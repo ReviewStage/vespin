@@ -66,10 +66,14 @@ import { useNumberedTaskIdOf } from "./use-link-standing.js";
  * dropped. The `/` menu stands aside while the `@` list stands, as the
  * toolbar stands aside for either. The editor stands in a room of its own
  * that the toolbar and the menus float in; focus leaving the room for anywhere
- * but its own toolbar and menus is the document's to hear (`onLeave`). A
+ * but its own toolbar and menus, or a dialog over the window, is the
+ * document's to hear (`onLeave`). A
  * finish or a leaving waits for a picture still being kept, since only the
  * open editor can lay in its address; it goes once none is.
  */
+
+/** A dialog standing over the window, which focus moving into does not leave the text. */
+const MODAL_SELECTOR = '[aria-modal="true"]';
 
 /** What every editor's room wears: the box the toolbar and the menus over its words are placed in. */
 const ROOM_CLASS = "markdown-editor relative";
@@ -372,8 +376,15 @@ export function MarkdownEditor({
       aria-label={roomLabel}
       onBlur={(event) => {
         const into = event.relatedTarget;
+        // Note that a dialog over the window, a picture enlarged from the text say, is not a leaving: the text stays open beneath it and takes the focus back as it closes.
+        const over = into instanceof Element && into.closest(MODAL_SELECTOR) !== null;
 
-        if (onLeave === undefined || event.currentTarget.contains(into) || toolbar.holds(into)) {
+        if (
+          onLeave === undefined ||
+          over ||
+          event.currentTarget.contains(into) ||
+          toolbar.holds(into)
+        ) {
           return;
         }
 

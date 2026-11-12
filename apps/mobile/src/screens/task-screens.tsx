@@ -23,6 +23,7 @@ import {
   subTasksOf,
   taskFinished,
 } from "@repo/features/task-list-model";
+import { TASK_MOVE_WORDS } from "@repo/features/task-move-model";
 import {
   CHANGE_RELATION,
   REMOVE_PARENT,
@@ -52,7 +53,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { provenanceText } from "@repo/features/time-format";
-import { countWords, readingWords, TERM, VERB } from "@repo/features/words";
+import { countWords, readFailedWords, readingWords, TERM, VERB } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
@@ -111,7 +112,9 @@ import {
   threadOpen,
   threadsOnBlocks,
   useTaskComments,
+  useTaskCommentsRetry,
 } from "../tasks/use-comments.js";
+import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import {
   type StatusQuestion,
@@ -133,6 +136,7 @@ import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, type SidebarTasks, useAppSidebar } from "./app-sidebar.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
+import { useMoveTaskDoor } from "./move-screens.js";
 import { type OpenRelation, RELATION_KIND_SYMBOL, useOpenRelation } from "./relation-screens.js";
 
 /** The Tasks tab's name, at its head and on its back button. */
@@ -169,6 +173,8 @@ const WORDS = {
   RENAME_TASK: "Rename task",
   NEW_SUB_TASK: "New sub-task",
   COMMENTS: "Comments",
+  DESCRIPTION_UNREAD: readFailedWords("the description"),
+  COMMENTS_UNREAD: readFailedWords("the comments"),
   DELETE: "Permanently delete",
   NO_TASKS: "No tasks",
   UNLISTED_TASK: "Task",
@@ -785,6 +791,8 @@ interface TaskMenuDoors {
   /** Opens the description's version history; none where the workspace's descriptions stand off, as the panel's ⋯ offers it only where they stand on. */
   readonly history: ((task: TaskSummary) => void) | undefined;
   readonly openRelation: OpenRelation;
+  /** Move to workspace's door for a task, none where the reader may not move it (`useMoveTaskDoor`). */
+  readonly moveDoor: (task: TaskSummary) => (() => void) | undefined;
 }
 
 /** Version history as a task's ⋯ offers it, none where the workspace's descriptions stand off. */
@@ -803,12 +811,20 @@ function historyActions(
   ];
 }
 
+/** Move to workspace as a task's ⋯ offers it, none where its door is closed. */
+function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
+  return open === undefined
+    ? []
+    : [{ label: TASK_MOVE_WORDS.TITLE, symbol: GLYPH.MOVE, onPress: open }];
+}
+
 /**
  * What a task's ⋯ holds, in the panel's order: Copy link, Rename, Version
- * history where the workspace's descriptions stand on, New sub-task, Remove
- * parent where it has one, Open in browser, and Permanently delete, red,
- * which asks first; then its Status, each status checked where it stands,
- * Task relation, Move to section, and its repository.
+ * history where the workspace's descriptions stand on, New sub-task, Move
+ * to workspace where the reader may move it, Remove parent where it has
+ * one, Open in browser, and Permanently delete, red, which asks first; then
+ * its Status, each status checked where it stands, Task relation, Move to
+ * section, and its repository.
  */
 function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
   const { task } = overview;
@@ -833,6 +849,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
         symbol: GLYPH.ADD,
         onPress: () => doors.newSubTask(task),
       },
+      ...moveActions(doors.moveDoor(task)),
       ...removeParentActs(task, overview.relations).map((action) => ({
         label: action.label,
         symbol: action.symbol,
@@ -1266,6 +1283,7 @@ function OverviewDescription({
   const threads = useTaskComments(task.id);
   const blocks = useMemo(() => descriptionBlocks(body), [body]);
   const onBlocks = threadsOnBlocks(threads, blocks);
+  const { pictureSource, videoAt } = useDescriptionPictures(body);
 
   const openThread = (threadId: string) =>
     router.push({ pathname: "/tasks/comments/[id]", params: { id: threadId, task: task.id } });
@@ -1273,7 +1291,13 @@ function OverviewDescription({
   if (blocks.length === 0) {
     return (
       <ListSection title={WORDS.DESCRIPTION}>
-        <WordsRow words={body} repository={task.repository} onOpenLink={openLink} />
+        <WordsRow
+          words={body}
+          repository={task.repository}
+          onOpenLink={openLink}
+          pictureSource={pictureSource}
+          videoAt={videoAt}
+        />
       </ListSection>
     );
   }
@@ -1290,6 +1314,8 @@ function OverviewDescription({
             words={block.drawn}
             repository={task.repository}
             onOpenLink={openLink}
+            pictureSource={pictureSource}
+            videoAt={videoAt}
             last={index === blocks.length - 1}
             menuActions={
               block.quote === undefined
@@ -1328,6 +1354,25 @@ function OverviewDescription({
   );
 }
 
+/** A read of the page's that failed, said in the panel's words, which a press reads again. */
+function ReadFailedRow({
+  words,
+  onRetry,
+}: {
+  readonly words: string;
+  readonly onRetry: () => void;
+}) {
+  return (
+    <LinkRow
+      symbol={GLYPH.FAILED}
+      label={words}
+      detail={VERB.RETRY}
+      tone={LINK_ROW_TONE.ATTENTION}
+      onPress={onRetry}
+    />
+  );
+}
+
 /**
  * The description's comment threads that still stand open, as the panel's
  * comments list holds them, the oldest started first: each its first
@@ -1338,6 +1383,15 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
   const { task } = overview;
   const open = useTaskComments(task.id).filter(threadOpen);
+  const retry = useTaskCommentsRetry(task.id);
+
+  if (retry !== undefined) {
+    return (
+      <ListSection title={WORDS.COMMENTS}>
+        <ReadFailedRow words={WORDS.COMMENTS_UNREAD} onRetry={retry} />
+      </ListSection>
+    );
+  }
 
   if (open.length === 0) return null;
 
@@ -1404,7 +1458,11 @@ function OverviewPage({
       <OverviewRelations overview={overview} />
       <OverviewAgents overview={overview} onArchiveAgent={onArchiveAgent} />
       <OverviewPages overview={overview} />
-      {!descriptions || document === undefined || document.document.body.trim() === "" ? null : (
+      {!descriptions ? null : overview.documentRetry !== undefined ? (
+        <ListSection title={WORDS.DESCRIPTION}>
+          <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
+        </ListSection>
+      ) : document === undefined || document.document.body.trim() === "" ? null : (
         <OverviewDescription overview={overview} body={document.document.body} />
       )}
       {descriptions ? <OverviewComments overview={overview} /> : null}
@@ -1482,6 +1540,7 @@ function TasksSplitScreen({
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const newSubTask = useNewSubTask();
   const openRelation = useOpenRelation();
+  const moveDoor = useMoveTaskDoor();
   const held = useTaskOverview(selected);
   const overview = held === undefined ? undefined : { ...held, setStatus: listing.setStatus };
   const history = useHistoryDoor(overview?.task.workspaceId);
@@ -1535,6 +1594,7 @@ function TasksSplitScreen({
                     newSubTask,
                     history,
                     openRelation,
+                    moveDoor,
                   }),
                   path: {
                     path: taskPath(overview.task, overview.workspace),
@@ -1582,6 +1642,7 @@ export function TaskScreen() {
   const deletion = useDeleteAsk(remove, () => router.back());
   const newSubTask = useNewSubTask();
   const openRelation = useOpenRelation();
+  const moveDoor = useMoveTaskDoor();
   const { refreshTasks } = useInboxActs();
   const archiveAsk = useAgentArchiveAsk();
   const read = useTasksRead();
@@ -1590,7 +1651,13 @@ export function TaskScreen() {
   const menu =
     overview === undefined
       ? undefined
-      : taskMenu(overview, { askDelete: deletion.askDelete, newSubTask, history, openRelation });
+      : taskMenu(overview, {
+          askDelete: deletion.askDelete,
+          newSubTask,
+          history,
+          openRelation,
+          moveDoor,
+        });
 
   const handed = useHandToSplit(SPLIT_TAB.TASKS, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);

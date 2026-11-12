@@ -1,8 +1,10 @@
 /**
  * sandbox.ts -- `Sandbox`, the one service every call of a sandbox goes through, whichever provider runs it, and what is built from its calls alone: a base drive filled in a sandbox of its own and deleted for good, a sandbox deleted only while it is the one read, and one resumed until it runs.
  *
- * A sandbox is persistent and named: it runs, stops with its disk kept as a
- * snapshot, and resumes from it, each time in a run of its own. A call on
+ * A sandbox is named and not persistent: it runs, and a stop discards its
+ * disk, so what must outlive a run is kept on a drive (`SandboxDrive`); one
+ * created persistent before stops with its disk kept as a snapshot and
+ * resumes from it, each time in a run of its own. A call on
  * what runs in it (a command, a file, its PTY, its firewall) names its
  * target (`SandboxTarget`): the sandbox's name, for whatever run it is up in
  * now, or one run of it, where the call must reach that run alone. No call
@@ -16,8 +18,8 @@
  * caller times any other way. Only agent or terminal activity touches a
  * sandbox (`SANDBOX_IDLE`); a terminal touches it only once it was used
  * since its last touch (`touchedWhileUsed`), never for standing open
- * alone. A stopped sandbox keeps its disk as a snapshot, so an idle one
- * bills nothing but that.
+ * alone. A stopped sandbox bills nothing but the drive it opened with, and
+ * a snapshot where it was created persistent before.
  *
  * A sandbox may open with a drive (`SandboxDrive`): a base drive it fills,
  * or a drive of its own forked from one. Every drive call is the package's,
@@ -69,10 +71,10 @@ export interface SandboxService {
   readonly driveStands: (name: string) => Effect.Effect<boolean, SandboxError>;
   /** Whether the sandbox of that name owns a drive it forked, standing whether the sandbox runs, stopped, or is gone; nothing is resumed. */
   readonly ownDriveStands: (sandboxName: string) => Effect.Effect<boolean, SandboxError>;
-  /** The named sandbox, resumed from its snapshot first where it was stopped. */
+  /** The named sandbox, resumed from its snapshot first where it was stopped; one not persistent holds none to resume (`SnapshotGone`). */
   readonly resume: (name: string) => Effect.Effect<OpenedSandbox, SandboxError>;
   /**
-   * Opens a persistent sandbox from the image or snapshot named, with the
+   * Opens a sandbox, not persistent, from the image or snapshot named, with the
    * drive it asks for, on the open internet; answers it with the run it is
    * up in. A name another sandbox holds is refused (`SandboxNameTaken`),
    * which is what makes a name a lock.

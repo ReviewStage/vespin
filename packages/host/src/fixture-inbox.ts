@@ -96,6 +96,7 @@ import {
 } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { McpClient } from "@repo/features/mcp-client-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import {
   MODEL_PROVIDER,
@@ -1228,6 +1229,24 @@ const INSTALLED_SKILL_FILES: ReadonlyMap<
   ],
 ]);
 
+/** The apps the account allowed to use it over MCP, as Settings › MCP lists them: one signing in on this computer, active today, and one on the web. */
+const MCP_CLIENTS: readonly McpClient[] = [
+  {
+    clientId: "mcp-client-terminal",
+    name: "Claude Code",
+    redirectUris: ["http://localhost:53682/callback"],
+    allowedAt: LANDED - 12 * DAY,
+    lastRefreshedAt: LANDED - 3 * HOUR,
+  },
+  {
+    clientId: "mcp-client-web",
+    name: "ChatGPT",
+    redirectUris: ["https://chatgpt.com/connector_platform_oauth_redirect"],
+    allowedAt: LANDED - 30 * DAY,
+    lastRefreshedAt: null,
+  },
+];
+
 /** The fixture workspace's one pending invitation, a week from running out. */
 const INVITATIONS: readonly WorkspaceInvitation[] = [
   {
@@ -1804,6 +1823,20 @@ const INTEGRATIONS: IntegrationStatusesAnswer = {
   ],
 };
 
+/**
+ * What each connected server answered when asked for its tools: GitHub's,
+ * Linear's, and Relay's Notion list theirs, and the Personal Notion's read
+ * couldn't be answered, so Settings › Integrations says so with Try again.
+ */
+const INTEGRATION_TOOLS: AppStateSnapshot[typeof LIVE_READ.INTEGRATION_TOOLS] = {
+  github: {
+    rows: { tools: [{ name: "search_code", description: "Search code across repositories" }] },
+  },
+  linear: { rows: { tools: [{ name: "list_issues", description: "List the team's issues" }] } },
+  notion: { rows: { tools: [{ name: "search", description: "Search the workspace's pages" }] } },
+  "notion-2": { failed: true },
+};
+
 /** The skills the invitations task's repository keeps, as the service finds them. */
 const SKILLS = {
   repository: "ada/relay",
@@ -1879,11 +1912,15 @@ export function inboxAppState(
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
+    [LIVE_READ.INTEGRATION_TOOLS]: INTEGRATION_TOOLS,
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
     // Note that Relay, the team a flow switches to, holds no memories and none of its own skills, so its pages draw their empty states rather than reading for good; the account's own skills stand in every workspace.
     [LIVE_READ.MEMORIES]: {
       [FIXTURE_IDS.WORKSPACE]: { rows: MEMORIES },
       [TEAM_WORKSPACE.id]: { rows: [] },
+    },
+    [LIVE_READ.MCP_CLIENTS]: {
+      [ADA.userId]: { rows: { serverUrl: "https://vespin.dev/api/mcp", clients: MCP_CLIENTS } },
     },
     [LIVE_READ.INSTALLED_SKILLS]: {
       [FIXTURE_IDS.WORKSPACE]: { rows: INSTALLED_SKILLS },
@@ -2167,6 +2204,10 @@ const ANSWERS: StagedAnswers = {
   [ACT_KIND.HOSTS_PAIRING_APPROVE]: ({ code }) =>
     pairingAnswer(code, { deviceId: "00000000-0000-4000-8000-0000000000a1" }),
   [ACT_KIND.HOSTS_PAIRING_DENY]: ({ code }) => pairingAnswer(code, { done: true as const }),
+  // Note that an account's rename is taken as the service takes one, the account answered under the label asked, though nothing here moves.
+  [ACT_KIND.INTEGRATIONS_RENAME]: ({ provider, connection, label }) => ({
+    account: { provider, connection, label, status: INTEGRATION_STATUS.CONNECTED },
+  }),
   // Note that Add skill's paste is read as the service reads one, though no repository is reached, and its install is taken and answered, though nothing here moves.
   [ACT_KIND.INSTALLED_SKILLS_PREVIEW]: ({ text }) => skillPreviewOf(text),
   [ACT_KIND.INSTALLED_SKILLS_INSTALL]: (request) => ({

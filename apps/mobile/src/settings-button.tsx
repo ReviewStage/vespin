@@ -20,6 +20,7 @@ export const SETTINGS_ROUTE = {
   MACHINES: "/settings/machines",
   /** A machine's pairing, approved or denied by the `code` its link named. */
   MACHINE_CONNECT: "/settings/machine-connect",
+  MCP: "/settings/mcp",
   MEMORY: "/settings/memory",
   /** A memory's words, written anew or edited (`?memory=` its id), as Settings › Memory opens it. */
   MEMORY_EDIT: "/settings/memory-edit",

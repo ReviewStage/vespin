@@ -1023,9 +1023,9 @@ function scopedItem(
  * the reader asks for their pinned tasks first (`pinnedFirst`), a pinned
  * task's items stand before every other, the latest first within each, so
  * an agent's reply on a pinned task lands at the top of Pinned rather than
- * the top of everything; and a run the reader folded (`folded`) lists none
- * of its items but the chosen one, though its count says how many it holds,
- * so K and J step past it. A search folds nothing, so no match is hidden.
+ * the top of everything; and the runs the reader folded (`folded`) are
+ * said with the list, whose rows and steps leave their items out
+ * (`inboxShownItems`). A search folds nothing, so no match is hidden.
  */
 export function inboxList(
   tasks: readonly InboxGroup[],
@@ -1071,12 +1071,8 @@ export function inboxList(
 
   const folded = search.length > 0 ? NO_FOLDS : (view.folded ?? NO_FOLDS);
 
-  const shown = items.filter(
-    (listed) => !folded.has(inboxRunOf(listed)) || listed.item.id === view.chosen,
-  );
-
   return {
-    items: shown,
+    items,
     readerId,
     runs: {
       counts: { [INBOX_RUN.PINNED]: pinned, [INBOX_RUN.REST]: items.length - pinned },
@@ -1121,12 +1117,31 @@ export function inboxPinnedRuns(view: InboxListView): readonly InboxPinnedRun[] 
       : [
           {
             run,
-            items: view.items.filter((listed) => inboxRunOf(listed) === run),
+            items: runs.folded.has(run)
+              ? NO_LISTED
+              : view.items.filter((listed) => inboxRunOf(listed) === run),
             count: runs.counts[run],
             folded: runs.folded.has(run),
           },
         ],
   );
+}
+
+/** No item listed. */
+const NO_LISTED: readonly InboxListed[] = [];
+
+/**
+ * The items a list draws rows for, which its keys, its selection, and K and
+ * J reach: every item it lists but those of a run folded under its heading
+ * (`inboxPinnedRuns`), bar `kept`, the item the pane shows, which keeps its
+ * place among the steps though its row is folded away.
+ */
+export function inboxShownItems(view: InboxListView, kept?: string): readonly InboxListed[] {
+  const folded = view.runs?.folded;
+
+  if (folded === undefined || folded.size === 0) return view.items;
+
+  return view.items.filter((listed) => !folded.has(inboxRunOf(listed)) || listed.item.id === kept);
 }
 
 /**
@@ -1284,7 +1299,7 @@ export function inboxSteps(
   view: InboxListView,
   chosen: string | undefined,
 ): InboxSteps | undefined {
-  const rowed = view.items;
+  const rowed = inboxShownItems(view, chosen);
   const at = rowed.findIndex(({ item }) => item.id === chosen);
 
   if (at < 0) return undefined;

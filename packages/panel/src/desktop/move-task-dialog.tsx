@@ -1,8 +1,21 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import {
+  MOVE_PART,
+  type MovePart,
+  mayMoveTask,
+  moveAgentsParts,
+  moveChosen,
+  moveGainParts,
+  moveLossParts,
+  moveTargetLine,
+  moveTargets,
+  moveTitle,
+  moveVerb,
+  TASK_MOVE_WORDS,
+  workspaceTakesTask,
+} from "@repo/features/task-move-model";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { strandedTaskHome, workspaceReaches } from "@repo/features/tasks-model";
-import { countWords, TERM } from "@repo/features/words";
-import { workspaceSharedWords } from "@repo/features/workspace-tile";
+import { strandedTaskHome } from "@repo/features/tasks-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import {
   ChoiceList,
@@ -20,7 +33,7 @@ import { CONFIRM_STAGE, confirmAsked } from "@repo/ui/confirm-state";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
-import { type ReactNode, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -49,115 +62,17 @@ import { TILE_SIZE, WorkspaceTile } from "./workspace-tile.js";
  * list, the toast the move would raise held back in its favor.
  */
 
-/** What the dialog says under its list when the service refused the move. */
-const MOVE_REFUSED = "The task could not be moved. Try again.";
-
-/** The workspaces a task may be moved to: every one the account is in but its own. */
-function otherWorkspaces(
-  tasks: Pick<TasksControl, "workspaces">,
-  task: TaskSummary,
-): readonly Workspace[] {
-  return tasks.workspaces.filter((workspace) => workspace.id !== task.workspaceId);
-}
-
-/** Whether the reader may be the one to move the task: its owner, where the window cannot tell it is not; a task whose owner's account is gone is no one's to move. */
-function ownsTask(tasks: Pick<TasksControl, "me">, task: TaskSummary): boolean {
-  return task.ownerId !== undefined && (tasks.me === undefined || task.ownerId === tasks.me);
-}
-
-/** Whether the workspace's GitHub reaches the task's repository (`workspaceReaches`); a task with no repository goes anywhere. */
-function reaches(workspace: Workspace, repository: string | null): boolean {
-  return repository === null || workspaceReaches(workspace, repository);
-}
-
-/** A row's line: who shares the workspace, or why it cannot take the task. */
-function rowLine(
-  workspace: Workspace,
-  repository: string | null,
-  personalId: string | undefined,
-): string | undefined {
-  if (reaches(workspace, repository)) {
-    return workspaceSharedWords(workspace.memberCount, workspace.id === personalId);
-  }
-
-  const github =
-    workspace.github === null ? "No GitHub connected" : `${workspace.github.login} on GitHub`;
-
-  return `${github} · cannot reach ${repository}`;
-}
-
-/** A workspace's name inside a line the dialog says, kept masked in a screen recording. */
-function named(workspace: Workspace): ReactNode {
-  return <ReplayMask>{workspace.name}</ReplayMask>;
-}
-
-/**
- * Who in the task's workspace loses it: nobody where the reader is alone,
- * else its members who are not in the workspace chosen too. Note that they
- * are not counted, because the window knows how many each workspace holds
- * but not who is in both, and one in both keeps the task.
- */
-function lossLine(from: Workspace | undefined, to: Workspace): ReactNode {
-  const losing = " lose access to it, its calls, and its agents.";
-
-  if (from === undefined) {
-    return (
-      <>
-        {"Members of its workspace who are not in "}
-        {named(to)}
-        {losing}
-      </>
-    );
-  }
-
-  if (from.memberCount !== undefined && from.memberCount <= 1) {
-    return (
-      <>
-        {"Nobody loses access: only you are in "}
-        {named(from)}.
-      </>
-    );
-  }
-
+/** A line of what the move does, each workspace it names kept masked in a screen recording. */
+function MoveLine({ parts }: { parts: readonly MovePart[] }): React.JSX.Element {
   return (
     <>
-      {"Members of "}
-      {named(from)}
-      {" who are not in "}
-      {named(to)}
-      {losing}
-    </>
-  );
-}
-
-/** Who in the workspace chosen gains it: its members counted, or named as its members where they are not. */
-function gainLine(to: Workspace): ReactNode {
-  const { memberCount } = to;
-
-  if (memberCount === undefined) {
-    return (
-      <>
-        {"Members of "}
-        {named(to)}
-        {" can read and edit it."}
-      </>
-    );
-  }
-
-  if (memberCount <= 1) {
-    return (
-      <>
-        {"Only you can read and edit it in "}
-        {named(to)}.
-      </>
-    );
-  }
-
-  return (
-    <>
-      {`${countWords(memberCount, TERM.MEMBER)} in `}
-      {named(to)}
-      {" can read and edit it."}
+      {parts.map((part, index) =>
+        part.kind === MOVE_PART.WORDS ? (
+          part.text
+        ) : (
+          <ReplayMask key={index}>{part.name}</ReplayMask>
+        ),
+      )}
     </>
   );
 }
@@ -185,20 +100,20 @@ function WorkspaceChoices({
   const options = workspaces.map((workspace) => ({
     value: workspace.id,
     label: workspace.name,
-    detail: rowLine(workspace, repository, personalId),
+    detail: moveTargetLine(workspace, repository, personalId),
     mark: (
       <ReplayMask>
         <WorkspaceTile workspace={workspace} size={TILE_SIZE.ROW} />
       </ReplayMask>
     ),
-    disabled: !reaches(workspace, repository),
+    disabled: !workspaceTakesTask(workspace, repository),
     replayMasked: true,
   }));
 
   return (
     <ScrollArea size={SCROLL_SIZE.CONTENT}>
       <ChoiceList
-        legend="Workspace"
+        legend={TASK_MOVE_WORDS.LEGEND}
         options={options}
         value={chosen === undefined ? [] : [chosen.id]}
         disabled={disabled}
@@ -247,7 +162,7 @@ function MoveTaskCard({
     <Dialog
       open={open}
       size={DIALOG_SIZE.CONFIRM}
-      title={`Move “${task.name}” to another workspace`}
+      title={moveTitle(task.name)}
       busy={moving}
       initialFocus={chosen === undefined ? cancel : first}
       onDismiss={dismiss}
@@ -256,9 +171,9 @@ function MoveTaskCard({
           onCancel={dismiss}
           cancelRef={cancel}
           act={{
-            verb: chosen === undefined ? "Move" : `Move to ${chosen.name}`,
+            verb: moveVerb(chosen),
             tone: DIALOG_TONE.PRIMARY,
-            running: "Moving",
+            running: TASK_MOVE_WORDS.RUNNING,
             busy: moving,
             disabled: chosen === undefined,
             onPress: () => confirm.run(),
@@ -279,11 +194,14 @@ function MoveTaskCard({
           />
           {chosen === undefined ? null : (
             <ul className="move-effects m-0 grid gap-tight-gap rounded-control bg-muted p-card-inset-snug pl-ui-24 text-body-foreground text-caption">
-              <li>{lossLine(from, chosen)}</li>
-              <li>{gainLine(chosen)}</li>
               <li>
-                {"Its agents keep running, now in "}
-                {named(chosen)}.
+                <MoveLine parts={moveLossParts(from, chosen)} />
+              </li>
+              <li>
+                <MoveLine parts={moveGainParts(chosen)} />
+              </li>
+              <li>
+                <MoveLine parts={moveAgentsParts(chosen)} />
               </li>
             </ul>
           )}
@@ -309,7 +227,7 @@ export function strandedHome(
   tasks: Pick<TasksControl, "me" | "workspaces">,
   task: TaskSummary,
 ): Workspace | undefined {
-  if (!ownsTask(tasks, task)) return undefined;
+  if (!mayMoveTask(task, tasks.me)) return undefined;
 
   return strandedTaskHome(task, tasks.workspaces);
 }
@@ -327,15 +245,13 @@ export function useMoveTaskDialog(
   tasks: Pick<TasksControl, "shown" | "me" | "workspaces" | "moveTask">,
   task: TaskSummary | undefined,
 ): MoveTaskDoor {
-  const others = task === undefined ? [] : otherWorkspaces(tasks, task);
-  const offered = task !== undefined && others.length > 0 && ownsTask(tasks, task);
+  const others = task === undefined ? [] : moveTargets(tasks.workspaces, task);
+  const offered = task !== undefined && others.length > 0 && mayMoveTask(task, tasks.me);
   const [picked, setPicked] = useState<string | undefined>(undefined);
   const moving = useMutation(tasks.moveTask);
   const repository = task?.repository ?? null;
 
-  const chosen =
-    others.find((workspace) => workspace.id === picked && reaches(workspace, repository)) ??
-    others.find((workspace) => reaches(workspace, repository));
+  const chosen = moveChosen(others, picked, repository);
 
   const moveAct = useConfirmAct(moving, {
     send: () =>
@@ -345,10 +261,10 @@ export function useMoveTaskDialog(
     answered: (moved): ActionResult =>
       moved
         ? { status: ACTION_RESULT_STATUS.ACCEPTED }
-        : { status: ACTION_RESULT_STATUS.REJECTED, reason: MOVE_REFUSED },
+        : { status: ACTION_RESULT_STATUS.REJECTED, reason: TASK_MOVE_WORDS.REFUSED },
     refusedFirst: () =>
       task === undefined || chosen === undefined
-        ? { status: ACTION_RESULT_STATUS.REJECTED, reason: "Choose a workspace." }
+        ? { status: ACTION_RESULT_STATUS.REJECTED, reason: TASK_MOVE_WORDS.CHOOSE }
         : undefined,
   });
 

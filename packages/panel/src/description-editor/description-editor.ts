@@ -17,7 +17,7 @@ import { TableKit } from "@tiptap/extension-table";
 import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "@tiptap/markdown";
 import type { Node as PmNode } from "@tiptap/pm/model";
-import { Selection, TextSelection } from "@tiptap/pm/state";
+import { NodeSelection, Selection, TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { Predicate } from "effect";
 import { enterSends, modEnterSends } from "../enter-sends.js";
@@ -34,6 +34,7 @@ import {
   type EditorSpan,
   FINISH,
   type MentionDrawer,
+  type PlacedPicture,
   type PlacedWords,
   rootAria,
   sameAria,
@@ -59,11 +60,14 @@ import {
 import { mentionNode, pastedMention } from "./mention-node.js";
 import {
   copiedPictures,
+  drawnAsPicture,
   droppedPictures,
   LIST_ITEMS,
   laidInPictures,
   pastedPictures,
+  pictureKeyDown,
   pictureNode,
+  pictureTyped,
   removedPicture,
   settledPicture,
 } from "./picture-node.js";
@@ -77,7 +81,7 @@ import { blockRulesOutOfCells, withoutTipTapChords, writingKeys } from "./writin
  * What the text may hold, and every Markdown rule for writing it, is
  * TipTap's own: StarterKit, `@tiptap/markdown`, task lists, tables, and
  * pictures (`./picture-node.ts`), each inline in a paragraph even where it
- * stands alone on its line; its chords are the writing vocabulary's
+ * stands alone on its line, which the caret then treats as a block; its chords are the writing vocabulary's
  * (`./writing-keys.ts`), in place of TipTap's, and neither a chord nor a
  * Markdown rule lays a block into a table's cell;
  * underline alone is left out, because Markdown cannot store it and the
@@ -158,14 +162,56 @@ function withWordsLine(item: JSONContent): JSONContent {
 /** A numbered item's first line as GFM reads one: up to nine digits, then `.` or `)`. */
 const NUMBERED_ITEM = /^[^\S\n]*\d{1,9}[.)](?:\s|$)/u;
 
-/** TipTap's ordered list tokenizer, taking a list that opens on a number alone. */
+/** A line TipTap's ordered list reads as an item: a number, a roman numeral, or one or two letters, then `.` or `)`. */
+const TIPTAP_ITEM = /^\s*(?:\d+|[ivxlcdmIVXLCDM]+|[a-zA-Z]{1,2})[.)]\s+/u;
+
+/** How far a line is indented. */
+function indentOf(line: string): number {
+  return line.length - line.trimStart().length;
+}
+
+/**
+ * A list's source up to the first line after its first, at the list's own
+ * indent, that TipTap would read as an item on a marker other than a number,
+ * which GFM reads as words, so the list ends before it (`Mr. Smith asked`
+ * after the list). Note that a line indented under an item is the item's own
+ * words, and that the source is only ever cut, so the list's source and the
+ * words' after it still join back into the text exactly.
+ */
+function numberedRun(src: string): string {
+  const lines = src.split("\n");
+  const indent = indentOf(lines[0] ?? "");
+
+  const cut = lines.findIndex((line, at) => at > 0 && indentOf(line) <= indent && lettered(line));
+
+  return cut === -1 ? src : `${lines.slice(0, cut).join("\n")}\n`;
+}
+
+/** Whether TipTap would read a line as an item on a marker other than a number. */
+function lettered(line: string): boolean {
+  return TIPTAP_ITEM.test(line) && !NUMBERED_ITEM.test(line);
+}
+
+/**
+ * TipTap's ordered list tokenizer, taking a list that opens on a number alone
+ * and holds numbered items alone. Note that a list holding a lettered line
+ * indented under an item is left to `marked`'s own list, which reads that
+ * line as the item's words, as GFM does, where TipTap's would make it a
+ * nested item and drop its first word.
+ */
 function numberedOnly(tokenizer: MarkdownTokenizer | undefined): MarkdownTokenizer {
   if (tokenizer === undefined) throw new Error("TipTap's ordered list reads no Markdown");
 
   return {
     ...tokenizer,
-    tokenize: (src, tokens, lexer) =>
-      NUMBERED_ITEM.test(src) ? tokenizer.tokenize(src, tokens, lexer) : undefined,
+    tokenize: (src, tokens, lexer) => {
+      if (!NUMBERED_ITEM.test(src)) return undefined;
+      const run = numberedRun(src);
+
+      return run.split("\n").slice(1).some(lettered)
+        ? undefined
+        : tokenizer.tokenize(run, tokens, lexer);
+    },
   };
 }
 
@@ -179,10 +225,11 @@ function numberedOnly(tokenizer: MarkdownTokenizer | undefined): MarkdownTokeniz
  * is TipTap's own fix waiting upstream (ueberdosis/tiptap#8466), so it goes
  * once a TipTap carrying that fix is installed.
  *
- * It opens only on a number, as GFM and the read view do. Note that TipTap's
- * own also reads one or two letters or a roman numeral as an item's marker,
- * so a paragraph opening `Mr. Smith asked` opened as a numbered item, and an
- * edit saved it as `1. Smith asked`. This is TipTap's own fix waiting
+ * It opens only on a number, and holds only numbered items, as GFM and the
+ * read view do. Note that TipTap's own also reads one or two letters or a
+ * roman numeral as an item's marker, so a paragraph opening `Mr. Smith asked`,
+ * alone or after a numbered list, opened as a numbered item, and an edit saved
+ * it as `1. Smith asked`. This is TipTap's own fix waiting
  * upstream (ueberdosis/tiptap#8395), so it goes once a TipTap carrying that
  * fix is installed.
  */
@@ -572,15 +619,43 @@ function caretWords(editor: Editor): PlacedWords | undefined {
 }
 
 /**
- * Where the caret goes as the editor opens on the words a click landed on,
- * where it finds them, the words its press selected selected again where it
- * finds where they start too; none where it does not find the words.
+ * The picture a click landed on in the drawn text, found as the drawn text
+ * counts its pictures: in the same section, as many of the description's
+ * pictures in; none where the section holds no such picture.
+ */
+function pictureAtPress(doc: PmNode, picture: PlacedPicture): Selection | undefined {
+  const blocks = sectionBlocks(doc, picture.section);
+
+  if (blocks === undefined) return undefined;
+  let seen = 0;
+  let found: number | undefined;
+  doc.forEach((block, offset, index) => {
+    if (found !== undefined || index < blocks.first || index >= blocks.next) return;
+    block.descendants((node, pos) => {
+      if (found !== undefined || !drawnAsPicture(node)) return;
+
+      if (seen === picture.occurrence) found = offset + 1 + pos;
+      seen += 1;
+    });
+  });
+
+  return found === undefined ? undefined : NodeSelection.create(doc, found);
+}
+
+/**
+ * Where the caret goes as the editor opens on the picture or the words a
+ * click landed on, where it finds them, the picture selected, or the words
+ * its press selected selected again where it finds where they start too;
+ * none where it does not find the picture or the words.
  */
 function placedOnWords(
   editor: Editor,
   placement: DescriptionEditorPlacement | undefined,
 ): Selection | undefined {
   const click = placement !== undefined && "x" in placement ? placement : undefined;
+
+  // A press on a picture opens the editor with that picture selected, as a press on it in the editor does.
+  if (click?.picture !== undefined) return pictureAtPress(editor.state.doc, click.picture);
   const at = click?.words === undefined ? undefined : wordsAt(editor, click.words);
 
   if (at === undefined) return undefined;
@@ -736,6 +811,9 @@ export function mountDescriptionEditor(
       },
       handleDrop: (view, event, _slice, moved) =>
         pictures === undefined ? false : droppedPictures(view, event, moved, pictures),
+      // Note that words typed over a selected picture start a line below it, where they would replace it.
+      handleTextInput: (view, _from, _to, words) =>
+        pictures !== undefined && pictureTyped(view, words),
       transformPasted: (slice) =>
         pictures === undefined ? slice : copiedPictures(slice, pictures),
       handleKeyDown: (view, event) => {
@@ -775,12 +853,16 @@ export function mountDescriptionEditor(
           return true;
         }
 
+        // A picture alone on its line takes the arrows, Enter, and the deletes as a block of its own.
+        if (pictures !== undefined && pictureKeyDown(view, event)) return true;
+
         const { selection } = view.state;
-        const first = selection.empty && selection.$from.index(0) === 0;
+        const picked = selection instanceof NodeSelection;
+        const first = (selection.empty || picked) && selection.$from.index(0) === 0;
 
         if (onLeaveUp === undefined || event.key !== "ArrowUp" || !first) return false;
 
-        if (!view.endOfTextblock("up")) return false;
+        if (!picked && !view.endOfTextblock("up")) return false;
         onLeaveUp();
 
         return true;

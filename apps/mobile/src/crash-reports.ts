@@ -12,6 +12,10 @@
  * signed in by its id alone (`@repo/features/sentry-account`). It traces
  * nothing, so no request becomes a span.
  *
+ * The native half starts first, as the app launches and before React Native
+ * loads, on the same DSN, environment, release and build number, which
+ * `app.config.ts` hands it (`SENTRY_LAUNCH_OPTIONS`), so a crash before this
+ * bundle runs is reported too; `init` below starts it again on these options.
  * Native crashes are caught by the SDK's native half and sent on the next
  * launch, where the JavaScript filters cannot reach them, so the native half
  * records no breadcrumb of its own for a request (`enableNetworkBreadcrumbs`):

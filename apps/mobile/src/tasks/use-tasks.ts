@@ -550,6 +550,8 @@ export interface TaskOverview {
   readonly task: TaskSummary;
   /** Its whole document, where the host has read it: its description and the tasks it waits on and holds up. */
   readonly document: Task | undefined;
+  /** Reads its document again, as the panel's Try again does (`TASKS_DOCUMENT_RETRY`), where its read failed and none is held; none otherwise. */
+  readonly documentRetry: (() => void) | undefined;
   readonly workspace: Workspace | undefined;
   readonly agents: readonly TaskAgentLine[];
   readonly pages: readonly PageLine[];
@@ -564,6 +566,11 @@ export interface TaskOverview {
   readonly placing: TaskPlacing;
   /** The writes that relate it to another task, change how one stands to it, or take it out from under its parent. */
   readonly relations: TaskRelationWrites;
+}
+
+/** Says on the console a description read asked again that did not go; the page still says the read failed. */
+function documentRetryLost(cause: unknown): void {
+  console.error("Reading the description again did not go.", cause);
 }
 
 /** Whether a link's word names the task: its id, or its number as a task link spells one. */
@@ -600,6 +607,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
         ? undefined
         : {
             document: state[LIVE_READ.DESCRIPTION_DOCUMENT][taskId]?.rows,
+            documentFailed: state[LIVE_READ.DESCRIPTION_DOCUMENT][taskId]?.failed === true,
             pages: state[LIVE_READ.PAGES][PAGE_OWNER.TASK][taskId]?.rows,
           },
   });
@@ -614,9 +622,18 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
     const listedWaiting = agents.reduce((sum, line) => sum + line.waiting, 0);
     const document = held?.document;
 
+    // Note that a read that failed with a document still held keeps drawing it, as the panel does, so Try again stands only where nothing is.
+    const documentRetry =
+      held?.documentFailed === true && document === undefined
+        ? () => {
+            acts[ACT_KIND.TASKS_DOCUMENT_RETRY]({ taskId: task.id }).catch(documentRetryLost);
+          }
+        : undefined;
+
     return {
       task,
       document: document !== undefined && "task" in document ? document.task : undefined,
+      documentRetry,
       workspace,
       agents,
       pages: held?.pages ?? [],
@@ -628,7 +645,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       placing,
       relations,
     };
-  }, [task, view, waiting, held, workspace, listed, rename, placing, relations]);
+  }, [task, view, waiting, held, workspace, listed, rename, placing, relations, acts]);
 }
 
 /** Whether the host has read the task list once, so a task it does not hold is one that is not there rather than one still on its way. */

@@ -7,7 +7,6 @@ import {
   BUTTON_VARIANT,
   Button,
   EditActions,
-  IconButton,
   Inline,
   JUSTIFY,
   MARK_PROVIDER,
@@ -43,7 +42,7 @@ import {
   Text,
   TextField,
 } from "@repo/ui";
-import { ExternalLinkIcon, GLYPH } from "@repo/ui/icons";
+import { ExternalLinkIcon } from "@repo/ui/icons";
 import { useState } from "react";
 import { CATALOG_FAILURE } from "../catalog-failure";
 import type { Example } from "../example";
@@ -521,7 +520,7 @@ function RowsFoldRows(): React.JSX.Element {
             leading={<Mark provider={MARK_PROVIDER.SLACK} />}
             end={() => (
               <>
-                <IconButton icon={<GLYPH.DISCONNECT />} label="Disconnect" />
+                <MoreButton thing="Slack" />
                 {chevron}
               </>
             )}
@@ -560,7 +559,7 @@ function RowsFoldRows(): React.JSX.Element {
             leading={<Mark provider={MARK_PROVIDER.SENTRY} />}
             end={() => (
               <>
-                <IconButton icon={<GLYPH.DISCONNECT />} label="Disconnect" />
+                <MoreButton thing="Sentry" />
                 {chevron}
               </>
             )}

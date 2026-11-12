@@ -360,7 +360,7 @@ test("a refused Remove is said in the dialog that asked it, though the list drew
   await settle();
   removeOf("sfo-02");
 
-  await press("Remove");
+  await press("Remove machine");
 
   const said = document.querySelector('[role="alertdialog"]')?.textContent ?? "";
   assert.ok(said.includes("Could not remove this machine. Try again."), said);

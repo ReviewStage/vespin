@@ -1,5 +1,5 @@
 /**
- * workspace-drive.test.ts -- a workspace's drive, over the test's own database, a GitHub that answers from the test's own installation, and `Sandbox` kept in memory: a fill brings each connected repository into its own folder and installs nothing, a repository that fails is passed by while the rest are filled, a repository no longer connected is left out of the folders the drive keeps, and a step that outruns its time hands the rest to the next. Synthetic accounts throughout.
+ * workspace-drive.test.ts -- a workspace's drive, over the test's own database, a GitHub that answers from the test's own installation, and `Sandbox` kept in memory: a fill brings each connected repository into its own folder and installs nothing, a repository that fails is passed by while the rest are filled, a repository no longer connected is left out of the folders the drive keeps. Synthetic accounts throughout.
  */
 
 import assert from "node:assert/strict";
@@ -10,7 +10,7 @@ import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
 import { Sandbox } from "@repo/sandbox";
 import { type MemoryCommand, memorySandbox } from "@repo/sandbox/testing";
-import { Clock, Duration, Effect } from "effect";
+import { Effect } from "effect";
 import {
   connectWorkspaceGitHub,
   githubReaching,
@@ -18,8 +18,7 @@ import {
 } from "../testing/github-app-fake.js";
 import type { SandboxRunner } from "./machine/sandbox-machine.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
-import { DriveFillSteps, fillWorkspaceDrive, workspaceDriveName } from "./workspace-drive.js";
-import { WORKSPACE_DRIVE_FILL } from "./workspace-drive-fill-bounds.js";
+import { fillWorkspaceDrive, workspaceDriveName } from "./workspace-drive.js";
 
 const IMAGE = "agent-image:fixture";
 const { VARIABLE } = REPOSITORY_SANDBOX_CONTRACT;
@@ -143,58 +142,6 @@ it.layer(getTestDB())("a workspace's drive", (it) => {
           ran.filter(isPrune).map((each) => each.ask.env?.[VARIABLE.KEEP]),
           ["acme/relay"],
         );
-      }),
-  );
-
-  it.effect(
-    "a step that outruns its time hands the rest to the next step from the repository it reached, and leaves the drive unfinished",
-    () =>
-      Effect.gen(function* () {
-        // One more repository than a batch holds, so the step outruns its time past its first batch.
-        const names = Array.from(
-          { length: WORKSPACE_DRIVE_FILL.BATCH + 1 },
-          (_, index) => `repo-${String(index).padStart(2, "0")}`,
-        );
-
-        const installation = installationOf(7204, names);
-        const workspace = yield* connected(installation);
-        let syncs = 0;
-        const handed: number[] = [];
-
-        const memory = memorySandbox({
-          run: (command) => {
-            if (isSync(command)) syncs += 1;
-
-            return undefined;
-          },
-        });
-
-        // Note that each batch's sync moves the clock a whole step on, so the step outruns its time after its first.
-        const outrun = Effect.map(Clock.Clock, (base) => {
-          const now = () =>
-            base.currentTimeMillisUnsafe() + syncs * Duration.toMillis(WORKSPACE_DRIVE_FILL.STEP);
-
-          return Object.assign(Object.create(base), {
-            currentTimeMillisUnsafe: now,
-            currentTimeMillis: Effect.sync(now),
-          });
-        });
-
-        const took = yield* filled(memory, installation, workspace).pipe(
-          Effect.provideService(DriveFillSteps, {
-            publish: (next) => Effect.sync(() => handed.push(next.from)),
-          }),
-          Effect.provideServiceEffect(Clock.Clock, outrun),
-        );
-
-        assert.equal(took, true);
-        assert.deepEqual(handed, [WORKSPACE_DRIVE_FILL.BATCH]);
-        assert.deepEqual(
-          syncedOf(memory.state.commands),
-          names.slice(0, WORKSPACE_DRIVE_FILL.BATCH).map((name) => `acme/${name}`),
-        );
-        assert.deepEqual(memory.state.commands.filter(isPrune), []);
-        assert.deepEqual(memory.state.deleted, []);
       }),
   );
 });

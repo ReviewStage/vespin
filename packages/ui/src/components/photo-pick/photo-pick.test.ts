@@ -68,5 +68,5 @@ test("the tile picks a photo, and once one stands with a way to remove it, a pre
     [before, opened, tile()?.getAttribute("aria-label")],
     ["Add photo", 1, "Change photo"],
   );
-  assert.match(document.body.textContent ?? "", /Replace photo.*Remove photo/su);
+  assert.match(document.body.textContent ?? "", /Replace photo.*Delete photo/su);
 });

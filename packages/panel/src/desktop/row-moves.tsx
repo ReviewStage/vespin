@@ -1,5 +1,6 @@
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, ArrowUpIcon } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { flushSync } from "react-dom";
 import { useAppCommand } from "../app-commands.js";
@@ -84,13 +85,17 @@ function rowMoveActions(place: RowPlace | undefined, run: RowRun = ROW_RUN.DOWN)
   return [...(at > 0 ? [back] : []), ...(at < count - 1 ? [on] : [])];
 }
 
-/** Whether a group holds only what destroys, which every menu keeps last and alone. */
-function destroys(group: readonly MenuEntry[] | undefined): boolean {
+/** Whether an entry takes its thing away: red, or wearing Delete's glyph where it acts at once and offers Undo. */
+function takesAway(entry: MenuEntry): boolean {
   return (
-    group !== undefined &&
-    group.length > 0 &&
-    group.every((entry) => "danger" in entry && entry.danger === true)
+    ("danger" in entry && entry.danger === true) ||
+    ("icon" in entry && entry.icon?.type === GLYPH.DELETE)
   );
+}
+
+/** Whether a group holds only what takes away, which every menu keeps last and alone. */
+function destroys(group: readonly MenuEntry[] | undefined): boolean {
+  return group !== undefined && group.length > 0 && group.every(takesAway);
 }
 
 /**

@@ -15,7 +15,7 @@ import { Tooltip } from "../tooltip/hint.js";
  * nothing is named, the camera laid over the tile under the pointer or the
  * keyboard's focus once something is. A press picks a photo; with one set,
  * which its caller says by offering its removal (`onRemove`), a press opens
- * Replace photo and Remove photo instead. A finger's tap is its press. The caller holds
+ * Replace photo and Delete photo instead. A finger's tap is its press. The caller holds
  * the picker and the photo, since what a picked file becomes is the
  * caller's to decide, and the picker's hidden input is drawn here, beside
  * the tile. Note that the words it is named by are a hint on a rest, since
@@ -27,7 +27,7 @@ const PICK_WORDS = {
   ADD: "Add photo",
   CHANGE: "Change photo",
   REPLACE: "Replace photo",
-  REMOVE: "Remove photo",
+  DELETE: "Delete photo",
 } as const;
 
 /**
@@ -112,8 +112,8 @@ export function PhotoPick({
             [{ label: PICK_WORDS.REPLACE, icon: <ImageUpIcon />, onSelect: picker.open }],
             [
               {
-                label: PICK_WORDS.REMOVE,
-                icon: <GLYPH.REMOVE />,
+                label: PICK_WORDS.DELETE,
+                icon: <GLYPH.DELETE />,
                 danger: true,
                 onSelect: onRemove,
               },

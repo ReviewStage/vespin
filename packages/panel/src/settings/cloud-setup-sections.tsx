@@ -94,7 +94,7 @@ import { SECTION, settingsSectionDrawn, settingsSectionHead } from "./settings-s
 /**
  * cloud-setup-sections.tsx -- Settings › Cloud environment's scripts: how the workspace's cloud agent sandboxes are set up and archived, its install script and each repository's setup and archive scripts, saved by its owners and admins.
  *
- * As Conductor Cloud's Cloud computer settings keep them. The install script
+ * Kept together in Settings. The install script
  * runs once per build of each of the workspace's repositories' base
  * snapshots, with `sudo`, so what it installs is in every new sandbox; a
  * repository's setup script runs once in each new agent sandbox of it, after
@@ -401,7 +401,7 @@ function LastRun({
 /**
  * One script's row: its name and the script under it, which an owner or
  * admin edits in place, Discard and Save standing at the row's end once it
- * differs from what is saved, and a ⋯ with Remove once one is saved. The
+ * differs from what is saved, and a ⋯ with Delete once one is saved. The
  * install script's row stands with an empty script where none is saved, so
  * the first is typed in place as any edit is; a setup script just added
  * stands the same way, the caret in it and Cancel at its end until it is
@@ -471,7 +471,7 @@ function ScriptRow({
 
   const actions =
     manages && script !== ""
-      ? [{ label: "Remove", icon: <TrashIcon />, danger: true, onSelect: removal.ask }]
+      ? [{ label: "Delete", icon: <TrashIcon />, danger: true, onSelect: removal.ask }]
       : [];
 
   return (
@@ -543,11 +543,11 @@ function ScriptRow({
           question={{
             title:
               target.repository === undefined
-                ? `Remove ${name}?`
-                : `Remove ${name}'s ${target.kind} script?`,
-            verb: "Remove",
-            running: "Removing",
-            loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+                ? `Delete ${name}?`
+                : `Delete ${name}'s ${target.kind} script?`,
+            verb: "Delete script",
+            running: "Deleting",
+            loss: CONFIRM_LOSS.IRREVERSIBLE,
             replayUnmasked: true,
             titleReplayMasked: repository !== undefined,
           }}
@@ -1066,7 +1066,7 @@ function RunActionRow({
           availabilityItems,
           [
             {
-              label: "Remove",
+              label: "Delete",
               icon: <TrashIcon />,
               danger: true,
               disabled: busy,
@@ -1204,10 +1204,10 @@ function RunActionRow({
           open
           confirm={removal}
           question={{
-            title: `Remove ${action.label}?`,
-            verb: "Remove",
-            running: "Removing",
-            loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+            title: `Delete ${action.label}?`,
+            verb: "Delete run action",
+            running: "Deleting",
+            loss: CONFIRM_LOSS.IRREVERSIBLE,
             replayUnmasked: true,
             titleReplayMasked: true,
           }}

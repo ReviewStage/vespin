@@ -12,6 +12,7 @@ import {
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
+  disabled,
   navigationBarTitleDisplayMode,
   navigationSplitViewStyle,
   navigationTitle,
@@ -124,7 +125,7 @@ export function BarMenuButton({ menu }: { readonly menu: BarMenu }) {
           key={action.label}
           {...actContent(action.label, action.symbol)}
           onPress={action.onPress}
-          {...(action.disabled === true ? { disabled: true } : {})}
+          modifiers={[disabled(action.disabled === true)]}
           {...(action.destructive === true ? { role: "destructive" } : {})}
         />
       ))}

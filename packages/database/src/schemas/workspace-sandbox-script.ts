@@ -13,7 +13,7 @@ import { organization } from "./auth.js";
 /**
  * workspace-sandbox-script.ts -- the scripts that set up and archive a workspace's cloud agent sandboxes: one install script for the workspace, one setup script and one archive script per repository, and each repository's run actions.
  *
- * As Conductor Cloud keeps them, in the workspace's settings rather than in
+ * Kept together, in the workspace's settings rather than in
  * a repository: the install script runs once per build of each of the
  * workspace's repositories' base snapshots, so what it installs is in every
  * sandbox made from one, a repository's setup script runs once in each new

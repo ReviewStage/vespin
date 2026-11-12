@@ -18,7 +18,6 @@ import { settledTurnListener } from "./agents/coder-host/settled-turns.js";
 import { startedTurnListener } from "./agents/coder-host/started-turns.js";
 import { queuedTurnListener, turnQueueFromEnvironment } from "./agents/coder-host/turn-delivery.js";
 import { sandboxReleasesFromEnvironment } from "./agents/session-sandboxes.js";
-import { driveFillStepsFromEnvironment } from "./agents/workspace-drive.js";
 import { bearerCallersLayer } from "./auth/bearer-callers.js";
 import { signInRevocationFromEnvironment } from "./auth/sign-in-revocation.js";
 import { automationCadenceFromEnvironment } from "./automations/automation-cadence.js";
@@ -188,7 +187,6 @@ export const webServices = Layer.mergeAll(
   turnQueueFromEnvironment,
   sandboxReleasesFromEnvironment,
   agentWakeupsFromEnvironment,
-  driveFillStepsFromEnvironment,
   githubDeliveryReadsFromEnvironment,
   modelCatalogLayer.pipe(Layer.provide(Layer.merge(FetchHttpClient.layer, hostedEnvironment))),
   pullRequestLinksLayer,
