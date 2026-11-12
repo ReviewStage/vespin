@@ -209,6 +209,7 @@ export const FAILURE_SURFACE = {
   UPDATE_CHECK: "update.check",
   WINDOW_ZOOM: "window.zoom",
   WORKSPACES_READ: "workspaces.read",
+  WORKSPACE_CONDUCTOR_IMPORT: "workspace.conductor_import",
   WORKSPACE_CREATE: "workspace.create",
   WORKSPACE_EXPERIMENT: "workspace.experiment",
   WORKSPACE_ENVIRONMENT_READ: "workspace_environment.read",

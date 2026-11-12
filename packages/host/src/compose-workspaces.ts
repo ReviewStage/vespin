@@ -198,6 +198,9 @@ export interface WorkspacesClient {
     | "putInstallScript"
     | "putRepositorySetup"
     | "putRunActions"
+    | "checkConductorImport"
+    | "runConductorImport"
+    | "conductorImportProgress"
     | "changeRole"
     | "transfer"
     | "leave"
@@ -1506,6 +1509,29 @@ function workspaceEnvironmentActs(
   };
 }
 
+/** An import from Conductor's acts: a key checked, a run begun, and the caller's newest run read. */
+function workspaceConductorImportActs(
+  reach: WorkspacesReach,
+): Pick<
+  HostActTable<typeof WORKSPACE_ACTS>,
+  | "WORKSPACE_CONDUCTOR_IMPORT_CHECK"
+  | "WORKSPACE_CONDUCTOR_IMPORT_RUN"
+  | "WORKSPACE_CONDUCTOR_IMPORT_PROGRESS"
+> {
+  const { client } = reach.dependencies;
+
+  // Note that the key passes through to the service on the act that carries
+  // it and is held nowhere here, because only the form's own state keeps it.
+  return {
+    WORKSPACE_CONDUCTOR_IMPORT_CHECK: ({ workspaceId, apiKey }) =>
+      workspaceAsked(reach, client.workspaces.checkConductorImport(workspaceId, apiKey)),
+    WORKSPACE_CONDUCTOR_IMPORT_RUN: ({ workspaceId, apiKey }) =>
+      workspaceAsked(reach, client.workspaces.runConductorImport(workspaceId, apiKey)),
+    WORKSPACE_CONDUCTOR_IMPORT_PROGRESS: ({ workspaceId }) =>
+      workspaceAsked(reach, client.workspaces.conductorImportProgress(workspaceId)),
+  };
+}
+
 /** A workspace's cloud sandbox setup's acts: read, and its install script, a repository's setup or archive script, or a repository's run actions saved. */
 function workspaceSandboxSetupActs(
   reach: WorkspacesReach,
@@ -1625,6 +1651,7 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
       ...workspaceSettingActs(reach, parts),
       ...workspaceEnvironmentActs(reach),
       ...workspaceSandboxSetupActs(reach),
+      ...workspaceConductorImportActs(reach),
       ...github.acts,
       ...adminActs(reach),
       ...workspaceFollowActs(parts),

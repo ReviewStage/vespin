@@ -1,0 +1,37 @@
+---
+title: "Import from Conductor"
+description: "Bring your team's Conductor workspaces and chats into Vespin"
+---
+
+The Conductor import brings every Conductor workspace a key can see into Vespin, archived ones included. Each workspace becomes a task, and each of its chats becomes an agent on that task with its whole transcript.
+
+## Run the import
+
+1. Make an API key in Conductor. A personal key or a team key works.
+2. In Vespin, open **Settings › Cloud environment** and paste the key under **Import from Conductor**. Vespin checks the key and says how many workspaces it sees.
+3. If some repositories aren't connected to Vespin yet, Vespin lists them. An owner or admin presses **Open GitHub** and adds them to Vespin's GitHub App. Vespin checks the key again when you come back.
+4. Press **Import**.
+
+The import keeps running if you close Settings. When you open the page again, it shows the progress for each workspace, links each task, and says why any workspace or chat failed.
+
+Vespin keeps the key encrypted for at most a day while the import runs, then deletes it. The import only reads from Conductor and never changes anything there.
+
+## What comes over
+
+- **Workspaces** become tasks. An archived workspace becomes a Done task.
+- **Chats** become agents on their workspace's task, marked Imported from Conductor. Each one keeps the messages, replies, thinking, and tool calls. An archived chat becomes an archived agent.
+- **Branches and pull requests** that a chat pushed or opened are named in the task's description.
+- **Repository scripts** from `.conductor/settings.toml` or `conductor.json` fill in the repository's empty setup, archive, and run scripts.
+- **Assignees** are matched by the Conductor creator's name.
+
+Send a message to an imported agent and it carries on from its transcript.
+
+## What doesn't come over
+
+- **Environment variables.** Add them under **Settings › Cloud environment › Variables**.
+- **Workspaces in repositories Vespin can't reach.** Add the repository to Vespin's GitHub App, then run the import again.
+- **Subagent transcripts.** The call to a subagent and its answer come over, but not its own steps.
+
+## Run it again
+
+You can run the import as many times as you like. Another run brings over only the workspaces and chats that are new since the last one, and leaves imported ones as they are, even if they grew in Conductor since. Teammates can run it with their own keys to bring over their private workspaces.

@@ -3,6 +3,7 @@ import { readingWords } from "@repo/features/words";
 import { SettingsRowsSkeleton, SettingsSection } from "@repo/ui";
 import { Fragment } from "react";
 import { CloudSetupSections } from "./cloud-setup-sections.js";
+import { ConductorImportSection } from "./conductor-import-section.js";
 import {
   EnvironmentVariablesSection,
   VARIABLE_ROW_SKELETON,
@@ -12,11 +13,12 @@ import { shownWorkspace } from "./settings-rows.js";
 import type { WorkspaceSettingsControl } from "./workspace-page.js";
 
 /**
- * cloud-environment-page.tsx -- Settings › Cloud environment: what the workspace's cloud agents start with, its variables and then its scripts, on one page since both exist only for those agents.
+ * cloud-environment-page.tsx -- Settings › Cloud environment: what the workspace's cloud agents start with, its variables and then its scripts, on one page since both exist only for those agents, and an import from Conductor beside them.
  *
  * Variables comes first, Add variable on its heading, then Install
  * software, Setup scripts, and Archive scripts, each section reading and
- * saving its own as it did on a page of its own.
+ * saving its own as it did on a page of its own, and last Import from
+ * Conductor, since a team moving over brings its scripts with it.
  */
 
 /** Settings › Cloud environment over the workspace the sidebar lists, or why there is none to show; signed in, as Settings draws it. */
@@ -51,6 +53,7 @@ export function CloudEnvironmentPage({
     <Fragment key={workspace.id}>
       <EnvironmentVariablesSection workspace={workspace} />
       <CloudSetupSections workspace={workspace} />
+      <ConductorImportSection workspace={workspace} />
     </Fragment>
   );
 }

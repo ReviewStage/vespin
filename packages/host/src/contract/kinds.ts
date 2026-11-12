@@ -808,6 +808,10 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_ENVIRONMENT_LIST: "workspace.environmentList",
   WORKSPACE_ENVIRONMENT_PUT: "workspace.environmentPut",
   WORKSPACE_ENVIRONMENT_DELETE: "workspace.environmentDelete",
+  /** An import from Conductor into a workspace, as Settings › Cloud environment asks it: a key checked, the run begun with it, and the caller's newest run read while the page shows it; no answer carries the key. */
+  WORKSPACE_CONDUCTOR_IMPORT_CHECK: "workspace.conductorImportCheck",
+  WORKSPACE_CONDUCTOR_IMPORT_RUN: "workspace.conductorImportRun",
+  WORKSPACE_CONDUCTOR_IMPORT_PROGRESS: "workspace.conductorImportProgress",
   /** A workspace's cloud sandbox setup, its install script and each repository's setup script, read once as Settings › Cloud environment opens; a save answers the setup as it then stands. */
   WORKSPACE_SANDBOX_SETUP_READ: "workspace.sandboxSetupRead",
   WORKSPACE_INSTALL_SCRIPT_PUT: "workspace.installScriptPut",
@@ -1212,6 +1216,9 @@ export const PORT_ACT_USE = {
   WORKSPACE_ENVIRONMENT_LIST: ACT_USE.FETCH,
   WORKSPACE_ENVIRONMENT_PUT: ACT_USE.WRITE,
   WORKSPACE_ENVIRONMENT_DELETE: ACT_USE.WRITE,
+  WORKSPACE_CONDUCTOR_IMPORT_CHECK: ACT_USE.FETCH,
+  WORKSPACE_CONDUCTOR_IMPORT_RUN: ACT_USE.WRITE,
+  WORKSPACE_CONDUCTOR_IMPORT_PROGRESS: ACT_USE.FETCH,
   WORKSPACE_SANDBOX_SETUP_READ: ACT_USE.FETCH,
   WORKSPACE_INSTALL_SCRIPT_PUT: ACT_USE.WRITE,
   WORKSPACE_REPOSITORY_SETUP_PUT: ACT_USE.WRITE,

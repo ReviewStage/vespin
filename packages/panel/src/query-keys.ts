@@ -29,6 +29,8 @@ export const QUERY_ROOT = {
   WORKSPACE_ENVIRONMENT: "workspace-environment",
   /** Settings › Cloud environment's scripts: a workspace's install script and each repository's setup and archive scripts (`settings/cloud-setup-sections.tsx`). */
   WORKSPACE_SANDBOX_SETUP: "workspace-sandbox-setup",
+  /** Settings › Cloud environment's Conductor: the caller's newest import from Conductor into a workspace (`settings/conductor-import-section.tsx`), never the key. */
+  CONDUCTOR_IMPORT: "conductor-import",
   INSTALLED_SKILL: "installed-skill",
   INSTALLED_SKILL_PREVIEW: "installed-skill-preview",
   TASK_NEWEST_REVISION: "task-newest-revision",
@@ -88,6 +90,7 @@ const ACCOUNT_SCOPED_ROOTS: ReadonlySet<unknown> = new Set<string>([
   QUERY_ROOT.HOST_PAIRING,
   QUERY_ROOT.WORKSPACE_ENVIRONMENT,
   QUERY_ROOT.WORKSPACE_SANDBOX_SETUP,
+  QUERY_ROOT.CONDUCTOR_IMPORT,
 ]);
 
 /**
