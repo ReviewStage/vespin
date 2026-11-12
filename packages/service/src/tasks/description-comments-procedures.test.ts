@@ -24,7 +24,7 @@ import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { hostedFetch } from "../orpc/handler.js";
 import type { WebServices } from "../runtime.js";
 import { syncHub } from "../sync/hub.js";
-import { Sync, type SyncShape } from "../sync/watch.js";
+import { Sync, type SyncService } from "../sync/watch.js";
 import { announcingClock, driven } from "../testing/clock-driven.js";
 import { descriptionCommentsProcedures } from "./description-comments-procedures.js";
 
@@ -100,7 +100,7 @@ const onHub = Effect.gen(function* () {
   const looking = yield* Queue.unbounded<void>();
   const hub = Context.get(yield* Layer.build(syncHub), Sync);
 
-  const announcing: SyncShape = {
+  const announcing: SyncService = {
     watch: (topics, fallback) =>
       Effect.map(hub.watch(topics, fallback), (watch) => ({
         ...watch,

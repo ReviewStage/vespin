@@ -240,7 +240,7 @@ function deviceAnswerOf(outcome: ChatGptDeviceLoginOutcome): ChatGptDevicePollAn
 }
 
 /** Whether a subscription credential is saved for the provider its kind belongs to and spelled as one of its kind; nothing is asked of the provider. */
-function subscriptionShapeOf(
+function subscriptionRefusalOf(
   provider: ProviderKeyProvider,
   kind: Exclude<ProviderKeyKind, typeof PROVIDER_KEY_KIND.API_KEY>,
   key: Redacted.Redacted<string>,
@@ -285,7 +285,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       }
 
       if (kind !== PROVIDER_KEY_KIND.API_KEY) {
-        const refused = subscriptionShapeOf(provider, kind, key);
+        const refused = subscriptionRefusalOf(provider, kind, key);
 
         if (refused !== undefined) return yield* keysAnswer(userId, ring, refused);
         const now = yield* DateTime.nowAsDate;

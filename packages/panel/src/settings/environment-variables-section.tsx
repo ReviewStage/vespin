@@ -21,7 +21,7 @@ import {
   SETTINGS_SKELETON_CONTROL,
   SecretField,
   SettingsLine,
-  type SettingsRowSkeletonShape,
+  type SettingsRowSkeletonLayout,
   SettingsRowsSkeleton,
   SettingsSection,
   Stack,
@@ -61,7 +61,7 @@ import { MenuRow } from "./menu-row.js";
  */
 
 /** A variable's row while the names are read. */
-export const VARIABLE_ROW_SKELETON: SettingsRowSkeletonShape = {
+export const VARIABLE_ROW_SKELETON: SettingsRowSkeletonLayout = {
   described: false,
   controls: [],
   end: [SETTINGS_SKELETON_CONTROL.MORE],

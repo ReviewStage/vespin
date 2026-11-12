@@ -143,7 +143,7 @@ import {
   completeIntegrationSignIn,
 } from "../integrations/integration-store.js";
 import { SlackBot, slackBotOver } from "../slack/slack-bot.js";
-import { clockWatch, Sync, type SyncShape } from "../sync/watch.js";
+import { clockWatch, Sync, type SyncService } from "../sync/watch.js";
 import { AGENT_KEY_RING, connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
   connectWorkspaceGitHub,
@@ -2266,7 +2266,7 @@ it.layer(getTestDB())("an agent's pull request's chapters' live read", (it) => {
 });
 
 /** A live read at `path` asked as `bearer`, polled, in delta mode past `sync` where it names one ("" for none yet), on the test's clock and on `hub` where one is named; its answer's body. */
-const askHeld = (bearer: string, path: string, sync?: string, hub?: SyncShape) =>
+const askHeld = (bearer: string, path: string, sync?: string, hub?: SyncService) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
@@ -2299,7 +2299,7 @@ const askHeld = (bearer: string, path: string, sync?: string, hub?: SyncShape) =
   });
 
 /** The task list asked as `bearer`, in delta mode past `sync` where it names one, on `hub` where one is named, its parts decoded. */
-const askTasks = (bearer: string, sync?: string, hub?: SyncShape) =>
+const askTasks = (bearer: string, sync?: string, hub?: SyncService) =>
   Effect.map(
     askHeld(bearer, "/api/live/tasks", sync, hub),
     (body) => Schema.decodeUnknownSync(TASK_LIST_READ.answer)(body).queries,
@@ -2310,7 +2310,7 @@ const askTasks = (bearer: string, sync?: string, hub?: SyncShape) =>
  * each wait announced on `looking` once the clock holds it, so a test moves
  * the clock only once the look before it found nothing moved.
  */
-const lookingOn = (looking: Queue.Queue<void>): SyncShape => ({
+const lookingOn = (looking: Queue.Queue<void>): SyncService => ({
   watch: (_topics, fallback) => {
     const watch = clockWatch(fallback);
 

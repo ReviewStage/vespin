@@ -162,7 +162,7 @@ diff --git a/packages/panel/src/repository-picture.tsx b/packages/panel/src/repo
 index a7d3e94ab..bedd04cf4 100644
 --- a/packages/panel/src/repository-picture.tsx
 +++ b/packages/panel/src/repository-picture.tsx
-@@ -2,6 +2,8 @@ import { AVATAR_SHAPE, AVATAR_SIZE, Avatar, type AvatarSize } from "@luke/ui";
+@@ -2,6 +2,8 @@ import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar, type AvatarSize } from "@luke/ui";
  import { GLYPH } from "@luke/ui/icons";
  import { repositoryOwnerPictureUrl } from "@luke/ui/tasks-model";
  import { useState } from "react";

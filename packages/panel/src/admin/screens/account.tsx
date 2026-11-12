@@ -14,7 +14,7 @@ import {
   MARK_PROVIDER,
   PICTURE_TILE_FACE,
   PictureTile,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   STATUS_TONE,
   Stack,
@@ -378,7 +378,7 @@ function Masthead({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
 function MastheadSkeleton(): React.JSX.Element {
   return (
     <MastheadFrame
-      avatar={<Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_AVATAR_WIDTH} />}
+      avatar={<Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_AVATAR_WIDTH} />}
       email={
         <Text as={TEXT_ELEMENT.DIV}>
           <Skeleton width={SKELETON_EMAIL_WIDTH} />

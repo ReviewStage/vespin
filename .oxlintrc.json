@@ -56,7 +56,7 @@
     "anti-slop/no-runtime-typeof": "error",
     "anti-slop/no-known-value-widening": "error",
     "anti-slop/require-safety-comment-for-type-assertion": "error",
-    "anti-slop/no-shape-in-symbol-names": "off",
+    "anti-slop/no-shape-in-symbol-names": "error",
     "anti-slop/require-readable-spacing": "error",
     "anti-slop-effect/no-manual-effect-error-tag": "error",
     "anti-slop-effect/no-manual-tagged-construction": "error",

@@ -62,7 +62,7 @@ import {
   SettingsRow,
   SettingsRowMark,
   SettingsRowMeter,
-  type SettingsRowSkeletonShape,
+  type SettingsRowSkeletonLayout,
   SettingsRowStateLine,
   SettingsRowUsage,
   SettingsSection,
@@ -171,7 +171,7 @@ interface Harness {
   /** What the site a key is made on is called, which its link names. */
   readonly keySite: string;
   /** How a key of its begins, which its empty field shows. */
-  readonly keyShape: string;
+  readonly keyExample: string;
   readonly anchor: string;
 }
 
@@ -190,7 +190,7 @@ const HARNESS = {
     keyName: "Anthropic",
     keyUrl: "https://console.anthropic.com/settings/keys",
     keySite: "Anthropic Console",
-    keyShape: "sk-ant-api03-…",
+    keyExample: "sk-ant-api03-…",
     anchor: SETTINGS_SECTION.CLAUDE,
   },
   [PROVIDER_KEY_PROVIDER.OPENAI]: {
@@ -202,7 +202,7 @@ const HARNESS = {
     keyName: "OpenAI",
     keyUrl: "https://platform.openai.com/api-keys",
     keySite: "OpenAI Platform",
-    keyShape: "sk-proj-…",
+    keyExample: "sk-proj-…",
     anchor: SETTINGS_SECTION.CODEX,
   },
 } as const satisfies Record<ProviderKeyProvider, Harness>;
@@ -216,7 +216,7 @@ const HARNESSES: readonly ProviderKeyProvider[] = [
 const SECTION_ROWS = 1;
 
 /** A credential's row while the keys are read: its mark, its name, and its press. */
-const CREDENTIAL_ROW_SKELETON: SettingsRowSkeletonShape = {
+const CREDENTIAL_ROW_SKELETON: SettingsRowSkeletonLayout = {
   described: false,
   mark: SETTINGS_ROW_MARK_WIDTH,
   controls: [SETTINGS_SKELETON_CONTROL.BUTTON],
@@ -239,7 +239,7 @@ const WORDS = {
   MANAGE_USAGE: "Manage usage",
   API_KEY: "API key",
   CANCEL: "Cancel",
-  TOKEN_SHAPE: "sk-ant-oat01-…",
+  TOKEN_EXAMPLE: "sk-ant-oat01-…",
   SAVING_TOKEN: "Saving the token",
   CHECKING_KEY: "Checking the key",
   DISCONNECT: "Disconnect",
@@ -690,7 +690,7 @@ function setupTokenPaste(placement: TokenPlacement): PasteKind {
   return {
     first: SETUP_TOKEN_FIRST,
     label: WORDS.PASTE_TOKEN,
-    placeholder: WORDS.TOKEN_SHAPE,
+    placeholder: WORDS.TOKEN_EXAMPLE,
     running: WORDS.SAVING_TOKEN,
     payload: (key) => ({
       provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
@@ -708,7 +708,7 @@ function keyPaste(provider: ProviderKeyProvider, replacing?: string): PasteKind 
   return {
     first: keyFirst(provider),
     label: WORDS.PASTE_KEY,
-    placeholder: HARNESS[provider].keyShape,
+    placeholder: HARNESS[provider].keyExample,
     running: WORDS.CHECKING_KEY,
     payload: (key) => ({
       provider,

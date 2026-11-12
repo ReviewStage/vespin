@@ -112,6 +112,7 @@ function NoticeBody({
           padding({ leading: SPACE.EDGE, trailing: SPACE.ROW, vertical: SPACE.ROW + 2 }),
           glassEffect({
             glass: { variant: "regular", interactive: true },
+            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
             shape: "roundedRectangle",
             cornerRadius: BAR_RADIUS,
           }),

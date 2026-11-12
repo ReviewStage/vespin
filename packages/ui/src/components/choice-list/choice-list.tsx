@@ -399,7 +399,7 @@ function ChoiceControl({
   tone: StatusTone | undefined;
   inCard: boolean;
 }): React.JSX.Element {
-  const shape = radio ? "radio" : "box";
+  const control = radio ? "radio" : "box";
   // Note that a neutral tone says nothing of what picking means, so its control fills in the accent.
   const toned = tone !== undefined && tone !== STATUS_TONE.NEUTRAL;
 
@@ -414,10 +414,10 @@ function ChoiceControl({
           : "self-start mt-[calc((var(--ui-type-body-leading)-var(--ui-space-16))/2)]",
         !checked && "border-muted-foreground",
         checked && (toned ? CONTROL_TONE_FILL : CONTROL_ACCENT_FILL),
-        checked && CONTROL_MARK[shape],
-        checked && CONTROL_INK[shape][toned ? "toned" : "accent"],
+        checked && CONTROL_MARK[control],
+        checked && CONTROL_INK[control][toned ? "toned" : "accent"],
       )}
-      data-shape={shape}
+      data-control={control}
       aria-hidden="true"
     />
   );

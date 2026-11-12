@@ -20,7 +20,7 @@ import {
   SETTINGS_ROW_MARK_WIDTH,
   SETTINGS_SKELETON_CONTROL,
   SettingsPageSkeleton,
-  type SettingsSectionSkeletonShape,
+  type SettingsSectionSkeletonLayout,
   SidebarIcon,
   TOOLBAR_LOOK,
   Toolbar,
@@ -284,7 +284,7 @@ function AutomationsLoading({
  * GitHub token, its mark leading; and Delete account. Note that they are not
  * read from the page itself, because that would draw its chunk in with this one.
  */
-const SETTINGS_SKELETON: readonly SettingsSectionSkeletonShape[] = [
+const SETTINGS_SKELETON: readonly SettingsSectionSkeletonLayout[] = [
   {
     headed: true,
     rows: [

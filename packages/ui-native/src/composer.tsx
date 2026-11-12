@@ -12,12 +12,11 @@ import {
   useNativeState,
   VStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityIdentifier,
   accessibilityLabel,
-  buttonBorderShape,
   buttonStyle,
-  contentShape,
   disabled,
   font,
   foregroundStyle,
@@ -25,7 +24,6 @@ import {
   glassEffect,
   lineLimit,
   padding,
-  shapes,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -48,7 +46,7 @@ const SEND_SIZE = 32;
  */
 const PRESS_FRAME = [
   frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
-  contentShape(shapes.rectangle()),
+  SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
 ];
 
 /** The mark inside the round button, centered in the circle's own size, so the system's circle draws at Send's size around it. */
@@ -58,7 +56,7 @@ const ROUND_MARK = [frame({ width: SEND_SIZE - 12, height: SEND_SIZE - 12 })];
 function roundModifiers(colors: ReturnType<typeof useColors>) {
   return [
     buttonStyle("borderedProminent"),
-    buttonBorderShape("circle"),
+    SwiftModifiers.buttonBorderShape("circle"),
     tint(colors.TEXT),
     foregroundStyle(colors.GROUND),
     ...PRESS_FRAME,
@@ -358,6 +356,7 @@ export function ComposerFoot(props: ComposerProps) {
     padding({ all: BAR_EDGE }),
     glassEffect({
       glass: { variant: "regular", interactive: true },
+      // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
       shape: "roundedRectangle",
       cornerRadius: BAR_RADIUS,
     }),

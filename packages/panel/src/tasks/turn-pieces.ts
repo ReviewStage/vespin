@@ -15,7 +15,7 @@
  */
 
 import type { AgentPart, TurnStretch } from "@repo/features/agent-parts";
-import { sameShape, TURN_ROW_DEPTH, type TurnRow } from "@repo/features/turn-rows";
+import { readAlike, TURN_ROW_DEPTH, type TurnRow } from "@repo/features/turn-rows";
 
 /** How many of a turn's rows, and lines that reached it, one piece of it holds. */
 export const PIECE_ROWS = 6;
@@ -129,7 +129,7 @@ export function pieceKey(turnKey: string, at: number): string {
 /** Whether two pieces draw alike: every field of the piece, its lines, and its rows as the rows are read (`sameTurnRow`). */
 function samePiece(a: TurnPiece, b: TurnPiece): boolean {
   // Note that a row stands two records under a piece: the piece, then its stretch.
-  return sameShape(a, b, TURN_ROW_DEPTH + 2);
+  return readAlike(a, b, TURN_ROW_DEPTH + 2);
 }
 
 /** The pieces handed, each the one held before at its place where it draws alike, so a page that touched only a turn's end leaves its earlier pieces the same values. */

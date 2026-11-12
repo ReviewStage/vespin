@@ -61,7 +61,7 @@ import {
 } from "../composer-drafts.js";
 import type { ShownFailure } from "../failure-report.js";
 import { modelsRetryMutation } from "../live-reads.js";
-import type { RenameShape } from "../rename-write.js";
+import type { RenameTerms } from "../rename-write.js";
 import { rendererPause } from "../renderer-runtime.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import { useToast } from "../toast.js";
@@ -176,11 +176,11 @@ type AgentDeleteMutation = ReturnType<typeof agentDeleteMutation>;
 type AgentRenameMutation = ReturnType<typeof agentRenameMutation>;
 
 /** How an agent's rename is asked and read back, its refusal its answer's failure. */
-export const AGENT_RENAME_SHAPE = {
+export const AGENT_RENAME_TERMS = {
   ask: (agentId: string, title: string): AgentRenameAsk => ({ agentId, title }),
   asked: ({ agentId, title }: AgentRenameAsk) => ({ subjectId: agentId, name: title }),
   refused: (answer: AgentActAnswer) => "failure" in answer,
-} satisfies RenameShape<AgentActAnswer, AgentRenameAsk>;
+} satisfies RenameTerms<AgentActAnswer, AgentRenameAsk>;
 
 /** No words to listen for, one array so a render that has none hands down the same one. */
 const NO_KEYWORDS: readonly string[] = [];
@@ -487,7 +487,7 @@ export interface AgentsControl {
   /** Whether an archive asked here is still out, the agent it took coming back should the service refuse it. */
   archiving: boolean;
   /** The rename a surface renaming an agent holds its own mutation over, drawn at once by the host, with how its refusal is asked, read back, and said. */
-  rename: RenameShape<AgentActAnswer, AgentRenameAsk> & { readonly options: AgentRenameMutation };
+  rename: RenameTerms<AgentActAnswer, AgentRenameAsk> & { readonly options: AgentRenameMutation };
   /**
    * Archives one agent, a turn it still runs stopped first, or brings it
    * back, drawn at once by the host, and offering Undo in a toast, which ⌘Z
@@ -1635,7 +1635,7 @@ export function useAgents(input: {
   // rename may be out before the first answers; only the newest one's refusal is said, in a toast,
   // as the name it replaced comes back, which the call's own `onSettled` keeps to.
   const rename = {
-    ...AGENT_RENAME_SHAPE,
+    ...AGENT_RENAME_TERMS,
     options: agentRenameMutation((asked) => sendAct(ACT_KIND.AGENTS_RENAME, asked)),
     onRefused: (
       answer: AgentActAnswer | undefined,

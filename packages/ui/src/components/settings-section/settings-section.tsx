@@ -3,7 +3,7 @@ import { type ReactNode, useId, useRef } from "react";
 import { said } from "../../said.js";
 import { RevealArea, revealArea } from "../reveal/reveal.js";
 import { SettingsRow, SettingsRowValue } from "../settings-row/settings-row.js";
-import { SKELETON_SHAPE, Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
+import { SKELETON_KIND, Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 
 /**
@@ -96,7 +96,7 @@ export type SettingsSkeletonControl =
 export const SETTINGS_ROW_MARK_WIDTH = "var(--ui-settings-row-mark-size)";
 
 /** One placeholder row, shaped as the row that lands: whether it is described, what it leads with, and what it ends in. */
-export interface SettingsRowSkeletonShape {
+export interface SettingsRowSkeletonLayout {
   /** Whether the row that lands carries a description under its label. */
   readonly described: boolean;
   /** The controls before its end, in order; none where it has none. */
@@ -108,9 +108,9 @@ export interface SettingsRowSkeletonShape {
 }
 
 /** One placeholder section, shaped as the section that lands: whether it is headed, and its rows. */
-export interface SettingsSectionSkeletonShape {
+export interface SettingsSectionSkeletonLayout {
   readonly headed: boolean;
-  readonly rows: readonly SettingsRowSkeletonShape[];
+  readonly rows: readonly SettingsRowSkeletonLayout[];
 }
 
 /** How wide each placeholder row's label and description stand, as shares of their lines, so the rows read as settings of their own. */
@@ -156,39 +156,39 @@ export function SettingsControlSkeleton({
     );
   }
 
-  return <Skeleton shape={SKELETON_SHAPE.CONTROL} width={width} />;
+  return <Skeleton kind={SKELETON_KIND.CONTROL} width={width} />;
 }
 
 /** A placeholder of one row, drawn by the row itself with its words, mark, and controls as blocks. */
 function RowSkeleton({
   at,
-  shape,
+  layout,
 }: {
   at: number;
-  shape: SettingsRowSkeletonShape;
+  layout: SettingsRowSkeletonLayout;
 }): React.JSX.Element {
   const widths = SKELETON_ROW_WIDTHS[at % SKELETON_ROW_WIDTHS.length] ?? SKELETON_ROW_WIDTHS[0];
 
   return (
     <SettingsRow
       label={<Skeleton width={widths.label} />}
-      description={shape.described ? <Skeleton width={widths.description} /> : undefined}
+      description={layout.described ? <Skeleton width={widths.description} /> : undefined}
       leading={
-        shape.mark === undefined ? undefined : (
-          <Skeleton shape={SKELETON_SHAPE.CIRCLE} width={shape.mark} />
+        layout.mark === undefined ? undefined : (
+          <Skeleton kind={SKELETON_KIND.CIRCLE} width={layout.mark} />
         )
       }
       end={
-        shape.end === undefined || shape.end.length === 0
+        layout.end === undefined || layout.end.length === 0
           ? undefined
           : () =>
-              shape.end?.map((control, place) => (
+              layout.end?.map((control, place) => (
                 <SettingsControlSkeleton key={place} control={control} />
               ))
       }
     >
       {() =>
-        shape.controls.map((control, place) => (
+        layout.controls.map((control, place) => (
           <SettingsControlSkeleton key={place} control={control} />
         ))
       }
@@ -197,11 +197,11 @@ function RowSkeleton({
 }
 
 /** The placeholder rows, ruled one from the next as a card's rows are. */
-function RowsSkeleton({ rows }: { rows: readonly SettingsRowSkeletonShape[] }): React.JSX.Element {
+function RowsSkeleton({ rows }: { rows: readonly SettingsRowSkeletonLayout[] }): React.JSX.Element {
   return (
     <div className="ui-settings-skeleton-rows">
-      {rows.map((shape, at) => (
-        <RowSkeleton key={at} at={at} shape={shape} />
+      {rows.map((layout, at) => (
+        <RowSkeleton key={at} at={at} layout={layout} />
       ))}
     </div>
   );
@@ -219,7 +219,7 @@ export function SettingsRowsSkeleton({
   /** What is being read, said to a reader: "Reading the members"; none where a region around them says it. */
   label?: string | undefined;
   /** The rows likely to land, each in its shape, from what the loaded rows are drawn from. */
-  rows: readonly SettingsRowSkeletonShape[];
+  rows: readonly SettingsRowSkeletonLayout[];
 }): React.JSX.Element {
   if (label === undefined) return <RowsSkeleton rows={rows} />;
 
@@ -233,12 +233,12 @@ export function SettingsRowsSkeleton({
 /** One placeholder section, drawn in a section's own frame: a heading's block where it is headed, over a card of its rows. */
 function SectionSkeleton({
   at,
-  shape,
+  layout,
 }: {
   at: number;
-  shape: SettingsSectionSkeletonShape;
+  layout: SettingsSectionSkeletonLayout;
 }): React.JSX.Element {
-  const head = shape.headed ? (
+  const head = layout.headed ? (
     <Text variant={TEXT_VARIANT.SECTION} as={TEXT_ELEMENT.DIV}>
       <Skeleton width={SKELETON_HEADING_WIDTHS[at % SKELETON_HEADING_WIDTHS.length]} />
     </Text>
@@ -246,7 +246,7 @@ function SectionSkeleton({
 
   return (
     <SectionFrame head={head}>
-      <RowsSkeleton rows={shape.rows} />
+      <RowsSkeleton rows={layout.rows} />
     </SectionFrame>
   );
 }
@@ -259,13 +259,13 @@ export function SettingsSectionsSkeleton({
   /** What is being read, said to a reader: "Reading the integrations". */
   label: string;
   /** The sections likely to land, each in its shape, from what the page's sections are drawn from. */
-  sections: readonly SettingsSectionSkeletonShape[];
+  sections: readonly SettingsSectionSkeletonLayout[];
 }): React.JSX.Element {
   return (
     <SkeletonRegion label={label}>
       <div className="ui-settings-skeleton">
-        {sections.map((shape, at) => (
-          <SectionSkeleton key={at} at={at} shape={shape} />
+        {sections.map((layout, at) => (
+          <SectionSkeleton key={at} at={at} layout={layout} />
         ))}
       </div>
     </SkeletonRegion>

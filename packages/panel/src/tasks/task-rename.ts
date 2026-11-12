@@ -5,7 +5,7 @@
 import type { TasksView } from "@repo/features/tasks-view";
 import { mutationOptions, useQuery } from "@tanstack/react-query";
 import { sendAct } from "../act.js";
-import type { RenameShape } from "../rename-write.js";
+import type { RenameTerms } from "../rename-write.js";
 import { pressRows, ROW_WRITE, type RowDoors, type TaskRows } from "../undo-stack.js";
 import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useTaskRowDoors } from "./task-row-doors.js";
@@ -20,7 +20,7 @@ interface TaskRenameAsk {
 }
 
 /** How a task's rename is asked and read back, its refusal the answer that it was not renamed. */
-export const TASK_RENAME_SHAPE: RenameShape<boolean, TaskRenameAsk> = {
+export const TASK_RENAME_TERMS: RenameTerms<boolean, TaskRenameAsk> = {
   ask: (taskId, name) => ({ taskId, name }),
   asked: ({ taskId, name }) => ({ subjectId: taskId, name }),
   refused: (renamed) => !renamed,

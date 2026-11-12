@@ -41,7 +41,7 @@ type VideoProps = {
   /** Opens the video where it plays, offered where the system's player cannot read it; none offers nothing. */
   readonly onOpenElsewhere?: (() => void) | undefined;
   /** A tile's fixed shape, width over height; a film's 16 by 9 where none is given. */
-  readonly shape?: number | undefined;
+  readonly tileAspect?: number | undefined;
 };
 
 /**
@@ -54,10 +54,10 @@ type VideoProps = {
  * system's spinner in its well, as Photos does, so it never reads as an
  * empty box.
  */
-export function Video({ source, label, onOpenElsewhere, shape }: VideoProps) {
+export function Video({ source, label, onOpenElsewhere, tileAspect }: VideoProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
-  const shaped = shape === undefined ? undefined : { aspectRatio: shape };
+  const tiled = tileAspect === undefined ? undefined : { aspectRatio: tileAspect };
   const player = useVideoPlayer(source ?? null);
   const [status, setStatus] = useState<VideoPlayerStatus>(player.status);
   useEffect(() => {
@@ -76,7 +76,7 @@ export function Video({ source, label, onOpenElsewhere, shape }: VideoProps) {
       <View
         style={[
           styles.frame,
-          shaped,
+          tiled,
           styles.unplayable,
           failed && large ? styles.grown : null,
           { backgroundColor: colors.WELL },
@@ -112,7 +112,7 @@ export function Video({ source, label, onOpenElsewhere, shape }: VideoProps) {
   }
 
   return (
-    <View style={[styles.frame, shaped]}>
+    <View style={[styles.frame, tiled]}>
       <VideoView
         player={player}
         nativeControls

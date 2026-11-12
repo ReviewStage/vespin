@@ -683,7 +683,7 @@ function required<A>(row: Option.Option<A>, absent: string): Effect.Effect<A> {
 
 const readsJsonObject = Schema.is(Schema.Record(Schema.String, Schema.Unknown));
 
-const readsPartsShape = Schema.is(Schema.Array(Schema.Struct({ type: Schema.String })));
+const readsPartTypes = Schema.is(Schema.Array(Schema.Struct({ type: Schema.String })));
 
 /**
  * The three `jsonb` columns this writer carries whose shape belongs to a
@@ -701,7 +701,7 @@ const readsPartsShape = Schema.is(Schema.Array(Schema.Struct({ type: Schema.Stri
  * `jsonb` in a statement.
  */
 const StoredPartsColumnSchema: Schema.Codec<Parts> = Schema.declare((input): input is Parts =>
-  readsPartsShape(input),
+  readsPartTypes(input),
 );
 
 const MessageMetadataColumnSchema: Schema.Codec<StoredMessageMetadata> = Schema.declare(

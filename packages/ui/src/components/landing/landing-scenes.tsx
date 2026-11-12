@@ -27,7 +27,7 @@ import { MARK_PROVIDER, ProviderMark } from "../../marks/provider-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";
 import { PROFILE, surfaceAttributes, THEME } from "../../tokens/surface.js";
-import { AVATAR_SHAPE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
+import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
 import { Badge } from "../badge/badge.js";
 import { BarAction, BarItem, BarItems } from "../bar-item/bar-item.js";
 import { Breadcrumbs } from "../breadcrumbs/breadcrumbs.js";
@@ -149,7 +149,7 @@ const DESKTOP_SURFACE = surfaceAttributes(PROFILE.DESKTOP, THEME.DARK);
 function agentAuthor(name: string): CommentAuthor {
   return {
     name,
-    shape: AVATAR_SHAPE.SQUARE,
+    outline: AVATAR_OUTLINE.SQUARE,
     glyph: <HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />,
   };
 }
@@ -942,7 +942,7 @@ function AutomationSettings(): React.JSX.Element {
       <div className="ui-landing-automation-title">
         <Avatar
           name="Nightly flaky-test sweep"
-          shape={AVATAR_SHAPE.SQUARE}
+          outline={AVATAR_OUTLINE.SQUARE}
           size={AVATAR_SIZE.PAGE}
           glyph={<FiringGlyph of={SCHEDULE} />}
           decorative
@@ -1007,7 +1007,7 @@ function AutomationRuns({ step }: { step: number }): React.JSX.Element {
               leading={
                 <Avatar
                   name={run.title}
-                  shape={AVATAR_SHAPE.SQUARE}
+                  outline={AVATAR_OUTLINE.SQUARE}
                   size={AVATAR_SIZE.ROW}
                   glyph={running ? <WorkingMark /> : <FiringGlyph of={SCHEDULE} />}
                   decorative

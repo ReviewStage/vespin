@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { PencilLineIcon } from "../../icons/icons.js";
 import { drawsSomething } from "../../said.js";
-import { AVATAR_SHAPE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
+import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
 import { Tooltip } from "../tooltip/hint.js";
 import type { CardBox } from "../tooltip/tooltip.js";
 import type { CommentAuthor } from "./comment.js";
@@ -98,7 +98,7 @@ function PinFaceOf({ face }: { face: PinFace }): React.JSX.Element {
         name={author.name}
         {...(author.id === undefined ? {} : { id: author.id })}
         src={author.picture}
-        shape={author.shape ?? AVATAR_SHAPE.CIRCLE}
+        outline={author.outline ?? AVATAR_OUTLINE.CIRCLE}
         glyph={glyph}
         tiled={glyph !== undefined}
         size={AVATAR_SIZE.INLINE}

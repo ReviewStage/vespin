@@ -11,11 +11,11 @@ import {
 } from "react";
 import { cn } from "../../cn.js";
 import {
-  BUTTON_SHAPE,
+  BUTTON_CORNERS,
   BUTTON_VARIANT,
   type BusyProps,
   Button,
-  type ButtonShape,
+  type ButtonCorners,
   type ButtonSize,
   type ButtonVariant,
 } from "../button/button.js";
@@ -133,7 +133,7 @@ function FoldingBox({
   label,
   icon,
   variant,
-  shape,
+  corners,
   size,
   busy,
   busyLabel,
@@ -151,7 +151,7 @@ function FoldingBox({
   label: string;
   icon: ReactNode;
   variant: ButtonVariant;
-  shape: ButtonShape | undefined;
+  corners: ButtonCorners | undefined;
   size: ButtonSize | undefined;
   busy: boolean | undefined;
   busyLabel: string | undefined;
@@ -176,7 +176,7 @@ function FoldingBox({
         icon={icon}
         trailing={trailing}
         variant={variant}
-        shape={shape ?? BUTTON_SHAPE.SQUARE}
+        corners={corners ?? BUTTON_CORNERS.SQUARE}
         size={size}
         disabled={disabled}
         focusableWhenDisabled={focusableWhenDisabled}
@@ -202,7 +202,7 @@ export function FoldingButton({
   label,
   icon,
   variant = BUTTON_VARIANT.QUIET,
-  shape,
+  corners,
   size,
   busy,
   busyLabel,
@@ -221,7 +221,7 @@ export function FoldingButton({
     icon: ReactNode;
     variant?: ButtonVariant;
     /** Its outline: the control's corner, or round, a pill drawn and a disc folded. */
-    shape?: ButtonShape | undefined;
+    corners?: ButtonCorners | undefined;
     /** How big it is: the control's own, or a row mark's height in the caption's type. */
     size?: ButtonSize | undefined;
     /** Whether the press its ring stood for landed, read as the ring leaves (Button's `succeeded`). */
@@ -245,7 +245,7 @@ export function FoldingButton({
       label={label}
       icon={icon}
       variant={variant}
-      shape={shape}
+      corners={corners}
       size={size}
       busy={busy}
       busyLabel={busyLabel}

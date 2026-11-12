@@ -136,7 +136,7 @@ import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { newTaskAction } from "../tasks/inbox-list.js";
 import { openTaskInTab } from "../tasks/task-menu-items.js";
-import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
+import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
 import { TaskKey } from "../tasks/task-standing.js";
 import { linkPressOf } from "../tasks/use-open-link.js";
@@ -421,7 +421,7 @@ const TaskBoardCard = memo(function TaskBoardCard({
   const unread = useMarkedUnread(task.id);
   const pictures = useRepositoryPictures();
   const renaming = useMutation(useTaskRename(tasks.drawnTasks));
-  const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_SHAPE));
+  const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_TERMS));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const drawn = (property: TaskProperty) => properties.includes(property);
 

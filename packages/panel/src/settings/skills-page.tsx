@@ -30,11 +30,11 @@ import {
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
   SettingsRowMark,
-  type SettingsRowSkeletonShape,
+  type SettingsRowSkeletonLayout,
   SettingsRowStateLine,
   SettingsRowsSkeleton,
   SettingsSection,
-  type SettingsSectionSkeletonShape,
+  type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
   SpinnerRegion,
   Stack,
@@ -106,7 +106,7 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
  */
 
 /** An installed skill's row while the skills are read: its book, its words over its source, and its ⋯. */
-const SKILL_ROW_SKELETON: SettingsRowSkeletonShape = {
+const SKILL_ROW_SKELETON: SettingsRowSkeletonLayout = {
   described: true,
   controls: [],
   end: [SETTINGS_SKELETON_CONTROL.MORE],
@@ -114,7 +114,7 @@ const SKILL_ROW_SKELETON: SettingsRowSkeletonShape = {
 };
 
 /** A group of skills while it is read, one row standing for however many land. */
-const SKILL_GROUP_SKELETON: SettingsSectionSkeletonShape = {
+const SKILL_GROUP_SKELETON: SettingsSectionSkeletonLayout = {
   headed: true,
   rows: [SKILL_ROW_SKELETON],
 };
@@ -124,7 +124,7 @@ const SKILL_GROUP_SKELETON: SettingsSectionSkeletonShape = {
  * reader's own, since whether the workspace is a personal one, which draws
  * no group of its own, is not yet known.
  */
-const SKILLS_SKELETON: readonly SettingsSectionSkeletonShape[] = [
+const SKILLS_SKELETON: readonly SettingsSectionSkeletonLayout[] = [
   SKILL_GROUP_SKELETON,
   SKILL_GROUP_SKELETON,
 ];

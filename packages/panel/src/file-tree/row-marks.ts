@@ -88,8 +88,8 @@ const GLYPH = {
 } as const;
 
 /** A glyph as the address a mask draws it from. */
-function maskOf(shapes: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${shapes}</svg>`;
+function maskOf(glyph: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${glyph}</svg>`;
 
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }

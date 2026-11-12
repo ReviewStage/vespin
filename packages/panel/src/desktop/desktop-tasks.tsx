@@ -93,7 +93,7 @@ import {
 } from "../tasks/task-mentions.js";
 import { taskLinkDestination, useOfferTaskRename } from "../tasks/task-menu-items.js";
 import type { TaskRelationsDoor } from "../tasks/task-relation-menu.js";
-import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
+import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
 import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
@@ -567,10 +567,10 @@ function DescriptionDocument({
   // The task renamed is the one the page stands on, so its rename opens while its description is still read.
   const taskId = opened?.id;
   const renaming = useMutation(useTaskRename(tasks.drawnTasks));
-  const rename = useInlineRename(taskId, renameWrite(renaming, TASK_RENAME_SHAPE));
+  const rename = useInlineRename(taskId, renameWrite(renaming, TASK_RENAME_TERMS));
   // Note that the title bar's field asks on a mutation of its own, so a name the description's title was refused does not open it over the words being typed there.
   const barRenaming = useMutation(useTaskRename(tasks.drawnTasks));
-  const barRename = useInlineRename(taskId, renameWrite(barRenaming, TASK_RENAME_SHAPE));
+  const barRename = useInlineRename(taskId, renameWrite(barRenaming, TASK_RENAME_TERMS));
 
   // The open task's one rename door, which its title's menu and ⌘K ask: it opens the field over the task's name where the window heads the task, a phone's head or the title bar.
   const beginRename = useSteadyDoor(() => {
@@ -840,7 +840,7 @@ function DescriptionDocument({
     (name: string): Promise<boolean> =>
       taskId === undefined
         ? Promise.resolve(true)
-        : renaming.mutateAsync(TASK_RENAME_SHAPE.ask(taskId, name)).catch(() => false),
+        : renaming.mutateAsync(TASK_RENAME_TERMS.ask(taskId, name)).catch(() => false),
   );
 
   const titleRename = useMemo<TitleRename>(() => ({ asked: rename.asked }), [rename.asked]);

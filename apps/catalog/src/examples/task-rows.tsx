@@ -24,7 +24,7 @@ import {
   RowCount,
   SCROLL_SIZE,
   ScrollArea,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   STATUS_TONE,
   TASK_ROW_CELL,
@@ -550,7 +550,7 @@ function ReadingRowsSkeleton(): React.JSX.Element {
           name={name}
           edges={TASK_ROW_EDGES.UNCHOSEN}
           content={{
-            [TASK_ROW_CELL.STATUS]: <Skeleton shape={SKELETON_SHAPE.CIRCLE} width="16px" />,
+            [TASK_ROW_CELL.STATUS]: <Skeleton kind={SKELETON_KIND.CIRCLE} width="16px" />,
             [TASK_ROW_CELL.REPOSITORY]: <Skeleton width="72px" />,
             [TASK_ROW_CELL.UPDATED]: <Skeleton width="24px" />,
           }}

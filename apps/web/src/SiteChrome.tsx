@@ -1,7 +1,7 @@
 import { PANEL_PATH } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
-  BUTTON_SHAPE,
+  BUTTON_CORNERS,
   BUTTON_VARIANT,
   ButtonLink,
   IconButtonLink,
@@ -161,7 +161,7 @@ export function SiteBarDownload(): React.JSX.Element {
   return (
     <ButtonLink
       variant={BUTTON_VARIANT.PRIMARY}
-      shape={BUTTON_SHAPE.ROUND}
+      corners={BUTTON_CORNERS.ROUND}
       href={DMG_URL}
       label="Download for macOS"
       onClick={() => captureSiteEvent(SITE_EVENT.DOWNLOAD_PRESS)}

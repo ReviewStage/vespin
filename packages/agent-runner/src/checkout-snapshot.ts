@@ -46,7 +46,7 @@ const SNAPSHOT_COMMITTER = {
   EMAIL: "checkout-snapshot@runner.invalid",
 } as const;
 
-export interface CheckoutSnapshotsShape {
+export interface CheckoutSnapshotsService {
   /** The checkout at `cwd` recorded under the line's id, as above; none where it could not be, which is logged. */
   readonly take: (
     cwd: string,
@@ -55,9 +55,10 @@ export interface CheckoutSnapshotsShape {
   ) => Effect.Effect<CheckoutSnapshot | undefined>;
 }
 
-export class CheckoutSnapshots extends Context.Service<CheckoutSnapshots, CheckoutSnapshotsShape>()(
-  "@repo/agent-runner/CheckoutSnapshots",
-) {}
+export class CheckoutSnapshots extends Context.Service<
+  CheckoutSnapshots,
+  CheckoutSnapshotsService
+>()("@repo/agent-runner/CheckoutSnapshots") {}
 
 /**
  * The snapshot, run in the checkout with the ref's name and how many refs

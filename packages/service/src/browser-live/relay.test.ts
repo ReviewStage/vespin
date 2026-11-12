@@ -20,7 +20,7 @@ import { type Cause, Duration, Effect, Fiber, Option, Queue, Stream } from "effe
 import { TestClock } from "effect/testing";
 import { agentBrowserOver } from "../agents/browser/agent-browser.js";
 import { SERVER_AGENT_TOOL } from "../events/server-events.js";
-import { Sync, type SyncShape } from "../sync/watch.js";
+import { Sync, type SyncService } from "../sync/watch.js";
 import type { RelayFrame } from "../terminal/relay.js";
 import {
   FAKE_IMAGE,
@@ -268,7 +268,7 @@ function heardSync() {
   const watches: { readonly topics: readonly SyncTopic[]; readonly woken: Queue.Queue<void> }[] =
     [];
 
-  const shape: SyncShape = {
+  const service: SyncService = {
     watch: (topics) =>
       Effect.gen(function* () {
         const woken = yield* Queue.unbounded<void>();
@@ -287,7 +287,7 @@ function heardSync() {
       { discard: true },
     );
 
-  return { shape, write };
+  return { service, write };
 }
 
 function started(peer: FakeCdpPeer, commands: readonly FakeCdpCommand[], run: Effect.Effect<void>) {
@@ -868,7 +868,7 @@ it.effect("a tab its agent closed, or its browser destroyed, closes the socket a
       listed.commands,
       Effect.scoped(
         relayBrowserTab(listedPanel.viewer, ASK, reachedTab(undefined), deps).pipe(
-          Effect.provideService(Sync, sync.shape),
+          Effect.provideService(Sync, sync.service),
         ),
       ),
     );

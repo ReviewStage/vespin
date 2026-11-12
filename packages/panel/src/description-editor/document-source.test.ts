@@ -254,14 +254,14 @@ test("an empty task item left at the end of a checklist is saved as a checkbox t
 });
 
 test.each([
-  { shape: "alone", markdown: "## Beats\n\n1.\n", saved: "## Beats\n\n1. Hook\n" },
+  { place: "alone", markdown: "## Beats\n\n1.\n", saved: "## Beats\n\n1. Hook\n" },
   {
-    shape: "over a nested list",
+    place: "over a nested list",
     markdown: "## Beats\n\n1.\n   1. Cut\n",
     saved: "## Beats\n\n1. Hook\n   1. Cut\n",
   },
 ])(
-  "an empty numbered item $shape, as an agent writes one under a heading, opens as a line the caret stands in, and what is typed there is saved in it",
+  "an empty numbered item $place, as an agent writes one under a heading, opens as a line the caret stands in, and what is typed there is saved in it",
   ({ markdown, saved }) => {
     const { editor, handedOver } = opened(markdown);
     const { doc } = editor.state;

@@ -59,13 +59,13 @@ import {
   SettingsRow,
   SettingsRowActSlot,
   SettingsRowMark,
-  type SettingsRowSkeletonShape,
+  type SettingsRowSkeletonLayout,
   SettingsRowStateLine,
   SettingsRowsFold,
   SettingsRowsSkeleton,
   SettingsRowValue,
   SettingsSection,
-  type SettingsSectionSkeletonShape,
+  type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
   STATUS_TONE,
   Stack,
@@ -116,7 +116,7 @@ import {
 } from "../live-reads.js";
 import { memberRows } from "../member-rows.js";
 import { useOpenPerson } from "../person-door.js";
-import { type RenameShape, renameWrite } from "../rename-write.js";
+import { type RenameTerms, renameWrite } from "../rename-write.js";
 import { useToast } from "../toast.js";
 import { PHOTO_ACCEPT, photoOfFile } from "../workspace-photo.js";
 import { useInviteDialog } from "./invite-dialog.js";
@@ -259,7 +259,7 @@ const MEMBERS_SKELETON_MOST = 5;
 const MEMBER_ESTIMATE_PX = 60;
 
 /** A member's row while the members are read: their face at a card's size, the email under the name, the role and the ⋯. */
-const MEMBER_ROW_SKELETON: SettingsRowSkeletonShape = {
+const MEMBER_ROW_SKELETON: SettingsRowSkeletonLayout = {
   described: true,
   mark: actorMarkWidth(ACTOR_SIZE.CARD),
   controls: [SETTINGS_SKELETON_CONTROL.VALUE],
@@ -267,7 +267,7 @@ const MEMBER_ROW_SKELETON: SettingsRowSkeletonShape = {
 };
 
 /** An invitation's row while the invitations are read: the invited face, the role and expiry under the email, Copy link and the ⋯. */
-const INVITATION_ROW_SKELETON: SettingsRowSkeletonShape = {
+const INVITATION_ROW_SKELETON: SettingsRowSkeletonLayout = {
   described: true,
   mark: actorMarkWidth(ACTOR_SIZE.CARD),
   controls: [SETTINGS_SKELETON_CONTROL.BUTTON],
@@ -286,7 +286,7 @@ const WORKSPACE_INTEGRATIONS = [
  * its tile at a card's size; the members; and a row to each integration, its
  * mark leading and its press at its end.
  */
-const WORKSPACE_SKELETON: readonly SettingsSectionSkeletonShape[] = [
+const WORKSPACE_SKELETON: readonly SettingsSectionSkeletonLayout[] = [
   {
     headed: false,
     rows: [
@@ -1707,7 +1707,7 @@ function useSlugDialog(workspace: Workspace): SlugAsk {
 }
 
 /** A workspace's rename as its mutation is asked; refused where the service refuses the call. */
-const WORKSPACE_RENAME_SHAPE: RenameShape<
+const WORKSPACE_RENAME_TERMS: RenameTerms<
   ActResult<typeof ACT_KIND.WORKSPACE_RENAME>,
   ActVariables<typeof ACT_KIND.WORKSPACE_RENAME>
 > = {
@@ -1734,7 +1734,7 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
   const manages = managesWorkspace(workspace);
   const renamable = manages && workspace.personal !== true;
   const renaming = useMutation(actMutation(ACT_KIND.WORKSPACE_RENAME));
-  const rename = useInlineRename(workspaceId, renameWrite(renaming, WORKSPACE_RENAME_SHAPE));
+  const rename = useInlineRename(workspaceId, renameWrite(renaming, WORKSPACE_RENAME_TERMS));
   const [uploading, setUploading] = useState(false);
   const [refusal, setRefusal] = useState<string>();
   const set = workspace.photoVersion !== undefined;

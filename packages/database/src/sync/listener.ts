@@ -47,7 +47,7 @@ export interface SyncListening {
   readonly notify: (payload: string) => Effect.Effect<number, SqlError | Schema.SchemaError>;
 }
 
-export interface SyncListenerShape {
+export interface SyncListenerService {
   /**
    * Listens on Sync's channel, answering once Postgres has acknowledged the
    * `LISTEN`, so a write committed after it is answered is heard; closing
@@ -56,7 +56,7 @@ export interface SyncListenerShape {
   readonly listen: Effect.Effect<SyncListening, SqlError, Scope.Scope>;
 }
 
-export class SyncListener extends Context.Service<SyncListener, SyncListenerShape>()(
+export class SyncListener extends Context.Service<SyncListener, SyncListenerService>()(
   "@repo/database/SyncListener",
 ) {}
 

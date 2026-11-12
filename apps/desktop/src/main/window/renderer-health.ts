@@ -98,13 +98,13 @@ interface SampledWindow {
 }
 
 /** What the system says of the app's processes and windows. */
-interface AppProcessesShape {
+interface AppProcessesService {
   readonly metrics: () => readonly MeasuredProcess[];
   readonly windows: () => readonly SampledWindow[];
 }
 
 /** The app's processes and windows: Electron's, unless a test stands its own in. */
-export const AppProcesses = Context.Reference<AppProcessesShape>("@repo/desktop/AppProcesses", {
+export const AppProcesses = Context.Reference<AppProcessesService>("@repo/desktop/AppProcesses", {
   defaultValue: () => ({
     metrics: () => app.getAppMetrics(),
     windows: () => BrowserWindow.getAllWindows(),
@@ -156,7 +156,7 @@ function documentOf(page: FollowedPage): string {
 }
 
 /** The working set of one process, in bytes, as the system last measured it. */
-function workingSetOf(processes: AppProcessesShape, pid: number): number | undefined {
+function workingSetOf(processes: AppProcessesService, pid: number): number | undefined {
   const metric = processes.metrics().find((each) => each.pid === pid);
 
   return metric === undefined ? undefined : metric.memory.workingSetSize * BYTES_PER_KILOBYTE;
@@ -200,7 +200,7 @@ function workingAgentsRung(count: number): WorkingAgents {
 }
 
 /** Where the app's windows stand now. */
-function windowStateNow(processes: AppProcessesShape): WindowState {
+function windowStateNow(processes: AppProcessesService): WindowState {
   const windows = processes.windows().filter((window) => !window.isDestroyed());
 
   if (windows.some((window) => window.isFocused())) return WINDOW_STATE.FOCUSED;

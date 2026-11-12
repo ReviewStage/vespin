@@ -14,7 +14,7 @@ import {
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
   SettingsSection,
-  type SettingsSectionSkeletonShape,
+  type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
 } from "@repo/ui";
 import { unreadShown } from "../failure-report.js";
@@ -50,7 +50,7 @@ const TOOLS: readonly IntegrationProvider[] = [
 const FIRST_TOOL = INTEGRATION_PROVIDER.LINEAR;
 
 /** What the rows look like while where they stand is read: each a provider not yet connected, its mark, the line saying what it gives agents, and Connect. */
-const TOOLS_SKELETON: readonly SettingsSectionSkeletonShape[] = [
+const TOOLS_SKELETON: readonly SettingsSectionSkeletonLayout[] = [
   {
     headed: false,
     rows: TOOLS.map(() => ({

@@ -10,16 +10,15 @@ import {
   Text,
   VStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityLabel,
   background,
   buttonStyle,
-  contentShape,
   font,
   foregroundStyle,
   frame,
   padding,
-  shapes,
   strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
@@ -83,6 +82,7 @@ function RecommendedTag() {
         padding({ horizontal: 5, vertical: 1 }),
         strokeBorder({
           content: colors.CHIP_EDGE,
+          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
           shape: "roundedRectangle",
           cornerRadius: RADIUS.TAG,
           style: { lineWidth: 1 },
@@ -143,7 +143,7 @@ function ChoiceRow({
         alignment="top"
         modifiers={[
           padding({ horizontal: SPACE.EDGE - 2, vertical: SPACE.ROW + 1 }),
-          contentShape(shapes.rectangle()),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         ]}
       >
         <Image
@@ -213,9 +213,13 @@ export function ChoiceList(props: ChoiceListProps) {
         spacing={0}
         modifiers={[
           frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-          background(colors.SURFACE, shapes.roundedRectangle({ cornerRadius: RADIUS.CARD })),
+          background(
+            colors.SURFACE,
+            SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.CARD }),
+          ),
           strokeBorder({
             content: colors.CHIP_EDGE,
+            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
             shape: "roundedRectangle",
             cornerRadius: RADIUS.CARD,
             style: { lineWidth: HAIRLINE },

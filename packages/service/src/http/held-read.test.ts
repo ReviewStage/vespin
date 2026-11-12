@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { TOPIC } from "@repo/database/sync/notification";
 import { Duration, Effect, Option } from "effect";
-import { Sync, type SyncShape } from "../sync/watch.js";
+import { Sync, type SyncService } from "../sync/watch.js";
 import { heldUntil } from "./held-read.js";
 
 /** A read held on a hub that wakes it twice, scripted: what it answers of when the write that moved it was heard. */
@@ -14,7 +14,7 @@ it.effect(
       const heard = [Option.some(100), Option.some(900)];
       let wakes = 0;
 
-      const hub: SyncShape = {
+      const hub: SyncService = {
         watch: () =>
           Effect.succeed({
             next: Effect.sync(() => {

@@ -1,6 +1,7 @@
 // row-list.tsx -- a list of rows and its sections, as SwiftUI's own List draws them, each section under a small muted header that folds.
 
 import { Button, HStack, Image, List, Section, Spacer, Text } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
   accessibilityElement,
@@ -9,7 +10,6 @@ import {
   accessibilityValue,
   background,
   buttonStyle,
-  contentShape,
   font,
   foregroundStyle,
   frame,
@@ -20,7 +20,6 @@ import {
   refreshable,
   scrollContentBackground,
   scrollDismissesKeyboard,
-  shapes,
 } from "@expo/ui/swift-ui/modifiers";
 import { Predicate } from "effect";
 import { type ReactNode, useState } from "react";
@@ -148,7 +147,7 @@ function GroupHeader({
     <HStack
       spacing={SPACE.TIGHT + 2}
       modifiers={[
-        contentShape(shapes.rectangle()),
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         accessibilityElement("combine"),
         accessibilityAddTraits(["isHeader"]),
       ]}

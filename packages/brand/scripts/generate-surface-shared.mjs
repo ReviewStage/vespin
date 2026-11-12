@@ -59,7 +59,7 @@ const SPRING_FAST = [
 
 const MOTION_DURATION_MS = {
   FAST: 280,
-  SHAPE: 460,
+  SPRING: 460,
   EXIT: 90,
   QUICK: 140,
   HOVER: 70,
@@ -244,7 +244,7 @@ function uiMotionTokensCss() {
   --ui-duration-quick: ${ms(MOTION_DURATION_MS.QUICK)};
   --ui-duration-pane: ${ms(MOTION_DURATION_MS.PANE)};
   --ui-duration-fast: ${ms(MOTION_DURATION_MS.FAST)};
-  --ui-duration-shape: ${ms(MOTION_DURATION_MS.SHAPE)};
+  --ui-duration-shape: ${ms(MOTION_DURATION_MS.SPRING)};
   --ui-duration-showcase: ${ms(MOTION_DURATION_MS.SHOWCASE)};
   --ui-motion-exit: ${MOTION_EXIT};
   --ui-motion-pane: ${MOTION_PANE};

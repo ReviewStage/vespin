@@ -2,7 +2,7 @@ import { repositoryLabel } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import {
   type GroupFold,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   SkeletonRegion,
   TASK_ROW_CELL,
@@ -196,7 +196,7 @@ export function RecentTasksSkeleton({
   fold?: GroupFold | undefined;
 }): React.JSX.Element {
   const blocks: Partial<Record<TaskRowCell, ReactNode>> = {
-    [TASK_ROW_CELL.STATUS]: <Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_MARK} />,
+    [TASK_ROW_CELL.STATUS]: <Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_MARK} />,
     [TASK_ROW_CELL.REPOSITORY]: <Skeleton width={SKELETON_REPOSITORY} />,
     [TASK_ROW_CELL.UPDATED]: <Skeleton width={SKELETON_TIME} />,
   };

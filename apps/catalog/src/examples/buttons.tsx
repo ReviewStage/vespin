@@ -1,7 +1,7 @@
 import {
   ALIGN,
   ArchiveIcon,
-  BUTTON_SHAPE,
+  BUTTON_CORNERS,
   BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
@@ -161,7 +161,7 @@ function Buttons(): React.JSX.Element {
           <Button
             icon={<PlusIcon />}
             size={BUTTON_SIZE.COMPACT}
-            shape={BUTTON_SHAPE.ROUND}
+            corners={BUTTON_CORNERS.ROUND}
             variant={BUTTON_VARIANT.WORKING_TINT}
           >
             Restart

@@ -48,7 +48,7 @@ import { useRepositoryPictures } from "../repository-pictures.js";
 import { PullRequestCard } from "../tasks/pull-request-card.js";
 import { PullRequestChip } from "../tasks/pull-request-chip.js";
 import { openTaskInTab } from "../tasks/task-menu-items.js";
-import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
+import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
 import { TaskKey } from "../tasks/task-standing.js";
 import { openerOf } from "../tasks/use-link-standing.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
@@ -211,7 +211,7 @@ export function TaskListRow({
   const marked = useMarkedUnread(task.id);
   const pictures = useRepositoryPictures();
   const renaming = useMutation(useTaskRename(tasks.drawnTasks));
-  const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_SHAPE));
+  const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_TERMS));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const drawn = (cell: TaskRowCell) => cells.includes(cell);
   const pullRequests = useTaskPullRequests(task.id);

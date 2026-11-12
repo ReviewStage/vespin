@@ -8,7 +8,7 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { UPDATE_STATUS } from "@repo/settings/update";
 import { updateInSidebar } from "@repo/settings/update-row";
 import {
-  BUTTON_SHAPE,
+  BUTTON_CORNERS,
   BUTTON_SIZE,
   BUTTON_VARIANT,
   type ButtonVariant,
@@ -119,7 +119,7 @@ function UpdatePill({
         label={word}
         icon={icon}
         variant={variant}
-        shape={BUTTON_SHAPE.ROUND}
+        corners={BUTTON_CORNERS.ROUND}
         size={BUTTON_SIZE.COMPACT}
         onClick={onClick}
         hint={saying}

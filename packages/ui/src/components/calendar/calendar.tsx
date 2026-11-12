@@ -70,7 +70,7 @@ const FIRST_DAY = "0001-01-01";
 const LAST_DAY = "9999-12-31";
 
 /** A day as the calendar reads and writes one. */
-const DAY_SHAPE = /^\d{4}-\d{2}-\d{2}$/u;
+const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
 /** A Sunday, from which the weekday headings are spelled in order. */
 const A_SUNDAY = "2026-10-18";
@@ -128,7 +128,7 @@ function monthShiftedDay(day: string, count: number): string {
  * `YYYY-MM-DD` reader takes.
  */
 function onCalendar(day: string): boolean {
-  return DAY_SHAPE.test(day) && day >= FIRST_DAY && day <= LAST_DAY;
+  return DAY_PATTERN.test(day) && day >= FIRST_DAY && day <= LAST_DAY;
 }
 
 /** Sunday is 0 and Saturday 6. */

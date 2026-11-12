@@ -1,6 +1,6 @@
 import { playheadText } from "@repo/features/time-format";
 import {
-  BUTTON_SHAPE,
+  BUTTON_CORNERS,
   BUTTON_VARIANT,
   CloseIcon,
   IconButton,
@@ -206,7 +206,7 @@ export function DictationStrip({ dictation }: { dictation: DictationControl }): 
             icon={<CheckIcon />}
             label={LABEL.FINISH}
             variant={BUTTON_VARIANT.INK}
-            shape={BUTTON_SHAPE.ROUND}
+            corners={BUTTON_CORNERS.ROUND}
             disabled={dictation.startedAt === undefined}
             keepFocus
             onClick={dictation.finish}

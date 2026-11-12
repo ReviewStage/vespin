@@ -11,7 +11,7 @@ import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { renameWrite } from "../rename-write.js";
 import { useShortcutTarget } from "../shortcut-target.js";
 import { agentName } from "../tasks/agent-model.js";
-import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
+import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
 import { TRANSCRIPT_COPY } from "../tasks/transcript-copy.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
@@ -81,7 +81,7 @@ export function TaskCrumbMenu({
 }): React.JSX.Element {
   const menu = useMenu(tasks.shown);
   const renaming = useMutation(useTaskRename(tasks.drawnTasks));
-  const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_SHAPE));
+  const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_TERMS));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const unread = useUnreadTasks({ staged: false })(task);
 

@@ -10,7 +10,7 @@ import {
 import type { AutomationRunSummary, AutomationSummary } from "@repo/features/automation-wire";
 import { GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import {
-  AVATAR_SHAPE,
+  AVATAR_OUTLINE,
   AVATAR_SIZE,
   Avatar,
   type AvatarSize,
@@ -258,7 +258,7 @@ function GlyphSquare({
       name={name}
       {...(src === undefined ? {} : { src })}
       glyph={glyph}
-      shape={AVATAR_SHAPE.SQUARE}
+      outline={AVATAR_OUTLINE.SQUARE}
       size={AVATAR_OF_SIZE[size]}
       tiled={tiled}
       branded={branded}
@@ -385,11 +385,15 @@ export function commentAuthor(actor: Actor): CommentAuthor {
     case ACTOR_KIND.PERSON:
       return { name: actor.name, id: actor.userId, picture: picture(actor.pictureUrl) };
     case ACTOR_KIND.APP:
-      return { name: actorName(actor), shape: AVATAR_SHAPE.SQUARE, glyph: <ProductMark small /> };
+      return {
+        name: actorName(actor),
+        outline: AVATAR_OUTLINE.SQUARE,
+        glyph: <ProductMark small />,
+      };
     case ACTOR_KIND.AGENT:
       return {
         name: actorName(actor),
-        shape: AVATAR_SHAPE.SQUARE,
+        outline: AVATAR_OUTLINE.SQUARE,
         glyph: (
           <StateGlyph
             glyph={<AgentMark provider={actor.provider} />}
@@ -400,14 +404,14 @@ export function commentAuthor(actor: Actor): CommentAuthor {
     case ACTOR_KIND.AUTOMATION:
       return {
         name: actorName(actor),
-        shape: AVATAR_SHAPE.SQUARE,
+        outline: AVATAR_OUTLINE.SQUARE,
         glyph: automationGlyph(actor),
       };
     case ACTOR_KIND.GITHUB:
       return actor.bot
         ? {
             name: actor.login,
-            shape: AVATAR_SHAPE.SQUARE,
+            outline: AVATAR_OUTLINE.SQUARE,
             glyph: <BotIcon />,
             picture: picture(actor.avatarUrl),
           }

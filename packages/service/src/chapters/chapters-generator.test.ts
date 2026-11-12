@@ -157,7 +157,7 @@ function told(title: string, hunkRefs: readonly unknown[], keyChanges: readonly 
 }
 
 /** The titles and hunks of chapters, which is what most of these tests read. */
-function shapeOf(chapters: readonly Chapter[]) {
+function outlineOf(chapters: readonly Chapter[]) {
   return chapters.map((chapter) => ({
     kind: chapter.kind,
     title: chapter.title,
@@ -183,7 +183,7 @@ it.effect(
 
       const generated = yield* generateChapters(script.model, pullRequest([TWO_HUNKS, ADDED]));
 
-      expect(shapeOf(generated.chapters)).toEqual([
+      expect(outlineOf(generated.chapters)).toEqual([
         {
           kind: CHAPTER_KIND.STORY,
           title: "Bump the constants",
@@ -206,7 +206,7 @@ it.effect("reads a new chapter the repair tells after the chapters before it", (
 
     const generated = yield* generateChapters(script.model, pullRequest([TWO_HUNKS, ADDED]));
 
-    expect(shapeOf(generated.chapters)).toEqual([
+    expect(outlineOf(generated.chapters)).toEqual([
       { kind: CHAPTER_KIND.STORY, title: "Bump the constants", hunkRefs: [APP_SECOND, APP_FIRST] },
       { kind: CHAPTER_KIND.STORY, title: "Add the util", hunkRefs: [UTIL] },
     ]);
@@ -222,7 +222,7 @@ it.effect("closes the left-out hunks as Other changes when the repair cannot be 
 
     const generated = yield* generateChapters(script.model, pullRequest([TWO_HUNKS, ADDED]));
 
-    expect(shapeOf(generated.chapters).map((chapter) => chapter.hunkRefs)).toEqual([
+    expect(outlineOf(generated.chapters).map((chapter) => chapter.hunkRefs)).toEqual([
       [APP_FIRST, APP_SECOND],
       [UTIL],
     ]);
@@ -249,7 +249,7 @@ it.effect(
 
       const generated = yield* generateChapters(script.model, pullRequest([TWO_HUNKS]));
 
-      expect(shapeOf(generated.chapters)).toEqual([
+      expect(outlineOf(generated.chapters)).toEqual([
         { kind: CHAPTER_KIND.STORY, title: "Bump the constants", hunkRefs: [APP_FIRST] },
         { kind: CHAPTER_KIND.STORY, title: "Return two", hunkRefs: [APP_SECOND] },
       ]);
@@ -281,7 +281,7 @@ it.effect(
       expect(script.asked[0]).not.toContain("pnpm-lock.yaml");
       expect(script.asked[0]).not.toContain("lockfileVersion");
       expect(script.asked[0]).not.toContain("assets/logo.bin");
-      expect(shapeOf(generated.chapters).at(-1)).toEqual({
+      expect(outlineOf(generated.chapters).at(-1)).toEqual({
         kind: CHAPTER_KIND.OTHER,
         title: "Other changes",
         hunkRefs: [
@@ -300,7 +300,7 @@ it.effect("asks the model nothing where every file is one it never sees", () =>
     const generated = yield* generateChapters(script.model, pullRequest([lockfile]));
 
     expect(script.asked).toHaveLength(0);
-    expect(shapeOf(generated.chapters)).toEqual([
+    expect(outlineOf(generated.chapters)).toEqual([
       {
         kind: CHAPTER_KIND.OTHER,
         title: "Other changes",
@@ -353,10 +353,10 @@ it.effect("answers model_refused where the provider refuses the call or fails it
 it.effect("answers invalid_answer where the answer is not JSON or not chapters", () =>
   Effect.gen(function* () {
     const prose = scriptedModel([{ text: "Here are your chapters!" }]);
-    const misshapen = scriptedModel([{ answer: { chapters: [{ title: 7, hunkRefs: "all" }] } }]);
+    const malformed = scriptedModel([{ answer: { chapters: [{ title: 7, hunkRefs: "all" }] } }]);
 
     const unreadable = yield* Effect.flip(generateChapters(prose.model, pullRequest([TWO_HUNKS])));
-    const wrong = yield* Effect.flip(generateChapters(misshapen.model, pullRequest([TWO_HUNKS])));
+    const wrong = yield* Effect.flip(generateChapters(malformed.model, pullRequest([TWO_HUNKS])));
 
     expect(unreadable.kind).toBe(PULL_REQUEST_CHAPTERS_FAILURE.INVALID_ANSWER);
     expect(wrong.kind).toBe(PULL_REQUEST_CHAPTERS_FAILURE.INVALID_ANSWER);

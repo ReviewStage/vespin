@@ -1,5 +1,5 @@
 import {
-  BUTTON_SHAPE,
+  BUTTON_CORNERS,
   BUTTON_SIZE,
   BUTTON_VARIANT,
   ComposeIcon,
@@ -48,14 +48,14 @@ function Tinted(): React.JSX.Element {
         label="Restart"
         icon={<UpdateIcon />}
         variant={BUTTON_VARIANT.WORKING_TINT}
-        shape={BUTTON_SHAPE.ROUND}
+        corners={BUTTON_CORNERS.ROUND}
         size={BUTTON_SIZE.COMPACT}
       />
       <FoldingButton
         label="Download"
         icon={<ExternalIcon />}
         variant={BUTTON_VARIANT.DANGER_TINT}
-        shape={BUTTON_SHAPE.ROUND}
+        corners={BUTTON_CORNERS.ROUND}
         size={BUTTON_SIZE.COMPACT}
       />
     </Inline>

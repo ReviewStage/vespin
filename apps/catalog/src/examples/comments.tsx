@@ -1,5 +1,5 @@
 import {
-  AVATAR_SHAPE,
+  AVATAR_OUTLINE,
   Badge,
   BUTTON_SIZE,
   COMMENT_ELEMENT,
@@ -58,7 +58,7 @@ function Comments(): React.JSX.Element {
               author={{
                 name: "Fix the flaky spec",
                 id: "agent-flaky",
-                shape: AVATAR_SHAPE.SQUARE,
+                outline: AVATAR_OUTLINE.SQUARE,
                 glyph: <GLYPH.AGENT />,
               }}
               at={now - 40 * MINUTE}
@@ -117,7 +117,7 @@ function Comments(): React.JSX.Element {
               author={{
                 name: "Fix the flaky spec",
                 id: "agent-flaky",
-                shape: AVATAR_SHAPE.SQUARE,
+                outline: AVATAR_OUTLINE.SQUARE,
                 glyph: <GLYPH.AGENT />,
               }}
               count={3}

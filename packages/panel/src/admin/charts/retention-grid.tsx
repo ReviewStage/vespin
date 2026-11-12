@@ -6,7 +6,7 @@ import {
   SCROLL_OVERSCROLL,
   SCROLL_SIZE,
   ScrollArea,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   TEXT_ELEMENT,
   TEXT_VARIANT,
@@ -209,7 +209,7 @@ export function RetentionGridSkeleton(): React.JSX.Element {
       <PlotBox
         height={`calc(var(--ui-type-caption-leading) + ${RETENTION_SKELETON_WEEKS} * (${RETENTION_ROW_HEIGHT} + ${RETENTION_GAP}))`}
       >
-        <Skeleton shape={SKELETON_SHAPE.BLOCK} />
+        <Skeleton kind={SKELETON_KIND.BLOCK} />
       </PlotBox>
     </ChartFrame>
   );

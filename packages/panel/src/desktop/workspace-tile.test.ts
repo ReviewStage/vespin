@@ -70,7 +70,7 @@ const pictureTile = (picture: string): Face => ({ picture, letter: "", hue: fals
 
 /** What the tile shows. */
 function drawn(container: HTMLElement): Face {
-  const tile = container.querySelector(".ui-avatar[data-shape='tile']");
+  const tile = container.querySelector(".ui-avatar[data-outline='tile']");
   const image = container.querySelector('img[data-loaded="true"]');
 
   return {

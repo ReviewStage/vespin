@@ -115,7 +115,7 @@ import {
   type TaskRelationSubject,
   taskRelationMenuPanel,
 } from "../tasks/task-relation-menu.js";
-import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
+import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
 import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import { NO_ASSIGNEE, PRIORITY_ROWS, useAssigneeRows } from "../tasks/task-standing.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
@@ -1228,7 +1228,7 @@ export function SidebarTask({
 }): React.JSX.Element {
   const renaming = useMutation(useTaskRename(tasks.drawnTasks));
   const pins = usePinWrites(tasks.drawnTasks);
-  const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_SHAPE));
+  const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_TERMS));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const reads = useReadMarks();
   const coarse = useCoarsePointer();

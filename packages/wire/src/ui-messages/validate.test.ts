@@ -129,9 +129,9 @@ test("a stored-row read holds a row to the structure and the registry's names, n
     { ok: true, value: [answered] },
   );
   // A row the SDK's structure refuses is still refused on read.
-  const shapeless = { ...reply, parts: [{ type: "text" }] };
+  const untyped = { ...reply, parts: [{ type: "text" }] };
   assert.equal(
-    (await runTest(readStoredUIMessages([shapeless], TOOLS, UNREGISTERED_TOOL_PART.DROP))).ok,
+    (await runTest(readStoredUIMessages([untyped], TOOLS, UNREGISTERED_TOOL_PART.DROP))).ok,
     false,
   );
 });

@@ -483,7 +483,7 @@ function moves(root: HTMLElement): boolean {
   return (
     animates(root) &&
     (tokenTiming(root, MOTION_TOKEN.DURATION_EXIT, MOTION_TOKEN.EASE_EXIT) !== undefined ||
-      tokenTiming(root, MOTION_TOKEN.DURATION_SHAPE, MOTION_TOKEN.SPRING) !== undefined)
+      tokenTiming(root, MOTION_TOKEN.DURATION_SPRING, MOTION_TOKEN.SPRING) !== undefined)
   );
 }
 
@@ -879,17 +879,17 @@ class ListMotionPlayer extends Component<
     const { way } = this.props;
     playExits(root, leaving, before, exit, way, this.props.leaves.replay);
 
-    const shape = engine
-      ? tokenTiming(root, MOTION_TOKEN.DURATION_SHAPE, MOTION_TOKEN.SPRING)
+    const spring = engine
+      ? tokenTiming(root, MOTION_TOKEN.DURATION_SPRING, MOTION_TOKEN.SPRING)
       : undefined;
 
-    if (shape === undefined) return;
+    if (spring === undefined) return;
     const left = leaving.length > 0 && exit !== undefined;
     const closes = left && way === LIST_MOTION_WAY.UNROLL;
     // Note that the change that ends the read lands the last of it, which arrives as the rest of it did.
     playMoves(root, before, {
       wait: left && !closes ? Number(exit.duration) : 0,
-      travel: shape,
+      travel: spring,
       close: closes ? exit : undefined,
       arrive: tokenTiming(root, MOTION_TOKEN.DURATION_QUICK, MOTION_TOKEN.EASE_EXIT),
       stagger: reading

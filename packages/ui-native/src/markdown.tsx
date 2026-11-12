@@ -581,7 +581,7 @@ type PictureProps = {
   /** What the picture shows, heard in its place. */
   readonly alt: string;
   /** A tile's fixed shape, width over height, the picture standing whole inside it; the picture's own shape where none is given. */
-  readonly shape?: number | undefined;
+  readonly tileAspect?: number | undefined;
 };
 
 /**
@@ -594,7 +594,7 @@ type PictureProps = {
  * is, the system's spinner in it as Photos stands one, so the words under
  * it do not jump twice and it never reads as an empty box.
  */
-export function Picture({ source, alt, shape }: PictureProps) {
+export function Picture({ source, alt, tileAspect }: PictureProps) {
   const colors = useColors();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -604,7 +604,7 @@ export function Picture({ source, alt, shape }: PictureProps) {
 
   const well = [
     styles.picture,
-    { aspectRatio: shape ?? aspect ?? 16 / 9, backgroundColor: colors.WELL },
+    { aspectRatio: tileAspect ?? aspect ?? 16 / 9, backgroundColor: colors.WELL },
   ];
 
   if (source === undefined) {

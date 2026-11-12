@@ -76,7 +76,7 @@ const writtenText = (directory: string) =>
   });
 
 /** The file kept again as a build of other row shapes would have kept it: every byte its own but the hash. */
-const keptAtOtherShapes = (directory: string) =>
+const keptAtOtherSchemas = (directory: string) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const kept = { ...JSON.parse(yield* openedText(directory)), hash: "another build's" };
@@ -85,17 +85,17 @@ const keptAtOtherShapes = (directory: string) =>
   });
 
 it.effect.each([
-  { kept: "the same account at the same row shapes", reopenedAs: DANA, otherShapes: false },
-  { kept: "another account", reopenedAs: "user-ravi", otherShapes: false },
-  { kept: "other row shapes", reopenedAs: DANA, otherShapes: true },
-])("a file kept for $kept", ({ reopenedAs, otherShapes }) =>
+  { kept: "the same account at the same row shapes", reopenedAs: DANA, otherSchemas: false },
+  { kept: "another account", reopenedAs: "user-ravi", otherSchemas: false },
+  { kept: "other row shapes", reopenedAs: DANA, otherSchemas: true },
+])("a file kept for $kept", ({ reopenedAs, otherSchemas }) =>
   Effect.gen(function* () {
     const directory = yield* temporaryDirectoryScoped("entity-store-");
     const first = yield* opened(directory, DANA);
     yield* first.store.keep(KEPT_READ.TASK_LIST, LIST);
     yield* first.closed;
 
-    if (otherShapes) yield* keptAtOtherShapes(directory);
+    if (otherSchemas) yield* keptAtOtherSchemas(directory);
 
     const reopened = yield* opened(directory, reopenedAs);
 
@@ -103,7 +103,7 @@ it.effect.each([
       Effect.flatMap(fileOf(directory), (file) => fileSystem.exists(file)),
     );
 
-    const fits = reopenedAs === DANA && !otherShapes;
+    const fits = reopenedAs === DANA && !otherSchemas;
     assert.deepEqual(reopened.store.stored(KEPT_READ.TASK_LIST), fits ? LIST : undefined);
     assert.equal(stays, fits);
   }).pipe(Effect.provide(files)),

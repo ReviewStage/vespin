@@ -88,7 +88,7 @@ const revisionsOf = (userId: string, taskId: string) =>
   Effect.map(listRevisions(userId, taskId), (page) => page.revisions);
 
 /** Each revision as the history lists it, without the instants a test's clock decides. */
-function shapeOf(revisions: readonly DescriptionRevisionLine[]) {
+function outlineOf(revisions: readonly DescriptionRevisionLine[]) {
   return revisions.map(({ seq, lastEdit, changes }) => ({
     seq,
     actor: lastEdit.actor,
@@ -111,7 +111,7 @@ it.layer(getTestDB())("a description's history", (it) => {
           { actor: DESCRIPTION_ACTOR.AGENT, agentId },
         );
 
-        assert.deepEqual(shapeOf(yield* revisionsOf(userId, taskId)), [
+        assert.deepEqual(outlineOf(yield* revisionsOf(userId, taskId)), [
           { seq: 2, actor: DESCRIPTION_ACTOR.AGENT, label: AGENT_TITLE, changes: 1 },
           {
             seq: 1,

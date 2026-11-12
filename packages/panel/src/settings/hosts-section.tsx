@@ -33,7 +33,7 @@ import {
   SettingsLine,
   SettingsRow,
   SettingsRowMark,
-  type SettingsRowSkeletonShape,
+  type SettingsRowSkeletonLayout,
   type SettingsRowState,
   SettingsRowStateLine,
   SettingsRowsSkeleton,
@@ -150,7 +150,7 @@ const WORDS = {
 } as const;
 
 /** The row that stands while the machines are read: a machine with its ⋯. */
-const HOSTS_SKELETON: readonly SettingsRowSkeletonShape[] = [
+const HOSTS_SKELETON: readonly SettingsRowSkeletonLayout[] = [
   { described: true, controls: [], end: [SETTINGS_SKELETON_CONTROL.MORE] },
 ];
 

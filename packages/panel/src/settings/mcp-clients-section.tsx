@@ -36,7 +36,7 @@ import {
   SettingsRowMark,
   SettingsRowStateLine,
   SettingsSection,
-  type SettingsSectionSkeletonShape,
+  type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
   STEP_STATE,
   Step,
@@ -235,7 +235,7 @@ const CLIENT_SKELETON_ROWS = 1;
  * likely, ending in its ⋯, then Connect an app's two rows, the agent asked
  * for and its step.
  */
-const SECTIONS_SKELETON: readonly SettingsSectionSkeletonShape[] = [
+const SECTIONS_SKELETON: readonly SettingsSectionSkeletonLayout[] = [
   {
     headed: true,
     rows: [

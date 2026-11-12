@@ -33,8 +33,8 @@ import { type Cause, DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import {
   Database,
+  type DatabaseClient,
   type DatabaseServices,
-  type DatabaseShape,
   queryBuilder,
   type StoreFailure,
 } from "../core/query.js";
@@ -409,7 +409,7 @@ const findWorkspaceFace = SqlSchema.findOneOption({
 });
 
 /** The workspaces the account is a member of, or the one named among them, as rows, each with how many members it has, counted apart from the account's own row the read joins. */
-function workspaceRows(db: DatabaseShape, userId: string, organizationId?: string) {
+function workspaceRows(db: DatabaseClient, userId: string, organizationId?: string) {
   return db
     .select({
       id: organization.id,
@@ -448,7 +448,7 @@ function workspaceRows(db: DatabaseShape, userId: string, organizationId?: strin
  * read of its own rather than a join on the workspaces', because a
  * workspace holding several would otherwise be listed once for each.
  */
-function installationRows(db: DatabaseShape, userId: string, organizationId?: string) {
+function installationRows(db: DatabaseClient, userId: string, organizationId?: string) {
   return db
     .select({
       organizationId: githubInstallation.organizationId,
@@ -489,7 +489,7 @@ const findInstallations = SqlSchema.findAll({
  * name the service holds now. A read of its own, as the installations are,
  * since a workspace holds one row per experiment.
  */
-function experimentRows(db: DatabaseShape, userId: string, organizationId?: string) {
+function experimentRows(db: DatabaseClient, userId: string, organizationId?: string) {
   return db
     .select({
       organizationId: workspaceExperiment.organizationId,

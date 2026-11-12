@@ -4,7 +4,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, test } from "vitest";
 import {
-  BUTTON_SHAPE,
+  BUTTON_CORNERS,
   BUTTON_SIZE,
   BUTTON_TYPE,
   BUTTON_VARIANT,
@@ -171,21 +171,21 @@ test("a toggle is announced pressed while it is on, in any look, and a plain but
         icon: createElement("svg"),
         label: "Mute microphone",
         variant: BUTTON_VARIANT.DANGER,
-        shape: BUTTON_SHAPE.ROUND,
+        corners: BUTTON_CORNERS.ROUND,
         pressed: false,
       }),
       createElement(IconButton, {
         icon: createElement("svg"),
         label: "Unmute speaker",
         variant: BUTTON_VARIANT.DANGER,
-        shape: BUTTON_SHAPE.ROUND,
+        corners: BUTTON_CORNERS.ROUND,
         pressed: true,
       }),
       createElement(IconButton, {
         icon: createElement("svg"),
         label: "End call",
         variant: BUTTON_VARIANT.INK,
-        shape: BUTTON_SHAPE.ROUND,
+        corners: BUTTON_CORNERS.ROUND,
       }),
     ),
   );

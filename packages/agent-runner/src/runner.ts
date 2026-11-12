@@ -82,7 +82,7 @@ import {
   settleAsk,
 } from "./approvals.js";
 import { CheckoutSnapshots } from "./checkout-snapshot.js";
-import { ClaudeCode, type ClaudeCodeSession, type ClaudeCodeShape } from "./claude-code.js";
+import { ClaudeCode, type ClaudeCodeService, type ClaudeCodeSession } from "./claude-code.js";
 import { runCodex } from "./codex.js";
 import { type EventSink, openEventSink } from "./events.js";
 import {
@@ -233,7 +233,7 @@ const CHAIN_UNREAD = "the session to cut could not be read from the service";
  * store alone, which would hand it the session whole, past the cut.
  */
 const resumePointOf = Effect.fn("agent-runner/resumePointOf")(function* (
-  claudeCode: ClaudeCodeShape,
+  claudeCode: ClaudeCodeService,
   config: ClaudeCodeConfig,
   store: SessionStore | undefined,
 ) {

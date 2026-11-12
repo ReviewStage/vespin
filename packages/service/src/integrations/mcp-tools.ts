@@ -30,8 +30,8 @@ import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   isRecord,
   isWireString,
+  PlainWireRecordSchema,
   type WireRecord,
-  WireRecordShapeSchema,
   type WireValue,
   WireValueSchema,
 } from "@repo/wire";
@@ -81,7 +81,7 @@ const MESSAGE_MAX_CHARS = 200;
  * Slack token's prefix, or a long unbroken run of token characters (a
  * path's or a host's segments are short, so an address in it is kept).
  */
-const CREDENTIAL_SHAPE = /bearer\s|xox[a-z]-|[A-Za-z0-9_+=-]{32,}/i;
+const CREDENTIAL_PATTERN = /bearer\s|xox[a-z]-|[A-Za-z0-9_+=-]{32,}/i;
 
 /** Words that name a secret, or a credential's name with a value set after it. */
 const SECRET_WORDS =
@@ -96,11 +96,11 @@ const KEY_LIKE_RUN = /[A-Za-z0-9_+=.-]{16,}/g;
  * whose own shape is held otherwise, as an email's is.
  */
 export function namesSecret(line: string): boolean {
-  return CREDENTIAL_SHAPE.test(line) || SECRET_WORDS.test(line);
+  return CREDENTIAL_PATTERN.test(line) || SECRET_WORDS.test(line);
 }
 
 /** Whether a line holds anything a credential could hide in, short or long. */
-function shapedLikeCredential(line: string): boolean {
+function looksLikeCredential(line: string): boolean {
   if (namesSecret(line)) return true;
 
   return (line.match(KEY_LIKE_RUN) ?? []).some((run) => /\d/.test(run) && /[A-Za-z]/.test(run));
@@ -187,7 +187,7 @@ export const McpToolSchemaSchema = Schema.Struct({
   name: Schema.String,
   title: Schema.optionalKey(Schema.String),
   description: Schema.optionalKey(Schema.String),
-  annotations: Schema.optionalKey(WireRecordShapeSchema),
+  annotations: Schema.optionalKey(PlainWireRecordSchema),
   inputSchema: Schema.optionalKey(WireValueSchema),
   outputSchema: Schema.optionalKey(WireValueSchema),
 });
@@ -278,7 +278,7 @@ function echoesToken(line: string, token: string): boolean {
 export function credentialFreeLine(message: string | undefined): string | undefined {
   const line = (message ?? "").trim().split(/\r?\n/)[0] ?? "";
 
-  if (line === "" || shapedLikeCredential(line)) return undefined;
+  if (line === "" || looksLikeCredential(line)) return undefined;
 
   return firstLine(line, MESSAGE_MAX_CHARS);
 }

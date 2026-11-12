@@ -46,7 +46,7 @@ import {
   SettingsOrderedRows,
   SettingsRowControlHold,
   SettingsRowMark,
-  type SettingsRowSkeletonShape,
+  type SettingsRowSkeletonLayout,
   SettingsRowsSkeleton,
   SettingsSection,
   TEXT_ELEMENT,
@@ -118,7 +118,7 @@ import { MenuRow } from "./menu-row.js";
  */
 
 /** A script's row while the setup is read. */
-const SCRIPT_ROW_SKELETON: SettingsRowSkeletonShape = {
+const SCRIPT_ROW_SKELETON: SettingsRowSkeletonLayout = {
   described: false,
   controls: [],
   end: [SETTINGS_SKELETON_CONTROL.MORE],

@@ -1417,7 +1417,7 @@ export function faceKind(face: Element | null | undefined): string | undefined {
 
   if (disc === null || disc === undefined) return undefined;
 
-  return disc.dataset.shape === "square" ? "agent" : "person";
+  return disc.dataset.outline === "square" ? "agent" : "person";
 }
 
 /** Every message the pane sends, written down and answered by `answer`, the item as the service would hand it back by default. */

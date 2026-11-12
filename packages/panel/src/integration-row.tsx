@@ -57,7 +57,7 @@ import { confirmFailure, refusedShown } from "./failure-report.js";
 import { type GitHubConnectControl, useGitHubConnection } from "./github-connect.js";
 import { GRANT_OUTCOME, grantedBySignIn, useIntegrationGrant } from "./integration-grant.js";
 import type { IntegrationStatuses } from "./integration-statuses.js";
-import { type RenameShape, renameWrite } from "./rename-write.js";
+import { type RenameTerms, renameWrite } from "./rename-write.js";
 import { Highlighted } from "./search-field.js";
 import { MenuRow } from "./settings/menu-row.js";
 
@@ -269,7 +269,7 @@ type RenameKind = typeof ACT_KIND.INTEGRATIONS_RENAME;
 /** An account's rename at `provider` as its mutation is asked, by the connection it names; refused where the service answers a failure. */
 function integrationRename(
   provider: ServerRow["provider"],
-): RenameShape<ActResult<RenameKind>, ActVariables<RenameKind>> {
+): RenameTerms<ActResult<RenameKind>, ActVariables<RenameKind>> {
   return {
     ask: (connection, label) => ({ provider, connection, label }),
     asked: ({ connection, label }) => ({ subjectId: connection, name: label }),

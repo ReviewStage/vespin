@@ -31,7 +31,7 @@ import {
   SCROLL_FADE,
   ScrollArea,
   ShowMoreRow,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   SkeletonRegion,
   TEXT_ELEMENT,
@@ -442,7 +442,7 @@ function LogSkeleton(): React.JSX.Element {
         {LOG_SKELETON.map((row) => (
           <ListRow
             key={row.author}
-            leading={<Skeleton shape={SKELETON_SHAPE.CIRCLE} width={ROW_MARK_SKELETON} />}
+            leading={<Skeleton kind={SKELETON_KIND.CIRCLE} width={ROW_MARK_SKELETON} />}
             title={<Skeleton width={row.author} />}
             description={<Skeleton width={row.summary} />}
             meta={<Skeleton width={TIME_SKELETON} />}

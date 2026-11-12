@@ -39,7 +39,7 @@ import {
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
   SettingsRow,
-  type SettingsRowSkeletonShape,
+  type SettingsRowSkeletonLayout,
   SettingsRowsSkeleton,
   SettingsSection,
   Spinner,
@@ -148,7 +148,7 @@ const PAGE_LINE = {
  * segments, which every model draws; context's stands only for a model with a
  * long window, so none stands for it.
  */
-const DEFAULT_SKELETON: readonly SettingsRowSkeletonShape[] = [
+const DEFAULT_SKELETON: readonly SettingsRowSkeletonLayout[] = [
   { described: true, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
   { described: true, controls: [SETTINGS_SKELETON_CONTROL.SWITCH] },
   { described: false, controls: [SETTINGS_SKELETON_CONTROL.CHOICE] },

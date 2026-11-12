@@ -25,7 +25,7 @@ import {
   SETTINGS_SKELETON_CONTROL,
   SearchField,
   SettingsSection,
-  type SettingsSectionSkeletonShape,
+  type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
   Shortcut,
   Stack,
@@ -132,7 +132,7 @@ const CONNECTED_SKELETON_ROWS = 2;
  * every one led by its mark, so the rows land in the height they
  * stood in.
  */
-const INTEGRATIONS_SKELETON: readonly SettingsSectionSkeletonShape[] = [
+const INTEGRATIONS_SKELETON: readonly SettingsSectionSkeletonLayout[] = [
   {
     headed: true,
     rows: INTEGRATION_PROVIDER_LIST.slice(0, CONNECTED_SKELETON_ROWS).map(() => ({

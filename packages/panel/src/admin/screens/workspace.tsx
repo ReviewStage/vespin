@@ -19,7 +19,7 @@ import {
   Inline,
   MARK_PROVIDER,
   QuietWords,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   STATUS_TONE,
   Stack,
@@ -179,7 +179,7 @@ function MastheadSkeleton(): React.JSX.Element {
     <MastheadFrame
       created={
         <Text as={TEXT_ELEMENT.DIV} variant={TEXT_VARIANT.CAPTION}>
-          <Skeleton shape={SKELETON_SHAPE.LINE} width={SKELETON_CREATED_WIDTH} />
+          <Skeleton kind={SKELETON_KIND.LINE} width={SKELETON_CREATED_WIDTH} />
         </Text>
       }
       links={null}
