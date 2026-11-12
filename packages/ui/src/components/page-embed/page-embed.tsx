@@ -46,11 +46,13 @@ export type PageEmbedHeight =
   | { readonly kind: typeof PAGE_EMBED_HEIGHT.CONTENT; readonly height: number }
   | { readonly kind: typeof PAGE_EMBED_HEIGHT.FILL };
 
-/** The frame's class and style for how it stands. */
-function frameSize(height: PageEmbedHeight): {
+type FrameSizeResult = {
   className: string;
   style: React.CSSProperties | undefined;
-} {
+};
+
+/** The frame's class and style for how it stands. */
+function frameSize(height: PageEmbedHeight): FrameSizeResult {
   if (height.kind === PAGE_EMBED_HEIGHT.CONTENT) {
     return {
       className: "h-page-embed",
@@ -65,8 +67,10 @@ function frameSize(height: PageEmbedHeight): {
   };
 }
 
+type UseLoadedResult = { loaded: boolean; onLoaded: () => void };
+
 /** Whether the frame has loaded the page it names now, and the load to hand it. */
-function useLoaded(src: string): { loaded: boolean; onLoaded: () => void } {
+function useLoaded(src: string): UseLoadedResult {
   const [loadedFrom, setLoadedFrom] = useState<string | undefined>(undefined);
 
   return { loaded: loadedFrom === src, onLoaded: () => setLoadedFrom(src) };

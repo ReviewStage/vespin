@@ -9,19 +9,20 @@ import { terminalTheme } from "./terminal-theme.js";
  * resolves no `var()`, so the platform's answer is staged: each token is
  * the color a browser would compute for it.
  */
-const TOKENS: Record<string, string> = {
-  "--terminal-ground": "rgb(0, 0, 0)",
-  "--terminal-text": "rgb(200, 100, 50)",
-  "--terminal-red": "rgb(100, 0, 200)",
-};
+const TOKENS: ReadonlyMap<string, string> = new Map([
+  ["--terminal-ground", "rgb(0, 0, 0)"],
+  ["--terminal-text", "rgb(200, 100, 50)"],
+  ["--terminal-red", "rgb(100, 0, 200)"],
+]);
 
 beforeEach(() => {
   // SAFETY: the theme reads only what the stand-in computed style has.
   vi.spyOn(window, "getComputedStyle").mockImplementation(
     (element) =>
       ({
-        getPropertyValue: (name: string) => TOKENS[name] ?? "",
-        color: TOKENS[/var\((.+)\)/u.exec((element as HTMLElement).style.color)?.[1] ?? ""] ?? "",
+        getPropertyValue: (name: string) => TOKENS.get(name) ?? "",
+        color:
+          TOKENS.get(/var\((.+)\)/u.exec((element as HTMLElement).style.color)?.[1] ?? "") ?? "",
       }) as CSSStyleDeclaration,
   );
 });

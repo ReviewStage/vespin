@@ -64,6 +64,12 @@ const INBOX_SCOPE_KEY = "inboxScope";
 /** No holder read yet. */
 const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
 
+type UseChosenInboxResult = {
+  readonly groups: ReturnType<ReturnType<typeof selectInboxGroupsIn>>;
+  readonly chosen: Workspace | undefined;
+  readonly workspaces: number;
+};
+
 /**
  * Every holder of Inbox items in the workspace chosen in Settings, as the
  * panel's Inbox lists the chosen workspace's alone, heard anew as another is
@@ -71,11 +77,7 @@ const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
  * them, the workspace chosen and how many the account has, which the Inbox
  * widget names (`inbox-widget/`).
  */
-export function useChosenInbox(): {
-  readonly groups: ReturnType<ReturnType<typeof selectInboxGroupsIn>>;
-  readonly chosen: Workspace | undefined;
-  readonly workspaces: number;
-} {
+export function useChosenInbox(): UseChosenInboxResult {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
 
@@ -99,11 +101,13 @@ function keptScope(): InboxShow {
   return Object.values(INBOX_SHOW).find((show) => show === kept) ?? INBOX_SHOW.OPEN;
 }
 
-/** The Inbox's scope, kept in the app's defaults across launches, and the choice of another. */
-export function useInboxScope(): {
+type UseInboxScopeResult = {
   readonly show: InboxShow;
   readonly choose: (show: InboxShow) => void;
-} {
+};
+
+/** The Inbox's scope, kept in the app's defaults across launches, and the choice of another. */
+export function useInboxScope(): UseInboxScopeResult {
   const [show, setShow] = useState(keptScope);
 
   const choose = (next: InboxShow) => {
@@ -180,6 +184,12 @@ export function useInboxBadge(): number {
   );
 }
 
+type UseInboxThreadResult = {
+  readonly listed: InboxListed | undefined;
+  readonly readerId: string | undefined;
+  readonly feed: InboxFeed;
+};
+
 /**
  * One thread by its id, with what holds it, wherever it stands in the
  * account's feed, and where that feed stands; none where the feed holds no
@@ -191,11 +201,7 @@ export function useInboxBadge(): number {
  * workspace's threads are searched, not only the chosen workspace's the list
  * shows, so a link to a thread of another workspace still opens it.
  */
-export function useInboxThread(id: string | undefined): {
-  readonly listed: InboxListed | undefined;
-  readonly readerId: string | undefined;
-  readonly feed: InboxFeed;
-} {
+export function useInboxThread(id: string | undefined): UseInboxThreadResult {
   const { data: read = NO_GROUPS } = useQuery({
     ...appStateQuery,
     select: selectInboxGroupsIn(undefined),

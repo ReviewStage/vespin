@@ -54,8 +54,10 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+type MountResult = { host: HTMLElement; opened: string[] };
+
 /** The task's Pages group over `pages`, its links written under a workspace, every page opened recorded. */
-function mount(pages: readonly PageLine[]): { host: HTMLElement; opened: string[] } {
+function mount(pages: readonly PageLine[]): MountResult {
   const opened: string[] = [];
   const host = document.createElement("div");
   document.body.append(host);

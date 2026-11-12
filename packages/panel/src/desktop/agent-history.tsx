@@ -125,12 +125,14 @@ function HistoryAgentRow({
   );
 }
 
+type HistoryAgentsResult = { closed: readonly AgentSummary[]; archived: readonly AgentSummary[] };
+
 /** The task's closed and archived agents, newest first, as History lists them for the search given. */
 function historyAgents(
   main: Pick<MainTabsControl, "openAgents">,
   agents: Pick<AgentsControl, "agents" | "archived" | "models">,
   query = "",
-): { closed: readonly AgentSummary[]; archived: readonly AgentSummary[] } {
+): HistoryAgentsResult {
   const open = main.openAgents ?? [];
   const listed = (each: AgentSummary) => matches(each, agents.models, query);
   // An agent whose tab is open is in the bar already, an archived one's among them.

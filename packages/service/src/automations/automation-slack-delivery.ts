@@ -24,11 +24,10 @@ import { slackClipped, slackEscaped, slackMarkdownBlock } from "../slack/slack-m
 /** The most characters of the final message the notification's plain text says; the blocks hold more. */
 const NOTIFICATION_CHARS = 2500;
 
+type Outcome = { readonly plain: string; readonly words?: string };
+
 /** What the message says of the run: its final message where it finished, that it failed and why, or that it was stopped. */
-function outcomeOf(
-  turn: SettledAgentTurn,
-  words: string | undefined,
-): { readonly plain: string; readonly words?: string } {
+function outcomeOf(turn: SettledAgentTurn, words: string | undefined): Outcome {
   // A run its plan's usage limit stopped is said so, not that it failed.
   if (turn.failure === TURN_FAILURE.PLAN_LIMIT) return { plain: LIMIT_REACHED_WORDS };
 

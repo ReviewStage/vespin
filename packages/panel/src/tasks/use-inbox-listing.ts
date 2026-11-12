@@ -102,6 +102,13 @@ function unmoved(
   return now === way.over || (now !== undefined && handed.has(now));
 }
 
+type UseChoiceFirstResult = {
+  readonly chosen: InboxChoice | undefined;
+  readonly settling: boolean;
+  readonly choose: (chosen: InboxChoice) => void;
+  readonly clear: () => void;
+};
+
 /**
  * The item the Inbox shows, as the reader chose it: a choice made here is
  * drawn at once, and handed to the window (`onChoose`) once the frame that
@@ -118,12 +125,7 @@ function useChoiceFirst(
   chosen: InboxChoice | undefined,
   onChoose: (chosen: InboxChoice) => void,
   onClear: () => void,
-): {
-  readonly chosen: InboxChoice | undefined;
-  readonly settling: boolean;
-  readonly choose: (chosen: InboxChoice) => void;
-  readonly clear: () => void;
-} {
+): UseChoiceFirstResult {
   const [held, setHeld] = useState<readonly ChoiceOnItsWay[]>([]);
   const latest = useRef({ chosen, onChoose, onClear });
   latest.current = { chosen, onChoose, onClear };

@@ -2515,15 +2515,17 @@ function noticeItem(extra: Partial<InboxItem> = {}): InboxItem {
   });
 }
 
+type NoticeWritesResult = {
+  answered: AgentInboxAnswerParams[];
+  messaged: AgentInboxMessageParams[];
+};
+
 /**
  * Every answer and message the Inbox sends from now on, written down: each
  * answer refused as unanswered while `refusing` says so, the box standing
  * open again, and held unanswered otherwise; each message held unanswered.
  */
-function noticeWrites(refusing: () => boolean = () => false): {
-  answered: AgentInboxAnswerParams[];
-  messaged: AgentInboxMessageParams[];
-} {
+function noticeWrites(refusing: () => boolean = () => false): NoticeWritesResult {
   const answered: AgentInboxAnswerParams[] = [];
   const messaged: AgentInboxMessageParams[] = [];
   const bridge = appBridge();

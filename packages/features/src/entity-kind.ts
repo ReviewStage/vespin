@@ -291,7 +291,7 @@ const ENTITY_NAME: EntityNames = {
  * (`words.ts`'s `TERM`) where it has one. Read it through `entityWordHeard`,
  * which leaves it out where the name already says it.
  */
-export const ENTITY_WORD: { readonly [K in EntityKind]: string } = {
+export const ENTITY_WORD: Readonly<Record<EntityKind, string>> = {
   [ENTITY_KIND.PLAN]: TERM.TASK.one,
   [ENTITY_KIND.SECTION]: TERM.SECTION.one,
   [ENTITY_KIND.VERSION]: "version",
@@ -347,10 +347,12 @@ function asEntity<P extends Entity>(place: P): Entity {
   return place;
 }
 
-/** The entity each kind of destination names. */
-const DESTINATION_ENTITY: {
+type DestinationEntities = {
   readonly [K in LinkDestinationKind]: (place: DestinationOf<K>) => Entity;
-} = {
+};
+
+/** The entity each kind of destination names. */
+const DESTINATION_ENTITY: DestinationEntities = {
   [LINK_DESTINATION.TASK]: (place) => ({ kind: ENTITY_KIND.PLAN, taskId: place.planId }),
   [LINK_DESTINATION.SECTION]: (place) => ({
     kind: ENTITY_KIND.SECTION,

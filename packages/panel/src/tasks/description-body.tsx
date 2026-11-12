@@ -557,6 +557,8 @@ const DESCRIPTION_LOADING_LABEL = readingWords("the description");
 /** How wide each line of the description's text stands while it is read: a paragraph's, the last line short. */
 const TEXT_LINE_WIDTHS = ["96%", "90%", "94%", "62%"] as const;
 
+type UnitsAfterResult = { readonly views: readonly UnitView[]; readonly nextId: number };
+
 /**
  * Each section of a newer document drawn under the id it had in the older
  * while its heading stands, so a save redraws a section in place rather than
@@ -569,7 +571,7 @@ function unitsAfter(
   previous: readonly UnitView[],
   sections: readonly DescriptionSection[],
   firstId: number,
-): { readonly views: readonly UnitView[]; readonly nextId: number } {
+): UnitsAfterResult {
   const changes = diffArrays(
     previous.map((view) => view.heading),
     sections.map((section) => section.heading),

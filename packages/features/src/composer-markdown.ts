@@ -98,7 +98,6 @@ const WHITESPACE = /\s/u;
 const PUNCTUATION = /[\p{P}\p{S}]/u;
 const ASCII_PUNCTUATION = /[!-/:-@[-`{-~]/u;
 const LEADING_SPACE = /^\s*/u;
-const TRAILING_SPACE = /\s*$/u;
 const TICK_RUNS = /`+/gu;
 
 /** A character words wearing a mark escape, which would otherwise close it, open another, or escape the delimiter after it. */
@@ -155,8 +154,10 @@ function runLength(line: string, at: number, char: string): number {
   return end - at;
 }
 
+type FlankingResult = { canOpen: boolean; canClose: boolean };
+
 /** Whether a delimiter run may open and may close, as CommonMark's flanking rules say. */
-function flanking(line: string, at: number, run: number): { canOpen: boolean; canClose: boolean } {
+function flanking(line: string, at: number, run: number): FlankingResult {
   const before = line[at - 1];
   const after = line[at + run];
   const beforeSpace = before === undefined || WHITESPACE.test(before);
@@ -499,8 +500,10 @@ function closing(mark: InlineMark): string {
   return `${CLOSE_BRACKET}(${writtenAddress(mark.href ?? "")})`;
 }
 
+type CodeFencesResult = { fence: string; pad: string };
+
 /** Code's words between fences longer than any run of backticks in them, padded where they start or end in a backtick or stand between spaces. */
-function codeFences(words: string): { fence: string; pad: string } {
+function codeFences(words: string): CodeFencesResult {
   const longest = Math.max(0, ...(words.match(TICK_RUNS) ?? []).map((run) => run.length));
   const between = words.startsWith(SPACE) && words.endsWith(SPACE) && words.trim() !== "";
   const pad = words.startsWith(TICK) || words.endsWith(TICK) || between ? SPACE : "";
@@ -517,6 +520,11 @@ function keptOpen(open: readonly InlineMark[], marks: readonly InlineMark[]): nu
   return kept === -1 ? open.length : kept;
 }
 
+type WriteInlineResult = {
+  readonly text: string;
+  readonly segments: readonly WrittenSegment[];
+};
+
 /**
  * One line written as Markdown: each piece's words wearing its marks, a
  * mark opened and closed only where the marks change, the spaces at a
@@ -524,10 +532,7 @@ function keptOpen(open: readonly InlineMark[], marks: readonly InlineMark[]): nu
  * CommonMark needs them to. Answers the line, and where every stretch of
  * each piece's words landed in it.
  */
-export function writeInline(pieces: readonly InlinePiece[]): {
-  readonly text: string;
-  readonly segments: readonly WrittenSegment[];
-} {
+export function writeInline(pieces: readonly InlinePiece[]): WriteInlineResult {
   let text = "";
   const segments: WrittenSegment[] = [];
   const open: InlineMark[] = [];
@@ -592,7 +597,8 @@ export function writeInline(pieces: readonly InlinePiece[]): {
       return;
     }
 
-    const trail = TRAILING_SPACE.exec(piece.text)?.[0].length ?? 0;
+    // Note that `trimEnd` drops what `\s` matches, read in one pass where a trailing `\s*$` would retry from every space.
+    const trail = piece.text.length - piece.text.trimEnd().length;
     write(piece.text.slice(0, lead), index);
 
     for (const mark of marks) {

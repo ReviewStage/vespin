@@ -519,16 +519,15 @@ export function inboxLineFiles(item: InboxItem): readonly InboxMessageFile[] {
   return [...new Set(files)];
 }
 
+type PlacedLineResult = { readonly words: string; readonly pieces: readonly InboxLinePiece[] };
+
 /**
  * The latest message's words as its row says them, as plain words and as
  * pieces with each file a member's marker names outside code in its place.
  * Note that the place is written into the words before they are read as
  * plain words, because reading them drops the code a marker stood in.
  */
-function placedLine(
-  thread: readonly InboxMessage[],
-  last: InboxMessage,
-): { readonly words: string; readonly pieces: readonly InboxLinePiece[] } {
+function placedLine(thread: readonly InboxMessage[], last: InboxMessage): PlacedLineResult {
   const files = last.author === INBOX_MESSAGE_AUTHOR.AGENT ? [] : (last.files ?? []);
 
   if (files.length === 0) {

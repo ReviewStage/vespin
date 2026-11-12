@@ -328,8 +328,11 @@ function readAnswer<A>(
 }
 
 /** A message's arguments as the Web API takes them, its blocks as the JSON Slack reads them from. */
-function contentArgs(content: SlackMessageContent): Record<string, string> {
-  return { text: content.text, blocks: JSON.stringify(content.blocks) };
+function contentArgs(content: SlackMessageContent) {
+  return { text: content.text, blocks: JSON.stringify(content.blocks) } satisfies Record<
+    string,
+    string
+  >;
 }
 
 /**
@@ -337,8 +340,11 @@ function contentArgs(content: SlackMessageContent): Record<string, string> {
  * previews off. Note that we turn them off, because an agent's words name
  * many pull requests, and a preview of each buries the message itself.
  */
-function postArgs(content: SlackMessageContent): Record<string, string> {
-  return { ...contentArgs(content), unfurl_links: "false", unfurl_media: "false" };
+function postArgs(content: SlackMessageContent) {
+  return { ...contentArgs(content), unfurl_links: "false", unfurl_media: "false" } satisfies Record<
+    string,
+    string
+  >;
 }
 
 /** Logs a failure by its fixed line, and answers nothing. */

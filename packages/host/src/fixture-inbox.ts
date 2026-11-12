@@ -1775,13 +1775,15 @@ type StagedAnswer<Kind extends PortActKind> = (
   payload: PortActPayload<Kind>,
 ) => PortActResult<Kind>;
 
+type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
+
 /**
  * Every read the Inbox, its items, and the person page ask, answered as the
  * service would answer it for this account. Note that the workspace's members
  * are not among them, because the tasks fixture's own answer names them
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
-const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
+const ANSWERS: StagedAnswers = {
   [ACT_KIND.AGENTS_LIST]: ({ taskId }) => {
     const agent = AGENTS.get(taskId);
 

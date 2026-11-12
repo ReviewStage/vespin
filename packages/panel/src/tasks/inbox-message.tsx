@@ -60,6 +60,8 @@ export function AgentName({ by }: { by: ItemAgent }): React.JSX.Element {
   return <AgentActorRef subject={by.subject} models={by.models} onOpen={by.onOpen} nameOnly />;
 }
 
+type UseMessageWriterResult = { readonly author: CommentAuthor; readonly nameRef: ReactNode };
+
 /**
  * A message's writer as its comment's head draws them: a member by their
  * face and name, which hangs their card, and the agent by its tile and its
@@ -68,7 +70,7 @@ export function AgentName({ by }: { by: ItemAgent }): React.JSX.Element {
 export function useMessageWriter(
   message: InboxMessage | undefined,
   by: ItemAgent,
-): { readonly author: CommentAuthor; readonly nameRef: ReactNode } {
+): UseMessageWriterResult {
   const member = usePerson(message?.member);
 
   if (message?.author === INBOX_MESSAGE_AUTHOR.AGENT) {

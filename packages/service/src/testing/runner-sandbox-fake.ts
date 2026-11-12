@@ -217,6 +217,21 @@ function asUserCommand(command: string, args: readonly string[]) {
   return { user, cwd, env, command: run, args: runArgs };
 }
 
+type Hooks = {
+  onStart?: ((command: FakeCommand) => Promise<void>) | undefined;
+  runExit?: ((args: readonly string[]) => number) | undefined;
+  runStdout?: ((args: readonly string[]) => string | undefined) | undefined;
+  onRun?:
+    | ((
+        env: Readonly<Record<string, string>>,
+        command: string,
+        args: readonly string[],
+      ) => Promise<void>)
+    | undefined;
+};
+
+type StopsAt = { call?: ((rest: string) => boolean) | undefined };
+
 /** Vercel Sandbox's REST API, as a store of the sandboxes and commands it was asked for. */
 export function runnerSandboxApi() {
   const sandboxes: FakeSandbox[] = [];
@@ -281,23 +296,12 @@ export function runnerSandboxApi() {
    * 422 `sandbox_stopping`, as Vercel answers them, until a resume opens the
    * sandbox's next session.
    */
-  const stopsAt: { call?: ((rest: string) => boolean) | undefined } = {};
+  const stopsAt: StopsAt = {};
   /** How many resumes the API refuses next with 422 `sandbox_snapshotting`, as Vercel answers one while the last stop's snapshot is still being taken. */
   const snapshotting = { remaining: 0 };
 
   /** What a test does the moment a detached command has started, before the API answers; the exit a waited run ends on, 0 unless it says, and what it prints, nothing unless it says; and what it does as a waited run arrives, before it ends. */
-  const hooks: {
-    onStart?: ((command: FakeCommand) => Promise<void>) | undefined;
-    runExit?: ((args: readonly string[]) => number) | undefined;
-    runStdout?: ((args: readonly string[]) => string | undefined) | undefined;
-    onRun?:
-      | ((
-          env: Readonly<Record<string, string>>,
-          command: string,
-          args: readonly string[],
-        ) => Promise<void>)
-      | undefined;
-  } = {};
+  const hooks: Hooks = {};
 
   /** The snapshots taken, in order. */
   const snapshots: string[] = [];
@@ -776,11 +780,13 @@ export const launchRead = <Config>(
     lines: lines.map(readInputLine),
   }));
 
+type StdinRead<Config> = { readonly config: Config; readonly lines: readonly InputLine[] };
+
 /** A launch's stdin as its runner reads it: its config as `readConfig` reads it, then each line written after it. */
 export function stdinRead<Config>(
   command: FakeCommand | undefined,
   readConfig: (input: unknown) => Config,
-): { readonly config: Config; readonly lines: readonly InputLine[] } {
+): StdinRead<Config> {
   const [config, ...lines] = linesOf(command);
 
   return { config: readConfig(config), lines: lines.map(readInputLine) };

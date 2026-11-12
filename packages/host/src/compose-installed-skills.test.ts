@@ -90,10 +90,10 @@ interface Replies {
 function fakeService(options: { refuseInstall?: boolean } = {}) {
   const asked: string[] = [];
 
-  const live: Readonly<Record<string, PolledLive<"skills", typeof LIVE_SIGNED_OUT>>> = {
-    [WORKSPACE_ID]: polledLive(["skills"]),
-    [OTHER_WORKSPACE_ID]: polledLive(["skills"]),
-  };
+  const live: ReadonlyMap<string, PolledLive<"skills", typeof LIVE_SIGNED_OUT>> = new Map([
+    [WORKSPACE_ID, polledLive(["skills"])],
+    [OTHER_WORKSPACE_ID, polledLive(["skills"])],
+  ]);
 
   const replies: Replies = {
     install: options.refuseInstall
@@ -123,7 +123,7 @@ function fakeService(options: { refuseInstall?: boolean } = {}) {
       { userId, workspaceId }: { readonly userId: string; readonly workspaceId: string },
       poll?: { readonly after?: string | undefined },
     ) => {
-      const read = live[workspaceId] ?? assert.fail(`no live read of ${workspaceId}`);
+      const read = live.get(workspaceId) ?? assert.fail(`no live read of ${workspaceId}`);
 
       return poll !== undefined
         ? read.poll(poll.after)
@@ -190,7 +190,7 @@ function subject(
         yield* settled;
 
         for (const [workspaceId, skills] of Object.entries(rows)) {
-          service.live[workspaceId]?.set({ skills: skills.map(rowOf) }, ["9100"]);
+          service.live.get(workspaceId)?.set({ skills: skills.map(rowOf) }, ["9100"]);
         }
 
         yield* nextPoll;
@@ -301,10 +301,10 @@ it.effect(
       assert.deepEqual(shown(WORKSPACE_ID), [SKILL_ID]);
       assert.deepEqual(shown(OTHER_WORKSPACE_ID), [], "another workspace's skill is not its");
 
-      live[WORKSPACE_ID]?.set({ skills: [] });
+      live.get(WORKSPACE_ID)?.set({ skills: [] });
       yield* nextPoll;
       assert.deepEqual(shown(WORKSPACE_ID), [SKILL_ID]);
-      live[WORKSPACE_ID]?.set({ skills: [rowOf(SKILL)] }, ["9300"]);
+      live.get(WORKSPACE_ID)?.set({ skills: [rowOf(SKILL)] }, ["9300"]);
       yield* nextPoll;
       assert.deepEqual(shown(WORKSPACE_ID), [SKILL_ID]);
     }),

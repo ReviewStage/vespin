@@ -280,12 +280,14 @@ function MakerCell({
   );
 }
 
+type UseRunNowResult = { readonly running: boolean; readonly run: () => void };
+
 /**
  * Run now from a row of the list, dimmed while one is out: the run it makes
  * is pushed to the row as it lands, and a refusal is said in a toast, since
  * the row has no line of its own to say it in, as the editor does.
  */
-function useRunNow(automationId: string): { readonly running: boolean; readonly run: () => void } {
+function useRunNow(automationId: string): UseRunNowResult {
   const runAutomation = useMutation(actMutation(ACT_KIND.AUTOMATIONS_RUN));
   const toast = useToast();
 

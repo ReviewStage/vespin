@@ -261,6 +261,11 @@ export function placeOfAgent(agent: Pick<Agent, "taskId">): StartWhere {
   return { taskId: agent.taskId };
 }
 
+type InheritedPlace = {
+  readonly machine: AgentMachineKind;
+  readonly deviceId?: string | null | undefined;
+};
+
 /**
  * Where a Start from another agent runs where its ask names no place: where
  * its source runs, so a continue or a fork goes on where the work was, but
@@ -271,7 +276,7 @@ export function placeOfAgent(agent: Pick<Agent, "taskId">): StartWhere {
 export function inheritedPlaceOf(
   userId: string,
   source: Pick<Agent, "userId" | "machine" | "deviceId">,
-): { readonly machine: AgentMachineKind; readonly deviceId?: string | null | undefined } {
+): InheritedPlace {
   const machine = source.machine ?? AGENT_MACHINE.VERCEL;
 
   if (machine === AGENT_MACHINE.DEVICE && source.userId !== userId) {

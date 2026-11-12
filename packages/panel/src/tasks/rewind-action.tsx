@@ -176,6 +176,15 @@ function takesWords(takes: Takes): string | undefined {
   return andList(takes.map((each) => `${countWords(each.count, MESSAGE)} from ${each.name}`));
 }
 
+type RewindPointsResult = {
+  readonly editable: ReadonlySet<string>;
+  readonly revertsAt: ReadonlyMap<string, string>;
+  readonly followed: ReadonlySet<string>;
+  readonly revertTakes: ReadonlyMap<string, string>;
+  readonly editTakes: ReadonlyMap<string, string>;
+  readonly restorable: ReadonlySet<string>;
+};
+
 /**
  * Where a transcript's rewinds land: the lines a person wrote that opened a
  * turn, the first included, each one Edit may write again, and, for each
@@ -200,14 +209,7 @@ export function rewindPoints(
   readerId: string | undefined,
   going: ReadonlySet<string> = new Set(),
   restores = false,
-): {
-  readonly editable: ReadonlySet<string>;
-  readonly revertsAt: ReadonlyMap<string, string>;
-  readonly followed: ReadonlySet<string>;
-  readonly revertTakes: ReadonlyMap<string, string>;
-  readonly editTakes: ReadonlyMap<string, string>;
-  readonly restorable: ReadonlySet<string>;
-} {
+): RewindPointsResult {
   const editable = new Set<string>();
   const revertsAt = new Map<string, string>();
   const revertTakes = new Map<string, string>();

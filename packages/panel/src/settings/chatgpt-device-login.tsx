@@ -87,15 +87,14 @@ const STARTING: Standing = { kind: STANDING.STARTING };
 
 const UNANSWERED = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
 
+type UseDeviceLoginResult = { standing: Standing; retry: () => void };
+
 /**
  * The login while it is drawn: a code asked for as it mounts and on Try
  * again, the login asked after while it waits, and withdrawn as it goes
  * away with it still waiting.
  */
-function useDeviceLogin(
-  add: boolean,
-  onConnected: () => void,
-): { standing: Standing; retry: () => void } {
+function useDeviceLogin(add: boolean, onConnected: () => void): UseDeviceLoginResult {
   const { mutateAsync: sendChatgptDeviceStart } = useMutation(
     actMutation(ACT_KIND.CHATGPT_DEVICE_START),
   );

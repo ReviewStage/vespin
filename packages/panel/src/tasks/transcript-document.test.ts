@@ -59,6 +59,11 @@ const UNANSWERED = new Error("The host did not answer.");
 /** No picture of an item is ever answered: each read waits. */
 const NO_PICTURES: PictureReader = () => new Promise(() => undefined);
 
+type PictureReaderResult = {
+  readonly read: PictureReader;
+  readonly land: (attachmentId: string) => void;
+};
+
 /**
  * An item's pictures read as the test answers them: at once as `answers`
  * holds them, a failure where it holds one, and held until `land` answers it
@@ -67,7 +72,7 @@ const NO_PICTURES: PictureReader = () => new Promise(() => undefined);
 function pictureReader(
   answers: ReadonlyMap<string, PictureAnswer | Error>,
   asked: string[] = [],
-): { readonly read: PictureReader; readonly land: (attachmentId: string) => void } {
+): PictureReaderResult {
   const held = new Map<string, (answer: PictureAnswer) => void>();
 
   const read: PictureReader = (itemId, attachmentId) => {

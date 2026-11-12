@@ -63,7 +63,7 @@ interface Gate {
  * which names none (`EXPERIMENT_OFF_REFUSAL`); a tool whose door answered
  * otherwise words its own (`CatalogTool`'s `refused`).
  */
-export const GATES: { readonly [G in ToolGate]: Gate } = {
+export const GATES: Readonly<Record<ToolGate, Gate>> = {
   [TOOL_GATE.REPOSITORY]: {
     opens: (agent) => hasRepository(agent),
     refusal: CODER_REFUSAL.NO_REPOSITORY,

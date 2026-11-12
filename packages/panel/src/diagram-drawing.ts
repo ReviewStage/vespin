@@ -113,6 +113,11 @@ export function useAppearance(): DiagramAppearance {
   return useSyncExternalStore(onAppearance, appearanceNow, appearanceNow);
 }
 
+type UseDrawingResult = {
+  readonly drawing: DiagramDrawing | undefined;
+  readonly retry: (() => void) | undefined;
+};
+
 /**
  * A code's drawing in the window's appearance: the one held, or nothing
  * while the bundle loads and the draw runs, which then lands. A bundle that
@@ -125,7 +130,7 @@ export function useAppearance(): DiagramAppearance {
 export function useDrawing(
   code: string | undefined,
   appearance: DiagramAppearance,
-): { readonly drawing: DiagramDrawing | undefined; readonly retry: (() => void) | undefined } {
+): UseDrawingResult {
   const { diagram } = useSideBundles();
   // Note that a drawer of no code reads nothing, so a surface that may draw a diagram imports Mermaid only once it does.
   const bundle = useQuery({ ...diagram, enabled: code !== undefined });

@@ -280,8 +280,10 @@ test("Delete closes the focused tab and hands focus to the tab standing in its p
   assert.equal(container.querySelectorAll('[role="tab"]').length, 2);
 });
 
+type Controls = { current: TabsControls | null };
+
 test("an owner's step moves the focused tab a place along, keeps focus on it, and says where it now stands", async () => {
-  const controls: { current: TabsControls | null } = { current: null };
+  const controls: Controls = { current: null };
   const container = await render(createElement(Strip, { count: 3, controls }));
   await render(createElement(Announcer));
   act(() => controls.current?.step(1));
@@ -302,7 +304,7 @@ test("an owner's step moves the focused tab a place along, keeps focus on it, an
 });
 
 test("an anchored tab stands out of every move: it has no place, the tabs after it are counted from the first after it, and a step takes none before it", async () => {
-  const controls: { current: TabsControls | null } = { current: null };
+  const controls: Controls = { current: null };
   const container = await render(createElement(Strip, { count: 3, controls, anchored: true }));
   assert.equal(controls.current?.placeOf(tabOf(container, "Tab 1")), undefined);
   const second = controls.current?.placeOf(tabOf(container, "Tab 2"));

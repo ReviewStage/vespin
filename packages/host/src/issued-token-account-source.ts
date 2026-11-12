@@ -36,10 +36,12 @@ export interface IssuedTokenSink {
 
 type AccountStore = AccountSourceHost["store"];
 
+type Told = { issued?: IssuedToken | undefined; once: boolean; refused: boolean };
+
 /** `store`, telling the sink each access token it writes and none once it clears or reads no account, a refused telling told again at its next read. */
 function tellingStore(store: AccountStore, sink: IssuedTokenSink): AccountStore {
   // What was last told and whether it was refused; nothing is told before the first read or write.
-  const told: { issued?: IssuedToken | undefined; once: boolean; refused: boolean } = {
+  const told: Told = {
     once: false,
     refused: false,
   };

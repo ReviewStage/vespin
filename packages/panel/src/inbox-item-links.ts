@@ -47,7 +47,7 @@ function holdsAgent(
  * declaration its route matched (`LINK_ROUTED_PLACE`); every other place is
  * the window's.
  */
-const ITEM_BESIDE: { readonly [Name in LinkDestinationName]?: ItemPlaceBeside } = {
+const ITEM_BESIDE: Readonly<Partial<Record<LinkDestinationName, ItemPlaceBeside>>> = {
   PAGE: (at, _workspace, here) => {
     // A page under a task named by a number no one found the task for is the window's, which finds it on the service.
     if (at.kind !== LINK_DESTINATION.PAGE || taskNumberOf(at) !== undefined) return NOTHING;

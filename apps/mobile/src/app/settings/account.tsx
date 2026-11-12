@@ -35,6 +35,8 @@ export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 /** The act that ends the account, its row's words and the question's alike. */
 const DELETE_ACCOUNT = "Delete account";
 
+type Said = { words?: string };
+
 export default function AccountScreen() {
   const acts = useHostActs();
   const write = useWrite();
@@ -62,7 +64,7 @@ export default function AccountScreen() {
   // Note that a sign-out refused says why under its row, in the host's words.
   const signOutNow = () =>
     void signOut.run(() => {
-      const said: { words?: string } = {};
+      const said: Said = {};
 
       return signOutAccount({
         inPlace: (words) => {
@@ -110,7 +112,7 @@ export default function AccountScreen() {
                   // Note that a refusal says why under the group, in the host's words, and puts the toggle back; flipping it again is the retry, so no Try again could replay an older choice.
                   void usage
                     .run(() => {
-                      const said: { words?: string } = {};
+                      const said: Said = {};
 
                       return write(
                         () => acts[ACT_KIND.SETTING_UPDATE]({ field: "usageData", value: on }),

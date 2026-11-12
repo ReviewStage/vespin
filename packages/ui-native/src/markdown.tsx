@@ -46,7 +46,7 @@ import { Video } from "./video.js";
  * own, as the panel's chip draws it before GitHub has said where the pull
  * request stands, and the rest the SF Symbol closest to the panel's.
  */
-const ENTITY_SYMBOL: { readonly [K in EntityKind]: Glyph } = {
+const ENTITY_SYMBOL: Readonly<Record<EntityKind, Glyph>> = {
   [ENTITY_KIND.PLAN]: "checklist",
   [ENTITY_KIND.SECTION]: "number",
   [ENTITY_KIND.VERSION]: "clock.arrow.circlepath",
@@ -90,7 +90,7 @@ const ENTITY_SYMBOL: { readonly [K in EntityKind]: Glyph } = {
 const CHIP_SYMBOL_SCALE = 0.85;
 
 /** Each heading level's size and weight, a step above the 15 pt words as the denser scale reads, never past a page's own heading. */
-const HEADING_LOOK: { readonly [Level in 1 | 2 | 3 | 4 | 5 | 6]: TextStyle } = {
+const HEADING_LOOK: Readonly<Record<1 | 2 | 3 | 4 | 5 | 6, TextStyle>> = {
   1: { fontSize: TEXT_SIZE.TITLE_3, fontWeight: "600" },
   2: { fontSize: TEXT_SIZE.HEADLINE, fontWeight: "600" },
   3: { fontSize: PROSE_SIZE, fontWeight: "600" },
@@ -99,7 +99,7 @@ const HEADING_LOOK: { readonly [Level in 1 | 2 | 3 | 4 | 5 | 6]: TextStyle } = {
   6: { fontSize: PROSE_SIZE, fontWeight: "600" },
 };
 
-const TEXT_ALIGN: { readonly [A in ColumnAlign]: TextStyle["textAlign"] } = {
+const TEXT_ALIGN: Readonly<Record<ColumnAlign, TextStyle["textAlign"]>> = {
   [COLUMN_ALIGN.START]: "left",
   [COLUMN_ALIGN.CENTER]: "center",
   [COLUMN_ALIGN.END]: "right",

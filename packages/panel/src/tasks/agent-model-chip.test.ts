@@ -196,6 +196,13 @@ const RUNTIME_MODELS: readonly CatalogModel[] = [
   },
 ];
 
+type OpenMenuOnResult = {
+  models: string[];
+  foot: string;
+  line: string;
+  menu: Element;
+};
+
 /** The open menu of a chip on an agent on the runtime given: the models it lists, and its pinned rows. */
 function openMenuOn(
   runtime: AgentRuntime | undefined,
@@ -203,12 +210,7 @@ function openMenuOn(
   models: readonly CatalogModel[] = RUNTIME_MODELS,
   usage: AgentUsage | undefined = undefined,
   payer: AgentPayer | undefined = undefined,
-): {
-  models: string[];
-  foot: string;
-  line: string;
-  menu: Element;
-} {
+): OpenMenuOnResult {
   const view = document.createElement("div");
   document.body.append(view);
   const root = createRoot(view);

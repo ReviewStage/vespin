@@ -163,12 +163,14 @@ function openLocal(localPort: number): void {
   appPlatform().openWeb(`http://${localAddress(localPort)}`);
 }
 
-/** How forwarding stands for the agent: whether it runs in the cloud, and whether this Mac forwards it. */
-function useForwarding(agent: Pick<AgentSummary, "id" | "machine">): {
+type UseForwardingResult = {
   cloud: boolean;
   offered: boolean;
   answer: PortForwardingAnswer;
-} {
+};
+
+/** How forwarding stands for the agent: whether it runs in the cloud, and whether this Mac forwards it. */
+function useForwarding(agent: Pick<AgentSummary, "id" | "machine">): UseForwardingResult {
   const capable =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.PORT_FORWARDS) }).data ===
     true;

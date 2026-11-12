@@ -437,6 +437,8 @@ interface RunnerMessage {
   readonly timeZone: string | undefined;
 }
 
+type RoutedContentResult = { readonly content: readonly ContentBlock[]; readonly compact?: true };
+
 /**
  * A message line's blocks as its route hands them: the turn's words ahead
  * of the developer's, as every message goes; after them, so the harness
@@ -448,7 +450,7 @@ function routedContent(
   route: CommandRoute,
   ahead: readonly ContentBlock[],
   content: readonly ContentBlock[],
-): { readonly content: readonly ContentBlock[]; readonly compact?: true } {
+): RoutedContentResult {
   switch (route) {
     case COMMAND_ROUTE.WORDS:
       return { content: [...ahead, ...content] };
@@ -529,6 +531,11 @@ function attachmentFileName(name: string, at: number): string {
   return `${at + 1}-${stem === "" ? "attachment" : stem}${extension}`;
 }
 
+type RunnerContentResult = {
+  readonly content: readonly ContentBlock[];
+  readonly files: readonly SandboxFile[];
+};
+
 /**
  * A message's content as the runner's lines carry it, and the files it
  * names: words as text, an image as an image block, and any other file,
@@ -542,7 +549,7 @@ function runnerContent(
   harness: string,
   lineId: string,
   attachments: string,
-): { readonly content: readonly ContentBlock[]; readonly files: readonly SandboxFile[] } {
+): RunnerContentResult {
   if (Predicate.isString(message)) return { content: [{ type: "text", text: message }], files: [] };
   const files: SandboxFile[] = [];
 

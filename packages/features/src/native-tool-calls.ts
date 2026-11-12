@@ -236,11 +236,11 @@ function codexTerminalAnswer(output: WireValue | undefined): WireValue | undefin
 }
 
 /** The header `apply_patch` opens a file's change with, for each kind of change Codex reports. */
-const CODEX_CHANGE_HEADER: Readonly<Record<string, string>> = {
-  add: "Add",
-  delete: "Delete",
-  update: "Update",
-};
+const CODEX_CHANGE_HEADER: ReadonlyMap<string, string> = new Map([
+  ["add", "Add"],
+  ["delete", "Delete"],
+  ["update", "Update"],
+]);
 
 /**
  * One file of a Codex file change as `apply_patch` spells it: a file added
@@ -253,7 +253,7 @@ function codexFilePatch(change: WireValue): readonly string[] {
   const kind = isRecord(change) ? change.kind : undefined;
   const type = inputString(kind, "type") ?? "update";
   const diff = inputString(change, "diff");
-  const header = `*** ${CODEX_CHANGE_HEADER[type] ?? "Update"} File: ${path}`;
+  const header = `*** ${CODEX_CHANGE_HEADER.get(type) ?? "Update"} File: ${path}`;
 
   if (type === "add") return [header, ...patchLines("+", diff)];
 
@@ -301,11 +301,11 @@ function codexTodosInput(input: WireValue | undefined): WireValue | undefined {
 }
 
 /** The few words a Codex subagent call is named by where it carries no task: what it did to the subagents it names. */
-const CODEX_SUBAGENT_DOING: Readonly<Record<string, string>> = {
-  wait: "Wait for subagents",
-  closeAgent: "Close a subagent",
-  resumeAgent: "Resume a subagent",
-};
+const CODEX_SUBAGENT_DOING: ReadonlyMap<string, string> = new Map([
+  ["wait", "Wait for subagents"],
+  ["closeAgent", "Close a subagent"],
+  ["resumeAgent", "Resume a subagent"],
+]);
 
 /** The collab tool that starts a subagent on a thread of its own, as `CollabAgentTool` spells it. */
 const CODEX_SPAWN_AGENT = "spawnAgent";
@@ -332,7 +332,7 @@ function codexSubagentInput(input: WireValue | undefined): WireValue | undefined
   const tool = inputString(input, "tool") ?? "";
 
   return prompt.trim() === ""
-    ? { prompt, description: CODEX_SUBAGENT_DOING[tool] ?? tool }
+    ? { prompt, description: CODEX_SUBAGENT_DOING.get(tool) ?? tool }
     : { prompt };
 }
 

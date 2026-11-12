@@ -71,7 +71,7 @@ function blockValue(block: ToolBlock): WireValue {
   }
 }
 
-function isContainer(value: unknown): value is object {
+function isContainer<T>(value: T): value is T & object {
   return Predicate.isObjectOrArray(value);
 }
 

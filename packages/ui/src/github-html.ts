@@ -287,8 +287,10 @@ const PHRASING_TAGS: ReadonlySet<string> = new Set([
   "var",
 ]);
 
+type Line = { line: HtmlNode[]; blocks: HtmlNode[] };
+
 /** A block's line, the nodes it holds outside any block nested in it, and the blocks nested in it. */
-function lineOf(block: HtmlNode): { line: HtmlNode[]; blocks: HtmlNode[] } {
+function lineOf(block: HtmlNode): Line {
   const line: HtmlNode[] = [];
   const blocks: HtmlNode[] = [];
 

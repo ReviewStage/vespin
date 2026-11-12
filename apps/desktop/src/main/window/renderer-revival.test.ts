@@ -17,8 +17,10 @@ import { PanelManager, type PanelSystem } from "./panel-manager";
 
 const windows: FakeBrowserWindow[] = [];
 
+type Sheets = { answers: number[]; shownOn: unknown[] };
+
 /** The answers the next sheets give, by button, and the windows each was shown on. */
-const sheets: { answers: number[]; shownOn: unknown[] } = { answers: [], shownOn: [] };
+const sheets: Sheets = { answers: [], shownOn: [] };
 
 /** Whether a quit asked for tears the launch down, or a live call holds it; and whether it was asked. */
 const quit = { goes: true, asked: false, tearingDown: false };

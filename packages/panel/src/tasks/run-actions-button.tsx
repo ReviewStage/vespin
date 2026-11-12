@@ -156,16 +156,18 @@ async function stopAction(
   else pressFailed(ACT_KIND.AGENTS_RUN_ACTION_STOP, agentId, answer, WORDS.NOT_STOPPED);
 }
 
+type UseRunActionPressResult = {
+  readonly busy: boolean;
+  readonly run: (action: HeldAction) => void;
+  readonly stop: (action: HeldAction) => void;
+};
+
 /**
  * Runs or stops one of an agent's run actions from the tab that shows it,
  * through the presses the Run button makes, the tab already shown; and
  * whether a press is under way, which holds the tab's button.
  */
-export function useRunActionPress(agentId: string): {
-  readonly busy: boolean;
-  readonly run: (action: HeldAction) => void;
-  readonly stop: (action: HeldAction) => void;
-} {
+export function useRunActionPress(agentId: string): UseRunActionPressResult {
   const queries = useQueryClient();
   const [busy, setBusy] = useState(false);
 

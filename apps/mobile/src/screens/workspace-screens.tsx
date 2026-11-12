@@ -36,6 +36,8 @@ const WORDS = {
 /** What a flow finds the name field by. */
 const NAME_FIELD_ID = "new-workspace-name";
 
+type Said = { words?: string };
+
 /**
  * New workspace: the team's name, then Create in the bar, lit once a name is
  * typed and while no create is out. The workspace is made by the host's own
@@ -71,7 +73,7 @@ export function NewWorkspaceScreen() {
   const make = () => {
     // Note that a refusal says why in the sheet, under the name, in the host's own words rather than the error's.
     void create.run(() => {
-      const said: { words?: string } = {};
+      const said: Said = {};
 
       return write(
         () =>

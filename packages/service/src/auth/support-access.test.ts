@@ -169,8 +169,10 @@ function keep(browser: Browser, headers: Headers): void {
   }
 }
 
-function cookieOf(browser: Browser): Record<string, string> {
-  return { cookie: [...browser].map(([name, value]) => `${name}=${value}`).join("; ") };
+function cookieOf(browser: Browser) {
+  return {
+    cookie: [...browser].map(([name, value]) => `${name}=${value}`).join("; "),
+  } satisfies Record<string, string>;
 }
 
 async function withSupportAuth(body: (auth: SupportAuth) => Promise<void>): Promise<void> {

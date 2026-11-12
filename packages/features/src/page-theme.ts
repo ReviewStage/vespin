@@ -102,14 +102,16 @@ export const pageThemeAskSchema = EffectSchema.Struct({
   type: EffectSchema.Literal(PAGE_THEME_ASK_TYPE),
 });
 
-/** The message the window posts to the frame, answering an ask or as its appearance flips. */
-export function pageThemeMessage(theme: PageTheme): {
+type PageThemeMessageResult = {
   readonly type: typeof PAGE_THEME_TYPE;
   readonly scheme: PageThemeScheme;
   readonly variables: Readonly<Record<string, string>>;
   readonly inset: string;
   readonly narrowInset: string;
-} {
+};
+
+/** The message the window posts to the frame, answering an ask or as its appearance flips. */
+export function pageThemeMessage(theme: PageTheme): PageThemeMessageResult {
   return {
     type: PAGE_THEME_TYPE,
     scheme: theme.scheme,

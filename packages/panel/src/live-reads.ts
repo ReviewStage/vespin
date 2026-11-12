@@ -196,7 +196,7 @@ function integrationToolsFollow(name: string): ReturnType<LiveFollow> {
  * Mac's host, and the workspaces' photos the host holds for the session, so
  * they take none.
  */
-const LIVE_FOLLOWS: { readonly [Read in LiveReadName]?: LiveFollow } = {
+const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
   [LIVE_READ.MODELS]: () => askAct(ACT_KIND.AGENTS_MODELS_FOLLOW),
   [LIVE_READ.PROVIDER_KEYS]: () => askAct(ACT_KIND.PROVIDER_KEYS_FOLLOW),
   [LIVE_READ.GITHUB_TOKEN]: () => askAct(ACT_KIND.GITHUB_TOKEN_FOLLOW),
@@ -274,9 +274,9 @@ function pullRequestPartIds([agentId = "", number = ""]: readonly string[]): rea
  * slice, whose every segment is a string; a read keyed by strings alone
  * declares none, its path being its ids.
  */
-const LIVE_KEY_IDS: {
-  readonly [Read in LiveReadName]?: (path: readonly string[]) => readonly LiveReadId[];
-} = {
+const LIVE_KEY_IDS: Readonly<
+  Partial<Record<LiveReadName, (path: readonly string[]) => readonly LiveReadId[]>>
+> = {
   [LIVE_READ.PULL_REQUEST]: pullRequestPartIds,
   [LIVE_READ.PULL_REQUEST_CHECKS]: pullRequestPartIds,
   [LIVE_READ.PULL_REQUEST_CONVERSATION]: pullRequestPartIds,

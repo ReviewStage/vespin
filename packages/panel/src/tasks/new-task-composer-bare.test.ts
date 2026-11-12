@@ -75,8 +75,10 @@ async function mount(purpose: NewTaskPurpose = NEW_TASK_PURPOSE.TASK): Promise<H
   return container;
 }
 
+type SendHintResult = { words: string; chord: string | undefined };
+
 /** The round button's hint once the pointer has rested on it: its words, and the chord it draws. */
-function sendHint(container: HTMLElement): { words: string; chord: string | undefined } {
+function sendHint(container: HTMLElement): SendHintResult {
   restOn(
     container.querySelector('button[type="submit"]') ?? assert.fail("the card draws its button"),
   );

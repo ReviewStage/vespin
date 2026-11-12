@@ -130,14 +130,14 @@ const SHAPE_CLASS: Record<AvatarShape, string> = {
 };
 
 /** The six identity hues a letter stands on, by the hue `identityHue` reads off an id. */
-const HUE_CLASS: Readonly<Record<number, string>> = {
-  1: "bg-identity-1",
-  2: "bg-identity-2",
-  3: "bg-identity-3",
-  4: "bg-identity-4",
-  5: "bg-identity-5",
-  6: "bg-identity-6",
-};
+const HUE_CLASS: ReadonlyMap<number, string> = new Map([
+  [1, "bg-identity-1"],
+  [2, "bg-identity-2"],
+  [3, "bg-identity-3"],
+  [4, "bg-identity-4"],
+  [5, "bg-identity-5"],
+  [6, "bg-identity-6"],
+]);
 
 /** The box a glyph stands in: the disc's whole, its glyph a share of it at every size. */
 const GLYPH_BOX = "ui-avatar-glyph grid size-full place-items-center *:size-avatar-glyph-share";
@@ -172,7 +172,7 @@ function typeClass({ size, shape }: Look): string {
  * a blank tile's nothing until its picture has loaded; or the quiet fill.
  */
 function groundClass({ glyph, tiled, branded, blank, hue }: Look): string {
-  if (hue !== undefined) return `${HUE_CLASS[hue] ?? ""} text-on-identity`;
+  if (hue !== undefined) return `${HUE_CLASS.get(hue) ?? ""} text-on-identity`;
 
   if (glyph && branded) return "bg-avatar-tile text-avatar-ink";
 

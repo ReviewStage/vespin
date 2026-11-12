@@ -59,8 +59,10 @@ const JOBS = [
   "fix(ui): chips fade where cut",
 ] as const;
 
+type StartedAgentResult = { readonly id: string; readonly name: string };
+
 /** A coding agent the run started, by its turn: its id and its name. */
-function startedAgent(turn: number): { readonly id: string; readonly name: string } {
+function startedAgent(turn: number): StartedAgentResult {
   const hex = turn.toString(16).padStart(12, "0");
 
   return {
@@ -413,8 +415,10 @@ export function longRunHold(): AsyncIteratorClass<never, void> {
 /** Each picture's bytes as the run showed it, drawn once: a screenshot-sized PNG. */
 let pictureBytes: string | undefined;
 
+type LongRunPictureResult = { readonly contentType: "image/png"; readonly base64: string };
+
 /** A picture the run showed, read as main reads one: a screenshot-sized PNG. */
-export function longRunPicture(): { readonly contentType: "image/png"; readonly base64: string } {
+export function longRunPicture(): LongRunPictureResult {
   if (pictureBytes === undefined) {
     const canvas = document.createElement("canvas");
     canvas.width = LONG_RUN.PICTURE_WIDTH;

@@ -138,16 +138,15 @@ function linesOf(listing: PullRequestListing): ReadonlyMap<string, AgentPullRequ
   return lines;
 }
 
-/** What moved from one drawing of the list to the next: the agents whose status moved, those the list names a pull request of anew, the addresses of the pull requests whose line moved or left, and of those whose head moved or left among them. */
-function movedOf(
-  before: PullRequestListing,
-  after: PullRequestListing,
-): {
+type Moved = {
   readonly agents: ReadonlySet<string>;
   readonly opened: ReadonlySet<string>;
   readonly urls: ReadonlySet<string>;
   readonly heads: ReadonlySet<string>;
-} {
+};
+
+/** What moved from one drawing of the list to the next: the agents whose status moved, those the list names a pull request of anew, the addresses of the pull requests whose line moved or left, and of those whose head moved or left among them. */
+function movedOf(before: PullRequestListing, after: PullRequestListing): Moved {
   const agents = new Set<string>();
 
   for (const [agentId, status] of before.statuses) {
@@ -257,7 +256,7 @@ export function pullRequestParts(
       tell: tell[LIVE_READ.PULL_REQUEST_VIEWED],
     });
 
-    const fetches: { readonly [Part in PullRequestPart]: PartFetch } = {
+    const fetches: Readonly<Record<PullRequestPart, PartFetch>> = {
       [PULL_REQUEST_PART.PULL_REQUEST]: pullRequest,
       [PULL_REQUEST_PART.CHECKS]: checks,
       [PULL_REQUEST_PART.CONVERSATION]: conversation,

@@ -120,8 +120,10 @@ function openMenu(): HTMLElement | null {
   return document.querySelector<HTMLElement>('[role="menu"]');
 }
 
+type OfferedResult = { label: string | null; items: string[] };
+
 /** What the open menu offers, by its items' words, and what it is named. */
-function offered(): { label: string | null; items: string[] } {
+function offered(): OfferedResult {
   const menu = openMenu();
 
   if (menu === null) throw new Error("No menu open");

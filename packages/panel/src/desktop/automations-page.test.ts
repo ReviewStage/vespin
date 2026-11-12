@@ -950,8 +950,10 @@ test("with no automations the page says what one is, and with no workspace liste
   assert.deepEqual(listed(), [WORKSPACE.id], "no list is read with no workspace listed");
 });
 
+type BarResult = { banner: HTMLElement; parts: Element[] };
+
 /** The window's bar over `page`, its parts in the order they stand, each by its text. */
-function bar(page: HTMLElement): { banner: HTMLElement; parts: Element[] } {
+function bar(page: HTMLElement): BarResult {
   const banner = page.querySelector<HTMLElement>("header") ?? assert.fail("no bar");
 
   return { banner, parts: [...banner.children] };

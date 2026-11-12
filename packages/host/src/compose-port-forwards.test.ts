@@ -54,6 +54,8 @@ const scriptedConnection = Effect.gen(function* () {
   return { connection, send: (text: string) => Queue.offer(inbound, encode(text)), written, state };
 });
 
+type Told = { last?: unknown };
+
 /** The composer over the scripted service, loopback, and relay. */
 function subject(options: { taken?: number[] } = {}) {
   return Effect.gen(function* () {
@@ -75,7 +77,7 @@ function subject(options: { taken?: number[] } = {}) {
     }[] = [];
 
     /** What the concern last told the windows of how forwarding stands. */
-    const told: { last?: unknown } = {};
+    const told: Told = {};
 
     const composer = yield* composePortForwards({
       kernel: {

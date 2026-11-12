@@ -220,11 +220,11 @@ type DemoSeedEffect<A> = Effect.Effect<
 >;
 
 /** The kind of fixed id Better Auth mints for each model it writes the seed's rows of. */
-const AUTH_ID_KIND: Readonly<Record<string, DemoIdKind>> = {
-  user: DEMO_ID_KIND.USER,
-  organization: DEMO_ID_KIND.ORGANIZATION,
-  member: DEMO_ID_KIND.MEMBER,
-};
+const AUTH_ID_KIND: ReadonlyMap<string, DemoIdKind> = new Map([
+  ["user", DEMO_ID_KIND.USER],
+  ["organization", DEMO_ID_KIND.ORGANIZATION],
+  ["member", DEMO_ID_KIND.MEMBER],
+]);
 
 /**
  * A Better Auth over the database, with the admin plugin, which writes
@@ -238,7 +238,7 @@ export function demoAuth(database: DB): DemoAuth {
   const minted = new Map<DemoIdKind, number>();
 
   const generateId = ({ model }: { readonly model: string }) => {
-    const kind = AUTH_ID_KIND[model] ?? DEMO_ID_KIND.AUTH_ROW;
+    const kind = AUTH_ID_KIND.get(model) ?? DEMO_ID_KIND.AUTH_ROW;
     const next = (minted.get(kind) ?? 0) + 1;
     minted.set(kind, next);
 

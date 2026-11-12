@@ -90,16 +90,16 @@ describe("the scroll fade pin", () => {
     const { document } = dom.window;
 
     // jsdom runs no scroll timeline, so the box is given the depths one would have eased it to.
-    const depths: Record<string, string> = {
-      "--ui-scroll-area-fade-start": "0px",
-      "--ui-scroll-area-fade-end": "24px",
-    };
+    const depths: ReadonlyMap<string, string> = new Map([
+      ["--ui-scroll-area-fade-start", "0px"],
+      ["--ui-scroll-area-fade-end", "24px"],
+    ]);
 
     // SAFETY: the scripts read only these few fields of a computed style.
     dom.window.getComputedStyle = ((box: Element) => ({
       animationName:
         box.id === "faded" ? "ui-scroll-area-fade-start, ui-scroll-area-fade-end" : "none",
-      getPropertyValue: (name: string) => depths[name] ?? "",
+      getPropertyValue: (name: string) => depths.get(name) ?? "",
     })) as unknown as typeof dom.window.getComputedStyle;
 
     dom.window.eval(PIN_SCROLL_FADES_SCRIPT);

@@ -174,12 +174,14 @@ function editedRunActions(
   });
 }
 
+type LastRun = { readonly lastRun?: CloudSetupScriptRun };
+
 /** A script's last run as the wire says it, its agent by the name every place gives it; none where it never ran. */
 function lastRunOf(
   runs: readonly WorkspaceScriptRun[],
   script: CloudSetupScript,
   repository: string | null,
-): { readonly lastRun?: CloudSetupScriptRun } {
+): LastRun {
   const run = runs.find(
     (each) => each.script === script && each.repository === (repository?.toLowerCase() ?? null),
   );

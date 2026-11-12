@@ -151,11 +151,10 @@ export function DeviceStandingGlyph({
   );
 }
 
+type DeviceMarkResult = { readonly icon: React.JSX.Element; readonly unready: string | undefined };
+
 /** A device as a list of places draws it: its platform's glyph wearing one dot, its words on hover and to a reader, and why it takes no agent now, none where it does. */
-export function deviceMark(
-  device: MacOffer,
-  book: PresenceBook,
-): { readonly icon: React.JSX.Element; readonly unready: string | undefined } {
+export function deviceMark(device: MacOffer, book: PresenceBook): DeviceMarkResult {
   const icon = <DeviceStandingGlyph device={device} standing={offerStanding(device, book)} />;
 
   return { icon, unready: offerUnready(device, book) };

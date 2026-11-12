@@ -316,6 +316,8 @@ const keptTabs = (conversationId: string) =>
     rows.map(({ targetId, address, title }) => ({ targetId, address, title })),
   );
 
+type Refusing = { unopenable: string | undefined };
+
 it.layer(getTestDB())("the browser tool", (it) => {
   it.effect(
     "a tab the agent opens and navigates is kept with its page as it now stands, and goes once closed",
@@ -386,7 +388,7 @@ it.layer(getTestDB())("the browser tool", (it) => {
           title: "Lost",
           openedBy: { kind: AGENT_BROWSER_TAB_OPENER.AGENT },
         });
-        const refusing: { unopenable: string | undefined } = { unopenable: "https://lost.test/" };
+        const refusing: Refusing = { unopenable: "https://lost.test/" };
 
         const { peer, held: pages } = yield* browser(
           [{ targetId: "tab-held", url: "https://held.test/", title: "Held" }],

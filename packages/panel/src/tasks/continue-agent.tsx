@@ -108,6 +108,14 @@ function holdsCarried(draft: Draft, carry: ContinueCarry): boolean {
   );
 }
 
+type UseContinueStartResult = {
+  readonly busy: boolean;
+  readonly note: Failure | undefined;
+  readonly start: (choice?: ModelChoice) => void;
+  /** Lets the box's words go where it still holds what the press carried. */
+  readonly letGo: () => void;
+};
+
 /**
  * A continue started at once from the agent's whole transcript, on `choice`
  * where one is named, with the box's words and files as its note: held busy
@@ -118,13 +126,7 @@ function useContinueStart(
   agentId: string,
   control: Pick<AgentsControl, "continueAgent">,
   carry: ContinueCarry | undefined,
-): {
-  readonly busy: boolean;
-  readonly note: Failure | undefined;
-  readonly start: (choice?: ModelChoice) => void;
-  /** Lets the box's words go where it still holds what the press carried. */
-  readonly letGo: () => void;
-} {
+): UseContinueStartResult {
   const starting = useAsyncAction<Failure>(rejectedFailure);
   const note = starting.refusal;
   const writer = useDraftWriter();

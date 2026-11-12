@@ -31,14 +31,14 @@ const WRITTEN = new WeakMap<Element, string>();
 const STRONG_DELIMITER = "**";
 
 /** The delimiters each inline mark is written with, by its element's tag, as the message box reads them (`@repo/features/composer-markdown`), so a quote laid in draws its marks. */
-const MARK_DELIMITER: Readonly<Record<string, string>> = {
-  STRONG: STRONG_DELIMITER,
-  B: STRONG_DELIMITER,
-  EM: "*",
-  I: "*",
-  DEL: "~~",
-  S: "~~",
-};
+const MARK_DELIMITER: ReadonlyMap<string, string> = new Map([
+  ["STRONG", STRONG_DELIMITER],
+  ["B", STRONG_DELIMITER],
+  ["EM", "*"],
+  ["I", "*"],
+  ["DEL", "~~"],
+  ["S", "~~"],
+]);
 
 /** The elements that stand as blocks of their own: a blank line before and after each. */
 const BLOCK_TAGS: ReadonlySet<string> = new Set([
@@ -223,7 +223,7 @@ function elementWritten(element: Element, range: Range, inside: Inside): string 
   const words = childrenWritten(element, range, { ...inside, marked });
 
   if (inside.code) return linedCode(element, words);
-  const delimiter = MARK_DELIMITER[tag];
+  const delimiter = MARK_DELIMITER.get(tag);
 
   if (delimiter !== undefined) return wrapped(words, delimiter);
 
@@ -282,7 +282,7 @@ function insideAncestors(words: string, from: Element): string {
 
   for (let at: Element | null = start; at !== null; at = at.parentElement) {
     const tag = at.tagName;
-    const delimiter = MARK_DELIMITER[tag];
+    const delimiter = MARK_DELIMITER.get(tag);
 
     if (delimiter !== undefined) kept = wrapped(kept, delimiter);
     else if (tag === "CODE") kept = at.parentElement?.tagName === "PRE" ? kept : codeSpan(kept);

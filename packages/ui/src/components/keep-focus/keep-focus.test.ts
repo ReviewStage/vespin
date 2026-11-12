@@ -26,8 +26,10 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
+type MountResult = { box: HTMLElement; pressed: string[] };
+
 /** A box holding words and a button, whose presses are recorded. */
-function mount(): { box: HTMLElement; pressed: string[] } {
+function mount(): MountResult {
   const pressed: string[] = [];
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);

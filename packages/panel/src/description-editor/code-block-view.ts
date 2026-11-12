@@ -46,8 +46,10 @@ function languageClass(node: PmNode): string {
   return language === "" ? "" : `${LANGUAGE_CLASS_PREFIX}${language}`;
 }
 
+type Frame = { dom: HTMLElement; head: HTMLElement; code: HTMLElement };
+
 /** The block's frame, its header's element, and its lines' element, which ProseMirror edits. */
-function frameOf(node: PmNode): { dom: HTMLElement; head: HTMLElement; code: HTMLElement } {
+function frameOf(node: PmNode): Frame {
   const dom = document.createElement("figure");
   dom.className = FRAME_CLASS;
   const head = document.createElement("div");

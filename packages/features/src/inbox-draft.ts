@@ -301,6 +301,11 @@ interface StepFence {
   readonly lang: string | undefined;
 }
 
+type StepPartsResult = {
+  readonly say: string;
+  readonly fences: readonly StepFence[];
+};
+
 /**
  * A to-do's step as its box draws it: its words, the box's label, and the
  * fenced blocks standing at its top level, each drawn under the words as a
@@ -308,10 +313,7 @@ interface StepFence {
  * the label's one line. Note that a fence inside a list or a quote stays in
  * the words, as a part of the block holding it.
  */
-export function stepParts(step: string): {
-  readonly say: string;
-  readonly fences: readonly StepFence[];
-} {
+export function stepParts(step: string): StepPartsResult {
   const fences = markdownTree(step).children.filter(
     (node): node is Extract<typeof node, { type: "code" }> => node.type === "code",
   );

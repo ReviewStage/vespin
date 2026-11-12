@@ -106,11 +106,13 @@ function mount(page: DrawnPage = SETTINGS_PAGE.APPEARANCE): HTMLElement {
   return container;
 }
 
-/** This Mac's Startup, and a way to draw it again over the settings the store then holds. */
-function mountThroughActs(): {
+type MountThroughActsResult = {
   page: HTMLElement;
   redraw: (settings: ReturnType<typeof settingsView>) => void;
-} {
+};
+
+/** This Mac's Startup, and a way to draw it again over the settings the store then holds. */
+function mountThroughActs(): MountThroughActsResult {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);

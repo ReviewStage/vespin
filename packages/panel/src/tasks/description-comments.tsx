@@ -286,6 +286,11 @@ function sameCards(a: readonly MarginCard[], b: readonly MarginCard[]): boolean 
   );
 }
 
+type UseMarginCardsResult = {
+  drawn: readonly DrawnCard[];
+  gone: (id: string) => void;
+};
+
 /**
  * The margin's cards to draw, while it is drawn: those standing, then each
  * that left, as it was last drawn, until its fade is done (`gone`). Note that what left is
@@ -293,13 +298,7 @@ function sameCards(a: readonly MarginCard[], b: readonly MarginCard[]): boolean 
  * fading rather than one drawn again, and a card standing again is no
  * longer held.
  */
-function useMarginCards(
-  cards: readonly MarginCard[],
-  drawing: boolean,
-): {
-  drawn: readonly DrawnCard[];
-  gone: (id: string) => void;
-} {
+function useMarginCards(cards: readonly MarginCard[], drawing: boolean): UseMarginCardsResult {
   const [held, setHeld] = useState<{
     last: readonly MarginCard[];
     leaving: readonly MarginCard[];
@@ -489,27 +488,28 @@ export function useCommentFocus(): CommentFocus {
   return useContext(CommentFocusContext);
 }
 
+type WriterSubjectResult = { subject: AgentSubject; elsewhere: boolean };
+
 /**
  * The agent that wrote an entry: one of the task's own, or, where an agent
  * of another task wrote on the description by naming it, as the window's list
  * across the workspace names it, rather than as an agent no list holds;
  * and whether it is such an agent, which has no tab on this task.
  */
-function writerSubject(
-  agents: EditAgents,
-  agentId: string,
-): { subject: AgentSubject; elsewhere: boolean } {
+function writerSubject(agents: EditAgents, agentId: string): WriterSubjectResult {
   const line = agents.control.listed?.find((each) => each.id === agentId);
   const subject = agentSubject(agents.control, agentId, NOTHING_HELD, false, line);
 
   return { subject, elsewhere: subject.agent === undefined && line !== undefined };
 }
 
+type UseWriterResult = { author: CommentAuthor; nameRef: ReactNode };
+
 /** Who wrote an entry as a comment draws them: their face, and their name as every place naming an actor draws it. */
 function useWriter(
   writer: DescriptionCommentWriter,
   agents: EditAgents | undefined,
-): { author: CommentAuthor; nameRef: ReactNode } {
+): UseWriterResult {
   const person = usePerson(writer.by);
 
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) {
@@ -1056,11 +1056,16 @@ const NO_FILES: readonly DescriptionCommentFile[] = [];
 /** An edit that opens holding no files of the window's. */
 const NO_ATTACHMENTS: readonly AgentAttachment[] = [];
 
+type FilesChangedResult = {
+  readonly keep?: readonly string[];
+  readonly attachments?: readonly AgentAttachment[];
+};
+
 /** What an edit says of its comment's files: nothing where it leaves them as they stand, else the files it keeps by their ids, in order, and those it adds. */
 function filesChanged(
   carried: readonly DescriptionCommentFile[],
   { kept, added }: EditedFiles,
-): { readonly keep?: readonly string[]; readonly attachments?: readonly AgentAttachment[] } {
+): FilesChangedResult {
   const keep = kept.map((file) => file.attachmentId);
 
   const same =
@@ -3895,8 +3900,10 @@ function PagePin({
   );
 }
 
+type UseReaderWriterResult = { author: CommentAuthor; nameRef: ReactNode };
+
 /** The reader as a comment of theirs draws them: their face and their name. */
-function useReaderWriter(): { author: CommentAuthor; nameRef: ReactNode } {
+function useReaderWriter(): UseReaderWriterResult {
   const { readerId } = useMemberDirectory();
   const reader = usePerson(readerId === undefined ? undefined : { userId: readerId, name: "" });
 

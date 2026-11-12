@@ -20,7 +20,7 @@ export function standingFor(
   repository: string | null,
   { local = false, memory = false, descriptions = true, turnEnd = false }: StandingFor = {},
 ): AgentStanding {
-  const opens: { readonly [G in ToolGate]: boolean } = {
+  const opens: Readonly<Record<ToolGate, boolean>> = {
     [TOOL_GATE.REPOSITORY]: repository !== null,
     [TOOL_GATE.SANDBOX]: !local,
     [TOOL_GATE.MEMORY]: memory,

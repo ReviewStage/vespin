@@ -48,11 +48,13 @@ function standingOf(answer: NotificationPermissionsStatus): NotificationStanding
   return NOTIFICATION_STANDING.UNASKED;
 }
 
-/** Where the permission stands, none until first read, and the step toward allowing it. */
-export function useNotificationPermission(): {
+type UseNotificationPermissionResult = {
   readonly standing: NotificationStanding | undefined;
   readonly allow: () => void;
-} {
+};
+
+/** Where the permission stands, none until first read, and the step toward allowing it. */
+export function useNotificationPermission(): UseNotificationPermissionResult {
   const [standing, setStanding] = useState<NotificationStanding | undefined>(undefined);
 
   const read = useCallback(() => {

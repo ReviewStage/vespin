@@ -87,14 +87,14 @@ const GOT_STATUS = /^Status: (\w+)$/m;
 const DELETED = "deleted";
 
 /** A task's status as the wire spells a to-do's: the CLI's `completed` is done, and the rest are spelled alike; nothing for a word that is none of them. */
-const TASK_STATUS: Readonly<Record<string, AgentTodoStatus>> = {
-  pending: AGENT_TODO_STATUS.PENDING,
-  in_progress: AGENT_TODO_STATUS.IN_PROGRESS,
-  completed: AGENT_TODO_STATUS.DONE,
-};
+const TASK_STATUS: ReadonlyMap<string, AgentTodoStatus> = new Map([
+  ["pending", AGENT_TODO_STATUS.PENDING],
+  ["in_progress", AGENT_TODO_STATUS.IN_PROGRESS],
+  ["completed", AGENT_TODO_STATUS.DONE],
+]);
 
 function taskStatus(status: WireValue | undefined): AgentTodoStatus | undefined {
-  return isWireString(status) ? TASK_STATUS[status] : undefined;
+  return isWireString(status) ? TASK_STATUS.get(status) : undefined;
 }
 
 /** The string under a key of the input, or nothing where it holds none. */

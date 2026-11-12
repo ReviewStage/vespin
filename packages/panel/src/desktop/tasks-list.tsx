@@ -320,11 +320,13 @@ function toggledIn(folds: ListFolds, head: TasksGroupHead): ListFolds {
   }
 }
 
-/** Which groups are folded, and the press that folds or opens one, kept on this Mac as it is pressed. */
-function useListFolds(): {
+type UseListFoldsResult = {
   folded: (head: TasksGroupHead) => boolean;
   toggle: (head: TasksGroupHead) => void;
-} {
+};
+
+/** Which groups are folded, and the press that folds or opens one, kept on this Mac as it is pressed. */
+function useListFolds(): UseListFoldsResult {
   const [folds, keep] = useKept(KEPT.FOLDS, {});
 
   return {

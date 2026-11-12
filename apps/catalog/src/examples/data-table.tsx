@@ -112,13 +112,17 @@ const STATIC_COLUMNS = column.columns([
 ]);
 
 /** A run's note, prose that wraps at its column's width. */
-const NOTES: Readonly<Record<string, string>> = {
-  nightly:
+const NOTES: ReadonlyMap<string, string> = new Map([
+  [
+    "nightly",
     "Reviews every pull request opened since the last run and leaves one comment per file it would change, never more.",
-  release: "Drafts the release notes from merged pull requests.",
-  triage:
+  ],
+  ["release", "Drafts the release notes from merged pull requests."],
+  [
+    "triage",
     "Labels new issues by area and asks for a reproduction where none is given, closing duplicates it is sure of.",
-};
+  ],
+]);
 
 /** A table whose note column wraps, each row offering its run's acts from its ⋯ and a right-click. */
 const NOTED_COLUMNS = column.columns([
@@ -126,7 +130,7 @@ const NOTED_COLUMNS = column.columns([
     id: "note",
     header: "Note",
     meta: { kind: DATA_TABLE_COLUMN_KIND.PROSE },
-    cell: ({ row: { original: run } }) => NOTES[run.id],
+    cell: ({ row: { original: run } }) => NOTES.get(run.id),
   }),
   column.display({ id: "name", header: "Run", cell: ({ row: { original: run } }) => run.name }),
   column.display({

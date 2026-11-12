@@ -222,7 +222,7 @@ type PagePlaceBeside = (place: LinkDestination, here: PagesHere) => Route;
  * an agent showed on itself, which the window finds the task of. Every
  * other place is the window's.
  */
-const PAGE_BESIDE: { readonly [Name in LinkDestinationName]?: PagePlaceBeside } = {
+const PAGE_BESIDE: Readonly<Partial<Record<LinkDestinationName, PagePlaceBeside>>> = {
   PAGE: (at, here) => {
     // Note that a task named by a number no one found the task for is no place a page reads on, so the window finds it on the service.
     if (at.kind !== LINK_DESTINATION.PAGE || taskNumberOf(at) !== undefined) return NOTHING;

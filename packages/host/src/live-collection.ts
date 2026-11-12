@@ -513,19 +513,23 @@ function withKeyLaid<Read extends object>(
   keyed: SliceLevel,
   path: readonly string[],
   read: Read | undefined,
-): SliceLevel {
+) {
   const [id, ...below] = path;
 
   if (id === undefined) return keyed;
-  const next: { [id: string]: SliceLevel[string] } = { ...keyed };
 
   if (below.length > 0) {
-    const level = Object.hasOwn(next, id) ? next[id] : undefined;
-    next[id] = withKeyLaid(isSliceLevel(level) ? level : {}, below, read);
-  } else if (read === undefined) Reflect.deleteProperty(next, id);
-  else next[id] = read;
+    const level = Object.hasOwn(keyed, id) ? keyed[id] : undefined;
 
-  return next;
+    const laid: SliceLevel = withKeyLaid(isSliceLevel(level) ? level : {}, below, read);
+
+    return { ...keyed, [id]: laid };
+  }
+
+  // Note that a key dropped leaves every other key where it stood, as deleting it from a copy would.
+  return read === undefined
+    ? Object.fromEntries(Object.entries(keyed).filter(([key]) => key !== id))
+    : { ...keyed, [id]: read };
 }
 
 /** A level of a held slice: its keys by id, each holding a level below or a key's read, as Effect's record reads it. */

@@ -1344,11 +1344,10 @@ type RowCardOf = (row: MentionRow) => React.ReactNode;
 /** The glyph a row leads with where it brings none of its own (`RowGlyph`), drawn under the workspace the list writes in. */
 type RowGlyphOf = (row: MentionRow) => React.ReactNode;
 
+type MarkedWordsResult = { readonly label: React.ReactNode; readonly detail: React.ReactNode };
+
 /** A row's name and detail, each marked where the words found it, as ⌘K marks its rows. */
-function markedWords(
-  row: MentionRow,
-  query: string,
-): { readonly label: React.ReactNode; readonly detail: React.ReactNode } {
+function markedWords(row: MentionRow, query: string): MarkedWordsResult {
   const subject = rowSubject(row);
   const hit = searchHit(subject, query);
 
@@ -1364,11 +1363,13 @@ function markedWords(
   };
 }
 
-/** A group's foot's words, in the muted ink a capped list's foot is said in. */
-function showMoreWordsOf(row: MentionRow): {
+type ShowMoreWords = {
   readonly label: React.ReactNode;
   readonly detail: React.ReactNode;
-} {
+};
+
+/** A group's foot's words, in the muted ink a capped list's foot is said in. */
+function showMoreWordsOf(row: MentionRow): ShowMoreWords {
   return {
     label: (
       <Text as={TEXT_ELEMENT.SPAN} tone={TEXT_TONE.MUTED}>
@@ -1571,13 +1572,15 @@ export const MENTION_MENU_SIDE = {
 
 export type MentionMenuSide = (typeof MENTION_MENU_SIDE)[keyof typeof MENTION_MENU_SIDE];
 
-/** The box a word's list hangs by, in window coordinates: the line its first letter stands on, as the editor reported it. */
-export function wordBox(word: ComposerTrigger): {
+type WordBoxResult = {
   left: number;
   top: number;
   right: number;
   bottom: number;
-} {
+};
+
+/** The box a word's list hangs by, in window coordinates: the line its first letter stands on, as the editor reported it. */
+export function wordBox(word: ComposerTrigger): WordBoxResult {
   const { left, top, bottom } = word.rect;
 
   return { left, top, right: left, bottom };

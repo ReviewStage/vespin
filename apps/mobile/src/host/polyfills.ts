@@ -66,17 +66,17 @@ if (deviceZone && "polyfilled" in Intl.DateTimeFormat) {
 }
 
 /** The digests the web's `crypto.subtle.digest` names, as `expo-crypto` names them. */
-const DIGEST_ALGORITHM: Readonly<Record<string, CryptoDigestAlgorithm>> = {
-  "SHA-1": CryptoDigestAlgorithm.SHA1,
-  "SHA-256": CryptoDigestAlgorithm.SHA256,
-  "SHA-384": CryptoDigestAlgorithm.SHA384,
-  "SHA-512": CryptoDigestAlgorithm.SHA512,
-};
+const DIGEST_ALGORITHM: ReadonlyMap<string, CryptoDigestAlgorithm> = new Map([
+  ["SHA-1", CryptoDigestAlgorithm.SHA1],
+  ["SHA-256", CryptoDigestAlgorithm.SHA256],
+  ["SHA-384", CryptoDigestAlgorithm.SHA384],
+  ["SHA-512", CryptoDigestAlgorithm.SHA512],
+]);
 
 /** The algorithm a `digest` call names, by the name alone or as `{ name }`. */
 function algorithmNamed(algorithm: AlgorithmIdentifier): CryptoDigestAlgorithm {
   const name = Predicate.isString(algorithm) ? algorithm : algorithm.name;
-  const named = DIGEST_ALGORITHM[name.toUpperCase()];
+  const named = DIGEST_ALGORITHM.get(name.toUpperCase());
 
   if (named === undefined) throw new Error(`Unrecognized digest algorithm: ${name}`);
 
@@ -110,7 +110,7 @@ function indexWithin(length: number, index: number): number | undefined {
 // reverse by copy throughout (`inbox-live.ts`, `task-list-live.ts`,
 // `sidebar-collections.ts`, among many).
 if (!Predicate.isFunction(Array.prototype.toSorted)) {
-  const copying: Record<string, (this: readonly unknown[], ...args: never[]) => unknown[]> = {
+  const copying = {
     toSorted(compare?: (a: unknown, b: unknown) => number) {
       return [...this].sort(compare);
     },
@@ -134,7 +134,7 @@ if (!Predicate.isFunction(Array.prototype.toSorted)) {
 
       return copy;
     },
-  };
+  } satisfies Record<string, (this: readonly unknown[], ...args: never[]) => unknown[]>;
 
   for (const [name, method] of Object.entries(copying)) {
     Object.defineProperty(Array.prototype, name, {

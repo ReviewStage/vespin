@@ -72,7 +72,7 @@ function isFolder(folder: string): boolean {
 }
 
 /** The environment a shell is handed: the app's, less what is the app's own or another terminal's. */
-function shellEnvironment(): Record<string, string> {
+function shellEnvironment() {
   const handed = Object.entries(process.env).filter(
     (entry): entry is [string, string] => entry[1] !== undefined && !UNHANDED_ENV.test(entry[0]),
   );
@@ -83,7 +83,7 @@ function shellEnvironment(): Record<string, string> {
     TERM_PROGRAM: TERMINAL_PROGRAM,
     COLORTERM: "truecolor",
     LANG: process.env.LANG || FALLBACK_LANG,
-  };
+  } satisfies Record<string, string>;
 }
 
 /** The developer's login shell started in `folder` at the size given; none where that is no folder, or node-pty did not load or start it. */

@@ -85,8 +85,10 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+type MountSectionResult = { container: HTMLElement; root: Root };
+
 /** The section drawn with a toast host, over a Sign out of the given answer. */
-function mountSection(onSignOut: () => Promise<void>): { container: HTMLElement; root: Root } {
+function mountSection(onSignOut: () => Promise<void>): MountSectionResult {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);

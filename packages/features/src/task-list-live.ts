@@ -430,8 +430,10 @@ function agentsSummaryOf(group: AgentGroup, now: number): TaskAgentsSummary {
   };
 }
 
+type Origin = { readonly origin?: TaskOrigin };
+
 /** Who made a task for its owner, as the summary names them: nothing for a task made by hand. */
-function originOf(row: TaskLiveRow): { readonly origin?: TaskOrigin } {
+function originOf(row: TaskLiveRow): Origin {
   const actor = row.creatorActor;
 
   if (actor === undefined || actor === DESCRIPTION_ACTOR.DEVELOPER) return {};

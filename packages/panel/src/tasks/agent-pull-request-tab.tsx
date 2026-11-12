@@ -2144,15 +2144,17 @@ interface HandedViewActions {
   readonly actions: TabActionGroups;
 }
 
+type UseViewActionsResult = {
+  readonly held: HandedViewActions | undefined;
+  readonly handFor: (view: PullRequestView) => HandTabActions;
+};
+
 /**
  * The tab's own hands for what its views offer its ⋯, each view's heard
  * under that view, let go only by the view that handed it, so a hidden
  * view letting go takes nothing of the shown one's.
  */
-function useViewActions(): {
-  readonly held: HandedViewActions | undefined;
-  readonly handFor: (view: PullRequestView) => HandTabActions;
-} {
+function useViewActions(): UseViewActionsResult {
   const [held, setHeld] = useState<HandedViewActions | undefined>(undefined);
 
   const handFor = useCallback(

@@ -226,24 +226,24 @@ const ON_YOUR_MAC = "On your Mac";
 const IN_THE_BROWSER = "Browser";
 
 /** What each of the browser's actions says it did, on a browser call's line. */
-const BROWSER_ACTION_WORDS: Readonly<Record<string, string>> = {
-  list: "listed the tabs",
-  open: "opened",
-  navigate: "went to a page",
-  back: "went back",
-  forward: "went forward",
-  click: "clicked",
-  type: "typed",
-  key: "pressed a key",
-  scroll: "scrolled",
-  wait: "waited",
-  screenshot: "took a screenshot",
-  snapshot: "read the page",
-  console: "read the console",
-  close: "closed",
-  record: "started recording",
-  stop_recording: "stopped recording",
-};
+const BROWSER_ACTION_WORDS: ReadonlyMap<string, string> = new Map([
+  ["list", "listed the tabs"],
+  ["open", "opened"],
+  ["navigate", "went to a page"],
+  ["back", "went back"],
+  ["forward", "went forward"],
+  ["click", "clicked"],
+  ["type", "typed"],
+  ["key", "pressed a key"],
+  ["scroll", "scrolled"],
+  ["wait", "waited"],
+  ["screenshot", "took a screenshot"],
+  ["snapshot", "read the page"],
+  ["console", "read the console"],
+  ["close", "closed"],
+  ["record", "started recording"],
+  ["stop_recording", "stopped recording"],
+]);
 
 /**
  * What a browser call's line says it did, in place of its kind's verb: each
@@ -255,9 +255,9 @@ export function browserCallWords(
   actions: readonly string[],
   tabNamed: boolean,
 ): string | undefined {
-  const said = [...new Set(actions.flatMap((action) => BROWSER_ACTION_WORDS[action] ?? []))].join(
-    ", ",
-  );
+  const said = [
+    ...new Set(actions.flatMap((action) => BROWSER_ACTION_WORDS.get(action) ?? [])),
+  ].join(", ");
 
   if (said === "") return undefined;
   const line = `${said.charAt(0).toUpperCase()}${said.slice(1)}`;

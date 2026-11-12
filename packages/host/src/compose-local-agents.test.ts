@@ -138,6 +138,15 @@ const until = (holds: () => boolean) =>
     assert.ok(holds(), "the follower never got there");
   });
 
+type Service = {
+  held: Set<string>;
+  refusing: number;
+  refused: string[];
+  settleTakes: Duration.Input;
+  beatTakes: Duration.Input;
+  release: DeviceAgentRelease | undefined;
+};
+
 /**
  * The follower on a host whose agents run straight on the box, with its
  * CLIs ready once `ready` succeeds; one launch line is handed. With what it
@@ -258,14 +267,7 @@ const followingDevice = (
      * it was asked; and the release it names on each beat's answer, where it
      * publishes one newer.
      */
-    const service: {
-      held: Set<string>;
-      refusing: number;
-      refused: string[];
-      settleTakes: Duration.Input;
-      beatTakes: Duration.Input;
-      release: DeviceAgentRelease | undefined;
-    } = {
+    const service: Service = {
       held: new Set(),
       refusing: 0,
       refused: [],

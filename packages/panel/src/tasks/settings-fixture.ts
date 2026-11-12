@@ -907,8 +907,10 @@ type StagedAnswer<Kind extends PortActKind> = (
   payload: PortActPayload<Kind>,
 ) => PortActResult<Kind>;
 
+type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
+
 /** Every read the staged pages ask, answered as the service would answer it for this account. */
-const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
+const ANSWERS: StagedAnswers = {
   // A box waiting on its code, as a pairing's link opened over Settings › Hosts reads it.
   [ACT_KIND.HOSTS_PAIRING_READ]: () => ({
     name: "fra-02",

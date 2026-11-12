@@ -30,8 +30,10 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
+type MountResult = { pane: HTMLElement; heard: string[] };
+
 /** A pane holding one button, whose pins and the document's presses are recorded in order. */
-function mount(pins: boolean): { pane: HTMLElement; heard: string[] } {
+function mount(pins: boolean): MountResult {
   const heard: string[] = [];
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);

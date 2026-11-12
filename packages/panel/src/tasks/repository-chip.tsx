@@ -175,16 +175,18 @@ export function otherOwnersWords(rest: number): string {
   return countWords(rest, { one: "other", many: "others" });
 }
 
+type UseOwnersToAskResult = {
+  readonly named: readonly WorkspaceMember[];
+  readonly rest: number;
+};
+
 /**
  * Who a member asks to mend a workspace's GitHub: its owners and admins, the
  * first few named and the rest counted, read while the asker stands; none
  * named until the read answers, or if it never does, since a name is only
  * ever a help.
  */
-export function useOwnersToAsk(workspaceId: string | undefined): {
-  readonly named: readonly WorkspaceMember[];
-  readonly rest: number;
-} {
+export function useOwnersToAsk(workspaceId: string | undefined): UseOwnersToAskResult {
   const members = useQuery(workspaceMembersQuery(workspaceId)).data?.members;
 
   const owners = (members ?? []).filter(

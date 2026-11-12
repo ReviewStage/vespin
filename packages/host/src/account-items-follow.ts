@@ -75,6 +75,12 @@ export interface AccountItemsDependencies {
   readonly accountWide: AccountWideReads;
 }
 
+type HeldAfterResult = {
+  readonly held: Held;
+  readonly sent: readonly InboxItem[];
+  readonly placed: readonly string[];
+};
+
 /**
  * The items held after an answer, the items it carried that stand, and the
  * items now on another plan than they were. A whole answer is every item
@@ -87,11 +93,7 @@ function heldAfter(
   rows: AccountInboxItemsLiveRows,
   standing: SyncStanding | undefined,
   now: number,
-): {
-  readonly held: Held;
-  readonly sent: readonly InboxItem[];
-  readonly placed: readonly string[];
-} {
+): HeldAfterResult {
   const carried = new Map(inboxOfLiveRows(rows).map((item) => [item.id, item]));
   const next = new Map<string, HeldItem>(standing?.past === undefined ? [] : held);
   const placed: string[] = [];

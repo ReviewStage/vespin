@@ -389,12 +389,14 @@ function remindAtMillisFor(readerId: string): SQL<number | null> {
   return sql<number | null>`floor(extract(epoch from ${remindAtFor(readerId)}) * 1000)::float8`;
 }
 
+type LiveReminderForResult = { remindAt: SQL; snoozedUntil: SQL };
+
 /**
  * The reader's reminder as a live read carries it: under `remindAt`, and
  * under `snoozedUntil`, the key a desktop from before the rename reads,
  * which goes with the minimum supported desktop version.
  */
-function liveReminderFor(readerId: string): { remindAt: SQL; snoozedUntil: SQL } {
+function liveReminderFor(readerId: string): LiveReminderForResult {
   return { remindAt: remindAtFor(readerId), snoozedUntil: remindAtFor(readerId) };
 }
 

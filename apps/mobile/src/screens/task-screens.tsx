@@ -202,6 +202,12 @@ function statusSubmenu(
   };
 }
 
+type RowActsResult = {
+  readonly trailingActions: readonly RowSwipe[];
+  readonly leadingActions: readonly RowSwipe[];
+  readonly menuActions: readonly RowAction[];
+};
+
 /**
  * A row's acts, as the panel's row menu offers them on a phone: behind its
  * trailing swipe Mark done, offered on a task not yet done, which a full
@@ -213,15 +219,7 @@ function statusSubmenu(
  * first. Move to section, priority, and assignee are left to the desktop
  * and the web.
  */
-function rowActs(
-  task: TaskSummary,
-  unread: boolean,
-  listing: TasksListing,
-): {
-  readonly trailingActions: readonly RowSwipe[];
-  readonly leadingActions: readonly RowSwipe[];
-  readonly menuActions: readonly RowAction[];
-} {
+function rowActs(task: TaskSummary, unread: boolean, listing: TasksListing): RowActsResult {
   const pinned = task.pinnedAt !== undefined;
 
   const markDone: readonly RowSwipe[] =
@@ -745,6 +743,11 @@ function agentSwipes(
   ];
 }
 
+type UseAgentArchiveAskResult = {
+  readonly archive: (agentId: string) => void;
+  readonly ask: ReactElement;
+};
+
 /**
  * Archive on an agent's row, asked first: `archive` raises the question for
  * an agent, and `ask` is the system's alert that asks it, which the screen
@@ -753,10 +756,7 @@ function agentSwipes(
  * asks (`archiveQuestion`), because one that starts working while the alert
  * is up would otherwise be stopped and archived without a word of it.
  */
-export function useAgentArchiveAsk(): {
-  readonly archive: (agentId: string) => void;
-  readonly ask: ReactElement;
-} {
+export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
   const acts = useAgentRowActs();
   const [asked, setAsked] = useState<{ readonly agentId: string; readonly presented: boolean }>();
   const agent = useFollowedAgent(asked?.agentId ?? "");

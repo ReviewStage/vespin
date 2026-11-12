@@ -83,15 +83,17 @@ const KEEPING_ENDS = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
 /** How long the typing pauses before the document hears the text. */
 const DRAFT_PAUSE = Duration.millis(150);
 
+type UseTypingPauseResult = {
+  readonly pausedAt: number | undefined;
+  readonly restart: (stamp: number) => void;
+};
+
 /**
  * A pause in the typing the holder starts over at each change, and the stamp
  * of the change it last ran out on. Note that each holder has its own, so the
  * title's wait and the text's never start the other's over.
  */
-function useTypingPause(): {
-  readonly pausedAt: number | undefined;
-  readonly restart: (stamp: number) => void;
-} {
+function useTypingPause(): UseTypingPauseResult {
   const wait = useWait();
   const pausedOn = useCreateStore<number | undefined>(undefined);
 

@@ -567,6 +567,13 @@ function useInvokerFocus(
   };
 }
 
+type UseFootClaimResult = {
+  foot: DialogFoot;
+  claimed: FootClaim | undefined;
+  asker: React.RefObject<Opener | null>;
+  setSlot: (slot: HTMLDivElement | null) => void;
+};
+
 /**
  * The card's foot as what it holds may claim it: the slot a question is
  * drawn into, and the question standing there, if one is.
@@ -575,12 +582,7 @@ function useInvokerFocus(
  * the question claiming the foot again as its answer runs, so the card can
  * hand focus back to it once the foot is let go.
  */
-function useFootClaim(): {
-  foot: DialogFoot;
-  claimed: FootClaim | undefined;
-  asker: React.RefObject<Opener | null>;
-  setSlot: (slot: HTMLDivElement | null) => void;
-} {
+function useFootClaim(): UseFootClaimResult {
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   const [claimed, setClaimed] = useState<FootClaim | undefined>(undefined);
   const asker = useRef<Opener | null>(null);

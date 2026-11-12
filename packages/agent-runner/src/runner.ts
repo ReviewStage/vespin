@@ -972,9 +972,8 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   const servers = yield* trace.step(
     RUNNER_SPAN.MCP_RELAY,
     Effect.gen(function* () {
-      const opened: Record<string, McpSdkServerConfigWithInstance> = {
-        [MCP_SERVER]: yield* openMcpRelay(MCP_SERVER, config.mcpUrl, bearer),
-      };
+      const opened: Record<string, McpSdkServerConfigWithInstance> = {};
+      opened[MCP_SERVER] = yield* openMcpRelay(MCP_SERVER, config.mcpUrl, bearer);
 
       // Each integration the agent is handed is a server of its own, its tools named `mcp__<connection>__<tool>`.
       for (const integration of config.integrations ?? []) {

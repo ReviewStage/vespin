@@ -39,8 +39,10 @@ function markup(props: MarkdownProps): string {
   return renderToStaticMarkup(createElement(Markdown, props));
 }
 
+type DrawnResult = { container: HTMLElement; root: Root };
+
 /** Words drawn into the page, with the root that redraws them. */
-function drawn(props: MarkdownProps): { container: HTMLElement; root: Root } {
+function drawn(props: MarkdownProps): DrawnResult {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);

@@ -41,9 +41,9 @@ export const CHECKOUT_IDENTITY_SCRIPT = [
 ].join("\n");
 
 /** The script's variables for the identity given. */
-export function checkoutIdentityEnv(identity: CheckoutIdentity): Readonly<Record<string, string>> {
+export function checkoutIdentityEnv(identity: CheckoutIdentity) {
   return {
     [CHECKOUT_IDENTITY_VARIABLE.NAME]: identity.name,
     [CHECKOUT_IDENTITY_VARIABLE.EMAIL]: identity.email,
-  };
+  } satisfies Readonly<Record<string, string>>;
 }

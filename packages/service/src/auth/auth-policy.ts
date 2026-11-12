@@ -390,6 +390,8 @@ interface Leaving {
   readonly organizationId: string;
 }
 
+type Permissions = { organization: ["delete"] };
+
 /**
  * Deletes a workspace the account is the only member of, whatever its role
  * there. Note that a member who is no owner, left alone in a workspace whose
@@ -403,7 +405,7 @@ async function deleteAlone<Pending>(
   { api, headers, userId, organizationId }: Leaving,
   steps: AccountDeletionSteps<Pending>,
 ) {
-  const permissions: { organization: ["delete"] } = { organization: ["delete"] };
+  const permissions: Permissions = { organization: ["delete"] };
   const { success } = await api.hasPermission({ headers, body: { organizationId, permissions } });
 
   if (!success) await steps.claim(userId, organizationId);

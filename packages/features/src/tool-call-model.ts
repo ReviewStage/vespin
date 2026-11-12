@@ -383,8 +383,10 @@ export function todosView(input: WireValue | undefined): AgentTodos["todos"] | u
   return Option.getOrUndefined(readTodos(input))?.todos;
 }
 
+type TodosCountResult = { done: number; total: number };
+
 /** How many of a list's items are done, and how many it holds. */
-export function todosCount(todos: AgentTodos["todos"]): { done: number; total: number } {
+export function todosCount(todos: AgentTodos["todos"]): TodosCountResult {
   const done = todos.filter((todo) => todo.status === AGENT_TODO_STATUS.DONE).length;
 
   return { done, total: todos.length };
@@ -1426,7 +1428,7 @@ const RETIRED_TOOL_VIEWS = {
 } as const satisfies Record<RetiredTool, ToolReader>;
 
 /** The tools the retired runtime gave a session and a native harness's subagent, a message to one and a stop of what runs in Claude Code's background, which a transcript carries beside the agent's own, and the retired runtime's connection tools: a connection's search and its run, each naming the server its input does. */
-const OTHER_TOOL_VIEWS: Readonly<Record<string, ToolReader>> = {
+const OTHER_TOOL_VIEWS = {
   [CLAUDE_CODE_TOOL.AGENT]: ({ input, output }) => subagentCallView(input, output),
   [CODEX_TOOL.SUBAGENT]: ({ input, output }) => subagentCallView(input, output),
   [CLAUDE_CODE_TOOL.SEND_MESSAGE]: ({ input, output }) =>
@@ -1448,7 +1450,7 @@ const OTHER_TOOL_VIEWS: Readonly<Record<string, ToolReader>> = {
     connectionCall(CALL_KIND.SEARCH_TOOLS, "query", input, output),
   [CONNECTION_TOOL.EXECUTE]: ({ input, output }) =>
     connectionCall(CALL_KIND.MCP_TOOL, "tool", input, output),
-};
+} satisfies Readonly<Record<string, ToolReader>>;
 
 /** Every tool a row reads by its name alone, which `toolCallView` looks a call up in. */
 const TOOL_VIEWS: ReadonlyMap<string, ToolReader> = new Map(

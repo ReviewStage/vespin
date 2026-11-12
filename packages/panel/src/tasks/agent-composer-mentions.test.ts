@@ -1120,8 +1120,10 @@ test("an @ narrowed to agents offers the workspace's agents after the task's own
   ]);
 });
 
+type ListNoteResult = { words: string; retry: HTMLButtonElement | null };
+
 /** What the open list says after its rows, and the press that reads again. */
-function listNote(container: HTMLElement): { words: string; retry: HTMLButtonElement | null } {
+function listNote(container: HTMLElement): ListNoteResult {
   const note = container.querySelector(".mention-menu .ui-combobox-note");
 
   return {

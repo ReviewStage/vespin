@@ -10,10 +10,10 @@ import { File, Paths } from "expo-file-system";
 const WRITING_SUFFIX = ".writing";
 
 /** The extension each video type a read answers is written under. */
-const VIDEO_EXTENSION: Readonly<Record<string, string>> = {
-  [MP4_TYPE]: "mp4",
-  [CONVERSATION_MEDIA_TYPE.WEBM]: "webm",
-};
+const VIDEO_EXTENSION: ReadonlyMap<string, string> = new Map([
+  [MP4_TYPE, "mp4"],
+  [CONVERSATION_MEDIA_TYPE.WEBM, "webm"],
+]);
 
 /** Each write still under way, by the address of the file it writes, so a second read of one video waits on the first rather than writing over it. */
 const writing = new Map<string, Promise<string>>();
@@ -47,7 +47,7 @@ export async function cachedVideo(
   contentType: string,
   base64: string,
 ): Promise<string> {
-  const extension = VIDEO_EXTENSION[contentType];
+  const extension = VIDEO_EXTENSION.get(contentType);
   const name = extension === undefined ? `${prefix}-${id}` : `${prefix}-${id}.${extension}`;
   const file = new File(Paths.cache, name);
 

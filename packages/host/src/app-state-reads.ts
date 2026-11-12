@@ -393,17 +393,17 @@ export function memoizedSelect<Inputs extends unknown[], A>(
 const SHARE_DEPTH = 500;
 
 /** Whether `value` is an array with no holes and no keys of its own beside its items. */
-function isPlainArray(value: unknown): value is readonly unknown[] {
+function isPlainArray<T>(value: T): value is T & readonly unknown[] {
   return Array.isArray(value) && value.length === Object.keys(value).length;
 }
 
 /** Whether `value` is an object of any kind, which a walk may go into. */
-function isObject(value: unknown): value is object {
+function isObject<T>(value: T): value is T & object {
   return Predicate.isObjectOrArray(value);
 }
 
 /** Whether `value` is an object literal's kind: one made by `{}` or with no prototype at all. */
-function isPlainObject(value: unknown): value is ReadonlyRecord<string, unknown> {
+function isPlainObject<T>(value: T): value is T & ReadonlyRecord<string, unknown> {
   if (!isObject(value)) return false;
   const prototype: unknown = Object.getPrototypeOf(value);
 

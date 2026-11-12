@@ -76,16 +76,15 @@ type Owner = (typeof OWNER)[keyof typeof OWNER];
 /** The words a ChatGPT-paid agent's chip hands the menu's last line. */
 const PLAN_NOTE = "Your Codex plan";
 
-/** The menu open on `chosen` under `owner`, recording where Settings opened, what it chose, and whether it asked to close. */
-function open(
-  chosen: ModelChoice,
-  owner: Owner = OWNER.START,
-): {
+type OpenResult = {
   menu: HTMLElement;
   opened: SettingsLink[];
   chose: ModelChoice[];
   closed: () => number;
-} {
+};
+
+/** The menu open on `chosen` under `owner`, recording where Settings opened, what it chose, and whether it asked to close. */
+function open(chosen: ModelChoice, owner: Owner = OWNER.START): OpenResult {
   const opened: SettingsLink[] = [];
   const chose: ModelChoice[] = [];
   let closes = 0;

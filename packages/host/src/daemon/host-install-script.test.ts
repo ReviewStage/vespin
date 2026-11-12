@@ -277,7 +277,7 @@ const box = (
     ].join("\n"),
   });
 
-  const env: Record<string, string> = {
+  const env = {
     PATH: `${fakes}:${join(home, ".local/bin")}:${process.env.PATH}`,
     HOME: home,
     APP_HOST_SYSTEMD_RUN_DIR: root,
@@ -287,7 +287,7 @@ const box = (
     FAKE_PAIRING: "paired",
     ...(options.selfLinger && { FAKE_SELF_LINGER: "1" }),
     ...(options.sudoRefused && { FAKE_SUDO_REFUSED: "1" }),
-  };
+  } satisfies Record<string, string>;
 
   const run = (args: readonly string[], extra: Readonly<Record<string, string>> = {}) =>
     spawnSync("sh", [...args], { cwd: folder(), env: { ...env, ...extra }, encoding: "utf8" });

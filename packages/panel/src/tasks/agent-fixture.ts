@@ -807,14 +807,17 @@ const INVITE_CHANGES = CHANGED_FILES.filter((file) => file.path === "src/members
  * turn whose snapshot the machine no longer holds, one on a Mac away, and
  * the invite for every other.
  */
-const TURN_CHANGES: Readonly<Record<string, AgentTurnChangesAnswerView>> = {
-  "fixture-agent-pending-ask": { failure: AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING },
-  "fixture-agent-race-ask": {
-    failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
-    localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
-    refusedDevice: { name: "Studio" },
-  },
-};
+const TURN_CHANGES: ReadonlyMap<string, AgentTurnChangesAnswerView> = new Map([
+  ["fixture-agent-pending-ask", { failure: AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING }],
+  [
+    "fixture-agent-race-ask",
+    {
+      failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
+      localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
+      refusedDevice: { name: "Studio" },
+    },
+  ],
+]);
 
 /** The pull request's chapters, made for its head: the pending state first, then the invite itself. */
 const CHAPTERS = {
@@ -1067,8 +1070,10 @@ function terminalStage(stage: AgentStage): TerminalStage | undefined {
   return "terminal" in stage ? stage.terminal : undefined;
 }
 
+type StagedShare = { shared: { readonly port: number; readonly url: string } | null };
+
 /** The port the fixture's agent shares by link, which its share and its close move, so the plug's menu reads back what it pressed. */
-const STAGED_SHARE: { shared: { readonly port: number; readonly url: string } | null } = {
+const STAGED_SHARE: StagedShare = {
   shared: null,
 };
 
@@ -1078,8 +1083,10 @@ type StagedAnswer<Kind extends PortActKind> = (
   stage: AgentStage,
 ) => PortActResult<Kind>;
 
+type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
+
 /** Every read the agent's tabs ask through the act door, answered as the service would answer it for this agent; the parts the host holds are staged apart (`STAGED_PARTS`). */
-const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
+const ANSWERS: StagedAnswers = {
   [ACT_KIND.AGENTS_LIST]: ({ taskId }, stage) => ({
     agents: [agentSummary(taskId, longRun(stage), holdsCall(stage))],
   }),
@@ -1094,7 +1101,7 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   [ACT_KIND.AGENTS_PICTURE]: () => longRunPicture(),
   [ACT_KIND.AGENTS_CHANGES]: () => CHANGES,
   [ACT_KIND.AGENTS_TURN_CHANGES]: ({ messageId }) =>
-    TURN_CHANGES[messageId] ?? { files: INVITE_CHANGES, truncated: false },
+    TURN_CHANGES.get(messageId) ?? { files: INVITE_CHANGES, truncated: false },
   [ACT_KIND.AGENTS_PORTS]: () => ({ running: true, ports: [3000, 5173] }),
   [ACT_KIND.AGENTS_PORT_SHARED]: () => ({ shared: STAGED_SHARE.shared }),
   [ACT_KIND.AGENTS_PORT_SHARE]: ({ port }) => {

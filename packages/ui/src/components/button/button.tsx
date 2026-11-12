@@ -544,13 +544,15 @@ function LandingMark({
   return <DoneMark hold leaving={shown.leaving} held={shown.ref} onShown={onShown} />;
 }
 
+type UseLandedResult = { landed: boolean; settle: () => void };
+
 /**
  * Whether a busy button's press has just landed: from the draw its ring
  * leaves on, told it `succeeded`, until its check has stood its hold, which
  * `settle` ends. Note that the ring's leaving is read as the draw sees it
  * rather than in an effect, so the check is in the first frame without it.
  */
-function useLanded(props: LandingProps): { landed: boolean; settle: () => void } {
+function useLanded(props: LandingProps): UseLandedResult {
   const busy = props.busy === true;
   const [wasBusy, setWasBusy] = useState(busy);
   const [landed, setLanded] = useState(false);

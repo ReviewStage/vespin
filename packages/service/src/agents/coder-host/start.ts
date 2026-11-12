@@ -628,6 +628,8 @@ function sourceOf(carried: SlackLineMetadata | undefined): AgentSource | undefin
   };
 }
 
+type Opening = { readonly sender: LineSender; readonly metadata: AwaitingLineMetadata };
+
 /**
  * Who a Start's first line names as its sender and what it says it is: an
  * automation's run says its prompt as the automation, as its later lines do
@@ -641,7 +643,7 @@ function openingOf(
   brief: { readonly prompt: string | null },
   /** What the line says of the agent it takes over from, continued or forked; none for a fresh Start. */
   taken: TakeoverRules["startLine"],
-): { readonly sender: LineSender; readonly metadata: AwaitingLineMetadata } {
+): Opening {
   const { automationId, automationOrigin, startedBy, carried } = ask;
 
   if (automationOrigin !== undefined) {

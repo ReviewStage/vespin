@@ -213,6 +213,11 @@ export function useRemindMany(onRemind: InboxReminder | undefined): InboxRemindM
   );
 }
 
+type UseInboxRemindingResult = {
+  readonly popover: React.ReactNode;
+  readonly onPick: (item: InboxItem, onAt?: (at: number) => void) => void;
+};
+
 /**
  * Reminders from an Inbox's list: H opens the Remind me menu on the chosen
  * row while `active`, and Pick a date and time opens the date picker there,
@@ -232,10 +237,7 @@ export function useInboxReminding({
   chosen: InboxItem | undefined;
   active: boolean;
   onRemind: InboxReminder | undefined;
-}): {
-  readonly popover: React.ReactNode;
-  readonly onPick: (item: InboxItem, onAt?: (at: number) => void) => void;
-} {
+}): UseInboxRemindingResult {
   const picker = useDatePicker(room);
   const toast = useToast();
   const menu = useMenu(active);

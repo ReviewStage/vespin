@@ -279,8 +279,10 @@ const THIS_MAC_OFF = {
   running: "Turning off",
 } as const;
 
+type DeleteFoldersWordsResult = { readonly label: string; readonly detail: string };
+
 /** The choice turning This Mac off offers where its host made agents' folders: delete them, or keep them in `~/.vespin/agents`. */
-function deleteFoldersWords(count: number): { readonly label: string; readonly detail: string } {
+function deleteFoldersWords(count: number): DeleteFoldersWordsResult {
   return {
     label: `Delete its agents' ${count === 1 ? "folder" : `${count} folders`} in ~/.vespin/agents`,
     detail: "Work in them that wasn't pushed goes with them.",

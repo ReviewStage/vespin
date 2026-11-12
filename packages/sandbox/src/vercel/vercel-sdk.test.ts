@@ -56,6 +56,9 @@ const CALLS: readonly {
   { call: SANDBOX_CALL.LIST, ask: (api) => api.listTagged("sessionId", "session_fixture") },
 ];
 
+/** An error body Vercel answers a refused call with. */
+type RefusalBody = { readonly code?: string; readonly message: string };
+
 type Responder = (url: string, init: RequestInit) => Response | Promise<Response>;
 
 /** `Sandbox` under the fixture's token, or the reader given, the SDK sending through the responder given. */
@@ -260,7 +263,7 @@ it.effect(
   "a create Vercel refused for its snapshot gone reads as gone, by its code or by its words, and the same status for a stopped sandbox or with no code does not",
   () =>
     Effect.gen(function* () {
-      let error: object = { code: "snapshot_not_found", message: "the snapshot is gone" };
+      let error: RefusalBody = { code: "snapshot_not_found", message: "the snapshot is gone" };
       const api = yield* apiOver(() => Response.json({ error }, { status: 410 }));
       const refusal = () => Effect.flip(api.create(CREATE_ASK));
 

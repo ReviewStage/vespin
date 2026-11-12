@@ -131,6 +131,12 @@ function holdsBack(list: InboxListView, held: ReadonlyMap<string, InboxPlace>): 
   return false;
 }
 
+type UseHeldInboxListResult = {
+  readonly list: InboxListView;
+  readonly steps: InboxListView;
+  readonly onPointing: (pointing: boolean) => void;
+};
+
 /**
  * The rows an Inbox draws (`list`) and the items K, J, and Next step through
  * (`steps`), which keep the chosen item in its place whether or not it has a
@@ -142,11 +148,7 @@ export function useHeldInboxList(
   filter: InboxFilter,
   chosen: string | undefined,
   shown: boolean,
-): {
-  readonly list: InboxListView;
-  readonly steps: InboxListView;
-  readonly onPointing: (pointing: boolean) => void;
-} {
+): UseHeldInboxListResult {
   const keptLast = useRef<string | undefined>(undefined);
   // Note that the hold is the pointer's and not the list's being shown, because the Inbox may stand open for as long as the window does.
   const pointer = useRef(false);

@@ -260,6 +260,13 @@ function DraftSection({
   );
 }
 
+type UseSheetStartResult = {
+  readonly starting: boolean;
+  readonly go: (start: () => Promise<StartAnswer>, refusal?: string | undefined) => void;
+};
+
+type Started = { answer?: StartAnswer };
+
 /**
  * Sends a start once, while none is out: on an agent started, the sheet
  * gives way to its page; on a task made with no agent, filed for later or
@@ -271,10 +278,7 @@ function DraftSection({
 function useSheetStart(
   kept: KeptWords,
   setNote: (note: string | undefined) => void,
-): {
-  readonly starting: boolean;
-  readonly go: (start: () => Promise<StartAnswer>, refusal?: string | undefined) => void;
-} {
+): UseSheetStartResult {
   const router = useRouter();
   const write = useWrite();
   const [starting, setStarting] = useState(false);
@@ -291,7 +295,7 @@ function useSheetStart(
 
     setStarting(true);
     setNote(undefined);
-    const started: { answer?: StartAnswer } = {};
+    const started: Started = {};
     // Note that a start refused says why in the sheet, under its words, rather than in the notice.
     write(
       () =>

@@ -709,6 +709,8 @@ function devicesOf(rows: readonly TaskSummaryRow[]): TaskStoreEffect<ReadonlyMap
   );
 }
 
+type RunsOn = { readonly runsOn?: TaskRunsOn };
+
 /**
  * Where a line's newest agent runs, as the wire says it for released
  * desktops: nothing for a sandbox or a task with no agent; for a device, its
@@ -719,7 +721,7 @@ function runsOnOf(
   row: TaskSummaryRow,
   names: ReadonlyMap<string, string>,
   devices: ReadonlyMap<string, Device>,
-): { readonly runsOn?: TaskRunsOn } {
+): RunsOn {
   if (row.machine !== AGENT_MACHINE.DEVICE) return {};
   const found = row.deviceId === null ? undefined : devices.get(row.deviceId);
   const owner = found === undefined ? undefined : names.get(found.userId);
@@ -796,8 +798,10 @@ function summaryOf(
   };
 }
 
+type Origin = { readonly origin?: TaskOrigin };
+
 /** Who made a task for its member, as the wire names them: nothing for a task made by hand. */
-function originOf(row: TaskSummaryRow): { readonly origin?: TaskOrigin } {
+function originOf(row: TaskSummaryRow): Origin {
   if (row.creatorActor === DESCRIPTION_ACTOR.DEVELOPER) return {};
   const agentId = row.creatorAgentId;
 

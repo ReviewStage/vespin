@@ -34,8 +34,10 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+type MountedResult = { editor: Editor; handle: DescriptionEditorHandle };
+
 /** The editor mounted on the text, and its handle. */
-function mounted(markdown: string): { editor: Editor; handle: DescriptionEditorHandle } {
+function mounted(markdown: string): MountedResult {
   const host = document.body.appendChild(document.createElement("div"));
 
   const handle = mountDescriptionEditor(host, {

@@ -49,11 +49,11 @@ const CLIENT_SEPARATOR = "/";
 const VERSION_PATTERN = /^[0-9A-Za-z.+-]{1,64}$/u;
 
 /** The two headers a build sends on every hosted call, as a record a request or a socket's address carries. */
-export function clientHeaders(identity: ClientIdentity): Readonly<Record<string, string>> {
+export function clientHeaders(identity: ClientIdentity) {
   return {
     [CLIENT_HEADER.CLIENT]: `${identity.platform}${CLIENT_SEPARATOR}${identity.version}`,
     [CLIENT_HEADER.API_VERSION]: String(HOSTED_API_VERSION),
-  };
+  } satisfies Readonly<Record<string, string>>;
 }
 
 /** The client given, naming itself on every request to the service's origin and on no other. */

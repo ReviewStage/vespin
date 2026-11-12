@@ -176,6 +176,14 @@ export function skillActions(row: SkillRow): readonly (readonly SkillAction[])[]
   return [[SKILL_ACTION.VIEW], [SKILL_ACTION.REMOVE]];
 }
 
+type RemoveQuestionResult = {
+  readonly title: string;
+  readonly body: string;
+  readonly verb: string;
+  readonly running: string;
+  readonly loss: ConfirmLoss;
+};
+
 /**
  * What Remove asks first: the skill and its files are deleted, past undoing,
  * so a personal skill's question is red; a workspace skill is every member's
@@ -184,13 +192,7 @@ export function skillActions(row: SkillRow): readonly (readonly SkillAction[])[]
 export function removeQuestion(
   skill: Pick<InstalledSkillSummary, "name" | "scope">,
   workspace: Pick<Workspace, "name">,
-): {
-  readonly title: string;
-  readonly body: string;
-  readonly verb: string;
-  readonly running: string;
-  readonly loss: ConfirmLoss;
-} {
+): RemoveQuestionResult {
   const shared = skill.scope === INSTALLED_SKILL_SCOPE.WORKSPACE;
 
   return {

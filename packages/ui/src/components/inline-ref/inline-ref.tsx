@@ -348,6 +348,12 @@ function noFocus(element: HTMLElement | null): void {
   element?.removeAttribute("tabindex");
 }
 
+type UseButtonKeysResult = {
+  onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
+  onKeyUp: (event: KeyboardEvent<HTMLElement>) => void;
+  onBlur: (event: FocusEvent<HTMLElement>) => void;
+};
+
 /**
  * The keys a button answers, for a span in a button's role, each pressing it
  * as a click does: Enter as it goes down, and Space once as it is let go, as
@@ -355,11 +361,7 @@ function noFocus(element: HTMLElement | null): void {
  * focus leaves first; neither scrolls the page. The blur a hint hands the
  * token is still heard.
  */
-function useButtonKeys(onBlur: FocusEventHandler<HTMLElement> | undefined): {
-  onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
-  onKeyUp: (event: KeyboardEvent<HTMLElement>) => void;
-  onBlur: (event: FocusEvent<HTMLElement>) => void;
-} {
+function useButtonKeys(onBlur: FocusEventHandler<HTMLElement> | undefined): UseButtonKeysResult {
   const spaceHeld = useRef(false);
 
   return {

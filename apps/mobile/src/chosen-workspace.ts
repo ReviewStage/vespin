@@ -50,11 +50,13 @@ function choose(id: string): void {
   for (const reader of readers) reader();
 }
 
-/** The workspace the phone works in, among `workspaces`, and the choice of another, which is kept and heard by every screen reading it. */
-export function useChosenWorkspace(workspaces: readonly Workspace[]): {
+type UseChosenWorkspaceResult = {
   readonly chosen: Workspace | undefined;
   readonly choose: (id: string) => void;
-} {
+};
+
+/** The workspace the phone works in, among `workspaces`, and the choice of another, which is kept and heard by every screen reading it. */
+export function useChosenWorkspace(workspaces: readonly Workspace[]): UseChosenWorkspaceResult {
   const kept = useSyncExternalStore(watchChoice, keptChoice);
   const chosen = workspaces.find((workspace) => workspace.id === kept) ?? workspaces[0];
 

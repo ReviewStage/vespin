@@ -1,9 +1,11 @@
 import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+type Clock = { now: number };
+
 /** What reached the speakers: the start time of every oscillator and noise burst the fake context was told to play. */
 let started: number[];
-let clock: { now: number };
+let clock: Clock;
 let oscillatorsRefused: boolean;
 let contextState: string;
 

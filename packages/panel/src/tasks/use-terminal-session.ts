@@ -335,12 +335,14 @@ function localLink(agentId: string): ShellLink {
 /** A terminal tab of either kind. */
 export type ShellTab = TerminalStripTab | LocalStripTab;
 
-/** A terminal tab's kind, its agent, and the id the window minted its terminal under. */
-function shellOf(tab: ShellTab): {
+type Shell = {
   readonly kind: TerminalKind;
   readonly agentId: string;
   readonly shell: string;
-} {
+};
+
+/** A terminal tab's kind, its agent, and the id the window minted its terminal under. */
+function shellOf(tab: ShellTab): Shell {
   switch (tab.kind) {
     case STRIP_TAB_KIND.TERMINAL:
       return { kind: TERMINAL_KIND.CLOUD, agentId: tab.terminal, shell: tab.shell };

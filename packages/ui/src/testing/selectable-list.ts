@@ -128,8 +128,10 @@ function press(name: string, held: KeyboardEventInit = {}): void {
   });
 }
 
+type HeardBehindResult = { heard: string[]; stop: () => void };
+
 /** The Esc presses that reach the document past the surface, listening until `stop` is called. */
-function heardBehind(): { heard: string[]; stop: () => void } {
+function heardBehind(): HeardBehindResult {
   const heard: string[] = [];
 
   const hear = (event: KeyboardEvent) => {
@@ -149,6 +151,8 @@ function release(root: HTMLElement): void {
   expect(chosen(root)).toEqual([]);
 }
 
+type DrawnResult = { root: HTMLElement; opened: () => readonly string[]; rows: string[] };
+
 /** Registers the contract's tests for `which`, drawn as `surface` draws it. */
 export function selectableListBehavior(
   which: SelectableSurfaceName,
@@ -164,7 +168,7 @@ export function selectableListBehavior(
     afterAll(() => standing?.unmount());
 
     /** The surface and the keys of its first rows that can be chosen, after any selection has gone. */
-    function drawn(): { root: HTMLElement; opened: () => readonly string[]; rows: string[] } {
+    function drawn(): DrawnResult {
       if (standing === undefined) throw new Error("The surface was not drawn");
       release(standing.root);
       const rows = available(standing.root);

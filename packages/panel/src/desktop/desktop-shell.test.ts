@@ -398,6 +398,8 @@ test("leaving Settings does not hand the keyboard to the one control left of a n
   assert.ok(document.activeElement === document.body, "the keyboard is with the window");
 });
 
+type DrawLoadingNarrowResult = { page: HTMLElement; went: string[] };
+
 /**
  * The shell in a narrow room on `tab` over `overrides`, Settings standing on
  * its list or its page as `listed` says, over a history whose Back goes to
@@ -409,7 +411,7 @@ function drawLoadingNarrow(
   overrides: Partial<TasksControl>,
   listed: boolean,
   at?: string,
-): { page: HTMLElement; went: string[] } {
+): DrawLoadingNarrowResult {
   const went: string[] = [];
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);

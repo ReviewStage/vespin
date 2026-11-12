@@ -121,6 +121,8 @@ export function transcriptSpeaker(message: AgentTranscriptMessage): string {
   return message.sentBy?.name ?? "You";
 }
 
+type TranscriptPartLinesResult = { readonly lines: readonly string[]; readonly printed: number };
+
 /**
  * The lines of a message's parts past the first `printed`, and how many of
  * its parts are printed after them: each settled part in order, stopping at
@@ -131,7 +133,7 @@ export function transcriptPartLines(
   message: AgentTranscriptMessage,
   printed: number,
   ended: boolean,
-): { readonly lines: readonly string[]; readonly printed: number } {
+): TranscriptPartLinesResult {
   const lines: string[] = [];
   let index = printed;
 

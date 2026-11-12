@@ -152,11 +152,13 @@ async function packageTarball(target: HostTarget, node: AgentToolPin): Promise<v
   process.stdout.write(`${name} ${digest}\n`);
 }
 
-/** The release target and the Node it runs on, as the options name them. */
-function releaseTarget(values: { os?: string; arch?: string }): {
+type ReleaseTargetResult = {
   target: HostTarget;
   node: AgentToolPin;
-} {
+};
+
+/** The release target and the Node it runs on, as the options name them. */
+function releaseTarget(values: { os?: string; arch?: string }): ReleaseTargetResult {
   // Note that a Mac release is Apple silicon's alone, since NODE_MAC_PIN is its Node.
   if (values.os === DEVICE_PLATFORM.DARWIN) {
     if (values.arch !== DEVICE_ARCH.ARM64) throw new Error(USAGE);

@@ -532,6 +532,11 @@ export interface LineAttachment {
   readonly attachment: AgentAttachment;
 }
 
+type UseLineAttachmentsResult = {
+  readonly attachments: readonly LineAttachment[];
+  readonly reading: boolean;
+};
+
 /**
  * A line's files as a message to the agent carries them again, for Edit to
  * send: each one the line holds inline, and each one kept as a picture whose
@@ -539,10 +544,7 @@ export interface LineAttachment {
  * picture is still being read, which joins them once it lands. One that
  * is gone is left out.
  */
-export function useLineAttachments(message: AgentTranscriptMessage): {
-  readonly attachments: readonly LineAttachment[];
-  readonly reading: boolean;
-} {
+export function useLineAttachments(message: AgentTranscriptMessage): UseLineAttachmentsResult {
   const door = useContext(AgentPicturesContext);
   const files = messageFileChips(message);
 

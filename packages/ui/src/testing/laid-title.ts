@@ -29,8 +29,10 @@ class StillObserver {
   disconnect(): void {}
 }
 
+type LayTitleResult = { restore: () => void };
+
 /** Lays every matching bar's title out as `layout` says, until the answered `restore` is called. */
-export function layTitle(layout: TitleLayout): { restore: () => void } {
+export function layTitle(layout: TitleLayout): LayTitleResult {
   const proto = Element.prototype;
   const rect = Object.getOwnPropertyDescriptor(proto, "getBoundingClientRect");
   const scroll = Object.getOwnPropertyDescriptor(proto, "scrollWidth");

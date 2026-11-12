@@ -102,9 +102,9 @@ const TARBALL = {
 } as const;
 
 /** The target each platform and architecture a host runs on fetches its release for. */
-const TARGET_OF: {
-  readonly [Platform in DevicePlatform]?: { readonly [Arch in DeviceArch]?: HostTarget };
-} = {
+const TARGET_OF: Readonly<
+  Partial<Record<DevicePlatform, Readonly<Partial<Record<DeviceArch, HostTarget>>>>>
+> = {
   [DEVICE_PLATFORM.LINUX]: {
     [DEVICE_ARCH.X64]: HOST_TARGET.LINUX_X64,
     [DEVICE_ARCH.ARM64]: HOST_TARGET.LINUX_ARM64,

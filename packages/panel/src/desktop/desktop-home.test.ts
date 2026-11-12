@@ -143,6 +143,8 @@ function home(
   );
 }
 
+type Opened = { tasks: string[]; settings: SettingsLink[] };
+
 /** Home over Acme with `items` waiting on `RETRIES`, read by Dean, with `overrides`, their feed refused where `refused` says; each task and place of Settings it opens recorded, and the window's router, where an item it opens takes it. */
 function mount(
   overrides: Partial<TasksControl> = {},
@@ -150,7 +152,7 @@ function mount(
   room: ShellRoom = SHELL_ROOM.WIDE,
   refused = false,
 ) {
-  const opened: { tasks: string[]; settings: SettingsLink[] } = { tasks: [], settings: [] };
+  const opened: Opened = { tasks: [], settings: [] };
   handHostReads({
     items: refused
       ? { failed: true }

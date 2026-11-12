@@ -576,6 +576,11 @@ function withOlderPage(
  */
 const RESYNC_SETTLE = Duration.seconds(10);
 
+type TakeAnsweredResult = {
+  readonly taskId: string;
+  readonly fields: Partial<PlanRow>;
+};
+
 /**
  * The panel's tasks as one concern. The view is told to every client whole
  * whenever it moves, and exactly one task is active at a time: opening or
@@ -1586,10 +1591,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    * standing is dropped first, because an answer names one only where the
    * task has one, so an answer that names none is a task assigned to no one.
    */
-  function takeAnswered(task: Task): {
-    readonly taskId: string;
-    readonly fields: Partial<PlanRow>;
-  } {
+  function takeAnswered(task: Task): TakeAnsweredResult {
     documentTook(task.id, task, (held) => ({ ...withoutAssignee(held), ...task }));
 
     return { taskId: task.id, fields: planFieldsOf(task) };

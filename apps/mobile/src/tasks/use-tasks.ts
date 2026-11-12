@@ -169,16 +169,18 @@ function withHeld(tasks: readonly TaskSummary[], held: HeldStatuses): readonly T
   });
 }
 
+type UseStatusWritesResult = {
+  readonly held: HeldStatuses;
+  readonly setStatus: SetStatus;
+};
+
 /**
  * The statuses a press set, drawn at once on every screen as the panel draws
  * its row write (`ROW_WRITE.TASK_STANDING`), each sent as the panel sends it
  * (`TASKS_SET_STANDING`), and let go where the host refuses it, so the row
  * stands as it did; one the document has since drawn is dropped too.
  */
-function useStatusWrites(tasks: readonly TaskSummary[]): {
-  readonly held: HeldStatuses;
-  readonly setStatus: SetStatus;
-} {
+function useStatusWrites(tasks: readonly TaskSummary[]): UseStatusWritesResult {
   const acts = useHostActs();
   const write = useWrite();
   const held = useSyncExternalStore(watchStatuses, () => heldStatuses);
@@ -568,6 +570,11 @@ export interface StatusQuestion {
   readonly dismiss: () => void;
 }
 
+type UseStatusAskResult = {
+  readonly setStatus: (taskId: string, status: TaskStatus) => void;
+  readonly question: StatusQuestion;
+};
+
 /**
  * Sets a task's status as the panel does (`useStandingWrites`): Done or
  * Canceled on a task whose agents are working asks first, since it stops
@@ -575,10 +582,9 @@ export interface StatusQuestion {
  * settle that stops them; anything else goes out at once. Answers the
  * asking `setStatus` and its question, which the screen draws.
  */
-export function useStatusAsk(doors: Pick<TasksListing, "setStatus" | "agentsWorking">): {
-  readonly setStatus: (taskId: string, status: TaskStatus) => void;
-  readonly question: StatusQuestion;
-} {
+export function useStatusAsk(
+  doors: Pick<TasksListing, "setStatus" | "agentsWorking">,
+): UseStatusAskResult {
   const [held, setHeld] = useState<HeldStatus>();
 
   const setStatus = (taskId: string, status: TaskStatus) => {
@@ -614,6 +620,11 @@ interface HeldDelete {
   readonly presented: boolean;
 }
 
+type UseDeleteAskResult = {
+  readonly askDelete: (task: TaskSummary) => void;
+  readonly question: StatusQuestion;
+};
+
 /**
  * Deletes a task for good as the panel does, asking first in the panel's
  * words (`deleteTaskWords`), since nothing brings it back. Answers the
@@ -623,10 +634,7 @@ interface HeldDelete {
 export function useDeleteAsk(
   remove: TaskWrites["remove"],
   onDeleted?: () => void,
-): {
-  readonly askDelete: (task: TaskSummary) => void;
-  readonly question: StatusQuestion;
-} {
+): UseDeleteAskResult {
   const [held, setHeld] = useState<HeldDelete>();
   const letGo = () => setHeld((was) => (was === undefined ? was : { ...was, presented: false }));
 
@@ -649,17 +657,19 @@ export function useDeleteAsk(
   };
 }
 
+type UseListingAsksResult = {
+  readonly listing: TasksListing;
+  readonly status: StatusQuestion;
+  readonly deletion: StatusQuestion;
+};
+
 /**
  * A list's acts that ask first, as every list of tasks offers them: its
  * status set, asking where it stops agents, and its delete, asking always.
  * Answers the listing its rows act through and the two questions, which the
  * screen draws.
  */
-export function useListingAsks(read: ReadListing): {
-  readonly listing: TasksListing;
-  readonly status: StatusQuestion;
-  readonly deletion: StatusQuestion;
-} {
+export function useListingAsks(read: ReadListing): UseListingAsksResult {
   const { setStatus, question } = useStatusAsk(read);
   const { remove } = useTaskWrites();
   const deletion = useDeleteAsk(remove);

@@ -91,11 +91,10 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+type MountResult = { opened: string[]; marked: string[] };
+
 /** The list drawn over `VIEW`, with what it was asked to open, `chosen` the item it has chosen and `columns` which of the Inbox's columns stand. */
-function mount(
-  chosen?: string,
-  columns: InboxColumnsShown = INBOX_COLUMNS.BOTH,
-): { opened: string[]; marked: string[] } {
+function mount(chosen?: string, columns: InboxColumnsShown = INBOX_COLUMNS.BOTH): MountResult {
   fakeAppPlatform(QUIET_PANEL);
   vi.stubGlobal(
     "ResizeObserver",
