@@ -27,6 +27,7 @@ import {
   createRouter,
   RouterProvider,
 } from "@tanstack/react-router";
+import { Predicate } from "effect";
 import { createContext, createElement, type ReactElement, useContext } from "react";
 import { beforeEach } from "vitest";
 import {
@@ -100,8 +101,7 @@ interface StandingProps {
 
 /** Where a shell stands by its props: Settings where its tab is, a version history, an agent's page where one stands, a task's place where one is open, else Home; the Inbox, the Board, a person's page, Admin, and the Automations pages stand only where a test names them, as they are their routes' alone. */
 function standingOf(shell: ReactElement): string {
-  const props: StandingProps =
-    typeof shell.props === "object" && shell.props !== null ? shell.props : {};
+  const props: StandingProps = Predicate.isObjectKeyword(shell.props) ? shell.props : {};
 
   if (props.tab === PANEL_TAB.SETTINGS) return SHELL_AT.SETTINGS;
 

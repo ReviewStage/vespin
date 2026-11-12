@@ -43,6 +43,7 @@ import {
   ComposerFoot,
   StepList,
 } from "@repo/ui-native";
+import { Predicate } from "effect";
 import type { ReactNode } from "react";
 import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
 import { REMIND_ME } from "./inbox-remind.js";
@@ -70,7 +71,7 @@ function typedValue(
   kind: AnswerFieldKind,
   typed: string | boolean,
 ): string | number | boolean | undefined {
-  if (typeof typed === "boolean") return typed;
+  if (Predicate.isBoolean(typed)) return typed;
 
   if (typed.trim() === "") return undefined;
 
@@ -243,7 +244,7 @@ export function OpenAskCard({
       kind,
       label: field.label,
       required: field.required === true,
-      value: typeof value === "boolean" ? value : value === undefined ? "" : String(value),
+      value: Predicate.isBoolean(value) ? value : value === undefined ? "" : String(value),
       options: field.options,
       recommended: field.recommended,
     };

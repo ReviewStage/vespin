@@ -20,7 +20,7 @@ import {
 } from "@repo/features/task-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { describeWire } from "@repo/wire/effect";
-import { Effect, Match, Option, Result, Schema } from "effect";
+import { Effect, Match, Option, Predicate, Result, Schema } from "effect";
 import {
   ACTION_RESULT_STATUS,
   type UnparsedWireValue,
@@ -553,7 +553,7 @@ export function runCreateTask(
             Effect.catch(madeRefusal(parentTaskId !== undefined)),
           );
 
-      if (typeof made === "string") return agentToolRejected(made);
+      if (Predicate.isString(made)) return agentToolRejected(made);
 
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,

@@ -25,7 +25,7 @@ import {
   type TasksDisplay,
   type TasksFilter,
 } from "@repo/ui/tasks-page-model";
-import { Schema, SchemaTransformation } from "effect";
+import { Predicate, Schema, SchemaTransformation } from "effect";
 import { KanbanIcon, ListFilterIcon, ListIcon, SlidersHorizontalIcon } from "lucide-react";
 import { FIND_PAGE, PageFind } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
@@ -124,9 +124,7 @@ const INITIAL_DISPLAY = {
 function storedDisplayOf(view: TasksView) {
   return storedDisplay.pipe(
     Schema.decodeTo(
-      Schema.declare(
-        (display): display is TasksDisplay => typeof display === "object" && display !== null,
-      ),
+      Schema.declare((display): display is TasksDisplay => Predicate.isObjectOrArray(display)),
       SchemaTransformation.transform({
         decode: (kept) => keptTasksDisplay(kept, INITIAL_DISPLAY[view]),
         encode: (display) => ({ ...display, offered: OFFERED[view] }),

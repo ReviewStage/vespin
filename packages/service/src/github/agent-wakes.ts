@@ -28,7 +28,7 @@ import {
   type UnparsedWireValue,
 } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { Clock, Duration, Effect, Option, Result, Schema } from "effect";
+import { Clock, Duration, Effect, Option, Predicate, Result, Schema } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { isAgentBranch } from "../agents/coder-host/bounds.js";
 import { agentPullRequestReach } from "../agents/coder-host/published.js";
@@ -548,7 +548,7 @@ function statusFailedWake(payload: UnparsedWireValue, now: number): AgentWake | 
 /** The agent branches of those named, the null a detached head or a fork's branch leaves dropped. */
 function agentBranchesOf(named: readonly (string | null | undefined)[]): readonly string[] {
   return named.filter(
-    (branch): branch is string => typeof branch === "string" && isAgentBranch(branch),
+    (branch): branch is string => Predicate.isString(branch) && isAgentBranch(branch),
   );
 }
 

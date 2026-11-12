@@ -923,7 +923,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         Effect.gen(function* () {
           const exit = yield* api.commandExit(opened, commandId, SETUP_RECORD_WAIT);
 
-          if (typeof exit !== "number") {
+          if (!Predicate.isNumber(exit)) {
             return yield* Effect.logDebug("A cloud setup outlived its record's wait");
           }
 

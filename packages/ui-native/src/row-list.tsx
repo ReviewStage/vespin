@@ -22,6 +22,7 @@ import {
   scrollDismissesKeyboard,
   shapes,
 } from "@expo/ui/swift-ui/modifiers";
+import { Predicate } from "effect";
 import { type ReactNode, useState } from "react";
 import type { MarkLook } from "./glyph.js";
 import { dropLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
@@ -66,7 +67,7 @@ type RowListProps = {
 function selectedId(selection: readonly (string | number)[]): string | undefined {
   const first = selection[0];
 
-  return typeof first === "string" ? first : undefined;
+  return Predicate.isString(first) ? first : undefined;
 }
 
 /** The ground a list stands on: the brand's, the sidebar's for a sidebar, never the system's grays. */

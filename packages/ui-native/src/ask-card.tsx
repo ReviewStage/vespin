@@ -33,6 +33,7 @@ import {
   toggleStyle,
 } from "@expo/ui/swift-ui/modifiers";
 import { FIELD_WORDS } from "@repo/features/words";
+import { Predicate } from "effect";
 import { Fragment, type ReactNode } from "react";
 import { useAnnounced } from "./accessibility.js";
 import { Chip } from "./button.js";
@@ -255,7 +256,7 @@ function TypedFieldRow({
   readonly onChange: (value: string) => void;
 }) {
   const colors = useColors();
-  const text = useNativeState(typeof field.value === "string" ? field.value : "");
+  const text = useNativeState(Predicate.isString(field.value) ? field.value : "");
 
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
@@ -301,7 +302,7 @@ function SelectRow({
       />
       <Picker<string>
         label={field.label}
-        selection={typeof field.value === "string" ? field.value : ""}
+        selection={Predicate.isString(field.value) ? field.value : ""}
         onSelectionChange={onChange}
         modifiers={[pickerStyle("menu"), labelsHidden(), tint(colors.TEXT)]}
       >

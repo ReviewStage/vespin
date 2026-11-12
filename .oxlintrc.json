@@ -53,7 +53,7 @@
     "anti-slop/no-array-filter-map": "error",
     "anti-slop/no-conditional-empty-object-spread": "error",
     "anti-slop/no-unknown-parameters": "off",
-    "anti-slop/no-runtime-typeof": "off",
+    "anti-slop/no-runtime-typeof": ["error", { "allowInTypeGuards": true }],
     "anti-slop/no-known-value-widening": "off",
     "anti-slop/require-safety-comment-for-type-assertion": "error",
     "anti-slop/no-shape-in-symbol-names": "off",

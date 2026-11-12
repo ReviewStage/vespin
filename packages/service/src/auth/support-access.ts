@@ -36,7 +36,7 @@ import {
   getSessionFromCtx,
   sessionMiddleware,
 } from "better-auth/api";
-import { Schema } from "effect";
+import { Predicate, Schema } from "effect";
 import {
   SUPPORT_ACCESS_GRANT_SECONDS,
   SUPPORT_ACCESS_PATH,
@@ -155,7 +155,7 @@ const refuseUnconsentedImpersonation = createAuthMiddleware(async (ctx) => {
   if ((await getSessionFromCtx(ctx)) === null) return;
   const userId: unknown = ctx.body?.userId;
 
-  if (typeof userId !== "string" || (await standingGrant(ctx, userId)) === null) {
+  if (!Predicate.isString(userId) || (await standingGrant(ctx, userId)) === null) {
     throw notGranted();
   }
 });

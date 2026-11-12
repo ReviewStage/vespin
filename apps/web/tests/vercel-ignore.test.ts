@@ -5,6 +5,7 @@ import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { temporaryDirectory } from "@repo/runtime/testing";
 import type { WireRecord } from "@repo/wire";
+import { Predicate } from "effect";
 import { type TestContext, test } from "vitest";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -96,7 +97,7 @@ async function repository(t: TestContext, withScript = true): Promise<string> {
     mkdirSync(dirname(join(root, path)), { recursive: true });
     writeFileSync(
       join(root, path),
-      typeof content === "string" ? content : `${JSON.stringify(content)}\n`,
+      Predicate.isString(content) ? content : `${JSON.stringify(content)}\n`,
     );
   }
 

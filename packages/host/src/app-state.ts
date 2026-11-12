@@ -71,7 +71,7 @@ import type { BuildCommit, UpdateSnapshot } from "@repo/settings/update";
 import type { AppSettings } from "@repo/settings/wire";
 import { EXCESS_KEYS, keepIdentity, type UnparsedWireValue } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { Equal, Result, Schema } from "effect";
+import { Equal, Predicate, Result, Schema } from "effect";
 import type { MacCommandAsk } from "./mac-command-ask.js";
 
 export type { MacCommandAsk } from "./mac-command-ask.js";
@@ -1182,7 +1182,7 @@ type Keyed = { readonly [key: string]: HeldValue };
 
 /** Whether `value` is a level of keys or a record of fields that can be read by name, rather than a primitive or nothing. */
 function isKeyed(value: unknown): value is Keyed {
-  return typeof value === "object" && value !== null;
+  return Predicate.isObjectOrArray(value);
 }
 
 /** The value `keyed` holds under `id` itself, never one it inherits. */
@@ -1373,7 +1373,7 @@ function valueLaid(entry: HostReadSliceEntry, held: HeldValue, move: KeyMoved): 
 
   if (rowsAreValue(entry)) return rows;
 
-  return typeof held === "object" && held !== null ? { ...held, rows } : { rows };
+  return Predicate.isObjectOrArray(held) ? { ...held, rows } : { rows };
 }
 
 /**
@@ -1389,10 +1389,10 @@ function recordLaid(
   beside: Keyed | undefined,
 ): HeldValue {
   // SAFETY: a read is a record of its fields, its rows among them, as `recordOf` reads it.
-  const read = (typeof held === "object" && held !== null ? held : {}) as Keyed;
+  const read = (Predicate.isObjectOrArray(held) ? held : {}) as Keyed;
   const was = read.rows;
   // SAFETY: a read whose slice names `rowsAt` holds its rows as a record of fields.
-  const heldRecord = (typeof was === "object" && was !== null ? was : {}) as Keyed;
+  const heldRecord = (Predicate.isObjectOrArray(was) ? was : {}) as Keyed;
 
   const fields =
     beside === undefined

@@ -17,7 +17,7 @@ import {
 } from "@repo/features/integration-wire";
 import { isRecord, unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { fakeHttpClientLayer, noNetwork } from "@repo/wire/testing";
-import { Clock, type Context, Effect, Layer, Option, Schema } from "effect";
+import { Clock, type Context, Effect, Layer, Option, Predicate, Schema } from "effect";
 import { type HttpClient, HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
@@ -384,7 +384,7 @@ const UNAVAILABLE_REFUSAL = {
 /** A write's answer as the service sent it, the transaction it wrote in, which every write answers, taken off. */
 function written(body: WireBoundaryInput): WireBoundaryInput {
   const read = unparsedWire(body);
-  assert.ok(isRecord(read) && typeof read.txid === "string", "the write answers its transaction");
+  assert.ok(isRecord(read) && Predicate.isString(read.txid), "the write answers its transaction");
   const { txid: _txid, ...rest } = read;
 
   return rest;

@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+
 /**
  * tool-call-block.ts -- what a tool call's body holds and how its blocks read as words, for every surface that draws a call: its state, its blocks, and the words its cards say.
  *
@@ -70,7 +72,7 @@ function blockValue(block: ToolBlock): WireValue {
 }
 
 function isContainer(value: unknown): value is object {
-  return value !== null && typeof value === "object";
+  return Predicate.isObjectOrArray(value);
 }
 
 /** A value that stands on its key's line: a scalar, its later lines set in under the first, or an empty list or record as "(none)". */
@@ -129,7 +131,7 @@ export function readableBlock(block: ToolBlock): ToolBlock {
   if (!isContainer(value)) return block;
   const [only, ...more] = Object.values(value);
 
-  if (!Array.isArray(value) && typeof only === "string" && more.length === 0) {
+  if (!Array.isArray(value) && Predicate.isString(only) && more.length === 0) {
     return { kind: TOOL_BLOCK.TEXT, text: only };
   }
 

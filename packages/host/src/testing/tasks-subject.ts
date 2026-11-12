@@ -97,7 +97,7 @@ import { type EntityPool, entityPool } from "@repo/sync";
 import type { WireBoundaryInput, WireRecord, WireValue } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { noNetwork } from "@repo/wire/testing";
-import { Data, Deferred, Duration, Effect, FiberMap, Result, type Scope } from "effect";
+import { Data, Deferred, Duration, Effect, FiberMap, Predicate, Result, type Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { type AppDescriptionDocuments, type AppHostRead, NO_KEYS_HELD } from "../app-state.js";
 import { composeTasks, type TasksClient } from "../compose-tasks.js";
@@ -463,7 +463,7 @@ type ListAt = Map<string, ReadonlyMap<"plans" | "agents", ReadonlyMap<string, st
 
 /** A row's id; none where it is no object carrying one as words. */
 function rowIdOf(row: unknown): string | undefined {
-  return typeof row === "object" && row !== null && "id" in row && typeof row.id === "string"
+  return Predicate.isObjectOrArray(row) && "id" in row && Predicate.isString(row.id)
     ? row.id
     : undefined;
 }
@@ -474,7 +474,7 @@ function rowsById(rows: readonly unknown[] | undefined): ReadonlyMap<string, str
     (rows ?? []).flatMap((row) => {
       const id = rowIdOf(row);
 
-      return typeof id === "string" ? [[id, JSON.stringify(row)] as const] : [];
+      return Predicate.isString(id) ? [[id, JSON.stringify(row)] as const] : [];
     }),
   );
 }
@@ -507,7 +507,7 @@ function listBySyncId(answer: ListAnswer, past: string | undefined, listAt: List
     const rows = query.rows.filter((row) => {
       const id = rowIdOf(row);
 
-      return typeof id === "string" && was.get(id) !== ids.get(id);
+      return Predicate.isString(id) && was.get(id) !== ids.get(id);
     });
 
     const gone = [...was.keys()].filter((id) => !ids.has(id));

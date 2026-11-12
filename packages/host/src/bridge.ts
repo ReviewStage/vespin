@@ -6,6 +6,7 @@ import {
 } from "@repo/features/analytics";
 import type { UnparsedWireValue } from "@repo/wire";
 import { wireResult as result, type WireGuard } from "@repo/wire/wire-guard";
+import { Predicate } from "effect";
 import { type AppStateSnapshot, isAppStateSnapshot } from "./app-state.js";
 import type { PUSH_METHOD, PushMethod, PushPayload } from "./contract/pushes.js";
 
@@ -87,7 +88,7 @@ export const BRIDGE = {
   reportOnline: entry({
     kind: "send",
     channel: "app:network-online",
-    args: args<[online: boolean]>((v) => v.length === 1 && typeof v[0] === "boolean"),
+    args: args<[online: boolean]>((v) => v.length === 1 && Predicate.isBoolean(v[0])),
   }),
   recordSurfaceEvent: entry({
     kind: "send",

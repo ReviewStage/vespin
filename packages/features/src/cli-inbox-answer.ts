@@ -11,6 +11,7 @@
  * in the words `inboxAnswersRefusal` reads the ask with.
  */
 
+import { Predicate } from "effect";
 import {
   INBOX_ASK,
   INBOX_REPLY,
@@ -60,11 +61,11 @@ function formValues(
     return undefined;
   }
 
-  if (typeof read !== "object" || read === null || Array.isArray(read)) return undefined;
+  if (!Predicate.isObject(read)) return undefined;
   const values: InboxFormValue[] = [];
 
   for (const [name, value] of Object.entries(read)) {
-    if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
+    if (!Predicate.isString(value) && !Predicate.isNumber(value) && !Predicate.isBoolean(value)) {
       return undefined;
     }
 

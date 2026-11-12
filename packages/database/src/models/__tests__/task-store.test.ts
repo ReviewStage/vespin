@@ -12,7 +12,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { eq, inArray } from "drizzle-orm";
-import { Clock, Effect, Option, Result } from "effect";
+import { Clock, Effect, Option, Predicate, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { agentTable } from "../../schemas/agent.js";
@@ -370,7 +370,7 @@ it.layer(getTestDB())("a task made under an id its maker chose", (it) => {
         const found = answers.filter((answer) => !answer.made);
 
         assert.deepEqual([made.length, found.length], [1, 1], "one start made the task");
-        assert.equal(typeof made[0]?.txid, "string");
+        assert.ok(Predicate.isString(made[0]?.txid));
         assert.equal(found[0]?.txid, undefined);
         assert.deepEqual(
           answers.map((answer) => answer.task.task.id),

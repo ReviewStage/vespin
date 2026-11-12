@@ -17,7 +17,7 @@
  */
 
 import { connect } from "node:net";
-import { Context, Data, Duration, Effect, Layer, Schedule } from "effect";
+import { Context, Data, Duration, Effect, Layer, Predicate, Schedule } from "effect";
 import { CODEX_ERROR_INFO, codexErrorKind, RUNNER_RECONNECT } from "./protocol.js";
 
 /**
@@ -75,13 +75,11 @@ export function codexConnectionLost(info: unknown): boolean {
 
   if (kind === undefined || !CODEX_CONNECTION_KINDS.has(kind)) return false;
 
-  if (typeof info !== "object" || info === null) return true;
+  if (!Predicate.isObjectOrArray(info)) return true;
   const detail: unknown = Object.values(info)[0];
 
   const status =
-    typeof detail === "object" && detail !== null && "httpStatusCode" in detail
-      ? detail.httpStatusCode
-      : null;
+    Predicate.isObjectOrArray(detail) && "httpStatusCode" in detail ? detail.httpStatusCode : null;
 
   return status === null || status === undefined;
 }

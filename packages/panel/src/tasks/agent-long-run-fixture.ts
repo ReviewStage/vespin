@@ -22,6 +22,7 @@ import { AGENT_STATUS, type AgentTranscriptMessage } from "@repo/features/agent-
 import type { AppTranscript } from "@repo/host/app-state";
 import { FIXTURE_IDS } from "@repo/host/fixture-stage";
 import { MESSAGE_ROLE, type WireRecord, type WireValue } from "@repo/wire";
+import { Predicate } from "effect";
 import { rendererPause } from "../renderer-runtime.js";
 import { fixtureMoved } from "./fixture-moves.js";
 
@@ -338,7 +339,7 @@ function newestJournal(steps: number): AgentTranscriptMessage {
 }
 
 function isRecord(value: WireValue | undefined): value is WireRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+  return Predicate.isObject(value);
 }
 
 /** How many steps the newest turn has taken, which the holds on its transcript move on (`longRunHold`): one run for the whole fixture run, which keeps writing while a tab holds it, as a running agent does, rather than starting over as a tab opens again. */

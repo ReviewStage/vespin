@@ -62,7 +62,7 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import type { Editor, TiptapEditorHTMLElement } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
-import { Clock, Context, Effect } from "effect";
+import { Clock, Context, Effect, Predicate } from "effect";
 import { TestClock } from "effect/testing";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -474,7 +474,7 @@ const READING_OF: Partial<Record<PullRequestPart, readonly string[]>> = {
 /** `read`, its part counted as answered once it lands with what it read; a failure still draws beside its region's wait, so it is not counted. */
 function answering<A>(part: PullRequestPart, read: Promise<A>): Promise<A> {
   return read.then((answer) => {
-    if (typeof answer !== "object" || answer === null || !("failure" in answer)) {
+    if (!Predicate.isObjectOrArray(answer) || !("failure" in answer)) {
       answeredParts.add(part);
     }
 

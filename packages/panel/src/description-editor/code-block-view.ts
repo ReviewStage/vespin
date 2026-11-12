@@ -1,6 +1,7 @@
 import type { AnyExtension, NodeViewRenderer } from "@tiptap/core";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { TextSelection } from "@tiptap/pm/state";
+import { Predicate } from "effect";
 import type { CodeHeaderDrawer, EditorCodeBlock } from "./contract.js";
 
 /**
@@ -71,7 +72,7 @@ function codeBlockView(drawCodeHeader: CodeHeaderDrawer): NodeViewRenderer {
     const setLanguage = (language: string) => {
       const at = getPos();
 
-      if (!editor.isEditable || typeof at !== "number") return;
+      if (!editor.isEditable || !Predicate.isNumber(at)) return;
       editor
         .chain()
         .focus(undefined, { scrollIntoView: false })

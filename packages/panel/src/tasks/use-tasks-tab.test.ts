@@ -59,7 +59,7 @@ import {
 } from "@repo/ui/tab-strip-model";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import { createMemoryHistory } from "@tanstack/react-router";
-import { Clock, Context, Duration, Effect, Option, Schema } from "effect";
+import { Clock, Context, Duration, Effect, Option, Predicate, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { act, createElement, Fragment, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -1139,7 +1139,7 @@ test("a column whose last agent is archived opens a new agent's draft in its pla
   await settle();
   const shown = column().tab;
   assert.ok(
-    shown !== undefined && typeof shown !== "string" && shown.kind === STRIP_TAB_KIND.DRAFT,
+    shown !== undefined && !Predicate.isString(shown) && shown.kind === STRIP_TAB_KIND.DRAFT,
     "a draft, as a task with no agent opens on",
   );
   assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, shown]);
@@ -4273,7 +4273,9 @@ test("archiving a task's last agent takes its tab at once, and a refused archive
   assert.ok(
     !tab
       .control()
-      .mainTabs.tabs.some((each) => typeof each !== "string" && each.kind === STRIP_TAB_KIND.AGENT),
+      .mainTabs.tabs.some(
+        (each) => !Predicate.isString(each) && each.kind === STRIP_TAB_KIND.AGENT,
+      ),
     "the agent leaves at once",
   );
 
@@ -4292,7 +4294,7 @@ test("an archived agent opens in a tab of its task's column, which stays once it
     tab
       .control()
       .mainTabs.tabs.filter(
-        (each) => typeof each !== "string" && each.kind === STRIP_TAB_KIND.AGENT,
+        (each) => !Predicate.isString(each) && each.kind === STRIP_TAB_KIND.AGENT,
       );
 
   assert.deepEqual(agentTabs(), [], "an archived agent's tab stands only once opened");

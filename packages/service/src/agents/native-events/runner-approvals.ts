@@ -57,7 +57,7 @@ import {
   agentPendingApprovalSchema,
 } from "@repo/features/agent-approval-wire";
 import { CommandPrefixSchema, type WireBoundaryInput, type WireValue } from "@repo/wire";
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option, Predicate, Schema } from "effect";
 
 /** The runner's decisions as a member's answers name them, one for one. */
 const ANSWER_OF_DECISION = {
@@ -116,9 +116,9 @@ function cutText(text: string, max: number): string {
 
 /** A value of a call's input cut as the runner cuts it, and no deeper than the bound. */
 function cutValue(value: unknown, depth: number): WireBoundaryInput {
-  if (typeof value === "string") return cutText(value, APPROVAL_INPUT.TEXT_MAX);
+  if (Predicate.isString(value)) return cutText(value, APPROVAL_INPUT.TEXT_MAX);
 
-  if (value === null || typeof value !== "object") {
+  if (!Predicate.isObjectOrArray(value)) {
     // SAFETY: a call's input arrives as JSON, so what is no string and no record or list is a JSON scalar, which `readInput` checks.
     return value as WireBoundaryInput;
   }
@@ -161,13 +161,7 @@ function statusOfResolved(by: ApprovalBy, decision: ApprovalDecision): ApprovalS
 
 /** Whether the message is one of the runner's approval events, an ask or its settle. */
 export function isApprovalEvent(message: WireValue): boolean {
-  return (
-    typeof message === "object" &&
-    message !== null &&
-    !Array.isArray(message) &&
-    "type" in message &&
-    APPROVAL_EVENTS.has(message.type)
-  );
+  return Predicate.isObject(message) && "type" in message && APPROVAL_EVENTS.has(message.type);
 }
 
 /**

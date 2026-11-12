@@ -6,7 +6,7 @@ import {
   type AppSettingKind,
   appToggleText,
 } from "@repo/wire/app-settings";
-import { Schema } from "effect";
+import { Predicate, Schema } from "effect";
 import {
   type AppSettingReader,
   type AppSettingSchemaEntry,
@@ -73,7 +73,7 @@ function detailOf(
   detail: RowSpec<string, AppSettingId>["detail"],
   settings: AppSettingReader,
 ): { detail: string } | undefined {
-  const worded = typeof detail === "function" ? detail(settings) : detail;
+  const worded = Predicate.isFunction(detail) ? detail(settings) : detail;
 
   return worded === undefined ? undefined : { detail: worded };
 }

@@ -84,6 +84,7 @@ import {
   FiberHandle,
   FiberMap,
   Option,
+  Predicate,
   Scope,
   Stream,
 } from "effect";
@@ -294,7 +295,7 @@ function workspaceRefused(failure: WorkspaceCallFailure): Effect.Effect<never, A
 function isFailed<Answer>(
   sealed: Answer | { readonly failure: string },
 ): sealed is { readonly failure: string } {
-  return typeof sealed === "object" && sealed !== null && "failure" in sealed;
+  return Predicate.isObjectOrArray(sealed) && "failure" in sealed;
 }
 
 /**

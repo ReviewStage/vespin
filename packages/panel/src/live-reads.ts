@@ -90,7 +90,13 @@ import {
   OWN_TRANSCRIPT,
   READ_KEYS,
 } from "@repo/host/app-state";
-import { type Query, type QueryClient, type QueryMeta, queryOptions, useQueryClient } from "@tanstack/react-query";
+import {
+  type Query,
+  type QueryClient,
+  type QueryMeta,
+  queryOptions,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { Effect, Predicate, Schema } from "effect";
 import { useEffect } from "react";
 import { askAct } from "./act.js";
@@ -140,7 +146,7 @@ const readCommentSubject = Schema.decodeUnknownSync(tasksCommentsFollowSchema);
 
 /** The pull request a key of one of its parts names: the agent, and its number where the key names one rather than the agent's own. */
 function pullRequestAskedOf([agentId, number]: readonly LiveReadId[]): AgentPullRequestReadParams {
-  return typeof number === "number"
+  return Predicate.isNumber(number)
     ? { agentId: String(agentId), number }
     : { agentId: String(agentId) };
 }
@@ -359,14 +365,14 @@ function readsIn(
 ): readonly { readonly ids: readonly string[]; readonly held: unknown }[] {
   if (depth === 0) return held === undefined ? [] : [{ ids, held }];
 
-  if (typeof held !== "object" || held === null) return [];
+  if (!Predicate.isObjectOrArray(held)) return [];
 
   return Object.entries(held).flatMap(([id, below]) => readsIn(below, depth - 1, [...ids, id]));
 }
 
 /** Whether `id` can be an id of a live read's key. */
 function isLiveReadId(id: unknown): id is LiveReadId {
-  return typeof id === "string" || typeof id === "number";
+  return Predicate.isString(id) || Predicate.isNumber(id);
 }
 
 /**
@@ -383,7 +389,9 @@ function heldAt<Read extends LiveReadName>(
   for (const segment of ids.map(String)) {
     // Note that a record of the document is an object or an array (`Predicate.isObjectOrArray`), read by its own field alone.
     at =
-      Predicate.isObjectOrArray(at) && Object.hasOwn(at, segment) && Predicate.hasProperty(at, segment)
+      Predicate.isObjectOrArray(at) &&
+      Object.hasOwn(at, segment) &&
+      Predicate.hasProperty(at, segment)
         ? at[segment]
         : undefined;
   }
@@ -403,7 +411,7 @@ function liveReadOf(
 ): { readonly read: LiveReadName; readonly ids: readonly LiveReadId[] } | undefined {
   const [name, ...ids] = query.queryKey;
 
-  if (typeof name !== "string" || !MOVED.has(name)) return undefined;
+  if (!Predicate.isString(name) || !MOVED.has(name)) return undefined;
   // SAFETY: `MOVED` holds live read names alone.
   const read = name as LiveReadName;
 

@@ -104,6 +104,7 @@ import {
   FiberMap,
   MutableHashMap,
   Option,
+  Predicate,
   PubSub,
   Queue,
   Schema,
@@ -334,7 +335,7 @@ interface LiveUnsealed {
 
 /** Whether a live read's seal is why it failed rather than its answer, which names no failure. */
 function unsealed(sealed: unknown): sealed is { readonly failure: string } {
-  return typeof sealed === "object" && sealed !== null && "failure" in sealed;
+  return Predicate.isObjectOrArray(sealed) && "failure" in sealed;
 }
 
 /** The service's side of the tasks as this concern asks it. */

@@ -18,7 +18,7 @@ import {
 } from "@repo/features/browser-agent-cdp";
 import type { CdpEvent, PageTarget } from "@repo/features/browser-cdp";
 import type { WireValue } from "@repo/wire";
-import { Duration, Effect, Fiber } from "effect";
+import { Duration, Effect, Fiber, Predicate } from "effect";
 import { TestClock } from "effect/testing";
 import {
   FAKE_IMAGE,
@@ -1326,7 +1326,7 @@ function callOnSelect(select: PageSelect, params: FakeCdpCommand["params"]): Fak
   const args = Array.isArray(params.arguments) ? params.arguments : [];
   // Note that the page's own class is the fake's, so the function's guard reads it as a select.
   const made: unknown = new Function("HTMLSelectElement", `return (${declaration});`)(PageSelect);
-  assert.equal(typeof made, "function");
+  assert.ok(Predicate.isFunction(made));
   // SAFETY: the declaration the browser is sent is a function the page calls on the element.
   const onSelect = made as SelectFunction;
 

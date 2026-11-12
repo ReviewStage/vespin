@@ -28,6 +28,7 @@ import { createHash } from "node:crypto";
 import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Predicate } from "effect";
 import * as pins from "../src/pins.ts";
 
 /** How long npm must have held a release before it is taken, so one pulled for a fault within the day is never pinned. */
@@ -360,7 +361,7 @@ function versionEdits(tool, from, to, claude) {
 async function claudeCodeVersion(version) {
   const manifest = await registryJson(`${SDK}/${version}`);
 
-  if (typeof manifest.claudeCodeVersion !== "string") {
+  if (!Predicate.isString(manifest.claudeCodeVersion)) {
     throw new Error(`${SDK}@${version} names no claudeCodeVersion`);
   }
 

@@ -14,7 +14,7 @@
 
 import { EXCESS_KEYS, type UnparsedWireValue, WireValueSchema } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { Result, Schema } from "effect";
+import { Predicate, Result, Schema } from "effect";
 import { BROWSER_AGENT_LIMITS, browserRefOf, cutBrowserText } from "./browser-agent-actions.js";
 
 /** Roles a node is printed under only where it has a name: wrappers that say nothing themselves. */
@@ -87,7 +87,7 @@ function wordsOf(value: AxNode["name"]): string {
   const raw = value?.value;
 
   if (raw === undefined || raw === null) return "";
-  const text = typeof raw === "string" ? raw : JSON.stringify(raw);
+  const text = Predicate.isString(raw) ? raw : JSON.stringify(raw);
 
   return cutBrowserText(
     text.replace(/\s+/gu, " ").trim(),

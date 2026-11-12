@@ -39,6 +39,7 @@ import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
+import { Predicate } from "effect";
 import { type ReactElement, type ReactNode, useContext, useState } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -87,7 +88,7 @@ type RowHeard = {
 /** A row's heard value, the pieces that say something joined. */
 function heardValue(value: RowHeard["value"]): string {
   return value
-    .filter((part): part is string => typeof part === "string" && part !== "")
+    .filter((part): part is string => Predicate.isString(part) && part !== "")
     .join(HEARD_PART);
 }
 

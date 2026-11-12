@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { fakeCloudApi, HTTP_STATUS, type JsonValue, recordingHttpClient } from "@repo/wire/testing";
-import { Effect, Fiber } from "effect";
+import { Effect, Fiber, Predicate } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { TestClock } from "effect/testing";
 import { accountBearer, CALL_FAULT } from "./account-call.js";
@@ -60,10 +60,7 @@ function uncaused<Answer extends object>(answer: Answer): object {
 /** The trace a failed answer's cause names, checked to be a trace id, since every ask mints its own. */
 function causeTraceOf<Answer extends object>(answer: Answer): string {
   const traceId =
-    "cause" in answer &&
-    typeof answer.cause === "object" &&
-    answer.cause !== null &&
-    "traceId" in answer.cause
+    "cause" in answer && Predicate.isObjectOrArray(answer.cause) && "traceId" in answer.cause
       ? answer.cause.traceId
       : undefined;
 

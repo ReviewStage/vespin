@@ -27,7 +27,7 @@
 
 import http, { type IncomingHttpHeaders, type IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
-import { Effect, FiberSet, type Scope } from "effect";
+import { Effect, FiberSet, Predicate, type Scope } from "effect";
 import { type WebSocket, WebSocketServer } from "ws";
 import { CREDENTIAL_HEADER } from "../auth/session-credential.js";
 import { HOSTED_HTTP_STATUS } from "./http.js";
@@ -107,7 +107,7 @@ function refuseUpgrade(socket: Duplex, status: number): void {
 function refused<A>(
   answer: { readonly status: number } | A,
 ): answer is { readonly status: number } {
-  return typeof answer === "object" && answer !== null && "status" in answer;
+  return Predicate.isObjectOrArray(answer) && "status" in answer;
 }
 
 /** What a server hands a service that stands on it, which is what `ws` upgrades on. */

@@ -25,6 +25,7 @@ import { type AnyExtension, type ChainedCommands, type Editor, Extension } from 
 import { keydownHandler } from "@tiptap/pm/keymap";
 import type { ResolvedPos } from "@tiptap/pm/model";
 import { NodeSelection, Plugin, PluginKey } from "@tiptap/pm/state";
+import { Predicate } from "effect";
 import type { EditorBox, EditorFormat, EditorFormatDoors, EditorFormatting } from "./contract.js";
 import { keymapName, selectionTouchesCell } from "./writing-keys.js";
 
@@ -129,7 +130,7 @@ function formatOf(editor: Editor): EditorFormat {
     cell: selectionTouchesCell(editor.state),
     marks: WRITING_MARKS.filter((mark) => editor.isActive(MARK_NAMES[mark])),
     block: blocks.size === 1 ? [...blocks][0] : undefined,
-    link: linked && typeof href === "string" ? href : undefined,
+    link: linked && Predicate.isString(href) ? href : undefined,
   };
 }
 

@@ -13,6 +13,7 @@
  * Nothing here draws.
  */
 
+import { Predicate } from "effect";
 import { ATTACHMENT_VIEW, attachmentView } from "./attachment-model.js";
 import { CONVERSATION_MEDIA_TYPE } from "./conversation-picture-wire.js";
 import { fileMarker, fileMarkers, isPictureName, markersAsNames } from "./file-marker.js";
@@ -511,7 +512,9 @@ export function inboxPreviewPieces(
 
 /** The files an item's row's second line places (`inboxPreviewPieces`), each once. */
 export function inboxLineFiles(item: InboxItem): readonly InboxMessageFile[] {
-  const files = itemLine(item).pieces.filter((piece) => typeof piece !== "string");
+  const files = itemLine(item).pieces.filter(
+    (piece): piece is InboxMessageFile => !Predicate.isString(piece),
+  );
 
   return [...new Set(files)];
 }
@@ -552,7 +555,7 @@ function placedLine(
   if (after !== "" || pieces.length === 0) pieces.push(after);
 
   const words = pieces
-    .map((piece) => (typeof piece === "string" ? piece : fileMarker(piece.name)))
+    .map((piece) => (Predicate.isString(piece) ? piece : fileMarker(piece.name)))
     .join("");
 
   return { words, pieces };

@@ -1,4 +1,4 @@
-import { Schema as EffectSchema, Option, SchemaTransformation } from "effect";
+import { Schema as EffectSchema, Option, Predicate, SchemaTransformation } from "effect";
 import { MODEL_PROVIDER } from "./models-wire.js";
 import { countedNumber } from "./service-wire.js";
 
@@ -82,7 +82,7 @@ export interface WrittenPlanStatus {
 function resetMillis(resetsAt: Date | number | null | undefined): number | undefined {
   if (resetsAt === null || resetsAt === undefined) return undefined;
 
-  return typeof resetsAt === "number" ? resetsAt : resetsAt.getTime();
+  return Predicate.isNumber(resetsAt) ? resetsAt : resetsAt.getTime();
 }
 
 /**

@@ -19,7 +19,7 @@ import { TASK_MODE, TASK_STATUS, type TaskStatus } from "@repo/features/task-wir
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { and, eq, isNotNull } from "drizzle-orm";
-import { Deferred, Effect, ErrorReporter, Fiber, Layer, Option, Result } from "effect";
+import { Deferred, Effect, ErrorReporter, Fiber, Layer, Option, Predicate, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { MESSAGE_ROLE, RUN_EVENT, RUN_TURN_ORIGIN, TURN_ORIGIN, TURN_TRIGGER } from "../../core.js";
 import { keptAfterResponse } from "../../http/after-response.js";
@@ -440,8 +440,8 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
 
         assert.equal(reported.length, 1);
         assert.equal(reported[0]?.reason, HOSTED_REFUSAL.NATIVE_AGENT_NOT_HERE.error);
-        assert.equal(typeof reported[0]?.agentId, "string");
-        assert.equal(typeof reported[0]?.conversationId, "string");
+        assert.ok(Predicate.isString(reported[0]?.agentId));
+        assert.ok(Predicate.isString(reported[0]?.conversationId));
       }),
   );
 

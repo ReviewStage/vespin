@@ -14,7 +14,7 @@ import { randomBytes } from "node:crypto";
 import { once } from "node:events";
 import { createServer } from "node:net";
 import { PgClient } from "@effect/sql-pg";
-import { Data, Effect, FileSystem, Path, Redacted, Schema, Stream } from "effect";
+import { Data, Effect, FileSystem, Path, Predicate, Redacted, Schema, Stream } from "effect";
 import { ChildProcess } from "effect/process";
 import { SqlClient } from "effect/sql";
 
@@ -153,7 +153,7 @@ const freeLoopbackPort = Effect.tryPromise({
     server.close();
     await once(server, "close");
 
-    if (address === null || typeof address === "string") {
+    if (address === null || Predicate.isString(address)) {
       throw new Error("the loopback server answered no TCP address");
     }
 

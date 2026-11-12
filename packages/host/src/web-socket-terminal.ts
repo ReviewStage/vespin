@@ -21,7 +21,7 @@ import type {
   TerminalSocketArrival,
   TerminalSocketOpening,
 } from "@repo/features/relay-socket";
-import { type Cause, Effect, Latch, Queue, Stream } from "effect";
+import { type Cause, Effect, Latch, Predicate, Queue, Stream } from "effect";
 
 /** How the shell ends a socket it no longer wants: normally, the shell going on in tmux. */
 const NORMAL_CLOSE = 1000;
@@ -39,7 +39,7 @@ export type ConnectWebSocket = (
 function arrivalOf(event: MessageEvent<string | ArrayBuffer>): TerminalSocketArrival {
   const { data } = event;
 
-  return typeof data === "string" ? { text: data } : { bytes: new Uint8Array(data) };
+  return Predicate.isString(data) ? { text: data } : { bytes: new Uint8Array(data) };
 }
 
 /** The host's socket opener over the platform's `WebSocket`, made by `connect`. */

@@ -1,4 +1,5 @@
 import { POSTHOG_PROXY } from "@repo/features/posthog-proxy";
+import { Predicate } from "effect";
 import type { CapturedNetworkRequest, PostHog } from "posthog-js";
 
 /**
@@ -181,12 +182,12 @@ function scrubAuthUrl(value: string): string {
  * capture result's `Date` timestamp) are each a leaf, left whole.
  */
 export function sanitizeAnalyticsUrls<Value>(value: Value): Value {
-  if (typeof value === "string") {
+  if (Predicate.isString(value)) {
     // SAFETY: a string Value is a string, and scrubbing an address answers a string.
     return scrubAuthUrl(value) as Value;
   }
 
-  if (value !== null && typeof value === "object") {
+  if (Predicate.isObjectOrArray(value)) {
     const proto = Object.getPrototypeOf(value);
 
     if (proto === Object.prototype || proto === null) {

@@ -46,6 +46,7 @@ import {
   Effect,
   Layer,
   Option,
+  Predicate,
   Redacted,
   Schema,
 } from "effect";
@@ -167,7 +168,8 @@ const revokeAtGoogle = /* @__PURE__ */ Effect.fnUntraced(function* (token: Redac
 
 /** What a defect is logged as: its kind alone, since a thrown value's words or fields may quote whatever it was handed. */
 function defectKind(defect: unknown): string {
-  return typeof defect === "object" && defect !== null ? defect.constructor.name : typeof defect;
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- names a thrown value's kind for the log, narrowing nothing
+  return Predicate.isObjectOrArray(defect) ? defect.constructor.name : typeof defect;
 }
 
 /**

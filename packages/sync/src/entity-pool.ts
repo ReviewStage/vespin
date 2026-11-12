@@ -72,6 +72,7 @@ import {
   Equal,
   Exit,
   FiberSet,
+  Predicate,
   PubSub,
   Result,
   Schema,
@@ -125,7 +126,7 @@ export function fieldKind<Row extends object>(
   return {
     key,
     drawn: (change, row) => {
-      if (typeof change !== "function") return row === undefined ? change.made : undefined;
+      if (!Predicate.isFunction(change)) return row === undefined ? change.made : undefined;
 
       if (row === undefined) return undefined;
       const fields = change(row);

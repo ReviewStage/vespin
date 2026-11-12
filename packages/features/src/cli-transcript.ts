@@ -23,6 +23,7 @@ import {
   type WireValue,
 } from "@repo/wire";
 import { TOOL_PART_STATE } from "@repo/wire/ui-messages";
+import { Predicate } from "effect";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
 
 /** How the SDK spells a tool part's type: the tool's name behind this prefix. */
@@ -70,7 +71,7 @@ function isPartFields(value: UnparsedWireValue): value is PartFields {
 function stringField(part: PartFields, key: string): string | undefined {
   const value = part[key];
 
-  return typeof value === "string" ? value : undefined;
+  return Predicate.isString(value) ? value : undefined;
 }
 
 /** What a call acted on, as one short line, from the first input key that names it. */
@@ -176,7 +177,7 @@ export function transcriptCallPlace(
 
 /** A call's input or result as words: a string as it is, anything else as its JSON, indented. */
 function callWords(value: unknown): string {
-  return typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? "");
+  return Predicate.isString(value) ? value : (JSON.stringify(value, null, 2) ?? "");
 }
 
 /** One call read whole as a terminal prints it: its tool and where it stands, its input, and its output or its error, each whole. */

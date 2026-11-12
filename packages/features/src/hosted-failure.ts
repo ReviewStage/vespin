@@ -26,7 +26,7 @@ import {
   type InferSchemaOutput,
   ProcedureContract,
 } from "@orpc/contract";
-import { Schema } from "effect";
+import { Predicate, Schema } from "effect";
 import { ANY_PROCEDURE_REFUSALS } from "./contract/base.js";
 import { HOSTED_REFUSAL_DATA, refusalCarriesData } from "./contract/errors.js";
 import { procedureOutputWire } from "./contract/output-wire.js";
@@ -162,7 +162,7 @@ export function spelledFailure(
 function proceduresIn(group: unknown): readonly AnyProcedureContract[] {
   if (group instanceof ProcedureContract) return [group];
 
-  if (typeof group !== "object" || group === null) return [];
+  if (!Predicate.isObjectOrArray(group)) return [];
 
   return Object.values(group).flatMap(proceduresIn);
 }

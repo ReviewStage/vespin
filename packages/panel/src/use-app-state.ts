@@ -6,7 +6,7 @@ import {
   shareAppState,
 } from "@repo/host/app-state-reads";
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
-import { Data, Effect } from "effect";
+import { Data, Effect, Predicate } from "effect";
 import { appBridge } from "./app-bridge.js";
 import { QUERY_ROOT } from "./query-keys.js";
 import { rendererPromise } from "./renderer-runtime.js";
@@ -119,7 +119,7 @@ function heard(): AppStateBridgeReads | undefined {
   try {
     const bridge = appBridge();
 
-    if (typeof bridge.onAppState !== "function") return undefined;
+    if (!Predicate.isFunction(bridge.onAppState)) return undefined;
 
     return {
       requestAppState: () => bridge.requestAppState(),

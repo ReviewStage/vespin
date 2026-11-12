@@ -84,6 +84,7 @@ function ended(failure: unknown): Effect.Effect<CliExit> {
     return Effect.as(Console.error(failure.message), failure.exit);
 
   if (CliError.isCliError(failure)) return Effect.succeed(CLI_EXIT.USAGE);
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- names a thrown value's kind for the message, narrowing nothing
   const kind = failure instanceof Error ? failure.name : typeof failure;
 
   return Effect.as(

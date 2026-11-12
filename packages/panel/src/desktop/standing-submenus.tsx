@@ -1,6 +1,7 @@
 import { TASK_STATUS, TASK_STATUS_ORDER, type TaskStatus } from "@repo/features/task-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { type MenuRow, TaskStatusMark } from "@repo/ui";
+import { Predicate } from "effect";
 import type { ShortcutSubject } from "../shortcut-target.js";
 import { STATUS_ROWS } from "../tasks/task-standing.js";
 import type { StandingWrites } from "../tasks/use-standing-writes.js";
@@ -42,7 +43,7 @@ export function chipSubmenu(
     (row): MenuAction => ({
       label: row.label,
       icon: <>{row.icon}</>,
-      ...(typeof row.detail === "string" && { detail: row.detail }),
+      ...(Predicate.isString(row.detail) && { detail: row.detail }),
       ...(row.card !== undefined && { card: row.card }),
       checked: row.id === value,
       onSelect: () => {

@@ -1,6 +1,7 @@
 import { type SearchSubject, searchHit } from "@repo/features/search-score";
 import { searchTokens } from "@repo/features/search-tokens";
 import { APP_SHORTCUTS, type KeyedCommand } from "@repo/settings/shortcuts";
+import { Predicate } from "effect";
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
 import { ICON_SIZE } from "../../icons/icon-size.js";
@@ -548,7 +549,7 @@ function optionGroups(
         ? { icon: row.icon }
         : { lead: row.faces, leadWidth: COMBOBOX_LEAD.FACES }),
       detail: rowWords(row, unmasked, row.detail),
-      detailWords: typeof row.detail === "string" ? row.detail : undefined,
+      detailWords: Predicate.isString(row.detail) ? row.detail : undefined,
       detailUnder: row.detailUnder,
       hint: rowWords(row, unmasked, rowHint(row)),
       replayMasked: row.replayMasked,
@@ -592,7 +593,7 @@ function submenuOptions(open: Submenu, unmasked: boolean): ComboboxOption[] {
     label: rowWords(row, unmasked, row.label),
     icon: row.icon,
     detail: rowWords(row, unmasked, row.detail),
-    detailWords: typeof row.detail === "string" ? row.detail : undefined,
+    detailWords: Predicate.isString(row.detail) ? row.detail : undefined,
     detailUnder: row.detailUnder,
     hint: rowWords(row, unmasked, rowHint(row)),
     replayMasked: row.replayMasked,

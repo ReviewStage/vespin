@@ -17,6 +17,7 @@ import { Markdown } from "@tiptap/markdown";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { Selection, TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
+import { Predicate } from "effect";
 import { enterSends, modEnterSends } from "../enter-sends.js";
 import { withCodeHeaders } from "./code-block-view.js";
 import { anchorsLaidIn, anchorsOf, commentAnchorMark, spanIn } from "./comment-anchors.js";
@@ -255,7 +256,7 @@ function drawnTaskView(tiptap: NodeViewRenderer, drawTaskBox: TaskBoxDrawer): No
     const toggle = (checked: boolean) => {
       const at = getPos();
 
-      if (!editor.isEditable || typeof at !== "number") return;
+      if (!editor.isEditable || !Predicate.isNumber(at)) return;
       editor
         .chain()
         .focus(undefined, { scrollIntoView: false })

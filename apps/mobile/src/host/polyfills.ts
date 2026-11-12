@@ -21,6 +21,7 @@
 // host's words make them at module load (`@repo/features/words.ts`), so a
 // bundle without them cannot even evaluate. They stand on `Intl.Locale` and
 // `Intl.getCanonicalLocales`.
+import { Predicate } from "effect";
 import "@formatjs/intl-getcanonicallocales/polyfill.js";
 import "@formatjs/intl-locale/polyfill.js";
 import "@formatjs/intl-pluralrules/polyfill.js";
@@ -74,7 +75,7 @@ const DIGEST_ALGORITHM: Readonly<Record<string, CryptoDigestAlgorithm>> = {
 
 /** The algorithm a `digest` call names, by the name alone or as `{ name }`. */
 function algorithmNamed(algorithm: AlgorithmIdentifier): CryptoDigestAlgorithm {
-  const name = typeof algorithm === "string" ? algorithm : algorithm.name;
+  const name = Predicate.isString(algorithm) ? algorithm : algorithm.name;
   const named = DIGEST_ALGORITHM[name.toUpperCase()];
 
   if (named === undefined) throw new Error(`Unrecognized digest algorithm: ${name}`);
@@ -108,7 +109,7 @@ function indexWithin(length: number, index: number): number | undefined {
 // Hermes has none of the four, and the host and its features sort and
 // reverse by copy throughout (`inbox-live.ts`, `task-list-live.ts`,
 // `sidebar-collections.ts`, among many).
-if (typeof Array.prototype.toSorted !== "function") {
+if (!Predicate.isFunction(Array.prototype.toSorted)) {
   const copying: Record<string, (this: readonly unknown[], ...args: never[]) => unknown[]> = {
     toSorted(compare?: (a: unknown, b: unknown) => number) {
       return [...this].sort(compare);
@@ -201,7 +202,7 @@ class StreamingResponse extends PlatformResponse {
 
     super(stream === undefined ? body : null, init);
     this.#stream = stream;
-    this.#words = typeof body === "string" ? body : undefined;
+    this.#words = Predicate.isString(body) ? body : undefined;
   }
 
   override get body(): ReadableStream<Uint8Array<ArrayBuffer>> | null {

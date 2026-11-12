@@ -1,6 +1,7 @@
 import type { FeedbackImage } from "@repo/features/feedback";
 import { FEEDBACK_IMAGE_TYPE, FEEDBACK_LIMITS, isFeedbackImageType } from "@repo/features/feedback";
 import { ACT_KIND } from "@repo/host/acts";
+import { Predicate } from "effect";
 import { askAct } from "./act.js";
 import { isHeicFile, isPictureFile } from "./picture-files.js";
 import { base64Of } from "./tasks/attached-files.js";
@@ -85,7 +86,7 @@ function base64FromBlob(blob: Blob): Promise<string> {
     reader.onload = () => {
       const url = reader.result;
 
-      if (typeof url === "string") resolve(url.slice(url.indexOf(",") + 1));
+      if (Predicate.isString(url)) resolve(url.slice(url.indexOf(",") + 1));
       else reject(new TypeError("FileReader read a data URL as no string"));
     };
 

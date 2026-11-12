@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { LiveStatement } from "@repo/database/core/live-statement";
 import { LIVE_POLL_URL, type SealedLiveQueryWire } from "@repo/features/live-wire";
 import type { WireValue } from "@repo/wire";
-import { Clock, Data, Effect } from "effect";
+import { Clock, Data, Effect, Predicate } from "effect";
 import type { SqlClient } from "effect/sql";
 
 /**
@@ -109,7 +109,7 @@ export function pollSealer(sql: SqlClient.SqlClient): LiveSealer {
           const digest = read[0]?.digest;
           const snapshot = read[0]?.snapshot;
 
-          if (typeof digest !== "string" || typeof snapshot !== "string") {
+          if (!Predicate.isString(digest) || !Predicate.isString(snapshot)) {
             return Effect.fail(refused());
           }
 
@@ -132,7 +132,7 @@ export function pollSealer(sql: SqlClient.SqlClient): LiveSealer {
           const digest = read[0]?.[DIGEST_COLUMN];
           const snapshot = read[0]?.[SNAPSHOT_COLUMN];
 
-          if (typeof digest !== "string" || typeof snapshot !== "string") {
+          if (!Predicate.isString(digest) || !Predicate.isString(snapshot)) {
             return Effect.fail(refused());
           }
 

@@ -15,6 +15,7 @@ import {
   VIDEO_PLAYER_PLACE,
   VideoPlayer,
 } from "@repo/ui";
+import { Predicate } from "effect";
 import { useEffect, useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -69,7 +70,7 @@ function recordStandIn(done: (url: string) => void): () => void {
   recorder.onstop = () => {
     const reader = new FileReader();
     reader.onload = () => {
-      if (!gone && typeof reader.result === "string") done(reader.result);
+      if (!gone && Predicate.isString(reader.result)) done(reader.result);
     };
 
     reader.readAsDataURL(new Blob(parts, { type: "video/webm" }));
@@ -121,7 +122,7 @@ function VideoPlayers(): React.JSX.Element {
   const standIn = useStandIn();
   const [expanded, setExpanded] = useState(0);
 
-  if (typeof standIn === "string") {
+  if (Predicate.isString(standIn)) {
     return (
       <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
         {STAND_IN_WORDS[standIn]}

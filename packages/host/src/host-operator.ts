@@ -50,7 +50,7 @@ import {
   type WireRecord,
 } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { Clock, Effect, type Schema as EffectSchema, Option, Result } from "effect";
+import { Clock, Effect, type Schema as EffectSchema, Option, Predicate, Result } from "effect";
 import { Base64 } from "effect/encoding";
 import type {
   AppAccessSlice,
@@ -498,7 +498,7 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
         (answer) => {
           const folder = record(answer)?.folder;
 
-          return typeof folder === "string" ? folder : undefined;
+          return Predicate.isString(folder) ? folder : undefined;
         },
       ),
     browserLiveConnect: (params) =>

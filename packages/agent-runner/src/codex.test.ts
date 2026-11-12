@@ -17,6 +17,7 @@ import {
   Layer,
   Logger,
   Match,
+  Predicate,
   Queue,
   Stream,
 } from "effect";
@@ -1306,9 +1307,9 @@ function lostTurn(httpStatusCode: number | null): Exchange {
   const completed = RESUMED_TURN.reply.at(-1);
   assert.ok(completed?.method === "turn/completed");
   const params = completed.params;
-  assert.ok(typeof params === "object" && params !== null && "turn" in params);
+  assert.ok(Predicate.isObjectKeyword(params) && "turn" in params);
   const turn = params.turn;
-  assert.ok(typeof turn === "object" && turn !== null);
+  assert.ok(Predicate.isObjectKeyword(turn));
 
   return {
     method: "turn/start",

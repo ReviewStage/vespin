@@ -12,7 +12,7 @@
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import type { WireRecord } from "@repo/wire";
 import { describeWire } from "@repo/wire/effect";
-import { Effect, Result, Schema } from "effect";
+import { Effect, Predicate, Result, Schema } from "effect";
 import { ACTION_RESULT_STATUS, isRecord, type UnparsedWireValue } from "../../core.js";
 import { type AgentCall, agentToolRejected, callerAgent } from "../agent-tools.js";
 
@@ -71,7 +71,7 @@ function readEnd(input: UnparsedWireValue): Result.Result<void, string> {
   if (Result.isSuccess(readInput(input))) return Result.succeed(undefined);
   const { summary, followUps } = isRecord(input) ? input : {};
 
-  if (typeof summary === "string" && summary.trim().length > END_TURN_BOUNDS.SUMMARY_CHARS) {
+  if (Predicate.isString(summary) && summary.trim().length > END_TURN_BOUNDS.SUMMARY_CHARS) {
     return Result.fail(END_TURN_REFUSAL.TOO_LONG(summary.trim().length));
   }
 
@@ -81,7 +81,7 @@ function readEnd(input: UnparsedWireValue): Result.Result<void, string> {
 
   const overlong = Array.isArray(followUps)
     ? followUps.some(
-        (each) => typeof each === "string" && each.trim().length > END_TURN_BOUNDS.FOLLOW_UP_CHARS,
+        (each) => Predicate.isString(each) && each.trim().length > END_TURN_BOUNDS.FOLLOW_UP_CHARS,
       )
     : false;
 

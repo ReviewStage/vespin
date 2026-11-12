@@ -106,6 +106,7 @@ import {
   Layer,
   Logger,
   Option,
+  Predicate,
   Redacted,
   Result,
   Schema,
@@ -3753,7 +3754,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.notEqual(first.exitCode, null);
         assert.ok(!JSON.stringify(yield* launchLines(first)).includes("Use Notion now."));
         const [config] = yield* launchLines(second);
-        assert.ok(typeof config === "object" && config !== null && "integrations" in config);
+        assert.ok(Predicate.isObjectOrArray(config) && "integrations" in config);
         assert.deepEqual(config.integrations, handed.servers);
         assert.ok(JSON.stringify(yield* handedLines(userId, second)).includes("Use Notion now."));
 

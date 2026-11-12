@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { type ReactNode, type Ref, useCallback, useId, useRef, useState } from "react";
 import { said } from "../../said.js";
 import {
@@ -173,7 +174,7 @@ export function CollectionPage({
     (element: HTMLDivElement | null) => {
       scroll.current = element;
 
-      if (typeof scrollRef === "function") scrollRef(element);
+      if (Predicate.isFunction(scrollRef)) scrollRef(element);
       else if (scrollRef !== undefined && scrollRef !== null) scrollRef.current = element;
     },
     [scrollRef],

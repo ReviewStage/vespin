@@ -90,7 +90,7 @@ import {
   type ShortcutChord,
   shortcutAria,
 } from "@repo/settings/shortcuts";
-import { Duration, Effect } from "effect";
+import { Duration, Effect, Predicate } from "effect";
 import {
   cloneElement,
   createContext,
@@ -512,7 +512,7 @@ function HintWords({
 
 /** Hands `node` to a ref of any shape, as a control's own ref is handed beside the tooltip's. */
 function handRef<T>(ref: Ref<T> | undefined, node: T | null): void {
-  if (typeof ref === "function") ref(node);
+  if (Predicate.isFunction(ref)) ref(node);
   else if (ref !== null && ref !== undefined) ref.current = node;
 }
 
@@ -978,7 +978,7 @@ export function Tooltip({
     ...(owns === "" ? undefined : { "aria-owns": owns }),
     ...(chord === undefined ? undefined : { "aria-keyshortcuts": shortcutAria(chord) }),
     // Note that only an element of the page's own is handed a ref, because a component may spread what it is handed over a ref of its own, as a chip's link address is.
-    ...(typeof children.type === "string" ? { ref: anchorRef } : undefined),
+    ...(Predicate.isString(children.type) ? { ref: anchorRef } : undefined),
     onPointerEnter: (event) => {
       own.onPointerEnter?.(event);
       learn(event.currentTarget);

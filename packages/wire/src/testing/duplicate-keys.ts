@@ -21,6 +21,7 @@
  * test, and this does not flush React's work to say otherwise.
  */
 
+import { Predicate } from "effect";
 import { afterAll, afterEach } from "vitest";
 
 /** The start of React's format string for the message, whose one argument is the key. */
@@ -34,7 +35,7 @@ const printError = console.error.bind(console);
 console.error = (...args: unknown[]) => {
   const [format, key] = args;
 
-  if (typeof format === "string" && format.startsWith(DUPLICATE_KEY)) duplicated.push(key);
+  if (Predicate.isString(format) && format.startsWith(DUPLICATE_KEY)) duplicated.push(key);
   printError(...args);
 };
 

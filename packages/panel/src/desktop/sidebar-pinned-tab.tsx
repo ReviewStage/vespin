@@ -27,7 +27,7 @@ import {
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { pullRequestLabelOf, STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
-import { absurd } from "effect";
+import { absurd, Predicate } from "effect";
 import { useCallback, useRef } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { commandAction, commandHead, PANEL_COMMAND } from "../command-items.js";
@@ -165,7 +165,7 @@ function repositoryOfLine(line: TaskPullRequestLine): string | undefined {
 function openPullRequestOf(pin: SidebarPin, tasks: TasksControl): AgentPullRequest | undefined {
   const { tab } = pin;
 
-  if (typeof tab === "string" || tab.kind !== STRIP_TAB_KIND.CHANGES) return undefined;
+  if (Predicate.isString(tab) || tab.kind !== STRIP_TAB_KIND.CHANGES) return undefined;
 
   // A turn's Changes tab shows no pull request.
   if (tab.turn !== undefined) return undefined;
@@ -193,7 +193,7 @@ function pinPullRequest(
 ): PinnedPullRequest | undefined {
   const { tab } = pin;
 
-  if (typeof tab === "string" || tab.kind !== STRIP_TAB_KIND.CHANGES || tab.turn !== undefined) {
+  if (Predicate.isString(tab) || tab.kind !== STRIP_TAB_KIND.CHANGES || tab.turn !== undefined) {
     return undefined;
   }
 
@@ -231,7 +231,7 @@ function namedPin<Pin extends SidebarPin>(
 
 /** The agent a pin of an agent's tab or of its Changes is of; none for any other pin. */
 function pinAgentId({ tab }: SidebarPin): string | undefined {
-  if (typeof tab === "string") return undefined;
+  if (Predicate.isString(tab)) return undefined;
 
   switch (tab.kind) {
     case STRIP_TAB_KIND.AGENT:
@@ -314,7 +314,7 @@ function pinChangesCard(
 
   if (gone || pullRequest === undefined) return null;
 
-  if (typeof tab === "string" || tab.kind !== STRIP_TAB_KIND.CHANGES) return null;
+  if (Predicate.isString(tab) || tab.kind !== STRIP_TAB_KIND.CHANGES) return null;
   const { agents } = tasks;
 
   return tabCard({
@@ -597,7 +597,7 @@ export function SidebarPinnedTab({
 
   // Note that a pin's agent may be another task's, whose people its own Changes tab read.
   const changesPeople = useChangesPeople(
-    typeof pin.tab !== "string" && pin.tab.kind === STRIP_TAB_KIND.CHANGES
+    !Predicate.isString(pin.tab) && pin.tab.kind === STRIP_TAB_KIND.CHANGES
       ? pin.tab.changes
       : undefined,
   );

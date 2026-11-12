@@ -29,7 +29,7 @@ import {
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import type { WireRecord } from "@repo/wire";
 import { describeWire } from "@repo/wire/effect";
-import { Clock, Duration, Effect, Result, Schema } from "effect";
+import { Clock, Duration, Effect, Predicate, Result, Schema } from "effect";
 import { ACTION_RESULT_STATUS, isRecord, type UnparsedWireValue } from "../../core.js";
 import { type AgentCall, agentToolRejected, callerAgent, orStoreRefusal } from "../agent-tools.js";
 import { type AgentWakeupServices, AgentWakeups } from "./agent-wakeups.js";
@@ -120,7 +120,7 @@ function readAsk(input: UnparsedWireValue): Result.Result<WakeupAsk, string> {
     const prompt = isRecord(input) ? input.prompt : undefined;
 
     return Result.fail(
-      typeof prompt === "string" && prompt.trim().length > WAKEUP_PROMPT_CHARS
+      Predicate.isString(prompt) && prompt.trim().length > WAKEUP_PROMPT_CHARS
         ? WAKEUP_REFUSAL.TOO_LONG(prompt.trim().length)
         : WAKEUP_REFUSAL.UNREADABLE,
     );

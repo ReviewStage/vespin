@@ -1,5 +1,5 @@
 import { isRecord, isWireNumber, isWireString, type WireValue } from "@repo/wire";
-import { Option, Schema } from "effect";
+import { Option, Predicate, Schema } from "effect";
 import {
   AGENT_TOOL,
   type AgentTool,
@@ -1660,7 +1660,7 @@ export function shownPageVersion(
   const page = stringAt(answer, "id");
   const version = isRecord(answer) ? answer.version : undefined;
 
-  return page === undefined || typeof version !== "number" ? undefined : { page, version };
+  return page === undefined || !Predicate.isNumber(version) ? undefined : { page, version };
 }
 
 /** The page a read answered, which opens its tab where it is on the call's own task; one of another task opens nothing here. Note that `isYours` is read too, because a transcript from before keeps the answer it was given then. */

@@ -149,7 +149,7 @@ import {
   storedToolName,
   TOOL_PART_STATE,
 } from "@repo/wire/ui-messages";
-import { Clock, Effect, Option, Result, Schema } from "effect";
+import { Clock, Effect, Option, Predicate, Result, Schema } from "effect";
 import { AUTOMATIC_ARCHIVE_REASON } from "../agents/agent-change.js";
 import { calledId } from "../agents/called-id.js";
 import {
@@ -491,7 +491,7 @@ function plainReply(text: string): SlackMessageContent {
 /** A refusal in the words a reply says it with: one fixed slug, never anything a caller wrote. */
 function refusalReply(what: string, failure: unknown): SlackMessageContent {
   const slug =
-    typeof failure === "object" && failure !== null && "error" in failure
+    Predicate.isObjectOrArray(failure) && "error" in failure
       ? String(failure.error)
       : "model_refused";
 
@@ -1046,7 +1046,7 @@ export function actOnSlackEvent(
   if (retried) return heardLine(kind, SLACK_DROP.RETRY);
   const addressed = addressedOf(callback.success);
 
-  if (typeof addressed === "string") return heardLine(kind, addressed);
+  if (Predicate.isString(addressed)) return heardLine(kind, addressed);
 
   return Effect.andThen(
     heardLine(kind, "acted"),

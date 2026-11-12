@@ -23,7 +23,7 @@ import type {
   SDKMessage,
   SessionCronSummary,
 } from "@anthropic-ai/claude-agent-sdk";
-import { Option, Schema } from "effect";
+import { Option, Predicate, Schema } from "effect";
 import type { ServerNotification } from "./codex-protocol/index.js";
 
 /**
@@ -1102,12 +1102,11 @@ const decodeCodexErrorKind = Schema.decodeUnknownOption(CodexErrorKindSchema);
  * object's one key; none for a kind this pin does not name, or no info.
  */
 export function codexErrorKind(info: unknown): CodexErrorKind | undefined {
-  const named =
-    typeof info === "string"
-      ? info
-      : typeof info === "object" && info !== null && Object.keys(info).length === 1
-        ? Object.keys(info)[0]
-        : undefined;
+  const named = Predicate.isString(info)
+    ? info
+    : Predicate.isObjectOrArray(info) && Object.keys(info).length === 1
+      ? Object.keys(info)[0]
+      : undefined;
 
   return Option.getOrUndefined(decodeCodexErrorKind(named));
 }

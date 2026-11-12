@@ -10,6 +10,7 @@
  */
 
 import type { Workspace } from "@repo/features/workspace-wire";
+import { Predicate } from "effect";
 import { useSyncExternalStore } from "react";
 import { Settings } from "react-native";
 
@@ -20,7 +21,7 @@ const CHOSEN_WORKSPACE_KEY = "chosenWorkspace";
 function keptChoice(): string | undefined {
   const kept: unknown = Settings.get(CHOSEN_WORKSPACE_KEY);
 
-  return typeof kept === "string" ? kept : undefined;
+  return Predicate.isString(kept) ? kept : undefined;
 }
 
 /** The screens reading the choice, each told when it is made here. */

@@ -32,6 +32,7 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import type { ActPortClient } from "@repo/host/contract";
 import { useQuery } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import Constants from "expo-constants";
 import { getDevicePushTokenAsync } from "expo-notifications";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -79,7 +80,7 @@ function readDeviceKey(fixture: boolean): Promise<PushDeviceKey | undefined> {
   tokenRead ??= getDevicePushTokenAsync().then(
     (token) => {
       keyRead =
-        typeof token.data === "string" && token.data !== ""
+        Predicate.isString(token.data) && token.data !== ""
           ? { token: token.data, environment: BUILD_ENVIRONMENT }
           : undefined;
 

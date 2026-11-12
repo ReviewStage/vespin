@@ -8,6 +8,7 @@ import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { agentTab, draftTab, pageTab } from "@repo/ui/tab-strip-model";
+import { Predicate } from "effect";
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
@@ -195,11 +196,11 @@ function mount(
                     tab: on,
                     onChoose: (chosen) =>
                       told.push(
-                        `choose ${typeof chosen === "string" ? chosen : JSON.stringify(chosen)}`,
+                        `choose ${Predicate.isString(chosen) ? chosen : JSON.stringify(chosen)}`,
                       ),
                     onOpen: (opened) =>
                       told.push(
-                        `open ${typeof opened === "string" ? opened : JSON.stringify(opened)}`,
+                        `open ${Predicate.isString(opened) ? opened : JSON.stringify(opened)}`,
                       ),
                     onToggle: () => told.push("toggle"),
                     onClose: (closed) => told.push(`close ${String(closed)}`),

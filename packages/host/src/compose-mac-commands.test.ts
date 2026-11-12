@@ -14,7 +14,7 @@ import { GATEWAY_EVENT, type GatewayEventKind } from "@repo/gateway";
 import { MAC_COMMAND_MODE, type MacCommandMode } from "@repo/settings";
 import { isRecord, type WireValue } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
-import { ConfigProvider, Duration, Effect, Layer, PubSub, Stream } from "effect";
+import { ConfigProvider, Duration, Effect, Layer, Predicate, PubSub, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { composeMacCommands, type MacCommandClient } from "./compose-mac-commands.js";
 import { Environment, reporterLayer } from "./effect/seams.js";
@@ -221,7 +221,7 @@ const subject = (
     const asks = Array.isArray(payload.asks) ? payload.asks : [];
     told.push(
       asks.flatMap((ask) =>
-        isRecord(ask) && typeof ask.id === "string" && typeof ask.command === "string"
+        isRecord(ask) && Predicate.isString(ask.id) && Predicate.isString(ask.command)
           ? [{ id: ask.id, command: ask.command }]
           : [],
       ),

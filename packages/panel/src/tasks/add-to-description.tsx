@@ -18,6 +18,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { isVideoDataUrl, STATUS_TONE } from "@repo/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import { ImagePlusIcon } from "lucide-react";
 import { useMemo } from "react";
 import { type ActResult, type ActVariables, unreachedAs } from "../act.js";
@@ -191,7 +192,7 @@ async function lineEdited(
     known.text,
   );
 
-  if (typeof saved !== "string") return { refused: saved.refused, words };
+  if (!Predicate.isString(saved)) return { refused: saved.refused, words };
   known.text = saved;
 
   if (written !== undefined) known.added = written.added;

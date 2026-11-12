@@ -66,7 +66,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { absurd, Effect } from "effect";
+import { absurd, Effect, Predicate } from "effect";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { askAct, sendAct, unreachedAs } from "../act.js";
 import { actMutation, pressMutation } from "../act-mutations.js";
@@ -1409,7 +1409,7 @@ export function useTasksTab(input: {
     inboxView !== undefined &&
     sidePanel.open &&
     sidePanel.tab !== undefined &&
-    typeof sidePanel.tab !== "string" &&
+    !Predicate.isString(sidePanel.tab) &&
     sidePanel.tab.kind === STRIP_TAB_KIND.TRANSCRIPT
       ? sidePanel.tab.transcript
       : undefined;
@@ -3141,7 +3141,7 @@ export function useTasksTab(input: {
 
       if (task !== undefined && at >= 0 && stripTabReopens(tab)) {
         const file =
-          typeof tab !== "string" && tab.kind === STRIP_TAB_KIND.FILE
+          !Predicate.isString(tab) && tab.kind === STRIP_TAB_KIND.FILE
             ? panelFiles.find((each) => each.path === tab.file)
             : undefined;
 
@@ -3176,7 +3176,7 @@ export function useTasksTab(input: {
   // known before its task opens: the retired Inbox and Comments draw on none.
   const drawsOnAnyTask = (closed: ClosedTab): boolean =>
     closed.strip !== CLOSED_TAB_STRIP.SIDE_PANEL ||
-    typeof closed.tab !== "string" ||
+    !Predicate.isString(closed.tab) ||
     DRAWN_KINDS.some((kind) => kind === closed.tab);
 
   const standsOpen = (closed: ClosedTab): boolean =>
@@ -3591,7 +3591,7 @@ export function useTasksTab(input: {
           const { tab } = pin;
           setChosen({ pin, over: openTaskId });
 
-          if (typeof tab === "string" || tab.kind !== STRIP_TAB_KIND.AGENT) {
+          if (Predicate.isString(tab) || tab.kind !== STRIP_TAB_KIND.AGENT) {
             showPanelTab(pin.task, tab);
 
             return;

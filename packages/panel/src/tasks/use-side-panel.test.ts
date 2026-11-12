@@ -9,6 +9,7 @@ import {
   terminalTab,
   transcriptTab,
 } from "@repo/ui/tab-strip-model";
+import { Predicate } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
@@ -641,7 +642,7 @@ test("a link in the panel to an agent elsewhere carries the panel to the agent's
   };
 
   const pagesDrawn = () =>
-    panel().strip.flatMap((tab) => (typeof tab === "object" && "page" in tab ? [tab.page] : []));
+    panel().strip.flatMap((tab) => (!Predicate.isString(tab) && "page" in tab ? [tab.page] : []));
 
   render(TASK);
   act(() => panel().onOpen(pageTab(PAGE), { taskId: OTHER_TASK }));
@@ -689,7 +690,7 @@ test("a page of another task opens beside the Inbox item, drawn there, and Open 
   act(() => panel().onOpen(pageTab(PAGE), { taskId: OTHER_TASK }));
 
   const pagesDrawn = () =>
-    panel().strip.flatMap((tab) => (typeof tab === "object" && "page" in tab ? [tab.page] : []));
+    panel().strip.flatMap((tab) => (!Predicate.isString(tab) && "page" in tab ? [tab.page] : []));
 
   assert.deepEqual(pagesDrawn(), [PAGE], "drawn beside the item it opened on");
   assert.deepEqual(panel().tab, pageTab(PAGE));
@@ -736,7 +737,7 @@ test("an agent's transcript stands in a panel beside the Inbox alone, once the t
 
   render(false);
   assert.ok(
-    !panel().strip.some((tab) => typeof tab === "object" && "transcript" in tab),
+    !panel().strip.some((tab) => !Predicate.isString(tab) && "transcript" in tab),
     "a task's own page draws its agents in its column, never beside",
   );
 });

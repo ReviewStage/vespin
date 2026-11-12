@@ -17,6 +17,7 @@ import {
 } from "@repo/features/agent-wire";
 import { type ShownFailureSentry, sendShownFailure } from "@repo/features/shown-failure";
 import { MESSAGE_ROLE, TURN_STATUS, type WireRecord } from "@repo/wire";
+import { Predicate } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test } from "vitest";
@@ -95,10 +96,9 @@ function reply(words: string | readonly WireRecord[]): AgentTranscriptMessage {
   return {
     id: "reply",
     role: MESSAGE_ROLE.ASSISTANT,
-    parts:
-      typeof words === "string"
-        ? [{ type: "step-start" }, { type: "text", text: words }]
-        : [{ type: "step-start" }, ...words],
+    parts: Predicate.isString(words)
+      ? [{ type: "step-start" }, { type: "text", text: words }]
+      : [{ type: "step-start" }, ...words],
     startedAt: 1_000,
   };
 }

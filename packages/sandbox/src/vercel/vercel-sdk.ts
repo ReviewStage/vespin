@@ -55,6 +55,7 @@ import {
   Effect,
   Layer,
   Option,
+  Predicate,
   Redacted,
   Result,
   Schema,
@@ -398,6 +399,7 @@ function causeDetail(cause: unknown): string {
     at = at.cause;
   }
 
+  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- names a thrown value's kind as its detail, narrowing nothing
   return capped(said.length === 0 ? typeof cause : said.join(" <- "));
 }
 
@@ -877,13 +879,13 @@ function vercelSandbox(
    */
   const sessionOf = (call: SandboxCall, target: SandboxTarget) =>
     Effect.flatMap(
-      found(call, typeof target === "string" ? target : target.name).pipe(
+      found(call, Predicate.isString(target) ? target : target.name).pipe(
         Effect.catchIf(isGone, () => Effect.fail(sessionEnded(call))),
       ),
       (sandbox) => {
         const current = sandbox.currentSession();
 
-        return typeof target === "string" || current.sessionId === target.running
+        return Predicate.isString(target) || current.sessionId === target.running
           ? Effect.succeed({ sandbox, session: current })
           : Effect.fail(sessionEnded(call));
       },

@@ -1,4 +1,4 @@
-import { Schema } from "effect";
+import { Predicate, Schema } from "effect";
 
 /**
  * The wire boundary: the values that arrive from outside this build, the
@@ -33,7 +33,7 @@ export type UnparsedWireValue = WireValue | undefined;
  * {@link isPlainRecord} below all read it back rather than restating it.
  */
 function isPlainWireRecordShape(value: unknown): value is WireRecord {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  if (!Predicate.isObject(value)) return false;
 
   if (Object.prototype.toString.call(value) !== "[object Object]") return false;
   const prototype = Object.getPrototypeOf(value);

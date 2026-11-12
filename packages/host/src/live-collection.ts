@@ -42,6 +42,7 @@ import {
   FiberMap,
   MutableHashMap,
   Option,
+  Predicate,
   Queue,
   type Scope,
   Stream,
@@ -532,7 +533,7 @@ type SliceLevel = ReadonlyRecord<string, unknown>;
 
 /** Whether `value` is a level whose keys can be read by id, rather than a primitive or nothing. */
 function isSliceLevel(value: unknown): value is SliceLevel {
-  return typeof value === "object" && value !== null;
+  return Predicate.isObjectOrArray(value);
 }
 
 /** The read `keyed` holds at `path`; none where it holds none. */

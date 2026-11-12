@@ -1,4 +1,5 @@
 import { SELECTION_WORDS } from "@repo/features/words";
+import { Predicate } from "effect";
 import {
   type CSSProperties,
   createContext,
@@ -424,7 +425,7 @@ function preventFocusMove(event: MouseEvent<HTMLElement>): void {
 function plainWords(words: ReactNode): string | undefined {
   // A slot is handed over as a loose ReactNode, and a string is the one form
   // whose words can be compared from render to render; this check is the boundary.
-  return typeof words === "string" ? words : undefined;
+  return Predicate.isString(words) ? words : undefined;
 }
 
 /**

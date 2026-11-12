@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { INBOX_STATUS, INBOX_WIRE_VERSION, type InboxItem } from "@repo/features/inbox-wire";
+import { Predicate } from "effect";
 import { test } from "vitest";
 import { INBOX_CHANGE, INBOX_ITEM } from "./inbox-collections.js";
 
@@ -21,7 +22,7 @@ const ITEM: InboxItem = {
 function reminded(item: InboxItem, until: number | null): InboxItem | undefined {
   const drawn = INBOX_ITEM.drawn({ kind: INBOX_CHANGE.REMINDED, itemId: item.id, until }, item);
 
-  return typeof drawn === "object" ? drawn : undefined;
+  return Predicate.isObjectOrArray(drawn) ? drawn : undefined;
 }
 
 test("a reminder draws the item put away at once and leaves it unread, and canceling one draws the item as it stood before, with no reminder come due", () => {

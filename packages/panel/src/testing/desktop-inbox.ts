@@ -59,6 +59,7 @@ import { DRAFT_WORD } from "@repo/ui";
 import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
+import { Predicate } from "effect";
 import { act, createElement, Fragment, useEffect, useMemo, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, assert, beforeEach, vi } from "vitest";
@@ -822,7 +823,7 @@ export function mount({
       sidePanel: sidePanel ?? {
         ...tasksControl().sidePanel,
         onOpen: (tab) => {
-          if (typeof tab !== "string" && tab.kind === STRIP_TAB_KIND.TRANSCRIPT) {
+          if (!Predicate.isString(tab) && tab.kind === STRIP_TAB_KIND.TRANSCRIPT) {
             asked.previewedAgents.push(tab.transcript);
           }
         },

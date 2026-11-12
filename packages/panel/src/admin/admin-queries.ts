@@ -29,6 +29,7 @@ import {
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { STATUS_TONE } from "@repo/ui";
 import { keepPreviousData, queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import { QUERY_ROOT } from "../query-keys.js";
 import { showToast } from "../toast.js";
 import type { AdminReads } from "./admin-doors.js";
@@ -133,9 +134,7 @@ interface FavoritePress {
 
 /** Whether a mutation's variables are a press of the star of account `id`. */
 function pressOf(variables: unknown, id: string): boolean {
-  return (
-    typeof variables === "object" && variables !== null && "id" in variables && variables.id === id
-  );
+  return Predicate.isObjectOrArray(variables) && "id" in variables && variables.id === id;
 }
 
 /**

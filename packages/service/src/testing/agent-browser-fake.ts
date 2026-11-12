@@ -29,7 +29,18 @@ import {
   SandboxUnavailable,
 } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { type Cause, Effect, Layer, Option, Queue, Redacted, Ref, Schema, Stream } from "effect";
+import {
+  type Cause,
+  Effect,
+  Layer,
+  Option,
+  Predicate,
+  Queue,
+  Redacted,
+  Ref,
+  Schema,
+  Stream,
+} from "effect";
 import { agentSandboxName } from "../agents/agent-sandbox-open.js";
 import {
   AgentBrowser,
@@ -152,7 +163,7 @@ export function fakeCdpPeer(
 
         if (command.method === "Target.createTarget") {
           const targetId = `page-${yield* Ref.updateAndGet(created, (count) => count + 1)}`;
-          const url = typeof params.url === "string" ? params.url : "about:blank";
+          const url = Predicate.isString(params.url) ? params.url : "about:blank";
           yield* Ref.update(pages, (held) => [...held, { targetId, url, title: "" }]);
 
           return { result: { targetId } };
@@ -204,7 +215,7 @@ export function fakeCdpPeer(
 function startsBridge(text: string): boolean {
   const parsed: unknown = JSON.parse(text);
 
-  if (typeof parsed !== "object" || parsed === null || !("args" in parsed)) return false;
+  if (!Predicate.isObjectOrArray(parsed) || !("args" in parsed)) return false;
   const { args } = parsed;
 
   return (
@@ -405,7 +416,7 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
     run: (target, ask) =>
       refused() ??
       Effect.sync((): CommandRun => {
-        const sandboxSessionId = typeof target === "string" ? current : target.running;
+        const sandboxSessionId = Predicate.isString(target) ? current : target.running;
         ran.push({ sandboxSessionId, ask });
 
         if (ask.args.includes(RECORDER_SOURCE)) {

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useLayoutEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
 import { visibleViewport } from "../../visible-viewport.js";
@@ -141,7 +142,7 @@ export function roomAround(
 export function askedStyleWidth(width: number | PopoverWidth): number | string {
   if (width === POPOVER_WIDTH.FIT) return "max-content";
 
-  return typeof width === "number" ? width : `var(${WIDTH_TOKEN[width]})`;
+  return Predicate.isNumber(width) ? width : `var(${WIDTH_TOKEN[width]})`;
 }
 
 /**
@@ -150,7 +151,7 @@ export function askedStyleWidth(width: number | PopoverWidth): number | string {
  * stylesheet, is read off the layer as it is laid out instead.
  */
 function askedWidth(layer: HTMLElement, width: number | PopoverWidth): number {
-  if (typeof width === "number") return width;
+  if (Predicate.isNumber(width)) return width;
 
   // Note that a fit popover is drawn at its content's width before it is measured, so its box is the width it asks for.
   if (width === POPOVER_WIDTH.FIT) return layer.getBoundingClientRect().width;
@@ -253,7 +254,7 @@ export function AnchoredPopover({
       ref={layer}
       className={LAYER}
       data-side={place?.side ?? POPOVER_SIDE.ABOVE}
-      data-width={typeof width === "number" ? undefined : width}
+      data-width={Predicate.isNumber(width) ? undefined : width}
       style={
         place === undefined
           ? placeStyle(align, 0, askedStyleWidth(width))

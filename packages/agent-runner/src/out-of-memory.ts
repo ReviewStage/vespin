@@ -20,6 +20,7 @@ import type {
   HookEvent,
   SDKMessage,
 } from "@anthropic-ai/claude-agent-sdk";
+import { Predicate } from "effect";
 import type { CodexNotification } from "./protocol.js";
 
 /** 128 and SIGKILL's 9: how a shell reports a command killed by the signal. */
@@ -212,7 +213,7 @@ export function claudeCodeMemoryWatch(
     if (message.type !== "user" || lines.size === 0) return message;
     const { content } = message.message;
 
-    if (typeof content === "string") return message;
+    if (Predicate.isString(content)) return message;
     let changed = false;
 
     const blocks = content.map((block) => {
@@ -224,7 +225,7 @@ export function claudeCodeMemoryWatch(
       changed = true;
       const said = block.content;
 
-      if (said === undefined || typeof said === "string") {
+      if (said === undefined || Predicate.isString(said)) {
         return { ...block, content: said === undefined ? line : `${said}\n${line}` };
       }
 

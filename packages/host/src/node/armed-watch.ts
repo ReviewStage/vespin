@@ -12,7 +12,7 @@
 
 import { existsSync, watch } from "node:fs";
 import { dirname, join } from "node:path";
-import { Cause, Data, Effect, Layer, Option, Queue, Stream } from "effect";
+import { Cause, Data, Effect, Layer, Option, Predicate, Queue, Stream } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as PlatformError from "effect/PlatformError";
 
@@ -42,7 +42,7 @@ export const armedWatchLayer = Layer.succeed(FileSystem.WatchBackend, {
 
     watcher.on("change", (event, name) => {
       // A move that names nothing is told as one of nothing in particular, which its watcher checks as it checks the first.
-      if (typeof name !== "string") return tell(WatchEvent.Update({ path: "" }));
+      if (!Predicate.isString(name)) return tell(WatchEvent.Update({ path: "" }));
       const stands = existsSync(join(directory, name));
       tell(
         WatchEvent[event !== "rename" ? "Update" : stands ? "Create" : "Remove"]({ path: name }),

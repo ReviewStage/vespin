@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useEffect, useState } from "react";
 import { motionHeld } from "./motion-timing.js";
 
@@ -25,7 +26,7 @@ export function useMotionHeld(): boolean {
     update();
 
     // Note that a document with no media queries, as a test's is, has no setting to follow.
-    if (typeof window.matchMedia !== "function") return;
+    if (!Predicate.isFunction(window.matchMedia)) return;
     const query = window.matchMedia(REDUCED_MOTION_QUERY);
     query.addEventListener("change", update);
 

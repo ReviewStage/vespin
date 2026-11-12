@@ -6,7 +6,7 @@ import type {
   TasksPictureAnswer,
 } from "@repo/features/tasks-view";
 import type { PlayableVideoType } from "@repo/features/video-signature";
-import { Data, Effect, Match, MutableHashMap, Option } from "effect";
+import { Data, Effect, Match, MutableHashMap, Option, Predicate } from "effect";
 
 /**
  * kept-content.ts -- content the service answers under a key it never changes under, kept in this process alone so a thing shown again asks the service nothing.
@@ -155,9 +155,9 @@ export interface KeptContent {
 
 /** How many characters the strings of an answer come to, which is what it weighs, so nothing is encoded again to weigh it. */
 function charactersOf(value: unknown): number {
-  if (typeof value === "string") return value.length;
+  if (Predicate.isString(value)) return value.length;
 
-  if (typeof value !== "object" || value === null) return 0;
+  if (!Predicate.isObjectOrArray(value)) return 0;
   let characters = 0;
 
   for (const each of Object.values(value)) characters += charactersOf(each);

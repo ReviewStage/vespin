@@ -38,7 +38,7 @@ import { TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
 import type { Sandbox } from "@repo/sandbox";
 import { isRecord } from "@repo/wire";
 import { describeWire } from "@repo/wire/effect";
-import { Clock, Effect, Option, Result, Schema, Struct } from "effect";
+import { Clock, Effect, Option, Predicate, Result, Schema, Struct } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
   changeAutomationAs,
@@ -387,7 +387,7 @@ function unknownServers(input: UnparsedWireValue): readonly string[] {
 
   return named.filter(
     (name): name is string =>
-      typeof name === "string" && integrationConnectionOf(name) === undefined,
+      Predicate.isString(name) && integrationConnectionOf(name) === undefined,
   );
 }
 

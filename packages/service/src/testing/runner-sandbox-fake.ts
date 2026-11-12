@@ -51,7 +51,7 @@ import {
 import type { WireValue } from "@repo/wire";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { Effect, Layer, Option, Schema } from "effect";
+import { Effect, Layer, Option, Predicate, Schema } from "effect";
 import { agentTag } from "../agents/agent-sandbox-open.js";
 import { EXCESS_KEYS } from "../core.js";
 
@@ -339,7 +339,7 @@ export function runnerSandboxApi() {
     if (method === "POST" && path === "/api/v3/sandboxes") {
       const asked = await body();
       assert.equal(asked.projectId, PROJECT);
-      assert.equal(typeof asked.persistent, "boolean");
+      assert.ok(Predicate.isBoolean(asked.persistent));
 
       // A name a sandbox still holds is refused, which is what makes a name a lock.
       if (sandboxes.some((each) => !each.deleted && each.name === asked.name)) {
@@ -553,7 +553,7 @@ export function runnerSandboxApi() {
       assert.equal(new Headers(init.headers).get("content-type"), "application/gzip");
 
       // Note that an upload relayed as text through GitHub's fake is not an archive any more, and is not kept.
-      if (typeof init.body !== "string") {
+      if (!Predicate.isString(init.body)) {
         uploads.push(untar(new Uint8Array(await new Response(init.body).arrayBuffer())));
       }
 
@@ -849,7 +849,7 @@ function swappedBearer(
   // SAFETY: the policy is the body the API was sent, Vercel's network policy as the adapter spells it.
   const sent = policy as SentPolicy | undefined;
 
-  if (sent === undefined || typeof sent === "string" || placeholder === undefined) return undefined;
+  if (sent === undefined || Predicate.isString(sent) || placeholder === undefined) return undefined;
 
   const swap = (sent.allow[host] ?? []).find((rule) =>
     (rule.match?.headers ?? []).some(

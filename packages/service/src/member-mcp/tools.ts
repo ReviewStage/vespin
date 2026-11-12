@@ -187,7 +187,7 @@ import {
   type WorkspaceExperiment,
 } from "@repo/settings";
 import { describeWire, type StandardSchemaWithJson, standardSchemaOf } from "@repo/wire/effect";
-import { Effect, Option, Redacted, Result, Schema } from "effect";
+import { Effect, Option, Predicate, Redacted, Result, Schema } from "effect";
 import type { HttpClient } from "effect/http";
 import { writeOwnPreferences } from "../accounts/account-preferences.js";
 import { accountProcedureSeams } from "../accounts/account-seams.js";
@@ -617,7 +617,7 @@ const readAsMember = <R, RRead>(
     const workspace = yield* workspaceOf(member.userId);
 
     if (Option.isNone(workspace)) {
-      return typeof refusal === "string" ? agentToolRejected(refusal) : refusal;
+      return Predicate.isString(refusal) ? agentToolRejected(refusal) : refusal;
     }
 
     return yield* read(memberCaller(member, workspace.value));
@@ -2915,7 +2915,7 @@ const repositoryAsMember = <A extends object, R>(
       Effect.catch((refusal) =>
         Effect.succeed(
           agentToolRejected(
-            typeof refusal === "string" ? refusal : repositoryRefusalWords(refusal),
+            Predicate.isString(refusal) ? refusal : repositoryRefusalWords(refusal),
           ),
         ),
       ),

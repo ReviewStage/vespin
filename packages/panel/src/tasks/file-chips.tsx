@@ -1,6 +1,7 @@
 import { chipBase64, type FileChip } from "@repo/features/attachment-model";
 import { fileMarkers, isPictureName } from "@repo/features/file-marker";
 import { AttachmentRef } from "@repo/ui";
+import { Predicate } from "effect";
 import { createContext, Fragment, type ReactNode, useState } from "react";
 import { AttachmentViewer } from "./attachment-viewer.js";
 import { FileTypeIcon } from "./file-type-icon.js";
@@ -72,7 +73,7 @@ export function WordFileChip({
  */
 export function LineWords({ pieces }: { pieces: readonly (string | FileChip)[] }): ReactNode {
   return pieces.map((piece, at) =>
-    typeof piece === "string" ? (
+    Predicate.isString(piece) ? (
       <Fragment key={at}>{piece}</Fragment>
     ) : (
       <WordFileChip key={at} name={piece.name} file={piece} />

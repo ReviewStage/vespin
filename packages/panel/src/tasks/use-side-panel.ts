@@ -27,7 +27,7 @@ import {
   viewedLast,
   withoutViewedAt,
 } from "@repo/ui/tab-strip-model";
-import { absurd, Option, Schema } from "effect";
+import { absurd, Option, Predicate, Schema } from "effect";
 import { InboxIcon } from "lucide-react";
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
@@ -372,7 +372,7 @@ export type SidebarPin = PinnedTab | AgentPin;
 
 /** Whether a row's pin is an agent's on a task, pinned on the account, rather than a tab pinned on this Mac. */
 export function isAgentPin(pin: SidebarPin): pin is AgentPin {
-  return typeof pin.tab !== "string" && pin.tab.kind === STRIP_TAB_KIND.AGENT;
+  return !Predicate.isString(pin.tab) && pin.tab.kind === STRIP_TAB_KIND.AGENT;
 }
 
 /** Whether two of the sidebar's pins are one: an agent's by its agent, and a tab's by its holder and the instant it was pinned, which no other pin shares. */
@@ -852,7 +852,7 @@ function withPinsPlaced(
 
 /** The name a pin of an agent's Changes tab wears as `names` names it, by agent id; none for any other pin, or one named nowhere. */
 function agentPinLabel(tab: PinnableTab, names: PinNames): string | undefined {
-  if (typeof tab === "string" || tab.kind !== STRIP_TAB_KIND.CHANGES) return undefined;
+  if (Predicate.isString(tab) || tab.kind !== STRIP_TAB_KIND.CHANGES) return undefined;
 
   return tab.number === undefined
     ? names.pullRequests.get(tab.changes)
@@ -946,7 +946,7 @@ function withTab(
   const opened = withTabHeld(held, tab, taskId, bare);
 
   const open =
-    typeof tab !== "string" && tab.kind === STRIP_TAB_KIND.SUBAGENT
+    !Predicate.isString(tab) && tab.kind === STRIP_TAB_KIND.SUBAGENT
       ? held.subagents.find((each) => sameTab(each, tab))
       : undefined;
 
@@ -1032,7 +1032,7 @@ function withPagePlaced(
   place: PagePlace | undefined,
   beside?: { readonly place: PagePlace; readonly on: string },
 ): HeldState {
-  if (typeof tab === "string" || tab.kind !== STRIP_TAB_KIND.PAGE) return held;
+  if (Predicate.isString(tab) || tab.kind !== STRIP_TAB_KIND.PAGE) return held;
 
   if (place === undefined && beside === undefined) return held;
   const standing = held.pages.find((each) => sameTab(each, tab));
@@ -1770,7 +1770,7 @@ function withFileInPlace(
   const order = orderOn(held, taskId);
 
   const fileOf = (tab: SidePanelTab) =>
-    typeof tab !== "string" && tab.kind === STRIP_TAB_KIND.FILE ? tab.file : undefined;
+    !Predicate.isString(tab) && tab.kind === STRIP_TAB_KIND.FILE ? tab.file : undefined;
 
   if (!order.some((tab) => fileOf(tab) === from || fileOf(tab) === to)) return held;
   const others = order.filter((tab) => fileOf(tab) !== to);
@@ -1852,7 +1852,7 @@ function settled(state: SidePanelState): HeldState {
 function stagesOpened(
   tab: NonNullable<StagedSidePanel["tab"]>,
 ): tab is FileStripTab | PageStripTab | TerminalStripTab {
-  if (typeof tab === "string") return false;
+  if (Predicate.isString(tab)) return false;
 
   switch (tab.kind) {
     case STRIP_TAB_KIND.FILE:
@@ -2412,7 +2412,7 @@ export function useSidePanel(
       // A page of another place is drawn here as it is opened, before the state naming it lands.
       const here =
         beside === undefined ||
-        typeof tab === "string" ||
+        Predicate.isString(tab) ||
         tab.kind !== STRIP_TAB_KIND.PAGE ||
         drawn.pages.includes(tab.page)
           ? drawn

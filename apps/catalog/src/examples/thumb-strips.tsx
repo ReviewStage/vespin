@@ -1,4 +1,5 @@
 import { CheckIcon, ThumbStrip } from "@repo/ui";
+import { Predicate } from "effect";
 import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -29,10 +30,9 @@ function ThumbStrips(): React.JSX.Element {
   const [at, setAt] = useState(1);
   const standIn = useStandIn();
 
-  const items =
-    typeof standIn === "string"
-      ? ITEMS
-      : [...ITEMS, { name: "recording.webm", video: standIn.url }];
+  const items = Predicate.isString(standIn)
+    ? ITEMS
+    : [...ITEMS, { name: "recording.webm", video: standIn.url }];
 
   return (
     <CatalogSection id="thumb-strip" title="A viewer's files">

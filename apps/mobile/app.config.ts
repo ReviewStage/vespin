@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
 import { CLAWD_PATH, GITHUB_PATH, GOOGLE_MARK_LAYERS } from "@repo/brand/provider-marks";
+import { Predicate } from "effect";
 import type { ConfigContext, ExpoConfig } from "expo/config";
 import { IOSConfig, withDangerousMod, withXcodeProject } from "expo/config-plugins";
 
@@ -421,11 +422,11 @@ const plistText = (text: string) =>
 const plistXml = (value: PlistValue, depth: number): string => {
   const indent = "\t".repeat(depth);
 
-  if (typeof value === "string") return `${indent}<string>${plistText(value)}</string>`;
+  if (Predicate.isString(value)) return `${indent}<string>${plistText(value)}</string>`;
 
-  if (typeof value === "boolean") return `${indent}<${value}/>`;
+  if (Predicate.isBoolean(value)) return `${indent}<${value}/>`;
 
-  if (typeof value === "number") return `${indent}<integer>${value}</integer>`;
+  if (Predicate.isNumber(value)) return `${indent}<integer>${value}</integer>`;
 
   if (Array.isArray(value))
     return `${indent}<array>\n${value.map((item) => plistXml(item, depth + 1)).join("\n")}\n${indent}</array>`;

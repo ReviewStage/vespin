@@ -30,7 +30,17 @@ import {
 } from "@repo/features/device-agent-wire";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
-import { ConfigProvider, Deferred, Duration, Effect, Exit, Layer, Option, Stream } from "effect";
+import {
+  ConfigProvider,
+  Deferred,
+  Duration,
+  Effect,
+  Exit,
+  Layer,
+  Option,
+  Predicate,
+  Stream,
+} from "effect";
 import * as FileSystem from "effect/FileSystem";
 import { TestClock } from "effect/testing";
 import { composeLocalAgents } from "./compose-local-agents.js";
@@ -251,7 +261,11 @@ const RESUMING_LINES = [
 const firstLinesOf = (spawned: ScriptedSpawner["spawned"]) =>
   Effect.gen(function* () {
     const stdin = spawned.find((each) => each.program === RUNNER)?.stdin;
-    assert.ok(typeof stdin === "object" && "stream" in stdin && typeof stdin.stream === "object");
+    assert.ok(
+      Predicate.isObjectKeyword(stdin) &&
+        "stream" in stdin &&
+        Predicate.isObjectKeyword(stdin.stream),
+    );
     const first = Option.getOrThrow(yield* Stream.runHead(stdin.stream));
 
     return new TextDecoder()

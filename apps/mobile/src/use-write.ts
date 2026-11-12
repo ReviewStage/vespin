@@ -25,6 +25,7 @@ import {
 import { actRefusalSentence } from "@repo/host/contract";
 import { BUZZ, type Buzz, buzz, NOTICE_KIND, useFailureNotices } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostActs } from "./host/host-provider.js";
@@ -191,8 +192,9 @@ export function useWrite(): Write {
           (answer) => {
             const words = saying.refused?.(answer);
 
-            const retry =
-              typeof saying.retry === "function" ? saying.retry(answer) : saying.retry === true;
+            const retry = Predicate.isFunction(saying.retry)
+              ? saying.retry(answer)
+              : saying.retry === true;
 
             if (words !== undefined) return failed(words, false, retry);
 
