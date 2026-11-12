@@ -130,6 +130,7 @@ export {
 export { webSocketOrigin } from "./socket-origin.js";
 
 export {
+  type FollowersWritten,
   HostedTaskClient,
   type HostedTaskClientOptions,
   type TaskCallResult,
