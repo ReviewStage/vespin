@@ -49,6 +49,7 @@ import {
   type PartCut,
 } from "./agent-wire.js";
 import { drawnCall } from "./native-tool-calls.js";
+import { formatBytes } from "./number-format.js";
 import { TOOL_STATE, type ToolState } from "./tool-call-block.js";
 import { remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-model.js";
 import { ROW_PART, type RowReading, TURN_ROW, type TurnRow, turnRows } from "./turn-rows.js";
@@ -78,6 +79,32 @@ const TOOL_STATES: ReadonlySet<string> = new Set(Object.values(TOOL_STATE));
 
 /** A part its page carried cut (`cutParts`): its two ends and its whole size, and the message and index it is fetched whole by. */
 export type AgentPartCut = Omit<PartCut, "field"> & { readonly messageId: string };
+
+/** Where a cut part's whole read (`AGENTS_PART`) stands: not asked, under way, read, or failed, which leaves it at its ends. */
+export const WHOLE_PART = {
+  CUT: "cut",
+  READING: "reading",
+  WHOLE: "whole",
+  FAILED: "failed",
+} as const;
+
+export type WholePartState = (typeof WHOLE_PART)[keyof typeof WHOLE_PART];
+
+/** A cut part's whole read as a client holds it once asked: under way, failed, or read whole. */
+export type WholePartRead =
+  | { readonly state: typeof WHOLE_PART.READING | typeof WHOLE_PART.FAILED }
+  | { readonly state: typeof WHOLE_PART.WHOLE; readonly part: WireValue };
+
+/** What a cut part's body says while its whole is read, by what it is. */
+export const CUT_PART_WORDS = {
+  THOUGHT: "Reading the whole thought…",
+  OUTPUT: "Reading the whole output…",
+} as const;
+
+/** A cut part's two ends, the middle that could not be read said between them, as a part whose whole read failed draws. */
+export function cutPartText(cut: Pick<AgentPartCut, "head" | "tail" | "bytes">): string {
+  return `${cut.head}\n\n… ${formatBytes(cut.bytes)} in all; only its start and end could be read …\n\n${cut.tail}`;
+}
 
 /** One part of a stored message as the tab draws it. */
 export type AgentPart =
@@ -194,6 +221,20 @@ function cutAgentPart(part: WireValue, cut: PartCut, messageId: string): AgentPa
   const read = agentPart(part);
 
   return read.kind === AGENT_PART.TOOL ? { ...read, cut: marked } : read;
+}
+
+/**
+ * The call a cut call's whole read answered, read for drawing, where it is
+ * the call that was cut (`callId`); none where the read answers another
+ * part, as an index read across a deploy that retired a tool would.
+ */
+export function wholeCallOf(
+  read: WireValue,
+  callId: string,
+): Extract<AgentPart, { readonly kind: typeof AGENT_PART.TOOL }> | undefined {
+  const whole = agentPart(read);
+
+  return whole.kind === AGENT_PART.TOOL && whole.callId === callId ? whole : undefined;
 }
 
 /** The parts of a message as the tab draws them, in the row's order, each its page carried cut marked so. */

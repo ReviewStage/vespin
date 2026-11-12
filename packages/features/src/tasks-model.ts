@@ -350,6 +350,21 @@ export function deleteTaskWords(
   };
 }
 
+/**
+ * What Permanently delete asks of an agent named `name`: what goes, and, on
+ * an agent not archived, that archiving it keeps it out of the way instead.
+ * Every client's confirm asks it in these words.
+ */
+export function deleteAgentWords(name: string, archived: boolean): StopAgentsWords {
+  const lost = `“${name}” and its transcript will be deleted. ${IRREVERSIBLE_WORDS}`;
+
+  return {
+    title: "Permanently delete agent?",
+    body: archived ? lost : `${lost} To keep it out of the way instead, archive it.`,
+    verb: "Permanently delete agent",
+  };
+}
+
 /** A task filed for later from words typed: its name, and its brief where the words say more than the name. */
 export interface FiledTask {
   readonly name: string;

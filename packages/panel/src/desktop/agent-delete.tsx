@@ -1,6 +1,6 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { IRREVERSIBLE_WORDS } from "@repo/features/words";
+import { deleteAgentWords } from "@repo/features/tasks-model";
 import {
   CONFIRM_LOSS,
   ConfirmDialog,
@@ -37,12 +37,8 @@ import { useRefusalHeard } from "./use-refusal-heard.js";
 
 /** What asking to delete an agent says: what goes, and, for one not archived, the archive that keeps it instead. */
 function deleteQuestion(name: string, archived: boolean): DialogQuestion {
-  const lost = `“${name}” and its transcript will be deleted. ${IRREVERSIBLE_WORDS}`;
-
   return {
-    title: "Permanently delete agent?",
-    body: archived ? lost : `${lost} To keep it out of the way instead, archive it.`,
-    verb: "Permanently delete agent",
+    ...deleteAgentWords(name, archived),
     running: "Deleting",
     loss: CONFIRM_LOSS.IRREVERSIBLE,
     replayUnmasked: true,

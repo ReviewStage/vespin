@@ -1,4 +1,4 @@
-import type { AgentPartCut } from "@repo/features/agent-parts";
+import { type AgentPartCut, WHOLE_PART, type WholePartState } from "@repo/features/agent-parts";
 import type { AgentPartView } from "@repo/features/agent-view";
 import { ACT_KIND } from "@repo/host/acts";
 import type { WireValue } from "@repo/wire";
@@ -61,16 +61,6 @@ function wholePartQueryOptions(door: WholePartDoor | undefined, cut: AgentPartCu
     retry: false,
   });
 }
-
-/** Where a cut part's whole read stands: not asked, under way, read, or failed, which leaves it at its ends. */
-export const WHOLE_PART = {
-  CUT: "cut",
-  READING: "reading",
-  WHOLE: "whole",
-  FAILED: "failed",
-} as const;
-
-type WholePartState = (typeof WHOLE_PART)[keyof typeof WHOLE_PART];
 
 /** A cut part as its fold draws it: where its whole read stands, its two ends and size, and what asks for it whole. */
 export interface CutBody {

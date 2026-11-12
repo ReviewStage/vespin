@@ -15,16 +15,25 @@
  * that showed them, a page it
  * showed as a card under its line, which opens it whole, and a pull request
  * it opened as the pull request's card, as it stands now where the task list
- * holds it.
+ * holds it. A call whose answer its page carried cut is read whole as it
+ * opens, as the panel's is (`AGENTS_PART`): its body says so while the read
+ * is under way, draws the call read whole once it lands, and its two ends
+ * where it could not be read.
  */
 
 import {
   AGENT_PART,
   type AgentPart,
+  type AgentPartCut,
   agentRows,
+  CUT_PART_WORDS,
+  cutPartText,
   messageWords,
   placedMessages,
   turnStretches,
+  WHOLE_PART,
+  type WholePartRead,
+  wholeCallOf,
 } from "@repo/features/agent-parts";
 import {
   calledPicturesOf,
@@ -160,6 +169,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly open: boolean;
       /** Its body's blocks while it stands open: what it was given and what it answered, or the error it ended in. */
       readonly body: readonly CallBodyBlock[];
+      /** Where it stands open with an answer its page carried cut whose whole read has not settled: the part to read whole. */
+      readonly cut: AgentPartCut | undefined;
     }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.FOLD;
@@ -209,6 +220,8 @@ export interface TranscriptReading {
   readonly now: number;
   /** The pull requests the agent opened as the task list holds them now, which a card opened by a call stands as. */
   readonly pullRequests: readonly AgentPullRequest[];
+  /** How the whole read of a part its page carried cut stands, where it was asked; none where it was not yet. */
+  readonly wholePart?: ((cut: AgentPartCut) => WholePartRead | undefined) | undefined;
 }
 
 /** How many lines of a call's block its card draws, as the panel's card cuts one. */
@@ -390,6 +403,35 @@ function openedPullRequest(
   ];
 }
 
+/**
+ * An open call's answer its page carried cut, as its body draws it: the call
+ * read whole once its read lands and answers the same call; until then the
+ * words saying it is read, and its two ends where the read failed or
+ * answered some other part.
+ */
+function wholeRead(
+  part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
+  cut: AgentPartCut,
+  reading: TranscriptReading,
+):
+  | {
+      readonly whole: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>;
+      readonly output?: never;
+      readonly reading?: never;
+    }
+  | { readonly whole?: never; readonly output: ToolBlock; readonly reading: boolean } {
+  const read = reading.wholePart?.(cut);
+  const whole = read?.state === WHOLE_PART.WHOLE ? wholeCallOf(read.part, part.callId) : undefined;
+
+  if (whole !== undefined) return { whole };
+  const failed = read?.state === WHOLE_PART.FAILED || read?.state === WHOLE_PART.WHOLE;
+
+  return {
+    output: { kind: TOOL_BLOCK.TEXT, text: failed ? cutPartText(cut) : CUT_PART_WORDS.OUTPUT },
+    reading: !failed,
+  };
+}
+
 /** One tool call as its items: its line, then what it showed. */
 function callItems(
   part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
@@ -448,7 +490,10 @@ function callItems(
 
   // Note that a set of pictures shown stands as its pictures alone, as the panel draws it.
   if (shownSet) return mediaItem;
-  const view = toolCallView({ tool: part.tool, input: part.input, output: part.output });
+  const open = toggles.calls.has(part.callId);
+  const read = open && part.cut !== undefined ? wholeRead(part, part.cut, reading) : undefined;
+  const drawn = read?.whole ?? part;
+  const view = toolCallView({ tool: drawn.tool, input: drawn.input, output: drawn.output });
 
   const shown = shownPageVersion({
     tool: part.tool,
@@ -456,8 +501,6 @@ function callItems(
     input: part.input,
     output: part.output,
   });
-
-  const open = toggles.calls.has(part.callId);
 
   const call: TranscriptItem = {
     ...base,
@@ -468,7 +511,8 @@ function callItems(
     runOn: callPlace(view.kind, view.server),
     standing: standingOf(part.state),
     open,
-    body: open ? callBody(view.input, view.output, part.errorText) : [],
+    body: open ? callBody(view.input, read?.output ?? view.output, drawn.errorText) : [],
+    cut: read?.reading === true ? part.cut : undefined,
   };
 
   const page: readonly TranscriptItem[] =
@@ -623,6 +667,13 @@ export function toggledAt(toggles: TranscriptToggles, item: TranscriptItem): Tra
   if (!held.delete(row)) held.add(row);
 
   return { ...toggles, folds: new Map(toggles.folds).set(message, held) };
+}
+
+/** The parts of every open call whose answer its page carried cut and whose whole read has not settled, which the page reads whole. */
+export function openCuts(items: readonly TranscriptItem[]): readonly AgentPartCut[] {
+  return items.flatMap((item) =>
+    item.kind === TRANSCRIPT_ITEM.CALL && item.cut !== undefined ? [item.cut] : [],
+  );
 }
 
 /** The ids of every picture and recording the items show, which the list reads the bytes of. */
