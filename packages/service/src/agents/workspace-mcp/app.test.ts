@@ -414,7 +414,7 @@ const AGENT_TOOLS = [
   "list_agents",
   "read_agent",
   "message_agent",
-  "add_button",
+  "add_suggestion",
   "update_agent",
   "list_models",
   "list_tasks",
@@ -785,7 +785,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           "forget_memory",
           "edit_description",
           "end_turn",
-          "add_button",
+          "add_suggestion",
         ];
 
         assert.deepEqual(

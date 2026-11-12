@@ -1,17 +1,17 @@
 /**
- * add-button.ts -- `add_button`: a button a coding agent puts in its reply, beside the line it is about, which starts a new agent on a brief it wrote, or sends its words to a running agent, once a member presses it.
+ * add-suggestion.ts -- `add_suggestion`: a suggestion a coding agent puts in its reply, beside the line it is about, of a new agent started on a brief it wrote, or of its words sent to a running agent, which a member opens filled in, may edit, and sends.
  *
- * The agent never writes what a button does into its reply: it calls this
- * tool with the button's label and what a press does, which is checked now,
- * while the agent can still mend it, and kept with the button
- * (`@repo/database/models/reply-buttons`), and the tool answers the link the
- * agent writes beside its line, which the app draws as the button
- * (`@repo/features/reply-button-wire`). So a label cannot say one thing and
- * do another, and the brief stays out of the reply's words. A start lands on
- * the agent's own task; a send goes to another agent of its workspace. Every
- * check runs again when the button is pressed, as the member who presses it.
- * The tool stands behind the Reply buttons workspace experiment, which the
- * catalog's gate holds (`TOOL_GATE.REPLY_BUTTONS`).
+ * The agent never writes what a suggestion does into its reply: it calls
+ * this tool with the suggestion's label and what it suggests, which is
+ * checked now, while the agent can still mend it, and kept with the
+ * suggestion (`@repo/database/models/reply-buttons`), and the tool answers
+ * the link the agent writes beside its line, which the app draws as the
+ * suggestion (`@repo/features/reply-button-wire`). So a label cannot say one
+ * thing and do another, and the brief stays out of the reply's words. A
+ * start lands on the agent's own task; a send goes to another agent of its
+ * workspace. Every check runs again when the member sends it, as that
+ * member. The tool stands behind the Suggestions workspace experiment, which
+ * the catalog's gate holds (`TOOL_GATE.REPLY_BUTTONS`).
  */
 
 import { makeReplyButton } from "@repo/database/models/reply-buttons";
@@ -47,20 +47,20 @@ import { workspaceAgent } from "../workspace-agents.js";
 import { workspaceStepOf } from "../written-mentions.js";
 
 /** Why a button was not made, in the words the model reads. */
-export const ADD_BUTTON_REFUSAL = {
+export const ADD_SUGGESTION_REFUSAL = {
   UNREADABLE:
     "Not added: give a label and exactly one of start or send, and a model with its effort or neither.",
-  NOT_AGENT: "Not added: only a coding agent puts a button in its reply.",
+  NOT_AGENT: "Not added: only a coding agent puts a suggestion in its reply.",
   NO_AGENT: "Not added: no agent of your workspace has that id.",
-  SELF: "Not added: a button never sends to you; start a new agent instead, or say it yourself.",
+  SELF: "Not added: a suggestion never sends to you; suggest a new agent instead, or say it yourself.",
   MODELS_UNREAD: "Not added: the models offered could not be read; try again.",
 } as const;
 
-const ADD_BUTTON_INPUT = Schema.Struct({
+const ADD_SUGGESTION_INPUT = Schema.Struct({
   label: describeWire(
     Schema.Trim.check(Schema.isNonEmpty(), Schema.isMaxLength(REPLY_BUTTON_BOUNDS.MAX_LABEL_CHARS)),
-    "The button's words, a short action in sentence case, such as Wire up the invite email: " +
-      `at most ${REPLY_BUTTON_BOUNDS.MAX_LABEL_CHARS} characters, saying what pressing it sets off.`,
+    "The suggestion's words, a short action in sentence case, such as Wire up the invite email: " +
+      `at most ${REPLY_BUTTON_BOUNDS.MAX_LABEL_CHARS} characters, saying what it sets off.`,
   ),
   start: Schema.optionalKey(
     describeWire(
@@ -84,7 +84,7 @@ const ADD_BUTTON_INPUT = Schema.Struct({
           describeWire(
             modelChoiceSchema.fields.model,
             `The model to run on, by its catalog id, as ${AGENT_TOOL.LIST_MODELS} lists it; ` +
-              "leave it out with the effort for the default of the member who presses it.",
+              "leave it out with the effort for the default of the member who sends it.",
           ),
         ),
         effort: Schema.optionalKey(
@@ -94,7 +94,7 @@ const ADD_BUTTON_INPUT = Schema.Struct({
           ),
         ),
       }),
-      "Start a new agent on the task you work on, as the member who presses the button, where " +
+      "Suggest a new agent on the task you work on, started as the member who sends it, where " +
         "their agents on the task run.",
     ),
   ),
@@ -107,36 +107,38 @@ const ADD_BUTTON_INPUT = Schema.Struct({
         ),
         text: describeWire(
           Schema.Trim.check(Schema.isNonEmpty(), Schema.isMaxLength(MAX_MESSAGE_WORDS_CHARS)),
-          "The words sent to it, as the member who presses the button.",
+          "The words sent to it, as the member who sends them.",
         ),
       }),
-      "Send words to an agent that is already running, as the member who presses the button.",
+      "Suggest words for an agent that is already running, sent as the member who sends them.",
     ),
   ),
 });
 
-const readAsked = Schema.decodeUnknownResult(ADD_BUTTON_INPUT);
+const readAsked = Schema.decodeUnknownResult(ADD_SUGGESTION_INPUT);
 
-type Asked = typeof ADD_BUTTON_INPUT.Type;
+type Asked = typeof ADD_SUGGESTION_INPUT.Type;
 
-/** `add_button` as a coding agent is offered it: its name, its words, and its input. */
-export const ADD_BUTTON_TOOL = {
-  name: AGENT_TOOL.ADD_BUTTON,
+/** `add_suggestion` as a coding agent is offered it: its name, its words, and its input. */
+export const ADD_SUGGESTION_TOOL = {
+  name: AGENT_TOOL.ADD_SUGGESTION,
   description:
-    "Put a button in your reply that sets off work the developer may want next, beside the " +
-    "line it is about: a new agent started on a brief you write, or words sent to an agent " +
-    "already running, either of them only once a member presses it, and then as that member. " +
-    "Use it where your reply names a next step that runs apart from your own work, such as a " +
+    "Put a suggestion in your reply of work the developer may want next, beside the line it " +
+    "is about: a new agent started on a brief you write, or words sent to an agent already " +
+    "running. A member who presses it opens it filled in, in a new agent's box or that " +
+    "agent's, may edit it, and sends it as themselves; nothing runs until they do. Use it " +
+    "where your reply names a next step that runs apart from your own work, such as a " +
     "follow-up found along the way, rather than asking the developer to start it by hand; " +
     "never for what you will do yourself. Give its label and exactly one of start or send. It " +
-    "is checked now, so a refusal says what to mend. Answers `accepted` with the button's " +
+    "is checked now, so a refusal says what to mend. Answers `accepted` with the suggestion's " +
     "link, which you write in your reply as `[<label>](<link>)` at the end of the line it is " +
-    "about, where the developer sees it as the button, or `rejected` and why no button was " +
-    "made. A button runs once, whoever presses it.",
-  inputSchema: ADD_BUTTON_INPUT,
+    "about, where the developer sees it as the suggestion, or `rejected` and why none was " +
+    "made. A suggestion is sent once, whoever sends it, and what it reaches reads that you " +
+    "suggested it.",
+  inputSchema: ADD_SUGGESTION_INPUT,
 } as const;
 
-/** What a press does, as the button keeps it, from what the agent asked; the start's choice already checked. */
+/** What a suggestion sets off, as the button keeps it, from what the agent asked; the start's choice already checked. */
 function actionOf(asked: Asked): ReplyButtonAction | undefined {
   const { start, send } = asked;
   if (start !== undefined && send === undefined) {
@@ -158,11 +160,11 @@ const startChoiceRefusal = (userId: string, action: ReplyButtonAction) =>
     const refusal = accepted.failure;
     return refusal instanceof ModelChoiceRefused
       ? choiceRefusal(choice, refusal.offered, "Not added")
-      : ADD_BUTTON_REFUSAL.MODELS_UNREAD;
+      : ADD_SUGGESTION_REFUSAL.MODELS_UNREAD;
   });
 
-/** One call of `add_button`: the button made and the link to write it by, or why none was. */
-export function runAddButton(
+/** One call of `add_suggestion`: the button made and the link to write it by, or why none was. */
+export function runAddSuggestion(
   call: AgentCall,
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
@@ -175,21 +177,22 @@ export function runAddButton(
     (action.kind === REPLY_BUTTON_ACTION.START &&
       (action.model === undefined) !== (action.effort === undefined))
   ) {
-    return Effect.succeed(agentToolRejected(ADD_BUTTON_REFUSAL.UNREADABLE));
+    return Effect.succeed(agentToolRejected(ADD_SUGGESTION_REFUSAL.UNREADABLE));
   }
   const agent = callerAgent(call.caller);
-  if (agent === undefined) return Effect.succeed(agentToolRejected(ADD_BUTTON_REFUSAL.NOT_AGENT));
+  if (agent === undefined)
+    return Effect.succeed(agentToolRejected(ADD_SUGGESTION_REFUSAL.NOT_AGENT));
   if (action.kind === REPLY_BUTTON_ACTION.SEND && action.agentId === agent.id) {
-    return Effect.succeed(agentToolRejected(ADD_BUTTON_REFUSAL.SELF));
+    return Effect.succeed(agentToolRejected(ADD_SUGGESTION_REFUSAL.SELF));
   }
   const userId = callerUserId(call.caller);
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(call.caller);
-      if (Option.isNone(workspace)) return agentToolRejected(ADD_BUTTON_REFUSAL.NO_AGENT);
+      if (Option.isNone(workspace)) return agentToolRejected(ADD_SUGGESTION_REFUSAL.NO_AGENT);
       if (action.kind === REPLY_BUTTON_ACTION.SEND) {
         const found = yield* workspaceAgent(userId, workspace.value, action.agentId, agent.id);
-        if (Option.isNone(found)) return agentToolRejected(ADD_BUTTON_REFUSAL.NO_AGENT);
+        if (Option.isNone(found)) return agentToolRejected(ADD_SUGGESTION_REFUSAL.NO_AGENT);
       }
       const refused = yield* startChoiceRefusal(userId, action);
       if (refused !== undefined) return agentToolRejected(refused);

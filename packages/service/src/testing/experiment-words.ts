@@ -6,7 +6,7 @@ import { Predicate } from "effect";
 
 /** Words that name Task descriptions, Memory, or Reply buttons to an agent: a task's description or its comments, the workspace's memory, or the tool that puts a button in a reply. */
 const EXPERIMENT_WORDS =
-  /\b(?:task's description|its description|the description|description's|descriptions?\b(?! of)|memor(?:y|ies)|add_button)/iu;
+  /\b(?:task's description|its description|the description|description's|descriptions?\b(?! of)|memor(?:y|ies)|add_suggestion)/iu;
 
 /** Words that say the same of something else: a pull request's own description, and the conversation an automation's runs share. */
 const ELSEWHERE_WORDS =

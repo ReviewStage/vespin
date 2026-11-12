@@ -620,7 +620,7 @@ test("with Done and follow-ups off the instructions say nothing of ending a turn
   }
 });
 
-test("with Reply buttons off the instructions say nothing of add_button; with it on they add its section before the memory's, and nothing else", () => {
+test("with Suggestions off the instructions say nothing of add_suggestion; with it on they add its section before the memory's, and nothing else", () => {
   const off = coderInstructions(
     "Acme/Relay",
     AGENT_BRIEF.PROMPT,
@@ -633,11 +633,11 @@ test("with Reply buttons off the instructions say nothing of add_button; with it
     TASK_LINK,
     standingFor("Acme/Relay", { replyButtons: true }),
   );
-  assert.ok(!off.includes(AGENT_TOOL.ADD_BUTTON));
-  const start = on.indexOf("## Buttons in your reply\n\n");
+  assert.ok(!off.includes(AGENT_TOOL.ADD_SUGGESTION));
+  const start = on.indexOf("## Suggestions in your reply\n\n");
   const end = on.indexOf("## What your messages are", start);
   assert.ok(start > 0 && end > start);
-  assert.ok(on.slice(start, end).includes(`\`${AGENT_TOOL.ADD_BUTTON}\``));
+  assert.ok(on.slice(start, end).includes(`\`${AGENT_TOOL.ADD_SUGGESTION}\``));
   assert.equal(on.slice(0, start) + on.slice(end), off);
 });
 

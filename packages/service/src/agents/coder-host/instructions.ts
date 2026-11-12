@@ -821,16 +821,16 @@ const CODER_SECTION_WORDS: SectionWords = {
 };
 
 /**
- * What the agent is told of the buttons it may put in its reply
- * (`../reply-buttons/add-button.ts`) where it is offered `add_button`, as
- * where its starter turned Reply buttons on (`../tool-catalog/gates.ts`'s
- * `REPLY_BUTTONS`), and nothing where not.
+ * What the agent is told of the suggestions it may put in its reply
+ * (`../reply-buttons/add-suggestion.ts`) where it is offered
+ * `add_suggestion`, as where its starter turned Suggestions on
+ * (`../tool-catalog/gates.ts`'s `REPLY_BUTTONS`), and nothing where not.
  */
 function replyButtonWords(standing: AgentStanding): string {
-  return offers(standing, AGENT_TOOL.ADD_BUTTON)
-    ? `## Buttons in your reply
+  return offers(standing, AGENT_TOOL.ADD_SUGGESTION)
+    ? `## Suggestions in your reply
 
-Where your reply names work the developer may want next that runs apart from yours, such as a follow-up you found along the way, or words for an agent already running, put a button beside the line it is about with \`${AGENT_TOOL.ADD_BUTTON}\` rather than asking them to start it by hand: it starts a new agent on a brief you write, or sends your words to that agent, once a member presses it, as that member, and only once. Write the link it answers as \`[<label>](<link>)\` at the end of that line. A button is for work you leave to the developer's choice, never for what you will do yourself, and never for a decision, which goes in a thread.
+Where your reply names work the developer may want next that runs apart from yours, such as a follow-up you found along the way, or words for an agent already running, put a suggestion beside the line it is about with \`${AGENT_TOOL.ADD_SUGGESTION}\` rather than asking them to start it by hand: a new agent on a brief you write, or your words for that agent. A member who presses it opens it filled in, may edit it, and sends it as themselves, only once. Write the link it answers as \`[<label>](<link>)\` at the end of that line. A suggestion is for work you leave to the developer's choice, never for what you will do yourself, and never for a decision, which goes in a thread.
 
 `
     : "";

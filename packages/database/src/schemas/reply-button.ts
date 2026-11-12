@@ -7,7 +7,7 @@ import { user } from "./auth.js";
 /**
  * reply-button.ts -- a button a coding agent put in its reply, which starts a new agent or sends to a running one once a member presses it, and how its press stands.
  *
- * An agent makes one with `add_button`, which keeps its label and what it
+ * An agent makes one with `add_suggestion`, which keeps its label and what it
  * does here and answers the link the agent writes beside the line the
  * button is about (`@repo/features/reply-button-wire`). What it does is kept
  * whole when it is made, so the press runs what the member saw. A press

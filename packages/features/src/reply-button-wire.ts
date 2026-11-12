@@ -6,7 +6,7 @@ import { parsedUrl } from "./parsed-url.js";
 /**
  * reply-button-wire.ts -- a reply button: what an agent's button in its reply does once a member presses it, starting a new agent on a brief it wrote or sending its words to a running agent, and how a press stands.
  *
- * An agent makes a button with `add_button` and writes its link beside the
+ * An agent makes a button with `add_suggestion` and writes its link beside the
  * line of its reply the button is about, `<home>/<workspace>/agent/<agent-id>/button/<button-id>`,
  * which the app draws as the button (`readReplyButtonLink`). It is no place
  * `link-grammar.ts` reads, so a build that knows no buttons, or a window with

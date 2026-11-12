@@ -976,7 +976,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             "start_agent",
             "stop_agent",
             "message_agent",
-            "add_button",
+            "add_suggestion",
             "update_agent",
             "create_task",
             "update_task",

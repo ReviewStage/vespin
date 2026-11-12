@@ -1155,8 +1155,8 @@ const AGENT_TOOL_VIEWS = {
       output,
       stringAt(input, "prompt") === undefined ? "task" : "prompt",
     ),
-  [AGENT_TOOL.ADD_BUTTON]: ({ input, output }) =>
-    namedCall(CALL_KIND.ADD_BUTTON, input, output, "label"),
+  [AGENT_TOOL.ADD_SUGGESTION]: ({ input, output }) =>
+    namedCall(CALL_KIND.ADD_SUGGESTION, input, output, "label"),
   [AGENT_TOOL.STOP_AGENT]: ({ input, output }) =>
     answeredAgentCall(CALL_KIND.STOP_AGENT, input, output),
   [AGENT_TOOL.UPDATE_AGENT]: ({ input, output }) =>

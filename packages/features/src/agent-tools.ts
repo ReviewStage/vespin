@@ -26,7 +26,7 @@ export const AGENT_TOOL = {
   MESSAGE_AGENT: AGENT_MESSAGE_TOOL,
   START_AGENT: "start_agent",
   // A button the agent puts in its reply, which starts a new agent or sends to a running one once a member presses it.
-  ADD_BUTTON: "add_button",
+  ADD_SUGGESTION: "add_suggestion",
   STOP_AGENT: "stop_agent",
   UPDATE_AGENT: "update_agent",
   LIST_TASKS: "list_tasks",
