@@ -5,7 +5,7 @@ import {
   base64Bytes,
 } from "@repo/features/agent-wire";
 import {
-  nextPictureName,
+  attachedPictureName,
   unusedName,
   writableName,
   writtenMarkers,
@@ -45,10 +45,10 @@ import { type FileDrop, useFileDrop } from "./use-file-drop.js";
  * together, and the first file that cannot come says why in the box's
  * note while the ones that can still come.
  *
- * A box that takes files into its words (`inWords`) attaches each image
- * under a picture's name, "Picture 1" and on, and every other file under its
- * own name made one a marker can spell and no other file of the box holds
- * (`@repo/features/file-marker`), and has each one's marker put in as a chip
+ * A box that takes files into its words (`inWords`) attaches each file
+ * under its own name made one a marker can spell and no other file of the
+ * box holds, and an image with no name of its own, a pasted screenshot,
+ * under a picture's name, "Picture 1" and on (`@repo/features/file-marker`), and has each one's marker put in as a chip
  * where the caret stands the moment the files are handed, before they are
  * read, so words typed meanwhile follow it, as a long paste taken as a file
  * is put in where it was pasted; the chip draws its file once it is read,
@@ -321,13 +321,13 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
   const usedNames = () =>
     new Set([...heldNow().map((file) => file.name), ...stashed.current.keys(), ...minted.current]);
 
-  /** The names files handed to the box go by, minted as they are handed: a picture as the next picture, any other file by its own name written so a marker can carry it, each past every name used, so no two files of the box share one. */
+  /** The names files handed to the box go by, minted as they are handed: each file by its own name written so a marker can carry it, a picture with none of its own as the next picture, each past every name used, so no two files of the box share one. */
   const named = (files: readonly File[]): readonly string[] => {
     const used = usedNames();
 
     return files.map((file) => {
       const name = isPictureFile(file)
-        ? nextPictureName(used)
+        ? attachedPictureName(file.name, used)
         : unusedName(writableName(file.name), used);
 
       used.add(name);
