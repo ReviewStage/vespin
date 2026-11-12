@@ -377,6 +377,12 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         name,
         Effect.sync(() => state.drives.has(name)),
       ),
+    ownDriveStands: (sandboxName) =>
+      scripted(
+        SANDBOX_CALL.DRIVE,
+        sandboxName,
+        Effect.sync(() => state.drives.has(ownDriveName(sandboxName))),
+      ),
     resume: (name) =>
       scripted(
         SANDBOX_CALL.GET,
