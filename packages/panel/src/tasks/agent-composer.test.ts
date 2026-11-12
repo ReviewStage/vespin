@@ -14,6 +14,7 @@ import type { SkillOption } from "@repo/features/skill-mention";
 import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
 import { pasteCutWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
+import { EXPERIMENT } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { Effect } from "effect";
@@ -23,6 +24,7 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { installShownFailureReporter } from "../failure-report.js";
 import { OpenSettingsProvider } from "../open-settings.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
+import { stateWith } from "../testing/app-state.js";
 import {
   composerEditor,
   editorBundleLanded,
@@ -32,7 +34,7 @@ import {
   QUIET_COMPOSER,
   typeInComposer,
 } from "../testing/composer.js";
-import { testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
+import { testQueryClientNow, withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
@@ -465,6 +467,8 @@ test("a / opens the repository's skills over the caret, the keys move through th
 });
 
 test("a / opening the message lists the box's commands ahead of the skills, a skill named as one left out, and a command typed as the first word runs rather than sending, the box held until a /clear is answered, but /compact, which goes as a message", async () => {
+  // The Goals experiment offers /goal.
+  writeAppState(stateWith({ [EXPERIMENT.GOALS]: true }, {}));
   let cleared = 0;
   let answerClear: (took: boolean) => void = ignore;
 
@@ -597,6 +601,9 @@ test("a skill named as a command the box does not run, as /compact in New task's
 });
 
 test("a box starting an agent, with no session yet, lists /goal beside /model but no command that needs a session", async () => {
+  // The Goals experiment offers /goal.
+  writeAppState(stateWith({ [EXPERIMENT.GOALS]: true }, {}));
+
   const box = await mounted(undefined, {
     model: MODEL,
     startsGoal: true,

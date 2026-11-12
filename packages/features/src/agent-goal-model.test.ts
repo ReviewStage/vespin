@@ -5,7 +5,13 @@
 import { MESSAGE_ROLE } from "@repo/wire";
 import { GOAL_EVENT, GOAL_PART, type GoalNotice } from "@repo/wire/ui-messages";
 import { describe, expect, it } from "vitest";
-import { AGENT_GOAL_STATE, agentGoal } from "./agent-goal-model.js";
+import {
+  AGENT_GOAL_STATE,
+  agentGoal,
+  GOAL_ASK_WAIT_MS,
+  goalAsShown,
+  readGoal,
+} from "./agent-goal-model.js";
 import { AGENT_SENDER, type AgentTranscriptMessage } from "./agent-wire.js";
 
 const CONDITION = "every billing test passes";
@@ -138,5 +144,41 @@ describe("agentGoal", () => {
     ];
 
     expect(agentGoal(cleared)).toBeUndefined();
+  });
+});
+
+describe("goalAsShown", () => {
+  /** The developer's own line of the words given, sent at `sentAt`. */
+  const said = (id: string, text: string, sentAt: number): AgentTranscriptMessage => ({
+    id,
+    role: MESSAGE_ROLE.USER,
+    sentAt,
+    parts: [{ type: "text", text }],
+  });
+
+  it("moves the goal as a /goal line asks, before the harness answers, and then as the harness says", () => {
+    const running = [turn("t1", [notice(GOAL_EVENT.SET)])];
+    const paused = [...running, said("u1", "/goal pause", 5_000)];
+
+    // A line still on its way sets a goal at once.
+    expect(
+      goalAsShown(readGoal([]), [{ id: "s1", text: `/goal ${CONDITION}` }], false, 0)?.state,
+    ).toBe(AGENT_GOAL_STATE.ACTIVE);
+    // Pause stands while the harness has said nothing of it.
+    expect(goalAsShown(readGoal(paused), [], false, 6_000)?.state).toBe(AGENT_GOAL_STATE.PAUSED);
+    // An ask the harness never answers stops moving the goal once it waited, unless the agent still works on it.
+    expect(goalAsShown(readGoal(paused), [], false, 5_000 + GOAL_ASK_WAIT_MS)?.state).toBe(
+      AGENT_GOAL_STATE.ACTIVE,
+    );
+    expect(goalAsShown(readGoal(paused), [], true, 5_000 + GOAL_ASK_WAIT_MS)?.state).toBe(
+      AGENT_GOAL_STATE.PAUSED,
+    );
+    // The harness's word settles it: here, it resumed the goal again.
+    const answered = [...paused, turn("t2", [notice(GOAL_EVENT.RESUMED)])];
+    expect(goalAsShown(readGoal(answered), [], false, 6_000)?.state).toBe(AGENT_GOAL_STATE.ACTIVE);
+    // Clear takes the row away at once.
+    expect(goalAsShown(readGoal(running), [{ id: "s2", text: "/goal clear" }], true, 0)).toBe(
+      undefined,
+    );
   });
 });

@@ -4,8 +4,10 @@
  * The row is a card of one row, as the pull request's is over it
  * (`agent-published.tsx`): the goal's condition on one line, where it stands
  * at the row's end, the goal whole and how far it has run in the card its
- * hint hangs, a press bringing in its newest notice, and its acts at its end
- * as a queued message's are: Pause, Resume and Clear. A goal that wants the
+ * hint hangs, and its acts at its end as a queued message's are: Pause,
+ * Resume and Clear. The row moves the moment a `/goal` line goes, an act's
+ * or one typed in the box, rather than once the harness says the goal moved
+ * (`goalAsShown`). A goal that wants the
  * developer says so on its own row, in its tone (`goalTone`): paused or out
  * of budget in the attention tone, a paused one's Resume standing on it, and
  * a blocked one in the danger tone. The notices are what the goal
@@ -13,16 +15,20 @@
  * card a check's line is drawn as (`line-cards.tsx`), the checker's reason
  * in its fold, and a pause or a resume as a trail across the transcript, as
  * a new session's is. The goal is read from those notices
- * (`@repo/features/agent-goal-model`).
+ * (`@repo/features/agent-goal-model`). While the Goals experiment is off,
+ * neither stands anywhere.
  */
 
 import {
   AGENT_GOAL_STATE,
   type AgentGoal,
-  agentGoal,
+  GOAL_ASK_WAIT_MS,
+  goalAsShown,
   goalSettled,
+  readGoal,
 } from "@repo/features/agent-goal-model";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
+import { EXPERIMENT } from "@repo/settings";
 import {
   AttentionMark,
   BUTTON_SIZE,
@@ -54,9 +60,10 @@ import {
 } from "@repo/ui";
 import { CircleCheckIcon, CircleSlashIcon, GLYPH } from "@repo/ui/icons";
 import { GOAL_EVENT, type GoalNotice } from "@repo/wire/ui-messages";
-import { type ReactNode, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { PLAN_BODY_LAYOUT, Plan, PlanContent, PlanHeader, PlanIcon } from "../ai-elements/plan.js";
-import { centerWithin } from "../scroll-within.js";
+import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 
 /** The words the goal is named by where a menu or a list says what it acts on. */
@@ -117,6 +124,11 @@ function goalTone(goal: AgentGoal): StatusTone | undefined {
     default:
       return undefined;
   }
+}
+
+/** Whether the Goals experiment is on, which every goal surface stands behind. */
+function useGoalsOn(): boolean {
+  return useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.GOALS) }).data === true;
 }
 
 /** The words a row's end stands in, its parts apart by the gap a pull request's row keeps between its state and its lines (`agent-published.tsx`). */
@@ -212,28 +224,44 @@ function GoalCard({ goal, working }: { goal: AgentGoal; working: boolean }): Rea
  */
 export function GoalDock({
   messages,
+  going,
   older,
   working,
-  onBringIn,
   onPause,
   onResume,
   onClear,
 }: {
   /** The transcript as the service stored it: a line still on its way, or refused, says nothing of the goal. */
   messages: readonly AgentTranscriptMessage[];
+  /** The lines the developer sent that the transcript has not read back yet, a goal line among them moving the goal at once. */
+  going: readonly { readonly id: string; readonly text: string }[];
   /** Whether older pages of the transcript stand unread, which may hold the goal's setting. */
   older: boolean;
   /** Whether the agent is at work now, which a running goal's row counts its time by. */
   working: boolean;
-  /** Takes the transcript to the end of a turn, by its id, where the goal's newest notice stands. */
-  onBringIn: (messageId: string) => void;
   onPause: (() => void) | undefined;
   onResume: (() => void) | undefined;
   onClear: (() => void) | undefined;
 }): ReactNode {
-  const goal = useMemo(() => agentGoal(messages, older), [messages, older]);
+  const goalsOn = useGoalsOn();
+  const read = useMemo(() => readGoal(messages, older), [messages, older]);
+  const [now, setNow] = useState(() => Date.now());
+  const sentAt = read.asked?.sentAt;
 
-  if (goal === undefined) return null;
+  // An ask the harness never answers stops moving the row once it waited its while, which the row is drawn again for.
+  useEffect(() => {
+    if (sentAt === undefined) return undefined;
+    const left = sentAt + GOAL_ASK_WAIT_MS - Date.now();
+
+    if (left <= 0) return undefined;
+    const timer = setTimeout(() => setNow(Date.now()), left);
+
+    return () => clearTimeout(timer);
+  }, [sentAt]);
+
+  const goal = goalAsShown(read, going, working, now);
+
+  if (goal === undefined || !goalsOn) return null;
   const paused = goal.state === AGENT_GOAL_STATE.PAUSED;
   const resume = paused ? onResume : undefined;
   const pause = goal.state === AGENT_GOAL_STATE.ACTIVE ? onPause : undefined;
@@ -281,7 +309,6 @@ export function GoalDock({
             titleReplayMasked
             meta={<GoalStanding goal={goal} working={working} />}
             hint={{ Hint: RowHint, label: goal.condition }}
-            onPress={() => onBringIn(goal.messageId)}
             tone={goalTone(goal)}
             actions={acts}
             actionsAt={resume === undefined ? LIST_ROW_ACTIONS.HOVER : LIST_ROW_ACTIONS.ALWAYS}
@@ -292,24 +319,12 @@ export function GoalDock({
   );
 }
 
-/**
- * Centers the newest goal notice the transcript draws, once the last piece
- * of the turn that holds it was brought in: a long turn is drawn in pieces,
- * and the goal's newest notice stands toward its end, in that piece or one
- * just before it, drawn beside it.
- */
-export function centerNewestGoalNotice(row: HTMLElement): void {
-  const log = row.closest('[role="log"]');
-
-  if (!(log instanceof HTMLElement)) return;
-  const notices = log.querySelectorAll("[data-goal-notice]");
-  const newest = notices.item(notices.length - 1);
-
-  if (newest instanceof HTMLElement) centerWithin(log, newest);
-}
-
 /** One move of the goal where it happened in the transcript: a trail for a move of its standing, a card for its setting and each verdict, the reason in its fold. */
 export function GoalNoticeView({ notice }: { notice: GoalNotice }): ReactNode {
+  const goalsOn = useGoalsOn();
+
+  if (!goalsOn) return null;
+
   if (TRAILS.has(notice.event)) {
     return (
       <NoteLine
@@ -323,7 +338,6 @@ export function GoalNoticeView({ notice }: { notice: GoalNotice }): ReactNode {
             <GLYPH.GOAL />
           )
         }
-        data-goal-notice={notice.event}
       >
         {NOTICE_WORDS[notice.event]}
       </NoteLine>
@@ -339,7 +353,6 @@ export function GoalNoticeView({ notice }: { notice: GoalNotice }): ReactNode {
   return (
     <div className="max-w-bubble">
       <Plan
-        data-goal-notice={notice.event}
         open={folds ? undefined : false}
         fill={DISCLOSURE_FILL.ACTIONS}
         actions={

@@ -230,7 +230,7 @@ import { AgentBootLine, BOOT_LINE, type BootLine, bootLineOf } from "./agent-boo
 import { type AgentBox, useAgentBox } from "./agent-box.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { useForwardToast } from "./agent-forward.js";
-import { centerNewestGoalNotice, GoalDock, GoalNoticeView } from "./agent-goal.js";
+import { GoalDock, GoalNoticeView } from "./agent-goal.js";
 import {
   agentLines,
   agentName,
@@ -3305,6 +3305,12 @@ function AgentTabView({
   // Note that the rewind doors stand as they were while what they say is unchanged, because every message
   // reads them, and a page that moved no rewind point must draw no message again.
   const pending = composer.sent.length > 0;
+
+  const goingLines = useMemo(
+    () => composer.sent.filter((line) => line.state === SENT_LINE_STATE.PENDING),
+    [composer.sent],
+  );
+
   const going = useKept(composer.going, sameSet);
 
   // The files go back only while the reader has Rewind restores files on, and a turn draws its files only while they have Turn changes on.
@@ -3637,9 +3643,9 @@ function AgentTabView({
         />
         <GoalDock
           messages={kept}
+          going={goingLines}
           older={transcript.hasOlder}
           working={standing.working}
-          onBringIn={(messageId) => bringIn?.current?.(messageId, centerNewestGoalNotice, true)}
           onPause={undefined}
           onClear={controlsQueue && boxOpen ? () => composer.sendWords(GOAL_CLEAR_LINE) : undefined}
           // Note that only Codex's goal pauses; Claude Code's stops only as it is cleared.

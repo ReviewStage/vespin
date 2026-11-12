@@ -9,11 +9,23 @@
  * nothing; where older pages of the transcript stand unread, which may hold a
  * goal's setting, any other move of a goal stands for it. A goal that settled stands until the developer writes again, so
  * its end is seen and then makes way; a cleared one stands nowhere.
+ *
+ * A `/goal` line the developer sent moves the goal as it is shown at once,
+ * ahead of the harness's own word of the move (`goalAsShown`): the line
+ * still on its way, and the newest one the harness has not answered yet,
+ * while the agent works on it or for `GOAL_ASK_WAIT_MS` after it went,
+ * since a harness that refuses an ask says nothing of it.
  * Nothing here draws.
  */
 
 import { MESSAGE_ROLE } from "@repo/wire";
-import { GOAL_EVENT, type GoalNotice } from "@repo/wire/ui-messages";
+import {
+  GOAL_ASK,
+  GOAL_EVENT,
+  type GoalAsk,
+  type GoalNotice,
+  goalAskOf,
+} from "@repo/wire/ui-messages";
 import { AGENT_PART, agentPart } from "./agent-parts.js";
 import { AGENT_SENDER, type AgentTranscriptMessage } from "./agent-wire.js";
 
@@ -47,6 +59,22 @@ export interface AgentGoal {
   readonly reason: string | null;
   /** The message that holds its newest notice, which the transcript is taken to. */
   readonly messageId: string;
+}
+
+/**
+ * How long a goal line the agent is not at work on moves the goal as shown
+ * before the harness answers it: both harnesses answer an ask they take at
+ * once, so one this old went unanswered and was refused.
+ */
+export const GOAL_ASK_WAIT_MS = 30_000;
+
+/** A `/goal` line the developer sent, as what it asks of the goal. */
+export interface GoalAsked {
+  readonly ask: GoalAsk;
+  /** The line's id, which a goal it sets is taken to hold until the harness says it. */
+  readonly messageId: string;
+  /** Epoch milliseconds it was sent; none where the transcript does not say. */
+  readonly sentAt: number | undefined;
 }
 
 /** Whether a goal is settled for good, met or not: it moves no more. */
@@ -181,6 +209,54 @@ function takenUp(notice: GoalNotice, message: AgentTranscriptMessage): AgentGoal
   return moved(standing, notice, message);
 }
 
+/** The words of a line, its text parts one after another. */
+function lineText(message: AgentTranscriptMessage): string {
+  return message.parts
+    .flatMap((stored) => {
+      const part = agentPart(stored);
+
+      return part.kind === AGENT_PART.TEXT ? [part.text] : [];
+    })
+    .join("\n");
+}
+
+/** The goal as it reads once a line asks a move of it, ahead of the harness's word: none where it asks the goal cleared. */
+export function goalAsked(goal: AgentGoal | undefined, asked: GoalAsked): AgentGoal | undefined {
+  const { ask } = asked;
+
+  switch (ask.kind) {
+    case GOAL_ASK.SET:
+      return {
+        condition: ask.objective,
+        state: AGENT_GOAL_STATE.ACTIVE,
+        setAt: asked.sentAt,
+        turns: 1,
+        tokens: null,
+        tokenBudget: null,
+        reason: null,
+        messageId: asked.messageId,
+      };
+    case GOAL_ASK.PAUSE:
+      return goal?.state === AGENT_GOAL_STATE.ACTIVE
+        ? { ...goal, state: AGENT_GOAL_STATE.PAUSED }
+        : goal;
+    case GOAL_ASK.RESUME:
+      return goal?.state === AGENT_GOAL_STATE.PAUSED
+        ? { ...goal, state: AGENT_GOAL_STATE.ACTIVE }
+        : goal;
+    case GOAL_ASK.CLEAR:
+      return undefined;
+    case GOAL_ASK.NONE:
+      return goal;
+  }
+}
+
+/** The agent's goal as its transcript leaves it, and the newest `/goal` line of the developer's no move of the goal has answered since. */
+export interface GoalRead {
+  readonly goal: AgentGoal | undefined;
+  readonly asked: GoalAsked | undefined;
+}
+
 /**
  * The agent's goal as its transcript's notices leave it; none where it set
  * none, cleared it, or wrote again after it settled. A line the developer
@@ -194,6 +270,11 @@ export function agentGoal(
   messages: readonly AgentTranscriptMessage[],
   older = false,
 ): AgentGoal | undefined {
+  return readGoal(messages, older).goal;
+}
+
+/** The goal and the newest ask no move of it has answered yet, as `agentGoal` reads the transcript. */
+export function readGoal(messages: readonly AgentTranscriptMessage[], older = false): GoalRead {
   const journals = new Set(messages.map((message) => message.id));
   const arrived = new Map<string, AgentTranscriptMessage[]>();
 
@@ -205,10 +286,18 @@ export function agentGoal(
   }
 
   let goal: AgentGoal | undefined;
+  let asked: GoalAsked | undefined;
 
   // A line the developer wrote once the goal settled lets it go: its end was seen, and the conversation moved on.
   const seen = (line: AgentTranscriptMessage) => {
-    if (goal !== undefined && goalSettled(goal) && developersLine(line)) goal = undefined;
+    if (!developersLine(line)) return;
+
+    if (goal !== undefined && goalSettled(goal)) goal = undefined;
+    const ask = goalAskOf(lineText(line));
+
+    if (ask !== undefined && ask.kind !== GOAL_ASK.NONE) {
+      asked = { ask, messageId: line.id, sentAt: line.sentAt };
+    }
   };
 
   for (const message of messages) {
@@ -243,6 +332,7 @@ export function agentGoal(
       }
 
       if (part.kind !== AGENT_PART.GOAL) continue;
+      asked = undefined;
       goal =
         goal === undefined && older && part.notice.event !== GOAL_EVENT.SET
           ? takenUp(part.notice, message)
@@ -252,5 +342,34 @@ export function agentGoal(
     arrive(Number.POSITIVE_INFINITY);
   }
 
-  return goal;
+  return { goal, asked };
+}
+
+/**
+ * The goal as the row shows it: as the transcript leaves it, moved by the
+ * newest ask the harness has not answered, while the agent works on it or
+ * for `GOAL_ASK_WAIT_MS` after it went, and then by each goal line still on
+ * its way, oldest first. `now` is epoch milliseconds.
+ */
+export function goalAsShown(
+  read: GoalRead,
+  going: readonly { readonly id: string; readonly text: string }[],
+  working: boolean,
+  now: number,
+): AgentGoal | undefined {
+  const { asked } = read;
+
+  const waited =
+    asked !== undefined &&
+    (working || asked.sentAt === undefined || now - asked.sentAt < GOAL_ASK_WAIT_MS);
+
+  let shown = waited ? goalAsked(read.goal, asked) : read.goal;
+
+  for (const line of going) {
+    const ask = goalAskOf(line.text);
+
+    if (ask !== undefined) shown = goalAsked(shown, { ask, messageId: line.id, sentAt: now });
+  }
+
+  return shown;
 }

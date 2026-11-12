@@ -40,3 +40,56 @@ export const GoalNoticeSchema = Schema.Struct({
 });
 
 export type GoalNotice = typeof GoalNoticeSchema.Type;
+
+/** What a `/goal` line asks of the agent's goal, as both harnesses' `/goal` reads its words. */
+export const GOAL_ASK = {
+  /** Set the goal to the objective, active: a new goal, or the one standing rewritten. */
+  SET: "set",
+  PAUSE: "pause",
+  RESUME: "resume",
+  CLEAR: "clear",
+  /** Nothing to change: `/goal` alone, which asks where the goal stands. */
+  NONE: "none",
+} as const;
+
+export type GoalAsk =
+  | { readonly kind: typeof GOAL_ASK.SET; readonly objective: string }
+  | {
+      readonly kind:
+        | typeof GOAL_ASK.PAUSE
+        | typeof GOAL_ASK.RESUME
+        | typeof GOAL_ASK.CLEAR
+        | typeof GOAL_ASK.NONE;
+    };
+
+/** The words after `/goal` that clear the goal, as Claude Code's `/goal` takes them; a Codex agent takes the same. */
+const CLEAR_WORDS: ReadonlySet<string> = new Set([
+  "clear",
+  "stop",
+  "off",
+  "reset",
+  "none",
+  "cancel",
+]);
+
+/** A goal line: `/goal` at the line's start, then its words, if any. */
+const GOAL_LINE = /^\s*\/goal(?:\s+([\s\S]*))?$/;
+
+/** What a line asks of the goal; none where the line is no goal line. */
+export function goalAskOf(text: string): GoalAsk | undefined {
+  const match = GOAL_LINE.exec(text);
+
+  if (match === null) return undefined;
+  const words = (match[1] ?? "").trim();
+  const lowered = words.toLowerCase();
+
+  if (words === "") return { kind: GOAL_ASK.NONE };
+
+  if (lowered === GOAL_ASK.PAUSE) return { kind: GOAL_ASK.PAUSE };
+
+  if (lowered === GOAL_ASK.RESUME) return { kind: GOAL_ASK.RESUME };
+
+  if (CLEAR_WORDS.has(lowered)) return { kind: GOAL_ASK.CLEAR };
+
+  return { kind: GOAL_ASK.SET, objective: words };
+}

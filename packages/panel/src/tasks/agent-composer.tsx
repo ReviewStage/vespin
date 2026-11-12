@@ -19,10 +19,12 @@ import {
   SLASH_COMMAND,
   type SlashCommand,
 } from "@repo/features/slash-command";
+import { EXPERIMENT } from "@repo/settings";
 import type { ShortcutChord } from "@repo/settings/shortcuts";
 import { type ComposerNote, type ComposerRefusal, NOTE_LINE_LOOK, NoteLine } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
+import { useQuery } from "@tanstack/react-query";
 import { absurd } from "effect";
 import {
   type ComponentProps,
@@ -38,6 +40,7 @@ import { modEnterSends } from "../enter-sends.js";
 import { failureShown } from "../failure-report.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { PANEL_SPAN } from "../panel-spans.js";
+import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import type { AgentModeControl } from "./agent-approvals.js";
 import { AgentContextRing, ContextRingIcon } from "./agent-context.js";
 import { contextHint } from "./agent-context-model.js";
@@ -471,11 +474,14 @@ export function AgentComposer({
   const held = composer.sending || closed || clearing;
   const editingQueued = queueing?.editing === true;
 
-  // Note that `/model` needs only the model chip, so New task's box and a draft's run it, while `/compact` and `/clear` need a session, and `/goal` a session or a first message.
+  const goalsOn =
+    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.GOALS) }).data === true;
+
+  // Note that `/model` needs only the model chip, so New task's box and a draft's run it, while `/compact` and `/clear` need a session, and `/goal` a session or a first message, while the Goals experiment is on.
   const reach = {
     model: model !== undefined,
     session: onClear !== undefined,
-    goal: onClear !== undefined || startsGoal,
+    goal: goalsOn && (onClear !== undefined || startsGoal),
   };
 
   const statuses = useIntegrationStatuses();
