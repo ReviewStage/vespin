@@ -57,13 +57,11 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - tapOn: "What the expired invite page says"
 - waitForAnimationToEnd
-# Note that the thread's ⋯ is the last "More" (a split view's list has its own first), and a tap that lands before the bar button is ready opens nothing, so it is tapped again where its menu did not open.
+# Note that on an iPhone the thread's ⋯ is the one "More"; a split view's list has its own first, so where Resolve did not open the thread's is tapped by its place, a second time where that tap only closed the list's menu. Maestro 2.12 finds no "More" by a negative index.
 - extendedWaitUntil:
     visible: "More"
     timeout: 5000
-- tapOn:
-    text: "More"
-    index: -1
+- tapOn: "More"
 - runFlow:
     when:
       notVisible: "Resolve"
@@ -71,7 +69,15 @@ appId: dev.vespin.ios
       - waitForAnimationToEnd
       - tapOn:
           text: "More"
-          index: -1
+          index: 1
+- runFlow:
+    when:
+      notVisible: "Resolve"
+    commands:
+      - waitForAnimationToEnd
+      - tapOn:
+          text: "More"
+          index: 1
 - tapOn: "Resolve"
 - extendedWaitUntil:
     visible:
@@ -85,9 +91,7 @@ appId: dev.vespin.ios
     notVisible:
       id: "failure-notice-undo"
     timeout: 5000
-- tapOn:
-    text: "More"
-    index: -1
+- tapOn: "More"
 - runFlow:
     when:
       notVisible: "Resolve"
@@ -95,6 +99,14 @@ appId: dev.vespin.ios
       - waitForAnimationToEnd
       - tapOn:
           text: "More"
-          index: -1
+          index: 1
+- runFlow:
+    when:
+      notVisible: "Resolve"
+    commands:
+      - waitForAnimationToEnd
+      - tapOn:
+          text: "More"
+          index: 1
 - assertVisible: "Resolve"
 - takeScreenshot: resolve-undone

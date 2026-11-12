@@ -74,7 +74,7 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
@@ -507,9 +507,11 @@ function ThreadDetail({
     };
   }, []);
 
-  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands.
+  const navigation = useNavigation();
+
+  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands in front: a stack's screen covered by another stays mounted.
   const openStarted = (id: string) => {
-    if (!shown.current) return;
+    if (!shown.current || !navigation.isFocused()) return;
 
     if (place.inStack) router.replace(`/inbox/${encodeURIComponent(id)}`);
     else place.onOpen(id);

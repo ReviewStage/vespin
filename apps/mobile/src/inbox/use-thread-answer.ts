@@ -512,16 +512,18 @@ export function useThreadAnswer(
       {
         refused: (answer) => ("failure" in answer ? refusedWords(answer.failure) : undefined),
         unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
+        // Note that the words go back as a new thread's, the box turned back to one, so a later Send never posts them as a reply.
         inPlace: (words) =>
-          hold(itemId, (was) => ({
-            ...was,
-            draft: was.draft.note.trim() === "" ? { ...was.draft, note: draft.note } : was.draft,
-            note: words,
-          })),
+          hold(itemId, (was) =>
+            was.draft.note.trim() === ""
+              ? { ...was, asNew: true, draft: { ...was.draft, note: draft.note }, note: words }
+              : { ...was, note: words },
+          ),
         went: BUZZ.SUCCESS,
       },
     ).then((went) => {
-      if (!went || startedId === undefined) return;
+      // Note that a start answered after a newer one was sent leaves the newer one's key, and opens nothing.
+      if (!went || startedId === undefined || held.get(itemId)?.started?.key !== key) return;
       hold(itemId, ({ started: _sent, ...was }) => ({ ...was, asNew: false }));
       onStarted?.(startedId);
     });
