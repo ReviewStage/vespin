@@ -32,7 +32,7 @@ import {
   PLACEMENT_END,
   type PlacedWords,
 } from "../description-editor/contract.js";
-import { descriptionFiles } from "../picture-files.js";
+import { descriptionFiles, offersDescriptionFiles } from "../picture-files.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { UNIT_ATTRIBUTED_CLASS } from "./description-unit-look.js";
 import { useEditorPictures } from "./editor-pictures.js";
@@ -667,8 +667,10 @@ function drawnWordsAt(body: HTMLElement, range: Range): PlacedWords | undefined 
  * The text as a place to drop files, drawn or open in the editor: a drag
  * of files anywhere over the column below the hairline parting the head
  * from the text, its gaps between blocks and its margins included, is the
- * text's, so the window never opens a file and the system shows a copy,
- * and it lands before the first line, or below the line it stands on or the
+ * text's, so the window never opens a file, and the system shows a copy
+ * where it carries one the text keeps (`offersDescriptionFiles`) and
+ * refuses it, drawing no line, where it carries none. It lands before the
+ * first line, or below the line it stands on or the
  * line above the gap it stands in, as deep in its lists as the pointer
  * stands across (`fileDropSpot`), which the line answered marks while the
  * files are carried. A drop puts the caret on that line's words, opening the
@@ -711,16 +713,19 @@ function useFileDrop({
       return fileDropSpot(textLines(text, within), event.clientX, event.clientY);
     };
 
+    // Note that a drag of files the text keeps none of is still held, so the window never opens them, but refused: no line, and no copy.
     const over = (event: DragEvent) => {
       if (!carriesFiles(event)) return;
       const spot = spotOf(event);
-      setLine((was) => (sameLine(was, spot?.line) ? was : spot?.line));
+      const taken = offersDescriptionFiles(event.dataTransfer?.items ?? []);
+      const at = taken ? spot?.line : undefined;
+      setLine((was) => (sameLine(was, at) ? was : at));
 
       if (spot === undefined) return;
       event.preventDefault();
       event.stopPropagation();
 
-      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = "copy";
+      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = taken ? "copy" : "none";
     };
 
     const left = (event: DragEvent) => {
