@@ -12,6 +12,7 @@
  */
 
 import { GOAL_EVENT, type GoalEvent } from "@repo/wire/ui-messages";
+import { Schema } from "effect";
 import type { ThreadGoal, ThreadGoalStatus } from "./codex-protocol/v2/index.js";
 import { RUNNER_EVENT, type RunnerGoal } from "./protocol.js";
 
@@ -24,6 +25,28 @@ export const CODEX_GOAL_STATUS = {
   BUDGET_LIMITED: "budgetLimited",
   COMPLETE: "complete",
 } as const satisfies Record<string, ThreadGoalStatus>;
+
+/** The longest objective app-server takes, which it refuses past (`MAX_THREAD_GOAL_OBJECTIVE_CHARS`), as Claude Code's `/goal` does. */
+export const GOAL_OBJECTIVE_MAX = 4000;
+
+/** The thread's goal as the launch reads it: what it is, where it stands, and what it spent. */
+export type GoalSeen = Pick<
+  ThreadGoal,
+  "objective" | "status" | "tokensUsed" | "tokenBudget" | "updatedAt"
+>;
+
+const GoalSeenSchema = Schema.Struct({
+  objective: Schema.String,
+  status: Schema.Literals(Object.values(CODEX_GOAL_STATUS)),
+  tokensUsed: Schema.Number,
+  tokenBudget: Schema.NullOr(Schema.Number),
+  updatedAt: Schema.Number,
+});
+
+/** App-server's answer to `thread/goal/get` and `thread/goal/set`: the goal as it now stands, none where the thread has none. */
+export const decodeGoalAnswer = Schema.decodeUnknownOption(
+  Schema.Struct({ goal: Schema.NullOr(GoalSeenSchema) }),
+);
 
 /** What a `/goal` line asks of the thread's goal. */
 export const GOAL_ASK = {
@@ -46,7 +69,7 @@ export type GoalAsk =
         | typeof GOAL_ASK.NONE;
     };
 
-/** The words after `/goal` that clear the goal, as Codex's TUI and Claude Code's `/goal` both take them. */
+/** The words after `/goal` that clear the goal, as Claude Code's `/goal` takes them; Codex's TUI takes `clear` alone, but app-server takes no words, so a Codex agent takes the same words as a Claude one. */
 const CLEAR_WORDS: ReadonlySet<string> = new Set([
   "clear",
   "stop",
@@ -76,9 +99,16 @@ export function goalAskOf(text: string): GoalAsk {
 }
 
 /** Whether Codex goes on with the goal by itself: it starts a turn toward it whenever the thread is idle. */
-export function goalRuns(goal: ThreadGoal | undefined): boolean {
+export function goalRuns(goal: GoalSeen | undefined): boolean {
   return goal?.status === CODEX_GOAL_STATUS.ACTIVE;
 }
+
+/** The statuses a goal ends at, which only a new ask sets going again. */
+const SETTLED: ReadonlySet<ThreadGoalStatus> = new Set([
+  CODEX_GOAL_STATUS.COMPLETE,
+  CODEX_GOAL_STATUS.BLOCKED,
+  CODEX_GOAL_STATUS.BUDGET_LIMITED,
+]);
 
 /** The move a status names, from the status the goal stood at before; none where it moved nothing the transcript keeps. */
 function statusMove(
@@ -86,8 +116,9 @@ function statusMove(
   status: ThreadGoalStatus,
 ): GoalEvent | undefined {
   switch (status) {
+    // Note that a goal set going again once it settled is set anew, since its end was already seen and let go.
     case CODEX_GOAL_STATUS.ACTIVE:
-      return before === undefined ? GOAL_EVENT.SET : GOAL_EVENT.RESUMED;
+      return before === undefined || SETTLED.has(before) ? GOAL_EVENT.SET : GOAL_EVENT.RESUMED;
     // Note that a goal Codex holds for the plan's limit stands paused until it lifts, as one paused by hand does.
     case CODEX_GOAL_STATUS.PAUSED:
     case CODEX_GOAL_STATUS.USAGE_LIMITED:
@@ -102,7 +133,7 @@ function statusMove(
 }
 
 /** A move of the goal as the GOAL event says it, its counts as app-server last said them. */
-function moveOf(event: GoalEvent, goal: ThreadGoal): RunnerGoal {
+function moveOf(event: GoalEvent, goal: GoalSeen): RunnerGoal {
   return {
     type: RUNNER_EVENT.GOAL,
     event,
@@ -115,10 +146,7 @@ function moveOf(event: GoalEvent, goal: ThreadGoal): RunnerGoal {
 }
 
 /** The GOAL events a goal update moves the transcript by, from the goal the launch last read; none where only its counts changed. */
-export function goalMoves(
-  before: ThreadGoal | undefined,
-  after: ThreadGoal,
-): readonly RunnerGoal[] {
+export function goalMoves(before: GoalSeen | undefined, after: GoalSeen): readonly RunnerGoal[] {
   // Note that another objective is a new goal, whatever stood before it.
   const known = before !== undefined && before.objective === after.objective ? before : undefined;
 
@@ -127,10 +155,30 @@ export function goalMoves(
   const set = known === undefined ? [moveOf(GOAL_EVENT.SET, after)] : [];
   const event = statusMove(known?.status, after.status);
 
-  return event === undefined || event === GOAL_EVENT.SET ? set : [...set, moveOf(event, after)];
+  if (event === undefined) return set;
+
+  return event === GOAL_EVENT.SET
+    ? [moveOf(GOAL_EVENT.SET, after)]
+    : [...set, moveOf(event, after)];
+}
+
+/**
+ * Whether a goal update is app-server saying again, as it resumes a thread,
+ * the goal the launch read as it opened the thread: the same goal at the
+ * same moment of it. It may come after a line's own ask was answered, so it
+ * is told by what it says rather than by when it comes.
+ */
+export function sameGoal(said: GoalSeen | undefined, read: GoalSeen | undefined): boolean {
+  if (said === undefined || read === undefined) return said === read;
+
+  return (
+    said.objective === read.objective &&
+    said.status === read.status &&
+    said.updatedAt === read.updatedAt
+  );
 }
 
 /** The GOAL event a cleared goal moves the transcript by; none where the launch knew of no goal. */
-export function goalCleared(before: ThreadGoal | undefined): RunnerGoal | undefined {
+export function goalCleared(before: GoalSeen | undefined): RunnerGoal | undefined {
   return before === undefined ? undefined : moveOf(GOAL_EVENT.CLEARED, before);
 }

@@ -1023,6 +1023,73 @@ it.effect(
     }),
 );
 
+it.effect(
+  "takes a resumed thread's standing goal as it stands, posting nothing of it, and ends the agent's turn on a goal line that starts none",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService("turn/completed");
+      const objective = "every billing test passes";
+
+      const paused = {
+        threadId: THREAD,
+        objective,
+        status: "paused",
+        tokenBudget: null,
+        tokensUsed: 40_000,
+        timeUsedSeconds: 60,
+        createdAt: 1,
+        updatedAt: 2,
+      };
+
+      // App-server says the goal a resumed thread holds again as it resumes it.
+      const resumed = exchange(RESUMED, 2);
+
+      const script: Script = {
+        goal: paused,
+        exchanges: [
+          exchange(RESUMED, 0),
+          exchange(RESUMED, 1),
+          {
+            ...resumed,
+            reply: [
+              ...resumed.reply,
+              {
+                method: "thread/goal/updated",
+                params: { threadId: THREAD, turnId: null, goal: paused },
+              },
+            ],
+          },
+          {
+            method: "thread/goal/clear",
+            reply: [
+              { id: 3, result: { cleared: true } },
+              { method: "thread/goal/cleared", params: { threadId: THREAD } },
+            ],
+          },
+        ],
+      };
+
+      const { spawned, write, run } = yield* launch([script], service);
+      yield* write({ ...CONFIG, threadId: THREAD });
+      yield* write({
+        type: INPUT_LINE.MESSAGE,
+        uuid: LINE.FIRST,
+        content: [{ type: "text", text: "/goal clear" }],
+        goal: true,
+      });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      assert.deepEqual(spawned[0]?.unexpected, []);
+      assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST]);
+      assert.deepEqual(
+        service.applied.flatMap(({ message: posted }) =>
+          "type" in posted && posted.type === RUNNER_EVENT.GOAL ? [posted.event] : [],
+        ),
+        ["cleared"],
+      );
+    }),
+);
+
 it.effect("starts the next turn for a message Vespin sent just before the turn completed", () =>
   Effect.gen(function* () {
     const service = fakeService("turn/completed");
