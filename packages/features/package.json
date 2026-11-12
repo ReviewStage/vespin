@@ -133,6 +133,7 @@
     "./search-tokens": "./src/search-tokens.js",
     "./device-agent-wire": "./src/device-agent-wire.js",
     "./checkout-path": "./src/checkout-path.js",
+    "./host-connect-words": "./src/host-connect-words.js",
     "./host-pairing-view": "./src/host-pairing-view.js",
     "./host-wire": "./src/host-wire.js",
     "./host-release": "./src/host-release.js",

@@ -342,16 +342,48 @@ export function ValueRow({ label, value }: { readonly label: string; readonly va
   );
 }
 
+/**
+ * A code to hold against another screen, such as the one a machine shows
+ * while it pairs: in the monospaced face at a heading's size, VoiceOver
+ * hearing it letter by letter so each can be checked.
+ */
+export function CodeRow({ code, testId }: { readonly code: string; readonly testId?: string }) {
+  const colors = useColors();
+  const spelled = [...code].filter((letter) => letter !== "-").join(" ");
+
+  return (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.PAGE_HEADING, design: "monospaced", weight: "semibold" }),
+        foregroundStyle(colors.TEXT),
+        listRowBackground(colors.SURFACE),
+        accessibilityLabel(spelled),
+        ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
+      ]}
+    >
+      {code}
+    </Text>
+  );
+}
+
 type ActionRowProps = {
   readonly label: string;
   readonly symbol?: SfSymbol | undefined;
   /** Whether the act ends something, such as Sign out, which the system draws red. */
   readonly destructive?: boolean | undefined;
+  /** Whether it takes no press, such as while another act on the page is out. */
+  readonly disabled?: boolean | undefined;
   readonly onPress: () => void;
 };
 
 /** A row a person presses to act, in the accent, or the system's red where it ends something. */
-export function ActionRow({ label, symbol, destructive = false, onPress }: ActionRowProps) {
+export function ActionRow({
+  label,
+  symbol,
+  destructive = false,
+  disabled: off = false,
+  onPress,
+}: ActionRowProps) {
   const colors = useColors();
 
   return (
@@ -360,7 +392,7 @@ export function ActionRow({ label, symbol, destructive = false, onPress }: Actio
       {...(symbol === undefined ? {} : { systemImage: symbol })}
       role={destructive ? "destructive" : "default"}
       onPress={onPress}
-      modifiers={[listRowBackground(colors.SURFACE)]}
+      modifiers={[listRowBackground(colors.SURFACE), disabled(off)]}
     />
   );
 }

@@ -1,4 +1,4 @@
-// machines.tsx -- Settings' Machines page: the account's machines, each by its name, where it stands, and what it is, and Remove, asked first, as the panel's Machines page offers it; a machine is added from the machine itself, so the phone offers no Add.
+// machines.tsx -- Settings' Machines page: the account's machines, each by its name, where it stands, and what it is, and Remove, asked first, as the panel's Machines page offers it; a machine is added from the machine itself, so the phone offers no Add, and a machine's pairing link opens its question here (`machine-connect.tsx`).
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
@@ -26,13 +26,13 @@ import {
   NoteRow,
   Screen,
   SettingsForm,
-  type SfSymbol,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
+import { PLATFORM_SYMBOL } from "../../machine-symbol.js";
 import { useWrite } from "../../use-write.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
@@ -42,12 +42,6 @@ const READ_WORDS = {
   READING: readingWords("your machines"),
   FAILED: readFailedWords("your machines"),
 } as const;
-
-/** The glyph a machine's row leads with, by its platform, as SF Symbols draws a Mac and a server. */
-const PLATFORM_SYMBOL = {
-  [DEVICE_PLATFORM.DARWIN]: "laptopcomputer",
-  [DEVICE_PLATFORM.LINUX]: "server.rack",
-} as const satisfies Record<DevicePlatform, SfSymbol>;
 
 /** A machine Remove was asked of: the host, what it is called, and whether it reads offline, which hears it only once it is online again. */
 interface RemoveAsked {
