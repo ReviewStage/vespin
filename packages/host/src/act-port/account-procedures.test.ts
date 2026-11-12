@@ -102,9 +102,7 @@ function windowPort(
       },
       haltSessionReplay: () => happened.push(["halt"]),
       resumeSessionReplay: () => happened.push(["resume"]),
-      ...(options.askBeforeSignOut === undefined
-        ? {}
-        : { askBeforeSignOut: options.askBeforeSignOut }),
+      ...(options.askBeforeSignOut !== undefined && { askBeforeSignOut: options.askBeforeSignOut }),
     }),
   );
   const client = port.as(PANEL, { trusted: true });

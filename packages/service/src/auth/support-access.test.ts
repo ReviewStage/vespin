@@ -216,7 +216,7 @@ function send(
     new Request(`${SERVICE_URL}/api/auth${path}`, {
       method,
       headers: { "content-type": "application/json", origin: SERVICE_URL, ...credential },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(body !== undefined && { body: JSON.stringify(body) }),
     }),
   );
 }

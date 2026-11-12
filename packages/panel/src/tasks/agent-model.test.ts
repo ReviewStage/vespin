@@ -199,7 +199,7 @@ test("a finished turn that ended with end_turn replies in its summary, folding t
     id: taken ? "steer" : "next",
     role: MESSAGE_ROLE.USER,
     parts: [{ type: "text", text: "Keep the link valid for a week." }],
-    ...(taken ? { arrivedIn: { journalId: twice.id, afterStep: 1 } } : {}),
+    ...(taken && { arrivedIn: { journalId: twice.id, afterStep: 1 } }),
   });
 
   assert.equal(lastTurnEnding([twice, line(true)])?.messageId, twice.id);

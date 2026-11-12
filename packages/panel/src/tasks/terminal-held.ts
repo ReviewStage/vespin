@@ -136,7 +136,7 @@ function writeHeld(state: HeldState): void {
     ),
   );
 
-  const kept = { ...top, ...(state.top === undefined ? {} : { account: state.top }), accounts };
+  const kept = { ...top, ...(state.top !== undefined && { account: state.top }), accounts };
 
   try {
     window.sessionStorage.setItem(HELD_KEY, Schema.encodeSync(keptShellsJson)(kept));

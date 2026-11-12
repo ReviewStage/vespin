@@ -179,8 +179,8 @@ export function pullRequestChaptersOfLive(
     pullRequest: {
       number,
       generatable,
-      ...(runsOn === undefined ? {} : { runsOn }),
-      ...(runsOnChoices === undefined ? {} : { runsOnChoices }),
+      ...(runsOn !== undefined && { runsOn }),
+      ...(runsOnChoices !== undefined && { runsOnChoices }),
       chapters,
     },
   };

@@ -203,7 +203,7 @@ function entriesOf(text: string): readonly { address: string; name?: string; typ
     const name = nameOf(before === "" ? names : [...names, before]);
     entries.push({
       address,
-      ...(name === undefined ? {} : { name }),
+      ...(name !== undefined && { name }),
       // Note that the words put back to edit it keep the name's quotes, so a comma inside them still holds it whole.
       typed: [...names, word].join(" "),
     });

@@ -338,7 +338,7 @@ function generatorOf(keys: readonly OwnKey[]): ChaptersGenerator {
   return {
     generatable: true,
     runsOn: runsOnOf(own),
-    ...(choices.length > 1 ? { runsOnChoices: choices } : {}),
+    ...(choices.length > 1 && { runsOnChoices: choices }),
   };
 }
 

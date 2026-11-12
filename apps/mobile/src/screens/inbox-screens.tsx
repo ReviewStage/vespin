@@ -827,7 +827,7 @@ export function InboxThreadScreen() {
   return (
     <>
       <Stack.Screen
-        options={{ headerBackTitle: INBOX_TITLE, ...(listed === undefined ? { title: "" } : {}) }}
+        options={{ headerBackTitle: INBOX_TITLE, ...(listed === undefined && { title: "" }) }}
       />
       {listed !== undefined ? (
         <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: true }} />

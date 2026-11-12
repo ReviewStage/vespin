@@ -255,10 +255,10 @@ function relationRows(
       id: each.id,
       label: each.name,
       replayMasked: true,
-      ...(each.status === undefined ? {} : { icon: <TaskStatusMark status={each.status} /> }),
-      ...(detail === undefined ? {} : { detail }),
-      ...(key === undefined ? {} : { terms: [key] }),
-      ...(disabled === undefined ? {} : { disabled }),
+      ...(each.status !== undefined && { icon: <TaskStatusMark status={each.status} /> }),
+      ...(detail !== undefined && { detail }),
+      ...(key !== undefined && { terms: [key] }),
+      ...(disabled !== undefined && { disabled }),
     };
   });
 }

@@ -247,9 +247,9 @@ function relationRows(
         id: each.id,
         label: each.name,
         replayMasked: true,
-        ...(each.status === undefined ? {} : { icon: <TaskStatusMark status={each.status} /> }),
-        ...(key === undefined ? {} : { detail: key, terms: [key] }),
-        ...(disabled === undefined ? {} : { disabled }),
+        ...(each.status !== undefined && { icon: <TaskStatusMark status={each.status} /> }),
+        ...(key !== undefined && { detail: key, terms: [key] }),
+        ...(disabled !== undefined && { disabled }),
       };
     });
 }
@@ -360,7 +360,7 @@ export function TaskRelationMenu({
 
   const head: MenuHead = {
     words: KIND_VERBS[kind].head,
-    ...(back === undefined ? {} : { back: { label: TASK_RELATION_MENU, onBack: back } }),
+    ...(back !== undefined && { back: { label: TASK_RELATION_MENU, onBack: back } }),
   };
 
   const { onNewTask } = door;

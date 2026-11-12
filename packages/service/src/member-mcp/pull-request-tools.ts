@@ -259,7 +259,7 @@ function overviewWords(overview: AgentOverviewPullRequest) {
   return {
     ...rest,
     body: kept,
-    ...(leftOutChars === undefined ? {} : { bodyLeftOutChars: leftOutChars }),
+    ...(leftOutChars !== undefined && { bodyLeftOutChars: leftOutChars }),
   };
 }
 
@@ -286,7 +286,7 @@ function entryWords({
   return {
     ...entry,
     ...cutWords(body, WORDS_CHARS),
-    ...(threads === undefined ? {} : { threads: threads.map(threadWords) }),
+    ...(threads !== undefined && { threads: threads.map(threadWords) }),
   };
 }
 
@@ -314,12 +314,13 @@ function conversationPage(conversation: AgentOverviewConversation, offset: numbe
   return {
     reviewers: conversation.reviewers,
     entries,
-    ...(next < newestFirst.length ? { nextOffset: next } : {}),
+    ...(next < newestFirst.length && { nextOffset: next }),
     // Note that GitHub holds entries older than the read carries, which no page reaches.
     earlier: conversation.earlier,
-    ...(conversation.pendingReview === undefined || conversation.pendingReview === null
-      ? {}
-      : { pendingReviewComments: conversation.pendingReview.comments }),
+    ...(conversation.pendingReview !== undefined &&
+      conversation.pendingReview !== null && {
+        pendingReviewComments: conversation.pendingReview.comments,
+      }),
   };
 }
 
@@ -372,9 +373,7 @@ const changesPart = (reached: Reached, userId: string, asked: ReadPullRequestInp
       status: file.status,
       additions: file.additions,
       deletions: file.deletions,
-      ...(marks === undefined
-        ? {}
-        : { viewed: marks.get(file.path) ?? FILE_VIEWED_STATE.UNVIEWED }),
+      ...(marks !== undefined && { viewed: marks.get(file.path) ?? FILE_VIEWED_STATE.UNVIEWED }),
     }));
 
     const named =
@@ -389,23 +388,21 @@ const changesPart = (reached: Reached, userId: string, asked: ReadPullRequestInp
 
     return {
       status: ACTION_RESULT_STATUS.ACCEPTED,
-      ...(changes.headSha === undefined ? {} : { headSha: changes.headSha }),
+      ...(changes.headSha !== undefined && { headSha: changes.headSha }),
       files,
-      ...(next < changes.files.length ? { nextOffset: next } : {}),
+      ...(next < changes.files.length && { nextOffset: next }),
       truncated: changes.truncated,
-      ...(marks === undefined ? { viewedUnread: viewed.outcome } : {}),
-      ...(changes.reviewers === undefined ? {} : { reviewers: changes.reviewers }),
-      ...(changes.comments === undefined ? {} : { reviews: changes.comments }),
-      ...(named === undefined
-        ? {}
-        : {
-            file: {
-              path: named.path,
-              patch: patch?.text ?? null,
-              omitted: named.omitted,
-              leftOutChars: patch?.leftOutChars ?? 0,
-            },
-          }),
+      ...(marks === undefined && { viewedUnread: viewed.outcome }),
+      ...(changes.reviewers !== undefined && { reviewers: changes.reviewers }),
+      ...(changes.comments !== undefined && { reviews: changes.comments }),
+      ...(named !== undefined && {
+        file: {
+          path: named.path,
+          patch: patch?.text ?? null,
+          omitted: named.omitted,
+          leftOutChars: patch?.leftOutChars ?? 0,
+        },
+      }),
     };
   });
 

@@ -347,9 +347,7 @@ function dimmedRow(port: number, busy: boolean, label: string | undefined): Menu
     key: port,
     label: `:${port}`,
     icon: <GlobeIcon aria-hidden="true" />,
-    ...(detail === undefined
-      ? {}
-      : { detail, detailPlace: MENU_DETAIL.BESIDE, detailMasked: !busy }),
+    ...(detail !== undefined && { detail, detailPlace: MENU_DETAIL.BESIDE, detailMasked: !busy }),
     disabled: true,
     onSelect: () => {},
   };
@@ -376,9 +374,10 @@ function portRows(view: PlugPorts, copy: (words: string, label: string) => void)
               label: WORDS.OPEN,
               icon: <GlobeIcon aria-hidden="true" />,
               // Note that the submenu's row names the Mac's port, so where it differs Open says the sandbox's.
-              ...(localPort === port
-                ? {}
-                : { detail: `from :${port}`, detailPlace: MENU_DETAIL.BESIDE }),
+              ...(localPort !== port && {
+                detail: `from :${port}`,
+                detailPlace: MENU_DETAIL.BESIDE,
+              }),
               stays: true,
               onSelect: () => openLocal(localPort),
             },

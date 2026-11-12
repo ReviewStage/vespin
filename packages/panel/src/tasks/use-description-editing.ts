@@ -160,7 +160,7 @@ function keepLeft(left: LeftTask, now: DocumentEditor, saving: symbol, cause?: u
     // Note that a conflict's detail names who wrote over the section, so it stays masked.
     replayUnmasked: !conflict,
     words: LEFT_UNSAVED.WORDS,
-    ...(conflict ? { detail: conflictWords(state.by, left.place).note } : {}),
+    ...(conflict && { detail: conflictWords(state.by, left.place).note }),
     tone: STATUS_TONE.DANGER,
     subject: taskId,
     persists: true,

@@ -588,7 +588,7 @@ function syncedParts<Part extends string>(
       const { snapshot: _snapshot, ...delta } = sealed;
       const ofPart = gone.get(part as Part) ?? [];
 
-      return [part, { ...delta, sync, ...(ofPart.length === 0 ? {} : { gone: ofPart }) }];
+      return [part, { ...delta, sync, ...(ofPart.length !== 0 && { gone: ofPart }) }];
     }),
   ) as Record<Part, SealedLiveQueryWire>;
 }

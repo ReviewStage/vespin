@@ -55,7 +55,7 @@ export function onPhone(element: React.ReactNode): {
 
         return {
           disabled: "disabled" in found && found.disabled === true,
-          ...(detail === undefined ? {} : { detail }),
+          ...(detail !== undefined && { detail }),
         };
       },
       press: (label, opener = document.body) => {

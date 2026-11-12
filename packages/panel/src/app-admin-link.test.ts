@@ -649,7 +649,7 @@ test.each([
           ...IDLE_TASKS_VIEW,
           workspaces: [ACME],
           tasks: [listed, open],
-          ...(other === undefined ? {} : { activeTaskId: open.id }),
+          ...(other !== undefined && { activeTaskId: open.id }),
         },
         access: { admin: false, pending: true },
       },

@@ -68,7 +68,7 @@ export const pullRequestNamed = Effect.fnUntraced(function* (
     return {
       by: NAMED_BY.AGENT,
       id: argument,
-      ...(Option.isSome(number) ? { number: String(number.value) } : {}),
+      ...(Option.isSome(number) && { number: String(number.value) }),
     } as const;
   }
 
@@ -283,7 +283,7 @@ export const viewCommand = Command.make(
         if (diff) lines.push(...files.flatMap(fileDiffLines));
       }
 
-      yield* answer({ json, lines, ...(ids === undefined ? {} : { ids }) });
+      yield* answer({ json, lines, ...(ids !== undefined && { ids }) });
     }),
 ).pipe(
   Command.withDescription(

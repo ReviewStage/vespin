@@ -671,9 +671,9 @@ function landWrite(
         row.kind,
         {
           usedPercent: write.usedPercent,
-          ...(write.windowMins === undefined ? {} : { windowMins: write.windowMins }),
-          ...(write.model === undefined ? {} : { model: write.model }),
-          ...(write.resetsAt === undefined ? {} : { resetsAt: write.resetsAt }),
+          ...(write.windowMins !== undefined && { windowMins: write.windowMins }),
+          ...(write.model !== undefined && { model: write.model }),
+          ...(write.resetsAt !== undefined && { resetsAt: write.resetsAt }),
         },
         new Date(now),
         new Date(write.turnOpenedAt ?? now),

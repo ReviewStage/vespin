@@ -61,7 +61,7 @@ const probeSyncLogging = (log?: SyncLogWrites) =>
       },
     ],
     ignore: [PROBE.touchedAt],
-    ...(log === undefined ? {} : { log }),
+    ...(log !== undefined && { log }),
   });
 
 const probeSync = probeSyncLogging();

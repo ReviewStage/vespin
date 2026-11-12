@@ -95,7 +95,7 @@ const standing = Effect.gen(function* () {
         new Request(address, {
           headers: {
             cookie: `${PREVIEW_LINK.COOKIE}=${cookie}`,
-            ...(pageLoad ? { "sec-fetch-mode": "navigate" } : {}),
+            ...(pageLoad && { "sec-fetch-mode": "navigate" }),
           },
         }),
       );

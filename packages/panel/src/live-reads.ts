@@ -477,7 +477,7 @@ function liveReadQuery<Read extends LiveReadName>(
 
   return queryOptions({
     queryKey,
-    ...(meta === undefined ? {} : { meta }),
+    ...(meta !== undefined && { meta }),
     queryFn: ({ client, signal }) =>
       rendererPromise(firstAnswer(client, read, ids ?? []), signal).then(
         (answered) =>

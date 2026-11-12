@@ -129,7 +129,7 @@ it.layer(getTestDB())("the runner line store", (it) => {
         const { userId, agentId, conversationId } = account;
 
         const queue = (launch: number, text: string, lineId?: string) =>
-          queueRunnerLine(userId, { agentId, launch, text, ...(lineId ? { lineId } : {}) });
+          queueRunnerLine(userId, { agentId, launch, text, ...(lineId && { lineId }) });
 
         // A line whose turn failed, which the developer resends themselves rather than a launch behind their back.
         const failed = yield* lineSent(account, "failed");
@@ -159,7 +159,7 @@ it.layer(getTestDB())("the runner line store", (it) => {
             agentId,
             launch: LAUNCH.FIRST,
             text,
-            ...(lineId ? { lineId } : {}),
+            ...(lineId && { lineId }),
           });
 
         const failed = yield* lineSent(account, "failed");

@@ -1175,7 +1175,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
               headers: {
                 "content-type": "application/json",
                 accept: "application/json, text/event-stream",
-                ...(bearer === undefined ? {} : { authorization: `Bearer ${bearer}` }),
+                ...(bearer !== undefined && { authorization: `Bearer ${bearer}` }),
               },
               body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
             }),

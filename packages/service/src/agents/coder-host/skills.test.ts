@@ -65,7 +65,7 @@ const startAgent = (repository: string | null, skillsOn = true) =>
 
     const task = yield* startTask(userId, {
       name: "Teammate invitations",
-      ...(repository === null ? {} : { repository }),
+      ...(repository !== null && { repository }),
     });
 
     const started = yield* createAgent(userId, {

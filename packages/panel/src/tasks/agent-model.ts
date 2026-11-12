@@ -563,7 +563,7 @@ export function endLineParts(
 
         const { unstarted } = launchStopped;
 
-        return { words, failed: true, failure, ...(unstarted === undefined ? {} : { unstarted }) };
+        return { words, failed: true, failure, ...(unstarted !== undefined && { unstarted }) };
       }
 
       const words =

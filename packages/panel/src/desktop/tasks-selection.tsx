@@ -161,7 +161,7 @@ function selectionActs(
   return [
     {
       label: status.label,
-      ...(status.icon === undefined ? {} : { icon: status.icon }),
+      ...(status.icon !== undefined && { icon: status.icon }),
       menu: [status.items],
       replayUnmasked: true,
     },

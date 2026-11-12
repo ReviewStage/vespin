@@ -182,7 +182,7 @@ export const spawnAppServer = Effect.fn("agent-runner/spawnAppServer")(function*
         stdin: { stream: Stream.fromQueue(stdin), endOnDone: true },
         killSignal: APP_SERVER_KILL.SIGNAL,
         forceKillAfter: APP_SERVER_KILL.GRACE,
-        ...(command.inRunnerGroup === true ? { detached: false } : {}),
+        ...(command.inRunnerGroup === true && { detached: false }),
       }),
     )
     .pipe(

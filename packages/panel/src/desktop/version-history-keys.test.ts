@@ -108,7 +108,7 @@ function drawn(
           ? undefined
           : { revision: sectionsOf, opened: { seq: sectionsOf, heading: undefined } },
       onSelect: (seq: number) => chosen.push(seq),
-      ...(older.onLoadEarlier === undefined ? {} : { onLoadEarlier: older.onLoadEarlier }),
+      ...(older.onLoadEarlier !== undefined && { onLoadEarlier: older.onLoadEarlier }),
     },
   });
 

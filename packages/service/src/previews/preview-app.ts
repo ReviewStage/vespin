@@ -364,7 +364,7 @@ function noPreview(request: Request, status: number = HOSTED_HTTP_STATUS.NOT_FOU
 
   return HttpServerResponse.text(page ? NO_PREVIEW_PAGE : NO_PREVIEW, {
     status,
-    ...(page ? { contentType: "text/html; charset=utf-8" } : {}),
+    ...(page && { contentType: "text/html; charset=utf-8" }),
     headers: NEVER_KEPT,
   });
 }
@@ -445,7 +445,7 @@ const passedOn = (request: Request, upstream: string, origin: string, asked: str
       method: request.method,
       headers,
       redirect: "manual",
-      ...(hasBody ? { body: request.body, duplex: "half" } : {}),
+      ...(hasBody && { body: request.body, duplex: "half" }),
     };
 
     const routeOrigin = new URL(upstream).origin;

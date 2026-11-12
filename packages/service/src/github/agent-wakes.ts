@@ -452,7 +452,7 @@ function commentWake(payload: UnparsedWireValue, now: number): AgentWake | undef
     ...githubAvatarOf(sender),
     at: instantOf(comment.created_at, now),
     words: comment.body,
-    ...(comment.id === undefined ? {} : { commentId: comment.id }),
+    ...(comment.id !== undefined && { commentId: comment.id }),
   };
 }
 
@@ -487,7 +487,7 @@ function dequeuedWake(payload: UnparsedWireValue, now: number): AgentWake | unde
     ...githubIdOf(sender),
     ...githubAvatarOf(sender),
     at: now,
-    ...(reason === undefined || reason === "" ? {} : { reason }),
+    ...(reason !== undefined && reason !== "" && { reason }),
   };
 }
 
@@ -845,7 +845,7 @@ function lineChecks(read: HeadChecks): NonNullable<GitHubLineMetadata["checks"]>
       if (check.conclusion === null || name === "") return [];
       const fits = url !== "" && url.length <= GITHUB_LINE_BOUNDS.URL_CHARS;
 
-      return [{ name, conclusion: check.conclusion, ...(fits ? { url } : {}) }];
+      return [{ name, conclusion: check.conclusion, ...(fits && { url }) }];
     })
     .slice(0, GITHUB_LINE_BOUNDS.CHECKS);
 }
@@ -878,10 +878,10 @@ function githubLine(
 
       return {
         path: comment.path,
-        ...(comment.line === undefined ? {} : { line: comment.line }),
+        ...(comment.line !== undefined && { line: comment.line }),
         url: comment.url,
         body,
-        ...(bodyHtml === undefined ? {} : { body_html: bodyHtml }),
+        ...(bodyHtml !== undefined && { body_html: bodyHtml }),
       };
     });
 
@@ -897,20 +897,21 @@ function githubLine(
     channel: MESSAGE_CHANNEL.GITHUB,
     event: LINE_EVENT_OF_WAKE[wake.kind],
     repository: wake.repository,
-    ...(wake.pullRequest === undefined ? {} : { number: wake.pullRequest }),
+    ...(wake.pullRequest !== undefined && { number: wake.pullRequest }),
     url: wake.url,
     by: wake.by,
-    ...(wake.byAvatar === undefined || wake.byAvatar.length > GITHUB_LINE_BOUNDS.URL_CHARS
-      ? {}
-      : { by_avatar: wake.byAvatar }),
-    ...(wake.verdict === undefined || wake.verdict === "" ? {} : { verdict: wake.verdict }),
-    ...(words === "" ? {} : { words }),
-    ...(html === undefined ? {} : { words_html: html }),
-    ...(comments.length === 0 ? {} : { comments }),
-    ...(wake.sha === undefined ? {} : { sha: wake.sha }),
+    ...(wake.byAvatar !== undefined &&
+      wake.byAvatar.length <= GITHUB_LINE_BOUNDS.URL_CHARS && {
+        by_avatar: wake.byAvatar,
+      }),
+    ...(wake.verdict !== undefined && wake.verdict !== "" && { verdict: wake.verdict }),
+    ...(words !== "" && { words }),
+    ...(html !== undefined && { words_html: html }),
+    ...(comments.length !== 0 && { comments }),
+    ...(wake.sha !== undefined && { sha: wake.sha }),
     outside_words: outsideWords,
-    ...(checkLine ? { failing } : {}),
-    ...(finished.length === 0 ? {} : { checks: finished }),
+    ...(checkLine && { failing }),
+    ...(finished.length !== 0 && { checks: finished }),
   };
 }
 

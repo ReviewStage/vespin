@@ -189,7 +189,7 @@ function changeRequest(id: string, query: { readonly number?: string }, choice: 
       return {
         action: PULL_REQUEST_ACTION.ENABLE_AUTO_MERGE,
         headSha,
-        ...(named === undefined ? {} : { method: named }),
+        ...(named !== undefined && { method: named }),
       };
     }
 

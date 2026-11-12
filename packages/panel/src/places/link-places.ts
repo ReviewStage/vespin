@@ -92,7 +92,7 @@ function agentPlaceOf(params: PlaceParams, fields: Readonly<Record<string, unkno
   const { workspace, taskId, agentId } = params;
 
   if (workspace === undefined || agentId === undefined) return undefined;
-  const place = { ...fields, ...(taskId === undefined ? {} : { planId: taskId }), agentId };
+  const place = { ...fields, ...(taskId !== undefined && { planId: taskId }), agentId };
 
   return isLinkDestination(place) ? place : undefined;
 }
@@ -293,7 +293,7 @@ export const LINK_ROUTED_PLACE = {
     read: ({ params }) =>
       placeOf({
         kind: LINK_DESTINATION.INBOX,
-        ...(params.taskId === undefined ? {} : { planId: params.taskId }),
+        ...(params.taskId !== undefined && { planId: params.taskId }),
       }),
   },
   INBOX_ITEM: {

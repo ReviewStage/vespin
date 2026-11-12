@@ -316,7 +316,7 @@ function commandOf(
       modifiers: message.modifiers,
       windowsVirtualKeyCode: message.keyCode,
       nativeVirtualKeyCode: message.keyCode,
-      ...(text === undefined ? {} : { text, unmodifiedText: text }),
+      ...(text !== undefined && { text, unmodifiedText: text }),
     };
 
     return { command: { method: CDP_METHOD.KEY, params }, move: false };

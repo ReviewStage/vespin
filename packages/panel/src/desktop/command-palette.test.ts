@@ -1572,7 +1572,7 @@ test("a task's row with a key starts as one without does, its glyph then its nam
   const task = (id: string, name: string, number?: number) => ({
     id,
     workspaceId: stage.id,
-    ...(number === undefined ? {} : { number }),
+    ...(number !== undefined && { number }),
     name,
     createdAt: 1,
     updatedAt: 1,

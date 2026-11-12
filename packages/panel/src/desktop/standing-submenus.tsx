@@ -42,8 +42,8 @@ export function chipSubmenu(
     (row): MenuAction => ({
       label: row.label,
       icon: <>{row.icon}</>,
-      ...(typeof row.detail === "string" ? { detail: row.detail } : {}),
-      ...(row.card === undefined ? {} : { card: row.card }),
+      ...(typeof row.detail === "string" && { detail: row.detail }),
+      ...(row.card !== undefined && { card: row.card }),
       checked: row.id === value,
       onSelect: () => {
         if (row.id !== value) onPick(row.id);

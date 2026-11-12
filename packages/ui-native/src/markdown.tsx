@@ -240,9 +240,9 @@ function MentionChip({
 
 function wordStyle(run: Extract<MarkdownRun, { kind: typeof MARKDOWN_RUN.WORDS }>): TextStyle {
   return {
-    ...(run.strong ? { fontWeight: "600" } : {}),
-    ...(run.emphasis ? { fontStyle: "italic" } : {}),
-    ...(run.struck ? { textDecorationLine: "line-through" } : {}),
+    ...(run.strong && { fontWeight: "600" }),
+    ...(run.emphasis && { fontStyle: "italic" }),
+    ...(run.struck && { textDecorationLine: "line-through" }),
   };
 }
 
@@ -542,7 +542,7 @@ function TableView({
                   style={{
                     fontSize: TEXT_SIZE.FOOTNOTE,
                     textAlign: TEXT_ALIGN[block.align[columnAt] ?? COLUMN_ALIGN.START],
-                    ...(rowAt === 0 ? { fontWeight: "600", color: colors.TEXT } : {}),
+                    ...(rowAt === 0 && { fontWeight: "600", color: colors.TEXT }),
                   }}
                 />
               </View>

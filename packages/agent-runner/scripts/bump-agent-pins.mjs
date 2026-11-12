@@ -403,7 +403,7 @@ async function bump(tool, to) {
     run("node", [path.join(packageRoot, "scripts", "generate-codex-protocol.mjs")]);
   }
 
-  return { tool, from, to, ...(claude ? { claude } : {}) };
+  return { tool, from, to, ...(claude && { claude }) };
 }
 
 /** The tools asked for, each with the version named or undefined for the newest settled release. */

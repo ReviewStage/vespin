@@ -111,7 +111,7 @@ describe("a screen's activity, continued on another of the member's devices", ()
     expect(
       iosContinuedRouteOf({
         link: activity.webpageUrl,
-        ...(activity.pullRequest === undefined ? {} : { pullRequest: activity.pullRequest }),
+        ...(activity.pullRequest !== undefined && { pullRequest: activity.pullRequest }),
       }),
     ).toBe(route);
   });

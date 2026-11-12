@@ -766,7 +766,7 @@ export function descriptionCommentsProcedures(seams: DescriptionCommentsProcedur
         words: start.words,
         clientKey: start.clientKey,
         isReply: false,
-        ...("page" in start ? reviewOf(start) : {}),
+        ...("page" in start && reviewOf(start)),
       });
 
       return {

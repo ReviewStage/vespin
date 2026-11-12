@@ -73,7 +73,7 @@ function summary(id: string, number: number, parentTaskId?: string): TaskSummary
     status: TASK_STATUS.TODO,
     priority: TASK_PRIORITY.NONE,
     number,
-    ...(parentTaskId === undefined ? {} : { parentTaskId }),
+    ...(parentTaskId !== undefined && { parentTaskId }),
   };
 }
 

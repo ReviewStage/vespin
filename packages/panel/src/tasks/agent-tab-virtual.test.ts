@@ -115,7 +115,7 @@ function page(
     cursor: "1:1",
     status: AGENT_STATUS.COMPLETED,
     title: null,
-    ...(before === undefined ? {} : { before }),
+    ...(before !== undefined && { before }),
   };
 }
 
@@ -220,7 +220,7 @@ async function drawTab(
     shown: true,
     onOpenSubagent: () => undefined,
     onHeld: () => undefined,
-    ...(cards === undefined ? {} : { cards }),
+    ...(cards !== undefined && { cards }),
   });
 
   act(() => root?.render(withQueryClient(wrap(tab))));

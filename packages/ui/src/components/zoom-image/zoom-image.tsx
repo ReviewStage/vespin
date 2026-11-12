@@ -354,12 +354,12 @@ export function useImageZoom(
       style: {
         transform: `translate(${String(view.x)}px, ${String(view.y)}px) scale(${String(view.scale)})`,
         // Note that a picture opened at its own pixels says none, because a fit grown past them would undo the scale its opening set.
-        ...(loaded !== undefined && opening === IMAGE_OPENING.FITTED
-          ? cssCustomProperties({
-              "--ui-zoom-natural-width": loaded.width,
-              "--ui-zoom-natural-height": loaded.height,
-            })
-          : {}),
+        ...(loaded !== undefined &&
+          opening === IMAGE_OPENING.FITTED &&
+          cssCustomProperties({
+            "--ui-zoom-natural-width": loaded.width,
+            "--ui-zoom-natural-height": loaded.height,
+          })),
       },
       "data-zoom": isZoomed(view) ? "zoomed" : "fitted",
       "data-glide": String(glide),

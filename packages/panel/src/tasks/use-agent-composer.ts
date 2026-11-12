@@ -489,7 +489,7 @@ export function useAgentComposer(input: {
     const failed: SentLine = {
       ...line,
       state: SENT_LINE_STATE.FAILED,
-      ...(rewoundNow ? { rewound: true } : {}),
+      ...(rewoundNow && { rewound: true }),
     };
 
     keepFailed((all) => [
@@ -518,9 +518,9 @@ export function useAgentComposer(input: {
       words: NOT_DELIVERED_TOAST,
       tone: STATUS_TONE.DANGER,
       failure: { surface: FAILURE_SURFACE.AGENT_SEND, cause: answer, about: { agentId } },
-      ...(onOpen === undefined
-        ? {}
-        : { action: { label: OPEN_WORD, onPress: onOpen, replayUnmasked: true } }),
+      ...(onOpen !== undefined && {
+        action: { label: OPEN_WORD, onPress: onOpen, replayUnmasked: true },
+      }),
     });
   };
 

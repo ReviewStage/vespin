@@ -49,8 +49,8 @@ function SignInScreen(): React.JSX.Element {
 
   return createElement(SignInGate, {
     account: { status: ACCOUNT_STATUS.SIGNED_OUT },
-    ...(signIn.signInWait === undefined ? {} : { waiting: signIn.signInWait }),
-    ...(signIn.signInFailure === undefined ? {} : { failure: signIn.signInFailure }),
+    ...(signIn.signInWait !== undefined && { waiting: signIn.signInWait }),
+    ...(signIn.signInFailure !== undefined && { failure: signIn.signInFailure }),
     onBegin: signIn.beginSignIn,
     onCancel: signIn.cancelSignIn,
   });

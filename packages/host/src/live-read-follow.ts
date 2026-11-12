@@ -100,7 +100,7 @@ export function followLiveRead<
 
           return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
         },
-        ...(read.adopts === undefined ? {} : { adopts: read.adopts }),
+        ...(read.adopts !== undefined && { adopts: read.adopts }),
       });
 
       const gone = yield* followTakingRows(

@@ -263,9 +263,7 @@ const box = (
       "esac",
     ].join("\n"),
     sudo: `printf 'sudo %s\\n' "$*" >>"$FAKE_ASKED"\n[ -z "$FAKE_SUDO_REFUSED" ] || exit 1\nFAKE_AS_ROOT=1 exec "$@"`,
-    ...(options.root
-      ? { id: 'if [ "$*" = -u ]; then echo 0; else exec /usr/bin/id "$@"; fi' }
-      : {}),
+    ...(options.root && { id: 'if [ "$*" = -u ]; then echo 0; else exec /usr/bin/id "$@"; fi' }),
     launchctl: [
       `printf 'launchctl %s\\n' "$*" >>"$FAKE_ASKED"`,
       'case "$1" in',
@@ -287,8 +285,8 @@ const box = (
     FAKE_ROOT: root,
     FAKE_SERVED: served,
     FAKE_PAIRING: "paired",
-    ...(options.selfLinger ? { FAKE_SELF_LINGER: "1" } : {}),
-    ...(options.sudoRefused ? { FAKE_SUDO_REFUSED: "1" } : {}),
+    ...(options.selfLinger && { FAKE_SELF_LINGER: "1" }),
+    ...(options.sudoRefused && { FAKE_SUDO_REFUSED: "1" }),
   };
 
   const run = (args: readonly string[], extra: Readonly<Record<string, string>> = {}) =>

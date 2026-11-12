@@ -771,11 +771,11 @@ async function shootBrowser(
   const context = await browser.newContext({
     viewport: { width: viewport.width, height: viewport.height },
     // A finger works either phone, as the catalog's own shoot gives its phone frame.
-    ...(frame.phone ? { hasTouch: true } : {}),
+    ...(frame.phone && { hasTouch: true }),
     // Note that the phone is shot at one device pixel per CSS pixel, because an emulated scale
     // gives the page a devicePixelRatio its device-pixel resize boxes do not share, and the
     // terminal's WebGL screen, which sizes its canvas from that box, then draws nothing.
-    ...(phone ? { isMobile: true } : {}),
+    ...(phone && { isMobile: true }),
     colorScheme: shot.theme,
     reducedMotion: "reduce",
   });

@@ -91,7 +91,7 @@ const iconOf = Effect.fnUntraced(function* (
   return Option.some<TaskSectionIcon>({
     kind: TASK_SECTION_ICON_KIND.GLYPH,
     glyph: glyph.value,
-    ...(Option.isSome(color) ? { color: color.value } : {}),
+    ...(Option.isSome(color) && { color: color.value }),
   });
 });
 
@@ -227,9 +227,9 @@ const addCommand = Command.make(
           repository: repo.value,
           label: label.value,
           command: command.value,
-          ...(Option.isSome(icon) ? { icon: icon.value } : {}),
-          ...(isDefault ? { isDefault: true } : {}),
-          ...(Option.isSome(position) ? { position: position.value } : {}),
+          ...(Option.isSome(icon) && { icon: icon.value }),
+          ...(isDefault && { isDefault: true }),
+          ...(Option.isSome(position) && { position: position.value }),
         },
         `Added ${label.value}.`,
       );
@@ -276,11 +276,11 @@ const editCommand = Command.make(
       }
 
       const changes = {
-        ...(Option.isSome(label) ? { label: label.value } : {}),
-        ...(Option.isSome(command) ? { command: command.value } : {}),
+        ...(Option.isSome(label) && { label: label.value }),
+        ...(Option.isSome(command) && { command: command.value }),
         ...(Option.isSome(icon) ? { icon: icon.value } : clearIcon ? { icon: null } : {}),
-        ...(Option.isSome(isDefault) ? { isDefault: isDefault.value } : {}),
-        ...(Option.isSome(position) ? { position: position.value } : {}),
+        ...(Option.isSome(isDefault) && { isDefault: isDefault.value }),
+        ...(Option.isSome(position) && { position: position.value }),
       };
 
       if (Object.keys(changes).length === 0) {

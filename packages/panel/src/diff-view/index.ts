@@ -587,9 +587,9 @@ function optionsOf(props: DiffViewProps): FileDiffOptions<string, undefined> {
       if (phase !== "unmount" && node.shadowRoot !== null && props.look.wrap)
         markLineIndents(node.shadowRoot);
     },
-    ...(renderAnnotation === undefined
-      ? {}
-      : { renderAnnotation: (note: { metadata: string }) => renderAnnotation(note.metadata) }),
+    ...(renderAnnotation !== undefined && {
+      renderAnnotation: (note: { metadata: string }) => renderAnnotation(note.metadata),
+    }),
   };
 }
 

@@ -501,7 +501,7 @@ function filterEntries(
         // Note that a person's face draws their letter, so it is masked with their name; none, No assignee or No one, is the app's own.
         icon:
           PERSON_FIELDS.includes(field) && value !== null ? <ReplayMask>{icon}</ReplayMask> : icon,
-        ...(detail === undefined ? {} : { detail, detailPlace: MENU_DETAIL.BESIDE }),
+        ...(detail !== undefined && { detail, detailPlace: MENU_DETAIL.BESIDE }),
         card,
         checked: kept.includes(value),
         stays: true,

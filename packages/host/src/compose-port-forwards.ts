@@ -286,7 +286,7 @@ export function composePortForwards(
       return {
         on: true,
         running: forwarding.running,
-        ...(shared === undefined ? {} : { shared }),
+        ...(shared !== undefined && { shared }),
         ports: forwards.map((forward) => {
           const label = labels.get(forward.port);
           const served = label === undefined ? {} : { label };
