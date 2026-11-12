@@ -63,6 +63,7 @@ export {
 } from "./settings-procedures.js";
 
 export {
+  shellReadProcedures,
   type TerminalPortSeam,
   terminalProcedures,
 } from "./terminal-procedures.js";

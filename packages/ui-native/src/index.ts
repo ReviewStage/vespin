@@ -165,6 +165,8 @@ export {
   ActionRow,
   MemberRow,
   type MemberRowAct,
+  MenuRow,
+  type MenuRowAct,
   NoteRow,
   type PickOption,
   PickRows,

@@ -1,3 +1,4 @@
+import { SHELLS_LOOK_EVERY_MS } from "@repo/features/run-actions-model";
 import { knownTaskSectionIcon, type LooseTaskSectionIcon } from "@repo/features/task-section-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { PlayIcon, SPINNER_SIZE, Spinner } from "@repo/ui";
@@ -27,16 +28,13 @@ import { useWindowAccount } from "./window-account.js";
  * offer Run or Stop in its header.
  */
 
-/** How often a shown list of an agent's shells is read again, as the Terminal tab's own list goes. */
-const SHELLS_EVERY_MS = 5_000;
-
 /** An agent's shells and where its sandbox stands, read again every few seconds while shown. */
 export function shellsQuery(agentId: string, shown: boolean, enabled: boolean) {
   return queryOptions({
     queryKey: [QUERY_ROOT.AGENT_SHELLS, agentId],
     queryFn: () => askAct(ACT_KIND.TERMINAL_LIST, { agentId }),
     enabled,
-    refetchInterval: shown ? SHELLS_EVERY_MS : false,
+    refetchInterval: shown ? SHELLS_LOOK_EVERY_MS : false,
     retry: false,
   });
 }

@@ -1,4 +1,4 @@
-// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, an act, and a note such as a memory.
+// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, an act, a note such as a memory, and a row whose press opens a menu of acts.
 
 import {
   ContextMenu,
@@ -52,6 +52,9 @@ export const PUSH_ROW_GOES = {
 } as const satisfies Record<string, SfSymbol>;
 
 export type PushRowGoes = (typeof PUSH_ROW_GOES)[keyof typeof PUSH_ROW_GOES];
+
+/** The size of the glyph leading a `MenuRow`, as a list's leading mark stands. */
+const GLYPH_SIZE = 15;
 
 /** The size of the mark at a `PushRow`'s end, as small as iOS draws its chevron. */
 const GOES_MARK_SIZE = 13;
@@ -421,13 +424,17 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
   );
 }
 
-/** One thing a member's menu does to them. */
-export interface MemberRowAct {
+/** One thing a row's menu does, such as a member's Remove from workspace or a port's Share. */
+export interface MenuRowAct {
   readonly label: string;
-  /** Whether it takes them out of something, such as Remove from workspace, which the system draws red. */
+  readonly symbol?: SfSymbol | undefined;
+  /** Whether it takes something away, such as Remove from workspace, which the system draws red. */
   readonly destructive?: boolean | undefined;
   readonly onPress: () => void;
 }
+
+/** One thing a member's menu does to them. */
+export type MemberRowAct = MenuRowAct;
 
 type MemberRowProps = {
   readonly name: string;
@@ -483,14 +490,79 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
         ...spokenValue(email, role),
       ]}
     >
-      {acts.map((act) => (
-        <SwiftUIButton
-          key={act.label}
-          label={act.label}
-          role={act.destructive === true ? "destructive" : "default"}
-          onPress={act.onPress}
-        />
-      ))}
+      <RowActs acts={acts} />
+    </Menu>
+  );
+}
+
+/** A row menu's acts, each the system's button, red where it takes something away. */
+function RowActs({ acts }: { readonly acts: readonly MenuRowAct[] }) {
+  return acts.map((act) => (
+    <SwiftUIButton
+      key={act.label}
+      label={act.label}
+      {...(act.symbol === undefined ? {} : { systemImage: act.symbol })}
+      role={act.destructive === true ? "destructive" : "default"}
+      onPress={act.onPress}
+    />
+  ));
+}
+
+type MenuRowProps = {
+  readonly label: string;
+  /** The glyph leading it, in the muted ink. */
+  readonly symbol: SfSymbol;
+  /** The line under its name in the muted ink, such as what serves a port; none for none. */
+  readonly detail?: string | undefined;
+  /** What stands at its end in the muted ink, such as Sharing; none for none. */
+  readonly value?: string | undefined;
+  /** What a press offers; a row with none takes no press. */
+  readonly acts: readonly MenuRowAct[];
+};
+
+/**
+ * A thing a sheet lists, such as one of an agent's ports: its glyph, its
+ * name with a line under it, and a value at its end, each but the name in
+ * the muted ink. Where it offers anything, a press opens the system's menu
+ * of what it offers, as `MemberRow`'s does; VoiceOver hears it by its name,
+ * then its line and its value.
+ */
+export function MenuRow({ label, symbol, detail, value, acts }: MenuRowProps) {
+  const colors = useColors();
+  const glyphSize = useScaledSize(GLYPH_SIZE);
+
+  const face = (
+    <HStack spacing={SPACE.ROW}>
+      <Image systemName={symbol} size={glyphSize} color={colors.TEXT_MUTED} />
+      <VStack alignment="leading" spacing={1}>
+        <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
+        {detail === undefined ? null : (
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE }),
+              foregroundStyle(colors.TEXT_MUTED),
+            ]}
+          >
+            {detail}
+          </Text>
+        )}
+      </VStack>
+      <Spacer />
+      {value === undefined ? null : (
+        <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{value}</Text>
+      )}
+    </HStack>
+  );
+
+  const heard = [accessibilityLabel(label), ...spokenValue(detail, value)];
+
+  if (acts.length === 0) {
+    return <VStack modifiers={[listRowBackground(colors.SURFACE), ...heard]}>{face}</VStack>;
+  }
+
+  return (
+    <Menu label={face} modifiers={[listRowBackground(colors.SURFACE), ...heard]}>
+      <RowActs acts={acts} />
     </Menu>
   );
 }

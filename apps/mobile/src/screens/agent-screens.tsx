@@ -1,10 +1,16 @@
-// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer's + and its ⋯ menu, its Permanently delete among it, a page it showed, opened whole, and the sheet of its options: its model, effort, Fast, permission mode, and MCP servers.
+// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer's + and its ⋯ menu, its run actions and its Permanently delete among it, a page it showed, opened whole, the sheet of its options: its model, effort, Fast, permission mode, and MCP servers, and the sheet of its listening ports.
 
 import { DENIES_WAITING } from "@repo/features/agent-approval-model";
 import {
   AGENT_PERMISSION_MODE,
   type AgentPermissionMode,
 } from "@repo/features/agent-approval-wire";
+import {
+  AGENT_PORTS_WORDS,
+  PORT_ACT,
+  type PortAct,
+  type PortRow,
+} from "@repo/features/agent-ports-model";
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentActivity } from "@repo/features/ios-system-activity";
@@ -18,6 +24,7 @@ import {
   mergeActionFor,
 } from "@repo/features/pull-request-model";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
+import { RUN_ACTION_WORDS, runActionMenuLabel } from "@repo/features/run-actions-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { MCP_SERVER_LABEL, VERB } from "@repo/features/words";
 import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
@@ -37,6 +44,8 @@ import {
   HintPickRows,
   ListSection,
   MenuPickRow,
+  MenuRow,
+  type MenuRowAct,
   NO_TOGGLES,
   openCuts,
   QueuedLines,
@@ -71,6 +80,8 @@ import { type AgentApprovals, useAgentApprovals } from "../agents/use-agent-appr
 import { type AgentComposer, useAgentComposer } from "../agents/use-agent-composer.js";
 import { type AgentMode, useAgentMode } from "../agents/use-agent-mode.js";
 import { type AgentModelPick, useAgentModelPick } from "../agents/use-agent-model.js";
+import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
+import { useAgentRun } from "../agents/use-agent-run.js";
 import { useAgentServers } from "../agents/use-agent-servers.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
@@ -320,10 +331,13 @@ function agentAddMenu(
  * Messages names a conversation, since the transcript opens at its newest
  * row and its head scrolls away, its back button leading to the task, with
  * a ⋯ menu, as the panel's agent menu offers it: Copy link and Open in
- * browser, Rename, typed in the system's alert, Pin or Unpin, Options,
- * Archive, asked first, which goes back once the agent is archived, and
- * Permanently delete, red and last, which always asks in the panel's words
- * and goes back once the agent is deleted. Under
+ * browser, Rename, typed in the system's alert, Pin or Unpin, Options, a
+ * cloud agent's Ports, which opens the sheet of its listening ports, and
+ * Run ›, its repository's run actions where its workspace offers them, each
+ * run in its sandbox or stopped while it runs, as the panel's narrow ⋯
+ * offers them, Archive, asked first, which goes back once the agent is
+ * archived, and Permanently delete, red and last, which always asks in the
+ * panel's words and goes back once the agent is deleted. Under
  * it, its transcript as one lazy list, its head where the agent stands and
  * the model it runs on, which opens the options sheet, as the menu's
  * Options and the composer's + do. The transcript
@@ -422,6 +436,9 @@ export function AgentScreen() {
   const mode = useAgentMode(id);
   const pick = useAgentModelPick(id);
   const actions = useAgentActions(id, address);
+  const runActions = useAgentRun(id);
+  const hasPorts = useAgentHasPorts(id);
+  const openPorts = () => router.push({ pathname: "/agent-ports", params: { agent: id } });
   // Whether Rename's alert, or Archive's or Permanently delete's question, stands over the page.
   const [renaming, setRenaming] = useState(false);
   const [archiving, setArchiving] = useState(false);
@@ -482,6 +499,25 @@ export function AgentScreen() {
               <Stack.Toolbar.MenuAction icon="slider.horizontal.3" onPress={openOptions}>
                 {ADD_WORDS.OPTIONS}
               </Stack.Toolbar.MenuAction>
+              {hasPorts ? (
+                <Stack.Toolbar.MenuAction icon="network" onPress={openPorts}>
+                  {AGENT_PORTS_WORDS.PORTS}
+                </Stack.Toolbar.MenuAction>
+              ) : null}
+              {runActions.length === 0 ? null : (
+                <Stack.Toolbar.Menu icon="play" title={RUN_ACTION_WORDS.SUBMENU}>
+                  {runActions.map((offered) => (
+                    <Stack.Toolbar.MenuAction
+                      key={offered.action.id}
+                      icon={offered.runs ? "stop" : "play"}
+                      subtitle={offered.action.command}
+                      onPress={offered.onPress}
+                    >
+                      {runActionMenuLabel(offered.action, offered.runs)}
+                    </Stack.Toolbar.MenuAction>
+                  ))}
+                </Stack.Toolbar.Menu>
+              )}
             </Stack.Toolbar.Menu>
           )}
           {agent === undefined ? null : (
@@ -716,6 +752,94 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
                 label={server.name}
                 on={server.on}
                 onSwitch={(on) => servers.toggle(server.connection, on)}
+              />
+            ))}
+          </ListSection>
+        </SettingsForm>
+      </Screen>
+    </>
+  );
+}
+
+/** The glyph each port's act wears in its menu, as the panel's plug wears it. */
+const PORT_ACT_SYMBOL = {
+  [PORT_ACT.SHARE]: "link",
+  [PORT_ACT.OPEN_LINK]: "safari",
+  [PORT_ACT.COPY_LINK]: "doc.on.doc",
+  [PORT_ACT.STOP_SHARING]: "xmark.circle",
+} as const satisfies Record<PortAct, SfSymbol>;
+
+/** Each port's act's words, in the panel's. */
+const PORT_ACT_WORDS = {
+  [PORT_ACT.SHARE]: AGENT_PORTS_WORDS.SHARE,
+  [PORT_ACT.OPEN_LINK]: AGENT_PORTS_WORDS.OPEN_LINK,
+  [PORT_ACT.COPY_LINK]: AGENT_PORTS_WORDS.COPY_LINK,
+  [PORT_ACT.STOP_SHARING]: AGENT_PORTS_WORDS.STOP_SHARING,
+} as const satisfies Record<PortAct, string>;
+
+/** The Ports sheet's own words: its close. */
+const PORTS_WORDS = { DONE: "Done" } as const;
+
+/**
+ * A cloud agent's listening ports, as the panel's plug lists them where it
+ * forwards nothing, in a sheet over its page, read every few seconds while
+ * it stands: one row per port, ":3000" with what serves it under it, whose
+ * press offers Share while no port is shared; the shared one wears a link
+ * and Sharing, and offers Open link, which opens it in Safari, Copy link,
+ * and Stop sharing; while one is shared, another offers nothing, and where
+ * none is listed, the panel's line says why. A share that did not go says
+ * why under the list. Done closes it.
+ */
+export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
+  const colors = useColors();
+  const router = useRouter();
+  const ports = useAgentPorts(agentId);
+
+  const actOf = (row: PortRow, act: PortAct): MenuRowAct => {
+    const label = PORT_ACT_WORDS[act];
+    const symbol = PORT_ACT_SYMBOL[act];
+    const url = row.url ?? "";
+
+    switch (act) {
+      case PORT_ACT.SHARE:
+        return { label, symbol, onPress: () => ports.share(row.port) };
+      case PORT_ACT.OPEN_LINK:
+        return { label, symbol, onPress: () => openInSafari(url) };
+      case PORT_ACT.COPY_LINK:
+        return { label, symbol, onPress: () => ports.copy(url) };
+      case PORT_ACT.STOP_SHARING:
+        return { label, symbol, onPress: () => ports.share(null) };
+    }
+  };
+
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: AGENT_PORTS_WORDS.PORTS,
+          headerTintColor: colors.TEXT,
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: colors.SIDEBAR },
+        }}
+      />
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button onPress={() => router.back()}>
+          {PORTS_WORDS.DONE}
+        </Stack.Toolbar.Button>
+      </Stack.Toolbar>
+      <Screen>
+        <SettingsForm>
+          <ListSection footer={ports.note ?? (ports.rows.length === 0 ? ports.none : undefined)}>
+            {ports.rows.map((row) => (
+              <MenuRow
+                key={row.port}
+                label={`:${row.port}`}
+                symbol={row.url === undefined ? "globe" : "link"}
+                detail={row.label}
+                value={row.url === undefined ? undefined : AGENT_PORTS_WORDS.SHARING}
+                acts={row.acts.map((act) => actOf(row, act))}
               />
             ))}
           </ListSection>
