@@ -14,9 +14,10 @@ test("each block's span stands over its own Markdown, its quote its words with n
   ]);
 });
 
-// A block drawn alone must still find a link's address defined elsewhere in the description, or its link reads as plain words.
-test("a block is drawn with the description's link definitions after it, and a definition is no block of its own", () => {
-  const text = "See [the spec][s].\n\n[s]: https://example.com/spec\n";
+// A block drawn alone must still find a link's address defined elsewhere in the description, or its link reads as plain words, and must not carry every other definition, or a long description is drawn once over for each block.
+test("a block is drawn with the link definitions it names after it, and a definition is no block of its own", () => {
+  const text =
+    "See [the spec][s].\n\nPlain.\n\n[s]: https://example.com/spec\n[t]: https://example.com/t\n";
 
   assert.deepEqual(descriptionBlocks(text), [
     {
@@ -25,5 +26,6 @@ test("a block is drawn with the description's link definitions after it, and a d
       drawn: "See [the spec][s].\n\n[s]: https://example.com/spec",
       quote: "See the spec.",
     },
+    { from: 20, to: 26, drawn: "Plain.", quote: "Plain." },
   ]);
 });

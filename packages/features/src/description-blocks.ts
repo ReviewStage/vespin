@@ -16,7 +16,7 @@ import { markdownTree } from "./markdown-tree.js";
 export interface DescriptionBlock {
   readonly from: number;
   readonly to: number;
-  /** The block's own Markdown, with the description's link definitions after it, so a reference-style link or picture in it still finds its address when the block is drawn alone. */
+  /** The block's own Markdown, with the description's link definitions it uses after it, so a reference-style link or picture in it still finds its address when the block is drawn alone. */
   readonly drawn: string;
   /** Its words with no Markdown, each inner block on a line of its own, at most a quote's length; none where it holds no words to comment on, such as a rule or raw HTML. */
   readonly quote: string | undefined;
@@ -50,6 +50,16 @@ function plainWords(node: Nodes): string {
   return parts.join(BLOCK_PARENTS.has(node.type) ? "\n" : "");
 }
 
+/** The link definitions a node's reference-style links and pictures name, by their normalized label. */
+function referenced(node: Nodes): readonly string[] {
+  const inner =
+    "children" in node ? node.children.flatMap((child: Nodes) => referenced(child)) : [];
+
+  return node.type === "linkReference" || node.type === "imageReference"
+    ? [node.identifier, ...inner]
+    : inner;
+}
+
 /**
  * The description's blocks, in order: each top-level block but a link
  * definition, which draws nothing, with its span in `text`, the Markdown it
@@ -69,11 +79,13 @@ export function descriptionBlocks(text: string): readonly DescriptionBlock[] {
       : [{ node, from: from + shift, to: to + shift }];
   });
 
-  const definitions = spans
-    .filter(({ node }) => node.type === "definition")
-    .map(({ from, to }) => text.slice(from, to));
+  // Note that the first definition of a label is the one a link takes, as CommonMark reads it.
+  const definitions = new Map<string, string>();
 
-  const after = definitions.length === 0 ? "" : `\n\n${definitions.join("\n")}`;
+  for (const { node, from, to } of spans) {
+    if (node.type === "definition" && !definitions.has(node.identifier))
+      definitions.set(node.identifier, text.slice(from, to));
+  }
 
   return spans
     .filter(({ node }) => node.type !== "definition")
@@ -82,6 +94,10 @@ export function descriptionBlocks(text: string): readonly DescriptionBlock[] {
         node.type === "html"
           ? ""
           : plainWords(node).trim().slice(0, DESCRIPTION_COMMENT_BOUNDS.MAX_QUOTE_CHARS);
+
+      // Note that a block carries only the definitions it names, so a long description is not drawn once over for every block.
+      const used = [...new Set(referenced(node))].flatMap((label) => definitions.get(label) ?? []);
+      const after = used.length === 0 ? "" : `\n\n${used.join("\n")}`;
 
       return { from, to, drawn: `${text.slice(from, to)}${after}`, quote: quote || undefined };
     });
