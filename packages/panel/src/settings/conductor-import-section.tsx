@@ -60,7 +60,7 @@ import { ReadFailed, replayMaskedError } from "./marks.js";
 const PROGRESS_POLL_MS = 3_000;
 
 /** Where a Conductor key is made. */
-const CONDUCTOR_KEYS_URL = "https://app.conductor.build/settings";
+const CONDUCTOR_KEYS_URL = "https://app.conductor.build/home/api-keys";
 
 /** What a refusal of Conductor's says. */
 const REFUSAL_WORDS = {
