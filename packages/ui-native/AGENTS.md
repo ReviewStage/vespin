@@ -151,7 +151,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   unread dot in the margin, a 14 pt leading mark in an 18 pt column (the
   status ring, or the ask's glyph on an agent's own thread), the words from
   `ROW_INSET.TEXT`, and a hairline in `CHIP_EDGE` that starts under the
-  words.
+  words. An Inbox thread stands roomier, as Mail's message rows do
+  (`ROW_INSET.THREAD_VERTICAL` above and below, `THREAD_LINE_GAP` between
+  its lines), while a task's row keeps the list's tighter inset.
 - **Group headers** (`ListSection`) are small and muted with a count; a
   `foldable` one folds in place on a press, its chevron on the left.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
