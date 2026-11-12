@@ -125,10 +125,16 @@ export default function FeedbackScreen() {
     words,
     feedback: feedbackPictures.attached,
     prompt: promptPictures.attached,
+    reading: feedbackPictures.reading || promptPictures.reading,
   });
 
   useEffect(() => {
-    held.current = { words, feedback: feedbackPictures.attached, prompt: promptPictures.attached };
+    held.current = {
+      words,
+      feedback: feedbackPictures.attached,
+      prompt: promptPictures.attached,
+      reading: feedbackPictures.reading || promptPictures.reading,
+    };
   });
 
   const send = () => {
@@ -171,7 +177,7 @@ export default function FeedbackScreen() {
       setSending(false);
 
       if (!went) return;
-      // Note that only what was sent is taken off: words changed while it was out, a picture added meanwhile, and the other kind's note all stay, and keep the page.
+      // Note that only what was sent is taken off: words changed while it was out, a picture added or still being read meanwhile, and the other kind's note all stay, and keep the page.
       const now = held.current;
       const other = kind === FEEDBACK_KIND.FEEDBACK ? FEEDBACK_KIND.PROMPT : FEEDBACK_KIND.FEEDBACK;
       const edited = now.words[kind] !== message;
@@ -185,7 +191,8 @@ export default function FeedbackScreen() {
         setSends((count) => count + 1);
       }
 
-      if (edited || added || otherHeld) return;
+      // Note that a picture dropped while the send was out and still being read keeps the page too, so it lands where it can be seen.
+      if (edited || added || otherHeld || now.reading) return;
       kept.release();
       router.back();
     });
