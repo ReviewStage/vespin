@@ -443,7 +443,11 @@ function KeptPicture({
           {
             label: TOOL.ENLARGE,
             icon: <Maximize2Icon aria-hidden="true" />,
-            run: () => door.open(named.attachmentId),
+            run: () => {
+              // Note that the text takes the focus back, the picture selected, before the viewer opens, so the viewer hands it back there as it closes and one Escape then leaves the text, where the tool's own button would hold it.
+              doors.leave(PICTURE_LEAVE.UP);
+              door.open(named.attachmentId);
+            },
           },
         ]
       : []),

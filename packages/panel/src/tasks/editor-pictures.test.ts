@@ -380,3 +380,28 @@ test("in a column too narrow for their names, a selected picture's tools are eac
     ["Alt text", "Caption", "Enlarge", "Delete"],
   );
 });
+
+test("Enlarge on a selected picture hands the focus back to the text, the picture selected, so the viewer closing leaves it there", async () => {
+  const container = await editing();
+  await pasteScreenshot(container);
+  await keepAsked();
+  await answerKeep({ id: KEPT_ID });
+  const tools = selectPicture(container);
+
+  const enlarge =
+    [...tools.querySelectorAll("button")].find((button) => button.textContent === "Enlarge") ??
+    assert.fail("Enlarge is offered");
+
+  // A press focuses the button it lands on, as the Mac's does.
+  act(() => {
+    enlarge.focus();
+    enlarge.click();
+  });
+
+  const text = container.querySelector(".ProseMirror");
+  assert.ok(document.activeElement === text, "the text holds the focus");
+  assert.equal(
+    container.querySelector(".editor-picture-drawn")?.getAttribute("data-selected"),
+    "true",
+  );
+});
