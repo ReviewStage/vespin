@@ -69,9 +69,10 @@ export function launchPullRequest(): number | undefined {
   return Number.isInteger(number) && number > 0 ? number : undefined;
 }
 
-/** The pairing code this launch hands the app, as `-connect <code>` names it, as a machine's link would (`maestro/settings-machine-connect.yaml`); none on any other platform, and where none is named. */
+/** The pairing code a fixture run's launch hands the app, as `-connect <code>` names it, as a machine's link would (`maestro/settings-machine-connect.yaml`); none in a live run, on any other platform, and where none is named. */
 export function launchHostConnect(): string | undefined {
-  if (Platform.OS !== "ios") return undefined;
+  // Note that only a fixture run takes a code from its launch, since a live one takes a pairing only from its link.
+  if (launchFixtureProfile() === undefined) return undefined;
   const named: unknown = Settings.get(LAUNCH_ARGUMENT.CONNECT);
 
   return Predicate.isString(named) && named !== "" ? named : undefined;

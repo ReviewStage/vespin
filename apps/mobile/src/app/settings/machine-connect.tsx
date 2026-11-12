@@ -7,6 +7,7 @@ import {
   hostConnectQuestion,
   hostConnectRefusalWords,
   hostDeniedTitle,
+  hostShownName,
 } from "@repo/features/host-connect-words";
 import {
   HOST_PAIRING_CALL_FAILURE,
@@ -31,6 +32,7 @@ import {
   SettingsForm,
 } from "@repo/ui-native";
 import { type UseQueryResult, useQuery } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { useHostActs } from "../../host/host-provider.js";
@@ -116,9 +118,9 @@ function readStanding(pairing: UseQueryResult<HostPairingAnswer | HostPairingFai
 }
 
 export default function MachineConnectScreen() {
-  const { code: named = "" } = useLocalSearchParams<{ code?: string }>();
-  // Note that a code is read as the link's own grammar reads one, so a route handed anything else asks the service nothing.
-  const code = hostUserCodeOf(named);
+  const { code: named } = useLocalSearchParams<{ code?: string }>();
+  // Note that a code is read as the link's own grammar reads one, so a route handed anything else, a repeated code among it, asks the service nothing.
+  const code = Predicate.isString(named) ? hostUserCodeOf(named) : undefined;
 
   // Note that the page is drawn anew for each code, so an answer to one never stands over another.
   return code === undefined ? <Refused refusal={NOT_FOUND} /> : <Pairing key={code} code={code} />;
@@ -265,7 +267,9 @@ function Pairing({ code }: { readonly code: string }) {
  * and platform it reported, its architecture and the address its start came
  * from; to connect it only if the member ran the command and the code
  * matches; the code and when it expires; then Connect and Deny, neither
- * taking a press while an answer is out or once the machine is made.
+ * taking a press while an answer is out or once the machine is made. Back,
+ * and the sheet's own swipe, are held only while an answer is out, so a
+ * page left standing connected can always be left.
  */
 function Ask({
   code,
@@ -280,16 +284,26 @@ function Ask({
   readonly connected: boolean;
   readonly onAnswer: (answer: Answer) => void;
 }) {
+  const navigation = useNavigation();
   const inFlight = sending === SENDING.CONNECT || sending === SENDING.DENY;
   const settled = inFlight || connected;
+  // Note that the Settings sheet itself is held too while an answer is out, as the panel's dialog holds its dismiss, so its answer is always seen.
+  useEffect(() => {
+    const sheet = navigation.getParent();
+
+    if (!inFlight || sheet === undefined) return undefined;
+    sheet.setOptions({ gestureEnabled: false });
+
+    return () => sheet.setOptions({ gestureEnabled: true });
+  }, [navigation, inFlight]);
 
   return (
     <>
       <Stack.Screen
         options={{
           title: hostConnectQuestion(box),
-          headerBackVisible: !settled,
-          gestureEnabled: !settled,
+          headerBackVisible: !inFlight,
+          gestureEnabled: !inFlight,
         }}
       />
       <Screen>
@@ -297,7 +311,7 @@ function Ask({
           <ListSection footer={HOST_CONNECT_WORDS.MATCH}>
             <NoteRow
               symbol={PLATFORM_SYMBOL[box.platform]}
-              words={box.name}
+              words={hostShownName(box)}
               line={hostBoxFacts(box)}
             />
           </ListSection>

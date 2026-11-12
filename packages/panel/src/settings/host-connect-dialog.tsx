@@ -5,6 +5,7 @@ import {
   hostConnectQuestion,
   hostConnectRefusalWords,
   hostDeniedTitle,
+  hostShownName,
 } from "@repo/features/host-connect-words";
 import {
   HOST_PAIRING_CALL_FAILURE,
@@ -213,7 +214,7 @@ function AskDialog({
                 <DeviceGlyph device={box} />
               </SettingsRowMark>
             }
-            label={<ReplayMask>{box.name}</ReplayMask>}
+            label={<ReplayMask>{hostShownName(box)}</ReplayMask>}
             description={<ReplayMask>{hostBoxFacts(box)}</ReplayMask>}
           />
         </SettingsSection>
