@@ -364,6 +364,31 @@ function standInResizeObserver(): void {
   );
 }
 
+test("an item standing for a wait is heard with its words after its label and detail", () => {
+  mount(
+    createElement(Harness, {
+      groups: [
+        [
+          {
+            label: "Stop Dev server",
+            detail: "pnpm dev",
+            busy: "Running",
+            onSelect: () => undefined,
+          },
+          { label: "Check", busy: "Running", onSelect: () => undefined },
+        ],
+      ],
+    }),
+  );
+  press(button("More"));
+  const items = [...(openMenu()?.querySelectorAll('[role="menuitem"]') ?? [])];
+
+  expect(items.map((item) => item.getAttribute("aria-label"))).toEqual([
+    "Stop Dev server, pnpm dev, Running",
+    "Check, Running",
+  ]);
+});
+
 test("a detail placed beside its label is heard after the label as one under it is", () => {
   standInResizeObserver();
   mount(

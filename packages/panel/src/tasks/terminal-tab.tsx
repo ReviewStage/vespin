@@ -39,7 +39,7 @@ import { TERMINAL_FIND, type TerminalFind } from "../terminal/contract.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectMirrors } from "../use-app-state.js";
 import { AgentRef, agentSubject, NOTHING_HELD } from "./agent-ref.js";
-import { type RunTabLook, runActionGlyph, useRunTabLooks } from "./run-action-shells.js";
+import { type RunTabLook, useRunTabLooks } from "./run-action-shells.js";
 import { useRunActionPress } from "./run-actions-button.js";
 import { AgentGlyph } from "./tab-look.js";
 import { useHeldShells } from "./terminal-held.js";
@@ -255,7 +255,6 @@ export function TerminalTab({
     <Fill className="terminal-tab file-view" data-state={session.state.kind}>
       {phone ? null : (
         <PaneBar
-          mark={runLook === undefined ? undefined : runActionGlyph(runLook.action.icon)}
           middle={
             // Note that the name and where the connection stands share one shrinking box, so a long name is cut rather than running past the bar.
             // Note that each fact stands as its own element a gap apart, never joined by a dot: a run action's read-only as a badge, the connection as quiet words.
