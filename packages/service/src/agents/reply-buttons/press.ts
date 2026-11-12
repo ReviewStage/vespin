@@ -10,7 +10,9 @@
  * own presser runs it again under the same key, the button's id, which the
  * start keys the agent by and the send keys its line by, so a retry after a
  * press cut off starts or sends once, and an attempt refused releases only
- * its own claim, never a retry's. Every check runs again here as the
+ * its own claim, never a retry's. A start a press already made, whoever's,
+ * is the agent a later press reaches, so a press taking over a claim cut off
+ * after its start never starts a second. Every check runs again here as the
  * presser: a start lands on the button agent's task, on their model or the
  * one the button names; a send reaches an agent they reach. A press refused
  * is released, so the button may be pressed again.
@@ -21,6 +23,7 @@ import { readVisibleAgent } from "@repo/database/models/agent-store";
 import {
   claimReplyButtonPress,
   type ReplyButton,
+  readAgentStartedByPress,
   readReplyButton,
   releaseReplyButtonPress,
   settleReplyButtonPress,
@@ -178,6 +181,13 @@ const runPressed = (
 
       return agent.id;
     }
+
+    // A start an earlier press made, another member's whose claim lapsed or was released after it ran, is the one this press reached.
+    const already = yield* hostedStoreOrUnavailable(
+      readAgentStartedByPress(button.id, button.taskId),
+    );
+
+    if (already !== undefined) return already;
 
     const started = yield* startRequestedAgent(
       routedSessions<TypedTurn>(userId),
