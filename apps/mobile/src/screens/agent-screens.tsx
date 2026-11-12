@@ -15,7 +15,7 @@ import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/feature
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
-import { modelLabel } from "@repo/features/model-label";
+import { agentName, modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
   MERGE_ACTION,
@@ -90,8 +90,8 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { PageScreen } from "./page-screens.js";
 
-/** What an agent is called where the list holds no title for it yet. */
-const UNTITLED_AGENT = "Agent";
+/** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
+const UNLISTED_AGENT = "Agent";
 
 /** What stands in the transcript's place while it is read, and where it could not be, with what reads it again. */
 const TRANSCRIPT_WORDS = {
@@ -412,7 +412,11 @@ export function AgentScreen() {
   const older = useOlderPages(id, transcript?.before);
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
-  const title = cardTitle(agent?.title ?? transcript?.word?.title ?? UNTITLED_AGENT);
+
+  const title = cardTitle(
+    agent === undefined ? (transcript?.word?.title ?? UNLISTED_AGENT) : agentName(agent),
+  );
+
   useScreenActivity((workspaces) =>
     agent === undefined
       ? undefined

@@ -1,7 +1,11 @@
 // inbox-line-model.ts -- the glyphs and tones a row's marks wear: an Inbox row's last line, and a task row's pull request, as the panel draws them.
 
-import { PULL_REQUEST_STATE, type PullRequestState } from "@repo/features/agent-wire";
+import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { INBOX_LINE, type InboxLineKind } from "@repo/features/inbox-list-model";
+import {
+  PULL_REQUEST_MARK_QUEUED,
+  type PullRequestMarkState,
+} from "@repo/features/pull-request-model";
 import type { Glyph } from "./glyph.js";
 import { STATUS_TONE, type StatusTone } from "./tokens/colors.js";
 import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
@@ -27,9 +31,13 @@ export const INBOX_LINE_LOOK = {
 } as const satisfies Record<InboxLineKind, InboxLineLook | undefined>;
 
 /**
- * A task's pull request as a task row's mark, in GitHub's own colors, as the
- * panel's agents mark draws it (`@repo/ui`'s `PULL_REQUEST_GLYPH`): Lucide's
- * own git glyphs, since SF Symbols has none.
+ * A pull request's mark, by where its mark says it stands
+ * (`@repo/features/pull-request-model`'s `pullRequestMarkState`), in GitHub's
+ * own colors, as the panel's agents mark draws it (`@repo/ui`'s
+ * `PULL_REQUEST_GLYPH`): Lucide's own git glyphs, since SF Symbols has none.
+ * An open one the merge queue holds wears the merge's glyph in the attention
+ * ink, as the panel's does, so its words, "Queued", not its color alone, tell
+ * it from a merged one.
  */
 export const PULL_REQUEST_LOOK = {
   [PULL_REQUEST_STATE.OPEN]: { symbol: LUCIDE_SYMBOL.GIT_PULL_REQUEST, tone: STATUS_TONE.COMPLETE },
@@ -42,4 +50,5 @@ export const PULL_REQUEST_LOOK = {
     symbol: LUCIDE_SYMBOL.GIT_PULL_REQUEST_CLOSED,
     tone: STATUS_TONE.DANGER,
   },
-} as const satisfies Record<PullRequestState, InboxLineLook>;
+  [PULL_REQUEST_MARK_QUEUED]: { symbol: LUCIDE_SYMBOL.GIT_MERGE, tone: STATUS_TONE.ATTENTION },
+} as const satisfies Record<PullRequestMarkState, InboxLineLook>;

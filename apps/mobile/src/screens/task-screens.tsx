@@ -981,6 +981,7 @@ export function TaskAgentRow({
           : {
               number: pullRequest.number,
               state: pullRequest.state,
+              queued: pullRequest.queued,
               onPress: () => router.push(iosPullRequestRoute(agent.id, pullRequest.number)),
             }
       }

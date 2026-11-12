@@ -12,7 +12,7 @@ import {
   padding,
   strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
-import type { PullRequestState } from "@repo/features/agent-wire";
+import type { PullRequestMarkState } from "@repo/features/pull-request-model";
 import { Chip } from "./button.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { ToneGlyph } from "./marks.js";
@@ -30,7 +30,8 @@ export type PullRequestAct = {
 };
 
 type PullRequestCardProps = {
-  readonly state: PullRequestState;
+  /** Where its mark says it stands (`pullRequestMarkState`): queued where it is open and the merge queue holds it. */
+  readonly state: PullRequestMarkState;
   /** Its title, led by its number where one is given: "#7911 Draw the Inbox". */
   readonly title: string;
   readonly number?: number | undefined;

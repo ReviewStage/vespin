@@ -1,4 +1,4 @@
-// pull-request-look.ts -- the glyphs and tones a pull request's page wears: its state with the merge queue beside it, each check, how its checks went, and each reviewer, as the panel's Pull request tab draws them.
+// pull-request-look.ts -- the glyphs and tones a pull request's page wears: each check, how its checks went, and each reviewer, as the panel's Pull request tab draws them.
 
 import {
   CHECK_STATE,
@@ -9,21 +9,7 @@ import {
   type ReviewState,
 } from "@repo/features/agent-wire";
 import type { MarkLook } from "./glyph.js";
-import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { STATUS_TONE } from "./tokens/colors.js";
-import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
-
-/**
- * A pull request's state mark: GitHub's glyph in GitHub's color for where it
- * stands, and, for an open one the merge queue holds, the merge's glyph in
- * the attention ink, as the panel's pill draws it, so its words, "Queued",
- * not its color alone, tell it from a merged one.
- */
-export function pullRequestLook(state: keyof typeof PULL_REQUEST_LOOK, queued: boolean): MarkLook {
-  return queued
-    ? { symbol: LUCIDE_SYMBOL.GIT_MERGE, tone: STATUS_TONE.ATTENTION }
-    : PULL_REQUEST_LOOK[state];
-}
 
 /**
  * Each check's glyph, the SF Symbol closest to the panel's: passed a green

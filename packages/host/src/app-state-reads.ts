@@ -16,7 +16,7 @@ import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositorie
 import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/inbox-list-model";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import { LIVE_READ } from "@repo/features/live-wire";
-import { providerOf } from "@repo/features/model-label";
+import { agentName, providerOf } from "@repo/features/model-label";
 import type { ModelChoice, ModelProvider, ModelsAnswer } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { HOST_LIVE } from "@repo/features/tasks-view";
@@ -534,15 +534,11 @@ export function selectInboxReader(state: AppStateSnapshot): string | undefined {
   return state.account.status === ACCOUNT_STATUS.SIGNED_IN ? state.account.id : undefined;
 }
 
-/** Every agent's title the task list holds, by the agent's id, as a `select`: the agents on its tasks, an agent with no title yet left out. Made anew only as the list moves. */
-export const selectAgentTitles = memoizedSelect(
+/** Every agent's name the task list holds, by the agent's id, as a `select`: the agents on its tasks, each named as the panel names it (`agentName`). Made anew only as the list moves. */
+export const selectAgentNames = memoizedSelect(
   (state: AppStateSnapshot) => [state.tasks],
   (tasks): ReadonlyMap<string, string> =>
-    new Map(
-      (tasks.taskAgents ?? []).flatMap(({ id, title }) =>
-        title === null ? [] : [[id, title] as const],
-      ),
-    ),
+    new Map((tasks.taskAgents ?? []).map((agent) => [agent.id, agentName(agent)] as const)),
 );
 
 /** The provider whose harness each agent on the task list runs in, by the agent's id, as a `select`: read off its model's catalog id, an agent on a provider we run no agent on left out. Made anew only as the list moves. */

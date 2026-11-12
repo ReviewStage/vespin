@@ -45,10 +45,10 @@ import {
   type AgentPullRequest,
   type AgentTranscriptMessage,
   PULL_REQUEST_STATE,
-  type PullRequestState,
 } from "@repo/features/agent-wire";
 import { fileName } from "@repo/features/code-ref-words";
 import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { callHeading, WORKING_LINE, workedForText } from "@repo/features/time-format";
 import {
   BLOCK_TITLE,
@@ -193,7 +193,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly title: string;
       /** Its own page on GitHub. */
       readonly url: string;
-      readonly state: PullRequestState;
+      /** Where its mark says it stands: queued where it is open and the merge queue holds it. */
+      readonly state: PullRequestMarkState;
       /** The lines it adds and removes, where the task list holds it. */
       readonly additions: number | undefined;
       readonly deletions: number | undefined;
@@ -387,7 +388,8 @@ function openedPullRequest(
   const held = pullRequests.find((each) => each.number === number && each.url === url);
 
   if (held !== undefined) {
-    const { title, state, additions, deletions } = held;
+    const { title, additions, deletions } = held;
+    const state = pullRequestMarkState(held);
     const kind = TRANSCRIPT_ITEM.PULL_REQUEST;
 
     return [{ ...base, place, kind, number, title, url, state, additions, deletions }];
