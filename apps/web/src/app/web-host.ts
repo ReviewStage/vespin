@@ -86,7 +86,6 @@ import type { NotificationsStatus } from "@repo/settings/settings-controls";
 import type { RouterHistory } from "@tanstack/react-router";
 import { Cause, ConfigProvider, Context, Effect, Layer, Path, Queue, Stream } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
-import { version as appVersion } from "../../package.json";
 import { type ConnectTabs, connectTabs, tabBrowser } from "./connect-tab";
 import { FILES_KEY, localStorageFileSystem, tabStorage } from "./local-storage-file-system";
 import { type PageLeave, tabLeave } from "./page-leave";
@@ -106,6 +105,7 @@ import {
   openTab,
   webPlatform,
 } from "./web-platform";
+import { webDeploymentCommit } from "./web-sentry";
 import { openTerminalSocketFromPage } from "./web-terminal-socket";
 
 /** Where the host in the tab keeps its files, inside the browser's storage (`local-storage-file-system.ts`). */
@@ -254,6 +254,14 @@ function tabOnline(): Stream.Stream<boolean> {
     ),
   );
 }
+
+/**
+ * The version this tab reports itself as: the commit it was deployed from,
+ * which is the only name a web build has, or none on a development server.
+ * Never the package's `version` field, which no deploy bumps, so a count
+ * filed under it would name a release this tab is not.
+ */
+const appVersion = webDeploymentCommit();
 
 /** Every seam the host's kernel and assembly stand on, as the tab answers it. */
 function seamLayers(storage: Storage, fixture: RunProfile | undefined) {
