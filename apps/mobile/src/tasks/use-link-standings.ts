@@ -48,8 +48,11 @@ export function useLinkStandings(
     return [...new Set(words.flatMap((each) => markdownGithubPages(each, reading)))];
   }, [words, repository, workspaceId]);
 
-  useLiveFollows(pages, (address) =>
-    acts[ACT_KIND.TASKS_LINK_STANDING_FOLLOW]({ workspaceId: workspaceId ?? "", address }),
+  useLiveFollows(
+    pages,
+    (address) =>
+      acts[ACT_KIND.TASKS_LINK_STANDING_FOLLOW]({ workspaceId: workspaceId ?? "", address }),
+    workspaceId,
   );
 
   const { data: held } = useQuery({

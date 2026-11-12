@@ -528,16 +528,21 @@ function blocksOf(nodes: readonly RootContent[], reader: Reader): MarkdownBlock[
   return nodes.flatMap((node) => blockOf(node, reader));
 }
 
-/** A run's words as VoiceOver hears them, each chip by its kind and name. */
-function heardRun(run: MarkdownRun): string {
+/** A chip as VoiceOver hears it where nothing more is known of it: by its kind and name. */
+function chipHeardAsWritten(chip: MarkdownChip): string {
+  return chip.heard;
+}
+
+/** A run's words as VoiceOver hears them, each chip as `chipHeard` says it. */
+function heardRun(run: MarkdownRun, chipHeard: (chip: MarkdownChip) => string): string {
   switch (run.kind) {
     case MARKDOWN_RUN.WORDS:
     case MARKDOWN_RUN.CODE:
       return run.text;
     case MARKDOWN_RUN.LINK:
-      return run.runs.map(heardRun).join("");
+      return run.runs.map((each) => heardRun(each, chipHeard)).join("");
     case MARKDOWN_RUN.CHIP:
-      return run.chip.heard;
+      return chipHeard(run.chip);
     case MARKDOWN_RUN.BREAK:
       return "\n";
   }
@@ -551,14 +556,18 @@ function holdsChip(run: MarkdownRun): boolean {
 }
 
 /**
- * A line's words as VoiceOver hears them where it holds a chip, each chip by
- * its kind and name; nothing where it holds none, since its words are heard
+ * A line's words as VoiceOver hears them where it holds a chip, each chip as
+ * `chipHeard` says it, by its kind and name unless the caller knows more of
+ * it, such as a GitHub page's title and state; nothing where it holds none, since its words are heard
  * as drawn. Note that a chip stands in the line as a view, which iOS never
  * hears inside a run of text, so a line read without this says
  * "Pull request:" and stops.
  */
-export function heardLine(runs: readonly MarkdownRun[]): string | undefined {
-  return runs.some(holdsChip) ? runs.map(heardRun).join("") : undefined;
+export function heardLine(
+  runs: readonly MarkdownRun[],
+  chipHeard: (chip: MarkdownChip) => string = chipHeardAsWritten,
+): string | undefined {
+  return runs.some(holdsChip) ? runs.map((run) => heardRun(run, chipHeard)).join("") : undefined;
 }
 
 /** Markdown as the blocks the app draws, read as the panel reads it; words nested too deep to parse safely are one block of plain text. */

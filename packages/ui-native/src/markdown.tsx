@@ -3,7 +3,7 @@
 import { Image as SwiftUIImage } from "@expo/ui/swift-ui";
 import { accessibilityHidden, frame } from "@expo/ui/swift-ui/modifiers";
 import { readerZone } from "@repo/features/date-mention";
-import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
+import { ENTITY_KIND, type EntityKind, entityWordHeard } from "@repo/features/entity-kind";
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import { SymbolView } from "expo-symbols";
@@ -178,7 +178,17 @@ type StandingLook = {
   readonly tone: StatusTone;
   readonly name: string;
   readonly state: string | undefined;
+  /** What VoiceOver hears: its kind, the name it now shows, and its state. */
+  readonly heard: string;
 };
+
+/** A GitHub chip's words as VoiceOver hears them once its standing is read, as the panel hears the label it shows: its kind and the name it shows, then its state. */
+function standingHeard(chip: MarkdownChip, name: string, state: string | undefined): string {
+  const word = entityWordHeard(chip.entity, name);
+  const named = word === undefined ? name : `${word} ${name}`;
+
+  return state === undefined ? named : `${named}, ${state}`;
+}
 
 /**
  * How a chip of a GitHub page stands, as the panel's chip draws it: a pull
@@ -191,23 +201,31 @@ function standingLook(chip: MarkdownChip, drawing: Drawing): StandingLook | unde
 
   if (standing?.pullRequest !== undefined) {
     const look = PULL_REQUEST_LOOK[pullRequestMarkState(standing.pullRequest)];
+    const name = `#${standing.pullRequest.number}`;
 
     return {
       ...look,
       glyph: look.symbol,
-      name: `#${standing.pullRequest.number}`,
+      name,
       state: standing.state,
+      heard: standingHeard(chip, name, standing.state),
     };
   }
 
   if (standing?.issue !== undefined) {
     const look = ISSUE_LOOK[standing.issue.state];
     const name = `#${standing.issue.number} ${standing.title}`;
+    const heard = standingHeard(chip, name, standing.state);
 
-    return { ...look, glyph: look.symbol, name, state: standing.state };
+    return { ...look, glyph: look.symbol, name, state: standing.state, heard };
   }
 
   return undefined;
+}
+
+/** A chip as VoiceOver hears it: as its standing shows it once GitHub has answered, else by its kind and written name. */
+function chipHeard(chip: MarkdownChip, drawing: Drawing): string {
+  return standingLook(chip, drawing)?.heard ?? chip.heard;
 }
 
 function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
@@ -263,7 +281,7 @@ function MentionChip({
   const onPress = open(chip.target, drawing);
   const size = TEXT_SIZE.FOOTNOTE;
   const standing = standingLook(chip, drawing);
-  const heard = standing?.state === undefined ? chip.heard : `${chip.heard}, ${standing.state}`;
+  const heard = standing?.heard ?? chip.heard;
 
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
@@ -391,13 +409,14 @@ function collectOpenings(
       if (onOpen !== undefined) {
         openings.push({
           name: `open-${openings.length}`,
-          label: `${OPEN_WORD} ${run.chip.heard}`,
+          label: `${OPEN_WORD} ${chipHeard(run.chip, drawing)}`,
           onOpen,
         });
       }
     } else if (run.kind === MARKDOWN_RUN.LINK) {
       const onOpen = open(run.target, drawing);
-      const words = heardLine(run.runs) ?? runsText(run.runs);
+      const heard = heardLine(run.runs, (chip) => chipHeard(chip, drawing));
+      const words = heard ?? runsText(run.runs, drawing);
 
       if (onOpen !== undefined && words !== "") {
         openings.push({ name: `open-${openings.length}`, label: `${OPEN_WORD} ${words}`, onOpen });
@@ -409,15 +428,15 @@ function collectOpenings(
 }
 
 /** A run's plain words, as a link's text is heard. */
-function runText(run: MarkdownRun): string {
+function runText(run: MarkdownRun, drawing: Drawing): string {
   switch (run.kind) {
     case MARKDOWN_RUN.WORDS:
     case MARKDOWN_RUN.CODE:
       return run.text;
     case MARKDOWN_RUN.LINK:
-      return runsText(run.runs);
+      return runsText(run.runs, drawing);
     case MARKDOWN_RUN.CHIP:
-      return run.chip.heard;
+      return chipHeard(run.chip, drawing);
     case MARKDOWN_RUN.BREAK:
       return " ";
     default: {
@@ -428,8 +447,8 @@ function runText(run: MarkdownRun): string {
 }
 
 /** Runs' plain words, joined. */
-function runsText(runs: readonly MarkdownRun[]): string {
-  return runs.map(runText).join("");
+function runsText(runs: readonly MarkdownRun[], drawing: Drawing): string {
+  return runs.map((run) => runText(run, drawing)).join("");
 }
 
 /** A line of words: a paragraph's, a heading's, or a table cell's. */
@@ -458,7 +477,7 @@ function Line({
 
   return (
     <Text
-      accessibilityLabel={heardLine(runs)}
+      accessibilityLabel={heardLine(runs, (chip) => chipHeard(chip, drawing))}
       {...(heading === true ? { accessibilityRole: "header" as const } : {})}
       {...actions}
       style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}
