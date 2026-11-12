@@ -16,6 +16,7 @@ import {
   type TaskRelationKind,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
@@ -63,6 +64,14 @@ export function useOpenRelation(): OpenRelation {
       pathname: "/task-relation",
       params: kind === undefined ? { task: taskId } : { task: taskId, kind },
     });
+}
+
+/** What the sheet says while the task's document, which holds its blocks, is first read. */
+const READING_TASK = readingWords("the task");
+
+/** Whether a kind is a block, which the open task's document judges, since the list carries no blocks. */
+function blockKind(kind: TaskRelationKind): boolean {
+  return kind === TASK_RELATION_KIND.BLOCKED_BY || kind === TASK_RELATION_KIND.BLOCKS;
 }
 
 /** Whether a route's word names one of the four kinds. */
@@ -204,7 +213,18 @@ export function TaskRelationScreen({
 
   const { document } = overview;
 
-  // Note that the open task's blocks are its document's, which the list does not carry, so a block already standing is judged only once the document is read.
+  // Note that the open task's blocks are its document's, which the list does not carry, so a block's tasks wait for it rather than be judged against none.
+  if (blockKind(kind) && document === undefined) {
+    return (
+      <>
+        {bar}
+        <Screen>
+          <EmptyState title={READING_TASK} symbol="checklist" />
+        </Screen>
+      </>
+    );
+  }
+
   const subject: TaskRelationSubject = {
     ...overview.task,
     ...(document?.blockedBy === undefined ? undefined : { blockedBy: document.blockedBy }),
