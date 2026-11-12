@@ -257,12 +257,16 @@ A flow is written one way throughout:
 - **A control is found by its id** where it has one (`workspace-switcher`,
   `composer-field`), and a row or a line by its words. A tab is opened
   through `maestro/subflows/tab.yaml`, by its id (`inbox-tab`, `tasks-tab`,
-  `search-tab`), since a list's title and a back button share its name.
+  `search-tab`), since a list's title and a back button share its name; an
+  iPad's floating bar carries no id, so `simulator-screenshots.sh` passes
+  `FLOATING_TABS=true` there and the tab is found by name. A flow chooses its
+  way by the device it runs on, never by what is on screen a moment.
 - **A repeated step is a subflow** under `maestro/subflows/`, run with
   `runFlow` and its `env`: `open-row.yaml` and `row-menu.yaml` scroll to a
   row and let the list settle before its tap or long press, `scroll-to.yaml`
   centers an element on a page, so neither a bar nor the reply box covers
-  it, `tab.yaml` opens a tab, and `dismiss.yaml` closes a menu by a tap off
+  it, or with `ABOVE` scrolls it above a control, for an element at a list's
+  end, which no scroll can center, `tab.yaml` opens a tab, and `dismiss.yaml` closes a menu by a tap off
   it. Maestro reads a swipe's points as the flow is parsed, so a swipe stays
   in its flow.
 - **A swipe is closed before the next press**, by pressing its action or a

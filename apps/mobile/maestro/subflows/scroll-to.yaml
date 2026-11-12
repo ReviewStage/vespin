@@ -1,36 +1,50 @@
-# scroll-to.yaml -- scrolls the page until `ELEMENT` stands in its middle, down unless `DIRECTION` is UP, and lets it settle.
+# scroll-to.yaml -- scrolls the page until `ELEMENT` stands in its middle, down unless `DIRECTION` is UP, or with `ABOVE` down until it stands above the control of that id, and lets it settle.
 #
 # Note that the element is centered, because a scroll that stops once it
 # shows leaves it at the window's edge: under a thread's reply box and the
 # tab bar going down, where a tap lands on them instead, and under the bar
-# and the status bar going up, where a tap scrolls the page to its top. A row
-# at a list's end cannot be centered, since the list scrolls no further, so a
-# row is reached through `open-row.yaml` or `row-menu.yaml`. Each swipe
-# waits at most a second for the page to hold still, because an agent's page
-# draws its turn still running, whose mark never stops moving, so a wait to
-# its end took four seconds a swipe and ran a scroll out of time on a loaded
-# runner.
+# and the status bar going up, where a tap scrolls the page to its top. An
+# element at a list's end cannot be centered, since the list scrolls no
+# further and the scroll swipes on until its time is up, so it is scrolled
+# to above the control that would cover it instead (`ABOVE`, such as
+# `composer-field`); a row is reached through `open-row.yaml` or
+# `row-menu.yaml`. Each scroll may take a minute, because a page that never
+# holds still, an agent's turn still running or a video playing, holds each
+# swipe ten seconds waiting for it to, which ran a scroll out of Maestro's
+# twenty seconds after two swipes.
 appId: dev.vespin.ios
 env:
   DIRECTION: ${DIRECTION || 'DOWN'}
+  ABOVE: ${ABOVE || ''}
 ---
 - runFlow:
     when:
-      true: ${DIRECTION == 'UP'}
+      true: ${ABOVE != ''}
+    commands:
+      - scrollUntilVisible:
+          element:
+            text: "${ELEMENT}"
+            above:
+              id: "${ABOVE}"
+          direction: DOWN
+          timeout: 60000
+- runFlow:
+    when:
+      true: ${ABOVE == '' && DIRECTION == 'UP'}
     commands:
       - scrollUntilVisible:
           element: "${ELEMENT}"
           direction: UP
           centerElement: true
-          waitToSettleTimeoutMs: 1000
+          timeout: 60000
 - runFlow:
     when:
-      true: ${DIRECTION != 'UP'}
+      true: ${ABOVE == '' && DIRECTION != 'UP'}
     commands:
       - scrollUntilVisible:
           element: "${ELEMENT}"
           direction: DOWN
           centerElement: true
-          waitToSettleTimeoutMs: 1000
+          timeout: 60000
 - waitForAnimationToEnd:
     timeout: 5000

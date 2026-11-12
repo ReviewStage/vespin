@@ -167,6 +167,7 @@ run_suite() {
     fi
     maestro --udid "$1" test \
         ${config[@]+"${config[@]}"} \
+        --env "FLOATING_TABS=$floating_tabs" \
         --test-output-dir "$2" \
         --debug-output "$2/debug" \
         --flatten-debug-output \
@@ -210,6 +211,10 @@ failed=0
 for name in "$@"; do
     slug=$(printf '%s' "$name" | tr '[:upper:] ' '[:lower:]-')
     udid=$(simulator_udid "$name")
+    # An iPad's tab bar floats at the window's top and carries no ids, so
+    # its flows open a tab by name (`maestro/subflows/tab.yaml`).
+    floating_tabs=false
+    if [[ "$name" == iPad* ]]; then floating_tabs=true; fi
     device_output="$output/$slug"
     mkdir -p "$device_output"
     echo "==> $name ($udid)"

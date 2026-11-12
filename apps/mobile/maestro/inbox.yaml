@@ -94,13 +94,15 @@ appId: dev.vespin.ios
 # A file that is neither a picture nor a video, the test plan's PDF, stands
 # after its message as its chip, its name over its kind and size once read; a
 # press opens it full screen, its pages drawn in a web view under a bar with
-# Done and Share. Note that the chip is scrolled to the screen's middle, since
-# the thread's last message first shows under the reply box and the tab bar,
-# where a tap lands on them instead.
+# Done and Share. Note that the chip is scrolled to above the reply box,
+# since the thread's last message first shows under it and the tab bar, where
+# a tap lands on them instead, and stands at the list's end, which no scroll
+# can center.
 - runFlow:
     file: subflows/scroll-to.yaml
     env:
       ELEMENT: "invite-test-plan.pdf, PDF.*"
+      ABOVE: composer-field
 - takeScreenshot: inbox-file
 - tapOn: "invite-test-plan.pdf, PDF.*"
 # The viewer stands as file-viewer only once WebKit has drawn the PDF, so the

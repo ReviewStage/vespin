@@ -32,18 +32,20 @@ appId: dev.vespin.ios
     id: "failure-notice-retry"
 - takeScreenshot: failure-notice
 # Try again sends the unpin once more, which is refused again, so the
-# notice comes back in the same words.
+# notice comes back, and a swipe up puts it away before its time is up.
+# Note that the swipe follows the press at once, with nothing checked
+# between, because the notice goes on its own six seconds after it stands
+# (`failure-notice.tsx`), and a press and two checks on a loaded runner took
+# longer; the swipe finding the notice is what shows it came back.
 - tapOn:
     id: "failure-notice-retry"
-- assertVisible: "The task could not be unpinned. Try again."
-- assertVisible: "Pinned"
-# A swipe up puts the notice away before its time is up.
 - swipe:
     from:
       id: "failure-notice"
     direction: UP
 - waitForAnimationToEnd
 - assertNotVisible: "The task could not be unpinned. Try again."
+- assertVisible: "Pinned"
 # Mark done from the same menu asks first in the system's alert, since the
 # task's agent is at work and only the person can decide to stop it; once
 # confirmed, it is refused too: the task stays in the list and the notice

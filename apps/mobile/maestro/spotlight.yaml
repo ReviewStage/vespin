@@ -30,13 +30,13 @@ appId: dev.vespin.ios
 # Note that the app's row is found by its title and the summary Spotlight
 # reads beside it, "In progress · Ada Lovelace", since Maestro matches words
 # whatever their case and Safari suggests "weekly digest email" too; and
-# that the keyboard is put away before the row is tapped, because Spotlight
-# lists the app's results under the web's, behind the keyboard, where a tap
-# lands on a key.
-- extendedWaitUntil:
-    visible: "Weekly digest email, .*"
+# that the results are scrolled to it, which puts the keyboard away, because
+# Spotlight lists the app's results under the web's, behind the keyboard,
+# where a tap lands on a key and Maestro does not count the row as shown.
+- scrollUntilVisible:
+    element: "Weekly digest email, .*"
+    direction: DOWN
     timeout: 30000
-- hideKeyboard
 - waitForAnimationToEnd
 - takeScreenshot: spotlight-results
 - tapOn: "Weekly digest email, .*"

@@ -298,9 +298,12 @@ onFlowComplete:
 - waitForAnimationToEnd
 # Its description's open comment threads stand under it; one opens with its
 # comments and the reply field, a reply typed into it.
+# Note that the scroll may take a minute, because the description's video
+# plays on, holding each swipe ten seconds waiting for the page to settle.
 - scrollUntilVisible:
     element: "Comments"
     direction: DOWN
+    timeout: 60000
 - waitForAnimationToEnd
 - takeScreenshot: task-comments
 - tapOn: "Should an owner be able to resend.*"

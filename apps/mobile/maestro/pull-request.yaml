@@ -199,8 +199,11 @@ appId: dev.vespin.ios
 - assertVisible: "Open on GitHub"
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-menu
+# Note that the flow waits for the system's "Return to Vespin" in the
+# status bar, which stands once Safari is in front, because the app's own
+# words stay in the tree Maestro reads while Safari draws its first page.
 - tapOn: "Open on GitHub"
 - extendedWaitUntil:
-    notVisible: "Send the invite email from the workspace.*"
+    visible: "Return to Vespin"
     timeout: 30000
 - takeScreenshot: pull-request-github
