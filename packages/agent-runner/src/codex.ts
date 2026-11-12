@@ -207,6 +207,7 @@ import {
   RUNNER_WARM,
   type RunnerApprovalRequested,
   type RunnerEnd,
+  type TurnFilesSummary,
 } from "./protocol.js";
 import {
   awaitProvider,
@@ -829,6 +830,18 @@ interface CodexLaunch {
   readonly heard: { count: number };
   /** The checkout recorded before a turn the line named opens (`checkout-snapshot.ts`); none where it could not be. */
   readonly snapshot: (lineId: string) => Effect.Effect<CheckoutSnapshot | undefined>;
+  /** The snapshot the turn under way opened on, until its end reads the turn's files from it; none between turns or where none was recorded. */
+  opening: string | undefined;
+  /** The files a turn changed since the snapshot named (`checkout-snapshot.ts`'s `summarize`). */
+  readonly filesSince: (from: string) => Effect.Effect<TurnFilesSummary | undefined>;
+}
+
+/** The files the turn under way changed since the snapshot it opened on, its opening let go so no later end reads them again; none where no snapshot stands. */
+function turnFilesOf(launch: CodexLaunch): Effect.Effect<TurnFilesSummary | undefined> {
+  const from = launch.opening;
+  launch.opening = undefined;
+
+  return from === undefined ? Effect.succeed(undefined) : launch.filesSince(from);
 }
 
 /**
@@ -1365,6 +1378,8 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
   // where the turn opens the agent's; a turn continuing one under way leaves the opening record standing.
   const first = merged.lines[0];
   const snapshot = launch.open || first === undefined ? undefined : yield* launch.snapshot(first);
+
+  if (!launch.open) launch.opening = snapshot?.commit;
   launch.open = true;
   const outgoing: Outgoing = { ...merged, snapshot };
 
@@ -1643,7 +1658,11 @@ const takeTurnCompleted = Effect.fn("agent-runner/codex/takeTurnCompleted")(func
   // The agent's turn is over: the launch stays warm for the service's next message
   // rather than ending.
   launch.state = { kind: LAUNCH_STATE.IDLE, warm: true };
-  yield* launch.context.sink.emit({ type: RUNNER_EVENT.IDLE });
+  const files = yield* turnFilesOf(launch);
+  yield* launch.context.sink.emit({
+    type: RUNNER_EVENT.IDLE,
+    ...(files === undefined ? undefined : { files }),
+  });
 
   return undefined;
 });
@@ -1956,6 +1975,8 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
       config.agentId === undefined
         ? Effect.succeed(undefined)
         : snapshots.take(config.cwd, config.agentId, lineId),
+    opening: undefined,
+    filesSince: (from) => snapshots.summarize(config.cwd, from),
   };
 
   // The service's lines join the signals in a loop of their own, so a line is
@@ -1993,6 +2014,8 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
   yield* denyWaiting(approvals, APPROVAL_BY.ENDED);
   yield* Scope.close(launch.serverScope, Exit.void);
   yield* mirrored(launch);
+  // A turn the end cut short, or ended without an IDLE, still says what it changed.
+  const files = yield* turnFilesOf(launch);
 
-  return outcome;
+  return files === undefined ? outcome : { ...outcome, files };
 });

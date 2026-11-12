@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { CHECKOUT_DIFF_EXIT } from "@repo/agent-runner/checkout-diff";
 import { Database } from "@repo/database/core/query";
 import { RUNNER_LOST_DETAIL } from "@repo/database/models/abandoned-turns";
 import {
@@ -36,7 +37,6 @@ import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { DEVICE_LAYOUT, expectTopicsFire, getTestDB } from "@repo/database/testing";
 import { AGENT_FAILURE } from "@repo/features/agent-wire";
-import { CHECKOUT_DIFF_EXIT } from "@repo/features/checkout-diff";
 import { CHECKOUT_RESTORE_EXIT } from "@repo/features/checkout-restore";
 import {
   DEVICE_AGENT_LINE_KIND,

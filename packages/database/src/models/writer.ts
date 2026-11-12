@@ -1462,6 +1462,7 @@ const turnEnded = /* @__PURE__ */ Effect.fnUntraced(function* (
           },
     ),
     responseIds: event.responseIds,
+    files: nullable(event.files),
   });
 
   if (!ended) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FENCED });

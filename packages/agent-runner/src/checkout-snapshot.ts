@@ -29,7 +29,13 @@
 
 import { Clock, Context, Duration, Effect, Layer, Option, Result, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import { CHECKOUT_SNAPSHOT, type CheckoutSnapshot } from "./protocol.js";
+import {
+  CHECKOUT_DIFF_FORMAT,
+  CHECKOUT_DIFF_SCRIPT,
+  checkoutDiffEnv,
+  turnFilesSummary,
+} from "./checkout-diff.js";
+import { CHECKOUT_SNAPSHOT, type CheckoutSnapshot, type TurnFilesSummary } from "./protocol.js";
 
 const SNAPSHOT_BOUNDS = {
   /** The most a turn waits on its snapshot before it goes on without one. */
@@ -53,6 +59,8 @@ export interface CheckoutSnapshotsService {
     agentId: string,
     lineId: string,
   ) => Effect.Effect<CheckoutSnapshot | undefined>;
+  /** The files the turn changed, diffed from the snapshot `from` taken before it to the checkout at `cwd` as it stands (`checkout-diff.ts`); none where it changed none, or the diff could not be read, which is logged. */
+  readonly summarize: (cwd: string, from: string) => Effect.Effect<TurnFilesSummary | undefined>;
 }
 
 export class CheckoutSnapshots extends Context.Service<
@@ -124,46 +132,42 @@ function stderrTail(stderr: string): string {
     .slice(-SNAPSHOT_BOUNDS.STDERR_TAIL);
 }
 
+/** What one of the checkout's scripts printed and how it exited. */
+interface ScriptRun {
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly exitCode: number;
+}
+
 /**
- * The snapshot run as a child of the runner's own, as app-server is, on
- * the environment given: git's path and home alone reach it, so no secret of
- * the launch's does. The process is ended where it runs past the bound.
+ * One of the checkout's scripts run as a child of the runner's own, as
+ * app-server is: git's path and home alone reach it from the environment
+ * given, beside the variables `own` names, so no secret of the launch's
+ * does. The process is ended where it runs past the bound. Answers what it
+ * printed, or why it could not run, or none past the bound.
  */
-const takeIn = Effect.fn("agent-runner/checkoutSnapshot")(function* (
+const ranScript = Effect.fn("agent-runner/checkoutScript")(function* (
   env: Readonly<Record<string, string | undefined>>,
   cwd: string,
-  agentId: string,
-  lineId: string,
-): Effect.fn.Return<CheckoutSnapshot | undefined, never, ChildProcessSpawner.ChildProcessSpawner> {
+  args: readonly string[],
+  own: Readonly<Record<string, string>>,
+) {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
 
-  const ran = yield* Effect.gen(function* () {
+  return yield* Effect.gen(function* () {
     const handle = yield* spawner.spawn(
-      ChildProcess.make(
-        "sh",
-        [
-          "-c",
-          SNAPSHOT_SCRIPT,
-          "sh",
-          snapshotRef(agentId, yield* Clock.currentTimeMillis, lineId),
-          String(CHECKOUT_SNAPSHOT.KEEP),
-        ],
-        {
-          cwd,
-          env: {
-            ...(env.PATH === undefined ? undefined : { PATH: env.PATH }),
-            ...(env.HOME === undefined ? undefined : { HOME: env.HOME }),
-            GIT_TERMINAL_PROMPT: "0",
-            GIT_AUTHOR_NAME: SNAPSHOT_COMMITTER.NAME,
-            GIT_AUTHOR_EMAIL: SNAPSHOT_COMMITTER.EMAIL,
-            GIT_COMMITTER_NAME: SNAPSHOT_COMMITTER.NAME,
-            GIT_COMMITTER_EMAIL: SNAPSHOT_COMMITTER.EMAIL,
-          },
-          extendEnv: false,
-          stdin: "ignore",
-          forceKillAfter: SNAPSHOT_BOUNDS.KILL_GRACE,
+      ChildProcess.make("sh", ["-c", ...args], {
+        cwd,
+        env: {
+          ...(env.PATH === undefined ? undefined : { PATH: env.PATH }),
+          ...(env.HOME === undefined ? undefined : { HOME: env.HOME }),
+          GIT_TERMINAL_PROMPT: "0",
+          ...own,
         },
-      ),
+        extendEnv: false,
+        stdin: "ignore",
+        forceKillAfter: SNAPSHOT_BOUNDS.KILL_GRACE,
+      }),
     );
 
     const [stdout, stderr, exitCode] = yield* Effect.all(
@@ -175,12 +179,39 @@ const takeIn = Effect.fn("agent-runner/checkoutSnapshot")(function* (
       { concurrency: "unbounded" },
     );
 
-    return { stdout, stderr, exitCode: Number(exitCode) };
+    const run: ScriptRun = { stdout, stderr, exitCode: Number(exitCode) };
+
+    return run;
   }).pipe(
     Effect.scoped,
     Effect.timeoutOption(SNAPSHOT_BOUNDS.TIMEOUT),
     Effect.mapError((failure) => String(failure)),
     Effect.result,
+  );
+});
+
+/** The snapshot run as above, its commit made under the runner's own name rather than the agent's identity. */
+const takeIn = Effect.fn("agent-runner/checkoutSnapshot")(function* (
+  env: Readonly<Record<string, string | undefined>>,
+  cwd: string,
+  agentId: string,
+  lineId: string,
+): Effect.fn.Return<CheckoutSnapshot | undefined, never, ChildProcessSpawner.ChildProcessSpawner> {
+  const ran = yield* ranScript(
+    env,
+    cwd,
+    [
+      SNAPSHOT_SCRIPT,
+      "sh",
+      snapshotRef(agentId, yield* Clock.currentTimeMillis, lineId),
+      String(CHECKOUT_SNAPSHOT.KEEP),
+    ],
+    {
+      GIT_AUTHOR_NAME: SNAPSHOT_COMMITTER.NAME,
+      GIT_AUTHOR_EMAIL: SNAPSHOT_COMMITTER.EMAIL,
+      GIT_COMMITTER_NAME: SNAPSHOT_COMMITTER.NAME,
+      GIT_COMMITTER_EMAIL: SNAPSHOT_COMMITTER.EMAIL,
+    },
   );
 
   if (Result.isFailure(ran)) {
@@ -209,6 +240,43 @@ const takeIn = Effect.fn("agent-runner/checkoutSnapshot")(function* (
   return snapshot;
 });
 
+/**
+ * The turn's files read as above, by the one diff script the Changes view
+ * reads too, its counts alone. Note that it runs as the checkout's own
+ * committer, not the snapshot's name, since the script tells the turn's own
+ * commits from upstream's by the checkout's committer.
+ */
+const summarizeIn = Effect.fn("agent-runner/turnFiles")(function* (
+  env: Readonly<Record<string, string | undefined>>,
+  cwd: string,
+  from: string,
+): Effect.fn.Return<TurnFilesSummary | undefined, never, ChildProcessSpawner.ChildProcessSpawner> {
+  const ran = yield* ranScript(
+    env,
+    cwd,
+    [CHECKOUT_DIFF_SCRIPT],
+    checkoutDiffEnv({ from, to: null }, CHECKOUT_DIFF_FORMAT.NUMSTAT),
+  );
+
+  if (Result.isFailure(ran) || Option.isNone(ran.success)) {
+    yield* Effect.logWarning("agent-runner: the turn's files were not read");
+
+    return undefined;
+  }
+
+  const { stdout, stderr, exitCode } = ran.success.value;
+
+  if (exitCode !== 0) {
+    yield* Effect.logWarning(
+      `agent-runner: the turn's files were not read: the diff exited ${exitCode}: ${stderrTail(stderr)}`,
+    );
+
+    return undefined;
+  }
+
+  return turnFilesSummary(stdout);
+});
+
 /** Snapshots through git itself, as a child of the runner's, on the environment given. */
 export function checkoutSnapshotsLive(
   env: Readonly<Record<string, string | undefined>>,
@@ -218,6 +286,10 @@ export function checkoutSnapshotsLive(
     Effect.map(ChildProcessSpawner.ChildProcessSpawner, (spawner) => ({
       take: (cwd, agentId, lineId) =>
         takeIn(env, cwd, agentId, lineId).pipe(
+          Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+        ),
+      summarize: (cwd, from) =>
+        summarizeIn(env, cwd, from).pipe(
           Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
         ),
     })),

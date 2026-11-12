@@ -127,6 +127,7 @@ import {
   type RunnerEnd,
   type RunnerEndEvent,
   type RunnerWaiting,
+  type TurnFilesSummary,
 } from "./protocol.js";
 import {
   awaitProvider,
@@ -468,6 +469,10 @@ interface Launch {
   readonly firstSequence: number;
   /** The checkout recorded before a turn the line named opens (`checkout-snapshot.ts`); none where it could not be. */
   readonly snapshot: (lineId: string) => Effect.Effect<CheckoutSnapshot | undefined>;
+  /** The snapshot the turn under way opened on, until its end reads the turn's files from it; none between turns or where none was recorded. */
+  readonly opening: Ref.Ref<string | undefined>;
+  /** The files a turn changed since the snapshot named (`checkout-snapshot.ts`'s `summarize`). */
+  readonly filesSince: (from: string) => Effect.Effect<TurnFilesSummary | undefined>;
   /** The API's host, as the CLI reaches it, which a lost connection is probed for. */
   readonly providerHost: string;
   /** Where that host is probed: the proxy the CLI goes through, or the host itself. */
@@ -515,6 +520,8 @@ const handToCli = Effect.fn("agent-runner/handToCli")(function* (
   yield* Ref.set(launch.warm, false);
   // The checkout is recorded before the CLI can touch it; a line a running turn takes in opens no turn to rewind to.
   const snapshot = running ? undefined : yield* launch.snapshot(uuid);
+
+  if (!running) yield* Ref.set(launch.opening, snapshot?.commit);
   yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(prompt));
   // Posted ahead of the hand-off, so it is numbered before anything the CLI says of the message.
   yield* launch.sink.emit({
@@ -843,6 +850,13 @@ const stillWarm = Effect.fn("agent-runner/stillWarm")(function* (launch: Launch)
   );
 });
 
+/** The files the turn under way changed since the snapshot it opened on, its opening let go so no later end reads them again; none where no snapshot stands. */
+const turnFilesOf = Effect.fn("agent-runner/turnFilesOf")(function* (launch: Launch) {
+  const from = yield* Ref.getAndSet(launch.opening, undefined);
+
+  return from === undefined ? undefined : yield* launch.filesSince(from);
+});
+
 /**
  * The agent's turn over, and the launch kept warm rather than ended: its
  * IDLE posted, so the service settles the turn, and a watch armed that ends it
@@ -856,7 +870,11 @@ const warmed = Effect.fn("agent-runner/warmed")(function* (launch: Launch) {
       if ((yield* Ref.get(launch.unanswered)).size > 0) return undefined;
       yield* Ref.set(launch.turnRunning, false);
       yield* Ref.set(launch.warm, true);
-      yield* launch.sink.emit({ type: RUNNER_EVENT.IDLE });
+      const files = yield* turnFilesOf(launch);
+      yield* launch.sink.emit({
+        type: RUNNER_EVENT.IDLE,
+        ...(files === undefined ? undefined : { files }),
+      });
 
       // Counted, so the cap an earlier IDLE armed is dropped.
       return yield* Ref.updateAndGet(launch.waits, (count) => count + 1);
@@ -1065,6 +1083,8 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
       config.agentId === undefined
         ? Effect.succeed(undefined)
         : snapshots.take(config.cwd, config.agentId, lineId),
+    opening: yield* Ref.make<string | undefined>(undefined),
+    filesSince: (from) => snapshots.summarize(config.cwd, from),
     providerHost: provider.host,
     probeTarget: probeTargetOf(context.env, provider),
     reconnecting: yield* Ref.make<Reconnecting | undefined>(undefined),
@@ -1117,8 +1137,10 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   session.close();
   yield* Fiber.interrupt(posting);
   const failure = yield* Ref.get(launch.failure);
+  // A turn the end cut short, or ended without an IDLE, still says what it changed.
+  const files = yield* turnFilesOf(launch);
 
-  return { end, failure } satisfies LaunchOutcome;
+  return { end, failure, ...(files === undefined ? undefined : { files }) } satisfies LaunchOutcome;
 });
 
 /**
@@ -1248,12 +1270,13 @@ const runLaunch = Effect.fn("agent-runner/runLaunch")(function* (read: ReadLaunc
       ? yield* runCodex({ ...context, config })
       : yield* runClaudeCode({ ...context, config });
 
-  const { end, failure } = outcome;
+  const { end, failure, files } = outcome;
 
   const last: RunnerEndEvent = {
     type: RUNNER_EVENT.END,
     reason: end,
     ...(failure === "" ? undefined : { detail: failure }),
+    ...(files === undefined ? undefined : { files }),
   };
 
   yield* sink.emit(last);
