@@ -17,7 +17,7 @@ import { TableKit } from "@tiptap/extension-table";
 import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "@tiptap/markdown";
 import type { Node as PmNode } from "@tiptap/pm/model";
-import { Selection, TextSelection } from "@tiptap/pm/state";
+import { NodeSelection, Selection, TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { Predicate } from "effect";
 import { enterSends, modEnterSends } from "../enter-sends.js";
@@ -34,6 +34,7 @@ import {
   type EditorSpan,
   FINISH,
   type MentionDrawer,
+  type PlacedPicture,
   type PlacedWords,
   rootAria,
   sameAria,
@@ -59,11 +60,14 @@ import {
 import { mentionNode, pastedMention } from "./mention-node.js";
 import {
   copiedPictures,
+  drawnAsPicture,
   droppedPictures,
   LIST_ITEMS,
   laidInPictures,
   pastedPictures,
+  pictureKeyDown,
   pictureNode,
+  pictureTyped,
   removedPicture,
   settledPicture,
 } from "./picture-node.js";
@@ -77,7 +81,7 @@ import { blockRulesOutOfCells, withoutTipTapChords, writingKeys } from "./writin
  * What the text may hold, and every Markdown rule for writing it, is
  * TipTap's own: StarterKit, `@tiptap/markdown`, task lists, tables, and
  * pictures (`./picture-node.ts`), each inline in a paragraph even where it
- * stands alone on its line; its chords are the writing vocabulary's
+ * stands alone on its line, which the caret then treats as a block; its chords are the writing vocabulary's
  * (`./writing-keys.ts`), in place of TipTap's, and neither a chord nor a
  * Markdown rule lays a block into a table's cell;
  * underline alone is left out, because Markdown cannot store it and the
@@ -615,15 +619,43 @@ function caretWords(editor: Editor): PlacedWords | undefined {
 }
 
 /**
- * Where the caret goes as the editor opens on the words a click landed on,
- * where it finds them, the words its press selected selected again where it
- * finds where they start too; none where it does not find the words.
+ * The picture a click landed on in the drawn text, found as the drawn text
+ * counts its pictures: in the same section, as many of the description's
+ * pictures in; none where the section holds no such picture.
+ */
+function pictureAtPress(doc: PmNode, picture: PlacedPicture): Selection | undefined {
+  const blocks = sectionBlocks(doc, picture.section);
+
+  if (blocks === undefined) return undefined;
+  let seen = 0;
+  let found: number | undefined;
+  doc.forEach((block, offset, index) => {
+    if (found !== undefined || index < blocks.first || index >= blocks.next) return;
+    block.descendants((node, pos) => {
+      if (found !== undefined || !drawnAsPicture(node)) return;
+
+      if (seen === picture.occurrence) found = offset + 1 + pos;
+      seen += 1;
+    });
+  });
+
+  return found === undefined ? undefined : NodeSelection.create(doc, found);
+}
+
+/**
+ * Where the caret goes as the editor opens on the picture or the words a
+ * click landed on, where it finds them, the picture selected, or the words
+ * its press selected selected again where it finds where they start too;
+ * none where it does not find the picture or the words.
  */
 function placedOnWords(
   editor: Editor,
   placement: DescriptionEditorPlacement | undefined,
 ): Selection | undefined {
   const click = placement !== undefined && "x" in placement ? placement : undefined;
+
+  // A press on a picture opens the editor with that picture selected, as a press on it in the editor does.
+  if (click?.picture !== undefined) return pictureAtPress(editor.state.doc, click.picture);
   const at = click?.words === undefined ? undefined : wordsAt(editor, click.words);
 
   if (at === undefined) return undefined;
@@ -779,6 +811,9 @@ export function mountDescriptionEditor(
       },
       handleDrop: (view, event, _slice, moved) =>
         pictures === undefined ? false : droppedPictures(view, event, moved, pictures),
+      // Note that words typed over a selected picture start a line below it, where they would replace it.
+      handleTextInput: (view, _from, _to, words) =>
+        pictures !== undefined && pictureTyped(view, words),
       transformPasted: (slice) =>
         pictures === undefined ? slice : copiedPictures(slice, pictures),
       handleKeyDown: (view, event) => {
@@ -818,12 +853,16 @@ export function mountDescriptionEditor(
           return true;
         }
 
+        // A picture alone on its line takes the arrows, Enter, and the deletes as a block of its own.
+        if (pictures !== undefined && pictureKeyDown(view, event)) return true;
+
         const { selection } = view.state;
-        const first = selection.empty && selection.$from.index(0) === 0;
+        const picked = selection instanceof NodeSelection;
+        const first = (selection.empty || picked) && selection.$from.index(0) === 0;
 
         if (onLeaveUp === undefined || event.key !== "ArrowUp" || !first) return false;
 
-        if (!view.endOfTextblock("up")) return false;
+        if (!picked && !view.endOfTextblock("up")) return false;
         onLeaveUp();
 
         return true;
