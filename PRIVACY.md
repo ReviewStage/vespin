@@ -95,7 +95,7 @@ with a server-only secret held outside the database. We keep a short hint
 as, the name you give a plan, and whether the provider accepts it. We never
 log a saved credential or include it in analytics, error reports, or screen
 recordings. We never send one to your devices, except to run an agent on your
-own machine with Bring your own machine (see Agents on your own machines below).
+own machine (see Agents on your own machines below).
 
 A workspace's owners and admins can save environment variables for the
 workspace, which we store sealed the same way. Each of the workspace's cloud
@@ -129,8 +129,8 @@ token, key, or file contents, that goes too.
 
 ### Agents on your own machines
 
-If you turn on Bring your own machine, agents can run directly on This Mac or on
-another machine you add, with full access to everything that machine's account
+Agents can run directly on This Mac, once you turn on its toggle in Machines,
+or on another machine you add, with full access to everything that machine's account
 can reach. Their work stays on that machine, though their transcripts are
 stored like any other, and, on a machine running host 0.11.0 or later, so is
 their harness's own session, its thinking text included, as a cloud agent's

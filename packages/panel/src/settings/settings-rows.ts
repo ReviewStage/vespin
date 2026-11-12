@@ -61,7 +61,6 @@ const PAGE_CAPABILITY = {
  * Settings shows, the page is not listed, found, or drawn.
  */
 const PAGE_EXPERIMENT: Partial<Record<SettingsView, Experiment>> = {
-  [SETTINGS_VIEW.HOSTS]: EXPERIMENT.BRING_YOUR_OWN_HOST,
   [SETTINGS_VIEW.SKILLS]: EXPERIMENT.SKILLS,
   [SETTINGS_VIEW.MEMORY]: EXPERIMENT.MEMORY,
 };

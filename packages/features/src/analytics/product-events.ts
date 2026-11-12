@@ -291,6 +291,7 @@ export const PRODUCT_EXPERIMENT = {
   /** Removed with Pilot, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   PILOT: "pilot",
   SKILLS: "skills",
+  /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   BRING_YOUR_OWN_HOST: "bring-your-own-host",
   /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   SEVERAL_REPOSITORIES: "several-repositories",

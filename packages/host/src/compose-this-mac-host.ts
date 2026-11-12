@@ -4,7 +4,7 @@ import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { HOST_RELEASE } from "@repo/features/host-release";
 import { HOST_WIRE } from "@repo/features/host-wire";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
-import { EXPERIMENT, type Experiment, type KeepAwake } from "@repo/settings";
+import type { KeepAwake } from "@repo/settings";
 import { cappedExponential } from "@repo/wire/effect";
 import {
   Cause,
@@ -48,7 +48,7 @@ import { ownedAgents, ownedAgentsMoves } from "./local-agent-state.js";
 import type { RunMode } from "./run-mode.js";
 
 /**
- * compose-this-mac-host.ts -- This Mac's host, the host daemon the app carries in its bundle, its LaunchAgent registered with macOS while the account has Bring your own host on and unregistered while it has it off.
+ * compose-this-mac-host.ts -- This Mac's host, the host daemon the app carries in its bundle, its LaunchAgent registered with macOS while its account is signed in and unregistered once it signs out.
  *
  * The agent and its registration are the app's (`ThisMacHost`, through
  * `SMAppService`); its state, and the record its host runs on, stand under
@@ -61,10 +61,10 @@ import type { RunMode } from "./run-mode.js";
  * script the service serves where launchd holds no account install; turning
  * it off runs the install's own `vespin-host uninstall`, with
  * `--keep-agents` where its agents' folders are kept; and it leaves the
- * host running while Bring your own host is off or nobody is signed in.
+ * host running while nobody is signed in.
  * Where it stands is read at launch
  * and again on every change that could move it: the settings told again (a
- * sign-in, a sign-out, an experiment turned on or off), This Mac turned on
+ * sign-in, a sign-out, a setting changed), This Mac turned on
  * or off, and a move in the host's state folder, which its own host writes
  * apart from this app; and it is acted on only when it changed. macOS tells
  * no app when the member allows the agent in System Settings › Login Items,
@@ -91,15 +91,11 @@ import type { RunMode } from "./run-mode.js";
  * answered, so the window says so. Nothing here enrolls a Mac unasked, so a
  * Mac removed from anywhere stays off until it is turned on.
  *
- * With Bring your own host on, a host of the account standing is kept
- * running: its agent registered where macOS holds none, and registered again
+ * A host of the account standing is kept running while it is signed in: its agent registered where macOS holds none, and registered again
  * where another version of the app registered it, since an update replaces
  * the bundle under a running daemon and `register()` does not start an agent
  * already registered. An agent macOS holds for the member's approval is
- * left for them, the windows told (`needsApproval`). With Bring your own host
- * off, a host of the account is unregistered, its state, record and agents'
- * folders kept, so turning it on again starts the same host on the same
- * record. A record the service refused, the host removed from Settings ›
+ * left for them, the windows told (`needsApproval`). A record the service refused, the host removed from Settings ›
  * Machines anywhere, has its agent unregistered and the host removed, its
  * agents' folders kept, as the account install removes itself, since a
  * bundled host rests rather than removing itself. Once the agent is
@@ -156,17 +152,14 @@ function failedWords(cause: Cause.Cause<unknown>): string {
   return failure instanceof Error ? failure.message : String(failure);
 }
 
-/** What the app keeps This Mac's host at for the account signed in, and how many times it was turned on; stopped, with no account, where nobody is signed in; none where it keeps it at nothing, and leaves it as it stands. */
-type Kept =
-  | { readonly userId: string; readonly running: boolean; readonly turns: number }
-  | typeof SIGNED_OUT
-  | undefined;
+/** What the app keeps This Mac's host at for the account signed in, running, and how many times it was turned on; stopped, with no account, where nobody is signed in; none where it keeps it at nothing, and leaves it as it stands. */
+type Kept = { readonly userId: string; readonly turns: number } | typeof SIGNED_OUT | undefined;
 
 /** What the app keeps This Mac's host at while nobody is signed in. */
-const SIGNED_OUT = { userId: undefined, running: false, turns: 0 } as const;
+const SIGNED_OUT = { userId: undefined, turns: 0 } as const;
 
 const sameKept = (one: Kept, other: Kept) =>
-  one?.userId === other?.userId && one?.running === other?.running && one?.turns === other?.turns;
+  one?.userId === other?.userId && one?.turns === other?.turns;
 
 /** Whether two reads of This Mac name the same device and machine, and stand the same. */
 const sameThisMac = (one: AppThisMacHost, other: AppThisMacHost) =>
@@ -197,11 +190,9 @@ export interface ThisMacHostDependencies {
   account: Pick<AccountComposer, "capabilitiesActive">;
   /** The account signed in now, by its id; none where nobody is. */
   accountId: () => string | undefined;
-  /** Whether the account signed in has the experiment given on, as the settings hold it now. */
-  experimentOn: (experiment: Experiment) => Effect.Effect<boolean>;
   /** How the member keeps this Mac awake, as the settings hold it now, which the host is handed in its state. */
   keepAwake: Effect.Effect<KeepAwake>;
-  /** A pulse each time the settings are told again, which a sign-in, a sign-out, and an experiment turned on or off each do, subscribed as it is yielded. */
+  /** A pulse each time the settings are told again, which a sign-in, a sign-out, and a setting changed each do, subscribed as it is yielded. */
   settingsTold: Effect.Effect<Stream.Stream<void>, never, Scope.Scope>;
   /** Whether the service lists the device given among the account's hosts; none where it could not answer. */
   hostListed: (
@@ -554,22 +545,6 @@ export function composeThisMacHost(
         ),
       );
 
-    /** The account's host unregistered, which stops it and keeps it from starting at the next login, its files kept. */
-    const keepStopped = oneAtATime(
-      Effect.gen(function* () {
-        if (!host.runsHost || !host.registers) return;
-
-        if (Option.isNone(yield* standing)) return;
-        const status = yield* host.status;
-
-        if (status === THIS_MAC_AGENT_STATUS.NOT_REGISTERED) return;
-
-        if (status === THIS_MAC_AGENT_STATUS.NOT_FOUND) return;
-        yield* unregistered;
-        report("this Mac's host was stopped");
-      }),
-    );
-
     /**
      * The agent unregistered, which stops the host and keeps it from
      * starting at the next login, once its account signed out, its files
@@ -599,8 +574,8 @@ export function composeThisMacHost(
       }),
     );
 
-    /** What the app keeps the host at now, as the account and its experiments stand. */
-    const keptNow: Effect.Effect<Kept> = Effect.gen(function* () {
+    /** What the app keeps the host at now, as the account stands. */
+    const keptNow: Effect.Effect<Kept> = Effect.sync((): Kept => {
       if (!kernel.runMode.sendsNetwork) return undefined;
       const userId = dependencies.accountId();
 
@@ -608,28 +583,19 @@ export function composeThisMacHost(
 
       if (!account.capabilitiesActive()) return undefined;
 
-      return {
-        userId,
-        running: yield* dependencies.experimentOn(EXPERIMENT.BRING_YOUR_OWN_HOST),
-        turns: MutableRef.get(turns),
-      };
+      return { userId, turns: MutableRef.get(turns) };
     });
 
     /** The host kept as asked, each step that failed tried again after `RETRY` until it lands. */
     const keep = (kept: Kept) =>
       kept === undefined
         ? Effect.void
-        : (kept.userId === undefined
-            ? stoppedSignedOut
-            : kept.running
-              ? keepRunning
-              : keepStopped
-          ).pipe(
+        : (kept.userId === undefined ? stoppedSignedOut : keepRunning).pipe(
             Effect.tapError((step) =>
               Effect.andThen(
                 Effect.sync(() => {
                   report(`this Mac's host: could not ${step}, so it is tried again`);
-                  MutableRef.set(keepFailed, kept.running && MutableRef.get(starting));
+                  MutableRef.set(keepFailed, kept.userId !== undefined && MutableRef.get(starting));
                 }),
                 tellThisMac,
               ),

@@ -1,11 +1,7 @@
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import {
-  EXPERIMENT,
-  SETTINGS_PAGE as SETTINGS_VIEW,
-  type SettingsPage as SettingsView,
-} from "@repo/settings";
-import { EXPERIMENT_ANCHOR, SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
+import { SETTINGS_PAGE as SETTINGS_VIEW, type SettingsPage as SettingsView } from "@repo/settings";
+import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 
 export type { SettingsView };
 
@@ -162,8 +158,6 @@ export const SETTINGS_SECTION = {
   CODEX: SETTINGS_SEARCH_ROW.API_KEY_OPENAI,
   /** The account's GitHub personal access token row, where a member saves the token that adds repositories to a workspace. */
   GITHUB_TOKEN: SETTINGS_SEARCH_ROW.GITHUB_ACCESS,
-  /** Bring your own host's row on Experimental, which a pairing's link lands on while the account has it off. */
-  BRING_YOUR_OWN_HOST: EXPERIMENT_ANCHOR[EXPERIMENT.BRING_YOUR_OWN_HOST],
 } as const;
 
 type SettingsSection = (typeof SETTINGS_SECTION)[keyof typeof SETTINGS_SECTION];

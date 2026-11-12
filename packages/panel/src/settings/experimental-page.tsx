@@ -61,7 +61,7 @@ import { SwitchRow } from "./switch-row.js";
  * choice is drawn as the act is sent (`ACT_KIND.WORKSPACE_EXPERIMENT_SET`)
  * and stands once the workspace's live row agrees.
  *
- * The second group is the account's own, Skills and Bring your own host,
+ * The second group is the account's own, Skills,
  * which change the app only for the reader, in every workspace: a row's
  * switch writes the account's choice at once, as every Settings switch
  * writes, and a write the service refused puts it back and is said in a

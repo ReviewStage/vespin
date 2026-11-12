@@ -362,6 +362,7 @@ const SETTINGS_PAGES = [
   "Workspace",
   "Cloud environment",
   "Agents",
+  "Machines",
   "Integrations",
   "Vespin MCP & CLI",
   "Appearance",

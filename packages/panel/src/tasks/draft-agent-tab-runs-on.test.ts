@@ -9,7 +9,6 @@ import {
 } from "@repo/features/agent-wire";
 import { DEVICE_KIND } from "@repo/features/device-agent-wire";
 import { type MacOffer, MODEL_PROVIDER } from "@repo/features/models-wire";
-import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
 import { Effect } from "effect";
 import { act, createElement, useState } from "react";
@@ -26,14 +25,13 @@ import { continueFork } from "./fork-model.js";
 import type { AgentDraft } from "./use-agents.js";
 
 /**
- * draft-agent-tab-runs-on.test.ts -- a draft agent's Runs on, with Bring
- * your own host on and the member's Studio online: the chip starts where
+ * draft-agent-tab-runs-on.test.ts -- a draft agent's Runs on, with the
+ * member's Studio online: the chip starts where
  * the member's newest agent on the task runs, a teammate's newer one aside,
  * and a send left on it names no place, leaving it to the service; a place
  * picked is sent with the start; a continue's draft starts on its source's
  * place, named as the source names it where the member's list does not, and
- * sends a pick with the continue. With the experiment off no chip
- * stands and a send names no place, one picked before among them.
+ * sends a pick with the continue.
  * Synthetic throughout.
  */
 
@@ -92,7 +90,7 @@ beforeAll(() => Effect.runPromise(editorBundleLanded));
 beforeEach(() => {
   installScrollIntoView();
   installEditorLayout();
-  handState(experimentsOn(EXPERIMENT.BRING_YOUR_OWN_HOST));
+  handState(experimentsOn());
   handBeats({ [STUDIO]: 0 });
   fakeActPort({});
 });
@@ -214,18 +212,4 @@ test("a continue of a teammate's agent on their own device names that device, wh
   ]);
 
   assert.equal(tab.chip()?.getAttribute("aria-label"), "Runs on: Dana's Mac mini");
-});
-
-test("with Bring your own host off no Runs on stands, and a send names no place, one picked before among them", async () => {
-  handState(experimentsOn());
-
-  const tab = await mount({
-    ...DRAFT,
-    runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId: STUDIO },
-  });
-
-  assert.equal(tab.chip(), null);
-
-  await tab.send();
-  assert.deepEqual(tab.starts, [undefined]);
 });

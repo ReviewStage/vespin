@@ -10,7 +10,7 @@ import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { NOTIFICATIONS_STATUS } from "@repo/settings/settings-controls";
 import { SETTINGS_VIEW, type SettingsView } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import { appSettingsWire, experimentsOn, settingsView } from "@repo/settings/testing";
+import { appSettingsWire, settingsView } from "@repo/settings/testing";
 import { UPDATE_STATUS } from "@repo/settings/update";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { act, createElement, useState } from "react";
@@ -23,7 +23,7 @@ import type { WorkspaceSettingsControl } from "../settings/workspace-page.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { DESKTOP_CAPABILITIES, handState } from "../testing/app-state.js";
+import { DESKTOP_CAPABILITIES } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { pressInPhoneHead, readPhoneHead } from "../testing/phone-head.js";
 import { DesktopSettings, type SettingsStep } from "./desktop-settings.js";
@@ -49,7 +49,15 @@ const PAGE_GROUPS = [
   { heading: "Workspace", rows: ["Workspace", "Cloud environment"] },
   {
     heading: "Account",
-    rows: ["Account", "Preferences", "Agents", "Integrations", "Vespin MCP & CLI", "Experimental"],
+    rows: [
+      "Account",
+      "Preferences",
+      "Agents",
+      "Machines",
+      "Integrations",
+      "Vespin MCP & CLI",
+      "Experimental",
+    ],
   },
   {
     heading: "This Mac",
@@ -355,28 +363,11 @@ test("the sidebar lists Memory under Workspace and its search finds it only whil
   assert.equal(shownTitle(on), "Memory");
 });
 
-test("the sidebar lists Machines under Account after Agents, and its search finds it, only while the account has Bring your own machine on", async () => {
-  const off = mount(createElement(SettingsHarness));
-  assert.deepEqual(pageGroups(off)[1]?.rows, PAGE_GROUPS[1]?.rows);
-  assert.deepEqual(foundUnder(off, "Add a machine"), []);
-
-  const experiments = experimentsOn(EXPERIMENT.BRING_YOUR_OWN_HOST);
-  handState(experiments);
-  const on = mount(createElement(SettingsHarness, { stored: settingsView({ experiments }) }));
-  await vi.waitFor(() => expect(pageGroups(on)[1]?.rows).toContain("Machines"));
-
-  assert.deepEqual(pageGroups(on)[1]?.rows, [
-    "Account",
-    "Preferences",
-    "Agents",
-    "Machines",
-    "Integrations",
-    "Vespin MCP & CLI",
-    "Experimental",
-  ]);
-  openPage(on, "Machines");
-  assert.equal(shownTitle(on), "Machines");
-  assert.deepEqual(foundUnder(on, "Add a machine"), ["Machines"]);
+test("the search finds Machines' rows on its page", () => {
+  const page = mount(createElement(SettingsHarness));
+  openPage(page, "Machines");
+  assert.equal(shownTitle(page), "Machines");
+  assert.deepEqual(foundUnder(page, "Add a machine"), ["Machines"]);
 });
 
 test("the Workspace page is titled with the workspace the sidebar lists, and follows the sidebar when it lists another", () => {

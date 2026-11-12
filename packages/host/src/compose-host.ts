@@ -23,7 +23,7 @@ import {
   type GatewayShutdownSteps,
   NODE_CAPABILITY_STATUS,
 } from "@repo/gateway";
-import { APP_SETTING_SCHEMA, experimentOn, MAC_COMMAND_MODE, NO_EXPERIMENTS } from "@repo/settings";
+import { APP_SETTING_SCHEMA, MAC_COMMAND_MODE } from "@repo/settings";
 import { entityPool } from "@repo/sync";
 import { Effect, Exit, Layer, Option, Scope, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
@@ -443,13 +443,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
             kernel,
             account,
             accountId,
-            experimentOn: (experiment) =>
-              Effect.map(
-                Effect.orElseSucceed(settings.store.snapshot(), () => ({
-                  experiments: NO_EXPERIMENTS,
-                })),
-                (snapshot) => experimentOn(snapshot.experiments, experiment),
-              ),
             keepAwake: Effect.map(
               Effect.orElseSucceed(settings.store.snapshot(), () => undefined),
               (snapshot) => snapshot?.stored.keepAwake ?? APP_SETTING_SCHEMA.keepAwake.default,
