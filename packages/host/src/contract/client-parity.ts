@@ -8,7 +8,9 @@
  * sign-out; the Inbox: its list, which the host reads from the account
  * gate opening with no act of the app's, its read marks, its reminders, its
  * retry, its pictures, a thread's answer, reply, and resolve, a notice's Got
- * it, and the Undo of either; the Tasks
+ * it, and the Undo of either, a new thread started with a thread's agent,
+ * and a thread its link names that the feed does not hold, found where it
+ * stands and read from its task's own inbox; the Tasks
  * tab: its tree, read from the same list, a task's status set, pin, read
  * mark, rename, and delete, a task moved into a section from its menu or
  * dragged into one on an iPad, its repository changed, and a task's
@@ -143,7 +145,6 @@ const IOS = {
   SOUNDS: byDesign("The phone plays only its push sound, never the account's chosen sounds"),
   TASKS: notYet("iOS v1's Tasks tab and task page don't offer this yet"),
   UPDATER: byDesign("The App Store updates the app"),
-  WAVE_5: notYet("Starting an agent from a thread is iOS wave 5"),
 } as const;
 
 /** A phone's own push registration, which a desktop or a browser tab has no APNs token for. */
@@ -277,17 +278,17 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_GITHUB_IMAGE]: panel(IOS.DIFF),
   [PORT_ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: EVERYWHERE,
 
-  [PORT_ACT_KIND.AGENTS_INBOX_FOLLOW]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_INBOX_RETRY]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.AGENTS_INBOX_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_INBOX_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ANSWER]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_CLOSE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_TAKE_BACK]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_MESSAGE]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_INBOX_START]: panel(IOS.WAVE_5),
+  [PORT_ACT_KIND.AGENTS_INBOX_START]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_READ_STATE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_REMIND]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_INBOX_ITEM_HOME]: panel(notYet("iOS v1 opens no Inbox item by its link")),
+  [PORT_ACT_KIND.AGENTS_INBOX_ITEM_HOME]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_READ_ALL]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ATTACHMENT]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PICTURE]: EVERYWHERE,

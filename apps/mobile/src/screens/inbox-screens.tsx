@@ -74,8 +74,8 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useInboxActs,
@@ -400,7 +400,12 @@ function useAgentHarness(agentId: string): ModelProvider | undefined {
  */
 type ThreadPlace =
   | { readonly inStack: true }
-  | { readonly inStack: false; readonly onRemind: (item: InboxItem) => void };
+  | {
+      readonly inStack: false;
+      readonly onRemind: (item: InboxItem) => void;
+      /** Selects another thread in the split view, such as one the box just started. */
+      readonly onOpen: (id: string) => void;
+    };
 
 /**
  * A thread's page from its item: its path, its subject, each message with
@@ -490,7 +495,29 @@ function ThreadDetail({
   const { sources, sizes } = useThreadMedia(item.id, media);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
-  const answer = useThreadAnswer(listed);
+  const router = useRouter();
+
+  // Whether this thread still stands, so a start that answers after the reader left it opens nothing over where they went.
+  const shown = useRef(false);
+  useEffect(() => {
+    shown.current = true;
+
+    return () => {
+      shown.current = false;
+    };
+  }, []);
+
+  const navigation = useNavigation();
+
+  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands in front: a stack's screen covered by another stays mounted.
+  const openStarted = (id: string) => {
+    if (!shown.current || !navigation.isFocused()) return;
+
+    if (place.inStack) router.replace(`/inbox/${encodeURIComponent(id)}`);
+    else place.onOpen(id);
+  };
+
+  const answer = useThreadAnswer(listed, openStarted);
   const remind = useRemindSheet();
   const inStack = place.inStack;
   const openRemind = place.inStack ? remind.open : place.onRemind;
@@ -597,7 +624,12 @@ function ThreadDetail({
           }}
         />
       }
-      {...(inStack ? {} : { menu, foot: <ThreadComposer item={item} answer={answer} inColumn /> })}
+      {...(inStack
+        ? {}
+        : {
+            menu,
+            foot: <ThreadComposer item={item} answer={answer} agentName={agentName} inColumn />,
+          })}
     />
   );
 
@@ -624,7 +656,7 @@ function ThreadDetail({
           ))}
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
-      <GlassDock bar={<ThreadComposer item={item} answer={answer} />}>
+      <GlassDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
         <Screen>{page}</Screen>
       </GlassDock>
       {remind.sheet}
@@ -632,10 +664,14 @@ function ThreadDetail({
   );
 }
 
-/** What stands where a thread named by its id is not drawn: that the feed is still read, that it could not be, with Retry, or that it holds no such thread. */
-function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
-  const { refresh, refreshTasks } = useInboxActs();
-
+/** What stands where a thread named by its id is not drawn: that it is still read, that it could not be, with Retry, or that no such thread is the account's to read. */
+function ThreadNotDrawn({
+  feed,
+  onRetry,
+}: {
+  readonly feed: InboxFeed;
+  readonly onRetry: () => void;
+}) {
   if (feed === INBOX_FEED.READING)
     return <EmptyState title={READING_INBOX} symbol="tray" loading />;
 
@@ -644,11 +680,7 @@ function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
       <EmptyState
         title={INBOX_NOT_READ}
         symbol="exclamationmark.triangle"
-        action={{
-          label: RETRY,
-          // The feed or the task list that holds the thread failed, so both are read again.
-          onPress: () => void Promise.all([refresh(), refreshTasks()]),
-        }}
+        action={{ label: RETRY, onPress: onRetry }}
       />
     );
   }
@@ -664,15 +696,23 @@ function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
 function ThreadColumn({
   id,
   onRemind,
+  onOpen,
 }: {
   readonly id: string;
   readonly onRemind: (item: InboxItem) => void;
+  readonly onOpen: (id: string) => void;
 }) {
-  const { listed, readerId, feed } = useInboxThread(id);
+  const { listed, readerId, feed, retry } = useInboxThread(id);
 
-  if (listed === undefined) return <ThreadNotDrawn feed={feed} />;
+  if (listed === undefined) return <ThreadNotDrawn feed={feed} onRetry={retry} />;
 
-  return <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: false, onRemind }} />;
+  return (
+    <ThreadDetail
+      listed={listed}
+      readerId={readerId}
+      place={{ inStack: false, onRemind, onOpen }}
+    />
+  );
 }
 
 /** The list's search words and how to change them, held by the tab's root screen above its two layouts. */
@@ -821,7 +861,7 @@ function InboxSplitScreen({
             selected === undefined ? (
               <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol="tray" />
             ) : (
-              <ThreadColumn key={selected} id={selected} onRemind={remind.open} />
+              <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
             )
           }
         />
@@ -849,7 +889,7 @@ export function InboxListScreen() {
 /** The Inbox's pushed screen: one thread, named by the route's `id`, its path small in the bar over its heading. */
 export function InboxThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { listed, readerId, feed } = useInboxThread(id);
+  const { listed, readerId, feed, retry } = useInboxThread(id);
   const handed = useHandToSplit(SPLIT_TAB.INBOX, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.THREAD, id);
 
@@ -864,7 +904,7 @@ export function InboxThreadScreen() {
         <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: true }} />
       ) : (
         <Screen>
-          <ThreadNotDrawn feed={feed} />
+          <ThreadNotDrawn feed={feed} onRetry={retry} />
         </Screen>
       )}
     </>

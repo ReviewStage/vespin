@@ -108,15 +108,6 @@ function emptyBox(draft: InboxDraft): boolean {
   return draft.note.trim() === "" && draft.attachments.length === 0;
 }
 
-/** What Send reads, in words, while the box starts a new thread. */
-const START_THREAD = "Start thread";
-
-/** What the line asks for while the box starts a new thread. */
-const NEW_THREAD_PLACEHOLDER = "Start a new thread";
-
-/** What the checkbox under the card says before the agent's chip. */
-const SEND_AS_NEW = "Send as a new thread to";
-
 /** What the press after an archived agent's note says. */
 const UNARCHIVE = "Unarchive";
 
@@ -136,7 +127,7 @@ function NewThreadChoice({
   return (
     <div className="inbox-new-thread flex min-w-0 pt-ui-8 pl-ui-4 text-muted-foreground">
       <Checkbox checked={checked} disabled={held} onChange={onChange}>
-        {SEND_AS_NEW} {offer.agent}
+        {INBOX_BOX_WORDS.SEND_AS_NEW} {offer.agent}
       </Checkbox>
     </div>
   );
@@ -247,7 +238,7 @@ function AnswerCard({
   };
 
   const placeholder = starts
-    ? NEW_THREAD_PLACEHOLDER
+    ? INBOX_BOX_WORDS.NEW_THREAD_PLACEHOLDER
     : asks
       ? INBOX_BOX_WORDS.NOTE_PLACEHOLDER
       : INBOX_BOX_WORDS.REPLY_PLACEHOLDER;
@@ -387,7 +378,11 @@ function AnswerCard({
         wording={{
           placeholder,
           label: placeholder,
-          send: nod ? INBOX_BOX_WORDS.GOT_IT : starts ? START_THREAD : INBOX_BOX_WORDS.SEND,
+          send: nod
+            ? INBOX_BOX_WORDS.GOT_IT
+            : starts
+              ? INBOX_BOX_WORDS.START_THREAD
+              : INBOX_BOX_WORDS.SEND,
         }}
         maxLength={INBOX_BOUNDS.MAX_MESSAGE_CHARS}
         takesFocus={false}
