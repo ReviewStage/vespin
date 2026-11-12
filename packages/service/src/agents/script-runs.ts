@@ -2,11 +2,10 @@
  * script-runs.ts -- how a workspace's cloud setup script ran in an agent's sandbox, recorded as that script's last run for Settings › Cloud setup.
  *
  * The sandbox's setup (`machine/sandbox-machine.ts`'s `setUp`) records the
- * install script's run and the repository's setup script's, and an archive
- * (`archive-script.ts`) the archive script's where it exited, each with when
+ * install script's run and the repository's setup script's, each with when
  * it started, how it exited, and the agent whose sandbox it ran in; never what it printed,
- * which stays in the sandbox's setup log. A record is a courtesy no setup or
- * archive waits on: one that could not be written is logged and let go.
+ * which stays in the sandbox's setup log. A record is a courtesy no setup
+ * waits on: one that could not be written is logged and let go.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
