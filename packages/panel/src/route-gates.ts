@@ -69,6 +69,7 @@ export function routeAccessNow(client: QueryClient): RouteAccess {
   const state = appStateIn(client);
   const access = state?.access;
   const workspaces = state === undefined ? NO_WORKSPACES : selectWorkspaces(state);
+
   return {
     // A reloaded Admin address waits on an access still being read rather than being refused.
     admin: access === undefined || access.pending === true || access.admin === true,
@@ -109,11 +110,14 @@ function selectWorkspaces(state: AppStateSnapshot): readonly GateWorkspace[] {
 export function useRouteAccess(): RouteAccess {
   // Note that Admin stands before the document is read, as a reloaded Admin address waits on the access.
   const admin = useQuery({ ...appStateQuery, select: selectAdminStands }).data ?? true;
+
   const experiments =
     useQuery({ ...appStateQuery, select: selectStoredExperimentChoices }).data ?? NO_EXPERIMENTS;
+
   const experimentsRead = useQuery({ ...appStateQuery, select: selectSettingsHeld }).data === true;
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? NO_WORKSPACES;
   const listed = stepOf(useKeptChoice(workspaces));
+
   return useMemo(
     (): RouteAccess => ({
       admin,
@@ -142,6 +146,7 @@ export function adminRouteStands(access: RouteAccess): boolean {
 function experimentsAt(workspace: string | undefined, access: RouteAccess): ExperimentChoices {
   const step = workspace ?? access.listed;
   const named = step === undefined ? undefined : workspaceOfSlug(access.workspaces, step);
+
   return experimentsIn(
     access.experiments,
     workspaceExperimentChoices(access.workspaces, named?.id),
@@ -162,9 +167,12 @@ export function settingsPageRouteStands(
   workspace?: string,
 ): boolean {
   const view = settingsViewNamed(page);
+
   if (view === undefined || !access.experimentsRead) return true;
+
   // Note that only a page a workspace experiment holds waits on the workspaces, since an account's own experiment is read already.
   if (access.workspaces.length === 0 && settingsPageWaitsOnWorkspaces(view)) return true;
+
   return settingsPageExperimentStands(view, experimentsAt(workspace, access));
 }
 
@@ -179,5 +187,6 @@ export function versionHistoryRouteStands(access: RouteAccess, workspace: string
 /** The same path under the workspace whose address step is `workspace`, in place of the step it names first. */
 export function pathUnder(pathname: string, workspace: string): string {
   const [, , ...rest] = pathname.split("/");
+
   return ["", encodeURIComponent(workspace), ...rest].join("/");
 }

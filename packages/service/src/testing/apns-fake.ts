@@ -3,7 +3,7 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Predicate } from "effect";
 import {
   APNS_DELIVERY,
   type ApnsAnswer,
@@ -26,15 +26,18 @@ export function recordingApnsTransport(
   answer: (request: ApnsRequest) => ApnsAnswer | ApnsTransportFailure,
 ): RecordingApnsTransport {
   const sent: ApnsRequest[] = [];
+
   const layer = Layer.succeed(ApnsTransport, {
     send: (request) => {
       sent.push(request);
       const answered = answer(request);
+
       return answered instanceof ApnsTransportFailure
         ? Effect.fail(answered)
         : Effect.succeed(answered);
     },
   });
+
   return { layer, sent };
 }
 
@@ -60,13 +63,17 @@ export function recordingApnsSender(
         | Effect.Effect<ApnsDelivery, never, DatabaseServices>) = APNS_DELIVERY.DELIVERED,
 ): RecordingApnsSender {
   const sent: ApnsNotification[] = [];
+
   const layer = Layer.succeed(ApnsSender, {
     send: (notification) => {
       sent.push(notification);
-      if (typeof delivery !== "function") return Effect.succeed(delivery);
+
+      if (!Predicate.isFunction(delivery)) return Effect.succeed(delivery);
       const answered = delivery(notification);
+
       return Effect.isEffect(answered) ? answered : Effect.succeed(answered);
     },
   });
+
   return { layer, sent };
 }

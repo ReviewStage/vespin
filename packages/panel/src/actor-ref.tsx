@@ -10,7 +10,7 @@ import {
 import type { AutomationRunSummary, AutomationSummary } from "@repo/features/automation-wire";
 import { GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import {
-  AVATAR_SHAPE,
+  AVATAR_OUTLINE,
   AVATAR_SIZE,
   Avatar,
   type AvatarSize,
@@ -173,10 +173,13 @@ function ringOf(actor: Actor, pile: ActorPile, tiled: boolean): string {
   if (pile === ACTOR_PILE.NONE) {
     return actor.kind === ACTOR_KIND.SOMEONE && !grayed(actor) ? "shadow-actor-outline" : "";
   }
+
   if (squared(actor) && !tiled) return "";
+
   if (pile === ACTOR_PILE.IN_PILE && actor.kind === ACTOR_KIND.SOMEONE) {
     return "shadow-actor-outline-ring";
   }
+
   return "shadow-actor-ring";
 }
 
@@ -221,6 +224,7 @@ function PersonDisc({
   size: ActorSize;
 }): React.JSX.Element {
   const src = pictureAt(pictureUrl, size);
+
   return (
     <Avatar
       id={id}
@@ -254,7 +258,7 @@ function GlyphSquare({
       name={name}
       {...(src === undefined ? {} : { src })}
       glyph={glyph}
-      shape={AVATAR_SHAPE.SQUARE}
+      outline={AVATAR_OUTLINE.SQUARE}
       size={AVATAR_OF_SIZE[size]}
       tiled={tiled}
       branded={branded}
@@ -274,6 +278,7 @@ const SOMEONE_GLYPHS = {
 /** The glyph someone the window cannot name stands by, for why. */
 function SomeoneGlyph({ actor }: { actor: ActorOf<typeof ACTOR_KIND.SOMEONE> }): React.JSX.Element {
   const Glyph = SOMEONE_GLYPHS[actor.reason];
+
   return <Glyph />;
 }
 
@@ -286,6 +291,7 @@ function SomeoneDisc({ glyph, size }: { glyph: ReactNode; size: ActorSize }): Re
 function automationGlyph(actor: ActorOf<typeof ACTOR_KIND.AUTOMATION>): React.JSX.Element {
   const glyph =
     actor.trigger === undefined ? <GLYPH.AUTOMATION /> : <FiringGlyph of={actor.trigger} />;
+
   return <StateGlyph glyph={glyph} state={GLYPH_OF_STATE[actor.state]} />;
 }
 
@@ -361,6 +367,7 @@ function Face({
           />
         );
       }
+
       return <SomeoneDisc glyph={<SomeoneGlyph actor={actor} />} size={size} />;
   }
 }
@@ -373,15 +380,20 @@ function Face({
  */
 export function commentAuthor(actor: Actor): CommentAuthor {
   const picture = (url: string | undefined) => pictureAt(url, ACTOR_SIZE.ROW);
+
   switch (actor.kind) {
     case ACTOR_KIND.PERSON:
       return { name: actor.name, id: actor.userId, picture: picture(actor.pictureUrl) };
     case ACTOR_KIND.APP:
-      return { name: actorName(actor), shape: AVATAR_SHAPE.SQUARE, glyph: <ProductMark small /> };
+      return {
+        name: actorName(actor),
+        outline: AVATAR_OUTLINE.SQUARE,
+        glyph: <ProductMark small />,
+      };
     case ACTOR_KIND.AGENT:
       return {
         name: actorName(actor),
-        shape: AVATAR_SHAPE.SQUARE,
+        outline: AVATAR_OUTLINE.SQUARE,
         glyph: (
           <StateGlyph
             glyph={<AgentMark provider={actor.provider} />}
@@ -392,14 +404,14 @@ export function commentAuthor(actor: Actor): CommentAuthor {
     case ACTOR_KIND.AUTOMATION:
       return {
         name: actorName(actor),
-        shape: AVATAR_SHAPE.SQUARE,
+        outline: AVATAR_OUTLINE.SQUARE,
         glyph: automationGlyph(actor),
       };
     case ACTOR_KIND.GITHUB:
       return actor.bot
         ? {
             name: actor.login,
-            shape: AVATAR_SHAPE.SQUARE,
+            outline: AVATAR_OUTLINE.SQUARE,
             glyph: <BotIcon />,
             picture: picture(actor.avatarUrl),
           }
@@ -412,6 +424,7 @@ export function commentAuthor(actor: Actor): CommentAuthor {
           picture: picture(actor.pictureUrl),
         };
       }
+
       return { name: actorName(actor), glyph: <SomeoneGlyph actor={actor} /> };
   }
 }
@@ -557,6 +570,7 @@ export function UnassignedMark({
       <UnassignedAvatar size={AVATAR_OF_SIZE[size]} decorative={decorative} />
     </span>
   );
+
   return hint ? <Tooltip label={UNASSIGNED_WORDS}>{mark}</Tooltip> : mark;
 }
 
@@ -568,6 +582,7 @@ function UnassignedHeard(): React.JSX.Element {
 /** What a reader of the screen hears of a row's assignee, whose face says it on screen: their name, and that they left where they did. */
 function AssigneeHeard({ actor }: { actor: Actor }): React.JSX.Element {
   const left = leftWithFace(actor) ? ", who left" : "";
+
   return <VisuallyHidden>{`(assigned to ${actorName(actor)}${left})`}</VisuallyHidden>;
 }
 
@@ -645,6 +660,7 @@ function ActorHead({
   const you = actor.kind === ACTOR_KIND.PERSON && actor.you;
   // Note that the card names the reader by their name, beside its badge, since the card is about who they are.
   const name = actor.kind === ACTOR_KIND.PERSON ? actor.name : actorName(actor);
+
   return (
     <HoverCardHead
       mark={<ActorMark actor={actor} size={ACTOR_SIZE.CARD} />}
@@ -670,6 +686,7 @@ function ActorHead({
 /** A card's line under a name from the parts it has, one dot between each; none where it has none. */
 function subLine(...parts: readonly (string | undefined)[]): string | undefined {
   const said = parts.filter((part): part is string => part !== undefined && part !== "");
+
   return said.length === 0 ? undefined : said.join(" · ");
 }
 
@@ -695,6 +712,7 @@ export function PersonCard({
 }): React.JSX.Element {
   // The card hanging is the pointer on their name, a press from their page, so its chunk is read now.
   usePreloadedPerson(actor.userId);
+
   return (
     <HoverCard data-actor-card={actor.kind}>
       <ActorHead
@@ -741,6 +759,7 @@ function SomeoneCard({
   const former = actor.reason === SOMEONE_REASON.FORMER;
   // Note that a named former member's head already says "Former member".
   const note = former && actor.name !== undefined ? undefined : SOMEONE_NOTES[actor.reason];
+
   return (
     <HoverCard data-actor-card={actor.kind}>
       <ActorHead
@@ -819,6 +838,7 @@ export function namedAutomationActor(
     automationId === undefined && name !== undefined
       ? `${name} ${DELETED_AUTOMATION_WORDS}`
       : (name ?? AUTOMATION_WORDS);
+
   return { kind: ACTOR_KIND.AUTOMATION, name: words, state: ACTOR_STATE.REST };
 }
 
@@ -856,6 +876,7 @@ export function AutomationCard({
   const actor = automationActor(automation);
   const { lastRun } = automation;
   const nextWords = automationNextText(automation, now);
+
   return (
     <HoverCard data-actor-card={actor.kind}>
       <ActorHead
@@ -890,7 +911,9 @@ function AutomationMaker({
   const maker = useCreator(
     automation.creatorId === undefined ? {} : { ownerId: automation.creatorId },
   );
+
   if (maker.kind === ACTOR_KIND.SOMEONE) return null;
+
   return (
     <>
       <HoverCardRule />
@@ -910,10 +933,13 @@ type ActorOf<K extends Actor["kind"]> = Extract<Actor, { readonly kind: K }>;
 /** An automation's card, as the directory around the place naming it knows it; none where it knows no such automation. */
 function KnownAutomationActorCard({ automationId }: { automationId: string }): ReactNode {
   const known = useAutomation(automationId);
+
   return known === undefined ? undefined : (
     <AutomationCard automation={known.automation} workspaceName={known.workspaceName} />
   );
 }
+
+type ActorCards = { readonly [K in Actor["kind"]]: (actor: ActorOf<K>) => ReactNode };
 
 /**
  * The card each kind of actor hangs where the place naming it adds
@@ -923,7 +949,7 @@ function KnownAutomationActorCard({ automationId }: { automationId: string }): R
  * An agent or an automation named by its name alone hangs none, its name
  * standing as a pill.
  */
-const ACTOR_CARD: { readonly [K in Actor["kind"]]: (actor: ActorOf<K>) => ReactNode } = {
+const ACTOR_CARD: ActorCards = {
   [ACTOR_KIND.PERSON]: (actor) => <PersonCard actor={actor} />,
   [ACTOR_KIND.SOMEONE]: (actor) => <SomeoneCard actor={actor} />,
   [ACTOR_KIND.GITHUB]: (actor) => <GitHubCard actor={actor} />,
@@ -982,6 +1008,7 @@ export function ActorRef({
   // A person's own door, their page or GitHub's, where the place hands none.
   const door = useActorDoor(actor);
   const open = onOpen ?? door;
+
   return (
     <InlineRef
       look={INLINE_REF_LOOK.WASH}
@@ -1023,6 +1050,7 @@ export interface StackFace {
 /** What the face says of an actor to a screen reader and in its pill: their name, that they left where they did, and what the face says beside it. */
 function faceName(actor: Actor, face: StackFace): string {
   const name = leftWithFace(actor) ? `${actorName(actor)}${LEFT_WORDS}` : actorName(actor);
+
   return face.says === undefined ? name : `${name} · ${face.says}`;
 }
 
@@ -1040,6 +1068,7 @@ function CardedFace({
   spacing: string;
 }): React.JSX.Element {
   const name = faceName(actor, face);
+
   return (
     <Tooltip label={name} card={actorCard(actor)}>
       <li className={cn("actor-stack-face relative inline-flex", spacing)} aria-label={name}>
@@ -1093,6 +1122,7 @@ function MoreFaces({
   spacing: string;
 }): React.JSX.Element {
   const names = actors.map((actor, index) => faceName(actor, faces[index] ?? {}));
+
   const card = (
     <HoverCard data-actor-card="more">
       <HoverCardList label={label}>
@@ -1109,6 +1139,7 @@ function MoreFaces({
       </HoverCardList>
     </HoverCard>
   );
+
   return (
     <Tooltip label={names.join(", ")} card={card}>
       <li className={cn(PILE_COUNT, spacing)} aria-label={names.join(", ")}>
@@ -1136,6 +1167,7 @@ const PILE_COUNT =
  */
 function pileSpacing(index: number, apart: boolean): string {
   if (index === 0) return "";
+
   return apart ? "ml-item-gap" : "-ml-actor-overlap";
 }
 
@@ -1177,6 +1209,7 @@ export function ActorStack({
   const rest = counted ? actors.length - drawn : 0;
   const shown = actors.slice(0, drawn);
   const tiled = overlaps(shown.length, faces);
+
   if (faces === undefined) {
     return (
       <span className="actor-stack inline-flex items-center" aria-hidden="true">
@@ -1197,7 +1230,9 @@ export function ActorStack({
       </span>
     );
   }
+
   const apart = shown.some((_, index) => faces[index]?.badge !== undefined);
+
   return (
     <ul className="actor-stack m-0 inline-flex list-none items-center p-0" aria-label={label}>
       {shown.map((actor, index) => (

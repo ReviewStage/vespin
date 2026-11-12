@@ -41,6 +41,7 @@ const openAccount = Effect.gen(function* () {
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const task = yield* startTask(userId, { name: "Invitations" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -51,6 +52,7 @@ const openAccount = Effect.gen(function* () {
     repository: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   return { userId, agentId: Option.getOrThrow(started).agent.id };
 });
 
@@ -77,6 +79,7 @@ it.layer(getTestDB())("an agent's queue", (it) => {
         const [first, second, third] = Option.getOrThrow(
           yield* readAgentQueue(userId, agentId),
         ).messages;
+
         assert.ok(first !== undefined && second !== undefined && third !== undefined);
         yield* editQueuedMessage(userId, agentId, second.id, "Second, reworded");
         assert.deepEqual(
@@ -112,12 +115,15 @@ it.layer(getTestDB())("an agent's queue", (it) => {
         assert.ok(Option.isNone(yield* claimQueueHead(agentId)), "a paused queue hands on nothing");
 
         assert.deepEqual(yield* resumeAgentQueue(userId, agentId), Option.some(true));
+
         // The head claimed and let go of, as a refused send lets it go, so each claim below reads it afresh.
         const claimed = Effect.fn(function* () {
           const head = Option.getOrThrow(yield* claimQueueHead(agentId));
           yield* releaseQueuedMessage(agentId, head);
+
           return head;
         });
+
         const head = yield* claimed();
         assert.equal(head.text, "First");
         // A message being edited stops the hand-off at it, however long it stands: those ahead of it still go, and
@@ -205,9 +211,11 @@ it.layer(getTestDB())("an agent's queue", (it) => {
         text: "Theirs",
       });
       yield* pauseAgentQueue(owner.agentId, QUEUE_PAUSE.STOPPED);
+
       const [theirs] = Option.getOrThrow(
         yield* readAgentQueue(owner.userId, owner.agentId),
       ).messages;
+
       assert.ok(theirs !== undefined);
 
       assert.ok(Option.isNone(yield* readAgentQueue(other.userId, owner.agentId)));

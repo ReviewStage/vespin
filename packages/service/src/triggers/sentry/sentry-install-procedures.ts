@@ -56,21 +56,26 @@ function installUrl(settings: SentryAppSettings, state: string): string {
     `/sentry-apps/${encodeURIComponent(settings.slug)}/external-install/`,
     SENTRY_ORIGIN,
   );
+
   url.searchParams.set(INSTALL_STATE_QUERY, state);
+
   return url.toString();
 }
 
 /** The workspace Sentry resource: install and disconnect to an owner or admin, and the installations to any member. */
 export function sentryInstallProcedures(seams: SentryInstallProcedureSeams) {
   const resource = hosted.workspaceSentry.use(accountMiddleware(seams.resolveUserId));
+
   return {
     /** An intent opened for the workspace, answered as Sentry's install address. */
     install: resource.install.effect(function* ({ input, context }) {
       const workspace = yield* managedWorkspace(context.userId, input.workspaceId);
       const settings = yield* settingsOrUnavailable;
+
       const state = yield* hostedStoreOrUnavailable(
         openIntegrationInstallIntent(TRIGGER_PROVIDER.SENTRY, context.userId, workspace.id),
       );
+
       return { url: installUrl(settings, state) };
     }),
     /** The workspace's Sentry, to any member of it. */

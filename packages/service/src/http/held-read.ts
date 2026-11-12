@@ -53,6 +53,7 @@ export function cursorOf(stamps: readonly CursorStamp[]): string {
       ...(stamp.waitsOn === undefined ? [] : [stamp.waitsOn]),
     ])
     .toSorted(([a], [b]) => (String(a) < String(b) ? -1 : String(a) > String(b) ? 1 : 0));
+
   return createHash("sha256").update(JSON.stringify(standing)).digest("hex").slice(0, CURSOR_CHARS);
 }
 
@@ -100,26 +101,32 @@ export function heldUntil<A, E, R>(
   edge: ClockEdge<A> = NO_CLOCK_EDGE,
 ): Effect.Effect<Option.Option<Held<A>>, E, R> {
   const again = Effect.withTracerEnabled(read, false);
+
   return Effect.scoped(
     Effect.gen(function* () {
       const watch = yield* (yield* Sync).watch(topics, poll);
       const woken = new Set<string>();
       let heardAt = Option.none<number>();
       let standing = yield* read;
+
       while (!moved(standing)) {
         const at = edge(standing);
+
         const wait =
           at === undefined
             ? Effect.map(watch.next, Option.some)
             : Effect.flatMap(Clock.currentTimeMillis, (now) =>
                 Effect.timeoutOption(watch.next, Duration.millis(Math.max(0, at - now))),
               );
+
         const heard = yield* wait;
+
         for (const txid of Option.getOrElse(heard, () => NO_TXIDS)) woken.add(txid);
         // Note that only the wake before the look that moved is kept, since an earlier one that moved nothing, as a parent's write may on a worker's read, is not what this read answers; a wait its clock edge ended was woken by no write.
         heardAt = Option.isSome(heard) ? yield* watch.heardAt : Option.none();
         standing = yield* again;
       }
+
       return { read: standing, txids: [...woken], heardAt };
     }),
   ).pipe(Effect.timeoutOption(hold));

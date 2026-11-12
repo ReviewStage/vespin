@@ -33,11 +33,13 @@ const NOT_COPIED = "Could not copy";
  */
 function copyAnswered(copy: (text: string) => Promise<void>, details: string): void {
   let copying: Promise<void>;
+
   try {
     copying = copy(details);
   } catch (refusal) {
     copying = Promise.reject(refusal);
   }
+
   copying.then(
     () => announce(ANNOUNCE.POLITE, COPIED),
     () => announce(ANNOUNCE.ALERT, NOT_COPIED),
@@ -66,6 +68,7 @@ export function MessageFailedMark({
   const menu = useMenu(true);
   const reported = isReported(failure) ? failure : undefined;
   const details = useFailureDetails(reported);
+
   const copy: readonly (readonly MenuEntry[])[] =
     reported === undefined || details === undefined
       ? []
@@ -78,6 +81,7 @@ export function MessageFailedMark({
             },
           ],
         ];
+
   return (
     <>
       <IconButton

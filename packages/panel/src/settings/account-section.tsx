@@ -83,6 +83,7 @@ function GitHubTokenRow({ accountId }: { accountId: string | undefined }): React
   const retry = useMutation(githubTokenRetryMutation());
   const token = read.data?.token;
   const [managing, setManaging] = useState(false);
+
   // Note that the card is drawn for the token it opened over until its fade has run, so it does not change under its own exit.
   const { held: drawn, onExited } = useHeldThroughExit(
     managing && token !== undefined ? token : undefined,
@@ -149,9 +150,9 @@ const ACCOUNT_DELETE_MUTATION = mutationOptions({
   mutationFn: (): Promise<ActionResult> =>
     sendAct(ACT_KIND.ACCOUNT_DELETE, undefined).then(
       () => ({ status: ACTION_RESULT_STATUS.ACCEPTED }),
-      (error: unknown) => ({
+      (cause: unknown) => ({
         status: ACTION_RESULT_STATUS.REJECTED,
-        reason: accountDeleteRefusalWords(error),
+        reason: accountDeleteRefusalWords(cause),
       }),
     ),
 });
@@ -192,10 +193,12 @@ export function AccountSection({
   // Note that the section is only drawn while its page is, so the page
   // leaving takes the question with it.
   const deleting = useMutation(ACCOUNT_DELETE_MUTATION);
+
   const deletionAct = useConfirmAct(deleting, {
     send: () => deleting.mutateAsync(),
     answered: sameAnswer,
   });
+
   const deletion = useConfirmDialog(
     { subject: true, surfaceOpen: true },
     deletionAct,

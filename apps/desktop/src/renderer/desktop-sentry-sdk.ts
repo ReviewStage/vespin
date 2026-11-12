@@ -101,6 +101,7 @@ export function initDesktopSentry(queryClient: QueryClient): DesktopSentry {
     ignoreSpans: SPANS_NAMING_ACCESS_TOKENS,
     beforeSendSpan: withStreamedSpan(spanWithoutAccessTokens),
   });
+
   return {
     reportBlankWindow: (error, why) => {
       captureException(error, { mechanism: BLANK_WINDOW_MECHANISM[why] });
@@ -117,6 +118,7 @@ export function initDesktopSentry(queryClient: QueryClient): DesktopSentry {
           startTime: new Date(span.startedAt),
           parentSpan: null,
         });
+
         if (recorded.isRecording()) recorded.setAttributes(span.attributes());
         recorded.end(new Date(span.endedAt));
       });

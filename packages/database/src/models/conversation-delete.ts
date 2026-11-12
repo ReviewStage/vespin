@@ -41,5 +41,6 @@ export function deleteConversations(
   conversationIds: readonly string[],
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   if (conversationIds.length === 0) return Effect.void;
+
   return deleteRows(conversationIds);
 }

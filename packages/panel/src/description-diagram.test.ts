@@ -51,6 +51,7 @@ const UNPARSED = "flowchart LR\n  A -->";
 /** What the stand-in answers: a picture named by what it was asked to draw, or a refusal for `UNPARSED`. */
 function stoodInDrawing(code: string, appearance: DiagramAppearance): DiagramDrawing {
   if (code === UNPARSED) return { kind: DIAGRAM_DRAWING.REFUSED };
+
   return { kind: DIAGRAM_DRAWING.DRAWN, url: pictureOf(code, appearance) };
 }
 
@@ -119,6 +120,7 @@ async function drawn(node: ReactElement): Promise<HTMLElement> {
     ),
   );
   await settle();
+
   return container;
 }
 
@@ -157,6 +159,7 @@ function toggle(container: HTMLElement): HTMLButtonElement {
 /** A version of the description drawn against the one before it, as the version history draws it. */
 function Version({ previous, now }: { previous: string; now: string }): ReactNode {
   const restore = { busy: false, onRestore: () => undefined };
+
   return createElement(VersionView, {
     onRetry: () => undefined,
     viewing: {
@@ -177,14 +180,13 @@ function Version({ previous, now }: { previous: string; now: string }): ReactNod
   });
 }
 
-test("a Mermaid fence on a plan's page draws as the picture the diagram bundle answered, out of the screen recording", async () => {
+test("a Mermaid fence on a plan's page draws as the picture the diagram bundle answered", async () => {
   const code = "sequenceDiagram\n  Admin->>Service: Invite";
 
   const page = await drawn(createElement(DescriptionBody, { task: taskWith(mermaidFence(code)) }));
 
   assert.deepEqual(pictures(page), [pictureOf(code, DIAGRAM_APPEARANCE.LIGHT)]);
   assert.equal(page.querySelector(".description-diagram pre"), null);
-  assert.ok(page.querySelector(".description-diagram")?.classList.contains("ph-no-capture"));
 });
 
 test("a diagram's picture is named for its title, or its first line where it has none", async () => {
@@ -192,6 +194,7 @@ test("a diagram's picture is named for its title, or its first line where it has
   const plain = "%% a note\n\nsequenceDiagram\n  Admin->>Service: Invite";
   const configured = "---\nconfig:\n  layout: elk\n---\nflowchart LR\n  A --> B";
   const pie = 'pie title "Votes so far"\n  "Yes" : 3';
+
   const page = await drawn(
     createElement(DescriptionBody, {
       task: taskWith(
@@ -218,6 +221,7 @@ test("while an edited diagram is drawn again, the picture kept is still named fo
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const show = (code: string, previous: string | undefined) =>
     act(() =>
       root.render(
@@ -227,6 +231,7 @@ test("while an edited diagram is drawn again, the picture kept is still named fo
         ),
       ),
     );
+
   const alt = () => container.querySelector("img")?.getAttribute("alt");
   show(before, undefined);
   await settle();
@@ -271,9 +276,11 @@ test("a fence the diagram bundle refuses says it could not be drawn, over its co
 test("a diagram bundle that failed to load says so with Retry, which imports it again and draws the fence", async () => {
   const code = "flowchart TD\n  Offline --> Online";
   let online = false;
+
   const unloaded = standInBundles({
     diagram: () => (online ? Promise.resolve(STAND_IN) : Promise.reject(new Error("offline"))),
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -322,7 +329,10 @@ test("a fence in another language, and a Mermaid fence where the words are not a
   const shell = "```sh\npnpm install\n```";
 
   const page = await drawn(createElement(DescriptionBody, { task: taskWith(shell) }));
-  const caption = await drawn(createElement(MarkdownMessage, { words: mermaidFence(code) }));
+
+  const caption = await drawn(
+    createElement(MarkdownMessage, { words: mermaidFence(code), link: null }),
+  );
 
   assert.equal(page.querySelector(".description-diagram"), null);
   assert.equal(page.querySelector("pre")?.textContent, "pnpm install");
@@ -345,9 +355,11 @@ test("a version draws a fence it left alone as its diagram, and one whose code i
   );
 
   assert.deepEqual(pictures(version), [pictureOf(kept, DIAGRAM_APPEARANCE.LIGHT)]);
+
   const changed = [...version.querySelectorAll("pre")].find((pre) =>
     pre.textContent?.includes("Invite"),
   );
+
   assert.ok(changed, "the changed fence stands as its code");
   assert.equal(changed.closest(".description-diagram"), null);
   assert.deepEqual(
@@ -397,9 +409,11 @@ test("on a finger's device a tap on a diagram opens it over the window at its ow
     open.querySelector(".ui-zoom-image")?.getAttribute("src"),
     pictureOf(code, DIAGRAM_APPEARANCE.LIGHT),
   );
+
   const close =
     open.querySelector<HTMLButtonElement>('button[aria-label="Close"]') ??
     assert.fail("the viewer offers Close");
+
   act(() => close.click());
   assert.equal(viewer(), null);
 });
@@ -409,6 +423,7 @@ test("in a phone's narrow room a tap on a diagram opens it, and Escape shuts it"
   const room = document.body.appendChild(document.createElement("div"));
   room.className = "desktop-shell";
   room.dataset.room = "narrow";
+
   // Note that the shell hands its room down as well as writing it on its element, as `app.tsx` does.
   const page = await drawn(
     createElement(
@@ -417,6 +432,7 @@ test("in a phone's narrow room a tap on a diagram opens it, and Escape shuts it"
       createElement(DescriptionBody, { task: taskWith(mermaidFence(code)) }),
     ),
   );
+
   room.append(page);
 
   act(() => tap(picture(page)));
@@ -424,6 +440,7 @@ test("in a phone's narrow room a tap on a diagram opens it, and Escape shuts it"
   const card =
     document.querySelector<HTMLElement>('[role="dialog"]') ??
     assert.fail("the diagram opens over the window");
+
   act(() => {
     card.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   });
@@ -452,6 +469,7 @@ test("in a wide room the keyboard's press on a diagram, named for what it does, 
 
 test("a Mermaid fence in a reply draws as its diagram once its closing fence arrives, and an invalid one stays code", async () => {
   const code = "sequenceDiagram\n  Admin->>Service: Invite";
+
   const words = (text: string, streaming: boolean) =>
     createElement(TranscriptWords, { text, streaming });
 

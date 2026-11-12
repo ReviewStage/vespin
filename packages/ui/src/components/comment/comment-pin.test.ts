@@ -41,6 +41,7 @@ function drawn(count: number) {
   );
   const pin = container.querySelector("button");
   assert.ok(pin);
+
   return { pin, told };
 }
 

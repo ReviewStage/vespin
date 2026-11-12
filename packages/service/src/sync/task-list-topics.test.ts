@@ -46,6 +46,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -70,6 +71,7 @@ const wakesTheTaskList = <A, E, R>(
       wokenBy(topics, woken),
       "the task list's read is woken by a topic the write notifies",
     );
+
     return fired;
   });
 
@@ -89,6 +91,7 @@ it.layer(getTestDB())("what moves an account's task list notifies", (it) => {
           account,
           userId,
         );
+
         const taskPin = Option.getOrElse(taskPinned.value, () => assert.fail("no task pinned"));
         assert.deepEqual(taskPinned.txids, [taskPin.txid]);
         yield* wakesTheTaskList(
@@ -102,6 +105,7 @@ it.layer(getTestDB())("what moves an account's task list notifies", (it) => {
           account,
           userId,
         );
+
         const agentPin = Option.getOrElse(agentPinned.value, () => assert.fail("no agent pinned"));
         assert.deepEqual(agentPinned.txids, [agentPin.txid]);
         yield* wakesTheTaskList(pinAgentCommitted(userId, agentId, false), account, userId);
@@ -120,12 +124,15 @@ it.layer(getTestDB())("what moves an account's task list notifies", (it) => {
         const task = yield* createTask(teammate, { organizationId: teamId, name: "Billing" });
         const agentId = yield* openTaskAgent(teammate, teamId, task.id);
         const db = yield* Database;
+
         const [agent] = yield* db
           .select({ conversationId: agentTable.conversationId })
           .from(agentTable)
           .where(eq(agentTable.id, agentId));
+
         const conversationId =
           agent?.conversationId ?? assert.fail("the agent has no conversation");
+
         const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
 
         yield* wakesTheTaskList(

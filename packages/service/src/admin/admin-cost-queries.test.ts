@@ -39,6 +39,7 @@ const TODAY = "2026-10-17";
 const YESTERDAY = "2026-10-16";
 const AT_TODAY = new Date(Date.UTC(2026, 9, 17, 9));
 const AT_YESTERDAY = new Date(Date.UTC(2026, 9, 16, 9));
+
 /** Before the 7-day window's prior week began, so nothing read reaches it. */
 const AT_LONG_AGO = new Date(Date.UTC(2026, 8, 1, 9));
 
@@ -58,6 +59,7 @@ const openAccount = (role: string = USER_ROLE.USER) =>
     const db = yield* Database;
     const id = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test`, role });
+
     return id;
   });
 
@@ -68,11 +70,14 @@ const openConversation = (
 ) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const [row] = yield* db
       .insert(conversations)
       .values({ userId, kind, parentConversationId: parentConversationId ?? null })
       .returning({ id: conversations.id });
+
     if (row === undefined) throw new Error("no conversation was written");
+
     return row.id;
   });
 
@@ -222,10 +227,12 @@ it.layer(getTestDB())("the Cost screen's reads", (it) => {
         { userId: owner, day: TODAY, calls: 3, dictationSeconds: 0 },
       ]);
       const workspace = yield* openWorkspace(owner);
+
       const { id: taskId } = yield* createTask(owner, {
         organizationId: workspace,
         name: "Merges",
       });
+
       const agentRow = {
         organizationId: workspace,
         taskId,
@@ -234,6 +241,7 @@ it.layer(getTestDB())("the Cost screen's reads", (it) => {
         effort: "high",
         repository: "owner/name",
       };
+
       const pullRequest: AgentPullRequest = {
         number: 1,
         title: "Synthetic",
@@ -244,12 +252,14 @@ it.layer(getTestDB())("the Cost screen's reads", (it) => {
         deletions: 1,
         changedFiles: 1,
       };
+
       const opened = [
         { ...pullRequest, mergedAt: AT_YESTERDAY.getTime() },
         { ...pullRequest, mergedAt: AT_YESTERDAY.getTime() },
         // Open, never merged.
         { ...pullRequest, state: PULL_REQUEST_STATE.OPEN },
       ];
+
       for (const each of opened) {
         const [agent] = yield* db
           .insert(agentTable)
@@ -260,6 +270,7 @@ it.layer(getTestDB())("the Cost screen's reads", (it) => {
             idempotencyKey: randomUUID(),
           })
           .returning({ id: agentTable.id });
+
         yield* db.insert(agentPullRequest).values({
           agentId: agent?.id ?? "",
           repository: "owner/name",
@@ -289,6 +300,7 @@ it.layer(getTestDB())("the Cost screen's reads", (it) => {
       const admin = yield* openAccount(USER_ROLE.ADMIN);
       const member = yield* openAccount();
       const other = yield* openAccount();
+
       for (const id of [admin, member, other]) {
         const main = yield* openConversation(id, CONVERSATION_KIND.MAIN);
         yield* settleTurn(id, main, {
@@ -305,6 +317,7 @@ it.layer(getTestDB())("the Cost screen's reads", (it) => {
           readAdminCostUsage({ now: NOW, windowDays: WEEK, scope }),
           (usage) => new Set(usage.tokens.map((row) => row.userId)),
         );
+
       const withoutAdmins = yield* accountsRead(ADMIN_METRICS_SCOPE.NON_ADMINS);
       const everyone = yield* accountsRead(ADMIN_METRICS_SCOPE.ALL);
       assert.ok(!withoutAdmins.has(admin));
@@ -317,6 +330,7 @@ it.layer(getTestDB())("the Cost screen's reads", (it) => {
         scope: ADMIN_METRICS_SCOPE.ALL,
         userId: member,
       });
+
       assert.deepEqual(
         one.tokens.map((row) => row.userId),
         [member],

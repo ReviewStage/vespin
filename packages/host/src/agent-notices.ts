@@ -187,6 +187,7 @@ function guardedDoors(
         );
       }
     };
+
   return {
     post: guarded("post", (notice: AgentNotice) => doors.post(notice)),
     badge: guarded("badge", (count: number) => doors.badge(count)),
@@ -275,10 +276,13 @@ function waitingOnAccount(
   accountId: string | undefined,
 ): AccountInboxAnswer {
   if (accountId === undefined) return answer;
+
   const ownOf = (item: AccountInboxEntry) => {
     const waitsOn = item.waitsOn ?? item.startedBy;
+
     return waitsOn === undefined || waitsOn === accountId;
   };
+
   return { ...answer, items: answer.items.filter(ownOf) };
 }
 
@@ -292,6 +296,7 @@ function reminderOf(item: { readonly remindAt?: number | null }): {
 /** The items each task holds waiting, the task whose item changed latest first, as the read answered them latest first. */
 function waitingTasks(items: readonly AccountInboxEntry[]): AppInboxSlice["waiting"] {
   const tasks = new Map<string, AppInboxWaitingItem[]>();
+
   for (const item of items) {
     const waiting = {
       id: item.id,
@@ -301,10 +306,13 @@ function waitingTasks(items: readonly AccountInboxEntry[]): AppInboxSlice["waiti
       ...(item.asking === undefined ? undefined : { asking: item.asking }),
       ...reminderOf(item),
     };
+
     const held = tasks.get(item.planId);
+
     if (held === undefined) tasks.set(item.planId, [waiting]);
     else held.push(waiting);
   }
+
   return [...tasks].map(([taskId, held]) => ({ taskId, items: held }));
 }
 
@@ -322,6 +330,7 @@ function sameTasks(one: readonly AccountInboxTask[], other: readonly AccountInbo
     one.length === other.length &&
     one.every((task, at) => {
       const was = other[at];
+
       return (
         was !== undefined &&
         was.planId === task.planId &&
@@ -348,14 +357,18 @@ function noticeOf(burst: readonly Told[]): Omit<AgentNotice, "subject" | "onClic
   readonly place: LinkDestination;
 } {
   const [only, ...rest] = burst;
+
   if (only !== undefined && rest.length === 0) return only;
   const finished = burst.filter((told) => told.kind === NOTICE_KIND.AGENT_FINISHED);
   const asked = burst.length - finished.length;
+
   const said = [
     ...(finished.length > 0 ? [`${agentsCounted(finished.length)} finished`] : []),
     ...(asked > 0 ? [`${finished.length > 0 ? asked : agentsCounted(asked)} need you`] : []),
   ];
+
   const newest = burst.at(-1);
+
   return {
     title: said.join(", "),
     body: [...new Set(burst.map((told) => told.title))].join(", "),
@@ -413,6 +426,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
     function notify(subject: NoticeSubject, told: Told): void {
       if (focused || !dependencies.notify()) return;
       gathering.push(told);
+
       if (gathering.length > 1) return;
       const teller = dependencies.signedInAs();
       forkGathering(
@@ -421,6 +435,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
           Effect.sync(() => {
             const burst = gathering;
             gathering = [];
+
             if (focused || !dependencies.notify() || dependencies.signedInAs() !== teller) return;
             const { title, body, place } = noticeOf(burst);
             doors.post({ subject, title, body, onClick: () => dependencies.open(place) });
@@ -444,10 +459,12 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
     function heard(subject: NoticeSubject, told?: Told): void {
       if (told !== undefined) notify(subject, told);
       const { when, sound, askSound } = dependencies.sound();
+
       if (when === SOUND_WHEN.OFF || (when === SOUND_WHEN.BACKGROUND && focused)) return;
       const asking = subject.kind !== NOTICE_KIND.AGENT_FINISHED;
       const now = clock.currentTimeMillisUnsafe();
       const inBurst = chimedAt !== undefined && now - chimedAt < Duration.toMillis(BURST);
+
       if (inBurst && (chimedAsking || !asking)) return;
       chimedAt = now;
       chimedAsking = asking;
@@ -459,7 +476,9 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       if (agent.status !== AGENT_STATUS.COMPLETED && agent.status !== AGENT_STATUS.FAILED) {
         return;
       }
+
       const accountId = dependencies.accountId();
+
       if (accountId !== undefined && agent.startedBy === accountId) {
         const taskName = dependencies.taskName(agent.taskId);
         heard(
@@ -482,6 +501,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
           },
         );
       }
+
       if (focused && shownAgent === agentId) return;
       unseen.add(agentId);
       publishUnseen();
@@ -515,10 +535,13 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
     /** When the answer's next reminder later than `now` comes due; none where it holds none. */
     function nextDueOf(answer: InboxAnswered, now: number): number | undefined {
       let next: number | undefined;
+
       for (const { remindAt } of answer.items) {
         if (remindAt === undefined || remindAt === null || remindAt <= now) continue;
+
         if (next === undefined || remindAt < next) next = remindAt;
       }
+
       return next;
     }
 
@@ -529,6 +552,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
           const now = yield* Clock.currentTimeMillis;
           doors.badge(countedOf(answer, now));
           const due = nextDueOf(answer, now);
+
           if (due === undefined) return;
           yield* Effect.sleep(Duration.millis(due - now));
         }
@@ -537,6 +561,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
     /** Writes what waits for the window, and its number, the account's own alone, for the Dock, whose wait for the last answer's reminders it replaces. */
     function publishWaiting(answer: InboxAnswered): Effect.Effect<void> {
       dependencies.onInboxChanged(sliceOf(answer));
+
       return Effect.asVoid(FiberHandle.run(reminders, badgeAsDue(answer)));
     }
 
@@ -549,6 +574,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       const answer = waitingOnAccount(read, dependencies.accountId());
       observeAsking(answer);
       const was = waiting;
+
       // Note that an answer at the same cursor holding fewer of the account's own items is written, because the account's id, which picks them, may have arrived since.
       if (was?.cursor === answer.cursor && was.items.length === answer.items.length) {
         // Note that the tasks holding items may move with nothing waiting moving, an archive or a read mark, so they are written alone.
@@ -556,9 +582,12 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         const moved = { ...was, plans: answer.plans };
         waiting = moved;
         dependencies.onInboxChanged(sliceOf(moved));
+
         return Effect.void;
       }
+
       waiting = answer;
+
       return publishWaiting(answer);
     }
 
@@ -571,6 +600,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
     function observeAsking(answer: InboxAnswered): void {
       const was = asking;
       const now = new Map<string, Told>();
+
       for (const item of answer.items) {
         if (item.asking !== true) continue;
         now.set(item.id, {
@@ -580,8 +610,11 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
           place: { kind: LINK_DESTINATION.INBOX_ITEM, planId: item.planId, itemId: item.id },
         });
       }
+
       asking = new Set(now.keys());
+
       if (was === undefined) return;
+
       for (const [itemId, told] of now) {
         if (!was.has(itemId)) heard({ kind: NOTICE_KIND.ITEM_ASKED, itemId }, told);
       }
@@ -600,12 +633,15 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         waiting = undefined;
         asking = undefined;
         const letGo = publishWaiting({ items: [], plans: [] });
+
         if (reader === undefined) return letGo;
+
         // An answer that throws is reported rather than left to end the follow, which would never resume.
         const look = (answer: AgentAccountInboxAnswerView) =>
           Effect.catchDefect(
             Effect.suspend(() => {
               if (dependencies.signedInAs() !== reader || "failure" in answer) return Effect.void;
+
               return observeWaiting(answer);
             }),
             (defect) =>
@@ -615,18 +651,22 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
                 ),
               ),
           );
+
         return Effect.andThen(letGo, Stream.runForEach(dependencies.followAccountInbox(), look));
       });
 
     /** One agent as an answer carried it, against where the ledger last had it. */
     function observe(agentId: string, next: HeldAgent): void {
       const was = ledger.get(agentId);
+
       // An agent first seen ended ended before the app watched it; one first seen at work may have just started.
       if (was === undefined) {
         if (ledger.size === 0) holder = dependencies.signedInAs();
         ledger.set(agentId, next);
+
         return;
       }
+
       // The reads overlap, so a list can land after a newer read moved the
       // ledger on: one describing a turn the agent has left behind, or no
       // turn yet, says nothing newer and is let go whole.
@@ -635,6 +675,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       const startedBy = next.startedBy ?? was.startedBy;
       // So does one naming no title, since a status page carries none.
       const title = next.title ?? was.title;
+
       if (was.turnId === next.turnId) {
         // A turn that ended stays ended, so an end is never a second turn's,
         // and running again under the ended turn's id is a late read or a
@@ -642,26 +683,34 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         if (!stillWriting(was.status)) return;
         const held = { ...next, pastTurns: was.pastTurns, startedBy, title };
         ledger.set(agentId, held);
+
         if (stillWriting(next.status)) return;
         ended(agentId, held);
+
         return;
       }
+
       // A new turn: the one before it is left behind, and its own end is the next dot.
       const pastTurns = new Set(was.pastTurns);
+
       if (was.turnId !== null) pastTurns.add(was.turnId);
       const held = { ...next, pastTurns, startedBy, title };
       ledger.set(agentId, held);
+
       if (!stillWriting(next.status)) ended(agentId, held);
     }
 
     /** Lets go of every agent `keep` refuses, their dots with them, as a plan or an agent deleted or an account left has no tab to clear one. */
     function forget(keep: (agent: HeldAgent, agentId: string) => boolean): void {
       let dotted = false;
+
       for (const [agentId, agent] of ledger) {
         if (keep(agent, agentId)) continue;
         ledger.delete(agentId);
+
         if (unseen.delete(agentId)) dotted = true;
       }
+
       if (dotted) publishUnseen();
     }
 
@@ -694,6 +743,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       observeMessaged: (agent) => observe(agent.id, heldOf(agent)),
       observeStatus: (agentId, status) => {
         const held = ledger.get(agentId);
+
         if (held !== undefined) observe(agentId, { ...held, status });
       },
       observeTaskGone: (taskId) => forget((agent) => agent.taskId !== taskId),
@@ -706,15 +756,20 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         const named = new Set(agents.map((agent) => agent.id));
         forget((agent, agentId) => {
           if (!held.has(agent.taskId)) return false;
+
           if (named.has(agentId)) return true;
+
           if (followedAgents.has(agentId)) return false;
           const pushes = (unnamedPushes.get(agentId) ?? 0) + 1;
           unnamedPushes.set(agentId, pushes);
+
           return pushes <= UNNAMED_PUSHES_KEPT;
         });
+
         for (const agentId of unnamedPushes.keys()) {
           if (named.has(agentId) || !ledger.has(agentId)) unnamedPushes.delete(agentId);
         }
+
         followedAgents = named;
         notices.observeAgents(agents);
       },
@@ -740,6 +795,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       Effect.sync(() =>
         dependencies.onPanelFocusChanged((next) => {
           focused = next;
+
           if (focused) seen(shownAgent);
         }),
       ),
@@ -757,6 +813,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       ),
       (unsubscribe) => Effect.sync(unsubscribe),
     );
+
     return notices;
   },
 );

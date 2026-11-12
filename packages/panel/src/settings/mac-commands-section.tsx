@@ -42,6 +42,7 @@ export function MacCommandsSection({
 }): React.JSX.Element {
   const startup =
     settingRowsForPage(SCHEMA_SETTINGS_PAGE.THIS_MAC, SETTING_SECTION.STARTUP, view).length > 0;
+
   return (
     <>
       <SettingsSection>

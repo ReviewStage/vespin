@@ -47,12 +47,14 @@ interface HostSeamDependencies {
 function hostSeamLayersFor(dependencies: HostSeamDependencies) {
   const { config, cipher } = dependencies;
   const { runMode } = config;
+
   // A press on a Mac with no network is answered at once, from Electron's own
   // probe, rather than opening a page nobody can load.
   const consent = Layer.succeed(SignInConsent, {
     open: <Grant extends object>(options: LoopbackConsentOptions<Grant>) =>
       loopbackConsent({ ...options, isOnline: () => net.isOnline() }),
   });
+
   return Layer.mergeAll(
     Layer.succeed(StateRoot, config.stateRoot),
     Layer.succeed(RunMode, runMode),
@@ -106,6 +108,7 @@ export function hostAssemblyLayerFor(
   dependencies: HostSeamDependencies,
 ): Layer.Layer<HostAssemblyTag | ServiceReach, DuplicateGatewayMethod | DuplicateHostAct> {
   const seams = hostSeamLayersFor(dependencies);
+
   return Layer.provide(
     // The desktop runs every platform concern: it is the host they were written for.
     hostAssemblyLayer(ALL_HOST_PLATFORM_CONCERNS),

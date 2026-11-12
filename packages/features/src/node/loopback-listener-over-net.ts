@@ -23,6 +23,7 @@ function connectionOf(socket: net.Socket): LoopbackConnection {
       Effect.sync(() => {
         socket.on("data", (data: Buffer) => Queue.offerUnsafe(queue, new Uint8Array(data)));
         socket.once("close", () => Queue.endUnsafe(queue));
+
         if (socket.destroyed) Queue.endUnsafe(queue);
       }),
     ),
@@ -40,6 +41,7 @@ export const listenOnLoopbackOverNet: ListenOnLoopback = (port) =>
   Effect.gen(function* () {
     const accepted = yield* Queue.unbounded<LoopbackConnection, Cause.Done>();
     const sockets = new Set<net.Socket>();
+
     const server = yield* Effect.acquireRelease(
       Effect.sync(() =>
         net.createServer((socket) => {
@@ -53,14 +55,17 @@ export const listenOnLoopbackOverNet: ListenOnLoopback = (port) =>
       (server) =>
         Effect.sync(() => {
           server.close();
+
           for (const socket of sockets) socket.destroy();
           Queue.endUnsafe(accepted);
         }),
     );
+
     const listening = yield* Effect.callback<boolean>((resume) => {
       server.once("listening", () => resume(Effect.succeed(true)));
       server.once("error", () => resume(Effect.succeed(false)));
       server.listen({ host: LOOPBACK, port, exclusive: true });
     });
+
     return listening ? Stream.fromQueue(accepted) : undefined;
   });

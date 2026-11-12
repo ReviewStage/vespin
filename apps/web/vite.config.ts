@@ -33,6 +33,7 @@ function pageInMacAppAtCleanPath(): Plugin {
     configureServer(server) {
       server.middlewares.use((request, _response, next) => {
         const url = new URL(request.url ?? "/", "http://localhost");
+
         if (url.pathname === PAGE_IN_MAC_APP_PATH)
           request.url = `${url.pathname}.html${url.search}`;
         next();

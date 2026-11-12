@@ -119,7 +119,20 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
-import { Data, Duration, Effect, Exit, Fiber, Option, Queue, Schema, Scope, Stream } from "effect";
+import {
+  Data,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  Option,
+  Predicate,
+  Queue,
+  Result,
+  Schema,
+  Scope,
+  Stream,
+} from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import type { ChildProcessSpawner } from "effect/process";
 import {
@@ -136,7 +149,7 @@ import {
   denyForMessage,
   denyWaiting,
   holdAsk,
-  makeApprovals,
+  openApprovals,
   settleAsk,
 } from "./approvals.js";
 import { CheckoutSnapshots } from "./checkout-snapshot.js";
@@ -145,6 +158,7 @@ import type {
   ApprovalsReviewer,
   AskForApproval,
   ChatgptAuthTokensRefreshResponse,
+  CodexErrorInfo,
   CommandExecutionApprovalDecision,
   SandboxMode,
   SandboxPolicy,
@@ -310,7 +324,7 @@ type Signal =
       readonly status: TurnStatus;
       readonly error: string | undefined;
       /** Codex's own word for why the turn failed (`codexErrorInfo`), as it wrote it. */
-      readonly errorInfo: unknown;
+      readonly errorInfo: CodexErrorInfo | null | undefined;
     }
   | { readonly kind: typeof SIGNAL.PROBED; readonly answered: boolean }
   | { readonly kind: typeof SIGNAL.EXITED; readonly stderrTail: string }
@@ -358,7 +372,9 @@ const ThreadAnswerSchema = Schema.Struct({
     path: Schema.optionalKey(Schema.NullOr(Schema.String)),
   }),
 });
+
 const TurnAnswerSchema = Schema.Struct({ turn: Schema.Struct({ id: Schema.String }) });
+
 /** A page of a thread's turns as the rewind reads it: each turn's id and its user messages' client ids. */
 const TurnsPageSchema = Schema.Struct({
   data: Schema.Array(
@@ -374,6 +390,7 @@ const TurnsPageSchema = Schema.Struct({
   ),
   nextCursor: Schema.NullOr(Schema.String),
 });
+
 const decodeThreadAnswer = Schema.decodeUnknownOption(ThreadAnswerSchema);
 
 /** App-server's word for a thread resumed on another model provider than it was written on, in its refusal's message or data. */
@@ -381,9 +398,14 @@ const PROVIDER_MISMATCH = /model\s*provider\s*mismatch/i;
 const decodeTurnsPage = Schema.decodeUnknownOption(TurnsPageSchema);
 const decodeTurnAnswer = Schema.decodeUnknownOption(TurnAnswerSchema);
 const decodeLine = Schema.decodeUnknownOption(Schema.fromJsonString(InputLineSchema));
+
 /** The field of a refusal's `data` read here: the `TurnError`'s info, where app-server sent one. */
 const decodeRefusalData = Schema.decodeUnknownOption(
-  Schema.Struct({ codexErrorInfo: Schema.optionalKey(Schema.NullOr(Schema.Unknown)) }),
+  Schema.Struct({
+    codexErrorInfo: Schema.optionalKey(
+      Schema.NullOr(Schema.Union([Schema.String, Schema.Record(Schema.String, Schema.Unknown)])),
+    ),
+  }),
 );
 
 const CODEX_EFFORTS: ReadonlySet<string> = new Set(Object.values(CODEX_EFFORT));
@@ -431,6 +453,7 @@ function serviceTierOf(
   ultrafast: boolean | undefined,
 ): ServiceTier | null {
   if (ultrafast === true) return SERVICE_TIER.ULTRAFAST;
+
   return fast === true ? SERVICE_TIER.FAST : null;
 }
 
@@ -455,14 +478,17 @@ function bundledCatalog() {
  */
 function ultrafastCatalog(): string {
   const catalog = bundledCatalog();
-  const isUltrafast = (tier: unknown) =>
-    typeof tier === "object" && tier !== null && "id" in tier && tier.id === SERVICE_TIER.ULTRAFAST;
+
+  const isUltrafast = Schema.is(Schema.Struct({ id: Schema.Literal(SERVICE_TIER.ULTRAFAST) }));
+
   const models = catalog.models.map((model) => {
     const tiers = model.service_tiers ?? [];
+
     return tiers.some(isUltrafast)
       ? model
       : { ...model, service_tiers: [...tiers, ULTRAFAST_CATALOG_TIER] };
   });
+
   return JSON.stringify({ ...catalog, models });
 }
 
@@ -473,9 +499,11 @@ function ultrafastCatalog(): string {
  */
 function planCatalog(): string {
   const catalog = bundledCatalog();
+
   const models = catalog.models.map((model) =>
     Object.fromEntries(Object.entries(model).filter(([key]) => key !== "multi_agent_version")),
   );
+
   return JSON.stringify({ ...catalog, models });
 }
 
@@ -486,6 +514,7 @@ const catalogFile = (catalog: string) =>
       const folder = mkdtempSync(join(tmpdir(), CATALOG_FILE.PREFIX));
       const file = join(folder, CATALOG_FILE.NAME);
       writeFileSync(file, catalog);
+
       return { folder, file };
     }),
     ({ folder }) => Effect.sync(() => rmSync(folder, { recursive: true, force: true })),
@@ -533,6 +562,7 @@ type CodexAuth = (
 function providerOverrides(auth: CodexAuth): (readonly [string, string])[] {
   if (auth.kind !== CODEX_AUTH.API_KEY) return [];
   const provider = `model_providers.${API_KEY_PROVIDER.ID}`;
+
   return [
     ["model_provider", toml(API_KEY_PROVIDER.ID)],
     [`${provider}.name`, toml(API_KEY_PROVIDER.NAME)],
@@ -615,6 +645,7 @@ const REVIEWER_OF = {
 function permissionsOf(mode: PermissionMode | undefined): CodexPermissions {
   if (mode === undefined || mode === PERMISSION_MODE.FULL_ACCESS) return FULL_ACCESS;
   const approvalsReviewer = REVIEWER_OF[mode];
+
   return {
     approvalPolicy: "on-request",
     approvalsReviewer,
@@ -656,6 +687,7 @@ function appServerArgs(
   toolEnv: Readonly<Record<string, string>>,
 ): string[] {
   const mcp = `mcp_servers.${MCP_SERVER}`;
+
   // Each integration the agent is handed is a server of its own on the same bearer, its tools approved and bounded as ours are.
   // Note that a cached catalog satisfies an integration's startup (`startup_readiness`) while it connects, so a
   // known integration holds no first turn; an integration with none waits no longer than Codex's grace for optional servers.
@@ -663,6 +695,7 @@ function appServerArgs(
     .filter((integration) => integration.name !== MCP_SERVER)
     .flatMap((integration): (readonly [string, string])[] => {
       const server = `mcp_servers.${integration.name}`;
+
       return [
         [`${server}.url`, toml(integration.url)],
         [`${server}.bearer_token_env_var`, toml(RUNNER_ENV.BEARER)],
@@ -672,10 +705,12 @@ function appServerArgs(
         [`${server}.tool_timeout_sec`, MCP_TOOL_TIMEOUT_SECONDS.toFixed(1)],
       ];
     });
+
   const excluded = [
     RUNNER_ENV.BEARER,
     ...(auth.kind === CODEX_AUTH.API_KEY ? [RUNNER_ENV.OPENAI_API_KEY] : []),
   ];
+
   const overrides: (readonly [string, string])[] = [
     ...providerOverrides(auth),
     ...featureOverrides(auth),
@@ -700,6 +735,7 @@ function appServerArgs(
           ],
         ] as const)),
   ];
+
   return [
     "app-server",
     "--listen",
@@ -719,6 +755,7 @@ function appServerArgs(
 function steerWaits(error: AppServerError): boolean {
   if (error.data === undefined || error.data === null) return error.code === INVALID_REQUEST;
   const read = decodeRefusalData(error.data);
+
   return (
     Option.isSome(read) &&
     codexErrorKind(read.value.codexErrorInfo) === CODEX_ERROR_INFO.ACTIVE_TURN_NOT_STEERABLE
@@ -846,7 +883,9 @@ const ApprovalAskSchema = Schema.Struct({
   cwd: Schema.optionalKey(Schema.NullOr(Schema.String)),
   grantRoot: Schema.optionalKey(Schema.NullOr(Schema.String)),
 });
+
 const decodeApprovalAsk = Schema.decodeUnknownOption(ApprovalAskSchema);
+
 const decodeResolved = Schema.decodeUnknownOption(
   Schema.Struct({ requestId: Schema.Union([Schema.Number, Schema.String]) }),
 );
@@ -872,6 +911,7 @@ function codexDecisionOf(
   by: ApprovalBy,
 ): Extract<CommandExecutionApprovalDecision, string> {
   if (by === APPROVAL_BY.ENDED || by === APPROVAL_BY.ABORTED) return "cancel";
+
   switch (decision) {
     case APPROVAL_DECISION.ALLOW:
       return "accept";
@@ -894,27 +934,33 @@ function servedAsk(
   request: AppServerRequest & { readonly method: keyof typeof APPROVAL_ASK },
 ): Effect.Effect<Schema.Json, AppServerRequestFailed> {
   const params = decodeApprovalAsk(request.params);
+
   if (Option.isNone(params)) {
     return Effect.fail(
       new AppServerRequestFailed({ detail: "the approval request is unreadable" }),
     );
   }
+
   const { itemId, reason, command, cwd, grantRoot } = params.value;
   const { toolName, title } = APPROVAL_ASK[request.method];
   const requestId = randomUUID();
+
   const input = Object.fromEntries(
-    Object.entries({ command, cwd, grantRoot }).filter(([, value]) => typeof value === "string"),
+    Object.entries({ command, cwd, grantRoot }).filter(([, value]) => Predicate.isString(value)),
   );
+
   const requested: RunnerApprovalRequested = {
     type: RUNNER_EVENT.APPROVAL_REQUESTED,
     requestId,
     toolUseId: itemId,
     toolName,
     title,
-    ...(typeof reason === "string" && reason !== "" ? { description: reason } : undefined),
+    ...(Predicate.isString(reason) && reason !== "" ? { description: reason } : undefined),
     input: cutInput(input),
   };
+
   const key = String(request.id);
+
   return Effect.sync(() => asked.set(key, requestId)).pipe(
     Effect.andThen(
       holdAsk(seen.approvals, requested, (decision, by) => ({
@@ -937,25 +983,32 @@ const DECLINED_ELICITATION = { action: "decline", content: null, _meta: null } a
  */
 function reviewNotes(): (notification: CodexNotification) => CodexNotification {
   const notes = new Map<string, string>();
+
   return (notification) => {
     if (notification.method === METHOD.AUTO_REVIEW_COMPLETED) {
       const { targetItemId, review } = notification.params;
       const why = review.rationale ?? "";
+
       if (targetItemId === null || targetItemId === undefined) return notification;
+
       if (review.status === "denied") {
         notes.set(targetItemId, `Codex's automatic review denied this command. ${why}`.trim());
       } else if (review.status === "timedOut") {
         notes.set(targetItemId, "Codex's automatic review timed out, so this command did not run.");
       }
+
       return notification;
     }
+
     if (notification.method !== METHOD.ITEM_COMPLETED) return notification;
     const { item } = notification.params;
     const note = notes.get(item.id);
+
     if (item.type !== "commandExecution" || note === undefined) return notification;
     notes.delete(item.id);
     const said = item.aggregatedOutput ?? "";
     const aggregatedOutput = said === "" ? note : `${said.replace(/\n$/, "")}\n${note}`;
+
     return {
       ...notification,
       params: { ...notification.params, item: { ...item, aggregatedOutput } },
@@ -977,6 +1030,7 @@ function listenerFor(
   const annotate = codexMemoryWatch();
   const reviewed = reviewNotes();
   const asked = new Map<string, string>();
+
   return {
     onRequest: (request) => {
       if (request.method === METHOD.CHATGPT_AUTH_TOKENS_REFRESH && refresh !== undefined) {
@@ -984,8 +1038,11 @@ function listenerFor(
           Effect.mapError((failure) => new AppServerRequestFailed({ detail: failure.detail })),
         );
       }
+
       if (request.method === METHOD.MCP_ELICITATION) return Effect.succeed(DECLINED_ELICITATION);
+
       if (!seen.asks || !isApprovalMethod(request.method)) return undefined;
+
       return servedAsk(seen, asked, { ...request, method: request.method });
     },
     onNotification: (notification) =>
@@ -993,24 +1050,33 @@ function listenerFor(
         yield* seen.context.sink.emit(
           reviewed(yield* Effect.promise(() => annotate(notification))),
         );
+
         if (notification.method === METHOD.SERVER_REQUEST_RESOLVED) {
           // App-server settled an ask itself, as an interrupt does: it is withdrawn, where it still waits.
           const resolved = decodeResolved(notification.params);
+
           const requestId = Option.isSome(resolved)
             ? asked.get(String(resolved.value.requestId))
             : undefined;
+
           if (requestId === undefined) return;
           yield* settleAsk(seen.approvals, requestId, APPROVAL_DECISION.DENY, APPROVAL_BY.ABORTED);
+
           return;
         }
+
         if (notification.method === METHOD.TURN_STARTED) {
           const { threadId, turn } = notification.params;
+
           if (threadId !== seen.threadId) return;
           yield* Queue.offer(seen.signals, { kind: SIGNAL.TURN_STARTED, turnId: turn.id });
+
           return;
         }
+
         if (notification.method === METHOD.TURN_COMPLETED) {
           const { threadId, turn } = notification.params;
+
           if (threadId !== seen.threadId) return;
           yield* Queue.offer(seen.signals, {
             kind: SIGNAL.TURN_COMPLETED,
@@ -1019,16 +1085,22 @@ function listenerFor(
             error: turn.error?.message,
             errorInfo: turn.error?.codexErrorInfo,
           });
+
           return;
         }
+
         if (notification.method !== METHOD.ITEM_STARTED) return;
         const { threadId, item } = notification.params;
+
         if (threadId !== seen.threadId) return;
+
         // Every item but a message of ours is the model's doing, so it counts as the model heard from.
         if (item.type !== "userMessage") {
           seen.heard.count += 1;
+
           return;
         }
+
         if (item.clientId === null) return;
         yield* Queue.offer(seen.signals, { kind: SIGNAL.MESSAGE_TAKEN, clientId: item.clientId });
       }),
@@ -1067,14 +1139,17 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
   const { auth } = launch;
   const serverScope = yield* Scope.make();
   const client = yield* HttpClient.HttpClient;
+
   // Note that the tokens are asked for on the launch's own client, since app-server's ask is answered on the reader's fiber.
   const tokens =
     auth.kind === CODEX_AUTH.CHATGPT_TOKENS
       ? planTokens(auth.tokenUrl, bearer).pipe(Effect.provideService(HttpClient.HttpClient, client))
       : undefined;
+
   // Note that the listener reads the thread's id from here, because a new
   // thread's notifications arrive before `thread/start` answers.
   const { permissions } = launch;
+
   const seen: ThreadSeen = {
     context: launch.context,
     signals: launch.signals,
@@ -1083,6 +1158,7 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
     threadId: fork ? undefined : threadId,
     heard: launch.heard,
   };
+
   const server = yield* spawnAppServer(
     {
       executable: config.executable,
@@ -1101,6 +1177,7 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
   ).pipe(Scope.provide(serverScope), (spawned) =>
     launch.context.trace.step(RUNNER_SPAN.CLI, spawned),
   );
+
   const opened = Effect.gen(function* () {
     // Note that the sign-in on host-supplied tokens is experimental, which app-server serves only to a client that opted in.
     yield* server.request(METHOD.INITIALIZE, {
@@ -1109,6 +1186,7 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
         tokens === undefined ? null : { experimentalApi: true, requestAttestation: false },
     });
     yield* server.notify(METHOD.INITIALIZED);
+
     if (tokens !== undefined) {
       const signedIn = yield* tokens.pipe(
         Effect.mapError(
@@ -1116,17 +1194,22 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
             new AppServerError({ method: METHOD.ACCOUNT_LOGIN_START, detail: failure.detail }),
         ),
       );
+
       yield* server.request(METHOD.ACCOUNT_LOGIN_START, {
         type: "chatgptAuthTokens",
         ...signedIn,
       });
     }
+
     // The member's installed skills, beside the checkout's `.agents/skills`, before the thread lists them.
     const skills = installedSkillsPath(config.installedSkills, INSTALLED_SKILLS.SKILLS);
+
     if (skills !== undefined) {
       yield* server.request(METHOD.SKILLS_EXTRA_ROOTS_SET, { extraRoots: [skills] });
     }
+
     if (!(yield* rollouts)) return yield* new RolloutUnread();
+
     const thread = {
       cwd: config.cwd,
       model: launch.model,
@@ -1137,9 +1220,11 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
       sandbox: permissions.sandbox,
       developerInstructions: config.developerInstructions,
     } satisfies ThreadStartParams;
+
     // Note that a resume refused for its provider forks the thread, so whether it forked is told with the answer.
     const forking = (forkedId: string) =>
       server.request(METHOD.THREAD_FORK, { ...thread, threadId: forkedId, excludeTurns: true });
+
     const { answer, forked } =
       threadId === undefined
         ? { answer: yield* server.request(METHOD.THREAD_START, thread), forked: false }
@@ -1156,20 +1241,26 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
                   })),
                 ),
               );
+
     const opened = decodeThreadAnswer(answer);
+
     if (Option.isNone(opened)) {
       return yield* new AppServerError({
         method: METHOD.THREAD_START,
         detail: "no thread in the answer",
       });
     }
+
     seen.threadId = opened.value.thread.id;
+
     return { ...opened.value.thread, forked };
   });
+
   const openedThread = yield* opened.pipe(
     (handshake) => launch.context.trace.step(RUNNER_SPAN.HANDSHAKE, handshake),
     Effect.tapError(() => Scope.close(serverScope, Exit.void)),
   );
+
   return {
     server,
     serverScope,
@@ -1198,6 +1289,7 @@ const revertedBefore = Effect.fn("agent-runner/codex/revertedBefore")(function* 
   rewindBefore: string,
 ): Effect.fn.Return<string | undefined, AppServerError> {
   let cursor: string | null = null;
+
   for (;;) {
     const page = decodeTurnsPage(
       yield* server.request(METHOD.THREAD_TURNS_LIST, {
@@ -1208,18 +1300,24 @@ const revertedBefore = Effect.fn("agent-runner/codex/revertedBefore")(function* 
         itemsView: "full",
       }),
     );
+
     if (Option.isNone(page)) return undefined;
+
     const taking = page.value.data.find((turn) =>
       turn.items.some((item) => item.type === "userMessage" && item.clientId === rewindBefore),
     );
+
     if (taking !== undefined) {
       const answer = yield* server.request(METHOD.THREAD_REVERT, {
         threadId,
         beforeTurnId: taking.id,
       });
+
       const reverted = decodeThreadAnswer(answer);
+
       return Option.isSome(reverted) ? (reverted.value.thread.path ?? undefined) : undefined;
     }
+
     if (page.value.nextCursor === null) return undefined;
     cursor = page.value.nextCursor;
   }
@@ -1262,12 +1360,14 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
           input: messages.flatMap((message) => message.input),
           lines: messages.flatMap((message) => message.lines),
         };
+
   // The checkout is recorded before app-server can touch it, under the first line the turn takes,
   // where the turn opens the agent's; a turn continuing one under way leaves the opening record standing.
   const first = merged.lines[0];
   const snapshot = launch.open || first === undefined ? undefined : yield* launch.snapshot(first);
   launch.open = true;
   const outgoing: Outgoing = { ...merged, snapshot };
+
   const answer = decodeTurnAnswer(
     yield* launch.server.request(METHOD.TURN_START, {
       threadId: launch.threadId,
@@ -1284,12 +1384,14 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
       serviceTier: turnTierOf(launch),
     }),
   );
+
   if (Option.isNone(answer)) {
     return yield* new AppServerError({
       method: METHOD.TURN_START,
       detail: "no turn in the answer",
     });
   }
+
   launch.state = { kind: LAUNCH_STATE.TURN, id: answer.value.turn.id, stopping: false };
   launch.sent.set(outgoing.clientId, outgoing);
   yield* accepted(launch, outgoing);
@@ -1323,12 +1425,16 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
   text: string,
 ) {
   const line = decodeLine(text);
+
   if (Option.isNone(line)) {
     // Note that we never echo the line: a message carries the user's words, a token line a secret.
     yield* Effect.logWarning("agent-runner: skipped a stdin line it could not read");
+
     return undefined;
   }
+
   const value = line.value;
+
   switch (value.type) {
     case INPUT_LINE.MESSAGE: {
       yield* launch.context.trace.taken;
@@ -1338,22 +1444,29 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
       const uuid = value.uuid ?? randomUUID();
       const outgoing: Outgoing = { clientId: uuid, input: userInput(value.content), lines: [uuid] };
       const { state } = launch;
+
       // A compaction waits for a turn running, or a host being probed, to be over, as app-server compacts no thread at work.
       if (value.compact === true) {
         if (state.kind === LAUNCH_STATE.IDLE) yield* startCompaction(launch, outgoing);
         else launch.compactNext = outgoing;
+
         return undefined;
       }
+
       if (state.kind === LAUNCH_STATE.IDLE) {
         yield* startTurn(launch, [outgoing]);
+
         return undefined;
       }
+
       // A message sent while the provider's host is probed waits for it, and one sent while
       // the turn stops waits for that turn to end: either starts the next turn.
       if (state.kind === LAUNCH_STATE.RECONNECTING || state.stopping) {
         launch.waiting.push(outgoing);
+
         return undefined;
       }
+
       // A steer the turn cannot take waits for the next turn; any other refusal fails the launch.
       const steered = yield* launch.server
         .request(METHOD.TURN_STEER, {
@@ -1366,23 +1479,32 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
           Effect.as(true),
           Effect.catchIf(steerWaits, () => Effect.succeed(false)),
         );
+
       if (!steered) {
         launch.waiting.push(outgoing);
+
         return undefined;
       }
+
       launch.sent.set(outgoing.clientId, outgoing);
       yield* accepted(launch, outgoing);
+
       return undefined;
     }
+
     case INPUT_LINE.STOP: {
       // A stop for another launch's turn is not this launch's to take.
       if (value.launch !== undefined && value.launch !== launch.context.config.firstSequence) {
         yield* Effect.logWarning("agent-runner: skipped a stop for another launch");
+
         return undefined;
       }
+
       const { state } = launch;
+
       if (state.kind !== LAUNCH_STATE.TURN) return ended(RUNNER_END.STOPPED);
       launch.state = { ...state, stopping: true };
+
       // Note that a turn app-server did not interrupt ends with the launch, which closes app-server, so a stop never waits on a hung one.
       const interrupted = yield* launch.server
         .request(METHOD.TURN_INTERRUPT, { threadId: launch.threadId, turnId: state.id })
@@ -1392,37 +1514,49 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
             Effect.logWarning("agent-runner: turn/interrupt failed").pipe(Effect.as(false)),
           ),
         );
+
       return interrupted ? undefined : ended(RUNNER_END.STOPPED);
     }
+
     case INPUT_LINE.RETIRE: {
       // Lines are taken one at a time, so a message ahead of this one already took the launch out of warm.
       const { state } = launch;
+
       if (state.kind === LAUNCH_STATE.IDLE && state.warm && launch.waiting.length === 0) {
         return ended(RUNNER_END.IDLED);
       }
+
       yield* Effect.logWarning("agent-runner: skipped a retire for a launch at work");
+
       return undefined;
     }
+
     // Note that a warm launch's window is its wait for the next signal, which this one already ran again from now.
     case INPUT_LINE.WARM:
       return undefined;
     case INPUT_LINE.APPROVAL: {
       const { requestId, decision, message } = value;
+
       if (!(yield* settleAsk(launch.approvals, requestId, decision, APPROVAL_BY.MEMBER, message))) {
         yield* Effect.logWarning("agent-runner: skipped an approval for no waiting call");
       }
+
       return undefined;
     }
+
     case INPUT_LINE.MODEL: {
       if (value.model !== undefined) launch.model = value.model;
+
       // Note that a line naming either speed key says both, the one it leaves out being off.
       if (value.fast !== undefined || value.ultrafast !== undefined) {
         launch.tier = serviceTierOf(value.fast, value.ultrafast);
       }
+
       if (value.effort !== undefined && isCodexEffort(value.effort)) launch.effort = value.effort;
       else if (value.effort !== undefined) {
         yield* Effect.logWarning("agent-runner: skipped an effort Codex does not take");
       }
+
       return undefined;
     }
   }
@@ -1431,6 +1565,7 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
 /** The rollout's new lines sent to the store, where the launch mirrors it; one the store did not take goes with the next. */
 function mirrored(launch: Pick<CodexLaunch, "mirror">) {
   if (launch.mirror === undefined) return Effect.void;
+
   return mirrorRollout(launch.mirror).pipe(
     Effect.catch(() => Effect.logWarning("agent-runner: the rollout was not mirrored")),
   );
@@ -1442,56 +1577,74 @@ const takeTurnCompleted = Effect.fn("agent-runner/codex/takeTurnCompleted")(func
   signal: Extract<Signal, { kind: typeof SIGNAL.TURN_COMPLETED }>,
 ) {
   const { state } = launch;
+
   if (state.kind !== LAUNCH_STATE.TURN || signal.turnId !== state.id) return undefined;
   launch.state = IDLE;
   yield* mirrored(launch);
+
   // A stopped turn's own messages end with it; those sent since the stop start the next turn.
   if (state.stopping) {
     const since = launch.waiting;
     launch.sent.clear();
     launch.waiting = [];
+
     if (since.length === 0) return ended(RUNNER_END.STOPPED);
     yield* startTurn(launch, since);
+
     return undefined;
   }
+
   // A turn app-server gave up on for want of its provider's host is carried on once the host answers, not ended.
   if (signal.status === "failed" && codexConnectionLost(signal.errorInfo)) {
     return yield* connectionLost(launch);
   }
+
   if (signal.status === "failed")
     return ended(RUNNER_END.FAILED, signal.error ?? "the turn failed");
+
   if (signal.status === "interrupted") {
     return ended(RUNNER_END.FAILED, signal.error ?? "the turn was interrupted");
   }
+
   const unanswered = [...launch.sent.values(), ...launch.waiting];
   launch.sent.clear();
   launch.waiting = [];
+
   if (unanswered.length > 0) {
     yield* startTurn(launch, unanswered);
+
     return undefined;
   }
+
   // What the service wrote before the turn completed, still queued behind the
   // completion, is acted on before the launch is called over, so a
   // follow-up already sent starts the next turn rather than being dropped.
   for (;;) {
     const queued = yield* Queue.poll(launch.signals);
+
     if (Option.isNone(queued)) break;
     const done = yield* takeSignal(launch, queued.value);
+
     if (done !== undefined) return done;
   }
+
   if (launch.state.kind !== LAUNCH_STATE.IDLE) return undefined;
   launch.open = false;
   const compaction = launch.compactNext;
+
   if (compaction !== undefined) {
     launch.compactNext = undefined;
     yield* startCompaction(launch, compaction);
+
     return undefined;
   }
+
   if (launch.context.config.warm !== true) return ended(RUNNER_END.TURN_ENDED);
   // The agent's turn is over: the launch stays warm for the service's next message
   // rather than ending.
   launch.state = { kind: LAUNCH_STATE.IDLE, warm: true };
   yield* launch.context.sink.emit({ type: RUNNER_EVENT.IDLE });
+
   return undefined;
 });
 
@@ -1508,11 +1661,13 @@ const connectionLost = Effect.fn("agent-runner/codex/connectionLost")(function* 
     yield* Effect.logWarning(
       "agent-runner: the connection was lost again before the model answered",
     );
+
     return ended(
       RUNNER_END.FAILED,
       connectionLostFailure(launch.providerHost, CONNECTION_LOST_DETAIL.LOST_AGAIN),
     );
   }
+
   yield* Effect.logWarning(`agent-runner: lost the connection to ${launch.providerHost}`);
   launch.state = { kind: LAUNCH_STATE.RECONNECTING };
   yield* launch.context.sink.emit({
@@ -1523,6 +1678,7 @@ const connectionLost = Effect.fn("agent-runner/codex/connectionLost")(function* 
     Effect.flatMap((answered) => Queue.offer(launch.signals, { kind: SIGNAL.PROBED, answered })),
     Effect.forkScoped,
   );
+
   return undefined;
 });
 
@@ -1538,22 +1694,27 @@ const connectionProbed = Effect.fn("agent-runner/codex/connectionProbed")(functi
 ) {
   if (launch.state.kind !== LAUNCH_STATE.RECONNECTING) return undefined;
   launch.state = IDLE;
+
   if (!answered) {
     yield* Effect.logWarning(`agent-runner: ${launch.providerHost} did not answer within the wait`);
+
     return ended(
       RUNNER_END.FAILED,
       connectionLostFailure(launch.providerHost, CONNECTION_LOST_DETAIL.GAVE_UP),
     );
   }
+
   launch.carriedOnAt = launch.heard.count;
   const waiting = launch.waiting;
   launch.waiting = [];
+
   if (waiting.length > 0) yield* startTurn(launch, waiting);
   yield* launch.context.sink.emit({
     type: RUNNER_EVENT.CONNECTION_RESTORED,
     host: launch.providerHost,
     carryOn: waiting.length === 0,
   });
+
   return undefined;
 });
 
@@ -1572,15 +1733,19 @@ function takeSignal(
     case SIGNAL.INPUT_CLOSED: {
       // A turn still running is let finish; the launch ends with it.
       const idle = launch.state.kind !== LAUNCH_STATE.TURN && launch.waiting.length === 0;
+
       return Effect.succeed(idle ? ended(RUNNER_END.INPUT_CLOSED) : undefined);
     }
+
     case SIGNAL.MESSAGE_TAKEN:
       launch.sent.delete(signal.clientId);
+
       return Effect.succeed(undefined);
     case SIGNAL.TURN_STARTED:
       if (launch.state.kind === LAUNCH_STATE.TURN && launch.state.id === COMPACTION_TURN) {
         launch.state = { ...launch.state, id: signal.turnId };
       }
+
       return Effect.succeed(undefined);
     case SIGNAL.TURN_COMPLETED:
       return takeTurnCompleted(launch, signal);
@@ -1598,6 +1763,7 @@ function takeSignal(
 /** Whether the launch's environment holds the account's OpenAI API key, which app-server then runs on in place of the plan's token. */
 function onApiKey(context: LaunchContext<CodexConfig>): boolean {
   const key = context.env[RUNNER_ENV.OPENAI_API_KEY];
+
   return key !== undefined && key !== "";
 }
 
@@ -1613,9 +1779,11 @@ const authOf = Effect.fn("agent-runner/codexAuthOf")(function* (
   if (runsOnHost(context.env)) {
     return { kind: CODEX_AUTH.MACHINE_LOGIN, catalog: yield* catalogFile(planCatalog()) } as const;
   }
+
   if (onApiKey(context)) {
     return { kind: CODEX_AUTH.API_KEY, catalog: yield* catalogFile(ultrafastCatalog()) } as const;
   }
+
   return {
     kind: CODEX_AUTH.CHATGPT_TOKENS,
     tokenUrl: context.config.tokenUrl,
@@ -1631,8 +1799,10 @@ const authOf = Effect.fn("agent-runner/codexAuthOf")(function* (
  */
 function codexHomeOf(env: Readonly<Record<string, string | undefined>>): string | undefined {
   const named = env.CODEX_HOME;
+
   if (named !== undefined && named !== "") return named;
   const home = env.HOME;
+
   return runsOnHost(env) && home !== undefined && home !== ""
     ? join(home, CODEX_HOME_FOLDER)
     : undefined;
@@ -1645,7 +1815,9 @@ function codexHomeOf(env: Readonly<Record<string, string | undefined>>): string 
  */
 function pathWithCodexTools(executable: string, path: string | undefined): string | undefined {
   const tools = join(dirname(executable), "..", "codex-path");
+
   if (!existsSync(tools)) return path;
+
   return path === undefined || path === "" ? tools : `${tools}${delimiter}${path}`;
 }
 
@@ -1667,6 +1839,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
   // A thread resumed or forked has its rollout written back where the sandbox no longer holds it,
   // beside app-server's start.
   const codexHome = codexHomeOf(context.env);
+
   const store =
     config.transcriptsUrl === undefined || codexHome === undefined
       ? undefined
@@ -1674,6 +1847,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
           store: transcriptStore(config.transcriptsUrl, context.bearer, context.trace.headers),
           codexHome,
         };
+
   const restoring = yield* (
     store === undefined || config.threadId === undefined
       ? Effect.void
@@ -1683,24 +1857,32 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     Effect.orElseSucceed(() => false),
     Effect.forkScoped,
   );
+
   const heard = { count: 0 };
   const provider = providerOf(auth);
   const permissions = permissionsOf(config.permissionMode);
-  const approvals = yield* makeApprovals(context.sink);
+  const approvals = yield* openApprovals(context.sink);
+
   const opened = yield* openAppServer(
     { context, signals, model: config.model, auth, heard, permissions, approvals },
     config.threadId,
     config.fork === true,
     Fiber.join(restoring),
   ).pipe(Effect.result);
-  if (opened._tag === "Failure") {
+
+  if (Result.isFailure(opened)) {
     const failure = opened.failure;
+
     return ended(
       RUNNER_END.FAILED,
-      failure._tag === "RolloutUnread" ? ROLLOUT_UNREAD : `${failure.method}: ${failure.detail}`,
+      Predicate.isTagged(failure, "RolloutUnread")
+        ? ROLLOUT_UNREAD
+        : `${failure.method}: ${failure.detail}`,
     );
   }
+
   const { path, forked, ...server } = opened.success;
+
   const reverting =
     config.threadId !== undefined && config.rewindBefore !== undefined
       ? revertedBefore(server.server, server.threadId, config.rewindBefore).pipe(
@@ -1712,9 +1894,11 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
           ),
         )
       : Effect.succeed(undefined);
+
   const segment = yield* reverting;
   // Note that only a thread resumed as it was stands in the store whole: a fork's file, the fallback's for a provider among them, is Codex's new writing.
   const resumed = config.threadId !== undefined && !forked;
+
   // A fork cut by a revert stands on the file Codex forked it into, which the store holds none of, so it is sent whole before the mirror follows the thread.
   if (store !== undefined && path !== undefined && segment !== undefined && !resumed) {
     const forked = yield* openRolloutMirror(
@@ -1724,14 +1908,17 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
       path,
       false,
     ).pipe(Effect.option);
+
     if (Option.isSome(forked)) {
       yield* mirrorRollout(forked.value).pipe(
         Effect.catch(() => Effect.logWarning("agent-runner: the forked rollout was not mirrored")),
       );
     }
   }
+
   // The mirror follows the thread onto the segment a revert began, which the store holds none of yet.
   const mirroredPath = segment ?? path;
+
   const mirror =
     store === undefined || mirroredPath === undefined
       ? undefined
@@ -1742,6 +1929,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
           mirroredPath,
           resumed && segment === undefined,
         ).pipe(Effect.option, Effect.map(Option.getOrUndefined));
+
   const launch: CodexLaunch = {
     context,
     signals,
@@ -1777,6 +1965,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     Effect.andThen(Queue.offer(signals, { kind: SIGNAL.INPUT_CLOSED })),
     Effect.forkScoped,
   );
+
   const outcome = yield* Effect.gen(function* () {
     for (;;) {
       // A warm launch waits at most its window for the next signal, and ends where none came.
@@ -1786,8 +1975,10 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
               Effect.timeoutOption(Duration.millis(config.warmForMs ?? RUNNER_WARM.IDLE_CAP_MS)),
             )
           : Option.some(yield* Queue.take(signals));
+
       if (Option.isNone(next)) return ended(RUNNER_END.IDLED);
       const done = yield* takeSignal(launch, next.value);
+
       if (done !== undefined) return done;
     }
   }).pipe(
@@ -1795,11 +1986,13 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
       Effect.succeed(ended(RUNNER_END.FAILED, `${error.method}: ${error.detail}`)),
     ),
   );
+
   // App-server ends before the launch's last event, so nothing it emits on
   // the way down is numbered after it. A call still waiting on the member is
   // canceled first, so its ask is resolved ahead of the launch's last event.
   yield* denyWaiting(approvals, APPROVAL_BY.ENDED);
   yield* Scope.close(launch.serverScope, Exit.void);
   yield* mirrored(launch);
+
   return outcome;
 });

@@ -71,11 +71,14 @@ const UNICODE_VERSION = "11";
 function loadWebgl(terminal: Terminal): WebglAddon | undefined {
   if (!("WebGL2RenderingContext" in window)) return undefined;
   const webgl = new WebglAddon();
+
   try {
     terminal.loadAddon(webgl);
+
     return webgl;
   } catch {
     webgl.dispose();
+
     return undefined;
   }
 }
@@ -91,10 +94,13 @@ function loadWebgl(terminal: Terminal): WebglAddon | undefined {
  */
 function drawWithWebgl(terminal: Terminal, dom: () => void): void {
   const webgl = loadWebgl(terminal);
+
   if (webgl === undefined) {
     dom();
+
     return;
   }
+
   webgl.onContextLoss(() => {
     webgl.dispose();
     dom();
@@ -114,8 +120,10 @@ function scrollbackFind(terminal: Terminal, host: Element): TerminalFind {
   terminal.loadAddon(search);
   // The query found last, which a query typed further keeps to the match of.
   let last = "";
+
   const options = (way: TerminalFindWay) => {
     const { match, current } = terminalFindTints(host);
+
     return {
       incremental: way === TERMINAL_FIND.TYPED,
       decorations: {
@@ -126,6 +134,7 @@ function scrollbackFind(terminal: Terminal, host: Element): TerminalFind {
       },
     };
   };
+
   return {
     // Note that a query typed afresh is found from the newest output up,
     // as a terminal's recent lines are what a find is after, and one typed
@@ -133,6 +142,7 @@ function scrollbackFind(terminal: Terminal, host: Element): TerminalFind {
     find: (query, way) => {
       const fresh = way === TERMINAL_FIND.TYPED && (last === "" || !query.startsWith(last));
       last = query;
+
       if (way === TERMINAL_FIND.PREVIOUS || fresh) search.findPrevious(query, options(way));
       else search.findNext(query, options(way));
     },
@@ -145,6 +155,7 @@ function scrollbackFind(terminal: Terminal, host: Element): TerminalFind {
       const heard = search.onDidChangeResults(({ resultIndex, resultCount }) =>
         listener({ count: resultCount, at: resultIndex, more: resultCount >= FIND_LIMIT }),
       );
+
       return () => heard.dispose();
     },
     selection: () => terminal.getSelection(),
@@ -185,7 +196,9 @@ export function createTerminal(props: TerminalProps): TerminalHandle {
   const terminal = new Terminal(TERMINAL_LOOK);
   terminal.attachCustomKeyEventHandler((event) => {
     const key = terminalKey(event);
+
     if (key.kind === TERMINAL_KEY.SHELL) return true;
+
     // Note that the press is claimed whole on its keydown, because the
     // keypress after it would type Return into the shell as well, and the
     // window's keymap would read ⌘⌫ as deleting the task.
@@ -194,6 +207,7 @@ export function createTerminal(props: TerminalProps): TerminalHandle {
       event.stopPropagation();
       terminal.input(key.data, true);
     }
+
     return false;
   });
   const fit = new FitAddon();
@@ -209,6 +223,7 @@ export function createTerminal(props: TerminalProps): TerminalHandle {
   // Whether the output is dimmed, and the contrast floor the renderer drawing now takes.
   let dimmed = false;
   let contrast: number = TERMINAL_LOOK.minimumContrastRatio;
+
   // Note that a dimmed screen is dimmed in its colors, never by the box's opacity, and its contrast floor is lifted, because the floor would lift the output back out of its dimming.
   const retheme = () => {
     if (!screen.isConnected) return;
@@ -218,6 +233,7 @@ export function createTerminal(props: TerminalProps): TerminalHandle {
 
   // The size is said once the screen has first been fitted to a box with room, then as it changes.
   let fitted = false;
+
   const heard = [
     terminal.onData(props.onInput),
     // Note that the size is handed on as columns and rows alone, because xterm's event carries more, and an act that takes the size refuses a key it does not name.
@@ -225,9 +241,11 @@ export function createTerminal(props: TerminalProps): TerminalHandle {
       if (fitted) props.onResize({ cols, rows });
     }),
   ];
+
   const fitNow = () => {
     if (!hasRoom(screen) || fit.proposeDimensions() === undefined) return;
     fit.fit();
+
     if (fitted) return;
     fitted = true;
     props.onResize({ cols: terminal.cols, rows: terminal.rows });
@@ -235,6 +253,7 @@ export function createTerminal(props: TerminalProps): TerminalHandle {
 
   // A box resized many times in a frame is fitted once, at the frame.
   let frame: number | undefined;
+
   const resized = new ResizeObserver(() => {
     if (frame !== undefined) return;
     frame = requestAnimationFrame(() => {
@@ -242,12 +261,14 @@ export function createTerminal(props: TerminalProps): TerminalHandle {
       fitNow();
     });
   });
+
   resized.observe(screen);
   const stopRetheming = onDrawnThemeChange(retheme);
 
   // The screen opens in the first box it is shown in, which its face and colors are read from.
   let opened = false;
   let disposed = false;
+
   const open = () => {
     opened = true;
     const family = monospaceFont(screen);
@@ -261,6 +282,7 @@ export function createTerminal(props: TerminalProps): TerminalHandle {
       contrast = 1;
       retheme();
     });
+
     // A face that lands later is drawn in from then, its cells measured again as a change of face measures them, and the screen fitted to them.
     if (landed) return;
     onFaceLanded(face, () => {
@@ -274,12 +296,14 @@ export function createTerminal(props: TerminalProps): TerminalHandle {
     write: (data, written) => terminal.write(data, written),
     attach: (host) => {
       host.append(screen);
+
       if (!opened) open();
       else {
         // Note that the colors are read again, since the appearance may have flipped while the screen stood out of the document.
         retheme();
         terminal.refresh(0, terminal.rows - 1);
       }
+
       fitNow();
     },
     detach: () => screen.remove(),
@@ -292,8 +316,10 @@ export function createTerminal(props: TerminalProps): TerminalHandle {
     dispose: () => {
       disposed = true;
       resized.disconnect();
+
       if (frame !== undefined) cancelAnimationFrame(frame);
       stopRetheming();
+
       for (const each of heard) each.dispose();
       terminal.dispose();
       stopAdopting();

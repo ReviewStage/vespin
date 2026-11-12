@@ -259,6 +259,7 @@ function newestAgentColumn<T>(column: typeof agentTable.machine | typeof agentTa
     .where(eq(agentTable.taskId, task.id))
     .orderBy(desc(agentTable.createdAt), desc(agentTable.id))
     .limit(1);
+
   return sql<T | null>`(${newest})`;
 }
 
@@ -562,8 +563,11 @@ function agentLabelsOf(
     ...row.agentEdits.map((edit) => edit.agentId),
     ...sectionWriters.flatMap((writer) => (writer.agentId === undefined ? [] : [writer.agentId])),
   ];
+
   const agentIds = [...new Set(named)];
+
   if (agentIds.length === 0) return Effect.succeed(new Map());
+
   return Effect.map(
     findAgentLabels({ agentIds }),
     (agents) => new Map(agents.map((agent) => [agent.id, agentName(agent)])),
@@ -581,6 +585,7 @@ function sectionEditOf(
 ): DescriptionSectionEdit {
   const { section, actor, at } = writer;
   const label = writer.agentId === undefined ? undefined : labels.get(writer.agentId);
+
   return {
     section,
     actor,
@@ -623,6 +628,7 @@ function journaledEdit(edit: LabeledAgentEdit): DescriptionLastEdit {
 function storedTaskOf(userId: string, row: TaskRow): TaskStoreEffect<StoredTask> {
   return Effect.gen(function* () {
     const devices = yield* devicesOf([row]);
+
     const read = yield* Effect.all(
       {
         pin: findPin({ userId, taskId: row.id }),
@@ -636,19 +642,25 @@ function storedTaskOf(userId: string, row: TaskRow): TaskStoreEffect<StoredTask>
       },
       { concurrency: yield* readConcurrency },
     );
+
     const { sectionWriters, labels } = read.written;
+
     const mark = Option.getOrElse(read.mark, () => ({
       readThrough: row.createdAt,
       markedUnread: false,
     }));
+
     const summary = summaryOf(row, Option.getOrNull(read.pin), mark, read.names, devices);
+
     const agentEdits = row.agentEdits.map((edit) => ({
       ...edit,
       label: labels.get(edit.agentId) ?? UNKNOWN_AGENT_LABEL,
     }));
+
     const lastEdit = Option.orElse(read.lastRevision, () =>
       Option.map(Option.fromUndefinedOr(agentEdits.at(-1)), journaledEdit),
     );
+
     return {
       task: {
         ...summary,
@@ -681,6 +693,7 @@ function namedAccountsOf(
 ): readonly string[] {
   return rows.flatMap((row) => {
     const deviceOwner = row.deviceId === null ? undefined : devices.get(row.deviceId)?.userId;
+
     return [row.userId, row.assigneeId, deviceOwner].filter(
       (account): account is string => account !== null && account !== undefined,
     );
@@ -696,6 +709,8 @@ function devicesOf(rows: readonly TaskSummaryRow[]): TaskStoreEffect<ReadonlyMap
   );
 }
 
+type RunsOn = { readonly runsOn?: TaskRunsOn };
+
 /**
  * Where a line's newest agent runs, as the wire says it for released
  * desktops: nothing for a sandbox or a task with no agent; for a device, its
@@ -706,10 +721,11 @@ function runsOnOf(
   row: TaskSummaryRow,
   names: ReadonlyMap<string, string>,
   devices: ReadonlyMap<string, Device>,
-): { readonly runsOn?: TaskRunsOn } {
+): RunsOn {
   if (row.machine !== AGENT_MACHINE.DEVICE) return {};
   const found = row.deviceId === null ? undefined : devices.get(row.deviceId);
   const owner = found === undefined ? undefined : names.get(found.userId);
+
   return {
     runsOn: {
       machine: AGENT_MACHINE.DEVICE,
@@ -751,6 +767,7 @@ function summaryOf(
   const createdAt = row.createdAt.getTime();
   const owner = row.userId === null ? undefined : names.get(row.userId);
   const assignee = row.assigneeId === null ? undefined : names.get(row.assigneeId);
+
   return {
     id: row.id,
     workspaceId: row.organizationId,
@@ -781,10 +798,13 @@ function summaryOf(
   };
 }
 
+type Origin = { readonly origin?: TaskOrigin };
+
 /** Who made a task for its member, as the wire names them: nothing for a task made by hand. */
-function originOf(row: TaskSummaryRow): { readonly origin?: TaskOrigin } {
+function originOf(row: TaskSummaryRow): Origin {
   if (row.creatorActor === DESCRIPTION_ACTOR.DEVELOPER) return {};
   const agentId = row.creatorAgentId;
+
   return {
     origin: { actor: row.creatorActor, ...(agentId === null ? undefined : { agentId }) },
   };
@@ -1038,8 +1058,10 @@ const treeRepositoryHeld = Effect.fnUntraced(function* (
   asked: string | null,
 ): Effect.fn.Return<void, TaskStoreFailure | TaskTreeRepositoryLocked, DatabaseServices> {
   if (sameRepository(asked, locked.repository)) return;
+
   const inTree =
     locked.parentTaskId !== null || Option.isSome(yield* hasChildren({ taskId: locked.id }));
+
   if (inTree) return yield* new TaskTreeRepositoryLocked();
 });
 
@@ -1202,6 +1224,7 @@ const insertOf = (userId: string, started: NewTask & { readonly id?: string }) =
     const now = yield* DateTime.nowAsDate;
     const named = started.name?.trim() ?? "";
     const brief = started.brief?.trim() ?? "";
+
     return {
       ...(started.id === undefined ? undefined : { id: started.id }),
       userId,
@@ -1230,6 +1253,7 @@ function assigneeAdmitted(
   organizationId: string,
 ): Effect.Effect<void, TaskStoreFailure | TaskAssigneeNotMember, DatabaseServices> {
   if (assigneeId === undefined || assigneeId === null) return Effect.void;
+
   return Effect.flatMap(isWorkspaceMember(assigneeId, organizationId), (member) =>
     member ? Effect.void : Effect.fail(new TaskAssigneeNotMember()),
   );
@@ -1280,7 +1304,9 @@ function startedValues(
   return Effect.gen(function* () {
     yield* assigneeAdmitted(started.assigneeId, started.organizationId);
     const values = yield* insertOf(userId, started);
+
     if (holding.length > 0) yield* lockTasksForBlocks(userId, holding);
+
     return values;
   });
 }
@@ -1305,10 +1331,12 @@ export function createTaskCommitted(
     client.withTransaction(
       Effect.gen(function* () {
         const values = yield* startedValues(userId, started, holding);
+
         const { txid, ...row } = yield* insertTask(values).pipe(
           // An insert that returned no row is the database breaking its own contract, not an outcome.
           Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
         );
+
         return { task: yield* storedTaskOf(userId, row), txid };
       }),
     ),
@@ -1344,17 +1372,23 @@ export function createTaskCommittedOnce(
     client.withTransaction(
       Effect.gen(function* () {
         const before = yield* readTask(userId, started.id);
+
         if (Option.isSome(before)) return { task: before.value, made: false };
         const values = yield* startedValues(userId, started, holding);
         const inserted = yield* insertTaskOnce(values);
+
         if (Option.isSome(inserted)) {
           const { txid, ...row } = inserted.value;
+
           return { task: yield* storedTaskOf(userId, row), txid, made: true };
         }
+
         // Note that a start under the same id that committed meanwhile reads as made, because the insert
         // waited on it, and a task the account does not reach reads as none, which the start is refused as.
         const raced = yield* readTask(userId, started.id);
+
         if (Option.isNone(raced)) return yield* new TaskIdTaken();
+
         return { task: raced.value, made: false };
       }),
     ),
@@ -1375,6 +1409,7 @@ export function createTaskOnce(
     yield* assigneeAdmitted(started.assigneeId, started.organizationId);
     const values = yield* insertOf(userId, started);
     const row = yield* insertTaskOnce(values);
+
     return yield* Effect.transposeOption(Option.map(row, (made) => taskOf(userId, made)));
   });
 }
@@ -1393,6 +1428,7 @@ export function listTasks(userId: string): TaskStoreEffect<readonly TaskSummary[
     const rows = yield* findTasks({ userId });
     const devices = yield* devicesOf(rows);
     const names = yield* readAccountNames(namedAccountsOf(rows, devices));
+
     return rows.map((row) => ({
       ...summaryOf(
         row,
@@ -1491,6 +1527,7 @@ export function readTaskHeaders(
   taskIds: readonly string[],
 ): TaskStoreEffect<ReadonlyMap<string, TaskHeader>> {
   if (taskIds.length === 0) return Effect.succeed(new Map());
+
   return Effect.map(
     findTaskHeaders({ userId, taskIds }),
     (rows) =>
@@ -1547,6 +1584,7 @@ export function saveDescriptionText(
   return Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
     const row = yield* replaceText({ userId, taskId, text, ...extras, now });
+
     return yield* Effect.transposeOption(Option.map(row, (saved) => taskOf(userId, saved)));
   });
 }
@@ -1615,6 +1653,7 @@ function pinAsAsked(
   now: Date,
 ): TaskStoreEffect<Option.Option<typeof TxidRowSchema.Type>> {
   if (!pinned) return removePin({ userId, taskId });
+
   return position === undefined
     ? insertPin({ userId, taskId, now })
     : placePin({ userId, taskId, position, now });
@@ -1775,14 +1814,18 @@ const archivedIdleWithTask = Effect.fnUntraced(function* <R>(
   const agents = yield* lockStandingAgents(
     agentId === undefined ? { taskId } : { taskId, agentId },
   );
+
   if (agents.length === 0) return [];
   const idle = yield* archive.idle(agents);
+
   const agentIds = agents
     .filter(
       ({ id }) => idle.has(id) && (agentId !== undefined || id !== archive.archivedBy.agentId),
     )
     .map(({ id }) => id);
+
   if (agentIds.length === 0) return [];
+
   return yield* stampArchivedWithTask({
     agentIds,
     archivedAt: now,
@@ -1798,6 +1841,7 @@ const archivedIdleWithTask = Effect.fnUntraced(function* <R>(
  */
 const broughtBackWithTask = Effect.fnUntraced(function* (taskId: string, completedAt: Date) {
   const archived = yield* lockArchivedWithTask({ taskId, since: completedAt });
+
   if (archived.length === 0) return;
   yield* clearArchives(archived.map(({ id }) => id));
 });
@@ -1894,23 +1938,30 @@ const taskStatusMoved = Effect.fnUntraced(function* <R, E2, R2>(
 ) {
   const effects: readonly TaskMoveEffect[] =
     TASK_MOVE_EFFECTS[move.mover][standingOf(move.from)][standingOf(move.to)];
+
   const { taskId, finishedAt, doneArchive, now } = move;
+
   if (effects.includes(TASK_MOVE_EFFECT.BRING_BACK_AGENTS) && finishedAt !== null) {
     yield* broughtBackWithTask(taskId, finishedAt);
   }
+
   const archived =
     effects.includes(TASK_MOVE_EFFECT.ARCHIVE_IDLE_AGENTS) && doneArchive !== undefined
       ? yield* archivedIdleWithTask(taskId, undefined, doneArchive, now)
       : [];
+
   yield* beforeItems;
+
   if (effects.includes(TASK_MOVE_EFFECT.SETTLE_INBOX)) {
     yield* settleTaskInboxItems(taskId, move.to, now);
   }
+
   // An archived agent's asks the task's settle left open settle with its archive.
   yield* settleAgentInboxItems(
     archived.map(({ id }) => id),
     now,
   );
+
   return archived;
 });
 
@@ -1975,29 +2026,38 @@ export function updateTaskCommitted<E = never, R = never, RA = never>(
     client.withTransaction(
       Effect.gen(function* () {
         const locked = yield* lockTask({ userId, taskId });
+
         if (Option.isNone(locked)) return Option.none();
+
         if (changes.repository !== undefined) {
           yield* treeRepositoryHeld(locked.value, changes.repository);
         }
+
         if (changes.organizationId !== undefined && moveGuard !== undefined) {
           yield* moveGuard(
             changes.repository === undefined ? locked.value.repository : changes.repository,
           );
         }
+
         const now = yield* DateTime.nowAsDate;
+
         const pinned =
           changes.pinned === undefined
             ? Option.none()
             : yield* pinAsAsked(userId, taskId, changes.pinned, changes.pinPosition, now);
+
         const marked =
           changes.readMark === undefined
             ? Option.none()
             : yield* markAsAsked(userId, taskId, changes.readMark, now);
+
         const moved =
           changes.organizationId !== undefined &&
           changes.organizationId !== locked.value.organizationId;
+
         // A task moved to another workspace takes the next number there; its old one is never handed out again.
         const movedNumber = moved ? yield* nextTaskNumber(changes.organizationId) : undefined;
+
         // The number it leaves behind still opens it, as a link written with it names it.
         if (moved) {
           yield* forwardTaskNumber({
@@ -2006,16 +2066,20 @@ export function updateTaskCommitted<E = never, R = never, RA = never>(
             taskId,
           });
         }
+
         const landsIn = moved ? changes.organizationId : locked.value.organizationId;
         // The assignee the task already names in its own workspace passes, a member who left among them.
         const kept = !moved && changes.assigneeId === locked.value.assigneeId;
+
         if (!kept) yield* assigneeAdmitted(changes.assigneeId, landsIn);
+
         // A task moved where its assignee is no member goes unassigned rather than assigned to someone who cannot read it.
         const unassigned =
           moved &&
           changes.assigneeId === undefined &&
           locked.value.assigneeId !== null &&
           !(yield* isWorkspaceMember(locked.value.assigneeId, landsIn));
+
         // A task no one is on is its mover's once it moves into progress, as Linear's start assigns;
         // an assignee the change names wins, and one taken off a task already in progress stays off.
         const startedBy =
@@ -2024,6 +2088,7 @@ export function updateTaskCommitted<E = never, R = never, RA = never>(
           locked.value.status !== TASK_STATUS.IN_PROGRESS &&
           locked.value.assigneeId === null &&
           (!moved || (yield* isWorkspaceMember(userId, landsIn)));
+
         const columns = columnChangesOf(
           unassigned
             ? { ...changes, assigneeId: null }
@@ -2035,6 +2100,7 @@ export function updateTaskCommitted<E = never, R = never, RA = never>(
           movedNumber,
           doneArchive?.archivedBy,
         );
+
         // A change that names only a pin writes nothing of the row, and an update with nothing to set is no statement.
         const { txid: written, ...row } =
           Object.keys(columns).length === 0
@@ -2043,17 +2109,21 @@ export function updateTaskCommitted<E = never, R = never, RA = never>(
                 // The row is held under this transaction's lock, so an update that missed it is the database breaking its own contract.
                 Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
               );
+
         const txid =
           written ?? Option.getOrUndefined(pinned)?.txid ?? Option.getOrUndefined(marked)?.txid;
+
         // A task moved to another workspace takes its agents and items with it, and leaves its sections and blocks.
         const followed = Effect.gen(function* () {
           if (changes.organizationId === undefined) return;
           yield* followingAgentsAndInbox(taskId, row.organizationId);
+
           if (row.organizationId !== locked.value.organizationId) {
             yield* leaveSections(taskId);
             yield* leaveTaskBlocks(taskId);
           }
         });
+
         const archived: readonly TaskArchivedAgent[] =
           columns.status === undefined
             ? yield* Effect.as(followed, [])
@@ -2069,8 +2139,10 @@ export function updateTaskCommitted<E = never, R = never, RA = never>(
                 },
                 followed,
               );
+
         const changed = yield* taskOf(userId, row);
         const statusMoved = columns.status !== undefined;
+
         return Option.some(
           txid === undefined
             ? { task: changed, archived, statusMoved }
@@ -2089,10 +2161,12 @@ const parentWritten = (
 ): TaskStoreEffect<TaskCommitted<Task>> =>
   Effect.gen(function* () {
     if (row.parentTaskId === parentTaskId) return { task: yield* taskOf(userId, row) };
+
     const { txid, ...changed } = yield* applyChanges({ userId, taskId: row.id, parentTaskId }).pipe(
       // The row is held under this transaction's lock, so an update that missed it is the database breaking its own contract.
       Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
     );
+
     return { task: yield* taskOf(userId, changed), txid };
   });
 
@@ -2123,25 +2197,34 @@ export function setTaskParent(
       Effect.gen(function* () {
         if (parentTaskId === null) {
           const locked = yield* lockTask({ userId, taskId });
+
           if (Option.isNone(locked)) return Option.none();
+
           return Option.some(yield* parentWritten(userId, locked.value, null));
         }
+
         if (parentTaskId === taskId) return yield* new TaskParentCycle();
         const rows = yield* lockTaskPair({ userId, taskIds: [taskId, parentTaskId] });
         const child = rows.find((row) => row.id === taskId);
+
         if (child === undefined) return Option.none();
         const parent = rows.find((row) => row.id === parentTaskId);
+
         if (parent === undefined || parent.organizationId !== child.organizationId) {
           return yield* new TaskParentUnreached();
         }
+
         if (!sameRepository(child.repository, parent.repository)) {
           return yield* new TaskParentRepositoryDiffers({ repository: parent.repository });
         }
+
         // Note that the workspace's parent writes take turns, because two that each close half a loop would each walk past the other's unwritten row.
         yield* client`select pg_advisory_xact_lock(hashtextextended(${child.organizationId}, 0))`;
+
         if (Option.isSome(yield* findAmongAncestors({ taskId, parentTaskId }))) {
           return yield* new TaskParentCycle();
         }
+
         return Option.some(yield* parentWritten(userId, child, parentTaskId));
       }),
     ),
@@ -2160,7 +2243,9 @@ export function nameUntitledTask(
   name: string,
 ): TaskStoreEffect<boolean> {
   const named = name.trim();
+
   if (named.length === 0) return Effect.succeed(false);
+
   return Effect.map(nameUntitled({ userId, taskId, name: named }), Option.isSome);
 }
 
@@ -2219,10 +2304,13 @@ export function beginTaskWorkCommitted(
     client.withTransaction(
       Effect.gen(function* () {
         const locked = yield* lockTask({ userId, taskId });
+
         if (Option.isNone(locked) || locked.value.status === TASK_STATUS.IN_PROGRESS) {
           return Option.none();
         }
+
         const now = yield* DateTime.nowAsDate;
+
         const { txid } = yield* applyChanges({
           userId,
           taskId,
@@ -2231,6 +2319,7 @@ export function beginTaskWorkCommitted(
           // The row is held under this transaction's lock, so an update that missed it is the database breaking its own contract.
           Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
         );
+
         yield* taskStatusMoved<never, never, never>(
           {
             taskId,
@@ -2242,6 +2331,7 @@ export function beginTaskWorkCommitted(
           },
           Effect.void,
         );
+
         return Option.some({ txid });
       }),
     ),
@@ -2284,8 +2374,10 @@ export function archiveAgentOfDoneTask<R = never>(
     client.withTransaction(
       Effect.gen(function* () {
         const locked = yield* lockDoneBy({ userId, taskId });
+
         if (Option.isNone(locked) || !isTaskSettled(locked.value.status)) return [];
         const archivedBy = locked.value.doneBy;
+
         if (archivedBy === null) return [];
         const now = yield* DateTime.nowAsDate;
         const archived = yield* archivedIdleWithTask(taskId, agentId, { archivedBy, idle }, now);
@@ -2293,6 +2385,7 @@ export function archiveAgentOfDoneTask<R = never>(
           archived.map(({ id }) => id),
           now,
         );
+
         return archived;
       }),
     ),
@@ -2337,15 +2430,20 @@ export function deleteTaskCommitted(
     client.withTransaction(
       Effect.gen(function* () {
         const locked = yield* lockTask({ userId, taskId });
+
         if (Option.isNone(locked)) return Option.none();
         const agents = yield* findAgentConversations({ userId, taskId });
+
         if (guard !== undefined && agents.some(({ id }) => !guard.stoppedAgentIds.has(id))) {
           return yield* new TaskAgentUnstopped();
         }
+
         const conversationIds = agents.map((agent) => agent.conversationId);
         const removed = yield* removeTask({ userId, taskId });
+
         if (Option.isNone(removed)) return Option.none();
         yield* deleteConversations(conversationIds);
+
         return Option.some({ txid: removed.value.txid });
       }),
     ),

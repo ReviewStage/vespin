@@ -50,6 +50,7 @@ export function CopyMessageAction({
 }): ReactNode {
   const place = useMessagePlace(messageId ?? "");
   const copyLink = useCopyLink();
+
   return (
     <MessageActions>
       {lead}

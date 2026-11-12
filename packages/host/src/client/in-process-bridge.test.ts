@@ -30,14 +30,17 @@ const LINK = {
 const bridgeFixture = Effect.gen(function* () {
   const state = new AppStateStore(initialAppState(RUN, false, []), Context.empty());
   const reported: string[] = [];
+
   const made = yield* createInProcessBridge({
     state,
     windowFacts: () => ({ fullScreen: false }),
     reports: { notifyReady: () => {}, recordSurfaceEvent: () => {} },
     report: (message) => reported.push(message),
   });
+
   // The push's first reading is of the document as it stood, before anything subscribed.
   yield* Effect.yieldNow;
+
   return { ...made, state, reported };
 });
 
@@ -101,11 +104,13 @@ it.effect("a listener that throws is reported, and the others still hear the eve
 it.effect("a closed bridge tells its page nothing more, nor takes a new subscription", () =>
   Effect.gen(function* () {
     const shown: unknown[] = [];
+
     const { bridge, events } = yield* Effect.scoped(
       Effect.tap(bridgeFixture, ({ bridge }) =>
         Effect.sync(() => bridge.onShowLink((place) => shown.push(place))),
       ),
     );
+
     bridge.onShowLink((place) => shown.push(place));
     events.onShowLink(LINK);
     assert.deepEqual(shown, []);

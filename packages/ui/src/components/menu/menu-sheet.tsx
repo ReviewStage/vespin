@@ -63,25 +63,32 @@ export interface SheetBack {
 function useSheetSwipe(onAway: () => void) {
   const sheet = useRef<HTMLDivElement | null>(null);
   const drag = useRef<SheetDrag | null>(null);
+
   const follow = (down: number, held: boolean) => {
     const element = sheet.current;
+
     if (element === null) return;
     element.style.translate = down === 0 ? "" : `0 ${down}px`;
     element.toggleAttribute("data-dragging", held);
   };
+
   const letGo = (event: React.PointerEvent<HTMLElement>, away: boolean) => {
     const held = drag.current;
+
     if (held === null || held.pointerId !== event.pointerId) return;
     drag.current = null;
     const height = sheet.current?.getBoundingClientRect().height ?? 0;
     const far = held.down > height * SHEET_SWIPE.SHARE || held.speed > SHEET_SWIPE.FLICK;
     // Note that a sheet put away sinks on from where the finger left it.
     follow(away && far ? held.down : 0, false);
+
     if (away && far) onAway();
   };
+
   const head = {
     onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
       if (event.pointerType !== "touch") return;
+
       if (event.target instanceof Element && event.target.closest(HEAD_CONTROL) !== null) return;
       drag.current = {
         pointerId: event.pointerId,
@@ -94,9 +101,11 @@ function useSheetSwipe(onAway: () => void) {
     },
     onPointerMove: (event: React.PointerEvent<HTMLElement>) => {
       const held = drag.current;
+
       if (held === null || held.pointerId !== event.pointerId) return;
       const down = Math.max(0, event.clientY - held.from);
       const elapsed = event.timeStamp - held.at;
+
       if (elapsed > 0) held.speed = (down - held.down) / elapsed;
       held.down = down;
       held.at = event.timeStamp;
@@ -105,6 +114,7 @@ function useSheetSwipe(onAway: () => void) {
     onPointerUp: (event: React.PointerEvent<HTMLElement>) => letGo(event, true),
     onPointerCancel: (event: React.PointerEvent<HTMLElement>) => letGo(event, false),
   };
+
   return { sheet, head };
 }
 
@@ -160,6 +170,7 @@ export function MenuSheetFrame({
 }): React.JSX.Element {
   const nameId = useId();
   const { sheet, head } = useSheetSwipe(onAway);
+
   // Note that the sheet's own sink is what the menu's exit is waited on, since it is marked in the draw that closes it, where the dialog marks its card's fade a draw later, after the hold has already looked.
   const framed = useCallback(
     (node: HTMLDivElement | null) => {
@@ -168,6 +179,7 @@ export function MenuSheetFrame({
     },
     [sheet, hold],
   );
+
   return (
     <Dialog
       open={open}

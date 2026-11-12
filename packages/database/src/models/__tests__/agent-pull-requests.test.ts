@@ -27,6 +27,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -34,6 +35,7 @@ const openAccount = Effect.gen(function* () {
 const openAgent = (userId: string, organizationId: string) =>
   Effect.gen(function* () {
     const { id: taskId } = yield* createTask(userId, { organizationId, name: "Invitations" });
+
     const started = yield* createAgent(userId, {
       taskId,
       descriptionSnapshot: null,
@@ -45,6 +47,7 @@ const openAgent = (userId: string, organizationId: string) =>
       githubAccess: GITHUB_ACCESS.APP,
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     return Option.getOrThrow(started).agent.id;
   });
 
@@ -80,13 +83,16 @@ it.layer(getTestDB())("the pull requests an agent opened", (it) => {
 
         yield* recordAgentPullRequests(dean, agentId, [read(41, PULL_REQUEST_STATE.OPEN)]);
         yield* recordAgentPullRequests(dean, agentId, [read(42, PULL_REQUEST_STATE.OPEN)]);
+
         const merged = yield* recordAgentPullRequests(dean, agentId, [
           read(42, PULL_REQUEST_STATE.MERGED),
           read(41, PULL_REQUEST_STATE.MERGED),
         ]);
+
         const again = yield* recordAgentPullRequests(dean, agentId, [
           read(41, PULL_REQUEST_STATE.MERGED),
         ]);
+
         const stale = yield* recordAgentPullRequests(dean, agentId, [
           read(41, PULL_REQUEST_STATE.OPEN),
         ]);

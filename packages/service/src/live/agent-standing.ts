@@ -70,9 +70,11 @@ export function failureWordOf(latest: LatestTurn): SQL<string | null> {
         sql` or `,
       )} then ${word}`,
   );
+
   const settled = SETTLED_FAILURES.map(
     ([failure, word]) => sql`when ${latest.failure} = ${failure} then ${word}`,
   );
+
   return sql<string | null>`case
     when ${latest.id} is null then ${AGENT_FAILURE.NOT_STARTED}
     when ${latest.status} <> ${TURN_STATUS.FAILED} then null

@@ -37,13 +37,16 @@ export function useStrandedTaskBanner(
   const moving = useMoveTaskDialog(tasks, task);
   const home = task === undefined ? undefined : strandedHome(tasks, task);
   const { ask } = moving;
+
   if (home === undefined || ask === undefined) return { banner: null, dialog: moving.dialog };
   const personal = tasks.workspaces[0]?.id === home.id;
+
   const moveWords = (
     <ReplayUnmask>
       Move to <ReplayMask>{home.name}</ReplayMask>
     </ReplayUnmask>
   );
+
   return {
     banner: (
       <TaskBanner action={{ label: moveWords, onPress: ask }}>

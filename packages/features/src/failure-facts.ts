@@ -35,6 +35,7 @@ export const FAILURE_FACT = {
   /** A live read's first answer never came, asked again and again (`@repo/host`'s `transcript-follow.ts`). */
   SEAL_UNANSWERED: "SealUnanswered",
 } as const;
+
 type FailureFact = (typeof FAILURE_FACT)[keyof typeof FAILURE_FACT];
 
 /** Why the host's gate to the service stood closed. */

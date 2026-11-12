@@ -19,7 +19,7 @@ import {
   Inline,
   MARK_PROVIDER,
   QuietWords,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   STATUS_TONE,
   Stack,
@@ -137,6 +137,7 @@ function MastheadFrame({
 /** What the workspace is: whether it is someone's personal one, when it was made, and the GitHub accounts it installed the App on. */
 function Masthead({ detail }: { detail: AdminWorkspaceDetail }): React.JSX.Element {
   const { workspace } = detail;
+
   return (
     <MastheadFrame
       created={
@@ -178,7 +179,7 @@ function MastheadSkeleton(): React.JSX.Element {
     <MastheadFrame
       created={
         <Text as={TEXT_ELEMENT.DIV} variant={TEXT_VARIANT.CAPTION}>
-          <Skeleton shape={SKELETON_SHAPE.LINE} width={SKELETON_CREATED_WIDTH} />
+          <Skeleton kind={SKELETON_KIND.LINE} width={SKELETON_CREATED_WIDTH} />
         </Text>
       }
       links={null}
@@ -195,6 +196,7 @@ function WorkspaceSections({
   onOpenAccount: (id: string) => void;
 }): React.JSX.Element {
   const memberTableColumns = useMemo(() => memberColumns(onOpenAccount), [onOpenAccount]);
+
   return (
     <>
       {detail === undefined ? <MastheadSkeleton /> : <Masthead detail={detail} />}

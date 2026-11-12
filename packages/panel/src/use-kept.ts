@@ -42,7 +42,7 @@ export const keptFlag = Schema.Literals(["true", "false"]).pipe(
 const UNWRITTEN = new Map<string, string | null>();
 
 /** The surfaces drawn now that hold each key, so a choice made in one is drawn in every other. */
-const HOLDERS = new Map<string, Set<(kept: unknown) => void>>();
+const HOLDERS = new Map<string, Set<(kept: never) => void>>();
 
 /**
  * The choice kept under `key`, or `initial` where none was kept, it no
@@ -65,38 +65,47 @@ export function useKept<A>(
   // What this surface draws, for the doors, which outlive a draw.
   const drawn = useRef(value);
   useEffect(() => {
-    const held = (next: unknown) => {
-      // Note that what a holder is told was kept through this key's own schema, so it is this key's type.
-      const kept = next as A;
-      drawn.current = kept;
-      setValue(kept);
+    const held = (next: A) => {
+      drawn.current = next;
+      setValue(next);
     };
+
     const holders = HOLDERS.get(key.name) ?? new Set();
     holders.add(held);
     HOLDERS.set(key.name, holders);
+
     return () => {
       holders.delete(held);
     };
   }, [key.name]);
+
   const choose = useCallback(
     (next: A) => {
       drawn.current = next;
       setValue(next);
+
       if (writeKept(key.name, key.schema, next)) UNWRITTEN.delete(key.name);
       else UNWRITTEN.set(key.name, readKeptText(key.name));
-      for (const holder of HOLDERS.get(key.name) ?? []) holder(next);
+
+      for (const holder of HOLDERS.get(key.name) ?? []) {
+        // SAFETY: what a holder is told was kept through this key's own schema, so it is this key's type.
+        (holder as (kept: A) => void)(next);
+      }
     },
     [key],
   );
+
   const change = useCallback(
     (changed: (kept: A) => A) => {
       // Note that where storage refused the last write, the choice drawn is newer than the one it holds, so it is changed instead, unless another window has kept one since.
       const refused = UNWRITTEN.has(key.name) && UNWRITTEN.get(key.name) === readKeptText(key.name);
       const was = refused ? drawn.current : readKept(key.name, key.schema, drawn.current);
       const next = changed(was);
+
       if (!Object.is(next, was)) choose(next);
     },
     [key, choose],
   );
+
   return [value, choose, change];
 }

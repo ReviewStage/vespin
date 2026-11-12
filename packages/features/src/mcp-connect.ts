@@ -8,6 +8,7 @@
  * (`shellLine`).
  */
 
+import { Predicate, type Schema } from "effect";
 import { PRODUCT_NAME } from "./product-name.js";
 import { shellQuoted } from "./shell-quote.js";
 
@@ -69,38 +70,36 @@ export function shellLine(command: McpCommand): string {
   return command.map((word) => (PLAIN_WORD.test(word) ? word : shellQuoted(word))).join(" ");
 }
 
+type CursorEntryResult = { readonly url: string };
+
 /** The entry Cursor keeps for a remote server: its address alone. */
-function cursorEntry(serverUrl: string): { readonly url: string } {
+function cursorEntry(serverUrl: string): CursorEntryResult {
   return { url: serverUrl };
 }
 
 /** Cursor's install link for a remote server: its name and its config, `{ url }`, in base64 (cursor.com/docs/mcp/install-links). */
 export function cursorInstallUrl(serverUrl: string): string {
   const config = btoa(JSON.stringify(cursorEntry(serverUrl)));
+
   return `https://cursor.com/en/install-mcp?name=${MCP_SERVER_NAME}&config=${encodeURIComponent(config)}`;
 }
 
 /** Where Cursor reads the servers it runs everywhere, under the home folder. */
 export const CURSOR_CONFIG_PATH = [".cursor", "mcp.json"] as const;
 
-/** Whether a value read from JSON is an object of named values, rather than an array, a word, or nothing. */
-function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 /**
  * Cursor's `mcp.json` with the server's entry in it, every other key and
  * server kept as it stood; none where what stands there is no config this
  * could add to, which is left for the person rather than overwritten.
  */
-export function cursorConfigWithServer(
-  config: unknown,
-  serverUrl: string,
-): Readonly<Record<string, unknown>> | undefined {
-  const existing = config ?? {};
-  if (!isRecord(existing)) return undefined;
+export function cursorConfigWithServer(config: Schema.Json | undefined, serverUrl: string) {
+  const existing: unknown = config ?? {};
+
+  if (!Predicate.isObject(existing)) return undefined;
   const servers = existing.mcpServers ?? {};
-  if (!isRecord(servers)) return undefined;
+
+  if (!Predicate.isObject(servers)) return undefined;
+
   return { ...existing, mcpServers: { ...servers, [MCP_SERVER_NAME]: cursorEntry(serverUrl) } };
 }
 

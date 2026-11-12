@@ -30,6 +30,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -45,10 +46,13 @@ test("the place leads the arrows, or stands between them with the noun it counts
     previous: { label: "Older run", onStep: () => {} },
     next: { label: "Newer run", onStep: () => {} },
   };
+
   const lead = render(
     createElement(Pager, { axis: PAGER_AXIS.VERTICAL, place: { at: 2, total: 8 }, ...steps }),
   );
+
   assert.deepEqual(reading(lead), ["2 of 8", "Older run", "Newer run"]);
+
   const between = render(
     createElement(Pager, {
       axis: PAGER_AXIS.HORIZONTAL,
@@ -57,11 +61,13 @@ test("the place leads the arrows, or stands between them with the noun it counts
       ...steps,
     }),
   );
+
   assert.deepEqual(reading(between), ["Older run", "Run 3 of 5", "Newer run"]);
 });
 
 test("an arrow with nowhere to go keeps the keyboard but steps nowhere, and the other steps", () => {
   const stepped: string[] = [];
+
   const container = render(
     createElement(Pager, {
       axis: PAGER_AXIS.HORIZONTAL,
@@ -70,6 +76,7 @@ test("an arrow with nowhere to go keeps the keyboard but steps nowhere, and the 
       next: { label: "Next chapter", onStep: () => stepped.push("next") },
     }),
   );
+
   const [previous, next] = [...container.querySelectorAll<HTMLButtonElement>("button")];
   assert.ok(previous && next);
   assert.equal(previous.getAttribute("aria-disabled"), "true");

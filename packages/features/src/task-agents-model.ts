@@ -78,8 +78,10 @@ function markedPullRequest<PullRequest extends Pick<TaskPullRequestLine, "state"
 ): PullRequest | undefined {
   for (const states of PULL_REQUEST_ORDER) {
     const found = pullRequests.find((each) => states.has(each.state));
+
     if (found !== undefined) return found;
   }
+
   return undefined;
 }
 
@@ -123,8 +125,11 @@ type OrderedAgent = Pick<ListedAgent, "id" | "planId" | "status" | "createdAt" |
 /** Those at work first, then the rest, newest started first within each, and by id among those started at one instant. */
 function workingFirst(a: OrderedAgent, b: OrderedAgent): number {
   const working = Number(WORKING.has(b.status)) - Number(WORKING.has(a.status));
+
   if (working !== 0) return working;
+
   if (a.createdAt !== b.createdAt) return b.createdAt - a.createdAt;
+
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
@@ -179,9 +184,12 @@ export function taskAgentsStatus(
   pullRequests: readonly TaskPullRequestLine[],
 ): TaskAgentsStatus {
   if (agents === undefined) return NO_STATUS;
+
   if ((agents.failed ?? 0) > 0) return { kind: TASK_AGENTS_STATUS.FAILED };
+
   if (agents.working > 0) return { kind: TASK_AGENTS_STATUS.WORKING };
   const pullRequest = markedPullRequest(pullRequests);
+
   return pullRequest === undefined
     ? NO_STATUS
     : { kind: TASK_AGENTS_STATUS.PULL_REQUEST, pullRequest };
@@ -211,9 +219,12 @@ export function inAgentListOrder<Entry>(
 ): readonly Entry[] {
   const writing = (entry: Entry) => {
     const agent = agentOf(entry);
+
     return agent !== undefined && agentStillWriting(agent.status);
   };
+
   const started = (entry: Entry) => agentOf(entry)?.createdAt ?? 0;
+
   return entries.toSorted(
     (a, b) =>
       Number(waits(b)) - Number(waits(a)) ||
@@ -230,6 +241,8 @@ export const RUNS_ON_WORDS = {
   OFFLINE: "Offline",
   UNKNOWN: "Can't check status",
   CHECKING: "Checking",
+  SETTING_UP: "Setting up",
+  FAILED: "Failed",
   REMOVED: "Removed device",
   NO_MATCH: "No devices match",
 } as const;
@@ -247,5 +260,6 @@ export function agentRunsOnWords(
   deviceName: (mac: RunsOnMac) => string = (mac) => mac.name,
 ): string {
   if (agent.machine !== AGENT_MACHINE.DEVICE) return RUNS_ON_WORDS.CLOUD;
+
   return agent.mac === undefined ? RUNS_ON_WORDS.REMOVED : deviceName(agent.mac);
 }

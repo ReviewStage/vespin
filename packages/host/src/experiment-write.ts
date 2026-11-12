@@ -49,12 +49,14 @@ export function experimentWriter(input: {
   const { client, store, readAccountKey, confirmAccount } = input;
   const turns = Semaphore.makeUnsafe(1);
   let sent = 0;
+
   const refused = (reason: string) =>
     Effect.map(store.snapshot(), (settings) => ({
       status: ACTION_RESULT_STATUS.REJECTED,
       settings,
       reason,
     }));
+
   return {
     writesSent: () => sent,
     write: (accountEmail, experiment, on) =>
@@ -62,17 +64,22 @@ export function experimentWriter(input: {
         Effect.gen(function* () {
           // A switch pressed for an account the service no longer names is sent for no one.
           yield* confirmAccount();
+
           if ((yield* readAccountKey()) !== accountEmail) {
             return yield* refused(EXPERIMENT_ACCOUNT_CHANGED);
           }
+
           sent += 1;
           const answer = yield* client.writeExperiments({ [experiment]: on });
+
           if (!answer) return yield* refused(EXPERIMENT_UNANSWERED);
           yield* store.cacheExperiments(accountEmail, answer.experiments);
+
           // An answer for an account that has since signed out moved no switch this window draws.
           if ((yield* readAccountKey()) !== accountEmail) {
             return yield* refused(EXPERIMENT_ACCOUNT_CHANGED);
           }
+
           return { status: ACTION_RESULT_STATUS.ACCEPTED, settings: yield* store.snapshot() };
         }),
       ),

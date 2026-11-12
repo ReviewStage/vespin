@@ -1,6 +1,7 @@
 import { TASK_STATUS, TASK_STATUS_ORDER, type TaskStatus } from "@repo/features/task-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { type MenuRow, TaskStatusMark } from "@repo/ui";
+import { Predicate } from "effect";
 import type { ShortcutSubject } from "../shortcut-target.js";
 import { STATUS_ROWS } from "../tasks/task-standing.js";
 import type { StandingWrites } from "../tasks/use-standing-writes.js";
@@ -42,16 +43,18 @@ export function chipSubmenu(
     (row): MenuAction => ({
       label: row.label,
       icon: <>{row.icon}</>,
-      ...(typeof row.detail === "string" ? { detail: row.detail } : {}),
-      ...(row.card === undefined ? {} : { card: row.card }),
+      ...(Predicate.isString(row.detail) && { detail: row.detail }),
+      ...(row.card !== undefined && { card: row.card }),
       checked: row.id === value,
       onSelect: () => {
         if (row.id !== value) onPick(row.id);
       },
     }),
   );
+
   const standing = rows.find((row) => row.id === value);
   const mark = standing === undefined ? icon : <>{standing.icon}</>;
+
   return mark === undefined ? { label, items } : { label, icon: mark, items };
 }
 
@@ -72,6 +75,7 @@ export function statusSubmenu(
     current,
     (id) => {
       const picked = TASK_STATUS_ORDER.find((status) => status === id);
+
       if (picked !== undefined) standing.onSettleTasks(taskIds, picked);
       onActed?.();
     },
@@ -87,6 +91,7 @@ export function keyedStatusSubmenu(
   subject: ShortcutSubject,
 ): MenuSubmenu {
   const submenu = statusSubmenu(standing, [taskId], current);
+
   return { ...submenu, command: APP_COMMAND.SET_STATUS, subject };
 }
 
@@ -95,5 +100,6 @@ export function sharedStatus(
   held: readonly { readonly status?: TaskStatus | undefined }[],
 ): TaskStatus | undefined {
   const statuses = new Set(held.map((task) => task.status ?? TASK_STATUS.TODO));
+
   return statuses.size === 1 ? [...statuses][0] : undefined;
 }

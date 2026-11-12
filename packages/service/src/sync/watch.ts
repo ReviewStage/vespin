@@ -39,7 +39,7 @@ export interface SyncWatch {
   readonly heardAt: Effect.Effect<Option.Option<number>>;
 }
 
-export interface SyncShape {
+export interface SyncService {
   /**
    * Opens a watch on the topics, answering once the listener hears them, so
    * a read made after it misses no commit; `fallback` is how long its `next`
@@ -58,11 +58,11 @@ export const clockWatch = (fallback: Duration.Duration): SyncWatch => ({
 });
 
 /** No hub: every watch waits on its clock. */
-const CLOCK_SYNC: SyncShape = {
+const CLOCK_SYNC: SyncService = {
   watch: (_topics, fallback) => Effect.succeed(clockWatch(fallback)),
 };
 
 /** Sync as one runtime has it: the hub where the runtime provides one, the clock otherwise. */
-export const Sync = Context.Reference<SyncShape>("@repo/service/Sync", {
+export const Sync = Context.Reference<SyncService>("@repo/service/Sync", {
   defaultValue: () => CLOCK_SYNC,
 });

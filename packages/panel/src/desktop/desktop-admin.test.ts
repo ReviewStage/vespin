@@ -29,8 +29,7 @@ import { DesktopAdmin } from "./desktop-admin.js";
  * browser among its acts, and its sections are a bar under it, the one
  * standing chosen; it draws no way back of its own, and Escape leaves it.
  * Each view reads through the window's host (`admin.read`) rather than a
- * browser client, opens an account on a press rather than an address, is
- * blocked from the screen recording whole, and stands a refusal of the
+ * browser client, opens an account on a press rather than an address, and stands a refusal of the
  * service's gate as the app's own failure rather than a sign-in card.
  */
 
@@ -62,11 +61,12 @@ const ROSTER: AdminUserList = {
 
 /** An answer as the port carries it: JSON, as the host's act answers cross. */
 function onTheWire(value: AdminReadAnswer): WireBoundaryInput {
-  return JSON.parse(JSON.stringify(value)) as WireBoundaryInput;
+  return JSON.parse(JSON.stringify(value));
 }
 
 let root: Root | undefined;
 let sent: SentPortAct[] = [];
+
 /** What the fake host answers every admin read with. */
 let answer: AdminReadAnswer = { answer: ROSTER };
 
@@ -77,6 +77,7 @@ beforeEach(() => {
   fakeAppPlatform({ adminDashboard: () => ({ href: "https://app.test/admin" }) });
   fakeActPortAnswering((request) => {
     sent.push(request);
+
     return Promise.resolve(request.kind === ACT_KIND.ADMIN_READ ? onTheWire(answer) : undefined);
   });
 });
@@ -116,6 +117,7 @@ async function open(
   await vi.waitFor(() =>
     expect(page.querySelector('[role="status"][aria-busy="true"]')).toBeNull(),
   );
+
   return { page, opened, exits };
 }
 
@@ -124,6 +126,7 @@ function sections(page: HTMLElement): { name: string; chosen: boolean }[] {
   const bar =
     page.querySelector('[role="radiogroup"][aria-label="Admin sections"]') ??
     assert.fail("the bar of sections");
+
   return [...bar.querySelectorAll<HTMLElement>('[role="radio"]')].map((option) => ({
     name: option.textContent ?? "",
     chosen: option.getAttribute("aria-checked") === "true",
@@ -217,6 +220,7 @@ test("the Users view reads its roster through the window's host and draws its ac
   const [read] = reads;
   assert.equal(reads.length, 1);
   assert.ok(read !== undefined);
+  // SAFETY: an admin read's payload names the procedure it reads.
   assert.equal((read.payload as { procedure: string }).procedure, ADMIN_READ.USERS);
   assert.match(page.textContent ?? "", /Ada Lovelace/u);
 });
@@ -227,20 +231,12 @@ test("an account opens on a press, as a step of the place, and is no link to an 
   const name = [...page.querySelectorAll("button")].find((button) =>
     button.textContent?.includes("Ada Lovelace"),
   );
+
   assert.ok(name instanceof HTMLButtonElement, "the account's name is a button");
   assert.equal(page.querySelector('a[href*="user="]'), null);
   act(() => name.click());
 
   assert.deepEqual(opened, [{ kind: "account", id: ADA.id }]);
-});
-
-test("the place is blocked from the screen recording whole, since every view names other accounts", async () => {
-  const { page } = await open({ kind: "users" });
-
-  const roster = [...page.querySelectorAll("*")].find(
-    (node) => node.textContent === "Ada Lovelace",
-  );
-  assert.ok(roster?.closest(".ph-no-capture"), "the roster stands inside the recording's block");
 });
 
 test("a refusal of the service's gate stands as the app's failure, offering no sign-in", async () => {
@@ -261,9 +257,11 @@ test("⌘F finds in the view standing, its bar under the view's toolbar, and cou
   act(() => {
     assert.ok(runAppCommand(APP_COMMAND.FIND), "⌘F is offered on the Admin place");
   });
+
   const field = page.querySelector<HTMLInputElement>(
     '.page-find > .find-bar input[aria-label="Find"]',
   );
+
   assert.ok(field, "the find bar stands in the view's column");
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(

@@ -37,6 +37,7 @@ export const CHECK = {
   PLAN: "the plan works from inside the sandbox",
   TOKEN: "the token stays at the firewall",
 } as const;
+
 type Check = (typeof CHECK)[keyof typeof CHECK];
 
 /** The words each turn ends on, which the probe's prompts ask for. */
@@ -72,7 +73,7 @@ export interface ProbeObservations {
   /** What Anthropic answered the placeholder with from outside the sandbox, the probe's own machine. */
   readonly placeholderOutside: string | undefined;
   /** How many files outside `/proc` hold a token-shaped string, as root sees the disk. */
-  readonly rootFilesWithTokenShape: number | undefined;
+  readonly rootFilesWithTokenPattern: number | undefined;
 }
 
 export interface Condition {
@@ -107,7 +108,7 @@ function shellIsPrivate(report: LeakReport | undefined): boolean {
     !report.sudo &&
     !report.env_token &&
     report.proc_environ_with_token === 0 &&
-    report.files_with_token_shape === 0 &&
+    report.files_with_token_pattern === 0 &&
     !report.agent_home_listable &&
     !report.shadow_readable
   );
@@ -121,8 +122,10 @@ function describe(report: LeakReport | undefined): string {
 function agentLeakReport(messages: readonly WireValue[]): LeakReport | undefined {
   for (const text of toolResultTexts(messages)) {
     const report = leakReportIn(text);
+
     if (report !== undefined) return report;
   }
+
   return undefined;
 }
 
@@ -133,8 +136,10 @@ function agentLeakReport(messages: readonly WireValue[]): LeakReport | undefined
  */
 function endedWell(messages: readonly WireValue[], words: string): boolean {
   const said = messages.findIndex((message) => assistantText([message]).includes(words));
+
   if (said === -1) return false;
   const after = turnResults(messages.slice(said + 1))[0];
+
   return after !== undefined && !after.is_error;
 }
 
@@ -144,10 +149,12 @@ function sandboxRunConditions(seen: ProbeObservations): readonly Condition[] {
   const calls = toolCalls(seen.firstLaunch);
   const resumedInit = sessionInit(seen.resumedLaunch);
   const fileName = `agent-probe/${seen.nonce}.txt`;
+
   const billedToPlan =
     init?.apiKeySource === "none" &&
     (account?.subscriptionType ?? "") !== "" &&
     (account?.apiProvider ?? "firstParty") === "firstParty";
+
   return [
     condition(
       CHECK.PLAN,
@@ -225,6 +232,7 @@ function sandboxRunConditions(seen: ProbeObservations): readonly Condition[] {
 function tokenConditions(seen: ProbeObservations): readonly Condition[] {
   const terminal = seen.terminalCapsDropped;
   const agent = agentLeakReport(seen.firstLaunch);
+
   return [
     condition(
       CHECK.TOKEN,
@@ -247,7 +255,7 @@ function tokenConditions(seen: ProbeObservations): readonly Condition[] {
     condition(
       CHECK.TOKEN,
       "Claude Code runs on a placeholder, not the token",
-      agent?.env_token === true && !agent.env_token_shaped,
+      agent?.env_token === true && !agent.env_token_like,
       describe(agent),
     ),
     condition(
@@ -255,9 +263,9 @@ function tokenConditions(seen: ProbeObservations): readonly Condition[] {
       "a command the agent runs finds no token",
       agent !== undefined &&
         !agent.sudo &&
-        !agent.env_token_shaped &&
-        agent.proc_environ_token_shaped === 0 &&
-        agent.files_with_token_shape === 0,
+        !agent.env_token_like &&
+        agent.proc_environ_token_like === 0 &&
+        agent.files_with_token_pattern === 0,
       describe(agent),
     ),
     condition(
@@ -269,8 +277,8 @@ function tokenConditions(seen: ProbeObservations): readonly Condition[] {
     condition(
       CHECK.TOKEN,
       "no file on the disk holds the token",
-      seen.rootFilesWithTokenShape === 0,
-      `${seen.rootFilesWithTokenShape ?? "unknown"} token-shaped files, as root`,
+      seen.rootFilesWithTokenPattern === 0,
+      `${seen.rootFilesWithTokenPattern ?? "unknown"} token-shaped files, as root`,
     ),
     condition(
       CHECK.TOKEN,

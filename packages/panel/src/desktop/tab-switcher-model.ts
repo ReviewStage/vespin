@@ -66,11 +66,14 @@ export function switcherPressed<Card>(
       shown: true,
     };
   }
+
   const cards = input.screens.slice(0, SWITCHER_CARDS);
   const here = input.here && cards.length > 0;
+
   if (cards.length < (here ? 2 : 1)) return state;
   const after = here ? 1 : 0;
   const chosen = input.step === SWITCH_STEP.ON ? after : cards.length - 1;
+
   return { held: true, cards, here, chosen, shown: false };
 }
 
@@ -82,11 +85,13 @@ export function switcherShown<Card>(state: SwitcherState<Card>): SwitcherState<C
 /** The switcher with the card at `at` chosen, as the pointer resting on it chooses it. */
 export function switcherChose<Card>(state: SwitcherState<Card>, at: number): SwitcherState<Card> {
   if (!state.held || at < 0 || at >= state.cards.length) return state;
+
   return { ...state, chosen: at };
 }
 
 /** The card a let-go goes to: the one chosen, or none where it is the screen the window stands on. */
 export function switcherTarget<Card>(state: SwitcherState<Card>): Card | undefined {
   if (!state.held || (state.here && state.chosen === 0)) return undefined;
+
   return state.cards[state.chosen];
 }

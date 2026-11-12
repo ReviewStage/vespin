@@ -55,12 +55,9 @@
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/lib/test-shards.mjs"],
       "outputs": []
     },
-    // The whole-repository checks each read every file in one program, so
-    // each is one root task whose inputs are every file the repository tracks.
+    // The whole-repository check reads every file in one program, so it is
+    // one root task whose inputs are every file the repository tracks.
     "//#lint": {
-      "outputs": []
-    },
-    "//#discarded-effect": {
       "outputs": []
     }
   }

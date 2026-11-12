@@ -21,5 +21,6 @@ export const MARKDOWN_CLASS = {
 /** A note's root classes, with a place's own after them: an editor standing in drawn words' place wears the same, so opening it moves no word. */
 export function markdownClass(className?: string): string {
   const root = `${MARKDOWN_CLASS.ROOT} ${MARKDOWN_CLASS.FLOW} ${PROSE_CLASS}`;
+
   return className === undefined ? root : `${root} ${className}`;
 }

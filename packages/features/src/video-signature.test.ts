@@ -45,6 +45,7 @@ function videoTrack(width: number, height: number): number[] {
       ...element([0xba], [height >> 8, height & 0xff]),
     ],
   );
+
   return element([0xae], [...element([0xd7], [1]), ...video]);
 }
 
@@ -86,6 +87,7 @@ test("a Matroska file that is no WebM, and a WebM whose frames come before any t
     ...ebmlHeader("matroska"),
     ...liveSegment(element([...TRACKS], videoTrack(640, 480))),
   ]);
+
   const clusterFirst = new Uint8Array([
     ...ebmlHeader("webm"),
     ...liveSegment([
@@ -111,6 +113,7 @@ test("a picture, and a WebM cut short inside its header, are no WebM of any size
 /** One MP4 box: its size, its type, and what it holds. */
 function box(type: string, payload: readonly number[] = []): number[] {
   const size = 8 + payload.length;
+
   return [
     size >>> 24,
     (size >>> 16) & 0xff,

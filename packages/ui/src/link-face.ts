@@ -63,6 +63,7 @@ function bareAddress(address: string): string {
 function bareUrl(href: string): string | undefined {
   if (!WEB_SCHEME.test(href) || !URL.canParse(href)) return undefined;
   const bare = bareAddress(href);
+
   try {
     return decodeURI(bare);
   } catch {
@@ -78,5 +79,6 @@ function saysOwnAddress(href: string, words: string): boolean {
 /** What a link to `href` labeled `words` says: its address said bare where the words are the address, its label otherwise. */
 export function linkFace(href: string, words: string): LinkFace {
   const bare = saysOwnAddress(href, words) ? bareUrl(href) : undefined;
+
   return bare === undefined ? { words, bare: false } : { words: bare, bare: true };
 }

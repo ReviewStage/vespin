@@ -42,6 +42,7 @@ import {
   Duration,
   Effect,
   Option,
+  Predicate,
   Queue,
   Ref,
   Schedule,
@@ -124,6 +125,7 @@ const readServiceFrame = Schema.decodeUnknownOption(
 /** One dimension of the terminal's size, within what the relay takes. */
 function bounded(value: number | undefined, fallback: number): number {
   if (value === undefined || value < SIZE_BOUNDS.MIN) return fallback;
+
   return Math.min(value, SIZE_BOUNDS.MAX);
 }
 
@@ -159,6 +161,7 @@ const typed = Stream.callback<Uint8Array>((queue) =>
     Effect.sync(() => {
       const onData = (chunk: Buffer) => Queue.offerUnsafe(queue, new Uint8Array(chunk));
       process.stdin.on("data", onData);
+
       return onData;
     }),
     (onData) => Effect.sync(() => process.stdin.off("data", onData)),
@@ -171,6 +174,7 @@ const resized = Stream.callback<void>((queue) =>
     Effect.sync(() => {
       const onResize = () => Queue.offerUnsafe(queue, undefined);
       process.stdout.on("resize", onResize);
+
       return onResize;
     }),
     (onResize) => Effect.sync(() => process.stdout.off("resize", onResize)),
@@ -198,12 +202,14 @@ function attached(agentId: string, terminalId: string) {
     Effect.gen(function* () {
       const { origin, credential } = yield* session;
       const socketOrigin = webSocketOrigin(origin);
+
       if (socketOrigin === undefined) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
           message: `${origin} serves no terminal relay.`,
         });
       }
+
       const current = yield* Ref.make<TerminalSocket | undefined>(undefined);
       const held = yield* Ref.make<readonly Uint8Array[]>([]);
       const detached = yield* Deferred.make<void>();
@@ -216,9 +222,11 @@ function attached(agentId: string, terminalId: string) {
           Effect.gen(function* () {
             if (bytes.length === 0) return;
             const socket = yield* Ref.get(current);
+
             if (socket !== undefined) return yield* socket.send({ bytes });
             yield* Ref.update(held, (before) => {
               const size = before.reduce((sum, each) => sum + each.length, 0);
+
               return size + bytes.length <= TYPED_WHILE_AWAY_MAX_BYTES
                 ? [...before, bytes]
                 : before;
@@ -231,31 +239,38 @@ function attached(agentId: string, terminalId: string) {
         Effect.gen(function* () {
           const size = terminalSize();
           const address = terminalRelayAddress(socketOrigin, { agentId, terminalId, ...size });
+
           const opening = yield* openedUnderCredential(
             credential,
             openTerminalSocketOverWs,
             address,
           );
+
           if ("unreachable" in opening) return yield* new RelayDropped();
+
           if ("refused" in opening) {
             if (opening.refused >= SERVER_ERROR_STATUS) return yield* new RelayDropped();
+
             if (opening.refused === UNAUTHORIZED_STATUS) {
               return yield* new CommandFailed({
                 exit: CLI_EXIT.AUTH,
                 message: `Not signed in, or the sign-in lapsed. ${SIGN_IN_HINT}`,
               });
             }
+
             if (opening.refused === NOT_FOUND_STATUS) {
               return yield* new CommandFailed({
                 exit: CLI_EXIT.UNAVAILABLE,
                 message: `${origin} serves no terminal relay.`,
               });
             }
+
             return yield* new CommandFailed({
               exit: CLI_EXIT.REFUSED,
               message: "No such shell, or the agent is not yours to reach.",
             });
           }
+
           const { socket } = opening;
           yield* Effect.addFinalizer(() => Ref.set(current, undefined));
           let attachedOnce = false;
@@ -264,21 +279,28 @@ function attached(agentId: string, terminalId: string) {
           yield* Stream.runForEach(socket.arrivals, (arrival) => {
             if ("close" in arrival) {
               closeCode = arrival.close;
+
               return Effect.void;
             }
+
             if ("bytes" in arrival) return written(socket, arrival.bytes);
             const frame = Option.getOrUndefined(readServiceFrame(arrival.text));
+
             if (frame?.type === TERMINAL_RELAY_FRAME.EXITED) exitCode = frame.code;
+
             if (frame?.type !== TERMINAL_RELAY_FRAME.ATTACHED) return Effect.void;
             attachedOnce = true;
+
             return inOrder(
               Effect.gen(function* () {
                 yield* Ref.set(current, socket);
                 // A resize while the socket opened reached no socket, so the size is set right now.
                 const now = terminalSize();
+
                 if (now.cols !== size.cols || now.rows !== size.rows) {
                   yield* socket.send({ text: resizeFrame(now) });
                 }
+
                 // What was typed while the socket was away reaches the shell first, in the order it was typed.
                 const typedWhileAway = yield* Ref.getAndSet(held, []);
                 yield* Effect.forEach(typedWhileAway, (bytes) => socket.send({ bytes }), {
@@ -288,6 +310,7 @@ function attached(agentId: string, terminalId: string) {
             );
           });
           const end = socketEnding(closeCode, exitCode, attachedOnce);
+
           switch (end.kind) {
             case RELAY_SOCKET_END.EXITED:
               return { ending: SOCKET_ENDING.EXITED, code: end.code } satisfies SocketEnding;
@@ -309,7 +332,7 @@ function attached(agentId: string, terminalId: string) {
       // The socket opened, and opened again after each drop, until the shell exits or the relay ends it.
       const reopening = attempt.pipe(
         Effect.retry({
-          while: (failure): boolean => failure._tag === "RelayDropped",
+          while: (failure): boolean => Predicate.isTagged(failure, "RelayDropped"),
           times: REOPEN.TIMES,
           schedule: Schedule.exponential(REOPEN.FIRST).pipe(
             Schedule.modifyDelay(({ duration }) =>
@@ -322,7 +345,7 @@ function attached(agentId: string, terminalId: string) {
           while: (socket) => socket.ending === SOCKET_ENDING.DROPPED,
         }),
         Effect.mapError((failure) =>
-          failure._tag === "RelayDropped"
+          Predicate.isTagged(failure, "RelayDropped")
             ? new CommandFailed({
                 exit: CLI_EXIT.UNAVAILABLE,
                 message: "Could not reach the agent's shell.",
@@ -336,6 +359,7 @@ function attached(agentId: string, terminalId: string) {
         Stream.runForEach(typed, (bytes) =>
           Effect.gen(function* () {
             const detach = bytes.indexOf(DETACH_BYTE);
+
             if (detach < 0) return yield* send(bytes);
             yield* send(bytes.subarray(0, detach));
             yield* Deferred.succeed(detached, undefined);
@@ -346,10 +370,12 @@ function attached(agentId: string, terminalId: string) {
         Stream.runForEach(resized, () =>
           Effect.gen(function* () {
             const socket = yield* Ref.get(current);
+
             if (socket !== undefined) yield* socket.send({ text: resizeFrame(terminalSize()) });
           }),
         ),
       );
+
       return yield* Effect.raceFirst(
         Effect.map(reopening, (socket) => ({
           ending: SHELL_ENDING.EXITED,
@@ -385,6 +411,7 @@ export const shellCommand = Command.make(
           message: "--title names a new shell; leave it out to attach to one that stands.",
         });
       }
+
       // Note that this is checked before a shell is started, so a piped run leaves none behind.
       if (!process.stdin.isTTY || !process.stdout.isTTY) {
         return yield* new CommandFailed({
@@ -392,6 +419,7 @@ export const shellCommand = Command.make(
           message: "vespin agent shell is interactive: run it in a terminal, not piped.",
         });
       }
+
       const terminalId = Option.isSome(shell)
         ? shell.value
         : (yield* askService(
@@ -403,14 +431,18 @@ export const shellCommand = Command.make(
             HOSTED_DEADLINE.USUAL,
             { [HOSTED_API_ERROR.SANDBOX_STOPPED]: SANDBOX_STOPPED_WORDS },
           )).terminal.id;
+
       yield* note(`Attaching to shell ${terminalId}. Ctrl-] detaches and leaves it running.`);
       const ended = yield* attached(agentId, terminalId);
+
       if (ended.ending === SHELL_ENDING.DETACHED) {
         yield* note(
           `\nDetached; the shell keeps running. Attach again: vespin agent shell ${agentId} ${terminalId}`,
         );
+
         return;
       }
+
       yield* note(
         ended.code === undefined ? "\nThe shell exited." : `\nThe shell exited (${ended.code}).`,
       );

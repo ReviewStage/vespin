@@ -56,7 +56,9 @@ export interface MacAppHandoffDoor {
 /** Whether the tab's address carries Open in browser's flag, which is dropped from it, the entry's state kept, so it is honored once. */
 function tookStayOnWeb(): boolean {
   const without = withoutStayOnWeb(location.href);
+
   if (without !== undefined) history.replaceState(history.state, "", without);
+
   return without !== undefined;
 }
 
@@ -74,8 +76,10 @@ function tookStayOnWeb(): boolean {
 export function browserLoadedFresh(loaded: HistoryLocation): boolean {
   const stay = tookStayOnWeb();
   const [navigation] = performance.getEntriesByType("navigation");
+
   const navigated =
     navigation !== undefined && "type" in navigation && navigation.type === NAVIGATED;
+
   return navigated && !stay && !savesStep(loaded);
 }
 
@@ -89,12 +93,16 @@ export const handOffToMacApp = /* @__PURE__ */ Effect.fnUntraced(function* (
   origin: string,
 ): Effect.fn.Return<void, never, HttpClient.HttpClient> {
   if (!door.fresh) return;
+
   if (linkOpenTarget(LINK_OPEN.MAC_APP, door.platform, door.address) === undefined) return;
+
   // Note that the cookie is the whole credential, so the call carries no header of its own.
   const answer = yield* accountCall({ baseUrl: origin, credential: {} }).ask(
     { method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.ACCOUNT_PREFERENCES },
     LinkOpenAnswer,
   );
+
   const target = linkOpenTarget(answer?.linkOpen ?? LINK_OPEN.BROWSER, door.platform, door.address);
+
   if (target !== undefined) door.open(target);
 });

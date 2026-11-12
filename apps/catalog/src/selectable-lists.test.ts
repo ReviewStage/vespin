@@ -33,13 +33,15 @@ function drawn(id: string) {
   const root: Root = createRoot(container);
   act(() => root.render(createElement(SELECTION_EXAMPLE.Render)));
   const box = container.querySelector<HTMLElement>(`#${id}`);
+
   if (box === null) throw new Error(`The example draws no box ${id}`);
+
   return {
     root: box,
     opened: () =>
-      [...box.querySelectorAll<HTMLElement>("[data-select-key]")]
-        .filter((press) => press.textContent?.includes("(open)"))
-        .map((press) => press.getAttribute("data-select-key") ?? ""),
+      [...box.querySelectorAll<HTMLElement>("[data-select-key]")].flatMap((press) =>
+        press.textContent?.includes("(open)") ? [press.getAttribute("data-select-key") ?? ""] : [],
+      ),
     unmount: () => {
       act(() => root.unmount());
       container.remove();
@@ -49,4 +51,5 @@ function drawn(id: string) {
 }
 
 selectableListBehavior("CATALOG", { part: "List", mount: () => drawn("selection-tasks-list") });
+
 selectableListBehavior("CATALOG", { part: "cards", mount: () => drawn("selection-cards-region") });

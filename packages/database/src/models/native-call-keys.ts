@@ -29,6 +29,7 @@ const upsertKey = SqlSchema.findOne({
   execute: ({ userId, conversationId, digest, fresh, now, mintedAfter }) => {
     // The standing key is kept while it was minted within the window; the fresh one replaces it, with its minting, once a whole window has passed.
     const expired = sql`${nativeCallKey.mintedAt} <= ${mintedAfter.toISOString()}::timestamptz`;
+
     return Database.use((db) =>
       db
         .insert(nativeCallKey)
@@ -60,6 +61,7 @@ export function nativeCallKeyOf(
   return Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
     const mintedAfter = new Date(now.getTime() - windowMs);
+
     const row = yield* upsertKey({
       userId,
       conversationId,
@@ -68,6 +70,7 @@ export function nativeCallKeyOf(
       now,
       mintedAfter,
     });
+
     return row.key;
   }).pipe(
     // Note that an upsert always answers the one row it wrote, so no row is a defect rather than a failure a caller reads.

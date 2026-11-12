@@ -1,6 +1,6 @@
 import { isAPIError } from "better-auth/api";
 import type { Cause } from "effect";
-import { Effect, Option } from "effect";
+import { Effect, Option, Predicate } from "effect";
 import {
   isRecord,
   text,
@@ -37,6 +37,7 @@ export type SessionEndpoint = (input: {
 export function oauthUserInfoFromAuthAnswer(value: UnparsedWireValue): OAuthUserInfo | undefined {
   if (!isRecord(value)) return undefined;
   const sub = text(value.sub);
+
   return sub ? { sub } : undefined;
 }
 
@@ -49,15 +50,18 @@ export function oauthUserInfoFromAuthAnswer(value: UnparsedWireValue): OAuthUser
  */
 function refusedToken(failure: Cause.UnknownError): boolean {
   const thrown = failure.cause;
+
   if (isAPIError(thrown)) {
     return (
       thrown.statusCode < HOSTED_HTTP_STATUS.INTERNAL_ERROR &&
       thrown.statusCode !== HOSTED_HTTP_STATUS.TOO_MANY_REQUESTS
     );
   }
-  if (!(thrown instanceof Error) || !("code" in thrown) || typeof thrown.code !== "string") {
+
+  if (!(thrown instanceof Error) || !("code" in thrown) || !Predicate.isString(thrown.code)) {
     return false;
   }
+
   return thrown.code.startsWith(JOSE_CODE.PREFIX) && thrown.code !== JOSE_CODE.KEY_SET_TIMEOUT;
 }
 
@@ -82,7 +86,9 @@ function userIdForAuthorization(
   userInfo: UserInfoEndpoint,
 ): Effect.Effect<Option.Option<string>, Cause.UnknownError> {
   const authorization = value?.trim();
+
   if (!authorization) return Effect.succeedNone;
+
   return userInfo({ headers: new Headers({ authorization }) }).pipe(
     Effect.map((identity) => Option.fromUndefinedOr(identity?.sub || undefined)),
     Effect.catchIf(refusedToken, () => Effect.succeedNone),
@@ -110,7 +116,9 @@ export function requestUserId(
 ): Effect.Effect<Option.Option<string>, Cause.UnknownError> {
   if (request.headers.has(CREDENTIAL_HEADER.AUTHORIZATION)) return hostedUserId(request, userInfo);
   const cookie = sessionCredential(request.headers);
+
   if (cookie === undefined) return Effect.succeedNone;
+
   return session({ headers: cookie });
 }
 
@@ -127,6 +135,7 @@ export function relayUserId(
 ): Effect.Effect<Option.Option<string>, Cause.UnknownError> {
   if ("bearer" in credential) return userIdForAuthorization(credential.bearer, userInfo);
   const page = new Request(RELAY_PAGE_BASE, { headers: credential.page });
+
   return requestUserId(page, userInfo, session);
 }
 
@@ -135,6 +144,7 @@ const askedUserInfo: UserInfoEndpoint = (input) =>
   Effect.tryPromise(async () => {
     // SAFETY: Better Auth hands back its parsed userinfo answer as structured-clone data; the wire guards below validate the selected field.
     const answer = (await auth.api.oauth2UserInfo(input)) as WireBoundaryInput;
+
     return oauthUserInfoFromAuthAnswer(unparsedWire(answer));
   });
 

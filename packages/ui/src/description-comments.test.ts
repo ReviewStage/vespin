@@ -111,6 +111,7 @@ test("a thread begun on the editor's words is marked on the same words of the sa
   const saved = "alpha beta gamma";
   const draft = "alpha new beta gamma";
   const from = draft.indexOf("beta");
+
   const pending = {
     from,
     to: from + 4,
@@ -120,6 +121,7 @@ test("a thread begun on the editor's words is marked on the same words of the sa
   };
 
   const [span] = commentSpansIn([], { from: 0, to: saved.length }, undefined, pending, saved);
+
   const onlyDraft = commentSpansIn(
     [],
     { from: 0, to: saved.length },

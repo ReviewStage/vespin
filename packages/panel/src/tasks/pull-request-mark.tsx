@@ -49,10 +49,12 @@ export type PullRequestMarked = Pick<AgentPullRequest, "number" | "state" | "che
 /** A pull request's words for a reader who cannot see its mark: its number, where it stands, and that its checks failed where they did. */
 function pullRequestMarkLabel(pullRequest: PullRequestMarked): string {
   const failing = pullRequest.checks === CHECK_SUMMARY.FAILING;
+
   const standing =
     pullRequestMarkState(pullRequest) === PULL_REQUEST_MARK_QUEUED
       ? `Pull request ${pullRequestNumberLabel(pullRequest)}, queued`
       : pullRequestPillLabel(pullRequest);
+
   return `${standing}${failing ? CHECKS_FAILING_WORDS : ""}`;
 }
 
@@ -66,6 +68,7 @@ export function PullRequestMark({
 }): React.JSX.Element {
   const state = pullRequestMarkState(pullRequest);
   const Glyph = PULL_REQUEST_GLYPH[state];
+
   return (
     <Glyph
       className={className === undefined ? "pull-request-mark" : `pull-request-mark ${className}`}

@@ -32,8 +32,10 @@ const flipped = new Set<EventListenerOrEventListenerObject>();
 /** The machine's appearance turning dark or light, said to every query listening for it. */
 function machineTurns(dark: boolean): void {
   machineDark = dark;
+
   for (const changed of flipped) {
     const event = new Event("change");
+
     if ("handleEvent" in changed) changed.handleEvent(event);
     else changed(event);
   }

@@ -40,7 +40,7 @@ import { readRepositoryFile } from "../github/repository-file.js";
 import { GIT_ENTRY, readRepositoryFolder } from "../github/repository-folder.js";
 
 /** Where a repository keeps its skills, in the order a name is looked for. */
-export const SKILL_ROOT = {
+const SKILL_ROOT = {
   AGENTS: ".agents/skills",
   CLAUDE: ".claude/skills",
 } as const;
@@ -79,11 +79,15 @@ export interface RepositorySkill {
 /** The skill a `SKILL.md` in the folder named describes, or nothing where it breaks the convention. */
 function skillOf(root: SkillRoot, name: string, text: string): RepositorySkill | undefined {
   const file = readSkillFile(text);
+
   if (file === undefined) return undefined;
   const declared = file.keys.get(SKILL_KEY.NAME)?.trim();
+
   if (declared !== undefined && declared !== name) return undefined;
   const description = file.keys.get(SKILL_KEY.DESCRIPTION)?.trim() ?? "";
+
   if (description === "") return undefined;
+
   return {
     name,
     description: description.slice(0, REPOSITORY_SKILLS.MAX_DESCRIPTION_CHARS),
@@ -124,12 +128,15 @@ function readSkill(
   folder: SkillFolder,
 ): Effect.Effect<RepositorySkill | undefined, GitHubUnavailable, HttpClient.HttpClient> {
   const path = `${folder.root}/${folder.name}/${SKILL_FILE}`;
+
   return Effect.map(
     readRepositoryFile(token, repository, repository.defaultBranch, path),
     (file) => {
       if (!file.regular || file.content === undefined) return undefined;
+
       if (file.bytes > REPOSITORY_SKILLS.MAX_FILE_BYTES) return undefined;
       const text = new TextDecoder("utf-8", { fatal: false }).decode(file.content);
+
       return skillOf(folder.root, folder.name, text);
     },
   );
@@ -154,18 +161,23 @@ export function readRepositorySkills(
     const listed = yield* Effect.forEach(Object.values(SKILL_ROOT), (root) =>
       rootFolders(token, repository, root),
     );
+
     // Note that the sort is stable, so a name's folders stay in root order.
     const folders = listed
       .flat()
       .sort((a, b) => a.name.localeCompare(b.name))
       .slice(0, REPOSITORY_SKILLS.MAX_READS);
+
     const read = yield* Effect.forEach(folders, (folder) => readSkill(token, repository, folder), {
       concurrency: REPOSITORY_SKILLS.READ_CONCURRENCY,
     });
+
     const byName = new Map<string, RepositorySkill>();
+
     for (const skill of read) {
       if (skill !== undefined && !byName.has(skill.name)) byName.set(skill.name, skill);
     }
+
     return [...byName.values()].slice(0, REPOSITORY_SKILLS.MAX_SKILLS);
   });
 }

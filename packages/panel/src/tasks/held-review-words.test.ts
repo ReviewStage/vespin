@@ -58,6 +58,7 @@ const PENDING: PendingReviewComment = {
 };
 
 let root: Root | undefined;
+
 /** Every change the tab asked GitHub for, in order. */
 let changes: PullRequestActionRequest[] = [];
 
@@ -71,6 +72,7 @@ beforeEach(() => {
   fakeActPort({
     [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: ({ request }) => {
       changes.push(request);
+
       return Promise.resolve({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE });
     },
   });
@@ -116,6 +118,7 @@ function draw(): HTMLElement {
       ),
     ),
   );
+
   return container;
 }
 
@@ -228,6 +231,7 @@ function actionsSent(): string[] {
 
 test("Enter sends a reply and saves an edit, and Shift+Enter sends neither", async () => {
   const container = draw();
+
   const press = (element: HTMLElement, init: KeyboardEventInit) =>
     act(() => {
       element.dispatchEvent(

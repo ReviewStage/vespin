@@ -9,6 +9,7 @@ import { SITE_PAGE, SiteBarDownload, SiteFooterLinks, SiteNavigation } from "./S
 function useAskedPath(): string | undefined {
   const [path, setPath] = useState<string | undefined>(undefined);
   useEffect(() => setPath(window.location.pathname), []);
+
   return path;
 }
 

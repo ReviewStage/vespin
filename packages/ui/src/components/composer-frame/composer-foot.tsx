@@ -2,7 +2,7 @@ import type { ShortcutChord } from "@repo/settings/shortcuts";
 import { type ReactNode, useId } from "react";
 import { inputProblem, type ReportedFailure, type Unreported } from "../../reported-failure.js";
 import {
-  BUTTON_SHAPE,
+  BUTTON_CORNERS,
   BUTTON_TYPE,
   BUTTON_VARIANT,
   type BusyProps,
@@ -15,7 +15,7 @@ import { ErrorLine } from "../error-line/error-line.js";
 import { ErrorState, type ErrorStateRemedy } from "../error-state/error-state.js";
 import { HoldPress } from "../hold-press/hold-press.js";
 import { LengthCounter } from "../length-counter/length-counter.js";
-import { SKELETON_SHAPE, Skeleton } from "../skeleton/skeleton.js";
+import { SKELETON_KIND, Skeleton } from "../skeleton/skeleton.js";
 import { Tooltip } from "../tooltip/hint.js";
 
 /**
@@ -192,7 +192,9 @@ function SendButton({
   refusalId: string;
 }): React.JSX.Element {
   const { onHold, empty, held = false } = send;
+
   if (onHold === undefined) return <SendPress send={send} refusalId={refusalId} />;
+
   return (
     <HoldPress onHold={onHold} disabled={empty || held || send.busy === true}>
       <SendPress send={send} refusalId={refusalId} />
@@ -219,9 +221,11 @@ function SendPress({
     chord,
     refuses,
   } = send;
+
   const variant = SEND_VARIANT[tone];
   const busy = send.busy === true ? { busy: true, busyLabel: send.busyLabel } : {};
   const type = onSend === undefined ? BUTTON_TYPE.SUBMIT : BUTTON_TYPE.BUTTON;
+
   // Note that an empty send that can say why stays pressable, and a held one never is.
   const refusing =
     refuses === undefined
@@ -231,6 +235,7 @@ function SendPress({
           onRefused: refuses.onRefused,
           "aria-describedby": refusalId,
         };
+
   if (inWords) {
     return (
       <Button
@@ -246,6 +251,7 @@ function SendPress({
       </Button>
     );
   }
+
   return (
     <Tooltip label={label} chord={chord}>
       {icon === undefined ? (
@@ -262,7 +268,7 @@ function SendPress({
       ) : (
         <IconButton
           icon={icon}
-          shape={BUTTON_SHAPE.ROUND}
+          corners={BUTTON_CORNERS.ROUND}
           variant={variant}
           label={label}
           type={type}
@@ -279,6 +285,7 @@ function SendPress({
 /** Stop, the round button in the send's place wearing Stop's glyph, busy while its stop is out. */
 function StopButton({ stop }: { stop: ComposerStop }): React.JSX.Element {
   const busy = stop.busy === true ? { busy: true, busyLabel: stop.busyLabel } : {};
+
   return (
     <Tooltip label={stop.busy === true ? stop.busyLabel : stop.label}>
       <IconButton
@@ -330,6 +337,7 @@ export function ComposerFoot({
   note?: ComposerNote | undefined;
 }): React.JSX.Element {
   const refusalId = useId();
+
   return (
     <FootBox>
       <FootBar>
@@ -377,7 +385,7 @@ export function ComposerFootSkeleton({
         <FootTools>{tools}</FootTools>
         <FootEnd>
           {actions}
-          <Skeleton shape={SKELETON_SHAPE.CIRCLE} />
+          <Skeleton kind={SKELETON_KIND.CIRCLE} />
         </FootEnd>
       </FootBar>
     </FootBox>

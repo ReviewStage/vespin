@@ -102,6 +102,7 @@ const BOUNDARY = /[^\p{L}\p{N}]/u;
 /** Whether the character at `at` of `text` is a mark's edge: the text's end, or a boundary. */
 function edgeAt(text: string, at: number): boolean {
   const character = text[at];
+
   return character === undefined || BOUNDARY.test(character);
 }
 
@@ -109,20 +110,24 @@ function edgeAt(text: string, at: number): boolean {
 function closingOf(text: string, from: number, marker: string): number | undefined {
   const lineEnd = text.indexOf("\n", from);
   const end = lineEnd === -1 ? text.length : lineEnd;
+
   for (
     let at = text.indexOf(marker, from + 2);
     at !== -1 && at < end;
     at = text.indexOf(marker, at + 1)
   ) {
     const inner = text[at - 1];
+
     if (inner !== undefined && !/\s/u.test(inner) && edgeAt(text, at + 1)) return at;
   }
+
   return undefined;
 }
 
 /** Appends `text` to `runs`, joined to a run of words it follows. */
 function pushText(runs: DraftRun[], text: string): void {
   const last = runs.at(-1);
+
   if (last?.kind === DRAFT_RUN.TEXT)
     runs[runs.length - 1] = { kind: DRAFT_RUN.TEXT, text: last.text + text };
   else if (text !== "") runs.push({ kind: DRAFT_RUN.TEXT, text });
@@ -132,31 +137,41 @@ function pushText(runs: DraftRun[], text: string): void {
 function slackRuns(text: string): DraftRun[] {
   const runs: DraftRun[] = [];
   let at = 0;
+
   while (at < text.length) {
     const character = text[at] ?? "";
     const link = character === "<" ? SLACK_LINK.exec(text.slice(at)) : null;
+
     if (link !== null) {
       const [whole, url = "", label] = link;
+
       // Note that a bare link's words are its address as written, never read for marks a path may hold.
       const words: DraftRun[] =
         label === undefined || label === ""
           ? [{ kind: DRAFT_RUN.TEXT, text: url }]
           : slackRuns(label);
+
       runs.push({ kind: DRAFT_RUN.LINK, url, runs: words });
       at += whole.length;
       continue;
     }
+
+    // SAFETY: `Object.hasOwn` checked the character is one of MARK_OF's keys.
     const mark = Object.hasOwn(MARK_OF, character)
       ? MARK_OF[character as keyof typeof MARK_OF]
       : undefined;
+
     const opens =
       mark !== undefined && (at === 0 || edgeAt(text, at - 1)) && !/\s/u.test(text[at + 1] ?? " ");
+
     const closes = opens ? closingOf(text, at, character) : undefined;
+
     if (mark === undefined || closes === undefined) {
       pushText(runs, character);
       at += 1;
       continue;
     }
+
     const inner = text.slice(at + 1, closes);
     runs.push({
       kind: DRAFT_RUN.MARK,
@@ -165,6 +180,7 @@ function slackRuns(text: string): DraftRun[] {
     });
     at = closes + 1;
   }
+
   return runs;
 }
 
@@ -186,9 +202,11 @@ function runsHtml(runs: readonly DraftRun[]): string {
     .map((run) => {
       if (run.kind === DRAFT_RUN.TEXT)
         return escapeHtml(run.text).replace(COLLAPSED_SPACE, "&nbsp;").replaceAll("\n", "<br>");
+
       if (run.kind === DRAFT_RUN.LINK)
         return `<a href="${escapeHtml(run.url)}">${runsHtml(run.runs)}</a>`;
       const element = MARK_ELEMENT[run.mark];
+
       return `<${element}>${runsHtml(run.runs)}</${element}>`;
     })
     .join("");
@@ -200,7 +218,9 @@ function runsText(runs: readonly DraftRun[]): string {
     .map((run) => {
       if (run.kind === DRAFT_RUN.TEXT) return run.text;
       const words = runsText(run.runs);
+
       if (run.kind === DRAFT_RUN.MARK || words === run.url) return words;
+
       return `${words} (${run.url})`;
     })
     .join("");
@@ -215,14 +235,18 @@ export function draftKindOf(language: string): DraftKind | undefined {
 export function readDraft(kind: DraftKind, text: string): Draft {
   if (kind === DRAFT_KIND.SLACK) return { kind, subject: undefined, runs: slackRuns(text) };
   const [first = "", ...rest] = text.split("\n");
+
   const subject =
     kind === DRAFT_KIND.EMAIL && first.toLowerCase().startsWith(SUBJECT_LEAD)
       ? first.slice(SUBJECT_LEAD.length).trim()
       : undefined;
+
   // Note that the blank lines after a subject are dropped line by line, since a pattern over them would backtrack on a long run of spaces.
   const blank = rest.findIndex((line) => line.trim() !== "");
+
   const body =
     subject === undefined ? text : rest.slice(blank === -1 ? rest.length : blank).join("\n");
+
   return { kind, subject, runs: body === "" ? [] : [{ kind: DRAFT_RUN.TEXT, text: body }] };
 }
 

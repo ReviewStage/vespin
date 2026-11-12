@@ -38,6 +38,7 @@ const AGENT_ID = "0b6f9a4e-1c1d-4d2e-9f3a-5b7c8d9e0f12";
 const LINE_ID = "d1c2b3a4-0000-4000-8000-000000000001";
 const DEVICE_SECRET = `lkd_${"a".repeat(43)}`;
 const POLL_SECRET = `lkp_${"c".repeat(43)}`;
+
 /** What a pairing's start answers beside its poll secret: the service's own numbers, ten minutes and five seconds. */
 const PAIRING_CODE: Omit<HostPairingStartAnswer, "pollSecret"> = {
   userCode: "BCDF-GHJK",
@@ -45,10 +46,13 @@ const PAIRING_CODE: Omit<HostPairingStartAnswer, "pollSecret"> = {
   expiresInMs: 600_000,
   intervalMs: 5_000,
 };
+
 /** Where a pairing stands as a poll answers it. */
 type HostPairingPollStatus =
   (typeof HOST_PAIRING_POLL_STATUS)[keyof typeof HOST_PAIRING_POLL_STATUS];
+
 const RUNNER_TOKEN = "sk-ant-oat01-fixture-not-a-real-token";
+
 /** A release newer than the daemon's, as a beat's answer names one. */
 const NEWER_RELEASE = {
   version: "0.2.0",
@@ -58,10 +62,13 @@ const NEWER_RELEASE = {
     [HOST_TARGET.DARWIN_ARM64]: "c".repeat(64),
   },
 };
+
 /** The Node the daemon runs on, which its runners run on too. */
 const NODE = "/opt/vespin-host/node/bin/node";
+
 /** The runner's bundle every OS runs: the release's own. */
 const RUNNER_BUNDLE = "/opt/vespin-host/lib/agent-runner.mjs";
+
 const HTTP = {
   OK: 200,
   UNAUTHORIZED: 401,
@@ -71,8 +78,10 @@ const HTTP = {
 
 /** What the service answers a secret no standing host holds: the 401 every host reads, marked as the host removed. */
 const HOST_REMOVED = { error: "invalid-token", hostRemoved: true } as const;
+
 /** What anything else on the service's origin may answer: a 401 that says nothing of the host. */
 const BARE_REFUSAL = { error: "invalid-token" } as const;
+
 /** The box's device, as its record keeps it. */
 const DEVICE = {
   deviceId: DEVICE_ID,
@@ -82,6 +91,7 @@ const DEVICE = {
 
 /** Which machine fra-01 is, as its host reports it: a Linux box names no model. */
 const FRA_01_MACHINE = { machineId: "e".repeat(64) } as const;
+
 /** Which machine Studio is, as its host reports it. */
 const STUDIO_MACHINE = { machineId: "f".repeat(64), model: "Mac Studio (2023)" } as const;
 
@@ -127,6 +137,7 @@ const elapsed = (total: Duration.Duration) =>
 /** A box's state root and its home, under a folder of its own. */
 const box = Effect.gen(function* () {
   const root = yield* temporaryDirectoryScoped("host-daemon-");
+
   return { home: `${root}/home`, stateRoot: `${root}/state` };
 });
 
@@ -139,9 +150,12 @@ const world = (home: string, reports: string[]) => {
   const spawner = scriptedSpawner((program, args) => {
     if (program === "/bin/bash" && args[0] === "-l")
       return { stdout: "/usr/bin:/bin", exitCode: 0 };
+
     if (isRunner({ program, args })) return {};
+
     return undefined;
   });
+
   const layer = Layer.mergeAll(
     NodeFileSystem.layer,
     NodePath.layer,
@@ -149,6 +163,7 @@ const world = (home: string, reports: string[]) => {
     reporterLayer((line) => reports.push(line)),
     Layer.succeed(Environment, ConfigProvider.fromUnknown({ HOME: home, SHELL: "/bin/bash" })),
   );
+
   return { spawner, layer };
 };
 
@@ -158,10 +173,12 @@ const launchingService = (
   refusing: (request: RecordedRequest) => Response | undefined,
 ) => {
   let linesRead = 0;
+
   return recordingHttpClient((request) => {
     switch (`${request.method} ${request.pathname}`) {
       case `GET ${HOSTED_SERVICE_PATH.DEVICE_AGENT_LINES}`:
         linesRead += 1;
+
         if (linesRead === 1) {
           return jsonResponse({
             lines: [
@@ -175,6 +192,7 @@ const launchingService = (
             ],
           });
         }
+
         break;
       case `POST ${HOSTED_SERVICE_PATH.DEVICE_AGENT_LINE_CLAIM}`:
         return jsonResponse({
@@ -193,6 +211,7 @@ const launchingService = (
           secrets: { env: { CLAUDE_CODE_OAUTH_TOKEN: RUNNER_TOKEN }, stdin: "{}\n" },
         });
     }
+
     return refusing(request) ?? jsonResponse({ done: true });
   });
 };
@@ -224,11 +243,14 @@ describe("a host's daemon", () => {
         const { spawner, layer } = world(home, reports);
         let linesRead = 0;
         let removed = false;
+
         const http = recordingHttpClient((request) => {
           if (removed) return jsonResponse(HOST_REMOVED, HTTP.UNAUTHORIZED);
+
           switch (`${request.method} ${request.pathname}`) {
             case `GET ${HOSTED_SERVICE_PATH.DEVICE_AGENT_LINES}`:
               linesRead += 1;
+
               return linesRead > 1
                 ? jsonResponse({}, HTTP.SERVER_ERROR)
                 : jsonResponse({
@@ -266,6 +288,7 @@ describe("a host's daemon", () => {
               return jsonResponse({ done: true });
           }
         });
+
         const platform = platformOn(os, stateRoot, uid);
         yield* writeHostDevice(stateRoot, DEVICE);
 
@@ -276,6 +299,7 @@ describe("a host's daemon", () => {
           version: VERSION,
           platform,
         }).pipe(Effect.provide(Layer.merge(layer, http.layer)), Effect.forkScoped);
+
         yield* settled(() => spawner.spawned.some(isRunner));
         yield* settled(
           () => at(http.requests, "POST", HOSTED_SERVICE_PATH.DEVICE_AGENT_PRESENCE).length > 0,
@@ -311,9 +335,11 @@ describe("a host's daemon", () => {
           HOME: home,
           PATH: "/usr/bin:/bin:/opt/agent/agent-tools",
         });
+
         for (const variable of ["XDG_CACHE_HOME", "PNPM_HOME", "NPM_CONFIG_PREFIX"]) {
           expect(runner?.env?.[variable]).toBeUndefined();
         }
+
         expect(runner?.env?.IS_SANDBOX).toBe(sandboxed);
         expect(reports).toContain("Vespin host: Connected to Vespin.");
 
@@ -343,9 +369,11 @@ describe("a host's daemon", () => {
         const reports: string[] = [];
         const { spawner, layer } = world(home, reports);
         let refused = false;
+
         const http = launchingService(home, () =>
           refused ? jsonResponse(BARE_REFUSAL, HTTP.UNAUTHORIZED) : undefined,
         );
+
         yield* writeHostDevice(stateRoot, DEVICE);
 
         const daemon = yield* hostDaemon({
@@ -355,6 +383,7 @@ describe("a host's daemon", () => {
           version: VERSION,
           platform: platformOn(FRA_01, stateRoot),
         }).pipe(Effect.provide(Layer.merge(layer, http.layer)), Effect.forkScoped);
+
         yield* settled(() => spawner.spawned.some(isRunner));
         refused = true;
         yield* elapsed(Duration.minutes(3));
@@ -374,13 +403,16 @@ describe("a host's daemon", () => {
         const { home, stateRoot } = yield* box;
         const reports: string[] = [];
         const { layer } = world(home, reports);
+
         const http = recordingHttpClient(() =>
           jsonResponse(
             { error: "host-upgrade-needed", minimumVersion: "0.2.0" },
             HTTP.UPGRADE_REQUIRED,
           ),
         );
+
         const platform = platformOn(FRA_01, stateRoot);
+
         const registers = () =>
           at(http.requests, "POST", HOSTED_SERVICE_PATH.DEVICE_AGENT_DEVICES).length;
 
@@ -440,6 +472,7 @@ describe("a host waiting on its record", () => {
           Effect.provide(reporterLayer((line) => reports.push(line))),
           Effect.forkScoped,
         );
+
         yield* settled(() => reports.length === 1);
         yield* elapsed(Duration.minutes(2));
         expect(resting.pollUnsafe()).toBeUndefined();
@@ -479,6 +512,7 @@ describe("a host waiting on its record", () => {
         const waiting = yield* hostDeviceWhen(stateRoot, Option.isSome).pipe(Effect.forkScoped);
         yield* elapsed(Duration.seconds(30));
         yield* fileSystem.remove(stateRoot, { recursive: true });
+
         if (madeBeforeHeard) yield* fileSystem.makeDirectory(stateRoot, { recursive: true });
         yield* elapsed(Duration.seconds(30));
         yield* writeHostDevice(stateRoot, DEVICE);
@@ -492,16 +526,20 @@ describe("a host waiting on its record", () => {
       // Each folder a watch is laid on, the state folder removed after the check that finds it standing and before its watch, once.
       const watched: string[] = [];
       let removing: string | undefined;
+
       const removedAsWatched = Layer.succeed(FileSystem.WatchBackend, {
         register: (folder) => {
           watched.push(folder);
+
           if (folder === removing) {
             removing = undefined;
             rmSync(folder, { recursive: true });
           }
+
           return Option.none();
         },
       });
+
       return Effect.gen(function* () {
         const { stateRoot } = yield* box;
         const fileSystem = yield* FileSystem.FileSystem;
@@ -536,7 +574,9 @@ describe("a host's connect with a code", () => {
       if (request.pathname === HOSTED_SERVICE_PATH.HOST_PAIRING_START) {
         return jsonResponse({ pollSecret: POLL_SECRET, ...PAIRING_CODE });
       }
+
       const status = statuses.shift() ?? HOST_PAIRING_POLL_STATUS.PENDING;
+
       return jsonResponse(
         status === HOST_PAIRING_POLL_STATUS.APPROVED
           ? { status, deviceId: DEVICE_ID, deviceSecret: DEVICE_SECRET }
@@ -566,11 +606,13 @@ describe("a host's connect with a code", () => {
       Effect.gen(function* () {
         const { stateRoot } = yield* box;
         const fileSystem = yield* FileSystem.FileSystem;
+
         const http = pairingService([
           HOST_PAIRING_POLL_STATUS.SLOW_DOWN,
           HOST_PAIRING_POLL_STATUS.PENDING,
           HOST_PAIRING_POLL_STATUS.APPROVED,
         ]);
+
         const shown: HostPairingCode[] = [];
         const polls = () => at(http.requests, "POST", HOSTED_SERVICE_PATH.HOST_PAIRING_POLL);
 

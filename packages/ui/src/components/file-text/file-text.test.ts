@@ -30,6 +30,7 @@ function draw(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -51,6 +52,7 @@ test("a peek keeps the words and its name but takes no place in the Tab order", 
       extent: FILE_TEXT_EXTENT.PEEK,
     }),
   );
+
   expect(container.textContent).toBe(SKILL);
   expect(document.querySelector("section")?.getAttribute("aria-label")).toBe("Pasted text");
   expect(container.querySelector("[tabindex]")).toBeNull();

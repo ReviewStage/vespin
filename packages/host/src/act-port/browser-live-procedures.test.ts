@@ -69,10 +69,12 @@ function fixture() {
   let messageListener: Parameters<HostOperator["onBrowserLiveMessage"]>[0] | undefined;
   let closedListener: Parameters<HostOperator["onBrowserLiveClosed"]>[0] | undefined;
   let ids = 0;
+
   const host: BrowserLiveActsDependencies<Window>["host"] = {
     browserLiveConnect: ({ connectionId, agentId, tabId }) =>
       Effect.sync(() => {
         asked.push(`connect:${connectionId}:${agentId}:${tabId}`);
+
         return true;
       }),
     browserLiveSend: ({ connectionId, text }) =>
@@ -81,19 +83,23 @@ function fixture() {
       Effect.sync(() => void asked.push(`disconnect:${connectionId}`)),
     onBrowserLiveMessage: (listener) => {
       messageListener = listener;
+
       return () => undefined;
     },
     onBrowserLiveClosed: (listener) => {
       closedListener = listener;
+
       return () => undefined;
     },
   };
+
   const actPort = testActPort(
     browserLiveProcedures<Window>({
       host,
       ports: {
         open: (sender, ticket): MainBrowserLivePort => {
           let heard: ((message: WireBoundaryInput) => void) | undefined;
+
           const port: ScriptedPort = {
             sender,
             ticket,
@@ -101,7 +107,9 @@ function fixture() {
             closed: false,
             send: (message) => heard?.(message),
           };
+
           opened.push(port);
+
           return {
             post: (message) => void port.posted.push(message),
             onMessage: (listener) => {
@@ -117,11 +125,14 @@ function fixture() {
       createId: () => `connection-${++ids}`,
       run: <A>(effect: Effect.Effect<A>) => {
         pending.push(effect);
+
         return new Promise<A>(() => undefined);
       },
     }),
   );
+
   ports.push(actPort);
+
   return {
     actPort,
     asked,

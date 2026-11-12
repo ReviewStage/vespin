@@ -38,6 +38,7 @@ function keepChoice(theme: Theme): void {
  */
 function wearAccountTheme(theme: Theme, root = document.documentElement): () => void {
   keepChoice(theme);
+
   return wearTheme(root, theme, () => tintChrome(root));
 }
 
@@ -45,5 +46,6 @@ function wearAccountTheme(theme: Theme, root = document.documentElement): () => 
 export function WebAppearance(): null {
   const theme = useQuery({ ...appStateQuery, select: selectAppSettingsView }).data?.theme;
   useLayoutEffect(() => (theme === undefined ? undefined : wearAccountTheme(theme)), [theme]);
+
   return null;
 }

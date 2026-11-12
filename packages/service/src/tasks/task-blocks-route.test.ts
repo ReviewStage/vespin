@@ -49,6 +49,7 @@ const ORIGIN = "https://app.test";
 const blocking = (bearers: ReadonlyMap<string, string>) =>
   Effect.gen(function* () {
     const github = fakeGitHub(() => Response.json({}, { status: 404 }), GITHUB_APP_WITH_TOKENS);
+
     const services = yield* Effect.context<never>().pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -59,6 +60,7 @@ const blocking = (bearers: ReadonlyMap<string, string>) =>
         ),
       ),
     );
+
     const handle = hostedFetch({
       plans: tasksProcedures({
         resolveUserId: (incoming: Request) =>
@@ -70,8 +72,10 @@ const blocking = (bearers: ReadonlyMap<string, string>) =>
         workspaces: yield* fakeWorkspaceSeams,
       }),
     });
+
     // SAFETY: a block's write yields the store and the clock alone, which is all a test provides of the web runtime's services.
     const webServices = services as Context.Context<WebServices>;
+
     return (
       taskId: string,
       bearer: string,
@@ -87,6 +91,7 @@ const blocking = (bearers: ReadonlyMap<string, string>) =>
           }),
           webServices,
         );
+
         // SAFETY: the router answers JSON; the test compares it as the wire value it is.
         return { status: response.status, body: JSON.parse(await response.text()) };
       });
@@ -115,6 +120,7 @@ it.layer(getTestDB())("a member's blocks on a task", (it) => {
           "Bearer owner",
           add(TASK_BLOCK_RELATION.BLOCKED_BY, schema),
         );
+
         const blocks = yield* send(panel, "Bearer owner", add(TASK_BLOCK_RELATION.BLOCKS, mark));
 
         assert.equal(blockedBy.status, 200, JSON.stringify(blockedBy.body));
@@ -151,12 +157,14 @@ it.layer(getTestDB())("a member's blocks on a task", (it) => {
         const { id: panel } = yield* createTask(owner, { organizationId: workspace, name: "P" });
         const { id: other } = yield* createTask(owner, { organizationId: elsewhere, name: "O" });
         const { id: hidden } = yield* createTask(stranger, { organizationId: theirs, name: "H" });
+
         const send = yield* blocking(
           new Map([
             ["Bearer owner", owner],
             ["Bearer stranger", stranger],
           ]),
         );
+
         yield* send(panel, "Bearer owner", add(TASK_BLOCK_RELATION.BLOCKED_BY, schema));
 
         const ontoHidden = yield* send(
@@ -164,12 +172,15 @@ it.layer(getTestDB())("a member's blocks on a task", (it) => {
           "Bearer owner",
           add(TASK_BLOCK_RELATION.BLOCKS, hidden),
         );
+
         const fromStranger = yield* send(
           schema,
           "Bearer stranger",
           add(TASK_BLOCK_RELATION.BLOCKS, hidden),
         );
+
         const across = yield* send(panel, "Bearer owner", add(TASK_BLOCK_RELATION.BLOCKS, other));
+
         const cycle = yield* send(
           schema,
           "Bearer owner",
@@ -212,17 +223,20 @@ it.layer(getTestDB())("a member's parent and relations on a task", (it) => {
         const workspace = yield* openWorkspace(owner);
         const { id: top } = yield* createTask(owner, { organizationId: workspace, name: "T" });
         const { id: leaf } = yield* createTask(owner, { organizationId: workspace, name: "L" });
+
         const { id: apart } = yield* createTask(owner, {
           organizationId: workspace,
           name: "A",
           repository: "acme/app",
         });
+
         const send = yield* blocking(
           new Map([
             ["Bearer owner", owner],
             ["Bearer stranger", stranger],
           ]),
         );
+
         const parent = (taskId: string, bearer: string, parentTaskId: string | null) =>
           send(taskId, bearer, { parentTaskId }, PLAN_WRITE.PARENT);
 
@@ -260,14 +274,18 @@ it.layer(getTestDB())("a member's parent and relations on a task", (it) => {
         const workspace = yield* openWorkspace(owner);
         const { id: schema } = yield* createTask(owner, { organizationId: workspace, name: "S" });
         const { id: panel } = yield* createTask(owner, { organizationId: workspace, name: "P" });
+
         const { id: apart } = yield* createTask(owner, {
           organizationId: workspace,
           name: "A",
           repository: "acme/app",
         });
+
         const send = yield* blocking(new Map([["Bearer owner", owner]]));
+
         const move = (change: TaskRelationChangeRequest) =>
           send(panel, "Bearer owner", change, PLAN_WRITE.RELATION);
+
         yield* send(panel, "Bearer owner", add(TASK_BLOCK_RELATION.BLOCKED_BY, schema));
         yield* send(panel, "Bearer owner", add(TASK_BLOCK_RELATION.BLOCKS, apart));
 
@@ -277,6 +295,7 @@ it.layer(getTestDB())("a member's parent and relations on a task", (it) => {
           from: TASK_RELATION_KIND.BLOCKED_BY,
           to: TASK_RELATION_KIND.PARENT,
         });
+
         // A task it blocks cannot become its sub-task from another repository, so the block it would have given up stands.
         const refused = yield* move({
           taskId: apart,

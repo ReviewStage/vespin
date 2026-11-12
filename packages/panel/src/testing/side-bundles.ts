@@ -37,6 +37,7 @@ export function landedBundles(
   const bundles = sideBundles(importers);
   const given = Object.keys(importers).filter((key): key is keyof SideBundles => key in bundles);
   const land = <Bundle extends keyof SideBundles>(key: Bundle) => bundleLanded(bundles[key]);
+
   return Effect.forEach(given, land, {
     discard: true,
   }).pipe(Effect.as(bundles));
@@ -52,13 +53,16 @@ export function standInBundles(importers: Partial<SideBundleImporters>): SideBun
   const bundles = sideBundles(importers);
   const client = testQueryClientNow();
   const given = Object.keys(importers).filter((key): key is keyof SideBundles => key in bundles);
+
   for (const key of given) client.removeQueries({ queryKey: bundles[key].queryKey, exact: true });
+
   return bundles;
 }
 
 /** The bundles as a window holds them before any has landed: each asked for, and none answering. */
 export function unlandedBundles(): SideBundles {
   const unlanded = () => Promise.withResolvers<never>().promise;
+
   return standInBundles({
     descriptionEditor: unlanded,
     fileTree: unlanded,
@@ -77,10 +81,12 @@ function fittedTerminal(terminal: TerminalModule): TerminalModule {
     create: (props) => {
       const screen = terminal.create(props);
       let fitted = false;
+
       return {
         ...screen,
         attach: (host) => {
           screen.attach(host);
+
           if (fitted) return;
           fitted = true;
           props.onResize(FITTED_SIZE);

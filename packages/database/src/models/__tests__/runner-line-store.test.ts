@@ -41,6 +41,7 @@ const openAccount = Effect.gen(function* () {
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const task = yield* startTask(userId, { name: "Invitations" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -51,7 +52,9 @@ const openAccount = Effect.gen(function* () {
     repository: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   const { agent } = Option.getOrThrow(started);
+
   return { userId, agentId: agent.id, conversationId: agent.conversationId };
 });
 
@@ -64,6 +67,7 @@ const lineSent = (account: { userId: string; conversationId: string }, clientKey
       { text: clientKey, clientKey, sender: { kind: MESSAGE_SENDER.APP } },
       Effect.succeed(true),
     );
+
     return sentLineId(clientKey);
   });
 
@@ -78,24 +82,29 @@ it.layer(getTestDB())("the runner line store", (it) => {
     Effect.gen(function* () {
       const { userId, agentId } = yield* openAccount;
       const lineId = randomUUID();
+
       const first = yield* queueRunnerLine(userId, {
         agentId,
         launch: LAUNCH.FIRST,
         text: '{"type":"message","n":1}',
         lineId,
       });
+
       const again = yield* queueRunnerLine(userId, {
         agentId,
         launch: LAUNCH.FIRST,
         text: '{"type":"message","n":1}',
         lineId,
       });
+
       assert.deepEqual(again, first);
+
       const model = yield* queueRunnerLine(userId, {
         agentId,
         launch: LAUNCH.FIRST,
         text: '{"type":"model"}',
       });
+
       // Note that a launch's own lines stand past the window an earlier launch's are handed in.
       yield* TestClock.adjust(Duration.hours(2));
       assert.deepEqual(yield* textsPast(userId, agentId, LAUNCH.FIRST), [
@@ -118,8 +127,10 @@ it.layer(getTestDB())("the runner line store", (it) => {
       Effect.gen(function* () {
         const account = yield* openAccount;
         const { userId, agentId, conversationId } = account;
+
         const queue = (launch: number, text: string, lineId?: string) =>
-          queueRunnerLine(userId, { agentId, launch, text, ...(lineId ? { lineId } : {}) });
+          queueRunnerLine(userId, { agentId, launch, text, ...(lineId && { lineId }) });
+
         // A line whose turn failed, which the developer resends themselves rather than a launch behind their back.
         const failed = yield* lineSent(account, "failed");
         const writer = yield* storeWriter({ tools: {} });
@@ -142,13 +153,15 @@ it.layer(getTestDB())("the runner line store", (it) => {
       Effect.gen(function* () {
         const account = yield* openAccount;
         const { userId, agentId, conversationId } = account;
+
         const queue = (text: string, lineId?: string) =>
           queueRunnerLine(userId, {
             agentId,
             launch: LAUNCH.FIRST,
             text,
-            ...(lineId ? { lineId } : {}),
+            ...(lineId && { lineId }),
           });
+
         const failed = yield* lineSent(account, "failed");
         const writer = yield* storeWriter({ tools: {} });
         yield* settleRunnerLostTurns(writer, conversationId, yield* Clock.currentTimeMillis);
@@ -188,6 +201,7 @@ it.layer(getTestDB())("the runner line store", (it) => {
         yield* settleRunnerLostTurns(writer, conversationId, yield* Clock.currentTimeMillis);
         const first = yield* lineSent(account, "first");
         const second = yield* lineSent(account, "second");
+
         for (const [lineId, handed] of [
           [first, { task: "first" }],
           [second, { task: "second" }],
@@ -227,11 +241,13 @@ it.layer(getTestDB())("the runner line store", (it) => {
         text: "theirs",
         lineId,
       });
+
       const foreign = yield* queueRunnerLine(other.userId, {
         agentId: owner.agentId,
         launch: LAUNCH.FIRST,
         text: "intruder",
       });
+
       assert.ok(Option.isNone(foreign));
       assert.deepEqual(yield* textsPast(other.userId, owner.agentId, LAUNCH.FIRST), []);
       yield* acceptRunnerLine(other.userId, owner.agentId, lineId);

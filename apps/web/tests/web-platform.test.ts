@@ -41,8 +41,10 @@ function tabsOpened(): (string | URL | undefined)[] {
   const opened: (string | URL | undefined)[] = [];
   vi.spyOn(window, "open").mockImplementation((url) => {
     opened.push(url);
+
     return null;
   });
+
   return opened;
 }
 
@@ -52,6 +54,7 @@ test("a link opens in a tab of its own only where its address is an http or http
 
   platform.openWeb("https://example.com/docs");
   platform.openWeb("http://localhost:3000/preview");
+
   for (const address of OFF_THE_WEB) platform.openWeb(address);
 
   assert.deepEqual(opened, ["https://example.com/docs", "http://localhost:3000/preview"]);
@@ -62,6 +65,7 @@ test("a GitHub link opens in a tab of its own only where its address is GitHub's
   const platform = webPlatform(COUNTING);
 
   platform.openGitHub("https://github.com/acme/app/pull/7");
+
   for (const address of [
     ...OFF_THE_WEB,
     "https://example.com/acme/app/pull/7",
@@ -121,12 +125,14 @@ test("a task's page is framed through the service's frame of its version on the 
   const platform = webPlatform(COUNTING);
   const task = "3f6c1b2a-8d4e-4f10-9a7b-5c2d1e0fa21b";
   const page = "0b6f6b52-2c1e-4f8e-9a4d-7f1c2e9d5a01";
+
   /** The address the contract declares for a procedure, its path's names filled in. */
   const declared = (
     procedure: Parameters<typeof getOpenAPIMeta>[0],
     names: Readonly<Record<string, string>>,
   ) => {
     const path = getOpenAPIMeta(procedure)?.path ?? "";
+
     return new URL(
       path.replace(/\{(\w+)\}/gu, (_, name: string) => names[name] ?? ""),
       location.origin,

@@ -36,6 +36,7 @@ const APP_ON_GITHUB: Actor = { kind: ACTOR_KIND.APP, onGitHub: true };
 function facesOf(member: Actor, token: string): readonly Actor[] {
   if (!isCommitAuthor(token)) return [];
   const [author, other] = appAuthors(token) ? [APP_ON_GITHUB, member] : [member, APP_ON_GITHUB];
+
   return coAuthorCredited(token) ? [author, other] : [author];
 }
 
@@ -54,10 +55,12 @@ function AgentsSection({
   account: Extract<AccountSnapshot, { status: typeof ACCOUNT_STATUS.SIGNED_IN }>;
 }): React.JSX.Element {
   const member = accountActor(account);
+
   const faces = (field: AppSettingField, token: string) =>
     field === APP_SETTING_SCHEMA.commitAuthor.field ? (
       <ActorStack actors={facesOf(member, token)} counted={false} />
     ) : undefined;
+
   return (
     <SettingsSection title="Agents">
       <SchemaSettingRows

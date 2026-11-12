@@ -50,8 +50,8 @@ const IDLE = { stage: ASYNC_ACTION_STAGE.IDLE } as const;
 const RUNNING = { stage: ASYNC_ACTION_STAGE.RUNNING } as const;
 
 /** The words a rejection says: an `Error`'s message, else the value itself. */
-export function rejectionWords(rejected: unknown): string {
-  return rejected instanceof Error ? rejected.message : String(rejected);
+export function rejectionWords(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
 }
 
 /**
@@ -64,7 +64,7 @@ export function rejectionWords(rejected: unknown): string {
  * sees one left running.
  */
 export function useAsyncAction<Refusal = string>(
-  unanswered: (rejected: unknown) => Refusal,
+  unanswered: (cause: unknown) => Refusal,
 ): AsyncAction<Refusal> {
   const [state, setState] = useState<AsyncActionState<Refusal>>(IDLE);
   const out = useRef(false);
@@ -74,32 +74,41 @@ export function useAsyncAction<Refusal = string>(
   const run = useCallback((act: AsyncActionAct<Refusal>): Promise<boolean> => {
     if (out.current) return Promise.resolve(false);
     let started: ReturnType<AsyncActionAct<Refusal>>;
+
     try {
       started = act();
     } catch (thrown) {
       // Note that an act that throws before it starts anything is refused as one that rejects is.
       started = Promise.reject(thrown);
     }
+
     if (started === undefined) {
       setState(IDLE);
+
       return Promise.resolve(true);
     }
+
     out.current = true;
     setState(RUNNING);
+
     const settle = (refusal: Refusal | undefined): boolean => {
       out.current = false;
       setState(refusal === undefined ? IDLE : { stage: ASYNC_ACTION_STAGE.REFUSED, refusal });
+
       return refusal === undefined;
     };
+
     return Promise.resolve(started).then(
       (refusal) => settle(refusal ?? undefined),
-      (rejected: unknown) => settle(newestUnanswered.current(rejected)),
+      (cause: unknown) => settle(newestUnanswered.current(cause)),
     );
   }, []);
+
   const refuse = useCallback((refusal: Refusal) => {
     if (out.current) return;
     setState({ stage: ASYNC_ACTION_STAGE.REFUSED, refusal });
   }, []);
+
   const clear = useCallback(() => {
     if (out.current) return;
     setState(IDLE);

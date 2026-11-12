@@ -10,16 +10,15 @@ import {
   Text,
   VStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityLabel,
   background,
   buttonStyle,
-  contentShape,
   font,
   foregroundStyle,
   frame,
   padding,
-  shapes,
   strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
@@ -51,7 +50,7 @@ type ChoiceListProps = {
   readonly recommended?: readonly string[] | undefined;
   /** The labels picked so far. */
   readonly picked: readonly string[];
-  /** Whether a person may pick several, which draws squares rather than circles. */
+  /** Whether a person may pick several, which draws Reminders' round checks once picked; the caller says so in `title`, since an unpicked row reads as a circle either way. */
   readonly multiple?: boolean | undefined;
   /** Called with the labels picked once a row is pressed. */
   readonly onChange: (picked: readonly string[]) => void;
@@ -64,15 +63,17 @@ type ChoiceListProps = {
 /** How thick the card's and the tag's edges are drawn. */
 const HAIRLINE = 0.5;
 
-/** The mark leading an option, 18 pt: a ring or a square, the ring filled with the accent at its heart once picked. */
+/** The mark leading an option, 18 pt: a ring filled with the accent at its heart once picked, or, where several may be picked, Reminders' round check, since iOS has no square checkbox. */
 function pickMark(picked: boolean, multiple: boolean) {
-  if (multiple) return picked ? "checkmark.square.fill" : "square";
+  if (multiple) return picked ? "checkmark.circle.fill" : "circle";
+
   return picked ? "smallcircle.filled.circle.fill" : "circle";
 }
 
 /** The small bordered tag after the recommended option's label, muted, as the panel's stands, so copper is left for the option picked. */
 function RecommendedTag() {
   const colors = useColors();
+
   return (
     <Text
       modifiers={[
@@ -81,6 +82,7 @@ function RecommendedTag() {
         padding({ horizontal: 5, vertical: 1 }),
         strokeBorder({
           content: colors.CHIP_EDGE,
+          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
           shape: "roundedRectangle",
           cornerRadius: RADIUS.TAG,
           style: { lineWidth: 1 },
@@ -99,6 +101,7 @@ function nextPicked(
   multiple: boolean,
 ): readonly string[] {
   if (!multiple) return [label];
+
   return picked.includes(label) ? picked.filter((each) => each !== label) : [...picked, label];
 }
 
@@ -117,6 +120,7 @@ function ChoiceRow({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+
   return (
     <Button
       onPress={onPress}
@@ -139,7 +143,7 @@ function ChoiceRow({
         alignment="top"
         modifiers={[
           padding({ horizontal: SPACE.EDGE - 2, vertical: SPACE.ROW + 1 }),
-          contentShape(shapes.rectangle()),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
         ]}
       >
         <Image
@@ -191,6 +195,7 @@ function ChoiceMediaBlock({ media }: { readonly media: readonly ChoiceMedia[] })
 export function ChoiceList(props: ChoiceListProps) {
   const { choices, recommended = [], picked, multiple = false, onChange, title, none } = props;
   const colors = useColors();
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
       {title === undefined ? null : (
@@ -208,9 +213,13 @@ export function ChoiceList(props: ChoiceListProps) {
         spacing={0}
         modifiers={[
           frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-          background(colors.SURFACE, shapes.roundedRectangle({ cornerRadius: RADIUS.CARD })),
+          background(
+            colors.SURFACE,
+            SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.CARD }),
+          ),
           strokeBorder({
             content: colors.CHIP_EDGE,
+            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
             shape: "roundedRectangle",
             cornerRadius: RADIUS.CARD,
             style: { lineWidth: HAIRLINE },

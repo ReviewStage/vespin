@@ -38,6 +38,7 @@ describe("taskSectionIconSchema", () => {
     for (const name of ["", "FlaskConical", "flask conical", "-flask", "flask--conical", "a/b"]) {
       assert.equal(isIcon(glyph(name)), false, name);
     }
+
     assert.equal(isIcon(glyph("a".repeat(65))), false);
   });
 
@@ -55,6 +56,7 @@ describe("taskSectionSchema", () => {
       icon: glyph("rocket", "gray"),
       createdAt: 1_700_000_000_000,
     };
+
     const read = EffectSchema.decodeUnknownSync(taskSectionSchema)(section);
     assert.deepEqual(read.icon, glyph("rocket"));
   });

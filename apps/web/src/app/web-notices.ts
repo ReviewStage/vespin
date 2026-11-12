@@ -56,15 +56,19 @@ export interface WebNoticeDoors extends AgentNoticeDoorsSurface {
 function titleBadge(): BadgeDoor {
   let count = 0;
   let watch: MutationObserver | undefined;
+
   const apply = () => {
     const bare = document.title.replace(TITLE_COUNT, "");
     const next = count > 0 ? `(${count}) ${bare}` : bare;
+
     if (document.title !== next) document.title = next;
   };
+
   return {
     set: (next) => {
       count = next;
       apply();
+
       if (watch !== undefined || count === 0) return;
       watch = new MutationObserver(apply);
       watch.observe(document.head, { childList: true, subtree: true, characterData: true });
@@ -91,8 +95,10 @@ function badgeDoor(): BadgeDoor {
       // Note that a refusal is dropped, because a badge the browser will not draw says nothing the window's counts have not.
       asked.catch(() => undefined);
     };
+
     return { set, close: () => set(0) };
   }
+
   return titleBadge();
 }
 
@@ -107,6 +113,7 @@ export function onTabShownChanged(listener: (shown: boolean) => void): () => voi
   const said = () => listener(document.visibilityState === "visible");
   document.addEventListener("visibilitychange", said);
   said();
+
   return () => document.removeEventListener("visibilitychange", said);
 }
 
@@ -118,6 +125,7 @@ function offersNotifications(): boolean {
 /** Whether the browser lets the site post notifications: on once allowed, off where blocked or offered by no browser, unknown while nobody asked. */
 export function tabNotificationsStatus(): NotificationsStatus {
   if (!offersNotifications()) return NOTIFICATIONS_STATUS.OFF;
+
   switch (Notification.permission) {
     case "granted":
       return NOTIFICATIONS_STATUS.ON;
@@ -138,7 +146,9 @@ export async function askTabNotifications(): Promise<NotificationsStatus> {
   if (!offersNotifications() || Notification.permission !== "default") {
     return tabNotificationsStatus();
   }
+
   await Notification.requestPermission();
+
   return tabNotificationsStatus();
 }
 
@@ -156,6 +166,7 @@ const postNotice: AgentNoticeDoorsSurface["post"] = (notice) => {
 /** The tab's doors: the browser's notification, the badge, and the chime. */
 export function webNoticeDoors(): WebNoticeDoors {
   const badge = badgeDoor();
+
   return {
     post: postNotice,
     badge: badge.set,

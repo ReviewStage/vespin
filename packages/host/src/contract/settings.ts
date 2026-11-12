@@ -43,6 +43,7 @@ const settingUpdatePayloadSchema = EffectSchema.Struct({
   EffectSchema.decodeTo(carried<SettingUpdatePayload>(), {
     decode: SchemaGetter.transformEffect((payload) => {
       const parsed = APP_SETTING_SCHEMA[payload.field].guard(payload.value);
+
       return parsed.valid
         ? // SAFETY: the field's own guard admitted this value for this field.
           Effect.succeed({ field: payload.field, value: parsed.value } as SettingUpdatePayload)

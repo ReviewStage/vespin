@@ -56,6 +56,7 @@ export function MoreButton({
   "aria-describedby"?: string | undefined;
 }): React.JSX.Element {
   const label = moreLabel(thing);
+
   return (
     <Tooltip label={label}>
       <IconButton

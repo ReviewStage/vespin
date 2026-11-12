@@ -18,15 +18,6 @@ function releaseDownloadPromise(result: UpdateCheckResult | null): void {
 }
 
 /**
- * electron-updater's cache helper is not part of its public surface, but a
- * corrupt cached download is only ever retried — the cache self-invalidates
- * solely on a remote sha512 change — so errors must reach in and clear it.
- */
-interface AppUpdaterInternals {
-  downloadedUpdateHelper: { clear(): Promise<void> } | null;
-}
-
-/**
  * The common production electron-updater setup, bound the same way: electron
  * updater's generic provider pointed at the feed fixed by the build, auto
  * download on, install at quit on, differential download off (a known source
@@ -48,6 +39,7 @@ export function createElectronUpdaterEngine(): UpdaterEngine {
       let lastProgressAt = 0;
       autoUpdater.on("download-progress", (progress) => {
         const now = Date.now();
+
         if (now - lastProgressAt < PROGRESS_EMIT_INTERVAL_MS) return;
         lastProgressAt = now;
         events.onProgress({
@@ -66,13 +58,12 @@ export function createElectronUpdaterEngine(): UpdaterEngine {
       autoUpdater.quitAndInstall(false, true);
     },
     async clearCachedUpdate() {
-      // electron-updater keeps the cache helper protected, so no typed access
-      // exists: Reflect is the narrowest way to a property the type will not
-      // name, and the annotation keeps every use of the answer checked.
-      const helper: AppUpdaterInternals["downloadedUpdateHelper"] = Reflect.get(
-        autoUpdater,
-        "downloadedUpdateHelper",
-      );
+      // Note that electron-updater keeps its cache helper protected, but a
+      // corrupt cached download is only ever retried, since the cache
+      // self-invalidates solely on a remote sha512 change, so errors must
+      // reach in and clear it: element access is TypeScript's typed way past
+      // a protected member.
+      const helper = autoUpdater["downloadedUpdateHelper"];
       await helper?.clear();
     },
   };

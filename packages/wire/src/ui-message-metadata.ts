@@ -271,6 +271,7 @@ function coherentSpan(metadata: SpokenAskMetadata): boolean {
   if (metadata.from_ms === undefined || metadata.to_ms === undefined) {
     return metadata.from_ms === metadata.to_ms;
   }
+
   return metadata.from_ms <= metadata.to_ms;
 }
 
@@ -521,7 +522,9 @@ export const USER_MESSAGE_METADATA = EffectSchema.Union([
  */
 export function isDeveloperLine(metadata: UserMessageMetadata): boolean {
   if ("source" in metadata) return false;
+
   if (metadata.channel === MESSAGE_CHANNEL.AGENT_MESSAGE) return false;
+
   return metadata.channel !== MESSAGE_CHANNEL.VOICE || metadata.author === MESSAGE_AUTHOR.DEVELOPER;
 }
 
@@ -582,10 +585,13 @@ function spokenByVoiceModel(metadata: AssistantMessageStruct): boolean {
     metadata.from_ms !== undefined ||
     metadata.to_ms !== undefined ||
     metadata.read_from !== undefined;
+
   if (spoken && metadata.author !== MESSAGE_AUTHOR.VOICE_MODEL) return false;
+
   if (metadata.from_ms === undefined || metadata.to_ms === undefined) {
     return metadata.from_ms === metadata.to_ms;
   }
+
   return metadata.from_ms <= metadata.to_ms;
 }
 

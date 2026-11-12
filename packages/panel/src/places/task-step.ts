@@ -112,6 +112,7 @@ function sideOf(shown: StepShown): SideStep {
 function sameShownSide(one: StepShown, other: StepShown): boolean {
   const mine = sideOf(one);
   const theirs = sideOf(other);
+
   return mine === undefined || theirs === undefined || sameSide(mine, theirs);
 }
 
@@ -124,6 +125,7 @@ function sameChosen(one: StepShown, other: StepShown): boolean {
 export function sameSubStep(one: StepShown, other: StepShown): boolean {
   const mine = subStepOf(one);
   const theirs = subStepOf(other);
+
   return mine === undefined || theirs === undefined || mine === theirs;
 }
 
@@ -137,6 +139,7 @@ export function stoodAlike(one: StepShown, other: StepShown): boolean {
   // A room turned takes the step standing in place, with its sub-step or without.
   if (subStepOf(one) !== subStepOf(other)) return false;
   const panelTab = sameTabOrNone(one.panel?.tab, other.panel?.tab);
+
   return panelTab && sameTabOrNone(one.column, other.column) && sameSide(one.side, other.side);
 }
 
@@ -149,9 +152,11 @@ export function stoodAlike(one: StepShown, other: StepShown): boolean {
  */
 export function stepWithin(standing: StepShown, next: StepShown, led: StepLed): StepWithin {
   if (!sameSubStep(standing, next)) return STEP_WITHIN.VISIT;
+
   if (sameStepShown(standing, next)) return STEP_WITHIN.SAME;
   const chose = led.pressed && !sameChosen(standing, next);
   const opened = led.opened && !sameShownSide(standing, next);
+
   return chose || opened ? STEP_WITHIN.VISIT : STEP_WITHIN.SETTLE;
 }
 
@@ -188,6 +193,7 @@ export function taskOfAt(
   const home = workspaceOfSlug(workspaces, at.workspace);
   // Note that an address naming none of the reader's workspaces, once they are read, names none of their tasks by number either.
   const named = home !== undefined || workspaces.length === 0;
+
   const found = tasks.find(
     (task) =>
       task.id === at.task ||
@@ -195,7 +201,9 @@ export function taskOfAt(
         taskLinkStep(task) === at.task &&
         (home === undefined || task.workspaceId === home.id)),
   );
+
   if (found !== undefined) return found.id;
+
   return NUMBER_STEP.test(at.task) ? undefined : at.task;
 }
 
@@ -214,11 +222,16 @@ export function taskAtOf(
   standingIn: string | undefined,
 ): TaskAt | undefined {
   const task = tasks.find((each) => each.id === taskId);
+
   // Note that an id the window holds no task for that reads as a number has no address of its own, as it would name the task of that number.
   if (task === undefined && NUMBER_STEP.test(taskId)) return undefined;
+
   const home =
     task === undefined ? listed : workspaces.find((each) => each.id === task.workspaceId);
+
   const workspace = home?.slug ?? home?.id ?? task?.workspaceId ?? standingIn;
+
   if (workspace === undefined) return undefined;
+
   return { workspace, task: task === undefined ? taskId : taskLinkStep(task) };
 }

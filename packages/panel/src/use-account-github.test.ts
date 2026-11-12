@@ -41,10 +41,12 @@ beforeEach(() => {
   fakeActPort({
     [ACT_KIND.GITHUB_CONNECT]: () => {
       asked.push(ACT_KIND.GITHUB_CONNECT);
+
       return Promise.resolve(undefined);
     },
     [ACT_KIND.GITHUB_DISCONNECT]: () => {
       asked.push(ACT_KIND.GITHUB_DISCONNECT);
+
       return Promise.reject(refusedOnPort(REFUSAL));
     },
   });
@@ -65,6 +67,7 @@ async function settle(): Promise<void> {
 
 function Probe(): null {
   control = useAccountGitHub();
+
   return null;
 }
 
@@ -88,6 +91,7 @@ async function mount(github: GitHubConnection, fixtureMode = false): Promise<Git
     );
   });
   await settle();
+
   return control ?? assert.fail("the hook stands");
 }
 

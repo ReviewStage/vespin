@@ -51,6 +51,7 @@ const NUMBER = 7;
 const TOKEN = Redacted.make("ghs_fixture_installation_token");
 const PULL = `/repos/acme/relay/pulls/${NUMBER}`;
 const COMMENTS = `/repos/acme/relay/issues/${NUMBER}/comments`;
+
 /** The pull request's head as its checks are asked for: the ref GitHub keeps on it, one segment. */
 const COMMIT = `/repos/acme/relay/commits/refs%2Fpull%2F${NUMBER}%2Fhead`;
 const PAGE = `https://github.com/acme/relay/pull/${NUMBER}`;
@@ -68,6 +69,7 @@ function githubUser(id: number, login: string) {
 const CHARLES = githubUser(1001, "charlespan");
 const PRIYA = githubUser(1002, "priyan");
 const LUKE = githubUser(GITHUB_FIXTURE_BOT.id, GITHUB_FIXTURE_BOT.login);
+
 /** Another App's bot, which GitHub draws by its App's logo, at its App's address. */
 const DEVIN = {
   ...githubUser(1004, "devin-ai-integration[bot]"),
@@ -133,6 +135,7 @@ function deploymentsAnswer(
   if (deployments === undefined || deployments instanceof Response) return deployments;
   const first = Number(/deployments\(first: (\d+)/u.exec(query)?.[1] ?? "0");
   const nodes = deployments.slice(0, first);
+
   return {
     data: {
       repository: {
@@ -166,6 +169,7 @@ function repository(answers: {
 }): RepositoryScript {
   return (sent) => {
     const { pathname } = new URL(sent.url);
+
     if (
       pathname === "/graphql" &&
       sent.method === "POST" &&
@@ -173,14 +177,17 @@ function repository(answers: {
     ) {
       const asked: { variables: { owner: string; name: string; after: string | null } } =
         JSON.parse(sent.body);
+
       // Note that the stack is read of the agent's repository alone.
       assert.deepEqual([asked.variables.owner, asked.variables.name], ["acme", "relay"]);
       const open = answers.open ?? [];
+
       if (open instanceof Response) return open;
       // GitHub pages the listing a hundred to a page, the cursor here the place the next one starts.
       const from = Number(asked.variables.after ?? "0");
       const nodes = open.slice(from, from + 100);
       const more = from + 100 < open.length;
+
       return Response.json({
         data: {
           repository: {
@@ -192,34 +199,47 @@ function repository(answers: {
         },
       });
     }
+
     if (pathname === "/graphql" && sent.method === "POST") {
       const asked: { query: string; variables?: object } = JSON.parse(sent.body);
       // Note that the threads and the deployments are each asked of this one pull request by name and number.
       assert.deepEqual(asked.variables, { owner: "acme", name: "relay", number: NUMBER });
+
       const answer = asked.query.startsWith("query Deployments")
         ? deploymentsAnswer(answers.deployments, asked.query)
         : answers.graphql;
+
       if (answer !== undefined) {
         return answer instanceof Response ? answer : Response.json(answer);
       }
     }
+
     // Note that the bodies are GitHub's to render, so a read of one that does not ask for its rendering is refused.
     const rendered = sent.headers.get("accept") === "application/vnd.github.full+json";
+
     if ([PULL, COMMENTS, `${PULL}/reviews`].includes(pathname) && !rendered) {
       return Response.json({ message: "Unsupported Media Type" }, { status: 415 });
     }
+
     if (pathname === PULL && answers.pull !== undefined) return Response.json(answers.pull);
+
     if (pathname === `${COMMIT}/check-runs`) {
       const runs = answers.checkRuns ?? [];
+
       return runs instanceof Response ? runs : Response.json({ check_runs: runs });
     }
+
     if (pathname === `${COMMIT}/status`) return Response.json({ statuses: answers.statuses ?? [] });
+
     if (pathname === COMMENTS) {
       // GitHub pages a listing a hundred to a page.
       const page = Number(new URL(sent.url).searchParams.get("page") ?? "1");
+
       return Response.json((answers.comments ?? []).slice((page - 1) * 100, page * 100));
     }
+
     if (pathname === `${PULL}/reviews`) return Response.json(answers.reviews ?? []);
+
     return undefined;
   };
 }
@@ -241,6 +261,7 @@ function openPull(number: number, head: string, base: string) {
 const agentPublishing = (userId: string, branch: string, number: number) =>
   Effect.gen(function* () {
     const task = yield* startTask(userId, { name: "Invites", repository: REPOSITORY });
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: `start-${randomUUID()}`,
@@ -251,6 +272,7 @@ const agentPublishing = (userId: string, branch: string, number: number) =>
       repository: REPOSITORY,
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     assert.ok(Option.isSome(started));
     const { agent } = started.value;
     yield* updateAgentBranch(userId, agent.id, branch);
@@ -270,6 +292,7 @@ const agentPublishing = (userId: string, branch: string, number: number) =>
       REPOSITORY,
       branch,
     );
+
     return agent;
   });
 
@@ -286,6 +309,7 @@ const linkedAccount = (githubId: number) =>
       userId,
       updatedAt: new Date(0),
     });
+
     return userId;
   });
 
@@ -322,6 +346,7 @@ const overviewOf = (organizationId: string, script: RepositoryScript) =>
       ],
       { concurrency: "unbounded" },
     );
+
     return pullRequest === undefined ? undefined : { ...pullRequest, checks, ...conversation };
   }).pipe(answering(script));
 
@@ -406,6 +431,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
           avatarUrl: CHARLES.avatar_url,
           userId: charles,
         };
+
         const asPriya = { login: PRIYA.login, bot: false, avatarUrl: PRIYA.avatar_url };
         assert.ok(overview !== undefined);
         assert.equal(overview.state, PULL_REQUEST_STATE.OPEN);
@@ -509,6 +535,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
             }),
           ),
         );
+
         assert.deepEqual(
           checks.map(({ name, avatarUrl }) => ({ name, avatarUrl })),
           [
@@ -525,6 +552,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
     () =>
       Effect.gen(function* () {
         let asked = 0;
+
         const script = repository({
           deployments: [
             deployment("Preview – luke-web", "SUCCESS", "https://web-git-x.vercel.app"),
@@ -535,12 +563,15 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
             deployment("queued", null, null),
           ],
         });
+
         const deployments = yield* pullRequestDeployments(TOKEN, REPOSITORY, NUMBER).pipe(
           answering((sent) => {
             asked += 1;
+
             return script(sent);
           }),
         );
+
         assert.deepEqual(deployments, [
           {
             environment: "Preview – luke-web",
@@ -584,6 +615,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
         const redeployed = Array.from({ length: 30 }, () =>
           deployment("Preview", "INACTIVE", "https://preview.vercel.app"),
         );
+
         const deployments = yield* pullRequestDeployments(TOKEN, REPOSITORY, NUMBER).pipe(
           answering(
             repository({
@@ -591,6 +623,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
             }),
           ),
         );
+
         assert.deepEqual(
           deployments.map(({ environment }) => environment),
           ["Preview", "staging"],
@@ -612,10 +645,13 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
             }),
           ),
         );
+
         assert.deepEqual(refused, []);
+
         const failed = yield* pullRequestDeployments(TOKEN, REPOSITORY, NUMBER).pipe(
           answering(repository({ deployments: Response.json({}, { status: 502 }) })),
         );
+
         assert.deepEqual(failed, []);
       }),
   );
@@ -626,6 +662,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
       Effect.gen(function* () {
         const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
         const long = `<p>${"x".repeat(40_000)}</p>`;
+
         const overview = yield* overviewOf(
           workspace,
           repository({
@@ -682,6 +719,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
             ),
           ),
         );
+
         assert.deepEqual([refused._tag, refused.status], ["GitHubUnavailable", 403]);
       }),
   );
@@ -689,6 +727,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
   it.effect("the newest hundred entries are kept, oldest first, and the earlier ones counted", () =>
     Effect.gen(function* () {
       const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
+
       const many = yield* overviewOf(
         workspace,
         repository({
@@ -702,6 +741,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
           })),
         }),
       );
+
       assert.ok(many !== undefined);
       assert.equal(many.conversation.length, OVERVIEW_BOUNDS.MAX_ENTRIES);
       assert.equal(many.conversation[0]?.url, `${PAGE}#issuecomment-5`, "the newest are kept");
@@ -714,9 +754,11 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
     () =>
       Effect.gen(function* () {
         const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
+
         const passing = Array.from({ length: OVERVIEW_BOUNDS.MAX_CHECKS }, (_, at) =>
           checkRun(`test ${at}`, "completed", "success"),
         );
+
         const overview = yield* overviewOf(
           workspace,
           repository({
@@ -751,8 +793,10 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
       Effect.gen(function* () {
         const charles = yield* linkedAccount(CHARLES.id);
         const workspace = yield* openWorkspace(charles);
+
         const hunk =
           "@@ -10,3 +10,4 @@ export function send()\n   const a = 1;\n-  twice();\n+  once();\n+  done();";
+
         /** A comment as GitHub's GraphQL answers one. */
         /** An author as GitHub's GraphQL names one. */
         interface Author {
@@ -761,6 +805,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
           readonly avatarUrl: string;
           readonly databaseId: number;
         }
+
         const comment = (
           author: Author | null,
           at: string,
@@ -775,24 +820,28 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
           diffHunk: hunk,
           pullRequestReview: review,
         });
+
         const asPriyaNode = {
           __typename: "User",
           login: PRIYA.login,
           avatarUrl: PRIYA.avatar_url,
           databaseId: PRIYA.id,
         };
+
         const asCharlesNode = {
           __typename: "User",
           login: CHARLES.login,
           avatarUrl: CHARLES.avatar_url,
           databaseId: CHARLES.id,
         };
+
         const reviewer = {
           __typename: "Bot",
           login: "reviewer",
           avatarUrl: "https://avatars.githubusercontent.com/in/811515?v=4",
           databaseId: 4242,
         };
+
         const overview = yield* overviewOf(
           workspace,
           repository({
@@ -896,12 +945,14 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
 
         assert.ok(overview !== undefined);
         const asPriya = { login: PRIYA.login, bot: false, avatarUrl: PRIYA.avatar_url };
+
         const asCharles = {
           login: CHARLES.login,
           bot: false,
           avatarUrl: CHARLES.avatar_url,
           userId: charles,
         };
+
         assert.deepEqual(overview.conversation, [
           {
             kind: CONVERSATION_ENTRY.REVIEW,
@@ -997,17 +1048,20 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
       Effect.gen(function* () {
         const charles = yield* linkedAccount(CHARLES.id);
         const workspace = yield* openWorkspace(charles);
+
         const asNode = (who: typeof CHARLES) => ({
           __typename: who.type,
           login: who.login.replace("[bot]", ""),
           avatarUrl: who.avatar_url,
           databaseId: who.id,
         });
+
         /** A reaction as GitHub's GraphQL answers one, naming those given. */
         const group = (content: string, totalCount: number, nodes?: readonly object[]) => ({
           content,
           reactors: nodes === undefined ? { totalCount } : { totalCount, nodes },
         });
+
         const overview = yield* overviewOf(
           workspace,
           repository({
@@ -1097,12 +1151,14 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
         );
 
         assert.ok(overview !== undefined);
+
         const asCharles = {
           login: CHARLES.login,
           bot: false,
           avatarUrl: CHARLES.avatar_url,
           userId: charles,
         };
+
         const asPriya = { login: PRIYA.login, bot: false, avatarUrl: PRIYA.avatar_url };
         assert.deepEqual(overview.descriptionReactions, [
           { content: REACTION.HEART, count: 2, by: [asCharles, asPriya] },
@@ -1141,14 +1197,17 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
         const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
         const member = Redacted.make("ghu_member_fixture");
         const bearers: string[] = [];
+
         const group = (content: string, totalCount: number) => ({
           content,
           reactors: { totalCount, nodes: [] },
         });
+
         const viewed = (content: string, viewerHasReacted: boolean) => ({
           content,
           viewerHasReacted,
         });
+
         const script = repository({
           pull: pull(),
           comments: [
@@ -1174,10 +1233,12 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
             },
           ],
         });
+
         const answered: RepositoryScript = (sent) => {
           if (new URL(sent.url).pathname !== "/graphql") return script(sent);
           bearers.push(sent.headers.get("authorization") ?? "");
           const viewer = JSON.parse(sent.body).query.includes("viewerHasReacted");
+
           return Response.json({
             data: {
               repository: {
@@ -1291,6 +1352,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
     () =>
       Effect.gen(function* () {
         const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
+
         const script = repository({
           pull: pull(),
           graphql: {
@@ -1305,12 +1367,14 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
             },
           },
         });
+
         const reading = yield* Effect.forkChild(
           Effect.flatMap(
             pullRequestConversation(TOKEN, REPOSITORY, { number: NUMBER, url: PAGE }, Effect.never),
             (read) => namedOverviewConversation({ organizationId: workspace }, NUMBER, read),
           ).pipe(answering(script)),
         );
+
         yield* TestClock.adjust(Duration.seconds(1));
         const conversation = yield* Fiber.join(reading);
         assert.deepEqual(conversation.descriptionReactions, [
@@ -1322,6 +1386,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
   it.effect("review threads GitHub will not answer leave the rest of the overview standing", () =>
     Effect.gen(function* () {
       const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
+
       for (const graphql of [
         Response.json({ message: "Resource not accessible" }, { status: 403 }),
         { data: null, errors: [{ message: "Something went wrong" }] },
@@ -1343,6 +1408,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
             graphql,
           }),
         );
+
         assert.ok(overview !== undefined);
         assert.deepEqual(
           overview.conversation.map((entry) => [entry.state, entry.threads]),
@@ -1357,6 +1423,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
     () =>
       Effect.gen(function* () {
         const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
+
         const script = repository({
           checkRuns: [checkRun("lint", "completed", "failure")],
           comments: [
@@ -1369,6 +1436,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
             },
           ],
         });
+
         const failing: RepositoryScript = (sent) =>
           new URL(sent.url).pathname === PULL
             ? Response.json({ message: "Service Unavailable" }, { status: 503 })
@@ -1377,6 +1445,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
         const pullRequest = yield* Effect.exit(
           pullRequestPartOf(workspace).pipe(answering(failing)),
         );
+
         const checks = yield* pullRequestChecks(TOKEN, REPOSITORY, NUMBER).pipe(answering(failing));
         const conversation = yield* conversationPartOf(workspace).pipe(answering(failing));
 
@@ -1479,14 +1548,17 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
     () =>
       Effect.gen(function* () {
         const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
+
         const filler = Array.from({ length: 120 }, (_, at) =>
           openPull(100 + at, `luke/other-${at}`, "main"),
         );
+
         const stacked = [
           openPull(9, "luke/invite-copy", "luke/invite-once"),
           openPull(NUMBER, "luke/invite-once", "luke/expiry-job"),
           openPull(5, "luke/expiry-job", "main"),
         ];
+
         const pulled = pull({ base: { ref: "luke/expiry-job" } });
 
         const paged = yield* pullRequestPartOf(workspace).pipe(
@@ -1501,6 +1573,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
             }),
           ),
         );
+
         const forked = yield* pullRequestPartOf(workspace).pipe(
           answering(
             repository({
@@ -1529,6 +1602,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
       Effect.gen(function* () {
         const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
         const pulled = pull();
+
         const own = yield* pullRequestPartOf(workspace, false).pipe(
           answering(
             repository({
@@ -1544,6 +1618,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
             }),
           ),
         );
+
         const forked = yield* pullRequestPartOf(workspace, false).pipe(
           answering(
             repository({
@@ -1580,6 +1655,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
             }),
           ),
         );
+
         const refused = yield* pullRequestPartOf(workspace).pipe(
           answering(
             repository({
@@ -1588,6 +1664,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
             }),
           ),
         );
+
         const unasked = yield* pullRequestPartOf(workspace, false).pipe(
           answering(repository({ pull: pull(), open })),
         );

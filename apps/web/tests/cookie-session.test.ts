@@ -59,6 +59,7 @@ const { OWN_ORIGIN } = vi.hoisted(() => {
   const own = "https://app.test";
   vi.stubEnv("VERCEL_ENV", "production");
   vi.stubEnv("BETTER_AUTH_URL", own);
+
   return { OWN_ORIGIN: own };
 });
 
@@ -101,8 +102,10 @@ const openSignedIn = Effect.gen(function* () {
   yield* Database.use((db) =>
     db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
   ).pipe(Effect.provide(plugin.database));
+
   const resolveUserId: UserIdResolver = (request) =>
     requestUserId(request, () => Effect.succeed(undefined), plugin.resolveSessionUserId);
+
   return { plugin, userId, cookie: yield* plugin.sessionCookieOf(userId), resolveUserId };
 });
 
@@ -118,7 +121,9 @@ function accountRoute(resolveUserId: UserIdResolver) {
             const incoming = yield* HttpServerRequest.HttpServerRequest;
             const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
             const account = yield* resolvedAccount(resolveUserId, request);
+
             if (Option.isNone(account)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+
             return hostedJsonResponse(HOSTED_HTTP_STATUS.OK, { userId: account.value });
           }),
         ),
@@ -134,6 +139,7 @@ const answered = (route: ReturnType<typeof routeFromHttpRouter>, request: Reques
     const response = await route.fetch(request);
     // SAFETY: every route here answers JSON; the test compares it as the wire value it is.
     const body = (await response.json()) as WireBoundaryInput;
+
     return { status: response.status, body };
   });
 
@@ -171,6 +177,7 @@ it.effect(
     Effect.gen(function* () {
       const { cookie, resolveUserId } = yield* openSignedIn;
       const route = accountRoute(resolveUserId);
+
       const refused = {
         status: HOSTED_HTTP_STATUS.FORBIDDEN,
         body: { error: HOSTED_API_ERROR.NOT_PERMITTED },
@@ -183,6 +190,7 @@ it.effect(
           method,
         );
       }
+
       assert.deepEqual(yield* answered(route, sent("POST", { cookie })), refused);
       assert.deepEqual(
         yield* answered(route, sent("POST", { cookie, "sec-fetch-site": "cross-site" })),
@@ -197,6 +205,7 @@ it.effect(
     Effect.gen(function* () {
       const { cookie, resolveUserId } = yield* openSignedIn;
       const route = accountRoute(resolveUserId);
+
       const unauthenticated = {
         status: HOSTED_HTTP_STATUS.UNAUTHORIZED,
         body: { error: HOSTED_API_ERROR.INVALID_TOKEN },
@@ -226,6 +235,7 @@ it.effect("the Mac's commands route refuses a session cookie every account route
           ReturnType<typeof auth.api.getSession>
         >,
     );
+
     const asked = () =>
       new Request(new URL(HOSTED_SERVICE_PATH.MAC_COMMANDS, OWN_ORIGIN), { headers: { cookie } });
 
@@ -245,16 +255,21 @@ it.effect(
         status: HOSTED_HTTP_STATUS.FORBIDDEN,
         body: { error: HOSTED_API_ERROR.NOT_PERMITTED },
       };
+
       const writes = hostedProcedureRoutes().filter(
         (procedure) => procedure.method !== HTTP_METHOD.GET,
       );
+
       assert.ok(writes.length > 0);
+
       for (const procedure of writes) {
         const path = procedure.path.replaceAll(/\{\+?[^{}]+\}/gu, PATH_PARAMETER_ID);
+
         const request = new Request(new URL(path, OWN_ORIGIN), {
           method: procedure.method,
           headers: { cookie: UNHELD_COOKIE, origin: FOREIGN_ORIGIN },
         });
+
         assert.deepEqual(yield* answered(deployedOrpc, request), refused, procedure.key.join("."));
       }
     }),
@@ -272,11 +287,13 @@ it.effect(
             headers,
           }),
         );
+
       // The procedure's own caller check, which reaches for an account store this suite never dials, so it answers unavailable rather than the guard's refusal.
       const callerChecked = {
         status: HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
         body: { error: HOSTED_API_ERROR.UNAVAILABLE },
       };
+
       const refused = {
         status: HOSTED_HTTP_STATUS.FORBIDDEN,
         body: { error: HOSTED_API_ERROR.NOT_PERMITTED },

@@ -61,7 +61,7 @@ import { SwitchRow } from "./switch-row.js";
  * choice is drawn as the act is sent (`ACT_KIND.WORKSPACE_EXPERIMENT_SET`)
  * and stands once the workspace's live row agrees.
  *
- * The second group is the account's own, Skills and Bring your own host,
+ * The second group is the account's own, Skills,
  * which change the app only for the reader, in every workspace: a row's
  * switch writes the account's choice at once, as every Settings switch
  * writes, and a write the service refused puts it back and is said in a
@@ -130,6 +130,7 @@ const FLIP_WORDS = {
 /** Whom a flip reaches, by how many members the workspace holds where the list says. */
 function reachWords(workspace: Pick<Workspace, "name" | "memberCount">): string {
   const { name, memberCount } = workspace;
+
   return memberCount === undefined || memberCount < 2
     ? `This changes ${PRODUCT_NAME} for everyone in ${name} and their agents.`
     : `This changes ${PRODUCT_NAME} for all ${memberCount} members of ${name} and their agents.`;
@@ -143,6 +144,7 @@ function flipQuestion(
 ): DialogQuestion {
   const changes = FLIP_WORDS[entry.key][on ? "on" : "off"](workspace.name);
   const kept = on ? WORDS.KEPT_WHEN_OFF : WORDS.NOTHING_DELETED;
+
   return {
     title: `Turn ${on ? "on" : "off"} ${entry.name} for everyone in ${workspace.name}?`,
     body: `${reachWords(workspace)} ${changes} ${kept}`,
@@ -161,6 +163,7 @@ const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 /** One experiment's detail: what turning it on brings, and the way to say how it went. */
 function ExperimentDetail({ entry }: { entry: ExperimentEntry }): React.JSX.Element {
   const openFeedback = useOpenFeedback();
+
   return (
     <>
       {`${entry.detail} `}
@@ -175,11 +178,14 @@ function ExperimentDetail({ entry }: { entry: ExperimentEntry }): React.JSX.Elem
 function ChangedLine({ choice }: { choice: WorkspaceExperimentChoice }): React.JSX.Element {
   const now = useMinute();
   const { changedBy } = choice;
+
   const person = usePerson(
     changedBy === null ? undefined : { userId: changedBy.id, name: changedBy.name },
   );
+
   const turned = choice.on ? "Turned on" : "Turned off";
   const day = dateOfText(choice.changedAt, now);
+
   return (
     <SettingsRowStateLine block wrap>
       {changedBy === null ? (
@@ -212,6 +218,7 @@ function WorkspaceExperimentRow({
   // The state a flip asked for, which its question names until another flip asks again.
   const [asked, setAsked] = useState<boolean | undefined>(undefined);
   const mutation = useMutation(actMutation(ACT_KIND.WORKSPACE_EXPERIMENT_SET));
+
   const act = useConfirmAct(mutation, {
     send: () =>
       mutation.mutateAsync({
@@ -222,11 +229,13 @@ function WorkspaceExperimentRow({
     answered: () => ACCEPTED,
     failed: (error) => ({ status: ACTION_RESULT_STATUS.REJECTED, reason: error.message }),
   });
+
   const confirm = useConfirmDialog(
     { subject: asked !== undefined, surfaceOpen: true },
     act,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_EXPERIMENT),
   );
+
   return (
     <>
       <SwitchRow
@@ -267,6 +276,7 @@ function AccountExperimentRow({
     ...actMutation(ACT_KIND.EXPERIMENT_SET),
     onSettled: refusalToast(actionRefused),
   });
+
   return (
     <SwitchRow
       label={entry.name}
@@ -315,6 +325,7 @@ export function ExperimentalPage({
       </Text>
     );
   }
+
   if (entries.length === 0) {
     return (
       <EmptyState icon={<FlaskConicalIcon />} replayUnmasked>
@@ -322,8 +333,10 @@ export function ExperimentalPage({
       </EmptyState>
     );
   }
+
   const workspaceEntries = entries.filter(isWorkspaceEntry);
   const accountEntries = entries.filter((entry) => !isWorkspaceExperiment(entry.key));
+
   return (
     <>
       {workspace === undefined || workspaceEntries.length === 0 ? null : (

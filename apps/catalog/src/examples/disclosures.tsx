@@ -36,6 +36,7 @@ import { CatalogSection } from "../section";
 /** A fold whose head ends with a ⋯ beside its summary, which counts its presses rather than folding the row. */
 function ActionDisclosure(): React.JSX.Element {
   const [presses, setPresses] = useState(0);
+
   return (
     <Disclosure
       actions={
@@ -56,6 +57,7 @@ function ActionDisclosure(): React.JSX.Element {
 function RowDisclosure(): React.JSX.Element {
   const [open, setOpen] = useState(true);
   const [copies, setCopies] = useState(0);
+
   return (
     <DisclosureFrame
       fill={DISCLOSURE_FILL.ACTIONS}
@@ -99,6 +101,7 @@ function ChipDisclosure(): React.JSX.Element {
 /** A fold whose open state its holder keeps, as a tab keeps which of its notes it folded. */
 function HeldDisclosure(): React.JSX.Element {
   const [open, setOpen] = useState(true);
+
   return (
     <Disclosure open={open} onOpenChange={setOpen}>
       <DisclosureSummary>

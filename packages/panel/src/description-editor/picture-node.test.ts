@@ -3,9 +3,9 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "vitest";
 import type {
-  PictureTaken,
   DescriptionEditorHandle,
   DescriptionEditorPictures,
+  PictureTaken,
 } from "./contract.js";
 import { mountDescriptionEditor } from "./description-editor.js";
 
@@ -34,12 +34,15 @@ afterEach(() => {
 /** The editor on `TEXT`, its caret at the end of the Approach section, with the panel's pictures stood in for. */
 function opened(markdown = TEXT) {
   const taken: PictureTaken[] = [];
+
   const pictures: DescriptionEditorPictures = {
     draw: () => ({ redraw: () => undefined, undraw: () => undefined }),
     take: (each) => taken.push(...each),
     copies: (src) => src.includes(OTHER_TASK_ID),
   };
+
   const host = document.body.appendChild(document.createElement("div"));
+
   const handle = mountDescriptionEditor(host, {
     markdown,
     placement: { section: 0 },
@@ -51,7 +54,9 @@ function opened(markdown = TEXT) {
     onLeaveUp: () => undefined,
     pictures,
   });
+
   handles.push(handle);
+
   return { handle, taken, host };
 }
 

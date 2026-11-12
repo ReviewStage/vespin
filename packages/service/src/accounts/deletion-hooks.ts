@@ -14,9 +14,7 @@
  * have caught, so Better Auth answers it as the failure it is. An after step
  * runs once the row is already gone, so whatever escapes it, a defect
  * included, is logged rather than rejected: a rejection there would answer a
- * delete that happened as one that failed. What would end
- * this file's row among the permanent adaptors is a Better Auth that takes
- * an Effect hook.
+ * delete that happened as one that failed.
  */
 
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -54,9 +52,12 @@ export function withDeletionServices<A>(
 
 async function run<A, E>(effect: Effect.Effect<A, E, DeletionServices>): Promise<A> {
   const services = handed.getStore();
+
   if (services === undefined) throw new Error("A deletion's services were not handed to it.");
   const exit = await Effect.runPromiseExitWith(services)(effect);
+
   if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
+
   return exit.value;
 }
 

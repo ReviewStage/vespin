@@ -25,8 +25,9 @@ import {
   type InferSchemaInput,
   type InferSchemaOutput,
   ProcedureContract,
+  type RouterContract,
 } from "@orpc/contract";
-import { Schema } from "effect";
+import { Predicate, Schema } from "effect";
 import { ANY_PROCEDURE_REFUSALS } from "./contract/base.js";
 import { HOSTED_REFUSAL_DATA, refusalCarriesData } from "./contract/errors.js";
 import { procedureOutputWire } from "./contract/output-wire.js";
@@ -152,26 +153,32 @@ export function spelledFailure(
   reading: HostedReading<HostedRenames, boolean>,
 ): string | undefined {
   const renamed = reading.as?.[refusal];
+
   if (renamed !== undefined) return renamed;
+
   return ANY_PROCEDURE_REFUSALS.some((any) => any === refusal) ? undefined : refusal;
 }
 
 /** Every procedure of a group, the group's nested groups' among them. */
-function proceduresIn(group: unknown): readonly AnyProcedureContract[] {
+function proceduresIn(group: RouterContract): readonly AnyProcedureContract[] {
   if (group instanceof ProcedureContract) return [group];
-  if (typeof group !== "object" || group === null) return [];
+
+  if (!Predicate.isObjectOrArray(group)) return [];
+
   return Object.values(group).flatMap(proceduresIn);
 }
 
 /** The refusals the procedures declare, each once. */
 function declaredBy(procedures: readonly AnyProcedureContract[]): readonly HostedApiError[] {
   const declared = new Set<HostedApiError>();
+
   for (const procedure of procedures) {
     for (const refusal of Object.keys(procedure["~orpc"].errorMap)) {
       // SAFETY: every hosted procedure declares its refusals from the one map, keyed by `HostedApiError`.
       declared.add(refusal as HostedApiError);
     }
   }
+
   return [...declared];
 }
 
@@ -182,9 +189,12 @@ function failuresOf(
 ): readonly string[] {
   const spelled = declaredBy(procedures).flatMap((refusal) => {
     const failure = spelledFailure(refusal, reading);
+
     return failure === undefined ? [] : [failure];
   });
+
   const live = reading.live === true ? [LIVE_SIGNED_OUT.failure] : [];
+
   return [...new Set([...spelled, ...live, HOSTED_CALL_FAILURE.UNANSWERED])];
 }
 
@@ -194,7 +204,7 @@ function failuresOf(
  * constant's name (`not-found` is `NOT_FOUND`), as an `as const` object.
  */
 export function failureSetOf<
-  Group,
+  Group extends RouterContract,
   const As extends HostedRenames = NoRenames,
   Live extends boolean = false,
 >(
@@ -204,6 +214,7 @@ export function failureSetOf<
   const entries = failuresOf(proceduresIn(group), reading).map(
     (failure) => [failure.toUpperCase().replaceAll("-", "_"), failure] as const,
   );
+
   // SAFETY: each entry is a failure the group's refusals spell, under its constant's name, as the type spells them.
   return Object.fromEntries(entries) as HostedFailureSet<FailureOf<DeclaredIn<Group>, As, Live>>;
 }
@@ -211,29 +222,39 @@ export function failureSetOf<
 /**
  * The schema of a procedure's answer as it crosses to a window: its output
  * as the wire schema reads it, or a failure the domain spells, with the
- * fields its refusal carries and the facts of what failed beneath it.
+ * fields its refusal carries and the facts of what failed beneath it. Note
+ * that the type is the overload's, because the union built below is the
+ * output and the failures the procedure's declaration spells, as
+ * `HostedAnswerView` spells them, which no value can be checked against
+ * while the procedure is generic.
  */
 export function answerView<
   Procedure extends AnyProcedureContract,
   const As extends HostedRenames = NoRenames,
   Live extends boolean = false,
->(
-  procedure: Procedure,
-  reading: HostedReading<As, Live> = {},
-): HostedAnswerView<Procedure, As, Live> {
+>(procedure: Procedure, reading?: HostedReading<As, Live>): HostedAnswerView<Procedure, As, Live>;
+
+export function answerView(
+  procedure: AnyProcedureContract,
+  reading: HostedReading<HostedRenames, boolean> = {},
+): Schema.Top {
   const output = procedureOutputWire(procedure);
+
   if (output === undefined) throw new TypeError("A hosted procedure's output is a wire schema");
+
   const named = declaredBy([procedure]).filter(
     (refusal) => spelledFailure(refusal, reading) !== undefined,
   );
+
   const dataFields = named.flatMap((refusal) =>
     refusalCarriesData(refusal) ? Object.entries(HOSTED_REFUSAL_DATA[refusal].fields) : [],
   );
+
   const failed = Schema.Struct({
     failure: Schema.Literals(failuresOf([procedure], reading)),
     cause: Schema.optionalKey(failureFactsSchema),
     ...Object.fromEntries(dataFields),
   });
-  // SAFETY: the union is the output and the failures the procedure's declaration spells, as the type spells them.
-  return Schema.Union([output, failed]) as unknown as HostedAnswerView<Procedure, As, Live>;
+
+  return Schema.Union([output, failed]);
 }

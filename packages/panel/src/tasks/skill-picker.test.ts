@@ -31,6 +31,7 @@ const SOURCE = () => Promise.resolve(READ);
 /** The list drawn as a composer draws it, over a repository that keeps one skill unless `source` reads others. */
 async function mounted(source: SkillSource = SOURCE) {
   let latest: SkillPicker | undefined;
+
   function Picker() {
     const room = useRef<HTMLDivElement>(null);
     const editor = useRef(undefined);
@@ -41,12 +42,15 @@ async function mounted(source: SkillSource = SOURCE) {
       source,
       onOpen: undefined,
     });
+
     return createElement("div", { ref: room }, latest.menu);
   }
+
   const page = document.createElement("div");
   document.body.append(page);
   root = createRoot(page);
   act(() => root?.render(createElement(Picker)));
+
   return {
     page,
     close: () => act(() => latest?.onTrigger(undefined)),
@@ -73,11 +77,14 @@ test("another `/` opening the list, at the same place or another, draws the skil
       { name: "release", description: "Cut it", source: TASK_SKILL_SOURCE.REPOSITORY },
     ],
   };
+
   const reads: ((read: SkillsRead) => void)[] = [];
+
   const source: SkillSource = () =>
     new Promise((resolve) => {
       reads.push(resolve);
     });
+
   const { page, close, type } = await mounted(source);
   const offered = () => [...page.querySelectorAll("[role='option']")].map((row) => row.textContent);
 

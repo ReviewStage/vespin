@@ -128,8 +128,11 @@ function header(response: HttpClientResponse.HttpClientResponse, name: string): 
 /** The identity GitHub limits the request under: the App, nobody, or a member's own token by its digest alone. */
 function identityOf(request: HttpClientRequest.HttpClientRequest): string {
   const authorization = request.headers.authorization;
+
   if (authorization === undefined) return IDENTITY.ANONYMOUS;
+
   if (APP_BEARERS.test(authorization)) return IDENTITY.APP;
+
   return createHash("sha256").update(authorization).digest("hex");
 }
 
@@ -154,19 +157,26 @@ const refusalOf = Effect.fnUntraced(function* (
   now: number,
 ) {
   const status = response.status;
+
   if (status !== RATE_LIMIT_STATUS.FORBIDDEN && status !== RATE_LIMIT_STATUS.TOO_MANY_REQUESTS) {
     return NOT_LIMITED;
   }
+
   const retryAfter = header(response, "retry-after")?.trim();
+
   if (retryAfter !== undefined && /^\d+$/u.test(retryAfter)) {
     return { limited: true, stated: Duration.seconds(Number(retryAfter)) };
   }
+
   const reset = Number(header(response, "x-ratelimit-reset"));
+
   if (header(response, "x-ratelimit-remaining") === "0" && Number.isFinite(reset)) {
     return { limited: true, stated: Duration.millis(Math.max(0, reset * 1000 - now)) };
   }
+
   if (status === RATE_LIMIT_STATUS.TOO_MANY_REQUESTS) return { limited: true, stated: undefined };
   const message = yield* response.text.pipe(Effect.orElseSucceed(() => ""));
+
   return RATE_LIMIT_WORDS.test(message) ? { limited: true, stated: undefined } : NOT_LIMITED;
 });
 
@@ -198,6 +208,7 @@ function backoffFor(strikes: number): Duration.Duration {
  */
 function holdFor(refusal: Refusal, strikes: number): Duration.Duration {
   const floor = strikes === 1 ? Duration.zero : backoffFor(strikes);
+
   return Duration.max(refusal.stated ?? GATE.MINIMUM_HOLD, floor);
 }
 
@@ -210,10 +221,12 @@ function holdFor(refusal: Refusal, strikes: number): Duration.Duration {
 function waitsFor(refusal: Refusal): [number, ...number[]] {
   const waits: [number, ...number[]] = [Duration.toMillis(holdFor(refusal, 1))];
   let strikes = 1;
+
   while (Duration.isLessThan(backoffFor(strikes), GATE.MAXIMUM_HOLD)) {
     strikes += 1;
     waits.push(Duration.toMillis(holdFor(refusal, strikes)));
   }
+
   return waits;
 }
 
@@ -227,6 +240,7 @@ function heldAnswer(
   left: number,
 ): HttpClientResponse.HttpClientResponse {
   const seconds = Math.max(1, Math.ceil(left / 1000));
+
   return HttpClientResponse.fromWeb(
     request,
     Response.json(
@@ -268,6 +282,7 @@ export const githubRateGate: Layer.Layer<
         for (const [kept, read] of shared) {
           if (now - read.readAt >= Duration.toMillis(GATE.SHARED_READ_FOR)) shared.delete(kept);
         }
+
         shared.set(identity, { readAt: now, hold });
       });
 
@@ -290,16 +305,20 @@ export const githubRateGate: Layer.Layer<
     /** The identity's shared hold as last read, read again once that read is past trusting. */
     const sharedHold = Effect.fnUntraced(function* (identity: string, now: number) {
       const read = shared.get(identity);
+
       if (read !== undefined && now - read.readAt < Duration.toMillis(GATE.SHARED_READ_FOR)) {
         return read.hold;
       }
+
       const stored = yield* unblocking(
         readGitHubRateHold(identity),
         identity,
         "github: shared rate hold unread; sending",
       );
+
       const hold = stored === undefined ? undefined : holdOf(stored);
       yield* remembered(identity, now, hold);
+
       return hold;
     });
 
@@ -316,13 +335,16 @@ export const githubRateGate: Layer.Layer<
       Effect.suspend(() => {
         const lane = lanes.get(identity) ?? { turn: Semaphore.makeUnsafe(1), waiting: 0 };
         lanes.set(identity, { ...lane, waiting: lane.waiting + 1 });
+
         return lane.turn
           .withPermits(1)(run)
           .pipe(
             Effect.ensuring(
               Effect.sync(() => {
                 const standing = lanes.get(identity);
+
                 if (standing === undefined) return;
+
                 if (standing.waiting <= 1) lanes.delete(identity);
                 else lanes.set(identity, { ...standing, waiting: standing.waiting - 1 });
               }),
@@ -338,8 +360,10 @@ export const githubRateGate: Layer.Layer<
     const inTurn = <A, E, R>(identity: string, write: Effect.Effect<A, E, R>) => {
       const waited = Effect.flatMap(Clock.currentTimeMillis, (now) => {
         const next = nextWrite.get(identity) ?? now;
+
         return next > now ? Effect.sleep(Duration.millis(next - now)) : Effect.void;
       });
+
       return inLane(writers, identity, Effect.andThen(waited, write));
     };
 
@@ -349,12 +373,14 @@ export const githubRateGate: Layer.Layer<
       for (const [kept, next] of nextWrite) {
         if (next <= now) nextWrite.delete(kept);
       }
+
       nextWrite.set(identity, now + Duration.toMillis(GATE.MUTATIVE_SPACING));
     };
 
     /** Lets go of the shared hold an answer came after, where the instance last read one now over. */
     const lifted = Effect.fnUntraced(function* (identity: string, now: number) {
       const hold = shared.get(identity)?.hold;
+
       if (hold === undefined || now < hold.until) return;
       yield* remembered(identity, now, undefined);
       yield* unblocking(
@@ -372,14 +398,17 @@ export const githubRateGate: Layer.Layer<
     ) {
       // Note that a hold lifted more than `GATE.MAXIMUM_HOLD` ago counts no strike, as the instance's own holds are let go then.
       const forgottenBefore = new Date(now - Duration.toMillis(GATE.MAXIMUM_HOLD));
+
       const stored = yield* unblocking(
         holdGitHubIdentity(identity, new Date(now), waitsFor(refusal), forgottenBefore),
         identity,
         "github: shared rate hold unwritten; holding this instance alone",
       );
+
       if (stored === undefined) return undefined;
       const hold = holdOf(stored);
       yield* remembered(identity, now, hold);
+
       return hold;
     });
 
@@ -392,22 +421,28 @@ export const githubRateGate: Layer.Layer<
       if (response.status < FIRST_REFUSAL_STATUS) {
         const now = yield* Clock.currentTimeMillis;
         const standing = holds.get(identity);
+
         if (standing === undefined || now >= standing.until) holds.delete(identity);
         yield* lifted(identity, now);
+
         return;
       }
+
       // Note that the hold standing is read only once the refusal is, because
       // reading its message waits on GitHub, and a longer hold another
       // refusal set meanwhile must not be written over.
       const refusal = yield* refusalOf(response, yield* Clock.currentTimeMillis);
+
       if (!refusal.limited) return;
       const now = yield* Clock.currentTimeMillis;
+
       // Note that a hold long lifted is let go before this refusal is
       // counted, so it counts no strike, as the shared hold's statement
       // reads it, and a member token refused once and never again is not kept.
       for (const [kept, standing] of holds) {
         if (standing.until + Duration.toMillis(GATE.MAXIMUM_HOLD) < now) holds.delete(kept);
       }
+
       const standing = holds.get(identity);
       const holding = standing !== undefined && now < standing.until;
       // Note that refusals of requests already out as the hold began are
@@ -436,27 +471,36 @@ export const githubRateGate: Layer.Layer<
       // Note that the hold is read once the lane is had, because a request
       // that queued behind the refusal must not be sent after it.
       const writes = MUTATIVE_METHODS.has(request.method);
+
       const send = Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
+
         const local = () => {
           const standing = holds.get(identity);
+
           return standing !== undefined && now < standing.until ? standing : undefined;
         };
+
         // Note that the local hold is read again after the shared one, because the other lane may have been refused while that read was out.
         const shared = local() === undefined ? yield* sharedHold(identity, now) : undefined;
         const held = local() ?? shared;
+
         if (held !== undefined && now < held.until) return heldAnswer(request, held.until - now);
+
         // Note that a write books its start only now, as it is sent, so a
         // write that waited for its lane still starts a second after the
         // last; one held, or given up on before this, books nothing.
         if (writes) started(identity, yield* Clock.currentTimeMillis);
         const response = yield* sent;
         yield* noted(identity, response);
+
         return response;
       });
+
       const gated = Effect.flatMap(Effect.service(GitHubBackground), (background) =>
         inLane(background ? backgroundSenders : senders, identity, send),
       );
+
       // Note that a write waits its turn before it takes the lane, and reads the hold after, so the wait holds no lane and misses no hold set meanwhile.
       return writes ? inTurn(identity, gated) : gated;
     });

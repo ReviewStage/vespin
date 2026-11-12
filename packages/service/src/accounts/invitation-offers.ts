@@ -107,17 +107,20 @@ export const invitationOffer = Effect.fn("web/invitationOffer")(function* (
   now: number,
 ) {
   const found = yield* findInvitation(id);
+
   if (Option.isSome(found)) {
     const joined = yield* findMember({
       userId,
       organizationId: found.value.organizationId,
     });
+
     if (Option.isSome(joined)) {
       return {
         member: { workspaceName: found.value.workspaceName },
       } satisfies InvitationOfferAnswer;
     }
   }
+
   if (
     Option.isNone(found) ||
     found.value.status !== PENDING ||
@@ -125,25 +128,32 @@ export const invitationOffer = Effect.fn("web/invitationOffer")(function* (
   ) {
     return { refused: INVITATION_OFFER_REFUSAL.SPENT } satisfies InvitationOfferAnswer;
   }
+
   const offered = found.value;
   const address = yield* findAddress(userId);
+
   if (Option.isNone(address) || address.value.email.toLowerCase() !== offered.email.toLowerCase()) {
     return { refused: INVITATION_OFFER_REFUSAL.NOT_RECIPIENT } satisfies InvitationOfferAnswer;
   }
+
   if (!address.value.emailVerified) {
     return { refused: INVITATION_OFFER_REFUSAL.UNVERIFIED } satisfies InvitationOfferAnswer;
   }
+
   const inviter = yield* findMember({
     userId: offered.inviterId,
     organizationId: offered.organizationId,
   });
+
   const offer = {
     id: offered.id,
     workspaceName: offered.workspaceName,
     role: roleOfRow(offered.role),
   };
+
   const answer: InvitationOfferAnswer = {
     offer: Option.isNone(inviter) ? offer : { ...offer, inviter: inviter.value },
   };
+
   return answer;
 });

@@ -40,6 +40,7 @@ const TOKEN_REPOSITORIES: RowKind<TokenRepositoriesRow, TokenRepositoriesChange>
   drawn: (change, row) => {
     if (row === undefined) return undefined;
     const repositories = change.listed(row.repositories);
+
     return Equal.equals(repositories, row.repositories) ? undefined : { ...row, repositories };
   },
 };
@@ -98,9 +99,12 @@ function names(repository: WorkspaceTokenRepository, fullName: string): boolean 
 function listedAfter(set: TokenRepositorySet): TokenRepositoriesChange["listed"] {
   return (repositories) => {
     const kept = repositories.filter((each) => !names(each, set.repository));
+
     if (!set.added) return kept.length === repositories.length ? repositories : kept;
+
     if (kept.length !== repositories.length) return repositories;
     const { repository: fullName, addedBy, addedAt } = set;
+
     return [{ fullName, addedBy, addedAt, removable: true }, ...repositories];
   };
 }
@@ -112,6 +116,7 @@ export function tokenRepositoryWrites(
   return Effect.gen(function* () {
     /** The session writes are asked in, moved on as each ends. */
     let session = 0;
+
     const beside: HeldRows<TokenRepositoriesRow, TokenRepositoriesChange> =
       yield* dependencies.pool.stand(TOKEN_REPOSITORIES, {
         redraw: () => dependencies.tell,
@@ -122,20 +127,27 @@ export function tokenRepositoryWrites(
           take: () => undefined,
         },
       });
+
     const drawn = (lists: AppTokenRepositories): AppTokenRepositories => {
       const standing = beside.standing();
+
       if (standing.length === 0) return lists;
+
       return Object.fromEntries(
         Object.entries(lists).map(([workspaceId, read]) => {
           const { rows } = read;
+
           if (rows === undefined) return [workspaceId, read];
+
           const listed = standing
             .filter((change) => change.workspaceId === workspaceId)
             .reduce((each, change) => change.listed(each), rows);
+
           return [workspaceId, listed === rows ? read : { ...read, rows: listed }];
         }),
       );
     };
+
     const set = <Answer>(
       send: (set: TokenRepositorySet) => Effect.Effect<TokenRepositorySetWritten<Answer>>,
       unsent: Answer,
@@ -149,6 +161,7 @@ export function tokenRepositoryWrites(
       keys: ({ workspaceId }) => [workspaceId],
       change: (input) => {
         const listed = listedAfter(input);
+
         return {
           workspaceId: input.workspaceId,
           listed: (repositories) =>
@@ -159,21 +172,26 @@ export function tokenRepositoryWrites(
         Effect.suspend(
           (): Effect.Effect<Written<TokenRepositoriesChange, Answer> | Refused<Answer>> => {
             if (session !== input.session) return Effect.succeed({ refused: unsent });
+
             return Effect.flatMap(
               send(input),
               (sent): Effect.Effect<Written<TokenRepositoriesChange, Answer> | Refused<Answer>> => {
                 if ("refused" in sent) return Effect.succeed(sent);
                 const kept = { answer: sent.answer, txid: undefined };
+
                 if (session !== input.session) return Effect.succeed(kept);
+
                 return Effect.as(dependencies.answered(input.workspaceId, sent.repositories), kept);
               },
             );
           },
         ),
     });
+
     const letGo = Effect.sync(() => {
       session += 1;
     });
+
     return { drawn, set, session: () => session, letGo };
   });
 }

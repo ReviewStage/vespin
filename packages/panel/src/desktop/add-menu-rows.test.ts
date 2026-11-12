@@ -72,15 +72,18 @@ async function opened(entries: readonly AddEntry[]): Promise<Map<string, HTMLEle
   assert.ok(plus, "the + stands");
   await act(async () => plus.click());
   const named = new Map<string, HTMLElement>();
+
   for (const option of container.querySelectorAll<HTMLElement>('[role="option"]')) {
     named.set(option.querySelector(".ui-combobox-option-label")?.textContent ?? "", option);
   }
+
   return named;
 }
 
 /** The labels of the marks a row wears at its end. */
 function endMarks(option: HTMLElement | undefined): (string | null)[] {
   const end = option?.querySelector(".ui-combobox-option-hint");
+
   return [...(end?.querySelectorAll("[role='img']") ?? [])].map((mark) =>
     mark.getAttribute("aria-label"),
   );
@@ -88,10 +91,12 @@ function endMarks(option: HTMLElement | undefined): (string | null)[] {
 
 test("a failed agent's row in the column's \"+\" wears the failed mark and a healthy one's wears none, and a row hangs its agent's card while the pointer rests on it", async () => {
   const base = tasksControl();
+
   const agents = agentsControl({
     agents: [BROKEN, HEALTHY],
     agentIds: [BROKEN.id, HEALTHY.id],
   });
+
   const options = await opened(
     agentEntries(base.mainTabs, agents, { members: undefined, readerId: undefined }, NOTHING_HELD),
   );
@@ -106,6 +111,7 @@ test("a failed agent's row in the column's \"+\" wears the failed mark and a hea
 
 test("a Terminal row in the side panel's \"+\" hangs its agent's card", async () => {
   const base = tasksControl();
+
   const cards: PanelCards = {
     agents: agentsControl({ agents: [BROKEN], agentIds: [BROKEN.id] }),
     held: NOTHING_HELD,
@@ -114,6 +120,7 @@ test("a Terminal row in the side panel's \"+\" hangs its agent's card", async ()
     onOpenAgent: ignore,
     people: new Map(),
   };
+
   const options = await opened(
     panelEntries({
       panel: base.sidePanel,

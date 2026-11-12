@@ -39,6 +39,7 @@ afterEach(() => {
 function Stage(): React.JSX.Element {
   const stage = useStageRoom();
   reading = { room: stage.room, compact: stage.compact };
+
   return createElement("div", { ref: stage.ref, className: "app-stage" });
 }
 
@@ -50,6 +51,7 @@ function mount(width: number, height = 0): void {
     this: HTMLElement,
   ) {
     const stage = this.classList.contains("app-stage");
+
     return DOMRect.fromRect({ width: stage ? stageWidth : 0, height: stage ? stageHeight : 0 });
   });
   const container = document.createElement("div");
@@ -63,6 +65,7 @@ function resizeTo(width: number, height = stageHeight) {
   stageWidth = width;
   stageHeight = height;
   act(() => relayout());
+
   return reading;
 }
 
@@ -81,16 +84,17 @@ test("a laid-out stage that then measures a zero width keeps the reading it had"
 
 /** Answers the device's pointer as a finger's, as a phone's browser does. */
 function onTouchScreen(): void {
-  vi.spyOn(window, "matchMedia").mockImplementation(
+  vi.spyOn(window, "matchMedia").mockImplementation((query) => {
+    const list: Partial<MediaQueryList> = {
+      matches: query === "(pointer: coarse)",
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    };
+
     // SAFETY: the room reads `matches` alone, which this answers for every query.
-    (query) =>
-      ({
-        matches: query === "(pointer: coarse)",
-        media: query,
-        addEventListener: () => undefined,
-        removeEventListener: () => undefined,
-      }) as unknown as MediaQueryList,
-  );
+    return list as MediaQueryList;
+  });
 }
 
 /** Answers the device's screen as one of a size, as the browser reports it whichever way it is turned. */
@@ -131,9 +135,13 @@ test("a phone's screen turns narrow when its main pointer becomes a finger, with
           return coarse && query === "(pointer: coarse)";
         },
         media: query,
-        addEventListener: (_: string, listener: () => void) => heard.add(listener),
-        removeEventListener: (_: string, listener: () => void) => heard.delete(listener),
-      }) as unknown as MediaQueryList,
+        addEventListener: (_: string, listener: () => void) => {
+          heard.add(listener);
+        },
+        removeEventListener: (_: string, listener: () => void) => {
+          heard.delete(listener);
+        },
+      }) as MediaQueryList,
   );
   mount(LANDSCAPE_PHONE.width, LANDSCAPE_PHONE.height);
   assert.equal(reading?.room, "wide");

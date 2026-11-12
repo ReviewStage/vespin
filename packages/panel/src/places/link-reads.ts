@@ -19,20 +19,26 @@ import { savesStep } from "./window-steps.js";
 /** The developer's moves to another page counted beside each window's router history. */
 const movesBeside = new WeakMap<RouterHistory, { count: number }>();
 
+type Moves = { count: number };
+
 /** The moves counted beside `history`, counted from the moment they are first read. */
-function movesOf(history: RouterHistory): { count: number } {
+function movesOf(history: RouterHistory): Moves {
   const kept = movesBeside.get(history);
+
   if (kept !== undefined) return kept;
   const made = { count: 0 };
   let path = history.location.pathname;
   history.subscribe(({ location, action }) => {
     const before = path;
     path = location.pathname;
+
     if (location.pathname === before) return;
+
     if (action.type === "REPLACE" && savesStep(location)) return;
     made.count += 1;
   });
   movesBeside.set(history, made);
+
   return made;
 }
 
@@ -42,9 +48,11 @@ export type LinkRead = () => () => boolean;
 /** The window router's link reads (see the module's head). */
 export function useLinkReads(): LinkRead {
   const { history } = useRouter();
+
   return useCallback(() => {
     const moves = movesOf(history);
     const begun = moves.count;
+
     return () => moves.count === begun;
   }, [history]);
 }

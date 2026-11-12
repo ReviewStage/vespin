@@ -3,26 +3,32 @@ import path from "node:path";
 import { PACKAGED_ARCHITECTURE } from "./package-layout.mjs";
 
 const NOTARY_KEYCHAIN_PROFILE = "vespin-notary";
+
 // The version-free asset name every release carries beside the versioned DMG,
 // so the download link on the website can point at the latest release forever.
 export const RELEASE_LATEST_DMG_FILE_NAME = "Vespin.dmg";
+
 // The version-free manifest name every release carries, so the app's update
 // feed URL — releases/latest/download/latest-mac.yml — never moves either.
 // The name is electron-updater's own convention for a macOS generic feed.
 export const RELEASE_UPDATE_FEED_FILE_NAME = "latest-mac.yml";
+
 // The mounted installer volume is not named bare after the app: it appears
 // beside the app's bundle in Finder, and both wear the app's icon.
 export const RELEASE_VOLUME_NAME = "Vespin Installer";
+
 export const NOTARY_CREDENTIAL_SOURCE = {
   KEYCHAIN_PROFILE: "keychain-profile",
   KEY_FILE: "key-file",
 };
+
 export const NOTARY_SUBMISSION_STATUS = {
   ACCEPTED: "Accepted",
   IN_PROGRESS: "In Progress",
   INVALID: "Invalid",
   REJECTED: "Rejected",
 };
+
 export const NOTARY_POLL_INTERVAL_MS = 30_000;
 export const NOTARY_POLL_TIMEOUT_MS = 20 * 60_000;
 
@@ -53,14 +59,17 @@ export function resolveNotaryCredentials(env) {
   const keyId = env.APPLE_API_KEY_ID?.trim();
   const issuerId = env.APPLE_API_ISSUER_ID?.trim();
   const provided = [keyPath, keyId, issuerId].filter(Boolean);
+
   if (provided.length === 0) {
     return { source: NOTARY_CREDENTIAL_SOURCE.KEYCHAIN_PROFILE };
   }
+
   if (provided.length < 3) {
     throw new Error(
       "APPLE_API_KEY_PATH, APPLE_API_KEY_ID, and APPLE_API_ISSUER_ID must be provided together",
     );
   }
+
   return { source: NOTARY_CREDENTIAL_SOURCE.KEY_FILE, keyPath, keyId, issuerId };
 }
 
@@ -75,6 +84,7 @@ function notaryCredentialArguments(credentials) {
       credentials.issuerId,
     ];
   }
+
   return ["--keychain-profile", NOTARY_KEYCHAIN_PROFILE];
 }
 
@@ -119,20 +129,24 @@ export async function awaitNotarizationDecision({
 }) {
   for (let waited = 0; ; waited += intervalMs) {
     const status = readStatus();
+
     if (status === NOTARY_SUBMISSION_STATUS.ACCEPTED) {
       return status;
     }
+
     if (
       status === NOTARY_SUBMISSION_STATUS.INVALID ||
       status === NOTARY_SUBMISSION_STATUS.REJECTED
     ) {
       throw new Error(`Notarization failed with status: ${status}`);
     }
+
     if (waited + intervalMs >= timeoutMs) {
       throw new Error(
         `Apple did not finish notarization within ${timeoutMs / 60_000} minutes; last status: ${status ?? "unknown"}`,
       );
     }
+
     await wait(intervalMs);
   }
 }

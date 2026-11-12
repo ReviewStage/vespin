@@ -75,6 +75,7 @@ function deleteChosenQuestion(count: number, archived: boolean): DialogQuestion 
   const one = count === 1;
   const named = countWords(count, TERM.AGENT);
   const lost = `${one ? "The agent and its transcript" : `The ${named} and their transcripts`} will be deleted. ${IRREVERSIBLE_WORDS}`;
+
   return {
     title: `Permanently delete ${named}?`,
     body: archived
@@ -121,16 +122,20 @@ export function useAgentsSelection(
   shown: boolean,
 ): AgentsSelection {
   const toast = useToast();
+
   const { regionId, selected, setChosen, onClear } = useChosen(
     new Set(listed.map((agent) => agent.id)),
   );
+
   const chosen = listed.filter((agent) => selected.has(agent.id));
 
   // An archive asking nothing, a refusal said in a toast since no question stands to say it.
   const { mutateAsync: archiveAtOnce } = useMutation(agents.archiveAgents);
+
   const pressArchive = (agentIds: readonly string[], archived: boolean) =>
     void archiveAtOnce({ agentIds, archived }).then((answers) => {
       const refusal = firstRefusal(answers);
+
       if (refusal.status === ACTION_RESULT_STATUS.ACCEPTED) return;
       toast({
         words: refusal.reason,
@@ -141,11 +146,14 @@ export function useAgentsSelection(
 
   // The agents Stop and archive was asked of, held as it asks.
   const [stopping, setStopping] = useState<readonly string[]>([]);
+
   // Note that an archive asked about is drawn at once, which may take the rows the dialog stands over with it.
   const archiveHeard = useRefusalHeard(stopping.length > 0 && shown, {
     surface: FAILURE_SURFACE.AGENT_ARCHIVE,
   });
+
   const asking = useMutation(agents.archiveAgents);
+
   const archiveAct = useConfirmAct(asking, {
     send: async () => {
       const answers = await asking.mutateAsync({
@@ -153,23 +161,30 @@ export function useAgentsSelection(
         archived: true,
         asked: true,
       });
+
       const refused = stopping.filter(
         (_, at) => answers[at]?.status !== ACTION_RESULT_STATUS.ACCEPTED,
       );
+
       if (refused.length === 0) {
         onClear();
+
         return ACCEPTED;
       }
+
       setStopping(refused);
+
       return archiveHeard(firstRefusal(answers));
     },
     answered: firstRefusal,
   });
+
   const archiveConfirm = useConfirmDialog(
     { subject: stopping.length > 0, surfaceOpen: shown },
     archiveAct,
     confirmFailure(FAILURE_SURFACE.AGENT_ARCHIVE),
   );
+
   const askArchive = (agentIds: readonly string[]) => {
     setStopping(agentIds);
     archiveConfirm.ask();
@@ -177,28 +192,38 @@ export function useAgentsSelection(
 
   // Note that a teammate's agent drawn at rest is read again first, because nothing follows an agent whose tab is not shown, and a read that did not land asks rather than stop a turn it could not see.
   const [reading, setReading] = useState(false);
+
   const archive = () => {
     if (reading) return;
     const agentIds = chosen.map((agent) => agent.id);
+
     const teammates = chosen.filter(
       (agent) => teammateStarter(agent.startedBy, agents.me) !== undefined,
     );
+
     if (chosen.some((agent) => agentStillWriting(agent.status))) {
       askArchive(agentIds);
+
       return;
     }
+
     if (teammates.length === 0) {
       pressArchive(agentIds, true);
       onClear();
+
       return;
     }
+
     setReading(true);
     void Promise.all(teammates.map((agent) => agents.readAgent(agent.id))).then((now) => {
       setReading(false);
+
       if (now.some((read) => read === undefined || agentStillWriting(read.status))) {
         askArchive(agentIds);
+
         return;
       }
+
       pressArchive(agentIds, true);
       onClear();
     });
@@ -206,33 +231,43 @@ export function useAgentsSelection(
 
   // The agents Permanently delete was asked of, held as it asks.
   const [doomed, setDoomed] = useState<Doomed>(NONE_DOOMED);
+
   const deleteHeard = useRefusalHeard(doomed.agentIds.length > 0 && shown, {
     surface: FAILURE_SURFACE.AGENT_DELETE,
   });
+
   const { mutateAsync: deleteOne } = useMutation(agents.deleteAgent);
+
   const deleting = useMutation({
     mutationFn: (agentIds: readonly string[]) =>
       Promise.all(agentIds.map((agentId) => deleteOne(agentId))),
   });
+
   const deleteAct = useConfirmAct(deleting, {
     send: async () => {
       const answers = await deleting.mutateAsync(doomed.agentIds);
+
       const refused = doomed.agentIds.filter(
         (_, at) => answers[at]?.status !== ACTION_RESULT_STATUS.ACCEPTED,
       );
+
       if (refused.length === 0) {
         onClear();
+
         return ACCEPTED;
       }
+
       setDoomed({ ...doomed, agentIds: refused });
       // Note that the agents refused are chosen again, since each left the selection as the host drew it gone, and the deleted stay out.
       setChosen(
         (held) => new Set([...[...held].filter((id) => !doomed.agentIds.includes(id)), ...refused]),
       );
+
       return deleteHeard(firstRefusal(answers));
     },
     answered: firstRefusal,
   });
+
   const deleteConfirm = useConfirmDialog(
     { subject: doomed.agentIds.length > 0, surfaceOpen: shown },
     deleteAct,
@@ -240,6 +275,7 @@ export function useAgentsSelection(
   );
 
   const archivedAll = chosen.length > 0 && chosen.every((agent) => agent.archivedAt !== undefined);
+
   const acts: SelectionAct[] = [
     archivedAll
       ? {
@@ -262,7 +298,9 @@ export function useAgentsSelection(
       },
     },
   ];
+
   const chosenOf = useChosenOf(selected, TERM.AGENT, acts);
+
   return {
     regionId,
     selected,

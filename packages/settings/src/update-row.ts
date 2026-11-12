@@ -1,11 +1,6 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { commitLabel, devBuildDetail } from "./dev-build.js";
-import {
-  type RunningBuild,
-  UPDATE_FAILURE,
-  UPDATE_STATUS,
-  type UpdateSnapshot,
-} from "./update.js";
+import { type RunningBuild, UPDATE_FAILURE, UPDATE_STATUS, type UpdateSnapshot } from "./update.js";
 
 /** The one action the row's button offers in each state. */
 export const UPDATE_ROW_ACTION = {
@@ -82,6 +77,7 @@ export function fixtureUpdate(
 ): UpdateSnapshot {
   if (!run.fixtureMode) return update;
   const [major = "0", minor = "0"] = update.currentVersion.split(".");
+
   return {
     status: UPDATE_STATUS.READY,
     currentVersion: update.currentVersion,
@@ -93,11 +89,13 @@ export function fixtureUpdate(
 /** The version, with the commit beside it quietly, for a bug report to quote. */
 function versionTitle(update: UpdateSnapshot, build: RunningBuild): string {
   const version = `Version ${update.currentVersion}`;
+
   return build.commit ? `${version} (${commitLabel(build.commit)})` : version;
 }
 
 function downloadingDetail(update: UpdateSnapshot & { status: "downloading" }): string {
   const percent = update.progress ? ` ${Math.round(update.progress.percent)}%` : "";
+
   return `Downloading ${update.latestVersion}…${percent}`;
 }
 
@@ -108,6 +106,7 @@ function idleRow(
   if (update.upToDate) {
     return { detail: "Up to date", action: UPDATE_ROW_ACTION.CHECK, current: true, failed: false };
   }
+
   if (update.unreachable) {
     return {
       detail: "Couldn't reach GitHub",
@@ -116,6 +115,7 @@ function idleRow(
       failed: true,
     };
   }
+
   // Not an answer: nothing has been learned yet, so the row only offers to
   // ask rather than posing an unknown as up to date.
   return {
@@ -138,6 +138,7 @@ function releaseRow(update: UpdateSnapshot): Omit<UpdateRow, "title"> {
       failed: false,
     };
   }
+
   switch (update.status) {
     case UPDATE_STATUS.CHECKING:
       return {
@@ -180,6 +181,7 @@ function releaseRow(update: UpdateSnapshot): Omit<UpdateRow, "title"> {
           failed: true,
         };
       }
+
       return update.latestVersion
         ? {
             detail: `Couldn't install ${update.latestVersion}`,
@@ -219,5 +221,6 @@ export function updateRow(update: UpdateSnapshot, build: RunningBuild): UpdateRo
       failed: false,
     };
   }
+
   return { title: versionTitle(update, build), ...releaseRow(update) };
 }

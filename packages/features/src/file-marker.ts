@@ -90,10 +90,13 @@ export function writableName(name: string): string {
   const written = name
     .replace(UNWRITABLE, (character) => {
       if (character === "[") return "(";
+
       if (character === "]") return ")";
+
       return " ";
     })
     .trim();
+
   return written === "" ? BLANK_NAME : written;
 }
 
@@ -105,10 +108,13 @@ export function writableName(name: string): string {
  */
 export function unusedName(name: string, used: ReadonlySet<string>): string {
   const free = (each: string) => !used.has(each) && !isPictureName(each);
+
   if (free(name)) return name;
   const [, stem = name, extension = ""] = EXTENSION.exec(name) ?? [];
+
   for (let number = 2; ; number += 1) {
     const numbered = `${stem} ${String(number)}${extension}`;
+
     if (free(numbered)) return numbered;
   }
 }
@@ -137,20 +143,43 @@ export function fileMarkers(text: string): readonly FileMarkerToken[] {
 export function wordsWithoutMarkers(text: string): string {
   let words = "";
   let at = 0;
+
   for (const marker of fileMarkers(text)) {
     words += text.slice(at, marker.start);
     at = marker.end;
   }
+
+  return words + text.slice(at);
+}
+
+/**
+ * The words with every marker outside code written as the name of the file
+ * it names, "this Picture 1 next to spec.pdf": what a place that draws plain
+ * words, and no chip, says of each file where the message named it, as a
+ * search's snippet, a reader's ears, or a title read from the words.
+ */
+export function markersAsNames(text: string): string {
+  let words = "";
+  let at = 0;
+
+  for (const marker of fileMarkers(text)) {
+    words += text.slice(at, marker.start) + marker.name;
+    at = marker.end;
+  }
+
   return words + text.slice(at);
 }
 
 /** The next picture's name: one past the highest picture's number among the names, so a picture taken off frees no number a later one reuses beside its neighbor's marker. */
 export function nextPictureName(names: Iterable<string>): string {
   let highest = 0;
+
   for (const name of names) {
     const number = PICTURE_NAME.exec(name)?.[1];
+
     if (number !== undefined) highest = Math.max(highest, Number(number));
   }
+
   return pictureName(highest + 1);
 }
 
@@ -171,14 +200,18 @@ export function placedFiles<T>(
   const unplaced = [...files];
   const runs: FileRun<T>[] = [];
   let at = 0;
+
   for (const marker of fileMarkers(text)) {
     const index = unplaced.findIndex((file) => nameOf(file) === marker.name);
+
     if (index === -1) continue;
     const [file] = unplaced.splice(index, 1);
     runs.push({ words: text.slice(at, marker.end), file });
     at = marker.end;
   }
+
   if (runs.length === 0) return undefined;
   runs.push({ words: text.slice(at), file: undefined });
+
   return { unplaced, runs };
 }

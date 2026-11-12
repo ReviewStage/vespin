@@ -78,7 +78,7 @@ import {
   withdrawDeviceAgentRequest,
   withdrawUnclaimedDeviceAgentLine,
 } from "@repo/database/models/device-agent-store";
-import { deviceLayout, devicesSeenSince } from "@repo/database/models/device-store";
+import { deviceLayout, devicesNamed, devicesSeenSince } from "@repo/database/models/device-store";
 import { hostRemoved } from "@repo/database/models/host-store";
 import { parseKeyRing, sealMacLaunchSecrets } from "@repo/database/models/provider-key-seal";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
@@ -271,9 +271,11 @@ function deviceTopics(userId: string): readonly SyncTopic[] {
 function filesLines(files: readonly SandboxFile[]): readonly (readonly SandboxFile[])[] {
   const lines: SandboxFile[][] = [];
   let bytes = 0;
+
   for (const file of files) {
     const size = Buffer.byteLength(file.path) + file.contents.byteLength;
     const line = lines.at(-1);
+
     if (line === undefined || bytes + size > DEVICE_AGENT_BOUNDS.MAX_FILES_LINE_BYTES) {
       lines.push([file]);
       bytes = size;
@@ -282,6 +284,7 @@ function filesLines(files: readonly SandboxFile[]): readonly (readonly SandboxFi
       bytes += size;
     }
   }
+
   return lines;
 }
 
@@ -322,21 +325,33 @@ function deviceMachineOver(
   /** The local agent running in the session, where one does. */
   const pinOfSession = (session: string) => stored(deviceAgentOfSession(session));
 
-  /** Where the agent's things stand on its Mac, under the agents folder that Mac registered, or its home folder where it named none; refused where it is pinned to no Mac of its starter's. */
+  /** Where the agent's things stand on its Mac, under the agents folder that Mac registered, or its home folder where it named none; refused where it is pinned to no Mac of its starter's, and as away where that Mac's host has not registered its folders. */
   const layoutOf = (userId: string, agentId: string, deviceId: string | null | undefined) =>
     Effect.gen(function* () {
       if (deviceId === null || deviceId === undefined) {
         return yield* new LaunchRefused({ reason: "no mac" });
       }
+
       const device = yield* stored(deviceLayout(userId, deviceId));
+
       if (Option.isNone(device)) {
         // Note that a removed host is refused by name, so the member is told it is gone rather than to try again.
-        return yield* (yield* stored(hostRemoved(userId, deviceId)))
-          ? new LaunchRefused({ reason: "host removed", deviceRemoved: true })
+        if (yield* stored(hostRemoved(userId, deviceId))) {
+          return yield* new LaunchRefused({ reason: "host removed", deviceRemoved: true });
+        }
+
+        // Note that a Mac of the account's whose host has not registered the folders a launch lays
+        // out, one from before them, is away until it registers them, as its presence read reads it.
+        const named = (yield* stored(devicesNamed([deviceId]))).get(deviceId);
+
+        return yield* named?.userId === userId
+          ? new LaunchRefused({ reason: "host unregistered", deviceAway: true })
           : new LaunchRefused({ reason: "no mac" });
       }
+
       const folders = macFolders(device.value, agentId);
       const kept = keepsTranscripts(device.value.version);
+
       const layout: MachineLayout = {
         checkoutPath: folders.checkoutPath,
         // Note that a local agent is handed none of the skills its member installed into the app, and
@@ -357,6 +372,7 @@ function deviceMachineOver(
         diskSessions: true,
         permissionModes: device.value.capabilities.includes(DEVICE_CAPABILITY.PERMISSION_MODES),
       };
+
       return layout;
     });
 
@@ -389,6 +405,7 @@ function deviceMachineOver(
       const now = yield* Clock.currentTimeMillis;
       const since = new Date(now - MAC_PRESENCE.FRESH_MS);
       const seen = yield* stored(devicesSeenSince(pin.userId, since));
+
       return seen.some((device) => device.id === pin.deviceId);
     });
 
@@ -400,9 +417,11 @@ function deviceMachineOver(
   const refuseAway = (pin: DeviceAgentPin) =>
     Effect.gen(function* () {
       if (yield* present(pin)) return;
+
       if (pin.deviceId !== null && (yield* stored(hostRemoved(pin.userId, pin.deviceId)))) {
         return yield* new LaunchRefused({ reason: "host removed", deviceRemoved: true });
       }
+
       return yield* new LaunchRefused({ reason: "mac away", deviceAway: true });
     });
 
@@ -420,13 +439,16 @@ function deviceMachineOver(
   ) =>
     Effect.gen(function* () {
       const pin = yield* pinOfSession(session);
+
       if (Option.isNone(pin) || !(yield* present(pin.value))) return yield* unavailable();
       const { userId, agentId } = pin.value;
       const id = randomUUID();
+
       const answer = yield* Effect.gen(function* () {
         if (!(yield* stored(queueDeviceAgentRequest(userId, { id, agentId, kind, args })))) {
           return Option.none<DeviceAgentAnswer>();
         }
+
         const held = yield* heldUntil(
           stored(deviceAgentRequestAnswer(userId, id)),
           Option.isSome,
@@ -434,9 +456,12 @@ function deviceMachineOver(
           MAC_MACHINE.POLL,
           wait,
         );
+
         return Option.flatMap(held, ({ read }) => read);
       }).pipe(Effect.ensuring(Effect.ignore(stored(withdrawDeviceAgentRequest(userId, id)))));
+
       if (Option.isNone(answer) || answer.value.kind !== kind) return yield* unavailable();
+
       return answer.value;
     });
 
@@ -444,7 +469,9 @@ function deviceMachineOver(
   const exitOfLine = (pin: DeviceAgentPin, lineId: string) =>
     Effect.map(stored(deviceAgentLineStanding(pin.userId, lineId)), (standing): CommandExit => {
       if (Option.isNone(standing)) return COMMAND_GONE;
+
       if (!standing.value.settled) return null;
+
       return standing.value.exitCode ?? COMMAND_GONE;
     });
 
@@ -471,9 +498,11 @@ function deviceMachineOver(
   const keyRing = Effect.gen(function* () {
     const keys = Option.getOrUndefined(environment)?.providerKeyEncryptionKeys;
     const ring = keys === undefined ? undefined : parseKeyRing(keys);
+
     if (ring === undefined || Result.isFailure(ring)) {
       return yield* new LaunchRefused({ reason: "no key ring" });
     }
+
     return ring.success;
   });
 
@@ -492,6 +521,7 @@ function deviceMachineOver(
           [layoutOf(ask.agent.userId, ask.agent.id, ask.agent.deviceId), ask.beside],
           { concurrency: "unbounded" },
         );
+
         return yield* use(
           {
             place: macPlace(ask.session, ask.agent.id),
@@ -507,19 +537,23 @@ function deviceMachineOver(
     findPlace: (_userId, session) =>
       Effect.gen(function* () {
         const pin = yield* pinOfSession(session);
+
         if (Option.isNone(pin)) return Option.none<FoundPlace>();
         const { userId, agentId } = pin.value;
         const launch = yield* stored(latestDeviceAgentLaunch(userId, agentId));
         const place = macPlace(session, agentId);
+
         const payload = Option.flatMap(launch, (line) =>
           Option.getSuccess(
             Schema.decodeUnknownResult(deviceAgentLaunchPayloadSchema)(line.payload),
           ),
         );
+
         const mark = Option.map(payload, (read) => ({
           firstSequence: read.firstSequence,
-          ...(read.fingerprint === undefined ? {} : { fingerprint: read.fingerprint }),
+          ...(read.fingerprint !== undefined && { fingerprint: read.fingerprint }),
         }));
+
         const live =
           Option.isSome(launch) &&
           Option.isSome(mark) &&
@@ -527,6 +561,7 @@ function deviceMachineOver(
           !launch.value.stopped
             ? { handle: { ...place, command: launch.value.id }, mark: mark.value }
             : undefined;
+
         const found: FoundPlace = {
           machine: AGENT_MACHINE.DEVICE,
           session,
@@ -536,8 +571,9 @@ function deviceMachineOver(
           runner: live,
           launch: Option.getOrUndefined(mark),
           // SAFETY: the pin is this machine's own to read back; no caller reads it.
-          kept: pin.value as unknown as MachineKept,
+          kept: pin.value as DeviceAgentPin & MachineKept,
         };
+
         return Option.some(found);
       }),
 
@@ -548,6 +584,7 @@ function deviceMachineOver(
         if (record.kind === RUNNER_RECORD.RUNNING) return;
         const pin = yield* pinOfPlace(macPlace(place.session, place.agentId));
         const launch = yield* stored(latestDeviceAgentLaunch(pin.userId, pin.agentId));
+
         if (Option.isNone(launch) || launch.value.settled || launch.value.stopped) return;
         yield* queued(pin, { kind: DEVICE_AGENT_LINE_KIND.STOP, payload: {} });
       }),
@@ -608,45 +645,56 @@ function deviceMachineOver(
         const pin = yield* pinOfPlace(place);
         // Note that the refusal comes before the caller's steps run, so it has nothing to undo.
         yield* refuseAway(pin);
+
         const read = Effect.gen(function* () {
           const agent = yield* stored(readAgent(pin.userId, pin.agentId));
+
           if (Option.isNone(agent) || !hasRepository(agent.value))
             return { agent, identity: Exit.succeed(undefined) };
           const target = { userId: pin.userId, conversationId: agent.value.conversationId };
+
           return { agent, identity: yield* Effect.exit(agentCommitIdentity(target, agent.value)) };
         });
+
         // Note that a Mac's runner takes its config with its launch, so it starts on none of the caller's steps sooner.
         const [, ready, { agent, identity }, ring] = yield* Effect.all(
           [launch.started ?? Effect.void, launch.ready, read, keyRing],
           { concurrency: "unbounded" },
         );
+
         if (Option.isNone(agent)) return yield* new LaunchRefused({ reason: "no agent" });
+
         // Note that an agent in a repository whose host is a build from before it works in every repository on its own GitHub
         // sign-in, as one whose host went back to an older release since its Start, is refused, since that host would ask for a
         // token the service never hands a device.
         if (hasRepository(agent.value) && !(yield* signsInOwnGithub(pin))) {
           yield* Effect.ignore(launch.abandon(ready));
+
           return yield* new LaunchRefused({ reason: "host predates its own github sign-in" });
         }
+
         const id = randomUUID();
         const handle: RunnerHandle = { ...place, command: id };
         yield* Effect.gen(function* () {
           const commitsBy = yield* identity;
           const layout = yield* layoutOf(pin.userId, pin.agentId, pin.deviceId);
           const { lines, mark } = yield* launch.firstLines(ready, handle);
+
           const sealedSecrets = sealMacLaunchSecrets(
             ring,
             { userId: pin.userId, agentId: pin.agentId },
             Redacted.make(encodeSecrets({ env: launch.env, stdin: lines })),
           );
+
           const payload: DeviceAgentLaunchPayload = {
             checkoutPath: layout.checkoutPath,
             repository: agent.value.repository,
             startBranch: agent.value.startBranch,
             firstSequence: mark.firstSequence,
-            ...(mark.fingerprint === undefined ? {} : { fingerprint: mark.fingerprint }),
-            ...(commitsBy === undefined ? {} : { identity: commitsBy }),
+            ...(mark.fingerprint !== undefined && { fingerprint: mark.fingerprint }),
+            ...(commitsBy !== undefined && { identity: commitsBy }),
           };
+
           yield* queued(pin, {
             id,
             kind: DEVICE_AGENT_LINE_KIND.LAUNCH,
@@ -654,15 +702,18 @@ function deviceMachineOver(
             sealedSecrets,
           });
         }).pipe(Effect.tapError(() => Effect.ignore(launch.abandon(ready))));
+
         return { handle, ready };
       }),
 
     writeLine: (handle, text) =>
       Effect.gen(function* () {
         const pin = yield* pinOfPlace(handle);
+
         if (yield* runnerEnded(pin, handle)) {
           return yield* new SandboxGone({});
         }
+
         yield* refuseAway(pin);
         yield* queued(pin, stdinLine(text));
       }),
@@ -676,6 +727,7 @@ function deviceMachineOver(
     runnerExit: (handle, within = MAC_MACHINE.EXIT_WAIT) =>
       Effect.gen(function* () {
         const pin = yield* pinOfPlace(handle);
+
         const settled = yield* heldUntil(
           exitOf(pin, handle),
           (exit) => exit !== null,
@@ -683,12 +735,14 @@ function deviceMachineOver(
           MAC_MACHINE.POLL,
           within,
         );
+
         return Option.match(settled, { onNone: () => null, onSome: ({ read }) => read });
       }),
 
     kill: (handle) =>
       Effect.gen(function* () {
         const pin = yield* pinOfPlace(handle);
+
         if (yield* runnerEnded(pin, handle)) return;
         yield* queued(pin, { kind: DEVICE_AGENT_LINE_KIND.STOP, payload: {} });
       }),
@@ -710,9 +764,11 @@ function deviceMachineOver(
     restoreCheckout: (session, snapshot) =>
       Effect.gen(function* () {
         const pin = yield* pinOfSession(session);
+
         if (Option.isNone(pin)) return RESTORE_OUTCOME.MISSING;
         // A Mac away or removed is refused by name before its host's release is read, which a removed host has none of.
         yield* refuseAway(pin.value);
+
         if (!(yield* restoresCheckout(pin.value))) return RESTORE_OUTCOME.UNSUPPORTED;
         const id = randomUUID();
         yield* queued(pin.value, {
@@ -720,6 +776,7 @@ function deviceMachineOver(
           kind: DEVICE_AGENT_LINE_KIND.RESTORE,
           payload: encodeRestorePayload(snapshot),
         });
+
         // Note that a line the Mac has not taken by the time the wait ends is withdrawn, because a Mac
         // back later would otherwise put the files back under whatever the agent has done since.
         const settled = yield* heldUntil(
@@ -733,11 +790,16 @@ function deviceMachineOver(
             Effect.ignore(stored(withdrawUnclaimedDeviceAgentLine(pin.value.userId, id))),
           ),
         );
+
         const exit = Option.match(settled, { onNone: () => null, onSome: ({ read }) => read });
+
         if (exit === 0) return RESTORE_OUTCOME.RESTORED;
+
         if (exit === CHECKOUT_RESTORE_EXIT.MISSING) return RESTORE_OUTCOME.MISSING;
+
         // A follower from before the line settles it with no exit, having acted on nothing.
         if (exit === COMMAND_GONE) return RESTORE_OUTCOME.UNSUPPORTED;
+
         return RESTORE_OUTCOME.FAILED;
       }),
 
@@ -747,28 +809,37 @@ function deviceMachineOver(
       Effect.gen(function* () {
         const pin = yield* pinOfSession(session);
         const missing: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.MISSING };
+
         if (Option.isNone(pin)) return missing;
         yield* refuseAway(pin.value);
+
         if (!(yield* registered(pin.value, DEVICE_CAPABILITY.DIFF_CHECKOUT))) {
           const unsupported: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.UNSUPPORTED };
+
           return unsupported;
         }
+
         const answer = yield* asked(
           session,
           DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
           { from: range.from, to: range.to },
           MAC_MACHINE.DIFF_WAIT,
         );
+
         if (answer.kind !== DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT) return missing;
+
         if (answer.exit === 0) {
           const diffed: CheckoutDiffOutcome = {
             outcome: CHECKOUT_DIFF_OUTCOME.DIFFED,
             diff: answer.diff,
           };
+
           return diffed;
         }
+
         if (answer.exit === CHECKOUT_DIFF_EXIT.MISSING) return missing;
         const failed: CheckoutDiffOutcome = { outcome: CHECKOUT_DIFF_OUTCOME.FAILED };
+
         return failed;
       }),
 
@@ -782,5 +853,6 @@ export const deviceMachine: Effect.Effect<DeviceMachineService, never, DatabaseS
   Effect.gen(function* () {
     const context = yield* Effect.context<DatabaseServices>();
     const environment = yield* Effect.serviceOption(HostedEnvironment);
+
     return deviceMachineOver(context, environment);
   });

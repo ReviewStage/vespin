@@ -43,6 +43,7 @@ function rowOf(tool: string, input: WireRecord, output: WireRecord) {
       },
     ],
   };
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -62,6 +63,7 @@ function rowOf(tool: string, input: WireRecord, output: WireRecord) {
   );
   const row = container.querySelector("summary");
   assert.ok(row, `${tool} draws a row`);
+
   return row.textContent?.trim();
 }
 
@@ -86,6 +88,7 @@ test("each of Vespin's tools that fell through to 'Used' reads as its own verb, 
     [AGENT_TOOL.UPDATE_COMMENT, { thread: "t1", resolved: false }, "Reopened a thread"],
     [RETIRED_TOOL.RECALL, { query: "transcript words" }, "Recalled transcript words"],
   ] as const;
+
   for (const [tool, input, words] of rows) {
     assert.equal(rowOf(tool, input, NO_ANSWER), words, tool);
   }
@@ -97,6 +100,7 @@ test("a call of an integration's tool says the tool it ran and the server it ran
     { remoteTool: "list_issues", parentCallId: "wrapper", input: {} },
     NO_ANSWER,
   );
+
   assert.equal(words, "Ran list_issues Linear");
 });
 
@@ -111,6 +115,7 @@ test("every tool an agent is offered has a kind of its own, and an MCP call a na
     input: { path: "README.md" },
     output: undefined,
   });
+
   assert.deepEqual(
     [claudeCode.kind, claudeCode.subject, claudeCode.server],
     [CALL_KIND.MCP_TOOL, "get_file_contents", "GitHub"],
@@ -127,6 +132,7 @@ test("every tool an agent is offered has a kind of its own, and an MCP call a na
     input: { connection: "posthog", query: "dashboards" },
     output: undefined,
   });
+
   assert.deepEqual(
     [search.kind, search.subject, search.server],
     [CALL_KIND.SEARCH_TOOLS, "dashboards", "PostHog"],

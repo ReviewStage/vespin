@@ -4,7 +4,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, test } from "vitest";
 import {
-  BUTTON_SHAPE,
+  BUTTON_CORNERS,
   BUTTON_SIZE,
   BUTTON_TYPE,
   BUTTON_VARIANT,
@@ -50,6 +50,7 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -72,6 +73,7 @@ test("a ButtonLink is a link named by its words, going to its address", () => {
 
 test("a press on a ButtonLink is heard, and the link is still followed", () => {
   const presses: boolean[] = [];
+
   const container = mount(
     createElement(ButtonLink, {
       href: "vespin://vespin.dev/acme",
@@ -79,6 +81,7 @@ test("a press on a ButtonLink is heard, and the link is still followed", () => {
       children: "Open in Vespin",
     }),
   );
+
   const link = container.querySelector("a");
   expect(link).not.toBeNull();
   // Note that jsdom cannot follow a link, so the page stops it once the press has bubbled past the component.
@@ -91,6 +94,7 @@ test("a press on a ButtonLink is heard, and the link is still followed", () => {
 
 test("a button that is not tabbable is skipped by Tab, yet takes the focus handed to it and its press", () => {
   const pressed: string[] = [];
+
   const container = mount(
     createElement(
       "div",
@@ -104,6 +108,7 @@ test("a button that is not tabbable is skipped by Tab, yet takes the focus hande
       }),
     ),
   );
+
   const [save, more] = Array.from(container.querySelectorAll("button"));
 
   expect(save?.tabIndex).toBe(0);
@@ -117,6 +122,7 @@ test("a button that is not tabbable is skipped by Tab, yet takes the focus hande
 
 test("a button that keeps focus, pressed with the pointer, leaves the focus on the field and is pressed", () => {
   const pressed: string[] = [];
+
   const container = mount(
     createElement(
       "div",
@@ -131,8 +137,10 @@ test("a button that keeps focus, pressed with the pointer, leaves the focus on t
       createElement(Button, { onClick: () => pressed.push("Connect"), children: "Connect" }),
     ),
   );
+
   const field = container.querySelector("input");
   const [back, connect] = Array.from(container.querySelectorAll("button"));
+
   if (field === null || back === undefined || connect === undefined) throw new Error("not drawn");
   act(() => field.focus());
 
@@ -141,6 +149,7 @@ test("a button that keeps focus, pressed with the pointer, leaves the focus on t
     const down = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
     act(() => {
       button.dispatchEvent(down);
+
       if (!down.defaultPrevented) button.focus();
       button.click();
     });
@@ -162,21 +171,21 @@ test("a toggle is announced pressed while it is on, in any look, and a plain but
         icon: createElement("svg"),
         label: "Mute microphone",
         variant: BUTTON_VARIANT.DANGER,
-        shape: BUTTON_SHAPE.ROUND,
+        corners: BUTTON_CORNERS.ROUND,
         pressed: false,
       }),
       createElement(IconButton, {
         icon: createElement("svg"),
         label: "Unmute speaker",
         variant: BUTTON_VARIANT.DANGER,
-        shape: BUTTON_SHAPE.ROUND,
+        corners: BUTTON_CORNERS.ROUND,
         pressed: true,
       }),
       createElement(IconButton, {
         icon: createElement("svg"),
         label: "End call",
         variant: BUTTON_VARIANT.INK,
-        shape: BUTTON_SHAPE.ROUND,
+        corners: BUTTON_CORNERS.ROUND,
       }),
     ),
   );
@@ -194,6 +203,7 @@ test("a toggle is announced pressed while it is on, in any look, and a plain but
 
 test("a read-only labeled button records a press: it takes none and no Tab stop, is announced pressed where it was the one given, and a drag over its words selects them", () => {
   const heard: string[] = [];
+
   const container = mount(
     createElement(
       "div",
@@ -214,6 +224,7 @@ test("a read-only labeled button records a press: it takes none and no Tab stop,
       }),
     ),
   );
+
   const [given, other] = [...container.querySelectorAll("button")];
   act(() => {
     given?.click();
@@ -257,6 +268,7 @@ test("a labeled button given a label is named by it, its words within it, and by
       }),
     ),
   );
+
   const said = Array.from(container.querySelectorAll("button"), (button) => [
     button.getAttribute("aria-label"),
     button.textContent,
@@ -304,6 +316,7 @@ test("an IconButtonLink is a link named by its label, and one in a new tab opens
 
 test("a compact row mark is found by its label, pressed, and right-clicked, and refuses its press while unavailable", () => {
   const pressed: string[] = [];
+
   const container = mount(
     createElement(
       "div",
@@ -324,7 +337,9 @@ test("a compact row mark is found by its label, pressed, and right-clicked, and 
       }),
     ),
   );
+
   const pin = container.querySelector<HTMLButtonElement>('button[aria-label="Pin Launch notes"]');
+
   const archive = container.querySelector<HTMLButtonElement>(
     'button[aria-label="Archive Launch notes"]',
   );
@@ -339,6 +354,7 @@ test("a compact row mark is found by its label, pressed, and right-clicked, and 
 
 test("an unavailable button that keeps its Tab stop refuses a press, as a busy one does, and an available one takes it", () => {
   const pressed: string[] = [];
+
   const container = mount(
     createElement(
       "div",
@@ -358,6 +374,7 @@ test("an unavailable button that keeps its Tab stop refuses a press, as a busy o
       createElement(Button, { onClick: () => pressed.push("Open"), children: "Open" }),
     ),
   );
+
   const [merge, save, open] = [...container.querySelectorAll("button")];
 
   act(() => merge?.click());
@@ -370,6 +387,7 @@ test("an unavailable button that keeps its Tab stop refuses a press, as a busy o
 /** Draws a form holding `submit`, and answers how many times the form was sent. */
 function mountForm(submit: React.ReactElement) {
   let sent = 0;
+
   const container = mount(
     createElement(
       "form",
@@ -382,6 +400,7 @@ function mountForm(submit: React.ReactElement) {
       submit,
     ),
   );
+
   return { container, sent: () => sent };
 }
 
@@ -394,6 +413,7 @@ test("a ready submit sends its form, and an unavailable one sends nothing", () =
       variant: BUTTON_VARIANT.INK,
     }),
   );
+
   const held = mountForm(
     createElement(IconButton, {
       submit: SUBMIT_STATE.READY,
@@ -413,6 +433,7 @@ test("a ready submit sends its form, and an unavailable one sends nothing", () =
 
 test("a streaming submit made the Stop does its own act, named Stop, without sending the form", () => {
   const stops: string[] = [];
+
   const form = mountForm(
     createElement(IconButton, {
       submit: SUBMIT_STATE.STREAMING,
@@ -421,6 +442,7 @@ test("a streaming submit made the Stop does its own act, named Stop, without sen
       onClick: () => stops.push("Stop"),
     }),
   );
+
   const stop = form.container.querySelector<HTMLButtonElement>('button[aria-label="Stop"]');
 
   act(() => stop?.click());
@@ -439,6 +461,7 @@ test("a done button wears its check in its words' place, refuses its press, and 
   });
   const heard: string[] = [];
   let pressed = 0;
+
   const draw = (done: boolean) =>
     createElement(Button, {
       variant: BUTTON_VARIANT.DANGER,
@@ -449,6 +472,7 @@ test("a done button wears its check in its words' place, refuses its press, and 
       },
       children: "Delete",
     });
+
   const container = mount(draw(false));
   const root = roots.at(-1) ?? expect.fail("no root");
   act(() => root.render(draw(true)));
@@ -478,10 +502,12 @@ test("a busy button whose press succeeded wears a check where its ring stood, re
     configurable: true,
     value(this: HTMLElement) {
       if (!this.classList.contains("ui-button-done")) return [];
+
       return this.dataset.leaving === "true" ? [fade] : [hold];
     },
   });
   let pressed = 0;
+
   const draw = (busy: boolean, succeeded: boolean) =>
     createElement(
       "div",
@@ -506,20 +532,25 @@ test("a busy button whose press succeeded wears a check where its ring stood, re
         succeeded,
       }),
     );
+
   const container = mount(draw(true, false));
   const root = roots.at(-1) ?? expect.fail("no root");
   const [save, upload] = [...container.querySelectorAll("button")];
   act(() => root.render(draw(false, true)));
+
   const landed = [save, upload].map((button) => ({
     check: button?.querySelector(".ui-button-done svg") !== null,
     busy: button?.getAttribute("aria-busy") ?? null,
     disabled: button?.disabled,
   }));
+
   act(() => save?.click());
   act(() => hold.dispatchEvent(new Event("finish")));
+
   const fading = [save, upload].map(
     (button) => button?.querySelector<HTMLElement>(".ui-button-done")?.dataset.leaving,
   );
+
   act(() => fade.dispatchEvent(new Event("finish")));
   Reflect.deleteProperty(HTMLElement.prototype, "getAnimations");
 
@@ -543,6 +574,7 @@ test("a busy button whose press succeeded wears a check where its ring stood, re
 
 test("a ButtonLink given a label is named by it, and an IconButtonLink's press is heard before the link is followed", () => {
   const presses: string[] = [];
+
   const container = mount(
     createElement(
       "div",
@@ -563,6 +595,7 @@ test("a ButtonLink given a label is named by it, and an IconButtonLink's press i
       }),
     ),
   );
+
   const [preview, github] = Array.from(container.querySelectorAll("a"));
 
   expect([preview?.getAttribute("aria-label"), preview?.textContent]).toEqual([

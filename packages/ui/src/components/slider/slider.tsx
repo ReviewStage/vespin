@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { cn } from "../../cn.js";
 import { Slider as ShadcnSlider } from "../../shadcn/slider.js";
 
@@ -62,7 +63,7 @@ export function Slider({
       value={value}
       thumbLabel={label}
       thumbValueText={valueText}
-      onValueChange={(next) => onChange(typeof next === "number" ? next : (next[0] ?? min))}
+      onValueChange={(next) => onChange(Predicate.isNumber(next) ? next : (next[0] ?? min))}
     />
   );
 }

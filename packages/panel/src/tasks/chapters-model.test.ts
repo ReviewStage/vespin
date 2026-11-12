@@ -88,6 +88,7 @@ function chapter(title: string, hunkRefs: Chapter["hunkRefs"]): Chapter {
 
 const FIRST = chapter("Read the store", [{ path: STORE.path, oldStart: 1 }]);
 const SECOND = chapter("Write the store", [{ path: STORE.path, oldStart: 10 }]);
+
 const OTHER: Chapter = {
   ...chapter("Other changes", [{ path: LOCK.path, oldStart: 3 }]),
   kind: CHAPTER_KIND.OTHER,
@@ -175,6 +176,7 @@ test("chapters made for an older head than the tab holds are stale, those for th
 
   assert.equal(current.kind, CHAPTERS_SHOWN.READY);
   assert.equal(older.kind, CHAPTERS_SHOWN.READY);
+
   if (current.kind !== CHAPTERS_SHOWN.READY || older.kind !== CHAPTERS_SHOWN.READY) return;
   assert.equal(current.stale, false);
   assert.equal(older.stale, true);
@@ -190,6 +192,7 @@ test("chapters are stale where the files drawn are of another push than they wer
       pullRequest: undefined,
       files,
     });
+
     return shown.kind === CHAPTERS_SHOWN.READY && shown.stale;
   };
 
@@ -224,6 +227,7 @@ test("marking a chapter turns the files not yet viewed, and marking a viewed one
 
 test("a chapter counts the review threads on its own hunks, and one on the whole file in every chapter holding a hunk of it", () => {
   const hunks = chapterHunks([STORE, LOCK]);
+
   const on = (line: number | null): ReviewThread => ({
     path: STORE.path,
     line,
@@ -238,6 +242,7 @@ test("a chapter counts the review threads on its own hunks, and one on the whole
     comments: [],
     more: 0,
   });
+
   const threads = [on(2), on(11), on(null)];
 
   assert.equal(chapterThreadCount(FIRST, threads, hunks), 2);
@@ -259,6 +264,7 @@ test("a key change's press goes to its first lines in the chapter's file order, 
     startLine,
     endLine,
   });
+
   const storeAdded = at(STORE.path, LINE_REF_SIDE.ADDITIONS, 10);
   const storeRemoved = at(STORE.path, LINE_REF_SIDE.DELETIONS, 10);
   const lockRemoved = at(LOCK.path, LINE_REF_SIDE.DELETIONS, 3);

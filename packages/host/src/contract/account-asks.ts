@@ -1,5 +1,7 @@
 import {
   AGENT_CALL_FAILURE,
+  allowedCommandsWriteAnswerViewSchema,
+  allowedCommandWriteParamsSchema,
   chatGptDeviceLoginParamsSchema,
   chatGptDevicePollAnswerViewSchema,
   chatGptDeviceStartAnswerViewSchema,
@@ -16,6 +18,8 @@ import {
   memoriesAnswerViewSchema,
   memoriesFollowParamsSchema,
   memoryForgetParamsSchema,
+  memorySaveAnswerViewSchema,
+  memorySaveParamsSchema,
   providerKeyForAgentsParamsSchema,
   providerKeyRemoveParamsSchema,
   providerKeySaveParamsSchema,
@@ -140,10 +144,26 @@ export const ACCOUNT_ASK_ACTS = declaredActs({
     door: ACT.REMOTE_WORK,
     unanswered: UNANSWERED,
   }),
+  ALLOWED_COMMANDS_WRITE: hostAct({
+    input: allowedCommandWriteParamsSchema,
+    output: allowedCommandsWriteAnswerViewSchema,
+    refusal: "Couldn't change your always-allowed commands on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: UNANSWERED,
+  }),
   MEMORIES_FORGET: hostAct({
     input: memoryForgetParamsSchema,
     output: memoriesAnswerViewSchema,
     refusal: "Could not forget that memory on this system.",
+    panelOnly: true,
+    door: ACT.ROW_WRITE,
+    unanswered: UNANSWERED,
+  }),
+  MEMORIES_SAVE: hostAct({
+    input: memorySaveParamsSchema,
+    output: memorySaveAnswerViewSchema,
+    refusal: "Could not save that memory on this system.",
     panelOnly: true,
     door: ACT.ROW_WRITE,
     unanswered: UNANSWERED,
@@ -262,7 +282,7 @@ export const ACCOUNT_ASK_ACTS = declaredActs({
   }),
 });
 
-/** A workspace's memories, followed for Settings › Memory while it holds them, and the account's provider keys and GitHub token, each held once for the account signed in while Settings draws them. */
+/** A workspace's memories, followed for Settings › Memory while it holds them, and the account's provider keys, GitHub token, and always-allowed commands, each held once for the account signed in while Settings draws them. */
 export const ACCOUNT_ASK_FOLLOWS = liveFollows({
   MEMORIES_FOLLOW: liveFollow({
     slice: LIVE_READ.MEMORIES,
@@ -293,6 +313,16 @@ export const ACCOUNT_ASK_FOLLOWS = liveFollows({
     retry: {
       name: "GITHUB_TOKEN_RETRY",
       refusal: "Could not read your GitHub token again on this system.",
+    },
+  }),
+  ALLOWED_COMMANDS_FOLLOW: liveFollow({
+    slice: LIVE_READ.ALLOWED_COMMANDS,
+    hold: HOLD.ACCOUNT,
+    refusal: "Couldn't follow your always-allowed commands on this system.",
+    panelOnly: true,
+    retry: {
+      name: "ALLOWED_COMMANDS_RETRY",
+      refusal: "Couldn't read your always-allowed commands again on this system.",
     },
   }),
 });

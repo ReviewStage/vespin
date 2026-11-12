@@ -24,12 +24,15 @@ const foldersBeforeBackfill = Effect.gen(function* () {
   const fileSystem = yield* FileSystem;
   const path = yield* Path;
   const folder = yield* fileSystem.makeTempDirectoryScoped({ prefix: "before-backfill-" });
+
   const names = (yield* fileSystem.readDirectory(MIGRATIONS_FOLDER)).filter(
     (name) => name.localeCompare(BACKFILL) < 0,
   );
+
   for (const name of names) {
     yield* fileSystem.copy(path.join(MIGRATIONS_FOLDER, name), path.join(folder, name));
   }
+
   return folder;
 });
 
@@ -50,6 +53,7 @@ it.effect(
         yield* sql`insert into personal_workspace (user_id, organization_id, created_at) values
           ('ada', 'ada-first', now()),
           ('grace', 'grace-first', now())`;
+
         const names = sql<{ readonly id: string; readonly name: string }>`
           select id, name from organization order by id
         `;
@@ -64,6 +68,7 @@ it.effect(
           { id: "grace-first", name: "Grace" },
           { id: "team", name: "Personal" },
         ];
+
         assert.deepEqual(migrated, expected);
         assert.deepEqual(yield* names, expected);
       }),

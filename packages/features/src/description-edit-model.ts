@@ -93,17 +93,23 @@ interface LineChange {
 function lineChanges(base: string[], text: string, mine: boolean): LineChange[] {
   const changes: LineChange[] = [];
   let at = 0;
+
   for (const part of diffArrays(base, text.split("\n"))) {
     const last = changes.at(-1);
     const changed = part.added || part.removed;
     // Note that a part following a change with no line kept between them is part of that change.
     const joins = changed && last !== undefined && last.to === at;
+
     if (joins) changes.pop();
     const change = joins ? last : { from: at, to: at, lines: [], mine };
+
     if (part.added) changes.push({ ...change, lines: [...change.lines, ...part.value] });
+
     if (part.removed) changes.push({ ...change, to: at + part.count });
+
     if (!part.added) at += part.count;
   }
+
   return changes;
 }
 
@@ -111,6 +117,7 @@ function lineChanges(base: string[], text: string, mine: boolean): LineChange[] 
 function byPlace(a: LineChange, b: LineChange): number {
   const aWrites = a.from === a.to ? 0 : 1;
   const bWrites = b.from === b.to ? 0 : 1;
+
   return a.from - b.from || aWrites - bWrites || Number(a.mine) - Number(b.mine);
 }
 
@@ -123,9 +130,12 @@ function byPlace(a: LineChange, b: LineChange): number {
 function settledChanges(place: readonly LineChange[]): readonly LineChange[] {
   const mine = place.filter((change) => change.mine);
   const theirs = place.filter((change) => !change.mine);
+
   if (mine.length === 0 || theirs.length === 0) return place;
+
   if (!place.every((change) => change.from === change.to)) return mine;
   const same = mine[0]?.lines.join("\n") === theirs[0]?.lines.join("\n");
+
   return same ? mine : [...theirs, ...mine];
 }
 
@@ -139,16 +149,20 @@ function placesOf(changes: readonly LineChange[]): (readonly LineChange[])[] {
   const places: LineChange[][] = [];
   let from = 0;
   let to = -1;
+
   for (const change of changes) {
     const place = places.at(-1);
     const insertsHere = from === to && change.from === to && change.to === to;
+
     if (place !== undefined && (change.from < to || insertsHere)) place.push(change);
     else {
       places.push([change]);
       from = change.from;
     }
+
     to = Math.max(to, change.to);
   }
+
   return places;
 }
 
@@ -163,17 +177,21 @@ function keptOver(base: string, mine: string, theirs: string): string {
   const changes = [...lineChanges(lines, theirs, false), ...lineChanges(lines, mine, true)];
   const merged: string[] = [];
   let at = 0;
+
   for (const place of placesOf(changes.sort(byPlace))) {
     for (const change of settledChanges(place)) {
       merged.push(...lines.slice(at, change.from), ...change.lines);
       at = change.to;
     }
+
     // Note that the other writer's lines a place dropped stand as the base held them.
     const to = Math.max(at, ...place.map((change) => change.to));
     merged.push(...lines.slice(at, to));
     at = to;
   }
+
   merged.push(...lines.slice(at));
+
   return merged.join("\n");
 }
 
@@ -204,13 +222,17 @@ export function editorTyped(
   anchors: DescriptionCommentAnchors | undefined = editor.anchors,
 ): DocumentEditor {
   const typed = anchors === undefined ? { ...editor, draft } : { ...editor, draft, anchors };
+
   if (tooLong(draft)) {
     const note = FAILURE_NOTE[DESCRIPTION_EDIT_REFUSAL.TOO_LONG];
+
     return { ...typed, state: { kind: DOCUMENT_EDITOR_STATE.FAILED, note } };
   }
+
   if (editor.state.kind === DOCUMENT_EDITOR_STATE.FAILED) {
     return { ...typed, state: { kind: DOCUMENT_EDITOR_STATE.EDITING } };
   }
+
   return typed;
 }
 
@@ -221,10 +243,13 @@ export function editorTyped(
  */
 export function pendingSave(editor: DocumentEditor): DescriptionEditRequest | undefined {
   if (editor.sending !== undefined) return undefined;
+
   if (editor.state.kind !== DOCUMENT_EDITOR_STATE.EDITING) return undefined;
   const { base, draft, anchors } = editor;
+
   if (draft === base || tooLong(draft)) return undefined;
   const document = { base, value: draft };
+
   return anchors === undefined ? { document } : { document, comments: anchors };
 }
 
@@ -238,20 +263,25 @@ export function editorSent(
 /** The service's answer to the save that was out. */
 export function editorAnswered(editor: DocumentEditor, answer: TasksEditAnswer): DocumentEditor {
   const { sending: sent, ...rest } = editor;
+
   if ("saved" in answer) {
     const base = sent === undefined ? editor.base : sent.document.value;
+
     // Note that words typed past the bound while the save was out still say so, so they hold the editor open.
     return editorTyped(
       { ...rest, base, state: { kind: DOCUMENT_EDITOR_STATE.EDITING } },
       rest.draft,
     );
   }
+
   if ("conflict" in answer) {
     const current = currentOr(editor.base, answer.conflict.current);
     const { by } = answer.conflict;
     const kind = DOCUMENT_EDITOR_STATE.CONFLICT;
+
     return { ...rest, state: by === undefined ? { kind, current } : { kind, current, by } };
   }
+
   return {
     ...rest,
     state: { kind: DOCUMENT_EDITOR_STATE.FAILED, note: FAILURE_NOTE[answer.failure] },
@@ -261,12 +291,14 @@ export function editorAnswered(editor: DocumentEditor, answer: TasksEditAnswer):
 /** The save that was out never answered: the act itself was refused. */
 export function editorRefused(editor: DocumentEditor, note: string): DocumentEditor {
   const { sending: _sent, ...rest } = editor;
+
   return { ...rest, state: { kind: DOCUMENT_EDITOR_STATE.FAILED, note } };
 }
 
 /** The developer asks a failed save to be tried again. */
 export function editorRetried(editor: DocumentEditor): DocumentEditor {
   if (editor.state.kind !== DOCUMENT_EDITOR_STATE.FAILED) return editor;
+
   return { ...editor, state: { kind: DOCUMENT_EDITOR_STATE.EDITING } };
 }
 
@@ -279,6 +311,7 @@ export function leavingSave(editor: DocumentEditor): DescriptionEditRequest | un
 export function editorLeft(editor: DocumentEditor): DocumentEditor | undefined {
   if (editor.draft === editor.base) return undefined;
   const { sending: _sent, ...rest } = editor;
+
   return { ...rest, closing: false };
 }
 
@@ -297,6 +330,7 @@ export function editorKeptMine(editor: DocumentEditor): DocumentEditor {
   const draft = keptOver(editor.base, editor.draft, base);
   const { anchors: _anchors, ...rest } = editor;
   const kept = draft === editor.draft ? editor : rest;
+
   // Note that two changes each within the bound may merge past it, which says so and holds the editor open.
   return editorTyped({ ...kept, base, state: { kind: DOCUMENT_EDITOR_STATE.EDITING } }, draft);
 }
@@ -305,6 +339,7 @@ export function editorKeptMine(editor: DocumentEditor): DocumentEditor {
 export function editorTookTheirs(editor: DocumentEditor): DocumentEditor {
   if (editor.state.kind !== DOCUMENT_EDITOR_STATE.CONFLICT) return editor;
   const base = editor.state.current;
+
   return {
     ...editor,
     base,

@@ -29,11 +29,13 @@ const ALIASED_SSL_MODE = /(^|&)sslmode=(?:prefer|require|verify-ca)(?=&|$)/;
  */
 function withExplicitSslMode(connectionString: string): string {
   const queryAt = connectionString.indexOf("?");
+
   if (queryAt === -1) {
     return connectionString;
   }
 
   const query = connectionString.slice(queryAt + 1);
+
   if (/(^|&)uselibpqcompat=true(?=&|$)/.test(query)) {
     return connectionString;
   }
@@ -44,6 +46,7 @@ function withExplicitSslMode(connectionString: string): string {
 /** The connection string as one rule reads it: trimmed, and a blank value is absent. */
 function connectionStringOf(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
+
   return trimmed ? withExplicitSslMode(trimmed) : undefined;
 }
 
@@ -59,6 +62,7 @@ export const databaseUrl: Config.Config<Redacted.Redacted> = Config.Redacted(
 ).pipe(
   Config.mapEffect((url) => {
     const named = connectionStringOf(Redacted.value(url));
+
     return named === undefined
       ? Effect.fail(
           new Config.ConfigError(
@@ -125,6 +129,7 @@ function createPool(connectionString: string): Pool {
     console.warn(`An idle database client was dropped: ${error.message}`);
   });
   attachDatabasePool(created);
+
   return created;
 }
 
@@ -142,10 +147,12 @@ export function getPool(): Pool {
   }
 
   const connectionString = connectionStringOf(process.env[DATABASE_ENVIRONMENT.URL]);
+
   if (!connectionString) {
     throw new Error(`${DATABASE_ENVIRONMENT.URL} is required to connect to the database.`);
   }
 
   pool = createPool(connectionString);
+
   return pool;
 }

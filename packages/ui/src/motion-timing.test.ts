@@ -13,7 +13,9 @@ const root = document.documentElement;
 function stand(duration: string | undefined, easing: string | undefined): void {
   root.style.removeProperty(MOTION_TOKEN.DURATION_FAST);
   root.style.removeProperty(MOTION_TOKEN.SPRING_FAST);
+
   if (duration !== undefined) root.style.setProperty(MOTION_TOKEN.DURATION_FAST, duration);
+
   if (easing !== undefined) root.style.setProperty(MOTION_TOKEN.SPRING_FAST, easing);
 }
 
@@ -43,6 +45,7 @@ test("a motion plays nothing where the tokens are zeroed by a capture run or lef
 
 test("a capture run, which zeroes the tokens on the body and not the root, holds motion still", () => {
   document.body.style.setProperty(MOTION_TOKEN.DURATION_FAST, "0s");
+
   try {
     stand("280ms", "ease-out");
     expect(motionHeld()).toBe(true);

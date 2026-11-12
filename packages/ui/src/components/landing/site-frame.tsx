@@ -30,10 +30,13 @@ function useFloating(): boolean {
   useEffect(() => {
     const read = (): void =>
       setFloating((was) => (was ? window.scrollY > FLOAT.BEFORE : window.scrollY > FLOAT.AFTER));
+
     read();
     window.addEventListener("scroll", read, { passive: true });
+
     return () => window.removeEventListener("scroll", read);
   }, []);
+
   return floating;
 }
 
@@ -73,6 +76,7 @@ export function SiteFrame({
   children: ReactNode;
 }): React.JSX.Element {
   const floating = useFloating();
+
   return (
     <div className="ui-landing-page">
       <div className="ui-landing-rails" aria-hidden="true" />

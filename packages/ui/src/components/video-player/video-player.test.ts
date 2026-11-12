@@ -3,7 +3,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, test, vi } from "vitest";
-import { VIDEO_PLAYER_PLACE, VideoPlayer } from "../../index.js";
+import { VIDEO_PLAYER_PLACE, VideoPlayer, type VideoPlayerPlace } from "../../index.js";
 
 /**
  * video-player.test.ts -- while focus is in a video's player, Space or K
@@ -12,8 +12,11 @@ import { VIDEO_PLAYER_PLACE, VideoPlayer } from "../../index.js";
  * comma and period, like the bar's frame buttons, pause it and step one
  * frame of the length its header states, none of them reaching the place
  * around it, whose arrows may walk files; a button's own Space is left to
- * the button. In the viewer it starts at
- * once, unless motion is held still. The browser's media element is
+ * the button. Until its size is read it says it is loading, with no bar.
+ * In the viewer it starts at
+ * once, unless motion is held still. A recording drawn again, as Expand
+ * draws it in the viewer, starts where it was left, and the player it was
+ * left in goes on from the viewer's place when played again. The browser's media element is
  * the boundary, so a stand-in plays, pauses, seeks, and opens Safari's own
  * player as one does, telling its events, and the player is read by what its
  * bar shows. Full screen, where the browser fills the screen with no element,
@@ -34,6 +37,11 @@ const DURATION_FAST = "--ui-duration-fast";
 
 /** A WebM's bytes as a picture read answers them; the stand-in element never decodes them. */
 const WEBM_URL = "data:video/webm;base64,GkXfow==";
+
+/** Recordings of their own for the tests that move the playhead, since where a recording was left outlives its player. */
+const SEEK_URL = "data:video/webm;base64,GkXfo0FA";
+const HELD_URL = "data:video/webm;base64,GkXfo0FB";
+const KEPT_URL = "data:video/webm;base64,GkXfo0KG";
 
 /**
  * A WebM header stating its frames a tenth of a second long: the EBML magic,
@@ -70,6 +78,7 @@ function standInMedia(video: HTMLVideoElement): () => number {
       value: () => {
         paused = false;
         video.dispatchEvent(new Event("play"));
+
         return Promise.resolve();
       },
     },
@@ -81,11 +90,16 @@ function standInMedia(video: HTMLVideoElement): () => number {
     },
   });
   act(() => video.dispatchEvent(new Event("loadedmetadata")));
+
   return () => at;
 }
 
 /** Draws a player inside a box that records every key reaching it, its video a stand-in. */
-function mountPlayer(onExpand?: () => void, dataUrl = WEBM_URL) {
+function mountPlayer(
+  onExpand?: () => void,
+  dataUrl = WEBM_URL,
+  place: VideoPlayerPlace = VIDEO_PLAYER_PLACE.INLINE,
+) {
   vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:recording");
   vi.spyOn(URL, "revokeObjectURL").mockReturnValue(undefined);
   const reached: string[] = [];
@@ -102,35 +116,59 @@ function mountPlayer(onExpand?: () => void, dataUrl = WEBM_URL) {
         createElement(VideoPlayer, {
           dataUrl,
           label: "Inviting a member",
-          place: VIDEO_PLAYER_PLACE.INLINE,
+          place,
           onExpand,
         }),
       ),
     ),
   );
   const video = container.querySelector("video");
+
   if (video === null) throw new Error("the player draws its video");
   const playhead = standInMedia(video);
   const frame = video.parentElement;
+
   if (frame === null) throw new Error("the video stands in a frame");
+
   const press = (key: string, on: HTMLElement = frame, repeat = false) =>
     act(() =>
       on.dispatchEvent(
         new KeyboardEvent("keydown", { key, repeat, bubbles: true, cancelable: true }),
       ),
     );
+
   const toggleLabel = () =>
     container
       .querySelector('button[aria-label="Play"], button[aria-label="Pause"]')
       ?.getAttribute("aria-label");
+
   const seekAt = () => container.querySelector<HTMLInputElement>('input[aria-label="Seek"]')?.value;
+
   const pressButton = (label: string) => {
     const button = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+
     if (button === null) throw new Error(`the bar has a ${label}`);
     act(() => button.click());
   };
+
   return { container, video, press, pressButton, toggleLabel, seekAt, playhead, reached };
 }
+
+test("until the video's size is read its frame says it is loading and draws no bar, which stands once it is read", () => {
+  vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:recording");
+  vi.spyOn(URL, "revokeObjectURL").mockReturnValue(undefined);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  act(() => root.render(createElement(VideoPlayer, { dataUrl: WEBM_URL, label: "" })));
+  const status = () => container.querySelector('[role="status"]')?.textContent;
+  expect(status()).toBe("Loading the video");
+  expect(container.querySelector('button[aria-label="Play"]')).toBeNull();
+  act(() => container.querySelector("video")?.dispatchEvent(new Event("loadedmetadata")));
+  expect(status()).toBeUndefined();
+  expect(container.querySelector('button[aria-label="Play"]')).not.toBeNull();
+});
 
 test("Space and K play and pause the video while focus is in its player, and neither reaches the place around it", () => {
   const { press, toggleLabel, reached } = mountPlayer();
@@ -145,7 +183,7 @@ test("Space and K play and pause the video while focus is in its player, and nei
 });
 
 test("the arrows seek five seconds within the video's length, flashing how far, from its scrubber too, and never reach the place around it", () => {
-  const { container, press, seekAt, reached } = mountPlayer();
+  const { container, press, seekAt, reached } = mountPlayer(undefined, SEEK_URL);
   const flash = () => container.querySelector(".ui-video-player-flash")?.textContent;
   press("ArrowRight");
   press("ArrowRight");
@@ -158,7 +196,9 @@ test("the arrows seek five seconds within the video's length, flashing how far, 
   expect(seekAt()).toBe("0");
   expect(flash()).toBe("10 seconds");
   const seek = container.querySelector<HTMLInputElement>('input[aria-label="Seek"]');
+
   if (seek === null) throw new Error("the bar has a scrubber");
+
   for (const _ of [1, 2, 3, 4, 5]) press("ArrowRight", seek);
   expect(seekAt()).toBe(String(LENGTH_S));
   expect(reached).toEqual([]);
@@ -167,6 +207,7 @@ test("the arrows seek five seconds within the video's length, flashing how far, 
 test("Space on one of the bar's buttons is the button's, and other keys pass on to the place around the player", () => {
   const { container, press, toggleLabel, reached } = mountPlayer(() => undefined);
   const expand = container.querySelector<HTMLButtonElement>('button[aria-label="Expand"]');
+
   if (expand === null) throw new Error("the bar has an Expand");
   press(" ", expand);
   expect(toggleLabel()).toBe("Play");
@@ -176,11 +217,13 @@ test("Space on one of the bar's buttons is the button's, and other keys pass on 
 });
 
 test("a held Space or K plays or pauses once, while a held arrow goes on seeking", () => {
-  const { press, toggleLabel, seekAt } = mountPlayer();
+  const { press, toggleLabel, seekAt } = mountPlayer(undefined, HELD_URL);
   press("k");
+
   for (const _ of [1, 2, 3]) press("k", undefined, true);
   expect(toggleLabel()).toBe("Pause");
   press(" ");
+
   for (const _ of [1, 2, 3, 4]) press(" ", undefined, true);
   expect(toggleLabel()).toBe("Play");
   press("ArrowRight");
@@ -193,6 +236,7 @@ test("comma and period, like the frame buttons, pause the video and step one fra
     undefined,
     TENTH_FRAME_URL,
   );
+
   press("k");
   press(".");
   // Each step lands in the middle of its frame: the second frame, a tenth long, spans 0.1 to 0.2.
@@ -217,7 +261,22 @@ test("comma and period, like the frame buttons, pause the video and step one fra
 test("Full screen opens the video in the browser's own player where the browser fills the screen with no element", () => {
   const { video, pressButton } = mountPlayer();
   pressButton("Full screen");
-  expect(Reflect.get(video, "webkitDisplayingFullscreen")).toBe(true);
+  expect("webkitDisplayingFullscreen" in video && video.webkitDisplayingFullscreen).toBe(true);
+});
+
+test("a recording opened in the viewer starts where it was left, and its first player goes on from the viewer's place", () => {
+  const inline = mountPlayer(() => undefined, KEPT_URL);
+  inline.press("ArrowRight");
+  inline.press("ArrowRight");
+  inline.pressButton("Expand");
+  const viewer = mountPlayer(undefined, KEPT_URL, VIDEO_PLAYER_PLACE.VIEWER);
+  expect(viewer.playhead()).toBe(10);
+  viewer.press("ArrowRight");
+  // A change of speed in the first player, before it plays, moves nothing and keeps the viewer's place.
+  inline.press(">");
+  act(() => inline.video.dispatchEvent(new Event("ratechange")));
+  inline.pressButton("Play");
+  expect(inline.playhead()).toBe(15);
 });
 
 /** Draws a player in the viewer, as the file viewer an Expand opens does, and answers its video. */
@@ -237,6 +296,7 @@ function mountInViewer(): HTMLVideoElement {
       }),
     ),
   );
+
   return container.querySelector("video") ?? expect.unreachable("the player draws its video");
 }
 

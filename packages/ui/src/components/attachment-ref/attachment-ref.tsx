@@ -15,7 +15,9 @@ import { INLINE_REF_FIT } from "../inline-ref/inline-ref-fit.js";
  * size under its name; a picture whose bytes are not here, still read or not
  * kept, wears a picture's glyph and hangs its name alone. Any other file
  * wears its type's glyph, which the caller draws as its file tree does. A
- * press opens it, as its caller opens files.
+ * press opens it, as its caller opens files. In a row that is itself a
+ * press and hangs its own card, it is an inert pill that hangs nothing
+ * (`hint` off), as a time in such a row hangs none.
  *
  * A pill is a token in its caller's words, so it takes no class or style.
  */
@@ -33,6 +35,7 @@ export function AttachmentRef({
   image,
   glyph,
   onOpen,
+  hint = true,
 }: {
   /** The file's name, "Picture 1" or "spec.pdf", which the pill says. */
   name: string;
@@ -42,14 +45,17 @@ export function AttachmentRef({
   glyph?: ReactNode;
   /** Opens the file; a pill without it presses nothing. */
   onOpen?: (() => void) | undefined;
+  /** Whether it hangs its card, or its name, while the pointer rests on it; off in a row that hangs its own. */
+  hint?: boolean | undefined;
 }): React.JSX.Element {
   const card =
-    image === undefined ? undefined : (
+    image === undefined || !hint ? undefined : (
       <HoverCard data-picture-card="">
         <HoverCardHead name={name} />
         <img className={PREVIEW} src={image} alt={name} />
       </HoverCard>
     );
+
   return (
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
@@ -65,6 +71,7 @@ export function AttachmentRef({
         )
       }
       card={card}
+      hint={hint ? undefined : false}
       onPress={onOpen}
       pressLabel={onOpen === undefined ? undefined : `Open ${name}`}
     />

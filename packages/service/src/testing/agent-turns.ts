@@ -46,6 +46,7 @@ export const endedAt = (
       trigger: TURN_TRIGGER.ASK,
       at: at - 1,
     });
+
     if (said !== undefined) {
       const answer = new AssistantMessageBuilder();
       answer.stepStart();
@@ -59,6 +60,7 @@ export const endedAt = (
         message: answer.finish(randomUUID()),
       });
     }
+
     yield* writer.consume(target, {
       ...turn,
       kind: RUN_EVENT.TURN_ENDED,
@@ -68,5 +70,6 @@ export const endedAt = (
       responseIds: [],
       at,
     });
+
     return turnId;
   });

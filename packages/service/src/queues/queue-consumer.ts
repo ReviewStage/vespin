@@ -5,9 +5,7 @@
  * consumer's effect is run here, on the services the function's runtime
  * handed over, never on a runtime of this file's own: this is the promise
  * door of the automation-runs consumer (`automation-run-consumer.ts`) and the
- * agent-turns consumer (`turn-delivery.ts`) alike, listed as a
- * permanent adaptor in `tools/anti-slop/effect-edges.json` and root
- * AGENTS.md; what would end it is an Effect consumer in the queue's SDK.
+ * agent-turns consumer (`turn-delivery.ts`) alike; what would end it is an Effect consumer in the queue's SDK.
  *
  * A delivery whose effect succeeds answers what it asks of the queue:
  * acknowledged, or delivered again after a while, which the SDK's retry
@@ -16,6 +14,7 @@
  * consumer's own wait where it names one, else once its lease runs out.
  */
 
+import type { WireValue } from "@repo/wire";
 import { handleCallback } from "@vercel/queue";
 import { Cause, type Context, Data, Duration, Effect, Exit } from "effect";
 
@@ -45,15 +44,17 @@ function secondsOf(wait: Duration.Duration): number {
  */
 export function queueConsumer<R>(
   services: Context.Context<R>,
-  consume: (message: unknown, deliveryCount: number) => Effect.Effect<QueueAnswer, unknown, R>,
+  consume: (message: WireValue, deliveryCount: number) => Effect.Effect<QueueAnswer, unknown, R>,
   failedAgain?: Duration.Duration,
 ): (request: Request) => Promise<Response> {
-  return handleCallback(
+  return handleCallback<WireValue>(
     async (message, metadata) => {
       const exit = await Effect.runPromiseExitWith(services)(
         consume(message, metadata.deliveryCount),
       );
+
       if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
+
       if (!exit.value.acknowledged) {
         throw new DeliveredAgain({ afterSeconds: secondsOf(exit.value.again) });
       }
@@ -61,6 +62,7 @@ export function queueConsumer<R>(
     {
       retry: (error) => {
         if (error instanceof DeliveredAgain) return { afterSeconds: error.afterSeconds };
+
         return failedAgain === undefined ? undefined : { afterSeconds: secondsOf(failedAgain) };
       },
     },

@@ -185,18 +185,24 @@ function isInlineMark(name: string): name is InlineMarkName {
 /** A mark as the box writes it: its name, and a link's address. */
 function inlineMark(mark: Mark): InlineMark[] {
   const { name } = mark.type;
+
   if (!isInlineMark(name)) return [];
+
   return [{ name, href: name === INLINE_MARK.LINK ? String(mark.attrs.href) : undefined }];
 }
 
 /** The words an inline node stands for, its marks aside. */
 function inlineText(node: PmNode): string {
   if (node.isText) return node.text ?? "";
+
   if (node.type.name === SKILL_NODE) return skillWord(String(node.attrs.name));
+
   if (node.type.name === FILE_NODE) return fileMarker(String(node.attrs.name));
+
   if (node.type.name === MENTION_NODE) {
     return mentionLink({ name: String(node.attrs.name), target: String(node.attrs.target) });
   }
+
   return node.type.name === HARD_BREAK_NODE ? NEWLINE : "";
 }
 
@@ -227,11 +233,13 @@ function fragmentText(fragment: Fragment): string {
   const inline: PmNode[] = [];
   fragment.forEach((node) => {
     const last = blocks.at(-1);
+
     if (isQuote(node)) blocks.push({ kind: MESSAGE_BLOCK.QUOTE, words: quoteWords(node) });
     else if (!node.isBlock) inline.push(node);
     else if (last?.kind === MESSAGE_BLOCK.WORDS) last.lines.push(fragmentText(node.content));
     else blocks.push({ kind: MESSAGE_BLOCK.WORDS, lines: [fragmentText(node.content)] });
   });
+
   return blocks.length === 0 ? writtenLine(inline).text : messageText(blocks);
 }
 
@@ -239,6 +247,7 @@ function fragmentText(fragment: Fragment): string {
 function copiedText(slice: Slice): string {
   const only = slice.content.childCount === 1 ? slice.content.firstChild : null;
   const insideQuote = only !== null && isQuote(only) && slice.openStart > 0 && slice.openEnd > 0;
+
   return fragmentText(insideQuote ? only.content : slice.content);
 }
 
@@ -252,9 +261,13 @@ function quotedOffset(line: string, at: number): number {
   const lines = line.split(NEWLINE);
   const before = line.slice(0, at).split(NEWLINE).length;
   let prefixes = 0;
+
   for (let index = 0; index < before; index += 1) prefixes += lines[index] === "" ? 1 : 2;
+
   return at + prefixes;
 }
+
+type LineRunsResult = { runs: TextRun[]; length: number };
 
 /** The runs of words of one line of the document, `start` the place its paragraph stands at and `offset` where its words start, a quote's lines shifted past their `> `. */
 function lineRuns(
@@ -262,7 +275,7 @@ function lineRuns(
   start: number,
   offset: number,
   quoted: boolean,
-): { runs: TextRun[]; length: number } {
+): LineRunsResult {
   const children: PmNode[] = [];
   const starts: number[] = [];
   paragraph.forEach((child, childStart) => {
@@ -270,11 +283,13 @@ function lineRuns(
     starts.push(start + 1 + childStart);
   });
   const line = writtenLine(children);
+
   const runs = line.segments.map((segment) => ({
     offset: offset + (quoted ? quotedOffset(line.text, segment.offset) : segment.offset),
     pos: (starts[segment.piece] ?? 0) + segment.from,
     length: segment.length,
   }));
+
   return { runs, length: quoted ? quoteOf(line.text).length : line.text.length };
 }
 
@@ -287,13 +302,17 @@ function textRuns(doc: PmNode): TextRun[] {
     if (previous !== undefined) {
       offset += isQuote(previous) || isQuote(block) ? QUOTE_GAP.length : NEWLINE.length;
     }
+
     previous = block;
+
     if (!isQuote(block)) {
       const line = lineRuns(block, start, offset, false);
       runs.push(...line.runs);
       offset += line.length;
+
       return;
     }
+
     block.forEach((paragraph, childStart) => {
       if (childStart > 0) offset += NEWLINE.length;
       const line = lineRuns(paragraph, start + 1 + childStart, offset, true);
@@ -301,6 +320,7 @@ function textRuns(doc: PmNode): TextRun[] {
       offset += line.length;
     });
   });
+
   return runs;
 }
 
@@ -312,7 +332,9 @@ function placeOf(
   const run = runs.find(
     (each) => range.start >= each.offset && range.end <= each.offset + each.length,
   );
+
   if (run === undefined) return undefined;
+
   return { from: run.pos + range.start - run.offset, to: run.pos + range.end - run.offset };
 }
 
@@ -329,6 +351,7 @@ function textBetween(doc: PmNode, from: number, to: number): string {
  */
 function offsetAt(doc: PmNode, pos: number): number {
   const run = textRuns(doc).find((each) => pos >= each.pos && pos <= each.pos + each.length);
+
   return run === undefined ? textBetween(doc, 0, pos).length : run.offset + pos - run.pos;
 }
 
@@ -371,8 +394,10 @@ function chipTokens(
       node: (schema) => schema.node(MENTION_NODE, { ...token.mention }),
     }),
   );
+
   // A command the message opens with is the command's chip, even where a skill shares its name, since the command is what it runs.
   const leading = leadingCommandToken(text, commands);
+
   const commanded = (leading === undefined ? [] : [leading]).map(
     (range): ChipToken => ({
       ...range,
@@ -380,6 +405,7 @@ function chipTokens(
         schema.node(SKILL_NODE, { name: text.slice(range.start + 1, range.end), command: true }),
     }),
   );
+
   // Note that a `/name` inside a mention's link is the link's words, never a chip of its own.
   const skilled = skillTokens(text, skills)
     .filter((range) => range.start !== leading?.start)
@@ -390,10 +416,12 @@ function chipTokens(
         node: (schema) => schema.node(SKILL_NODE, { name: text.slice(range.start + 1, range.end) }),
       }),
     );
+
   // Note that a marker inside a mention's link is the link's words, as a `/name` there is.
   const filed = fileTokens(text, files).filter(
     (token) => !mentions.some((each) => token.start < each.end && token.end > each.start),
   );
+
   return [...mentions, ...commanded, ...skilled, ...filed].sort(
     (first, second) => first.start - second.start,
   );
@@ -417,20 +445,25 @@ function paragraphsOf(schema: Schema, text: string, chipping: Chipping): PmNode[
   const paragraphs: PmNode[] = [];
   let lineStart = 0;
   let fence: string | undefined;
+
   for (const line of text.split(NEWLINE)) {
     const lineEnd = lineStart + line.length;
     const fenceBefore = fence;
     fence = fenceAfter(fence, line);
+
     if (fenceBefore !== undefined || fence !== undefined) {
       paragraphs.push(schema.node("paragraph", null, line === "" ? [] : [schema.text(line)]));
       lineStart = lineEnd + NEWLINE.length;
       continue;
     }
+
     const chips = tokens.filter((each) => each.start >= lineStart && each.end <= lineEnd);
+
     const atoms = chips.map((each) => ({
       start: each.start - lineStart,
       end: each.end - lineStart,
     }));
+
     const children = readInline(line, atoms).map((span) =>
       span.kind === INLINE_SPAN.ATOM
         ? (chips.find((each) => each.start === lineStart + span.from)?.node(schema) ??
@@ -440,9 +473,11 @@ function paragraphsOf(schema: Schema, text: string, chipping: Chipping): PmNode[
             span.marks.map((mark) => schemaMark(schema, mark)),
           ),
     );
+
     paragraphs.push(schema.node("paragraph", null, children));
     lineStart = lineEnd + NEWLINE.length;
   }
+
   return paragraphs;
 }
 
@@ -454,12 +489,15 @@ function paragraphsOf(schema: Schema, text: string, chipping: Chipping): PmNode[
  */
 function documentOf(schema: Schema, text: string, chipping: Chipping): PmNode {
   const blocks = messageBlocks(text);
+
   const nodes = blocks.flatMap((block) =>
     block.kind === MESSAGE_BLOCK.QUOTE
       ? [schema.node(QUOTE_NODE, null, paragraphsOf(schema, block.words, chipping))]
       : paragraphsOf(schema, block.lines.join(NEWLINE), chipping),
   );
+
   if (blocks.at(-1)?.kind === MESSAGE_BLOCK.QUOTE) nodes.push(schema.node("paragraph"));
+
   return schema.topNodeType.create(null, nodes);
 }
 
@@ -484,6 +522,7 @@ function chipped(
   const text = textOf(doc);
   const caret = selection.empty ? offsetAt(doc, selection.from) : undefined;
   const leading = leadingCommandToken(text, chipping.commands);
+
   const tokens: {
     start: number;
     end: number;
@@ -509,16 +548,21 @@ function chipped(
       node: () => token.node(schema),
     })),
   ];
+
   const places = tokens
     .filter((token) => !spareCaret || token.end !== caret)
     .flatMap((token) => {
       const place = placeOf(runs, token);
+
       return place === undefined ? [] : [{ ...place, node: token.node(place) }];
     })
     .sort((first, second) => first.from - second.from);
+
   if (places.length === 0) return undefined;
   const tr = state.tr;
+
   for (const place of places.reverse()) tr.replaceWith(place.from, place.to, place.node);
+
   return tr.setMeta(CHIPPED_META, true);
 }
 
@@ -532,12 +576,15 @@ const DOCUMENT_ENTER = chainCommands(createParagraphNear, liftEmptyBlock, splitB
 /** The chip beside an empty selection taken out whole, before it for Backspace and after it for Delete; answers whether there was one. */
 function removedChip(view: EditorView, key: string): boolean {
   const { selection } = view.state;
+
   if (!selection.empty || (key !== "Backspace" && key !== "Delete")) return false;
   const back = key === "Backspace";
   const beside = back ? selection.$from.nodeBefore : selection.$from.nodeAfter;
+
   if (beside === null || beside === undefined || !isChip(beside)) return false;
   const from = back ? selection.from - 1 : selection.from;
   view.dispatch(view.state.tr.delete(from, from + 1).scrollIntoView());
+
   return true;
 }
 
@@ -559,19 +606,25 @@ type TriggerFinder = (text: string, caret: number) => TriggerWord | undefined;
 /** The `/` word the caret ends: a skill's name as far as it is typed, through to the name's end. */
 function slashWord(text: string, caret: number): TriggerWord | undefined {
   const mention = mentionAt(text, caret);
+
   if (mention === undefined) return undefined;
   let end = caret;
+
   while (end < text.length && NAME_CHARACTER.test(text[end] ?? "")) end += 1;
+
   return { ...mention, end };
 }
 
 /** The `@` word the caret ends, as far as it is typed, through to the word's end (`atWordAround`); nothing in code. */
 function atWord(text: string, caret: number): TriggerWord | undefined {
   const word = atWordAround(text.slice(0, caret), text.slice(caret));
+
   if (word === undefined) return undefined;
   const start = caret - word.query.length - 1;
+
   // An `@` in code is the code's, as a `/` there is, and as the server reads no mention there.
   if (insideCode(text, start)) return undefined;
+
   return { start, query: word.query, end: caret + word.rest };
 }
 
@@ -585,16 +638,20 @@ function triggerAt(
   find: TriggerFinder,
 ): { readonly trigger: ComposerTrigger; readonly from: number; readonly to: number } | undefined {
   const { doc, selection } = view.state;
+
   if (!selection.empty || !view.hasFocus()) return undefined;
   const text = textOf(doc);
   const caret = offsetAt(doc, selection.from);
   const word = find(text, caret);
+
   if (word === undefined) return undefined;
   const runs = textRuns(doc);
   const typed = placeOf(runs, { start: word.start, end: caret });
+
   if (typed === undefined) return undefined;
   const whole = placeOf(runs, { start: word.start, end: word.end }) ?? typed;
   const box = view.coordsAtPos(typed.from);
+
   return {
     trigger: {
       start: word.start,
@@ -628,6 +685,7 @@ function skillNode(drawChip: ComposerEditorProps["drawChip"], known: (name: stri
           tag: "span[data-chip]",
           getAttrs: (element) => {
             const name = element.textContent.replace(/^\//u, "");
+
             return known(name) ? { name } : false;
           },
         },
@@ -644,10 +702,12 @@ function skillNode(drawChip: ComposerEditorProps["drawChip"], known: (name: stri
         const dom = document.createElement("span");
         dom.contentEditable = "false";
         dom.dataset.chip = SKILL_NODE;
+
         const undraw = drawChip(dom, {
           name: String(node.attrs.name),
           command: node.attrs.command === true,
         });
+
         return { dom, ignoreMutation: () => true, destroy: undraw };
       };
     },
@@ -677,6 +737,7 @@ function fileNode(drawFile: ComposerEditorProps["drawFile"], held: (name: string
           tag: `span[data-chip="${FILE_NODE}"]`,
           getAttrs: (element) => {
             const name = fileMarkers(element.textContent)[0]?.name;
+
             return name !== undefined && held(name) ? { name } : false;
           },
         },
@@ -694,8 +755,10 @@ function fileNode(drawFile: ComposerEditorProps["drawFile"], held: (name: string
         dom.contentEditable = "false";
         dom.dataset.chip = FILE_NODE;
         const name = String(node.attrs.name);
+
         if (drawFile === undefined) dom.textContent = fileMarker(name);
         const undraw = drawFile?.(dom, name) ?? (() => undefined);
+
         return { dom, ignoreMutation: () => true, destroy: undraw };
       };
     },
@@ -731,6 +794,7 @@ function composerExtensions(
     underline: false,
     trailingNode: false,
   });
+
   return [
     withoutTipTapChords(kit),
     writingKeys.configure({ actions: WRITING_ACTIONS }),
@@ -745,6 +809,7 @@ function composerExtensions(
 /** Whether a node is a chip, a skill's, a file's, or a mention's. */
 function isChip(node: PmNode): boolean {
   const { name } = node.type;
+
   return name === SKILL_NODE || name === FILE_NODE || name === MENTION_NODE;
 }
 
@@ -752,8 +817,10 @@ function isChip(node: PmNode): boolean {
 function unmarkedChips(tr: Transaction): Transaction {
   tr.doc.descendants((node, pos) => {
     if (isChip(node) && node.marks.length > 0) tr.removeMark(pos, pos + node.nodeSize);
+
     return !node.isInline;
   });
+
   return tr;
 }
 
@@ -779,14 +846,18 @@ interface ComposerState {
 function reported(view: EditorView, state: ComposerState, props: ComposerEditorProps): void {
   state.trigger = triggerAt(view, slashWord);
   const next = state.trigger?.trigger;
+
   if (!sameTrigger(next, state.reported)) {
     state.reported = next;
     props.onTrigger(next);
   }
+
   const { mentions } = props;
+
   if (mentions === undefined) return;
   state.mentionTrigger = triggerAt(view, atWord);
   const mention = state.mentionTrigger?.trigger;
+
   if (sameTrigger(mention, state.mentionReported)) return;
   state.mentionReported = mention;
   mentions.onTrigger(mention);
@@ -804,14 +875,17 @@ function guardPlugin(state: ComposerState, props: ComposerEditorProps): Plugin {
     // words already over it, which nothing lays in, can still be cut back.
     filterTransaction: (tr, before) => {
       if (!tr.docChanged) return true;
+
       if (state.input === COMPOSER_INPUT.READ_ONLY && tr.getMeta(COMMAND_META) !== true)
         return false;
       const length = textOf(tr.doc).length;
+
       return length <= props.maxLength || length <= textOf(before.doc).length;
     },
     appendTransaction: (transactions, _old, now) => {
       const chipping = transactions.some((tr) => tr.getMeta(CHIPPED_META) === true);
       const tr = unmarkedChips((chipping ? undefined : chipped(now, state, true)) ?? now.tr);
+
       return tr.docChanged ? tr : undefined;
     },
     view: () => ({ update: (view) => reported(view, state, props) }),
@@ -822,12 +896,15 @@ function guardPlugin(state: ComposerState, props: ComposerEditorProps): Plugin {
 function inFence(text: string, at: number): boolean {
   let fence: string | undefined;
   let start = 0;
+
   for (const line of text.split(NEWLINE)) {
     const before = fence;
     fence = fenceAfter(fence, line);
+
     if (at <= start + line.length) return before !== undefined || fence !== undefined;
     start += line.length + NEWLINE.length;
   }
+
   return false;
 }
 
@@ -839,6 +916,7 @@ function inFence(text: string, at: number): boolean {
  */
 function caretInCode(text: string, caret: number): boolean {
   if (insideCode(text, caret)) return true;
+
   return caret > 0 && text[caret - 1] !== NEWLINE && insideCode(text, caret - 1);
 }
 
@@ -851,17 +929,23 @@ function pasted(
   props: ComposerEditorProps,
 ): boolean {
   const files = [...(event.clipboardData?.files ?? [])];
+
   if (files.length > 0 && props.onPasteFiles(files)) return true;
+
   if (state.input === COMPOSER_INPUT.READ_ONLY) return true;
   const { doc, selection, schema } = view.state;
   const words = fragmentText(slice.content);
+
   if (props.onPasteText?.(words) === true) return true;
+
   // Note that what goes over is read off the words as the paste would leave them, since a selection inside a mark leaves its delimiters standing around what replaces it.
   const over = (pasting: string) =>
     textOf(view.state.tr.replaceSelection(sliceOf(schema, pasting, state)).doc).length -
     props.maxLength;
+
   // An address of our own or a page of an integration's pasted whole, outside code, is laid in as its mention, where its link has room.
   const mention = props.mentions?.pasted(words);
+
   if (
     mention !== undefined &&
     over(`${mentionLink(mention)}${SPACE}`) <= 0 &&
@@ -869,16 +953,22 @@ function pasted(
   ) {
     return pastedMention(view, event, () => mention);
   }
+
   let kept = words;
+
   for (let excess = over(kept); excess > 0 && kept !== ""; excess = over(kept)) {
     kept = kept.slice(0, Math.max(0, kept.length - excess));
   }
+
   if (kept === words) return false;
+
   if (kept !== "") {
     view.dispatch(view.state.tr.replaceSelection(sliceOf(schema, kept, state)).scrollIntoView());
   }
+
   // Note that the owner is told after the words land, so what it says of the cut is never cleared by the change that made it.
   props.onPasteCut?.();
+
   return true;
 }
 
@@ -895,21 +985,28 @@ function composerProps(state: ComposerState, props: ComposerEditorProps): Editor
     // Note that a key an input method is composing is the input method's alone, the owner's included.
     handleKeyDown: (view, event) => {
       if (composing(view, event)) return false;
+
       if (props.onKey(event) || removedChip(view, event.key)) return true;
+
       // Note that Shift with Enter is never the owner's, ⌘ or Ctrl held too, since Shift is what breaks a line.
       if (event.shiftKey) {
         const plain = event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.altKey;
+
         return plain && DOCUMENT_ENTER(view.state, view.dispatch);
       }
+
       if (!(props.enterWrites === true ? modEnterSends(event) : enterSends(event))) return false;
       props.onEnter();
+
       return true;
     },
     // Note that words typed in a fenced block are the code's, so no Markdown rule makes a mark of them, as none is read from its lines (`paragraphsOf`).
     handleTextInput: (view, from, _to, _text, typed) => {
       const { doc } = view.state;
+
       if (!inFence(textOf(doc), offsetAt(doc, from))) return false;
       view.dispatch(typed());
+
       return true;
     },
     handleDOMEvents: {
@@ -917,19 +1014,23 @@ function composerProps(state: ComposerState, props: ComposerEditorProps): Editor
       beforeinput: (_view, event) => {
         if (state.input !== COMPOSER_INPUT.READ_ONLY) return false;
         event.preventDefault();
+
         return true;
       },
       blur: (view) => {
         reported(view, state, props);
+
         return false;
       },
       focus: (view) => {
         reported(view, state, props);
+
         return false;
       },
       // The words scrolling under a list move the slash it stands over, with no change to the state.
       scroll: (view) => {
         reported(view, state, props);
+
         return false;
       },
     },
@@ -963,12 +1064,15 @@ function focusedAtCaret(editor: Editor): void {
 /** The words laid in whole, each known skill's `/name` its chip, the caret at their end, and the browser's there too where the box holds the focus. */
 function laidIn(editor: Editor, state: ComposerState, text: string): void {
   const { doc, schema } = editor.state;
+
   const tr = editor.state.tr.replaceWith(
     0,
     doc.content.size,
     documentOf(schema, text, state).content,
   );
+
   commanded(editor, tr.setSelection(TextSelection.atEnd(tr.doc)).setMeta(CHIPPED_META, true));
+
   if (editor.view.hasFocus()) focusedAtCaret(editor);
 }
 
@@ -977,6 +1081,7 @@ function needsSpace(node: PmNode | null | undefined, after: boolean): boolean {
   if (node === null || node === undefined) return false;
   const words = inlineText(node);
   const character = after ? words[0] : words.at(-1);
+
   return character !== undefined && !/\s/u.test(character);
 }
 
@@ -994,6 +1099,7 @@ function insertedAt(
   const trail = needsSpace($pos.nodeAfter, true) ? SPACE : "";
   const room = Math.max(0, maxLength - textOf(doc).length - lead.length - trail.length);
   const fitting = words.slice(0, room).trim();
+
   if (fitting === "") return false;
   const tr = editor.state.tr.replace(pos, pos, sliceOf(schema, `${lead}${fitting}${trail}`, state));
   commanded(
@@ -1001,6 +1107,7 @@ function insertedAt(
     tr.setSelection(TextSelection.create(tr.doc, tr.mapping.map(pos) - trail.length)),
   );
   editor.view.focus();
+
   return true;
 }
 
@@ -1021,17 +1128,22 @@ function insertedFilesAt(
 ): boolean {
   const { doc, schema } = editor.state;
   const $pos = doc.resolve(pos);
+
   if (names.length === 0 || !$pos.parent.inlineContent) return false;
   state.files = new Set([...state.files, ...names]);
+
   const chips = names.flatMap((name, index) => [
     ...(index > 0 ? [schema.text(SPACE)] : []),
     schema.node(FILE_NODE, { name }),
   ]);
+
   const laid = editor.state.tr.insert(pos, chips);
   const tr = spacedChip(laid, pos, laid.mapping.map(pos));
+
   if (textOf(tr.doc).length > maxLength) return false;
   editor.view.dispatch(tr.setMeta(COMMAND_META, true).setMeta(CHIPPED_META, true).scrollIntoView());
   editor.view.focus();
+
   return true;
 }
 
@@ -1045,8 +1157,10 @@ function removedFiles(editor: Editor, names: readonly string[]): void {
     const spaced = doc.textBetween(end, Math.min(end + 1, doc.content.size)) === SPACE;
     ranges.push({ from: pos, to: spaced ? end + SPACE.length : end });
   });
+
   if (ranges.length === 0) return;
   const tr = editor.state.tr;
+
   for (const range of ranges.reverse()) tr.delete(range.from, range.to);
   editor.view.dispatch(tr.setMeta(COMMAND_META, true).setMeta("addToHistory", false));
 }
@@ -1073,6 +1187,7 @@ function laidInMention(
   if (state.input !== COMPOSER_INPUT.EDITABLE) return;
   const chip = editor.schema.node(MENTION_NODE, { name: mention.name, target: mention.target });
   const tr = chipOverSelection(editor.state, chip);
+
   if (textOf(tr.doc).length > maxLength) return;
   editor.view.dispatch(tr.scrollIntoView());
   editor.view.focus();
@@ -1086,14 +1201,18 @@ function quotedAt(editor: Editor, chipping: Chipping, words: string): Transactio
   const quote = schema.node(QUOTE_NODE, null, paragraphsOf(schema, words, chipping));
   const from = $from.before(1);
   const empty = line.type.name === "paragraph" && line.content.size === 0;
+
   const tr = empty
     ? editor.state.tr.replaceWith(from, from + line.nodeSize, quote)
     : editor.state.tr.insert(from + line.nodeSize, quote);
+
   const under = (empty ? from : from + line.nodeSize) + quote.nodeSize;
   const next = tr.doc.nodeAt(under);
+
   if (next === null || next.type.name !== "paragraph" || next.content.size > 0) {
     tr.insert(under, schema.node("paragraph"));
   }
+
   return tr.setSelection(TextSelection.create(tr.doc, under + 1));
 }
 
@@ -1111,17 +1230,23 @@ function laidInQuote(
   if (state.input !== COMPOSER_INPUT.EDITABLE || editor.state.selection.$from.depth < 1) {
     return false;
   }
+
   let kept = words;
+
   while (kept !== "") {
     const tr = quotedAt(editor, state, kept);
     const over = textOf(tr.doc).length - maxLength;
+
     if (over <= 0) {
       editor.view.dispatch(tr.scrollIntoView());
       focusedAtCaret(editor);
+
       return true;
     }
+
     kept = cutReply(kept, kept.length - over);
   }
+
   return false;
 }
 
@@ -1129,15 +1254,18 @@ function laidInQuote(
 function marked(editor: Editor, state: ComposerState, maxLength: number): ComposerMark {
   const mark = Symbol("mark");
   state.marks.set(mark, editor.state.selection.to);
+
   return {
     insert: (words) => {
       const pos = state.marks.get(mark);
       state.marks.delete(mark);
+
       return pos !== undefined && insertedAt(editor, state, maxLength, pos, words);
     },
     insertFiles: (names) => {
       const pos = state.marks.get(mark);
       state.marks.delete(mark);
+
       return pos !== undefined && insertedFilesAt(editor, state, maxLength, pos, names);
     },
     release: () => {
@@ -1177,7 +1305,9 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
     mentions: props.mentions !== undefined,
     marks: new Map(),
   };
+
   const guard = guardPlugin(state, props);
+
   const editor = new Editor({
     element: host,
     // Note that TipTap's own base rules would go in as an inline `<style>`, which the panel's policy (`style-src 'self'`: the desktop's `renderer/index.html` and the web's `vercel.json`) refuses; the owner's stylesheet styles the box instead.
@@ -1194,15 +1324,19 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
     ],
     editorProps: composerProps(state, props),
   });
+
   editor.on("transaction", ({ transaction }) => {
     for (const [mark, pos] of state.marks) state.marks.set(mark, transaction.mapping.map(pos));
     const text = textOf(editor.state.doc);
+
     if (!transaction.docChanged || text === state.emitted) return;
     state.emitted = text;
     props.onDraft(text);
   });
   laidIn(editor, state, props.text);
+
   if (props.focus) editor.view.focus();
+
   return {
     ...editorFormatting(editor),
     clear: () => laidIn(editor, state, ""),
@@ -1223,16 +1357,19 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
     setSkills: (skills) => {
       state.skills = skills;
       const tr = chipped(editor.state, state, true);
+
       if (tr !== undefined) editor.view.dispatch(tr.setMeta("addToHistory", false));
     },
     setCommands: (commands) => {
       state.commands = commands;
       const tr = chipped(editor.state, state, true);
+
       if (tr !== undefined) editor.view.dispatch(tr.setMeta("addToHistory", false));
     },
     setFiles: (files) => {
       state.files = files;
       const tr = chipped(editor.state, state, true);
+
       if (tr !== undefined) editor.view.dispatch(tr.setMeta("addToHistory", false));
     },
     removeFiles: (names) => removedFiles(editor, names),
@@ -1247,6 +1384,7 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
     setAria: (aria) => {
       if (sameAria(state.aria, aria) || editor.isDestroyed) return;
       state.aria = aria;
+
       // Note that an input method's words are never redrawn under it: the next change it makes names the list.
       if (!editor.view.composing) editor.view.updateState(editor.state);
     },

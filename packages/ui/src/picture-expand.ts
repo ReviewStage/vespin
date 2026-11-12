@@ -55,6 +55,7 @@ interface Box {
 /** A pixel length's number, none where it is none. */
 function pixels(value: string): number {
   const length = Number.parseFloat(value);
+
   return Number.isFinite(length) ? length : 0;
 }
 
@@ -72,13 +73,18 @@ function overlaps(box: Box, room: Pick<Box, "top" | "right" | "bottom" | "left">
  */
 function inSight(face: HTMLElement): boolean {
   const box = face.getBoundingClientRect();
+
   if (box.width <= 0 || box.height <= 0) return false;
   const view = { top: 0, left: 0, right: innerWidth, bottom: innerHeight };
+
   if (!overlaps(box, view)) return false;
+
   for (let around = face.parentElement; around !== null; around = around.parentElement) {
     if (getComputedStyle(around).overflow === "visible") continue;
+
     if (!overlaps(box, around.getBoundingClientRect())) return false;
   }
+
   return true;
 }
 
@@ -96,13 +102,16 @@ interface Flight {
  */
 function flightOf(face: HTMLElement, card: HTMLElement): Flight | undefined {
   const picture = card.querySelector(PICTURE_SELECTOR);
+
   if (picture === null) return undefined;
   const tile = face.getBoundingClientRect();
   const box = card.getBoundingClientRect();
   const shown = picture.getBoundingClientRect();
+
   if (tile.width <= 0 || tile.height <= 0 || shown.width <= 0 || shown.height <= 0) {
     return undefined;
   }
+
   const scaleX = tile.width / shown.width;
   const scaleY = tile.height / shown.height;
   const x = tile.left - box.left - (shown.left - box.left) * scaleX;
@@ -115,6 +124,7 @@ function flightOf(face: HTMLElement, card: HTMLElement): Flight | undefined {
   const left = Math.max(shown.left, box.left) - box.left;
   const corner = pixels(getComputedStyle(face).borderTopLeftRadius);
   const room = -SHADOW_ROOM_PX;
+
   return {
     tile: {
       transformOrigin: "0 0",
@@ -168,6 +178,7 @@ export function usePictureExpand(onOpened: boolean): PictureExpand {
   // the picture it waits on is taken out and never loads.
   useLayoutEffect(() => {
     if (!onOpened) stopWaiting.current?.();
+
     if (face !== undefined && grown.current) face.style.visibility = onOpened ? "hidden" : "";
   }, [face, onOpened]);
   useLayoutEffect(
@@ -181,11 +192,15 @@ export function usePictureExpand(onOpened: boolean): PictureExpand {
   // picture cannot be measured, which taking the attribute off replays.
   const fly = (standing: HTMLElement, tile: HTMLElement, timing: KeyframeAnimationOptions) => {
     const flight = tile.isConnected ? flightOf(tile, standing) : undefined;
+
     if (flight === undefined) {
       standing.removeAttribute(EXPANDING_ATTRIBUTE);
+
       return;
     }
+
     grown.current = true;
+
     if (onOpened) tile.style.visibility = "hidden";
     standing.animate([flight.tile, flight.landed], timing);
   };
@@ -194,34 +209,43 @@ export function usePictureExpand(onOpened: boolean): PictureExpand {
     if (card.current !== null || face === undefined || !face.isConnected) return;
     card.current = standing;
     const timing = tokenTiming(standing, FLIGHT_DURATION, FLIGHT_EASING);
+
     if (timing === undefined) return;
     // Note that the attribute goes on before the card is measured, so the
     // measure is of the card as it stands rather than mid-entrance.
     standing.setAttribute(EXPANDING_ATTRIBUTE, "true");
     const picture = standing.querySelector(PICTURE_SELECTOR);
+
     if (!(picture instanceof HTMLImageElement) || picture.complete) {
       fly(standing, face, timing);
+
       return;
     }
+
     // Note that a picture the viewer has yet to decode has no size to fly
     // to, so the card stands unseen until it has one, then flies; one that
     // fails to load opens as every card does.
     const waiting = standing.animate([{ opacity: 0 }, { opacity: 0 }], { fill: "forwards" });
+
     const stop = () => {
       stopWaiting.current = undefined;
       picture.removeEventListener("load", settle);
       picture.removeEventListener("error", settle);
       waiting.cancel();
     };
+
     const settle = (event: Event) => {
       stop();
+
       if (event.type === "load" && !closing.current) fly(standing, face, timing);
       else standing.removeAttribute(EXPANDING_ATTRIBUTE);
     };
+
     stopWaiting.current = () => {
       stop();
       standing.removeAttribute(EXPANDING_ATTRIBUTE);
     };
+
     picture.addEventListener("load", settle);
     picture.addEventListener("error", settle);
   };
@@ -232,16 +256,21 @@ export function usePictureExpand(onOpened: boolean): PictureExpand {
     // Note that the tile is asked about as the close lands, because it may
     // have unmounted or scrolled away while the picture stood over it.
     const tile = grown.current && onOpened && face?.isConnected && inSight(face) ? face : undefined;
+
     const timing =
       standing === null ? undefined : tokenTiming(standing, FLIGHT_DURATION, FLIGHT_EASING);
+
     const flight =
       tile === undefined || standing === null || timing === undefined
         ? undefined
         : flightOf(tile, standing);
+
     if (tile === undefined || standing === null || timing === undefined || flight === undefined) {
       done();
+
       return;
     }
+
     closing.current = true;
     const back = { ...timing, fill: "forwards" } as const;
     standing.parentElement?.animate([{ opacity: 1 }, { opacity: 0 }], back);

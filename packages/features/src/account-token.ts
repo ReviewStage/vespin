@@ -9,6 +9,7 @@ import { Data, type Effect } from "effect";
 export class AccountRefreshFailed extends Data.TaggedError("AccountRefreshFailed")<{
   readonly message: string;
 }> {}
+
 /**
  * Who a call to our own service is on behalf of. Every client that speaks
  * to the service on the signed-in account — the brain's transports, the voice

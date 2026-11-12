@@ -16,7 +16,7 @@
 
 import { Duration, Effect } from "effect";
 import { useCallback, useEffect, useRef } from "react";
-import { makeWait } from "../../wait.js";
+import { createWait } from "../../wait.js";
 
 /** How long the pointer rests on a row before that row takes it from a submenu, or opens its own: as long as Base UI waits to open a submenu. */
 const AIM_REST = Duration.millis(100);
@@ -43,7 +43,7 @@ interface PutOff {
 }
 
 /** The window's one put-off move: taken once the pointer has rested `AIM_REST`, each new one calling off the last. */
-const aimRest = makeWait();
+const aimRest = createWait();
 
 /** Which side of the line from `a` to `b` the point `p` stands on: its sign. */
 function sideOf(a: Point, b: Point, p: Point): number {
@@ -60,6 +60,7 @@ function headsInto(from: Point, to: Point, box: DOMRectReadOnly): boolean {
   const top = { x: near, y: box.top - AIM_GIVE };
   const bottom = { x: near, y: box.bottom + AIM_GIVE };
   const sides = [sideOf(from, top, to), sideOf(top, bottom, to), sideOf(bottom, from, to)];
+
   return sides.every((side) => side >= 0) || sides.every((side) => side <= 0);
 }
 
@@ -81,10 +82,12 @@ export function useSubmenuAim(
 ): (take: () => void, opening?: Element) => void {
   const last = useRef<Point | undefined>(undefined);
   const putOff = useRef<PutOff | undefined>(undefined);
+
   const drop = useCallback(() => {
     putOff.current = undefined;
     aimRest.stop();
   }, []);
+
   // Note that putting a move off again restarts its rest, since the wait calls off the last.
   const rest = useCallback((move: PutOff) => {
     putOff.current = move;
@@ -98,6 +101,7 @@ export function useSubmenuAim(
       ),
     );
   }, []);
+
   // Note that the pointer is followed for as long as the menu stands, a
   // submenu or none, so the first move after the one that opened a submenu
   // already has where it came from. A move heading on into the submenu
@@ -109,23 +113,32 @@ export function useSubmenuAim(
       const to = { x: event.clientX, y: event.clientY };
       last.current = to;
       const move = putOff.current;
+
       if (move === undefined) return;
       const target = event.target instanceof Node ? event.target : null;
+
       if (!move.aiming) {
         if (move.opening?.contains(target) !== true) drop();
+
         return;
       }
+
       const surface = submenu.current;
+
       if (surface === null || surface.contains(target)) return drop();
+
       if (from !== undefined && headsInto(from, to, surface.getBoundingClientRect())) {
         return rest(move);
       }
+
       if (move.opening !== undefined) return rest({ ...move, aiming: false });
       drop();
       move.take();
     };
+
     document.addEventListener("mousemove", moved, true);
     document.addEventListener("keydown", drop, true);
+
     return () => {
       document.removeEventListener("mousemove", moved, true);
       document.removeEventListener("keydown", drop, true);
@@ -136,9 +149,11 @@ export function useSubmenuAim(
   useEffect(() => {
     if (!standing && putOff.current?.aiming === true) drop();
   }, [standing, drop]);
+
   return useCallback(
     (take: () => void, opening?: Element) => {
       if (standing && submenu.current !== null) return rest({ take, aiming: true, opening });
+
       if (opening !== undefined) return rest({ take, aiming: false, opening });
       drop();
       take();

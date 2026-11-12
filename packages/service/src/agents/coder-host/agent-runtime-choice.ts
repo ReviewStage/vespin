@@ -212,13 +212,17 @@ function keptPlans(
         row.provider === PROVIDER_KEY_PROVIDER.ANTHROPIC,
     );
   }
+
   const parsed = ring === undefined ? undefined : parseKeyRing(ring);
+
   if (parsed === undefined || Result.isFailure(parsed)) return [];
+
   const owner = {
     userId,
     provider: PROVIDER_KEY_PROVIDER.OPENAI,
     kind: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
   };
+
   return rows.filter(
     (row) =>
       row.kind === PROVIDER_KEY_KIND.CHATGPT_OAUTH &&
@@ -248,12 +252,15 @@ const hasRoom = (row: ProviderKeyRow, now: number): boolean =>
  */
 function soonestReset(plans: readonly ProviderKeyRow[], now: number): ProviderKeyRow | undefined {
   let soonest: { readonly row: ProviderKeyRow; readonly resetsAt: number } | undefined;
+
   for (const row of plans) {
     const resetsAt = planLimitResetsAt(row, now);
+
     if (resetsAt !== undefined && (soonest === undefined || resetsAt < soonest.resetsAt)) {
       soonest = { row, resetsAt };
     }
   }
+
   return soonest?.row ?? plans[0];
 }
 
@@ -277,7 +284,9 @@ const keepsApiKey = (
   if (rows.some((row) => row.kind === PROVIDER_KEY_KIND.API_KEY && row.provider === provider)) {
     return Effect.succeed(true);
   }
+
   if (environment === undefined) return Effect.succeed(false);
+
   return Effect.map(
     previewKeysOf(userId, environment),
     (standIns) => standIns[provider] !== undefined,
@@ -287,6 +296,7 @@ const keepsApiKey = (
 /** The provider of a model the catalog offers; every model a Start accepted has one, so none is a defect. */
 const providerOfModel = (model: string): Effect.Effect<ModelProvider> => {
   const named = providerModelOf(model);
+
   return named === undefined
     ? Effect.die(new Error(`no provider for the model ${model}`))
     : Effect.succeed(named.provider);
@@ -306,10 +316,13 @@ const providerRuntimeChoice = Effect.fnUntraced(function* (
 ): Effect.fn.Return<AgentRuntimeChoice, StoreFailure | AgentCredentialMissing, DatabaseServices> {
   const environment = yield* deploymentEnvironment;
   const plans = keptPlans(userId, provider, environment?.providerKeyEncryptionKeys, rows);
+
   if (plans.length > 0) return onPlanOf(provider);
+
   // Our key pays for no coding agent, so an account with no API key of the provider's is refused by name.
   if (!(yield* keepsApiKey(userId, provider, rows, environment)))
     return yield* Effect.fail(new AgentCredentialMissing({ provider }));
+
   return provider === MODEL_PROVIDER.ANTHROPIC ? ON_CLAUDE_CODE_API_KEY : ON_CODEX_API_KEY;
 });
 
@@ -323,6 +336,7 @@ export const agentRuntimeChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
   rows?: AccountKeyRows,
 ): Effect.fn.Return<AgentRuntimeChoice, StoreFailure | AgentCredentialMissing, DatabaseServices> {
   const provider = yield* providerOfModel(model);
+
   return yield* providerRuntimeChoice(userId, provider, yield* keyRowsOf(userId, rows));
 });
 
@@ -376,6 +390,7 @@ export const macOffers = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
 ): Effect.fn.Return<readonly MacOffer[], StoreFailure, DatabaseServices> {
   const registered = yield* devicesSeenSince(userId, new Date(0));
+
   return registered.map((device) => ({
     deviceId: device.id,
     name: device.name,
@@ -405,6 +420,7 @@ const freshOffer = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (deviceId === null || deviceId === undefined) return undefined;
   const now = yield* Clock.currentTimeMillis;
   const since = now - Duration.toMillis(THIS_MAC.FRESH);
+
   return (yield* macOffers(userId)).find(
     (each) => each.deviceId === deviceId && (each.seenAt ?? 0) >= since,
   );
@@ -431,19 +447,24 @@ export const agentMachineChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<AgentMachineChoice, StoreFailure | LocalAgentRefused, DatabaseServices> {
   if (asked.machine !== AGENT_MACHINE.DEVICE) return IN_A_SANDBOX;
   const offer = yield* freshOffer(userId, asked.deviceId);
+
   if (offer === undefined) {
     return yield* new LocalAgentRefused({ reason: LOCAL_AGENT_REFUSAL.MAC_AWAY });
   }
+
   if (offer.setup !== undefined) {
     return yield* new LocalAgentRefused({ reason: SETUP_REFUSAL[offer.setup] });
   }
+
   // Note that a Mac runs only the providers it lists, so Codex on one that lists none of OpenAI's is refused by name.
   if (!offer.providers.includes(RUNTIME_PROVIDER[runtime])) {
     return yield* new LocalAgentRefused({ reason: LOCAL_AGENT_REFUSAL.CODEX });
   }
+
   if (inRepository && !(yield* signsInOwnGithub(userId, offer.deviceId))) {
     return yield* new LocalAgentRefused({ reason: LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN });
   }
+
   return { machine: AGENT_MACHINE.DEVICE, deviceId: offer.deviceId };
 });
 
@@ -485,6 +506,7 @@ const payersOf = Effect.fnUntraced(function* (
   const now = yield* Clock.currentTimeMillis;
   const plans = keptPlans(userId, provider, environment?.providerKeyEncryptionKeys, rows);
   const ordered = [...plans, ...keysOf(provider, rows)].toSorted(byPlace);
+
   return { rows, plans, ordered, environment, now };
 });
 
@@ -519,16 +541,20 @@ export const turnPayerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<TurnPayer, StoreFailure, DatabaseServices> {
   const { rows, plans, ordered, environment, now } = yield* payersOf(userId, provider);
   const first = firstPayerRow(ordered, now) ?? keysOf(provider, rows)[0];
+
   let chosen: TurnPayer =
     first?.kind === PROVIDER_KEY_KIND.API_KEY
       ? { payer: AGENT_PAYER.API_KEY, subscriptionId: first.id }
       : { payer: PLAN_PAYER[provider], subscriptionId: first?.id };
+
   if (first === undefined) {
     chosen = (yield* keepsApiKey(userId, provider, rows, environment))
       ? { payer: AGENT_PAYER.API_KEY, subscriptionId: undefined }
       : { payer: PLAN_PAYER[provider], subscriptionId: soonestReset(plans, now)?.id };
   }
+
   yield* recordAgentPayer(userId, agentId, chosen.payer, chosen.subscriptionId ?? null);
+
   return chosen;
 });
 
@@ -544,15 +570,18 @@ export const launchPayerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<TurnPayer, StoreFailure, DatabaseServices> {
   if (agent.machine !== AGENT_MACHINE.DEVICE) return yield* turnPayerOf(userId, agent.id, provider);
   yield* recordAgentPayer(userId, agent.id, AGENT_PAYER.MAC_SIGN_IN, null);
+
   return { payer: AGENT_PAYER.MAC_SIGN_IN, subscriptionId: undefined };
 });
 
 /** A plan or API key among `rows` named as Settings names it (`planNamesOf`, `apiKeyName`). */
 function payerNameOf(provider: ModelProvider, rows: AccountKeyRows, row: ProviderKeyRow): string {
   if (row.kind === PROVIDER_KEY_KIND.API_KEY) return apiKeyName(row);
+
   const plans = rows.filter(
     (each) => each.provider === provider && each.kind !== PROVIDER_KEY_KIND.API_KEY,
   );
+
   const names = planNamesOf(
     provider,
     plans.map((each) => ({
@@ -562,6 +591,7 @@ function payerNameOf(provider: ModelProvider, rows: AccountKeyRows, row: Provide
       addedAt: each.createdAt.getTime(),
     })),
   );
+
   return names.get(row.id) ?? PLAN_NAME[provider];
 }
 
@@ -586,9 +616,13 @@ export const roomAfterLimit = /* @__PURE__ */ Effect.fnUntraced(function* (
   const limited = rows.find((row) => row.id === limitedId);
   const from = limited === undefined ? PLAN_NAME[provider] : payerNameOf(provider, rows, limited);
   const next = firstPayerRow(ordered, now, limitedId);
+
   if (next !== undefined) return { from, to: payerNameOf(provider, rows, next) };
+
   if (keysOf(provider, rows).length > 0) return undefined;
+
   if (!(yield* keepsApiKey(userId, provider, rows, environment))) return undefined;
+
   // Note that a Preview's stand-in key has no row, so it is named as any API key.
   return { from, to: "API key" };
 });
@@ -609,10 +643,13 @@ export const soonestResetBeside = /* @__PURE__ */ Effect.fnUntraced(function* (
   const now = yield* Clock.currentTimeMillis;
   const plans = keptPlans(userId, provider, environment?.providerKeyEncryptionKeys, rows);
   const limited = limitedSubscriptionId ?? plans[0]?.id;
+
   const resets = plans.flatMap((row) => {
     const resetsAt = row.id === limited ? undefined : planLimitResetsAt(row, now);
+
     return resetsAt === undefined ? [] : [resetsAt];
   });
+
   return resets.length === 0 ? undefined : Math.min(...resets);
 });
 
@@ -629,6 +666,7 @@ export const messageCredentialMissing = /* @__PURE__ */ Effect.fnUntraced(functi
 ): Effect.fn.Return<ModelProvider | undefined, StoreFailure, DatabaseServices> {
   if (routing.payer !== AGENT_PAYER.API_KEY) return undefined;
   const provider = yield* providerOfModel(agent.model);
+
   return (yield* unconnectedProviders(agent.userId)).has(provider) ? provider : undefined;
 });
 
@@ -644,13 +682,16 @@ export const unconnectedProviders = /* @__PURE__ */ Effect.fnUntraced(function* 
 ): Effect.fn.Return<ReadonlySet<ModelProvider>, StoreFailure, DatabaseServices> {
   const rows = yield* keyRowsOf(userId, read);
   const missing = new Set<ModelProvider>();
+
   for (const provider of Object.values(MODEL_PROVIDER)) {
     const paid = yield* providerRuntimeChoice(userId, provider, rows).pipe(
       Effect.as(true),
       Effect.catchTag("AgentCredentialMissing", () => Effect.succeed(false)),
     );
+
     if (!paid) missing.add(provider);
   }
+
   return missing;
 });
 
@@ -663,7 +704,9 @@ export const markedUnconnected = /* @__PURE__ */ Effect.fnUntraced(function* <
   rows?: AccountKeyRows,
 ): Effect.fn.Return<readonly Model[], StoreFailure, DatabaseServices> {
   const missing = yield* unconnectedProviders(userId, rows);
+
   if (missing.size === 0) return offered;
+
   return offered.map((model) =>
     missing.has(model.provider) ? { ...model, credentialMissing: true } : model,
   );
@@ -681,12 +724,15 @@ export const accountFastOffer = /* @__PURE__ */ Effect.fnUntraced(function* (
   read?: AccountKeyRows,
 ): Effect.fn.Return<AccountFastOffer, StoreFailure, DatabaseServices> {
   const rows = yield* keyRowsOf(userId, read);
+
   // Whether the account's own Anthropic key may run fast mode, as its row says, readable or not.
   const anthropic = rows.find(
     (row) =>
       row.kind === PROVIDER_KEY_KIND.API_KEY && row.provider === PROVIDER_KEY_PROVIDER.ANTHROPIC,
   )?.fastAccess;
+
   const ring = (yield* deploymentEnvironment)?.providerKeyEncryptionKeys;
   const plans = keptPlans(userId, MODEL_PROVIDER.OPENAI, ring, rows);
+
   return { anthropic: anthropic ?? undefined, chatGptPlan: plans.length > 0 };
 });

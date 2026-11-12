@@ -132,6 +132,7 @@ function titleOf(line: string): Option.Option<string> {
   if (line.length === 0 || titlesNothing(line)) {
     return Option.none();
   }
+
   return Option.some(line);
 }
 
@@ -144,9 +145,11 @@ function titleOf(line: string): Option.Option<string> {
  */
 function tidyAgentTitle(answer: string): Option.Option<string> {
   const line = tidiedLine(answer.trim().split("\n")[0] ?? "");
+
   if (line.length > AGENT_BOUNDS.MAX_TITLE_CHARS) {
     return Option.none();
   }
+
   return titleOf(line);
 }
 
@@ -172,7 +175,9 @@ function firstWordsTitle(text: string): Option.Option<string> {
           .trim(),
       )
       .find((each) => each.length > 0) ?? "";
+
   const words = line.split(/\s+/u).slice(0, AGENT_TITLE.FALLBACK_WORDS).join(" ");
+
   // Note that only the first letter is raised, because the rest are the developer's own and may be a name's.
   return Option.map(
     titleOf(tidiedLine(words).slice(0, AGENT_BOUNDS.MAX_TITLE_CHARS).trim()),
@@ -183,6 +188,7 @@ function firstWordsTitle(text: string): Option.Option<string> {
 /** A part's words without the replay of another agent or the note's marker: the brief and the note where either stands, the part whole otherwise. */
 function withoutReplay(text: string): string {
   const read = firstMessageParts(text);
+
   return read.note === undefined ? read.brief : `${read.brief}\n${read.note.text}`;
 }
 
@@ -195,17 +201,20 @@ function excerptOf(message: StoredUIMessage | undefined): string {
   ) {
     return message.metadata.words.trim().slice(0, AGENT_TITLE.EXCERPT_CHARS);
   }
+
   const words = (message?.parts ?? [])
     .filter((part) => isTextUIPart(part))
     .map((part) => withoutReplay(part.text).trim())
     .filter((text) => text.length > 0)
     .join("\n");
+
   return words.slice(0, AGENT_TITLE.EXCERPT_CHARS);
 }
 
 /** What an automation's run is named from in its opening's place: the GitHub event's subject where one fired it, then the automation's prompt alone, cut to the excerpt; the subject leads, so a long prompt never cuts it off. */
 function originWords(origin: StoredAutomationOrigin): string {
   const { firing } = origin;
+
   const subject =
     firing.kind === AUTOMATION_FIRING.GITHUB
       ? [
@@ -215,12 +224,14 @@ function originWords(origin: StoredAutomationOrigin): string {
           ...(firing.title === undefined ? [] : [`Title: ${firing.title}`]),
         ]
       : [];
+
   return [...subject, origin.prompt.trim()].join("\n").slice(0, AGENT_TITLE.EXCERPT_CHARS);
 }
 
 /** A row of the developer's own words: a user row no other agent's message wrote, and no note the runtime wrote down. */
 function saidByDeveloper(message: StoredUIMessage | undefined): boolean {
   if (message?.role !== MESSAGE_ROLE.USER || "source" in message.metadata) return false;
+
   return message.metadata.channel !== MESSAGE_CHANNEL.AGENT_MESSAGE;
 }
 
@@ -250,13 +261,17 @@ function answerToDeveloper<
 >(records: readonly Row[], noticed: ReadonlySet<string>): Row | undefined {
   let heard: Heard = HEARD.UNKNOWN;
   let answer: Row | undefined;
+
   for (const record of records) {
     if (saidByDeveloper(record.message)) heard = HEARD.DEVELOPER;
+
     if (record.message.role !== MESSAGE_ROLE.ASSISTANT) continue;
     const prompted = record.turnId !== undefined && noticed.has(record.turnId);
+
     if (heard === HEARD.DEVELOPER || (heard === HEARD.UNKNOWN && !prompted)) answer = record;
     heard = HEARD.OTHER;
   }
+
   return answer;
 }
 
@@ -277,6 +292,7 @@ function turnsNoticed(
       ? [record.turnId]
       : [],
   );
+
   return Effect.map(
     listTurnOpeners(target.userId, target.conversationId, tools, [...new Set(turnIds)]),
     (openers) =>
@@ -312,19 +328,23 @@ function conversationExchange(
   return Effect.gen(function* () {
     const { userId, conversationId } = target;
     const opening = yield* listMessagesPast(userId, conversationId, tools, CURSOR_START, 1);
+
     const recent = yield* listRecentMessages(
       userId,
       conversationId,
       tools,
       AGENT_TITLE.RECENT_MESSAGES,
     );
+
     const first = opening.read.ok ? opening.read.value[0] : undefined;
     const newest = recent.ok ? recent.value : [];
     const said = newest.findLast((record) => saidByDeveloper(record.message));
     const answered = answerToDeveloper(newest, yield* turnsNoticed(target, tools, newest));
     const opened = saidByDeveloper(first?.message) ? first : undefined;
+
     // An answer to no word of the developer's, as to a wake the brain took before anyone spoke, names nothing.
     if (origin === null && opened === undefined && said === undefined) return NOTHING_TO_NAME;
+
     const exchange = [
       {
         speaker: SPEAKER.DEVELOPER,
@@ -336,10 +356,11 @@ function conversationExchange(
       },
       { speaker: SPEAKER.AGENT, words: excerptOf(answered?.message) },
     ]
-      .filter((line) => line.words.length > 0)
-      .map((line) => `${line.speaker}: ${line.words}`)
+      .flatMap((line) => (line.words.length > 0 ? [`${line.speaker}: ${line.words}`] : []))
       .join("\n\n");
+
     const firstWords = origin === null ? excerptOf((opened ?? said)?.message) : origin.prompt;
+
     return { exchange, opening: firstWords };
   });
 }
@@ -393,10 +414,14 @@ function titleOfConversation(
       CODER.TITLE_TURNS,
       undefined,
     );
+
     if (ran.earlier) return Option.none();
     const naming = yield* conversationExchange(target, tools, origin);
+
     if (naming.exchange.length === 0) return Option.none();
+
     if (model === undefined) return firstWordsTitle(naming.opening);
+
     return yield* generateAgentTitle(model, naming.exchange);
   });
 }
@@ -415,9 +440,11 @@ function titledWithTask(
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   const written = Effect.gen(function* () {
     const filled = yield* fillAgentTitle(userId, agent.id, title);
+
     if (!filled) return;
     yield* nameUntitledTask(userId, agent.taskId, title);
   });
+
   return Effect.flatMap(SqlClient.SqlClient, (client) => client.withTransaction(written));
 }
 
@@ -432,6 +459,7 @@ export function titleInboxThread(
   text: string,
 ): Effect.Effect<Option.Option<string>> {
   const words = text.trim().slice(0, AGENT_TITLE.EXCERPT_CHARS);
+
   return words === "" ? Effect.succeed(Option.none()) : generateAgentTitle(model, words);
 }
 
@@ -450,6 +478,7 @@ export function titleAgent(
   return Effect.gen(function* () {
     if (agent.title !== null) return;
     const title = yield* titleOfConversation(model, target, CODER_TOOL_SET, agent.automationOrigin);
+
     if (Option.isNone(title)) return;
     yield* titledWithTask(target.userId, agent, title.value);
   });

@@ -40,6 +40,7 @@ const openAccount = Effect.gen(function* () {
   yield* Database.use((db) =>
     db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` }),
   );
+
   return id;
 });
 
@@ -47,6 +48,7 @@ const answer = (bearers: ReadonlyMap<string, string>, request: Request) =>
   Effect.gen(function* () {
     // SAFETY: the procedures yield the database and the clock alone, which the test's own context holds.
     const services = (yield* Effect.context<never>()) as Context.Context<WebServices>;
+
     const handle = hostedFetch({
       agentPages: agentPagesProcedures({
         resolveUserId: (incoming) =>
@@ -55,9 +57,11 @@ const answer = (bearers: ReadonlyMap<string, string>, request: Request) =>
           ),
       }),
     });
+
     const response = yield* Effect.promise(() => handle(request, services));
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = (yield* Effect.promise(() => response.json())) as WireBoundaryInput;
+
     return { status: response.status, body } satisfies Answer;
   });
 
@@ -72,7 +76,9 @@ const versionPath = (agentId: string, pageId: string, version: string) =>
 function readOk<S extends Parameters<typeof readEither>[0]>(schema: S, answered: Answer) {
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
   const read = readEither(schema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read)) return assert.fail(`not the wire's: ${read.failure.refusal}`);
+
   return read.success;
 }
 
@@ -86,6 +92,7 @@ it.layer(getTestDB())("an agent's own pages over HTTP", (it) => {
         const workspace = yield* openWorkspace(starter);
         yield* joinWorkspace(workspace, teammate);
         const taskId = (yield* createTask(starter, { organizationId: workspace })).id;
+
         const started = yield* createAgent(starter, {
           taskId,
           descriptionSnapshot: null,
@@ -96,7 +103,9 @@ it.layer(getTestDB())("an agent's own pages over HTTP", (it) => {
           repository: null,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         const agentId = Option.getOrThrow(started).agent.id;
+
         const chart = Option.getOrThrow(
           yield* writePage(
             starter,
@@ -105,8 +114,10 @@ it.layer(getTestDB())("an agent's own pages over HTTP", (it) => {
             { kind: PAGE_SHOWER.AGENT, agentId },
           ),
         );
+
         const bearers = new Map([starter, teammate].map((id) => [`Bearer ${id}`, id] as const));
         const ask = (userId: string, path: string) => answer(bearers, get(userId, path));
+
         const notFound = {
           status: HOSTED_HTTP_STATUS.NOT_FOUND,
           body: { error: HOSTED_API_ERROR.NOT_FOUND },

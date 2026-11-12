@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import type { WireRecord } from "@repo/wire";
 import { test } from "vitest";
 import {
   calledPicturesOf,
@@ -87,13 +88,14 @@ test("an integration's answer names its kept pictures and the ones it left out, 
 });
 
 test("a browser call's screenshots are named by their place among its steps, each as the transcript kept it, and a screenshot from before they were kept names none", () => {
-  const shot = (extra: Record<string, unknown>) => ({
+  const shot = (extra: WireRecord) => ({
     action: "screenshot",
     status: "done",
     tab: "tab-1",
     image: { mime: "image/jpeg", width: 1280, height: 800 },
     ...extra,
   });
+
   const answer = {
     status: "ran",
     steps: [
@@ -146,6 +148,7 @@ test("a picture is added to a description's text as its own last paragraph, esca
     assert.match(addition.text, /(^|\n\n)!\[/u, "the picture stands as a paragraph of its own");
     assert.equal(withoutPictureLine(addition.text, addition.added), description);
   }
+
   assert.equal(
     withoutPictureLine("# Moved\n\nThe line was edited away.\n", `\n${line}\n`),
     undefined,

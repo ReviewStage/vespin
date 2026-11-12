@@ -17,6 +17,7 @@ import { HOSTED_API_ERROR } from "@repo/features";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import type { TaskRunsOnRequest } from "@repo/features/task-wire";
+import type { WireRecord } from "@repo/wire";
 import { Clock, type Context, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { sessionSandboxesLayer } from "../agents/session-sandboxes.js";
@@ -43,6 +44,7 @@ const ORIGIN = "https://app.test";
 const standing = (bearers: ReadonlyMap<string, string>) =>
   Effect.gen(function* () {
     const github = fakeGitHub(() => Response.json({}, { status: 404 }), GITHUB_APP_WITH_TOKENS);
+
     const services = yield* Effect.context<never>().pipe(
       Effect.provide(
         Layer.mergeAll(
@@ -53,6 +55,7 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
         ),
       ),
     );
+
     const handle = hostedFetch({
       plans: tasksProcedures({
         resolveUserId: (incoming: Request) =>
@@ -64,9 +67,11 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
         workspaces: yield* fakeWorkspaceSeams,
       }),
     });
+
     // SAFETY: setting where a task runs yields the store and the clock alone, which is all a test provides of the web runtime's services.
     const webServices = services as Context.Context<WebServices>;
-    return (method: string, path: string, bearer: string, body: object) =>
+
+    return (method: string, path: string, bearer: string, body: WireRecord) =>
       Effect.promise(async () => {
         const response = await handle(
           new Request(new URL(path, ORIGIN), {
@@ -76,6 +81,7 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
           }),
           webServices,
         );
+
         // SAFETY: the router answers JSON; the test compares it as the wire value it is.
         return { status: response.status, body: JSON.parse(await response.text()) };
       });
@@ -87,6 +93,7 @@ const deviceOf = (userId: string, name: string) =>
     const id = randomUUID();
     yield* registerDevice(userId, { id, name, ...DEVICE_LAYOUT });
     yield* connectAgentApiKeys(userId, { providers: [PROVIDER_KEY_PROVIDER.ANTHROPIC] });
+
     return id;
   });
 
@@ -114,12 +121,14 @@ it.layer(getTestDB())("where a task runs its agents", (it) => {
           deviceId: studio,
         });
         const empty = yield* createTask(owner, { organizationId: workspace, name: "Kept" });
+
         const send = yield* standing(
           new Map([
             ["Bearer owner", owner],
             ["Bearer stranger", stranger],
           ]),
         );
+
         const patch = (taskId: string, bearer: string, runsOn: TaskRunsOnRequest) =>
           send("PATCH", `/api/plans/${taskId}`, bearer, { runsOn });
 
@@ -127,12 +136,15 @@ it.layer(getTestDB())("where a task runs its agents", (it) => {
           machine: AGENT_MACHINE.DEVICE,
           deviceId: laptop,
         });
+
         assert.equal(toLaptop.status, 200, JSON.stringify(toLaptop.body));
         assert.equal(toLaptop.body.plan.runsOn?.deviceId, studio);
+
         const toDevice = yield* patch(empty.id, "Bearer owner", {
           machine: AGENT_MACHINE.DEVICE,
           deviceId: studio,
         });
+
         assert.equal(toDevice.status, 200, JSON.stringify(toDevice.body));
         assert.equal(toDevice.body.plan.runsOn, undefined);
 
@@ -140,6 +152,7 @@ it.layer(getTestDB())("where a task runs its agents", (it) => {
         const byStranger = yield* patch(task.id, "Bearer stranger", {
           machine: AGENT_MACHINE.VERCEL,
         });
+
         assert.deepEqual(byStranger, { status: 404, body: { error: HOSTED_API_ERROR.NOT_FOUND } });
       }),
   );

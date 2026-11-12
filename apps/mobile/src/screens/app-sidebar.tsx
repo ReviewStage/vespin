@@ -1,12 +1,15 @@
 // app-sidebar.tsx -- a wide window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned and the member's sections with their tasks, and Settings at its foot.
 
 import {
+  AccountBarItem,
   type ColumnBar,
   GroupRow,
   LIST_LOOK,
   type ListLook,
   ListSection,
+  MARK_SIZE,
   RowList,
+  SWITCHER_LOOK,
   WorkspaceSwitcherMenu,
 } from "@repo/ui-native";
 import { useRouter } from "expo-router";
@@ -82,52 +85,70 @@ function placeOf(id: string): (typeof PLACES)[number] | undefined {
   return PLACES.find((place) => place.id === id);
 }
 
+type UseAppSidebarResult = {
+  readonly columns: (list?: ListColumn | undefined) => SidebarColumns;
+  /** How the tab's list stands: plain beside the app sidebar, in the sidebar's look where it stands first. */
+  readonly listLook: ListLook;
+  readonly ask: ReactNode;
+};
+
 /**
  * A tab's first columns in a regular window. Where the window is wide enough
  * for three, an iPad's in landscape, the app sidebar stands where the
  * system's tab bar would, which that window hides, with the tab's list
  * beside it: the place the tab is, or the task it has open where the sidebar
  * lists it, drawn selected. A place opens its tab, and a task opens on the
- * Tasks tab beside its list, as a link to it does. The account's photo and
- * Settings both open Settings, the photo where the iPhone stands it and
- * Settings at the foot, where an iPad sidebar stands it; New task opens its
- * sheet. The switcher heads the sidebar's list rather than its bar, as
- * Notion's iPad sidebar names its workspace, because the bar's middle
- * overlapped the photo in a column that narrow, and a second leading item
- * folds into the bar's overflow. A narrower regular window, a portrait
- * iPad's or the unfolded Duo's, keeps the system's tab bar, and the list
- * stands first under the photo and the switcher, as the split view stood
- * before.
+ * Tasks tab beside its list, as a link to it does. The switcher's account
+ * and Settings at the foot, where an iPad sidebar stands it, both open
+ * Settings; New task opens its sheet. The switcher heads the sidebar's list
+ * rather than its bar, as Notion's iPad sidebar names its workspace,
+ * because a second leading item folds into the bar's overflow beside the
+ * sidebar's own button. A narrower regular window, a portrait iPad's or the
+ * unfolded Duo's, keeps the system's tab bar, and the list stands first
+ * under the switcher's tile at its bar's leading edge beside the list's
+ * title, as the compact bar stands it.
  */
 export function useAppSidebar(
   place: SidebarPlace,
   tasks: SidebarTasks,
   openTask?: string | undefined,
-): {
-  readonly columns: (list?: ListColumn | undefined) => SidebarColumns;
-  /** How the tab's list stands: plain beside the app sidebar, in the sidebar's look where it stands first. */
-  readonly listLook: ListLook;
-  readonly ask: ReactNode;
-} {
+): UseAppSidebarResult {
   const router = useRouter();
   const waiting = useInboxBadge();
-  const account = useSettingsAccount();
   const openSettings = useOpenSettings();
+  const account = useSettingsAccount();
   const switcher = useWorkspaceSwitcher();
   const threeColumns = useThreeColumns();
   const { shown, setShown } = useSidebarShown();
   const header = switcher === undefined ? undefined : <WorkspaceSwitcherMenu {...switcher} />;
   const selected = openTask !== undefined && tasks.ids.has(openTask) ? openTask : place;
+
   const pick = (id: string) => {
     const picked = placeOf(id);
+
     if (picked !== undefined) router.navigate(picked.route);
     else router.navigate({ pathname: "/tasks", params: { selected: id } });
   };
+
   const columns = (list?: ListColumn | undefined): SidebarColumns => {
     const visibility = { sidebarShown: shown, onSidebarShownChange: setShown };
+
     if (!threeColumns && list !== undefined) {
-      return { sidebar: list.view, sidebarBar: { ...list.bar, account, header }, ...visibility };
+      // Note that the photo leads only until the workspaces are read, as the compact bar's does, so Settings is never out of reach.
+      const leading =
+        switcher !== undefined ? (
+          <WorkspaceSwitcherMenu
+            {...switcher}
+            look={SWITCHER_LOOK.TILE}
+            tileSize={MARK_SIZE.COLUMN_BAR_FACE}
+          />
+        ) : account === undefined ? undefined : (
+          <AccountBarItem {...account} />
+        );
+
+      return { sidebar: list.view, sidebarBar: { ...list.bar, leading }, ...visibility };
     }
+
     return {
       sidebar: (
         <RowList look={LIST_LOOK.SIDEBAR} selected={selected} onSelect={pick}>
@@ -148,7 +169,6 @@ export function useAppSidebar(
         </RowList>
       ),
       sidebarBar: {
-        account,
         action: { ...NEW_TASK, onPress: () => router.push("/start-task") },
         foot: [{ ...SETTINGS, onPress: () => openSettings() }],
       },
@@ -157,5 +177,6 @@ export function useAppSidebar(
       ...visibility,
     };
   };
+
   return { columns, listLook: threeColumns ? LIST_LOOK.PLAIN : LIST_LOOK.SIDEBAR, ask: tasks.ask };
 }

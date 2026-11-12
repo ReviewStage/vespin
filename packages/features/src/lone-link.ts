@@ -74,8 +74,11 @@ export type LoneLink =
 /** The lines of a file at a whole commit a GitHub page names; nothing for any other page, a branch's among them. */
 function codeLinesOf(target: string): LoneLink | undefined {
   const page = readGitHubPage(target);
+
   if (page?.kind !== GITHUB_PAGE.FILE || page.lines === undefined) return undefined;
+
   if (!WHOLE_COMMIT.test(page.ref)) return undefined;
+
   return {
     kind: LONE_LINK.CODE,
     repo: page.repository,
@@ -89,14 +92,18 @@ function codeLinesOf(target: string): LoneLink | undefined {
 /** What a link standing alone in its paragraph names as a card; nothing for a link that earns none. */
 export function loneLinkOf(target: string): LoneLink | undefined {
   const url = target.length > MAX_LINK_CHARS ? undefined : parsedUrl(target);
+
   if (url === undefined) return undefined;
   const pullRequest = pullRequestAddressOf(target);
+
   if (pullRequest !== undefined) return { kind: LONE_LINK.PULL_REQUEST, ...pullRequest };
   const place = readLink(target)?.place;
+
   if (place?.kind === LINK_DESTINATION.PAGE) {
     return "planId" in place
       ? { kind: LONE_LINK.PAGE, taskId: place.planId, pageId: place.pageId }
       : { kind: LONE_LINK.PAGE, agentId: place.agentId, pageId: place.pageId };
   }
+
   return codeLinesOf(target);
 }

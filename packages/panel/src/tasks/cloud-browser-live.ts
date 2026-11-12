@@ -226,8 +226,10 @@ export function cloudBrowserLive(input: {
 
   const send = (message: BrowserLiveClientMessage) =>
     MutableRef.get(socket)?.send(JSON.stringify(message));
+
   const sendViewport = () => {
     const size = viewport();
+
     if (size === undefined || size.width < 1 || size.height < 1) return;
     send({
       type: BROWSER_LIVE_CLIENT.VIEWPORT,
@@ -239,6 +241,7 @@ export function cloudBrowserLive(input: {
   const views = Stream.unwrap(
     Effect.gen(function* () {
       const state = yield* SubscriptionRef.make<CloudBrowserView>(OPENING_VIEW);
+
       const set = (change: (view: CloudBrowserView) => CloudBrowserView) =>
         Effect.flatMap(SubscriptionRef.updateAndGet(state, change), (view) =>
           Effect.sync(() => MutableRef.set(latest, view)),
@@ -250,16 +253,21 @@ export function cloudBrowserLive(input: {
           case BROWSER_LIVE_SERVER.FRAME: {
             const { type: _type, ...frame } = message;
             onFrame(frame);
+
             return MutableRef.get(latest).painted
               ? Effect.void
               : set((view) => ({ ...view, painted: true }));
           }
+
           case BROWSER_LIVE_SERVER.PAGE: {
             const { type: _type, ...page } = message;
+
             return set((view) => ({ ...view, page }));
           }
+
           case BROWSER_LIVE_SERVER.DRIVER: {
             const { type: _type, ...driver } = message;
+
             return set((view) => ({
               ...view,
               driver,
@@ -267,10 +275,12 @@ export function cloudBrowserLive(input: {
               stepRefused: false,
             }));
           }
+
           case BROWSER_LIVE_SERVER.REFUSED:
             if (message.reason === BROWSER_LIVE_REFUSAL.NOT_PERMITTED) {
               return set((view) => ({ ...view, takeoverRefused: true }));
             }
+
             return message.reason === BROWSER_LIVE_REFUSAL.HELD
               ? set((view) => ({ ...view, stepRefused: true }))
               : Effect.void;
@@ -294,7 +304,9 @@ export function cloudBrowserLive(input: {
                 message: (text) => Queue.offerUnsafe(arrivals, { text }),
                 closed: (close) => Queue.offerUnsafe(arrivals, { close }),
               });
+
               MutableRef.set(socket, opened);
+
               return opened;
             }),
             (opened) =>
@@ -321,23 +333,33 @@ export function cloudBrowserLive(input: {
             Stream.runForEach((arrival) => {
               if ("close" in arrival) {
                 code = arrival.close;
+
                 return Effect.void;
               }
+
               const message = serverMessage(arrival.text);
+
               if (message === undefined) return Effect.void;
+
               if (message.type === BROWSER_LIVE_SERVER.CLOSED) reason = message.reason;
+
               const opening = live
                 ? Effect.void
                 : set((view) => ({ ...view, phase: CLOUD_BROWSER_PHASE.LIVE, ended: undefined }));
+
               live = true;
+
               return Effect.andThen(opening, heard(message));
             }),
           );
           const ended = reason ?? (code === undefined ? undefined : REASON_BY_CODE.get(code));
+
           if (ended === BROWSER_LIVE_CLOSE_REASON.NOT_OPENED) {
             yield* set((view) => ({ ...view, phase: CLOUD_BROWSER_PHASE.CONNECTING }));
+
             return yield* Effect.fail(new Dropped());
           }
+
           if (
             ended === BROWSER_LIVE_CLOSE_REASON.IDLE ||
             ended === BROWSER_LIVE_CLOSE_REASON.GONE
@@ -348,14 +370,18 @@ export function cloudBrowserLive(input: {
               ended,
               driver: undefined,
             }));
+
             return SOCKET_ENDING.ENDED;
           }
+
           yield* set((view) => ({
             ...view,
             phase: CLOUD_BROWSER_PHASE.RECONNECTING,
             driver: undefined,
           }));
+
           if (!live) return yield* Effect.fail(new Dropped());
+
           return SOCKET_ENDING.DROPPED;
         }),
       );
@@ -370,6 +396,7 @@ export function cloudBrowserLive(input: {
           Effect.ignore,
         ),
       );
+
       return SubscriptionRef.changes(state);
     }),
   );

@@ -34,6 +34,7 @@ function git(args: readonly string[], stderr: GitStderr = GIT_STDERR.HIDDEN) {
       const handle = yield* ChildProcess.make("git", [...args], { stdin: "ignore", stderr });
       const stdout = yield* Stream.mkString(Stream.decodeText(handle.stdout));
       const code = yield* handle.exitCode;
+
       return { code: Number(code), stdout } satisfies GitRun;
     }),
   ).pipe(
@@ -62,8 +63,11 @@ export const originRepository = Effect.gen(function* () {
     ["remote", "get-url", ORIGIN],
     `This folder has no git remote named ${ORIGIN}. Run the command in a checkout, or name the repository with -R owner/name.`,
   );
+
   const repository = githubRepositoryOfRemote(remote);
+
   if (repository !== undefined) return repository;
+
   return yield* new CommandFailed({
     exit: CLI_EXIT.REFUSED,
     message: `${ORIGIN} (${remote.trim()}) is not a GitHub repository. Name one with -R owner/name.`,
@@ -101,14 +105,17 @@ export function checkoutFromOrigin(branch: string) {
       GIT_STDERR.SHOWN,
     );
     const local = yield* git(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]);
+
     if (local.code !== 0) {
       yield* gitOrFail(
         ["checkout", "--track", "-b", branch, `${ORIGIN}/${branch}`],
         `Could not check out ${branch}.`,
         GIT_STDERR.SHOWN,
       );
+
       return;
     }
+
     yield* gitOrFail(["checkout", branch], `Could not check out ${branch}.`, GIT_STDERR.SHOWN);
     yield* gitOrFail(
       ["merge", "--ff-only", `${ORIGIN}/${branch}`],

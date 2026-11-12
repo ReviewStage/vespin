@@ -30,19 +30,26 @@ export function hostedAnswer<Services>(
     // SAFETY: a test provides only the services its procedures yield, which is all they read of the web runtime's.
     const webServices = context as Context.Context<WebServices>;
     const undeclared: UndeclaredRefusal[] = [];
+
     const recorder = ErrorReporter.make(({ cause }) => {
       const defect = Cause.squash(cause);
+
       if (defect instanceof UndeclaredRefusal) undeclared.push(defect);
     });
+
     const reporters = Context.get(webServices, ErrorReporter.CurrentErrorReporters);
+
     const watched = Context.add(
       webServices,
       ErrorReporter.CurrentErrorReporters,
       new Set([...reporters, recorder]),
     );
+
     const response = yield* Effect.promise(() => hostedFetch(router)(request, watched));
     const [first] = undeclared;
+
     if (first !== undefined) return yield* Effect.die(first);
+
     return response;
   });
 }

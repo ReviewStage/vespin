@@ -35,6 +35,7 @@ const openUser = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -48,9 +49,11 @@ const liveHistoryOf = (reader: string, taskId: string) =>
     const statements = Option.getOrThrow(
       taskHistoryRead.statements({ userId: reader, id: taskId }),
     );
+
     const rows = yield* Schema.decodeUnknownEffect(TASK_HISTORY_READ.rows)({
       revisions: yield* runLive(statements.revisions),
     });
+
     return revisionsOfLiveRows(rows);
   });
 
@@ -63,11 +66,14 @@ it.layer(getTestDB())("a task's history followed live", (it) => {
         const stranger = yield* openUser;
         const task = yield* startTask(owner, { name: "Teammate invitations" });
         const binding = { userId: owner, taskId: task.id };
+
         const agrees = Effect.gen(function* () {
           const held = yield* listRevisions(owner, task.id);
           assert.deepEqual(yield* liveHistoryOf(owner, task.id), held);
+
           return held;
         });
+
         const later = TestClock.adjust(Duration.hours(1));
 
         assert.deepEqual(yield* agrees, { revisions: [] });
@@ -76,6 +82,7 @@ it.layer(getTestDB())("a task's history followed live", (it) => {
         yield* saveNotes(binding, [added("Context", "A member cannot bring a teammate in.")], {
           actor: DESCRIPTION_ACTOR.NOTETAKER,
         });
+
         const started = yield* createAgent(owner, {
           taskId: task.id,
           idempotencyKey: randomUUID(),
@@ -86,6 +93,7 @@ it.layer(getTestDB())("a task's history followed live", (it) => {
           repository: "acme/relay",
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         yield* later;
         yield* saveNotes(binding, [added("Open questions", "- Who may withdraw an invite?")], {
           actor: DESCRIPTION_ACTOR.AGENT,

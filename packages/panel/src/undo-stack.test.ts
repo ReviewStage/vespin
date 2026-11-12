@@ -47,6 +47,7 @@ function tasksShowing(pinned: boolean): TasksView {
     repository: null,
     ...(pinned ? { pinnedAt: 3 } : undefined),
   };
+
   return { ...IDLE_TASKS_VIEW, tasks: [task] };
 }
 
@@ -62,14 +63,18 @@ interface PinWindow {
 function standWindow(): PinWindow {
   let drawn = tasksShowing(false);
   const sent: TasksPinParams[] = [];
+
   const show = (pinned: boolean) => {
     drawn = tasksShowing(pinned);
   };
+
   const send = (payload: TasksPinParams) => {
     sent.push(payload);
     show(payload.pinned);
+
     return Promise.resolve(true);
   };
+
   return { doors: { rows: () => ({ tasks: drawn, held: undefined }), send }, sent, show };
 }
 
@@ -78,6 +83,7 @@ async function pin(window: PinWindow): Promise<void> {
   const pressed = pressRows(ROW_WRITE.TASK_PIN, window.doors, [
     { id: TASK_ID, after: { pinned: true, position: null } },
   ]);
+
   assert.equal(await window.doors.send({ taskId: TASK_ID, pinned: true }), true);
   pressed.keep("Task pinned");
 }
@@ -158,6 +164,7 @@ function takeBackWrite(
     act: (_doors, itemId) => Promise.resolve(sent.push(`act ${itemId}`)),
     undo: (_doors, itemId) => {
       const at = sent.push(`undo ${itemId}`);
+
       return undoing.then(() => at);
     },
     refused: () => undefined,
@@ -182,20 +189,24 @@ test("⌘Z takes a take-back write back once by its take-back, and leaves nothin
 test("once the account changes, an undo queued behind another sends nothing, and a write still out keeps no entry", async () => {
   const sent: string[] = [];
   let open = () => {};
+
   const gate = new Promise<void>((resolve) => {
     open = resolve;
   });
+
   const window = standWindow();
   await pressTakeBack(takeBackWrite(sent, gate), undefined, "item-1");
   await pressTakeBack(takeBackWrite(sent, gate), undefined, "item-2");
   const first = undoLast();
   const queued = undoLast();
   await vi.waitFor(() => assert.ok(sent.includes("undo item-2")));
+
   const pinning = pressWrite(
     { ...PIN_WRITE, act: (send, taskId) => gate.then(() => send({ taskId, pinned: true })) },
     window.doors,
     TASK_ID,
   );
+
   const pressed = pressRows(ROW_WRITE.TASK_PIN, window.doors, [
     { id: TASK_ID, after: { pinned: true, position: null } },
   ]);

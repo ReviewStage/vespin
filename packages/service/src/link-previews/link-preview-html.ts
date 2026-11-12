@@ -91,16 +91,20 @@ function unescaped(words: string): string {
   return words.replace(ENTITY, (whole, body: string) => {
     if (body.startsWith("#x") || body.startsWith("#X")) {
       const point = Number.parseInt(body.slice(2), 16);
+
       return Number.isFinite(point) && point > 0 && point <= 0x10ffff
         ? String.fromCodePoint(point)
         : whole;
     }
+
     if (body.startsWith("#")) {
       const point = Number.parseInt(body.slice(1), 10);
+
       return Number.isFinite(point) && point > 0 && point <= 0x10ffff
         ? String.fromCodePoint(point)
         : whole;
     }
+
     return NAMED_ENTITIES.get(body.toLowerCase()) ?? whole;
   });
 }
@@ -108,27 +112,34 @@ function unescaped(words: string): string {
 /** Words as a card says them: entities read back, runs of space one space, trimmed, and cut to `max`; none for no words. */
 function spoken(words: string | undefined, max: number): string | undefined {
   if (words === undefined) return undefined;
+
   const said = unescaped(words)
     .replace(/[\p{Cc}\s]+/gu, " ")
     .trim();
+
   if (said === "") return undefined;
+
   return said.length <= max ? said : `${said.slice(0, max - 1)}${FOLD}`;
 }
 
 /** A tag's attributes by their lowercased names, each value with its entities read back. */
 function attributesOf(tag: string): ReadonlyMap<string, string> {
   const attributes = new Map<string, string>();
+
   for (const match of tag.matchAll(ATTRIBUTE)) {
     const name = match[1]?.toLowerCase();
+
     if (name === undefined || attributes.has(name)) continue;
     attributes.set(name, unescaped(match[2] ?? match[3] ?? match[4] ?? ""));
   }
+
   return attributes;
 }
 
 /** The head of a page's markup: what stands before `</head>` or `<body`, or all of it where neither stands. */
 function headOf(html: string): string {
   const end = HEAD_END.exec(html);
+
   return end === null ? html : html.slice(0, end.index);
 }
 
@@ -136,6 +147,7 @@ function headOf(html: string): string {
 export function charsetOf(headBytes: Uint8Array): string | undefined {
   // Note that the head is read as Latin-1 to find the charset, since the bytes naming it are ASCII in every charset a page declares.
   const latin = new TextDecoder("latin1").decode(headBytes);
+
   return META_CHARSET.exec(headOf(latin))?.[1]?.toLowerCase();
 }
 
@@ -143,7 +155,9 @@ export function charsetOf(headBytes: Uint8Array): string | undefined {
 function absolute(address: string | undefined, page: URL): string | undefined {
   if (address === undefined) return undefined;
   const spelled = address.trim();
+
   if (spelled === "" || !URL.canParse(spelled, page)) return undefined;
+
   return webPageAddressOf(new URL(spelled, page).href)?.href;
 }
 
@@ -152,33 +166,42 @@ export function pageHeadOf(html: string, page: URL): PageHead {
   const head = headOf(html);
   const meta = new Map<string, string>();
   const icons = new Map<string, string>();
+
   for (const match of head.matchAll(HEAD_TAG)) {
     const tag = match[1]?.toLowerCase();
     const attributes = attributesOf(match[2] ?? "");
+
     if (tag === "meta") {
       const key = (attributes.get("property") ?? attributes.get("name"))?.toLowerCase();
       const content = attributes.get("content");
+
       // Note that the first saying of a thing wins, as a reader of the head takes it.
       if (key !== undefined && content !== undefined && !meta.has(key)) meta.set(key, content);
     } else if (tag === "link") {
       const rel = attributes.get("rel")?.toLowerCase().replace(/\s+/gu, " ").trim();
       const href = attributes.get("href");
+
       if (rel !== undefined && href !== undefined && !icons.has(rel)) icons.set(rel, href);
     }
   }
+
   const first = (keys: readonly string[], from: ReadonlyMap<string, string>) =>
     keys.map((key) => from.get(key)).find((value) => value !== undefined && value.trim() !== "");
+
   const title = spoken(
     first(SAYS.TITLE, meta) ?? TITLE.exec(head)?.[1],
     LINK_PREVIEW_BOUNDS.MAX_TITLE_CHARS,
   );
+
   const description = spoken(
     first(SAYS.DESCRIPTION, meta),
     LINK_PREVIEW_BOUNDS.MAX_DESCRIPTION_CHARS,
   );
+
   const siteName = spoken(first(SAYS.SITE_NAME, meta), LINK_PREVIEW_BOUNDS.MAX_SITE_NAME_CHARS);
   const iconUrl = absolute(first(ICON_RELS, icons) ?? DEFAULT_ICON_PATH, page);
   const imageUrl = absolute(first(SAYS.IMAGE, meta), page);
+
   return {
     ...(title === undefined ? undefined : { title }),
     ...(description === undefined ? undefined : { description }),

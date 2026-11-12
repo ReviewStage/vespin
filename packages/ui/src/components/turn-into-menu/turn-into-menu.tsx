@@ -36,6 +36,7 @@ function blockAction(
   onTurn: (block: WritingBlock) => void,
 ): MenuAction {
   const shortcut: WritingShortcut = WRITING_SHORTCUTS[block];
+
   return {
     label: shortcut.label,
     icon: <WritingGlyph action={block} />,

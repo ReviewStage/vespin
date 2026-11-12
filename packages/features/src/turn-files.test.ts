@@ -54,6 +54,7 @@ test("a turn's files are each path its patches and writes name, with the lines a
     call(AGENT_TOOL.APPLY_PATCH, { patchText: CODEX }),
     call(AGENT_TOOL.READ_FILE, { filePath: "src/db/schema.ts" }),
   ]);
+
   assert.deepEqual(files, {
     files: [
       { path: "src/members/invite.ts", added: 2, removed: 2 },
@@ -92,11 +93,13 @@ test("each reply names the developer's line that opened its turn, a line that ar
     sentAt: 1,
     ...(arrivedIn === undefined ? undefined : { arrivedIn }),
   });
+
   const reply = (id: string): AgentTranscriptMessage => ({
     id,
     role: MESSAGE_ROLE.ASSISTANT,
     parts: [],
   });
+
   assert.deepEqual(
     [
       ...turnLinesOf([

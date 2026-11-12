@@ -91,21 +91,28 @@ function placeOf(
   search: Readonly<Record<string, string>>,
 ): { place: AutomationsPlace; runs: boolean } | undefined {
   const page = Object.entries(AUTOMATIONS_LEAF).find(([id]) => id === leaf)?.[1];
+
   if (page === undefined) return undefined;
   const { automationId, runId } = params;
+
   if (page.kind === AUTOMATIONS_PAGE.NEW) {
     const preset = presetOf(search.preset);
+
     return {
       place: preset === undefined ? { kind: page.kind } : { kind: page.kind, preset },
       runs: false,
     };
   }
+
   if (page.kind !== AUTOMATIONS_PAGE.EDIT) return { place: { kind: page.kind }, runs: false };
+
   if (automationId === undefined) return undefined;
+
   const place: AutomationsPlace =
     runId === undefined
       ? { kind: AUTOMATIONS_PAGE.EDIT, automationId }
       : { kind: AUTOMATIONS_PAGE.EDIT, automationId, runId };
+
   return { place, runs: page.runs };
 }
 
@@ -138,10 +145,12 @@ function navigationTo(to: AutomationsPlace, workspace: string): NavigateOptions 
 /** Which Automations page the router stands, if any. */
 export function useAutomationsPlace(): AutomationsStanding {
   const here = useWindowPlace();
+
   const standing =
     here.place === ROUTED_PLACE.AUTOMATIONS
       ? placeOf(here.leaf, here.params, here.search)
       : undefined;
+
   return {
     open: standing !== undefined,
     place: standing?.place ?? AUTOMATIONS_LIST,
@@ -159,33 +168,43 @@ export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRout
   // Only grows: every automation the window has seen deleted.
   const deleted = useRoutedMemory().deletedAutomations;
   const { standingIn } = standing;
+
   const standsAt = (to: AutomationsPlace, workspace: string) =>
     router.buildLocation(navigationTo(to, workspace)).href === router.history.location.href;
+
   const onOpen = (to: AutomationsPlace, workspace: string) => {
     const gone = to.kind === AUTOMATIONS_PAGE.LIST ? to.deleted : undefined;
+
     if (gone !== undefined) deleted.setState((held) => new Map(held).set(gone, true));
     const options = navigationTo(to, workspace);
+
     // Opening the page already standing moves nothing, as pressing the place standing always has,
     // and keeps it standing where the door that asked for it left the routed place first, as ⌘K's does.
     if (standsAt(to, workspace)) {
       exits.stay();
+
       return;
     }
+
     // The automation a new page made takes that page's step.
     const replace = to.kind === AUTOMATIONS_PAGE.EDIT && to.created === true;
     void navigate({ ...options, replace });
   };
+
   const automation =
     standing.place.kind === AUTOMATIONS_PAGE.EDIT && standingIn !== undefined
       ? { workspace: standingIn, automationId: standing.place.automationId }
       : undefined;
+
   const setup =
     automation === undefined
       ? undefined
       : ({ to: "/$workspace/automation/$automationId", params: automation } as const);
+
   // Note that the runs alone are a step of their own in a narrow room alone, as a page of Settings is; a wide room's take the setup's step, as its setup takes theirs back.
   const onRuns = (shown: boolean) => {
     if (setup === undefined || standing.runs === shown) return;
+
     if (shown) {
       void navigate({
         to: "/$workspace/automation/$automationId/runs",
@@ -194,11 +213,13 @@ export function useAutomationsRoute(input: { narrow: boolean }): AutomationsRout
       });
     } else void navigate({ ...setup, replace: true });
   };
+
   const onTurn = (workspace: string) => {
     if (standingIn === undefined || standingIn === workspace) return;
     const { pathname } = router.history.location;
     void navigate({ href: pathUnder(pathname, workspace), replace: true });
   };
+
   return {
     ...standing,
     deletedNow: (automationId) => deleted.state.has(automationId),

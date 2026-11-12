@@ -34,6 +34,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -41,6 +42,7 @@ function render(element: ReactElement): HTMLElement {
 function Ask(): React.JSX.Element {
   const [picked, setPicked] = useState<readonly string[]>([]);
   const [ticked, setTicked] = useState(false);
+
   return createElement(
     "div",
     null,

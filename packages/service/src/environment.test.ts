@@ -20,13 +20,16 @@ async function environmentOver(
   logged: string[] = [],
 ): Promise<HostedEnvironmentValues> {
   const previous = new Map(Object.keys(variables).map((name) => [name, process.env[name]]));
+
   for (const [name, value] of Object.entries(variables)) {
     if (value === undefined) delete process.env[name];
     else process.env[name] = value;
   }
+
   const recorder = Logger.make(({ message }) => {
     logged.push(JSON.stringify(message));
   });
+
   try {
     return await Effect.runPromise(
       Effect.provide(HostedEnvironment, hostedEnvironment).pipe(
@@ -47,6 +50,7 @@ test("a secret that is set travels sealed and trimmed, and its value is the one 
     [POSTHOG_ENVIRONMENT.PERSONAL_API_KEY]: "  phx-personal-key\n",
     [CRON_ENVIRONMENT.CRON_SECRET]: " cron-secret-1 ",
   });
+
   assert.ok(
     environment.posthogPersonalApiKey && Redacted.isRedacted(environment.posthogPersonalApiKey),
   );
@@ -67,6 +71,7 @@ test("a Preview's stand-in API keys are read on a Preview alone, and production 
     PREVIEW_ANTHROPIC_API_KEY: "sk-ant-preview-stand-in-1111",
     PREVIEW_OPENAI_API_KEY: "sk-proj-preview-stand-in-1111",
   };
+
   const preview = await environmentOver({ ...standIns, VERCEL_ENV: "preview" });
   assert.deepEqual(
     Object.fromEntries(
@@ -77,6 +82,7 @@ test("a Preview's stand-in API keys are read on a Preview alone, and production 
     ),
     { anthropic: standIns.PREVIEW_ANTHROPIC_API_KEY, openai: standIns.PREVIEW_OPENAI_API_KEY },
   );
+
   for (const deployment of ["production", "development", undefined]) {
     const elsewhere = await environmentOver({ ...standIns, VERCEL_ENV: deployment });
     assert.deepEqual(elsewhere.previewApiKeys, {}, String(deployment));

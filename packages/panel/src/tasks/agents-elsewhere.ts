@@ -30,6 +30,7 @@ const selectListedPullRequests = (state: AppStateSnapshot) => state.tasks.agentP
 function listsAgent(agents: AgentsControl, agentId: string): boolean {
   const among = (list: readonly AgentSummary[] | undefined) =>
     list?.some((each) => each.id === agentId) === true;
+
   return among(agents.agents) || among(agents.archived);
 }
 
@@ -56,12 +57,14 @@ export function useAgentsElsewhere(
   const [rows, setRows] = useState<ReadonlyMap<string, AgentSummary>>(() => new Map());
   // The agents asked for once, so a read that found none is not asked again on every draw.
   const asked = useRef(new Set<string>());
+
   const unread = named.filter(
     (agentId) =>
       !listsAgent(agents, agentId) &&
       listedAgentIn(tasks, agentId) === undefined &&
       !asked.current.has(agentId),
   );
+
   const { readAgent } = agents;
   useEffect(() => {
     for (const agentId of unread) {
@@ -74,14 +77,18 @@ export function useAgentsElsewhere(
       );
     }
   });
+
   return useMemo(() => {
     const byAgent = new Map<string, AgentsControl>();
+
     return (agentId) => {
       if (listsAgent(agents, agentId)) return agents;
       const known = byAgent.get(agentId);
+
       if (known !== undefined) return known;
       const row = listedAgentIn(tasks, agentId) ?? rows.get(agentId);
       const pullRequest = listedPullRequestOf(listed, agentId);
+
       const control: AgentsControl = {
         ...agents,
         // Note that the row stands among the agents archived or not, as an agent's own page lists its agent.
@@ -91,7 +98,9 @@ export function useAgentsElsewhere(
             ? agents.pullRequests
             : new Map([...agents.pullRequests, [agentId, pullRequest]]),
       };
+
       byAgent.set(agentId, control);
+
       return control;
     };
   }, [agents, rows, listed, tasks]);

@@ -14,7 +14,7 @@ import {
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
   SettingsSection,
-  type SettingsSectionSkeletonShape,
+  type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
 } from "@repo/ui";
 import { unreadShown } from "../failure-report.js";
@@ -50,7 +50,7 @@ const TOOLS: readonly IntegrationProvider[] = [
 const FIRST_TOOL = INTEGRATION_PROVIDER.LINEAR;
 
 /** What the rows look like while where they stand is read: each a provider not yet connected, its mark, the line saying what it gives agents, and Connect. */
-const TOOLS_SKELETON: readonly SettingsSectionSkeletonShape[] = [
+const TOOLS_SKELETON: readonly SettingsSectionSkeletonLayout[] = [
   {
     headed: false,
     rows: TOOLS.map(() => ({
@@ -64,6 +64,7 @@ const TOOLS_SKELETON: readonly SettingsSectionSkeletonShape[] = [
 /** Setup's tools step. */
 export function ToolRows(): React.JSX.Element {
   const statuses = useIntegrationStatuses();
+
   const { reads, retry } = useIntegrationToolReads(
     namedServers({
       statusOf: statuses.statusOf,
@@ -73,7 +74,9 @@ export function ToolRows(): React.JSX.Element {
       .filter((server) => TOOLS.includes(server.provider))
       .map((server) => server.connection),
   );
+
   const read = TOOLS.some((provider) => statuses.statusOf(provider) !== undefined);
+
   if (!read && !statuses.readFailed) {
     return (
       <SettingsSectionsSkeleton
@@ -82,9 +85,11 @@ export function ToolRows(): React.JSX.Element {
       />
     );
   }
+
   // Note that every server here is named from one of setup's tools, so the first stands in only for a name that parses as none.
   const healthOf = (server: string) =>
     connectionHealth(integrationConnectionOf(server)?.provider ?? FIRST_TOOL, reads[server]);
+
   const rows = serverRows({
     statusOf: statuses.statusOf,
     healthOf,
@@ -95,6 +100,7 @@ export function ToolRows(): React.JSX.Element {
   })
     .filter((row) => TOOLS.includes(row.provider))
     .toSorted((one, other) => TOOLS.indexOf(one.provider) - TOOLS.indexOf(other.provider));
+
   return (
     <SettingsSection>
       {statuses.readFailed ? (

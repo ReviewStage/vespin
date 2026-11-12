@@ -21,6 +21,7 @@ import {
 } from "./release-config.mjs";
 
 const ELECTRON_BUILDER_NOTARIZE_ENV = "APP_ELECTRON_BUILDER_NOTARIZE";
+
 // As many tries, and as far apart, as electron-builder's own signing makes
 // (app-builder-lib's `macCodeSign.sign`), which this hook stands in for.
 const SIGN_ATTEMPTS = 4;
@@ -32,6 +33,7 @@ function sleep(milliseconds) {
 
 async function submitForNotarization(artifactPath, credentials) {
   let notaryOutput;
+
   try {
     notaryOutput = execFileSync("xcrun", notarySubmitArguments(artifactPath, credentials), {
       encoding: "utf8",
@@ -39,10 +41,12 @@ async function submitForNotarization(artifactPath, credentials) {
     });
   } catch (error) {
     notaryOutput = error.stdout?.toString() ?? "";
+
     if (!notaryOutput) throw error;
   }
 
   let submission;
+
   try {
     submission = JSON.parse(notaryOutput);
   } catch {
@@ -98,21 +102,25 @@ function staple(artifactPath) {
  */
 export async function signElectronBuilderApp(configuration) {
   const contents = path.join(configuration.app, "Contents");
+
   const ownEntitlements = new Map([
     [path.resolve(contents, BUNDLED_HOST.launcherPath), BUNDLED_HOST_ENTITLEMENTS.launcher],
     [path.resolve(contents, BUNDLED_HOST.nodePath), BUNDLED_HOST_ENTITLEMENTS.node],
   ]);
+
   const options = {
     ...configuration,
     optionsForFile: (filePath) => {
       const fileOptions = configuration.optionsForFile(filePath);
       const entitlements = ownEntitlements.get(path.resolve(filePath));
+
       // Note that a fresh list each time, since osx-sign replaces a list it is handed with the plist it writes for it.
       return entitlements === undefined
         ? fileOptions
         : { ...fileOptions, entitlements: [...entitlements] };
     },
   };
+
   for (let attempt = 1; ; attempt += 1) {
     try {
       return await signAsync(options);
@@ -132,6 +140,7 @@ export async function notarizeElectronBuilderApp(context) {
   const credentials = resolveNotaryCredentials(process.env);
   const appPath = path.join(context.appOutDir, "Vespin.app");
   const submissionDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "builder-notary-"));
+
   try {
     const submissionPath = path.join(submissionDirectory, "Vespin.app.zip");
     execFileSync("ditto", ["-c", "-k", "--keepParent", appPath, submissionPath], {
@@ -149,26 +158,34 @@ function writeSha256(artifactPath) {
     cwd: path.dirname(artifactPath),
     encoding: "utf8",
   });
+
   fs.writeFileSync(`${artifactPath}.sha256`, output);
+
   return `${artifactPath}.sha256`;
 }
 
 export async function finalizeElectronBuilderArtifacts(buildResult) {
   const artifacts = [...buildResult.artifactPaths];
+
   // A `--dir` build (the evidence run's) stops at the unpacked app: there is no
   // DMG or zip to checksum, notarize, or name latest, and demanding one would
   // fail the very build that asked for none.
   const builtTargets = [...buildResult.platformToTargets.values()].flatMap((targets) => [
     ...targets.keys(),
   ]);
+
   if (!builtTargets.includes("dmg")) return artifacts;
+
   const { version } = JSON.parse(
     fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"),
   );
+
   const outputDirectory = buildResult.outDir;
   const dmgPath = path.join(outputDirectory, releaseDmgFileName(version));
   const zipPath = path.join(outputDirectory, releaseZipFileName(version));
+
   if (!fs.existsSync(dmgPath)) throw new Error(`electron-builder did not write ${dmgPath}`);
+
   if (!fs.existsSync(zipPath)) throw new Error(`electron-builder did not write ${zipPath}`);
 
   if (shouldNotarize()) {
@@ -180,5 +197,6 @@ export async function finalizeElectronBuilderArtifacts(buildResult) {
   const latestDmgPath = path.join(outputDirectory, RELEASE_LATEST_DMG_FILE_NAME);
   fs.copyFileSync(dmgPath, latestDmgPath);
   artifacts.push(latestDmgPath, writeSha256(dmgPath), writeSha256(zipPath));
+
   return artifacts;
 }

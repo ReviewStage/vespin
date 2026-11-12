@@ -43,19 +43,24 @@ const KIND_OF_PROCESS_TYPE: Partial<Record<ProcessMetric["type"], MacProcessKind
 /** Electron's own processes by pid, each named as its metrics name it: a utility by its service ("Network Service"), any other by its type. */
 function electronProcesses(): Map<number, ElectronProcessName> {
   const named = new Map<number, ElectronProcessName>();
+
   for (const metric of app.getAppMetrics()) {
     const kind = KIND_OF_PROCESS_TYPE[metric.type];
+
     if (kind === undefined) continue;
     named.set(metric.pid, { kind, name: metric.name ?? metric.serviceName ?? metric.type });
   }
+
   return named;
 }
 
 /** The app's processes now; none where `ps` did not answer. */
 export const readMacResources: Effect.Effect<MacResources> = Effect.gen(function* () {
   const table = yield* printed("ps", ["-axo", "pid=,ppid=,pcpu=,rss=,comm="], ANSWER_WITHIN);
+
   if (Result.isFailure(table)) return { processes: [] };
   const rows = readProcessTable(table.success);
+
   return {
     processes: appProcesses({
       table: rows,

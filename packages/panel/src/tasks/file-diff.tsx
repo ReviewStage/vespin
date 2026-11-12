@@ -44,14 +44,17 @@ export function useSplitRoom(element: HTMLElement | null): boolean {
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
+
     return () => observer.disconnect();
   }, [element]);
+
   return roomy;
 }
 
 /** How the diff settings draw a diff (`file-view-settings.ts`), unified where a split has no room. */
 export function useDiffLook(roomy: boolean): DiffLook {
   const { settings } = useFileViewSettings();
+
   return {
     layout: roomy ? settings.diffLayout : DIFF_LAYOUT.UNIFIED,
     indicators: settings.diffIndicators,
@@ -70,6 +73,7 @@ export function useDiffLook(roomy: boolean): DiffLook {
 /** Whether two selections light the same lines. */
 function sameSelection(a: DiffSelection | undefined, b: DiffSelection | undefined): boolean {
   if (a === undefined || b === undefined) return a === b;
+
   return a.start === b.start && a.side === b.side && a.end === b.end && a.endSide === b.endSide;
 }
 
@@ -84,10 +88,12 @@ const NO_NOTES: readonly PierreDiffNote[] = [];
 /** What the diff stands its notes in: the element kept for each key, made the first time it is asked for. */
 function keptNote(held: Map<string, HTMLDivElement>, key: string): HTMLDivElement {
   const kept = held.get(key);
+
   if (kept !== undefined) return kept;
   const element = document.createElement("div");
   element.className = "diff-note";
   held.set(key, element);
+
   return element;
 }
 
@@ -129,6 +135,7 @@ export function PierreDiff({
   const elements = useRef(new Map<string, HTMLDivElement>());
   const renderAnnotation = useCallback((key: string) => keptNote(elements.current, key), []);
   const annotations = notes.map(({ key, side, line }) => ({ key, side, line }));
+
   // What the diff was last drawn with; the mount reads the latest, so it is mounted once.
   const props: DiffViewProps = {
     patch,
@@ -139,15 +146,18 @@ export function PierreDiff({
     renderAnnotation,
     pooled,
   };
+
   const drawn = useRef(props);
   const latest = useRef(props);
   latest.current = props;
   useEffect(() => {
     const element = host.current;
+
     if (module === undefined || element === null) return undefined;
     drawn.current = latest.current;
     const mounted = module.mount(element, latest.current);
     handle.current = mounted;
+
     return () => {
       handle.current = undefined;
       mounted.unmount();
@@ -157,6 +167,7 @@ export function PierreDiff({
   useEffect(() => {
     if (handle.current === undefined) return;
     const was = drawn.current;
+
     if (
       was.patch === patch &&
       sameLook(was.look, look) &&
@@ -166,6 +177,7 @@ export function PierreDiff({
     ) {
       return;
     }
+
     drawn.current = latest.current;
     handle.current.update(latest.current);
   });
@@ -184,8 +196,9 @@ export function PierreDiff({
       </ErrorState>
     );
   }
+
   return (
-    <div ref={host} className={`${className} ph-no-capture`} data-diff-layout={look.layout}>
+    <div ref={host} className={className} data-diff-layout={look.layout}>
       {notes.map((note) =>
         createPortal(note.content, keptNote(elements.current, note.key), note.key),
       )}

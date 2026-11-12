@@ -18,7 +18,7 @@ import { LINK_SITE, type LinkSite } from "@repo/features/link-site";
 import {
   type DescriptionMention,
   handedMentionsIn,
-  linkMention,
+  linkChipOf,
   MENTION_KIND,
   type Mention,
   mentionName,
@@ -172,13 +172,16 @@ const SITE_READ_BY: Readonly<Partial<Record<LinkSite, IntegrationProvider>>> = {
 function keptLength(text: string, bound: number): number {
   if (text.length <= bound) return text.length;
   const lineEnd = text.lastIndexOf("\n", bound);
+
   return text.slice(0, lineEnd > 0 ? lineEnd : bound).trimEnd().length;
 }
 
 /** The text cut on a line to the bound, saying how much was left out; whole where it fits. */
 function cutOnLine(text: string, bound: number): string {
   const kept = keptLength(text, bound);
+
   if (kept === text.length) return text;
+
   return `${text.slice(0, kept)}\n… (${text.length - kept} more characters)`;
 }
 
@@ -188,12 +191,15 @@ const HEADINGS_CHARS = 2_000;
 /** Headings joined as a list, as many as its bound holds, the rest counted. */
 function headingList(headings: readonly string[]): string {
   let list = "";
+
   for (const [at, heading] of headings.entries()) {
     const next = list === "" ? heading : `${list}; ${heading}`;
+
     if (next.length > HEADINGS_CHARS)
       return `${list === "" ? "" : `${list}; `}and ${headings.length - at} more`;
     list = next;
   }
+
   return list;
 }
 
@@ -213,24 +219,32 @@ interface HandedMention {
 function excerptOf({ mention, name }: NamedMention, task: Task): string {
   if (mention.kind === MENTION_KIND.TASK) {
     const whole = descriptionMarkdown(task);
+
     if (whole.length <= MENTIONED_BOUNDS.DESCRIPTION_CHARS)
       return `The whole description:\n\n${whole.trimEnd()}`;
+
     // Note that a section is left out by where it starts, past the cut, never by its heading's words, which earlier text may quote.
     const bodyKept =
       keptLength(whole, MENTIONED_BOUNDS.DESCRIPTION_CHARS) -
       (whole.length - task.document.body.trimEnd().length - 1);
+
     const headings = descriptionSections(task.document.body)
       .filter((section) => section.heading !== "" && section.from >= bodyKept)
       .map((section) => section.heading);
+
     const rest = headings.length === 0 ? "" : `\n\nIts other sections: ${headingList(headings)}.`;
+
     return `The whole description, cut short:\n\n${cutOnLine(whole, MENTIONED_BOUNDS.DESCRIPTION_CHARS)}${rest}`;
   }
+
   const sections = descriptionSections(task.document.body);
   const anchors = sectionAnchors(sections.map((section) => section.heading));
   const section = sections[anchors.indexOf(mention.anchor)];
+
   if (section === undefined) {
     return `The section "${name}": no longer in the description.`;
   }
+
   return `The description's section "${section.heading}":\n\n${cutOnLine(section.text, MENTIONED_BOUNDS.SECTION_CHARS)}`;
 }
 
@@ -266,7 +280,9 @@ type Handed =
  */
 function pageNoteOf(pageId: string, name: string, reads: MentionedReads): string {
   const page = reads.pages.get(pageId);
+
   if (page === undefined) return `The page "${name}": no longer on this task.`;
+
   return `The developer pointed you at the page "${page.title}" (id \`${page.id}\`, version ${page.version}) shown on this task. Read it as the developer saw it with \`${AGENT_TOOL.READ_PAGE}\`, \`pageId: "${page.id}"\`, and \`version: ${page.version}\`, or leave the version out for its newest. To change it, show it again with \`${AGENT_TOOL.SHOW_PAGE}\` and \`page: "${page.id}"\`, which writes its next version in its place.`;
 }
 
@@ -276,10 +292,13 @@ function readingOf(agent: MentionedAgent, repository: string | null): string {
     return " It works in no repository, so there is no work of its to read.";
   const elsewhere = agent.repository.toLowerCase() !== repository?.toLowerCase();
   const repo = elsewhere ? ` --repo ${agent.repository}` : "";
+
   if (agent.pullRequest !== null) {
     return ` Read its work with \`gh pr diff ${agent.pullRequest.number}${repo}\` and \`gh pr view ${agent.pullRequest.number}${repo}\`.`;
   }
+
   if (agent.branch === null) return " It has pushed no work yet, so there is none of its to read.";
+
   return elsewhere
     ? ` Its work, once pushed, is on that branch of \`${agent.repository}\`, which \`gh\` reads.`
     : ` Read its work, once pushed, with \`git fetch origin ${agent.branch}\` and \`git diff HEAD...FETCH_HEAD\`.`;
@@ -288,7 +307,9 @@ function readingOf(agent: MentionedAgent, repository: string | null): string {
 /** Where a mentioned agent works, beside the plan of the agent it is handed to. */
 function taskWords(agent: MentionedAgent, task: Task | undefined): string {
   if (agent.task === null) return "on a task you cannot open";
+
   if (agent.task.id === task?.id) return "on this task";
+
   return `on the task "${agent.task.name}"`;
 }
 
@@ -301,17 +322,21 @@ function agentNoteOf(
 ): string {
   // The store holds an id in lower case, whatever case the link spelled it in.
   const agent = reads.agents.get(agentId.toLowerCase());
+
   if (agent === undefined) return `The agent "${name}": not found in your workspace.`;
   const archived = agent.archived ? ", archived," : "";
   const branch = agent.branch === null ? "" : ` on the branch \`${agent.branch}\``;
   const working = agent.repository === null ? "" : ` working in \`${agent.repository}\``;
+
   const pullRequest =
     agent.pullRequest === null
       ? ""
       : `, whose pull request is ${mentionMarkdownLink(`#${agent.pullRequest.number}`, agent.pullRequest.url)}`;
+
   const message = agent.archived
     ? ""
     : ` To message it, call \`${AGENT_TOOL.MESSAGE_AGENT}\` with its id.`;
+
   return `The developer pointed you at another agent of your workspace ${taskWords(agent, task)}, "${agent.name}" (id \`${agent.id}\`)${archived}${working}${branch}${pullRequest}.${readingOf(agent, task?.repository ?? null)}${message} Read its conversation with \`${AGENT_TOOL.READ_AGENT}\` and its id.`;
 }
 
@@ -325,17 +350,21 @@ const ROLE_WORDS = {
 /** What a mention of a person is handed as: who they are in the workspace, and that the agent reaches them only by naming them in what it writes. */
 function personNoteOf(userId: string, name: string, reads: MentionedReads): string {
   const person = reads.people.get(userId);
+
   if (person === undefined) return `The person "${name}": not a member of your workspace.`;
+
   return `The developer pointed you at ${person.name}, ${ROLE_WORDS[person.role]} of your workspace. No tool of yours reaches them, so where the work needs them, name them in what you write, as the developer's mention of them is written.`;
 }
 
 /** What a mention of a file's lines is handed as: the lines, the commit they were read at, and how to read just those; nothing for a whole file. */
 function linesNoteOf({ path, lines }: LinesMention): string {
   if (lines === undefined) return "";
+
   const span =
     lines.startLine === lines.endLine
       ? `line ${lines.startLine}`
       : `lines ${lines.startLine}–${lines.endLine}`;
+
   return `The developer pointed you at ${span} of \`${path}\` as they stood at commit \`${lines.commit}\` for this message: read just those lines, as \`git show ${lines.commit}:${path}\` holds them, since your branch may have moved them.`;
 }
 
@@ -350,14 +379,18 @@ function noteOf(mention: ServerMention): string {
     mention.kind === MENTION_KIND.LINK
       ? mention.provider
       : (mention.connection ?? mention.provider);
+
   const server = `the ${INTEGRATION_NAME[mention.provider]} MCP server (connection \`${connection}\`)`;
   const joins = "If that connection is not among yours in this turn, it joins at your next.";
+
   if (mention.kind === MENTION_KIND.SERVER) {
     return `The developer pointed you at ${server} for this message: use that connection's tools before reaching for anything else. ${joins}`;
   }
+
   if (mention.kind === MENTION_KIND.LINK) {
     return `The developer pointed you at ${mention.url}, a page of ${server}, for this message: read it through that connection's tools rather than the web. ${joins}`;
   }
+
   return `The developer pointed you at the tool \`${mention.tool}\` of ${server} for this message: run it in preference to other tools. ${joins}`;
 }
 
@@ -383,8 +416,10 @@ function numberedTaskOf(
   if (!("taskId" in mention) || mention.taskId === task?.id) return undefined;
   const read = readLink(target);
   const number = read === undefined ? undefined : taskNumberOf(read.place);
+
   if (read === undefined || number === undefined) return undefined;
   const link = linkOf({ kind: LINK_DESTINATION.TASK, planId: String(number) }, read.workspace);
+
   return { kind: HANDED_KIND.NUMBERED_TASK, taskId: mention.taskId, link };
 }
 
@@ -395,7 +430,9 @@ function handedMention(
   task: Task | undefined,
 ): Handed | undefined {
   const numbered = numberedTaskOf(mention, target, task);
+
   if (numbered !== undefined) return numbered;
+
   switch (mention.kind) {
     case MENTION_KIND.TASK:
     case MENTION_KIND.SECTION:
@@ -411,10 +448,12 @@ function handedMention(
     case MENTION_KIND.LINK: {
       if ("provider" in mention) return mention;
       const reader = SITE_READ_BY[mention.site];
+
       return reader === undefined
         ? undefined
         : { kind: mention.kind, provider: reader, url: mention.url };
     }
+
     // A whole file is the agent's to read; only lines the developer picked are handed a note.
     case MENTION_KIND.FILE:
       return mention.lines === undefined ? undefined : mention;
@@ -515,11 +554,15 @@ export function mentionedIds(
   const agents = new Set<string>();
   const people = new Set<string>();
   const handed = handedMentionsIn(words, task?.repository ?? null, { taskIdOf: foundTask(tasks) });
+
   for (const { mention } of handed) {
     if (mention.kind === MENTION_KIND.PAGE && standsOn(mention, task)) pages.add(mention.pageId);
+
     if (mention.kind === MENTION_KIND.AGENT) agents.add(mention.agentId.toLowerCase());
+
     if (mention.kind === MENTION_KIND.PERSON) people.add(mention.userId);
   }
+
   return { pages: [...pages], agents: [...agents], people: [...people] };
 }
 
@@ -530,12 +573,16 @@ export function mentionedServers(words: string, repository: string | null): read
     if (mention.kind === MENTION_KIND.SERVER || mention.kind === MENTION_KIND.TOOL) {
       return [mention.connection ?? mention.provider];
     }
+
     if (mention.kind !== MENTION_KIND.LINK) return [];
+
     // A page names its provider and no account, so it brings in the provider's first.
     if ("provider" in mention) return [mention.provider];
     const reader = SITE_READ_BY[mention.site];
+
     return reader === undefined ? [] : [reader];
   });
+
   return [...new Set(connections)];
 }
 
@@ -556,35 +603,45 @@ export function mentionedContext(
   const named: HandedMention[] = [];
   const repository = task?.repository ?? null;
   const taskIdOf = foundTask(reads.tasks);
+
   for (const { mention, label, target } of handedMentionsIn(words, repository, { taskIdOf })) {
     const handed = handedMention(mention, target, task);
+
     if (handed === undefined) continue;
+
     if (
       !descriptionsOn &&
       (handed.kind === MENTION_KIND.TASK || handed.kind === MENTION_KIND.SECTION)
     ) {
       continue;
     }
+
     // A bare address is named by what it says of the thing, a section by its anchor, as its chip is.
-    const name = linkMention(label, target, repository)?.name ?? mentionName(label);
+    const name = linkChipOf(label, target, repository)?.name ?? mentionName(label);
+
     if (!named.some((each) => sameMention(each.mention, handed))) {
       named.push({ mention: handed, name });
     }
   }
+
   if (named.length === 0) return undefined;
   let part = MENTIONED_HEADING;
   let left = 0;
+
   // Note that an excerpt too long for the room left is passed over rather than
   // ending the part, so a shorter one after it still goes; what was passed
   // over is counted, and said once at the end.
   for (const mention of named) {
     const excerpt = `\n\n${handedAs(mention, task, reads)}`;
+
     if (part.length + excerpt.length + LEFT_OUT_ROOM <= MENTIONED_BOUNDS.PART_CHARS)
       part += excerpt;
     else left += 1;
   }
+
   if (left > 0) {
     part += `\n\n${left} more mention${left === 1 ? "" : "s"} left out, since this part is full; ask for what you need.`;
   }
+
   return part;
 }

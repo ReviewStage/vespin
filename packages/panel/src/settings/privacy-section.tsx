@@ -34,12 +34,15 @@ function SupportAccessRow(): React.JSX.Element {
     ...appStateQuery,
     select: (state) => supportAccessStanding(state, Date.now()),
   }).data;
+
   const supportAccess = useMutation(pressMutation(ACT_KIND.ACCOUNT_SUPPORT_ACCESS));
   const granted = standing?.granted === true;
+
   const press = {
     busy: supportAccess.isPending,
     onPress: () => supportAccess.mutate({ grant: !granted }),
   };
+
   return (
     <SettingsRow label="Support access" description={standing?.words}>
       {() =>

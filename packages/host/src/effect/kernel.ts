@@ -43,6 +43,7 @@ export interface LateService<A> {
 export const lateService = <A>(): Effect.Effect<LateService<A>> =>
   Effect.map(Deferred.make<A>(), (deferred) => {
     let held: Option.Option<A> = Option.none();
+
     return {
       value: Deferred.await(deferred),
       set: (value) =>
@@ -50,6 +51,7 @@ export const lateService = <A>(): Effect.Effect<LateService<A>> =>
           if (Option.isSome(held)) return false;
           held = Option.some(value);
           Deferred.doneUnsafe(deferred, Effect.succeed(value));
+
           return true;
         }),
       peek: Effect.sync(() => held),
@@ -86,6 +88,7 @@ const kernelEmit = /* @__PURE__ */ Effect.fnUntraced(function* (
   yield* Effect.forkDetach(
     Effect.map(service.value, (resolved) => {
       standing = resolved;
+
       for (const queued of pending) resolved.emit(queued.kind, queued.payload);
       pending.length = 0;
     }),

@@ -90,6 +90,7 @@ export function browserLivePath(target: BrowserLiveTarget): string {
     [BROWSER_LIVE.QUERY.AGENT]: target.agentId,
     [BROWSER_LIVE.QUERY.TAB]: target.tabId,
   });
+
   return `${BROWSER_LIVE.PATH}?${query.toString()}`;
 }
 

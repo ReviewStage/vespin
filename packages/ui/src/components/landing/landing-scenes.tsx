@@ -22,12 +22,11 @@ import {
   SidebarIcon,
 } from "../../icons/lucide-glyphs.js";
 import { FiringGlyph } from "../../marks/firing-glyph.js";
-import { HarnessMark } from "../../marks/harness-mark.js";
-import { MARK_PROVIDER, ProviderMark } from "../../marks/provider-mark.js";
+import { type CodexArt, HarnessMark } from "../../marks/harness-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";
 import { PROFILE, surfaceAttributes, THEME } from "../../tokens/surface.js";
-import { AVATAR_SHAPE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
+import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
 import { Badge } from "../badge/badge.js";
 import { BarAction, BarItem, BarItems } from "../bar-item/bar-item.js";
 import { Breadcrumbs } from "../breadcrumbs/breadcrumbs.js";
@@ -47,7 +46,6 @@ import { GROUP_HEADING, GroupHeader } from "../group-header/group-header.js";
 import { INLINE_REF_LOOK, InlineRef } from "../inline-ref/inline-ref.js";
 import { INLINE_REF_FIT, type InlineRefFit } from "../inline-ref/inline-ref-fit.js";
 import { LineRow } from "../line-button/line-button.js";
-import { LIST_MOTION_WAY, ListMotion } from "../list-motion/list-motion.js";
 import {
   LIST_DENSITY,
   LIST_ROW_CURRENT,
@@ -90,7 +88,7 @@ import {
   MEMBER,
   SidePanelToggle,
 } from "./landing-desktop.js";
-import { LandingPanel, LandingPhone, LandingWindow } from "./landing-devices.js";
+import { LandingPhone, LandingWindow } from "./landing-devices.js";
 import { MINUTE, STORY_NOW, still, useNarrowPage, useStory } from "./landing-story.js";
 
 /**
@@ -110,7 +108,7 @@ import { MINUTE, STORY_NOW, still, useNarrowPage, useStory } from "./landing-sto
  */
 
 /** How long each scene holds a step, in milliseconds. */
-const BEAT = { HERO: 900, INBOX: 1900, AGENTS: 1800, RUNS: 1700, KEYS: 1500 } as const;
+const BEAT = { INBOX: 1900, AGENTS: 1800, RUNS: 1700, KEYS: 1500 } as const;
 
 /**
  * A window's story: how many steps it plays, the last it draws (held for the
@@ -128,6 +126,7 @@ function useWindowStory(
   beat: number,
 ): number {
   const from = useNarrowPage(ref) ? story.NARROW_FROM : 0;
+
   return Math.min(useStory(ref, story.STEPS - from, beat) + from, story.LAST);
 }
 
@@ -149,7 +148,7 @@ const DESKTOP_SURFACE = surfaceAttributes(PROFILE.DESKTOP, THEME.DARK);
 function agentAuthor(name: string): CommentAuthor {
   return {
     name,
-    shape: AVATAR_SHAPE.SQUARE,
+    outline: AVATAR_OUTLINE.SQUARE,
     glyph: <HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />,
   };
 }
@@ -223,6 +222,7 @@ type InboxItem = {
 /** An Inbox row as the panel draws it: the task above, the ask's glyph before its last line, its age beside the title. */
 function InboxRow({ item }: { item: InboxItem }): React.JSX.Element {
   const open = item.kind !== LINE.SETTLED;
+
   return (
     <ListRow
       motionKey={item.id}
@@ -312,6 +312,7 @@ const OTHER_ITEMS: readonly InboxItem[] = [
 function inboxItems(step: number): readonly InboxItem[] {
   if (step < 1) return OTHER_ITEMS;
   const answered = step >= 5;
+
   const question: InboxItem = {
     id: "question",
     task: QUESTION.TASK,
@@ -323,6 +324,7 @@ function inboxItems(step: number): readonly InboxItem[] {
     unread: step < 2,
     current: step >= 2,
   };
+
   return [question, ...OTHER_ITEMS];
 }
 
@@ -446,6 +448,7 @@ function DraftAnswer({ picked, note }: { picked: boolean; note: string }): React
  */
 function QuestionThread({ step }: { step: number }): React.JSX.Element {
   const sent = step >= 5;
+
   return (
     <div className="ui-landing-thread">
       <header className="ui-landing-subject">
@@ -488,6 +491,7 @@ function QuestionThread({ step }: { step: number }): React.JSX.Element {
 /** The Inbox's page at `step`: the list, a question arriving, opened, answered in the draft under it, and sent. */
 function InboxPage({ step }: { step: number }): React.JSX.Element {
   const open = step >= 2;
+
   return (
     <div className="ui-landing-app">
       <DesktopSidebar place={DESKTOP_PLACE.INBOX} />
@@ -546,6 +550,7 @@ function InboxPage({ step }: { step: number }): React.JSX.Element {
 function InboxScene(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const step = useWindowStory(ref, STORY.INBOX, BEAT.INBOX);
+
   return (
     <div ref={ref} className="ui-landing-scene">
       <DesktopWindow label="The Inbox, where an agent's question is answered">
@@ -608,6 +613,7 @@ type SubTask = {
 function subTasks(step: number): readonly SubTask[] {
   const at = (from: number, to: number): TaskStatus =>
     step >= to ? TASK_STATUS.DONE : step >= from ? TASK_STATUS.IN_PROGRESS : TASK_STATUS.TODO;
+
   return [
     { id: "schema", name: "Pending memberships schema", status: TASK_STATUS.DONE, key: "ACME-54" },
     {
@@ -644,6 +650,7 @@ function TaskTabs({ step }: { step: number }): React.JSX.Element {
 /** The agent's log at `step`: its words, its folded calls, the other agent's messages, and its working line. */
 function AgentLog({ step }: { step: number }): React.JSX.Element {
   const calls = step >= 3 ? 3 : step >= 1 ? 2 : 1;
+
   return (
     <div className="ui-landing-log">
       <MessageFrame>
@@ -755,6 +762,7 @@ function AgentFoot({ step }: { step: number }): React.JSX.Element {
 function PlanPanel({ step }: { step: number }): React.JSX.Element {
   const tasks = subTasks(step);
   const done = tasks.filter((task) => task.status === TASK_STATUS.DONE).length;
+
   return (
     <aside className="ui-landing-side">
       <div className="ui-landing-side-bar">
@@ -852,6 +860,7 @@ function TaskPage({ step }: { step: number }): React.JSX.Element {
 function AgentsScene(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const step = useWindowStory(ref, STORY.AGENTS, BEAT.AGENTS);
+
   return (
     <div ref={ref} className="ui-landing-scene">
       <DesktopWindow label="A task's agent starting another agent, and the two trading messages">
@@ -932,7 +941,7 @@ function AutomationSettings(): React.JSX.Element {
       <div className="ui-landing-automation-title">
         <Avatar
           name="Nightly flaky-test sweep"
-          shape={AVATAR_SHAPE.SQUARE}
+          outline={AVATAR_OUTLINE.SQUARE}
           size={AVATAR_SIZE.PAGE}
           glyph={<FiringGlyph of={SCHEDULE} />}
           decorative
@@ -971,13 +980,16 @@ function AutomationSettings(): React.JSX.Element {
 /** The automation's runs at `step`: a scheduled run firing, working, and finishing on top of the earlier ones. */
 function AutomationRuns({ step }: { step: number }): React.JSX.Element {
   const working = step >= 1 && step < 3;
+
   const latest: Run = {
     id: "236",
     ago: 0,
     title: step >= 3 ? "Wait for the invite email in the accept test" : "Scheduled run",
     line: "Finished",
   };
+
   const runs = step >= 1 ? [latest, ...RUNS] : RUNS;
+
   return (
     <aside className="ui-landing-runs">
       <Text as={TEXT_ELEMENT.H2} variant={TEXT_VARIANT.SECTION} tone={TEXT_TONE.MUTED}>
@@ -986,6 +998,7 @@ function AutomationRuns({ step }: { step: number }): React.JSX.Element {
       <List label="Runs">
         {runs.map((run) => {
           const running = run.id === latest.id && working;
+
           return (
             <ListRow
               key={run.id}
@@ -993,7 +1006,7 @@ function AutomationRuns({ step }: { step: number }): React.JSX.Element {
               leading={
                 <Avatar
                   name={run.title}
-                  shape={AVATAR_SHAPE.SQUARE}
+                  outline={AVATAR_OUTLINE.SQUARE}
                   size={AVATAR_SIZE.ROW}
                   glyph={running ? <WorkingMark /> : <FiringGlyph of={SCHEDULE} />}
                   decorative
@@ -1035,6 +1048,7 @@ function AutomationPage({ step }: { step: number }): React.JSX.Element {
 function AutomationsScene(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const step = useStory(ref, 5, BEAT.RUNS);
+
   return (
     <div ref={ref} className="ui-landing-scene">
       <DesktopWindow label="An automation's page, a scheduled run firing and finishing">
@@ -1110,10 +1124,14 @@ function DevicesScene(): React.JSX.Element {
   );
 }
 
+/** What a scene is handed: Codex's picture, where the page has one to draw its mark from. */
+type SceneProps = { readonly codexArt?: CodexArt | undefined };
+
 /** A harness's row in Settings › Agents: its mark, its name, the credential it connects with, and the step of the story it connects at. */
 type KeyRow = {
   readonly id: string;
   readonly name: string;
+  /** Its mark, or none for Codex's, which is drawn from the page's `codexArt`. */
   readonly mark: ReactNode;
   readonly connected: string;
   readonly at: number;
@@ -1130,7 +1148,7 @@ const KEY_ROWS: readonly KeyRow[] = [
   {
     id: "codex",
     name: "Codex",
-    mark: <ProviderMark provider={MARK_PROVIDER.CHATGPT} />,
+    mark: null,
     connected: "OpenAI API key",
     at: 2,
   },
@@ -1141,9 +1159,10 @@ const KEY_ROWS: readonly KeyRow[] = [
  * a device makes its screen one: a reader is told what it shows, and its rows
  * are inert, since none of them is ever pressed.
  */
-function KeysScene(): React.JSX.Element {
+function KeysScene({ codexArt }: SceneProps): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const step = useStory(ref, 5, BEAT.KEYS);
+
   return (
     <div
       ref={ref}
@@ -1156,10 +1175,18 @@ function KeysScene(): React.JSX.Element {
         <SettingsSection title="Agents">
           {KEY_ROWS.map((row) => {
             const connected = step >= row.at;
+
             return (
               <SettingsRow
                 key={row.id}
-                leading={<SettingsRowMark>{row.mark}</SettingsRowMark>}
+                leading={
+                  <SettingsRowMark>
+                    {row.mark ??
+                      (codexArt === undefined ? null : (
+                        <HarnessMark provider={MODEL_PROVIDER.OPENAI} codexArt={codexArt} />
+                      ))}
+                  </SettingsRowMark>
+                }
                 label={row.name}
                 description={
                   <SettingsRowStateLine
@@ -1183,156 +1210,7 @@ function KeysScene(): React.JSX.Element {
   );
 }
 
-/** One of the posts the hero's Inbox turns through: its task, its title, what it asks, and its last line. */
-type HeroPost = {
-  readonly id: string;
-  readonly task: string;
-  readonly title: string;
-  readonly kind: Line;
-  readonly line: string;
-};
-
-/** What agents post to the hero's Inbox, in the order it arrives, round and round; asks among them, and news that asks nothing. */
-const HERO_POSTS: readonly HeroPost[] = [
-  {
-    id: "migration",
-    task: "Teammate invitations",
-    title: "Run the memberships migration on preview?",
-    kind: LINE.DECIDE,
-    line: "Approve (recommended) / Decline",
-  },
-  {
-    id: "merged",
-    task: "Pricing page",
-    title: "Merged #479 into main",
-    kind: LINE.SETTLED,
-    line: "Checks passed · Deployed to production",
-  },
-  {
-    id: "domain",
-    task: "Weekly digest email",
-    title: "Verify the digest's sender domain",
-    kind: LINE.DO,
-    line: "3 steps left · Open the mail provider's Domains page",
-  },
-  {
-    id: "flag",
-    task: "Search ranking",
-    title: "Ship the new ranking behind a flag?",
-    kind: LINE.DECIDE,
-    line: "Yes (recommended) / No",
-  },
-  {
-    id: "tests",
-    task: "Checkout redesign",
-    title: "Fixed the two flaky payment tests",
-    kind: LINE.SETTLED,
-    line: "Pushed to #482 · Checks passing",
-  },
-  {
-    id: "secret",
-    task: "Onboarding checklist",
-    title: "Add the email provider's API key",
-    kind: LINE.DO,
-    line: "1 step left · Add the secret in Vercel",
-  },
-  {
-    id: "review",
-    task: "Checkout redesign",
-    title: "Ready for review: #482",
-    kind: LINE.DECIDE,
-    line: "Merge / Request changes",
-  },
-  {
-    id: "currency",
-    task: "Billing export",
-    title: "Which currency goes in the CSV?",
-    kind: LINE.DECIDE,
-    line: "USD / The account's own (recommended)",
-  },
-];
-
-/** How many posts the hero's Inbox lists once the oldest is let go, the last below the panel's crop; fewer than there are posts less one, so the one arriving on top is never one still listed. */
-const HERO_LISTED = 6;
-
-/** Minutes between one post's arrival and the next's. */
-const HERO_SPACING = 9;
-
-/**
- * The hero's Inbox at `step`, two steps to each post's arrival: on the first
- * the newest post arrives on top and every other glides down to make room,
- * and on the second the oldest, by then under the panel's faded foot, is let
- * go. The one arriving unrolls from the list's top edge, its foot and the
- * rows under it traveling as one edge. Note that a post arrives in a change
- * of its own, because a list plays what leaves it before what moves, and a
- * row leaving in the same change would hold every glide back for its exit. A post stands as it arrived,
- * unread and asking what it asks, because nothing on screen reads or answers
- * it. Its place in the story is its age alone, so the last step leads into
- * the first with nothing reset.
- */
-function heroItems(step: number): readonly InboxItem[] {
-  const count = HERO_POSTS.length;
-  const arrival = Math.floor(step / 2);
-  const listed = step % 2 === 0 ? HERO_LISTED + 1 : HERO_LISTED;
-  return Array.from({ length: listed }, (_, age) => {
-    const post = HERO_POSTS[(arrival - age + count) % count];
-    if (post === undefined) throw new Error("heroItems: a post out of range");
-    return {
-      id: post.id,
-      task: post.task,
-      status: TASK_STATUS.IN_PROGRESS,
-      title: post.title,
-      line: post.line,
-      kind: post.kind,
-      ago: 1 + age * HERO_SPACING,
-      unread: true,
-    };
-  });
-}
-
-/** The hero's moving screen: the Inbox's column alone, agents' posts arriving on top and carrying the older ones off its foot. */
-export function LandingHeroScene(): React.JSX.Element {
-  const ref = useRef<HTMLDivElement>(null);
-  const step = useStory(ref, HERO_POSTS.length * 2, BEAT.HERO);
-  const rows = useRef<HTMLDivElement>(null);
-  return (
-    <div ref={ref} className="ui-landing-scene">
-      <LandingPanel label="The Inbox, as agents post to it">
-        <div className="ui-landing-desktop ui-landing-hero-inbox" {...DESKTOP_SURFACE}>
-          <Toolbar
-            title="Inbox"
-            start={TOOLBAR_INSET.COLUMN}
-            end={TOOLBAR_INSET.COLUMN}
-            actions={
-              <IconButton icon={<SlidersHorizontalIcon />} label="View options" onClick={still} />
-            }
-          />
-          <div ref={rows} className="ui-landing-hero-sheet">
-            <search className="ui-landing-search">
-              <SearchField
-                label="Search inbox"
-                placeholder="Search inbox"
-                value=""
-                onChange={still}
-              />
-            </search>
-            <div className="ui-landing-rows">
-              <ListMotion root={rows} way={LIST_MOTION_WAY.UNROLL}>
-                <List label="Inbox items" moves>
-                  {heroItems(step).map((item) => (
-                    <InboxRow key={item.id} item={item} />
-                  ))}
-                </List>
-              </ListMotion>
-            </div>
-          </div>
-        </div>
-      </LandingPanel>
-    </div>
-  );
-}
-
-const SCENES: Readonly<Record<LandingScene, () => React.JSX.Element>> = {
+const SCENES: Readonly<Record<LandingScene, (props: SceneProps) => React.JSX.Element>> = {
   [LANDING_SCENE.INBOX]: InboxScene,
   [LANDING_SCENE.AGENTS]: AgentsScene,
   [LANDING_SCENE.AUTOMATIONS]: AutomationsScene,
@@ -1341,7 +1219,14 @@ const SCENES: Readonly<Record<LandingScene, () => React.JSX.Element>> = {
 };
 
 /** The scene that shows `scene`'s feature. */
-export function LandingSceneView({ scene }: { scene: LandingScene }): React.JSX.Element {
+export function LandingSceneView({
+  scene,
+  codexArt,
+}: {
+  scene: LandingScene;
+  codexArt?: CodexArt | undefined;
+}): React.JSX.Element {
   const Scene = SCENES[scene];
-  return <Scene />;
+
+  return <Scene codexArt={codexArt} />;
 }

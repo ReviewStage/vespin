@@ -64,10 +64,12 @@ function part(messageId: string, index: number, text: string): TranscriptWindowP
 
 test("a window followed by cursor joins an answer past the cursor by message id: a message it moved stands once at its new place, grown, the rest as held, the newest window kept", () => {
   const held = Array.from({ length: TRANSCRIPT_WINDOW }, (_, at) => `line-${at + 1}`);
+
   const window = {
     window: held.map((id, at) => row(id, at + 1, 1)),
     windowParts: held.map((id) => part(id, 0, id)),
   };
+
   const answer = {
     window: [row("line-2", TRANSCRIPT_WINDOW + 1, 2), row("reply", TRANSCRIPT_WINDOW + 2, 1)],
     windowParts: [
@@ -92,12 +94,14 @@ test("a window followed by cursor joins an answer past the cursor by message id:
 
 test("a line whose turn's runner recorded the checkout before it reads as one the files can go back at, and one that arrived inside a turn does not", () => {
   const opened = { ...row("line-1", 1, 1), turnSnapshotCommit: "0123456789abcdef" };
+
   const steered = {
     ...row("line-2", 2, 1),
     journalId: "reply-1",
     afterStep: 1,
     turnSnapshotCommit: "0123456789abcdef",
   };
+
   const unrecorded = { ...row("line-3", 3, 1), turnSnapshotCommit: null };
 
   const drawn = windowMessagesOf(

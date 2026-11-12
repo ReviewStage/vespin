@@ -54,7 +54,9 @@ const refusedAsItStands = /* @__PURE__ */ Effect.fnUntraced(function* (
   approvalId: string,
 ): Effect.fn.Return<never, HostedRefusal, DatabaseServices> {
   const now = yield* hostedStoreOrUnavailable(readApproval(userId, agentId, approvalId));
+
   if (Option.isNone(now)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return yield* Effect.fail(approvalSettled(now.value.status));
 });
 
@@ -66,9 +68,11 @@ export const answeredApproval = /* @__PURE__ */ Effect.fnUntraced(function* (
   request: ApprovalAnswerRequest,
 ): Effect.fn.Return<ApprovalAnswerAnswer, HostedRefusal, DatabaseServices> {
   const approvalId = yield* pathUuid(id);
+
   if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* admitsPlanWriter(userId, agent);
   const at = new Date(yield* Clock.currentTimeMillis);
+
   // The answer claims the ask first, so of two members answering at once the runner hears only the one the row records.
   const claimed = yield* hostedStoreOrUnavailable(
     answerApproval({
@@ -79,13 +83,16 @@ export const answeredApproval = /* @__PURE__ */ Effect.fnUntraced(function* (
       at,
     }),
   );
+
   if (Option.isNone(claimed)) return yield* refusedAsItStands(userId, agent.id, approvalId);
+
   const line: ApprovalLine = {
     type: INPUT_LINE.APPROVAL,
     requestId: claimed.value.requestId,
     decision: DECISION_OF_ANSWER[request.answer],
     ...(request.message === undefined ? undefined : { message: request.message }),
   };
+
   // A claim whose line never reached a runner goes back, uninterruptibly; a release that fails is said, and
   // the answer's own outcome kept.
   const released = (to: typeof APPROVAL_STATUS.PENDING | typeof APPROVAL_STATUS.EXPIRED) =>
@@ -97,6 +104,7 @@ export const answeredApproval = /* @__PURE__ */ Effect.fnUntraced(function* (
       Effect.annotateLogs({ agentId: agent.id }),
       Effect.uninterruptible,
     );
+
   // Note that the delivery runs to its end whatever happens to the request, because a line cut off as it
   // lands leaves no word of whether the runner has it: its outcome alone says, and the claim follows it.
   const reached = yield* Effect.uninterruptible(
@@ -111,11 +119,14 @@ export const answeredApproval = /* @__PURE__ */ Effect.fnUntraced(function* (
           ),
     ),
   );
+
   if (reached === RUNNER_ANSWER.WRITTEN) {
     return { approval: { id: claimed.value.id, status: claimed.value.status } };
   }
+
   // The line never reached a runner, and the claim went back: pending for another answer where the runner
   // could not be reached just now, and expired where none runs, so no runner holds the ask.
   if (reached === RUNNER_ANSWER.FAILED) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+
   return yield* refusedAsItStands(userId, agent.id, approvalId);
 });

@@ -42,14 +42,18 @@ export function rowChanges<Row extends object, Key extends string>(
   held: ReadonlyMap<Key, Row>,
   next: ReadonlyMap<Key, Row>,
 ): RowChange<Row, Key>[] {
-  const gone = [...held.keys()]
-    .filter((key) => !next.has(key))
-    .map((key) => ({ type: "delete" as const, key }));
+  const gone = [...held.keys()].flatMap((key) =>
+    next.has(key) ? [] : [{ type: "delete" as const, key }],
+  );
+
   const moved = [...next].flatMap(([key, row]): RowChange<Row, Key>[] => {
     const was = held.get(key);
+
     if (was === undefined) return [{ type: "insert", value: row }];
+
     return Equal.equals(was, row) ? [] : [{ type: "update", value: row }];
   });
+
   return [...gone, ...moved];
 }
 
@@ -63,8 +67,9 @@ const readRows = new WeakMap<object, object>();
  * Note that a row read again while it stands is the very object read
  * before, so a reader of a row that did not move holds the same object.
  */
-export function rowOf<Row extends object>(stored: object): Row {
+export function rowOf<Row extends object, Stored extends object>(stored: Stored): Row {
   let read = readRows.get(stored);
+
   if (read === undefined) {
     read = Object.fromEntries(
       Object.entries(stored).filter(
@@ -73,6 +78,7 @@ export function rowOf<Row extends object>(stored: object): Row {
     );
     readRows.set(stored, read);
   }
+
   // SAFETY: only the virtual fields and keys left undefined are dropped, neither of which a row of ours carries.
   return read as Row;
 }
@@ -104,6 +110,7 @@ export function syncedCollection<Row extends object, Key extends string>(
   return Effect.gen(function* () {
     let writer: SyncWriter<Row, Key> | undefined;
     let held: ReadonlyMap<Key, Row> = new Map();
+
     const collection = yield* scopedCollection(() =>
       createCollection<Row, Key>({
         getKey,
@@ -116,6 +123,7 @@ export function syncedCollection<Row extends object, Key extends string>(
             handed.begin();
             handed.commit();
             handed.markReady();
+
             return () => {
               writer = undefined;
             };
@@ -123,18 +131,23 @@ export function syncedCollection<Row extends object, Key extends string>(
         },
       }),
     );
+
     const take = (next: ReadonlyMap<Key, Row>): readonly Key[] => {
       const changes = rowChanges(held, next);
+
       if (writer === undefined || changes.length === 0) return [];
       writer.begin();
+
       for (const change of changes) writer.write(change);
       // Note that the receipt is never awaited, since a commit held behind a standing transaction lands only once that transaction settles.
       writer.commit();
       held = next;
+
       return changes.map((change) =>
         change.type === "delete" ? change.key : getKey(change.value),
       );
     };
+
     return { collection, held: () => held, take };
   });
 }

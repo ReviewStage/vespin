@@ -77,6 +77,7 @@ async function placeOf(
     root.render(withQueryClient(createElement(AgentPlace, { agent: { id: AGENT_ID, ...agent } }))),
   );
   await settle();
+
   return document.body.textContent ?? "";
 }
 
@@ -91,9 +92,10 @@ function labelWhile(ages: Readonly<Record<string, number>> | undefined): Promise
   );
 }
 
-test("a device the presence read finds beating reads online though the agent's own read is old", async () => {
+test("a device the presence read finds beating reads online though the agent's own read is old, its glyph's dot saying so as its row's does", async () => {
   const label = await labelWhile({ [DEVICE]: 5_000 });
   assert.equal(label, "Runs on: Charles's MacBook Air");
+  assert.equal(document.querySelector('[role="img"]')?.getAttribute("aria-label"), "Online");
 });
 
 test("a device the presence read finds silent reads offline", async () => {
@@ -139,6 +141,7 @@ test("a cloud agent's chip reads Cloud alone, a reader hearing its sandbox's sta
     stateAt: Date.now(),
     runsUntil: Date.now() + 60_000,
   };
+
   await placeOf({ sandbox: running, sandboxVcpus: 4 }, undefined);
   assert.equal(cloudChip().textContent, "Cloud");
   assert.equal(cloudChip().getAttribute("aria-label"), "Runs on: Cloud, Running");
@@ -181,13 +184,15 @@ async function placeMenuOf(move: PlaceMove, opened: SettingsLink[]): Promise<HTM
   );
   await settle();
   act(() => container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]')?.click());
+
   return [...document.querySelectorAll<HTMLElement>('[role="option"]')];
 }
 
-test("where a move is offered, the popover lists the places under its facts and moves the agent to the one picked, and with no Mac sends the member to add one", async () => {
+test("where a move is offered, the popover lists the places under its facts, Cloud wearing its sandbox's dot, and moves the agent to the one picked, and with no Mac sends the member to add one", async () => {
   const moved: AgentRunsOnRequest[] = [];
   const opened: SettingsLink[] = [];
   const studio: MacOffer = { deviceId: DEVICE, name: "Studio", providers: [] };
+
   const withMac = {
     devices: [studio],
     moveTo: (to: AgentRunsOnRequest) => moved.push(to),
@@ -197,6 +202,7 @@ test("where a move is offered, the popover lists the places under its facts and 
 
   const rows = await placeMenuOf(withMac, opened);
   assert.deepEqual(factsShown(), [["Status", "Off"]]);
+  assert.equal(rows[0]?.querySelector('[role="img"]')?.getAttribute("aria-label"), "Off");
   assert.deepEqual(
     rows.map((row) => row.textContent?.includes("Studio") ?? false),
     [false, true],

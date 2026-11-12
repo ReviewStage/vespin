@@ -56,8 +56,10 @@ test("a zoom keeps the picture's point under the pointer where it stands", () =>
 test("a pinch in and out again comes back to the picture fitted", () => {
   const at = { x: -150, y: 60 };
   let view = FITTED_VIEW;
+
   for (let pinch = 0; pinch < 10; pinch += 1) view = zoomedByWheel(view, FRAME, -12, at);
   assert.ok(isZoomed(view));
+
   for (let pinch = 0; pinch < 10; pinch += 1) view = zoomedByWheel(view, FRAME, 12, at);
   assert.deepEqual(view, FITTED_VIEW);
 });
@@ -91,6 +93,7 @@ test("a picture narrower than its frame along an axis stays centered along it", 
     frame: { width: 800, height: 500 },
     fitted: { width: 200, height: 500 },
   };
+
   const zoomed = zoomedTo(FITTED_VIEW, tall, 2, { x: 100, y: 200 });
   assert.equal(zoomed.x, 0, "400 wide in 800 stays centered");
   assert.ok(zoomed.y !== 0, "1000 tall in 500 follows the pointer");
@@ -101,6 +104,7 @@ test("a fitted picture cannot be moved, nor does a zoom out leave it off center"
   assert.deepEqual(pannedBy(FITTED_VIEW, FRAME, 50, 50), FITTED_VIEW);
   const zoomed = pannedBy(zoomedTo(FITTED_VIEW, FRAME, 3, FRAME_CENTER), FRAME, 300, 200);
   let view = zoomed;
+
   for (let step = 0; step < 4; step += 1) view = zoomedByStep(view, FRAME, -1);
   assert.deepEqual(view, FITTED_VIEW);
 });

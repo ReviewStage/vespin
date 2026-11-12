@@ -60,6 +60,7 @@ export function useRepositoryRemedy(): (
 ) => (() => void) | undefined {
   const doors = useContext(RepositoryRemedyContext);
   const openSettings = useOpenSettings();
+
   return (failure, retry) => {
     switch (failure.reason) {
       case FAILURE_REASON.CONNECT_GITHUB:
@@ -81,6 +82,7 @@ export function useRepositoryRemedy(): (
             if (moved) retry?.();
           });
         };
+
       // Note that the agent's box offers the continue in the cloud itself, since it moves the agent rather than mending the repository.
       case FAILURE_REASON.API_KEY:
       case FAILURE_REASON.CONTINUE_IN_CLOUD:

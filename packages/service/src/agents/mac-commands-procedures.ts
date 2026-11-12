@@ -43,27 +43,34 @@ export interface MacCommandsProcedureSeams {
 /** The mac-commands resource: the held read and the result posted back, on the Mac's bearer. */
 export function macCommandsProcedures(seams: MacCommandsProcedureSeams) {
   const macCommands = hosted.macCommands.use(bearerOnlyMiddleware(seams.resolveUserId));
+
   return {
     waiting: macCommands.waiting.effect(function* ({ context, input }) {
       const kinds = macCommandKindsRead(input.kinds);
       const commands = yield* hostedStoreOrUnavailable(macCommandsFor(context.userId, kinds));
+
       return { commands };
     }),
     settle: macCommands.settle.effect(function* ({ context, input }) {
       const settled = yield* hostedStoreOrUnavailable(
         settleMacCommand(context.userId, input.id, input.result),
       );
+
       if (!settled) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       return { settled: true } as const;
     }),
     claim: macCommands.claim.effect(function* ({ context, input }) {
       const claimed = yield* hostedStoreOrUnavailable(claimedMacCommand(context.userId, input.id));
+
       if (Option.isNone(claimed)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       return { command: claimed.value };
     }),
     // Note that the kinds a presence names are read past, since every Mac that listens runs shell.
     listening: macCommands.listening.effect(function* ({ context }) {
       yield* hostedStoreOrUnavailable(markMacListening(context.userId));
+
       return { listening: true } as const;
     }),
   };

@@ -30,6 +30,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -46,12 +47,15 @@ it.layer(getTestDB())("what moves a workspace's memories notifies", (it) => {
           rememberMemory(workspaceId, userId, "Deployments go out from main.", undefined),
           memories,
         );
+
         assert.ok(kept.value.kind === MEMORY_OUTCOME.KEPT, "the memory was kept");
         const id = kept.value.memory.id;
+
         const corrected = yield* expectTopicsFire(
           rememberMemory(workspaceId, userId, "Deployments go out from the release branch.", id),
           memories,
         );
+
         assert.equal(corrected.value.kind, MEMORY_OUTCOME.CORRECTED);
         const agentId = yield* openAgentOnOwnTask(userId, workspaceId);
         yield* expectTopicsFire(
@@ -63,6 +67,7 @@ it.layer(getTestDB())("what moves a workspace's memories notifies", (it) => {
           forgetWorkspaceMemory(userId, workspaceId, id),
           memories,
         );
+
         assert.ok(forgot.value.kind === WORKSPACE_MEMORY.READ, "the memory was forgotten");
         assert.ok(forgot.value.txid !== undefined, "the forget answered its transaction");
         assert.deepEqual(forgot.txids, [forgot.value.txid]);

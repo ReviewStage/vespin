@@ -13,7 +13,9 @@ import { PersonPage } from "./person-page.js";
 function PersonRoutePlace(): React.JSX.Element | null {
   const { tasks, room, sidebar, away } = useShellPlaces();
   const { userId, name } = usePersonRoute();
+
   if (userId === undefined) return null;
+
   // Keyed by the person, so another person's page holds nothing of the last, its find among it.
   return (
     <PageFind key={userId} page={FIND_PAGE.PERSON} at={userId} active={tasks.shown}>

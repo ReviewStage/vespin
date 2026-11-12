@@ -50,8 +50,10 @@ export interface ActPortContext<Sender = unknown> extends WithEffectContext<neve
 export function refusedBy(procedure: AnyProcedure, cause?: unknown): ORPCError<string, unknown> {
   const errors = createORPCErrorConstructorMap(procedure["~orpc"].errorMap);
   const refused = errors[ACT_ERROR.REFUSED];
+
   // Note that every act contract declares the refusal (`contract/base.ts`), so this is an invariant rather than a branch.
   if (refused === undefined) throw new Error("An act procedure declares no refusal.");
+
   return refused({ cause });
 }
 
@@ -77,7 +79,9 @@ export function actPortFor<Sender>() {
     .$context<ActPortContext<Sender>>()
     .use(({ context, next, procedure }) => {
       if (!context.trusted) throw refusedBy(procedure);
+
       if (panelOnlyOf(procedure) === true && !context.actor.panel) throw refusedBy(procedure);
+
       return next();
     });
 }

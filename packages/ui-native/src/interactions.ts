@@ -5,7 +5,7 @@ import {
   createModifierWithEventListener,
   type ModifierConfig,
 } from "@expo/ui/swift-ui/modifiers";
-import { Option, Schema } from "effect";
+import { flow, Option, Schema } from "effect";
 
 /** The names the native module registers each modifier under, which its Swift names too. */
 const MODIFIER = {
@@ -49,17 +49,29 @@ const decodeDroppedLink = Schema.decodeUnknownOption(DroppedLinkSchema);
 export function dropPictures(
   onDrop: (uris: readonly string[], unreadable: number) => void,
 ): ModifierConfig {
-  return createModifierWithEventListener(MODIFIER.DROP_PICTURES, (event: unknown) => {
-    Option.map(decodeDroppedPictures(event), ({ uris, dropped }) => {
-      const unreadable = Math.max(0, (dropped ?? uris.length) - uris.length);
-      if (uris.length + unreadable > 0) onDrop(uris, unreadable);
-    });
-  });
+  return createModifierWithEventListener(
+    MODIFIER.DROP_PICTURES,
+    flow(
+      decodeDroppedPictures,
+      Option.match({
+        onNone: () => undefined,
+        onSome: ({ uris, dropped }) => {
+          const unreadable = Math.max(0, (dropped ?? uris.length) - uris.length);
+
+          if (uris.length + unreadable > 0) onDrop(uris, unreadable);
+        },
+      }),
+    ),
+  );
 }
 
 /** A link dropped on a view, such as a task's row dragged onto a section, handed on by its address. */
 export function dropLink(onDrop: (url: string) => void): ModifierConfig {
-  return createModifierWithEventListener(MODIFIER.DROP_LINK, (event: unknown) => {
-    Option.map(decodeDroppedLink(event), ({ url }) => onDrop(url));
-  });
+  return createModifierWithEventListener(
+    MODIFIER.DROP_LINK,
+    flow(
+      decodeDroppedLink,
+      Option.map(({ url }) => onDrop(url)),
+    ),
+  );
 }

@@ -54,6 +54,7 @@ const BEARER_PREFIX = "Bearer ";
 /** The secret the call presents as its bearer; nothing where it sends none. */
 function presentedSecret(request: Request): string | undefined {
   const authorization = request.headers.get("authorization") ?? "";
+
   return authorization.startsWith(BEARER_PREFIX)
     ? authorization.slice(BEARER_PREFIX.length)
     : undefined;
@@ -63,6 +64,7 @@ function presentedSecret(request: Request): string | undefined {
 function secretHolds(secret: string, kept: string): boolean {
   const offered = createHash("sha256").update(secret).digest();
   const wanted = Buffer.from(kept, "hex");
+
   return offered.length === wanted.length && timingSafeEqual(offered, wanted);
 }
 
@@ -75,7 +77,9 @@ function secretHolds(secret: string, kept: string): boolean {
  */
 function dedupeKeyOf(request: Request): string {
   const sent = request.headers.get(AUTOMATION_WEBHOOK.IDEMPOTENCY_HEADER)?.trim() ?? "";
+
   if (sent.length === 0) return randomUUID();
+
   return createHash("sha256").update(sent).digest("hex");
 }
 
@@ -87,17 +91,22 @@ const webhookEndpoint = /* @__PURE__ */ Effect.fn("web/automationWebhookEndpoint
     HttpServerRequest.HttpServerRequest | DatabaseServices
   > {
     const incoming = yield* HttpServerRequest.HttpServerRequest;
+
     if (incoming.method !== HTTP_METHOD.POST) {
       return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
     }
+
     const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
     const ids = new URL(request.url).searchParams.getAll(QUERY.ID);
     const id = readEither(wireUuidSchema)(unparsedWire(ids.length === 1 ? (ids[0] ?? "") : ""));
     const secret = presentedSecret(request);
+
     if (Result.isFailure(id) || secret === undefined) {
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
     }
+
     const automation = yield* hostedStoreOrUnavailable(readWebhookAutomation(id.success));
+
     if (
       Option.isNone(automation) ||
       automation.value.webhookSecretHash === null ||
@@ -105,12 +114,15 @@ const webhookEndpoint = /* @__PURE__ */ Effect.fn("web/automationWebhookEndpoint
     ) {
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
     }
+
     if (!automation.value.enabled) return hostedJsonResponse(HOSTED_HTTP_STATUS.OK, { queued: 0 });
     const body = yield* readBodyBytesEffect(AUTOMATION_WEBHOOK.MAX_BODY_BYTES);
+
     // Bytes that are no UTF-8 text could not be handed to the agent whole, so they are refused.
     const text = yield* Effect.try(() =>
       new TextDecoder("utf-8", { fatal: true }).decode(body),
     ).pipe(Effect.mapError(() => HOSTED_REFUSAL.INVALID_REQUEST));
+
     // A NUL is UTF-8 but no text a column keeps, so a body holding one is refused rather than lost.
     if (text.includes("\u0000")) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     const cadence = yield* AutomationCadence;
@@ -123,6 +135,7 @@ const webhookEndpoint = /* @__PURE__ */ Effect.fn("web/automationWebhookEndpoint
         firedAt: yield* Clock.currentTimeMillis,
       }),
     );
+
     return hostedJsonResponse(HOSTED_HTTP_STATUS.ACCEPTED, { queued: 1 });
   },
 );

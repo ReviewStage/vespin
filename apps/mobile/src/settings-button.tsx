@@ -1,4 +1,4 @@
-// settings-button.tsx -- the one way Settings opens, and the signed-in account's photo at the leading edge of each tab's root bar, the button that opens it, with the workspace switcher beside it where the tab names its workspace.
+// settings-button.tsx -- the one way Settings opens, and what leads each tab's root bar: the workspace switcher, whose menu opens it, where the tab names its workspace, else the signed-in account's photo, the button that opens it.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { selectAccount } from "@repo/host/app-state-reads";
@@ -23,12 +23,13 @@ export const SETTINGS_ROUTE = {
 export type SettingsRoute = (typeof SETTINGS_ROUTE)[keyof typeof SETTINGS_ROUTE];
 
 /**
- * The one way to open Settings, from the account's photo, the iPad's menu
- * bar's ⌘, (`modules/menu-commands/`), the workspace switcher, or anywhere
- * else that offers it: on its main list, or on one of its pages.
+ * The one way to open Settings, from the workspace switcher's account, the
+ * account's photo, the iPad's menu bar's ⌘, (`modules/menu-commands/`), the
+ * sidebar's foot, or anywhere else that offers it: on its main list, or on one of its pages.
  */
 export function useOpenSettings(): (route?: SettingsRoute) => void {
   const router = useRouter();
+
   // Note that a page is pushed with its stack's anchor, so Settings opened on Workspace stands its main list under it and Back goes there.
   return (route = SETTINGS_ROUTE.MAIN) => router.push(route, { withAnchor: true });
 }
@@ -37,7 +38,9 @@ export function useOpenSettings(): (route?: SettingsRoute) => void {
 export function useSettingsAccount(): BarAccount | undefined {
   const open = useOpenSettings();
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
+
   if (account?.status !== ACCOUNT_STATUS.SIGNED_IN) return undefined;
+
   return {
     name: account.name ?? account.email,
     picture: account.pictureUrl,
@@ -47,29 +50,30 @@ export function useSettingsAccount(): BarAccount | undefined {
 }
 
 /**
- * The photo at the leading edge of a tab's root bar, in a stack's own
+ * The one item at the leading edge of a tab's root bar, in a stack's own
  * header: a compact window's, and a regular one's where the tab stands no
- * split view, and after it the workspace switcher where the tab names its
- * workspace (the Inbox and Tasks). A split view stands both in the app
- * sidebar's bar instead (`screens/app-sidebar.tsx`). Note that the two stand
- * in one toolbar, because each `Stack.Toolbar` of a placement takes the
- * whole side of the bar.
+ * split view: the workspace switcher, whose menu holds the account and
+ * opens Settings, as Notion's one workspace button does, on every tab, since
+ * each acts on the chosen workspace; the account's photo, opening Settings,
+ * only before the account's workspaces are read. A split view
+ * stands the switcher in its own bar or the app sidebar's list instead
+ * (`screens/app-sidebar.tsx`).
  */
 export function SettingsBarButton({ switcher }: { readonly switcher?: SwitcherProps | undefined }) {
   const account = useSettingsAccount();
-  if (account === undefined && switcher === undefined) return null;
+
+  const lead =
+    switcher !== undefined ? (
+      <WorkspaceSwitcher {...switcher} />
+    ) : account !== undefined ? (
+      <AccountButton {...account} />
+    ) : undefined;
+
+  if (lead === undefined) return null;
+
   return (
     <Stack.Toolbar placement="left">
-      {account === undefined ? null : (
-        <Stack.Toolbar.View>
-          <AccountButton {...account} />
-        </Stack.Toolbar.View>
-      )}
-      {switcher === undefined ? null : (
-        <Stack.Toolbar.View>
-          <WorkspaceSwitcher {...switcher} />
-        </Stack.Toolbar.View>
-      )}
+      <Stack.Toolbar.View>{lead}</Stack.Toolbar.View>
     </Stack.Toolbar>
   );
 }

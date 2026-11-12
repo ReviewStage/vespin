@@ -42,9 +42,11 @@ const LIST: KeptRows[typeof KEPT_READ.TASK_LIST] = {
 function opened(directory: string, accountId: string) {
   return Effect.gen(function* () {
     const scope = yield* Scope.make();
+
     const store = yield* Scope.provide(scope)(
       openEntityStore({ directory, cipher: testCipher(), accountId }),
     );
+
     return { store, closed: Scope.close(scope, Exit.void) };
   });
 }
@@ -58,6 +60,7 @@ const openedText = (directory: string) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const sealed = yield* fileSystem.readFileString(yield* fileOf(directory));
+
     return testCipher().decrypt(Result.getOrThrow(Base64.decode(sealed)));
   });
 
@@ -68,11 +71,12 @@ const writtenText = (directory: string) =>
     const file = yield* fileOf(directory);
     // Note that the write is the disk's own, which no test clock moves, so the test waits on the file itself.
     yield* Effect.repeat(fileSystem.exists(file), { until: (exists) => exists, times: 10_000 });
+
     return yield* fileSystem.readFileString(file);
   });
 
 /** The file kept again as a build of other row shapes would have kept it: every byte its own but the hash. */
-const keptAtOtherShapes = (directory: string) =>
+const keptAtOtherSchemas = (directory: string) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const kept = { ...JSON.parse(yield* openedText(directory)), hash: "another build's" };
@@ -81,23 +85,25 @@ const keptAtOtherShapes = (directory: string) =>
   });
 
 it.effect.each([
-  { kept: "the same account at the same row shapes", reopenedAs: DANA, otherShapes: false },
-  { kept: "another account", reopenedAs: "user-ravi", otherShapes: false },
-  { kept: "other row shapes", reopenedAs: DANA, otherShapes: true },
-])("a file kept for $kept", ({ reopenedAs, otherShapes }) =>
+  { kept: "the same account at the same row shapes", reopenedAs: DANA, otherSchemas: false },
+  { kept: "another account", reopenedAs: "user-ravi", otherSchemas: false },
+  { kept: "other row shapes", reopenedAs: DANA, otherSchemas: true },
+])("a file kept for $kept", ({ reopenedAs, otherSchemas }) =>
   Effect.gen(function* () {
     const directory = yield* temporaryDirectoryScoped("entity-store-");
     const first = yield* opened(directory, DANA);
     yield* first.store.keep(KEPT_READ.TASK_LIST, LIST);
     yield* first.closed;
-    if (otherShapes) yield* keptAtOtherShapes(directory);
+
+    if (otherSchemas) yield* keptAtOtherSchemas(directory);
 
     const reopened = yield* opened(directory, reopenedAs);
+
     const stays = yield* Effect.flatMap(FileSystem.FileSystem, (fileSystem) =>
       Effect.flatMap(fileOf(directory), (file) => fileSystem.exists(file)),
     );
 
-    const fits = reopenedAs === DANA && !otherShapes;
+    const fits = reopenedAs === DANA && !otherSchemas;
     assert.deepEqual(reopened.store.stored(KEPT_READ.TASK_LIST), fits ? LIST : undefined);
     assert.equal(stays, fits);
   }).pipe(Effect.provide(files)),
@@ -133,6 +139,7 @@ it.effect("a write waiting for the service is written within half a second of it
   Effect.gen(function* () {
     const directory = yield* temporaryDirectoryScoped("entity-store-");
     const pool = yield* entityPool({ mintKey: () => "rename-1", replayRefused: Effect.void });
+
     const rename: WriteDeclaration<Row, FieldChange<Row>, string, string> = {
       kind: fieldKind((row: Row) => row.id),
       keys: () => ["1"],
@@ -140,6 +147,7 @@ it.effect("a write waiting for the service is written within half a second of it
       send: () => Effect.succeed({ refused: "unreachable", unanswered: true as const }),
       queue: { name: "plans.rename", input: Schema.String, queued: () => "waits" },
     };
+
     const scope = yield* Scope.make();
     yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
     yield* Scope.provide(scope)(
@@ -168,12 +176,14 @@ it.effect(
     Effect.gen(function* () {
       const directory = yield* temporaryDirectoryScoped("entity-store-");
       const { store, closed } = yield* opened(directory, DANA);
+
       const people = {
         members: [
           { userId: "user-ada", name: "Ada", email: "ada@app.test", role: "owner", image: null },
         ],
         former: [{ userId: "user-lee", name: "Lee", image: null }],
       };
+
       yield* store.keepIn(KEPT_READ.MEMBERS, "workspace-acme", people);
       yield* store.keepIn(KEPT_READ.MEMBERS, "workspace-relay", people);
 

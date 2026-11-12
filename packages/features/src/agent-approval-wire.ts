@@ -152,8 +152,12 @@ export type ApprovalAnswerRequest = typeof approvalAnswerRequestSchema.Type;
  * call's id in the transcript (`toolUseId`), so the card stands on the call;
  * the subagent's id that made it, absent for the agent's own; the tool's
  * name; the CLI's sentence for the ask and its subtitle where it gave one;
- * the call's input as its runner cut it; and when it was asked, in epoch
- * milliseconds.
+ * the call's input as its runner cut it; when it was asked, in epoch
+ * milliseconds; and the command's first words where the harness proposed a
+ * rule for every command starting with them (`allowed-command-wire.ts`),
+ * which an Always allow keeps on the answering member's list past the
+ * agent's session, absent where it proposed none and Always allow lasts
+ * for the session alone.
  */
 export const agentPendingApprovalSchema = EffectSchema.Struct({
   id: wireUuidSchema,
@@ -164,6 +168,7 @@ export const agentPendingApprovalSchema = EffectSchema.Struct({
   description: EffectSchema.optionalKey(EffectSchema.String),
   input: EffectSchema.Record(EffectSchema.String, WireValueSchema),
   askedAt: countedNumber,
+  commandPrefix: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
 });
 
 export type AgentPendingApproval = typeof agentPendingApprovalSchema.Type;

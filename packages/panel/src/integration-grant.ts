@@ -55,6 +55,7 @@ export function useIntegrationGrant(statuses: IntegrationStatuses): IntegrationG
   const { mutateAsync: connectIntegration } = useMutation(
     actMutation(ACT_KIND.INTEGRATIONS_CONNECT),
   );
+
   const { connect } = useGitHubConnection();
   const { signInBegun } = statuses;
 
@@ -62,12 +63,15 @@ export function useIntegrationGrant(statuses: IntegrationStatuses): IntegrationG
   const outcomeOf = useCallback(
     (answer: IntegrationConnectView | undefined, server: string): GrantOutcome => {
       if (answer === undefined) return GRANT_OUTCOME.REFUSED;
+
       if ("failure" in answer) {
         return answer.failure === INTEGRATION_CALL_FAILURE.NOT_OPENED
           ? GRANT_OUTCOME.NOT_OPENED
           : GRANT_OUTCOME.REFUSED;
       }
+
       signInBegun(answer.connection ?? server);
+
       return GRANT_OUTCOME.BEGUN;
     },
     [signInBegun],
@@ -76,6 +80,7 @@ export function useIntegrationGrant(statuses: IntegrationStatuses): IntegrationG
   const add = useCallback(
     async (provider: IntegrationProvider): Promise<GrantOutcome> => {
       const answer = await connectIntegration({ provider, add: true }).catch(() => undefined);
+
       return outcomeOf(answer, provider);
     },
     [connectIntegration, outcomeOf],
@@ -84,20 +89,26 @@ export function useIntegrationGrant(statuses: IntegrationStatuses): IntegrationG
   const begin = useCallback(
     async (server: string): Promise<GrantOutcome> => {
       const account = integrationConnectionOf(server);
+
       if (account === undefined) return GRANT_OUTCOME.REFUSED;
       const { provider } = account;
       // An added account the service no longer holds, its first sign-in having ended, is signed in afresh as a new one; one still waiting is reopened under its own name.
       const ended = statuses.signInOf(server)?.kind !== SIGN_IN.WAITING;
+
       if (account.place > 1 && !statuses.listed(server) && ended) return add(provider);
+
       if (grantedBySignIn(provider)) {
         if (!(await connect())) return GRANT_OUTCOME.NOT_OPENED;
         signInBegun(provider);
+
         return GRANT_OUTCOME.BEGUN;
       }
+
       const answer = await connectIntegration({
         provider,
         ...(server === provider ? undefined : { connection: server }),
       }).catch(() => undefined);
+
       return outcomeOf(answer, server);
     },
     [connectIntegration, connect, signInBegun, outcomeOf, add, statuses],

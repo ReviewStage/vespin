@@ -4,8 +4,6 @@ import type { AppStateStore } from "@repo/host/client";
 import type { UpdaterEngine, UpdaterEngineEvents } from "@repo/host/update-service";
 import { UPDATE_FAILURE, UPDATE_STATUS, type UpdateSnapshot } from "@repo/settings/update";
 import { Effect } from "effect";
-import { vi } from "vitest";
-import type { DesktopConfig } from "./desktop-config";
 import { createUpdateServiceHost } from "./update-service-host";
 
 /**
@@ -15,9 +13,6 @@ import { createUpdateServiceHost } from "./update-service-host";
  * Squirrel's own quit and install, which nothing holds. Synthetic versions
  * throughout.
  */
-
-// Note that Electron is never reached: the menu bar is drawn through `showMenuBar`, and no window opens.
-vi.mock("electron", () => ({}));
 
 /** What the updater reads of the launch: a packaged build that sends nothing on its own. */
 const CONFIG = {
@@ -35,6 +30,7 @@ const restartFixture = (answer: boolean) =>
   Effect.gen(function* () {
     const happened: string[] = [];
     let heard: UpdaterEngineEvents | undefined;
+
     const engine: UpdaterEngine = {
       wire: (events) => {
         heard = events;
@@ -43,9 +39,11 @@ const restartFixture = (answer: boolean) =>
       quitAndInstall: () => happened.push("squirrel quit and install"),
       clearCachedUpdate: async () => undefined,
     };
+
+    const state: Pick<AppStateStore, "update"> = { update: () => undefined };
+
     const updates = yield* createUpdateServiceHost({
-      // SAFETY: the updater reads only the fields `CONFIG` names.
-      config: CONFIG as unknown as DesktopConfig,
+      config: CONFIG,
       recordProductEvent: (name) => happened.push(`counted ${name}`),
       engine,
       beforeRestart: async () => {
@@ -53,14 +51,16 @@ const restartFixture = (answer: boolean) =>
       },
       askBeforeRestart: async () => {
         happened.push("asked");
+
         return answer;
       },
-      // SAFETY: the updater only writes where it stands, which no assertion reads.
-      state: { update: () => undefined } as unknown as AppStateStore,
+      state,
       showSettings: () => undefined,
       moveToApplications: () => undefined,
     });
+
     heard?.onDownloaded("2.0.0");
+
     return { updates, happened };
   });
 
@@ -100,9 +100,13 @@ it.effect("an install Squirrel refuses on a read-only volume is told as that fai
   Effect.gen(function* () {
     const told: UpdateSnapshot[] = [];
     let heard: UpdaterEngineEvents | undefined;
+
+    const state: Pick<AppStateStore, "update"> = {
+      update: ({ update }: { update: UpdateSnapshot }) => told.push(update),
+    };
+
     yield* createUpdateServiceHost({
-      // SAFETY: the updater reads only the fields `CONFIG` names.
-      config: CONFIG as unknown as DesktopConfig,
+      config: CONFIG,
       recordProductEvent: () => undefined,
       engine: {
         wire: (events) => {
@@ -114,10 +118,7 @@ it.effect("an install Squirrel refuses on a read-only volume is told as that fai
       },
       beforeRestart: async () => undefined,
       askBeforeRestart: async () => true,
-      // SAFETY: the updater only writes where it stands, which `told` keeps.
-      state: {
-        update: ({ update }: { update: UpdateSnapshot }) => told.push(update),
-      } as unknown as AppStateStore,
+      state,
       showSettings: () => undefined,
       moveToApplications: () => undefined,
     });

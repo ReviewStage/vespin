@@ -28,6 +28,7 @@ afterEach(() => {
 test("each block's header is drawn, and a language picked there is written to its fence", () => {
   const host = document.body.appendChild(document.createElement("div"));
   const drawn = new Map<HTMLElement, EditorCodeBlock>();
+
   const handle = mountDescriptionEditor(host, {
     markdown: TEXT,
     placement: undefined,
@@ -38,12 +39,14 @@ test("each block's header is drawn, and a language picked there is written to it
     onFinish: () => undefined,
     drawCodeHeader: (element, block) => {
       drawn.set(element, block);
+
       return {
         redraw: (next) => drawn.set(element, next),
         undraw: () => drawn.delete(element),
       };
     },
   });
+
   editors.push(handle);
   const headers = () => [...drawn.values()].map(({ language, code }) => ({ language, code }));
 

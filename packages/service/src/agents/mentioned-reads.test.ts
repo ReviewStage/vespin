@@ -26,16 +26,19 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
 const slugOf = (organizationId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const [row] = yield* db
       .select({ slug: organization.slug })
       .from(organization)
       .where(eq(organization.id, organizationId));
+
     return row?.slug ?? assert.fail("the workspace was not written");
   });
 
@@ -46,6 +49,7 @@ const numberedSection = (ownerId: string) =>
     const created = yield* createTask(ownerId, { name: "Invites", organizationId: workspace });
     const slug = yield* slugOf(workspace);
     const words = `Follow [@Rollout](${LINK_ORIGIN}/${slug}/task/${created.number}#rollout).`;
+
     return { workspace, task: { ...created, document: DESCRIPTION }, words };
   });
 
@@ -54,6 +58,7 @@ const agentTask = (ownerId: string) =>
   Effect.gen(function* () {
     const workspace = yield* openWorkspace(ownerId);
     const created = yield* createTask(ownerId, { name: "Billing", organizationId: workspace });
+
     return { workspace, task: { ...created, document: DESCRIPTION } };
   });
 

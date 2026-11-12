@@ -62,6 +62,7 @@ function soFarToday(stillFilling: boolean): (() => string) | undefined {
  */
 function activityStats(stillFilling: boolean): readonly StatSpec<AdminDayDetail>[] {
   const hint = soFarToday(stillFilling);
+
   return [
     {
       key: "active-developers",
@@ -109,6 +110,7 @@ function activeAccountColumns(
  */
 function hostedStats(stillFilling: boolean): readonly StatSpec<AdminDayDetail>[] {
   const soFar = soFarToday(stillFilling);
+
   return [
     {
       key: "accounts",
@@ -158,6 +160,7 @@ function ActiveAccountsTable({
   onOpen: (id: string) => void;
 }): React.JSX.Element {
   const activeColumns = useMemo(() => activeAccountColumns(onOpen), [onOpen]);
+
   return (
     <DataTable
       label="Accounts active this day"
@@ -180,6 +183,7 @@ function DayAccountsTable({
   onOpen: (id: string) => void;
 }): React.JSX.Element {
   const dayColumns = useMemo(() => dayAccountColumns(onOpen), [onOpen]);
+
   return (
     <DataTable
       label="Hosted-tier accounts this day"
@@ -212,6 +216,7 @@ function DaySections({
   const dayColumns = useMemo(() => dayAccountColumns(onOpenAccount), [onOpenAccount]);
   const activeColumns = useMemo(() => activeAccountColumns(onOpenAccount), [onOpenAccount]);
   const stillFilling = partialDayKey([{ day }], detail?.generatedAt ?? Date.now()) !== undefined;
+
   return (
     <>
       <AdminSection title="This day">
@@ -303,6 +308,7 @@ export function DayScreen({
   const withdraw = useAdminSignOut(onSignOut);
   const signOut = () => withdraw.mutate();
   const back: AdminWayBack = { tab: ADMIN_TAB.DASHBOARD, onBack };
+
   const controls = (
     <AdminViewOptions hideAdmins={hideAdmins} onHideAdminsChange={onHideAdminsChange} />
   );

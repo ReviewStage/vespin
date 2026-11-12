@@ -25,6 +25,7 @@ class StandInResizeObserver implements ResizeObserver {
 
   unobserve(target: Element): void {
     this.#targets.delete(target);
+
     if (this.#targets.size === 0) watching.delete(this);
   }
 

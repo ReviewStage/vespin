@@ -10,6 +10,7 @@ import { useSyncExternalStore } from "react";
 /** Hears the window's page shown or hidden. */
 function onVisibilityChange(changed: () => void): () => void {
   document.addEventListener("visibilitychange", changed);
+
   return () => document.removeEventListener("visibilitychange", changed);
 }
 

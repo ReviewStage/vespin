@@ -19,20 +19,23 @@ import { useChosenInbox } from "../inbox/use-inbox.js";
 import { forgetInboxWidget, keepInboxWidget } from "./inbox-widget-file.js";
 
 /** Logs a write or a removal the device refused; the next change tries again. */
-function logRefusal(error: unknown): void {
-  console.error("The Inbox widget's snapshot was not kept.", error);
+function logRefusal(cause: unknown): void {
+  console.error("The Inbox widget's snapshot was not kept.", cause);
 }
 
 /** The Inbox widget's snapshot written while an account is signed in, and removed once it signs out. */
 export function useInboxWidget(signedIn: boolean): void {
   const { groups, chosen, workspaces } = useChosenInbox();
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
+
   const { data: feed = INBOX_FEED.READING } = useQuery({
     ...appStateQuery,
     select: selectInboxFeed,
   });
+
   useEffect(() => {
     if (!signedIn || chosen === undefined || feed !== INBOX_FEED.ANSWERED) return;
+
     try {
       keepInboxWidget(
         inboxWidgetSnapshot({
@@ -57,6 +60,7 @@ export function useInboxWidget(signedIn: boolean): void {
         logRefusal(error);
       }
     }
+
     wasSignedIn.current = signedIn;
   }, [signedIn]);
 }

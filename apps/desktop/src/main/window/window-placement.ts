@@ -39,6 +39,7 @@ const decodePlacement = Schema.decodeUnknownOption(
 function overlap(a: Rectangle, b: Rectangle): number {
   const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x);
   const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y);
+
   return width > 0 && height > 0 ? width * height : 0;
 }
 
@@ -51,6 +52,7 @@ function clamp(value: number, lowest: number, highest: number): number {
 function within(bounds: Rectangle, area: Rectangle): Rectangle {
   const width = Math.min(bounds.width, area.width);
   const height = Math.min(bounds.height, area.height);
+
   return {
     x: clamp(bounds.x, area.x, area.x + area.width - width),
     y: clamp(bounds.y, area.y, area.y + area.height - height),
@@ -73,6 +75,7 @@ export function placementOf(window: {
 }): WindowPlacement {
   const { normal, shown, zoomed, fullScreen } = window;
   const moved = fullScreen && overlap(normal, shown) === 0;
+
   const bounds = moved
     ? within(
         {
@@ -83,17 +86,20 @@ export function placementOf(window: {
         shown,
       )
     : normal;
+
   return { bounds, zoomed, fullScreen };
 }
 
 /** Where the window last stood, or nothing for a first launch or a file that is not one. */
 export function readWindowPlacement(file: string): WindowPlacement | undefined {
   let text: string;
+
   try {
     text = fs.readFileSync(file, "utf8");
   } catch {
     return undefined;
   }
+
   return Option.getOrUndefined(decodePlacement(text));
 }
 
@@ -123,14 +129,19 @@ export function placeWindow(options: {
 }): WindowPlacement {
   const { saved, workAreas, first } = options;
   const opening: WindowPlacement = { bounds: first, zoomed: false, fullScreen: false };
+
   if (saved === undefined) return opening;
   let area: Rectangle | undefined;
+
   for (const candidate of workAreas) {
     const covered = overlap(saved.bounds, candidate);
+
     if (covered > 0 && (area === undefined || covered > overlap(saved.bounds, area))) {
       area = candidate;
     }
   }
+
   if (area === undefined) return opening;
+
   return { ...saved, bounds: within(saved.bounds, area) };
 }

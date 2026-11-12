@@ -96,5 +96,6 @@ export function settingsGroupHeadingOf(
   ) {
     return THIS_DEVICE_HEADING;
   }
+
   return SETTINGS_GROUP_HEADING[group];
 }

@@ -139,28 +139,38 @@ export function integrationStatusesOfLive(
 ): IntegrationStatusesAnswer {
   const offeredProviders = providersOf(offered);
   const multipleProviders = providersOf(multiple);
+
   const standings = INTEGRATION_PROVIDER_LIST.map((provider) => {
     if (INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.GITHUB_SIGN_IN) {
       return { provider, status: github, accounts: [] };
     }
+
     if (!offeredProviders.has(provider)) {
       return { provider, status: INTEGRATION_STATUS.UNAVAILABLE, accounts: [] };
     }
+
     const held = rows
       .filter((row) => row.provider === provider)
       .toSorted((a, b) => placeOf(a) - placeOf(b));
+
     const first = held.find((row) => row.connection === provider);
+
     return {
       provider,
       status: first?.status ?? INTEGRATION_STATUS.DISCONNECTED,
-      accounts: held.filter((row) => row.status !== INTEGRATION_STATUS.DISCONNECTED).map(accountOf),
+      accounts: held.flatMap((row) =>
+        row.status === INTEGRATION_STATUS.DISCONNECTED ? [] : [accountOf(row)],
+      ),
     };
   });
+
   // SAFETY: the entries are one per provider of INTEGRATION_PROVIDER_LIST, which is every provider.
   const integrations = Object.fromEntries(
     standings.map(({ provider, status }) => [provider, status]),
   ) as Record<IntegrationProvider, IntegrationStatus>;
+
   const accounts = standings.flatMap((standing) => standing.accounts);
+
   const addable = standings
     .filter(
       ({ provider, accounts: held }) =>
@@ -169,6 +179,7 @@ export function integrationStatusesOfLive(
         held.length < INTEGRATION_ACCOUNTS_MAX,
     )
     .map(({ provider }) => provider);
+
   return {
     integrations,
     ...(accounts.length > 0 ? { accounts } : undefined),

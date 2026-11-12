@@ -8,7 +8,7 @@
  * The host daemon names itself apart, by `HOST_WIRE.VERSION_HEADER`.
  */
 
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import { PRODUCT_PLATFORM } from "./analytics/product-events.js";
@@ -49,11 +49,11 @@ const CLIENT_SEPARATOR = "/";
 const VERSION_PATTERN = /^[0-9A-Za-z.+-]{1,64}$/u;
 
 /** The two headers a build sends on every hosted call, as a record a request or a socket's address carries. */
-export function clientHeaders(identity: ClientIdentity): Readonly<Record<string, string>> {
+export function clientHeaders(identity: ClientIdentity) {
   return {
     [CLIENT_HEADER.CLIENT]: `${identity.platform}${CLIENT_SEPARATOR}${identity.version}`,
     [CLIENT_HEADER.API_VERSION]: String(HOSTED_API_VERSION),
-  };
+  } satisfies Readonly<Record<string, string>>;
 }
 
 /** The client given, naming itself on every request to the service's origin and on no other. */
@@ -64,6 +64,7 @@ export function clientNamedOnService(
 ): HttpClient.HttpClient {
   const origin = new URL(serviceBaseUrl).origin;
   const headers = clientHeaders(identity);
+
   return HttpClient.mapRequest(http, (request) =>
     request.url === origin || request.url.startsWith(`${origin}/`)
       ? HttpClientRequest.setHeaders(request, headers)
@@ -89,12 +90,15 @@ export function presentedClient(headers: {
 }): PresentedClient | undefined {
   const named = headers.get(CLIENT_HEADER.CLIENT)?.trim() ?? "";
   const at = named.indexOf(CLIENT_SEPARATOR);
+
   if (at <= 0) return undefined;
   const platform = readPlatform(named.slice(0, at));
   const apiVersion = readApiVersion(headers.get(CLIENT_HEADER.API_VERSION)?.trim());
   const version = named.slice(at + 1);
-  if (platform._tag === "None" || apiVersion._tag === "None" || !VERSION_PATTERN.test(version)) {
+
+  if (Option.isNone(platform) || Option.isNone(apiVersion) || !VERSION_PATTERN.test(version)) {
     return undefined;
   }
+
   return { platform: platform.value, version, apiVersion: apiVersion.value };
 }

@@ -47,6 +47,7 @@ export function LazyBoundary({
   const reloadUnlanded = (): void => {
     if (!loaded()) reload();
   };
+
   return (
     <Suspense fallback={fallback}>
       <ErrorBoundary onReload={reloadUnlanded}>{children}</ErrorBoundary>

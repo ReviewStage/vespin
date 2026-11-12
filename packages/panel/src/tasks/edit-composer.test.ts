@@ -104,11 +104,14 @@ async function opened(
     ),
   );
   await settle();
+
   const button = (name: string) =>
     [...container.querySelectorAll("button")].find(
       (each) => each.textContent === name || each.getAttribute("aria-label") === name,
     );
+
   const close = () => act(() => root.unmount());
+
   return { container, ended, canceled: () => canceled, button, close };
 }
 
@@ -191,10 +194,12 @@ test("one of two like files taken off stays off after a relaunch, and the other 
     filename: "invite-expired.png",
     url: `data:image/png;base64,${PIXEL}`,
   };
+
   const twice: AgentTranscriptMessage = {
     ...LINE,
     parts: [{ type: "text", text: "Also email the inviter." }, picture, picture],
   };
+
   const first = await opened(twice, undefined, "Also email the inviter.");
   const remove = first.button(`Remove invite-expired.png`);
   assert.ok(remove !== undefined, "the file's chip offers its removal");
@@ -234,6 +239,7 @@ const KEPT: AgentTranscriptMessage = {
 
 test("a picture that lands after words were written goes with them when Edit opens the line again", async () => {
   let land: (() => void) | undefined;
+
   const door: AgentPictureDoor = {
     owner: `owner-${Math.random()}`,
     read: () =>
@@ -241,6 +247,7 @@ test("a picture that lands after words were written goes with them when Edit ope
         land = () => resolve({ contentType: "image/png", base64: PIXEL });
       }),
   };
+
   const first = await opened(KEPT, door, "And this one.");
   typeInComposer(first.container, " Look closely.");
   await act(async () => land?.());
@@ -261,6 +268,7 @@ test("a picture that lands after words were written goes with them when Edit ope
 
 test("a picture still being read holds Send, and joins the box once it lands", async () => {
   let land: (() => void) | undefined;
+
   const door: AgentPictureDoor = {
     owner: `owner-${Math.random()}`,
     read: () =>
@@ -268,6 +276,7 @@ test("a picture still being read holds Send, and joins the box once it lands", a
         land = () => resolve({ contentType: "image/png", base64: PIXEL });
       }),
   };
+
   const box = await opened(KEPT, door, "And this one.");
 
   pressInComposer(box.container, "Enter");
@@ -298,10 +307,12 @@ test("Send asks what it drops where messages follow, naming a teammate's among t
       cuts: true,
       takes,
     });
+
     pressInComposer(box.container, "Enter");
     await settle();
     const text = document.querySelector('[role="alertdialog"]')?.textContent;
     await box.close();
+
     return text;
   };
 
@@ -353,10 +364,12 @@ test("it offers the files back beside Cancel where the line's turn recorded them
   assert.deepEqual(ticked.ended, [], "putting the files back is asked about first");
   const question = document.querySelector('[role="alertdialog"]')?.textContent;
   assert.ok(question?.includes("files also go back"), String(question));
+
   const send =
     [...document.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')].find(
       (each) => each.textContent === "Send message",
     ) ?? assert.fail("the question offers Send message");
+
   await act(async () => send.click());
   await settle();
   assert.deepEqual(

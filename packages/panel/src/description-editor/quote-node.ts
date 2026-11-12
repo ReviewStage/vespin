@@ -18,5 +18,6 @@ import { withoutTipTapChords } from "./writing-keys.js";
 /** The quote node, holding lines alone where `linesAlone` says so, as a message box's does. */
 export function quoteNode(linesAlone: boolean): AnyExtension {
   const quote = linesAlone ? Blockquote.extend({ content: "paragraph+" }) : Blockquote;
+
   return withoutTipTapChords(quote.configure({ HTMLAttributes: { class: QUOTE_CLASS } }));
 }

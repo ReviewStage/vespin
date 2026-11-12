@@ -27,6 +27,7 @@ export function macTerminalProcedures(
   dependencies: MacTerminalActsDependencies,
 ): Pick<PlatformActProcedures<WebContents>, MacTerminalActKind> {
   const { home, openInTerminal, exists } = dependencies;
+
   return {
     [MAC_TERMINAL_ACT_KIND.MAC_TERMINAL_LOCAL_AGENT]: macTerminalPort[
       MAC_TERMINAL_ACT_KIND.MAC_TERMINAL_LOCAL_AGENT
@@ -34,6 +35,7 @@ export function macTerminalProcedures(
       yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
       // Note that the worktree is the host's to make, as it takes the agent's launch, so one not made yet is refused rather than made here.
       const folder = deviceAgentCheckoutPath(home, input.agentId);
+
       if (!exists(folder)) return yield* Effect.fail(errors.REFUSED());
       openInTerminal(folder);
     }),

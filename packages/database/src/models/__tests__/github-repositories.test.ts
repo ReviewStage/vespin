@@ -41,6 +41,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -77,14 +78,17 @@ it.layer(getTestDB())("GitHub's repositories by their id", (it) => {
           organizationId: workspace,
           repository: relay,
         });
+
         const otherTask = yield* createTask(owner, {
           organizationId: workspace,
           repository: other,
         });
+
         const strangerTask = yield* createTask(stranger, {
           organizationId: strangerWorkspace,
           repository: relay.toLowerCase(),
         });
+
         const agent = Option.getOrThrow(
           yield* createAgent(owner, {
             taskId: relayTask.id,
@@ -97,6 +101,7 @@ it.layer(getTestDB())("GitHub's repositories by their id", (it) => {
             runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           }),
         ).agent;
+
         const alsoInRelay = Option.getOrThrow(
           yield* createAgent(owner, {
             taskId: otherTask.id,
@@ -110,6 +115,7 @@ it.layer(getTestDB())("GitHub's repositories by their id", (it) => {
             runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           }),
         ).agent;
+
         const automation = Option.getOrThrow(
           yield* createAutomation(owner, {
             organizationId: workspace,
@@ -122,6 +128,7 @@ it.layer(getTestDB())("GitHub's repositories by their id", (it) => {
             webhookSecretHash: null,
           }),
         );
+
         yield* setRepositoryPin(owner, relay, true);
         yield* setRepositoryPin(stranger, relay.toLowerCase(), true);
         yield* setRepositoryPin(stranger, rocket, true);
@@ -191,6 +198,7 @@ it.layer(getTestDB())("GitHub's repositories by their id", (it) => {
         const rocket = repositoryName("acme", "rocket");
         const owner = yield* openAccount;
         const workspace = yield* openWorkspace(owner);
+
         const renamed = yield* createTask(owner, {
           organizationId: workspace,
           repository: relay,

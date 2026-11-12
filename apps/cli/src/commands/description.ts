@@ -31,11 +31,14 @@ import { resolveTaskId } from "../tasks.js";
 export function writeDescription(taskId: string, base: string, value: string) {
   return Effect.gen(function* () {
     const { hosted } = yield* session;
+
     const saved = yield* askService(hosted.plans.editDescription, {
       params: { id: taskId },
       body: { document: { base, value } },
     });
+
     if ("plan" in saved) return saved.plan;
+
     return yield* new CommandFailed({
       exit: CLI_EXIT.REFUSED,
       message:
@@ -82,22 +85,27 @@ const showCommand = Command.make(
     Effect.gen(function* () {
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
+
       if (Option.isSome(revision)) {
         const seq = revision.value;
+
         const read = yield* askService(
           hosted.plans.descriptionRevision,
           { id, seq: String(seq) },
           HOSTED_DEADLINE.USUAL,
           NO_REVISION_WORDS,
         );
+
         const { body } = read.revision.document;
         yield* answer({
           json: { id, revision: seq, body },
           lines: [body.replace(/\n+$/u, "")],
           ids: [id],
         });
+
         return;
       }
+
       const { plan } = yield* askService(hosted.plans.open, { id });
       yield* answer({
         json: { id: plan.id, name: plan.name, body: plan.document.body },
@@ -161,6 +169,7 @@ const editCommand = Command.make(
 /** Who wrote a revision, as a person reads it. */
 function revisionWriter(line: DescriptionRevisionLine): string {
   const name = line.lastEdit.by?.name ?? line.lastEdit.label;
+
   return name === undefined ? line.lastEdit.actor : `${line.lastEdit.actor} ${name}`;
 }
 
@@ -178,10 +187,12 @@ const historyCommand = Command.make(
     Effect.gen(function* () {
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
+
       const page = yield* askService(hosted.plans.descriptionRevisions, {
         id,
         ...(Option.isSome(before) ? { before: String(before.value) } : undefined),
       });
+
       const rows = page.revisions.map((line) => [
         String(line.seq),
         new Date(line.lastEdit.at).toISOString(),
@@ -190,6 +201,7 @@ const historyCommand = Command.make(
           ? revisionWriter(line)
           : `${revisionWriter(line)}, restored ${line.restoredFrom.seq}`,
       ]);
+
       yield* answer({
         json: { id, ...page },
         lines: [
@@ -221,12 +233,14 @@ const restoreCommand = Command.make(
     Effect.gen(function* () {
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
+
       const { plan } = yield* askService(
         hosted.plans.restoreDescription,
         { id, seq: String(revision) },
         HOSTED_DEADLINE.USUAL,
         NO_REVISION_WORDS,
       );
+
       yield* answer({
         json: { id: plan.id, name: plan.name, restored: revision, body: plan.document.body },
         lines: [`Restored revision ${revision} of the description of ${plan.name}.`],

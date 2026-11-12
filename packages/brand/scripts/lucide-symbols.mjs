@@ -50,6 +50,7 @@ const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
 const times = (a, k) => ({ x: a.x * k, y: a.y * k });
 const unit = (a) => times(a, 1 / Math.hypot(a.x, a.y));
 const polar = (angle) => ({ x: Math.cos(angle), y: Math.sin(angle) });
+
 // The normal on a stroke's first side, a quarter turn from its direction.
 const normalOf = (direction) => ({ x: direction.y, y: -direction.x });
 const turnBetween = (a, b) => Math.abs(Math.atan2(a.x * b.y - a.y * b.x, a.x * b.x + a.y * b.y));
@@ -70,8 +71,11 @@ function arcSegment(from, rx, ry, largeArc, sweep, to) {
   const center = add(middle, times({ x: half.y, y: -half.x }, sign * rise));
   const start = Math.atan2(from.y - center.y, from.x - center.x);
   let delta = Math.atan2(to.y - center.y, to.x - center.x) - start;
+
   if (sweep && delta < 0) delta += 2 * Math.PI;
+
   if (!sweep && delta > 0) delta -= 2 * Math.PI;
+
   return { kind: "arc", from, to, center, radius, start, delta };
 }
 
@@ -80,6 +84,7 @@ const lineSegment = (from, to) => ({ kind: "line", from, to });
 function directionAt(segment, end) {
   if (segment.kind === "line") return unit(sub(segment.to, segment.from));
   const angle = segment.start + (end ? segment.delta : 0);
+
   return times(polar(angle + Math.PI / 2), Math.sign(segment.delta));
 }
 
@@ -93,10 +98,12 @@ function subpathsOf(data) {
   let command;
   let index = 0;
   const number = () => Number(tokens[index++]);
+
   while (index < tokens.length) {
     if (/[a-zA-Z]/.test(tokens[index])) command = tokens[index++];
     const relative = command === command.toLowerCase();
     const offset = (point) => (relative ? add(at, point) : point);
+
     switch (command.toLowerCase()) {
       case "m":
         at = offset({ x: number(), y: number() });
@@ -110,6 +117,7 @@ function subpathsOf(data) {
         at = to;
         break;
       }
+
       case "h": {
         const x = number();
         const to = { x: relative ? at.x + x : x, y: at.y };
@@ -117,6 +125,7 @@ function subpathsOf(data) {
         at = to;
         break;
       }
+
       case "v": {
         const y = number();
         const to = { x: at.x, y: relative ? at.y + y : y };
@@ -124,6 +133,7 @@ function subpathsOf(data) {
         at = to;
         break;
       }
+
       case "a": {
         const [rx, ry] = [number(), number()];
         number();
@@ -133,32 +143,40 @@ function subpathsOf(data) {
         at = to;
         break;
       }
+
       default:
         throw new Error(`lucide-symbols: no outline for the path command "${command}"`);
     }
   }
+
   return subpaths;
 }
 
 // A subpath as its runs: its segments split wherever two meet at a corner.
 function runsOf(segments) {
   const runs = [];
+
   for (const segment of segments) {
     const run = runs.at(-1);
+
     const tangent =
       run !== undefined &&
       turnBetween(directionAt(run.at(-1), true), directionAt(segment, false)) < TANGENT_TOLERANCE;
+
     if (tangent) run.push(segment);
     else runs.push([segment]);
   }
+
   return runs;
 }
 
 // Lucide's icon node as what is outlined: rings and runs, in drawing order.
 function strokesOf(node) {
   const strokes = [];
+
   for (const [element, attributes] of node) {
     const value = (name) => Number(attributes[name]);
+
     if (element === "circle") {
       strokes.push({
         kind: "ring",
@@ -178,6 +196,7 @@ function strokesOf(node) {
       throw new Error(`lucide-symbols: no outline for a <${element}>`);
     }
   }
+
   return strokes;
 }
 
@@ -191,6 +210,7 @@ function arcCubics(center, radius, start, delta) {
   const step = delta / pieces;
   const reach = (4 / 3) * Math.tan(step / 4) * radius;
   const cubics = [];
+
   for (let piece = 0; piece < pieces; piece++) {
     const a = start + step * piece;
     const b = a + step;
@@ -200,6 +220,7 @@ function arcCubics(center, radius, start, delta) {
     const c2 = sub(p3, times(polar(b + Math.PI / 2), reach));
     cubics.push({ command: "C", points: [c1, c2, p3] });
   }
+
   return cubics;
 }
 
@@ -214,6 +235,7 @@ function capCubics(point, radius, from, ahead) {
       add(point, times(v, radius)),
     ],
   });
+
   return [quarter(from, ahead), quarter(ahead, times(from, -1))];
 }
 
@@ -223,14 +245,18 @@ function sideOf(segment, half, side, forward) {
     const normal = times(normalOf(directionAt(segment, false)), half * side);
     const start = add(forward ? segment.from : segment.to, normal);
     const end = add(forward ? segment.to : segment.from, normal);
+
     return { start, commands: [{ command: "L", points: [end] }] };
   }
+
   // Note that an arc's offset is an arc about the same center, its radius
   // grown or shrunk by the half width as the side faces out or in.
   const radius = segment.radius + half * side * Math.sign(segment.delta);
+
   if (radius <= 0) throw new Error("lucide-symbols: a stroke closes a curve tighter than it");
   const start = forward ? segment.start : segment.start + segment.delta;
   const delta = forward ? segment.delta : -segment.delta;
+
   return {
     start: add(segment.center, times(polar(start), radius)),
     commands: arcCubics(segment.center, radius, start, delta),
@@ -241,6 +267,7 @@ function sideOf(segment, half, side, forward) {
 // second, and round its start.
 function runOutline(segments, half) {
   const commands = [];
+
   const travel = (sides) => {
     for (const [index, { start, commands: along }] of sides.entries()) {
       if (index === 0)
@@ -249,6 +276,7 @@ function runOutline(segments, half) {
       commands.push(...along);
     }
   };
+
   const first = segments[0];
   const last = segments.at(-1);
   const endNormal = normalOf(directionAt(last, true));
@@ -260,6 +288,7 @@ function runOutline(segments, half) {
     ...capCubics(first.from, half, times(startNormal, -1), times(directionAt(first, false), -1)),
   );
   commands.push({ command: "Z", points: [] });
+
   return commands;
 }
 
@@ -267,11 +296,13 @@ function runOutline(segments, half) {
 // inside stays open under the nonzero fill.
 function ringOutline({ center, radius }, half) {
   if (radius - half <= 0) throw new Error("lucide-symbols: a stroke fills a ring's inside");
+
   const circle = (r, delta) => [
     { command: "M", points: [add(center, { x: r, y: 0 })] },
     ...arcCubics(center, r, 0, delta),
     { command: "Z", points: [] },
   ];
+
   return [...circle(radius + half, 2 * Math.PI), ...circle(radius - half, -2 * Math.PI)];
 }
 
@@ -282,19 +313,22 @@ const outlineOf = (stroke, half) =>
 
 const coordinate = (value) => {
   const rounded = Math.round(value * 1000) / 1000;
+
   return Object.is(rounded, -0) ? "0" : String(rounded);
 };
 
 function pathData(commands, centerX) {
   const left = centerX - BOX_SIZE / 2;
   const place = ({ x, y }) => `${coordinate(left + x * SCALE)},${coordinate(BOX_TOP + y * SCALE)}`;
+
   return commands.map(({ command, points }) => [command, ...points.map(place)].join(" ")).join(" ");
 }
 
 function weightGroup(name, strokes, weight) {
   const paths = strokes.map((stroke) => outlineOf(stroke, STROKE[weight] / 2));
+
   return {
-    shapes: paths.map((commands) => commands.map(({ command }) => command).join("")),
+    pathCommands: paths.map((commands) => commands.map(({ command }) => command).join("")),
     svg: `<g id="${name}-S">${paths
       .map((commands) => `<path d="${pathData(commands, WEIGHT_CENTER[weight])}"/>`)
       .join("")}</g>`,
@@ -303,6 +337,7 @@ function weightGroup(name, strokes, weight) {
 
 function marginGuides(name, weight) {
   const center = WEIGHT_CENTER[weight];
+
   return [
     `<path id="left-margin-${name}-S" d="M${coordinate(center - BOX_SIZE / 2)},56 l0,110"/>`,
     `<path id="right-margin-${name}-S" d="M${coordinate(center + BOX_SIZE / 2)},56 l0,110"/>`,
@@ -322,9 +357,11 @@ const WEIGHTS = [
 export function symbolTemplate(node) {
   const strokes = strokesOf(node);
   const weights = WEIGHTS.map(([name, weight]) => weightGroup(name, strokes, weight));
-  const [ultralight, regular, black] = weights.map(({ shapes }) => shapes.join("|"));
+  const [ultralight, regular, black] = weights.map(({ pathCommands }) => pathCommands.join("|"));
+
   if (ultralight !== regular || regular !== black)
     throw new Error("lucide-symbols: the weights' outlines differ in shape and cannot interpolate");
+
   const guides = [
     `<path id="Capline-S" d="M18,${CAPLINE} l800,0"/>`,
     `<path id="H-reference" stroke="none" d="M85,145.755 L87.685,145.755 L113.369,79.287 L114.052,79.287 L114.052,76 L112.148,76 L85,145.755 Z M95.693,121.536 L130.996,121.536 L130.263,119.313 L96.474,119.313 L95.693,121.536 Z M139.15,145.755 L141.787,145.755 L114.638,76 L113.466,76 L113.466,79.287 L139.15,145.755 Z"/>`,
@@ -335,6 +372,7 @@ export function symbolTemplate(node) {
     `<path id="Capline-L" d="M18,476 l800,0"/>`,
     `<path id="Baseline-L" d="M18,546 l800,0"/>`,
   ].join("");
+
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<svg width="800" height="600" version="1.1" xmlns="http://www.w3.org/2000/svg">`,

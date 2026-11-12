@@ -49,17 +49,15 @@ import { WholeFile, type WholeFileHandle, type WholeFileNote } from "./whole-fil
  * and offers what is done with it (\`file-view.tsx\`), told how the read
  * stands as it moves. The lines are drawn as every code is
  * (\`file-view-settings.ts\`), and ⌘F finds in the whole file, drawn or not
- * (\`file-find.ts\`). Every line here is the repository's, so the lines are
- * left out of the screen recording (\`whole-file.tsx\`), since their colors
- * draw the code's shape.
+ * (\`file-find.ts\`).
  */
 
 /** The first line of a file, the one read to learn the commit the head stands at. */
 const FIRST_LINE = { firstLine: 1, lastLine: 1 } as const;
 
 /** The read a failed query stands for: the refusal the service answered, or a read that never arrived. */
-function failedRead(error: unknown): FileRead {
-  return error instanceof ReadRefused ? notRead(error.answer) : { kind: FILE_READ.FAILED };
+function failedRead(cause: unknown): FileRead {
+  return cause instanceof ReadRefused ? notRead(cause.answer) : { kind: FILE_READ.FAILED };
 }
 
 /** The read a refusal or a failure stands for, from an answer that carried no file. */
@@ -67,6 +65,7 @@ function notRead(answer: TasksFileAnswer): FileRead {
   if ("refusal" in answer) {
     return { kind: FILE_READ.REFUSED, refusal: answer.refusal, branch: answer.branch };
   }
+
   return { kind: FILE_READ.FAILED };
 }
 
@@ -99,18 +98,28 @@ function wholeTextRead(
 ): FileRead {
   if (pinned === undefined) {
     if (head.status === QUERY_STATUS.PENDING || head.fetching) return { kind: FILE_READ.READING };
+
     if (head.status === QUERY_STATUS.ERROR) return failedRead(head.error);
+
     if (head.data === undefined) return { kind: FILE_READ.FAILED };
+
     if (!("file" in head.data)) return notRead(head.data);
   }
+
   if (whole.status === QUERY_STATUS.PENDING || whole.fetching) return { kind: FILE_READ.READING };
+
   if (whole.status === QUERY_STATUS.ERROR) return failedRead(whole.error);
+
   if (whole.data === undefined) return { kind: FILE_READ.FAILED };
+
   if (!("text" in whole.data)) return notRead(whole.data);
   const { repository, branch, text } = whole.data.text;
+
   const commit =
     pinned ?? (head.data !== undefined && "file" in head.data ? head.data.file.commit : undefined);
+
   const file: FileText = { repository, branch, commit, text, lineCount: lineCountOf(text) };
+
   return { kind: FILE_READ.READY, ...file };
 }
 
@@ -162,6 +171,7 @@ function ReadNotice({
       read.kind === FILE_READ.FAILED
         ? "The file could not be read."
         : refusalLine(read.refusal, read.branch, commit);
+
     return (
       <ErrorState
         failure={unreadShown(FAILURE_SURFACE.FILE_READ)}
@@ -172,6 +182,7 @@ function ReadNotice({
       </ErrorState>
     );
   }
+
   return <EmptyState alert>{refusalLine(read.refusal, read.branch, commit)}</EmptyState>;
 }
 
@@ -181,6 +192,7 @@ function linesName(path: string, lines: { readonly startLine: number; readonly e
     lines.startLine === lines.endLine
       ? String(lines.startLine)
       : `${lines.startLine}–${lines.endLine}`;
+
   return `${fileName(path)}:${span}`;
 }
 
@@ -204,14 +216,19 @@ export function FileTab({
   const drop = useMentionDrop();
   const handle = useRef<WholeFileHandle | null>(null);
   const pinned = file.commit;
+
   const head = useQuery({
     ...taskFileQueryOptions(place, { path: file.path, ...FIRST_LINE }),
     enabled: pinned === undefined,
   });
+
   const headRead = head.data !== undefined && "file" in head.data;
+
   const headCommit =
     head.data !== undefined && "file" in head.data ? head.data.file.commit : undefined;
+
   const commitAsked = pinned ?? headCommit;
+
   const whole = useQuery({
     ...taskFileQueryOptions(place, {
       path: file.path,
@@ -222,14 +239,17 @@ export function FileTab({
     // Note that a head that answered no file, a refusal, ends the read there, as the tab draws it.
     enabled: pinned !== undefined || headRead,
   });
+
   // Note that the read is drawn from what each result says rather than the result itself, which is a new object every render.
   const { status: headStatus, isFetching: headFetching, data: headData, error: headError } = head;
+
   const {
     status: wholeStatus,
     isFetching: wholeFetching,
     data: wholeData,
     error: wholeError,
   } = whole;
+
   const read = useMemo(
     () =>
       wholeTextRead(
@@ -249,6 +269,7 @@ export function FileTab({
       wholeError,
     ],
   );
+
   // Retry reads again the read that stopped the tab: the head's where it failed or named no file, else the whole text.
   // Note that a head read again that failed keeps the file it named before, so its status is weighed beside its answer.
   const headStopped = head.status === QUERY_STATUS.ERROR || !headRead;
@@ -261,11 +282,13 @@ export function FileTab({
 
   // ⌥⌘K hands the agent's message box the lines picked here, pinned to the commit they were read at.
   const commit = read.kind === FILE_READ.READY ? (read.commit ?? file.commit) : undefined;
+
   const mentionLines =
     page === undefined || drop === undefined || commit === undefined
       ? undefined
       : () => {
           const lines = handle.current?.pickedLines();
+
           if (lines === undefined) return;
           const mention = { kind: MENTION_KIND.FILE, path: file.path, lines: { commit, ...lines } };
           drop({
@@ -273,6 +296,7 @@ export function FileTab({
             target: encodeMention(mention, page.doors.place),
           });
         };
+
   useAppCommand(APP_COMMAND.MENTION_LINES, mentionLines);
 
   return (

@@ -32,6 +32,7 @@ const AGENTS_FAILED = { failed: true } as const;
 /** Newest started first, and by id among those started at one instant, as the service lists them. */
 function newestFirst(a: ListedAgent, b: ListedAgent): number {
   if (a.createdAt !== b.createdAt) return b.createdAt - a.createdAt;
+
   return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
 }
 
@@ -47,10 +48,13 @@ function newestOf(
   repository: string | null,
 ): WorkspaceAgents {
   const onTasks = tasks?.taskAgents;
+
   if (onTasks === undefined) {
     return tasks?.listStatus === TASKS_READ.FAILED ? AGENTS_FAILED : undefined;
   }
+
   const repositoryNamed = repository?.toLowerCase();
+
   const agents = onTasks
     .filter(
       (agent) =>
@@ -60,6 +64,7 @@ function newestOf(
     )
     .toSorted(newestFirst)
     .slice(0, AGENT_BOUNDS.MAX_WORKSPACE_AGENTS);
+
   return { agents };
 }
 
@@ -69,6 +74,7 @@ export function useWorkspaceAgents(
   repository: string | null,
 ): WorkspaceAgents {
   const tasks = useQuery({ ...appStateQuery, select: selectTasks }).data;
+
   return useMemo(
     () => (workspaceId === undefined ? undefined : newestOf(tasks, workspaceId, repository)),
     [tasks, workspaceId, repository],
@@ -91,6 +97,7 @@ export function listedAgentIn(
 /** The agent `agentId` names as the task list carries it, past the newest and archived alike; none while none is named, or where the list holds no such agent. */
 export function useListedAgent(agentId: string | null): AgentSummary | undefined {
   const tasks = useQuery({ ...appStateQuery, select: selectTasks }).data;
+
   return useMemo(
     () => (agentId === null ? undefined : listedAgentIn(tasks, agentId)),
     [tasks, agentId],
@@ -110,5 +117,6 @@ export function useSandboxOpen(agentId: string | null): boolean | undefined {
       agentId === null ? undefined : listedAgentIn(state.tasks, agentId)?.sandboxOpen,
     [agentId],
   );
+
   return useQuery({ ...appStateQuery, select }).data;
 }

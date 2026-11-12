@@ -118,7 +118,7 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  * Our MCP server, answered by its group the way a function answers it,
  * over a real dialect, and driven by the MCP SDK's own client, the one a
  * harness speaks: a runner's bearer admits its agent's conversation, the
- * server lists `read_threads` and runs it through the coder host's inbox door
+ * server lists `list_threads` and runs it through the coder host's inbox door
  * as the agent's starter, the door the tool catalog names for it, and a wrong bearer, a missing one, and a retired
  * one are each refused before anything is read. Synthetic accounts and
  * words throughout.
@@ -187,12 +187,15 @@ const doorServices = Effect.gen(function* () {
 /** A sandbox holding the files given by absolute path, each read as one stream; the paths asked for are kept. */
 function sandboxWith(files: Readonly<Record<string, string>>) {
   const asked: string[] = [];
+
   const door: InboxSandboxDoor = () =>
     Promise.resolve({
       readFile: ({ path }: { path: string }) => {
         asked.push(path);
         const text = files[path];
+
         if (text === undefined) return Promise.resolve(null);
+
         return Promise.resolve(
           new ReadableStream<Uint8Array>({
             start(controller) {
@@ -203,6 +206,7 @@ function sandboxWith(files: Readonly<Record<string, string>>) {
         );
       },
     });
+
   return { door, asked };
 }
 
@@ -215,14 +219,17 @@ const NO_AGENT_SANDBOX: WorkspaceMcpAgentSandbox = Layer.mock(AgentSandbox)({});
 /** An agent's sandbox that shares one port at a time by a link named for its session, the port shared kept by session; its every other ask dies. */
 function sharingSandbox() {
   const shared = new Map<string, number>();
+
   const layer = Layer.mock(AgentSandbox)({
     share: (sessionId, port) =>
       Effect.sync(() => {
         shared.set(sessionId, port);
+
         return `https://${sessionId}-${port}.sandbox.test`;
       }),
     unshare: (sessionId) => Effect.sync(() => void shared.delete(sessionId)),
   });
+
   return { layer, shared };
 }
 
@@ -237,13 +244,16 @@ const standingOver = (
   Effect.gen(function* () {
     const base = Layer.merge(yield* doorServices, pageLinks);
     const services = instead === undefined ? base : Layer.merge(base, instead);
+
     const web = HttpRouter.toWebHandler(
       workspaceMcpApp({ sandbox: () => ({ files: sandbox }), browser, agentSandbox }).pipe(
         HttpRouter.provideRequest(services),
       ),
       { disableLogger: true },
     );
+
     yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()));
+
     return (input: string | URL | Request, init?: RequestInit) =>
       web.handler(new Request(input, init));
   });
@@ -256,6 +266,7 @@ const agentWithBearer = Effect.gen(function* () {
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const task = yield* startTask(userId, { name: "Teammate invitations" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -267,9 +278,11 @@ const agentWithBearer = Effect.gen(function* () {
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
   });
+
   const agent = Option.getOrThrow(started).agent;
   const bearer = randomBytes(32).toString("base64url");
   yield* recordAgentRunnerToken(userId, agent.id, runnerTokenDigest(bearer));
+
   return {
     userId,
     taskId: task.id,
@@ -285,6 +298,7 @@ const agentInNoRepositoryWithBearer = Effect.gen(function* () {
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const organizationId = yield* openWorkspace(userId);
+
   const started = yield* createAgent(userId, {
     taskId: (yield* createTask(userId, { organizationId })).id,
     descriptionSnapshot: null,
@@ -296,26 +310,31 @@ const agentInNoRepositoryWithBearer = Effect.gen(function* () {
     runtime: CONVERSATION_RUNTIME.CODEX,
     payer: AGENT_PAYER.CHATGPT_SUBSCRIPTION,
   });
+
   const agent = Option.getOrThrow(started).agent;
   const bearer = randomBytes(32).toString("base64url");
   yield* recordAgentRunnerToken(userId, agent.id, runnerTokenDigest(bearer));
+
   return { userId, agentId: agent.id, bearer };
 });
 
 /** What a fake Chromium's page answers beside its targets, as Chrome does for a screenshot of it. */
-const PAGE_ANSWERS: Readonly<Record<string, { readonly result: unknown }>> = {
-  "Target.attachToTarget": { result: { sessionId: "session-tab-1" } },
-  "Target.detachFromTarget": { result: {} },
-  "Target.activateTarget": { result: {} },
-  "Page.getLayoutMetrics": {
-    result: {
-      cssLayoutViewport: { clientWidth: 1280, clientHeight: 800 },
-      cssVisualViewport: { pageX: 0, pageY: 0, clientWidth: 1280, clientHeight: 800 },
+const PAGE_ANSWERS: ReadonlyMap<string, { readonly result: unknown }> = new Map([
+  ["Target.attachToTarget", { result: { sessionId: "session-tab-1" } }],
+  ["Target.detachFromTarget", { result: {} }],
+  ["Target.activateTarget", { result: {} }],
+  [
+    "Page.getLayoutMetrics",
+    {
+      result: {
+        cssLayoutViewport: { clientWidth: 1280, clientHeight: 800 },
+        cssVisualViewport: { pageX: 0, pageY: 0, clientWidth: 1280, clientHeight: 800 },
+      },
     },
-  },
-  "Runtime.evaluate": { result: { result: { value: "complete" } } },
-  "Page.captureScreenshot": { result: { data: "/9j/AAAA" } },
-};
+  ],
+  ["Runtime.evaluate", { result: { result: { value: "complete" } } }],
+  ["Page.captureScreenshot", { result: { data: "/9j/AAAA" } }],
+]);
 
 /** The session a native agent's sandbox is tagged with, as its conversation records it. */
 const SESSION = "runner_session_fixture";
@@ -331,6 +350,7 @@ const agentInSandbox = Effect.gen(function* () {
       .set({ runtimeSessionId: SESSION })
       .where(eq(conversations.id, conversationId)),
   );
+
   return { ...agent, conversationId };
 });
 
@@ -342,12 +362,15 @@ function connected(
 ) {
   return Effect.promise(async () => {
     const client = new Client({ name: "runner-test", version: "1.0.0" });
+
     const transport = new StreamableHTTPClientTransport(new URL(`${ORIGIN}${path}`), {
       fetch,
       requestInit: { headers: { authorization: `Bearer ${bearer}` } },
     });
+
     // SAFETY: the SDK's transport is its own `Transport`; its optional members are typed without `undefined`, which this repository's `exactOptionalPropertyTypes` reads strictly.
     await client.connect(transport as Transport);
+
     return client;
   });
 }
@@ -363,13 +386,17 @@ function post(
     const headers = new Headers(extra);
     headers.set("content-type", "application/json");
     headers.set("accept", "application/json, text/event-stream");
+
     if (bearer !== undefined) headers.set("authorization", `Bearer ${bearer}`);
+
     const response = await fetch(`${ORIGIN}${WORKSPACE_MCP_PATH}`, {
       method: "POST",
       headers,
       body: JSON.stringify(body),
     });
+
     const text = await response.text();
+
     return { status: response.status, body: text.length > 0 ? JSON.parse(text) : undefined };
   });
 }
@@ -410,7 +437,8 @@ const AGENT_TOOLS = [
 /** The tools a native agent is served: every tool of our catalog that its harness has no equal of. */
 const SERVED_TOOLS = [
   "post_thread",
-  "read_threads",
+  "list_threads",
+  "read_thread",
   "withdraw_ask",
   "open_pull_request",
   "edit_description",
@@ -459,11 +487,12 @@ const DOOR_OF: Readonly<
 > = {
   post_thread: (admitted, input) =>
     runAgentInbox(admitted, { tool: INBOX_TOOL.POST, input, sandbox: NO_SANDBOX }),
-  read_threads: (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.READ, input }),
+  list_threads: (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.LIST, input }),
+  read_thread: (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.READ, input }),
   withdraw_ask: (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.WITHDRAW, input }),
   open_pull_request: (admitted, input) => runAgentOpenPullRequest(admitted, input),
   edit_description: (admitted, input) => runAgentEditDescription(admitted, input, 0, NO_SANDBOX),
-  look_at_picture: (admitted, input) => runAgentLookAtPicture(admitted, input),
+  look_at_picture: (admitted, input) => runAgentLookAtPicture(admitted, input, true),
   show_image: (admitted, input) => runAgentShowImage(admitted, input, NO_SANDBOX),
   show_page: (admitted, input) => runAgentShowPage(admitted, input, NO_SANDBOX),
   read_comments: commentTool("read_comments"),
@@ -490,9 +519,10 @@ const HARNESS_TOOLS = [
 ] as const;
 
 /** A tool's result as the server answers it, its first block's JSON. */
-function firstJson(called: object) {
+function firstJson<Called extends object>(called: Called) {
   // SAFETY: every result but a picture's is one text block (`app.ts`'s `toolResult`).
   const [content] = (called as { content: readonly { type: string; text: string }[] }).content;
+
   return JSON.parse(content?.text ?? "null");
 }
 
@@ -505,7 +535,7 @@ const initialize = (protocolVersion: string) => ({
 
 it.layer(SUITE)("Vespin's MCP server", (it) => {
   it.effect(
-    "an SDK client under the runner's bearer lists read_threads and reads its agent's threads through the inbox door",
+    "an SDK client under the runner's bearer lists list_threads and lists its agent's threads through the inbox door",
     () =>
       Effect.gen(function* () {
         const fetch = yield* standing;
@@ -522,19 +552,21 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const client = yield* connected(fetch, agent.bearer);
 
         const listed = yield* Effect.promise(() => client.listTools());
+
         const called = yield* Effect.promise(() =>
-          client.callTool({ name: INBOX_TOOL.READ, arguments: {} }),
+          client.callTool({ name: INBOX_TOOL.LIST, arguments: {} }),
         );
+
         yield* Effect.promise(() => client.close());
 
-        assert.ok(listed.tools.some((tool) => tool.name === INBOX_TOOL.READ));
+        assert.ok(listed.tools.some((tool) => tool.name === INBOX_TOOL.LIST));
         assert.equal(called.isError, false);
         // SAFETY: the server answers every tool call with text blocks alone (`app.ts`'s `toolResult`).
         const [content] = called.content as readonly { type: string; text: string }[];
         const result = JSON.parse(content?.text ?? "null");
         assert.equal(result.status, "accepted");
         assert.deepEqual(
-          result.inbox.map((line: { key: string; title: string }) => [line.key, line.title]),
+          result.threads.map((line: { key: string; title: string }) => [line.key, line.title]),
           [["invite-queue", "Which queue sends the invitation emails?"]],
         );
       }),
@@ -550,6 +582,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         randomBytes(32).toString("base64url"),
         initialize("2025-06-18"),
       );
+
       const none = yield* post(fetch, undefined, initialize("2025-06-18"));
       const sdk = yield* Effect.exit(connected(fetch, "not-the-bearer"));
 
@@ -563,19 +596,21 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
     Effect.gen(function* () {
       const fetch = yield* standing;
       const agent = yield* agentWithBearer;
+
       const before = yield* post(fetch, agent.bearer, {
         jsonrpc: "2.0",
         id: 2,
         method: "tools/call",
-        params: { name: INBOX_TOOL.READ, arguments: {} },
+        params: { name: INBOX_TOOL.LIST, arguments: {} },
       });
 
       yield* recordAgentRunnerToken(agent.userId, agent.agentId, null);
+
       const after = yield* post(fetch, agent.bearer, {
         jsonrpc: "2.0",
         id: 3,
         method: "tools/call",
-        params: { name: INBOX_TOOL.READ, arguments: {} },
+        params: { name: INBOX_TOOL.LIST, arguments: {} },
       });
 
       assert.equal(before.status, HOSTED_HTTP_STATUS.OK);
@@ -612,21 +647,25 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           method: "tools/call",
           params: { name: "bash", arguments: {} },
         });
+
         const renamedTool = yield* post(fetch, agent.bearer, {
           jsonrpc: "2.0",
           id: 7,
           method: "tools/call",
           params: { name: "edit_plan", arguments: { taskId: agent.taskId, notes: [] } },
         });
+
         const unknownMethod = yield* post(fetch, agent.bearer, {
           jsonrpc: "2.0",
           id: 5,
           method: "resources/list",
         });
+
         const notification = yield* post(fetch, agent.bearer, {
           jsonrpc: "2.0",
           method: "notifications/initialized",
         });
+
         const unspokenHeader = yield* post(
           fetch,
           agent.bearer,
@@ -662,12 +701,15 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
         const names = listed.tools.map((tool) => tool.name);
         assert.deepEqual([...names].sort(), [...SERVED_TOOLS].sort());
+
         for (const native of HARNESS_TOOLS) assert.ok(!names.includes(native), native);
+
         const standingOn = {
           agent: Option.none(),
           open: new Set<ToolGate>(),
           experiments: { descriptionsOn: true, memoryOn: true, turnEndOn: true },
         };
+
         for (const tool of listed.tools) {
           const served = isServedTool(tool.name) ? TOOL_CATALOG.get(tool.name) : undefined;
           assert.ok(served !== undefined);
@@ -709,6 +751,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
             .set({ machine: AGENT_MACHINE.DEVICE })
             .where(eq(agentTable.id, agent.agentId)),
         );
+
         return agent;
       }),
       withheld: ["browser", "run_on_mac", "list_ports", "share_port"],
@@ -731,9 +774,9 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           "list_memories",
           "forget_memory",
           "edit_description",
-          "look_at_picture",
           "end_turn",
         ];
+
         assert.deepEqual(
           listed.tools.map((tool) => tool.name).sort(),
           SERVED_TOOLS.filter((name) => !left.includes(name)).sort(),
@@ -748,6 +791,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const fetch = yield* standing;
         const agent = yield* agentInSandbox;
         yield* descriptionsOn(agent.userId);
+
         const runTurn = Database.use((db) =>
           db.insert(turns).values({
             userId: agent.userId,
@@ -756,13 +800,16 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
             status: TURN_STATUS.RUNNING,
           }),
         );
+
         const client = yield* connected(fetch, agent.bearer);
+
         const editDescription = (count: number, turn: string) => {
           const notes = Array.from({ length: count }, (_, index) => ({
             kind: "add",
             section: "Approach",
             text: `- ${turn} note ${index + 1}.`,
           }));
+
           return Effect.promise(() =>
             client.callTool({
               name: "edit_description",
@@ -810,15 +857,18 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       const noMac = yield* Effect.promise(() =>
         client.callTool({ name: "run_on_mac", arguments: { command: "ls ~/code" } }),
       );
+
       const unreadable = yield* Effect.promise(() =>
         client.callTool({ name: "withdraw_ask", arguments: {} }),
       );
+
       const noPicture = yield* Effect.promise(() =>
         client.callTool({
           name: "look_at_picture",
           arguments: { address: "https://vespin.dev/acme/plan/p/files/missing" },
         }),
       );
+
       yield* Effect.promise(() => client.close());
 
       assert.deepEqual([noMac.isError, firstJson(noMac).status], [true, "not-run"]);
@@ -834,13 +884,15 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         // A browser that would answer and keep its tab, were the door run.
         const peer = yield* fakeCdpPeer({
           pages: [{ targetId: "tab-1", url: "https://shop.test/", title: "Shop" }],
-          answer: (command) => PAGE_ANSWERS[command.method],
+          answer: (command) => PAGE_ANSWERS.get(command.method),
         });
+
         const fetch = yield* standingOver(
           NO_SANDBOX,
           undefined,
           agentBrowserTestLayer(peer, SESSION),
         );
+
         const agent = yield* agentInSandbox;
         yield* Database.use((db) =>
           db
@@ -853,12 +905,14 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const mac = yield* Effect.promise(() =>
           client.callTool({ name: "run_on_mac", arguments: { command: "ls ~/code" } }),
         );
+
         const browser = yield* Effect.promise(() =>
           client.callTool({
             name: "browser",
             arguments: { actions: [{ action: BROWSER_AGENT_ACTION.LIST }] },
           }),
         );
+
         yield* Effect.promise(() => client.close());
 
         const refused = { status: "not-run", reason: GATES[TOOL_GATE.SANDBOX].refusal };
@@ -883,12 +937,15 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
         for (const [name, door] of Object.entries(DOOR_OF)) {
           const called = yield* Effect.promise(() => client.callTool({ name, arguments: {} }));
+
           const direct = yield* door(admitted, unparsedWire({}), seams).pipe(
             Effect.provide(yield* doorServices),
           );
+
           assert.deepEqual(firstJson(called), JSON.parse(JSON.stringify(direct)), name);
           assert.equal(called.isError, refusedByDoor(direct), name);
         }
+
         yield* Effect.promise(() => client.close());
       }),
   );
@@ -900,9 +957,11 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const fetch = yield* standing;
         const agent = yield* agentWithBearer;
         const client = yield* connected(fetch, agent.bearer);
+
         // Note that a task's row is keyed on the call as a start and a message are (`AgentCall`'s `clientKey`), and needs no harness to be made; on no repository, since no GitHub stands here to reach one.
         const create = (input: Readonly<Record<string, string | null>>) =>
           Effect.promise(() => client.callTool({ name: "create_task", arguments: input }));
+
         const name = "Expire stale invitations";
 
         const first = yield* create({ name, brief: "After a week.", repository: null });
@@ -930,11 +989,14 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         yield* Effect.promise(() => client.close());
 
         assert.ok(listed.tools.length > 0);
+
         for (const tool of listed.tools) {
           assert.equal(tool._meta?.["anthropic/maxResultSizeChars"], 500_000, tool.name);
         }
+
         const loaded = (name: string) =>
           listed.tools.find((tool) => tool.name === name)?._meta?.["anthropic/alwaysLoad"];
+
         assert.equal(loaded("edit_description"), true);
         assert.equal(loaded("look_at_picture"), undefined);
       }),
@@ -946,6 +1008,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         "/workspace/repository/pages/funnel.html":
           "<!doctype html><title>Funnel</title><p>Invites</p>",
       });
+
       const fetch = yield* standingOver(sandbox.door);
       const agent = yield* agentWithBearer;
       const client = yield* connected(fetch, agent.bearer);
@@ -956,6 +1019,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           arguments: { title: "Invite funnel", path: "pages/funnel.html" },
         }),
       );
+
       yield* Effect.promise(() => client.close());
 
       assert.equal(called.isError, false);
@@ -972,17 +1036,21 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const agent = yield* agentWithBearer;
         yield* descriptionsOn(agent.userId);
         const kept = yield* keepDescriptionAttachment(agent.userId, agent.taskId, PICTURE);
+
         if (kept.status !== DESCRIPTION_ATTACHMENT_KEEP.KEPT)
           return assert.fail("the picture was not kept");
+
         const address = descriptionAttachmentAddress(
           { taskId: agent.taskId, attachmentId: kept.id },
           "acme",
         );
+
         const client = yield* connected(fetch, agent.bearer);
 
         const called = yield* Effect.promise(() =>
           client.callTool({ name: "look_at_picture", arguments: { address } }),
         );
+
         yield* Effect.promise(() => client.close());
 
         assert.equal(called.isError, false);
@@ -1000,22 +1068,28 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const fetch = yield* standing;
         const agent = yield* agentWithBearer;
         yield* descriptionsOn(agent.userId);
+
         const video: Picture = {
           contentType: PICTURE_MEDIA_TYPE.WEBM,
           bytes: webmBytes(1280, 800),
         };
+
         const kept = yield* keepDescriptionAttachment(agent.userId, agent.taskId, video);
+
         if (kept.status !== DESCRIPTION_ATTACHMENT_KEEP.KEPT)
           return assert.fail("the video was not kept");
+
         const address = descriptionAttachmentAddress(
           { taskId: agent.taskId, attachmentId: kept.id },
           "acme",
         );
+
         const client = yield* connected(fetch, agent.bearer);
 
         const called = yield* Effect.promise(() =>
           client.callTool({ name: "look_at_picture", arguments: { address } }),
         );
+
         yield* Effect.promise(() => client.close());
 
         assert.deepEqual(called.content, [
@@ -1036,15 +1110,18 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         );
         yield* completeIntegrationSignIn(agent.userId, "linear", `state-${agent.userId}`);
         const heard = { calls: [], bearers: [] };
+
         const fetch = yield* standingOver(
           NO_SANDBOX,
           Layer.merge(LINEAR_AND_NOTION_CONNECT, linearServer(linearTokenOf(agent.userId), heard)),
         );
+
         const linear = yield* connected(
           fetch,
           agent.bearer,
           `${WORKSPACE_INTEGRATION_MCP_PATH}/linear`,
         );
+
         const notion = yield* connected(
           fetch,
           agent.bearer,
@@ -1053,13 +1130,17 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
         const linearTools = yield* Effect.promise(() => linear.listTools());
         const drawn = yield* Effect.promise(() => linear.callTool({ name: "draw", arguments: {} }));
+
         const failed = yield* Effect.promise(() =>
           linear.callTool({ name: "fail", arguments: {} }),
         );
+
         const notionTools = yield* Effect.promise(() => notion.listTools());
+
         const unsigned = yield* Effect.promise(() =>
           notion.callTool({ name: "notion-search", arguments: {} }),
         );
+
         yield* Effect.promise(() => Promise.all([linear.close(), notion.close()]));
 
         assert.equal(linear.getServerVersion()?.name, "linear");
@@ -1089,6 +1170,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       Effect.gen(function* () {
         const agent = yield* agentWithBearer;
         const fetch = yield* standing;
+
         const ask = (path: string, bearer: string | undefined) =>
           Effect.promise(() =>
             fetch(`${ORIGIN}${path}`, {
@@ -1096,7 +1178,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
               headers: {
                 "content-type": "application/json",
                 accept: "application/json, text/event-stream",
-                ...(bearer === undefined ? {} : { authorization: `Bearer ${bearer}` }),
+                ...(bearer !== undefined && { authorization: `Bearer ${bearer}` }),
               },
               body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
             }),
@@ -1116,13 +1198,15 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       Effect.gen(function* () {
         const peer = yield* fakeCdpPeer({
           pages: [{ targetId: "tab-1", url: "https://shop.test/", title: "Shop" }],
-          answer: (command) => PAGE_ANSWERS[command.method],
+          answer: (command) => PAGE_ANSWERS.get(command.method),
         });
+
         const fetch = yield* standingOver(
           NO_SANDBOX,
           undefined,
           agentBrowserTestLayer(peer, SESSION),
         );
+
         const agent = yield* agentInSandbox;
         const client = yield* connected(fetch, agent.bearer);
 
@@ -1137,9 +1221,11 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
             },
           }),
         );
+
         yield* Effect.promise(() => client.close());
 
         assert.equal(called.isError, false);
+
         // SAFETY: the server answers a browser call with text and image blocks (`tools.ts`'s `browserContent`).
         const content = called.content as readonly {
           type: string;
@@ -1147,6 +1233,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           data?: string;
           mimeType?: string;
         }[];
+
         // One JSON block, which the native transcript reads whole, then the picture.
         assert.deepEqual(
           content.map((block) => block.type),
@@ -1185,6 +1272,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           arguments: { actions: [{ action: BROWSER_AGENT_ACTION.LIST }] },
         }),
       );
+
       yield* Effect.promise(() => client.close());
 
       assert.equal(called.isError, true);
@@ -1205,6 +1293,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const now = new Date(yield* Clock.currentTimeMillis);
         yield* claimRuntimeSession(admitted.target, sessionId, now);
         const sandbox = sharingSandbox();
+
         const fetch = yield* standingOver(
           NO_SANDBOX,
           undefined,
@@ -1212,15 +1301,19 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           sandbox.layer,
           PAGE_SANDBOX,
         );
+
         const client = yield* connected(fetch, agent.bearer);
 
         const share = yield* Effect.promise(() =>
           client.callTool({ name: "share_port", arguments: { port: 3000 } }),
         );
+
         const sharedThen = [...sandbox.shared];
+
         const stop = yield* Effect.promise(() =>
           client.callTool({ name: "share_port", arguments: { port: null } }),
         );
+
         yield* Effect.promise(() => client.close());
 
         // The agent's preview host is its workspace's slug, its task's number, and its id's head, under the page sandbox's domain.
@@ -1228,6 +1321,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           .select({ slug: organization.slug })
           .from(organization)
           .where(eq(organization.id, agent.organizationId));
+
         const host = `${workspace?.slug}-1-${agent.agentId.slice(0, 6)}.vespin.page`;
         assert.deepEqual(firstJson(share), {
           status: "accepted",

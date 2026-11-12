@@ -40,9 +40,11 @@ const USAGE = {
 /** A model that calls `read_file` once, then answers in words once it has read the call's result. */
 function modelCallingReadFile() {
   let calls = 0;
+
   return new MockLanguageModelV4({
     doGenerate: async () => {
       calls += 1;
+
       return {
         content:
           calls === 1
@@ -71,6 +73,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const sentry = recordingEveSentry();
+
       const answer = yield* Effect.gen(function* () {
         const result = yield* Effect.promise(() =>
           generateText({
@@ -91,11 +94,14 @@ it.effect(
             },
           }),
         );
+
         // Note that an event is processed asynchronously, so the crash waits for the tool call's report to settle, as a crash seconds later would.
         yield* Effect.promise(() => Sentry.flush(1_000));
         Sentry.captureException(new RangeError("no such row"));
+
         return result.text;
       }).pipe(Effect.provide(sentry.layer));
+
       assert.equal(answer, "That file is not there.");
       assert.deepEqual(exceptionTypes(sentry.sent), ["RangeError"]);
       const [crash] = sentOfType(sentry.sent, "event");
@@ -112,17 +118,21 @@ it.effect(
 /** A refusal explained `links` times over, each a bare `Error` whose cause is the one before. */
 function refusalChain(links: number, words: string): Error {
   let failure = new Error(`${words} (1 of ${links})`);
+
   for (let link = 2; link <= links; link += 1)
     failure = new Error(`${words} (${link} of ${links})`, { cause: failure });
+
   return failure;
 }
 
 /** A model that calls each named tool once, then answers in words once it has read their results. */
 function modelCalling(toolNames: readonly string[]) {
   let calls = 0;
+
   return new MockLanguageModelV4({
     doGenerate: async () => {
       calls += 1;
+
       return {
         content:
           calls === 1
@@ -152,9 +162,11 @@ it.effect("a tool's refusal is not an issue, and a failure beneath a tool still 
     // Note that a cause may loop back on its error, which must not keep the error from Sentry.
     const looping = new Error("The connection answered in circles.");
     looping.cause = looping;
+
     const throwing = (failure: Error) => async (): Promise<string> => {
       throw failure;
     };
+
     // Note that a refusal explained in a bare `Error` of its own is a refusal still.
     const tools = {
       write_file: throwing(refused),
@@ -177,7 +189,9 @@ it.effect("a tool's refusal is not an issue, and a failure beneath a tool still 
         }),
       ),
     };
+
     const input = jsonSchema<Record<string, never>>({ type: "object", properties: {} });
+
     const answer = yield* Effect.promise(() =>
       generateText({
         model: modelCalling(Object.keys(tools)),
@@ -191,6 +205,7 @@ it.effect("a tool's refusal is not an issue, and a failure beneath a tool still 
         ),
       }),
     ).pipe(Effect.provide(sentry.layer));
+
     assert.equal(answer.text, "Read it first, then wrote it.");
     assert.deepEqual([...new Set(exceptionValues(sentry.sent))].sort(), [
       "Status code 404 is not ok",

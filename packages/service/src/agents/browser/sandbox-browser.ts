@@ -193,5 +193,6 @@ export type BrowserStart =
 
 export function browserStartOf(run: CommandRun): BrowserStart {
   if (run.exitCode !== 0) return { ok: false, exitCode: run.exitCode };
+
   return { ok: true, started: run.stdout.trim() === BROWSER_START_OUTPUT.STARTED };
 }

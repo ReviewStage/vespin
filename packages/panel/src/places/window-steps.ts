@@ -193,6 +193,7 @@ function titleOf(place: Titled | undefined): StepTitle | undefined {
 function sameTitle(one: Place, other: Place): boolean {
   const mine = titleOf(one);
   const theirs = titleOf(other);
+
   return mine?.label === theirs?.label && mine?.detail === theirs?.detail;
 }
 
@@ -204,6 +205,7 @@ function choiceTask(choice: InboxChoice): string | undefined {
 /** Whether two places are one page, whichever of its narrow sub-steps each stands on: the same task's own place, or another routed place at the same address. */
 export function samePage(one: Place, other: Place): boolean {
   if (one.task === undefined && other.task === undefined) return one.address === other.address;
+
   return (
     one.task !== undefined && other.task !== undefined && one.task.taskId === other.task.taskId
   );
@@ -242,6 +244,7 @@ export function recentAfter(
   const rest = recent.filter(
     (each) => !sameScreen(each, place) && (replaced === undefined || !sameScreen(each, replaced)),
   );
+
   return [place, ...rest].slice(0, RECENT_KEPT);
 }
 
@@ -268,6 +271,7 @@ export function pathOf(address: string): string {
 /** The address a step is held at: its link's path, with the query and fragment it carries, since a browser holds a same-origin path. */
 export function addressOf(link: ReadLink): string {
   const url = new URL(linkOf(link.place, link.workspace));
+
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
@@ -297,6 +301,7 @@ export function visitWrite(
 ): StepWrite | undefined {
   const standing = steps.entries[steps.at];
   const wentUp = up !== undefined && sameStep(up, place);
+
   // An entry the router wrote on a task's own place, as a door's navigation or a gate's redirect writes one, holding none of
   // the task's step, is that task's step, which the window writes only once the task bound for is the one its address names.
   const routedHere =
@@ -304,21 +309,26 @@ export function visitWrite(
     standing.place.task === undefined &&
     place.task !== undefined &&
     (standing.address === address || onTaskRoute(standing.address));
+
   // What the place shows within the page standing, as a step of its own, the window settling, or the step standing (`places/task-step.ts`).
   const within =
     standing !== undefined && samePage(standing.place, place)
       ? stepWithin(shownOf(standing.place), shownOf(place), { pressed, opened })
       : STEP_WITHIN.VISIT;
+
   if (standing !== undefined && (wentUp || within === STEP_WITHIN.SETTLE || routedHere)) {
     return { kind: STEP_WRITE.REPLACE, address, place };
   }
+
   if (standing !== undefined && within === STEP_WITHIN.SAME) {
     const moved =
       !stoodAlike(shownOf(standing.place), shownOf(place)) ||
       !sameTitle(standing.place, place) ||
       standing.address !== address;
+
     return moved ? { kind: STEP_WRITE.REPLACE, address, place } : undefined;
   }
+
   return { kind: STEP_WRITE.PUSH, address, place };
 }
 
@@ -333,10 +343,13 @@ export function nearest(
   reachable: (place: Place) => boolean,
 ): number | undefined {
   const standing = steps.entries[steps.at]?.place;
+
   for (let at = steps.at + step; at >= 0 && at < steps.entries.length; at += step) {
     const place = steps.entries[at]?.place;
+
     if (place !== undefined && reachable(place) && !sameStep(standing, place)) return at;
   }
+
   return undefined;
 }
 
@@ -350,11 +363,15 @@ export function awayFrom(
   reachable: (place: Place) => boolean,
 ): number | undefined {
   const standing = steps.entries[steps.at]?.place;
+
   for (let at = steps.at - 1; at >= 0; at -= 1) {
     const place = steps.entries[at]?.place;
+
     if (place === undefined || !reachable(place)) continue;
+
     if (standing === undefined || !samePage(standing, place)) return at;
   }
+
   return undefined;
 }
 
@@ -417,13 +434,16 @@ function listedSteps(
 ): HistoryStep[] {
   const listed: HistoryStep[] = [];
   let from = steps.at;
+
   while (listed.length < LISTED_STEPS) {
     const at = nearest({ entries: steps.entries, at: from }, way, reachable);
     const entry = at === undefined ? undefined : steps.entries[at];
+
     if (at === undefined || entry === undefined) break;
     listed.push({ number: entry.number, title: named(entry.place), page: pageOf(entry.place) });
     from = at;
   }
+
   return listed;
 }
 
@@ -471,6 +491,7 @@ function sameSteps(one: readonly HistoryStep[], other: readonly HistoryStep[]): 
     one.length === other.length &&
     one.every((step, index) => {
       const theirs = other[index];
+
       return (
         theirs !== undefined &&
         step.number === theirs.number &&
@@ -501,6 +522,7 @@ function awayStep(
 ): AwayStep | undefined {
   const at = awayFrom(steps, reachable);
   const place = at === undefined ? undefined : steps.entries[at]?.place;
+
   return place === undefined ? undefined : { title: named(place) };
 }
 
@@ -517,35 +539,46 @@ function taggedSide(side: SideStep): SideStep {
  */
 function taggedPlace(place: Place): Place {
   const { task } = place;
+
   if (task === undefined) {
     const side = taggedSide(place.side);
+
     return side === place.side ? place : { ...place, side };
   }
+
   const column = task.column === undefined ? undefined : taggedStripTab(task.column);
   const side = taggedSide(task.side);
   const panelTab = task.panel?.tab === undefined ? undefined : taggedStripTab(task.panel.tab);
+
   if (column === task.column && side === task.side && panelTab === task.panel?.tab) return place;
   const panel = task.panel === undefined ? undefined : { ...task.panel, tab: panelTab };
+
   return { ...place, task: { ...task, column, side, panel } };
 }
 
 /** The step saved in `location`'s entry, its tabs tagged with their kind; none in an entry no window wrote, or wrote before the router held its history. */
 export function savedStepOf(location: HistoryLocation): SavedStep | undefined {
   const { step } = location.state;
+
   if (!isSavedStep(step)) return undefined;
   // Note that the kind is read as any string a browser held, since an entry may hold one this build no longer writes.
   const kind: string = step.place.kind;
+
   if (kind === SAVED_HOME_KIND) return { ...step, place: routedPlace(location.href) };
   const held = step.place;
+
   // Note that a task's step saved before the task was the router's held its task and tabs where its typed state holds them now.
   if (held.kind === SAVED_TASK_KIND) {
     const { taskId, panel, column, side } = held;
+
     return {
       ...step,
       place: taggedPlace(taskPlace(location.href, { taskId, panel, column, side })),
     };
   }
+
   const place = taggedPlace(held);
+
   return place === held ? { ...step, place: held } : { ...step, place };
 }
 
@@ -594,40 +627,50 @@ export function useStepReach(input: {
   // The tabs each task's column stood with as the window last stood on it, so a step on a tab since closed is passed over.
   // Note that a task reopened before its agents are read keeps the column it was last seen with.
   const knownColumns = useRef(new Map<string, ReadonlySet<string>>()).current;
+
   if (columnSeen && boundFor !== undefined) {
     knownColumns.set(boundFor, new Set(tasks.mainTabs.tabs.map(tabKey)));
   }
+
   const listedWorkspace = tasks.workspace?.id;
   // Only grows, so writing it as the list is drawn is the same on every render.
   const everListed = useRef(new Set<string>()).current;
   // Each task ever listed by the step its links name it by, under its workspace, so a version history's address finds its task once it is deleted.
   const everStepped = useRef(new Map<string, Map<string, string>>()).current;
+
   for (const task of tasks.tasks) {
     everListed.add(task.id);
     const stepped = everStepped.get(task.workspaceId) ?? new Map<string, string>();
     stepped.set(taskLinkStep(task), task.id);
     everStepped.set(task.workspaceId, stepped);
   }
+
   const historyTaskOf = (matches: RouteMatches) => {
     if (routedPlaceOf(matches, access) !== ROUTED_PLACE.VERSION_HISTORY) return undefined;
     const params: Readonly<Record<string, string | undefined>> = matches.at(-1)?.params ?? {};
     const { workspace, taskId } = params;
+
     if (workspace === undefined || taskId === undefined) return undefined;
     const home = workspaceOfSlug(tasks.workspaces, workspace)?.id;
+
     return (home === undefined ? undefined : everStepped.get(home)?.get(taskId)) ?? taskId;
   };
+
   // Whether the column's tab a task's step showed still stands on its strip, as far as the window last saw it; a task not seen since is taken to.
   // Note that the side panel's tab is not asked after, because going to the step opens it again, as a link opens a preview another took the place of.
   const columnStands = (taskId: string, tab: StripTab | undefined) => {
     const column = knownColumns.get(taskId);
+
     return tab === undefined || column === undefined || column.has(tabKey(tab));
   };
+
   // Whether a task a step stands on is still there: the one bound for, one no list held yet, or one the list holds, unless the list could not be read.
   const taskStands = (taskId: string) =>
     taskId === boundFor ||
     tasks.listFailed ||
     !everListed.has(taskId) ||
     tasks.tasks.some((task) => task.id === taskId);
+
   // What a routed step's declaration reads to say whether it is still there (`routedStepStands`), a task's by what its step holds.
   const thereOf = (matches: RouteMatches, taskStep: TaskStep | undefined): PlaceThere => ({
     historyTask: historyTaskOf(matches),
@@ -638,10 +681,13 @@ export function useStepReach(input: {
     listed: (workspace: string) =>
       workspaceOfSlug(tasks.workspaces, workspace)?.id === listedWorkspace,
   });
+
   const reachable = (to: Place) => {
     const matches = router.matchRoutes(pathOf(to.address));
+
     return routedStepStands(matches, searchOf(to.address), access, thereOf(matches, to.task));
   };
+
   return { reachable, historyTaskOf };
 }
 
@@ -672,6 +718,7 @@ export function useStepNames(input: {
 }): (to: Place) => StepTitle | undefined {
   const { access, tasks, inbox, historyTaskOf, personStanding, entries } = input;
   const router = useRouter();
+
   const personListed = useSyncExternalStore(
     input.subscribe,
     () =>
@@ -681,22 +728,28 @@ export function useStepNames(input: {
           routedPlaceOf(router.matchRoutes(pathOf(entry.address)), access) === ROUTED_PLACE.PERSON,
       ),
   );
+
   const members = useQuery(workspaceMembersQuery(personListed ? tasks.workspace?.id : undefined))
     .data?.members;
+
   // The task an Inbox item is of, by the item's id, where a door chose it.
   const itemTask = (itemId: string) => {
     const chosen = inbox.choiceOf(itemId);
+
     return chosen === undefined ? undefined : choiceTask(chosen);
   };
+
   // A step is named again as its place's declaration says, by the ids its address names, a task's by what its step holds.
   const routedNamed = (to: Place): NamedStep | undefined => {
     const matches = router.matchRoutes(pathOf(to.address));
     const naming = { historyTask: historyTaskOf(matches), itemTask, taskStep: to.task };
+
     return stepPlaceOf(matches, access, to.task)?.named(
       placeParamsOf(matches),
       searchOf(to.address),
       naming,
     );
   };
+
   return (to: Place) => liveStepTitle(routedNamed(to), titleOf(to), tasks, members);
 }

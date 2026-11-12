@@ -130,26 +130,29 @@ export interface GitHubProcedureSeams {
  */
 function unlinkOrRefusal(unlink: ReturnType<GitHubUnlink>): Effect.Effect<void, HostedRefusal> {
   return unlink.pipe(
-    Effect.catch((failure): Effect.Effect<never, HostedRefusal> => {
+    Effect.catchTag(
+      "UnknownError",
       // A failure that is not a refusal is logged by its kind alone, since what it threw may quote a request.
-      if (failure._tag === "UnknownError") {
-        return Effect.andThen(
+      () =>
+        Effect.andThen(
           Effect.logWarning("GitHub unlink failed: UnknownError"),
           Effect.fail(HOSTED_REFUSAL.UNAVAILABLE),
+        ),
+      (refused): Effect.Effect<never, HostedRefusal> => {
+        if (
+          refused.status === HOSTED_HTTP_STATUS.UNAUTHORIZED ||
+          refused.code === UNLINK_REFUSAL.SESSION_NOT_FRESH
+        ) {
+          return Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+        }
+
+        return Effect.fail(
+          refused.code === UNLINK_REFUSAL.LAST_ACCOUNT
+            ? HOSTED_REFUSAL.NOT_PERMITTED
+            : HOSTED_REFUSAL.UNAVAILABLE,
         );
-      }
-      if (
-        failure.status === HOSTED_HTTP_STATUS.UNAUTHORIZED ||
-        failure.code === UNLINK_REFUSAL.SESSION_NOT_FRESH
-      ) {
-        return Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
-      }
-      return Effect.fail(
-        failure.code === UNLINK_REFUSAL.LAST_ACCOUNT
-          ? HOSTED_REFUSAL.NOT_PERMITTED
-          : HOSTED_REFUSAL.UNAVAILABLE,
-      );
-    }),
+      },
+    ),
   );
 }
 
@@ -161,18 +164,21 @@ function unlinkOrRefusal(unlink: ReturnType<GitHubUnlink>): Effect.Effect<void, 
 export function githubProcedures(seams: GitHubProcedureSeams) {
   const signedIn = hosted.github.use(accountMiddleware(seams.resolveUserId));
   const inSession = hosted.github.use(sessionMiddleware(seams.resolveSessionUserId));
+
   return {
     connect: signedIn.connect.effect(function* ({ context }) {
       const intent = yield* hostedStoreOrUnavailable(openGitHubConnectIntent(context.userId));
       // Note that the page is on the host the Mac asked through, because the session cookie is that host's.
       const url = new URL(GITHUB_CONNECT_PAGE.PATH, context.request.url);
       url.searchParams.set(GITHUB_CONNECT_PAGE.INTENT_PARAM, intent);
+
       return { url: url.toString() };
     }),
     claim: inSession.claim.effect(function* ({ context, input }) {
       const claim = yield* hostedStoreOrUnavailable(
         claimGitHubConnectIntent(input.intent, context.userId),
       );
+
       return { claim };
     }),
     connection: signedIn.connection.effect(function* ({ context }) {
@@ -180,6 +186,7 @@ export function githubProcedures(seams: GitHubProcedureSeams) {
     }),
     disconnect: inSession.disconnect.effect(function* ({ context }) {
       yield* unlinkOrRefusal(seams.unlinkGitHub(context.sessionHeaders));
+
       return yield* hostedStoreOrUnavailable(githubConnection(context.userId));
     }),
     repositories: signedIn.repositories.effect(function* ({ context, input }) {
@@ -193,6 +200,7 @@ export function githubProcedures(seams: GitHubProcedureSeams) {
     }),
     repositoryFile: signedIn.repositoryFile.effect(function* ({ context, input }) {
       const window = yield* fileWindowOf(input);
+
       return yield* readPlaceFile(context.userId, input, window);
     }),
     repositoryTree: signedIn.repositoryTree.effect(function* ({ context, input }) {

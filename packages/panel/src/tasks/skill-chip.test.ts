@@ -90,6 +90,7 @@ async function mounted(view: ReactNode, source: SkillSource = reading) {
     );
   });
   await settleFrames();
+
   return { container, opened };
 }
 
@@ -97,6 +98,7 @@ async function mounted(view: ReactNode, source: SkillSource = reading) {
 function Composer({ words, commands = false }: { words: string; commands?: boolean }): ReactNode {
   const [draft, setDraft] = useState(words);
   const [attachments, setAttachments] = useState<readonly AgentAttachment[]>([]);
+
   return createElement(AgentComposer, {
     ...QUIET_COMPOSER,
     composer: {
@@ -127,6 +129,7 @@ test("a press on a skill's chip in the composer opens the skill's file, and a pr
   const { container, opened } = await mounted(
     createElement(Composer, { words: "Cut it with /release now" }),
   );
+
   const chip = container.querySelector(".agent-composer-input [data-skill-ref]");
   assert.equal(
     chip?.querySelector(".ui-inline-ref-label")?.textContent,
@@ -146,6 +149,7 @@ test("a skill's chip in the composer hangs the skill's card, what it is for unde
   const { container } = await mounted(
     createElement(Composer, { words: "Cut it with /release now" }),
   );
+
   const chip = container.querySelector(".agent-composer-input [data-skill-ref]");
   assert.ok(chip, "the chosen skill is drawn as a chip");
 
@@ -160,6 +164,7 @@ test("a skill still being read hangs a card of its name, with a placeholder for 
   const { container } = await mounted(
     createElement(SkillRef, { name: "release", skill: undefined, onOpen: undefined }),
   );
+
   const chip = container.querySelector("[data-skill-ref]");
   assert.ok(chip, "the skill is a chip before it is read");
 
@@ -174,9 +179,11 @@ test("a sent chip's hover card is the plan card: the skill's mark and name, what
   const { container, opened } = await mounted(
     createElement(SentWords, { text: "Cut it with /release now." }),
   );
+
   const chip = container.querySelector<HTMLButtonElement>(
     ":is(button, [role='button'])[data-skill-ref]",
   );
+
   assert.ok(chip, "the skill is a chip");
   // The card hangs as the keyboard reaches the chip, as it does under a resting pointer.
   document.documentElement.dataset.keyboard = "true";
@@ -200,10 +207,12 @@ test("a sent chip's hover card is the plan card: the skill's mark and name, what
 
 test("an installed skill's chip is no button, yet takes the focus for its card, which says where it comes from and names no file, as a repository's card says Repo", async () => {
   const both: SkillSource = () => Promise.resolve({ skills: [RELEASE, TRIAGE] });
+
   const { container, opened } = await mounted(
     createElement(SentWords, { text: "Run /triage then /release now." }),
     both,
   );
+
   const [triage, release] = container.querySelectorAll<HTMLElement>("[data-skill-ref]");
   assert.ok(triage && release, "both skills are chips");
   assert.deepEqual(
@@ -235,6 +244,7 @@ test("a /compact opening a message is the command's chip in the composer and in 
       createElement(SentWords, { text: "Then /compact again." }),
     ),
   );
+
   const chips = [...container.querySelectorAll<HTMLElement>("[data-command-ref]")];
   assert.equal(chips.length, 2, "the composer's and the first sent message's");
   assert.ok(
@@ -254,8 +264,11 @@ test("a /compact opening a message is the command's chip in the composer and in 
 /** A node's words as drawn, without those only a screen reader hears. */
 function drawnWords(node: Node): string {
   if (!(node instanceof Element)) return node.textContent ?? "";
+  // SAFETY: a deep clone of an element is an element.
   const drawn = node.cloneNode(true) as Element;
+
   for (const heard of drawn.querySelectorAll(".ui-visually-hidden")) heard.remove();
+
   return drawn.textContent ?? "";
 }
 
@@ -264,10 +277,12 @@ function drawnLines(container: HTMLElement): readonly string[] {
   const paragraph = container.querySelector("p");
   assert.ok(paragraph, "the words are drawn as a paragraph");
   const lines = [""];
+
   for (const node of paragraph.childNodes) {
     if (node.nodeName === "BR") lines.push("");
     else lines[lines.length - 1] += drawnWords(node).replace(/\n/gu, "");
   }
+
   return lines;
 }
 
@@ -275,6 +290,7 @@ test("a sent message keeps each line typed on a line of its own, rather than joi
   const { container } = await mounted(
     createElement(SentWords, { text: "First line\nSecond line\nThird line" }),
   );
+
   assert.deepEqual(drawnLines(container), ["First line", "Second line", "Third line"]);
 });
 
@@ -282,6 +298,7 @@ test("a sent message naming a skill keeps its lines too, the skill still its chi
   const { container } = await mounted(
     createElement(SentWords, { text: "Cut it with /release\nthen tell me." }),
   );
+
   assert.ok(
     container.querySelector(":is(button, [role='button'])[data-skill-ref]"),
     "the skill is a chip",
@@ -323,6 +340,7 @@ function cardOf(control: HTMLElement): string | undefined {
   focusRestOn(control);
   const card = [...document.querySelectorAll(".ui-tooltip-card > [data-skill-card]")].at(-1);
   act(() => control.blur());
+
   return card?.outerHTML;
 }
 
@@ -335,9 +353,11 @@ test("a loaded skill's row in the transcript names the skill as its chip does, h
       createElement("div", { className: "turn" }, agentTurn(loadedTurn("release"))),
     ),
   );
+
   const chip = container.querySelector<HTMLButtonElement>(
     ":is(button, [role='button'])[data-skill-ref]",
   );
+
   const row = container.querySelector<HTMLButtonElement>(".turn button[data-opens]");
   assert.ok(chip, "the sent message names the skill as its chip");
   assert.ok(row, "the loaded skill's row is one button");

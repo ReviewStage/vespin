@@ -34,6 +34,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -46,6 +47,7 @@ const openWorkspace = Effect.gen(function* () {
     slug: `workspace-${id}`,
     createdAt: yield* DateTime.nowAsDate,
   });
+
   return id;
 });
 
@@ -66,12 +68,14 @@ it.layer(getTestDB())("the integration installation store", (it) => {
           organizationId: ours,
           userId: owner,
         });
+
         const taken = yield* linkIntegrationInstallation({
           provider: SENTRY,
           externalId,
           organizationId: theirs,
           userId: stranger,
         });
+
         const relinked = yield* linkIntegrationInstallation({
           provider: SENTRY,
           externalId,
@@ -115,6 +119,7 @@ it.layer(getTestDB())("the integration installation store", (it) => {
         const unknown = yield* markIntegrationInstallationDeleted(SENTRY, randomUUID());
         const afterUninstall = yield* activeInstallationWorkspace(SENTRY, externalId);
         const listed = yield* workspaceIntegrationInstallations(ours);
+
         const moved = yield* linkIntegrationInstallation({
           provider: SENTRY,
           externalId,
@@ -173,6 +178,7 @@ it.layer(getTestDB())("the integration installation store", (it) => {
         const ours = yield* openWorkspace;
         const externalId = randomUUID();
         const link = { provider: SENTRY, externalId, organizationId: ours, userId: owner };
+
         const labelOf = Effect.map(workspaceIntegrationInstallations(ours), (rows) =>
           rows.map((row) => row.accountLabel),
         );

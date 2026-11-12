@@ -45,11 +45,14 @@ export interface ElectronProcessName {
 /** The rows of `ps -axo pid=,ppid=,pcpu=,rss=,comm=`'s output; a line it cannot read is passed over. */
 export function readProcessTable(text: string): ProcessTableRow[] {
   const rows: ProcessTableRow[] = [];
+
   for (const line of text.split("\n")) {
     const read = PROCESS_FIGURES.exec(line);
+
     if (read === null) continue;
     const [figures, pid, parent, cpu, memory] = read;
     const command = line.slice(figures.length).trim();
+
     if (command === "") continue;
     rows.push({
       pid: Number(pid),
@@ -59,6 +62,7 @@ export function readProcessTable(text: string): ProcessTableRow[] {
       command,
     });
   }
+
   return rows;
 }
 
@@ -81,13 +85,17 @@ export function appProcesses(input: {
   const { table, main, host, electron } = input;
   const byPid = new Map(table.map((row) => [row.pid, row]));
   const children = new Map<number, ProcessTableRow[]>();
+
   for (const row of table) {
     const siblings = children.get(row.parent);
+
     if (siblings === undefined) children.set(row.parent, [row]);
     else siblings.push(row);
   }
+
   const answered: MacProcess[] = [];
   const seen = new Set<number>();
+
   const walk = (row: ProcessTableRow, parent: number | undefined, kind: MacProcessKind) => {
     // Note that a pid is walked once, because a table read while processes come and go may list a pid reused under its own descendant.
     if (seen.has(row.pid)) return;
@@ -95,7 +103,7 @@ export function appProcesses(input: {
     const named = electron.get(row.pid);
     answered.push({
       pid: row.pid,
-      ...(parent === undefined ? {} : { parent }),
+      ...(parent !== undefined && { parent }),
       ppid: row.parent,
       kind,
       name: named?.name ?? executableName(row.command),
@@ -103,16 +111,22 @@ export function appProcesses(input: {
       cpu: row.cpu,
       memory: row.memory,
     });
+
     for (const child of children.get(row.pid) ?? []) {
       const helper = electron.get(child.pid);
+
       // Electron's helpers stand at the top beside main, as an app's helpers do in Activity Monitor.
       if (helper !== undefined) walk(child, undefined, helper.kind);
       else walk(child, row.pid, MAC_PROCESS_KIND.CHILD);
     }
   };
+
   const mainRow = byPid.get(main);
+
   if (mainRow !== undefined) walk(mainRow, undefined, MAC_PROCESS_KIND.MAIN);
   const hostRow = host === undefined ? undefined : byPid.get(host);
+
   if (hostRow !== undefined) walk(hostRow, undefined, MAC_PROCESS_KIND.HOST);
+
   return answered;
 }

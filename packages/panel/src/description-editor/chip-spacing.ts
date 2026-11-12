@@ -50,8 +50,10 @@ export interface AtWord {
 /** Whether what stands right before a place ends a word, so a chip laid there needs a space before it. */
 function endsWord(node: PmNode | null): boolean {
   if (node === null) return false;
+
   if (!node.isText) return node.isInline && node.type.spec.linebreakReplacement !== true;
   const last = node.text?.at(-1) ?? "";
+
   return last !== "" && !/\s/u.test(last) && !OPENING_PUNCTUATION.test(last);
 }
 
@@ -61,13 +63,16 @@ function endsWord(node: PmNode | null): boolean {
  */
 export function spacedChip(tr: Transaction, from: number, end: number): Transaction {
   const next = tr.doc.textBetween(end, Math.min(end + 1, tr.doc.content.size));
+
   if (CLOSING_PUNCTUATION.test(next)) tr.setSelection(TextSelection.create(tr.doc, end));
   else {
     if (next !== SPACE) tr.insert(end, tr.doc.type.schema.text(SPACE));
     tr.setSelection(TextSelection.create(tr.doc, end + SPACE.length));
   }
+
   // Note that the caret set above moves on past a space laid in before the chips.
   if (endsWord(tr.doc.resolve(from).nodeBefore)) tr.insert(from, tr.doc.type.schema.text(SPACE));
+
   return tr;
 }
 
@@ -75,13 +80,16 @@ export function spacedChip(tr: Transaction, from: number, end: number): Transact
 export function chipOverSelection(state: EditorState, chip: PmNode): Transaction {
   const laid = state.tr.replaceSelectionWith(chip, false);
   const end = laid.selection.from;
+
   return spacedChip(laid, end - chip.nodeSize, end);
 }
 
 /** The `@` word the caret stands in, read from its line's words before the caret and after it; nothing where the caret ends no `@` word. */
 export function atWordAround(before: string, after: string): AtWord | undefined {
   const match = AT_WORD.exec(before);
+
   if (match === null) return undefined;
   const rest = AT_WORD_REST.exec(after)?.[0] ?? "";
+
   return { query: match[2] ?? "", rest: rest.replace(TRAILING_CLOSING, "").length };
 }

@@ -32,6 +32,7 @@ function draw(element: ReactNode): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -93,6 +94,7 @@ test.each(DOCUMENTS)(
     const container = drawPage();
     const title = container.querySelector("h1");
     const share = [...container.querySelectorAll("button")].find((b) => b.textContent === "Share");
+
     if (title === null || share === undefined) throw new Error("no title or no act");
 
     expect(share.closest("header")).toBe(title.closest("header"));
@@ -121,6 +123,7 @@ test("a page under the window's toolbar draws no h1 of its own, so its name is s
       children: createElement("p", null, "Task 1"),
     }),
   ]);
+
   expect(container.querySelectorAll("h1")).toHaveLength(0);
 });
 
@@ -133,6 +136,7 @@ test("the line under the title says what the page is, and a slot left empty draw
       actions: false,
     }),
   );
+
   const header = container.querySelector("header");
   expect(document.getElementById("person-title")?.textContent).toBe("Ada Lovelace");
   expect(header?.textContent).toBe("Ada LovelaceEngineer · Platform");

@@ -139,6 +139,7 @@ async function drawnTab(
 ) {
   const opened: string[] = [];
   const turns: [string, string, string][] = [];
+
   const page: TaskMentionsValue = {
     holder: { taskId: TASK },
     taskName: "Fix the tile",
@@ -158,6 +159,7 @@ async function drawnTab(
       },
     },
   };
+
   if (restoring) {
     handState(
       { [EXPERIMENT.REWIND_FILES]: true },
@@ -184,6 +186,7 @@ async function drawnTab(
   } else {
     fakeAppBridge({});
   }
+
   const calls: string[] = [];
   pushedTranscripts(() => [
     {
@@ -193,18 +196,22 @@ async function drawnTab(
       title: null,
     },
   ]);
+
   const control = agentsControl({
     agents: [AGENT_SUMMARY],
     onRewind: (_agentId, messageId, restoreFiles) => {
       calls.push(restoreFiles === true ? `rewind:${messageId}:files` : `rewind:${messageId}`);
+
       return Promise.resolve(REWOUND);
     },
     onMessage: (_agentId, text) => {
       calls.push(`send:${text}`);
+
       // A send held never answers, so its line stays sent and not yet read back.
       return holdSends ? new Promise(() => undefined) : Promise.resolve(REWOUND);
     },
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -226,9 +233,11 @@ async function drawnTab(
     ),
   );
   await settle();
+
   const message = (id: string) =>
     container.querySelector<HTMLElement>(`[data-message-id="${id}"]`) ??
     assert.fail(`${id} is drawn in the transcript`);
+
   /** Opens the message for writing again, replaces its words, and presses Send in its box. */
   const editAndSend = async (id: string, words: string) => {
     const edit = message(id).querySelector<HTMLButtonElement>('button[aria-label="Edit"]');
@@ -243,21 +252,26 @@ async function drawnTab(
     pressInComposer(box, "Enter");
     await settle();
   };
+
   const dialog = () => document.querySelector<HTMLElement>('[role="alertdialog"]');
+
   const press = async (name: string) => {
     const button = [...(dialog()?.querySelectorAll("button") ?? [])].find(
       (each) => each.textContent === name,
     );
+
     assert.ok(button, `the question offers ${name}`);
     await act(async () => button.click());
     await settle();
   };
+
   /** Sends words from the box at the tab's foot. */
   const sendFromFoot = async (words: string) => {
     typeInComposer(container, words);
     pressInComposer(container, "Enter");
     await settle();
   };
+
   return { container, calls, opened, turns, message, editAndSend, sendFromFoot, dialog, press };
 }
 
@@ -272,6 +286,7 @@ test("sending an edited middle message asks first, and Cancel keeps every later 
 
   assert.equal(tab.dialog(), null);
   assert.deepEqual(tab.calls, []);
+
   for (const id of ["reply-2", "last"]) assert.ok(tab.message(id), `${id} is kept`);
   assert.ok(tab.message("middle").hasAttribute("data-editing"), "the edit stays open");
 });
@@ -308,10 +323,13 @@ test("an edited message whose turn recorded the files offers them back in its bo
   const recorded = MESSAGES.map((each) =>
     each.id === "middle" ? { ...each, filesRestorable: true as const } : each,
   );
+
   const plain = await drawnTab(false, recorded);
+
   const plainEdit = plain
     .message("middle")
     .querySelector<HTMLButtonElement>('button[aria-label="Edit"]');
+
   assert.ok(plainEdit);
   await act(async () => plainEdit.click());
   await settle();
@@ -320,6 +338,7 @@ test("an edited message whose turn recorded the files offers them back in its bo
     null,
     "with the experiment off, the box offers no files back",
   );
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 
@@ -353,6 +372,7 @@ test("a turn that edited a file says which, with its lines added and removed, ov
   const edited = MESSAGES.map((each) => (each.id === "reply-2" ? EDITED : each));
   const off = await drawnTab(false, edited);
   assert.equal(off.message("reply-2").querySelector("[data-turn-files]"), null);
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 

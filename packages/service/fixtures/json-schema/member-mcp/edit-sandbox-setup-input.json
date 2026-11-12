@@ -10,7 +10,15 @@
     "repository": {
       "type": "string",
       "maxLength": 140,
-      "description": "The repository whose setup script to save, as owner/name; leave it out to save the workspace's install script."
+      "description": "The repository whose script to save, as owner/name; leave it out to save the workspace's install script."
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "setup",
+        "archive"
+      ],
+      "description": "Which of the repository's scripts to save: setup, which runs once in each new agent sandbox of it after its checkout, or archive, which runs once in each just before it is deleted for good as its agent is archived; setup where left out."
     },
     "script": {
       "type": "string",

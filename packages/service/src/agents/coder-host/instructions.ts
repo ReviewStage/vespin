@@ -133,6 +133,10 @@ const CHECKS_WAIT = {
 } as const;
 
 /** The harnesses whose instructions differ in the tools they name: Claude Code and Codex, which each run their own. */
+/** How Codex reads an attached PDF or HEIC photo, since it has no Read tool: it goes with every Codex agent's checkout or sandbox words. */
+const CODEX_DOCUMENT_WORDS =
+  " To read an attached PDF, run `pdftotext -layout <file> -` for its text, and `pdftoppm -png <file> <prefix>` then `view_image` for its pictures; to look at a HEIC photo, convert it with `heif-dec <file> <out>.jpg`, then `view_image`.";
+
 export const CODER_HARNESS = {
   CLAUDE_CODE: CONVERSATION_RUNTIME.CLAUDE_CODE,
   CODEX: CONVERSATION_RUNTIME.CODEX,
@@ -157,8 +161,6 @@ interface ToolWords {
   readonly sandbox: string;
   /** How a server is kept running for a screenshot. */
   readonly serve: string;
-  /** What becomes of what the agent started, once its turn ends. */
-  readonly started: string;
   /** The tool a file or a picture is read with, and the one a folder is looked through with. */
   readonly readFile: string;
   readonly glob: string;
@@ -203,10 +205,6 @@ Where the developer should see a running app for themselves, such as a dev serve
 `;
 }
 
-/** What Codex tells an agent of what it started: its runner stays up past the turn (`runner-sessions.ts`'s warm launch), and what it started with it. */
-const STOP_BEFORE_TURN_END =
-  "Stop every process you started in the background, a server among them, before you end your turn, because one left running holds its port and your sandbox past it.";
-
 /**
  * How an agent waits on its checks, on either harness: with our
  * `schedule_wakeup` (`wakeup-tool.ts`), whose turn ends once it has booked
@@ -245,8 +243,6 @@ const TOOL_WORDS: Readonly<Record<CoderHarness, ToolWords>> = {
     sandbox: `Your own tools start in \`${CODER.CHECKOUT_PATH}\`, an empty folder that is yours to work in: every Bash command runs there, and Read, Write, Glob, and Grep resolve a relative path from it. ${COMMAND_DESCRIPTION_INSTRUCTION}`,
     serve:
       "Start the app with Bash in the background (`run_in_background`), which keeps a server running until you stop it",
-    started:
-      "Stop every background task you started, a server or a Monitor among them, with TaskStop before you end your turn, because one left running holds your session open.",
     readFile: "Read",
     glob: "Glob",
     searchWeb: "Search the public web with WebSearch and read a page with WebFetch",
@@ -260,11 +256,10 @@ const TOOL_WORDS: Readonly<Record<CoderHarness, ToolWords>> = {
     integrations: NATIVE_INTEGRATION_WORDS,
   },
   [CODER_HARNESS.CODEX]: {
-    checkout: `Your own tools start there: every shell command runs in the checkout, and \`apply_patch\` resolves a relative path from it. The checkout holds the repository's whole history.`,
-    sandbox: `Your own tools start in \`${CODER.CHECKOUT_PATH}\`, an empty folder that is yours to work in: every shell command runs there, and \`apply_patch\` resolves a relative path from it.`,
+    checkout: `Your own tools start there: every shell command runs in the checkout, and \`apply_patch\` resolves a relative path from it. The checkout holds the repository's whole history.${CODEX_DOCUMENT_WORDS}`,
+    sandbox: `Your own tools start in \`${CODER.CHECKOUT_PATH}\`, an empty folder that is yours to work in: every shell command runs there, and \`apply_patch\` resolves a relative path from it.${CODEX_DOCUMENT_WORDS}`,
     serve:
       "Start the app from your shell in the background (with `&` and its output sent to a file), which keeps a server running until you stop it",
-    started: STOP_BEFORE_TURN_END,
     readFile: "your shell (`cat`, or `sed -n` for a range), or Codex's `view_image` for a picture",
     glob: "your shell (`rg --files`, or `ls`)",
     searchWeb: "Search the public web with Codex's own web search",
@@ -320,6 +315,7 @@ function writeUpPlace(brief: AgentBrief, onTask: boolean): string {
   if (brief === AGENT_BRIEF.DESCRIPTION && onTask) {
     return `write it into the description with \`${AGENT_EDIT_DESCRIPTION_TOOL}\`, or show it as a page with \`${AGENT_TOOL.SHOW_PAGE}\` where it reads better as one, and post it in a thread for the developer`;
   }
+
   return `show it as a page with \`${AGENT_TOOL.SHOW_PAGE}\` and post it in a thread for the developer`;
 }
 
@@ -413,6 +409,7 @@ function editDescriptionTold(brief: AgentBrief, notes: string): EditDescriptionT
       : brief === AGENT_BRIEF.BLANK
         ? `Your task has a description, which you were not handed: it may be empty, or say what the conversation does not. Read it with \`${AGENT_TOOL.READ_TASK}\` and your task's id before you edit it. `
         : "";
+
   return {
     decided: ` When an answer settles how to build, a choice made or a step approved or declined, take that decision into the description with \`${AGENT_EDIT_DESCRIPTION_TOOL}\`, where it belongs in the description's text, as a note of your own.`,
     updating: `
@@ -452,13 +449,16 @@ function namingWords(
       ? ""
       : `
 - A file of your repository: \`[@session-store.ts](https://github.com/${repository}/blob/HEAD/apps/web/session-store.ts)\`; a folder the same way with \`tree\` for \`blob\`; lines at a commit already on GitHub: \`[@session-store.ts:3–5](https://github.com/${repository}/blob/<commit>/apps/web/session-store.ts#L3-L5)\`.`;
+
   const taskWords = describes
     ? `
 - Your task's description, whose link is \`${ownTask.link}\` and whose id is \`${ownTask.id}\`: \`[@<the task's name>](${ownTask.link})\`, and one of its sections by its heading's anchor, the heading as GitHub spells an anchor (lower case, spaces as hyphens, punctuation dropped): \`[@Rollout](${ownTask.link}#rollout)\`.`
     : "";
+
   const where = describes
     ? "in a message, a thread, or the description. Keep a mention in the description exactly as it stands when you edit around it."
     : "in a message or a thread.";
+
   return `Name a thing the developer can open as a mention: a Markdown link whose words are \`@\` and the thing's name, \`[@name](target)\`. ${PRODUCT_NAME} draws it as the thing's chip, which opens it, wherever you write it: ${where} Copy an address a tool answered rather than spelling one:${files}
 - A pull request or an issue on GitHub, or a Linear issue, by its own address: \`[@#42 Fix the refresh](https://github.com/${repository ?? EXAMPLE_REPOSITORY}/pull/42)\`, \`[@ACME-142 Token refresh fails](https://linear.app/acme/issue/ACME-142)\`. Write one so every time you name it, in passing and in a report to another agent among them, never as a bare \`#42\`, which draws as no chip; where no tool answered a pull request's address, spell it from its number, its repository's address with \`/pull/\` and the number.${taskWords}
 - ${linkRuleWords(`${LINK_ORIGIN}/${workspace}`)}
@@ -473,11 +473,13 @@ Write a name ${PRODUCT_NAME} shows as a label in sentence case, with no period a
 /** Whose the agent's commits are, the developer's or the App's bot's, and the trailer naming the other as co-author where one is handed; the bot's with none where nothing is. */
 function authorshipRule(authorship: CommitAuthorship | undefined): string {
   const coAuthor = authorship?.coAuthor;
+
   if (authorship?.by === COMMIT_BY.DEVELOPER) {
     return coAuthor === undefined
       ? `Your commits are the developer's: the checkout's git identity is already set to the developer's own GitHub account, so never change \`user.name\` or \`user.email\`, pass \`--author\`, add a \`Co-authored-by\` trailer, or rewrite who a commit is by. The service opens your pull request as the developer too.`
       : `Your commits are the developer's, with ${PRODUCT_NAME} as co-author: the checkout's git identity is already set to the developer's own GitHub account, so never change \`user.name\` or \`user.email\`, pass \`--author\`, or rewrite who a commit is by, and end every commit message with a blank line and then this trailer, exactly as written: \`${coAuthor}\`. The service opens your pull request as the developer too.`;
   }
+
   return coAuthor === undefined
     ? `Your commits are the ${PRODUCT_NAME} GitHub App's: the checkout's git identity is already set to its bot, so never change \`user.name\` or \`user.email\`, pass \`--author\`, add a \`Co-authored-by\` trailer, or rewrite who a commit is by.`
     : `Your commits are the ${PRODUCT_NAME} GitHub App's, with the developer as co-author: the checkout's git identity is already set to its bot, so never change \`user.name\` or \`user.email\`, pass \`--author\`, or rewrite who a commit is by, and end every commit message with a blank line and then this trailer, exactly as written: \`${coAuthor}\`.`;
@@ -507,6 +509,7 @@ function branchWords(startBranch: string | null): BranchWords {
       base: "",
     };
   }
+
   return {
     checkout: `at \`${startBranch}\`, the branch you were started on, rather than the default branch`,
     cut: `cut from \`${startBranch}\`, the branch you were started on, not from the default branch. Never commit to or push \`${startBranch}\` or the default branch.`,
@@ -585,7 +588,9 @@ const SANDBOX_MACHINE: CoderMachine = {
  */
 function toolsOn(tools: ToolWords, machine: CoderMachine, standing: AgentStanding): ToolWords {
   const offered = offers(standing, AGENT_TOOL.BROWSER) ? tools : { ...tools, browser: "" };
+
   if (!machine.local) return offered;
+
   return {
     ...offered,
     sandbox: tools.sandbox.replaceAll(`\`${CODER.CHECKOUT_PATH}\``, `\`${machine.checkoutPath}\``),
@@ -634,9 +639,10 @@ function checkoutReachWords(machine: CoderMachine, standing: AgentStanding): str
 /** How the agent looks at what it built before it publishes: on the sandbox's Playwright, display, and browser, or on the developer's machine with whatever the repository runs. */
 function seeingWords(tools: ToolWords, machine: CoderMachine): string {
   if (machine.local) {
-    return `When your change is something a person looks at, such as a page, a screen, or a component, look at it yourself before you publish. ${tools.serve}, then screenshot it with whatever the repository or the machine has for it, such as Playwright from the shell, look at the picture with ${tools.readFile}, fix what is wrong, and show the developer the result with \`${AGENT_TOOL.SHOW_IMAGE}\` where a picture says it better than words; a WebM of a flow plays there too, kept under 4 MB. ${tools.started}`;
+    return `When your change is something a person looks at, such as a page, a screen, or a component, look at it yourself before you publish. ${tools.serve}, then screenshot it with whatever the repository or the machine has for it, such as Playwright from the shell, look at the picture with ${tools.readFile}, fix what is wrong, and show the developer the result with \`${AGENT_TOOL.SHOW_IMAGE}\` where a picture says it better than words; a WebM of a flow plays there too, kept under 4 MB.`;
   }
-  return `When your change is something a person looks at, such as a page, a screen, or a component, look at it yourself before you publish. ${tools.serve}, then screenshot it with Playwright, whose \`playwright\` command, package, and Chromium are installed: \`playwright screenshot --wait-for-timeout=2000 http://localhost:3000 ${SHARED_FILES_DIRECTORY}/home.png\`, saving every picture, video, and page you show or post under \`${SHARED_FILES_DIRECTORY}/\` (\`mkdir -p ${SHARED_FILES_DIRECTORY}\` where it is missing) or the checkout, which ${PRODUCT_NAME} reads, never in a temp folder of your harness's own, which only you can read, or, for a page that needs a click, a viewport, or a dark color scheme, a short CommonJS script of your own that requires \`playwright\`, run with \`NODE_PATH="${PLAYWRIGHT_PIN.PREFIX}/lib/node_modules:$(npm root -g)" node shot.cjs\` so it finds the installed package rather than one of the checkout's. An Electron app runs here too, on the X display \`xvfb-run -a\` gives it: fetch its binary first, which an install on Linux often skips, with \`node node_modules/electron/install.js\` from the app's own folder, then start it with \`--disable-gpu\`, without which its window never draws, or drive it from such a script with Playwright's \`_electron.launch\`, choosing its window by URL, since the first one open may be a hidden one. Look at the picture with ${tools.readFile}, fix what is wrong, and show the developer the result with \`${AGENT_TOOL.SHOW_IMAGE}\` where a picture says it better than words. Where what you built is a flow rather than a screen, such as a form to fill in and submit, record it as a video: in your browser, \`record\` before the flow and \`stop_recording\` with a caption after it, which keeps the video in your transcript; or, in such a script, draw your pointer, its clicks, and its typing into the page as ${PRODUCT_NAME} draws them, with \`await page.addInitScript({ path: "${RECORDING_CURSOR_FILE.PATH}" })\` before \`page.goto\`, and start it once the page has drawn, never before it loads, which a dev server's first compile can leave blank for seconds: after \`page.goto\`, \`page.screencast.start({ path: "${SHARED_FILES_DIRECTORY}/flow.webm", size: { width: 1280, height: 800 } })\`, and after the flow \`page.screencast.stop()\`, which writes the WebM that \`${AGENT_TOOL.SHOW_IMAGE}\` plays in your transcript; before each click, hover what you click and wait a moment, \`await target.hover()\` then \`await page.waitForTimeout(300)\`, so the pointer has glided there when the press lands; keep it to the steps that matter, under 4 MB. ${tools.started}`;
+
+  return `When your change is something a person looks at, such as a page, a screen, or a component, look at it yourself before you publish. ${tools.serve}, then screenshot it with Playwright, whose \`playwright\` command, package, and Chromium are installed: \`playwright screenshot --wait-for-timeout=2000 http://localhost:3000 ${SHARED_FILES_DIRECTORY}/home.png\`, saving every picture, video, and page you show or post under \`${SHARED_FILES_DIRECTORY}/\` (\`mkdir -p ${SHARED_FILES_DIRECTORY}\` where it is missing) or the checkout, which ${PRODUCT_NAME} reads, never in a temp folder of your harness's own, which only you can read, or, for a page that needs a click, a viewport, or a dark color scheme, a short CommonJS script of your own that requires \`playwright\`, run with \`NODE_PATH="${PLAYWRIGHT_PIN.PREFIX}/lib/node_modules:$(npm root -g)" node shot.cjs\` so it finds the installed package rather than one of the checkout's. An Electron app runs here too, on the X display \`xvfb-run -a\` gives it: fetch its binary first, which an install on Linux often skips, with \`node node_modules/electron/install.js\` from the app's own folder, then start it with \`--disable-gpu\`, without which its window never draws, or drive it from such a script with Playwright's \`_electron.launch\`, choosing its window by URL, since the first one open may be a hidden one. Look at the picture with ${tools.readFile}, fix what is wrong, and show the developer the result with \`${AGENT_TOOL.SHOW_IMAGE}\` where a picture says it better than words. Where what you built is a flow rather than a screen, such as a form to fill in and submit, record it as a video: in your browser, \`record\` before the flow and \`stop_recording\` with a caption after it, which keeps the video in your transcript; or, in such a script, draw your pointer, its clicks, and its typing into the page as ${PRODUCT_NAME} draws them, with \`await page.addInitScript({ path: "${RECORDING_CURSOR_FILE.PATH}" })\` before \`page.goto\`, and start it once the page has drawn, never before it loads, which a dev server's first compile can leave blank for seconds: after \`page.goto\`, \`page.screencast.start({ path: "${SHARED_FILES_DIRECTORY}/flow.webm", size: { width: 1280, height: 800 } })\`, and after the flow \`page.screencast.stop()\`, which writes the WebM that \`${AGENT_TOOL.SHOW_IMAGE}\` plays in your transcript; before each click, hover what you click and wait a moment, \`await target.hover()\` then \`await page.waitForTimeout(300)\`, so the pointer has glided there when the press lands; keep it to the steps that matter, under 4 MB.`;
 }
 
 /**
@@ -672,6 +678,7 @@ function buildWords(
   const branch = branchWords(startBranch);
   const pullRequest = memberToken ? PULL_REQUEST_WORDS.rest : PULL_REQUEST_WORDS.cli;
   const checks = memberToken ? tools.checks.rest : tools.checks.readable;
+
   return {
     branch: `Work on a branch named \`${CODER.BRANCH_PREFIX}<slug>\`, ${branch.cut}${PULL_REQUEST_BRANCH_WORDS}`,
     authorship: authorshipRule(authorship),
@@ -688,48 +695,6 @@ function buildWords(
   };
 }
 
-/** A repository an agent works in beside its own, as its instructions name it: `owner/name`, where it is checked out, and the branch its checkout is cloned at, null for its default branch. */
-export interface ExtraCheckout {
-  readonly repository: string;
-  readonly path: string;
-  readonly branch: string | null;
-}
-
-/**
- * What an agent that works in other repositories beside its own is told of
- * them, after its own checkout: each by name, where it stands, and its
- * branch, read as its own repository is, and for an agent that builds, how
- * it opens a pull request in each, naming the repository, which is tracked
- * as its own is; nothing for an agent in one repository, whose words are
- * then the text they always were, which the prompt cache depends on.
- */
-function extraCheckoutsWords(extras: readonly ExtraCheckout[], builds: boolean): string {
-  if (extras.length === 0) return "";
-  const listed = extras
-    .map(
-      (extra) =>
-        `- \`${extra.repository}\` at \`${extra.path}\`, ${extra.branch === null ? "on its default branch" : `on \`${extra.branch}\``}`,
-    )
-    .join("\n");
-  const reading =
-    "Read each one's `AGENTS.md` and `CLAUDE.md` before you change it, and run its own checks.";
-  const publishing = builds
-    ? ` Commit in each on a branch of your own cut from the branch it is checked out on, push it from that repository's folder, and open its pull request with \`${AGENT_TOOL.OPEN_PULL_REQUEST}\` naming that repository as \`repository\`; it merges into the branch the repository is checked out on unless you name another \`base\`. Its reviews, comments, and checks reach you as your own pull request's do, and the task waits on every pull request you open. Name each pull request in the others' descriptions and in your final message.`
-    : "";
-  return `
-
-You work in other repositories beside it too, each checked out whole in a folder of its own and reached by the same credential:
-${listed}
-
-${reading}${publishing}`;
-}
-
-/** What the step that opens a pull request adds for an agent that works in other repositories beside its own: to name the repository on every call; nothing for an agent in one, whose step is then the text it always was. */
-function extrasPublishWords(extras: readonly ExtraCheckout[], repository: string): string {
-  if (extras.length === 0) return "";
-  return ` You work in several repositories, so every \`${AGENT_TOOL.OPEN_PULL_REQUEST}\` call names the one it opens in as \`repository\`, \`${repository}\` for this checkout's.`;
-}
-
 /** Where an agent with a repository works: its checkout, its branch, its commits, its pull request, and its checks. */
 function repositoryWords(
   tools: ToolWords,
@@ -739,15 +704,15 @@ function repositoryWords(
   startBranch: string | null,
   machine: CoderMachine,
   standing: AgentStanding,
-  extras: readonly ExtraCheckout[],
 ): WorkWords {
   const branch = branchWords(startBranch);
+
   return {
     work: `You are ${PRODUCT_NAME}'s agent. Your job is to ${words.job}, in the GitHub repository \`${repository}\`, and to decide whether the result is worth publishing as a pull request.
 
 ## The checkout
 
-The repository is checked out at \`${machine.checkoutPath}\`, ${branch.checkout}. Work there. ${tools.checkout} ${checkoutReachWords(machine, standing)}${extraCheckoutsWords(extras, true)}
+The repository is checked out at \`${machine.checkoutPath}\`, ${branch.checkout}. Work there. ${tools.checkout} ${checkoutReachWords(machine, standing)}
 
 ## How to work
 
@@ -757,7 +722,7 @@ The repository is checked out at \`${machine.checkoutPath}\`, ${branch.checkout}
 4. ${build.authorship}
 5. ${build.change}
 6. ${build.check}
-7. ${build.publish}${extrasPublishWords(extras, repository)} Once it is ready for the developer to review, post it in a thread, as the threads section below says.
+7. ${build.publish} Once it is ready for the developer to review, post it in a thread, as the threads section below says.
    ${build.writeUp}
 8. ${build.ci}
 
@@ -787,6 +752,7 @@ function sandboxSection(tools: ToolWords, machine: CoderMachine, standing: Agent
 
 You work in a folder of your own with no repository in it. ${DEVICE_DIRECT_WORDS} ${tools.sandbox}`;
   }
+
   return `## Your sandbox
 
 You have a sandbox of your own, with no repository in it, which opens the first time you use it. ${tools.sandbox} No GitHub credential is set in it, so never try to sign in. ${SANDBOX_SETUP_WORDS}${runOnMacWords(standing)}`;
@@ -902,7 +868,7 @@ End every turn by calling \`${AGENT_TOOL.END_TURN}\` last, and write nothing aft
  * a task's link or `read_task` hands it or what it names
  * (`PLANLESS_TASK_PLACE_WORDS`, `namingWords`). The repository and the
  * machine still word what is no tool's: the checkout, its CI, the commits,
- * the other checkouts, and a local agent's folders.
+ * and a local agent's folders.
  */
 export function coderInstructions(
   repository: string | null,
@@ -914,7 +880,6 @@ export function coderInstructions(
   memberToken = false,
   harness: CoderHarness = CODER_HARNESS.CLAUDE_CODE,
   machine: CoderMachine = SANDBOX_MACHINE,
-  extras: readonly ExtraCheckout[] = [],
   workspace: string = EXAMPLE_WORKSPACE,
 ): string {
   const words = BRIEF_WORDS[brief];
@@ -924,23 +889,29 @@ export function coderInstructions(
   const task = describes ? onTask : { ...onTask, ...PLANLESS_TASK_PLACE_WORDS };
   // Note that an agent offered no description edits writes no description, so its write-up goes to a page.
   const planTask = describes ? ownTask : null;
+
   const build =
     repository === null || !offers(standing, AGENT_TOOL.OPEN_PULL_REQUEST)
       ? null
       : buildWords(tools, words, brief, planTask, authorship, startBranch, memberToken, machine);
+
   const agent =
     repository === null || build === null
       ? sandboxWords(tools, words, brief, planTask, machine, standing)
-      : repositoryWords(tools, repository, words, build, startBranch, machine, standing, extras);
+      : repositoryWords(tools, repository, words, build, startBranch, machine, standing);
+
   const place = { ...task, ...agent };
+
   const editing = describes
     ? editDescriptionTold(
         brief,
         build === null ? EDIT_DESCRIPTION_WORDS.repositoryless : EDIT_DESCRIPTION_WORDS.builder,
       )
     : NOT_TOLD_EDIT_DESCRIPTION;
+
   const taskRead = describes ? ", its description included," : ",";
   const sections = CODER_SECTION_WORDS;
+
   return `${place.work}${tools.todos}
 
 ${place.search}${place.skills}${place.links}${place.link} Older messages write the same things in an app-only scheme, as \`<scheme>://file/<path>\`${place.olderLinks}. Write the name rather than an app-only link, such as a \`mention://\` one, anywhere outside ${PRODUCT_NAME}, such as a commit or a pull request, where it leads nowhere; a GitHub or ${LINK_HOME.HOST} link may be written as it is.
@@ -955,7 +926,7 @@ Where another agent started you, as your first message says, your final message 
 
 One thread per thing you need; \`${INBOX_TOOLS.POST.name}\`'s own words say how to write its posts and the asks they end with. Decide small things yourself.
 
-Keep your threads current rather than repeating them: ask again under a key only when what you need from it has changed, never to remind, and withdraw an ask with \`${INBOX_TOOLS.WITHDRAW.name}\` as soon as you no longer need it, or once you have checked that a to-do is done. Never restate an open ask in a message, at the end of a turn or anywhere else: the developer sees it in its thread. Read your threads with \`${INBOX_TOOLS.READ.name}\` rather than ask again when you are unsure what stands. An answer to any ask you post reaches you as a message whose first line starts "${INBOX_ANSWER_LEAD}" and names the key. Replying never answers: the developer may just reply, and any member may write on a thread at any point, or start a new one with you under a key of its own, which reaches you as a message whose first line starts "${INBOX_MESSAGE_LEAD}" and names the key. Where such a message, or an answer carrying their words, asks something of you, a question or a request, reply on that thread with \`${INBOX_TOOLS.POST.name}\` under its key, asking nothing unless what you need from them changed: answer a question once you can, and once a request is done, say in a line or two what you did, or why you did not, since a request you act on without a word leaves them asking again. A message that only tells you something, agrees, or thanks you needs no reply, nor does an answer given with its buttons alone. Never post on a thread to say how the work is going, such as that you started on it, that it is under way, that its checks are running, or that its pull request is almost merged: a thread hears from you again only to answer what was asked on it, when something on it is ready for their eyes, or when you need something new of them. They read your reply on the thread they wrote on, not in your transcript, so never answer them in your message alone: your message may say in a line that you replied on the thread, and nothing they should read stands only there.${editing.decided} Carry on with whatever does not depend on an answer; where nothing does, end your turn saying in one line that you are waiting on a thread.${pagesWords(machine.sharedFiles)}${place.comments}
+Keep your threads current rather than repeating them: ask again under a key only when what you need from it has changed, never to remind, and withdraw an ask with \`${INBOX_TOOLS.WITHDRAW.name}\` as soon as you no longer need it, or once you have checked that a to-do is done. Never restate an open ask in a message, at the end of a turn or anywhere else: the developer sees it in its thread. List your threads with \`${INBOX_TOOLS.LIST.name}\`, and read one whole with \`${INBOX_TOOLS.READ.name}\`, rather than ask again when you are unsure what stands. An answer to any ask you post reaches you as a message whose first line starts "${INBOX_ANSWER_LEAD}" and names the key. Replying never answers: the developer may just reply, and any member may write on a thread at any point, or start a new one with you under a key of its own, which reaches you as a message whose first line starts "${INBOX_MESSAGE_LEAD}" and names the key. Where such a message, or an answer carrying their words, asks something of you, a question or a request, reply on that thread with \`${INBOX_TOOLS.POST.name}\` under its key, asking nothing unless what you need from them changed: answer a question once you can, and once a request is done, say in a line or two what you did, or why you did not, since a request you act on without a word leaves them asking again. A message that only tells you something, agrees, or thanks you needs no reply, nor does an answer given with its buttons alone. Never post on a thread to say how the work is going, such as that you started on it, that it is under way, that its checks are running, or that its pull request is almost merged: a thread hears from you again only to answer what was asked on it, when something on it is ready for their eyes, or when you need something new of them. They read your reply on the thread they wrote on, not in your transcript, so never answer them in your message alone: your message may say in a line that you replied on the thread, and nothing they should read stands only there.${editing.decided} Carry on with whatever does not depend on an answer; where nothing does, end your turn saying in one line that you are waiting on a thread.${pagesWords(machine.sharedFiles)}${place.comments}
 
 ## Handing work to a worker
 
@@ -995,8 +966,6 @@ export interface AgentInstructionsContext {
   /** Where it stands against the gates of our tools (`../tool-catalog/gates.ts`), which decide the tools' words it is told. */
   readonly standing: AgentStanding;
   readonly harness: CoderHarness;
-  /** The repositories it works in beside its own, where each is checked out; none for an agent in one repository or none. */
-  readonly extraRepositories?: readonly ExtraCheckout[] | undefined;
   /** Where the agent's machine keeps its checkout and the files the service reads back; where every sandbox keeps them, where unsaid. */
   readonly place?:
     | {
@@ -1023,6 +992,7 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
       context.workspace,
     ),
   };
+
   return coderInstructions(
     agent.repository,
     agentBriefOf(agent),
@@ -1037,7 +1007,6 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
       checkoutPath: context.place?.checkoutPath ?? SANDBOX_MACHINE.checkoutPath,
       sharedFiles: context.place?.sharedFiles ?? SANDBOX_MACHINE.sharedFiles,
     },
-    context.extraRepositories,
     context.workspace,
   );
 }

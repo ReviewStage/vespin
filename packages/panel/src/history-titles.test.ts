@@ -28,6 +28,7 @@ function onTask(
   side: (typeof SIDE_PANEL_TAB)[keyof typeof SIDE_PANEL_TAB] | FileStripTab | undefined,
 ) {
   const base = tasksControl();
+
   return tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     tasks: [TASK],
@@ -70,6 +71,7 @@ test("a task's step listed later on its Overview is named by the task and its pa
     column: MAIN_TAB.OVERVIEW,
     side: SIDE_PANEL_TAB.COMMENTS,
   } as const;
+
   assert.deepEqual(liveStepTitle(step, undefined, tasksControl({ tasks: [TASK] }), undefined), {
     label: "Auth refactor",
     detail: "Comments",

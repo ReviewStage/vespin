@@ -65,6 +65,7 @@ const readAsk = readEither(liveSocketAskSchema);
 function askOf(frame: VoiceFrame): LiveSocketAsk | undefined {
   if (!("text" in frame)) return undefined;
   const read = readAsk(jsonOf(frame.text));
+
   return Result.isSuccess(read) ? read.success : undefined;
 }
 
@@ -74,10 +75,13 @@ function askHeaders(credential: RelayCredential, named: URLSearchParams): Header
     "bearer" in credential
       ? new Headers({ [CREDENTIAL_HEADER.AUTHORIZATION]: credential.bearer })
       : new Headers(credential.page);
+
   for (const header of Object.values(CLIENT_HEADER)) {
     const value = named.get(header);
+
     if (value !== null) headers.set(header, value);
   }
+
   return headers;
 }
 
@@ -111,7 +115,9 @@ function answerAsk(
       headers,
       signal,
     });
+
     const response = await answerer.fetch(request, answerer.services);
+
     return { id: ask.id, status: response.status, body: await response.text() };
   }).pipe(
     Effect.orElseSucceed(() => ({
@@ -137,13 +143,17 @@ export function answerLiveSocket(
   return Effect.gen(function* () {
     const asks = yield* FiberSet.make<void>();
     const headers = askHeaders(credential, named);
+
     while (true) {
       const frame = yield* socket.next;
+
       if (Option.isNone(frame)) return;
       const ask = askOf(frame.value);
+
       if (ask === undefined || (yield* FiberSet.size(asks)) >= MAXIMUM_OPEN_ASKS) {
         return yield* socket.close(SOCKET_CLOSE_CODE.POLICY_VIOLATION);
       }
+
       yield* FiberSet.run(
         asks,
         Effect.flatMap(answerAsk(ask, headers, answerer), (answer) =>
@@ -161,8 +171,10 @@ function admitLiveSocketUpgrade(
   ownOrigins: ReadonlySet<string>,
 ): { readonly status: number } | AdmittedUpgrade {
   const address = new URL(url ?? "/", "http://localhost");
+
   if (address.pathname !== LIVE_SOCKET.PATH) return { status: RELAY_UPGRADE_STATUS.NOT_FOUND };
   const credential = relayCredential(headers, ownOrigins);
+
   return "status" in credential ? credential : { credential, named: address.searchParams };
 }
 
@@ -200,6 +212,7 @@ export function standLiveSocket(
       services: yield* Effect.context<WebServices>(),
       origin: options.origin,
     };
+
     yield* standRelay({
       server: options.server,
       sockets: { maxPayload: MAXIMUM_FRAME_BYTES },

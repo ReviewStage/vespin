@@ -43,10 +43,12 @@ function draw(failure: ShownFailure | undefined): void {
   if (root === undefined) {
     root = createRoot(document.body.appendChild(document.createElement("div")));
   }
+
   const element =
     failure === undefined
       ? null
       : createElement(ErrorState, { failure: failureShown(failure), children: LINE });
+
   act(() => root?.render(withQueryClient(createElement("div", null, element))));
 }
 
@@ -65,16 +67,19 @@ test("a failure drawn in place is reported once as it stands, again for another,
   const copied: string[] = [];
   fakeAppPlatform(copyingInto(copied));
   const lines: string[] = [];
+
   const recording: ShownFailureSentry = {
     captureException: () => "event-fixture",
     logger: { warn: (line) => lines.push(line), error: (line) => lines.push(line) },
     getActiveSpan: () => undefined,
     getCurrentScope: () => ({ getPropagationContext: () => ({ traceId: "trace-fixture" }) }),
   };
+
   const uninstall = installShownFailureReporter(
     (report) => sendShownFailure(recording, report),
     testQueryClientNow(),
   );
+
   try {
     draw(unreadTasks());
     draw(unreadTasks());
@@ -93,6 +98,7 @@ test("a failure drawn in place is reported once as it stands, again for another,
     assert.equal(lines.length, 3, "come back after the lapse, it is reported again");
 
     const copy = document.querySelector<HTMLButtonElement>('button[aria-label="Copy details"]');
+
     if (copy === null) throw new Error("no Copy details");
     await act(async () => copy.click());
     assert.deepEqual(copied, [

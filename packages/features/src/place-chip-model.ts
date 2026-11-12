@@ -56,6 +56,7 @@ const KIND_NAME = {
 function taskOf(place: LinkDestination): string | undefined {
   if (place.kind === LINK_DESTINATION.TASK || place.kind === LINK_DESTINATION.VERSION)
     return undefined;
+
   return "planId" in place ? place.planId : undefined;
 }
 
@@ -77,5 +78,6 @@ export function placeChipLook(
   const untitled = place.kind === LINK_DESTINATION.TASK && held === UNTITLED_TASK_NAME;
   const live = named.live && !untitled;
   const name = (live ? (held ?? label) : (label ?? held)) ?? KIND_NAME[place.kind];
+
   return { name, under };
 }

@@ -42,6 +42,7 @@ const REQUIRED = { accountRequired: true } as const;
 /** Main's document for `account` signed in, where the window needs an account. */
 function signedIn(account: { id: string; email: string; name: string }): AppStateSnapshot {
   const snapshot = signedInAs(account);
+
   return { ...snapshot, run: { ...snapshot.run, ...REQUIRED } };
 }
 
@@ -111,6 +112,7 @@ beforeEach(() => {
   listeners = new Set();
   window.localStorage.clear();
   fakeAppPlatform({ ...QUIET_PANEL, applySessionReplay: () => undefined });
+
   const quiet = Object.fromEntries([
     ...Object.keys(PUSH_METHOD).map((method) => [method, () => () => undefined]),
     ...bridgeEntries().map(([method, entry]) => [
@@ -118,12 +120,14 @@ beforeEach(() => {
       entry.kind === "invoke" ? () => Promise.resolve(undefined) : () => undefined,
     ]),
   ]);
+
   fakeAppBridge({
     ...quiet,
     requestAppState: () => Promise.resolve(structuredClone(ADA)),
     onAppState: (heard: (delivery: AppStateDelivery) => void) => {
       const listener = (snapshot: AppStateSnapshot) => heard(deliveryOf(snapshot));
       listeners.add(listener);
+
       return () => listeners.delete(listener);
     },
   } satisfies Partial<AppBridge>);
@@ -163,7 +167,9 @@ function button(name: string): HTMLButtonElement {
   const found = [...document.querySelectorAll("button")].find(
     (each) => each.textContent?.trim() === name,
   );
+
   assert.ok(found, `${name} stands`);
+
   return found;
 }
 
@@ -173,6 +179,7 @@ test("signed out from Settings, a fresh account that finishes setup lands on Hom
     ...GRACE,
     settings: appSettingsWire(settingsView({ setupPlace: '{"audience":"me","at":4}' })),
   };
+
   // Note that the document is in the client before the window draws, as the root's `ensureQueryData` leaves it.
   await writeHandedAppState();
   const held = windowRouter();

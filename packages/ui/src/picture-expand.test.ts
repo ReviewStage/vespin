@@ -53,12 +53,15 @@ beforeEach(() => {
         : this.classList.contains("ui-zoom-image")
           ? RECT.PICTURE
           : { left: 0, top: 0, width: innerWidth, height: innerHeight };
+
     return DOMRect.fromRect({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
   });
   HTMLElement.prototype.animate = function (this: HTMLElement, frames: Keyframe[] | null) {
     const animation = { onfinish: null, cancel: () => undefined };
     played.push({ element: this, frames: frames ?? [], animation });
-    return animation as unknown as Animation;
+
+    // SAFETY: the expand reads only `onfinish` and `cancel` of the animation it starts.
+    return animation as Animation;
   };
 });
 
@@ -76,6 +79,7 @@ afterEach(() => {
 function Viewer({ onClosed }: { onClosed: () => void }): React.JSX.Element {
   const titleId = useId();
   const expand = usePictureExpand(true);
+
   return createElement(Dialog, {
     open: true,
     size: DIALOG_SIZE.MEDIA,
@@ -97,6 +101,7 @@ function Viewer({ onClosed }: { onClosed: () => void }): React.JSX.Element {
 function Page({ closed }: { closed: string[] }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [tiled, setTiled] = useState(true);
+
   return createElement(
     "div",
     null,
@@ -127,7 +132,9 @@ function mountPage(closed: string[]) {
   roots.push(root);
   act(() => root.render(createElement(Page, { closed })));
   const tile = container.querySelector<HTMLButtonElement>(".ui-picture-tile");
+
   if (tile === null) throw new Error("the tile is drawn");
+
   return {
     tile,
     card: () => document.querySelector<HTMLElement>(".ui-dialog"),
@@ -135,6 +142,7 @@ function mountPage(closed: string[]) {
       const button = [...container.querySelectorAll("button")].find(
         (each) => each.textContent === "Withdraw",
       );
+
       act(() => button?.click());
     },
     escape: () => {

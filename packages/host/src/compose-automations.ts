@@ -171,6 +171,7 @@ class WebhookSecretHashFailed extends Data.TaggedError("WebhookSecretHashFailed"
  */
 function handing(standing: Map<string, TxWait>, id: string) {
   let handed: TxWait | undefined;
+
   return {
     onTxWait: (wait: TxWait | undefined) => {
       if (wait !== undefined) standing.set(id, wait);
@@ -196,15 +197,18 @@ function automationFollows(
   lists: Held["lists"],
 ): AutomationFollows {
   const { kernel, client } = dependencies;
+
   /** A live read for the account the follow started for, or refused as signed out where it started for nobody. */
   const sealed = <Answer>(
     userId: string | undefined,
     read: (userId: string) => Effect.Effect<Answer, never, HttpClient.HttpClient>,
   ) => (userId === undefined ? Effect.succeed(LIVE_SIGNED_OUT) : asked(read(userId)));
+
   return {
     [AUTOMATION_FOLLOW.WORKSPACE]: (workspaceId, answers) => {
       const userId = dependencies.accountId();
       const wait = handing(waits[AUTOMATION_FOLLOW.WORKSPACE], workspaceId);
+
       return Effect.scoped(
         Effect.gen(function* () {
           const list = yield* automationListCollections({
@@ -214,9 +218,11 @@ function automationFollows(
             serviceBaseUrl: kernel.hostedServiceBaseUrl,
             txWait: wait.handed,
           });
+
           lists.set(workspaceId, list);
           // Note that the automations kept on disk are drawn as the service last answered them, until the read answers anew.
           const kept = dependencies.entities?.()?.storedIn(KEPT_READ.AUTOMATIONS, workspaceId);
+
           if (kept !== undefined) yield* list.answer(kept);
           // Note that a follow lets go only of its own list, since one started over may stand first.
           yield* Effect.addFinalizer(() =>
@@ -251,6 +257,7 @@ function automationFollows(
     [AUTOMATION_FOLLOW.RUNS]: (automationId, answers) => {
       const userId = dependencies.accountId();
       const wait = handing(waits[AUTOMATION_FOLLOW.RUNS], automationId);
+
       return Effect.scoped(
         Effect.flatMap(
           historyAtEdges(automationRunsOfLiveRows, automationRunsGraceEdge, answers.answered),
@@ -274,6 +281,7 @@ function automationFollows(
     [AUTOMATION_FOLLOW.WORKSPACE_RUNS]: (workspaceId, answers) => {
       const userId = dependencies.accountId();
       const wait = handing(waits[AUTOMATION_FOLLOW.WORKSPACE_RUNS], workspaceId);
+
       return Effect.scoped(
         Effect.flatMap(
           historyAtEdges(
@@ -308,18 +316,22 @@ export function composeAutomations(
     const http = yield* HttpClient.HttpClient;
     const { kernel, account } = dependencies;
     const gate = () => kernel.runMode.sendsNetwork && account.capabilitiesActive();
+
     const asked: Asked = (call) =>
       gate()
         ? Effect.provideService(call, HttpClient.HttpClient, http)
         : Effect.succeed(UNANSWERED);
+
     const waits: Waits = {
       [AUTOMATION_FOLLOW.WORKSPACE]: new Map(),
       [AUTOMATION_FOLLOW.RUNS]: new Map(),
       [AUTOMATION_FOLLOW.WORKSPACE_RUNS]: new Map(),
     };
+
     const lists: Held["lists"] = new Map();
     const follows = automationFollows(dependencies, asked, waits, lists);
     const follow = AUTOMATION_FOLLOWS.AUTOMATIONS_FOLLOW;
+
     // Note that each held read is keyed by one id, its slice laid whole as it moves.
     const slices: Held["slices"] = yield* Effect.all({
       [AUTOMATION_FOLLOW.WORKSPACE]: heldSlice<typeof LIVE_READ.AUTOMATIONS, string>({
@@ -347,6 +359,7 @@ export function composeAutomations(
         tell: liveTold(kernel.emit, follow, LIVE_READ.AUTOMATION_WORKSPACE_RUNS),
       }),
     });
+
     return composed(dependencies, gate, asked, { slices, waits, lists });
   });
 }
@@ -365,6 +378,7 @@ function composed(
     for (const [workspaceId, list] of lists) {
       if (list.holds(automationId)) return { workspaceId, list };
     }
+
     return undefined;
   };
 
@@ -377,6 +391,7 @@ function composed(
   const confirmed = (txid: string | undefined, on: readonly (TxWait | undefined)[]) =>
     Effect.suspend(() => {
       const standing = on.filter((wait): wait is TxWait => wait !== undefined);
+
       return txid === undefined
         ? Effect.void
         : Effect.asVoid(
@@ -397,6 +412,7 @@ function composed(
    */
   const waitsShowing = (automationId: string, workspaceId: string | undefined, ran: boolean) => {
     const listed = workspaceId ?? listShowing(automationId)?.workspaceId;
+
     return [
       listed === undefined ? undefined : waits[AUTOMATION_FOLLOW.WORKSPACE].get(listed),
       ran ? waits[AUTOMATION_FOLLOW.RUNS].get(automationId) : undefined,
@@ -483,6 +499,7 @@ function composed(
         Effect.sync(() => {
           const request = { ...asked, id: asked.id ?? kernel.createId() };
           const userId = dependencies.accountId();
+
           // Note that a create behind a closed gate, or for nobody, draws nothing, since it never reaches the service.
           return {
             request,
@@ -498,10 +515,12 @@ function composed(
     AUTOMATIONS_RUN: (run) =>
       Effect.gen(function* () {
         const answer = yield* asked(client.runNow(run));
+
         // A run stands in its automation's held runs, in its workspace's held runs, and as the last run on a held list; with none of them held it answers at once.
         if ("run" in answer) {
           yield* confirmed(answer.txid, waitsShowing(run.automationId, undefined, true));
         }
+
         return answer;
       }),
     // A webhook trigger's secret is minted again here, its hash sent to the service, and the secret answered once to the window that asked (root AGENTS.md's carve-out).
@@ -513,18 +532,22 @@ function composed(
         const secret = mintedWebhookSecret();
         // A secret that cannot be hashed is never sent, and the call is answered as unanswered.
         const hashed = yield* Effect.result(webhookSecretHash(secret));
+
         if (Result.isFailure(hashed)) return UNANSWERED;
+
         const replaced = yield* asked(
           client.replaceWebhookSecret({
             automationId: named.automationId,
             webhookSecretHash: hashed.success,
           }),
         );
+
         if ("failure" in replaced) return replaced;
         yield* confirmed(
           replaced.txid,
           waitsShowing(replaced.automation.id, replaced.automation.workspaceId, false),
         );
+
         return { automation: replaced.automation, webhookSecret: secret };
       }),
     // What a key names is held for the windows while an Automations page draws it, its slice by its kind.

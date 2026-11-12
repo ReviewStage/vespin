@@ -50,13 +50,16 @@ function standing(refused?: (typeof SANDBOX_CALL)[keyof typeof SANDBOX_CALL]) {
   const sandbox = memorySandbox({
     fail: (call) => (call === refused ? new SandboxUnavailable({ call }) : undefined),
   });
+
   sandbox.state.drives.set("base", { name: "base", forkedFrom: undefined });
+
   const run = <A, E>(call: (sandboxes: SessionSandboxes["Service"]) => Effect.Effect<A, E>) =>
     Effect.flatMap(SessionSandboxes, call).pipe(
       Effect.provide(sessionSandboxesLayer),
       Effect.provide(sandbox.layer),
       Effect.provide(getTestDB()),
     );
+
   return Effect.gen(function* () {
     yield* sandbox.service.create({
       name: "agent-sandbox-drive",
@@ -70,6 +73,7 @@ function standing(refused?: (typeof SANDBOX_CALL)[keyof typeof SANDBOX_CALL]) {
       tags: { sessionId: SESSION },
       status: SANDBOX_STATUS.STOPPED,
     });
+
     return { sandbox, run };
   });
 }
@@ -106,17 +110,20 @@ function archiving(exitCode: number | null) {
       command.exit = exitCode;
     },
   });
+
   sandbox.stand({
     name: "agent-sandbox",
     tags: { sessionId: SESSION },
     status: SANDBOX_STATUS.STOPPED,
   });
+
   const archived = Effect.flatMap(SessionSandboxes, (sandboxes) =>
     sandboxes.archiveFor(SESSION, {
       script: "docker compose down",
       environment: { DATABASE_URL: "postgres://fixture" },
     }),
   ).pipe(Effect.provide(sessionSandboxesLayer), Effect.provide(sandbox.layer));
+
   return { sandbox, archived };
 }
 
@@ -169,6 +176,7 @@ const openedSandbox = Effect.gen(function* () {
   const sandbox = memorySandbox();
   sandbox.stand({ name, tags: { sessionId: SESSION }, status: SANDBOX_STATUS.STOPPED });
   yield* recordedSandboxOpen(agentId, name);
+
   return { name, sandbox, userId, workspaceId, agentId };
 });
 
@@ -193,6 +201,7 @@ const swept = () =>
         publish: (name) => Effect.sync(() => void published.push(name)),
       }),
     );
+
     return published;
   });
 
@@ -239,12 +248,14 @@ it.layer(getTestDB())("an unused sandbox's release", (it) => {
       const { name, sandbox, userId, workspaceId, agentId } = yield* openedSandbox;
       yield* TestClock.adjust(SANDBOX_RELEASE.UNUSED_FOR);
       const now = new Date(yield* Clock.currentTimeMillis);
+
       const [agent] = yield* Effect.flatMap(Database, (db) =>
         db
           .select({ conversationId: agentTable.conversationId })
           .from(agentTable)
           .where(eq(agentTable.id, agentId)),
       );
+
       assert.ok(agent !== undefined);
       const { conversationId } = agent;
       yield* claimRuntimeSession({ userId, conversationId }, `wrun_${randomUUID()}`, now);
@@ -258,6 +269,7 @@ it.layer(getTestDB())("an unused sandbox's release", (it) => {
       yield* archiveAgent(userId, agentId, true);
       // The script signals once it runs, and runs on until the test ends.
       const running = yield* Deferred.make<void>();
+
       const scriptRunning = Layer.succeed(SessionSandboxes, {
         deleteFor: () => Effect.die("an archive deletes no sandbox"),
         archiveFor: () => Effect.andThen(Deferred.succeed(running, undefined), Effect.never),

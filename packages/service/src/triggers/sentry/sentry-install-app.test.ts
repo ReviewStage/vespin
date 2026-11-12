@@ -55,6 +55,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -72,27 +73,35 @@ interface SentryCall {
  */
 function sentryApi(codes: ReadonlyMap<string, string>) {
   const heard: SentryCall[] = [];
+
   const layer = fakeHttpClientLayer(async (url, init) => {
     const { pathname } = new URL(url);
     const method = init.method ?? "GET";
     heard.push({ method, path: pathname, bearer: new Headers(init.headers).get("authorization") });
+
     const [, installationId, rest] =
       /^\/api\/0\/sentry-app-installations\/([^/]+)\/(.*)$/u.exec(pathname) ?? [];
+
     if (installationId === undefined) return Response.json({}, { status: 404 });
+
     if (rest === "authorizations/" && method === "POST") {
       // SAFETY: the group sends one JSON body per exchange.
       const body = JSON.parse(await new Response(init.body).text()) as Record<string, string>;
+
       const granted =
         body.client_id === SETTINGS.clientId &&
         body.client_secret === Redacted.value(SETTINGS.clientSecret) &&
         codes.get(installationId) === body.code;
+
       return granted
         ? Response.json({ token: `token-${installationId}` })
         : Response.json({ detail: "invalid grant" }, { status: 401 });
     }
+
     if (rest === "" && method === "PUT") {
       const verified =
         new Headers(init.headers).get("authorization") === `Bearer token-${installationId}`;
+
       return verified
         ? Response.json({
             uuid: installationId,
@@ -101,8 +110,10 @@ function sentryApi(codes: ReadonlyMap<string, string>) {
           })
         : Response.json({ detail: "unauthorized" }, { status: 401 });
     }
+
     return Response.json({}, { status: 404 });
   });
+
   return { layer, heard };
 }
 
@@ -111,6 +122,7 @@ const standing = (settings: SentryAppSettings | undefined) =>
   Effect.gen(function* () {
     const codes = new Map<string, string>();
     const sentry = sentryApi(codes);
+
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
       Layer.succeed(Database, yield* Database),
@@ -118,12 +130,15 @@ const standing = (settings: SentryAppSettings | undefined) =>
       Layer.succeed(SentryApp, sentryAppService(settings, ["SENTRY_APP_SLUG"])),
       sentry.layer,
     );
+
     const app = HttpRouter.toWebHandler(
       sentryInstallApp().pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
+
     yield* Effect.addFinalizer(() => Effect.promise(() => app.dispose()));
     const context = yield* Effect.context<never>().pipe(Effect.provide(services));
+
     const procedures = hostedFetch({
       workspaceSentry: sentryInstallProcedures({
         resolveUserId: (incoming) =>
@@ -132,8 +147,10 @@ const standing = (settings: SentryAppSettings | undefined) =>
           ),
       }),
     });
+
     // SAFETY: the procedures yield the database, the Sentry integration and the HTTP client alone, which is all a test provides of the web runtime's services.
     const webServices = context as Context.Context<WebServices>;
+
     const send = (path: string, userId: string, body?: WireBoundaryInput) =>
       Effect.gen(function* () {
         const response = yield* Effect.promise(() =>
@@ -149,10 +166,13 @@ const standing = (settings: SentryAppSettings | undefined) =>
             webServices,
           ),
         );
+
         // SAFETY: the router answers JSON; the test compares it as the wire value it is.
         const answer = (yield* Effect.promise(() => response.json())) as WireBoundaryInput;
+
         return { status: response.status, body: answer };
       });
+
     /** An install begun by the account; the state Sentry's address carries, or the refusal. */
     const install = (userId: string, workspaceId: string) =>
       Effect.map(
@@ -160,6 +180,7 @@ const standing = (settings: SentryAppSettings | undefined) =>
         (answer) => {
           // SAFETY: an install answers `{ url }`, or a refusal that carries none.
           const { url } = answer.body as { url?: string };
+
           return {
             ...answer,
             url,
@@ -167,6 +188,7 @@ const standing = (settings: SentryAppSettings | undefined) =>
           };
         },
       );
+
     /** Sentry returning the browser from installing on an organization; where it was sent on. */
     const returned = (
       state: string,
@@ -175,18 +197,22 @@ const standing = (settings: SentryAppSettings | undefined) =>
     ) =>
       Effect.gen(function* () {
         const query = new URLSearchParams({ code, installationId, orgSlug: ORG_SLUG, state });
+
         const response = yield* Effect.promise(() =>
           app.handler(
             new Request(new URL(`${HOSTED_SERVICE_PATH.SENTRY_INSTALLED}?${query}`, ORIGIN)),
           ),
         );
+
         return response.headers.get("location");
       });
+
     return {
       sentry,
       /** Sentry minting the code an install of this installation returns with. */
       installed: (installationId: string) => {
         codes.set(installationId, `code-${installationId}`);
+
         return installationId;
       },
       install,
@@ -213,6 +239,7 @@ const team = Effect.gen(function* () {
   const workspaceId = yield* openWorkspace(owner);
   yield* joinWorkspace(workspaceId, admin, WORKSPACE_ROLE.ADMIN);
   yield* joinWorkspace(workspaceId, member, WORKSPACE_ROLE.MEMBER);
+
   return { owner, admin, member, stranger, workspaceId };
 });
 
@@ -233,10 +260,12 @@ it.layer(getTestDB())("a workspace's Sentry installation", (it) => {
         assert.ok(
           begun.url?.startsWith("https://sentry.io/sentry-apps/luke/external-install/?state="),
         );
+
         const landing = yield* group.returned(
           begun.state ?? assert.fail("no state"),
           installationId,
         );
+
         const read = yield* group.read(member, workspaceId);
 
         assert.equal(landing, landed(INTEGRATION_LANDING_STATUS.CONNECTED));
@@ -396,9 +425,11 @@ it.layer(getTestDB())("a workspace's Sentry installation", (it) => {
         assert.deepEqual(elsewhere.body, { error: HOSTED_API_ERROR.NOT_FOUND });
         // The disconnect answers the transaction it marked the installation in, which a desktop holding the workspace's integrations waits for.
         assert.equal(disconnected.status, HOSTED_HTTP_STATUS.OK);
+
         const { txid, ...answered } = Schema.decodeUnknownSync(workspaceSentryAnswerSchema)(
           disconnected.body,
         );
+
         assert.deepEqual(answered, { configured: true, installations: [] });
         assert.ok(txid !== undefined, "the disconnect answered its transaction");
         assert.deepEqual(othersRead.body, {

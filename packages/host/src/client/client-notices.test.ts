@@ -53,6 +53,7 @@ function linked(
 ) {
   let focus: ((focused: boolean) => void) | undefined;
   let forward = 0;
+
   return Effect.gen(function* () {
     const state = new AppStateStore(initialAppState(RUN, false, []), yield* Effect.context());
     yield* linkClientNotices({
@@ -72,12 +73,14 @@ function linked(
       },
       onPanelFocusChanged: (listener) => {
         focus = listener;
+
         return () => {
           focus = undefined;
         };
       },
       report: (message) => reported.push(message),
     }).pipe(Effect.provide(SILENT_DOORS), Scope.provide(scope));
+
     return { focus: () => focus, state, forwarded: () => forward };
   });
 }
@@ -127,6 +130,7 @@ it.effect(
       const started = yield* Deferred.make<void>();
       const ended = yield* Deferred.make<void>();
       const scope = yield* Scope.make();
+
       // A read the host never answers, so only the scope's close can end it.
       const { focus } = yield* linked(
         scope,
@@ -149,9 +153,11 @@ it.effect(
 
 it.effect("a workspaces read that dies is reported, to Sentry as well, rather than lost", () => {
   const sentry = recordingReporter();
+
   return Effect.gen(function* () {
     const reported: string[] = [];
     const scope = yield* Scope.make();
+
     const { focus } = yield* linked(
       scope,
       () => Effect.die(new Error("the gateway went away")),
@@ -210,6 +216,7 @@ it.effect(
       const settled = Effect.repeat(Effect.yieldNow, { times: 20 });
       state.update({ tasks: { ...state.snapshot().tasks, ...listing(AGENT) } });
       yield* settled;
+
       const held = (...[worker, own]: readonly AgentStatus[]) => ({
         [AGENT.id]: {
           "call-7": transcriptAt(worker ?? AGENT_STATUS.RUNNING),
@@ -246,6 +253,7 @@ it.effect(
       const scope = yield* Scope.make();
       const { state } = yield* linked(scope, () => Effect.void, []);
       const settled = Effect.repeat(Effect.yieldNow, { times: 20 });
+
       const own = (read: AppHostRead<AppTranscript>) => ({
         [LIVE_READ.TRANSCRIPT]: { [AGENT.id]: { [OWN_TRANSCRIPT]: read } },
       });
@@ -284,11 +292,13 @@ it.effect(
       const { state } = yield* linked(scope, () => Effect.void, []);
       const settled = Effect.repeat(Effect.yieldNow, { times: 20 });
       const worker = { "call-7": transcriptAt(AGENT_STATUS.RUNNING) };
+
       const held = (own?: AppHostRead<AppTranscript>) => ({
         [LIVE_READ.TRANSCRIPT]: {
           [AGENT.id]: own === undefined ? worker : { ...worker, [OWN_TRANSCRIPT]: own },
         },
       });
+
       state.update({ tasks: { ...state.snapshot().tasks, ...listing(AGENT) } });
       yield* settled;
 

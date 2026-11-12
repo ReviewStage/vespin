@@ -136,7 +136,7 @@ import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { newTaskAction } from "../tasks/inbox-list.js";
 import { openTaskInTab } from "../tasks/task-menu-items.js";
-import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
+import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
 import { TaskKey } from "../tasks/task-standing.js";
 import { linkPressOf } from "../tasks/use-open-link.js";
@@ -256,7 +256,9 @@ const NONE_STANDING = "No tasks match this view";
 /** What the page stands: its read, or none of the workspace's tasks. */
 function boardState(tasks: TasksControl, empty: boolean): CollectionState {
   if (tasks.listFailed && empty) return COLLECTION_STATE.ERROR;
+
   if (!tasks.listRead && !tasks.listFailed) return COLLECTION_STATE.LOADING;
+
   return empty ? COLLECTION_STATE.EMPTY : COLLECTION_STATE.READY;
 }
 
@@ -419,9 +421,10 @@ const TaskBoardCard = memo(function TaskBoardCard({
   const unread = useMarkedUnread(task.id);
   const pictures = useRepositoryPictures();
   const renaming = useMutation(useTaskRename(tasks.drawnTasks));
-  const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_SHAPE));
+  const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_TERMS));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const drawn = (property: TaskProperty) => properties.includes(property);
+
   const actions = useTaskMenuItems(tasks, task.id, task.name, {
     rename: rename.begin,
     drawn: true,
@@ -433,6 +436,7 @@ const TaskBoardCard = memo(function TaskBoardCard({
     },
     opened,
   });
+
   const onOpen = () => onSelect(task.id);
   const setStanding = (standing: TaskStanding) => onStanding(task, standing);
   const press = useRef<HTMLButtonElement | null>(null);
@@ -440,11 +444,13 @@ const TaskBoardCard = memo(function TaskBoardCard({
   const nameId = useId();
   const key = task.number === undefined ? undefined : taskKey(workspaceName, task.number);
   const repository = task.repository === null ? undefined : repositoryLabel(task.repository, []);
+
   const own = {
     ...rowMenu("Task", actions.groups(), tasks.shown, true),
     footer: actions.footer,
     subject: taskSubject(task, repository, key),
   };
+
   const menu = useRowMenu(
     rename.editing
       ? undefined
@@ -453,7 +459,9 @@ const TaskBoardCard = memo(function TaskBoardCard({
         : chosenRowMenu(own.thing, chosen, tasks.shown),
     { disabled: actions.deletion.busy, opener: press, more: !coarse },
   );
+
   const endedByKey = useRefocusAfterEdit(rename.editing, press);
+
   return (
     <Card
       as={CARD_ELEMENT.LI}
@@ -658,6 +666,7 @@ function columnHead(head: TasksGroupHead, people: ColumnPeople): ColumnHead {
       words: TASK_STATUS_WORDS[head.status],
     };
   }
+
   if (head.kind === TASKS_GROUP.PRIORITY) {
     return {
       mark: (
@@ -668,6 +677,7 @@ function columnHead(head: TasksGroupHead, people: ColumnPeople): ColumnHead {
       words: TASK_PRIORITY_WORDS[head.priority],
     };
   }
+
   if (head.kind === TASKS_GROUP.ASSIGNEE) {
     return head.assigneeId === null
       ? { mark: <UnassignedMark size={ACTOR_SIZE.MARK} decorative />, words: NO_ASSIGNEE_WORDS }
@@ -677,14 +687,18 @@ function columnHead(head: TasksGroupHead, people: ColumnPeople): ColumnHead {
           masked: true,
         };
   }
+
   return { mark: null, words: "" };
 }
 
 /** The value a column stands for, which names it among the Board's columns: a status, a priority, or an assignee's account id, as its grouping is. */
 function columnValue(head: TasksGroupHead): string {
   if (head.kind === TASKS_GROUP.STATUS) return head.status;
+
   if (head.kind === TASKS_GROUP.PRIORITY) return head.priority;
+
   if (head.kind === TASKS_GROUP.ASSIGNEE) return head.assigneeId ?? NO_ASSIGNEE_COLUMN;
+
   return head.kind;
 }
 
@@ -762,17 +776,21 @@ function TaskBoardColumnView({
       const task = column.tasks.find((each) => each.id === taskId);
       const onto = columns.find((each) => columnValue(each.head) === zone);
       const standing = onto === undefined ? undefined : groupStanding(onto.head);
+
       if (task === undefined || standing === undefined || standsAt(task, standing)) return;
       onStanding(task, standing);
     },
   });
+
   const { mark, words, masked } = columnHead(column.head, people);
   const value = columnValue(column.head);
+
   // Note that the properties a card under its assignee's column draws are made once, so a card handed them holds (`memo`).
   const unassigned = useMemo(
     () => properties.filter((property) => property !== TASK_PROPERTY.ASSIGNEE),
     [properties],
   );
+
   // Note that a phone's card keeps its assignee's chip under an assignee's column, since with no drag it is how the card moves to another, and so does a card held under a column that no longer names its assignee.
   const drawn = (task: TaskSummary) =>
     column.head.kind === TASKS_GROUP.ASSIGNEE &&
@@ -780,11 +798,14 @@ function TaskBoardColumnView({
     column.head.assigneeId === (task.assignee?.userId ?? null)
       ? unassigned
       : properties;
+
   const cards = useLeaving(column.tasks, taskIdOf);
+
   // Every repository the board stands a card for, which a card's pill tells its own apart from.
   const repositories = columns.flatMap((each) =>
     each.tasks.map((task) => ({ repository: task.repository })),
   );
+
   const keys = useMemo(() => cards.map(({ key }) => key), [cards]);
   const run = useRef<VirtualRowsHandle>(null);
   useLayoutEffect(() => holdRun(run), [holdRun]);
@@ -794,25 +815,32 @@ function TaskBoardColumnView({
   const quick = useQuickAdd(tasks, into ?? {});
   // Note that the quick add's lines stand where the cards do, so a column with none draws them in their list rather than its empty line.
   const adding = quick.shown;
+
   // A column's cards are one Tab stop that ↑↓ walk; ←→ cross to the next column's (`useRovingColumns`). A key reaching past
   // the cards drawn goes on to the column's own first or last card, or the one after or before, brought in where it is not drawn.
   const roving = useRovingKeys<HTMLDivElement>({
     reach: (from, to) => {
       const inHand = from?.closest(`[${VIRTUAL_ROW_KEY_ATTRIBUTE}]`);
+
       const id = reachedKey(
         column.tasks.map(taskIdOf),
         inHand?.getAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE) ?? undefined,
         to,
       );
+
       if (id === undefined) return false;
       const press = pressOf(run.current?.rowElement(id));
+
       if (press !== undefined) {
         press.focus();
+
         return true;
       }
+
       return run.current?.bringIn(id, (card) => pressOf(card)?.focus()) === true;
     },
   });
+
   return (
     <Card
       as={CARD_ELEMENT.SECTION}
@@ -891,6 +919,7 @@ function TaskBoardColumnView({
                 >
                   {(index, place) => {
                     const task = cards[index]?.value;
+
                     return task === undefined ? null : (
                       <TaskBoardCard
                         key={task.id}
@@ -955,12 +984,14 @@ export function TasksBoard({
   const subTasksOf = useMemo(() => childTaskCounts(listed), [listed]);
   const { filter, display } = frame;
   const directory = useMemberDirectory();
+
   const people: ColumnPeople = {
     mark: (userId) => (
       <ActorMark actor={assigneeFor(userId, directory, listed)} size={ACTOR_SIZE.MARK} />
     ),
     words: (userId) => assigneeWords(userId, directory, listed),
   };
+
   // While the page is shown each card keeps the column and the place it was first drawn in, so one a teammate's change would move stays under the reader's eye.
   const columns = useHeldTasks(
     tasks,
@@ -975,6 +1006,7 @@ export function TasksBoard({
         now,
       }),
   );
+
   // Note that every door a card is handed stands across draws, so a card held while what it is handed does (`memo`) holds.
   const standingDoor = useStandingDoor(tasks);
   const setStanding = useSteadyDoor(standingDoor.set);
@@ -993,13 +1025,16 @@ export function TasksBoard({
   // Note that the motion is handed what lays the cards out, so a draw that moved none measures none.
   const properties = display.properties;
   const shownColumn = narrow ? shown : undefined;
+
   const laidOut = useMemo(
     () => ({ columns, properties, shownColumn }),
     [columns, properties, shownColumn],
   );
+
   const drawnColumns = narrow
     ? columns.filter((column) => columnValue(column.head) === shown)
     : columns;
+
   // Each drawn column's tasks, in the order drawn down it, those its run leaves undrawn among them.
   const order = drawnColumns.map((column) => column.tasks.map(taskIdOf));
   const runs = useVirtualRuns();
@@ -1007,6 +1042,7 @@ export function TasksBoard({
   const finding = useFindOpen();
   // Note that only cards a drawn column lists stay chosen, so a task the filter or another tab's column took away is never acted on.
   const selection = useTasksSelection(tasks, new Set(order.flat()), frame.chosen);
+
   const tabs =
     narrow && columns.length > 0 ? (
       <div className="tasks-board-tabs flex min-w-0 grow basis-full flex-col">
@@ -1014,6 +1050,7 @@ export function TasksBoard({
           label={COLUMN_TABS}
           items={columns.map((column) => {
             const { mark, words, masked } = columnHead(column.head, people);
+
             return {
               value: columnValue(column.head),
               label: words,
@@ -1029,7 +1066,9 @@ export function TasksBoard({
         />
       </div>
     ) : null;
+
   const workspaceName = tasks.workspace?.name ?? "";
+
   const filters =
     frame.chips === null && tabs === null ? null : (
       <>
@@ -1037,6 +1076,7 @@ export function TasksBoard({
         {tabs}
       </>
     );
+
   return (
     <CollectionPage
       frame={PAGE_FRAME.TOOLBAR}

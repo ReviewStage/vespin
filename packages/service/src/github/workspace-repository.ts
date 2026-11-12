@@ -96,20 +96,26 @@ export const workspaceRepository = /* @__PURE__ */ Effect.fnUntraced(function* (
   GitHubApp | HttpClient.HttpClient | DatabaseServices
 > {
   const app = yield* GitHubApp;
+
   const reach = yield* githubReachOrRefusal(
     app.repositoryReach(organizationId, repository, member),
   );
+
   if (Result.isSuccess(reach)) return reach.success;
   const unreached = reach.failure;
+
   const movable =
     mover !== undefined &&
     (unreached.reason === REPOSITORY_UNREACHED.NOT_CONNECTED ||
       unreached.reason === REPOSITORY_UNREACHED.OTHER_OWNER);
+
   if (!movable) return yield* Effect.fail(repositoryNotReachable(unreached));
   const [owner = ""] = repository.split("/");
+
   const elsewhere = yield* hostedStoreOrUnavailable(
     memberWorkspaceOnOwner(mover, owner, organizationId),
   );
+
   // Note that the other workspace is named only where its installation lists the repository,
   // because one on the owner may not have been given it, and a GitHub that does not say names none.
   const reachedThere =
@@ -120,6 +126,7 @@ export const workspaceRepository = /* @__PURE__ */ Effect.fnUntraced(function* (
         Effect.orElseSucceed(() => reach),
       ),
     );
+
   return yield* Effect.fail(
     repositoryNotReachable(
       reachedThere && Option.isSome(elsewhere)

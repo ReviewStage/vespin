@@ -105,19 +105,26 @@ export function setRepositoryPin(
     client.withTransaction(
       Effect.gen(function* () {
         const account = yield* lockAccount(userId);
+
         if (Option.isNone(account)) return Option.none();
+
         const answer = (rows: readonly (typeof TxidRowSchema.Type)[]) =>
           Effect.map(listRepositoryPins(userId), (pins) => {
             const txid = rows[0]?.txid;
+
             return Option.some(txid === undefined ? { pins } : { pins, txid });
           });
+
         if (!pinned) return yield* answer(yield* deletePin({ userId, repository }));
         const standing = yield* listRepositoryPins(userId);
+
         if (standing.some((pin) => pin.repository === repository)) {
           return Option.some({ pins: standing });
         }
+
         if (standing.length >= REPOSITORY_PIN_BOUNDS.MAX_PINS) return Option.none();
         const now = yield* DateTime.nowAsDate;
+
         return yield* answer(yield* insertPin({ userId, repository, now }));
       }),
     ),

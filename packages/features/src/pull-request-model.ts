@@ -164,20 +164,29 @@ function mergeActionOf(
   canBypassRules: boolean,
 ): MergeAction | undefined {
   if (merging.queued !== null) return MERGE_ACTION.DEQUEUE;
+
   if (merging.autoMerge !== null) return MERGE_ACTION.DISABLE_AUTO_MERGE;
+
   if (merge === MERGE_STATE.CONFLICTS || merge === MERGE_STATE.DRAFT) return undefined;
+
   if (merging.queue) return MERGE_ACTION.MERGE_WHEN_READY;
+
   if (merging.methods.length === 0) return undefined;
+
   if (MERGEABLE.has(merge)) return MERGE_ACTION.MERGE;
   const waiting = merging.checks === CHECK_SUMMARY.PENDING;
+
   if (merging.autoMergeAllowed && waiting) return MERGE_ACTION.ENABLE_AUTO_MERGE;
+
   return canBypassRules && BYPASSABLE.has(merge) ? MERGE_ACTION.BYPASS : undefined;
 }
 
 /** The press a pull request offers as it stands: none for one not open, or whose merge read has not landed. */
 export function mergeActionFor(pullRequest: AgentOverviewPullRequest): MergeAction | undefined {
   const { merging } = pullRequest;
+
   if (merging === undefined || pullRequest.state !== PULL_REQUEST_STATE.OPEN) return undefined;
+
   return mergeActionOf(pullRequest.merge, merging, pullRequest.canBypassRules === true);
 }
 
@@ -200,12 +209,17 @@ const HELD_WORDS = ", so it can't be merged yet";
 function blockedWords(merging: PullRequestMerging | undefined, held: boolean): string | undefined {
   if (merging === undefined) return undefined;
   const plain = (words: string) => (held ? `${words}${HELD_WORDS}` : words);
+
   if (merging.review === REVIEW_DECISION.CHANGES_REQUESTED) return plain("Changes were requested");
+
   if (merging.review === REVIEW_DECISION.REVIEW_REQUIRED) {
     return plain("A required review is missing");
   }
+
   if (merging.checks === CHECK_SUMMARY.PENDING) return "Waiting on required checks";
+
   if (merging.checks === CHECK_SUMMARY.FAILING) return "Required checks are failing";
+
   return undefined;
 }
 
@@ -245,18 +259,21 @@ export function mergeSentence(
   const standing = (blocked ? blockedWords(merging, action === undefined) : undefined) ?? line;
   const queued = merging?.queued ?? null;
   const autoMerge = merging?.autoMerge ?? null;
+
   const lead =
     queued !== null
       ? queuedLabel(queued.position)
       : autoMerge !== null
         ? MERGE_WORDS.autoMerge(autoMerge.method)
         : undefined;
+
   return lead === undefined ? standing : `${lead}. ${standing}`;
 }
 
 /** What Bypass rules and merge asks first: what it bypasses, in GitHub's sentence for the merge, and how and where it merges. */
 export function bypassSentence(pullRequest: AgentOverviewPullRequest, method: MergeMethod): string {
   const { base } = pullRequest;
+
   return `${mergeSentence(pullRequest, MERGE_ACTION.BYPASS)}. This merges it into ${base} now by ${METHOD_NOUNS[method]}, as you on GitHub, bypassing the rules ${base} requires.`;
 }
 
@@ -273,7 +290,9 @@ export const CHECK_WORDS = {
 /** The checks as one word, as the pull request's mark wears it: a failure beats a wait beats a pass. */
 export function checksSummaryOf(checks: readonly PullRequestCheck[]): CheckSummary {
   if (checks.some((check) => check.state === CHECK_STATE.FAILED)) return CHECK_SUMMARY.FAILING;
+
   if (checks.some((check) => check.state === CHECK_STATE.PENDING)) return CHECK_SUMMARY.PENDING;
+
   return checks.length === 0 ? CHECK_SUMMARY.NONE : CHECK_SUMMARY.PASSING;
 }
 
@@ -282,9 +301,11 @@ export function checksCountOf(checks: readonly PullRequestCheck[], summary: Chec
   if (summary === CHECK_SUMMARY.FAILING) {
     return checks.filter((check) => check.state === CHECK_STATE.FAILED).length;
   }
+
   if (summary === CHECK_SUMMARY.PENDING) {
     return checks.filter((check) => check.state === CHECK_STATE.PENDING).length;
   }
+
   return checks.length;
 }
 
@@ -305,12 +326,16 @@ export function reviewersOf(
   author: string | undefined,
 ): readonly PullRequestReviewer[] {
   const by = new Map<string, PullRequestReviewer>();
+
   for (const reviewer of standings) by.set(reviewer.by.login, reviewer);
+
   for (const person of requested) {
     if (by.get(person.login)?.state === REVIEW_STATE.CHANGES_REQUESTED) continue;
     by.set(person.login, { by: person, state: REVIEW_STATE.REQUESTED });
   }
+
   const named = [...by.values()].filter((reviewer) => reviewer.by.login !== author);
+
   return [
     ...named.filter((reviewer) => !reviewer.by.bot),
     ...named.filter((reviewer) => reviewer.by.bot),
@@ -323,6 +348,7 @@ export function conversationCount(conversation: AgentOverviewConversation): numb
     (sum, entry) => sum + (entry.threads?.length ?? 0),
     0,
   );
+
   return conversation.earlier + conversation.conversation.length + threads;
 }
 
@@ -357,6 +383,7 @@ export function pullRequestWriteWords(
           : PULL_REQUEST_WRITE_WORDS.UNREACHED,
     };
   }
+
   switch (answer.outcome) {
     case PULL_REQUEST_WRITE_OUTCOME.DONE:
       return undefined;

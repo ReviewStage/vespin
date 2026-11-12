@@ -21,6 +21,7 @@ import {
 } from "effect/http";
 import { agentPublished } from "../agents/coder-host/published.js";
 import { routedSessions } from "../agents/coder-host/runtime-sessions.js";
+import { installationDriveRegenerated } from "../agents/workspace-drive.js";
 import { cadenceOrUnavailable } from "../automations/automation-cadence.js";
 import { queueGithubRuns } from "../automations/automation-github.js";
 import type { SessionsForAccount } from "../automations/automation-runs.js";
@@ -82,10 +83,13 @@ import { GitHubBackground } from "./github-rate-gate.js";
  * suspended and brought back keeps its members and its tasks. GitHub never
  * redelivers a failed delivery on its own, so a status one missed is mended
  * by the next read of the installation from GitHub (`github-app.ts`). Its
- * `installation_repositories` deliveries, a repository given or taken, are
- * answered and ignored, because no repository of an installation is held:
- * the chip lists them from GitHub each time it opens, and every start checks
- * its repository there (`github-procedures.ts`, `workspace-repository.ts`).
+ * `installation_repositories` deliveries, a repository given or taken, move
+ * nothing held, because no repository of an installation is held: the chip
+ * lists them from GitHub each time it opens, and every start checks its
+ * repository there (`github-procedures.ts`, `workspace-repository.ts`). But
+ * a repository given or taken, or an installation made, deleted, or brought
+ * back, regenerates its workspace's drive past the answer
+ * (`workspace-drive.ts`), so the drive holds what the workspace connects.
  *
  * A user revoking their authorization of the App, which GitHub also sends
  * without subscribing (`github_app_authorization`), drops that GitHub user's
@@ -129,6 +133,8 @@ const WEBHOOK_EVENT = {
   STATUS: "status",
   /** The App installed, removed, suspended, or brought back on an account. */
   INSTALLATION: "installation",
+  /** Repositories given to an installation or taken from it. */
+  INSTALLATION_REPOSITORIES: "installation_repositories",
   /** A user revoked their authorization of the App. */
   APP_AUTHORIZATION: "github_app_authorization",
   /** A repository created, renamed, transferred, or otherwise changed. */
@@ -149,6 +155,33 @@ const INSTALLATION_ACTION_STATUS: ReadonlyMap<string, GitHubInstallationStatus> 
   ["deleted", GITHUB_INSTALLATION_STATUS.DELETED],
   ["suspend", GITHUB_INSTALLATION_STATUS.SUSPENDED],
   ["unsuspend", GITHUB_INSTALLATION_STATUS.ACTIVE],
+]);
+
+/** The installation actions after which the repositories it grants changed, as GitHub spells them. */
+const GRANT_CHANGE_ACTION = {
+  CREATED: "created",
+  DELETED: "deleted",
+  UNSUSPEND: "unsuspend",
+  /** An `installation_repositories` delivery's: repositories given to the installation. */
+  ADDED: "added",
+  /** An `installation_repositories` delivery's: repositories taken from it. */
+  REMOVED: "removed",
+} as const;
+
+/** The actions, by event, after which the workspace's drive is regenerated, since the repositories it connects changed. */
+const DRIVE_CHANGE_ACTIONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  [
+    WEBHOOK_EVENT.INSTALLATION,
+    new Set<string>([
+      GRANT_CHANGE_ACTION.CREATED,
+      GRANT_CHANGE_ACTION.DELETED,
+      GRANT_CHANGE_ACTION.UNSUSPEND,
+    ]),
+  ],
+  [
+    WEBHOOK_EVENT.INSTALLATION_REPOSITORIES,
+    new Set<string>([GRANT_CHANGE_ACTION.ADDED, GRANT_CHANGE_ACTION.REMOVED]),
+  ],
 ]);
 
 /** A pull request's actions that change what a task's row says of it: where it stands, its merge queue among it, its title, or its size. */
@@ -177,6 +210,7 @@ const RepositorySchema = Schema.Struct({
   full_name: Schema.String,
   default_branch: Schema.optionalKey(Schema.String),
 });
+
 const HeadSchema = Schema.Struct({ head: Schema.Struct({ ref: Schema.String }) });
 
 /** A delivery as far as it is read: what happened, and the repository and branches it names. */
@@ -266,6 +300,7 @@ function signatureMatches(
   const offered = Buffer.from(header.slice(SIGNATURE_PREFIX.length), "hex");
   // The secret is revealed here alone, into the HMAC the compare reads.
   const wanted = createHmac("sha256", Redacted.value(secret)).update(body).digest();
+
   return offered.length === wanted.length && timingSafeEqual(offered, wanted);
 }
 
@@ -293,8 +328,10 @@ function deliveryTarget(event: string, payload: UnparsedWireValue): DeliveryTarg
   switch (event) {
     case WEBHOOK_EVENT.PULL_REQUEST: {
       const read = readDelivery(PullRequestDeliverySchema, payload);
+
       if (Result.isFailure(read) || !PULL_REQUEST_ACTIONS.has(read.success.action))
         return undefined;
+
       return {
         repository: read.success.repository.full_name,
         branches: branchesOf(
@@ -303,10 +340,13 @@ function deliveryTarget(event: string, payload: UnparsedWireValue): DeliveryTarg
         ),
       };
     }
+
     case WEBHOOK_EVENT.CHECK_SUITE: {
       const read = readDelivery(CheckSuiteDeliverySchema, payload);
+
       if (Result.isFailure(read)) return undefined;
       const suite = read.success.check_suite;
+
       return {
         repository: read.success.repository.full_name,
         branches: branchesOf(
@@ -315,9 +355,12 @@ function deliveryTarget(event: string, payload: UnparsedWireValue): DeliveryTarg
         ),
       };
     }
+
     case WEBHOOK_EVENT.STATUS: {
       const read = readDelivery(StatusDeliverySchema, payload);
+
       if (Result.isFailure(read)) return undefined;
+
       return {
         repository: read.success.repository.full_name,
         branches: branchesOf(
@@ -326,6 +369,7 @@ function deliveryTarget(event: string, payload: UnparsedWireValue): DeliveryTarg
         ),
       };
     }
+
     default:
       return undefined;
   }
@@ -334,13 +378,17 @@ function deliveryTarget(event: string, payload: UnparsedWireValue): DeliveryTarg
 /** The `owner/name` a repository delivery says the repository had before, where its action is a rename or a transfer. */
 function formerName(payload: UnparsedWireValue): string | undefined {
   const read = readDelivery(RepositoryChangeDeliverySchema, payload);
+
   if (Result.isFailure(read)) return undefined;
   const { action, repository, changes } = read.success;
+
   if (action === REPOSITORY_ACTION.RENAMED && changes.repository !== undefined) {
     return `${repository.owner.login}/${changes.repository.name.from}`;
   }
+
   const from = changes.owner?.from;
   const formerOwner = from?.organization?.login ?? from?.user?.login;
+
   return action === REPOSITORY_ACTION.TRANSFERRED && formerOwner !== undefined
     ? `${formerOwner}/${repository.name}`
     : undefined;
@@ -352,9 +400,11 @@ function repositorySighting(
   payload: UnparsedWireValue,
 ): RepositorySighting | undefined {
   const read = readDelivery(SightedDeliverySchema, payload);
+
   if (Result.isFailure(read)) return undefined;
   const { id, full_name: fullName, updated_at: updatedAt } = read.success.repository;
   const formerly = event === WEBHOOK_EVENT.REPOSITORY ? formerName(payload) : undefined;
+
   return { id, fullName, updatedAt, formerly };
 }
 
@@ -363,17 +413,33 @@ function installationTarget(
   payload: UnparsedWireValue,
 ): { readonly installationId: number; readonly status: GitHubInstallationStatus } | undefined {
   const read = readDelivery(InstallationDeliverySchema, payload);
+
   if (Result.isFailure(read)) return undefined;
   const status = INSTALLATION_ACTION_STATUS.get(read.success.action);
+
   return status === undefined
     ? undefined
     : { installationId: read.success.installation.id, status };
 }
 
+/** The installation a delivery says now grants other repositories; nothing for any other event or action. */
+function installationRegranted(event: string, payload: UnparsedWireValue): number | undefined {
+  const actions = DRIVE_CHANGE_ACTIONS.get(event);
+
+  if (actions === undefined) return undefined;
+  const read = readDelivery(InstallationDeliverySchema, payload);
+
+  if (Result.isFailure(read) || !actions.has(read.success.action)) return undefined;
+
+  return read.success.installation.id;
+}
+
 /** The GitHub user whose authorization a delivery says was revoked; nothing for any other action. */
 function revokedAuthorization(payload: UnparsedWireValue): number | undefined {
   const read = readDelivery(AuthorizationDeliverySchema, payload);
+
   if (Result.isFailure(read) || read.success.action !== AUTHORIZATION_REVOKED) return undefined;
+
   return read.success.sender.id;
 }
 
@@ -388,6 +454,7 @@ const readAgainOnBranches = /* @__PURE__ */ Effect.fn("web/githubWebhookReadAgai
   const agents = yield* hostedStoreOrUnavailable(
     listAgentsOnBranches(target.repository, target.branches, MAXIMUM_AGENTS_PER_DELIVERY),
   );
+
   const landed = yield* Effect.forEach(
     agents,
     ({ userId, agent }) =>
@@ -405,6 +472,7 @@ const readAgainOnBranches = /* @__PURE__ */ Effect.fn("web/githubWebhookReadAgai
       ),
     { concurrency: READ_CONCURRENCY },
   );
+
   return landed.filter(Boolean).length;
 });
 
@@ -421,42 +489,64 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
     | Sandbox
   > {
     const request = yield* HttpServerRequest.HttpServerRequest;
+
     if (request.method !== HTTP_METHOD.POST) {
       return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
     }
+
     const { githubWebhookSecret } = yield* HostedEnvironment;
+
     if (githubWebhookSecret === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     const body = yield* readBodyBytesEffect(MAXIMUM_DELIVERY_BYTES);
     const signature = request.headers[DELIVERY_HEADER.SIGNATURE] ?? null;
+
     if (!signatureMatches(body, signature, githubWebhookSecret)) {
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
     }
+
     const event = request.headers[DELIVERY_HEADER.EVENT] ?? "";
+
     if (event === WEBHOOK_EVENT.PING) return hostedJsonResponse(200, { read: 0 });
     const payload = yield* parseJsonBytes(body);
-    if (event === WEBHOOK_EVENT.INSTALLATION) {
-      const moved = installationTarget(payload);
+
+    if (event === WEBHOOK_EVENT.INSTALLATION || event === WEBHOOK_EVENT.INSTALLATION_REPOSITORIES) {
+      const moved = event === WEBHOOK_EVENT.INSTALLATION ? installationTarget(payload) : undefined;
+
       if (moved !== undefined) {
         yield* hostedStoreOrUnavailable(setInstallationStatus(moved.installationId, moved.status));
       }
+
+      // Note that the status is moved first, so an installation deleted regenerates a drive that drops its repositories.
+      const regranted = installationRegranted(event, payload);
+
+      if (regranted !== undefined) yield* installationDriveRegenerated(regranted);
+
       return hostedJsonResponse(200, { read: 0 });
     }
+
     if (event === WEBHOOK_EVENT.APP_AUTHORIZATION) {
       const githubUserId = revokedAuthorization(payload);
+
       if (githubUserId !== undefined) {
         yield* hostedStoreOrUnavailable(clearRevokedAuthorization(githubUserId));
       }
+
       return hostedJsonResponse(200, { read: 0 });
     }
+
     // Note that the repository is recorded first, because a rename relabels the stored names the reads below match on.
     const sighting = repositorySighting(event, payload);
+
     if (sighting !== undefined) yield* hostedStoreOrUnavailable(noteGitHubRepository(sighting));
+
     if (event === WEBHOOK_EVENT.REPOSITORY) return hostedJsonResponse(200, { read: 0 });
     // A deployment with no App configured knows no bot of its own, so every bot is another's.
     const agentLogin = yield* Effect.orElseSucceed((yield* GitHubApp).botLogin, () => undefined);
+
     const queued = yield* cadenceOrUnavailable(
       queueGithubRuns(request.headers[DELIVERY_HEADER.DELIVERY] ?? "", event, payload, agentLogin),
     );
+
     const target = deliveryTarget(event, payload);
     const read = target === undefined ? 0 : yield* readAgainOnBranches(target);
     const now = yield* Clock.currentTimeMillis;
@@ -465,6 +555,7 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
     const wakes = [agentWakeOf(event, payload, now), checksCompletedWakeOf(event, payload, now)];
     // Each agent's sessions as the deployment acting for its owner, as an automation's run reaches them.
     const sessionsForAccount: SessionsForAccount = routedSessions;
+
     const counts = yield* Effect.forEach(wakes, (wake) =>
       wake === undefined
         ? Effect.succeed(0)
@@ -475,7 +566,9 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
             agentLogin,
           ),
     );
+
     const told = counts.reduce((sum, count) => sum + count, 0);
+
     return hostedJsonResponse(200, { read, queued, told });
   },
   // Note that no member waits on a delivery, so what it asks GitHub waits in the background lane (`github-rate-gate.ts`).

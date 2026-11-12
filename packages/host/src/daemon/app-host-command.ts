@@ -26,8 +26,8 @@ const ACCOUNT_RELEASES = [".local", "share", "vespin-host"] as const;
 /** The host program's folder inside an app bundle (`BUNDLED_HOST.libPath`'s parent), by the real path it runs from. */
 const APP_HOST_FOLDER = /\.app\/Contents\/Resources\/host\/?$/u;
 
-/** The commands the host program answers from inside the app: the one its LaunchAgent runs, and one that reads and changes nothing. */
-const APP_COMMANDS: ReadonlySet<string | undefined> = new Set(["run", "version"]);
+/** The commands the host program answers from inside the app: the one its LaunchAgent runs, and two that read and change nothing. */
+const APP_COMMANDS: ReadonlySet<string | undefined> = new Set(["run", "version", "status"]);
 
 /** What became of the command's link: moved to the launcher, already naming it, or left as the member's own. */
 export const COMMAND_LINK_OUTCOME = {
@@ -50,6 +50,7 @@ export function appRefusesCommand(hostFolder: string, command: string | undefine
 function intoAccountReleases(path: Path.Path, home: string, link: string, target: string): boolean {
   const releases = path.join(home, ...ACCOUNT_RELEASES);
   const resolved = path.resolve(path.dirname(link), target);
+
   return resolved.startsWith(`${releases}${path.sep}`);
 }
 
@@ -69,18 +70,22 @@ export const appHostCommandLinked = Effect.fnUntraced(function* (input: {
   const path = yield* Path.Path;
   const link = path.join(input.home, ...COMMAND_LINK);
   const target = yield* Effect.exit(fileSystem.readLink(link));
+
   if (Exit.isSuccess(target)) {
     if (target.value === input.launcher) return COMMAND_LINK_OUTCOME.ALREADY;
+
     if (!intoAccountReleases(path, input.home, link, target.value)) {
       return COMMAND_LINK_OUTCOME.LEFT;
     }
   } else if (yield* fileSystem.exists(link)) {
     return COMMAND_LINK_OUTCOME.LEFT;
   }
+
   yield* fileSystem.makeDirectory(path.dirname(link), { recursive: true });
   const beside = `${link}.app-link`;
   yield* fileSystem.remove(beside, { force: true });
   yield* fileSystem.symlink(input.launcher, beside);
   yield* fileSystem.rename(beside, link);
+
   return COMMAND_LINK_OUTCOME.LINKED;
 });

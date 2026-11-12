@@ -57,6 +57,7 @@ function Standing<Data extends object>({
   draw: (toast: StandingToast<Data>) => ReactNode;
 }): ReactNode {
   const { toasts } = BaseToast.useToastManager<Data>();
+
   return createPortal(
     <BaseToast.Viewport
       className="ui-toast-stack pointer-events-none fixed z-toast"

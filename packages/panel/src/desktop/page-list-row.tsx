@@ -74,6 +74,7 @@ export function PageListRow({
 }): React.JSX.Element {
   const { icon, label } = tabLook({ kind: TAB_KIND.PAGE, title: page.title });
   const card = tabCard({ kind: TAB_KIND.PAGE, place, pageId: page.id, name: page.title, page });
+
   const row = (
     <TaskRow
       taskId={page.id}
@@ -96,6 +97,7 @@ export function PageListRow({
       onOpenInTab={onOpenInTab}
     />
   );
+
   // Note that the card reaches the row's hint by its options, because the row takes its hint as a component, which must stay one across renders.
   return card === null ? row : <RowHintOptions card={card}>{row}</RowHintOptions>;
 }

@@ -64,6 +64,7 @@ let migratedDataDirectory: Promise<Blob> | undefined;
 async function migrateFreshPglite(): Promise<PGlite> {
   const client = new PGlite();
   const migrationRuntime = ManagedRuntime.make(sqlClientOverPglite(client));
+
   try {
     await migrationRuntime.runPromise(runWebMigrations());
   } catch (error) {
@@ -72,6 +73,7 @@ async function migrateFreshPglite(): Promise<PGlite> {
   } finally {
     await migrationRuntime.dispose();
   }
+
   return client;
 }
 
@@ -81,6 +83,7 @@ async function migrateFreshPglite(): Promise<PGlite> {
  */
 export async function writeMigratedPgliteDump(file: string): Promise<void> {
   const client = await migrateFreshPglite();
+
   try {
     const dump = await client.dumpDataDir("none");
     await writeFile(file, new Uint8Array(await dump.arrayBuffer()));
@@ -98,15 +101,19 @@ export async function writeMigratedPgliteDump(file: string): Promise<void> {
  */
 export async function openMigratedPglite(): Promise<PGlite> {
   const runDump = process.env[MIGRATED_PGLITE_ENVIRONMENT.DUMP];
+
   if (migratedDataDirectory === undefined && runDump !== undefined) {
     migratedDataDirectory = readFile(runDump).then((bytes) => new Blob([bytes]));
   }
+
   if (migratedDataDirectory !== undefined) {
     return new PGlite({ loadDataDir: await migratedDataDirectory });
   }
+
   const first = migrateFreshPglite();
   const dumped = first.then((client) => client.dumpDataDir("none"));
   migratedDataDirectory = dumped;
+
   try {
     await dumped;
   } catch (error) {
@@ -118,6 +125,7 @@ export async function openMigratedPglite(): Promise<PGlite> {
     );
     throw error;
   }
+
   return first;
 }
 

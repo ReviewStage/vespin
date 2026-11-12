@@ -63,9 +63,11 @@ export function refusalLine(
   if (refusal === TASK_FILE_REFUSAL.MISSING && commit !== undefined) {
     return `This file is not at commit ${shortCommit(commit)} on GitHub, or the commit was never pushed.`;
   }
+
   if (refusal === TASK_FILE_REFUSAL.MISSING && branch !== undefined) {
     return `This file is not on ${branch}, the branch ${PRODUCT_NAME} reads from GitHub.`;
   }
+
   return FILE_REFUSAL_LINE[refusal];
 }
 
@@ -82,10 +84,13 @@ export function fileUrl(held: FileText, file: OpenFile): string {
     ref: held.commit ?? held.branch,
     path: file.path,
   } as const;
+
   if (file.range === undefined || file.range.startLine > held.lineCount) {
     return gitHubPageLink(page);
   }
+
   const { startLine, endLine } = file.range;
+
   return gitHubPageLink({ ...page, lines: { startLine, endLine } });
 }
 
@@ -101,6 +106,7 @@ export function refusalPasses(refusal: TaskFileRefusal): boolean {
  */
 export function lineCountOf(text: string): number {
   const lines = text.split("\n").length;
+
   return text.endsWith("\n") && lines > 1 ? lines - 1 : lines;
 }
 
@@ -125,6 +131,8 @@ export type WholeText =
  */
 export function wholeTextOf(answer: TasksFileAnswer): WholeText {
   if ("text" in answer) return { kind: WHOLE_TEXT.READ, text: answer.text.text };
+
   if ("refusal" in answer) return { kind: WHOLE_TEXT.REFUSED, cause: answer };
+
   return { kind: WHOLE_TEXT.UNREAD, cause: answer };
 }

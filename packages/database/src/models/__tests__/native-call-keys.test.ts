@@ -26,13 +26,16 @@ const openConversation = Effect.gen(function* () {
   yield* Database.use((db) =>
     db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
   );
+
   const [row] = yield* Database.use((db) =>
     db
       .insert(conversations)
       .values({ userId, kind: CONVERSATION_KIND.AGENT })
       .returning({ id: conversations.id }),
   );
+
   assert.ok(row);
+
   return { userId, conversationId: row.id };
 });
 
@@ -65,12 +68,14 @@ it.layer(getTestDB())("native call keys", (it) => {
         const other = yield* openConversation;
         const digest = `digest-${randomUUID()}`;
         const first = yield* nativeCallKeyOf(own.userId, own.conversationId, digest, WINDOW_MS);
+
         const theirs = yield* nativeCallKeyOf(
           other.userId,
           other.conversationId,
           digest,
           WINDOW_MS,
         );
+
         const sameAccount = yield* nativeCallKeyOf(
           own.userId,
           other.conversationId,

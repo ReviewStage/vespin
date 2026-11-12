@@ -79,14 +79,20 @@ function fed(plans: Readonly<Record<string, readonly InboxItem[]>>) {
 
 function mount(holdings: readonly InboxHolding[]) {
   let control: HolderInboxItems | undefined;
+
   function Probe({ listed }: { listed: readonly InboxHolding[] }) {
     control = useHolderInboxItems(listed);
+
     return null;
   }
+
   root = createRoot(document.createElement("div"));
+
   const draw = (listed: readonly InboxHolding[]) =>
     act(() => root?.render(withQueryClient(createElement(Probe, { listed }))));
+
   draw(holdings);
+
   return { control: () => control, list: draw };
 }
 
@@ -125,6 +131,7 @@ test("a feed refused before it ever answered says so only while a plan is listed
     ...fakeActPortCalls(),
     [ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]: () => {
       retried += 1;
+
       return Promise.resolve(undefined);
     },
   });

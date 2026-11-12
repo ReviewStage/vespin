@@ -49,6 +49,7 @@ function copyPathAction(path: string, copy: (text: string, words: string) => voi
 /** Saves text where the system's save dialog chooses, as a file of the name given, its failure said in a toast. */
 export function useSaveText(): (name: string, text: string) => Promise<void> {
   const show = useToast();
+
   return (name, text) =>
     appPlatform()
       .saveFile({ name, text })

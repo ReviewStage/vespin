@@ -33,6 +33,7 @@ function popstateListeners(): Set<EventListenerOrEventListenerObject> {
     if (type === "popstate" && listener !== null) held.delete(listener);
     unlisten(type, listener, options);
   });
+
   return held;
 }
 

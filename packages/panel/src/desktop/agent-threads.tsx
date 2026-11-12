@@ -96,6 +96,7 @@ function agentPaneDoors(
     panelFor: tasks.activeTaskId,
     openPlace: (_place, elsewhere) => elsewhere(),
   });
+
   return {
     ...doors,
     onOpenAgent: (each) => (each === agentId ? onBack() : doors.onOpenAgent(each)),
@@ -105,17 +106,21 @@ function agentPaneDoors(
 /** Each agent's card's threads, by the agent, held while the task's page stands. */
 export function useAgentThreadViews(): AgentThreadViews {
   const [views, setViews] = useState<ReadonlyMap<string, AgentThreadsShown>>(() => new Map());
+
   const onOpen = useCallback((agentId: string, itemId: string | undefined) => {
     setViews((was) => new Map(was).set(agentId, { itemId }));
   }, []);
+
   const onClose = useCallback((agentId: string) => {
     setViews((was) => {
       if (!was.has(agentId)) return was;
       const next = new Map(was);
       next.delete(agentId);
+
       return next;
     });
   }, []);
+
   return useMemo(
     () => ({ shown: (agentId: string) => views.get(agentId), onOpen, onClose }),
     [views, onOpen, onClose],
@@ -153,6 +158,7 @@ export function AgentThreads({
   const { open, settled } = inbox.board;
   // Note that a reminder is weighed on the window's clock, as the Inbox weighs it.
   const now = useMinute();
+
   const standing = useMemo(
     () =>
       inboxAtNow(
@@ -166,27 +172,34 @@ export function AgentThreads({
       ),
     [task, open, settled, agentId, now],
   );
+
   const filter = useMemo(() => ({ ...AGENT_LISTS, readerId: me }), [me]);
   const { list, steps, onPointing } = useHeldInboxList(standing, filter, chosen, shown);
   const listedRows = useMemo(() => listedItems(list), [list]);
+
   const listed = useMemo(
     () => listedItems(steps).find(({ item }) => item.id === chosen),
     [steps, chosen],
   );
+
   const counts = useMemo(() => inboxCounts(standing, me), [standing, me]);
+
   // Note that the card's columns hold no item while it is off screen, so no way back of theirs takes the window's Back meanwhile,
   // nor one the read no longer holds, so a narrow card stands its list, with its way back, rather than nothing.
   const columns = useInboxColumns(shown ? listed?.item.id : undefined, {
     onClear: () => onChoose(undefined),
   });
+
   const choose = (each: InboxListed) => {
     columns.onOpen(each.item.id);
     onChoose(each.item.id);
   };
+
   const step = (each: InboxListed) => {
     columns.onStep();
     onChoose(each.item.id);
   };
+
   const pager = useInboxPager(steps, list, chosen, step, { shown: active });
   useAppCommand(APP_COMMAND.EXIT_AGENT_THREADS, active ? onBack : undefined);
   const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id, readerId: me });
@@ -201,6 +214,7 @@ export function AgentThreads({
   });
   // Note that the task's page holds its read with its cards' drafts, so the pane takes it whole.
   useNodOnOpen({ shown: opened, readerId: me, control: inbox });
+
   const back = (
     <ReplayUnmask>
       <BackButton
@@ -211,6 +225,7 @@ export function AgentThreads({
       />
     </ReplayUnmask>
   );
+
   return (
     <Fill as={FILL_ELEMENT.SECTION} className="agent-threads" data-popover-room="">
       <div className={INBOX_VIEW} ref={columns.ref} data-columns={columns.shown}>

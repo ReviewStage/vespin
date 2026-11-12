@@ -152,16 +152,19 @@ let kept: readonly KeptFailure[] = [];
 /** Whether `cause`, or a cause beneath it, is the act port's declared refusal. */
 function carriesRefusal(cause: unknown): boolean {
   let next = cause;
+
   for (let depth = 0; depth < CHAIN_BOUND && next !== undefined; depth++) {
     if (next instanceof ORPCError && next.code === ACT_ERROR.REFUSED) return true;
     next = Predicate.hasProperty(next, "cause") ? next.cause : undefined;
   }
+
   return false;
 }
 
 /** Whether a client's answer names a failure the service worded, rather than none it could answer. */
 function namesRefusal(cause: unknown): boolean {
   if (!Predicate.hasProperty(cause, "failure")) return false;
+
   return Predicate.isString(cause.failure) && !UNANSWERED_FAILURES.has(cause.failure);
 }
 
@@ -175,10 +178,12 @@ function namesRefusal(cause: unknown): boolean {
 function kindOf(failure: ShownFailure): FailureKind {
   const { cause } = failure;
   const answered = Predicate.hasProperty(cause, "status") && REFUSED_ANSWERS.has(cause.status);
+
   // Note that a refused answer settled from what failed beneath it, an act that never arrived among them, is judged by what is beneath.
   if (answered && Predicate.hasProperty(cause, "cause") && cause.cause !== undefined) {
     return kindOf({ ...failure, cause: cause.cause });
   }
+
   return failure.refused === true || answered || namesRefusal(cause) || carriesRefusal(cause)
     ? FAILURE_KIND.REFUSED
     : FAILURE_KIND.UNEXPECTED;
@@ -188,6 +193,7 @@ function kindOf(failure: ShownFailure): FailureKind {
 function sameFailure(one: ShownFailure, other: ShownFailure): boolean {
   const about = one.about ?? {};
   const otherAbout = other.about ?? {};
+
   return (
     one.surface === other.surface &&
     Object.is(one.cause, other.cause) &&
@@ -209,17 +215,21 @@ function keptFailure(failure: ShownFailure): ReportedFailure {
   let details: { readonly copied: string | undefined } | undefined;
   let standing = 0;
   let hiddenAt: number | undefined;
+
   return {
     shown: () => {
       const at = now();
       const lapsed = standing === 0 && hiddenAt !== undefined && at - hiddenAt >= LAPSE_MS;
+
       if (details === undefined || lapsed) details = { copied: reportShownFailure(failure, at) };
       standing += 1;
       hiddenAt = undefined;
+
       return details.copied;
     },
     hidden: () => {
       standing = Math.max(0, standing - 1);
+
       if (standing === 0) hiddenAt = now();
     },
     copy: (text) => appPlatform().copyText(text),
@@ -236,6 +246,7 @@ export function failureShown(failure: ShownFailure): ReportedFailure {
   const found = kept.find((one) => sameFailure(one.failure, failure));
   const entry = found ?? { failure, reported: keptFailure(failure) };
   kept = [...kept.filter((one) => one !== found), entry].slice(-KEPT_BOUND);
+
   return entry.reported;
 }
 
@@ -261,6 +272,7 @@ export function refusalShown(
   about?: FailureAbout,
 ): ShownError | undefined {
   if (refusal === undefined) return undefined;
+
   return { words: refusal.words, failure: failureShown({ surface, cause: refusal.cause, about }) };
 }
 
@@ -277,6 +289,7 @@ export function refusedShown(
 ): ShownError | undefined {
   if (words === undefined || words === null || words === false || words === "") return undefined;
   const failure = failureShown({ surface, cause: FAILURE_CONDITION.REFUSED, about, refused: true });
+
   return { words, failure };
 }
 
@@ -289,6 +302,7 @@ export function refusedShown(
 export function failureOfConnection(failure: ShownFailure): boolean {
   if (kindOf(failure) === FAILURE_KIND.REFUSED) return false;
   const state = reporter === undefined ? undefined : appStateIn(reporter.client);
+
   return state !== undefined && !networkConnected(state.network);
 }
 
@@ -304,6 +318,7 @@ export function installShownFailureReporter(
 ): () => void {
   const installed: InstalledReporter = { report, client };
   reporter = installed;
+
   return () => {
     if (reporter === installed) reporter = undefined;
   };
@@ -315,6 +330,7 @@ function sent(report: ShownFailureReport): ShownFailureSent | undefined {
     return reporter?.report(report);
   } catch (error) {
     console.error("A failure shown could not be reported.", error);
+
     return undefined;
   }
 }
@@ -331,8 +347,10 @@ function sent(report: ShownFailureReport): ShownFailureSent | undefined {
  */
 export function reportShownFailure(failure: ShownFailure, at: number): string | undefined {
   if (reporter === undefined) return undefined;
+
   try {
     const state = appStateIn(reporter.client);
+
     const report: ShownFailureReport = {
       surface: failure.surface,
       kind: kindOf(failure),
@@ -345,10 +363,13 @@ export function reportShownFailure(failure: ShownFailure, at: number): string | 
         live: failure.live,
       },
     };
+
     const told = { at, version: state?.run.appVersion, sent: sent(report) };
+
     return report.kind === FAILURE_KIND.UNEXPECTED ? shownFailureDetails(report, told) : undefined;
   } catch (error) {
     console.error("A failure shown could not be reported.", error);
+
     return undefined;
   }
 }

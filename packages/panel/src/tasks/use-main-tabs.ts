@@ -254,8 +254,10 @@ function withChoices(
   if (taskId === undefined) return held;
   const was = choicesOn(held, taskId);
   const choice = change(was);
+
   if (choice === was) return held;
   const kept = Object.entries(held.tasks).filter(([task]) => task !== taskId);
+
   return {
     ...held,
     tasks: Object.fromEntries([...kept, [taskId, choice] as const].slice(-TASKS_KEPT)),
@@ -271,17 +273,21 @@ function openAgentsOf(
   if (agents === undefined) return undefined;
   const live = agents.filter((agent) => !held.closedAgents.includes(agent));
   const opened = (archived ?? []).filter((agent) => held.openArchived.includes(agent));
+
   return opened.length === 0 ? live : [...live, ...opened];
 }
 
 /** The tabs that move in their order: the open agents' and the draft's, in the task's order. */
 function movableOf(held: HeldState, drawn: DrawnTabs): readonly MainTab[] {
   const choices = choicesOn(held, drawn.taskId);
+
   const agents = (openAgentsOf(held, drawn.agents, drawn.archived) ?? []).map((agent) =>
     agentTab(agent),
   );
+
   const draft = drawn.draft === undefined ? [] : [draftTab(drawn.draft)];
   const order = choices.order ?? NO_TABS;
+
   return inTaskOrder([...agents, ...draft], order, (tab) => tab);
 }
 
@@ -305,8 +311,10 @@ function stands(held: HeldState, drawn: DrawnTabs, tab: MainTab): boolean {
  */
 function shownIn(held: HeldState, drawn: DrawnTabs): MainTab | undefined {
   if (drawn.taskId === undefined) return undefined;
+
   if (drawn.agents === undefined) return shownBeforeList(held, drawn);
   const recent = choicesOn(held, drawn.taskId).recent ?? NO_TABS;
+
   return (
     recent.findLast((tab) => stands(held, drawn, tab)) ??
     (drawn.detailsFirst ? MAIN_TAB.OVERVIEW : movableOf(held, drawn).at(-1))
@@ -320,6 +328,7 @@ function shownIn(held: HeldState, drawn: DrawnTabs): MainTab | undefined {
  */
 function returnedTo(held: HeldState, drawn: DrawnTabs): MainTab | undefined {
   const recent = choicesOn(held, drawn.taskId).recent ?? NO_TABS;
+
   return (
     recent.findLast((tab) => !isOverviewTab(tab) && stands(held, drawn, tab)) ??
     movableOf(held, drawn).at(-1)
@@ -335,19 +344,23 @@ function returnedTo(held: HeldState, drawn: DrawnTabs): MainTab | undefined {
  */
 function shownBeforeList(held: HeldState, drawn: DrawnTabs): MainTab | undefined {
   const recent = choicesOn(held, drawn.taskId).recent ?? NO_TABS;
+
   for (const tab of [...recent].reverse()) {
     if (isOverviewTab(tab)) return tab;
+
     switch (tab.kind) {
       case STRIP_TAB_KIND.DRAFT:
         if (tab.draft === drawn.draft) return tab;
         continue;
       case STRIP_TAB_KIND.AGENT:
         if (held.closedAgents.includes(tab.agent)) continue;
+
         return undefined;
       default:
         return absurd(tab);
     }
   }
+
   // Note that a task none of whose tabs viewed stands waits on its agents, since it opens on them, but on a phone's, its details.
   return drawn.detailsFirst ? MAIN_TAB.OVERVIEW : undefined;
 }
@@ -360,6 +373,7 @@ function withViewed(
 ): HeldState {
   return withChoices(held, taskId, (was) => {
     const recent = viewedLast(was.recent ?? NO_TABS, viewed, RECENT_KEPT);
+
     return recent === undefined ? was : { ...was, recent };
   });
 }
@@ -393,7 +407,9 @@ function withOpened(held: HeldState, tab: MainTab, live: boolean): HeldState {
   const { agent } = tab;
   const closed = held.closedAgents.includes(agent);
   const opens = !live && !held.openArchived.includes(agent);
+
   if (!closed && !opens) return held;
+
   return {
     ...held,
     closedAgents: held.closedAgents.filter((each) => each !== agent),
@@ -420,13 +436,16 @@ function liveOn(drawn: DrawnTabs, on: string | undefined, tab: MainTab): boolean
  */
 function withLiveLetGo(held: HeldState, live: readonly string[]): HeldState {
   if (!held.openArchived.some((agent) => live.includes(agent))) return held;
+
   return { ...held, openArchived: held.openArchived.filter((agent) => !live.includes(agent)) };
 }
 
 /** The state with the tabs of the agents given open again, of those whose tabs closed for being idle. */
 function withWoken(held: HeldState, agents: readonly string[]): HeldState {
   const woken = held.dozing.filter((agent) => agents.includes(agent));
+
   if (woken.length === 0) return held;
+
   return {
     ...held,
     closedAgents: held.closedAgents.filter((agent) => !woken.includes(agent)),
@@ -444,6 +463,7 @@ function withViewedAt(
 ): HeldState {
   return withChoices(held, taskId, (was) => {
     const viewedAt = stampedViewed(was.viewedAt ?? NO_STAMPS, viewed, standing, at, VIEWED_KEPT);
+
     return viewedAt === undefined ? was : { ...was, viewedAt };
   });
 }
@@ -457,6 +477,7 @@ function withViewedAt(
 function withChosen(held: HeldState, tab: MainTab, drawn: DrawnTabs): HeldState {
   const shown = shownIn(held, drawn);
   const viewed = shown === undefined || sameTab(shown, tab) ? [tab] : [shown, tab];
+
   return withViewed(withOpened(held, tab, liveOn(drawn, drawn.taskId, tab)), drawn.taskId, viewed);
 }
 
@@ -466,12 +487,14 @@ function withChosen(held: HeldState, tab: MainTab, drawn: DrawnTabs): HeldState 
  */
 function withShown(held: HeldState, on: string, tab: MainTab, drawn: DrawnTabs): HeldState {
   if (on === drawn.taskId) return withChosen(held, tab, drawn);
+
   return withViewed(withOpened(held, tab, liveOn(drawn, on, tab)), on, [tab]);
 }
 
 /** The state with an agent's tab closed, kept closed, and dozing where it closed for being idle; as it is for any other kind, whose close holds nothing. */
 function withAgentClosed(held: HeldState, tab: MainTab, dozing: boolean): HeldState {
   if (isOverviewTab(tab)) return held;
+
   switch (tab.kind) {
     case STRIP_TAB_KIND.AGENT:
       return {
@@ -503,17 +526,21 @@ function withoutTab(held: HeldState, tab: MainTab, drawn: DrawnTabs, dozing = fa
   if (stripTabStays(tab)) return held;
   const before = stripOf(held, drawn);
   const closed = withAgentClosed(held, tab, dozing);
+
   const forgotten = withChoices(closed, drawn.taskId, (was) => ({
     ...was,
     recent: (was.recent ?? NO_TABS).filter((each) => !sameTab(each, tab)),
     ...(was.viewedAt === undefined ? undefined : { viewedAt: withoutViewedAt(was.viewedAt, tab) }),
   }));
+
   const shown = shownIn(held, drawn);
+
   if (shown === undefined || !sameTab(shown, tab)) return forgotten;
   // Note that the draft's tab stands until its owner lets the draft go, so it is left out here.
   const standing = stripOf(forgotten, drawn).filter((each) => !sameTab(each, tab));
   const recent = choicesOn(forgotten, drawn.taskId).recent ?? NO_TABS;
   const replacement = replacementOf(standing, recent, before, tab);
+
   return replacement === undefined ? forgotten : withViewed(forgotten, drawn.taskId, [replacement]);
 }
 
@@ -526,6 +553,7 @@ function withTabAt(held: HeldState, tab: MainTab, to: number, drawn: DrawnTabs):
   const movable = movableOf(held, drawn);
   const was = choicesOn(held, drawn.taskId).order ?? NO_TABS;
   const order = movedOrder(was, movable, tab, to);
+
   return order === undefined
     ? held
     : withChoices(held, drawn.taskId, (choices) => ({ ...choices, order }));
@@ -540,12 +568,16 @@ function keptTab(tab: MainTab): tab is Exclude<MainTab, DraftStripTab> {
 function stored(held: HeldState): MainTabsState {
   const kept = (tabs: readonly MainTab[] = NO_TABS) => {
     const each = tabs.filter(keptTab);
+
     return each.length === 0 ? undefined : each;
   };
+
   const stamped = (stamps: readonly ViewedAt<MainTab>[] = NO_STAMPS) => {
     const each = stamps.flatMap(({ tab, at }) => (keptTab(tab) ? [{ tab, at }] : []));
+
     return each.length === 0 ? undefined : each;
   };
+
   return {
     closedAgents: held.closedAgents,
     ...(held.dozing.length === 0 ? undefined : { dozing: held.dozing }),
@@ -594,6 +626,7 @@ function stagedOn(
   if (tab === undefined || taskId === undefined || staged.tasks[taskId] !== undefined) {
     return staged;
   }
+
   return withViewed(staged, taskId, [tab]);
 }
 
@@ -622,20 +655,25 @@ export function useMainTabs(
   const [newTabAsked, setNewTabAsked] = useState(false);
   const staging = fixture !== undefined;
   const fixtureTab = fixture?.tab;
+
   const fixtureState = useMemo(
     () => stagedOn(staged, taskId, fixtureTab),
     [staged, taskId, fixtureTab],
   );
+
   const state = staging ? fixtureState : kept;
+
   const update = useCallback(
     (change: (held: HeldState) => HeldState) =>
       staging ? setStaged((held) => change(stagedOn(held, taskId, fixtureTab))) : setKept(change),
     [staging, taskId, fixtureTab],
   );
+
   const drawn = useMemo(
     () => ({ taskId, agents, archived, draft, detailsFirst }),
     [taskId, agents, archived, draft, detailsFirst],
   );
+
   // An agent brought back from the archive, or another task's opened as it went there, is one of the task's live agents now.
   const letGo = agents?.some((agent) => state.openArchived.includes(agent)) === true;
   useEffect(() => {
@@ -644,16 +682,20 @@ export function useMainTabs(
   // A task left on its details lets them go, so it opens on its agents again wherever it is opened
   // from; a phone's, whose details are where a task opens, keeps them.
   const [standing, setStanding] = useState(taskId);
+
   if (standing !== taskId) {
     setStanding(taskId);
+
     if (standing !== undefined && !detailsFirst) {
       update((held) => withDetailsLeft(held, standing));
     }
   }
+
   // Note that a write that fails (storage full, or refused) costs only the
   // preference, so it is not worth a word on screen.
   useEffect(() => {
     if (staging) return;
+
     try {
       window.localStorage.setItem(STORAGE_KEY, encodeStored(stored(kept)));
     } catch {
@@ -662,43 +704,53 @@ export function useMainTabs(
   }, [staging, kept]);
 
   const tabs = useMemo(() => stripOf(state, drawn), [state, drawn]);
+
   const openAgents = useMemo(
     () => openAgentsOf(state, agents, archived),
     [state, agents, archived],
   );
+
   const onChoose = useCallback(
     (tab: MainTab) => update((held) => withChosen(held, tab, drawn)),
     [update, drawn],
   );
+
   // Note that a tab shown on another task is not counted viewed after the
   // open task's, because the task it is viewed on is the one about to open.
   const onShow = useCallback(
     (on: string, tab: MainTab) => update((held) => withShown(held, on, tab, drawn)),
     [update, drawn],
   );
+
   const onClose = useCallback(
     (tab: MainTab) => update((held) => withoutTab(held, tab, drawn)),
     [update, drawn],
   );
+
   const onMove = useCallback(
     (tab: MainTab, to: number) => update((held) => withTabAt(held, tab, to, drawn)),
     [update, drawn],
   );
+
   const onNewTab = useCallback(() => setNewTabAsked(true), []);
   const onNewTabAnswered = useCallback(() => setNewTabAsked(false), []);
+
   const onViewedAt = useCallback(
     (on: string, viewed: readonly MainTab[], standing: readonly MainTab[], at: number) =>
       update((held) => withViewedAt(held, on, viewed, standing, at)),
     [update],
   );
+
   const onDoze = useCallback(
     (tab: AgentStripTab) => update((held) => withoutTab(held, tab, drawn, true)),
     [update, drawn],
   );
+
   const onWake = useCallback(
     (woken: readonly string[]) => update((held) => withWoken(held, woken)),
     [update],
   );
+
   return {
     tabs,
     tab: shownIn(state, drawn),

@@ -27,15 +27,19 @@ Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 const PROJECT_KEY = "phc_site_sign_in_test";
 const TRANSFER_PATH = "/api/auth/electron/transfer-user";
 const SESSION_PATH = "/api/auth/get-session";
+
 /** Where the library posts events before the project's remote configuration says otherwise, on this origin's path to PostHog. */
 const DEFAULT_CAPTURE_PATH = `${POSTHOG_PROXY.PATH}/e/`;
+
 /** Where the project's remote configuration routes events, and what it serves beside that. */
 const CAPTURE_ENDPOINT = "/i/v0/e/";
 const CAPTURE_PATH = `${POSTHOG_PROXY.PATH}${CAPTURE_ENDPOINT}`;
+
 const PROJECT_CONFIG = {
   analytics: { endpoint: CAPTURE_ENDPOINT },
   supportedCompression: ["gzip", "gzip-js"],
 } as const;
+
 const CAPTURE_PATHS: ReadonlySet<string> = new Set([DEFAULT_CAPTURE_PATH, CAPTURE_PATH]);
 const BEACON_FIELD = "data=";
 const ACCOUNT = { id: "account-1", name: "Ada", email: "ada@example.com" };
@@ -53,6 +57,7 @@ interface SentEvent {
 /** What left the page, in order: each request carrying events, and the page leaving. */
 const timeline: Array<"send" | "leave"> = [];
 const sent: SentEvent[] = [];
+
 /** Decodes still under way, since a beacon's Blob is read asynchronously. */
 const reading: Promise<void>[] = [];
 
@@ -67,9 +72,11 @@ function noteSend(url: URL, body: Promise<string>): void {
   reading.push(
     body.then((text) => {
       if (url.pathname === CAPTURE_PATH && text.startsWith(BEACON_FIELD)) return;
+
       const json = text.startsWith(BEACON_FIELD)
         ? Buffer.from(decodeURIComponent(text.slice(BEACON_FIELD.length)), "base64").toString()
         : text;
+
       const batch: Array<Omit<SentEvent, "at">> = JSON.parse(json).batch;
       sent.push(...batch.map((event) => ({ ...event, at })));
     }),
@@ -79,6 +86,7 @@ function noteSend(url: URL, body: Promise<string>): void {
 /** Every event sent so far, once each request's body has been read. */
 async function sentEvents(): Promise<SentEvent[]> {
   await Promise.all(reading);
+
   return sent;
 }
 
@@ -95,12 +103,15 @@ function hanging(signal: AbortSignal | null | undefined): Promise<Response> {
 /** Better Auth's answers, by path; the analytics endpoints answer an empty object. */
 function answer(url: URL, signal: AbortSignal | null | undefined): Promise<Response> | Response {
   if (url.pathname === SESSION_PATH && !sessionAnswers) return hanging(signal);
+
   if (url.pathname === TRANSFER_PATH) {
     return Response.json({ electron_authorization_code: "code-for-the-mac" });
   }
+
   if (url.pathname === SESSION_PATH) {
     return Response.json({ session: { id: "session-1", userId: ACCOUNT.id }, user: ACCOUNT });
   }
+
   return Response.json({});
 }
 
@@ -137,12 +148,15 @@ beforeAll(() => {
     configurable: true,
     value: (url: string, body: Blob) => {
       noteSend(new URL(url, window.location.href), body.text());
+
       return true;
     },
   });
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
+
     if (CAPTURE_PATHS.has(url.pathname)) noteSend(url, Promise.resolve(String(init?.body)));
+
     return answer(url, init?.signal);
   });
   // Note that jsdom does not navigate: it reports each attempt on its own
@@ -220,6 +234,7 @@ test("a session read that answers after the page's own work still counts", async
   const { completeSiteSignIn, startSiteAnalytics } = await import("../src/analytics");
   startSiteAnalytics();
   let answerRead: (session: { session: { id: string }; user: typeof ACCOUNT }) => void = () => {};
+
   const read = new Promise<{ session: { id: string }; user: typeof ACCOUNT }>((resolve) => {
     answerRead = resolve;
   });

@@ -124,10 +124,12 @@ function signInsAfterRead(
 ): SignIns {
   const next = new Map<string, SignIn>();
   const servers = new Set([...INTEGRATION_PROVIDER_LIST, ...standing.keys(), ...signIns.keys()]);
+
   for (const server of servers) {
     const status = standing.get(server);
     const held = signIns.get(server);
     const named = failures.find((failure) => (failure.connection ?? failure.provider) === server);
+
     const failure =
       named === undefined
         ? undefined
@@ -135,18 +137,22 @@ function signInsAfterRead(
             reason: named.reason,
             ...(named.message !== undefined ? { message: named.message } : undefined),
           };
+
     const signIn =
       failure === undefined && before !== undefined && before.get(server) === status
         ? held
         : signInAfterRead(held, { status, failure, ...read });
+
     if (signIn !== undefined) next.set(server, signIn);
   }
+
   return next;
 }
 
 /** Whether the server is granted by the account's own GitHub, whose connect the service never answers pending. */
 function byGitHub(server: string): boolean {
   const provider = providerOfServer(server);
+
   return (
     provider !== undefined && INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.GITHUB_SIGN_IN
   );
@@ -157,6 +163,7 @@ function nextDeadline(signIns: SignIns): number | undefined {
   const deadlines = [...signIns.values()].flatMap((signIn) =>
     signIn.kind === SIGN_IN.WAITING ? [signIn.deadline] : [],
   );
+
   return deadlines.length === 0 ? undefined : Math.min(...deadlines);
 }
 
@@ -201,6 +208,7 @@ let shared = freshShared(null);
 /** The book and ledger of `owner`, made afresh where the window's are another account's. */
 function sharedOf(owner: string | null): Shared {
   if (shared.owner !== owner) shared = freshShared(owner);
+
   return shared;
 }
 
@@ -242,6 +250,7 @@ export function useIntegrationStatuses(): IntegrationStatuses {
     (latest: IntegrationStatusesAnswer, deadline: boolean) => {
       const before = ledger.told?.standing;
       const standing = ledger.told?.answer === latest ? before : standingOfRead(latest);
+
       if (standing === undefined) return;
       ledger.told = { answer: latest, standing };
       ledger.marks += 1;
@@ -270,6 +279,7 @@ export function useIntegrationStatuses(): IntegrationStatuses {
   useEffect(() => {
     if (passed === 0) return;
     const latest = ledger.told?.answer;
+
     if (latest !== undefined) tell(latest, true);
   }, [passed, ledger, tell]);
 
@@ -301,21 +311,25 @@ export function useIntegrationStatuses(): IntegrationStatuses {
   const cancelSignIn = useCallback(
     async (server: string): Promise<boolean> => {
       const provider = providerOfServer(server);
+
       if (provider === undefined) return false;
       const waited = book.state.signIns.get(server);
       change((book) =>
         withSignIns(book, (held) => {
           const rest = new Map(held);
           rest.delete(server);
+
           return rest;
         }),
       );
+
       const canceled: IntegrationStatusView | undefined = byGitHub(server)
         ? { status: INTEGRATION_STATUS.DISCONNECTED }
         : await cancelIntegration({
             provider,
             ...(server === provider ? undefined : { connection: server }),
           }).catch(() => undefined);
+
       if (canceled === undefined || "failure" in canceled) {
         if (waited !== undefined) {
           change((book) =>
@@ -324,14 +338,17 @@ export function useIntegrationStatuses(): IntegrationStatuses {
             ),
           );
         }
+
         return false;
       }
+
       // A sign-in begun again while the Cancel was out still stands, and is waited on for its own whole wait.
       if (canceled.status === INTEGRATION_STATUS.PENDING) {
         ledger.marks += 1;
         const begun = begunSignIn(ledger.marks, clockNow(), true);
         change((book) => withSignIns(book, (held) => new Map(held).set(server, begun)));
       }
+
       return true;
     },
     [cancelIntegration, book, change, ledger],
@@ -344,9 +361,12 @@ export function useIntegrationStatuses(): IntegrationStatuses {
    */
   const statusOf = (server: string): IntegrationStatus | undefined => {
     const read = standing?.get(server);
+
     if (read !== undefined) return read;
     const signIn = signIns.get(server);
+
     if (signIn === undefined) return undefined;
+
     return signIn.kind === SIGN_IN.WAITING
       ? INTEGRATION_STATUS.PENDING
       : INTEGRATION_STATUS.DISCONNECTED;
@@ -363,11 +383,15 @@ export function useIntegrationStatuses(): IntegrationStatuses {
   // row of its own beside one that is.
   const unlisted = [...signIns.keys()].flatMap((server): IntegrationAccount[] => {
     const added = integrationConnectionOf(server);
+
     if (added === undefined) return [];
+
     if (accounts.some((account) => account.connection === server)) return [];
+
     if (added.place === 1 && !accounts.some((account) => account.provider === added.provider)) {
       return [];
     }
+
     return [
       {
         provider: added.provider,

@@ -30,22 +30,29 @@ const FULL_PERCENT = 100;
 /** A window's length as its name says it: "5-hour", "Weekly". */
 function lengthLabel(windowMins: number | undefined): string {
   if (windowMins === undefined) return "Limit";
+
   if (windowMins === MINUTES.WEEK) return "Weekly";
+
   if (windowMins === MINUTES.DAY) return "Daily";
+
   if (windowMins % MINUTES.DAY === 0) return `${String(windowMins / MINUTES.DAY)}-day`;
+
   if (windowMins % MINUTES.HOUR === 0) return `${String(windowMins / MINUTES.HOUR)}-hour`;
+
   return `${String(windowMins)}-minute`;
 }
 
 /** A window's name: its length, and the model it alone counts where it counts one, "Weekly (Opus)". */
 function windowLabel(window: PlanUsage): string {
   const length = lengthLabel(window.windowMins);
+
   return window.model === undefined ? length : `${length} (${window.model})`;
 }
 
 /** When a window resets, where a clock can name it: a reset past the dates `Date` holds, as an undocumented answer could send, is none. */
 function resetOf(window: PlanUsage): number | undefined {
   const { resetsAt } = window;
+
   return resetsAt === undefined || Number.isNaN(new Date(resetsAt).getTime())
     ? undefined
     : resetsAt;
@@ -73,9 +80,11 @@ export function planUsageMeters(
   now: number,
 ): PlanUsageMeters | undefined {
   const windows = plan.usageWindows ?? (plan.usage === undefined ? [] : [plan.usage]);
+
   if (windows.length === 0) return undefined;
   const rows = windows.map(windowRow);
   const heardAt = plan.usageHeardAt;
+
   return heardAt !== undefined && now - heardAt > STALE_MS
     ? { rows, heard: `Updated ${agoText(heardAt, now)}` }
     : { rows };

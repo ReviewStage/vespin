@@ -94,14 +94,16 @@ function drawn(words: string): boolean {
 function dialog(): HTMLElement {
   const open = document.querySelector<HTMLElement>('[role="alertdialog"]');
   assert.ok(open !== null, "the confirm dialog stands");
+
   return open;
 }
 
 /** The page's words, apart from any dialog over it. */
 function pageText(): string {
   return [...document.body.children]
-    .filter((each) => each.querySelector('[role="alertdialog"]') === null)
-    .map((each) => each.textContent ?? "")
+    .flatMap((each) =>
+      each.querySelector('[role="alertdialog"]') === null ? [each.textContent ?? ""] : [],
+    )
     .join(" ");
 }
 
@@ -113,6 +115,7 @@ test("the desktop's Install says why it failed, then the version installed, and 
     },
     { outcome: CLI_INSTALL_OUTCOME.INSTALLED, version: "0.3.0", onPath: true },
   ] as const;
+
   let asked = 0;
   fakeActPort({
     [ACT_KIND.CLI_INSTALL]: () => Promise.resolve(answers[asked++] ?? assert.fail("asked twice")),
@@ -143,6 +146,7 @@ test("Sign out everywhere revokes the command's grant and leaves the sign-in to 
   fakeActPort({
     [ACT_KIND.MCP_CLIENTS_REVOKE]: ({ clientId }) => {
       revoked.push(clientId);
+
       return Promise.resolve({ serverUrl: SERVER_URL, clients: [] });
     },
   });

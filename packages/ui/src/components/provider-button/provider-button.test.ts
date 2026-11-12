@@ -35,6 +35,7 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -66,7 +67,9 @@ function only(container: HTMLElement) {
   const buttons = Array.from(container.querySelectorAll("button"));
   expect(buttons).toHaveLength(1);
   const button = buttons[0];
+
   if (button === undefined) throw new Error("no button is drawn");
+
   return { button, name: button.getAttribute("aria-label") ?? button.textContent };
 }
 
@@ -84,6 +87,7 @@ test("a button that names its own act is named by it rather than as a sign-in", 
   const { name } = only(
     mount(gitHub(PROVIDER_BUTTON_SIZE.GATE, [], { words: "Install on GitHub" })),
   );
+
   expect(name).toBe("Install on GitHub");
 });
 

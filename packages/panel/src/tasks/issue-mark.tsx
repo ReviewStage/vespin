@@ -32,6 +32,7 @@ export function IssueMark({
   issue: { readonly number: number; readonly state: IssueState };
 }): React.JSX.Element {
   const Glyph = ISSUE_GLYPH[issue.state];
+
   return (
     <Glyph
       className="issue-mark"

@@ -54,6 +54,7 @@ function mount(driving: boolean, takes: (key: RemoteKey) => boolean = () => true
         onWheel: (input) => wheels.push(input),
         onKey: (input) => {
           keys.push(input);
+
           return takes(input);
         },
         onPaste: (text) => pastes.push(text),
@@ -61,7 +62,9 @@ function mount(driving: boolean, takes: (key: RemoteKey) => boolean = () => true
     ),
   );
   const canvas = container.querySelector("canvas");
+
   if (canvas === null) throw new Error("the surface is drawn");
+
   return { canvas, pointers, wheels, keys, pastes };
 }
 
@@ -106,6 +109,7 @@ test("a driven surface hands on a press held inside it, with its button and clic
 
 test("a driven surface counts a wheel's lines in pixels and keeps the panel from scrolling", () => {
   const { canvas, wheels } = mount(true);
+
   const wheel = new WheelEvent("wheel", {
     bubbles: true,
     cancelable: true,
@@ -114,6 +118,7 @@ test("a driven surface counts a wheel's lines in pixels and keeps the panel from
     deltaY: 3,
     deltaMode: 1,
   });
+
   act(() => {
     canvas.dispatchEvent(wheel);
   });
@@ -131,18 +136,21 @@ test("a driven surface counts a wheel's lines in pixels and keeps the panel from
 
 test("a key the owner takes is kept from the window, and one it leaves is not", () => {
   const { canvas, keys } = mount(true, (key) => key.key !== "w");
+
   const typed = new KeyboardEvent("keydown", {
     bubbles: true,
     cancelable: true,
     key: "a",
     code: "KeyA",
   });
+
   const closing = new KeyboardEvent("keyup", {
     bubbles: true,
     cancelable: true,
     key: "w",
     metaKey: true,
   });
+
   act(() => {
     canvas.dispatchEvent(typed);
     canvas.dispatchEvent(closing);

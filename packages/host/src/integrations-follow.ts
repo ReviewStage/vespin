@@ -166,6 +166,7 @@ function followIntegrations(
     let github: IntegrationStatus | undefined;
     let taken = false;
     let txWait: TxWait | undefined;
+
     const askLabels = () => {
       const unnamed = connections
         .rows()
@@ -175,19 +176,25 @@ function followIntegrations(
             integrationLabelUnread(row.provider, row.label) &&
             !labelAsked.has(row.id),
         );
+
       for (const row of unnamed) labelAsked.add(row.id);
+
       if (unnamed.length > 0) Queue.offerUnsafe(settleAsked, undefined);
     };
+
     // Note that a row is forgotten once it stands pending no more, so a sign-in begun on it again is settled once more.
     const askPending = () => {
       const pending = connections
         .rows()
         .filter((row) => row.status === INTEGRATION_STATUS.PENDING)
         .map((row) => row.id);
+
       const fresh = pending.some((id) => !pendingDrawn.has(id));
       pendingDrawn = new Set(pending);
+
       if (fresh) Queue.offerUnsafe(settleAsked, undefined);
     };
+
     const draw = () => {
       if (!taken || beside === undefined || github === undefined) return;
       const rows = connections.rows();
@@ -195,32 +202,40 @@ function followIntegrations(
       askPending();
       askLabels();
     };
+
     const connections: HeldRows<IntegrationLiveRow> = yield* dependencies.pool.stand(INTEGRATION, {
       redraw: () => Effect.sync(draw),
       confirmation: () => {
         const handed = txWait;
+
         return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
       },
     });
+
     const askGithub = Effect.map(dependencies.github, (answer) => {
       if ("status" in answer) {
         github = answer.status;
         draw();
       } else if (github === undefined) answers.unanswered();
     });
+
     followed({
       rows: () => connections.rows(),
       synced: () => connections.synced(),
       txWait: () => txWait,
       github: askGithub,
     });
+
     // Note that a window come forward settles a sign-in still pending and asks again for every account still to be named.
     const askAgain = Effect.sync(() => {
       labelAsked.clear();
+
       if (!taken) return;
+
       if (pendingDrawn.size > 0) Queue.offerUnsafe(settleAsked, undefined);
       askLabels();
     });
+
     yield* Effect.forkScoped(
       Stream.make(undefined).pipe(
         Stream.concat(yield* dependencies.focus.heard),
@@ -232,24 +247,31 @@ function followIntegrations(
     );
     /** Whether the service refused the read for good, the session another account's now. */
     let gone = false;
+
     const sealed = (poll: boolean, after?: string) =>
       dependencies.gate()
         ? Effect.map(dependencies.seal(userId, poll, after), (answer) => {
             if ("failure" in answer) {
               gone ||= answer.failure === LIVE_SIGNED_OUT.failure;
+
               return { failure: answer.failure, gone };
             }
+
             const next = { offered: answer.offered, multiple: answer.multiple };
+
             if (!sameBeside(beside, next)) {
               beside = next;
               draw();
             }
+
             return answer;
           })
         : Effect.sync(() => {
             gone = true;
+
             return { ...LIVE_SIGNED_OUT, gone };
           });
+
     const take = (parts: typeof LiveRowsSchema.Type) =>
       Effect.andThen(
         connections.answer(integrationLiveRowsOf(parts.connections)),
@@ -258,13 +280,17 @@ function followIntegrations(
           draw();
         }),
       );
+
     yield* restarting(
       Effect.gen(function* () {
         const first = yield* sealed(false);
+
         if ("failure" in first) {
           answers.unanswered();
+
           return !gone;
         }
+
         yield* followTakingRows(
           {
             poll: (after) => sealed(true, after),
@@ -276,6 +302,7 @@ function followIntegrations(
           LiveRowsSchema,
           take,
         ).pipe(Effect.catch(() => Effect.void));
+
         return !gone;
       }),
     );
@@ -295,6 +322,7 @@ export function heldIntegrations(
   return Effect.gen(function* () {
     /** Each standing follow as a write to it is confirmed, by the account. */
     const follows = new Map<string, Followed>();
+
     const slice = yield* heldSlice<typeof LIVE_READ.INTEGRATIONS, string>({
       empty: NO_KEYS_HELD,
       path: (userId) => [userId],
@@ -317,6 +345,7 @@ export function heldIntegrations(
         ),
       tell: dependencies.tell,
     });
+
     return {
       ...slice,
       githubMoved: Effect.suspend(() =>
@@ -328,8 +357,10 @@ export function heldIntegrations(
       confirmed: (userId, connection, txid, moves) =>
         Effect.suspend(() => {
           const follow = follows.get(userId);
+
           if (follow === undefined || txid === undefined) return Effect.void;
           const row = follow.rows().find((each) => each.connection === connection);
+
           // Note that a write that moves nothing the rows show is never carried by an answer that moved, so it is not waited on.
           return moves(row) ? confirmWrite(follow.txWait(), txid) : Effect.void;
         }),
@@ -372,6 +403,7 @@ export function integrationRename(
       Effect.map(send(rename), (answer) => {
         if ("failure" in answer) return { refused: answer };
         const kept = answer.account.label;
+
         return {
           answer,
           txid: carries(rename, kept) ? undefined : answer.txid,

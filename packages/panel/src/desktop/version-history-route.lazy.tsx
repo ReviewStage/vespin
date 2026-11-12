@@ -18,7 +18,9 @@ import { TaskVersionHistory } from "./desktop-version-history.js";
 /** The open description's version history over the whole window, once its task stands under it. */
 function VersionHistoryPlace(): React.JSX.Element {
   const { tasks, sidebar, room, history, settings } = useShellPlaces();
+
   if (!tasks.history.open) return <VersionHistoryRouteLoading />;
+
   return (
     <VersionHistoryFrame>
       {(exit) => (

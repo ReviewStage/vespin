@@ -30,6 +30,8 @@ export function dispatchedBy(
 ): Promise<Response> {
   const pathname = new URL(request.url).pathname;
   const rule = landingRule(pathname, rewrites);
+
   if (rule === undefined) throw new Error(`no rewrite serves ${pathname}`);
+
   return dispatchRoutes(routes).fetch(landed(request, rule));
 }

@@ -38,6 +38,7 @@ function NoteRow({ note }: { note: EventNote }): React.JSX.Element {
       {note.where}
     </Text>
   );
+
   return (
     <li className="flex min-w-0 flex-col gap-ui-4 border-t border-border pt-ui-8">
       {note.glyph == null ? (
@@ -63,7 +64,9 @@ export function EventNotes({ notes }: { notes: readonly EventNote[] }): React.JS
   const [open, setOpen] = useState(false);
   const rest = useUntilFound<HTMLUListElement>(!open, () => setOpen(true));
   const more = notes.slice(NOTES_SHOWN);
+
   if (notes.length === 0) return null;
+
   return (
     <div className="flex min-w-0 flex-col gap-ui-8 first:[&>ul:first-child>li:first-child]:border-t-0 first:[&>ul:first-child>li:first-child]:pt-0">
       <ul className="m-0 flex min-w-0 list-none flex-col gap-ui-8 p-0">

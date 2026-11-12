@@ -75,6 +75,7 @@ export function liveSelection<
       ([key, column]) => [key, epochMillis(column).as(key)] as const,
     ),
   ];
+
   // SAFETY: every key of `columns` and of `instants` is written above, and no other, each answering as its column or its instant does.
   return Object.fromEntries(aliased) as LiveSelection<Columns, Instants>;
 }
@@ -97,6 +98,7 @@ export function liveLatest(column: SQLWrapper): SQL<number> {
 export function liveKeysIn(expression: SQLWrapper, keys: readonly string[]): SQL {
   if (keys.length === 0) return sql`false`;
   const type = is(expression, Column) ? expression.getSQLType() : "text";
+
   return sql`${expression} in (select jsonb_array_elements_text(${JSON.stringify([...new Set(keys)])}::jsonb)::${sql.raw(type)})`;
 }
 
@@ -111,6 +113,7 @@ const LiveValuesSchema = Schema.Array(
  */
 export function liveStatementOf(statement: LiveSelect): Option.Option<LiveStatement> {
   const { sql: text, params } = statement.toSQL();
+
   return Option.map(Schema.decodeUnknownOption(LiveValuesSchema)(params), (values) => ({
     sql: text,
     params: values.map((value) => (value instanceof Date ? value.toISOString() : value)),

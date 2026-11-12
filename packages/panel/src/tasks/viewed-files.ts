@@ -59,6 +59,7 @@ const UNANSWERED: AgentPullRequestViewedAnswerView = { failure: AGENT_CALL_FAILU
 function readNote(answer: AgentPullRequestViewedAnswerView): WriteNote | undefined {
   if (!("failure" in answer) && answer.outcome === PULL_REQUEST_WRITE_OUTCOME.DONE)
     return undefined;
+
   return noteOf(answer);
 }
 
@@ -87,9 +88,11 @@ export function useViewedFiles(
   reading: number | undefined,
 ): ViewedFiles {
   const { number, write } = source;
+
   const held = useQuery(
     pullRequestViewedQuery(reading === undefined ? undefined : pullRequestAsked(agentId, number)),
   );
+
   const { mutate: retryViewed } = useMutation(pullRequestPartRetryMutation());
   const [states, setStates] = useState<ReadonlyMap<string, FileViewedState> | undefined>();
   const [pressed, setPressed] = useState<ReadonlyMap<string, boolean>>(new Map());
@@ -107,6 +110,7 @@ export function useViewedFiles(
   useEffect(() => {
     const was = readFor.current;
     readFor.current = reading;
+
     if (was !== undefined && reading !== undefined && was !== reading) {
       retryViewed({ part: PULL_REQUEST_PART.VIEWED, ...pullRequestAsked(agentId, number) });
     }
@@ -114,21 +118,28 @@ export function useViewedFiles(
 
   const answer: AgentPullRequestViewedAnswerView | undefined =
     held.data ?? (held.isError ? UNANSWERED : undefined);
+
   useEffect(() => {
     if (answer === undefined) return;
     const asked = takenAt.current;
     takenAt.current = settled.current.count;
     setNote(readNote(answer));
+
     if ("failure" in answer || answer.outcome !== PULL_REQUEST_WRITE_OUTCOME.DONE) {
       setStates(undefined);
+
       return;
     }
+
     // A file pressed and not settled, or settled since the answer before this one, keeps the mark it has now.
     const since = (path: string) =>
       (settled.current.at.get(path) ?? 0) > asked || pressing.current.has(path);
+
     setStates((was) => {
       const next = new Map(answer.files.map((file) => [file.path, file.state]));
+
       for (const [path, state] of was ?? []) if (since(path)) next.set(path, state);
+
       return next;
     });
   }, [answer]);
@@ -144,6 +155,7 @@ export function useViewedFiles(
       const action = wanted
         ? PULL_REQUEST_ACTION.MARK_FILE_VIEWED
         : PULL_REQUEST_ACTION.UNMARK_FILE_VIEWED;
+
       sentAt.set(path, pressing.current.get(path)?.presses ?? 0);
       void write({ action, path })
         .catch(
@@ -153,28 +165,35 @@ export function useViewedFiles(
         )
         .then((answer) => {
           const now = pressing.current.get(path);
+
           if (now === undefined) return;
           const sent = sentAt.get(path) ?? 0;
           // Every mark GitHub took is GitHub's word at once, so a later refusal shows what GitHub holds.
           const word = took(answer) ? wanted : confirmed;
+
           if (took(answer)) {
             const state = wanted ? FILE_VIEWED_STATE.VIEWED : FILE_VIEWED_STATE.UNVIEWED;
             setStates((was) => (was === undefined ? was : new Map(was).set(path, state)));
           }
+
           // A press made since this one was sent is sent, where GitHub does not yet hold what it asks, whatever became of this one.
           if (now.wanted !== word && (now.presses > sent || now.wanted !== wanted)) {
             return send(path, now.wanted, word);
           }
+
           pressing.current.delete(path);
           settled.current.count += 1;
           settled.current.at.set(path, settled.current.count);
           const stood = now.wanted === word;
+
           if (!stood) setNote(noteOf(answer));
           setPressed((was) => {
             const next = new Map(was);
             next.delete(path);
+
             return next;
           });
+
           for (const tell of now.told) tell(stood);
         });
     },
@@ -193,16 +212,20 @@ export function useViewedFiles(
       });
       setPressed((was) => new Map(was).set(path, wanted));
       setNote(undefined);
+
       if (out === undefined) send(path, wanted, states?.get(path) === FILE_VIEWED_STATE.VIEWED);
+
       return settles.promise;
     },
     [viewed, send, states],
   );
 
   const dismiss = useCallback(() => setNote(undefined), []);
+
   const marks = useMemo(
     () => (states === undefined ? undefined : { viewed, toggle }),
     [states, viewed, toggle],
   );
+
   return { marks, note, dismiss };
 }

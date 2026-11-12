@@ -12,7 +12,7 @@ export const REPLAY_PROVIDER_KEY = "openai";
 
 type StoredPart = UIMessagePart<UIDataTypes, UITools>;
 
-declare const CLIENT_SHAPE: unique symbol;
+declare const CLIENT_BRAND: unique symbol;
 
 /**
  * A stored message in the one shape a read route may answer with. The brand
@@ -22,7 +22,7 @@ declare const CLIENT_SHAPE: unique symbol;
  * which is the strip. A route whose answer type names this shape cannot
  * hand a device an unstripped message, whoever adds the route.
  */
-export type ClientUIMessage = StoredUIMessage & { readonly [CLIENT_SHAPE]: true };
+export type ClientUIMessage = StoredUIMessage & { readonly [CLIENT_BRAND]: true };
 
 /**
  * A stored message as a device may receive it: the row's parts with the
@@ -40,12 +40,15 @@ export function clientUIMessage(message: StoredUIMessage): ClientUIMessage {
 function clientPart(part: StoredPart): StoredPart {
   if (!("providerMetadata" in part) || part.providerMetadata === undefined) return part;
   const { [REPLAY_PROVIDER_KEY]: replay, ...kept } = part.providerMetadata;
+
   if (replay === undefined) return part;
   const cut = { ...part };
+
   if (Object.keys(kept).length === 0) {
     delete cut.providerMetadata;
   } else {
     cut.providerMetadata = kept;
   }
+
   return cut;
 }

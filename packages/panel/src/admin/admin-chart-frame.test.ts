@@ -31,6 +31,7 @@ function render(element: React.ReactElement): HTMLElement {
   document.body.replaceChildren(container);
   root = createRoot(container);
   act(() => root?.render(element));
+
   return container;
 }
 

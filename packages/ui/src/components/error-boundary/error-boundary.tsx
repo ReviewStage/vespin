@@ -164,6 +164,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   override render(): ReactNode {
     if (!this.state.failed) return this.props.children;
+
     return (
       <ReloadState failure={this.props.failure} room={this.props.room} onReload={this.reload} />
     );

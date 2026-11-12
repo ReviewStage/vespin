@@ -95,15 +95,21 @@ function gateRoute(resolveUserId: UserIdResolver<string | undefined>) {
       hostedRefusing(
         Effect.gen(function* () {
           const request = yield* HttpServerRequest.HttpServerRequest;
+
           if (request.method !== HTTP_METHOD.GET) {
             return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
           }
+
           const environment = yield* HostedEnvironment;
+
           if (environment.cronSecret === undefined) {
             return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
           }
+
           const account = yield* resolvedAccount(resolveUserId, request.headers.authorization);
+
           if (Option.isNone(account)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+
           return hostedJsonResponse(HOSTED_HTTP_STATUS.OK, { userId: account.value });
         }),
       ),
@@ -134,10 +140,13 @@ const CASES = [
 
 test("the route reads a bearer the request carries", async () => {
   const seen: (string | undefined)[] = [];
+
   const route = gateRoute((authorization) => {
     seen.push(authorization);
+
     return Effect.succeedSome(USER_ID);
   });
+
   const response = await route.fetch(gateRequest("GET"));
   assert.equal(response.status, HOSTED_HTTP_STATUS.OK);
   assert.deepEqual(seen, [AUTHORIZATION]);
@@ -145,6 +154,7 @@ test("the route reads a bearer the request carries", async () => {
 
 test("the route built from a route layer answers the gate's own refusals", async () => {
   const gate: number[] = [];
+
   for (const entry of CASES) {
     vi.stubEnv(CRON_SECRET, entry.secret ?? "");
     gate.push(
@@ -156,6 +166,7 @@ test("the route built from a route layer answers the gate's own refusals", async
     );
     await disposeWebRuntime();
   }
+
   assert.deepEqual(
     gate,
     CASES.map((entry) => entry.status),
@@ -169,6 +180,7 @@ test("a route refuses a cookie POST a foreign page sent, and answers its own pag
   const foreign = await route.fetch(
     post(WRITE_PATH, { cookie: SESSION_COOKIE, origin: FOREIGN_ORIGIN }),
   );
+
   assert.equal(foreign.status, HOSTED_HTTP_STATUS.FORBIDDEN);
   assert.deepEqual(await foreign.json(), { error: HOSTED_API_ERROR.NOT_PERMITTED });
 
@@ -185,6 +197,7 @@ test("a route refuses a cookie POST a foreign page sent, and answers its own pag
 test("a dispatch that names Better Auth's path on another route reaches none of that route's handlers", async () => {
   stubProduction();
   const dispatcher = dispatchRoutes(new Map([[WRITE_ROUTE_KEY, writeRoute()]]));
+
   const dispatched = (query: string) =>
     post(`/api/default.js?${DISPATCH_QUERY.ROUTE}=${WRITE_ROUTE_KEY}${query}`, {
       cookie: SESSION_COOKIE,
@@ -201,6 +214,7 @@ test("a dispatch that names Better Auth's path on another route reaches none of 
 
 test("Better Auth's own route takes a cookie POST a foreign page sent, and answers it itself", async () => {
   stubProduction();
+
   const route = routeFromHttpRouter(
     authApp(
       async () => Response.json({ handled: true }, { status: HOSTED_HTTP_STATUS.OK }),
@@ -211,6 +225,7 @@ test("Better Auth's own route takes a cookie POST a foreign page sent, and answe
   const answered = await route.fetch(
     post("/api/auth/sign-in/social", { cookie: SESSION_COOKIE, origin: FOREIGN_ORIGIN }),
   );
+
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
   assert.deepEqual(await answered.json(), { handled: true });
 });

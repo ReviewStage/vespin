@@ -26,6 +26,7 @@ const TEXT = "# Context\n\nOnly an admin can add a member.\n";
 function saved(editor: DocumentEditor) {
   const request = pendingSave(editor);
   assert.ok(request !== undefined, "a save is pending");
+
   return request;
 }
 
@@ -42,6 +43,7 @@ test("one save is out at a time; words typed meanwhile save after it lands, from
 
 test("a conflict holds the developer's words and saves nothing until they choose", () => {
   const typed = editorTyped(editorOpened(TEXT), `${TEXT}Mine.\n`);
+
   const conflicted = editorAnswered(editorSent(typed, saved(typed)), {
     conflict: { current: `${TEXT}Vespin's.\n` },
   });
@@ -127,6 +129,7 @@ const SECTIONS = [
 /** An editor whose save of `mine` met `theirs`, the text another writer saved from the same base meanwhile. */
 function conflictedOver(mine: string, theirs: string): DocumentEditor {
   const typed = editorTyped(editorOpened(SECTIONS), mine);
+
   return editorAnswered(editorSent(typed, saved(typed)), { conflict: { current: theirs } });
 }
 
@@ -134,6 +137,7 @@ function conflictedOver(mine: string, theirs: string): DocumentEditor {
 function storedAfter(editor: DocumentEditor, current: string): string {
   const outcome = applyDocumentEdit(current, saved(editor));
   assert.ok("applied" in outcome, "the save lands");
+
   return outcome.applied;
 }
 
@@ -154,6 +158,7 @@ test("Keep mine over a writer who changed another section saves both changes", (
 
 test("Keep mine where both writers changed the same line saves mine there and theirs elsewhere", () => {
   const mine = SECTIONS.replace("Only an admin", "Only an owner");
+
   const theirs = SECTIONS.replace("Only an admin", "Any member").replace(
     "Send the invite.",
     "Send the invite today.",

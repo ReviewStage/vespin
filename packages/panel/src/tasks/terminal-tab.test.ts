@@ -11,7 +11,7 @@ import {
   type TerminalPortOutbound,
   type TerminalRefusal,
 } from "@repo/features/terminal-acts";
-import { SANDBOX_STATE } from "@repo/features/terminal-wire";
+import { SANDBOX_STATE, type TerminalSummary } from "@repo/features/terminal-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   ACT_ERROR,
@@ -99,6 +99,7 @@ function keep(shells: readonly HeldShell[], account?: string): void {
 function kept(account?: string): readonly HeldShell[] {
   const all = keptValue();
   const lists = all.account === account ? all : all.accounts?.[account ?? ""];
+
   return lists?.cloud[AGENT.id] ?? [];
 }
 
@@ -135,6 +136,8 @@ interface Main {
   resumeRefused: TerminalRefusal | undefined;
   /** Whether a sandbox the service said it resumed still refuses a shell as stopped. */
   staysStopped: boolean;
+  /** The shells `terminal.list` answers, none where unset. */
+  listed: readonly TerminalSummary[];
   /** Posts a shell's port to the tab, as main does after an attach, answering the host's half. */
   readonly post: (terminalId: string) => HostPort;
 }
@@ -143,41 +146,51 @@ const roots: Root[] = [];
 
 // The terminal bundle landed before any tab is drawn, as it is once a terminal has been shown in this window.
 let FITTED: SideBundles;
+
 beforeAll(async () => {
   FITTED = await Effect.runPromise(fittedTerminalBundles());
 });
+
 let main: Main;
 
 beforeEach(() => {
   keep([{ shell: TAB.shell, title: TAB.title }]);
   const sent: SentAct[] = [];
   let made = 0;
+
   const answer = (request: TerminalAct): PortActResult<TerminalActKind> => {
     switch (request.kind) {
       case ACT_KIND.TERMINAL_CREATE:
         if (main.createRefused !== undefined) return { failure: main.createRefused };
         // Note that each shell made has an id of its own, as the service mints one per shell, the first of them MADE.
         made += 1;
+
         return { terminal: shell(made === 1 ? MADE : crypto.randomUUID()) };
       case ACT_KIND.TERMINAL_KILL:
         return { sandbox: SANDBOX_STATE.RUNNING, terminals: [] };
+      case ACT_KIND.TERMINAL_LIST:
+        return { sandbox: SANDBOX_STATE.RUNNING, terminals: main.listed };
       case ACT_KIND.TERMINAL_RESUME:
         if (main.resumeRefused !== undefined) return { failure: main.resumeRefused };
+
         // A resumed sandbox runs, so a shell is made in it.
         if (!main.staysStopped && main.createRefused === TERMINAL_REFUSAL.SANDBOX_STOPPED) {
           main.createRefused = undefined;
         }
+
         return { sandbox: SANDBOX_STATE.RUNNING };
       default:
         return undefined;
     }
   };
+
   main = {
     sent,
     down: new Set(),
     createRefused: undefined,
     resumeRefused: undefined,
     staysStopped: false,
+    listed: [],
     post: (terminalId) => {
       const { port1: port } = new MessageChannel();
       const posted: TerminalPortInbound[] = [];
@@ -194,6 +207,7 @@ beforeEach(() => {
           }),
         );
       });
+
       return {
         posted,
         closed: () => close.mock.calls.length > 0,
@@ -203,16 +217,20 @@ beforeEach(() => {
       };
     },
   };
+
   /** A terminal act answered as main's procedure would: refused, or answered now. */
   const respond = (request: TerminalAct): Promise<PortActResult<TerminalActKind>> => {
     sent.push(request);
+
     if (main.down.has(request.kind)) {
       return Promise.reject(
         new ORPCError(ACT_ERROR.REFUSED, { message: "Could not reach this agent's sandbox." }),
       );
     }
+
     return Promise.resolve(answer(request));
   };
+
   fakeAppBridge({});
   // SAFETY: each procedure answers its own kind, whose answer `answer` gives by the same kind; the casts are the one dispatch on it.
   fakeActPort({
@@ -231,6 +249,10 @@ beforeEach(() => {
     [ACT_KIND.TERMINAL_ATTACH]: (payload) =>
       respond({ kind: ACT_KIND.TERMINAL_ATTACH, payload }) as Promise<
         PortActResult<typeof ACT_KIND.TERMINAL_ATTACH>
+      >,
+    [ACT_KIND.TERMINAL_LIST]: (payload) =>
+      respond({ kind: ACT_KIND.TERMINAL_LIST, payload }) as Promise<
+        PortActResult<typeof ACT_KIND.TERMINAL_LIST>
       >,
   });
   // jsdom has neither constructed sheets nor media queries; the window has both.
@@ -253,6 +275,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
   document.head.innerHTML = "";
@@ -281,16 +304,22 @@ async function mount(shown = true, still = true, account?: string) {
   const terminals = windowTerminals();
   let closed = 0;
   let end: ((tab: TerminalStripTab) => void) | undefined;
+
   const Ender = () => {
     end = useEndTerminalTab();
+
     return null;
   };
+
   // The account signed in, as the window's root hands it on.
   const Owner = ({ of }: { of: string | undefined }) => {
     useTerminalsOwner(of);
+
     return null;
   };
+
   let signedIn = account;
+
   const render = (on: boolean, drawn = true) => {
     const tab = createElement(TerminalTab, {
       tab: TAB,
@@ -301,6 +330,7 @@ async function mount(shown = true, still = true, account?: string) {
         closed += 1;
       },
     });
+
     act(() =>
       root.render(
         withQueryClient(
@@ -325,13 +355,17 @@ async function mount(shown = true, still = true, account?: string) {
       ),
     );
   };
+
   render(shown);
   await settle();
+
   const keyboard = () => {
     const field = container.querySelector("textarea");
     assert.ok(field, "the screen takes the keyboard");
+
     return field;
   };
+
   return {
     container,
     terminals,
@@ -364,6 +398,7 @@ async function mount(shown = true, still = true, account?: string) {
       const field = keyboard();
       const down = new KeyboardEvent("keydown", { key, keyCode, bubbles: true, cancelable: true });
       field.dispatchEvent(down);
+
       if (!down.defaultPrevented) {
         const charCode = key.length === 1 ? key.charCodeAt(0) : keyCode;
         field.dispatchEvent(
@@ -376,27 +411,30 @@ async function mount(shown = true, still = true, account?: string) {
           }),
         );
       }
+
       await settle();
     },
   };
 }
 
 /** The payload of the act of the kind the tab sent last. */
-function lastPayload(kind: TerminalActKind) {
+function lastPayload<Kind extends TerminalActKind>(kind: Kind): PortActPayload<Kind> {
   const request = main.sent.findLast((each) => each.kind === kind);
   assert.ok(request && "payload" in request, `the tab sent ${kind}`);
-  return request.payload;
+
+  // SAFETY: a request sent under a kind carries that kind's payload, as the act port checks it.
+  return request.payload as PortActPayload<Kind>;
 }
 
 test("shown, the tab starts a shell in the agent's sandbox, keeps its id for a reload, and attaches to it; hidden and shown again, it keeps its port and asks nothing more", async () => {
   const tab = await mount();
   assert.deepEqual(tab.kinds(), ["terminal.create", "terminal.attach"]);
-  assert.equal((lastPayload(ACT_KIND.TERMINAL_ATTACH) as { terminalId: string }).terminalId, MADE);
+  assert.equal(lastPayload(ACT_KIND.TERMINAL_ATTACH).terminalId, MADE);
   assert.deepEqual(kept(), [{ shell: TAB.shell, title: "Cloud 1", terminal: MADE }]);
-  assert.equal(tab.standing(), "· connecting…");
+  assert.equal(tab.standing(), "connecting…");
   const port = main.post(MADE);
   port.say({ type: "state", state: "attached" });
-  assert.equal(tab.standing(), "· connected");
+  assert.equal(tab.standing(), "connected");
   await tab.render(false);
   await tab.render(true);
   assert.equal(port.closed(), false);
@@ -407,10 +445,7 @@ test("after a reload, the tab attaches to the shell its terminal kept, which run
   keep([{ shell: TAB.shell, title: TAB.title, terminal: RUNNING_ON }]);
   const tab = await mount();
   assert.deepEqual(tab.kinds(), ["terminal.attach"]);
-  assert.equal(
-    (lastPayload(ACT_KIND.TERMINAL_ATTACH) as { terminalId: string }).terminalId,
-    RUNNING_ON,
-  );
+  assert.equal(lastPayload(ACT_KIND.TERMINAL_ATTACH).terminalId, RUNNING_ON);
 });
 
 test("closing the tab ends its shell in the sandbox, its port closed and its terminal out of the window's list", async () => {
@@ -440,12 +475,14 @@ test("another account signing in detaches the tab's shell and ends none: its por
 test("what the window keeps reads, through the shape the build before this one reads, as the signed-in account's terminals", async () => {
   keep([{ shell: TAB.shell, title: TAB.title }], "ada");
   await mount(true, true, "ada");
+
   // The shape a build that held one list for every account reads, as that build declares it.
   const shell = Schema.Struct({
     shell: Schema.String,
     title: Schema.String,
     terminal: Schema.optional(Schema.String),
   });
+
   const byAgent = Schema.Record(Schema.String, Schema.Array(shell));
   const before = Schema.fromJsonString(Schema.Struct({ cloud: byAgent, local: byAgent }));
 
@@ -479,10 +516,7 @@ test("the terminals a build before this one kept are the signed-in account's, an
   );
   const tab = await mount(true, true, "ada");
   assert.deepEqual(tab.kinds(), ["terminal.attach"]);
-  assert.equal(
-    (lastPayload(ACT_KIND.TERMINAL_ATTACH) as { terminalId: string }).terminalId,
-    RUNNING_ON,
-  );
+  assert.equal(lastPayload(ACT_KIND.TERMINAL_ATTACH).terminalId, RUNNING_ON);
 
   await tab.signIn("grace", false);
 
@@ -515,9 +549,11 @@ test("while another account is signed in, nothing the first's shell says reaches
 
   // Note that the tab stays drawn, as a strip that still held it would draw it.
   await tab.signIn("grace", true);
+
   const ada = tab.terminals.sessions.session("ada", TERMINAL_KIND.CLOUD, AGENT.id, TAB.shell, () =>
     assert.fail("the first account's session stands"),
   );
+
   const detached = ada.state;
   await tab.type("a", 65);
   port.say({ type: "state", state: "exited", code: 0 });
@@ -527,7 +563,7 @@ test("while another account is signed in, nothing the first's shell says reaches
     port.posted.filter((message) => message.type === "input"),
     [],
   );
-  assert.notEqual(tab.standing(), "· exited", "the first account's shell said nothing here");
+  assert.notEqual(tab.standing(), "exited", "the first account's shell said nothing here");
   assert.deepEqual(ada.state, detached, "nor to its own detached session");
   assert.ok(!tab.kinds().includes(ACT_KIND.TERMINAL_KILL), "no shell was ended");
 });
@@ -553,7 +589,7 @@ test("the first account signing in again finds its terminal, which attaches to t
   await tab.signIn("ada", true);
 
   assert.deepEqual(tab.kinds(before), ["terminal.attach"]);
-  assert.equal((lastPayload(ACT_KIND.TERMINAL_ATTACH) as { terminalId: string }).terminalId, MADE);
+  assert.equal(lastPayload(ACT_KIND.TERMINAL_ATTACH).terminalId, MADE);
   assert.deepEqual(tab.terminals.held.of("ada", TERMINAL_KIND.CLOUD, AGENT.id), [
     { shell: TAB.shell, title: "Cloud 1", terminal: MADE },
   ]);
@@ -576,7 +612,7 @@ test("a switch away and back before the first attach's port arrives keeps the sc
   );
   assert.equal(first.closed(), true);
   assert.equal(second.closed(), false);
-  assert.equal(tab.standing(), "· connected");
+  assert.equal(tab.standing(), "connected");
   assert.deepEqual(
     second.posted.filter((message) => message.type === "input"),
     [{ type: "input", data: "a" }],
@@ -594,7 +630,7 @@ test("a tab shown over a stopped sandbox resumes it, saying it is connecting, an
     "terminal.create",
     "terminal.attach",
   ]);
-  assert.equal(tab.standing(), "· connecting…");
+  assert.equal(tab.standing(), "connecting…");
   assert.equal(tab.bar(), undefined);
   const port = main.post(MADE);
   port.say({ type: "state", state: "attached" });
@@ -652,7 +688,7 @@ test("an agent that has not opened its sandbox yet shows the waiting bar, and th
   const { deliverTasks } = handHostReads({});
   deliverTasks(listedWithSandbox(false));
   const tab = await mount();
-  assert.equal(tab.standing(), "· waiting for sandbox");
+  assert.equal(tab.standing(), "waiting for sandbox");
   assert.equal(tab.bar(), "Waiting for the agent to open its sandbox…");
   assert.equal(tab.action(), null);
   main.createRefused = undefined;
@@ -727,12 +763,12 @@ test("a connection the host ended says so in the bar, and any key reconnects to 
   const tab = await mount();
   const port = main.post(MADE);
   port.say({ type: "state", state: "idle" });
-  assert.equal(tab.standing(), "· disconnected");
+  assert.equal(tab.standing(), "disconnected");
   assert.equal(tab.bar(), "Disconnected. Press any key to reconnect.");
   const before = main.sent.length;
   await tab.type("q", 81);
   assert.deepEqual(tab.kinds(before), ["terminal.attach"]);
-  assert.equal((lastPayload(ACT_KIND.TERMINAL_ATTACH) as { terminalId: string }).terminalId, MADE);
+  assert.equal(lastPayload(ACT_KIND.TERMINAL_ATTACH).terminalId, MADE);
   // The key reconnected; it never reached the shell.
   assert.deepEqual(
     port.posted.filter((message) => message.type === "input"),
@@ -766,7 +802,7 @@ test("a shell that ended takes any key for a new one in the same tab", async () 
   const tab = await mount();
   const port = main.post(MADE);
   port.say({ type: "state", state: "exited", code: 0 });
-  assert.equal(tab.standing(), "· exited");
+  assert.equal(tab.standing(), "exited");
   assert.equal(tab.bar(), "Process exited with code 0. Press any key for a new shell.");
   const before = main.sent.length;
   await tab.type("a", 65);
@@ -774,11 +810,56 @@ test("a shell that ended takes any key for a new one in the same tab", async () 
   assert.equal(kept().length, 1, "the tab is still the one terminal");
 });
 
+test("a run action's tab takes nothing typed, and a key after its shell ended starts no shell in its place", async () => {
+  keep([
+    {
+      shell: TAB.shell,
+      title: TAB.title,
+      terminal: RUNNING_ON,
+      action: { id: "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a01" },
+    },
+  ]);
+  const tab = await mount();
+  const port = main.post(RUNNING_ON);
+  port.say({ type: "state", state: "attached" });
+  await tab.type("a", 65);
+  port.say({ type: "state", state: "exited", code: 0 });
+  await settle();
+  const before = main.sent.length;
+  await tab.type("a", 65);
+
+  assert.deepEqual(
+    port.posted.filter((message) => message.type === "input"),
+    [],
+  );
+  assert.deepEqual(tab.kinds(before), []);
+  assert.equal(tab.bar(), "This run action’s terminal ended. Run the action to start it again.");
+});
+
+test("a run action's tab whose shell went attaches again once its action runs again, starting no shell of its own", async () => {
+  const action = "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a01";
+  keep([{ shell: TAB.shell, title: TAB.title, terminal: RUNNING_ON, action: { id: action } }]);
+  // The action runs again in its own pane, under the same shell, as a press on its Run starts it.
+  main.listed = [{ ...shell(RUNNING_ON), running: true, runAction: action }];
+  const tab = await mount();
+  const port = main.post(RUNNING_ON);
+  port.say({ type: "state", state: "attached" });
+  const before = main.sent.length;
+  port.say({ type: "state", state: "exited", code: 0 });
+  await settle();
+
+  assert.deepEqual(
+    tab.kinds(before).filter((kind) => kind !== ACT_KIND.TERMINAL_LIST),
+    ["terminal.attach"],
+  );
+  assert.equal(lastPayload(ACT_KIND.TERMINAL_ATTACH).terminalId, RUNNING_ON);
+});
+
 test("a service it cannot reach shows a bar that says so, whose action asks again", async () => {
   main.down.add(ACT_KIND.TERMINAL_CREATE);
   mountAnnouncer();
   const tab = await mount();
-  assert.equal(tab.standing(), "· unreachable");
+  assert.equal(tab.standing(), "unreachable");
   assert.equal(tab.bar(), "Could not connect. Check your internet connection.");
   assert.equal(
     announcedPolitely(),

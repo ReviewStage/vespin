@@ -17,11 +17,13 @@ it.effect(
     Effect.gen(function* () {
       const recording = recordingHttpClient(() => new Response("{}"));
       const http = yield* Effect.provide(HttpClient.HttpClient, recording.layer);
+
       const named = clientNamedOnService(
         http,
         { platform: CLIENT_PLATFORM.IOS, version: "0.1.0" },
         "https://app.test/",
       );
+
       yield* named.execute(HttpClientRequest.get("https://app.test/api/account/access"));
       yield* named.execute(HttpClientRequest.get("https://api.github.com/user"));
       const [service, other] = recording.requests;

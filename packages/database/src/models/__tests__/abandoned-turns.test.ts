@@ -49,6 +49,7 @@ const openConversation = (
     yield* db
       .insert(conversations)
       .values({ id: conversationId, userId, kind, runtimeSessionId: runtimeSessionId ?? null });
+
     return { userId, conversationId } satisfies ConversationTarget;
   });
 
@@ -69,6 +70,7 @@ const turnIn = (
       origin: TURN_ORIGIN.TYPED,
       runtimeTurnId: "turn_0",
     });
+
     if (stands === TURN_STATUS.QUEUED) return turnId;
     yield* writer.consume(target, {
       ...turn,
@@ -78,6 +80,7 @@ const turnIn = (
       trigger: TURN_TRIGGER.ASK,
       at: STARTED_AT,
     });
+
     if (stands === TURN_STATUS.RUNNING) return turnId;
     yield* writer.consume(target, {
       ...turn,
@@ -87,6 +90,7 @@ const turnIn = (
       responseIds: [],
       at: STARTED_AT + 1,
     });
+
     return turnId;
   });
 
@@ -94,6 +98,7 @@ const turnIn = (
 const newestTurnOf = (target: ConversationTarget) =>
   Effect.map(latestTurnsOfReached([target.conversationId]), (turns) => {
     const turn = turns.get(target.conversationId);
+
     return [turn?.status, turn?.failure];
   });
 
@@ -104,8 +109,10 @@ it.layer(getTestDB())("a turn whose end is not coming", (it) => {
       Effect.gen(function* () {
         const db = yield* Database;
         const writer = yield* storeWriter({ tools: {} });
+
         const lose = (target: ConversationTarget) =>
           settleRunnerLostTurns(writer, target.conversationId, STARTED_AT + 10);
+
         const projectionOf = (target: ConversationTarget) =>
           Effect.map(
             db
@@ -114,6 +121,7 @@ it.layer(getTestDB())("a turn whose end is not coming", (it) => {
               .where(eq(conversations.id, target.conversationId)),
             ([row]) => row?.projection,
           );
+
         const holding = (target: ConversationTarget, turnId: string) =>
           db
             .update(conversations)
@@ -165,8 +173,10 @@ it.layer(getTestDB())("a turn whose end is not coming", (it) => {
     () =>
       Effect.gen(function* () {
         const writer = yield* storeWriter({ tools: {} });
+
         const settle = (target: ConversationTarget, id: string) =>
           settleEndedSessionTurn(writer, { id, ...target }, STARTED_AT + 10);
+
         const ended = [TURN_STATUS.FAILED, TURN_FAILURE.SESSION_ENDED];
 
         const running = yield* openAgentConversation;
@@ -197,6 +207,7 @@ it.layer(getTestDB())("a turn whose end is not coming", (it) => {
         const db = yield* Database;
         const writer = yield* storeWriter({ tools: {} });
         const ended = [TURN_STATUS.FAILED, TURN_FAILURE.SESSION_ENDED];
+
         const endOf = (session: string) =>
           settleEndedSession(writer, session, { now: STARTED_AT + 10 });
 

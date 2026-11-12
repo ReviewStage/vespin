@@ -209,6 +209,7 @@ test("a task's own link, or a section's, is read under /task/ and with a slash a
       target,
     );
   }
+
   assert.equal(appLinkOf(`${HOME}/plan/${TASK}/`), `vespin://vespin.dev/acme/task/${TASK}`);
 });
 
@@ -361,6 +362,7 @@ test("a link is handed to the desktop in its own scheme, written again from the 
     appLinkOf(`vespin://vespin.dev/personal-u_1/plan/${TASK}/inbox/${OTHER}`),
     `vespin://vespin.dev/personal-u_1/task/${TASK}/inbox/${OTHER}`,
   );
+
   for (const target of [
     `https://example.com/acme/plan/${TASK}`,
     `luke://plan/${TASK}`,
@@ -373,6 +375,7 @@ test("a link is handed to the desktop in its own scheme, written again from the 
 
 test("a box's pairing link names its code under no workspace, read whatever its case and dash, and is handed to the desktop as the box shows it", () => {
   const place = { kind: ACCOUNT_DESTINATION.CONNECT, code: "BCDFGHJK" } as const;
+
   for (const target of [
     "https://vespin.dev/connect/BCDF-GHJK",
     "https://vespin.dev/connect/bcdfghjk/?from=box#top",
@@ -380,10 +383,12 @@ test("a box's pairing link names its code under no workspace, read whatever its 
   ]) {
     assert.deepEqual(readShownLink(target), { place }, target);
   }
+
   assert.equal(
     appLinkOf("https://vespin.dev/connect/bcdf-ghjk?from=box"),
     "vespin://vespin.dev/connect/BCDF-GHJK",
   );
+
   // A code holds no vowel, so a step of any workspace's place is never read as one.
   for (const target of [
     "https://vespin.dev/connect",
@@ -393,6 +398,7 @@ test("a box's pairing link names its code under no workspace, read whatever its 
   ]) {
     assert.equal(readShownLink(target), undefined, target);
   }
+
   assert.deepEqual(readShownLink(`https://vespin.dev/connect/plan/${TASK}`), {
     workspace: "connect",
     place: { kind: LINK_DESTINATION.TASK, planId: TASK },
@@ -458,6 +464,7 @@ test("every GitHub page the app reads is written by its address, and read back f
     assert.equal(gitHubPageLink(page), address);
     assert.deepEqual(readGitHubPage(address), page, address);
   }
+
   assert.deepEqual(readGitHubPage("https://github.com/acme/relay/pull/42/files#diff-1"), {
     kind: GITHUB_PAGE.PULL_REQUEST,
     repository: "acme/relay",
@@ -497,6 +504,7 @@ test("a GitHub page on a branch, one whose path climbs, lines no file has, or an
 test("a Linear issue's page names its identifier, in capitals, with its slug or without; any other page names none", () => {
   assert.equal(readLinearIssue("https://linear.app/acme/issue/ENG-123/fix-the-thing"), "ENG-123");
   assert.equal(readLinearIssue("https://linear.app/acme/issue/eng-123"), "ENG-123");
+
   for (const target of [
     "https://linear.app/acme/project/eng-123",
     "https://linear.app/acme/issue/123",

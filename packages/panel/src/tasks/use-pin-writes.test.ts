@@ -34,10 +34,13 @@ function mountWrites(procedures: Partial<FakeActPort>): () => PinWrites {
   fakeActPort(procedures);
   writeAppState(DEAN);
   let writes: PinWrites | undefined;
+
   const Probe = () => {
     writes = usePinWrites(() => IDLE_TASKS_VIEW);
+
     return null;
   };
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   act(() =>
@@ -47,6 +50,7 @@ function mountWrites(procedures: Partial<FakeActPort>): () => PinWrites {
       ),
     ),
   );
+
   return () => writes ?? assert.fail("the writes are drawn");
 }
 
@@ -54,6 +58,7 @@ function mountWrites(procedures: Partial<FakeActPort>): () => PinWrites {
 function heldAgentPins() {
   const asked: boolean[] = [];
   const answers: ((answer: PortActResult<typeof ACT_KIND.AGENTS_PIN>) => void)[] = [];
+
   const procedures: Partial<FakeActPort> = {
     [ACT_KIND.AGENTS_PIN]: ({ pinned }) =>
       new Promise((resolve) => {
@@ -61,6 +66,7 @@ function heldAgentPins() {
         answers.push(resolve);
       }),
   };
+
   return { asked, answers, procedures };
 }
 
@@ -112,18 +118,22 @@ test("a pin dragged to a new place the service refuses puts back what the drop p
 
 test("a drag's changes to the sections go to main as one ask, and a refused one says so in a toast", async () => {
   const sent: (readonly TaskSectionWrite[])[] = [];
+
   const writes = mountWrites({
     [ACT_KIND.TASKS_WRITE_SECTION]: ({ writes }) => {
       sent.push(writes);
+
       return Promise.resolve(false);
     },
   });
+
   const make = (id: string, title: string) => ({
     kind: TASK_SECTION_WRITE.CREATE,
     id,
     workspaceId: "workspace-1",
     title,
   });
+
   const asked = [
     make("0a1b2c3d-0000-4000-8000-000000000001", "Launch"),
     make("0a1b2c3d-0000-4000-8000-000000000002", "Later"),

@@ -52,6 +52,7 @@ export function clientSettingSideEffects(
   dependencies: ClientSettingSideEffectDependencies,
 ): ClientSettingSideEffects {
   const { applyLoginItem } = dependencies;
+
   return {
     [SETTING_SIDE_EFFECT.NONE]: noClientSettingSideEffect,
     [SETTING_SIDE_EFFECT.USAGE_DATA]: noClientSettingSideEffect,
@@ -101,6 +102,7 @@ export function settingsProcedures(dependencies: SettingsProceduresDependencies)
   ): Effect.Effect<SettingsUpdateResult, ORPCError<string, unknown>> =>
     Effect.suspend(() => {
       const held = lastSettings();
+
       return held ? Effect.succeedSome(held) : host.settingsSnapshot();
     }).pipe(
       Effect.flatMap(
@@ -143,6 +145,7 @@ export function settingsProcedures(dependencies: SettingsProceduresDependencies)
     refused: Refused,
   ): Effect.Effect<string, ORPCError<string, unknown>> => {
     const reporter = reporterOf(actor);
+
     return reporter === undefined ? Effect.fail(refused()) : Effect.succeed(reporter);
   };
 
@@ -170,6 +173,7 @@ export function settingsProcedures(dependencies: SettingsProceduresDependencies)
     [SETTINGS_ACT_KIND.SETTING_UPDATE]: actPort[SETTINGS_ACT_KIND.SETTING_UPDATE].effect(
       function* ({ input, context, errors }) {
         const reporter = yield* reporterFor(context.actor, errors.REFUSED);
+
         return yield* write(
           errors.REFUSED,
           asked(SETTINGS_ACTS.SETTING_UPDATE, acts.SETTING_UPDATE, input, reporter),
@@ -184,6 +188,7 @@ export function settingsProcedures(dependencies: SettingsProceduresDependencies)
     [SETTINGS_ACT_KIND.EXPERIMENT_SET]: actPort[SETTINGS_ACT_KIND.EXPERIMENT_SET].effect(
       function* ({ input, context, errors }) {
         const reporter = yield* reporterFor(context.actor, errors.REFUSED);
+
         return yield* write(
           errors.REFUSED,
           asked(SETTINGS_ACTS.EXPERIMENT_SET, acts.EXPERIMENT_SET, input, reporter),
@@ -193,6 +198,7 @@ export function settingsProcedures(dependencies: SettingsProceduresDependencies)
     [SETTINGS_ACT_KIND.SETTINGS_RESET]: actPort[SETTINGS_ACT_KIND.SETTINGS_RESET].effect(
       function* ({ input, context, errors }) {
         const reporter = yield* reporterFor(context.actor, errors.REFUSED);
+
         return yield* write(
           errors.REFUSED,
           asked(SETTINGS_ACTS.SETTINGS_RESET, acts.SETTINGS_RESET, input, reporter),
@@ -202,6 +208,7 @@ export function settingsProcedures(dependencies: SettingsProceduresDependencies)
               : Effect.forEach(
                   APP_SETTING_FIELDS.filter((field) => {
                     const definition = APP_SETTING_SCHEMA[field];
+
                     return (
                       "resetScope" in definition &&
                       definition.resetScope === input.scope &&

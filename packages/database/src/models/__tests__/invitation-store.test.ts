@@ -31,6 +31,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -42,6 +43,7 @@ it.layer(getTestDB())("a workspace's invitations", (it) => {
         const ada = yield* openAccount;
         const acme = yield* openWorkspace(ada);
         const beta = yield* openWorkspace(ada);
+
         const made = (organizationId: string, email: string) =>
           createWorkspaceInvitation({
             organizationId,
@@ -56,6 +58,7 @@ it.layer(getTestDB())("a workspace's invitations", (it) => {
         const alan = yield* made(acme, "alan@app.test");
         yield* made(beta, "linus@app.test");
         const pendingBefore = yield* pendingWorkspaceInvitations(acme, NOW);
+
         const canceled = {
           fromAnother: yield* cancelWorkspaceInvitation(beta, grace.id),
           own: yield* cancelWorkspaceInvitation(acme, grace.id),

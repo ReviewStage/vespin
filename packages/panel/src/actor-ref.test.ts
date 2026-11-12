@@ -24,14 +24,17 @@ import { restOn } from "./testing/hint-rest.js";
  */
 
 const PICTURE = "https://avatars.githubusercontent.com/u/9";
+
 const DANA: Actor = {
   kind: ACTOR_KIND.PERSON,
   userId: "user-dana",
   name: "Dana Reyes",
   you: false,
 };
+
 const SAM: Actor = { kind: ACTOR_KIND.PERSON, userId: "user-sam", name: "Sam Okafor", you: false };
 const LEE: Actor = { kind: ACTOR_KIND.PERSON, userId: "user-lee", name: "Lee Park", you: false };
+
 const AGENT: Actor = {
   kind: ACTOR_KIND.AGENT,
   name: "Fix auth flow",
@@ -52,6 +55,7 @@ function draw(element: ReactElement): HTMLElement {
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() => root?.render(withQueryClient(element)));
+
   return container;
 }
 
@@ -82,6 +86,7 @@ test("each kind of actor stands on its own kind of mark, which a screen reader s
     { kind: ACTOR_KIND.SOMEONE, reason: SOMEONE_REASON.FORMER, name: "Lee Park" },
     { kind: ACTOR_KIND.GITHUB, login: "octocat", bot: false },
   ];
+
   const view = draw(
     createElement(
       "div",
@@ -89,6 +94,7 @@ test("each kind of actor stands on its own kind of mark, which a screen reader s
       actors.map((actor, index) => createElement(ActorMark, { key: index, actor })),
     ),
   );
+
   const marks = [...view.querySelectorAll<HTMLElement>(".actor-mark")];
 
   assert.equal(marks.length, 6);
@@ -97,6 +103,7 @@ test("each kind of actor stands on its own kind of mark, which a screen reader s
 
 test("an actor with a page is a press that opens it, and a person's name is words in the line", () => {
   let opened = 0;
+
   const view = draw(
     createElement(
       "p",
@@ -105,6 +112,7 @@ test("an actor with a page is a press that opens it, and a person's name is word
       createElement(ActorRef, { actor: { ...DANA, you: true }, sentence: true, possessive: true }),
     ),
   );
+
   const [agent, person] = [...view.querySelectorAll<HTMLElement>("[data-actor-ref]")];
 
   assert.equal(agent?.tagName, "BUTTON");
@@ -123,6 +131,7 @@ test("a facepile draws its first few and counts the rest only where its words do
   const uncounted = draw(
     createElement(ActorStack, { actors: [DANA, SAM, LEE], drawn: 2, counted: false }),
   );
+
   assert.equal(uncounted.querySelector(".actor-stack-more"), null);
 });
 
@@ -131,6 +140,7 @@ function cardOf(actor: Actor): Element {
   const view = draw(createElement(ActorRef, { actor }));
   const named = view.querySelector("[data-actor-ref]") ?? assert.fail("the actor is named");
   restOn(named);
+
   return (
     document.querySelector('.ui-tooltip-card [data-actor-card="github"]') ??
     assert.fail("a card hangs")
@@ -139,6 +149,7 @@ function cardOf(actor: Actor): Element {
 
 test("someone on GitHub stands by their avatar, a person on a circle with their letter until it loads, and an App's bot on a square with its robot, never a letter", () => {
   const avatar = "https://avatars.githubusercontent.com/u/1";
+
   const view = draw(
     createElement(
       "div",
@@ -156,6 +167,7 @@ test("someone on GitHub stands by their avatar, a person on a circle with their 
       }),
     ),
   );
+
   const [person, bot] = [...view.querySelectorAll<HTMLElement>('.actor-mark[data-kind="github"]')];
   assert.ok(person && bot);
   assert.equal(person?.textContent, "O");
@@ -188,6 +200,7 @@ test("someone on GitHub hangs a card saying who they are there and that a person
 
 test("a picture GitHub serves is asked for at twice the size its disc is drawn", () => {
   const avatar = "https://avatars.githubusercontent.com/u/1?v=4";
+
   const view = draw(
     createElement(
       "div",
@@ -219,13 +232,16 @@ test("a picture GitHub serves is asked for at twice the size its disc is drawn",
 
 test("an App's bot on GitHub stands by its App's avatar and wears a quiet bot badge after its name, in a line, a card, and the count's card, and a person on GitHub wears none", () => {
   const avatar = "https://avatars.githubusercontent.com/in/29110?v=4";
+
   const dependabot: Actor = {
     kind: ACTOR_KIND.GITHUB,
     login: "dependabot[bot]",
     bot: true,
     avatarUrl: avatar,
   };
+
   const octocat: Actor = { kind: ACTOR_KIND.GITHUB, login: "octocat", bot: false };
+
   const view = draw(
     createElement(
       "p",
@@ -235,6 +251,7 @@ test("an App's bot on GitHub stands by its App's avatar and wears a quiet bot ba
       createElement(ActorRef, { actor: { kind: ACTOR_KIND.APP } }),
     ),
   );
+
   const [bot, person, luke] = [...view.querySelectorAll<HTMLElement>("[data-actor-ref]")];
 
   assert.equal(bot?.querySelector("img")?.getAttribute("src"), `${avatar}&s=32`);
@@ -245,6 +262,7 @@ test("an App's bot on GitHub stands by its App's avatar and wears a quiet bot ba
 
   act(() => root?.unmount());
   document.body.innerHTML = "";
+
   const pile = draw(
     createElement(ActorStack, {
       actors: [DANA, octocat, dependabot],
@@ -253,10 +271,13 @@ test("an App's bot on GitHub stands by its App's avatar and wears a quiet bot ba
       label: "Reviewers",
     }),
   );
+
   restOn(pile.querySelector(".actor-stack-more") ?? assert.fail("the count stands"));
+
   const row =
     document.querySelector('.ui-tooltip-card [data-actor-card="more"] [data-actor-more]') ??
     assert.fail("the count's card names the rest");
+
   assert.deepEqual(
     [
       row.querySelector(".ui-hover-card-row-label")?.textContent,
@@ -276,6 +297,7 @@ test("a person GitHub names by login alone stands by the avatar GitHub serves fo
       createElement(ActorMark, { actor: githubLoginActor("devin-ai-integration[bot]") }),
     ),
   );
+
   const [person, bot] = [...view.querySelectorAll<HTMLElement>(".actor-mark")];
   const picture = person?.querySelector("img") ?? assert.fail("the avatar is asked for");
 
@@ -291,6 +313,7 @@ test("a person GitHub names by login alone stands by the avatar GitHub serves fo
 
 test("a member who left keeps their own face, their picture or else their letter, and a screen reader hears that they left", () => {
   const picture = "https://lh3.googleusercontent.com/a/photo-7";
+
   const lee: Actor = {
     kind: ACTOR_KIND.SOMEONE,
     reason: SOMEONE_REASON.FORMER,
@@ -298,12 +321,14 @@ test("a member who left keeps their own face, their picture or else their letter
     userId: "user-lee",
     pictureUrl: picture,
   };
+
   const unpictured: Actor = {
     kind: ACTOR_KIND.SOMEONE,
     reason: SOMEONE_REASON.FORMER,
     name: "Lee Park",
     userId: "user-lee",
   };
+
   const view = draw(
     createElement(
       "p",
@@ -312,6 +337,7 @@ test("a member who left keeps their own face, their picture or else their letter
       createElement(ActorMark, { actor: unpictured }),
     ),
   );
+
   const [withPicture, withLetter] = [...view.querySelectorAll<HTMLElement>(".actor-mark")];
 
   assert.equal(withPicture?.querySelector("img")?.getAttribute("src"), picture);
@@ -326,6 +352,7 @@ test("a facepile of faces with cards names a member who left as one to a screen 
     name: "Lee Park",
     userId: "user-lee",
   };
+
   const view = draw(
     createElement(ActorStack, {
       actors: [lee, SAM],

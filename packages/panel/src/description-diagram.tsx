@@ -28,9 +28,7 @@ import { AttachmentViewer } from "./tasks/attachment-viewer.js";
  * this loader and nothing of Mermaid. Each picture is kept by the window's
  * appearance and then by its code (`diagram-drawing.ts`), so a section drawn
  * again, or a version opened twice, shows its diagram at once; the appearance
- * flipping draws each shown diagram again in the new one. A diagram can hold words, so the
- * figure is left out of the screen recording (`ph-no-capture`): a picture
- * of words is the one thing the recording's masking cannot reach.
+ * flipping draws each shown diagram again in the new one.
  *
  * A diagram is drawn no wider than its column, which on a phone shrinks a
  * wide one's words past reading, so where the room is narrow or the window
@@ -126,12 +124,13 @@ export function DescriptionDiagram({
   const coarse = useCoarsePointer();
   const room = useContext(ShellRoomContext);
   const pointerOpens = coarse || room === SHELL_ROOM.NARROW;
+
   return (
     <Card
       as={CARD_ELEMENT.FIGURE}
       corner={CARD_CORNER.CONTROL}
       padding={CARD_PADDING.NONE}
-      className="description-diagram ph-no-capture my-block-gap px-card-compact py-list-inset"
+      className="description-diagram my-block-gap px-card-compact py-list-inset"
       aria-busy={drawingNow === undefined}
     >
       <div className={HEAD_CLASS}>
@@ -159,6 +158,7 @@ export function DescriptionDiagram({
               // Note that a key's press (no pointer's click count) opens it in any room, because the
               // head's Full screen stands only where a finger's tap would open it too.
               const keyed = event.detail === 0;
+
               if (!keyed && !opensFullScreen(event.currentTarget)) return;
               // The press is the picture's, so the section around it does not open to be edited.
               event.stopPropagation();
@@ -193,8 +193,10 @@ export function DiagramPreview({
 }): React.JSX.Element {
   const appearance = useAppearance();
   const { drawing: drawingNow, retry } = useDrawing(code, appearance);
+
   const shown =
     drawingNow ?? (previous === undefined ? undefined : heldDrawing(appearance, previous));
+
   return (
     <>
       <div className={HEAD_CLASS}>

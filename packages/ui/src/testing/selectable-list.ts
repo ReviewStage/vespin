@@ -78,7 +78,9 @@ function keyOf(press: HTMLElement): string {
 /** What a reader hears a press described as: the words its `aria-describedby` names, which outrank its `aria-description`, else that. */
 function describedAs(press: HTMLElement): string {
   const named = press.getAttribute("aria-describedby");
+
   if (named === null) return press.getAttribute("aria-description") ?? "";
+
   return named
     .split(" ")
     .map((id) => document.getElementById(id)?.textContent ?? "")
@@ -95,7 +97,9 @@ function chosen(root: HTMLElement): string[] {
 /** The press of the row keyed `key`, as drawn now. */
 function pressOf(root: HTMLElement, key: string): HTMLElement {
   const found = presses(root).find((press) => keyOf(press) === key);
+
   if (found === undefined) throw new Error(`No row keyed ${key}`);
+
   return found;
 }
 
@@ -124,13 +128,18 @@ function press(name: string, held: KeyboardEventInit = {}): void {
   });
 }
 
+type HeardBehindResult = { heard: string[]; stop: () => void };
+
 /** The Esc presses that reach the document past the surface, listening until `stop` is called. */
-function heardBehind(): { heard: string[]; stop: () => void } {
+function heardBehind(): HeardBehindResult {
   const heard: string[] = [];
+
   const hear = (event: KeyboardEvent) => {
     if (event.key === "Escape") heard.push(event.key);
   };
+
   document.addEventListener("keydown", hear);
+
   return { heard, stop: () => document.removeEventListener("keydown", hear) };
 }
 
@@ -141,6 +150,8 @@ function release(root: HTMLElement): void {
   press("Escape");
   expect(chosen(root)).toEqual([]);
 }
+
+type DrawnResult = { root: HTMLElement; opened: () => readonly string[]; rows: string[] };
 
 /** Registers the contract's tests for `which`, drawn as `surface` draws it. */
 export function selectableListBehavior(
@@ -157,7 +168,7 @@ export function selectableListBehavior(
     afterAll(() => standing?.unmount());
 
     /** The surface and the keys of its first rows that can be chosen, after any selection has gone. */
-    function drawn(): { root: HTMLElement; opened: () => readonly string[]; rows: string[] } {
+    function drawn(): DrawnResult {
       if (standing === undefined) throw new Error("The surface was not drawn");
       release(standing.root);
       const rows = available(standing.root);
@@ -165,6 +176,7 @@ export function selectableListBehavior(
         rows.length,
         "the surface draws at least four rows that can be chosen",
       ).toBeGreaterThan(3);
+
       return { root: standing.root, opened: standing.opened, rows };
     }
 
@@ -213,6 +225,7 @@ export function selectableListBehavior(
       focus(root, rows[0] ?? "");
       press("a", { metaKey: true });
       const behind = heardBehind();
+
       try {
         press("Escape");
         expect(chosen(root)).toEqual([]);

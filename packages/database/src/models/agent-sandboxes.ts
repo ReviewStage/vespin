@@ -60,9 +60,11 @@ type SandboxUseEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
 /** The states a row may move to `to` from, as `AGENT_SANDBOX_TRANSITIONS` declares them. */
 function movesInto(to: AgentSandboxState): AgentSandboxState[] {
-  return Object.values(AGENT_SANDBOX_STATE).filter((from) =>
-    (AGENT_SANDBOX_TRANSITIONS[from] as readonly AgentSandboxState[]).includes(to),
-  );
+  return Object.values(AGENT_SANDBOX_STATE).filter((from) => {
+    const moves: readonly AgentSandboxState[] = AGENT_SANDBOX_TRANSITIONS[from];
+
+    return moves.includes(to);
+  });
 }
 
 /** That the row may be written `to`: it stands in a state that moves there, or `to` itself where `stays`. */

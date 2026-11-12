@@ -141,6 +141,7 @@ function epochSeconds(ms: number): number {
 function listedAgents(userId: string, running: readonly RunningAgentTurn[]) {
   return Effect.gen(function* () {
     const shown = running.slice(0, LIVE_ACTIVITY_BOUNDS.MAX_AGENTS);
+
     const listed = yield* Effect.forEach(shown, (turn) =>
       Effect.map(
         readAgent(userId, turn.agentId),
@@ -153,6 +154,7 @@ function listedAgents(userId: string, running: readonly RunningAgentTurn[]) {
         ),
       ),
     );
+
     return listed.flatMap((each) => (Option.isSome(each) ? [each.value] : []));
   });
 }
@@ -164,6 +166,7 @@ function contentStateOf(
 ): Effect.Effect<LiveActivityContentState, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const running = yield* listRunningAgentTurns(userId);
+
     return {
       running: running.length,
       waiting: yield* inboxWaitingCount(userId, now),
@@ -217,10 +220,13 @@ function endPayload(state: LiveActivityContentState, now: number): ApnsPayload {
 function standsOn(phone: LiveActivityPhone, now: number): boolean {
   if (phone.startedAt === null) return false;
   const age = now - phone.startedAt.getTime();
+
   if (age >= Duration.toMillis(LIVE_ACTIVITY_PUSH.LIFETIME)) return false;
+
   const confirmed =
     phone.activityToken !== null ||
     (phone.sentAt !== null && phone.sentAt.getTime() >= phone.startedAt.getTime());
+
   return confirmed || age < Duration.toMillis(LIVE_ACTIVITY_PUSH.START_HOLD);
 }
 
@@ -235,6 +241,7 @@ function sendTo(
 ): Effect.Effect<ApnsDelivery, never, DatabaseServices | ApnsSender> {
   return Effect.gen(function* () {
     const sender = yield* ApnsSender;
+
     return yield* sender.send({
       device: { token, environment: phone.environment, bundleId: phone.bundleId },
       pushType: APNS_PUSH_TYPE.LIVE_ACTIVITY,
@@ -259,8 +266,10 @@ function startOn(
   now: number,
 ): Effect.Effect<void, StoreFailure, DatabaseServices | ApnsSender> {
   const { pushDeviceId, startToken } = phone;
+
   if (startToken === null) return Effect.void;
   const claimedAt = new Date(now);
+
   // Note that the claim, the send, and its record run uninterrupted, so a sweep cut short never leaves a start Apple took unrecorded.
   return Effect.uninterruptible(
     Effect.gen(function* () {
@@ -269,6 +278,7 @@ function startOn(
       ) {
         return;
       }
+
       const delivery = yield* sendTo(
         phone,
         startToken,
@@ -277,18 +287,23 @@ function startOn(
         LIVE_ACTIVITY_PUSH.STALE_AFTER,
         now,
       );
+
       if (delivery === APNS_DELIVERY.DELIVERED) {
         const sentState = JSON.stringify(state);
+
         return yield* recordLiveActivityPushed(userId, pushDeviceId, {
           sentAt: claimedAt,
           sentState,
           startedAt: claimedAt,
         });
       }
+
       if (delivery === APNS_DELIVERY.FAILED) return;
+
       if (delivery === APNS_DELIVERY.TOKEN_GONE) {
         yield* forgetLiveActivityToken(userId, pushDeviceId, LIVE_ACTIVITY_TOKEN.START, startToken);
       }
+
       yield* releaseLiveActivityStart(userId, pushDeviceId, claimedAt);
     }),
   );
@@ -310,8 +325,10 @@ function endOn(
 ): Effect.Effect<void, StoreFailure, DatabaseServices | ApnsSender> {
   return Effect.gen(function* () {
     const never = phone.notify === PUSH_NOTIFY.NEVER;
+
     // Note that whether an agent runs is read again here, as a turn may have begun since the state was read.
     if (!never && (yield* listRunningAgentTurns(userId)).length > 0) return;
+
     if (phone.activityToken !== null) {
       const delivery = yield* sendTo(
         phone,
@@ -321,13 +338,17 @@ function endOn(
         LIVE_ACTIVITY_PUSH.LIFETIME,
         now,
       );
+
       if (delivery === APNS_DELIVERY.FAILED) return;
     }
+
     const ended = yield* recordLiveActivityEnded(userId, phone.pushDeviceId, read);
+
     if (!ended || never) return;
     // Note that a turn that began while the end was in flight read the activity standing and left it be, so it is started again here.
     const restartAt = yield* Clock.currentTimeMillis;
     const restart = yield* contentStateOf(userId, restartAt);
+
     if (restart.running === 0) return;
     const cleared = { startedAt: null, activityToken: null };
     yield* startOn(userId, { ...phone, ...cleared, sentState: null }, cleared, restart, restartAt);
@@ -349,21 +370,29 @@ function refreshPhone(
 
     if (!standsOn(phone, now)) {
       if (wanted) return yield* startOn(userId, phone, read, state, now);
+
       // An activity aged out, or a start no refresh confirmed, is let go once none is wanted.
       if (phone.startedAt !== null) yield* recordLiveActivityEnded(userId, pushDeviceId, read);
+
       return;
     }
+
     if (!wanted) return yield* endOn(userId, phone, read, state, now);
     // An activity whose update token the app has not registered yet takes nothing until it has.
     const sentState = JSON.stringify(state);
+
     if (phone.startedAt === null || phone.activityToken === null || sentState === phone.sentState) {
       return;
     }
+
     const asked = cause === LIVE_ACTIVITY_CAUSE.ASKED;
+
     const throttled =
       phone.sentAt !== null &&
       now - phone.sentAt.getTime() < Duration.toMillis(LIVE_ACTIVITY_PUSH.THROTTLE);
+
     if (!asked && throttled) return;
+
     const delivery = yield* sendTo(
       phone,
       phone.activityToken,
@@ -372,6 +401,7 @@ function refreshPhone(
       LIVE_ACTIVITY_PUSH.STALE_AFTER,
       now,
     );
+
     if (delivery === APNS_DELIVERY.TOKEN_GONE) {
       return yield* forgetLiveActivityToken(
         userId,
@@ -380,6 +410,7 @@ function refreshPhone(
         phone.activityToken,
       );
     }
+
     if (delivery !== APNS_DELIVERY.DELIVERED) return;
     yield* recordLiveActivityPushed(userId, pushDeviceId, {
       sentAt: new Date(now),
@@ -401,11 +432,14 @@ export function refreshLiveActivity(
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const sender = yield* Effect.serviceOption(ApnsSender);
+
     if (Option.isNone(sender)) return;
+
     // Note that a phone set to never take a push is still read while an activity stands on it, so that activity is ended.
     const phones = (yield* listLiveActivityPhones(userId)).filter(
       (phone) => phone.notify !== PUSH_NOTIFY.NEVER || phone.startedAt !== null,
     );
+
     if (phones.length === 0) return;
     const now = yield* Clock.currentTimeMillis;
     const state = yield* contentStateOf(userId, now);
@@ -426,8 +460,10 @@ export function refreshLiveActivity(
 export function refreshLiveActivities(): Effect.Effect<number, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const members = yield* listLiveActivityMembers(LIVE_ACTIVITY_PUSH.SWEEP_BATCH);
+
     const until =
       (yield* Clock.currentTimeMillis) + Duration.toMillis(LIVE_ACTIVITY_PUSH.SWEEP_BUDGET);
+
     const refreshed = (userId: string) =>
       Effect.gen(function* () {
         if ((yield* Clock.currentTimeMillis) >= until) return;
@@ -439,10 +475,12 @@ export function refreshLiveActivities(): Effect.Effect<number, StoreFailure, Dat
             : Effect.logWarning(`a live activity was not refreshed: ${causeKind(cause)}`),
         ),
       );
+
     yield* Effect.forEach(members, refreshed, {
       concurrency: LIVE_ACTIVITY_PUSH.SWEEP_CONCURRENCY,
       discard: true,
     });
+
     return members.length;
   });
 }

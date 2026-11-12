@@ -1,117 +1,107 @@
 /**
- * base-drive-refresh.ts -- every base drive that stands refilled once a day, so each agent forked from one fetches little of the default branch.
+ * base-drive-refresh.ts -- every workspace's drive that is missing or unfinished filled once a day, several at once, so a workspace whose drive was never made, or whose fill failed, gets one.
  *
- * Vercel's cron calls the refresh once a day (the root `vercel.json`;
- * `maintenance/base-drive-refresh-app.ts`). It reads every workspace's
- * repository a base drive may stand for (`listBaseDriveRepositories`), asks
- * the sandbox provider whether that drive stands, and refills each one that
- * does as a launch would (`fillBaseDrive`): the default branch fetched over
- * its checkout, and an install only where that moved a lockfile. A
- * repository whose drive stands not is passed by, so the refresh never fills
- * a drive no launch asked for, and so is one the workspace's installation no
- * longer reaches. The drives are refilled one after another, each kept from
- * the rest: one that fails is logged by its kind and the next is refilled,
- * and tomorrow's run tries it again.
+ * Vercel's scheduler calls the refresh once a day (the root `vercel.json`;
+ * `maintenance/base-drive-refresh-app.ts`). It reads every workspace that
+ * connects a GitHub installation (`listBaseDriveWorkspaces`) and fills the
+ * drive of each one whose drive stands not, or stands under a fill's sandbox
+ * left past its grace (`readOf`'s `WANTED`); a whole drive is passed by, and
+ * so is one a fill holds now, since its own fill keeps it as a connect or a
+ * disconnect regenerates it (`workspace-drive.ts`). Note that the fills run
+ * `REFRESH_CONCURRENCY` at a time rather than one after another, because one
+ * call fills them all under the function's one bound, and a workspace's
+ * first fill clones every repository it connects, which can take minutes.
+ * Each workspace is kept from the rest: one that fails is reported where it
+ * failed (`reportedBroken`) and counted, and the rest are filled.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
-import {
-  type BaseDriveRepository,
-  listBaseDriveRepositories,
-} from "@repo/database/models/base-drive-repositories";
-import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import { listBaseDriveWorkspaces } from "@repo/database/models/base-drive-repositories";
 import { causeKind } from "@repo/runtime/effect";
 import { Sandbox } from "@repo/sandbox";
-import { Cause, Effect, Option } from "effect";
-import { GitHubApp } from "../github/github-app.js";
-import { BASE_WANTED, type BaseDriveOf, baseDriveName, fillBaseDrive } from "./base-drive.js";
+import { Cause, Clock, Effect } from "effect";
 import { AgentImage } from "./coder-host/agent-image.js";
+import type { SandboxRunner } from "./machine/sandbox-machine.js";
 import {
-  firewallSessionOf,
-  repositoryFirewallOver,
-  repositorySandboxOver,
-  type SandboxRunner,
-} from "./machine/sandbox-machine.js";
+  DRIVE_BROKEN,
+  DRIVE_STATE,
+  fillWorkspaceDrive,
+  readOf,
+  reportedBroken,
+  workspaceDriveName,
+} from "./workspace-drive.js";
 
-/** What one day's refresh did, in counts alone: no workspace and no repository is named. */
+/** How many workspaces' drives one refresh fills at once. */
+const REFRESH_CONCURRENCY = 8;
+
+/** What one day's refresh did, in counts alone: no workspace is named. */
 interface BaseDriveRefresh {
-  /** Base drives refilled, or found being filled by another. */
-  readonly refilled: number;
-  /** Repositories passed by: no base drive stands for them, or the workspace's installation no longer reaches them. */
+  /** Workspace drives filled. */
+  readonly filled: number;
+  /** Workspace drives passed by: whole, or held by another fill. */
   readonly passed: number;
-  /** Base drives whose refill failed, each logged. */
+  /** Workspace drives whose fill failed, each reported. */
   readonly failed: number;
 }
 
-const REFRESH_OUTCOME = { REFILLED: "refilled", PASSED: "passed" } as const;
+const REFRESH_OUTCOME = { FILLED: "filled", PASSED: "passed", FAILED: "failed" } as const;
 
-/**
- * One workspace's repository's base drive refilled where it stands, on a
- * read token minted for it on the workspace's installation and the image
- * given, its sandbox's firewall written under the account named.
- */
-const refreshedOne = (run: SandboxRunner, image: string, candidate: BaseDriveRepository) =>
+type RefreshOutcome = (typeof REFRESH_OUTCOME)[keyof typeof REFRESH_OUTCOME];
+
+/** Whether the workspace's drive wants a fill: it stands not, or a fill left its sandbox past its grace. */
+const driveWanted = (workspaceId: string) =>
   Effect.gen(function* () {
     const api = yield* Sandbox;
-    // Note that the drive's name reads the repository's case aside, so the row's spelling finds it.
-    const named = baseDriveName({
-      workspaceId: candidate.workspaceId,
-      fullName: candidate.repository,
-    });
-    if (!(yield* api.driveStands(named))) return REFRESH_OUTCOME.PASSED;
-    const reached = yield* (yield* GitHubApp).repositoryReadToken(
-      candidate.workspaceId,
-      candidate.repository,
-      undefined,
+    const name = workspaceDriveName(workspaceId);
+
+    if (!(yield* api.driveStands(name))) return true;
+
+    return (
+      readOf(yield* api.get(name), yield* Clock.currentTimeMillis).state === DRIVE_STATE.WANTED
     );
-    if (Option.isNone(reached) || reached.value.access.kind !== GITHUB_ACCESS.APP) {
-      return REFRESH_OUTCOME.PASSED;
-    }
-    const { repository, token, access } = reached.value;
-    const of: BaseDriveOf = {
-      workspaceId: candidate.workspaceId,
-      fullName: repository.fullName,
-      defaultBranch: repository.defaultBranch,
-    };
-    const context = yield* Effect.context<DatabaseServices>();
-    yield* fillBaseDrive(
-      of,
-      image,
-      { token, access },
-      (running) =>
-        repositorySandboxOver(
-          api,
-          running,
-          run,
-          repositoryFirewallOver(api, context, firewallSessionOf(running, candidate.userId), {}),
-        ),
-      BASE_WANTED.SCHEDULED,
-    );
-    return REFRESH_OUTCOME.REFILLED;
   });
 
-/** Every base drive that stands refilled, one after another, each failure logged and passed by; what the run did. */
+/** One workspace's drive filled where it wants one, as what the refresh counts it. */
+const refreshedOne = (
+  run: SandboxRunner,
+  image: string,
+  workspace: { readonly workspaceId: string; readonly userId: string },
+) =>
+  Effect.gen(function* () {
+    if (!(yield* driveWanted(workspace.workspaceId))) return REFRESH_OUTCOME.PASSED;
+    const filled = yield* fillWorkspaceDrive(run, image, workspace);
+
+    return filled ? REFRESH_OUTCOME.FILLED : REFRESH_OUTCOME.PASSED;
+  }).pipe(
+    // An interruption, the function's own deadline, still ends the run.
+    Effect.catchCause((cause) =>
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.failCause(cause)
+        : Effect.as(
+            reportedBroken(workspace.workspaceId, DRIVE_BROKEN.FILL_FAILED, causeKind(cause)),
+            REFRESH_OUTCOME.FAILED,
+          ),
+    ),
+  );
+
+/** Every workspace's drive that wants one filled, `REFRESH_CONCURRENCY` at once, each failure reported and passed by; what the run did. */
 export const refreshBaseDrives = Effect.fn("web/refreshBaseDrives")(function* (run: SandboxRunner) {
   const image = yield* Effect.flatMap(AgentImage, (agentImage) => agentImage.reference);
-  const counts = { refilled: 0, passed: 0, failed: 0 };
-  for (const candidate of yield* listBaseDriveRepositories()) {
-    const outcome = yield* refreshedOne(run, image, candidate).pipe(
-      // An interruption, the function's own deadline, still ends the run.
-      Effect.catchCause((cause) =>
-        Cause.hasInterruptsOnly(cause)
-          ? Effect.failCause(cause)
-          : Effect.as(
-              Effect.logError(`a base drive's refill failed: ${causeKind(cause)}`),
-              undefined,
-            ),
-      ),
-    );
-    if (outcome === undefined) counts.failed += 1;
-    else counts[outcome] += 1;
-  }
-  const refreshed: BaseDriveRefresh = counts;
-  yield* Effect.logInfo(
-    `base drives refreshed: ${counts.refilled} refilled, ${counts.passed} passed by, ${counts.failed} failed`,
+
+  const outcomes: readonly RefreshOutcome[] = yield* Effect.forEach(
+    yield* listBaseDriveWorkspaces(),
+    (workspace) => refreshedOne(run, image, workspace),
+    { concurrency: REFRESH_CONCURRENCY },
   );
+
+  const refreshed: BaseDriveRefresh = {
+    filled: outcomes.filter((each) => each === REFRESH_OUTCOME.FILLED).length,
+    passed: outcomes.filter((each) => each === REFRESH_OUTCOME.PASSED).length,
+    failed: outcomes.filter((each) => each === REFRESH_OUTCOME.FAILED).length,
+  };
+
+  yield* Effect.logInfo(
+    `workspace drives refreshed: ${refreshed.filled} filled, ${refreshed.passed} passed by, ${refreshed.failed} failed`,
+  );
+
   return refreshed;
 });

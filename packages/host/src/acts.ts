@@ -52,12 +52,15 @@ export const ACCOUNT_DELETE_UNCONFIRMED_REFUSAL =
  * that it failed; anything else, such as a service that did not answer,
  * says to try again.
  */
-export function accountDeleteRefusalWords(error: unknown): string {
-  const said = error instanceof Error ? error.message : undefined;
+export function accountDeleteRefusalWords(cause: unknown): string {
+  const said = cause instanceof Error ? cause.message : undefined;
+
   if (said === ACCOUNT_DELETE_SESSION_EXPIRED_REFUSAL) {
     return "The account could not be deleted. Sign out and back in, then delete it again.";
   }
+
   if (said === ACCOUNT_DELETE_UNCONFIRMED_REFUSAL) return ACCOUNT_DELETE_UNCONFIRMED_REFUSAL;
+
   return "The account could not be deleted. Try again.";
 }
 
@@ -77,9 +80,11 @@ export function accountDeleteWorkspacesWords(
   if (workspaces === undefined || !listKnown) {
     return "Workspaces you own and are the only member of are also deleted, with everything in them.";
   }
+
   const names = workspaces
     .filter(({ role, memberCount }) => role === WORKSPACE_ROLE.OWNER && memberCount === 1)
     .map(({ name }) => name);
+
   return names.length > 0 ? `Also deleted, with everything in them: ${andList(names)}.` : undefined;
 }
 

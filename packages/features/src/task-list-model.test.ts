@@ -63,6 +63,7 @@ test("a repository group lists its tasks newest updated first, the time each row
     task("touched", "acme/relay", 1, 30),
     task("new", "acme/relay", 2, 20),
   ]);
+
   expect(names(groups)).toEqual([["touched", "new", "old"]]);
 });
 
@@ -92,12 +93,14 @@ test("filtered to one creator, the list holds only the tasks they created; filte
     task("Charles's", "acme/relay", 1, 1, CHARLES),
     task("Unnamed", "acme/relay", 1, 1),
   ];
+
   expect(createdByOnly(tasks, DEAN).map((task) => task.name)).toEqual(["Dean's"]);
   expect(createdByOnly(tasks, undefined)).toHaveLength(3);
 });
 
 test("a task whose agent ended a turn after another task's description was edited stands first, showing its agent's time", () => {
   const edited = task("Description edited at 500", "acme/relay", 1, 500);
+
   const worked = {
     ...task("Agent finished at 800", "acme/relay", 1, 100),
     agents: {
@@ -107,6 +110,7 @@ test("a task whose agent ended a turn after another task's description was edite
       pullRequestTotal: 0,
     },
   };
+
   const groups = repositoryGroups([edited, worked]);
   expect(names(groups)).toEqual([["Agent finished at 800", "Description edited at 500"]]);
   expect(taskTime(worked, TASK_ORDER.UPDATED)).toBe(800);
@@ -123,6 +127,7 @@ test("an agent's activity older than the description's own edit leaves the descr
       pullRequestTotal: 0,
     },
   };
+
   expect(taskTime(summary, TASK_ORDER.UPDATED)).toBe(900);
   expect(taskTime(summary, TASK_ORDER.CREATED)).toBe(1);
 });
@@ -177,6 +182,7 @@ test("the rows assigned to one member are the tasks they are on, and every row f
     },
     task("No one's on it", "acme/relay", 1, 20, DEAN),
   ];
+
   const member = { kind: ASSIGNED_TO.MEMBER, userId: DEAN } as const;
   expect(tasksAssignedTo(rows, member, CHARLES).map((each) => each.name)).toEqual(["Dean's on it"]);
   expect(tasksAssignedTo(rows, { kind: ASSIGNED_TO.ANYONE }, DEAN)).toHaveLength(2);
@@ -189,6 +195,7 @@ test("Me holds the reader's tasks and the tasks no one is on that they created, 
     assigned("Dean made it, Maya's on it", 30, MAYA, DEAN),
     task("Charles made it, no one's on it", "acme/relay", 1, 40, CHARLES),
   ];
+
   expect(tasksAssignedTo(rows, { kind: ASSIGNED_TO.ME }, DEAN).map((each) => each.name)).toEqual([
     "Charles made it, Dean's on it",
     "Dean made it, no one's on it",
@@ -276,6 +283,7 @@ test("a parent counts its direct child tasks that are done or canceled, of all i
     ...childTask(name, 1, parent),
     status,
   });
+
   const counts = childTaskCounts([
     withStatus("parent", undefined, TASK_STATUS.IN_PROGRESS),
     withStatus("shipped", "parent", TASK_STATUS.DONE),
@@ -284,6 +292,7 @@ test("a parent counts its direct child tasks that are done or canceled, of all i
     withStatus("waiting", "parent", TASK_STATUS.TODO),
     withStatus("grandchild", "working", TASK_STATUS.DONE),
   ]);
+
   expect(counts.get("parent")).toEqual({ finished: 2, total: 4 });
   expect(counts.get("working")).toEqual({ finished: 1, total: 1 });
   expect(counts.has("shipped")).toBe(false);

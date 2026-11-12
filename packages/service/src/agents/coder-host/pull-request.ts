@@ -156,6 +156,7 @@ const PULL_REQUEST_REFUSAL = {
 /** Why a call naming no repository, or one the agent does not work in, opened nothing, listing those it works in. */
 function repositoryRefusal(repositories: readonly AgentRepositoryEntry[]): string {
   const listed = repositories.map((each) => `\`${each.repository}\``).join(", ");
+
   return repositories.length > 1
     ? `Not opened: you work in several repositories, so name the one to open it in as repository: ${listed}.`
     : `Not opened: you work in ${listed} alone; name it as repository, or leave repository out.`;
@@ -248,9 +249,12 @@ function refusalWords(refusal: typeof RefusalSchema.Type): string {
   const details = (refusal.errors ?? []).flatMap((error) => {
     if (error.message !== undefined) return [error.message];
     const named = [error.field, error.code].filter((word) => word !== undefined).join(" ");
+
     return named === "" ? [] : [named];
   });
+
   const words = [refusal.message, ...details].join(" ");
+
   return `Not opened: GitHub said: ${words.slice(0, PULL_REQUEST_BOUNDS.MAX_REFUSAL_CHARS)}`;
 }
 
@@ -280,9 +284,11 @@ const attempt = /* @__PURE__ */ Effect.fn("web/openPullRequestAttempt")(function
 ): Effect.fn.Return<Attempt, never, HttpClient.HttpClient> {
   const [owner = "", name = ""] = fullName.split("/");
   const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/pulls`;
+
   return yield* Effect.scoped(
     Effect.gen(function* (): Effect.fn.Return<Attempt, unknown, HttpClient.HttpClient> {
       const response = yield* send(githubPost(path, token, pullRequest));
+
       switch (response.status) {
         case GITHUB_HTTP_STATUS.UNAUTHORIZED:
           return { kind: ATTEMPT.TOKEN_REFUSED, reason: AGENT_AUTHOR.APP_UNLINKED };
@@ -294,10 +300,13 @@ const attempt = /* @__PURE__ */ Effect.fn("web/openPullRequestAttempt")(function
           return { kind: ATTEMPT.TOKEN_REFUSED, reason: AGENT_AUTHOR.APP_NO_PUSH };
         case GITHUB_HTTP_STATUS.UNPROCESSABLE: {
           const refusal = yield* HttpClientResponse.schemaBodyJson(RefusalSchema)(response);
+
           return { kind: ATTEMPT.REFUSED, reason: refusalWords(refusal) };
         }
+
         default: {
           const opened = yield* readBody(response, OpenedSchema);
+
           return { kind: ATTEMPT.OPENED, url: opened.html_url, number: opened.number };
         }
       }
@@ -328,6 +337,7 @@ const attemptAsDeveloper = /* @__PURE__ */ Effect.fn("web/openPullRequestAsDevel
 ): Effect.fn.Return<Attempt | undefined, never, CheckoutServices> {
   if (agent.author !== AGENT_AUTHOR.DEVELOPER) return undefined;
   const app = yield* GitHubApp;
+
   return yield* app.userToken(target.userId).pipe(
     Effect.flatMap((token) => attempt(token, fullName, pullRequest)),
     Effect.catchTag("GitHubSignInRequired", () =>
@@ -361,6 +371,7 @@ function pullRequestOf(input: OpenPullRequestInput, base: string): PullRequestAs
 /** The answer for an attempt that ended other than with a token refused. */
 function answerOf(ended: Settled, openedAs: OpenedAs, note?: string): PullRequestToolResult {
   if (ended.kind === ATTEMPT.REFUSED) return pullRequestRejected(ended.reason);
+
   return {
     status: ACTION_RESULT_STATUS.ACCEPTED,
     url: ended.url,
@@ -385,28 +396,37 @@ const attemptOpening = /* @__PURE__ */ Effect.fn("web/attemptPullRequestOpening"
   extra: AgentRepositoryEntry | undefined,
 ): Effect.fn.Return<PullRequestToolResult, never, CheckoutServices | DatabaseServices> {
   const minted = yield* Effect.result(agentRepositoryToken(target, agent, extra?.repository));
+
   if (Result.isFailure(minted)) return pullRequestRejected(`Not opened: ${minted.failure.reason}`);
   const { token, fullName, defaultBranch, access } = minted.success;
   // Note that an extra's pull request opens against the branch its checkout was cloned at, as it was named at the Start.
   const pullRequest = pullRequestOf(input, extra?.baseBranch ?? defaultBranch);
+
   // Note that an agent on its starter's own token opens on it alone, since no installation reaches the repository.
   if (access.kind === GITHUB_ACCESS.TOKEN) {
     const asMember = yield* attempt(token, fullName, pullRequest);
+
     return asMember.kind === ATTEMPT.TOKEN_REFUSED
       ? pullRequestRejected(PULL_REQUEST_REFUSAL.TOKEN_REFUSED)
       : answerOf(asMember, OPENED_AS.DEVELOPER);
   }
+
   const asDeveloper = yield* attemptAsDeveloper(target, agent, fullName, pullRequest);
+
   if (asDeveloper !== undefined && asDeveloper.kind !== ATTEMPT.TOKEN_REFUSED) {
     return answerOf(asDeveloper, OPENED_AS.DEVELOPER);
   }
+
   const asApp = yield* attempt(token, fullName, pullRequest);
+
   if (asApp.kind === ATTEMPT.TOKEN_REFUSED) {
     return pullRequestRejected(PULL_REQUEST_REFUSAL.UNAVAILABLE);
   }
+
   if (asDeveloper === undefined || asApp.kind === ATTEMPT.REFUSED) {
     return answerOf(asApp, OPENED_AS.APP);
   }
+
   yield* recordAgentAuthor(target.userId, agent.id, asDeveloper.reason).pipe(
     Effect.catch((failure) =>
       Effect.logWarning(
@@ -414,6 +434,7 @@ const attemptOpening = /* @__PURE__ */ Effect.fn("web/attemptPullRequestOpening"
       ),
     ),
   );
+
   return answerOf(asApp, OPENED_AS.APP, FALLBACK_NOTE[asDeveloper.reason]);
 });
 
@@ -434,8 +455,10 @@ const recordOpened = (
     if (extra === undefined) {
       yield* updateAgentBranch(target.userId, agent.id, head);
       yield* agentPublished(target.userId, { ...agent, branch: head });
+
       return;
     }
+
     // An extra's head is written on its own row, and its pull request read back with the agent's.
     yield* recordAgentRepositoryHead(target.userId, agent.id, extra.repository, head);
     yield* agentPublished(target.userId, agent);
@@ -459,15 +482,19 @@ function chosenExtra(
   repositories: readonly AgentRepositoryEntry[],
 ): Result.Result<AgentRepositoryEntry | undefined, string> {
   const [own, ...extras] = repositories;
+
   if (named === undefined) {
     return extras.length === 0
       ? Result.succeed(undefined)
       : Result.fail(repositoryRefusal(repositories));
   }
+
   const lowered = named.toLowerCase();
+
   if (own === undefined || own.repository.toLowerCase() === lowered)
     return Result.succeed(undefined);
   const extra = extras.find((each) => each.repository.toLowerCase() === lowered);
+
   return extra === undefined ? Result.fail(repositoryRefusal(repositories)) : Result.succeed(extra);
 }
 
@@ -484,13 +511,17 @@ export const openPullRequest = /* @__PURE__ */ Effect.fn("web/openPullRequest")(
   input: UnparsedWireValue,
 ): Effect.fn.Return<PullRequestToolResult, never, CheckoutServices | DatabaseServices> {
   const read = readInput(input);
+
   if (Result.isFailure(read)) return pullRequestRejected(PULL_REQUEST_REFUSAL.UNREADABLE);
   const repositories = yield* Effect.result(readAgentRepositories(target.userId, agent.id));
+
   if (Result.isFailure(repositories)) return pullRequestRejected(PULL_REQUEST_REFUSAL.UNAVAILABLE);
   const chosen = chosenExtra(read.success.repository, repositories.success);
+
   if (Result.isFailure(chosen)) return pullRequestRejected(chosen.failure);
   const extra = chosen.success;
   const result = yield* attemptOpening(target, agent, read.success, extra);
+
   if (result.status === ACTION_RESULT_STATUS.ACCEPTED) {
     yield* recordOpened(target, agent, read.success.head, extra);
     yield* recordServerEvent(
@@ -505,5 +536,6 @@ export const openPullRequest = /* @__PURE__ */ Effect.fn("web/openPullRequest")(
       },
     );
   }
+
   return result;
 });

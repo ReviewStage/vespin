@@ -24,13 +24,16 @@ export interface TitleLayout {
 }
 
 /** No resize is watched: a bar reads itself once, as it renders. */
-class StillObserver {
+class StillObserver implements ResizeObserver {
   observe(): void {}
+  unobserve(): void {}
   disconnect(): void {}
 }
 
+type LayTitleResult = { restore: () => void };
+
 /** Lays every matching bar's title out as `layout` says, until the answered `restore` is called. */
-export function layTitle(layout: TitleLayout): { restore: () => void } {
+export function layTitle(layout: TitleLayout): LayTitleResult {
   const proto = Element.prototype;
   const rect = Object.getOwnPropertyDescriptor(proto, "getBoundingClientRect");
   const scroll = Object.getOwnPropertyDescriptor(proto, "scrollWidth");
@@ -41,7 +44,9 @@ export function layTitle(layout: TitleLayout): { restore: () => void } {
     configurable: true,
     value(this: Element) {
       if (this.matches(layout.room)) return box(layout.roomWidth);
+
       if (this.matches(layout.words)) return box(layout.whole);
+
       return box(0);
     },
   });
@@ -53,13 +58,17 @@ export function layTitle(layout: TitleLayout): { restore: () => void } {
   });
   globalThis.requestAnimationFrame = (run: FrameRequestCallback) => {
     run(0);
+
     return 0;
   };
-  globalThis.ResizeObserver = StillObserver as unknown as typeof ResizeObserver;
+
+  globalThis.ResizeObserver = StillObserver;
   document.documentElement.style.setProperty("--ui-title-floor", `${layout.floor}px`);
+
   return {
     restore: () => {
       if (rect !== undefined) Object.defineProperty(proto, "getBoundingClientRect", rect);
+
       if (scroll !== undefined) Object.defineProperty(proto, "scrollWidth", scroll);
       globalThis.requestAnimationFrame = frame;
       globalThis.ResizeObserver = observer;

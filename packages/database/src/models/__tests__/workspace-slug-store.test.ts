@@ -26,6 +26,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -55,11 +56,13 @@ it.layer(getTestDB())("a workspace's slug", (it) => {
         yield* setWorkspaceSlug(acme, "acme-labs");
         const listed = yield* listWorkspaces(ada);
         const outsiders = yield* listWorkspaces(bob);
+
         const named = {
           byOld: yield* workspaceIdOfSlug(ada, "ACME"),
           byCurrent: yield* workspaceIdOfSlug(ada, "acme-labs"),
           toOutsider: yield* workspaceIdOfSlug(bob, "acme"),
         };
+
         const takeOld = yield* Effect.flip(setWorkspaceSlug(beta, "ACME"));
         const takeCurrent = yield* Effect.flip(setWorkspaceSlug(beta, "acme-labs"));
         yield* setWorkspaceSlug(acme, "acme");

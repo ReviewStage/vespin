@@ -32,6 +32,7 @@ export class TasksPageHeld {
   measuredIn(view: TasksView): Map<string, VirtualRowMeasurements> {
     const measured = this.#measured.get(view) ?? new Map<string, VirtualRowMeasurements>();
     this.#measured.set(view, measured);
+
     return measured;
   }
 
@@ -39,6 +40,7 @@ export class TasksPageHeld {
   chosenIn(view: TasksView): ChosenTasksStore {
     const chosen = this.#chosen.get(view) ?? new Store<ReadonlySet<string>>(new Set<string>());
     this.#chosen.set(view, chosen);
+
     return chosen;
   }
 }
@@ -51,6 +53,7 @@ export class TasksPagesHeld {
   of(workspaceId: string): TasksPageHeld {
     const held = this.#held.get(workspaceId) ?? new TasksPageHeld();
     this.#held.set(workspaceId, held);
+
     return held;
   }
 }

@@ -25,11 +25,14 @@ import type { SkillSource } from "./skill-picker.js";
  */
 export function keptSkills(read: () => Promise<TasksSkillsAnswer>): SkillSource {
   let last: SkillsRead | undefined;
+
   const settle = (next: SkillsRead): SkillsRead => {
     if ("unread" in next && last !== undefined && "skills" in last) return last;
     last = last === undefined ? next : keepIdentity(last, next);
+
     return last;
   };
+
   return () =>
     read().then(
       (answer) => settle(skillsReadOf(answer)),

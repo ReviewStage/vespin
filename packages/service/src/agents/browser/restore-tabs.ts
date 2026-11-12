@@ -29,7 +29,7 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { listAgentBrowserTabs, retargetBrowserTab } from "@repo/database/models/agent-browser-tabs";
 import type { CdpSession } from "@repo/features/browser-cdp";
-import { Effect, type Scope } from "effect";
+import { Effect, Result, type Scope } from "effect";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { AgentBrowser, type BrowserUnreachable } from "./agent-browser.js";
 
@@ -45,27 +45,35 @@ export function restoreBrowserTabs(
 ): Effect.Effect<void, never, DatabaseServices> {
   return Effect.gen(function* () {
     const rows = yield* listAgentBrowserTabs(conversationId);
+
     if (rows.length === 0) return;
     // Note that a browser that could not say which pages it holds is left as it is, since every
     // kept tab would otherwise read as lost and be opened twice; the next connection asks again.
     const pages = yield* Effect.result(cdp.pages);
-    if (pages._tag === "Failure") {
+
+    if (Result.isFailure(pages)) {
       return yield* Effect.logWarning(`The Browser tabs were not read: ${pages.failure.kind}`);
     }
+
     const held = new Set(pages.success.map((page) => page.targetId));
+
     for (const row of rows) {
       if (held.has(row.targetId)) continue;
       const reopened = yield* Effect.result(cdp.openPage(row.address));
-      if (reopened._tag === "Failure") {
+
+      if (Result.isFailure(reopened)) {
         yield* Effect.logWarning(`A Browser tab did not reopen: ${reopened.failure.kind}`);
         continue;
       }
+
       const page = reopened.success;
       // A page whose row did not move, because the store failed or another caller moved it first, goes.
       const unkept = Effect.ignore(cdp.closePage(page));
+
       const moved = yield* retargetBrowserTab(conversationId, row.id, row.targetId, page).pipe(
         Effect.onError(() => unkept),
       );
+
       if (!moved) yield* unkept;
     }
   }).pipe(Effect.tapError(logStoreFailure), Effect.ignore);
@@ -83,6 +91,7 @@ export function connectRestoring(
     const browser = yield* AgentBrowser;
     const cdp = yield* browser.connect(browserSession);
     yield* restoreBrowserTabs(conversationId, cdp);
+
     return cdp;
   });
 }

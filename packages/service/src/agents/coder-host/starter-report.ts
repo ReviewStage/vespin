@@ -36,7 +36,7 @@ import type { Sandbox } from "@repo/sandbox";
 import { TURN_STATUS } from "@repo/wire";
 import type { StoredUIMessage } from "@repo/wire/ui-messages";
 import { getToolName, isTextUIPart, isToolUIPart } from "ai";
-import { Effect, Option } from "effect";
+import { Effect, Option, Predicate } from "effect";
 import type { HttpClient } from "effect/http";
 import type { SessionsForAccount } from "../../automations/automation-runs.js";
 import { ACTION_RESULT_STATUS, MESSAGE_CHANNEL, TURN_FAILURE } from "../../core.js";
@@ -64,18 +64,24 @@ function endTurnSummary(journal: StoredUIMessage): string | undefined {
   const part = journal.parts.findLast(
     (each) => isToolUIPart(each) && getToolName(each) === AGENT_TOOL.END_TURN,
   );
+
   if (part === undefined || !isToolUIPart(part) || part.state !== "output-available")
     return undefined;
   // Note that a call a turn ended before it answered is kept as available too, so only an answer that took it counts.
   const output: unknown = part.output;
+
   const status =
-    typeof output === "object" && output !== null && "status" in output ? output.status : undefined;
+    Predicate.isObjectOrArray(output) && "status" in output ? output.status : undefined;
+
   const input: unknown = part.input;
-  if (status !== ACTION_RESULT_STATUS.ACCEPTED || typeof input !== "object" || input === null) {
+
+  if (status !== ACTION_RESULT_STATUS.ACCEPTED || !Predicate.isObjectOrArray(input)) {
     return undefined;
   }
+
   const summary = "summary" in input ? input.summary : undefined;
-  return typeof summary === "string" && summary.trim().length > 0 ? summary.trim() : undefined;
+
+  return Predicate.isString(summary) && summary.trim().length > 0 ? summary.trim() : undefined;
 }
 
 /**
@@ -87,13 +93,16 @@ export function lastSaid(journal: StoredUIMessage): string | undefined {
   const said = journal.parts.flatMap((part) =>
     isTextUIPart(part) && part.text.trim().length > 0 ? [part.text.trim()] : [],
   );
+
   return endTurnSummary(journal) ?? said.at(-1);
 }
 
 /** The agent's final words: the last text its turn's journal holds, cut to fit; none where it said nothing. */
 function finalWords(journal: StoredUIMessage): string | undefined {
   const last = lastSaid(journal);
+
   if (last === undefined) return undefined;
+
   return last.length > REPORT_WORDS_CHARS
     ? `${last.slice(0, REPORT_WORDS_CHARS - CUT_MARK.length)}${CUT_MARK}`
     : last;
@@ -102,13 +111,16 @@ function finalWords(journal: StoredUIMessage): string | undefined {
 /** How the turn ended, in the head's words. */
 function ended(turn: SettledAgentTurn): string {
   if (turn.status === TURN_STATUS.CANCELED) return "was stopped before it finished";
+
   // A turn its plan's usage limit stopped is said so, not as a failure word.
   if (turn.failure === TURN_FAILURE.PLAN_LIMIT) {
     return `was stopped: ${agentFailureWords(AGENT_FAILURE.PLAN_LIMIT, undefined)}`;
   }
+
   if (turn.status === TURN_STATUS.FAILED) {
     return `failed its turn${turn.failure === null ? "" : ` (${turn.failure})`}`;
   }
+
   return "finished its turn";
 }
 
@@ -120,6 +132,7 @@ function reportLine(
   words: string | undefined,
 ): string {
   const head = `${AGENT_MESSAGE_LEAD} · ${mention}, an agent you started, ${ended(turn)}. Its final message:`;
+
   return [head, words ?? NO_WORDS, agentMessageReplyLine(agent.id)].join("\n\n");
 }
 
@@ -131,6 +144,7 @@ const starterOf = (agent: Agent) =>
   Effect.gen(function* () {
     if (agent.startedByAgentId === null) return Option.none<Agent>();
     const starter = yield* readAgent(agent.userId, agent.startedByAgentId);
+
     return Option.filter(starter, (found) => found.archivedAt === null);
   });
 
@@ -146,23 +160,29 @@ export function reportToStarter(
 ): Effect.Effect<void, never, DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox> {
   return Effect.gen(function* () {
     const agent = yield* readAgentOfConversation(turn.userId, turn.conversationId);
+
     if (Option.isNone(agent)) return;
     const starter = yield* starterOf(agent.value);
+
     if (Option.isNone(starter)) return;
+
     const journal = yield* readMessageByClientId(
       turn.userId,
       turn.conversationId,
       CODER_TOOL_SET,
       turn.turnId,
     );
+
     const [newest] = journal.ok ? journal.value : [];
     const words = newest === undefined ? undefined : finalWords(newest.message);
     const step = yield* workspaceStepOf(turn.userId, agent.value.organizationId);
+
     const mention = writtenMention(
       { kind: MENTION_KIND.AGENT, agentId: agent.value.id },
       agentName(agent.value),
       step,
     );
+
     const agentSessions = yield* sessionsFor(turn.userId);
     yield* steerAgent(
       agentSessions,

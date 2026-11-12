@@ -95,11 +95,14 @@ async function mount(surface: React.ReactElement, at?: string): Promise<HTMLElem
   document.body.append(container);
   const root = createRoot(container);
   unmounts.push(() => root.unmount());
+
   const router = windowRouter(
     at === undefined ? undefined : createMemoryHistory({ initialEntries: [at] }),
   );
+
   act(() => root.render(router.provide(withQueryClient(surface))));
   await settle();
+
   return container;
 }
 
@@ -120,8 +123,10 @@ function readFailure(page: HTMLElement) {
   // The alert's words are what it says with its presses taken out, however it nests them.
   const said = alert.cloneNode(true);
   assert.ok(said instanceof HTMLElement);
+
   for (const press of said.querySelectorAll("button")) press.remove();
   const words = said.textContent;
+
   return {
     words,
     presses: presses.map((each) => each.textContent),
@@ -186,6 +191,7 @@ function sidebarOver(tasks: TasksControl): React.ReactElement {
 
 test("the sidebar's plans that could not be read say so, and Retry reads the list again", async () => {
   let retried = 0;
+
   const page = await mount(
     sidebarOver(
       tasksControl({
@@ -196,6 +202,7 @@ test("the sidebar's plans that could not be read say so, and Retry reads the lis
       }),
     ),
   );
+
   const failure = readFailure(page);
   assertSaidAlike(failure, "Your tasks could not be read.");
   failure.retry();
@@ -216,19 +223,23 @@ test("the Inbox's list says its feed could not be read as the sidebar does, and 
     items: { failed: true },
     inbox: { ...stateWith({}, {}).inbox, tasks: [{ taskId: TASK.id, items: 1, updatedAt: 2 }] },
   });
+
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]: () => {
       deliver({ rows: { [INBOX_SCOPE_KIND.PLAN]: {} } });
+
       return Promise.resolve(undefined);
     },
   });
+
   const page = await mount(
     createElement(DesktopInbox, {
       tasks: tasksControl({ tasks: [TASK] }),
     }),
     INBOX_AT,
   );
+
   // Note that the failure, and then the feed read again, stand once they reach the feed's query.
   const failure = await vi.waitFor(() => readFailure(page));
   assertSaidAlike(failure, "The inbox could not be read.");
@@ -245,11 +256,15 @@ test("the Inbox's list says its feed could not be read as the sidebar does, and 
 
 test("a side panel tab whose read failed says so alike, and Retry reads them again", async () => {
   let reads = 0;
+
   const readChanges = (): Promise<AgentChangesAnswerView> => {
     reads += 1;
+
     return Promise.resolve(reads === 1 ? UNANSWERED : { pullRequest: null });
   };
+
   fakeActPort({ ...fakeActPortCalls(), ...answeringChanges(readChanges) });
+
   const page = await mount(
     createElement(ChangesTabReading, {
       agentId: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
@@ -259,6 +274,7 @@ test("a side panel tab whose read failed says so alike, and Retry reads them aga
       tree: { open: false, onToggle: ignore },
     }),
   );
+
   // Note that the changes land through a query, so the failure is read once it is drawn.
   await vi.waitFor(() => assert.equal(page.querySelector('[role="alert"]') !== null, true));
   const failure = readFailure(page);
@@ -280,6 +296,7 @@ test("Settings says a page's failed read alike in its card's place, the keys and
     ...fakeActPortCalls(),
     [ACT_KIND.PROVIDER_KEYS_RETRY]: () => {
       deliverKeys({ rows: { keys: [] } });
+
       return Promise.resolve();
     },
   });
@@ -298,6 +315,7 @@ test("Settings says a page's failed read alike in its card's place, the keys and
   );
 
   let retried = 0;
+
   const workspaces = await mount(
     createElement(WorkspacePage, {
       readerId: undefined,
@@ -312,6 +330,7 @@ test("Settings says a page's failed read alike in its card's place, the keys and
       },
     }),
   );
+
   const workspacesFailure = readFailure(workspaces);
   assertSaidAlike(workspacesFailure, "Your workspaces could not be read.");
   workspacesFailure.retry();
@@ -321,12 +340,14 @@ test("Settings says a page's failed read alike in its card's place, the keys and
 /** The Inbox page as the tests draw it: open, nothing chosen. */
 test("an Inbox whose task list could not be read says so, never that nothing needs you, and Retry reads the list again", async () => {
   let retried = 0;
+
   const tasks = tasksControl({
     listFailed: true,
     onRetryList: () => {
       retried += 1;
     },
   });
+
   const page = await mount(createElement(DesktopInbox, { tasks }), INBOX_AT);
   const failure = readFailure(page);
   assertSaidAlike(failure, "The inbox could not be read.");
@@ -346,6 +367,7 @@ const REVISION: DescriptionRevisionLine = {
 /** The description's version history whose chosen version could not be read, its sections open where `sections` says. */
 async function versionNotRead(sections: boolean, onRetryVersion: () => void): Promise<HTMLElement> {
   const base = tasksControl();
+
   const history = {
     ...base.history,
     open: true,
@@ -357,12 +379,14 @@ async function versionNotRead(sections: boolean, onRetryVersion: () => void): Pr
       : undefined,
     onRetryVersion,
   };
+
   const tasks = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     activeTaskId: DOCUMENT_TASK.id,
     region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
     history,
   });
+
   return mount(
     createElement(DesktopVersionHistory, {
       sidebar: {
@@ -395,6 +419,7 @@ async function versionNotRead(sections: boolean, onRetryVersion: () => void): Pr
 /** The Retry in a region's alert, which reads the version again. */
 function retryIn(region: Element | null): HTMLButtonElement | undefined {
   const alert = region?.querySelector('[role="alert"]');
+
   return [...(alert?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
     (each) => each.textContent === "Retry",
   );
@@ -402,9 +427,11 @@ function retryIn(region: Element | null): HTMLButtonElement | undefined {
 
 test("a version history whose version could not be read says so on its page and over the sections it opened, each with Retry, and no placeholder", async () => {
   let retried = 0;
+
   const page = await versionNotRead(true, () => {
     retried += 1;
   });
+
   const sections = page.querySelector("section[aria-label='Sections changed']");
   const version = page.querySelector(".version-page");
   assert.match(sections?.textContent ?? "", /The sections it changed could not be read\./u);
@@ -418,9 +445,11 @@ test("a version history whose version could not be read says so on its page and 
 
 test("a version history whose version could not be read says so on its page with Retry where no sections are open", async () => {
   let retried = 0;
+
   const page = await versionNotRead(false, () => {
     retried += 1;
   });
+
   const version = page.querySelector(".version-page");
   assert.match(version?.textContent ?? "", /The version could not be read\./u);
   assert.equal(page.querySelectorAll('[role="alert"]').length, 1);

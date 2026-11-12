@@ -45,8 +45,8 @@
   /* The one cursor rule (docs/DESIGN.md): a control gives the Mac's arrow,
      as Finder, Mail and Notes do, and only a real link the pointing hand.
      A control reads `--ui-cursor-press` (`cursor-press`), a link
-     `--ui-cursor-link` (`cursor-link`); the style guard refuses the hand
-     spelled anywhere else (`pointer-cursor`). */
+     `--ui-cursor-link` (`cursor-link`); the hand is spelled nowhere
+     else. */
   --ui-cursor-press: default;
   --ui-cursor-link: pointer;
   --ui-icon-gap: var(--ui-space-8);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inboxPushResponseOf } from "./inbox-push-wire.js";
+import { inboxPushOf, inboxPushResponseOf } from "./inbox-push-wire.js";
 
 /**
  * Where a tap or an action on a push takes the app, and what it sends there,
@@ -86,6 +86,18 @@ describe("inboxPushResponseOf", () => {
       response: { route: "/tasks/agent/agent-3" },
     },
     {
+      name: "a task the share sheet started opens its agent's page",
+      payload: { kind: "share-started", taskId: "task-4", agentId: "agent-4" },
+      action: TAP,
+      response: { route: "/tasks/agent/agent-4" },
+    },
+    {
+      name: "a task the share sheet started with no agent opens the task",
+      payload: { kind: "share-started", taskId: "task-5" },
+      action: TAP,
+      response: { route: "/tasks/task-5" },
+    },
+    {
       name: "a settled thread's background push opens nothing",
       payload: { aps: { "content-available": 1, badge: 0 }, kind: "settled", itemId: "item-1" },
       action: TAP,
@@ -98,6 +110,6 @@ describe("inboxPushResponseOf", () => {
       response: undefined,
     },
   ])("$name", ({ payload, action, response }) => {
-    expect(inboxPushResponseOf(payload, action)).toEqual(response);
+    expect(inboxPushResponseOf(inboxPushOf(payload), action)).toEqual(response);
   });
 });

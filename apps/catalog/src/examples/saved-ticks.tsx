@@ -13,6 +13,7 @@ import { CatalogSection } from "../section";
 function SavedSwitch(): React.JSX.Element {
   const [on, setOn] = useState(false);
   const [saves, setSaves] = useState(0);
+
   return (
     <SettingsRow
       label="Sound on send"

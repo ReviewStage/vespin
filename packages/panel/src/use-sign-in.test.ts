@@ -46,10 +46,11 @@ afterEach(() => {
 /** The sign-in screen as the window stands it: the gate, over the sign-in it begins. */
 function SignInScreen(): React.JSX.Element {
   const signIn = useSignIn();
+
   return createElement(SignInGate, {
     account: { status: ACCOUNT_STATUS.SIGNED_OUT },
-    ...(signIn.signInWait === undefined ? {} : { waiting: signIn.signInWait }),
-    ...(signIn.signInFailure === undefined ? {} : { failure: signIn.signInFailure }),
+    ...(signIn.signInWait !== undefined && { waiting: signIn.signInWait }),
+    ...(signIn.signInFailure !== undefined && { failure: signIn.signInFailure }),
     onBegin: signIn.beginSignIn,
     onCancel: signIn.cancelSignIn,
   });
@@ -68,11 +69,14 @@ async function pressedOver(answer: FakeActAnswer): Promise<HTMLElement> {
   const root = createRoot(container);
   mounted.push(root);
   act(() => root.render(withQueryClient(createElement(SignInScreen))));
+
   const google = [...container.querySelectorAll("button")].find(
     (each) => each.textContent === "Continue with Google",
   );
+
   assert.ok(google, "the gate offers Google");
   await act(async () => google.click());
+
   return container;
 }
 
@@ -86,6 +90,7 @@ test("each reason a sign-in ended for reaches the screen in its own words", asyn
     const container = await pressedOver({ status: FAKE_ANSWER.DONE, value: { failure } });
     assert.equal(alertWords(container), SAID[failure], failure);
   }
+
   assert.equal(new Set(Object.values(SAID)).size, Object.values(SIGN_IN_FAILURE).length);
 });
 
@@ -94,6 +99,7 @@ test("a sign-in that landed says nothing went wrong", async () => {
     status: FAKE_ANSWER.DONE,
     value: { account: { status: ACCOUNT_STATUS.SIGNED_OUT } },
   });
+
   assert.equal(alertWords(container), "");
 });
 
@@ -102,6 +108,7 @@ test("a refusal the port drew says only that the sign-in did not finish, never i
     status: FAKE_ANSWER.REFUSED,
     reason: "Could not start signing in on this system.",
   });
+
   assert.equal(alertWords(container), SAID[SIGN_IN_FAILURE.UNFINISHED]);
 });
 
@@ -111,9 +118,11 @@ test("a Cancel main refuses says why in a toast, and the gate is offered again a
     act: (request) => {
       // The sign-in waits on the browser for as long as the test runs.
       if (request.kind === ACT_KIND.ACCOUNT_BEGIN_SIGN_IN) return new Promise(() => undefined);
+
       if (request.kind === ACT_KIND.ACCOUNT_CANCEL_SIGN_IN) {
         return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: refusal });
       }
+
       return Promise.resolve({ status: FAKE_ANSWER.UNKNOWN_ACT });
     },
   });
@@ -128,9 +137,11 @@ test("a Cancel main refuses says why in a toast, and the gate is offered again a
       ),
     ),
   );
+
   const press = (name: string) =>
     [...container.querySelectorAll("button")].find((each) => each.textContent === name) ??
     assert.fail(`the gate offers ${name}`);
+
   await act(async () => press("Continue with Google").click());
 
   await act(async () => press("Cancel").click());

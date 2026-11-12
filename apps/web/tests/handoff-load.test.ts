@@ -26,6 +26,7 @@ const histories: RouterHistory[] = [];
 function loadedHistory(): RouterHistory {
   const history = createBrowserHistory();
   histories.push(history);
+
   return history;
 }
 
@@ -49,6 +50,7 @@ test("a navigation to the address is fresh", () => {
 
 test("a reload, or a Back or Forward into the tab, is not", () => {
   window.history.replaceState(null, "", TASK_ADDRESS);
+
   for (const type of ["reload", "back_forward"] as const) {
     pageLoadedBy(type);
     assert.equal(browserLoadedFresh(loaded()), false, type);

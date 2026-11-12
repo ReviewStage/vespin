@@ -42,6 +42,7 @@ function draw(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -70,10 +71,12 @@ test("the bar reads its lead, its title, the tag after it, and its actions, in t
 
 test("a title that opens what it names is its heading's one press, saying whether that stands open", () => {
   const presses: string[] = [];
+
   const banner = bar({
     title: "Teammate invitations",
     titlePress: { open: false, label: "Task details", onPress: () => presses.push("press") },
   });
+
   const press = banner.querySelector<HTMLButtonElement>("h1 button") ?? assert.fail("no press");
   assert.equal(press.textContent, "Teammate invitations");
   assert.equal(press.getAttribute("aria-expanded"), "false");
@@ -84,11 +87,13 @@ test("a title that opens what it names is its heading's one press, saying whethe
     title: "Teammate invitations",
     titlePress: { open: true, label: "Task details", onPress: () => undefined },
   });
+
   assert.equal(open.querySelector("h1 button")?.getAttribute("aria-expanded"), "true");
 });
 
 test("a title holding the page's menu renamed in place hands the focus back to the menu's box once Return ends the edit", async () => {
   const ended: (string | undefined)[] = [];
+
   const titled = (editing: boolean): ToolbarProps => ({
     title: "Triage overnight issues",
     titleMenu: {
@@ -110,13 +115,16 @@ test("a title holding the page's menu renamed in place hands the focus back to t
         }
       : undefined,
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Toolbar, titled(true))));
+
   const field =
     container.querySelector<HTMLInputElement>('input[aria-label="Agent name"]') ??
     assert.fail("the title is its field");
+
   field.value = "Triage the queue";
   await act(async () => {
     field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
@@ -158,6 +166,7 @@ test("a trail leads the heading with each place above the page, the page's own n
     },
   );
   const pressed: string[] = [];
+
   const banner = bar({
     title: "Nightly triage",
     trail: [
@@ -169,6 +178,7 @@ test("a trail leads the heading with each place above the page, the page's own n
       },
     ],
   });
+
   const path = banner.querySelector("nav") ?? assert.fail("no trail");
   const crumbs = [...path.querySelectorAll("li")];
 
@@ -180,9 +190,11 @@ test("a trail leads the heading with each place above the page, the page's own n
   const current = crumbs.at(-1) ?? assert.fail("no current page");
   assert.equal(current.querySelector("[aria-current='page']")?.textContent, "Nightly triage");
   assert.equal(current.querySelector("button, a"), null);
+
   for (const crumb of crumbs.slice(0, -1)) {
     act(() => (crumb.querySelector("button") ?? assert.fail("no press")).click());
   }
+
   assert.deepEqual(pressed, ["Workspace", "Automations"]);
 });
 
@@ -195,11 +207,13 @@ test("a title that opens what it names ends its trail as that press, the page's 
     },
   );
   const presses: string[] = [];
+
   const banner = bar({
     title: "Daily standup · Nov 8, 7:30",
     titlePress: { open: false, label: "Task details", onPress: () => presses.push("details") },
     trail: [{ label: "Automations", icon: createElement("svg"), onPress: () => undefined }],
   });
+
   const crumbs = [
     ...(banner.querySelector("nav") ?? assert.fail("no trail")).querySelectorAll("li"),
   ];
@@ -208,8 +222,10 @@ test("a title that opens what it names ends its trail as that press, the page's 
     crumbs.map((crumb) => crumb.textContent),
     ["Automations", "Daily standup · Nov 8, 7:30"],
   );
+
   const press =
     crumbs.at(-1)?.querySelector<HTMLButtonElement>("h1 button") ?? assert.fail("no press");
+
   assert.equal(press.getAttribute("aria-expanded"), "false");
   act(() => press.click());
   assert.deepEqual(presses, ["details"]);
@@ -217,6 +233,7 @@ test("a title that opens what it names ends its trail as that press, the page's 
 
 test("a place not found keeps its bar, its way back pressable, above the words saying so", () => {
   let backed = false;
+
   const region = draw(
     createElement(NotFound, {
       thing: NOT_FOUND_THING.AUTOMATION,
@@ -229,6 +246,7 @@ test("a place not found keeps its bar, its way back pressable, above the words s
       },
     }),
   );
+
   const page = region.querySelector("section") ?? assert.fail("no page");
   const banner = page.firstElementChild;
 
@@ -260,8 +278,10 @@ test("a document's trail leads its bar, and its name joins the trail as the curr
     },
   );
   const trail = [{ label: "Automations", icon: createElement("svg"), onPress: () => undefined }];
+
   const crumbs = (shown: boolean): string[] => {
     const banner = bar({ trail, pickUp: { name: "Nightly triage", shown } });
+
     return [...banner.querySelectorAll("nav li")].map((crumb) => crumb.textContent ?? "");
   };
 
@@ -278,6 +298,7 @@ test("a document's trail stands alone while its name is not yet read", () => {
       disconnect(): void {}
     },
   );
+
   const banner = bar({
     trail: [{ label: "Automations", icon: createElement("svg"), onPress: () => undefined }],
     pickUp: { name: "", shown: false },
@@ -298,6 +319,7 @@ test("a bar that would cut the page's name under the readable floor stands it on
       whole,
       floor: 120,
     });
+
     try {
       return bar({ title: "New thread", wrapHeading: true }).dataset.wrapped;
     } finally {
@@ -317,6 +339,7 @@ test("a bar that would cut the page's name under the readable floor stands it on
 test("a bar reads its title again once the page's fonts finish loading, which widen or narrow its words in a bar that keeps its width", () => {
   const fonts = new EventTarget();
   Object.defineProperty(document, "fonts", { configurable: true, value: fonts });
+
   const lay = (whole: number) =>
     layTitle({
       room: ".ui-toolbar-heading",
@@ -325,7 +348,9 @@ test("a bar reads its title again once the page's fonts finish loading, which wi
       whole,
       floor: 120,
     });
+
   let laid = lay(90);
+
   try {
     const banner = bar({ title: "New thread", wrapHeading: true });
     assert.equal(banner.dataset.wrapped, undefined, "a 90px name stands whole in 96px");

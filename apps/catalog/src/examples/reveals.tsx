@@ -41,6 +41,7 @@ function Line({ label, description }: { label: string; description: string }) {
 function Reveals(): React.JSX.Element {
   const [quiet, setQuiet] = useState(false);
   const [trigger, setTrigger] = useState<Trigger>(TRIGGER.SCHEDULE);
+
   return (
     <SettingsPage title="Notifications">
       <SettingsSection title="Quiet hours">

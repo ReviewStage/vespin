@@ -13,10 +13,12 @@ export interface RecordingReporter {
 /** A reporter that keeps each reported error's message rather than sending it anywhere. */
 export function recordingReporter(): RecordingReporter {
   const reported: string[] = [];
+
   const layer = ErrorReporter.layer([
     ErrorReporter.make(({ error }) => {
       reported.push(error.message);
     }),
   ]);
+
   return { reported, layer };
 }

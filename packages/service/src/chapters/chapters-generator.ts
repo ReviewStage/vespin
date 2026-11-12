@@ -214,7 +214,9 @@ function callFailureOf(cause: unknown): PullRequestChaptersFailure {
       ? PULL_REQUEST_CHAPTERS_FAILURE.MODEL_REFUSED
       : PULL_REQUEST_CHAPTERS_FAILURE.INVALID_ANSWER;
   }
+
   if (NoOutputGeneratedError.isInstance(cause)) return PULL_REQUEST_CHAPTERS_FAILURE.INVALID_ANSWER;
+
   return PULL_REQUEST_CHAPTERS_FAILURE.MODEL_REFUSED;
 }
 
@@ -224,6 +226,7 @@ function failedAs(
   cause?: unknown,
 ): Effect.Effect<never, ChaptersFailure> {
   const named = cause === undefined ? kind : `${kind} (${failureKind(cause)})`;
+
   return Effect.andThen(
     Effect.logWarning(`chapters could not be generated: ${named}`),
     Effect.fail(new ChaptersFailure({ kind })),
@@ -256,11 +259,14 @@ function askStructured<A>(
         },
         abortSignal,
       });
+
       if (answer.finishReason === FINISH_REFUSED) return { refused: true } as const;
+
       return { refused: false, output: answer.output } as const;
     },
     catch: (cause) => cause,
   });
+
   return Effect.matchEffect(called, {
     onFailure: (cause) => failedAs(callFailureOf(cause), cause),
     onSuccess: (answer) =>
@@ -299,6 +305,7 @@ function withHunkPlaced(chapter: Chapter, ref: HunkRef): Chapter {
   const lastOfFile = refs.findLastIndex((each) => each.path === ref.path);
   const afterFile = lastOfFile === -1 ? refs.length : lastOfFile + 1;
   const at = later === -1 ? afterFile : later;
+
   return { ...chapter, hunkRefs: [...refs.slice(0, at), ref, ...refs.slice(at)] };
 }
 
@@ -318,6 +325,7 @@ const RISK_RANK = new Map<Chapter["risk"], number>([
  */
 function withRiskOf(chapter: Chapter, risk: Chapter["risk"], reason: string): Chapter {
   if ((RISK_RANK.get(risk) ?? -1) <= (RISK_RANK.get(chapter.risk) ?? -1)) return chapter;
+
   return { ...chapter, risk, riskReasons: [...chapter.riskReasons, reason] };
 }
 
@@ -327,13 +335,16 @@ function repairedChapters(
   repair: typeof repairAnswerSchema.Type,
 ): readonly Chapter[] {
   let placed = chapters;
+
   for (const { path, oldStart, chapter, risk, riskReason } of repair.placements) {
     const at = chapter - 1;
     const target = placed[at];
+
     if (target === undefined) continue;
     const raised = withRiskOf(target, risk, unescapeLiteralNewlines(riskReason));
     placed = placed.with(at, withHunkPlaced(raised, { path, oldStart }));
   }
+
   return [...placed, ...repair.newChapters.map(storyChapter)];
 }
 
@@ -352,18 +363,21 @@ function repairCoverage(
 ): Effect.Effect<{ readonly chapters: readonly Chapter[]; readonly missing: readonly HunkRef[] }> {
   const missingSet = new Set(covered.missing);
   const missing = shown.filter((each) => missingSet.has(each.ref));
+
   const prompt = repairPrompt({
     title: input.title,
     chapters: covered.chapters,
     missing,
     statusOf,
   });
+
   const asked = askStructured(model, {
     system: REPAIR_INSTRUCTIONS,
     prompt,
     schema: repairAnswerSchema,
     maxOutputTokens: CHAPTERS_BOUNDS.REPAIR_MAX_OUTPUT_TOKENS,
   });
+
   return asked.pipe(
     Effect.map((repair) => coverHunks(repairedChapters(covered.chapters, repair), shown)),
     Effect.catch(() => Effect.succeed(covered)),
@@ -373,6 +387,7 @@ function repairCoverage(
 /** The status a file's hunks are headed with. */
 function statusesOf(files: readonly AgentChangedFile[]): (path: string) => string {
   const byPath = new Map(files.map((file) => [file.path, file.status]));
+
   return (path) => byPath.get(path) ?? "modified";
 }
 
@@ -397,10 +412,13 @@ export function chaptersModelOf(
     apiKey: Redacted.value(own.key),
     ...(fetch === undefined ? undefined : { fetch }),
   };
+
   const id = chaptersModelOn(own.provider, modelId);
+
   if (own.provider === MODEL_PROVIDER.ANTHROPIC) {
     return { id, model: createAnthropic(settings)(id) };
   }
+
   return { id, model: createOpenAI(settings).responses(id) };
 }
 
@@ -418,6 +436,7 @@ export function generateChapters(
   const all = chapterHunks(input.files);
   const shown = all.filter((each) => !unseen(each));
   const statusOf = statusesOf(input.files);
+
   const prompt = chaptersPrompt({
     title: input.title,
     body: input.body,
@@ -430,6 +449,7 @@ export function generateChapters(
     shown,
     statusOf,
   });
+
   const generated = Effect.gen(function* () {
     const told =
       shown.length === 0
@@ -440,21 +460,28 @@ export function generateChapters(
             schema: chaptersAnswerSchema,
             maxOutputTokens: CHAPTERS_BOUNDS.MAX_OUTPUT_TOKENS,
           });
+
     const first = coverHunks(told.chapters.map(storyChapter), shown);
+
     const covered =
       first.missing.length === 0
         ? first
         : yield* repairCoverage(model, input, first, shown, statusOf);
+
     const outside = new Set(covered.missing);
+
     const other = all
       .filter((each) => unseen(each) || outside.has(each.ref))
       .map((each) => each.ref);
+
     const chapters = covered.chapters.map((chapter) => validLineRefs(chapter, shown));
+
     return {
       model: model.id,
       chapters: other.length === 0 ? chapters : [...chapters, otherChangesChapter(other)],
     };
   });
+
   return generated.pipe(
     Effect.timeoutOrElse({
       duration: CHAPTERS_BOUNDS.TIMEOUT,

@@ -43,6 +43,7 @@ export function useSurfaceOpen(surfaces: readonly OpenSurface[], room: ShellRoom
   useEffect(() => {
     const before = shown.current;
     shown.current = surfaces;
+
     for (const opened of surfaces) {
       if (before.some((held) => sameSurface(held, opened))) continue;
       appPlatform().recordSurfaceEvent(PRODUCT_SURFACE_EVENT.SURFACE_OPEN, {

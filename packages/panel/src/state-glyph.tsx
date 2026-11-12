@@ -44,6 +44,7 @@ export function StateGlyph({
       </span>
     );
   }
+
   return (
     <span
       className="state-glyph"

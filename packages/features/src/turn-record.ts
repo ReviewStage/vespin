@@ -53,7 +53,9 @@ function choiceOf(recorded: string | null): string | undefined {
 /** How the turn ended where it did not simply answer; nothing for one that did or still runs. */
 function endingOf(turn: RecordedTurn): TurnEnding | undefined {
   if (turn.status === TURN_STATUS.CANCELED) return TURN_ENDING.STOPPED;
+
   if (turn.status !== TURN_STATUS.FAILED) return undefined;
+
   return turn.failure === TURN_FAILURE.ABANDONED ? TURN_ENDING.ABANDONED : TURN_ENDING.FAILED;
 }
 
@@ -61,8 +63,10 @@ function endingOf(turn: RecordedTurn): TurnEnding | undefined {
 function tokensOf(turn: RecordedTurn): TurnTokens | undefined {
   if (turn.usage === null) return undefined;
   const usage = decodeUsage(turn.usage);
+
   if (Option.isNone(usage)) return undefined;
   const { inputTokens, outputTokens, cachedInputTokens, cacheWriteTokens } = usage.value;
+
   return {
     inputTokens,
     outputTokens,
@@ -77,6 +81,7 @@ export function turnRecordOf(turn: RecordedTurn): TurnRecord {
   const effort = choiceOf(turn.reasoningEffort);
   const tokens = tokensOf(turn);
   const ending = endingOf(turn);
+
   return {
     ...(model === undefined ? undefined : { model }),
     ...(effort === undefined ? undefined : { effort }),

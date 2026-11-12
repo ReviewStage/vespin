@@ -44,12 +44,14 @@ it.effect(
         yield* (yield* Database)
           .insert(user)
           .values({ id: member, name: "Test User", email: `${member}@app.test` });
+
         const router = {
           supportAccess: supportAccessProcedures({
             resolveSessionUserId: plugin.resolveSessionUserId,
             supportAccess: supportAccessCalls(plugin.api),
           }),
         };
+
         const ask = (method: string, headers: Record<string, string>) =>
           Effect.flatMap(
             hostedAnswer(
@@ -64,9 +66,11 @@ it.effect(
               Effect.promise(async () => {
                 // SAFETY: the route answers JSON; the test compares it as the wire value it is.
                 const body = (await response.json()) as WireBoundaryInput;
+
                 return { status: response.status, body };
               }),
           );
+
         const session = { authorization: `Bearer ${yield* plugin.sessionBearerOf(member)}` };
 
         assert.deepEqual(yield* ask("POST", session), {

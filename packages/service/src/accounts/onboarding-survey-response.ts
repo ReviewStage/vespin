@@ -50,6 +50,7 @@ function responseOf<Value extends string>(
   other: string | undefined,
 ): string | undefined {
   if (answer === undefined) return undefined;
+
   return answer === SURVEY_OTHER && other !== undefined ? other : labels[answer];
 }
 
@@ -78,6 +79,7 @@ export function onboardingSurveyAnswered(
       response: responseOf(SURVEY_INTENT_LABEL, survey.intent, survey.intentOther),
     },
   ];
+
   return recordSurveyResponse({
     userId,
     surveyId: ONBOARDING_SURVEY.ID,

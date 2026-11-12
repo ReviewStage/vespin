@@ -135,6 +135,7 @@ async function mount(shown: Shown = {}): Promise<HTMLElement> {
   roots.push(root);
   act(() => root.render(taskDrawn(shown)));
   await settle();
+
   return container;
 }
 
@@ -157,6 +158,7 @@ interface Shown {
 /** The task's window as `mount` describes it. */
 function taskDrawn(shown: Shown) {
   const base = tasksControl();
+
   const tasks = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     tasks: [shown.listed ?? SUMMARY],
@@ -201,13 +203,16 @@ function taskDrawn(shown: Shown) {
       ]),
     }),
   });
+
   // The window's tasks' cards, as the shell hands them to everything it holds.
   const chipCards = {
     taskCard: (taskId: string, now: number) => {
       const task = tasks.tasks.find((each) => each.id === taskId);
+
       return task === undefined ? undefined : taskCardOf(tasks, task, now);
     },
   };
+
   return windowRouter().provide(
     withExperiments(
       experimentsOn(EXPERIMENT.DESCRIPTIONS),
@@ -231,6 +236,7 @@ function tabLooks(column: Element): Map<string, Look> {
   return new Map(
     [...column.querySelectorAll('[role="tab"]')].map((tab) => {
       const label = tab.querySelector(".ui-tab-label")?.textContent ?? "";
+
       return [label, { glyph: tab.querySelector(".ui-tab-icon")?.innerHTML, label }];
     }),
   );
@@ -241,14 +247,18 @@ function rowLooks(column: Element): Map<string, Look> {
   const add = column.querySelector<HTMLButtonElement>('button[aria-label="Open a tab"]');
   assert.ok(add, "the strip's +");
   act(() => add.click());
+
   const rows = [...column.querySelectorAll('.ui-searchable-menu [role="option"]')].map((row) => {
     const label = row.querySelector(".ui-combobox-option-label")?.textContent ?? "";
+
     return [
       label,
       { glyph: row.querySelector(".ui-combobox-option-glyph")?.innerHTML, label },
     ] as const;
   });
+
   act(() => add.click());
+
   return new Map(rows);
 }
 
@@ -273,6 +283,7 @@ test("the task's topbar names the task, as the list names it now, over a strip o
     listed: { ...SUMMARY, name: "Expire invites after a week" },
     main: agentTab(WORKING.id),
   });
+
   const topbar = container.querySelector(".task-topbar .ui-toolbar");
   assert.ok(topbar, "the task's topbar");
   assert.match(topbar.textContent ?? "", /Expire invites after a week/u);
@@ -292,43 +303,53 @@ test("a link to an agent's pull request in the plan hangs the card its Pull requ
   const url = "https://github.com/acme/relay/pull/42";
   // Note that the task's details stand in the panel's place, so the tab is read beside an agent and the links on the details.
   const beside = await mount();
+
   const tab = [...beside.querySelectorAll<HTMLElement>('.side-panel-tabs [role="tab"]')].find(
     (each) => each.querySelector(".ui-tab-label")?.textContent === "#42 Expire invitations",
   );
+
   const cardOf = (control: HTMLElement | undefined) => {
     assert.ok(control, "the pull request is named");
     restOn(control);
     const card = [...document.querySelectorAll(".ui-tooltip-card > *")].at(-1);
+
     const look = {
       card: card?.hasAttribute("data-pull-request-card"),
       name: card?.querySelector(".ui-hover-card-name")?.textContent,
       agent: card?.querySelector('.ui-hover-card-row [data-actor-ref][data-kind="agent"]')
         ?.textContent,
     };
+
     act(() => {
       control.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
     });
+
     return look;
   };
 
   const own = cardOf(tab);
   assert.deepEqual(own, { card: true, name: "Expire invitations", agent: DONE.title });
+
   const container = await mount({
     body: `## Goal\n\nShip it with [@#42](${url}) once ${url}/files is green.\n`,
     main: MAIN_TAB.OVERVIEW,
   });
+
   const [chip, files] = container.querySelectorAll<HTMLElement>(
     'a[data-mention-ref][data-kind="link"]',
   );
+
   assert.deepEqual(cardOf(chip), own, "the chip hangs the tab's card");
   assert.deepEqual(cardOf(files), own, "a link to its files hangs it too");
 });
 
 test("a cloud terminal tab wears the still terminal glyph though its agent works, says its name with the agent's beside it, and hangs the agent's card saying whose sandbox it is in", async () => {
   const panel = (await mount()).querySelector(".side-panel-tabs");
+
   const tab = [...(panel?.querySelectorAll<HTMLElement>('[role="tab"]') ?? [])].find(
     (each) => each.querySelector(".ui-tab-label")?.firstChild?.textContent === "Cloud 1",
   );
+
   assert.ok(tab, "the strip has a cloud terminal tab");
   assert.equal(tab.querySelector(".ui-tab-detail")?.textContent, WORKING.title);
   assert.doesNotMatch(
@@ -346,12 +367,14 @@ test("a cloud terminal tab wears the still terminal glyph though its agent works
   );
 });
 
-test("a page's tab hangs the page's card: its title and version over its newest version drawn small, in a frame that runs its scripts alone, takes no pointer or focus, and is left out of the recording", async () => {
+test("a page's tab hangs the page's card: its title and version over its newest version drawn small, in a frame that runs its scripts alone and takes no pointer or focus", async () => {
   fakeAppPlatform({ pageFrameUrl });
   const panel = (await mount()).querySelector(".side-panel-tabs");
+
   const tab = [...(panel?.querySelectorAll<HTMLElement>('[role="tab"]') ?? [])].find(
     (each) => each.querySelector(".ui-tab-label")?.textContent === FUNNEL.title,
   );
+
   assert.ok(tab, "the strip has the page's tab");
   restOn(tab);
   const card = document.querySelector(".ui-tooltip-card [data-page-card]");
@@ -367,14 +390,15 @@ test("a page's tab hangs the page's card: its title and version over its newest 
   assert.equal(frame.getAttribute("sandbox"), "allow-scripts");
   assert.equal(frame.tabIndex, -1);
   assert.equal(frame.getAttribute("aria-hidden"), "true");
-  assert.ok(frame.closest(".ph-no-capture"), "the preview is left out of the recording");
 });
 
 test("a page's tab keeps its page drawn while another tab or the task's details are shown, so a return finds the page as it was left rather than loaded afresh", async () => {
   fakeAppPlatform({ pageFrameUrl });
   const container = await mount({ tab: pageTab(FUNNEL.id) });
+
   const pageFrame = () =>
     container.querySelector(`.side-panel-content iframe[title="${FUNNEL.title}"]`);
+
   const frame = pageFrame();
   assert.ok(frame, "the page is drawn in its tab");
   await redraw({ tab: changesTab(DONE.id) });
@@ -384,10 +408,12 @@ test("a page's tab keeps its page drawn while another tab or the task's details 
   await redraw({ tab: pageTab(FUNNEL.id), main: MAIN_TAB.OVERVIEW });
   await redraw({ tab: pageTab(FUNNEL.id) });
   assert.ok(pageFrame() === frame, "the page stands in its frame after the details are left");
+
   // The page's tab offers what its page hands its menu, as it did before it was hidden.
   const tab = [...container.querySelectorAll<HTMLElement>('.side-panel-tabs [role="tab"]')].find(
     (each) => each.querySelector(".ui-tab-label")?.textContent === FUNNEL.title,
   );
+
   assert.ok(tab, "the strip has the page's tab");
   act(() => {
     tab.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));

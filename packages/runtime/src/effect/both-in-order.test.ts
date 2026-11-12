@@ -7,10 +7,12 @@ describe("bothInOrder", () => {
   it.effect("runs the two at once, so the first may wait on what the second does", () =>
     Effect.gen(function* () {
       const handed = yield* Deferred.make<string>();
+
       const answered = yield* bothInOrder(
         Deferred.await(handed),
         Effect.as(Deferred.succeed(handed, "from the second"), 2),
       );
+
       assert.deepEqual(answered, ["from the second", 2]);
     }),
   );
@@ -19,10 +21,12 @@ describe("bothInOrder", () => {
     Effect.gen(function* () {
       const secondFailed = yield* Deferred.make<void>();
       const first = Effect.andThen(Deferred.await(secondFailed), Effect.fail("first"));
+
       const second = Effect.andThen(
         Deferred.succeed(secondFailed, undefined),
         Effect.fail("second"),
       );
+
       assert.equal(yield* Effect.flip(bothInOrder(first, second)), "first");
     }),
   );

@@ -30,6 +30,7 @@ import { beatDevice, registerDevice } from "@repo/database/models/device-store";
 import { enrollOwnDevice, removeHost } from "@repo/database/models/host-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
+import { device } from "@repo/database/schemas/device";
 import { deviceAgentLine } from "@repo/database/schemas/device-agent";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
@@ -69,6 +70,7 @@ import {
   agentRepositoryRead,
   cloneAgentRepository,
   finishCheckoutWith,
+  repositoryCredentialOf,
 } from "../coder-host/checkout.js";
 import { reconcileAgent } from "../coder-host/reconcile.js";
 import {
@@ -107,6 +109,7 @@ const ENVIRONMENT: HostedEnvironmentValues = {
 
 /** The repository an agent works in where a test gives it one, and the installation reaching it. */
 const RELAY = { owner: "Acme", name: "Relay", defaultBranch: "trunk" } as const;
+
 const RELAY_INSTALLATION: InstallationFixture = {
   id: 31,
   login: RELAY.owner,
@@ -119,6 +122,7 @@ const launched = (opened: Effect.Success<ReturnType<typeof openLocalAgent>>) =>
     const machine = yield* deviceMachine;
     const found = Option.getOrUndefined(yield* machine.findPlace(opened.userId, opened.session));
     assert.ok(found?.running !== undefined, "a local agent's place always stands");
+
     return yield* machine.launchRunner(found.running, {
       env: ENV,
       userId: opened.userId,
@@ -146,6 +150,7 @@ const untilAsked = (userId: string, deviceId: string) =>
     while ((yield* deviceAgentRequestsWaiting(userId, deviceId)).length === 0)
       yield* Effect.yieldNow;
     const [request] = yield* deviceAgentRequestsWaiting(userId, deviceId);
+
     return Option.getOrThrow(Option.fromNullishOr(request));
   });
 
@@ -154,6 +159,7 @@ const untilQueued = (userId: string, deviceId: string) =>
   Effect.gen(function* () {
     while ((yield* deviceAgentLinesWaiting(userId, deviceId)).length === 0) yield* Effect.yieldNow;
     const [line] = yield* deviceAgentLinesWaiting(userId, deviceId);
+
     return Option.getOrThrow(Option.fromNullishOr(line));
   });
 
@@ -164,26 +170,37 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
   "a local agent's machine",
   (it) => {
     it.effect(
-      "an agent on a host its account removed is refused by name, and one on a Mac with no layout as before",
+      "an agent on a host its account removed is refused by name, one on a host from before the folders a launch lays out as away, and one on no Mac of the account's as before",
       () =>
         Effect.gen(function* () {
           const { userId, deviceId, agent } = yield* openLocalAgent();
+          const machine = yield* deviceMachine;
+          const db = yield* Database;
+          // The Mac stands as a host from before its temp and attachments folders registered it.
+          yield* db
+            .update(device)
+            .set({ tempFolder: null, attachmentsFolder: null })
+            .where(eq(device.id, deviceId));
+          const outdated = yield* Effect.flip(machine.layout(agent));
           // The Mac the agent is pinned to is enrolled and removed, as Settings › Hosts removes one.
           yield* enrollOwnDevice(userId, {
             id: deviceId,
             version: "0.1.0",
             secretHash: `secret-${randomUUID()}`,
           });
-          const machine = yield* deviceMachine;
+
           const unregistered = yield* Effect.flip(
             machine.layout({ ...agent, deviceId: randomUUID() }),
           );
+
           assert.notEqual(yield* removeHost(userId, deviceId), undefined);
 
           const refused = yield* Effect.flip(machine.layout(agent));
 
           assert.ok(refused instanceof LaunchRefused);
           assert.equal(refused.deviceRemoved, true);
+          assert.ok(outdated instanceof LaunchRefused);
+          assert.equal(outdated.deviceAway, true, "a host from before its folders reads away");
           assert.ok(unregistered instanceof LaunchRefused);
           assert.equal(
             unregistered.deviceRemoved,
@@ -207,10 +224,12 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           });
           const { handle } = yield* launched(opened);
           const db = yield* Database;
+
           const [row] = yield* db
             .select({ payload: deviceAgentLine.payload })
             .from(deviceAgentLine)
             .where(eq(deviceAgentLine.id, handle.command));
+
           const payload = Schema.decodeUnknownSync(deviceAgentLaunchPayloadSchema)(row?.payload);
 
           assert.equal(
@@ -225,27 +244,33 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
         const opened = yield* openLocalAgent();
         const { handle } = yield* launched(opened);
         const db = yield* Database;
+
         const [row] = yield* db
           .select({ sealed: deviceAgentLine.sealedSecrets, payload: deviceAgentLine.payload })
           .from(deviceAgentLine)
           .where(eq(deviceAgentLine.id, handle.command));
+
         const stored = JSON.stringify(row);
 
         const first = yield* claimedDeviceAgentLine(opened.userId, opened.deviceId, handle.command);
+
         const second = yield* claimedDeviceAgentLine(
           opened.userId,
           opened.deviceId,
           handle.command,
         );
+
         const [after] = yield* db
           .select({ sealed: deviceAgentLine.sealedSecrets })
           .from(deviceAgentLine)
           .where(eq(deviceAgentLine.id, handle.command));
 
         assert.notEqual(row?.sealed ?? null, null, "the line carries its secrets sealed");
+
         for (const secret of [BEARER, PLAN_TOKEN, Buffer.from(BEARER).toString("base64")]) {
           assert.ok(!stored.includes(secret), "no secret stands in the row in the clear");
         }
+
         assert.deepEqual(
           Option.map(first, (claimed) => ("secrets" in claimed ? claimed.secrets : undefined)),
           Option.some({ env: ENV, stdin: FIRST_LINES }),
@@ -263,10 +288,12 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           const github = githubReaching([RELAY_INSTALLATION]);
           const { handle } = yield* launched(opened).pipe(Effect.provide(github.layer));
           const db = yield* Database;
+
           const [row] = yield* db
             .select({ payload: deviceAgentLine.payload })
             .from(deviceAgentLine)
             .where(eq(deviceAgentLine.id, handle.command));
+
           const payload = Schema.decodeUnknownSync(deviceAgentLaunchPayloadSchema)(row?.payload);
           // The same agent's checkout in a cloud sandbox, finished as its launch finishes it.
           const { agent } = opened;
@@ -274,8 +301,12 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           const target = { userId: opened.userId, conversationId: agent.conversationId };
           const sandbox = sandboxDouble(() => undefined);
           yield* Effect.gen(function* () {
-            yield* cloneAgentRepository(agent, sandbox, yield* agentRepositoryRead(target, agent));
-            yield* finishCheckoutWith(sandbox, yield* agentCheckoutPlan(target, agent));
+            const read = yield* agentRepositoryRead(target, agent);
+            yield* cloneAgentRepository(agent, sandbox, read);
+            yield* finishCheckoutWith(
+              sandbox,
+              yield* agentCheckoutPlan(target, agent, repositoryCredentialOf(read)),
+            );
           }).pipe(Effect.provide(github.layer));
 
           // A member with no GitHub sign-in writes as the App's bot, at the noreply address GitHub links to it.
@@ -283,6 +314,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
             name: GITHUB_FIXTURE_BOT.login,
             email: `${GITHUB_FIXTURE_BOT.id}+${GITHUB_FIXTURE_BOT.login}@users.noreply.github.com`,
           };
+
           assert.deepEqual(payload.identity, bot);
           assert.deepEqual(sandbox.identities, [bot]);
         }),
@@ -310,6 +342,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
         Effect.gen(function* () {
           const { userId, deviceId, session } = yield* openLocalAgent();
           const machine = yield* deviceMachine;
+
           const snapshot = {
             commit: "0123456789abcdef0123456789abcdef01234567",
             head: "89abcdef0123456789abcdef0123456789abcdef",
@@ -449,6 +482,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           const account: readonly SyncTopic[] = [[TOPIC.ACCOUNT, userId]];
           const accountAndAgent: readonly SyncTopic[] = [...account, [TOPIC.AGENT, agent.id]];
           const id = randomUUID();
+
           const request = {
             id,
             agentId: agent.id,
@@ -496,7 +530,9 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
               deviceAgentLinesFor(userId, deviceId),
               launched(opened),
             );
+
             const line = lines.written.handle.command;
+
             const read = yield* wokenOnHub(
               machine.readFile(session, "/tmp/shot.png", 1_024),
               Effect.gen(function* () {
@@ -509,7 +545,9 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
                 });
               }),
             );
+
             const id = randomUUID();
+
             const requests = yield* wokenOnHub(
               deviceAgentRequestsFor(userId, deviceId),
               queueDeviceAgentRequest(userId, {
@@ -519,6 +557,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
                 args: { path: "/tmp/notes.md", maxBytes: 1_025 },
               }),
             );
+
             const exit = yield* wokenOnHub(
               machine.runnerExit(lines.written.handle),
               Effect.andThen(
@@ -557,6 +596,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
             { userId, conversationId: agent.conversationId },
             { turnId, runtimeTurnId: turnId, origin: TURN_ORIGIN.TYPED },
           );
+
           const statusNow = Effect.map(
             latestTurnsOfReached([agent.conversationId]),
             (turns) => turns.get(agent.conversationId)?.status,
@@ -591,13 +631,17 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
         yield* messageSent(opened);
         const launch = yield* launched(opened);
         yield* claimedDeviceAgentLine(userId, deviceId, launch.handle.command);
+
         if (step !== undefined) {
           yield* stepDeviceAgentLaunch(userId, deviceId, launch.handle.command, step);
         }
+
         yield* settledDeviceAgentLine(userId, deviceId, launch.handle.command, 1, unstarted);
+
         const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(
           agent.conversationId,
         );
+
         return { agent, turn };
       });
 
@@ -650,11 +694,13 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           const message = yield* Effect.flip(
             machine.writeLine(handle, '{"type":"message","content":[]}\n'),
           );
+
           const files = yield* Effect.flip(
             machine.writeFiles(handle, [
               { path: "/tmp/note.txt", mode: 0o644, contents: new Uint8Array([104, 105]) },
             ]),
           );
+
           const launch = yield* Effect.flip(launched(opened));
           // The Mac is enrolled and removed, as Settings › Hosts removes one.
           yield* enrollOwnDevice(opened.userId, {
@@ -663,6 +709,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
             secretHash: `secret-${randomUUID()}`,
           });
           assert.notEqual(yield* removeHost(opened.userId, opened.deviceId), undefined);
+
           const removed = yield* Effect.flip(
             machine.writeLine(handle, '{"type":"message","content":[]}\n'),
           );
@@ -671,6 +718,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
             assert.ok(refused instanceof LaunchRefused);
             assert.equal(refused.deviceAway, true);
           }
+
           assert.ok(removed instanceof LaunchRefused);
           assert.equal(removed.deviceRemoved, true);
           assert.deepEqual(yield* deviceAgentLinesWaiting(opened.userId, opened.deviceId), []);
@@ -694,6 +742,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(
             agent.conversationId,
           );
+
           assert.equal(turn?.status, TURN_STATUS.FAILED);
           assert.equal(
             turn?.failureDetail,
@@ -718,6 +767,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           yield* claimedDeviceAgentLine(kept.userId, kept.deviceId, keptLaunch.handle.command);
           yield* recordAgentRunnerToken(lapsed.userId, lapsed.agent.id, "fixture-digest");
           const writer = yield* storeWriter({ tools: {} });
+
           for (const { userId, agent } of [lapsed, kept]) {
             const turnId = randomUUID();
             yield* writer.enqueueTurn(
@@ -725,14 +775,19 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
               { turnId, runtimeTurnId: turnId, origin: TURN_ORIGIN.TYPED },
             );
           }
+
           yield* TestClock.adjust("6 minutes");
           yield* beatDevice(kept.userId, kept.deviceId);
+
           for (const { agent } of [lapsed, kept]) yield* reconcileAgent(agent);
+
           const turns = yield* latestTurnsOfReached([
             lapsed.agent.conversationId,
             kept.agent.conversationId,
           ]);
+
           const db = yield* Database;
+
           const [bearer] = yield* db
             .select({ hash: agentTable.runnerTokenHash })
             .from(agentTable)

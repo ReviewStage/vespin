@@ -85,6 +85,7 @@ function Owner({
   suggestion: string | undefined;
 }): React.JSX.Element {
   const [body, setBody] = useState(start);
+
   return createElement(CommentEditor, {
     variant: REPLY_VARIANT.REPLY,
     label: "Comment",
@@ -120,10 +121,13 @@ function mount(
   act(() =>
     root.render(withQueryClient(createElement(Owner, { start, heard, answers, suggestion }))),
   );
+
   const element =
     holder.querySelector<TiptapEditorHTMLElement>('.ProseMirror[aria-label="Comment"]') ??
     assert.fail("the box's editor is mounted");
+
   const editor: Editor = element.editor ?? assert.fail("the box's editor is running");
+
   /** Presses a key in the words, as the member would. */
   const press = (init: KeyboardEventInit) =>
     act(() => {
@@ -131,11 +135,13 @@ function mount(
         new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }),
       );
     });
+
   /** Types words where the caret stands, as the editor's own input inserts them. */
   const type = (words: string) =>
     act(() => {
       editor.view.dispatch(editor.state.tr.insertText(words));
     });
+
   return { holder, editor, heard, reached, press, type };
 }
 
@@ -192,6 +198,7 @@ test("a comment opened on its Markdown hands nothing over untouched, and an edit
   let at = -1;
   editor.state.doc.descendants((node, pos) => {
     const found = node.isText ? (node.text ?? "").indexOf("twice") : -1;
+
     if (at < 0 && found >= 0) at = pos + found;
   });
   act(() => {
@@ -222,6 +229,7 @@ test("Esc in the link field gives the link up alone: the box stays open and noth
       assert.fail("the toolbar offers Link")
     ).click(),
   );
+
   const field =
     holder.querySelector<HTMLInputElement>('input[aria-label="Link"]') ??
     assert.fail("Link opens the link field");

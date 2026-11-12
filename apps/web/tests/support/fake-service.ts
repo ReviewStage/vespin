@@ -103,6 +103,7 @@ function polledTaskList(unchanged: boolean): WireValue {
     digest: "1",
     ...(unchanged ? undefined : { rows: JSON.stringify(LIVE_ROWS.get(name) ?? []) }),
   });
+
   return {
     url: LIVE_POLL_URL,
     queries: { plans: part("plans"), agents: part("agents"), issues: part("issues") },
@@ -167,61 +168,82 @@ export function fakeService(options: FakeServiceOptions): FakeService {
   let signedIn = options.signedIn;
   let settled = false;
   const seen: SeenRequest[] = [];
+
   const layer = fakeHttpClientLayer(async (url, init) => {
     const { pathname } = new URL(url);
     const method = init.method ?? "GET";
     seen.push({ method, path: pathname });
+
     if (pathname === "/api/auth/get-session") {
       await options.sessionHeld;
+
       return json(signedIn ? { user: SIGNED_IN_USER } : null);
     }
+
     if (pathname === "/api/auth/sign-out" && method === "POST") {
       signedIn = false;
+
       return json({ success: true });
     }
+
     // A sign-in to Slack under way: the rows read it as stored, and only the POST settles it.
     if (pathname === "/api/live/integration-statuses" && method === "GET") {
       if (!signedIn) return json({ error: "unauthorized" }, 401);
       const after = new URL(url).searchParams.get(LIVE_POLL.AFTER);
+
       return json(polledIntegrations(settled, after === (settled ? "2" : "1")));
     }
+
     if (pathname === "/api/account/integrations/github" && method === "GET" && signedIn) {
       return json({ status: "disconnected" });
     }
+
     if (pathname === "/api/account/integrations/settle" && method === "POST" && signedIn) {
       settled = true;
+
       return json({ integrations: { slack: "connected" } });
     }
+
     if (pathname === "/api/account/integrations/notion/connect" && method === "POST" && signedIn) {
       return json({ url: NOTION_SIGN_IN });
     }
+
     if (pathname === "/api/workspaces/github/connect" && method === "POST" && signedIn) {
       return json({ url: GITHUB_INSTALL });
     }
+
     // A member removed answers those who remain.
     if (pathname === "/api/workspaces/members/remove" && method === "POST" && signedIn) {
       return json({ members: [WORKSPACE_MEMBER] });
     }
+
     if (pathname === "/api/github/repositories" && method === "GET" && signedIn) {
       return json(GITHUB_REPOSITORIES);
     }
+
     // The account's preferences snapshot, as a cookie caller reads it: no stored settings, and the link choice where one was made.
     if (pathname === "/api/account/preferences" && method === "GET") {
       if (!signedIn) return json({ error: "unauthorized" }, 401);
       const linkOpen = options.linkOpen === undefined ? undefined : { linkOpen: options.linkOpen };
+
       return json({ preferences: {}, ...linkOpen });
     }
+
     if (pathname === "/api/live/tasks" && method === "GET") {
       if (!signedIn) return json({ error: "unauthorized" }, 401);
       // The list is answered polled, its rows inline; a poll past where they stand answers them unchanged.
       const unchanged = new URL(url).searchParams.get(LIVE_POLL.AFTER) === LIVE_DIGEST;
+
       return json(polledTaskList(unchanged));
     }
+
     if (pathname === "/api/plans" && method === "GET") {
       return signedIn ? json({ plans: [LISTED_TASK] }) : json({ error: "unauthorized" }, 401);
     }
+
     return json({ error: "not_found" }, 404);
   });
+
   return {
     layer,
     setSession: (next) => {

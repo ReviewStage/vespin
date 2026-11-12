@@ -59,6 +59,7 @@ const openAgent = (automationOrigin?: StoredAutomationOrigin) =>
       on: true,
       by: userId,
     });
+
     const started = yield* createAgent(userId, {
       taskId: (yield* createTask(userId, { organizationId: workspaceId })).id,
       descriptionSnapshot: null,
@@ -70,7 +71,9 @@ const openAgent = (automationOrigin?: StoredAutomationOrigin) =>
       automationOrigin,
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     assert.ok(Option.isSome(started));
+
     return { agent: started.value.agent, workspaceId };
   });
 
@@ -94,11 +97,14 @@ const writeTurn = (
     const db = yield* Database;
     const now = new Date();
     const own = { userId: agent.userId, conversationId: agent.conversationId };
+
     const [turn] = yield* db
       .insert(turns)
       .values({ ...own, origin: TURN_ORIGIN.TYPED, status, queuedAt: now, startedAt: now })
       .returning({ id: turns.id });
+
     assert.ok(turn !== undefined);
+
     const [line] = yield* db
       .insert(messages)
       .values({
@@ -118,6 +124,7 @@ const writeTurn = (
             : { sender: opener.sender, senderUserId: agent.userId }),
       })
       .returning({ id: messages.id });
+
     assert.ok(line !== undefined);
     yield* db.insert(messages).values({
       ...own,
@@ -136,12 +143,14 @@ const writeTurn = (
       metadata: { author: MESSAGE_AUTHOR.MODEL },
       placedAt: now,
     });
+
     return line.id;
   });
 
 /** A memory call from the agent, as its tool door hands it. */
 function agentCall(agent: Agent): AgentCall {
   const { sessions } = recordingSessions();
+
   return {
     caller: { kind: AGENT_CALLER.AGENT, agent, descriptionsOn: false },
     agentSessions: sessions,
@@ -177,6 +186,7 @@ it.layer(getTestDB())("a remember's provenance", (it) => {
           firing: { kind: AUTOMATION_FIRING.MANUAL },
           prompt: "Triage the overnight errors.",
         };
+
         const { agent, workspaceId } = yield* openAgent(origin);
         yield* writeTurn(agent, { sender: undefined }, []);
 
@@ -253,9 +263,11 @@ it.layer(getTestDB())("a remember's provenance", (it) => {
           },
           { opener: { sender: MESSAGE_SENDER.MEMBER }, called: [], refusal: undefined },
         ] as const;
+
         for (const { opener, called, refusal } of cases) {
           const { agent, workspaceId } = yield* openAgent();
           const db = yield* Database;
+
           const [kept] = yield* db
             .insert(memory)
             .values({
@@ -266,6 +278,7 @@ it.layer(getTestDB())("a remember's provenance", (it) => {
               updatedAt: new Date(),
             })
             .returning({ id: memory.id });
+
           assert.ok(kept !== undefined);
           yield* writeTurn(agent, opener, called);
 

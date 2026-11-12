@@ -20,6 +20,7 @@ test("each hunk keeps its header and git's starts and counts, its rows numbered 
       "\\ No newline at end of file",
     ].join("\n"),
   );
+
   assert.deepEqual(hunks, [
     {
       header: "@@ -4,3 +4,3 @@ function expire()",

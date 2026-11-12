@@ -6,7 +6,7 @@ import { useEffect, useEffectEvent } from "react";
 type OpenedFollow = AsyncIteratorObject<unknown, unknown, unknown>;
 
 /** Says on the console an act the host refused, which the next delivery of the document corrects. */
-function refused(what: string): (error: unknown) => void {
+function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not go.`, error);
 }
 
@@ -26,17 +26,23 @@ export function useLiveFollow(
     if (key === undefined) return;
     let held = true;
     let stream: OpenedFollow | undefined;
+
     const drain = async (opened: OpenedFollow) => {
       stream = opened;
+
       if (!held) {
         await opened.return?.();
+
         return;
       }
+
       for await (const _ of opened) {
         if (!held) break;
       }
     };
+
     opening(key).then(drain).catch(refused("Following a live read"));
+
     return () => {
       held = false;
       stream?.return?.().catch(refused("Letting a live read go"));

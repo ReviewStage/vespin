@@ -92,10 +92,13 @@ function observeTranscripts(
   for (const agentId of noted.keys()) {
     if (!Object.hasOwn(held, agentId)) noted.delete(agentId);
   }
+
   for (const [agentId, transcripts] of Object.entries(held)) {
     const rows = transcripts[OWN_TRANSCRIPT]?.rows;
+
     // Note that an own transcript let go for good is counted from its first page once it is read anew.
     if (rows === undefined) noted.delete(agentId);
+
     if (rows?.word === undefined || noted.get(agentId) === rows.pages) continue;
     noted.set(agentId, rows.pages);
     notices.observeStatus(agentId, rows.word.status);
@@ -123,6 +126,7 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
   const doors = yield* AgentNoticeDoors;
   const fork = yield* FiberSet.makeRuntime();
   let focused = false;
+
   // Note that a defect is reported here, because nothing joins the set a refresh is forked into.
   const forkReported = (refresh: Effect.Effect<void>, what: string): void => {
     fork(
@@ -133,12 +137,14 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
       ),
     );
   };
+
   const notices = yield* createAgentNotices({
     onUnseenChanged: (unseen) => state.update({ agents: { unseen } }),
     onPanelFocusChanged,
     signedInAs: () => accountKey(state.snapshot().account),
     accountId: () => {
       const { account } = state.snapshot();
+
       return account.status === ACCOUNT_STATUS.SIGNED_IN ? account.id : undefined;
     },
     onAccountChanged: (listener) =>
@@ -148,6 +154,7 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
     onInboxChanged: (inbox) => state.update({ inbox }),
     sound: () => {
       const stored = state.snapshot().settings?.stored;
+
       return {
         when: stored?.soundWhen ?? APP_SETTING_DEFAULTS.soundWhen,
         sound: stored?.completionSound ?? APP_SETTING_DEFAULTS.completionSound,
@@ -160,6 +167,7 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
     open: presenter.openPlace,
     report,
   });
+
   // Every agent on a task, the archived left out, while the list is followed
   // live, is the notices' to hold in place of the watch's own reads, and a
   // task the list no longer holds takes its agents with it.
@@ -217,12 +225,15 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
       (asks) =>
         Effect.sync(() => {
           const waiting = new Set(asks.map((ask) => ask.id));
+
           for (const askId of told) if (!waiting.has(askId)) told.delete(askId);
+
           for (const ask of asks) {
             if (told.has(ask.id)) continue;
             told.add(ask.id);
             const subject = { kind: NOTICE_KIND.MAC_COMMAND_ASK, askId: ask.id } as const;
             notices.heard(subject);
+
             if (focused) continue;
             doors.post({
               ...MAC_COMMAND_ASK_NOTICE,
@@ -239,10 +250,12 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
     Effect.sync(() =>
       onPanelFocusChanged((next) => {
         focused = next;
+
         if (focused) forkReported(host.workspacesRefresh(), "the workspaces refresh");
       }),
     ),
     (unsubscribe) => Effect.sync(unsubscribe),
   );
+
   return notices;
 });

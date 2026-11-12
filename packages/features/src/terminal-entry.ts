@@ -41,11 +41,15 @@ export interface TerminalContext {
 /** Which agent a terminal command is for. */
 export function terminalTarget(context: TerminalContext): TerminalTarget {
   const { here, agents, lastUsed } = context;
+
   if (here !== undefined && agents.includes(here))
     return { kind: TERMINAL_TARGET.AGENT, agentId: here };
+
   if (lastUsed !== undefined && agents.includes(lastUsed))
     return { kind: TERMINAL_TARGET.AGENT, agentId: lastUsed };
   const [first] = agents;
+
   if (first === undefined) return { kind: TERMINAL_TARGET.NO_AGENT };
+
   return { kind: TERMINAL_TARGET.AGENT, agentId: first };
 }

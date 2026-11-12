@@ -21,6 +21,7 @@ export function layScrollerOut(box: HTMLElement, view: number, length: number): 
       box.dispatchEvent(new Event("scroll"));
     },
   });
+  // SAFETY: the scroller calls scrollTo with its options form alone, which the stand-in takes.
   box.scrollTo = ((options: ScrollToOptions) => {
     box.scrollTop = options.top ?? top;
   }) as typeof box.scrollTo;

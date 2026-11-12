@@ -25,6 +25,7 @@ beforeAll(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
 });
@@ -32,8 +33,10 @@ afterEach(() => {
 /** Back, wrapped, each of its acts recorded in order. */
 function mount(options: { disabled?: boolean; contextMenu?: boolean } = {}) {
   const done: string[] = [];
+
   function Back(): React.JSX.Element {
     const [, redraw] = useState(0);
+
     return createElement(HoldPress, {
       mouse: true,
       disabled: options.disabled,
@@ -49,13 +52,16 @@ function mount(options: { disabled?: boolean; contextMenu?: boolean } = {}) {
       }),
     });
   }
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Back)));
   const back = container.querySelector<HTMLButtonElement>('button[aria-label="Back"]');
+
   if (back === null) throw new Error("Back is not drawn");
+
   return { back, done };
 }
 

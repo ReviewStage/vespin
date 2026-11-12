@@ -37,6 +37,7 @@ const WORKED_ON: TaskSummary = {
 function drawn(node: ReactNode): HTMLElement {
   const box = document.createElement("div");
   box.innerHTML = renderToStaticMarkup(createElement("div", null, node));
+
   return box;
 }
 
@@ -60,9 +61,11 @@ test("a sidebar plan's row, an agent's tab, and a running call draw one working 
     ),
     toolRow: toolRow(TOOL_STATE.INPUT_AVAILABLE),
   };
+
   const names = Object.values(surfaces).map(
     (surface) => surface.querySelector("[role='img']")?.getAttribute("aria-label") ?? "",
   );
+
   assert.deepEqual(names, ["Working", "Working", "Working"]);
 });
 

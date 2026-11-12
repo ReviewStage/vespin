@@ -15,6 +15,7 @@ it.effect(
     Effect.gen(function* () {
       const kept = yield* keptContent(BUDGET);
       const asked: string[] = [];
+
       const read = (attachmentId: string, base64 = ANSWERED) =>
         kept.answer(
           new InboxAttachmentKey({
@@ -25,6 +26,7 @@ it.effect(
           () => "user-dana",
           Effect.sync(() => {
             asked.push(attachmentId);
+
             return { contentType: INBOX_IMAGE_TYPE.PNG, base64 };
           }),
           (answer) => answer,

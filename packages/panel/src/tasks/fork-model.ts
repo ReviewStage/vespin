@@ -114,8 +114,11 @@ export function messageOpening(words: string): string {
     .split(/\s+/)
     .filter((word) => word !== "")
     .join(" ");
+
   let quote = whole.split(" ").slice(0, OPENING.WORDS).join(" ");
+
   if (quote.length > OPENING.CHARS) quote = quote.slice(0, OPENING.CHARS).trimEnd();
+
   return quote.length < whole.length ? `${quote}${ELLIPSIS}` : quote;
 }
 
@@ -131,9 +134,12 @@ export function forkChoice(source: AgentSummary): ModelChoice {
 /** Where a fork starts from: its source at its message, cut where it was seen to end while it was still being written, or on its whole transcript for a continue. */
 function forkFrom(fork: AgentFork): NonNullable<ForkStart["from"]> {
   const { agentId, messageId, messageSteps, messageStepParts } = fork;
+
   if (messageId === undefined) return { agentId };
+
   // Note that a settled message names no cut, so a service before the count still takes its fork.
   if (messageSteps === undefined) return { agentId, messageId };
+
   return messageStepParts === undefined
     ? { agentId, messageId, messageSteps }
     : { agentId, messageId, messageSteps, messageStepParts };
@@ -161,6 +167,7 @@ export function forkStart(input: {
 }): ForkStart {
   const note = input.words.trim();
   const { attachments, choice, disabledServers, runsOn, permissionMode } = input;
+
   return {
     idempotencyKey: input.draftId,
     from: forkFrom(input.fork),
@@ -204,6 +211,7 @@ export function openReply(
 /** Whether a part is a step's words or a call, which a fork's cut within a step counts as the service does. */
 function isCutPart(part: AgentTranscriptMessage["parts"][number]): boolean {
   if (!isRecord(part) || !isWireString(part.type)) return false;
+
   return part.type === AGENT_PART.TEXT || part.type.startsWith(TOOL_PART_TYPE_PREFIX);
 }
 
@@ -222,6 +230,7 @@ export function forkCutOf(
   if (message.id !== open) return undefined;
   const { parts } = message;
   const last = parts.findLastIndex((part) => isRecord(part) && part.type === AGENT_PART.STEP_START);
+
   return {
     messageSteps: parts.filter((part) => isRecord(part) && part.type === AGENT_PART.STEP_START)
       .length,
@@ -241,12 +250,16 @@ export function forksOf(
 ): ReadonlyMap<string, readonly string[]> {
   const forks = new Map<string, string[]>();
   const started = [...agents].sort((a, b) => a.createdAt - b.createdAt);
+
   for (const agent of started) {
     const messageId = agent.from?.agentId === sourceId ? agent.from.messageId : undefined;
+
     if (messageId === undefined) continue;
     const held = forks.get(messageId);
+
     if (held === undefined) forks.set(messageId, [agent.id]);
     else held.push(agent.id);
   }
+
   return forks;
 }

@@ -65,13 +65,17 @@ export function PlanPages({
   const openInTabOf = useOpenInTab();
   const linkOf = usePlaceLink();
   const copy = useCopyToast();
+
   const { regionId, selected, setChosen, onClear } = useChosen(
     new Set(listed.map((page) => page.id)),
   );
+
   const placeOf = (pageId: string) =>
     ({ kind: LINK_DESTINATION.PAGE, planId: place.taskId, pageId }) as const;
+
   // Note that the links are copied and opened in the order the group lists the pages, whatever order they were chosen in.
   const chosenPages = () => listed.filter((page) => selected.has(page.id));
+
   // Note that a browser may let one press open a single tab and hold the rest as pop-ups until the site is allowed them; that is the browser's to ask.
   const openAll: SelectionAct[] = opensTabs()
     ? [
@@ -85,6 +89,7 @@ export function PlanPages({
         },
       ]
     : [];
+
   const acts: SelectionAct[] = [
     ...openAll,
     {
@@ -93,15 +98,20 @@ export function PlanPages({
       onAct: () => {
         const links = chosenPages().flatMap((page) => {
           const link = linkOf(placeOf(page.id));
+
           return link === undefined ? [] : [link];
         });
+
         if (links.length > 0) copy(links.join("\n"), LINKS_COPY.COPIED);
         onClear();
       },
     },
   ];
+
   const chosenOf = useChosenOf(selected, TERM.PAGE, acts);
+
   if (listed.length === 0) return null;
+
   return (
     // Note that the group is pulled out by a row's inset on each side, as the agents' is, so its marks stand on the title's edge.
     <div className="plan-pages -mx-row-inset mb-block-gap">

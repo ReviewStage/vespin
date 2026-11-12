@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { TASK_SECTION_ICON_KIND } from "@repo/features/task-section-wire";
 import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
 import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
@@ -33,10 +34,13 @@ const LATER = new Date("2026-11-08T12:05:00Z");
 
 const { SETUP, ARCHIVE } = REPOSITORY_SCRIPT_KIND;
 
+const BOOKS = { kind: TASK_SECTION_ICON_KIND.EMOJI, emoji: "📚" } as const;
+
 const openOwnedWorkspace = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return yield* openWorkspace(userId);
 });
 
@@ -99,7 +103,7 @@ it.layer(getTestDB())("the workspace sandbox script store", (it) => {
   );
 
   it.effect(
-    "a save replaces a repository's run actions in its order, an action keeps only its own repository's id and only once, and an empty list removes them",
+    "a save replaces a repository's run actions in its order with their icons and one default, an action keeps only its own repository's id and only once, and an empty list removes them",
     () =>
       Effect.gen(function* () {
         const workspace = yield* openOwnedWorkspace;
@@ -124,9 +128,9 @@ it.layer(getTestDB())("the workspace sandbox script store", (it) => {
           workspace,
           "Acme/Relay",
           [
-            { label: "Storybook", command: "pnpm storybook" },
-            { id: dev, label: "Dev", command: "pnpm dev --port 3000" },
-            { id: dev, label: "Dev again", command: "pnpm dev" },
+            { label: "Storybook", command: "pnpm storybook", icon: BOOKS },
+            { id: dev, label: "Dev", command: "pnpm dev --port 3000", isDefault: true },
+            { id: dev, label: "Dev again", command: "pnpm dev", isDefault: true },
             { id: api, label: "Serve", command: "uv run serve" },
           ],
           LATER,
@@ -144,12 +148,18 @@ it.layer(getTestDB())("the workspace sandbox script store", (it) => {
         );
         const relay = yield* readRunActions(workspace, "ACME/relay");
         assert.deepEqual(
-          relay.map((row) => [row.label, row.command, row.updatedAt.getTime()]),
+          relay.map((row) => [
+            row.label,
+            row.command,
+            row.icon,
+            row.isDefault,
+            row.updatedAt.getTime(),
+          ]),
           [
-            ["Storybook", "pnpm storybook", LATER.getTime()],
-            ["Dev", "pnpm dev --port 3000", LATER.getTime()],
-            ["Dev again", "pnpm dev", LATER.getTime()],
-            ["Serve", "uv run serve", LATER.getTime()],
+            ["Storybook", "pnpm storybook", BOOKS, false, LATER.getTime()],
+            ["Dev", "pnpm dev --port 3000", null, true, LATER.getTime()],
+            ["Dev again", "pnpm dev", null, false, LATER.getTime()],
+            ["Serve", "uv run serve", null, false, LATER.getTime()],
           ],
         );
         const ids = relay.map((row) => row.id);
@@ -160,6 +170,41 @@ it.layer(getTestDB())("the workspace sandbox script store", (it) => {
         yield* setRunActions(workspace, "acme/relay", [], LATER);
         assert.deepEqual(yield* readRunActions(workspace, "acme/relay"), []);
         assert.equal((yield* listRunActions(workspace)).length, 1);
+      }),
+  );
+
+  it.effect(
+    "a save of a repository's run actions is stamped later than the list it replaces, even from an earlier or the same clock reading",
+    () =>
+      Effect.gen(function* () {
+        const workspace = yield* openOwnedWorkspace;
+
+        const stampOf = Effect.map(
+          readRunActions(workspace, "acme/relay"),
+          (rows) => rows[0]?.updatedAt.getTime() ?? 0,
+        );
+
+        yield* setRunActions(
+          workspace,
+          "acme/relay",
+          [{ label: "Dev", command: "pnpm dev" }],
+          LATER,
+        );
+        const first = yield* stampOf;
+        yield* setRunActions(
+          workspace,
+          "acme/relay",
+          [{ label: "Dev", command: "pnpm dev" }],
+          LATER,
+        );
+        const second = yield* stampOf;
+        // A save whose clock was read before the lock, while the save before it waited.
+        yield* setRunActions(workspace, "acme/relay", [{ label: "Dev", command: "pnpm dev" }], AT);
+        const third = yield* stampOf;
+
+        assert.equal(first, LATER.getTime());
+        assert.ok(second > first, `${second} > ${first}`);
+        assert.ok(third > second, `${third} > ${second}`);
       }),
   );
 

@@ -252,6 +252,7 @@ export interface AgentStarted {
 
 /** The newest turn of an agent's conversation, as its status is read from it; nothing before the first turn. The read is the store's own (`message-reads.ts`), re-exported here beside the agents it is read for. */
 export type AgentLatestTurn = LatestTurn;
+
 export {
   lastSettledTurnsOfReached,
   latestTurnsOf,
@@ -430,6 +431,7 @@ const AGENT_LINE_COLUMNS = {
 /** What an agent was handed as its first message, as `AGENT_LINE_COLUMNS` reads it from the row: its prompt, else the description, else nothing. */
 export function agentBriefOf(agent: Pick<Agent, "descriptionSnapshot" | "prompt">): AgentBrief {
   if (agent.prompt !== null) return AGENT_BRIEF.PROMPT;
+
   return agent.descriptionSnapshot === null ? AGENT_BRIEF.BLANK : AGENT_BRIEF.DESCRIPTION;
 }
 
@@ -441,6 +443,7 @@ export function agentLineOf(agent: Agent): AgentLine {
     prompt: _prompt,
     ...line
   } = agent;
+
   return {
     ...line,
     automationName: automationOrigin?.name ?? null,
@@ -481,6 +484,7 @@ const AutomationOriginColumnSchema = Schema.NullOr(
     body: Schema.optionalKey(Schema.String),
   }),
 );
+
 /** The `started_from` column as a row holds it. */
 const StartedFromColumnSchema = Schema.NullOr(
   Schema.Struct({
@@ -496,6 +500,7 @@ const StartedFromColumnSchema = Schema.NullOr(
     cutBefore: Schema.optionalKey(Schema.String),
   }),
 );
+
 /** An author as the agent's row holds it. */
 const AuthorColumnSchema = Schema.Literals(Object.values(AGENT_AUTHOR));
 
@@ -630,11 +635,13 @@ const findOwnAgentId = SqlSchema.findOneOption({
 const ownStarterOf = Effect.fnUntraced(function* (userId: string, agentId: string | undefined) {
   if (agentId === undefined) return null;
   const own = yield* findOwnAgentId({ userId, agentId });
+
   return Option.isSome(own) ? own.value.id : null;
 });
 
 /** A runtime as a conversation's row holds it. */
 const RuntimeColumnSchema = Schema.Literals(Object.values(CONVERSATION_RUNTIME));
+
 /** A payer as the agent's row holds it. */
 const PayerColumnSchema = agentPayerSchema;
 
@@ -1521,10 +1528,13 @@ const AGENT_SHOWN_NAME = sql<string>`coalesce(
  */
 function agentNamed(query: string): SQL | undefined {
   const words = query.split(/\s+/u).filter(Boolean);
+
   if (words.length === 0) return undefined;
+
   return and(
     ...words.map((word) => {
       const pattern = containing(word);
+
       return or(
         ilike(AGENT_SHOWN_NAME, pattern),
         exists(
@@ -1597,6 +1607,7 @@ function ofAutomation(automationId: string): SQL {
 /** The condition that an agent is one of the workspace's the account reaches, narrowed as the request asks. */
 function ofReachedWorkspace(request: typeof AgentsOfWorkspaceSchema.Type) {
   const { userId, organizationId, repository, taskId, words, except } = request;
+
   return and(
     agentVisibleTo(userId),
     eq(agentTable.organizationId, organizationId),
@@ -1631,6 +1642,7 @@ function ofReachedWorkspace(request: typeof AgentsOfWorkspaceSchema.Type) {
 /** The condition that an agent is the asking agent's own: its starter, or one it started. */
 function ownOfAgent(around: typeof AgentAroundSchema.Type): SQL {
   const started = eq(agentTable.startedByAgentId, around.agentId);
+
   return around.startedByAgentId === null
     ? started
     : (or(started, eq(agentTable.id, around.startedByAgentId)) ?? started);
@@ -1646,9 +1658,11 @@ function ownOfAgent(around: typeof AgentAroundSchema.Type): SQL {
  */
 function workspaceListOrder(request: typeof AgentsOfWorkspaceSchema.Type): SQL[] {
   const { around } = request;
+
   if (around === null) return [desc(agentTable.createdAt), desc(agentTable.id)];
   const onTask = eq(agentTable.taskId, around.taskId);
   const nearness = sql`case when ${ownOfAgent(around)} then 0 when ${onTask} then 1 else 2 end`;
+
   return [nearness, desc(agentTable.createdAt), desc(agentTable.id)];
 }
 
@@ -1911,6 +1925,7 @@ const findStartedFrom = SqlSchema.findAll({
           ),
         )
         .as("ranked");
+
       return db
         .select({ id: ranked.id, title: ranked.title, startedFrom: ranked.startedFrom })
         .from(ranked)
@@ -2216,16 +2231,21 @@ export function createAgent(
     client.withTransaction(
       Effect.gen(function* () {
         const reached = yield* lockReachableTask({ userId, taskId: started.taskId });
+
         if (Option.isNone(reached)) return Option.none();
+
         const existing = yield* findAgentByKey({
           userId,
           idempotencyKey: started.idempotencyKey,
         });
+
         if (Option.isSome(existing)) {
           return Option.some({ agent: existing.value, created: false });
         }
+
         const organizationId = reached.value.organizationId;
         const now = yield* DateTime.nowAsDate;
+
         const conversation = yield* insertAgentConversation({
           userId,
           runtime: started.runtime,
@@ -2234,6 +2254,7 @@ export function createAgent(
           // An insert that returned no row is the database breaking its own contract, not an outcome.
           Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
         );
+
         const { txid, ...row } = yield* insertAgent({
           userId,
           conversationId: conversation.id,
@@ -2267,8 +2288,10 @@ export function createAgent(
           // An insert that returned no row is the database breaking its own contract, not an outcome.
           Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
         );
+
         // Note that an agent in one repository or none writes no row here, so its rows are as they were.
         const extras = started.extraRepositories ?? [];
+
         if (extras.length > 0) {
           yield* insertAgentRepositories({
             agentId: row.id,
@@ -2278,6 +2301,7 @@ export function createAgent(
             })),
           });
         }
+
         return Option.some({ agent: row, created: true, txid });
       }),
     ),
@@ -2294,8 +2318,10 @@ export function discardAgent(userId: string, agentId: string): AgentStoreEffect<
     client.withTransaction(
       Effect.gen(function* () {
         const [deleted] = yield* deleteAgentRow({ userId, agentId });
+
         if (deleted === undefined) return false;
         yield* deleteConversationRow(deleted.conversationId);
+
         return true;
       }),
     ),
@@ -2339,18 +2365,25 @@ export function deleteAgent<R = never>(
     client.withTransaction(
       Effect.gen(function* () {
         const found = yield* findAgent({ userId, agentId });
+
         if (Option.isNone(found)) return Option.none();
+
         const locked = yield* lockAgentConversation({
           conversationId: found.value.conversationId,
         });
+
         if (Option.isNone(locked)) return Option.none();
         const agent = yield* findAgent({ userId, agentId });
+
         if (Option.isNone(agent)) return Option.none();
+
         if (!(yield* guard.standsStopped(agent.value))) return yield* new TaskAgentUnstopped();
         yield* guard.beforeDelete([agent.value.conversationId]);
         const [deleted] = yield* deleteAgentRow({ userId, agentId });
+
         if (deleted === undefined) return Option.none();
         yield* deleteConversations([deleted.conversationId]);
+
         return Option.some({ txid: deleted.txid });
       }),
     ),
@@ -2495,7 +2528,9 @@ export function taskNamesOf(
   taskIds: readonly string[],
 ): AgentStoreEffect<ReadonlyMap<string, AgentTaskName>> {
   const ids = [...new Set(taskIds)];
+
   if (ids.length === 0) return Effect.succeed(new Map());
+
   return Effect.map(
     findTaskNames({ userId, taskIds: ids }),
     (rows) => new Map(rows.map((row) => [row.id, { name: row.name }])),
@@ -2524,6 +2559,7 @@ export function listPublishedAgents(
 ): AgentStoreEffect<readonly PublishedAgentLine[]> {
   if (taskIds.length === 0) return Effect.succeed([]);
   const includeArchived = options.includeArchived === true;
+
   return Effect.map(findAgentsOfTasks({ userId, taskIds, includeArchived }), (rows) =>
     rows.map(({ published, pullRequests, ...agent }) => ({ agent, published, pullRequests })),
   );
@@ -2535,6 +2571,7 @@ export function listPublishedAgentsById(
   agentIds: readonly string[],
 ): AgentStoreEffect<readonly PublishedAgent[]> {
   if (agentIds.length === 0) return Effect.succeed([]);
+
   return Effect.map(findPublishedAgentsById({ userId, agentIds }), (rows) =>
     rows.map(({ published, pullRequests, ...agent }) => ({ agent, published, pullRequests })),
   );
@@ -2562,8 +2599,10 @@ export function continuationsOf(
 ): AgentStoreEffect<ReadonlyMap<string, readonly AgentStartedFromIt[]>> {
   if (agentIds.length === 0) return Effect.succeed(new Map());
   const perSource = CONTINUATIONS_PER_AGENT;
+
   return Effect.map(findStartedFrom({ userId, agentIds, perSource }), (rows) => {
     const bySource = new Map<string, AgentStartedFromIt[]>();
+
     for (const { id, title, startedFrom } of rows) {
       if (startedFrom === null) continue;
       const each = bySource.get(startedFrom.agentId) ?? [];
@@ -2574,6 +2613,7 @@ export function continuationsOf(
       );
       bySource.set(startedFrom.agentId, each);
     }
+
     return bySource;
   });
 }
@@ -2584,6 +2624,7 @@ export function newlyMerged(
   published: StoredPullRequest | null,
 ): boolean {
   if (published?.state !== PULL_REQUEST_STATE.MERGED) return false;
+
   return kept?.number !== published.number || kept.state !== PULL_REQUEST_STATE.MERGED;
 }
 
@@ -2678,13 +2719,16 @@ function ownedNewestFirst(found: readonly FoundAgent[], limit: number): readonly
           other.row.onRepository.toLowerCase() === each.row.onRepository.toLowerCase(),
       ) === at,
   );
+
   const sorted = once.toSorted(
     (a, b) =>
       b.row.createdAt.getTime() - a.row.createdAt.getTime() ||
       (a.row.id < b.row.id ? -1 : a.row.id > b.row.id ? 1 : 0),
   );
+
   return sorted.slice(0, limit).map(({ row, extra: onExtra }) => {
     const { onRepository, onBranch, ...agent } = row;
+
     return {
       userId: agent.userId,
       agent,
@@ -2717,6 +2761,7 @@ export function listAgentsOnBranches(
 ): AgentStoreEffect<readonly OwnedAgent[]> {
   if (branches.length === 0) return Effect.succeed([]);
   const request = { repository, branches, limit };
+
   return Effect.map(
     Effect.all([
       findAgentsOnBranches(request),
@@ -2750,6 +2795,7 @@ export function listAgentsOnPullRequest(
   limit: number,
 ): AgentStoreEffect<readonly OwnedAgent[]> {
   const request = { repository, number, limit };
+
   return Effect.map(findAgentsOnPullRequest(request), (linked) =>
     ownedNewestFirst(linkedFound(linked), limit),
   );
@@ -2882,11 +2928,14 @@ export function dispatchMentioningServers<E, R>(
   dispatch: Effect.Effect<boolean, E, R>,
 ): Effect.Effect<boolean, E | StoreFailure, R | DatabaseServices> {
   if (mentioned.length === 0) return dispatch;
+
   return Effect.gen(function* () {
     const read = yield* readReachableMentionedServers({ userId, agentId });
+
     if (Option.isNone(read)) return yield* dispatch;
     const standing = new Set(read.value.mentionedServers);
     const added = [...new Set(mentioned)].filter((name) => !standing.has(name));
+
     // The servers come out again however the hand-over ends short of taken, a deadline's interruption among them.
     return yield* Effect.acquireUseRelease(
       addMentionedServers({ agentId, names: added }),
@@ -2914,8 +2963,10 @@ export function takeAgentMentionedServers(
     client.withTransaction(
       Effect.gen(function* () {
         const locked = yield* lockAgentMentionedServers({ userId, conversationId });
+
         if (Option.isNone(locked) || locked.value.mentionedServers.length === 0) return [];
         yield* setAgentMentionedServers({ agentId: locked.value.id, mentionedServers: null });
+
         return locked.value.mentionedServers;
       }),
     ),
@@ -3047,24 +3098,31 @@ export function archiveAgentCommitted(
     client.withTransaction(
       Effect.gen(function* () {
         const now = yield* DateTime.nowAsDate;
+
         const archivedBefore = archived
           ? Option.getOrUndefined(yield* lockAgentArchivedAt({ userId, agentId }))?.archivedAt
           : undefined;
+
         // An archive already standing is kept as it stands, its stamp and record unmoved.
         if (archived && archivedBefore !== undefined && archivedBefore !== null) {
           const kept = yield* findAgent({ userId, agentId });
+
           return Option.map(kept, (agent) => ({ agent, archivedNow: false }));
         }
+
         const written = yield* updateAgentArchived({
           userId,
           agentId,
           archivedAt: archived ? now : null,
           archivedBy: archived ? archivedBy : null,
         });
+
         if (Option.isNone(written)) return Option.none();
+
         // An archive settles the agent's open inbox items that ask; bringing it back opens none.
         if (archived) yield* settleAgentInboxItems([agentId], now);
         const { txid, ...agent } = written.value;
+
         return Option.some({ agent, txid, archivedNow: archived && archivedBefore === null });
       }),
     ),
@@ -3112,6 +3170,7 @@ export function unarchiveAgentFrom(
     client.withTransaction(
       Effect.gen(function* () {
         const rows = yield* unarchiveIfStamped({ userId, agentId, archivedAt });
+
         return rows.length > 0;
       }),
     ),
@@ -3145,14 +3204,18 @@ export function pinAgentCommitted(
   return Effect.gen(function* () {
     // Note that a pin is the member's reading of the agent, so it is gated as their read of it is, its task's reach among it.
     const found = yield* findVisibleAgent({ userId, agentId });
+
     if (Option.isNone(found)) return Option.none();
     const now = yield* DateTime.nowAsDate;
+
     const written = !pinned
       ? yield* deleteAgentPin({ userId, agentId })
       : position === undefined
         ? yield* insertAgentPin({ userId, agentId, now })
         : yield* placeAgentPin({ userId, agentId, position, now });
+
     const txid = Option.getOrUndefined(written)?.txid;
+
     return Option.some(txid === undefined ? { agent: found.value } : { agent: found.value, txid });
   });
 }
@@ -3207,6 +3270,7 @@ export function archiveUnmovedAgent(
     client.withTransaction(
       Effect.gen(function* () {
         const archivedAt = yield* DateTime.nowAsDate;
+
         const rows = yield* updateUnmovedArchived({
           userId,
           agentId,
@@ -3214,10 +3278,12 @@ export function archiveUnmovedAgent(
           archivedAt,
           archivedBy,
         });
+
         yield* settleAgentInboxItems(
           rows.map(({ id }) => id),
           archivedAt,
         );
+
         return rows.length > 0;
       }),
     ),
@@ -3334,6 +3400,7 @@ export function nativeRuntimesOfReached(
   conversationIds: readonly string[],
 ): AgentStoreEffect<ReadonlyMap<string, (typeof NATIVE_RUNTIMES)[number]>> {
   if (conversationIds.length === 0) return Effect.succeed(new Map());
+
   return Effect.map(
     findNativeRuntimes({ conversationIds }),
     (rows) => new Map(rows.map((row) => [row.conversationId, row.runtime])),
@@ -3350,6 +3417,7 @@ export function openSandboxesOfReached(
   conversationIds: readonly string[],
 ): AgentStoreEffect<ReadonlySet<string>> {
   if (conversationIds.length === 0) return Effect.succeed(new Set());
+
   return Effect.map(
     findOpenSandboxes({ conversationIds }),
     (rows) => new Set(rows.map((row) => row.conversationId)),
@@ -3465,9 +3533,11 @@ export function readRunnerTokenConversation(
 ): AgentStoreEffect<Option.Option<RunnerTokenConversation>> {
   return Effect.gen(function* () {
     const found = yield* findRunnerTokenConversation({ runnerTokenHash });
+
     if (Option.isNone(found)) return found;
     const { userId, conversationId } = found.value;
     const agent = yield* findAgentHeaderOfConversation({ userId, conversationId });
+
     return Option.isSome(agent) ? found : Option.none();
   });
 }
@@ -3479,6 +3549,7 @@ function endedAtOf(
   const ended = Option.filter(newest, (turn) =>
     TURN_TERMINAL.some((status) => status === turn.status),
   );
+
   // An ended turn with no settle time stamped reads as ended long ago, so the sweep takes it at once.
   return Option.isSome(ended) ? (ended.value.settledAt ?? new Date(0)) : null;
 }
@@ -3515,9 +3586,11 @@ function readNativeRunStandings(
 ): AgentStoreEffect<ReadonlyMap<string, NativeRunStanding>> {
   return Effect.gen(function* () {
     const ids = agentIds.filter((agentId) => AGENT_ID_PATTERN.test(agentId));
+
     if (ids.length === 0) return new Map();
     const found = yield* findNativeAgentConversations({ agentIds: ids });
     const newest = yield* latestTurnsOfReached(found.map((row) => row.conversationId));
+
     return new Map(
       found.map(({ agentId, conversationId, userId }): [string, NativeRunStanding] => [
         agentId,
@@ -3666,6 +3739,7 @@ export function delegationStartsOf(
   childConversationIds: readonly string[],
 ): AgentStoreEffect<ReadonlyMap<string, Date>> {
   if (childConversationIds.length === 0) return Effect.succeed(new Map());
+
   return Effect.map(
     findDelegationStarts({
       userId: parent.userId,
@@ -3807,12 +3881,14 @@ export function lineSendersOf(
   messageIds: readonly string[],
 ): AgentStoreEffect<ReadonlyMap<string, LineSent>> {
   if (messageIds.length === 0) return Effect.succeed(new Map());
+
   return Effect.map(
     findLineSenders({ userId: target.userId, conversationId: target.conversationId, messageIds }),
     (rows) =>
       new Map(
         rows.flatMap((row) => {
           const sent = lineSentOf(row);
+
           return sent === undefined ? [] : [[row.id, sent] as const];
         }),
       ),
@@ -3873,6 +3949,7 @@ export function linePlacesOf(
   messageIds: readonly string[],
 ): AgentStoreEffect<ReadonlyMap<string, LinePlace>> {
   if (messageIds.length === 0) return Effect.succeed(new Map());
+
   return Effect.map(
     findLinePlaces({ userId: target.userId, conversationId: target.conversationId, messageIds }),
     (rows) =>

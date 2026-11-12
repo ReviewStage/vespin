@@ -54,6 +54,7 @@ function ChoosingTasks(): React.JSX.Element {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set(["release", "inbox"]));
   const [open, setOpen] = useState<string | undefined>(undefined);
   const clear = () => setSelected(new Set());
+
   return (
     <div className="catalog-column">
       <SelectionBar
@@ -96,6 +97,7 @@ function ChoosingCards(): React.JSX.Element {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set(["sign-in", "inbox"]));
   const [open, setOpen] = useState<string | undefined>(undefined);
   const clear = () => setSelected(new Set());
+
   return (
     <div className="catalog-column">
       <SelectionBar
@@ -139,6 +141,7 @@ function ChoosingMail(): React.JSX.Element {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set(["expiry"]));
   const clear = () => setSelected(new Set());
   const count = selected.size;
+
   return (
     <div className="catalog-column">
       <Toolbar
@@ -155,15 +158,13 @@ function ChoosingMail(): React.JSX.Element {
                   label: "Read",
                   count: MAIL.filter((item) => !item.unread).length,
                   onSelect: () =>
-                    setSelected(
-                      new Set(MAIL.filter((item) => !item.unread).map((item) => item.id)),
-                    ),
+                    setSelected(new Set(MAIL.flatMap((item) => (item.unread ? [] : [item.id])))),
                 },
                 {
                   label: "Unread",
                   count: MAIL.filter((item) => item.unread).length,
                   onSelect: () =>
-                    setSelected(new Set(MAIL.filter((item) => item.unread).map((item) => item.id))),
+                    setSelected(new Set(MAIL.flatMap((item) => (item.unread ? [item.id] : [])))),
                 },
               ]}
             />

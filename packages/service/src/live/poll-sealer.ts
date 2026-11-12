@@ -1,7 +1,8 @@
 import { createHash } from "node:crypto";
 import type { LiveStatement } from "@repo/database/core/live-statement";
 import { LIVE_POLL_URL, type SealedLiveQueryWire } from "@repo/features/live-wire";
-import { Clock, Data, Effect } from "effect";
+import type { WireValue } from "@repo/wire";
+import { Clock, Data, Effect, Predicate } from "effect";
 import type { SqlClient } from "effect/sql";
 
 /**
@@ -20,8 +21,15 @@ import type { SqlClient } from "effect/sql";
 
 /** The column a sealed statement answers its digest under, beside the statement's own: no wire key starts with an underscore. */
 const DIGEST_COLUMN = "_live_digest";
+
 /** The column a sealed statement answers its snapshot under, beside its digest. */
 const SNAPSHOT_COLUMN = "_live_snapshot";
+
+/** The one row a sealed statement answers: its digest and its snapshot, as text. */
+type SealedRow = Readonly<
+  Partial<Record<typeof DIGEST_COLUMN | typeof SNAPSHOT_COLUMN, WireValue>>
+>;
+
 /**
  * The snapshot the statement that selects it reads at, as Postgres spells
  * one (`xmin:xmax:xip,…`). Note that it is selected in the statement that
@@ -78,12 +86,14 @@ function subqueryOf(statement: LiveStatement): string {
 function sealedSql(statement: LiveStatement): string {
   const first = (column: string) =>
     `case when row_number() over () = 1 then live_seal."${column}" end as "${column}"`;
+
   return `with live_rows as materialized ${subqueryOf(statement)} select ${first(DIGEST_COLUMN)}, ${first(SNAPSHOT_COLUMN)}, live_rows.* from (select ${digestOver("live_rows")} as "${DIGEST_COLUMN}", ${SNAPSHOT} as "${SNAPSHOT_COLUMN}") as live_seal left join live_rows on true`;
 }
 
 /** The sealer that reads rather than seals, over the service's own database client. */
 export function pollSealer(sql: SqlClient.SqlClient): LiveSealer {
   const refused = () => new SealRefused({ reason: "the statement could not be read" });
+
   return {
     url: LIVE_POLL_URL,
     digest: (statement) =>
@@ -98,9 +108,11 @@ export function pollSealer(sql: SqlClient.SqlClient): LiveSealer {
         Effect.flatMap(({ read, now }) => {
           const digest = read[0]?.digest;
           const snapshot = read[0]?.snapshot;
-          if (typeof digest !== "string" || typeof snapshot !== "string") {
+
+          if (!Predicate.isString(digest) || !Predicate.isString(snapshot)) {
             return Effect.fail(refused());
           }
+
           return Effect.succeed({
             capability: LIVE_POLL_URL,
             queryFingerprint: LIVE_POLL_URL,
@@ -112,16 +124,18 @@ export function pollSealer(sql: SqlClient.SqlClient): LiveSealer {
       ),
     seal: (statement) =>
       Effect.all({
-        read: sql.unsafe<Readonly<Record<string, unknown>>>(sealedSql(statement), statement.params),
+        read: sql.unsafe<SealedRow>(sealedSql(statement), statement.params),
         now: Clock.currentTimeMillis,
       }).pipe(
         Effect.mapError(refused),
         Effect.flatMap(({ read, now }) => {
           const digest = read[0]?.[DIGEST_COLUMN];
           const snapshot = read[0]?.[SNAPSHOT_COLUMN];
-          if (typeof digest !== "string" || typeof snapshot !== "string") {
+
+          if (!Predicate.isString(digest) || !Predicate.isString(snapshot)) {
             return Effect.fail(refused());
           }
+
           // Note that a statement of no rows answers the one row its digest and snapshot ride on, which is none of its own.
           const rows =
             digest === NO_ROWS_DIGEST
@@ -129,6 +143,7 @@ export function pollSealer(sql: SqlClient.SqlClient): LiveSealer {
               : read.map(
                   ({ [DIGEST_COLUMN]: _digest, [SNAPSHOT_COLUMN]: _snapshot, ...row }) => row,
                 );
+
           return Effect.succeed({
             capability: LIVE_POLL_URL,
             queryFingerprint: LIVE_POLL_URL,

@@ -51,13 +51,16 @@ function barOver(path = PATH) {
   );
   const nav = container.querySelector('nav[aria-label="Path"]') ?? assert.fail("the path is drawn");
   const buttons = () => [...nav.querySelectorAll<HTMLButtonElement>("button")];
+
   const named = (button: HTMLButtonElement) =>
     button.getAttribute("aria-label") ?? button.textContent;
+
   return {
     /** Presses the crumb the name names. */
     press: (name: string) => {
       const button =
         buttons().find((each) => named(each) === name) ?? assert.fail(`a crumb named ${name}`);
+
       act(() => button.click());
     },
   };

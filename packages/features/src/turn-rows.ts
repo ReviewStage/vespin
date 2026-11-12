@@ -20,6 +20,7 @@
  * it, stands where it arrived: it ends the group before it.
  */
 
+import { Predicate } from "effect";
 import { countWords } from "./words.js";
 
 /** The kinds of call a row can be, across both tabs. */
@@ -37,11 +38,15 @@ export const CALL_KIND = {
   WEB_PAGE: "web-page",
   LOAD_SKILL: "load-skill",
   LOOK_AT_PICTURE: "look-at-picture",
+  /** A look at a picture a thread's message carries (`look_at_picture` on a thread's address). */
+  LOOK_AT_THREAD_PICTURE: "look-at-thread-picture",
   EDIT_DESCRIPTION: "edit-description",
   TODOS: "todos",
   INBOX_POST: "inbox-post",
   INBOX_CLOSE: "inbox-close",
   INBOX_READ: "inbox-read",
+  /** One thread read whole (`read_thread`), its row naming the thread's title. */
+  INBOX_THREAD_READ: "inbox-thread-read",
   INBOX_REPLY: "inbox-reply",
   /** An ask on one of the agent's inbox threads taken back with why (`withdraw_ask`), its row naming the thread's key. */
   INBOX_WITHDRAW: "inbox-withdraw",
@@ -151,11 +156,13 @@ export const CALL_WORDS = {
   [CALL_KIND.WEB_PAGE]: { verb: "Fetched", code: true },
   [CALL_KIND.LOAD_SKILL]: { verb: "Loaded skill", code: true },
   [CALL_KIND.LOOK_AT_PICTURE]: { verb: "Looked at a picture in the description", code: false },
+  [CALL_KIND.LOOK_AT_THREAD_PICTURE]: { verb: "Looked at a picture in a thread", code: false },
   [CALL_KIND.EDIT_DESCRIPTION]: { verb: "Updated the description:", code: false },
   [CALL_KIND.TODOS]: { verb: "Updated the to-dos:", code: false },
   [CALL_KIND.INBOX_POST]: { verb: "Posted a thread:", code: false },
   [CALL_KIND.INBOX_CLOSE]: { verb: "Closed a thread:", code: false },
-  [CALL_KIND.INBOX_READ]: { verb: "Read your threads", code: false },
+  [CALL_KIND.INBOX_READ]: { verb: "Read threads", code: false },
+  [CALL_KIND.INBOX_THREAD_READ]: { verb: "Read a thread:", code: false },
   [CALL_KIND.INBOX_REPLY]: { verb: "Replied in a thread:", code: false },
   [CALL_KIND.INBOX_WITHDRAW]: { verb: "Withdrew an ask:", code: false },
   [CALL_KIND.WORKER]: { verb: "Asked the worker", code: false },
@@ -219,24 +226,24 @@ const ON_YOUR_MAC = "On your Mac";
 const IN_THE_BROWSER = "Browser";
 
 /** What each of the browser's actions says it did, on a browser call's line. */
-const BROWSER_ACTION_WORDS: Readonly<Record<string, string>> = {
-  list: "listed the tabs",
-  open: "opened",
-  navigate: "went to a page",
-  back: "went back",
-  forward: "went forward",
-  click: "clicked",
-  type: "typed",
-  key: "pressed a key",
-  scroll: "scrolled",
-  wait: "waited",
-  screenshot: "took a screenshot",
-  snapshot: "read the page",
-  console: "read the console",
-  close: "closed",
-  record: "started recording",
-  stop_recording: "stopped recording",
-};
+const BROWSER_ACTION_WORDS: ReadonlyMap<string, string> = new Map([
+  ["list", "listed the tabs"],
+  ["open", "opened"],
+  ["navigate", "went to a page"],
+  ["back", "went back"],
+  ["forward", "went forward"],
+  ["click", "clicked"],
+  ["type", "typed"],
+  ["key", "pressed a key"],
+  ["scroll", "scrolled"],
+  ["wait", "waited"],
+  ["screenshot", "took a screenshot"],
+  ["snapshot", "read the page"],
+  ["console", "read the console"],
+  ["close", "closed"],
+  ["record", "started recording"],
+  ["stop_recording", "stopped recording"],
+]);
 
 /**
  * What a browser call's line says it did, in place of its kind's verb: each
@@ -248,11 +255,13 @@ export function browserCallWords(
   actions: readonly string[],
   tabNamed: boolean,
 ): string | undefined {
-  const said = [...new Set(actions.flatMap((action) => BROWSER_ACTION_WORDS[action] ?? []))].join(
-    ", ",
-  );
+  const said = [
+    ...new Set(actions.flatMap((action) => BROWSER_ACTION_WORDS.get(action) ?? [])),
+  ].join(", ");
+
   if (said === "") return undefined;
   const line = `${said.charAt(0).toUpperCase()}${said.slice(1)}`;
+
   return tabNamed ? `${line} in` : line;
 }
 
@@ -284,6 +293,7 @@ export function isAgentCallKind(kind: CallKind): kind is AgentCallKind {
 /** How the line of a call about one coding agent reads where the agent's chip follows its verb: the verb alone, then the words it sent where it sent any. */
 export function agentCallLine(kind: AgentCallKind, subject: string | undefined): CallLine {
   const words = AGENT_CALL_WORDS[kind];
+
   return { verb: words.verb, subject: words.subject ? subject : undefined, code: false };
 }
 
@@ -337,7 +347,9 @@ export function isCommandKind(kind: CallKind): boolean {
  */
 export function callPlace(kind: CallKind, server?: string): string | undefined {
   if (kind === CALL_KIND.MCP_TOOL || kind === CALL_KIND.SEARCH_TOOLS) return server;
+
   if (kind === CALL_KIND.MAC_COMMAND) return ON_YOUR_MAC;
+
   return kind === CALL_KIND.BROWSER ? IN_THE_BROWSER : undefined;
 }
 
@@ -363,10 +375,13 @@ export function callLine(
   description: string | undefined,
 ): CallLine {
   const words = CALL_WORDS[kind];
+
   if (description === undefined) return { verb: words.verb, subject, code: words.code };
+
   if (kind === CALL_KIND.BROWSER || kind === CALL_KIND.OPEN_PULL_REQUEST) {
     return { verb: description, subject, code: false };
   }
+
   return {
     verb: description,
     subject: subject === undefined ? undefined : firstLine(subject),
@@ -392,6 +407,7 @@ function firstLine(text: string): string {
  */
 export function commandDescription(description: string | undefined): string | undefined {
   const words = description?.replace(/\s+/gu, " ").trim();
+
   return words === undefined || words === "" ? undefined : words;
 }
 
@@ -421,6 +437,7 @@ const WEB_SCHEME = /^https?:\/\//iu;
 /** The site a web address is of, as a website chip names it: its host without its `www.`; nothing for an address that is not the web's. */
 export function siteName(href: string): string | undefined {
   if (!WEB_SCHEME.test(href) || !URL.canParse(href)) return undefined;
+
   return new URL(href).hostname.replace(/^www\./u, "");
 }
 
@@ -478,11 +495,6 @@ export type TurnRow<B> =
       readonly running: boolean;
     };
 
-/** Whether a value is a record of its own keys, rather than an array or a primitive. */
-function isRecordValue(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 /**
  * Whether two values read alike, `depth` records deep: the same value;
  * arrays alike item by item; or records with the same keys, each value
@@ -492,21 +504,24 @@ function isRecordValue(value: unknown): value is Readonly<Record<string, unknown
  * arrays cost no depth, so a group's blocks inside a row are read as a
  * lone block is.
  */
-export function sameShape(a: unknown, b: unknown, depth: number): boolean {
+export function readAlike<Value>(a: Value, b: Value, depth: number): boolean {
   if (Object.is(a, b)) return true;
+
   if (Array.isArray(a) || Array.isArray(b)) {
     return (
       Array.isArray(a) &&
       Array.isArray(b) &&
       a.length === b.length &&
-      a.every((item, at) => sameShape(item, b[at], depth))
+      a.every((item, at) => readAlike(item, b[at], depth))
     );
   }
-  if (depth <= 0 || !isRecordValue(a) || !isRecordValue(b)) return false;
+
+  if (depth <= 0 || !Predicate.isObject(a) || !Predicate.isObject(b)) return false;
   const keys = Object.keys(a);
+
   return (
     keys.length === Object.keys(b).length &&
-    keys.every((key) => Object.hasOwn(b, key) && sameShape(a[key], b[key], depth - 1))
+    keys.every((key) => Object.hasOwn(b, key) && readAlike(a[key], b[key], depth - 1))
   );
 }
 
@@ -520,11 +535,14 @@ export function sameFieldsBy<T extends object>(
   b: T,
   by: { readonly [K in keyof T]?: (ours: T[K], theirs: T[K]) => boolean },
 ): boolean {
+  // SAFETY: a component's props hold only the props T declares, so a's own keys are T's keys.
   const keys = Object.keys(a) as (keyof T)[];
+
   return (
     keys.length === Object.keys(b).length &&
     keys.every((key) => {
       const read = by[key];
+
       return (
         Object.hasOwn(b, key) &&
         (read === undefined ? Object.is(a[key], b[key]) : read(a[key], b[key]))
@@ -536,9 +554,9 @@ export function sameFieldsBy<T extends object>(
 /** How deep a turn's row is read: the row, each of its blocks, then each block's own fields, a part read again from the same stored part reading alike. */
 export const TURN_ROW_DEPTH = 3;
 
-/** Whether two of a turn's rows draw alike: every field of the row and its blocks' own fields (`sameShape`). */
+/** Whether two of a turn's rows draw alike: every field of the row and its blocks' own fields (`readAlike`). */
 export function sameTurnRow<B>(a: TurnRow<B>, b: TurnRow<B>): boolean {
-  return sameShape(a, b, TURN_ROW_DEPTH);
+  return readAlike(a, b, TURN_ROW_DEPTH);
 }
 
 /** What a run's blocks hold, as its group's line counts them. */
@@ -551,10 +569,12 @@ interface Held {
 /** What a group's line says it holds: its calls, a coding agent's start among them, then its subagents, in the same words while the turn moves and once it has finished. */
 function groupSummary({ calls, subagents, startedAgents }: Held): string {
   const tools = calls + startedAgents;
+
   const said = [
     ...(tools > 0 ? [countWords(tools, { one: "tool call", many: "tool calls" })] : []),
     ...(subagents > 0 ? [countWords(subagents, { one: "subagent", many: "subagents" })] : []),
   ];
+
   return said.join(", ");
 }
 
@@ -593,12 +613,15 @@ export function turnRows<B>(
 ): readonly TurnRow<B>[] {
   const rows: TurnRow<B>[] = [];
   let group: Keyed<B>[] = [];
+
   const flush = (trailing: boolean) => {
     const held = counted(group, read);
     const work = held.calls + held.subagents + held.startedAgents;
     const [first] = group;
+
     if (first === undefined) return;
     const open = trailing && turn.moving;
+
     if (work > 0 && (group.length > 1 || open)) {
       rows.push({
         kind: TURN_ROW.GROUP,
@@ -613,18 +636,24 @@ export function turnRows<B>(
         ...group.map((each) => ({ kind: TURN_ROW.BLOCK, key: each.key, block: each.block })),
       );
     }
+
     group = [];
   };
+
   for (const [index, block] of blocks.entries()) {
     const each = { key: read.key(block, index), block };
+
     if (runsWithCalls(read.part(block))) {
       group.push(each);
       continue;
     }
+
     flush(false);
     rows.push({ kind: TURN_ROW.BLOCK, key: each.key, block });
   }
+
   flush(true);
+
   return rows;
 }
 
@@ -633,11 +662,16 @@ function counted<B>(blocks: readonly Keyed<B>[], read: RowReading<B>): Held {
   let calls = 0;
   let subagents = 0;
   let startedAgents = 0;
+
   for (const { block } of blocks) {
     const part = read.part(block);
+
     if (part === ROW_PART.CALL || part === ROW_PART.LONE_CALL) calls += 1;
+
     if (part === ROW_PART.SUBAGENT) subagents += 1;
+
     if (part === ROW_PART.AGENT) startedAgents += 1;
   }
+
   return { calls, subagents, startedAgents };
 }

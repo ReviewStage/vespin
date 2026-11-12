@@ -116,26 +116,32 @@ function usage(message: string): CommandFailed {
 /** The trigger the flags name, none where they name none, or why they do not read. */
 const triggerOf = Effect.fnUntraced(function* (flags: TriggerFlags) {
   const named = [flags.cron, flags.github, flags.sentry, flags.trigger].filter(Option.isSome);
+
   if (named.length > 1) {
     return yield* usage("Name one trigger: --cron, --github, --sentry, or --trigger.");
   }
+
   if (Option.isSome(flags.timezone) && Option.isNone(flags.cron)) {
     return yield* usage("--timezone goes with --cron.");
   }
+
   if ((flags.label.length > 0 || flags.branch.length > 0) && Option.isNone(flags.github)) {
     return yield* usage("--label and --branch go with --github.");
   }
+
   if (Option.isSome(flags.cron)) {
     const timezone = Option.getOrElse(
       flags.timezone,
       () => Intl.DateTimeFormat().resolvedOptions().timeZone,
     );
+
     return Option.some<AutomationTrigger>({
       kind: AUTOMATION_TRIGGER.SCHEDULE,
       cron: flags.cron.value,
       timezone,
     });
   }
+
   if (Option.isSome(flags.github)) {
     return Option.some<AutomationTrigger>({
       kind: AUTOMATION_TRIGGER.GITHUB,
@@ -144,6 +150,7 @@ const triggerOf = Effect.fnUntraced(function* (flags: TriggerFlags) {
       ...(flags.branch.length === 0 ? undefined : { branches: flags.branch }),
     });
   }
+
   if (Option.isSome(flags.sentry)) {
     return Option.some<AutomationTrigger>({
       kind: AUTOMATION_TRIGGER.INTEGRATION,
@@ -151,12 +158,17 @@ const triggerOf = Effect.fnUntraced(function* (flags: TriggerFlags) {
       event: flags.sentry.value,
     });
   }
+
   if (Option.isNone(flags.trigger)) return Option.none<AutomationTrigger>();
+
   const decoded = Schema.decodeUnknownOption(Schema.fromJsonString(automationTriggerSchema))(
     flags.trigger.value,
   );
+
   if (Option.isNone(decoded)) return yield* usage("--trigger is no trigger as JSON.");
+
   if (decoded.value.kind === AUTOMATION_TRIGGER.WEBHOOK) return yield* usage(WEBHOOK_REFUSAL);
+
   return decoded;
 });
 
@@ -168,6 +180,7 @@ const choiceOf = Effect.fnUntraced(function* (
   if (Option.isSome(model) !== Option.isSome(effort)) {
     return yield* usage("Name --model and --effort together (vespin models lists them).");
   }
+
   return Option.isSome(model) && Option.isSome(effort)
     ? Option.some({ model: model.value, effort: effort.value })
     : Option.none();
@@ -216,6 +229,7 @@ function automationLines(
   runs: readonly AutomationRunSummary[],
 ): string[] {
   const { action } = automation;
+
   return [
     `${automation.name}  [${automation.enabled ? "on" : "off"}]  ${automation.id}`,
     `Trigger: ${triggerWords(automation.trigger)}`,
@@ -251,9 +265,11 @@ const listCommand = Command.make(
   ({ task }) =>
     Effect.gen(function* () {
       const { hosted } = yield* session;
+
       const query = Option.isSome(task)
         ? { planId: yield* resolveTaskId(task.value) }
         : { workspaceId: (yield* resolveWorkspace).workspace.id };
+
       const { automations } = yield* askService(hosted.automations.list, query);
       yield* answer({
         json: { automations },
@@ -303,16 +319,20 @@ const createCommand = Command.make(
   ({ name, task, prompt, model, effort, repository, scope, ...flags }) =>
     Effect.gen(function* () {
       const trigger = yield* triggerOf(flags);
+
       if (Option.isNone(trigger)) {
         return yield* usage("Name a trigger: --cron, --github, --sentry, or --trigger.");
       }
+
       if (Option.isNone(prompt)) return yield* usage("Give each run's prompt with --prompt.");
       const choice = yield* choiceOf(model, effort);
       const words = (yield* readInput(prompt.value)).trim();
       const { hosted } = yield* session;
+
       const where = Option.isSome(task)
         ? { planId: yield* resolveTaskId(task.value) }
         : { workspaceId: (yield* resolveWorkspace).workspace.id };
+
       const made = yield* askService(hosted.automations.create, {
         ...where,
         name,
@@ -325,6 +345,7 @@ const createCommand = Command.make(
         ...(repository.length === 0 ? undefined : { repositories: repository }),
         ...(Option.isSome(scope) ? { scope: scope.value } : undefined),
       });
+
       yield* written(made.automation, `Made automation ${made.automation.id}.`);
     }),
 ).pipe(
@@ -363,10 +384,13 @@ const updateCommand = Command.make(
       if (enable && disable) return yield* usage("Name --enable or --disable, not both.");
       const trigger = yield* triggerOf(flags);
       const choice = yield* choiceOf(model, effort);
+
       const words = Option.isSome(prompt)
         ? Option.some((yield* readInput(prompt.value)).trim())
         : Option.none<string>();
+
       const { hosted } = yield* session;
+
       // Note that an action is changed whole, so the one standing is read for what is not named.
       const action =
         Option.isSome(words) || Option.isSome(choice)
@@ -376,6 +400,7 @@ const updateCommand = Command.make(
               ...(Option.isSome(choice) ? { choice: choice.value } : undefined),
             }
           : undefined;
+
       const body = {
         ...(Option.isSome(name) ? { name: name.value } : undefined),
         ...(enable || disable ? { enabled: enable } : undefined),
@@ -384,11 +409,14 @@ const updateCommand = Command.make(
         ...(repository.length === 0 ? undefined : { repositories: repository }),
         ...(Option.isSome(scope) ? { scope: scope.value } : undefined),
       };
+
       if (Object.keys(body).length === 0) return yield* usage("Name something to change.");
+
       const changed = yield* askService(hosted.automations.change, {
         params: { id: automation },
         body,
       });
+
       yield* written(changed.automation, `Changed automation ${changed.automation.id}.`);
     }),
 ).pipe(
@@ -405,10 +433,12 @@ const updateCommand = Command.make(
 const runCommand = Command.make("run", { automation: automationArgument }, ({ automation }) =>
   Effect.gen(function* () {
     const { hosted } = yield* session;
+
     const ran = yield* askService(hosted.automations.run, {
       params: { id: automation },
       body: { idempotencyKey: randomUUID() },
     });
+
     const { run } = ran.body;
     yield* answer({
       json: { run },

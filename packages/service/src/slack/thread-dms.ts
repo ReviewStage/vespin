@@ -201,6 +201,7 @@ interface ThreadDmPost {
 function openingMessage(item: InboxItem): InboxMessage | undefined {
   const thread = item.thread ?? [];
   const asking = thread.find((message) => message.ask?.status === INBOX_ASK_STATUS.OPEN);
+
   return asking ?? thread.findLast((message) => message.author === INBOX_MESSAGE_AUTHOR.AGENT);
 }
 
@@ -214,15 +215,18 @@ function postedMessage(item: InboxItem, asked: boolean): InboxMessage | undefine
 /** A do ask's steps, as the message's ask names them; none for any other ask. */
 function askSteps(ask: InboxReadAsk | undefined): readonly string[] {
   const known = ask === undefined ? undefined : knownAsk(ask);
+
   return known?.type === INBOX_ASK.DO ? known.steps : [];
 }
 
 /** The agent's words with a do ask's steps listed under them, numbered, each step's later lines kept inside its item. */
 function wordsWithSteps(text: string, steps: readonly string[]): string {
   if (steps.length === 0) return text;
+
   const list = steps.map(
     (step, at) => `${at + 1}. ${step.trim().replaceAll("\n", `\n${STEP_INDENT}`)}`,
   );
+
   return [text.trim(), ...list].filter((part) => part !== "").join("\n\n");
 }
 
@@ -243,7 +247,9 @@ function askControls(
   if (message.ask === undefined || message.ask.status !== INBOX_ASK_STATUS.OPEN) {
     return NO_CONTROLS;
   }
+
   const ask = knownAsk(message.ask);
+
   if (ask?.type === INBOX_ASK.DO) {
     const buttons = SLACK_DO_REPLIES.map((reply) => ({
       type: "button",
@@ -252,19 +258,24 @@ function askControls(
       value: Schema.encodeSync(SlackChoiceSchema)({ item: itemId, ask: message.id, reply }),
       ...(reply === INBOX_REPLY.DONE ? { style: "primary" } : undefined),
     }));
+
     return { blocks: [], buttons };
   }
+
   if (ask?.type !== INBOX_ASK.DECIDE) return NO_CONTROLS;
+
   const recommended = new Set([
     ...(ask.recommended === undefined ? [] : [ask.recommended]),
     ...(ask.recommendations ?? []),
   ]);
+
   const value = (choice?: string) =>
     Schema.encodeSync(SlackChoiceSchema)({
       item: itemId,
       ask: message.id,
       ...(choice === undefined ? undefined : { choice }),
     });
+
   if (ask.multiple !== true) {
     const buttons = ask.options.map(({ label }) => ({
       type: "button",
@@ -273,14 +284,18 @@ function askControls(
       value: value(label),
       ...(recommended.has(label) ? { style: "primary" } : undefined),
     }));
+
     return { blocks: [], buttons };
   }
+
   // Note that a recommended label is clipped short of its note, so the note always shows.
   const options = ask.options.map(({ label }, index) => {
     const note = recommended.has(label) ? RECOMMENDED_NOTE : "";
     const text = `${slackClipped(label, SLACK_TEXT_BOUND.OPTION - note.length)}${note}`;
+
     return { text: { type: "plain_text", text }, value: String(index) };
   });
+
   return {
     blocks: [
       {
@@ -303,6 +318,7 @@ function askControls(
 /** A thread's title, after the inbox's emoji, as a DM's header block. */
 function titleHeader(title: string): SlackBlock {
   const text = slackClipped(`${TITLE_PREFIX}${title}`, SLACK_TEXT_BOUND.HEADER);
+
   return { type: "header", text: { type: "plain_text", text } };
 }
 
@@ -330,6 +346,7 @@ function titleDmContent(
   controls: AskControls = NO_CONTROLS,
 ): SlackMessageContent {
   const words = openAsk.trim();
+
   return {
     text: `${TITLE_PREFIX}${title}`,
     blocks: [
@@ -356,6 +373,7 @@ function threadDmContent(
   controls: AskControls = NO_CONTROLS,
 ): SlackMessageContent {
   const words = view.text.trim();
+
   const blocks: SlackBlock[] = [
     ...(view.titled === true ? [titleHeader(view.title)] : []),
     ...(words === "" ? [] : [slackMarkdownBlock(words)]),
@@ -368,6 +386,7 @@ function threadDmContent(
       elements: [...controls.buttons, openButton(view.link)],
     },
   ];
+
   return { text: line === undefined ? view.title : `${view.title} · ${line}`, blocks };
 }
 
@@ -564,6 +583,7 @@ const claimSettledDms = SqlSchema.findAll({
           ),
         )
         .as("settled");
+
       return db
         .update(inboxMessage)
         .set({ slackDm: sql`${inboxMessage.slackDm} || '{"settled":true}'::jsonb` })
@@ -599,11 +619,14 @@ function messageUploads(
 /** The title DMs the replies stand under, each once; a DM that stood alone stands under none. */
 function titleDmsOf(dms: readonly (typeof SlackDmSchema.Type)[]): readonly TitleDm[] {
   const titles: TitleDm[] = [];
+
   for (const { channel, thread } of dms) {
     if (thread === undefined) continue;
+
     if (titles.some((title) => title.channel === channel && title.ts === thread)) continue;
     titles.push({ channel, ts: thread });
   }
+
   return titles;
 }
 
@@ -632,6 +655,7 @@ function redrawTitleDms(
               askControls(itemId, message),
             ),
         });
+
         return bot.update(at.channel, at.ts, content);
       }),
     { discard: true },
@@ -704,22 +728,28 @@ export function rewriteThreadDm(
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const bot = yield* Effect.serviceOption(SlackBot);
+
     if (Option.isNone(bot) || !bot.value.configured) return;
     const place = yield* findItemPlace(itemId);
+
     if (Option.isNone(place)) return;
     const kept = yield* findMessageDm(message.id);
     const link = threadLink(itemId, place.value);
+
     // A press on the title DM, which the message's reply stands under, has it say the thread's open ask anew rather than the reply's line.
     if (Option.isSome(kept) && kept.value.dm.thread === dm.ts) {
       yield* redrawTitleDms(bot.value, itemId, { title: place.value.title, link }, [dm]);
+
       return;
     }
+
     const view = {
       title: place.value.title,
       text: wordsWithSteps(message.text, askSteps(message.ask)),
       link,
       titled: Option.isSome(kept) && kept.value.dm.thread === undefined,
     };
+
     yield* bot.value.update(dm.channel, dm.ts, threadDmContent(view, line));
   });
 }
@@ -746,10 +776,13 @@ export function settleThreadDms(
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const bot = yield* Effect.serviceOption(SlackBot);
+
     if (Option.isNone(bot) || !bot.value.configured) return;
     const claimed = yield* claimSettledDms(itemId);
+
     if (claimed.length === 0) return;
     const place = yield* findItemPlace(itemId);
+
     if (Option.isNone(place)) return;
     const { title } = place.value;
     const link = threadLink(itemId, place.value);
@@ -795,49 +828,63 @@ export function dmThreadPost(
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const bot = yield* Effect.serviceOption(SlackBot);
+
     if (Option.isNone(bot) || !bot.value.configured) return;
     const { item, organizationId } = post;
     yield* settleThreadDms(item.id);
     const message = postedMessage(item, post.asked);
     const recipient = item.waitsOn?.userId;
+
     if (message === undefined || recipient === undefined) return;
+
     if (!(yield* slackNotificationsOn(recipient))) return;
+
     const kept = Option.getOrUndefined(
       Option.filter(
         Option.map(yield* findLatestDm(item.id), ({ dm }) => threadRoot(dm)),
         (root) => root.to === recipient,
       ),
     );
+
     // A post opens a DM where it asks anew or none stood open; a follow-up does neither, but replies in a DM there is.
     if (kept === undefined && post.wasOpen && !post.asked) return;
     const place = yield* findItemPlace(item.id);
+
     if (Option.isNone(place)) return;
     const link = threadLink(item.id, place.value);
+
     const opened =
       kept === undefined
         ? yield* bot.value.dm(organizationId, recipient, titleDmContent(item.title, link))
         : Option.some(kept);
+
     if (Option.isNone(opened)) return;
     const thread = { channel: opened.value.channel, ts: opened.value.ts };
+
     // Note that a new title DM is kept settled until its reply takes its place, so a failed reply leaves it the thread's, never rewritten.
     if (kept === undefined) {
       yield* recordDm({ messageId: message.id, dm: { ...thread, to: recipient, settled: true } });
     }
+
     const view = {
       title: item.title,
       text: wordsWithSteps(message.text, askSteps(message.ask)),
       link,
     };
+
     const content = threadDmContent(view, undefined, askControls(item.id, message));
     const sent = yield* bot.value.dm(organizationId, recipient, content, thread);
+
     if (Option.isNone(sent)) return;
     yield* recordDm({
       messageId: message.id,
       dm: { ...sent.value, to: recipient, thread: thread.ts },
     });
+
     if (message.ask?.status === INBOX_ASK_STATUS.OPEN) {
       yield* redrawTitleDms(bot.value, item.id, { title: item.title, link }, [thread]);
     }
+
     const uploads = yield* messageUploads(recipient, item.id, message);
     yield* bot.value.upload(thread.channel, thread.ts, uploads);
   });

@@ -53,7 +53,9 @@ const pluggedInNow = Effect.scoped(
       stdin: "ignore",
       stderr: "ignore",
     });
+
     const printed = yield* Stream.mkString(Stream.decodeText(handle.stdout));
+
     return !printed.includes(ON_BATTERY);
   }),
 ).pipe(Effect.orElseSucceed(() => true));
@@ -76,6 +78,7 @@ const heldBy = (
       return Stream.zipLatestWith(working, pluggedIn, (running, plugged) => running || plugged);
     default: {
       const unhandled: never = choice;
+
       return Stream.die(new Error(`Unhandled keep-awake choice: ${String(unhandled)}`));
     }
   }

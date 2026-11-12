@@ -20,7 +20,7 @@ import { type Cause, Duration, Effect, Fiber, Option, Queue, Stream } from "effe
 import { TestClock } from "effect/testing";
 import { agentBrowserOver } from "../agents/browser/agent-browser.js";
 import { SERVER_AGENT_TOOL } from "../events/server-events.js";
-import { Sync, type SyncShape } from "../sync/watch.js";
+import { Sync, type SyncService } from "../sync/watch.js";
 import type { RelayFrame } from "../terminal/relay.js";
 import {
   FAKE_IMAGE,
@@ -50,11 +50,13 @@ const TARGET = "page-live";
 const TARGET_SESSION = "target-session-1";
 const MEMBER = "member-1";
 const TASK = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
+
 const ASK = {
   userId: MEMBER,
   place: { agentId: "5a4b3c2d-1e0f-4a9b-8c7d-6e5f4a3b2c1d" },
   tabId: "8b3c7a1e-2f4d-4c6b-9e0a-1d2f3a4b5c6d",
 };
+
 const CONVERSATION = "conversation-agent";
 const FRAME_DATA = "ZmFrZS1mcmFtZQ==";
 
@@ -93,6 +95,7 @@ const scriptedViewer = Effect.gen(function* () {
   const inbound = yield* Queue.make<RelayFrame, Cause.Done>();
   const sent: RelayFrame[] = [];
   const closed: number[] = [];
+
   const viewer: BrowserLiveViewer = {
     frames: Stream.fromQueue(inbound),
     send: (frame) => Effect.sync(() => void sent.push(frame)),
@@ -103,7 +106,9 @@ const scriptedViewer = Effect.gen(function* () {
       ),
     buffered: Effect.succeed(0),
   };
+
   const messages = () => sent.flatMap((frame) => ("text" in frame ? [JSON.parse(frame.text)] : []));
+
   return {
     viewer,
     push: (message: BrowserLiveClientMessage) =>
@@ -125,26 +130,34 @@ function liveBrowser(
 ) {
   return Effect.gen(function* () {
     const commands: FakeCdpCommand[] = [];
+
     const peer = yield* fakeCdpPeer({
       pages: options.pages ?? [
         { targetId: TARGET, url: "https://example.test/start", title: "Start" },
       ],
       answer: (command) => {
         commands.push(command);
+
         if (command.method === "Target.attachToTarget")
           return { result: { sessionId: TARGET_SESSION } };
+
         if (command.method === "Target.getTargets") return undefined;
+
         if (command.method === "Page.getNavigationHistory") {
           return { result: { currentIndex: 1, entries: [{ id: 10 }, { id: 11 }, { id: 12 }] } };
         }
+
         if (options.mouseHangs === true && command.method === "Input.dispatchMouseEvent") {
           return { silent: true };
         }
+
         return { result: {} };
       },
     });
+
     const sandbox = fakeSandboxApi({ status: "running", sessionId: SESSION });
     const browser = agentBrowserOver(sandbox.api, fakeBridgePty(peer), FAKE_IMAGE);
+
     return { peer, browser, commands };
   });
 }
@@ -157,15 +170,21 @@ function world(
   let row: ReachedBrowserTab | undefined = options.reached ?? reachedTab(undefined);
   const handedBack: string[] = [];
   const notedPages: { readonly targetId: string; readonly address: string }[] = [];
+
   const setDriver = (driverUserId: string | null, heldUntil: Date | null) => {
     if (row !== undefined) row = { ...row, tab: { ...row.tab, driverUserId, heldUntil } };
   };
+
   const drivenBy = (now: Date) => {
     const tab = row?.tab;
+
     if (tab?.driverUserId == null || tab.heldUntil === null) return null;
+
     return tab.heldUntil.getTime() > now.getTime() ? tab.driverUserId : null;
   };
+
   const counted: string[] = [];
+
   const deps: BrowserLiveDependencies = {
     readTab: () => Effect.sync(() => Option.fromUndefinedOr(row)),
     sessionOf: () => Effect.succeed(options.session ?? Option.some(SESSION)),
@@ -173,14 +192,17 @@ function world(
     takeOver: (_tab, userId, heldUntil, now) =>
       Effect.sync(() => {
         const driver = drivenBy(now);
+
         if (driver !== null && driver !== userId) return false;
         setDriver(userId, heldUntil);
+
         return true;
       }),
     renew: (_tab, userId, heldUntil, now) =>
       Effect.sync(() => {
         if (drivenBy(now) !== userId) return false;
         setDriver(userId, heldUntil);
+
         return true;
       }),
     handBack: (_tab, userId) =>
@@ -188,12 +210,14 @@ function world(
         if (row?.tab.driverUserId !== userId) return false;
         handedBack.push(userId);
         setDriver(null, null);
+
         return true;
       }),
     counted: (_userId, _agentId, tool) => Effect.sync(() => void counted.push(tool)),
     notePage: (_tab, targetId, page) =>
       Effect.sync(() => void notedPages.push({ targetId, address: page.address })),
   };
+
   return {
     deps,
     handedBack,
@@ -231,9 +255,9 @@ const frameEvent = (frameId: number) => ({
 });
 
 const acks = (commands: readonly FakeCdpCommand[]) =>
-  commands
-    .filter((command) => command.method === "Page.screencastFrameAck")
-    .map((command) => command.params.sessionId);
+  commands.flatMap((command) =>
+    command.method === "Page.screencastFrameAck" ? [command.params.sessionId] : [],
+  );
 
 const inputs = (commands: readonly FakeCdpCommand[]) =>
   commands.filter((command) => command.method.startsWith("Input."));
@@ -243,14 +267,17 @@ const inputs = (commands: readonly FakeCdpCommand[]) =>
 function heardSync() {
   const watches: { readonly topics: readonly SyncTopic[]; readonly woken: Queue.Queue<void> }[] =
     [];
-  const shape: SyncShape = {
+
+  const service: SyncService = {
     watch: (topics) =>
       Effect.gen(function* () {
         const woken = yield* Queue.unbounded<void>();
         watches.push({ topics, woken });
+
         return { next: Effect.as(Queue.take(woken), []), heardAt: Effect.succeed(Option.none()) };
       }),
   };
+
   const write = (topic: SyncTopic) =>
     Effect.forEach(
       watches.filter((watch) =>
@@ -259,13 +286,15 @@ function heardSync() {
       (watch) => Queue.offer(watch.woken, undefined),
       { discard: true },
     );
-  return { shape, write };
+
+  return { service, write };
 }
 
 function started(peer: FakeCdpPeer, commands: readonly FakeCdpCommand[], run: Effect.Effect<void>) {
   return Effect.gen(function* () {
     const fiber = yield* Effect.forkChild(run);
     yield* until(() => commands.some((command) => command.method === "Page.startScreencast"));
+
     return { fiber, peer };
   });
 }
@@ -277,6 +306,7 @@ it.effect(
       const { peer, browser, commands } = yield* liveBrowser();
       const panel = yield* scriptedViewer;
       const { deps } = world(browser);
+
       const { fiber } = yield* started(
         peer,
         commands,
@@ -327,6 +357,7 @@ it.effect("the tab's address, title, and loading state reach the panel as they c
   Effect.gen(function* () {
     const { peer, browser, commands } = yield* liveBrowser();
     const panel = yield* scriptedViewer;
+
     const { fiber } = yield* started(
       peer,
       commands,
@@ -405,6 +436,7 @@ it.effect(
       const { peer, browser, commands } = yield* liveBrowser();
       const panel = yield* scriptedViewer;
       const store = world(browser);
+
       const { fiber } = yield* started(
         peer,
         commands,
@@ -427,6 +459,7 @@ it.effect(
 );
 
 const VIEWPORT = { type: BROWSER_LIVE_CLIENT.VIEWPORT, width: 640, height: 400 } as const;
+
 const CLICK = {
   type: BROWSER_LIVE_CLIENT.MOUSE,
   action: BROWSER_LIVE_MOUSE_ACTION.DOWN,
@@ -444,6 +477,7 @@ it.effect(
     Effect.gen(function* () {
       const { peer, browser, commands } = yield* liveBrowser();
       const panel = yield* scriptedViewer;
+
       const { fiber } = yield* started(
         peer,
         commands,
@@ -451,6 +485,7 @@ it.effect(
           relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), world(browser).deps),
         ),
       );
+
       yield* peer.emit(frameEvent(1));
       yield* until(() => acks(commands).length === 1);
 
@@ -512,6 +547,7 @@ it.effect(
     Effect.gen(function* () {
       const { peer, browser, commands } = yield* liveBrowser();
       const panel = yield* scriptedViewer;
+
       const { fiber } = yield* started(
         peer,
         commands,
@@ -561,6 +597,7 @@ it.effect(
       const { peer, browser, commands } = yield* liveBrowser();
       const panel = yield* scriptedViewer;
       const store = world(browser);
+
       const { fiber } = yield* started(
         peer,
         commands,
@@ -591,12 +628,15 @@ it.effect("a member who does not control the agent cannot take its tab over", ()
   Effect.gen(function* () {
     const { peer, browser, commands } = yield* liveBrowser();
     const panel = yield* scriptedViewer;
+
     const ownToken = reachedTab({
       id: "agent-1",
       userId: "starter-1",
       githubAccess: GITHUB_ACCESS.TOKEN,
     });
+
     const store = world(browser, { reached: ownToken });
+
     const { fiber } = yield* started(
       peer,
       commands,
@@ -624,11 +664,13 @@ it.effect(
       const { peer, browser, commands } = yield* liveBrowser();
       const panel = yield* scriptedViewer;
       const store = world(browser);
+
       const { fiber } = yield* started(
         peer,
         commands,
         Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), store.deps)),
       );
+
       yield* peer.emit(frameEvent(1));
       yield* until(() => acks(commands).length === 1);
 
@@ -661,6 +703,7 @@ it.effect("a socket that closes hands back the takeover it took", () =>
     const { peer, browser, commands } = yield* liveBrowser();
     const panel = yield* scriptedViewer;
     const store = world(browser);
+
     const { fiber } = yield* started(
       peer,
       commands,
@@ -713,11 +756,14 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const reopened = "page-reopened";
+
       const { peer, browser, commands } = yield* liveBrowser({
         pages: [{ targetId: reopened, url: "https://example.test/start", title: "Start" }],
       });
+
       const panel = yield* scriptedViewer;
       const store = world(browser);
+
       // The connection reopens the kept tab on a new target, as `connectRestoring` does after a resume.
       const deps: BrowserLiveDependencies = {
         ...store.deps,
@@ -803,6 +849,7 @@ it.effect("a tab its agent closed, or its browser destroyed, closes the socket a
     const sync = heardSync();
     let storeDown = false;
     let failedReads = 0;
+
     const deps: BrowserLiveDependencies = {
       ...store.deps,
       readTab: (...asked) =>
@@ -815,15 +862,17 @@ it.effect("a tab its agent closed, or its browser destroyed, closes the socket a
             )
           : store.deps.readTab(...asked),
     };
+
     const { fiber } = yield* started(
       listed.peer,
       listed.commands,
       Effect.scoped(
         relayBrowserTab(listedPanel.viewer, ASK, reachedTab(undefined), deps).pipe(
-          Effect.provideService(Sync, sync.shape),
+          Effect.provideService(Sync, sync.service),
         ),
       ),
     );
+
     store.close();
     // The close is heard on the tab's task, but the read it wakes finds the store down, so it is
     // read again on the clock, with no second write to wake it.
@@ -838,6 +887,7 @@ it.effect("a tab its agent closed, or its browser destroyed, closes the socket a
 
     const destroyed = yield* liveBrowser();
     const destroyedPanel = yield* scriptedViewer;
+
     const relay = yield* started(
       destroyed.peer,
       destroyed.commands,
@@ -850,6 +900,7 @@ it.effect("a tab its agent closed, or its browser destroyed, closes the socket a
         ),
       ),
     );
+
     yield* destroyed.peer.emit({ method: "Target.targetDestroyed", params: { targetId: TARGET } });
     yield* Fiber.join(relay.fiber);
     assert.deepEqual(destroyedPanel.closed, [
@@ -862,6 +913,7 @@ it.effect("a panel that sends nothing for the idle bound closes as idle", () =>
   Effect.gen(function* () {
     const { peer, browser, commands } = yield* liveBrowser();
     const panel = yield* scriptedViewer;
+
     const { fiber } = yield* started(
       peer,
       commands,
@@ -891,6 +943,7 @@ it.effect(
       const resent = yield* liveBrowser();
       const resentPanel = yield* scriptedViewer;
       const resentStore = world(resent.browser);
+
       const { fiber } = yield* started(
         resent.peer,
         resent.commands,
@@ -898,14 +951,17 @@ it.effect(
           relayBrowserTab(resentPanel.viewer, ASK, reachedTab(undefined), resentStore.deps),
         ),
       );
+
       yield* resentPanel.push(VIEWPORT);
       yield* settle;
+
       // An older panel's keep-alive: the size it already sent, once a minute, past the idle bound.
       for (let minute = 0; minute < 6; minute += 1) {
         yield* TestClock.adjust(Duration.minutes(1));
         yield* resentPanel.push(VIEWPORT);
         yield* settle;
       }
+
       yield* resentPanel.leave;
       yield* Fiber.join(fiber);
       assert.deepEqual(resentPanel.closed, [
@@ -915,6 +971,7 @@ it.effect(
       const resized = yield* liveBrowser();
       const resizedPanel = yield* scriptedViewer;
       const resizedStore = world(resized.browser);
+
       const relay = yield* started(
         resized.peer,
         resized.commands,
@@ -922,11 +979,13 @@ it.effect(
           relayBrowserTab(resizedPanel.viewer, ASK, reachedTab(undefined), resizedStore.deps),
         ),
       );
+
       for (let minute = 0; minute < 6; minute += 1) {
         yield* TestClock.adjust(Duration.minutes(1));
         yield* resizedPanel.push({ ...VIEWPORT, width: VIEWPORT.width + minute });
         yield* settle;
       }
+
       assert.deepEqual(resizedPanel.closed, [], "a resize keeps the socket open");
       yield* resizedPanel.leave;
       yield* Fiber.join(relay.fiber);
@@ -940,11 +999,13 @@ it.effect(
       const { peer, browser, commands } = yield* liveBrowser();
       const panel = yield* scriptedViewer;
       const store = world(browser);
+
       const { fiber } = yield* started(
         peer,
         commands,
         Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), store.deps)),
       );
+
       const watchFor = (minutes: number) =>
         Effect.gen(function* () {
           for (let minute = 0; minute < minutes; minute += 1) {
@@ -953,6 +1014,7 @@ it.effect(
             yield* settle;
           }
         });
+
       yield* watchFor(3);
       assert.deepEqual(panel.closed, [], "a watched panel stays open");
       assert.deepEqual(panel.ofType(BROWSER_LIVE_SERVER.REFUSED), [], "watching drives nothing");
@@ -976,8 +1038,10 @@ it.effect(
       const first = yield* scriptedViewer;
       const second = yield* scriptedViewer;
       const store = world(browser);
+
       const relay = (panel: Effect.Success<typeof scriptedViewer>) =>
         Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), store.deps));
+
       const one = yield* started(peer, commands, relay(first));
       yield* first.push({ type: BROWSER_LIVE_CLIENT.TAKE_OVER });
       yield* until(() => first.ofType(BROWSER_LIVE_SERVER.DRIVER).some((message) => message.yours));
@@ -1008,11 +1072,13 @@ it.effect(
       const { peer, browser, commands } = yield* liveBrowser({ mouseHangs: true });
       const panel = yield* scriptedViewer;
       const store = world(browser);
+
       const { fiber } = yield* started(
         peer,
         commands,
         Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), store.deps)),
       );
+
       yield* peer.emit(frameEvent(1));
       yield* until(() => acks(commands).length === 1);
       yield* panel.push(VIEWPORT);
@@ -1045,11 +1111,13 @@ it.effect(
       const panel = yield* scriptedViewer;
       const store = world(browser);
       const deps = { ...store.deps, renew: () => Effect.fail("store down") };
+
       const { fiber } = yield* started(
         peer,
         commands,
         Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), deps)),
       );
+
       yield* peer.emit(frameEvent(1));
       yield* until(() => acks(commands).length === 1);
       yield* panel.push(VIEWPORT);
@@ -1076,11 +1144,13 @@ it.effect(
       const { peer, browser, commands } = yield* liveBrowser();
       const panel = yield* scriptedViewer;
       const store = world(browser);
+
       const { fiber } = yield* started(
         peer,
         commands,
         Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), store.deps)),
       );
+
       yield* panel.push({ type: BROWSER_LIVE_CLIENT.TAKE_OVER });
       yield* until(() => panel.ofType(BROWSER_LIVE_SERVER.DRIVER).some((message) => message.yours));
       yield* panel.push({ type: BROWSER_LIVE_CLIENT.TAKE_OVER });
@@ -1106,11 +1176,13 @@ it.effect("a takeover the member's other window already holds is not counted aga
     const panel = yield* scriptedViewer;
     const store = world(browser);
     store.driveAs(MEMBER, AN_HOUR_IN);
+
     const { fiber } = yield* started(
       peer,
       commands,
       Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), store.deps)),
     );
+
     yield* until(() => panel.ofType(BROWSER_LIVE_SERVER.DRIVER).some((message) => message.yours));
     yield* panel.push({ type: BROWSER_LIVE_CLIENT.TAKE_OVER });
     yield* panel.push({ type: BROWSER_LIVE_CLIENT.HAND_BACK });
@@ -1128,19 +1200,23 @@ it.effect("a hand-back the store did not take is tried again as the socket close
     const panel = yield* scriptedViewer;
     const store = world(browser);
     let refusals = 1;
+
     const deps: BrowserLiveDependencies = {
       ...store.deps,
       handBack: (tab, userId) => {
         if (refusals === 0) return store.deps.handBack(tab, userId);
         refusals -= 1;
+
         return Effect.fail("store down");
       },
     };
+
     const { fiber } = yield* started(
       peer,
       commands,
       Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), deps)),
     );
+
     yield* panel.push({ type: BROWSER_LIVE_CLIENT.TAKE_OVER });
     yield* until(() => panel.ofType(BROWSER_LIVE_SERVER.DRIVER).some((message) => message.yours));
     yield* panel.push({ type: BROWSER_LIVE_CLIENT.HAND_BACK });
@@ -1157,11 +1233,13 @@ it.effect("the tab's screencast is stopped as the view ends", () =>
   Effect.gen(function* () {
     const { peer, browser, commands } = yield* liveBrowser();
     const panel = yield* scriptedViewer;
+
     const { fiber } = yield* started(
       peer,
       commands,
       Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), world(browser).deps)),
     );
+
     yield* panel.leave;
     yield* Fiber.join(fiber);
 
@@ -1183,6 +1261,7 @@ const KEY_A = {
 /** The tab as the store reads it while the member given holds a takeover until the instant given. */
 function drivenTab(userId: string, heldUntil: Date, agent?: ReachedBrowserTab["agent"]) {
   const reached = reachedTab(agent);
+
   return { ...reached, tab: { ...reached.tab, driverUserId: userId, heldUntil } };
 }
 
@@ -1196,10 +1275,12 @@ it.effect(
       const own = yield* scriptedViewer;
       const other = yield* scriptedViewer;
       const store = world(browser, { reached: drivenTab(MEMBER, AN_HOUR_IN) });
+
       const relay = (panel: Effect.Success<typeof scriptedViewer>, userId: string) =>
         Effect.scoped(
           relayBrowserTab(panel.viewer, { ...ASK, userId }, reachedTab(undefined), store.deps),
         );
+
       const mine = yield* started(peer, commands, relay(own, MEMBER));
       const theirs = yield* Effect.forkChild(relay(other, "member-2"));
       yield* until(() => other.ofType(BROWSER_LIVE_SERVER.DRIVER).length > 0);
@@ -1232,11 +1313,13 @@ it.effect(
       const ownToken = { id: "agent-1", userId: "starter-1", githubAccess: GITHUB_ACCESS.TOKEN };
       const driven = drivenTab(MEMBER, AN_HOUR_IN, ownToken);
       const store = world(browser, { reached: driven });
+
       const { fiber } = yield* started(
         peer,
         commands,
         Effect.scoped(relayBrowserTab(panel.viewer, ASK, driven, store.deps)),
       );
+
       yield* until(() => panel.ofType(BROWSER_LIVE_SERVER.DRIVER).length > 0);
       assert.equal(panel.ofType(BROWSER_LIVE_SERVER.DRIVER).at(-1)?.yours, false);
 
@@ -1255,11 +1338,13 @@ it.effect(
       const { peer, browser, commands } = yield* liveBrowser();
       const panel = yield* scriptedViewer;
       const store = world(browser, { reached: drivenTab(MEMBER, new Date(3000)) });
+
       const { fiber } = yield* started(
         peer,
         commands,
         Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), store.deps)),
       );
+
       yield* until(() => panel.ofType(BROWSER_LIVE_SERVER.DRIVER).length > 0);
 
       // The takeover lapses before the tab is read again.
@@ -1287,8 +1372,10 @@ it.effect(
       const first = yield* scriptedViewer;
       const second = yield* scriptedViewer;
       const store = world(browser);
+
       const relay = (panel: Effect.Success<typeof scriptedViewer>) =>
         Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), store.deps));
+
       const one = yield* started(peer, commands, relay(first));
       yield* first.push({ type: BROWSER_LIVE_CLIENT.TAKE_OVER });
       yield* until(() => first.ofType(BROWSER_LIVE_SERVER.DRIVER).some((message) => message.yours));
@@ -1320,11 +1407,13 @@ it.effect(
       const { peer, browser, commands } = yield* liveBrowser();
       const panel = yield* scriptedViewer;
       const store = world(browser, { reached: drivenTab(MEMBER, AN_HOUR_IN) });
+
       const { fiber } = yield* started(
         peer,
         commands,
         Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), store.deps)),
       );
+
       yield* until(() => panel.ofType(BROWSER_LIVE_SERVER.DRIVER).at(-1)?.yours === true);
 
       yield* panel.push({ type: BROWSER_LIVE_CLIENT.HAND_BACK });

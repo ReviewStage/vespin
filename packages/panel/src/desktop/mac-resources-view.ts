@@ -41,7 +41,9 @@ function cpuWords(percent: number): string {
 /** The order of two siblings by the column chosen: a name from A, a figure from the largest. */
 function compare(sort: ResourceSort): (a: MacProcess, b: MacProcess) => number {
   if (sort === RESOURCE_SORT.NAME) return (a, b) => nameOf(a).localeCompare(nameOf(b));
+
   if (sort === RESOURCE_SORT.CPU) return (a, b) => b.cpu - a.cpu;
+
   return (a, b) => b.memory - a.memory;
 }
 
@@ -56,16 +58,20 @@ export function macResourcesView(
 ): MacResourcesView {
   const answered = new Set(processes.map((each) => each.pid));
   const children = new Map<number | undefined, MacProcess[]>();
+
   for (const each of processes) {
     // A parent that is not answered leaves its child at the top rather than lost.
     const parent = each.parent !== undefined && answered.has(each.parent) ? each.parent : undefined;
     const siblings = children.get(parent);
+
     if (siblings === undefined) children.set(parent, [each]);
     else siblings.push(each);
   }
+
   const order = compare(sort);
   const rows: ResourceRow[] = [];
   const lines: string[] = [];
+
   const walk = (parent: number | undefined, depth: number) => {
     for (const each of [...(children.get(parent) ?? [])].sort(order)) {
       const row = {
@@ -75,6 +81,7 @@ export function macResourcesView(
         cpu: cpuWords(each.cpu),
         memory: formatBytes(each.memory),
       };
+
       rows.push(row);
       lines.push(
         `${row.name} ${row.cpu} ${row.memory} (pid=${each.pid} ppid=${each.ppid} cmd=${each.command})`,
@@ -82,8 +89,10 @@ export function macResourcesView(
       walk(each.pid, depth + 1);
     }
   };
+
   walk(undefined, 0);
   const cpu = cpuWords(processes.reduce((sum, each) => sum + each.cpu, 0));
   const memory = formatBytes(processes.reduce((sum, each) => sum + each.memory, 0));
+
   return { rows, cpu, memory, text: [`CPU ${cpu} Memory ${memory}`, ...lines].join("\n") };
 }

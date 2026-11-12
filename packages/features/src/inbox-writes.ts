@@ -55,6 +55,7 @@ function settledThread(
       ? { ...message, ask: { ...message.ask, ...standing } }
       : message,
   );
+
   return [...settled, ...after];
 }
 
@@ -99,12 +100,14 @@ export function answeredNow(
     answers: sent.answers,
     createdAt: now,
   };
+
   const thread = settledThread(
     item.thread ?? [],
     sent.answers.ask,
     { status: INBOX_ASK_STATUS.ANSWERED },
     [reply],
   );
+
   return { ...acknowledgedNow(item, reader, now), thread };
 }
 
@@ -115,6 +118,7 @@ export function closedNow(
   now: number,
 ): InboxItem {
   const askId = openAskId(item);
+
   const thread =
     item.thread === undefined || askId === undefined
       ? undefined
@@ -128,6 +132,7 @@ export function closedNow(
           },
           [],
         );
+
   return {
     ...item,
     status: INBOX_STATUS.CLOSED,
@@ -151,12 +156,16 @@ export function takenBackNow(item: InboxItem, now: number): InboxItem {
       message.ask?.status === INBOX_ASK_STATUS.WITHDRAWN &&
       message.ask.withdrawnReason === undefined,
   )?.id;
+
   const thread = item.thread?.map((message) => {
     if (message.id !== askId || message.ask === undefined) return message;
     const { withdrawnAt: _at, withdrawnBy: _by, ...ask } = message.ask;
+
     return { ...message, ask: { ...ask, status: INBOX_ASK_STATUS.OPEN } };
   });
+
   const { answeredBy: _answered, closedBy: _closed, settledAt: _settled, ...open } = item;
+
   return {
     ...open,
     status: INBOX_STATUS.OPEN,
@@ -201,16 +210,21 @@ function sendingDrawn(
       ? closedNow(item, reader, sending.at)
       : item;
   }
+
   const thread = item.thread ?? [];
+
   if (thread.some(({ id, clientKey }) => id === sending.key || clientKey === sending.key)) {
     return item;
   }
+
   const { key, text, answers, at } = sending;
+
   if (answers !== undefined) {
     return asksOpen(item, answers.ask)
       ? answeredNow(item, { key, text, answers }, reader, at)
       : item;
   }
+
   const reply: InboxMessage = {
     id: key,
     author: INBOX_MESSAGE_AUTHOR.MEMBER,
@@ -219,6 +233,7 @@ function sendingDrawn(
     clientKey: key,
     createdAt: at,
   };
+
   return { ...item, thread: [...thread, reply], unread: false };
 }
 

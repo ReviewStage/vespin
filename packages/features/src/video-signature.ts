@@ -88,17 +88,22 @@ interface Vint {
  */
 function readVint(bytes: Uint8Array, at: number, keepMarker: boolean): Vint | undefined {
   const first = bytes[at];
+
   if (first === undefined || first === 0) return undefined;
   let length = 1;
+
   while (length <= 8 && (first & (0x80 >> (length - 1))) === 0) length += 1;
+
   if (length > 8 || at + length > bytes.length) return undefined;
   let value = keepMarker ? first : first & (0xff >> length);
   let allOnes = value === 0xff >> length;
+
   for (let index = 1; index < length; index += 1) {
     const byte = bytes[at + index] ?? 0;
     value = value * 256 + byte;
     allOnes &&= byte === 0xff;
   }
+
   return { value, length, unknown: !keepMarker && allOnes };
 }
 
@@ -111,18 +116,23 @@ interface ElementHeader {
 
 function readHeader(bytes: Uint8Array, at: number, limit: number): ElementHeader | undefined {
   const id = readVint(bytes, at, true);
+
   if (id === undefined) return undefined;
   const size = readVint(bytes, at + id.length, false);
+
   if (size === undefined) return undefined;
   const body = at + id.length + size.length;
   const end = size.unknown ? limit : Math.min(limit, body + size.value);
+
   return { id: id.value, body, end };
 }
 
 /** An unsigned integer element's value, big-endian over its body. */
 function readUint(bytes: Uint8Array, from: number, to: number): number {
   let value = 0;
+
   for (let at = from; at < to; at += 1) value = value * 256 + (bytes[at] ?? 0);
+
   return value;
 }
 
@@ -135,18 +145,26 @@ export function startsLikeWebm(bytes: Uint8Array): boolean {
 function docTypeOf(bytes: Uint8Array): string | undefined {
   if (!startsLikeWebm(bytes)) return undefined;
   const header = readHeader(bytes, 0, bytes.length);
+
   if (header === undefined) return undefined;
+
   for (let at = header.body; at < header.end; ) {
     const child = readHeader(bytes, at, header.end);
+
     if (child === undefined) return undefined;
+
     if (child.id === EBML_ID.DOC_TYPE) {
       // A string element may be padded with zero bytes, which are no part of it.
       let end = child.end;
+
       while (end > child.body && bytes[end - 1] === 0) end -= 1;
+
       return String.fromCharCode(...bytes.subarray(child.body, end));
     }
+
     at = child.end;
   }
+
   return undefined;
 }
 
@@ -163,19 +181,26 @@ export interface VideoDimensions {
 export function webmDimensions(bytes: Uint8Array): VideoDimensions | undefined {
   if (docTypeOf(bytes) !== WEBM_DOC_TYPE) return undefined;
   const header = readHeader(bytes, 0, bytes.length);
+
   if (header === undefined) return undefined;
   let width = 0;
   let height = 0;
   // A stack of where each container walked into ends, so its siblings are read after it.
   const ends: number[] = [bytes.length];
   let at = header.end;
+
   while (at < bytes.length) {
     while (ends.length > 1 && at >= (ends.at(-1) ?? bytes.length)) ends.pop();
     const element = readHeader(bytes, at, ends.at(-1) ?? bytes.length);
+
     if (element === undefined || element.id === EBML_ID.CLUSTER) break;
+
     if (element.id === EBML_ID.PIXEL_WIDTH) width = readUint(bytes, element.body, element.end);
+
     if (element.id === EBML_ID.PIXEL_HEIGHT) height = readUint(bytes, element.body, element.end);
+
     if (width > 0 && height > 0) return { width, height };
+
     if (WALKED.has(element.id)) {
       ends.push(element.end);
       at = element.body;
@@ -183,6 +208,7 @@ export function webmDimensions(bytes: Uint8Array): VideoDimensions | undefined {
       at = element.end;
     }
   }
+
   return undefined;
 }
 
@@ -199,6 +225,7 @@ function holdsWord(bytes: Uint8Array, word: string, from: number, to: number): b
   for (let at = from; at + word.length <= to; at += 1) {
     if (fourCc(bytes, at) === word) return true;
   }
+
   return false;
 }
 
@@ -213,19 +240,25 @@ export function streamableMp4(bytes: Uint8Array): boolean {
   if (bytes.length < 8 || fourCc(bytes, 4) !== MP4_BOX.FTYP) return false;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let at = 0;
+
   while (at + 8 <= bytes.length) {
     const short = view.getUint32(at);
     const type = fourCc(bytes, at + 4);
+
     const size =
       short === 1 && at + 16 <= bytes.length
         ? Number(view.getBigUint64(at + 8))
         : short === 0
           ? bytes.length - at
           : short;
+
     if (size < 8 || at + size > bytes.length) return false;
+
     if (type === MP4_BOX.MDAT) return false;
+
     if (type === MP4_BOX.MOOV) return holdsWord(bytes, MP4_BOX.AVC1, at + 8, at + size);
     at += size;
   }
+
   return false;
 }

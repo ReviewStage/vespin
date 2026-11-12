@@ -19,8 +19,7 @@ import { SkeletonBlock } from "../../shadcn/skeleton.js";
  *
  * Only a component named `*Skeleton` draws these, through the components
  * the loaded surface draws with, so the blocks stand in the surface's own
- * boxes rather than a copy of them (`anti-slop/skeleton-through-components`,
- * root AGENTS.md's Layout). A block is shadcn/ui's skeleton
+ * boxes rather than a copy of them (`packages/ui/README.md`'s Skeletons). A block is shadcn/ui's skeleton
  * (`../../shadcn/skeleton.tsx`) drawn in Tailwind utilities over the theme,
  * each shape's box picked here; its breath alone is a rule of its own
  * (`skeleton.css`).
@@ -31,14 +30,14 @@ import { SkeletonBlock } from "../../shadcn/skeleton.js";
  * circle, or a block that fills the box its container gives it, a plot's or
  * a card's, so the container sets its size.
  */
-export const SKELETON_SHAPE = {
+export const SKELETON_KIND = {
   LINE: "line",
   CONTROL: "control",
   CIRCLE: "circle",
   BLOCK: "block",
 } as const;
 
-export type SkeletonShape = (typeof SKELETON_SHAPE)[keyof typeof SKELETON_SHAPE];
+export type SkeletonKind = (typeof SKELETON_KIND)[keyof typeof SKELETON_KIND];
 
 /**
  * Each shape's box: a line the words' height centered in their line, so a
@@ -46,29 +45,29 @@ export type SkeletonShape = (typeof SKELETON_SHAPE)[keyof typeof SKELETON_SHAPE]
  * given; a control's box; a circle as wide as it is given, a control's
  * height where it is not; or the whole box its container gives it.
  */
-const SHAPE_CLASS: Record<SkeletonShape, string> = {
-  [SKELETON_SHAPE.LINE]:
+const KIND_CLASS: Record<SkeletonKind, string> = {
+  [SKELETON_KIND.LINE]:
     "ui-skeleton w-[var(--ui-skeleton-width,100%)] h-skeleton-line my-skeleton-line-gap rounded-skeleton",
-  [SKELETON_SHAPE.CONTROL]:
+  [SKELETON_KIND.CONTROL]:
     "ui-skeleton w-[var(--ui-skeleton-width,100%)] h-control rounded-control",
-  [SKELETON_SHAPE.CIRCLE]:
+  [SKELETON_KIND.CIRCLE]:
     "ui-skeleton w-[var(--ui-skeleton-width,var(--spacing-control))] aspect-square rounded-full",
-  [SKELETON_SHAPE.BLOCK]: "ui-skeleton size-full rounded-control",
+  [SKELETON_KIND.BLOCK]: "ui-skeleton size-full rounded-control",
 };
 
 /** A block's shape and width, the width a share of its line or a length. */
 interface SkeletonProps {
-  shape?: SkeletonShape | undefined;
+  kind?: SkeletonKind | undefined;
   /** How wide it stands, as a share of its line ("60%") or a length; the whole line where none is given. A block takes its container's width instead. */
   width?: string | undefined;
 }
 
-/** One block of `shape`, as wide as the share of its line given, or the whole line. */
-export function Skeleton({ shape = SKELETON_SHAPE.LINE, width }: SkeletonProps): React.JSX.Element {
+/** One block of `kind`, as wide as the share of its line given, or the whole line. */
+export function Skeleton({ kind = SKELETON_KIND.LINE, width }: SkeletonProps): React.JSX.Element {
   return (
     <SkeletonBlock
-      className={SHAPE_CLASS[shape]}
-      data-shape={shape}
+      className={KIND_CLASS[kind]}
+      data-kind={kind}
       style={
         width === undefined ? undefined : cssCustomProperties({ "--ui-skeleton-width": width })
       }

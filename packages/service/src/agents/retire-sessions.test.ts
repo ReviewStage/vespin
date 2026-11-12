@@ -25,15 +25,18 @@ function sessionsNamed(count: number, prefix: string): StandingSession[] {
 
 function sessionsRetiring(hanging: ReadonlySet<string>) {
   const retired: string[] = [];
+
   const sessionsAt: Retiring = {
     reset: (sessionId) =>
       hanging.has(sessionId)
         ? Effect.never
         : Effect.sync(() => {
             retired.push(sessionId);
+
             return { outcome: SESSION_RESET_OUTCOME.RESET } as const;
           }),
   };
+
   return { sessionsAt, retired };
 }
 
@@ -59,6 +62,7 @@ it.layer(getTestDB())("sessions retired", (it) => {
     Effect.gen(function* () {
       const answered = sessionsNamed(5, "answered");
       const { sessionsAt, retired } = sessionsRetiring(new Set(["hung-0"]));
+
       const retiring = yield* Effect.forkChild(
         retireSessions(sessionsAt, [...sessionsNamed(1, "hung"), ...answered]),
       );

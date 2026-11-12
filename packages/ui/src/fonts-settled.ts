@@ -13,5 +13,6 @@ export function onFontsSettled(run: () => void): () => void {
   // Note that the font set is read as optional, because the DOM's types promise it and jsdom has none.
   const fonts: FontFaceSet | undefined = globalThis.document?.fonts;
   fonts?.addEventListener("loadingdone", run);
+
   return () => fonts?.removeEventListener("loadingdone", run);
 }

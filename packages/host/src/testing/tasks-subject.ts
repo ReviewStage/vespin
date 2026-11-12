@@ -94,10 +94,10 @@ import {
   type GatewayMethod,
 } from "@repo/gateway";
 import { type EntityPool, entityPool } from "@repo/sync";
-import type { WireRecord, WireValue } from "@repo/wire";
+import type { WireBoundaryInput, WireRecord, WireValue } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { noNetwork } from "@repo/wire/testing";
-import { Data, Deferred, Duration, Effect, FiberMap, Result, type Scope } from "effect";
+import { Data, Deferred, Duration, Effect, FiberMap, Predicate, Result, type Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { type AppDescriptionDocuments, type AppHostRead, NO_KEYS_HELD } from "../app-state.js";
 import { composeTasks, type TasksClient } from "../compose-tasks.js";
@@ -121,6 +121,7 @@ type TasksActName = keyof typeof TASKS_ACTS;
 
 export const INVITES = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
 export const SECTION_ID = "3c9e1a2b-4d5f-4a6b-8c7d-9e0f1a2b3c4d";
+
 /** The text the edit tests' task opens on. */
 export const INVITES_TEXT = "# Teammate invitations";
 export const BILLING = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
@@ -334,6 +335,7 @@ export const PERSONAL: Workspace = {
   githubInstallations: [],
   memberCount: 1,
 };
+
 export const ACME: Workspace = {
   id: "workspace-acme",
   name: "acme",
@@ -343,8 +345,10 @@ export const ACME: Workspace = {
   githubInstallations: [{ installationId: 7, login: "acme", active: true }],
   memberCount: 3,
 };
+
 /** A workspace's photo as the window sends it: a WebP's `data:` URL. */
 export const PHOTO_URL = "data:image/webp;base64,UklGRgAAAABXRUJQ";
+
 export const RELAY: Workspace = {
   id: "workspace-relay",
   name: "Relay Labs",
@@ -421,13 +425,16 @@ export function workspacesLiveRows(workspaces: readonly Workspace[]) {
     ),
   };
 }
+
 export const INSTALL_URL = "https://github.com/apps/luke/installations/new?state=intent-1";
+
 export const ADA: WorkspaceMember = {
   userId: "user-ada",
   name: "Ada Lovelace",
   email: "ada@app.test",
   role: WORKSPACE_ROLE.ADMIN,
 };
+
 export const GRACE: WorkspaceMember = {
   userId: "user-grace",
   name: "Grace Hopper",
@@ -436,6 +443,7 @@ export const GRACE: WorkspaceMember = {
 };
 
 const UNANSWERED_WORKSPACE = { ok: false, failure: WORKSPACE_CALL_FAILURE.UNANSWERED } as const;
+
 const NOT_PERMITTED_WORKSPACE = {
   ok: false,
   failure: WORKSPACE_CALL_FAILURE.NOT_PERMITTED,
@@ -453,12 +461,20 @@ type ListAnswer = Exclude<
 /** Each part of the task list's rows by id as they stood at each sync id answered, so a read past one is answered what moved since. */
 type ListAt = Map<string, ReadonlyMap<"plans" | "agents", ReadonlyMap<string, string>>>;
 
+/** A row's id; none where it is no object carrying one as words. */
+function rowIdOf<Row>(row: Row): string | undefined {
+  return Predicate.isObjectOrArray(row) && "id" in row && Predicate.isString(row.id)
+    ? row.id
+    : undefined;
+}
+
 /** A part's rows by id, each as JSON, to tell which moved. */
 function rowsById(rows: readonly unknown[] | undefined): ReadonlyMap<string, string> {
   return new Map(
     (rows ?? []).flatMap((row) => {
-      const id = typeof row === "object" && row !== null ? Reflect.get(row, "id") : undefined;
-      return typeof id === "string" ? [[id, JSON.stringify(row)] as const] : [];
+      const id = rowIdOf(row);
+
+      return Predicate.isString(id) ? [[id, JSON.stringify(row)] as const] : [];
     }),
   );
 }
@@ -472,24 +488,33 @@ function rowsById(rows: readonly unknown[] | undefined): ReadonlyMap<string, str
 function listBySyncId(answer: ListAnswer, past: string | undefined, listAt: ListAt): ListAnswer {
   const next = answer.queries.plans.digest ?? "0";
   const before = past === undefined ? undefined : listAt.get(past);
+
   const now = new Map([
     ["plans", rowsById(answer.queries.plans.rows)],
     ["agents", rowsById(answer.queries.agents.rows)],
   ] as const);
+
   listAt.set(next, now);
+
   const part = (name: "plans" | "agents"): SealedLiveQueryWire => {
     const query = answer.queries[name];
     const sync = past === undefined ? { next } : { past, next };
     const was = before?.get(name);
     const ids = now.get(name) ?? new Map<string, string>();
+
     if (was === undefined || query.rows === undefined) return { ...query, sync };
+
     const rows = query.rows.filter((row) => {
-      const id = typeof row === "object" && row !== null ? Reflect.get(row, "id") : undefined;
-      return typeof id === "string" && was.get(id) !== ids.get(id);
+      const id = rowIdOf(row);
+
+      return Predicate.isString(id) && was.get(id) !== ids.get(id);
     });
+
     const gone = [...was.keys()].filter((id) => !ids.has(id));
+
     return { ...query, rows, sync, gone };
   };
+
   return {
     ...answer,
     queries: { ...answer.queries, plans: part("plans"), agents: part("agents") },
@@ -501,6 +526,7 @@ export function fakeService(tasks: Task[]): FakeService {
   /** What the task list's read keeps to answer by sync id. */
   const listAt: ListAt = new Map();
   let followMisses = false;
+
   const live: FakeService["live"] = {
     workspaces: polledLive<"workspaces" | "installations" | "experiments">(
       ["workspaces", "installations", "experiments"],
@@ -523,12 +549,14 @@ export function fakeService(tasks: Task[]): FakeService {
       { readonly failure: typeof TASK_CALL_FAILURE.UNANSWERED | typeof LIVE_SIGNED_OUT.failure }
     >(["plans", "agents", "issues"]),
   };
+
   /** A live read first asked, or polled past `after`. */
   const asked = <Part extends string, Refused extends { readonly failure: string }>(
     read: PolledLive<Part, Refused>,
     poll: boolean | undefined,
     after: string | undefined,
   ) => (poll === true ? read.poll(after) : Effect.succeed(read.first()));
+
   /** The fake's live read of the declared read named, for the task, agent, or page its params name, first asked or polled past `after`; none where the service holds none. */
   const liveOf = (
     name: string,
@@ -539,16 +567,23 @@ export function fakeService(tasks: Task[]): FakeService {
     const ask = <Part extends string, Refused extends { readonly failure: string }>(
       read: PolledLive<Part, Refused> | undefined,
     ) => (read === undefined ? undefined : asked(read, poll, after));
+
     if (name === TASK_COMMENTS_READ.name)
       return ask(service.commentLives[params.page ?? params.id]);
+
     if (name === TASK_HISTORY_READ.name) return ask(service.historyLives[params.id]);
+
     if (name === TASK_RECORD_READ.name) return ask(service.recordLives[params.id]);
+
     if (name === TASK_PAGES_READ.name || name === AGENT_PAGES_READ.name)
       return ask(service.pageLives[params.id]);
+
     if (name === TASK_BROWSER_TABS_READ.name || name === AGENT_BROWSER_TABS_READ.name)
       return ask(service.browserTabLives[params.id]);
+
     return undefined;
   };
+
   const service: FakeService = {
     tasks,
     threads: {},
@@ -561,6 +596,7 @@ export function fakeService(tasks: Task[]): FakeService {
       Effect.sync(() => {
         if ("page" in start) throw new Error("the fake holds no page's threads");
         service.commentCalls.push(`start:${planId}:${start.quote}`);
+
         const thread: DescriptionCommentThread = {
           id: start.id ?? "0f9b5f6e-6a8e-4c51-9a0e-2c1f2f0b7a11",
           scope: start.scope,
@@ -584,7 +620,9 @@ export function fakeService(tasks: Task[]): FakeService {
           updatedAt: 1,
           revision: 1,
         };
+
         service.threads[planId] = [...(service.threads[planId] ?? []), thread];
+
         return { thread };
       }),
     actOnComment: (planId, threadId, action) =>
@@ -594,6 +632,7 @@ export function fakeService(tasks: Task[]): FakeService {
         ),
         Effect.sync(() => {
           service.commentCalls.push(`act:${planId}:${threadId}:${action.action}`);
+
           return service.commentAnswer ?? { deleted: threadId };
         }),
       ),
@@ -637,10 +676,12 @@ export function fakeService(tasks: Task[]): FakeService {
       Effect.sync(() => {
         const held = service.pictures.get(taskId) ?? new Map();
         service.pictures.set(taskId, held);
+
         if (held.size >= 2) return { failure: PICTURE_KEEP_FAILURE.TOO_MANY };
         const id = `kept-${held.size + 1}`;
         const [, base64 = ""] = picture.split(",");
         held.set(id, { contentType: PICTURE_TYPE.PNG, base64 });
+
         return { id };
       }),
     readPicture: (taskId, attachmentId) =>
@@ -659,7 +700,9 @@ export function fakeService(tasks: Task[]): FakeService {
       Effect.sync(() => {
         const found = service.tasks.find((candidate) => candidate.id === taskId);
         const revision = service.revisions[seq];
+
         if (found === undefined || revision === undefined) return undefined;
+
         const restored: Task = {
           ...found,
           document: revision.document,
@@ -670,9 +713,11 @@ export function fakeService(tasks: Task[]): FakeService {
             duringCall: false,
           },
         };
+
         service.tasks = service.tasks.map((candidate) =>
           candidate.id === taskId ? restored : candidate,
         );
+
         return { task: restored, txid: `txid-${seq}` };
       }),
     editAnswer: undefined,
@@ -696,6 +741,7 @@ export function fakeService(tasks: Task[]): FakeService {
     },
     set memberships(next) {
       memberships = next;
+
       if (!followMisses) live.workspaces.move();
     },
     get followMisses() {
@@ -730,6 +776,7 @@ export function fakeService(tasks: Task[]): FakeService {
       status: () =>
         Effect.suspend(() => {
           const read = service.connection;
+
           return Effect.map(service.githubGate, () =>
             read === undefined ? { failure: GITHUB_CONNECTION_CALL_FAILURE.UNANSWERED } : read,
           );
@@ -738,16 +785,20 @@ export function fakeService(tasks: Task[]): FakeService {
         Effect.sync(() => {
           const url = `https://vespin.dev/connect-github.html?intent=intent-${service.connectPages.length + 1}`;
           service.connectPages.push(url);
+
           return { url };
         }),
       // The service unlinks the session's GitHub and answers the connection as it then stands.
       disconnect: () =>
         Effect.sync(() => {
           service.reads.push("github-disconnect");
+
           if (service.notPermitted) {
             return { failure: GITHUB_CONNECTION_CALL_FAILURE.NOT_PERMITTED };
           }
+
           service.connection = { connected: false, login: null };
+
           return service.connection;
         }),
     },
@@ -756,11 +807,13 @@ export function fakeService(tasks: Task[]): FakeService {
       read: (params) =>
         Effect.sync(() => {
           service.reads.push(`admin:${params.procedure}`);
+
           return { answer: { procedure: params.procedure, query: params.query } };
         }),
       favorite: (id, favorite) =>
         Effect.sync(() => {
           service.reads.push(`admin-favorite:${id}:${favorite}`);
+
           return true;
         }),
     },
@@ -786,13 +839,16 @@ export function fakeService(tasks: Task[]): FakeService {
           const polled = poll !== undefined;
           const after = poll?.after;
           const workspaceId = params.workspaceId ?? "";
+
           switch (read.name) {
             // A workspace's invitations are read for an owner or an admin alone, as the service reads them.
             case WORKSPACE_INVITATIONS_READ.name:
               if (!polled) service.reads.push(`invitations-live:${workspaceId}`);
+
               if (service.notPermitted) {
                 return Effect.succeed({ failure: WORKSPACE_CALL_FAILURE.NOT_PERMITTED });
               }
+
               return Effect.map(asked(live.invitations, polled, after), (answer) => ({
                 ...answer,
                 origin: INVITATIONS_ORIGIN,
@@ -800,19 +856,24 @@ export function fakeService(tasks: Task[]): FakeService {
             // A workspace's people are read for a member alone, as the service reads them.
             case WORKSPACE_MEMBERS_READ.name:
               if (!polled) service.reads.push(`people-live:${workspaceId}`);
+
               if (service.workspacesFail) {
                 return Effect.succeed({ failure: WORKSPACE_CALL_FAILURE.UNANSWERED });
               }
+
               return service.members[workspaceId] === undefined
                 ? Effect.succeed({ failure: WORKSPACE_CALL_FAILURE.NOT_FOUND })
                 : asked(live.people, polled, after);
             // The workspaces as the store holds them, each poll held until they move.
             case WORKSPACES_READ.name:
               if (!polled) service.reads.push("workspaces-live");
+
               if (service.workspacesFail) {
                 return Effect.succeed({ failure: WORKSPACE_CALL_FAILURE.UNANSWERED });
               }
+
               if (service.workspacesSignedOut) return Effect.succeed(LIVE_SIGNED_OUT);
+
               // Note that a poll held until the workspaces moved reads the session again as it answers.
               return Effect.map(asked(live.workspaces, polled, after), (answer) =>
                 service.workspacesSignedOut ? LIVE_SIGNED_OUT : answer,
@@ -820,6 +881,7 @@ export function fakeService(tasks: Task[]): FakeService {
             // A workspace's integrations are read for a member alone, with both integrations held by the deployment.
             case WORKSPACE_INTEGRATIONS_READ.name:
               if (!polled) service.reads.push(`integrations-live:${workspaceId}`);
+
               return Effect.map(asked(live.integrations, polled, after), (answer) => ({
                 ...answer,
                 sentryConfigured: true,
@@ -832,44 +894,55 @@ export function fakeService(tasks: Task[]): FakeService {
       create: (name) =>
         Effect.sync(() => {
           service.reads.push(`create:${name}`);
+
           if (name !== RELAY.name) return UNANSWERED_WORKSPACE;
           service.memberships = [...service.memberships, RELAY];
+
           return { ok: true, answer: RELAY } as const;
         }),
       rename: (workspaceId, name) =>
         Effect.sync(() => {
           service.reads.push(`rename:${workspaceId}:${name}`);
+
           if (service.notPermitted) return NOT_PERMITTED_WORKSPACE;
           const renamed = service.memberships.find((each) => each.id === workspaceId);
+
           if (renamed === undefined) return UNANSWERED_WORKSPACE;
           const now = { ...renamed, name };
           const again = service.renamedAgain;
           service.memberships = service.memberships.map((each) =>
             each.id !== workspaceId ? each : again === undefined ? now : { ...now, name: again },
           );
+
           return { ok: true, answer: now } as const;
         }).pipe(Effect.tap(() => service.renameAnswered)),
       setExperiment: (workspaceId, experiment, on) =>
         Effect.sync(() => {
           service.reads.push(`experimentSet:${workspaceId}:${experiment}:${on}`);
+
           if (service.notPermitted) return NOT_PERMITTED_WORKSPACE;
           const found = service.memberships.find((each) => each.id === workspaceId);
+
           if (found === undefined) return UNANSWERED_WORKSPACE;
+
           const chosen = {
             experiment,
             on,
             changedBy: { id: "user-dana", name: "Dana" },
             changedAt: 5,
           };
+
           const now = { ...found, experiments: [chosen] };
           service.memberships = service.memberships.map((each) =>
             each.id === workspaceId ? now : each,
           );
+
           return { ok: true, answer: now } as const;
         }).pipe(Effect.tap(() => service.experimentAnswered)),
       setSlug: (workspaceId, slug) =>
         Effect.sync(() => {
           service.reads.push(`slugSet:${workspaceId}:${slug}`);
+
           return slug === service.slugTaken
             ? ({ ok: false, failure: WORKSPACE_CALL_FAILURE.SLUG_TAKEN } as const)
             : UNANSWERED_WORKSPACE;
@@ -878,19 +951,23 @@ export function fakeService(tasks: Task[]): FakeService {
       setPhoto: (workspaceId, photo) =>
         Effect.sync(() => {
           service.reads.push(`photoSet:${workspaceId}:${photo ?? "none"}`);
+
           if (service.notPermitted) return NOT_PERMITTED_WORKSPACE;
           const found = service.memberships.find((each) => each.id === workspaceId);
+
           if (found === undefined) return UNANSWERED_WORKSPACE;
           const { photoVersion: _replaced, ...rest } = found;
           const now = photo === null ? rest : { ...rest, photoVersion: photo };
           service.memberships = service.memberships.map((each) =>
             each.id === workspaceId ? now : each,
           );
+
           return { ok: true, answer: now } as const;
         }),
       githubConnect: (workspaceId) =>
         Effect.sync(() => {
           service.reads.push(`connect:${workspaceId}`);
+
           return service.notPermitted
             ? NOT_PERMITTED_WORKSPACE
             : ({ ok: true, answer: service.installUrl } as const);
@@ -898,30 +975,36 @@ export function fakeService(tasks: Task[]): FakeService {
       githubDisconnect: (workspaceId) =>
         Effect.sync(() => {
           service.reads.push(`disconnect:${workspaceId}`);
+
           if (service.notPermitted) return NOT_PERMITTED_WORKSPACE;
           const disconnected = service.memberships.find((each) => each.id === workspaceId);
+
           if (disconnected === undefined) return UNANSWERED_WORKSPACE;
           const now = { ...disconnected, github: null, githubInstallations: [] };
           service.memberships = service.memberships.map((each) =>
             each.id === workspaceId ? now : each,
           );
+
           return { ok: true, answer: now } as const;
         }),
       sentryInstall: () => Effect.succeed(UNANSWERED_WORKSPACE),
       sentryDisconnect: (workspaceId, installationId) =>
         Effect.suspend(() => {
           service.reads.push(`sentry-disconnect:${workspaceId}:${installationId}`);
+
           return Effect.as(service.integrationsGate, service.sentryAnswer);
         }),
       slackBot: (workspaceId) =>
         Effect.sync(() => {
           service.reads.push(`slack-bot:${workspaceId}`);
+
           return service.slackBotAnswer;
         }),
       slackBotConnect: () => Effect.succeed(UNANSWERED_WORKSPACE),
       slackBotDisconnect: (workspaceId) =>
         Effect.suspend(() => {
           service.reads.push(`slack-bot-disconnect:${workspaceId}`);
+
           return Effect.as(service.integrationsGate, service.slackBotAnswer);
         }),
       slackBotNotifications: () => Effect.succeed(UNANSWERED_WORKSPACE),
@@ -929,12 +1012,14 @@ export function fakeService(tasks: Task[]): FakeService {
       slackBotChannel: (channel) =>
         Effect.suspend(() => {
           service.reads.push(`slack-bot-channel:${channel.workspaceId}:${channel.channelId}`);
+
           return Effect.as(service.integrationsGate, service.slackBotAnswer);
         }),
       photo: (workspaceId) =>
         Effect.sync(() => {
           service.reads.push(`photo:${workspaceId}`);
           const photo = service.photos[workspaceId];
+
           return photo === undefined
             ? ({ ok: false, failure: WORKSPACE_CALL_FAILURE.NOT_FOUND } as const)
             : ({ ok: true, answer: photo } as const);
@@ -942,30 +1027,41 @@ export function fakeService(tasks: Task[]): FakeService {
       removeMember: (workspaceId, userId) =>
         Effect.sync(() => {
           service.reads.push(`remove:${workspaceId}:${userId}`);
+
           if (service.notPermitted) return NOT_PERMITTED_WORKSPACE;
+
           const remaining = (service.members[workspaceId] ?? []).filter(
             (member) => member.userId !== userId,
           );
+
           service.members[workspaceId] = remaining;
+
           return { ok: true, answer: remaining } as const;
         }),
       changeRole: (workspaceId, userId, role) =>
         Effect.sync(() => {
           service.reads.push(`role:${workspaceId}:${userId}:${role}`);
+
           if (service.notPermitted) return NOT_PERMITTED_WORKSPACE;
+
           const given =
             role === WORKSPACE_ROLE.ADMIN ? WORKSPACE_ROLE.ADMIN : WORKSPACE_ROLE.MEMBER;
+
           const changed = (service.members[workspaceId] ?? []).map((member) =>
             member.userId === userId ? { ...member, role: given } : member,
           );
+
           service.members[workspaceId] = changed;
+
           return { ok: true, answer: changed } as const;
         }).pipe(Effect.tap(() => service.roleAnswered)),
       // A handover makes the heir the owner and the account, the owner until then, an admin.
       transfer: (workspaceId, userId) =>
         Effect.sync(() => {
           service.reads.push(`transfer:${workspaceId}:${userId}`);
+
           if (service.notPermitted) return NOT_PERMITTED_WORKSPACE;
+
           const handedOver = (service.members[workspaceId] ?? []).map((member) => ({
             ...member,
             role:
@@ -975,17 +1071,21 @@ export function fakeService(tasks: Task[]): FakeService {
                   ? WORKSPACE_ROLE.ADMIN
                   : member.role,
           }));
+
           service.members[workspaceId] = handedOver;
           service.memberships = service.memberships.map((each) =>
             each.id === workspaceId ? { ...each, role: WORKSPACE_ROLE.ADMIN } : each,
           );
+
           return { ok: true, answer: handedOver } as const;
         }),
       // The service answers the invitation it made, with its accept link.
       invite: (workspaceId, email, role) =>
         Effect.sync(() => {
           service.reads.push(`invite:${workspaceId}:${email}`);
+
           if (service.notPermitted) return NOT_PERMITTED_WORKSPACE;
+
           const made: WorkspaceInvitation = {
             id: `inv-${email}`,
             email,
@@ -993,30 +1093,39 @@ export function fakeService(tasks: Task[]): FakeService {
             expiresAt: "2026-10-16T12:00:00.000Z",
             acceptUrl: `https://vespin.dev/accept-invitation.html?id=inv-${email}`,
           };
+
           service.invitations[workspaceId] = [...(service.invitations[workspaceId] ?? []), made];
+
           return { ok: true, answer: made } as const;
         }),
       cancelInvitation: (workspaceId, invitationId) =>
         Effect.sync(() => {
           service.reads.push(`cancel:${workspaceId}:${invitationId}`);
+
           const pending = (service.invitations[workspaceId] ?? []).filter(
             (one) => one.id !== invitationId,
           );
+
           service.invitations[workspaceId] = pending;
+
           return { ok: true, answer: pending } as const;
         }),
       leave: (workspaceId) =>
         Effect.sync(() => {
           service.reads.push(`leave:${workspaceId}`);
+
           if (service.notPermitted) return NOT_PERMITTED_WORKSPACE;
           service.memberships = service.memberships.filter((each) => each.id !== workspaceId);
+
           return { ok: true, answer: workspaceId } as const;
         }),
       delete: (workspaceId) =>
         Effect.sync(() => {
           service.reads.push(`delete:${workspaceId}`);
+
           if (service.notPermitted) return NOT_PERMITTED_WORKSPACE;
           service.memberships = service.memberships.filter((each) => each.id !== workspaceId);
+
           return { ok: true, answer: workspaceId } as const;
         }),
     },
@@ -1031,6 +1140,7 @@ export function fakeService(tasks: Task[]): FakeService {
             ? [standing ?? { repository, pinnedAt: MARKED_AT + service.pins.length }, ...others]
             : others;
           const txid = service.pinTxid;
+
           return {
             ok: true,
             answer: { pins: service.pins, ...(txid === undefined ? undefined : { txid }) },
@@ -1043,6 +1153,7 @@ export function fakeService(tasks: Task[]): FakeService {
       Effect.sync((): TaskCallResult<TaskSectionsWritten, WriteUntaken> => {
         service.sectionWrites.push(write);
         const { sections } = service;
+
         return write.kind === service.sectionRefused || sections === undefined
           ? { ok: false, failure: WRITE_UNTAKEN.REFUSED }
           : { ok: true, answer: sections };
@@ -1052,7 +1163,9 @@ export function fakeService(tasks: Task[]): FakeService {
       Effect.sync((): TaskCallResult<DescriptionEditAnswer, typeof TASK_CALL_FAILURE.NOT_FOUND> => {
         if (service.editAnswer !== undefined) return { ok: true, answer: service.editAnswer };
         const found = service.tasks.find((candidate) => candidate.id === taskId);
+
         if (found === undefined) return { ok: false, failure: TASK_CALL_FAILURE.NOT_FOUND };
+
         const edited = {
           ...found,
           updatedAt: EDITED_AT,
@@ -1062,10 +1175,12 @@ export function fakeService(tasks: Task[]): FakeService {
           },
           lastEdit: { actor: DESCRIPTION_ACTOR.DEVELOPER, at: EDITED_AT, duringCall: false },
         };
+
         service.tasks = service.tasks.map((candidate) =>
           candidate.id === taskId ? edited : candidate,
         );
         const txid = service.editTxid;
+
         return {
           ok: true,
           answer: { plan: edited, ...(txid === undefined ? undefined : { txid }) },
@@ -1076,6 +1191,7 @@ export function fakeService(tasks: Task[]): FakeService {
     readSkills: (taskId) =>
       Effect.sync(() => {
         service.reads.push(`skills:${taskId}`);
+
         return service.skills[taskId];
       }),
     linkPreview: () => Effect.succeed(LINK_PREVIEW_UNANSWERED),
@@ -1094,16 +1210,19 @@ export function fakeService(tasks: Task[]): FakeService {
     readRepositoryPullRequest: (place, number) =>
       Effect.gen(function* () {
         if (service.pullRequestGate !== undefined) yield* Deferred.await(service.pullRequestGate);
+
         if (service.pullRequestQuota !== undefined) {
           if (service.pullRequestQuota === 0) return undefined;
           service.pullRequestQuota -= 1;
         }
+
         return service.pullRequests[place.workspaceId]?.[place.repository]?.get(number);
       }),
     readRepositoryIssue: (place, number) =>
       Effect.sync(() => service.issues[place.workspaceId]?.[place.repository]?.get(number)),
     openBrowserTab: () => Effect.succeed({ failure: BROWSER_TAB_OPEN_FAILURE.UNANSWERED }),
     // A declared live read answers as its follow asks it: first, or polled past `after`; the sidebar as the service holds it, a poll not counted among the reads; the record of a task with none is not found, every other read unanswered.
+    // SAFETY: the stand-in answers each declared read in the shape its declaration names.
     liveRead: ((
       read: { readonly name: string },
       params: {
@@ -1116,12 +1235,17 @@ export function fakeService(tasks: Task[]): FakeService {
     ) =>
       Effect.suspend((): Effect.Effect<unknown> => {
         if (read.name === TASK_LIST_READ.name) return service.listLive(params.userId, params.sync);
+
         if (read.name === SIDEBAR_READ.name) {
           if (poll === undefined) service.reads.push("sidebar-live");
+
           return asked(live.sidebar, poll !== undefined, poll?.after);
         }
+
         const followed = liveOf(read.name, params, poll !== undefined, poll?.after);
+
         if (followed !== undefined) return followed;
+
         return Effect.succeed(
           read.name === TASK_RECORD_READ.name ? NOT_FOUND_LIVE : UNANSWERED_LIVE,
         );
@@ -1130,13 +1254,16 @@ export function fakeService(tasks: Task[]): FakeService {
     listLive: (_userId, sync) =>
       Effect.suspend((): Effect.Effect<unknown> => {
         if (sync === undefined) return Effect.succeed(live.list.first());
+
         if (sync === "") {
           service.liveListReads += 1;
           const whole = live.list.first();
+
           return Effect.succeed(
             "failure" in whole ? whole : listBySyncId(whole, undefined, listAt),
           );
         }
+
         return Effect.map(live.list.poll(sync), (answer) =>
           "failure" in answer ? answer : listBySyncId(answer, sync, listAt),
         );
@@ -1144,11 +1271,15 @@ export function fakeService(tasks: Task[]): FakeService {
     open: (taskId) =>
       Effect.sync((): TaskCallResult<Task, TaskCallFailure> => {
         service.reads.push(`open:${taskId}`);
+
         if (service.opensUnanswered > 0) {
           service.opensUnanswered -= 1;
+
           return { ok: false, failure: TASK_CALL_FAILURE.UNANSWERED };
         }
+
         const found = service.tasks.find((candidate) => candidate.id === taskId);
+
         return found === undefined
           ? { ok: false, failure: TASK_CALL_FAILURE.NOT_FOUND }
           : { ok: true, answer: found };
@@ -1157,6 +1288,7 @@ export function fakeService(tasks: Task[]): FakeService {
       Effect.sync(() => {
         service.createKeys.push(key);
         service.createRequests.push(request);
+
         return service.createAnswer;
       }),
     repositories: (workspaceId) =>
@@ -1164,6 +1296,7 @@ export function fakeService(tasks: Task[]): FakeService {
         service.reads.push(
           workspaceId === undefined ? "repositories" : `repositories:${workspaceId}`,
         );
+
         return service.repositoriesAnswer;
       }),
     // The service keeps the repository on the task and answers the task whole.
@@ -1172,13 +1305,16 @@ export function fakeService(tasks: Task[]): FakeService {
         if (service.repositoryUnreachable) {
           return { ok: false, failure: TASK_CALL_FAILURE.REPOSITORY_NOT_REACHABLE };
         }
+
         const found = service.tasks.find((candidate) => candidate.id === taskId);
+
         if (found === undefined) return { ok: false, failure: TASK_CALL_FAILURE.UNANSWERED };
         const changed = { ...found, repository };
         service.tasks = service.tasks.map((candidate) =>
           candidate.id === taskId ? changed : candidate,
         );
         const txid = service.repositoryTxid;
+
         return {
           ok: true,
           answer: { task: changed, ...(txid === undefined ? undefined : { txid }) },
@@ -1188,64 +1324,78 @@ export function fakeService(tasks: Task[]): FakeService {
     move: (taskId, workspaceId) =>
       Effect.sync((): TaskCallResult<TaskWritten, TaskCallFailure> => {
         const found = service.tasks.find((candidate) => candidate.id === taskId);
+
         if (found === undefined) return { ok: false, failure: TASK_CALL_FAILURE.NOT_FOUND };
         const moved = { ...found, workspaceId };
         service.tasks = service.tasks.map((candidate) =>
           candidate.id === taskId ? moved : candidate,
         );
+
         return { ok: true, answer: { task: moved } };
       }),
     // The service adds the block to the task the change names, as the store does, and answers the task whole.
     block: (taskId, change) =>
       Effect.sync((): TaskCallResult<TaskWritten, BlockCallFailure> => {
         const found = service.tasks.find((candidate) => candidate.id === taskId);
+
         if (found === undefined) return { ok: false, failure: TASK_CALL_FAILURE.NOT_FOUND };
         const blocked = { ...found, blockedBy: [...(found.blockedBy ?? []), change.taskId] };
         service.tasks = service.tasks.map((candidate) =>
           candidate.id === taskId ? blocked : candidate,
         );
+
         return { ok: true, answer: { task: blocked } };
       }),
     // The service sets the task's parent, or clears it, as the store does, and answers the task whole.
     setParent: (taskId, { parentTaskId }) =>
       Effect.sync((): TaskCallResult<TaskWritten, ParentCallFailure> => {
         const found = service.tasks.find((candidate) => candidate.id === taskId);
+
         if (found === undefined) return { ok: false, failure: TASK_CALL_FAILURE.NOT_FOUND };
         const { parentTaskId: _standingParent, ...rest } = found;
         const parented = parentTaskId === null ? rest : { ...rest, parentTaskId };
         service.tasks = service.tasks.map((candidate) =>
           candidate.id === taskId ? parented : candidate,
         );
+
         return { ok: true, answer: { task: parented } };
       }),
     // The service moves the relation to the kind named, as the store does: the other made the parent here, and answers the task whole.
     changeRelation: (taskId, { taskId: otherId }) =>
       Effect.sync((): TaskCallResult<TaskWritten, RelationCallFailure> => {
         const found = service.tasks.find((candidate) => candidate.id === taskId);
+
         if (found === undefined) return { ok: false, failure: TASK_CALL_FAILURE.NOT_FOUND };
+
         if (service.relationFails) return { ok: false, failure: TASK_CALL_FAILURE.UNANSWERED };
+
         const moved = {
           ...found,
           blockedBy: (found.blockedBy ?? []).filter((id) => id !== otherId),
           parentTaskId: otherId,
         };
+
         service.tasks = service.tasks.map((candidate) =>
           candidate.id === taskId ? moved : candidate,
         );
+
         return { ok: true, answer: { task: moved } };
       }).pipe(Effect.tap(() => service.relationAnswered)),
     // The service re-titles the document with the name, as the store does.
     rename: (taskId, { name }, key) =>
       Effect.sync((): TaskCallResult<TaskWritten, WriteUntaken> => {
         service.renameKeys.push(key);
+
         if (service.renameUntaken !== undefined)
           return { ok: false, failure: service.renameUntaken };
         const found = service.tasks.find((candidate) => candidate.id === taskId);
+
         if (found === undefined) return { ok: false, failure: WRITE_UNTAKEN.REFUSED };
         const renamed = { ...found, name, document: { ...found.document, body: `# ${name}` } };
         service.tasks = service.tasks.map((candidate) =>
           candidate.id === taskId ? renamed : candidate,
         );
+
         return { ok: true, answer: { task: renamed } };
       }),
     // The service sets the status, the priority, and the assignee named, naming the assignee by
@@ -1253,36 +1403,45 @@ export function fakeService(tasks: Task[]): FakeService {
     setStanding: (taskId, { assigneeId, ...standing }) =>
       Effect.sync((): TaskCallResult<TaskWritten, WriteUntaken> => {
         const found = service.tasks.find((candidate) => candidate.id === taskId);
+
         if (found === undefined) return { ok: false, failure: WRITE_UNTAKEN.REFUSED };
         const { assignee: _standingAssignee, ...rest } = found;
+
         const changed =
           assigneeId === undefined
             ? { ...found, ...standing }
             : assigneeId === null
               ? { ...rest, ...standing }
               : { ...rest, ...standing, assignee: { userId: assigneeId, name: "Ada Lovelace" } };
+
         service.tasks = service.tasks.map((candidate) =>
           candidate.id === taskId ? changed : candidate,
         );
+
         return { ok: true, answer: { task: changed } };
       }),
     // The service stamps a pin at its own clock, and a false takes it away.
     mark: (taskId, { pinned }) =>
       Effect.sync((): TaskCallResult<TaskWritten, WriteUntaken> => {
         const found = service.tasks.find((candidate) => candidate.id === taskId);
+
         if (found === undefined || service.markFails) {
           return { ok: false, failure: WRITE_UNTAKEN.REFUSED };
         }
+
         const { pinnedAt, ...rest } = found;
         const pin = pinned === undefined ? pinnedAt : pinned ? MARKED_AT : undefined;
+
         const marked = {
           ...rest,
           ...(pin === undefined ? undefined : { pinnedAt: pin }),
         };
+
         service.tasks = service.tasks.map((candidate) =>
           candidate.id === taskId ? marked : candidate,
         );
         const txid = service.markTxid;
+
         return {
           ok: true,
           answer: { task: marked, ...(txid === undefined ? undefined : { txid }) },
@@ -1292,9 +1451,11 @@ export function fakeService(tasks: Task[]): FakeService {
       Effect.sync(() => {
         if (service.deleteFails) return undefined;
         service.tasks = service.tasks.filter((candidate) => candidate.id !== taskId);
+
         return {};
       }).pipe(Effect.tap(() => service.deleteAnswered)),
   };
+
   return service;
 }
 
@@ -1341,15 +1502,18 @@ export function subject(
     const told: TasksView[] = [];
     /** Every other event the host emitted, in order, a live follow's slice by the slice it is told on. */
     const events: { readonly kind: string; readonly payload: WireValue }[] = [];
+
     const waiters: {
       wanted: (view: TasksView) => boolean;
       seen: Deferred.Deferred<TasksView>;
     }[] = [];
+
     const focus = yield* windowFocus;
     const kept = yield* keptContent(KEPT_CONTENT_CHARACTERS);
     const pool = options.pool ?? (yield* entityPool());
     const accountId = options.accountId ?? (() => "user-dana");
     const account = { capabilitiesActive: () => options.signedIn ?? true };
+
     const kernel = {
       runMode: { sendsNetwork: options.sendsNetwork ?? true },
       now: () => 0,
@@ -1358,26 +1522,33 @@ export function subject(
       emit: (kind: GatewayEventKind, payload: WireValue) => {
         if (kind === GATEWAY_EVENT.LIVE_READ_CHANGED) {
           // SAFETY: a live follow's slice is told as its name and the slice whole (`liveTold`).
-          const { read, held } = payload as unknown as { read: LiveRead; held: WireValue };
+          const { read, held } = payload as { read: LiveRead; held: WireValue };
           pushed.push([read, held]);
           events.push({ kind: read, payload: held });
+
           return;
         }
+
         if (kind !== GATEWAY_EVENT.TASKS_CHANGED) {
           pushed.push([kind, payload]);
           events.push({ kind, payload });
+
           return;
         }
+
         const read = readEither(tasksViewSchema)(payload);
         assert.ok(Result.isSuccess(read), "the planning event carries a view");
         told.push(read.success);
+
         for (const waiter of waiters) {
           if (waiter.wanted(read.success))
             Deferred.doneUnsafe(waiter.seen, Effect.succeed(read.success));
         }
       },
     };
+
     const member = () => ({ userId: options.accountId?.() ?? "user-dana", name: "Dana" });
+
     const tasks = yield* composeTasks({
       kernel,
       account,
@@ -1390,6 +1561,7 @@ export function subject(
       entities: () => options.entities,
       offlineRefused: { clear: () => undefined },
     }).pipe(Effect.provide(noNetwork));
+
     // Note that the workspaces are composed beside the tasks as the host composes them (`compose-host.ts`).
     const workspaces = yield* composeWorkspaces({
       kernel,
@@ -1405,6 +1577,7 @@ export function subject(
       recordProductEvent: () => undefined,
       tasks: tasks.workspaces,
     }).pipe(Effect.provide(noNetwork));
+
     yield* tasks.link({ workspacesRefreshed: workspaces.refreshed });
     /** The account gate opening, as the host opens it. */
     const open = Effect.andThen(tasks.open, workspaces.open);
@@ -1416,30 +1589,44 @@ export function subject(
       input: ActInput<(typeof TASKS_ACTS)[Name]>,
     ): Effect.Effect<ActOutput<(typeof TASKS_ACTS)[Name]>>;
     function call(method: GatewayMethod, params?: WireRecord): Effect.Effect<WireValue>;
-    function call(name: TasksActName | GatewayMethod, params: unknown = {}) {
+    function call(
+      name: TasksActName | GatewayMethod,
+      params: ActInput<(typeof TASKS_ACTS)[TasksActName]> | WireRecord = {},
+    ) {
       const acts: HostActTable<typeof TASKS_ACTS> = { ...tasks.acts, ...workspaces.acts };
+
       if (name in acts) {
         // SAFETY: the overloads pair each act's name with its own input.
         const handler = acts[name as TasksActName] as (
-          input: unknown,
+          input: typeof params,
         ) => Effect.Effect<unknown, unknown>;
+
         return Effect.orDie(handler(params));
       }
+
+      // SAFETY: a method name either side answers is one of the Gateway's.
       const handler =
         tasks.methods[name as GatewayMethod] ?? workspaces.methods[name as GatewayMethod];
+
       assert.ok(handler, `no handler for ${name}`);
+
       // SAFETY: a Gateway method is called with a record, as its overload takes.
       return Effect.orDie(handler(params as WireRecord, context));
     }
+
     /** The windows' holds on the Tasks tab's live follows, each one fiber standing until let go, as a window's stream stands. */
     const windowHolds = yield* FiberMap.make<WindowHold>();
+
     /** The follow `name`'s handler, by a name not yet known. */
-    const followOf = (name: keyof typeof TASKS_FOLLOWS) =>
+    const followOf = <Name extends keyof typeof TASKS_FOLLOWS>(name: Name) =>
       // SAFETY: every Tasks follow's handler holds and asks again by its own key, which the overloads below pair with its name.
-      tasks.acts[name] as unknown as {
-        readonly hold: (key: unknown) => Effect.Effect<void, never, Scope.Scope>;
-        readonly retry?: (key: unknown) => Effect.Effect<void>;
+      tasks.acts[name] as {
+        readonly hold: (
+          key: FollowKey<(typeof TASKS_FOLLOWS)[Name]>,
+        ) => Effect.Effect<void, never, Scope.Scope>;
+        readonly retry?: (key: FollowKey<(typeof TASKS_FOLLOWS)[Name]>) => Effect.Effect<void>;
       };
+
     /** Holds `name`'s read at `key` as a window's stream does, until `unfollow`; a hold that stands already holds nothing anew. */
     const follow = <Name extends keyof typeof TASKS_FOLLOWS>(
       name: Name,
@@ -1453,16 +1640,19 @@ export function subject(
           { onlyIfMissing: true },
         ),
       );
+
     /** Lets go the window's hold of `name`'s read at `key`. */
     const unfollow = <Name extends keyof typeof TASKS_FOLLOWS>(
       name: Name,
       key: FollowKey<(typeof TASKS_FOLLOWS)[Name]>,
     ) => FiberMap.remove(windowHolds, windowHoldOf(name, key));
+
     /** Asks `name`'s read at `key` again, as its Try again does. */
     const retry = <Name extends keyof typeof TASKS_FOLLOWS>(
       name: Name,
       key: FollowKey<(typeof TASKS_FOLLOWS)[Name]>,
     ) => followOf(name).retry?.(key) ?? Effect.void;
+
     /** One of the workspaces' acts, as the act port answers it: its value, or the sentence it was refused in. */
     const act = <Name extends keyof typeof WORKSPACE_ACTS>(
       name: Name,
@@ -1471,6 +1661,7 @@ export function subject(
       const workspaceActs: HostActTable<typeof WORKSPACE_ACTS> = workspaces.acts;
       // SAFETY: a workspace act is a plain act, never a live follow, so its handler is an `ActHandler`, which a name not yet known cannot narrow to.
       const handler = workspaceActs[name] as ActHandler<(typeof WORKSPACE_ACTS)[Name]>;
+
       return Effect.orDie(
         Effect.catchIf(
           handler(input),
@@ -1480,24 +1671,31 @@ export function subject(
         ),
       );
     };
+
     const last = () => told.at(-1);
+
     /** The first view told, from now on, that `wanted` holds of. */
     const viewWhere = (wanted: (view: TasksView) => boolean) =>
       Effect.gen(function* () {
         const seen = yield* Deferred.make<TasksView>();
         waiters.push({ wanted, seen });
+
         return yield* Deferred.await(seen);
       });
+
     /** Waits from now on for the first view `wanted` holds of, and answers the wait. */
     const viewLands = (wanted: (view: TasksView) => boolean) =>
       Effect.map(Deferred.make<TasksView>(), (seen) => {
         waiters.push({ wanted, seen });
+
         return Deferred.await(seen);
       });
+
     /** The host's own fibers given their turn, so what a poll answered is drawn. */
     const settled = Effect.gen(function* () {
       for (let tick = 0; tick < 200; tick += 1) yield* Effect.yieldNow;
     });
+
     /**
      * The followed list answered as the service holds it: a row for each of
      * its tasks, and the agents given, on the poll standing or the next, half
@@ -1508,27 +1706,35 @@ export function subject(
         service.live.list.set({ plans: service.tasks.map(rowOfTask), agents, issues: [] });
         yield* nextPoll(settled);
       });
+
     /** Holds a task's description as the window does while it has the task open. */
     const holdDescription = (taskId: string) => follow("TASKS_DOCUMENT_FOLLOW", { taskId });
+
     /** Opens a task as the window's press does, the window then holding its description, and lets the description's read land. */
     const openTask = (taskId: string) =>
       Effect.tap(call("TASKS_SELECT", { taskId }), () =>
         Effect.andThen(holdDescription(taskId), settled),
       );
+
     /** The descriptions the host holds for the windows as it last told them (`LIVE_READ.DESCRIPTION_DOCUMENT`). */
     const descriptions = (): AppDescriptionDocuments => {
       const told = pushed.findLast(([kind]) => kind === LIVE_READ.DESCRIPTION_DOCUMENT);
+
       // SAFETY: the host tells its held descriptions whole as this event's payload.
       return (told?.[1] ?? NO_KEYS_HELD) as AppDescriptionDocuments;
     };
+
     /** `taskId`'s description as the host last told it held; none where it holds none. */
     const held = (taskId: string): AppHostRead<HeldDescriptionDocument> | undefined =>
       descriptions()[taskId];
+
     /** The task `taskId`'s held description holds; none where none is held, or it is gone. */
     const description = (taskId: string): Task | undefined => {
       const rows = held(taskId)?.rows;
+
       return rows !== undefined && "task" in rows ? rows.task : undefined;
     };
+
     return {
       tasks,
       workspaces,
@@ -1558,10 +1764,16 @@ export function subject(
 }
 
 /** A window's hold on one of the Tasks tab's live follows: the follow's name, and the key it holds. */
-class WindowHold extends Data.Class<{ readonly name: string; readonly [field: string]: unknown }> {}
+class WindowHold extends Data.Class<{
+  readonly name: string;
+  readonly [field: string]: WireBoundaryInput;
+}> {}
 
 /** `name`'s hold at `key`, equal to another of the same follow and the same key, field by field. */
-function windowHoldOf(name: string, key: object): WindowHold {
+function windowHoldOf<Key extends Readonly<Record<string, WireBoundaryInput>>>(
+  name: string,
+  key: Key,
+): WindowHold {
   return new WindowHold({ ...key, name });
 }
 

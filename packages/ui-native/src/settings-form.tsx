@@ -6,38 +6,36 @@ import {
   Image,
   LabeledContent,
   Menu,
-  Picker,
   Spacer,
   Button as SwiftUIButton,
   Text,
   Toggle,
   VStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  accessibilityAddTraits,
   accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
   background,
   buttonStyle,
-  contentShape,
   disabled,
   font,
   foregroundStyle,
-  labelsHidden,
   listRowBackground,
-  pickerStyle,
   scrollContentBackground,
   scrollDismissesKeyboard,
-  shapes,
-  tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
+import { useScaledSize } from "./accessibility.js";
 import { Avatar } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
+import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-switcher.js";
 
 /** An account's face in its row, larger than a list's. */
 const ACCOUNT_FACE_SIZE = 36;
@@ -58,12 +56,14 @@ const GOES_MARK_SIZE = 13;
 /** The mark at a row's end that says where a press goes, in the muted ink. */
 function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
   const colors = useColors();
+
   return <Image systemName={goes} size={GOES_MARK_SIZE} color={colors.TEXT_MUTED} />;
 }
 
 /** The row's other words, joined as VoiceOver reads a value after its label; none where there are none. */
 function spokenValue(...parts: readonly (string | undefined)[]) {
   const said = parts.filter((part) => part !== undefined && part.length > 0).join(", ");
+
   return said.length === 0 ? [] : [accessibilityValue(said)];
 }
 
@@ -92,6 +92,7 @@ function PressedRow({
   readonly testId?: string | undefined;
 }) {
   const colors = useColors();
+
   return (
     <SwiftUIButton
       onPress={onPress}
@@ -119,6 +120,7 @@ function PressedRow({
  */
 export function SettingsForm({ children }: { readonly children: ReactNode }) {
   const colors = useColors();
+
   return (
     <Form
       modifiers={[
@@ -131,6 +133,71 @@ export function SettingsForm({ children }: { readonly children: ReactNode }) {
     >
       {children}
     </Form>
+  );
+}
+
+type HeadRowProps = {
+  /** What leads the row: a person's face or a workspace's tile, at the head's size. */
+  readonly face: ReactNode;
+  readonly name: string;
+  /** The line under the name, such as an account's address or a workspace's role. */
+  readonly line: string;
+  /** A quiet line under that, such as how the account signed in. */
+  readonly detail?: string | undefined;
+  /** Where a press goes; a row with none takes no press. */
+  readonly onPress?: (() => void) | undefined;
+};
+
+/** A page's head: its face, its name, its lines, and the chevron where a press goes on, as the account heads iOS's own Settings. */
+function HeadRow({ face, name, line, detail, onPress }: HeadRowProps) {
+  const colors = useColors();
+
+  const drawn = (
+    <HStack
+      spacing={SPACE.ROW + 2}
+      modifiers={[
+        listRowBackground(colors.SURFACE),
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+      ]}
+    >
+      {face}
+      <VStack alignment="leading" spacing={2}>
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
+            foregroundStyle(colors.TEXT),
+          ]}
+        >
+          {name}
+        </Text>
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_BODY)]}
+        >
+          {line}
+        </Text>
+        {detail === undefined ? null : (
+          <Text
+            modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(colors.TEXT_MUTED)]}
+          >
+            {detail}
+          </Text>
+        )}
+      </VStack>
+      {onPress === undefined ? null : (
+        <>
+          <Spacer />
+          <GoesMark goes={PUSH_ROW_GOES.PAGE} />
+        </>
+      )}
+    </HStack>
+  );
+
+  return onPress === undefined ? (
+    drawn
+  ) : (
+    <PressedRow label={name} value={[line, detail]} onPress={onPress}>
+      {drawn}
+    </PressedRow>
   );
 }
 
@@ -151,49 +218,37 @@ type AccountRowProps = {
  * as the account heads iOS's own Settings.
  */
 export function AccountRow({ name, email, picture, detail, onPress }: AccountRowProps) {
-  const colors = useColors();
-  const face = (
-    <HStack
-      spacing={SPACE.ROW + 2}
-      modifiers={[listRowBackground(colors.SURFACE), contentShape(shapes.rectangle())]}
-    >
-      <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE} />
-      <VStack alignment="leading" spacing={2}>
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
-            foregroundStyle(colors.TEXT),
-          ]}
-        >
-          {name}
-        </Text>
-        <Text
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_BODY)]}
-        >
-          {email}
-        </Text>
-        {detail === undefined ? null : (
-          <Text
-            modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(colors.TEXT_MUTED)]}
-          >
-            {detail}
-          </Text>
-        )}
-      </VStack>
-      {onPress === undefined ? null : (
-        <>
-          <Spacer />
-          <GoesMark goes={PUSH_ROW_GOES.PAGE} />
-        </>
-      )}
-    </HStack>
+  return (
+    <HeadRow
+      face={<Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE} />}
+      name={name}
+      line={email}
+      detail={detail}
+      onPress={onPress}
+    />
   );
-  return onPress === undefined ? (
-    face
-  ) : (
-    <PressedRow label={name} value={[email, detail]} onPress={onPress}>
-      {face}
-    </PressedRow>
+}
+
+/**
+ * A workspace heading its own page: its tile, as the switcher draws it (its
+ * photo, its owner's picture, or its letter on its hue, on a softened square,
+ * since a square says a team as a circle says a person), its name, and what
+ * the reader is in it.
+ */
+export function WorkspaceRow({
+  workspace,
+  role,
+}: {
+  readonly workspace: SwitcherWorkspace;
+  /** The reader's role in it, in the panel's words. */
+  readonly role: string;
+}) {
+  return (
+    <HeadRow
+      face={<WorkspaceTile workspace={workspace} size={ACCOUNT_FACE_SIZE} />}
+      name={workspace.name}
+      line={role}
+    />
   );
 }
 
@@ -216,9 +271,13 @@ type PushRowProps = {
  */
 export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRowProps) {
   const colors = useColors();
+
   return (
     <PressedRow label={label} value={[detail]} onPress={onPress} testId={testId}>
-      <HStack spacing={SPACE.ROW} modifiers={[contentShape(shapes.rectangle())]}>
+      <HStack
+        spacing={SPACE.ROW}
+        modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+      >
         {symbol === undefined ? null : (
           <Image systemName={symbol} size={GOES_MARK_SIZE + 4} color={colors.TEXT_MUTED} />
         )}
@@ -246,6 +305,7 @@ type ToggleRowProps = {
 /** A setting turned on or off, as the system's switch, in the brand's copper, with what it does under its name. */
 export function ToggleRow({ label, detail, on, disabled: off = false, onChange }: ToggleRowProps) {
   const colors = useColors();
+
   return (
     <Toggle
       isOn={on}
@@ -267,6 +327,7 @@ export function ToggleRow({ label, detail, on, disabled: off = false, onChange }
 /** A setting's name and where it stands, as the system lays a value out beside its label. */
 export function ValueRow({ label, value }: { readonly label: string; readonly value: string }) {
   const colors = useColors();
+
   return (
     <LabeledContent label={label} modifiers={[listRowBackground(colors.SURFACE)]}>
       <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{value}</Text>
@@ -285,6 +346,7 @@ type ActionRowProps = {
 /** A row a person presses to act, in the accent, or the system's red where it ends something. */
 export function ActionRow({ label, symbol, destructive = false, onPress }: ActionRowProps) {
   const colors = useColors();
+
   return (
     <SwiftUIButton
       label={label}
@@ -300,36 +362,59 @@ export function ActionRow({ label, symbol, destructive = false, onPress }: Actio
 export type PickOption = { readonly id: string; readonly label: string };
 
 type PickRowsProps = {
-  /** What is picked, for VoiceOver; the section's title heads it on screen. */
-  readonly label: string;
   readonly options: readonly PickOption[];
   readonly picked: string | undefined;
   readonly onPick: (id: string) => void;
 };
 
-/** A choice among a few, each a row of its own with the picked one checked, as SwiftUI's inline picker draws it. */
-export function PickRows({ label, options, picked, onPick }: PickRowsProps) {
+/** The picked row's check, as iOS's own Settings draws it at a row's end. */
+const PICKED_MARK = "checkmark";
+
+/** The check's size, as small and heavy as the system's own. */
+const PICKED_MARK_SIZE = 15;
+
+/**
+ * A choice among a few, each a row of its own with the picked one checked
+ * in copper, as iOS's own Settings checks a choice. Note that the rows are
+ * drawn here rather than by SwiftUI's inline picker, because its check takes
+ * the form's tint, which stands in the ink, and neither a tint on the picker
+ * nor one on a group around it reached the check. VoiceOver hears each row
+ * as a button by its words, the picked one selected, under the section's
+ * title.
+ */
+export function PickRows({ options, picked, onPick }: PickRowsProps) {
   const colors = useColors();
+  const markSize = useScaledSize(PICKED_MARK_SIZE);
+
+  // Note that the rows stand in a fragment, each its own row of the form, because a group around them made one element of them all, which neither VoiceOver nor a flow could pick from.
   return (
-    <Picker<string | null>
-      label={label}
-      selection={picked ?? null}
-      onSelectionChange={(id) => {
-        if (id !== null) onPick(id);
-      }}
-      modifiers={[
-        pickerStyle("inline"),
-        labelsHidden(),
-        tint(colors.ACCENT),
-        listRowBackground(colors.SURFACE),
-      ]}
-    >
+    <>
       {options.map((option) => (
-        <Text key={option.id} modifiers={[tag(option.id), foregroundStyle(colors.TEXT)]}>
-          {option.label}
-        </Text>
+        <SwiftUIButton
+          key={option.id}
+          onPress={() => onPick(option.id)}
+          modifiers={[
+            buttonStyle("plain"),
+            accessibilityLabel(option.label),
+            ...(option.id === picked ? [accessibilityAddTraits(["isSelected"])] : []),
+            listRowBackground(colors.SURFACE),
+          ]}
+        >
+          <HStack modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}>
+            <Text modifiers={[foregroundStyle(colors.TEXT)]}>{option.label}</Text>
+            <Spacer />
+            {option.id === picked ? (
+              <Image
+                systemName={PICKED_MARK}
+                size={markSize}
+                color={colors.ACCENT}
+                modifiers={[font({ size: markSize, weight: "semibold" })]}
+              />
+            ) : null}
+          </HStack>
+        </SwiftUIButton>
       ))}
-    </Picker>
+    </>
   );
 }
 
@@ -361,6 +446,7 @@ type MemberRowProps = {
  */
 export function MemberRow({ name, email, picture, role, badge, acts }: MemberRowProps) {
   const colors = useColors();
+
   const face = (
     <HStack spacing={SPACE.ROW}>
       <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE - 8} />
@@ -380,9 +466,11 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
       )}
     </HStack>
   );
+
   if (acts.length === 0) {
     return <VStack modifiers={[listRowBackground(colors.SURFACE)]}>{face}</VStack>;
   }
+
   return (
     <Menu
       label={face}

@@ -41,7 +41,10 @@ import { Clock, DateTime, Effect, Layer, Option, Redacted } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { afterEach, vi } from "vitest";
+import { REPOSITORY_SANDBOX_CONTRACT } from "../agents/repository-sandbox-contract.js";
+import { WorkspaceDriveFills, workspaceDriveName } from "../agents/workspace-drive.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
+import { keptAfterResponse } from "../http/after-response.js";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
 import { connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
@@ -82,11 +85,14 @@ afterEach(() => {
 
 const RELAY = { owner: "Acme", name: "Relay" } as const;
 const RELAY_FULL_NAME = `${RELAY.owner}/${RELAY.name}`;
+
 /** The installation on the repository's owner; each agent's workspace connects one of its own, since one installation connects to one workspace and the tests share the database. */
 const installationOfRelay = () => {
   const id = 700_000 + Math.floor(Math.random() * 90_000);
+
   return { id, accountId: id + 1, login: RELAY.owner, repositories: [RELAY] };
 };
+
 /** The head's commit; each test cuts a branch of its own, since the agents of every test share the database. */
 const HEAD_SHA = "0123abcd";
 
@@ -102,6 +108,7 @@ interface PullRequestFixture {
 /** The repository's pull request from the agent's branch, read by number or by its head, with its head's one check run. */
 function relayRepository(pull: PullRequestFixture, ref: string) {
   const base = `/repos/${RELAY.owner}/${RELAY.name}`;
+
   const pullJson = () => ({
     number: 41,
     title: "Teammate invitations",
@@ -114,25 +121,34 @@ function relayRepository(pull: PullRequestFixture, ref: string) {
     changed_files: 6,
     head: { ref, sha: HEAD_SHA },
   });
+
   return (sent: SentToGitHub): Response | undefined => {
     const url = new URL(sent.url);
+
     if (url.pathname === "/graphql" && sent.method === "POST") {
       const mergeQueueEntry = pull.queued === true ? { position: 1 } : null;
+
       return Response.json({ data: { repository: { pullRequest: { mergeQueueEntry } } } });
     }
+
     if (!url.pathname.startsWith(base)) return undefined;
     const path = url.pathname.slice(base.length);
+
     if (path === "/pulls") return Response.json([pullJson()]);
+
     if (path === "/pulls/41") return Response.json(pullJson());
+
     if (path === `/commits/${HEAD_SHA}/check-runs`) {
       return Response.json({
         total_count: 1,
         check_runs: [{ name: "build", status: "completed", conclusion: pull.conclusion }],
       });
     }
+
     if (path === `/commits/${HEAD_SHA}/status`) {
       return Response.json({ state: "pending", total_count: 0, statuses: [] });
     }
+
     return Response.json({ message: "Not Found" }, { status: 404 });
   };
 }
@@ -161,17 +177,32 @@ interface Answer {
 /** The native harnesses the webhook's wakes reach, writing down each with the account it acted for. */
 const HARNESS = recordingHarness();
 
-/** The group over the test's database, the GitHub given, and the secret given (and any other values held), answering one request. */
+/** Where a case watches the group fill a workspace's drive: its sandboxes, and the work it kept past the answer. */
+interface Filling {
+  readonly sandbox: ReturnType<typeof memorySandbox>;
+  readonly after: ReturnType<typeof keptAfterResponse>;
+}
+
+/** The fills of a workspace's drive, their checkout run straight on the test's own runtime. */
+const DRIVE_FILLS = Layer.succeed(WorkspaceDriveFills, {
+  run: (effect) => Effect.runPromise(effect),
+  image: Effect.succeed("agent-image:fixture"),
+});
+
+/** The group over the test's database, the GitHub given, and the secret given (and any other values held), answering one request; filling the workspace's drive where `filling` watches it. */
 const answer = (
   github: FakeGitHub,
   secret: string | undefined,
   request: Request,
   held: Partial<HostedEnvironmentValues> = {},
+  filling?: Filling,
 ) =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
+
     const services = Layer.mergeAll(
-      memorySandbox().layer,
+      filling === undefined ? memorySandbox().layer : filling.sandbox.layer,
+      filling === undefined ? Layer.empty : Layer.merge(filling.after.layer, DRIVE_FILLS),
       Layer.succeed(SqlClient.SqlClient, client),
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
@@ -179,14 +210,17 @@ const answer = (
       github.layer,
       HARNESS.layer,
     );
+
     const { handler, dispose } = HttpRouter.toWebHandler(
       githubWebhookApp().pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
+
     const response = yield* Effect.promise(() => handler(request));
     // SAFETY: the group answers JSON; the test compares it as the wire value it is.
     const body = (yield* Effect.promise(() => response.json())) as WireBoundaryInput;
     yield* Effect.promise(() => dispose());
+
     return { status: response.status, body } satisfies Answer;
   });
 
@@ -198,10 +232,12 @@ function delivery(
   deliveryId: string = randomUUID(),
 ): Request {
   const body = JSON.stringify(payload);
+
   const signature =
     "signature" in signing
       ? signing.signature
       : `sha256=${createHmac("sha256", signing.secret).update(body).digest("hex")}`;
+
   return new Request(new URL(WEBHOOK, ORIGIN), {
     method: "POST",
     headers: {
@@ -226,15 +262,18 @@ const openAgent = (pull: PullRequestFixture) =>
   Effect.gen(function* () {
     const owner = yield* openGithubUser();
     yield* connectAgentApiKeys(owner);
+
     const task = yield* startTask(owner, {
       name: "Teammate invitations",
       repository: RELAY_FULL_NAME,
     });
+
     const installation = installationOfRelay();
     assert.equal(
       yield* connectWorkspaceGitHub(task.workspaceId, installation),
       LINK_OUTCOME.LINKED,
     );
+
     const started = yield* createAgent(owner, {
       taskId: task.id,
       idempotencyKey: randomUUID(),
@@ -246,12 +285,15 @@ const openAgent = (pull: PullRequestFixture) =>
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
       payer: AGENT_PAYER.API_KEY,
     });
+
     const agent: Agent = Option.getOrElse(started, () =>
       assert.fail("the start made no agent"),
     ).agent;
+
     const ref = `luke/teammate-invitations-${randomUUID()}`;
     yield* updateAgentBranch(owner, agent.id, ref);
     const github = githubReaching([installation], undefined, undefined, relayRepository(pull, ref));
+
     /** What the agent's row keeps of its pull request now. */
     const kept = (): Effect.Effect<
       AgentPullRequest | null | undefined,
@@ -262,6 +304,7 @@ const openAgent = (pull: PullRequestFixture) =>
         listPublishedAgents(owner, [task.id]),
         (agents) => agents.find((each) => each.agent.id === agent.id)?.published,
       );
+
     return { github, kept, ref, owner, agent, task, installation };
   });
 
@@ -283,6 +326,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
           ),
           refusal(HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE, HOSTED_API_ERROR.UNAVAILABLE),
         );
+
         for (const signing of [
           { secret: "not-the-secret" },
           { signature: "sha256=" },
@@ -297,6 +341,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
             refusal(HOSTED_HTTP_STATUS.UNAUTHORIZED, HOSTED_API_ERROR.INVALID_TOKEN),
           );
         }
+
         assert.deepEqual(github.sent, []);
         assert.equal(yield* kept(), null);
         assert.deepEqual(
@@ -312,6 +357,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
       Effect.gen(function* () {
         const pull: PullRequestFixture = { state: "open", merged: false, conclusion: "success" };
         const { github, kept, ref } = yield* openAgent(pull);
+
         const deliver = (action: string) =>
           Effect.map(
             answer(github, SECRET, delivery("pull_request", pullRequestDelivery(action, ref))),
@@ -347,12 +393,14 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         const installationId = 900_000 + Math.floor(Math.random() * 90_000);
         const login = `acme-${randomUUID()}`;
         const github = githubReaching([{ id: installationId, login, repositories: [] }]);
+
         const { id: workspaceId } = yield* (yield* fakeWorkspaceSeams).createOrganization({
           name: "Acme",
           slug: login,
           userId: owner,
           metadata: {},
         });
+
         const now = yield* DateTime.nowAsDate;
         yield* Database.use((db) =>
           db.insert(githubInstallation).values({
@@ -366,18 +414,21 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
             updatedAt: now,
           }),
         );
+
         const connected = () =>
           Effect.map(listWorkspaces(owner), (workspaces) =>
             workspaces
               .filter((workspace) => workspace.id === workspaceId)
               .map(({ github: account }) => account),
           );
+
         const deliver = (action: string) =>
           answer(
             github,
             SECRET,
             delivery("installation", { action, installation: { id: installationId } }),
           );
+
         assert.deepEqual(yield* connected(), [{ login, active: true }]);
 
         yield* deliver("suspend");
@@ -394,12 +445,59 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
   );
 
   it.effect(
+    "repositories added to an installation have its workspace's drive filled with them past the answer",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        const installation = installationOfRelay();
+        const github = githubReaching([installation]);
+
+        const { id: workspaceId } = yield* (yield* fakeWorkspaceSeams).createOrganization({
+          name: "Acme",
+          slug: `acme-${randomUUID()}`,
+          userId: owner,
+          metadata: {},
+        });
+
+        yield* connectWorkspaceGitHub(workspaceId, installation);
+        const filling = { sandbox: memorySandbox(), after: keptAfterResponse() };
+
+        const added = {
+          action: "added",
+          installation: { id: installation.id },
+          repositories_added: [{ full_name: RELAY_FULL_NAME }],
+        };
+
+        const answered = yield* answer(
+          github,
+          SECRET,
+          delivery("installation_repositories", added),
+          {},
+          filling,
+        );
+
+        yield* filling.after.run.pipe(Effect.provide(github.layer));
+
+        const drive = workspaceDriveName(workspaceId);
+
+        const folders = filling.sandbox.state.commands.flatMap(
+          (command) => command.ask.env?.[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.FOLDER] ?? [],
+        );
+
+        assert.deepEqual(answered, { status: 200, body: { read: 0 } });
+        assert.deepEqual([...filling.sandbox.state.drives.keys()], [drive]);
+        assert.deepEqual(folders, ["acme/relay"]);
+      }),
+  );
+
+  it.effect(
     "a user revoking the App's authorization clears that GitHub user's tokens alone, keeps the row, and the user's token for GitHub's MCP server asks for a new sign-in",
     () =>
       Effect.gen(function* () {
         const githubUserIdOf = () => 800_000 + Math.floor(Math.random() * 90_000);
         const revoked = githubUserIdOf();
         const kept = revoked + 1;
+
         const accountWith = (githubUserId: number) =>
           Effect.gen(function* () {
             const userId = `user-${randomUUID()}`;
@@ -408,6 +506,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
                 .insert(user)
                 .values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
             );
+
             for (const [providerId, accountId] of [
               [GITHUB_PROVIDER_ID, String(githubUserId)],
               ["google", `google-${userId}`],
@@ -425,8 +524,10 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
                 }),
               );
             }
+
             return userId;
           });
+
         const providersOf = (userId: string) =>
           Effect.map(
             Database.use((db) =>
@@ -437,6 +538,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
             ),
             (rows) => rows.map((row) => row.providerId).sort(),
           );
+
         const githubTokensOf = (userId: string) =>
           Database.use((db) =>
             db
@@ -449,6 +551,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
               .from(account)
               .where(and(eq(account.userId, userId), eq(account.providerId, GITHUB_PROVIDER_ID))),
           );
+
         const revoking = yield* accountWith(revoked);
         const other = yield* accountWith(kept);
         const github = githubReaching([]);
@@ -493,11 +596,13 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         yield* connectAgentApiKeys(owner);
         const repositoryName = `Acme/triage-${randomUUID()}`;
         const task = yield* startTask(owner, { name: "Triage", repository: repositoryName });
+
         const trigger: AutomationTrigger = {
           kind: AUTOMATION_TRIGGER.GITHUB,
           event: GITHUB_TRIGGER_EVENT.ISSUE_OPENED,
           labels: ["Bug"],
         };
+
         const made = Option.getOrThrow(
           yield* createAutomation(owner, {
             organizationId: task.workspaceId,
@@ -510,7 +615,9 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
             webhookSecretHash: null,
           }),
         );
+
         const github = githubReaching([]);
+
         const issue = (labels: readonly string[], senderType = "User") => ({
           action: "opened",
           repository: { full_name: repositoryName.toLowerCase() },
@@ -523,6 +630,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
             body: "Never read by the webhook.",
           },
         });
+
         const deliveryId = randomUUID();
 
         const first = yield* answer(
@@ -530,11 +638,13 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
           SECRET,
           delivery("issues", issue(["bug"]), undefined, deliveryId),
         );
+
         const again = yield* answer(
           github,
           SECRET,
           delivery("issues", issue(["bug"]), undefined, deliveryId),
         );
+
         const fromBot = yield* answer(github, SECRET, delivery("issues", issue(["bug"], "Bot")));
         const otherLabel = yield* answer(github, SECRET, delivery("issues", issue(["docs"])));
 
@@ -574,6 +684,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         yield* connectAgentApiKeys(owner);
         const repositoryName = `Acme/review-${randomUUID()}`;
         const task = yield* startTask(owner, { name: "Reviews", repository: null });
+
         const onWorkspace = (event: GitHubTriggerEvent, name: string) =>
           Effect.map(
             createAutomation(owner, {
@@ -588,9 +699,11 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
             }),
             Option.getOrThrow,
           );
+
         const review = yield* onWorkspace(GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED, "Code review");
         const greet = yield* onWorkspace(GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED, "Greet");
         const github = githubReaching([]);
+
         const pull = (action: string, options: { draft?: boolean; sender?: string } = {}) => ({
           action,
           repository: { full_name: repositoryName.toLowerCase() },
@@ -605,6 +718,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
             draft: options.draft ?? false,
           },
         });
+
         const queued = (payload: WireBoundaryInput) =>
           Effect.map(answer(github, SECRET, delivery("pull_request", payload)), (got) => got.body);
 
@@ -649,6 +763,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         yield* connectAgentApiKeys(owner);
         const repositoryName = `Acme/settings-${randomUUID()}`;
         const task = yield* startTask(owner, { name: "Reviews", repository: null });
+
         const listening = (trigger: AutomationTrigger) =>
           Effect.map(
             createAutomation(owner, {
@@ -663,12 +778,14 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
             }),
             Option.getOrThrow,
           );
+
         const review = yield* listening({
           kind: AUTOMATION_TRIGGER.GITHUB,
           event: GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED,
           senders: [GITHUB_SENDER.PEOPLE, GITHUB_SENDER.APP_AGENTS],
           moments: [PULL_REQUEST_MOMENT.OPENED, PULL_REQUEST_MOMENT.PUSHED],
         });
+
         const everything = yield* listening({
           kind: AUTOMATION_TRIGGER.GITHUB,
           event: GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED,
@@ -676,7 +793,9 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
           drafts: true,
           forks: true,
         });
+
         const github = githubReaching([]);
+
         const pull = (
           action: string,
           sender: { readonly type: string; readonly login: string },
@@ -697,12 +816,16 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
             draft: options.draft ?? false,
           },
         });
+
         const person = { type: "User", login: "ada" };
         const agent = { type: "Bot", login: "luke[bot]" };
         const dependabot = { type: "Bot", login: "dependabot[bot]" };
+
         const runsOf = (automation: { readonly id: string }) =>
           Effect.map(listAutomationRuns(owner, automation.id), (runs) => runs.length);
+
         const counts = [];
+
         for (const payload of [
           pull("opened", person),
           pull("ready_for_review", person),
@@ -738,6 +861,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         yield* connectAgentApiKeys(owner);
         const repositoryName = `Acme/agents-${randomUUID()}`;
         const task = yield* startTask(owner, { name: "Reviews", repository: null });
+
         const hearing = (senders: readonly GitHubSender[]) =>
           Effect.map(
             createAutomation(owner, {
@@ -757,10 +881,12 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
             }),
             Option.getOrThrow,
           );
+
         const people = yield* hearing([GITHUB_SENDER.PEOPLE]);
         const agents = yield* hearing([GITHUB_SENDER.APP_AGENTS]);
         const github = githubReaching([]);
         const developer = { type: "User", login: "ada" };
+
         const pull = (
           action: string,
           sender: { readonly type: string; readonly login: string },
@@ -780,9 +906,12 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
             draft: false,
           },
         });
+
         const runsOf = (automation: { readonly id: string }) =>
           Effect.map(listAutomationRuns(owner, automation.id), (runs) => runs.length);
+
         const counts = [];
+
         for (const payload of [
           pull("opened", developer, "luke/invitations"),
           pull("ready_for_review", developer, "luke/invitations"),
@@ -814,6 +943,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
       yield* connectAgentApiKeys(owner);
       const repositoryName = `Acme/ci-${randomUUID()}`;
       const task = yield* startTask(owner, { name: "CI", repository: repositoryName });
+
       const made = Option.getOrThrow(
         yield* createAutomation(owner, {
           organizationId: task.workspaceId,
@@ -830,7 +960,9 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
           webhookSecretHash: null,
         }),
       );
+
       const github = githubReaching([]);
+
       const suite = (branch: string, conclusion: string) => ({
         action: "completed",
         repository: { full_name: repositoryName, html_url: `https://github.com/${repositoryName}` },
@@ -842,11 +974,13 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         SECRET,
         delivery("check_suite", suite("main", "failure")),
       );
+
       const passedMain = yield* answer(
         github,
         SECRET,
         delivery("check_suite", suite("main", "success")),
       );
+
       const failedAgent = yield* answer(
         github,
         SECRET,
@@ -887,6 +1021,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
           `wrun_${randomUUID()}`,
           yield* DateTime.nowAsDate,
         );
+
         const review = {
           action: "submitted",
           repository,
@@ -934,6 +1069,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
             startedAt: now,
           }),
         );
+
         const suite = {
           action: "completed",
           repository: { ...repository, html_url: `https://github.com/${RELAY_FULL_NAME}` },
@@ -963,6 +1099,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         const pull = { state: "open", merged: false, conclusion: "success" } as const;
         const { github, owner, agent } = yield* openAgent({ ...pull });
         yield* updateAgentBranch(owner, agent.id, "main");
+
         const suite = {
           action: "completed",
           repository: { ...repository, default_branch: "main" },
@@ -980,6 +1117,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
       Effect.gen(function* () {
         const pull = { state: "open", merged: false, conclusion: "success" } as const;
         const { github, ref } = yield* openAgent({ ...pull });
+
         const run = {
           action: "completed",
           repository: { ...repository, html_url: `https://github.com/${RELAY_FULL_NAME}` },
@@ -1003,6 +1141,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
     () =>
       Effect.gen(function* () {
         const pull = { state: "open", merged: false, conclusion: "success" } as const;
+
         const {
           github: before,
           ref,
@@ -1013,6 +1152,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         } = yield* openAgent({
           ...pull,
         });
+
         yield* claimRuntimeSession(
           { userId: owner, conversationId: agent.conversationId },
           `wrun_${randomUUID()}`,
@@ -1024,12 +1164,14 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         ).pipe(Effect.provide(before.layer));
         const id = repositoryIdOf(RELAY);
         const renamed = `${RELAY.owner}/Rocket`;
+
         const github = githubReaching(
           [{ ...installation, repositories: [{ owner: RELAY.owner, name: "Rocket" }] }],
           undefined,
           undefined,
           relayRepository(pull, ref),
         );
+
         const review = {
           action: "submitted",
           repository: { id, full_name: renamed, updated_at: "2026-10-16T12:00:00Z", private: true },
@@ -1069,6 +1211,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         const owner = yield* openGithubUser();
         const name = `relay-${randomUUID().slice(0, 8)}`;
         const task = yield* startTask(owner, { name: "Relay", repository: from(name) });
+
         const moved = {
           action,
           repository: {

@@ -44,6 +44,7 @@ export const openWorkspacePlugin = Effect.gen(function* () {
   const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
     Effect.promise(() => opened.close()),
   );
+
   const plugin = betterAuth({
     database: authDatabaseAdapter(drizzle({ client })),
     baseURL: "http://127.0.0.1",
@@ -60,27 +61,35 @@ export const openWorkspacePlugin = Effect.gen(function* () {
       supportAccess(),
     ],
   });
+
   /** A fresh session for the account, its token signed under the plugin's secret. */
   const signedSessionOf = async (userId: string) => {
     const context = await plugin.$context;
     const session = await context.internalAdapter.createSession(userId);
+
     return { context, signed: `${session.token}.${await makeSignature(session.token, SECRET)}` };
   };
+
   /** A fresh session for the account, as the signed bearer token the plugin would hand the Mac. */
   const sessionBearerOf = (userId: string) =>
     Effect.promise(async () => (await signedSessionOf(userId)).signed);
+
   /** A fresh session for the account, as the `Cookie` header a browser signed in to it sends. */
   const sessionCookieOf = (userId: string) =>
     Effect.promise(async () => {
       const { context, signed } = await signedSessionOf(userId);
+
       return `${context.authCookies.sessionToken.name}=${encodeURIComponent(signed)}`;
     });
+
   /** The account a request's session names, read as the routes read it, from a request or its headers alone. */
   const resolveSessionUserId = (request: { headers: Headers }) =>
     Effect.tryPromise(async () => {
       const session = await plugin.api.getSession({ headers: request.headers });
+
       return Option.fromNullishOr(session?.user.id);
     });
+
   return {
     api: plugin.api,
     seams: workspaceSeams(plugin.api),

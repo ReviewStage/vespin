@@ -32,18 +32,23 @@ const standing = Effect.gen(function* () {
     Layer.succeed(Database, yield* Database),
     Layer.succeed(Clock.Clock, yield* Clock.Clock),
   );
+
   const web = HttpRouter.toWebHandler(runnerLinesApp().pipe(HttpRouter.provideRequest(services)), {
     disableLogger: true,
   });
+
   yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()));
+
   return (bearer: string, after: number) =>
     Effect.promise(async () => {
       const url = new URL(`${ORIGIN}${RUNNER_LINES_PATH}`);
       url.searchParams.set(RUNNER_LINES.QUERY.LAUNCH, String(LAUNCH));
       url.searchParams.set(RUNNER_LINES.QUERY.AFTER, String(after));
+
       const response = await web.handler(
         new Request(url, { headers: { authorization: `Bearer ${bearer}` } }),
       );
+
       return { status: response.status, body: await response.json() };
     });
 });
@@ -54,6 +59,7 @@ const agentWithLines = Effect.gen(function* () {
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const task = yield* startTask(userId, { name: "Invitations" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -64,11 +70,13 @@ const agentWithLines = Effect.gen(function* () {
     repository: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   const agentId = Option.getOrThrow(started).agent.id;
   const bearer = randomBytes(32).toString("base64url");
   yield* recordAgentRunnerToken(userId, agentId, runnerTokenDigest(bearer));
   const first = yield* queueRunnerLine(userId, { agentId, launch: LAUNCH, text: "one" });
   yield* queueRunnerLine(userId, { agentId, launch: LAUNCH, text: "two" });
+
   return { userId, agentId, bearer, first: Option.getOrThrow(first) };
 });
 

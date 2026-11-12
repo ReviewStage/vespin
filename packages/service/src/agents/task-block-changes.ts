@@ -127,6 +127,7 @@ export const blockWritesAsked = (
 ) =>
   Effect.gen(function* () {
     const { blockedBy, blocks } = changes;
+
     const writes: TaskBlockWrites = {
       removes: [
         ...pairsOf(taskId, blockedBy?.remove, "blockedBy"),
@@ -137,17 +138,22 @@ export const blockWritesAsked = (
         ...pairsOf(taskId, blocks?.add, "blocks"),
       ],
     };
+
     const others = new Set(tasksOfWrites(writes));
+
     if (writes.adds.some((pair) => pair.blockerTaskId === pair.blockedTaskId)) {
       return Result.fail(TASK_BLOCK_REFUSAL.SELF);
     }
+
     others.delete(taskId);
     const headers = yield* readTaskHeaders(userId, [...others]);
+
     for (const otherId of others) {
       if (headers.get(otherId)?.workspaceId !== workspaceId) {
         return Result.fail(TASK_BLOCK_REFUSAL.NO_TASK);
       }
     }
+
     return Result.succeed(writes);
   });
 
@@ -167,12 +173,15 @@ export function tasksOfWrites(writes: TaskBlockWrites): string[] {
 export const writeTaskBlocks = (userId: string, writes: TaskBlockWrites) =>
   Effect.gen(function* () {
     let changed = false;
+
     for (const pair of writes.removes) {
       const removed = yield* removeTaskBlock(userId, pair);
+
       if (Option.isNone(removed))
         return yield* new TaskBlockRefused({ words: TASK_BLOCK_REFUSAL.NO_TASK });
       changed ||= removed.value.txid !== undefined;
     }
+
     for (const pair of writes.adds) {
       const added = yield* addTaskBlock(userId, pair).pipe(
         Effect.catchTags({
@@ -182,10 +191,12 @@ export const writeTaskBlocks = (userId: string, writes: TaskBlockWrites) =>
           TaskBlockCycle: () => new TaskBlockRefused({ words: TASK_BLOCK_REFUSAL.CYCLE }),
         }),
       );
+
       if (Option.isNone(added))
         return yield* new TaskBlockRefused({ words: TASK_BLOCK_REFUSAL.NO_TASK });
       changed ||= added.value.txid !== undefined;
     }
+
     return changed;
   });
 
@@ -194,8 +205,10 @@ const readingsOf = (userId: string, taskIds: readonly string[]) =>
   Effect.map(readTaskHeaders(userId, taskIds), (headers) =>
     taskIds.flatMap((taskId): TaskBlockReading[] => {
       const header = headers.get(taskId);
+
       if (header === undefined) return [];
       const { name, status } = header;
+
       return [{ id: taskId, name, status }];
     }),
   );

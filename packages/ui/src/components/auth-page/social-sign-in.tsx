@@ -40,6 +40,7 @@ export function SocialProviderButton({
   onPress: () => void;
 }): React.JSX.Element {
   const label = SOCIAL_PROVIDER_LABEL[provider];
+
   return (
     <ProviderButton
       provider={provider}

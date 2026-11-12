@@ -37,9 +37,11 @@ const FIRST_SHA256 = "f7e8295fba8642d67d4f80d3e3d64e833693adf8c0ccb638cc6abcbb0e
 const openAccounts = Effect.gen(function* () {
   const db = yield* Database;
   const [owner, other] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
   for (const id of [owner, other]) {
     yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
   }
+
   return { owner, other };
 });
 
@@ -47,10 +49,12 @@ const openAccounts = Effect.gen(function* () {
 const choicesOf = (userId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const rows = yield* db
       .select({ slot: accountSoundChoice.slot, soundId: accountSoundChoice.soundId })
       .from(accountSoundChoice)
       .where(eq(accountSoundChoice.userId, userId));
+
     return Object.fromEntries(rows.map((row) => [row.slot, row.soundId]));
   });
 

@@ -83,6 +83,7 @@ function everyoneIn(workspace: Pick<Workspace, "name">): string {
 /** Where a skill's files came from: `owner/repo @ 3f9c2e1`, or Pasted. */
 function sourceLine(source: InstalledSkillSource): string {
   if (source.type === INSTALLED_SKILL_SOURCE.TEXT) return SKILLS_LINE.PASTED;
+
   return `${source.owner}/${source.repo} @ ${source.sha.slice(0, SHORT_SHA)}`;
 }
 
@@ -110,7 +111,9 @@ function installerOf(
   members: readonly WorkspaceMember[] | undefined,
 ): string | undefined {
   if (skill.installedBy === null) return undefined;
+
   if (skill.installedBy === readerId) return "you";
+
   return members?.find((each) => each.userId === skill.installedBy)?.name;
 }
 
@@ -122,6 +125,7 @@ function rowOf(
 ): SkillRow {
   const workspace = skill.scope === INSTALLED_SKILL_SCOPE.WORKSPACE;
   const installer = workspace ? installerOf(skill, readerId, members) : undefined;
+
   return {
     skill,
     source: workspace ? TASK_SKILL_SOURCE.WORKSPACE : TASK_SKILL_SOURCE.PERSONAL,
@@ -144,6 +148,7 @@ export function skillGroups(
 ): SkillGroups {
   const sorted = [...skills].sort((one, other) => one.name.localeCompare(other.name));
   const rows = sorted.map((skill) => rowOf(skill, readerId, members));
+
   return {
     workspace: rows.filter((row) => row.skill.scope === INSTALLED_SKILL_SCOPE.WORKSPACE),
     personal: rows.filter((row) => row.skill.scope === INSTALLED_SKILL_SCOPE.PERSONAL),
@@ -167,8 +172,17 @@ export type SkillAction = (typeof SKILL_ACTION)[keyof typeof SKILL_ACTION];
  */
 export function skillActions(row: SkillRow): readonly (readonly SkillAction[])[] {
   if (!row.skill.manageable) return [[SKILL_ACTION.VIEW]];
+
   return [[SKILL_ACTION.VIEW], [SKILL_ACTION.REMOVE]];
 }
+
+type RemoveQuestionResult = {
+  readonly title: string;
+  readonly body: string;
+  readonly verb: string;
+  readonly running: string;
+  readonly loss: ConfirmLoss;
+};
 
 /**
  * What Remove asks first: the skill and its files are deleted, past undoing,
@@ -178,14 +192,9 @@ export function skillActions(row: SkillRow): readonly (readonly SkillAction[])[]
 export function removeQuestion(
   skill: Pick<InstalledSkillSummary, "name" | "scope">,
   workspace: Pick<Workspace, "name">,
-): {
-  readonly title: string;
-  readonly body: string;
-  readonly verb: string;
-  readonly running: string;
-  readonly loss: ConfirmLoss;
-} {
+): RemoveQuestionResult {
   const shared = skill.scope === INSTALLED_SKILL_SCOPE.WORKSPACE;
+
   return {
     title: `Delete ${skill.name}?`,
     body: shared
@@ -269,23 +278,29 @@ export function previewLine(
   view: InstalledSkillPreview | InstalledSkillFailedView | undefined,
 ): DetectedLine | undefined {
   if (view === undefined) return { text: SKILLS_LINE.READING, tone: STATUS_TONE.NEUTRAL };
+
   if ("failure" in view) {
     const text =
       view.failure === INSTALLED_SKILL_CALL_FAILURE.UNANSWERED
         ? readFailedWords("that paste")
         : failureLine(view);
+
     return { text, tone: STATUS_TONE.ATTENTION };
   }
+
   if (view.kind === SKILL_PASTE_KIND.UNSUPPORTED) {
     return { text: SKILLS_LINE.UNSUPPORTED, tone: STATUS_TONE.ATTENTION };
   }
+
   if (view.kind !== SKILL_PASTE_KIND.SOURCE || view.skills.length > 0) return undefined;
+
   return { text: `No skills found in ${view.owner}/${view.repo}.`, tone: STATUS_TONE.ATTENTION };
 }
 
 /** The skills ticked as a preview lands: the ones the paste named, or the one skill there is. */
 export function initialTicks(preview: InstalledSkillPreview | undefined): ReadonlySet<string> {
   if (preview?.kind !== SKILL_PASTE_KIND.SOURCE) return new Set();
+
   return new Set(preview.skills.filter((each) => each.selected).map((each) => each.name));
 }
 
@@ -300,19 +315,23 @@ export function shownSkills(
   query: string,
 ): readonly InstalledSkillCandidate[] {
   const tokens = searchTokens(query);
+
   return skills.filter((each) => matchesTokens([each.name, each.description ?? ""], tokens));
 }
 
 /** Where a found skill is and how large: "skills/review · 1.2 kB". */
 export function candidateFacts(candidate: InstalledSkillCandidate): string {
   const where = candidate.path === "" ? "repository root" : candidate.path;
+
   return `${where} · ${formatBytes(candidate.bytes)}`;
 }
 
 /** The primary button's words: what Install will do. */
 export function installLabel(install: readonly string[]): string {
   const [only] = install;
+
   if (only === undefined) return SKILLS_LINE.INSTALL;
+
   return install.length === 1 ? `Install ${only}` : `Install ${install.length} skills`;
 }
 
@@ -321,7 +340,9 @@ export function installScopes(
   workspace: Workspace,
 ): readonly { readonly value: InstalledSkillScope; readonly label: string }[] {
   const mine = { value: INSTALLED_SKILL_SCOPE.PERSONAL, label: SKILLS_LINE.ONLY_YOU };
+
   if (workspace.personal === true) return [mine];
+
   return [mine, { value: INSTALLED_SKILL_SCOPE.WORKSPACE, label: everyoneIn(workspace) }];
 }
 
@@ -334,6 +355,7 @@ export interface TextFill {
 /** The fields as a text's preview lands: what its frontmatter declares, else empty. */
 export function textFill(preview: InstalledSkillPreview | undefined): TextFill {
   if (preview?.kind !== SKILL_PASTE_KIND.TEXT) return { name: "", description: "" };
+
   return { name: preview.name ?? "", description: preview.description ?? "" };
 }
 
@@ -354,13 +376,18 @@ export function installRequest(state: {
 }): InstalledSkillInstallParams | undefined {
   const { workspaceId, text, scope, preview, ticked, fill } = state;
   const base = { text, workspaceId, scope };
+
   if (preview?.kind === SKILL_PASTE_KIND.SOURCE) {
     const skills = preview.skills.filter((each) => ticked.has(each.name)).map((each) => each.name);
+
     return skills.length === 0 ? undefined : { ...base, skills, sha: preview.sha };
   }
+
   if (preview?.kind !== SKILL_PASTE_KIND.TEXT) return undefined;
   const name = fill.name.trim();
   const description = fill.description.trim();
+
   if (!SKILL_NAME_RULE.test(name) || description === "") return undefined;
+
   return { ...base, name, description };
 }

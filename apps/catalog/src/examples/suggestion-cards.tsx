@@ -12,6 +12,7 @@ import { CatalogSection } from "../section";
 
 function SuggestionCardsExample(): React.JSX.Element {
   const [pressed, setPressed] = useState("Nothing yet");
+
   return (
     <CatalogSection id="suggestion-cards" title="Suggested">
       <SuggestionCards title="Suggested">

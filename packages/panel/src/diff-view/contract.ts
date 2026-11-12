@@ -90,6 +90,7 @@ export function sameNotes(a: readonly DiffAnnotation[], b: readonly DiffAnnotati
     a.length === b.length &&
     a.every((note, at) => {
       const other = b[at];
+
       return (
         other !== undefined &&
         note.key === other.key &&
@@ -230,6 +231,7 @@ export function sameFileNotes(a: readonly FileAnnotation[], b: readonly FileAnno
 /** Whether two runs of lines are the same lines, or both none. */
 export function sameFileLines(a: FileLineRange | undefined, b: FileLineRange | undefined): boolean {
   if (a === undefined || b === undefined) return a === b;
+
   return a.startLine === b.startLine && a.endLine === b.endLine;
 }
 
@@ -310,6 +312,7 @@ export function sameListSelection(
   b: DiffListSelection | undefined,
 ): boolean {
   if (a === undefined || b === undefined) return a === b;
+
   return (
     a.path === b.path &&
     a.selection.start === b.selection.start &&

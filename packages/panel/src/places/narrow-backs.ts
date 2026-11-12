@@ -71,6 +71,7 @@ function stepIn(place: RoutedPlace, narrow: boolean): boolean {
 export function useNarrowBacks(narrow: boolean): NarrowBacks {
   const exits = useRoutedExits();
   const router = useRouter();
+
   return {
     list: (place, list, stand) => {
       if (!stepIn(place, narrow) || list === undefined || !exits.behind.backTo({ address: list })) {
@@ -81,13 +82,18 @@ export function useNarrowBacks(narrow: boolean): NarrowBacks {
       // Note that a phone's panel a link opened over an Inbox item steps back to it shut, where that is the step behind.
       if (over.routed) {
         const standing = { address: router.history.location.href, side: null };
+
         if (!narrow || !exits.behind.backTo(standing)) shut();
+
         return;
       }
+
       if (over.taskId === undefined || !narrow) {
         shut();
+
         return;
       }
+
       // Note that the plan is the panel's page with the panel shut, so shutting it steps back there rather than adding a step Back would open the panel again from.
       exits.behind.upTo(
         { task: { taskId: over.taskId, panel: { open: false, tab: undefined } } },

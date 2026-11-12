@@ -50,9 +50,11 @@ test("Deny opens a field, and its Deny sends the field's words with the denial",
 
   act(() => button("Deny").click());
   assert.deepEqual(heard, []);
+
   const note =
     document.querySelector<HTMLInputElement>('input[aria-label="Why you denied it"]') ??
     assert.fail("no field");
+
   act(() => {
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     set?.call(note, "  Build it instead  ");

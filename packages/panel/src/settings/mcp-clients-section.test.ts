@@ -78,10 +78,13 @@ async function choose(words: string): Promise<void> {
   const ellipsis =
     document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]') ??
     assert.fail("no ⋯");
+
   act(() => ellipsis.click());
+
   const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
     (each) => each.textContent === words,
   );
+
   assert.ok(item !== undefined, `${words} is in the ⋯`);
   act(() => item.click());
   await settle();
@@ -91,14 +94,16 @@ async function choose(words: string): Promise<void> {
 function dialog(): HTMLElement {
   const open = document.querySelector<HTMLElement>('[role="alertdialog"]');
   assert.ok(open !== null, "the confirm dialog stands");
+
   return open;
 }
 
 /** The page's words, apart from any dialog over it. */
 function pageText(): string {
   return [...document.body.children]
-    .filter((each) => each.querySelector('[role="alertdialog"]') === null)
-    .map((each) => each.textContent ?? "")
+    .flatMap((each) =>
+      each.querySelector('[role="alertdialog"]') === null ? [each.textContent ?? ""] : [],
+    )
     .join(" ");
 }
 
@@ -112,16 +117,19 @@ test("a revoke that did not finish leaves the agent standing with its Disconnect
       },
     },
   );
+
   const answers: McpClientsView[] = [
     { failure: MCP_CLIENTS_CALL_FAILURE.UNANSWERED },
     { serverUrl: SERVER_URL, clients: [] },
   ];
+
   const asked: string[] = [];
   fakeActPort({
     [ACT_KIND.MCP_CLIENTS_REVOKE]: ({ clientId }) => {
       asked.push(clientId);
       const answer = answers.shift();
       assert.ok(answer !== undefined, "the page revokes no more than twice");
+
       return Promise.resolve(answer);
     },
   });

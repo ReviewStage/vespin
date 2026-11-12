@@ -64,6 +64,7 @@ test("over a page the window answers its Command chords and ⌃Tab, and the page
     alt: held.alt === true,
     control: held.control === true,
   });
+
   assert.equal(chordIsWindows(chord("k", { meta: true })), true);
   assert.equal(chordIsWindows(chord("c", { meta: true })), false);
   assert.equal(chordIsWindows(chord("Tab", { control: true })), true);

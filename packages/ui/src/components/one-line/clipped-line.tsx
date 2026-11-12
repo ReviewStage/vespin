@@ -50,6 +50,7 @@ export function ClippedLine({
   children: ReactNode;
 }): React.JSX.Element {
   const [measured, clipped] = useClipped(words);
+
   const line = (
     <Element
       ref={measured}
@@ -60,5 +61,6 @@ export function ClippedLine({
       {children}
     </Element>
   );
+
   return hint === undefined ? line : hint(line, clipped);
 }

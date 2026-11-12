@@ -67,6 +67,7 @@ afterEach(() => {
 /** The description's version history over the window, its versions by Lee read, and the sections of version 3 open. */
 function drawn(): HTMLElement {
   const base = tasksControl();
+
   const tasks = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     activeTaskId: DOCUMENT_TASK.id,
@@ -81,6 +82,7 @@ function drawn(): HTMLElement {
       spot: { revision: 3, opened: { seq: 3, heading: undefined } },
     },
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -120,6 +122,7 @@ function drawn(): HTMLElement {
       ),
     ),
   );
+
   return container;
 }
 
@@ -135,6 +138,7 @@ test("a version by a member who left names them as one, in its row and over its 
 
   const said = (selector: string) =>
     [...view.querySelectorAll(selector)].map((each) => each.textContent);
+
   // Note that who left is named once the workspace's people reach their query.
   await vi.waitFor(() =>
     assert.deepEqual(said('[aria-label="Version list"] .version-row-author'), [

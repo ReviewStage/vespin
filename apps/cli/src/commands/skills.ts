@@ -63,7 +63,9 @@ function skillJson(skill: InstalledSkillSummary) {
 /** Where a skill's files came from, in a word or a repository's path. */
 function sourceWords(skill: InstalledSkillSummary): string {
   const { source } = skill;
+
   if (source.type === INSTALLED_SKILL_SOURCE.TEXT) return "pasted text";
+
   return `${source.owner}/${source.repo}${source.path === "" ? "" : `/${source.path}`}`;
 }
 
@@ -72,6 +74,7 @@ function skillsOf(workspaceId: string) {
   return Effect.gen(function* () {
     const { hosted } = yield* session;
     const { skills } = yield* askService(hosted.installedSkills.list, { workspaceId });
+
     return skills;
   });
 }
@@ -81,11 +84,15 @@ function resolveSkill(workspaceId: string, named: string) {
   return Effect.gen(function* () {
     const skills = yield* skillsOf(workspaceId);
     const lowered = named.toLowerCase();
+
     const matches = skills.filter(
       (skill) => skill.id === named || skill.name.toLowerCase() === lowered,
     );
+
     const [only, ...others] = matches;
+
     if (only !== undefined && others.length === 0) return only;
+
     return yield* new CommandFailed({
       exit: CLI_EXIT.USAGE,
       message: [
@@ -139,13 +146,16 @@ function installAsked(
       wanted,
       found: preview.skills.find((skill) => skill.name.toLowerCase() === wanted.toLowerCase()),
     }));
+
     const unknown = named.flatMap(({ wanted, found }) => (found === undefined ? [wanted] : []));
+
     const chosen =
       unknown.length > 0
         ? []
         : asked.skill.length > 0
           ? named.flatMap(({ found }) => (found === undefined ? [] : [found.name]))
           : preview.skills.filter((skill) => skill.selected).map((skill) => skill.name);
+
     return {
       chosen,
       request: { skills: chosen, sha: preview.sha },
@@ -155,17 +165,20 @@ function installAsked(
           : "Name the skills to install with --skill.",
     };
   }
+
   const name =
     Option.getOrUndefined(asked.name) ??
     (preview.kind === SKILL_PASTE_KIND.TEXT ? preview.name : undefined);
+
   const description =
     Option.getOrUndefined(asked.description) ??
     (preview.kind === SKILL_PASTE_KIND.TEXT ? preview.description : undefined);
+
   return {
     chosen: name === undefined || description === undefined ? [] : [name],
     request: {
-      ...(name === undefined ? {} : { name }),
-      ...(description === undefined ? {} : { description }),
+      ...(name !== undefined && { name }),
+      ...(description !== undefined && { description }),
     },
     missing: "Name the skill with --name and --description; its text declares none.",
   };
@@ -255,12 +268,14 @@ const installCommand = Command.make(
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
       const text = asked.source === STDIN_SOURCE ? yield* readInput(STDIN_SOURCE) : asked.source;
+
       const preview = yield* askService(
         hosted.installedSkills.preview,
         { text, workspaceId: workspace.id },
         undefined,
         SKILL_REFUSAL_WORDS,
       );
+
       if (preview.kind === SKILL_PASTE_KIND.UNSUPPORTED) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
@@ -268,25 +283,32 @@ const installCommand = Command.make(
             "That is neither a GitHub repository, a link to one of its folders, an `npx skills add` line, nor a skill's text.",
         });
       }
+
       const install = installAsked(preview, asked);
+
       if (asked.preview) {
         return yield* answer({ json: preview, lines: previewLines(preview, install.chosen) });
       }
+
       for (const line of previewLines(preview, install.chosen)) yield* note(line);
+
       if (install.chosen.length === 0) {
         return yield* new CommandFailed({ exit: CLI_EXIT.USAGE, message: install.missing });
       }
+
       yield* confirmOrYes(
         `Install ${install.chosen.join(", ")} for ${asked.scope === INSTALLED_SKILL_SCOPE.WORKSPACE ? `everyone in ${workspace.name}` : "you alone"}?`,
         asked.yes,
         "Nothing was installed.",
       );
+
       const installed = yield* askService(
         hosted.installedSkills.install,
         { text, workspaceId: workspace.id, scope: asked.scope, ...install.request },
         undefined,
         SKILL_REFUSAL_WORDS,
       );
+
       const skills = installed.skills.map(skillJson);
       yield* answer({
         json: { skills },

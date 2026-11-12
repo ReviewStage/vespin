@@ -1,5 +1,5 @@
 /**
- * sandbox-reach.ts -- which coding agent's sandbox a member's request reaches, by the Terminal tab's rule, and a sandbox that did not answer as the refusal a route answers.
+ * sandbox-reach.ts -- which coding agent's sandbox a member's request reaches, by the Terminal tab's rule, a sandbox or shell that did not answer as the refusal a route answers, and the agent's shells as they stand.
  *
  * Every route that acts in an agent's sandbox for a member, its shells, its
  * resume, and the ports listened on in it, reads the agent through here, so
@@ -10,6 +10,7 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
+import { SANDBOX_STATE } from "@repo/features/terminal-wire";
 import type { SandboxError } from "@repo/sandbox";
 import { Effect } from "effect";
 import {
@@ -18,6 +19,7 @@ import {
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
 import { controlsAgent, reachedAgentById } from "../agent-reach.js";
+import { AgentSandbox, SHELL_REFUSAL, type ShellRefusal } from "./agent-sandbox.js";
 
 /** The agent a sandbox route reaches: the session its sandbox is tagged with, and the machine it runs on. */
 interface ReachedAgentSession {
@@ -38,11 +40,15 @@ export const reachedAgentSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   id: string,
 ): Effect.fn.Return<ReachedAgentSession, HostedRefusal, DatabaseServices> {
   const { agent } = yield* reachedAgentById(userId, id);
+
   if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+
   if (agent.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_RETIRED);
+
   const [session] = yield* hostedStoreOrUnavailable(
     standingSessionsOf(agent.userId, [agent.conversationId]),
   );
+
   return {
     sessionId: session?.sessionId,
     machine: agent.machine,
@@ -61,14 +67,33 @@ export const reachedAgentSession = /* @__PURE__ */ Effect.fnUntraced(function* (
 export function sandboxOrUpstream<A, R>(
   effect: Effect.Effect<A, SandboxError, R>,
 ): Effect.Effect<A, HostedRefusal, R> {
-  return Effect.catch(effect, (failure) =>
-    Effect.andThen(
+  return effect.pipe(
+    Effect.tapError((failure) =>
       Effect.logWarning(`an agent's sandbox call failed: ${failure.message}`),
-      Effect.fail(
-        failure._tag === "SnapshotGone"
-          ? HOSTED_REFUSAL.SANDBOX_SNAPSHOT_GONE
-          : HOSTED_REFUSAL.UPSTREAM_ERROR,
-      ),
+    ),
+    Effect.catchTag(
+      "SnapshotGone",
+      () => Effect.fail(HOSTED_REFUSAL.SANDBOX_SNAPSHOT_GONE),
+      () => Effect.fail(HOSTED_REFUSAL.UPSTREAM_ERROR),
     ),
   );
 }
+
+/** Why a shell could not be had, as the refusal a route answers. */
+export function shellRefusal(refusal: ShellRefusal): HostedRefusal {
+  if (refusal.kind === SHELL_REFUSAL.NOT_FOUND) return HOSTED_REFUSAL.NOT_FOUND;
+
+  return refusal.sandbox === SANDBOX_STATE.STARTING
+    ? HOSTED_REFUSAL.AGENT_NOT_READY
+    : HOSTED_REFUSAL.SANDBOX_STOPPED;
+}
+
+/** The agent's shells as they stand now, the answer every change of one returns too. */
+export const listedShells = /* @__PURE__ */ Effect.fnUntraced(function* (
+  sessionId: string | undefined,
+) {
+  if (sessionId === undefined) return { sandbox: SANDBOX_STATE.STARTING, terminals: [] };
+  const sandbox = yield* AgentSandbox;
+
+  return yield* sandboxOrUpstream(sandbox.terminals(sessionId));
+});

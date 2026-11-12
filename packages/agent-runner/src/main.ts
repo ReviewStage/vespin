@@ -32,6 +32,7 @@ const stdin: AsyncIterable<string> = {
       Symbol.asyncIterator
     ](),
 };
+
 const stdinLines = Stream.fromAsyncIterable(stdin, () => undefined).pipe(
   Stream.catch(() => Stream.empty),
 );

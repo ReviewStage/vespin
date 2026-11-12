@@ -69,17 +69,22 @@ function takenRows<Part extends string, Rows>(
   ) => Effect.Effect<SealedRead<Part> | { readonly failure: string; readonly gone: boolean }>,
 ): Effect.Effect<void, LiveBroken> {
   const decode = Schema.decodeUnknownOption(schema);
+
   /** Takes an answer's rows, answering whether they decoded; one carrying none inline takes nothing. */
   const taken = (read: SealedRead<Part>) => {
     const parts = Object.entries<{ readonly rows?: readonly unknown[] }>(read.queries);
+
     if (parts.some(([, query]) => query.rows === undefined)) return Effect.succeed(true);
     const rows = decode(Object.fromEntries(parts.map(([part, query]) => [part, query.rows])));
+
     return Option.isSome(rows)
       ? Effect.as(dependencies.take(rows.value), true)
       : Effect.succeed(false);
   };
+
   return Effect.gen(function* () {
     if (!(yield* taken(first))) return yield* new LiveBroken({ reason: "a row did not decode" });
+
     const takenPoll = (after: string | undefined) =>
       Effect.flatMap(poll(after), (read) =>
         "failure" in read
@@ -88,6 +93,7 @@ function takenRows<Part extends string, Rows>(
               decoded ? read : { failure: "a row did not decode" },
             ),
       );
+
     const onTxWait = dependencies.onTxWait;
     yield* Stream.runDrain(
       liveRows({ poll: takenPoll, ...(onTxWait === undefined ? undefined : { onTxWait }) }, first),
@@ -107,17 +113,21 @@ export function followAutomationRead<Part extends string, Rows>(
 ): Effect.Effect<void> {
   const attempt = Effect.gen(function* () {
     const sealed = yield* dependencies.live(false);
+
     if ("failure" in sealed) {
       if (sealed.failure === LIVE_SIGNED_OUT.failure) return false;
       dependencies.unanswered();
+
       return sealed.failure !== AUTOMATION_CALL_FAILURE.NOT_FOUND;
     }
+
     /**
      * Why the follow ended for good, the first poll's terminal failure, kept
      * whatever answers after it, so a follow that ends is told unanswered
      * or ended unsaid.
      */
     let endedBy: string | undefined;
+
     const noted = (read: Sealed<SealedRead<Part>>) => {
       if (
         endedBy === undefined &&
@@ -127,8 +137,10 @@ export function followAutomationRead<Part extends string, Rows>(
       ) {
         endedBy = read.failure;
       }
+
       return goneWhereNotFound(read);
     };
+
     // A follow the service ended for good, as one whose automation is gone, ends here at once, rather than starting again.
     const gone = yield* takenRows(schema, dependencies, sealed, (after) =>
       Effect.map(dependencies.live(true, after), noted),
@@ -136,12 +148,16 @@ export function followAutomationRead<Part extends string, Rows>(
       Effect.as(false),
       Effect.catch((broken) => Effect.succeed(broken.reason === LIVE_GONE)),
     );
+
     if (gone) {
       if (endedBy === AUTOMATION_CALL_FAILURE.NOT_FOUND) dependencies.unanswered();
+
       return false;
     }
+
     return true;
   });
+
   return restarting(attempt);
 }
 
@@ -159,14 +175,18 @@ export function historyAtEdges<Rows, History>(
 ): Effect.Effect<(rows: Rows) => Effect.Effect<void>, never, Scope.Scope> {
   return Effect.gen(function* () {
     let taken: Option.Option<Rows> = Option.none();
+
     const drawn = yield* drawnAtEdges((at) => {
       if (Option.isNone(taken)) return undefined;
       answered(build(taken.value, at));
+
       return edge(taken.value, at);
     });
+
     return (rows) =>
       Effect.suspend(() => {
         taken = Option.some(rows);
+
         return drawn;
       });
   });

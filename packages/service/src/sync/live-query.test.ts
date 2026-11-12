@@ -11,8 +11,9 @@ import { HOSTED_SERVICE_PATH } from "@repo/features";
 import { hostedContract } from "@repo/features/contract";
 import { LIVE_MODE, LIVE_PARAM, liveRead, liveRows, ORDER } from "@repo/features/live-read";
 import { liveDigestOf } from "@repo/features/live-wire";
+import type { WireRecord } from "@repo/wire";
 import { pgTable, text, uuid } from "drizzle-orm/pg-core";
-import { Clock, Duration, Effect, Fiber, Layer, Option, Queue, Schema } from "effect";
+import { Clock, Duration, Effect, Fiber, Layer, Option, Predicate, Queue, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { liveQueryParts } from "../live/live-procedures.js";
@@ -95,7 +96,7 @@ const PROBE_READ = probeQuery(
 );
 
 /** One node of an explained plan, as its JSON writes it, the nodes under it among its `Plans`. */
-type PlanNode = Readonly<Record<string, unknown>>;
+type PlanNode = WireRecord;
 
 /** A node of the plan, and whether it is a root: the statement's top node, or a subquery's. */
 interface PlannedNode {
@@ -113,12 +114,16 @@ interface Scan extends PlannedNode {
 const SUBQUERY_ROOT: ReadonlySet<unknown> = new Set(["SubPlan", "InitPlan"]);
 
 /** Every node under the explained plan, each once, the roots marked. */
-function nodesOf(explained: unknown, root = false): readonly PlannedNode[] {
+function nodesOf<Explained>(explained: Explained, root = false): readonly PlannedNode[] {
   if (Array.isArray(explained)) return explained.flatMap((each) => nodesOf(each, root));
-  if (typeof explained !== "object" || explained === null) return [];
+
+  if (!Predicate.isObjectOrArray(explained)) return [];
+  // SAFETY: the guard above admits only an object, an EXPLAIN node, whose fields PlanNode names.
   const fields = explained as PlanNode;
+
   if ("Plan" in fields) return nodesOf(fields.Plan, true);
   const own = { node: fields, root: root || SUBQUERY_ROOT.has(fields["Parent Relationship"]) };
+
   return [own, ...nodesOf(fields.Plans)];
 }
 
@@ -126,7 +131,8 @@ function nodesOf(explained: unknown, root = false): readonly PlannedNode[] {
 function scanOf(planned: PlannedNode): readonly Scan[] {
   const table = planned.node["Relation Name"];
   const alias = planned.node.Alias;
-  return typeof table === "string" && typeof alias === "string"
+
+  return Predicate.isString(table) && Predicate.isString(alias)
     ? [{ ...planned, table, alias }]
     : [];
 }
@@ -135,8 +141,10 @@ function scanOf(planned: PlannedNode): readonly Scan[] {
 function ownExpressions(node: PlanNode, withoutOutput: boolean): readonly string[] {
   return Object.entries(node).flatMap(([key, value]) => {
     if (key === "Plans" || (withoutOutput && key === "Output")) return [];
-    if (typeof value === "string") return [value];
-    return Array.isArray(value) ? value.filter((each) => typeof each === "string") : [];
+
+    if (Predicate.isString(value)) return [value];
+
+    return Array.isArray(value) ? value.filter((each) => Predicate.isString(each)) : [];
   });
 }
 
@@ -149,9 +157,11 @@ function ownExpressions(node: PlanNode, withoutOutput: boolean): readonly string
 function namesColumn(alias: string, column: string): (expression: string) => boolean {
   const escaped = (name: string) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const qualifier = `"?${escaped(alias)}"?\\.`;
+
   const reference = new RegExp(
     `(?<![\\w$."':])(?:${qualifier}\\*|(?:${qualifier})?"?${escaped(column)}"?(?![\\w$"'(]))`,
   );
+
   return (expression) => reference.test(expression);
 }
 
@@ -163,8 +173,10 @@ function namesColumn(alias: string, column: string): (expression: string) => boo
  */
 function emitsWholeRow(scan: Scan, table: SyncTable): boolean {
   const output = scan.node.Output;
+
   if (scan.root || !Array.isArray(output)) return false;
-  const named = output.filter((each) => typeof each === "string");
+  const named = output.filter((each) => Predicate.isString(each));
+
   return [...table.watched, ...table.ignored].every((column) =>
     named.some(namesColumn(scan.alias, column)),
   );
@@ -189,17 +201,24 @@ const genericPlanOf = (statement: string) =>
       Effect.gen(function* () {
         yield* client.unsafe("set local plan_cache_mode = force_generic_plan");
         yield* client.unsafe(`prepare ${PLANNED} as ${statement}`);
+
         const [prepared] = yield* client.unsafe<{ readonly parameters: number }>(
           "select cardinality(parameter_types) as parameters from pg_prepared_statements where name = $1",
           [PLANNED],
         );
+
         const nulls = Array.from({ length: prepared?.parameters ?? 0 }, () => "null").join(", ");
+
         const rows = yield* client.unsafe<{ readonly "QUERY PLAN": unknown }>(
           `explain (verbose, format json) execute ${PLANNED}${nulls.length === 0 ? "" : `(${nulls})`}`,
         );
+
         return rows.map((row) => {
           const plan = row["QUERY PLAN"];
-          return typeof plan === "string" ? (JSON.parse(plan) as unknown) : plan;
+
+          const parsed: unknown = Predicate.isString(plan) ? JSON.parse(plan) : plan;
+
+          return parsed;
         });
       }).pipe(Effect.ensuring(Effect.ignore(client.unsafe(`deallocate ${PLANNED}`)))),
     ),
@@ -221,30 +240,41 @@ const faultsOf = (query: AnyBoundRead) =>
   Effect.gen(function* () {
     const params = Object.fromEntries(query.params.map((param) => [param, randomUUID()]));
     const past = query.cursor === undefined ? [] : [(yield* query.cursor.standing(params)).next];
+
     const built = [
       query.statements(params),
       ...past.map((cursor) => query.statements(params, cursor)),
       ...(query.delta === undefined ? [] : [query.delta.statements(params, MOVED_EVERYTHING)]),
     ];
+
     const declared = new Map(query.reads.map((table) => [table.name, table]));
     const faults = new Set<string>();
+
     const planned = built.flatMap((statements) => {
       assert.ok(Option.isSome(statements), `${query.name}'s statements could not be built`);
+
       return Object.values<LiveStatement>(statements.value);
     });
+
     for (const statement of planned) {
       const nodes = nodesOf(yield* genericPlanOf(statement.sql));
       const scans = nodes.flatMap(scanOf);
+
       const wholeRows = new Set(
         scans.flatMap((scan) => {
           const synced = declared.get(scan.table);
+
           return synced !== undefined && emitsWholeRow(scan, synced) ? [scan.node] : [];
         }),
       );
+
       const expressions = nodes.flatMap(({ node }) => ownExpressions(node, wholeRows.has(node)));
+
       for (const { table, alias } of scans) {
         const synced = declared.get(table);
+
         if (synced === undefined) faults.add(`reads ${table}, which it does not declare`);
+
         for (const column of synced?.ignored ?? []) {
           if (expressions.some(namesColumn(alias, column))) {
             faults.add(`reads ${table}.${column}, which ${table} ignores`);
@@ -252,6 +282,7 @@ const faultsOf = (query: AnyBoundRead) =>
         }
       }
     }
+
     return [...faults];
   });
 
@@ -278,6 +309,7 @@ const onHub = <A, E, R>(
   Effect.gen(function* () {
     const { clock, asleep } = yield* announcingClock;
     const looking = yield* Queue.unbounded<void>();
+
     const announcing = Layer.effect(
       Sync,
       Effect.map(Sync, (hub) => ({
@@ -288,6 +320,7 @@ const onHub = <A, E, R>(
           })),
       })),
     ).pipe(Layer.provide(syncHub));
+
     return yield* test({ asleep, looking }).pipe(
       Effect.provide(announcing),
       Effect.provideService(Clock.Clock, clock),
@@ -299,6 +332,7 @@ it("every live procedure answers one bound read, and a bound read's procedure is
     [...LIVE_QUERIES.keys()].toSorted(),
     Object.keys(hostedContract.live).toSorted(),
   );
+
   for (const read of BOUND_READS) {
     assert.equal(getOpenAPIMeta(hostedContract.live[read.name])?.path, read.declaration.path);
   }
@@ -316,6 +350,7 @@ it.layer(probeDB)("live reads Vespin Sync wakes", (it) => {
               `${query.name} reads ${table.name}, which no migration captures`,
             );
           }
+
           assert.deepEqual(yield* faultsOf(query), [], query.name);
         }
       }),
@@ -356,10 +391,12 @@ it.layer(probeDB)("live reads Vespin Sync wakes", (it) => {
         yield* liveQueryParts(PROBE_READ, { taskId: randomUUID() }, {}).pipe(
           Effect.provide(sentry.layer),
         );
+
         const spans = sentOfType(sentry.sent, "span").flatMap(
           (item): readonly { name: string; span_id: string; parent_span_id?: string }[] =>
             JSON.parse(item.text).items,
         );
+
         const read = spans.find((span) => span.name === "web/live/taskHistory");
         const statement = spans.find((span) => span.name.includes("from live_query_probe p"));
         assert.ok(read !== undefined && statement !== undefined);
@@ -376,9 +413,11 @@ it.layer(probeDB)("live reads Vespin Sync wakes", (it) => {
           const first = yield* liveQueryParts(PROBE_READ, { taskId }, {});
           const after = liveDigestOf(first.queries);
           assert.ok(after !== undefined);
+
           const held = yield* Effect.forkChild(liveQueryParts(PROBE_READ, { taskId }, { after }), {
             startImmediately: true,
           });
+
           yield* Queue.take(looking);
           // Note that the waits announced while the read was held count for nothing now.
           yield* Queue.clear(asleep);
@@ -402,9 +441,11 @@ it.layer(probeDB)("live reads Vespin Sync wakes", (it) => {
         const first = yield* liveQueryParts(PROBE_READ, { taskId }, {});
         const after = liveDigestOf(first.queries);
         assert.ok(after !== undefined);
+
         const held = yield* Effect.forkChild(liveQueryParts(PROBE_READ, { taskId }, { after }), {
           startImmediately: true,
         });
+
         yield* Queue.take(looking);
         yield* written(randomUUID());
 

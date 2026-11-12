@@ -89,6 +89,7 @@ export function TabStrip({
   useAppCommand(APP_COMMAND.MOVE_TAB_LEFT, stepping ? () => controls.current?.step(-1) : undefined);
   useAppCommand(APP_COMMAND.MOVE_TAB_RIGHT, stepping ? () => controls.current?.step(1) : undefined);
   const placeOf = (tab: HTMLElement) => controls.current?.placeOf(tab);
+
   return (
     <TabPlaceContext.Provider value={placeOf}>
       <Tabs
@@ -126,6 +127,7 @@ export function MenuTab({
 }): React.JSX.Element {
   const menu = useMenu(true);
   const placeOf = useContext(TabPlaceContext);
+
   return (
     <Tab
       {...tab}

@@ -54,10 +54,13 @@ async function importedRoute(web: string, key: string): Promise<Route> {
     const { orpcRoute } = (await import(
       moduleUrl(web, ORPC_ROUTE_MODULE)
     )) as typeof import("./orpc-route.js");
+
     return orpcRoute;
   }
+
   // SAFETY: every file under `server/routes/` default-exports its `Route`, which the generated entry imports on the same terms.
   const route = (await import(moduleUrl(web, routeSourcePath(key)))) as { readonly default: Route };
+
   return route.default;
 }
 
@@ -67,12 +70,14 @@ async function groupedFunction(web: string, definition: FunctionDefinition): Pro
       async (key): Promise<[string, Route]> => [key, await importedRoute(web, key)],
     ),
   );
+
   return dispatchRoutes(new Map(members));
 }
 
 /** Every grouped function by the path its rewrites land on, `/api/<file>.js`. */
 async function servedFunctions(web: string): Promise<ReadonlyMap<string, Route>> {
   const grouped = (await webFunctions(web)).filter((definition) => definition.dispatches);
+
   const served = await Promise.all(
     grouped.map(
       async (definition): Promise<[string, Route]> => [
@@ -81,6 +86,7 @@ async function servedFunctions(web: string): Promise<ReadonlyMap<string, Route>>
       ],
     ),
   );
+
   return new Map(served);
 }
 
@@ -90,13 +96,16 @@ export async function localDeployment(web: string): Promise<LocalDeployment> {
     readApiRewritesTable(web),
     servedFunctions(web),
   ]);
+
   return {
     answers: (pathname) => landingRule(pathname, rewrites) !== undefined,
     fetch: (request) => {
       const rule = landingRule(new URL(request.url).pathname, rewrites);
+
       if (rule === undefined) return Promise.resolve(new Response(null, { status: NOT_FOUND }));
       const arrived = landed(request, rule);
       const served = functions.get(new URL(arrived.url).pathname);
+
       return served === undefined
         ? Promise.resolve(new Response(null, { status: NOT_FOUND }))
         : served.fetch(arrived);
@@ -120,14 +129,18 @@ export async function localPages(web: string): Promise<(pathname: string) => str
     readVercelConfig(web),
     readApiRewritesTable(web),
   ]);
+
   const deployment = new Set(table.map((rewrite) => rewrite.src));
+
   const pages: Rewrite[] = services.web.routes.flatMap((route) =>
     "dest" in route && route.has === undefined && !deployment.has(route.src)
       ? [{ src: route.src, dest: route.dest }]
       : [],
   );
+
   return (pathname) => {
     const rule = landingRule(pathname, pages);
+
     return rule === undefined ? pathname : landedPath(pathname, rule);
   };
 }

@@ -31,6 +31,7 @@ function validatedInput(schema: Schema.Codec<unknown, UnparsedWireValue>) {
         const read = readEither(schema, { excess: EXCESS_KEYS.DROP })(
           unparsedWire(value as WireBoundaryInput),
         );
+
         return Result.match(read, {
           onSuccess: (value) => ({ success: true as const, value }),
           onFailure: (refused) => ({

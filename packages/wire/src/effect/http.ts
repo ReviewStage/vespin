@@ -25,7 +25,9 @@ export function webResponseFromClientResponse(
   response: HttpClientResponse.HttpClientResponse,
 ): Effect.Effect<Response> {
   const init: ResponseInit = { status: response.status, headers: response.headers };
+
   if (bodilessStatuses.has(response.status)) return Effect.succeed(new Response(null, init));
+
   return Effect.map(
     Stream.toReadableStreamEffect(response.stream),
     (body) => new Response(body, init),

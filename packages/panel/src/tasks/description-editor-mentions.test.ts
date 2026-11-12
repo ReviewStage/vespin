@@ -69,6 +69,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   await letGoOfWords();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   // Note that the saves a description left as it went answer before the test's client is cleared.
   await settledWrites();
@@ -88,6 +89,7 @@ async function opened(page?: TaskMentionsValue, task: Task = TASK) {
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS), {
     [LIVE_READ.WORKSPACE_MEMBERS]: { "workspace-1": { rows: { members: [] } } },
   });
+
   const body = createElement(DescriptionBody, {
     task: task,
     edit: descriptionEditMutation(task.id, () =>
@@ -100,6 +102,7 @@ async function opened(page?: TaskMentionsValue, task: Task = TASK) {
       reveal: undefined,
     },
   });
+
   act(() =>
     root.render(
       withQueryClient(
@@ -120,6 +123,7 @@ async function opened(page?: TaskMentionsValue, task: Task = TASK) {
   const element = container.querySelector<TiptapEditorHTMLElement>(".description-document-text");
   const editor = element?.editor;
   assert.ok(element && editor, "the description's editor is open");
+
   /** The words typed at the end of the text, as the editor's own input inserts them. */
   const typeAtEnd = async (words: string) => {
     act(() => {
@@ -130,10 +134,12 @@ async function opened(page?: TaskMentionsValue, task: Task = TASK) {
     });
     await act(async () => undefined);
   };
+
   const press = (key: string) =>
     act(() => {
       element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
     });
+
   /** The words typed right after the words given, as the editor's own input inserts them. */
   const typeAfter = async (words: string, typed: string) => {
     act(() => {
@@ -152,6 +158,7 @@ async function opened(page?: TaskMentionsValue, task: Task = TASK) {
     });
     await act(async () => undefined);
   };
+
   /** Words pasted at the end of the text, as the system's clipboard hands them over. */
   const pasteAtEnd = async (words: string) => {
     act(() => {
@@ -169,6 +176,7 @@ async function opened(page?: TaskMentionsValue, task: Task = TASK) {
     });
     await act(async () => undefined);
   };
+
   return { container, typeAtEnd, typeAfter, press, pasteAtEnd };
 }
 
@@ -204,6 +212,7 @@ test("Enter writes the highlighted row as its mention, drawn in the editor as it
   const chips = [
     ...task.container.querySelectorAll(".description-document-text [data-mention-ref]"),
   ];
+
   assert.deepEqual(
     chips.map((chip) => chip.querySelector(".ui-inline-ref-label")?.textContent),
     ["Rollout"],
@@ -213,6 +222,7 @@ test("Enter writes the highlighted row as its mention, drawn in the editor as it
 
 test("words after an @ that read as a time on a day, up to six of them, offer it first, and Enter draws it as a chip saying it from today", async () => {
   vi.useFakeTimers({ now: Date.parse("2026-10-19T12:00:00Z"), toFake: ["Date"] });
+
   try {
     const task = await opened();
 
@@ -224,6 +234,7 @@ test("words after an @ that read as a time on a day, up to six of them, offer it
     const chips = [
       ...task.container.querySelectorAll(".description-document-text [data-mention-ref]"),
     ];
+
     assert.deepEqual(offered, ["Dates", ["Oct 30 3:00 PM → 5:00 PM"]]);
     assert.deepEqual(
       chips.map((chip) => chip.querySelector(".ui-inline-ref-label")?.textContent),
@@ -315,6 +326,7 @@ test("on the plan's page an @ typed in the description suggests its agents and t
       onOpenFile: undefined,
     },
   };
+
   const description = await opened(page);
 
   await description.typeAtEnd(" @");
@@ -331,6 +343,7 @@ test("on the plan's page an @ typed in the description offers the workspace's ot
     name,
     actor: { kind: ACTOR_KIND.AGENT, name, provider: undefined, state: ACTOR_STATE.REST },
   });
+
   const page: TaskMentionsValue = {
     holder: { taskId: TASK.id },
     taskName: TASK.name,
@@ -351,6 +364,7 @@ test("on the plan's page an @ typed in the description offers the workspace's ot
       onOpenFile: undefined,
     },
   };
+
   const description = await opened(page);
 
   await description.typeAtEnd(" @agents:");
@@ -363,6 +377,7 @@ test("on the plan's page an @ typed in the description offers the workspace's ot
 
 test("a section's address pasted whole into the description is laid in as its chip, called by its heading", async () => {
   const description = await opened();
+
   const goal = encodeMention(
     { kind: MENTION_KIND.SECTION, taskId: TASK.id, anchor: "goal" },
     { workspace: "acme", repository: TASK.repository },
@@ -374,6 +389,7 @@ test("a section's address pasted whole into the description is laid in as its ch
   const chips = [
     ...description.container.querySelectorAll(".description-document-text [data-mention-ref]"),
   ];
+
   assert.deepEqual(
     chips.map((chip) => chip.querySelector(".ui-inline-ref-label")?.textContent),
     ["Goal"],
@@ -406,6 +422,7 @@ test("a section's address naming its task by its number, pasted whole into the d
       ".description-document-text [data-mention-ref]",
     ),
   ];
+
   assert.deepEqual(
     chips.map((chip) => [
       chip.dataset.kind,
@@ -500,6 +517,7 @@ test("on the description's page an @ typed in the description offers the pull re
       onOpenFile: undefined,
     },
   };
+
   const description = await opened(page);
 
   await description.typeAtEnd(" See @seat");

@@ -10,7 +10,7 @@ import {
   ListMotion,
   ListRow,
   PAGE_FRAME,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   SkeletonRegion,
   type StatusTone,
@@ -81,7 +81,7 @@ export function PersonTitle({
 export function PersonTitleSkeleton({ name }: { name: string | undefined }): React.JSX.Element {
   return (
     <PersonTitle
-      face={<Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_FACE} />}
+      face={<Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_FACE} />}
       name={name ?? <Skeleton width={SKELETON_HEAD.NAME} />}
     />
   );
@@ -115,6 +115,7 @@ export function PersonBody({
   children: ReactNode;
 }): React.JSX.Element {
   const root = useRef<HTMLDivElement | null>(null);
+
   return (
     <div ref={root}>
       <ListMotion root={root} reading={reading}>
@@ -207,7 +208,7 @@ export function RowsSkeleton({ label }: { label: string }): React.JSX.Element {
           {SKELETON_ROWS.map(({ name, context }) => (
             <ListRow
               key={name}
-              leading={<Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_MARK} />}
+              leading={<Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_MARK} />}
               title={<Skeleton width={name} />}
               meta={<Skeleton width={context} />}
             />

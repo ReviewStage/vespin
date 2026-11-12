@@ -26,7 +26,7 @@
  * enough closes itself (`idleTabs`, the panel's `tasks/use-idle-tabs.ts`).
  */
 
-import { Schema } from "effect";
+import { Predicate, Schema } from "effect";
 
 /**
  * What each kind of tab whose name is not its subject's is called, wherever
@@ -262,7 +262,7 @@ export function cloudBrowserTab(cloudBrowser: string): CloudBrowserStripTab {
 
 /** A tab's kind: a word's for a string, and an object's own otherwise. */
 export function stripTabKind(tab: StripTab): StripTabKind {
-  return typeof tab === "string" ? STRIP_TAB_KIND.WORD : tab.kind;
+  return Predicate.isString(tab) ? STRIP_TAB_KIND.WORD : tab.kind;
 }
 
 /**
@@ -271,10 +271,17 @@ export function stripTabKind(tab: StripTab): StripTabKind {
  * tagged, as it is; none for an object naming nothing a tab names.
  */
 export function taggedStripTab<T extends StripTab>(tab: T | UntaggedStripTab<T>): T | undefined {
-  // Note that a tab keeps its kind of `T` through the tag, the field it was found to hold, which the compiler cannot follow.
+  // SAFETY: a tab is a StripTab or an untagged one, whatever its `T`.
   const held = tab as StripTab | UntaggedStripTab;
-  if (typeof held === "string" || "kind" in held) return tab as T;
+
+  if (Predicate.isString(held) || "kind" in held) {
+    // SAFETY: a word, or a tab already tagged, is the `T` it was handed as.
+    return tab as T;
+  }
+
   const kind = OBJECT_STRIP_TAB_KINDS.find((each) => each in held);
+
+  // SAFETY: a tab keeps its kind of `T` through the tag, the field it was found to hold, which the compiler cannot follow.
   return kind === undefined ? undefined : ({ kind, ...held } as T);
 }
 
@@ -305,7 +312,7 @@ export function followedAgent(
   return column.shown &&
     !column.covered &&
     tab !== undefined &&
-    typeof tab !== "string" &&
+    !Predicate.isString(tab) &&
     tab.kind === STRIP_TAB_KIND.AGENT
     ? tab.agent
     : undefined;
@@ -316,9 +323,11 @@ const transcriptKeys = new Map<string, string>();
 
 function transcriptKey(agentId: string): string {
   const held = transcriptKeys.get(agentId);
+
   if (held !== undefined) return held;
   const made = crypto.randomUUID();
   transcriptKeys.set(agentId, made);
+
   return made;
 }
 
@@ -334,9 +343,11 @@ function numberedKey(agentId: string, number: number): string {
   const ofAgent = numberedKeys.get(agentId) ?? new Map<number, string>();
   numberedKeys.set(agentId, ofAgent);
   const held = ofAgent.get(number);
+
   if (held !== undefined) return held;
   const made = crypto.randomUUID();
   ofAgent.set(number, made);
+
   return made;
 }
 
@@ -347,9 +358,11 @@ function turnKey(agentId: string, turn: string): string {
   const ofAgent = turnKeys.get(agentId) ?? new Map<string, string>();
   turnKeys.set(agentId, ofAgent);
   const held = ofAgent.get(turn);
+
   if (held !== undefined) return held;
   const made = crypto.randomUUID();
   ofAgent.set(turn, made);
+
   return made;
 }
 
@@ -436,8 +449,9 @@ const TAB_IDENTITY = {
   },
 } as const satisfies { readonly [K in StripTabKind]: TabIdentity<StripTabOf<K>> };
 
-/** The identity of a tab's kind, over any tab. Note that each entry is read only with a tab of its own kind, which is what makes the widening sound. */
+/** The identity of a tab's kind, over any tab. */
 function identityOf(tab: StripTab): TabIdentity<StripTab> {
+  // SAFETY: each entry is read only with a tab of its own kind, which is what makes the widening sound.
   return TAB_IDENTITY[stripTabKind(tab)] as TabIdentity<StripTab>;
 }
 
@@ -449,6 +463,7 @@ export function agentOfTab(tab: StripTab | undefined): string | undefined {
 /** Whether two tabs are the same tab: of one kind, and the same as that kind declares it (`TAB_IDENTITY`). No tab, as a column showing its plan has, is the same as none. */
 export function sameTab(a: StripTab | undefined, b: StripTab | undefined): boolean {
   if (a === undefined || b === undefined) return false;
+
   return stripTabKind(a) === stripTabKind(b) && identityOf(a).same(a, b);
 }
 
@@ -468,6 +483,7 @@ export function inTaskOrder<T>(
   tabOf: (each: T) => StripTab,
 ): T[] {
   const placed = order.flatMap((tab) => drawn.filter((each) => sameTab(tabOf(each), tab)));
+
   return [...placed, ...drawn.filter((each) => !placed.includes(each))];
 }
 
@@ -493,6 +509,7 @@ export function openedOrder<T extends StripTab>(
   tab: T,
 ): readonly T[] | undefined {
   if (strip.some((other) => sameTab(other, tab))) return undefined;
+
   return [...wholeOrder(was, strip).filter((other) => !sameTab(other, tab)), tab];
 }
 
@@ -513,10 +530,12 @@ export function movedOrder<T extends StripTab>(
   const all = wholeOrder(was, strip);
   const at = strip.findIndex((other) => sameTab(other, tab));
   const own = all.find((other) => sameTab(other, tab));
+
   if (at < 0 || to === at || own === undefined) return undefined;
   const before = strip.filter((other) => !sameTab(other, tab))[Math.max(0, to)];
   const rest = all.filter((other) => !sameTab(other, tab));
   const place = before === undefined ? -1 : rest.findIndex((other) => sameTab(other, before));
+
   return place < 0 ? [...rest, own] : [...rest.slice(0, place), own, ...rest.slice(place)];
 }
 
@@ -532,9 +551,11 @@ export function viewedLast<T extends StripTab>(
 ): readonly T[] | undefined {
   const others = before.filter((each) => !viewed.some((tab) => sameTab(tab, each)));
   const recent = [...others, ...viewed].slice(-kept);
+
   const same =
     recent.length === before.length &&
     recent.every((tab, at) => before[at] !== undefined && sameTab(tab, before[at]));
+
   return same ? undefined : recent;
 }
 
@@ -551,8 +572,10 @@ export function replacementOf<T extends StripTab>(
   tab: T,
 ): T | undefined {
   const viewed = recent.findLast((each) => standing.some((other) => sameTab(other, each)));
+
   if (viewed !== undefined) return viewed;
   const place = strip.findIndex((other) => sameTab(other, tab));
+
   return strip[place + 1] ?? strip[place - 1];
 }
 
@@ -586,16 +609,20 @@ export function stampedViewed<T extends StripTab>(
   kept: number,
 ): readonly ViewedAt<T>[] | undefined {
   const unstamped = standing.filter((tab) => viewedAtOf(before, tab) === undefined);
+
   const fresh = [...viewed, ...unstamped].filter(
     (tab, place, all) =>
       viewedAtOf(before, tab) !== at && all.findIndex((other) => sameTab(other, tab)) === place,
   );
+
   if (fresh.length === 0) return undefined;
   const others = before.filter((each) => !fresh.some((tab) => sameTab(tab, each.tab)));
   const all = [...others, ...fresh.map((tab) => ({ tab, at }))];
+
   const loose = all
     .filter((each) => !standing.some((tab) => sameTab(tab, each.tab)))
     .slice(0, Math.max(0, all.length - kept));
+
   return all.filter((each) => !loose.includes(each));
 }
 
@@ -625,6 +652,7 @@ export function idleTabs<T extends StripTab>(
   return strip
     .filter((tab) => {
       const at = viewedAtOf(stamps, tab);
+
       return at !== undefined && now - at >= idle && !keeps(tab);
     })
     .toReversed();

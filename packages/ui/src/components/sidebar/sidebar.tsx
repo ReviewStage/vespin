@@ -75,6 +75,7 @@ export function SidebarPlaces({
   children: ReactNode;
 }): React.JSX.Element {
   const className = "sidebar-places mb-list-gap flex flex-none flex-col gap-list-gap";
+
   return label === undefined ? (
     <div className={className}>{children}</div>
   ) : (

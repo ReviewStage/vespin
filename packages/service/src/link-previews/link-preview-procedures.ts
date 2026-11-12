@@ -20,9 +20,9 @@
  */
 
 import { LINK_PREVIEW_REFUSAL, type LinkPreviewAnswer } from "@repo/features/link-preview-wire";
-import { Cache, Duration, Effect, type Exit, Option, Semaphore } from "effect";
+import { Cache, Duration, Effect, Exit, Option, Semaphore } from "effect";
 import { HOSTED_REFUSAL, type UserIdResolver } from "../http/http-effect.js";
-import { makeRateBrake } from "../http/rate-brake.js";
+import { createRateBrake } from "../http/rate-brake.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
 import { webPageAddressOf } from "./link-address.js";
 import { type HopTransport, readLinkPreview } from "./link-preview-read.js";
@@ -59,7 +59,7 @@ type LinkPreviewCache = Cache.Cache<string, LinkPreviewAnswer>;
 
 /** How long an answer is kept: longer where the page answered. */
 function previewKept(exit: Exit.Exit<LinkPreviewAnswer>): Duration.Duration {
-  return exit._tag === "Success" && "preview" in exit.value
+  return Exit.isSuccess(exit) && "preview" in exit.value
     ? PREVIEWS_KEPT.ANSWERED
     : PREVIEWS_KEPT.UNANSWERED;
 }
@@ -72,6 +72,7 @@ function previewKept(exit: Exit.Exit<LinkPreviewAnswer>): Duration.Duration {
  */
 function instanceLinkPreviewCache(connect: HopTransport): Effect.Effect<LinkPreviewCache> {
   const reads = Semaphore.makeUnsafe(PREVIEWS_KEPT.CONCURRENT_READS);
+
   const made = Cache.makeWith(
     (address: string): Effect.Effect<LinkPreviewAnswer> =>
       Effect.map(
@@ -86,7 +87,9 @@ function instanceLinkPreviewCache(connect: HopTransport): Effect.Effect<LinkPrev
       timeToLive: previewKept,
     },
   );
+
   let kept: LinkPreviewCache | undefined;
+
   return Effect.suspend(() =>
     kept === undefined ? Effect.map(made, (cache) => (kept ??= cache)) : Effect.succeed(kept),
   );
@@ -95,19 +98,23 @@ function instanceLinkPreviewCache(connect: HopTransport): Effect.Effect<LinkPrev
 /** The link previews resource: one page's preview, read for a signed-in account. */
 export function linkPreviewsProcedures(seams: LinkPreviewsProcedureSeams) {
   const previews = instanceLinkPreviewCache(seams.linkReach);
-  const brake = makeRateBrake(ASK_BRAKE);
+  const brake = createRateBrake(ASK_BRAKE);
   const signedIn = hosted.linkPreviews.use(accountMiddleware(seams.resolveUserId));
+
   return {
     read: signedIn.read.effect(function* ({ input, context }) {
       if (!(yield* brake.check(context.userId))) {
         return yield* Effect.fail(HOSTED_REFUSAL.QUOTA_EXHAUSTED);
       }
+
       const url = webPageAddressOf(input.url);
+
       if (url === undefined) return { refused: LINK_PREVIEW_REFUSAL.ADDRESS };
       // Note that the fragment never reaches the server, so two links to one page differing in it share one read.
       url.hash = "";
       const cache = yield* previews;
       const answer = yield* Cache.get(cache, url.href);
+
       return "preview" in answer ? { preview: { ...answer.preview, url: input.url } } : answer;
     }),
   };

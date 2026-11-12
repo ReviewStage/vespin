@@ -26,6 +26,7 @@ const commandStarted = Effect.gen(function* () {
   const commandId = yield* api.start(ref, { command: "node", args: ["runner.js"], sudo: false });
   const command = fake.commands.find((each) => each.id === commandId);
   assert.ok(command !== undefined);
+
   return { fake, api, ref, command };
 });
 

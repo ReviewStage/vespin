@@ -34,7 +34,9 @@ import {
   linkOf,
   type ReadLink,
 } from "@repo/features/link-grammar";
+import type { WireBoundaryInput } from "@repo/wire";
 import type { HistoryLocation, RegisteredRouter, RouteIds } from "@tanstack/react-router";
+import { Predicate } from "effect";
 import { type PlaceParams, placeParamsOf } from "./place-params.js";
 
 /** A route of the panel's tree, by its id. */
@@ -43,7 +45,7 @@ export type PanelRouteId = RouteIds<RegisteredRouter["routeTree"]>;
 /** What a link place reads of an address its route matched: its params, its query as its route's schema read it, and its fragment, without its `#`. */
 interface LinkAddress {
   readonly params: PlaceParams;
-  readonly search: Readonly<Record<string, unknown>>;
+  readonly search: Readonly<Record<string, WireBoundaryInput>>;
   readonly hash: string;
 }
 
@@ -83,19 +85,22 @@ export type OnStandingTask = (typeof ON_STANDING_TASK)[keyof typeof ON_STANDING_
 /** The thread a task's address names in its query (`?comment=`), as its route's schema reads it. */
 function commentOf(search: LinkAddress["search"]): string | undefined {
   const { comment } = search;
-  return typeof comment === "string" ? comment : undefined;
+
+  return Predicate.isString(comment) ? comment : undefined;
 }
 
 /** An agent's place as its route's params name it, under the task an address names it under or none, read through the link grammar's own schema; none where they name no such place. */
-function agentPlaceOf(params: PlaceParams, fields: Readonly<Record<string, unknown>>) {
+function agentPlaceOf(params: PlaceParams, fields: Readonly<Record<string, WireBoundaryInput>>) {
   const { workspace, taskId, agentId } = params;
+
   if (workspace === undefined || agentId === undefined) return undefined;
-  const place = { ...fields, ...(taskId === undefined ? {} : { planId: taskId }), agentId };
+  const place = { ...fields, ...(taskId !== undefined && { planId: taskId }), agentId };
+
   return isLinkDestination(place) ? place : undefined;
 }
 
 /** The place a route's params spell, read through the link grammar's own schema; none where they spell no place. */
-function placeOf(fields: Readonly<Record<string, unknown>>): LinkDestination | undefined {
+function placeOf(fields: Readonly<Record<string, WireBoundaryInput>>): LinkDestination | undefined {
   return isLinkDestination(fields) ? fields : undefined;
 }
 
@@ -104,6 +109,7 @@ function taskPlaceOf({ params, search, hash }: LinkAddress): LinkDestination | u
   if (params.taskId === undefined || commentOf(search) !== undefined || hash !== "") {
     return undefined;
   }
+
   return placeOf({ kind: LINK_DESTINATION.TASK, planId: params.taskId });
 }
 
@@ -111,9 +117,11 @@ function taskPlaceOf({ params, search, hash }: LinkAddress): LinkDestination | u
 function inboxItemOf({ taskId, agentId, itemId }: PlaceParams): LinkDestination | undefined {
   if (taskId !== undefined)
     return placeOf({ kind: LINK_DESTINATION.INBOX_ITEM, planId: taskId, itemId });
+
   if (agentId !== undefined) {
     return placeOf({ kind: LINK_DESTINATION.INBOX_ITEM, agentId, itemId });
   }
+
   return placeOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId });
 }
 
@@ -129,6 +137,7 @@ function adminOf({ userId, workspaceId, day, section }: PlaceParams): LinkDestin
           : section !== undefined
             ? { section }
             : {};
+
   return placeOf({ kind: LINK_DESTINATION.ADMIN, ...view });
 }
 
@@ -144,6 +153,7 @@ export const LINK_ROUTED_PLACE = {
     routes: ["/places/$workspace/task/$taskId/"],
     read: ({ params, search }) => {
       const threadId = commentOf(search);
+
       return params.taskId === undefined || threadId === undefined
         ? undefined
         : { kind: LINK_DESTINATION.COMMENT, planId: params.taskId, threadId };
@@ -156,7 +166,9 @@ export const LINK_ROUTED_PLACE = {
     // Note that a comment thread named beside a fragment is the comment's link, as `readLink` reads it.
     read: ({ params, search, hash }) => {
       const anchor = decodedStep(hash)?.toLowerCase();
+
       if (params.taskId === undefined || commentOf(search) !== undefined) return undefined;
+
       return anchor === undefined || anchor === ""
         ? undefined
         : { kind: LINK_DESTINATION.SECTION, planId: params.taskId, anchor };
@@ -172,8 +184,11 @@ export const LINK_ROUTED_PLACE = {
     // A page an older link names under the agent that showed it opens on the agent's task, once read.
     read: ({ params }) => {
       const { taskId, agentId, pageId } = params;
+
       if (pageId === undefined) return undefined;
+
       if (taskId !== undefined) return { kind: LINK_DESTINATION.PAGE, planId: taskId, pageId };
+
       return agentId === undefined ? undefined : { kind: LINK_DESTINATION.PAGE, agentId, pageId };
     },
   },
@@ -280,7 +295,7 @@ export const LINK_ROUTED_PLACE = {
     read: ({ params }) =>
       placeOf({
         kind: LINK_DESTINATION.INBOX,
-        ...(params.taskId === undefined ? {} : { planId: params.taskId }),
+        ...(params.taskId !== undefined && { planId: params.taskId }),
       }),
   },
   INBOX_ITEM: {
@@ -354,6 +369,7 @@ export type LinkDestinationName = keyof typeof LINK_ROUTED_PLACE;
 /** Whether a declaration reads the route `id`: one it stands at, or, for a link opened in the window rather than a page landing, a routed place's own page it is matched at. */
 function readsAt(declared: LinkDestinationDeclaration, id: string, landing: boolean): boolean {
   const own = landing ? [] : (declared.ownPlaceRoutes ?? []);
+
   return [...declared.routes, ...own].some((each) => each === id);
 }
 
@@ -373,17 +389,21 @@ function routedAt(
   const { pathname, search } = router.parseLocation(location);
   const matches = router.matchRoutes(pathname, search);
   const leaf = matches.at(-1);
+
   if (leaf === undefined) return undefined;
   const params = placeParamsOf(matches);
   const hash = location.hash.replace(/^#/u, "");
   const at: LinkAddress = { params, search: leaf.search, hash };
+
   for (const [name, declared] of Object.entries(LINK_ROUTED_PLACE)) {
     if (!readsAt(declared, leaf.routeId, landing)) continue;
     const place = declared.read(at);
+
     if (place !== undefined && params.workspace !== undefined && isPlaceName(name)) {
       return { name, declared, link: { workspace: params.workspace, place } };
     }
   }
+
   return undefined;
 }
 
@@ -395,6 +415,7 @@ function isPlaceName(name: string): name is LinkDestinationName {
 /** The location a URL names, as a history would hold it, its state none of the window's. */
 function locationOf(url: URL): HistoryLocation {
   const { pathname, search, hash } = url;
+
   return { href: `${pathname}${search}${hash}`, pathname, search, hash, state: { __TSR_index: 0 } };
 }
 
@@ -416,8 +437,10 @@ export function routedLinkOf(
   standingIn: string | undefined,
 ): RoutedLink | undefined {
   const under = link.workspace === "" ? standingIn : link.workspace;
+
   if (under === undefined || under === "") return undefined;
   const routed = routedAt(router, locationOf(new URL(linkOf(link.place, under))), false);
+
   return routed === undefined
     ? undefined
     : { ...routed, link: { ...routed.link, workspace: link.workspace } };
@@ -438,7 +461,9 @@ export function opensAtItsRoute(link: ReadLink): boolean {
   const declared: LinkDestinationDeclaration | undefined = DECLARATIONS.find(
     (each) => each.kind === link.place.kind,
   );
+
   if (declared === undefined || declared.routes.length === 0) return false;
+
   return declared.lands?.(link.place) ?? true;
 }
 
@@ -453,9 +478,11 @@ export function onTasksTab(
   standingTask: string | undefined,
 ): OnStandingTask {
   const standing = standingTask !== undefined && "planId" in place && place.planId === standingTask;
+
   const declared: LinkDestinationDeclaration | undefined = DECLARATIONS.find(
     (each) => each.kind === place.kind,
   );
+
   return standing && declared !== undefined ? declared.onStandingTask : ON_STANDING_TASK.GO;
 }
 

@@ -31,7 +31,9 @@ function computerName(): string {
  */
 export function macDeviceName(): string {
   const chosen = computerName();
+
   if (chosen.length > 0) return chosen;
   const host = os.hostname().replace(/\.local$/u, "");
+
   return host.length > 0 ? host : "This Mac";
 }

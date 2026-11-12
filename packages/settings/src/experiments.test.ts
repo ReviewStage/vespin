@@ -20,6 +20,7 @@ describe("a choice of experiments read from the store or the wire", () => {
     const read = experimentChoicesFrom(
       unparsedWire({ [EXPERIMENT.MEMORY]: true, graduated: true, newer: false }),
     );
+
     assert.deepEqual(read, { [EXPERIMENT.MEMORY]: true });
     assert.deepEqual(experimentChoicesFrom(unparsedWire({ [EXPERIMENT.MEMORY]: false })), {
       [EXPERIMENT.MEMORY]: false,
@@ -37,6 +38,7 @@ describe("a choice of experiments read from the store or the wire", () => {
 describe("the experiments on where a member works in a workspace", () => {
   test("take the account's own from the account and a workspace experiment only from the workspace, whatever the account's store still holds", () => {
     const account = { [EXPERIMENT.SKILLS]: true, [EXPERIMENT.DESCRIPTIONS]: true };
+
     const workspace = workspaceExperimentChoicesFrom([
       { experiment: EXPERIMENT.MEMORY, on: true },
       { experiment: EXPERIMENT.SKILLS, on: true },

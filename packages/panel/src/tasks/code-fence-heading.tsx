@@ -63,7 +63,9 @@ export function fenceHeading(language: string): FenceHeading {
   if (suggests(language)) {
     return { glyph: undefined, title: SUGGESTION_LABEL, titleIs: CODE_CARD_TITLE.WORDS };
   }
+
   const { extension, name } = codeLanguage(language);
+
   return {
     glyph: name === undefined ? undefined : <FileTypeIcon name={`code.${extension}`} />,
     title: codeTitle(language),
@@ -92,10 +94,12 @@ export function EditorCodeHeader({ block }: { block: EditorCodeBlock }): React.J
   const menuId = useId();
   const held = useRef<HTMLSpanElement>(null);
   const heading = fenceHeading(block.language);
+
   const close = () => {
     setOpen(false);
     held.current?.querySelector("button")?.focus();
   };
+
   return (
     <span ref={held} className="contents">
       <CodeCardHeader

@@ -35,6 +35,7 @@ export interface RepositoryPullRequestProcedureSeams {
 /** The pull request resource: its seven reads and its one change, to a signed-in member of the workspace the query names. */
 export function repositoryPullRequestProcedures(seams: RepositoryPullRequestProcedureSeams) {
   const signedIn = hosted.pullRequests.use(accountMiddleware(seams.resolveUserId));
+
   return {
     pullRequest: signedIn.pullRequest.effect(function* ({ input, context }) {
       return publishedOf(yield* reachedPullRequest(context.userId, input));
@@ -58,6 +59,7 @@ export function repositoryPullRequestProcedures(seams: RepositoryPullRequestProc
      */
     reviewOptions: signedIn.reviewOptions.effect(function* ({ input, context }) {
       const { token, access, subject } = yield* reachedRepository(context.userId, input);
+
       return yield* githubReadRefusal(
         pullRequestReviewOptions(token, subject.repository).pipe(markRefusedToken(access)),
       ).pipe(
@@ -68,14 +70,17 @@ export function repositoryPullRequestProcedures(seams: RepositoryPullRequestProc
     }),
     overviewPullRequest: signedIn.overviewPullRequest.effect(function* ({ input, context }) {
       const reached = yield* reachedPullRequest(context.userId, input);
+
       return yield* overviewOf(reached, context.userId, overviewPullRequestRead);
     }),
     overviewChecks: signedIn.overviewChecks.effect(function* ({ input, context }) {
       const reached = yield* reachedPullRequest(context.userId, input);
+
       return yield* overviewOf(reached, context.userId, overviewChecksRead);
     }),
     overviewConversation: signedIn.overviewConversation.effect(function* ({ input, context }) {
       const reached = yield* reachedPullRequest(context.userId, input);
+
       return yield* overviewOf(reached, context.userId, overviewConversationRead);
     }),
   };

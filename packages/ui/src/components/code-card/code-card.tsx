@@ -39,9 +39,7 @@ import {
  * browser's own and the window's alike (`find-matches.ts`), and the card
  * opens whole when a match lands there (`beforematch`), as a closed
  * `<details>` opens. Copy copies the whole block
- * whichever way it stands. Its lines are left out of the screen recording
- * (`ph-no-capture`), a second line behind the recording's text masking,
- * since their colors draw the code's shape.
+ * whichever way it stands.
  *
  * It is drawn in the Tailwind theme's utilities: the header on the hover
  * fill over a hairline, a glyph before its title where it wears one, its title holding to one line and fading where the
@@ -98,8 +96,11 @@ const BODY_ROWS = `${BODY} px-0 [&>code]:block [&>code]:min-w-fit`;
 function runColors({ color, lightColor }: CodeToken): React.CSSProperties | undefined {
   if (color === undefined && lightColor === undefined) return undefined;
   const colors: Record<string, string> = {};
+
   if (color !== undefined) colors["--ui-code-run-dark"] = color;
+
   if (lightColor !== undefined) colors["--ui-code-run-light"] = lightColor;
+
   return cssCustomProperties(colors);
 }
 
@@ -127,6 +128,7 @@ function CodeRows({
 }): ReactNode {
   return text.map((words, at) => {
     const tokens = lines?.[at];
+
     return (
       // Note that a row's place is its identity: a block's rows never reorder.
       <span
@@ -150,6 +152,7 @@ function CodeRuns({
 }): ReactNode {
   // Note that an empty block holds one empty line, so it stands a line tall, as an empty block in the editor does.
   if (lines === undefined) return text.length === 1 && text[0] === "" ? "\n" : text.join("\n");
+
   return lines.map((tokens, line) => (
     // Note that a line's place is its identity: the lines of one block never reorder.
     <Fragment key={line}>
@@ -261,6 +264,7 @@ export function CodeCard({
   const cut = code !== undefined && text.length > CODE_CARD_CUT_LINES;
   const rest = useUntilFound<HTMLSpanElement>(cut && !whole, () => setWhole(true));
   const lead = cut ? CODE_CARD_CUT_LINES : text.length;
+
   const drawLines = (from: number, to: number): ReactNode =>
     rows === undefined ? (
       <CodeRuns text={text.slice(from, to)} lines={lines?.slice(from, to)} />
@@ -271,13 +275,14 @@ export function CodeCard({
         rows={rows.slice(from)}
       />
     );
+
   return (
     <Card
       as={CARD_ELEMENT.FIGURE}
       look={CARD_LOOK.CODE}
       corner={CARD_CORNER.CONTROL}
       padding={CARD_PADDING.FLUSH}
-      className="ui-code-card ph-no-capture m-0"
+      className="ui-code-card m-0"
       aria-label={label}
       {...data}
     >

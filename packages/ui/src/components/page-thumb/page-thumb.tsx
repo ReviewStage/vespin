@@ -9,8 +9,7 @@ import { useBlobUrl } from "../video-player/video-player.js";
  * in a hairline over a quiet ground that holds its place until what it shows
  * has landed. A page (`frame`) is laid out four times the thumb's width, a
  * desktop window's, and scaled down by as much, fading in once loaded; the
- * frame takes no pointer, no focus, and no part in what is read aloud, and is
- * left out of the screen recording; its caller holds the frame (`frameRef`)
+ * frame takes no pointer, no focus, and no part in what is read aloud; its caller holds the frame (`frameRef`)
  * to hear the page's messages and answer them. A picture (`image`) fills it, as a
  * video's first frame does (`video`), still, from a `blob:` address made of
  * its bytes as the player plays it (`../video-player/video-player.tsx`), and
@@ -76,7 +75,9 @@ function VideoStill({
   fit: PageThumbFit;
 }): React.JSX.Element | null {
   const url = useBlobUrl(dataUrl);
+
   if (url === undefined) return null;
+
   return (
     <video
       className={`ui-page-thumb-image pointer-events-none size-full ${FIT_CLASS[fit]}`}
@@ -115,6 +116,7 @@ export function PageThumb({
   glyph?: ReactNode;
 }): React.JSX.Element {
   const [loadedFrom, setLoadedFrom] = useState<string | undefined>(undefined);
+
   return (
     <AspectRatio
       as="span"
@@ -126,7 +128,6 @@ export function PageThumb({
           ? "flex items-center justify-center"
           : SIZE_CLASS[size],
         glyph === undefined ? "" : "[&_svg]:size-control-icon",
-        frame === undefined ? "" : "ph-no-capture",
       ]
         .filter((part) => part !== "")
         .join(" ")}

@@ -162,8 +162,11 @@ function fenced(lines: readonly string[]): readonly string[] {
 /** A pull request's body as the model reads it: cut to its bound, and said to be cut. */
 function boundedBody(body: string | null): string {
   const trimmed = (body ?? "").trim();
+
   if (trimmed.length === 0) return "(none)";
+
   if (trimmed.length <= MAX_BODY_CHARS) return trimmed;
+
   return `${trimmed.slice(0, MAX_BODY_CHARS)}\n[truncated]`;
 }
 
@@ -182,6 +185,7 @@ function numberedRows(hunk: DiffHunk): string {
   const lastOld = hunk.oldStart + Math.max(hunk.oldLines - 1, 0);
   const lastNew = hunk.newStart + Math.max(hunk.newLines - 1, 0);
   const width = Math.max(String(lastOld).length, String(lastNew).length);
+
   return hunk.rows
     .flatMap((row) =>
       row.kind === DIFF_ROW.NOTE
@@ -235,6 +239,7 @@ export interface ChaptersPromptInput {
 export function chaptersPrompt(input: ChaptersPromptInput): string {
   const subjects = (input.commitMessages ?? []).map(subjectOf).filter((line) => line.length > 0);
   const { files, additions, deletions } = input.stats;
+
   return [
     "=== PULL REQUEST ===",
     ...fenced([`Title: ${input.title}`, `Description: ${boundedBody(input.body)}`]),

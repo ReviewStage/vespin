@@ -40,6 +40,7 @@ const SEARCH = "https://www.google.com/search?q=";
 /** Whether an address is one a Browser tab loads: an absolute http or https address the URL parser reads, no longer than the bar takes. */
 export function isBrowserAddress(address: string): boolean {
   if (address.length > BROWSER_ADDRESS_MAX_CHARS || !URL.canParse(address)) return false;
+
   return BROWSER_SCHEMES.has(new URL(address).protocol);
 }
 
@@ -47,6 +48,7 @@ export function isBrowserAddress(address: string): boolean {
 function hostAddress(line: string): string | undefined {
   const host = line.split(/[/?#]/u, 1)[0]?.replace(/:\d+$/u, "") ?? "";
   const address = `${LOCAL_HOST.test(host) ? "http" : "https"}://${line}`;
+
   return isBrowserAddress(address) ? new URL(address).href : undefined;
 }
 
@@ -60,11 +62,15 @@ function hostAddress(line: string): string | undefined {
  */
 export function browserAddressOf(typed: string): string | undefined {
   const line = typed.trim();
+
   // Note that a line too long to open is refused before any pattern reads it.
   if (line.length === 0 || line.length > BROWSER_ADDRESS_MAX_CHARS) return undefined;
+
   if (NAMED_SCHEME.test(line)) return isBrowserAddress(line) ? new URL(line).href : undefined;
+
   if (HOST_LIKE.test(line)) return hostAddress(line);
   const search = `${SEARCH}${encodeURIComponent(line)}`;
+
   return isBrowserAddress(search) ? search : undefined;
 }
 
@@ -87,5 +93,6 @@ const PAGE_KEPT_KEYS: ReadonlySet<string> = new Set(["c", "v", "x", "a", "z"]);
  */
 export function chordIsWindows(chord: BrowserChord): boolean {
   if (!chord.meta) return chord.control && !chord.alt && chord.key === "Tab";
+
   return chord.alt || chord.control || !PAGE_KEPT_KEYS.has(chord.key.toLowerCase());
 }

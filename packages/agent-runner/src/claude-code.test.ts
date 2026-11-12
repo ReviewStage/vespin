@@ -17,6 +17,7 @@ import { Effect } from "effect";
 import { ClaudeCode, claudeCodeLive } from "./claude-code.js";
 
 const SESSION = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+
 const CHAIN = [
   "10000000-0000-4000-8000-000000000001",
   "10000000-0000-4000-8000-000000000002",
@@ -26,6 +27,7 @@ const CHAIN = [
 /** One transcript line as the CLI writes it, the child of the one before it, where one stands. */
 function entryOf(cwd: string, uuid: string, parentUuid: string | null, index: number) {
   const type = index % 2 === 0 ? "user" : "assistant";
+
   return {
     type,
     uuid,

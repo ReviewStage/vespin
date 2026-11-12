@@ -1,13 +1,24 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { type TerminalAction, type TerminalBar, terminalLook } from "@repo/features/terminal-model";
+import {
+  readOnlyTerminalLook,
+  TERMINAL_ACTION,
+  TERMINAL_STATE,
+  type TerminalAction,
+  type TerminalBar,
+  terminalLook,
+} from "@repo/features/terminal-model";
 import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import {
   ANNOUNCE,
+  Badge,
+  BUTTON_VARIANT,
   ERROR_STATE_PLACEMENT,
   ErrorState,
   FILL_FLOW,
   Fill,
+  IconButton,
   PaneBar,
+  PlayIcon,
   Shortcut,
   TEXT_BUTTON_TONE,
   TEXT_ELEMENT,
@@ -15,9 +26,10 @@ import {
   Text,
   TextButton,
 } from "@repo/ui";
-import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
+import { GLYPH } from "@repo/ui/icons";
+import { STRIP_TAB_KIND, type TerminalStripTab } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
-import { useContext, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { TERMINAL_LOAD_FAILED } from "../bundle-loader.js";
 import { useTabActions } from "../desktop/strip-tabs.js";
 import { unreadShown } from "../failure-report.js";
@@ -27,6 +39,8 @@ import { TERMINAL_FIND, type TerminalFind } from "../terminal/contract.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectMirrors } from "../use-app-state.js";
 import { AgentRef, agentSubject, NOTHING_HELD } from "./agent-ref.js";
+import { type RunTabLook, useRunTabLooks } from "./run-action-shells.js";
+import { useRunActionPress } from "./run-actions-button.js";
 import { AgentGlyph } from "./tab-look.js";
 import { useHeldShells } from "./terminal-held.js";
 import {
@@ -52,9 +66,8 @@ import { useWindowAccount } from "./window-account.js";
  * its key, and the title bar says the rest (`terminal-model.ts`). The tab
  * keeps its terminal while it is hidden (`terminal-session.ts`).
  *
- * The screen is left out of the screen recording, because the shell's
- * own words are drawn on a canvas the text masking cannot reach, and a
- * shell prints whatever its commands print; the bar over it records masked.
+ * The screen draws on a canvas, which the screen recording leaves blank;
+ * the bar over it records masked.
  */
 
 /**
@@ -87,6 +100,29 @@ function useScrollbackFind(find: TerminalFind | undefined): FindSource | undefin
   );
 }
 
+/** What an action's tab says it is, beside where the action stands. */
+const READ_ONLY = "Read-only";
+
+/** What the tab's Run and Stop say to a reader, its glyph saying it on screen. */
+const RUN_WORDS = {
+  RUN: (label: string) => `Run ${label}`,
+  STOP: (label: string) => `Stop ${label}`,
+} as const;
+
+/** A run action's tab's own press: Stop while its process runs, Run otherwise, which runs it again in this tab. */
+function runControlOf(
+  run: RunTabLook,
+  label: string,
+  press: ReturnType<typeof useRunActionPress>,
+): { readonly label: string; readonly icon: React.JSX.Element; readonly onPress: () => void } {
+  return run.running === true
+    ? { label: RUN_WORDS.STOP(label), icon: <GLYPH.STOP />, onPress: () => press.stop(run.action) }
+    : { label: RUN_WORDS.RUN(label), icon: <PlayIcon />, onPress: () => press.run(run.action) };
+}
+
+/** No cloud tab, which a Local tab hands the run action looks. */
+const NO_CLOUD_TAB: readonly TerminalStripTab[] = [];
+
 /** What a phone's ⋯ calls the agent's name in the bar, which opens its tab. */
 const OPEN_AGENT = "Open agent";
 
@@ -102,6 +138,7 @@ function StateBar({
   // Note that a late bar is hidden until it has held a second, so its words are said once its reveal has run: a blip that mends first is never seen, so it is never said.
   const [revealed, setRevealed] = useState(false);
   useAnnounceShown(ANNOUNCE.POLITE, bar.late && !revealed ? "" : bar.words);
+
   return (
     <div
       className="terminal-bar flex min-h-7 flex-none flex-wrap items-center gap-x-control-gap gap-y-list-gap border-b border-border bg-muted py-tight-gap pr-list-inset pl-ui-16 font-mono text-caption text-muted-foreground"
@@ -162,7 +199,29 @@ export function TerminalTab({
   // Note that a Local tab says which step of the agent's mirror it waits on while it connects, where the host said.
   const mirrors = useQuery({ ...appStateQuery, select: selectMirrors }).data;
   const mirror = tab.kind === STRIP_TAB_KIND.LOCAL ? mirrors?.[agentId] : undefined;
-  const look = terminalLook(session.state, mirror);
+
+  // A run action's tab is read-only, and its bar says where the action stands and offers to run or stop it.
+  const runLook = useRunTabLooks(
+    tab.kind === STRIP_TAB_KIND.TERMINAL ? [tab] : NO_CLOUD_TAB,
+    shown,
+  )(tab.kind === STRIP_TAB_KIND.TERMINAL ? tab : undefined);
+
+  const look =
+    runLook === undefined
+      ? terminalLook(session.state, mirror)
+      : readOnlyTerminalLook(session.state);
+
+  const press = useRunActionPress(agentId);
+
+  // A run action's tab whose shell went says it ended, and attaches again once its action runs again, from here or the Run button.
+  const ranAgain =
+    shown && runLook?.running === true && session.state.kind === TERMINAL_STATE.EXITED;
+
+  const { onAction } = session;
+  useEffect(() => {
+    if (ranAgain) onAction(TERMINAL_ACTION.RETRY);
+  }, [ranAgain, onAction]);
+  const runControl = runLook === undefined ? undefined : runControlOf(runLook, tab.title, press);
   // A phone draws no bar over the screen: its header's ⋯ opens the agent.
   const phone = usePhoneRoom();
   // Note that a phone has no title bar to carry "connecting…", so a state only that bar says is said in a bar over the screen.
@@ -177,16 +236,28 @@ export function TerminalTab({
               detail: subject.name,
               onSelect: onOpenAgent,
             },
+            ...(runControl === undefined
+              ? []
+              : [
+                  {
+                    label: runControl.label,
+                    icon: runControl.icon,
+                    disabled: press.busy,
+                    onSelect: runControl.onPress,
+                  },
+                ]),
           ],
         ]
       : undefined,
   );
+
   return (
     <Fill className="terminal-tab file-view" data-state={session.state.kind}>
       {phone ? null : (
         <PaneBar
           middle={
             // Note that the name and where the connection stands share one shrinking box, so a long name is cut rather than running past the bar.
+            // Note that each fact stands as its own element a gap apart, never joined by a dot: a run action's read-only as a badge, the connection as quiet words.
             <span className="terminal-tab-title inline-flex min-w-0 items-center gap-item-gap overflow-hidden whitespace-nowrap text-muted-foreground">
               <AgentRef
                 subject={subject}
@@ -195,8 +266,23 @@ export function TerminalTab({
                 glyph={<AgentGlyph agent={subject.agent} />}
                 label={subject.name}
               />
-              <span className="terminal-tab-standing flex-none">· {look.words}</span>
+              {runLook !== undefined && session.state.kind === TERMINAL_STATE.ATTACHED ? (
+                <Badge>{READ_ONLY}</Badge>
+              ) : (
+                <span className="terminal-tab-standing flex-none">{look.words}</span>
+              )}
             </span>
+          }
+          actions={
+            runControl === undefined ? undefined : (
+              <IconButton
+                variant={BUTTON_VARIANT.QUIET}
+                icon={runControl.icon}
+                label={runControl.label}
+                disabled={press.busy}
+                onClick={runControl.onPress}
+              />
+            )
           }
         />
       )}
@@ -245,5 +331,6 @@ export function TerminalCount({
     kind,
     agentId,
   ).length;
+
   return <>{count === 0 ? null : `${count} ${count === 1 ? "terminal" : "terminals"}`}</>;
 }

@@ -125,10 +125,12 @@ async function drawnTab(
     rows: { members: [{ ...DEAN, email: "dean@example.com", role: WORKSPACE_ROLE.OWNER }] },
   }));
   pushedTranscripts(() => [{ messages: [...messages], cursor: "9:0", status, title: null }]);
+
   const control = agentsControl({
     agents: [agentOf(status)],
     me: DEAN.userId,
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() =>
@@ -152,6 +154,7 @@ async function drawnTab(
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await settleQueries();
+
   return container;
 }
 
@@ -164,7 +167,9 @@ function drawnOrder(container: HTMLElement): readonly string[] {
   ].map((element) => {
     if (element.matches(".is-user, .is-received"))
       return `line: ${element.getAttribute("data-message-id")}`;
+
     if (element.matches("summary")) return `fold: ${element.textContent}`;
+
     return `call: ${element.getAttribute("data-call-id")}`;
   });
 }
@@ -224,10 +229,12 @@ test("a line sent to steer a turn still running stands inside the turn, which st
     parts: [{ type: "text", text: "Keep the 16:9 ratio." }],
     sentAt: 5_000,
   };
+
   const writing = {
     ...journal(false),
     parts: [...journal(false).parts, { type: "text", text: "Checking the ratio." }],
   };
+
   // The service keeps a line awaiting its place after the open journal.
   const container = await drawnTab([TASK, writing, steer], AGENT_STATUS.RUNNING);
 

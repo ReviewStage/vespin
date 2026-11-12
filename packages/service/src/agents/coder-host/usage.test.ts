@@ -32,6 +32,7 @@ test("a fast turn is priced at Fast's rate, and one Anthropic refused Fast at th
     cachedInputTokens: 0,
     reasoningTokens: 0,
   };
+
   const turn = { model: "anthropic/claude-opus-5.5-fast", usage };
 
   assert.equal(usageOfTurns([{ ...turn, fastRefused: false }], PRICED)?.costUsd, 12);

@@ -47,6 +47,7 @@ function drawn(output: WireRecord | undefined) {
       },
     ],
   };
+
   const links: string[] = [];
   const container = document.createElement("div");
   document.body.append(container);
@@ -60,6 +61,7 @@ function drawn(output: WireRecord | undefined) {
           {
             value: (address: Address) => {
               if (address.href !== undefined) links.push(address.href);
+
               return true;
             },
           },
@@ -74,6 +76,7 @@ function drawn(output: WireRecord | undefined) {
       ),
     ),
   );
+
   return { container, links };
 }
 

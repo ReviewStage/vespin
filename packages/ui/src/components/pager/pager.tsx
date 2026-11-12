@@ -105,6 +105,7 @@ export function Pager({
   next: PagerStep;
 }): React.JSX.Element {
   const [back, on] = ARROWS[axis];
+
   const words =
     place === undefined ? null : (
       <span
@@ -115,6 +116,7 @@ export function Pager({
           : `${place.noun} ${place.at} of ${place.total}`}
       </span>
     );
+
   return (
     <div className="ui-pager flex flex-none items-center">
       {count === PAGER_COUNT.LEAD ? words : null}

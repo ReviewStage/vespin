@@ -1,4 +1,4 @@
-# inbox.yaml -- the Inbox's list under its scope pills, the account's photo in its bar, its ⋯ menu, its search, a row's swipes and its long press preview, a thread with a picture opened full screen and a video in the system's player, Remind me from its ⋯ menu, and Remind me putting a thread away under Reminders.
+# inbox.yaml -- the Inbox's list under its scopes' segmented control (a menu picker in a regular window's list column), the workspace's button in its bar, its ⋯ menu, its search, a row's swipes and its long press preview, a thread with a picture opened full screen, a video in the system's player, and a PDF's chip opening its viewer, Remind me from its ⋯ menu, and Remind me putting a thread away under Reminders.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -12,9 +12,10 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
 - assertVisible: "Recorded the invite flow"
-# The account's photo leads the bar, heard as Settings: the fixture's account
-# has no picture, so its letters stand in it.
-- assertVisible: "Settings"
+# The workspace's one button leads the bar, its menu holding the account and
+# Settings (`workspace.yaml`).
+- assertVisible:
+    id: "workspace-switcher"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-list
 # The ⋯ menu: Mark all as read. A tap off the menu closes it.
@@ -24,8 +25,14 @@ appId: dev.vespin.ios
 - tapOn:
     point: "50%, 90%"
 - waitForAnimationToEnd
-# The scope pills over the list, Open chosen: All lists the settled threads
-# too.
+# The scopes' segmented control over the list, Open chosen: All lists the settled threads
+# too. A regular window's list column holds them as a menu picker instead,
+# named for the scope chosen, so the flow opens it first there.
+- runFlow:
+    when:
+      visible: "Choose an item"
+    commands:
+      - tapOn: "Open.*"
 - tapOn: "All"
 - scrollUntilVisible:
     element: "Which day the digest goes out"
@@ -36,51 +43,15 @@ appId: dev.vespin.ios
     element: "Recorded the invite flow"
     direction: UP
 - waitForAnimationToEnd
-- tapOn: "Open.*"
-# A swipe from the leading edge reveals Mark as read or unread, which a full
-# swipe would press at once, so the flow swipes partway across "Recorded the
-# invite flow", the second row, which a compact window stands at about a
-# quarter of its height whatever the list holds below it; a long press offers
-# the same in the row's menu. Note that the press is optional, because a
-# regular window's sidebar stands its rows elsewhere.
-- swipe:
-    start: "8%, 27%"
-    end: "38%, 27%"
-    duration: 900
-- takeScreenshot: inbox-swipe
-- tapOn:
-    text: "Mark as .*"
-    optional: true
-# A swipe from the trailing edge reveals Resolve, which a full swipe would
-# press at once, and Remind me, so the flow swipes partway back across the
-# same row, and a tap on the Inbox's tab closes it unpressed. Note that a
-# regular window, which stands "Choose an item" beside its sidebar, is left
-# out, as its swipes read as taps.
 - runFlow:
     when:
-      notVisible: "Choose an item"
+      visible: "Choose an item"
     commands:
-      - swipe:
-          start: "92%, 27%"
-          end: "60%, 27%"
-          duration: 900
-      - assertVisible: "Resolve"
-      - takeScreenshot: inbox-swipe-trailing
-      - tapOn: "Inbox"
-      - waitForAnimationToEnd
-- scrollUntilVisible:
-    element: "acceptInvite can add a member twice"
-    direction: DOWN
-- waitForAnimationToEnd
-# A long press lifts the thread's preview, its newest messages under its
-# task and title, over the row's menu, which leads with Open, since a tap on
-# the preview only closes it.
-- longPressOn: "acceptInvite can add a member twice"
-- assertVisible: "Open"
-- assertVisible: "Mark as read"
-- waitForAnimationToEnd
-- takeScreenshot: inbox-preview
-- tapOn: "Mark as read"
+      - tapOn: "All"
+- tapOn: "Open.*"
+# The thread comes first, before the row's swipes and its long press: a row
+# a swipe opened takes the next tap to close its actions, and its files, the
+# PDF among them, are shot whatever the press below does.
 # Note that the list is scrolled back to its first row, rather than to the
 # first point this row shows, because the folded Duo then stands it against the
 # top edge, where a tap a point or two higher no longer opens it. Neither row
@@ -121,6 +92,30 @@ appId: dev.vespin.ios
     timeout: 15000
 - assertNotVisible: ".*can't play here.*"
 - takeScreenshot: inbox-video
+# A file that is neither a picture nor a video, the test plan's PDF, stands
+# after its message as its chip, its name over its kind and size once read; a
+# press opens it full screen, its pages drawn in a web view under a bar with
+# Done and Share. Note that the chip is scrolled to the screen's middle, since
+# the thread's last message first shows under the reply box and the tab bar,
+# where a tap lands on them instead.
+- scrollUntilVisible:
+    element: "invite-test-plan.pdf, PDF.*"
+    direction: DOWN
+    centerElement: true
+- waitForAnimationToEnd
+- takeScreenshot: inbox-file
+- tapOn: "invite-test-plan.pdf, PDF.*"
+# The viewer stands as file-viewer only once WebKit has drawn the PDF, so the
+# flow waits for it rather than shooting the spinner.
+- extendedWaitUntil:
+    visible:
+      id: "file-viewer"
+    timeout: 15000
+- waitForAnimationToEnd
+- takeScreenshot: inbox-pdf
+- tapOn:
+    id: "file-viewer-done"
+- waitForAnimationToEnd
 # The thread's ⋯ menu opens Remind me too: a compact window's bar holds the
 # menu, and a regular window's detail column its own, the last "More" on
 # screen beside the sidebar's. The sheet stands over the whole thread, and a
@@ -134,15 +129,76 @@ appId: dev.vespin.ios
 - assertVisible: "Pick a date and time…"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-thread-remind
-- tapOn:
-    point: "50%, 5%"
+- swipe:
+    start: "50%, 48%"
+    end: "50%, 98%"
+    duration: 400
 - waitForAnimationToEnd
 - assertNotVisible: "Pick a date and time…"
-# Back on the list, the search, a round glass button in the bar, narrows it to
-# the threads whose words hold every word typed. It comes last, since its
-# keyboard stands over the rows.
+# Back on the list, from the thread.
 - tapOn: "Inbox"
 - waitForAnimationToEnd
+# A swipe from the leading edge reveals Mark as read or unread, which a full
+# swipe would press at once, so the flow swipes partway across "Recorded the
+# invite flow", the second row, which a compact window stands at about a
+# quarter of its height whatever the list holds below it; a long press offers
+# the same in the row's menu. Note that the press is optional, because a
+# regular window's sidebar stands its rows elsewhere.
+- swipe:
+    start: "8%, 27%"
+    end: "38%, 27%"
+    duration: 900
+- takeScreenshot: inbox-swipe
+- tapOn:
+    text: "Mark as .*"
+    optional: true
+# A swipe from the trailing edge reveals Resolve, which a full swipe would
+# press at once, and Remind me, so the flow swipes partway back across the
+# same row, and a tap on the Inbox's tab closes it unpressed. Note that a
+# regular window, which stands "Choose an item" beside its sidebar, is left
+# out, as its swipes read as taps.
+- runFlow:
+    when:
+      notVisible: "Choose an item"
+    commands:
+      - swipe:
+          start: "92%, 27%"
+          end: "60%, 27%"
+          duration: 900
+      - assertVisible: "Resolve"
+      - takeScreenshot: inbox-swipe-trailing
+      - tapOn: "Inbox"
+      - waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "acceptInvite can add a member twice"
+    direction: DOWN
+- waitForAnimationToEnd
+# A long press lifts the thread's preview, its newest messages under its
+# task and title, over the row's menu, which leads with Open, since a tap on
+# the preview only closes it.
+- longPressOn: "acceptInvite can add a member twice"
+- runFlow:
+    when:
+      notVisible: "Open"
+    commands:
+      - longPressOn: "acceptInvite can add a member twice"
+- assertVisible: "Open"
+- assertVisible: "Mark as read"
+- waitForAnimationToEnd
+- takeScreenshot: inbox-preview
+- tapOn: "Mark as read"
+# Note that the list is scrolled back to its first row, rather than to the
+# first point this row shows, because the folded Duo then stands it against the
+# top edge, where a tap a point or two higher no longer opens it. Neither row
+# can be scrolled to the middle, since a list at its top scrolls no further,
+# and a window that shows the row already scrolls not at all.
+- runFlow:
+    when:
+      notVisible: "Recorded the invite flow"
+    commands:
+      - scrollUntilVisible:
+          element: "Who can withdraw an invite\\?"
+          direction: UP
 # Remind me, which a row's trailing swipe and its long press both open, offers
 # the panel's times in a sheet, each saying when it comes due; In 1 hour puts
 # the thread away, out of Open and under Reminders, its time in the row's
@@ -156,13 +212,26 @@ appId: dev.vespin.ios
 - tapOn: "In 1 hour.*"
 - waitForAnimationToEnd
 - assertNotVisible: "Recorded the invite flow"
+- runFlow:
+    when:
+      visible: "Choose an item"
+    commands:
+      - tapOn: "Open.*"
 - tapOn: "Reminders"
 - assertVisible: "Recorded the invite flow"
 - assertVisible: "Reminder .*"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-reminders
+- runFlow:
+    when:
+      visible: "Choose an item"
+    commands:
+      - tapOn: "Reminders"
 - tapOn: "Open.*"
 - waitForAnimationToEnd
+# The search, a round glass button in the bar, narrows the list to
+# the threads whose words hold every word typed. It comes last, since its
+# keyboard stands over the rows.
 # A compact window's search is the bar's round button, named as the Search
 # tab is, so the one above the tab bar is pressed; a split view's sidebar
 # holds the field itself.

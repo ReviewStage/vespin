@@ -19,6 +19,7 @@ export function useWindowFullScreen(fullScreen: boolean | undefined): void {
   // same frame the window first draws in full screen.
   useLayoutEffect(() => {
     const root = document.documentElement;
+
     if (fullScreen === true) root.setAttribute(FULL_SCREEN_ATTRIBUTE, "true");
     else root.removeAttribute(FULL_SCREEN_ATTRIBUTE);
   }, [fullScreen]);

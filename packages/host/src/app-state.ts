@@ -24,6 +24,7 @@ import type {
   AgentOrigin,
   AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
+import type { AllowedCommand } from "@repo/features/allowed-command-wire";
 import type {
   AutomationRunSummary,
   AutomationSummary,
@@ -70,7 +71,7 @@ import type { BuildCommit, UpdateSnapshot } from "@repo/settings/update";
 import type { AppSettings } from "@repo/settings/wire";
 import { EXCESS_KEYS, keepIdentity, type UnparsedWireValue } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { Equal, Result, Schema } from "effect";
+import { Equal, Predicate, Result, Schema } from "effect";
 import type { MacCommandAsk } from "./mac-command-ask.js";
 
 export type { MacCommandAsk } from "./mac-command-ask.js";
@@ -98,6 +99,8 @@ export const RUN_PROFILE = {
   PERSON: "person",
   /** The same task on its coding agent, its Pull request tab beside it: checks, reviews, and a merge queued. */
   AGENT_PULL_REQUEST: "agent-pull-request",
+  /** The same agent and Pull request tab, the agent in an asking mode holding a call on the member's answer, whose command's first words Always allow names. */
+  AGENT_APPROVAL: "agent-approval",
   /** The same agent and Pull request tab, the agent's turn long enough that its transcript scrolls. */
   AGENT_TRANSCRIPT: "agent-transcript",
   /** The same agent as an orchestrator days into its run, its transcript thousands of entries long and written to while it is open. */
@@ -443,6 +446,7 @@ export const PULL_REQUEST_PART_READ = {
   [PULL_REQUEST_PART.REVIEW_OPTIONS]: LIVE_READ.REVIEW_OPTIONS,
   [PULL_REQUEST_PART.VIEWED]: LIVE_READ.PULL_REQUEST_VIEWED,
 } as const satisfies Record<PullRequestPart, LiveRead>;
+
 /** One of the account's own devices' last beat, at the host's instant: its age as the service answered it, taken from the host's clock as the answer landed. */
 interface AppDeviceBeat {
   deviceId: string;
@@ -468,7 +472,7 @@ export interface AppDevicePresence {
 export type AppDevicePresences = Readonly<Record<string, AppHostRead<AppDevicePresence>>>;
 
 /** The account's hosts as Settings › Hosts draws them, by name, with each removal still out drawn gone, and the install script's address its commands name. */
-interface AppHostsHeld {
+export interface AppHostsHeld {
   hosts: readonly HostLine[];
   installScriptUrl: string;
 }
@@ -503,6 +507,8 @@ export interface AppThisMacHost {
   agentFolders?: number;
   /** Whether macOS holds its host until the member allows the app in System Settings › Login Items; absent reads as not. */
   needsApproval?: boolean;
+  /** Whether the app could not start its host as asked, and is trying again; absent reads as not. */
+  setupFailed?: boolean;
 }
 
 /** This Mac as the host last read it, by the account signed in: the one key the host holds, none while nobody is signed in. */
@@ -552,6 +558,7 @@ export type AppIntegrations = Readonly<Record<string, AppHostRead<IntegrationSta
 
 /** The outside MCP clients the account allowed, by the account, as the host's read of them stands. */
 export type AppMcpClients = Readonly<Record<string, AppHostRead<McpClientsAnswer>>>;
+
 /** Each integration server's tools the windows hold, by the server's name, as the host's read of them stands: its tools, or why it listed none. */
 export type AppIntegrationTools = Readonly<Record<string, AppHostRead<IntegrationToolsAnswer>>>;
 
@@ -599,6 +606,14 @@ export interface AppGitHubToken {
 
 /** The account's GitHub token the windows hold, by the account, as the host's read of it stands. */
 export type AppGitHubTokens = Readonly<Record<string, AppHostRead<AppGitHubToken>>>;
+
+/** The commands the account always allows its coding agents to run, as the service last answered them, a read's or a write's: the list, the earliest added first. */
+export interface AppAllowedCommandList {
+  commands: readonly AllowedCommand[];
+}
+
+/** The account's always-allowed commands the windows hold, by the account, as the host's read of them stands. */
+export type AppAllowedCommands = Readonly<Record<string, AppHostRead<AppAllowedCommandList>>>;
 
 /** Each workspace's token repositories the windows hold, by the workspace, as the host's read of them stands. */
 export type AppTokenRepositories = Readonly<
@@ -690,6 +705,7 @@ export interface AppHostReads {
   [LIVE_READ.PULL_REQUEST]: AgentOverviewPullRequestAnswerView;
   [LIVE_READ.REPOSITORY_LISTS]: GitHubRepositoriesAnswer;
   [LIVE_READ.GITHUB_TOKEN]: AppGitHubToken;
+  [LIVE_READ.ALLOWED_COMMANDS]: AppAllowedCommandList;
   [LIVE_READ.PULL_REQUEST_CHAPTERS]: PullRequestChaptersAnswer;
   [LIVE_READ.BROWSER_TABS]: readonly AgentBrowserTab[];
   [LIVE_READ.PULL_REQUEST_CHECKS]: AgentOverviewChecksAnswerView;
@@ -847,6 +863,8 @@ export interface AppState {
   [LIVE_READ.REPOSITORY_LISTS]: AppRepositoryLists;
   /** The account's own GitHub token, held while a window draws it and a while after: what Settings › Account, a workspace's Add repository, and onboarding's GitHub step read. Never written to disk. */
   [LIVE_READ.GITHUB_TOKEN]: AppGitHubTokens;
+  /** The account's always-allowed commands, held while a window draws them and a while after: what Settings › Agents' Always allowed reads. */
+  [LIVE_READ.ALLOWED_COMMANDS]: AppAllowedCommands;
   /** Each agent's pull request's chapters the windows chose, held while a Pull request tab holds them and a while after: what its Chapters tab draws. */
   [LIVE_READ.PULL_REQUEST_CHAPTERS]: AppChapters;
   /** Each task's or agent's cloud Browser tabs the windows' side panels list, held while one lists them and a while after: what the side panel's Browser tabs draw. Never written to disk. */
@@ -1041,6 +1059,7 @@ export const HOST_READ_SLICE = {
   [LIVE_READ.LINK_STANDINGS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
   [LIVE_READ.REPOSITORY_LISTS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.GITHUB_TOKEN]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
+  [LIVE_READ.ALLOWED_COMMANDS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.PULL_REQUEST_CHAPTERS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
   [LIVE_READ.PULL_REQUEST]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
   [LIVE_READ.PULL_REQUEST_CHECKS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
@@ -1129,10 +1148,10 @@ const HOST_READ_SLICES = Object.keys(HOST_READ_SLICE) as HostReadSlice[];
  * its membership or order moved.
  */
 type KeyMoved =
-  | { readonly key: readonly string[]; readonly value: unknown }
+  | { readonly key: readonly string[]; readonly value: HeldValue }
   | {
       readonly key: readonly string[];
-      readonly rows: readonly object[];
+      readonly rows: readonly Keyed[];
       readonly ids?: readonly string[];
       /** Where the key's rows are a record (`rowsAt`), its fields beside the list, whole. */
       readonly beside?: Keyed;
@@ -1155,16 +1174,27 @@ export interface AppStateDelivery {
   readonly moved?: { readonly [Slice in HostReadSlice]?: readonly KeyMoved[] };
 }
 
+/** A value the document holds: a record or list, a primitive, or nothing. */
+type HeldValue = Keyed | readonly HeldValue[] | string | number | boolean | null | undefined;
+
 /** One level of a slice's keys: each id's or part's value, or, above the last level, each kind's record of ids. */
-type Keyed = Readonly<Record<string, unknown>>;
+type Keyed = { readonly [key: string]: HeldValue };
+
+/** Whether `value` is a level of keys or a record of fields that can be read by name, rather than a primitive or nothing. */
+function isKeyed(value: HeldValue): value is Keyed {
+  return Predicate.isObjectOrArray(value);
+}
 
 /** The value `keyed` holds under `id` itself, never one it inherits. */
-function ownValue(keyed: Keyed, id: string): unknown {
+function ownValue(keyed: Keyed, id: string): HeldValue {
   return Object.hasOwn(keyed, id) ? keyed[id] : undefined;
 }
 
 /** The record a slice's keys stand in, as `slice` holds it; none where a slice keyed on its rows holds no rows. */
-function keyedOf(entry: HostReadSliceEntry, slice: object | undefined): Keyed | undefined {
+function keyedOf<Slice extends object>(
+  entry: HostReadSliceEntry,
+  slice: Slice | undefined,
+): Keyed | undefined {
   // SAFETY: a slice the table declares is a record of its keys, or a read whose rows are, as its `on` says.
   return entry.on === KEYS_ON.SLICE
     ? (slice as Keyed | undefined)
@@ -1175,6 +1205,7 @@ function keyedOf(entry: HostReadSliceEntry, slice: object | undefined): Keyed | 
 function rowIdOf(entry: HostReadSliceEntry, key: readonly string[]): string | undefined {
   if (entry.keys !== READ_KEYS.PARTS) return entry.rowId;
   const [part] = key;
+
   return part === undefined || entry.rowIds === undefined || !Object.hasOwn(entry.rowIds, part)
     ? undefined
     : entry.rowIds[part];
@@ -1186,11 +1217,10 @@ function rowsAreValue(entry: HostReadSliceEntry): boolean {
 }
 
 /** The record a key's read's rows are, where its slice names the field its list stands under (`rowsAt`); none otherwise. */
-function recordOf(entry: HostReadSliceEntry, value: unknown): Keyed | undefined {
-  if (entry.rowsAt === undefined || typeof value !== "object" || value === null) return undefined;
-  const rows: unknown = Reflect.get(value, "rows");
-  // SAFETY: a read whose slice names `rowsAt` holds its rows as a record of fields.
-  return typeof rows === "object" && rows !== null ? (rows as Keyed) : undefined;
+function recordOf(entry: HostReadSliceEntry, value: HeldValue): Keyed | undefined {
+  if (entry.rowsAt === undefined || !isKeyed(value)) return undefined;
+
+  return isKeyed(value.rows) ? value.rows : undefined;
 }
 
 /**
@@ -1199,28 +1229,32 @@ function recordOf(entry: HostReadSliceEntry, value: unknown): Keyed | undefined 
  * where it holds none. Note that a read holding rows says nothing else
  * (`AppHostRead`), so its rows are all of it that can move.
  */
-function rowsOf(entry: HostReadSliceEntry, value: unknown): readonly object[] | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
+function rowsOf(entry: HostReadSliceEntry, value: HeldValue): readonly Keyed[] | undefined {
+  if (!isKeyed(value)) return undefined;
+
   const rows: unknown =
     entry.rowsAt === undefined
       ? rowsAreValue(entry)
         ? value
-        : Reflect.get(value, "rows")
+        : value.rows
       : recordOf(entry, value)?.[entry.rowsAt];
+
   return Array.isArray(rows) ? rows : undefined;
 }
 
 /** A key's read's record of rows without its list, where its slice names `rowsAt`; none otherwise. */
-function besideOf(entry: HostReadSliceEntry, value: unknown): Keyed | undefined {
+function besideOf(entry: HostReadSliceEntry, value: HeldValue): Keyed | undefined {
   const record = recordOf(entry, value);
+
   if (record === undefined) return undefined;
+
   return Object.fromEntries(Object.entries(record).filter(([field]) => field !== entry.rowsAt));
 }
 
 /** A row's id, under the field its slice names. */
-function idOf(rowId: string, row: object): string {
+function idOf(rowId: string, row: Keyed): string {
   // SAFETY: a row-keyed slice's rows each carry their id as a string under `rowId` (`HOST_READ_SLICE`).
-  return Reflect.get(row, rowId) as string;
+  return row[rowId] as string;
 }
 
 /**
@@ -1233,23 +1267,28 @@ function idOf(rowId: string, row: object): string {
 function keyMoved(
   entry: HostReadSliceEntry,
   key: readonly string[],
-  sent: unknown,
-  next: unknown,
+  sent: HeldValue,
+  next: HeldValue,
 ): KeyMoved {
   const rowId = rowIdOf(entry, key);
   const [before, after] = [rowsOf(entry, sent), rowsOf(entry, next)];
+
   if (rowId === undefined || before === undefined || after === undefined) {
     return { key, value: next };
   }
+
   const sentRows = new Map(before.map((row) => [idOf(rowId, row), row]));
   const sentIds = [...sentRows.keys()];
   const ids = after.map((row) => idOf(rowId, row));
+
   // Note that a list whose ids repeat cannot be laid by them, so it crosses whole.
   if (sentRows.size !== before.length || new Set(ids).size !== ids.length) {
     return { key, value: next };
   }
+
   const reordered = ids.length !== sentIds.length || ids.some((id, at) => id !== sentIds[at]);
   const beside = besideOf(entry, next);
+
   return {
     key,
     rows: after.filter((row) => sentRows.get(idOf(rowId, row)) !== row),
@@ -1266,9 +1305,11 @@ function idsMoved(
   after: Keyed,
 ): KeyMoved[] {
   if (before === after) return [];
+
   return [
     ...Object.entries(after).flatMap(([id, value]) => {
       const sent = ownValue(before, id);
+
       return sent === value ? [] : [keyMoved(entry, [...path, id], sent, value)];
     }),
     ...Object.keys(before)
@@ -1289,38 +1330,50 @@ function keysMoved(entry: HostReadSliceEntry, before: Keyed, after: Keyed): KeyM
   const kinds = new Set([...Object.keys(before), ...Object.keys(after)]);
   // SAFETY: each kind of a slice keyed by two holds a record of its ids.
   const ofKind = (keyed: Keyed, kind: string) => (ownValue(keyed, kind) ?? {}) as Keyed;
+
   return [...kinds].flatMap((kind) =>
     idsMoved(entry, [kind], ofKind(before, kind), ofKind(after, kind)),
   );
 }
 
 /** The value `held` stood at once `move` lands on it: laid in, keeping what of it did not move, or none where it is gone. */
-function valueLaid(entry: HostReadSliceEntry, held: unknown, move: KeyMoved): unknown {
+function valueLaid(entry: HostReadSliceEntry, held: HeldValue, move: KeyMoved): HeldValue {
   if ("value" in move) {
     if (move.value === null) return undefined;
+
     return held === undefined ? move.value : keepIdentity(held, move.value);
   }
+
   const rowId = rowIdOf(entry, move.key);
+
   if (rowId === undefined) return held;
   const heldList = rowsOf(entry, held) ?? [];
   const heldRows = new Map(heldList.map((row) => [idOf(rowId, row), row]));
+
   const movedRows = new Map(
     move.rows.map((row) => {
       const was = heldRows.get(idOf(rowId, row));
+
       return [idOf(rowId, row), was === undefined ? row : keepIdentity(was, row)];
     }),
   );
+
   const rows =
     move.ids === undefined
       ? heldList.map((row) => movedRows.get(idOf(rowId, row)) ?? row)
-      : move.ids.flatMap((id) => movedRows.get(id) ?? heldRows.get(id) ?? []);
+      : move.ids.flatMap<Keyed>((id) => movedRows.get(id) ?? heldRows.get(id) ?? []);
+
   const listKept = rows.length === heldList.length && rows.every((row, at) => row === heldList[at]);
+
   if (entry.rowsAt !== undefined) {
     return recordLaid(entry.rowsAt, held, listKept ? heldList : rows, move.beside);
   }
+
   if (listKept) return held;
+
   if (rowsAreValue(entry)) return rows;
-  return typeof held === "object" && held !== null ? { ...held, rows } : { rows };
+
+  return Predicate.isObjectOrArray(held) ? { ...held, rows } : { rows };
 }
 
 /**
@@ -1331,27 +1384,32 @@ function valueLaid(entry: HostReadSliceEntry, held: unknown, move: KeyMoved): un
  */
 function recordLaid(
   rowsAt: string,
-  held: unknown,
-  list: readonly object[],
+  held: HeldValue,
+  list: readonly Keyed[],
   beside: Keyed | undefined,
-): unknown {
+): HeldValue {
   // SAFETY: a read is a record of its fields, its rows among them, as `recordOf` reads it.
-  const read = (typeof held === "object" && held !== null ? held : {}) as Keyed;
+  const read = (Predicate.isObjectOrArray(held) ? held : {}) as Keyed;
   const was = read.rows;
   // SAFETY: a read whose slice names `rowsAt` holds its rows as a record of fields.
-  const heldRecord = (typeof was === "object" && was !== null ? was : {}) as Keyed;
+  const heldRecord = (Predicate.isObjectOrArray(was) ? was : {}) as Keyed;
+
   const fields =
     beside === undefined
       ? Object.entries(heldRecord).filter(([field]) => field !== rowsAt)
       : Object.entries(beside).map(([field, value]) => {
           const kept = field !== rowsAt && Object.hasOwn(heldRecord, field);
+
           return [field, kept ? keepIdentity(heldRecord[field], value) : value] as const;
         });
-  const record: Keyed = { ...Object.fromEntries(fields), [rowsAt]: list };
+
+  const record = { ...Object.fromEntries(fields), [rowsAt]: list };
   const entries = Object.entries(record);
+
   const kept =
     entries.length === Object.keys(heldRecord).length &&
     entries.every(([field, value]) => ownValue(heldRecord, field) === value);
+
   return kept ? held : { ...read, rows: record };
 }
 
@@ -1360,14 +1418,17 @@ function withIdsMoved(
   entry: HostReadSliceEntry,
   held: Keyed | undefined,
   moves: readonly KeyMoved[],
-): Keyed {
-  const next: Record<string, unknown> = { ...held };
+) {
+  const next = { ...held };
+
   for (const move of moves) {
     const id = move.key[move.key.length - 1] ?? "";
     const laid = valueLaid(entry, ownValue(next, id), move);
+
     if (laid === undefined) Reflect.deleteProperty(next, id);
     else next[id] = laid;
   }
+
   return next;
 }
 
@@ -1376,8 +1437,9 @@ function withKindsMoved(
   entry: HostReadSliceEntry,
   held: Keyed | undefined,
   moves: readonly KeyMoved[],
-): Keyed {
-  const next: Record<string, unknown> = { ...held };
+) {
+  const next = { ...held };
+
   for (const kind of new Set(moves.map((move) => move.key[0] ?? ""))) {
     // SAFETY: each kind of a slice keyed by two holds a record of its ids.
     const ofKind = (held === undefined ? undefined : ownValue(held, kind)) as Keyed | undefined;
@@ -1387,20 +1449,23 @@ function withKindsMoved(
       moves.filter((move) => move.key[0] === kind),
     );
   }
+
   return next;
 }
 
 /** A slice once `moves` land on it, every key and kind they do not name the very one held. */
-function withSliceMoved(
+function withSliceMoved<Slice extends object>(
   entry: HostReadSliceEntry,
-  held: object | undefined,
+  held: Slice | undefined,
   moves: readonly KeyMoved[],
 ): object {
   const keyed = keyedOf(entry, held);
+
   const laid =
     entry.keys === READ_KEYS.TWO
       ? withKindsMoved(entry, keyed, moves)
       : withIdsMoved(entry, keyed, moves);
+
   return entry.on === KEYS_ON.SLICE ? laid : { ...held, rows: laid };
 }
 
@@ -1418,25 +1483,32 @@ export function appStateDelivery(
   const names = [...new Set([...Object.keys(sent ?? {}), ...Object.keys(next)])].filter(
     (name) => name !== "version",
   ) as AppStateEntry[];
+
   // Note that a keyed slice crosses as the keys that moved in it wherever the window held it and still does, so it is never walked whole as well.
   const patched = HOST_READ_SLICES.flatMap((slice) => {
     const entry: HostReadSliceEntry = HOST_READ_SLICE[slice];
     const [before, after] = [keyedOf(entry, sent?.[slice]), keyedOf(entry, next[slice])];
+
     return before === undefined || after === undefined
       ? []
       : [[slice, keysMoved(entry, before, after)] as const];
   });
+
   const crossing = new Set<string>(patched.map(([slice]) => slice));
+
   const moved = names.filter(
     (name) => !crossing.has(name) && (sent === undefined || !Equal.equals(sent[name], next[name])),
   );
+
   const keys = patched.filter(([, keysOf]) => keysOf.length > 0);
   const gone = moved.filter((name) => next[name] === undefined);
+
   if (sent !== undefined && moved.length === 0 && keys.length === 0) return undefined;
+
   return {
     version: next.version,
     entries: Object.fromEntries(
-      moved.filter((name) => next[name] !== undefined).map((name) => [name, next[name]]),
+      moved.flatMap((name) => (next[name] === undefined ? [] : [[name, next[name]]])),
     ),
     ...(gone.length === 0 ? undefined : { gone }),
     ...(keys.length === 0 ? undefined : { moved: Object.fromEntries(keys) }),
@@ -1461,20 +1533,25 @@ export function withAppStateDelivery(
       keepIdentity(held[name as AppStateEntry], value),
     ]),
   );
+
   const slices = HOST_READ_SLICES.flatMap((slice) => {
     const moves = delivery.moved?.[slice];
+
     return moves === undefined
       ? []
       : [[slice, withSliceMoved(HOST_READ_SLICE[slice], held[slice], moves)] as const];
   });
+
   const next: AppStateSnapshot = {
     ...held,
     ...entries,
     ...Object.fromEntries(slices),
     version: delivery.version,
   };
+
   // Note that an entry gone is held as no key at all, as the document holds it.
   for (const name of delivery.gone ?? []) Reflect.deleteProperty(next, name);
+
   return next;
 }
 

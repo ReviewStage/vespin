@@ -14,6 +14,7 @@ export interface ReadPhoneHead {
 /** The names of the controls in one of the header's three places, none where the place is not drawn. */
 function namesIn(slot: Element | null): string[] {
   if (slot === null) return [];
+
   return [...slot.querySelectorAll("button")].map(
     (each) => each.getAttribute("aria-label") ?? each.textContent?.trim() ?? "",
   );
@@ -30,7 +31,9 @@ function standingHeads(root: ParentNode, place: string): HTMLElement[] {
 export function readPhoneHead(root: ParentNode, place: string): ReadPhoneHead {
   const heads = standingHeads(root, place);
   const [head] = heads;
+
   if (head === undefined || heads.length !== 1) throw new Error(`one ${place} header stands`);
+
   return {
     start: namesIn(head.querySelector(":scope > .ui-toolbar-lead")),
     title: head.querySelector(":scope > .ui-toolbar-heading h1")?.textContent ?? undefined,
@@ -43,6 +46,7 @@ export function pressInPhoneHead(root: ParentNode, place: string, label: string)
   const button = standingHeads(root, place)
     .flatMap((head) => [...head.querySelectorAll("button")])
     .find((each) => (each.getAttribute("aria-label") ?? each.textContent?.trim()) === label);
+
   if (button === undefined) throw new Error(`the ${place} header offers ${label}`);
   act(() => button.click());
 }
@@ -64,6 +68,7 @@ export function chooseMenuItem(label: string): void {
   const item = [
     ...document.querySelectorAll<HTMLElement>('[role="menu"]:not([data-leaving]) .ui-menu-item'),
   ].find((each) => each.querySelector(".ui-menu-item-label")?.textContent === label);
+
   if (item === undefined) throw new Error(`${label} is in the menu`);
   act(() => item.click());
 }

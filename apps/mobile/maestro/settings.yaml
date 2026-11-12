@@ -14,8 +14,11 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
 - assertVisible: "Recorded the invite flow"
-# The account's photo leads the Inbox's bar, heard as Settings, and opens it.
-- tapOn: "Settings"
+# The workspace switcher leads the Inbox's bar, and its menu's account,
+# heard as its name and Settings, opens it.
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
 - waitForAnimationToEnd
 # The account heads the list, pushing to Account.
 - assertVisible: "Ada Lovelace"
@@ -69,7 +72,9 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
 - assertVisible: "Recorded the invite flow"
-- tapOn: "Settings"
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
 - waitForAnimationToEnd
 - tapOn:
     id: "settings-workspace"
@@ -95,7 +100,9 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
 - assertVisible: "Recorded the invite flow"
-- tapOn: "Settings"
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Agents"

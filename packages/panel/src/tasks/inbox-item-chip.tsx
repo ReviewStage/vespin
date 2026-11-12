@@ -48,16 +48,22 @@ interface FedItem {
 function fedItemOf(fed: AppInboxItems | undefined, place: InboxItemPlace): FedItem | undefined {
   if (fed === undefined) return undefined;
   const plans = fed[INBOX_SCOPE_KIND.PLAN];
+
   const named = (item: InboxItem) =>
     item.id === place.itemId && (!("agentId" in place) || item.agentId === place.agentId);
+
   if ("planId" in place) {
     const item = plans[place.planId]?.find(named);
+
     return item === undefined ? undefined : { item, planId: place.planId };
   }
+
   for (const [planId, items] of Object.entries(plans)) {
     const item = items.find(named);
+
     if (item !== undefined) return { item, planId };
   }
+
   return undefined;
 }
 
@@ -75,15 +81,20 @@ function useLinkedItem(place: InboxItemPlace): InboxListed | undefined {
   const fed = useQuery(inboxItemsQuery()).data;
   const tasks = useQuery({ ...appStateQuery, select: selectTasks }).data;
   const inbox = useQuery({ ...appStateQuery, select: selectInbox }).data;
+
   const found = useMemo(() => {
     if (planId !== undefined) return fedItemOf(fed, { planId, itemId });
+
     return fedItemOf(fed, namedAgent === undefined ? { itemId } : { agentId: namedAgent, itemId });
   }, [fed, planId, namedAgent, itemId]);
+
   const item = found?.item;
   const taskId = planId ?? found?.planId ?? waitingTaskOf(inbox, itemId);
+
   return useMemo(() => {
     if (item === undefined || taskId === undefined) return undefined;
     const task = tasks?.tasks.find((each) => each.id === taskId);
+
     return task === undefined ? undefined : { holder: taskHolder(task), item };
   }, [item, taskId, tasks]);
 }
@@ -91,10 +102,11 @@ function useLinkedItem(place: InboxItemPlace): InboxListed | undefined {
 /** The brief main holds of an item that waits on the reader, by its id; none for one settled or unknown. */
 function useWaitingBrief(itemId: string): AppInboxWaitingItem | undefined {
   const inbox = useQuery({ ...appStateQuery, select: selectInbox }).data;
+
   return (inbox?.waiting ?? []).flatMap((task) => task.items).find((each) => each.id === itemId);
 }
 
-/** An item's card from main's brief alone, wearing no glyph, as its read card wears none: its question, that it needs the reader, since main's brief lists only what waits on them, as its read card says, and when it was asked. */
+/** An item's card from main's brief alone. It says the item needs the reader, since main's brief lists only what waits on them. */
 function WaitingItemCard({
   item,
   now,
@@ -117,6 +129,7 @@ function WaitingItemCard({
 export function useInboxItemTitle(place: InboxItemPlace): string | undefined {
   const listed = useLinkedItem(place);
   const waiting = useWaitingBrief(place.itemId);
+
   return listed?.item.title ?? waiting?.title;
 }
 
@@ -128,6 +141,7 @@ export function useInboxItemTitle(place: InboxItemPlace): string | undefined {
  */
 export function InboxItemChipGlyph({ place }: { place: InboxItemPlace }): ReactNode {
   const listed = useLinkedItem(place);
+
   return listed === undefined ? <GLYPH.THREAD /> : inboxItemGlyph(listed.item);
 }
 
@@ -143,8 +157,10 @@ export function InboxItemChipCard({
   const { models, me } = useMentionedPlace();
   const now = useMinute();
   const waiting = useWaitingBrief(place.itemId);
+
   if (listed === undefined) {
     return waiting === undefined ? fallback : <WaitingItemCard item={waiting} now={now} />;
   }
+
   return <InboxItemCard listed={listed} now={now} models={models} readerId={me} />;
 }

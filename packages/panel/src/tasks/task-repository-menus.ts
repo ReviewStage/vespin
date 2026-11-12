@@ -50,13 +50,16 @@ export function useRepositoriesIn(): (workspaceId: string | undefined) => Reposi
   const workspaces = listed?.workspaces;
   const tasks = listed?.tasks;
   const listStatus = listed?.listStatus;
+
   return useCallback(
     (workspaceId: string | undefined): RepositoryChooser => {
       const workspace = workspaces?.find((each) => each.id === workspaceId);
+
       const own =
         workspaceId === undefined
           ? (tasks ?? [])
           : (tasks ?? []).filter((task) => task.workspaceId === workspaceId);
+
       // Note that the tasks are filtered before the recent ones are counted,
       // because a few newer stranded tasks would otherwise crowd out an older
       // repository the workspace does reach.
@@ -66,6 +69,7 @@ export function useRepositoriesIn(): (workspaceId: string | undefined) => Reposi
           : own.filter(
               (task) => task.repository !== null && workspaceReaches(workspace, task.repository),
             );
+
       return {
         recent: recentRepositories(offered),
         reading: listStatus !== TASKS_READ.READY && listStatus !== TASKS_READ.FAILED,
@@ -83,6 +87,7 @@ export function useRepositoriesIn(): (workspaceId: string | undefined) => Reposi
 /** The repository chip's list for one workspace, made again only as what it lists from moves. */
 export function useRepositoryChooser(workspaceId: string | undefined): RepositoryChooser {
   const repositoriesIn = useRepositoriesIn();
+
   return useMemo(() => repositoriesIn(workspaceId), [repositoriesIn, workspaceId]);
 }
 
@@ -110,6 +115,7 @@ export function useTaskMenus(doors: {
   const [repositoryMenu, setRepositoryMenu] = useState<RepositoryMenuAsk | undefined>(undefined);
   const [relationMenu, setRelationMenu] = useState<RelationMenuAsk | undefined>(undefined);
   const { activeTaskId, select, showTask } = doors;
+
   return {
     repositoryMenu,
     relationMenu,

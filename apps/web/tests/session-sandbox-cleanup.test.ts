@@ -18,6 +18,7 @@ const openUser = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -31,6 +32,7 @@ const openConversation = (
 ) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const [row] = yield* db
       .insert(conversations)
       .values({
@@ -39,7 +41,9 @@ const openConversation = (
         runtimeSessionId: options.sessionId ?? null,
       })
       .returning({ id: conversations.id });
+
     assert.ok(row);
+
     return row.id;
   });
 
@@ -54,10 +58,12 @@ it.layer(getTestDB())("the standing sessions read", (it) => {
         const other = yield* openUser;
         const main = mintSession();
         const agent = mintSession();
+
         const mainConversation = yield* openConversation(userId, {
           kind: CONVERSATION_KIND.MAIN,
           sessionId: main,
         });
+
         yield* openConversation(userId, { kind: CONVERSATION_KIND.AGENT, sessionId: agent });
         yield* openConversation(userId, { kind: CONVERSATION_KIND.CHILD });
         yield* openConversation(other, { kind: CONVERSATION_KIND.MAIN, sessionId: mintSession() });

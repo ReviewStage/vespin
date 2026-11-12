@@ -54,6 +54,7 @@ describe("a live answer's cursor", () => {
 
   it("moves where the held read's would, though the items are as many as before", () => {
     const before = cursorOf(ROWS);
+
     for (const [why, rows] of [
       ["the item was read", { ...ROWS, items: [{ ...ITEM, unread: false }] }],
       ["the item was posted again", { ...ROWS, items: [{ ...ITEM, revision: 2, updatedAt: NOW }] }],
@@ -68,6 +69,7 @@ describe("a live answer's cursor", () => {
     ] as const) {
       assert.notEqual(cursorOf(rows), before, why);
     }
+
     assert.notEqual(
       cursorOf(ROWS, RUN.failedAt + FAILED_RUN_WINDOW_MILLIS + 1),
       before,

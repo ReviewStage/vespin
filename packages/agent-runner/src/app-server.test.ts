@@ -13,6 +13,7 @@ it.effect("refuses a request made after app-server has exited", () =>
   Effect.gen(function* () {
     const server = fakeAppServer([{ exchanges: [], exitWith: "gone" }]);
     const exited = yield* Deferred.make<string>();
+
     const appServer = yield* spawnAppServer(
       { executable: "/opt/agent-codex/bin/codex", args: [], cwd: "/srv/repo", env: {} },
       {
@@ -20,11 +21,13 @@ it.effect("refuses a request made after app-server has exited", () =>
         onExit: (stderrTail) => Deferred.succeed(exited, stderrTail).pipe(Effect.asVoid),
       },
     ).pipe(Effect.provide(server.layer));
+
     assert.equal(yield* Deferred.await(exited), "gone");
 
     const failure = yield* appServer
       .request("thread/start", { cwd: "/srv/repo" })
       .pipe(Effect.flip);
+
     assert.ok(failure instanceof AppServerError);
   }),
 );
@@ -39,9 +42,11 @@ const running = (exchanges: Script["exchanges"]) =>
 it.effect("fails a request app-server never answers once its bound has passed", () =>
   Effect.gen(function* () {
     const appServer = yield* running([{ method: "turn/interrupt", reply: [] }]);
+
     const asked = yield* appServer
       .request("turn/interrupt", { threadId: "thread", turnId: "turn" })
       .pipe(Effect.flip, Effect.forkScoped);
+
     yield* Effect.yieldNow.pipe(Effect.repeat({ times: 20 }));
     yield* TestClock.adjust(Duration.minutes(1));
 
@@ -58,12 +63,14 @@ it.effect("keeps the JSON-RPC code and data of a request app-server refused", ()
       codexErrorInfo: { activeTurnNotSteerable: { turnKind: "review" } },
       additionalDetails: null,
     };
+
     const appServer = yield* running([
       {
         method: "turn/steer",
         reply: [{ id: 1, error: { code: -32600, message: "cannot steer a review turn", data } }],
       },
     ]);
+
     const failure = yield* appServer
       .request("turn/steer", {
         threadId: "thread",

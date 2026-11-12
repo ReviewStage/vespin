@@ -68,6 +68,7 @@ export const DEFAULT_SETTINGS: FileViewSettings = {
 /** The settings as the document holds them, each at its default before the first document arrives. */
 function settingsOf(view: AppSettingsView | undefined): FileViewSettings {
   if (view === undefined) return DEFAULT_SETTINGS;
+
   return {
     lineNumbers: view.lineNumbers,
     wordWrap: view.wordWrap,
@@ -112,19 +113,23 @@ function withWrites(
   stored: FileViewSettings,
   out: readonly (SettingWrite | undefined)[],
 ): FileViewSettings {
-  let settings = stored;
+  const settings = { ...stored };
+
   for (const write of out) {
     if (write !== undefined && isFileViewField(write.field)) {
-      settings = { ...settings, [write.field]: write.value };
+      Object.assign(settings, { [write.field]: write.value });
     }
   }
+
   return settings;
 }
 
 export function useFileViewSettings(): FileViewSettingsControl {
   const stored =
     useQuery({ ...appStateQuery, select: selectStoredFileView }).data ?? DEFAULT_SETTINGS;
+
   const { mutate } = useMutation(settingMutation());
+
   // Note that every settings write still out, this hook's or a row's, is read from the window's mutations, as the Optimistic Updates guide reads another component's.
   const out = useMutationState<
     SettingWrite | undefined,
@@ -133,11 +138,14 @@ export function useFileViewSettings(): FileViewSettingsControl {
     filters: { mutationKey: settingMutation().mutationKey, status: "pending" },
     select: (mutation) => mutation.state.variables,
   });
+
   const settings = useMemo(() => withWrites(stored, out), [stored, out]);
+
   const change = useCallback(
     <Field extends FileViewField>(field: Field, value: AppSettingValue<Field>) =>
       mutate({ field, value }),
     [mutate],
   );
+
   return { settings, change };
 }

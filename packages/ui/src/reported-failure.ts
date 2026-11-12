@@ -19,6 +19,7 @@
  * so rather than passing for reported.
  */
 
+import { Predicate } from "effect";
 import type { ReactNode } from "react";
 import { said } from "./said.js";
 
@@ -67,5 +68,5 @@ export function inputProblem(words: ReactNode): ShownError | undefined {
 export function isReported(
   failure: ReportedFailure | Unreported | undefined,
 ): failure is ReportedFailure {
-  return typeof failure === "object";
+  return Predicate.isObjectKeyword(failure);
 }

@@ -91,6 +91,7 @@ interface WebhookSecret {
 /** A fresh webhook secret and its hash. */
 function mintWebhookSecret(): WebhookSecret {
   const secret = randomBytes(WEBHOOK_SECRET_BYTES).toString("base64url");
+
   return { secret, hash: createHash("sha256").update(secret).digest("hex") };
 }
 
@@ -100,9 +101,11 @@ const firstDue = /* @__PURE__ */ Effect.fnUntraced(function* (
   now: number,
 ): Effect.fn.Return<Date | null, HostedRefusal> {
   if (trigger.kind !== AUTOMATION_TRIGGER.SCHEDULE) return null;
+
   if (Result.isFailure(readSchedule(trigger, new Date(now)))) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   return nextScheduledRun(trigger, new Date(now)) ?? null;
 });
 
@@ -115,6 +118,7 @@ const checkedAction = /* @__PURE__ */ Effect.fnUntraced(function* (
   yield* acceptedAgentChoice(userId, action.choice).pipe(
     Effect.catchTag("ModelChoiceRefused", () => Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST)),
   );
+
   return action;
 });
 
@@ -129,6 +133,7 @@ function agentOf(
 ): NonNullable<AutomationRunSummary["agent"]> {
   const status = agentStatusOf(standing.turn, { createdAt, now, boot: standing.boot });
   const failureReason = status === AGENT_STATUS.FAILED ? agentFailureOf(standing.turn) : undefined;
+
   return {
     id,
     title,
@@ -156,6 +161,7 @@ function runSummaryOf(
           standingOf(run.agentConversationId),
           now,
         );
+
   return {
     id: run.id,
     firing: run.firing,
@@ -177,11 +183,14 @@ export const runSummaries = /* @__PURE__ */ Effect.fnUntraced(function* (
       ? []
       : [{ id: agentId, conversationId: agentConversationId }],
   );
+
   const standingOf = yield* standingsOf(
     agents.map(({ conversationId }) => conversationId),
     agents,
   );
+
   const now = yield* Clock.currentTimeMillis;
+
   return runs.map((run) => runSummaryOf(run, standingOf, now, readerId));
 });
 
@@ -192,6 +201,7 @@ export const summaryOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<AutomationSummary, HostedRefusal, DatabaseServices> {
   const newest = yield* hostedStoreOrUnavailable(listAutomationRuns(userId, automation.id, 1));
   const [lastRun] = yield* runSummaries(userId, newest);
+
   return {
     id: automation.id,
     // Note that no automation stands on a task, and the wire still names one because a released desktop reads it.
@@ -240,10 +250,13 @@ const checkedTarget = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (target.kind === AUTOMATION_TARGET.NEW_AGENT) {
     return { targetKind: AUTOMATION_TARGET.NEW_AGENT, targetAgentId: null };
   }
+
   if (target.agentId === null)
     return { targetKind: AUTOMATION_TARGET.SAME_AGENT, targetAgentId: null };
   const agent = yield* hostedStoreOrUnavailable(readVisibleAgent(userId, target.agentId));
+
   if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
   return { targetKind: AUTOMATION_TARGET.SAME_AGENT, targetAgentId: agent.value.id };
 });
 
@@ -255,9 +268,11 @@ const checkedScope = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<AutomationScope, HostedRefusal, DatabaseServices> {
   if (scope === AUTOMATION_SCOPE.PERSONAL) return scope;
   const personal = yield* hostedStoreOrUnavailable(personalWorkspaceOf(userId));
+
   if (Option.isSome(personal) && personal.value === organizationId) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   return scope;
 });
 
@@ -288,6 +303,7 @@ const reachedRepositories = /* @__PURE__ */ Effect.fnUntraced(function* (
   const reached = yield* Effect.forEach(repositories, (repository) =>
     workspaceRepository(organizationId, repository, undefined),
   );
+
   return reached.map((one) => one.repository.fullName);
 });
 
@@ -311,10 +327,14 @@ const standingOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (made.planId !== undefined || made.workspaceId === undefined) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   const member = yield* hostedStoreOrUnavailable(isWorkspaceMember(userId, made.workspaceId));
+
   if (made.repositories === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
   if (!member) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const repositories = yield* reachedRepositories(made.workspaceId, made.repositories);
+
   return { organizationId: made.workspaceId, repositories };
 });
 
@@ -337,6 +357,7 @@ const changesOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   DatabaseServices | ModelCatalog | GitHubApp | HttpClient.HttpClient | Sandbox
 > {
   const now = yield* Clock.currentTimeMillis;
+
   // A webhook sent again is no change, since a webhook names nothing but its kind, so its secret
   // survives a form that sends the whole automation back.
   const newTrigger =
@@ -344,9 +365,11 @@ const changesOf = /* @__PURE__ */ Effect.fnUntraced(function* (
     standing.trigger.kind === AUTOMATION_TRIGGER.WEBHOOK
       ? undefined
       : asked.trigger;
+
   const trigger = newTrigger ?? standing.trigger;
   const enabled = asked.enabled ?? standing.enabled;
   const due = yield* firstDue(trigger, now);
+
   // Note that an action sent without its servers keeps the ones saved, because a desktop from before
   // them sends the whole action back on a prompt's edit, and would otherwise switch every one back on.
   const kept =
@@ -355,33 +378,44 @@ const changesOf = /* @__PURE__ */ Effect.fnUntraced(function* (
     standing.action.disabledServers === undefined
       ? asked.action
       : { ...asked.action, disabledServers: standing.action.disabledServers };
+
   const action = kept === undefined ? undefined : yield* checkedAction(userId, kept);
+
   const becameWebhook =
     newTrigger?.kind === AUTOMATION_TRIGGER.WEBHOOK &&
     standing.trigger.kind !== AUTOMATION_TRIGGER.WEBHOOK;
+
   // A secret is replaced on a webhook alone: there is none to replace on any other trigger.
   if (asked.webhookSecretHash !== undefined && trigger.kind !== AUTOMATION_TRIGGER.WEBHOOK) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   // A secret the caller minted stands in place of one minted here, so no secret is answered that would not hold.
   const webhook =
     becameWebhook && asked.webhookSecretHash === undefined ? mintWebhookSecret() : undefined;
+
   const secretHash = asked.webhookSecretHash ?? webhook?.hash;
+
   const scope =
     asked.scope === undefined
       ? undefined
       : yield* checkedScope(userId, standing.organizationId, asked.scope);
+
   const target =
     asked.target === undefined ? undefined : yield* checkedTarget(userId, asked.target);
+
   yield* checkTriggerRepositories(trigger, asked.repositories ?? standing.repositories);
+
   // Note that new repositories are read through the automation's own workspace, as its runs will reach them.
   const repositories =
     asked.repositories === undefined
       ? undefined
       : yield* reachedRepositories(standing.organizationId, asked.repositories);
+
   // Note that only a resume or a pause moves the due instant, so a form that sends `enabled` as it stands skips no firing.
   const reschedules =
     newTrigger !== undefined || (asked.enabled !== undefined && asked.enabled !== standing.enabled);
+
   const changes: AutomationChanges = {
     ...(asked.name === undefined ? undefined : { name: asked.name }),
     ...(asked.enabled === undefined ? undefined : { enabled: asked.enabled }),
@@ -398,6 +432,7 @@ const changesOf = /* @__PURE__ */ Effect.fnUntraced(function* (
       : { archiveSuccessful: asked.archiveSuccessful }),
     ...(asked.slackDelivery === undefined ? undefined : { slackDelivery: asked.slackDelivery }),
   };
+
   return { changes, webhookSecret: webhook?.secret };
 });
 
@@ -432,15 +467,20 @@ export const createAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
   const action = yield* checkedAction(userId, made.action);
   const standing = yield* standingOf(userId, made);
   yield* checkTriggerRepositories(made.trigger, standing.repositories);
+
   const scope = yield* checkedScope(
     userId,
     standing.organizationId,
     made.scope ?? AUTOMATION_SCOPE.PERSONAL,
   );
+
   const target = yield* checkedTarget(userId, made.target ?? { kind: AUTOMATION_TARGET.NEW_AGENT });
+
   const webhook =
     made.trigger.kind === AUTOMATION_TRIGGER.WEBHOOK ? mintWebhookSecret() : undefined;
+
   const { id } = made;
+
   const created = yield* hostedStoreOrUnavailable(
     createAutomationCommitted(userId, {
       ...(id === undefined ? undefined : { id }),
@@ -458,22 +498,27 @@ export const createAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
       slackDelivery: made.slackDelivery ?? false,
     }),
   );
+
   const cadence = yield* AutomationCadence;
+
   if (Option.isNone(created)) {
     // A make run again under the id it named, beside or after the one that wrote, answers the automation it made.
     const standing =
       id === undefined
         ? Option.none()
         : yield* hostedStoreOrUnavailable(readAutomation(userId, id));
+
     if (Option.isNone(standing)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     // Its schedule is kept again, since the make that wrote it may have died before keeping it.
     yield* cadenceOrUnavailable(cadence.keep(standing.value));
+
     return {
       automation: yield* summaryOf(userId, standing.value),
       webhookSecret: undefined,
       txid: undefined,
     };
   }
+
   yield* cadenceOrUnavailable(cadence.keep(created.value.automation));
   yield* recordServerEvent(
     SERVER_EVENT.AUTOMATION_CREATE,
@@ -483,6 +528,7 @@ export const createAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
       source,
     },
   );
+
   return {
     automation: yield* summaryOf(userId, created.value.automation),
     webhookSecret: webhook?.secret,
@@ -506,13 +552,16 @@ export const changeAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
   DatabaseServices | ModelCatalog | GitHubApp | HttpClient.HttpClient | Sandbox
 > {
   const { changes, webhookSecret } = yield* changesOf(userId, standing, asked);
+
   // Turning it on or off alone is the toggle, which more of the workspace may do than change it.
   const access = Object.keys(asked).every((field) => field === "enabled")
     ? AUTOMATION_ACCESS.TOGGLE
     : AUTOMATION_ACCESS.CHANGE;
+
   const written = yield* hostedStoreOrUnavailable(
     updateAutomationCommitted(userId, standing.id, changes, access),
   );
+
   if (Option.isNone(written)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* cadenceOrUnavailable((yield* AutomationCadence).keep(written.value.automation));
   yield* recordServerEvent(
@@ -520,6 +569,7 @@ export const changeAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
     { userId, workspaceId: standing.organizationId },
     { action: SERVER_AUTOMATION_CHANGE_ACTION.EDIT, source },
   );
+
   return {
     automation: yield* summaryOf(userId, written.value.automation),
     webhookSecret,
@@ -534,6 +584,7 @@ export const removeAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
   source: (typeof SERVER_AUTOMATION_SOURCE)[keyof typeof SERVER_AUTOMATION_SOURCE],
 ): Effect.fn.Return<string, HostedRefusal, DatabaseServices> {
   const deleted = yield* hostedStoreOrUnavailable(deleteAutomationCommitted(userId, standing.id));
+
   if (Option.isNone(deleted)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   // Note that a schedule Vercel failed to delete is logged and left, because its firing finds no
   // automation and records nothing (`automation-run-consumer.ts`), and the delete has committed.
@@ -551,6 +602,7 @@ export const removeAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
     { userId, workspaceId: standing.organizationId },
     { action: SERVER_AUTOMATION_CHANGE_ACTION.DELETE, source },
   );
+
   return deleted.value.txid;
 });
 
@@ -580,6 +632,7 @@ export const runAutomationNowAs = /* @__PURE__ */ Effect.fnUntraced(function* (
   DatabaseServices | ModelCatalog | GitHubApp | HttpClient.HttpClient | Sandbox
 > {
   const firedAt = yield* DateTime.nowAsDate;
+
   const recorded = yield* hostedStoreOrUnavailable(
     recordAutomationRun(automation, {
       dedupeKey: key,
@@ -587,11 +640,15 @@ export const runAutomationNowAs = /* @__PURE__ */ Effect.fnUntraced(function* (
       firedAt,
     }),
   );
+
   if (Option.isSome(recorded)) yield* executeAutomationRun(sessionsFor, recorded.value);
   const run = yield* hostedStoreOrUnavailable(automationRunByKey(userId, automation.id, key));
+
   if (Option.isNone(run)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const [summary] = yield* runSummaries(userId, [run.value]);
+
   if (summary === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return {
     run: summary,
     made: Option.isSome(recorded),

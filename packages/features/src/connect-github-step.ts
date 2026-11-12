@@ -49,6 +49,7 @@ function isLinkError(code: string): code is LinkError {
 /** The connect page's address for an intent, which claims it again and retries the link. */
 function intentAddress(intent: string): string {
   const query = new URLSearchParams({ [GITHUB_CONNECT_PAGE.INTENT_PARAM]: intent });
+
   return `${GITHUB_CONNECT_PAGE.PATH}?${query.toString()}`;
 }
 
@@ -62,6 +63,7 @@ export function failedLinkAddress(intent: string): string {
     [GITHUB_CONNECT_PAGE.ERROR_PARAM]: GITHUB_CONNECT_PAGE.FLAG,
     [GITHUB_CONNECT_PAGE.INTENT_PARAM]: intent,
   });
+
   return `${GITHUB_CONNECT_PAGE.PATH}?${query.toString()}`;
 }
 
@@ -69,19 +71,25 @@ export function failedLinkAddress(intent: string): string {
 export function connectStepFromSearch(search: string): ConnectStep {
   const query = new URLSearchParams(search);
   const errors = query.getAll(GITHUB_CONNECT_PAGE.ERROR_PARAM);
+
   if (errors.length > 0) {
     const intent = query.get(GITHUB_CONNECT_PAGE.INTENT_PARAM);
+
     return {
       kind: CONNECT_STEP.FAILED,
       code: errors.find((e) => e !== GITHUB_CONNECT_PAGE.FLAG),
       retry: intent ? intentAddress(intent) : undefined,
     };
   }
+
   if (query.get(GITHUB_CONNECT_PAGE.DONE_PARAM) === GITHUB_CONNECT_PAGE.FLAG) {
     return { kind: CONNECT_STEP.DONE };
   }
+
   const intent = query.get(GITHUB_CONNECT_PAGE.INTENT_PARAM);
+
   if (intent) return { kind: CONNECT_STEP.CONNECT, intent };
+
   return { kind: CONNECT_STEP.NOTHING };
 }
 
@@ -100,5 +108,6 @@ export function linkErrorWords(
 ): string {
   if (code !== undefined && isLinkError(code)) return LINK_ERROR_WORDS[code];
   const said = message ?? code;
+
   return said ? `${failed}: ${said}` : `${failed}.`;
 }

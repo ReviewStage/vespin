@@ -16,5 +16,6 @@ export async function temporaryDirectory(t: TestContext, prefix = "luke-"): Prom
   t.onTestFinished(async () => {
     await fs.rm(directory, { recursive: true, force: true });
   });
+
   return directory;
 }

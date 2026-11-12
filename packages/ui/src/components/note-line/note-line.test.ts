@@ -26,6 +26,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 });
@@ -36,6 +37,7 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -43,6 +45,7 @@ test("a note line announced as a status says its words alone, with no alert or p
   const container = mount(
     createElement(NoteLine, { look: NOTE_LINE_LOOK.LIST, status: true, children: WORDS }),
   );
+
   const statuses = container.querySelectorAll('[role="status"]');
 
   expect(statuses).toHaveLength(1);
@@ -77,6 +80,7 @@ function press(target: Element, type: string): void {
 
 test("a note line a hint wraps hangs the hint's card when tapped, found by its caller's mark", () => {
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(hover: none)" }));
+
   const container = mount(
     createElement(Tooltip, {
       label: "Worked for 3m",
@@ -88,15 +92,18 @@ test("a note line a hint wraps hangs the hint's card when tapped, found by its c
       }),
     }),
   );
+
   const line = container.querySelector("[data-worked]");
   expect(line?.textContent).toBe("Worked for 3m");
 
   for (const type of ["pointerover", "pointerdown", "pointerup", "pointerout"]) {
     press(line ?? document.body, type);
   }
+
   const touchEnd = new TouchEvent("touchend", { bubbles: true, cancelable: true });
   act(() => {
     line?.dispatchEvent(touchEnd);
+
     if (!touchEnd.defaultPrevented) {
       line?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
     }

@@ -33,6 +33,7 @@ export function openTargetOf(pathname: string, hash: string, search = ""): OpenT
   const address = `${LINK_ORIGIN}${pathname.replace(/\/$/u, "")}${search}${hash}`;
   const read = readShownLink(address);
   const appLink = appLinkOf(address);
+
   return read === undefined || appLink === undefined
     ? undefined
     : { appLink, kind: read.place.kind };

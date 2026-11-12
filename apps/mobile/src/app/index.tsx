@@ -6,9 +6,11 @@ import { launchAgent, launchPullRequest } from "../host/launch-arguments.js";
 /** Where the launch opens: the Inbox, or the agent it names, or that agent's pull request by its number. */
 function launchHref(): string {
   const agent = launchAgent();
+
   if (agent === undefined) return "/inbox";
   const agentPage = `/tasks/agent/${encodeURIComponent(agent)}`;
   const number = launchPullRequest();
+
   return number === undefined ? agentPage : `${agentPage}/pull/${number}`;
 }
 

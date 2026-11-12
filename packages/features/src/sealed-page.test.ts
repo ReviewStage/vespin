@@ -4,6 +4,7 @@ import { sealedPageDocument } from "./sealed-page.js";
 
 const THEME: PageTheme = {
   scheme: PAGE_THEME_SCHEME.LIGHT,
+  // SAFETY: nothing under test reads a variable of the theme.
   variables: {} as PageTheme["variables"],
   inset: "16px",
   narrowInset: "16px",
@@ -15,6 +16,7 @@ describe("sealedPageDocument", () => {
       "<!-- a --!><script>leak()</script><!-- b --><!doctype html><p>Hi</p>",
       THEME,
     );
+
     expect(sealed.indexOf("Content-Security-Policy")).toBeLessThan(
       sealed.indexOf("<script>leak()"),
     );

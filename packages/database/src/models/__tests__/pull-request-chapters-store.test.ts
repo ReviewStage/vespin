@@ -47,6 +47,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -54,6 +55,7 @@ const openAccount = Effect.gen(function* () {
 const openPullRequest = Effect.gen(function* () {
   const requestedBy = yield* openAccount;
   const organizationId = yield* openWorkspace(requestedBy);
+
   const generate = (now: Date, headSha: string = HEAD): ChapterGenerationRequest => ({
     organizationId,
     repository: REPOSITORY,
@@ -63,12 +65,14 @@ const openPullRequest = Effect.gen(function* () {
     requestedBy,
     now,
   });
+
   return { organizationId, requestedBy, generate };
 });
 
 const claimedOf = (answer: ChapterClaimAnswer): ChapterClaim => {
   assert.equal(answer.outcome, CHAPTER_CLAIM_OUTCOME.CLAIMED);
   assert.ok(answer.outcome === CHAPTER_CLAIM_OUTCOME.CLAIMED);
+
   return answer.claim;
 };
 
@@ -92,11 +96,13 @@ it.layer(getTestDB())("the pull request chapters store", (it) => {
 
       const claim = claimedOf(yield* claimChapterGeneration(generate(at(0))));
       const generating = yield* latestOf(organizationId);
+
       const landed = yield* finishChapterGeneration(claim, {
         model: MODEL,
         chapters: CHAPTERS,
         now: at(1),
       });
+
       const ready = yield* latestOf(organizationId);
 
       assert.deepEqual(
@@ -134,11 +140,13 @@ it.layer(getTestDB())("the pull request chapters store", (it) => {
       const { organizationId, generate } = yield* openPullRequest;
 
       const claim = claimedOf(yield* claimChapterGeneration(generate(at(0))));
+
       const landed = yield* failChapterGeneration(
         claim,
         PULL_REQUEST_CHAPTERS_FAILURE.TOO_LARGE,
         at(1),
       );
+
       const failed = yield* latestOf(organizationId);
 
       assert.equal(landed, true);
@@ -201,12 +209,15 @@ it.layer(getTestDB())("the pull request chapters store", (it) => {
           chapters: CHAPTERS,
           now: at(boundMinutes + 2),
         });
+
         const lateFailure = yield* failChapterGeneration(
           crashed,
           PULL_REQUEST_CHAPTERS_FAILURE.TIMEOUT,
           at(boundMinutes + 2),
         );
+
         const standing = yield* latestOf(organizationId);
+
         const landed = yield* finishChapterGeneration(takeover, {
           model: MODEL,
           chapters: CHAPTERS,
@@ -232,11 +243,13 @@ it.layer(getTestDB())("the pull request chapters store", (it) => {
 
         const second = claimedOf(yield* claimChapterGeneration(generate(at(2))));
         const regenerating = yield* latestOf(organizationId);
+
         const replay = yield* finishChapterGeneration(first, {
           model: MODEL,
           chapters: CHAPTERS,
           now: at(3),
         });
+
         yield* failChapterGeneration(second, PULL_REQUEST_CHAPTERS_FAILURE.MODEL_REFUSED, at(3));
         const third = yield* claimChapterGeneration(generate(at(4)));
 

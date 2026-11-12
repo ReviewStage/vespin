@@ -86,6 +86,7 @@ export function browserLiveProcedures<Sender>(
   // A socket that closed closes its port after saying so; the panel opens another when it wants one.
   host.onBrowserLiveClosed(({ connectionId, code }) => {
     const port = byConnection.get(connectionId);
+
     if (port === undefined) return;
     byConnection.delete(connectionId);
     port.post({ type: BROWSER_LIVE_PORT_MESSAGE.CLOSED, code });
@@ -97,19 +98,23 @@ export function browserLiveProcedures<Sender>(
     Effect.suspend(() => {
       attached.port.close();
       byConnection.delete(attached.connectionId);
+
       return host.browserLiveDisconnect({ connectionId: attached.connectionId });
     });
 
   /** What the panel sent on one connection's port, read and handed to the host; anything else is dropped. */
   const heard = (connectionId: string, message: WireBoundaryInput): Effect.Effect<void> => {
     const read = readInbound(unparsedWire(message));
+
     if (Result.isFailure(read)) return Effect.void;
+
     return host.browserLiveSend({ connectionId, text: read.success.text });
   };
 
   /** The panel's attached views, its page's end watched for the first time it attaches any. */
   const attachedOf = (sender: Sender) => {
     const held = panels.get(sender);
+
     if (held !== undefined) return held;
     const fresh = new Map<string, Attached>();
     panels.set(sender, fresh);
@@ -117,6 +122,7 @@ export function browserLiveProcedures<Sender>(
       panels.delete(sender);
       void run(Effect.forEach([...fresh.values()], release, { discard: true }));
     });
+
     return fresh;
   };
 
@@ -129,28 +135,35 @@ export function browserLiveProcedures<Sender>(
       BROWSER_LIVE_ACT_KIND.BROWSER_LIVE_ATTACH
     ].effect(function* ({ input, context, errors }) {
       const sender = panelOf(context.actor);
+
       if (sender === undefined) return yield* Effect.fail(errors.REFUSED());
       const held = attachedOf(sender);
       const earlier = held.get(input.viewId);
+
       if (earlier !== undefined) {
         held.delete(input.viewId);
         yield* release(earlier);
       }
+
       const connectionId = createId();
       const port = ports.open(sender, { viewId: input.viewId });
       const attached = { connectionId, port };
       held.set(input.viewId, attached);
       byConnection.set(connectionId, port);
       port.onMessage((message) => void run(heard(connectionId, message)));
+
       const taken = yield* host.browserLiveConnect({
         connectionId,
         agentId: input.agentId,
         tabId: input.tabId,
       });
+
       if (taken) return;
+
       // Note that only this attach's own entry goes, because a newer attach of the view may have taken its place.
       if (held.get(input.viewId) === attached) held.delete(input.viewId);
       yield* release(attached);
+
       return yield* Effect.fail(errors.REFUSED());
     }),
     [BROWSER_LIVE_ACT_KIND.BROWSER_LIVE_DETACH]: browserLivePort[
@@ -159,6 +172,7 @@ export function browserLiveProcedures<Sender>(
       if (!context.actor.panel) return yield* Effect.fail(errors.REFUSED());
       const held = panels.get(context.actor.sender);
       const attached = held?.get(input.viewId);
+
       if (held === undefined || attached === undefined) return;
       held.delete(input.viewId);
       yield* release(attached);

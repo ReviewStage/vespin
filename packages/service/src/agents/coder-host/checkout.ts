@@ -32,14 +32,14 @@ import {
   agentMember,
   agentWorkspace as workspaceOfAgent,
 } from "../../github/workspace-repository.js";
-import { extraCheckoutPaths, REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
+import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import {
-  cloneExtraRepository,
+  claimWorkspaceCheckout,
   cloneRepository,
+  linkWorkspaceFolder,
   REPOSITORY_REFUSAL,
   type RepositoryRefusal,
   type RepositorySandbox,
-  refreshRepository,
   runInSandbox,
   setCheckoutIdentity,
 } from "../repository-shell.js";
@@ -49,24 +49,25 @@ import { CODER, CODER_REFUSAL, type CoderRefusal } from "./bounds.js";
 /**
  * checkout.ts -- a coding agent's checkout of its repository, whose commits are, and the credential its sandbox pushes through.
  *
- * The agent's repository is checked out in two steps. As its sandbox opens,
- * it is checked out on the same terms as the brain's checkout
- * (`repository-shell.ts`): the installation of its task's workspace is
- * confirmed to reach it and a read token minted for that one repository,
- * set at the sandbox's firewall for the clone alone and withdrawn after it;
- * a sandbox created for a launch has the launch's write token set there
- * first instead, to stand on past the checkout, which reaches GitHub
- * through it with no write of its own (`writeAgentCredential`).
+ * The agent's repository is checked out in two steps. As a cloud start
+ * begins, the installation of its task's workspace is confirmed to reach it
+ * and its write token minted, once (`agentRepositoryRead`), which the
+ * sandbox's checkout waits on and nothing else of GitHub's. As its sandbox
+ * opens, it is checked out on the same terms as the brain's checkout
+ * (`repository-shell.ts`), the token set at the sandbox's firewall first,
+ * to stand on past the checkout, which reaches GitHub through it with no
+ * write of its own (`writeAgentCredential`); a checkout made again before a
+ * relaunch sets it there for the clone alone.
  * The clone is whole, since a branch and a pull request are cut from the
- * history, or is no clone at all where its sandbox was created from its
- * workspace's repository's base drive, whose whole checkout is fetched
- * up to the branch instead (`refreshAgentCheckout`, `../base-drive.ts`),
- * or from the snapshot of the agent it was started from, whose checkout
- * stands as that agent left it. The launch then finishes it (`finishCheckoutWith`): a
- * write token is minted, carrying contents and pull requests write, since
- * the agent pushes a branch and opens a pull request from it, and set at the
- * firewall; the commit identity is set; and the token is handed back for
- * the authored file to set at the firewall for the session's own commands,
+ * history, or is no clone at all where its sandbox was created on a fork of
+ * its workspace's drive, whose checkout of the repository is claimed and
+ * fetched up to the branch instead (`claimAgentCheckout`,
+ * `../workspace-drive.ts`), or from the snapshot of the agent it was started from, whose checkout
+ * stands as that agent left it. The launch then finishes it (`finishCheckoutWith`): the
+ * write token, carrying contents and pull requests write, since the agent
+ * pushes a branch and opens a pull request from it, is set at the firewall;
+ * the commit identity, read on it beside the checkout (`agentCheckoutPlan`),
+ * is set; and the token is handed on for the launch's own firewall write,
  * minted afresh at every write after
  * (`agentFirewallSources`, `../sandbox-firewall.ts`), which is where `gh` and `git push` reach
  * GitHub; it never enters the sandbox's filesystem or environment. An installation token is good for an hour, so
@@ -157,9 +158,12 @@ const readAuthor = /* @__PURE__ */ Effect.fn("web/agentReadAuthor")(function* (
   agent: WithRepository<Agent>,
 ): Effect.fn.Return<AgentAuthor, StoreFailure, CheckoutServices> {
   if (automationRun(agent) !== undefined) return AGENT_AUTHOR.APP_AUTOMATION;
+
   if (agent.githubAccess === GITHUB_ACCESS.TOKEN) return AGENT_AUTHOR.TOKEN;
+
   if (appAuthors(yield* commitAuthorOf(target.userId))) return AGENT_AUTHOR.APP_CHOSEN;
   const app = yield* GitHubApp;
+
   return yield* app.userPusher(target.userId, agent.repository).pipe(
     Effect.map((pusher) =>
       Option.isSome(pusher) ? AGENT_AUTHOR.DEVELOPER : AGENT_AUTHOR.APP_NO_PUSH,
@@ -189,6 +193,7 @@ const agentAuthor = /* @__PURE__ */ Effect.fn("web/agentAuthor")(function* (
   if (agent.author !== null) return agent.author;
   const read = yield* readAuthor(target, agent);
   const settled = yield* settleAgentAuthor(target.userId, agent.id, read);
+
   return Option.getOrElse(settled, () => read);
 });
 
@@ -227,17 +232,23 @@ const coAuthorOf = /* @__PURE__ */ Effect.fn("web/agentCoAuthorOf")(function* (
 ) {
   if (!coAuthorCredited(choice)) return undefined;
   const app = yield* GitHubApp;
+
   if (author === AGENT_AUTHOR.APP_CHOSEN) {
     const token = yield* app.userToken(target.userId);
+
     return coAuthorTrailer(identityOf(yield* app.tokenUser(token)));
   }
+
   if (author !== AGENT_AUTHOR.DEVELOPER && author !== AGENT_AUTHOR.TOKEN) return undefined;
+
   // Note that an agent on its starter's own token reads the bot on that token, which stands where their sign-in may not.
   const token =
     author === AGENT_AUTHOR.TOKEN
       ? (yield* agentRepositoryToken(target, agent)).token
       : yield* app.userToken(target.userId);
+
   const bot = yield* app.appBot(token);
+
   return coAuthorTrailer({ name: bot.login, email: noreplyAddress(bot) });
 });
 
@@ -257,21 +268,26 @@ export const agentAuthorship = /* @__PURE__ */ Effect.fn("web/agentAuthorship")(
     Effect.logWarning(
       `The ${what} of conversation ${target.conversationId}'s commits was not read: ${failure._tag}`,
     );
+
   const author = yield* agentAuthor(target, agent).pipe(
     Effect.tapError(unread("author")),
     Effect.option,
   );
+
   if (Option.isNone(author)) return { by: COMMIT_BY.APP, coAuthor: undefined };
+
   const by =
     author.value === AGENT_AUTHOR.DEVELOPER || author.value === AGENT_AUTHOR.TOKEN
       ? COMMIT_BY.DEVELOPER
       : COMMIT_BY.APP;
+
   const coAuthor = yield* Effect.flatMap(commitAuthorOf(target.userId), (choice) =>
     coAuthorOf(target, agent, author.value, choice),
   ).pipe(
     Effect.tapError(unread("co-author")),
     Effect.orElseSucceed(() => undefined),
   );
+
   return { by, coAuthor };
 });
 
@@ -306,31 +322,41 @@ export const agentRepositoryToken = /* @__PURE__ */ Effect.fn("web/agentReposito
     CheckoutServices
   > {
     const app = yield* GitHubApp;
+
     const repositories = yield* readAgentRepositories(target.userId, agent.id).pipe(
       Effect.mapError(refusedBy),
     );
+
     if (repositories.length > 1) {
       const names = repositories.map((each) => each.repository);
+
       const answered =
         named === undefined
           ? 0
           : names.findIndex((each) => each.toLowerCase() === named.toLowerCase());
+
       if (answered < 0) {
         return yield* new CheckoutRefused({
           reason: CODER_REFUSAL.NOT_REACHABLE,
           detail: `Not reached: ${named}.`,
         });
       }
+
       return yield* agentRepositoriesToken(target, agent, names, answered);
     }
+
     const reached = yield* Effect.gen(function* () {
       const workspace = yield* agentWorkspace(target, agent);
+
       if (Option.isNone(workspace)) return Option.none();
+
       return yield* app.repositoryWriteToken(workspace.value, agent.repository, agentMember(agent));
     }).pipe(Effect.mapError(refusedBy));
+
     if (Option.isNone(reached))
       return yield* new CheckoutRefused({ reason: CODER_REFUSAL.NOT_REACHABLE });
     const { repository, token, access } = reached.value;
+
     return {
       token,
       defaultBranch: repository.defaultBranch,
@@ -352,6 +378,7 @@ export const agentFirewallSources = /* @__PURE__ */ Effect.fn("web/agentFirewall
   ): Effect.fn.Return<FirewallSources, CheckoutRefused, CheckoutServices> {
     if (!hasRepository(agent)) return {};
     const { token, fullName, access } = yield* agentRepositoryToken(target, agent);
+
     return { github: { token, fullName, access } };
   },
 );
@@ -364,30 +391,40 @@ const agentRepositoriesToken = Effect.fnUntraced(function* (
   answered: number,
 ) {
   const app = yield* GitHubApp;
+
   const minted = yield* Effect.gen(function* () {
     const workspace = yield* agentWorkspace(target, agent);
+
     if (Option.isNone(workspace)) return Option.none();
+
     return Option.some(
       yield* app.repositoriesWriteToken(workspace.value, repositories, agentMember(agent)),
     );
   }).pipe(Effect.mapError(refusedBy));
+
   if (Option.isNone(minted))
     return yield* new CheckoutRefused({ reason: CODER_REFUSAL.NOT_REACHABLE });
+
   if (Result.isFailure(minted.value)) {
     const refused = minted.value.failure;
+
     const repository =
       refused.why === REPOSITORY_SET_UNREACHED.UNREACHED
         ? refused.unreached.repository
         : refused.repository;
+
     return yield* new CheckoutRefused({
       reason: CODER_REFUSAL.NOT_REACHABLE,
       detail: `Not reached: ${repository}.`,
     });
   }
+
   const { repositories: reached, token, access } = minted.value.success;
   const one = reached[answered];
+
   if (one === undefined)
     return yield* Effect.die("a set of repositories answered fewer than asked");
+
   return { token, defaultBranch: one.defaultBranch, fullName: one.fullName, access };
 });
 
@@ -407,18 +444,23 @@ const commitIdentity = /* @__PURE__ */ Effect.fn("web/agentCommitIdentity")(func
   credential: RepositoryCredential,
 ): Effect.fn.Return<CheckoutIdentity, CheckoutRefused, CheckoutServices> {
   const app = yield* GitHubApp;
+
   if (author === AGENT_AUTHOR.TOKEN && credential.access.kind === GITHUB_ACCESS.TOKEN) {
     return identityOf(yield* app.tokenUser(credential.token).pipe(Effect.mapError(refusedBy)));
   }
+
   if (author === AGENT_AUTHOR.DEVELOPER) {
     const pusher = yield* Effect.option(app.userPusher(target.userId, agent.repository));
     const developer = Option.flatten(pusher);
+
     if (Option.isSome(developer)) return identityOf(developer.value.user);
     yield* Effect.logWarning(
       `The developer of conversation ${target.conversationId} no longer pushes to its repository; its commits are the App's`,
     );
   }
+
   const bot = yield* app.appBot(credential.token).pipe(Effect.mapError(refusedBy));
+
   return { name: bot.login, email: noreplyAddress(bot) };
 });
 
@@ -437,7 +479,7 @@ function refusedWith(failure: RepositoryRefusal): CheckoutRefused {
   return new CheckoutRefused({ reason: failure.reason, detail: failure.detail });
 }
 
-/** The agent's repository as its workspace reaches it: the workspace, the repository as GitHub spells it, its default branch, and a read token with whose it is. */
+/** The agent's repository as its workspace reaches it: the workspace, the repository as GitHub spells it, its default branch, and its write token with whose it is. */
 export interface AgentRepositoryRead {
   readonly workspaceId: string;
   readonly fullName: string;
@@ -447,117 +489,39 @@ export interface AgentRepositoryRead {
 }
 
 /**
- * The agent's repository as its workspace reaches it now: the workspace, the
- * repository as GitHub spells it with its default branch, and a read token
- * for that one repository with whose it is; refused as not reachable where
- * neither the workspace's installation nor the starter's own token reaches
- * it, and as GitHub unavailable where GitHub did not say.
+ * The agent's repository as its workspace reaches it now, read on the one
+ * write token a cloud start mints for it (`agentRepositoryToken`): the
+ * workspace, the repository as GitHub spells it with its default branch,
+ * and the token with whose it is, which the checkout clones or fetches
+ * through, the firewall carries, and the commit identity is read on
+ * (`agentCheckoutPlan`), so a start mints it once and its checkout waits on
+ * nothing else of GitHub's. Refused as not reachable where neither the
+ * workspace's installation nor the starter's own token reaches it, and as
+ * GitHub unavailable where GitHub did not say.
  */
 export const agentRepositoryRead = /* @__PURE__ */ Effect.fn("web/agentRepositoryRead")(function* (
   target: ConversationTarget,
   agent: WithRepository<Agent>,
 ): Effect.fn.Return<AgentRepositoryRead, CheckoutRefused, CheckoutServices> {
-  const app = yield* GitHubApp;
   // Note that a store that could not be read refuses as GitHub unavailable.
   const workspace = yield* agentWorkspace(target, agent).pipe(Effect.mapError(refusedBy));
+
   if (Option.isNone(workspace))
     return yield* new CheckoutRefused({ reason: CODER_REFUSAL.NOT_REACHABLE });
-  const reached = yield* app
-    .repositoryReadToken(workspace.value, agent.repository, agentMember(agent))
-    .pipe(Effect.mapError(refusedBy));
-  if (Option.isNone(reached))
-    return yield* new CheckoutRefused({ reason: CODER_REFUSAL.NOT_REACHABLE });
-  const { repository, token, access } = reached.value;
-  return {
-    workspaceId: workspace.value,
-    fullName: repository.fullName,
-    defaultBranch: repository.defaultBranch,
-    token,
-    access,
-  };
+  const minted = yield* agentRepositoryToken(target, agent);
+
+  return { workspaceId: workspace.value, ...minted };
 });
 
-/** A repository the agent works in beside its own, as its workspace reaches it: the repository as GitHub spells it, the branch its checkout is cloned at, the folder it is cloned into, and a read token for it with whose it is. */
-export interface AgentExtraRead {
-  readonly fullName: string;
-  readonly branch: string;
-  readonly path: string;
-  readonly token: Redacted.Redacted;
-  readonly access: GitHubTokenAccess;
+/** The agent's write token as the firewall carries it, from the read its start made. */
+export function repositoryCredentialOf(read: AgentRepositoryRead): RepositoryCredential {
+  return { token: read.token, fullName: read.fullName, access: read.access };
 }
-
-/**
- * The repositories the agent works in beside its own (`readAgentRepositories`),
- * each as its workspace reaches it now, with a read token for that one
- * repository, the branch it was named at or its default branch, and the
- * folder it is cloned into (`extraCheckoutPaths`); none for an agent in one
- * repository, which reads nothing of GitHub. Refused as not reachable,
- * naming the repository, where one is no longer reached.
- */
-export const agentExtraReads = /* @__PURE__ */ Effect.fn("web/agentExtraReads")(function* (
-  target: ConversationTarget,
-  agent: WithRepository<Agent>,
-): Effect.fn.Return<readonly AgentExtraRead[], CheckoutRefused, CheckoutServices> {
-  const [, ...extras] = yield* readAgentRepositories(target.userId, agent.id).pipe(
-    Effect.mapError(refusedBy),
-  );
-  if (extras.length === 0) return [];
-  const app = yield* GitHubApp;
-  const workspace = yield* agentWorkspace(target, agent).pipe(Effect.mapError(refusedBy));
-  if (Option.isNone(workspace))
-    return yield* new CheckoutRefused({ reason: CODER_REFUSAL.NOT_REACHABLE });
-  const paths = extraCheckoutPaths(extras.map((each) => each.repository));
-  return yield* Effect.forEach(
-    extras,
-    (extra, index) =>
-      Effect.gen(function* () {
-        const reached = yield* app
-          .repositoryReadToken(workspace.value, extra.repository, agentMember(agent))
-          .pipe(Effect.mapError(refusedBy));
-        if (Option.isNone(reached)) {
-          return yield* new CheckoutRefused({
-            reason: CODER_REFUSAL.NOT_REACHABLE,
-            detail: `Not reached: ${extra.repository}.`,
-          });
-        }
-        const { repository, token, access } = reached.value;
-        const read: AgentExtraRead = {
-          fullName: repository.fullName,
-          branch: extra.baseBranch ?? repository.defaultBranch,
-          path: paths[index] ?? REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE,
-          token,
-          access,
-        };
-        return read;
-      }),
-    { concurrency: "unbounded" },
-  );
-});
-
-/**
- * The repositories the agent works in beside its own cloned whole into
- * their folders, on the reads the caller made of them, one after another,
- * since each clone's token stands in the one slot the firewall keeps for a
- * clone (`underCloneCredential`); nothing for an agent with none.
- */
-export const cloneAgentExtras = /* @__PURE__ */ Effect.fn("web/cloneAgentExtras")(function* (
-  sandbox: RepositorySandbox,
-  reads: readonly AgentExtraRead[],
-): Effect.fn.Return<void, CheckoutRefused> {
-  for (const read of reads) {
-    yield* cloneExtraRepository(
-      sandbox,
-      { fullName: read.fullName, branch: read.branch, folder: read.path.split("/").pop() ?? "" },
-      read.token,
-      read.access,
-    ).pipe(Effect.mapError(refusedWith));
-  }
-});
 
 /**
  * The agent's repository cloned whole into the sandbox on the read the
  * caller made of it, at the branch it was started on where its row names one
- * and at the default branch otherwise, the read token standing at the
+ * and at the default branch otherwise, the read's token standing at the
  * firewall for the clone alone where none stands there for it already
  * (`writeAgentCredential`). The checkout is recorded under the name the
  * agent's row holds. Nothing else is set: no commit identity and no
@@ -585,28 +549,41 @@ export const cloneAgentRepository = /* @__PURE__ */ Effect.fn("web/cloneAgentRep
 );
 
 /**
- * The checkout a fork of the repository's base drive holds brought up to
- * the repository's default branch, on the read the caller made of it, the token
- * at the firewall for the fetch alone where none stands there for it already
- * (`writeAgentCredential`), and recorded under the name the
- * agent's row holds; refused, in git's words, where the sandbox holds no
- * checkout of that repository or the fetch failed. As after a clone, no
- * identity and no credential is set (`finishCheckoutWith`).
+ * The agent's checkout made on a fresh fork of its workspace's drive, on
+ * the read the caller made of it: the repository's folder on the drive
+ * (`folder`) claimed as the checkout and brought up to the branch the agent
+ * was started on where its row names one and to the default branch
+ * otherwise (`claimWorkspaceCheckout`), or, where the fork holds no
+ * checkout there, the repository cloned whole as from the image alone
+ * (`cloneAgentRepository`) and linked at its folder, so it stands among the
+ * drive's other repositories either way. The token stands at the firewall
+ * for the fetch alone where none stands there for it already
+ * (`writeAgentCredential`), and the checkout is recorded under the name the
+ * agent's row holds. As after a clone, no identity and no credential is
+ * set (`finishCheckoutWith`).
  */
-export const refreshAgentCheckout = /* @__PURE__ */ Effect.fn("web/refreshAgentCheckout")(
-  function* (
-    agent: WithRepository<Agent>,
-    sandbox: RepositorySandbox,
-    read: AgentRepositoryRead,
-  ): Effect.fn.Return<void, CheckoutRefused> {
-    yield* refreshRepository(
-      sandbox,
-      { fullName: read.fullName, defaultBranch: read.defaultBranch, recordedAs: agent.repository },
-      read.token,
-      read.access,
-    ).pipe(Effect.mapError(refusedWith));
-  },
-);
+export const claimAgentCheckout = /* @__PURE__ */ Effect.fn("web/claimAgentCheckout")(function* (
+  agent: WithRepository<Agent>,
+  sandbox: RepositorySandbox,
+  read: AgentRepositoryRead,
+  folder: string,
+): Effect.fn.Return<void, CheckoutRefused> {
+  const claimed = yield* claimWorkspaceCheckout(
+    sandbox,
+    {
+      fullName: read.fullName,
+      defaultBranch: agent.startBranch ?? read.defaultBranch,
+      recordedAs: agent.repository,
+      folder,
+    },
+    read.token,
+    read.access,
+  ).pipe(Effect.mapError(refusedWith));
+
+  if (claimed) return;
+  yield* cloneAgentRepository(agent, sandbox, read);
+  yield* linkWorkspaceFolder(sandbox, folder).pipe(Effect.mapError(refusedWith));
+});
 
 const MAKE_WORKING_FOLDER = `mkdir -p ${CODER.CHECKOUT_PATH}`;
 
@@ -626,6 +603,7 @@ export const openWorkingFolder = /* @__PURE__ */ Effect.fn("web/openWorkingFolde
     { command: MAKE_WORKING_FOLDER, workingDirectory: REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE },
     REPOSITORY_REFUSAL.SANDBOX_UNAVAILABLE,
   ).pipe(Effect.mapError(refusedWith));
+
   if (made.exitCode !== 0) {
     return yield* new CheckoutRefused({
       reason: `\`${MAKE_WORKING_FOLDER}\` exited ${made.exitCode}`,
@@ -640,20 +618,16 @@ export interface AgentCheckoutPlan {
 }
 
 /**
- * What a checkout's finish reads of GitHub, apart from the sandbox: a write
- * token minted and the commit identity read, so a launch that opens a
- * sandbox anyway reads them while its checkout is made (`runner-sessions.ts`).
+ * What a checkout's finish sets, on the write token its start minted: the
+ * token itself, and the commit identity read on it, which a launch reads
+ * while its checkout is made, since the checkout waits on the token alone.
  */
 export const agentCheckoutPlan = /* @__PURE__ */ Effect.fn("web/agentCheckoutPlan")(function* (
   target: ConversationTarget,
   agent: WithRepository<Agent>,
+  credential: RepositoryCredential,
 ): Effect.fn.Return<AgentCheckoutPlan, CheckoutRefused | StoreFailure, CheckoutServices> {
-  const minted = yield* agentRepositoryToken(target, agent);
-  const identity = yield* identityOn(target, agent, minted);
-  return {
-    credential: { token: minted.token, fullName: minted.fullName, access: minted.access },
-    identity,
-  };
+  return { credential, identity: yield* identityOn(target, agent, credential) };
 });
 
 /**
@@ -682,9 +656,11 @@ export const writeAgentCredential = /* @__PURE__ */ Effect.fn("web/writeAgentCre
     credential: RepositoryCredential,
   ): Effect.fn.Return<void, CheckoutRefused> {
     const firewall = sandbox.firewall;
+
     if (firewall === undefined) {
       return yield* new CheckoutRefused({ reason: REPOSITORY_REFUSAL.NO_FIREWALL });
     }
+
     // The token is revealed only into the firewall rules set for GitHub.
     yield* firewall
       .write({ github: credential })

@@ -39,8 +39,10 @@ export function appSettingsWire(settings: AppSettingsView): AppSettings {
   const storedEntries = Object.fromEntries(
     APP_SETTING_FIELDS.map((field) => [field, settings[field]]),
   );
+
   // SAFETY: APP_SETTING_FIELDS enumerates every schema-derived stored field exactly once.
   const stored = storedEntries as StoredAppSettings;
+
   return { stored, experiments: settings.experiments, accountRead: settings.accountRead };
 }
 

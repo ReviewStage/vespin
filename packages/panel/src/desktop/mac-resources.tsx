@@ -51,14 +51,17 @@ function MacResources(): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [sort, setSort] = useState<ResourceSort>(RESOURCE_SORT.MEMORY);
   const { data } = useQuery(macResourcesQuery(open));
+
   const view = useMemo(
     () => (data === undefined ? undefined : macResourcesView(data.processes, sort)),
     [data, sort],
   );
+
   const facts: readonly ResourceFact[] = [
     { label: WORDS.CPU, value: view?.cpu ?? "—" },
     { label: WORDS.MEMORY, value: view?.memory ?? "—" },
   ];
+
   return (
     <ResourcesPopover
       label={WORDS.TITLE}
@@ -80,5 +83,6 @@ export function MacResourcesButton(): React.JSX.Element | null {
   const desktop =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.DESKTOP_APP) }).data ===
     true;
+
   return desktop ? <MacResources /> : null;
 }

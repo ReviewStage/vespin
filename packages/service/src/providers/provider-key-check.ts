@@ -88,6 +88,7 @@ const HTTP_STATUS = { OK: 200, UNAUTHORIZED: 401, FORBIDDEN: 403, TOO_MANY_REQUE
 /** Whether the key is spelled as the other provider's. */
 function spelledForOther(provider: ProviderKeyProvider, key: string): boolean {
   const anthropic = key.startsWith(ANTHROPIC_KEY_PREFIX);
+
   return provider === PROVIDER_KEY_PROVIDER.ANTHROPIC
     ? !anthropic && key.startsWith(OPENAI_KEY_PREFIX)
     : anthropic;
@@ -100,6 +101,7 @@ function checkRequest(
   switch (provider) {
     case PROVIDER_KEY_PROVIDER.ANTHROPIC: {
       const check = PROVIDER_CHECK[PROVIDER_KEY_PROVIDER.ANTHROPIC];
+
       // The key is revealed here alone, into the one header the provider reads it from.
       return HttpClientRequest.get(check.URL).pipe(
         HttpClientRequest.setHeaders({
@@ -108,6 +110,7 @@ function checkRequest(
         }),
       );
     }
+
     case PROVIDER_KEY_PROVIDER.OPENAI:
       return HttpClientRequest.get(PROVIDER_CHECK[PROVIDER_KEY_PROVIDER.OPENAI].URL).pipe(
         HttpClientRequest.bearerToken(Redacted.value(key)),
@@ -119,6 +122,7 @@ function checkRequest(
 export function providerKeyHint(key: Redacted.Redacted<string>): string {
   const revealed = Redacted.value(key);
   const prefix = HINT_PREFIX.exec(revealed)?.[0] ?? "";
+
   return `${prefix}…${revealed.slice(-HINT_TAIL_CHARS)}`;
 }
 
@@ -129,6 +133,7 @@ export const checkProviderKey = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<ProviderKeyCheck, never, HttpClient.HttpClient> {
   if (spelledForOther(provider, Redacted.value(key))) return PROVIDER_KEY_CHECK.WRONG_PROVIDER;
   const client = yield* HttpClient.HttpClient;
+
   // A request that failed or timed out is no answer, and its cause is dropped unread.
   const answered = Option.getOrUndefined(
     yield* client.execute(checkRequest(provider, key)).pipe(
@@ -138,10 +143,13 @@ export const checkProviderKey = /* @__PURE__ */ Effect.fnUntraced(function* (
       Effect.option,
     ),
   );
+
   if (answered === HTTP_STATUS.OK) return PROVIDER_KEY_CHECK.ACCEPTED;
+
   if (answered === HTTP_STATUS.UNAUTHORIZED || answered === HTTP_STATUS.FORBIDDEN) {
     return PROVIDER_KEY_CHECK.INVALID;
   }
+
   return PROVIDER_KEY_CHECK.UNREACHABLE;
 });
 
@@ -156,6 +164,7 @@ export const checkFastAccess = /* @__PURE__ */ Effect.fnUntraced(function* (
   // A key spelled as OpenAI's is never sent to Anthropic, as the check above refuses it unsent.
   if (spelledForOther(PROVIDER_KEY_PROVIDER.ANTHROPIC, Redacted.value(key))) return undefined;
   const client = yield* HttpClient.HttpClient;
+
   // The key is revealed here alone, into the one header the provider reads it from.
   const request = HttpClientRequest.post(FAST_CHECK.URL).pipe(
     HttpClientRequest.setHeaders({
@@ -165,6 +174,7 @@ export const checkFastAccess = /* @__PURE__ */ Effect.fnUntraced(function* (
     }),
     HttpClientRequest.bodyJsonUnsafe(FAST_CHECK.BODY),
   );
+
   // Note that only a 429's body is read, and only for the limit's words, because a refusal can echo part of the key.
   const answered = yield* client.execute(request).pipe(
     Effect.flatMap((response) =>
@@ -178,5 +188,6 @@ export const checkFastAccess = /* @__PURE__ */ Effect.fnUntraced(function* (
     Effect.timeout(FAST_CHECK_TIMEOUT),
     Effect.option,
   );
+
   return Option.getOrUndefined(answered);
 });

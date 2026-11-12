@@ -27,9 +27,11 @@ export function contextWindowOf(
 ): number {
   const model = offered.find((each) => each.id === modelId);
   const windows = model?.contextWindows;
+
   if (windows !== undefined) {
     return chosen === CONTEXT_WINDOW.LONG ? windows.longTokens : windows.standardTokens;
   }
+
   return model?.contextWindow ?? CODER.FALLBACK_CONTEXT_WINDOW_TOKENS;
 }
 
@@ -39,6 +41,7 @@ function compactionThresholdOf(windowTokens: number, runtime: ConversationRuntim
     runtime === CONVERSATION_RUNTIME.CLAUDE_CODE
       ? windowTokens - CODER.CLAUDE_CODE_COMPACTION_RESERVE_TOKENS
       : Math.floor(windowTokens * CODER.COMPACTION_THRESHOLD_SHARE);
+
   return Math.max(1, threshold);
 }
 
@@ -49,8 +52,10 @@ export function agentContextOf(
   runtime: ConversationRuntime,
 ): AgentContext | undefined {
   const step = row.lastStep;
+
   if (step === null) return undefined;
   const compacted = row.compactedAt !== null;
+
   return {
     windowTokens,
     compactionThresholdTokens: compactionThresholdOf(windowTokens, runtime),

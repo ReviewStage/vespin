@@ -73,6 +73,7 @@ const router = createPanelRouter(
 /** The link place the window's router matches a link at, by its declaration and the place it reads there. */
 function matched(link: ReadLink) {
   const routed = routedLinkOf(router, link, "acme");
+
   return routed === undefined ? undefined : { declared: routed.declared, place: routed.link.place };
 }
 
@@ -80,10 +81,13 @@ function matched(link: ReadLink) {
 function handed(href: string): readonly ReadLink[] {
   const links: ReadLink[] = [];
   let open: ((href: string) => void) | undefined;
+
   function Opener(): null {
     open = useOpenLink();
+
     return null;
   }
+
   fakeAppPlatform({ openGitHub: () => undefined, openWeb: () => undefined });
   root = createRoot(document.body.appendChild(document.createElement("div")));
   act(() =>
@@ -98,6 +102,7 @@ function handed(href: string): readonly ReadLink[] {
     ),
   );
   act(() => open?.(href));
+
   return links;
 }
 
@@ -116,11 +121,13 @@ function press(url: string, wrap: (row: ReactNode) => ReactNode = (row) => row) 
   fakeAppPlatform({ openGitHub: (href) => github.push(href) });
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   const row = createElement(
     "ul",
     null,
     createElement(PullRequestLine, { pullRequest: { ...LINE, url } }),
   );
+
   act(() =>
     root?.render(
       withQueryClient(
@@ -132,10 +139,13 @@ function press(url: string, wrap: (row: ReactNode) => ReactNode = (row) => row) 
       ),
     ),
   );
+
   const button =
     container.querySelector<HTMLElement>("[data-task-card-pull-request] button") ??
     assert.fail("the row is a press");
+
   act(() => button.click());
+
   return { places: links.map((link) => link.place), github };
 }
 
@@ -149,14 +159,18 @@ test("inside a pull request's own tab, a link to it opens on GitHub", () => {
 test("a new list of tasks draws no part opening links again, and a link opened after it reads the new list", () => {
   const links: ReadLink[] = [];
   let open: ((href: string) => void) | undefined;
+
   // Note that the part holds while nothing it is handed changes, as a transcript's link does.
   const Opener = memo(function Opener() {
     open = useOpenLink();
+
     return null;
   });
+
   const openPlace = (link: ReadLink) => {
     links.push(link);
   };
+
   const draw = (tasks: readonly TaskPullRequests[]) =>
     withQueryClient(
       createElement(
@@ -165,6 +179,7 @@ test("a new list of tasks draws no part opening links again, and a link opened a
         createElement(ListedPullRequests, { tasks, children: createElement(Opener) }),
       ),
     );
+
   fakeAppPlatform({ openGitHub: () => undefined });
   root = createRoot(document.body.appendChild(document.createElement("div")));
   act(() => root?.render(draw([])));
@@ -288,6 +303,7 @@ test.each([
 
 test("a link naming a listed task by its number is asked of the place it is pressed on by the task's id", async () => {
   const page = "3f8e2a1b-6c4d-4e5f-8a9b-0c1d2e3f4a5b";
+
   const acme = {
     id: "workspace-acme",
     name: "Acme",
@@ -296,6 +312,7 @@ test("a link naming a listed task by its number is asked of the place it is pres
     github: null,
     memberCount: 1,
   };
+
   handState(
     {},
     {
@@ -318,12 +335,15 @@ test("a link naming a listed task by its number is asked of the place it is pres
   );
   const asked: LinkDestination[] = [];
   let open: ((href: string) => void) | undefined;
+
   // Note that the part reads the window's document, so it is read by the press.
   function Opener(): null {
     useQuery({ ...appStateQuery, select: selectRun });
     open = useOpenLink();
+
     return null;
   }
+
   root = createRoot(document.body.appendChild(document.createElement("div")));
   await act(async () =>
     root?.render(
@@ -333,6 +353,7 @@ test("a link naming a listed task by its number is asked of the place it is pres
           {
             value: (address) => {
               if (address.kind === ADDRESS.PLACE) asked.push(address.link.place);
+
               return true;
             },
           },
@@ -392,6 +413,7 @@ type OpenedBeside =
 /** What a press on `href` opens beside a task's page. */
 function openedOnPage(href: string, here: PagesHere): OpenedBeside {
   let opened: OpenedBeside;
+
   const open = openPullRequestsHere(
     here,
     (agentId, number) => {
@@ -401,8 +423,10 @@ function openedOnPage(href: string, here: PagesHere): OpenedBeside {
       opened = { page: [pageId, place] };
     },
   );
+
   const took = open(addressOf(href, ROUTER));
   assert.equal(took, opened !== undefined);
+
   return opened;
 }
 
@@ -456,11 +480,13 @@ test.each<[string, string, PagesHere, OpenedBeside]>([
 
 test("a task's page: a related task's pull request, as its row presses it, the window's, in that task's agent's tab", () => {
   const opened: (readonly [string, number | undefined])[] = [];
+
   const page = openPullRequestsHere(
     { ...TASK_PAGE, taskId: OTHER, pullRequests: new Map(), agentIds: [OTHER] },
     (agentId, number) => opened.push([agentId, number]),
     () => undefined,
   );
+
   const { places } = press(URL, (row) => createElement(OpenAddressesHere, { value: page }, row));
 
   assert.deepEqual(

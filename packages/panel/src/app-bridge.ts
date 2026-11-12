@@ -33,6 +33,7 @@ let installedActPort: ActPortClient | undefined;
 /** Installs the bridge this window reaches main through; its root does this once, before anything is drawn, and calls what it answers as it closes. */
 export function installAppBridge(bridge: AppBridge): () => void {
   installed = bridge;
+
   return () => {
     if (installed === bridge) installed = undefined;
   };
@@ -41,6 +42,7 @@ export function installAppBridge(bridge: AppBridge): () => void {
 /** The bridge this window's root installed. */
 export function appBridge(): AppBridge {
   if (installed === undefined) throw new Error("No app bridge is installed in this window.");
+
   return installed;
 }
 
@@ -60,14 +62,17 @@ export function installActPort(
     // A send's trace crosses as Sentry's own headers, which the host reads into its call (`send-traces.ts`).
     headers: ({ context }) => (context.trace === undefined ? {} : sendTraceHeaders(context.trace)),
   });
+
   const uninstall = installActPortClient(through(createORPCClient(link)));
   port.start();
+
   return uninstall;
 }
 
 /** Installs the act port's client itself, which a test answers with a fake of its own; answers how to take it down. */
 export function installActPortClient(client: ActPortClient): () => void {
   installedActPort = client;
+
   return () => {
     if (installedActPort === client) installedActPort = undefined;
   };
@@ -76,12 +81,13 @@ export function installActPortClient(client: ActPortClient): () => void {
 /** The act port's client this window's root installed. */
 export function actPort(): ActPortClient {
   if (installedActPort === undefined) throw new Error("No act port is installed in this window.");
+
   return installedActPort;
 }
 
 /** One listener on one push, held as its own entry so a listener subscribed twice hears twice. */
 interface PushEntry {
-  readonly listener: (payload: unknown) => void;
+  readonly listener: (payload: PushEvent["payload"]) => void;
 }
 
 /** This window's push stream: the listeners a window subscribes through, and when main began to listen. */
@@ -94,6 +100,7 @@ export interface PushStream {
 /** Hands one push to every listener on it, its payload first read by the push's own guard. */
 function deliver(held: ReadonlyMap<PushName, Set<PushEntry>>, event: PushEvent): void {
   if (!PUSH_GUARD[event.push](event.payload)) return;
+
   for (const entry of [...(held.get(event.push) ?? [])]) {
     // Note that each listener is told on its own, because one that throws must
     // not end the stream every other push to this window rides.
@@ -115,31 +122,36 @@ function deliver(held: ReadonlyMap<PushName, Set<PushEntry>>, event: PushEvent):
  */
 export function openPushStream(client: ActPortClient): PushStream {
   const held = new Map<PushName, Set<PushEntry>>();
+
   const listen = (push: PushName, listener: PushEntry["listener"]) => {
     const entry: PushEntry = { listener };
     const entries = held.get(push) ?? new Set<PushEntry>();
     held.set(push, entries);
     entries.add(entry);
+
     return () => {
       entries.delete(entry);
     };
   };
+
   const listeners = Object.fromEntries(
     Object.entries(PUSH_METHOD).map(([method, push]) => [
       method,
       (listener: PushEntry["listener"]) => listen(push, listener),
     ]),
   );
+
   const opened = client.pushes().then((stream) => {
     void (async () => {
       for await (const event of stream) deliver(held, event);
-    })().catch((error: unknown) => {
+    })().catch((cause: unknown) => {
       // Note that a stream ends this way only with its page, its port closing under it, unless something broke.
-      if (!(error instanceof Error && error.name === "AbortError")) {
-        console.error("This window's push stream ended.", error);
+      if (!(cause instanceof Error && cause.name === "AbortError")) {
+        console.error("This window's push stream ended.", cause);
       }
     });
   });
+
   // SAFETY: one listener per method of PUSH_METHOD, each subscribing to that method's own push, whose guard reads its payload.
   return { listeners: listeners as PushListeners, opened };
 }

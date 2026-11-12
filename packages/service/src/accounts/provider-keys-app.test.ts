@@ -17,8 +17,10 @@ import { providerKeyRewrapApp } from "./provider-keys-app.js";
  */
 
 const CRON_SECRET = "cron-secret-1";
+
 /** A bearer that is not the cron's secret. */
 const OTHER_BEARER = "other-bearer-1";
+
 /** A ring of one key, held by every deployment here, so no refusal is the ring's absence. */
 const KEYS = `1:${Buffer.alloc(32, 1).toString("base64")}`;
 
@@ -45,16 +47,20 @@ const rewrap = (cronSecret: string | undefined, bearer: string) =>
       noDatabase,
       Layer.succeed(HostedEnvironment, environment(cronSecret)),
     );
+
     const { handler, dispose } = HttpRouter.toWebHandler(
       providerKeyRewrapApp().pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
+
     const request = new Request(`https://app.test${MAINTENANCE_PROVIDER_KEYS_REWRAP_PATH}`, {
       method: "POST",
       headers: { authorization: `Bearer ${bearer}` },
     });
+
     const response = yield* Effect.promise(() => handler(request));
     yield* Effect.promise(() => dispose());
+
     return response.status;
   });
 

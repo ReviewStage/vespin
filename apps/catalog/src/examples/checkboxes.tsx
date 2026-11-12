@@ -14,6 +14,7 @@ const copyToClipboard = (text: string): Promise<void> => navigator.clipboard.wri
 
 function WithDetail(): React.JSX.Element {
   const [checked, setChecked] = useState(false);
+
   return (
     <Checkbox
       checked={checked}
@@ -33,6 +34,7 @@ function WithDetail(): React.JSX.Element {
 
 function Held({ start, children }: { start: boolean; children: string }): React.JSX.Element {
   const [checked, setChecked] = useState(start);
+
   return (
     <Checkbox checked={checked} onChange={setChecked}>
       {children}
@@ -42,6 +44,7 @@ function Held({ start, children }: { start: boolean; children: string }): React.
 
 function Wordless({ label }: { label: string }): React.JSX.Element {
   const [checked, setChecked] = useState(false);
+
   return <Checkbox label={label} checked={checked} onChange={setChecked} />;
 }
 

@@ -93,12 +93,16 @@ async function resumedAuthorization(
 ): Promise<URLSearchParams | undefined> {
   if (!(await verifyOAuthQueryParams(query.toString(), secret))) return undefined;
   const resumed = new URLSearchParams(query);
+
   for (const name of SIGNING_PARAMETERS) resumed.delete(name);
+
   const prompts = (resumed.get(PROMPT.PARAMETER) ?? "")
     .split(" ")
     .filter((prompt) => prompt !== "" && prompt !== PROMPT.LOGIN);
+
   if (prompts.length === 0) resumed.delete(PROMPT.PARAMETER);
   else resumed.set(PROMPT.PARAMETER, prompts.join(" "));
+
   return resumed;
 }
 
@@ -118,6 +122,7 @@ function loginMethod(resumed: URLSearchParams | undefined): SocialProvider {
 async function sessionCookie(context: SignInContext, token: string): Promise<string> {
   const { name, attributes } = context.authCookies.sessionToken;
   const signed = `${token}.${await makeSignature(token, context.secret)}`;
+
   return [
     `${name}=${encodeURIComponent(signed)}`,
     `Max-Age=${context.sessionConfig.expiresIn}`,
@@ -132,24 +137,29 @@ async function sessionCookie(context: SignInContext, token: string): Promise<str
 async function signIn(auth: LocalSignInAuth, userId: string, request: Request): Promise<Response> {
   // Note that the environment is read on every request rather than trusted from the start, so this path holds the guard however it came to be mounted.
   const refusal = localServerRefusal(process.env);
+
   if (refusal !== undefined) return refused(STATUS.FORBIDDEN, refusal);
   const context = await auth.$context;
   const query = new URL(request.url).searchParams;
   const resumed = query.size === 0 ? undefined : await resumedAuthorization(query, context.secret);
+
   if (query.size > 0 && resumed === undefined) {
     return refused(
       STATUS.BAD_REQUEST,
       "This sign-in link is not one the service issued, or it expired: start the sign-in again.",
     );
   }
+
   if ((await context.internalAdapter.findUserById(userId)) === null) {
     return refused(
       STATUS.CONFLICT,
       "The demo's member is not in this database: run the demo seed first.",
     );
   }
+
   const session = await context.internalAdapter.createSession(userId);
   await context.internalAdapter.updateUser(userId, { lastLoginMethod: loginMethod(resumed) });
+
   return new Response(null, {
     status: STATUS.FOUND,
     headers: {

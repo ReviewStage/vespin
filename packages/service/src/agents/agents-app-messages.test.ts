@@ -139,9 +139,11 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, agent, ask, sessionId } = yield* messagedAgent(agentSessions, {
           running: false,
         });
+
         const message = (text: string) => ({ text, clientKey: randomUUID() });
 
         const overCookie = yield* ask(
@@ -152,6 +154,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             body: message("Use the new table."),
           }),
         );
+
         const overBearer = yield* ask(messageAs(owner, agent.id, message("And drop the old one.")));
 
         assert.equal(
@@ -175,6 +178,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             [harnessFor(owner), sessionId, "And drop the old one."],
           ],
         );
+
         const counted = {
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
           machine: AGENT_MACHINE.VERCEL,
@@ -182,6 +186,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           turn_running: false,
           queued: false,
         };
+
         assert.deepEqual(countedWith(owner, SERVER_EVENT.MESSAGE_SEND), [counted, counted]);
       }),
   );
@@ -191,15 +196,19 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, agent, ask, target, writer, turnId } = yield* messagedAgent(agentSessions, {
           running: true,
         });
+
         const shot = {
           name: "flow.png",
           mediaType: AGENT_ATTACHMENT_TYPE.PNG,
           data: Buffer.from(SIZED_PNG).toString("base64"),
         };
+
         const body = { text: "Match this.", attachments: [shot], clientKey: randomUUID() };
+
         const kept = Database.use((db) =>
           db
             .select({ id: attachment.id })
@@ -216,16 +225,20 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           handed.map((part) => (part.type === "text" ? part.text : part.filename)),
           ["Match this.", "flow.png", `Image flow.png is attachment ${row.id}`],
         );
+
         const picture = Option.getOrThrow(
           yield* readConversationPicture(target.conversationId, row.id),
         );
+
         assert.equal(picture.contentType, AGENT_ATTACHMENT_TYPE.PNG);
         assert.deepEqual(new Uint8Array(picture.bytes), SIZED_PNG);
+
         // The retired runtime's receipt of the message, its image staged by name with no bytes, takes the line it was sent as.
         const taken = yield* writer.takeAwaitingLine(target, {
           text: receivedMessage({ message: "", parts: handed }).text,
           turnId,
         });
+
         assert.ok(Result.isSuccess(taken));
         assert.equal(taken.success.length, 1, "the receipt takes the one line awaiting it");
 
@@ -268,14 +281,17 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, agent, ask, fetch, target, writer, turnId } = yield* messagedAgent(
           agentSessions,
           {
             running: true,
           },
         );
+
         const data = Buffer.from(SIZED_PNG).toString("base64");
         const pdf = Buffer.from("%PDF-1.4").toString("base64");
+
         const sent = yield* ask(
           messageAs(owner, agent.id, {
             text: "Match this.",
@@ -286,6 +302,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             clientKey: randomUUID(),
           }),
         );
+
         assert.equal(sent.status, HOSTED_HTTP_STATUS.ACCEPTED, JSON.stringify(sent.body));
 
         const page = readAnswer(
@@ -293,9 +310,11 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id })),
         );
+
         const files = page.messages.flatMap((message) =>
           message.parts.filter((part) => isRecord(part) && part.type === "file"),
         );
+
         const [image, spec, ...more] = files;
         assert.ok(isRecord(image) && isRecord(spec) && more.length === 0, JSON.stringify(files));
         assert.equal(image.url, "", "the row carries no bytes of the image");
@@ -307,11 +326,13 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         const served = yield* fetch(
           request(AGENT_PICTURE, owner, { id: agent.id, picture: pictureId }),
         );
+
         assert.equal(served.status, HOSTED_HTTP_STATUS.OK);
         assert.deepEqual(
           new Uint8Array(yield* Effect.promise(() => served.arrayBuffer())),
           SIZED_PNG,
         );
+
         const taken = yield* writer.takeAwaitingLine(target, {
           text: receivedMessage({
             message: "",
@@ -319,6 +340,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           }).text,
           turnId,
         });
+
         assert.ok(Result.isSuccess(taken));
         assert.equal(taken.success.length, 1, "the receipt takes the line its row names by id");
       }),
@@ -339,6 +361,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             cookie: sessionCookieOf(stopped.owner),
           }),
         );
+
         const archive = yield* archived.ask(
           request(AGENT, undefined, {
             method: "PATCH",
@@ -347,6 +370,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             body: { archived: true, reason: "Superseded by the stacked change." },
           }),
         );
+
         const taskArchive = yield* withTask.ask(
           request(TASK(withTask.task.id), undefined, {
             method: "PATCH",
@@ -359,10 +383,12 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           [stop.status, archive.status, taskArchive.status],
           [HOSTED_HTTP_STATUS.OK, HOSTED_HTTP_STATUS.OK, HOSTED_HTTP_STATUS.OK],
         );
+
         for (const { agentSessions, owner, sessionId } of [stopped, archived, withTask]) {
           assert.deepEqual(agentSessions.canceled, [[sessionId, "turn_0"]]);
           assert.deepEqual(agentSessions.canceledAs, [harnessFor(owner)]);
         }
+
         const archivedRow = Option.getOrThrow(yield* readAgent(archived.owner, archived.agent.id));
         assert.notEqual(archivedRow.archivedAt, null);
         assert.equal(archivedRow.archivedBy?.reason, "Superseded by the stacked change.");
@@ -385,6 +411,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const sandboxes = yield* scriptedSessionSandboxes();
+
         const { owner, task, ask } = yield* messagedAgent(
           fakeAgentSessions(),
           { running: false },
@@ -405,16 +432,20 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const services = yield* Effect.context<DatabaseServices>();
+
         // Two statements in a row share a transaction's id where one stands open around them.
         const alone = Effect.flatMap(SqlClient.SqlClient, (sql) =>
           Effect.gen(function* () {
             const xid = sql<{ readonly xid: string }>`select txid_current()::text as xid`;
             const [first] = yield* xid;
             const [second] = yield* xid;
+
             return first !== undefined && second !== undefined && first.xid !== second.xid;
           }),
         ).pipe(Effect.provide(services), Effect.orDie);
+
         const agentSessions = fakeAgentSessions({ resetSees: alone });
+
         const { owner, task, ask, sessionId } = yield* messagedAgent(agentSessions, {
           running: true,
         });
@@ -477,6 +508,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             body: { text: "Use the new table.", clientKey: randomUUID() },
           }),
         );
+
         const agentStop = yield* stopped.ask(
           request(AGENT_STOP, undefined, {
             method: "POST",
@@ -484,6 +516,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             cookie: teammate,
           }),
         );
+
         const deleted = yield* stopped.ask(
           request(TASK(stopped.task.id), undefined, { method: "DELETE", cookie: teammate }),
         );
@@ -510,9 +543,11 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, other, task, agent, ask } = yield* messagedAgent(agentSessions, {
           running: true,
         });
+
         const cookie = sessionCookieOf(other);
         const notFound = refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND);
 
@@ -540,6 +575,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           const { pathname } = new URL(asked.url);
           assert.deepEqual(yield* ask(asked), notFound, `${asked.method} ${pathname}`);
         }
+
         assert.deepEqual(
           [agentSessions.sent, agentSessions.canceled, agentSessions.reset],
           [[], [], []],
@@ -554,14 +590,17 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, other, task, agent, target, sessionId, ask } = yield* messagedAgent(
           agentSessions,
           {
             running: true,
           },
         );
+
         yield* joinWorkspace(task.workspaceId, other);
         assert.ok(Option.isSome(yield* pinAgent(owner, agent.id, true)));
+
         const posted = yield* postInboxThread(
           { userId: owner, taskId: task.id, agentId: agent.id },
           {
@@ -571,6 +610,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             ask: { type: INBOX_ASK.ANSWER },
           },
         );
+
         assert.ok(Result.isSuccess(posted));
         const deleted = yield* ask(request(AGENT, other, { method: "DELETE", id: agent.id }));
 
@@ -609,9 +649,11 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, other, task, agent, sessionId, ask } = yield* messagedAgent(agentSessions, {
           running: false,
         });
+
         const notFound = refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND);
 
         const outside = yield* ask(request(AGENT, other, { method: "DELETE", id: agent.id }));
@@ -677,6 +719,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const onClaudeCode = yield* messagedAgent(fakeAgentSessions(), undefined);
+
         const change = (
           started: typeof onClaudeCode,
           body: { model: string; effort: string; contextWindow?: string },
@@ -693,6 +736,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             contextWindow: "standard",
           }),
         ];
+
         const taken = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -705,6 +749,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST),
           );
         }
+
         assert.deepEqual(
           [taken.model, taken.effort, taken.runtime],
           [SMALL_WINDOW.model, "low", "claude_code"],
@@ -727,7 +772,9 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         const { other, task, agent, ask } = yield* messagedAgent(fakeAgentSessions(), {
           running: false,
         });
+
         yield* joinWorkspace(task.workspaceId, other);
+
         const changed = (archived: boolean) =>
           Effect.map(
             ask(request(AGENT, other, { method: "PATCH", id: agent.id, body: { archived } })),
@@ -741,6 +788,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         assert.equal(archived.archivedBy?.agent, undefined);
         const back = yield* changed(false);
         assert.deepEqual([back.archivedAt, back.archivedBy], [undefined, undefined]);
+
         // A released desktop still moves its read mark of an agent, which is read through its task's alone, so it is answered the agent as it stands.
         const marked = readAnswer(
           agentAnswerSchema,
@@ -753,6 +801,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             }),
           ),
         );
+
         assert.deepEqual(marked, { agent: back });
       }),
   );
@@ -767,15 +816,19 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             running: true,
           },
         );
+
         yield* joinWorkspace(task.workspaceId, other);
+
         const marked = (body: { archived?: boolean; status?: string }) =>
           Effect.map(
             ask(request(TASK(task.id), other, { method: "PATCH", body })),
             (answered) => answered.status,
           );
+
         const standing = () =>
           Effect.map(readTask(owner, task.id), (read) => {
             const { status, completedAt } = Option.getOrThrow(read).task;
+
             return { status, finished: completedAt !== undefined };
           });
 
@@ -835,6 +888,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             running: false,
           },
         );
+
         yield* sent("Rename the subject line too.");
 
         assert.deepEqual(
@@ -856,7 +910,9 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             running: true,
           },
         );
+
         const turn = { conversationId: sessionKey(target.conversationId), turnId };
+
         /** The turn's step begun, as the relay tells the step's start. */
         const stepBegun = (step: number) =>
           writer.consume(target, {
@@ -865,12 +921,14 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             sequence: step + 2,
             step,
           });
+
         yield* stepBegun(1);
         yield* stepBegun(2);
         yield* sent("Rename the subject line too.");
         yield* writer.takeAwaitingLine(target, { text: "Rename the subject line too.", turnId });
         yield* stepBegun(3);
         const answer = new AssistantMessageBuilder();
+
         for (const _step of [1, 2, 3]) answer.stepStart();
         answer.text("Renamed it.");
         yield* writer.consume(target, {
@@ -885,6 +943,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id })),
         );
+
         const journal = page.messages.find((each) => each.role === MESSAGE_ROLE.ASSISTANT);
         assert.ok(journal);
         // The closed journal stands behind the line it took, so the order alone would draw the line ahead of the turn.
@@ -904,14 +963,17 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, other, task, agent, sessionId, ask, transcript } = yield* messagedAgent(
           agentSessions,
           {
             running: false,
           },
         );
+
         const asOther = (text: string) =>
           ask(messageAs(other, agent.id, { text, clientKey: randomUUID() }));
+
         assert.deepEqual(
           yield* asOther("Before I joined."),
           refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
@@ -923,6 +985,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(TASK_AGENTS, other, { id: task.id })),
         );
+
         assert.deepEqual(
           listed.agents.map((each) => [each.id, each.status]),
           [[agent.id, AGENT_STATUS.COMPLETED]],
@@ -932,11 +995,13 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           listed.agents.map((each) => each.startedBy?.userId),
           [owner],
         );
+
         const read = readAnswer(
           agentMessagesAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(AGENT_MESSAGES, other, { id: agent.id })),
         );
+
         assert.deepEqual(userTexts(read), [SNAPSHOT]);
 
         const sent = readAnswer(
@@ -944,6 +1009,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           HOSTED_HTTP_STATUS.ACCEPTED,
           yield* asOther("Rename the subject line too."),
         );
+
         assert.equal(sent.agent.status, AGENT_STATUS.RUNNING);
         assert.equal(sent.agent.startedBy?.userId, owner);
         assert.deepEqual(
@@ -967,12 +1033,14 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             running: false,
           },
         );
+
         // The session takes the line, but no runner ever does, so the turn its send queued never starts.
         yield* TestClock.adjust(Duration.seconds(1));
         assert.equal(
           (yield* sent("Rename the subject line too.")).agent.status,
           AGENT_STATUS.RUNNING,
         );
+
         const statuses = () =>
           Effect.gen(function* () {
             const page = readAnswer(
@@ -980,17 +1048,20 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
               HOSTED_HTTP_STATUS.OK,
               yield* ask(request(AGENT, owner, { id: agent.id })),
             );
+
             const listed = readAnswer(
               agentListAnswerSchema,
               HOSTED_HTTP_STATUS.OK,
               yield* ask(request(TASK_AGENTS, owner, { id: task.id })),
             );
+
             return {
               page: page.agent.status,
               list: listed.agents.find((each) => each.id === agent.id)?.status,
               transcript: (yield* transcript()).status,
             };
           });
+
         const reconciled = Effect.flatMap(readAgent(owner, agent.id), (stored) =>
           reconcileAgent(Option.getOrThrow(stored)).pipe(Effect.provide(noNetwork)),
         );
@@ -1009,9 +1080,11 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           list: AGENT_STATUS.FAILED,
           transcript: AGENT_STATUS.FAILED,
         });
+
         const turn = (yield* latestTurnsOfReached([target.conversationId])).get(
           target.conversationId,
         );
+
         assert.equal(turn?.failure, TURN_FAILURE.LINE_UNTAKEN);
       }),
   );
@@ -1021,10 +1094,12 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, agent, ask, target, writer, transcript } = yield* messagedAgent(
           agentSessions,
           undefined,
         );
+
         const first = agentSessions.opened.at(-1)?.message;
         assert.ok(first !== undefined);
         // The launch fails past the Start's answer as the service writes it: a turn queued and settled failed, the line untaken.
@@ -1056,12 +1131,14 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           agentSessions.sent.map((each) => [each.message.lineId, each.message.message]),
           [[first.lineId, first.message]],
         );
+
         // Note that the newest page is read, since the line moved and a transcript read past a cursor reads it afresh.
         const page = readAnswer(
           agentNewestAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(AGENT_NEWEST, owner, { id: agent.id })),
         );
+
         assert.deepEqual(
           { lines: userTexts(page), status: page.status },
           { lines: [SNAPSHOT], status: AGENT_STATUS.RUNNING },
@@ -1076,6 +1153,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         const { owner, other, task, agent, ask } = yield* messagedAgent(fakeAgentSessions(), {
           running: false,
         });
+
         yield* joinWorkspace(task.workspaceId, other);
         yield* Database.use((db) =>
           db.update(user).set({ name: "Charles Pan" }).where(eq(user.id, owner)),
@@ -1086,6 +1164,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(TASKS, other)),
         );
+
         assert.deepEqual(
           listed.plans
             .find((each) => each.id === task.id)
@@ -1102,6 +1181,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         const { owner, task, agent, ask } = yield* messagedAgent(fakeAgentSessions(), {
           running: false,
         });
+
         const automationIds = () =>
           Effect.gen(function* () {
             const agents = readAnswer(
@@ -1109,14 +1189,18 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
               HOSTED_HTTP_STATUS.OK,
               yield* ask(request(TASK_AGENTS, owner, { id: task.id })),
             );
+
             const tasks = readAnswer(
               heldTaskListAnswerSchema,
               HOSTED_HTTP_STATUS.OK,
               yield* ask(request(TASKS, owner)),
             );
+
             const line = tasks.plans.find((each) => each.id === task.id)?.agents?.agents[0];
+
             return [agents.agents[0]?.automationId, line?.automationId];
           });
+
         assert.deepEqual(yield* automationIds(), [undefined, undefined]);
 
         const made = yield* createAutomation(owner, {
@@ -1130,6 +1214,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           nextRunAt: new Date("2026-10-16T09:00:00Z"),
           webhookSecretHash: null,
         });
+
         const automationId = Option.getOrThrow(made).id;
         yield* Database.use((db) =>
           db.update(agentTable).set({ automationId }).where(eq(agentTable.id, agent.id)),
@@ -1144,9 +1229,11 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, other, task, agent, ask } = yield* messagedAgent(agentSessions, {
           running: false,
         });
+
         const page = () =>
           Effect.map(ask(request(AGENT, owner, { id: agent.id })), (answered) =>
             readAnswer(agentPageAnswerSchema, HOSTED_HTTP_STATUS.OK, answered),
@@ -1184,6 +1271,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
         const { owner, agent, ask } = yield* messagedAgent(agentSessions, { running: false });
+
         const ranAs = (firing: AutomationFiring) =>
           Effect.gen(function* () {
             yield* Database.use((db) =>
@@ -1192,6 +1280,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
                 .set({ automationOrigin: { name: "Code review", firing, prompt: "Review it." } })
                 .where(eq(agentTable.id, agent.id)),
             );
+
             return readAnswer(
               agentPageAnswerSchema,
               HOSTED_HTTP_STATUS.OK,
@@ -1207,6 +1296,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           title: "View commands",
           url: "https://github.com/acme/relay/pull/2905",
         });
+
         const ranNow = yield* ranAs({ kind: AUTOMATION_FIRING.MANUAL, userId: owner });
 
         assert.equal(reviewed.automationName, "Code review");
@@ -1228,9 +1318,11 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, other, task, agent, ask } = yield* messagedAgent(agentSessions, {
           running: false,
         });
+
         const posted = yield* postInboxThread(
           { userId: owner, taskId: task.id, agentId: agent.id },
           {
@@ -1240,6 +1332,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             ask: { type: INBOX_ASK.ANSWER },
           },
         );
+
         assert.ok(Result.isSuccess(posted));
 
         const read = readAnswer(
@@ -1247,6 +1340,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(AGENT_INBOX, owner, { id: agent.id, after: INBOX_CURSOR_START })),
         );
+
         const outside = yield* ask(
           request(AGENT_INBOX, other, { id: agent.id, after: INBOX_CURSOR_START }),
         );
@@ -1267,9 +1361,11 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, other, task, agent, ask } = yield* messagedAgent(agentSessions, {
           running: false,
         });
+
         yield* joinWorkspace(task.workspaceId, other);
         // The task is seen on its starter's own token, which the teammate holds none of, while the agent is seen through the App.
         yield* Database.use((db) =>
@@ -1284,6 +1380,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(AGENT_WORKSPACE_TOOLS, owner, { id: agent.id })),
         );
+
         const teammate = yield* ask(request(AGENT_WORKSPACE_TOOLS, other, { id: agent.id }));
 
         assert.deepEqual(read.runOnMac, {
@@ -1346,6 +1443,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
         let githubDown = false;
+
         const { owner, ask, agent } = yield* agentStartedOn(
           yield* openTask({
             agentSessions,
@@ -1357,6 +1455,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           agentSessions,
           { running: true },
         );
+
         githubDown = true;
 
         readAnswer(
@@ -1376,10 +1475,13 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, other, task, agent, target, sessionId, ask, transcript } =
           yield* messagedAgent(agentSessions, { running: true });
+
         yield* joinWorkspace(task.workspaceId, other);
         const clientKey = randomUUID();
+
         const steer = () =>
           ask(messageAs(other, agent.id, { text: "Use seven days, not five.", clientKey }));
 
@@ -1388,6 +1490,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           HOSTED_HTTP_STATUS.ACCEPTED,
           yield* steer(),
         );
+
         // The send that wrote the line answers the transaction that wrote it.
         assert.match(first.txid ?? "", /^\d+$/u);
         assert.deepEqual(
@@ -1412,6 +1515,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           HOSTED_HTTP_STATUS.ACCEPTED,
           yield* steer(),
         );
+
         // A repeat wrote nothing, so there is no transaction to wait for.
         assert.equal(again.txid, undefined);
         assert.equal(agentSessions.sent.length, 1);
@@ -1423,12 +1527,14 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, other, task, agent, ask, sent, writer, target } = yield* messagedAgent(
           agentSessions,
           {
             running: true,
           },
         );
+
         yield* joinWorkspace(task.workspaceId, other);
         yield* Database.use((db) =>
           db.update(user).set({ name: "Dean Stratakos" }).where(eq(user.id, owner)),
@@ -1448,6 +1554,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         );
         // Our line from a call, an automation's run's, and another coding agent's, written as their sends write them.
         const automationId = randomUUID();
+
         for (const [text, sender] of [
           ["Rebase on main.", { kind: MESSAGE_SENDER.APP }],
           [
@@ -1470,6 +1577,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             Effect.succeed(true),
           );
         }
+
         /** Each of the developer's lines as a member reads the page, beside what sent it. */
         const sendersAs = (reader: string) =>
           Effect.map(ask(request(AGENT_MESSAGES, reader, { id: agent.id })), (answered) =>
@@ -1497,6 +1605,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             { name: "Add PR overview tab", agent: true, model: agent.model, agentId: agent.id },
           ],
         ];
+
         assert.deepEqual(yield* sendersAs(owner), named);
         assert.deepEqual(yield* sendersAs(other), named);
 
@@ -1508,6 +1617,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         )
           .messages.filter((message) => message.role === MESSAGE_ROLE.USER)
           .map((message) => message.sentAt);
+
         assert.ok(sentAts.every((at) => at !== undefined));
         assert.equal((sentAts[3] ?? 0) - (sentAts[2] ?? 0), Duration.toMillis(Duration.minutes(1)));
 
@@ -1524,9 +1634,11 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, sessionId, sent, transcript } = yield* messagedAgent(agentSessions, {
           running: true,
         });
+
         const clientKey = randomUUID();
         const answered = yield* sent("  Use the helper.  ", clientKey);
         assert.equal(answered.agent.status, AGENT_STATUS.RUNNING);
@@ -1581,6 +1693,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         const { owner, task, ask, sent } = yield* messagedAgent(agentSessions, { running: true });
         const other = yield* startedAgentOf(owner, task.id, ask);
         yield* updateAgentBranch(owner, other.agent.id, "luke/store-invitations");
+
         const shown = yield* writePage(
           owner,
           taskPageOwner(task.id),
@@ -1590,6 +1703,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           },
           { kind: PAGE_SHOWER.APP },
         );
+
         assert.ok(Option.isSome(shown));
         const place = { workspace: "acme", repository: task.repository };
         const words = `Build what ${mentionMarkdown({ kind: MENTION_KIND.PAGE, taskId: task.id, pageId: shown.value.id }, "Invites by week", place)} shows on ${mentionMarkdown({ kind: MENTION_KIND.AGENT, agentId: other.agent.id }, "Store", place)}.`;
@@ -1626,9 +1740,11 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, other, task, ask, sent } = yield* messagedAgent(agentSessions, {
           running: true,
         });
+
         const billing = yield* startTask(owner, { name: "Billing", repository: RELAY_FULL_NAME });
         const onBilling = yield* startedAgentOf(owner, billing.id, ask);
         const foreign = yield* startedAgentOf(owner, task.id, ask);
@@ -1643,8 +1759,10 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             .where(eq(agentTable.id, foreign.agent.id)),
         );
         const place = { workspace: "acme", repository: task.repository };
+
         const mention = (agentId: string, name: string) =>
           mentionMarkdown({ kind: MENTION_KIND.AGENT, agentId }, name, place);
+
         const words = `Line up with ${mention(onBilling.agent.id, "Billing agent")} and ${mention(foreign.agent.id, "Stranger")}.`;
 
         yield* sent(words);
@@ -1676,8 +1794,10 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         const elsewhere = yield* openWorkspace(other);
         yield* joinWorkspace(elsewhere, owner);
         const place = { workspace: "acme", repository: task.repository };
+
         const mention = (userId: string, name: string) =>
           mentionMarkdown({ kind: MENTION_KIND.PERSON, userId }, name, place);
+
         const words = `Ask ${mention(owner, "Me")} and ${mention(other, "Stranger")}.`;
 
         yield* sent(words);
@@ -1700,9 +1820,11 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions({ sends: SESSION_SEND_OUTCOME.NOT_READY });
+
         const { owner, agent, ask, target } = yield* messagedAgent(agentSessions, {
           running: true,
         });
+
         const words = `Check ${mentionMarkdown({ kind: MENTION_KIND.SERVER, provider: INTEGRATION_PROVIDER.LINEAR }, "Linear", { workspace: "acme", repository: null })} first.`;
 
         const answered = yield* ask(
@@ -1775,9 +1897,11 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, other, agent, ask, transcript } = yield* messagedAgent(agentSessions, {
           running: true,
         });
+
         const line = { text: "Rename the helper.", clientKey: randomUUID() };
         assert.deepEqual(
           yield* ask(messageAs(other, agent.id, line)),

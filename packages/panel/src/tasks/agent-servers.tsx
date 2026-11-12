@@ -196,6 +196,7 @@ function ServerName({ name }: { name: string }): React.JSX.Element {
  */
 function problemHint(problem: string, said: string | undefined): OneLineHint {
   if (said === undefined) return wholeWordsHint(problem);
+
   return (line) => <Tooltip label={`${problem} ${said}`}>{line}</Tooltip>;
 }
 
@@ -264,6 +265,7 @@ export function useServerRows(
       .map((server) => server.connection)
       .filter((connection) => only === undefined || connection === only),
   );
+
   return serverRows({
     statusOf: statuses.statusOf,
     healthOf: (server) =>
@@ -327,6 +329,7 @@ const RowHighlight = createContext<(() => void) | undefined>(undefined);
  */
 const PointerHighlight: ListRowHint = ({ children }) => {
   const highlight = useContext(RowHighlight);
+
   return cloneElement(children, {
     onPointerEnter: (event) => {
       children.props.onPointerEnter?.(event);
@@ -366,22 +369,27 @@ function ServersPopover({
   const moving = useRef<HTMLDivElement>(null);
   const rowsId = useId();
   const rows = useServerRows(statuses, servers.disabled);
+
   const [working, setWorking] = useState<{ server: string; act: WorkingAct } | undefined>(
     undefined,
   );
+
   const [query, setQuery] = useState("");
   const [highlight, setHighlight] = useState(0);
   const grant = useIntegrationGrant(statuses);
 
   const groups = serverGroups(searchServers(rows, query));
+
   // A row the keys can land on: every row drawn but one whose standing is unread.
   const picks = groups
     .flatMap((group) => group.rows)
     .filter((row) => row.kind !== SERVER_ROW.QUIET);
+
   const at = Math.min(highlight, Math.max(picks.length - 1, 0));
 
   useLayoutEffect(() => {
     const row = document.getElementById(`${rowsId}-${at}`);
+
     if (list.current !== null && row !== null) revealWithin(list.current, row);
   }, [at, rowsId]);
 
@@ -422,6 +430,7 @@ function ServersPopover({
       setHighlight(Math.min(Math.max(at + step, 0), Math.max(picks.length - 1, 0)));
     } else if (event.key === "Enter") {
       const row = picks[at];
+
       if (row === undefined) return;
       event.preventDefault();
       press(row)?.();
@@ -431,6 +440,7 @@ function ServersPopover({
   /** A row's button while its server waits on an act: busy if it started that act, off if the other did. */
   const workingOn = (server: string, mine: WorkingAct, busyLabel: string) => {
     if (working?.server !== server) return {};
+
     return working.act === mine ? { busy: true, busyLabel } : { disabled: true };
   };
 
@@ -503,6 +513,7 @@ function ServersPopover({
   /** A server's row: its place among the picks names its id and its highlight, and the pointer coming onto its press moves the highlight there. */
   const serverRow = (row: ServerRow) => {
     const index = picks.indexOf(row);
+
     return (
       <RowHighlight.Provider
         key={row.connection}
@@ -620,6 +631,7 @@ function ServersMenuPanel({
   onClose: () => void;
 }): React.JSX.Element {
   const id = useId();
+
   // Note that focus leaving the popover is the menu's to hear, which closes unless it went to the menu itself.
   return (
     <ServersPopover
@@ -680,6 +692,7 @@ export function AgentServersButton({
   const trigger = useRef<HTMLButtonElement>(null);
   // Note that the popover is drawn from its opening until its fade has run, and no longer, because its search, its page and its reads of every server's tools are its own and start afresh each time it opens.
   const [drawn, setDrawn] = useState(open);
+
   if (open && !drawn) setDrawn(true);
 
   // Note that we hand focus back to the chip, as a menu returns it to its
@@ -719,6 +732,7 @@ export function AgentServersButton({
             onLeave={(left) => {
               // The window losing focus is the browser opened for a sign-in, whose outcome the popover waits to read.
               if (!document.hasFocus()) return;
+
               if (!(left instanceof Node && root.current?.contains(left))) setOpen(false);
             }}
             onExited={() => setDrawn(false)}

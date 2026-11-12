@@ -54,6 +54,7 @@ test("a message reads back as the quotes and lines it was written from, empty li
     [lines("", ""), quote("A"), lines("", "Then")],
     [quote("Two options:\n\nA or B"), lines("B.")],
   ];
+
   for (const blocks of messages) assert.deepEqual(messageBlocks(messageText(blocks)), blocks);
 });
 

@@ -30,6 +30,7 @@ export function literalsReadingLegacy<const Values extends ReadonlyArray<string>
     (input: unknown): input is Values[number] =>
       input === legacy || values.some((value) => value === input),
   );
+
   return stored.pipe(
     Schema.decodeTo(
       Schema.Literals(values),

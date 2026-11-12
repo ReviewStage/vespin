@@ -61,12 +61,15 @@ export function DailyBars<Day extends { readonly day: string }>({
   // day these bars actually state can open; an unset opener leaves recharts'
   // own `onClick` prop absent rather than assigned `undefined`.
   const barChartProps: Pick<React.ComponentProps<typeof BarChart>, "onClick"> = {};
+
   if (onOpenDay) {
     barChartProps.onClick = ({ activeLabel }) => {
       const clicked = data.find((point) => point.day === activeLabel);
+
       if (clicked) onOpenDay(clicked.day);
     };
   }
+
   return (
     <ChartContainer
       config={config}

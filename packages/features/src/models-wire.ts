@@ -87,13 +87,16 @@ export const MODEL_SPEED_SUFFIX = {
 /** The speed a catalog id names, by its suffix. */
 export function modelSpeedOf(catalogId: string): ModelSpeed {
   if (catalogId.endsWith(MODEL_SPEED_SUFFIX[MODEL_SPEED.ULTRAFAST])) return MODEL_SPEED.ULTRAFAST;
+
   if (catalogId.endsWith(MODEL_SPEED_SUFFIX[MODEL_SPEED.FAST])) return MODEL_SPEED.FAST;
+
   return MODEL_SPEED.STANDARD;
 }
 
 /** The id of the model a catalog id is a version of, which runs at standard speed; a standard id as it is. */
 export function standardModelIdOf(catalogId: string): string {
   const speed = modelSpeedOf(catalogId);
+
   return speed === MODEL_SPEED.STANDARD
     ? catalogId
     : catalogId.slice(0, -MODEL_SPEED_SUFFIX[speed].length);
@@ -224,10 +227,13 @@ export function agentFallbackChoice(
   models: readonly Pick<CatalogModel, "id" | "provider" | "credentialMissing">[],
 ): ModelChoice {
   const openai = AGENT_FALLBACK_CHOICE[MODEL_PROVIDER.OPENAI];
+
   const claudeUnpaid = models.some(
     (model) => model.provider === MODEL_PROVIDER.ANTHROPIC && model.credentialMissing === true,
   );
+
   const listed = models.find((model) => model.id === openai.model);
+
   return claudeUnpaid && listed !== undefined && listed.credentialMissing !== true
     ? openai
     : AGENT_DEFAULT_CHOICE;
