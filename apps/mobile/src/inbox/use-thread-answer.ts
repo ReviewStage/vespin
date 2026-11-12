@@ -324,6 +324,9 @@ export interface ThreadAnswer {
 /** The nods out, by the item's id, so a second press of Got it before the first lands sends nothing. */
 const nodding = new Set<string>();
 
+/** The new threads out, by the item's id, so a second start waits for the first's answer rather than racing it for the box's words. */
+const starting = new Set<string>();
+
 /**
  * The box of the thread `listed` stands for: its draft, and its Send, Got
  * it, Resolve, and the start of a new thread with its agent, which
@@ -486,11 +489,12 @@ export function useThreadAnswer(
     [itemId],
   );
 
-  // Note that the same words sent again go under the key they went under, so a retry starts one thread. The box lets go of its words at once, as a reply does, and a start refused puts them back ahead of nothing typed since.
+  // Note that the same words sent again go under the key they went under, so a retry starts one thread. The box lets go of its words at once, as a reply does, and a start refused puts them back ahead of nothing typed since. One start is out at a time, as one Got it is, so a refusal never puts back words a later start sent.
   const start = () => {
     const text = draft.note.trim();
 
-    if (text === "") return;
+    if (text === "" || starting.has(itemId)) return;
+    starting.add(itemId);
     const before = held.get(itemId)?.started;
     const key = before?.words === text ? before.key : randomUUID();
     let startedId: string | undefined;
@@ -522,7 +526,8 @@ export function useThreadAnswer(
         went: BUZZ.SUCCESS,
       },
     ).then((went) => {
-      // Note that a start answered after a newer one was sent leaves the newer one's key, and opens nothing.
+      starting.delete(itemId);
+
       if (!went || startedId === undefined || held.get(itemId)?.started?.key !== key) return;
       hold(itemId, ({ started: _sent, ...was }) => ({ ...was, asNew: false }));
       onStarted?.(startedId);
