@@ -15,8 +15,9 @@ committed copy from them, and what those copies are.
   `lucide-react` `@repo/ui` resolves.
 
 Regenerate the generated files (under `src/generated/`, `assets/`, and
-`@repo/ui`'s `src/tokens/brand.css` and `motion-tokens.css`, and
-`@repo/ui-native`'s `src/tokens/brand-colors.ts` and `lucide-symbols.ts`)
+`@repo/ui`'s `src/tokens/brand.css`, `identity.css`, and `motion-tokens.css`,
+and `@repo/ui-native`'s `src/tokens/brand-colors.ts`, `identity-hues.ts`, and
+`lucide-symbols.ts`)
 from the sources rather than hand-editing; `pnpm --filter @repo/brand check`
 reports drift when run by hand, and `scripts/repository-checks.sh` runs the
 surface generator's half of it.

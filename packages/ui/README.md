@@ -112,7 +112,9 @@ Every token is a `--ui-*` custom property under `src/tokens/`.
   brand's own colors among them (the grounds, the inks, the accent, the status
   inks) are `brand.css`, generated from the brand table in `@repo/brand`'s
   `scripts/brand-palette.mjs`, so a rebrand or a second theme is that table;
-  `tokens/brand-contrast.test.ts` holds its inks to WCAG AA.
+  `tokens/brand-contrast.test.ts` holds its inks to WCAG AA. The identity
+  hues (`--ui-color-identity-*`) are `identity.css`, generated from the same
+  table, which writes the iOS app's copy too.
 - **Display** (`display.css`): the site's marketing styles, `--ui-display-*`,
   set under the web profile only; the window has no display type.
 - **Motion** (`motion-tokens.css`, generated from `@repo/brand`'s tables by
