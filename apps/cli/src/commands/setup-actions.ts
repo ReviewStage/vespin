@@ -91,21 +91,29 @@ const iconOf = Effect.fnUntraced(function* (
   });
 });
 
-/** One action as a person reads it: its id, its label with its emoji and whether it is the default, and its command. */
-function actionRow(action: RunAction): string[] {
+/** One action as a person reads it: its id, its label with its emoji and whether it is the default the Run button runs, and its command. */
+function actionRow(action: RunAction, runByDefault: boolean): string[] {
   const emoji = action.icon?.kind === TASK_SECTION_ICON_KIND.EMOJI ? `${action.icon.emoji} ` : "";
-  const label = `${emoji}${action.label}${action.isDefault === true ? " (default)" : ""}`;
+  const label = `${emoji}${action.label}${runByDefault ? " (default)" : ""}`;
   return [action.id, label, action.command];
+}
+
+/** The action the Run button runs: the one named the default, or the first where none is. */
+function defaultOf(list: RepositoryRunActions): RunAction | undefined {
+  return list.actions.find((action) => action.isDefault === true) ?? list.actions[0];
 }
 
 /** Each repository's run actions, as a person reads them. */
 export function runActionsLines(lists: readonly RepositoryRunActions[]): string[] {
   if (lists.length === 0) return ["No run actions."];
-  return lists.flatMap((list, index) => [
-    ...(index === 0 ? [] : [""]),
-    `${list.repository} run actions:`,
-    ...columns(list.actions.map(actionRow)),
-  ]);
+  return lists.flatMap((list, index) => {
+    const runByDefault = defaultOf(list);
+    return [
+      ...(index === 0 ? [] : [""]),
+      `${list.repository} run actions:`,
+      ...columns(list.actions.map((action) => actionRow(action, action === runByDefault))),
+    ];
+  });
 }
 
 /** The repository's list in a setup, named in any casing; none where it has no actions. */

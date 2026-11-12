@@ -4962,8 +4962,8 @@ const EDIT_RUN_ACTION_TOOL = memberMcpTool({
 const RUN_ACTION_REFUSAL = {
   NOT_FOUND:
     "Not run: the member sees no such agent, or it runs on a Mac or has no repository, its " +
-    "workspace has the Run actions experiment off, or its repository has no run action of " +
-    `that id; ${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} lists each repository's actions.`,
+    "workspace has Run actions off, or it has no run action of that id, saved to run or " +
+    `running to stop; ${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} lists each repository's actions.`,
   NOT_PERMITTED:
     "Not run: only the agent's starter may run in its sandbox, since the agent works on their " +
     "own GitHub token.",
@@ -5022,8 +5022,8 @@ const RUN_ACTION_TOOL = memberMcpTool({
     "agent's id and the action's, as the member's press in the agent's Run menu would: its " +
     "command runs from the checkout with the workspace's environment variables in a Terminal " +
     "tab of its own, and an action already running is left running rather than started twice. " +
-    "Run actions are behind the workspace's Run actions experiment, and only a cloud agent " +
-    "with a repository has them. A sandbox that is not running is refused, never woken; " +
+    "Only a cloud agent with a repository, in a workspace with Run actions on, has them. A " +
+    "sandbox that is not running is refused, never woken; " +
     `${MEMBER_MCP_TOOL.WAKE_AGENT} wakes it. Only the member who started an agent runs one on ` +
     "their own GitHub token. Answers `accepted` with the action's shell, or `rejected` and " +
     `why. ${MEMBER_MCP_TOOL.LIST_AGENT_PORTS} then names a server it started.`,
@@ -5031,20 +5031,22 @@ const RUN_ACTION_TOOL = memberMcpTool({
   annotations: ADDITIVE,
   run: ({ agentId, actionId }) =>
     runActionAnswer((userId) => ranRunAction(userId, agentId, actionId)),
+  experiment: EXPERIMENT.RUN_ACTIONS,
 });
 
 const STOP_RUN_ACTION_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.STOP_RUN_ACTION,
   description:
     "Interrupt what a run action runs in a coding agent's cloud sandbox, by the agent's id " +
-    "and the action's, as the member's Stop in the agent's Run menu would; its Terminal tab " +
-    "stays open. Only the member who started an agent stops one on their own GitHub token. " +
+    "and the action's, as the member's Stop in the agent's Run menu would, even one removed " +
+    "from its repository's list since it started; its Terminal tab stays open. Only the member who started an agent stops one on their own GitHub token. " +
     "Answers `accepted` with where the sandbox stands and its shells, each with whether it is " +
     "running, or `rejected` and why.",
   input: AgentRunActionInputSchema,
   annotations: DESTRUCTIVE,
   run: ({ agentId, actionId }) =>
     runActionAnswer((userId) => stoppedRunAction(userId, agentId, actionId)),
+  experiment: EXPERIMENT.RUN_ACTIONS,
 });
 
 /*

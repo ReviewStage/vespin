@@ -1,4 +1,4 @@
-import type { TaskSectionIcon } from "@repo/features/task-section-wire";
+import type { LooseTaskSectionIcon } from "@repo/features/task-section-wire";
 import {
   REPOSITORY_SCRIPT_KIND,
   type RepositoryScriptKind,
@@ -83,7 +83,7 @@ export const workspaceRepositoryRunAction = pgTable(
     /** The bash it runs from the checkout. */
     command: text("command").notNull(),
     /** The icon the Run menu draws it with, one emoji or one Lucide glyph, as a sidebar section's is; none for the menu's own. */
-    icon: jsonb("icon").$type<TaskSectionIcon>(),
+    icon: jsonb("icon").$type<LooseTaskSectionIcon>(),
     /** Whether it is the Run button's and ⌥⌘R's; where no action of the list is, the first is. */
     isDefault: boolean("is_default").notNull().default(false),
     createdAt: createdAt(),

@@ -40,11 +40,8 @@ interface RunActionAgent {
   readonly repository: string | null;
 }
 
-/** The run action `actionId` names among the agent's repository's, or not found. */
-const runActionOf = /* @__PURE__ */ Effect.fnUntraced(function* (
-  agent: RunActionAgent,
-  actionId: string,
-): Effect.fn.Return<RunAction, HostedRefusal, DatabaseServices> {
+/** The agent's repository, where it has run actions at all: a cloud agent with one, in a workspace with the experiment on; not found otherwise. */
+const runActionRepositoryOf = /* @__PURE__ */ Effect.fnUntraced(function* (agent: RunActionAgent) {
   const repository = agent.repository;
   if (agent.machine === AGENT_MACHINE.DEVICE || repository === null) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
@@ -52,6 +49,15 @@ const runActionOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (!(yield* experimentOnIn(agent.organizationId, EXPERIMENT.RUN_ACTIONS))) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
+  return repository;
+});
+
+/** The run action `actionId` names among the agent's repository's, or not found. */
+const runActionOf = /* @__PURE__ */ Effect.fnUntraced(function* (
+  agent: RunActionAgent,
+  actionId: string,
+): Effect.fn.Return<RunAction, HostedRefusal, DatabaseServices> {
+  const repository = yield* runActionRepositoryOf(agent);
   const actions = yield* hostedStoreOrUnavailable(readRunActions(agent.organizationId, repository));
   const action = actions.find((each) => each.id === actionId);
   if (action === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
@@ -94,17 +100,23 @@ export const ranRunAction = Effect.fn("web/ranRunAction")(function* (
   return { terminal: ran.success };
 });
 
-/** What one of the agent's run actions' shell runs interrupted, as the member, the shell left standing; answers the shells as they stand after. */
+/**
+ * What one of the agent's run actions' shell runs stopped, as the member,
+ * the shell left standing; answers the shells as they stand after. Note
+ * that the action need not still be saved, because one removed from the
+ * list while it runs must still be stoppable; the sandbox stops only a
+ * shell started for that action's id, and finds none for any other.
+ */
 export const stoppedRunAction = Effect.fn("web/stoppedRunAction")(function* (
   userId: string,
   agentId: string,
   actionId: string,
 ) {
   const { sessionId, agent } = yield* reachedAgentSession(userId, agentId);
-  yield* runActionOf(agent, actionId);
+  yield* runActionRepositoryOf(agent);
   if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const sandbox = yield* AgentSandbox;
-  const stopped = yield* sandboxOrUpstream(sandbox.interrupt(sessionId, actionId));
+  const stopped = yield* sandboxOrUpstream(sandbox.stop(sessionId, actionId));
   if (Result.isFailure(stopped)) return yield* Effect.fail(shellRefusal(stopped.failure));
   return yield* listedShells(sessionId);
 });

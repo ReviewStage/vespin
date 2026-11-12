@@ -172,6 +172,39 @@ it.layer(getTestDB())("the workspace sandbox script store", (it) => {
       }),
   );
 
+  it.effect(
+    "a save of a repository's run actions is stamped later than the list it replaces, even from an earlier or the same clock reading",
+    () =>
+      Effect.gen(function* () {
+        const workspace = yield* openOwnedWorkspace;
+        const stampOf = Effect.map(
+          readRunActions(workspace, "acme/relay"),
+          (rows) => rows[0]?.updatedAt.getTime() ?? 0,
+        );
+        yield* setRunActions(
+          workspace,
+          "acme/relay",
+          [{ label: "Dev", command: "pnpm dev" }],
+          LATER,
+        );
+        const first = yield* stampOf;
+        yield* setRunActions(
+          workspace,
+          "acme/relay",
+          [{ label: "Dev", command: "pnpm dev" }],
+          LATER,
+        );
+        const second = yield* stampOf;
+        // A save whose clock was read before the lock, while the save before it waited.
+        yield* setRunActions(workspace, "acme/relay", [{ label: "Dev", command: "pnpm dev" }], AT);
+        const third = yield* stampOf;
+
+        assert.equal(first, LATER.getTime());
+        assert.ok(second > first, `${second} > ${first}`);
+        assert.ok(third > second, `${third} > ${second}`);
+      }),
+  );
+
   it.effect("one workspace neither reads nor removes another's scripts", () =>
     Effect.gen(function* () {
       const mine = yield* openOwnedWorkspace;

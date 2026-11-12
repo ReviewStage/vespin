@@ -11,6 +11,7 @@
  * be, are the service's to say.
  */
 
+import { CLI_EXIT } from "@repo/features/cli-exit";
 import {
   REPOSITORY_SCRIPT_KIND,
   type RepositoryScriptKind,
@@ -18,7 +19,7 @@ import {
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { Effect, Option } from "effect";
 import { Command, Flag } from "effect/cli";
-import { answer, readInput } from "../output.js";
+import { answer, CommandFailed, readInput } from "../output.js";
 import { askService, session } from "../session.js";
 import { resolveWorkspace } from "../workspace.js";
 import { actionsCommand, runActionsLines } from "./setup-actions.js";
@@ -31,11 +32,22 @@ const repoFlag = Flag.String("repo").pipe(
 );
 
 const kindFlag = Flag.Literals("kind", Object.values(REPOSITORY_SCRIPT_KIND)).pipe(
-  Flag.withDefault(REPOSITORY_SCRIPT_KIND.SETUP),
+  Flag.optional,
   Flag.withDescription(
-    "With --repo, which of its scripts: setup, run in each new sandbox after its checkout, or archive, run just before one is deleted",
+    "With --repo, which of its scripts: setup (the default), run in each new sandbox after its checkout, or archive, run just before one is deleted",
   ),
 );
+
+/** The script kind the flags name: a repository's, setup where unsaid; a kind without a repository is refused, since it would otherwise read or save the install script. */
+const kindOf = (repo: Option.Option<string>, kind: Option.Option<RepositoryScriptKind>) =>
+  Option.isNone(repo) && Option.isSome(kind)
+    ? Effect.fail(
+        new CommandFailed({
+          exit: CLI_EXIT.USAGE,
+          message: "Name --repo with --kind; leave both out for the install script.",
+        }),
+      )
+    : Effect.succeed(Option.getOrElse(kind, () => REPOSITORY_SCRIPT_KIND.SETUP));
 
 /** A script kind as a person reads it. */
 const KIND_WORDS = {
@@ -93,8 +105,10 @@ function setupLines(setup: WorkspaceSandboxSetupAnswer): string[] {
   ];
 }
 
-const showCommand = Command.make("show", { repo: repoFlag, kind: kindFlag }, ({ repo, kind }) =>
+const showCommand = Command.make("show", { repo: repoFlag, kind: kindFlag }, (flags) =>
   Effect.gen(function* () {
+    const { repo } = flags;
+    const kind = yield* kindOf(repo, flags.kind);
     const { workspace } = yield* resolveWorkspace;
     const { hosted } = yield* session;
     const setup = yield* askService(hosted.workspaceSandboxSetup.read, {
@@ -140,8 +154,9 @@ const editCommand = Command.make(
       Flag.withDescription("The whole script, from a file or - for stdin; an empty one removes it"),
     ),
   },
-  ({ repo, kind, file }) =>
+  ({ repo, file, ...flags }) =>
     Effect.gen(function* () {
+      const kind = yield* kindOf(repo, flags.kind);
       const script = yield* readInput(file);
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;

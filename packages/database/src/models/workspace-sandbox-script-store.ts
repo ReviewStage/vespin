@@ -10,9 +10,8 @@
  */
 
 import {
+  type LooseTaskSectionIcon,
   looseTaskSectionIconSchema,
-  type TaskSectionIcon,
-  taskSectionIconSchema,
 } from "@repo/features/task-section-wire";
 import {
   REPOSITORY_SCRIPT_KIND,
@@ -194,12 +193,12 @@ const RunActionSchema = Schema.Struct({
 /** One of a repository's run actions as its list was last saved, with the repository as that save spelled it. */
 export type WorkspaceRunAction = typeof RunActionSchema.Type;
 
-/** One action as a save writes it: the id it keeps, where it keeps one, its label, its command, its icon where it wears one, and whether it is the default. */
+/** One action as a save writes it: the id it keeps, where it keeps one, its label, its command, its icon where it wears one, and whether it is the default. Note that an icon is written as loosely as it is read, so an edit of another action keeps one a newer deploy stored as it stood. */
 export interface RunActionWrite {
   readonly id?: string | undefined;
   readonly label: string;
   readonly command: string;
-  readonly icon?: TaskSectionIcon | undefined;
+  readonly icon?: LooseTaskSectionIcon | undefined;
   readonly isDefault?: boolean | undefined;
 }
 
@@ -265,7 +264,7 @@ const insertRunAction = SqlSchema.void({
     position: Schema.Number,
     label: Schema.String,
     command: Schema.String,
-    icon: Schema.NullOr(taskSectionIconSchema),
+    icon: Schema.NullOr(looseTaskSectionIconSchema),
     isDefault: Schema.Boolean,
     now: Schema.Date,
   }),
@@ -365,7 +364,8 @@ export function readRunActions(
  * the new one written in one transaction, so a reader sees one list or the
  * other, never a mix; and that it is held under the repository's lock, so
  * two edits of one repository land one after the other, the later editing
- * what the earlier wrote. Where `edit` fails, nothing is written.
+ * what the earlier wrote and stamped later than it. Where `edit` fails,
+ * nothing is written.
  */
 export const editRunActions = <E, R>(
   organizationId: string,
@@ -380,6 +380,10 @@ export const editRunActions = <E, R>(
         yield* client`select pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(lower(${repository})))`;
         const standing = yield* findRepositoryRunActions({ organizationId, repository });
         const actions = yield* edit(standing);
+        // Note that the list is stamped later than the one it replaces, even in the same millisecond or from a clock read before the lock, because a client keeps the list with the latest stamp.
+        const stamped = new Date(
+          Math.max(now.getTime(), ...standing.map((row) => row.updatedAt.getTime() + 1)),
+        );
         const keepable = new Set(standing.map((row) => row.id));
         yield* deleteRunActions({ organizationId, repository });
         let defaulted = false;
@@ -394,7 +398,7 @@ export const editRunActions = <E, R>(
             icon: action.icon ?? null,
             // Note that only the first action named default is, so a list naming two still saves one.
             isDefault: action.isDefault === true && !defaulted,
-            now,
+            now: stamped,
             ...(keeps && action.id !== undefined ? { id: action.id } : {}),
           });
           defaulted ||= action.isDefault === true;
