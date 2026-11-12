@@ -83,6 +83,7 @@ import { type AgentModelPick, useAgentModelPick } from "../agents/use-agent-mode
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { useAgentServers } from "../agents/use-agent-servers.js";
+import { useWarmAgent } from "../agents/use-warm-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
@@ -441,6 +442,7 @@ export function AgentScreen() {
   const pick = useAgentModelPick(id);
   const actions = useAgentActions(id, address);
   const runActions = useAgentRun(id);
+  useWarmAgent(id);
   const hasPorts = useAgentHasPorts(id);
   const openPorts = () => router.push({ pathname: "/agent-ports", params: { agent: id } });
   // Whether Rename's alert, or Archive's or Permanently delete's question, stands over the page.

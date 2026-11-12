@@ -116,7 +116,6 @@ const IOS = {
     "iOS's agent page leaves a rewind, a fresh session, and a restart of the agent's machine to the desktop and the web for now",
   ),
   AUTOMATIONS: byDesign("iOS v1 leaves Automations to the desktop and the web"),
-  COMPOSER: notYet("iOS's New task and New agent sheets offer no skills or warm-keeping yet"),
   COPY_PICTURE: byDesign(
     "iOS copies a picture to the system's pasteboard itself (expo-clipboard), from its long press or the viewer's share button",
   ),
@@ -265,7 +264,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_REWIND]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_CLEAR]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_BOOT]: panel(IOS.AGENT_SESSION),
-  [PORT_ACT_KIND.AGENTS_WARM]: panel(IOS.COMPOSER),
+  [PORT_ACT_KIND.AGENTS_WARM]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PORTS]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PORT_SHARED]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PORT_SHARE]: EVERYWHERE,
