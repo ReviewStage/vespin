@@ -243,6 +243,7 @@
     "effect": "catalog:",
     "pg": "8.23.1",
     "request-filtering-agent": "3.2.1",
+    "smol-toml": "1.9.1",
     "ws": "catalog:"
   },
   "devDependencies": {
