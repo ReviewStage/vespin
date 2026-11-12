@@ -22,7 +22,7 @@ faq:
   - q: Does it use my ChatGPT plan?
     a: Yes. An answer is Markdown, [links](https://example.com) included.
   - q: "A question with a colon: quote it"
-    a: Quote any value YAML would misread, such as one with `: ` in it.
+    a: "Quote any value YAML would misread, such as one with a colon and a space in it: like this."
 ---
 
 The answer to the title, in the first sentence. Opening paragraphs may stand
@@ -42,6 +42,12 @@ before the first section.
 | `faq` | yes | At least one `{ q, a }`, drawn under "Frequently asked questions" after the body and marked up as `FAQPage` structured data. |
 | `related` | no | Other guides' slugs, linked under "Related guides". Without it, the page links the three most recently updated others. |
 | `draft` | no | `true` keeps the guide out of production builds; a Preview and a local build still draw it. |
+
+Link another guide by its file, `[the Codex guide](run-codex-in-the-cloud.md)`:
+the page links it at `/guides/run-codex-in-the-cloud`, and the Markdown copy
+and GitHub read it as written. A picture is written from the repository's
+root, `apps/web/public/…`, as the changelog's are, and served from the
+site's.
 
 The body has no `#` heading, since the page sets the title, and no FAQ of its
 own, since the front matter's is drawn for it. Every page closes on the same

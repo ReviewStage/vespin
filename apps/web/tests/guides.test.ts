@@ -26,7 +26,10 @@ const FILES = [
       "related: [review-agents]",
       "faq:",
       "  - q: Can I run two?",
-      "    a: Yes, see [the docs](https://vespin.dev/docs).",
+      "    a: |",
+      "      Yes, see [the docs](https://vespin.dev/docs) and [reviewing](review-agents.md):",
+      "",
+      "      - one *each*",
       "---",
       "",
       "The answer first.",
@@ -86,18 +89,20 @@ test("a guide's front matter FAQ is its FAQPage's questions in plain words, and 
     {
       "@type": "Question",
       name: "Can I run two?",
-      acceptedAnswer: { "@type": "Answer", text: "Yes, see the docs." },
+      acceptedAnswer: { "@type": "Answer", text: "Yes, see the docs and reviewing: one each" },
     },
   ]);
 
   assert.ok(
     guideMarkdown(guide).text.endsWith(
-      "## Frequently asked questions\n\n### Can I run two?\n\nYes, see [the docs](https://vespin.dev/docs).\n",
+      "## Frequently asked questions\n\n### Can I run two?\n\nYes, see [the docs](https://vespin.dev/docs) and [reviewing](review-agents.md):\n\n- one *each*\n",
     ),
   );
+  // A link to another guide's file opens that guide's page.
+  assert.ok(guide.faq[0]?.html.includes('href="/guides/review-agents"'));
 });
 
-test("a draft is left out where drafts are, and a guide naming a related guide that isn't there fails the build", () => {
+test("a draft is left out where drafts are, and a guide naming a related guide that isn't there, or a day the calendar lacks, fails the build", () => {
   const draft = FILES[1].words.replace("faq:", "draft: true\nfaq:");
 
   assert.deepEqual(
@@ -106,4 +111,18 @@ test("a draft is left out where drafts are, and a guide naming a related guide t
   );
 
   assert.throws(() => parseGuides([FILES[0]], true), /related.*review-agents/);
+
+  assert.throws(
+    () =>
+      parseGuides(
+        [
+          {
+            file: "review-agents.md",
+            words: FILES[1].words.replace("updated: 2026-11-11", "updated: 2026-11-31"),
+          },
+        ],
+        true,
+      ),
+    /review-agents\.md/,
+  );
 });

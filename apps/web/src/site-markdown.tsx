@@ -95,15 +95,35 @@ const RELEASE_COMPONENTS: MarkdownComponents = {
 /** Inline words drawn bare, for a heading the page sets itself. */
 const INLINE_COMPONENTS: MarkdownComponents = { p: ({ children }) => <>{children}</> };
 
+/** A link from one guide to another, as written beside it: `<slug>.md`, perhaps with a fragment. */
+const GUIDE_LINK = /^([a-z0-9]+(?:-[a-z0-9]+)*)\.md(#.*)?$/;
+
+/**
+ * Each address a guide names, as the site serves it: another guide, written
+ * as its file beside this one (which GitHub and the guide's Markdown copy
+ * read as written), at that guide's page; a picture from the site's root;
+ * anything else as written.
+ */
+function guideUrl(url: string, key: string): string {
+  if (key === "src") return servedPath(url);
+  const link = GUIDE_LINK.exec(url);
+
+  return link === null ? url : `/guides/${link[1]}${link[2] ?? ""}`;
+}
+
 /** Markdown drawn as a document's HTML, with no root of its own: the page's `Prose` is its root. */
-function documentHtml(words: string, components?: MarkdownComponents): string {
+function documentHtml(
+  words: string,
+  components?: MarkdownComponents,
+  urlTransform: (url: string, key: string) => string = siteUrl,
+): string {
   return renderToStaticMarkup(
     <Markdown
       look={MARKDOWN_LOOK.DOCUMENT}
       words={words}
       components={components}
       rehypePlugins={DOCUMENT_STEPS}
-      urlTransform={siteUrl}
+      urlTransform={urlTransform}
     />,
   );
 }
@@ -241,16 +261,43 @@ export interface GuideSource {
   readonly draft: boolean;
 }
 
-/** A guide's FAQ entry as written: a question, and its answer in Markdown. */
-const GUIDE_QUESTION = Schema.Struct({ q: Schema.NonEmptyString, a: Schema.NonEmptyString });
+/** Words a guide must say: more than spaces, which a quoted YAML value may be. */
+const GUIDE_WORDS = Schema.String.check(Schema.isPattern(/\S/));
 
-/** A front matter day, `YYYY-MM-DD`, as YAML 1.2 reads one: words. */
-const GUIDE_DAY = Schema.String.check(Schema.isPattern(DAY));
+/** The plain words of blocks: each paragraph's, heading's, and cell's run, and a list's items, one after another. */
+function blockText(nodes: readonly Nodes[]): string {
+  return nodes
+    .flatMap((node): string[] => {
+      const words =
+        node.type === "paragraph" || node.type === "heading" || node.type === "tableCell"
+          ? plainText(node.children)
+          : node.type === "code" || node.type === "html"
+            ? node.value
+            : "children" in node
+              ? blockText(node.children)
+              : "";
+
+      return words === "" ? [] : [words];
+    })
+    .join(" ");
+}
+
+/** A guide's FAQ entry as written: a question, and its answer in Markdown. */
+const GUIDE_QUESTION = Schema.Struct({ q: GUIDE_WORDS, a: GUIDE_WORDS });
+
+/** Whether a `YYYY-MM-DD` names a day the calendar has, which `2026-02-30` does not. */
+const calendarDay = (day: string) => new Date(`${day}T00:00:00Z`).toISOString().startsWith(day);
+
+/** A front matter day, `YYYY-MM-DD`, as YAML 1.2 reads one: words, naming a day the calendar has. */
+const GUIDE_DAY = Schema.String.check(
+  Schema.isPattern(DAY),
+  Schema.makeFilter((day: string) => calendarDay(day)),
+);
 
 /** A guide's front matter as `guides/README.md` documents it; any other key is refused. */
 const GUIDE_FRONT_MATTER = Schema.Struct({
-  title: Schema.NonEmptyString,
-  description: Schema.NonEmptyString,
+  title: GUIDE_WORDS,
+  description: GUIDE_WORDS,
   published: GUIDE_DAY,
   updated: GUIDE_DAY,
   related: Schema.optionalKey(Schema.Array(Schema.NonEmptyString)),
@@ -266,11 +313,14 @@ const decodeFrontMatter = Schema.decodeUnknownSync(GUIDE_FRONT_MATTER, {
 function questionOf(entry: typeof GUIDE_QUESTION.Type): GuideQuestion {
   const answer = entry.a.trim();
 
-  const text = markdownTree(answer)
-    .children.flatMap((node) => (node.type === "paragraph" ? [plainText(node.children)] : []))
-    .join(" ");
+  const text = blockText(markdownTree(answer).children);
 
-  return { question: entry.q.trim(), answer, html: documentHtml(answer), text: text || answer };
+  return {
+    question: entry.q.trim(),
+    answer,
+    html: documentHtml(answer, undefined, guideUrl),
+    text,
+  };
 }
 
 /** A guide's front matter decoded, or the build failed naming the file and what is wrong. */
@@ -318,7 +368,7 @@ export function parseGuide(file: string, markdown: string): GuideSource {
       published: front.published,
       updated: front.updated,
       related: front.related ?? [],
-      html: documentHtml(body, RELEASE_COMPONENTS),
+      html: documentHtml(body, RELEASE_COMPONENTS, guideUrl),
       markdown: body,
       faq: front.faq.map(questionOf),
     },

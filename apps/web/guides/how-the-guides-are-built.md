@@ -25,6 +25,13 @@ Paragraphs, lists, tables, code, and links, in GitHub's dialect:
 | Dates | `published` and `updated` |
 | FAQ | `faq` |
 
+A table wider than the column scrolls sideways in its own box:
+
+| Tool | Where agents run | Agents | Teams | Price | Open source | Mobile |
+| --- | --- | --- | --- | --- | --- | --- |
+| Example one | Your laptop, in worktrees | Several | No | Free | Yes | No |
+| Example two | A cloud sandbox per task | Several | Yes | Per seat | No | Web |
+
 ## What comes after it
 
 The page closes on the FAQ, a short paragraph about Vespin, and related
