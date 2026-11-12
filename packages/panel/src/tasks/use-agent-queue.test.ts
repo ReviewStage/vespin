@@ -262,6 +262,25 @@ test("a queued message steered from its row stands in the transcript at once und
   assert.deepEqual(now().composer.sent, []);
 });
 
+test("a steer refused while another message's edit stands open keeps its words out of that edit, giving them back as it closes", async () => {
+  act(() =>
+    now().page({ messages: [message("m1", "Run tests"), message("m2", "Deploy")], revision: 1 }),
+  );
+  act(() => now().composer.setDraft("my own words"));
+  act(() => now().editing.edit(message("m1", "Run tests")));
+  await answer({
+    queue: { messages: [message("m1", "Run tests"), message("m2", "Deploy")], revision: 2 },
+  });
+  act(() => now().composer.setDraft("Run tests and fix failures"));
+  act(() => now().editing.steer());
+  act(() => now().editing.edit(message("m2", "Deploy")));
+  await answer(refused);
+
+  assert.equal(now().composer.draft, "Deploy");
+  act(() => now().editing.cancel());
+  assert.equal(now().composer.draft, "Run tests and fix failures\nmy own words");
+});
+
 test("an edit whose message left the queue, sent or deleted elsewhere, closes and keeps its words in the box", async () => {
   act(() => now().page({ messages: [message("m1", "Run tests")], revision: 1 }));
   act(() => now().editing.edit(message("m1", "Run tests")));

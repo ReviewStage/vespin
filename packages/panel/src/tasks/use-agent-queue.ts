@@ -308,6 +308,9 @@ export function useQueueEditing(
   const [stashed, setStashed] = useState<Stashed | undefined>();
   const held = useRef<string | undefined>(undefined);
   held.current = stashed?.id;
+  // The edit open as an answer lands, which a refusal landing late reads.
+  const stashedNow = useRef(stashed);
+  stashedNow.current = stashed;
   // Whether the service's queue has listed the message since its edit opened, which its leaving the queue is read against.
   const seen = useRef(false);
   const listed = stashed !== undefined && queue.listed.has(stashed.id);
@@ -330,20 +333,36 @@ export function useQueueEditing(
   /**
    * Words the queue did not take back into the box, ahead of what was written
    * there meanwhile; under the id they went under where queueing them again
-   * as they went must not queue them twice.
+   * as they went must not queue them twice. Note that while an edit stands
+   * open as the refusal lands, the words join the box's own kept aside
+   * instead, which the edit's close gives back, because the box holds that
+   * queued message's words, which a save would send with them.
    */
   const putBack = (went: Pick<Stashed, "text" | "attachments">, id: string | undefined) =>
     putBackRefused({
       went,
       most: AGENT_BOUNDS.MAX_MESSAGE_CHARS,
-      update: (next) =>
-        composer.updateHeld((now) => {
-          const joined = next(now);
+      update: (next) => {
+        const open = stashedNow.current;
 
-          if (joined !== undefined && id !== undefined) refused.current = { text: went.text, id };
+        if (open === undefined) {
+          return composer.updateHeld((now) => {
+            const joined = next(now);
 
-          return joined;
-        }),
+            if (joined !== undefined && id !== undefined) refused.current = { text: went.text, id };
+
+            return joined;
+          });
+        }
+
+        const joined = next(open);
+
+        if (joined === undefined) return;
+
+        if (id !== undefined) refused.current = { text: went.text, id };
+        stashedNow.current = { ...open, ...joined };
+        setStashed(stashedNow.current);
+      },
     });
 
   const giveBack = (stash: Stashed) => {
