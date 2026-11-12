@@ -305,10 +305,13 @@ export function documentMarkdown(
     // Note that a kept block written against the block after it, as a line
     // over its list, stays so where the two still read apart; the text's last
     // block kept its source without the line break after it, which a block
-    // laid in after it needs.
+    // laid in after it needs, since without it the next block's first line
+    // runs on in its own.
     const asWritten =
       /\n[^\S\n]*\n$/u.test(block) ||
-      (held.sources.has(node) && readsApart(manager, block, blocks[index + 1] ?? ""));
+      (held.sources.has(node) &&
+        block.endsWith("\n") &&
+        readsApart(manager, block, blocks[index + 1] ?? ""));
 
     out += asWritten ? block : block.trimEnd() + BLOCK_GAP;
   });

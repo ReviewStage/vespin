@@ -445,3 +445,15 @@ test("a checklist laid in after a list that ends the text without a line break s
 
   assert.equal(handedOver(), "- one\n- [ ] two");
 });
+
+test("a code block laid in after a last line written with no line break stands apart from it", () => {
+  const { editor, handedOver } = opened("Intro");
+
+  editor.commands.insertContentAt(editor.state.doc.content.size, {
+    type: "codeBlock",
+    attrs: { language: "sh" },
+    content: [{ type: "text", text: "pwd" }],
+  });
+
+  assert.equal(handedOver(), "Intro\n\n```sh\npwd\n```");
+});
