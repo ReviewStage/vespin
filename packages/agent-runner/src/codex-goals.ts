@@ -1,5 +1,5 @@
 /**
- * codex-goals.ts -- Codex's thread goal as a launch drives and reads it: a `/goal` line read as the app-server request it asks for, and each goal update app-server sends read as the move it made, if any.
+ * codex-goals.ts -- Codex's thread goal as a launch drives and reads it: each goal update app-server sends read as the move it made, if any; a `/goal` line is read by `@repo/wire`'s `goalAskOf`.
  *
  * Codex runs a goal itself: set active on an idle thread, app-server starts
  * a turn toward it, and at each turn's end goes on with another while the
@@ -47,56 +47,6 @@ const GoalSeenSchema = Schema.Struct({
 export const decodeGoalAnswer = Schema.decodeUnknownOption(
   Schema.Struct({ goal: Schema.NullOr(GoalSeenSchema) }),
 );
-
-/** What a `/goal` line asks of the thread's goal. */
-export const GOAL_ASK = {
-  /** Set the goal to the objective, active: a new goal, or the one standing rewritten. */
-  SET: "set",
-  PAUSE: "pause",
-  RESUME: "resume",
-  CLEAR: "clear",
-  /** Nothing to change: `/goal` alone, which asks where the goal stands, as the row already says. */
-  NONE: "none",
-} as const;
-
-export type GoalAsk =
-  | { readonly kind: typeof GOAL_ASK.SET; readonly objective: string }
-  | {
-      readonly kind:
-        | typeof GOAL_ASK.PAUSE
-        | typeof GOAL_ASK.RESUME
-        | typeof GOAL_ASK.CLEAR
-        | typeof GOAL_ASK.NONE;
-    };
-
-/** The words after `/goal` that clear the goal, as Claude Code's `/goal` takes them; Codex's TUI takes `clear` alone, but app-server takes no words, so a Codex agent takes the same words as a Claude one. */
-const CLEAR_WORDS: ReadonlySet<string> = new Set([
-  "clear",
-  "stop",
-  "off",
-  "reset",
-  "none",
-  "cancel",
-]);
-
-/** The command a goal line opens with. */
-const GOAL_COMMAND = /^\s*\/goal(?:\s+([\s\S]*))?$/;
-
-/** What a goal line's words ask of the thread's goal. */
-export function goalAskOf(text: string): GoalAsk {
-  const words = (GOAL_COMMAND.exec(text)?.[1] ?? "").trim();
-  const lowered = words.toLowerCase();
-
-  if (words === "") return { kind: GOAL_ASK.NONE };
-
-  if (lowered === GOAL_ASK.PAUSE) return { kind: GOAL_ASK.PAUSE };
-
-  if (lowered === GOAL_ASK.RESUME) return { kind: GOAL_ASK.RESUME };
-
-  if (CLEAR_WORDS.has(lowered)) return { kind: GOAL_ASK.CLEAR };
-
-  return { kind: GOAL_ASK.SET, objective: words };
-}
 
 /** Whether Codex goes on with the goal by itself: it starts a turn toward it whenever the thread is idle. */
 export function goalRuns(goal: GoalSeen | undefined): boolean {

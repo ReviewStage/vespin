@@ -126,6 +126,7 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
+import { GOAL_ASK, type GoalAsk, goalAskOf } from "@repo/wire/ui-messages";
 import {
   Data,
   Duration,
@@ -162,11 +163,8 @@ import {
 import { CheckoutSnapshots } from "./checkout-snapshot.js";
 import {
   decodeGoalAnswer,
-  GOAL_ASK,
   GOAL_OBJECTIVE_MAX,
-  type GoalAsk,
   type GoalSeen,
-  goalAskOf,
   goalCleared,
   goalMoves,
   goalRuns,
@@ -1863,7 +1861,7 @@ const askGoal = Effect.fn("agent-runner/codex/askGoal")(function* (
   const text = content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
   const waited = launch.goalWait;
 
-  const answer = yield* goalAsked(launch, goalAskOf(text)).pipe(
+  const answer = yield* goalAsked(launch, goalAskOf(text) ?? { kind: GOAL_ASK.NONE }).pipe(
     // Note that we log the method and code alone, since a refusal may quote the objective, the developer's words.
     Effect.catch((error) =>
       Effect.as(
