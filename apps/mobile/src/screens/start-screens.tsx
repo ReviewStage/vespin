@@ -15,6 +15,7 @@ import {
 import { filedTaskOf } from "@repo/features/tasks-model";
 import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
+  ActionRow,
   AttachRow,
   BAR_TITLE,
   BUZZ,
@@ -68,6 +69,7 @@ const WORDS = {
   NO_RELATION: "None",
   CANCEL: "Cancel",
   NO_REPOSITORIES: "The workspace's GitHub reaches no repository yet.",
+  TRY_AGAIN: "Try again",
 } as const;
 
 /** The names each sheet's flow finds its words and its + by. */
@@ -147,7 +149,7 @@ function SheetBar({
   );
 }
 
-/** The agent's section: its model and effort, and where it runs where the account may run one on its own device. */
+/** The agent's section: its model and effort, and where it runs where the account may run one on its own device; where the models could not be read, why, with Try again. */
 function AgentSection({
   pick,
   runsOn,
@@ -158,13 +160,16 @@ function AgentSection({
   readonly onRunsOn: (place: string) => void;
 }) {
   return (
-    <ListSection title={WORDS.AGENT}>
+    <ListSection title={WORDS.AGENT} footer={pick.failed}>
       <MenuPickRow
         label={WORDS.MODEL}
         options={pick.models}
         picked={pick.shown?.model}
         onPick={pick.pickModel}
       />
+      {pick.failed === undefined ? null : (
+        <ActionRow label={WORDS.TRY_AGAIN} symbol="arrow.clockwise" onPress={pick.retry} />
+      )}
       {pick.efforts.length <= 1 ? null : (
         <MenuPickRow
           label={WORDS.EFFORT}
@@ -541,14 +546,31 @@ export function NewTaskScreen({
           {/* Note that the section has no header, since its one row already names it, as a system form's single-row group stands. */}
           <ListSection
             footer={
-              tree === undefined && repository.options.length === 0
-                ? WORDS.NO_REPOSITORIES
-                : undefined
+              tree !== undefined
+                ? undefined
+                : (repository.failed ??
+                  (repository.read && repository.options.length === 0
+                    ? WORDS.NO_REPOSITORIES
+                    : undefined))
             }
           >
             {tree !== undefined ? (
               <ValueRow label={WORDS.REPOSITORY} value={tree.repository ?? NO_REPOSITORY} />
-            ) : repository.options.length === 0 ? null : (
+            ) : repository.options.length === 0 ? (
+              <>
+                {/* Note that the repository a start still names, taken from the account's recent tasks, stands while the list is read or could not be, so it never starts in one the sheet did not show. */}
+                {repository.picked === undefined ? null : (
+                  <ValueRow label={WORDS.REPOSITORY} value={repository.picked} />
+                )}
+                {repository.failed === undefined ? null : (
+                  <ActionRow
+                    label={WORDS.TRY_AGAIN}
+                    symbol="arrow.clockwise"
+                    onPress={repository.retry}
+                  />
+                )}
+              </>
+            ) : (
               <MenuPickRow
                 label={WORDS.REPOSITORY}
                 options={repository.options}
