@@ -54,7 +54,11 @@ import {
   type Redacted,
 } from "effect";
 import type { AgentImage, AgentImageMissing } from "../coder-host/agent-image.js";
-import type { CheckoutRefused, CheckoutServices } from "../coder-host/checkout.js";
+import type {
+  AgentRepositoryRead,
+  CheckoutRefused,
+  CheckoutServices,
+} from "../coder-host/checkout.js";
 import type {
   FirewallLaunch,
   FirewallSources,
@@ -314,6 +318,13 @@ export interface MachineOpen<B, EB, RB> {
   readonly harness: string;
   /** The caller's reads that need no place, run beside the open, whose result `use` is handed. */
   readonly beside: Effect.Effect<B, EB, RB>;
+  /**
+   * The agent's repository read on its write token, minted once for the
+   * start and shared by whatever asks for it (`agentRepositoryRead`), none for
+   * an agent with no repository: a sandbox's open starts it at once and
+   * checks out on it; a device's open never asks for it.
+   */
+  readonly repositoryToken: Effect.Effect<AgentRepositoryRead | undefined, CheckoutRefused>;
   /** The workspace's cloud setup scripts, which a sandbox the open creates runs after its checkout; none where none is saved, and nothing on a machine that runs none, a device's. */
   readonly setup?: Effect.Effect<SandboxSetup | undefined> | undefined;
 }

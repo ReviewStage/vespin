@@ -910,7 +910,7 @@ export type WorkspaceAgentConversation = typeof WorkspaceAgentConversationSchema
  * account that ran it rather than the workspace, so a workspace's delete
  * reads these while its agents stand and, once they are gone, deletes the
  * conversations, as a task's delete does its own, the sessions' sandboxes,
- * the repositories' base drives, and the local agents' folders on their
+ * the workspace's drive, and the local agents' folders on their
  * devices.
  */
 export function workspaceAgentConversations(

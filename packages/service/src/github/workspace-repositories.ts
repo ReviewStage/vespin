@@ -46,6 +46,7 @@ import type {
 import { managesWorkspace } from "@repo/features/workspace-role";
 import { DateTime, Effect, Option, Result } from "effect";
 import type { HttpClient } from "effect/http";
+import { workspaceDriveRegenerated } from "../agents/workspace-drive.js";
 import type { GitHubRepository } from "../core.js";
 import {
   HOSTED_REFUSAL,
@@ -287,7 +288,8 @@ const removeTokenRepository = /* @__PURE__ */ Effect.fnUntraced(function* (
  * A repository added to the workspace on the member's own token, or removed
  * from it, answered with the token repositories as they then stand; a
  * workspace the account is not in is not found. A removal leaves the
- * workspace's tasks as they stand.
+ * workspace's tasks as they stand. Either regenerates the workspace's drive
+ * past the answer (`workspace-drive.ts`).
  */
 export const setWorkspaceTokenRepository = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
@@ -302,6 +304,8 @@ export const setWorkspaceTokenRepository = /* @__PURE__ */ Effect.fnUntraced(fun
   yield* change.added
     ? addTokenRepository(userId, change.workspaceId, change.repository)
     : removeTokenRepository(userId, change.workspaceId, change.repository);
+  // The workspace's drive holds every repository it connects, so it is regenerated past the answer.
+  yield* workspaceDriveRegenerated(change.workspaceId);
   return yield* workspaceTokenRepositories(userId, change.workspaceId);
 });
 

@@ -139,13 +139,6 @@ import {
   reopenedOf,
   SANDBOX_ENV,
 } from "../agent-sandbox-open.js";
-import {
-  BASE_DRIVE,
-  BASE_STATE,
-  DRIVE_PNPM_STORE,
-  HAND_INSTALL_TO_AGENT,
-  readOf,
-} from "../base-drive.js";
 import { AgentImage } from "../coder-host/agent-image.js";
 import { CODER } from "../coder-host/bounds.js";
 import {
@@ -161,6 +154,7 @@ import {
   cloneAgentRepository,
   finishCheckoutWith,
   openWorkingFolder,
+  repositoryCredentialOf,
   writeAgentCredential,
 } from "../coder-host/checkout.js";
 import { diffCheckout, restoreCheckout } from "../coder-host/checkout-restore.js";
@@ -180,7 +174,6 @@ import {
   type LaunchSwapKind,
   newPlaceholder,
   placeholderSwap,
-  type RepositoryCredential,
   sandboxFirewall,
 } from "../sandbox-firewall.js";
 import {
@@ -191,7 +184,13 @@ import {
   recordedSandboxOpen,
 } from "../sandbox-use.js";
 import { scriptRanIn } from "../script-runs.js";
-import { WORKSPACE_DRIVE, workspaceDriveName, workspaceFolderOf } from "../workspace-drive.js";
+import {
+  DRIVE_STATE,
+  readOf,
+  WORKSPACE_DRIVE,
+  workspaceDriveName,
+  workspaceFolderOf,
+} from "../workspace-drive.js";
 import {
   AgentMachine,
   type AgentMachineService,
@@ -269,17 +268,35 @@ const LINK_TOOLS_DIRECTORY = `if [ -d ${SANDBOX_TOOLS_DIRECTORY_BEFORE_RENAME} ]
  */
 const JOIN_DOCKER_GROUP = `if getent group docker > /dev/null && ! id -nG ${AGENT_USER} | grep -qw docker; then usermod -aG docker ${AGENT_USER}; fi`;
 
+/** Where pnpm keeps its store for a checkout on the workspace's drive, where an install that ran as the default user put it: the drive's root, the first folder up from the checkout it may write on that drive. */
+const DRIVE_PNPM_STORE = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/.pnpm-store`;
+
 /**
  * The workspace's drive's root opened to the store's group on each launch,
  * root's, where pnpm's store stands at it, so `agent`, in the default user's
- * group, may write there, and its pnpm picks that store as the fill's did.
+ * group, may write there, and its pnpm picks that store as that install's did.
  * Note that this is because pnpm keeps its store at the topmost folder of
- * the checkout's drive its user may write, and a fork of a base drive mounts
+ * the checkout's drive its user may write, and a fork of a drive mounts
  * with a root only root writes, so `agent`'s pnpm chose a store under the
  * checkout and, finding the one its `node_modules` names elsewhere, asked to
  * purge it.
  */
 const OPEN_DRIVE_STORE = `if [ -d ${DRIVE_PNPM_STORE} ]; then chgrp --reference=${DRIVE_PNPM_STORE} ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}; chmod g+w ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}; fi`;
+
+/**
+ * The dependencies another user installed in the agent's checkout handed to
+ * `agent` on each launch, root's: a setup script's, or an install made
+ * before drives held none, both the default user's. Note
+ * that this is because an install chmods what it installed on every run
+ * (pnpm a package's bins, a `prepare` script the hooks it copies), which
+ * only a file's owner may, so `agent`'s own install failed on them. The
+ * checkout's files but its `.git` and pnpm's store on the drive, whose files
+ * `node_modules` links, are made `agent`'s, their group and its writes left
+ * as they stand, so the default user still writes them. It is asked only
+ * where the checkout's `node_modules` is not `agent`'s, so a launch after
+ * the one that handed it walks nothing.
+ */
+const HAND_INSTALL_TO_AGENT = `if [ -d ${CODER.CHECKOUT_PATH}/node_modules ] && [ "$(stat -c %U ${CODER.CHECKOUT_PATH}/node_modules)" != ${AGENT_USER} ]; then find ${CODER.CHECKOUT_PATH} -mindepth 1 -maxdepth 1 ! -name .git -exec chown -R ${AGENT_USER} {} +; if [ -d ${DRIVE_PNPM_STORE} ]; then chown -R ${AGENT_USER} ${DRIVE_PNPM_STORE}; fi; fi`;
 
 /**
  * A checkout marked safe for git in the sandbox and its repository shared
@@ -321,9 +338,6 @@ const CHECKOUT_CONFIG_PATH = `${CHECKOUT_GIT_PATH}/config`;
 /** Why a checkout cloned before a relaunch was not finished: the store did not answer for its commit identity. */
 const RESTORE_PLAN_UNREAD = "the restored checkout's commit identity could not be read";
 
-/** Why a sandbox created for a launch checked nothing out: the store did not answer for the agent's credential. */
-const CREDENTIAL_UNREAD = "the agent's repository credential could not be read";
-
 /**
  * The launch's readying, run by bash as root through `sudo`, waited on before the runner starts:
  * `agent` put in the `docker` group, the deploy's runner unit the launch
@@ -339,8 +353,8 @@ const CREDENTIAL_UNREAD = "the agent's repository credential could not be read";
  * agent's own and those of the repositories it works in beside it at the
  * paths given (`extraCheckoutPaths`), none for an agent in one repository,
  * the drive's pnpm store opened to `agent` (`OPEN_DRIVE_STORE`) and what
- * another user installed in its checkout handed to it where the drive's
- * fill did not already (`HAND_INSTALL_TO_AGENT`), so its own install runs there,
+ * another user installed in its checkout handed to it where it is not
+ * `agent`'s already (`HAND_INSTALL_TO_AGENT`), so its own install runs there,
  * and the folder an agent saves what the service reads back in made
  * `agent`'s and readable by the default user the service reads as
  * (`SHARED_FILES_DIRECTORY`). Note that the checkout's git config is written
@@ -493,12 +507,11 @@ function snapshotUnusable(failure: { readonly _tag: string }): boolean {
   return failure._tag === "SnapshotGone" || failure._tag === "SandboxGone";
 }
 
-/** What an agent with a repository is checked out from as its sandbox is created: the agent, the reads the open made of its repositories, and its write token as the launch reads it beside the open. */
+/** What an agent with a repository is checked out from as its sandbox is created: the agent, and the reads the open made of its repositories, its own on its write token. */
 interface AgentCheckoutReads {
   readonly agent: WithRepository<Agent>;
   readonly read: AgentRepositoryRead;
   readonly extras: readonly AgentExtraRead[];
-  readonly credential: Effect.Effect<RepositoryCredential, CheckoutRefused>;
   /** The workspace's cloud setup scripts as the launch reads them beside the open, which the sandbox runs after its checkout. */
   readonly setup: Effect.Effect<SandboxSetup | undefined>;
 }
@@ -986,11 +999,10 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
    * reaches it before any sandbox opens on its code, and each repository it
    * works in beside its own cloned into its folder (`cloneAgentExtras`), one
    * already standing in a source's snapshot left as it is. The agent's write
-   * token, as the launch reads it beside the open, is the run's first write,
-   * and stands on past the checkout, which reaches GitHub through it with no
-   * write of its own; a repository it works in beside its own still has its
-   * read token for its clone alone, beside it. A read of it that failed fails
-   * the setup, as it would fail the launch.
+   * token, the one its start minted and its read was made on, is the run's
+   * first write, and stands on past the checkout, which reaches GitHub
+   * through it with no write of its own; a repository it works in beside its
+   * own still has its read token for its clone alone, beside it.
    */
   const checkedOutIn = (
     context: Context.Context<DatabaseServices>,
@@ -1001,7 +1013,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
   ) =>
     Effect.gen(function* () {
       const userId = checkout.agent.userId;
-      const github = yield* checkout.credential;
+      const github = repositoryCredentialOf(checkout.read);
       const sandbox = checkoutOver(context, opened, userId, { github }, github.fullName);
       yield* writeAgentCredential(sandbox, github);
       yield* checkedOutAs(checkout.agent, sandbox, checkout.read, from);
@@ -1126,8 +1138,9 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
    * where it owns one, else from the image with a fork of its workspace's
    * drive where no fill holds it, else from the image alone, each
    * snapshot or drive found gone at the create passed by for the next. The
-   * repository, its extras, and the source's snapshot are read at once,
-   * since none waits on another. Nothing fills the workspace's drive here:
+   * repository, on the write token its start minted (`read`), its extras,
+   * and the source's snapshot are read at once, since none waits on
+   * another. Nothing fills the workspace's drive here:
    * its fills keep it (`../workspace-drive.ts`), and a start that finds none
    * clones.
    */
@@ -1135,22 +1148,20 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     target: ConversationTarget,
     agent: Agent,
     sessionId: string,
-    credential: Effect.Effect<RepositoryCredential, CheckoutRefused>,
+    repositoryRead: Effect.Effect<AgentRepositoryRead | undefined, CheckoutRefused>,
     setup: Effect.Effect<SandboxSetup | undefined>,
   ) =>
     Effect.gen(function* () {
       const [read, extras, source] = yield* Effect.all(
         [
-          hasRepository(agent) ? agentRepositoryRead(target, agent) : Effect.succeed(undefined),
+          repositoryRead,
           hasRepository(agent) ? agentExtraReads(target, agent) : Effect.succeed([]),
           sourceSnapshotOf(agent),
         ],
         { concurrency: "unbounded" },
       );
       const checkout =
-        hasRepository(agent) && read !== undefined
-          ? { agent, read, extras, credential, setup }
-          : undefined;
+        hasRepository(agent) && read !== undefined ? { agent, read, extras, setup } : undefined;
       // A drive the sandboxes could not be asked about, or one a fill holds, is passed by.
       const drive =
         checkout === undefined ? undefined : workspaceDriveName(checkout.read.workspaceId);
@@ -1162,7 +1173,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
               Effect.map(([found, now]) => readOf(found, now)),
             ),
           ),
-          (each) => each.state === BASE_STATE.READY,
+          (each) => each.state === DRIVE_STATE.READY,
         );
       const fromSource = (drive: SandboxDrive | undefined): CreateAttempt[] =>
         source === undefined
@@ -1179,7 +1190,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         ...fromSource(
           source === undefined
             ? undefined
-            : { fork: { ownedBy: source.sandbox }, at: BASE_DRIVE.MOUNT },
+            : { fork: { ownedBy: source.sandbox }, at: WORKSPACE_DRIVE.MOUNT },
         ),
         ...fromSource(undefined),
         ...(drive === undefined || !driveReady
@@ -1221,10 +1232,13 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       });
       if (finished.exitCode === 0) return;
       const holds = yield* api.run(place, { command: "test", args: ["-d", CHECKOUT_GIT_PATH] });
-      const [read, plan] = yield* Effect.all(
+      const read = yield* agentRepositoryRead(target, agent);
+      const sandbox = yield* checkoutIn(place, agent.userId);
+      // The commit identity is read on the one token minted while the clone runs on it.
+      const [, plan] = yield* Effect.all(
         [
-          agentRepositoryRead(target, agent),
-          agentCheckoutPlan(target, agent).pipe(
+          holds.exitCode === 0 ? Effect.void : cloneAgentRepository(agent, sandbox, read),
+          agentCheckoutPlan(target, agent, repositoryCredentialOf(read)).pipe(
             Effect.mapError((failure) =>
               failure instanceof CheckoutRefused
                 ? failure
@@ -1234,8 +1248,6 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         ],
         { concurrency: "unbounded" },
       );
-      const sandbox = yield* checkoutIn(place, agent.userId);
-      if (holds.exitCode !== 0) yield* cloneAgentRepository(agent, sandbox, read);
       yield* finishCheckoutWith(sandbox, plan);
       yield* Effect.logWarning(
         holds.exitCode === 0
@@ -1251,45 +1263,38 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
 
     deliverCredentials: (_agent, credentials) => heldAtFirewall(credentials),
 
-    // What the checkout's finish reads of GitHub (`agentCheckoutPlan`) is read beside the sandbox's
-    // opening and the caller's own reads, and kept as it ended, so a read that failed fails the
-    // launch only once the sandbox stands, and never cuts its opening short; its write token is
-    // the one a sandbox created here checks out through (`checkedOutIn`). Note that a use that
-    // fails leaves the sandbox standing under the session's name, where the next message finds it.
+    // The agent's write token is minted as the open begins, once for the whole start
+    // (`ask.repositoryToken`), and the checkout waits on it alone; the commit identity the
+    // checkout's finish sets (`agentCheckoutPlan`) is read on it beside the sandbox's opening and
+    // the caller's own reads, and kept as it ended, so a read that failed fails the launch only
+    // once the sandbox stands, and never cuts its opening short. Note that a use that fails leaves
+    // the sandbox standing under the session's name, where the next message finds it.
     // The sandbox is recorded booting before it opens, and its boot ended where the open or its use failed.
     open: (ask, use) =>
       Effect.gen(function* () {
         yield* recordedSandboxBooting(ask.agent.id, agentSandboxName(ask.session));
-        const reading = yield* Effect.forkChild(
+        const agent = ask.agent;
+        const identifying = yield* Effect.forkChild(
           Effect.exit(
-            hasRepository(ask.agent)
-              ? agentCheckoutPlan(ask.target, ask.agent)
+            hasRepository(agent)
+              ? Effect.flatMap(ask.repositoryToken, (read) =>
+                  read === undefined
+                    ? Effect.die(new Error("an agent with a repository read none"))
+                    : agentCheckoutPlan(ask.target, agent, repositoryCredentialOf(read)),
+                )
               : Effect.succeed(undefined),
-          ),
-        );
-        const read = Fiber.join(reading);
-        const credential = Effect.flatten(read).pipe(
-          Effect.mapError((failure) =>
-            failure instanceof CheckoutRefused
-              ? failure
-              : new CheckoutRefused({ reason: CREDENTIAL_UNREAD }),
-          ),
-          Effect.flatMap((plan) =>
-            plan === undefined
-              ? Effect.die(new Error("an agent with no repository was checked out"))
-              : Effect.succeed(plan.credential),
           ),
         );
         const [{ name, running, created, from }, [plan, beside]] = yield* Effect.all(
           [
             openedCheckout(
               ask.target,
-              ask.agent,
+              agent,
               ask.session,
-              credential,
+              ask.repositoryToken,
               ask.setup ?? Effect.succeed(undefined),
             ),
-            Effect.all([read, ask.beside], { concurrency: "unbounded" }),
+            Effect.all([Fiber.join(identifying), ask.beside], { concurrency: "unbounded" }),
           ],
           { concurrency: "unbounded" },
         );
@@ -1334,7 +1339,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           snapshot !== undefined
             ? [{ from: CREATED_FROM.SOURCE, snapshot, drive: undefined }, FROM_IMAGE]
             : hasRepository(agent)
-              ? [{ ...FROM_IMAGE, drive: { own: true, at: BASE_DRIVE.MOUNT } }, FROM_IMAGE]
+              ? [{ ...FROM_IMAGE, drive: { own: true, at: WORKSPACE_DRIVE.MOUNT } }, FROM_IMAGE]
               : [FROM_IMAGE];
         const opened = yield* openedFromFirst(agent, found.session, attempts, undefined);
         if (Result.isFailure(opened)) return yield* opened.failure;

@@ -4,7 +4,7 @@ import { routeFromHttpRouter } from "../../route-effect.js";
 import { runWeb } from "../../runtime.js";
 
 /**
- * The daily base drive refresh's one entry, called by Vercel's cron on the
+ * The daily workspace drive refresh's one entry, called by Vercel's cron on the
  * cadence `vercel.json` fixes. The logic lives in
  * `packages/service/src/agents/base-drive-refresh.ts`, behind the group in
  * `packages/service/src/maintenance/base-drive-refresh-app.ts`; this file only

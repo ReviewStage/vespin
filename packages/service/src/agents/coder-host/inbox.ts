@@ -201,7 +201,7 @@ export const INBOX_TOOLS = {
       `and its latest ${INBOX_BOUNDS.MAX_MESSAGES_READ} messages oldest first, each with when it was written, who wrote it (you, agent for another agent, or a member by name and fromUserId, which their link names them by), ` +
       "its words in Markdown, its files by name, the ask it ends with whole, settled or not, with where it stands (open, answered, replaced by a newer ask, or withdrawn, with why), " +
       "and the answer a member's message carries. older, where earlier messages stand, is the before that reads the page before it, and openAsk is the message whose ask stands open where it is older than the page. " +
-      `A picture stands in the words as its alt and caption, and a page as its link or, on an option, its pageId and version, which ${AGENT_TOOL.READ_PAGE} reads. ` +
+      `A picture stands in the words as ![alt](address "caption"), which ${AGENT_TOOL.LOOK_AT_PICTURE} shows by its address where the words are not enough, and a page as its link or, on an option, its pageId and version, which ${AGENT_TOOL.READ_PAGE} reads. ` +
       "A member may close a thread without answering, which withdraws its ask with no reason; " +
       `where it held an ask open of yours, that reaches you as a developer's message whose first line starts "${INBOX_CLOSE_LEAD}" and names the key: ` +
       "take it as their not wanting what the ask asked.",

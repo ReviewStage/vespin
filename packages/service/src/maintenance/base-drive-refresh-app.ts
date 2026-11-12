@@ -1,12 +1,12 @@
 /**
- * base-drive-refresh-app.ts -- the daily base drive refresh as Vercel's cron calls it, under the deployment's `CRON_SECRET`.
+ * base-drive-refresh-app.ts -- the daily workspace drive refresh as Vercel's cron calls it, under the deployment's `CRON_SECRET`.
  *
  * The refresh (`agents/base-drive-refresh.ts`) is a group of its own, kept
  * out of the sweep's so its function's longer bound is its alone. It answers
  * a GET under the deployment's own `CRON_SECRET`, compared in constant time,
  * as the sweep does; a deployment missing the secret answers unavailable and
  * refreshes nothing. It answers what the run did, and an error status where
- * any drive's refill failed, so the cron's log shows it.
+ * any drive's fill failed, so the cron's log shows it.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
@@ -32,7 +32,7 @@ import { BASE_DRIVE_REFRESH_PATH } from "./maintenance-bounds.js";
 
 type RefreshServices = DatabaseServices | GitHubApp | HttpClient.HttpClient | Sandbox;
 
-/** What the group is made with: the edge's runner a refill's checkout runs through, and the agents' image the function ships. */
+/** What the group is made with: the edge's runner a fill's checkouts run through, and the agents' image the function ships. */
 export interface BaseDriveRefreshAppOptions {
   readonly run: SandboxRunner;
   readonly image: Layer.Layer<AgentImage>;

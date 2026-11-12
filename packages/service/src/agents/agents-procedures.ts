@@ -668,7 +668,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       const actionId = yield* pathUuid(input.action);
       return yield* inSandbox(ranRunAction(context.userId, input.id, actionId));
     }),
-    /** What one run action's shell runs interrupted, answering the shells as they stand after. */
+    /** One run action stopped, TERM then KILL where it outlives the grace (`agent-sandbox.ts`), answering the shells as they stand after. */
     stopRunAction: signedIn.stopRunAction.effect(function* ({ input, context }) {
       const actionId = yield* pathUuid(input.action);
       return yield* inSandbox(stoppedRunAction(context.userId, input.id, actionId));

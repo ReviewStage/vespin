@@ -14,6 +14,7 @@ import { fileRefText, shortCommit } from "./code-ref-words.js";
 import { descriptionAttachmentOf } from "./description-attachment-link.js";
 import type { DescriptionAgentEdit } from "./description-notes.js";
 import { askHeadWords } from "./inbox-ask-words.js";
+import { inboxAttachmentOf } from "./inbox-attachment-link.js";
 import {
   INBOX_ASK,
   INBOX_BLOCK,
@@ -1025,7 +1026,14 @@ const SEARCH_MEMORY_CALL: ToolReader = ({ input, output }) => {
  */
 const AGENT_TOOL_VIEWS = {
   [AGENT_TOOL.LOOK_AT_PICTURE]: ({ input, output }) =>
-    namedCall(CALL_KIND.LOOK_AT_PICTURE, input, output, undefined),
+    namedCall(
+      threadPictureOf(input) === undefined
+        ? CALL_KIND.LOOK_AT_PICTURE
+        : CALL_KIND.LOOK_AT_THREAD_PICTURE,
+      input,
+      output,
+      undefined,
+    ),
   [AGENT_TOOL.LIST_AGENTS]: ({ input, output }) =>
     namedCall(CALL_KIND.LIST_AGENTS, input, output, undefined),
   [AGENT_TOOL.READ_AGENT]: ({ input, output }) =>
@@ -1485,10 +1493,17 @@ function namedDescription(call: TargetedCall): ToolTarget {
 
 /** The description a look's address names, which its row opens; the task's own description where the address names no picture. */
 function lookedDescription(call: TargetedCall): ToolTarget {
+  if (threadPictureOf(call.input) !== undefined) return INBOX_TARGET;
   const address = stringAt(call.input, "address");
   return planOf(
     address === undefined ? undefined : descriptionAttachmentOf(address.trim())?.taskId,
   );
+}
+
+/** The thread's picture a look's address names; nothing where it names a description's or none. */
+function threadPictureOf(input: WireValue | undefined) {
+  const address = stringAt(input, "address");
+  return address === undefined ? undefined : inboxAttachmentOf(address.trim());
 }
 
 /** The task a change answered, which its row opens as the sidebar opens it. */

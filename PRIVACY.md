@@ -73,8 +73,9 @@ repositories where the App is installed. A cloud agent works on a checkout of
 the repository in its own Vercel Sandbox: on a drive of its own where it was
 forked from its workspace's drive or from the drive of the agent it was
 continued from, and in the sandbox otherwise; an agent on your own machine
-keeps its work there. A workspace repository's default branch may also be kept
-on a drive of its own. Each workspace keeps one drive holding the default branch
+keeps its work there. A workspace repository's default branch may also remain
+on a drive of its own made before workspace drives, which nothing reads or
+writes any more. Each workspace keeps one drive holding the default branch
 of every repository it connects, which each new cloud agent forks, so an
 agent's sandbox holds those repositories beside its own checkout: those its
 installation grants and those a member added on their own token alike, the
@@ -439,10 +440,11 @@ data with:
 Your data is stored on servers provided by our infrastructure partners: our
 database is hosted by Neon, and agents' checkouts and session files live in
 Vercel Sandboxes, in their snapshots, and on Vercel Drives: each agent's
-checkout on a drive of its own, and a copy of each workspace repository's
-default branch, with its dependencies installed, on a drive of its own, and one
-drive per workspace holding the default branch of every repository it connects,
-member-token ones included, which each new cloud agent forks.
+checkout on a drive of its own, and one drive per workspace holding the default
+branch of every repository it connects, member-token ones included, which each
+new cloud agent forks. A copy of a workspace repository's default branch, with
+its dependencies installed, may also remain on a drive of its own made before
+workspace drives, which nothing reads or writes any more.
 We use encryption in transit (TLS), encrypt saved credentials as described
 above, and keep the tokens agents use outside their sandboxes, adding them at
 the sandbox's network firewall. Transcripts, descriptions, and other content are not
@@ -462,11 +464,13 @@ agent deletes its transcript at once. Deleting or archiving an agent asks
 Vercel to delete its sandbox and the drive holding its checkout; where that
 fails or does not finish in time, the delete or archive goes ahead anyway, and
 the drive may remain. A sandbox's snapshots otherwise expire and are removed
-seven days after they were last used. A repository's default-branch drive, and
-the workspace's drive of every repository it connects, are kept for the
-workspace's agents until the workspace is deleted, and a
-repository snapshot made before default-branch drives expires thirty days after
-its last use. When you delete your account:
+seven days after they were last used. The workspace's drive of every
+repository it connects is kept for the workspace's agents until the workspace
+is deleted. A repository's default-branch drive made before workspace drives
+is no longer read; deleting its workspace asks Vercel to delete it where one of
+the workspace's agents still names its repository, and where none does, or the
+delete fails or does not finish in time, it may remain. A repository snapshot
+made before default-branch drives expires thirty days after its last use. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
   preferences, your sounds, integration records, your phones' push
@@ -481,8 +485,9 @@ its last use. When you delete your account:
 - **Workspaces you own and are the only member of** are deleted at once with
   their tasks, transcripts, and automations, as a deleted task is, and we ask
   Vercel to delete every one of their agents' sandboxes and the drives holding
-  their checkouts and the copy of each of their repositories' default branches
-  on a drive their agents start from, and to stop their scheduled automations;
+  their checkouts, the workspace's drive of every repository it connects, and
+  the default-branch drive made before it of each repository one of their
+  agents still names, and to stop their scheduled automations;
   where that fails or does not finish in time, the workspace is deleted anyway
   and a drive may remain. Their GitHub, Slack, and Sentry
   connections are removed on our side; our apps stay installed at those

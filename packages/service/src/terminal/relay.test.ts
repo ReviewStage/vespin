@@ -87,6 +87,8 @@ function world(options: {
   readonly pty: Scripted;
   /** Whether tmux holds no such shell. */
   readonly shellGone?: boolean;
+  /** Whether the shell is a run action's, which takes nothing typed. */
+  readonly readOnly?: boolean;
   /** How many of the first mints GitHub refuses. */
   readonly tokensRefused?: number;
   /** What GitHub answers a mint only after; never, where it is never done. */
@@ -120,7 +122,7 @@ function world(options: {
     rename: () => Effect.die("the relay renames nothing"),
     kill: () => Effect.die("the relay kills nothing"),
     run: () => Effect.die("the relay runs no run action"),
-    interrupt: () => Effect.die("the relay stops no run action"),
+    stop: () => Effect.die("the relay stops no run action"),
     resume: () =>
       Effect.sync(() => {
         asked.resumed += 1;
@@ -139,6 +141,7 @@ function world(options: {
               sandboxName: "sandbox-relay",
               sandboxSessionId: SANDBOX_SESSION,
               shell: { url: "wss://pty.test", token: Redacted.make("pty-token") },
+              readOnly: options.readOnly ?? false,
             }
           : { state };
       }),
@@ -311,7 +314,7 @@ it.effect(
         "the start names the shell's session exactly",
       );
       assert.ok(
-        start.args.includes("attach-session"),
+        start.args.some((arg: string) => arg.includes("attach-session")),
         "a standing shell is attached, never started here",
       );
       assert.deepEqual([start.cols, start.rows], [ASK.cols, ASK.rows]);
@@ -329,6 +332,35 @@ it.effect(
       );
       assert.deepEqual(device.closed, [], "a desktop that left is sent no close");
     }),
+);
+
+it.effect("a run action's shell takes nothing typed, while its size and output still pass", () =>
+  Effect.gen(function* () {
+    const pty = yield* scriptedSocket;
+    const device = yield* scriptedSocket;
+    const action = world({ pty, readOnly: true });
+
+    const relay = yield* Effect.forkChild(
+      Effect.scoped(relayTerminal(device.socket, ASK, action.deps)),
+    );
+    yield* Effect.yieldNow;
+    yield* device.push({ bytes: encode("vim\r") });
+    yield* device.push({
+      text: JSON.stringify({ type: TERMINAL_RELAY_FRAME.RESIZE, cols: 100, rows: 30 }),
+    });
+    yield* pty.push({ bytes: encode("ready\r\n") });
+    yield* Effect.yieldNow;
+    yield* device.leave;
+    yield* Fiber.join(relay);
+
+    assert.ok(!pty.sent.some((frame) => "bytes" in frame));
+    assert.deepEqual(texts(pty.sent)[1], {
+      type: TERMINAL_RELAY_FRAME.RESIZE,
+      cols: 100,
+      rows: 30,
+    });
+    assert.ok(device.sent.some((frame) => "bytes" in frame));
+  }),
 );
 
 it.effect("the shell's exit reaches the desktop as exited, and ends the connection as exited", () =>

@@ -438,10 +438,10 @@ test("shown, the tab has its agent's files mirrored and a shell opened in the mi
     cols: 80,
     rows: 24,
   });
-  assert.equal(tab.standing(), "· connecting…");
+  assert.equal(tab.standing(), "connecting…");
   const port = main.post(MADE);
   port.say({ type: "state", state: "attached" });
-  assert.equal(tab.standing(), "· connected");
+  assert.equal(tab.standing(), "connected");
   assert.equal(tab.bar(), undefined);
   await tab.render(false);
   await tab.render(true);
@@ -463,7 +463,7 @@ test("a shell that ended takes any key for a new one in the same tab, and is let
   const tab = await mount();
   const port = main.post(MADE);
   port.say({ type: "state", state: "exited", code: 0 });
-  assert.equal(tab.standing(), "· exited");
+  assert.equal(tab.standing(), "exited");
   assert.equal(tab.bar(), "Process exited with code 0. Press any key for a new shell.");
   const before = main.sent.length;
   await tab.type("a", 65);
@@ -515,7 +515,7 @@ test("a switch away and back before the first attach's port arrives keeps the sc
   );
   assert.equal(first.closed(), true);
   assert.equal(second.closed(), false);
-  assert.equal(tab.standing(), "· connected");
+  assert.equal(tab.standing(), "connected");
   assert.deepEqual(
     second.posted.filter((message) => message.type === "input"),
     [{ type: "input", data: "a" }],
@@ -527,7 +527,7 @@ test("a mirror main could not make shows a bar that says so, whose action asks a
   main.down.add(ACT_KIND.MAC_SHELL_MIRROR);
   mountAnnouncer();
   const tab = await mount();
-  assert.equal(tab.standing(), "· unreachable");
+  assert.equal(tab.standing(), "unreachable");
   assert.equal(tab.bar(), "Could not mirror this agent’s files on this Mac.");
   assert.equal(
     announcedPolitely(),
@@ -557,7 +557,7 @@ test("the screen says it has drawn each five thousand characters of output, whic
   port.say({ type: "output", data: bytes("y".repeat(1_500)) });
   await act(async () => vi.runAllTimersAsync());
   assert.deepEqual(acks(), [{ type: "ack", bytes: 5_500 }]);
-  assert.equal(tab.standing(), "· connected");
+  assert.equal(tab.standing(), "connected");
 });
 
 test("a message on the port that is no message of main's is never drawn nor acted on", async () => {
@@ -566,7 +566,7 @@ test("a message on the port that is no message of main's is never drawn nor acte
   port.say({ type: "state", state: "attached" });
   port.say({ type: "state", state: "melted" });
   port.say({ type: "output", data: "not bytes" });
-  assert.equal(tab.standing(), "· connected");
+  assert.equal(tab.standing(), "connected");
 });
 
 test("a terminal bundle that fails to load leaves the tab saying so with Retry, which imports it again and draws the screen", async () => {
@@ -602,7 +602,7 @@ test("a terminal bundle that fails to load leaves the tab saying so with Retry, 
 test("a shell main could not open in the mirror says so, and its action asks again", async () => {
   main.down.add(ACT_KIND.MAC_SHELL_OPEN);
   const tab = await mount();
-  assert.equal(tab.standing(), "· unreachable");
+  assert.equal(tab.standing(), "unreachable");
   assert.equal(tab.bar(), "Could not open a shell in this agent’s files.");
   main.down.clear();
   await act(async () => tab.action()?.click());
@@ -896,6 +896,6 @@ test("on a phone a connecting terminal says so in a bar over its screen, and a c
 
 test("in a wide room a connecting terminal draws no bar, the title bar saying so", async () => {
   const tab = await mount();
-  assert.equal(tab.standing(), "· connecting…");
+  assert.equal(tab.standing(), "connecting…");
   assert.equal(tab.bar(), undefined);
 });

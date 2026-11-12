@@ -28,6 +28,7 @@ import { useAddRepository } from "../tasks/add-repository.js";
 import type { AgentFork } from "../tasks/fork-model.js";
 import { useMoveToEntry } from "../tasks/move-agent.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
+import type { HeldAction } from "../tasks/terminal-held.js";
 import { TERMINAL_KIND } from "../tasks/terminal-session.js";
 import {
   agentTranscript,
@@ -251,10 +252,11 @@ export interface AgentTerminalDoors {
   readonly onShowShell?: ((agentId: string, terminal: ShownShell) => void) | undefined;
 }
 
-/** A shell the service started, as a Terminal tab names and attaches to it. */
+/** A shell the service started, as a Terminal tab names and attaches to it, and the run action it runs where it is one's. */
 export interface ShownShell {
   readonly id: string;
   readonly title: string;
+  readonly action?: HeldAction | undefined;
 }
 
 /** An agent's actions as a surface draws them: its doors, its rename where it is renamed, and the questions its Archive and its delete ask through, drawn beside them. */

@@ -32,7 +32,7 @@ import {
 } from "react";
 import { askAct, tellAct } from "../act.js";
 import { tracedSend } from "../send-traces.js";
-import { type HeldShell, nextShellTitle, TerminalsHeld } from "./terminal-held.js";
+import { type HeldAction, type HeldShell, nextShellTitle, TerminalsHeld } from "./terminal-held.js";
 import {
   SERVICE_UNREACHED,
   type ShellLink,
@@ -222,8 +222,13 @@ function holdShellId(
 /**
  * How a cloud tab reaches its shell: started in the agent's sandbox and
  * attached through the service's relay; one that ended or went is replaced
- * by a new one in the same tab, and the tab's close ends it. `onGone` closes
- * the tab, as for an agent archived.
+ * by a new one in the same tab, and the tab's close ends it. A run action's
+ * shell is read-only: nothing typed reaches it, and one that went is never
+ * replaced by a shell of the developer's. Note that whether it is a run
+ * action's is read from the window's list each time it is asked, because a
+ * tab kept from before it held its action learns it only once the action is
+ * pressed again, after its session was made. `onGone` closes the tab, as for
+ * an agent archived.
  */
 function cloudLink(
   held: TerminalsHeld,
@@ -234,6 +239,12 @@ function cloudLink(
 ): ShellLink {
   return {
     agentId,
+    get readOnly() {
+      const found = held
+        .of(account, TERMINAL_KIND.CLOUD, agentId)
+        .find((each) => each.shell === shell);
+      return found?.action !== undefined;
+    },
     open: async () => {
       const made = await askAct(ACT_KIND.TERMINAL_CREATE, { agentId });
       if ("failure" in made) return { state: refusedOrGone(made.failure, onGone) };
@@ -253,6 +264,18 @@ function cloudLink(
     },
     close: (terminalId) => tellAct(ACT_KIND.TERMINAL_KILL, { agentId, terminalId }),
   };
+}
+
+/** A cloud tab's session, on the shell the window holds for it where it holds one. */
+function cloudSession(
+  held: TerminalsHeld,
+  account: string | undefined,
+  agentId: string,
+  shell: string,
+  onGone: () => void,
+): TerminalSession {
+  const found = held.of(account, TERMINAL_KIND.CLOUD, agentId).find((each) => each.shell === shell);
+  return new TerminalSession(cloudLink(held, account, agentId, shell, onGone), found?.terminal);
 }
 
 /** How a Local tab reaches its shell on this Mac, its open a span from its ask for the mirror to its shell open. */
@@ -372,11 +395,7 @@ export function useTerminalTabSession(
     () =>
       sessions.session(account, kind, agentId, shell, () =>
         kind === TERMINAL_KIND.CLOUD
-          ? new TerminalSession(
-              cloudLink(held, account, agentId, shell, () => gone.current()),
-              held.of(account, TERMINAL_KIND.CLOUD, agentId).find((each) => each.shell === shell)
-                ?.terminal,
-            )
+          ? cloudSession(held, account, agentId, shell, () => gone.current())
           : new TerminalSession(localLink(agentId), undefined),
       ),
     [held, sessions, account, kind, agentId, shell],
@@ -450,11 +469,20 @@ export function useOpenTerminalTab(
  * shell is, in a cloud Terminal tab: the tab that already holds it where
  * the window holds one, or a new tab held on that shell, which attaches to
  * it rather than starting another, handing the panel the keys (`onShown`).
+ * The tab holds the run action it runs, with the action's icon as last
+ * pressed, so it wears both.
  */
 export function useShowShellTab(
   sidePanel: Pick<SidePanelControl, "onChoose">,
   onShown: () => void,
-): (agentId: string, terminal: { readonly id: string; readonly title: string }) => void {
+): (
+  agentId: string,
+  terminal: {
+    readonly id: string;
+    readonly title: string;
+    readonly action?: HeldAction | undefined;
+  },
+) => void {
   const { held: kept } = useContext(TerminalsContext);
   const account = useWindowAccount();
   const { onChoose } = sidePanel;
@@ -462,12 +490,21 @@ export function useShowShellTab(
     (agentId, terminal) => {
       const shells = kept.of(account, TERMINAL_KIND.CLOUD, agentId);
       const found = shells.find((each) => each.terminal === terminal.id);
-      const entry = found ?? {
-        shell: crypto.randomUUID(),
-        title: terminal.title,
+      const entry: HeldShell = {
+        shell: found?.shell ?? crypto.randomUUID(),
+        // Note that a tab already open keeps its name, since its tab is found by it.
+        title: found?.title ?? terminal.title,
         terminal: terminal.id,
+        ...(terminal.action === undefined ? {} : { action: terminal.action }),
       };
-      if (found === undefined) kept.set(account, TERMINAL_KIND.CLOUD, agentId, [...shells, entry]);
+      kept.set(
+        account,
+        TERMINAL_KIND.CLOUD,
+        agentId,
+        found === undefined
+          ? [...shells, entry]
+          : shells.map((each) => (each === found ? entry : each)),
+      );
       onChoose(tabOf(TERMINAL_KIND.CLOUD, agentId, entry));
       onShown();
     },

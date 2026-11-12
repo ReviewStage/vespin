@@ -9,7 +9,11 @@
  * keeping the spelling of its latest save.
  */
 
-import { type TaskSectionIcon, taskSectionIconSchema } from "@repo/features/task-section-wire";
+import {
+  looseTaskSectionIconSchema,
+  type TaskSectionIcon,
+  taskSectionIconSchema,
+} from "@repo/features/task-section-wire";
 import {
   REPOSITORY_SCRIPT_KIND,
   type RepositoryScriptKind,
@@ -181,7 +185,8 @@ const RunActionSchema = Schema.Struct({
   repository: Schema.String,
   label: Schema.String,
   command: Schema.String,
-  icon: Schema.NullOr(taskSectionIconSchema),
+  // Note that an icon is read loosely, its glyph's color as any text, so a color a newer deploy stored fails no older reader.
+  icon: Schema.NullOr(looseTaskSectionIconSchema),
   isDefault: Schema.Boolean,
   updatedAt: InstantColumnSchema,
 });

@@ -99,7 +99,7 @@ const GROUPS: readonly GroupDefinition[] = [
     maxDuration: MAINTENANCE_SWEEP.MAX_DURATION_SECONDS,
     routes: [routeKeyOf(MAINTENANCE_SWEEP_PATH)],
   },
-  // The daily refresh refills every base drive in the one call, one after another, past the platform's default duration.
+  // The daily refresh fills every workspace's drive in the one call, one after another, past the platform's default duration.
   {
     file: FUNCTION_GROUP.BASE_DRIVE_REFRESH,
     maxDuration: BASE_DRIVE_REFRESH.MAX_DURATION_SECONDS,

@@ -18,12 +18,7 @@ interface StandingFor {
  */
 export function standingFor(
   repository: string | null,
-  {
-    local = false,
-    memory = false,
-    descriptions = true,
-    turnEnd = false,
-  }: StandingFor = {},
+  { local = false, memory = false, descriptions = true, turnEnd = false }: StandingFor = {},
 ): AgentStanding {
   const opens: { readonly [G in ToolGate]: boolean } = {
     [TOOL_GATE.REPOSITORY]: repository !== null,

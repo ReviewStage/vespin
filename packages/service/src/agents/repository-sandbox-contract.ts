@@ -37,8 +37,6 @@ export const REPOSITORY_SANDBOX_CONTRACT = {
     URL: "APP_CLONE_URL",
     /** The model's command, which bash reads from the variable and never from shell text. */
     COMMAND: "APP_COMMAND",
-    /** Set on the run that brings a checkout a repository snapshot holds up to its branch; its presence is what makes a run the refresh. */
-    REFRESH: "APP_REFRESH",
     /** The folder under the workspace an extra repository's checkout is cloned into; its presence is what makes a run an extra's clone. */
     FOLDER: "APP_CHECKOUT_FOLDER",
     /** The folders a workspace drive keeps, one `owner/name` a line; its presence is what makes a run the drive's prune. */
