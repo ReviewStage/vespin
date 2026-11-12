@@ -217,7 +217,14 @@ const keysAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
         ...(row.accountEmail === null ? undefined : { email: row.accountEmail }),
         ...(usage.length === 0 ? undefined : { usage: usage[0], usageWindows: usage }),
         ...(row.usageHeardAt === null ? undefined : { usageHeardAt: row.usageHeardAt.getTime() }),
-        ...(row.resetCredits === null ? undefined : { resetCredits: row.resetCredits }),
+        ...(row.resetCredits === null ? undefined : { resetCredits: row.resetCredits.count }),
+        ...(row.resetCredits?.credits === undefined
+          ? undefined
+          : {
+              resetCreditExpiries: row.resetCredits.credits.map(
+                (credit) => credit.expiresAt ?? null,
+              ),
+            }),
       });
     }
   }
@@ -395,13 +402,16 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
     /** One of the account's ChatGPT plan's reset credits spent under the press's key, answering the keys as they then stand and how the spend went. */
     useResetCredit: keyed.useResetCredit.effect(function* ({ context, input }) {
       const { userId, ring } = context;
+
       const outcome = yield* spentResetCredit(
         userId,
         ring,
         input.subscriptionId,
         input.idempotencyKey,
       );
+
       const keys = yield* keysAnswer(userId, ring);
+
       return Option.isNone(outcome) ? keys : { ...keys, resetCredit: outcome.value };
     }),
 

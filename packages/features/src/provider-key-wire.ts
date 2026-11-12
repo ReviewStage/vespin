@@ -240,6 +240,10 @@ const subscriptionKeySummarySchema = EffectSchema.Struct({
   usageHeardAt: EffectSchema.optionalKey(countedNumber),
   /** How many rate-limit reset credits a ChatGPT plan holds, as its usage read last counted; absent until counted. */
   resetCredits: EffectSchema.optionalKey(countedNumber),
+  /** When each credit ChatGPT listed expires, in epoch milliseconds, soonest first and null for one that never expires; absent where it listed none. The first is the one a spend uses. */
+  resetCreditExpiries: EffectSchema.optionalKey(
+    EffectSchema.Array(EffectSchema.NullOr(countedNumber)),
+  ),
 });
 
 /** How ChatGPT took a reset credit's spend, as Codex's app-server names it. */

@@ -825,12 +825,14 @@ it.layer(SUITE)("a reset credit spent on a ChatGPT plan at its limit", (it) => {
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const spec = HARNESS[CONVERSATION_RUNTIME.CODEX];
+
         const limitedAgent = Effect.gen(function* () {
           const { userId, agent, sessions, sequence, launches } = yield* accountWith(
             CONVERSATION_RUNTIME.CODEX,
             false,
             FALLBACK.NONE,
           );
+
           const reached = reaching(userId, sessions);
           const post = yield* eventsRoute(reached);
           const sent = yield* writtenLine(agent, "Fix the invitations.");
@@ -845,8 +847,10 @@ it.layer(SUITE)("a reset credit spent on a ChatGPT plan at its limit", (it) => {
           assert.equal(yield* post(first, limited), 200);
           const [plan] = yield* listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
           assert.ok(plan !== undefined);
+
           return { userId, agent, reached, launches, plan };
         });
+
         const mine = yield* limitedAgent;
         const theirs = yield* limitedAgent;
 
@@ -855,44 +859,94 @@ it.layer(SUITE)("a reset credit spent on a ChatGPT plan at its limit", (it) => {
           jsonResponse({}, HTTP_STATUS.SERVER_ERROR),
           jsonResponse({ code: "reset" }),
         ];
+
+        // ChatGPT lists the plan's credits in no order, a spent one among them.
+        const soonest = Date.UTC(2026, 10, 30);
+        const later = Date.UTC(2026, 11, 14);
+
         const chatgpt = recordingHttpClient((request) =>
           request.method === "POST"
             ? (spends.shift() ?? jsonResponse({ code: "already_redeemed" }))
-            : jsonResponse({
-                rate_limit: {
-                  primary_window: { used_percent: 0, limit_window_seconds: 18_000, reset_at: 1 },
-                },
-                rate_limit_reset_credits: { available_count: 1 },
-              }),
+            : request.pathname.endsWith("/rate-limit-reset-credits")
+              ? jsonResponse({
+                  credits: [
+                    { id: "later", status: "available", expires_at: new Date(later).toISOString() },
+                    { id: "spent", status: "redeemed", expires_at: null },
+                    {
+                      id: "soonest",
+                      status: "available",
+                      expires_at: new Date(soonest).toISOString(),
+                    },
+                  ],
+                })
+              : jsonResponse({
+                  rate_limit: {
+                    primary_window: { used_percent: 0, limit_window_seconds: 18_000, reset_at: 1 },
+                  },
+                  rate_limit_reset_credits: { available_count: 2 },
+                }),
         );
-        const key = randomUUID();
-        const spend = spentResetCredit(mine.userId, keyRing(), mine.plan.id, key).pipe(
-          Effect.provide(Layer.merge(chatgpt.layer, mine.reached)),
-        );
-        const unanswered = yield* spend;
-        const retried = yield* spend;
 
-        const keys = chatgpt.requests
-          .filter((request) => request.method === "POST")
-          .map((request) => {
-            const body = request.init.body;
-            return JSON.parse(
-              typeof body === "string" ? body : new TextDecoder().decode(body as Uint8Array),
-            ).redeem_request_id;
-          });
+        const key = randomUUID();
+        const next = randomUUID();
+
+        const spendUnder = (under: string) =>
+          spentResetCredit(mine.userId, keyRing(), mine.plan.id, under).pipe(
+            Effect.provide(Layer.merge(chatgpt.layer, mine.reached)),
+          );
+
+        const unanswered = yield* spendUnder(key);
+        const retried = yield* spendUnder(key);
+        // The next press, once the plan's credits are listed, names the one that expires soonest.
+        yield* spendUnder(next);
+
+        const SpendSchema = Schema.fromJsonString(
+          Schema.Struct({
+            redeem_request_id: Schema.String,
+            credit_id: Schema.optionalKey(Schema.String),
+          }),
+        );
+
+        const keys = yield* Effect.forEach(
+          chatgpt.requests.filter((request) => request.method === "POST"),
+          (request) =>
+            Effect.promise(() => new Response(request.init.body ?? null).text()).pipe(
+              Effect.flatMap(Schema.decodeUnknownEffect(SpendSchema)),
+              Effect.map((sent) => [sent.redeem_request_id, sent.credit_id]),
+            ),
+        );
+
         const [plan] = yield* listProviderKeyRows(mine.userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+
         const waits = yield* Effect.flatMap(Database, (db) =>
           db
             .select({ waitsUntil: turns.waitsUntil })
             .from(turns)
             .where(eq(turns.conversationId, theirs.agent.conversationId)),
         );
+
         assert.deepEqual(
           [Option.getOrUndefined(unanswered), Option.getOrUndefined(retried)],
           [undefined, "reset"],
         );
-        assert.deepEqual(keys, [key, key]);
-        assert.deepEqual([plan?.status, plan?.resetCredits], [PROVIDER_KEY_STATUS.VERIFIED, 1]);
+        assert.deepEqual(keys, [
+          [key, undefined],
+          [key, undefined],
+          [next, "soonest"],
+        ]);
+        assert.deepEqual(
+          [plan?.status, plan?.resetCredits],
+          [
+            PROVIDER_KEY_STATUS.VERIFIED,
+            {
+              count: 2,
+              credits: [
+                { id: "soonest", expiresAt: soonest },
+                { id: "later", expiresAt: later },
+              ],
+            },
+          ],
+        );
         assert.equal((yield* mine.launches).length, 2, "the plan's agent went on before its reset");
         assert.ok(
           waits.some((turn) => turn.waitsUntil !== null),

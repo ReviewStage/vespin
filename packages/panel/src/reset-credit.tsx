@@ -1,26 +1,39 @@
 /**
  * reset-credit.tsx -- one of a ChatGPT plan's rate-limit reset credits spent, asked first, from Settings or from a Codex agent's limit notice.
  *
- * Settings › Agents counts a plan's credits under its usage, and offers Use
- * reset while the plan is at its limit; a Codex agent's pause on that plan
- * offers the same press on its notice. A spent credit is not given back, so
- * either press asks first, in red, through the one dialog here. Its yes
- * spends one (`PROVIDER_KEYS_USE_RESET_CREDIT`) under a key minted for the
- * press and sent again on a retry, so ChatGPT spends one credit for it; the
- * keys it answers lift the plan's limit everywhere, and the agents it pays
- * for carry on.
+ * Settings › Agents offers a plan's credits under its usage as one press,
+ * Use reset, or Use 1 of 3 resets where it holds more, at any usage, as
+ * Codex's own `/usage` offers them; its card lists when each expires, the
+ * one used next first. A Codex agent's pause on that plan offers the same
+ * press on its notice. A spent credit is not given back, so either press
+ * asks first, in red, through the one dialog here, which lists them too. Its
+ * yes spends the soonest (`PROVIDER_KEYS_USE_RESET_CREDIT`) under a key
+ * minted for the press and sent again on a retry, so ChatGPT spends one
+ * credit for it; the keys it answers lift the plan's limit everywhere, and
+ * the agents it pays for carry on.
  */
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import {
   PROVIDER_KEY_KIND,
-  PROVIDER_KEY_STATUS,
   RESET_CREDIT_OUTCOME,
   type SubscriptionKeySummary,
 } from "@repo/features/provider-key-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { dateOfText } from "@repo/features/time-format";
 import { ACT_KIND } from "@repo/host/acts";
-import { CONFIRM_LOSS, ConfirmDialog, UsageLimitNotice, useConfirmDialog } from "@repo/ui";
+import {
+  CONFIRM_LOSS,
+  ConfirmDialog,
+  HoverCard,
+  HoverCardHead,
+  HoverCardList,
+  HoverCardNote,
+  HoverCardRow,
+  HoverCardRule,
+  UsageLimitNotice,
+  useConfirmDialog,
+} from "@repo/ui";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { type UsageLimitNotice as Notice, USAGE_LIMIT_AGENT } from "@repo/wire/ui-messages";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -33,38 +46,73 @@ import { TranscriptAgent } from "./tasks/line-cards.js";
 import { appStateQuery, selectAccount } from "./use-app-state.js";
 
 const WORDS = {
-  TITLE: "Use a reset credit?",
   VERB: "Use reset",
   RUNNING: "Using reset",
-  NOT_SPENT: "Couldn't use a reset credit. Try again.",
-  NO_CREDIT: "No reset credits left on this plan.",
+  NOT_SPENT: "Couldn't use a reset. Try again.",
+  NO_CREDIT: "That reset is no longer available.",
+  EACH: "Each resets your 5-hour and weekly limits.",
+  USED_NEXT: "Used next",
+  NO_EXPIRY: "Doesn't expire",
+  LISTED: "Resets",
 } as const;
 
-/** How a plan's credits are counted. */
-export function resetCreditWords(credits: number): string {
-  return credits === 1 ? "1 reset credit" : `${credits} reset credits`;
+/** The press, and the question it asks: "Use reset" for one, "Use 1 of 3 resets" for more. */
+function pressWords(credits: number): string {
+  return credits === 1 ? WORDS.VERB : `Use 1 of ${credits} resets`;
 }
 
-/** What the question says the spend takes. */
-function askBody(credits: number): string {
-  const of =
-    credits === 1 ? "the plan's last reset credit" : `1 of the plan's ${credits} reset credits`;
-  return `This spends ${of} to lift the Codex usage limit now, and its agents carry on. A spent credit can't be given back.`;
-}
-
-/** Whether the plan offers a credit: a ChatGPT plan at its limit that holds one. */
+/** Whether the plan offers a credit: a ChatGPT plan that holds one. */
 function offers(plan: SubscriptionKeySummary | undefined): plan is SubscriptionKeySummary {
   return (
     plan !== undefined &&
     plan.kind === PROVIDER_KEY_KIND.CHATGPT_OAUTH &&
-    plan.status === PROVIDER_KEY_STATUS.LIMIT_REACHED &&
     (plan.resetCredits ?? 0) > 0
   );
 }
 
-/** A credit offered on a plan: the press that asks, and the dialog that asks it, which its caller draws. */
+/** The plan's listed credits, each by when it expires, the one a spend uses first; nothing where ChatGPT listed none. */
+function ResetCreditRows({ plan }: { plan: SubscriptionKeySummary }): React.JSX.Element | null {
+  const expiries = plan.resetCreditExpiries;
+
+  if (expiries === undefined || expiries.length === 0) return null;
+  const now = Date.now();
+
+  return (
+    <HoverCardList label={WORDS.LISTED}>
+      {expiries.map((at, index) => (
+        // Note that two credits may expire at once, so a row is keyed by its place.
+        <li key={index}>
+          <HoverCardRow
+            label={at === null ? WORDS.NO_EXPIRY : `Expires ${dateOfText(at, now)}`}
+            end={index === 0 && expiries.length > 1 ? WORDS.USED_NEXT : undefined}
+          />
+        </li>
+      ))}
+    </HoverCardList>
+  );
+}
+
+/** What a plan's Use reset hangs: how many it holds, on which account, what one does, and when each expires. */
+export function ResetCreditCard({ plan }: { plan: SubscriptionKeySummary }): React.JSX.Element {
+  const credits = plan.resetCredits ?? 0;
+  const listed = (plan.resetCreditExpiries?.length ?? 0) > 0;
+
+  return (
+    <HoverCard>
+      <HoverCardHead
+        name={credits === 1 ? "1 reset" : `${credits} resets`}
+        sub={plan.label ?? plan.email}
+      />
+      <HoverCardNote>{WORDS.EACH}</HoverCardNote>
+      {listed ? <HoverCardRule /> : null}
+      <ResetCreditRows plan={plan} />
+    </HoverCard>
+  );
+}
+
+/** A credit offered on a plan: the press's words, the press that asks, and the dialog that asks it, which its caller draws. */
 export interface ResetCreditOffer {
-  readonly credits: number;
+  readonly words: string;
   readonly use: () => void;
   readonly busy: boolean;
   readonly dialog: ReactNode;
@@ -76,6 +124,7 @@ export function useResetCreditOffer(
 ): ResetCreditOffer | undefined {
   const offered = offers(plan);
   const key = useRef("");
+
   const spend = useMutation({
     mutationFn: (subscriptionId: string) =>
       askAct(ACT_KIND.PROVIDER_KEYS_USE_RESET_CREDIT, {
@@ -83,6 +132,7 @@ export function useResetCreditOffer(
         idempotencyKey: key.current,
       }),
   });
+
   const act = useConfirmAct(spend, {
     send: () => (plan?.id === undefined ? Promise.resolve() : spend.mutateAsync(plan.id)),
     answered: (answer): ActionResult =>
@@ -93,15 +143,18 @@ export function useResetCreditOffer(
           : ANSWER_ACCEPTED,
     failed: refusedWith,
   });
+
   const asked = useConfirmDialog(
     { subject: offered, surfaceOpen: true },
     act,
     confirmFailure(FAILURE_SURFACE.ACT),
   );
+
   if (!offered) return undefined;
-  const credits = plan.resetCredits ?? 0;
+  const words = pressWords(plan.resetCredits ?? 0);
+
   return {
-    credits,
+    words,
     busy: asked.busy,
     use: () => {
       // Note that the key is minted once a press, so the dialog's retry sends the same one.
@@ -113,14 +166,17 @@ export function useResetCreditOffer(
         open
         confirm={asked}
         question={{
-          title: WORDS.TITLE,
+          title: `${words}?`,
           replayUnmasked: true,
-          body: askBody(credits),
+          body: `Resets the 5-hour and weekly limits on ${plan.label ?? plan.email ?? "this plan"}.`,
+          bodyReplayMasked: true,
           verb: WORDS.VERB,
           running: WORDS.RUNNING,
           loss: CONFIRM_LOSS.IRREVERSIBLE,
         }}
-      />
+      >
+        <ResetCreditRows plan={plan} />
+      </ConfirmDialog>
     ),
   };
 }
@@ -129,6 +185,7 @@ export function useResetCreditOffer(
 function useOwnPlan(planId: string | undefined): SubscriptionKeySummary | undefined {
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
   const keys = useQuery(providerKeysQuery(accountId)).data;
+
   return planId === undefined ? undefined : keys?.subscriptions?.find((one) => one.id === planId);
 }
 
@@ -155,11 +212,14 @@ export function TranscriptAgentOn({
 /** A limit notice in a transcript, offering a credit where it is a Codex pause still standing on the reader's own plan. */
 export function TranscriptUsageLimitNotice({ notice }: { notice: Notice }): React.JSX.Element {
   const plan = useOwnPlan(useContext(TranscriptPlan));
+
   const pause =
     notice.agent === USAGE_LIMIT_AGENT.CODEX &&
     notice.resetsAt !== null &&
     notice.resetsAt > Date.now();
+
   const offer = useResetCreditOffer(pause ? plan : undefined);
+
   return (
     <>
       <UsageLimitNotice notice={notice} reset={offer} />

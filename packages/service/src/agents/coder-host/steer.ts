@@ -855,6 +855,7 @@ export const resumeWaitedTurns = /* @__PURE__ */ Effect.fn("web/resumeWaitedTurn
 ) {
   const released = yield* releaseWaitedTurns(new Date(now), WAITED_TURNS.RESUME_LIMIT);
   yield* handWaitedTurnsOn(released);
+
   return released.length;
 });
 

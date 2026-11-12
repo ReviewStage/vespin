@@ -393,6 +393,11 @@ export function SettingsRowMeter({
   );
 }
 
+/** One small press under a row's description, on a line of its own: a plan's Use reset under its meters. */
+export function SettingsRowAction({ children }: { children: ReactNode }): React.JSX.Element {
+  return <span className="ui-settings-row-action mt-ui-8 flex">{children}</span>;
+}
+
 /** How much of each of its usage windows a row's plan has used, as meters under its state line (`UsageMeters`). */
 export function SettingsRowUsage({
   rows,
