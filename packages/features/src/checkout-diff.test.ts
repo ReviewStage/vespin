@@ -3,7 +3,7 @@
  */
 
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -82,9 +82,33 @@ afterEach(() => {
   for (const cwd of made.splice(0)) rmSync(cwd, { recursive: true });
 });
 
-/** A git command run in the repository, its output trimmed. */
+/** Whoever commits upstream in these repositories: someone other than the checkout's own committer. */
+const UPSTREAM_COMMITTER = {
+  GIT_AUTHOR_NAME: "Teammate",
+  GIT_AUTHOR_EMAIL: "teammate@example.invalid",
+  GIT_COMMITTER_NAME: "Teammate",
+  GIT_COMMITTER_EMAIL: "teammate@example.invalid",
+};
+
+/**
+ * Whether the git these tests run can replay one side's change onto another
+ * (`merge-tree --merge-base`, git 2.40), which the script falls back from
+ * where it cannot, as Apple's git 2.39 cannot.
+ */
+const REPLAYS = (() => {
+  const help = spawnSync("git", ["merge-tree", "-h"], { encoding: "utf8", env: GIT_ENV });
+
+  return `${help.stdout}${help.stderr}`.includes("merge-base");
+})();
+
+/** A git command run in the repository as the checkout's own committer, or as `as` where given, its output trimmed. */
 function git(cwd: string, ...args: string[]): string {
-  return execFileSync("git", args, { cwd, encoding: "utf8", env: GIT_ENV }).trim();
+  return gitAs(cwd, {}, ...args);
+}
+
+/** A git command run in the repository with `as` over the checkout's own committer, its output trimmed. */
+function gitAs(cwd: string, as: Readonly<Record<string, string>>, ...args: string[]): string {
+  return execFileSync("git", args, { cwd, encoding: "utf8", env: { ...GIT_ENV, ...as } }).trim();
 }
 
 /** Lines `1` to `count` of a file, each its own number, with line `at` spelled `words` where given. */
@@ -122,7 +146,7 @@ function turnAcrossAMerge(clashing: boolean) {
   write("shared.txt", numbered(40, { line: 38, words: "from upstream" }));
 
   if (clashing) write("clash.txt", numbered(10, { line: 5, words: "upstream's five" }));
-  git(cwd, "commit", "--quiet", "-am", "upstream");
+  gitAs(cwd, UPSTREAM_COMMITTER, "commit", "--quiet", "-am", "upstream");
   git(cwd, "update-ref", "refs/remotes/origin/main", "HEAD");
   git(cwd, "checkout", "--quiet", "-b", "agent", "main");
   write("clash.txt", numbered(10, { line: 5, words: "the agent's five" }));
@@ -139,6 +163,11 @@ function turnAcrossAMerge(clashing: boolean) {
     numbered(40, { line: 2, words: "the agent's two" }).replace("\n38\n", "\nfrom upstream\n"),
   );
 
+  return turnDiff(cwd, from);
+}
+
+/** The script's diff from the snapshot `from` to the working tree, by path and lines added. */
+function turnDiff(cwd: string, from: string) {
   const output = execFileSync("sh", ["-c", CHECKOUT_DIFF_SCRIPT], {
     cwd,
     encoding: "utf8",
@@ -294,12 +323,40 @@ test("the script's variables carry the two commits, the second empty for the wor
 });
 
 test("a turn that merged its upstream in names only the agent's own changes, leaving out what the merge brought", () => {
-  assert.deepEqual(turnAcrossAMerge(false), [
-    ["agent.txt", 1],
-    ["shared.txt", 1],
-  ]);
+  // Note that a git that cannot replay upstream takes every path upstream changed out, `shared.txt` among them.
+  assert.deepEqual(
+    turnAcrossAMerge(false),
+    REPLAYS
+      ? [
+          ["agent.txt", 1],
+          ["shared.txt", 1],
+        ]
+      : [["agent.txt", 1]],
+  );
 });
 
 test("where upstream clashes with the checkout before the turn, the files upstream changed are left out and the agent's others kept", () => {
   assert.deepEqual(turnAcrossAMerge(true), [["agent.txt", 1]]);
+});
+
+test("a commit the turn made that reached upstream, as an agent's push to the default branch does, stays the turn's", () => {
+  const cwd = mkdtempSync(join(tmpdir(), "checkout-diff-"));
+  made.push(cwd);
+  git(cwd, "init", "--quiet", "--initial-branch=main");
+  writeFileSync(join(cwd, "agent.txt"), `${numbered(10)}\n`);
+  git(cwd, "add", "-A");
+  git(cwd, "commit", "--quiet", "-m", "first");
+  git(cwd, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main");
+  git(cwd, "update-ref", "refs/remotes/origin/main", "HEAD");
+  const tree = git(cwd, "write-tree");
+  const from = git(cwd, "commit-tree", tree, "-p", "HEAD", "-m", "The checkout before a turn");
+  // The turn commits on main and pushes, so upstream moves to the turn's own commit.
+  writeFileSync(
+    join(cwd, "agent.txt"),
+    `${numbered(10, { line: 3, words: "the agent's three" })}\n`,
+  );
+  git(cwd, "commit", "--quiet", "-am", "the turn's work");
+  git(cwd, "update-ref", "refs/remotes/origin/main", "HEAD");
+
+  assert.deepEqual(turnDiff(cwd, from), [["agent.txt", 1]]);
 });

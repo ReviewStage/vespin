@@ -65,9 +65,13 @@ const { FROM, TO } = CHECKOUT_DIFF_VARIABLE;
  * turn is diffed from what that makes. Where the replay clashes with the
  * checkout before the turn, or the machine's git has no such merge, the
  * paths upstream changed are taken as the side after the turn holds them
- * instead, so they drop out of the diff whoever changed them. A checkout
- * with no `origin/HEAD`, or a side with no `HEAD` under it, is diffed as it
- * stands.
+ * instead, so they drop out of the diff whoever changed them. Note that
+ * where a commit between the two bases was committed by the checkout's own
+ * committer, it may be the turn's own work that reached upstream, as an
+ * agent's push to the default branch does, and history cannot tell it from
+ * upstream's, so the turn is diffed as it stands rather than risk leaving
+ * out what it did. A checkout with no `origin/HEAD`, or a side with no
+ * `HEAD` under it, is diffed as it stands too.
  */
 export const CHECKOUT_DIFF_SCRIPT = [
   "set -eu",
@@ -91,6 +95,11 @@ export const CHECKOUT_DIFF_SCRIPT = [
   'if [ -n "$from_head" ] && [ -n "$to_head" ] && [ -n "$upstream" ]; then',
   '  was=$(git merge-base "$from_head" "$upstream" 2>/dev/null || true)',
   '  now=$(git merge-base "$to_head" "$upstream" 2>/dev/null || true)',
+  '  if [ -n "$was" ] && [ -n "$now" ] && [ "$was" != "$now" ]; then',
+  "    me=$(git var GIT_COMMITTER_IDENT 2>/dev/null | sed -n 's/.*<\\(.*\\)>.*/\\1/p' || true)",
+  '    git log --format=%ce "$was..$now" > "$run/committers"',
+  '    if [ -n "$me" ] && grep -qxF -- "$me" "$run/committers"; then was="$now"; fi',
+  "  fi",
   '  if [ -n "$was" ] && [ -n "$now" ] && [ "$was" != "$now" ]; then',
   '    if replayed=$(git merge-tree --write-tree --merge-base "$was" "$from" "$now" 2>/dev/null); then',
   '      from=$(printf "%s\\n" "$replayed" | head -n 1)',
