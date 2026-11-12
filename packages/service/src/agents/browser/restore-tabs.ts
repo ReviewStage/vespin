@@ -29,7 +29,7 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { listAgentBrowserTabs, retargetBrowserTab } from "@repo/database/models/agent-browser-tabs";
 import type { CdpSession } from "@repo/features/browser-cdp";
-import { Effect, type Scope } from "effect";
+import { Effect, Result, type Scope } from "effect";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { AgentBrowser, type BrowserUnreachable } from "./agent-browser.js";
 
@@ -51,7 +51,7 @@ export function restoreBrowserTabs(
     // kept tab would otherwise read as lost and be opened twice; the next connection asks again.
     const pages = yield* Effect.result(cdp.pages);
 
-    if (pages._tag === "Failure") {
+    if (Result.isFailure(pages)) {
       return yield* Effect.logWarning(`The Browser tabs were not read: ${pages.failure.kind}`);
     }
 
@@ -61,7 +61,7 @@ export function restoreBrowserTabs(
       if (held.has(row.targetId)) continue;
       const reopened = yield* Effect.result(cdp.openPage(row.address));
 
-      if (reopened._tag === "Failure") {
+      if (Result.isFailure(reopened)) {
         yield* Effect.logWarning(`A Browser tab did not reopen: ${reopened.failure.kind}`);
         continue;
       }

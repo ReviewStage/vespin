@@ -93,7 +93,7 @@ import {
   type TaskRunsOnRequest,
   type TaskStartAnswer,
 } from "@repo/features/task-wire";
-import { Effect, Option } from "effect";
+import { Effect, Match, Option, Predicate } from "effect";
 import { routedSessions } from "../agents/coder-host/runtime-sessions.js";
 import { type StartReach, startRequestedAgent } from "../agents/coder-host/start.js";
 import { summaryOf } from "../agents/coder-host/stop.js";
@@ -336,24 +336,21 @@ const pickKept = (userId: string, asked: TaskRunsOnRequest) =>
 function relationRefused(
   failure: TaskRelationRefused | TaskCreateRelationRefused | StoreFailure,
 ): Effect.Effect<never, HostedRefusal> {
-  switch (failure._tag) {
-    case "TaskBlockCycle":
-      return Effect.fail(HOSTED_REFUSAL.TASK_BLOCK_CYCLE);
-    case "TaskBlockSelf":
-    case "TaskBlockAcrossWorkspaces":
-      return Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-    case "TaskParentCycle":
-      return Effect.fail(HOSTED_REFUSAL.TASK_PARENT_CYCLE);
-    case "TaskParentRepositoryDiffers":
-      return Effect.fail(HOSTED_REFUSAL.CHILD_REPOSITORY_LOCKED);
-    case "TaskParentHeld":
-      return Effect.fail(HOSTED_REFUSAL.TASK_PARENT_HELD);
-    case "TaskParentUnreached":
-    case "TaskRelationUnreached":
-      return Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-    default:
-      return hostedStoreOrUnavailable(Effect.fail(failure));
-  }
+  return Match.value(failure).pipe(
+    Match.tag("TaskBlockCycle", () => Effect.fail(HOSTED_REFUSAL.TASK_BLOCK_CYCLE)),
+    Match.tag("TaskBlockSelf", "TaskBlockAcrossWorkspaces", () =>
+      Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST),
+    ),
+    Match.tag("TaskParentCycle", () => Effect.fail(HOSTED_REFUSAL.TASK_PARENT_CYCLE)),
+    Match.tag("TaskParentRepositoryDiffers", () =>
+      Effect.fail(HOSTED_REFUSAL.CHILD_REPOSITORY_LOCKED),
+    ),
+    Match.tag("TaskParentHeld", () => Effect.fail(HOSTED_REFUSAL.TASK_PARENT_HELD)),
+    Match.tag("TaskParentUnreached", "TaskRelationUnreached", () =>
+      Effect.fail(HOSTED_REFUSAL.NOT_FOUND),
+    ),
+    Match.orElse((store) => hostedStoreOrUnavailable(Effect.fail(store))),
+  );
 }
 
 /** A make's refusal answered by name: a repository refused as its reach answered it, an assignee who is no member as invalid, an id another plan holds as not found, and a parent or a relation as `relationRefused` answers it. */
@@ -367,9 +364,10 @@ function createRefused(
 ): Effect.Effect<never, HostedRefusal> {
   if (!("_tag" in failure)) return Effect.fail(failure);
 
-  if (failure._tag === "TaskAssigneeNotMember") return Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+  if (Predicate.isTagged(failure, "TaskAssigneeNotMember"))
+    return Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
 
-  if (failure._tag === "TaskIdTaken") return Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  if (Predicate.isTagged(failure, "TaskIdTaken")) return Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
   return relationRefused(failure);
 }

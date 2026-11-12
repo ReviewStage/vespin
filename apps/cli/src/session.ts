@@ -31,7 +31,7 @@ import {
 import { LINK_ORIGIN } from "@repo/features/link-home";
 import { FIRST_PARTY_OAUTH_CLIENT_ID } from "@repo/features/oauth-client-ids";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { Effect, Option } from "effect";
+import { Effect, Option, Predicate } from "effect";
 import { URL_FLAG } from "./flags.js";
 import { CommandFailed } from "./output.js";
 import { accountStore } from "./token-store.js";
@@ -140,7 +140,7 @@ function failureWords(failed: HostedFailure): string {
 
   if (exit === CLI_EXIT.AUTH) return `Not signed in, or the sign-in lapsed. ${SIGN_IN_HINT}`;
 
-  if (failed._tag === "HostedRefused") {
+  if (Predicate.isTagged(failed, "HostedRefused")) {
     if (failed.refusal === HOSTED_API_ERROR.UNAVAILABLE) {
       return `${PRODUCT_NAME} is unavailable right now.`;
     }
@@ -170,7 +170,9 @@ export function askService<Input, Output>(
   refusalWords: Readonly<Partial<Record<HostedApiError, string>>> = {},
 ) {
   return Effect.mapError(askHosted(procedure, input, deadline), (failed) => {
-    const named = failed._tag === "HostedRefused" ? refusalWords[failed.refusal] : undefined;
+    const named = Predicate.isTagged(failed, "HostedRefused")
+      ? refusalWords[failed.refusal]
+      : undefined;
 
     return new CommandFailed({
       exit: cliExitOfHostedFailure(failed),

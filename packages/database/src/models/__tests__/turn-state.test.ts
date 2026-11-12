@@ -54,7 +54,7 @@ const openAgent = Effect.gen(function* () {
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
 
-  assert.ok(started._tag === "Some");
+  assert.ok(Option.isSome(started));
   const { agent } = started.value;
 
   return { agentId: agent.id, target: { userId, conversationId: agent.conversationId } };

@@ -2,7 +2,9 @@ import {
   Array as Arr,
   Data,
   Effect,
+  Match,
   Option,
+  Predicate,
   Result,
   Schema,
   SchemaAST,
@@ -441,7 +443,10 @@ function unionNode(
 ): JsonSchemaNode {
   takeBounds(ast, bounds, []);
   const members = ast.types;
-  const literals = members.flatMap((member) => (member._tag === "Literal" ? [member.literal] : []));
+
+  const literals = members.flatMap((member) =>
+    Predicate.isTagged(member, "Literal") ? [member.literal] : [],
+  );
 
   if (literals.length === members.length) {
     const asEnum = enumNode(literals);
@@ -459,8 +464,8 @@ function unionNode(
  * is what `required` already says.
  */
 function propertyType(type: SchemaAST.AST): SchemaAST.AST {
-  if (type._tag !== "Union") return type;
-  const defined = type.types.filter((member) => member._tag !== "Undefined");
+  if (!Predicate.isTagged(type, "Union")) return type;
+  const defined = type.types.filter((member) => !Predicate.isTagged(member, "Undefined"));
 
   if (defined.length === type.types.length) return type;
   const only = defined[0];
@@ -536,41 +541,52 @@ function emit(ast: SchemaAST.AST, above: Gathered, visiting: Set<SchemaAST.AST>)
     if (link !== undefined) return emit(link.to, gathered, visiting);
   }
 
-  switch (ast._tag) {
-    case "Suspend": {
-      if (visiting.has(ast)) throw unshowable(ast, "a recursive declaration has no finite node");
-      visiting.add(ast);
-      const node = emit(ast.thunk(), gathered, visiting);
-      visiting.delete(ast);
+  return Match.value(ast).pipe(
+    Match.tag("Suspend", (suspend) => {
+      if (visiting.has(suspend)) {
+        throw unshowable(suspend, "a recursive declaration has no finite node");
+      }
+
+      visiting.add(suspend);
+      const node = emit(suspend.thunk(), gathered, visiting);
+      visiting.delete(suspend);
 
       return node;
-    }
-
-    case "String":
-      return withDescription(stringNode(ast, gathered.bounds), gathered.description);
-    case "Number":
-      return withDescription(numberNode(ast, gathered.bounds), gathered.description);
-    case "Boolean":
-      takeBounds(ast, gathered.bounds, []);
+    }),
+    Match.tag("String", (string) =>
+      withDescription(stringNode(string, gathered.bounds), gathered.description),
+    ),
+    Match.tag("Number", (number) =>
+      withDescription(numberNode(number, gathered.bounds), gathered.description),
+    ),
+    Match.tag("Boolean", (boolean) => {
+      takeBounds(boolean, gathered.bounds, []);
 
       return withDescription({ type: "boolean" }, gathered.description);
-    case "Null":
-      takeBounds(ast, gathered.bounds, []);
+    }),
+    Match.tag("Null", (none) => {
+      takeBounds(none, gathered.bounds, []);
 
       return withDescription({ type: "null" }, gathered.description);
-    case "Literal":
-      takeBounds(ast, gathered.bounds, []);
+    }),
+    Match.tag("Literal", (literal) => {
+      takeBounds(literal, gathered.bounds, []);
 
-      return withDescription(literalNode(ast), gathered.description);
-    case "Union":
-      return withDescription(unionNode(ast, gathered.bounds, visiting), gathered.description);
-    case "Objects":
-      return withDescription(objectNode(ast, gathered.bounds, visiting), gathered.description);
-    case "Arrays":
-      return withDescription(arraysNode(ast, gathered.bounds, visiting), gathered.description);
-    default:
-      throw unshowable(ast, `a ${ast._tag} has no wire form`);
-  }
+      return withDescription(literalNode(literal), gathered.description);
+    }),
+    Match.tag("Union", (union) =>
+      withDescription(unionNode(union, gathered.bounds, visiting), gathered.description),
+    ),
+    Match.tag("Objects", (objects) =>
+      withDescription(objectNode(objects, gathered.bounds, visiting), gathered.description),
+    ),
+    Match.tag("Arrays", (arrays) =>
+      withDescription(arraysNode(arrays, gathered.bounds, visiting), gathered.description),
+    ),
+    Match.orElse((other) => {
+      throw unshowable(other, `a ${other._tag} has no wire form`);
+    }),
+  );
 }
 
 /** The JSON Schema node a model is shown for this declaration. */
@@ -671,58 +687,52 @@ function checkRefusal(check: SchemaAST.Check<unknown>): SchemaRefusal {
  * inside it reports where that schema refused.
  */
 function refusalOf(issue: SchemaIssue.Issue, path: SchemaPath): SchemaRefusalError {
-  switch (issue._tag) {
-    case "Pointer":
-      return refusalOf(issue.issue, [...path, ...pathSegments(issue.path)]);
-    case "Composite": {
-      const named = nodeRefusal(issue.ast);
+  const malformed = () => new SchemaRefusalError({ refusal: SCHEMA_REFUSAL.MALFORMED, path });
+
+  const annotated = (issued: SchemaIssue.InvalidValue | SchemaIssue.Forbidden) =>
+    new SchemaRefusalError({
+      refusal: annotatedRefusal(issued.annotations) ?? SCHEMA_REFUSAL.MALFORMED,
+      path,
+    });
+
+  const ofNode = (issued: SchemaIssue.InvalidType | SchemaIssue.UnexpectedKey) =>
+    new SchemaRefusalError({
+      refusal: nodeRefusal(issued.ast) ?? SCHEMA_REFUSAL.MALFORMED,
+      path,
+    });
+
+  return Match.valueTags(issue, {
+    Pointer: (pointer) => refusalOf(pointer.issue, [...path, ...pathSegments(pointer.path)]),
+    Composite: (composite) => {
+      const named = nodeRefusal(composite.ast);
 
       return named === undefined
-        ? refusalOf(issue.issues[0], path)
+        ? refusalOf(composite.issues[0], path)
         : new SchemaRefusalError({ refusal: named, path });
-    }
-
-    case "AnyOf": {
-      const named = nodeRefusal(issue.ast);
+    },
+    AnyOf: (anyOf) => {
+      const named = nodeRefusal(anyOf.ast);
 
       if (named !== undefined) return new SchemaRefusalError({ refusal: named, path });
-      const first = issue.issues[0];
+      const first = anyOf.issues[0];
 
-      return first === undefined
-        ? new SchemaRefusalError({ refusal: SCHEMA_REFUSAL.MALFORMED, path })
-        : refusalOf(first, path);
-    }
-
-    case "Filter":
-      return new SchemaRefusalError({ refusal: checkRefusal(issue.filter), path });
-    case "Encoding": {
-      const named = nodeRefusal(issue.ast);
+      return first === undefined ? malformed() : refusalOf(first, path);
+    },
+    Filter: (filter) => new SchemaRefusalError({ refusal: checkRefusal(filter.filter), path }),
+    Encoding: (encoding) => {
+      const named = nodeRefusal(encoding.ast);
 
       return named === undefined
-        ? refusalOf(issue.issue, path)
+        ? refusalOf(encoding.issue, path)
         : new SchemaRefusalError({ refusal: named, path });
-    }
-
-    case "InvalidType":
-      return new SchemaRefusalError({
-        refusal: nodeRefusal(issue.ast) ?? SCHEMA_REFUSAL.MALFORMED,
-        path,
-      });
-    case "UnexpectedKey":
-      return new SchemaRefusalError({
-        refusal: nodeRefusal(issue.ast) ?? SCHEMA_REFUSAL.MALFORMED,
-        path,
-      });
-    case "InvalidValue":
-    case "Forbidden":
-      return new SchemaRefusalError({
-        refusal: annotatedRefusal(issue.annotations) ?? SCHEMA_REFUSAL.MALFORMED,
-        path,
-      });
-    case "MissingKey":
-    case "OneOf":
-      return new SchemaRefusalError({ refusal: SCHEMA_REFUSAL.MALFORMED, path });
-  }
+    },
+    InvalidType: ofNode,
+    UnexpectedKey: ofNode,
+    InvalidValue: annotated,
+    Forbidden: annotated,
+    MissingKey: malformed,
+    OneOf: malformed,
+  });
 }
 
 /**

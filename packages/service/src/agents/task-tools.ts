@@ -20,7 +20,7 @@ import {
 } from "@repo/features/task-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { describeWire } from "@repo/wire/effect";
-import { Effect, Option, Result, Schema } from "effect";
+import { Effect, Match, Option, Result, Schema } from "effect";
 import {
   ACTION_RESULT_STATUS,
   type UnparsedWireValue,
@@ -447,35 +447,32 @@ const madeRefusal =
   ): Effect.Effect<string, StoreFailure> => {
     if (!("_tag" in failure)) return Effect.succeed(repositoryRefusalWords(failure));
 
-    switch (failure._tag) {
-      case "TaskAssigneeNotMember":
-        return Effect.succeed(CREATE_TASK_REFUSAL.NOT_MEMBER);
-      case "TaskParentHeld":
-        return Effect.succeed(CREATE_TASK_REFUSAL.PARENT_HELD);
-      case "TaskParentRepositoryDiffers":
-        return Effect.succeed(
+    return Match.value(failure).pipe(
+      Match.tag("TaskAssigneeNotMember", () => Effect.succeed(CREATE_TASK_REFUSAL.NOT_MEMBER)),
+      Match.tag("TaskParentHeld", () => Effect.succeed(CREATE_TASK_REFUSAL.PARENT_HELD)),
+      Match.tag("TaskParentRepositoryDiffers", () =>
+        Effect.succeed(
           parentNamed
             ? CREATE_TASK_REFUSAL.PARENT_REPOSITORY
             : CREATE_TASK_REFUSAL.CHILD_REPOSITORY,
-        );
-      case "TaskParentCycle":
-      case "TaskBlockCycle":
-        return Effect.succeed(CREATE_TASK_REFUSAL.RELATION_CYCLE);
-      case "TaskParentUnreached":
-        return Effect.succeed(
+        ),
+      ),
+      Match.tag("TaskParentCycle", "TaskBlockCycle", () =>
+        Effect.succeed(CREATE_TASK_REFUSAL.RELATION_CYCLE),
+      ),
+      Match.tag("TaskParentUnreached", () =>
+        Effect.succeed(
           parentNamed ? CREATE_TASK_REFUSAL.NO_PARENT : CREATE_TASK_REFUSAL.NO_RELATED,
-        );
+        ),
+      ),
       // The other task gone out of reach since it was read, and the store's own holds, read as none to relate to.
-      case "TaskRelationUnreached":
-      case "TaskBlockSelf":
-      case "TaskBlockAcrossWorkspaces":
-        return Effect.succeed(CREATE_TASK_REFUSAL.NO_RELATED);
+      Match.tag("TaskRelationUnreached", "TaskBlockSelf", "TaskBlockAcrossWorkspaces", () =>
+        Effect.succeed(CREATE_TASK_REFUSAL.NO_RELATED),
+      ),
       // The id is drawn from the member's own key, so a task another holds under it is the store breaking.
-      case "TaskIdTaken":
-        return Effect.succeed(AGENT_TOOL_REFUSAL.STORE);
-      default:
-        return Effect.fail(failure);
-    }
+      Match.tag("TaskIdTaken", () => Effect.succeed(AGENT_TOOL_REFUSAL.STORE)),
+      Match.orElse((store): Effect.Effect<string, StoreFailure> => Effect.fail(store)),
+    );
   };
 
 /** One call of `create_task`: a task made in the caller's workspace for its member, once under the call's key. */

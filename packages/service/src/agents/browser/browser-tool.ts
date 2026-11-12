@@ -84,7 +84,7 @@ import { imageDimensions, sniffImageType } from "@repo/features/image-signature"
 import { webmDimensions } from "@repo/features/video-signature";
 import { isRecord, type UnparsedWireValue, unparsedWire } from "@repo/wire";
 import { describeWire, readEither } from "@repo/wire/effect";
-import { DateTime, Duration, Effect, Option, Result, Schema } from "effect";
+import { DateTime, Duration, Effect, Option, Predicate, Result, Schema } from "effect";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { AgentBrowser, type BrowserUnreachable } from "./agent-browser.js";
 import { connectRestoring } from "./restore-tabs.js";
@@ -716,7 +716,8 @@ export function runBrowserTool(
     );
 
     if (Result.isFailure(ran)) {
-      if (ran.failure._tag !== "BrowserUnreachable") return yield* Effect.fail(ran.failure);
+      if (!Predicate.isTagged(ran.failure, "BrowserUnreachable"))
+        return yield* Effect.fail(ran.failure);
 
       return browserNotRun(`${BROWSER_TOOL_REFUSAL.UNREACHABLE} ${ran.failure.message}.`);
     }

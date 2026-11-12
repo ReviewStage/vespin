@@ -123,6 +123,7 @@ import {
   Fiber,
   Layer,
   Option,
+  Predicate,
   Redacted,
   Result,
   Tracer,
@@ -481,7 +482,7 @@ const FROM_IMAGE: CreateAttempt = {
 
 /** Whether a create failed because the snapshot or the drive it named is gone, expired, deleted, or never filled, so the next way is tried. */
 function snapshotUnusable(failure: { readonly _tag: string }): boolean {
-  return failure._tag === "SnapshotGone" || failure._tag === "SandboxGone";
+  return Predicate.isTagged(failure, "SnapshotGone") || Predicate.isTagged(failure, "SandboxGone");
 }
 
 /** What an agent with a repository is checked out from as its sandbox is created: the agent, and the reads the open made of its repositories, its own on its write token. */

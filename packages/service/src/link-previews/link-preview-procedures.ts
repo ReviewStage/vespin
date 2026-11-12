@@ -20,7 +20,7 @@
  */
 
 import { LINK_PREVIEW_REFUSAL, type LinkPreviewAnswer } from "@repo/features/link-preview-wire";
-import { Cache, Duration, Effect, type Exit, Option, Semaphore } from "effect";
+import { Cache, Duration, Effect, Exit, Option, Semaphore } from "effect";
 import { HOSTED_REFUSAL, type UserIdResolver } from "../http/http-effect.js";
 import { createRateBrake } from "../http/rate-brake.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
@@ -59,7 +59,7 @@ type LinkPreviewCache = Cache.Cache<string, LinkPreviewAnswer>;
 
 /** How long an answer is kept: longer where the page answered. */
 function previewKept(exit: Exit.Exit<LinkPreviewAnswer>): Duration.Duration {
-  return exit._tag === "Success" && "preview" in exit.value
+  return Exit.isSuccess(exit) && "preview" in exit.value
     ? PREVIEWS_KEPT.ANSWERED
     : PREVIEWS_KEPT.UNANSWERED;
 }

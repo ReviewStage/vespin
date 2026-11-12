@@ -26,7 +26,7 @@ import {
 } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { eq, sql } from "drizzle-orm";
-import { DateTime, Deferred, Effect, Fiber, Option, Result } from "effect";
+import { DateTime, Deferred, Effect, Exit, Fiber, Option, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { agentDelegationTable, agentTable } from "../../schemas/agent.js";
@@ -2353,7 +2353,7 @@ it.layer(getTestDB())("the coding-agent store's agent of a conversation", (it) =
         }),
       );
 
-      assert.ok(second._tag === "Failure");
+      assert.ok(Exit.isFailure(second));
       assert.deepEqual(
         Option.map(
           yield* readAgentOfConversation(starter, agent.conversationId),

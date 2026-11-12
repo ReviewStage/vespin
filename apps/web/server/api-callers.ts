@@ -4,7 +4,7 @@ import { pathToFileURL } from "node:url";
 import { getOpenAPIMeta } from "@orpc/openapi";
 import { walkProcedureContractsSync } from "@orpc/server";
 import { hostedContract } from "@repo/features/contract";
-import { Predicate, Schema } from "effect";
+import { Option, Predicate, Schema } from "effect";
 import ts from "typescript";
 import { functionAliasPath, HAND_WRITTEN_FUNCTIONS } from "./build-output.js";
 import { functionPublicPath, webFunctions } from "./function-layout.js";
@@ -493,7 +493,7 @@ async function evaluatePathsModule(
 
     const decoded = decodeExportedPaths(namespace[exported.name]);
 
-    if (decoded._tag === "None") {
+    if (Option.isNone(decoded)) {
       refuse();
       continue;
     }
@@ -506,7 +506,7 @@ async function evaluatePathsModule(
       const segments = Array.from({ length: exported.parameterCount ?? 0 }, () => PROBE_SEGMENT);
       const answer = decodeString(value(...segments));
 
-      if (answer._tag === "None") {
+      if (Option.isNone(answer)) {
         refuse();
         continue;
       }

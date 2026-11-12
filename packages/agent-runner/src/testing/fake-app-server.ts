@@ -162,7 +162,8 @@ export function fakeAppServer(scripts: readonly Script[]) {
 
   const spawn = (command: ChildProcess.Command) =>
     Effect.gen(function* () {
-      if (command._tag !== "StandardCommand") return yield* Effect.die("a pipeline was spawned");
+      if (!Predicate.isTagged(command, "StandardCommand"))
+        return yield* Effect.die("a pipeline was spawned");
       const script = scripts[spawned.length];
 
       if (script === undefined) {

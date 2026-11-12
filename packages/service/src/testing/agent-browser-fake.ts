@@ -29,7 +29,7 @@ import {
   SandboxUnavailable,
 } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { type Cause, Effect, Layer, Queue, Redacted, Ref, Schema, Stream } from "effect";
+import { type Cause, Effect, Layer, Option, Queue, Redacted, Ref, Schema, Stream } from "effect";
 import { agentSandboxName } from "../agents/agent-sandbox-open.js";
 import {
   AgentBrowser,
@@ -265,7 +265,7 @@ export function fakeBridgePty(
               for (const line of lines) {
                 const command = decodeCommandLine(line);
 
-                if (command._tag === "None") continue;
+                if (Option.isNone(command)) continue;
                 const { id, method, params, sessionId: target } = command.value;
                 const asked = { method, params: params ?? {}, sessionId: target };
                 const answer = yield* peer.answer(asked);

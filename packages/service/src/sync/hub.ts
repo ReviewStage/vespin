@@ -60,6 +60,7 @@ import {
   Layer,
   Metric,
   Option,
+  Predicate,
   RcRef,
   Schedule,
   Schema,
@@ -451,9 +452,12 @@ const connected = (hub: Hub, listening: Listening) =>
 const listened = (hub: Hub, listening: Listening) =>
   connected(hub, listening).pipe(
     Effect.tapError((error) =>
-      error._tag === "ListenerUnopened" ? unopened(listening, error) : Effect.void,
+      Predicate.isTagged(error, "ListenerUnopened") ? unopened(listening, error) : Effect.void,
     ),
-    Effect.retry({ schedule: REOPEN, while: (error) => error._tag === "ListenerUnopened" }),
+    Effect.retry({
+      schedule: REOPEN,
+      while: (error) => Predicate.isTagged(error, "ListenerUnopened"),
+    }),
     Effect.catchTag("ListenerLost", (error) => lost(hub, listening, error.loss)),
     Effect.forever,
   );

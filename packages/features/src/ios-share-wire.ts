@@ -19,7 +19,7 @@
  * another file.
  */
 
-import { Schema as EffectSchema } from "effect";
+import { Schema as EffectSchema, Option } from "effect";
 import { type ClientIdentity, clientHeaders } from "./client-identity.js";
 import { recentRepositories, workspaceReaches } from "./tasks-model.js";
 import type { TasksView } from "./tasks-view.js";
@@ -78,7 +78,7 @@ const decodeDraft = EffectSchema.decodeUnknownOption(EffectSchema.fromJsonString
 export function shareDraftOf(json: string, accountId: string): ShareDraft | undefined {
   const read = decodeDraft(json);
 
-  return read._tag === "Some" && read.value.accountId === accountId ? read.value : undefined;
+  return Option.isSome(read) && read.value.accountId === accountId ? read.value : undefined;
 }
 
 /**

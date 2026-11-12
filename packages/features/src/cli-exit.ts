@@ -8,6 +8,8 @@
  * no answer, or a server error, is the service's or the network's.
  */
 
+import { Predicate } from "effect";
+
 import { CALL_FAULT } from "./account-call.js";
 import { AGENT_STATUS, type AgentStatus } from "./agent-wire.js";
 import type { HostedFailure } from "./hosted-link.js";
@@ -53,7 +55,7 @@ export function cliExitOfFault(fault: (typeof CALL_FAULT)[keyof typeof CALL_FAUL
 
 /** How a hosted procedure's failure ends the command. */
 export function cliExitOfHostedFailure(failed: HostedFailure): CliExit {
-  if (failed._tag === "HostedRefused") {
+  if (Predicate.isTagged(failed, "HostedRefused")) {
     if (failed.refusal === HOSTED_API_ERROR.INVALID_TOKEN) return CLI_EXIT.AUTH;
 
     // Note that a refusal naming the service's own state is not the caller's to fix.

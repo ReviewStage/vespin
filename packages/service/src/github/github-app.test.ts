@@ -17,7 +17,7 @@ import {
 import { GITHUB_TOKEN_STATUS } from "@repo/features/github-token-wire";
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import { generateCodeChallenge } from "better-auth/oauth2";
-import { Clock, Effect, Layer, Option, Redacted, Result } from "effect";
+import { Clock, Effect, Layer, Option, Predicate, Redacted, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { afterEach, beforeEach, vi } from "vitest";
 import { AUTH_SECRET_ENVIRONMENT, GITHUB_APP_ENVIRONMENT } from "../auth/auth-deployment.js";
@@ -270,7 +270,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         .repositoryReadToken(workspace, "octo-org/relay", undefined)
         .pipe(Effect.provide(refusing.layer), Effect.flip);
 
-      assert.ok(failure._tag === "GitHubUnavailable");
+      assert.ok(Predicate.isTagged(failure, "GitHubUnavailable"));
       assert.equal(failure.status, 403);
     }).pipe(Effect.provide(GitHubApp.layer(GITHUB_APP_SETTINGS))),
   );
@@ -684,7 +684,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
 
         const none = yield* app.workspaceRepositories(lapsed).pipe(Effect.provide(lapsing.layer));
 
-        assert.ok(failure._tag === "GitHubUnavailable");
+        assert.ok(Predicate.isTagged(failure, "GitHubUnavailable"));
         assert.equal(failure.status, 502);
         assert.ok(Option.isNone(none));
       }).pipe(Effect.provide(GitHubApp.layer(GITHUB_APP_SETTINGS))),

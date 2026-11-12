@@ -27,7 +27,17 @@ import {
   pullRequestAuthorOf,
 } from "@repo/features/agent-wire";
 import { failureKind } from "@repo/runtime/effect";
-import { Cache, Clock, Data, Duration, Effect, Exit, Option, type Redacted } from "effect";
+import {
+  Cache,
+  Clock,
+  Data,
+  Duration,
+  Effect,
+  Exit,
+  Option,
+  Predicate,
+  type Redacted,
+} from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { reconsiderRunArchive } from "../../automations/run-archive.js";
 import { recordServerEvent, SERVER_EVENT } from "../../events/server-events.js";
@@ -618,7 +628,7 @@ function keptStands(agent: Agent, ended: boolean, kept: KeptPublished, now: numb
 
 /** Whether GitHub refused the read for its rate limit: a 429, the instance's own held answer among them, or a 403 it may answer one with. */
 function rateLimited(failure: PublishedReadFailure): boolean {
-  if (failure._tag !== "GitHubUnavailable") return false;
+  if (!Predicate.isTagged(failure, "GitHubUnavailable")) return false;
 
   return (
     failure.status === GITHUB_HTTP_STATUS.TOO_MANY_REQUESTS ||
