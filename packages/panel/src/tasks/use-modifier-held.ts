@@ -15,6 +15,7 @@ export function useModifierHeld(watching: boolean): boolean {
     window.addEventListener("keydown", heard);
     window.addEventListener("keyup", heard);
     window.addEventListener("blur", lost);
+
     return () => {
       window.removeEventListener("keydown", heard);
       window.removeEventListener("keyup", heard);
@@ -22,5 +23,6 @@ export function useModifierHeld(watching: boolean): boolean {
       setHeld(false);
     };
   }, [watching]);
+
   return watching && held;
 }

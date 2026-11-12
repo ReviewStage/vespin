@@ -49,6 +49,7 @@ const CONVERSATION = "conversation-1";
 const SANDBOX_SESSION = "sbs_running";
 const ASK = { userId: "user-1", agentId: AGENT, terminalId: SHELL, cols: 120, rows: 32 };
 const encode = (text: string) => new TextEncoder().encode(text);
+
 const CREDENTIAL = {
   token: Redacted.make("ghs_fixture"),
   fullName: "Acme/Relay",
@@ -60,6 +61,7 @@ const scriptedSocket = Effect.gen(function* () {
   const inbound = yield* Queue.make<RelayFrame, Cause.Done>();
   const sent: RelayFrame[] = [];
   const closed: number[] = [];
+
   const socket: RelaySocket = {
     frames: Stream.fromQueue(inbound),
     send: (frame) => Effect.sync(() => void sent.push(frame)),
@@ -69,6 +71,7 @@ const scriptedSocket = Effect.gen(function* () {
         Queue.end(inbound),
       ),
   };
+
   return {
     socket,
     push: (frame: RelayFrame) => Queue.offer(inbound, frame),
@@ -102,6 +105,7 @@ function world(options: {
   let credentialAt: number | undefined;
   const policies: string[] = [];
   const touched: { readonly sessionId: string; readonly at: number }[] = [];
+
   const asked = {
     attached: 0,
     resumed: 0,
@@ -111,6 +115,7 @@ function world(options: {
     policies,
     touched,
   };
+
   const sandbox: AgentSandboxService = {
     terminals: () => Effect.die("the relay lists nothing"),
     listeningPorts: () => Effect.die("the relay lists no ports"),
@@ -126,15 +131,18 @@ function world(options: {
     resume: () =>
       Effect.sync(() => {
         asked.resumed += 1;
+
         return SANDBOX_STATE.RUNNING;
       }),
     attach: () =>
       Effect.sync(() => {
         asked.attached += 1;
         const state = options.sandbox ?? SANDBOX_STATE.RUNNING;
+
         if (state === SANDBOX_STATE.RUNNING && options.shellGone === true) {
           return { state, gone: true } as const;
         }
+
         return state === SANDBOX_STATE.RUNNING
           ? {
               state,
@@ -149,22 +157,26 @@ function world(options: {
     setCredential: ({ sandboxSessionId }) =>
       Effect.sync(() => void asked.policies.push(sandboxSessionId)),
   };
+
   const agent: RelayAgent = {
     userId: "user-relay",
     conversationId: CONVERSATION,
     sessionId: "wrun_1",
     repositoryCredential: Effect.suspend(() => {
       asked.tokens += 1;
+
       const answer =
         asked.tokens <= (options.tokensRefused ?? 0)
           ? Effect.fail("GitHub refused the mint")
           : Effect.succeed(CREDENTIAL);
+
       return options.tokensWait === undefined
         ? answer
         : Effect.andThen(Deferred.await(options.tokensWait), answer);
     }),
     memberToken: options.memberToken ?? false,
   };
+
   const deps: RelayDependencies = {
     reach: () => Effect.succeed(options.agent ?? Option.some(agent)),
     sandbox,
@@ -172,8 +184,10 @@ function world(options: {
     claimRenewal: (_conversation, _session, now, renewedBefore) =>
       Effect.sync(() => {
         asked.claims.push(now.getTime());
+
         if (credentialAt !== undefined && credentialAt >= renewedBefore.getTime()) return false;
         credentialAt = now.getTime();
+
         return true;
       }),
     renewedAt: () =>
@@ -181,24 +195,29 @@ function world(options: {
     releaseRenewal: (_conversation, _session, claimedAt) =>
       Effect.sync(() => {
         asked.released += 1;
+
         if (credentialAt === claimedAt.getTime()) credentialAt = undefined;
       }),
     touch: (sessionId) =>
       Effect.suspend(() => {
         touchesAsked += 1;
+
         if (touchesAsked <= (options.touchesUnconfirmed ?? 0)) {
           return Effect.fail(new SandboxUnavailable({}));
         }
+
         return Effect.flatMap(Clock.currentTimeMillis, (at) =>
           Effect.sync(() => void touched.push({ sessionId, at })),
         );
       }),
   };
+
   /** Another window's renewal of the token, at the instant given. */
   const renewElsewhere = (at: number) =>
     Effect.sync(() => {
       credentialAt = at;
     });
+
   return { deps, asked, renewElsewhere };
 }
 
@@ -218,6 +237,7 @@ it.effect(
       const gone = yield* scriptedSocket;
       const starting = yield* scriptedSocket;
       const unreached = world({ agent: Option.none(), pty });
+
       const unopened = world({
         agent: Option.some({
           userId: "user-relay",
@@ -296,6 +316,7 @@ it.effect(
       const relay = yield* Effect.forkChild(
         Effect.scoped(relayTerminal(device.socket, ASK, running.deps)),
       );
+
       yield* Effect.yieldNow;
       yield* device.push({ bytes: encode("ls\r") });
       yield* device.push({
@@ -343,6 +364,7 @@ it.effect("a run action's shell takes nothing typed, while its size and output s
     const relay = yield* Effect.forkChild(
       Effect.scoped(relayTerminal(device.socket, ASK, action.deps)),
     );
+
     yield* Effect.yieldNow;
     yield* device.push({ bytes: encode("vim\r") });
     yield* device.push({
@@ -371,6 +393,7 @@ it.effect("the shell's exit reaches the desktop as exited, and ends the connecti
     const relay = yield* Effect.forkChild(
       Effect.scoped(relayTerminal(device.socket, ASK, world({ pty }).deps)),
     );
+
     yield* Effect.yieldNow;
     yield* pty.push({ text: JSON.stringify({ type: "exit", code: 3 }) });
     yield* Fiber.join(relay);
@@ -392,12 +415,15 @@ it.effect(
       const relay = yield* Effect.forkChild(
         Effect.scoped(relayTerminal(device.socket, ASK, open.deps)),
       );
+
       yield* settle;
+
       // Nobody types and nothing prints for two touch intervals, then a key is typed.
       for (let minute = 0; minute < 2 * every; minute += 60_000) {
         yield* TestClock.adjust(Duration.minutes(1));
         yield* settle;
       }
+
       yield* device.push({ bytes: encode("x") });
       yield* settle;
       yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
@@ -425,6 +451,7 @@ it.effect("a touch the sandbox did not confirm is tried again a touch interval o
     const relay = yield* Effect.forkChild(
       Effect.scoped(relayTerminal(device.socket, ASK, open.deps)),
     );
+
     yield* settle;
     // The attach's touch is not confirmed, and nothing is typed or printed after it.
     yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
@@ -462,9 +489,11 @@ it.effect(
       const one = yield* Effect.forkChild(
         Effect.scoped(relayTerminal(first.socket, ASK, shared.deps)),
       );
+
       const two = yield* Effect.forkChild(
         Effect.scoped(relayTerminal(second.socket, ASK, shared.deps)),
       );
+
       yield* settle;
       yield* first.leave;
       yield* second.leave;
@@ -488,14 +517,17 @@ it.effect(
       const relay = yield* Effect.forkChild(
         Effect.scoped(relayTerminal(device.socket, ASK, open.deps)),
       );
+
       yield* settle;
       yield* TestClock.adjust(Duration.minutes(30));
       yield* open.renewElsewhere(30 * minute);
+
       // Past the first renewal's deadline, and on past the one another window's renewal sets.
       for (let step = 0; step < 4; step += 1) {
         yield* TestClock.adjust(Duration.minutes(25));
         yield* settle;
       }
+
       yield* device.leave;
       yield* Fiber.join(relay);
 
@@ -535,6 +567,7 @@ it.effect(
       const relay = yield* Effect.forkChild(
         Effect.scoped(relayTerminal(device.socket, ASK, refusing.deps)),
       );
+
       yield* Effect.yieldNow;
       const afterRefusal = [...refusing.asked.policies];
       yield* device.push({ bytes: encode("x") });
@@ -558,6 +591,7 @@ it.effect("a renewal cut off by its connection closing gives its claim back", ()
     const relay = yield* Effect.forkChild(
       Effect.scoped(relayTerminal(device.socket, ASK, hanging.deps)),
     );
+
     yield* settle;
     const releasedWhileMinting = hanging.asked.released;
     yield* Fiber.interrupt(relay);
@@ -578,6 +612,7 @@ it.effect(
       const relay = yield* Effect.forkChild(
         Effect.scoped(relayTerminal(device.socket, ASK, hanging.deps)),
       );
+
       yield* settle;
       yield* device.leave;
       yield* Fiber.join(relay);
@@ -596,6 +631,7 @@ it.effect(
       const device = yield* scriptedSocket;
       const answered = yield* Deferred.make<void>();
       const slow = world({ pty, tokensWait: answered });
+
       const typed = () =>
         pty.sent.flatMap((frame) =>
           "bytes" in frame ? [new TextDecoder().decode(frame.bytes)] : [],
@@ -604,6 +640,7 @@ it.effect(
       const relay = yield* Effect.forkChild(
         Effect.scoped(relayTerminal(device.socket, ASK, slow.deps)),
       );
+
       yield* settle;
       yield* device.push({ bytes: encode("git fetch\r") });
       yield* settle;
@@ -632,7 +669,9 @@ it.effect(
       const relay = yield* Effect.forkChild(
         Effect.scoped(relayTerminal(device.socket, ASK, hanging.deps)),
       );
+
       yield* settle;
+
       for (const bytes of paste) yield* device.push({ bytes });
       yield* settle;
       yield* device.leave;

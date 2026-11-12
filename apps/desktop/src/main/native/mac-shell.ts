@@ -50,6 +50,7 @@ let nodePty: typeof NodePty | null | undefined;
 /** node-pty, loaded once; null where it cannot be. */
 function loadedNodePty(): typeof NodePty | null {
   if (nodePty !== undefined) return nodePty;
+
   try {
     const loaded: typeof NodePty = createRequire(__filename)(nativeHelperPath("node-pty"));
     nodePty = loaded;
@@ -57,6 +58,7 @@ function loadedNodePty(): typeof NodePty | null {
     console.error(`node-pty did not load (${failureCode(cause)}), so no shell opens on this Mac.`);
     nodePty = null;
   }
+
   return nodePty;
 }
 
@@ -74,6 +76,7 @@ function shellEnvironment(): Record<string, string> {
   const handed = Object.entries(process.env).filter(
     (entry): entry is [string, string] => entry[1] !== undefined && !UNHANDED_ENV.test(entry[0]),
   );
+
   return {
     ...Object.fromEntries(handed),
     TERM: TERMINAL_NAME,
@@ -86,9 +89,11 @@ function shellEnvironment(): Record<string, string> {
 /** The developer's login shell started in `folder` at the size given; none where that is no folder, or node-pty did not load or start it. */
 export function spawnMacShell(folder: string, cols: number, rows: number): MacShell | undefined {
   const pty = loadedNodePty();
+
   if (pty === null || !isFolder(folder)) return undefined;
   const shell = process.env.SHELL || os.userInfo().shell || FALLBACK_SHELL;
   let running: NodePty.IPty;
+
   try {
     // Note that the shell's bytes are taken as it wrote them, never decoded here, so a character a read cuts in two reaches the screen whole.
     running = pty.spawn(shell, ["-l"], {
@@ -101,10 +106,13 @@ export function spawnMacShell(folder: string, cols: number, rows: number): MacSh
     });
   } catch (cause) {
     console.error(`A shell did not start on this Mac (${failureCode(cause)}).`);
+
     return undefined;
   }
+
   // SAFETY: a pseudoterminal spawned with no encoding hands each chunk as the Buffer it read, which node-pty's typings still name a string.
   const chunks = running.onData as unknown as NodePty.IEvent<Uint8Array>;
+
   return {
     onData: (listener) => void chunks(listener),
     onExit: (listener) => void running.onExit(({ exitCode }) => listener(exitCode)),

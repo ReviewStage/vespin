@@ -88,6 +88,7 @@ function holdHosts(hostsOf: () => readonly HostLine[]): (signedInAs?: string) =>
   let account: AppStateSnapshot["account"] | undefined;
   let accountId: string | undefined;
   let version = 0;
+
   const laid = () =>
     accountId === undefined
       ? {}
@@ -96,39 +97,50 @@ function holdHosts(hostsOf: () => readonly HostLine[]): (signedInAs?: string) =>
             [accountId]: { rows: { hosts: hostsOf(), installScriptUrl: SCRIPT } },
           },
         };
+
   fakeAppBridge({
     ...fakeAppBridgeCalls(),
     requestAppState: async () => {
       const snapshot = await (handed ?? assert.fail("a document is handed"))();
       version = Math.max(version, snapshot.version);
       account = snapshot.account;
+
       if (account.status === ACCOUNT_STATUS.SIGNED_IN) accountId = account.id;
+
       return { ...snapshot, ...laid() };
     },
     onAppState: (listener: (delivery: AppStateDelivery) => void) => {
       listeners.add(listener);
+
       const before = listening?.((delivery) => {
         version = Math.max(version, delivery.version);
         listener(delivery);
       });
+
       return () => {
         listeners.delete(listener);
         before?.();
       };
     },
   });
+
   return (signedInAs) => {
     version += 1;
+
     if (signedInAs === undefined) {
       for (const listener of [...listeners]) listener({ version, entries: laid() });
+
       return;
     }
+
     const standing = account ?? assert.fail("a document is handed");
+
     if (standing.status !== ACCOUNT_STATUS.SIGNED_IN) assert.fail("the window is signed in");
     const next = { ...standing, id: signedInAs };
     account = next;
     accountId = signedInAs;
     const entries = { ...laid(), account: next };
+
     for (const listener of [...listeners]) listener({ version, entries });
   };
 }
@@ -192,14 +204,18 @@ function removeOf(name: string): void {
     [...document.querySelectorAll<HTMLElement>(".ui-settings-row")].find(
       (each) => each.textContent?.includes(name) ?? false,
     ) ?? assert.fail(`${name}'s row is drawn`);
+
   const ellipsis =
     row.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]') ??
     assert.fail(`${name}'s ⋯ is drawn`);
+
   act(() => ellipsis.click());
+
   const item =
     [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
       (each) => each.textContent === "Remove",
     ) ?? assert.fail(`${name}'s Remove is drawn`);
+
   act(() => item.click());
 }
 
@@ -208,6 +224,7 @@ async function press(words: string): Promise<void> {
   const button = [...document.querySelectorAll("button")].find(
     (each) => each.textContent === words,
   );
+
   assert.ok(button !== undefined, `${words} is drawn`);
   await act(async () => button.click());
   await settle();
@@ -226,6 +243,7 @@ async function machinesWithThisMac(
   holdHosts(() =>
     hosts.map((host) => {
       const age = ages.get(host.id);
+
       return age === undefined ? host : { ...host, away: age > MAC_PRESENCE.FRESH_MS };
     }),
   );
@@ -236,6 +254,7 @@ async function machinesWithThisMac(
     requestAppState: async () => {
       const snapshot = await (handed ?? assert.fail("the beats hand a document"))();
       const { account } = snapshot;
+
       return account.status === ACCOUNT_STATUS.SIGNED_IN && account.id !== undefined
         ? { ...snapshot, [LIVE_READ.THIS_MAC_HOST]: { [account.id]: { rows: thisMac } } }
         : snapshot;
@@ -263,6 +282,7 @@ const SERVER_AND_THIS_MAC: readonly HostLine[] = [
 function thisMacSwitch(): HTMLElement {
   const found = document.querySelector<HTMLElement>('[aria-label="Run agents on this Mac"]');
   assert.ok(found !== null, "This Mac's switch is drawn");
+
   return found;
 }
 
@@ -277,9 +297,11 @@ test("This Mac stands first on the row of the machine it is, its switch on, with
   assert.ok(text.indexOf("This Mac") < text.indexOf("fra-03"), "This Mac stands first");
   assert.ok(text.includes("Online · Mac"), text);
   assert.equal(thisMacSwitch().getAttribute("aria-checked"), "true");
+
   const thisMacRow = [...document.querySelectorAll(".ui-settings-row")].find(
     (row) => row.textContent?.includes("This Mac") ?? false,
   );
+
   assert.equal(
     (thisMacRow?.querySelector('button[aria-haspopup="menu"]') ?? null) === null,
     true,
@@ -292,6 +314,7 @@ test("a host's row says Setting up… while its update runs, though the restart 
     { id: "3f6b0c2e-8d1a-4b5e-9c7d-2a4e6f8b0d14", name: "ams-01", update: HOST_UPDATE.WAITING },
     { id: "9b2d4f6a-1c3e-4a5b-8d7f-0e2a4c6b8d31", name: "ord-01", update: HOST_UPDATE.UPDATING },
   ];
+
   await machinesWithThisMac(hosts, {}, [
     { deviceId: "3f6b0c2e-8d1a-4b5e-9c7d-2a4e6f8b0d14", ageMs: 0 },
     { deviceId: "9b2d4f6a-1c3e-4a5b-8d7f-0e2a4c6b8d31", ageMs: 90_000 },
@@ -307,6 +330,7 @@ test("each host draws its Remove on its own row, which asks about that host firs
     { id: "3f6b0c2e-8d1a-4b5e-9c7d-2a4e6f8b0d14", name: "fra-01" },
     { id: "9b2d4f6a-1c3e-4a5b-8d7f-0e2a4c6b8d31", name: "sfo-02" },
   ];
+
   await machinesWithThisMac(hosts, {});
 
   removeOf("sfo-02");
@@ -329,6 +353,7 @@ test("a refused Remove is said in the dialog that asked it, though the list drew
       await new Promise((done) => setTimeout(done, 0));
       hosts = [kept, removed];
       lay();
+
       return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     },
   });
@@ -382,10 +407,13 @@ test("a Mac turned on whose host macOS holds for approval says so, and opens Log
 
 test("This Mac's switch turns it on at once, and off only once the question is answered", async () => {
   const sent: unknown[] = [];
+
   const answered = async (input: unknown) => {
     sent.push(input);
+
     return { done: true as const };
   };
+
   await machinesWithThisMac([], { machineId: MACHINE_ID }, [], {
     [ACT_KIND.HOSTS_THIS_MAC_SET]: answered,
   });
@@ -417,6 +445,7 @@ test("turning This Mac off offers to keep its agents' folders, and keeps them wh
   await machinesWithThisMac([], { machineId: MACHINE_ID, enrolled: true, agentFolders: 3 }, [], {
     [ACT_KIND.HOSTS_THIS_MAC_SET]: async (input: unknown) => {
       sent.push(input);
+
       return { done: true as const };
     },
   });
@@ -426,6 +455,7 @@ test("turning This Mac off offers to keep its agents' folders, and keeps them wh
   const box = document.querySelector<HTMLElement>(
     '[role="alertdialog"] [aria-label^="Delete its agents\' 3 folders"], [role="alertdialog"] [role="checkbox"]',
   );
+
   assert.ok(box !== null, "the question offers to delete the folders");
   assert.equal(box.getAttribute("aria-checked"), "true", "deleting them is what it offers first");
   await act(async () => box.click());

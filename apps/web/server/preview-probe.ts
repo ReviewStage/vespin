@@ -46,7 +46,9 @@ export const PROBE_DOOR = {
   /** OPTIONS Allowlist over `/api`: an OPTIONS the allowlist lets through with no credential at all. */
   OPTIONS_ALLOWLIST: "options-allowlist",
 } as const;
+
 type ProbeDoor = (typeof PROBE_DOOR)[keyof typeof PROBE_DOOR];
+
 export const ProbeDoorSchema = Schema.Literals([
   PROBE_DOOR.BYPASS_SECRET,
   PROBE_DOOR.OPTIONS_ALLOWLIST,
@@ -56,6 +58,7 @@ const PROBE_METHOD = {
   GET: "GET",
   OPTIONS: "OPTIONS",
 } as const;
+
 type ProbeMethod = (typeof PROBE_METHOD)[keyof typeof PROBE_METHOD];
 
 const METHOD_BY_DOOR = {
@@ -72,13 +75,16 @@ const PROBE_STATUS = {
   METHOD_NOT_ALLOWED: 405,
   UPGRADE_REQUIRED: 426,
 } as const;
+
 const SERVER_ERROR_FLOOR = 500;
 const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
 
 /** A path no route answers, which the fallback lands on the hosted oRPC router. */
 const UNKNOWN_API_PATH = "/api/nope";
+
 /** An exception's parameterized path, held ahead of the fallback: its route refuses a read by method, where the router would not find it. */
 const EXCEPTION_PATH = "/api/automations/probe/webhook";
+
 /** The hosted router's own answer to a path it does not match. */
 const ROUTER_NOT_FOUND_BODY = '{"error":"not-found"}';
 
@@ -148,6 +154,7 @@ export function planProbes(door: ProbeDoor, paths: ProbePaths): readonly Planned
   const expected = EXPECTED_STATUS[door];
   const page = door === PROBE_DOOR.BYPASS_SECRET ? [SITE_ROOT_PATH] : [];
   const unique = new Set([...page, ...paths.callers, ...paths.scheduled, ...expected.keys()]);
+
   return [...unique].sort().map((path) => ({
     method,
     path,
@@ -157,11 +164,13 @@ export function planProbes(door: ProbeDoor, paths: ProbePaths): readonly Planned
 }
 
 const VERCEL_CONFIG_FILE = "vercel.json";
+
 const VercelSchedules = Schema.Struct({
   schedules: Schema.Record(Schema.String, Schema.Struct({ path: Schema.String })).pipe(
     Schema.withDecodingDefaultType(Effect.succeed({})),
   ),
 });
+
 const decodeVercelSchedules = Schema.decodeUnknownEffect(Schema.fromJsonString(VercelSchedules));
 
 /** The caller paths of the checkout, read the way the callers check reads them, and the schedules' paths of its `vercel.json`. */
@@ -171,9 +180,11 @@ export function readProbePaths(input: {
 }): Effect.Effect<ProbePaths, Schema.SchemaError> {
   return Effect.gen(function* () {
     const report = yield* Effect.promise(() => checkApiCallers(input));
+
     const config = yield* decodeVercelSchedules(
       yield* Effect.promise(() => readFile(join(input.repoRoot, VERCEL_CONFIG_FILE), "utf8")),
     );
+
     return {
       callers: report.resolved.map((entry) =>
         entry.resolution === RESOLUTION.PREFIX
@@ -199,6 +210,7 @@ export const VERDICT = {
   /** A handler answered with the status named, but not with the body named. */
   UNEXPECTED_BODY: "unexpected-body",
 } as const;
+
 export type Verdict = (typeof VERDICT)[keyof typeof VERDICT];
 
 const HEADER = {
@@ -207,8 +219,10 @@ const HEADER = {
   VERCEL_ERROR: "x-vercel-error",
   BYPASS: "x-vercel-protection-bypass",
 } as const;
+
 const NO_CACHE = "no-cache";
 const CACHE_BUSTER = "nocache";
+
 /** Where Vercel Authentication sends a stranger; a redirect there is the protection answering, not the deployment. */
 const VERCEL_SSO = { host: "vercel.com", pathname: "/sso-api" } as const;
 
@@ -222,24 +236,31 @@ interface ProbeAnswer {
 
 function redirectsToVercelSso(answer: ProbeAnswer): boolean {
   if (!REDIRECT_STATUSES.has(answer.status) || Option.isNone(answer.location)) return false;
+
   if (!URL.canParse(answer.location.value)) return false;
   const target = new URL(answer.location.value);
+
   return target.host === VERCEL_SSO.host && target.pathname === VERCEL_SSO.pathname;
 }
 
 function judge(request: PlannedRequest, answer: ProbeAnswer): Verdict {
   if (redirectsToVercelSso(answer)) return VERDICT.PROTECTED;
+
   if (Option.isSome(answer.vercelError)) return VERDICT.PLATFORM_ERROR;
+
   if (answer.status >= SERVER_ERROR_FLOOR) return VERDICT.SERVER_ERROR;
+
   if (request.expected !== undefined && answer.status !== request.expected) {
     return VERDICT.UNEXPECTED_STATUS;
   }
+
   if (
     request.expectedBody !== undefined &&
     Option.getOrUndefined(answer.body) !== request.expectedBody
   ) {
     return VERDICT.UNEXPECTED_BODY;
   }
+
   return VERDICT.OK;
 }
 
@@ -273,6 +294,7 @@ export const PROBE_REQUEST_INIT: RequestInit = { redirect: "manual" };
 export const TRANSPORT_RETRY = Schedule.exponential(Duration.seconds(1)).pipe(
   Schedule.upTo({ times: 3 }),
 );
+
 const PROBE_CONCURRENCY = 4;
 
 function probeRequest(
@@ -282,9 +304,11 @@ function probeRequest(
 ): HttpClientRequest.HttpClientRequest {
   const url = new URL(planned.path, target.address);
   url.searchParams.set(CACHE_BUSTER, buster);
+
   const request = HttpClientRequest.make(planned.method)(url).pipe(
     HttpClientRequest.setHeader(HEADER.CACHE_CONTROL, NO_CACHE),
   );
+
   return Option.match(target.bypassSecret, {
     onNone: () => request,
     onSome: (secret) => HttpClientRequest.setHeader(HEADER.BYPASS, Redacted.value(secret))(request),
@@ -302,6 +326,7 @@ export const probeDeployment = /* @__PURE__ */ Effect.fn("web/probeDeployment")(
 > {
   const client = yield* HttpClient.HttpClient;
   const now = yield* Clock.currentTimeMillis;
+
   return yield* Effect.forEach(
     task,
     (planned, index) =>
@@ -318,6 +343,7 @@ export const probeDeployment = /* @__PURE__ */ Effect.fn("web/probeDeployment")(
             location: Headers.get(response.headers, HEADER.LOCATION),
             body,
           };
+
           return {
             ...planned,
             status: answer.status,

@@ -41,6 +41,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 });
@@ -62,8 +63,10 @@ function drawnLines(container: HTMLElement) {
   const scroller =
     container.querySelector<HTMLElement>(".whole-file > .ui-scroll-area") ??
     assert.fail("the file is drawn");
+
   const pre =
     wholeFileRoot(container)?.querySelector("pre") ?? assert.fail("the file's lines are drawn");
+
   return {
     numbers: String(!pre.hasAttribute("data-disable-line-numbers")),
     wrap: String(pre.getAttribute("data-overflow") === "wrap"),
@@ -81,6 +84,7 @@ function Bar(): React.JSX.Element {
     ready: true,
     readText: () => Promise.resolve({ kind: WHOLE_TEXT.READ, text: "" }),
   });
+
   return createElement(FileViewBar, { lead: null, ...end });
 }
 
@@ -94,6 +98,7 @@ function mount(): HTMLElement {
       withQueryClient(createElement("div", null, createElement(Bar), createElement(DrawnLines))),
     ),
   );
+
   return container;
 }
 
@@ -102,6 +107,7 @@ function press(container: HTMLElement, name: string): void {
   const button =
     container.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`) ??
     assert.fail(`the bar offers ${name}`);
+
   act(() => button.click());
 }
 
@@ -152,6 +158,7 @@ test("View settings on a File tab offers its lines' wrap, numbers, syntax theme,
     [...popover.querySelectorAll<HTMLButtonElement>('[role="switch"]')].find(
       (each) => each.getAttribute("aria-label") === name,
     );
+
   await act(async () => switches("Line numbers")?.click());
   await act(async () => switches("Ligatures")?.click());
   await vi.waitFor(() => assert.equal(drawnLines(container).numbers, "false"));
@@ -178,9 +185,11 @@ test("Copy file contents copies the text the tab draws, read at its commit, rath
   const copied: string[] = [];
   fakeAppPlatform(copyingInto(copied));
   const asked: TaskFileRequest[] = [];
+
   // The service: the head's commit from the first line, the text at it, and newer text once the branch moves on.
   const readFile = (request: TaskFileRequest): Promise<TasksFileAnswer> => {
     asked.push(request);
+
     if (request.raw !== true) {
       return Promise.resolve({
         file: {
@@ -194,11 +203,14 @@ test("Copy file contents copies the text the tab draws, read at its commit, rath
         },
       });
     }
+
     const text = request.ref === HEAD ? "const seats = 3;\n" : "const seats = 4;\n";
+
     return Promise.resolve({
       text: { path: PATH, repository: "acme/relay", branch: "main", text },
     });
   };
+
   answerFileReads(readFile);
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -221,9 +233,11 @@ test("Copy file contents copies the text the tab draws, read at its commit, rath
   );
   await wholeFileDrawn(container);
   press(container, "File actions");
+
   const copy = [...document.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]')].find(
     (item) => item.textContent === "Copy file contents",
   );
+
   await act(async () => copy?.click());
 
   assert.deepEqual(copied, ["const seats = 3;\n"]);
@@ -235,6 +249,7 @@ test("on a phone a File tab draws no bar, and the task's header's ⋯ offers eve
   fakeAppPlatform(copyingInto([]));
   const steps: string[] = [];
   const opened: string[] = [];
+
   const readFile = (request: TaskFileRequest): Promise<TasksFileAnswer> =>
     Promise.resolve(
       request.raw === true
@@ -251,7 +266,9 @@ test("on a phone a File tab draws no bar, and the task's header's ⋯ offers eve
             },
           },
     );
+
   answerFileReads(readFile);
+
   const { element, handed } = onPhone(
     createElement(FileView, {
       place: { taskId: "task-1" },
@@ -264,6 +281,7 @@ test("on a phone a File tab draws no bar, and the task's header's ⋯ offers eve
       history: { canGoBack: true, canGoForward: false, onStep: (step) => steps.push(step) },
     }),
   );
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);

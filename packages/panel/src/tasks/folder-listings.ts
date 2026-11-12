@@ -26,7 +26,9 @@ export function listingOf(answer: TasksTreeAnswer): FolderListing {
       truncated: answer.folder.truncated,
     };
   }
+
   if ("failure" in answer) return { notice: "The files could not be read.", retry: true };
+
   return {
     notice: refusalLine(answer.refusal, answer.branch),
     retry: refusalPasses(answer.refusal),

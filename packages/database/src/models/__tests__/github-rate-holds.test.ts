@@ -20,6 +20,7 @@ import {
 
 const AT = Date.UTC(2026, 9, 25, 12);
 const at = (minutes: number) => new Date(AT + minutes * 60_000);
+
 const MINUTES = (...minutes: [number, ...number[]]) =>
   minutes.map((count) => count * 60_000) as [number, ...number[]];
 

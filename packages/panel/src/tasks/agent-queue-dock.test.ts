@@ -88,16 +88,19 @@ function drawn(controls: boolean, messages: readonly QueuedMessage[] = TWO) {
     ),
   );
   const rows = [...container.querySelectorAll("li")];
+
   const presses = (row: Element | undefined) =>
     [...(row?.querySelectorAll("button") ?? [])].map(
       (button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "",
     );
+
   return {
     row: (index: number) => presses(rows[index]),
     words: (index: number) => rows[index]?.querySelector(".ui-one-line")?.textContent ?? "",
     /** Whether a reader reaches the row's files, which no hidden region holds back. */
     filesReached: (index: number) => {
       const files = rows[index]?.querySelector('[aria-label="Attached files"]');
+
       return (
         files !== null && files !== undefined && files.closest('[aria-hidden="true"]') === null
       );
@@ -151,6 +154,7 @@ test("a queued image is drawn on its row as a sent message's is, its thumbnail r
       files: [{ name: SHOT.name, mediaType: AGENT_ATTACHMENT_TYPE.PNG, id: SHOT.id }],
     },
   ]);
+
   await act(async () => {
     for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
   });

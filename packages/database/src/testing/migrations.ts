@@ -38,16 +38,22 @@ export function migrationStatements(migration: string): Effect.Effect<readonly s
 /** A rename's statement undone: the names it moved swapped back. A statement that is no rename is refused, since it has no undoing. */
 export function undoneRename(statement: string): string {
   const table = /^ALTER TABLE "([^"]+)" RENAME TO "([^"]+)";?$/u.exec(statement);
+
   if (table) return `ALTER TABLE "${table[2]}" RENAME TO "${table[1]}"`;
   const column = /^ALTER TABLE "([^"]+)" RENAME COLUMN "([^"]+)" TO "([^"]+)";?$/u.exec(statement);
+
   if (column) return `ALTER TABLE "${column[1]}" RENAME COLUMN "${column[3]}" TO "${column[2]}"`;
+
   const constraint = /^ALTER TABLE "([^"]+)" RENAME CONSTRAINT "([^"]+)" TO "([^"]+)";?$/u.exec(
     statement,
   );
+
   if (constraint) {
     return `ALTER TABLE "${constraint[1]}" RENAME CONSTRAINT "${constraint[3]}" TO "${constraint[2]}"`;
   }
+
   const index = /^ALTER INDEX "([^"]+)" RENAME TO "([^"]+)";?$/u.exec(statement);
+
   if (index) return `ALTER INDEX "${index[2]}" RENAME TO "${index[1]}"`;
   throw new Error(`the migration holds a statement that is no rename: ${statement}`);
 }
@@ -67,6 +73,7 @@ function renamesOf(migration: string): Effect.Effect<{
     const forward = replayable(statements).filter((statement) =>
       /^ALTER (TABLE|INDEX) "[^"]+" RENAME /u.test(statement),
     );
+
     return { back: [...forward].reverse().map(undoneRename), forward };
   });
 }

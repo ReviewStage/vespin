@@ -46,9 +46,11 @@ function gitEnvironment(home: string): NodeJS.ProcessEnv {
 export function fixtureOidcToken(): string {
   const exp = Math.floor(Date.UTC(2027, 9, 14) / 1000);
   const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url");
+
   const payload = Buffer.from(
     JSON.stringify({ project_id: "prj_fixture", owner_id: "team_fixture", exp }),
   ).toString("base64url");
+
   return `${header}.${payload}.`;
 }
 
@@ -70,6 +72,7 @@ export function sourceCheckout(root: string): SourceCheckout {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "pipe"],
     }).trim();
+
   const remote = join(root, "remote.git");
   const checkout = join(root, "checkout");
   mkdirSync(checkout);
@@ -84,6 +87,7 @@ export function sourceCheckout(root: string): SourceCheckout {
   sh(checkout, "git", "add", "-A");
   sh(checkout, "git", "commit", "--quiet", "-m", "Start invites");
   sh(checkout, "git", "push", "--quiet", "origin", "main");
+
   return { root, remote, checkout, sh };
 }
 
@@ -114,49 +118,63 @@ export function sourceSandbox(
   snapshotted = false,
 ): SourceSandbox {
   const name = agentSandboxName(SOURCE_SANDBOX.SESSION);
+
   const state: SourceSandbox["state"] = {
     status,
     session: status === "running" ? SOURCE_SANDBOX.RUNNING : undefined,
   };
+
   const stops: string[] = [];
   const policies: SourceSandbox["policies"] = [];
   const ran: string[] = [];
+
   const answer = ({ url, method, headers, body }: SentToSandbox): Response | undefined => {
     const parsed = new URL(url);
+
     if (parsed.host !== "vercel.com") return undefined;
     const session = /\/sessions\/([^/]+)\//u.exec(parsed.pathname)?.[1] ?? "";
+
     if (parsed.pathname.endsWith("/cmd")) {
       const asked = JSON.parse(body);
       assert.equal(asked.cwd, REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT);
       assert.equal(session, state.session);
       ran.push(session);
+
       const done = spawnSync(asked.command, asked.args, {
         cwd: source.checkout,
         env: gitEnvironment(source.root),
         encoding: "utf8",
       });
+
       return commandRunStreamed(
         { id: "cmd_1", sessionId: session },
         { exitCode: done.status ?? 1, stdout: done.stdout, stderr: done.stderr },
       );
     }
+
     if (parsed.pathname.endsWith("/stop") && method === "POST") {
       const refused = sandboxStopRefusal({ headers });
+
       if (refused === undefined) {
         stops.push(session);
         state.status = "stopped";
       }
+
       return refused ?? Response.json(sessionAnswered({ id: session, status: "stopped" }));
     }
+
     if (parsed.pathname.endsWith("/network-policy")) {
       // An open policy carries a credential on no host.
       policies.push({ session, hosts: Object.keys(JSON.parse(body).allow ?? {}) });
+
       return Response.json(sessionAnswered({ id: session, status: "running" }));
     }
+
     if (parsed.searchParams.get("resume") === "true") {
       state.status = "running";
       state.session = SOURCE_SANDBOX.WOKEN;
     }
+
     const listed = {
       name,
       status: state.status ?? "stopped",
@@ -164,16 +182,19 @@ export function sourceSandbox(
       createdAt: 0,
       ...(snapshotted ? { currentSnapshotId: "snap_source" } : undefined),
     };
+
     // A lookup by any other name finds none, as for a session that never opened a sandbox.
     if (/^\/api\/v2\/sandboxes\/[^/]+$/u.test(parsed.pathname)) {
       return parsed.pathname === `/api/v2/sandboxes/${name}` && state.status !== undefined
         ? Response.json(sandboxFound(listed))
         : new Response(null, { status: 404 });
     }
+
     return (
       sandboxListRefusal(parsed) ??
       Response.json(sandboxesListed(state.status === undefined ? [] : [listed]))
     );
   };
+
   return { state, stops, policies, ran, answer };
 }

@@ -397,6 +397,7 @@ let chaptersTabLanded = false;
 const CHAPTERS_TAB = lazy(() =>
   import("./agent-chapters-tab.js").then((loaded) => {
     chaptersTabLanded = true;
+
     return { default: loaded.AgentChaptersTab };
   }),
 );
@@ -470,7 +471,9 @@ function threadLines(
 ): string | undefined {
   const line = thread.line ?? thread.originalLine;
   const start = thread.line === null ? thread.originalStartLine : thread.startLine;
+
   if (line === null) return undefined;
+
   return start === null || start === line ? `line ${line}` : `lines ${start}–${line}`;
 }
 
@@ -516,9 +519,11 @@ function usePartRead<Answer>(
   const { mutateAsync: retry } = useMutation(pullRequestPartRetryMutation());
   const agentId = asked?.agentId;
   const number = asked?.number;
+
   const ask = useCallback(() => {
     if (agentId === undefined) return Promise.resolve();
     setAsking((count) => count + 1);
+
     // Note that a Try again the port refuses settles as one that landed, since the read's own failure is what the tab draws.
     return retry(number === undefined ? { part, agentId } : { part, agentId, number })
       .then(
@@ -527,15 +532,20 @@ function usePartRead<Answer>(
       )
       .finally(() => setAsking((count) => count - 1));
   }, [retry, part, agentId, number]);
+
   const answer = held.data ?? (held.isError ? UNANSWERED : undefined);
+
   return { answer, out: asking > 0 || held.isPending, ask };
 }
 
 /** Where one read stands. Note that a failure gives way to the wait as soon as it is asked again, while a part drawn stands until its answer lands. */
 function partOf<A>(read: PartRead<A>): Part<A> {
   const { answer, out } = read;
+
   if (answer === undefined || (out && "failure" in answer)) return { kind: PART.PENDING };
+
   if ("failure" in answer) return { kind: PART.FAILED, failed: answer };
+
   return answer.pullRequest === null
     ? { kind: PART.NONE }
     : { kind: PART.LANDED, value: answer.pullRequest };
@@ -602,6 +612,7 @@ const RAN_AT_LEAST_MS = 1_000;
 function durationOf(check: PullRequestCheck): string | undefined {
   if (check.startedAt === null || check.completedAt === null) return undefined;
   const ran = check.completedAt - check.startedAt;
+
   return ran < RAN_AT_LEAST_MS ? undefined : workingTime(ran);
 }
 
@@ -662,6 +673,7 @@ function headerPullRequestOf(
   published: AgentPullRequest | undefined,
 ): HeaderPullRequest | undefined {
   const held = pullRequest ?? published;
+
   if (held === undefined) return undefined;
   const { number, state, url } = held;
   // Note that what was published says the checks of its own pull request only, never of a newer one the overview read.
@@ -669,6 +681,7 @@ function headerPullRequestOf(
   // Note that the overview's merge read says its head's checks as one word too, so a pull request nothing published still shows them before its Checks tab is read.
   const merged = pullRequest?.merging?.checks;
   const summary = checks === undefined ? (heldChecks ?? merged) : checksSummaryOf(checks.checks);
+
   return { number, state, url, checks: summary ?? CHECK_SUMMARY.NONE };
 }
 
@@ -685,6 +698,7 @@ function headerQueuedOf(
   number: number,
 ): { readonly position?: number } | null | undefined {
   if (pullRequest !== undefined) return pullRequest.merging?.queued;
+
   return published?.number === number && published.queued === true ? {} : undefined;
 }
 
@@ -732,6 +746,7 @@ export function Section({
       )}
     </Text>
   );
+
   if (fold === undefined) {
     return (
       <section className="pull-request-section" aria-label={title}>
@@ -740,6 +755,7 @@ export function Section({
       </section>
     );
   }
+
   return (
     <section className="pull-request-section" aria-label={title}>
       <DisclosureFrame
@@ -793,6 +809,7 @@ function ProxiedCheckAvatar({
   src: string;
 }): React.JSX.Element {
   const state = usePicture(pictureQuery(agentId, src, useGitHubImageRead()), pictureUnread);
+
   return (
     <CheckSquare name={name} src={state.kind === PICTURE_STATE.READY ? state.url : undefined} />
   );
@@ -809,7 +826,9 @@ function CheckAvatar({
   src: string;
 }): React.JSX.Element {
   const hosted = githubAvatarUrl(src);
+
   if (hosted === undefined) return <ProxiedCheckAvatar agentId={agentId} name={name} src={src} />;
+
   return (
     <CheckSquare
       name={name}
@@ -871,6 +890,7 @@ export function CheckRow({
   const duration = durationOf(check);
   const { url, avatarUrl, startedAt } = check;
   const running = check.state === CHECK_STATE.PENDING && startedAt !== null;
+
   return (
     <ListRow
       leading={
@@ -908,8 +928,10 @@ function Checks({
 }): React.JSX.Element {
   const counts = CHECK_ORDER.flatMap((state) => {
     const count = checks.filter((check) => check.state === state).length;
+
     return count === 0 ? [] : [`${count} ${CHECK_WORDS[state]}`];
   });
+
   return (
     <Section title="Checks" count={counts.length === 0 ? undefined : counts.join(", ")}>
       {checks.length === 0 ? (
@@ -1068,6 +1090,7 @@ const AnchorsContext = createContext<OpenHere | undefined>(undefined);
 /** Words of the pull request's own, under which a link to one of its comments on GitHub opens the comment in the tab, and any other link as it would. */
 function Anchored({ children }: { children: ReactNode }): ReactNode {
   const open = useContext(AnchorsContext);
+
   return open === undefined ? children : <OpenHereFirst open={open}>{children}</OpenHereFirst>;
 }
 
@@ -1090,6 +1113,7 @@ function EntryWords({
       </div>
     );
   }
+
   return entry.body === "" ? null : (
     <div className="pull-request-words min-w-0 select-text text-body-size leading-reading text-foreground">
       <Anchored>
@@ -1116,6 +1140,7 @@ function useThreadJump(
   view: PullRequestThreadView,
 ): (() => void) | undefined {
   const jumps = useContext(ThreadJumpContext);
+
   return jumps === undefined || thread.id === undefined
     ? undefined
     : () => jumps.jump(thread, view);
@@ -1144,6 +1169,7 @@ function ThreadMenu({
   const jump = useThreadJump(thread, there);
   const place = jumps?.place(thread, here);
   const links = place === undefined ? [] : linkItemsOf(place);
+
   // Note that a Conversation thread's own path and lines already open it in Files changed, so only Files changed offers a View in.
   const views: MenuAction[] =
     jump === undefined || there === PULL_REQUEST_THREAD_VIEW.FILES
@@ -1155,9 +1181,12 @@ function ThreadMenu({
             onSelect: jump,
           },
         ];
+
   const groups = [links, views].filter((group) => group.length > 0);
+
   if (groups.length === 0) return null;
   const label = moreLabel(THREAD_REVEAL_WORDS.THING);
+
   return (
     <span className="pull-request-thread-menu ml-auto flex">
       <MoreButton thing={THREAD_REVEAL_WORDS.THING} {...menu.trigger()} />
@@ -1190,6 +1219,7 @@ type EntryThing = (typeof ENTRY_THING)[keyof typeof ENTRY_THING];
 function GitHubEntryMenu({ thing, url }: { thing: EntryThing; url: string }): React.JSX.Element {
   const menu = useMenu(true);
   const copy = useCopyToast();
+
   const groups = [
     [commandAction(PANEL_COMMAND.COPY_GITHUB_LINK, () => copy(url, LINK_COPY.COPIED), undefined)],
     [
@@ -1200,6 +1230,7 @@ function GitHubEntryMenu({ thing, url }: { thing: EntryThing; url: string }): Re
       ),
     ],
   ];
+
   return (
     <span className="pull-request-entry-menu flex">
       <MoreButton thing={thing} {...menu.trigger()} />
@@ -1222,7 +1253,9 @@ function lineSpan(
 ): string | undefined {
   const line = thread.line ?? thread.originalLine;
   const start = thread.line === null ? thread.originalStartLine : thread.startLine;
+
   if (line === null) return undefined;
+
   return start === null || start === line ? `L${line}` : `L${start}–${line}`;
 }
 
@@ -1252,6 +1285,7 @@ function ThreadWhere({
   onPress: (() => void) | undefined;
 }): React.JSX.Element {
   const cut = path === undefined ? -1 : path.lastIndexOf("/");
+
   const words = (
     <span className="flex min-w-0 whitespace-nowrap px-list-inset py-tight-gap">
       {path === undefined ? null : (
@@ -1281,8 +1315,11 @@ function ThreadWhere({
       )}
     </span>
   );
+
   const named = [path, lines].filter((part) => part !== undefined).join(" ");
+
   if (onPress === undefined) return <Tooltip label={named}>{words}</Tooltip>;
+
   return (
     <Tooltip label={THREAD_REVEAL_WORDS.VIEW_FILES}>
       <LineButton
@@ -1301,6 +1338,7 @@ function useThreadHead(thread: ReviewThread, now: number, pending: boolean) {
   const name = useNamer();
   const first = thread.comments[0];
   const writer = first === undefined ? undefined : name(first.by);
+
   return {
     label:
       writer === undefined
@@ -1348,12 +1386,15 @@ function ThreadCard({
   const pending = usePendingThread(thread);
   const head = useThreadHead(thread, now, pending);
   const landed = useLandedThread(thread, !thread.resolved && !thread.outdated);
+
   // Note that a folded card opens for its ⋯'s Edit or Delete, so the field or the question it opens is in view.
   const start = usePendingActs(usePendingComment(thread.comments[0]?.url), () =>
     landed.onOpenChange(true),
   );
+
   const toFiles = useThreadJump(thread, PULL_REQUEST_THREAD_VIEW.FILES);
   const controls = useThreadControls(thread);
+
   return (
     <li className="pull-request-thread-slot">
       <AnnotationCard
@@ -1433,6 +1474,7 @@ function ThreadComment({
   const acts = start ?? own;
   const writer = useNamer()(comment.by);
   const words = <EntryWords entry={comment} picture={picture} />;
+
   const reply: AnnotationReply | undefined = first
     ? undefined
     : {
@@ -1443,6 +1485,7 @@ function ThreadComment({
         status: draft === undefined ? undefined : <PendingWords />,
         trailing: draft === undefined ? undefined : <CommentTools>{acts.menu}</CommentTools>,
       };
+
   return (
     <AnnotationComment reply={reply} className="pull-request-thread-comment">
       {draft === undefined ? (
@@ -1493,6 +1536,7 @@ function PendingDraft({
 /** Words that say what a read left on GitHub, a link to the page that holds it, opened through the window's link-open act. */
 function OnGitHubLink({ href, children }: { href: string; children: string }): React.JSX.Element {
   const openLink = useOpenLink();
+
   return (
     <OutsideLink href={href} open={openLink}>
       {children}
@@ -1514,6 +1558,7 @@ function ThreadComments({
   start: PendingActs | undefined;
 }): React.JSX.Element {
   const last = thread.comments.at(-1);
+
   return (
     <>
       <AnnotationComments>
@@ -1563,12 +1608,15 @@ function InlineThread({
   const pending = usePendingThread(thread);
   const head = useThreadHead(thread, now, pending);
   const landed = useLandedThread(thread, !thread.resolved && !thread.outdated);
+
   // Note that a folded card opens for its ⋯'s Edit or Delete, so the field or the question it opens is in view.
   const start = usePendingActs(usePendingComment(thread.comments[0]?.url), () =>
     landed.onOpenChange(true),
   );
+
   const lines = place === THREAD_PLACE.ABOVE ? lineSpan(thread) : undefined;
   const controls = useThreadControls(thread);
+
   return (
     <AnnotationCard
       {...head}
@@ -1623,19 +1671,24 @@ const entryWordsFound = new WeakMap<ConversationEntry, string>();
 /** The text of words GitHub rendered, or the words as written where it rendered none. */
 function plainWords(words: Pick<ConversationEntry, "html" | "body">): string {
   if (words.html === null) return words.body;
+
   return renderingText(words.html);
 }
 
 /** The words an entry's card draws that a find counts before it is drawn: who wrote it, its words, and each thread's file and comments with who wrote them. */
 function entryWordsOf(entry: ConversationEntry, name: (person: GitHubPerson) => string): string {
   const kept = entryWordsFound.get(entry);
+
   if (kept !== undefined) return kept;
+
   const threads = (entry.threads ?? []).flatMap((thread) => [
     thread.path,
     ...thread.comments.flatMap((comment) => [name(comment.by), plainWords(comment)]),
   ]);
+
   const words = [name(entry.by), plainWords(entry), ...threads].join("\n");
   entryWordsFound.set(entry, words);
+
   return words;
 }
 
@@ -1678,8 +1731,10 @@ function EntryRun({
   useLayoutEffect(() => {
     if (target === undefined || ask === undefined) return;
     const entry = entryLandedOn(latest.current, target);
+
     if (entry !== undefined) handle.current?.bringIn(entry.url);
   }, [target, ask, handle]);
+
   return (
     <VirtualRows
       scroller={scroller}
@@ -1693,6 +1748,7 @@ function EntryRun({
     >
       {(index, place) => {
         const entry = entries[index];
+
         return entry === undefined ? null : (
           <EntryCard entry={entry} now={now} picture={picture} place={place} />
         );
@@ -1749,6 +1805,7 @@ function EntryCard({
   const landed = useLandedEntry(entry.url);
   const { ref: measure, ...placed } = place;
   const { ref: land } = landed;
+
   // Note that the card is both measured by its run and landed on, so its element is handed to each.
   const ref = useCallback(
     (element: HTMLElement | null) => {
@@ -1757,6 +1814,7 @@ function EntryCard({
     },
     [measure, land],
   );
+
   return (
     <EntryFrame
       ref={ref}
@@ -1818,7 +1876,9 @@ interface OverviewParts {
 /** Asks again the pull request's own read and each other part whose read failed beside it, which the failure under the title speaks for. */
 function askUnreadAgain(parts: OverviewParts): void {
   parts.ask.pullRequest();
+
   if (unread(parts.conversation)) parts.ask.conversation();
+
   if (unread(parts.checks)) parts.ask.checks();
 }
 
@@ -1846,8 +1906,10 @@ interface HeadFacts {
 function standingFactsOf(standing: LinkStanding | undefined): HeadFacts | undefined {
   const pullRequest = standing?.pullRequest;
   const branches = pullRequest?.branches;
+
   if (pullRequest === undefined || branches === undefined) return undefined;
   const { when } = pullRequest;
+
   return {
     base: branches.base,
     head: branches.head,
@@ -1891,6 +1953,7 @@ function PullRequestHead({
   };
 }): React.JSX.Element {
   const { pullRequest: part, conversation } = parts;
+
   if (part.kind === PART.FAILED || part.kind === PART.NONE) {
     return (
       <PartFailure
@@ -1901,8 +1964,10 @@ function PullRequestHead({
       />
     );
   }
+
   const { picks } = editing;
   const pullRequest = landed(part);
+
   const facts: HeadFacts | undefined =
     pullRequest === undefined
       ? standingFactsOf(standing)
@@ -1915,8 +1980,10 @@ function PullRequestHead({
           merged: pullRequest.mergedAt ?? undefined,
           labels: picks.labels,
         };
+
   if (facts === undefined) return <HeadSkeleton />;
   const { author, opened, merged } = facts;
+
   return (
     <PeopleLine>
       <span className="pull-request-branch-row flex min-w-0 max-w-full flex-wrap items-center gap-control-gap">
@@ -1971,9 +2038,12 @@ function HeadPeople({
 }): React.JSX.Element | null {
   const author = pullRequest.author?.login;
   const reviewers = reviewersOf(editing.picks.requested, standings, author);
+
   const open =
     pullRequest.state === PULL_REQUEST_STATE.OPEN || pullRequest.state === PULL_REQUEST_STATE.DRAFT;
+
   if (reviewers.length === 0 && !open) return null;
+
   return (
     <span className="pull-request-reviewers inline-flex items-center gap-control-gap">
       {reviewers.length === 0 ? null : <HeaderReviewers reviewers={reviewers} />}
@@ -1994,6 +2064,7 @@ function DeploymentRow({
 }): React.JSX.Element {
   const openLink = useOpenLink();
   const { url, avatarUrl, state } = deployment;
+
   return (
     <ListRow
       leading={
@@ -2028,6 +2099,7 @@ function Deployments({
   deployments: readonly PullRequestDeployment[];
 }): React.JSX.Element | null {
   if (deployments.length === 0) return null;
+
   return (
     <Section title="Deployments" count={formatCount(deployments.length)}>
       <List label="Deployment list" variant={LIST_VARIANT.CARD} density={LIST_DENSITY.DENSE}>
@@ -2082,6 +2154,7 @@ function useViewActions(): {
   readonly handFor: (view: PullRequestView) => HandTabActions;
 } {
   const [held, setHeld] = useState<HandedViewActions | undefined>(undefined);
+
   const handFor = useCallback(
     (view: PullRequestView): HandTabActions =>
       (actions) =>
@@ -2090,6 +2163,7 @@ function useViewActions(): {
         ),
     [],
   );
+
   return { held, handFor };
 }
 
@@ -2112,7 +2186,9 @@ function PreviewControl({
   const menu = useMenu(shown);
   const serving = servingOf(checks);
   const [only] = serving;
+
   if (only === undefined) return null;
+
   if (serving.length === 1) {
     return (
       <Tooltip label={only.environment}>
@@ -2128,11 +2204,13 @@ function PreviewControl({
       </Tooltip>
     );
   }
+
   const actions: MenuAction[] = serving.map((deployment) => ({
     label: deployment.environment,
     icon: <ExternalLinkIcon aria-hidden="true" />,
     onSelect: () => openLink(deployment.url),
   }));
+
   return (
     <span className="flex">
       <Chip
@@ -2168,7 +2246,9 @@ function ChecksPart({
   live: boolean;
 }): React.JSX.Element | null {
   const part = parts.checks;
+
   if (unread(part) && unread(parts.pullRequest)) return null;
+
   if (part.kind === PART.LANDED) {
     return (
       <>
@@ -2177,6 +2257,7 @@ function ChecksPart({
       </>
     );
   }
+
   return (
     <Section title="Checks">
       {part.kind === PART.PENDING ? (
@@ -2214,6 +2295,7 @@ function DescriptionPart({
   fold: SectionFold;
 }): React.JSX.Element | null {
   if (part.kind === PART.FAILED || part.kind === PART.NONE) return null;
+
   const words =
     part.kind !== PART.LANDED || part.value.html === "" ? undefined : (
       <div className="pull-request-words min-w-0 select-text text-body-size leading-reading text-foreground">
@@ -2224,6 +2306,7 @@ function DescriptionPart({
         </EntryPictures>
       </div>
     );
+
   return (
     <Section title="Description" fold={fold}>
       {part.kind === PART.PENDING ? (
@@ -2283,7 +2366,9 @@ function ConversationPart({
   picture: GitHubPictureDrawer;
 }): React.JSX.Element | null {
   const part = parts.conversation;
+
   if (unread(part) && unread(parts.pullRequest)) return null;
+
   if (part.kind !== PART.LANDED) {
     return (
       <Section title="Conversation" fold={fold} end={filterControls}>
@@ -2300,7 +2385,9 @@ function ConversationPart({
       </Section>
     );
   }
+
   const { conversation, earlier } = part.value;
+
   return (
     <Section
       title="Conversation"
@@ -2353,6 +2440,7 @@ function HeaderTitle({
       </div>
     );
   }
+
   return (
     <PullRequestTitle title={title.title} number={pullRequestNumberLabel(title)} writes={writes} />
   );
@@ -2388,9 +2476,11 @@ function checksCount(
   count: number | undefined,
 ): readonly CountPart[] | undefined {
   const glyph = SUMMARY_GLYPHS[summary];
+
   if (glyph === null && count === undefined) return undefined;
   const text = count === undefined ? "" : formatCount(count);
   const tone = SUMMARY_TONES[summary];
+
   return [
     glyph === null ? { text, tone } : { text, tone, glyph, glyphLabel: SUMMARY_WORDS[summary] },
   ];
@@ -2438,10 +2528,12 @@ function chaptersTabCount(
   const files = changes.pullRequest ?? undefined;
   // Note that once the files are read their own head is the one the view judges by, even where they name none.
   const filesHead = files === undefined ? chapters.head : files.headSha;
+
   const state = chaptersShown(chapters.answer, chapters.generating, {
     pullRequest: chapters.head,
     files: filesHead,
   });
+
   if (state.kind === CHAPTERS_SHOWN.GENERATING) {
     return [
       {
@@ -2451,6 +2543,7 @@ function chaptersTabCount(
       },
     ];
   }
+
   if (state.kind === CHAPTERS_SHOWN.GENERATION_FAILED) {
     return [
       {
@@ -2461,8 +2554,10 @@ function chaptersTabCount(
       },
     ];
   }
+
   if (state.kind !== CHAPTERS_SHOWN.READY) return undefined;
   const total = state.chapters.length;
+
   // Note that with neither the files nor the pull request's head read yet nothing says they are out of date, so they are counted as they stand.
   if (state.stale && (files !== undefined || chapters.head !== undefined)) {
     return [
@@ -2474,14 +2569,18 @@ function chaptersTabCount(
       },
     ];
   }
+
   const marks = changes.viewedFiles.marks;
+
   const viewed =
     files === undefined || marks === undefined
       ? 0
       : state.chapters.filter((chapter) =>
           chapterViewed(chapterPaths(chapter, files.files), marks.viewed),
         ).length;
+
   if (viewed === 0) return [{ text: formatCount(total) }];
+
   return viewedCount(viewed, total);
 }
 
@@ -2509,25 +2608,34 @@ function linesOf(
 ): LinesShown | undefined {
   const changes = reads.pullRequest;
   const marks = reads.viewedFiles.marks;
+
   if (changes === null || marks === undefined) {
     return published === undefined
       ? undefined
       : { count: linesCount(published.additions, published.deletions), hint: undefined };
   }
+
   const { files, truncated } = changes;
+
   const sum = (of: readonly (typeof files)[number][], key: "additions" | "deletions") =>
     of.reduce((total, file) => total + file[key], 0);
+
   const additions =
     truncated && published !== undefined ? published.additions : sum(files, "additions");
+
   const deletions =
     truncated && published !== undefined ? published.deletions : sum(files, "deletions");
+
   const whole = { count: linesCount(additions, deletions), hint: undefined };
   const viewed = files.filter((file) => marks.viewed(file.path));
+
   if (viewed.length === 0 || (viewed.length === files.length && !truncated)) return whole;
+
   const left = linesCount(
     Math.max(0, additions - sum(viewed, "additions")),
     Math.max(0, deletions - sum(viewed, "deletions")),
   );
+
   return {
     count: [...left, { text: PULL_REQUEST_WORDS.LEFT }],
     hint: PULL_REQUEST_WORDS.total(additions, deletions),
@@ -2548,6 +2656,7 @@ function filesTabCount(
 ): readonly CountPart[] | undefined {
   const changes = reads.pullRequest;
   const marks = reads.viewedFiles.marks;
+
   // Note that a read cut short counts at least the files it holds, since a push after publishing can outgrow what was published.
   const total =
     changes === null
@@ -2555,11 +2664,14 @@ function filesTabCount(
       : changes.truncated
         ? Math.max(published?.changedFiles ?? 0, changes.files.length)
         : changes.files.length;
+
   if (total === undefined) return undefined;
+
   const viewed =
     changes === null || marks === undefined
       ? 0
       : changes.files.filter((file) => marks.viewed(file.path)).length;
+
   return viewed === 0 ? [{ text: formatCount(total) }] : viewedCount(viewed, total);
 }
 
@@ -2570,6 +2682,7 @@ function HeaderLines({ lines }: { lines: LinesShown }): React.JSX.Element {
       <CountParts parts={lines.count} />
     </span>
   );
+
   return lines.hint === undefined ? drawn : <Tooltip label={lines.hint}>{drawn}</Tooltip>;
 }
 
@@ -2590,6 +2703,7 @@ function tabsOf(
 ): readonly ChoiceItem<PullRequestView>[] {
   const conversation = landed(parts.conversation);
   const checks = landed(parts.checks);
+
   return [
     {
       value: PULL_REQUEST_VIEW.CONVERSATION,
@@ -2641,6 +2755,7 @@ function ConversationFilter({
 }): React.JSX.Element {
   const noteId = useId();
   const note = count === undefined ? undefined : describe(count);
+
   const filter = (
     <span className="pull-request-filter inline-flex">
       <Chip
@@ -2660,14 +2775,18 @@ function ConversationFilter({
       )}
     </span>
   );
+
   return note === undefined ? filter : <Tooltip label={note}>{filter}</Tooltip>;
 }
 
 /** What a phone's filter chip says is left out: what each filter on hides, by the filter's own word, or that everything shows. */
 function hidingWords({ hideResolved, hideBots }: ConversationFilters): string {
   if (hideResolved && hideBots) return PULL_REQUEST_WORDS.HIDING_BOTH;
+
   if (hideResolved) return PULL_REQUEST_WORDS.HIDING_RESOLVED;
+
   if (hideBots) return PULL_REQUEST_WORDS.HIDING_BOTS;
+
   return PULL_REQUEST_WORDS.SHOWING_ALL;
 }
 
@@ -2688,6 +2807,7 @@ function ConversationFilterMenu({
   const menu = useMenu(true);
   const words = hidingWords(filters);
   const count = (each: number | undefined) => (each === undefined ? undefined : formatCount(each));
+
   // Note that each counts beside its label rather than at its end, because a phone's sheet prints no item's hint, a chord being a keyboard's.
   const items: MenuAction[] = [
     {
@@ -2707,6 +2827,7 @@ function ConversationFilterMenu({
       onSelect: () => change({ hideBots: !filters.hideBots }),
     },
   ];
+
   return (
     <span className="pull-request-filter-menu flex min-w-0">
       <Chip
@@ -2739,7 +2860,9 @@ function ConversationFilterChips({
   hidden: ConversationHidden | undefined;
 }): React.JSX.Element {
   const { filters, change } = control;
+
   if (usePhoneRoom()) return <ConversationFilterMenu control={control} hidden={hidden} />;
+
   return (
     <>
       <ConversationFilter
@@ -2797,15 +2920,18 @@ function ConversationView({
   const choices = useConversationFilters();
   const { filters, change } = choices;
   const conversation = landed(parts.conversation)?.conversation;
+
   const shown = useMemo(
     () => (conversation === undefined ? [] : filteredConversation(conversation, filters, kept)),
     [conversation, filters, kept],
   );
+
   const scroller = useRef<HTMLDivElement>(null);
   const entries = useRef<VirtualRowsHandle>(null);
   const name = useNamer();
   // Note that the entries' words are read only while a find bar stands open over the tab.
   const finding = useFindOpen();
+
   const findRows = useMemo(
     (): readonly FindRow[] =>
       finding
@@ -2816,12 +2942,14 @@ function ConversationView({
         : [],
     [finding, shown, name],
   );
+
   useVirtualFind({ root: scroller, rows: findRows, handle: entries, findable: viewShown });
   const asked = landing?.ask;
   const conversationOpen = filters.conversationOpen;
   useEffect(() => {
     if (asked !== undefined && !conversationOpen) change({ conversationOpen: true });
   }, [asked, conversationOpen, change]);
+
   return (
     // Note that it is in the tab order, because it scrolls on its own, and a column of words holds nothing else a keyboard could reach to scroll it by.
     <ScrollArea
@@ -2905,6 +3033,7 @@ interface ThreadJump {
  */
 function centerCard(card: HTMLElement): void {
   const scroller = scrollerOf(card);
+
   if (scroller === undefined) return;
   const padding = Number.parseFloat(getComputedStyle(scroller).scrollPaddingTop);
   const clear = Number.isNaN(padding) ? 0 : padding;
@@ -2940,11 +3069,14 @@ function useThreadJumps(input: {
   // The thread last brought into the Conversation, which stands through its filters while it is read.
   const [kept, setKept] = useState<string | undefined>(undefined);
   const asks = useRef(0);
+
   const start = useCallback((threadId: string, view: PullRequestThreadView) => {
     asks.current += 1;
+
     if (view === PULL_REQUEST_THREAD_VIEW.CONVERSATION) setKept(threadId);
     setJump({ threadId, view, ask: asks.current });
   }, []);
+
   // A link names the agent's own pull request, never one a tab shows by its number.
   const windowAsk = useWindowThreadReveal(agentId);
   const taken = number === undefined && shown ? windowAsk : undefined;
@@ -2952,26 +3084,34 @@ function useThreadJumps(input: {
   latestAsk.current = taken;
   useEffect(() => {
     const standing = latestAsk.current;
+
     if (standing === undefined) return;
     start(standing.reveal.threadId, standing.reveal.view);
     standing.onRevealed(standing.reveal.ask);
   }, [taken?.reveal.ask, start]);
+
   const place = (thread: ReviewThread, view: PullRequestThreadView): LinkDestination | undefined =>
     thread.id === undefined || number !== undefined
       ? undefined
       : { kind: LINK_DESTINATION.PULL_REQUEST_THREAD, agentId, threadId: thread.id, view };
+
   const latestView = useRef(input.onView);
   latestView.current = input.onView;
+
   const jumpTo = (thread: ReviewThread, view: PullRequestThreadView) => {
     const routed = place(thread, view);
+
     if (routed !== undefined && openPlace !== undefined) {
       openPlace(routed);
+
       return;
     }
+
     if (thread.id === undefined) return;
     latestView.current(view);
     start(thread.id, view);
   };
+
   const target = jump === undefined ? undefined : threads.find((each) => each.id === jump.threadId);
   // A thread the conversation read no longer holds is said gone; one a read that failed or is out stands for its Retry.
   const gone = jump !== undefined && conversation.kind === PART.LANDED && target === undefined;
@@ -2990,9 +3130,11 @@ function useThreadJumps(input: {
     });
     setJump(undefined);
   }, [gone, toast, agentId, number]);
+
   const letGo = useCallback((ask: number) => {
     setJump((was) => (was?.ask === ask ? undefined : was));
   }, []);
+
   const conversationLanding: ThreadLanding | undefined =
     jump?.view === PULL_REQUEST_THREAD_VIEW.CONVERSATION && target?.id !== undefined
       ? {
@@ -3003,6 +3145,7 @@ function useThreadJumps(input: {
           onFaded: () => undefined,
         }
       : undefined;
+
   // Note that a thread whose file the changes no longer hold is shown in the Conversation instead, said so.
   const filesReveal: ChangesReveal | undefined =
     jump?.view === PULL_REQUEST_THREAD_VIEW.FILES && target !== undefined
@@ -3028,6 +3171,7 @@ function useThreadJumps(input: {
           },
         }
       : undefined;
+
   return {
     jumps: { jump: jumpTo, place } satisfies ThreadJumps,
     kept,
@@ -3058,29 +3202,38 @@ function useConversationAnchors(input: {
   onView: (view: PullRequestView) => void;
 }): ConversationAnchors {
   const { pullRequestUrl, conversation, jumps, onView } = input;
+
   const [entry, setEntry] = useState<{ readonly url: string; readonly ask: number } | undefined>(
     undefined,
   );
+
   // Note that the asks are counted apart from the one standing, which a landing lets go, so the same link pressed again is a new ask its card answers.
   const asks = useRef(0);
   const [kept, setKept] = useState<string | undefined>(undefined);
+
   const open: OpenHere = (href) => {
     const anchor =
       pullRequestUrl === undefined || conversation === undefined
         ? undefined
         : anchorIn(href, pullRequestUrl, conversation);
+
     if (anchor === undefined) return false;
+
     if (anchor.kind === ANCHOR_KIND.THREAD) {
       if (anchor.thread.id === undefined) return false;
       jumps.jump(anchor.thread, PULL_REQUEST_THREAD_VIEW.CONVERSATION);
+
       return true;
     }
+
     onView(PULL_REQUEST_VIEW.CONVERSATION);
     setKept(anchor.entry.url);
     asks.current += 1;
     setEntry({ url: anchor.entry.url, ask: asks.current });
+
     return true;
   };
+
   const landing =
     entry === undefined
       ? undefined
@@ -3091,6 +3244,7 @@ function useConversationAnchors(input: {
           onLanded: (ask: number) => setEntry((was) => (was?.ask === ask ? undefined : was)),
           onFaded: () => undefined,
         };
+
   return { open, landing, kept };
 }
 
@@ -3117,6 +3271,7 @@ export function AgentPullRequestTab({
   ...props
 }: AgentPullRequestTabProps): React.JSX.Element {
   const source = useAgentPullRequestSource(control, props.agentId, props.number);
+
   // Note that the number and the source are handed down before any of the tab's own hooks run, its writes among them.
   return (
     <PullRequestNumberProvider value={props.number}>
@@ -3162,6 +3317,7 @@ const VIEW_SCROLLER =
  */
 function viewScroller(box: Element, root: Element): boolean {
   const view = box.closest(".pull-request-view");
+
   return (
     box.matches(VIEW_SCROLLER) &&
     box.parentElement?.closest(VIEW_SCROLLER) === null &&
@@ -3183,8 +3339,10 @@ function shownScroller(root: Element): Element | undefined {
  */
 function leadsView(box: Element): boolean {
   const view = box.closest(".pull-request-view");
+
   if (view === null) return false;
   const inset = Number.parseFloat(getComputedStyle(view).paddingTop) || 0;
+
   return box.getBoundingClientRect().top - view.getBoundingClientRect().top - inset < 1;
 }
 
@@ -3249,6 +3407,7 @@ function useHeaderFold(phone: boolean): HeaderFold {
   // The shown view's scroller as last measured, and the room the header folds away.
   const measured = useRef<Element | undefined>(undefined);
   const room = useRef(0);
+
   const follow = (top: number) => {
     const whole = room.current;
     const slid = Math.min(Math.max(top, 0), whole);
@@ -3258,10 +3417,12 @@ function useHeaderFold(phone: boolean): HeaderFold {
     root.current?.style.setProperty(FOLD_PROPERTY.TITLE, String(title));
     header.current?.toggleAttribute("data-folded", whole > 0 && slid >= whole);
   };
+
   const measure = () => {
     const tab = root.current;
     const head = header.current;
     const line = compact.current;
+
     if (!phone || tab === null || head === null || line === null) return;
     const box = shownScroller(tab);
     const whole = Math.max(0, head.offsetHeight - line.offsetHeight);
@@ -3272,6 +3433,7 @@ function useHeaderFold(phone: boolean): HeaderFold {
     setShape((held) => (held.room === whole && held.lead === lead ? held : { room: whole, lead }));
     follow(box?.scrollTop ?? 0);
   };
+
   const measureNow = useRef(measure);
   measureNow.current = measure;
   // Note that the tab is measured each time it draws, because a view's scroller stands only once its read lands.
@@ -3279,12 +3441,15 @@ function useHeaderFold(phone: boolean): HeaderFold {
   useEffect(() => {
     const tab = root.current;
     const head = header.current;
+
     if (!phone || tab === null || head === null) return undefined;
     const sizes = new ResizeObserver(() => measureNow.current());
     sizes.observe(tab);
     sizes.observe(head);
+
     return () => sizes.disconnect();
   }, [phone]);
+
   return {
     shape,
     root,
@@ -3292,16 +3457,20 @@ function useHeaderFold(phone: boolean): HeaderFold {
     compact,
     onScrollCapture: (event) => {
       const box = event.target;
+
       if (!phone || !(box instanceof Element) || !viewScroller(box, event.currentTarget)) return;
+
       if (box === measured.current) follow(box.scrollTop);
       else measure();
     },
     onScrollEndCapture: (event) => {
       const box = event.target;
+
       if (!phone || !(box instanceof Element) || box !== measured.current) return;
       const top = box.scrollTop;
       const whole = room.current;
       const end = box.scrollHeight - box.clientHeight;
+
       if (top <= 0 || top >= whole || top >= end - 1) return;
       box.scrollTo({ top: top < whole / 2 ? 0 : whole, behavior: glideOf(box) });
     },
@@ -3321,6 +3490,7 @@ function CompactTitle({
   ref: React.Ref<HTMLDivElement>;
 }): React.JSX.Element {
   const number = title === undefined ? "" : pullRequestNumberLabel(title);
+
   return (
     <div ref={ref} className="pull-request-compact px-column-inset" aria-hidden="true">
       <Text as={TEXT_ELEMENT.DIV} variant={TEXT_VARIANT.DIALOG}>
@@ -3347,67 +3517,83 @@ function PullRequestTabBody({
   onActions,
 }: Omit<AgentPullRequestTabProps, "control"> & { source: PullRequestSource }): React.JSX.Element {
   const id = useId();
+
   // A phone names the chosen tab and draws the others by their glyphs and counts, so the four fit its row without scrolling; a tab pressed is named.
   // A narrow panel folds the same way once their names stop fitting, the chosen tab's last, so the view standing open is named in words, not a bare count.
   const tabsFold =
     useContext(ShellRoomContext) === SHELL_ROOM.NARROW
       ? CHOICE_BAR_FOLD.OWN
       : CHOICE_BAR_FOLD.CHOSEN_LAST;
+
   const ids = (each: PullRequestView) => ({
     tab: `${id}-${each}-tab`,
     panel: `${id}-${each}-panel`,
   });
+
   // The header's parts are held while the tab is shown, the conversation among them for where its reviewers stand, the checks for the deployments its Preview opens, and what the agent published, which names a tab and its pin by the pull request's title.
   const asked = shown ? pullRequestAsked(agentId, number) : undefined;
+
   const pullRequestRead = usePartRead(
     useQuery(pullRequestQuery(asked)),
     PULL_REQUEST_PART.PULL_REQUEST,
     asked,
   );
+
   const conversationRead = usePartRead(
     useQuery(pullRequestConversationQuery(asked)),
     PULL_REQUEST_PART.CONVERSATION,
     asked,
   );
+
   const checksRead = usePartRead(
     useQuery(pullRequestChecksQuery(asked)),
     PULL_REQUEST_PART.CHECKS,
     asked,
   );
+
   const publishedRead = usePartRead(
     useQuery(pullRequestPublishedQuery(asked)),
     PULL_REQUEST_PART.PUBLISHED,
     asked,
   );
+
   const ask = {
     pullRequest: pullRequestRead.ask,
     checks: checksRead.ask,
     conversation: conversationRead.ask,
   };
+
   // Refresh reads again the header's parts, the checks among them, and what the agent published; the chapters are held live, so Refresh does not read them.
   // It settles once the header's parts land, which a change waits on before its press lets go.
   const refresh = () => {
     const header = Promise.all([ask.pullRequest(), ask.conversation(), ask.checks()]);
     void publishedRead.ask();
+
     return header;
   };
+
   const parts: OverviewParts = {
     pullRequest: partOf(pullRequestRead),
     checks: partOf(checksRead),
     conversation: partOf(conversationRead),
     ask,
   };
+
   const reading = pullRequestRead.out || checksRead.out || conversationRead.out;
   // Note that a tab naming its pull request by number draws what the host last read of it, as the task list draws the agent's own.
   const publishedPart = publishedRead.answer;
+
   const published =
     number !== undefined && publishedPart !== undefined && "pullRequest" in publishedPart
       ? (publishedPart.pullRequest ?? source.published)
       : source.published;
+
   const held = headerPullRequestOf(landed(parts.pullRequest), landed(parts.checks), published);
+
   const none = [parts.pullRequest, parts.checks, parts.conversation].some(
     (part) => part.kind === PART.NONE,
   );
+
   // The toolbar's ⋯ copies and opens the pull request on GitHub and reads it again while the header draws it,
   // Refresh dimmed while a read is out; a read saying there is none takes them away with the header.
   // Note that the ⋯'s Refresh reads Files changed again too where its view was shown, because it is the one Refresh
@@ -3419,15 +3605,18 @@ function PullRequestTabBody({
     url === undefined ? undefined : pullRequestTabSubject(url),
     PULL_REQUEST_TAB_KEYS,
   );
+
   // Until the pull request's own read lands, its link standing, the read its chip's card draws, draws the line under the title.
   const standing = usePlaceStanding(
     source.place,
     shown && parts.pullRequest.kind === PART.PENDING ? url : undefined,
   );
+
   // Note that the copy is read through a ref, because `useCopyToast` answers a new function every draw.
   const copy = useCopyToast();
   const copyNow = useRef(copy);
   copyNow.current = copy;
+
   const handed = useMemo(
     () =>
       url === undefined
@@ -3442,6 +3631,7 @@ function PullRequestTabBody({
           ],
     [url, reading],
   );
+
   // A phone draws no actions beside the title, so its ⋯ offers Preview after the pull request's own,
   // and whatever the view shown hands up, Files changed's bar among them.
   const phone = usePhoneRoom();
@@ -3458,6 +3648,7 @@ function PullRequestTabBody({
           ...(phone && viewActions.held?.view === view ? viewActions.held.actions : []),
         ].filter((group) => group.length > 0),
   );
+
   // Files changed's reads, held here so its tab's count reads the same marks it draws, and the
   // Chapters view draws the same files and marks; asked as either is first shown.
   const changes = useChangesReads(
@@ -3465,12 +3656,16 @@ function PullRequestTabBody({
     source,
     shown && !none && (view === PULL_REQUEST_VIEW.FILES || view === PULL_REQUEST_VIEW.CHAPTERS),
   );
+
   refreshAllNow.current = () => {
     refresh();
+
     if (askedYet(changes)) changes.ask();
   };
+
   // The Chapters view's chunk is asked for only once the view is first shown.
   const [chaptersSeen, setChaptersSeen] = useState(false);
+
   if (!chaptersSeen && view === PULL_REQUEST_VIEW.CHAPTERS) setChaptersSeen(true);
   const overview = landed(parts.pullRequest);
   // Note that Files changed is read again as the pull request's head moves, as a push moves it, where it was read, because a diff is too large to hold on app state and nothing else asks it again.
@@ -3481,9 +3676,12 @@ function PullRequestTabBody({
   useEffect(() => {
     const was = headSeen.current;
     headSeen.current = head;
+
     if (was === undefined || head === undefined || was === head) return;
+
     if (askedYet(changesNow.current)) changesNow.current.ask();
   }, [head]);
+
   // The chapters, held while the tab is shown once the pull request's own read has answered, naming the number it found, so their tab says where they stand before their view is opened.
   const chapters = useChaptersRead(
     agentId,
@@ -3494,6 +3692,7 @@ function PullRequestTabBody({
       : { number: overview.number, head: overview.merging?.headSha },
     () => refreshAllNow.current(),
   );
+
   const title = overview ?? published;
   // Review stands at the end of the tabs once the pull request is held, whatever it stands as, because GitHub takes a review of one merged or closed too; where GitHub refuses one, as on a locked conversation, the panel says why in GitHub's words.
   const reviewable = held !== undefined;
@@ -3515,22 +3714,27 @@ function PullRequestTabBody({
   const threadList = useMemo(() => reviewThreadsOf(conversation), [conversation]);
   // The member's pending comments drawn among the threads on their lines, a reply in its thread's card.
   const drafts = pendingReview?.drafts;
+
   const pendingComments = useMemo<PendingComments>(
     () => new Map((drafts ?? []).map((draft) => [draft.id, draft])),
     [drafts],
   );
+
   const filesThreads = useMemo(
     () => pendingThreadsOf(threadList, drafts ?? []),
     [threadList, drafts],
   );
+
   const drawThread = useCallback<ChangesThreads["draw"]>(
     (thread, place) => <InlineThread thread={thread} place={place} now={now} picture={picture} />,
     [now, picture],
   );
+
   const changesThreads = useMemo<ChangesThreads>(
     () => ({ list: filesThreads, draw: drawThread, refresh: conversationRead.ask }),
     [filesThreads, drawThread, conversationRead.ask],
   );
+
   const threadJumps = useThreadJumps({
     agentId,
     number,
@@ -3539,17 +3743,21 @@ function PullRequestTabBody({
     conversation: parts.conversation,
     onView,
   });
+
   const anchors = useConversationAnchors({
     pullRequestUrl: title?.url,
     conversation: conversation?.conversation,
     jumps: threadJumps.jumps,
     onView,
   });
+
   const kept = new Set(
     [threadJumps.kept, anchors.kept].filter((each): each is string => each !== undefined),
   );
+
   const fold = useHeaderFold(phone);
   const listRoom = phone && fold.shape.lead ? fold.shape.room : 0;
+
   // Every review thread the tab draws, in the Conversation or on its line, replies and resolves on this agent's pull request.
   const page = (
     <ThreadWritesProvider value={{ agentId, onWritten: written }}>
@@ -3751,6 +3959,7 @@ function PullRequestTabBody({
       </ThreadJumpContext.Provider>
     </ThreadWritesProvider>
   );
+
   // The member's own pending comments, told apart wherever a comment is drawn (`pending-comments.tsx`).
   return <PendingCommentsProvider value={pendingComments}>{page}</PendingCommentsProvider>;
 }

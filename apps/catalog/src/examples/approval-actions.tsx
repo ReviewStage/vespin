@@ -20,7 +20,9 @@ const GIVEN = {
 /** The presses, which give way to the answer given once one is pressed. */
 function Answerable(): React.JSX.Element {
   const [given, setGiven] = useState<string | undefined>(undefined);
+
   if (given !== undefined) return <span>{given}</span>;
+
   return (
     <ApprovalActions
       noteMaxLength={4_000}

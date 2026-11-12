@@ -96,8 +96,11 @@ const BODY_ROWS = `${BODY} px-0 [&>code]:block [&>code]:min-w-fit`;
 function runColors({ color, lightColor }: CodeToken): React.CSSProperties | undefined {
   if (color === undefined && lightColor === undefined) return undefined;
   const colors: Record<string, string> = {};
+
   if (color !== undefined) colors["--ui-code-run-dark"] = color;
+
   if (lightColor !== undefined) colors["--ui-code-run-light"] = lightColor;
+
   return cssCustomProperties(colors);
 }
 
@@ -125,6 +128,7 @@ function CodeRows({
 }): ReactNode {
   return text.map((words, at) => {
     const tokens = lines?.[at];
+
     return (
       // Note that a row's place is its identity: a block's rows never reorder.
       <span
@@ -148,6 +152,7 @@ function CodeRuns({
 }): ReactNode {
   // Note that an empty block holds one empty line, so it stands a line tall, as an empty block in the editor does.
   if (lines === undefined) return text.length === 1 && text[0] === "" ? "\n" : text.join("\n");
+
   return lines.map((tokens, line) => (
     // Note that a line's place is its identity: the lines of one block never reorder.
     <Fragment key={line}>
@@ -259,6 +264,7 @@ export function CodeCard({
   const cut = code !== undefined && text.length > CODE_CARD_CUT_LINES;
   const rest = useUntilFound<HTMLSpanElement>(cut && !whole, () => setWhole(true));
   const lead = cut ? CODE_CARD_CUT_LINES : text.length;
+
   const drawLines = (from: number, to: number): ReactNode =>
     rows === undefined ? (
       <CodeRuns text={text.slice(from, to)} lines={lines?.slice(from, to)} />
@@ -269,6 +275,7 @@ export function CodeCard({
         rows={rows.slice(from)}
       />
     );
+
   return (
     <Card
       as={CARD_ELEMENT.FIGURE}

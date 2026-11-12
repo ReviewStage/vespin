@@ -15,7 +15,9 @@ const OFF_SCREEN = { ...ON_SCREEN, top: -100, bottom: -80 };
 function readyWith(html: string, rect = ON_SCREEN): boolean {
   const dom = new JSDOM(`<body>${html}</body>`, { runScripts: "outside-only" });
   const box = dom.window.document.querySelector("[data-box]");
+
   if (box !== null) box.getBoundingClientRect = () => rect as DOMRect;
+
   return dom.window.eval(READY_SCRIPT) as boolean;
 }
 
@@ -43,13 +45,16 @@ describe("the scroll script", () => {
     const dom = new JSDOM(`<body>${html}</body>`, { runScripts: "outside-only" });
     const boxes = [...dom.window.document.querySelectorAll<HTMLElement>("[data-box]")];
     const wheels: { deltaY: number; top: number }[] = [];
+
     for (const box of boxes) {
       box.scrollTop = top;
       box.addEventListener("wheel", (event) => {
         wheels.push({ deltaY: (event as WheelEvent).deltaY, top: box.scrollTop });
       });
     }
+
     const found = dom.window.eval(scrollScript(role, by)) as boolean;
+
     return { found, tops: boxes.map((box) => box.scrollTop), wheels };
   }
 
@@ -75,12 +80,15 @@ describe("the scroll fade pin", () => {
     const dom = new JSDOM('<body><div id="faded"></div><div id="plain"></div></body>', {
       runScripts: "outside-only",
     });
+
     const { document } = dom.window;
+
     // jsdom runs no scroll timeline, so the box is given the depths one would have eased it to.
     const depths: Record<string, string> = {
       "--ui-scroll-area-fade-start": "0px",
       "--ui-scroll-area-fade-end": "24px",
     };
+
     dom.window.getComputedStyle = ((box: Element) => ({
       animationName:
         box.id === "faded" ? "ui-scroll-area-fade-start, ui-scroll-area-fade-end" : "none",
@@ -101,6 +109,7 @@ describe("the sized script", () => {
   function sizedAt(width: number, height: number): boolean {
     const dom = new JSDOM("<body></body>", { runScripts: "outside-only" });
     Object.assign(dom.window, { innerWidth: width, innerHeight: height });
+
     return dom.window.eval(
       sizedScript({ width: 760, height: 520, zoom: 1.25, phone: false }),
     ) as boolean;
@@ -121,6 +130,7 @@ describe("flattening a picture", () => {
     const picture = new PNG({ width: 3, height: 1 });
     // Clear, half-clear white, and opaque red.
     picture.data.set([10, 20, 30, 0, 255, 255, 255, 128, 200, 0, 0, 255]);
+
     const flat = PNG.sync.read(
       flattenPng(PNG.sync.write(picture), { red: 32, green: 32, blue: 32 }),
     );
@@ -133,12 +143,14 @@ describe("flattening a picture", () => {
 describe("the scene list", () => {
   it("opens ⌘K with the chord each client answers: Meta on the desktop, a Mac's alone, and Ctrl or Meta on the web as its system has it", () => {
     const palettes = SCENES.filter((scene) => scene.id.startsWith("palette"));
+
     const chordsOn = (client: Client) =>
       palettes.flatMap((scene) =>
         (scene.steps ?? []).flatMap((step) =>
           step.kind === STEP.PRESS ? [pressedOn(step.keys, client)] : [],
         ),
       );
+
     expect(palettes).toHaveLength(2);
     expect(chordsOn(CLIENT.DESKTOP)).toEqual(["Meta+K", "Meta+K"]);
     expect(chordsOn(CLIENT.WEB)).toEqual(["ControlOrMeta+K", "ControlOrMeta+K"]);

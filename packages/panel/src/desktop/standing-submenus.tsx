@@ -50,8 +50,10 @@ export function chipSubmenu(
       },
     }),
   );
+
   const standing = rows.find((row) => row.id === value);
   const mark = standing === undefined ? icon : <>{standing.icon}</>;
+
   return mark === undefined ? { label, items } : { label, icon: mark, items };
 }
 
@@ -72,6 +74,7 @@ export function statusSubmenu(
     current,
     (id) => {
       const picked = TASK_STATUS_ORDER.find((status) => status === id);
+
       if (picked !== undefined) standing.onSettleTasks(taskIds, picked);
       onActed?.();
     },
@@ -87,6 +90,7 @@ export function keyedStatusSubmenu(
   subject: ShortcutSubject,
 ): MenuSubmenu {
   const submenu = statusSubmenu(standing, [taskId], current);
+
   return { ...submenu, command: APP_COMMAND.SET_STATUS, subject };
 }
 
@@ -95,5 +99,6 @@ export function sharedStatus(
   held: readonly { readonly status?: TaskStatus | undefined }[],
 ): TaskStatus | undefined {
   const statuses = new Set(held.map((task) => task.status ?? TASK_STATUS.TODO));
+
   return statuses.size === 1 ? [...statuses][0] : undefined;
 }

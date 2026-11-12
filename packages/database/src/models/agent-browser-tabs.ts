@@ -444,6 +444,7 @@ const releaseTab = SqlSchema.findAll({
 /** A reached row split into its tab and its agent. */
 function reachedOf(row: typeof ReachedTabSchema.Type): ReachedBrowserTab {
   const { agentId, agentUserId, agentGithubAccess, ...tab } = row;
+
   return { tab, agent: { id: agentId, userId: agentUserId, githubAccess: agentGithubAccess } };
 }
 
@@ -453,7 +454,9 @@ export function browserTabDriver(
   now: Date,
 ): { readonly userId: string; readonly heldUntil: Date } | null {
   if (tab.driverUserId === null || tab.heldUntil === null) return null;
+
   if (tab.heldUntil.getTime() <= now.getTime()) return null;
+
   return { userId: tab.driverUserId, heldUntil: tab.heldUntil };
 }
 
@@ -471,8 +474,10 @@ export function listBrowserTabs(
       "taskId" in place
         ? yield* findReachableTask({ userId, taskId: place.taskId })
         : yield* findReachableAgent({ userId, agentId: place.agentId });
+
     if (reached.length === 0) return Option.none();
     const rows = yield* findReachedTabs({ userId, place });
+
     return Option.some(rows.map(reachedOf));
   });
 }
@@ -516,6 +521,7 @@ export function recordMemberOpenedBrowserTab(
   tab: Omit<BrowserTabAction, "openedBy"> & { readonly userId: string },
 ): BrowserTabEffect<AgentBrowserTabRow> {
   const { userId, ...page } = tab;
+
   return writeTab({ ...page, openedBy: { kind: AGENT_BROWSER_TAB_OPENER.MEMBER, userId } }, true);
 }
 
@@ -527,6 +533,7 @@ function writeTab(
   return Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
     const { openedBy } = action;
+
     return yield* upsertTab({
       conversationId: action.conversationId,
       targetId: action.targetId,

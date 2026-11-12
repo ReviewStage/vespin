@@ -52,10 +52,12 @@ export interface Wait {
 /** A wait its maker holds, a module for the whole window among them, so a wait begun anywhere calls off the one before. */
 export function createWait(fork: ForkEffect = forkEffect): Wait {
   let running: (() => void) | undefined;
+
   const stop = () => {
     running?.();
     running = undefined;
   };
+
   return {
     start: (effect) => {
       stop();
@@ -69,5 +71,6 @@ export function createWait(fork: ForkEffect = forkEffect): Wait {
 export function useWait(fork?: ForkEffect): Wait {
   const [wait] = useState(() => createWait(fork));
   useEffect(() => wait.stop, [wait]);
+
   return wait;
 }

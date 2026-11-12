@@ -301,20 +301,24 @@ interface WordsNode {
 /** The words a node holds, its marks left out: what a row's press is named by, so a reader hears no backticks. */
 function wordsIn(node: WordsNode): string {
   if (typeof node.value === "string") return node.value;
+
   return (node.children ?? []).map((child) => wordsIn(child)).join("");
 }
 
 /** Whom the Kept by filter files a memory under: its keeper, or everyone who left as one. */
 function keeperKey(memory: MemorySummary, actor: Actor): string {
   if (memory.keptBy === null || actor.kind !== ACTOR_KIND.PERSON) return FORMER_KEY;
+
   return memory.keptBy.userId;
 }
 
 /** Who may delete a memory, as its unavailable Delete says it. */
 function forgetterOf(memory: MemorySummary, actor: Actor): string {
   if (actor.kind === ACTOR_KIND.PERSON && actor.you) return "You: its words are yours";
+
   if (memory.forgettable) return "You, as an owner or admin of the workspace";
   const keeper = actor.kind === ACTOR_KIND.PERSON ? actor.name : undefined;
+
   return keeper === undefined
     ? "Only an owner or an admin"
     : `Only ${keeper}, or an owner or admin`;
@@ -358,13 +362,18 @@ function SourceChip({
   const { agentId, messageId, taskId, taskName } = source;
   const doors = useMentionDoors();
   const openPlace = useOpenPlace();
+
   const opened = useMemo(() => {
     if (messageId === null || openPlace === undefined) return doors;
+
     const openLine = () =>
       openPlace({ kind: LINK_DESTINATION.MESSAGE, planId: taskId, agentId, messageId });
+
     return { ...doors, onOpenTask: openLine, onOpenAgent: openLine };
   }, [doors, openPlace, agentId, messageId, taskId]);
+
   const place = { workspace: workspaceStep, repository: null };
+
   const chip =
     agentName === undefined
       ? linkChip(encodeMention({ kind: MENTION_KIND.TASK, taskId }, place), `@${taskName}`, opened)
@@ -373,6 +382,7 @@ function SourceChip({
           `@${agentName}`,
           opened,
         );
+
   return chip ?? null;
 }
 
@@ -380,16 +390,20 @@ function SourceChip({
 function UseBadge({ memory }: { memory: MemorySummary }): React.JSX.Element | null {
   const now = useMinute();
   const age = now - memory.createdAt;
+
   if (age < NEW_FOR_MS) return <Badge tone={STATUS_TONE.WORKING}>{USE_WORDS.NEW}</Badge>;
+
   if (age > RECALL_WINDOW_MS && memory.recalls30d === 0) {
     return <Badge tone={STATUS_TONE.ATTENTION}>{USE_WORDS.UNUSED}</Badge>;
   }
+
   return null;
 }
 
 /** The card a memory's words hang: whose they are, and when they were last kept or corrected. */
 function KeeperCard({ shown }: { shown: ShownMemory }): React.JSX.Element {
   const { actor, memory } = shown;
+
   return (
     <HoverCard>
       <HoverCardHead
@@ -478,6 +492,7 @@ function memoryColumns(): DataTableColumns<MemoryTableRow> {
       sortDescFirst: true,
       cell: ({ row: { original } }) => {
         const last = original.memory.lastRecalledAt;
+
         return (
           <Text tone={TEXT_TONE.MUTED}>
             {last === null ? USE_WORDS.NEVER : <Time at={last} look={TIME_LOOK.AGO} hint={false} />}
@@ -523,6 +538,7 @@ function memoryMenu(
   },
 ): readonly (readonly MenuEntry[])[] {
   const { memory, actor } = shown;
+
   return [
     [
       // Note that Edit stands only where the reader may change the memory's words, who may also delete it, as `forgettable` says.
@@ -574,21 +590,26 @@ interface Keeper {
 /** The keepers of `listed`, the reader first as Me, then each by name, everyone who left last. */
 function keepersOf(listed: readonly ShownMemory[]): readonly Keeper[] {
   const byKey = new Map<string, Keeper>();
+
   for (const { memory, actor } of listed) {
     const key = keeperKey(memory, actor);
     const known = byKey.get(key);
+
     if (known !== undefined) {
       byKey.set(key, { ...known, count: known.count + 1 });
       continue;
     }
+
     const former = key === FORMER_KEY;
     const you = actor.kind === ACTOR_KIND.PERSON && actor.you;
     const label = former ? FORMER_WORDS : you ? PEOPLE_FILTER_WORDS.ME : actorName(actor);
     const face = former ? <GLYPH.PEOPLE /> : <ActorMark actor={actor} size={ACTOR_SIZE.INLINE} />;
     byKey.set(key, { key, label, face, count: 1, named: !former && !you });
   }
+
   const rank = (keeper: Keeper) =>
     keeper.label === PEOPLE_FILTER_WORDS.ME ? 0 : keeper.key === FORMER_KEY ? 2 : 1;
+
   return [...byKey.values()].sort(
     (one, other) => rank(one) - rank(other) || one.label.localeCompare(other.label),
   );
@@ -597,7 +618,9 @@ function keepersOf(listed: readonly ShownMemory[]): readonly Keeper[] {
 /** Puts `key` in the set or takes it out. */
 function toggled(set: ReadonlySet<string>, key: string): ReadonlySet<string> {
   const next = new Set(set);
+
   if (!next.delete(key)) next.add(key);
+
   return next;
 }
 
@@ -612,6 +635,7 @@ function KeptByFilter({
   onKept: (kept: ReadonlySet<string>) => void;
 }): React.JSX.Element {
   const menu = useMenu(true);
+
   const people: MenuAction[] = keepers.map((keeper) => ({
     label: keeper.label,
     replayMasked: keeper.named,
@@ -621,6 +645,7 @@ function KeptByFilter({
     stays: true,
     onSelect: () => onKept(toggled(kept, keeper.key)),
   }));
+
   return (
     <>
       <CornerDot shown={kept.size > 0}>
@@ -661,18 +686,23 @@ function KeptByLine({
   // Note that the keepers are read again on every render, so the list the chips leave by is kept until another keeper is kept.
   const listed = keepers.filter((keeper) => kept.has(keeper.key));
   const [stable, setStable] = useState(listed);
+
   const same =
     stable.length === listed.length &&
     stable.every(
       (keeper, at) => keeper.key === listed[at]?.key && keeper.label === listed[at]?.label,
     );
+
   if (!same) setStable(listed);
   const drawn = useLeaving(same ? stable : listed, keeperChipKey);
+
   if (drawn.length === 0) return null;
+
   return (
     <Inline gap={GAP.TIGHT} ref={line} moves>
       {drawn.map(({ key, value: keeper, leaving }) => {
         const name = `${KEPT_BY} ${keeper.label === PEOPLE_FILTER_WORDS.ME ? "me" : keeper.label}`;
+
         return (
           <Chip
             key={key}
@@ -704,6 +734,7 @@ function KeptByChips(props: {
   onKept: (kept: ReadonlySet<string>) => void;
 }): React.JSX.Element {
   const line = useRef<HTMLElement | null>(null);
+
   return (
     <ListMotion root={line} way={LIST_MOTION_WAY.SCALE}>
       <KeptByLine line={line} {...props} />
@@ -716,10 +747,12 @@ function forgetQuestion(asked: readonly MemorySummary[], left: number) {
   const one = asked.length === 1;
   const them = one ? "it" : "them";
   const body = `No agent will recall ${them} in any later task in this workspace, for anyone.`;
+
   const kept =
     left === 0
       ? ""
       : ` ${countWords(left, TERM.MEMORY)} you may not delete ${left === 1 ? "stays" : "stay"}.`;
+
   return {
     title: one ? "Delete this memory?" : `Delete ${countWords(asked.length, TERM.MEMORY)}?`,
     body: `${body}${kept}`,
@@ -748,6 +781,7 @@ function NothingShown({
       />
     );
   }
+
   return <SettingsLine>{PAGE_LINE.EMPTY}</SettingsLine>;
 }
 
@@ -801,6 +835,7 @@ function MemoryWords({
   workspaceStep: string;
 }): React.JSX.Element {
   const { source } = shown.memory;
+
   return (
     <Stack gap={GAP.TIGHT}>
       <Tooltip label={`Saved by ${actorName(shown.actor)}`} card={<KeeperCard shown={shown} />}>
@@ -874,16 +909,20 @@ function MemoryCard({
   const dialog = useRef<DialogHandle>(null);
   const titleId = useId();
   const body = useRef<HTMLDivElement>(null);
+
   const field = useMemo(
     (): RefObject<HTMLElement | null> => ({
       get current() {
         const card = body.current?.closest<HTMLElement>(CARD_SELECTOR) ?? null;
+
         return body.current?.querySelector<HTMLElement>(FIELD_SELECTOR) ?? card;
       },
     }),
     [],
   );
+
   const title = editing.replaces === undefined ? EDITOR_WORDS.ADD : EDITOR_WORDS.EDIT;
+
   const box = useMessageBox({
     draft: editing.text,
     setDraft: onChange,
@@ -898,6 +937,7 @@ function MemoryCard({
     focusedByOwner: true,
     held: busy,
   });
+
   return (
     <Dialog
       open={open}
@@ -931,6 +971,7 @@ function MemoryCard({
 /** A refused save as the card says it under its words, reported once on its surface. */
 function refusalNote(result: ActionResult): ComposerNote | undefined {
   if (result.status !== ACTION_RESULT_STATUS.REJECTED) return undefined;
+
   return { words: result.reason, failure: confirmFailure(FAILURE_SURFACE.MEMORY_SAVE)(result) };
 }
 
@@ -947,6 +988,7 @@ function refusalNote(result: ActionResult): ComposerNote | undefined {
 function useMemoryEditor(workspaceId: string, kept: ReadonlySet<string>) {
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const [openings, setOpenings] = useState(0);
+
   const saving = useMutation({
     mutationKey: [ACT_KIND.MEMORIES_SAVE, workspaceId],
     mutationFn: (save: { readonly text: string; readonly replaces: string | undefined }) =>
@@ -956,7 +998,9 @@ function useMemoryEditor(workspaceId: string, kept: ReadonlySet<string>) {
         ...(save.replaces === undefined ? {} : { replaces: save.replaces }),
       }),
   });
+
   if (editing?.replaces !== undefined && !kept.has(editing.replaces.id)) setEditing(undefined);
+
   const open = (memory: MemorySummary | undefined) => {
     // Note that a save out keeps its card, so its answer, or its refusal, still finds it.
     if (saving.isPending) return;
@@ -964,15 +1008,20 @@ function useMemoryEditor(workspaceId: string, kept: ReadonlySet<string>) {
     setOpenings(opening);
     setEditing({ replaces: memory, text: memory?.text ?? "", refusal: undefined, opening });
   };
+
   const save = () => {
     if (editing === undefined || saving.isPending) return;
     const words = editing.text.trim();
+
     if (words === "" || editing.text.length > MEMORY_BOUNDS.MAX_CHARS) return;
+
     // Note that an edit that changed nothing puts the card away with nothing to send.
     if (words === editing.replaces?.text) {
       setEditing(undefined);
+
       return;
     }
+
     const { opening } = editing;
     void saving
       .mutateAsync({ text: words, replaces: editing.replaces?.id })
@@ -983,12 +1032,15 @@ function useMemoryEditor(workspaceId: string, kept: ReadonlySet<string>) {
         const refusal = refusalNote(result);
         setEditing((was) => {
           if (was?.opening !== opening) return was;
+
           return refusal === undefined ? undefined : { ...was, refusal };
         });
       });
   };
+
   // The card is drawn through its fade, on the words it last held.
   const { held, onExited } = useHeldThroughExit(editing);
+
   const card =
     held === undefined ? null : (
       <MemoryCard
@@ -1006,6 +1058,7 @@ function useMemoryEditor(workspaceId: string, kept: ReadonlySet<string>) {
         onExited={onExited}
       />
     );
+
   return {
     /** The card, while it stands and through its fade. */
     card,
@@ -1043,39 +1096,50 @@ function MemoryList({
   const [asked, setAsked] = useState<readonly MemorySummary[]>([]);
   const found = searchTokens(query);
   const editor = useMemoryEditor(workspaceId, new Set(memories.map((memory) => memory.id)));
+
   const all = byUse(memories).map((memory): ShownMemory => {
     // Note that the service names a memory's keeper as nobody only once their account is deleted.
     const actor =
       memory.keptBy === null
         ? DELETED_ACCOUNT_ACTOR
         : personActor(memory.keptBy, members, readerId, former);
+
     const keeper = memory.keptBy?.name ?? "";
     const agentName = memory.source === null ? undefined : agents.get(memory.source.agentId);
+
     return { memory, actor, keeper, agentName };
   });
+
   const searched = all.filter((each) => matchesTokens([each.memory.text, each.keeper], found));
+
   const listed = searched.filter(
     (each) => kept.size === 0 || kept.has(keeperKey(each.memory, each.actor)),
   );
+
   // Note that a memory no longer drawn leaves the selection for good, as a task does, so one a search hid is not chosen again unasked.
   const drawn = new Set(listed.map((each) => each.memory.id));
   const standing: ReadonlySet<string> = new Set([...selected].filter((id) => drawn.has(id)));
+
   if (standing.size !== selected.size) setSelected(standing);
   const chosen = listed.filter((each) => standing.has(each.memory.id)).map((each) => each.memory);
   const forgettable = asked.filter((memory) => memory.forgettable);
+
   const forgetConfirmAct = useConfirmAct(forgettingAll, {
     send: () => forgettingAll.mutateAsync(forgettable.map((memory) => memory.id)),
     answered: sameAnswer,
   });
+
   const forgetConfirm = useConfirmDialog(
     { subject: asked.length > 0, surfaceOpen: true },
     forgetConfirmAct,
     confirmFailure(FAILURE_SURFACE.MEMORY_FORGET),
   );
+
   const askForget = (memories: readonly MemorySummary[]) => {
     setAsked(memories);
     forgetConfirm.ask();
   };
+
   const copyAll = (memories: readonly MemorySummary[]) =>
     copy(
       memories.map((memory) => memory.text).join("\n\n"),
@@ -1083,19 +1147,24 @@ function MemoryList({
         ? "Memory copied"
         : `${countWords(memories.length, TERM.MEMORY)} copied`,
     );
+
   const acts: readonly SelectionAct[] = [
     ...(chosen.some((memory) => memory.forgettable) && !forgetting
       ? [{ label: MEMORY_ACT.FORGET, icon: <TrashIcon />, onAct: () => askForget(chosen) }]
       : []),
     { label: MEMORY_ACT.COPY, icon: <GLYPH.COPY />, onAct: () => copyAll(chosen) },
   ];
+
   const several: ChosenMemories | undefined =
     chosen.length > 1 ? { count: chosen.length, acts } : undefined;
+
   const clear = () => {
     setQuery("");
     setKept(new Set());
   };
+
   const keepers = keepersOf(searched);
+
   const cells: MemoryCells = {
     chosen: (shown) => (
       <Checkbox
@@ -1106,8 +1175,10 @@ function MemoryList({
     ),
     words: (shown) => <MemoryWords shown={shown} found={found} workspaceStep={workspaceStep} />,
   };
+
   const rowMenu = (row: MemoryTableRow): ListRowMenu => {
     const { memory } = row;
+
     return rowMenuOf(
       several !== undefined && standing.has(memory.id) ? several : undefined,
       memoryMenu(row, forgetting, {
@@ -1117,6 +1188,7 @@ function MemoryList({
       }),
     );
   };
+
   return (
     <SettingsSection anchor={SETTINGS_SEARCH_ROW.MEMORY} frame={SETTINGS_SECTION_FRAME.NONE}>
       <Stack gap={GAP.SECTION}>
@@ -1201,7 +1273,9 @@ export function MemorySection({
   // The memories as the host holds them, followed live while the page shows them, so a memory an agent keeps meanwhile draws as it lands.
   const memories = useQuery(memoriesQuery(signedIn ? workspaceId : undefined));
   const retryMemories = useMutation(memoriesRetryMutation());
+
   if (!signedIn) return <SettingsLine>{PAGE_LINE.SIGNED_OUT}</SettingsLine>;
+
   // Note that no workspace is a read not answered yet or one that failed, never a workspace-less account, which holds its own.
   if (workspace === undefined) {
     return workspacesFailed ? (
@@ -1214,6 +1288,7 @@ export function MemorySection({
       <MemoriesSkeleton label={READING_LABEL.WORKSPACES} />
     );
   }
+
   return memories.data !== undefined ? (
     // Note that the keepers are read in the workspace Settings shows, which may not be the one the window's tasks stand in.
     <MemberDirectory workspace={workspace} readerId={readerId}>

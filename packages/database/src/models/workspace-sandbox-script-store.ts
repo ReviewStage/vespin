@@ -325,6 +325,7 @@ export const setRepositorySetup = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<void, StoreFailure, DatabaseServices> {
   const write = { organizationId, repository, kind, script, now };
   const updated = yield* updateSetup(write);
+
   if (updated.length > 0) return;
   yield* insertSetup(write);
 });
@@ -380,13 +381,16 @@ export const editRunActions = <E, R>(
         yield* client`select pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(lower(${repository})))`;
         const standing = yield* findRepositoryRunActions({ organizationId, repository });
         const actions = yield* edit(standing);
+
         // Note that the list is stamped later than the one it replaces, even in the same millisecond or from a clock read before the lock, because a client keeps the list with the latest stamp.
         const stamped = new Date(
           Math.max(now.getTime(), ...standing.map((row) => row.updatedAt.getTime() + 1)),
         );
+
         const keepable = new Set(standing.map((row) => row.id));
         yield* deleteRunActions({ organizationId, repository });
         let defaulted = false;
+
         for (const [position, action] of actions.entries()) {
           const keeps = action.id !== undefined && keepable.delete(action.id);
           yield* insertRunAction({

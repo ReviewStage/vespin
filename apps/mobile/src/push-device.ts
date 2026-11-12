@@ -82,15 +82,18 @@ function readDeviceKey(fixture: boolean): Promise<PushDeviceKey | undefined> {
         typeof token.data === "string" && token.data !== ""
           ? { token: token.data, environment: BUILD_ENVIRONMENT }
           : undefined;
+
       return keyRead;
     },
     (error: unknown) => {
       // Note that a refusal is not kept, so the next screen to ask reads again.
       tokenRead = undefined;
       console.error("The phone's push token could not be read.", error);
+
       return undefined;
     },
   );
+
   return tokenRead;
 }
 
@@ -100,6 +103,7 @@ export function useFixtureRun(): boolean {
     ...appStateQuery,
     select: (state) => state.run.fixtureMode,
   });
+
   return fixture;
 }
 
@@ -127,10 +131,12 @@ export function usePushDeviceKey(): PushDeviceKey | undefined {
     readDeviceKey(fixture).then((read) => {
       if (live) setKey(read);
     });
+
     return () => {
       live = false;
     };
   }, [allowed, fixture]);
+
   return allowed ? key : undefined;
 }
 
@@ -149,8 +155,11 @@ let lastRegister: Promise<void> = Promise.resolve();
  */
 export function registeredPushDevice(acts: ActPortClient, key: PushDeviceKey): Promise<void> {
   const bundleId = Constants.expoConfig?.ios?.bundleIdentifier;
+
   if (bundleId === undefined) return Promise.resolve();
+
   if (registration?.token === key.token) return registration.done;
+
   const done = lastRegister
     .then(() => acts[ACT_KIND.PUSH_DEVICE_REGISTER]({ ...key, bundleId }))
     .then(
@@ -163,8 +172,10 @@ export function registeredPushDevice(acts: ActPortClient, key: PushDeviceKey): P
         console.error("The phone was not registered for notifications.", error);
       },
     );
+
   registration = { token: key.token, done };
   lastRegister = done;
+
   return done;
 }
 
@@ -176,8 +187,10 @@ export function usePushRegistration(signedIn: boolean): void {
     if (!signedIn) {
       // Note that a sign-out the app did not start, such as a refused renewal, runs no unregister, so the next account registers afresh.
       registration = undefined;
+
       return;
     }
+
     if (key === undefined) return;
     registeredPushDevice(acts, key).catch(() => undefined);
   }, [acts, signedIn, key]);
@@ -197,16 +210,21 @@ export function usePushRegistration(signedIn: boolean): void {
 export function unregisterPushDevice(acts: ActPortClient, fixture: boolean): Promise<void> {
   // The next account to sign in registers the phone afresh.
   registration = undefined;
+
   // Note that the unregister waits on a register still under way, since a register landing after it would put the phone back on the account.
   const done = lastRegister.then(() => {
     const key = fixture ? FIXTURE_KEY : keyRead;
+
     if (key === undefined) return undefined;
+
     return acts[ACT_KIND.PUSH_DEVICE_UNREGISTER](key).then(
       () => undefined,
       (error: unknown) => console.error("The phone was not unregistered.", error),
     );
   });
+
   lastRegister = done;
+
   return done;
 }
 
@@ -218,6 +236,7 @@ export function unregisterPushDevice(acts: ActPortClient, fixture: boolean): Pro
  */
 export function reregisterPushDevice(acts: ActPortClient, fixture: boolean): Promise<void> {
   const key = fixture ? FIXTURE_KEY : keyRead;
+
   return key === undefined ? Promise.resolve() : registeredPushDevice(acts, key);
 }
 
@@ -247,10 +266,12 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
         },
         (error: unknown) => console.error("The phone's notifications could not be read.", error),
       );
+
     return () => {
       live = false;
     };
   }, [acts, key]);
+
   const choose = useCallback(
     (notify: PushNotify) => {
       if (key === undefined || standing === undefined) return;
@@ -258,12 +279,15 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
       const pick = picks.current;
       // Note that the choice is drawn at once and put back where the service did not take it, unless a later choice stands by then.
       setStanding({ ...standing, notify });
+
       const putBack = () => {
         const held = confirmed.current;
+
         if (pick === picks.current && held !== undefined) {
           setStanding((drawn) => drawn && { ...drawn, notify: held });
         }
       };
+
       write(() => acts[ACT_KIND.PUSH_DEVICE_NOTIFY]({ ...key, notify }), {
         // Note that a pick offers no Try again, which could replay an older choice over a newer one; picking again is the retry.
         refused: (answer) => ("failure" in answer ? PUSH_NOTIFY_REFUSED : undefined),
@@ -274,6 +298,7 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
     },
     [acts, write, key, standing],
   );
+
   // A phone iOS no longer lets notify draws no standing, whatever was read before.
   return { standing: key === undefined ? undefined : standing, choose };
 }

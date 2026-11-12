@@ -30,12 +30,14 @@ function render(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
 /** A name its own owner holds, as a row holds its rename. */
 function Owned({ ended }: { ended: (value: string | undefined) => void }): React.JSX.Element {
   const [editing, setEditing] = useState(false);
+
   return createElement(RenamableName, {
     value: "Dev server",
     label: "Run action name",
@@ -86,6 +88,7 @@ test("a name with no way to open it is drawn plain", () => {
       onEnd: () => {},
     }),
   );
+
   expect({ text: container.textContent, press: container.querySelector("button") }).toEqual({
     text: "Dev server",
     press: null,

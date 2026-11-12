@@ -47,6 +47,7 @@ beforeAll(() => readExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
 const TASK_ID = "3f6c1b2a-8d4e-4f10-9a7b-5c2d1e0fa21b";
 const REPOSITORY = "acme/relay";
 const DOCS = "https://example.com/docs";
+
 const BARE =
   "https://www.postgresql.org/docs/current/sql-createindex.html#SQL-CREATEINDEX-CONCURRENTLY";
 
@@ -121,6 +122,7 @@ function drawn(node: ReactNode): HTMLElement {
   act(() =>
     root.render(withQueryClient(createElement(TaskMentions, { value: PAGE, children: node }))),
   );
+
   return container;
 }
 
@@ -134,6 +136,7 @@ function plainLinks(container: HTMLElement): (string | null)[] {
 /** A description's version, read and ready, as the version history draws it. */
 function Version(): ReactNode {
   const restore = { busy: false, onRestore: () => undefined };
+
   return createElement(VersionView, {
     onRetry: () => undefined,
     viewing: {
@@ -183,6 +186,7 @@ test("the description's editor draws a plain link as every place does, whole", a
       sectionLinks: SECTION_LINKS,
     }),
   );
+
   const rollout = container.querySelector<HTMLElement>('[role="group"][aria-label="Rollout"]');
   assert.ok(rollout !== null);
   act(() => rollout.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
@@ -208,6 +212,7 @@ test("a plain link pressed in the description opens in the browser and opens no 
   for (const link of container.querySelectorAll<HTMLElement>(".ui-text-link")) {
     act(() => link.click());
   }
+
   await act(async () => undefined);
 
   assert.deepEqual(sent, [
@@ -219,9 +224,11 @@ test("a plain link pressed in the description opens in the browser and opens no 
 
 test("a plain link pressed in a version opens in the browser", () => {
   const surface = drawn(createElement(Version));
+
   const docs = [...surface.querySelectorAll<HTMLElement>(".ui-text-link")].find(
     (link) => link.textContent === "the docs",
   );
+
   assert.ok(docs !== undefined);
 
   act(() => docs.click());
@@ -232,6 +239,7 @@ test("a plain link pressed in a version opens in the browser", () => {
 test("a bare address a change marks inside is drawn whole, its marks where they stand", () => {
   const words = `See ${BARE} now.`;
   const inside = words.indexOf("current");
+
   const changed = drawn(
     createElement(MarkdownMessage, {
       words,
@@ -251,6 +259,7 @@ test("a bare address a change marks inside is drawn whole, its marks where they 
 
 test("a plain link to an address the window refuses to open is drawn going nowhere", () => {
   const long = `https://example.com/${"a".repeat(2_100)}`;
+
   const container = drawn(
     createElement(DescriptionBody, {
       task: {
@@ -260,6 +269,7 @@ test("a plain link to an address the window refuses to open is drawn going nowhe
       sectionLinks: SECTION_LINKS,
     }),
   );
+
   const link = container.querySelector<HTMLElement>(".ui-text-link");
   assert.ok(link !== null);
 
@@ -271,16 +281,20 @@ test("a plain link to an address the window refuses to open is drawn going nowhe
 
 test("a plain link hangs its whole address in the window's hint, an address past the hint's bound cut short", () => {
   const long = `https://example.com/${"a".repeat(2_100)}`;
+
   const container = drawn(
     createElement(MarkdownMessage, {
       words: `See ${BARE} and [the long page](${long}).`,
       link: null,
     }),
   );
+
   const [bare, longLink] = [...container.querySelectorAll<HTMLElement>(".ui-text-link")];
   assert.ok(bare !== undefined && longLink !== undefined);
+
   const hint = (link: HTMLElement): string | null | undefined => {
     restOn(link);
+
     return document.querySelector('[role="tooltip"]')?.textContent;
   };
 

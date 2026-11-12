@@ -69,13 +69,18 @@ function pictureReader(
   asked: string[] = [],
 ): { readonly read: PictureReader; readonly land: (attachmentId: string) => void } {
   const held = new Map<string, (answer: PictureAnswer) => void>();
+
   const read: PictureReader = (itemId, attachmentId) => {
     asked.push(`${itemId}/${attachmentId}`);
     const answer = answers.get(attachmentId);
+
     if (answer instanceof Error) return Promise.reject(answer);
+
     if (answer !== undefined) return Promise.resolve(answer);
+
     return new Promise<PictureAnswer>((resolve) => held.set(attachmentId, resolve));
   };
+
   return { read, land: (attachmentId) => act(() => held.get(attachmentId)?.(HELD)) };
 }
 
@@ -140,9 +145,11 @@ function inPane(
     ...openingLinks((link) => told.push(link)),
     [ACT_KIND.TASKS_FILE]: (window) => {
       read.push({ path: window.path, ref: window.ref });
+
       return new Promise<never>(() => undefined);
     },
   });
+
   const doors = {
     code: {
       repository: REPOSITORY,
@@ -150,6 +157,7 @@ function inPane(
       onOpenFile: () => undefined,
     },
   };
+
   return createElement(InboxPictures, {
     itemId: ITEM_ID,
     control: { read: pictures },
@@ -164,6 +172,7 @@ function drawn(node: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(withQueryClient(node)));
+
   return container;
 }
 
@@ -186,6 +195,7 @@ function chipsInWords(container: HTMLElement): (string | null)[] {
 
 test("drawn as a document, a link alone in its paragraph is its card, a pull request's row, a page's row, or the lines at a commit as the Code tab's card, while the same link in a sentence and a lone link that earns no card stay chips", () => {
   const read: { path: string; ref: string | undefined }[] = [];
+
   const container = drawn(
     inPane(createElement(TranscriptWords, { text: LINKS, asDocument: true }), NO_PICTURES, read),
   );
@@ -205,6 +215,7 @@ test("drawn as a document, a link alone in its paragraph is its card, a pull req
   const pullRequest = container.querySelector<HTMLButtonElement>(
     '[data-lone-link="pull-request"] button',
   );
+
   assert.ok(pullRequest, "the pull request's row is pressed");
   act(() => pullRequest.click());
   assert.deepEqual(told.at(-1), { kind: ACT_KIND.GITHUB_OPEN, payload: { url: PULL_REQUEST } });
@@ -233,9 +244,11 @@ test("a typed message drawn as a document draws its lone links as cards too", ()
 test("drawn as a document, pictures written next to each other stand side by side in one row, each with its caption, asked for as it is drawn and opened over the window by a press", async () => {
   const asked: string[] = [];
   const pictures = pictureReader(new Map(), asked);
+
   const container = drawn(
     inPane(createElement(TranscriptWords, { text: PAIR, asDocument: true }), pictures.read),
   );
+
   await vi.waitFor(() => assert.deepEqual(asked, [`${ITEM_ID}/${BEFORE}`, `${ITEM_ID}/${AFTER}`]));
   assert.equal(container.querySelectorAll(".transcript-pictures .picture-pending").length, 2);
 
@@ -262,13 +275,16 @@ test("drawn as a document, pictures written next to each other stand side by sid
 test("a picture of an item opens a viewer the arrow keys walk across the item's pictures in the order they are drawn, one still read or drawn later joining once held and one whose read failed left out, and none of another item's", async () => {
   const third = "7d1e2f30-4a5b-4c6d-8e7f-901a2b3c4d03";
   const broken = "7d1e2f30-4a5b-4c6d-8e7f-901a2b3c4d04";
+
   let text = [
     PAIR,
     `![Third](${pictureOf(ITEM_ID, third)})`,
     `![Broken](${pictureOf(ITEM_ID, broken)})`,
   ].join("\n\n");
+
   const otherText = `![Another's](${pictureOf(OTHER_ITEM_ID, BEFORE)})`;
   const fourth = "7d1e2f30-4a5b-4c6d-8e7f-901a2b3c4d05";
+
   const pictures = pictureReader(
     new Map<string, PictureAnswer | Error>([
       [BEFORE, HELD],
@@ -277,6 +293,7 @@ test("a picture of an item opens a viewer the arrow keys walk across the item's 
       [fourth, HELD],
     ]),
   );
+
   const draw = () =>
     createElement(
       "div",
@@ -289,6 +306,7 @@ test("a picture of an item opens a viewer the arrow keys walk across the item's 
         children: createElement(TranscriptWords, { text: otherText, asDocument: true }),
       }),
     );
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -304,14 +322,17 @@ test("a picture of an item opens a viewer the arrow keys walk across the item's 
   const press = container.querySelector<HTMLButtonElement>('button[aria-label="Enlarge After"]');
   assert.ok(press, "a picture is pressed to enlarge it");
   act(() => press.click());
+
   const viewer = () => {
     const card = document.querySelector<HTMLElement>('[role="dialog"]');
     assert.ok(card, "the viewer is open");
+
     return [
       card.querySelector<HTMLImageElement>(".ui-zoom-image")?.alt,
       viewerPlace(card) ?? "alone",
     ];
   };
+
   const key = (name: string) =>
     act(() =>
       document
@@ -320,6 +341,7 @@ test("a picture of an item opens a viewer the arrow keys walk across the item's 
           new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }),
         ),
     );
+
   // The third is still read, and the broken one failed, so the walk holds the pair alone.
   assert.deepEqual(viewer(), ["After.png", "2 of 2"]);
   key("ArrowRight");
@@ -383,6 +405,7 @@ test("a picture far from the screen is neither asked for nor drawn until it come
     box = isIntersecting ? near : away;
     act(() => seen.at(-1)?.([{ isIntersecting, boundingClientRect: box as DOMRect }]));
   };
+
   scrolled(true);
   await vi.waitFor(() => assert.deepEqual(asked, [`${ITEM_ID}/${far}`]));
   pictures.land(far);
@@ -397,6 +420,7 @@ test("a picture far from the screen is neither asked for nor drawn until it come
 test("a picture of another item stands as its link and is never asked for", () => {
   const asked: string[] = [];
   const text = `![Another's](${pictureOf(OTHER_ITEM_ID, BEFORE)})`;
+
   const container = drawn(
     inPane(
       createElement(TranscriptWords, { text, asDocument: true }),
@@ -426,6 +450,7 @@ test("an Inbox link block draws as the link alone in its words does: a pull requ
   const pullRequest = drawn(
     inPane(createElement(LinkBlock, { url: PULL_REQUEST, label: "The fix" })),
   );
+
   assert.deepEqual(cards(pullRequest), [["pull-request", "The fix"]]);
 
   const page = drawn(inPane(createElement(LinkBlock, { url: PAGE, label: "The funnel" })));
@@ -435,12 +460,14 @@ test("an Inbox link block draws as the link alone in its words does: a pull requ
   const issue = drawn(
     inPane(createElement(LinkBlock, { url: `${LINEAR}?a=(b)`, label: "[ACME-142] fails" })),
   );
+
   assert.equal(issue.querySelectorAll(".lone-link-card").length, 0);
   assert.deepEqual(chipsInWords(issue), ["[ACME-142] fails"]);
 
   const inert = drawn(
     inPane(createElement(LinkBlock, { url: "file:///tmp/notes.txt", label: "Notes" })),
   );
+
   assert.equal(inert.querySelectorAll("[data-mention-ref]").length, 0);
   assert.match(inert.textContent ?? "", /Notes\s*file:\/\/\/tmp\/notes\.txt/u);
 });

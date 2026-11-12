@@ -107,7 +107,9 @@ function previewView(
   previewed: UseQueryResult<InstalledSkillPreviewView>,
 ): InstalledSkillPreviewView | undefined {
   if (previewed.isPending || previewed.isFetching) return undefined;
+
   if (previewed.isError) return { failure: INSTALLED_SKILL_CALL_FAILURE.UNANSWERED };
+
   return previewed.data;
 }
 
@@ -117,6 +119,7 @@ function DetectedText({ line }: { line: DetectedLine }): React.JSX.Element {
     line.tone === STATUS_TONE.ATTENTION ? ANNOUNCE.ALERT : ANNOUNCE.POLITE,
     line.text,
   );
+
   return (
     <span className="settings-state" data-state={LINE_STATE[line.tone]}>
       <ReplayMask>{line.text}</ReplayMask>
@@ -226,6 +229,7 @@ export function AddSkillDialog({
   const { mutateAsync: sendInstalledSkillsInstall } = useMutation(
     actMutation(ACT_KIND.INSTALLED_SKILLS_INSTALL),
   );
+
   const [text, setText] = useState("");
   // Note that the text is previewed once typing pauses, so a preview asks for the words as they settled.
   const [settled, setSettled] = useState<string | undefined>(undefined);
@@ -233,9 +237,11 @@ export function AddSkillDialog({
   const [fill, setFill] = useState<TextFill>(() => textFill(undefined));
   const [scope, setScope] = useState<InstalledSkillScope>(chosenScope);
   const [query, setQuery] = useState("");
+
   const adding = useAsyncAction(() =>
     failureLine({ failure: INSTALLED_SKILL_CALL_FAILURE.UNANSWERED }),
   );
+
   const installing = adding.running;
   const box = useRef<HTMLTextAreaElement | null>(null);
   const scopes = installScopes(workspace);
@@ -247,29 +253,35 @@ export function AddSkillDialog({
     void pause(PREVIEW_PAUSE_MS).then(() => {
       if (current) setSettled(text);
     });
+
     return () => {
       current = false;
     };
   }, [asks, pause, text]);
   const previewing = asks && settled === text;
+
   const previewed = useQuery({
     ...skillPreviewQueryOptions(workspace.id, text),
     enabled: previewing,
   });
+
   const view = previewing ? previewView(previewed) : undefined;
   // A preview that lands chooses its skills afresh, as React's guide adjusts state to a prop that changed.
   const [landedOn, setLandedOn] = useState<InstalledSkillPreviewView | undefined>(undefined);
+
   if (view !== undefined && !("failure" in view) && view !== landedOn) {
     setLandedOn(view);
     setTicked(initialTicks(view));
     setFill(textFill(view));
     setQuery("");
   }
+
   const preview = view === undefined || "failure" in view ? undefined : view;
   const skills = preview?.kind === SKILL_PASTE_KIND.SOURCE ? preview.skills : [];
   const shown = shownSkills(skills, query);
   const line = asks ? previewLine(view) : undefined;
   const failed = view !== undefined && "failure" in view ? view : undefined;
+
   const request = installRequest({
     workspaceId: workspace.id,
     text,
@@ -278,11 +290,13 @@ export function AddSkillDialog({
     ticked,
     fill,
   });
+
   const toInstall = request?.skills ?? (request?.name === undefined ? [] : [request.name]);
   const label = installLabel(toInstall);
 
   const tick = (name: string, on: boolean) => {
     const next = new Set(ticked);
+
     if (on) next.add(name);
     else next.delete(name);
     setTicked(next);
@@ -295,6 +309,7 @@ export function AddSkillDialog({
         if ("failure" in answer) return failureLine(answer);
         onInstalled(answer.skills);
         onClose();
+
         return undefined;
       }),
     );

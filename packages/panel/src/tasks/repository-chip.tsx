@@ -186,10 +186,13 @@ export function useOwnersToAsk(workspaceId: string | undefined): {
   readonly rest: number;
 } {
   const members = useQuery(workspaceMembersQuery(workspaceId)).data?.members;
+
   const owners = (members ?? []).filter(
     (each) => each.role === WORKSPACE_ROLE.OWNER || each.role === WORKSPACE_ROLE.ADMIN,
   );
+
   const named = owners.slice(0, NAMED_OWNERS);
+
   return { named, rest: owners.length - named.length };
 }
 
@@ -197,6 +200,7 @@ export function useOwnersToAsk(workspaceId: string | undefined): {
 function useWhomToAsk(workspaceId: string | undefined): string {
   const { named, rest } = useOwnersToAsk(workspaceId);
   const others = rest > 0 ? [otherOwnersWords(rest)] : [];
+
   return named.length === 0 ? ANY_OWNER : orList([...named.map((each) => each.name), ...others]);
 }
 
@@ -209,6 +213,7 @@ function AskOwnersRow({
   ask: DeadEnd["ask"];
 }): React.JSX.Element {
   const whom = useWhomToAsk(workspaceId);
+
   return (
     <MenuNoteRow
       glyph={<ProviderMark provider={MARK_PROVIDER.GITHUB} />}
@@ -221,6 +226,7 @@ function AskOwnersRow({
 /** Whether the read's repositories hold one, as GitHub spells it or not. */
 function listedIn(reached: readonly GitHubRepository[], repository: string): boolean {
   const wanted = repository.toLowerCase();
+
   return reached.some((each) => each.fullName.toLowerCase() === wanted);
 }
 
@@ -241,14 +247,17 @@ function repositoryRows(
 ): MenuRow[] {
   const names =
     reached === undefined ? [...recent] : recent.filter((each) => listedIn(reached, each));
+
   for (const each of reached ?? []) {
     if (!names.includes(each.fullName)) names.push(each.fullName);
   }
+
   const onToken = new Set(
     (reached ?? [])
       .filter((each) => each.access === GITHUB_ACCESS.TOKEN)
       .map((each) => each.fullName),
   );
+
   return names.map((fullName) =>
     repositoryMenuRow(fullName, pictures, { token: onToken.has(fullName) }),
   );
@@ -266,6 +275,7 @@ function useMenuPlace() {
   const menuId = useId();
   const room = useRef<HTMLDivElement>(null);
   const opener = useRef<HTMLElement | null>(null);
+
   return {
     open,
     drawn,
@@ -423,19 +433,24 @@ function useRepositoryListing(
   useEffect(() => {
     if (listed !== undefined) onListed?.(listed.repositories.map((each) => each.fullName));
   }, [listed, onListed]);
+
   // A GitHub not connected, or reaching nothing, is mended at the workspace's GitHub row.
   const workspaceGitHub: SettingsLink = {
     page: SETTINGS_VIEW.WORKSPACE,
     section: SETTINGS_SECTION.GITHUB_REPOSITORIES,
     ...(chooser.scope === undefined ? undefined : { workspaceId: chooser.scope }),
   };
+
   const omitted = new Set((props.omit ?? []).map((each) => each.toLowerCase()));
+
   const rows = repositoryRows(chooser.recent, listed?.repositories, chooser.pictures).filter(
     (row) => !omitted.has(row.id.toLowerCase()),
   );
+
   // Note that no repository is a choice of its own where the opener lets one go, so it is not said as a pick still owed.
   const nothingReached = rows.length === 0 && listed !== undefined;
   const none = nothingReached || (onClear !== undefined && props.pending !== true);
+
   const label =
     value ??
     (none
@@ -443,9 +458,11 @@ function useRepositoryListing(
       : chooser.reading === true || props.pending === true
         ? READING_LABEL
         : CHOOSE_LABEL);
+
   // Note that a member is told whom to ask, so only a member reads the workspace's people.
   const whom = useWhomToAsk(chooser.manages ? undefined : chooser.scope);
   const configure = () => choose(() => openSettings(workspaceGitHub));
+
   // A list with nothing to pick is mended at the workspace's GitHub, by an owner or an admin, whom a member is told to ask.
   const deadEnd = (way: DeadEnd) =>
     chooser.manages ? (
@@ -457,6 +474,7 @@ function useRepositoryListing(
     ) : (
       <AskOwnersRow workspaceId={chooser.scope} ask={way.ask} />
     );
+
   // Note that a workspace whose row says GitHub is connected, yet whose read finds none installed, had it removed or suspended on GitHub;
   // one installed but giving us nothing has its repositories chosen on GitHub, through the workspace's row.
   const stuck =
@@ -469,6 +487,7 @@ function useRepositoryListing(
         : rows.length === 0 && listed.installed
           ? DEAD_END.NONE_REACHED
           : undefined;
+
   const note =
     failure !== undefined ? (
       <ErrorState
@@ -482,6 +501,7 @@ function useRepositoryListing(
     ) : listed === undefined ? (
       <Spinner delay label={readingWords("repositories")} />
     ) : undefined;
+
   // Note that the way to the repositories' Settings ends every list but a dead end's, whose own row already leads there.
   const configurable = stuck === undefined;
 
@@ -544,10 +564,12 @@ export function useRepositoryMenu(props: RepositoryMenuProps): RepositoryMenu {
     place.ask();
     onAsked?.(openRequest);
   }, [openRequest, onAsked, place.ask]);
+
   const listing = useRepositoryListing(props, (pick) => {
     place.close();
     pick();
   });
+
   return {
     ...place,
     label: listing.label,
@@ -577,10 +599,12 @@ export function RepositoryMenuPanel(
 ): React.JSX.Element {
   const { onBack, onClose } = props;
   const id = useId();
+
   const listing = useRepositoryListing(props, (pick) => {
     onClose();
     pick();
   });
+
   return (
     <SearchableMenu
       {...repositoryMenuProps(listing.menu, id)}
@@ -623,6 +647,7 @@ export function CheckedRepositoryChip(props: {
   onOpen: () => void;
 }): React.JSX.Element {
   const place = useMenuPlace();
+
   const menu: RepositoryMenu = {
     ...place,
     label: props.label,
@@ -642,6 +667,7 @@ export function CheckedRepositoryChip(props: {
       onPick: props.onToggle,
     }),
   };
+
   return <MenuChip place={CHIP_PLACE.ACTION} menu={menu} named={false} />;
 }
 
@@ -661,6 +687,7 @@ function MenuChip(
   },
 ): React.JSX.Element {
   const { held, menu } = props;
+
   return (
     <div className="repository-chip relative min-w-0" data-place={props.place} ref={menu.room}>
       <Tooltip

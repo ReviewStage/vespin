@@ -87,9 +87,11 @@ function serveWrites(start: readonly AllowedCommand[]): AllowedCommandWriteParam
           : commands.filter((each) => each.prefix.join(" ") !== write.remove.join(" "));
       writeAppState(documentHolding(commands));
       const answer: AllowedCommandsWriteAnswerView = { commands };
+
       return Promise.resolve(answer);
     },
   });
+
   return sent;
 }
 
@@ -120,6 +122,7 @@ async function typeAndEnter(words: string): Promise<void> {
   const field =
     document.querySelector<HTMLInputElement>('input[aria-label="Add a command"]') ??
     assert.fail("no field");
+
   act(() => {
     const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
     set?.call(field, words);
@@ -154,14 +157,18 @@ test("Add sends a typed command's first words, its trailing * dropped, and refus
 test("Remove takes a command off at once, and its toast's Undo adds it again", async () => {
   const sent = serveWrites([GIT_STATUS]);
   await mount([GIT_STATUS]);
+
   const ellipsis =
     document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]') ??
     assert.fail("no ⋯");
+
   act(() => ellipsis.click());
+
   const remove =
     [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
       (each) => each.textContent === "Remove",
     ) ?? assert.fail("no Remove");
+
   act(() => remove.click());
   await settle();
 
@@ -182,14 +189,18 @@ test("a removal that never reaches the host leaves the command standing and says
     [ACT_KIND.ALLOWED_COMMANDS_WRITE]: () => Promise.reject(new Error("the port closed")),
   });
   await mount([GIT_STATUS]);
+
   const ellipsis =
     document.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]') ??
     assert.fail("no ⋯");
+
   act(() => ellipsis.click());
+
   const remove =
     [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
       (each) => each.textContent === "Remove",
     ) ?? assert.fail("no Remove");
+
   act(() => remove.click());
   await settle();
 

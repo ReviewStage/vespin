@@ -43,6 +43,7 @@ export const PANEL_SPAN = {
   /** A key pressed in an Inbox item's answer box to the paint after it. */
   KEYSTROKE_INBOX_ANSWER: "keystroke.inbox_answer",
 } as const;
+
 type PanelSpanName = (typeof PANEL_SPAN)[keyof typeof PANEL_SPAN];
 
 /** The spans timed from a press to a surface drawn, begun by `beginPanelSpan` and ended once by `endPanelSpan`. */
@@ -78,6 +79,7 @@ export const PANEL_SPAN_ATTRIBUTE = {
   /** How long a keystroke's handlers ran, in milliseconds. */
   PROCESSING: "keystroke.processing_ms",
 } as const;
+
 type PanelSpanAttribute = (typeof PANEL_SPAN_ATTRIBUTE)[keyof typeof PANEL_SPAN_ATTRIBUTE];
 
 /** One timing, ended: when it started and ended, in the epoch's milliseconds, and what it measured, read only where it is kept. */
@@ -125,7 +127,9 @@ let keystrokeObserver: PerformanceObserver | undefined;
 /** The span a keystroke on `target` is timed under: the timed box it was pressed in, if any. */
 function timedBoxOf(target: Node | null): KeystrokeSpanName | undefined {
   if (target === null) return undefined;
+
   for (const [box, name] of timedBoxes) if (box.contains(target)) return name;
+
   return undefined;
 }
 
@@ -143,6 +147,7 @@ function recordKeystrokes(list: PerformanceObserverEntryList): void {
   for (const entry of list.getEntriesByName("keydown")) {
     if (!isEventTiming(entry)) continue;
     const name = timedBoxOf(entry.target);
+
     if (name === undefined) continue;
     const startedAt = performance.timeOrigin + entry.startTime;
     const delay = entry.processingStart - entry.startTime;
@@ -177,10 +182,12 @@ function reportsKeystrokes(): boolean {
 function timeKeystrokes(box: Element, name: KeystrokeSpanName): () => void {
   if (recorder === undefined || !reportsKeystrokes()) return () => undefined;
   timedBoxes.set(box, name);
+
   if (keystrokeObserver === undefined) {
     keystrokeObserver = new PerformanceObserver(recordKeystrokes);
     keystrokeObserver.observe(KEYSTROKES_OBSERVED);
   }
+
   return () => {
     timedBoxes.delete(box);
   };
@@ -189,6 +196,7 @@ function timeKeystrokes(box: Element, name: KeystrokeSpanName): () => void {
 /** Installs what this window records its spans through, and answers what takes it back. */
 export function installPanelSpanRecorder(installed: PanelSpanRecorder): () => void {
   recorder = installed;
+
   return () => {
     if (recorder === installed) recorder = undefined;
   };
@@ -211,6 +219,7 @@ export function endPanelSpan(
   attributes: PanelSpan["attributes"] = () => ({}),
 ): void {
   const startedAt = begun.get(name);
+
   if (startedAt === undefined) return;
   begun.delete(name);
   recordPanelSpan({ name, startedAt, endedAt: Date.now(), attributes });
@@ -260,6 +269,7 @@ export function endWindowSpanOnFirstDraw(root: Element, name: WindowSpanName): v
     drawn.disconnect();
     endWindowSpan(name);
   });
+
   drawn.observe(root, { childList: true });
 }
 
@@ -269,6 +279,7 @@ export function endWindowSpanOnFirstDraw(root: Element, name: WindowSpanName): v
  */
 export function useKeystrokeSpans(name: KeystrokeSpanName): (box: Element | null) => void {
   const stop = useRef<(() => void) | undefined>(undefined);
+
   // Note that a box that goes is handed back as null, which stops its timing.
   return useCallback(
     (box: Element | null) => {

@@ -82,8 +82,10 @@ const services = Layer.mergeAll(
 function ended(failure: unknown): Effect.Effect<CliExit> {
   if (failure instanceof CommandFailed)
     return Effect.as(Console.error(failure.message), failure.exit);
+
   if (CliError.isCliError(failure)) return Effect.succeed(CLI_EXIT.USAGE);
   const kind = failure instanceof Error ? failure.name : typeof failure;
+
   return Effect.as(
     Console.error(`${PRODUCT_NAME} CLI failed unexpectedly (${kind}).`),
     CLI_EXIT.REFUSED,

@@ -42,7 +42,9 @@ export type NotificationStanding =
 /** The standing a permission's answer reads as: a refusal is one iOS will not ask again, which only its Settings undoes. */
 function standingOf(answer: NotificationPermissionsStatus): NotificationStanding {
   if (answer.granted) return NOTIFICATION_STANDING.ALLOWED;
+
   if (!answer.canAskAgain) return NOTIFICATION_STANDING.REFUSED;
+
   return NOTIFICATION_STANDING.UNASKED;
 }
 
@@ -52,29 +54,37 @@ export function useNotificationPermission(): {
   readonly allow: () => void;
 } {
   const [standing, setStanding] = useState<NotificationStanding | undefined>(undefined);
+
   const read = useCallback(() => {
     getPermissionsAsync().then(
       (answer) => setStanding(standingOf(answer)),
       (error: unknown) => console.error("The notification permission could not be read.", error),
     );
   }, []);
+
   useEffect(() => {
     read();
+
     // Note that a person may change it in iOS's Settings and come back, so it is read again then.
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") read();
     });
+
     return () => subscription.remove();
   }, [read]);
+
   const allow = () => {
     if (standing === NOTIFICATION_STANDING.REFUSED) {
       openNotificationSettings();
+
       return;
     }
+
     requestPermissionsAsync().then(
       (answer) => setStanding(standingOf(answer)),
       (error: unknown) => console.error("The notification permission was not asked.", error),
     );
   };
+
   return { standing, allow };
 }

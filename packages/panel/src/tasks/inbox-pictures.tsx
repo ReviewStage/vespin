@@ -89,6 +89,7 @@ function viewerFile(alt: string, name: string | undefined, url: string): FileChi
   const mediaType = url.slice("data:".length, url.indexOf(";"));
   const words = alt === "" ? UNNAMED_PICTURE : alt;
   const saved = name ?? `${words}.${mediaType.slice(mediaType.indexOf("/") + 1)}`;
+
   return { name: saved.replace(UNSAVEABLE, "-"), mediaType, url };
 }
 
@@ -119,16 +120,20 @@ export function InboxPicture({
   const [place, { near, height }] = useNearView();
   const placed = useMemo(() => joinRefs(anchor, place), [place]);
   const register = door?.register;
+
   // Note that a picture is read as it first comes near the screen, and once read stands kept away from it.
   const state = usePicture(
     { ...pictureQuery(door?.itemId ?? "", attachmentId, door?.read), enabled: near },
     pictureUnread,
   );
+
   useLayoutEffect(
     () => register?.(key, { attachmentId, alt, name, anchor }),
     [register, key, attachmentId, alt, name],
   );
+
   if (door === undefined) return null;
+
   // Away from the screen, a picture once drawn holds its place and lets its bytes' drawing go.
   if (!near && height !== undefined) {
     return (
@@ -140,6 +145,7 @@ export function InboxPicture({
       />
     );
   }
+
   if (state.kind === PICTURE_STATE.READY && near) {
     return (
       <PictureBlock
@@ -151,6 +157,7 @@ export function InboxPicture({
       />
     );
   }
+
   return (
     <PictureBlock
       ref={placed}
@@ -184,18 +191,23 @@ export function useInboxPictureThumb(
   const key = useId();
   const anchor = useRef<HTMLElement | null>(null);
   const register = door?.register;
+
   const state = usePicture(
     { ...pictureQuery(door?.itemId ?? "", attachmentId, door?.read), enabled: door !== undefined },
     pictureUnread,
   );
+
   useLayoutEffect(
     () => register?.(key, { attachmentId, alt, name: undefined, anchor }),
     [register, key, attachmentId, alt],
   );
+
   const place = useCallback((element: HTMLElement | null) => {
     anchor.current = element;
   }, []);
+
   if (door === undefined) return undefined;
+
   return { state, anchor: place, open: () => door.open(key) };
 }
 
@@ -219,15 +231,18 @@ function inDrawnOrder(drawn: ReadonlyMap<string, DrawnPicture>): readonly Walked
   const standing = [...drawn].flatMap(([key, { attachmentId, alt, name, anchor }]) =>
     anchor.current === null ? [] : [{ key, attachmentId, alt, name, element: anchor.current }],
   );
+
   standing.sort((one, other) =>
     one.element.compareDocumentPosition(other.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
   );
+
   return standing.map(({ key, attachmentId, alt, name }) => ({ key, attachmentId, alt, name }));
 }
 
 /** Whether the picture shown is drawn among the item's: its own copy, or, where its words were drawn again, another of the same picture. */
 function stillDrawn(drawn: ReadonlyMap<string, DrawnPicture>, shown: ViewedPicture): boolean {
   if (drawn.has(shown.key)) return true;
+
   return [...drawn.values()].some((picture) => picture.attachmentId === shown.attachmentId);
 }
 
@@ -256,21 +271,29 @@ function ItemViewer({
     queries: pictures.map((picture) => pictureQuery(itemId, picture.attachmentId)),
     combine: (results) => results.map((result) => result.data),
   });
+
   const held = pictures.flatMap((picture, index) => {
     const read = reads[index];
+
     if (read?.kind !== PICTURE_STATE.READY) return [];
+
     return [{ picture, file: viewerFile(picture.alt, picture.name, read.url) }];
   });
+
   const byKey = held.findIndex((each) => each.picture.key === shown.key);
+
   const at =
     byKey >= 0 ? byKey : held.findIndex((each) => each.picture.attachmentId === shown.attachmentId);
+
   if (at < 0) return null;
+
   return (
     <AttachmentViewer
       files={held.map((each) => each.file)}
       at={at}
       onAt={(next) => {
         const walked = held[next];
+
         if (walked !== undefined) onShow(walked.picture);
       }}
       onClose={onClose}
@@ -300,33 +323,40 @@ export function InboxPictures({
   const { read } = control;
   const drawn = useRef(new Map<string, DrawnPicture>());
   const [viewing, setViewing] = useState<ViewedPicture | undefined>();
+
   const register = useCallback((key: string, picture: DrawnPicture) => {
     drawn.current.set(key, picture);
     // An open viewer is drawn again to take the picture in.
     setViewing((now) => (now === undefined ? now : { ...now }));
+
     return () => {
       drawn.current.delete(key);
       // An open viewer is drawn again to let the picture go.
       setViewing((now) => (now === undefined ? now : { ...now }));
     };
   }, []);
+
   // Note that the viewer closes here rather than as a picture lets go, because
   // words drawn again let their pictures go before drawing them anew, and
   // this runs once both are done.
   useLayoutEffect(() => {
     if (viewing !== undefined && !stillDrawn(drawn.current, viewing)) setViewing(undefined);
   }, [viewing]);
+
   const open = useCallback(
     (key: string) => {
       const picture = drawn.current.get(key);
+
       if (picture !== undefined) setViewing({ itemId, key, attachmentId: picture.attachmentId });
     },
     [itemId],
   );
+
   const door = useMemo<InboxPicturesDoor>(
     () => ({ itemId, read, register, open }),
     [itemId, read, register, open],
   );
+
   return (
     <InboxPicturesContext.Provider value={door}>
       {children}
@@ -352,11 +382,15 @@ export function useInboxPictureDrawer():
   | ((src: string, alt: string, caption: string | undefined) => ReactNode | undefined)
   | undefined {
   const door = useContext(InboxPicturesContext);
+
   return useMemo(() => {
     if (door === undefined) return undefined;
+
     return (src: string, alt: string, caption: string | undefined) => {
       const named = inboxAttachmentOf(src);
+
       if (named?.itemId !== door.itemId) return undefined;
+
       return <InboxPicture attachmentId={named.attachmentId} alt={alt} caption={caption} />;
     };
   }, [door]);

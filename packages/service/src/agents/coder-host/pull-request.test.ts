@@ -68,11 +68,14 @@ const opened = () =>
 /** GitHub answering a pull request's opening as given, every opening written down. */
 function repository(answer: Opening) {
   const openings: SentToGitHub[] = [];
+
   const script = (sent: SentToGitHub): Response | undefined => {
     if (new URL(sent.url).pathname !== PULLS || sent.method !== "POST") return undefined;
     openings.push(sent);
+
     return answer(sent.headers.get("authorization") ?? "");
   };
+
   return { openings, script };
 }
 
@@ -84,9 +87,11 @@ const openAgent = (installationId: number, author: AgentAuthor | null, row?: Git
       login: RELAY.owner,
       repositories: [RELAY],
     };
+
     const userId = yield* openGithubUser(row);
     const task = yield* startTask(userId, { name: "Invitations", repository: RELAY_FULL_NAME });
     yield* connectWorkspaceGitHub(task.workspaceId, installation);
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: "start-1",
@@ -97,10 +102,13 @@ const openAgent = (installationId: number, author: AgentAuthor | null, row?: Git
       repository: RELAY_FULL_NAME,
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     const { agent } = Option.getOrThrow(started);
+
     if (author !== null) yield* settleAgentAuthor(userId, agent.id, author);
     const settled = Option.getOrThrow(yield* readAgent(userId, agent.id));
     assert.ok(hasRepository(settled));
+
     return {
       installation,
       agent: settled,
@@ -120,10 +128,13 @@ const open = (
 ) =>
   Effect.gen(function* () {
     const github = repository(answer);
+
     const result = yield* openPullRequest(target, opened.agent, unparsedWire(input)).pipe(
       Effect.provide(githubReaching([opened.installation], undefined, {}, github.script).layer),
     );
+
     const row = Option.getOrThrow(yield* readAgent(target.userId, opened.agent.id));
+
     return { result, openings: github.openings, author: row.author, branch: row.branch };
   });
 
@@ -131,6 +142,7 @@ const open = (
 const openTokenAgent = Effect.gen(function* () {
   const userId = yield* openTokenMember();
   const task = yield* startTask(userId, { name: "Invitations", repository: RELAY_FULL_NAME });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: "start-1",
@@ -142,10 +154,12 @@ const openTokenAgent = Effect.gen(function* () {
     githubAccess: GITHUB_ACCESS.TOKEN,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   const { agent } = Option.getOrThrow(started);
   yield* settleAgentAuthor(userId, agent.id, AGENT_AUTHOR.TOKEN);
   const settled = Option.getOrThrow(yield* readAgent(userId, agent.id));
   assert.ok(hasRepository(settled));
+
   return {
     agent: settled,
     target: { userId, conversationId: agent.conversationId },
@@ -162,17 +176,23 @@ const openOnToken = (
 ) =>
   Effect.gen(function* () {
     const github = repository(answer);
+
     const script = (sent: SentToGitHub): Response | undefined => {
       const onToken = sent.headers.get("authorization") === `Bearer ${GITHUB_FIXTURE_MEMBER.TOKEN}`;
+
       if (onToken && new URL(sent.url).pathname === `/repos/${RELAY_FULL_NAME}`) {
         return Response.json(memberRepositoryJson(RELAY, true));
       }
+
       return github.script(sent);
     };
+
     const result = yield* openPullRequest(opened.target, opened.agent, unparsedWire(INPUT)).pipe(
       Effect.provide(githubReaching([], GITHUB_APP_WITH_TOKENS, {}, script).layer),
     );
+
     const row = Option.getOrThrow(yield* readAgent(opened.target.userId, opened.agent.id));
+
     return { result, openings: github.openings, author: row.author };
   });
 
@@ -187,9 +207,11 @@ const openAgentBesideDocs = (installationId: number) =>
       login: RELAY.owner,
       repositories: [RELAY, DOCS],
     };
+
     const userId = yield* openGithubUser();
     const task = yield* startTask(userId, { name: "Invitations", repository: RELAY_FULL_NAME });
     yield* connectWorkspaceGitHub(task.workspaceId, installation);
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: "start-1",
@@ -201,10 +223,12 @@ const openAgentBesideDocs = (installationId: number) =>
       extraRepositories: [{ repository: DOCS_FULL_NAME, baseBranch: "next" }],
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     const { agent } = Option.getOrThrow(started);
     yield* settleAgentAuthor(userId, agent.id, AGENT_AUTHOR.APP_AUTOMATION);
     const settled = Option.getOrThrow(yield* readAgent(userId, agent.id));
     assert.ok(hasRepository(settled));
+
     return {
       installation,
       agent: settled,
@@ -219,15 +243,19 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
       Effect.gen(function* () {
         const besideDocs = yield* openAgentBesideDocs(41);
         const openings: SentToGitHub[] = [];
+
         const script = (sent: SentToGitHub): Response | undefined => {
           const path = new URL(sent.url).pathname;
+
           if (sent.method !== "POST" || !path.endsWith("/pulls")) return undefined;
           openings.push(sent);
+
           return Response.json(
             { number: 7, html_url: `https://github.com/${DOCS_FULL_NAME}/pull/7` },
             { status: 201 },
           );
         };
+
         const call = (input: WireBoundaryInput) =>
           openPullRequest(besideDocs.target, besideDocs.agent, unparsedWire(input)).pipe(
             Effect.provide(githubReaching([besideDocs.installation], undefined, {}, script).layer),
@@ -260,10 +288,12 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
           [`/repos/${DOCS_FULL_NAME}/pulls`],
         );
         assert.equal(JSON.parse(openings[0]?.body ?? "{}").base, "next");
+
         const [own, docs] = yield* readAgentRepositories(
           besideDocs.target.userId,
           besideDocs.agent.id,
         );
+
         assert.equal(own?.headBranch, null, "the agent's own repository is left as it stood");
         assert.equal(docs?.headBranch, INPUT.head);
       }),
@@ -274,6 +304,7 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
     () =>
       Effect.gen(function* () {
         const accepted = yield* openOnToken(yield* openTokenAgent, opened);
+
         const refused = yield* openOnToken(yield* openTokenAgent, () =>
           Response.json({ message: "Bad credentials" }, { status: 401 }),
         );
@@ -281,6 +312,7 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
         assert.ok(accepted.result.status === ACTION_RESULT_STATUS.ACCEPTED);
         assert.equal(accepted.result.openedAs, "developer");
         assert.equal(refused.result.status, ACTION_RESULT_STATUS.REJECTED);
+
         for (const { openings, author } of [accepted, refused]) {
           assert.deepEqual(
             openings.map((sent) => sent.headers.get("authorization")),
@@ -328,6 +360,7 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
       Effect.gen(function* () {
         const refusedToken = yield* openAgent(22, AGENT_AUTHOR.DEVELOPER);
         const noAccess = yield* openAgent(23, AGENT_AUTHOR.DEVELOPER);
+
         const appOnly = (status: number) => (bearer: string) =>
           bearer === `Bearer ${DEVELOPER_TOKEN}`
             ? Response.json({ message: "Refused" }, { status })
@@ -346,6 +379,7 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
             [`Bearer ${DEVELOPER_TOKEN}`, `Bearer ${GITHUB_FIXTURE_INSTALLATION_TOKEN}`],
           );
         }
+
         assert.deepEqual(
           [unlinked.author, forbidden.author],
           [AGENT_AUTHOR.APP_UNLINKED, AGENT_AUTHOR.APP_NO_PUSH],
@@ -381,6 +415,7 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
         const agent = yield* openAgent(26, AGENT_AUTHOR.DEVELOPER);
         // The agent already stands on a branch of its own, with its pull request from it.
         yield* updateAgentBranch(agent.target.userId, agent.agent.id, "luke/ready");
+
         const exists = () =>
           Response.json(
             {
@@ -418,6 +453,7 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
       Effect.gen(function* () {
         const agent = yield* openAgent(31, AGENT_AUTHOR.DEVELOPER);
         const stacked = { ...INPUT, base: "luke/teammate-invitations-store" };
+
         // GitHub's own answer to a base it has no branch for: an error with a field and a code, and no message.
         const unknownBase = () =>
           Response.json(
@@ -429,6 +465,7 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
           );
 
         const accepted = yield* open(agent, agent.target, opened, stacked);
+
         const refused = yield* open(agent, agent.target, unknownBase, {
           ...INPUT,
           base: "luke/gone",
@@ -455,12 +492,14 @@ it.layer(getTestDB())("a coding agent's pull request", (it) => {
       Effect.gen(function* () {
         const limited = yield* openAgent(27, AGENT_AUTHOR.DEVELOPER);
         const now = yield* Clock.currentTimeMillis;
+
         const expired = yield* openAgent(28, AGENT_AUTHOR.DEVELOPER, {
           accessToken: "ghu_expired",
           refreshToken: "ghr_standing",
           accessTokenExpiresAt: new Date(now - GITHUB_FIXTURE.HOUR_MS),
           refreshTokenExpiresAt: new Date(now + 170 * 24 * GITHUB_FIXTURE.HOUR_MS),
         });
+
         const rateLimit = (bearer: string) =>
           bearer === `Bearer ${DEVELOPER_TOKEN}`
             ? Response.json(

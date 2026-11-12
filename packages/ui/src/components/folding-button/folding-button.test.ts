@@ -75,6 +75,7 @@ function draw(busy?: string, hint: FoldingButtonHint = Hint): HTMLButtonElement 
       }),
     ),
   );
+
   return container.querySelector("button") ?? assert.fail("no button");
 }
 

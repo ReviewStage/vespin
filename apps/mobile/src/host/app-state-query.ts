@@ -28,6 +28,7 @@ export const appStateQuery = queryOptions({
   queryKey: [APP_STATE_KEY],
   queryFn: ({ client }): Promise<AppStateSnapshot> => {
     const held: AppStateSnapshot | undefined = client.getQueryData([APP_STATE_KEY]);
+
     return held === undefined
       ? Promise.reject(new Error("The host's document is followed into the client, never fetched."))
       : Promise.resolve(held);
@@ -50,6 +51,7 @@ export function followAppStateInto(
     bridge,
     (state) => {
       client.setQueryData(appStateQuery.queryKey, state);
+
       return undefined;
     },
     (message, cause) => {

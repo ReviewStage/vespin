@@ -40,15 +40,19 @@ export function calendarWeeks<Day extends { day: string }>(
   daily: readonly Day[],
 ): readonly CalendarWeek<Day>[] {
   const weeks: { weekStart: string; days: (Day | undefined)[] }[] = [];
+
   for (const entry of daily) {
     const weekStart = sundayKey(entry.day);
     let week = weeks.at(-1);
+
     if (week === undefined || week.weekStart !== weekStart) {
       week = { weekStart, days: Array.from({ length: DAYS_PER_WEEK }, () => undefined) };
       weeks.push(week);
     }
+
     week.days[weekdaySlot(entry.day)] = entry;
   }
+
   return weeks;
 }
 
@@ -63,12 +67,16 @@ export function monthLabels(
   weeks: readonly CalendarWeek<{ day: string }>[],
 ): readonly (string | undefined)[] {
   let previousMonth: string | undefined;
+
   return weeks.map((week) => {
     const firstDay = week.days.find((day) => day !== undefined);
+
     if (firstDay === undefined) return undefined;
     const month = firstDay.day.slice(0, 7);
+
     if (month === previousMonth) return undefined;
     previousMonth = month;
+
     return new Date(`${firstDay.day}T00:00:00.000Z`).toLocaleDateString("en-US", {
       month: "short",
       timeZone: "UTC",

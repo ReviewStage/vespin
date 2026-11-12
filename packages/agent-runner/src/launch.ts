@@ -40,6 +40,7 @@ export function harnessEnvOf(
   env: Readonly<Record<string, string | undefined>>,
 ): Readonly<Record<string, string | undefined>> {
   if (!runsOnHost(env)) return env;
+
   return Object.fromEntries(
     Object.entries(env).filter(([name]) => !ACCOUNT_CREDENTIALS.includes(name)),
   );
@@ -100,5 +101,6 @@ export interface LaunchOutcome {
 export function installedSkillsPath(folder: string | undefined, entry: string): string | undefined {
   if (folder === undefined) return undefined;
   const path = join(folder, entry);
+
   return existsSync(path) ? path : undefined;
 }

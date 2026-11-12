@@ -80,23 +80,29 @@ test("Home from the last row reaches the first one left undrawn, and ↑ and ↓
   roots.push(root);
   const tasks = tasksControl({ tasks: Array.from({ length: 60 }, (_, at) => task(at + 1)) });
   act(() => root.render(withQueryClient(drawnSidebar(sidebarProps(tasks)))));
+
   // Note that jsdom lays nothing out, so the column is given a view and a length, then scrolled to its end, drawing only the last rows.
   const scroller = container.querySelector<HTMLElement>(
     ".desktop-sidebar [data-slot='scroll-area']",
   );
+
   assert.ok(scroller, "the column scrolls");
   layScrollerOut(scroller, VIEW_PX, 60 * 30);
   act(() => {
     scroller.scrollTop = 60 * 30 - VIEW_PX;
   });
+
   const drawn = () =>
     [...container.querySelectorAll(".desktop-sidebar ul.ui-virtual-rows > li")].map(
       (row) => row.querySelector(".ui-list-row-title")?.firstChild?.textContent,
     );
+
   assert.ok(!drawn().includes("Chore 1"), "the first row is not drawn");
+
   const last = [
     ...container.querySelectorAll<HTMLElement>(".desktop-sidebar [data-roving-item]"),
   ].at(-1);
+
   assert.ok(last, "a row is drawn to press");
   act(() => last.focus());
   assert.equal(focusedName(), "Chore 60");

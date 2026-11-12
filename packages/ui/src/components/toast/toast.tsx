@@ -122,6 +122,7 @@ export function Toast({
   actions: ReactNode;
 }): React.JSX.Element {
   const Lead = glyph;
+
   return (
     <BaseToast.Root
       toast={toast}

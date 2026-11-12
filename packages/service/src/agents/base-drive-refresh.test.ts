@@ -32,6 +32,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -44,6 +45,7 @@ it.layer(getTestDB())("the daily refresh", (it) => {
       yield* connectWorkspaceGitHub(globex, GLOBEX);
       const filled = workspaceDriveName(acme);
       const broken = workspaceDriveName(globex);
+
       // Globex's fill fails as its sandbox is created; acme's goes through.
       const memory = memorySandbox({
         fail: (call, name) =>

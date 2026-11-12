@@ -20,10 +20,12 @@ const CONTENT_LENGTH = "content-length";
 
 function sentHeaders(headers: HttpClientRequest.HttpClientRequest["headers"]): Headers {
   const sent = new Headers();
+
   for (const [name, value] of Object.entries(headers)) {
     if (name.toLowerCase() === CONTENT_LENGTH) continue;
     sent.set(name, value);
   }
+
   return sent;
 }
 

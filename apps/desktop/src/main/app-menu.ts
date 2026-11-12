@@ -145,18 +145,22 @@ function sendCommand(command: AppCommand): NonNullable<MenuItemConstructorOption
     // or it was the window's layered Escape. The keymap is the one reader
     // of keys, so only a click runs an item.
     if (event.triggeredByAccelerator) return;
+
     // The window arrives as the base type, and only a browser window has a
     // page to hand the command to.
     if (window instanceof BrowserWindow) {
       windowPushes.push(window.webContents, PUSH.MENU_COMMAND, command);
     }
   };
+
   HANDED.set(hand, command);
+
   return hand;
 }
 
 function commandItem(command: KeyedCommand): MenuItemConstructorOptions {
   const shortcut = APP_SHORTCUTS[command];
+
   return {
     // The command names its item, so the menu's gate can find a gated feature's item by it.
     id: command,
@@ -175,6 +179,7 @@ function commandItem(command: KeyedCommand): MenuItemConstructorOptions {
  */
 function closeWindowItem(): MenuItemConstructorOptions {
   const shortcut = APP_SHORTCUTS[APP_COMMAND.CLOSE_WINDOW];
+
   return {
     label: menuTitle(shortcut.label),
     accelerator: shortcutAccelerator(shortcut.chord),
@@ -190,6 +195,7 @@ function closeWindowItem(): MenuItemConstructorOptions {
  */
 function closeTabItem(): MenuItemConstructorOptions {
   const handOn = sendCommand(APP_COMMAND.CLOSE_TAB);
+
   return {
     ...commandItem(APP_COMMAND.CLOSE_TAB),
     click: (item, window: BaseWindow | undefined, event) => {
@@ -208,6 +214,7 @@ function closeTabItem(): MenuItemConstructorOptions {
  */
 function newTaskItem(panel: PanelMenu | undefined): MenuItemConstructorOptions {
   const handOn = sendCommand(APP_COMMAND.NEW_TASK);
+
   return {
     ...commandItem(APP_COMMAND.NEW_TASK),
     click: (item, window: BaseWindow | undefined, event) => {
@@ -230,10 +237,12 @@ function newTaskItem(panel: PanelMenu | undefined): MenuItemConstructorOptions {
  */
 function actualSizeItem(panel: PanelMenu | undefined): MenuItemConstructorOptions {
   const handOn = sendCommand(APP_COMMAND.ACTUAL_SIZE);
+
   return {
     ...commandItem(APP_COMMAND.ACTUAL_SIZE),
     click: (item, window: BaseWindow | undefined, event) => {
       const panelInFront = window !== undefined && panel?.isPanel(window) === true;
+
       if (panel !== undefined && event.triggeredByAccelerator && !panelInFront) panel.onReopen();
       else handOn(item, window, event);
     },
@@ -265,6 +274,7 @@ function mainWindowItem(appName: string, panel: PanelMenu): MenuItemConstructorO
 function reloadItem(reload: ReloadMenu | undefined): MenuItemConstructorOptions {
   if (reload === undefined) return roleItem("reload", APP_COMMAND.RELOAD);
   const shortcut = APP_SHORTCUTS[APP_COMMAND.RELOAD];
+
   return {
     label: menuTitle(shortcut.label),
     accelerator: shortcutAccelerator(shortcut.chord),
@@ -307,6 +317,7 @@ export function updateMenuAct(
   packaged: boolean,
 ): UpdateMenuAct | undefined {
   if (!update.installSupported) return packaged ? UPDATE_MENU_ACT.GET : undefined;
+
   switch (update.status) {
     case UPDATE_STATUS.CHECKING:
       return UPDATE_MENU_ACT.CHECKING;
@@ -328,6 +339,7 @@ export function updateMenuAct(
  */
 function updateItem(menu: UpdateMenu): MenuItemConstructorOptions {
   const label = UPDATE_MENU_LABELS[menu.act];
+
   switch (menu.act) {
     case UPDATE_MENU_ACT.CHECK:
       return { label, click: () => menu.onCheck() };
@@ -352,13 +364,16 @@ function developerItem(buildLabel: BuildLabelMenu | undefined): MenuItemConstruc
     label: "Developer Tools",
     accelerator: shortcutAccelerator(DEVELOPER_TOOLS_CHORD),
   };
+
   if (buildLabel === undefined) return { label: "Developer", submenu: [tools] };
+
   const label: MenuItemConstructorOptions = {
     type: "checkbox",
     label: "Show Build Label",
     checked: buildLabel.shown,
     click: () => buildLabel.onShow(!buildLabel.shown),
   };
+
   return { label: "Developer", submenu: [tools, SEPARATOR, label] };
 }
 
@@ -406,6 +421,7 @@ export function appMenuTemplate(
 function offeredBy(commands: readonly AppCommand[] | undefined): (command: AppCommand) => boolean {
   if (commands === undefined) return () => true;
   const held = new Set(commands);
+
   return (command) => held.has(command);
 }
 
@@ -415,6 +431,7 @@ function dimmedItem(
   offered: (command: AppCommand) => boolean,
 ): MenuItemConstructorOptions {
   const handed = item.click === undefined ? undefined : HANDED.get(item.click);
+
   return handed === undefined || offered(handed) ? item : { ...item, enabled: false };
 }
 
@@ -433,6 +450,7 @@ function isKeyedCommandItem(id: string): id is KeyedCommand {
 /** A separator left with nothing to separate: first, last, or beside another. */
 function strandedSeparator(items: readonly MenuItemConstructorOptions[], at: number): boolean {
   if (items[at]?.type !== "separator") return false;
+
   return at === 0 || at === items.length - 1 || items[at + 1]?.type === "separator";
 }
 
@@ -443,6 +461,7 @@ function renamedItem(
 ): MenuItemConstructorOptions {
   if (item.id === undefined || !isKeyedCommandItem(item.id)) return item;
   const label = named(item.id);
+
   return label === APP_SHORTCUTS[item.id].label ? item : { ...item, label: menuTitle(label) };
 }
 
@@ -466,6 +485,7 @@ function gated(
         ? { ...item, submenu: gated(item.submenu, shown, named, offered) }
         : dimmedItem(renamedItem(item, named), offered),
     );
+
   return kept.filter((_item, at) => !strandedSeparator(kept, at));
 }
 
@@ -514,6 +534,7 @@ function menuGate(
   readonly named: (command: KeyedCommand) => string;
 } {
   const choices = experimentsIn(experiments, experimentsOffered(offered ?? []));
+
   return {
     shown: (command) =>
       shortcutShown(command, choices, capabilities) &&
@@ -547,9 +568,12 @@ export function menuBarDrawer(
     buildLabel: undefined,
     offered: undefined,
   };
+
   let drawn = false;
+
   return (change) => {
     const next = change === undefined ? state : { ...state, ...change };
+
     const moved =
       next.update !== state.update ||
       next.developerTools !== state.developerTools ||
@@ -559,6 +583,7 @@ export function menuBarDrawer(
       next.offered?.join() !== state.offered?.join() ||
       JSON.stringify(next.experiments) !== JSON.stringify(state.experiments) ||
       JSON.stringify(next.capabilities) !== JSON.stringify(state.capabilities);
+
     if (drawn && !moved) return;
     state = next;
     drawn = true;

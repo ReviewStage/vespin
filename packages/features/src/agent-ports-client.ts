@@ -28,6 +28,7 @@ export function portForwardAddress(
     [SANDBOX_TUNNEL.QUERY.KIND]: TUNNEL_KIND.PORT_FORWARD,
     [SANDBOX_TUNNEL.QUERY.PORT]: String(ask.port),
   });
+
   return `${socketOrigin}${SANDBOX_TUNNEL.PATH}?${query}`;
 }
 

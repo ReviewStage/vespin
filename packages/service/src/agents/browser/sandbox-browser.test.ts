@@ -29,11 +29,13 @@ async function devtools() {
       const { id, method } = JSON.parse(text);
       // Spaced over lines, as a browser may write JSON, so the bridge must keep it one line.
       socket.send(JSON.stringify({ id, result: { method, note: "a\nb" } }, null, 2));
+
       if (method === "Browser.close") socket.close();
     });
   });
   server.on("request", (request, response) => {
     const { port } = server.address() as AddressInfo;
+
     if (request.url !== "/json/version") return response.writeHead(404).end();
     response.setHeader("content-type", "application/json");
     response.end(
@@ -44,6 +46,7 @@ async function devtools() {
   await once(server, "listening");
   // SAFETY: a listening TCP server answers its bound address as AddressInfo, never a pipe path.
   const { port } = server.address() as AddressInfo;
+
   return {
     port,
     received,
@@ -60,13 +63,16 @@ function bridge(port: number) {
   const child = spawn(process.execPath, ["--no-warnings", "-e", BRIDGE_SOURCE, String(port)], {
     stdio: ["pipe", "pipe", "inherit"],
   });
+
   const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
   const next = async () => JSON.parse(String((await lines.next()).value));
+
   return { child, next };
 }
 
 it("the bridge carries one message a line each way and exits when the browser goes", async () => {
   const browser = await devtools();
+
   try {
     const { child, next } = bridge(browser.port);
     assert.deepEqual(await next(), { bridge: "ready" });

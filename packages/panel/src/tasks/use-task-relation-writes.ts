@@ -117,8 +117,10 @@ interface ParentRemoved {
 /** Whether the task's plan, as the host holds it, lists the block; none where it holds no plan of it, as the list carries no blocks. */
 function blockStands(rows: TaskRows, { taskId, relation, otherId }: BlockRemoved) {
   const task = heldTask(rows, taskId);
+
   if (task === undefined) return undefined;
   const side = relation === TASK_BLOCK_RELATION.BLOCKED_BY ? task.blockedBy : task.blocks;
+
   return side?.includes(otherId) ?? false;
 }
 
@@ -161,12 +163,14 @@ const RELATION_WRITE = {
     read: (rows, { taskId }) => {
       const parentTaskId =
         drawnTask(rows, taskId)?.parentTaskId ?? heldTask(rows, taskId)?.parentTaskId;
+
       return parentTaskId === undefined ? undefined : { taskId, parentTaskId };
     },
     act: (send, { taskId }) => relationAsked(send({ taskId, parentTaskId: null })),
     undo: (send, { taskId, parentTaskId }) => relationAsked(send({ taskId, parentTaskId })),
     holds: (rows, { taskId }) => {
       const task = drawnTask(rows, taskId);
+
       return task !== undefined && task.parentTaskId === undefined;
     },
     undone: (rows, { taskId, parentTaskId }) =>
@@ -191,6 +195,7 @@ const RELATION_WRITE = {
  */
 function listedIn(queryClient: QueryClient): TasksView {
   const state = appStateIn(queryClient);
+
   return state === undefined ? IDLE_TASKS_VIEW : selectListedTasks(state);
 }
 
@@ -228,9 +233,11 @@ export interface TaskRelationWrites {
 export function useTaskRelationWrites(): TaskRelationWrites {
   const queryClient = useQueryClient();
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
+
   const { mutateAsync: sendTaskRepository } = useMutation(
     actMutation(ACT_KIND.TASKS_SET_REPOSITORY),
   );
+
   // ⌘Z reads a removal's rows off the tasks listed as it runs (`task-row-doors.ts`).
   const listedNow = useCallback(() => listedIn(queryClient), [queryClient]);
   const blockDoors = useTaskRowDoors(ACT_KIND.TASKS_BLOCK, listedNow);
@@ -239,6 +246,7 @@ export function useTaskRelationWrites(): TaskRelationWrites {
   const toast = useToast();
   const { send: sendBlock } = blockDoors;
   const { send: sendParent } = parentDoors;
+
   // The relation writes' one recipe.
   const askRelation = (
     surface: FailureSurface,
@@ -248,6 +256,7 @@ export function useTaskRelationWrites(): TaskRelationWrites {
     if (staged) return;
     void relationAsked(asked()).then((answer) => {
       const words = relationRefused(answer);
+
       if (words === undefined) return;
       toast({
         replayUnmasked: true,
@@ -257,9 +266,11 @@ export function useTaskRelationWrites(): TaskRelationWrites {
       });
     });
   };
+
   return {
     onSetRepository: (taskId, repository) => {
       if (staged) return Promise.resolve(undefined);
+
       return sendTaskRepository({ taskId, repository }).then(
         (answer) => ("failure" in answer ? repositoryChangeFailureNote(answer.failure) : undefined),
         (refused: Error) => refused.message,
@@ -292,15 +303,18 @@ export function useOpenWorkspaceGitHub(
   onOpenSettings: (link: SettingsLink) => void,
 ): (taskId: string) => void {
   const queryClient = useQueryClient();
+
   return useCallback(
     (taskId: string) => {
       const listed = listedIn(queryClient);
       const held = appStateIn(queryClient)?.[LIVE_READ.DESCRIPTION_DOCUMENT];
+
       const workspaceId =
         listed.tasks.find((task) => task.id === taskId)?.workspaceId ??
         (listed.activeTaskId === taskId
           ? heldTask({ tasks: listed, held }, taskId)?.workspaceId
           : undefined);
+
       onOpenSettings({
         page: SETTINGS_VIEW.WORKSPACE,
         section: SETTINGS_SECTION.GITHUB_REPOSITORIES,

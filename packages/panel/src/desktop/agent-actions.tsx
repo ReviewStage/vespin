@@ -130,6 +130,7 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
   const { onOpenInTask } = doors;
   const { onOpenBrowser, onOpenInSlack, run } = doors;
   const { moveTo, archive, deletion, subject } = doors;
+
   const copies: MenuEntry[] = [
     ...(links ?? []),
     // Note that the two copies share one Copy transcript beside Copy link, so the menu leads with one copy of the agent's words rather than two.
@@ -160,9 +161,11 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
           },
         ]),
   ];
+
   const named: MenuEntry[] = [
     ...(onRename === undefined ? [] : [commandAction(PANEL_COMMAND.RENAME, onRename, subject)]),
   ];
+
   const opened: MenuEntry[] = [
     ...(onOpenTerminal === undefined
       ? []
@@ -181,6 +184,7 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
       ? []
       : [commandAction(PANEL_COMMAND.OPEN_IN_SLACK, onOpenInSlack, subject)]),
   ];
+
   return [
     copies,
     named,
@@ -227,6 +231,7 @@ export type RowDoors = Omit<AgentDoors, keyof typeof NOT_ON_A_ROW>;
 /** The doors a row offers of those an agent offers, `NOT_ON_A_ROW`'s left out. */
 export function rowDoors(doors: AgentDoors): RowDoors {
   const offered = Object.entries(doors).filter(([door]) => !Object.hasOwn(NOT_ON_A_ROW, door));
+
   return Object.fromEntries(offered);
 }
 
@@ -286,12 +291,15 @@ export function useAgentTerminalDoors(
   const terminals =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.TERMINALS) }).data ===
     true;
+
   const locals =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.LOCAL_TERMINALS) })
       .data === true;
+
   const openTerminal = useOpenTerminal(sidePanel, onShown);
   const openLocal = useOpenTerminalTab(TERMINAL_KIND.LOCAL, sidePanel, onShown);
   const showShell = useShowShellTab(sidePanel, onShown);
+
   return {
     terminals,
     onShowShell: terminals ? showShell : undefined,
@@ -323,12 +331,14 @@ export function useAgentDraftDoors(
   const onFork = useSteadyDoor(
     archived ? undefined : (fork: AgentFork) => onOpenDraft(agents.onForkDraft(fork)),
   );
+
   const onContinue = useSteadyDoor(
     archived
       ? undefined
       : (agentId: string, words: string, attachments: readonly AgentAttachment[]) =>
           onOpenDraft(agents.onContinueDraft(agentId, words, attachments)),
   );
+
   return { onFork, onContinue };
 }
 
@@ -381,15 +391,18 @@ export function useAgentActions(
   // renamed then; an archived agent's tab on its task is renamed as a live one's is.
   const renamable = agents.onUnarchive === undefined;
   const { onOpenTerminal, onOpenLocal } = terminals;
+
   const macTerminal =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.MAC_TERMINAL) }).data ===
     true;
+
   const { mutate: openMacTerminal } = useMutation(pressMutation(ACT_KIND.MAC_TERMINAL_LOCAL_AGENT));
   const thisMac = useThisMac();
   const local = agent.machine === AGENT_MACHINE.DEVICE;
   // Note that a local agent runs in a worktree on its device, which no relayed tab reaches, so its
   // Terminal opens the Mac's own Terminal there, offered only where that device is This Mac.
   const onThisMac = thisMac?.deviceId !== undefined && agent.mac?.deviceId === thisMac.deviceId;
+
   const terminal = local
     ? macTerminal && onThisMac
       ? () => openMacTerminal({ agentId: agent.id })
@@ -397,8 +410,10 @@ export function useAgentActions(
     : onOpenTerminal === undefined
       ? undefined
       : () => onOpenTerminal(agent.id);
+
   const read = agentTranscriptRead(agents.readTranscript, agent.id, label, agent.brief);
   const slackUrl = agent.source?.kind === AGENT_SOURCE.SLACK ? agent.source.url : undefined;
+
   return {
     doors: {
       onCopy: copied(read),

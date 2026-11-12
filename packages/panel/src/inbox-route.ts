@@ -126,11 +126,14 @@ function useFoundChoice(itemId: string | undefined, held: boolean): InboxChoice 
   const asked = itemId !== undefined && !held;
   const home = useQuery({ ...inboxItemHomeQueryOptions(itemId ?? ""), enabled: asked });
   const { isPending, data } = home;
+
   return useMemo(() => {
     if (!asked) return undefined;
+
     // Note that an item still being found is chosen without being opened, so its pane waits rather than saying it is missing.
     if (isPending) return { itemId };
     const found = data === undefined || "failure" in data ? undefined : data;
+
     return found === undefined ? { itemId, opened: true } : choiceAt(itemId, found);
   }, [asked, itemId, isPending, data]);
 }
@@ -147,6 +150,7 @@ export function useInboxRoute(): InboxRoute {
   const open = here.place === ROUTED_PLACE.INBOX;
   const standingIn = open ? here.params.workspace : undefined;
   const itemId = open && here.leaf === INBOX_LEAF.ITEM ? here.params.itemId : undefined;
+
   const narrowed = !open
     ? undefined
     : here.leaf === INBOX_LEAF.TASK
@@ -154,34 +158,44 @@ export function useInboxRoute(): InboxRoute {
       : here.leaf === INBOX_LEAF.ITEM
         ? here.search.task
         : undefined;
+
   const held = useSelector(choices, (map) => (itemId === undefined ? undefined : map.get(itemId)));
   const found = useFoundChoice(itemId, held !== undefined);
   const standingAt = standingIn === undefined ? undefined : { workspace: standingIn, narrowed };
+
   // Note that a door asked for the place standing moves nothing, and keeps it standing where it left the routed place first, as a link's and ⌘K's do.
   const visit = (options: NavigateOptions, replace = false) => {
     if (router.buildLocation(options).href === router.history.location.href) {
       exits.stay();
+
       return;
     }
+
     void navigate({ ...options, replace });
   };
+
   // Note that an item still being found by its address is no door's choice, so it is held nowhere and found again where it stands.
   const onHold = (chosen: InboxChoice) => {
     if (!beingFound(chosen)) choices.setState((map) => new Map(map).set(chosen.itemId, chosen));
   };
+
   const onGoTo = (chosen: InboxChoice, at?: InboxAt) => {
     const to = at ?? standingAt;
+
     if (to === undefined) return;
     // An item of another task leaves the task the list is narrowed to, so the list it opens in holds it.
     const keeps = to.narrowed === undefined || to.narrowed === choiceTaskOf(chosen);
     visit(itemAt(chosen.itemId, keeps ? to : { ...to, narrowed: undefined }));
   };
+
   const onChoose = (chosen: InboxChoice, at?: InboxAt) => {
     if (at === undefined && standingAt === undefined) return;
     onHold(chosen);
     onGoTo(chosen, at);
   };
+
   const list = standingAt === undefined ? undefined : listAt(standingAt);
+
   return {
     open,
     standingIn,
@@ -192,8 +206,10 @@ export function useInboxRoute(): InboxRoute {
     onOpen: (at, replace) => visit(listAt(at), replace),
     choiceOf: (itemId) => {
       const chosen = choices.state.get(itemId);
+
       if (chosen !== undefined) return chosen;
       const home = queryClient.getQueryData(inboxItemHomeQueryOptions(itemId).queryKey);
+
       return home === undefined || "failure" in home ? undefined : choiceAt(itemId, home);
     },
     onChoose,
@@ -228,14 +244,17 @@ export function listedInboxChoice(
 ): InboxChoice | undefined {
   if (chosen === undefined || !("taskId" in chosen) || tasks.workspace === undefined) return chosen;
   const listedId = tasks.workspace.id;
+
   const listed = tasks.tasks.some(
     (task) => task.id === chosen.taskId && task.workspaceId === listedId,
   );
+
   return listed ? chosen : undefined;
 }
 
 /** The window's Inbox as the router stands it, its choice as the listed workspace's list holds it. */
 export function useInboxView(tasks: Pick<TasksControl, "tasks" | "workspace">): InboxView {
   const { open, chosen, narrowed } = useInboxRoute();
+
   return { open, chosen: listedInboxChoice(chosen, tasks), narrowed };
 }

@@ -86,6 +86,7 @@ export function buildAdminReliability(
   windowDays: AdminMetricsWindow,
 ): AdminReliability {
   const dayKeys = lastNDayKeys(now, windowDays);
+
   const of = <Count>(map: ReadonlyMap<string, Count>, empty: Count) =>
     dayKeys.map((day) => map.get(day) ?? empty);
 
@@ -138,6 +139,7 @@ export function buildAdminReliability(
  */
 function adminReliabilityWindow(value: string | undefined): AdminMetricsWindow | undefined {
   const windowDays = adminMetricsWindow(value);
+
   return windowDays !== undefined && ADMIN_RELIABILITY_WINDOWS.includes(windowDays)
     ? windowDays
     : undefined;
@@ -163,6 +165,7 @@ export function handleAdminReliability(
   const { query } = options;
 
   const windowDays = adminReliabilityWindow(query.window);
+
   if (windowDays === undefined) return Effect.fail(ADMIN_REFUSAL.INVALID_WINDOW);
 
   return Effect.flatMap(Clock.currentTimeMillis, (now) =>

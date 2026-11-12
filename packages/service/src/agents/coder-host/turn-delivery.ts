@@ -111,20 +111,29 @@ export const consumeTurnDelivery = /* @__PURE__ */ Effect.fn("web/consumeTurnDel
   message: unknown,
 ): Effect.fn.Return<QueueAnswer, unknown, DatabaseServices> {
   const delivered = yield* Effect.option(decodeTurnMessage(message));
+
   if (Option.isNone(delivered)) {
     yield* Effect.logError("an agent-turns message did not decode; it is dropped");
+
     return QUEUE_ACKNOWLEDGED;
   }
+
   const turn = delivered.value;
+
   return yield* Effect.gen(function* () {
     const status = yield* turnStatusOf(turn.conversationId, turn.turnId);
+
     if (!Option.contains(status, TURN_STATUS.QUEUED)) return QUEUE_ACKNOWLEDGED;
     const handover = yield* turnHandedOver(turn);
+
     if (handover === TURN_HANDOVER.BUSY) return deliveredAgainAfter(TURN_DELIVERY.BUSY_AGAIN);
+
     if (handover === TURN_HANDOVER.AWAITED) return deliveredAgainAfter(TURN_DELIVERY.TAKE_GRACE);
+
     if (handover === TURN_HANDOVER.UNREACHED) {
       yield* Effect.logWarning("a queued turn's agent was not reached, so nothing was handed over");
     }
+
     return QUEUE_ACKNOWLEDGED;
   }).pipe(Effect.annotateLogs({ ...agentLogIds(turn), turnId: turn.turnId }));
 });
@@ -132,6 +141,7 @@ export const consumeTurnDelivery = /* @__PURE__ */ Effect.fn("web/consumeTurnDel
 /** The publish's options: kept for the turn's pickup window, under the turn's id where it is keyed. */
 function sendOptions(turn: QueuedAgentTurn, how: TurnPublish) {
   const retentionSeconds = Math.ceil(Duration.toSeconds(TURN_DELIVERY.RETENTION));
+
   return how === TURN_PUBLISH.KEYED
     ? { retentionSeconds, idempotencyKey: turn.turnId }
     : { retentionSeconds };
@@ -190,8 +200,10 @@ const deliveredInProcess = (turn: QueuedAgentTurn, until: number) =>
               ),
         ),
       );
+
       if (answer.acknowledged) return;
       yield* Effect.sleep(answer.again);
+
       if ((yield* Clock.currentTimeMillis) >= until) return;
     }
   });
@@ -203,13 +215,17 @@ const deliveredInProcess = (turn: QueuedAgentTurn, until: number) =>
  */
 function inProcessTurnQueue(): TurnQueueShape {
   const kept = new Map<string, number>();
+
   return {
     publish: (turn, how) =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
+
         for (const [turnId, until] of kept) if (until <= now) kept.delete(turnId);
+
         if (how === TURN_PUBLISH.KEYED && kept.has(turn.turnId)) return;
         const until = now + Duration.toMillis(TURN_DELIVERY.RETENTION);
+
         if (how === TURN_PUBLISH.KEYED) kept.set(turn.turnId, until);
         const services = yield* outsideTransaction;
         yield* Effect.forkDetach(
@@ -261,15 +277,18 @@ export const republishQueuedTurns = /* @__PURE__ */ Effect.fn("web/republishQueu
   function* (now: number) {
     const queue = yield* TurnQueue;
     const queuedBefore = new Date(now - Duration.toMillis(TURN_DELIVERY.REPUBLISH_AFTER));
+
     const turns = yield* turnsAwaitingRunner(
       queuedBefore,
       new Date(now),
       TURN_DELIVERY.REPUBLISH_LIMIT,
     );
+
     yield* Effect.forEach(turns, (turn) => queue.publish(turn, TURN_PUBLISH.KEYED), {
       concurrency: TURN_DELIVERY.REPUBLISH_CONCURRENCY,
       discard: true,
     });
+
     return turns.length;
   },
 );

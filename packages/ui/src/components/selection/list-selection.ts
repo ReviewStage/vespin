@@ -139,6 +139,7 @@ function choosableOf(list: Element): Choosable[] {
 /** The rows of `rows` that stand in the run `press` stands in, every one where the list draws no runs. */
 function inRunOf(rows: readonly Choosable[], press: Element): readonly Choosable[] {
   const run = press.closest(RUN_SELECTOR);
+
   return run === null ? rows : rows.filter((row) => row.press.closest(RUN_SELECTOR) === run);
 }
 
@@ -146,6 +147,7 @@ function inRunOf(rows: readonly Choosable[], press: Element): readonly Choosable
 export function focusChoosable(box: Element): boolean {
   const first = choosableOf(box)[0];
   first?.press.focus();
+
   return first !== undefined;
 }
 
@@ -165,6 +167,7 @@ function withRun(
   const found = keys.indexOf(from);
   const start = found < 0 ? end : found;
   const run = keys.slice(Math.min(start, end), Math.max(start, end) + 1);
+
   return new Set([...base, ...run]);
 }
 
@@ -235,6 +238,7 @@ export function useListSelection(
   // set its owner changed itself, a Clear, starts the next run afresh.
   const standing = useCallback((chosen: ReadonlySet<string>): Anchor | undefined => {
     const held = anchor.current;
+
     return held !== undefined && sameKeys(held.left, chosen) ? held : undefined;
   }, []);
 
@@ -246,8 +250,10 @@ export function useListSelection(
   const toggle = useCallback(
     (key: string) => {
       const current = latest.current;
+
       if (current === undefined) return;
       const next = new Set(current.selected);
+
       if (next.has(key)) next.delete(key);
       else next.add(key);
       hand(next, { key, base: next, head: key, left: next });
@@ -258,31 +264,43 @@ export function useListSelection(
   const press = useCallback(
     (key: string, event: MouseEvent<HTMLElement>): boolean => {
       const current = latest.current;
+
       if (current === undefined) return false;
       const chosen = current.selected;
+
       if (event.shiftKey) {
         const list = event.currentTarget.closest(ROOT_SELECTOR);
+
         if (list === null) return false;
         const from = standing(chosen) ?? { key, base: chosen, head: key, left: chosen };
         const runs = listed.current;
+
         const keys =
           runs === undefined
             ? keysOf(inRunOf(choosableOf(list), event.currentTarget))
             : runListing(runs, key);
+
         const next = withRun(keys, from.base, from.key, key);
         hand(next, { ...from, head: key, left: next });
+
         return true;
       }
+
       if (command(event)) {
         toggle(key);
+
         return true;
       }
+
       if (plainPress.current === PLAIN_PRESS.CLEARS && chosen.size > 0) {
         const none = new Set<string>();
         hand(none, { key, base: none, head: key, left: none });
+
         return false;
       }
+
       anchor.current = { key, base: chosen, head: key, left: chosen };
+
       return false;
     },
     [hand, standing, toggle],
@@ -291,7 +309,9 @@ export function useListSelection(
   const passOver = useCallback(
     (event: MouseEvent<HTMLElement>) => {
       const current = latest.current;
+
       if (plainPress.current !== PLAIN_PRESS.CLEARS || current === undefined) return;
+
       if (event.shiftKey || command(event) || current.selected.size === 0) return;
       hand(new Set(), undefined);
     },
@@ -301,37 +321,49 @@ export function useListSelection(
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLElement>): boolean => {
       const current = latest.current;
+
       if (current === undefined || event.defaultPrevented || typedIn(event.target)) return false;
       const list = event.currentTarget;
+
       if (event.key === "Escape") {
         if (current.selected.size === 0 || event.nativeEvent.isComposing) return false;
         // Note that the key goes no further, so what stands behind the list stays open.
         event.preventDefault();
         event.stopPropagation();
         hand(new Set(), undefined);
+
         return true;
       }
+
       if (command(event) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "a") {
         event.preventDefault();
         hand(new Set(listed.current?.flat() ?? keysOf(choosableOf(list))), undefined);
+
         return true;
       }
+
       const bare = !command(event) && !event.shiftKey && !event.altKey;
+
       if (bare && event.key.toLowerCase() === "x") {
         const row = choosableOf(list).find((each) => each.press === event.target);
+
         if (row === undefined) return false;
         event.preventDefault();
         toggle(row.key);
+
         return true;
       }
+
       const step = Match.value(event.key).pipe(
         Match.when("ArrowDown", () => 1),
         Match.when("ArrowUp", () => -1),
         Match.orElse(() => 0),
       );
+
       if (step === 0 || !event.shiftKey || command(event) || event.altKey) return false;
       const all = choosableOf(list);
       const inHand = all.find((row) => row.press === event.target);
+
       if (inHand === undefined) return false;
       const rows = inRunOf(all, inHand.press);
       // Note that a list handed its order walks every row its run lists, the one reached brought into view where it is not drawn.
@@ -342,27 +374,34 @@ export function useListSelection(
       const here = inHand.key;
       // Note that the run grows from the row in hand: one the focus walked to apart from the run starts a new one there.
       const held = standing(current.selected);
+
       const from =
         held !== undefined && held.head === here
           ? held
           : { key: here, base: current.selected, head: here, left: current.selected };
+
       const to = at < 0 ? undefined : keys[at + step];
+
       if (to === undefined) return true;
       const next = withRun(keys, from.base, from.key, to);
       hand(next, { ...from, head: to, left: next });
       const pressOf = () => choosableOf(list).find((row) => row.key === to)?.press;
       const drawn = pressOf();
+
       if (drawn !== undefined) drawn.focus();
       else bringing.current?.(to, () => pressOf()?.focus());
+
       return true;
     },
     [hand, standing, toggle],
   );
 
   const selected = selection?.selected;
+
   const selecting = useMemo(
     () => (selected === undefined ? undefined : { selected, press, toggle, passOver }),
     [selected, press, toggle, passOver],
   );
+
   return { selecting, onKeyDown };
 }

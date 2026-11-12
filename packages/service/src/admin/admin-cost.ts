@@ -131,6 +131,7 @@ function priceTokenRow(row: AdminCostTokenRow, offered: readonly OfferedModel[])
     ],
     offered,
   );
+
   return {
     day: row.day,
     source: row.source,
@@ -145,6 +146,7 @@ function priceTokenRow(row: AdminCostTokenRow, offered: readonly OfferedModel[])
 /** One group of seconds at its list price. */
 function priceSecondsRow(row: AdminCostSecondsRow): PricedCostRow {
   const price = SECONDS_LIST_PRICE[row.source];
+
   return {
     day: row.day,
     source: row.source,
@@ -177,13 +179,16 @@ function spendByAccount(
   days: ReadonlySet<string>,
 ): Map<string, { usd: number; unpricedTokens: number }> {
   const byAccount = new Map<string, { usd: number; unpricedTokens: number }>();
+
   for (const row of priced) {
     if (!days.has(row.day)) continue;
     const spend = byAccount.get(row.userId) ?? { usd: 0, unpricedTokens: 0 };
+
     if (row.usd === undefined) spend.unpricedTokens += row.tokens;
     else spend.usd += row.usd;
     byAccount.set(row.userId, spend);
   }
+
   return byAccount;
 }
 
@@ -198,6 +203,7 @@ export function topCostAccountIds(
   windowDays: AdminMetricsWindow,
 ): string[] {
   const window = new Set(costWindowKeys(now, windowDays).window);
+
   return [...spendByAccount(priced, window)]
     .filter(([, spend]) => spend.usd > 0 || spend.unpricedTokens > 0)
     .sort(([leftId, left], [rightId, right]) =>
@@ -211,6 +217,7 @@ function median(values: readonly number[]): number | null {
   if (values.length === 0) return null;
   const sorted = [...values].sort((left, right) => left - right);
   const middle = Math.floor(sorted.length / 2);
+
   return sorted.length % 2 === 1
     ? (sorted[middle] ?? 0)
     : ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
@@ -231,11 +238,14 @@ function dailySpend(
   windowKeys: readonly string[],
 ): AdminCostDay[] {
   const byDay = new Map(windowKeys.map((day) => [day, emptyDay(day)]));
+
   for (const row of priced) {
     const day = byDay.get(row.day);
+
     if (day === undefined || row.usd === undefined) continue;
     day[row.source] += row.usd;
   }
+
   return [...byDay.values()];
 }
 
@@ -245,16 +255,20 @@ function spendByModel(
   days: ReadonlySet<string>,
 ): AdminCostModel[] {
   const byModel = new Map<string | null, { usd: number; priced: number; unpriced: number }>();
+
   for (const row of priced) {
     if (!days.has(row.day) || row.tokens === 0) continue;
     const model = byModel.get(row.model) ?? { usd: 0, priced: 0, unpriced: 0 };
+
     if (row.usd === undefined) model.unpriced += row.tokens;
     else {
       model.usd += row.usd;
       model.priced += row.tokens;
     }
+
     byModel.set(row.model, model);
   }
+
   return [...byModel]
     .sort(([, left], [, right]) =>
       right.usd === left.usd ? right.unpriced - left.unpriced : right.usd - left.usd,
@@ -273,10 +287,12 @@ function mergedByAccount(
   days: ReadonlySet<string>,
 ): Map<string, number> {
   const byAccount = new Map<string, number>();
+
   for (const row of merged) {
     if (!days.has(row.day)) continue;
     byAccount.set(row.userId, (byAccount.get(row.userId) ?? 0) + row.merged);
   }
+
   return byAccount;
 }
 
@@ -311,8 +327,10 @@ export function buildAdminCost(input: {
   const topAccounts = topCostAccountIds(input.priced, input.now, input.windowDays).flatMap((id) => {
     const info = input.accounts.get(id);
     const spend = accounts.get(id);
+
     if (info === undefined || spend === undefined) return [];
     const merged = mergedInWindow.get(id) ?? 0;
+
     return [
       {
         ...info,
@@ -373,6 +391,7 @@ export function handleAdminCost<R>(
   const { query } = options;
 
   const windowDays = adminMetricsWindow(query.window);
+
   if (windowDays === undefined) return Effect.fail(ADMIN_REFUSAL.INVALID_WINDOW);
 
   return Effect.flatMap(Clock.currentTimeMillis, (now) =>

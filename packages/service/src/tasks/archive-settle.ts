@@ -28,6 +28,7 @@ function archiveSettledStatus(
   standing: TaskStatus,
 ): TaskStoreEffect<TaskStatus> {
   if (isTaskSettled(standing)) return Effect.succeed(standing);
+
   return Effect.map(taskHasMergedPullRequest(userId, taskId), (merged) =>
     merged ? TASK_STATUS.DONE : TASK_STATUS.CANCELED,
   );

@@ -15,6 +15,7 @@ const PNG_37_BY_23 = [
   "qCjJTOBX5JKv9Yt02yC58+RZcSR6r1z8jQ5t5cHClvs9N5SVFRSb0nVfM0MrS5N6ebomKSkhQVoDndVGipDQAA//8I",
   "FJ0jAAAABklEQVQDANt9eaw6g4OJAAAAAElFTkSuQmCC",
 ].join("");
+
 const JPEG_37_BY_23 = [
   "/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAA",
   "EAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAA",
@@ -31,6 +32,7 @@ const JPEG_37_BY_23 = [
   "3eAd+SGg2NOszXuvV2VqygCAE96D7P5Nzm+UYWRhZFKVZAaytkBKrzpHPs7Ot9o05SPFI45KIibEEREBERAREQERED",
   "//2Q==",
 ].join("");
+
 const WEBP_37_BY_23 = [
   "UklGRmACAABXRUJQVlA4WAoAAAAgAAAAJAAAFgAASUNDUMgBAAAAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAA",
   "EAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAA",
@@ -51,6 +53,7 @@ function bytesOf(base64: string): Uint8Array {
 /** A RIFF WebP holding one chunk of the given four-letter type and payload. */
 function webpWith(chunk: string, payload: readonly number[]): Uint8Array {
   const ascii = (text: string) => [...text].map((letter) => letter.charCodeAt(0));
+
   return new Uint8Array([
     ...ascii("RIFF"),
     0,
@@ -95,6 +98,7 @@ test("a lossy and a lossless WebP chunk state their sizes", () => {
   const lossy = webpWith("VP8 ", [0, 0, 0, 0x9d, 0x01, 0x2a, 37, 0, 23, 0]);
   // VP8L: the signature byte, then width and height less one in fourteen bits each.
   const bits = 36 + 22 * 2 ** 14;
+
   const lossless = webpWith("VP8L", [
     0x2f,
     bits & 0xff,
@@ -107,6 +111,7 @@ test("a lossy and a lossless WebP chunk state their sizes", () => {
     0,
     0,
   ]);
+
   assert.deepEqual(imageDimensions(lossy, INBOX_IMAGE_TYPE.WEBP), { width: 37, height: 23 });
   assert.deepEqual(imageDimensions(lossless, INBOX_IMAGE_TYPE.WEBP), { width: 37, height: 23 });
 });

@@ -49,6 +49,7 @@ type ProviderButtonProps = {
  */
 export function ProviderButton({ label, mark, disabled = false, onPress }: ProviderButtonProps) {
   const colors = useColors();
+
   return (
     <SwiftUIButton
       onPress={onPress}

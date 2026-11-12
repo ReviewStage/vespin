@@ -44,12 +44,14 @@ function Held({
   children: (value: string, onChange: (value: string) => void) => React.ReactNode;
 }): React.JSX.Element {
   const [value, setValue] = useState(start);
+
   return <>{children(value, setValue)}</>;
 }
 
 /** A count the example holds, as a number or nothing. */
 function NumberHeld(): React.JSX.Element {
   const [count, setCount] = useState<number | undefined>(3);
+
   return (
     <FormField label="Retries">
       {(field) => (
@@ -63,6 +65,7 @@ function NumberHeld(): React.JSX.Element {
 function SubmittedNote(): React.JSX.Element {
   const [reply, setReply] = useState("Looks good to me.");
   const [sent, setSent] = useState<string | undefined>(undefined);
+
   return (
     <Stack gap={GAP.FIELD}>
       <TextArea
@@ -85,6 +88,7 @@ function SubmittedNote(): React.JSX.Element {
 function MessageBox(): React.JSX.Element {
   const [message, setMessage] = useState("");
   const [sent, setSent] = useState<string | undefined>(undefined);
+
   return (
     <Stack gap={GAP.FIELD}>
       <div className="catalog-message-box">

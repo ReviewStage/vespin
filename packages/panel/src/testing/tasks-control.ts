@@ -72,6 +72,7 @@ export function listedAgent(
 /** A page as the host pushes it: caught up where it came back with nothing on it, unless it says otherwise. */
 function pushedPage(page: AgentMessagesAnswerView | AgentTranscriptPage): AgentTranscriptPage {
   if ("failure" in page || "caughtUp" in page) return page;
+
   return { ...page, caughtUp: page.messages.length === 0 };
 }
 
@@ -88,6 +89,7 @@ export type ToldPage = AgentMessagesAnswerView | AgentTranscriptPage;
  */
 export function transcriptTold(pages: readonly ToldPage[]): AppHostRead<AppTranscript> {
   let held: AppTranscript = { messages: [], pages: 0 };
+
   for (const page of pages.map(pushedPage)) {
     if ("failure" in page) {
       held =
@@ -96,16 +98,21 @@ export function transcriptTold(pages: readonly ToldPage[]): AppHostRead<AppTrans
           : { ...held, failure: page };
       continue;
     }
+
     const { messages, cursor, before, newest, ...word } = page;
     const ids = new Set(messages.map((message) => message.id));
     const meets = before === undefined || held.messages.some((message) => ids.has(message.id));
+
     const replaces =
       newest === true &&
       (held.messages.length === 0 || !meets || word.rewound !== held.word?.rewound);
+
     const { failure: _failure, before: heldBefore, ...standing } = held;
+
     // Note that a newest page naming no older page holds the whole transcript, so nothing stands below it.
     const below =
       replaces || (newest === true && before === undefined) ? before : (heldBefore ?? before);
+
     held = {
       ...standing,
       messages: replaces ? messages : applyMessagesPage(held.messages, messages),
@@ -115,6 +122,7 @@ export function transcriptTold(pages: readonly ToldPage[]): AppHostRead<AppTrans
       pages: held.pages + 1,
     };
   }
+
   return { rows: held };
 }
 
@@ -135,20 +143,25 @@ export function pushedTranscripts(
   void held?.release.then(() => {
     released = true;
   });
+
   const told: TranscriptsHeld = holdTranscripts(
     handHostReads({}).deliverTranscripts,
     (transcript) => {
       const pages = pagesOf(transcript);
+
       if (!released) {
         // Note that a transcript let go reads nothing more, so the rest lands only while a window holds it.
         void held?.release.then(() => {
           if (heldNow(told, transcript)) told.lay(transcript, transcriptTold(pages));
         });
       }
+
       const laid = released ? pages : pages.slice(0, held?.page ?? pages.length);
+
       return laid.length === 0 ? undefined : transcriptTold(laid);
     },
   );
+
   return told;
 }
 
@@ -156,6 +169,7 @@ export function pushedTranscripts(
 function heldNow(held: TranscriptsHeld, transcript: AgentTranscriptKey): boolean {
   const same = (other: AgentTranscriptKey) =>
     other.agentId === transcript.agentId && other.callId === transcript.callId;
+
   return held.asked.filter(same).length > held.closed.filter(same).length;
 }
 
@@ -178,10 +192,12 @@ interface Told {
 /** A transcript as a test's host holds it once `told`: its pages told in turn, each older page laid before them. */
 function heldOf({ pages, older }: Told): AppHostRead<AppTranscript> {
   const { rows = { messages: [], pages: 0 } } = transcriptTold(pages);
+
   return {
     rows: older.reduce<AppTranscript>((held, page) => {
       const ids = new Set(held.messages.map((message) => message.id));
       const { before: _laid, ...rest } = held;
+
       return {
         ...rest,
         messages: [...page.messages.filter((message) => !ids.has(message.id)), ...held.messages],
@@ -200,18 +216,24 @@ function heldOf({ pages, older }: Told): AppHostRead<AppTranscript> {
 export function tellingTranscripts(): TranscriptsTelling {
   /** What was told of each transcript, by its agent and then its worker's call or the agent's own. */
   const told = new Map<string, Map<string | undefined, Told>>();
+
   const toldOf = (transcript: AgentTranscriptKey) =>
     told.get(transcript.agentId)?.get(transcript.callId);
+
   const held = holdTranscripts(handHostReads({}).deliverTranscripts, (transcript) => {
     const was = toldOf(transcript);
+
     return was === undefined ? undefined : heldOf(was);
   });
+
   const tellOn = (transcript: AgentTranscriptKey, more: (was: Told) => Told) => {
     const ofAgent = told.get(transcript.agentId) ?? new Map<string | undefined, Told>();
     const next = more(ofAgent.get(transcript.callId) ?? { pages: [], older: [] });
     told.set(transcript.agentId, ofAgent.set(transcript.callId, next));
+
     if (heldNow(held, transcript)) held.lay(transcript, heldOf(next));
   };
+
   return {
     asked: held.asked,
     closed: held.closed,
@@ -263,6 +285,7 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
   const onArchive: AgentsControl["onArchive"] =
     overrides.onArchive ??
     (() => Promise.resolve({ status: ACTION_RESULT_STATUS.REJECTED, reason: "Ignored." }));
+
   return {
     me: undefined,
     agents: [],
@@ -457,6 +480,7 @@ export function newTaskControl(overrides: Partial<NewTask> = {}): NewTask {
 export function tasksControl(overrides: Partial<TasksControl> = {}): TasksControl {
   const onMoveTask: TasksControl["onMoveTask"] =
     overrides.onMoveTask ?? (() => Promise.resolve(false));
+
   return {
     page: TASKS_PAGE.HOME,
     shown: true,

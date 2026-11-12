@@ -50,6 +50,7 @@ export function OneLine({
   children: ReactNode;
 }): React.JSX.Element {
   const whole = words ?? (typeof children === "string" ? children : undefined);
+
   return (
     <ClippedLine
       as={as}

@@ -147,27 +147,35 @@ export function runReadTask(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   const asked = readTaskAsked(input);
+
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(READ_TASK_REFUSAL.UNREADABLE));
   }
+
   const { taskId } = asked.success;
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(call.caller);
+
       if (Option.isNone(workspace)) {
         return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
       }
+
       const userId = callerUserId(call.caller);
       const stored = yield* readTask(userId, taskId);
+
       // A task of another workspace, even one the member is also in, is none of the caller's.
       if (Option.isNone(stored) || stored.value.task.workspaceId !== workspace.value) {
         return agentToolRejected(READ_TASK_REFUSAL.NO_TASK);
       }
+
       const { task, text, saved, brief } = stored.value;
       const { step, name } = yield* workspaceNamingOf(userId, workspace.value);
       const description = cutOnLine(text, DESCRIPTION_TEXT_READ_CHARS);
       const descriptionsOn = yield* callerDescriptionsOn(call.caller);
       const blocks = yield* taskBlockReadings(userId, task);
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         task: {
@@ -390,6 +398,7 @@ function descriptionTextOf(description: string): string {
 /** Who a task's first description is written by, as its history names them: the calling coding agent, or the member calling, as the developer. */
 function revisionWriterOf(call: AgentCall): NonNullable<TaskCreateAsked["writer"]> {
   const agent = callerAgent(call.caller);
+
   return agent === undefined
     ? { actor: DESCRIPTION_ACTOR.DEVELOPER }
     : { actor: DESCRIPTION_ACTOR.AGENT, agentId: agent.id };
@@ -403,6 +412,7 @@ function relationsOf(asked: {
 }): readonly TaskCreateRelation[] {
   const sideOf = (ids: readonly string[] | undefined, kind: TaskCreateRelation["kind"]) =>
     (ids ?? []).map((taskId) => ({ kind, taskId }));
+
   return [
     ...sideOf(asked.subTaskIds, TASK_CREATE_RELATION_KIND.PARENT_OF),
     ...sideOf(asked.blockedBy, TASK_CREATE_RELATION_KIND.BLOCKED_BY),
@@ -413,6 +423,7 @@ function relationsOf(asked: {
 /** Who made a task for the caller's member: the coding agent by its id; none for the member calling, as for one they make by hand. */
 function originOf(call: AgentCall): { readonly origin?: TaskOrigin } {
   const agent = callerAgent(call.caller);
+
   return agent === undefined
     ? {}
     : { origin: { actor: DESCRIPTION_ACTOR.AGENT, agentId: agent.id } };
@@ -435,6 +446,7 @@ const madeRefusal =
       | StoreFailure,
   ): Effect.Effect<string, StoreFailure> => {
     if (!("_tag" in failure)) return Effect.succeed(repositoryRefusalWords(failure));
+
     switch (failure._tag) {
       case "TaskAssigneeNotMember":
         return Effect.succeed(CREATE_TASK_REFUSAL.NOT_MEMBER);
@@ -474,39 +486,51 @@ export function runCreateTask(
   if (namesRetiredPlan(input)) {
     return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.RENAMED_DESCRIPTION));
   }
+
   if (namesRetiredRelation(input)) {
     return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.RENAMED_RELATION));
   }
+
   const asked = readCreateAsked(input);
+
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.UNREADABLE));
   }
+
   const { name, brief, description, status, priority, assignee, parentTaskId } = asked.success;
   const relations = relationsOf(asked.success);
+
   const assigneeId =
     assignee === undefined || assignee === null ? undefined : assigneeIdOf(assignee);
+
   if (assignee !== undefined && assignee !== null && assigneeId === undefined) {
     return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.NOT_MEMBER));
   }
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(call.caller);
+
       if (Option.isNone(workspace)) {
         return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
       }
+
       const userId = callerUserId(call.caller);
       const id = calledId(userId, call.clientKey);
       const naming = yield* workspaceNamingOf(userId, workspace.value);
       // Left out, the repository is the one the caller works in, unless the task joins a tree, whose it takes.
       const inTree = parentTaskId !== undefined || (asked.success.subTaskIds ?? []).length > 0;
+
       const repository =
         asked.success.repository !== undefined || inTree
           ? asked.success.repository
           : yield* workedRepository(call.caller);
+
       // The call run again finds the task it made, and makes no second.
       const before = yield* readTask(userId, id);
       // Note that a description is written only for a caller with Task descriptions on; the schema takes one alike, so the tool's words stay the same.
       const descriptionsOn = yield* callerDescriptionsOn(call.caller);
+
       const made = Option.isSome(before)
         ? before.value.task
         : yield* createTaskAsked(
@@ -531,7 +555,9 @@ export function runCreateTask(
             Effect.map((created) => created.task.task),
             Effect.catch(madeRefusal(parentTaskId !== undefined)),
           );
+
       if (typeof made === "string") return agentToolRejected(made);
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         task: {

@@ -54,6 +54,7 @@ const NONE_WORD = "none";
 /** The fields of a task every answer prints, its key beside them where it has a number. */
 function taskJson(task: Omit<TaskSummary, "agents">, workspaceName: string | undefined) {
   const { id, number, name, status, priority, repository, assignee, workspaceId } = task;
+
   return {
     id,
     key:
@@ -88,8 +89,10 @@ function pullRequestLine(pullRequest: TaskPullRequestLine): string[] {
 /** An open ask's line: the thread's title and the words that ask, on their first line. */
 function askLine(item: InboxItem): string | undefined {
   const asking = openAskOf(item.thread ?? []);
+
   if (item.status !== INBOX_STATUS.OPEN || asking === undefined) return undefined;
   const words = asking.message.text.trim().split("\n")[0] ?? "";
+
   return `  ${item.title}${words.length === 0 ? "" : `: ${words}`}  (${item.id})`;
 }
 
@@ -116,18 +119,21 @@ const listCommand = Command.make(
       const { hosted } = yield* session;
       const me = mine ? yield* signedInMemberId : undefined;
       const { plans } = yield* askService(hosted.plans.list, {});
+
       const listed = plans.filter(
         (task) =>
           task.workspaceId === workspace.id &&
           (Option.isNone(status) || task.status === status.value) &&
           (me === undefined || task.assignee?.userId === me),
       );
+
       const found = listed.map((task) => ({
         ...taskJson(task, workspace.name),
         agents: task.agents?.total ?? 0,
         working: task.agents?.working ?? 0,
         pullRequests: task.agents?.pullRequests ?? [],
       }));
+
       yield* answer({
         json: found,
         lines:
@@ -167,6 +173,7 @@ const viewCommand = Command.make(
     Effect.gen(function* () {
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
+
       const [{ plan }, { agents }, { plans }, { items }, { workspaces }] = yield* Effect.all(
         [
           askService(hosted.plans.open, { id }),
@@ -177,13 +184,17 @@ const viewCommand = Command.make(
         ],
         { concurrency: "unbounded" },
       );
+
       const row = plans.find((listed) => listed.id === id);
       const found = taskJson(plan, workspaceNamed(workspaces, plan.workspaceId));
       const pullRequests = row?.agents?.pullRequests ?? [];
+
       const asks = items.flatMap((item) => {
         const line = askLine(item);
+
         return line === undefined ? [] : [{ item, line }];
       });
+
       yield* answer({
         json: {
           ...found,
@@ -253,15 +264,18 @@ const createCommand = Command.make(
     Effect.gen(function* () {
       const fileSource = Option.getOrUndefined(file);
       const promptSource = Option.getOrUndefined(prompt);
+
       if (fileSource === "-" && promptSource === "-") {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
           message: "Only one of -F and --prompt may read stdin.",
         });
       }
+
       const descriptionText = fileSource === undefined ? undefined : yield* readInput(fileSource);
       const promptText = promptSource === undefined ? undefined : yield* readInput(promptSource);
       const starting = start || promptText !== undefined;
+
       if (starting && descriptionText === undefined && promptText === undefined) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
@@ -269,11 +283,13 @@ const createCommand = Command.make(
             "An agent needs something to work from: give the task a description with -F, or the agent a prompt with --prompt.",
         });
       }
+
       const repository = Option.isSome(repo) ? repo.value : yield* originRepository;
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
       // Note that an agent goes in the create's own request only where no plan is written first, since it would read the plan empty.
       const together = starting && descriptionText === undefined;
+
       const created = yield* askService(
         hosted.plans.create,
         {
@@ -291,16 +307,20 @@ const createCommand = Command.make(
         },
         together ? HOSTED_DEADLINE.START : HOSTED_DEADLINE.USUAL,
       );
+
       const task = taskJson(created.body.plan, workspace.name);
+
       if (descriptionText !== undefined) {
         yield* writeDescription(task.id, created.body.plan.document.body, descriptionText);
       }
+
       const agent =
         starting && !together
           ? yield* startAgent(task.id, {
               ...(promptText === undefined ? undefined : { prompt: promptText }),
             })
           : created.body.agent;
+
       const refusal = created.body.agentRefusal;
       yield* answer({
         json: { task, agent: agent ?? null, agentRefusal: refusal ?? null },
@@ -310,6 +330,7 @@ const createCommand = Command.make(
         ],
         ids: [task.id, ...(agent === undefined ? [] : [agent.id])],
       });
+
       if (refusal !== undefined) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.REFUSED,
@@ -361,6 +382,7 @@ function blockChangesOf(named: {
       (task) => [TASK_BLOCK_CHANGE.REMOVE, TASK_BLOCK_RELATION.BLOCKS, task] as const,
     ),
   ];
+
   return Effect.forEach(asked, ([change, relation, task]) =>
     Effect.map(resolveTaskId(task), (taskId) => ({ change, relation, taskId })),
   );
@@ -401,6 +423,7 @@ const updateCommand = Command.make(
   ({ task, status, priority, assignee, name, parent, section, ...blockFlags }) =>
     Effect.gen(function* () {
       const blocksAsked = Object.values(blockFlags).some((named) => named.length > 0);
+
       if (
         [status, priority, assignee, name, parent, section].every(Option.isNone) &&
         !blocksAsked
@@ -411,41 +434,53 @@ const updateCommand = Command.make(
             "Name a change: --status, --priority, --assignee, --name, --parent, --blocked-by, --blocks, their --remove- forms, or --section.",
         });
       }
+
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
+
       const assigneeId = Option.isSome(assignee)
         ? yield* memberIdOf(id, assignee.value)
         : undefined;
+
       const parentTaskId = Option.isNone(parent)
         ? undefined
         : parent.value === NONE_WORD
           ? null
           : yield* resolveTaskId(parent.value);
+
       const blockChanges = yield* blockChangesOf(blockFlags);
+
       const fields = {
         ...(Option.isSome(status) ? { status: status.value } : undefined),
         ...(Option.isSome(priority) ? { priority: priority.value } : undefined),
         ...(assigneeId === undefined ? undefined : { assigneeId }),
         ...(Option.isSome(name) ? { name: name.value } : undefined),
       };
+
       // Note that each change is its own request, as the task menu's are, and the task as the last one answers is the one printed.
       let plan: Task | undefined;
+
       if (Object.keys(fields).length > 0) {
         plan = (yield* askService(hosted.plans.update, { params: { id }, body: fields })).plan;
       }
+
       if (parentTaskId !== undefined) {
         plan = (yield* askService(hosted.plans.parent, { params: { id }, body: { parentTaskId } }))
           .plan;
       }
+
       for (const block of blockChanges) {
         plan = (yield* askService(hosted.plans.block, { params: { id }, body: block })).plan;
       }
+
       plan ??= (yield* askService(hosted.plans.open, { id })).plan;
+
       const sectionId = Option.isNone(section)
         ? undefined
         : section.value === NONE_WORD
           ? null
           : (yield* resolveSection(plan.workspaceId, section.value)).section.id;
+
       if (sectionId !== undefined) {
         yield* askService(hosted.taskSections.write, {
           kind: TASK_SECTION_WRITE.PLACE,
@@ -453,7 +488,9 @@ const updateCommand = Command.make(
           sectionId,
         });
       }
+
       const { workspaces } = yield* askService(hosted.workspaces.list, undefined);
+
       const found = {
         ...taskJson(plan, workspaceNamed(workspaces, plan.workspaceId)),
         parentTaskId: plan.parentTaskId ?? null,
@@ -461,6 +498,7 @@ const updateCommand = Command.make(
         blocks: plan.blocks ?? [],
         ...(sectionId === undefined ? undefined : { sectionId }),
       };
+
       yield* answer({
         json: found,
         lines: [
@@ -514,10 +552,12 @@ const deleteCommand = Command.make(
     Effect.gen(function* () {
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
+
       const [{ plan }, { workspaces }] = yield* Effect.all(
         [askService(hosted.plans.open, { id }), askService(hosted.workspaces.list, undefined)],
         { concurrency: "unbounded" },
       );
+
       const found = taskJson(plan, workspaceNamed(workspaces, plan.workspaceId));
       yield* confirmOrYes(
         `Delete ${taskLabel(found)} ${found.name} for good, with its agents and their transcripts?`,
@@ -585,27 +625,34 @@ const relateCommand = Command.make(
         { to: TASK_RELATION_KIND.SUB_TASK, other: subTask },
         { to: TASK_RELATION_KIND.PARENT, other: parent },
       ].flatMap(({ to, other }) => (Option.isSome(other) ? [{ to, other: other.value }] : []));
+
       const [asked, ...others] = named;
+
       if (asked === undefined || others.length > 0) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
           message: "Name one relation: --blocked-by, --blocks, --sub-task, or --parent.",
         });
       }
+
       const fromKind = Option.getOrElse(from, () => INVERSE_RELATION_KIND[asked.to]);
+
       if (fromKind === asked.to) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
           message: `--from names the kind it stands in now, so it is another than ${asked.to}.`,
         });
       }
+
       const id = yield* resolveTaskId(task);
       const otherId = yield* resolveTaskId(asked.other);
       const { hosted } = yield* session;
+
       const { plan } = yield* askService(hosted.plans.relation, {
         params: { id },
         body: { taskId: otherId, from: fromKind, to: asked.to },
       });
+
       const { workspaces } = yield* askService(hosted.workspaces.list, undefined);
       const found = taskJson(plan, workspaceNamed(workspaces, plan.workspaceId));
       yield* answer({
@@ -636,22 +683,29 @@ const relateCommand = Command.make(
 function memberIdOf(taskId: string, named: string) {
   return Effect.gen(function* () {
     if (named === ASSIGNEE_WORD.NONE) return null;
+
     if (named === ASSIGNEE_WORD.ME) return yield* signedInMemberId;
     const { hosted } = yield* session;
     const { plan } = yield* askService(hosted.plans.open, { id: taskId });
+
     const { members } = yield* askService(hosted.workspaces.members, {
       workspaceId: plan.workspaceId,
     });
+
     const lowered = named.toLowerCase();
+
     const matches = members.filter(
       (member) =>
         member.userId === named ||
         member.email.toLowerCase() === lowered ||
         member.name.toLowerCase() === lowered,
     );
+
     const [only, ...others] = matches;
+
     if (only !== undefined && others.length === 0) return only.userId;
     const listed = members.map((member) => `  ${member.email}  ${member.name}`);
+
     return yield* new CommandFailed({
       exit: CLI_EXIT.USAGE,
       message: [
@@ -690,6 +744,7 @@ const catCommand = Command.make(
     Effect.gen(function* () {
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
+
       // Note that a raw read carries the whole text, so its window stands for nothing.
       const read = yield* askService(hosted.taskFiles.file, {
         id,
@@ -699,7 +754,9 @@ const catCommand = Command.make(
         raw: TASK_FILE_QUERY_FLAG,
         ...(Option.isSome(commit) ? { ref: commit.value } : undefined),
       });
+
       if ("refusal" in read) return yield* fileRefused(read);
+
       if (!("text" in read)) return yield* fileRefused({ refusal: TASK_FILE_REFUSAL.NOT_TEXT });
       yield* answer({ json: read.text, lines: [read.text.text], ids: [read.text.path] });
     }),
@@ -739,16 +796,20 @@ const lsCommand = Command.make(
     Effect.gen(function* () {
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
+
       const listed = yield* askService(hosted.taskFiles.tree, {
         id,
         ...(Option.isSome(path) && path.value !== "" ? { path: path.value } : undefined),
         ...(recursive ? { recursive: TASK_FILE_QUERY_FLAG } : undefined),
       });
+
       if ("refusal" in listed) return yield* fileRefused(listed);
       const { folder } = listed;
+
       const names = folder.entries.map((entry) =>
         entry.kind === TASK_TREE_ENTRY.FOLDER ? `${entry.name}/` : entry.name,
       );
+
       if (folder.truncated) yield* note("The folder holds more entries than one listing carries.");
       yield* answer({ json: folder, lines: names, ids: names });
     }),

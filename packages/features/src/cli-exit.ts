@@ -38,8 +38,11 @@ const STATUS = { UNAUTHORIZED: 401, FIRST_CLIENT_ERROR: 400, FIRST_SERVER_ERROR:
 /** What an answer's status says of the call: fine, refused, a lapsed sign-in, or a failure on the service's side. */
 export function cliExitOfStatus(status: number): CliExit {
   if (status === STATUS.UNAUTHORIZED) return CLI_EXIT.AUTH;
+
   if (status >= STATUS.FIRST_SERVER_ERROR) return CLI_EXIT.UNAVAILABLE;
+
   if (status >= STATUS.FIRST_CLIENT_ERROR) return CLI_EXIT.REFUSED;
+
   return CLI_EXIT.OK;
 }
 
@@ -52,12 +55,15 @@ export function cliExitOfFault(fault: (typeof CALL_FAULT)[keyof typeof CALL_FAUL
 export function cliExitOfHostedFailure(failed: HostedFailure): CliExit {
   if (failed._tag === "HostedRefused") {
     if (failed.refusal === HOSTED_API_ERROR.INVALID_TOKEN) return CLI_EXIT.AUTH;
+
     // Note that a refusal naming the service's own state is not the caller's to fix.
     return failed.refusal === HOSTED_API_ERROR.UNAVAILABLE
       ? CLI_EXIT.UNAVAILABLE
       : CLI_EXIT.REFUSED;
   }
+
   if (failed.fault !== undefined) return cliExitOfFault(failed.fault);
+
   return failed.status === undefined ? CLI_EXIT.UNAVAILABLE : cliExitOfStatus(failed.status);
 }
 
@@ -69,8 +75,10 @@ export function cliExitOfHostedFailure(failed: HostedFailure): CliExit {
  */
 export function cliExitOfAgentStatus(status: AgentStatus): CliExit | undefined {
   if (status === AGENT_STATUS.COMPLETED) return CLI_EXIT.OK;
+
   if (status === AGENT_STATUS.FAILED || status === AGENT_STATUS.CANCELED) {
     return CLI_EXIT.TURN_FAILED;
   }
+
   return undefined;
 }

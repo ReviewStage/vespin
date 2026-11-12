@@ -30,6 +30,7 @@ function drawn(code: string): { lines: string[]; more: boolean } {
   roots.push(root);
   act(() => root.render(createElement(CodePreview, { code, shown: 2 })));
   const preview = container.querySelector("code") ?? expect.fail("No preview");
+
   return {
     lines: [...preview.children].map((line) => line.textContent ?? ""),
     more: preview.dataset.more === "true",

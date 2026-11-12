@@ -197,6 +197,7 @@ function Shell({
   const stage = useStageRoom();
   const room = stage.room;
   const sidebar = useSidebarCollapse(false, stage.compact);
+
   const shell = createElement(DesktopShell, {
     gates: { accountRequired: false, onBeginSignIn: ignore, onCancelSignIn: ignore },
     tab,
@@ -218,6 +219,7 @@ function Shell({
     settingsStep,
     settings,
   });
+
   return createElement("div", { ref: stage.ref, className: "app-stage" }, shell);
 }
 
@@ -231,6 +233,7 @@ function SettingsWindow({ link }: { link: SettingsLink | undefined }): React.JSX
     // Entering Settings stands it on its list, as `App`'s tab switch does.
     place.open(link ?? { page: SETTINGS_VIEW.ACCOUNT, listed: true });
   }, [link, place]);
+
   return createElement(Shell, {
     tab: place.standing ? PANEL_TAB.SETTINGS : PANEL_TAB.TASKS,
     tasks: tasksControl(),
@@ -250,6 +253,7 @@ const VERSIONS_LISTED: HistorySpot = { revision: undefined, opened: undefined, l
 function HistoryWindow({ at }: { at: HistorySpot }): React.JSX.Element {
   const [spot, setSpot] = useState(at);
   standVersions = setSpot;
+
   const versions = useDescriptionHistory({
     source: HISTORY,
     taskId: DOCUMENT_TASK.id,
@@ -263,14 +267,17 @@ function HistoryWindow({ at }: { at: HistorySpot }): React.JSX.Element {
     onSought: ignore,
     onRestored: ignore,
   });
+
   standingVersions = versions;
   const base = tasksControl();
+
   const tasks = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     activeTaskId: DOCUMENT_TASK.id,
     region: { kind: DOCUMENT_REGION.READY, task: DOCUMENT_TASK },
     history: { ...base.history, ...versions, open: true },
   });
+
   return createElement(Shell, { tab: PANEL_TAB.TASKS, tasks });
 }
 
@@ -285,6 +292,7 @@ async function mount(
     this: HTMLElement,
   ) {
     const fills = WHOLE_WINDOW_SCREENS.some((name) => this.classList.contains(name));
+
     return DOMRect.fromRect({ width: fills ? stageWidth : 0 });
   });
   const container = document.createElement("div");
@@ -293,6 +301,7 @@ async function mount(
   act(() => root?.render(withQueryClient(underRouter(window, standing))));
   await act(() => routed().settled());
   await settle();
+
   return container;
 }
 
@@ -438,6 +447,7 @@ test("a link to a Settings page on a narrow stage opens on that page, with the w
     PHONE,
     createElement(SettingsWindow, { link: { page: SETTINGS_VIEW.APPEARANCE } }),
   );
+
   assert.deepEqual(onScreen(page, SETTINGS_COLUMNS), ["page"]);
   assert.equal(the(page, SETTINGS_COLUMNS.page).getAttribute("aria-label"), "Appearance");
 
@@ -450,6 +460,7 @@ test("a link to Settings that names no page opens on the page list on a narrow s
     PHONE,
     createElement(SettingsWindow, { link: { page: SETTINGS_VIEW.ACCOUNT, listed: true } }),
   );
+
   assert.deepEqual(onScreen(page, SETTINGS_COLUMNS), ["list"]);
 });
 
@@ -458,6 +469,7 @@ test("Find on a narrow Settings lands in the search shown: a page with none show
     PHONE,
     createElement(SettingsWindow, { link: { page: SETTINGS_VIEW.APPEARANCE } }),
   );
+
   act(() => {
     runAppCommand(APP_COMMAND.FIND);
   });
@@ -469,6 +481,7 @@ test("Find on a narrow Settings lands in the search shown: a page with none show
     PHONE,
     createElement(SettingsWindow, { link: { page: SETTINGS_VIEW.INTEGRATIONS } }),
   );
+
   await press(the(integrations, SETTINGS_COLUMNS.page), "Settings");
   act(() => {
     runAppCommand(APP_COMMAND.FIND);
@@ -490,6 +503,7 @@ function versionRow(page: HTMLElement, at: number): HTMLButtonElement {
       "button:not([aria-label])",
     ),
   ];
+
   return rows[at] ?? assert.fail(`a version stands ${at} rows down`);
 }
 
@@ -499,6 +513,7 @@ test("a version history on a narrow stage opens on its versions, a version chose
     createElement(HistoryWindow, { at: VERSIONS_LISTED }),
     SHELL_AT.VERSION_HISTORY,
   );
+
   assert.deepEqual(onScreen(page, HISTORY_COLUMNS), ["list"]);
 
   act(() => versionRow(page, 1).click());
@@ -519,6 +534,7 @@ test("a version history under the split's line by its own width, on a stage wide
     createElement(HistoryWindow, { at: VERSIONS_LISTED }),
     SHELL_AT.VERSION_HISTORY,
   );
+
   assert.deepEqual(onScreen(page, HISTORY_COLUMNS), ["list"]);
 
   act(() => versionRow(page, 1).click());
@@ -538,6 +554,7 @@ test("a link to a version on a narrow stage opens on that version, with the way 
     createElement(HistoryWindow, { at: { revision: 2, opened: undefined, listed: false } }),
     SHELL_AT.VERSION_HISTORY,
   );
+
   assert.deepEqual(onScreen(page, HISTORY_COLUMNS), ["version"]);
 
   await press(the(page, HISTORY_COLUMNS.version), "Versions");
@@ -550,6 +567,7 @@ test("a version history standing on its list in a narrow room shows its list, an
     createElement(HistoryWindow, { at: VERSIONS_LISTED }),
     SHELL_AT.VERSION_HISTORY,
   );
+
   assert.deepEqual(onScreen(page, HISTORY_COLUMNS), ["list"]);
 
   act(() => standVersions?.({ revision: 2, opened: undefined, listed: false }));
@@ -574,7 +592,9 @@ async function pressFocused(within: HTMLElement, words: string): Promise<void> {
 /** The words the focused element says, and the column it stands in, by the names given the columns. */
 function focusIn(page: HTMLElement, columns: Readonly<Record<string, string>>): string | undefined {
   const active = document.activeElement;
+
   if (!(active instanceof HTMLElement)) return undefined;
+
   return Object.entries(columns).find(([, selector]) => the(page, selector).contains(active))?.[0];
 }
 
@@ -602,6 +622,7 @@ test("a version chosen on a narrow stage takes the focus to its way back, and Ba
     createElement(HistoryWindow, { at: VERSIONS_LISTED }),
     SHELL_AT.VERSION_HISTORY,
   );
+
   const row = versionRow(page, 1);
   act(() => {
     row.focus();
@@ -629,6 +650,7 @@ test("a link to a version on a narrow stage opens with the focus on its way back
     createElement(HistoryWindow, { at: { revision: 2, opened: undefined, listed: false } }),
     SHELL_AT.VERSION_HISTORY,
   );
+
   assert.equal(focusIn(page, HISTORY_COLUMNS), "version");
   assert.equal(document.activeElement?.textContent?.trim(), "Versions", "the way back to the list");
 });

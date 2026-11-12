@@ -61,6 +61,7 @@ const JOBS = [
 /** A coding agent the run started, by its turn: its id and its name. */
 function startedAgent(turn: number): { readonly id: string; readonly name: string } {
   const hex = turn.toString(16).padStart(12, "0");
+
   return {
     id: `0a1b2c3d-4e5f-4a6b-8c7d-${hex}`,
     name: `${JOBS[turn % JOBS.length]} (${turn + 1})`,
@@ -70,12 +71,14 @@ function startedAgent(turn: number): { readonly id: string; readonly name: strin
 /** A mention of the agent the run started at `turn`, as the run writes one. */
 function agentMention(turn: number): string {
   const agent = startedAgent(turn);
+
   return `[@${agent.name}](https://vespin.dev/stage/plan/${FIXTURE_IDS.TASK}/agent/${agent.id})`;
 }
 
 /** A mention of a pull request the run's agents opened. */
 function pullRequestMention(turn: number): string {
   const number = 5_000 + turn;
+
   return `[@#${number} ${JOBS[turn % JOBS.length]}](https://github.com/ada/relay/pull/${number})`;
 }
 
@@ -93,8 +96,10 @@ function runningPart(tool: string, callId: string, input: WireRecord): WireRecor
 function turnWords(turn: number): string {
   const rows = Array.from({ length: 3 }, (_, at) => {
     const each = turn * 3 + at;
+
     return `| ${pullRequestMention(each)} | ${each % 3 === 0 ? "Merged" : "In the queue"} | ${agentMention((turn + at) % LONG_RUN.TURNS)} |`;
   });
+
   return [
     `Wave ${turn + 1} stands as below. ${agentMention(turn)} opened its pull request, and ${PEOPLE[turn % PEOPLE.length]} asked for the narrow layout first.`,
     "",
@@ -109,6 +114,7 @@ function turnWords(turn: number): string {
 /** One of the run's calls, its `at`th of the turn: message and Inbox calls most, then commands and reads. */
 function call(turn: number, at: number): WireRecord {
   const id = `long-run-${turn}-${at}`;
+
   switch (at % 7) {
     case 0:
       return toolPart(
@@ -173,6 +179,7 @@ function call(turn: number, at: number): WireRecord {
 /** The coding agent a turn started, as `start_agent` answers. */
 function startAgentPart(turn: number): WireRecord {
   const agent = startedAgent(turn);
+
   return toolPart(
     "start_agent",
     `long-run-${turn}-start`,
@@ -231,6 +238,7 @@ function turnParts(turn: number): WireRecord[] {
     { type: "step-start" },
     call(turn, at),
   ]).flat();
+
   return [
     { type: "step-start" },
     { type: "reasoning", text: `Wave ${turn + 1} first: read the threads, then the queue.` },
@@ -245,6 +253,7 @@ function turnParts(turn: number): WireRecord[] {
 /** The line that opened a turn: a teammate's, or the developer's own naming what to do next. */
 function turnLine(turn: number): AgentTranscriptMessage {
   const at = RUN_STARTED_AT + turn * 70 * MINUTE;
+
   return {
     id: `long-run-line-${turn}`,
     role: MESSAGE_ROLE.USER,
@@ -261,6 +270,7 @@ function turnLine(turn: number): AgentTranscriptMessage {
 /** A turn's journal, finished an hour after it began, or still under way where it is the newest. */
 function turnJournal(turn: number, parts: readonly WireRecord[], running: boolean) {
   const at = RUN_STARTED_AT + turn * 70 * MINUTE;
+
   return {
     id: `long-run-journal-${turn}`,
     role: MESSAGE_ROLE.ASSISTANT,
@@ -313,6 +323,7 @@ const ARRIVED: readonly AgentTranscriptMessage[] = ROUND_STEPS.flatMap((afterSte
 function newestJournal(steps: number): AgentTranscriptMessage {
   const turn = LONG_RUN.TURNS - 1;
   const parts: WireRecord[] = ROUND_PARTS.flat();
+
   for (let at = 0; at < steps; at += 1) {
     const done = call(turn, at);
     parts.push(
@@ -322,6 +333,7 @@ function newestJournal(steps: number): AgentTranscriptMessage {
         : done,
     );
   }
+
   return turnJournal(turn, parts, true);
 }
 
@@ -345,6 +357,7 @@ let staged: { readonly step: number; readonly transcript: AppTranscript } | unde
  */
 export function longRunTranscript(): AppTranscript {
   if (staged?.step === step) return staged.transcript;
+
   const transcript: AppTranscript = {
     messages: [...SETTLED, newestJournal(step), ...ARRIVED],
     cursor: `${step}:0`,
@@ -356,7 +369,9 @@ export function longRunTranscript(): AppTranscript {
     },
     pages: step,
   };
+
   staged = { step, transcript };
+
   return transcript;
 }
 
@@ -371,16 +386,20 @@ export function longRunTranscript(): AppTranscript {
 export function longRunHold(): AsyncIteratorClass<never, void> {
   const hold = {};
   let closed = false;
+
   return new AsyncIteratorClass<never, void>(
     async () => {
       // Note that a hold joins those open on its first read, so a hold never read neither advances the run nor blocks another.
       if (!closed) holds.add(hold);
+
       while (!closed) {
         await rendererPause(LONG_RUN.STEP_MS);
+
         if (closed || holds.values().next().value !== hold) continue;
         step += 1;
         fixtureMoved();
       }
+
       return { done: true, value: undefined };
     },
     async () => {
@@ -400,6 +419,7 @@ export function longRunPicture(): { readonly contentType: "image/png"; readonly 
     canvas.width = LONG_RUN.PICTURE_WIDTH;
     canvas.height = LONG_RUN.PICTURE_HEIGHT;
     const context = canvas.getContext("2d");
+
     if (context !== null) {
       const ground = context.createLinearGradient(0, 0, canvas.width, canvas.height);
       ground.addColorStop(0, "#dbe7ff");
@@ -407,7 +427,9 @@ export function longRunPicture(): { readonly contentType: "image/png"; readonly 
       context.fillStyle = ground;
       context.fillRect(0, 0, canvas.width, canvas.height);
     }
+
     pictureBytes = canvas.toDataURL("image/png").slice("data:image/png;base64,".length);
   }
+
   return { contentType: "image/png", base64: pictureBytes };
 }

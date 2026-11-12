@@ -48,6 +48,7 @@ const ACTION_KINDS = Object.values(MEANINGFUL_ACTION);
  */
 export function calendarDayKeys(now: number): string[] {
   const daysIntoWeek = ((Math.floor(now / DAY_MS) + 4) % DAYS_PER_WEEK) + 1;
+
   return lastNDayKeys(now, CALENDAR_COMPLETE_WEEKS * DAYS_PER_WEEK + daysIntoWeek);
 }
 
@@ -71,9 +72,12 @@ export interface AdminUserSource {
 /** Consecutive active days ending today or yesterday, since today may simply not have started yet. */
 function currentStreak(activeFlags: readonly boolean[]): number {
   let streakEnd = activeFlags.length - 1;
+
   if (!activeFlags[streakEnd]) streakEnd -= 1;
   let streak = 0;
+
   for (let index = streakEnd; index >= 0 && activeFlags[index]; index -= 1) streak += 1;
+
   return streak;
 }
 
@@ -94,6 +98,7 @@ function buildAdminUserActions(
 ): AdminUserActions {
   const year = calendarDayKeys(now).map((day): AdminActionDay => {
     const counts = actionsByDay.get(day);
+
     return {
       day,
       [MEANINGFUL_ACTION.TASKS_CREATED]: counts?.get(MEANINGFUL_ACTION.TASKS_CREATED) ?? 0,
@@ -102,6 +107,7 @@ function buildAdminUserActions(
       [MEANINGFUL_ACTION.AGENTS_STARTED]: counts?.get(MEANINGFUL_ACTION.AGENTS_STARTED) ?? 0,
     };
   });
+
   const totals = year.map(actionTotal);
   const trendTotals = totals.slice(-ADMIN_TREND_DAYS * 2);
   const windowTotals = totals.slice(-windowDays);
@@ -197,9 +203,11 @@ export function handleAdminUser(
   const { query } = options;
 
   const userId = adminUserId(query.id);
+
   if (userId === undefined) return Effect.fail(ADMIN_REFUSAL.MISSING_USER_ID);
 
   const windowDays = adminMetricsWindow(query.window);
+
   if (windowDays === undefined) return Effect.fail(ADMIN_REFUSAL.INVALID_WINDOW);
 
   return Effect.flatMap(Clock.currentTimeMillis, (now) =>

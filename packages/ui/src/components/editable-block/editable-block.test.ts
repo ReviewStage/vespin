@@ -38,6 +38,7 @@ function drawDocument(heard: string[], portaled?: HTMLElement): HTMLElement {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const block = (
     label: string,
     kind: (typeof EDITABLE_BLOCK_KIND)[keyof typeof EDITABLE_BLOCK_KIND],
@@ -58,6 +59,7 @@ function drawDocument(heard: string[], portaled?: HTMLElement): HTMLElement {
           : null,
       ],
     });
+
   act(() =>
     root.render(
       createElement(
@@ -69,12 +71,15 @@ function drawDocument(heard: string[], portaled?: HTMLElement): HTMLElement {
       ),
     ),
   );
+
   return container;
 }
 
 function blockNamed(label: string): HTMLElement {
   const found = document.querySelector<HTMLElement>(`[role='group'][aria-label='${label}']`);
+
   if (found === null) throw new Error(`the ${label} block is drawn`);
+
   return found;
 }
 
@@ -91,6 +96,7 @@ test("the document is one Tab stop, at its entry, and no code inside a block is 
   expect(blockNamed("First").tabIndex).toBe(0);
   expect(blockNamed("Title").tabIndex).toBe(-1);
   expect(blockNamed("Second").tabIndex).toBe(-1);
+
   for (const code of document.querySelectorAll<HTMLElement>("pre")) expect(code.tabIndex).toBe(-1);
 });
 
@@ -111,6 +117,7 @@ test("a key from inside a block is the words', never the block's", () => {
   const heard: string[] = [];
   drawDocument(heard);
   const words = blockNamed("First").querySelector("p");
+
   if (words === null) throw new Error("the words are drawn");
   key(words, "Enter");
   key(words, "ArrowDown");
@@ -123,6 +130,7 @@ test("a press on a block's words opens it where it landed, and a portaled press 
   drawDocument(heard, elsewhere);
   const words = blockNamed("Second").querySelector("p");
   const menu = elsewhere.querySelector("button");
+
   if (words === null || menu === null) throw new Error("the words and the menu are drawn");
   act(() => {
     words.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 12, clientY: 34 }));

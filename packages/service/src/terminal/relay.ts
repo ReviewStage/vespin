@@ -187,13 +187,16 @@ function renewCredential(
   return Effect.gen(function* () {
     const { sandboxSessionId } = session;
     const renewedBefore = new Date(at.getTime() - Duration.toMillis(CODER.GITHUB_TOKEN_REFRESH));
+
     const claimed = yield* deps.claimRenewal(
       agent.conversationId,
       sandboxSessionId,
       at,
       renewedBefore,
     );
+
     if (!claimed) return false;
+
     return yield* setCredential(deps, agent, session).pipe(
       Effect.as(true),
       // Note that a connection closing mid-renewal interrupts it, and the claim goes back then too.
@@ -222,11 +225,15 @@ function credentialRound(
     const renewedAt = yield* deps.renewedAt(agent.conversationId, session.sandboxSessionId);
     const at = yield* DateTime.nowAsDate;
     const refresh = Duration.toMillis(CODER.GITHUB_TOKEN_REFRESH);
+
     if (Option.isSome(renewedAt)) {
       const dueIn = renewedAt.value.getTime() + refresh - at.getTime();
+
       if (dueIn >= 0) return Duration.millis(dueIn + 1);
     }
+
     const renewed = yield* renewCredential(deps, agent, session, at);
+
     return renewed ? CODER.GITHUB_TOKEN_REFRESH : TERMINAL_RELAY_BOUNDS.CREDENTIAL_RETRY_AFTER;
   });
 }
@@ -244,17 +251,20 @@ function keepCredential(
   firstSet: Deferred.Deferred<void>,
 ): Effect.Effect<void> {
   const firstDone = Deferred.succeed(firstSet, undefined);
+
   if (agent.memberToken) {
     const set = setCredential(deps, agent, session).pipe(
       Effect.tapError(() => Effect.logWarning("a terminal's GitHub credential was not set")),
       Effect.ensuring(firstDone),
     );
+
     return Effect.ignore(
       Effect.retry(set, {
         schedule: Schedule.spaced(TERMINAL_RELAY_BOUNDS.CREDENTIAL_RETRY_AFTER),
       }),
     );
   }
+
   return Effect.forever(
     Effect.flatMap(Effect.tap(credentialRound(deps, agent, session), firstDone), Effect.sleep),
   );
@@ -279,12 +289,15 @@ function readDevice(
       const bytes = yield* Ref.updateAndGet(held, (sum) =>
         sum === undefined ? undefined : sum + frameBytes(frame),
       );
+
       if (bytes !== undefined && bytes > TERMINAL_RELAY_BOUNDS.HELD_MAX_BYTES) {
         yield* Deferred.succeed(overheld, undefined);
       }
+
       yield* Queue.offer(fromDevice, frame);
     }),
   );
+
   return Effect.ensuring(read, Queue.end(fromDevice));
 }
 
@@ -299,10 +312,13 @@ function deviceToPty(
     yield* Stream.runForEach(fromDevice, (frame) => {
       if ("bytes" in frame) return readOnly ? Effect.void : Effect.andThen(used, pty.send(frame));
       const resize = readResize(jsonOf(frame.text));
+
       if (Result.isFailure(resize)) return Effect.void;
       const { cols, rows } = resize.success;
+
       return pty.send({ text: JSON.stringify({ type: TERMINAL_RELAY_FRAME.RESIZE, cols, rows }) });
     });
+
     return PIPE_END.DEVICE_LEFT;
   });
 }
@@ -318,12 +334,16 @@ function ptyToDevice(
     yield* Stream.runForEachWhile(pty.frames, (frame) => {
       if ("bytes" in frame) return Effect.as(Effect.andThen(used, device.send(frame)), true);
       const exit = readPtyExit(jsonOf(frame.text));
+
       // A text frame that is not the exit is output the PTY server sent as text.
       if (Result.isFailure(exit)) {
         const output = device.send({ bytes: new TextEncoder().encode(frame.text) });
+
         return Effect.as(Effect.andThen(used, output), true);
       }
+
       const { code } = exit.success;
+
       return Effect.as(
         Effect.andThen(
           Ref.set(exited, true),
@@ -332,6 +352,7 @@ function ptyToDevice(
         false,
       );
     });
+
     return (yield* Ref.get(exited)) ? PIPE_END.EXITED : PIPE_END.UPSTREAM_LEFT;
   });
 }
@@ -350,14 +371,20 @@ export function relayTerminal(
 ): Effect.Effect<void, never, Scope.Scope> {
   return Effect.gen(function* () {
     const reached = yield* Effect.result(deps.reach(ask.userId, ask.agentId));
+
     if (Result.isFailure(reached)) return yield* device.close(TERMINAL_RELAY_CLOSE.UNAVAILABLE);
+
     if (Option.isNone(reached.success)) return yield* device.close(TERMINAL_RELAY_CLOSE.GONE);
     const agent = reached.success.value;
+
     if (agent.sessionId === undefined) return yield* device.close(TERMINAL_RELAY_CLOSE.STARTING);
     const attached = yield* Effect.result(deps.sandbox.attach(agent.sessionId, ask.terminalId));
+
     if (Result.isFailure(attached)) return yield* device.close(TERMINAL_RELAY_CLOSE.UNAVAILABLE);
     const sandbox = attached.success;
+
     if ("gone" in sandbox) return yield* device.close(TERMINAL_RELAY_CLOSE.GONE);
+
     if (sandbox.state !== SANDBOX_STATE.RUNNING) {
       return yield* device.close(
         sandbox.state === SANDBOX_STATE.STOPPED
@@ -365,6 +392,7 @@ export function relayTerminal(
           : TERMINAL_RELAY_CLOSE.STARTING,
       );
     }
+
     // An attach is a use, and so is every byte typed or printed after it: the sandbox is touched while the terminal is used, never for standing open alone.
     const lastUsed = yield* Ref.make(yield* Clock.currentTimeMillis);
     yield* touchedWhileUsed(deps.touch(agent.sessionId), Ref.get(lastUsed));
@@ -374,14 +402,17 @@ export function relayTerminal(
     const held = yield* Ref.make<number | undefined>(0);
     const overheld = yield* Deferred.make<void>();
     const deviceLeft = yield* Effect.forkScoped(readDevice(device, fromDevice, held, overheld));
+
     const session: FirewallSession = {
       userId: agent.userId,
       name: sandbox.sandboxName,
       sandboxSessionId: sandbox.sandboxSessionId,
     };
+
     const firstRenewed = yield* Deferred.make<void>();
     yield* Effect.forkScoped(keepCredential(deps, agent, session, firstRenewed));
     const pty = yield* Effect.result(deps.connect(sandbox.shell));
+
     if (Result.isFailure(pty)) return yield* device.close(TERMINAL_RELAY_CLOSE.UNAVAILABLE);
     const start = attachTerminal(ask.terminalId);
     yield* pty.success.send({
@@ -395,6 +426,7 @@ export function relayTerminal(
         rows: ask.rows,
       }),
     });
+
     // A shell is attached once its sandbox's firewall holds a token, so a command typed at once reaches GitHub; a desktop that leaves first ends the renewal with the scope.
     // Note that a desktop sending past the bound is attached at once instead, its renewal going on beside the pipe, because what it sent is owed to the shell.
     const leftFirst = yield* Effect.raceAll([
@@ -402,14 +434,19 @@ export function relayTerminal(
       Effect.as(Deferred.await(overheld), false),
       Effect.as(Fiber.join(deviceLeft), true),
     ]);
+
     yield* Ref.set(held, undefined);
+
     if (leftFirst) return yield* pty.success.close(NORMAL_CLOSE);
     yield* device.send({ text: JSON.stringify({ type: TERMINAL_RELAY_FRAME.ATTACHED }) });
+
     const end = yield* Effect.raceAll([
       deviceToPty(Stream.fromQueue(fromDevice), pty.success, used, sandbox.readOnly),
       ptyToDevice(device, pty.success, used),
     ]);
+
     yield* pty.success.close(NORMAL_CLOSE);
+
     if (end !== PIPE_END.DEVICE_LEFT) yield* device.close(CLOSE_OF_END[end]);
   });
 }

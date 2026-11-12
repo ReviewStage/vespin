@@ -26,6 +26,7 @@ import { isSafeChartCssColor, isSafeChartCssKey } from "./chart-css.js";
 const THEMES = { light: "", dark: '[data-ui-theme="dark"]' } as const;
 
 const INITIAL_DIMENSION = { width: 320, height: 200 } as const;
+
 type TooltipNameType = number | string;
 
 export type ChartConfig = Record<
@@ -103,11 +104,14 @@ function ChartContainer({
  */
 function singleColorVariables(config: ChartConfig): React.CSSProperties {
   const variables: Record<string, string> = {};
+
   for (const [key, itemConfig] of Object.entries(config)) {
     if (itemConfig.theme || !itemConfig.color) continue;
+
     if (!isSafeChartCssKey(key) || !isSafeChartCssColor(itemConfig.color)) continue;
     variables[`--color-${key}`] = itemConfig.color;
   }
+
   return variables;
 }
 
@@ -121,6 +125,7 @@ const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   // color should cost that series its variable, not the chart its render.
   const colorConfig = Object.entries(config).filter(([key, itemConfig]) => {
     const colors = itemConfig.theme ? Object.values(itemConfig.theme) : [];
+
     return colors.length > 0 && isSafeChartCssKey(key) && colors.every(isSafeChartCssColor);
   });
 
@@ -139,6 +144,7 @@ ${colorConfig
   .map(([key, itemConfig]) => {
     // SAFETY: theme iterates Object.entries(THEMES), so it is a THEMES key.
     const color = itemConfig.theme?.[theme as keyof typeof itemConfig.theme];
+
     return color ? `  --color-${key}: ${color};` : null;
   })
   .join("\n")}
@@ -244,6 +250,7 @@ function ChartTooltipContent({
     const [item] = payload;
     const key = `${labelKey ?? item?.dataKey ?? item?.name ?? "value"}`;
     const itemConfig = getPayloadConfigFromPayload(config, item, key);
+
     // Recharts hands `label` over as a loose ReactNode, and a string is the
     // only form that can name a ChartConfig entry — this check is the boundary.
     const value =
@@ -282,6 +289,7 @@ function ChartTooltipContent({
                 </div>
               );
             }
+
             return (
               <ChartTooltipRow
                 key={key}

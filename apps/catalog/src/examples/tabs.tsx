@@ -79,7 +79,9 @@ function movedTabs(tabs: readonly SampleTab[], from: number, to: number): Sample
   to += lead;
   const moved = [...tabs];
   const [taken] = moved.splice(from, 1);
+
   if (taken !== undefined) moved.splice(to, 0, taken);
+
   return moved;
 }
 
@@ -94,6 +96,7 @@ function Strip({
   const [tabs, setTabs] = useState<readonly SampleTab[]>(frame ? FRAME_TABS : SAMPLE_TABS);
   const [chosen, setChosen] = useState("agent");
   const [seen, setSeen] = useState<ReadonlySet<string>>(new Set());
+
   return (
     <div
       className={narrow ? "catalog-tab-row catalog-tab-row-narrow" : "catalog-tab-row"}
@@ -131,6 +134,7 @@ function Strip({
                 : () => {
                     const rest = tabs.filter((each) => each.id !== tab.id);
                     setTabs(rest);
+
                     if (tab.id === chosen) setChosen(rest[0]?.id ?? "");
                   }
             }
@@ -150,6 +154,7 @@ const STILL = `data:image/svg+xml,${encodeURIComponent(
 function Cards(): React.JSX.Element {
   const [chosen, setChosen] = useState(1);
   const [picked, setPicked] = useState<string | undefined>(undefined);
+
   const cards = [
     {
       icon: <DocumentIcon />,
@@ -166,6 +171,7 @@ function Cards(): React.JSX.Element {
       still: undefined,
     },
   ];
+
   return (
     <>
       <TabCards label="Recent tabs">

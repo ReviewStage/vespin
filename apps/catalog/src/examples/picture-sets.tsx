@@ -25,6 +25,7 @@ import { CatalogSection } from "../section";
 /** A stand-in screenshot, `width` by `height`, in a gradient of `from` to `to`. */
 function screenshot(width: number, height: number, from: string, to: string): PictureState {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${String(width)}" height="${String(height)}" viewBox="0 0 ${String(width)} ${String(height)}"><defs><linearGradient id="g" x2="1" y2="1"><stop offset="0" stop-color="${from}"/><stop offset="1" stop-color="${to}"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/><rect x="8%" y="10%" width="40%" height="8%" rx="4" fill="#fff9"/><rect x="8%" y="26%" width="84%" height="56%" rx="6" fill="#fff5"/></svg>`;
+
   return { kind: PICTURE_STATE.READY, url: `data:image/svg+xml,${encodeURIComponent(svg)}` };
 }
 
@@ -55,6 +56,7 @@ function OpenedLine({ opened }: { opened: number }): React.JSX.Element {
 function PictureSets(): React.JSX.Element {
   const [opened, setOpened] = useState(0);
   const open = () => setOpened((was) => was + 1);
+
   return (
     <>
       <CatalogSection id="picture-sets-few" title="A few, captioned, at their own shapes">

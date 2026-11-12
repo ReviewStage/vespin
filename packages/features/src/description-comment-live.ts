@@ -132,12 +132,15 @@ type FileLiveRow = LiveRowOf<typeof FILES>;
 /** Each row under the key `keyOf` reads, in the order they came. */
 function groupedBy<Row>(rows: readonly Row[], keyOf: (row: Row) => string): Map<string, Row[]> {
   const groups = new Map<string, Row[]>();
+
   for (const row of rows) {
     const key = keyOf(row);
     const group = groups.get(key);
+
     if (group === undefined) groups.set(key, [row]);
     else group.push(row);
   }
+
   return groups;
 }
 
@@ -145,6 +148,7 @@ function groupedBy<Row>(rows: readonly Row[], keyOf: (row: Row) => string): Map<
 function askedOf(row: EntryLiveRow): DescriptionCommentAsked | undefined {
   if (row.askedActor === DESCRIPTION_COMMENT_ACTOR.APP)
     return { actor: DESCRIPTION_COMMENT_ACTOR.APP };
+
   return row.askedActor === DESCRIPTION_COMMENT_ACTOR.AGENT && row.askedAgentId !== null
     ? { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: row.askedAgentId }
     : undefined;
@@ -156,6 +160,7 @@ function entryOf(row: EntryLiveRow, files: readonly FileLiveRow[]): DescriptionC
     row.actor === DESCRIPTION_COMMENT_ACTOR.MEMBER && row.userId !== null && row.userName !== null
       ? { by: { userId: row.userId, name: row.userName } }
       : undefined;
+
   const carried = files.map(
     (file): DescriptionCommentFile => ({
       attachmentId: file.attachmentId,
@@ -163,7 +168,9 @@ function entryOf(row: EntryLiveRow, files: readonly FileLiveRow[]): DescriptionC
       mediaType: file.mediaType,
     }),
   );
+
   const asked = askedOf(row);
+
   return {
     id: row.id,
     kind: row.kind,
@@ -190,11 +197,14 @@ function threadOf(
     row.anchorFrom === null || row.anchorTo === null
       ? undefined
       : { anchor: { from: row.anchorFrom, to: row.anchorTo } };
+
   const element = row.pageElement === null ? undefined : { element: row.pageElement };
+
   const page =
     row.pageId === null || row.pageVersion === null
       ? undefined
       : { page: { id: row.pageId, version: row.pageVersion, ...element } };
+
   return {
     id: row.id,
     scope: row.scope,
@@ -215,6 +225,7 @@ export function threadsOfLiveRows(rows: TaskCommentsLiveRows): readonly Descript
   // Note that each group keeps the order its rows stand in, so an entry's place in its thread and a file's on its comment hold within it.
   const entriesOf = groupedBy(orderedLiveRows(ENTRIES, rows.entries), (entry) => entry.threadId);
   const filesOf = groupedBy(orderedLiveRows(FILES, rows.files), (file) => file.entryId);
+
   return orderedLiveRows(THREADS, rows.threads).map((row) =>
     threadOf(row, entriesOf.get(row.id) ?? [], filesOf),
   );

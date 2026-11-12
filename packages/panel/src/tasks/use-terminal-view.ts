@@ -49,6 +49,7 @@ function sayingShown(session: TerminalSession): Effect.Effect<void> {
   const say = Effect.sync(() => {
     if (document.visibilityState === "visible" && document.hasFocus()) session.sayShown();
   });
+
   return Effect.forever(Effect.andThen(Effect.sleep(SAY_SHOWN_EVERY), say));
 }
 
@@ -77,12 +78,14 @@ export function useTerminalView(
     session.show(module, element);
     session.screen?.focus();
     setFind(session.screen?.find);
+
     return () => session.hide();
   }, [session, shown, module, element]);
 
   // Note that the beat is the tab's own fiber, so it ends with the tab hidden or let go.
   useEffect(() => {
     if (session === undefined || !shown) return;
+
     return forkEffect(sayingShown(session));
   }, [session, shown]);
 

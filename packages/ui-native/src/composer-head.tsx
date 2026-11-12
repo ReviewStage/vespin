@@ -54,6 +54,7 @@ function LineAct({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+
   return (
     <Button
       onPress={onPress}
@@ -88,7 +89,9 @@ function LineAct({
  */
 export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesProps) {
   const colors = useColors();
+
   if (lines.length === 0 && paused === undefined) return null;
+
   return (
     <VStack alignment="leading" spacing={0}>
       {paused === undefined ? null : (
@@ -153,6 +156,7 @@ export function AttachedPictures({
   readonly onDetach: (id: string) => void;
 }) {
   if (pictures.length === 0) return null;
+
   return (
     <ScrollView axes="horizontal" showsIndicators={false}>
       <HStack spacing={SPACE.TIGHT * 2}>
@@ -202,8 +206,10 @@ export function SkillSuggestions({
   readonly onPick: (name: string) => void;
 }) {
   const colors = useColors();
+
   if (skills.length === 0) {
     if (empty === undefined) return null;
+
     return (
       <Text
         modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
@@ -212,6 +218,7 @@ export function SkillSuggestions({
       </Text>
     );
   }
+
   const rows = (
     <VStack alignment="leading" spacing={0}>
       {skills.map((skill) => (
@@ -262,7 +269,9 @@ export function SkillSuggestions({
       ))}
     </VStack>
   );
+
   if (skills.length <= SUGGESTIONS_SHOWN) return rows;
+
   return (
     <ScrollView modifiers={[frame({ height: SUGGESTION_HEIGHT * SUGGESTIONS_SHOWN })]}>
       {rows}

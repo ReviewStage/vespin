@@ -84,12 +84,14 @@ export function TaskCrumbMenu({
   const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_SHAPE));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const unread = useUnreadTasks({ staged: false })(task);
+
   const items = useTaskMenuItems(taskRowTab(tasks), task.id, task.name, {
     rename: rename.begin,
     drawn: true,
     unread,
     opened: openedTaskOf(tasks),
   });
+
   const { deletion } = items;
   const descriptions = useWorkspaceExperiment(task.workspaceId, EXPERIMENT.DESCRIPTIONS);
   useShortcutTarget(keys.length === 0 ? undefined : items.keysOn, keys);
@@ -107,6 +109,7 @@ export function TaskCrumbMenu({
       : undefined,
     FOCUSED_OFFER,
   );
+
   const editing = rename.editing ? (
     <InlineEdit
       value={rename.asked ?? task.name}
@@ -116,6 +119,7 @@ export function TaskCrumbMenu({
       onEnd={(edit) => rename.end(edit.value)}
     />
   ) : undefined;
+
   return (
     <>
       {children({ menu: { contextMenu: menu.contextMenu(), keyMenu: menu.keyMenu }, editing })}
@@ -157,11 +161,13 @@ export function AgentCrumbMenu({
   const { shown } = tasks;
   const label = agentName(agent, agents.models);
   const menu = useMenu(shown);
+
   const actions = useAgentActions(agent, agents, {
     label,
     shown,
     terminals: { onOpenTerminal: undefined },
   });
+
   const { onCopy } = actions.doors;
   const copies = onCopy === undefined ? NO_CRUMB_KEYS : keys;
   useShortcutTarget(keys.length === 0 ? undefined : actions.subject, keys);
@@ -181,6 +187,7 @@ export function AgentCrumbMenu({
   );
   const groups = agentMenuGroups({ ...actions.doors, subject: actions.subject });
   const { rename } = actions;
+
   const editing =
     rename?.editing === true ? (
       <InlineEdit
@@ -191,6 +198,7 @@ export function AgentCrumbMenu({
         onEnd={(edit) => rename.end(edit.value)}
       />
     ) : undefined;
+
   return (
     <>
       {children({ menu: { contextMenu: menu.contextMenu(), keyMenu: menu.keyMenu }, editing })}

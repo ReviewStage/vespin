@@ -46,6 +46,7 @@ export interface AdminProcedureSeams {
 
 export function adminProcedures(seams: AdminProcedureSeams) {
   const gated = hosted.admin.use(adminGateMiddleware(seams.resolveViewer));
+
   return {
     cost: gated.cost.effect(function* ({ input }) {
       return yield* handleAdminCost({ query: input, readCost: seams.readCost });

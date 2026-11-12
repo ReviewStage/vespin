@@ -47,9 +47,11 @@ export function runAgentInbox(
       admitted.target.userId,
       admitted.target.conversationId,
     );
+
     if (Option.isNone(found)) return inboxRejected(INBOX_REFUSAL.NO_AGENT);
     const { id: agentId, taskId, organizationId } = found.value;
     const agent = { userId: admitted.target.userId, taskId, agentId, organizationId };
+
     switch (call.tool) {
       case INBOX_TOOL.POST:
         return yield* postToInbox(agent, call.input, call.sandbox);

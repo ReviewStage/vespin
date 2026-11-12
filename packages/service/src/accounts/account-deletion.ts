@@ -48,6 +48,7 @@ const forgetAnalytics = /* @__PURE__ */ Effect.fn("web/forgetAnalytics")(functio
   userId: string,
 ): Effect.fn.Return<void, never, HostedEnvironment | HttpClient.HttpClient> {
   const environment = yield* HostedEnvironment;
+
   if (!environment.posthogPersonalApiKey || !environment.posthogProjectId) return;
   const personalApiKey = Redacted.value(environment.posthogPersonalApiKey);
   const projectId = environment.posthogProjectId;
@@ -86,6 +87,7 @@ export const beforeAccountDeletion = /* @__PURE__ */ Effect.fn("web/beforeAccoun
     const signIns = yield* (yield* SignInRevocation).grantsOf(userId);
     const schedules = yield* accountScheduledAutomations(userId);
     const email = (yield* readAccountPerson(userId))?.email;
+
     return { grants, signIns, schedules, email } satisfies AccountDeletionPending;
   },
 );
@@ -105,6 +107,7 @@ export const afterAccountDeletion = /* @__PURE__ */ Effect.fn("web/afterAccountD
       { concurrency: "unbounded", discard: true },
     );
     yield* schedulesForgotten(pending.schedules);
+
     if (pending.email !== undefined) yield* onboardingForgotten(pending.email);
   },
 );

@@ -112,6 +112,7 @@ const ANALYTICS = recordingProductAnalytics();
 
 const ORIGIN = "https://app.test";
 const RELAY = { owner: "Acme", name: "Relay" } as const;
+
 /**
  * The installations reaching the repository, one for each owner's workspace,
  * since one installation connects to one workspace and the suite's tests
@@ -123,6 +124,7 @@ const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 24 },
   accountId: 70_000 + index,
   repositories: [RELAY],
 }));
+
 let installationsConnected = 0;
 
 const CATALOG: readonly OfferedModel[] = [
@@ -152,22 +154,26 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
     const opened: string[] = [];
     /** Who opened each session, in order: the request's bearer, or the deployment acting for an account. */
     const openedAs: string[] = [];
+
     const sessionsAs = (caller: string): AgentSessions =>
       openedOnBoot({
         open: (message) =>
           Effect.sync(() => {
             opened.push(message.conversationId);
             openedAs.push(caller);
+
             return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: `wrun_${randomUUID()}` };
           }),
         send: () => Effect.succeed({ outcome: SESSION_SEND_OUTCOME.FAILED, status: 500 }),
         cancel: () => Effect.succeed({ outcome: SESSION_CANCEL_OUTCOME.ACCEPTED }),
         reset: () => Effect.succeed({ outcome: SESSION_RESET_OUTCOME.RESET }),
       });
+
     // Every account behind a bearer is signed in on a browser of its own too, whose cookie names it.
     const sessions = new Map(
       [...bearers.values()].map((userId) => [sessionCookieOf(userId), userId]),
     );
+
     const services = yield* Effect.context<
       DatabaseServices | GitHubApp | HttpClient.HttpClient | ModelCatalog
     >().pipe(
@@ -183,8 +189,10 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
         ),
       ),
     );
+
     // SAFETY: the automation procedures yield the database, the clock, GitHub, its HTTP client, and the catalog alone, which is all a test provides of the web runtime's services.
     const webServices = services as Context.Context<WebServices>;
+
     const handle = hostedFetch({
       automations: automationsProcedures({
         // The account read as `resolveHostedUserId` reads it: the bearer where one is carried, else the session cookie.
@@ -193,6 +201,7 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
             incoming,
             (input) => {
               const sub = bearers.get(input.headers.get("authorization") ?? "");
+
               return Effect.succeed(sub === undefined ? undefined : { sub });
             },
             (input) =>
@@ -200,6 +209,7 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
           ),
       }),
     });
+
     const ask = (
       path: string,
       bearer: string | undefined,
@@ -212,13 +222,17 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
     ) =>
       Effect.gen(function* () {
         const headers = new Headers({ "content-type": "application/json" });
+
         if (bearer !== undefined) headers.set("authorization", `Bearer ${bearer}`);
+
         if (init.cookie !== undefined) headers.set("cookie", init.cookie);
         const sent = init.body === undefined ? undefined : JSON.stringify(init.body);
+
         // The length the platform hands a function with every body.
         if (sent !== undefined) {
           headers.set("content-length", String(new TextEncoder().encode(sent).byteLength));
         }
+
         const response = yield* Effect.promise(() =>
           handle(
             new Request(`${ORIGIN}${path}`, {
@@ -229,11 +243,14 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
             webServices,
           ),
         );
+
         const text = yield* Effect.promise(() => response.text());
         // SAFETY: the router answers JSON; the test reads it as the wire value it is.
         const body = (text.length === 0 ? text : JSON.parse(text)) as WireBoundaryInput;
+
         return { status: response.status, body } satisfies Answer;
       });
+
     return { ask, opened, openedAs };
   });
 
@@ -245,7 +262,9 @@ function readAnswer<S extends Schema.ConstraintDecoder<unknown>>(
 ): S["Type"] {
   assert.equal(answer.status, status, JSON.stringify(answer.body));
   const read = readEither(schema)(unparsedWire(answer.body));
+
   if (Result.isFailure(read)) assert.fail(`not the answer: ${JSON.stringify(answer.body)}`);
+
   return read.success;
 }
 
@@ -255,19 +274,23 @@ const openAccounts = Effect.gen(function* () {
   yield* connectAgentApiKeys(owner);
   const other = yield* openGithubUser();
   yield* connectAgentApiKeys(other);
+
   const task = yield* startTask(owner, {
     name: "Issue triage",
     repository: `${RELAY.owner}/${RELAY.name}`,
   });
+
   const installation = INSTALLATIONS[installationsConnected++];
   assert.ok(installation);
   yield* connectWorkspaceGitHub(task.workspaceId, installation);
+
   const { ask, opened, openedAs } = yield* standing(
     new Map([
       [`Bearer ${owner}`, owner],
       [`Bearer ${other}`, other],
     ]),
   );
+
   return { owner, other, task, ask, opened, openedAs };
 });
 
@@ -312,6 +335,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: weekdays(task.workspaceId, [relay.toLowerCase()]),
           }),
         );
+
         const { automation } = made;
         assert.deepEqual(
           [automation.planId, automation.planName, automation.workspaceId, automation.repositories],
@@ -324,6 +348,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(`${HOSTED_SERVICE_PATH.AUTOMATIONS}?workspaceId=${task.workspaceId}`, owner),
         );
+
         assert.deepEqual(
           listed.automations.map((each) => each.id),
           [automation.id],
@@ -335,11 +360,13 @@ it.layer(getTestDB())("the automation routes", (it) => {
           method: "PATCH",
           body: { repositories: ["acme/elsewhere"] },
         });
+
         assert.equal(
           unreached.status,
           HOSTED_HTTP_STATUS.FORBIDDEN,
           JSON.stringify(unreached.body),
         );
+
         const kept = readAnswer(
           automationAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -348,6 +375,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: { repositories: [relay] },
           }),
         );
+
         assert.deepEqual(kept.automation.repositories, [relay]);
       }),
   );
@@ -358,25 +386,31 @@ it.layer(getTestDB())("the automation routes", (it) => {
       Effect.gen(function* () {
         const { owner, other, task, ask } = yield* openAccounts;
         const relay = `${RELAY.owner}/${RELAY.name}`;
+
         const post = (by: string, body: WireBoundaryInput) =>
           ask(HOSTED_SERVICE_PATH.AUTOMATIONS, by, { method: "POST", body });
 
         const outside = yield* post(other, weekdays(task.workspaceId, [relay]));
+
         // Note that a released desktop may still name the plan it made an automation on, on which none stands now.
         const onPlan = yield* post(owner, {
           ...weekdays(task.workspaceId, [relay]),
           planId: task.id,
         });
+
         const { repositories: _none, ...bare } = weekdays(task.workspaceId, [relay]);
         const noRepositories = yield* post(owner, bare);
         const unreached = yield* post(owner, weekdays(task.workspaceId, ["acme/elsewhere"]));
+
         const github = {
           trigger: { kind: AUTOMATION_TRIGGER.GITHUB, event: GITHUB_TRIGGER_EVENT.ISSUE_OPENED },
         };
+
         const onGitHubNowhere = yield* post(owner, {
           ...weekdays(task.workspaceId, []),
           ...github,
         });
+
         const onGitHub = yield* post(owner, { ...weekdays(task.workspaceId, [relay]), ...github });
         const nowhere = yield* post(owner, weekdays(task.workspaceId, []));
 
@@ -409,15 +443,18 @@ it.layer(getTestDB())("the automation routes", (it) => {
       Effect.gen(function* () {
         const { owner, task, ask } = yield* openAccounts;
         const relay = `${RELAY.owner}/${RELAY.name}`;
+
         const onGitHub = {
           trigger: { kind: AUTOMATION_TRIGGER.GITHUB, event: GITHUB_TRIGGER_EVENT.ISSUE_OPENED },
         };
+
         const made = (body: WireBoundaryInput) =>
           Effect.map(
             ask(HOSTED_SERVICE_PATH.AUTOMATIONS, owner, { method: "POST", body }),
             (answer) =>
               readAnswer(automationAnswerSchema, HOSTED_HTTP_STATUS.CREATED, answer).automation,
           );
+
         const onWorkspaceMade = yield* made(weekdays(task.workspaceId, [relay]));
 
         const changed = readAnswer(
@@ -464,23 +501,29 @@ it.layer(getTestDB())("the automation routes", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(`${HOSTED_SERVICE_PATH.AUTOMATIONS}?workspaceId=${task.workspaceId}`, owner),
         );
+
         assert.deepEqual(
           listed.automations.map((each) => each.id),
           [automation.id],
         );
+
         // Note that a released desktop may still list a plan's automations, of which there are none now.
         const onPlan = readAnswer(
           automationListAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(`${HOSTED_SERVICE_PATH.AUTOMATIONS}?planId=${task.id}`, owner),
         );
+
         assert.deepEqual(onPlan.automations, []);
+
         const othersList = readAnswer(
           automationListAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(HOSTED_SERVICE_PATH.AUTOMATIONS, other),
         );
+
         assert.deepEqual(othersList.automations, []);
+
         for (const [path, method] of [
           [automationPath(automation.id), "GET"],
           [automationPath(automation.id), "PATCH"],
@@ -491,6 +534,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             method,
             ...(method === "PATCH" ? { body: { enabled: false } } : undefined),
           });
+
           assert.equal(refused.status, HOSTED_HTTP_STATUS.NOT_FOUND, `${method} ${path}`);
         }
 
@@ -502,6 +546,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: { name: "Weekday triage" },
           }),
         );
+
         assert.equal(renamed.automation.name, "Weekday triage");
         assert.equal(
           renamed.automation.nextRunAt,
@@ -521,19 +566,24 @@ it.layer(getTestDB())("the automation routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask } = yield* openAccounts;
+
         const make = (body: WireBoundaryInput) =>
           ask(HOSTED_SERVICE_PATH.AUTOMATIONS, owner, { method: "POST", body });
+
         const base = weekdays(task.workspaceId);
 
         const tooOften = yield* make({ ...base, trigger: { ...base.trigger, cron: "* * * * *" } });
+
         const unknownZone = yield* make({
           ...base,
           trigger: { ...base.trigger, timezone: "Mars/Olympus_Mons" },
         });
+
         const unknownModel = yield* make({
           ...base,
           action: { ...base.action, choice: { model: "acme/unknown-1", effort: "high" } },
         });
+
         const excess = yield* make({ ...base, owner: "someone-else" });
 
         for (const refused of [tooOften, unknownZone, unknownModel, excess]) {
@@ -544,11 +594,13 @@ it.layer(getTestDB())("the automation routes", (it) => {
           );
           assert.deepEqual(refused.body, { error: HOSTED_API_ERROR.INVALID_REQUEST });
         }
+
         const listed = readAnswer(
           automationListAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(HOSTED_SERVICE_PATH.AUTOMATIONS, owner),
         );
+
         assert.deepEqual(listed.automations, [], "nothing refused was made");
       }),
   );
@@ -567,14 +619,17 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: { ...weekdays(task.workspaceId), trigger: { kind: AUTOMATION_TRIGGER.WEBHOOK } },
           }),
         );
+
         const secret = hooked.webhookSecret ?? "";
         assert.ok(secret.length >= 40, "a secret of real length is answered");
+
         const [row] = yield* Database.use((db) =>
           db
             .select({ hash: automationTable.webhookSecretHash })
             .from(automationTable)
             .where(eq(automationTable.id, hooked.automation.id)),
         );
+
         assert.equal(row?.hash, createHash("sha256").update(secret).digest("hex"));
         const read = yield* ask(automationPath(hooked.automation.id), owner);
         assert.equal(JSON.stringify(read.body).includes(secret), false, "a read never answers it");
@@ -587,12 +642,15 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: weekdays(task.workspaceId),
           }),
         ).automation;
+
         yield* pausedByAnOlderBuild(scheduled.id);
+
         const paused = readAnswer(
           automationAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(automationPath(scheduled.id), owner),
         ).automation;
+
         const resumed = readAnswer(
           automationAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -621,6 +679,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
       Effect.gen(function* () {
         const { owner, task, ask } = yield* openAccounts;
         const made = weekdays(task.workspaceId);
+
         const { automation } = readAnswer(
           automationAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -643,6 +702,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             },
           }),
         ).automation;
+
         assert.equal(edited.action.prompt, "Triage, then fix one.");
         assert.deepEqual(edited.action.disabledServers, [INTEGRATION_PROVIDER.SENTRY]);
 
@@ -660,6 +720,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             },
           }),
         ).automation;
+
         assert.deepEqual(cleared.action.disabledServers ?? [], []);
       }),
   );
@@ -669,6 +730,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, other, task: plan, ask } = yield* openAccounts;
+
         const made = (name: string) =>
           Effect.map(
             ask(HOSTED_SERVICE_PATH.AUTOMATIONS, owner, {
@@ -678,8 +740,10 @@ it.layer(getTestDB())("the automation routes", (it) => {
             (answer) =>
               readAnswer(automationAnswerSchema, HOSTED_HTTP_STATUS.CREATED, answer).automation,
           );
+
         const ran = yield* made("Morning triage");
         yield* made("Never ran");
+
         const runOnce = (automationId = ran.id) =>
           Effect.map(
             ask(automationRunPath(automationId), owner, {
@@ -689,6 +753,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             (answer) =>
               readAnswer(automationRunAnswerSchema, HOSTED_HTTP_STATUS.CREATED, answer).run,
           );
+
         const refused = yield* runOnce();
         const agent = Option.getOrThrow(yield* readAgent(owner, refused.agent?.id ?? ""));
         // Its turn failed on the model call, GitHub's refusal in its detail.
@@ -703,6 +768,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
           }),
         );
         yield* runOnce();
+
         // A run whose agent's session ended for good, and one whose turn settled.
         const endedOn = (name: string, status: TurnStatus, failure: string | null) =>
           Effect.gen(function* () {
@@ -719,26 +785,33 @@ it.layer(getTestDB())("the automation routes", (it) => {
                 settledAt: new Date(),
               }),
             );
+
             return automation.id;
           });
+
         const ended = yield* endedOn(
           "Session ended",
           TURN_STATUS.FAILED,
           TURN_FAILURE.SESSION_ENDED,
         );
+
         const settled = yield* endedOn("Settled", TURN_STATUS.SETTLED, null);
 
         const now = yield* Clock.currentTimeMillis;
         const sql = yield* SqlClient.SqlClient;
+
         const run = (statement: { readonly sql: string; readonly params: readonly unknown[] }) =>
           sql.unsafe(statement.sql, [...statement.params]);
+
         for (const reader of [owner, other]) {
           const statements = Option.getOrThrow(
             automationsRead.statements({ userId: reader, workspaceId: plan.workspaceId }),
           );
+
           const rows = yield* Schema.decodeUnknownEffect(AUTOMATIONS_READ.rows)({
             automations: yield* run(statements.automations),
           });
+
           const held = readAnswer(
             automationListAnswerSchema,
             HOSTED_HTTP_STATUS.OK,
@@ -747,8 +820,10 @@ it.layer(getTestDB())("the automation routes", (it) => {
               reader,
             ),
           );
+
           assert.deepEqual(automationsOfLiveRows(rows, now, ORIGIN), held.automations);
         }
+
         const statements = Option.getOrThrow(
           automationRunsRead.statements({
             userId: owner,
@@ -756,17 +831,20 @@ it.layer(getTestDB())("the automation routes", (it) => {
             workspaceId: plan.workspaceId,
           }),
         );
+
         const runs = automationRunsOfLiveRows(
           yield* Schema.decodeUnknownEffect(AUTOMATION_RUNS_READ.rows)({
             runs: yield* run(statements.runs),
           }),
           now,
         );
+
         const history = readAnswer(
           automationRunsAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(automationRunsPath(ran.id), owner),
         );
+
         assert.deepEqual(runs, history.runs);
         assert.deepEqual(
           runs.map((each) => `${each.agent?.status}:${each.agent?.failureReason ?? ""}`).toSorted(),
@@ -776,6 +854,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             `${AGENT_STATUS.RUNNING}:`,
           ],
         );
+
         for (const [automationId, said] of [
           [ended, `${AGENT_STATUS.FAILED}:${AGENT_FAILURE.SESSION_ENDED}`],
           [settled, `${AGENT_STATUS.COMPLETED}:`],
@@ -787,20 +866,24 @@ it.layer(getTestDB())("the automation routes", (it) => {
               workspaceId: plan.workspaceId,
             }),
           );
+
           const [only] = automationRunsOfLiveRows(
             yield* Schema.decodeUnknownEffect(AUTOMATION_RUNS_READ.rows)({
               runs: yield* run(read.runs),
             }),
             now,
           );
+
           const heldRuns = readAnswer(
             automationRunsAnswerSchema,
             HOSTED_HTTP_STATUS.OK,
             yield* ask(automationRunsPath(automationId), owner),
           ).runs;
+
           assert.deepEqual([only], heldRuns);
           assert.equal(`${only?.agent?.status}:${only?.agent?.failureReason ?? ""}`, said);
         }
+
         const outsiders = Option.getOrThrow(
           automationRunsRead.statements({
             userId: other,
@@ -808,6 +891,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             workspaceId: plan.workspaceId,
           }),
         );
+
         assert.deepEqual(yield* run(outsiders.runs), []);
       }),
   );
@@ -817,6 +901,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask } = yield* openAccounts;
+
         const { automation } = readAnswer(
           automationAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -825,6 +910,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: weekdays(task.workspaceId),
           }),
         );
+
         const { run } = readAnswer(
           automationRunAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -833,6 +919,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: { idempotencyKey: randomUUID() },
           }),
         );
+
         const agent = Option.getOrThrow(yield* readAgent(owner, run.agent?.id ?? ""));
         // Its one turn ran past its bound, and the sweep settled it.
         yield* Database.use((db) =>
@@ -850,6 +937,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(automationRunsPath(automation.id), owner),
         );
+
         assert.deepEqual(history.runs[0]?.agent, {
           id: agent.id,
           // The run names its agent as the agent goes by: its title.
@@ -866,6 +954,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask, opened } = yield* openAccounts;
+
         const { automation } = readAnswer(
           automationAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -874,6 +963,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: weekdays(task.workspaceId),
           }),
         );
+
         const key = randomUUID();
 
         const first = readAnswer(
@@ -884,6 +974,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: { idempotencyKey: key },
           }),
         );
+
         const again = readAnswer(
           automationRunAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -892,6 +983,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: { idempotencyKey: key },
           }),
         );
+
         const history = readAnswer(
           automationRunsAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -916,6 +1008,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask } = yield* openAccounts;
+
         /** The transaction that last wrote the automation's row, as Postgres keeps it. */
         const writtenIn = (id: string) =>
           Effect.map(
@@ -936,6 +1029,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: weekdays(task.workspaceId),
           }),
         );
+
         const { id } = made.automation;
         assert.equal(made.txid, yield* writtenIn(id), "a make answers the row's transaction");
 
@@ -944,22 +1038,27 @@ it.layer(getTestDB())("the automation routes", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(automationPath(id), owner, { method: "PATCH", body: { name: "Renamed" } }),
         );
+
         assert.equal(renamed.txid, yield* writtenIn(id), "a change answers the row's transaction");
         assert.notEqual(renamed.txid, made.txid);
 
         const key = randomUUID();
         const run = { method: "POST", body: { idempotencyKey: key } } as const;
+
         const first = readAnswer(
           automationRunAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
           yield* ask(automationRunPath(id), owner, run),
         );
+
         assert.ok(first.txid !== undefined, "a Run now that records a run answers its transaction");
+
         const again = readAnswer(
           automationRunAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(automationRunPath(id), owner, run),
         );
+
         assert.equal(again.txid, undefined, "one that records nothing answers none");
 
         const deleted = readAnswer(
@@ -967,6 +1066,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* ask(automationPath(id), owner, { method: "DELETE" }),
         );
+
         assert.ok(deleted.txid !== undefined, "a delete answers its transaction");
         assert.notEqual(deleted.txid, renamed.txid);
         assert.deepEqual(
@@ -996,6 +1096,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, other, task, ask, openedAs } = yield* openAccounts;
+
         const made = () =>
           Effect.map(
             ask(HOSTED_SERVICE_PATH.AUTOMATIONS, owner, {
@@ -1005,8 +1106,10 @@ it.layer(getTestDB())("the automation routes", (it) => {
             (answer) =>
               readAnswer(automationAnswerSchema, HOSTED_HTTP_STATUS.CREATED, answer).automation,
           );
+
         const byCookie = yield* made();
         const byBearer = yield* made();
+
         const runNow = (id: string, bearer: string | undefined, cookie?: string) =>
           ask(automationRunPath(id), bearer, {
             method: "POST",
@@ -1015,11 +1118,13 @@ it.layer(getTestDB())("the automation routes", (it) => {
           });
 
         const stranger = yield* runNow(byCookie.id, undefined, sessionCookieOf(other));
+
         const overCookie = readAnswer(
           automationRunAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
           yield* runNow(byCookie.id, undefined, sessionCookieOf(owner)),
         );
+
         const overBearer = readAnswer(
           automationRunAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -1042,6 +1147,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
       Effect.gen(function* () {
         const { owner, other, task, ask, openedAs } = yield* openAccounts;
         yield* joinWorkspace(task.workspaceId, other);
+
         const { automation } = readAnswer(
           automationAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -1072,6 +1178,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask } = yield* openAccounts;
+
         const hooked = readAnswer(
           automationAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -1080,6 +1187,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: { ...weekdays(task.workspaceId), trigger: { kind: AUTOMATION_TRIGGER.WEBHOOK } },
           }),
         ).automation;
+
         const hashOf = (id: string) =>
           Effect.map(
             Database.use((db) =>
@@ -1090,16 +1198,19 @@ it.layer(getTestDB())("the automation routes", (it) => {
             ),
             (rows) => rows[0]?.hash,
           );
+
         const before = yield* hashOf(hooked.id);
 
         const resent = yield* ask(automationPath(hooked.id), owner, {
           method: "PATCH",
           body: { name: "Renamed", trigger: { kind: AUTOMATION_TRIGGER.WEBHOOK } },
         });
+
         assert.equal(resent.status, HOSTED_HTTP_STATUS.OK);
         assert.equal(yield* hashOf(hooked.id), before, "the secret stands");
 
         yield* pausedByAnOlderBuild(hooked.id);
+
         const pausedByOwner = readAnswer(
           automationAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -1108,6 +1219,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: { enabled: false },
           }),
         ).automation;
+
         assert.equal(pausedByOwner.pausedReason, null);
 
         const escaped = yield* ask(HOSTED_SERVICE_PATH.AUTOMATIONS, owner, {
@@ -1120,12 +1232,14 @@ it.layer(getTestDB())("the automation routes", (it) => {
             },
           },
         });
+
         assert.equal(escaped.status, HOSTED_HTTP_STATUS.CREATED);
 
         const notUuid = yield* ask(automationRunPath(hooked.id), owner, {
           method: "POST",
           body: { idempotencyKey: "2026-10-15T09:00:00.000Z" },
         });
+
         assert.deepEqual(notUuid.body, { error: HOSTED_API_ERROR.INVALID_REQUEST });
       }),
   );
@@ -1135,13 +1249,16 @@ it.layer(getTestDB())("the automation routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask } = yield* openAccounts;
+
         const made = (body: WireBoundaryInput) =>
           ask(HOSTED_SERVICE_PATH.AUTOMATIONS, owner, { method: "POST", body });
+
         const { automation } = readAnswer(
           automationAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
           yield* made(weekdays(task.workspaceId)),
         );
+
         const { run } = readAnswer(
           automationRunAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -1150,6 +1267,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: { idempotencyKey: randomUUID() },
           }),
         );
+
         const agentId = run.agent?.id ?? "";
 
         const continued = readAnswer(
@@ -1163,10 +1281,12 @@ it.layer(getTestDB())("the automation routes", (it) => {
             },
           }),
         ).automation;
+
         const strangerAgent = yield* ask(automationPath(automation.id), owner, {
           method: "PATCH",
           body: { target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: randomUUID() } },
         });
+
         const personal = yield* openWorkspace(owner);
         yield* Database.use((db) =>
           db
@@ -1177,10 +1297,12 @@ it.layer(getTestDB())("the automation routes", (it) => {
         const installation = INSTALLATIONS[installationsConnected++];
         assert.ok(installation);
         yield* connectWorkspaceGitHub(personal, installation);
+
         const inPersonalWorkspace = yield* made({
           ...weekdays(personal),
           scope: AUTOMATION_SCOPE.WORKSPACE,
         });
+
         const shared = readAnswer(
           automationAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -1230,6 +1352,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             .set({ role: `${WORKSPACE_ROLE.MEMBER},${WORKSPACE_ROLE.ADMIN}` })
             .where(eq(memberTable.userId, admin)),
         );
+
         const { ask } = yield* standing(
           new Map([
             [`Bearer ${owner}`, owner],
@@ -1237,23 +1360,27 @@ it.layer(getTestDB())("the automation routes", (it) => {
             [`Bearer ${admin}`, admin],
           ]),
         );
+
         const make = (by: string, body: WireBoundaryInput) =>
           Effect.map(
             ask(HOSTED_SERVICE_PATH.AUTOMATIONS, by, { method: "POST", body }),
             (answer) =>
               readAnswer(automationAnswerSchema, HOSTED_HTTP_STATUS.CREATED, answer).automation,
           );
+
         const listed = (by: string) =>
           Effect.map(ask(HOSTED_SERVICE_PATH.AUTOMATIONS, by), (answer) =>
             readAnswer(automationListAnswerSchema, HOSTED_HTTP_STATUS.OK, answer)
               .automations.map((each) => each.id)
               .toSorted(),
           );
+
         const patch = (by: string, id: string, body: WireBoundaryInput) =>
           Effect.map(
             ask(automationPath(id), by, { method: "PATCH", body }),
             (answer) => answer.status,
           );
+
         const runNow = (by: string, id: string) =>
           Effect.map(
             ask(automationRunPath(id), by, {
@@ -1262,14 +1389,17 @@ it.layer(getTestDB())("the automation routes", (it) => {
             }),
             (answer) => answer.status,
           );
+
         const remove = (by: string, id: string) =>
           Effect.map(ask(automationPath(id), by, { method: "DELETE" }), (answer) => answer.status);
 
         const personal = yield* make(owner, weekdays(task.workspaceId));
+
         const shared = yield* make(owner, {
           ...weekdays(task.workspaceId),
           scope: AUTOMATION_SCOPE.WORKSPACE,
         });
+
         const leavers = yield* make(member, weekdays(task.workspaceId));
 
         assert.deepEqual(yield* listed(member), [shared.id, leavers.id].toSorted());
@@ -1329,19 +1459,23 @@ it.layer(getTestDB())("the automation routes", (it) => {
         const member = yield* openGithubUser();
         yield* connectAgentApiKeys(member);
         yield* joinWorkspace(task.workspaceId, member, WORKSPACE_ROLE.MEMBER);
+
         const { ask } = yield* standing(
           new Map([
             [`Bearer ${owner}`, owner],
             [`Bearer ${member}`, member],
           ]),
         );
+
         const shared = { ...weekdays(task.workspaceId), scope: AUTOMATION_SCOPE.WORKSPACE };
+
         const make = (by: string) =>
           Effect.map(
             ask(HOSTED_SERVICE_PATH.AUTOMATIONS, by, { method: "POST", body: shared }),
             (answer) =>
               readAnswer(automationAnswerSchema, HOSTED_HTTP_STATUS.CREATED, answer).automation,
           );
+
         const minesListed = (by: string) =>
           Effect.map(ask(HOSTED_SERVICE_PATH.AUTOMATIONS, by), (answer) =>
             Object.fromEntries(
@@ -1353,6 +1487,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
 
         const owners = yield* make(owner);
         const members = yield* make(member);
+
         const readByMember = readAnswer(
           automationAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -1373,6 +1508,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask } = yield* openAccounts;
+
         const { automation } = readAnswer(
           automationAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -1381,6 +1517,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: weekdays(task.workspaceId),
           }),
         );
+
         // The due instant as the sweep leaves it once it has moved a schedule on.
         const later = new Date((automation.nextRunAt ?? 0) + 7 * 24 * 60 * 60_000);
         yield* Database.use((db) =>
@@ -1398,6 +1535,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             body: { enabled: true, name: "Renamed" },
           }),
         );
+
         const malformed = yield* ask(`${HOSTED_SERVICE_PATH.AUTOMATIONS}?planId=not-a-plan`, owner);
 
         assert.equal(
@@ -1414,6 +1552,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, task, ask } = yield* openAccounts;
+
         const { automation } = readAnswer(
           automationAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -1427,14 +1566,17 @@ it.layer(getTestDB())("the automation routes", (it) => {
           method: "PATCH",
           body: { enabled: "yes", owner: "someone-else" },
         });
+
         const unsignedMade = yield* ask(HOSTED_SERVICE_PATH.AUTOMATIONS, undefined, {
           method: "POST",
           body: { name: 7 },
         });
+
         const twice = yield* ask(
           `${HOSTED_SERVICE_PATH.AUTOMATIONS}?planId=${task.id}&planId=${task.id}`,
           owner,
         );
+
         const oversized = yield* ask(HOSTED_SERVICE_PATH.AUTOMATIONS, owner, {
           method: "POST",
           body: {
@@ -1450,6 +1592,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
           assert.equal(unsigned.status, HOSTED_HTTP_STATUS.UNAUTHORIZED);
           assert.deepEqual(unsigned.body, { error: HOSTED_API_ERROR.INVALID_TOKEN });
         }
+
         assert.equal(twice.status, HOSTED_HTTP_STATUS.BAD_REQUEST, JSON.stringify(twice.body));
         assert.deepEqual(twice.body, { error: HOSTED_API_ERROR.INVALID_REQUEST });
         assert.equal(oversized.status, HOSTED_HTTP_STATUS.PAYLOAD_TOO_LARGE);
@@ -1462,6 +1605,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { task, ask } = yield* openAccounts;
+
         const unsignedOversized = yield* ask(HOSTED_SERVICE_PATH.AUTOMATIONS, undefined, {
           method: "POST",
           body: {
@@ -1472,6 +1616,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             },
           },
         });
+
         assert.equal(unsignedOversized.status, HOSTED_HTTP_STATUS.PAYLOAD_TOO_LARGE);
         assert.deepEqual(unsignedOversized.body, { error: HOSTED_API_ERROR.REQUEST_TOO_LARGE });
       }),

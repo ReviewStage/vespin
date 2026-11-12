@@ -52,6 +52,7 @@ function revisionsStatement(userId: string, taskId: string) {
     .where(eq(descriptionRevision.taskId, taskId))
     .orderBy(desc(descriptionRevision.seq))
     .limit(DESCRIPTION_HISTORY_BOUNDS.PAGE + 1);
+
   return liveRowsStatement(
     TASK_HISTORY_READ.parts.revisions,
     {

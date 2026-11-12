@@ -47,6 +47,7 @@ export function useSandboxState(sandbox: AgentSandbox | undefined): SandboxState
   const edge = sandboxStandingEdge(sandbox, now);
   useEffect(() => {
     if (edge === undefined) return undefined;
+
     // Note that we read the clock again on waking, because a timer may fire a
     // moment early, and a draw before the edge would find the same edge and
     // arm nothing more.
@@ -58,8 +59,10 @@ export function useSandboxState(sandbox: AgentSandbox | undefined): SandboxState
             Effect.suspend(() => until),
           ),
     );
+
     return rendererFork(until);
   }, [edge]);
+
   return sandboxStandingAt(sandbox, now);
 }
 

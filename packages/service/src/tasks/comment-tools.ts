@@ -218,6 +218,7 @@ const DESCRIPTION_COMMENT_TOOLS = {
 } as const;
 
 type CommentTool = (typeof COMMENT_TOOLS)[number];
+
 export type CommentToolName = CommentTool["name"];
 
 /** A call that took nothing, and why. */
@@ -228,6 +229,7 @@ export function commentToolRejected(reason: string): WireRecord {
 /** The task a call names, or nothing where it names none that reads, which refuses it whole. */
 export function commentedTaskOf(input: UnparsedWireValue): string | undefined {
   const read = readCommentedTask(input);
+
   return Result.isSuccess(read) ? read.success.taskId : undefined;
 }
 
@@ -262,9 +264,11 @@ function threadRead(thread: DescriptionCommentThread): WireRecord {
         ? undefined
         : { files: entry.files.map((file) => ({ name: file.name, type: file.mediaType })) }),
     }));
+
   const asked = thread.entries
     .filter((entry) => entry.kind === DESCRIPTION_COMMENT_ENTRY.ASKED && entry.asked !== undefined)
     .map((entry) => ({ by: writerOf(entry), to: askedName(entry.asked) }));
+
   // Note that a page's thread stands on no words of the description, so it names its page in their place.
   const where =
     thread.page !== undefined
@@ -272,6 +276,7 @@ function threadRead(thread: DescriptionCommentThread): WireRecord {
       : thread.anchor === undefined
         ? { onWordsDeleted: true }
         : undefined;
+
   return {
     thread: thread.id,
     state: thread.status,
@@ -290,7 +295,9 @@ function threadRead(thread: DescriptionCommentThread): WireRecord {
  */
 export function commentAnswerRead(answer: DescriptionCommentThreadAnswer): WireRecord {
   if ("refused" in answer) return commentToolRejected(answer.refused);
+
   if ("deleted" in answer) return commentToolRejected(COMMENT_TOOL_REFUSAL.NO_THREAD);
+
   return {
     status: ACTION_RESULT_STATUS.ACCEPTED,
     ...threadRead(answer.thread),
@@ -302,9 +309,11 @@ export function commentAnswerRead(answer: DescriptionCommentThreadAnswer): WireR
 function written(outcome: DescriptionCommentOutcome): WireRecord {
   if (outcome.status === DESCRIPTION_COMMENT_OUTCOME.NO_TASK)
     return commentToolRejected(COMMENT_TOOL_REFUSAL.NO_TASK);
+
   // Note that no tool starts a thread, so no write of one finds no page; a thread it names is the task's or none.
   if (outcome.status !== DESCRIPTION_COMMENT_OUTCOME.DONE)
     return commentToolRejected(COMMENT_TOOL_REFUSAL.NO_THREAD);
+
   return commentAnswerRead(outcome.answer);
 }
 
@@ -323,55 +332,75 @@ export function runCommentTool(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   const { taskId, writer, descriptionsOn } = binding;
+
   const act = (thread: string, action: Parameters<typeof actOnDescriptionCommentThread>[3]) =>
     Effect.map(actOnDescriptionCommentThread(writer, taskId, thread, action), written);
+
   const threadOf = (thread: string) =>
     Effect.map(readDescriptionCommentThread(writer.userId, taskId, thread), Option.getOrUndefined);
+
   const descriptionOff = (thread: DescriptionCommentThread | undefined) =>
     descriptionThreadOff(thread, descriptionsOn);
+
   const run = Effect.gen(function* () {
     switch (name) {
       case AGENT_TOOL.READ_COMMENTS: {
         const read = readEither(READ_INPUT)(input);
+
         if (Result.isFailure(read)) return commentToolRejected(COMMENT_TOOL_REFUSAL.UNREADABLE);
         const { page } = read.success;
+
         if (page === undefined && !descriptionsOn) {
           return commentToolRejected(EXPERIMENT_OFF_REFUSAL);
         }
+
         const status = read.success.status ?? DESCRIPTION_COMMENT_STATUS.OPEN;
         const threads = yield* readDescriptionCommentThreads(writer.userId, taskId, page);
+
         if (Option.isNone(threads)) return commentToolRejected(COMMENT_TOOL_REFUSAL.NO_TASK);
+
         return {
           status: ACTION_RESULT_STATUS.ACCEPTED,
           threads: threads.value.filter((thread) => thread.status === status).map(threadRead),
         };
       }
+
       case AGENT_TOOL.REPLY_TO_COMMENT: {
         const read = readEither(REPLY_INPUT)(input);
+
         if (Result.isFailure(read)) return commentToolRejected(COMMENT_TOOL_REFUSAL.UNREADABLE);
         const thread = yield* threadOf(read.success.thread);
+
         if (descriptionOff(thread)) return commentToolRejected(EXPERIMENT_OFF_REFUSAL);
+
         if (thread?.status === DESCRIPTION_COMMENT_STATUS.RESOLVED)
           return commentToolRejected(COMMENT_TOOL_REFUSAL.RESOLVED);
+
         return yield* act(read.success.thread, {
           action: DESCRIPTION_COMMENT_ACTION.REPLY,
           clientKey: randomUUID(),
           words: read.success.words,
         });
       }
+
       case AGENT_TOOL.UPDATE_COMMENT: {
         const read = readEither(UPDATE_INPUT)(input);
+
         if (Result.isFailure(read)) return commentToolRejected(COMMENT_TOOL_REFUSAL.UNREADABLE);
+
         if (descriptionOff(yield* threadOf(read.success.thread))) {
           return commentToolRejected(EXPERIMENT_OFF_REFUSAL);
         }
+
         const action = read.success.resolved
           ? DESCRIPTION_COMMENT_ACTION.RESOLVE
           : DESCRIPTION_COMMENT_ACTION.REOPEN;
+
         return yield* act(read.success.thread, { action });
       }
     }
   });
+
   return run.pipe(
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(commentToolRejected(COMMENT_TOOL_REFUSAL.UNAVAILABLE))),
@@ -386,7 +415,9 @@ export function runCommentTool(
  */
 export function openThreadsText(threads: readonly DescriptionCommentThread[]): readonly string[] {
   const open = threads.filter((thread) => thread.status === DESCRIPTION_COMMENT_STATUS.OPEN);
+
   if (open.length === 0) return [];
+
   return [OPEN_THREADS_MARKER, ...open.map((thread) => JSON.stringify(threadRead(thread)))];
 }
 

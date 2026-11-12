@@ -636,6 +636,7 @@ function surveyResponseItem(
   environment: string,
 ): PosthogBatchItem {
   const answered = response.answers.filter((answer) => answer.response !== undefined);
+
   return {
     event: SURVEY_SENT_EVENT,
     distinct_id: response.userId,
@@ -693,6 +694,7 @@ const productAnalyticsOfEnvironment = Layer.effect(
     const client = yield* HttpClient.HttpClient;
     const database = yield* Effect.context<DatabaseServices>();
     const key = environment.posthogProjectApiKey;
+
     if (key === undefined) {
       return {
         capture: () => Effect.void,
@@ -700,15 +702,18 @@ const productAnalyticsOfEnvironment = Layer.effect(
         nameWorkspace: () => Effect.void,
       };
     }
+
     const host = environment.posthogIngestHost;
     // Vercel's own variable, read as the layer is built, as `/api/events` reads it per request.
     const deployment = deploymentNamed(process.env[DEPLOYMENT_VARIABLE]);
     const named = new Map<string, number>();
+
     const post = (items: readonly PosthogBatchItem[]) =>
       postBatchEffect(
         { api_key: Redacted.value(key), historical_migration: false, batch: items },
         { ...(host === undefined ? undefined : { host }), timeoutMs: SERVER_EVENT_TIMEOUT_MS },
       ).pipe(Effect.provideService(HttpClient.HttpClient, client));
+
     // The group's naming item, or none where the workspace is gone or its row cannot be read.
     const groupItems = (userId: string, workspaceId: string, now: number) =>
       readWorkspaceFace(workspaceId).pipe(
@@ -721,6 +726,7 @@ const productAnalyticsOfEnvironment = Layer.effect(
         ),
         Effect.orElseSucceed((): PosthogBatchItem[] => []),
       );
+
     // Posts the items, the group's naming first, and notes the group named once PostHog took them.
     const postNaming = (
       workspaceId: string,
@@ -730,12 +736,16 @@ const productAnalyticsOfEnvironment = Layer.effect(
     ) =>
       Effect.gen(function* () {
         const answer = yield* post([...naming, ...rest]);
+
         if (naming.length > 0 && answer?.ok === true) named.set(workspaceId, now);
       });
+
     const due = (workspaceId: string, now: number) => {
       const last = named.get(workspaceId);
+
       return last === undefined || now - last >= WORKSPACE_GROUP_REFRESH_MS;
     };
+
     return {
       capture: (event: ServerEvent) =>
         Effect.gen(function* () {
@@ -743,15 +753,19 @@ const productAnalyticsOfEnvironment = Layer.effect(
           const person = yield* readAccountPerson(event.userId).pipe(
             Effect.provideContext(database),
           );
+
           if (person === undefined) return;
           const now = yield* Clock.currentTimeMillis;
+
           const item = serverEventItem(
             event,
             { name: person.name, email: person.email },
             now,
             deployment,
           );
+
           const workspaceId = event.workspaceId;
+
           if (workspaceId === undefined || !due(workspaceId, now)) return yield* post([item]);
           yield* postNaming(
             workspaceId,
@@ -766,6 +780,7 @@ const productAnalyticsOfEnvironment = Layer.effect(
           const person = yield* readAccountPerson(response.userId).pipe(
             Effect.provideContext(database),
           );
+
           if (person === undefined) return;
           const now = yield* Clock.currentTimeMillis;
           yield* post([
@@ -781,6 +796,7 @@ const productAnalyticsOfEnvironment = Layer.effect(
         Effect.gen(function* () {
           const now = yield* Clock.currentTimeMillis;
           const naming = yield* groupItems(userId, workspaceId, now);
+
           if (naming.length > 0) yield* postNaming(workspaceId, naming, [], now);
         }),
     };
@@ -856,6 +872,7 @@ function recordServerEventOf<Name extends ServerEventName, E, R>(
           Effect.flatMap(counted, (read) => {
             if (Option.isNone(read)) return Effect.void;
             const { actor, properties } = read.value;
+
             // SAFETY: `properties` is typed as this `name`'s own entry above;
             // the union `ServerEvent` widens the pairing TypeScript cannot follow.
             return analytics.value.capture({
@@ -897,7 +914,9 @@ export function recordSurveyResponse(response: SurveyResponse): Effect.Effect<vo
 /** What a settled turn's row says of how it ended, in the count's words. */
 function turnOutcomeOf(turn: SettledAgentTurn): Values<typeof SERVER_TURN_OUTCOME> {
   if (turn.status === TURN_STATUS.SETTLED) return SERVER_TURN_OUTCOME.COMPLETED;
+
   if (turn.status === TURN_STATUS.CANCELED) return SERVER_TURN_OUTCOME.STOPPED;
+
   return turn.failure === TURN_FAILURE.ABANDONED
     ? SERVER_TURN_OUTCOME.ABANDONED
     : SERVER_TURN_OUTCOME.FAILED;
@@ -916,12 +935,14 @@ function turnFailureOf(turn: SettledAgentTurn): Values<typeof SERVER_TURN_FAILUR
 
 function turnDurationOf(ranMs: number): Values<typeof SERVER_TURN_DURATION> {
   const bucket = TURN_DURATION_BOUNDS.find(([, bound]) => ranMs < bound);
+
   return bucket === undefined ? SERVER_TURN_DURATION.OVER_4H : bucket[0];
 }
 
 /** The bucket a dictated clip's length falls in. */
 export function dictationDurationOf(ms: number): Values<typeof SERVER_DICTATION_DURATION> {
   const bucket = DICTATION_DURATION_BOUNDS.find(([, bound]) => ms < bound);
+
   return bucket === undefined ? SERVER_DICTATION_DURATION.UNDER_2M : bucket[0];
 }
 
@@ -948,6 +969,7 @@ export function turnEndCounted(
       settledTurnAgent(turn.turnId),
       Option.map((agent) => {
         const outcome = turnOutcomeOf(turn);
+
         return {
           actor: { userId: turn.userId, workspaceId: agent.organizationId },
           properties: {
@@ -977,6 +999,7 @@ export const productAnalyticsFromEnvironment = productAnalyticsOfEnvironment;
 export function recordingProductAnalytics() {
   const recorded: ServerEvent[] = [];
   const responses: SurveyResponse[] = [];
+
   const layer = Layer.merge(
     Layer.succeed(ProductAnalytics, {
       capture: (event) => Effect.sync(() => void recorded.push(event)),
@@ -985,5 +1008,6 @@ export function recordingProductAnalytics() {
     }),
     turnEndCounting,
   );
+
   return { layer, recorded, responses };
 }

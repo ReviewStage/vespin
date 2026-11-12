@@ -72,12 +72,15 @@ export function ConnectAgentBanner({
   const card = look === NOTICE_LOOK.CARD;
   const remedy = useRepositoryRemedy();
   const anyPaid = models.some((model) => model.credentialMissing !== true);
+
   // Note that the chosen model's harness stands last.
   const offered = anyPaid
     ? [unpaid.provider]
     : [...PROVIDERS.filter((provider) => provider !== unpaid.provider), unpaid.provider];
+
   const connect = (provider: ModelProvider) =>
     remedy({ reason: FAILURE_REASON.CONNECT_AGENTS, text: unpaid.text, provider })?.();
+
   return (
     <Banner
       look={card ? BANNER_LOOK.CARD : BANNER_LOOK.INSET}

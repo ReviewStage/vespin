@@ -26,12 +26,15 @@ const FROM = new Date("2026-10-30T12:00:00Z");
 function upcoming(cron: string, timezone: string, from: Date, count: number): string[] {
   const due: string[] = [];
   let at = from;
+
   for (let index = 0; index < count; index += 1) {
     const next = nextScheduledRun(schedule(cron, timezone), at);
+
     if (next === undefined) break;
     due.push(next.toISOString());
     at = next;
   }
+
   return due;
 }
 
@@ -58,6 +61,7 @@ describe("a scheduled automation's next run", () => {
         onFailure: (reason) => reason,
         onSuccess: () => undefined,
       });
+
     expect(refusal("every morning", "UTC")).toBe(SCHEDULE_REFUSAL.CRON);
     expect(refusal("0 0 9 * * *", "UTC")).toBe(SCHEDULE_REFUSAL.CRON);
     expect(refusal(SCHEDULE_PRESET.DAILY, "Mars/Olympus_Mons")).toBe(SCHEDULE_REFUSAL.TIMEZONE);

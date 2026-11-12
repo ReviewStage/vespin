@@ -53,11 +53,14 @@ export const restoreRollouts = Effect.fn("agent-runner/codex/restoreRollouts")(f
 ) {
   const key = { projectKey: CODEX_PROJECT, sessionId: threadId };
   const subpaths = yield* Effect.tryPromise(() => store.listSubkeys(key));
+
   for (const subpath of subpaths) {
     if (!rolloutSubpathContained(subpath)) continue;
     const path = join(codexHome, subpath);
+
     if (existsSync(path)) continue;
     const entries = yield* Effect.tryPromise(() => store.load({ ...key, subpath }));
+
     if (entries === null) continue;
     const text = entries.map((entry) => `${JSON.stringify(entry)}\n`).join("");
     yield* Effect.tryPromise(async () => {
@@ -88,12 +91,14 @@ export const openRolloutMirror = Effect.fn("agent-runner/codex/openRolloutMirror
   const sent = yield* Effect.tryPromise(async () => {
     if (!held || !existsSync(path)) return 0;
     const file = await open(path);
+
     try {
       return (await file.stat()).size;
     } finally {
       await file.close();
     }
   });
+
   return {
     store,
     threadId,
@@ -110,23 +115,27 @@ export const mirrorRollout = Effect.fn("agent-runner/codex/mirrorRollout")(funct
   const read = yield* Effect.tryPromise(async () => {
     if (!existsSync(mirror.path)) return { entries: [], bytes: 0 };
     const file = await open(mirror.path);
+
     try {
       const size = (await file.stat()).size;
       const bytes = Buffer.alloc(Math.max(0, size - mirror.sent));
       await file.read(bytes, 0, bytes.length, mirror.sent);
       // Note that a line app-server is still writing is left for the next read.
       const end = bytes.lastIndexOf(0x0a) + 1;
+
       const entries = bytes
         .subarray(0, end)
         .toString("utf8")
         .split("\n")
         .filter((line) => line !== "")
         .map((line): SessionStoreEntry => JSON.parse(line));
+
       return { entries, bytes: end };
     } finally {
       await file.close();
     }
   });
+
   if (read.entries.length === 0) return;
   const key = { projectKey: CODEX_PROJECT, sessionId: mirror.threadId, subpath: mirror.subpath };
   yield* Effect.tryPromise(() => mirror.store.append(key, read.entries));

@@ -18,6 +18,7 @@ import { CatalogSection } from "../section";
 /** A row whose name hangs its card beside the whole row, the row's other act part of its control. */
 function CardedRow(): React.JSX.Element {
   const row = useRef<HTMLSpanElement>(null);
+
   return (
     <span ref={row} className="catalog-carded-row">
       <Tooltip

@@ -71,12 +71,14 @@ const HIGHLIGHT_LANGUAGE = /^highlight-(?:source|text)-(.+)$/u;
 /** A node's classes, as the parsed tree holds them. */
 function classesOf(node: HtmlNode): readonly string[] {
   const named = node.properties?.className;
+
   return Array.isArray(named) ? named.map(String) : [];
 }
 
 /** All the words a node holds, in order. */
 function textOf(node: HtmlNode): string {
   if (node.type === "text") return node.value ?? "";
+
   return (node.children ?? []).map(textOf).join("");
 }
 
@@ -116,18 +118,22 @@ function sourceFor(sources: readonly HtmlNode[], theme: string): string | undefi
   const source = sources.find(
     (each) => SOURCE_THEME.exec(String(each.properties?.media ?? ""))?.[1] === theme,
   );
+
   const set = source?.properties?.srcSet;
   const first = Array.isArray(set) ? set[0] : set;
+
   const address =
     String(first ?? "")
       .trim()
       .split(/\s+/u)[0] ?? "";
+
   return address === "" ? undefined : address;
 }
 
 /** A picture's `<img>` drawn from `address` alone in the theme `mark` names. */
 function themeOnly(image: HtmlNode, address: string, mark: string): HtmlNode {
   const bare = address.split("#")[0] ?? address;
+
   return { ...image, properties: { ...image.properties, src: `${bare}${mark}` } };
 }
 
@@ -143,11 +149,14 @@ function themedImages(picture: HtmlNode): HtmlNode[] {
   const sources = children.filter((child) => isTag(child, "source"));
   const kept = children.filter((child) => !isTag(child, "source"));
   const image = kept.find((child) => isTag(child, "img"));
+
   if (image === undefined) return kept;
   const own = String(image.properties?.src ?? "");
   const light = sourceFor(sources, "light") ?? own;
   const dark = sourceFor(sources, "dark") ?? own;
+
   if (light === dark) return kept;
+
   return kept.flatMap((child) =>
     child === image
       ? [themeOnly(image, light, THEME_ONLY.LIGHT), themeOnly(image, dark, THEME_ONLY.DARK)]
@@ -165,7 +174,9 @@ export function pictureFor(src: string, dark: boolean): string | undefined {
   const [own, other] = dark
     ? [THEME_ONLY.DARK, THEME_ONLY.LIGHT]
     : [THEME_ONLY.LIGHT, THEME_ONLY.DARK];
+
   if (src.endsWith(other)) return undefined;
+
   return src.endsWith(own) ? src.slice(0, -own.length) : src;
 }
 
@@ -189,6 +200,7 @@ const SUGGESTION_ROW = [
 /** Every element under a node, in order, the node first. */
 function elementsOf(node: HtmlNode): readonly HtmlNode[] {
   if (node.type !== "element") return [];
+
   return [node, ...(node.children ?? []).flatMap(elementsOf)];
 }
 
@@ -202,8 +214,10 @@ function suggestion(blob: HtmlNode): HtmlNode {
     if (cell.tagName !== "td") return [];
     const classes = classesOf(cell);
     const mark = SUGGESTION_ROW.find(([name]) => classes.includes(name))?.[1];
+
     return mark === undefined ? [] : [`${mark}${textOf(cell)}`];
   });
+
   return fenced(SUGGESTED_CHANGE_LANGUAGE, lines.join("\n"));
 }
 
@@ -225,10 +239,13 @@ function blank(node: HtmlNode): boolean {
 function selfLinkedPicture(link: HtmlNode): HtmlNode | undefined {
   const held = (link.children ?? []).filter((child) => !blank(child));
   const picture = held[0];
+
   if (held.length !== 1 || picture?.type !== "element" || picture.tagName !== "img") {
     return undefined;
   }
+
   const href = String(link.properties?.href ?? "");
+
   return linksToPicture(href, String(picture.properties?.src ?? "")) ? picture : undefined;
 }
 
@@ -274,16 +291,19 @@ const PHRASING_TAGS: ReadonlySet<string> = new Set([
 function lineOf(block: HtmlNode): { line: HtmlNode[]; blocks: HtmlNode[] } {
   const line: HtmlNode[] = [];
   const blocks: HtmlNode[] = [];
+
   for (const child of block.children ?? []) {
     if (child.type === "element" && !PHRASING_TAGS.has(child.tagName ?? "")) {
       blocks.push(child);
       continue;
     }
+
     line.push(child);
     const held = lineOf(child);
     line.push(...held.line);
     blocks.push(...held.blocks);
   }
+
   return { line, blocks };
 }
 
@@ -291,37 +311,48 @@ function lineOf(block: HtmlNode): { line: HtmlNode[]; blocks: HtmlNode[] } {
 function markInlinePictures(block: HtmlNode): void {
   const { line, blocks } = lineOf(block);
   const worded = line.some((node) => node.type === "text" && !blank(node));
+
   for (const node of line) {
     if (worded && node.type === "element" && node.tagName === "img") {
       node.properties = { ...node.properties, [INLINE_PICTURE]: true };
     }
   }
+
   for (const nested of blocks) markInlinePictures(nested);
 }
 
 /** What one node of GitHub's rendering becomes: itself, nodes in its place, or nothing. */
 function reshaped(node: HtmlNode): readonly HtmlNode[] {
   if (node.type !== "element") return [node];
+
   // A source is an address the window would read itself; its picture's `<img>` stands alone.
   if (node.tagName === "source") return [];
+
   // A themed picture draws an `<img>` for each theme, each its theme's alone.
   if (node.tagName === "picture") {
     node.children = reshapeChildren(themedImages(node));
+
     return [node];
   }
+
   // A picture GitHub links to itself stands alone, the place's to open.
   const picture = node.tagName === "a" ? selfLinkedPicture(node) : undefined;
+
   if (picture !== undefined) return [picture];
   const classes = classesOf(node);
+
   // A suggested change is GitHub's own diff table, whose looks are all its classes.
   if (node.tagName === "div" && classes.includes(SUGGESTION_BLOB)) return [suggestion(node)];
   // A diagram's source stands in a block naming its language (`<pre lang="mermaid">`).
   const named = node.tagName === "pre" ? node.properties?.lang : undefined;
+
   if (named !== undefined && named !== null) return [fenced(String(named), textOf(node))];
   const highlighted = classes.map((each) => HIGHLIGHT_LANGUAGE.exec(each)?.[1]).find(Boolean);
+
   if (node.tagName === "div" && highlighted !== undefined)
     return [fenced(highlighted, textOf(node))];
   node.children = reshapeChildren(node.children ?? []);
+
   return [node];
 }
 
@@ -353,16 +384,22 @@ function picturesUnder(
   if (node.type !== "element" && node.type !== "root") return [];
   const within = node.tagName === "a" ? node : link;
   const children = node.tagName === "picture" ? themedImages(node) : (node.children ?? []);
+
   return children.flatMap((child) => {
     if (child.type !== "element" || child.tagName !== "img") {
       return picturesUnder(child, within, dark);
     }
+
     const src = pictureFor(String(child.properties?.src ?? ""), dark);
+
     if (src === undefined) return [];
     const alt = String(child.properties?.alt ?? "");
+
     if (within === undefined) return [{ src, original: src, alt }];
+
     // A picture in a link stands alone in it, GitHub's own wrapping, or is the link's.
     if (within !== node || selfLinkedPicture(node) !== child) return [];
+
     return [{ src, original: String(node.properties?.href ?? ""), alt }];
   });
 }

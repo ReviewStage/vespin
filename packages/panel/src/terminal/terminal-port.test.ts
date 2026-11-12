@@ -19,11 +19,13 @@ function received(init: MessageEventInit): readonly unknown[] {
   const stop = onTerminalPort((ticket, port) => heard.push({ ticket, port }));
   window.dispatchEvent(new MessageEvent("message", init));
   stop();
+
   return heard;
 }
 
 test("a port the preload hands in under the terminal channel reaches the tab with its ticket", () => {
   const { port1 } = new MessageChannel();
+
   const heard = received({
     data: { channel: TERMINAL_PORT_CHANNEL, ticket: TICKET },
     source: window,
@@ -37,16 +39,19 @@ test("a port from another source, under another channel, or with no ticket never
   const { port1 } = new MessageChannel();
   const frame = document.createElement("iframe");
   document.body.append(frame);
+
   const fromFrame = received({
     data: { channel: TERMINAL_PORT_CHANNEL, ticket: TICKET },
     source: frame.contentWindow,
     ports: [port1],
   });
+
   const otherChannel = received({
     data: { channel: "other", ticket: TICKET },
     source: window,
     ports: [port1],
   });
+
   const noTicket = received({
     data: { channel: TERMINAL_PORT_CHANNEL },
     source: window,

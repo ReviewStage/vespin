@@ -23,6 +23,7 @@ export const startedTurnListener: Layer.Layer<StartedTurnListener> = Layer.effec
   StartedTurnListener,
   Effect.gen(function* () {
     const apns = yield* Effect.serviceOption(ApnsSender);
+
     return {
       heard: (turn) =>
         Option.match(apns, {

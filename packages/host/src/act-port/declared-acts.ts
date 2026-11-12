@@ -56,8 +56,10 @@ function isActRefused(error: unknown): error is ActRefused {
 /** The act's own refusal, in `sentence` where one is given, as the error its contract declares. */
 function refusalOf(act: AnyHostAct, sentence: string | undefined) {
   const refused = createORPCErrorConstructorMap(act.procedure["~orpc"].errorMap)[ACT_ERROR.REFUSED];
+
   // Note that every act contract declares the refusal (`contract/base.ts`), so this is an invariant rather than a branch.
   if (refused === undefined) throw new Error(`${act.kind} declares no refusal.`);
+
   return refused(sentence === undefined ? undefined : { message: sentence });
 }
 
@@ -68,6 +70,7 @@ export function declaredAnswer<Act extends AnyHostAct>(
   input: ActInput<Act>,
 ): Effect.Effect<ActOutput<Act>, unknown> {
   const carries = EffectSchema.is(act.output);
+
   return Effect.suspend(() => handler(input)).pipe(
     Effect.withErrorReporting({ defectsOnly: true }),
     Effect.filterOrFail(carries, () => new Error(`${act.kind} answered a shape it cannot carry`)),
@@ -75,7 +78,9 @@ export function declaredAnswer<Act extends AnyHostAct>(
       // Note that an interrupted call is the window gone, so nothing is drawn for it.
       if (Cause.hasInterruptsOnly(cause)) return Effect.failCause(cause);
       const refused = Option.filter(Cause.findErrorOption(cause), isActRefused);
+
       if (Option.isSome(refused)) return Effect.fail(refusalOf(act, refused.value.sentence));
+
       return Option.match(act.unanswered, {
         onNone: () => Effect.failCause(cause),
         onSome: (unanswered) => Effect.succeed(unanswered),
@@ -95,13 +100,17 @@ export function declaredActProcedures<
   const Handlers extends Partial<HostActTable<Acts>>,
 >(acts: Acts, handlers: Handlers): DeclaredProcedures<Acts, keyof Handlers & keyof Acts> {
   const procedures: Record<string, unknown> = {};
+
   for (const [name, handler] of Object.entries(handlers)) {
     const act = acts[name];
+
     if (act === undefined || handler === undefined || isLiveFollow(act) || act.byHand) continue;
+
     // SAFETY: a declared act's kind keys its own procedure in the contract `actPort` implements.
     const builder = actPort[
       act.kind as keyof typeof actPort
     ] as unknown as DeclaredProcedureBuilder;
+
     procedures[act.kind] = builder.effect(function* ({ input }) {
       // SAFETY: the port read `input` with the act's own input schema before this body runs, and the handler is the act's own.
       return yield* declaredAnswer(
@@ -111,6 +120,7 @@ export function declaredActProcedures<
       );
     });
   }
+
   // SAFETY: the loop above built each handed act's procedure under its own kind.
   return procedures as DeclaredProcedures<Acts, keyof Handlers & keyof Acts>;
 }

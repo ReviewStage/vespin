@@ -31,6 +31,7 @@ beforeEach(() => {
   sent = [];
   fakeActPortAnswering((request) => {
     sent.push(request);
+
     return Promise.resolve(undefined);
   });
 });
@@ -67,11 +68,15 @@ async function mount(admin: boolean): Promise<{ sidebar: HTMLElement; path: () =
   await act(async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
+
   const switcher =
     container.querySelector<HTMLButtonElement>('.sidebar-workspace button[aria-haspopup="menu"]') ??
     assert.fail("the workspace switcher");
+
   act(() => switcher.click());
+
   if (admin) await vi.waitFor(() => assert.equal(adminItem() !== undefined, true));
+
   return { sidebar: container, path: () => router.history.location.pathname };
 }
 

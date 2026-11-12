@@ -25,8 +25,10 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 
 /** The server's instance, of which the SDK calls `connect` alone. */
 type SdkServer = McpSdkServerConfigWithInstance["instance"];
+
 /** The transport the SDK connects the server to: the CLI's control channel. */
 type CliTransport = Parameters<SdkServer["connect"]>[0];
+
 /** One JSON-RPC message, either way across that channel. */
 type JsonRpcMessage = Parameters<CliTransport["send"]>[0];
 
@@ -42,6 +44,7 @@ interface Received {
 function requestId(message: JsonRpcMessage): string | number | undefined {
   if (!("method" in message) || !("id" in message)) return undefined;
   const id: unknown = message.id;
+
   return typeof id === "string" || typeof id === "number" ? id : undefined;
 }
 
@@ -67,22 +70,29 @@ function relay(
     HttpClientRequest.setHeader("accept", "application/json, text/event-stream"),
     HttpClientRequest.bodyText(JSON.stringify(message), "application/json"),
   );
+
   const failed = (detail: string) => {
     const id = requestId(message);
+
     if (id === undefined) return Effect.void;
+
     const error: JsonRpcMessage = {
       jsonrpc: "2.0",
       id,
       error: { code: INTERNAL_ERROR, message: detail },
     };
+
     return deliver(transport, error);
   };
+
   return client.execute(request).pipe(
     Effect.flatMap((response) => {
       if (response.status < 200 || response.status >= 300) {
         return failed(`The service answered ${response.status}`);
       }
+
       if (requestId(message) === undefined) return Effect.void;
+
       return response.json.pipe(
         Effect.flatMap((body) =>
           isJsonRpc(body)
@@ -115,16 +125,20 @@ export const openMcpRelay = Effect.fn("agent-runner/openMcpRelay")(function* (
     Stream.runDrain,
     Effect.forkScoped,
   );
+
   const server: Pick<SdkServer, "connect"> = {
     connect: (transport) => {
       transport.onmessage = (message) => {
         Queue.offerUnsafe(inbox, { transport, message });
       };
+
       return transport.start();
     },
   };
+
   // Note that the SDK calls the instance's `connect` and nothing else of it
   // (0.3.304's `connectSdkMcpServer`), so a relay stands in for an McpServer.
   const instance = server as SdkServer;
+
   return { type: "sdk", name, instance };
 });

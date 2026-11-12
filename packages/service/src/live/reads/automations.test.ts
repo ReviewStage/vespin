@@ -31,6 +31,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -43,11 +44,13 @@ const openWorkspace = (...members: readonly string[]) =>
     yield* db
       .insert(organization)
       .values({ id, name: "Test Workspace", slug: `workspace-${id}`, createdAt: now });
+
     for (const userId of members) {
       yield* db
         .insert(member)
         .values({ id: randomUUID(), organizationId: id, userId, role: "member", createdAt: now });
     }
+
     return id;
   });
 
@@ -73,6 +76,7 @@ const ranOnce = (
         scope,
       }),
     );
+
     yield* recordAutomationRun(made, {
       dedupeKey: randomUUID(),
       firing: { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: firedAt.getTime() },
@@ -101,12 +105,15 @@ it.layer(getTestDB())("the automations' live reads", (it) => {
         yield* ranOnce(reader, elsewhere, "Elsewhere", AUTOMATION_SCOPE.PERSONAL, new Date(4_000));
 
         const sql = yield* SqlClient.SqlClient;
+
         const { runs } = Option.getOrThrow(
           automationWorkspaceRunsRead.statements({ userId: reader, workspaceId: workspace }),
         );
+
         const rows = yield* Schema.decodeUnknownEffect(AUTOMATION_WORKSPACE_RUNS_READ.rows)({
           runs: yield* sql.unsafe(runs.sql, [...runs.params]),
         });
+
         assert.deepEqual(
           automationWorkspaceRunsOfLiveRows(rows, 5_000).map((run) => run.automation.name),
           ["Shared", "Mine"],

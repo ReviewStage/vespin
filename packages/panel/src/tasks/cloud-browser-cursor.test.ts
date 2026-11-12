@@ -78,6 +78,7 @@ async function paneOf(tab: AgentBrowserTab): Promise<{
   fakeAppPlatform({
     openBrowserLive: (_target, heard) => {
       listener = heard;
+
       return { send: () => undefined, close: () => undefined };
     },
   });
@@ -85,6 +86,7 @@ async function paneOf(tab: AgentBrowserTab): Promise<{
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const pane = (shown: AgentBrowserTab) =>
     withQueryClient(
       createElement(CloudBrowserPane, {
@@ -94,18 +96,22 @@ async function paneOf(tab: AgentBrowserTab): Promise<{
         memberName: () => undefined,
       }),
     );
+
   act(() => root.render(pane(tab)));
   await settle();
+
   const say = async (message: object) => {
     await act(async () => listener?.message(JSON.stringify(message)));
     await settle();
   };
+
   await say({
     type: BROWSER_LIVE_SERVER.FRAME,
     data: "/9j/AA==",
     pageWidth: 1280,
     pageHeight: 800,
   });
+
   return {
     say,
     redraw: async (next) => {
@@ -175,6 +181,7 @@ test.each(["1ms", "0s"])(
   "where the motion tokens stand at %s the agent's pointer is held still: it neither rocks, glides, nor ripples",
   async (duration) => {
     document.documentElement.style.setProperty("--ui-duration-fast", duration);
+
     try {
       await paneOf(CLICKED);
       const drawn = pointer();

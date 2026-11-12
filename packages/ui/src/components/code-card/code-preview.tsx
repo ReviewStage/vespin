@@ -32,6 +32,7 @@ const PREVIEW_LINE =
 /** One line as drawn: in its colors where they spell it, plain where they do not. */
 function drawnLine(text: string, tokens: CodeLines[number] | undefined): ReactNode {
   const spelled = tokens?.map((token) => token.text).join("") === text;
+
   return spelled && tokens !== undefined ? lineRuns(tokens) : text;
 }
 
@@ -49,6 +50,7 @@ export function CodePreview({
 }): React.JSX.Element {
   const all = code.split("\n");
   const drawn = all.slice(0, Math.max(1, shown));
+
   return (
     // Note that it is a `<code>` of block lines rather than a `<pre>`, because it stands in a row's description, a paragraph, which may hold phrasing content alone.
     <code className={PREVIEW} data-more={all.length > drawn.length || undefined}>

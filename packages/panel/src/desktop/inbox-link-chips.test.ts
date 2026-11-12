@@ -59,6 +59,7 @@ const ACME: Workspace = {
   github: { login: "acme", active: true },
   memberCount: 2,
 };
+
 const GLOBEX: Workspace = {
   ...ACME,
   id: "workspace-globex",
@@ -75,6 +76,7 @@ const TASK: TaskSummary = {
   updatedAt: 2,
   repository: "acme/relay",
 };
+
 const TASK_AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
 
 /** A notice an agent posted, asking nothing, its thread one message of the words given. */
@@ -147,6 +149,7 @@ async function inbox(options: {
   const task = options.task ?? TASK;
   // The account's feed holds the task's items, which the Inbox draws from; the host holds each link's standing through every workspace.
   const signedIn = signedInAs({ id: "user-sam", email: "sam@example.com", name: "Sam Okafor" });
+
   const state = {
     ...signedIn,
     inbox: {
@@ -171,11 +174,13 @@ async function inbox(options: {
       rows: { [INBOX_SCOPE_KIND.PLAN]: { [task.id]: options.taskItems } },
     },
   };
+
   fakeActs({
     onAppState: () => () => undefined,
     requestAppState: () => Promise.resolve(state),
     act: (request: AnyAct): Promise<FakeActAnswer> => {
       asked.push(request);
+
       switch (request.kind) {
         // A link's standing is held quietly, as the host holds one, what it holds already on the document.
         case ACT_KIND.TASKS_LINK_STANDING_FOLLOW:
@@ -191,17 +196,22 @@ async function inbox(options: {
   fakeActPort({ ...fakeActPortCalls() });
   // Note that the first item stands chosen at its address, held as a press on its row holds it, so the item is drawn.
   const [first] = options.taskItems;
+
   const chosen: InboxChoice | undefined =
     first === undefined ? undefined : { taskId: task.id, itemId: first.id };
+
   function Page() {
     return createElement(DesktopInbox, {
       tasks: tasksControl({ workspace: options.listed, tasks: [task] }),
     });
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   const listedStep =
     options.listed === undefined ? "acme" : (options.listed.slug ?? options.listed.id);
+
   const at = `/${listedStep}/inbox${chosen === undefined ? "" : `/${chosen.itemId}`}`;
   const router = windowRouter(createMemoryHistory({ initialEntries: [at] }));
   const held = chosen === undefined ? null : holdingInboxChoice(chosen);
@@ -213,6 +223,7 @@ async function inbox(options: {
   await act(async () => {
     for (let tick = 0; tick < 16; tick += 1) await Promise.resolve();
   });
+
   return { container, asked };
 }
 
@@ -248,6 +259,7 @@ test("a plan's item in the window's Inbox reads its links through the plan's wor
 
 test("an item of a workspace an older service answered with no slug still reads its links through that workspace, by its id", async () => {
   const { slug: _slug, ...unslugged } = GLOBEX;
+
   const { container, asked } = await inbox({
     listed: undefined,
     taskItems: [item("a1b2c3d4-0000-4000-8000-000000000004", TASK_AGENT, `Opened ${LEDGER_PULL}.`)],

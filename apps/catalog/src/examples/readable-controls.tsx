@@ -12,6 +12,7 @@ import { CatalogSection } from "../section";
 function ReadableControlsExample(): React.JSX.Element {
   const [checked, setChecked] = useState(false);
   const [toggles, setToggles] = useState(0);
+
   return (
     <CatalogSection id="readable-controls" title="Select the words, or toggle">
       <Stack gap={GAP.CONTROL}>

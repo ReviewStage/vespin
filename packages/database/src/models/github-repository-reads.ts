@@ -158,6 +158,7 @@ export function unaskedTokenRepositories(
   return Effect.gen(function* () {
     const tasks = yield* findUnaskedTaskRepositories({ userId, since });
     const agents = yield* findUnaskedAgentRepositories({ userId, since });
+
     return [...new Set([...tasks, ...agents].map((row) => row.repository))];
   });
 }
@@ -177,11 +178,14 @@ export function recordRepositoryReads(
     client.withTransaction(
       Effect.gen(function* () {
         const held = yield* lockTokenSeal(userId);
+
         if (Option.getOrUndefined(held)?.sealedToken !== sealedToken) return false;
+
         for (const read of reads) {
           const repository = read.repository.toLowerCase();
           yield* upsertRead({ userId, repository, readable: read.readable, now });
         }
+
         return true;
       }),
     ),

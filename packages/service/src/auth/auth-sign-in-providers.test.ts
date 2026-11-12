@@ -42,6 +42,7 @@ afterEach(() => {
 test("a Google press and a GitHub press each start their own provider's sign-in", async () => {
   const { socialProviders } = await import("./auth.js");
   const client = await openMigratedPglite();
+
   try {
     const auth = betterAuth({
       baseURL: BASE_URL,
@@ -49,6 +50,7 @@ test("a Google press and a GitHub press each start their own provider's sign-in"
       database: authDatabaseAdapter(drizzle({ client })),
       socialProviders: socialProviders(authSecrets(REGISTERED)),
     });
+
     const start = async (provider: string) => {
       const response = await auth.handler(
         new Request(`${BASE_URL}/api/auth/sign-in/social`, {
@@ -57,8 +59,10 @@ test("a Google press and a GitHub press each start their own provider's sign-in"
           body: JSON.stringify({ provider, callbackURL: "/" }),
         }),
       );
+
       assert.equal(response.status, 200, provider);
       const authorize = new URL(decodeStarted(await response.json()).url);
+
       return { at: authorize.origin, clientId: authorize.searchParams.get("client_id") };
     };
 

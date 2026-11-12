@@ -41,11 +41,13 @@ function isServicePage(url: string, serviceBaseUrl: string): boolean {
 function adminPage(serviceBaseUrl: string): string | undefined {
   if (!URL.canParse(ADMIN_PAGE_PATH, serviceBaseUrl)) return undefined;
   const page = new URL(ADMIN_PAGE_PATH, serviceBaseUrl).href;
+
   return isWebAddress(page) && isServicePage(page, serviceBaseUrl) ? page : undefined;
 }
 
 export function tasksProcedures(dependencies: TasksProceduresDependencies) {
   const { acts, openExternal } = dependencies;
+
   return {
     // The address is GitHub's by the act's own schema, so what opens is a
     // repository's page or the App's installation page and nothing else.
@@ -83,9 +85,11 @@ export function tasksProcedures(dependencies: TasksProceduresDependencies) {
     }) {
       // Note that the contract marks the act the panel's alone (`contract/tasks.ts`), so any other window was refused before this body runs.
       const page = yield* declaredAnswer(TASKS_ACTS.GITHUB_CONNECT, acts.GITHUB_CONNECT, undefined);
+
       if (!("url" in page) || !isServicePage(page.url, dependencies.serviceBaseUrl)) {
         return yield* Effect.fail(errors.REFUSED());
       }
+
       const { url } = page;
       yield* Effect.tryPromise({ try: () => openExternal(url), catch: () => errors.REFUSED() });
     }),
@@ -98,6 +102,7 @@ export function tasksProcedures(dependencies: TasksProceduresDependencies) {
     }) {
       yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
       const url = adminPage(dependencies.serviceBaseUrl);
+
       if (url === undefined) return yield* Effect.fail(errors.REFUSED());
       yield* Effect.tryPromise({ try: () => openExternal(url), catch: () => errors.REFUSED() });
     }),
@@ -107,6 +112,7 @@ export function tasksProcedures(dependencies: TasksProceduresDependencies) {
       errors,
     }) {
       yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
+
       return yield* dependencies.colorCode(input.language, input.code);
     }),
   };

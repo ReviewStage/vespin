@@ -46,6 +46,7 @@ const OPEN_LINK_LABEL = "Open link";
  */
 function inEditedWords(element: Element): boolean {
   const said = element.closest("[contenteditable]");
+
   return said !== null && said.getAttribute("contenteditable") !== "false";
 }
 
@@ -56,14 +57,17 @@ const EDITED_LINK_OPENERS = new WeakMap<Element, (href: string) => void>();
 function editedLinkOpenerOf(element: Element): ((href: string) => void) | undefined {
   for (let at: Element | null = element; at !== null; at = at.parentElement) {
     const open = EDITED_LINK_OPENERS.get(at);
+
     if (open !== undefined) return open;
   }
+
   return undefined;
 }
 
 /** The address `element` is a link to: an anchor's, read resolved as a click would follow it, or the one a control handed; nothing for any other. */
 function addressOf(element: Element): string | undefined {
   if (element instanceof HTMLAnchorElement && element.hasAttribute("href")) return element.href;
+
   return linkAddressOf(element);
 }
 
@@ -71,15 +75,19 @@ function addressOf(element: Element): string | undefined {
 function linkAt(target: EventTarget | null): HeardLink | undefined {
   for (let at = target instanceof Element ? target : null; at !== null; at = at.parentElement) {
     const href = addressOf(at);
+
     if (href === undefined || !(at instanceof HTMLElement)) continue;
+
     return opensAsLink(href) ? { href, element: at } : undefined;
   }
+
   return undefined;
 }
 
 /** Where the menu hangs: at the pointer, or under the link for the menu key, which says no point. */
 function placementOf(event: MouseEvent, element: HTMLElement): MenuPlacement {
   if (event.clientX === 0 && event.clientY === 0) return dropBelowStart(element);
+
   return { x: event.clientX, y: event.clientY, align: MENU_ALIGN.START };
 }
 
@@ -99,18 +107,22 @@ export function LinkMenu(): React.JSX.Element | null {
       // A menu of the clicked thing's own, a row's or a tab's, already answered it.
       if (event.defaultPrevented) return;
       const found = linkAt(event.target);
+
       if (found === undefined) return;
       event.preventDefault();
       setLink(found);
       show(placementOf(event, found.element), found.element);
     };
+
     document.addEventListener("contextmenu", heard);
+
     return () => document.removeEventListener("contextmenu", heard);
   }, [show]);
 
   if (drawn === undefined || link === undefined) return null;
   const { href, element } = link;
   const inBrowser = linkedPageInBrowserItem(href);
+
   return (
     <ActionMenu
       label={LINK_MENU_LABEL}
@@ -149,6 +161,7 @@ export function useEditedLinksHost(): (element: Element | null) => void {
   const openLink = useOpenLink();
   const latest = useRef(openLink);
   latest.current = openLink;
+
   return useCallback((element: Element | null) => {
     if (element !== null) EDITED_LINK_OPENERS.set(element, (href) => latest.current(href));
   }, []);

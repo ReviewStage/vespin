@@ -83,6 +83,7 @@ const startAgent = (userId: string, deviceId?: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
     const task = yield* startTask(userId, { name: "Invitations" });
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: randomUUID(),
@@ -93,13 +94,16 @@ const startAgent = (userId: string, deviceId?: string) =>
       repository: null,
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     const agentId = Option.getOrThrow(started).agent.id;
+
     if (deviceId !== undefined) {
       yield* db
         .update(agentTable)
         .set({ machine: AGENT_MACHINE.DEVICE, deviceId })
         .where(eq(agentTable.id, agentId));
     }
+
     return agentId;
   });
 
@@ -108,6 +112,7 @@ const registerMac = (userId: string) =>
   Effect.gen(function* () {
     const deviceId = randomUUID();
     yield* registerDevice(userId, { id: deviceId, name: "Studio", ...DEVICE_LAYOUT });
+
     return deviceId;
   });
 
@@ -119,6 +124,7 @@ const openAccount = (onMac = true) =>
     yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
     const deviceId = yield* registerMac(userId);
     const agentId = yield* startAgent(userId, onMac ? deviceId : undefined);
+
     return { userId, deviceId, agentId };
   });
 
@@ -143,10 +149,12 @@ const fiveMinutesOn = Effect.map(
 const storedSecrets = (id: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const [row] = yield* db
       .select({ sealedSecrets: deviceAgentLine.sealedSecrets })
       .from(deviceAgentLine)
       .where(eq(deviceAgentLine.id, id));
+
     return row?.sealedSecrets;
   });
 
@@ -159,6 +167,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         const queued = Option.getOrThrow(yield* queueDeviceAgentLine(userId, launch(agentId)));
 
         const waiting = yield* deviceAgentLinesWaiting(userId, deviceId);
+
         const claims = yield* Effect.all(
           [
             claimDeviceAgentLine(userId, deviceId, queued.id),
@@ -166,6 +175,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           ],
           { concurrency: "unbounded" },
         );
+
         const settledBeforeExit = yield* deviceAgentLineSettlement(userId, queued.id);
         const settled = yield* settleDeviceAgentLine(userId, deviceId, queued.id, 137);
         const settledAgain = yield* settleDeviceAgentLine(userId, deviceId, queued.id, 0);
@@ -196,9 +206,11 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
     () =>
       Effect.gen(function* () {
         const { userId, deviceId, agentId } = yield* openAccount();
+
         const queued = Option.getOrThrow(
           yield* queueDeviceAgentLine(userId, message(agentId, "hello")),
         );
+
         const token = randomUUID();
 
         const first = yield* claimDeviceAgentLine(userId, deviceId, queued.id, token);
@@ -217,6 +229,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           sealedSecrets: null,
           secretsGone: false,
         };
+
         assert.deepEqual(first, Option.some(expected));
         assert.deepEqual(again, Option.some(expected), "the same claim is answered the same");
         assert.deepEqual(underAnother, Option.none());
@@ -245,6 +258,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           .map((claim) => Option.getOrThrow(claim))
           .map((line) => [line.sealedSecrets, line.secretsGone] as const)
           .sort((one, other) => Number(one[1]) - Number(other[1]));
+
         assert.deepEqual(answered, [
           [SEALED, false],
           [null, true],
@@ -261,6 +275,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         const otherMac = yield* registerMac(userId);
         const queued = Option.getOrThrow(yield* queueDeviceAgentLine(userId, launch(agentId)));
         const said = Option.getOrThrow(yield* queueDeviceAgentLine(userId, message(agentId, "hi")));
+
         const stepped = (
           id: string,
           step: DeviceLaunchStep = DEVICE_LAUNCH_STEP.PREPARING,
@@ -272,10 +287,12 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         yield* claimDeviceAgentLine(userId, deviceId, said.id);
         const onAnotherMac = yield* stepped(queued.id, DEVICE_LAUNCH_STEP.PREPARING, otherMac);
         const onAMessage = yield* stepped(said.id);
+
         const forward = [
           yield* stepped(queued.id, DEVICE_LAUNCH_STEP.PREPARING),
           yield* stepped(queued.id, DEVICE_LAUNCH_STEP.STARTING),
         ];
+
         const late = yield* stepped(queued.id, DEVICE_LAUNCH_STEP.FETCHING);
         const held = yield* latestDeviceAgentLaunch(userId, agentId);
         // A step a newer build wrote is one this build cannot place, so a late report it knows leaves it.
@@ -330,18 +347,22 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
     Effect.gen(function* () {
       const { userId, deviceId, agentId } = yield* openAccount();
       const budget = DEVICE_AGENT_BOUNDS.MAX_LINES_READ_BYTES;
+
       const files = (bytes: number) =>
         ({
           agentId,
           kind: DEVICE_AGENT_LINE_KIND.FILES,
           payload: { files: [{ path: "/skill.md", mode: 0o644, contents: "A".repeat(bytes) }] },
         }) as const;
+
       const queued: string[] = [];
+
       for (const bytes of [budget + 1, budget * 0.4, budget * 0.4, budget * 0.4]) {
         queued.push(Option.getOrThrow(yield* queueDeviceAgentLine(userId, files(bytes))).id);
       }
 
       const first = yield* deviceAgentLinesWaiting(userId, deviceId);
+
       for (const line of first) yield* claimDeviceAgentLine(userId, deviceId, line.id);
       const rest = yield* deviceAgentLinesWaiting(userId, deviceId);
 
@@ -381,9 +402,11 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
       Effect.gen(function* () {
         const owner = yield* openAccount();
         const other = yield* openAccount();
+
         const line = Option.getOrThrow(
           yield* queueDeviceAgentLine(owner.userId, launch(owner.agentId)),
         );
+
         const requestId = randomUUID();
         yield* queueDeviceAgentRequest(owner.userId, {
           id: requestId,
@@ -396,31 +419,38 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
           other.userId,
           message(owner.agentId, "hi"),
         );
+
         const requestedByOther = yield* queueDeviceAgentRequest(other.userId, {
           id: randomUUID(),
           agentId: owner.agentId,
           kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
           args: { path: "/etc/hosts" },
         });
+
         const linesOnOwnersMac = yield* deviceAgentLinesWaiting(other.userId, owner.deviceId);
         const requestsOnOwnersMac = yield* deviceAgentRequestsWaiting(other.userId, owner.deviceId);
+
         const lineClaimedByOther = yield* claimDeviceAgentLine(
           other.userId,
           other.deviceId,
           line.id,
         );
+
         const lineClaimedOnOwnersMac = yield* claimDeviceAgentLine(
           other.userId,
           owner.deviceId,
           line.id,
         );
+
         const requestClaimedByOther = yield* claimDeviceAgentRequest(
           other.userId,
           owner.deviceId,
           requestId,
         );
+
         yield* claimDeviceAgentLine(owner.userId, owner.deviceId, line.id);
         yield* claimDeviceAgentRequest(owner.userId, owner.deviceId, requestId);
+
         const steppedByOther = [
           Option.isSome(
             yield* stepDeviceAgentLaunch(
@@ -439,18 +469,21 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
             ),
           ),
         ];
+
         const settledByOther = yield* settleDeviceAgentLine(
           other.userId,
           owner.deviceId,
           line.id,
           0,
         );
+
         const answeredByOther = yield* answerDeviceAgentRequest(
           other.userId,
           owner.deviceId,
           requestId,
           FILE_ANSWER,
         );
+
         yield* answerDeviceAgentRequest(owner.userId, owner.deviceId, requestId, FILE_ANSWER);
 
         assert.deepEqual(queuedByOther, Option.none());
@@ -513,6 +546,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         const db = yield* Database;
         const owner = yield* openAccount();
         const other = yield* openAccount();
+
         for (const { userId, deviceId } of [owner, other]) {
           yield* registerDevice(userId, {
             id: deviceId,
@@ -521,6 +555,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
             capabilities: [DEVICE_CAPABILITY.DISCARD],
           });
         }
+
         yield* db.delete(agentTable).where(eq(agentTable.id, owner.agentId));
         const gone = { agentId: owner.agentId, deviceId: owner.deviceId };
 
@@ -554,12 +589,15 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
         bytes,
       });
+
       const claimed = yield* claimDeviceAgentRequest(userId, deviceId, id);
       const claimedAgain = yield* claimDeviceAgentRequest(userId, deviceId, id);
+
       const answered = yield* answerDeviceAgentRequest(userId, deviceId, id, {
         kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
         bytes,
       });
+
       const answeredAgain = yield* answerDeviceAgentRequest(userId, deviceId, id, {
         kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
         bytes: null,
@@ -583,6 +621,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
   it.effect("a diff's answer, its exit and what it printed, is read back as given", () =>
     Effect.gen(function* () {
       const { userId, deviceId, agentId } = yield* openAccount();
+
       const answered = (answer: { exit: number; diff: string }) =>
         Effect.gen(function* () {
           const id = randomUUID();
@@ -597,6 +636,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
             kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT,
             ...answer,
           });
+
           return yield* deviceAgentRequestAnswer(userId, id);
         });
 
@@ -667,10 +707,12 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
   it.effect("an answer past the bound in bytes is refused and writes nothing", () =>
     Effect.gen(function* () {
       const { userId, deviceId, agentId } = yield* openAccount();
+
       const oversized: DeviceAgentAnswer = {
         kind: DEVICE_AGENT_REQUEST_KIND.READ_FILE,
         bytes: new Uint8Array(DEVICE_AGENT_BOUNDS.MAX_ANSWER_BYTES + 2),
       };
+
       const id = randomUUID();
       yield* queueDeviceAgentRequest(userId, { id, agentId, kind: oversized.kind, args: {} });
       yield* claimDeviceAgentRequest(userId, deviceId, id);
@@ -690,6 +732,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
       const other = yield* openAccount();
       const running = Option.getOrThrow(yield* queueDeviceAgentLine(userId, launch(agentId)));
       yield* claimDeviceAgentLine(userId, deviceId, running.id);
+
       const left = Option.getOrThrow(
         yield* queueDeviceAgentLine(userId, message(agentId, "never taken")),
       );
@@ -750,20 +793,27 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
       Effect.gen(function* () {
         const away = yield* openAccount();
         const back = yield* openAccount();
+
         const claimed = Option.getOrThrow(
           yield* queueDeviceAgentLine(away.userId, launch(away.agentId)),
         );
+
         yield* claimDeviceAgentLine(away.userId, away.deviceId, claimed.id);
+
         const waiting = Option.getOrThrow(
           yield* queueDeviceAgentLine(away.userId, launch(away.agentId)),
         );
+
         const kept = Option.getOrThrow(
           yield* queueDeviceAgentLine(back.userId, launch(back.agentId)),
         );
+
         const settledByDevice = yield* openAccount();
+
         const exited = Option.getOrThrow(
           yield* queueDeviceAgentLine(settledByDevice.userId, launch(settledByDevice.agentId)),
         );
+
         yield* claimDeviceAgentLine(settledByDevice.userId, settledByDevice.deviceId, exited.id);
         yield* TestClock.adjust("10 minutes");
         yield* beatDevice(back.userId, back.deviceId);
@@ -778,6 +828,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         const settled = yield* settleLapsedDeviceAgentLine(away.userId, waiting.id, seenBefore);
         const again = yield* settleLapsedDeviceAgentLine(away.userId, waiting.id, seenBefore);
         const beaten = yield* settleLapsedDeviceAgentLine(back.userId, kept.id, seenBefore);
+
         const theirs = yield* settleLapsedDeviceAgentLine(
           settledByDevice.userId,
           exited.id,
@@ -809,24 +860,31 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
       Effect.gen(function* () {
         const owner = yield* openAccount();
         const other = yield* openAccount();
+
         const exited = Option.getOrThrow(
           yield* queueDeviceAgentLine(owner.userId, launch(owner.agentId)),
         );
+
         yield* claimDeviceAgentLine(owner.userId, owner.deviceId, exited.id);
         yield* settleDeviceAgentLine(owner.userId, owner.deviceId, exited.id, 0);
+
         const stopped = Option.getOrThrow(
           yield* queueDeviceAgentLine(owner.userId, launch(owner.agentId)),
         );
+
         yield* claimDeviceAgentLine(owner.userId, owner.deviceId, stopped.id);
         yield* queueDeviceAgentLine(owner.userId, {
           agentId: owner.agentId,
           kind: DEVICE_AGENT_LINE_KIND.STOP,
           payload: {},
         });
+
         const running = Option.getOrThrow(
           yield* queueDeviceAgentLine(owner.userId, launch(owner.agentId)),
         );
+
         yield* claimDeviceAgentLine(owner.userId, owner.deviceId, running.id);
+
         const waiting = Option.getOrThrow(
           yield* queueDeviceAgentLine(owner.userId, launch(owner.agentId)),
         );
@@ -887,6 +945,7 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         const stop = { kind: DEVICE_AGENT_LINE_KIND.MESSAGE, payload: { text } } as const;
         yield* queueDeviceAgentLine(owner.userId, launch(owner.agentId));
         yield* queueDeviceAgentLine(owner.userId, message(owner.agentId, text));
+
         const newest = Option.getOrThrow(
           yield* queueDeviceAgentLine(owner.userId, launch(owner.agentId)),
         );

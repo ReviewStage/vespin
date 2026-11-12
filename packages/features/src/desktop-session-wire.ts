@@ -71,12 +71,14 @@ export interface DesktopSessionPageQuery {
 function loopbackReturn(raw: string | null): URL | undefined {
   if (!raw || !URL.canParse(raw)) return undefined;
   const url = new URL(raw);
+
   const loopback =
     url.protocol === "http:" &&
     url.hostname === LOOPBACK_HOST &&
     url.port !== "" &&
     url.username === "" &&
     url.password === "";
+
   return loopback ? url : undefined;
 }
 
@@ -87,6 +89,7 @@ export function desktopSessionPageUrl(origin: string, request: DesktopSessionReq
   url.searchParams.set(TRANSFER_PARAM.STATE, request.state);
   url.searchParams.set(TRANSFER_PARAM.CODE_CHALLENGE, request.codeChallenge);
   url.searchParams.set(DESKTOP_SESSION_PAGE.RETURN_PARAM, request.returnTo);
+
   return url.href;
 }
 
@@ -96,7 +99,9 @@ export function desktopSessionPageQuery(search: string): DesktopSessionPageQuery
   const state = params.get(TRANSFER_PARAM.STATE);
   const codeChallenge = params.get(TRANSFER_PARAM.CODE_CHALLENGE);
   const returnTo = loopbackReturn(params.get(DESKTOP_SESSION_PAGE.RETURN_PARAM));
+
   if (!state || !codeChallenge || returnTo === undefined) return undefined;
+
   return {
     transfer: {
       client_id: DESKTOP_SESSION_CLIENT_ID,
@@ -112,5 +117,6 @@ export function desktopSessionReturnUrl(returnTo: URL, code: string, state: stri
   const url = new URL(returnTo.href);
   url.searchParams.set(RETURN_PARAM.CODE, code);
   url.searchParams.set(RETURN_PARAM.STATE, state);
+
   return url.href;
 }

@@ -71,8 +71,10 @@ function filteredActor(
   tasks: readonly TaskSummary[],
 ): Actor {
   const member = reader.members?.find((each) => each.userId === userId);
+
   if (member !== undefined) return memberActor(member, reader.readerId);
   const named = tasks.find((task) => task.createdBy?.userId === userId);
+
   return creatorActor(named ?? { ownerId: userId }, reader, undefined);
 }
 
@@ -103,6 +105,7 @@ function assignedToChoices(
     meWithoutId: true,
     meFirst: true,
   });
+
   // Note that a member is keyed by their id and Me and Anyone are not, so only a member's name is masked.
   return [
     ...people.map((item) =>
@@ -120,6 +123,7 @@ function viewEntries(
   reader: ReturnType<typeof useMemberDirectory>,
 ): MenuEntry[][] {
   const { view } = control;
+
   const grouping: MenuSubmenu = {
     label: GROUP_BY,
     icon: <Rows3Icon />,
@@ -130,6 +134,7 @@ function viewEntries(
       onSelect: () => control.onGrouping(choice),
     })),
   };
+
   const finished: MenuAction = {
     label: SHOW_COMPLETED_SUB_TASKS,
     icon: <ListChecksIcon />,
@@ -138,6 +143,7 @@ function viewEntries(
     stays: true,
     onSelect: () => control.onFinishedSubTasks(!view.finishedSubTasks),
   };
+
   const assigned: MenuEntry[] = shared
     ? [
         // Note that a workspace's members may run to hundreds, so they are searched in a panel that draws only those near its view.
@@ -151,6 +157,7 @@ function viewEntries(
         }),
       ]
     : [];
+
   return [[grouping, finished, ...assigned]];
 }
 
@@ -174,6 +181,7 @@ export function TaskViewOptions({
 }): React.JSX.Element {
   const menu = useMenu(shown);
   const reader = useMemberDirectory();
+
   return (
     <GroupAction state={filtered ? GROUP_ACTION_STATE.ACTIVE : GROUP_ACTION_STATE.IDLE}>
       <Tooltip label={VIEW_OPTIONS}>
@@ -210,9 +218,12 @@ export function tasksHeadWords(
   tasks: readonly TaskSummary[],
 ): string {
   if (!shared) return TASKS_HEAD_WORDS[ASSIGNED_TO.ME];
+
   if (assignedTo.kind !== ASSIGNED_TO.MEMBER) return TASKS_HEAD_WORDS[assignedTo.kind];
   const actor = filteredActor(assignedTo.userId, reader, tasks);
+
   if (actor.kind === ACTOR_KIND.PERSON && actor.you) return TASKS_HEAD_WORDS[ASSIGNED_TO.ME];
+
   return `${actorName(actor)}'s tasks`;
 }
 
@@ -241,14 +252,19 @@ export function useTaskViewCommands({
   shared: boolean;
 }): void {
   const { grouping, assignedTo, finishedSubTasks } = control.view;
+
   const group = (to: typeof grouping) =>
     offer(offered, grouping !== to, () => control.onGrouping(to));
+
   const assign = (to: AssignedTo) =>
     offer(offered && shared, assignedTo.kind !== to.kind, () => control.onAssignedTo(to));
+
   useAppCommand(APP_COMMAND.GROUP_TASKS_BY_REPOSITORY, group(TASK_GROUPING.REPOSITORY));
   useAppCommand(APP_COMMAND.LIST_TASKS_UNGROUPED, group(TASK_GROUPING.NONE));
+
   const finished = (shown: boolean) =>
     offer(offered, finishedSubTasks !== shown, () => control.onFinishedSubTasks(shown));
+
   useAppCommand(APP_COMMAND.SHOW_FINISHED_SUB_TASKS, finished(true));
   useAppCommand(APP_COMMAND.HIDE_FINISHED_SUB_TASKS, finished(false));
   useAppCommand(APP_COMMAND.SHOW_MY_TASKS, assign({ kind: ASSIGNED_TO.ME }));

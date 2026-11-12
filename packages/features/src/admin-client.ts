@@ -57,6 +57,7 @@ const REFUSED_BY_STATUS: ReadonlyMap<number, AdminRefused> = new Map([
 /** A path under the service with its query parameters, the way the admin routes read them. */
 function withQuery(path: string, query: Readonly<Record<string, string>>): string {
   const parameters = new URLSearchParams(query).toString();
+
   return parameters ? `${path}?${parameters}` : path;
 }
 
@@ -104,6 +105,7 @@ export class HostedAdminClient {
       credential: options.sessionCredential,
       requestTimeoutMs: options.requestTimeoutMs,
     });
+
     this.#send = sendInSession(call, options.sessionCredential);
     this.#bodyDeadline = Duration.millis(call.requestTimeoutMs);
   }
@@ -118,19 +120,25 @@ export class HostedAdminClient {
   read(params: AdminReadParams): Effect.Effect<AdminReadAnswer, never, HttpClient.HttpClient> {
     const send = this.#send;
     const deadline = this.#bodyDeadline;
+
     return Effect.gen(function* () {
       const answer = yield* send({
         method: HTTP_METHOD.GET,
         path: withQuery(ADMIN_READ_PATH[params.procedure], params.query),
       });
+
       if (!callAnswered(answer)) return faultRefused(answer);
       const { response } = answer;
+
       if (!response.ok) {
         return { refused: REFUSED_BY_STATUS.get(response.status) ?? ADMIN_UNANSWERED };
       }
+
       const text = yield* textWithin(response, deadline);
+
       if (text === undefined) return { refused: ADMIN_REFUSED.UNAVAILABLE };
       const body = parsedJson(text);
+
       return body === undefined ? { refused: ADMIN_REFUSED.INTERCEPTED } : { answer: body.json };
     });
   }
@@ -143,14 +151,17 @@ export class HostedAdminClient {
   favorite(id: string, favorite: boolean): Effect.Effect<boolean, never, HttpClient.HttpClient> {
     const send = this.#send;
     const deadline = this.#bodyDeadline;
+
     return Effect.gen(function* () {
       const answer = yield* send({
         method: favorite ? HTTP_METHOD.PUT : HTTP_METHOD.DELETE,
         path: withQuery(ADMIN_ROUTE_PATH.FAVORITE, { [ADMIN_USER_ID_PARAM]: id }),
       });
+
       if (!callAnswered(answer) || !answer.response.ok) return false;
       const text = yield* textWithin(answer.response, deadline);
       const body = text === undefined ? undefined : parsedJson(text);
+
       return body !== undefined && favoriteLanded(body.json, favorite);
     });
   }

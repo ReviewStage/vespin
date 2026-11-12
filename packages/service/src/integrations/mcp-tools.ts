@@ -102,6 +102,7 @@ export function namesSecret(line: string): boolean {
 /** Whether a line holds anything a credential could hide in, short or long. */
 function shapedLikeCredential(line: string): boolean {
   if (namesSecret(line)) return true;
+
   return (line.match(KEY_LIKE_RUN) ?? []).some((run) => /\d/.test(run) && /[A-Za-z]/.test(run));
 }
 
@@ -204,6 +205,7 @@ export type McpToolCall =
   | { readonly called: false; readonly tools: readonly McpToolSchema[] };
 
 type ListedTool = (typeof ToolsPage.Type)["tools"][number];
+
 const decodePage = Schema.decodeUnknownOption(ToolsPage);
 const decodeWireValue = Schema.decodeUnknownOption(WireValueSchema);
 
@@ -233,18 +235,21 @@ function answersOf(contentType: string, body: string): readonly RpcAnswerType[] 
           .join("\n"),
       )
     : [body];
+
   return texts.flatMap((text) => Option.toArray(decodeAnswerText(text)));
 }
 
 /** A text whole, its ends trimmed, bounded to `max` characters. */
 function bounded(text: string | undefined, max: number): string {
   const whole = (text ?? "").trim();
+
   return whole.length <= max ? whole : `${whole.slice(0, max - 1)}…`;
 }
 
 /** A text's first line, bounded to `max` characters. */
 function firstLine(text: string | undefined, max: number): string {
   const line = (text ?? "").trim().split(/\r?\n/)[0] ?? "";
+
   return line.length <= max ? line : `${line.slice(0, max - 1)}…`;
 }
 
@@ -255,9 +260,11 @@ const unreadable = new McpToolsFailure({ reason: MCP_TOOLS_FAILURE.UNREADABLE })
 /** Whether `line` repeats any run of the bearer long enough to be part of it rather than chance. */
 function echoesToken(line: string, token: string): boolean {
   if (token.length <= TOKEN_ECHO_CHARS) return line.includes(token);
+
   for (let start = 0; start + TOKEN_ECHO_CHARS <= token.length; start += 1) {
     if (line.includes(token.slice(start, start + TOKEN_ECHO_CHARS))) return true;
   }
+
   return false;
 }
 
@@ -270,7 +277,9 @@ function echoesToken(line: string, token: string): boolean {
  */
 export function credentialFreeLine(message: string | undefined): string | undefined {
   const line = (message ?? "").trim().split(/\r?\n/)[0] ?? "";
+
   if (line === "" || shapedLikeCredential(line)) return undefined;
+
   return firstLine(line, MESSAGE_MAX_CHARS);
 }
 
@@ -282,6 +291,7 @@ export function credentialFreeLine(message: string | undefined): string | undefi
  */
 function keptMessage(message: string | undefined, token: string): string | undefined {
   const kept = credentialFreeLine(message);
+
   return kept === undefined || echoesToken(kept, token) ? undefined : kept;
 }
 
@@ -289,6 +299,7 @@ function keptMessage(message: string | undefined, token: string): string | undef
 function rpcFailure(error: typeof RpcError.Type, token: string): McpToolsFailure {
   if (error.code === RPC_UNAUTHORIZED) return refused;
   const serverMessage = keptMessage(error.message, token);
+
   return new McpToolsFailure({
     reason: MCP_TOOLS_FAILURE.REJECTED,
     code: error.code,
@@ -328,6 +339,7 @@ function inMcpSession<A>(
     const send: McpSend = (method, params, notification = false) =>
       Effect.gen(function* () {
         const id = notification ? undefined : ++nextId;
+
         const request = HttpClientRequest.post(url).pipe(
           HttpClientRequest.setHeaders({
             authorization: `Bearer ${token}`,
@@ -342,29 +354,40 @@ function inMcpSession<A>(
             ...(id !== undefined ? { id } : undefined),
           }),
         );
+
         const response = yield* Effect.mapError(client.execute(request), () => unreachable);
+
         if (response.status === 401 || response.status === 403) {
           return yield* refused;
         }
+
         if (response.status >= 400) {
           // Note that we read an error status's body, because a server says there why it refused.
           const failed = yield* Effect.mapError(response.text, () => unreachable);
+
           const error = answersOf(response.headers["content-type"] ?? "", failed).find(
             (message) => message.error !== undefined,
           )?.error;
+
           return yield* error === undefined ? unreachable : rpcFailure(error, token);
         }
+
         session = Option.getOrElse(
           Option.fromUndefinedOr(response.headers[MCP_HEADER.SESSION]),
           () => session,
         );
+
         if (id === undefined) return undefined;
         const text = yield* Effect.mapError(response.text, () => unreachable);
+
         const answer = answersOf(response.headers["content-type"] ?? "", text).find(
           (message) => message.id === id,
         );
+
         if (answer === undefined) return yield* unreadable;
+
         if (answer.error !== undefined) return yield* rpcFailure(answer.error, token);
+
         return answer.result;
       });
 
@@ -376,6 +399,7 @@ function inMcpSession<A>(
       });
       opened = true;
       yield* send(MCP_METHOD.INITIALIZED, {}, true);
+
       return yield* body(send);
     });
 
@@ -409,14 +433,18 @@ function listedTools(send: McpSend): Effect.Effect<readonly ListedTool[], McpToo
   return Effect.gen(function* () {
     const tools: ListedTool[] = [];
     let cursor: string | undefined;
+
     for (let page = 0; page < MAX_PAGES; page += 1) {
       const result = yield* send(MCP_METHOD.TOOLS_LIST, cursor !== undefined ? { cursor } : {});
       const read = Option.getOrUndefined(decodePage(result));
+
       if (read === undefined) return yield* unreadable;
       tools.push(...read.tools);
       cursor = read.nextCursor;
+
       if (cursor === undefined) return tools;
     }
+
     return yield* unreadable;
   });
 }
@@ -442,6 +470,7 @@ export const listMcpTools = /* @__PURE__ */ Effect.fn("web/listMcpTools")(functi
   token: string,
 ): Effect.fn.Return<readonly McpTool[], McpToolsFailure, HttpClient.HttpClient> {
   const listed = yield* inMcpSession(url, token, READ_TIMEOUT, listedTools);
+
   return listed.map(
     (tool): McpTool => ({
       name: tool.name,
@@ -456,6 +485,7 @@ export const listMcpToolSchemas = /* @__PURE__ */ Effect.fn("web/listMcpToolSche
   token: string,
 ): Effect.fn.Return<readonly McpToolSchema[], McpToolsFailure, HttpClient.HttpClient> {
   const listed = yield* inMcpSession(url, token, READ_TIMEOUT, listedTools);
+
   return listed.map(toolSchema);
 });
 
@@ -476,13 +506,18 @@ export const callMcpTool = /* @__PURE__ */ Effect.fn("web/callMcpTool")(function
     Effect.gen(function* () {
       const tools = (yield* listedTools(send)).map(toolSchema);
       const tool = tools.find((each) => each.name === name);
+
       if (tool === undefined) return { called: false, tools } as const;
+
       const called = Effect.gen(function* () {
         const result = yield* send(MCP_METHOD.TOOLS_CALL, { name, arguments: input });
         const answered = Option.getOrUndefined(decodeWireValue(result));
+
         if (answered === undefined) return yield* unreadable;
+
         return { called: true, tools, tool, result: answered } as const;
       });
+
       // A call the server refused still read the server's list, which the caller may keep.
       return yield* Effect.mapError(
         called,
@@ -518,7 +553,9 @@ export const readMcpTool = /* @__PURE__ */ Effect.fn("web/readMcpTool")(function
     Effect.gen(function* () {
       const result = yield* send(MCP_METHOD.TOOLS_CALL, { name, arguments: input });
       const answered = Option.getOrUndefined(decodeWireValue(result));
+
       if (answered === undefined) return yield* unreadable;
+
       return answered;
     }),
   );
@@ -527,7 +564,9 @@ export const readMcpTool = /* @__PURE__ */ Effect.fn("web/readMcpTool")(function
 /** Each text block of a tool's result, in order; none where the result is the tool's own error. */
 export function toolResultTexts(result: WireValue): readonly string[] {
   const read = Option.getOrUndefined(decodeToolResult(result));
+
   if (read === undefined || read.isError === true) return [];
+
   return (read.content ?? []).flatMap((block) =>
     Option.toArray(Option.map(decodeTextBlock(block), (text) => text.text)),
   );
@@ -540,8 +579,10 @@ export function toolResultTexts(result: WireValue): readonly string[] {
  */
 export function toolResultJson(result: WireValue): readonly unknown[] {
   const read = Option.getOrUndefined(decodeToolResult(result));
+
   if (read === undefined || read.isError === true) return [];
   const structured = read.structuredContent !== undefined ? [read.structuredContent] : [];
+
   return [
     ...structured,
     ...toolResultTexts(result).flatMap((text) => Option.toArray(decodeJsonText(text))),

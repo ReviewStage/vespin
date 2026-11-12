@@ -34,7 +34,9 @@ test("a Claude Code agent is told of Claude Code's own tools and never of Vespin
     "`delegate`",
     "task_wait",
   ];
+
   const CLAUDE_CODES = ["TaskCreate", "WebSearch", "WebFetch", "Skill tool", "Agent tool"];
+
   for (const brief of Object.values(AGENT_BRIEF)) {
     for (const repository of ["Acme/Relay", null]) {
       for (const memberToken of [false, true]) {
@@ -47,6 +49,7 @@ test("a Claude Code agent is told of Claude Code's own tools and never of Vespin
           null,
           memberToken,
         ] as const;
+
         const claudeCode = coderInstructions(...args, CODER_HARNESS.CLAUDE_CODE);
         const label = `${brief} ${repository ?? "no repository"} ${memberToken ? "token" : "app"}`;
         assert.deepEqual(
@@ -62,6 +65,7 @@ test("a Claude Code agent is told of Claude Code's own tools and never of Vespin
           [],
           label,
         );
+
         // The tools that touch the app stay ours, under their own names.
         for (const kept of [INBOX_TOOLS.POST.name, AGENT_TOOL.START_AGENT, AGENT_TOOL.SHOW_IMAGE]) {
           assert.ok(claudeCode.includes(`\`${kept}\``), `${label}: ${kept}`);
@@ -73,10 +77,12 @@ test("a Claude Code agent is told of Claude Code's own tools and never of Vespin
 
 test("a Claude Code or Codex agent is told of its browser, which Vespin's MCP server serves it, with Playwright run from its own shell", () => {
   const BROWSER = `\`${AGENT_TOOL.BROWSER}\` drives a real browser, a Chromium in your own sandbox`;
+
   const SHELL_OF = [
     [CODER_HARNESS.CLAUDE_CODE, "on Playwright from Bash,"],
     [CODER_HARNESS.CODEX, "on Playwright from your shell,"],
   ] as const;
+
   for (const brief of Object.values(AGENT_BRIEF)) {
     for (const repository of ["Acme/Relay", null]) {
       for (const [harness, shell] of SHELL_OF) {
@@ -90,6 +96,7 @@ test("a Claude Code or Codex agent is told of its browser, which Vespin's MCP se
           false,
           harness,
         );
+
         const label = `${harness} ${brief} ${repository ?? "no repository"}`;
         assert.ok(words.includes("## Your browser"), label);
         assert.ok(words.includes(BROWSER), label);
@@ -105,6 +112,7 @@ test("a local agent is told its folders on its machine, and no browser and no sk
     checkoutPath: "/Users/dev/.vespin/agents/a1/repository",
     sharedFiles: "/Users/dev/.vespin/agents/a1/tmp",
   };
+
   for (const repository of ["Acme/Relay", null]) {
     for (const harness of [CODER_HARNESS.CLAUDE_CODE, CODER_HARNESS.CODEX]) {
       const words = coderInstructions(
@@ -118,10 +126,12 @@ test("a local agent is told its folders on its machine, and no browser and no sk
         harness,
         MAC,
       );
+
       const label = `${harness} ${repository ?? "no repository"}`;
       assert.ok(!words.includes("## Your browser"), label);
       // Note that its harness finds whatever skills the machine's own home holds, so it is told of none.
       assert.ok(!words.includes("A word like `/name`"), label);
+
       if (repository !== null) assert.ok(words.includes(`\`${MAC.checkoutPath}\``), label);
     }
   }
@@ -133,12 +143,15 @@ test("a local agent is told it runs straight on its machine with full access to 
     checkoutPath: "/home/vespin-host/.vespin/agents/a1/repository",
     sharedFiles: "/home/vespin-host/.vespin/agents/a1/tmp",
   };
+
   const told = ["straight on one of the developer's own machines", "full access"];
+
   // Note that its worktree shares the machine's one clone, whose branches another agent's worktree may hold.
   const toldWithRepository = [
     "`git switch --detach origin/<branch>`",
     "`git push origin HEAD:<branch>`",
   ];
+
   for (const repository of ["Acme/Relay", null]) {
     const words = coderInstructions(
       repository,
@@ -151,13 +164,18 @@ test("a local agent is told it runs straight on its machine with full access to 
       CODER_HARNESS.CLAUDE_CODE,
       HOST,
     );
+
     const label = repository ?? "no repository";
+
     for (const each of told) assert.ok(words.includes(each), `${label}: ${each}`);
     assert.ok(!words.includes("## Your browser"), label);
+
     if (repository !== null) assert.ok(words.includes(`\`${HOST.checkoutPath}\``), label);
+
     for (const each of toldWithRepository) {
       assert.equal(words.includes(each), repository !== null, `${label}: ${each}`);
     }
+
     // The machine reads back only inside the agent's folder, never its own `/tmp`.
     assert.ok(words.includes(`under \`${HOST.sharedFiles}/\``), label);
     assert.ok(!words.includes(SHARED_FILES_DIRECTORY), label);
@@ -180,13 +198,16 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
     "`delegate`",
     "task_wait",
   ];
+
   const CLAUDE_CODES = ["TaskCreate", "WebSearch", "WebFetch", "Skill tool", "Agent tool", "Bash"];
+
   const CODEXES = [
     "`apply_patch`",
     "`update_plan`",
     "Codex's own web search",
     "Codex's own subagent tools",
   ];
+
   for (const brief of Object.values(AGENT_BRIEF)) {
     for (const repository of ["Acme/Relay", null]) {
       for (const memberToken of [false, true]) {
@@ -200,6 +221,7 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
           memberToken,
           CODER_HARNESS.CODEX,
         );
+
         const label = `${brief} ${repository ?? "no repository"} ${memberToken ? "token" : "app"}`;
         assert.deepEqual(
           LUKES.filter((tool) => codex.includes(tool)),
@@ -218,11 +240,13 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
         );
         // An agent with a repository is pointed at its skills where Codex keeps them.
         assert.equal(codex.includes("`.agents/skills`"), repository !== null, label);
+
         for (const kept of [INBOX_TOOLS.POST.name, AGENT_TOOL.START_AGENT, AGENT_TOOL.SHOW_IMAGE]) {
           assert.ok(codex.includes(`\`${kept}\``), `${label}: ${kept}`);
         }
       }
     }
+
     // An agent on either harness waits on its checks with our wakeup, never the CLI's, which its launch denies, nor a watch.
     for (const harness of Object.values(CODER_HARNESS)) {
       for (const memberToken of [false, true]) {
@@ -236,6 +260,7 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
           memberToken,
           harness,
         );
+
         const label = `${brief} ${harness} ${memberToken ? "token" : "app"}`;
         assert.ok(waiting.includes(`wait with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\``), label);
         // GitHub's message that the checks finished reaches an agent on the App alone, so only it is told to cancel the wakeup then.
@@ -255,6 +280,7 @@ test("an agent on a task is told of the task's links, pages, and comments", () =
   const TASK_LINK = "`https://vespin.dev/<workspace>/task/<number>` link, or one by the task's id";
   const PAGES = `show it with \`${AGENT_TOOL.SHOW_PAGE}\``;
   const COMMENTS = `answer in that thread with \`${AGENT_TOOL.REPLY_TO_COMMENT}\``;
+
   for (const brief of Object.values(AGENT_BRIEF)) {
     const onTask = coderInstructions("Acme/Relay", brief, TASK_ADDRESS, standingFor("Acme/Relay"));
     const told = [onTask.includes(TASK_LINK), onTask.includes(PAGES), onTask.includes(COMMENTS)];
@@ -265,20 +291,24 @@ test("an agent on a task is told of the task's links, pages, and comments", () =
 test("every agent on a task is told how to update its description, one handed a prompt told to read it first", () => {
   const UPDATING = "## Updating the description";
   const READ_FIRST = `Read it with \`${AGENT_TOOL.READ_TASK}\``;
+
   const told = (brief: AgentBrief, task: OwnTask) => {
     const words = coderInstructions("Acme/Relay", brief, task, standingFor("Acme/Relay"));
+
     return [
       words.includes(UPDATING),
       words.includes(AGENT_TOOL.EDIT_DESCRIPTION),
       words.includes(READ_FIRST),
     ];
   };
+
   assert.deepEqual(told(AGENT_BRIEF.DESCRIPTION, TASK_ADDRESS), [true, true, false]);
   assert.deepEqual(told(AGENT_BRIEF.PROMPT, TASK_ADDRESS), [true, true, true]);
 });
 
 test("an agent on a task with no repository names what it decided in its message, never in a pull request's description, which it opens none of", () => {
   const IN_PULL_REQUEST = "pull request's description";
+
   const decided = (repository: string | null) =>
     coderInstructions(
       repository,
@@ -286,16 +316,20 @@ test("an agent on a task with no repository names what it decided in its message
       TASK_ADDRESS,
       standingFor(repository),
     ).includes(IN_PULL_REQUEST);
+
   assert.deepEqual([decided("Acme/Relay"), decided(null)], [true, false]);
 });
 
 test("every agent on a task is told to keep its task's status with update_task, on to done once its work and subtasks are, a helper on its starter's task leaving it to the starter, and one on no task told of no status", () => {
   const STATUS = "## Your task's status";
+
   const told = (brief: AgentBrief, task: OwnTask) => {
     const words = coderInstructions("Acme/Relay", brief, task, standingFor("Acme/Relay"));
     const at = words.indexOf(STATUS);
+
     if (at === -1) return [false, false, false, false];
     const section = words.slice(at, words.indexOf("\n\n## ", at + STATUS.length));
+
     return [
       true,
       section.includes(AGENT_TOOL.UPDATE_TASK),
@@ -305,6 +339,7 @@ test("every agent on a task is told to keep its task's status with update_task, 
       ),
     ];
   };
+
   for (const brief of Object.values(AGENT_BRIEF)) {
     assert.deepEqual(told(brief, TASK_ADDRESS), [true, true, true, true], brief);
   }
@@ -314,11 +349,14 @@ test("an agent asked for a plan, a proposal, or research opens no pull request o
   const NO_DOCUMENT = "never commit the write-up as a document";
   const PLAN = `write it into the description with \`${AGENT_TOOL.EDIT_DESCRIPTION}\``;
   const PAGE = `show it as a page with \`${AGENT_TOOL.SHOW_PAGE}\``;
+
   const told = (brief: AgentBrief, task: OwnTask) => {
     const words = coderInstructions("Acme/Relay", brief, task, standingFor("Acme/Relay"));
     assert.ok(words.includes(NO_DOCUMENT), brief);
+
     return [words.includes(PLAN), words.includes(PAGE)];
   };
+
   assert.deepEqual(told(AGENT_BRIEF.DESCRIPTION, TASK_ADDRESS), [true, true]);
   assert.deepEqual(told(AGENT_BRIEF.PROMPT, TASK_ADDRESS), [false, true]);
 });
@@ -331,6 +369,7 @@ test("the thread post tool tells the session never to ask for a credential or a 
 
 test("the session sends whatever is ready for the developer to look at or review to a thread, a pull request among it, and a test only the developer can run, and an agent another coding agent started may message that agent before its report", () => {
   const READY = "ready for them to look at or review";
+
   for (const brief of Object.values(AGENT_BRIEF)) {
     const inbox = coderInstructions(
       "Acme/Relay",
@@ -338,6 +377,7 @@ test("the session sends whatever is ready for the developer to look at or review
       TASK_ADDRESS,
       standingFor("Acme/Relay"),
     ).split("## Threads")[1];
+
     assert.ok(inbox?.includes(READY), brief);
     assert.ok(inbox?.includes("a pull request you opened or marked ready"), brief);
     assert.ok(inbox?.includes("needs to test something by hand"), brief);
@@ -354,6 +394,7 @@ test("the session sends whatever is ready for the developer to look at or review
 test("an agent is told whose its commits are and to end each on the trailer it is handed, never to add one where it is handed none, and to open a pull request through the service, never gh", () => {
   const BOT_TRAILER = "Co-authored-by: luke[bot] <90001+luke[bot]@users.noreply.github.com>";
   const DEVELOPER_TRAILER = "Co-authored-by: Ada Lovelace <7001+ada@users.noreply.github.com>";
+
   const cases = [
     {
       by: COMMIT_BY.DEVELOPER,
@@ -368,6 +409,7 @@ test("an agent is told whose its commits are and to end each on the trailer it i
     { by: COMMIT_BY.APP, coAuthor: DEVELOPER_TRAILER, says: "set to its bot" },
     { by: COMMIT_BY.APP, coAuthor: undefined, says: "set to its bot" },
   ] as const;
+
   for (const brief of Object.values(AGENT_BRIEF)) {
     for (const authorship of cases) {
       const words = coderInstructions(
@@ -377,6 +419,7 @@ test("an agent is told whose its commits are and to end each on the trailer it i
         standingFor("Acme/Relay"),
         authorship,
       );
+
       const named = `${brief}, ${authorship.by}, ${authorship.coAuthor ?? "no co-author"}`;
       assert.ok(words.includes(authorship.says), named);
       assert.equal(
@@ -384,6 +427,7 @@ test("an agent is told whose its commits are and to end each on the trailer it i
         authorship.by === COMMIT_BY.DEVELOPER,
         named,
       );
+
       if (authorship.coAuthor === undefined) {
         assert.ok(words.includes("add a `Co-authored-by` trailer"), named);
         assert.ok(!words.includes("exactly as written: `Co-authored-by"), named);
@@ -391,6 +435,7 @@ test("an agent is told whose its commits are and to end each on the trailer it i
         assert.ok(words.includes(`exactly as written: \`${authorship.coAuthor}\``), named);
         assert.ok(!words.includes("add a `Co-authored-by` trailer"), named);
       }
+
       assert.ok(
         words.includes(
           `open the pull request with \`${AGENT_TOOL.OPEN_PULL_REQUEST}\`, never \`gh pr create\``,
@@ -403,6 +448,7 @@ test("an agent is told whose its commits are and to end each on the trailer it i
 
 test("an agent on its starter's own token reads its checks and its pull request over GitHub's REST API under its repository, never gh pr, is told a draft cannot be marked ready from its sandbox, and is told nothing on its pull request wakes it without the App", () => {
   const TRAILER = "Co-authored-by: luke[bot] <90001+luke[bot]@users.noreply.github.com>";
+
   for (const brief of Object.values(AGENT_BRIEF)) {
     const words = (memberToken: boolean) =>
       coderInstructions(
@@ -414,11 +460,14 @@ test("an agent on its starter's own token reads its checks and its pull request 
         null,
         memberToken,
       );
+
     const onToken = words(true);
+
     for (const cli of ["`gh pr checks", "`gh run view", "marking a draft ready"]) {
       assert.ok(!onToken.includes(cli), `${brief}: ${cli}`);
       assert.ok(words(false).includes(cli), `${brief}: ${cli}`);
     }
+
     assert.ok(onToken.includes("`gh api repos/{owner}/{repo}/commits/<sha>/check-runs`"), brief);
     assert.ok(onToken.includes("`gh api repos/{owner}/{repo}/pulls/<number>/reviews`"), brief);
     assert.ok(onToken.includes("A draft cannot be marked ready from here"), brief);
@@ -435,6 +484,7 @@ test("every agent is told that what happens on its pull request after its turn r
       TASK_ADDRESS,
       standingFor("Acme/Relay"),
     );
+
     assert.ok(instructions.includes("reaches you as a message from GitHub"), brief);
     assert.ok(instructions.includes("before you end a turn on an open pull request"), brief);
   }
@@ -448,6 +498,7 @@ test("every agent is told to reply on an inbox thread to a question or a request
       TASK_ADDRESS,
       standingFor("Acme/Relay"),
     );
+
     assert.ok(
       instructions.includes(`reply on that thread with \`${INBOX_TOOLS.POST.name}\` under its key`),
       brief,
@@ -472,6 +523,7 @@ test("every agent is told to look at a UI it built in the image's Chromium and s
       TASK_ADDRESS,
       standingFor("Acme/Relay"),
     );
+
     assert.ok(instructions.includes("playwright screenshot"), brief);
     assert.ok(
       instructions.includes('NODE_PATH="/usr/local/lib/node_modules:$(npm root -g)"'),
@@ -526,6 +578,7 @@ test("a coding agent's instructions are the golden's, byte for byte, for each br
 test("with Memory off the instructions say nothing of the workspace's memory; with it on they add its section before the one on messages, and nothing else", () => {
   for (const brief of Object.values(AGENT_BRIEF)) {
     const off = coderInstructions("Acme/Relay", brief, TASK_LINK, standingFor("Acme/Relay"));
+
     const on = coderInstructions(
       "Acme/Relay",
       brief,
@@ -536,6 +589,7 @@ test("with Memory off the instructions say nothing of the workspace's memory; wi
       false,
       CODER_HARNESS.CLAUDE_CODE,
     );
+
     assert.ok(!off.includes("## The workspace's memory"), brief);
     assert.ok(!off.includes(`\`${AGENT_TOOL.SAVE_MEMORY}\``), brief);
     const start = on.indexOf("## The workspace's memory\n\n");
@@ -549,12 +603,14 @@ test("with Memory off the instructions say nothing of the workspace's memory; wi
 test("with Done and follow-ups off the instructions say nothing of ending a turn; with it on they add its section before the one on messages, and nothing else", () => {
   for (const brief of Object.values(AGENT_BRIEF)) {
     const off = coderInstructions("Acme/Relay", brief, TASK_LINK, standingFor("Acme/Relay"));
+
     const on = coderInstructions(
       "Acme/Relay",
       brief,
       TASK_LINK,
       standingFor("Acme/Relay", { turnEnd: true }),
     );
+
     assert.ok(!off.includes(`\`${AGENT_TOOL.END_TURN}\``), brief);
     const start = on.indexOf("## Ending a turn\n\n");
     const end = on.indexOf("## What your messages are", start);
@@ -576,6 +632,7 @@ test("with Task descriptions off the instructions say nothing of a description: 
     "Keep a mention in the description",
     "comment threads on a description's text",
   ];
+
   for (const brief of Object.values(AGENT_BRIEF)) {
     const told = (descriptions: boolean) =>
       coderInstructions(
@@ -588,6 +645,7 @@ test("with Task descriptions off the instructions say nothing of a description: 
         false,
         CODER_HARNESS.CLAUDE_CODE,
       );
+
     const on = told(true);
     const off = told(false);
     assert.equal(
@@ -604,12 +662,14 @@ test("with Task descriptions off the instructions say nothing of a description: 
     assert.ok(comments.includes(`\`${AGENT_TOOL.REPLY_TO_COMMENT}\``), brief);
     assert.ok(off.includes(`show it as a page with \`${AGENT_TOOL.SHOW_PAGE}\``), brief);
   }
+
   const planned = coderInstructions(
     "Acme/Relay",
     AGENT_BRIEF.DESCRIPTION,
     TASK_LINK,
     standingFor("Acme/Relay"),
   );
+
   assert.deepEqual(
     DESCRIPTION_WORDS.filter((words) => !planned.includes(words)),
     [],

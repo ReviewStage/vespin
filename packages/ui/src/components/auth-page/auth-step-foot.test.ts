@@ -25,6 +25,7 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -35,6 +36,7 @@ function buttonWords(container: HTMLElement): string[] {
 
 test("the foot offers only what the step gives, each press reaching its own act", () => {
   const pressed: string[] = [];
+
   const first = mount(
     createElement(AuthStepFoot, {
       at: 1,
@@ -42,6 +44,7 @@ test("the foot offers only what the step gives, each press reaching its own act"
       next: { label: "Continue", onPress: () => pressed.push("continue") },
     }),
   );
+
   expect(first.textContent).toContain("1 of 4");
   expect(buttonWords(first)).toEqual(["Continue"]);
 
@@ -53,7 +56,9 @@ test("the foot offers only what the step gives, each press reaching its own act"
       onSkip: () => pressed.push("skip"),
     }),
   );
+
   expect(buttonWords(optional)).toEqual(["Back", "Skip"]);
+
   for (const each of optional.querySelectorAll("button")) act(() => each.click());
   act(() => first.querySelector("button")?.click());
   expect(pressed).toEqual(["back", "skip", "continue"]);

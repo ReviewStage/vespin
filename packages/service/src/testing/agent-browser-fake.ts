@@ -108,6 +108,7 @@ function framesOf(text: string): readonly RelayFrame[] {
   const bytes = new TextEncoder().encode(text);
   const wide = bytes.findIndex((byte) => byte >= 0x80);
   const at = wide >= 0 ? wide + 1 : Math.floor(bytes.length / 2);
+
   return [{ bytes: bytes.slice(0, at) }, { bytes: bytes.slice(at) }];
 }
 
@@ -122,8 +123,10 @@ export function fakeCdpPeer(
     const pages = yield* Ref.make<readonly PageTarget[]>(
       options.pages ?? [{ targetId: "page-blank", url: "about:blank", title: "" }],
     );
+
     const created = yield* Ref.make(0);
     const outputs = new Set<Queue.Queue<RelayFrame, Cause.Done>>();
+
     const write = (text: string) =>
       Effect.forEach([...outputs], (output) => Queue.offerAll(output, framesOf(text)), {
         discard: true,
@@ -132,9 +135,11 @@ export function fakeCdpPeer(
     const known = (command: FakeCdpCommand): Effect.Effect<FakeCdpAnswer> =>
       Effect.gen(function* () {
         const { params } = command;
+
         if (command.method === "Target.getTargets") {
           const held = yield* Ref.get(pages);
           const infos = held.map((page) => ({ ...page, type: "page", attached: false }));
+
           return {
             result: {
               targetInfos: [
@@ -144,14 +149,18 @@ export function fakeCdpPeer(
             },
           };
         }
+
         if (command.method === "Target.createTarget") {
           const targetId = `page-${yield* Ref.updateAndGet(created, (count) => count + 1)}`;
           const url = typeof params.url === "string" ? params.url : "about:blank";
           yield* Ref.update(pages, (held) => [...held, { targetId, url, title: "" }]);
+
           return { result: { targetId } };
         }
+
         if (command.method === "Target.closeTarget") {
           const held = yield* Ref.get(pages);
+
           if (!held.some((page) => page.targetId === params.targetId)) {
             return {
               error: {
@@ -160,12 +169,15 @@ export function fakeCdpPeer(
               },
             };
           }
+
           yield* Ref.set(
             pages,
             held.filter((page) => page.targetId !== params.targetId),
           );
+
           return { result: {} };
         }
+
         return {
           error: { code: CHROME_ERROR.NO_METHOD, message: `'${command.method}' wasn't found` },
         };
@@ -181,6 +193,7 @@ export function fakeCdpPeer(
       attach: (output) => Effect.sync(() => void outputs.add(output)),
       answer: (command) => {
         const own = options.answer?.(command);
+
         return own === undefined ? known(command) : Effect.succeed(own);
       },
     };
@@ -190,8 +203,10 @@ export function fakeCdpPeer(
 /** Whether a PTY start frame runs the bridge, on the port the browser listens on. */
 function startsBridge(text: string): boolean {
   const parsed: unknown = JSON.parse(text);
+
   if (typeof parsed !== "object" || parsed === null || !("args" in parsed)) return false;
   const { args } = parsed;
+
   return (
     Array.isArray(args) &&
     args.includes(BRIDGE_SOURCE) &&
@@ -205,20 +220,24 @@ export function fakeBridgePty(
   bridge: FakeBridge = FAKE_BRIDGE.READY,
 ): SandboxPtyService {
   let connections = 0;
+
   return {
     connect: () =>
       Effect.gen(function* () {
         connections += 1;
+
         const word =
           bridge === FAKE_BRIDGE.ERROR_FIRST
             ? connections === 1
               ? FAKE_BRIDGE.ERROR
               : FAKE_BRIDGE.READY
             : bridge;
+
         const output = yield* Queue.make<RelayFrame, Cause.Done>();
         yield* Effect.addFinalizer(() => Queue.end(output));
         let held = "";
         const say = (text: string) => Queue.offerAll(output, framesOf(text));
+
         return {
           frames: Stream.fromQueue(output),
           close: () => Queue.end(output).pipe(Effect.asVoid),
@@ -228,25 +247,34 @@ export function fakeBridgePty(
                 if (!startsBridge(frame.text) || word === FAKE_BRIDGE.SILENT) return;
                 yield* peer.attach(output);
                 yield* say("a line the PTY printed before the bridge\r\n");
+
                 const said =
                   word === FAKE_BRIDGE.ERROR
                     ? { bridge: word, reason: "socket" }
                     : { bridge: word };
+
                 yield* say(`${JSON.stringify(said)}\r\n`);
+
                 return;
               }
+
               held += new TextDecoder().decode(frame.bytes);
               const lines = held.split("\n");
               held = lines.pop() ?? "";
+
               for (const line of lines) {
                 const command = decodeCommandLine(line);
+
                 if (command._tag === "None") continue;
                 const { id, method, params, sessionId: target } = command.value;
                 const asked = { method, params: params ?? {}, sessionId: target };
                 const answer = yield* peer.answer(asked);
+
                 if ("silent" in answer) continue;
+
                 const sessionId =
                   asked.sessionId === undefined ? {} : { sessionId: asked.sessionId };
+
                 yield* say(`${JSON.stringify({ id, ...answer, ...sessionId })}\r\n`);
               }
             }),
@@ -312,14 +340,18 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
   /** Every `getOrCreate` that made the sandbox again, as it was asked. */
   const creates: SandboxGetOrCreate[] = [];
   let name = scenario.legacy === true ? FAKE_SANDBOX.NAME : agentSandboxName(scenario.sessionId);
+
   const refused = () =>
     scenario.unavailable === undefined ? undefined : Effect.fail(new SandboxUnavailable({}));
+
   let refusedResumes = 0;
+
   const resumeRefused = () =>
     scenario.resumeRefusal === undefined ||
     refusedResumes++ >= (scenario.resumeRefusals ?? Number.POSITIVE_INFINITY)
       ? undefined
       : Effect.fail(scenario.resumeRefusal);
+
   const listed = (): OpenedSandbox => ({
     name,
     status,
@@ -327,6 +359,7 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
     tags: FAKE_SANDBOX.TAGS,
     ...(scenario.vcpus === undefined ? undefined : { vcpus: scenario.vcpus }),
   });
+
   /** The sandbox resumed: running at once where it runs, and otherwise after the pending resumes the scenario names. */
   const resumed = () =>
     Effect.sync(() => {
@@ -337,8 +370,10 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
       current = FAKE_SANDBOX.RESUMED_SESSION;
       // A resume starts from the snapshot, where no browser runs.
       browserUp = false;
+
       return listed();
     });
+
   const api: SandboxService = {
     ...memorySandbox().service,
     listTagged: (_tag, sessionId) =>
@@ -358,6 +393,7 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
             current = FAKE_SANDBOX.CREATED_SESSION;
             browserUp = false;
             await onCreate?.(listed());
+
             return listed();
           })
         : Effect.andThen(
@@ -371,6 +407,7 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
       Effect.sync((): CommandRun => {
         const sandboxSessionId = typeof target === "string" ? current : target.running;
         ran.push({ sandboxSessionId, ask });
+
         if (ask.args.includes(RECORDER_SOURCE)) {
           return (
             scenario.recording?.start ?? {
@@ -380,8 +417,10 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
             }
           );
         }
+
         if (ask.args.includes(SANDBOX_RECORDING.VIDEO)) {
           const video = scenario.recording?.video;
+
           return video === undefined
             ? { exitCode: RECORDING_READ_EXIT.NO_VIDEO, stdout: "", stderr: "" }
             : {
@@ -390,15 +429,20 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
                 stderr: "",
               };
         }
+
         // The stop is the recording's other script, named as the start is.
         if (ask.args.includes(RECORDING_SCRIPT_NAME)) {
           const stop = scenario.recording?.stop ?? `{"ok":false,"reason":"none"}`;
+
           return { exitCode: 0, stdout: `${stop}\n`, stderr: "" };
         }
+
         const exitCode = scenario.startExit ?? 0;
+
         if (exitCode !== 0) return { exitCode, stdout: "", stderr: "Chromium did not start\n" };
         const stdout = browserUp ? BROWSER_START_OUTPUT.ATTACHED : BROWSER_START_OUTPUT.STARTED;
         browserUp = true;
+
         return { exitCode, stdout: `${stdout}\n`, stderr: "" };
       }),
     openInteractive: () =>
@@ -408,6 +452,7 @@ export function fakeSandboxApi(scenario: FakeSandboxScenario) {
         token: Redacted.make("pty-token"),
       }),
   };
+
   return { api, ran, creates };
 }
 
@@ -421,6 +466,7 @@ export function agentBrowserTestLayer(
   sessionId: string,
 ): Layer.Layer<AgentBrowser> {
   const { api } = fakeSandboxApi({ status: SANDBOX_STATUS.RUNNING, sessionId });
+
   return Layer.succeed(AgentBrowser, agentBrowserOver(api, fakeBridgePty(peer), FAKE_IMAGE));
 }
 

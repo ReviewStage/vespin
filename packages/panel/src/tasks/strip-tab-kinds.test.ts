@@ -325,6 +325,7 @@ describe("a strip tab's kind answers", () => {
       assert.deepEqual(stripTabLook(tab, KNOWN), look);
       const shown = stripTabSurface(tab, TASK);
       assert.equal(shown.surface, surface);
+
       // Note that a transcript's and a numbered Changes tab's key is minted on first ask, so no row can name it.
       if (of !== undefined) assert.equal(shown.of, of);
       assert.deepEqual(stripTabLink(tab, HOLDER), link);

@@ -17,8 +17,10 @@ const requests = vi.hoisted(() => {
   const made: string[] = [];
   globalThis.fetch = async (url) => {
     made.push(String(url));
+
     return new Response("{}", { status: 200 });
   };
+
   return made;
 });
 

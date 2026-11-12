@@ -16,6 +16,7 @@ export const STOPPED_COMMAND = "sleep 600";
 
 export function firstTurn(nonce: string): string {
   const branch = `agent-probe/${nonce}`;
+
   return [
     "This is Vespin's Claude Code probe. Do each step in order, in this repository.",
     `1. Create the file \`agent-probe/${nonce}.txt\` holding the single line \`${nonce}\`.`,

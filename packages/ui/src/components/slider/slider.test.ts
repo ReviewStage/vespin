@@ -26,6 +26,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -33,6 +34,7 @@ test("a slider is a range input named by its label, at its value and ends", () =
   const container = render(
     createElement(Slider, { value: 30, label: "Swipe", onChange: () => {} }),
   );
+
   const input = container.querySelector("input");
   assert.equal(input?.type, "range");
   assert.equal(input?.getAttribute("aria-label"), "Swipe");
@@ -43,9 +45,11 @@ test("a slider is a range input named by its label, at its value and ends", () =
 
 test("a change is told as a number", () => {
   const seen: number[] = [];
+
   const container = render(
     createElement(Slider, { value: 30, label: "Swipe", onChange: (v: number) => seen.push(v) }),
   );
+
   const input = container.querySelector("input");
   assert.ok(input);
   const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -58,9 +62,11 @@ test("a change is told as a number", () => {
 
 test("an arrow key on the thumb steps the value by one, told as a number", () => {
   const seen: number[] = [];
+
   const container = render(
     createElement(Slider, { value: 30, label: "Swipe", onChange: (v: number) => seen.push(v) }),
   );
+
   const input = container.querySelector("input");
   assert.ok(input);
   act(() => {

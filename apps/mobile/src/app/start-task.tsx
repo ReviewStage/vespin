@@ -16,12 +16,15 @@ export { ScreenBoundary as ErrorBoundary } from "../screen-boundary.js";
 function draftPictures(param: string | undefined): readonly string[] | undefined {
   if (param === undefined) return undefined;
   let read: unknown;
+
   try {
     read = JSON.parse(param);
   } catch {
     return undefined;
   }
+
   if (!Array.isArray(read)) return undefined;
+
   return SHARE_DRAFT_PICTURE_FILES.filter((name) => read.includes(name)).flatMap(
     (name) => appGroupFileUri(name) ?? [],
   );
@@ -35,6 +38,7 @@ export default function StartTaskRoute() {
     repository?: string;
     pictures?: string;
   }>();
+
   return (
     <NewTaskScreen
       parent={parent === "" ? undefined : parent}

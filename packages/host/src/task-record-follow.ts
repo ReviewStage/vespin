@@ -62,6 +62,7 @@ export function taskRecordMoves(
       (before: string | undefined, rows: TaskRecordLiveRows) => {
         const mark = descriptionMarkOf(rows);
         const moved = mark === before ? [] : [{ descriptionSavedAt: rows.description[0]?.savedAt }];
+
         return [mark, moved] as const;
       },
     ),

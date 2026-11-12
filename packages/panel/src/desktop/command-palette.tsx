@@ -568,9 +568,11 @@ function undrawnRow(words: RowWords, draw: () => Omit<PaletteRow, keyof RowWords
  */
 function pathScore(path: string, query: string): number {
   const lowered = path.toLowerCase();
+
   for (const letter of query.toLowerCase()) {
     if (letter.trim() !== "" && !lowered.includes(letter)) return 0;
   }
+
   return searchHit({ label: fileName(path), lines: [path], loose: true }, query)?.score ?? 0;
 }
 
@@ -585,6 +587,7 @@ function ranked<Item>(
   score: (item: Item) => number,
 ): readonly Item[] {
   if (searchTokens(query).length === 0) return items.slice(0, limit);
+
   return items
     .map((item) => ({ item, score: score(item) }))
     .filter((each) => each.score > 0)
@@ -603,6 +606,7 @@ function filesAtHand(
 ): readonly string[] {
   const drawn = panel.files.filter((file) => file.browsedOn === taskId);
   const placed = inTaskOrder(drawn, panel.order, (file) => fileTab(file.path));
+
   return [...new Set(placed.map((file) => file.path))];
 }
 
@@ -621,10 +625,13 @@ function leadingPaths(
   const lead = leading.filter((path) => listed.has(path)).slice(0, limit);
   const led = new Set(lead);
   const rest: string[] = [];
+
   for (const path of paths) {
     if (lead.length + rest.length >= limit) break;
+
     if (!led.has(path)) rest.push(path);
   }
+
   return [...lead, ...rest];
 }
 
@@ -639,7 +646,9 @@ function filesOf(answer: TasksTreeAnswer): FilesRead {
       truncated: answer.folder.truncated,
     };
   }
+
   if ("failure" in answer) return { read: FILES_READ.FAILED };
+
   return { read: FILES_READ.MISSED, notice: refusalLine(answer.refusal, answer.branch) };
 }
 
@@ -651,7 +660,9 @@ function paletteFilesQueryOptions(taskId: string | undefined) {
 /** The files as the palette holds them: none before they are asked for, and reading while a read is out, a Retry's among them. */
 function filesHeld(files: UseQueryResult<TasksTreeAnswer>): FilesRead | undefined {
   if (files.isFetching) return { read: FILES_READ.READING };
+
   if (files.isError) return filesOf(refusedAnswer(files.error));
+
   return files.data === undefined ? undefined : filesOf(files.data);
 }
 
@@ -662,12 +673,15 @@ function filesNotice(
   onRetry: () => void,
 ): PaletteNotice | undefined {
   if (!repositoryOpen) return { kind: PALETTE_NOTICE.SAID, line: NO_REPOSITORY_LINE };
+
   if (held === undefined || held.read === FILES_READ.READING) {
     return { kind: PALETTE_NOTICE.READING, line: READING_LINE };
   }
+
   if (held.read === FILES_READ.FAILED) {
     return { kind: PALETTE_NOTICE.FAILED, line: FILES_MISSED_LINE, onRetry };
   }
+
   return held.read === FILES_READ.MISSED
     ? { kind: PALETTE_NOTICE.SAID, line: <ReplayMask>{held.notice}</ReplayMask> }
     : undefined;
@@ -678,6 +692,7 @@ function tasksNotice(
   tasks: Pick<TasksControl, "signedIn" | "listRead" | "listFailed" | "onRetryList">,
 ): PaletteNotice | undefined {
   if (!tasks.signedIn || tasks.listRead) return undefined;
+
   return tasks.listFailed
     ? { kind: PALETTE_NOTICE.FAILED, line: TASKS_FAILED_LINE, onRetry: tasks.onRetryList }
     : { kind: PALETTE_NOTICE.READING, line: TASKS_READING_LINE };
@@ -695,9 +710,12 @@ function peopleNotice(
 ): PaletteNotice | undefined {
   if (tasks.workspace === undefined) {
     const coming = tasks.signedIn && tasks.workspaces.length === 0 && !tasks.listFailed;
+
     return coming ? { kind: PALETTE_NOTICE.READING, line: PEOPLE_READING_LINE } : undefined;
   }
+
   if (read.data !== undefined) return undefined;
+
   return read.isError
     ? { kind: PALETTE_NOTICE.FAILED, line: PEOPLE_FAILED_LINE, onRetry: retry }
     : { kind: PALETTE_NOTICE.READING, line: PEOPLE_READING_LINE };
@@ -706,6 +724,7 @@ function peopleNotice(
 /** What the Inbox filter says while its items have not been pushed, or a push did not land; nothing once every one is. */
 function inboxNotice(search: InboxSearch): PaletteNotice | undefined {
   if (search.reading) return { kind: PALETTE_NOTICE.READING, line: INBOX_READING_LINE };
+
   return search.failed
     ? { kind: PALETTE_NOTICE.FAILED, line: INBOX_FAILED_LINE, onRetry: search.onRetry }
     : undefined;
@@ -717,11 +736,15 @@ function automationsNotice(
   automations: Pick<ReturnType<typeof useAutomations>, "read" | "reload">,
 ): PaletteNotice | undefined {
   const { read, reload: onRetry } = automations;
+
   if (tasks.workspace === undefined) {
     const coming = tasks.signedIn && tasks.workspaces.length === 0 && !tasks.listFailed;
+
     return coming ? { kind: PALETTE_NOTICE.READING, line: READING_AUTOMATIONS } : undefined;
   }
+
   if (read === undefined) return { kind: PALETTE_NOTICE.READING, line: READING_AUTOMATIONS };
+
   return "failure" in read
     ? { kind: PALETTE_NOTICE.FAILED, line: AUTOMATIONS_FAILED_LINE, onRetry }
     : undefined;
@@ -736,6 +759,7 @@ function NoticeLine({ notice }: { notice: PaletteNotice }): React.JSX.Element {
       </ErrorState>
     );
   }
+
   return (
     <NoteLine look={NOTE_LINE_LOOK.INSET} status={notice.kind === PALETTE_NOTICE.READING}>
       {notice.line}
@@ -761,9 +785,13 @@ function fileRow(path: string, open: (path: string) => void): PaletteRow {
  */
 function arrowStep(event: React.KeyboardEvent, query: string): number {
   if (query !== "" || event.nativeEvent.isComposing) return 0;
+
   if (event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return 0;
+
   if (event.key === SHORTCUT_KEY.LEFT.key) return -1;
+
   if (event.key === SHORTCUT_KEY.RIGHT.key) return 1;
+
   return 0;
 }
 
@@ -775,6 +803,7 @@ function steppedFilter(
 ): PaletteFilter {
   const at = filters.indexOf(filter);
   const count = filters.length;
+
   return filters[(at + step + count) % count] ?? PALETTE_FILTER.ALL;
 }
 
@@ -830,39 +859,49 @@ function taskRows(
 ): readonly UndrawnRow[] {
   const listedId = tasks.workspace?.id;
   const carded = { ...tasks, onShowAgent: showAgent };
+
   // Note that a repository's name is weighed against each repository listed once, not against each task, since many tasks share one.
   const repositories = [...new Set(tasks.tasks.map((task) => task.repository))].map(
     (repository) => ({ repository }),
   );
+
   // Note that only the listed workspace's members are read, so another workspace's assignee stands by the wire's name, never as having left.
   const listedMembers = (task: TaskSummary) =>
     task.workspaceId === listedId ? members : undefined;
+
   const readerOf = (task: TaskSummary) => ({
     members: listedMembers(task),
     readerId: tasks.me,
     memberCount: tasks.workspaces.find((each) => each.id === task.workspaceId)?.memberCount,
   });
+
   const elsewhereOf = (task: TaskSummary): Workspace | undefined =>
     listedId === undefined || task.workspaceId === listedId
       ? undefined
       : tasks.workspaces.find((each) => each.id === task.workspaceId);
+
   // Note that a task is found by its key, as its card and the Tasks list say it, read under its own workspace's name.
   const keyOf = (task: TaskSummary): PaletteRow["taskKey"] => {
     const home = tasks.workspaces.find((each) => each.id === task.workspaceId);
+
     return home === undefined || task.number === undefined
       ? undefined
       : { workspaceName: home.name, number: task.number };
   };
+
   const taskOf = (task: TaskSummary): UndrawnRow => {
     const elsewhere = elsewhereOf(task);
     const numbered = keyOf(task);
+
     const key =
       numbered === undefined ? undefined : taskKey(numbered.workspaceName, numbered.number);
+
     const createdBy = task.createdBy?.name ?? null;
     const assignedTo = task.assignee?.name ?? null;
     // Note that a task the app or an agent made says them in its detail, so it is found by them.
     const origin = originOf(task);
     const madeBy = origin === undefined ? null : actorName(origin);
+
     const words: RowWords = {
       label: task.name,
       terms: [
@@ -877,9 +916,11 @@ function taskRows(
       ].filter((term) => term !== null && term !== undefined),
       taskKey: numbered,
     };
+
     return undrawnRow(words, () => {
       const worn = assigneeFace(task, readerOf(task));
       const detail = taskDetail(task, repositories);
+
       return {
         replayMasked: true,
         icon: tabLook({ kind: TAB_KIND.PLAN, name: task.name, status: task.status }).icon,
@@ -900,15 +941,19 @@ function taskRows(
       };
     });
   };
+
   const listed = (task: TaskSummary) => listedId === undefined || task.workspaceId === listedId;
+
   // The pinned stand first, as the sidebar's; the rest by their last
   // activity, as the sidebar, Home's Recent, and the row's time read it.
   const pinnedFirst = (each: readonly TaskSummary[]) => [
     ...each.filter((task) => task.pinnedAt !== undefined),
     ...orderTasks(each.filter((task) => task.pinnedAt === undefined)),
   ];
+
   const here = tasks.tasks.filter(listed);
   const elsewhere = tasks.tasks.filter((task) => !listed(task));
+
   return [...pinnedFirst(here).map(taskOf), ...pinnedFirst(elsewhere).map(taskOf)];
 }
 
@@ -927,7 +972,9 @@ interface PanelOfferDoors {
  */
 function paletteEntries(entry: AddEntry): readonly AddEntry[] {
   const { submenu, ...row } = entry.row;
+
   if (submenu === undefined) return [entry];
+
   return submenu.rows.map((choice) => ({
     row: { ...row, detail: choice.label, terms: [row.label, choice.label] },
     endMark: isValidElement(choice.end) ? choice.end : undefined,
@@ -959,23 +1006,28 @@ function agentRows(
   directory: EditReader,
 ): readonly PaletteRow[] {
   const taskId = tasks.activeTaskId;
+
   if (taskId === undefined) return [];
   const taskName = tasks.tasks.find((task) => task.id === taskId)?.name;
   // Note that an item main says waits on the task holds its Inbox with no agent read yet.
   const waiting = inboxWaiting.find((each) => each.taskId === taskId)?.items.length ?? 0;
   const inbox = inboxEntries(tasks.agents, waiting, () => tasks.onShowInbox({ taskId }));
+
   const agents = agentEntries(tasks.mainTabs, tasks.agents, directory).map((entry) => ({
     ...entry,
     onPick: () => tasks.onShowAgent(taskId, entry.row.id),
   }));
+
   // Note that the plan's places open in its own panel, and in the Inbox's
   // beside an item of the plan, whose panel is the Inbox's.
   const holder = holdsTaskPanel(tasks, inboxStanding)
     ? SIDE_PANEL_HOLDER.TASK
     : SIDE_PANEL_HOLDER.INBOX;
+
   // Note that the Inbox's panel reads the chosen item's pages on its own (`desktop-inbox.tsx`).
   const inboxHeld = holder === SIDE_PANEL_HOLDER.INBOX;
   const pages = (inboxHeld ? tasks.inboxView.pages : tasks.pages) ?? [];
+
   const places = opensTaskItems(tasks, inboxStanding)
     ? panelOffers({
         holder,
@@ -1008,15 +1060,19 @@ function agentRows(
           },
         }))
     : [];
+
   const entries: readonly AddEntry[] = [...inbox, ...agents, ...places];
+
   const standing = entries.map(({ row, endMark, card, onPick, agent }) => {
     // Note that a terminal's row is named by its agent, as under the "+"'s Cloud and Local headings, which ⌘K draws none of, so the row says it.
     const heading =
       row.section === ADD_SECTION.CLOUD || row.section === ADD_SECTION.LOCAL
         ? row.section
         : undefined;
+
     const detail = typeof row.detail === "string" ? row.detail : undefined;
     const named = [heading, taskName].filter((word) => word !== undefined);
+
     return {
       replayMasked: true,
       icon: row.icon,
@@ -1036,6 +1092,7 @@ function agentRows(
       onChoose: () => show(onPick),
     };
   });
+
   return [...standing, ...archivedAgentRows(tasks, taskName, show, directory)];
 }
 
@@ -1050,6 +1107,7 @@ function runRows(
   show: (pick: () => void) => void,
 ): readonly PaletteRow[] {
   const taskName = tasks.tasks.find((task) => task.id === tasks.activeTaskId)?.name;
+
   return runPaletteRows(offer).map((row) => ({
     replayMasked: true,
     icon: row.icon,
@@ -1075,12 +1133,14 @@ function archivedAgentRows(
   directory: EditReader,
 ): readonly PaletteRow[] {
   const { agents } = tasks;
+
   return (agents.archived ?? []).map((agent) => {
     const look = tabLook({
       kind: TAB_KIND.AGENT,
       name: agentName(agent, agents.models),
       agent,
     });
+
     return {
       ...look,
       replayMasked: true,
@@ -1128,6 +1188,7 @@ function automationRows(
 ): readonly PaletteRow[] {
   return automations.map((automation) => {
     const trigger = automationTriggerText(automation.trigger, automation.repositories ?? []);
+
     return {
       replayMasked: true,
       // Note that it wears its tile, what fires it and how its last run went, as the Automations page, its chip, and the @ list draw it.
@@ -1155,22 +1216,27 @@ function snippetOf(
   tokens: readonly string[],
 ): string | undefined {
   const missing = tokens.filter((token) => !matchesTokens(seen, [token]));
+
   for (const line of words) {
     if (seen.includes(line)) continue;
     const lowered = line.toLowerCase();
     const token = missing.find((each) => lowered.includes(each));
+
     if (token === undefined) continue;
     const at = lowered.indexOf(token);
     const from = Math.max(0, at - SNIPPET_REACH);
     const to = Math.min(line.length, at + token.length + SNIPPET_REACH);
+
     return `${from > 0 ? "…" : ""}${line.slice(from, to).trim()}${to < line.length ? "…" : ""}`;
   }
+
   return undefined;
 }
 
 /** What an Inbox item's search reads: its title and its task's name, and else everything it says (`inboxItemWords`). */
 function inboxWords({ holder, item }: InboxListed): RowWords {
   const title = cardTitle(item.title);
+
   return { label: title, terms: [title, holder.task.name], keywords: inboxItemWords(item) };
 }
 
@@ -1192,9 +1258,11 @@ function inboxRow(
   },
 ): UndrawnRow {
   const { holder, item } = listed;
+
   return undrawnRow(words, () => {
     const name = holder.task.name;
     const snippet = snippetOf(words.keywords ?? [], [item.title, words.label, name], seams.tokens);
+
     return {
       replayMasked: true,
       // Note that it leads with what it asks, as its chip and the @ list's row do, never its agent's tile, which its holder's words already name.
@@ -1301,6 +1369,7 @@ function commandLabel(command: AppCommand, experiments: ExperimentChoices): stri
  */
 function actionLabel(command: AppCommand, experiments: ExperimentChoices): string {
   const label = commandLabel(command, experiments);
+
   return PLACE_COMMANDS.has(command) ? `Go to ${label.toLowerCase()}` : label;
 }
 
@@ -1326,6 +1395,7 @@ function actionRows(
     )
     .map((command) => {
       const label = actionLabel(command, experiments);
+
       return {
         icon: panelCommandOf(command)?.icon ?? null,
         label,
@@ -1356,8 +1426,10 @@ function holdsTaskPanel(tasks: TasksControl, inbox: InboxStanding): boolean {
  */
 function opensTaskItems(tasks: TasksControl, inbox: InboxStanding): boolean {
   if (holdsTaskPanel(tasks, inbox)) return true;
+
   if (tasks.agentView.agentId !== undefined || !inbox.open) return false;
   const { chosen } = inbox;
+
   return chosen !== undefined && "taskId" in chosen && chosen.taskId === tasks.activeTaskId;
 }
 
@@ -1371,8 +1443,10 @@ function copyLinkRows(
   copy: (held: LinkAtHand) => void,
 ): readonly PaletteRow[] {
   const item = PANEL_COMMAND.COPY_LINK;
+
   return links.map((held, index) => {
     const label = `${commandWords(item, COMMAND_PLACE.PALETTE)} to ${held.thing}`;
+
     return {
       icon: item.icon,
       label,
@@ -1402,14 +1476,17 @@ function panelTabRows(
   if (tasks.region.kind !== DOCUMENT_REGION.READY || !holdsTaskPanel(tasks, inbox)) return [];
   const plan = openPlanStanding(tasks);
   const kinds = offeredPanelKinds(SIDE_PANEL_HOLDER.TASK);
+
   return kinds.map((tab) => {
     // Note that the row says the kind, Show plan, while its glyph is the Plan tab's, the task's status.
     const { icon } = tabLook({ kind: TAB_KIND.PANEL, tab, plan });
     const label = `Show ${SIDE_PANEL_TAB_KIND[tab].label.toLowerCase()}`;
+
     const pick = () => {
       tasks.onStandTask();
       tasks.sidePanel.onChoose(tab);
     };
+
     return { icon, label, terms: [label], onChoose: () => show(pick) };
   });
 }
@@ -1429,11 +1506,14 @@ function readMarkRows(
 ): readonly PaletteRow[] {
   if (tasks.region.kind !== DOCUMENT_REGION.READY) return [];
   const { task } = tasks.region;
+
   if (task.id !== reads.watched) return [];
+
   const item = markReadItem(
     { unread: reads.markedUnread(task.id), onMark: (unread) => reads.mark(task, unread) },
     shortcutSubject(SHORTCUT_SUBJECT.TASK, task.id),
   );
+
   return [
     {
       icon: item.icon,
@@ -1457,11 +1537,13 @@ function taskPinRows(
   choose: (run: () => void) => void,
 ): readonly PaletteRow[] {
   const task = reads.watched === undefined ? undefined : taskOf(tasks, reads.watched);
+
   if (task === undefined) return [];
   const pinned = task.pinnedAt !== undefined;
   const item = pinned ? PANEL_COMMAND.UNPIN_TASK : PANEL_COMMAND.PIN_TASK;
   const label = commandWords(item, COMMAND_PLACE.PALETTE);
   const mark = pinned ? TASK_MARK.UNPIN : TASK_MARK.PIN;
+
   return [
     {
       icon: item.icon,
@@ -1494,8 +1576,10 @@ function taskCommandRows(
   historyOffered: boolean,
 ): readonly PaletteRow[] {
   const task = reads.watched === undefined ? undefined : taskOf(tasks, reads.watched);
+
   if (task === undefined) return [];
   const renamed = rename?.taskId === task.id ? rename.begin : undefined;
+
   const commands: readonly { item: PanelCommand; run: () => void }[] = [
     ...(renamed === undefined ? [] : [{ item: PANEL_COMMAND.RENAME_TASK, run: renamed }]),
     ...(historyOffered
@@ -1523,8 +1607,10 @@ function taskCommandRows(
       : []),
     { item: PANEL_COMMAND.CHANGE_REPOSITORY, run: () => tasks.onChangeRepository(task.id) },
   ];
+
   return commands.map(({ item, run }) => {
     const label = commandWords(item, COMMAND_PLACE.PALETTE);
+
     return {
       icon: item.icon,
       label,
@@ -1550,13 +1636,16 @@ function useOpenThingKeys(
 ): void {
   const inbox = inboxStanding.open;
   const task = inbox || reads.watched === undefined ? undefined : taskOf(tasks, reads.watched);
+
   const toggleRead =
     task === undefined ? undefined : () => reads.mark(task, !reads.markedUnread(task.id));
+
   const togglePin =
     task === undefined
       ? undefined
       : () =>
           pins.onMarkTask(task.id, task.pinnedAt === undefined ? TASK_MARK.PIN : TASK_MARK.UNPIN);
+
   useAppCommand(APP_COMMAND.TOGGLE_READ, toggleRead);
   useAppCommand(APP_COMMAND.PIN, togglePin);
 }
@@ -1571,6 +1660,7 @@ function settingsPageRows(
     settingsPageShown(page, capabilities, experiments),
   ).map((page) => {
     const { title, icon } = settingsPageOf(page);
+
     return {
       icon,
       label: title,
@@ -1587,6 +1677,7 @@ function settingRows(
   land: (page: SettingsView, id: string) => void,
 ): readonly PaletteRow[] {
   if (rows === undefined) return [];
+
   return settingsSearchEntries(rows).map((entry) => ({
     icon: <GearIcon />,
     label: entry.label,
@@ -1605,11 +1696,15 @@ function settingRows(
  */
 function personFound(row: PaletteRow, tokens: readonly string[]): string | undefined {
   const people = row.people ?? [];
+
   if (people.length === 0 || tokens.length === 0) return undefined;
+
   // The name holding the most of the query's words, so a first name two people share never hides the one the whole query names.
   const held = (name: string) =>
     tokens.filter((token) => matchRanges(name, [token]).length > 0).length;
+
   const named = people.reduce((best, name) => (held(name) > held(best) ? name : best));
+
   return held(named) > 0 ? named : undefined;
 }
 
@@ -1625,6 +1720,7 @@ function markedIn(
   tokens: readonly string[],
 ): readonly MatchRange[] {
   if (hit === undefined) return [];
+
   return hit.tier === SEARCH_TIER.LOOSE
     ? hitRangesIn(text, subject, hit)
     : matchRanges(text, tokens);
@@ -1641,10 +1737,12 @@ function paletteItem(
   const hit = searchHit(subject, query);
   // A task found by its assignee's or its creator's name says the name after its detail, so the match is in sight.
   const found = personFound(row, tokens);
+
   const detail =
     found === undefined
       ? row.detail
       : [row.detail, found].filter((words) => words !== undefined).join(" · ");
+
   const words =
     detail === undefined && row.workspace === undefined ? undefined : (
       <ReplayWords masked={row.detailShown !== true}>
@@ -1665,6 +1763,7 @@ function paletteItem(
         )}
       </ReplayWords>
     );
+
   // Note that a task's key stands first at the row's end, as the Tasks list's row sets it, and never leads: a lead on the keyed rows alone pushes their glyph and name right of every row without one.
   // Spoken, since a palette row is an option, which carries no
   // `aria-keyshortcuts` to say the chord for it.
@@ -1686,6 +1785,7 @@ function paletteItem(
         {row.endMark}
       </>
     );
+
   return {
     id,
     label: <Highlighted text={row.label} ranges={hit?.label ?? []} />,
@@ -1710,9 +1810,11 @@ function paletteItem(
 function revealChecked(band: HTMLElement): void {
   const bar = band.querySelector<HTMLElement>('[role="radiogroup"]');
   const checked = bar?.querySelector<HTMLElement>('[aria-checked="true"]');
+
   if (bar === null || checked === null || checked === undefined) return;
   const start = checked.offsetLeft;
   const end = start + checked.offsetWidth;
+
   if (start < bar.scrollLeft) bar.scrollLeft = start;
   else if (end > bar.scrollLeft + bar.clientWidth) bar.scrollLeft = end - bar.clientWidth;
 }
@@ -1739,6 +1841,7 @@ function PaletteFilters({
     // Note that the list changing reveals it too, since a filter gone, as This task is when its task closes, moves the chosen one along the row.
     if (band.current !== null) revealChecked(band.current);
   }, [filter, filters]);
+
   return (
     <div ref={band}>
       <ReplayUnmask>
@@ -1762,6 +1865,7 @@ function PaletteFooter({ typed, runs }: { typed: boolean; runs: boolean }): Reac
     ...listHints(runs ? RETURN_WORD.RUN : RETURN_WORD.OPEN),
     typed ? FILTER_HINT.TYPED : FILTER_HINT.EMPTY,
   ];
+
   return (
     <>
       {hints.map((hint) => (
@@ -1818,15 +1922,18 @@ const PaletteDialog = memo(function PaletteDialog({
   const [selected, setSelected] = useState(FIRST_ROW);
   // Note that a palette closing keeps its row chosen, since it fades out as it stood.
   const [chosenUnder, setChosenUnder] = useState({ opening, filter });
+
   if (chosenUnder.opening !== opening || chosenUnder.filter !== filter) {
     setChosenUnder({ opening, filter });
     setSelected(FIRST_ROW);
   }
+
   // Whether the row chosen is a command's, which Return runs rather than opens.
   const runs = groups.some(
     (group) =>
       group.id === PALETTE_FILTER.COMMANDS && group.items.some((item) => item.id === selected),
   );
+
   return (
     <CommandDialog
       {...dialog}
@@ -1877,10 +1984,12 @@ export function CommandPalette({
   const inboxWaiting = useInboxWaitingTasks();
   // Note that the palette stands outside a task page, so it reads the open task's workspace's members itself, the reader among them, which a starter's face is told from.
   const directory = useWorkspaceDirectory(tasks.workspace);
+
   if (open && !available) setOpen(false);
   const [filter, setFilter] = useState<PaletteFilter>(PALETTE_FILTER.ALL);
   // Note that This task is offered only while a task is open, as its rows are (`agentRows`), since it would list nothing otherwise.
   const filters = tasks.activeTaskId === undefined ? TASKLESS_FILTERS : PALETTE_FILTERS;
+
   // Note that a filter gone with its task, as This task is when the task closes under the palette, gives way to All.
   if (!filters.includes(filter)) setFilter(PALETTE_FILTER.ALL);
   // How many times ⌘K has opened the palette, each of which chooses its first row.
@@ -1925,8 +2034,10 @@ export function CommandPalette({
   useEffect(() => {
     if (open) {
       shown.current = true;
+
       return;
     }
+
     if (!shown.current) return;
     shown.current = false;
     const run = chosen.current;
@@ -1938,12 +2049,14 @@ export function CommandPalette({
     chosen.current = run;
     setOpen(false);
   }, []);
+
   const automationsDoor = useAutomationsDoor(tasks);
   const inboxDoor = useInboxDoor(tasks);
   const inboxStanding = useInboxView(tasks);
   // A task, and an agent's tab, are always opened on the Tasks tab, as a
   // press in the sidebar is.
   const { placeLeave } = tasks;
+
   const onTasks = useCallback(
     (run: () => void) =>
       choose(() =>
@@ -1953,6 +2066,7 @@ export function CommandPalette({
       ),
     [choose, onTabChange, placeLeave],
   );
+
   // The seek for a setting's row gives itself up once another is asked
   // for or Settings is left, so it never lands on a later visit's page.
   const landing = useRef<(() => void) | undefined>(undefined);
@@ -1960,6 +2074,7 @@ export function CommandPalette({
     if (tab !== PANEL_TAB.SETTINGS) landing.current?.();
   }, [tab]);
   useEffect(() => () => landing.current?.(), []);
+
   const land = (page: SettingsView, id: string) =>
     choose(() => {
       // Choosing a page opens Settings on it, or turns the page of Settings standing.
@@ -1967,6 +2082,7 @@ export function CommandPalette({
       landing.current?.();
       landing.current = landOnSettingsRow(id);
     });
+
   const openPage = (page: SettingsView) =>
     choose(() => {
       landing.current?.();
@@ -1983,9 +2099,12 @@ export function CommandPalette({
   const owedReturn = useRef<string | undefined>(undefined);
   useEffect(() => {
     const owed = owedReturn.current;
+
     if (!open) owedReturn.current = undefined;
+
     if (!open || owed === undefined || sought !== query) return;
     owedReturn.current = undefined;
+
     // Note that the Return chooses the row its words rank first, as a Return typed after them would,
     // whatever was highlighted before; and none where the words changed again before they were ranked.
     if (owed !== query) return;
@@ -2003,22 +2122,29 @@ export function CommandPalette({
       if (event.key === "Enter" && sought !== query) {
         event.preventDefault();
         owedReturn.current = query;
+
         return;
       }
+
       const step = arrowStep(event, query);
+
       if (step !== 0) {
         event.preventDefault();
         setFilter(steppedFilter(filters, filter, step));
+
         return;
       }
+
       const pressed = commandForKey(
         [APP_COMMAND.COMMAND_PALETTE, APP_COMMAND.BACK, APP_COMMAND.FORWARD],
         event.nativeEvent,
       );
+
       if (pressed === undefined) return;
       // The menu bar's Back and Forward are held off too, since the palette
       // claims their chords for its filters while it stands.
       event.preventDefault();
+
       if (pressed === APP_COMMAND.COMMAND_PALETTE) setOpen(false);
       else setFilter(steppedFilter(filters, filter, pressed === APP_COMMAND.BACK ? -1 : 1));
     },
@@ -2031,11 +2157,13 @@ export function CommandPalette({
   const { mutate: retryMembers } = useMutation(workspaceMembersRetryMutation());
   const originOf = useTaskOrigin();
   const members = membersRead.data?.members;
+
   // Note that the tasks' rows are built once for what they say rather than on every render, and
   // only while a filter that lists them stands open, because a key, an arrow, or the pointer
   // moving ranks or lights them again but changes none of them, and an account may hold thousands.
   const tasksShown =
     open && tasks.signedIn && (filter === PALETTE_FILTER.ALL || filter === PALETTE_FILTER.TASKS);
+
   const taskList = useMemo(
     () =>
       tasksShown
@@ -2050,12 +2178,15 @@ export function CommandPalette({
         : [],
     [tasksShown, tasks, members, onTasks, originOf],
   );
+
   const reads = useReadMarks();
+
   // The watched task's history is its description's, which stands by its own workspace's choice.
   const historyOffered = useWorkspaceExperiment(
     reads.watched === undefined ? undefined : taskOf(tasks, reads.watched)?.workspaceId,
     EXPERIMENT.DESCRIPTIONS,
   );
+
   const renameOffer = useTaskRenameOffer();
   const relationWrites = useTaskRelationWrites();
   const pins = usePinWrites(tasks.drawnTasks);
@@ -2067,18 +2198,24 @@ export function CommandPalette({
   const openLocal = useOpenTerminalTab(TERMINAL_KIND.LOCAL, tasks.sidePanel, noFocusMove);
   // Note that the task's Changes rows hang their pull request's people, as their Changes tabs read them.
   const offeredChanges = tasks.sidePanel.changes;
+
   const changesPeople = useChangesPeopleOf(
     useMemo(() => offeredChanges.map((tab) => tab.changes), [offeredChanges]),
   );
+
   // The run actions of the agent the open task's column shows, each a row of its own, Run or Stop as it stands (`run-actions-button.tsx`).
   const showShell = useShowShellTab(tasks.sidePanel, noFocusMove);
+
   const terminalsRun =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.TERMINALS) }).data ===
     true;
+
   const runAgentId = tasks.sidePanel.agent;
+
   const runAgent = tasks.agents.agents?.find(
     (agent) => agent.id === runAgentId && agent.archivedAt === undefined,
   );
+
   const runOffer = useRunActions(
     runAgent,
     open,
@@ -2086,6 +2223,7 @@ export function CommandPalette({
       ? undefined
       : (terminal) => showShell(runAgent.id, terminal),
   );
+
   const offerDoors: PanelOfferDoors = {
     account: useWindowAccount(),
     onNewTerminal:
@@ -2099,25 +2237,33 @@ export function CommandPalette({
         ? (agentId) => openLocal(agentId, true)
         : undefined,
   };
+
   const taskId = tasks.activeTaskId;
   const repository = tasks.tasks.find((task) => task.id === taskId)?.repository ?? null;
+
   // Note that a task's files are searched only while its panel is the one standing, which an agent's page holds otherwise.
   const filesOpen =
     opensTaskItems(tasks, inboxStanding) && taskId !== undefined && repository !== null;
+
   const filesAsked = open && filesOpen && (filter === PALETTE_FILTER.FILES || tokens.length > 0);
+
   // Note that the Inbox is read the first time it is searched, on the Files filter's terms.
   const inboxAsked =
     open && tasks.signedIn && (filter === PALETTE_FILTER.INBOX || tokens.length > 0);
+
   const inboxSearch = useInboxSearch(tasks, inboxAsked);
+
   // Note that each Inbox item's words are read once for the items pushed rather than on every key.
   const inboxList = useMemo(
     () =>
       inboxAsked ? inboxSearch.items.map((listed) => ({ listed, words: inboxWords(listed) })) : [],
     [inboxAsked, inboxSearch.items],
   );
+
   // Note that the automations are held the first time they are searched, on the Inbox's terms.
   const automationsAsked =
     open && tasks.signedIn && (filter === PALETTE_FILTER.AUTOMATIONS || tokens.length > 0);
+
   const automations = useAutomations(automationsAsked ? tasks.workspace?.id : undefined);
   const now = useMinute();
 
@@ -2131,6 +2277,7 @@ export function CommandPalette({
   const paths = held?.read === FILES_READ.LISTED ? held.paths : undefined;
   const fileQuery = filter === PALETTE_FILTER.FILES || tokens.length > 0 ? sought : undefined;
   const blankFiles = fileQuery !== undefined && searchTokens(fileQuery).length === 0;
+
   // Ranked once a query or the listing changes, not on every render, since
   // a repository may list tens of thousands of paths.
   const rankedPaths = useMemo(
@@ -2140,10 +2287,12 @@ export function CommandPalette({
         : ranked(paths, fileQuery, limit, (path) => pathScore(path, fileQuery)),
     [paths, fileQuery, limit],
   );
+
   const listedPaths = useMemo(
     () => (paths === undefined || !blankFiles ? undefined : new Set(paths)),
     [paths, blankFiles],
   );
+
   // Note that with nothing typed the files open in the strip lead, since they are the likeliest sought.
   const matchedPaths =
     paths === undefined || listedPaths === undefined
@@ -2152,6 +2301,7 @@ export function CommandPalette({
 
   const byRow = (row: PaletteRow) => rowScore(row, sought);
   const runCommand = (command: AppCommand) => choose(() => runAppCommand(command));
+
   // The tasks and the Inbox's items, which may number thousands, ranked by what their search
   // reads and drawn only once listed.
   const undrawnOf = {
@@ -2168,6 +2318,7 @@ export function CommandPalette({
         }),
       ),
   } as const;
+
   // Every other kind's rows in tiers, built only for the filter shown and only
   // while open: every row a tier matches ranks above the next tier's.
   const tiersOf = {
@@ -2231,6 +2382,7 @@ export function CommandPalette({
     Exclude<PaletteKind, keyof typeof undrawnOf | typeof PALETTE_FILTER.FILES>,
     () => readonly (readonly PaletteRow[])[]
   >;
+
   // Note that a file found opens through the panel's one door for a file
   // named in place: the tab it has, as it stands, or a new one at the strip's end.
   const openFile = (path: string) =>
@@ -2238,22 +2390,27 @@ export function CommandPalette({
       tasks.onStandTask();
       tasks.sidePanel.onOpenFile({ path });
     });
+
   const rowsFor = (kind: PaletteKind): readonly PaletteRow[] => {
     if (kind === PALETTE_FILTER.FILES) {
       return (filesOpen ? matchedPaths : []).map((path) => fileRow(path, openFile));
     }
+
     if (kind === PALETTE_FILTER.TASKS || kind === PALETTE_FILTER.INBOX) {
       return ranked(undrawnOf[kind](), sought, limit, (row) =>
         subjectScore(row.subject, sought),
       ).map((row) => row.draw());
     }
+
     return tiersOf[kind]()
       .flatMap((tier) => ranked(tier, sought, limit, byRow))
       .slice(0, limit);
   };
+
   const kinds = filters.filter((each): each is PaletteKind =>
     filter === PALETTE_FILTER.ALL ? each !== PALETTE_FILTER.ALL : each === filter,
   );
+
   // Each kind's word for its rows' absence: still reading, refused, or a line of its own.
   const noticeOf = {
     [PALETTE_FILTER.TASKS]: () => tasksNotice(tasks),
@@ -2262,6 +2419,7 @@ export function CommandPalette({
     [PALETTE_FILTER.PEOPLE]: () =>
       peopleNotice(tasks, membersRead, () => {
         const workspaceId = tasks.workspace?.id;
+
         if (workspaceId !== undefined) retryMembers({ workspaceId });
       }),
     [PALETTE_FILTER.AUTOMATIONS]: () =>
@@ -2271,20 +2429,24 @@ export function CommandPalette({
     [PALETTE_FILTER.COMMANDS]: () => undefined,
     [PALETTE_FILTER.SETTINGS]: () => undefined,
   } as const satisfies Record<PaletteKind, () => PaletteNotice | undefined>;
+
   // Note that each kind's notice stands in its own group, beside the rows other kinds matched,
   // so a source that failed or is still reading is never taken for no match; under All a
   // line of a kind's own (no repository open) stays out, since that kind is simply not searched.
   const noticeFor = (kind: PaletteKind): PaletteNotice | undefined => {
     const notice = noticeOf[kind]();
+
     return filter === PALETTE_FILTER.ALL && notice?.kind === PALETTE_NOTICE.SAID
       ? undefined
       : notice;
   };
+
   const cut =
     filesOpen &&
     filter === PALETTE_FILTER.FILES &&
     held?.read === FILES_READ.LISTED &&
     held.truncated;
+
   // A kind's notice after its rows, or, under Files, that the listing searched was cut short.
   const noteOf = (section: PaletteSection): ReactNode =>
     section.notice !== undefined ? (
@@ -2294,17 +2456,22 @@ export function CommandPalette({
     ) : cut && section.kind === PALETTE_FILTER.FILES ? (
       <ReplayUnmask>{TRUNCATED_LINE}</ReplayUnmask>
     ) : undefined;
+
   // Every kind's rows ranked for the words sought, each group's items placed after the last.
   const rank = (): readonly CommandGroup[] => {
     const sections = kinds
       .map((kind) => ({ kind, rows: rowsFor(kind), notice: noticeFor(kind) }))
       .filter((section) => section.rows.length > 0 || section.notice !== undefined);
+
     let place = 0;
+
     const items = (rows: readonly PaletteRow[]): CommandItem[] =>
       rows.map((row) => {
         place += 1;
+
         return paletteItem(row, String(place), sought, tokens);
       });
+
     return [
       ...sections.map((section) => ({
         id: section.kind,
@@ -2314,9 +2481,11 @@ export function CommandPalette({
       })),
     ];
   };
+
   // The render a key paints the field in draws the ranking already standing, and only the
   // render the words sought catch up in ranks them, so no key waits on the ranking.
   if (open) stood.current = sought === query ? rank() : stood.current;
+
   const band = useMemo(
     () => <PaletteFilters filters={filters} filter={filter} onFilter={setFilter} />,
     [filters, filter],

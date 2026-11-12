@@ -31,9 +31,12 @@ export const folderMoves = (
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
+
       if (!(yield* standing(fileSystem, folder))) {
         const parent = path.dirname(folder);
+
         if (parent === folder) return Stream.never;
+
         // Note that each move of the parent asks whether the folder now stands, and the one that finds it is the folder's first pulse.
         return folderMoves(parent).pipe(
           Stream.mapEffect(() => standing(fileSystem, folder)),
@@ -50,7 +53,9 @@ export const folderMoves = (
           ),
         );
       }
+
       const name = path.basename(folder);
+
       // Note that a move that names the folder or finds it gone is its last pulse here, and it is followed again from the start, as is a folder gone before its watch was laid.
       return fileSystem.watch(folder).pipe(
         Stream.mapEffect((move) =>

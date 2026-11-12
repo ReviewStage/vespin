@@ -49,11 +49,14 @@ function pictureRefusal(pictures: readonly HeldPicture[]): string | undefined {
   if (pictures.length > AGENT_BOUNDS.MAX_ATTACHMENTS) {
     return PICTURE_REFUSAL.FULL(AGENT_BOUNDS.MAX_ATTACHMENTS);
   }
+
   const tooLarge = pictures.find(
     ({ file }) => base64Bytes(file.data) > AGENT_BOUNDS.MAX_IMAGE_BYTES,
   );
+
   if (tooLarge !== undefined) return PICTURE_REFUSAL.TOO_LARGE(tooLarge.file.name);
   const total = pictures.reduce((sum, { file }) => sum + base64Bytes(file.data), 0);
+
   return total > AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES ? PICTURE_REFUSAL.TOO_MUCH : undefined;
 }
 
@@ -94,25 +97,32 @@ export function useAttachedPictures(
   useEffect(() => {
     held.current = pictures;
   }, [pictures]);
+
   // Pictures read as base64, or none for one that could not be, named past every picture held now and added after them, saying the first that could not be read, or else what a bound refuses. Note that the held pictures are written at once, so a second drop landing before the next render adds after this one rather than over it.
   const add = (contents: readonly (string | null | undefined)[], unreadable = 0) => {
     const now = held.current;
+
     const read = contents.map((base64, index): HeldPicture | string => {
       const name = nextName(now, index);
+
       if (base64 === null || base64 === undefined) return PICTURE_REFUSAL.UNREADABLE(name);
+
       return {
         id: randomUUID(),
         file: { name, mediaType: AGENT_ATTACHMENT_TYPE.JPEG, data: base64 },
       };
     });
+
     const unread =
       read.find((each): each is string => typeof each === "string") ??
       (unreadable > 0 ? PICTURE_REFUSAL.UNREADABLE(nextName(now, read.length)) : undefined);
+
     const next = [...now, ...read.filter((each): each is HeldPicture => typeof each !== "string")];
     held.current = next;
     setPictures(next);
     onNote(unread ?? pictureRefusal(next));
   };
+
   // Note that the system's photo picker reads only what the member picks, so no permission is asked for first.
   const attach = () => {
     launchImageLibraryAsync({
@@ -128,11 +138,13 @@ export function useAttachedPictures(
       })
       .catch((error: unknown) => console.error("The photo picker did not open.", error));
   };
+
   // Each dropped JPEG is read whole and deleted, since the drop kept it under the app's temporary folder for this alone; a picture the drop could not keep at all is said as unreadable.
   const dropped = (uris: readonly string[], unreadable: number) =>
     Promise.all(
       uris.map((uri) => {
         const file = new File(uri);
+
         return file
           .base64()
           .catch(() => undefined)
@@ -147,16 +159,21 @@ export function useAttachedPictures(
     )
       .then((contents) => add(contents, unreadable))
       .catch((error: unknown) => console.error("The dropped pictures were not read.", error));
+
   const drop = (uris: readonly string[], unreadable: number) => {
     void dropped(uris, unreadable);
   };
+
   // Note that the pictures opened with are being read from the first render, so nothing is sent without them.
   const [opening, setOpening] = useState(opensWith !== undefined && opensWith.length > 0);
+
   const open = useEffectEvent(() => {
     if (opensWith === undefined || opensWith.length === 0) return;
     void dropped(opensWith, 0).finally(() => setOpening(false));
   });
+
   useEffect(() => open(), []);
+
   return {
     attached: pictures.map(({ id, file }) => ({ id, name: file.name })),
     files: pictures.length === 0 ? undefined : pictures.map(({ file }) => file),
@@ -170,6 +187,7 @@ export function useAttachedPictures(
     },
     take: () => {
       setPictures([]);
+
       return pictures;
     },
     putBack: (carried) => setPictures((held) => [...carried, ...held]),

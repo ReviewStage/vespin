@@ -94,6 +94,7 @@ test("a browser call's screenshots are named by their place among its steps, eac
     image: { mime: "image/jpeg", width: 1280, height: 800 },
     ...extra,
   });
+
   const answer = {
     status: "ran",
     steps: [
@@ -146,6 +147,7 @@ test("a picture is added to a description's text as its own last paragraph, esca
     assert.match(addition.text, /(^|\n\n)!\[/u, "the picture stands as a paragraph of its own");
     assert.equal(withoutPictureLine(addition.text, addition.added), description);
   }
+
   assert.equal(
     withoutPictureLine("# Moved\n\nThe line was edited away.\n", `\n${line}\n`),
     undefined,

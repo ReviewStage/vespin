@@ -86,12 +86,16 @@ const TESTS: MemorySummary = {
 
 /** The memories the test's service holds, by the workspace, held and forgotten by the page. */
 let stored: Readonly<Record<string, readonly MemorySummary[]>> = {};
+
 /** Every act the page sent, in order. */
 let sent: AnyAct[] = [];
+
 /** Whether the host's read of the memories failed before it ever answered. */
 let readFails = false;
+
 /** Whether a forget is answered with a failure rather than the memories. */
 let refuseForget = false;
+
 /** What the test's service answers a save with, by the save. */
 let saveAnswer: (save: {
   readonly workspaceId: string;
@@ -100,13 +104,17 @@ let saveAnswer: (save: {
 }) => PortActResult<typeof ACT_KIND.MEMORIES_SAVE> = () => ({
   failure: AGENT_CALL_FAILURE.UNANSWERED,
 });
+
 /** What a save waits on before the test's service answers it; nothing from the start. */
 let saveHeld: Promise<void> = Promise.resolve();
+
 /** Whether the host has read nothing yet, so it lays no memories. */
 let readsNothing = false;
+
 /** Each workspace's memories as the test's host lays them on the document, under the version it last delivered. */
 let laid: AppMemories = NO_KEYS_HELD;
 let version = 1;
+
 /** The window's listeners to the document's deliveries. */
 const listeners = new Set<(delivery: AppStateDelivery) => void>();
 
@@ -121,6 +129,7 @@ const unanswered = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
 function lay(workspaceId: string, read: AppHostRead<readonly MemorySummary[]>): void {
   laid = { ...laid, [workspaceId]: read };
   version += 1;
+
   for (const listener of [...listeners]) {
     listener({ version, entries: { [LIVE_READ.MEMORIES]: laid } });
   }
@@ -135,15 +144,19 @@ function layRead(workspaceId: string): void {
 /** The bridge, answering the page's acts the way the host would. */
 function answer(request: AnyAct): Promise<FakeActAnswer> {
   sent.push(request);
+
   switch (request.kind) {
     case ACT_KIND.MEMORIES_FOLLOW: {
       const { workspaceId } = request.payload;
       // Note that the host lays what it read once the hold is taken, never inside it, and holds it quietly.
       void Promise.resolve().then(() => layRead(workspaceId));
+
       return Promise.resolve({ status: FAKE_ANSWER.UNKNOWN_ACT });
     }
+
     case ACT_KIND.MEMORIES_RETRY:
       layRead(request.payload.workspaceId);
+
       return Promise.resolve(done(undefined));
     case ACT_KIND.MEMORIES_FORGET: {
       const { workspaceId, id } = request.payload;
@@ -151,17 +164,24 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
       const after = before.filter((memory) => memory.id !== id);
       // The host draws the memory gone the moment it is asked, and puts it back where the service refused it.
       lay(workspaceId, { rows: after });
+
       if (refuseForget) {
         lay(workspaceId, { rows: before });
+
         return Promise.resolve(done(unanswered));
       }
+
       stored = { ...stored, [workspaceId]: after };
+
       return Promise.resolve(done({ memories: after }));
     }
+
     case ACT_KIND.MEMORIES_SAVE: {
       const { payload } = request;
+
       return saveHeld.then(() => done(saveAnswer(payload)));
     }
+
     default:
       return Promise.resolve({ status: FAKE_ANSWER.UNKNOWN_ACT });
   }
@@ -185,6 +205,7 @@ beforeEach(() => {
     requestAppState: () => Promise.resolve(stateWith({}, { version, [LIVE_READ.MEMORIES]: laid })),
     onAppState: (listener: (delivery: AppStateDelivery) => void) => {
       listeners.add(listener);
+
       return () => listeners.delete(listener);
     },
   });
@@ -222,6 +243,7 @@ async function mount(
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (shown: Workspace | null, readerId: string | undefined) =>
     act(() =>
       root.render(
@@ -241,6 +263,7 @@ async function mount(
         ),
       ),
     );
+
   // Note that the page stands read once the memories the host holds reach their query, unless the test holds the read out.
   const read = () =>
     readsNothing
@@ -248,9 +271,11 @@ async function mount(
       : vi.waitFor(() =>
           assert.equal(container.textContent?.includes("Reading Vespin's memory"), false),
         );
+
   draw(workspace, signedIn ? READER : undefined);
   await settle();
   await read();
+
   return {
     page: container,
     show: async (next, readerId = READER) => {
@@ -263,6 +288,7 @@ async function mount(
 
 beforeAll(() => {
   installEditorLayout();
+
   return Effect.runPromise(editorBundleLanded);
 });
 
@@ -308,6 +334,7 @@ function pressInField(_page: HTMLElement, label: string): void {
     [...document.querySelectorAll<HTMLButtonElement>(".memory-field button")].find(
       (each) => (each.getAttribute("aria-label") ?? each.textContent) === label,
     ) ?? assert.fail(`no ${label} in the field`);
+
   act(() => press.click());
 }
 
@@ -316,6 +343,7 @@ function openMenu(page: HTMLElement, memory: MemorySummary): void {
   const more =
     rowOf(page, memory).querySelector<HTMLButtonElement>('button[aria-label="Memory actions"]') ??
     assert.fail("no ⋯ on the row");
+
   act(() => more.click());
 }
 
@@ -331,6 +359,7 @@ async function forget(page: HTMLElement, memory: MemorySummary): Promise<boolean
   const askedFirst = !sent.some((request) => request.kind === ACT_KIND.MEMORIES_FORGET);
   act(() => button(dialog(), "Delete memory").click());
   await settle();
+
   return askedFirst;
 }
 
@@ -339,6 +368,7 @@ async function searchFor(page: HTMLElement, query: string): Promise<void> {
   const field =
     page.querySelector<HTMLInputElement>('input[aria-label="Search memories"]') ??
     assert.fail("no search");
+
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, query);
     field.dispatchEvent(new Event("input", { bubbles: true }));
@@ -374,6 +404,7 @@ test("a memory's code in backticks is drawn as inline code, never as the backtic
       text: "Run pnpm db:generate after changing a schema.",
     }).querySelectorAll("code"),
   ];
+
   assert.deepEqual(
     code.map((each) => each.textContent),
     ["pnpm db:generate"],
@@ -453,6 +484,7 @@ test("several memories chosen are forgotten on one question, one after another, 
     id: "2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f",
     text: "Pricing lives in the billing service.",
   };
+
   stored = { [ACME.id]: [DEPLOYS, pricing, TESTS] };
   const { page } = await mount();
 
@@ -557,6 +589,7 @@ test("the memories agents recalled most in the last 30 days stand first, then th
     recalls30d: 4,
     lastRecalledAt: Date.UTC(2026, 9, 20, 12),
   };
+
   const flags: MemorySummary = {
     ...TESTS,
     id: "3d4e5f6a-7b8c-4d9e-8f0a-2b3c4d5e6f7a",
@@ -565,6 +598,7 @@ test("the memories agents recalled most in the last 30 days stand first, then th
     recalls30d: 9,
     lastRecalledAt: Date.UTC(2026, 9, 21, 12),
   };
+
   stored = { [ACME.id]: [DEPLOYS, TESTS, pricing, flags] };
   const { page } = await mount();
 

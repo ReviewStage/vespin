@@ -63,6 +63,7 @@ function NewWorkspaceStep({ tasks, onClose }: NewWorkspaceStepsProps): React.JSX
   const nameField = useRef<HTMLInputElement | null>(null);
   useEffect(() => nameField.current?.focus(), []);
   const { onChooseWorkspace, onGoHome } = tasks;
+
   const teamForm = useTeamForm({
     made:
       made === undefined
@@ -76,13 +77,17 @@ function NewWorkspaceStep({ tasks, onClose }: NewWorkspaceStepsProps): React.JSX
       if (failed.length === 0) setAt(STEP.GITHUB);
     },
   });
+
   const { busy } = teamForm;
+
   // Note that leaving once the workspace is made lands on its Home, as setup's Finish does, rather than on the task the switch reopened.
   const leave = useCallback(() => {
     if (busy) return;
     onClose();
+
     if (made !== undefined) onGoHome();
   }, [busy, made, onClose, onGoHome]);
+
   // Escape presses the corner's way out. Note that it listens ahead of the window's own Escape, which would otherwise step the history behind the cards.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -90,7 +95,9 @@ function NewWorkspaceStep({ tasks, onClose }: NewWorkspaceStepsProps): React.JSX
       event.preventDefault();
       leave();
     };
+
     window.addEventListener("keydown", onKey, true);
+
     return () => window.removeEventListener("keydown", onKey, true);
   }, [leave]);
   const exit = { label: made === undefined ? "Cancel" : "Close", onPress: leave };
@@ -116,6 +123,7 @@ function NewWorkspaceStep({ tasks, onClose }: NewWorkspaceStepsProps): React.JSX
       </AuthPage>
     );
   }
+
   // Note that the press makes the workspace until it stands, then saves what was changed in it, or goes on, as setup's team card does.
   return (
     <AuthPage

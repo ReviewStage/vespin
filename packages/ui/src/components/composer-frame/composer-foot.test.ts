@@ -37,6 +37,7 @@ function draw(props: React.ComponentProps<typeof ComposerFoot>): {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(ComposerFoot, props)));
+
   return {
     container,
     redraw: (next) => act(() => root.render(createElement(ComposerFoot, next))),
@@ -48,7 +49,9 @@ function button(container: HTMLElement, name: string): HTMLButtonElement {
   const found = [...container.querySelectorAll("button")].find(
     (each) => each.getAttribute("aria-label") === name || each.textContent === name,
   );
+
   if (found === undefined) throw new Error(`no button named ${name}`);
+
   return found;
 }
 
@@ -74,13 +77,16 @@ test("the send takes no press while the box is empty, and sends once it holds wo
 test("an empty send that can say why stays pressable but sends nothing, telling its owner, and is described by what the owner says", () => {
   const heard: string[] = [];
   const onSend = () => heard.push("sent");
+
   const refuses = (words: string | undefined) => ({
     onRefused: () => heard.push("refused"),
     words,
   });
+
   const { container, redraw } = draw({
     send: { label: "Send", empty: true, onSend, refuses: refuses(undefined) },
   });
+
   const send = button(container, "Send");
   expect(send.disabled).toBe(false);
   expect(unavailable(send)).toBe(true);
@@ -88,14 +94,17 @@ test("an empty send that can say why stays pressable but sends nothing, telling 
   expect(heard).toEqual(["refused"]);
 
   redraw({ send: { label: "Send", empty: true, onSend, refuses: refuses("Pick an option.") } });
+
   const line = document.getElementById(
     button(container, "Send").getAttribute("aria-describedby") ?? "",
   );
+
   expect(line?.textContent).toBe("Pick an option.");
 });
 
 test("a send still out is named by its busy words and takes no second press", () => {
   const sent: string[] = [];
+
   const { container } = draw({
     send: {
       label: "Send",
@@ -105,6 +114,7 @@ test("a send still out is named by its busy words and takes no second press", ()
       onSend: () => sent.push("sent"),
     },
   });
+
   act(() => button(container, "Sending").click());
   expect(sent).toEqual([]);
 });
@@ -123,6 +133,7 @@ test("the note line says a cut paste as it lands", () => {
 
 test("a refused send's note offers Retry, which tries again", () => {
   const tries: string[] = [];
+
   const { container } = draw({
     send: { label: "Send", empty: false },
     note: {
@@ -131,6 +142,7 @@ test("a refused send's note offers Retry, which tries again", () => {
       failure: FAILURE,
     },
   });
+
   act(() => button(container, "Retry").click());
   expect(tries).toEqual(["again"]);
 });
@@ -138,6 +150,7 @@ test("a refused send's note offers Retry, which tries again", () => {
 test("a note's remedy mends what Retry cannot, and a send in words says what it settles", () => {
   const mended: string[] = [];
   const settled: string[] = [];
+
   const { container } = draw({
     send: { label: "Got it", empty: false, inWords: true, onSend: () => settled.push("nod") },
     note: {
@@ -146,6 +159,7 @@ test("a note's remedy mends what Retry cannot, and a send in words says what it 
       remedy: { label: "Unarchive", onClick: () => mended.push("back") },
     },
   });
+
   act(() => button(container, "Unarchive").click());
   act(() => button(container, "Got it").click());
   expect(mended).toEqual(["back"]);
@@ -162,6 +176,7 @@ test("a note's mend stands under its line, as a closed agent's Continue does", (
       mends: createElement("span", { className: "mend" }, "Continue in new agent"),
     },
   });
+
   const note = container.querySelector(".ui-composer-foot-note");
   expect(note?.querySelector('[role="alert"]')?.textContent).toBe(
     "The agent takes no more messages.",

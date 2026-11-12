@@ -109,6 +109,7 @@ function draw(element: React.ReactElement): { rerender: (next: React.ReactElemen
   roots.push(root);
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   act(() => root.render(withQueryClient(element)));
+
   return { rerender: (next) => act(() => root.render(withQueryClient(next))) };
 }
 
@@ -120,16 +121,22 @@ const USED: OpenTask = {
 
 test("a listed cloud Browser tab stands in the strip only once opened in this window, stays chosen while the list is on its way, and closes in this window alone", () => {
   let control: SidePanelControl | undefined;
+
   function Probe({ listed }: { listed: readonly string[] | undefined }) {
     control = useSidePanel(undefined, USED, [], [], [], [], undefined, listed);
+
     return null;
   }
+
   const current = () => {
     assert.ok(control);
+
     return control;
   };
+
   const browsers = () =>
     current().strip.filter((tab) => tab instanceof Object && "cloudBrowser" in tab);
+
   const panel = draw(createElement(Probe, { listed: [TAB, OTHER_TAB] }));
   assert.deepEqual(browsers(), [], "an agent's browser adds no tab by itself");
 
@@ -155,20 +162,25 @@ test("a cloud Browser tab's pane spins while it waits for the page, draws it onc
     openBrowserLive: (target, heard) => {
       assert.deepEqual(target, { agentId: AGENT_ID, tabId: TAB });
       listener = heard;
+
       return { send: (text) => sent.push(JSON.parse(text)), close: () => undefined };
     },
   });
+
   const say = async (message: object) => {
     await act(async () => listener?.message(JSON.stringify(message)));
     await settle();
   };
+
   const press = async (name: string) => {
     const button = [...document.querySelectorAll("button")].find(
       (each) => each.textContent === name,
     );
+
     assert.ok(button, `a ${name} button`);
     await act(async () => button.click());
   };
+
   // What stands over the page, apart from the line under the bar saying who has the tab.
   const status = () =>
     document.querySelector('.cloud-browser-body [role="status"]')?.textContent ?? undefined;
@@ -220,6 +232,7 @@ test("a pane's view closes while its window's page is hidden, and a new one open
     openBrowserLive: () => {
       const socket = { closed: false };
       sockets.push(socket);
+
       return {
         send: () => undefined,
         close: () => {
@@ -228,11 +241,13 @@ test("a pane's view closes while its window's page is hidden, and a new one open
       };
     },
   });
+
   const turn = async (visibility: DocumentVisibilityState) => {
     vi.spyOn(document, "visibilityState", "get").mockReturnValue(visibility);
     await act(async () => document.dispatchEvent(new Event("visibilitychange")));
     await settle();
   };
+
   try {
     draw(
       createElement(CloudBrowserPane, {
@@ -265,6 +280,7 @@ it.effect(
       fakeAppPlatform({
         openBrowserLive: () => {
           closed.push(false);
+
           return {
             send: (text) => sent.push(JSON.parse(text)),
             close: () => {
@@ -292,6 +308,7 @@ it.effect(
       );
       const landed = Effect.promise(settle);
       yield* landed;
+
       for (let minute = 0; minute < 6; minute += 1) {
         yield* TestClock.adjust(Duration.minutes(1));
         yield* landed;
@@ -312,6 +329,7 @@ test("while the member drives, a paste reaches the page as text, Control-V and â
   fakeAppPlatform({
     openBrowserLive: (_target, heard) => {
       listener = heard;
+
       return { send: (text) => sent.push(JSON.parse(text)), close: () => undefined };
     },
   });
@@ -326,11 +344,14 @@ test("while the member drives, a paste reaches the page as text, Control-V and â
   await settle();
   const canvas = document.querySelector("canvas");
   assert.ok(canvas);
+
   const wheel = () => {
     const event = new WheelEvent("wheel", { deltaY: 40, bubbles: true, cancelable: true });
     canvas.dispatchEvent(event);
+
     return event.defaultPrevented;
   };
+
   assert.equal(wheel(), false, "watching, the wheel is the panel's");
 
   await act(async () =>
@@ -343,13 +364,16 @@ test("while the member drives, a paste reaches the page as text, Control-V and â
     ),
   );
   await settle();
+
   const keyDown = (init: KeyboardEventInit) => {
     const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
     act(() => {
       canvas.dispatchEvent(event);
     });
+
     return event.defaultPrevented;
   };
+
   assert.equal(keyDown({ key: "v", code: "KeyV", ctrlKey: true }), false);
   assert.equal(keyDown({ key: "v", code: "KeyV", metaKey: true }), false);
   const paste = new Event("paste", { bubbles: true, cancelable: true });
@@ -375,6 +399,7 @@ test("off a Mac, while the member drives, a Ctrl chord the window has a command 
     commandKey: COMMAND_KEY.CONTROL,
     openBrowserLive: (_target, heard) => {
       listener = heard;
+
       return { send: (text) => sent.push(JSON.parse(text)), close: () => undefined };
     },
   });
@@ -429,12 +454,15 @@ test("a tab the member opened here is listed before the service lists it, and le
     openedBy: { kind: "member", userId: "user-dean" },
     driver: { userId: "user-dean", heldUntil: 60_000 },
   };
+
   const lay = holdBrowserTabs(handHostReads({}).deliverBrowserTabs, () => [LISTED]);
   let read: readonly AgentBrowserTab[] | undefined;
   let listed: readonly AgentBrowserTab[] | undefined;
+
   function Probe() {
     read = useCloudBrowserTabs({ taskId: TASK }, true);
     listed = useQuery({ ...browserTabsQuery({ taskId: TASK }), enabled: false }).data;
+
     return null;
   }
 
@@ -468,11 +496,14 @@ test("a tab opened and a draft started under one account stand for that account 
   holdBrowserTabs(handHostReads({}).deliverBrowserTabs, () => [LISTED]);
   let read: readonly AgentBrowserTab[] | undefined;
   let drafts: readonly CloudBrowserDraft[] = [];
+
   function Probe() {
     read = useCloudBrowserTabs({ taskId: TASK }, true);
     drafts = useCloudBrowserDrafts({ taskId: TASK }, true);
+
     return null;
   }
+
   const signedIn = (account: string) =>
     createElement(WindowAccountContext.Provider, { value: account }, createElement(Probe));
 
@@ -509,6 +540,7 @@ test("a tab opened and a draft started under one account stand for that account 
 function addressField(): HTMLInputElement {
   const field = document.querySelector<HTMLInputElement>('input[aria-label="Address"]');
   assert.ok(field, "the bar's address");
+
   return field;
 }
 
@@ -531,6 +563,7 @@ async function pressEnter(): Promise<void> {
 /** Hands what it draws the account the window's document signs in, as the window's root hands it. */
 function SignedInHere({ children }: { children: React.ReactNode }): React.ReactElement {
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+
   return createElement(
     WindowAccountContext.Provider,
     { value: windowAccountOf(account) },
@@ -555,14 +588,17 @@ test("a draft's open that answers once another account signed in chooses nothing
   holdBrowserTabs(handHostReads({}).deliverBrowserTabs, () => []);
   const read = new Map<string, readonly string[] | undefined>();
   const drafts = new Map<string, readonly CloudBrowserDraft[]>();
+
   function Probe({ account }: { account: string }) {
     read.set(
       account,
       useCloudBrowserTabs({ taskId: TASK }, true)?.map((tab) => tab.id),
     );
     drafts.set(account, useCloudBrowserDrafts({ taskId: TASK }, true));
+
     return null;
   }
+
   const draft = startCloudDraft("account-ada", { taskId: TASK }, AGENT_ID);
   const handed: AgentBrowserTab[] = [];
   draw(
@@ -610,6 +646,7 @@ test("a draft opens nothing until its bar's Enter, then opens the tab in its age
   fakeActPort({
     [ACT_KIND.TASKS_BROWSER_TAB_OPEN]: (payload) => {
       asked.push(payload);
+
       // SAFETY: the test hands back the wire's own answer, a tab or a failure.
       return Promise.resolve(answer as never);
     },
@@ -671,6 +708,7 @@ test("a draft opens nothing until its bar's Enter, then opens the tab in its age
     address: "http://localhost:3000/",
     openedBy: { kind: "member", userId: "user-dean" },
   };
+
   answer = { tab: opened };
   await pressEnter();
   assert.deepEqual(handed, [opened]);
@@ -692,6 +730,7 @@ test("in a draft, Escape clears the typed address first and discards the draft o
     }),
   );
   await settle();
+
   const pressEscape = () =>
     act(async () =>
       addressField().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })),
@@ -713,18 +752,22 @@ test("a live tab's bar opens a typed address and steps back, forward, and reload
   fakeAppPlatform({
     openBrowserLive: (_target, heard) => {
       listener = heard;
+
       return { send: (text) => sent.push(JSON.parse(text)), close: () => undefined };
     },
   });
+
   const say = async (message: object) => {
     await act(async () => listener?.message(JSON.stringify(message)));
     await settle();
   };
+
   const press = async (label: string) => {
     const button = document.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
     assert.ok(button, `a ${label} step`);
     await act(async () => button.click());
   };
+
   draw(
     createElement(CloudBrowserPane, {
       tab: LISTED,
@@ -769,6 +812,7 @@ test("a bar's steps say why they are off while the tab is not live, reachable by
   fakeAppPlatform({
     openBrowserLive: (_target, heard) => {
       listener = heard;
+
       return { send: () => undefined, close: () => undefined };
     },
   });
@@ -781,8 +825,10 @@ test("a bar's steps say why they are off while the tab is not live, reachable by
     }),
   );
   await settle();
+
   const back = () =>
     document.querySelector<HTMLButtonElement>('button[aria-label="Back"]') ?? assert.fail("Back");
+
   const hint = () => document.querySelector('[role="tooltip"]')?.textContent;
 
   assert.equal(back().disabled, false, "an unavailable step stays in the tab order");
@@ -814,6 +860,7 @@ test("plain words typed in a cloud tab's bar search the web, in a draft and on a
   fakeActPort({
     [ACT_KIND.TASKS_BROWSER_TAB_OPEN]: (payload) => {
       asked.push(payload);
+
       return Promise.resolve({ failure: BROWSER_TAB_OPEN_FAILURE.UNANSWERED });
     },
   });
@@ -822,6 +869,7 @@ test("plain words typed in a cloud tab's bar search the web, in a draft and on a
   fakeAppPlatform({
     openBrowserLive: (_target, heard) => {
       listener = heard;
+
       return { send: (text) => sent.push(JSON.parse(text)), close: () => undefined };
     },
   });
@@ -836,6 +884,7 @@ test("plain words typed in a cloud tab's bar search the web, in a draft and on a
       onDiscard: () => undefined,
     }),
   );
+
   await settle();
   assert.ok(
     document.body.textContent?.includes("Invite emails' browser"),
@@ -870,6 +919,7 @@ test("plain words typed in a cloud tab's bar search the web, in a draft and on a
 
 test("on a phone a Browser tab's bar keeps its address alone, the task's header's â‹¯ offering its Back, Forward, and Reload, dimmed where the page cannot step", async () => {
   fakeActPort({});
+
   const { element, handed } = onPhone(
     createElement(CloudBrowserDraftPane, {
       place: { taskId: TASK },
@@ -879,6 +929,7 @@ test("on a phone a Browser tab's bar keeps its address alone, the task's header'
       onDiscard: () => undefined,
     }),
   );
+
   draw(element);
   await settle();
 

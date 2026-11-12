@@ -37,9 +37,11 @@ export type ThisMac = AppThisMacHost | undefined;
 /** Whether the machine given is the one the desktop app runs on: by machine id where both name one, else by the device this Mac's host's record names. */
 export function isThisMac(machine: ListedMachine, thisMac: ThisMac): boolean {
   if (thisMac === undefined) return false;
+
   if (machine.machineId !== undefined && thisMac.machineId !== undefined) {
     return machine.machineId === thisMac.machineId;
   }
+
   return machine.deviceId !== undefined && machine.deviceId === thisMac.deviceId;
 }
 
@@ -50,12 +52,14 @@ export function machineName(
   thisMac: ThisMac,
 ): string {
   if (isThisMac(machine, thisMac)) return THIS_MAC;
+
   const twinned = listed.some(
     (other) =>
       other.deviceId !== machine.deviceId &&
       other.name === machine.name &&
       !isThisMac(other, thisMac),
   );
+
   return twinned && machine.model !== undefined
     ? `${machine.name} · ${machine.model}`
     : machine.name;
@@ -64,5 +68,6 @@ export function machineName(
 /** This Mac as the host holds it for the account signed in; none before the host first reads it, while nobody is signed in, and in a browser tab. */
 export function useThisMac(): ThisMac {
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+
   return useQuery(thisMacHostQuery(accountId)).data;
 }

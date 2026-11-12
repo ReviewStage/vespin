@@ -51,10 +51,12 @@ export function SettingsAddRow({
   const errorId = `${useId()}error`;
   const typed = value.trim();
   const failed = error !== undefined && said(error.words);
+
   const add = () => {
     if (typed === "" || busy) return;
     onAdd(typed);
   };
+
   return (
     <div className="ui-settings-add-row box-border min-w-0 px-settings-row-inline py-settings-row-block">
       <div className="flex min-h-control min-w-0 items-center gap-control-gap">

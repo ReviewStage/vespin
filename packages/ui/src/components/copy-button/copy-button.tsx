@@ -135,6 +135,7 @@ const GLYPH_INK = {
  */
 function CopyGlyph({ state, turns }: { state: CopyState; turns: number }): React.JSX.Element {
   const Drawn = COPY_GLYPH[state];
+
   return (
     <span
       key={turns}
@@ -208,10 +209,12 @@ export function CopyButton(props: CopyButtonProps): React.JSX.Element {
   const label = copyLabel(what);
   // The button's hold: it hands the glyph back once it runs out, and a new answer starts it afresh.
   const hold = useWait();
+
   const [shown, setShown] = useState<{ readonly state: CopyState; readonly turns: number }>({
     state: COPY_STATE.IDLE,
     turns: 0,
   });
+
   // Note that this is a ref, because an answer reads it as it lands, which
   // no render stands between; leaving bumps it, so a late answer lands nowhere.
   const latest = useRef(0);
@@ -226,9 +229,11 @@ export function CopyButton(props: CopyButtonProps): React.JSX.Element {
     [hold],
   );
   const turn = (state: CopyState) => setShown((was) => ({ state, turns: was.turns + 1 }));
+
   const press = () => {
     latest.current += 1;
     const pressed = latest.current;
+
     const answer = (state: keyof typeof COPY_ANSWER) => {
       if (pressed !== latest.current) return;
       turn(state);
@@ -244,24 +249,30 @@ export function CopyButton(props: CopyButtonProps): React.JSX.Element {
         ),
       );
     };
+
     // Note that the act is called within the press, because a browser's
     // clipboard takes a write only while the press's activation stands, and
     // one that throws before it hands a promise back is a refused copy too.
     let asked: Promise<void>;
+
     try {
       asked = copy(text);
     } catch (refusal) {
       asked = Promise.reject(refusal);
     }
+
     asked.then(
       () => answer(COPY_STATE.COPIED),
       () => answer(COPY_STATE.FAILED),
     );
   };
+
   const { state, turns } = shown;
   const hint = state === COPY_STATE.IDLE ? label : COPY_ANSWER[state];
+
   if (props.look === COPY_LOOK.CHIP) {
     const face = CHIP_FACE[props.face ?? COPY_CHIP_LOOK.PILL];
+
     return (
       <Tooltip label={state === COPY_STATE.IDLE ? text : COPY_ANSWER[state]}>
         <Chip
@@ -279,6 +290,7 @@ export function CopyButton(props: CopyButtonProps): React.JSX.Element {
       </Tooltip>
     );
   }
+
   return (
     <Tooltip label={hint}>
       <IconButton

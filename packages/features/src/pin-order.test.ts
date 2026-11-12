@@ -23,9 +23,11 @@ const names = (pins: readonly Pin[]) => pins.map((pin) => pin.name);
 function afterMove(pins: readonly Pin[], from: number, to: number): Pin[] {
   const order = inPinOrder(pins, place);
   const positions = pinPositionsForMove(order, from, to, place);
+
   return inPinOrder(
     order.map((pin) => {
       const position = positions.get(pin);
+
       return position === undefined ? pin : { ...pin, position };
     }),
     place,
@@ -39,6 +41,7 @@ describe("inPinOrder", () => {
       { name: "new", at: 3 },
       { name: "middle", at: 2 },
     ];
+
     assert.deepEqual(names(inPinOrder(pins, place)), ["new", "middle", "old"]);
   });
 
@@ -48,6 +51,7 @@ describe("inPinOrder", () => {
       { name: "upper", at: 2, position: "Zz" },
       { name: "later", at: 3, position: "a1" },
     ];
+
     assert.deepEqual(names(inPinOrder(pins, place)), ["upper", "lower", "later"]);
   });
 
@@ -57,6 +61,7 @@ describe("inPinOrder", () => {
       { name: "second", at: 2, position: "a1" },
       { name: "fresh", at: 9 },
     ];
+
     assert.deepEqual(names(inPinOrder(pins, place)), ["fresh", "first", "second"]);
   });
 
@@ -65,6 +70,7 @@ describe("inPinOrder", () => {
       { name: "kept", at: 2, position: "a0" },
       { name: "garbled", at: 5, position: "not a key" },
     ];
+
     assert.deepEqual(names(inPinOrder(pins, place)), ["garbled", "kept"]);
   });
 });
@@ -76,6 +82,7 @@ describe("pinPositionsForMove", () => {
       { name: "b", at: 2, position: "a1" },
       { name: "c", at: 3, position: "a2" },
     ];
+
     const order = inPinOrder(pins, place);
     const positions = pinPositionsForMove(order, 2, 0, place);
     assert.deepEqual(
@@ -91,6 +98,7 @@ describe("pinPositionsForMove", () => {
       { name: "middle", at: 2 },
       { name: "new", at: 3 },
     ];
+
     const moved = afterMove(pins, 0, 2);
     assert.deepEqual(names(moved), ["middle", "old", "new"]);
     assert.ok(moved.every((pin) => pin.position !== undefined));
@@ -102,6 +110,7 @@ describe("pinPositionsForMove", () => {
       { name: "second", at: 2, position: "a1" },
       { name: "fresh", at: 9 },
     ];
+
     assert.deepEqual(names(afterMove(pins, 0, 2)), ["first", "second", "fresh"]);
     assert.deepEqual(names(afterMove(pins, 2, 1)), ["fresh", "second", "first"]);
   });
@@ -112,6 +121,7 @@ describe("pinPositionsForMove", () => {
       { name: "two", at: 1, position: "a0" },
       { name: "three", at: 0, position: "a1" },
     ];
+
     assert.deepEqual(names(afterMove(pins, 2, 1)), ["one", "three", "two"]);
   });
 
@@ -120,6 +130,7 @@ describe("pinPositionsForMove", () => {
       { name: "a", at: 1, position: "a0" },
       { name: "b", at: 2, position: "a1" },
     ];
+
     assert.equal(pinPositionsForMove(inPinOrder(pins, place), 1, 1, place).size, 0);
   });
 
@@ -129,6 +140,7 @@ describe("pinPositionsForMove", () => {
       { name: "b", at: 2, position: "a1" },
       { name: "c", at: 3, position: "a2" },
     ];
+
     for (let drop = 0; drop < 400; drop += 1) pins = afterMove(pins, drop % 2 === 0 ? 2 : 1, 1);
     assert.ok(pins.every((pin) => (pin.position?.length ?? 0) <= PIN_POSITION_BOUNDS.MAX_CHARS));
     assert.equal(new Set(pins.map((pin) => pin.position)).size, pins.length);
@@ -139,9 +151,11 @@ describe("pinPositionsForMove", () => {
 function afterInsert(pins: readonly Pin[], fresh: Pin, to: number): Pin[] {
   const order = inPinOrder(pins, place);
   const positions = pinPositionsForInsert(order, fresh, to, place);
+
   return inPinOrder(
     [...order, fresh].map((pin) => {
       const position = positions.get(pin);
+
       return position === undefined ? pin : { ...pin, position };
     }),
     place,
@@ -154,6 +168,7 @@ describe("pinPositionsForInsert", () => {
       { name: "later", at: 9, position: "a0" },
       { name: "loose", at: 8 },
     ];
+
     assert.deepEqual(names(afterInsert(pins, { name: "dropped", at: 5 }, 0)), [
       "dropped",
       "later",
@@ -166,6 +181,7 @@ describe("pinPositionsForInsert", () => {
       { name: "first", at: 1, position: "a0" },
       { name: "second", at: 2, position: "a1" },
     ];
+
     assert.deepEqual(names(afterInsert(pins, { name: "middle", at: 3 }, 1)), [
       "first",
       "middle",

@@ -103,14 +103,17 @@ function untilRegained<Output, Input, Error, Env>(
 
 /** The least time between two polls, so a service answering at once is not asked in a hot loop; each poll is otherwise held by the service until the rows move. */
 const LIVE_POLL_FLOOR = Duration.millis(500);
+
 /** The least time after an answer a write woke before the next poll: the 100 ms the service gathers a burst of writes into one answer for. */
 const LIVE_POLL_WOKEN_FLOOR = Duration.millis(100);
+
 /** The wait before each poll after the first, by whether the answer before it was one a write woke. */
 const POLL_SPACING = Schedule.spaced(LIVE_POLL_FLOOR).pipe(
   Schedule.modifyDelay(({ input, duration }) =>
     Effect.succeed(input === true ? LIVE_POLL_WOKEN_FLOOR : duration),
   ),
 );
+
 /**
  * How a poll that failed is asked again: after a wait drawn at random up to
  * a second, then up to two, four, and five, so the windows a deploy or an
@@ -128,6 +131,7 @@ const POLL_BACKOFF = untilRegained(
     ),
   ),
 );
+
 /** Why a poll answered no read: what failed, and whether the read names nothing the account reaches any more. */
 export type LiveFailure = { readonly failure: string; readonly gone?: boolean };
 
@@ -154,6 +158,7 @@ export const TX_WAIT_TIMEOUT = Duration.seconds(10);
 
 /** A snapshot as Postgres spells one (`pg_current_snapshot()::text`): `xmin:xmax:xip,…`, the transactions it lists as running, if any, joined by commas. */
 const SNAPSHOT_SPELLING = /^(\d+):(\d+):((?:\d+(?:,\d+)*)?)$/;
+
 /** A transaction id as a writer answers one (`pg_current_xact_id()::text`). */
 const TXID_SPELLING = /^\d+$/;
 
@@ -169,11 +174,15 @@ const TXID_SPELLING = /^\d+$/;
  */
 function shows(snapshot: string, txid: string): boolean {
   const spelled = SNAPSHOT_SPELLING.exec(snapshot);
+
   if (spelled === null || !TXID_SPELLING.test(txid)) return false;
   const [, xmin = "", xmax = "", running = ""] = spelled;
   const id = BigInt(txid);
+
   if (id < BigInt(xmin)) return true;
+
   if (id >= BigInt(xmax)) return false;
+
   return running === "" || !running.split(",").some((each) => BigInt(each) === id);
 }
 
@@ -201,7 +210,9 @@ export function syncStandingOf<Part extends string>(
 ): SyncStanding | undefined {
   const parts = Object.values<SealedLiveQueryWire>(read.queries);
   const answered = parts.find((query) => query.sync !== undefined)?.sync;
+
   if (answered === undefined) return undefined;
+
   return {
     past: answered.past,
     next: answered.next,
@@ -271,6 +282,7 @@ export function confirmWrite(
   txid: string | undefined,
 ): Effect.Effect<void> {
   if (wait === undefined || txid === undefined) return Effect.void;
+
   return wait(txid, TX_WAIT_TIMEOUT).pipe(
     Effect.catch((why) =>
       Effect.logWarning(`live-follow: a write's transaction did not arrive (${why.reason})`),
@@ -295,21 +307,26 @@ function txConfirmations() {
   /** The snapshot each part of the last answer was read at; none before an answer carried one on every part. */
   let snapshots: readonly string[] = [];
   const waiting = new Map<string, Set<Deferred.Deferred<void>>>();
+
   /** Whether every part of the last answer read at snapshots shows the transaction. */
   const shown = (txid: string) =>
     snapshots.length > 0 && snapshots.every((snapshot) => shows(snapshot, txid));
+
   const settle = (txid: string) => {
     for (const arrived of waiting.get(txid) ?? []) Deferred.doneUnsafe(arrived, Effect.void);
   };
+
   const forget = (now: number) => {
     for (const [txid, at] of carried) {
       if (now - at < Duration.toMillis(TX_WAIT_TIMEOUT)) return;
       carried.delete(txid);
     }
   };
+
   const wait: TxWait = (txid, timeout) =>
     Effect.gen(function* () {
       forget(yield* Clock.currentTimeMillis);
+
       if (carried.has(txid) || shown(txid)) return;
       const arrived = Deferred.makeUnsafe<void>();
       const ofTxid = waiting.get(txid) ?? new Set();
@@ -323,16 +340,19 @@ function txConfirmations() {
         Effect.ensuring(
           Effect.sync(() => {
             ofTxid.delete(arrived);
+
             if (ofTxid.size === 0 && waiting.get(txid) === ofTxid) waiting.delete(txid);
           }),
         ),
       );
     });
+
   return {
     wait,
     /** An answer carrying the txids was handed on: every wait on one of them settles. */
     carry: (txids: readonly string[], now: number) => {
       forget(now);
+
       for (const txid of txids) {
         // Note that a txid carried again is moved to the end, so the map stays oldest first.
         carried.delete(txid);
@@ -343,6 +363,7 @@ function txConfirmations() {
     /** An answer every part of which carried the snapshot it was read at was handed on: every wait on a transaction they all show settles. */
     see: (next: readonly string[]) => {
       snapshots = next;
+
       for (const txid of waiting.keys()) if (shown(txid)) settle(txid);
     },
   };
@@ -363,6 +384,7 @@ function snapshotsOf<Part extends string>(
   read: SealedRead<Part>,
 ): readonly string[] | undefined {
   const snapshots = parts.map((part) => read.queries[part].snapshot);
+
   return snapshots.every((snapshot) => snapshot !== undefined) ? snapshots : undefined;
 }
 
@@ -385,7 +407,9 @@ function rowsOf<Part extends string>(
   read: SealedRead<Part>,
 ): Readonly<Record<Part, readonly unknown[]>> | undefined {
   const rows = parts.map((part) => [part, read.queries[part].rows] as const);
+
   if (rows.some(([, carried]) => carried === undefined)) return undefined;
+
   // SAFETY: every part is written above, each with its rows.
   return Object.fromEntries(rows) as Readonly<Record<Part, readonly unknown[]>>;
 }
@@ -408,15 +432,19 @@ function liveAnswers<Part extends string>(
   first: SealedRead<Part>,
 ): Stream.Stream<LiveAnswer<Part>, LiveBroken> {
   const parts = Object.keys(first.queries).filter((part): part is Part => part in first.queries);
+
   return Stream.callback<LiveAnswer<Part>, LiveBroken>((queue) =>
     Effect.gen(function* () {
       let last: string | undefined;
+
       const emit = (answer: LiveAnswer<Part>) => {
         const said = JSON.stringify(answer);
+
         if (said === last) return;
         last = said;
         Queue.offerUnsafe(queue, answer);
       };
+
       const confirmations = txConfirmations();
       let handed = false;
       yield* Effect.addFinalizer(() =>
@@ -424,25 +452,33 @@ function liveAnswers<Part extends string>(
           if (handed) dependencies.onTxWait?.(undefined);
         }),
       );
+
       /** Hands the answer's rows on, then its snapshots and its txids, answering whether a write woke it. */
       const answered = (read: SealedRead<Part>) =>
         Effect.gen(function* () {
           const rows = rowsOf(parts, read);
+
           if (rows !== undefined) emit({ rows, past: pastOf(read) });
           const snapshots = snapshotsOf(parts, read);
+
           if (snapshots !== undefined) confirmations.see(snapshots);
           const txids = txidsOf(read);
+
           if (txids.length > 0) confirmations.carry(txids, yield* Clock.currentTimeMillis);
+
           if (!handed && (snapshots !== undefined || txids.length > 0)) {
             handed = true;
             dependencies.onTxWait?.(confirmations.wait);
           }
+
           return txids.length > 0;
         });
+
       const standing = (queries: SealedRead<Part>["queries"]) =>
         dependencies.heldOn === undefined
           ? liveDigestOf(queries)
           : liveDigestOn(queries, dependencies.heldOn);
+
       /** Where the rows stood at the last answer, which the next poll is held past. */
       let seen = standing(first.queries);
       /** The cursor the last answer named, past which the next poll reads the cursor parts; kept through a failed poll, since the rows held stand at it still. */
@@ -454,34 +490,45 @@ function liveAnswers<Part extends string>(
       /** How many polls have failed in a row since the last answer. */
       let failures = 0;
       yield* answered(first);
+
       const pollOnce = Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
         const stalled = sync !== undefined && now - syncMovedAt > Duration.toMillis(SYNC_STALL);
+
         if (stalled) syncMovedAt = now;
         const read = yield* dependencies.poll(seen, cursor, stalled ? undefined : sync);
+
         if ("failure" in read) {
           if (ended(read)) {
             Queue.failCauseUnsafe(queue, Cause.fail(new LiveBroken({ reason: GONE })));
+
             return yield* Effect.never;
           }
+
           // Note that the next poll asks for the rows whole, past no digest, and hands them on moved or not, since the rows may be behind.
           last = undefined;
           seen = undefined;
           // Note that one failure is not yet behind, because a poll a sleep or a backgrounded tab cut off fails once and its retry answers.
           failures += 1;
+
           if (failures > 1) dependencies.behind?.();
+
           return yield* Effect.fail(read);
         }
+
         failures = 0;
         seen = standing(read.queries) ?? seen;
         cursor = cursorOf(read) ?? cursor;
         const next = syncStandingOf(read)?.next;
+
         if (next !== undefined && next !== sync) {
           sync = next;
           syncMovedAt = yield* Clock.currentTimeMillis;
         }
+
         return yield* answered(read);
       });
+
       yield* Effect.forkScoped(
         pollOnce.pipe(Effect.retry(POLL_BACKOFF), Effect.repeat(POLL_SPACING)),
       );
@@ -518,6 +565,7 @@ export function decodedLiveRows<Part extends string, Rows>(
 ): Stream.Stream<Rows, LiveBroken> {
   const decode = Schema.decodeUnknownOption(schema);
   const { onTxWait, ...rest } = dependencies;
+
   return liveAnswers(
     { ...rest, ...(onTxWait === undefined ? undefined : { onTxWait }) },
     first,
@@ -535,6 +583,7 @@ export function decodedLiveRows<Part extends string, Rows>(
           held !== undefined && answer.past && joined !== undefined
             ? joined(held, answer.rows)
             : answer.rows;
+
         return [rows, [rows]] as const;
       },
     ),
@@ -560,17 +609,22 @@ export function followTakingRows<Part extends string, Rows>(
 ): Effect.Effect<void, LiveBroken> {
   const decode = Schema.decodeUnknownOption(schema);
   const parts = Object.keys(first.queries).filter((part): part is Part => part in first.queries);
+
   /** Takes the answer's rows where it carries them, answering whether they decoded. */
   const taken = (read: SealedRead<Part>) => {
     const carried = rowsOf(parts, read);
+
     if (carried === undefined) return Effect.succeed(true);
+
     return Option.match(decode(carried), {
       onNone: () => Effect.succeed(false),
       onSome: (rows) => Effect.as(take(rows, syncStandingOf(read)), true),
     });
   };
+
   return Effect.gen(function* () {
     if (!(yield* taken(first))) return yield* new LiveBroken({ reason: "a row did not decode" });
+
     const poll: LiveFollowDependencies<Part>["poll"] = (after, cursor, sync) =>
       Effect.flatMap(dependencies.poll(after, cursor, sync), (read) =>
         "failure" in read
@@ -579,6 +633,7 @@ export function followTakingRows<Part extends string, Rows>(
               decoded ? read : { failure: "a row did not decode" },
             ),
       );
+
     yield* Stream.runDrain(liveRows({ ...dependencies, poll }, first));
   });
 }
@@ -620,12 +675,14 @@ export function followBackoffWhile<Input>(
   again: (input: Input) => boolean,
 ): Schedule.Schedule<Duration.Duration, Input> {
   const doubling: Schedule.Schedule<Duration.Duration, Input> = FOLLOW_DOUBLING;
+
   return untilRegained(Schedule.while(doubling, ({ input }) => again(input)));
 }
 
 /** How long to wait before reading again after `fruitless` reads in a row that came to nothing: `FOLLOW_BACKOFF`'s wait for a loop that holds its own count, the first wait doubled for each after the first, never past the longest. */
 export function resealWait(fruitless: number): Duration.Duration {
   const doubled = Duration.times(FOLLOW_RESEAL.FIRST, 2 ** Math.max(0, fruitless - 1));
+
   return Duration.min(doubled, FOLLOW_RESEAL.LONGEST);
 }
 

@@ -26,11 +26,14 @@ afterEach(() => {
 function pressed(failures: readonly Failure[]): SettingsLink[] {
   const opened: SettingsLink[] = [];
   const presses: (() => void)[] = [];
+
   function Remedies(): null {
     const remedy = useRepositoryRemedy();
     presses.splice(0, presses.length, ...failures.map((failure) => remedy(failure) ?? fail()));
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   act(() =>
@@ -42,7 +45,9 @@ function pressed(failures: readonly Failure[]): SettingsLink[] {
       ),
     ),
   );
+
   for (const press of presses) act(press);
+
   return opened;
 }
 

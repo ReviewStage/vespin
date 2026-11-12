@@ -20,6 +20,7 @@ function row(): { row: HTMLElement; seat: HTMLElement; words: HTMLElement } {
   const seat = row.appendChild(document.createElement("span"));
   seat.style.display = "contents";
   const words = row.appendChild(document.createElement("span"));
+
   return { row, seat, words };
 }
 

@@ -28,14 +28,17 @@ export function slackClipped(words: string, bound: number): string {
 function withPlainMentions(markdown: string): string {
   let out = "";
   let at = 0;
+
   for (const link of mentionLinksIn(markdown)) {
     // Note that the link is kept as written but for its `@`, so a label's escapes still hold.
     const written = WEB_LINK.test(link.target)
       ? `[${markdown.slice(link.start + 2, link.end)}`
       : mentionName(link.label);
+
     out += markdown.slice(at, link.start) + written;
     at = link.end;
   }
+
   return out + markdown.slice(at);
 }
 

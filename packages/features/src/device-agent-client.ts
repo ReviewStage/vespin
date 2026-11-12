@@ -169,6 +169,7 @@ export function startHostPairing(
   request: HostPairingStartRequest,
 ): Effect.Effect<HostPairingOutcome<HostPairingStartAnswer>, never, HttpClient.HttpClient> {
   const hosted = hostedClient({ baseUrl: serviceBaseUrl, credential: {} });
+
   return hostedCall(hosted.deviceAgents.startPairing, request, { as: HOST_PAIRING_RENAMES });
 }
 
@@ -184,10 +185,12 @@ export function pollHostPairing(
   pollSecret: string,
 ): Effect.Effect<HostPairingOutcome<HostPairingPollAnswer>, never, HttpClient.HttpClient> {
   const bearer = `Bearer ${pollSecret}`;
+
   const hosted = hostedClient({
     baseUrl: serviceBaseUrl,
     credential: { authorization: () => Effect.succeed(bearer) },
   });
+
   return hostedCall(hosted.deviceAgents.pollPairing, undefined, { as: HOST_PAIRING_RENAMES });
 }
 
@@ -263,6 +266,7 @@ export class HostedDeviceAgentClient {
     device: DeviceAgentDevice,
   ): Effect.Effect<boolean, never, HttpClient.HttpClient> {
     const { codexExecutable, capabilities, setup, setupFailure, ...rest } = device;
+
     // Note that a Mac with no Codex checked names none, which the service reads as no Codex,
     // and one with no capability names no list, which a service from before the field refuses.
     const input = {
@@ -274,6 +278,7 @@ export class HostedDeviceAgentClient {
       ...(setup === undefined ? undefined : { setup }),
       ...(setup === undefined || setupFailure === undefined ? undefined : { setupFailure }),
     };
+
     return Effect.map(
       hostedCall(this.#hosted.deviceAgents.register, input),
       (answer) => !("failure" in answer),
@@ -286,12 +291,14 @@ export class HostedDeviceAgentClient {
     updating?: DeviceAgentUpdate,
   ): Effect.Effect<DeviceAgentBeat | undefined, never, HttpClient.HttpClient> {
     const failure = updating?.updateFailure;
+
     const input = {
       deviceId,
       // Note that a beat updating nothing names neither key, since a service from before them refuses a key it does not know.
       ...(updating === undefined ? undefined : { update: updating.update }),
       ...(updating === undefined || failure === undefined ? undefined : { updateFailure: failure }),
     };
+
     return Effect.map(
       hostedCall(this.#hosted.deviceAgents.beat, input),
       (answer): DeviceAgentBeat | undefined =>
@@ -334,12 +341,14 @@ export class HostedDeviceAgentClient {
         { deviceId, id, ...(named === undefined ? {} : { claimToken: named }) },
         { as: DEVICE_AGENT_RENAMES },
       );
+
     return claimed(claimToken).pipe(
       Effect.flatMap((answer) =>
         claimToken !== undefined && refused(answer) ? claimed(undefined) : Effect.succeed(answer),
       ),
       Effect.map((answer): DeviceAgentClaimedLine | typeof DEVICE_AGENT_NOT_CLAIMED | undefined => {
         if (!("failure" in answer)) return answer;
+
         return refused(answer) ? DEVICE_AGENT_NOT_CLAIMED : undefined;
       }),
     );
@@ -375,6 +384,7 @@ export class HostedDeviceAgentClient {
       ...(exitCode === undefined ? {} : { exitCode }),
       ...(unstarted === undefined ? {} : { unstarted }),
     };
+
     return Effect.map(
       hostedCall(this.#hosted.deviceAgents.settleLine, input),
       (answer) => !("failure" in answer),
@@ -412,6 +422,7 @@ export class HostedDeviceAgentClient {
       ),
       (answer): DeviceAgentRequest | typeof DEVICE_AGENT_NOT_CLAIMED | undefined => {
         if (!("failure" in answer)) return answer.request;
+
         return refused(answer) ? DEVICE_AGENT_NOT_CLAIMED : undefined;
       },
     );
@@ -428,6 +439,7 @@ export class HostedDeviceAgentClient {
       answer.kind === DEVICE_AGENT_REQUEST_KIND.READ_FILE
         ? { ...answer, bytes: answer.bytes === null ? null : encodeBytes(answer.bytes) }
         : answer;
+
     return Effect.map(
       hostedCall(this.#hosted.deviceAgents.answerRequest, { deviceId, id, answer: wire }),
       (answered) => !("failure" in answered),

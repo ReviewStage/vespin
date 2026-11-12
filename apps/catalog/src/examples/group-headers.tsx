@@ -96,6 +96,7 @@ function Folding(): React.JSX.Element {
 /** A group whose holder keeps whether it is folded, as the sidebar keeps it across launches. */
 function Held(): React.JSX.Element {
   const [open, setOpen] = useState(false);
+
   return (
     <div className="catalog-narrow">
       <GroupHeader
@@ -181,6 +182,7 @@ function Filtered(): React.JSX.Element {
       }
     />
   );
+
   return (
     <div className="catalog-narrow">
       {head("Tasks", false)}
@@ -319,6 +321,7 @@ function Renamed(): React.JSX.Element {
   const [editing, setEditing] = useState(true);
   const [picking, setPicking] = useState(false);
   const editor = useRef<GroupHeaderEditorHandle | null>(null);
+
   return (
     <div className="catalog-narrow">
       <GroupHeader
@@ -343,6 +346,7 @@ function Renamed(): React.JSX.Element {
                   open={picking}
                   onOpenChange={(open, away) => {
                     setPicking(open);
+
                     if (away) editor.current?.leave();
                   }}
                 >
@@ -353,6 +357,7 @@ function Renamed(): React.JSX.Element {
               }
               onEnd={({ kept, value }) => {
                 setEditing(false);
+
                 if (kept && value !== "") setName(value);
               }}
             />

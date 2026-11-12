@@ -45,6 +45,7 @@ function Harness({
   busy?: string;
 }): React.JSX.Element {
   const menu = useMenu(true);
+
   return createElement(
     "div",
     null,
@@ -86,7 +87,9 @@ function button(name: string): HTMLButtonElement {
   const found = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
     (each) => (each.getAttribute("aria-label") ?? each.textContent) === name,
   );
+
   if (found === undefined) throw new Error(`no button named ${name}`);
+
   return found;
 }
 
@@ -148,6 +151,7 @@ test("the keys walk the menu, a choice acts and closes it, and Escape closes it 
   key("ArrowDown");
   expect(focused()).toBe("Save and close");
   const item = document.activeElement;
+
   if (!(item instanceof HTMLElement)) throw new Error("nothing has focus");
   press(item);
   expect(done).toEqual(["Save and close"]);
@@ -226,6 +230,7 @@ test("a split button's main part whose press succeeded wears a check as its ring
       return this.classList.contains("ui-button-done") ? [new EventTarget()] : [];
     },
   });
+
   const draw = (busy: string | undefined, succeeded: boolean) =>
     createElement(SplitButton, {
       busy: busy !== undefined,
@@ -239,6 +244,7 @@ test("a split button's main part whose press succeeded wears a check as its ring
       },
       children: "Start",
     });
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);

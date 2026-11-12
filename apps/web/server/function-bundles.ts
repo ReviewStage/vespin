@@ -91,6 +91,7 @@ export interface ExternalsDrift {
   readonly added: readonly string[];
   readonly removed: readonly string[];
 }
+
 const DISPATCHER_NAMESPACE = "function-dispatcher";
 const DISPATCH_MODULE = join("server", "function-dispatch.ts");
 
@@ -115,15 +116,18 @@ function routeImport(web: string, route: string, index: number): string {
   if (route === ORPC_ROUTE_KEY) {
     return `import { orpcRoute as route${index} } from ${JSON.stringify(join(web, ORPC_ROUTE_MODULE))};`;
   }
+
   return `import route${index} from ${JSON.stringify(join(web, routeSourcePath(route)))};`;
 }
 
 /** The generated entry of a grouped function: every member route, keyed for the dispatcher. */
 function dispatcherSource(web: string, definition: FunctionDefinition): string {
   const imports = definition.routes.map((route, index) => routeImport(web, route, index));
+
   const entries = definition.routes.map(
     (route, index) => `[${JSON.stringify(route)}, route${index}]`,
   );
+
   return [
     `import { dispatchRoutes } from ${JSON.stringify(join(web, DISPATCH_MODULE))};`,
     ...imports,
@@ -138,7 +142,9 @@ function dispatcherPlugin(web: string, functions: readonly FunctionDefinition[])
       .filter((definition) => definition.dispatches)
       .map((definition) => [definition.file, dispatcherSource(web, definition)]),
   );
+
   const filter = new RegExp(`^${DISPATCHER_NAMESPACE}:`);
+
   return {
     name: DISPATCHER_NAMESPACE,
     setup(build) {
@@ -148,7 +154,9 @@ function dispatcherPlugin(web: string, functions: readonly FunctionDefinition[])
       }));
       build.onLoad({ filter: /.*/, namespace: DISPATCHER_NAMESPACE }, (args) => {
         const contents = sources.get(args.path);
+
         if (contents === undefined) throw new Error(`no dispatcher for the function ${args.path}`);
+
         return { contents, loader: "ts", resolveDir: web };
       });
     },
@@ -179,6 +187,7 @@ const ZOD_ENTRY_MODULES = [
   "/node_modules/zod/v4/index.js",
   "/node_modules/zod/v4/classic/index.js",
 ];
+
 /** The specifiers that reach them: `zod` and `zod/v4` from a dependency, `./classic/index.js` from inside `zod/v4`. */
 const ZOD_ENTRY_SPECIFIER = /^(zod(\/v4)?|\.\/classic\/index\.js)$/;
 const ZOD_ENTRY_PLUGIN = "zod-entry-side-effects";
@@ -203,13 +212,16 @@ function zodEntryPlugin(): Plugin {
       build.onResolve({ filter: ZOD_ENTRY_SPECIFIER }, async (args) => {
         // The plugin's own resolve below re-enters this hook; it is passed through by its marker.
         if (args.pluginData === ZOD_ENTRY_PLUGIN) return undefined;
+
         const resolved = await build.resolve(args.path, {
           kind: args.kind,
           importer: args.importer,
           resolveDir: args.resolveDir,
           pluginData: ZOD_ENTRY_PLUGIN,
         });
+
         const entry = ZOD_ENTRY_MODULES.some((suffix) => resolved.path.endsWith(suffix));
+
         return entry && resolved.errors.length === 0
           ? { ...resolved, sideEffects: true }
           : undefined;
@@ -220,13 +232,16 @@ function zodEntryPlugin(): Plugin {
 
 export async function functionBundlePlan(web: string): Promise<FunctionBundlePlan> {
   const functions = await webFunctions(web);
+
   const entryPoints = functions.map((definition) => ({
     in: definition.dispatches
       ? `${DISPATCHER_NAMESPACE}:${definition.file}`
       : join(web, routeSourcePath(definition.file)),
     out: definition.file,
   }));
+
   const exceptions = Object.values(INLINE_EXCEPTION);
+
   return {
     functions,
     externalPackages: new Set([
@@ -259,6 +274,7 @@ export async function functionBundlePlan(web: string): Promise<FunctionBundlePla
 /** The bundle's file under `dist-functions/`, POSIX-separated, whatever the metafile's output path was relative to. */
 function bundleKey(web: string, outputPath: string): string {
   const fromWeb = relative(join(web, FUNCTION_BUNDLE_DIRECTORY), join(web, outputPath));
+
   return fromWeb.split(sep).join(posix.sep);
 }
 
@@ -278,14 +294,18 @@ export function undeclaredImports(
   declared: ReadonlySet<string>,
 ): string[] {
   const undeclared = new Set<string>();
+
   for (const input of Object.values(metafile.inputs)) {
     for (const imported of input.imports) {
       if (!imported.external || imported.path === ESBUILD_RUNTIME) continue;
+
       if (relative(web, imported.path) in metafile.inputs) continue;
+
       if (declared.has(imported.path) || declared.has(packageNameOf(imported.path))) continue;
       undeclared.add(imported.path);
     }
   }
+
   return [...undeclared].sort();
 }
 
@@ -301,11 +321,14 @@ export async function profilerBinaryFiles(
   const importer = Object.entries(metafile.inputs).find(([, input]) =>
     input.imports.some((imported) => imported.external && imported.path === PROFILER_BINARY),
   );
+
   if (importer === undefined) return new Map();
+
   const file = {
     name: basename(PROFILER_BINARY),
     contents: await readFile(join(web, dirname(importer[0]), PROFILER_BINARY)),
   };
+
   return new Map(
     Object.entries(metafile.outputs)
       .filter(([, output]) => output.imports.some((imported) => imported.path === PROFILER_BINARY))
@@ -337,6 +360,7 @@ export function externalsSource(externals: BundleExternals): string {
       .sort()
       .map((bundle) => [bundle, [...(externals[bundle] ?? [])].sort()]),
   );
+
   return `${JSON.stringify(sorted, null, 2)}\n`;
 }
 
@@ -352,13 +376,16 @@ export function externalsDrift(
 ): readonly ExternalsDrift[] {
   const bundles = [...new Set([...Object.keys(expected), ...Object.keys(actual)])].sort();
   const drift: ExternalsDrift[] = [];
+
   for (const bundle of bundles) {
     const was = new Set(expected[bundle] ?? []);
     const is = new Set(actual[bundle] ?? []);
     const added = [...is].filter((specifier) => !was.has(specifier)).sort();
     const removed = [...was].filter((specifier) => !is.has(specifier)).sort();
+
     if (added.length > 0 || removed.length > 0) drift.push({ bundle, added, removed });
   }
+
   return drift;
 }
 
@@ -369,6 +396,7 @@ export function bundlesReaching(
   module: string,
 ): ReadonlySet<string> {
   const input = relative(web, module);
+
   return new Set(
     Object.entries(metafile.outputs)
       .filter(([, output]) => input in output.inputs)

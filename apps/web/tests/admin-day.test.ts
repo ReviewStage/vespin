@@ -148,7 +148,9 @@ async function openDay(body: AdminDayDetail | undefined): Promise<Opened> {
       ),
     );
   });
+
   if (body !== undefined) await readLanded(page);
+
   return { page, opened, backs };
 }
 
@@ -159,7 +161,9 @@ function headings(page: HTMLElement, level: string): string[] {
 /** Each row's cells of the table named `label`, in the words they read. */
 function rows(page: HTMLElement, label: string): string[][] {
   const table = page.querySelector(`table[aria-label="${label}"]`);
+
   if (table === null) throw new Error(`no table named ${label}`);
+
   return Array.from(table.querySelectorAll("tr"), (row) =>
     Array.from(row.querySelectorAll("th, td"), (cell) => cell.textContent ?? ""),
   );
@@ -168,7 +172,9 @@ function rows(page: HTMLElement, label: string): string[][] {
 /** The toolbar's way back, the button its path leads with. */
 function wayBack(page: HTMLElement): HTMLButtonElement {
   const found = page.querySelector<HTMLButtonElement>('header nav[aria-label="Path"] button');
+
   if (found === null) throw new Error("no way back");
+
   return found;
 }
 
@@ -181,7 +187,9 @@ function link(page: HTMLElement, words: string): HTMLAnchorElement {
   const found = Array.from(page.querySelectorAll("a")).find((anchor) =>
     anchor.textContent?.includes(words),
   );
+
   if (found === undefined) throw new Error(`no link reading ${words}`);
+
   return found;
 }
 
@@ -191,6 +199,7 @@ function press(target: Element, init: MouseEventInit = {}): boolean {
   act(() => {
     target.dispatchEvent(event);
   });
+
   return event.defaultPrevented;
 }
 
@@ -261,6 +270,7 @@ test("a plain press on an account or its row opens it; a modified press is the b
   expect(press(name)).toBe(true);
   expect(press(name, { metaKey: true })).toBe(false);
   const linRow = page.querySelectorAll("tbody tr")[1];
+
   if (linRow === undefined) throw new Error("no second row");
   press(linRow.querySelector("td:last-child") ?? linRow);
 

@@ -145,8 +145,10 @@ function ReviewPanel({
     focus: true,
     focusedByOwner: true,
   });
+
   // Note that the field is read as the panel asks for it, once the panel stands, because the panel hands the focus before an effect of its owner could find the words; where the editor lands later, the words take the focus themselves.
   const { room } = box;
+
   const field = useMemo<RefObject<HTMLElement | null>>(
     () => ({
       get current() {
@@ -155,6 +157,7 @@ function ReviewPanel({
     }),
     [room],
   );
+
   return (
     <PopoverPanel
       open={open}
@@ -258,11 +261,13 @@ export function ReviewPress({
   const panelId = useId();
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+
   // Note that we hand focus back to the press, as a menu returns it to its trigger, because closing takes the focused field away with it.
   const close = () => {
     setOpen(false);
     trigger.current?.focus();
   };
+
   const submit = () => {
     if (draft.over) return;
     onSent(() => {
@@ -270,6 +275,7 @@ export function ReviewPress({
       close();
     });
   };
+
   return (
     <div className={`${className} relative flex`} ref={root}>
       <FoldingButton
@@ -315,6 +321,7 @@ export function ReviewPress({
             // focus the way a click outside would, and the answer is drawn
             // in the panel.
             if (sending || overPanel(left)) return;
+
             if (!(left instanceof Node && root.current?.contains(left))) setOpen(false);
           }}
         />

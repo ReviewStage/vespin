@@ -19,6 +19,7 @@ export function cappedCount(value: number): string {
 /** A count's figure as `cappedCount` draws it, with the whole number said to a reader where the drawing is short of it. */
 export function CountFigure({ value }: { value: number }): React.JSX.Element {
   if (value <= COUNT_CAP) return <>{value}</>;
+
   return (
     <>
       <span aria-hidden="true">{cappedCount(value)}</span>

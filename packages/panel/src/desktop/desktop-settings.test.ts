@@ -67,6 +67,7 @@ const ACME: Workspace = {
   role: WORKSPACE_ROLE.ADMIN,
   github: null,
 };
+
 const PERSONAL: Workspace = {
   id: "workspace-personal",
   name: "Dana Reyes",
@@ -186,6 +187,7 @@ function SettingsHarness({
   history?: NavigationHistory;
 }): React.JSX.Element {
   const [view, setView] = useState<SettingsView>(opensOn);
+
   return createElement(DesktopSettings, {
     sidebar: {
       collapsed: false,
@@ -234,6 +236,7 @@ function mount(element: React.ReactElement): HTMLElement {
   document.body.append(container);
   root = createRoot(container);
   act(() => root?.render(withQueryClient(element)));
+
   return container;
 }
 
@@ -246,7 +249,9 @@ function redraw(element: React.ReactElement): void {
 function spoken(element: Element): string {
   const copy = element.cloneNode(true);
   assert.ok(copy instanceof Element);
+
   for (const hidden of copy.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+
   return copy.textContent ?? "";
 }
 
@@ -276,6 +281,7 @@ function shownTitle(page: HTMLElement): string | null | undefined {
 /** What scrolls the page drawn beside the sidebar: the shared settings page around its title. */
 function shownScroller(page: HTMLElement): HTMLElement {
   const title = [...page.querySelectorAll("h1")].find((each) => each.closest("nav") === null);
+
   return title?.closest<HTMLElement>(".ui-settings-page") ?? assert.fail("the page scrolls");
 }
 
@@ -286,6 +292,7 @@ function openPage(page: HTMLElement, title: string): HTMLElement {
   act(() => button.click());
   const drawn = page.querySelector<HTMLElement>(".settings-page");
   assert.ok(drawn, `${title} is drawn`);
+
   return drawn;
 }
 
@@ -338,6 +345,7 @@ test("the sidebar lists Memory under Workspace and its search finds it only whil
     ...PERSONAL,
     experiments: [{ experiment: EXPERIMENT.MEMORY, on: true, changedBy: null, changedAt: 1 }],
   };
+
   const on = mount(createElement(SettingsHarness, { workspace: listing(remembering) }));
   await vi.waitFor(() =>
     expect(pageGroups(on)[0]?.rows).toEqual(["Workspace", "Cloud environment", "Memory"]),
@@ -386,6 +394,7 @@ test("the Workspace page is titled with the workspace the sidebar lists, and fol
 test("every moved option is drawn on its one page and on no other", () => {
   const page = mount(createElement(SettingsHarness));
   const words = new Map(PAGE_TITLES.map((title) => [title, openPage(page, title).textContent]));
+
   for (const { words: option, page: home } of HOMES) {
     const holding = PAGE_TITLES.filter((title) => words.get(title)?.includes(option));
     assert.deepEqual(holding, [home], `${option} lives on ${home} alone`);
@@ -401,6 +410,7 @@ function foundUnder(page: HTMLElement, words: string): (string | null)[] {
     setValue?.call(field, words);
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
+
   return [...page.querySelectorAll("nav section[aria-label]")]
     .filter((group) => group.textContent?.includes(words))
     .map((group) => group.getAttribute("aria-label"));
@@ -408,6 +418,7 @@ function foundUnder(page: HTMLElement, words: string): (string | null)[] {
 
 test("the Settings search finds each moved option under its new page", () => {
   const page = mount(createElement(SettingsHarness));
+
   for (const { words: option, page: home, ...named } of HOMES) {
     const words = "found" in named ? named.found : option;
     assert.deepEqual(foundUnder(page, words), [home], `${words} is found under ${home}`);
@@ -423,9 +434,11 @@ test("Open Vespin at login stands on This Mac under Startup, drawn as the choice
 
   const appearance = openPage(page, "Appearance").textContent ?? "";
   const thisMac = openPage(page, "This Mac");
+
   const login = thisMac.querySelector<HTMLButtonElement>(
     'button[aria-label="Open Vespin at login"]',
   );
+
   assert.ok(login, "This Mac draws the switch");
   const group = login.closest("[aria-labelledby]");
   const heading = group && document.getElementById(group.getAttribute("aria-labelledby") ?? "");
@@ -439,6 +452,7 @@ test("a platform without Mac commands or updates lists no This Mac page, draws A
     HOST_CAPABILITY.MAC_COMMANDS,
     HOST_CAPABILITY.UPDATES,
   ];
+
   const capabilities = DESKTOP_CAPABILITIES.filter((each) => !missing.includes(each));
   const page = mount(createElement(SettingsHarness, { capabilities }));
 
@@ -449,6 +463,7 @@ test("a platform without Mac commands or updates lists no This Mac page, draws A
   const about = openPage(page, "About").textContent ?? "";
   assert.equal(about.includes("Changelog"), true);
   assert.equal(about.includes("Check for updates"), false);
+
   for (const words of ["Let agents run commands on this Mac", "Updates"]) {
     assert.deepEqual(foundUnder(page, words), [], `${words} is found nowhere`);
   }
@@ -460,13 +475,16 @@ test("a browser, which is no installed app, draws Appearance without Zoom and Th
     const groups = pageGroups(page);
     const appearance = openPage(page, "Appearance").textContent ?? "";
     const thisMac = openPage(page, "This Mac").textContent ?? "";
+
     // Note that the Keyboard shortcuts page is left out, because a picture's zoom keys are found there on every platform.
     const found = ["Zoom", "Open Vespin at login"]
       .flatMap((words) => foundUnder(page, words))
       .filter((section) => section !== "Keyboard shortcuts");
+
     act(() => root?.unmount());
     root = undefined;
     document.body.innerHTML = "";
+
     return {
       last: groups.at(-1),
       zoom: appearance.includes("Zoom"),
@@ -477,6 +495,7 @@ test("a browser, which is no installed app, draws Appearance without Zoom and Th
   };
 
   const desktop = drawnOn(DESKTOP_CAPABILITIES);
+
   const browser = drawnOn(
     DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.DESKTOP_APP),
   );
@@ -503,10 +522,12 @@ test("This Mac draws dictation's Microphone permission row and Prefer the Mac's 
     act(() => root?.unmount());
     root = undefined;
     document.body.innerHTML = "";
+
     return { words, found };
   };
 
   const desktop = thisMac(DESKTOP_CAPABILITIES);
+
   const without = thisMac(
     DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.MICROPHONE),
   );
@@ -528,8 +549,10 @@ test("Keyboard shortcuts lists Show terminal only on a platform offering termina
     act(() => root?.unmount());
     root = undefined;
     document.body.innerHTML = "";
+
     return { terminal: words.includes("Show terminal"), found };
   };
+
   const without = DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.TERMINALS);
 
   assert.deepEqual(listed(DESKTOP_CAPABILITIES), {
@@ -542,6 +565,7 @@ test("Keyboard shortcuts lists Show terminal only on a platform offering termina
 test("Keyboard shortcuts lists Files changed's own keys under a group of their own, which its search finds", () => {
   const page = mount(createElement(SettingsHarness));
   const drawn = openPage(page, "Keyboard shortcuts");
+
   const group =
     [...drawn.querySelectorAll("section[aria-labelledby]")].find(
       (each) =>
@@ -571,8 +595,10 @@ test("Keyboard shortcuts lists Files changed's own keys under a group of their o
 
 test("Appearance draws every diff setting in the Diff, Lines, and Text groups, in the order the View options popover draws them", () => {
   const page = mount(createElement(SettingsHarness, { opensOn: SETTINGS_VIEW.APPEARANCE }));
+
   const groups = [...page.querySelectorAll("section[aria-labelledby]")].flatMap((each) => {
     const title = document.getElementById(each.getAttribute("aria-labelledby") ?? "")?.textContent;
+
     return title === undefined || title === null
       ? []
       : [
@@ -585,6 +611,7 @@ test("Appearance draws every diff setting in the Diff, Lines, and Text groups, i
           ],
         ];
   });
+
   assert.deepEqual(groups, [
     ["Diff", ["Layout", "Changed words", "Indicators", "Backgrounds"]],
     ["Lines", ["Word wrap", "Line numbers", "Minimize inline comments"]],
@@ -623,6 +650,7 @@ function openIntegrationResult(page: HTMLElement, name: string): void {
   const result = [
     ...page.querySelectorAll<HTMLButtonElement>('nav section[aria-label="Integrations"] button'),
   ].find((button) => button.textContent === name);
+
   assert.ok(result, `the search finds ${name} under Integrations`);
   act(() => result.click());
 }
@@ -632,6 +660,7 @@ function pressEscape(composing = false): void {
   const leave = (event: KeyboardEvent) => {
     if (event.key === "Escape") runAppCommand(APP_COMMAND.EXIT_SETTINGS);
   };
+
   window.addEventListener("keydown", leave);
   act(() => {
     (document.activeElement ?? document.body).dispatchEvent(
@@ -650,6 +679,7 @@ function countSearchOpens() {
       if (event === PRODUCT_SURFACE_EVENT.SEARCH_OPEN) opens += 1;
     },
   });
+
   return () => opens;
 }
 
@@ -756,15 +786,18 @@ function pressIn(field: HTMLElement, key: string, shift = false): void {
 /** The words of the result the sidebar's search names lit. */
 function litResult(page: HTMLElement, field: HTMLElement): string | null | undefined {
   const id = field.getAttribute("aria-activedescendant");
+
   return id === null ? undefined : page.ownerDocument.getElementById(id)?.textContent;
 }
 
 test("the sidebar's search walks its results from the field, Tab and the arrows each showing the result's page with the caret left in the field", () => {
   // Note that the landing asks whether the row is drawn and scrolls to it, neither of which jsdom can do, so every row here is drawn and stays put.
   const stood = { checkVisibility: () => true, scrollIntoView: () => undefined };
+
   for (const [name, value] of Object.entries(stood)) {
     Object.defineProperty(HTMLElement.prototype, name, { value, configurable: true });
   }
+
   onTestFinished(() => {
     for (const name of Object.keys(stood)) Reflect.deleteProperty(HTMLElement.prototype, name);
   });
@@ -795,6 +828,7 @@ test("the Integrations page's search is cleared when another page is turned to",
 
 test("on a phone the page list is headed by its way out alone, named for the step Back goes to, and Settings centered, with no Back and Forward, and the way out leaves as Back did", () => {
   let exits = 0;
+
   const page = mount(
     createElement(SettingsHarness, {
       room: SHELL_ROOM.NARROW,
@@ -834,6 +868,7 @@ test("on a phone a page is headed by the way back to the list, its title, and it
   fakeActPort({
     [ACT_KIND.SETTINGS_RESET]: (payload) => {
       resets.push(payload);
+
       return Promise.resolve({
         status: ACTION_RESULT_STATUS.ACCEPTED,
         settings: appSettingsWire(settingsView()),
@@ -841,6 +876,7 @@ test("on a phone a page is headed by the way back to the list, its title, and it
     },
   });
   let listings = 0;
+
   const page = mount(
     createElement(SettingsHarness, {
       opensOn: SETTINGS_VIEW.APPEARANCE,
@@ -908,9 +944,11 @@ test("a page's row in the sidebar offers Copy link on a right-click, copying the
   act(() => {
     row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
   });
+
   const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
     (each) => each.textContent === "Copy link",
   );
+
   assert.ok(item, "the row's menu offers Copy link");
   await act(async () => item.click());
 
@@ -928,12 +966,14 @@ test("the page list is one Tab stop, and ↑ and ↓ walk its pages across the g
     "Tab lands on the open page",
   );
   act(() => buttons[0]?.focus());
+
   const press = (key: string) =>
     act(() => {
       document.activeElement?.dispatchEvent(
         new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }),
       );
     });
+
   press("ArrowDown");
   assert.equal(document.activeElement, buttons[1]);
   press("ArrowUp");

@@ -41,21 +41,26 @@ function json(body: WireValue): Response {
 function githubWithAddress(email: string) {
   return async (input: string | URL | Request): Promise<Response> => {
     const url = new URL(input instanceof Request ? input.url : input);
+
     if (url.href === "https://github.com/login/oauth/access_token") {
       return json({ token_type: "bearer", access_token: "ghu_linked", scope: "" });
     }
+
     if (url.href === "https://api.github.com/user") {
       return json({ id: GITHUB_ACCOUNT_ID, login: "octocat", name: "Octo", email: null });
     }
+
     if (url.href === "https://api.github.com/user/emails") {
       return json([{ email, primary: true, verified: true }]);
     }
+
     throw new Error(`this test reaches no network: ${url.href}`);
   };
 }
 
 function cookiesFrom(response: Response, carried = ""): string {
   const fresh = response.headers.getSetCookie().map((cookie) => cookie.split(";")[0]);
+
   return [carried, ...fresh].filter((part) => part !== "").join("; ");
 }
 
@@ -81,6 +86,7 @@ async function withAuth(
   body: (auth: Auth, client: Awaited<ReturnType<typeof openMigratedPglite>>) => Promise<void>,
 ): Promise<void> {
   const client = await openMigratedPglite();
+
   try {
     vi.stubGlobal("fetch", githubWithAddress("octo@github.test"));
     await body(linkingAuth(client), client);
@@ -99,6 +105,7 @@ async function linkGitHub(auth: Auth) {
       body: JSON.stringify({ email: LUKE_EMAIL, password: "fixture-password", name: "Planner" }),
     }),
   );
+
   assert.equal(signedUp.status, 200);
   const session = cookiesFrom(signedUp);
 
@@ -113,10 +120,12 @@ async function linkGitHub(auth: Auth) {
       }),
     }),
   );
+
   const authorize = new URL(decodeStarted(await started.json()).url);
   const callback = new URL(`${BASE_URL}/api/auth/callback/github`);
   callback.searchParams.set("code", "github-code-under-test");
   callback.searchParams.set("state", authorize.searchParams.get("state") ?? "");
+
   const { answer: landed, counts } = await withAuthCounts(() =>
     auth.handler(new Request(callback, { headers: { cookie: cookiesFrom(started, session) } })),
   );
@@ -125,6 +134,7 @@ async function linkGitHub(auth: Auth) {
   const found = await context.internalAdapter.findUserByEmail(LUKE_EMAIL);
   assert.ok(found);
   const accounts = await context.internalAdapter.findAccounts(found.user.id);
+
   return {
     counts,
     userId: found.user.id,
@@ -137,6 +147,7 @@ async function linkGitHub(auth: Auth) {
 /** Signs in with GitHub, GitHub holding the address given; answers our user the session is for. */
 async function signInWithGitHub(auth: Auth, email: string): Promise<string> {
   vi.stubGlobal("fetch", githubWithAddress(email));
+
   const started = await auth.handler(
     new Request(`${BASE_URL}/api/auth/sign-in/social`, {
       method: "POST",
@@ -144,17 +155,22 @@ async function signInWithGitHub(auth: Auth, email: string): Promise<string> {
       body: JSON.stringify({ provider: "github", callbackURL: DONE_URL }),
     }),
   );
+
   const authorize = new URL(decodeStarted(await started.json()).url);
   const callback = new URL(`${BASE_URL}/api/auth/callback/github`);
   callback.searchParams.set("code", "github-code-under-test");
   callback.searchParams.set("state", authorize.searchParams.get("state") ?? "");
+
   const landed = await auth.handler(
     new Request(callback, { headers: { cookie: cookiesFrom(started) } }),
   );
+
   const session = await auth.api.getSession({
     headers: new Headers({ cookie: cookiesFrom(landed) }),
   });
+
   assert.ok(session);
+
   return session.user.id;
 }
 
@@ -190,9 +206,11 @@ test("a GitHub-only account whose authorization was revoked signs in with GitHub
 
     assert.equal(again, first);
     const context = await auth.$context;
+
     const github = (await context.internalAdapter.findAccounts(again)).filter(
       (row) => row.providerId === "github",
     );
+
     assert.deepEqual(
       github.map((row) => [
         row.accountId,

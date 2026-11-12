@@ -59,6 +59,7 @@ test("a draft opens New task only for the account it was kept under", () => {
 test("a draft names its pictures only by the files the share sheet keeps them in", () => {
   const kept = (pictures: readonly string[]) =>
     JSON.stringify({ accountId: "user-ada", prompt: "", pictures, keptAt: 1 });
+
   expect(shareDraftOf(kept(["share-draft-picture-1.jpg"]), "user-ada")?.pictures).toEqual([
     "share-draft-picture-1.jpg",
   ]);

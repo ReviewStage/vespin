@@ -206,9 +206,13 @@ function rootClass({
 }): string {
   const pill = look === INLINE_REF_LOOK.PILL;
   const parts: string[] = [ROOT, FIT_ROOT[fit], LOOK_ROOT[look]];
+
   if (fit === INLINE_REF_FIT.LINE) parts.push(LOOK_GAP[look].row);
+
   if (!pill) parts.push(gone ? "text-muted-foreground" : "text-inherit");
+
   if (pressable) parts.push(leaving ? "cursor-link" : "cursor-press");
+
   if (pill) {
     if (gone) parts.push("bg-transparent inset-ring inset-ring-border-strong");
     else if (pressable)
@@ -219,6 +223,7 @@ function rootClass({
         "bg-fill-strong [@media(hover:hover)]:in-[:is(button,summary):hover]:bg-fill-selected in-[:is(button,summary):focus-visible]:bg-fill-selected",
       );
   }
+
   return parts.join(" ");
 }
 
@@ -244,12 +249,17 @@ function glyphClass(look: InlineRefLook, fit: InlineRefFit): string {
   const parts = [
     "ui-inline-ref-glyph inline-flex flex-none items-center justify-center empty:hidden [--ui-glyph-size:1em] [&>svg]:size-[1em]",
   ];
+
   const pill = look === INLINE_REF_LOOK.PILL;
+
   if (fit === INLINE_REF_FIT.FLOW || pill) parts.push("h-[1em]");
+
   if (fit === INLINE_REF_FIT.FLOW) {
     parts.push(`align-[-0.125em] after:h-[1em] after:self-baseline ${LOOK_GAP[look].glyph}`);
   }
+
   if (pill) parts.push("min-w-[1em] text-muted-foreground");
+
   return parts.join(" ");
 }
 
@@ -282,13 +292,18 @@ function labelClass({
   pressable: boolean;
 }): string {
   const parts = ["ui-inline-ref-label"];
+
   if (fit === INLINE_REF_FIT.LINE) parts.push("self-baseline");
   else if (name !== INLINE_REF_NAME.WHOLE) parts.push(FLOW_NAME_WRAP[name]);
+
   if (gone) parts.push("line-through");
+
   if (look === INLINE_REF_LOOK.LINK && pressable) {
     parts.push("group-hover/inline-ref:underline group-hover/inline-ref:underline-offset-2");
   }
+
   if (look === INLINE_REF_LOOK.WASH) parts.push("py-inline-ref-mark");
+
   return parts.join(" ");
 }
 
@@ -297,6 +312,7 @@ function stateClass(look: InlineRefLook, fit: InlineRefFit): string {
   const state = `ui-inline-ref-state whitespace-nowrap text-muted-foreground ${
     fit === INLINE_REF_FIT.LINE ? "flex-none self-baseline" : LOOK_GAP[look].state
   }`;
+
   return look === INLINE_REF_LOOK.PILL
     ? `${state} border-l border-border-strong pl-ui-4 font-caption`
     : state;
@@ -322,6 +338,7 @@ const CONTROL_ROOTS =
 function focusUnlessInControl(element: HTMLElement | null): void {
   if (element === null) return;
   const control = element.parentElement?.closest(CONTROL_ROOTS) ?? null;
+
   if (control === null) element.tabIndex = 0;
   else element.removeAttribute("tabindex");
 }
@@ -344,10 +361,12 @@ function useButtonKeys(onBlur: FocusEventHandler<HTMLElement> | undefined): {
   onBlur: (event: FocusEvent<HTMLElement>) => void;
 } {
   const spaceHeld = useRef(false);
+
   return {
     onKeyDown: (event) => {
       if (event.key !== "Enter" && event.key !== " ") return;
       event.preventDefault();
+
       if (event.key === "Enter") event.currentTarget.click();
       else if (!event.repeat) spaceHeld.current = true;
     },
@@ -398,6 +417,7 @@ function InlineRefRoot({
   const labelClassName = labelClass({ look, fit, name, gone, pressable });
   // Note that a path that wraps keeps its own order in words of either direction by isolating its whole token rather than its name, because a browser breaks wherever the direction's level changes, which would part the name from its glyph.
   const isolated = name === INLINE_REF_NAME.PATH && fit === INLINE_REF_FIT.FLOW;
+
   const face = (
     <>
       {kind === undefined ? null : <span className="ui-visually-hidden">{`${kind} `}</span>}
@@ -444,13 +464,16 @@ function InlineRefRoot({
       {gone ? <span className="ui-visually-hidden">{GONE_HEARD}</span> : null}
     </>
   );
+
   const own = {
     ...rest,
     className: `${rootClass({ look, fit, gone, pressable, leaving })}${pressable ? " group/inline-ref" : ""}`,
     "data-look": look,
     ...(isolated ? { dir: "ltr" } : {}),
   };
+
   const goneProps = gone ? { "data-gone": "true" } : {};
+
   if (onPress === undefined) {
     return (
       <span ref={carded ? focusUnlessInControl : noFocus} {...own} {...goneProps}>
@@ -458,16 +481,19 @@ function InlineRefRoot({
       </span>
     );
   }
+
   if (leaving) {
     // Note that the press, not the browser, opens the address, a
     // middle-click's as a click's, because the window's opener decides where
     // an address opens, a pull request's in its tab say; the link is what a
     // reader and a right-click are told.
     const open = pulseOnPress(onPress);
+
     const press = (event: MouseEvent<HTMLAnchorElement>) => {
       event.preventDefault();
       open(event);
     };
+
     return (
       <a
         {...own}
@@ -483,10 +509,12 @@ function InlineRefRoot({
       </a>
     );
   }
+
   if (fit === INLINE_REF_FIT.FLOW) {
     // Note that a token that wraps presses as a span in a button's role, because a browser draws a button as one box that never breaks across lines; the keys a button answers press it the same way.
     // Its click is canceled, because a label holding it, a checkbox's words say, would tick its box on a press of a span where it ignores a button's.
     const press = pulseOnPress(onPress);
+
     return (
       // biome-ignore lint/a11y/useSemanticElements: a token in running words wraps across lines as they do, and a browser draws a <button> as one box that never breaks.
       <span
@@ -508,6 +536,7 @@ function InlineRefRoot({
       </span>
     );
   }
+
   return (
     <button
       type="button"
@@ -538,7 +567,9 @@ export function InlineRef({
     card?: ReactNode;
   }): React.JSX.Element {
   const root = <InlineRefRoot {...token} carded={Hint !== false && card !== undefined} />;
+
   if (Hint === false) return root;
+
   return (
     <Hint label={hintLabel ?? token.label} card={card}>
       {root}

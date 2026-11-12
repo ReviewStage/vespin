@@ -29,6 +29,7 @@ const roots: Root[] = [];
 
 afterEach(() => {
   vi.restoreAllMocks();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
 });
@@ -48,6 +49,7 @@ function drawn(props: AvatarProps): Drawn {
   roots.push(root);
   const redraw = (next: AvatarProps): void => act(() => root.render(createElement(Avatar, next)));
   redraw(props);
+
   return { container, redraw };
 }
 
@@ -123,6 +125,7 @@ test("an app's glyph stands where its letter would, until its picture loads and 
     shape: AVATAR_SHAPE.SQUARE,
     glyph: GLYPH,
   });
+
   assert.equal(container.textContent, "");
   assert.ok(container.querySelector('[data-glyph="robot"]'));
   answer(container, "load");
@@ -136,6 +139,7 @@ test("an app's glyph stands where its letter would, until its picture loads and 
 test("an app's square names it to a reader as a person's disc does", () => {
   const disc = drawn({ name: "Vercel", shape: AVATAR_SHAPE.SQUARE, glyph: GLYPH }).container
     .firstElementChild;
+
   assert.equal(disc?.getAttribute("role"), "img");
   assert.equal(disc?.getAttribute("aria-label"), "Vercel");
 });
@@ -150,6 +154,7 @@ test("a picture the browser had drawn before the page took over is shown without
 
 test("a blank tile draws nothing until its picture loads, lazily, and says where the picture fails", () => {
   const failed = vi.fn();
+
   const { container } = drawn({
     name: "",
     src: PICTURE,
@@ -160,6 +165,7 @@ test("a blank tile draws nothing until its picture loads, lazily, and says where
     lazy: true,
     onFail: failed,
   });
+
   const tile = container.firstElementChild;
   assert.equal(container.textContent, "");
   assert.equal(tile?.querySelector("svg"), null);

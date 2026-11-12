@@ -111,6 +111,7 @@ const decodeRefusalAnswer = Schema.decodeUnknownResult(RefusalAnswerSchema);
 
 /** One request and its answer, as the account call states them. */
 type CallRequest = Parameters<AccountCallEffects["send"]>[0];
+
 type CallAnswer = Effect.Success<ReturnType<AccountCallEffects["send"]>>;
 
 const SIGNED_OUT: AccountSnapshot = { status: ACCOUNT_STATUS.SIGNED_OUT };
@@ -175,8 +176,10 @@ function accountOf(
   impersonated: boolean,
 ): SessionRead {
   const provider = user.lastLoginMethod;
+
   if (!isAccountProvider(provider)) return { signedIn: false };
   const pictureUrl = pinnedPictureUrl(user.image);
+
   return {
     signedIn: true,
     account: {
@@ -215,6 +218,7 @@ export const cookieAccountSourceLayer = (
     AccountSource,
     Effect.gen(function* () {
       const client = yield* HttpClient.HttpClient;
+
       return {
         tokenCipher: undefined,
         open: (host: AccountSourceHost) => openCookieSession(host, door, client),
@@ -252,6 +256,7 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   yield* Effect.addFinalizer(() =>
     Effect.suspend(() => {
       closed = true;
+
       // A confirmation waiting on an arrival the closing cut off waits no more.
       return arrival ? Deferred.succeed(arrival.shown, undefined) : Effect.void;
     }),
@@ -294,6 +299,7 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
     (closing) => {
       generation += 1;
       closings.add(closing);
+
       return closing;
     },
   );
@@ -304,6 +310,7 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
       moveGate(host.stopCapabilities),
       Effect.suspend(() => {
         closings.delete(closing);
+
         return Deferred.succeed(closing, undefined);
       }),
     );
@@ -344,6 +351,7 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   const settleOn = (next: AccountSnapshot): Effect.Effect<void> =>
     Effect.suspend(() => {
       account = next;
+
       return Effect.asVoid(PubSub.publish(changesPubSub, next));
     });
 
@@ -367,10 +375,12 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   ): Effect.Effect<void> =>
     Effect.gen(function* () {
       if (afterSomeone) yield* host.stopCapabilities;
+
       if (asOf !== generation) return;
       yield* settleArrival(arriving);
       yield* settleOnAsOf(asOf, arriving);
       yield* Deferred.succeed(shown, undefined);
+
       if (asOf !== generation) return;
       yield* host.startCapabilities;
     });
@@ -386,7 +396,9 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
     if (account.status === ACCOUNT_STATUS.SIGNING_IN && departedAt !== generation) {
       return Effect.void;
     }
+
     generation += 1;
+
     return account.status === ACCOUNT_STATUS.SIGNING_IN ? settleOn(SIGNED_OUT) : Effect.void;
   });
 
@@ -396,15 +408,22 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
       method: HTTP_METHOD.GET,
       path: AUTH_PATH.GET_SESSION,
     });
+
     if (!callAnswered(answer)) return yield* new SessionUnreadable();
+
     if (answer.response.status === HTTP_STATUS.UNAUTHORIZED) return { signedIn: false } as const;
+
     if (!answer.response.ok) return yield* new SessionUnreadable();
+
     const body = yield* Effect.orElseSucceed(
       Effect.tryPromise(() => answer.response.text()),
       () => undefined,
     );
+
     const decoded = decodeSessionAnswer(body);
+
     if (Result.isFailure(decoded)) return yield* new SessionUnreadable();
+
     return decoded.success === null
       ? ({ signedIn: false } as const)
       : accountOf(decoded.success.user, Boolean(decoded.success.session?.impersonatedBy));
@@ -425,35 +444,45 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
     if (!runMode.requiresAccount || !runMode.sendsNetwork) return undefined;
     const asked = generation;
     const read = yield* readSession;
+
     return yield* Effect.uninterruptible(
       Effect.gen(function* () {
         if (closed) return undefined;
+
         if (asked !== generation) return yield* new ReadSuperseded();
         const standing = signedInId(account);
+
         if (!read.signedIn) {
           if (standing === undefined) return yield* Effect.as(settleNobody, undefined);
           const closing = yield* depart;
           const steps = yield* Effect.exit(Effect.andThen(settleOn(SIGNED_OUT), forgetDeparted));
           const moved = yield* Effect.forkIn(close(closing), sessionScope);
           yield* steps;
+
           return moved;
         }
+
         // The same person, drawn anew where anything of them changed.
         if (standing !== undefined && standing === signedInId(read.account)) {
           if (!sameAccount(account, read.account)) yield* settleOn(read.account);
+
           return undefined;
         }
+
         // Note that another person's session, such as a sign-in in another
         // tab, is a departure and an arrival, never a swap under the gate:
         // the departure is shown now, the arrival only once the gate closed.
         const asOf = ++generation;
+
         if (standing !== undefined) {
           yield* settleOn(SIGNED_OUT);
           yield* forgetDeparted;
         }
+
         const shown = yield* Deferred.make<void>();
         arrival = { asOf, shown };
         const departures = [...closings];
+
         return yield* Effect.forkIn(
           Effect.ensuring(
             Effect.andThen(
@@ -471,6 +500,7 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   // One read at a time however many ask at once, every ask joining the one
   // under way; a read that ended is never reused, so the next ask reads again.
   const joinRead = yield* Effect.cachedWithTTL(settleRead, Duration.zero);
+
   // Note that an ask that joined a read a change then overtook, such as a
   // sign-out pressed while it was asked, reads again rather than settling on
   // nothing, so a confirmation always answers for a read begun after it asked.
@@ -501,6 +531,7 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
     renew: token.refreshAccount,
     holder: () => Effect.sync(() => signedInId(account)),
   };
+
   // Note that signed out, the call has nothing to go under, which an
   // authorization that reads nothing says: the call answers no credential
   // without going out, so a sender keeps what it queued for the sign-in, and
@@ -510,6 +541,7 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
     renew: token.refreshAccount,
     holder: () => Effect.succeed(undefined),
   };
+
   const credential: CallCredential = {
     resolve: () =>
       Effect.sync(() =>
@@ -534,11 +566,13 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   const leaveFor = (path: string, provider: AccountProvider, signingIn: boolean) =>
     Effect.gen(function* () {
       const asked = generation;
+
       const answer = yield* send(authCall, {
         method: HTTP_METHOD.POST,
         path,
         body: JSON.stringify({ provider, callbackURL: door.currentAddress() }),
       });
+
       const body =
         callAnswered(answer) && answer.response.ok
           ? yield* Effect.orElseSucceed(
@@ -546,11 +580,15 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
               () => undefined,
             )
           : undefined;
+
       const redirect = decodeRedirectAnswer(body);
+
       if (Result.isFailure(redirect)) return yield* failed("Sign-in could not start", answer);
+
       // A cancel pressed while the service answered keeps the tab where it is.
       if (asked !== generation) return false;
       yield* door.navigate(redirect.success.url, signingIn);
+
       return true;
     });
 
@@ -561,11 +599,15 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
       const started = generation;
       yield* settleOn({ status: ACCOUNT_STATUS.SIGNING_IN });
       const left = yield* Effect.result(leaveFor(AUTH_PATH.SIGN_IN_SOCIAL, provider, true));
+
       if (Result.isFailure(left)) {
         if (started === generation) yield* settleOn(SIGNED_OUT);
+
         return yield* Effect.fail(left.failure);
       }
+
       if (left.success) departedAt = generation;
+
       // The tab is leaving for the provider; the account lands on the page it comes back to.
       return account;
     });
@@ -592,10 +634,12 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   // Note that returns made while a read is under way keep only the latest,
   // and returns close together are one, so an outage piles up no reads.
   const initialized = yield* Deferred.make<void>();
+
   const returns = door.revisits.pipe(
     Stream.buffer({ capacity: 1, strategy: "sliding" }),
     Stream.throttle({ cost: () => 1, units: 1, duration: REVISIT_WINDOW, strategy: "enforce" }),
   );
+
   yield* Effect.forkScoped(
     Stream.runForEach(returns, () => Effect.andThen(Deferred.await(initialized), settled(reread))),
   );
@@ -607,15 +651,18 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
       // Note that an outage reads as signed out, there being no account to
       // name, and the launch's own `refreshOnce` reads again soon after.
       const asked = generation;
+
       const settled = yield* Effect.result(
         runMode.requiresAccount && runMode.sendsNetwork
           ? readSession
           : Effect.succeed({ signedIn: false } as const),
       );
+
       const initial =
         Result.isSuccess(settled) && settled.success.signedIn
           ? settled.success.account
           : SIGNED_OUT;
+
       // A change that landed while the launch read, a refused call's, stands
       // over it, its arrival shown first so the launch answers that person.
       if (asked === generation) {
@@ -624,7 +671,9 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
       } else {
         yield* arrivalSettled;
       }
+
       yield* Deferred.succeed(initialized, undefined);
+
       return account;
     }),
     returnedFromSignIn: door.returnedFromSignIn,
@@ -651,17 +700,22 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
         if (options.revokeRemote) {
           // A read under way when the sign-out was pressed settles nothing over it.
           generation += 1;
+
           const answer = yield* send(authCall, {
             method: HTTP_METHOD.POST,
             path: AUTH_PATH.SIGN_OUT,
             body: "{}",
           });
+
           const ended =
             callAnswered(answer) &&
             (answer.response.ok || answer.response.status === HTTP_STATUS.UNAUTHORIZED);
+
           if (!ended) return yield* failed("Signing out of the browser session failed", answer);
         }
+
         yield* leave;
+
         return account;
       }),
     deleteEverywhere: () =>
@@ -672,22 +726,29 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
           path: AUTH_PATH.DELETE_USER,
           body: "{}",
         });
+
         if (!callAnswered(answer)) return yield* failed("Account deletion failed", answer);
+
         if (!answer.response.ok) {
           const body = yield* Effect.orElseSucceed(
             Effect.tryPromise(() => answer.response.text()),
             () => undefined,
           );
+
           const refusal = decodeRefusalAnswer(body);
+
           if (Result.isSuccess(refusal) && refusal.success.code === SESSION_EXPIRED) {
             return yield* new DeletionSessionExpired({
               message: "Account deletion failed: the session is too old to delete under",
             });
           }
+
           return yield* failed("Account deletion failed", answer);
         }
+
         // The deletion ended the session with the account, so there is nothing left to sign out of remotely.
         yield* leave;
+
         return account;
       }),
     refreshOnce,

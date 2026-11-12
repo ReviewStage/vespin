@@ -59,6 +59,7 @@ const EVERY_CONTROL: readonly SettingsRowSkeletonShape[] = Object.values(
 /** A switch holding its own state, named `label` and described and failed by its row. */
 function HeldSwitch({ label, control }: { label: string; control: SettingsRowControl }) {
   const [on, setOn] = useState(true);
+
   return (
     <Switch
       checked={on}
@@ -89,6 +90,7 @@ function SwitchRow({
 /** A text area holding its own words. */
 function HeldTextArea() {
   const [text, setText] = useState("");
+
   return (
     <TextArea
       label="Prompt"

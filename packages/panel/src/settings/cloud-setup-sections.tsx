@@ -174,6 +174,7 @@ function savable(script: string): boolean {
 /** Why a row's last save was refused, as the line under it says it; nothing while none was. */
 function saveRefusal(error: Error | null): ShownError | undefined {
   if (error === null) return undefined;
+
   return replayMaskedError(
     refusalShown(
       { words: actFailureWords(error), cause: error },
@@ -212,16 +213,20 @@ function newerRunActions(
   saved: string | undefined,
 ): RepositoryRunActions[] {
   const byName = new Map(held.map((list) => [list.repository.toLowerCase(), list]));
+
   for (const list of answered) {
     const name = list.repository.toLowerCase();
     const standing = byName.get(name);
+
     if (standing === undefined || list.updatedAt >= standing.updatedAt) {
       byName.set(name, list);
     }
   }
+
   if (saved !== undefined && !answered.some((list) => sameRepository(list.repository, saved))) {
     byName.delete(saved.toLowerCase());
   }
+
   // Note that the lists stand in the order of their names, as the service answers them.
   return [...byName.entries()]
     .sort(([one], [other]) => (one < other ? -1 : one > other ? 1 : 0))
@@ -246,11 +251,13 @@ async function drawAnswer(
   await queries.cancelQueries({ queryKey, exact: true });
   queries.setQueryData(queryKey, (held) => {
     if (held === undefined) return answer;
+
     const runActions = newerRunActions(
       held.runActions ?? [],
       answer.runActions ?? [],
       write.runActionsOf,
     );
+
     // A script's save takes the scripts from its answer; a save of run actions leaves them as the page holds them.
     return write.runActionsOf === undefined ? { ...answer, runActions } : { ...held, runActions };
   });
@@ -259,6 +266,7 @@ async function drawAnswer(
 /** A save of the script named, an empty one removing it, its answer drawn over the page at once. */
 function useSaveScript(workspaceId: string) {
   const queries = useQueryClient();
+
   return useMutation({
     mutationFn: ({ target, script }: { target: ScriptTarget; script: string }) =>
       target.repository === undefined
@@ -305,6 +313,7 @@ function ScriptEditor({
   onLeave: (() => void) | undefined;
 }): React.JSX.Element {
   const lines = useTypedCodeColoring(SCRIPT_LANGUAGE, value);
+
   return (
     <ReplayMask>
       <CodeEditor
@@ -345,8 +354,10 @@ function LastRun({
   savedAt: number;
 }): React.JSX.Element {
   const openPlace = useOpenPlace();
+
   if (run.ranAt < savedAt) return <OneLine>Hasn't run since it was saved.</OneLine>;
   const { agent } = run;
+
   return (
     <OneLine words={`Last ran ${momentText(run.ranAt)} in ${agent.name}, exited ${run.exitCode}`}>
       <Text
@@ -448,33 +459,40 @@ function ScriptRow({
   const [edited, setEdited] = useState<string | undefined>(undefined);
   const saving = useSaveScript(workspaceId);
   const { repository } = target;
+
   // An edit the saved script now agrees with, its own save's or another's, is let go.
   if (edited !== undefined && edited === script && !saving.isPending) setEdited(undefined);
   const shown = edited ?? script;
   const changed = edited !== undefined && edited !== script;
+
   const removeAct = useConfirmAct(saving, {
     send: () => saving.mutateAsync({ target, script: "" }),
     answered: () => ACCEPTED,
     failed: rejected,
   });
+
   const removal = useConfirmDialog(
     { subject: true, surfaceOpen: true },
     removeAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_SANDBOX_SETUP_SAVE),
   );
+
   const discard = () => {
     saving.reset();
     setEdited(undefined);
   };
+
   const save = () => saving.mutate({ target, script: shown });
   const editing = changed || added !== undefined;
   const leave = added === undefined ? discard : added.onCancel;
   // Note that ⌘S and ⌘↩ answer only what the row's Save would: an edit that may be saved, with no save already out.
   const saveKey = editing && savable(shown) && !saving.isPending ? save : undefined;
+
   const actions =
     manages && script !== ""
       ? [{ label: "Remove", icon: <TrashIcon />, danger: true, onSelect: removal.ask }]
       : [];
+
   return (
     <>
       <MenuRow
@@ -578,6 +596,7 @@ function AddRepositoryButton({
   onPick: (repository: string) => void;
 }): React.JSX.Element {
   const chooser = useRepositoriesIn()(workspaceId);
+
   const menu = useRepositoryMenu({
     value: null,
     chooser,
@@ -585,8 +604,10 @@ function AddRepositoryButton({
     omit: taken,
     align: POPOVER_ALIGN.END,
   });
+
   // Note that the menu's press only opens or shuts it, starting no act, so it is named for that.
   const toggleMenu = menu.press;
+
   return (
     <div className="relative inline-flex min-w-0" ref={menu.room}>
       <Button
@@ -628,23 +649,30 @@ function RepositoryScriptsSection({
 }): React.JSX.Element {
   const [added, setAdded] = useState<readonly string[]>([]);
   const words = REPOSITORY_SECTION[kind];
+
   // A repository added and since saved is the saved list's now, so it is let go of here.
   const unsaved = added.filter(
     (repository) => !saved.some((each) => sameRepository(each.repository, repository)),
   );
+
   if (unsaved.length !== added.length) setAdded(unsaved);
+
   // Note that the saved and the added stand in one list keyed by repository, so a row just saved goes on as the same row, its caret where it was.
   const rows = [
     ...saved,
     ...(manages ? unsaved.map((repository) => ({ repository, script: "", added: true })) : []),
   ];
+
   const taken = rows.map((each) => each.repository);
+
   const add = (repository: string) =>
     setAdded((now) =>
       now.some((each) => sameRepository(each, repository)) ? now : [...now, repository],
     );
+
   const letGo = (repository: string) =>
     setAdded((now) => now.filter((each) => !sameRepository(each, repository)));
+
   return (
     <SettingsSection
       title={words.title}
@@ -718,6 +746,7 @@ function writtenOf(action: RunAction): RunActionWritten {
 /** Whether an action may be saved as typed: a label and a command, each within its bound. */
 function runActionSavable(draft: RunActionDraft): boolean {
   const name = draft.label.trim();
+
   return (
     name !== "" &&
     name.length <= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_LABEL_CHARS &&
@@ -735,6 +764,7 @@ function runActionSavable(draft: RunActionDraft): boolean {
  */
 function useSaveRunActions(workspaceId: string) {
   const queries = useQueryClient();
+
   return useMutation({
     mutationFn: ({
       repository,
@@ -778,6 +808,7 @@ function useRunActionOrder(
 ): { ordered: readonly RunAction[]; move: (from: number, to: number) => void } {
   const [sentOrder, setSentOrder] = useState<readonly string[] | undefined>(undefined);
   const byId = new Map(actions.map((action) => [action.id, action]));
+
   // Note that an action added or removed meanwhile is drawn where the service says, after those sent.
   const ordered =
     sentOrder === undefined
@@ -786,9 +817,11 @@ function useRunActionOrder(
           ...sentOrder.flatMap((id) => byId.get(id) ?? []),
           ...actions.filter((action) => !sentOrder.includes(action.id)),
         ];
+
   const move = (from: number, to: number) => {
     const next = [...ordered];
     const [moved] = next.splice(from, 1);
+
     if (moved === undefined || from === to) return;
     next.splice(to, 0, moved);
     setSentOrder(next.map((action) => action.id));
@@ -797,6 +830,7 @@ function useRunActionOrder(
       .catch(() => undefined)
       .then(() => setSentOrder(undefined));
   };
+
   return { ordered, move };
 }
 
@@ -845,6 +879,7 @@ function RunActionRow({
   const savedIcon = action?.icon === undefined ? undefined : knownTaskSectionIcon(action.icon);
   // A new action's name is held here until its first save; a saved one's rename is the app's shared one (`useInlineRename`) over the section's save, so a refused name reopens the field over what was asked.
   const [renaming, setRenaming] = useState(added !== undefined);
+
   const renames = renameWrite(saving, {
     ask: (id: string, name: string) => ({
       repository,
@@ -856,6 +891,7 @@ function RunActionRow({
     asked: ({ renamed }) => ({ subjectId: renamed?.id ?? "", name: renamed?.name ?? "" }),
     refused: () => false,
   });
+
   const rename = useInlineRename(action?.id, renames);
   const [picking, setPicking] = useState(false);
   // A new action's label and icon, held until its first save; a saved one's are saved as they change.
@@ -865,15 +901,18 @@ function RunActionRow({
   const [edited, setEdited] = useState<string | undefined>(undefined);
   const label = action === undefined ? newLabel : savedLabel;
   const icon = action === undefined ? newIcon : savedIcon;
+
   // An edit the saved command now agrees with, its own save's or another's, is let go, as a script's is (`ScriptRow`).
   if (edited !== undefined && action !== undefined && edited === savedCommand && !busy) {
     setEdited(undefined);
   }
+
   const command = edited ?? savedCommand;
   const previewLines = useTypedCodeColoring(SCRIPT_LANGUAGE, savedCommand);
   const changed = action !== undefined && edited !== undefined && edited !== savedCommand;
   const editing = changed || added !== undefined;
   const standing = () => actions.map(writtenOf);
+
   const saveChange = (change: Partial<RunActionWritten>) => {
     if (action === undefined) return;
     saving.mutate({
@@ -881,22 +920,30 @@ function RunActionRow({
       actions: standing().map((each) => (each.id === action.id ? { ...each, ...change } : each)),
     });
   };
+
   const canSave = editing && runActionSavable({ label, command, icon });
+
   const save = () => {
     const typed = { label: label.trim(), command, icon };
+
     const next =
       action === undefined
         ? [...standing(), { id: undefined, isDefault: false, ...typed }]
         : standing().map((each) => (each.id === action.id ? { ...each, ...typed } : each));
+
     saving.mutate({ repository, actions: next }, { onSuccess: () => added?.onCancel() });
   };
+
   const discard = () => {
     saving.reset();
+
     if (added !== undefined) added.onCancel();
     else setEdited(undefined);
   };
+
   // Note that ⌘S and ⌘↩ answer only what the row's Save would: an edit that may be saved, with no save already out.
   const saveKey = canSave && !busy ? save : undefined;
+
   const removeAct = useConfirmAct(saving, {
     send: () =>
       saving.mutateAsync({
@@ -906,12 +953,15 @@ function RunActionRow({
     answered: () => ACCEPTED,
     failed: rejected,
   });
+
   const removal = useConfirmDialog(
     { subject: true, surfaceOpen: true },
     removeAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_SANDBOX_SETUP_SAVE),
   );
+
   const isDefault = action?.isDefault === true;
+
   const setDefault = (on: boolean) =>
     saving.mutate({
       repository,
@@ -920,7 +970,9 @@ function RunActionRow({
         isDefault: on && each.id === action?.id,
       })),
     });
+
   const place = action === undefined ? -1 : actions.findIndex((each) => each.id === action.id);
+
   const menu = !manages
     ? []
     : action === undefined
@@ -980,20 +1032,27 @@ function RunActionRow({
             },
           ],
         ];
+
   const endRename = (value: string | undefined) => {
     const named = value?.trim();
     const changed = named === undefined || named === "" || named === label ? undefined : named;
+
     if (action !== undefined) {
       rename.end(changed);
+
       return;
     }
+
     setRenaming(false);
+
     if (changed !== undefined) setNewLabel(changed);
   };
+
   const pickIcon = (next: TaskSectionIcon | undefined) => {
     if (action === undefined) setNewIcon(next);
     else saveChange({ icon: next });
   };
+
   return (
     <>
       <MenuRow
@@ -1030,6 +1089,7 @@ function RunActionRow({
                   manages
                     ? () => {
                         if (busy) return;
+
                         if (action === undefined) setRenaming(true);
                         else rename.begin();
                       }
@@ -1140,17 +1200,22 @@ function RunActionsSection({
   const saving = useSaveRunActions(workspaceId);
   const [added, setAdded] = useState<readonly AddedRunAction[]>([]);
   const nextKey = useRef(0);
+
   const addedTo = (repository: string) =>
     added.filter((each) => sameRepository(each.repository, repository));
+
   const countOf = (repository: string) =>
     runActionsOf(lists, repository).length + addedTo(repository).length;
+
   const add = (repository: string) => {
     if (countOf(repository) >= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS) return;
     nextKey.current += 1;
     const key = nextKey.current;
     setAdded((now) => [...now, { repository, key }]);
   };
+
   const letGo = (key: number) => setAdded((now) => now.filter((each) => each.key !== key));
+
   // Note that a repository with only an unsaved action stands after the saved ones, so the row being typed in does not jump as the list is read again.
   const repositories = [
     ...lists.map((list) => list.repository),
@@ -1162,10 +1227,12 @@ function RunActionsSection({
           all.findIndex((other) => sameRepository(other, repository)) === at,
       ),
   ];
+
   // A repository whose list is full is left out of Add action's menu, as its own row's Add action stands still, so no row opens on a save the service would refuse.
   const full = repositories.filter(
     (repository) => countOf(repository) >= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS,
   );
+
   return (
     <SettingsSection
       title="Run actions"
@@ -1233,12 +1300,15 @@ function RunActionsOfRepository({
   onLetGo: (key: number) => void;
 }): React.JSX.Element {
   const order = useRunActionOrder(saving, repository, actions);
+
   // Note that the move itself is let go while a save is out, so a drag already under way drops nothing over the save, since each move saves the whole list as it reads it now.
   const drag = useRowDrag(manages && !saving.isPending ? order.move : undefined, {
     handle: SETTINGS_ORDER_HANDLE,
   });
+
   // Why the last save of this repository's list was refused, said under its row, whichever control sent it.
   const refused = saving.variables?.repository === repository ? saving.error : null;
+
   return (
     <>
       <MenuRow
@@ -1322,6 +1392,7 @@ export function CloudSetupSections({ workspace }: { workspace: Workspace }): Rea
   const pictures = useRepositoryPictures();
   const setup = useQuery(setupQuery(workspace.id));
   const answer = setup.data;
+
   const read = setup.isError ? (
     <ReadFailed
       line="The scripts could not be read."
@@ -1331,6 +1402,7 @@ export function CloudSetupSections({ workspace }: { workspace: Workspace }): Rea
   ) : answer === undefined ? (
     <SettingsRowsSkeleton label={readingWords("the scripts")} rows={[SCRIPT_ROW_SKELETON]} />
   ) : undefined;
+
   return (
     <>
       <SettingsSection

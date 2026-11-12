@@ -72,6 +72,7 @@ function standHost(
   fakeActPort({
     [ACT_KIND.TASKS_PICTURE_READ]: ({ attachmentId }) => {
       asked.push(attachmentId);
+
       return Promise.resolve(
         pictures.has(attachmentId)
           ? { contentType: "image/png", base64: PNG_BASE64 }
@@ -86,6 +87,7 @@ async function drawn(element: ReactElement): Promise<HTMLElement> {
   root = createRoot(container);
   act(() => root?.render(withExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS), element)));
   await settle();
+
   return container;
 }
 
@@ -100,6 +102,7 @@ const picture = (taskId: string, id: string) =>
 test("a description's picture is drawn from its bytes under its caption, and one this reader cannot reach as its words", async () => {
   const taskId = "7a1d4e90-0c3f-4b6a-9d2e-5f6a7b8c9d03";
   standHost(new Set([MOCK]), []);
+
   const body = [
     "## Approach",
     `![Invite email](${picture(taskId, MOCK)} "The mock Lee shared")`,
@@ -121,6 +124,7 @@ test("a description's picture is drawn from its bytes under its caption, and one
 test("a picture that is not available is read as words, with or without alt text, never hidden behind an image role", async () => {
   const taskId = "4d5e6f7a-8b9c-4d0e-a1f2-3b4c5d6e7f80";
   standHost(new Set(), []);
+
   const body = [`![Members page](${picture(taskId, GONE)})`, `![](${picture(taskId, GONE)})`].join(
     "\n\n",
   );
@@ -138,11 +142,13 @@ test("a picture that is not available is read as words, with or without alt text
 test("a press on a picture opens the description's pictures over the window, named by their alt text", async () => {
   const taskId = "9e2f5c11-6d4a-4c8b-b1e3-2a3b4c5d6e04";
   standHost(new Set([MOCK, SECOND]), []);
+
   const body = [
     "## Approach",
     `![Invite email](${picture(taskId, MOCK)})`,
     `![Members page](${picture(taskId, SECOND)})`,
   ].join("\n\n");
+
   const view = await drawn(createElement(DescriptionBody, { task: taskOf(taskId, body) }));
 
   act(() => {
@@ -159,12 +165,14 @@ test("who last changed a picture's section is said in the viewer over the window
   const taskId = "5b8e2d40-7f1a-4e3c-9a6b-0c1d2e3f4a07";
   standHost(new Set([MOCK, SECOND]), []);
   const now = Date.now();
+
   const body = [
     `![Invite email](${picture(taskId, MOCK)})`,
     `The members page's address is \`${picture(taskId, SECOND)}\`, drawn under Approach.`,
     "## Approach",
     `![Members page](${picture(taskId, SECOND)})`,
   ].join("\n\n");
+
   const task: Task = {
     ...taskOf(taskId, body),
     sectionEdits: [
@@ -177,6 +185,7 @@ test("who last changed a picture's section is said in the viewer over the window
       },
     ],
   };
+
   const view = await drawn(createElement(DescriptionBody, { task }));
 
   assert.deepEqual(
@@ -231,8 +240,10 @@ test("a version draws the picture it struck and the one it wrote in, each in its
   standHost(new Set([MOCK, SECOND]), []);
   const before = `## Approach\n\n![First mock](${picture(taskId, MOCK)})\n`;
   const after = `## Approach\n\n![Second mock](${picture(taskId, SECOND)})\n`;
+
   function Version(): React.JSX.Element {
     const restore = { busy: false, onRestore: () => undefined };
+
     return createElement(VersionView, {
       onRetry: () => undefined,
       viewing: {
@@ -339,17 +350,20 @@ test("an agent's description card draws the description's pictures once opened, 
   const asked: string[] = [];
   standHost(new Set([MOCK, SECOND]), asked);
   const address = picture(taskId, MOCK);
+
   const description = [
     "# Invites",
     `![Invite email](${address} "The mock Lee shared")`,
     "![Members page][members]",
     `[members]: ${picture(taskId, SECOND)} "The page today"`,
   ].join("\n\n");
+
   const handed = {
     id: "plan",
     role: MESSAGE_ROLE.USER,
     parts: [{ type: "text", text: description }],
   };
+
   const turn = {
     id: "turn",
     role: MESSAGE_ROLE.ASSISTANT,
@@ -357,7 +371,9 @@ test("an agent's description card draws the description's pictures once opened, 
     startedAt: 1_000,
     finishedAt: 61_000,
   };
+
   const shared = { lead: AGENT_LEAD, moving: false, delegation: { models: [] } };
+
   const view = await drawn(
     createElement(
       Fragment,
@@ -366,6 +382,7 @@ test("an agent's description card draws the description's pictures once opened, 
       createElement(AgentMessage, { ...shared, message: turn, description: false }),
     ),
   );
+
   assert.deepEqual(asked, [], "a closed card reads nothing");
 
   act(() => view.querySelector<HTMLElement>("[data-origin-description] > summary")?.click());

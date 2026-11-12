@@ -66,9 +66,11 @@ type Fed = AppInboxItems[typeof INBOX_SCOPE_KIND.PLAN] | undefined;
 function feedStanding(fed: Fed, holdings: readonly InboxHolding[]): InboxReads {
   if (fed === undefined) return NOTHING_HELD;
   const standing = new Map(Object.entries(fed));
+
   for (const holding of holdings) {
     if (!standing.has(holding.id)) standing.set(holding.id, []);
   }
+
   return standing;
 }
 
@@ -86,13 +88,16 @@ function currentOf(
 ): ReadonlySet<string> {
   // Note that the holdings are found by id rather than searched for each task, as a long Inbox follows hundreds of them.
   const byId = new Map<string, InboxHolding>();
+
   for (const holding of holdings) {
     if (!byId.has(holding.id)) byId.set(holding.id, holding);
   }
+
   return new Set(
     [...pushed].flatMap(([id, held]) => {
       const holding = byId.get(id);
       const absentFromFeed = fed !== undefined && !Object.hasOwn(fed, id);
+
       return holding === undefined || absentFromFeed || newest(held) >= holding.updatedAt
         ? [id]
         : [];
@@ -105,9 +110,11 @@ export function useHolderInboxItems(holdings: readonly InboxHolding[]): HolderIn
   const { mutate: retry } = useMutation(inboxItemsRetryMutation());
   const onRetry = useCallback(() => retry(), [retry]);
   const fed = feed.data?.[INBOX_SCOPE_KIND.PLAN];
+
   // Note that a task the feed holds nothing of is current with none, since the feed stands for every task whole.
   const read = useMemo(() => {
     const items = feedStanding(fed, holdings);
+
     return {
       items,
       current: currentOf(items, holdings, fed),
@@ -118,7 +125,9 @@ export function useHolderInboxItems(holdings: readonly InboxHolding[]): HolderIn
       ),
     };
   }, [fed, holdings]);
+
   const failed = holdings.length > 0 && feed.isError;
+
   return {
     ...read,
     failed,

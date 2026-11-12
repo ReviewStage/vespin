@@ -55,6 +55,7 @@ function heldPullRequest(state: PullRequestState): RunTasksHeld {
     additions: 3,
     deletions: 1,
   };
+
   return { ...NO_TASK_HELD, pullRequests: [{ taskId: RUN_TASK.id, pullRequests: [pullRequest] }] };
 }
 

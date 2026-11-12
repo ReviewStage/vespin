@@ -71,6 +71,7 @@ export function PhotoPick({
   const menu = useMenu(choosing);
   const label = photo === undefined && !choosing ? PICK_WORDS.ADD : PICK_WORDS.CHANGE;
   const press = choosing ? menu.trigger() : { onClick: picker.open };
+
   return (
     <>
       <Tooltip label={label}>

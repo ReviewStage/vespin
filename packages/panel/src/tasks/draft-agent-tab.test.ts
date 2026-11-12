@@ -65,6 +65,7 @@ const RELAY = "Acme/Relay";
 
 /** Where the account's Slack connection stands at the service; every other provider but GitHub is not offered. */
 let slack: IntegrationStatus = INTEGRATION_STATUS.CONNECTED;
+
 /** Where GitHub stands for the account, unavailable unless a test offers it. */
 let github: IntegrationStatus = INTEGRATION_STATUS.UNAVAILABLE;
 
@@ -72,6 +73,7 @@ let github: IntegrationStatus = INTEGRATION_STATUS.UNAVAILABLE;
 const UNAVAILABLE = Object.fromEntries(
   INTEGRATION_PROVIDER_LIST.map((provider) => [provider, INTEGRATION_STATUS.UNAVAILABLE]),
 ) as Record<IntegrationProvider, IntegrationStatus>;
+
 /** Every integration a Connect was asked for on the act port, in order. */
 let connects: IntegrationProviderParams[] = [];
 
@@ -102,13 +104,16 @@ beforeEach(() => {
   fakeActPort({
     [ACT_KIND.INTEGRATIONS_CONNECT]: (payload) => {
       connects.push(payload);
+
       if (payload.provider === INTEGRATION_PROVIDER.SLACK) slack = INTEGRATION_STATUS.PENDING;
       integrations.lay();
+
       return Promise.resolve({ opened: true });
     },
     [ACT_KIND.INTEGRATIONS_CANCEL]: () => {
       slack = INTEGRATION_STATUS.DISCONNECTED;
       integrations.lay();
+
       return Promise.resolve({ status: INTEGRATION_STATUS.DISCONNECTED });
     },
   });
@@ -138,6 +143,7 @@ async function settle(): Promise<void> {
 /** A failure's sentence alone: its alert's words without its presses'. */
 function sentence(alert: Element | null): string | undefined {
   if (alert === null) return undefined;
+
   return [...alert.children]
     .filter((part) => part.querySelector("button") === null)
     .map((part) => part.textContent)
@@ -153,9 +159,11 @@ function mount(
   const starts: string[] = [];
   const links: SettingsLink[] = [];
   const settings = { integrationsOpened: false };
+
   const control = agentsControl({
     startPrompt: (_draftId, prompt) => {
       starts.push(prompt);
+
       return Promise.resolve(answers.shift());
     },
     onOpenIntegrations: () => {
@@ -163,18 +171,22 @@ function mount(
     },
     ...extra,
   });
+
   const github = { connects: 0 };
   /** What each repository remedy's door was asked, in order. */
   const remedies: string[] = [];
+
   const doors: RepositoryRemedyDoors = {
     openWorkspaceGitHub: (taskId) => remedies.push(`workspace-github:${taskId}`),
     openGitHub: (url) => remedies.push(`github:${url}`),
     chooseRepository: (taskId) => remedies.push(`choose:${taskId}`),
     moveTask: (taskId, workspaceId) => {
       remedies.push(`move:${taskId}:${workspaceId}`);
+
       return Promise.resolve(true);
     },
   };
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -193,6 +205,7 @@ function mount(
                 connection: { connected: false, login: null },
                 connect: () => {
                   github.connects += 1;
+
                   return Promise.resolve(true);
                 },
                 disconnect: () => Promise.resolve(false),
@@ -208,6 +221,7 @@ function mount(
       ),
     ),
   );
+
   // A press is named by its words, or by the name it gives them (a Retry
   // keeps its words in a span of their own, as a shared Button does); the
   // mark before them carries a title of its own.
@@ -220,6 +234,7 @@ function mount(
           (node) => node.nodeType === Node.TEXT_NODE && node.textContent === words,
         ),
     );
+
   return {
     starts,
     remedies,
@@ -248,6 +263,7 @@ test("a refused Start offers Retry, which sends the message again", async () => 
     startFailureNote({ failure: AGENT_CALL_FAILURE.UNANSWERED }, TASK_ID),
     undefined,
   ]);
+
   await tab.send();
   assert.match(tab.note() ?? "", /could not be started/u);
 
@@ -264,6 +280,7 @@ test("a Start refused because the workspace has no GitHub connected names the re
     unreachable({ reason: REPOSITORY_UNREACHED.NOT_CONNECTED, repository: RELAY }),
     undefined,
   ]);
+
   await tab.send();
 
   assert.equal(
@@ -281,6 +298,7 @@ test("a Start refused because the workspace's GitHub was removed or suspended of
   const tab = mount([
     unreachable({ reason: REPOSITORY_UNREACHED.CONNECTION_LAPSED, repository: RELAY }),
   ]);
+
   await tab.send();
 
   assert.equal(
@@ -294,9 +312,11 @@ test("a Start refused because the workspace's GitHub was removed or suspended of
 
 test("a Start refused because the installation was not given the repository opens its settings on GitHub to add it, with Retry beside it", async () => {
   const settingsUrl = "https://github.com/organizations/Acme/settings/installations/7";
+
   const tab = mount([
     unreachable({ reason: REPOSITORY_UNREACHED.NOT_SELECTED, repository: RELAY, settingsUrl }),
   ]);
+
   await tab.send();
 
   assert.equal(tab.words(), "Vespin's GitHub App doesn't have access to Acme/Relay.");
@@ -314,6 +334,7 @@ test("a Start refused because the repository is under another account than the w
     }),
     unreachable({ reason: REPOSITORY_UNREACHED.GONE, repository: RELAY }),
   ]);
+
   await tab.send();
 
   assert.equal(
@@ -337,6 +358,7 @@ test("a Start refused because the repository's owner is connected to another wor
     }),
     undefined,
   ]);
+
   await tab.send();
 
   assert.equal(tab.words(), "Acme/Relay is connected to Acme Team, not this workspace.");
@@ -351,6 +373,7 @@ test("a Start GitHub did not answer says so and offers Retry alone, and one from
     startFailureNote({ failure: AGENT_CALL_FAILURE.GITHUB_UNANSWERED }, TASK_ID),
     startFailureNote({ failure: AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE }, TASK_ID),
   ]);
+
   await tab.send();
 
   assert.equal(tab.words(), "GitHub didn't answer.");
@@ -365,11 +388,14 @@ function openServers(): void {
   const plus =
     document.querySelector<HTMLButtonElement>('button[aria-label="Add files and more"]') ??
     assert.fail("the + is drawn");
+
   act(() => plus.click());
+
   const row =
     [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
       (item) => item.textContent === "MCP servers",
     ) ?? assert.fail("the + menu offers MCP servers");
+
   act(() => row.click());
 }
 
@@ -382,6 +408,7 @@ test("the MCP servers popover draws a row for each server the deployment offers 
   const rows = [...document.querySelectorAll(".agent-servers-list li")].map(
     (row) => row.querySelector(".agent-servers-name")?.textContent,
   );
+
   assert.deepEqual(rows, ["Slack"]);
   assert.equal(tab.button("Connect"), undefined, "nothing offers a server not offered");
 });
@@ -397,10 +424,12 @@ test("the MCP popover's GitHub row connects GitHub in place, and the popover sta
     [...document.querySelectorAll(".agent-servers-list li")].find(
       (row) => row.querySelector(".agent-servers-name")?.textContent === "GitHub",
     ) ?? assert.fail("the popover draws GitHub's row");
+
   const connect =
     [...githubRow().querySelectorAll("button")].find(
       (button) => button.textContent === "Connect",
     ) ?? assert.fail("GitHub's row offers Connect");
+
   act(() => connect.click());
   await settle();
 
@@ -415,8 +444,10 @@ test("the MCP popover waits on a Connect as Settings does, with Reopen and Cance
   await settle();
   openServers();
   await settle();
+
   const slackRow = () => {
     const row = document.querySelector(".agent-servers-list li") ?? assert.fail("Slack has a row");
+
     return {
       words:
         row.querySelector(".agent-servers-problem, .agent-servers-waiting")?.textContent ??
@@ -433,6 +464,7 @@ test("the MCP popover waits on a Connect as Settings does, with Reopen and Cance
       [...document.querySelectorAll<HTMLButtonElement>(".agent-servers-list li button")].find(
         (button) => button.textContent === words,
       ) ?? assert.fail(`Slack's row offers ${words}`);
+
     act(() => found.click());
     await settle();
   };
@@ -463,6 +495,7 @@ test("a fork's draft names its source and the message over the box, starts on th
   const SOURCE = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
   const MESSAGE = "4f1e2d3c-5b6a-4978-8a1b-2c3d4e5f6a7b";
   const fork = { agentId: SOURCE, messageId: MESSAGE, opening: "I moved the invite email…" };
+
   const source: AgentSummary = {
     id: SOURCE,
     planId: TASK_ID,
@@ -473,8 +506,10 @@ test("a fork's draft names its source and the message over the box, starts on th
     status: AGENT_STATUS.COMPLETED,
     turnId: null,
   };
+
   const forks: unknown[] = [];
   let dropped = 0;
+
   const tab = mount(
     [],
     { ...DRAFT, prompt: "", fork },
@@ -482,6 +517,7 @@ test("a fork's draft names its source and the message over the box, starts on th
       agents: [source],
       startFork: (draftId, forked, words, choice, attachments) => {
         forks.push({ draftId, forked, words, choice, attachments });
+
         return Promise.resolve(undefined);
       },
       onDropFork: () => {
@@ -489,6 +525,7 @@ test("a fork's draft names its source and the message over the box, starts on th
       },
     },
   );
+
   await settle();
 
   const chip = document.querySelector("[data-fork-chip]");
@@ -515,6 +552,7 @@ test("a fork's draft names its source and the message over the box, starts on th
 test("a continue's draft names its source alone over the box, stands on a working line copying the source's work while its Start is out, and gives way to the new agent as it lands, or to the note and Retry with the words kept", async () => {
   const SOURCE = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
   const fork = { agentId: SOURCE, opening: "" };
+
   const source: AgentSummary = {
     id: SOURCE,
     planId: TASK_ID,
@@ -525,9 +563,11 @@ test("a continue's draft names its source alone over the box, stands on a workin
     status: AGENT_STATUS.FAILED,
     turnId: null,
   };
+
   const answers: ((failed: Failure | undefined) => void)[] = [];
   const forks: unknown[] = [];
   let dropped = 0;
+
   const tab = mount(
     [],
     { ...DRAFT, prompt: "Now add the dark variant.", fork },
@@ -535,6 +575,7 @@ test("a continue's draft names its source alone over the box, stands on a workin
       agents: [source],
       startFork: (_draftId, forked, words) => {
         forks.push({ forked, words });
+
         return new Promise((resolve) => answers.push(resolve));
       },
       onDropFork: () => {
@@ -542,6 +583,7 @@ test("a continue's draft names its source alone over the box, stands on a workin
       },
     },
   );
+
   await settle();
   const working = () => document.querySelector("[data-working]")?.textContent ?? undefined;
 
@@ -580,7 +622,9 @@ test("a draft New task handed over after its agent was refused sends nothing by 
     prompt: "Make the sidebar keep its folds.",
     refused: startFailureNote({ failure: AGENT_CALL_FAILURE.UNANSWERED }, TASK_ID),
   };
+
   const marks: unknown[] = [];
+
   const tab = mount([undefined], handed, {
     start: {
       available: true,
@@ -589,6 +633,7 @@ test("a draft New task handed over after its agent was refused sends nothing by 
     },
     onDraftChange: (change) => marks.push(change),
   });
+
   await settle();
 
   assert.deepEqual(tab.starts, [], "nothing is sent until the developer asks");
@@ -612,6 +657,7 @@ function plannedKeys(forAgents: boolean): ProviderKeysAnswer {
     status: PROVIDER_KEY_STATUS.VERIFIED,
     statusAt: 0,
   };
+
   return {
     keys: [kept],
     subscriptions: [
@@ -639,17 +685,21 @@ async function plannedTab(options: { keys: ProviderKeysAnswer; model: string }) 
     },
   );
   const starts: unknown[][] = [];
+
   const tab = mount(
     [],
     { ...DRAFT, choice: { model: options.model, effort: "high" } },
     {
       startPrompt: (...args) => {
         starts.push(args);
+
         return Promise.resolve(undefined);
       },
     },
   );
+
   await settle();
+
   return { ...tab, starts };
 }
 

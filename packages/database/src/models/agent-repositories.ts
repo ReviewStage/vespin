@@ -97,13 +97,16 @@ export function readAgentRepositories(
 ): AgentStoreEffect<readonly AgentRepositoryEntry[]> {
   return Effect.map(findAgentRepositories({ userId, agentId }), (rows) => {
     const [first] = rows;
+
     if (first === undefined || first.repository === null) return [];
+
     const primary: AgentRepositoryEntry = {
       repository: first.repository,
       baseBranch: first.baseBranch,
       headBranch: first.headBranch,
       pullRequest: first.pullRequest,
     };
+
     const extras = rows.flatMap((row): AgentRepositoryEntry[] =>
       row.extraRepository === null
         ? []
@@ -116,6 +119,7 @@ export function readAgentRepositories(
             },
           ],
     );
+
     return [primary, ...extras];
   });
 }

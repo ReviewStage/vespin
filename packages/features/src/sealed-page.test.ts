@@ -15,6 +15,7 @@ describe("sealedPageDocument", () => {
       "<!-- a --!><script>leak()</script><!-- b --><!doctype html><p>Hi</p>",
       THEME,
     );
+
     expect(sealed.indexOf("Content-Security-Policy")).toBeLessThan(
       sealed.indexOf("<script>leak()"),
     );

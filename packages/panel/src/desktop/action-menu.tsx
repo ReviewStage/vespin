@@ -61,6 +61,7 @@ export interface MenuEnds {
 /** A command's chord as a shared item prints it and hears it: muted at its end, and choosing it while the menu stands. */
 function keyedBy(command: KeyedCommand): { hint: React.ReactNode; pressedBy: MenuKeyMatch } {
   const { chord } = APP_SHORTCUTS[command];
+
   return { hint: <Shortcut chord={chord} />, pressedBy: (event) => shortcutMatches(chord, event) };
 }
 
@@ -70,23 +71,29 @@ export function actingCommand(entry: {
   readonly subject?: ShortcutSubject | undefined;
 }): KeyedCommand | undefined {
   const { command, subject } = entry;
+
   if (command === undefined) return undefined;
+
   return subject === undefined || shortcutActsOn(command, subject) ? command : undefined;
 }
 
 /** The shared item for one of the window's, its command's chord as its hint. */
 function sharedAction({ command, subject, ...action }: MenuAction): SharedMenuAction {
   const acting = actingCommand({ command, subject });
+
   if (acting === undefined) return action;
+
   return { ...action, ...keyedBy(acting) };
 }
 
 function sharedEntry(entry: MenuEntry): SharedMenuEntry {
   if ("panel" in entry) return entry;
+
   if (!("items" in entry)) return sharedAction(entry);
   const { command, subject, ...submenu } = entry;
   const items = submenu.items.map(sharedAction);
   const acting = actingCommand({ command, subject });
+
   return acting === undefined ? { ...submenu, items } : { ...submenu, items, ...keyedBy(acting) };
 }
 
@@ -117,5 +124,6 @@ export function ActionMenu({
 }): React.JSX.Element {
   // Note that a menu standing open is drawn again as the keys' targets change, so it never prints a chord that no longer acts on its items.
   useShortcutTargets();
+
   return <Menu {...props} groups={groups.map((group) => group.map(sharedEntry))} />;
 }

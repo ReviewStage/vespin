@@ -18,10 +18,13 @@ export const modelsCommand = Command.make("models", {}, () =>
     const { hosted } = yield* session;
     const { models } = yield* askService(hosted.models.list, undefined);
     const preferences = yield* askService(hosted.account.preferences, undefined);
+
     const stored = Option.getOrUndefined(
       Schema.decodeUnknownOption(modelChoiceSchema)(preferences.agent),
     );
+
     const fallback = stored ?? agentFallbackChoice(models);
+
     const listed = models.map((model) => ({
       id: model.id,
       name: model.name,
@@ -30,6 +33,7 @@ export const modelsCommand = Command.make("models", {}, () =>
       default: model.id === fallback.model,
       ...(model.credentialMissing === true ? { credentialMissing: true } : undefined),
     }));
+
     yield* answer({
       json: { models: listed, default: fallback },
       lines: listed.map(

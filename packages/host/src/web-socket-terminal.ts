@@ -38,6 +38,7 @@ export type ConnectWebSocket = (
 /** A message's frame: text as the relay sent it, or a binary frame's bytes, which a socket whose binary type is an array buffer hands as one. */
 function arrivalOf(event: MessageEvent<string | ArrayBuffer>): TerminalSocketArrival {
   const { data } = event;
+
   return typeof data === "string" ? { text: data } : { bytes: new Uint8Array(data) };
 }
 
@@ -47,6 +48,7 @@ export function openTerminalSocketOver(connect: ConnectWebSocket): OpenTerminalS
     Effect.gen(function* () {
       const arrivals = yield* Queue.unbounded<TerminalSocketArrival, Cause.Done>();
       const flowing = yield* Latch.make(true);
+
       const socket = yield* Effect.acquireRelease(
         Effect.sync(() => {
           const opened = connect(url, headers);
@@ -58,10 +60,12 @@ export function openTerminalSocketOver(connect: ConnectWebSocket): OpenTerminalS
             Queue.offerUnsafe(arrivals, { close: event.code });
             Queue.endUnsafe(arrivals);
           });
+
           return opened;
         }),
         (opened) => Effect.sync(() => opened.close(NORMAL_CLOSE)),
       );
+
       const open: OpenSocket = {
         arrivals: Stream.mapEffect(Stream.fromQueue(arrivals), (arrival) =>
           Effect.as(flowing.await, arrival),
@@ -75,22 +79,29 @@ export function openTerminalSocketOver(connect: ConnectWebSocket): OpenTerminalS
         pause: Effect.asVoid(flowing.close),
         resume: Effect.asVoid(flowing.open),
       };
+
       return yield* Effect.callback<TerminalSocketOpening>((resume) => {
         // Note that a socket that opened or closed before this listened is read as it stands, because its event will not come again.
         if (socket.readyState === WebSocket.OPEN) {
           resume(Effect.succeed({ socket: open }));
+
           return;
         }
+
         if (socket.readyState === WebSocket.CLOSED) {
           resume(Effect.succeed({ unreachable: true }));
+
           return;
         }
+
         let settled = false;
+
         const settle = (opening: TerminalSocketOpening) => {
           if (settled) return;
           settled = true;
           resume(Effect.succeed(opening));
         };
+
         socket.addEventListener("open", () => settle({ socket: open }), { once: true });
         // An error is followed by the close, and a socket that closes before it opened never stood.
         socket.addEventListener("close", () => settle({ unreachable: true }), { once: true });

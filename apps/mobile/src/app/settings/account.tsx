@@ -42,10 +42,12 @@ export default function AccountScreen() {
   const { data: settings } = useQuery({ ...appStateQuery, select: selectAppSettingsView });
   const { data: workspaces } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { data: listStatus } = useQuery({ ...appStateQuery, select: selectTaskListStatus });
+
   const { data: support } = useQuery({
     ...appStateQuery,
     select: (state) => supportAccessStanding(state, Date.now()),
   });
+
   const signOutAccount = useSignOut();
   const signOut = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const deletion = useAsyncAction(accountDeleteRefusalWords);
@@ -54,28 +56,35 @@ export default function AccountScreen() {
   // Note that the system's switch keeps the turn a person made, so a refused write redraws it from the stored choice.
   const [usageRound, setUsageRound] = useState(0);
   const [asking, setAsking] = useState(false);
+
   if (account?.status !== ACCOUNT_STATUS.SIGNED_IN) return null;
+
   // Note that a sign-out refused says why under its row, in the host's words.
   const signOutNow = () =>
     void signOut.run(() => {
       const said: { words?: string } = {};
+
       return signOutAccount({
         inPlace: (words) => {
           said.words = words;
         },
       }).then(() => said.words);
     });
+
   // Note that support access goes through the write door too, its refusal said in place.
   const pressSupport = (grant: boolean) =>
     void supportPress.run(() =>
       refusalOf(write, () => acts[ACT_KIND.ACCOUNT_SUPPORT_ACCESS]({ grant })),
     );
+
   // Note that the delete happens at the service before anything local moves, so a refusal says why under the row and the account, and this phone's pushes, still stand.
   const deleteNow = () =>
     void deletion.run(() =>
       acts[ACT_KIND.ACCOUNT_DELETE]().then(() => clearAccountNotifications()),
     );
+
   const goneWith = accountDeleteWorkspacesWords(workspaces, listStatus === TASKS_READ.READY);
+
   return (
     <>
       <Screen>
@@ -102,6 +111,7 @@ export default function AccountScreen() {
                   void usage
                     .run(() => {
                       const said: { words?: string } = {};
+
                       return write(
                         () => acts[ACT_KIND.SETTING_UPDATE]({ field: "usageData", value: on }),
                         {

@@ -74,13 +74,16 @@ function repositoryScriptJson(
   const repository = named.trim();
   const lowered = repository.toLowerCase();
   const found = scriptsOfKind(setup, kind).find((one) => one.repository.toLowerCase() === lowered);
+
   return found ?? { repository, script: null, updatedAt: null };
 }
 
 /** Each repository's scripts of the kind, as a person reads them. */
 function scriptLines(setup: WorkspaceSandboxSetupAnswer, kind: RepositoryScriptKind): string[] {
   const scripts = scriptsOfKind(setup, kind);
+
   if (scripts.length === 0) return [`No repository ${KIND_WORDS[kind]}s.`];
+
   return scripts.flatMap((one) => [
     "",
     `${one.repository} ${KIND_WORDS[kind]} (${savedWords(one.updatedAt)}):`,
@@ -94,6 +97,7 @@ function setupLines(setup: WorkspaceSandboxSetupAnswer): string[] {
     setup.install === null
       ? ["No install script."]
       : [`Install script (${savedWords(setup.install.updatedAt)}):`, setup.install.script];
+
   return [
     ...install,
     "",
@@ -111,13 +115,17 @@ const showCommand = Command.make("show", { repo: repoFlag, kind: kindFlag }, (fl
     const kind = yield* kindOf(repo, flags.kind);
     const { workspace } = yield* resolveWorkspace;
     const { hosted } = yield* session;
+
     const setup = yield* askService(hosted.workspaceSandboxSetup.read, {
       workspaceId: workspace.id,
     });
+
     if (Option.isNone(repo)) {
       yield* answer({ json: setup, lines: setupLines(setup) });
+
       return;
     }
+
     const found = repositoryScriptJson(setup, repo.value, kind);
     yield* answer({
       json: found,
@@ -160,6 +168,7 @@ const editCommand = Command.make(
       const script = yield* readInput(file);
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
+
       const setup = Option.isNone(repo)
         ? yield* askService(hosted.workspaceSandboxSetup.putInstall, {
             workspaceId: workspace.id,
@@ -171,12 +180,15 @@ const editCommand = Command.make(
             script,
             kind,
           });
+
       const which = Option.isNone(repo)
         ? "the install script"
         : `the ${KIND_WORDS[kind]} of ${repo.value}`;
+
       const saved = Option.isNone(repo)
         ? setup.install !== null
         : repositoryScriptJson(setup, repo.value, kind).script !== null;
+
       yield* answer({
         json: setup,
         lines: [`${saved ? "Saved" : "Removed"} ${which} of ${workspace.name}.`],

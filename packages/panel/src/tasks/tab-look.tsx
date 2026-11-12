@@ -158,14 +158,18 @@ export function openPlanStanding(
   tasks: Pick<TasksControl, "region" | "tasks" | "activeTaskId">,
 ): PlanStanding | undefined {
   const { region } = tasks;
+
   // Note that while its description is read, the tab wears the task as the list holds it.
   if (region.kind === DOCUMENT_REGION.READING) {
     const listed = tasks.tasks.find((each) => each.id === tasks.activeTaskId);
+
     return listed === undefined ? undefined : { name: listed.name, status: listed.status };
   }
+
   if (region.kind !== DOCUMENT_REGION.READY) return undefined;
   const { task } = region;
   const listed = tasks.tasks.find((each) => each.id === task.id) ?? task;
+
   return { name: task.name, status: listed.status };
 }
 
@@ -189,6 +193,7 @@ export function AgentMark({ provider }: { provider: ModelProvider | undefined })
  */
 export function SubagentMark({ model }: { model: string | undefined }) {
   const provider = model === undefined ? undefined : providerOf(model);
+
   return provider === undefined ? (
     <EntityGlyph kind={ENTITY_KIND.WORKER} />
   ) : (
@@ -208,6 +213,7 @@ export function SubagentMark({ model }: { model: string | undefined }) {
 export function AgentGlyph({ agent }: { agent: AgentStanding | undefined }) {
   const provider = agent === undefined ? undefined : providerOf(agent.model);
   const state = agent?.status === undefined ? GLYPH_STATE.REST : agentGlyphState(agent.status);
+
   return <StateGlyph glyph={<AgentMark provider={provider} />} state={state} />;
 }
 
@@ -223,6 +229,7 @@ export function agentEndMark(
 ): React.JSX.Element | undefined {
   // An agent its plan's usage limit stopped failed for no fault of its own, so it wears no failed mark.
   if (agent.turn?.failure === AGENT_FAILURE.PLAN_LIMIT) return undefined;
+
   return stateEndMark(agentGlyphState(agent.status), hinted);
 }
 
@@ -231,15 +238,20 @@ export function tabLook(subject: TabSubject): KindLook {
   switch (subject.kind) {
     case TAB_KIND.PANEL: {
       const { tab, plan } = subject;
+
       if (tab === SIDE_PANEL_TAB.DESCRIPTION && plan !== undefined) {
         return { icon: <PlanGlyph status={plan.status} />, label: plan.name };
       }
+
       if (tab === SIDE_PANEL_TAB.INBOX && subject.thread === true) {
         return { icon: <EntityGlyph kind={ENTITY_KIND.INBOX_ITEM} />, label: TAB_WORDS.THREAD };
       }
+
       const { label, icon: Icon } = SIDE_PANEL_TAB_KIND[tab];
+
       return { icon: <Icon />, label };
     }
+
     case TAB_KIND.PLAN:
       return { icon: <PlanGlyph status={subject.status} />, label: subject.name };
     case TAB_KIND.INBOX:
@@ -292,8 +304,10 @@ export function tabLook(subject: TabSubject): KindLook {
     case TAB_KIND.FILE: {
       // A file's tab is named as every place names a file (`file-ref.tsx`).
       const { icon, label } = fileLook(subject.path);
+
       return { icon, label };
     }
+
     case TAB_KIND.PAGE:
       return { icon: <EntityGlyph kind={ENTITY_KIND.PAGE} />, label: subject.title };
     case TAB_KIND.BROWSER:

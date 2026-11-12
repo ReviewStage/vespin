@@ -21,6 +21,7 @@ afterEach(() => {
  */
 function holdingServer(held: number): Promise<{ server: Server; port: number }> {
   const waiting: Socket[] = [];
+
   const completion = Buffer.concat([
     Buffer.from([0x43, 0, 0, 0, 13]),
     Buffer.from("SELECT 1\0"),
@@ -40,12 +41,16 @@ function holdingServer(held: number): Promise<{ server: Server; port: number }> 
             Buffer.from([0x5a, 0, 0, 0, 5, 0x49]),
           ]),
         );
+
         return;
       }
+
       if (chunk[0] !== 0x51) {
         return;
       }
+
       waiting.push(socket);
+
       if (waiting.length === held) {
         for (const each of waiting) {
           each.write(completion);
@@ -67,6 +72,7 @@ test("one instance runs several queries at once on the pool Better Auth queries"
   vi.stubEnv("DATABASE_URL", `postgres://user:pass@127.0.0.1:${port}/luke?sslmode=disable`);
 
   const pool = getPool();
+
   try {
     await Promise.all(Array.from({ length: CONCURRENT_QUERIES }, () => pool.query("select 1")));
   } finally {
@@ -78,6 +84,7 @@ test("one instance runs several queries at once on the pool Better Auth queries"
 /** A server that answers every query at once and keeps each socket, so a test can end a connection the pool holds idle. */
 function answeringServer(): Promise<{ server: Server; port: number; sockets: Socket[] }> {
   const sockets: Socket[] = [];
+
   const server = createServer((socket) => {
     sockets.push(socket);
     let started = false;
@@ -86,8 +93,10 @@ function answeringServer(): Promise<{ server: Server; port: number; sockets: Soc
       if (!started) {
         started = true;
         socket.write(Buffer.from([0x52, 0, 0, 0, 8, 0, 0, 0, 0, 0x5a, 0, 0, 0, 5, 0x49]));
+
         return;
       }
+
       if (chunk[0] === 0x51) {
         socket.write(
           Buffer.concat([
@@ -117,9 +126,11 @@ test("an idle client whose connection ends is dropped, and the next query opens 
   const { getPool: getFreshPool } = await import("./index.js");
 
   const pool = getFreshPool();
+
   try {
     await pool.query("select 1");
     const removed = once(pool, "remove");
+
     for (const socket of sockets) socket.destroy();
     await removed;
     await pool.query("select 1");

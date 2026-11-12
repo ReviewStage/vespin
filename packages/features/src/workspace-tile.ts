@@ -34,13 +34,16 @@ export const WORKSPACE_SWITCHER_WORDS = {
  */
 export function identityHue(id: string): number {
   let hash = 0;
+
   for (const character of id) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+
   return (hash % IDENTITY_HUE_COUNT) + 1;
 }
 
 /** A name's first character as a reader sees it, an emoji's whole, upper-cased; none for a blank name. */
 export function identityLetter(name: string): string {
   const [first] = CHARACTERS.segment(name.trim());
+
   return first === undefined ? "" : first.segment.toUpperCase();
 }
 
@@ -55,6 +58,8 @@ export function workspaceSharedWords(
   personal: boolean,
 ): string | undefined {
   if (count === undefined) return undefined;
+
   if (count <= 1) return personal ? WORKSPACE_SWITCHER_WORDS.PERSONAL : "1 member";
+
   return `${count} members`;
 }

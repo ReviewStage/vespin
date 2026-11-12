@@ -121,7 +121,9 @@ interface Picked extends PressPlace {
 function reachesField(words: Element, range: Range): boolean {
   const common = range.commonAncestorContainer;
   const at = common instanceof Element ? common : common.parentElement;
+
   if (at !== null && at.closest(EDITABLE_SELECTOR) !== null) return true;
+
   return [...words.querySelectorAll(EDITABLE_SELECTOR)].some((field) =>
     range.intersectsNode(field),
   );
@@ -136,8 +138,10 @@ function scopeOf(node: Node): Element | null {
 function takesWords(text: Text, range: Range): boolean {
   const from = text === range.startContainer ? range.startOffset : 0;
   const to = text === range.endContainer ? range.endOffset : text.length;
+
   if (text.data.slice(from, to).trim() === "" || text.parentElement === null) return false;
   const style = getComputedStyle(text.parentElement);
+
   // Note that WebKit answers the property by its prefixed name alone.
   return (style.userSelect || style.webkitUserSelect) !== "none";
 }
@@ -150,13 +154,17 @@ function takesWords(text: Text, range: Range): boolean {
  */
 function cutTo(words: Element, range: Range): Range | undefined {
   const walker = document.createTreeWalker(range.commonAncestorContainer, NodeFilter.SHOW_TEXT);
+
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
     if (node instanceof Text && !words.contains(node) && range.intersectsNode(node)) {
       if (takesWords(node, range)) return undefined;
     }
   }
+
   const cut = range.cloneRange();
+
   if (!words.contains(range.endContainer)) cut.setEnd(words, words.childNodes.length);
+
   return cut;
 }
 
@@ -167,6 +175,7 @@ function cutTo(words: Element, range: Range): Range | undefined {
  */
 export function roomAround(element: Element): ViewportBox {
   const seen = visibleViewport();
+
   return element instanceof HTMLElement ? cutToClips(seen, clipsAround(element)) : seen;
 }
 
@@ -177,18 +186,25 @@ export function roomAround(element: Element): ViewportBox {
  */
 function pickedIn(scope: HTMLElement, kept?: Picked): Picked | undefined {
   const selection = window.getSelection();
+
   if (selection === null || selection.isCollapsed || selection.rangeCount === 0) return undefined;
   const whole = selection.getRangeAt(0);
   const words = scopeOf(whole.commonAncestorContainer) ?? scopeOf(whole.startContainer);
+
   if (words === null || !scope.contains(words)) return undefined;
   const range = cutTo(words, whole);
+
   if (range === undefined) return undefined;
+
   // Note that words a hidden pane holds keep their selection, as the narrow Inbox's item does behind its list, but are no longer on screen to reply to.
   if (words.closest("[hidden]") !== null) return undefined;
+
   if (reachesField(words, range)) return undefined;
   const reply = replyOf(selectedMarkdown(range));
+
   if (reply === "") return undefined;
   const box = range.getBoundingClientRect();
+
   return { reply, words, ...pressPlace(box, roomAround(words), kept?.below) };
 }
 
@@ -226,6 +242,7 @@ export function pressPlace(
   const below = kept ?? (finger || box.top - room.top < PRESS_ROOM);
   const gap = touch ? FINGER_SELECTION_GAP : PRESS_GAP;
   const center = (box.left + box.right) / 2;
+
   return {
     left: Math.min(Math.max(center, room.left + PRESS_MARGIN), room.right - PRESS_MARGIN),
     top: below ? box.bottom + gap : box.top - PRESS_GAP,
@@ -254,17 +271,21 @@ export function ReplyToSelection({
   // A selection is offered once the pointer or the keys let it go, or a finger's once it rests, never while it is being drawn.
   useEffect(() => {
     const element = scope.current;
+
     if (element === null) return undefined;
     const offer = () => setPicked(pickedIn(element));
+
     // Note that a mouse's selection waits for its pointerup as ever, so only a finger's is offered on resting,
     // and a mouse's drag is never measured as it goes.
     const changed = () => {
       if (coarsePointerNow() && pickedIn(element) !== undefined)
         settle.start(selectionSettled(offer));
     };
+
     element.addEventListener("pointerup", offer);
     element.addEventListener("keyup", offer);
     document.addEventListener("selectionchange", changed);
+
     return () => {
       element.removeEventListener("pointerup", offer);
       element.removeEventListener("keyup", offer);
@@ -275,6 +296,7 @@ export function ReplyToSelection({
   // Once offered, the press follows the selection as the log scrolls and goes as it does, or as the pane holding it is hidden.
   useEffect(() => {
     const element = scope.current;
+
     if (!shown || element === null) return undefined;
     const follow = () => setPicked((standing) => pickedIn(element, standing));
     // Note that hiding a pane changes no selection, so its `hidden` attribute is watched for itself.
@@ -283,6 +305,7 @@ export function ReplyToSelection({
     document.addEventListener("selectionchange", follow);
     document.addEventListener("scroll", follow, true);
     window.addEventListener("resize", follow);
+
     return () => {
       hiding.disconnect();
       document.removeEventListener("selectionchange", follow);
@@ -299,9 +322,11 @@ export function ReplyToSelection({
           window.getSelection()?.removeAllRanges();
           onReply(picked.reply, picked.words);
         };
+
   useAppCommand(APP_COMMAND.REPLY_TO_SELECTION, reply);
 
   if (picked === undefined || reply === undefined) return null;
+
   return <ReplyPress place={picked} onReply={reply} />;
 }
 
@@ -321,6 +346,7 @@ export function ReplyPress({
   layer?: RefObject<HTMLDivElement | null> | undefined;
 }): React.JSX.Element {
   const { room } = place;
+
   return createPortal(
     <div
       className="reply-to-selection-room pointer-events-none fixed inset-x-0 z-menu overflow-clip"

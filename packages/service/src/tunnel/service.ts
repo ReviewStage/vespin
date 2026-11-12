@@ -59,9 +59,12 @@ function bridgeOf(
   query: (name: string) => ReturnType<typeof unparsedWire>,
 ): TunnelBridge | undefined {
   const kind = readKind(query(SANDBOX_TUNNEL.QUERY.KIND));
+
   if (Result.isFailure(kind)) return undefined;
+
   if (kind.success === TUNNEL_KIND.MIRROR) return { kind: kind.success };
   const port = readPort(query(SANDBOX_TUNNEL.QUERY.PORT));
+
   return Result.isFailure(port) ? undefined : { kind: kind.success, port: port.success };
 }
 
@@ -72,15 +75,19 @@ function admitTunnelUpgrade(
   ownOrigins: ReadonlySet<string>,
 ): TunnelUpgrade {
   const address = new URL(url ?? "/", "http://localhost");
+
   if (address.pathname !== SANDBOX_TUNNEL.PATH) return { status: RELAY_UPGRADE_STATUS.NOT_FOUND };
   const credential = relayCredential(headers, ownOrigins);
+
   if ("status" in credential) return credential;
   const query = (name: string) => unparsedWire(address.searchParams.get(name) ?? "");
   const agentId = readId(query(SANDBOX_TUNNEL.QUERY.AGENT));
   const bridge = bridgeOf(query);
+
   if (Result.isFailure(agentId) || bridge === undefined) {
     return { status: RELAY_UPGRADE_STATUS.BAD_REQUEST };
   }
+
   return { credential, ask: { agentId: agentId.success, bridge } };
 }
 

@@ -125,6 +125,7 @@ function mount(
   // Leaves the routed place standing for `to`'s place, as the Tasks tab's door does: a navigation to its task's own place, or Home.
   let leaveTo: (to: TasksControl) => void = () => undefined;
   let taskRoute: TaskRoute | undefined;
+
   function Probe() {
     const [standing, setTasks] = useState(initial);
     wanted = standing;
@@ -138,6 +139,7 @@ function mount(
       wanted = tasks;
       setTasks(tasks);
     };
+
     // The Board and a person's page stand where the router does, as the window's root reads them, and are left for the state's place.
     board = useBoardRoute();
     person = usePersonRoute();
@@ -150,19 +152,25 @@ function mount(
     });
     inbox = useInboxRoute();
     const listedStep = standing.workspaces.find((each) => each.id === standing.workspace?.id)?.slug;
+
     const inboxAt = (narrowed: string | undefined) =>
       listedStep === undefined ? undefined : { workspace: listedStep, narrowed };
+
     const openInbox = (narrowed: string | undefined) => {
       const at = inboxAt(narrowed);
+
       if (at !== undefined) inbox?.onOpen(at);
     };
+
     // Home stands where the router does, under the workspace listed, as the window's root reads it.
     const home = useHomeRoute({
       listed: () => listedStep,
     });
+
     // Home stands under the workspace listed, as the Tasks tab turns it.
     useEffect(() => {
       const bound = standing.boundFor !== undefined;
+
       if (home.open && !bound && listedStep !== undefined && home.standingIn !== listedStep) {
         home.onTurn(listedStep);
       }
@@ -176,9 +184,11 @@ function mount(
         to.boundFor === undefined
           ? undefined
           : taskAtOf(to.boundFor, to.tasks, to.workspaces, to.workspace, undefined);
+
       if (at === undefined) home.onOpen();
       else route.onOpen(at, true, history?.onLeaveStart() ?? false);
     };
+
     const tasks: TasksControl = {
       ...standing,
       placeLeave,
@@ -197,16 +207,19 @@ function mount(
       onShowInbox: ({ taskId }) => openInbox(taskId),
       onAutomationRuns: automations.onRuns,
     };
+
     // The Automations pages open under the workspace listed, as their own doors do.
     openAutomationsAt = (to = { kind: AUTOMATIONS_PAGE.LIST }) => {
       if (listedStep !== undefined) automations?.onOpen(to, listedStep);
     };
+
     // Admin stands where the router does, as the window's root reads it.
     admin = useAdminRoute({
       listedSlug: () => tasks.workspaces.find((each) => each.id === tasks.workspace?.id)?.slug,
     });
     const routed = useRoutedStanding();
     const views = useRoutedViews();
+
     const copyLink = useCopyLink(
       tasks,
       undefined,
@@ -215,6 +228,7 @@ function mount(
       admin.open ? admin.view : undefined,
       routed?.place,
     );
+
     history = useWindowHistory({
       known: true,
       link: copyLink.placed,
@@ -243,37 +257,49 @@ function mount(
     useHistoryMouseButtons(history, true);
     open = tasks;
     backs = useNarrowBacks(false);
+
     return null;
   }
+
   // The Inbox `tasks` says stands, open or not and on the item it names, stood by the router as its own doors stand it.
   const standInbox = (tasks: Standing) => {
     const want = tasks.inboxStands;
     const workspace = tasks.workspaces.find((each) => each.id === tasks.workspace?.id)?.slug;
+
     if (inbox === undefined) return;
+
     if (want === undefined) {
       if (inbox.open) inbox.onClose();
+
       return;
     }
+
     if (workspace === undefined) return;
     const at = { workspace, narrowed: inbox.narrowed };
+
     if (want.chosen !== undefined) inbox.onChoose(want.chosen, at);
     else if (!inbox.open || inbox.chosen !== undefined) inbox.onOpen(at);
   };
+
   // A window opening on the Inbox opens at its address, as a reloaded one does.
   const initialStep = initial.workspaces.find((each) => each.id === initial.workspace?.id)?.slug;
+
   if (initial.inboxStands !== undefined && initialStep !== undefined) {
     const item = initial.inboxStands.chosen?.itemId;
     held.history.replace(`/${initialStep}/inbox${item === undefined ? "" : `/${item}`}`);
   }
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(held.provide(withQueryClient(createElement(Probe)))));
   act(() => standInbox(initial));
+
   return {
     history: () => {
       assert.ok(history);
+
       return history;
     },
     /** Stands the window on `tasks`, its Inbox by the router, as the Inbox's own doors stand it. */
@@ -345,6 +371,7 @@ test("leaving a plan for Home is a step Back returns from", () => {
   const window = mount(
     listedTab({ page: TASKS_PAGE.DOCUMENT, activeTaskId: TASK_ID, boundFor: TASK_ID }),
   );
+
   window.stand(listedTab());
   assert.equal(window.history().canGoBack, true);
 });
@@ -353,12 +380,15 @@ test("a press of the mouse's Back or Forward button takes one step and cancels t
   const window = mount(
     listedTab({ page: TASKS_PAGE.DOCUMENT, activeTaskId: TASK_ID, boundFor: TASK_ID }),
   );
+
   window.stand(listedTab());
+
   const press = (button: number) => {
     const release = new MouseEvent("mouseup", { button, bubbles: true, cancelable: true });
     act(() => {
       document.body.dispatchEvent(release);
     });
+
     return release;
   };
 
@@ -395,10 +425,12 @@ test("a step back canceled at the leave ask leaves the history where the window 
 
 test("a move landing on an entry holding no step at /app stands Home, which lets go of the task and writes its step there", () => {
   const homes: string[] = [];
+
   // An entry no window wrote, as one the page first loaded on, behind the one the window opens on.
   const held = windowRouter(
     createMemoryHistory({ initialEntries: ["/app", "/app"], initialIndex: 1 }),
   );
+
   const window = mount(listedTab(), held);
   window.stand(
     listedTab({
@@ -475,6 +507,7 @@ test("Escape on a task opened from a person's page returns to that page", async 
 
 test("Escape on a task with no step behind it, as a launch or a link opens one on, leaves the task once", () => {
   const left: string[] = [];
+
   const window = mount(
     listedTab({
       page: TASKS_PAGE.DOCUMENT,
@@ -669,6 +702,7 @@ const PLATFORM = {
 /** A task drawn in Acme, the workspaces as `workspaces` lists them, numbered `number` in it where given. */
 function onTask(workspaces: TasksControl["workspaces"], number?: number): TasksControl {
   const task = { ...DOCUMENT_TASK, workspaceId: ACME.id };
+
   return tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     activeTaskId: DOCUMENT_TASK.id,
@@ -686,12 +720,15 @@ test("each step's address is the path of the link ⇧⌘C copies there", async (
   const copied: string[] = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
   const listed = { workspaces: [ACME], workspace: ACME };
+
   const places: Standing[] = [
     onTask([ACME], 42),
     listedTab(listed),
     listedTab({ ...listed, inboxStands: {} }),
   ];
+
   const addresses: string[] = [];
+
   for (const tasks of places) {
     const window = mount(tasks);
     act(() => runAppCommand(APP_COMMAND.COPY_LINK));
@@ -749,6 +786,7 @@ test("the Admin place stands at its workspace's /admin though a task stands unde
 test("Copy link copies the Admin view while Admin stands over the Inbox, the place its state still holds under it", async () => {
   const copied: string[] = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
+
   const window = mount(
     listedTab({
       workspaces: [ACME],
@@ -756,6 +794,7 @@ test("Copy link copies the Admin view while Admin stands over the Inbox, the pla
       inboxStands: {},
     }),
   );
+
   window.openAdmin({ kind: ADMIN_TAB.COST });
   act(() => runAppCommand(APP_COMMAND.COPY_LINK));
   await settle();
@@ -769,6 +808,7 @@ test("with no workspace listed, a place in a workspace has no link, so it stands
   const none = { workspaces: [], workspace: undefined };
   const places: Standing[] = [listedTab({ ...none, inboxStands: {} })];
   const addresses: string[] = [];
+
   for (const tasks of places) {
     const window = mount(tasks);
     act(() => runAppCommand(APP_COMMAND.COPY_LINK));
@@ -809,6 +849,7 @@ test("a link loaded before the workspaces are read writes no Home step: its task
   const loaded = `/acme/task/${DOCUMENT_TASK.id}`;
   const held = windowRouter(createMemoryHistory({ initialEntries: [loaded] }));
   const unbound: string[] = [];
+
   const window = mount(
     tasksControl({
       workspaces: [],
@@ -817,6 +858,7 @@ test("a link loaded before the workspaces are read writes no Home step: its task
     }),
     held,
   );
+
   const waiting = window.addresses();
   window.stand({ ...onTask([ACME]), onUnbindTask: () => unbound.push("unbind") });
   act(() => window.history().onBack());
@@ -830,10 +872,12 @@ test("a link loaded before the workspaces are read writes no Home step: its task
 
 test("a link loaded into a workspace not the reader's stays at its own address, with no step behind it", () => {
   const loaded = `/elsewhere/task/${DOCUMENT_TASK.id}`;
+
   const window = mount(
     listedTab(),
     windowRouter(createMemoryHistory({ initialEntries: [loaded] })),
   );
+
   assert.deepEqual(window.addresses(), [loaded]);
   assert.equal(window.history().canGoBack, false);
 });
@@ -859,6 +903,7 @@ function onTabs(input: {
 }): TasksControl {
   const base = listedTab();
   const agents = input.agents ?? [AGENT_A, AGENT_B, AGENT_C];
+
   return listedTab({
     page: TASKS_PAGE.DOCUMENT,
     activeTaskId: TASK_ID,
@@ -925,6 +970,7 @@ function openAgent(title: string): AgentSummary {
 
 test("Back's list names a task and its agent's tab by the names they go by now, and an agent named nowhere now as the window called it there", () => {
   const open = onTabs({ column: AGENT_A });
+
   const window = mount(
     {
       ...open,
@@ -934,6 +980,7 @@ test("Back's list names a task and its agent's tab by the names they go by now, 
     windowRouter(),
     namedAsShown,
   );
+
   press();
   window.stand(
     listedTab({
@@ -957,6 +1004,7 @@ test("Back's list names a task and its agent's tab by the names they go by now, 
 test("Back's list names a renamed agent's tab by its name now beside a page's tab named as the window called it there, whose page is read only while its task is open", () => {
   const page = pageTab("page-notes");
   const open = onTabs({ column: AGENT_A, side: page });
+
   const window = mount(
     {
       ...open,
@@ -968,6 +1016,7 @@ test("Back's list names a renamed agent's tab by its name now beside a page's ta
     windowRouter(),
     namedAsShown,
   );
+
   press();
   window.stand(
     listedTab({
@@ -985,17 +1034,20 @@ test("Back's list names a person's page by the name the workspace's members give
   fakeAppBridge({});
   fakeActPort({});
   const reads = handHostReads({});
+
   const workspace = {
     id: "workspace-acme",
     name: "Acme",
     role: WORKSPACE_ROLE.MEMBER,
     github: null,
   };
+
   const window = mount(
     listedTab({ workspaces: [workspace], workspace }),
     windowRouter(),
     namedAsShown,
   );
+
   press();
   window.openPerson("user-lee", "Lee Park", workspace.id);
   await settle();
@@ -1040,8 +1092,10 @@ test("an Inbox item's step holds the panel beside it, so Back from the next item
   const OTHER_TASK = "7e8f9a0b-0000-4000-8000-0000000000c3";
   const done: string[] = [];
   const page = pageTab("page-plan");
+
   const onItem = (taskId: string, itemId: string, side: SidePanelTab | undefined, opened = 0) => {
     const base = listedTab();
+
     return listedTab({
       workspace: ACME,
       workspaces: [ACME],
@@ -1060,6 +1114,7 @@ test("an Inbox item's step holds the panel beside it, so Back from the next item
       },
     });
   };
+
   const window = mount(onItem(TASK_ID, "item-a", undefined));
   press();
   window.stand(onItem(TASK_ID, "item-a", page, 1));
@@ -1084,8 +1139,10 @@ test("Back to another task whose panel stood shut leaves the panel to shut as th
   const OTHER_TASK = "7e8f9a0b-0000-4000-8000-0000000000c4";
   const done: string[] = [];
   const notes = fileTab("docs/notes.md");
+
   const onTask = (taskId: string, side: SidePanelTab | undefined) => {
     const base = listedTab();
+
     return listedTab({
       page: TASKS_PAGE.DOCUMENT,
       activeTaskId: taskId,
@@ -1100,6 +1157,7 @@ test("Back to another task whose panel stood shut leaves the panel to shut as th
       },
     });
   };
+
   const window = mount(onTask(OTHER_TASK, undefined));
   press();
   window.stand(onTask(TASK_ID, notes));
@@ -1115,6 +1173,7 @@ test("an Inbox item chosen by a press where the Inbox splits is a step of its ow
       workspaces: [ACME],
       inboxStands: { chosen: { itemId, taskId: TASK_ID } },
     });
+
   const window = mount(onInbox("item-1"));
   press();
   window.stand(onInbox("item-2"));
@@ -1129,10 +1188,13 @@ test("an Inbox item chosen by a press where the Inbox splits is a step of its ow
 
 test("the side panel's tabs a link opens are steps though the task's agents are not read, as a task with none never reads them in a fixture run", () => {
   const shown: string[] = [];
+
   const unread = (side: SidePanelTab, opened: number) => {
     const tasks = onTabs({ column: undefined, side, shown, opened });
+
     return { ...tasks, mainTabs: { ...tasks.mainTabs, tabs: [], openAgents: undefined } };
   };
+
   const window = mount(unread(SIDE_PANEL_TAB.COMMENTS, 0));
   press();
   window.stand(unread(fileTab("docs/notes.md"), 1));
@@ -1212,14 +1274,17 @@ test("a browser's Back onto a step it cannot reach, with none behind it and the 
 
 test("Back's and Forward's steps are listed the nearest first, each named as the window called it there, passing over a step it cannot reach, and a step listed is gone to at once", () => {
   const shown: string[] = [];
+
   const titled = (tasks: TasksControl): StepTitle | undefined => {
     const column = tasks.mainTabs.tab;
+
     return column === undefined ||
       typeof column === "string" ||
       column.kind !== STRIP_TAB_KIND.AGENT
       ? { label: "Home" }
       : { label: "Auth refactor", detail: column.agent };
   };
+
   const window = mount(listedTab(), windowRouter(), titled);
   press();
   window.stand(onTabs({ column: AGENT_A, shown }));
@@ -1278,13 +1343,16 @@ test("a task the Inbox is narrowed to is a step linked by it and named by the ta
     role: WORKSPACE_ROLE.MEMBER,
     github: null,
   };
+
   const taskId = "a1000001-0000-4000-8000-0000000000b1";
+
   const onInbox = listedTab({
     workspace,
     workspaces: [workspace],
     tasks: [{ ...DOCUMENT_TASK, id: taskId, name: "Auth refactor" }],
     inboxStands: {},
   });
+
   const window = mount(onInbox, windowRouter(), stepTitleOf);
   await settle();
   press();
@@ -1345,6 +1413,7 @@ test("a version history opened over another task is counted once, as the history
     ...QUIET_PANEL,
     recordSurfaceEvent: (name, properties) => counted.push([name, properties]),
   });
+
   const onTask = (taskId: string) =>
     listedTab({
       workspace: ACME,
@@ -1353,6 +1422,7 @@ test("a version history opened over another task is counted once, as the history
       activeTaskId: taskId,
       boundFor: taskId,
     });
+
   const window = mount(onTask(TASK_ID));
   counted.length = 0;
 
@@ -1362,25 +1432,30 @@ test("a version history opened over another task is counted once, as the history
   const histories = counted.filter(
     (event) => (event as [string, { surface: string }])[1].surface === "version_history",
   );
+
   assert.equal(histories.length, 1, JSON.stringify(counted));
 });
 
 /** What a step ⌃Tab would step to shows: a task's column and side panel, or a routed place's address. */
 function screenOf(step: RecentStep): string {
   const task = step.place.task;
+
   if (task === undefined) return step.place.address;
   const column = task.column;
   const side = task.side;
+
   const columnWord =
     column === undefined || typeof column === "string" || column.kind !== STRIP_TAB_KIND.AGENT
       ? "none"
       : column.agent;
+
   const sideWord =
     side === null || side === undefined
       ? "shut"
       : typeof side !== "string" && side.kind === STRIP_TAB_KIND.FILE
         ? side.file
         : side;
+
   return `${columnWord} beside ${sideWord}`;
 }
 
@@ -1418,11 +1493,13 @@ test("⌃Tab goes to a screen as a visit after the one standing, standing it as 
   const shown: string[] = [];
   // Note that the panes' doors are the window's wherever it stands, so the Inbox holds the task's as the window does.
   const { mainTabs, sidePanel } = onTabs({ column: AGENT_A, shown });
+
   const onItem = listedTab({
     mainTabs,
     sidePanel: { ...sidePanel, open: false },
     inboxStands: { chosen: { itemId: "item-1", taskId: TASK_ID } },
   });
+
   const window = mount(onTabs({ column: AGENT_A, shown }));
   press();
   window.stand(onTabs({ column: AGENT_B, shown }));

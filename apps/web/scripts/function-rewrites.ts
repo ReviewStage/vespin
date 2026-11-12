@@ -23,6 +23,7 @@ const WEB = join(import.meta.dirname, "..");
 const MODE = { WRITE: "--write", CHECK: "--check" } as const;
 
 const mode = process.argv[2];
+
 if (mode !== MODE.WRITE && mode !== MODE.CHECK) {
   throw new Error(`usage: function-rewrites.ts ${MODE.WRITE} | ${MODE.CHECK}`);
 }

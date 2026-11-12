@@ -19,12 +19,14 @@ const DISCONNECTED = INTEGRATION_STATUS.DISCONNECTED;
 test("a slow read from before a sign-in began again leaves that sign-in's own reason standing", () => {
   // Try again pressed at mark 5, and the read issued at mark 6 says it was canceled.
   const retried = signInBegun(5, 0, true);
+
   const canceled = signInAfterRead(retried, {
     status: DISCONNECTED,
     failure: { reason: INTEGRATION_SIGN_IN_FAILURE.CANCELED },
     mark: 6,
     at: 1,
   });
+
   assert.equal(canceled?.kind, SIGN_IN.FAILED);
 
   // The read issued at mark 3, before the retry, lands last with the first sign-in's refusal.
@@ -34,17 +36,20 @@ test("a slow read from before a sign-in began again leaves that sign-in's own re
     mark: 3,
     at: 2,
   });
+
   assert.ok(late !== undefined);
   assert.equal(signInLine(GRANOLA, late).text, "You canceled connecting Granola.");
 });
 
 test("a sign-in given up on still learns why from a later read that names it", () => {
   const waiting = signInBegun(5, 0, true);
+
   const unfinished = signInAfterRead(waiting, {
     status: INTEGRATION_STATUS.PENDING,
     mark: 6,
     at: Infinity,
   });
+
   assert.equal(unfinished?.kind, SIGN_IN.UNFINISHED);
 
   const named = signInAfterRead(unfinished, {
@@ -53,6 +58,7 @@ test("a sign-in given up on still learns why from a later read that names it", (
     mark: 7,
     at: 1,
   });
+
   assert.ok(named !== undefined);
   assert.deepEqual(signInLine(GRANOLA, named), {
     text: "Granola could not be connected.",

@@ -54,6 +54,7 @@ export function renderPrerenderedPages(): readonly PrerenderedPage[] {
       head: undefined,
     }),
   );
+
   const changelog = changelogRoutes(RELEASES).map(
     (route): PrerenderedPage => ({
       file: route.file,
@@ -62,6 +63,7 @@ export function renderPrerenderedPages(): readonly PrerenderedPage[] {
       head: route.head,
     }),
   );
+
   return [...pages, ...changelog];
 }
 
@@ -84,7 +86,9 @@ export function renderSitemap() {
     ...Object.values(SITE_PAGE),
     ...changelogRoutes(RELEASES).map((route) => route.path),
   ]);
+
   const urls = [...paths].map((path) => `  <url><loc>${LINK_ORIGIN}${path}</loc></url>`);
+
   const xml = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
@@ -92,5 +96,6 @@ export function renderSitemap() {
     "</urlset>",
     "",
   ].join("\n");
+
   return { file: SITEMAP_FILE, xml };
 }

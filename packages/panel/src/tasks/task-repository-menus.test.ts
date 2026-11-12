@@ -58,6 +58,7 @@ function row(id: string, at: number, workspaceId: string, repository: string): T
 
 function Probe(): null {
   repositoriesIn = useRepositoriesIn();
+
   return null;
 }
 
@@ -69,6 +70,7 @@ async function mount(
   await writeHandedAppState();
   root = createRoot(document.body.appendChild(document.createElement("div")));
   act(() => root?.render(withQueryClient(createElement(Probe))));
+
   return repositoriesIn ?? assert.fail("the hook stands");
 }
 
@@ -111,12 +113,14 @@ test("newer tasks on repositories a workspace does not reach crowd out none it d
     ...[5, 6, 7, 8, 9].map((at) => row(`stranded-${at}`, at, ACME.id, `octo/site-${at}`)),
     row("relay", 1, ACME.id, "acme/relay"),
   ];
+
   const reached = (
     await mount({
       workspaces: [PERSONAL, { ...ACME, github: { login: "acme", active: true } }],
       tasks,
     })
   )(ACME.id).recent;
+
   act(() => root?.unmount());
 
   const suspended = (

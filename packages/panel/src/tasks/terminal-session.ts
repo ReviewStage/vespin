@@ -94,14 +94,17 @@ export interface ShellLink {
 function inputMessages(data: string): TerminalPortInbound[] {
   const messages: TerminalPortInbound[] = [];
   let at = 0;
+
   while (at < data.length) {
     // Note that a cut never falls inside a character, because half of one
     // sent alone reaches the shell as no character at all.
     let end = Math.min(at + TERMINAL_FLOW.MAX_INPUT_CHARS, data.length);
+
     if (end < data.length && isHighSurrogate(data.charCodeAt(end - 1))) end -= 1;
     messages.push({ type: TERMINAL_PORT_MESSAGE.INPUT, data: data.slice(at, end) });
     at = end;
   }
+
   return messages;
 }
 
@@ -181,6 +184,7 @@ export class TerminalSession {
     });
     this.#screen.attach(host);
     this.#screen.dim(terminalLook(this.state).dim);
+
     if (this.state.kind === TERMINAL_STATE.STOPPED) this.#enter(this.state);
   }
 
@@ -206,11 +210,13 @@ export class TerminalSession {
   /** The shell's port asked for, or a shell opened where the session holds none, once the screen has had room, any port it held let go first. */
   connect(): void {
     const size = this.#size;
+
     if (size === undefined) return;
     // Note that the port standing is let go, because each attach opens a host connection of its own, and the one before would run on until its idle bound.
     this.#letGo();
     this.#enter({ kind: TERMINAL_STATE.CONNECTING });
     const terminalId = this.#terminalId;
+
     if (terminalId === undefined) return void this.#open(size);
     this.#awaiting = terminalId;
     const asked = this.#ask(terminalId);
@@ -244,25 +250,33 @@ export class TerminalSession {
   /** The shell's port, as main posted it: kept where it answers the latest attach still awaited, closed otherwise. */
   attached(port: MessagePort): void {
     this.#arrived += 1;
+
     if (this.#arrived < this.#asked || this.#awaiting === undefined) {
       port.close();
+
       return;
     }
+
     this.#awaiting = undefined;
     this.#port = port;
     this.#unacked = 0;
     port.onmessage = (event) => {
       const message = readOutbound(event.data);
+
       if (Option.isSome(message)) this.#heard(message.value);
     };
+
     port.start();
+
     if (this.#size !== undefined) this.#post({ type: TERMINAL_PORT_MESSAGE.RESIZE, ...this.#size });
+
     for (const data of this.#typed.splice(0)) this.#send(data);
   }
 
   /** The screen, the port, and the shell where its link ends it, let go for good, as the tab closes. */
   dispose(): void {
     this.#letGo();
+
     if (this.#terminalId !== undefined) this.link.close?.(this.#terminalId);
     this.#screen?.dispose();
     this.#screen = undefined;
@@ -300,8 +314,10 @@ export class TerminalSession {
   async #resume(): Promise<void> {
     this.#resumed = true;
     this.#enter({ kind: TERMINAL_STATE.CONNECTING });
+
     try {
       const refused = await this.link.resume?.();
+
       if (refused !== undefined) return this.#enter(refused);
       this.#letGo();
       this.connect();
@@ -317,7 +333,9 @@ export class TerminalSession {
       this.#asked = 0;
       this.#arrived = 0;
     }
+
     this.#asked += 1;
+
     return this.#asked;
   }
 
@@ -343,11 +361,13 @@ export class TerminalSession {
   #enter(next: TerminalState): void {
     if (next.kind === TERMINAL_STATE.STOPPED && this.#shown) {
       if (!this.#resumed) return void this.#resume();
+
       return void this.#enter({
         kind: TERMINAL_STATE.UNREACHABLE,
         why: TERMINAL_UNREACHED.SANDBOX,
       });
     }
+
     if (next.kind === TERMINAL_STATE.ATTACHED) this.#resumed = false;
     this.#screen?.dim(terminalLook(next).dim);
     this.states.setState(() => next);
@@ -356,6 +376,7 @@ export class TerminalSession {
   #resized(size: TerminalSize): void {
     const first = this.#size === undefined;
     this.#size = size;
+
     if (first) this.connect();
     else this.#post({ type: TERMINAL_PORT_MESSAGE.RESIZE, ...size });
   }
@@ -367,7 +388,9 @@ export class TerminalSession {
   #input(data: string): void {
     const state = this.state;
     const action = returnAction(state);
+
     if (this.link.readOnly === true && state.kind === TERMINAL_STATE.EXITED) return;
+
     if (state.kind === TERMINAL_STATE.EXITED) {
       this.link.ended(this);
     } else if (state.kind === TERMINAL_STATE.IDLE) {
@@ -383,8 +406,10 @@ export class TerminalSession {
   #send(data: string): void {
     if (this.#port === undefined) {
       this.#typed.push(data);
+
       return;
     }
+
     for (const message of inputMessages(data)) this.#post(message);
   }
 
@@ -397,14 +422,19 @@ export class TerminalSession {
       // Note that the output is counted in the bytes it came as.
       this.#screen?.write(message.data, () => {
         this.#unacked += message.data.length;
+
         if (this.#unacked < TERMINAL_FLOW.ACK_EVERY_BYTES) return;
         this.#post({ type: TERMINAL_PORT_MESSAGE.ACK, bytes: this.#unacked });
         this.#unacked = 0;
       });
+
       return;
     }
+
     const next = this.link.stateOf(message.state, message.code);
+
     if (next === undefined || message.state === TERMINAL_CONNECTION.IDLE) this.#letGo();
+
     // Note that a read-only shell that went is said to have exited, because no shell of the developer's stands in for a run action's.
     if (next === undefined && this.link.readOnly === true) {
       this.#enter({ kind: TERMINAL_STATE.EXITED, code: undefined });
@@ -462,15 +492,18 @@ export class TerminalSessions {
     const held = agents.get(agentId) ?? new Map<string, TerminalSession>();
     agents.set(agentId, held);
     const found = held.get(key);
+
     if (found !== undefined) return found;
     const made = make();
     held.set(key, made);
     // Each shell's port goes to the session that asked for it; one none waits for is let go, which main hears as the detach.
     this.#stopHearing ??= onTerminalPort((ticket, port) => {
       const taker = this.#every().find((each) => each.takes(ticket.agentId, ticket.terminalId));
+
       if (taker === undefined) port.close();
       else taker.attached(port);
     });
+
     return made;
   }
 
@@ -483,12 +516,16 @@ export class TerminalSessions {
   ): void {
     const agents = this.#held.get(account)?.get(kind);
     const held = agents?.get(agentId);
+
     if (held === undefined) return;
+
     for (const key of keys ?? [...held.keys()]) {
       held.get(key)?.dispose();
       held.delete(key);
     }
+
     if (held.size === 0) agents?.delete(agentId);
+
     if (this.#every().length > 0) return;
     this.#stopHearing?.();
     this.#stopHearing = undefined;
@@ -502,8 +539,10 @@ export class TerminalSessions {
   own(account: string | undefined): void {
     if (account === this.#account) return;
     this.#account = account;
+
     for (const [owner, kinds] of this.#held) {
       if (owner === account) continue;
+
       for (const agents of kinds.values()) {
         for (const shells of agents.values()) for (const each of shells.values()) each.detach();
       }

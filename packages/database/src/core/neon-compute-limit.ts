@@ -33,11 +33,13 @@ const CAUSE_DEPTH = 8;
  */
 function isNeonComputeLimit(error: Error): boolean {
   let current: Error["cause"] = error;
+
   for (let depth = 0; depth < CAUSE_DEPTH && current instanceof Error; depth += 1) {
     if (current.message.includes(COMPUTE_LIMIT_WORDS)) return true;
     const beneath: Error["cause"] = current.cause;
     current = Cause.isCause(beneath) ? Cause.squash(beneath) : beneath;
   }
+
   return false;
 }
 

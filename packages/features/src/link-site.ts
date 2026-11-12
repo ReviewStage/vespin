@@ -72,6 +72,7 @@ const MAPS_VIEW_STEP = /^(?:@|data=)/u;
 
 /** The editors on Google's Docs host, each by the first step of its pages' paths. */
 const DOCS_HOST = "docs.google.com";
+
 const DOCS_STEP = {
   DOCUMENT: "document",
   SPREADSHEETS: "spreadsheets",
@@ -146,7 +147,9 @@ function spoken(words: string): string {
 /** A name cut to its bound, the cut marked; nothing for one with no words. */
 function named(words: string): string | undefined {
   const name = spoken(words);
+
   if (name === "") return undefined;
+
   return name.length <= MAX_NAME_CHARS ? name : `${name.slice(0, MAX_NAME_CHARS - 1)}${FOLD}`;
 }
 
@@ -167,25 +170,32 @@ function stepWords(step: string): string {
 /** A route's stops as its name: each stop that says something, joined. */
 function routeName(stops: readonly (string | null)[]): string | undefined {
   const said = stops.map((stop) => spoken(stop ?? "")).filter((stop) => stop !== "");
+
   return said.length === 0 ? undefined : named(said.join(ROUTE_JOIN));
 }
 
 /** A route Maps's `?api=1` query spells: its origin, the waypoints between, `|` apart, and its destination. */
 function queriedRoute(query: URLSearchParams): readonly (string | null)[] {
   const waypoints = query.get("waypoints")?.split(ROUTE_WAYPOINT_SEPARATOR) ?? [];
+
   return [query.get("origin"), ...waypoints, query.get("destination")];
 }
 
 /** Whether a page is Google Maps's: under `/maps` on Google's own host, anywhere on its `maps.` host, or one of its short links. */
 function isGoogleMaps(url: URL): boolean {
   const host = url.hostname.toLowerCase();
+
   if (MAPS_SHORT_HOSTS.has(host)) {
     return host !== "goo.gl" || url.pathname.startsWith(`/${MAPS_STEP}/`);
   }
+
   const google = GOOGLE_HOST.exec(host);
+
   if (google === null) return false;
+
   if (google[1] === "maps") return true;
   const first = url.pathname.split("/")[1];
+
   return first === MAPS_STEP;
 }
 
@@ -202,6 +212,7 @@ function googleMapsName(url: URL): string | undefined {
   const [page, ...rest] = at === -1 ? steps : steps.slice(at + 1);
   const end = rest.findIndex((step) => MAPS_VIEW_STEP.test(step));
   const stops = (end === -1 ? rest : rest.slice(0, end)).map(stepWords);
+
   switch (page) {
     case MAPS_PAGE.PLACE:
       return named(stops[0] ?? "");
@@ -210,7 +221,9 @@ function googleMapsName(url: URL): string | undefined {
     case MAPS_PAGE.DIRECTIONS:
       return routeName(query.has("destination") ? queriedRoute(query) : stops);
   }
+
   if (query.has("daddr")) return routeName([query.get("saddr"), query.get("daddr")]);
+
   return named(query.get("q") ?? "");
 }
 
@@ -237,23 +250,30 @@ function unnamed(): undefined {
 /** A Meet called by its code, the one thing its address spells. */
 function googleMeetName(url: URL): string | undefined {
   const code = pathSteps(url)[0]?.toLowerCase();
+
   return code !== undefined && MEET_CODE.test(code) ? code : undefined;
 }
 
 /** A YouTube channel called by its handle; any other page of YouTube's spells nothing of itself. */
 function youtubeName(url: URL): string | undefined {
   const [first, ...rest] = pathSteps(url);
+
   if (first === undefined || rest.length > 1) return undefined;
   const handle = decodedStep(first);
+
   return YOUTUBE_HANDLE.test(handle) ? named(handle) : undefined;
 }
 
 /** An X account called by its handle, and one of its posts as its author's; X's own pages spell no one. */
 function xName(url: URL): string | undefined {
   const [account, step] = pathSteps(url);
+
   if (account === undefined || !X_ACCOUNT.test(account)) return undefined;
+
   if (X_PAGES.has(account.toLowerCase())) return undefined;
+
   if (step === X_POST_STEP) return `Post by @${account}`;
+
   return step === undefined ? `@${account}` : undefined;
 }
 
@@ -299,5 +319,6 @@ export function linkSiteOf(url: URL): LinkSite | undefined {
 export function linkSiteName(site: LinkSite, href: string): string {
   const url = URL.canParse(href) ? new URL(href) : undefined;
   const spelled = url === undefined ? undefined : SITE_READ[site].nameOf(url);
+
   return spelled ?? LINK_SITE_NAME[site];
 }

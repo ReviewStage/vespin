@@ -30,11 +30,13 @@ function draw(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
 test("a frame that is a form sends when its submit is pressed", () => {
   const sent: string[] = [];
+
   const container = draw(
     createElement(ComposerFrame, {
       as: COMPOSER_ELEMENT.FORM,
@@ -46,6 +48,7 @@ test("a frame that is a form sends when its submit is pressed", () => {
       children: createElement("button", { type: "submit" }, "Send"),
     }),
   );
+
   act(() => container.querySelector("button")?.click());
   expect(sent).toEqual(["sent"]);
 });

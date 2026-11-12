@@ -29,6 +29,7 @@ const SERVICE = "https://app.test";
 const TASKS_POLL = `${SERVICE}/api/live/tasks?userId=user-1&poll=true&after=d1`;
 const HTTP_BODY = JSON.stringify({ over: "http" });
 const INBOX_READ = `${SERVICE}${HOSTED_SERVICE_PATH.INBOX_READ}`;
+
 /** A live read the service answers at once, past no digest, so it travels under the usual deadline. */
 const TASKS_READ = `${SERVICE}/api/live/tasks?userId=user-1&poll=true`;
 
@@ -45,6 +46,7 @@ const scriptedSocket = Effect.gen(function* () {
   const asked = yield* Queue.unbounded<LiveSocketAsk>();
   const read = yield* Deferred.make<void>();
   const state = { closed: false };
+
   const opening: TerminalSocketOpening = {
     socket: {
       arrivals: Stream.unwrap(
@@ -63,6 +65,7 @@ const scriptedSocket = Effect.gen(function* () {
       resume: Effect.void,
     },
   };
+
   return {
     opening,
     state,
@@ -81,6 +84,7 @@ type Scripted = Effect.Success<typeof scriptedSocket>;
 const scriptedRelay = Effect.gen(function* () {
   const opened = yield* Queue.unbounded<Scripted>();
   const addresses: string[] = [];
+
   const open: OpenTerminalSocket = (url, headers) =>
     Effect.gen(function* () {
       addresses.push(`${url} ${headers.authorization ?? ""}`);
@@ -94,20 +98,25 @@ const scriptedRelay = Effect.gen(function* () {
         ),
       );
       yield* Queue.offer(opened, scripted);
+
       return scripted.opening;
     });
+
   return { open, opened: Queue.take(opened), addresses };
 });
 
 /** An HTTP client that answers every request itself, keeping what it was asked. */
 function scriptedHttp() {
   const asked: string[] = [];
+
   const client = HttpClient.make((request) =>
     Effect.sync(() => {
       asked.push(`${request.method} ${request.url}`);
+
       return HttpClientResponse.fromWeb(request, new Response(HTTP_BODY, { status: 200 }));
     }),
   );
+
   return { client, asked };
 }
 
@@ -115,6 +124,7 @@ function scriptedHttp() {
 const subject = Effect.gen(function* () {
   const relay = yield* scriptedRelay;
   const http = scriptedHttp();
+
   const client = yield* liveSocketClient({
     http: http.client,
     openSocket: relay.open,
@@ -122,12 +132,14 @@ const subject = Effect.gen(function* () {
     serviceBaseUrl: SERVICE,
     client: { platform: CLIENT_PLATFORM.DESKTOP, version: "0.30.0" },
   });
+
   /** A live poll asked, as a fiber its answer is joined from. */
   const poll = Effect.forkChild(
     Effect.flatMap(client.execute(HttpClientRequest.get(TASKS_POLL)), (response) =>
       Effect.map(response.text, (text) => ({ status: response.status, text })),
     ),
   );
+
   return { relay, http, client, poll };
 });
 
@@ -215,9 +227,11 @@ it.effect(
         assert.equal(older.state.closed, true);
 
         const askedOverHttp = http.asked.length;
+
         const stalled = yield* Effect.forkChild(
           Effect.exit(client.execute(HttpClientRequest.get(TASKS_READ))),
         );
+
         yield* newer.asked;
         yield* TestClock.adjust(Duration.subtract(USUAL_DEADLINE, Duration.millis(1)));
         const ended = stalled.pollUnsafe();

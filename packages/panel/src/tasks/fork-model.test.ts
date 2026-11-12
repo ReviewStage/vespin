@@ -26,6 +26,7 @@ function agent(id: string, createdAt: number, extra: Partial<AgentSummary> = {})
     turnId: null,
     ...extra,
   };
+
   return summary;
 }
 

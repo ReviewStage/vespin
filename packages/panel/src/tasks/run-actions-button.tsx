@@ -91,12 +91,14 @@ function useRunPlace(agentId: string) {
   const select = useCallback(
     (state: AppStateSnapshot) => {
       const listed = listedAgentIn(state.tasks, agentId);
+
       return listed === undefined
         ? undefined
         : { workspaceId: listed.workspaceId, repository: listed.repository };
     },
     [agentId],
   );
+
   return useQuery({ ...appStateQuery, select }).data;
 }
 
@@ -126,12 +128,15 @@ async function runAction(
   onShowShell: ((terminal: ShownShell) => void) | undefined,
 ): Promise<void> {
   if (stopped) await askAct(ACT_KIND.TERMINAL_RESUME, { agentId }).catch(() => undefined);
+
   const answer = await askAct(ACT_KIND.AGENTS_RUN_ACTION, { agentId, actionId: action.id }).catch(
     (cause: unknown) => ({ failure: cause }),
   );
+
   await queries.invalidateQueries({ queryKey: [QUERY_ROOT.AGENT_SHELLS, agentId] });
   // The tab is held on the action, with the icon it wears as pressed, so it takes nothing typed and wears both.
   const held = { id: action.id, ...(action.icon === undefined ? {} : { icon: action.icon }) };
+
   if ("terminal" in answer) onShowShell?.({ ...answer.terminal, action: held });
   else pressFailed(ACT_KIND.AGENTS_RUN_ACTION, agentId, answer, WORDS.NOT_RUN);
 }
@@ -146,6 +151,7 @@ async function stopAction(
     agentId,
     actionId: action.id,
   }).catch((cause: unknown) => ({ failure: cause }));
+
   if ("terminals" in answer) queries.setQueryData([QUERY_ROOT.AGENT_SHELLS, agentId], answer);
   else pressFailed(ACT_KIND.AGENTS_RUN_ACTION_STOP, agentId, answer, WORDS.NOT_STOPPED);
 }
@@ -162,10 +168,12 @@ export function useRunActionPress(agentId: string): {
 } {
   const queries = useQueryClient();
   const [busy, setBusy] = useState(false);
+
   const pressed = (press: Promise<void>) => {
     setBusy(true);
     void press.finally(() => setBusy(false));
   };
+
   return {
     busy,
     run: (action) => pressed(runAction(queries, agentId, action, false, undefined)),
@@ -217,41 +225,56 @@ export function useRunActions(
   const repository = place?.repository ?? null;
   const asks = on && cloud && repository !== null && place !== undefined;
   const setup = useQuery(sandboxSetupQuery(place?.workspaceId ?? "", asks)).data;
+
   const actions =
     setup?.runActions?.find(
       (each) => each.repository.toLowerCase() === (repository ?? "").toLowerCase(),
     )?.actions ?? [];
+
   const offered = asks && actions.length > 0;
   const shells = useQuery(shellsQuery(agentId, shown, offered)).data;
+
   // ⌥⌘R is the desktop's alone (`APP_SHORTCUTS`), so it is offered, and printed, only where the keymap answers it.
   const desktop =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.DESKTOP_APP) }).data ===
     true;
+
   if (!offered || place === undefined) return undefined;
   const listed = shells !== undefined && "terminals" in shells ? shells : undefined;
+
   const running = new Set(
     (listed?.terminals ?? []).flatMap((shell) =>
       shell.running && shell.runAction !== undefined ? [shell.runAction] : [],
     ),
   );
+
   const stopped = listed !== undefined && listed.sandbox !== SANDBOX_STATE.RUNNING;
+
   const offer = (action: RunAction): OfferedAction => {
     const runs = running.has(action.id);
+
     const onPress = () => {
       setBusy(true);
+
       const pressed = runs
         ? stopAction(queries, agentId, action)
         : runAction(queries, agentId, action, stopped, onShowShell);
+
       void pressed.finally(() => setBusy(false));
     };
+
     return { action, runs, onPress };
   };
+
   const [first, ...rest] = actions;
+
   if (first === undefined) return undefined;
+
   const listedActions: readonly [OfferedAction, ...OfferedAction[]] = [
     offer(first),
     ...rest.map(offer),
   ];
+
   return {
     agentId,
     actions: listedActions,
@@ -285,16 +308,19 @@ function runItems(offer: RunOffer): MenuAction[][] {
       replayMasked: true,
       onSelect: offered.onPress,
     };
+
     return offered === offer.primary
       ? { ...item, command: APP_COMMAND.RUN_ACTION, subject: offer.subject }
       : item;
   });
+
   return [items, [{ label: WORDS.EDIT, icon: <GLYPH.SETTINGS />, onSelect: offer.onEdit }]];
 }
 
 /** Run ›, the actions as a phone's ⋯ lists them, where no button stands. */
 export function runSubmenu(offer: RunOffer | undefined): MenuSubmenu | undefined {
   if (offer === undefined) return undefined;
+
   return { label: WORDS.SUBMENU, icon: <GLYPH.RUN_ACTION />, items: runItems(offer).flat() };
 }
 
@@ -311,6 +337,7 @@ export interface RunPaletteRow {
 /** The actions as ⌘K lists them, each worded as the act it is. */
 export function runPaletteRows(offer: RunOffer | undefined): readonly RunPaletteRow[] {
   if (offer === undefined) return [];
+
   return offer.actions.map((offered) => ({
     id: offered.action.id,
     label: offered.runs ? WORDS.STOP(offered.action.label) : WORDS.RUN(offered.action.label),
@@ -343,6 +370,7 @@ export function RunActionsButton({
   useShortcutTarget(offer.keyed ? offer.subject : undefined, RUN_KEYS);
   useAppCommand(APP_COMMAND.RUN_ACTION, offer.keyed && !offer.busy ? first.onPress : undefined);
   const said = first.runs ? WORDS.STOP(first.action.label) : WORDS.RUN(first.action.label);
+
   return (
     <>
       <SplitButton

@@ -199,6 +199,7 @@ function exactPattern(path: string): string {
 
 function dest(definition: FunctionDefinition, route: string, query?: string): string {
   const parameters = `${DISPATCH_QUERY.ROUTE}=${route}${query === undefined ? "" : `&${query}`}`;
+
   return `/${functionPublicPath(definition)}?${parameters}`;
 }
 
@@ -219,6 +220,7 @@ function passThroughPaths(definitions: readonly FunctionDefinition[]): readonly 
       .map((definition) => functionPublicPath(definition)),
     ...HAND_WRITTEN_FUNCTIONS.map((fn) => fn.path),
   ];
+
   return own.flatMap((path) => [`/${functionAliasPath(path)}`, `/${path}`]).sort();
 }
 
@@ -241,38 +243,52 @@ export function apiRewrites(
       definition.routes.map((route): [string, FunctionDefinition] => [route, definition]),
     ),
   );
+
   const orpc = functionOf.get(ORPC_ROUTE_KEY);
+
   if (orpc === undefined) throw new Error("no function holds the hosted oRPC route");
   const rewrites: Rewrite[] = [];
+
   for (const { path, route, query } of publics) {
     const definition = functionOf.get(route);
+
     if (definition === undefined) throw new Error(`no route behind the public path ${path}`);
     rewrites.push({ src: exactPattern(path), dest: dest(definition, route, query) });
   }
+
   const rewritten = new Set<string>([ORPC_ROUTE_KEY]);
+
   for (const segment of segments) {
     const definition = functionOf.get(segment.route);
+
     if (definition === undefined) throw new Error(`no route behind the rewrite ${segment.src}`);
     rewrites.push({ src: segment.src, dest: dest(definition, segment.route, segment.query) });
     rewritten.add(segment.route);
   }
+
   for (const definition of definitions) {
     if (!definition.dispatches) continue;
+
     for (const route of definition.routes) {
       if (rewritten.has(route)) continue;
+
       if (!LITERAL_ROUTE_KEY.test(route)) {
         throw new Error(`the route ${route} needs a rewrite of its own in SEGMENT_REWRITES`);
       }
+
       rewrites.push({ src: `${API_ROUTE_PREFIX}${route}`, dest: dest(definition, route) });
     }
   }
+
   for (const path of passThroughPaths(definitions)) {
     rewrites.push({ src: exactPattern(path), dest: path });
   }
+
   rewrites.push({
     src: ORPC_FALLBACK_SRC,
     dest: dest(orpc, ORPC_ROUTE_KEY, `${DISPATCH_QUERY.PATH}=$1`),
   });
+
   return rewrites;
 }
 
@@ -283,6 +299,7 @@ export function generatedRewrites(definitions: readonly FunctionDefinition[]): r
 
 /** The deployment's configuration, at the repository root two steps above the web app. */
 export const VERCEL_CONFIG_FILE = join("..", "..", "vercel.json");
+
 /** The committed generation of the `/api/` rewrites, which the web service's routes are assembled from. */
 export const API_REWRITES_FILE = join("server", "api-rewrites.json");
 
@@ -400,6 +417,7 @@ const VercelConfig = Schema.Struct({
   ),
   rewrites: Schema.Array(ServiceRewriteSchema),
 });
+
 export type VercelConfig = typeof VercelConfig.Type;
 
 const decodeVercelConfig = Schema.decodeUnknownSync(Schema.fromJsonString(VercelConfig), {
@@ -409,13 +427,16 @@ const decodeVercelConfig = Schema.decodeUnknownSync(Schema.fromJsonString(Vercel
 /** Whether the file carries both keys, by their presence: a `routes` key that is merely undefined-valued is still the wrong shape. */
 function hasTopLevelRoutesBesideServices(source: string): boolean {
   let parsed: WireBoundaryInput;
+
   try {
     // SAFETY: the file is this app's own vercel.json; the strict decode that follows is what holds it to a shape.
     parsed = JSON.parse(source) as WireBoundaryInput;
   } catch {
     return false;
   }
+
   const value = unparsedWire(parsed);
+
   return isRecord(value) && "services" in value && "routes" in value;
 }
 
@@ -438,7 +459,9 @@ class TopLevelRoutesBesideServicesError extends Error {
 /** `vercel.json` as committed, refused unless it is exactly the shape this build knows. */
 export async function readVercelConfig(web: string): Promise<VercelConfig> {
   const source = await readFile(join(web, VERCEL_CONFIG_FILE), "utf8");
+
   if (hasTopLevelRoutesBesideServices(source)) throw new TopLevelRoutesBesideServicesError();
+
   return decodeVercelConfig(source);
 }
 
@@ -466,6 +489,7 @@ export async function rewritesDrifted(web: string): Promise<boolean> {
   const committed = (await readVercelConfig(web)).services.web.routes.filter(isTableRewrite);
   const table = await readApiRewritesTable(web);
   const generated = generatedRewrites(await webFunctions(web));
+
   return !sameRewrites(table, generated) || !sameRewrites(committed, table);
 }
 
@@ -482,11 +506,14 @@ const isHostLocked = (route: object): boolean => "has" in route;
 export async function vercelConfigSource(web: string): Promise<string> {
   const config = await readVercelConfig(web);
   const others = config.services.web.routes.filter((rewrite) => !isTableRewrite(rewrite));
+
   const routes = [
     ...others.filter(isHostLocked),
     ...(await readApiRewritesTable(web)),
     ...others.filter((route) => !isHostLocked(route)),
   ];
+
   const services = { ...config.services, web: { ...config.services.web, routes } };
+
   return `${JSON.stringify({ ...config, services }, null, 2)}\n`;
 }

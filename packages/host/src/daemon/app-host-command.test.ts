@@ -49,13 +49,17 @@ describe("the command's link to the app's launcher", () => {
         const launcher = join(home, "Vespin.app", "Contents", "MacOS", "vespin-host");
         const elsewhere = join(home, "bin", "vespin-host");
         yield* fileSystem.makeDirectory(join(home, ".local", "bin"), { recursive: true });
+
         if (stands === "file") yield* fileSystem.writeFileString(link, "#!/bin/sh\n");
+
         if (stands === "link") yield* fileSystem.symlink(elsewhere, link);
 
         assert.equal(yield* appHostCommandLinked({ home, launcher }), outcome);
 
         if (stands === "file") assert.equal(yield* fileSystem.readFileString(link), "#!/bin/sh\n");
+
         if (stands === "link") assert.equal(yield* fileSystem.readLink(link), elsewhere);
+
         if (stands === "nothing") assert.equal(yield* fileSystem.readLink(link), launcher);
       }).pipe(Effect.provide(FILES)),
     ),

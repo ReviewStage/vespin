@@ -344,8 +344,10 @@ export interface DeviceAgentRoots {
 /** The path given under the folder given, the folder's trailing slashes taken off. */
 function under(parent: string, child: string): string {
   let end = parent.length;
+
   // Note that the trailing slashes are counted off by hand, because a regular expression anchored at the end runs in quadratic time on a path of many slashes.
   while (end > 1 && parent[end - 1] === "/") end -= 1;
+
   return [parent.slice(0, end), child].join("/");
 }
 
@@ -372,6 +374,7 @@ export function deviceAgentCheckoutPath(home: string, agentId: string): string {
 /** The agent's folder and its other things, under the folders the Mac registered (`DeviceAgentRoots`). */
 export function deviceAgentLayoutIn(roots: DeviceAgentRoots, agentId: string): DeviceAgentLayout {
   const folder = [roots.agentsFolder, agentId].join("/");
+
   return {
     folder,
     checkoutPath: [folder, DEVICE_AGENT_FOLDER.REPOSITORY].join("/"),

@@ -73,6 +73,7 @@ async function draw(
   search = "",
 ): Promise<HTMLElement> {
   const unanswered = () => Promise.withResolvers<never>().promise;
+
   const doors: AdminDoors = {
     reads: {
       metrics: unanswered,
@@ -99,6 +100,7 @@ async function draw(
       onSearchMoved: () => () => undefined,
     },
   };
+
   const page = document.body.appendChild(document.createElement("div"));
   const root = createRoot(page);
   roots.push(root);
@@ -113,6 +115,7 @@ async function draw(
   await vi.waitFor(() =>
     expect(page.querySelector('[role="status"][aria-busy="true"]')).toBeNull(),
   );
+
   return page;
 }
 
@@ -127,6 +130,7 @@ test("a search of two words finds the account whose name holds one and whose ema
     { users: async () => usersList([JANE, BOB]) },
     "jane acme",
   );
+
   const rows = listedNames(page);
   expect(rows).toHaveLength(1);
   expect(rows[0]).toContain("Jane Doe");
@@ -139,6 +143,7 @@ test("a roster the search emptied says no accounts match, and an empty one says 
     { users: async () => usersList([JANE]) },
     "jane initech",
   );
+
   expect(searched.textContent).toContain("No accounts match");
 
   const bare = await draw(createElement(UsersScreen, QUIET), { users: async () => usersList([]) });
@@ -178,6 +183,7 @@ test("a star the service refuses goes back and says so in a toast", async () => 
     users: async () => usersList([JANE]),
     favorite: async () => false,
   });
+
   const star = () => page.querySelector<HTMLButtonElement>('button[aria-label$="Jane Doe"]');
   expect(star()?.getAttribute("aria-label")).toBe("Favorite Jane Doe");
 

@@ -62,20 +62,24 @@ let owed: ((answer: AgentQueueAnswerView) => void)[] = [];
 
 function Tab(): ReactNode {
   const [page, setPage] = useState<AgentQueue | undefined>();
+
   const composer = useAgentComposer({
     agentId: "agent-1",
     taskId: "plan-1",
     messages: [],
     send: () => new Promise(ignore),
   });
+
   const queue = useAgentQueue("agent-1", page);
   const files = useAgentPictureDoor("agent-1");
   held = { composer, queue, editing: useQueueEditing(composer, queue, files), page: setPage };
+
   return null;
 }
 
 function now(): NonNullable<typeof held> {
   assert.ok(held, "the tab drew");
+
   return held;
 }
 
@@ -113,6 +117,7 @@ beforeEach(async () => {
     [ACT_KIND.AGENTS_QUEUE]: ({ change, pictures: named }) => {
       sent.push(change);
       pictures.push(named);
+
       return new Promise((resolve) => owed.push(resolve));
     },
     [ACT_KIND.AGENTS_PICTURE]: ({ pictureId }) =>
@@ -173,9 +178,11 @@ test("a refused message that would pass a message's bound beside the box's newer
   assert.equal(now().composer.draft, "And the docs");
 
   act(() => now().composer.setDraft("Ok"));
+
   const putBack = [...document.querySelectorAll<HTMLButtonElement>(".ui-toast button")].find(
     (button) => button.textContent === "Put back",
   );
+
   const press = putBack ?? assert.fail("a toast keeps the message with Put back");
   // Note that a second press lands while the toast pressed is still leaving.
   act(() => press.click());
@@ -205,6 +212,7 @@ test("an edit the queue refused to save stays open with its new words, the box's
   act(() => now().editing.cancel());
   assert.equal(now().composer.draft, "my own words");
 });
+
 test("an edit of a message the queue would not hold, already on its way, closes and gives the box back", async () => {
   act(() => now().composer.setDraft("my own words"));
   act(() => now().editing.edit(message("m1", "Run tests")));
@@ -249,6 +257,7 @@ test("an edit takes the message's files into the box, read as its row draws them
     ...message("m1", "Match this."),
     files: [{ name: SHOT.name, mediaType: SHOT.mediaType, id: SHOT_ID }],
   };
+
   act(() => now().page({ messages: [queued], revision: 1 }));
   act(() => now().editing.edit(queued));
   await answer({ queue: { messages: [{ ...queued, editing: true }], revision: 2 } });
@@ -272,11 +281,14 @@ test("a message queued with an image names the id its bytes stand under for the 
   act(() => now().composer.setAttachments(() => [SHOT]));
   act(() => now().editing.queue());
   await settle();
+
   const ready = (id: string | undefined) => {
     assert.ok(id !== undefined, "the file names an id");
     const state = pictureNow(testQueryClientNow(), "agent-1", id);
+
     return state.kind === PICTURE_STATE.READY ? state.url : state.kind;
   };
+
   const url = `data:${SHOT.mediaType};base64,${SHOT.data}`;
   const queued = sent.at(-1);
   assert.ok(queued?.change === QUEUE_CHANGE.ADD);

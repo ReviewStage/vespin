@@ -19,6 +19,7 @@ const SHORT_COMMIT_CHARS = 7;
  */
 export function lineRangeText(ref: Omit<NamedLines, "path">): string | undefined {
   if (ref.startLine === undefined || ref.endLine === undefined) return undefined;
+
   return ref.startLine === ref.endLine
     ? `Line ${ref.startLine}`
     : `Lines ${ref.startLine}–${ref.endLine}`;
@@ -27,6 +28,7 @@ export function lineRangeText(ref: Omit<NamedLines, "path">): string | undefined
 /** A reference as words, where its path and its lines are said in one breath: "src/invite.ts, Lines 40–58", or the path alone for a whole file. */
 export function fileRefText(ref: NamedLines): string {
   const lines = lineRangeText(ref);
+
   return lines === undefined ? ref.path : `${ref.path}, ${lines}`;
 }
 

@@ -80,6 +80,7 @@ export function formerOf(organizationId: string): SQL | undefined {
     .select({ id: task.id })
     .from(task)
     .where(eq(task.organizationId, organizationId));
+
   return and(
     or(
       inArray(
@@ -171,8 +172,10 @@ export function listMembers(
     const members = rows.map(({ image, ...row }): WorkspaceMember => {
       const listed = { ...row, role: roleOf(row.role) };
       const pictureUrl = pinnedPictureUrl(image);
+
       return pictureUrl === undefined ? listed : { ...listed, pictureUrl };
     });
+
     return ROLE_ORDER.flatMap((role) => members.filter((one) => one.role === role));
   });
 }
@@ -184,6 +187,7 @@ export function listFormerMembers(
   return Effect.map(findFormer(organizationId), (rows) =>
     rows.map(({ image, ...row }): FormerMember => {
       const pictureUrl = pinnedPictureUrl(image);
+
       return pictureUrl === undefined ? row : { ...row, pictureUrl };
     }),
   );

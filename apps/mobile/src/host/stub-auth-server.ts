@@ -106,6 +106,7 @@ function workspacesAnswer(unchanged: boolean): Response {
 export const stubAuthFetch: typeof globalThis.fetch = (input, init) => {
   const request = new Request(input, init);
   const url = new URL(request.url);
+
   switch (url.pathname) {
     case STUB_PATH.TOKEN:
       return Promise.resolve(
@@ -128,6 +129,7 @@ export const stubAuthSession: AuthSession = {
     const callback = new URL(callbackUrl);
     callback.searchParams.set("code", STUB_CODE);
     callback.searchParams.set("state", new URL(page).searchParams.get("state") ?? "");
+
     return Promise.resolve({ end: AUTH_SESSION_END.REDIRECTED, url: callback.href });
   },
   dismiss: () => undefined,

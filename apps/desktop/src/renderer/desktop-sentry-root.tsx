@@ -40,8 +40,10 @@ const SENTRY_LOAD_DEADLINE_MS = 2_000;
 function LoadAfterFirstCommit({ load }: { readonly load: () => void }): null {
   useEffect(() => {
     const idle = requestIdleCallback(load, { timeout: SENTRY_LOAD_DEADLINE_MS });
+
     return () => cancelIdleCallback(idle);
   }, [load]);
+
   return null;
 }
 
@@ -61,10 +63,12 @@ export function createReportingRoot(
     sentry.reportBlankWindow(error, BLANK_WINDOW.RENDER);
     sentry.load();
   };
+
   // Note that both stand in for React's defaults, which say a failure on the
   // console, or to the window as an uncaught error, before the SDK could
   // stand to hear it.
   const root = createRoot(element, { onCaughtError: report, onUncaughtError: report });
+
   return (surface) => {
     root.render(
       <>

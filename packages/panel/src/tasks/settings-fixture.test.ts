@@ -66,6 +66,7 @@ function isWireSchema(schema: unknown): schema is Schema.Codec<unknown, unknown>
 function carried(kind: PortActKind, answer: unknown): boolean {
   const [declared] = actContract[kind]["~orpc"].outputSchemas ?? [];
   assert.ok(isWireSchema(declared), `${kind} declares a wire schema`);
+
   return Result.isSuccess(Schema.encodeUnknownResult(Schema.flip(declared))(answer));
 }
 
@@ -77,6 +78,7 @@ function answered<Kind extends PortActKind>(
 ): PortActResult<Kind> {
   const staged = fixtureActAnswer({ profile }, kind, payload as PortActPayload<PortActKind>);
   assert.ok(staged, `${profile} answers ${kind}`);
+
   // SAFETY: the profile answered this kind's read, with this kind's result.
   return staged.answer as PortActResult<Kind>;
 }
@@ -93,11 +95,14 @@ test("every read a signed-in profile answers is one the act port's contract carr
 
 test("the integrations profile draws some accounts connected and some with their sign-in expired", () => {
   const { run } = stateWith({}, {});
+
   const staged = fixtureAppState(
     stateWith({}, { run: { ...run, profile: RUN_PROFILE.SETTINGS_INTEGRATIONS } }),
   );
+
   const accountId =
     staged.account.status === ACCOUNT_STATUS.SIGNED_IN ? staged.account.id : undefined;
+
   const statuses = staged[LIVE_READ.INTEGRATIONS][accountId ?? ""]?.rows;
   assert.ok(statuses !== undefined, "the profile holds the account's integrations");
 
@@ -110,11 +115,14 @@ test("an Automations profile holds three automations in the listed workspace, on
   const { run } = stateWith({}, {});
   /** The document an Automations profile draws. */
   const staged = (profile: string) => fixtureAppState(stateWith({}, { run: { ...run, profile } }));
+
   const automations =
     staged(RUN_PROFILE.AUTOMATIONS)[LIVE_READ.AUTOMATIONS]["workspace-personal"]?.rows ?? [];
+
   const failed = automations.filter(
     (automation) => automation.lastRun?.status === AUTOMATION_RUN_STATUS.FAILED,
   );
+
   assert.equal(automations.length, 3);
   assert.ok(automations.every((automation) => automation.workspaceId === "workspace-personal"));
   assert.equal(failed.length, 1);
@@ -122,19 +130,24 @@ test("an Automations profile holds three automations in the listed workspace, on
   const runs =
     staged(RUN_PROFILE.AUTOMATIONS_RUNS)[LIVE_READ.AUTOMATION_RUNS][failed[0]?.id ?? ""]?.rows ??
     [];
+
   assert.ok(runs.some((each) => each.status === AUTOMATION_RUN_STATUS.FAILED));
 });
 
 test("every skill the Skills profile lists reads whole when viewed", () => {
   const { run } = stateWith({}, {});
+
   const staged = fixtureAppState(
     stateWith({}, { run: { ...run, profile: RUN_PROFILE.SETTINGS_SKILLS } }),
   );
+
   const listed = staged[LIVE_READ.INSTALLED_SKILLS][ACME.workspaceId]?.rows ?? [];
+
   const unread = listed.filter((skill) => {
     const content = answered(RUN_PROFILE.SETTINGS_SKILLS, ACT_KIND.INSTALLED_SKILLS_READ, {
       skillId: skill.id,
     });
+
     return !("skillFile" in content) || !content.skillFile.includes(skill.name);
   });
 
@@ -148,10 +161,13 @@ test("Admin's Overview answers the window and the scope its controls ask for, it
       procedure: ADMIN_READ.METRICS,
       query,
     });
+
     assert.ok("answer" in read);
+
     // SAFETY: a metrics read answers the Overview's metrics.
     return read.answer as AdminMetrics;
   };
+
   const week = metrics({ [ADMIN_METRICS_WINDOW_PARAM]: "7" });
   const everyone = metrics({ [ADMIN_METRICS_SCOPE_PARAM]: ADMIN_METRICS_SCOPE.ALL });
   const byDefault = metrics({});
@@ -164,10 +180,12 @@ test("Admin's Overview answers the window and the scope its controls ask for, it
     week.users.dailySignups.reduce((sum, day) => sum + day.count, 0),
   );
   assert.equal(week.overview.funnel[0]?.accounts, week.users.newInWindow);
+
   for (const days of Object.values(ADMIN_METRICS_WINDOW)) {
     const window = metrics({ [ADMIN_METRICS_WINDOW_PARAM]: String(days) });
     assert.ok(window.users.newInWindow <= window.users.total, `${days} days`);
   }
+
   assert.equal(byDefault.windowDays, 30);
   assert.ok(byDefault.overview.topAccounts.every((account) => !account.admin));
   assert.ok(everyone.overview.topAccounts.some((account) => account.admin));
@@ -177,10 +195,12 @@ test("Admin's Overview answers the window and the scope its controls ask for, it
 test("a signed-in profile lays the synthetic account, an admin, over main's signed-out document; any other leaves its account and access as they are", () => {
   const { run } = stateWith({}, {});
   const signedOut = stateWith({}, { account: { status: "signed-out" }, access: { admin: false } });
+
   const staged = fixtureAppState({
     ...signedOut,
     run: { ...run, fixtureMode: true, profile: RUN_PROFILE.SETTINGS_MEMORY },
   });
+
   const tasks = { ...signedOut, run: { ...run, fixtureMode: true, profile: RUN_PROFILE.TASKS } };
 
   assert.equal(staged.account.status, "signed-in");

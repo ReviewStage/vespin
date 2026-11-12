@@ -42,8 +42,10 @@ export const serialQueue = /* @__PURE__ */ Effect.fnUntraced(function* <R = neve
   options: SerialQueueOptions,
 ): Effect.fn.Return<SerialQueue<R>, never, Scope.Scope | R> {
   const queue = yield* Queue.unbounded<SerialWork<R>>();
+
   const take = (work: SerialWork<R>): SerialWork<R> =>
     Effect.catchDefect(work, (defect) => options.onDefect(Cause.die(defect)));
+
   // Registered before the fork so the close runs it after the fiber has been
   // interrupted. `Queue.clear` is what reads a queue that may be empty:
   // `Queue.takeAll` waits for a first message, and a finalizer is
@@ -55,7 +57,9 @@ export const serialQueue = /* @__PURE__ */ Effect.fnUntraced(function* <R = neve
       ),
     );
   }
+
   yield* Effect.forkScoped(Effect.forever(Effect.flatMap(Queue.take(queue), take)));
+
   return {
     offer: (work) => Effect.asVoid(Queue.offer(queue, work)),
     offerUnsafe: (work) => {

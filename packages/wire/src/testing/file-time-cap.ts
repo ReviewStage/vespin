@@ -33,6 +33,7 @@ beforeAll(() => {
 // Note that the file is named from expect's state rather than the hook's suite, because vitest reads a hook's first argument as its fixtures.
 afterAll(() => {
   const took = now() - startedAt;
+
   if (!process.env.CI || took <= FILE_TIME_CAP_MS) return;
   const file = path.relative(process.cwd(), expect.getState().testPath ?? "");
   throw new Error(

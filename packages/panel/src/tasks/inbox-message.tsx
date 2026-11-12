@@ -69,9 +69,11 @@ export function useMessageWriter(
   by: ItemAgent,
 ): { readonly author: CommentAuthor; readonly nameRef: ReactNode } {
   const member = usePerson(message?.member);
+
   if (message?.author === INBOX_MESSAGE_AUTHOR.AGENT) {
     return { author: commentAuthor(by.subject.tile), nameRef: <AgentName by={by} /> };
   }
+
   return { author: commentAuthor(member), nameRef: <ActorRef actor={member} nameOnly /> };
 }
 
@@ -95,11 +97,13 @@ export function ItemWords({
   children: ReactNode;
 }): React.JSX.Element {
   const cards = useMemo(() => (code === undefined ? undefined : { code }), [code]);
+
   const pictured = (
     <InboxPictures itemId={itemId} control={images}>
       {cards === undefined ? children : <LoneLinkCards doors={cards}>{children}</LoneLinkCards>}
     </InboxPictures>
   );
+
   return <WordsWorkspace value={workspaceId}>{pictured}</WordsWorkspace>;
 }
 
@@ -132,11 +136,14 @@ function CommentFiles({
     () => inboxCommentFiles(files, words, itemId),
     [files, words, itemId],
   );
+
   // Note that a picture says itself where its read did not answer (`InboxPicture`), so only the other files' are said here.
   const failed = others.flatMap((file) => {
     const read = reads.get(file.attachmentId);
+
     return read?.isError === true && !read.isFetching ? [read] : [];
   });
+
   return (
     <>
       {pictures.length === 0 ? null : (
@@ -199,15 +206,19 @@ export function useInboxLinePieces(
   ticked: readonly number[],
 ): readonly (string | FileChip)[] {
   const files = inboxLineFiles(item);
+
   const queries = useQueries({
     queries: files.map((file) => pictureQuery(item.id, file.attachmentId)),
   });
+
   const urls = new Map(
     files.flatMap((file, at) => {
       const read = queries[at]?.data;
+
       return read?.kind === PICTURE_STATE.READY ? [[file.attachmentId, read.url] as const] : [];
     }),
   );
+
   return inboxPreviewPieces(item, nameOf, ticked).map((piece) =>
     typeof piece === "string" ? piece : (inboxFileChips([piece], urls)[0] ?? piece.name),
   );
@@ -229,26 +240,33 @@ export function MessageWords({
   images: InboxImageReads;
 }): React.JSX.Element {
   const fromAgent = message.author === INBOX_MESSAGE_AUTHOR.AGENT;
+
   // Note that the files its ask's options carry stand on their cards, so the message draws them nowhere else.
   const files = useMemo(() => {
     const carried = optionFileIds(message.ask);
     const all = message.files ?? NO_FILES;
+
     return carried.size === 0 ? all : all.filter((file) => !carried.has(file.attachmentId));
   }, [message.files, message.ask]);
+
   // Note that each file is read once, as it is first drawn, and kept as the window's pictures are.
   const queries = useQueries({
     queries: files.map((file) => pictureQuery(itemId, file.attachmentId, images.read)),
   });
+
   const reads = new Map(
     files.flatMap((file, at) => {
       const read = queries[at];
+
       return read === undefined ? [] : [[file.attachmentId, read] as const];
     }),
   );
+
   const chips = inboxFileChips(files, readUrls(reads));
   // Note that an agent's words write no markers, so they name none of its files.
   const shown = useWordFiles(chips, fromAgent ? "" : message.text);
   const { named, viewer } = shown;
+
   return (
     <WordFilesContext.Provider value={named}>
       <CommentFiles

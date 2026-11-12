@@ -79,6 +79,7 @@ const EXTENSION_SCHEME = {
   FIREFOX: "moz-extension",
   SAFARI: "safari-web-extension",
 } as const;
+
 const EXTENSION_SCHEMES: ReadonlySet<string> = new Set(Object.values(EXTENSION_SCHEME));
 
 /** The browser's own words for what it refused that names no address, said as they are. */
@@ -91,6 +92,7 @@ const REFUSAL_KEYWORD = {
   TRUSTED_TYPES_POLICY: "trusted-types-policy",
   TRUSTED_TYPES_SINK: "trusted-types-sink",
 } as const;
+
 const REFUSAL_KEYWORDS: ReadonlySet<string> = new Set(Object.values(REFUSAL_KEYWORD));
 
 /** What a refusal says of an address it could not read, in place of the address. */
@@ -135,9 +137,11 @@ export function webSentryBuild(): WebSentryBuild {
 async function loadedSentry(build: WebSentryBuild): Promise<WebSentry | undefined> {
   try {
     const { initWebSentry } = await import("./web-sentry-sdk");
+
     return initWebSentry(build, queryClient);
   } catch (error) {
     console.warn("Sentry's SDK could not load; this tab reports nothing.", error);
+
     return undefined;
   }
 }
@@ -155,8 +159,10 @@ function isExtensionAddress(address: string): boolean {
  */
 function refusedOrigin(blockedURI: string): string {
   if (REFUSAL_KEYWORDS.has(blockedURI)) return blockedURI;
+
   try {
     const { origin } = new URL(blockedURI);
+
     return origin === "null" ? UNREADABLE_ADDRESS : origin;
   } catch {
     return UNREADABLE_ADDRESS;
@@ -183,13 +189,16 @@ let refusalsSaidTo: EarlyReports<WebSentry>["say"] | undefined;
 function listenForRefusals(say: EarlyReports<WebSentry>["say"]): void {
   const listening = refusalsSaidTo !== undefined;
   refusalsSaidTo = say;
+
   if (listening) return;
   document.addEventListener("securitypolicyviolation", (event) => {
     if (isExtensionAddress(event.blockedURI) || isExtensionAddress(event.sourceFile)) return;
     const directive = event.effectiveDirective;
     const origin = refusedOrigin(event.blockedURI);
     const origins = refusalsSaid.get(directive) ?? new Set<string>();
+
     if (origins.has(origin)) return;
+
     if (refusalsSaidTo?.((sentry) => sentry.reportRefusal(directive, origin))) {
       refusalsSaid.set(directive, origins.add(origin));
     }
@@ -206,14 +215,18 @@ export function startWebSentry(build: WebSentryBuild): WebSentryReports {
   // The SDK once it stands, which a send is traced through; a send pressed before then waits on nothing.
   let standing: WebSentry | undefined;
   const started = build.dsn ? loadedSentry(build) : Promise.resolve(undefined);
+
   const { say, settled } = reportsOnceStarted(
     started.then((sentry) => {
       standing = sentry;
+
       return sentry;
     }),
     EARLY_REPORTS_KEPT,
   );
+
   if (build.dsn) listenForRefusals(say);
+
   return {
     reportBlankTab: (error) => say((sentry) => sentry.reportBlankTab(error)),
     traceSend: (name, send) =>
@@ -225,11 +238,13 @@ export function startWebSentry(build: WebSentryBuild): WebSentryReports {
       say((sentry) => {
         sent = sentry.reportShownFailure(report);
       });
+
       return sent;
     },
     errorReporting: sentryReporterLayer({
       captureException: (error, hint) => {
         say((sentry) => sentry.captureException(error, hint));
+
         // Note that no event id is known yet, because the event may wait on the SDK's chunk.
         return "";
       },

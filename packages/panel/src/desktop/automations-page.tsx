@@ -216,6 +216,7 @@ function OwnerCell({
   workspace: Workspace | undefined;
 }): React.JSX.Element {
   const name = automationOwnerName(owner, workspace?.name, mine);
+
   return (
     <Tooltip label={name}>
       <AutomationOwnerFrame
@@ -254,12 +255,16 @@ function MakerCell({
   const maker = useCreator(
     automation.creatorId === undefined ? {} : { ownerId: automation.creatorId },
   );
+
   const owner = automationOwner(automation);
   const mine = automation.mine === true;
+
   if (maker.kind === ACTOR_KIND.SOMEONE) {
     return <OwnerCell owner={owner} mine={mine} workspace={workspace} />;
   }
+
   const name = actorName(maker);
+
   return (
     <Tooltip label={`${name} · ${automationOwnerName(owner, workspace?.name, mine)}`}>
       <AutomationOwnerFrame
@@ -283,6 +288,7 @@ function MakerCell({
 function useRunNow(automationId: string): { readonly running: boolean; readonly run: () => void } {
   const runAutomation = useMutation(actMutation(ACT_KIND.AUTOMATIONS_RUN));
   const toast = useToast();
+
   const run = () => {
     runAutomation
       .mutateAsync({ automationId, idempotencyKey: crypto.randomUUID() })
@@ -302,6 +308,7 @@ function useRunNow(automationId: string): { readonly running: boolean; readonly 
         }
       });
   };
+
   return { running: runAutomation.isPending, run };
 }
 
@@ -343,15 +350,18 @@ function AutomationRow({
   const next = automationNext(automation);
   const nextWords = automationNextText(automation, now);
   const links = useLinkItems()({ kind: LINK_DESTINATION.AUTOMATION, automationId: automation.id });
+
   const openInTab = useOpenInTab()({
     kind: LINK_DESTINATION.AUTOMATION,
     automationId: automation.id,
   });
+
   // Note that the glyph is the row's decoration, so its working word is said in the row's words instead.
   const working = state === GLYPH_STATE.WORKING ? glyphStateWords(state, false) : undefined;
   const trigger = automationTriggerText(automation.trigger, automation.repositories ?? []);
   const hiddenWorking = working === undefined ? null : <VisuallyHidden>{working}</VisuallyHidden>;
   const coarse = useCoarsePointer();
+
   return (
     <RowHintOptions
       card={<AutomationCard automation={automation} workspaceName={workspace?.name} />}
@@ -451,6 +461,7 @@ function AutomationGroupRows({
   shown: AutomationRowsShown;
 }): React.JSX.Element {
   const drawn = useLeaving(automations, automationKey);
+
   return (
     <>
       {drawn.map(({ key, value: automation }) => (
@@ -490,6 +501,7 @@ function AutomationList({
           shown.workspace?.name,
           group.automations.every((automation) => automation.mine === true),
         );
+
         // A phone's lone owner's list is headed too, since its rows name no owner.
         return (
           <AutomationGroupList
@@ -512,7 +524,9 @@ function listState(
   read: ReturnType<typeof useAutomations>["read"],
 ): CollectionState {
   if (workspacesUnread) return COLLECTION_STATE.ERROR;
+
   if (read === undefined) return COLLECTION_STATE.LOADING;
+
   return "failure" in read ? COLLECTION_STATE.ERROR : COLLECTION_STATE.READY;
 }
 
@@ -528,14 +542,17 @@ function useRowDeletion(
 ) {
   const removing = useMutation(AUTOMATION_DELETE_MUTATION);
   const [asking, setAsking] = useState<AutomationSummary | undefined>(undefined);
+
   const asked =
     asking !== undefined &&
     groups.some((group) => group.automations.some((each) => each.id === asking.id))
       ? asking
       : undefined;
+
   const confirmAct = useConfirmAct(removing, {
     send: () => {
       if (asked === undefined) return Promise.resolve();
+
       return removing.mutateAsync(asked.id).then((answer) => {
         if (!("failure" in answer)) onDeleted(asked.id);
       });
@@ -545,12 +562,15 @@ function useRowDeletion(
         ? { status: ACTION_RESULT_STATUS.REJECTED, reason: DELETE_REFUSAL_WORDS[answer.failure] }
         : ACCEPTED,
   });
+
   const confirm = useConfirmDialog(
     { subject: asked !== undefined, surfaceOpen: true },
     confirmAct,
     confirmFailure(FAILURE_SURFACE.AUTOMATION_DELETE, { automationId: asked?.id }),
   );
+
   const { ask: askConfirm } = confirm;
+
   const ask = useCallback(
     (automation: AutomationSummary) => {
       setAsking(automation);
@@ -558,6 +578,7 @@ function useRowDeletion(
     },
     [askConfirm],
   );
+
   return { asked, confirm, ask };
 }
 
@@ -572,6 +593,7 @@ function AutomationsHead({
   const door = useAutomationsDoor(tasks);
   const workspace = tasks.workspace;
   const openNew = () => door.open({ kind: AUTOMATIONS_PAGE.NEW });
+
   return room === SHELL_ROOM.NARROW ? (
     // A phone heads the list as it heads every place (`phone-head.tsx`): New automation, the title centered, and a ⋯.
     <PhoneHead
@@ -654,6 +676,7 @@ const SUGGESTIONS: readonly {
 /** The presets suggested where the window works in `workspaceId`: each whose experiment is on there, or that has none. */
 function useOfferedPresets(workspaceId: string | undefined): readonly AutomationPresetName[] {
   const experiments = useExperimentsIn(workspaceId);
+
   return SUGGESTIONS.filter(
     ({ experiment }) => experiment === undefined || experimentOn(experiments, experiment),
   ).map(({ preset }) => preset);
@@ -669,12 +692,15 @@ function SuggestedAutomations({ tasks }: { tasks: TasksControl }): React.JSX.Ele
   const door = useAutomationsDoor(tasks);
   const workspace = tasks.workspace;
   const offered = useOfferedPresets(workspace?.id);
+
   if (offered.length === 0) return null;
+
   return (
     <div className="automation-suggestions mt-page-section-gap">
       <SuggestionCards title="Suggested">
         {SUGGESTIONS.filter(({ preset }) => offered.includes(preset)).map(({ preset, glyph }) => {
           const filled = automationPreset(preset);
+
           return (
             <SuggestionCard
               key={preset}
@@ -707,12 +733,16 @@ function ListPage({
   const workspace = tasks.workspace;
   const workspacesRead = useWorkspacesRead();
   const { read, reload, toggle } = automations;
+
   const groups =
     read !== undefined && "automations" in read ? automationGroups(read.automations) : [];
+
   const workspacesUnread = workspace === undefined && workspacesRead.failed;
+
   const deletion = useRowDeletion(groups, (automationId) =>
     door.open({ kind: AUTOMATIONS_PAGE.LIST, deleted: automationId }),
   );
+
   return (
     <ReplayUnmask>
       <CollectionPage
@@ -791,8 +821,10 @@ function AutomationsTabs({
   const door = useAutomationsDoor(tasks);
   const standing = useAutomationsPlace();
   const { read } = useWorkspaceRuns(tasks.workspace?.id);
+
   const tab =
     standing.place.kind === AUTOMATIONS_PAGE.RUNS ? AUTOMATIONS_PAGE.RUNS : AUTOMATIONS_PAGE.LIST;
+
   const tabs = [
     { value: AUTOMATIONS_PAGE.LIST, label: AUTOMATIONS },
     {
@@ -801,6 +833,7 @@ function AutomationsTabs({
       count: runsCount(runningRuns(read), STATUS_TONE.WORKING),
     },
   ] as const;
+
   return (
     <Inline gap={GAP.SECTION}>
       <ChoiceBar<AutomationsTabKind>
@@ -818,7 +851,9 @@ function AutomationsTabs({
 /** What the Runs tab shows: the workspaces or the runs unread, the runs still being read, or the runs. */
 function runsState(workspacesUnread: boolean, read: WorkspaceRunsRead): CollectionState {
   if (workspacesUnread) return COLLECTION_STATE.ERROR;
+
   if (read === undefined) return COLLECTION_STATE.LOADING;
+
   return "failed" in read ? COLLECTION_STATE.ERROR : COLLECTION_STATE.READY;
 }
 
@@ -844,14 +879,18 @@ function RunsPage({
   const { read, reload } = useWorkspaceRuns(workspace?.id);
   const workspacesRead = useWorkspacesRead();
   const [shown, setShown] = useState<RunsShown>(RUNS_SHOWN.ALL);
+
   const listed =
     automations.read !== undefined && "automations" in automations.read
       ? automations.read.automations
       : [];
+
   // Note that an automation the list does not hold yet is taken for the reader's own, so no run names a creator it may not have.
   const mine = (automationId: string) =>
     listed.find((automation) => automation.id === automationId)?.mine !== false;
+
   const workspacesUnread = workspace === undefined && workspacesRead.failed;
+
   return (
     <ReplayUnmask>
       <CollectionPage
@@ -923,7 +962,9 @@ function backBar(onBack: () => void, phone: boolean): ToolbarProps {
       onBack={onBack}
     />
   );
+
   if (phone) return phoneBar({ place: "automation", start: back, end: null });
+
   return { lead: back, start: TOOLBAR_INSET.COLUMN };
 }
 
@@ -939,6 +980,7 @@ function AutomationAbsentPage({
   children: React.ReactNode;
 }): React.JSX.Element {
   useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, onBack);
+
   return (
     <ReplayUnmask>
       <DetailPage
@@ -981,6 +1023,7 @@ function UnreadPage({
 /** One automation's page that names an automation the list does not hold: it was deleted, or is of a workspace the reader is not in, as a link may name. */
 function GonePage({ onBack, phone }: { onBack: () => void; phone: boolean }): React.JSX.Element {
   useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, onBack);
+
   return (
     <ReplayUnmask>
       <NotFound replayUnmasked thing={NOT_FOUND_THING.AUTOMATION} bar={backBar(onBack, phone)} />
@@ -999,6 +1042,7 @@ function ReadingPage({
   offersOwner: boolean;
 }): React.JSX.Element {
   useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, onBack);
+
   return <AutomationPageSkeleton room={room} offersOwner={offersOwner} onBack={onBack} />;
 }
 
@@ -1052,10 +1096,12 @@ function useWorkspaceSentry(workspaceId: string): SentryOffer {
   const retry = () => retryIntegrations({ workspaceId });
   const installing = installSentry.isPending;
   const refusal = installSentry.error?.message;
+
   const onInstall = () => {
     if (installing) return;
     installSentry.mutate({ workspaceId });
   };
+
   return { read, failed, onRetry: retry, installing, refusal, onInstall };
 }
 
@@ -1097,13 +1143,17 @@ function AutomationsPages({
   const [made, setMade] = useState<string | undefined>(undefined);
   const back = () => door.open({ kind: AUTOMATIONS_PAGE.LIST });
   const { place } = standing;
+
   if (place.kind === AUTOMATIONS_PAGE.LIST) {
     return <ListPage tasks={tasks} automations={automations} room={room} />;
   }
+
   if (place.kind === AUTOMATIONS_PAGE.RUNS) {
     return <RunsPage tasks={tasks} automations={automations} room={room} />;
   }
+
   const { read, reload } = automations;
+
   if (workspace === undefined && workspacesRead.failed) {
     return (
       <UnreadPage
@@ -1114,6 +1164,7 @@ function AutomationsPages({
       />
     );
   }
+
   if (read !== undefined && "failure" in read) {
     return (
       <UnreadPage
@@ -1124,13 +1175,17 @@ function AutomationsPages({
       />
     );
   }
+
   const listedAutomations = read === undefined ? [] : read.automations;
+
   const opened =
     place.kind === AUTOMATIONS_PAGE.EDIT
       ? listedAutomations.find((automation) => automation.id === place.automationId)
       : undefined;
+
   // Note that the account's first workspace is its personal one, where everything is its own.
   const offersOwner = workspace !== undefined && tasks.workspaces[0]?.id !== workspace.id;
+
   if (place.kind === AUTOMATIONS_PAGE.EDIT && opened === undefined) {
     return read === undefined ? (
       <ReadingPage onBack={back} room={room} offersOwner={offersOwner} />
@@ -1138,7 +1193,9 @@ function AutomationsPages({
       <GonePage onBack={back} phone={room === SHELL_ROOM.NARROW} />
     );
   }
+
   const editing = opened === undefined || opened.id === made ? AUTOMATIONS_PAGE.NEW : opened.id;
+
   // A new page is filled in from the suggestion its address names only while that suggestion is offered.
   const preset =
     place.kind === AUTOMATIONS_PAGE.NEW &&
@@ -1146,6 +1203,7 @@ function AutomationsPages({
     offered.includes(place.preset)
       ? place.preset
       : undefined;
+
   const editor = (sentry: SentryOffer, slackBot: boolean) => (
     <AutomationEditor
       key={editing}
@@ -1173,6 +1231,7 @@ function AutomationsPages({
       }}
     />
   );
+
   return (
     // Keyed by the workspace, then by what it edits, so another workspace's page or another automation's holds nothing of the last's draft.
     <Fragment key={workspace?.id}>

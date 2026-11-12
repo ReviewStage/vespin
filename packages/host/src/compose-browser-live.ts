@@ -92,14 +92,18 @@ export function browserLiveConcern(
     Effect.scoped(
       Effect.gen(function* () {
         const opening = yield* openedUnderCredential(account.credential, openSocket, address);
+
         if (!("socket" in opening)) return yield* closed(connectionId, BROWSER_LIVE_ABNORMAL_CLOSE);
         const { socket } = opening;
         connection.socket = socket;
+
         for (const text of connection.held.splice(0)) yield* socket.send({ text });
         let code: number | undefined;
         yield* Stream.runForEach(socket.arrivals, (arrival) => {
           if ("close" in arrival) code = arrival.close;
+
           if (!("text" in arrival)) return Effect.void;
+
           return Effect.sync(() =>
             kernel.emit(
               GATEWAY_EVENT.BROWSER_LIVE_MESSAGE,
@@ -119,15 +123,19 @@ export function browserLiveConcern(
           params,
           "opening a live view names the connection, the agent, and the tab",
         );
+
         if (!gate()) return yield* Effect.fail(new RefusedRefusal({ message: "signed out" }));
         const { connectionId, agentId, tabId } = read;
+
         if (socketOrigin === undefined) {
           return yield* Effect.fail(new RefusedRefusal({ message: "no live view is served" }));
         }
+
         const connection: Connection = { socket: undefined, held: [] };
         connections.set(connectionId, connection);
         const address = `${socketOrigin}${browserLivePath({ agentId, tabId })}`;
         yield* FiberMap.run(fibers, connectionId, session(connectionId, connection, address));
+
         return {};
       }),
     [GATEWAY_METHOD.BROWSER_LIVE_SEND]: (params) =>
@@ -137,14 +145,18 @@ export function browserLiveConcern(
           params,
           "sending names the connection and the text",
         );
+
         const { connectionId, text } = read;
         const connection = connections.get(connectionId);
+
         if (connection === undefined) return {};
+
         if (connection.socket !== undefined) {
           yield* connection.socket.send({ text });
         } else if (connection.held.length < HELD_WHILE_OPENING) {
           connection.held.push(text);
         }
+
         return {};
       }),
     [GATEWAY_METHOD.BROWSER_LIVE_DISCONNECT]: (params) =>
@@ -154,8 +166,10 @@ export function browserLiveConcern(
           params,
           "closing a live view names the connection",
         );
+
         connections.delete(read.connectionId);
         yield* FiberMap.remove(fibers, read.connectionId);
+
         return {};
       }),
   };
@@ -164,6 +178,7 @@ export function browserLiveConcern(
     const ended = [...connections.keys()];
     connections.clear();
     yield* FiberMap.clear(fibers);
+
     for (const connectionId of ended) {
       kernel.emit(
         GATEWAY_EVENT.BROWSER_LIVE_CLOSED,

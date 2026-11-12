@@ -113,11 +113,14 @@ test("a known ask that fails its own shape is refused, and an ask without where 
     ...ASKING,
     ask: { ...DEPLOY, options: [{ label: "Ship it" }], status: "open" },
   };
+
   assert.equal(read(inboxMessageSchema, oneOption), undefined);
+
   const tooManySteps = {
     ...ASKING,
     ask: { ...SECRET, steps: Array(51).fill("Step."), status: "open" },
   };
+
   assert.equal(read(inboxMessageSchema, tooManySteps), undefined);
   assert.equal(read(inboxMessageSchema, { ...ASKING, ask: DEPLOY }), undefined);
 });
@@ -132,6 +135,7 @@ test("an ask of a type this build does not know reads as its type and where it s
     ...ASKING,
     ask: { type: "vote", ballots: ["a", "b"], status: INBOX_ASK_STATUS.OPEN },
   };
+
   assert.deepEqual(read(inboxMessageSchema, vote)?.ask, {
     type: "vote",
     status: INBOX_ASK_STATUS.OPEN,
@@ -140,11 +144,13 @@ test("an ask of a type this build does not know reads as its type and where it s
 
 test("a decide posted recommending several is kept as its first label and every label, which a desktop reading one label reads as its first", () => {
   const options = [{ label: "Email" }, { label: "Slack" }, { label: "SMS" }];
+
   const posted = read(inboxThreadPostInputSchema, {
     key: "invite-channels",
     body: "Pick any.",
     ask: { type: INBOX_ASK.DECIDE, options, multiple: true, recommended: ["Slack", "Email"] },
   });
+
   assert.ok(posted?.ask !== undefined);
   const kept = keptInboxAsk(posted.ask);
   assert.ok(kept.type === INBOX_ASK.DECIDE);
@@ -165,6 +171,7 @@ test("a decide whose options carry media reads on a released desktop as its labe
     { type: INBOX_OPTION_MEDIA.FILE, attachmentId: ITEM_ID, mediaType: "video/webm" },
     { type: "model", attachmentId: ITEM_ID, format: "glb" },
   ];
+
   const message = {
     ...ASKING,
     ask: {
@@ -173,6 +180,7 @@ test("a decide whose options carry media reads on a released desktop as its labe
       status: INBOX_ASK_STATUS.OPEN,
     },
   };
+
   const ask = read(inboxMessageSchema, message)?.ask;
   assert.ok(ask?.type === INBOX_ASK.DECIDE && "options" in ask);
   assert.deepEqual(ask.options[0]?.media, [media[0], { type: "model" }]);
@@ -194,21 +202,25 @@ test("an agent's answer ask keeps the option its select recommends", () => {
       },
     ],
   } as const;
+
   const posted = read(inboxThreadPostInputSchema, {
     key: "deploy-region",
     title: "Where should it deploy?",
     body: "Two regions are free.",
     ask,
   });
+
   assert.deepEqual(posted?.ask, ask);
 });
 
 test("an answer given against a response reads as the answer to the ask it stands for, Done ticking every step", () => {
   const asking = (view: InboxResponse, ask: InboxAsk) => ({ id: ASKING_ID, ask, view });
+
   const choice = asking(
     { type: INBOX_RESPONSE.CHOICE, options: DEPLOY.options },
     { type: INBOX_ASK.DECIDE, options: DEPLOY.options },
   );
+
   const approval = asking(
     { type: INBOX_RESPONSE.APPROVAL },
     {
@@ -216,11 +228,14 @@ test("an answer given against a response reads as the answer to the ask it stand
       options: [{ label: INBOX_APPROVAL_OPTION.APPROVE }, { label: INBOX_APPROVAL_OPTION.DECLINE }],
     },
   );
+
   const todo = asking({ type: INBOX_RESPONSE.TODO }, { type: INBOX_ASK.DO, steps: [] });
+
   const form = asking(
     { type: INBOX_RESPONSE.FORM, fields: REGION.fields },
     { type: INBOX_ASK.ANSWER, fields: REGION.fields },
   );
+
   const cases = [
     [
       choice,
@@ -254,6 +269,7 @@ test("an answer given against a response reads as the answer to the ask it stand
       },
     ],
   ] as const;
+
   for (const [open, reply, answers] of cases) {
     // The answer fits the response it was given against, and its reading fits the ask.
     const note: string | undefined = "note" in reply ? reply.note : undefined;
@@ -266,6 +282,7 @@ test("an answer given against a response reads as the answer to the ask it stand
       reply.reply,
     );
   }
+
   const words = asking({ type: INBOX_RESPONSE.TEXT }, { type: INBOX_ASK.ANSWER });
   assert.equal(inboxReplyAnswers(words, { reply: INBOX_REPLY.ACKNOWLEDGED }), undefined);
 });
@@ -279,6 +296,7 @@ test("a decide takes a pick of its offered options, or words or files where none
     reply,
     choices,
   });
+
   const several = { ...DEPLOY, multiple: true };
   assert.equal(inboxAnswersRefusal(DEPLOY, answer(INBOX_REPLY.CHOSE, ["Wait"]), ""), undefined);
   assert.equal(
@@ -288,13 +306,16 @@ test("a decide takes a pick of its offered options, or words or files where none
   assert.equal(inboxAnswersRefusal(DEPLOY, answer(INBOX_REPLY.ANSWERED), "Neither."), undefined);
   // None of these is a pick of no option, which only a choice whose options carry media offers.
   const shot = { type: INBOX_OPTION_MEDIA.FILE, attachmentId: ITEM_ID, mediaType: "image/png" };
+
   const designs = {
     ...DEPLOY,
     options: [{ label: "Ship it", media: [shot] }, { label: "Wait" }],
   } as const;
+
   assert.equal(inboxAnswersRefusal(designs, answer(INBOX_REPLY.CHOSE), ""), undefined);
   const file = { attachmentId: ITEM_ID, name: "plan.pdf", mediaType: "application/pdf" };
   assert.equal(inboxAnswersRefusal(DEPLOY, answer(INBOX_REPLY.ANSWERED), "", [file]), undefined);
+
   const refusals = [
     [DEPLOY, answer(INBOX_REPLY.CHOSE), "A pick names no option."],
     [DEPLOY, answer(INBOX_REPLY.CHOSE, ["Wait", "Ship it"]), "The choice takes one option."],
@@ -308,6 +329,7 @@ test("a decide takes a pick of its offered options, or words or files where none
     [DEPLOY, answer(INBOX_REPLY.APPROVED), "The ask does not take that answer."],
     [DEPLOY, answer(INBOX_REPLY.DONE), "The ask does not take that answer."],
   ] as const;
+
   for (const [ask, answers, refusal] of refusals) {
     assert.equal(inboxAnswersRefusal(ask, answers, "  "), refusal, refusal);
   }
@@ -322,12 +344,14 @@ test("a do takes Mark done once every step is ticked, or Couldn't do it with any
     reply,
     steps,
   });
+
   assert.equal(inboxAnswersRefusal(SECRET, answer(INBOX_REPLY.DONE, [1, 0]), ""), undefined);
   assert.equal(inboxAnswersRefusal(SECRET, answer(INBOX_REPLY.NOT_DONE, [0]), ""), undefined);
   assert.equal(inboxAnswersRefusal(SECRET, answer(INBOX_REPLY.NOT_DONE), ""), undefined);
   // A stored to-do maps to a do of no steps, which Mark done answers ticking none.
   const todo = { type: INBOX_ASK.DO, steps: [] };
   assert.equal(inboxAnswersRefusal(todo, answer(INBOX_REPLY.DONE), ""), undefined);
+
   const refusals = [
     [answer(INBOX_REPLY.DONE, [0]), "Mark done needs every step ticked."],
     [answer(INBOX_REPLY.DONE), "Mark done needs every step ticked."],
@@ -335,6 +359,7 @@ test("a do takes Mark done once every step is ticked, or Couldn't do it with any
     [answer(INBOX_REPLY.NOT_DONE, [2]), "A tick names no step of the ask."],
     [{ ask: ASKING_ID, reply: INBOX_REPLY.ANSWERED }, "The ask does not take that answer."],
   ] as const;
+
   for (const [answers, refusal] of refusals) {
     assert.equal(inboxAnswersRefusal(SECRET, answers, "Done."), refusal, refusal);
   }
@@ -346,14 +371,17 @@ test("a do takes the steps ticked with neither press as an answer, once one is t
     reply: INBOX_REPLY.ANSWERED,
     ...(steps === undefined ? undefined : { steps }),
   });
+
   assert.equal(inboxAnswersRefusal(SECRET, ticked([1]), ""), undefined);
   assert.equal(inboxAnswersRefusal(SECRET, ticked([0, 1]), ""), undefined);
+
   const refusals = [
     [ticked([]), "The ask does not take that answer."],
     [ticked(), "The ask does not take that answer."],
     [ticked([2]), "A tick names no step of the ask."],
     [ticked([1, 1]), "A step is ticked twice."],
   ] as const;
+
   for (const [answers, refusal] of refusals) {
     assert.equal(inboxAnswersRefusal(SECRET, answers, "Some words."), refusal, refusal);
   }
@@ -365,12 +393,14 @@ test("an answer with fields takes their values filled, and one without takes wor
     reply: INBOX_REPLY.SUBMITTED,
     values,
   });
+
   const answered = { ask: ASKING_ID, reply: INBOX_REPLY.ANSWERED };
   assert.equal(
     inboxAnswersRefusal(REGION, submitted([{ label: "Region", value: "us-east" }]), ""),
     undefined,
   );
   assert.equal(inboxAnswersRefusal(WORDS, answered, "Use the staging key."), undefined);
+
   const refusals = [
     [REGION, submitted([]), "", "A required field of the form is empty."],
     [
@@ -384,6 +414,7 @@ test("an answer with fields takes their values filled, and one without takes wor
     [WORDS, answered, " ", "An answer in the developer's own words needs words or a file."],
     [WORDS, submitted([]), "Here.", "The ask does not take that answer."],
   ] as const;
+
   for (const [ask, answers, words, refusal] of refusals) {
     assert.equal(inboxAnswersRefusal(ask, answers, words), refusal, refusal);
   }
@@ -395,6 +426,7 @@ test("a form filled in part is taken with a required field left empty, as is one
     reply: INBOX_REPLY.SUBMITTED,
     values,
   });
+
   const file = { attachmentId: ITEM_ID, name: "plan.pdf", mediaType: "application/pdf" };
   const partial = submitted([{ label: "Replicas", value: 3 }]);
   assert.equal(inboxAnswersRefusal(REGION, partial, ""), undefined);
@@ -404,10 +436,12 @@ test("a form filled in part is taken with a required field left empty, as is one
     inboxAnswersRefusal(REGION, submitted([]), "  "),
     "A required field of the form is empty.",
   );
+
   const owner = {
     type: INBOX_ASK.ANSWER,
     fields: [{ type: INBOX_FIELD.TEXT, label: "Owner", required: true }],
   } as const;
+
   assert.equal(
     inboxAnswersRefusal(owner, submitted([{ label: "Owner", value: "  " }]), "Ask ops."),
     "A required field of the form is empty.",

@@ -33,11 +33,13 @@ test("colors for older words leave the drawn words those typed", () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   // The colors were answered for "pnpm install\nuv sync"; the second line has since been typed over.
   const lines = [
     [{ text: "pnpm", color: "#ffa657" }, { text: " install" }],
     [{ text: "uv", color: "#ffa657" }, { text: " sync" }],
   ];
+
   const typed = "pnpm install\ndocker compose pull";
   act(() =>
     root.render(
@@ -64,9 +66,11 @@ test("a numbered editor numbers every line it holds, empty ones included", () =>
       }),
     ),
   );
+
   const drawn = [...(document.querySelector("pre")?.children ?? [])].map(
     (line) => line.firstElementChild?.textContent,
   );
+
   expect(drawn).toEqual(["1", "2", "3", "4"]);
 });
 
@@ -87,12 +91,14 @@ test("⌘S and ⌘↩ in an editor answer its save, kept from the browser, and E
     ),
   );
   const field = document.querySelector("textarea") ?? expect.fail("No field");
+
   const save = new KeyboardEvent("keydown", {
     key: "s",
     metaKey: true,
     bubbles: true,
     cancelable: true,
   });
+
   act(() => field.dispatchEvent(save));
   // The same physical key on a Cyrillic layout, whose character is no Latin letter.
   const cyrillic = { key: "ы", code: "KeyS", metaKey: true, bubbles: true, cancelable: true };

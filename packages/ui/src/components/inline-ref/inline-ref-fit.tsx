@@ -27,6 +27,7 @@ const InlineRefFitContext = createContext<InlineRefFit>(INLINE_REF_FIT.LINE);
 /** How a token takes its line: its own fit where it says one, else the surface's. */
 export function useInlineRefFit(own: InlineRefFit | undefined): InlineRefFit {
   const scoped = useContext(InlineRefFitContext);
+
   return own ?? scoped;
 }
 

@@ -77,6 +77,7 @@ const openUser = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -93,13 +94,16 @@ const agentOn = (userId: string, task: { readonly id: string; readonly workspace
       prompt: null,
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     assert.ok(Option.isSome(started));
+
     const agent = {
       userId,
       taskId: task.id,
       agentId: started.value.agent.id,
       organizationId: started.value.agent.organizationId,
     } satisfies ThreadPoster;
+
     return { ...agent, workspaceId: task.workspaceId };
   });
 
@@ -107,6 +111,7 @@ const agentOn = (userId: string, task: { readonly id: string; readonly workspace
 const openAgent = Effect.gen(function* () {
   const userId = yield* openUser;
   const task = yield* startTask(userId, { name: "Teammate invitations" });
+
   return yield* agentOn(userId, task);
 });
 
@@ -142,11 +147,14 @@ function sandboxWith(files: Readonly<Record<string, Uint8Array>>): InboxSandboxD
   const byPath = new Map(
     Object.entries(files).map(([path, bytes]) => [posix.resolve(CODER.CHECKOUT_PATH, path), bytes]),
   );
+
   return () =>
     Promise.resolve({
       readFile: ({ path }: { path: string }) => {
         const bytes = byPath.get(path);
+
         if (bytes === undefined) return Promise.resolve(null);
+
         return Promise.resolve(
           new ReadableStream<Uint8Array>({
             start(controller) {
@@ -175,18 +183,21 @@ const onlyItem = (agent: Pick<InboxAgent, "userId"> & { readonly taskId: string 
     assert.equal(items.length, 1, "one thread per key");
     const [item] = items;
     assert.ok(item);
+
     return item;
   });
 
 /** The lines a list accepted, failing where it refused. */
 function acceptedList(result: InboxListResult) {
   assert.ok("threads" in result, "the list was accepted");
+
   return result.threads;
 }
 
 /** The thread a read accepted, failing where it refused. */
 function acceptedRead(result: InboxReadResult) {
   assert.ok("thread" in result, "the read was accepted");
+
   return result.thread;
 }
 
@@ -199,12 +210,14 @@ function untimed<Line extends { readonly at: string }>(messages: readonly Line[]
 function openAsk(item: InboxItem) {
   const asking = item.thread?.find((message) => message.ask?.status === INBOX_ASK_STATUS.OPEN);
   assert.ok(asking);
+
   return asking;
 }
 
 /** The refusal a call answered, or a failure where it was taken. */
 function refusalOf(result: { readonly status: string; readonly reason?: string }): string {
   assert.equal(result.status, ACTION_RESULT_STATUS.REJECTED);
+
   return result.reason ?? "";
 }
 
@@ -246,11 +259,13 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         assert.equal(openAsk(noted).id, openAsk(first).id);
 
         yield* TestClock.adjust(Duration.seconds(1));
+
         const askedAgain = yield* post(agent, {
           key: QUEUE.key,
           body: "Redis is gone; how many workers?",
           ask: { type: INBOX_ASK.ANSWER, fields: [{ type: INBOX_FIELD.NUMBER, label: "Workers" }] },
         });
+
         assert.equal(askedAgain.status, ACTION_RESULT_STATUS.ACCEPTED);
         const item = yield* onlyItem(agent);
         assert.equal(item.id, first.id);
@@ -276,12 +291,15 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
+
         const person = (id: string) =>
           `[@Ada](${encodeMention({ kind: MENTION_KIND.PERSON, userId: id }, { workspace: "acme", repository: null })})`;
+
         const posted = yield* post(agent, { ...QUEUE, to: person(agent.userId) });
         assert.equal(posted.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(posted));
 
         const agentLink = `[@Agent](${encodeMention({ kind: MENTION_KIND.AGENT, agentId: agent.agentId }, { workspace: "acme", repository: null })})`;
+
         for (const [place, reason] of [
           [{ to: person(`user-${randomUUID()}`) }, INBOX_REFUSAL.NO_ADDRESSEE],
           [{ to: agentLink }, INBOX_REFUSAL.NO_MEMBER],
@@ -292,6 +310,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             JSON.stringify(place),
           );
         }
+
         assert.equal((yield* onlyItem(agent)).key, QUEUE.key);
       }),
   );
@@ -331,17 +350,20 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
+
         const cases = [
           ["decide", QUEUE.ask, undefined],
           ["answer", { type: INBOX_ASK.ANSWER }, undefined],
           ["do", SETTINGS.ask, undefined],
           ["do-quiet", SETTINGS.ask, false],
         ] as const;
+
         for (const [key, ask, waits] of cases) {
           const value = { key, title: key, body: "Words.", ask };
           const posted = yield* post(agent, waits === undefined ? value : { ...value, waits });
           assert.equal(posted.status, ACTION_RESULT_STATUS.ACCEPTED, key);
         }
+
         const items = yield* taskInboxItems(agent.userId, agent.taskId);
         assert.deepEqual(
           cases.map(([key]) => [key, items.find((item) => item.key === key)?.needsReply]),
@@ -356,12 +378,14 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
       Effect.gen(function* () {
         const agent = yield* openAgent;
         const decide = (ask: WireBoundaryInput) => ({ ...QUEUE, ask });
+
         const answer = (fields: readonly WireBoundaryInput[]) => ({
           key: "invite-channel",
           title: "How are invitations sent?",
           body: "Pick a channel.",
           ask: { type: INBOX_ASK.ANSWER, fields },
         });
+
         const refusals = [
           [
             decide({ ...QUEUE.ask, options: [{ label: "A" }, { label: "A" }] }),
@@ -407,14 +431,18 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           [{ key: "empty", title: "T", body: "" }, INBOX_REFUSAL.UNREADABLE_POST],
           [{ key: "blank", title: "T", body: " \n\t " }, INBOX_REFUSAL.UNREADABLE_POST],
         ] as const;
+
         for (const [value, reason] of refusals) {
           assert.equal(refusalOf(yield* post(agent, value)), reason);
         }
+
         // A link written before the tool that answers its id has answered holds a placeholder, which leads nowhere.
         const placeholder = "https://vespin.dev/acme/agent/{AGENT}";
+
         const unread = refusalOf(
           yield* post(agent, { ...QUEUE, body: `Started [@its agent](${placeholder}).` }),
         );
+
         assert.ok(unread.startsWith("Not posted:") && unread.includes(placeholder), unread);
         assert.deepEqual(yield* taskInboxItems(agent.userId, agent.taskId), []);
 
@@ -424,6 +452,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           options: ["Email", "Slack"],
           recommended: "Slack",
         };
+
         yield* post(agent, answer([channel]));
         const item = yield* onlyItem(agent);
         assert.deepEqual(openAsk(item).ask, {
@@ -447,6 +476,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           ask: { type: INBOX_ASK.DECIDE, options, multiple: true, recommended: ["Slack", "Email"] },
         });
         const several = yield* onlyItem(agent);
+
         const kept = {
           type: INBOX_ASK.DECIDE,
           options,
@@ -454,6 +484,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           recommended: "Slack",
           recommendations: ["Slack", "Email"],
         };
+
         assert.deepEqual(openAsk(several).ask, { ...kept, status: INBOX_ASK_STATUS.OPEN });
 
         yield* TestClock.adjust(Duration.seconds(1));
@@ -478,12 +509,14 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
       Effect.gen(function* () {
         const agent = yield* openAgent;
         const shown = { kind: PAGE_SHOWER.AGENT, agentId: agent.agentId } as const;
+
         const page = yield* writePage(
           agent.userId,
           taskPageOwner(agent.taskId),
           { title: "Done card directions", html: "<p>Directions</p>" },
           shown,
         ).pipe(Effect.map(Option.getOrThrow));
+
         // A later version stands by the time the agent posts the one it was shown.
         yield* writePage(
           agent.userId,
@@ -492,6 +525,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           shown,
         );
         const sandbox = sandboxWith({ "shots/body.png": PNG, "shots/card.png": PNG });
+
         const options = [
           {
             label: "A card",
@@ -503,6 +537,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           },
           { label: "No card" },
         ];
+
         const ask = { type: INBOX_ASK.DECIDE, options };
         const body = "How should a turn end? ![Today](shots/body.png)";
 
@@ -548,17 +583,21 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         });
 
         const other = yield* startTask(agent.userId, { name: "Another task" });
+
         const elsewhere = yield* writePage(
           agent.userId,
           taskPageOwner(other.id),
           { title: "Elsewhere", html: "<p>Elsewhere</p>" },
           shown,
         ).pipe(Effect.map(Option.getOrThrow));
+
         const away = [{ label: "A card", media: [{ page: elsewhere.id }] }, { label: "No card" }];
+
         const refused = yield* post(agent, {
           ...QUEUE,
           ask: { type: INBOX_ASK.DECIDE, options: away },
         });
+
         assert.equal(refusalOf(refused), INBOX_REFUSAL.NO_PAGE);
       }),
   );
@@ -568,6 +607,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
+
         const body = [
           "The form, before and after:",
           "",
@@ -577,6 +617,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           "",
           "Write `![alt](shots/missing.png)` for a picture.",
         ].join("\n");
+
         const sandbox = sandboxWith({ "shots/before.png": PNG, "shots/after.png": PNG });
 
         const posted = yield* post(agent, { ...QUEUE, body }, sandbox);
@@ -592,9 +633,11 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             ["after.png", INBOX_IMAGE_TYPE.PNG],
           ],
         );
+
         const drawn = [...(message?.text ?? "").matchAll(/!\[[^\]]*\]\(<?([^\s)>]+)/gu)].map(
           ([, destination]) => destination ?? "",
         );
+
         assert.deepEqual(
           drawn.slice(0, 2).map((address) => inboxAttachmentOf(address)),
           (message?.files ?? []).map((file) => ({
@@ -604,11 +647,13 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           "each path is written as its kept picture's address",
         );
         assert.deepEqual(drawn.slice(2), ["https://example.com/logo.png", "shots/missing.png"]);
+
         const kept = yield* readInboxAttachment(
           agent.userId,
           item.id,
           message?.files?.[0]?.attachmentId ?? "",
         );
+
         assert.deepEqual(new Uint8Array(Option.getOrThrow(kept).bytes), PNG);
 
         const web = yield* post(agent, {
@@ -616,6 +661,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           title: "A web picture",
           body: "![Logo](https://example.com/logo.png)",
         });
+
         assert.equal(web.status, ACTION_RESULT_STATUS.ACCEPTED, "a web picture opens no sandbox");
       }),
   );
@@ -635,7 +681,9 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           },
           sandbox,
         );
+
         yield* TestClock.adjust(Duration.seconds(1));
+
         const replied = yield* post(
           agent,
           { key: QUEUE.key, body: "Again: ![report](/tmp/report.pdf)" },
@@ -660,11 +708,13 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         );
         assert.match(first?.text ?? "", /^The report: \n\n!\[After\]\(https:/u);
         assert.equal(reply?.text, "Again: ");
+
         const kept = yield* readInboxAttachment(
           agent.userId,
           item.id,
           reply?.files?.[0]?.attachmentId ?? "",
         );
+
         assert.deepEqual(
           Option.map(kept, (file) => [file.contentType, new Uint8Array(file.bytes)]),
           Option.some([INBOX_FILE_TYPE.PDF, PDF]),
@@ -694,11 +744,13 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           message?.files?.map((file) => [file.name, file.mediaType]),
           [["flow.webm", INBOX_FILE_TYPE.WEBM]],
         );
+
         const kept = yield* readInboxAttachment(
           agent.userId,
           item.id,
           message?.files?.[0]?.attachmentId ?? "",
         );
+
         assert.deepEqual(
           Option.map(kept, (file) => [file.contentType, file.bytes.byteLength]),
           Option.some([INBOX_FILE_TYPE.WEBM, recording.byteLength]),
@@ -711,14 +763,17 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
+
         const sandbox = sandboxWith({
           "shots/huge.png": paddedTo(PNG, INBOX_BOUNDS.MAX_IMAGE_BYTES + 1),
           "/tmp/video/long.webm": paddedTo(webmBytes(1280, 800), INBOX_BOUNDS.MAX_VIDEO_BYTES + 1),
           "/tmp/video/flow.mkv": webmBytes(640, 480, "matroska"),
           "/tmp/report.pdf": paddedTo(PDF, AGENT_BOUNDS.MAX_PDF_BYTES + 1),
         });
+
         const tooLarge =
           "Not posted: a picture names a file larger than 1.5 MB, a video larger than 4.0 MB, or a PDF larger than 3.0 MB; render it smaller, or record a shorter flow:";
+
         const refusals = [
           ["shots/huge.png", `${tooLarge} shots/huge.png`],
           ["/tmp/video/long.webm", `${tooLarge} /tmp/video/long.webm`],
@@ -728,10 +783,12 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM video that states its size, or a PDF: /tmp/video/flow.mkv",
           ],
         ] as const;
+
         for (const [path, reason] of refusals) {
           const refused = yield* post(agent, { ...QUEUE, body: `![Shot](${path})` }, sandbox);
           assert.equal(refusalOf(refused), reason);
         }
+
         assert.deepEqual(yield* taskInboxItems(agent.userId, agent.taskId), []);
       }),
   );
@@ -741,14 +798,17 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
+
         const sandbox = sandboxWith({
           "shots/form.png": PNG,
           "notes.txt": new TextEncoder().encode("no picture"),
         });
+
         const drawing = (...paths: string[]) => ({
           ...QUEUE,
           body: paths.map((path) => `![Shot](${path})`).join("\n"),
         });
+
         const refusals = [
           [
             drawing("shots/form.png", "shots/gone.png"),
@@ -763,9 +823,11 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             INBOX_REFUSAL.TOO_MANY_PICTURES,
           ],
         ] as const;
+
         for (const [value, reason] of refusals) {
           assert.equal(refusalOf(yield* post(agent, value, sandbox)), reason);
         }
+
         assert.deepEqual(yield* taskInboxItems(agent.userId, agent.taskId), []);
       }),
   );
@@ -776,10 +838,12 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
       Effect.gen(function* () {
         const agent = yield* openAgent;
         yield* post(agent, SETTINGS);
+
         const withdrawn = yield* withdrawAsk(
           agent,
           input({ key: SETTINGS.key, reason: "Did it myself." }),
         );
+
         const settings = yield* onlyItem(agent);
         assert.deepEqual(withdrawn, {
           status: ACTION_RESULT_STATUS.ACCEPTED,
@@ -806,21 +870,27 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         assert.equal(refusalOf(again), INBOX_REFUSAL.NO_OPEN_ASK);
 
         yield* post(agent, QUEUE);
+
         const asked = (yield* taskInboxItems(agent.userId, agent.taskId)).find(
           (item) => item.key === QUEUE.key,
         );
+
         assert.ok(asked);
+
         const answered = yield* answerInboxAsk(agent.userId, asked.id, {
           answers: { ask: openAsk(asked).id, reply: INBOX_REPLY.CHOSE, choices: ["Redis"] },
           text: "",
           clientKey: randomUUID(),
         });
+
         assert.equal(Option.getOrThrow(answered).item.status, INBOX_STATUS.ANSWERED);
         const late = yield* withdrawAsk(agent, input({ key: QUEUE.key, reason: "Too late." }));
         assert.equal(refusalOf(late), INBOX_REFUSAL.NO_OPEN_ASK);
+
         const after = (yield* taskInboxItems(agent.userId, agent.taskId)).find(
           (item) => item.key === QUEUE.key,
         );
+
         assert.equal(
           after?.status,
           INBOX_STATUS.ANSWERED,
@@ -831,6 +901,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           [{ key: "no-such-thread", reason: "Gone." }, INBOX_REFUSAL.NO_OPEN_ASK],
           [{ key: QUEUE.key }, INBOX_REFUSAL.UNREADABLE_WITHDRAW],
         ] as const;
+
         for (const [value, reason] of refusals) {
           assert.equal(refusalOf(yield* withdrawAsk(agent, input(value))), reason);
         }
@@ -886,6 +957,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           yield* TestClock.adjust(Duration.seconds(1));
           yield* post(agent, { key: QUEUE.key, body: text });
         }
+
         // The agent's words after the answer bring the thread back as a notice, which the member's reply on it settles.
         const notice = yield* onlyItem(agent);
         assert.equal(notice.status, INBOX_STATUS.OPEN);
@@ -994,12 +1066,14 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         const ready = itemOf("pr-ready");
         const merged = itemOf("pr-merged");
         assert.ok(ready && merged);
+
         const nodded = yield* acknowledgeInboxItem(
           agent.userId,
           ready.id,
           ready.revision,
           randomUUID(),
         );
+
         assert.ok(Option.isSome(nodded));
         // A deployment from before threads closed a notice with why; no tool from version 5 closes one.
         yield* Database.use((db) =>
@@ -1041,30 +1115,38 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         const { workspaceId, ...agent } = yield* openAgent;
         const teammateId = yield* openUser;
         yield* joinWorkspace(workspaceId, teammateId);
+
         const teammateTask = yield* createTask(teammateId, {
           name: "Billing export",
           organizationId: workspaceId,
         });
+
         const { workspaceId: _shared, ...teammate } = yield* agentOn(teammateId, teammateTask);
         yield* post(teammate, QUEUE);
         const elsewhereId = yield* openWorkspace(agent.userId);
+
         const elsewhereTask = yield* createTask(agent.userId, {
           name: "Side project",
           organizationId: elsewhereId,
         });
+
         const { workspaceId: _elsewhere, ...elsewhere } = yield* agentOn(
           agent.userId,
           elsewhereTask,
         );
+
         yield* post(elsewhere, SETTINGS);
 
         const byAgent = acceptedList(
           yield* listThreads(agent, input({ agentId: teammate.agentId })),
         );
+
         const byTask = acceptedList(yield* listThreads(agent, input({ taskId: teammate.taskId })));
+
         const outside = acceptedList(
           yield* listThreads(agent, input({ agentId: elsewhere.agentId })),
         );
+
         const misspelled = yield* listThreads(agent, input({ agentID: teammate.agentId }));
         const [elsewhereItem] = yield* taskInboxItems(agent.userId, elsewhere.taskId);
         assert.ok(elsewhereItem);
@@ -1079,6 +1161,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             ask: { type: INBOX_ASK.DECIDE, text: QUEUE.body },
           },
         ];
+
         const summary = (rows: typeof byAgent) =>
           rows.map(({ key, agentId, status, lastFrom, ask }) => ({
             key,
@@ -1087,6 +1170,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             lastFrom,
             ask,
           }));
+
         assert.deepEqual(summary(byAgent), teammateThread);
         assert.deepEqual(summary(byTask), teammateThread);
         assert.deepEqual(outside, []);
@@ -1107,6 +1191,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           text: "",
           clientKey: randomUUID(),
         });
+
         // Note that it takes about a second, because it must settle as many threads as a list's bound to push the answered one past it.
         for (let done = 1; done <= INBOX_BOUNDS.MAX_SETTLED_TOLD; done += 1) {
           yield* TestClock.adjust(Duration.seconds(1));
@@ -1134,6 +1219,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         const asked = yield* onlyItem(agent);
         // Note that it takes about a second, because it must write one more message than a page's bound.
         const replies = INBOX_BOUNDS.MAX_MESSAGES_READ + 1;
+
         for (let reply = 1; reply <= replies; reply += 1) {
           yield* TestClock.adjust(Duration.seconds(1));
           yield* postInboxMessage(agent.userId, asked.id, {
@@ -1144,6 +1230,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
 
         const latest = acceptedRead(yield* readThread(agent, input({ threadId: asked.id })));
         assert.ok(latest.older);
+
         const earlier = acceptedRead(
           yield* readThread(agent, input({ threadId: asked.id, before: latest.older })),
         );

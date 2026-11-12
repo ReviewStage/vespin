@@ -120,13 +120,17 @@ export function useAppSidebar(
   const { shown, setShown } = useSidebarShown();
   const header = switcher === undefined ? undefined : <WorkspaceSwitcherMenu {...switcher} />;
   const selected = openTask !== undefined && tasks.ids.has(openTask) ? openTask : place;
+
   const pick = (id: string) => {
     const picked = placeOf(id);
+
     if (picked !== undefined) router.navigate(picked.route);
     else router.navigate({ pathname: "/tasks", params: { selected: id } });
   };
+
   const columns = (list?: ListColumn | undefined): SidebarColumns => {
     const visibility = { sidebarShown: shown, onSidebarShownChange: setShown };
+
     if (!threeColumns && list !== undefined) {
       // Note that the photo leads only until the workspaces are read, as the compact bar's does, so Settings is never out of reach.
       const leading =
@@ -139,8 +143,10 @@ export function useAppSidebar(
         ) : account === undefined ? undefined : (
           <AccountBarItem {...account} />
         );
+
       return { sidebar: list.view, sidebarBar: { ...list.bar, leading }, ...visibility };
     }
+
     return {
       sidebar: (
         <RowList look={LIST_LOOK.SIDEBAR} selected={selected} onSelect={pick}>
@@ -169,5 +175,6 @@ export function useAppSidebar(
       ...visibility,
     };
   };
+
   return { columns, listLook: threeColumns ? LIST_LOOK.PLAIN : LIST_LOOK.SIDEBAR, ask: tasks.ask };
 }

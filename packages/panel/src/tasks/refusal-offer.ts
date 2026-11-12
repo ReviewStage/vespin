@@ -36,6 +36,7 @@ function leadOf(
   newest: ReadonlySet<string>,
 ): CatalogModel | undefined {
   const fallbacks = new Set<string>(Object.values(AGENT_FALLBACK_CHOICE).map((each) => each.model));
+
   return (
     pool.find((model) => fallbacks.has(model.id)) ??
     pool.find((model) => newest.has(model.id)) ??
@@ -51,16 +52,21 @@ export function refusalOffer(
   const provider = providerOf(source.model);
   const { base } = readModelChoice(models, source.model);
   const newest = unsearchedModels(models, undefined);
+
   const others = offeredModels(models)
     .map((each) => each.model)
     .filter((model) => model.id !== base);
+
   const otherHarness = others.filter((model) => model.provider !== provider);
   const runs = otherHarness.filter((model) => model.credentialMissing !== true);
+
   const sameHarness = others.filter(
     (model) => model.provider === provider && model.credentialMissing !== true,
   );
+
   const lead = leadOf(runs, newest) ?? leadOf(sameHarness, newest);
   const effort = lead === undefined ? undefined : effortFor(lead.efforts, source.effort);
+
   return {
     choice:
       lead === undefined || effort === undefined

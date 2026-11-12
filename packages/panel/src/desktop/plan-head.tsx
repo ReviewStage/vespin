@@ -48,6 +48,7 @@ export function PlanHead({
     parentTaskId: task.id,
     ...(task.repository === null ? undefined : { repository: task.repository }),
   });
+
   return (
     <>
       <PlanRelations

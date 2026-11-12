@@ -27,6 +27,8 @@ export function hostServiceOf(input: {
   if (input.platform === DEVICE_PLATFORM.DARWIN) {
     return input.launchdLabel === HOST_SERVICE.LAUNCH_AGENT ? HOST_SERVICE.LAUNCH_AGENT : undefined;
   }
+
   const units = input.cgroup.split("\n").map((line) => line.slice(line.lastIndexOf("/") + 1));
+
   return units.includes(HOST_SERVICE.UNIT) ? HOST_SERVICE.UNIT : undefined;
 }

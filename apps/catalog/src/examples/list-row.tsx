@@ -54,6 +54,7 @@ const MEMBERS = [
 
 function Members(): React.JSX.Element {
   const [open, setOpen] = useState<string>("grace");
+
   return (
     <List label="Members">
       {MEMBERS.map((member) => (
@@ -80,6 +81,7 @@ const AUTOMATIONS = [
 /** Rows edge to edge in a card, each with a switch beside its press. */
 function Automations(): React.JSX.Element {
   const [on, setOn] = useState<Record<string, boolean>>({ sweep: true, review: false });
+
   return (
     <List label="Automations" variant={LIST_VARIANT.CARD}>
       {AUTOMATIONS.map((automation) => (
@@ -145,15 +147,19 @@ const NESTED = [
 /** Rows nested under the rows that fold them, opened and folded as their chevrons are pressed. */
 function NestedRows(): React.JSX.Element {
   const [opened, setOpened] = useState<readonly string[]>(["launch"]);
+
   const depthOf = (parent: string | undefined): number =>
     parent === undefined ? 0 : 1 + depthOf(NESTED.find((task) => task.id === parent)?.parent);
+
   const shown = (parent: string | undefined): boolean =>
     parent === undefined ||
     (opened.includes(parent) && shown(NESTED.find((task) => task.id === parent)?.parent));
+
   return (
     <List label="Tasks" density={LIST_DENSITY.DENSE}>
       {NESTED.filter((task) => shown(task.parent)).map((task) => {
         const folds = NESTED.some((child) => child.parent === task.id);
+
         return (
           <ListRow
             key={task.id}
@@ -236,8 +242,10 @@ const INBOX_TINT_ROWS = [
 /** Follow-ups a reader ticks to send, one ticked. */
 function TickedRows(): React.JSX.Element {
   const [ticked, setTicked] = useState<readonly string[]>(["resend"]);
+
   const turn = (key: string) =>
     setTicked((was) => (was.includes(key) ? was.filter((each) => each !== key) : [...was, key]));
+
   return (
     <List label="Follow-ups" variant={LIST_VARIANT.CARD}>
       <ListRow
@@ -253,6 +261,7 @@ function TickedRows(): React.JSX.Element {
     </List>
   );
 }
+
 function ListRows(): React.JSX.Element {
   return (
     <>

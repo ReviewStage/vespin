@@ -56,6 +56,7 @@ const serve = (session: string | null, sent: Sent[] = []) =>
       Effect.succeed(
         Option.fromNullishOr(request.headers.get("cookie") === PAGE_COOKIE ? session : null),
       );
+
     const route = hostedFetch({
       github: githubProcedures({
         resolveUserId: () => Effect.succeed(Option.none()),
@@ -67,6 +68,7 @@ const serve = (session: string | null, sent: Sent[] = []) =>
         resolveSessionUserId,
       }),
     });
+
     // SAFETY: the claim and the offer read the database alone, which is all a test provides of the web runtime's services.
     const services = (yield* Effect.context<DatabaseServices>()) as Context.Context<WebServices>;
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
@@ -78,7 +80,9 @@ const serve = (session: string | null, sent: Sent[] = []) =>
         body,
       });
       const headers = new Headers(init?.headers);
+
       if (init?.credentials === "include") headers.set("cookie", PAGE_COOKIE);
+
       return route(
         new Request(url, { method: init?.method ?? "GET", headers, body: body ?? null }),
         services,
@@ -133,6 +137,7 @@ const insertInvitation = Effect.gen(function* () {
     expiresAt: new Date(Date.UTC(2099, 0, 1)),
     inviterId: GRACE,
   });
+
   return "invitation-1";
 });
 

@@ -28,7 +28,9 @@ const broken = new SqlError({
 const migrationFreedAt = (freesAt: Duration.Duration) =>
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
+
     if (now < Duration.toMillis(freesAt)) return yield* Effect.fail(refused);
+
     return "applied";
   });
 
@@ -38,6 +40,7 @@ describe("waitingOutNeonComputeLimit", () => {
       const fiber = yield* Effect.forkChild(
         waitingOutNeonComputeLimit(migrationFreedAt(Duration.minutes(2))),
       );
+
       yield* TestClock.adjust(Duration.minutes(3));
       assert.equal(yield* Fiber.join(fiber), "applied");
     }),
@@ -48,6 +51,7 @@ describe("waitingOutNeonComputeLimit", () => {
       const fiber = yield* Effect.forkChild(
         Effect.exit(waitingOutNeonComputeLimit(migrationFreedAt(Duration.hours(1)))),
       );
+
       yield* TestClock.adjust(Duration.minutes(7));
       const exit = yield* Fiber.join(fiber);
       assert.deepEqual(exit, Exit.fail(refused));
@@ -57,9 +61,11 @@ describe("waitingOutNeonComputeLimit", () => {
   it.effect("a refusal Drizzle carries beneath a statement's failure is waited out too", () =>
     Effect.gen(function* () {
       let refusals = 1;
+
       const statement = Effect.suspend(() => {
         if (refusals === 0) return Effect.succeed("applied");
         refusals -= 1;
+
         return Effect.fail(
           new EffectDrizzleQueryError({
             query: "select 1",
@@ -68,6 +74,7 @@ describe("waitingOutNeonComputeLimit", () => {
           }),
         );
       });
+
       const fiber = yield* Effect.forkChild(waitingOutNeonComputeLimit(statement));
       yield* TestClock.adjust(Duration.minutes(1));
       assert.equal(yield* Fiber.join(fiber), "applied");

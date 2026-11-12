@@ -49,11 +49,14 @@ export const pageFrameAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<PageFrameAnswer, HostedRefusal, DatabaseServices | PageLinks> {
   if (!loadsAFrame(request)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const page = yield* hostedStoreOrUnavailable(readPageVersion(userId, owner, pageId, version));
+
   if (Option.isNone(page)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const { sandbox } = yield* PageLinks;
+
   const location =
     sandbox === undefined
       ? PAGE_IN_MAC_APP_PATH
       : mintPageLink(sandbox, { userId, owner, pageId, version }, yield* Clock.currentTimeMillis);
+
   return { status: PAGE_FRAME_STATUS, headers: { location, "referrer-policy": "no-referrer" } };
 });

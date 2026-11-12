@@ -36,6 +36,7 @@ export function useInboxTaskAgents(taskId: string | undefined): InboxTaskAgents 
   const [read, setRead] = useState<
     { taskId: string; agentIds: readonly string[]; heldIds: readonly string[] } | undefined
   >(undefined);
+
   // Note that a read naming the agents already held keeps the one held, so telling it again draws nothing anew.
   const onRead = useCallback(
     (on: string, agentIds: readonly string[], heldIds: readonly string[] = agentIds) =>
@@ -46,6 +47,8 @@ export function useInboxTaskAgents(taskId: string | undefined): InboxTaskAgents 
       ),
     [],
   );
+
   const ours = read !== undefined && read.taskId === taskId ? read : undefined;
+
   return { agentIds: ours?.agentIds, heldIds: ours?.heldIds, onRead };
 }

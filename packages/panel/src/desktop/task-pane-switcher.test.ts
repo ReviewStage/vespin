@@ -109,6 +109,7 @@ test("the screen standing follows the column and the panel: a tab of the panel w
 function itemWords(item: HTMLElement): string {
   const chord = item.querySelector(".ui-shortcut")?.textContent ?? "";
   const words = item.textContent ?? "";
+
   return chord !== "" && words.endsWith(chord) ? words.slice(0, -chord.length) : words;
 }
 
@@ -126,6 +127,7 @@ function mount(
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_RENAME]: ({ taskId, name }) => {
       told.push(`rename ${taskId} ${name}`);
+
       return Promise.resolve(true);
     },
   });
@@ -135,10 +137,13 @@ function mount(
   const narrow = room === SHELL_ROOM.NARROW;
   /** The rename door the open task's page offers ⌘K, as it stood at the last draw. */
   let renameOffer: ReturnType<typeof useTaskRenameOffer>;
+
   function RenameOfferProbe(): null {
     renameOffer = useTaskRenameOffer();
+
     return null;
   }
+
   const draw = (
     shown: boolean,
     on: SidePanelTab | undefined,
@@ -206,52 +211,68 @@ function mount(
         ),
       ),
     );
+
   draw(open, tab);
+
   // The row's ⋯, named for what is on screen ("Agent actions").
   const more = () => {
     const found = container.querySelector<HTMLButtonElement>(
       '.task-head .ui-toolbar-actions button[aria-haspopup="menu"]',
     );
+
     assert.ok(found, "the row holds its ⋯");
+
     return found;
   };
+
   // The ⋯'s menu, opened to be read and closed again by the press that opened it.
   const menu = () => {
     act(() => more().click());
+
     const groups = [...document.querySelectorAll<HTMLElement>('[role="menu"] button')].map((each) =>
       itemWords(each),
     );
+
     act(() => more().click());
+
     return groups;
   };
+
   const choose = (name: string) => {
     act(() => more().click());
+
     const found = [...document.querySelectorAll<HTMLElement>('[role="menu"] button')].find(
       (each) => itemWords(each) === name,
     );
+
     assert.ok(found, `the ⋯ offers ${name}`);
     act(() => found.click());
   };
+
   const head = () => ({
     buttons: [...container.querySelectorAll(".task-head button")].map(
       (each) => each.getAttribute("aria-label") ?? each.textContent,
     ),
     title: container.querySelector(".task-head h1")?.textContent,
   });
+
   const back = () => {
     const found = container.querySelector<HTMLButtonElement>(".task-head .ui-toolbar-lead button");
     assert.ok(found, "the row leads with its way back");
     act(() => found.click());
   };
+
   const labeled = (label: string) =>
     [...container.querySelectorAll("button")].some(
       (each) => each.getAttribute("aria-label") === label,
     );
+
   /** Asks the rename ⌘K would, through the door the page offers it. */
   const renameFromPalette = () => {
     assert.ok(renameOffer, "the page offers ⌘K its rename");
     act(() => renameOffer?.begin());
   };
+
   return {
     container,
     told,
@@ -347,9 +368,11 @@ test("on a phone ⌘K's Change repository shows Overview from under the panel, a
 test("on a phone the ⋯'s Rename edits the task's name in the row's title", async () => {
   const page = mount(SHELL_ROOM.NARROW);
   page.choose("Rename");
+
   const field = page.container.querySelector<HTMLInputElement>(
     '.task-head input[aria-label="Task name"]',
   );
+
   assert.ok(field, "the title is the name's field");
   field.value = "Invite teammates";
   await act(async () => {
@@ -361,9 +384,11 @@ test("on a phone the ⋯'s Rename edits the task's name in the row's title", asy
 test("on a phone, which has no ⌘F to press, Overview's ⋯ Find opens the find bar over the description with the caret in its field", () => {
   const page = mount(SHELL_ROOM.NARROW);
   page.choose("Find");
+
   const field = page.container.querySelector<HTMLInputElement>(
     '.find-bar input[aria-label="Find"]',
   );
+
   assert.ok(field, "the description's find bar stands");
   assert.equal(document.activeElement, field);
 });
@@ -429,9 +454,11 @@ test("on a phone a tab draws no bar of its own, and the task's header's ⋯ offe
 /** Chooses Rename from Overview's ⋯ in a wide window's column. */
 function chooseOverviewRename(container: HTMLElement): void {
   openTaskMenu(container);
+
   const rename = [...document.querySelectorAll<HTMLElement>('[role="menu"] button')].find(
     (each) => itemWords(each) === "Rename",
   );
+
   assert.ok(rename, "the ⋯ offers Rename");
   act(() => rename.click());
 }
@@ -478,6 +505,7 @@ test("on a wide window whose column shows an agent, the rename ⌘K asks edits t
 function RefusingTask(): React.JSX.Element {
   const [draft, setDraft] = useState<string | undefined>(undefined);
   const task = { ...TASK, name: draft ?? TASK.name };
+
   return createElement(DesktopTasks, {
     looks: NO_LOOKS,
     room: SHELL_ROOM.WIDE,

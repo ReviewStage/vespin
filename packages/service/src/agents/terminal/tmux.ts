@@ -148,6 +148,7 @@ export function listTerminals(): CommandAsk {
 /** Starts a shell detached in the agent's checkout, under its id, named where the developer named it. */
 export function startTerminal(terminalId: string, title: string | undefined): CommandAsk {
   const start = ["new-session", "-d", "-s", sessionOf(terminalId), "-c", TMUX.START_DIRECTORY];
+
   return tmux(
     title === undefined
       ? start
@@ -197,6 +198,7 @@ function processOf(run: RunActionStart): readonly string[] {
  */
 export function startRunAction(terminalId: string, run: RunActionStart): CommandAsk {
   const target = optionTargetOf(terminalId);
+
   return tmux([
     ...["new-session", "-d", "-s", sessionOf(terminalId), "-c", TMUX.START_DIRECTORY],
     ...environmentOf(run),
@@ -215,6 +217,7 @@ export function startRunAction(terminalId: string, run: RunActionStart): Command
  */
 export function rerunAction(terminalId: string, run: RunActionStart): CommandAsk {
   const target = optionTargetOf(terminalId);
+
   return tmux([
     ...["respawn-pane", "-t", target, "-c", TMUX.START_DIRECTORY],
     ...environmentOf(run),
@@ -301,18 +304,23 @@ export function killTerminal(terminalId: string): CommandAsk {
  */
 function signalOf(printed: string): number | undefined {
   if (/^\d+$/.test(printed)) return Number(printed);
+
   const named: number | undefined = (signals as Record<string, number | undefined>)[
     `SIG${printed}`
   ];
+
   return named;
 }
 
 /** How a run action's pane stands, from its dead flag, status, and signal: none while its process runs, or how it ended. */
 function exitOf(pane: string): ShellExit | undefined {
   const [dead, status, signal] = pane.split(" ");
+
   if (dead !== "1") return undefined;
   const signaled = signal === undefined || signal === "" ? undefined : signalOf(signal);
+
   if (signaled !== undefined) return { signal: signaled };
+
   return { code: Number(status === undefined || status === "" ? 0 : status) };
 }
 
@@ -327,15 +335,19 @@ function exitOf(pane: string): ShellExit | undefined {
  */
 export function terminalsOf(run: CommandRun): readonly TerminalSummary[] | undefined {
   if (run.exitCode !== 0) return undefined;
+
   const listed = run.stdout.split("\n").flatMap((line) => {
     const [name, created, title, command, cwd, runAction, pane, group] = line.split(" ");
+
     if (name === undefined || !name.startsWith(TMUX.SESSION_PREFIX)) return [];
     const id = readId(unparsedWire(name.slice(TMUX.SESSION_PREFIX.length)));
+
     if (Result.isFailure(id)) return [];
     const foreground = fieldOf(command);
     const named = fieldOf(title);
     const action = fieldOf(runAction);
     const exited = action === "" || group === RUNNING_GROUP ? undefined : exitOf(fieldOf(pane));
+
     return [
       {
         created: Number(created ?? 0),
@@ -352,5 +364,6 @@ export function terminalsOf(run: CommandRun): readonly TerminalSummary[] | undef
       },
     ];
   });
+
   return listed.sort((a, b) => a.created - b.created).map((row) => row.terminal);
 }

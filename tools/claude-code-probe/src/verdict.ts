@@ -37,6 +37,7 @@ export const CHECK = {
   PLAN: "the plan works from inside the sandbox",
   TOKEN: "the token stays at the firewall",
 } as const;
+
 type Check = (typeof CHECK)[keyof typeof CHECK];
 
 /** The words each turn ends on, which the probe's prompts ask for. */
@@ -121,8 +122,10 @@ function describe(report: LeakReport | undefined): string {
 function agentLeakReport(messages: readonly WireValue[]): LeakReport | undefined {
   for (const text of toolResultTexts(messages)) {
     const report = leakReportIn(text);
+
     if (report !== undefined) return report;
   }
+
   return undefined;
 }
 
@@ -133,8 +136,10 @@ function agentLeakReport(messages: readonly WireValue[]): LeakReport | undefined
  */
 function endedWell(messages: readonly WireValue[], words: string): boolean {
   const said = messages.findIndex((message) => assistantText([message]).includes(words));
+
   if (said === -1) return false;
   const after = turnResults(messages.slice(said + 1))[0];
+
   return after !== undefined && !after.is_error;
 }
 
@@ -144,10 +149,12 @@ function sandboxRunConditions(seen: ProbeObservations): readonly Condition[] {
   const calls = toolCalls(seen.firstLaunch);
   const resumedInit = sessionInit(seen.resumedLaunch);
   const fileName = `agent-probe/${seen.nonce}.txt`;
+
   const billedToPlan =
     init?.apiKeySource === "none" &&
     (account?.subscriptionType ?? "") !== "" &&
     (account?.apiProvider ?? "firstParty") === "firstParty";
+
   return [
     condition(
       CHECK.PLAN,
@@ -225,6 +232,7 @@ function sandboxRunConditions(seen: ProbeObservations): readonly Condition[] {
 function tokenConditions(seen: ProbeObservations): readonly Condition[] {
   const terminal = seen.terminalCapsDropped;
   const agent = agentLeakReport(seen.firstLaunch);
+
   return [
     condition(
       CHECK.TOKEN,

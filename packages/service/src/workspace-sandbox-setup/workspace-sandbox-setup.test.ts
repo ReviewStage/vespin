@@ -21,6 +21,7 @@ const RELAY = "acme/relay";
 function actionsOf(setup: WorkspaceSandboxSetupAnswer) {
   const list =
     setup.runActions?.find((one) => one.repository.toLowerCase() === RELAY)?.actions ?? [];
+
   return list.map((action) => ({
     id: action.id,
     label: action.label,
@@ -32,6 +33,7 @@ function actionsOf(setup: WorkspaceSandboxSetupAnswer) {
 const signedUp = Effect.gen(function* () {
   const id = `user-${randomUUID()}`;
   yield* Database.use((db) => db.insert(user).values({ id, name: id, email: `${id}@app.test` }));
+
   return id;
 });
 
@@ -40,19 +42,24 @@ const openWithActions = (labels: readonly string[]) =>
   Effect.gen(function* () {
     const owner = yield* signedUp;
     const workspaceId = yield* openWorkspace(owner);
+
     const saved = yield* saveRunActions(
       owner,
       workspaceId,
       RELAY,
       labels.map((label) => ({ label, command: `pnpm ${label.toLowerCase()}` })),
     );
+
     const ids = actionsOf(saved).map(({ id }) => id);
+
     /** The id of the action saved at the place. */
     const idAt = (place: number) => {
       const id = ids[place];
       assert.ok(id !== undefined, `an action stands at ${place}`);
+
       return id;
     };
+
     return { owner, workspaceId, idAt };
   });
 
@@ -129,6 +136,7 @@ it.layer(getTestDB())("an edit of one run action", (it) => {
         position: 0,
       });
       yield* editRunAction(owner, workspaceId, { ...edit, actionId: idAt(1), position: 0 });
+
       const edited = yield* editRunAction(owner, workspaceId, {
         ...edit,
         actionId: idAt(0),
@@ -149,6 +157,7 @@ it.layer(getTestDB())("an edit of one run action", (it) => {
         const { owner, workspaceId, idAt } = yield* openWithActions(
           Array.from({ length: 20 }, (_, index) => `Action ${index}`),
         );
+
         const member = yield* signedUp;
         yield* joinWorkspace(workspaceId, member, WORKSPACE_ROLE.MEMBER);
         const elsewhere = yield* openWithActions(["Theirs"]);

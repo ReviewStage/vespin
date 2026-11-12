@@ -120,6 +120,7 @@ export interface WindowAt {
 /** A workspace as a link names it: its slug, or its id before its slug is read; empty where neither is known. */
 export function slugOf(workspaces: readonly Workspace[], workspaceId: string | undefined): string {
   const home = workspaces.find((each) => each.id === workspaceId);
+
   return home?.slug ?? workspaceId ?? "";
 }
 
@@ -162,22 +163,27 @@ export function inboxItemPlace(chosen: InboxChoice): LinkDestination {
 /** The links of the task drawn: its version chosen, its tabs', and its own, the most specific first. */
 function taskLinks(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
   const { region } = tasks;
+
   if (region.kind !== DOCUMENT_REGION.READY) return [];
   const { task: drawn } = region;
   const workspace = slugOf(tasks.workspaces, drawn.workspaceId);
   // Note that the task's links name it by its number, where it has one, as every link to it is written.
   const planId = taskLinkStep(drawn);
+
   const task: LinkAtHand = {
     link: { workspace, place: { kind: LINK_DESTINATION.TASK, planId } },
     thing: LINK_THING.TASK,
     name: drawn.name,
   };
+
   // Note that the column's Overview is the task itself, so it adds no link past the task's.
   const shown = tasks.mainTabs.tab;
+
   const agentId =
     shown !== undefined && typeof shown !== "string" && shown.kind === STRIP_TAB_KIND.AGENT
       ? shown.agent
       : undefined;
+
   const agent: LinkAtHand | undefined =
     agentId === undefined
       ? undefined
@@ -186,25 +192,32 @@ function taskLinks(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
           thing: LINK_THING.AGENT,
           name: tasks.agents.agents?.find((each) => each.id === agentId)?.title ?? undefined,
         };
+
   const tabPlace = tasks.sidePanel.open
     ? panelTabPlace({ taskId: drawn.id }, tasks.sidePanel.tab)
     : undefined;
+
   const held = tabPlace === undefined ? undefined : withTaskId(tabPlace, planId);
   const thing = held === undefined ? undefined : panelThing(held);
+
   const panel: LinkAtHand | undefined =
     held === undefined || thing === undefined
       ? undefined
       : { link: { workspace, place: held }, thing };
+
   // A panel filling the window hides the work column, so its tab is at hand whatever holds the keyboard.
   const panelFirst = at.sidePanelFocused || tasks.sidePanel.fullScreen;
+
   // A narrow room's panel is a step of its own, which its tab's link names where it has one.
   if (at.narrow === true && panel !== undefined) {
     return [{ ...panel, step: true }, agent, task].filter(
       (each): each is LinkAtHand => each !== undefined,
     );
   }
+
   const standing: LinkAtHand = { ...task, step: true };
   const order = panelFirst ? [panel, agent, standing] : [agent, panel, standing];
+
   return order.filter((each): each is LinkAtHand => each !== undefined);
 }
 
@@ -221,7 +234,9 @@ function placesAtHand(
 ): readonly LinkAtHand[] {
   const listed = slugOf(tasks.workspaces, tasks.workspace?.id);
   const under = () => stateLinks(tasks, at);
+
   if (at.place === undefined || at.underRouted === true) return under();
+
   return at.place.links({ tasks, views, at, listed, under });
 }
 
@@ -277,10 +292,13 @@ export function useCopyLink(
   place: RoutedPlace | undefined = undefined,
 ): CopyLink {
   const copyWords = useCopyToast();
+
   const copy = (held: LinkAtHand) =>
     copyWords(linkOf(held.link.place, held.link.workspace), LINK_COPY.COPIED);
+
   const views = useRoutedViews();
   const inboxTask = views.inbox.narrowed;
+
   const linksAt = (sidePanelFocused: boolean) =>
     linksAtHand(tasks, views, {
       settings,
@@ -290,21 +308,27 @@ export function useCopyLink(
       narrow: room === SHELL_ROOM.NARROW,
       inboxTask,
     });
+
   useAppCommand(
     APP_COMMAND.COPY_LINK,
     enabled && linksAt(false).length > 0
       ? () => {
           const first = linksAt(inSidePanel(document.activeElement))[0];
+
           if (first !== undefined) copy(first);
         }
       : undefined,
   );
+
   const firstLink = (sidePanelFocused: boolean): string | undefined => {
     const first = enabled ? linksAt(sidePanelFocused)[0] : undefined;
+
     return first === undefined ? undefined : linkOf(first.link.place, first.link.workspace);
   };
+
   useHoldChordLinks(firstLink(false), firstLink(true));
   const standing = linksAt(false).find((each) => each.step === true)?.link;
+
   const placed = linksAtHand(tasks, views, {
     settings: undefined,
     underRouted: true,
@@ -312,5 +336,6 @@ export function useCopyLink(
     narrow: room === SHELL_ROOM.NARROW,
     inboxTask,
   }).find((each) => each.step === true)?.link;
+
   return { linksAt, standing, placed, copy };
 }

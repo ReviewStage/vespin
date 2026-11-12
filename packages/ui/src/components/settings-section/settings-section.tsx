@@ -147,6 +147,7 @@ export function SettingsControlSkeleton({
   control: SettingsSkeletonControl;
 }): React.JSX.Element {
   const width = SKELETON_CONTROL_BLOCK[control];
+
   if (control === SETTINGS_SKELETON_CONTROL.VALUE) {
     return (
       <SettingsRowValue>
@@ -154,6 +155,7 @@ export function SettingsControlSkeleton({
       </SettingsRowValue>
     );
   }
+
   return <Skeleton shape={SKELETON_SHAPE.CONTROL} width={width} />;
 }
 
@@ -166,6 +168,7 @@ function RowSkeleton({
   shape: SettingsRowSkeletonShape;
 }): React.JSX.Element {
   const widths = SKELETON_ROW_WIDTHS[at % SKELETON_ROW_WIDTHS.length] ?? SKELETON_ROW_WIDTHS[0];
+
   return (
     <SettingsRow
       label={<Skeleton width={widths.label} />}
@@ -219,6 +222,7 @@ export function SettingsRowsSkeleton({
   rows: readonly SettingsRowSkeletonShape[];
 }): React.JSX.Element {
   if (label === undefined) return <RowsSkeleton rows={rows} />;
+
   return (
     <SkeletonRegion label={label}>
       <RowsSkeleton rows={rows} />
@@ -239,6 +243,7 @@ function SectionSkeleton({
       <Skeleton width={SKELETON_HEADING_WIDTHS[at % SKELETON_HEADING_WIDTHS.length]} />
     </Text>
   ) : undefined;
+
   return (
     <SectionFrame head={head}>
       <RowsSkeleton rows={shape.rows} />
@@ -299,6 +304,7 @@ function SectionFrame({
 }): React.JSX.Element {
   const card = useRef<HTMLDivElement>(null);
   const rows = frame === SETTINGS_SECTION_FRAME.ROWS;
+
   return (
     <section
       className={
@@ -346,6 +352,7 @@ function SectionHead({
   children: ReactNode;
 }): React.JSX.Element {
   if (action === undefined || action === null || action === false) return <>{children}</>;
+
   return (
     <div className="flex min-w-0 items-center justify-between gap-ui-8">
       {children}
@@ -380,6 +387,7 @@ export function SettingsSection({
   const captionId = useId();
   const headed = said(title);
   const captioned = headed && caption !== undefined && caption !== null && caption !== false;
+
   const heading = (
     <SectionHead action={action}>
       <Text
@@ -392,6 +400,7 @@ export function SettingsSection({
       </Text>
     </SectionHead>
   );
+
   return (
     <SectionFrame
       head={

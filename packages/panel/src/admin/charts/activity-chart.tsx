@@ -96,6 +96,7 @@ export function ActivityChart({
 }): React.JSX.Element {
   const { daily, trend } = activity;
   const totals = daily.map((point) => FEATURES.reduce((total, key) => total + point[key], 0));
+
   if (seriesHasNoData(totals)) {
     return (
       <ChartFrame title={ACTIVITY_TITLE} aside={<ChartTrend trend={trend} />}>

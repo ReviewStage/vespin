@@ -63,12 +63,15 @@ export function Video({ source, label, onOpenElsewhere, shape }: VideoProps) {
   useEffect(() => {
     setStatus(player.status);
     const listening = player.addListener("statusChange", ({ status: next }) => setStatus(next));
+
     return () => listening.remove();
   }, [player]);
   const failed = status === "error";
+
   if (source === undefined || failed) {
     // Note that a well offering Open in Safari stands as two elements to VoiceOver, its words and its link, since one element would hide the link.
     const offers = failed && onOpenElsewhere !== undefined;
+
     return (
       <View
         style={[
@@ -107,6 +110,7 @@ export function Video({ source, label, onOpenElsewhere, shape }: VideoProps) {
       </View>
     );
   }
+
   return (
     <View style={[styles.frame, shaped]}>
       <VideoView

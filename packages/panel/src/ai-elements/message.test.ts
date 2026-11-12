@@ -18,6 +18,7 @@ const roots: Root[] = [];
 
 afterEach(() => {
   vi.unstubAllGlobals();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 });
@@ -29,6 +30,7 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(withQueryClient(element)));
+
   return container;
 }
 
@@ -58,6 +60,7 @@ function tap(target: Element): void {
   const touchEnd = new TouchEvent("touchend", { bubbles: true, cancelable: true });
   act(() => {
     target.dispatchEvent(touchEnd);
+
     if (touchEnd.defaultPrevented) return;
     target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
   });
@@ -66,11 +69,13 @@ function tap(target: Element): void {
 /** Whether a card stands, drawn and not on its way out. */
 function cardStands(): boolean {
   const card = document.querySelector(".ui-tooltip-card");
+
   return card !== null && !card.hasAttribute("data-leaving");
 }
 
 test("on a screen with no hover, a tap spent opening a hint in a message shows none of the message's actions", () => {
   vi.stubGlobal("matchMedia", (query: string) => ({ matches: query === "(hover: none)" }));
+
   const page = mount(
     createElement(
       Message,
@@ -87,6 +92,7 @@ test("on a screen with no hover, a tap spent opening a hint in a message shows n
       }),
     ),
   );
+
   const message = page.querySelector(".transcript-message") ?? assert.fail("the message");
 
   tap(page.querySelector("[data-worked]") ?? assert.fail("the line"));

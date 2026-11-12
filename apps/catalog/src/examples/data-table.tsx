@@ -139,6 +139,7 @@ const NOTED_COLUMNS = column.columns([
 
 function NotedRuns(): React.JSX.Element {
   const [acted, setActed] = useState<string>("none yet");
+
   return (
     <Stack gap={GAP.CONTROL}>
       <DataTable
@@ -166,6 +167,7 @@ const LONGEST_FIRST: SortingState = [{ id: "minutes", desc: true }];
 function SortedRuns(): React.JSX.Element {
   const [opened, setOpened] = useState<string>("none yet");
   const columns = useMemo(() => runColumns((run) => setOpened(run.name)), []);
+
   return (
     <Stack gap={GAP.CONTROL}>
       <DataTable

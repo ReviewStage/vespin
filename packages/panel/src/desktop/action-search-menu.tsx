@@ -95,6 +95,7 @@ export function ActionSearchMenu({
 }): React.JSX.Element {
   const minted = useId();
   const { actions } = search;
+
   return (
     <SearchableMenu
       {...("embedded" in place
@@ -113,7 +114,9 @@ export function ActionSearchMenu({
       replayUnmasked={search.replayUnmasked}
       onPick={(picked) => {
         const action = actions[Number(picked)];
+
         if (action === undefined) return;
+
         if (action.stays !== true) onDone();
         action.onSelect();
       }}

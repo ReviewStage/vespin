@@ -31,14 +31,19 @@ export function openedUnderCredential(
 ): Effect.Effect<TerminalSocketOpening, never, Scope.Scope> {
   return Effect.gen(function* () {
     const current = yield* resolvedCredential(credential);
+
     if (current.authorization === undefined) return yield* openSocket(address, {});
     const header = yield* current.authorization();
+
     if (header === undefined) return { refused: UNAUTHORIZED } satisfies TerminalSocketOpening;
     const opening = yield* openSocket(address, { authorization: header });
+
     if (!("refused" in opening) || opening.refused !== UNAUTHORIZED) return opening;
     yield* Effect.ignore(current.renew?.() ?? Effect.void);
     const renewed = yield* handshakeHeader(credential);
+
     if (renewed === undefined || renewed === header) return opening;
+
     return yield* openSocket(address, { authorization: renewed });
   });
 }

@@ -195,6 +195,7 @@ import {
  */
 
 export { placeOfAgent } from "./takeover.js";
+
 export type { StartWhere };
 
 /**
@@ -305,6 +306,7 @@ const modelChoicesRead = /* @__PURE__ */ Effect.fnUntraced(function* (
   DatabaseServices | ModelCatalog
 > {
   const catalog = yield* ModelCatalog;
+
   const { preferences, keys, read } = yield* Effect.all(
     {
       preferences: hostedStoreOrUnavailable(readAccountPreferences(userId)),
@@ -319,11 +321,15 @@ const modelChoicesRead = /* @__PURE__ */ Effect.fnUntraced(function* (
     },
     { concurrency: READ_CONCURRENCY },
   );
+
   const fastOffer = yield* hostedStoreOrUnavailable(accountFastOffer(userId, keys));
+
   const offered = yield* hostedStoreOrUnavailable(
     markedUnconnected(userId, offeredToAccount(read, fastOffer), keys),
   );
+
   const stored = preferences?.agent;
+
   return {
     choices: { offered, defaultChoice: stored ?? agentFallbackChoice(offered) },
     keys,
@@ -356,9 +362,11 @@ const acceptedChoiceRead = /* @__PURE__ */ Effect.fnUntraced(function* (
 > {
   const { choices, keys, permissionMode } = yield* modelChoicesRead(userId);
   const { offered, defaultChoice } = choices;
+
   const choice = yield* Effect.fromResult(
     validateModelChoice(offered, named ?? defaultChoice),
   ).pipe(Effect.mapError((reason) => new ModelChoiceRefused({ reason, offered })));
+
   return { choice, keys, permissionMode };
 });
 
@@ -385,14 +393,18 @@ export const confirmedBranch = Effect.fnUntraced(function* (
   branch: string,
 ): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient | GitHubApp> {
   const app = yield* GitHubApp;
+
   const reached = yield* githubReachOrRefusal(
     app.repositoryReadToken(workspaceId, repository, member),
   );
+
   if (Option.isNone(reached)) return yield* Effect.fail(HOSTED_REFUSAL.REPOSITORY_NOT_REACHABLE);
   const { repository: confirmed, token } = reached.value;
+
   const head = yield* readBranchHead(token, confirmed, branch).pipe(
     Effect.mapError(() => HOSTED_REFUSAL.GITHUB_UNANSWERED),
   );
+
   if (head === undefined) return yield* Effect.fail(HOSTED_REFUSAL.BRANCH_NOT_FOUND);
 });
 
@@ -420,12 +432,17 @@ const startBranchOf = Effect.fnUntraced(function* (
   if (ask.branch !== undefined && landing.repository === null) {
     return yield* Effect.fail(HOSTED_REFUSAL.NO_REPOSITORY);
   }
+
   const branch = ask.branch ?? inherited ?? undefined;
+
   if (branch === undefined || landing.repository === null) return undefined;
   const made = yield* hostedStoreOrUnavailable(readAgentByKey(userId, ask.idempotencyKey));
+
   if (Option.isSome(made)) return branch;
   const confirmed = confirmedBranch(landing.workspaceId, landing.repository, member, branch);
+
   if (ask.branch !== undefined) return yield* Effect.as(confirmed, branch);
+
   return yield* confirmed.pipe(
     Effect.as<string | undefined>(branch),
     Effect.catch((refusal) =>
@@ -444,10 +461,13 @@ const handedOf = Effect.fnUntraced(function* (
   noteFiles: NoteFiles | undefined,
 ) {
   const heading = place.noteHeading ?? START_NOTE_HEADING.DEVELOPER;
+
   const written = (replayed: Replay | undefined) =>
     firstMessageText(words, replayed, place.note, heading, noteFiles);
+
   // The replay is fitted to the new agent's first message as it is written around it.
   const fitted = fitter === undefined ? undefined : yield* fitter.fit(written);
+
   return { text: written(fitted?.replay), startedFrom: fitted?.startedFrom };
 });
 
@@ -460,14 +480,17 @@ const landingOf = Effect.fnUntraced(function* (
   landed: StoredTask | undefined,
 ): Effect.fn.Return<StartLanding, HostedRefusal, DatabaseServices> {
   const brief = fitter === undefined ? place.prompt : fitter.prompt;
+
   // A task its own start made a moment ago, in the same request, is landed on as it was made.
   const read =
     landed !== undefined && landed.task.id === place.taskId
       ? Option.some(landed)
       : yield* hostedStoreOrUnavailable(readTask(userId, place.taskId));
+
   if (Option.isNone(read)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const { task, ownerId } = read.value;
   const mover = ownerId === userId ? userId : undefined;
+
   if (place.blank === true) {
     return {
       startedFrom: undefined,
@@ -478,12 +501,15 @@ const landingOf = Effect.fnUntraced(function* (
       place: { taskId: place.taskId, descriptionSnapshot: null, prompt: null },
     };
   }
+
   // A workspace with Task descriptions off hands no description: the task's brief in its place, or else its name.
   const words =
     brief === undefined && !(yield* experimentOnIn(task.workspaceId, EXPERIMENT.DESCRIPTIONS))
       ? (read.value.brief ?? task.name)
       : brief;
+
   const handed = yield* handedOf(words ?? descriptionMarkdown(task), place, fitter, noteFiles);
+
   return {
     startedFrom: handed.startedFrom,
     workspaceId: task.workspaceId,
@@ -562,6 +588,7 @@ function startRuntimeOf(
   machine: AgentMachineKind,
 ) {
   if (machine === AGENT_MACHINE.DEVICE) return localAgentRuntimeChoice(model);
+
   return Effect.catch(agentRuntimeChoice(userId, model, keys), (failure) =>
     failure instanceof AgentCredentialMissing
       ? Effect.fail(credentialMissing(failure.provider))
@@ -594,6 +621,7 @@ function startMachineOf(
 /** What outside the app a Start comes from, which the agent's row keeps for a list to mark it by: the Slack message that carried its prompt; none for a Start in the app. */
 function sourceOf(carried: SlackLineMetadata | undefined): AgentSource | undefined {
   if (carried === undefined) return undefined;
+
   return {
     kind: AGENT_SOURCE.SLACK,
     ...(carried.url === undefined ? undefined : { url: carried.url }),
@@ -615,19 +643,23 @@ function openingOf(
   taken: TakeoverRules["startLine"],
 ): { readonly sender: LineSender; readonly metadata: AwaitingLineMetadata } {
   const { automationId, automationOrigin, startedBy, carried } = ask;
+
   if (automationOrigin !== undefined) {
     return {
       sender: { kind: MESSAGE_SENDER.AUTOMATION, automationId, name: automationOrigin.name },
       metadata: automationLineMetadata(automationOrigin.firing),
     };
   }
+
   if (carried !== undefined) {
     return { sender: { kind: MESSAGE_SENDER.MEMBER, userId: agent.userId }, metadata: carried };
   }
+
   const sender: LineSender =
     startedBy === undefined
       ? { kind: MESSAGE_SENDER.MEMBER, userId: agent.userId }
       : agentLineSender(startedBy);
+
   const metadata: AwaitingLineMetadata =
     taken === undefined
       ? {
@@ -639,6 +671,7 @@ function openingOf(
           brief: taken.brief,
           source_agent_id: taken.sourceAgentId,
         };
+
   return { sender, metadata };
 }
 
@@ -673,8 +706,10 @@ const defaultPlaceOf = Effect.fnUntraced(function* (
 ): Effect.fn.Return<PlaceRead, HostedRefusal, DatabaseServices> {
   if (automated) return { machine: AGENT_MACHINE.VERCEL };
   const newest = yield* hostedStoreOrUnavailable(readNewestAgentPlace(userId, task.id));
+
   if (Option.isSome(newest)) return newest.value;
   const pick = yield* hostedStoreOrUnavailable(readRunsOnPick(userId));
+
   return Option.getOrElse(pick, (): PlaceRead => ({ machine: AGENT_MACHINE.VERCEL }));
 });
 
@@ -706,19 +741,24 @@ const machineOfStart = Effect.fnUntraced(function* (
     (source !== undefined
       ? inheritedPlaceOf(userId, source)
       : yield* defaultPlaceOf(userId, task, ask.automationOrigin !== undefined));
+
   if (place.machine === AGENT_MACHINE.VERCEL) return IN_THE_CLOUD;
   const { deviceId } = place;
+
   const device =
     deviceId === null || deviceId === undefined
       ? undefined
       : (yield* hostedStoreOrUnavailable(devicesNamed([deviceId]))).get(deviceId);
+
   if (device === undefined) {
     return yield* Effect.fail(localAgentRefused(LOCAL_AGENT_REFUSAL.MAC_AWAY));
   }
+
   if (device.userId !== userId) {
     const owner = (yield* hostedStoreOrUnavailable(readAccountNames([device.userId]))).get(
       device.userId,
     );
+
     return yield* Effect.fail(
       localAgentRefused(LOCAL_AGENT_REFUSAL.NOT_OWNER, {
         name: device.name,
@@ -726,9 +766,11 @@ const machineOfStart = Effect.fnUntraced(function* (
       }),
     );
   }
+
   if (yield* hostedStoreOrUnavailable(hostRemoved(userId, device.id))) {
     return yield* Effect.fail(HOSTED_REFUSAL.DEVICE_REMOVED);
   }
+
   return { asked: { machine: AGENT_MACHINE.DEVICE, deviceId: device.id } };
 });
 
@@ -760,6 +802,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   // Note that a retry is answered with the agent its key made before where it runs is decided, or its
   // source read, because its task may run elsewhere since, its device be away, or its source be gone.
   const taken = yield* takeoverOf(userId, ask);
+
   if (taken.made !== undefined) {
     yield* agentSpansAnnotated({
       agentId: taken.made.id,
@@ -768,10 +811,13 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
       repository: taken.made.repository,
       harness: undefined,
     });
+
     return { agent: taken.made, created: false };
   }
+
   const rules = takeoverRules(taken.from, ask);
   const inherited: Inherited = { from: taken.from, rules };
+
   // An agent started from another runs on that agent's choice unless the Start names one, and is
   // landed with that agent's replay fitted to the choice's window.
   const { read, landing } = yield* landedInheriting(
@@ -782,11 +828,13 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
     modelRuntimeOf,
     (fitter, noteFiles) => landingOf(userId, ask, fitter, noteFiles, ask.landed),
   );
+
   const { choice, keys, permissionMode } = read;
   // An automation's agent reaches through the workspace's installation alone; a Start by hand, on the starter's token too.
   // Note that a task started with its agent reached the repository a moment ago, in the same
   // request and as the same member, so that reach stands rather than a second round of GitHub reads.
   const member = ask.automationOrigin === undefined ? userId : undefined;
+
   const reach: Effect.Effect<
     { readonly access: GitHubAccess } | undefined,
     HostedRefusal,
@@ -797,6 +845,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
       : ask.reached !== undefined && ask.reached.repository === landing.repository
         ? Effect.succeed(ask.reached)
         : workspaceRepository(landing.workspaceId, landing.repository, member, landing.mover);
+
   const branchOf = startBranchOf(userId, ask, rules.branch, landing, member);
   const brief = landing.place;
   // The words a mention is read from: the prompt with any note after it, or a description start's note
@@ -805,6 +854,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   // The files of the source's brief that fit, then those the note carries; a fresh start's are its own,
   // a prompt's or, on the description, the note's, such as the pictures `start_agent` hands on.
   const { attachments } = rules;
+
   // What the words mention of the plan's pages and agents is read before the agent is made, so a read
   // that fails leaves no agent its retry would find; the first message reads it again as its queue hands
   // it on, as any line's is (`steer.ts`).
@@ -819,17 +869,20 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
             }),
           ),
         );
+
   // GitHub's answers and the store's reads of the mentions wait on none of each other, so they are asked together.
   const [[reached, branch]] = yield* bothInOrder(bothInOrder(reach, branchOf), mentions);
   // Where it runs, the runtime, and the payer are decided as the agent is made, by the place it names or else its source or its starter's default, and its model, and never change.
   const where = yield* machineOfStart(userId, ask, rules.source, landing.task);
   const runtime = yield* startRuntimeOf(userId, choice.model, keys, where.asked.machine);
+
   const placed = yield* startMachineOf(
     userId,
     where.asked,
     runtime.runtime,
     landing.repository !== null,
   );
+
   const started = yield* hostedStoreOrUnavailable(
     createAgent(userId, {
       ...brief,
@@ -862,6 +915,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
         serverWords === undefined ? [] : mentionedServers(serverWords, landing.repository),
     }),
   );
+
   if (Option.isNone(started)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const { agent, created, txid } = started.value;
   yield* agentSpansAnnotated({
@@ -871,9 +925,11 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
     repository: agent.repository,
     harness: runtime.runtime,
   });
+
   if (!created) return { agent, created };
   // A blank agent opens no session: its first words open one as they reach it (`steer.ts`).
   const handed = brief.prompt ?? brief.descriptionSnapshot;
+
   const opening = Effect.gen(function* () {
     if (handed === null) return;
     // Every line the opening says names the agent, the runtime's own past the answer included. Note
@@ -883,6 +939,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
     // for. One cut short while the harness was asked is said alone, since its session may have opened, a
     // native launch handed on past the answer, and the agent is that session's.
     let asked = false;
+
     const opened = yield* Effect.gen(function* () {
       // The first message waits in the agent's queue while its machine boots, as it was sent, and goes
       // once the machine is up (`boot.ts`), so it says what it is and who sent it there; the runtime says
@@ -898,7 +955,9 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
           ),
         ),
       );
+
       asked = true;
+
       return yield* startBoot(sessions, agent, {
         id: randomUUID(),
         sendKey: randomUUID(),
@@ -941,9 +1000,11 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
       ),
       Effect.annotateLogs(agentLogIds(agent)),
     );
+
     if (opened === undefined || opened.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) {
       // An image still being prepared is answered by name, so the Start is made again under its key.
       const refusal = opened === undefined ? HOSTED_REFUSAL.UNAVAILABLE : failedCallRefusal(opened);
+
       // A native harness says why it refused where its harness decided it (`runner-sessions.ts`), so
       // a harness this function cannot reach is said here.
       if (opened !== undefined && opened.runtimeRefusal === RUNTIME_REFUSAL.NOT_HERE) {
@@ -953,6 +1014,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
           true,
         ).pipe(Effect.annotateLogs(agentLogIds(agent)));
       }
+
       yield* hostedStoreOrUnavailable(discardAgent(userId, agent.id)).pipe(
         Effect.annotateLogs(agentLogIds(agent)),
       );
@@ -963,8 +1025,10 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
             : SERVER_AGENT_START_FAILURE.REFUSED,
         startedBy: starterOf(ask),
       });
+
       return yield* Effect.fail(refusal);
     }
+
     yield* Effect.logInfo("a Start opened its agent's session").pipe(
       Effect.annotateLogs(agentLogIds(agent)),
     );
@@ -972,27 +1036,33 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
     // A place named is kept only once the agent stands for good, so a refused opening changes no pick.
     Effect.andThen(keptPick(userId, ask.runsOn)),
   );
+
   // The source's transcript is the new agent's own before its first open forks it, and a continue's
   // source stops once it opened, since the work goes on in the new agent; a fork's goes on beside it.
   yield* openedTakingOver(agentSessions, ask.startedBy, inherited, agent, opening);
   // The Start answers the last transaction it committed in, which Realtime delivers after every
   // one before it, so a client waiting on it sees the agent and its task's standing alike.
   let committed = txid;
+
   // A blank agent was handed no work, so its task stands where it is.
   if (handed !== null) {
     const begun = yield* beginTaskWorkCommitted(userId, landing.task.id).pipe(
       Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
     );
+
     if (Option.isSome(begun)) committed = begun.value.txid;
   }
+
   // Its starter is on a task no one was, where they started it by hand, a blank agent among them;
   // an automation's run assigns no one.
   if (ask.automationOrigin === undefined) {
     const assigned = yield* assignUnassignedTaskCommitted(userId, landing.task.id).pipe(
       Effect.catch((failure) => Effect.as(logStoreFailure(failure), Option.none())),
     );
+
     if (Option.isSome(assigned)) committed = assigned.value.txid;
   }
+
   yield* recordServerEvent(
     SERVER_EVENT.AGENT_START,
     { userId, workspaceId: agent.organizationId },
@@ -1007,6 +1077,7 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
       agent_kind: agent.kind,
     },
   );
+
   return committed === undefined ? { agent, created } : { agent, created, txid: committed };
 });
 
@@ -1028,12 +1099,14 @@ export const requestedChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
   request: Pick<AgentStartRequest, "model" | "effort" | "contextWindow">,
 ): Effect.fn.Return<ModelChoice | undefined, HostedRefusal> {
   const { model, effort, contextWindow } = request;
+
   if (
     (model === undefined) !== (effort === undefined) ||
     (contextWindow !== undefined && model === undefined)
   ) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   return model !== undefined && effort !== undefined
     ? { model, effort, ...(contextWindow === undefined ? undefined : { contextWindow }) }
     : undefined;
@@ -1065,6 +1138,7 @@ export const startRequestedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<RequestedStart, HostedRefusal, StartServices> {
   const { note } = request;
   const choice = yield* requestedChoice(request);
+
   const { agent, created, txid } = yield* startAgent(agentSessions, userId, {
     ...whereOf(where),
     idempotencyKey: request.idempotencyKey,
@@ -1084,6 +1158,8 @@ export const startRequestedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
     reached,
     landed,
   }).pipe(Effect.catchTag("ModelChoiceRefused", () => Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST)));
+
   const summary = yield* summaryOf(userId, agent);
+
   return { agent: summary, created, ...(txid === undefined ? undefined : { txid }) };
 });

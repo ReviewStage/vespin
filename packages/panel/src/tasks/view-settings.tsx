@@ -139,6 +139,7 @@ function ThemeRow<Id extends string>({
   onChange: (id: Id) => void;
 }): React.JSX.Element {
   const chosen = themes.find((theme) => theme.id === value);
+
   return (
     <PickerRow
       density={SETTINGS_ROW_DENSITY.COMPACT}
@@ -151,6 +152,7 @@ function ThemeRow<Id extends string>({
       noMatch={NO_THEME}
       onPick={(id) => {
         const theme = themes.find((each) => each.id === id);
+
         if (theme !== undefined) onChange(theme.id);
       }}
     />
@@ -205,12 +207,14 @@ function LinesRows({ notes }: { notes: boolean }): React.JSX.Element {
   const { settings } = useFileViewSettings();
   const wordWrapWrite = useSettingRowWrite("wordWrap", switchStored, switchDrawn, true);
   const lineNumbersWrite = useSettingRowWrite("lineNumbers", switchStored, switchDrawn, true);
+
   const diffMinimizeCommentsWrite = useSettingRowWrite(
     "diffMinimizeComments",
     switchStored,
     switchDrawn,
     true,
   );
+
   return (
     <>
       <SwitchRow
@@ -255,6 +259,7 @@ function LinesRows({ notes }: { notes: boolean }): React.JSX.Element {
 function ThemeRows(): React.JSX.Element {
   const { settings, change } = useFileViewSettings();
   const [appearance, setAppearance] = useState(currentAppearance);
+
   return (
     <>
       <SegmentedRow
@@ -285,19 +290,24 @@ function ThemeRows(): React.JSX.Element {
 /** The type every run of code is set in: its font, its size, its line height, and its ligatures, a File tab's lines and a diff's alike. */
 function TypeRows(): React.JSX.Element {
   const { settings } = useFileViewSettings();
+
   const diffFontWrite = useSettingRowWrite(
     "diffFont",
     (value: FileViewSettings["diffFont"]) => value,
   );
+
   const diffFontSizeWrite = useSettingRowWrite(
     "diffFontSize",
     (value: FileViewSettings["diffFontSize"]) => value,
   );
+
   const diffLineHeightWrite = useSettingRowWrite(
     "diffLineHeight",
     (value: FileViewSettings["diffLineHeight"]) => value,
   );
+
   const diffLigaturesWrite = useSettingRowWrite("diffLigatures", switchStored, switchDrawn, true);
+
   return (
     <>
       <SelectRow
@@ -341,16 +351,19 @@ function TypeRows(): React.JSX.Element {
 /** What a diff marks: its layout, its changed words, its indicators, and its backgrounds, where the diff is wide enough to split said under the layout. */
 function DiffRows({ roomy }: { roomy: boolean }): React.JSX.Element {
   const { settings, change } = useFileViewSettings();
+
   const inlineDiffWrite = useSettingRowWrite(
     "inlineDiff",
     (value: FileViewSettings["inlineDiff"]) => value,
   );
+
   const diffBackgroundsWrite = useSettingRowWrite(
     "diffBackgrounds",
     switchStored,
     switchDrawn,
     true,
   );
+
   return (
     <>
       <SegmentedRow
@@ -395,6 +408,7 @@ function GroupRows({
   scope: ViewSettingsScope;
 }): React.JSX.Element {
   const diff = scope.kind === VIEW_SETTINGS_SCOPE.DIFF;
+
   switch (section) {
     case SETTING_SECTION.DIFF:
       return <DiffRows roomy={diff && scope.roomy} />;
@@ -424,6 +438,7 @@ function ViewSettingsRows({ scope }: { scope: ViewSettingsScope }): React.JSX.El
     scope.kind === VIEW_SETTINGS_SCOPE.DIFF
       ? DIFF_SETTING_GROUPS
       : DIFF_SETTING_GROUPS.filter(({ section }) => section !== SETTING_SECTION.DIFF);
+
   return (
     <>
       {groups.map(({ section, title }) => (
@@ -482,6 +497,7 @@ export function useViewSettingsSheet(scope: ViewSettingsScope): {
 } {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+
   return {
     action: {
       label: VIEW_SETTINGS_LABEL,
@@ -512,10 +528,12 @@ export function ViewSettingsButton({ scope }: { scope: ViewSettingsScope }): Rea
   const popoverId = useId();
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+
   const close = () => {
     setOpen(false);
     trigger.current?.focus();
   };
+
   return (
     <div className="view-settings relative flex" ref={root}>
       <Tooltip label={VIEW_SETTINGS_LABEL}>

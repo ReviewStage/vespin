@@ -45,6 +45,7 @@ const CALENDAR_CELL_RADIUS = "25%";
 
 function calendarCellFill(total: number, maxTotal: number, color: string): string {
   const fill = Math.max(CALENDAR_FILL_FLOOR_PERCENT, Math.round((total / maxTotal) * 100));
+
   return `color-mix(in oklab, ${color} ${fill}%, transparent)`;
 }
 
@@ -68,6 +69,7 @@ function CalendarDayCell({
 }): React.JSX.Element {
   const provisional =
     day.day === partialDay ? " border border-dashed border-(--ui-color-text-muted)/60" : "";
+
   return (
     <div
       role="img"
@@ -89,6 +91,7 @@ function CalendarDayCell({
         ) {
           return;
         }
+
         onHide();
       }}
     />
@@ -181,11 +184,13 @@ export function ActivityCalendar({
   const gridAreaRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const area = gridAreaRef.current;
+
     if (area === null) return;
     const refit = () => setFitCount(calendarWeeksThatFit(area.clientWidth));
     refit();
     const observer = new ResizeObserver(refit);
     observer.observe(area);
+
     return () => observer.disconnect();
   }, []);
   const weeks = fitCount === undefined ? [] : lastWeeks(allWeeks, fitCount);
@@ -198,15 +203,19 @@ export function ActivityCalendar({
   const partialDay = partialDayKey(daily, generatedAt);
   const shownDays = weeks.flatMap((week) => week.days.filter((day) => day !== undefined));
   const maxTotal = Math.max(...shownDays.map((day) => day.count), 0);
+
   const spanLabel =
     weeks.length === allWeeks.length
       ? "trailing year"
       : `last ${weeks.length} ${weeks.length === 1 ? "week" : "weeks"}`;
+
   const cardRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const [anchor, setAnchor] = useState<CalendarTooltipAnchor | undefined>(undefined);
+
   const showTooltip = useCallback((day: AdminDailyCount, cell: HTMLElement) => {
     const card = cardRef.current;
+
     if (card === null) return;
     const cellRect = cell.getBoundingClientRect();
     const cardRect = card.getBoundingClientRect();
@@ -217,22 +226,27 @@ export function ActivityCalendar({
       bottom: cellRect.bottom - cardRect.top,
     });
   }, []);
+
   const hideTooltip = useCallback(() => setAnchor(undefined), []);
   // The tooltip's own size is what the clamp needs, so the placement waits
   // for the render that gives it one, still before the frame paints.
   useLayoutEffect(() => {
     const card = cardRef.current;
     const tooltip = tooltipRef.current;
+
     if (anchor === undefined || card === null || tooltip === null) return;
+
     const left = Math.min(
       Math.max(anchor.centerX - tooltip.offsetWidth / 2, 0),
       card.clientWidth - tooltip.offsetWidth,
     );
+
     const above = anchor.top - tooltip.offsetHeight - CALENDAR_TOOLTIP_GAP_PX;
     const top = above >= 0 ? above : anchor.bottom + CALENDAR_TOOLTIP_GAP_PX;
     tooltip.style.left = `${left}px`;
     tooltip.style.top = `${top}px`;
   }, [anchor]);
+
   return (
     <ChartFrame
       ref={cardRef}

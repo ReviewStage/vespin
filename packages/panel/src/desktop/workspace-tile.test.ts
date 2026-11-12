@@ -51,6 +51,7 @@ function mount(
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(withQueryClient(createElement(WorkspaceTile, { workspace }))));
+
   return container;
 }
 
@@ -71,6 +72,7 @@ const pictureTile = (picture: string): Face => ({ picture, letter: "", hue: fals
 function drawn(container: HTMLElement): Face {
   const tile = container.querySelector(".ui-avatar[data-shape='tile']");
   const image = container.querySelector('img[data-loaded="true"]');
+
   return {
     picture: image?.getAttribute("src") ?? undefined,
     letter: tile?.textContent ?? "",
@@ -85,6 +87,7 @@ function load(container: HTMLElement): void {
 
 test("a workspace with a photo draws its letter while it loads, then the photo the host holds for its id, with no letter or hue under it", async () => {
   const version = "1a2b3c4d5e6f7a8b";
+
   const tile = mount(
     { id: "workspace-photo", name: "acme", photoVersion: version },
     { "workspace-photo": { rows: { version, url: PHOTO_URL } } },
@@ -106,18 +109,22 @@ test("a photo the host holds none of at the version the list names, or that fail
     "workspace-stale": { rows: { version: "0c0c0c0c0c0c0c0c", url: PHOTO_URL } },
     "workspace-broken": { rows: { version: "0e0e0e0e0e0e0e0e", url: PHOTO_URL } },
   };
+
   const missing = mount(
     { id: "workspace-missing", name: "relay", photoVersion: "0f0f0f0f0f0f0f0f" },
     photos,
   );
+
   const stale = mount(
     { id: "workspace-stale", name: "stale", photoVersion: "0d0d0d0d0d0d0d0d" },
     photos,
   );
+
   const broken = mount(
     { id: "workspace-broken", name: "zeta", photoVersion: "0e0e0e0e0e0e0e0e" },
     photos,
   );
+
   await settle();
   await vi.waitFor(() => assert.equal(broken.querySelector("img") !== null, true));
   const offered = broken.querySelector("img") !== null;

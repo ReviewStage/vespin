@@ -48,9 +48,12 @@ export interface AdminIntegrationPresence {
 export function adminIntegrations(present: AdminIntegrationPresence): AdminIntegration[] {
   const connectors = INTEGRATION_PROVIDER_LIST.flatMap((provider) => {
     const configured = present.connectors.get(provider);
+
     if (configured === undefined) return [];
+
     return [{ key: provider, label: `${INTEGRATION_NAME[provider]} (Vercel Connect)`, configured }];
   });
+
   return [
     { ...ADMIN_INTEGRATION.GITHUB_APP, configured: present.githubApp },
     { ...ADMIN_INTEGRATION.GITHUB_SIGN_IN, configured: present.githubSignIn },

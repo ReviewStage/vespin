@@ -81,7 +81,9 @@ function Box({ status }: { status: AgentStatus }): ReactNode {
     messages: [],
     send: () => new Promise(ignore),
   });
+
   const [choice, choose] = useState({ model: "anthropic/claude-opus-5.5", effort: "high" });
+
   return createElement(AgentComposer, {
     ...QUIET_COMPOSER,
     status,
@@ -99,10 +101,13 @@ async function drawnAt(width: number, status: AgentStatus = AGENT_STATUS.COMPLET
   const root = createRoot(container);
   roots.push(root);
   await act(async () => root.render(withQueryClient(createElement(Box, { status }))));
+
   const foot =
     container.querySelector<HTMLElement>("form > :last-child") ?? assert.fail("the foot stands");
+
   const card =
     container.querySelector<HTMLElement>(".message-box") ?? assert.fail("the card stands");
+
   return {
     container,
     card,
@@ -115,18 +120,22 @@ async function drawnAt(width: number, status: AgentStatus = AGENT_STATUS.COMPLET
 test("at 220px wide, while a turn runs, the ⋯ offers every press it hid", async () => {
   const box = await drawnAt(CARD.NARROWEST, AGENT_STATUS.RUNNING);
   act(() => box.press("Composer actions").click());
+
   const offered = [...document.querySelectorAll('[role="menuitem"]')].map(
     (item) => item.textContent,
   );
+
   assert.deepEqual(offered, ["Attach files", "MCP servers", "62% of context used", "Dictate"]);
 });
 
 test("the ⋯ offers only what it hid: at 320px the + still stands beside it, so the ⋯ offers none of its rows", async () => {
   const box = await drawnAt(CARD.NARROW);
   act(() => box.press("Composer actions").click());
+
   const offered = [...document.querySelectorAll('[role="menuitem"]')].map(
     (item) => item.textContent,
   );
+
   assert.deepEqual(offered, ["62% of context used", "Dictate"]);
 });
 
@@ -144,6 +153,7 @@ test("the + raises a menu of Attachment and MCP servers, whose servers popover s
   const popover =
     document.querySelector<HTMLElement>(".ui-menu-panel [role='dialog']") ??
     assert.fail("the servers popover stands");
+
   const search = popover.querySelector<HTMLInputElement>("input") ?? assert.fail("it searches");
   assert.equal(document.activeElement, search);
   await act(async () => {
@@ -158,11 +168,13 @@ test("the ⋯'s menu closes once the card changes width, as a panel dragged narr
   const box = await drawnAt(CARD.NARROW);
   const width = vi.spyOn(box.card, "getBoundingClientRect");
   width.mockReturnValue(DOMRect.fromRect({ width: CARD.NARROW }));
+
   // What the standing menu offers; a closed one, held drawn while its exit plays, is inert.
   const offered = () =>
     [...document.querySelectorAll('[role="menuitem"]')]
       .filter((item) => item.closest("[inert]") === null)
       .map((item) => item.textContent);
+
   act(() => box.press("Composer actions").click());
   assert.deepEqual(offered(), ["62% of context used", "Dictate"]);
 
@@ -180,9 +192,11 @@ test("a card too narrow for the model's words has its chip draw the harness's ma
   const laid = vi.spyOn(HTMLFormElement.prototype, "clientWidth", "get");
   laid.mockReturnValue(CARD.NARROW);
   const box = await drawnAt(CARD.NARROW);
+
   const model = () =>
     box.container.querySelector<HTMLButtonElement>(".agent-model-chip button") ??
     assert.fail("the model chip stands");
+
   assert.equal(model().getAttribute("aria-label"), "Opus 5.5 High");
   assert.notEqual(model().querySelector(".ui-harness-mark"), null);
 

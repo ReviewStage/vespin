@@ -219,9 +219,11 @@ const REGISTERED_AS: ReadonlyMap<string, ConnectAgent> = new Map([
 /** The mark an allowed agent's row leads with: its brand's, where the name it registered under is one the picker knows, or a plain agent's. */
 function clientMark(client: McpClient): React.JSX.Element {
   const name = client.name?.trim().toLowerCase() ?? "";
+
   const agent =
     REGISTERED_AS.get(name) ??
     Object.values(CONNECT_AGENT).find((each) => CONNECT_STEPS[each].name.toLowerCase() === name);
+
   return (agent === undefined ? undefined : CONNECT_STEPS[agent].mark) ?? <GLYPH.AGENT />;
 }
 
@@ -260,6 +262,7 @@ function clientName(client: McpClient): string {
  */
 function destinations(client: McpClient): string {
   const places = new Set(client.redirectUris.map(oauthRedirectDestination));
+
   return [...places]
     .map((place) => (place === ON_THIS_COMPUTER ? PAGE_LINE.THIS_COMPUTER : place))
     .join(", ");
@@ -302,6 +305,7 @@ function ClientRow({
   const { mutateAsync: sendMcpClientsRevoke, ...revoking } = useMutation(
     actMutation(ACT_KIND.MCP_CLIENTS_REVOKE),
   );
+
   const name = clientName(client);
   const [rejection, setRejection] = useState<string | undefined>(undefined);
 
@@ -309,29 +313,37 @@ function ClientRow({
     status: ACTION_RESULT_STATUS.REJECTED,
     reason: `Revoking ${name} didn't finish. Try again.`,
   };
+
   const revoke = (): Promise<ActionResult> => {
     setRejection(undefined);
+
     return sendMcpClientsRevoke({ clientId: client.clientId }).then(
       (answer): ActionResult => {
         if ("failure" in answer) {
           setRejection(refused.reason);
+
           return refused;
         }
+
         onRevoked(client);
+
         return { status: ACTION_RESULT_STATUS.ACCEPTED };
       },
       () => {
         setRejection(refused.reason);
+
         return refused;
       },
     );
   };
+
   const confirmAct = useConfirmAct(revoking, {
     send: revoke,
     answered: (answer): ActionResult =>
       "failure" in answer ? refused : { status: ACTION_RESULT_STATUS.ACCEPTED },
     failed: () => refused,
   });
+
   const confirm = useConfirmDialog(
     { subject: !revoked, surfaceOpen: true },
     confirmAct,
@@ -340,6 +352,7 @@ function ClientRow({
 
   // Note that an agent that gave no name is called by the app's own words, which show in a screen recording.
   const named = client.name !== null;
+
   return (
     <>
       <MenuRow
@@ -391,6 +404,7 @@ function shownClients(
     (client) =>
       client.clientId !== FIRST_PARTY_OAUTH_CLIENT_ID.CLI && !revoked.has(client.clientId),
   );
+
   return [...standing, ...revoked.values()].toSorted(
     (one, other) => (other.allowedAt ?? 0) - (one.allowedAt ?? 0),
   );
@@ -413,6 +427,7 @@ function ConnectSteps({
   const openLink = useOpenLink();
   const installUrl = step.install?.url(serverUrl);
   const copied = step.command?.(serverUrl) ?? (step.address === true ? serverUrl : undefined);
+
   return (
     <SettingsBlock>
       <OutsideSteps waiting={waiting ? connectWaiting(step) : undefined}>
@@ -461,6 +476,7 @@ function ConnectRows({
   arrived: McpClient | undefined;
 }): React.JSX.Element {
   const [agent, setAgent] = useState<ConnectAgent>(CONNECT_AGENT.CLAUDE_CODE);
+
   return (
     <>
       <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.MCP_CONNECT)}>
@@ -513,9 +529,11 @@ export function McpSection(): React.JSX.Element {
   const [revoked, setRevoked] = useState<ReadonlyMap<string, McpClient>>(new Map());
   // The agents the first read listed, so one allowed while the page shows is told apart as just connected.
   const [known, setKnown] = useState<ReadonlySet<string> | undefined>(undefined);
+
   if (rows !== undefined && known === undefined) {
     setKnown(new Set(rows.clients.map((client) => client.clientId)));
   }
+
   if (rows === undefined && !read.isError) {
     return (
       <SettingsSectionsSkeleton
@@ -524,9 +542,12 @@ export function McpSection(): React.JSX.Element {
       />
     );
   }
+
   const shown = rows === undefined ? [] : shownClients(rows.clients, revoked);
+
   const isNew = (client: McpClient) =>
     known !== undefined && !known.has(client.clientId) && !revoked.has(client.clientId);
+
   return (
     <SettingsSection
       title={SECTION.TITLE}

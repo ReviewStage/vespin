@@ -30,6 +30,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -44,8 +45,10 @@ const installationOf = (id: number, names: readonly string[]): InstallationFixtu
 const folderOf = (command: MemoryCommand) => command.ask.env?.[VARIABLE.FOLDER];
 
 const isSync = (command: MemoryCommand) => Object.hasOwn(command.ask.env ?? {}, VARIABLE.FOLDER);
+
 const isInstall = (command: MemoryCommand) =>
   command.ask.args.some((arg) => arg.includes("pnpm install"));
+
 const isPrune = (command: MemoryCommand) => Object.hasOwn(command.ask.env ?? {}, VARIABLE.KEEP);
 
 /** The sandboxes kept in memory, each command a success but the sync of the folder named to fail. */
@@ -75,6 +78,7 @@ const connected = (installation: InstallationFixture) =>
     const userId = yield* openAccount;
     const workspaceId = yield* openWorkspace(userId);
     yield* connectWorkspaceGitHub(workspaceId, installation);
+
     return { workspaceId, userId };
   });
 

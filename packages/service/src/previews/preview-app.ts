@@ -155,6 +155,7 @@ const SHARE_CARD = {
  */
 function shareCardPage(app: string | undefined, signIn: URL): string {
   const image = new URL(SHARE_CARD.IMAGE_PATH, app).href;
+
   const tags = [
     ["name", "robots", "noindex"],
     ["name", "description", SHARE_CARD.DESCRIPTION],
@@ -173,6 +174,7 @@ function shareCardPage(app: string | undefined, signIn: URL): string {
     ["name", "twitter:image", image],
     ["name", "twitter:image:alt", SHARE_CARD.IMAGE_ALT],
   ] as const;
+
   return previewPage({
     title: SHARE_CARD.TITLE,
     line: `<a href="${signIn.href.replaceAll("&", "&amp;")}">Sign in</a> to view this preview.`,
@@ -185,7 +187,9 @@ function shareCardPage(app: string | undefined, signIn: URL): string {
 /** The page sandbox, or not found on a deployment that has none. */
 const pageSandbox = Effect.gen(function* () {
   const { sandbox } = yield* PageLinks;
+
   if (sandbox === undefined) return yield* Effect.fail<HostedRefusal>(HOSTED_REFUSAL.NOT_FOUND);
+
   return sandbox;
 });
 
@@ -218,27 +222,35 @@ const signInEndpoint = (seams: PreviewSignInSeams) =>
     const sandbox = yield* pageSandbox;
     const address = new URL(request.url);
     const name = previewNameOfLabel(address.searchParams.get(PREVIEW_LINK.QUERY.PREVIEW) ?? "");
+
     if (name === undefined)
       return yield* Effect.fail<HostedRefusal>(HOSTED_REFUSAL.INVALID_REQUEST);
     const returnPath = previewReturnPath(address.searchParams.get(PREVIEW_LINK.QUERY.RETURN));
     const account = yield* resolvedAccount(seams.resolveUserId, request);
+
     if (Option.isNone(account)) {
       const here = `${address.pathname}${address.search}`;
       const signIn = `${SIGN_IN_PAGE.PATH}?${new URLSearchParams({ [SIGN_IN_PAGE.RETURN]: here })}`;
+
       return HttpServerResponse.redirect(signIn, { status: HOSTED_HTTP_STATUS.FOUND });
     }
+
     const found = yield* previewAgentFor(account.value, name);
+
     if (Option.isNone(found)) return yield* Effect.fail<HostedRefusal>(HOSTED_REFUSAL.NOT_FOUND);
     const agentId = found.value;
     yield* reachedAgentSession(account.value, agentId);
+
     const token = mintPreviewHandoff(
       sandbox,
       { userId: account.value, agentId },
       yield* Clock.currentTimeMillis,
     );
+
     const target = new URL(PREVIEW_LINK.SESSION_PATH, previewOrigin(sandbox, name));
     target.searchParams.set(PREVIEW_LINK.QUERY.TOKEN, token);
     target.searchParams.set(PREVIEW_LINK.QUERY.RETURN, returnPath);
+
     return HttpServerResponse.redirect(target, { status: HOSTED_HTTP_STATUS.FOUND });
   });
 
@@ -259,6 +271,7 @@ export function previewSignInApp(
 /** The path and query the browser asked the preview host for, from the address the dispatcher restored under the proxy's path. */
 function askedPath(address: URL): string {
   const rest = address.pathname.slice(PREVIEW_LINK.PROXY_PATH.length);
+
   return `${rest.startsWith("/") ? rest : `/${rest}`}${address.search}`;
 }
 
@@ -266,8 +279,10 @@ function askedPath(address: URL): string {
 function previewCookie(request: Request): string | undefined {
   for (const part of (request.headers.get("cookie") ?? "").split(";")) {
     const [name, ...value] = part.trim().split("=");
+
     if (name === PREVIEW_LINK.COOKIE) return value.join("=");
   }
+
   return undefined;
 }
 
@@ -277,6 +292,7 @@ function cookiesWithoutPreview(request: Request): string | undefined {
     .split(";")
     .map((part) => part.trim())
     .filter((part) => part !== "" && !part.startsWith(`${PREVIEW_LINK.COOKIE}=`));
+
   return kept.length === 0 ? undefined : kept.join("; ");
 }
 
@@ -288,12 +304,15 @@ const sessionStep = (sandbox: PageSandbox, name: PreviewName, address: URL, now:
       address.searchParams.get(PREVIEW_LINK.QUERY.TOKEN) ?? "",
       now,
     );
+
     if (member === undefined || !(yield* namesTokenAgent(name, member))) {
       return HttpServerResponse.text(NOT_SIGNED_IN, { status: HOSTED_HTTP_STATUS.UNAUTHORIZED });
     }
+
     const maxAge = Duration.toSeconds(PREVIEW_TOKEN_LIFETIME.SESSION);
     const cookie = `${PREVIEW_LINK.COOKIE}=${mintPreviewSession(sandbox, member, now)}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`;
     const back = previewReturnPath(address.searchParams.get(PREVIEW_LINK.QUERY.RETURN));
+
     return HttpServerResponse.redirect(back, {
       status: HOSTED_HTTP_STATUS.FOUND,
       headers: { "Set-Cookie": cookie, "Cache-Control": "no-store" },
@@ -316,6 +335,7 @@ function signInFirst(sandbox: PageSandbox, name: PreviewName, request: Request, 
   const signIn = new URL(PREVIEW_LINK.SIGN_IN_PATH, app);
   signIn.searchParams.set(PREVIEW_LINK.QUERY.PREVIEW, previewLabel(name));
   signIn.searchParams.set(PREVIEW_LINK.QUERY.RETURN, asked);
+
   // Note that the card answers 200, because an unfurler draws no card for a page that refuses it.
   if (isUnfurl(request)) {
     return HttpServerResponse.text(shareCardPage(app, signIn), {
@@ -324,12 +344,14 @@ function signInFirst(sandbox: PageSandbox, name: PreviewName, request: Request, 
       headers: NEVER_KEPT,
     });
   }
+
   if (request.method !== HTTP_METHOD.GET || !isPageLoad(request)) {
     return HttpServerResponse.text(NOT_SIGNED_IN, {
       status: HOSTED_HTTP_STATUS.UNAUTHORIZED,
       headers: NEVER_KEPT,
     });
   }
+
   return HttpServerResponse.redirect(signIn, {
     status: HOSTED_HTTP_STATUS.FOUND,
     headers: { "Cache-Control": "no-store" },
@@ -339,6 +361,7 @@ function signInFirst(sandbox: PageSandbox, name: PreviewName, request: Request, 
 /** What a visit is answered where nothing is shared from the agent now, or its server stopped: a page for a page load, bare text for anything else, under the status given. */
 function noPreview(request: Request, status: number = HOSTED_HTTP_STATUS.NOT_FOUND) {
   const page = isPageLoad(request);
+
   return HttpServerResponse.text(page ? NO_PREVIEW_PAGE : NO_PREVIEW, {
     status,
     ...(page ? { contentType: "text/html; charset=utf-8" } : {}),
@@ -365,12 +388,14 @@ const refusedAsPage = <R>(
 /** What a visit is answered while the sandbox or its server comes up: a page that reloads itself for a page load, a bare 503 for anything else. */
 function wakingPage(request: Request) {
   const headers = { ...NEVER_KEPT, "Retry-After": String(WAKING_POLL_SECONDS) };
+
   if (!isPageLoad(request)) {
     return HttpServerResponse.text(WAKING, {
       status: HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
       headers,
     });
   }
+
   return HttpServerResponse.text(WAKING_PAGE, {
     status: HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
     contentType: "text/html; charset=utf-8",
@@ -392,6 +417,7 @@ const serverAnswers = (upstream: string) =>
   Effect.tryPromise(() => fetch(upstream, { redirect: "manual" })).pipe(
     Effect.map((answered) => {
       void answered.body?.cancel();
+
       // A server that stopped under a running share answers too, so the page reloads to say so.
       return (
         answered.headers.has(NOT_RUNNING_HEADER) ||
@@ -405,43 +431,57 @@ const serverAnswers = (upstream: string) =>
 const passedOn = (request: Request, upstream: string, origin: string, asked: string) =>
   Effect.gen(function* () {
     const headers = new Headers();
+
     for (const [name, value] of request.headers) {
       if (!DROPPED_REQUEST_HEADERS.has(name)) headers.set(name, value);
     }
+
     const cookies = cookiesWithoutPreview(request);
+
     if (cookies !== undefined) headers.set("cookie", cookies);
     const hasBody = request.method !== HTTP_METHOD.GET && request.method !== "HEAD";
+
     const init: RequestInit & { duplex?: "half" } = {
       method: request.method,
       headers,
       redirect: "manual",
       ...(hasBody ? { body: request.body, duplex: "half" } : {}),
     };
+
     const routeOrigin = new URL(upstream).origin;
     // Note that the path is joined to the route's origin rather than resolved against it, so a path like `//other.host/` stays on the route.
     const target = new URL(`${routeOrigin}${asked}`);
+
     if (target.origin !== routeOrigin) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
     const answered = yield* Effect.tryPromise(() => fetch(target, init)).pipe(
       Effect.tapError((failure) =>
         Effect.logWarning("a preview's sandbox did not answer", failure),
       ),
       Effect.mapError(() => HOSTED_REFUSAL.UPSTREAM_ERROR),
     );
+
     // The relay answers so while the port's server it started again is still coming up.
     if (answered.headers.has(STARTING_HEADER)) return wakingPage(request);
+
     if (answered.headers.has(NOT_RUNNING_HEADER)) return noPreview(request);
     const back = new Headers();
+
     for (const [name, value] of answered.headers) {
       if (name === "set-cookie" || DROPPED_RESPONSE_HEADERS.has(name)) continue;
       back.set(name, value);
     }
+
     for (const cookie of answered.headers.getSetCookie()) back.append("set-cookie", cookie);
+
     // Our own cache rule goes on last, so nothing the sandbox answers lets the CDN keep a preview for another visitor.
     for (const [name, value] of Object.entries(NEVER_KEPT)) back.set(name, value);
     const location = answered.headers.get("location") ?? "";
+
     if (location.startsWith(routeOrigin)) {
       back.set("location", `${origin}${location.slice(routeOrigin.length)}`);
     }
+
     return HttpServerResponse.fromWeb(
       new Response(answered.body, { status: answered.status, headers: back }),
     );
@@ -459,18 +499,25 @@ const proxyEndpoint = (seams: PreviewProxySeams) =>
     const sandbox = yield* pageSandbox;
     const address = new URL(request.url);
     const name = previewNameOfHost(sandbox, address.host);
+
     if (name === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     const now = yield* Clock.currentTimeMillis;
     const asked = askedPath(address);
+
     if (asked.split("?")[0] === PREVIEW_LINK.SESSION_PATH) {
       return yield* sessionStep(sandbox, name, new URL(asked, address.origin), now);
     }
+
     const member = readPreviewSession(sandbox, previewCookie(request) ?? "", now);
+
     if (member === undefined || !(yield* namesTokenAgent(name, member))) {
       return signInFirst(sandbox, name, request, asked);
     }
+
     const { sessionId } = yield* reachedAgentSession(member.userId, member.agentId);
+
     if (sessionId === undefined) return noPreview(request);
+
     const onSandbox = <A>(call: (agent: AgentSandboxService) => Effect.Effect<A, SandboxError>) =>
       Effect.provide(
         Effect.gen(function* () {
@@ -478,11 +525,14 @@ const proxyEndpoint = (seams: PreviewProxySeams) =>
         }),
         seams.sandbox,
       );
+
     const status = asked.split("?")[0] === PREVIEW_LINK.STATUS_PATH;
     const preview = yield* onSandbox((agent) => agent.preview(sessionId));
+
     // Note that a share gone while the page waited reloads it too, so it shows why.
     if (preview.kind === PREVIEW_STANDING.NONE)
       return status ? statusAnswer(true) : noPreview(request);
+
     if (preview.kind === PREVIEW_STANDING.WAKING) {
       // Note that the visit answers at once and the resume runs after it, so the waking page asks again until the sandbox is up.
       if (preview.state === SANDBOX_STATE.STOPPED) {
@@ -491,9 +541,12 @@ const proxyEndpoint = (seams: PreviewProxySeams) =>
           Effect.ignore(onSandbox((agent) => agent.resume(sessionId))),
         );
       }
+
       return status ? statusAnswer(false) : wakingPage(request);
     }
+
     if (status) return statusAnswer(yield* serverAnswers(preview.url));
+
     return yield* passedOn(request, preview.url, previewOrigin(sandbox, name), asked);
   });
 

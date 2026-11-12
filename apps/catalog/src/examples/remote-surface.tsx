@@ -25,11 +25,13 @@ function RemoteSurfaces(): React.JSX.Element {
   const [driving, setDriving] = useState(false);
   const [said, setSaid] = useState("Nothing yet");
   const canvas = useRef<HTMLCanvasElement>(null);
+
   const pointer = (input: RemotePointer) => {
     if (input.action === REMOTE_POINTER_ACTION.MOVE) return;
     setSaid(`${input.action} at ${String(Math.round(input.x))}, ${String(Math.round(input.y))}`);
     const element = canvas.current;
     const context = element?.getContext("2d");
+
     if (element === null || context === null || context === undefined) return;
     const ratio = element.width / WIDTH;
     context.clearRect(0, 0, element.width, element.height);
@@ -38,6 +40,7 @@ function RemoteSurfaces(): React.JSX.Element {
     context.arc(input.x * ratio, input.y * ratio, 6 * ratio, 0, Math.PI * 2);
     context.fill();
   };
+
   return (
     <CatalogSection id="remote-surface-driven" title="Driven, or watched">
       <Stack gap={GAP.FIELD}>
@@ -54,6 +57,7 @@ function RemoteSurfaces(): React.JSX.Element {
           onWheel={(input) => setSaid(`wheel ${String(Math.round(input.deltaY))}px`)}
           onKey={(input) => {
             setSaid(`key ${input.action} ${input.key}`);
+
             return true;
           }}
           onPaste={(text) => setSaid(`pasted ${String(text.length)} characters`)}

@@ -25,10 +25,13 @@ interface Sent {
 
 function upstream(status = 202, body: BodyInit = JSON.stringify(QUEUED)) {
   const sent: Sent[] = [];
+
   const layer = fakeHttpClientLayer((url, init) => {
     sent.push({ url, init });
+
     return new Response(body, { status });
   });
+
   return { layer, sent };
 }
 
@@ -68,6 +71,7 @@ it.effect("an answer that queued no person settles, since PostHog holds none to 
         recordings_queued_for_deletion: false,
       }),
     );
+
     yield* forgetPosthogPersonEffect("user-1", options()).pipe(Effect.provide(posthog.layer));
   }),
 );
@@ -82,6 +86,7 @@ it.effect("a 202 naming deletion errors fails without quoting the body", () =>
         deletion_errors: [{ person_uuid: "person-uuid-1", step: "delete_person" }],
       }),
     );
+
     const error = yield* forgetPosthogPersonEffect("user-1", options()).pipe(
       Effect.provide(posthog.layer),
       Effect.flip,
@@ -96,6 +101,7 @@ it.effect("a 202 naming deletion errors fails without quoting the body", () =>
 it.effect("a success whose body cannot be read fails with the status alone", () =>
   Effect.gen(function* () {
     const posthog = upstream(202, `not json ${PERSONAL_KEY}`);
+
     const error = yield* forgetPosthogPersonEffect("user-1", options()).pipe(
       Effect.provide(posthog.layer),
       Effect.flip,
@@ -109,6 +115,7 @@ it.effect("a success whose body cannot be read fails with the status alone", () 
 it.effect("a success that never says whether anything failed is unreadable, not taken", () =>
   Effect.gen(function* () {
     const posthog = upstream(202, "{}");
+
     const error = yield* forgetPosthogPersonEffect("user-1", options()).pipe(
       Effect.provide(posthog.layer),
       Effect.flip,
@@ -121,12 +128,14 @@ it.effect("a success that never says whether anything failed is unreadable, not 
 it.effect("a success whose body never ends fails at the deadline", () =>
   Effect.gen(function* () {
     const posthog = upstream(202, new ReadableStream());
+
     const pending = yield* Effect.forkChild(
       forgetPosthogPersonEffect("user-1", options({ timeoutMs: 5_000 })).pipe(
         Effect.provide(posthog.layer),
         Effect.flip,
       ),
     );
+
     yield* TestClock.adjust("5 seconds");
     const error = yield* Fiber.join(pending);
 
@@ -137,12 +146,14 @@ it.effect("a success whose body never ends fails at the deadline", () =>
 it.effect("a timeout the call refuses waits out the default deadline rather than none", () =>
   Effect.gen(function* () {
     const posthog = upstream(202, new ReadableStream());
+
     const pending = yield* Effect.forkChild(
       forgetPosthogPersonEffect("user-1", options({ timeoutMs: 0 })).pipe(
         Effect.provide(posthog.layer),
         Effect.flip,
       ),
     );
+
     yield* TestClock.adjust("5 seconds");
     const error = yield* Fiber.join(pending);
 
@@ -153,6 +164,7 @@ it.effect("a timeout the call refuses waits out the default deadline rather than
 it.effect("a refusal fails with the status alone, never anything that could name the key", () =>
   Effect.gen(function* () {
     const posthog = upstream(401, JSON.stringify({ detail: `bad key ${PERSONAL_KEY}` }));
+
     const error = yield* forgetPosthogPersonEffect("user-1", options()).pipe(
       Effect.provide(posthog.layer),
       Effect.flip,

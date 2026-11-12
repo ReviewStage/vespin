@@ -491,21 +491,29 @@ function relationFields(
     case TASK_RELATION_KIND.BLOCKS: {
       const [waiting, blocker] =
         side.kind === TASK_RELATION_KIND.BLOCKED_BY ? [taskId, otherId] : [otherId, taskId];
+
       if (row.id !== waiting || !reach.blocking.includes(blocker)) return {};
+
       const others =
         reach.opened?.taskId === waiting
           ? reach.opened.blockedBy.filter((id) => id !== blocker)
           : undefined;
+
       if (!side.added && others === undefined) return {};
       const blocked = side.added || (others ?? []).some((id) => reach.blocking.includes(id));
+
       return blocked === (row.blocked === true) ? {} : { blocked };
     }
+
     case TASK_RELATION_KIND.SUB_TASK:
     case TASK_RELATION_KIND.PARENT: {
       const [child, parent] =
         side.kind === TASK_RELATION_KIND.SUB_TASK ? [otherId, taskId] : [taskId, otherId];
+
       if (row.id !== child) return {};
+
       if (side.added) return { parentTaskId: parent };
+
       return row.parentTaskId === parent ? { parentTaskId: null } : {};
     }
   }
@@ -515,9 +523,11 @@ function relationFields(
 function relationDrawn(change: RelationChange): (row: PlanRow) => Partial<PlanRow> {
   return (row) => {
     const fields: Partial<PlanRow> = {};
+
     for (const side of change.sides) {
       Object.assign(fields, relationFields(change, side, { ...row, ...fields }));
     }
+
     return fields;
   };
 }
@@ -533,10 +543,13 @@ function withNewestPage(
   page: DescriptionRevisionsAnswer,
 ): DescriptionRevisionsAnswer {
   const oldest = page.revisions.at(-1)?.seq;
+
   if (held === undefined || oldest === undefined || page.earlier === undefined) return page;
   const older = held.revisions.filter((line) => line.seq < oldest);
+
   if (older.length === 0) return page;
   const revisions = [...page.revisions, ...older];
+
   return held.earlier === undefined ? { revisions } : { revisions, earlier: held.earlier };
 }
 
@@ -552,6 +565,7 @@ function withOlderPage(
   page: DescriptionRevisionsAnswer,
 ): DescriptionRevisionsAnswer {
   const revisions = [...held.revisions.filter((line) => line.seq >= before), ...page.revisions];
+
   return page.earlier === undefined ? { revisions } : { revisions, earlier: page.earlier };
 }
 
@@ -575,9 +589,11 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 ): Effect.fn.Return<TasksComposer, never, Scope.Scope | HttpClient.HttpClient> {
   const { kernel, account, client, kept } = dependencies;
   const http = yield* HttpClient.HttpClient;
+
   /** One ask of the service, over the host's own HTTP client. */
   const served = <Answer, Failure>(call: Effect.Effect<Answer, Failure, HttpClient.HttpClient>) =>
     Effect.provideService(call, HttpClient.HttpClient, http);
+
   /** A declared live read sealed, or polled where `poll` asks past `after`, as a follow reads it: its answer, or why not and whether the read is gone for good, a task or an agent the account no longer reaches or a session another's. */
   const sealedLive = <Read extends AnyLiveRead>(
     read: Read,
@@ -597,6 +613,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
             }
           : sealed,
     );
+
   const idleView = (): TasksView => IDLE_TASKS_VIEW;
   const gate = () => kernel.runMode.sendsNetwork && account.capabilitiesActive();
 
@@ -611,6 +628,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       ),
     { capacity: LINK_READ_KEPT.CAPACITY, timeToLive: linkReadKept },
   );
+
   /**
    * Each plan's skills, and each repository's no plan names, as the service
    * last read them: answered at once each time they are asked, a `/` opening
@@ -637,9 +655,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       ),
       (answer) => {
         const held = MutableHashMap.get(heldSkills, key);
+
         if (answer === undefined || !("skills" in answer)) return answer;
+
         if (Option.isSome(held) && Equal.equals(held.value, answer)) return held.value;
         MutableHashMap.set(heldSkills, key, answer);
+
         return answer;
       },
     );
@@ -649,10 +670,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   const skillsRead = (key: SkillsKey) =>
     Effect.gen(function* () {
       const out = yield* FiberMap.get(skillsReads, key);
+
       return Option.isSome(out)
         ? out.value
         : yield* FiberMap.run(skillsReads, key, readSkillsOf(key));
     });
+
   const issueReads = yield* Cache.makeWith(
     (key: LinkReadKey) =>
       served(
@@ -668,21 +691,27 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   const linkStandingOf = (link: LinkStandingKey) => {
     const { workspaceId, address } = link;
     const pullRequest = pullRequestAddressOf(address);
+
     if (pullRequest !== undefined) {
       const read = Cache.get(pullRequestReads, linkReadKey({ workspaceId, ...pullRequest }));
+
       return Effect.map(
         read,
         (answer): Option.Option<AppLinkStanding> => Option.fromUndefinedOr(answer),
       );
     }
+
     const issue = issueAddressOf(address);
+
     if (issue === undefined) return Effect.succeed(Option.none<AppLinkStanding>());
     const read = Cache.get(issueReads, linkReadKey({ workspaceId, ...issue }));
+
     return Effect.map(
       read,
       (answer): Option.Option<AppLinkStanding> => Option.fromUndefinedOr(answer),
     );
   };
+
   /**
    * What GitHub holds of each page a link names, fetched for the chips that
    * hold it (`held-fetch.ts`), by the workspace whose installation reaches it
@@ -699,6 +728,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     fetch: linkStandingOf,
     tell: liveTold(kernel.emit, TASKS_FOLLOWS.TASKS_LINK_STANDING_FOLLOW),
   });
+
   /**
    * The repositories the account reaches in each workspace, or in every one,
    * fetched for the windows that hold them (`held-fetch.ts`): asked as a
@@ -719,6 +749,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       ),
     tell: liveTold(kernel.emit, TASKS_FOLLOWS.TASKS_REPOSITORIES_FOLLOW),
   });
+
   /** The lists of the workspaces named asked again, and the list of every workspace's, which a change in any of them moves too. */
   const repositoriesMovedIn = (workspaceIds: ReadonlySet<string>) =>
     repositoryLists.wake(
@@ -750,6 +781,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     // last told, so a view that says nothing new is that one, and what is
     // told shares every part that did not move with what was told before.
     view = keepIdentity(published, view);
+
     if (view === published) return;
     published = view;
     kernel.emit(GATEWAY_EVENT.TASKS_CHANGED, carried(view));
@@ -770,6 +802,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   /** The task open as a workspace's leave is asked, and its close, which leaves it only while it is still the one open. */
   function openTaskLeaving(): OpenTaskLeaving {
     const openTaskId = view.activeTaskId;
+
     return {
       workspaceId: view.tasks.find((task) => task.id === openTaskId)?.workspaceId,
       close: serial(
@@ -794,6 +827,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     const userId = dependencies.accountId();
     /** The wait this follow handed last, so letting it go takes back its own alone. */
     let handed: TxWait | undefined;
+
     return pushLive({
       seal: (poll, after) =>
         gate() && userId !== undefined
@@ -845,16 +879,19 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     answers: HeldAnswers<readonly AgentBrowserTab[]>,
   ) {
     type Rows = typeof TASK_BROWSER_TABS_READ.rows.Type;
+
     const place = browserTabsPlaceOf(owner);
     // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
     const userId = dependencies.accountId();
     const tell = (rows: Rows, now: number) => answers.answered(browserTabsOfLiveRows(rows, now));
+
     // The rows told as they arrive, then again at each takeover's lapse in turn.
     const toldUntilMoved = (rows: Rows) =>
       Effect.gen(function* () {
         let now = yield* Clock.currentTimeMillis;
         tell(rows, now);
         let lapse = nextBrowserTabLapse(rows, now);
+
         while (lapse !== undefined) {
           yield* Effect.sleep(Duration.millis(lapse - now));
           now = Math.max(lapse, yield* Clock.currentTimeMillis);
@@ -862,6 +899,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           lapse = nextBrowserTabLapse(rows, now);
         }
       });
+
     return Effect.scoped(
       Effect.gen(function* () {
         const delivered = yield* Queue.sliding<Rows>(1);
@@ -872,6 +910,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
             ),
           ),
         );
+
         return yield* pushLive({
           seal: (poll, after) =>
             gate() && userId !== undefined
@@ -900,6 +939,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   function followPages(owner: PageOwnerKey, answers: HeldAnswers<readonly PageLine[]>) {
     // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
     const userId = dependencies.accountId();
+
     return pushLive({
       seal: (poll, after) =>
         gate() && userId !== undefined
@@ -968,6 +1008,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     gate,
     tell: liveTold(kernel.emit, TASKS_FOLLOWS.TASKS_COMMENTS_FOLLOW),
   });
+
   /** The windows' writes to a task's comments, each drawn over its thread at once; behind a closed gate each answers unanswered, taken back as it is drawn. */
   const commentWrites = descriptionCommentWrites({
     start: (planId, start) =>
@@ -997,6 +1038,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     listed: asListed,
     tell: liveTold(kernel.emit, TASKS_FOLLOWS.TASKS_DOCUMENT_FOLLOW),
   });
+
   /** Each edit's waits for its transaction, on its task's record and on the list, by the task, a newer edit's replacing an older one's. */
   const editWaits = yield* FiberMap.make<string>();
 
@@ -1005,6 +1047,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     standing: T,
   ): Omit<T, "assignee"> {
     const { assignee: _assignee, ...rest } = standing;
+
     return rest;
   }
 
@@ -1039,6 +1082,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
   const openTaskList = Effect.gen(function* () {
     const scope = yield* Scope.make();
+
     const collections = yield* Scope.provide(scope)(
       taskListCollections({
         pool: dependencies.pool,
@@ -1068,8 +1112,10 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         txWait: () => listWait,
       }),
     );
+
     return { scope, collections };
   });
+
   let taskList = yield* openTaskList;
   yield* Effect.addFinalizer(() => Scope.close(taskList.scope, Exit.void));
 
@@ -1084,6 +1130,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    * answers again.
    */
   const resending = yield* FiberHandle.make<void>();
+
   const resendQueued = Effect.suspend(() =>
     dependencies.pool.queued().length === 0
       ? Effect.void
@@ -1097,6 +1144,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     const userId = dependencies.accountId();
     const from = listKeptAt;
     listKeptAt = undefined;
+
     return followTaskList({
       ...(from === undefined ? undefined : { from }),
       live: (sync) =>
@@ -1125,6 +1173,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           const moved = yield* collections.answer(rows, standing);
           // Note that an answer the list did not draw tells its standing here, as after a poll that failed, and one it drew told it already.
           publish();
+
           // Note that only an answer read at a sync id is kept, since the follow reads past it at the next launch, and one that moved no row is written only beside the next that did, or as the store closes.
           if (entities !== undefined && standing !== undefined) {
             const kept = { rows: collections.synced(), at: standing.next };
@@ -1132,6 +1181,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
               ? entities.keep(KEPT_READ.TASK_LIST, kept)
               : entities.keepUnmoved(KEPT_READ.TASK_LIST, kept);
           }
+
           yield* resendQueued;
         }),
       // A list that could not be read says so beside the tasks it already drew rather than emptying them.
@@ -1169,6 +1219,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    */
   const openSidebar = Effect.gen(function* () {
     const scope = yield* Scope.make();
+
     const collections = yield* Scope.provide(scope)(
       sidebarCollections({
         pool: dependencies.pool,
@@ -1177,12 +1228,15 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         txWait: () => sidebarTxWait,
       }),
     );
+
     return { scope, collections };
   });
+
   let sidebar = yield* openSidebar;
   yield* Effect.addFinalizer(() => Scope.close(sidebar.scope, Exit.void));
   /** Whether the sidebar's follow has answered since its collections opened, after which nothing kept on disk is drawn over it. */
   let sidebarAnswered = false;
+
   /**
    * The sidebar's writes, each service call under the serial lock and the
    * transaction waited for outside it, so no task open, save, or read waits
@@ -1206,13 +1260,16 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   const followSidebar = Effect.gen(function* () {
     // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
     const userId = dependencies.accountId();
+
     const seal = (poll: boolean, after?: string) =>
       userId === undefined
         ? Effect.succeed(LIVE_SIGNED_OUT)
         : served(client.liveRead(SIDEBAR_READ, { userId }, poll ? { after } : undefined));
+
     /** One seal followed until it stops, which fails it so the backoff seals it again. */
     const attempt = Effect.gen(function* () {
       const sealed = yield* seal(false);
+
       if ("failure" in sealed) return yield* Effect.fail(sealed.failure);
       yield* followSidebarRows(
         {
@@ -1227,12 +1284,15 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
             sidebar.collections.answer(rows),
             Effect.suspend(() => {
               sidebarAnswered = true;
+
               return dependencies.entities()?.keep(KEPT_READ.SIDEBAR, rows) ?? Effect.void;
             }),
           ),
       ).pipe(Effect.ignore);
+
       return yield* Effect.fail(TASK_CALL_FAILURE.UNANSWERED);
     });
+
     const followed = attempt.pipe(
       Effect.retry({
         schedule: FOLLOW_BACKOFF,
@@ -1240,6 +1300,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       }),
       Effect.ignore,
     );
+
     yield* FiberHandle.run(sidebarFollow, followed, { onlyIfMissing: true });
   });
 
@@ -1251,15 +1312,19 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    */
   const drawnFromDisk = Effect.gen(function* () {
     const entities = dependencies.entities();
+
     if (entities === undefined) return;
     const list = entities.stored(KEPT_READ.TASK_LIST);
+
     if (list !== undefined && view.listStatus !== TASKS_READ.READY) {
       listKeptAt = list.at;
       // Note that a list drawn from disk is not said to be behind: the follow's first answer, or its failure, says where it stands.
       view = { ...view, listStatus: TASKS_READ.READY };
       yield* taskList.collections.answer(list.rows, { past: undefined, next: list.at, gone: [] });
     }
+
     const sidebarRows = entities.stored(KEPT_READ.SIDEBAR);
+
     if (sidebarRows !== undefined && !sidebarAnswered) {
       yield* sidebar.collections.answer(sidebarRows);
     }
@@ -1286,9 +1351,11 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    */
   function asListed(task: Task): Task {
     const listed = view.tasks.find((row) => row.id === task.id);
+
     if (listed === undefined) return task;
     const { agents: _agents, ...row } = listed;
     const { updatedAt, document, agentEdits, lastEdit, sectionEdits, blockedBy, blocks } = task;
+
     return {
       ...row,
       updatedAt,
@@ -1330,8 +1397,11 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    */
   function planRowOf(task: Task): PlanRow | undefined {
     const { ownerId, status, priority, number, origin } = task;
+
     if (ownerId === undefined || status === undefined || priority === undefined) return undefined;
+
     if (number === undefined) return undefined;
+
     return {
       id: task.id,
       workspaceId: task.workspaceId,
@@ -1362,6 +1432,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   /** Whether `taskId` holds back a task waiting on it now: unfinished, or not held by the list at all. */
   function blocksNow(taskId: string): boolean {
     const blocker = view.tasks.find((row) => row.id === taskId);
+
     return blocker?.status === undefined || !isTaskSettled(blocker.status);
   }
 
@@ -1369,8 +1440,10 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   function listedName(userId: string): string | undefined {
     for (const row of view.tasks) {
       if (row.createdBy?.userId === userId) return row.createdBy.name;
+
       if (row.assignee?.userId === userId) return row.assignee.name;
     }
+
     return undefined;
   }
 
@@ -1388,19 +1461,26 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   function startedRow(request: StartRequest): PlanRow | undefined {
     const ownerId = dependencies.accountId();
     const { workspaceId } = request;
+
     if (workspaceId === undefined || ownerId === undefined) return undefined;
     const relations = startRelationsOf(request);
+
     const related = (kind: TaskCreateRelationKind) =>
       relations.flatMap((each) => (each.kind === kind ? [each.taskId] : []));
+
     const listedTask = (taskId: string | undefined) =>
       taskId === undefined ? undefined : view.tasks.find((row) => row.id === taskId);
+
     const parentTaskId =
       request.parentTaskId ?? related(TASK_CREATE_RELATION_KIND.SUB_TASK_OF).at(0);
+
     const tree =
       listedTask(parentTaskId) ?? listedTask(related(TASK_CREATE_RELATION_KIND.PARENT_OF).at(0));
+
     const status = request.status ?? TASK_STATUS.TODO;
     const now = kernel.now();
     const name = request.name ?? "";
+
     return {
       id: request.id,
       workspaceId,
@@ -1438,11 +1518,13 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       screenAsks += 1;
       const opened = { asked: screenAsks, before: view.activeTaskId };
       const listed = view.tasks.find((row) => row.id === taskId);
+
       if (listed === undefined) return { ...opened, drawn: false };
       const { agents: _agents, ...row } = listed;
       // Note that the description is laid before the task opens, so the window's first frame of it draws its description.
       yield* documents.started({ ...row, document: EMPTY_DESCRIPTION });
       write({ activeTaskId: taskId });
+
       return { ...opened, drawn: true };
     });
   }
@@ -1459,6 +1541,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         view = opened.before === undefined ? rest : { ...rest, activeTaskId: opened.before };
         publish();
       }
+
       return opened.drawn ? documents.unfollow(taskId) : Effect.void;
     });
   }
@@ -1475,6 +1558,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     return Effect.gen(function* () {
       if (screenAsks !== opened.asked && view.activeTaskId !== task.id) return;
       yield* documents.started(task);
+
       if (opened.drawn) yield* documents.retry(task.id);
       write({ activeTaskId: task.id });
     });
@@ -1506,6 +1590,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     readonly fields: Partial<PlanRow>;
   } {
     documentTook(task.id, task, (held) => ({ ...withoutAssignee(held), ...task }));
+
     return { taskId: task.id, fields: planFieldsOf(task) };
   }
 
@@ -1530,6 +1615,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   /** `task` with the pin `marked` carries in place of its own. */
   function withMarksOf(task: Task, marked: Pick<Task, "pinnedAt" | "pinPosition">): Task {
     const { pinnedAt: _pinned, pinPosition: _position, ...kept } = task;
+
     return { ...kept, ...marksOf(marked) };
   }
 
@@ -1562,12 +1648,14 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         ? serial(
             Effect.gen(function* () {
               const renamedAs = yield* served(client.rename(taskId, { name }, key));
+
               if (!renamedAs.ok) {
                 return untaken(renamedAs.failure, {
                   kept: true,
                   refused: false,
                 });
               }
+
               const written = renamedAs.answer;
               const answered = written.task;
               documentTook(taskId, answered, (held) => ({
@@ -1575,6 +1663,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
                 name: answered.name,
                 document: answered.document,
               }));
+
               return {
                 answer: true,
                 txid: written.txid,
@@ -1627,15 +1716,18 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         ? serial(
             Effect.gen(function* () {
               const stoodAs = yield* served(client.setStanding(taskId, standing, key));
+
               if (!stoodAs.ok) {
                 return untaken(stoodAs.failure, {
                   kept: true,
                   refused: false,
                 });
               }
+
               const answered = stoodAs.answer;
               const { task } = answered;
               documentTook(taskId, task, (held) => ({ ...withoutAssignee(held), ...task }));
+
               return {
                 answer: true,
                 txid: answered.txid,
@@ -1679,14 +1771,17 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
                   key,
                 ),
               );
+
               if (!markedAs.ok) {
                 return untaken(markedAs.failure, {
                   kept: true,
                   refused: false,
                 });
               }
+
               const marked = markedAs.answer;
               takeMarks(marked.task);
+
               return {
                 answer: true,
                 txid: marked.txid,
@@ -1724,13 +1819,16 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         ? serial(
             Effect.gen(function* () {
               const answered = yield* served(client.mark(taskId, { readMark }, key));
+
               if (!answered.ok) {
                 return untaken(answered.failure, {
                   kept: true,
                   refused: false,
                 });
               }
+
               const marked = answered.answer;
+
               return {
                 answer: true,
                 txid: marked.txid,
@@ -1771,27 +1869,33 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       gate()
         ? Effect.gen(function* () {
             const { id } = start.request;
+
             const opened = start.quiet
               ? undefined
               : waited
                 ? OPENED_EARLIER
                 : yield* startOpened(id);
+
             return yield* serial(
               Effect.gen(function* () {
                 const created = yield* served(
                   client.create(start.request, start.request.agent === undefined ? key : undefined),
                 );
+
                 if (!created.ok) {
                   const { failure, localAgentRefusal, cause } = created;
                   const went = created.untaken ?? WRITE_UNTAKEN.REFUSED;
+
                   const waits =
                     went === WRITE_UNTAKEN.UNANSWERED && key !== undefined && startMayWait(start);
+
                   // Note that a start the service took already was made by an earlier send, so its record is followed again where it stands open, as a made start's is; one that waits keeps its task open, and any other is taken back.
                   if (went === WRITE_UNTAKEN.ALREADY_WRITTEN) {
                     if (opened?.drawn === true && view.activeTaskId === id) {
                       yield* documents.retry(id);
                     }
                   } else if (opened !== undefined && !waits) yield* startedBack(opened, id);
+
                   return untaken<FieldChange<PlanRow>, TasksStartAnswer>(went, {
                     kept: { planId: id },
                     refused: {
@@ -1801,9 +1905,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
                     },
                   });
                 }
+
                 const { task, agent, txid } = created.answer;
+
                 if (opened !== undefined) yield* startedAs(opened, task);
                 const row = planRowOf(task);
+
                 return {
                   answer: {
                     planId: task.id,
@@ -1846,9 +1953,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         ? serial(
             Effect.gen(function* () {
               const written = yield* served(client.delete(taskId));
+
               if (written === undefined) return { refused: false };
               yield* kept.forget(keptOfTask(taskId));
+
               if (view.activeTaskId === taskId) closeActive();
+
               return { answer: true, txid: written.txid };
             }),
           )
@@ -1885,11 +1995,13 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
               const { task, txid } = changed.answer;
               const { fields } = takeAnswered(task);
               const drawn = declared.drawn(input);
+
               return {
                 answer: declared.answered(task),
                 txid,
                 taken: (row: PlanRow) => {
                   const own = drawn(row);
+
                   return own === ROW_GONE || row.id !== task.id ? own : { ...own, ...fields };
                 },
               };
@@ -1986,10 +2098,13 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   /** What the list knows now of the two tasks a relation joins, which its draw reads. */
   function relationReachOf(taskId: string, otherId: string): RelationReach {
     const openId = view.activeTaskId;
+
     const blockedBy =
       openId === taskId || openId === otherId ? documents.heldTask(openId)?.blockedBy : undefined;
+
     const opened =
       openId === undefined || blockedBy === undefined ? undefined : { taskId: openId, blockedBy };
+
     return {
       blocking: [taskId, otherId, ...(blockedBy ?? [])].filter(blocksNow),
       ...(opened === undefined ? undefined : { opened }),
@@ -2001,10 +2116,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     Effect.gen(function* () {
       // A run that sends nothing reads the page its fixture stages, frame and source alike.
       if (!kernel.runMode.sendsNetwork) return fixturePage(read);
+
       if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };
       const { pageId, version } = read;
       const place = { taskId: read.taskId };
       const owner = pageOwnerOf(read);
+
       return yield* kept.answer(
         new PageVersionKey({ ownerKind: owner.kind, ownerId: owner.id, pageId, version }),
         dependencies.accountId,
@@ -2038,6 +2155,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         screenAsks += 1;
         // Note that the open reads nothing: the window holds the task's description (`TASKS_DOCUMENT_FOLLOW`), which draws at once where it was held lately.
         write({ activeTaskId: taskId });
+
         return true;
       }),
     // Leaving the task returns to the list, which was read when the tab
@@ -2051,6 +2169,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       Effect.gen(function* () {
         if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };
         const { path, firstLine, lastLine, raw, ref } = read;
+
         const window = {
           path,
           firstLine,
@@ -2058,11 +2177,13 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           ...(raw === undefined ? undefined : { raw }),
           ...(ref === undefined ? undefined : { ref }),
         };
+
         const asked = served(
           "taskId" in read
             ? client.readFile(read.taskId, window)
             : client.readRepositoryFile(read, window),
         );
+
         // A file read at a commit never changes, so it is kept; one read at the head of a branch is asked each time.
         const answer = yield* ref === undefined
           ? asked
@@ -2082,6 +2203,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
               (file) =>
                 file !== undefined && ("file" in file || "text" in file) ? file : undefined,
             );
+
         return answer ?? { failure: TASK_CALL_FAILURE.UNANSWERED };
       }),
     // A folder's listing is answered to the tree that asked and held nowhere:
@@ -2089,15 +2211,18 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     TASKS_TREE: (asked) =>
       Effect.gen(function* () {
         if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };
+
         const folder = {
           path: asked.path,
           ...(asked.recursive === undefined ? undefined : { recursive: asked.recursive }),
         };
+
         const answer = yield* served(
           "planId" in asked
             ? client.readTree(asked.planId, folder)
             : client.readRepositoryTree(asked, folder),
         );
+
         return answer ?? { failure: TASK_CALL_FAILURE.UNANSWERED };
       }),
     // The repository's skills are held for every window and read again behind
@@ -2108,8 +2233,10 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     TASKS_SKILLS: (asked) =>
       Effect.gen(function* () {
         if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };
+
         const listed =
           "planId" in asked ? view.tasks.find((each) => each.id === asked.planId) : undefined;
+
         const key: SkillsKey =
           "planId" in asked
             ? new PlanSkillsKey({
@@ -2121,10 +2248,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
                 workspaceId: asked.workspaceId,
                 repository: asked.repository,
               });
+
         // Note that skills held are answered as they stood when asked, the read behind them landing for the next ask.
         const held = MutableHashMap.get(heldSkills, key);
         const read = yield* skillsRead(key);
         const answer = Option.isSome(held) ? held.value : yield* Fiber.join(read);
+
         return answer ?? { failure: TASK_CALL_FAILURE.UNANSWERED };
       }),
     // A tab a member opens in an agent's browser is answered to the panel
@@ -2136,6 +2265,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       Effect.gen(function* () {
         if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };
         const taskId = yield* served(client.find(read.workspace, read.number));
+
         return taskId === undefined ? { failure: TASK_CALL_FAILURE.UNANSWERED } : { taskId };
       }),
     // A page of the history is answered to the caller that asked, and an
@@ -2148,15 +2278,18 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };
         const page = yield* served(client.readRevisions(taskId, before));
         const held = heldHistories.rowsOf(taskId);
+
         if (page !== undefined && before !== undefined && held !== undefined) {
           heldHistories.lay(taskId, withOlderPage(held, before, page));
         }
+
         return page ?? { failure: TASK_CALL_FAILURE.UNANSWERED };
       }),
     TASKS_REVISION: (read) =>
       Effect.gen(function* () {
         if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };
         const revision = yield* served(client.readRevision(read.taskId, read.seq));
+
         return revision === undefined ? { failure: TASK_CALL_FAILURE.UNANSWERED } : { revision };
       }),
     // The version is read as its frame reads it (`pageRead`), so its HTML reaches the tab that asked alone, line by line and plain.
@@ -2199,13 +2332,17 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     TASKS_RESTORE: ({ taskId, seq }) =>
       Effect.gen(function* () {
         if (!gate()) return false;
+
         const restored = yield* serial(
           Effect.gen(function* () {
             const answer = yield* served(client.restore(taskId, seq));
+
             if (answer === undefined) return undefined;
+
             return { ...answer, held: takeAnswered(answer.task) };
           }),
         );
+
         if (restored === undefined) return false;
         // Note that the waits stand outside the serial reads, so no read waits on them.
         const { held, txid } = restored;
@@ -2216,6 +2353,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           ],
           { concurrency: "unbounded" },
         );
+
         return true;
       }),
     // A start draws its task's row the moment it is asked, under the id minted for it where the
@@ -2226,6 +2364,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       read: ({ quiet, ...asked }) =>
         Effect.sync((): Start => {
           const request = { ...asked, id: asked.id ?? kernel.createId() };
+
           // Note that a start behind a closed gate draws nothing, since it never reaches the service.
           return { request, quiet: quiet === true, row: gate() ? startedRow(request) : undefined };
         }),
@@ -2277,13 +2416,18 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     TASKS_EDIT: ({ taskId, edit }) =>
       Effect.gen(function* () {
         if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };
+
         const edited = yield* serial(
           Effect.gen(function* () {
             const written = yield* served(client.edit(taskId, edit));
+
             if (!written.ok) return { answer: { failure: written.failure } };
             const answer = written.answer;
+
             if ("conflict" in answer) return { answer: { conflict: answer.conflict } };
+
             if ("refused" in answer) return { answer: { failure: answer.refused } };
+
             return {
               answer: { saved: true } as const,
               held: takeAnswered(answer.plan),
@@ -2291,6 +2435,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
             };
           }),
         );
+
         // Note that the waits stand outside the serial reads and behind the answer, so neither a read nor the editor waits on them.
         if (edited.held !== undefined) {
           const { held, txid } = edited;
@@ -2303,6 +2448,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
             ),
           );
         }
+
         return edited.answer;
       }),
   };
@@ -2314,10 +2460,13 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     [GATEWAY_METHOD.TASKS_RESYNC]: () =>
       Effect.gen(function* () {
         const at = yield* Clock.currentTimeMillis;
+
         if (resyncedAt !== undefined && at - resyncedAt < Duration.toMillis(RESYNC_SETTLE)) {
           return {};
         }
+
         yield* resealList;
+
         return {};
       }),
     // The connection came back, which no settle folds away, since a read a
@@ -2329,6 +2478,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       Effect.gen(function* () {
         yield* dependencies.focus.raise;
         yield* resealList;
+
         return {};
       }),
     // A page's version, answered to the frame that asked (`pageRead`).
@@ -2339,6 +2489,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           params,
           "reading a page names its task, the page, and its version",
         );
+
         return carried<TasksPageAnswer>(yield* pageRead(read));
       }),
   };
@@ -2387,6 +2538,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       yield* linkStandings.open;
       yield* repositoryLists.open;
       yield* documents.open;
+
       if (!gate()) return;
       yield* drawnFromDisk;
       yield* followAccount;

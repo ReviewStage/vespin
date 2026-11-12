@@ -20,6 +20,7 @@ test("a page a workspace experiment holds stands while the reader's workspaces a
     workspaces: [],
     listed: "acme",
   };
+
   const read = {
     ...unread,
     workspaces: [
@@ -46,6 +47,7 @@ test("a workspace's place stands while the reader's workspaces are unread, under
     workspaces: [],
     listed: undefined,
   };
+
   const read = {
     ...unread,
     workspaces: [{ id: "workspace-acme", slug: "acme", formerSlugs: ["acme-old"] }],

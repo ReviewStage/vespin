@@ -30,11 +30,14 @@ export function useRemindSheet(): {
   const { remind } = useInboxActs();
   const [held, setHeld] = useState<{ readonly item: InboxItem; readonly at: number }>();
   const close = () => setHeld(undefined);
+
   const set = (until: number | null) => {
     if (held !== undefined) remind(held.item.id, until);
     close();
   };
+
   const openedAt = held?.at ?? Date.now();
+
   const sheet = (
     <RemindSheet
       presented={held !== undefined}
@@ -49,5 +52,6 @@ export function useRemindSheet(): {
       onDismiss={close}
     />
   );
+
   return { open: (item) => setHeld({ item, at: Date.now() }), sheet };
 }

@@ -158,11 +158,13 @@ async function inbox() {
   handInboxItems({
     rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [ITEM] } },
   });
+
   function Page() {
     // Note that the item stands chosen at its address, as a press on its row chooses it.
     const { chosen } = useInboxRoute();
     const panelFor = chosen !== undefined && "taskId" in chosen ? chosen.taskId : undefined;
     const taskAgents = useInboxTaskAgents(panelFor);
+
     const sidePanel = useSidePanel(
       undefined,
       { id: panelFor, holds: {}, bare: true },
@@ -174,6 +176,7 @@ async function inbox() {
       undefined,
       taskAgents.heldIds,
     );
+
     return createElement(
       OpenLinkProvider,
       { value: (link: ReadLink) => links.push(link) },
@@ -190,6 +193,7 @@ async function inbox() {
       }),
     );
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   const router = windowRouter(createMemoryHistory({ initialEntries: [`/acme/inbox/${ITEM.id}`] }));
@@ -200,6 +204,7 @@ async function inbox() {
     ),
   );
   await settle();
+
   return { container, links, went };
 }
 
@@ -213,6 +218,7 @@ async function pressChip(container: HTMLElement, name: string): Promise<void> {
       ].find((each) => each.querySelector(".ui-inline-ref-label")?.textContent === name) ??
       assert.fail(`no chip says ${name}`),
   );
+
   act(() => {
     chip.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
   });
@@ -222,7 +228,9 @@ async function pressChip(container: HTMLElement, name: string): Promise<void> {
 /** The panel beside the Inbox as a reader hears it: each tab's label, `▸ ` before the one shown; nothing where no panel stands. */
 function panelTabs(container: HTMLElement): string[] | undefined {
   const panel = container.querySelector('aside[aria-label="Panel"]');
+
   if (panel === null) return undefined;
+
   return [...panel.querySelectorAll<HTMLElement>('[role="tab"]')].map(
     (tab) => `${tab.getAttribute("aria-selected") === "true" ? "▸ " : ""}${tab.textContent}`,
   );

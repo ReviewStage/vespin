@@ -110,4 +110,5 @@ const BRAND_PALETTES = {
     },
   },
 };
+
 export const BRAND = BRAND_PALETTES.COPPER;

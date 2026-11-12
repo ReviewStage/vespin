@@ -100,6 +100,7 @@ function CardWords({ children }: { children: React.ReactNode }): React.JSX.Eleme
  */
 function reachedRoute(repositories: readonly GitHubRepository[]): GitHubAccess {
   const onApp = repositories.some(({ access }) => access !== GITHUB_ACCESS.TOKEN);
+
   return onApp ? GITHUB_ACCESS.APP : GITHUB_ACCESS.TOKEN;
 }
 
@@ -107,6 +108,7 @@ function reachedRoute(repositories: readonly GitHubRepository[]): GitHubAccess {
 function useHeldToken(): boolean {
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
   const held = useQuery(githubTokenQuery(accountId));
+
   // Note that a token read that failed is taken for none, so the card offers a paste rather than waiting.
   return !held.isError && held.data?.token != null;
 }
@@ -116,6 +118,7 @@ function AppRoute({ workspaceId }: { workspaceId: string }): React.JSX.Element {
   const connectGitHub = useMutation(actMutation(ACT_KIND.WORKSPACE_GITHUB_CONNECT));
   const refusal = connectGitHub.error?.message;
   const install = () => connectGitHub.mutate({ workspaceId });
+
   return (
     <>
       <ProviderButton
@@ -143,7 +146,9 @@ function TokenRoute({ workspaceId }: { workspaceId: string }): React.JSX.Element
   const repositories = useTokenRepositories(workspaceId);
   const [refusal, setRefusal] = useState<string | undefined>(undefined);
   const held = useHeldToken();
+
   if (!held) return <GitHubTokenPaste onSave={save} />;
+
   return (
     <>
       <span className="flex">
@@ -171,6 +176,7 @@ function AddOnGitHub({
   onRefused: (refusal: string | undefined) => void;
 }): React.JSX.Element {
   const connectGitHub = useMutation(actMutation(ACT_KIND.WORKSPACE_GITHUB_CONNECT));
+
   return (
     <Button
       variant={BUTTON_VARIANT.OUTLINE}
@@ -195,6 +201,7 @@ function AddOnToken({
   onRefused: (refusal: string | undefined) => void;
 }): React.JSX.Element {
   const repositories = useTokenRepositories(workspaceId);
+
   return (
     <TokenRepositoryPicker
       workspaceId={workspaceId}
@@ -224,12 +231,15 @@ function ReachedGitHub({
   // Note that a refusal is held with the route it came from, so it goes once the other route stands.
   const [refused, setRefused] = useState<{ onToken: boolean; words: string } | undefined>();
   const refusal = refused?.onToken === onToken ? refused.words : undefined;
+
   const setRefusal = (words: string | undefined) =>
     setRefused(words === undefined ? undefined : { onToken, words });
+
   const lines = repositories.map(({ fullName, access }) => ({
     repository: fullName,
     token: access === GITHUB_ACCESS.TOKEN,
   }));
+
   return (
     <Stack gap={GAP.CONTROL}>
       <SettingsRow
@@ -278,9 +288,11 @@ export function GitHubSetup({
   useEffect(() => {
     if (reached > 0) setChosen(route);
   }, [reached, route]);
+
   if (repositories !== undefined && reached > 0) {
     return <ReachedGitHub workspaceId={workspaceId} repositories={repositories} />;
   }
+
   const options: readonly ChoiceOption<GitHubAccess>[] = [
     {
       value: GITHUB_ACCESS.APP,
@@ -294,6 +306,7 @@ export function GitHubSetup({
       below: chosen !== GITHUB_ACCESS.TOKEN ? null : <TokenRoute workspaceId={workspaceId} />,
     },
   ];
+
   return (
     <ChoiceList
       legend="How agents reach your repositories"

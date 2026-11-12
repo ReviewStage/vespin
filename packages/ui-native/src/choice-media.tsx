@@ -73,7 +73,9 @@ const styles = StyleSheet.create({
 function SymbolTile({ piece }: { readonly piece: ChoiceMedia }) {
   const colors = useColors();
   const symbol = TILE_SYMBOL[piece.kind];
+
   if (symbol === undefined) return null;
+
   return (
     <Pressable
       onPress={() => piece.onOpen?.()}
@@ -91,6 +93,7 @@ function SymbolTile({ piece }: { readonly piece: ChoiceMedia }) {
 function ChoiceMediaTile({ piece }: { readonly piece: ChoiceMedia }) {
   const colors = useColors();
   const large = useAccessibilitySize();
+
   return (
     <View style={large ? styles.wholeTile : styles.tile}>
       {piece.kind === CHOICE_MEDIA.PICTURE ? (

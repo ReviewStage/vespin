@@ -46,7 +46,9 @@ function memberWorkspaceOfStep(
 ): WorkspaceStoreEffect<Option.Option<string>> {
   return Effect.gen(function* () {
     const bySlug = yield* workspaceIdOfSlug(userId, step);
+
     if (Option.isSome(bySlug)) return bySlug;
+
     return (yield* isWorkspaceMember(userId, step)) ? Option.some(step) : Option.none();
   });
 }
@@ -155,10 +157,12 @@ export function taskIdOfNumber(
 ): WorkspaceStoreEffect<Option.Option<string>> {
   return Effect.gen(function* () {
     const workspace = yield* memberWorkspaceOfStep(userId, workspaceStep);
+
     if (Option.isNone(workspace)) return Option.none();
     const asked = { userId, organizationId: workspace.value, number };
     const held = yield* findNumberedTask(asked);
     const found = Option.isSome(held) ? held : yield* findForwardedTask(asked);
+
     return Option.map(found, (row) => row.id);
   });
 }
@@ -188,12 +192,16 @@ export function agentIdOfTaskNumber(
 ): WorkspaceStoreEffect<Option.Option<string>> {
   return Effect.gen(function* () {
     const taskId = yield* taskIdOfNumber(userId, workspaceStep, number);
+
     if (Option.isNone(taskId)) return Option.none();
     const head = idHead.toLowerCase();
+
     const matched = (yield* findTaskAgentIds(taskId.value)).filter((row) =>
       row.id.toLowerCase().startsWith(head),
     );
+
     const [only] = matched;
+
     return matched.length === 1 && only !== undefined ? Option.some(only.id) : Option.none();
   });
 }

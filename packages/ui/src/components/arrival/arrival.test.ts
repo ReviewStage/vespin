@@ -32,11 +32,14 @@ function mount(reading: boolean): { container: HTMLElement; read: (now: boolean)
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (now: boolean) =>
     act(() =>
       root.render(createElement(Arrival, { reading: now, label: LABEL, children: CONTENT })),
     );
+
   draw(reading);
+
   return { container, read: draw };
 }
 

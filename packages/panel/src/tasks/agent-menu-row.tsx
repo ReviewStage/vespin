@@ -54,6 +54,7 @@ export interface AgentRowPlace extends MentionedAgentsPlace {
 /** The line under an agent's card: the task it works on, where the list named it. */
 function cardFoot(agent: MentionableAgent): CardFoot | undefined {
   const name = agent.task?.name;
+
   return name === undefined ? undefined : taskFoot(`${CARD_FOOT.ON}${name}`);
 }
 
@@ -64,11 +65,13 @@ function cardFoot(agent: MentionableAgent): CardFoot | undefined {
  */
 function agentCard(agent: MentionableAgent, place: AgentRowPlace): React.ReactNode {
   const { actor, summary } = agent;
+
   if (summary === undefined) {
     return actor.kind === ACTOR_KIND.AGENT ? (
       <AgentHoverCard actor={{ ...actor, taskId: agent.task?.id }} agentId={agent.id} />
     ) : undefined;
   }
+
   const agents = {
     models: place.models,
     me: place.me,
@@ -76,6 +79,7 @@ function agentCard(agent: MentionableAgent, place: AgentRowPlace): React.ReactNo
     archived: undefined,
     pullRequests: NO_PULL_REQUESTS,
   };
+
   return (
     <AgentCard
       subject={agentSubject(agents, agent.id, NOTHING_HELD, false)}
@@ -98,8 +102,11 @@ export function agentSummaryEnd(
     { createdBy: summary.startedBy, ownerId: summary.startedBy?.userId },
     directory,
   );
+
   const failed = agentEndMark(summary, true);
+
   if (starter === undefined && failed === undefined) return undefined;
+
   return (
     <>
       {starter === undefined ? null : <ActorMark actor={starter} size={ACTOR_SIZE.MARK} />}
@@ -117,6 +124,7 @@ function agentTaskDetail(
     agent.task !== undefined && agent.task.id === taskId
       ? AGENT_DETAIL.THIS_TASK
       : (agent.task?.name ?? AGENT_DETAIL.OTHER_TASK);
+
   return agent.archived === true ? `${task}${DETAIL_JOIN}${AGENT_DETAIL.ARCHIVED}` : task;
 }
 
@@ -127,7 +135,9 @@ function rowDetail(
   taskId: string | undefined,
 ): string | undefined {
   const repeats = agent.task?.name?.trim().toLowerCase() === label.trim().toLowerCase();
+
   if (!repeats) return agentTaskDetail(agent, taskId);
+
   return agent.archived === true ? AGENT_DETAIL.ARCHIVED : undefined;
 }
 
@@ -135,6 +145,7 @@ function rowDetail(
 export function useAgentRowPlace(taskId?: string): AgentRowPlace {
   const place = useMentionedPlace();
   const directory = useMemberDirectory();
+
   return { ...place, directory, taskId };
 }
 
@@ -142,13 +153,16 @@ export function useAgentRowPlace(taskId?: string): AgentRowPlace {
 export function agentMenuRow(agent: MentionableAgent, place: AgentRowPlace): MenuRow {
   const { summary } = agent;
   const label = summary === undefined ? agent.name : agentName(summary, place.models);
+
   const icon =
     summary === undefined ? (
       <ActorMark actor={agent.actor} />
     ) : (
       tabLook({ kind: TAB_KIND.AGENT, name: label, agent: summary }).icon
     );
+
   const detail = rowDetail(agent, label, place.taskId);
+
   return {
     id: agent.id,
     label,

@@ -64,6 +64,7 @@ export function clientNamedOnService(
 ): HttpClient.HttpClient {
   const origin = new URL(serviceBaseUrl).origin;
   const headers = clientHeaders(identity);
+
   return HttpClient.mapRequest(http, (request) =>
     request.url === origin || request.url.startsWith(`${origin}/`)
       ? HttpClientRequest.setHeaders(request, headers)
@@ -89,12 +90,15 @@ export function presentedClient(headers: {
 }): PresentedClient | undefined {
   const named = headers.get(CLIENT_HEADER.CLIENT)?.trim() ?? "";
   const at = named.indexOf(CLIENT_SEPARATOR);
+
   if (at <= 0) return undefined;
   const platform = readPlatform(named.slice(0, at));
   const apiVersion = readApiVersion(headers.get(CLIENT_HEADER.API_VERSION)?.trim());
   const version = named.slice(at + 1);
+
   if (platform._tag === "None" || apiVersion._tag === "None" || !VERSION_PATTERN.test(version)) {
     return undefined;
   }
+
   return { platform: platform.value, version, apiVersion: apiVersion.value };
 }

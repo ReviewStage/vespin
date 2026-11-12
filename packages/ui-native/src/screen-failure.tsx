@@ -29,6 +29,7 @@ export function ScreenFailure({
   readonly retry: () => Promise<void>;
 }) {
   useEffect(() => console.error("A screen did not draw.", error), [error]);
+
   return (
     <Screen>
       <EmptyState

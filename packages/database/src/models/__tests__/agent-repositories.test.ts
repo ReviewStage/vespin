@@ -24,6 +24,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -36,6 +37,7 @@ const startedIn = (
 ) =>
   Effect.gen(function* () {
     const { id: taskId } = yield* createTask(userId, { organizationId, name: "Client bump" });
+
     const started = yield* createAgent(userId, {
       taskId,
       descriptionSnapshot: null,
@@ -49,6 +51,7 @@ const startedIn = (
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
       ...(extraRepositories === undefined ? undefined : { extraRepositories }),
     });
+
     return Option.getOrThrow(started).agent.id;
   });
 
@@ -63,6 +66,7 @@ it.layer(getTestDB())("the repositories an agent works in", (it) => {
     Effect.gen(function* () {
       const userId = yield* openAccount;
       const workspace = yield* openWorkspace(userId);
+
       const agentId = yield* startedIn(userId, workspace, "acme/api", [
         { repository: "acme/web" },
         { repository: "acme/docs", baseBranch: "next" },

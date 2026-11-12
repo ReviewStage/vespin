@@ -98,6 +98,7 @@ function kept(): readonly HeldShell[] {
   const all: { local?: Record<string, readonly HeldShell[]> } = JSON.parse(
     window.sessionStorage.getItem("vespin.terminals") ?? "{}",
   );
+
   return all.local?.[AGENT.id] ?? [];
 }
 
@@ -149,19 +150,23 @@ const roots: Root[] = [];
 
 // The terminal bundle landed before any tab is drawn, as it is once a terminal has been shown in this window.
 let FITTED: SideBundles;
+
 beforeAll(async () => {
   FITTED = await Effect.runPromise(fittedTerminalBundles());
 });
+
 let main: Main;
 
 beforeEach(() => {
   keep(HELD);
   const sent: SentAct[] = [];
   const shells = new Set<string>();
+
   /** Whether main refuses the act: a kind it is down for, or an attach or close of a shell it does not hold. */
   const refused = (request: ShellAct) =>
     main.down.has(request.kind) ||
     (request.kind === ACT_KIND.MAC_SHELL_ATTACH && !main.shells.has(request.payload.terminalId));
+
   const answer = (request: ShellAct): PortActResult<MacShellActKind> => {
     switch (request.kind) {
       case ACT_KIND.MAC_SHELL_MIRROR:
@@ -170,15 +175,19 @@ beforeEach(() => {
         // Note that each shell opened has an id of its own, as main mints one per shell, the first of them MADE.
         const terminalId = main.shells.has(MADE) ? crypto.randomUUID() : MADE;
         main.shells.add(terminalId);
+
         return { terminalId };
       }
+
       case ACT_KIND.MAC_SHELL_CLOSE:
         main.shells.delete(request.payload.terminalId);
+
         return undefined;
       default:
         return undefined;
     }
   };
+
   main = {
     sent,
     shells,
@@ -201,6 +210,7 @@ beforeEach(() => {
           }),
         );
       });
+
       return {
         posted,
         closed: () => close.mock.calls.length > 0,
@@ -210,21 +220,28 @@ beforeEach(() => {
       };
     },
   };
+
   /** A Mac shell act answered as main's procedure would: refused, held back, or answered now. */
   const respond = (request: ShellAct): Promise<PortActResult<MacShellActKind>> => {
     sent.push(request);
+
     const refusal = () =>
       new ORPCError(ACT_ERROR.REFUSED, { message: "Could not open that shell." });
+
     // A held answer says what main said when it was asked, or refuses as main would when it is let go.
     if (main.holding.has(request.kind)) {
       const value = answer(request);
+
       return new Promise((resolve, reject) =>
         main.held.push(() => (refused(request) ? reject(refusal()) : resolve(value))),
       );
     }
+
     if (refused(request)) return Promise.reject(refusal());
+
     return Promise.resolve(answer(request));
   };
+
   fakeAppBridge({});
   // SAFETY: each procedure answers its own kind, whose answer `answer` gives by the same kind; the casts are the one dispatch on it.
   fakeActPort({
@@ -265,6 +282,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
   document.head.innerHTML = "";
@@ -304,6 +322,7 @@ async function mount(
   // test that runs every fake timer out would never finish.
   serveEffectsOn(Context.make(Clock.Clock, STILL_CLOCK));
   const terminals = windowTerminals();
+
   const wrapped = (tab: React.ReactElement) =>
     findable
       ? createElement(FindScope, {
@@ -312,14 +331,19 @@ async function mount(
           children: tab,
         })
       : tab;
+
   let agentOpened = 0;
   let handed = onPhone(null).handed;
+
   // The account signed in, as the window's root hands it on.
   const Owner = ({ of }: { of: string | undefined }) => {
     useTerminalsOwner(of);
+
     return null;
   };
+
   let signedIn = account;
+
   const render = (on: boolean, drawn = true) => {
     const tab = createElement(TerminalTab, {
       tab: localTab(AGENT.id, shell, "Local 1"),
@@ -330,6 +354,7 @@ async function mount(
       },
       onClose: () => undefined,
     });
+
     const shown = onPhone(tab);
     handed = shown.handed;
     act(() =>
@@ -351,13 +376,17 @@ async function mount(
       ),
     );
   };
+
   render(shown);
   await settle();
+
   const keyboard = () => {
     const field = container.querySelector("textarea");
     assert.ok(field, "the screen takes the keyboard");
+
     return field;
   };
+
   return {
     container,
     /** What the tab handed the task's header's ⋯, drawn on a phone. */
@@ -396,6 +425,7 @@ async function mount(
       const field = keyboard();
       const down = new KeyboardEvent("keydown", { key, keyCode, bubbles: true, cancelable: true });
       field.dispatchEvent(down);
+
       if (!down.defaultPrevented) {
         const charCode = key.length === 1 ? key.charCodeAt(0) : keyCode;
         field.dispatchEvent(
@@ -408,6 +438,7 @@ async function mount(
           }),
         );
       }
+
       await settle();
     },
   };
@@ -572,12 +603,14 @@ test("a message on the port that is no message of main's is never drawn nor acte
 test("a terminal bundle that fails to load leaves the tab saying so with Retry, which imports it again and draws the screen", async () => {
   const landed = await Effect.runPromise(bundleLanded(SIDE_BUNDLES.terminal));
   let online = false;
+
   const unloaded = standInBundles({
     terminal: () =>
       online
         ? Promise.resolve(landed)
         : Promise.reject(new Error("The chunk could not be loaded.")),
   });
+
   const tab = await mount(true, false, unloaded);
   await settle();
   assert.equal(
@@ -588,9 +621,11 @@ test("a terminal bundle that fails to load leaves the tab saying so with Retry, 
   assert.deepEqual(tab.kinds(), []);
 
   online = true;
+
   const retry = [...tab.container.querySelectorAll("button")].find(
     (button) => button.textContent === "Retry",
   );
+
   assert.ok(retry, "the failure offers Retry");
   await act(async () => retry.click());
   await settle();
@@ -655,6 +690,7 @@ test("a paste longer than one message is cut between characters, never inside on
   await settle();
   const sent = port.posted.flatMap((message) => (message.type === "input" ? [message.data] : []));
   assert.equal(sent.join(""), paste);
+
   for (const part of sent) assert.doesNotMatch(part, /^[\uDC00-\uDFFF]|[\uD800-\uDBFF]$/);
 });
 
@@ -662,17 +698,20 @@ test("a paste longer than one message is cut between characters, never inside on
 function lastPayload(kind: PortActKind | MacShellActKind) {
   const request = main.sent.findLast((each) => each.kind === kind);
   assert.ok(request, `the tab sent ${kind}`);
+
   return "payload" in request ? request.payload : undefined;
 }
 
 test("a terminal's row in the panel's + counts the agent's Local terminals, leaving whether the agent works to its glyph", async () => {
   const tab = await mount();
+
   const standing = renderToStaticMarkup(
     onTerminals(
       tab.terminals,
       createElement(TerminalCount, { kind: TERMINAL_KIND.LOCAL, agentId: AGENT.id }),
     ),
   );
+
   assert.equal(standing, "2 terminals");
 });
 
@@ -685,19 +724,24 @@ function localDoors(
 ) {
   const chosen: SidePanelTab[] = [];
   let doors: { open: (agentId: string, fresh: boolean) => void; end: (tab: LocalStripTab) => void };
+
   const Doors = () => {
     const opened = useOpenTerminalTab(
       TERMINAL_KIND.LOCAL,
       { onChoose: (tab) => chosen.push(tab), terminals: [], locals: open, viewedAt },
       () => undefined,
     );
+
     doors = { open: opened, end: useEndTerminalTab() };
+
     return null;
   };
+
   const container = document.createElement("div");
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(onTerminals(terminals, createElement(Doors))));
+
   return {
     chosen,
     open: (fresh: boolean) => act(() => doors.open(AGENT.id, fresh)),
@@ -721,6 +765,7 @@ test("a new terminal asked for from the + or ⌘K opens a tab of its own, named 
 test("Show local goes to the agent's Local tab viewed last, and with none open, as after a reload, opens a tab for each terminal the window still holds, the newest last", async () => {
   const first = localTab(AGENT.id, FIRST, "Local 1");
   const second = localTab(AGENT.id, SECOND, "Local 2");
+
   const open = localDoors(
     [first, second],
     [
@@ -728,6 +773,7 @@ test("Show local goes to the agent's Local tab viewed last, and with none open, 
       { tab: second, at: 1 },
     ],
   );
+
   open.open(false);
   assert.deepEqual(open.chosen, [first]);
 
@@ -828,6 +874,7 @@ test("the window handing the tab a new link opener keeps the shell's scrollback 
   roots.push(root);
   const agents = agentsControl({ agents: [AGENT], agentIds: [AGENT.id] });
   const terminals = windowTerminals();
+
   const tab = createElement(TerminalTab, {
     tab: localTab(AGENT.id, FIRST, "Local 1"),
     agents,
@@ -835,6 +882,7 @@ test("the window handing the tab a new link opener keeps the shell's scrollback 
     onOpenAgent: () => undefined,
     onClose: () => undefined,
   });
+
   // The window's opener is a new closure whenever what it reads changes, as the window draws it.
   const draw = () =>
     act(() =>
@@ -854,6 +902,7 @@ test("the window handing the tab a new link opener keeps the shell's scrollback 
         ),
       ),
     );
+
   draw();
   await settle();
   const port = main.post(MADE);

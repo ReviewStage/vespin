@@ -28,6 +28,7 @@ export function readParams<Params>(
   sentence: string,
 ): Effect.Effect<Params, InvalidParamsRefusal> {
   const result = readEither(schema)(unparsedWire(params));
+
   return Result.isFailure(result) ? invalid(sentence) : Effect.succeed(result.success);
 }
 
@@ -44,6 +45,7 @@ export function gatewayEventReader(client: GatewayClient) {
   ) =>
     client.on(kind, (event) => {
       const payload = read(event);
+
       if (payload !== undefined) listener(payload);
     });
 }

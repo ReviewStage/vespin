@@ -57,12 +57,14 @@ const GOES_MARK_SIZE = 13;
 /** The mark at a row's end that says where a press goes, in the muted ink. */
 function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
   const colors = useColors();
+
   return <Image systemName={goes} size={GOES_MARK_SIZE} color={colors.TEXT_MUTED} />;
 }
 
 /** The row's other words, joined as VoiceOver reads a value after its label; none where there are none. */
 function spokenValue(...parts: readonly (string | undefined)[]) {
   const said = parts.filter((part) => part !== undefined && part.length > 0).join(", ");
+
   return said.length === 0 ? [] : [accessibilityValue(said)];
 }
 
@@ -91,6 +93,7 @@ function PressedRow({
   readonly testId?: string | undefined;
 }) {
   const colors = useColors();
+
   return (
     <SwiftUIButton
       onPress={onPress}
@@ -118,6 +121,7 @@ function PressedRow({
  */
 export function SettingsForm({ children }: { readonly children: ReactNode }) {
   const colors = useColors();
+
   return (
     <Form
       modifiers={[
@@ -148,6 +152,7 @@ type HeadRowProps = {
 /** A page's head: its face, its name, its lines, and the chevron where a press goes on, as the account heads iOS's own Settings. */
 function HeadRow({ face, name, line, detail, onPress }: HeadRowProps) {
   const colors = useColors();
+
   const drawn = (
     <HStack
       spacing={SPACE.ROW + 2}
@@ -184,6 +189,7 @@ function HeadRow({ face, name, line, detail, onPress }: HeadRowProps) {
       )}
     </HStack>
   );
+
   return onPress === undefined ? (
     drawn
   ) : (
@@ -263,6 +269,7 @@ type PushRowProps = {
  */
 export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRowProps) {
   const colors = useColors();
+
   return (
     <PressedRow label={label} value={[detail]} onPress={onPress} testId={testId}>
       <HStack spacing={SPACE.ROW} modifiers={[contentShape(shapes.rectangle())]}>
@@ -293,6 +300,7 @@ type ToggleRowProps = {
 /** A setting turned on or off, as the system's switch, in the brand's copper, with what it does under its name. */
 export function ToggleRow({ label, detail, on, disabled: off = false, onChange }: ToggleRowProps) {
   const colors = useColors();
+
   return (
     <Toggle
       isOn={on}
@@ -314,6 +322,7 @@ export function ToggleRow({ label, detail, on, disabled: off = false, onChange }
 /** A setting's name and where it stands, as the system lays a value out beside its label. */
 export function ValueRow({ label, value }: { readonly label: string; readonly value: string }) {
   const colors = useColors();
+
   return (
     <LabeledContent label={label} modifiers={[listRowBackground(colors.SURFACE)]}>
       <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{value}</Text>
@@ -332,6 +341,7 @@ type ActionRowProps = {
 /** A row a person presses to act, in the accent, or the system's red where it ends something. */
 export function ActionRow({ label, symbol, destructive = false, onPress }: ActionRowProps) {
   const colors = useColors();
+
   return (
     <SwiftUIButton
       label={label}
@@ -370,6 +380,7 @@ const PICKED_MARK_SIZE = 15;
 export function PickRows({ options, picked, onPick }: PickRowsProps) {
   const colors = useColors();
   const markSize = useScaledSize(PICKED_MARK_SIZE);
+
   // Note that the rows stand in a fragment, each its own row of the form, because a group around them made one element of them all, which neither VoiceOver nor a flow could pick from.
   return (
     <>
@@ -430,6 +441,7 @@ type MemberRowProps = {
  */
 export function MemberRow({ name, email, picture, role, badge, acts }: MemberRowProps) {
   const colors = useColors();
+
   const face = (
     <HStack spacing={SPACE.ROW}>
       <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE - 8} />
@@ -449,9 +461,11 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
       )}
     </HStack>
   );
+
   if (acts.length === 0) {
     return <VStack modifiers={[listRowBackground(colors.SURFACE)]}>{face}</VStack>;
   }
+
   return (
     <Menu
       label={face}

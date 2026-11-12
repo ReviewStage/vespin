@@ -53,6 +53,7 @@ import { getCalendars } from "expo-localization";
 // that a zone it cannot place, such as `GMT`, the name iOS gives a clock set
 // to UTC, leaves it in UTC, which is the same clock.
 const deviceZone = getCalendars()[0]?.timeZone;
+
 if (deviceZone && "polyfilled" in Intl.DateTimeFormat) {
   try {
     // SAFETY: a polyfilled `Intl.DateTimeFormat` is FormatJS's, which adds `__setDefaultTimeZone`.
@@ -74,7 +75,9 @@ const DIGEST_ALGORITHM: Readonly<Record<string, CryptoDigestAlgorithm>> = {
 function algorithmNamed(algorithm: AlgorithmIdentifier): CryptoDigestAlgorithm {
   const name = typeof algorithm === "string" ? algorithm : algorithm.name;
   const named = DIGEST_ALGORITHM[name.toUpperCase()];
+
   if (named === undefined) throw new Error(`Unrecognized digest algorithm: ${name}`);
+
   return named;
 }
 
@@ -88,6 +91,7 @@ if (globalThis.crypto === undefined) {
   const subtle: Pick<SubtleCrypto, "digest"> = {
     digest: (algorithm, data) => digest(algorithmNamed(algorithm), data),
   };
+
   // SAFETY: the host calls `getRandomValues`, `randomUUID`, and `subtle.digest` alone of `Crypto`.
   globalThis.crypto = { getRandomValues, randomUUID, subtle } as unknown as Crypto;
 }
@@ -95,6 +99,7 @@ if (globalThis.crypto === undefined) {
 /** The index `with` names, counted from the end where negative, or none where it names no element. */
 function indexWithin(length: number, index: number): number | undefined {
   const at = index < 0 ? length + index : index;
+
   return at >= 0 && at < length ? at : undefined;
 }
 
@@ -112,18 +117,23 @@ if (typeof Array.prototype.toSorted !== "function") {
     },
     toSpliced(start: number, deleteCount?: number, ...items: unknown[]) {
       const copy = [...this];
+
       if (deleteCount === undefined) copy.splice(start);
       else copy.splice(start, deleteCount, ...items);
+
       return copy;
     },
     with(index: number, value: unknown) {
       const at = indexWithin(this.length, index);
+
       if (at === undefined) throw new RangeError(`Invalid index : ${index}`);
       const copy = [...this];
       copy[at] = value;
+
       return copy;
     },
   };
+
   for (const [name, method] of Object.entries(copying)) {
     Object.defineProperty(Array.prototype, name, {
       value: method,
@@ -139,22 +149,28 @@ if (typeof Array.prototype.toSorted !== "function") {
 // symbols, as Expo registers `Symbol.asyncIterator`.
 // SAFETY: the two are read-only in the lib's declaration and absent in the runtime; this writes them once.
 const symbols = Symbol as unknown as Record<"dispose" | "asyncDispose", symbol | undefined>;
+
 symbols.dispose ??= Symbol.for("Symbol.dispose");
+
 symbols.asyncDispose ??= Symbol.for("Symbol.asyncDispose");
 
 /** A stream's chunks read to its end, as one run of bytes. */
 async function readWhole(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
   const chunks: Uint8Array[] = [];
   const reader = stream.getReader();
+
   for (let read = await reader.read(); !read.done; read = await reader.read()) {
     chunks.push(read.value);
   }
+
   const whole = new Uint8Array(chunks.reduce((length, chunk) => length + chunk.length, 0));
   let at = 0;
+
   for (const chunk of chunks) {
     whole.set(chunk, at);
     at += chunk.length;
   }
+
   return whole;
 }
 
@@ -169,6 +185,7 @@ async function readWhole(stream: ReadableStream<Uint8Array>): Promise<Uint8Array
 // chunk, words encoded here rather than through whatwg-fetch's
 // `arrayBuffer`, whose `FileReader.readAsArrayBuffer` React Native lacks.
 const PlatformResponse = globalThis.Response;
+
 class StreamingResponse extends PlatformResponse {
   readonly #stream: ReadableStream<Uint8Array<ArrayBuffer>> | undefined;
   /** A body handed as words, which whatwg-fetch reads back as bytes only through `FileReader.readAsArrayBuffer`, which React Native lacks. */
@@ -179,6 +196,7 @@ class StreamingResponse extends PlatformResponse {
       body instanceof ReadableStream
         ? (body as ReadableStream<Uint8Array<ArrayBuffer>>)
         : undefined;
+
     super(stream === undefined ? body : null, init);
     this.#stream = stream;
     this.#words = typeof body === "string" ? body : undefined;
@@ -187,10 +205,12 @@ class StreamingResponse extends PlatformResponse {
   override get body(): ReadableStream<Uint8Array<ArrayBuffer>> | null {
     if (this.#stream !== undefined) return this.#stream;
     const words = this.#words;
+
     const whole = () =>
       words === undefined
         ? super.arrayBuffer().then((bytes) => new Uint8Array(bytes))
         : Promise.resolve(new TextEncoder().encode(words));
+
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
       start: async (controller) => {
         controller.enqueue(await whole());
@@ -202,11 +222,13 @@ class StreamingResponse extends PlatformResponse {
   override async arrayBuffer(): Promise<ArrayBuffer> {
     if (this.#stream === undefined) return super.arrayBuffer();
     const whole = await readWhole(this.#stream);
+
     return whole.buffer.slice(whole.byteOffset, whole.byteOffset + whole.byteLength) as ArrayBuffer;
   }
 
   override async text(): Promise<string> {
     if (this.#stream === undefined) return super.text();
+
     return new TextDecoder().decode(await readWhole(this.#stream));
   }
 
@@ -214,6 +236,7 @@ class StreamingResponse extends PlatformResponse {
     return JSON.parse(await this.text());
   }
 }
+
 // SAFETY: the subclass answers every member of `Response` the host and Effect read, and its constructor takes the platform's arguments.
 globalThis.Response = StreamingResponse as unknown as typeof Response;
 

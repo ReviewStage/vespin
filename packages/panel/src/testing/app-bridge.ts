@@ -119,14 +119,17 @@ export function heldUntilClosed<Kind extends HoldKind>(
   closed: () => void,
 ): Promise<PortActResult<Kind>> {
   const ended = Promise.withResolvers<IteratorReturnResult<undefined>>();
+
   const close = () => {
     closed();
     ended.resolve({ done: true, value: undefined });
   };
+
   const stream: AsyncIteratorObject<never, undefined, unknown> = {
     next: () => ended.promise,
     return: async () => {
       close();
+
       return { done: true, value: undefined };
     },
     [Symbol.asyncIterator]: () => stream,
@@ -134,6 +137,7 @@ export function heldUntilClosed<Kind extends HoldKind>(
       close();
     },
   };
+
   // SAFETY: the window reads oRPC's stream as an async iterator alone, which this is.
   return Promise.resolve(stream as unknown as PortActResult<Kind>);
 }
@@ -170,6 +174,7 @@ export function fakeActPort(procedures: Partial<FakeActPort>): void {
     [AGENT_ACT_KIND.AGENTS_TRANSCRIPT_RETRY]: () => Promise.resolve(),
     ...procedures,
   };
+
   answeringPort = answered;
   // SAFETY: a test's window calls only the procedures its test answers, and any other is undefined and throws where it is called.
   installActPortClient(answered as ActPortClient);
@@ -201,10 +206,12 @@ export function openingLinks(
   return {
     [TASKS_ACT_KIND.GITHUB_OPEN]: ({ url }) => {
       opened({ kind: TASKS_ACT_KIND.GITHUB_OPEN, payload: { url } });
+
       return Promise.resolve();
     },
     [TASKS_ACT_KIND.WEB_OPEN]: ({ url }) => {
       opened({ kind: TASKS_ACT_KIND.WEB_OPEN, payload: { url } });
+
       return Promise.resolve();
     },
   };
@@ -262,6 +269,7 @@ export function fakeActPortAnswering(
   answer: (request: SentPortAct) => Promise<WireBoundaryInput>,
 ): void {
   const procedures: Partial<FakeActPort> = {};
+
   // SAFETY: the contract's keys are exactly its kinds.
   for (const kind of Object.keys(actContract) as PortActKind[]) {
     // Note that each kind is answered alike, whatever its own answer is, so it is assigned rather than typed by the kind.
@@ -270,6 +278,7 @@ export function fakeActPortAnswering(
         answer(payload === undefined ? { kind } : { kind, payload }),
     });
   }
+
   fakeActPort(procedures);
 }
 
@@ -302,7 +311,9 @@ let answeringActs: ((request: AnyAct) => Promise<FakeActAnswer>) | undefined;
 /** The answer {@link fakeActs} installed last, for a test that answers a kind more over it. */
 export function fakeActsAnswer(): (request: AnyAct) => Promise<FakeActAnswer> {
   const answer = answeringActs;
+
   if (answer === undefined) throw new Error("No acts are answered in this test yet.");
+
   return answer;
 }
 
@@ -321,14 +332,18 @@ export function fakeActs(
   answeringActs = answer;
   fakeAppBridge(bridge);
   const procedures: Partial<FakeActPort> = {};
+
   /** One act answered by the switch: the kind's value, or the port's refusal or rejection. */
   const settled = (kind: PortActKind, outcome: FakeActAnswer): PortActResult<PortActKind> => {
     if (outcome.status === FAKE_ANSWER.DONE) return outcome.value;
+
     if (outcome.status === FAKE_ANSWER.REFUSED) throw refusedOnPort(outcome.reason);
     throw new Error(`Vespin does not know the act ${kind}.`);
   };
+
   const answered = async (request: PortAct): Promise<PortActResult<PortActKind>> =>
     settled(request.kind, await answer(request));
+
   // SAFETY: the contract's keys are exactly its kinds.
   for (const kind of Object.keys(actContract) as PortActKind[]) {
     // Note that each kind is answered alike, whatever its own answer is, so it is assigned rather than typed by the kind.
@@ -336,13 +351,17 @@ export function fakeActs(
       [kind]: async (payload: WireBoundaryInput) => {
         // SAFETY: the window paired this payload with this kind, as its own procedure takes it.
         const request = (payload === undefined ? { kind } : { kind, payload }) as PortAct;
+
         if (!QUIET_HOLDS.has(request.kind)) return answered(request);
         // A hold the switch does not answer is held quietly, as the host holds one, its read laid on app state.
         const outcome = await answer(request);
+
         if (outcome.status === FAKE_ANSWER.DONE) return outcome.value;
+
         return quietHold();
       },
     });
   }
+
   fakeActPort(procedures);
 }

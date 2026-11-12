@@ -130,37 +130,48 @@ export function RemoteSurface({
   onPaste: (text: string) => void;
 }): React.JSX.Element {
   const own = useRef<HTMLCanvasElement | null>(null);
+
   // The canvas is the owner's too, which paints on it.
   const held = useCallback(
     (element: HTMLCanvasElement | null) => {
       own.current = element;
+
       if (typeof ref === "function") ref(element);
       else if (ref !== null && ref !== undefined) ref.current = element;
     },
     [ref],
   );
+
   const ratio = window.devicePixelRatio || 1;
   // React's own wheel listener is passive, so the default is refused on one of the canvas's own.
   const drivingNow = useRef(driving);
   drivingNow.current = driving;
   useEffect(() => {
     const element = own.current;
+
     if (element === null) return;
+
     const refuse = (event: globalThis.WheelEvent) => {
       if (drivingNow.current) event.preventDefault();
     };
+
     element.addEventListener("wheel", refuse, { passive: false });
+
     return () => element.removeEventListener("wheel", refuse);
   }, []);
+
   const at = (event: MouseEvent | WheelEvent): RemotePoint => {
     const box = event.currentTarget.getBoundingClientRect();
+
     return {
       x: Math.max(0, Math.min(width, event.clientX - box.left)),
       y: Math.max(0, Math.min(height, event.clientY - box.top)),
     };
   };
+
   const mouse = (action: RemotePointerAction) => (event: MouseEvent<HTMLCanvasElement>) => {
     if (!driving) return;
+
     if (action === REMOTE_POINTER_ACTION.DOWN) event.currentTarget.focus();
     const moved = action === REMOTE_POINTER_ACTION.MOVE;
     onPointer({
@@ -172,8 +183,10 @@ export function RemoteSurface({
       modifiers: modifiersOf(event),
     });
   };
+
   const key = (action: RemoteKeyAction) => (event: KeyboardEvent<HTMLCanvasElement>) => {
     if (!driving) return;
+
     const taken = onKey({
       action,
       key: event.key,
@@ -181,11 +194,13 @@ export function RemoteSurface({
       keyCode: event.keyCode,
       modifiers: modifiersOf(event),
     });
+
     // Note that a key the page took is the page's alone, so the window's keymap never hears it too.
     if (!taken) return;
     event.preventDefault();
     event.stopPropagation();
   };
+
   return (
     <canvas
       ref={held}

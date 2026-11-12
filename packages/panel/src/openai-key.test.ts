@@ -57,6 +57,7 @@ afterEach(() => {
 /** A composer's Dictate, as any box draws it. */
 function Presses(): React.JSX.Element {
   const dictation = useDictation({ editor: NO_EDITOR, keywords: NO_KEYWORDS, onNote: ignore });
+
   return createElement(DictateButton, { dictation, disabled: false });
 }
 
@@ -74,6 +75,7 @@ async function mount(held: AppHostRead<AppProviderKeyList>, signedIn = true) {
   fakeActPort({
     [ACT_KIND.PROVIDER_KEYS_FOLLOW]: () => {
       holds += 1;
+
       return quietHold();
     },
   });
@@ -96,8 +98,10 @@ async function mount(held: AppHostRead<AppProviderKeyList>, signedIn = true) {
     ),
   );
   await settle();
+
   const button = (label: string) =>
     container.querySelectorAll<HTMLButtonElement>(`button[aria-label="${label}"]`);
+
   return { opened, button, holds: () => holds };
 }
 
@@ -109,9 +113,11 @@ async function settle(): Promise<void> {
 
 test("with no OpenAI key saved, Dictate says to add one in settings, and the press opens Codex's row in Settings › Agents rather than dictating", async () => {
   const page = await mount({ rows: { keys: [ANTHROPIC_KEY] } });
+
   const press = await vi.waitFor(
     () => page.button(HINT)[0] ?? assert.fail("the press says to add the key"),
   );
+
   assert.equal(page.button("Dictate").length, 0);
   assert.equal(press.disabled, false, "the press is the way to Settings");
   act(() => press.click());
@@ -129,12 +135,14 @@ test("an OpenAI key the service can no longer open counts as none, while one Ope
   const unreadable = await mount({
     rows: { keys: [{ ...OPENAI_KEY, status: PROVIDER_KEY_STATUS.UNREADABLE }] },
   });
+
   await vi.waitFor(() => assert.equal(unreadable.button(HINT).length, 1));
   act(() => roots.pop()?.unmount());
 
   const refused = await mount({
     rows: { keys: [{ ...OPENAI_KEY, status: PROVIDER_KEY_STATUS.INVALID }] },
   });
+
   await vi.waitFor(() => assert.equal(refused.button("Dictate").length, 1));
   assert.equal(refused.button(HINT).length, 0);
 });

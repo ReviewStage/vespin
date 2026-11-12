@@ -80,8 +80,10 @@ function agentOf(
   agents: EditAgents | undefined,
 ): AgentSummary | undefined {
   const { agentId } = edit;
+
   if (agentId === undefined || agents === undefined) return undefined;
   const { control } = agents;
+
   return (
     control.agents?.find((each) => each.id === agentId) ??
     control.archived?.find((each) => each.id === agentId)
@@ -91,10 +93,12 @@ function agentOf(
 /** Who wrote an edit, an agent wearing the harness and state the task's list finds it in; nobody for the description before history. */
 function writerOf(edit: DescriptionLastEdit, place: EditPlace): Actor | undefined {
   const agent = agentOf(edit, place.agents);
+
   const found: EditAgent | undefined =
     agent === undefined
       ? undefined
       : { provider: providerOf(agent.model), state: ACTOR_OF_GLYPH[agentGlyphState(agent.status)] };
+
   return editActor(edit, place.reader, found);
 }
 
@@ -127,13 +131,17 @@ export function conflictWords(
   place: EditPlace,
 ): ConflictWords {
   const writer = edit === undefined ? undefined : writerOf(edit, place);
+
   if (writer === undefined || edit === undefined) return UNNAMED_CONFLICT;
+
   if (writer.kind === ACTOR_KIND.PERSON && writer.you) return OWN_CONFLICT;
   const agent = agentOf(edit, place.agents);
+
   const named =
     agent === undefined || writer.kind !== ACTOR_KIND.AGENT
       ? writer
       : { ...writer, name: agentName(agent, place.agents?.control.models) };
+
   return {
     note: `${actorName(named)} changed this section while you were editing.`,
     take: `Use ${actorName(named, { possessive: true })}`,
@@ -143,8 +151,10 @@ export function conflictWords(
 /** What an actor last did in the description, in a card's line; none where no section's last change is theirs. */
 function latestLine(actor: Actor, place: EditPlace, now: number, ago: boolean): string | undefined {
   const activity = latestActivity(place.sections, actor);
+
   if (activity === undefined) return undefined;
   const words = activityWords(activity);
+
   return ago ? `${words} · ${agoText(activity.at, now)}` : words;
 }
 
@@ -161,10 +171,12 @@ function PersonRef({
   faceOnly?: boolean;
 }): React.JSX.Element {
   const now = useMinute();
+
   const card =
     actor.kind === ACTOR_KIND.PERSON ? (
       <PersonCard actor={actor} latest={latestLine(actor, place, now, true)} />
     ) : undefined;
+
   return <ActorRef actor={actor} card={card} sentence={sentence} faceOnly={faceOnly} />;
 }
 
@@ -183,22 +195,29 @@ function WriterRef({
   const now = useMinute();
   const agent = agentOf(edit, place.agents);
   const actor = writerOf(edit, place);
+
   if (actor === undefined) return null;
+
   if (actor.kind === ACTOR_KIND.APP) {
     const card = (
       <AppCard sub={agoText(edit.at, now)} latest={latestLine(APP_ACTOR, place, now, false)} />
     );
+
     return <ActorRef actor={actor} card={card} faceOnly={faceOnly} />;
   }
+
   if (actor.kind !== ACTOR_KIND.AGENT) {
     return <PersonRef actor={actor} place={place} sentence={sentence} faceOnly={faceOnly} />;
   }
+
   // An agent the task's list does not hold is named alone, with no card to read and no tab to open.
   if (agent === undefined || place.agents === undefined) {
     return <ActorRef actor={actor} faceOnly={faceOnly} />;
   }
+
   const { control, onOpen } = place.agents;
   const subject = agentSubject(control, agent.id, NOTHING_HELD, false);
+
   return (
     <ActorRef
       actor={{ ...actor, name: subject.name }}
@@ -217,6 +236,7 @@ function WriterRef({
 export function useEditReader(reader: TaskReader): EditReader {
   const { members, former } = useMemberDirectory();
   const { readerId } = reader;
+
   return useMemo(() => ({ readerId, members, former }), [readerId, members, former]);
 }
 
@@ -248,5 +268,6 @@ export function EditedBy({
   faceOnly?: boolean;
 }): React.JSX.Element | null {
   if (edit.actor === DESCRIPTION_ACTOR.EARLIER) return null;
+
   return <WriterRef edit={edit} place={place} sentence={sentence} faceOnly={faceOnly} />;
 }

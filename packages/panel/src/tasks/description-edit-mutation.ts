@@ -42,6 +42,7 @@ export function descriptionAtRestMutation<Asked, Answer>(
   write: (asked: Asked, send: DescriptionEditSend) => Promise<Answer>,
 ) {
   const send = edit.mutationFn;
+
   return mutationOptions({
     ...descriptionWritesOf(taskId),
     mutationFn: (asked: Asked, context) =>

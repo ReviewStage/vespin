@@ -20,6 +20,7 @@ import { CatalogSection } from "../section";
 function Renamed({ start, look }: { start: string; look: InlineEditLook }): React.JSX.Element {
   const [name, setName] = useState(start);
   const [editing, setEditing] = useState(false);
+
   const edit = (
     <InlineEdit
       value={name}
@@ -29,10 +30,12 @@ function Renamed({ start, look }: { start: string; look: InlineEditLook }): Reac
       look={look}
       onEnd={({ value }) => {
         setEditing(false);
+
         if (value !== undefined) setName(value);
       }}
     />
   );
+
   return (
     <div className="catalog-inline-edit">
       {look === INLINE_EDIT_LOOK.WELL && editing ? (
@@ -53,6 +56,7 @@ function Renamed({ start, look }: { start: string; look: InlineEditLook }): Reac
 function PressedName({ start }: { start: string }): React.JSX.Element {
   const [name, setName] = useState(start);
   const [editing, setEditing] = useState(false);
+
   return (
     <RenamableName
       value={name}
@@ -61,6 +65,7 @@ function PressedName({ start }: { start: string }): React.JSX.Element {
       onBegin={() => setEditing(true)}
       onEnd={({ value }) => {
         setEditing(false);
+
         if (value !== undefined) setName(value);
       }}
     />

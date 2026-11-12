@@ -61,5 +61,6 @@ export const createdWorkspace = Effect.fn("web/createdWorkspace")(function* (
     { userId, workspaceId: organizationId },
     {},
   );
+
   return yield* answeredWorkspace(userId, organizationId);
 });

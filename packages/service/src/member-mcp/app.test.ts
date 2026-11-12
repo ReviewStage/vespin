@@ -161,9 +161,11 @@ const decodeMetadata = Schema.decodeUnknownSync(
     bearer_methods_supported: Schema.Array(Schema.String),
   }),
 );
+
 /** The rows of a list read by their ids alone. */
 const IdsSchema = Schema.Array(Schema.Struct({ id: Schema.String }));
 const decodeTasks = Schema.decodeUnknownSync(Schema.Struct({ tasks: IdsSchema }));
+
 /** The inbox read, each thread by its id, the ask it holds open, and its messages' asks by their options. */
 const decodeInbox = Schema.decodeUnknownSync(
   Schema.Struct({
@@ -187,6 +189,7 @@ const decodeInbox = Schema.decodeUnknownSync(
     ),
   }),
 );
+
 /** A write's answer: the thread as it then stands. */
 /** A read_agent's page, each entry by its words and the lineId a line sent to the agent names. */
 const decodeTranscript = Schema.decodeUnknownSync(
@@ -196,13 +199,17 @@ const decodeTranscript = Schema.decodeUnknownSync(
     ),
   }),
 );
+
 const decodeWritten = Schema.decodeUnknownSync(
   Schema.Struct({ thread: Schema.Struct({ status: Schema.String }) }),
 );
+
 const decodeStarted = Schema.decodeUnknownSync(
   Schema.Struct({ thread: Schema.Struct({ id: Schema.String, title: Schema.String }) }),
 );
+
 const decodeAgents = Schema.decodeUnknownSync(Schema.Struct({ agents: IdsSchema }));
+
 /** An agent's queue as read_agent and change_agent_queue answer it, each message by its id and words. */
 const decodeQueue = Schema.decodeUnknownSync(
   Schema.Struct({
@@ -211,6 +218,7 @@ const decodeQueue = Schema.decodeUnknownSync(
     }),
   }),
 );
+
 /** A workspace `create_workspace` answers it made. */
 const decodeCreated = Schema.decodeUnknownSync(
   Schema.Struct({
@@ -240,9 +248,11 @@ const decodeListed = Schema.decodeUnknownSync(
 const decodeMade = Schema.decodeUnknownSync(
   Schema.Struct({ task: Schema.Struct({ id: Schema.String, key: Schema.String }) }),
 );
+
 const decodeRelated = Schema.decodeUnknownSync(
   Schema.Struct({ task: Schema.Struct({ blockedBy: Schema.Array(Schema.Unknown) }) }),
 );
+
 const decodeAutomation = Schema.decodeUnknownSync(
   Schema.Struct({ automation: Schema.Struct({ id: Schema.String }) }),
 );
@@ -257,6 +267,7 @@ const WEEKLY = {
 const decodeThread = Schema.decodeUnknownSync(
   Schema.Struct({ thread: Schema.String, state: Schema.String }),
 );
+
 const decodeThreads = Schema.decodeUnknownSync(
   Schema.Struct({
     threads: Schema.Array(
@@ -268,9 +279,11 @@ const decodeThreads = Schema.decodeUnknownSync(
     ),
   }),
 );
+
 const decodeKept = Schema.decodeUnknownSync(
   Schema.Struct({ memory: Schema.Struct({ id: Schema.String }) }),
 );
+
 const decodeFound = Schema.decodeUnknownSync(
   Schema.Struct({ memories: Schema.Array(Schema.Struct({ id: Schema.String })) }),
 );
@@ -302,12 +315,15 @@ const standingAgent = (userId: string, taskId: string) =>
         payer: AGENT_PAYER.API_KEY,
       }),
     );
+
     const claimed = yield* claimRuntimeSession(
       { userId, conversationId: agent.conversationId },
       `wrun_${randomUUID()}`,
       yield* DateTime.nowAsDate,
     );
+
     assert.ok(claimed, "the agent's session stands");
+
     return agent.id;
   });
 
@@ -325,6 +341,7 @@ function goldenOf(toolName: string): string {
 /** The golden a tool's input is recorded under where no workspace of the member's has Task descriptions on: its off twin's, where its input there differs, its own otherwise. */
 function offGoldenOf(tool: MemberMcpTool): string {
   const off = tool.descriptionsOff;
+
   return off === undefined || off.input === tool.input
     ? goldenOf(tool.name)
     : `${goldenOf(tool.name)}-off`;
@@ -366,12 +383,14 @@ it.effect(
     Effect.gen(function* () {
       const { auth, fetch } = yield* standing;
       const { cookie } = yield* Effect.promise(() => signUp(auth));
+
       const desktop = yield* Effect.promise(() =>
         mintedToken(auth, cookie, {
           clientId: DESKTOP_OAUTH_CLIENT.id,
           scope: DESKTOP_OAUTH_CLIENT.scopes,
         }),
       );
+
       const elsewhere = yield* Effect.promise(() =>
         mintedToken(auth, cookie, {
           clientId: MCP_CLIENT.id,
@@ -379,6 +398,7 @@ it.effect(
           resource: OTHER_RESOURCE,
         }),
       );
+
       const unscoped = yield* Effect.promise(() =>
         mintedToken(auth, cookie, {
           clientId: MCP_CLIENT.id,
@@ -392,6 +412,7 @@ it.effect(
         assert.equal(refused.status, HOSTED_HTTP_STATUS.UNAUTHORIZED);
         assert.equal(refused.challenge, `Bearer resource_metadata="${METADATA_URL}"`);
       }
+
       const forbidden = yield* post(fetch, unscoped);
       assert.equal(forbidden.status, HOSTED_HTTP_STATUS.FORBIDDEN);
       assert.match(
@@ -410,6 +431,7 @@ it.effect.each(Object.values(REVISION))(
       const { auth, fetch, services } = yield* standing;
       const { userId, cookie } = yield* Effect.promise(() => signUp(auth));
       const workspaceId = yield* openWorkspace(userId).pipe(Effect.provide(services));
+
       const token = yield* Effect.promise(() =>
         mintedToken(auth, cookie, {
           clientId: MCP_CLIENT.id,
@@ -417,6 +439,7 @@ it.effect.each(Object.values(REVISION))(
           resource: RESOURCE,
         }),
       );
+
       const { client, transport } = yield* connected(fetch, token, revision);
 
       const unlisted = yield* Effect.promise(() => client.listTools());
@@ -424,16 +447,20 @@ it.effect.each(Object.values(REVISION))(
         setWorkspaceExperiment({ organizationId: workspaceId, experiment, on: true, by: userId }),
       ).pipe(Effect.provide(services));
       const listed = yield* Effect.promise(() => client.listTools());
+
       const called = yield* Effect.promise(() =>
         client.callTool({ name: LIST_WORKSPACES_TOOL.name, arguments: {} }),
       );
+
       yield* Effect.promise(() => client.close());
 
       assert.equal(transport.protocolVersion, revision);
+
       const goldenInput = (golden: string) =>
         Effect.promise(async () =>
           JSON.parse(await fs.readFile(path.join(GOLDEN_ROOT, `${golden}.json`), "utf8")),
         );
+
       // With no experiment on, a tool is listed in the words that name none, its input its off twin's golden where it has one.
       const offGoldens = yield* Effect.forEach(
         MEMBER_MCP_TOOLS.filter(({ experiment }) => experiment === undefined),
@@ -443,11 +470,13 @@ it.effect.each(Object.values(REVISION))(
             inputSchema,
           })),
       );
+
       assert.deepEqual(
         unlisted.tools.map(({ name, inputSchema }) => ({ name, inputSchema })),
         offGoldens,
       );
       assert.deepEqual(experimentWordsIn(unlisted.tools), []);
+
       const goldens = yield* Effect.forEach(MEMBER_MCP_TOOLS, ({ name, annotations }) =>
         Effect.map(goldenInput(goldenOf(name)), (inputSchema) => ({
           name,
@@ -455,6 +484,7 @@ it.effect.each(Object.values(REVISION))(
           annotations,
         })),
       );
+
       assert.deepEqual(
         listed.tools.map(({ name, inputSchema, annotations }) => ({
           name,
@@ -485,20 +515,25 @@ it.effect(
     Effect.gen(function* () {
       const { auth, fetch, services } = yield* standing;
       const member = yield* Effect.promise(() => signUp(auth));
+
       const rows = yield* Effect.gen(function* () {
         const workspace = yield* openWorkspace(member.userId);
+
         const task = yield* createTask(member.userId, {
           organizationId: workspace,
           name: "Seat billing",
         });
+
         const agentId = yield* openTaskAgent(member.userId, workspace, task.id);
         // Note that the messages are planted in the store, since a queue change would hand the first to the idle agent.
         const first = randomUUID();
         const second = randomUUID();
         yield* queueAgentMessage(member.userId, agentId, { id: first, text: "First" });
         yield* queueAgentMessage(member.userId, agentId, { id: second, text: "Second" });
+
         return { agentId, first, second };
       }).pipe(Effect.provide(services));
+
       const token = yield* Effect.promise(() =>
         mintedToken(auth, member.cookie, {
           clientId: MCP_CLIENT.id,
@@ -506,23 +541,30 @@ it.effect(
           resource: RESOURCE,
         }),
       );
+
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
       const call = (name: string, args: Record<string, unknown>) =>
         Effect.promise(async () => {
           const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
+
           return { refused: answer.isError === true, text: answer.content[0].text };
         });
+
       const { agentId, first, second } = rows;
 
       const read = yield* call(MEMBER_MCP_TOOL.READ_AGENT, { agentId });
+
       const reordered = yield* call(MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE, {
         agentId,
         change: { change: QUEUE_CHANGE.REORDER, order: [second] },
       });
+
       const deleted = yield* call(MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE, {
         agentId,
         change: { change: QUEUE_CHANGE.DELETE, messageId: first },
       });
+
       yield* Effect.promise(() => client.close());
 
       assert.deepEqual(decodeQueue(JSON.parse(read.text)).queue.messages, [
@@ -543,6 +585,7 @@ it.effect(
     Effect.gen(function* () {
       const { auth, fetch } = yield* standing;
       const { cookie } = yield* Effect.promise(() => signUp(auth));
+
       const token = yield* Effect.promise(() =>
         mintedToken(auth, cookie, {
           clientId: MCP_CLIENT.id,
@@ -550,7 +593,9 @@ it.effect(
           resource: RESOURCE,
         }),
       );
+
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
       const call = (name: string, args: Record<string, unknown>) =>
         Effect.promise(async () => decodeAnswer(await client.callTool({ name, arguments: args })));
 
@@ -564,9 +609,11 @@ it.effect(
         { slug: workspace.slug, name: workspace.name, role: workspace.role },
         { slug: "research", name: "Research", role: WORKSPACE_ROLE.OWNER },
       );
+
       const ownedIds = decodeListed(JSON.parse(listed.content[0].text)).workspaces.map(
         ({ id }) => id,
       );
+
       assert.ok(ownedIds.includes(workspace.id));
     }),
 );
@@ -578,20 +625,25 @@ it.effect(
       const { auth, fetch, services } = yield* standing;
       const member = yield* Effect.promise(() => signUp(auth));
       const stranger = yield* Effect.promise(() => signUp(auth));
+
       const rows = yield* Effect.gen(function* () {
         const own = yield* openWorkspace(member.userId);
         const second = yield* openWorkspace(member.userId);
         const elsewhere = yield* openWorkspace(stranger.userId);
+
         const ownTask = yield* createTask(member.userId, {
           organizationId: own,
           name: "Seat billing",
         });
+
         const strangerTask = yield* createTask(stranger.userId, {
           organizationId: elsewhere,
           name: "A stranger's task",
         });
+
         const ownAgent = yield* openTaskAgent(member.userId, own, ownTask.id);
         const strangerAgent = yield* openTaskAgent(stranger.userId, elsewhere, strangerTask.id);
+
         return {
           own,
           second,
@@ -610,10 +662,12 @@ it.effect(
           ),
         };
       }).pipe(Effect.provide(services));
+
       const strangerAsk = yield* readInboxItem(stranger.userId, rows.strangerItem).pipe(
         Effect.map((stored) => Option.getOrThrow(stored).item),
         Effect.provide(services),
       );
+
       const token = yield* Effect.promise(() =>
         mintedToken(auth, member.cookie, {
           clientId: MCP_CLIENT.id,
@@ -621,18 +675,23 @@ it.effect(
           resource: RESOURCE,
         }),
       );
+
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
       const call = (name: string, args: Record<string, unknown>) =>
         Effect.promise(async () => {
           const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
+
           return { refused: answer.isError === true, text: answer.content[0].text };
         });
+
       const slugOf = (workspaceId: string) => `workspace-${workspaceId}`;
 
       const unnamed = yield* call(MEMBER_MCP_TOOL.LIST_TASKS, {});
       const tasks = yield* call(MEMBER_MCP_TOOL.LIST_TASKS, { workspace: slugOf(rows.own) });
       const agents = yield* call(MEMBER_MCP_TOOL.LIST_AGENTS, { workspace: slugOf(rows.own) });
       const inbox = yield* call(MEMBER_MCP_TOOL.READ_INBOX, { workspace: slugOf(rows.own) });
+
       const strangers = yield* Effect.forEach(
         [
           [MEMBER_MCP_TOOL.LIST_TASKS, { workspace: slugOf(rows.elsewhere) }],
@@ -677,6 +736,7 @@ it.effect(
         ] as const,
         ([name, args]) => call(name, args),
       );
+
       const owns = yield* Effect.forEach(
         [
           [MEMBER_MCP_TOOL.READ_TASK, { taskId: rows.ownTask }],
@@ -686,6 +746,7 @@ it.effect(
         ] as const,
         ([name, args]) => call(name, args),
       );
+
       yield* Effect.promise(() => client.close());
 
       // A list that names no workspace is refused where the member has two, naming both and no other.
@@ -706,18 +767,22 @@ it.effect(
         decodeInbox(JSON.parse(inbox.text)).threads.map(({ id }) => id),
         [rows.ownItem],
       );
+
       for (const refused of strangers) {
         assert.equal(refused.refused, true, refused.text);
         assert.ok(
           !refused.text.includes(rows.strangerTask) && !refused.text.includes(rows.elsewhere),
         );
       }
+
       for (const read of owns) assert.equal(read.refused, false, read.text);
+
       // The stranger's thread stands as it was, its ask open and its thread its agent's alone.
       const after = yield* readInboxItem(stranger.userId, rows.strangerItem).pipe(
         Effect.map((stored) => Option.getOrThrow(stored).item),
         Effect.provide(services),
       );
+
       assert.deepEqual(after, strangerAsk);
     }),
 );
@@ -729,6 +794,7 @@ it.effect(
       const { auth, fetch, services } = yield* standing;
       const member = yield* Effect.promise(() => signUp(auth));
       const stranger = yield* Effect.promise(() => signUp(auth));
+
       const rows = yield* Effect.gen(function* () {
         const own = yield* openWorkspace(member.userId);
         // The member's own workspace has its experiments on, so their tools are listed to be refused elsewhere.
@@ -741,10 +807,12 @@ it.effect(
           by: member.userId,
         });
         const elsewhere = yield* openWorkspace(stranger.userId);
+
         const task = yield* createTask(stranger.userId, {
           organizationId: elsewhere,
           name: "A stranger's task",
         });
+
         const sectionId = randomUUID();
         yield* writeTaskSections(stranger.userId, {
           kind: TASK_SECTION_WRITE.CREATE,
@@ -752,6 +820,7 @@ it.effect(
           workspaceId: elsewhere,
           title: "A stranger's section",
         });
+
         const automation = yield* createAutomation(stranger.userId, {
           organizationId: elsewhere,
           name: "A stranger's automation",
@@ -761,6 +830,7 @@ it.effect(
           nextRunAt: null,
           webhookSecretHash: null,
         });
+
         yield* recordMemberDescriptionNotes(
           { userId: stranger.userId, taskId: task.id },
           { notes: [DESCRIPTION_NOTE] },
@@ -773,6 +843,7 @@ it.effect(
         );
         const { text } = Option.getOrThrow(yield* readTask(stranger.userId, task.id));
         const from = text.indexOf(DESCRIPTION_NOTE.text);
+
         const started = yield* startDescriptionCommentThread(
           { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, userId: stranger.userId },
           task.id,
@@ -785,15 +856,18 @@ it.effect(
             words: "A stranger's comment.",
           },
         );
+
         assert.ok(
           started.status === DESCRIPTION_COMMENT_OUTCOME.DONE && "thread" in started.answer,
         );
+
         const kept = yield* rememberMemory(
           elsewhere,
           stranger.userId,
           "A stranger's convention.",
           undefined,
         );
+
         assert.ok("memory" in kept);
         yield* setRunActions(
           elsewhere,
@@ -803,6 +877,7 @@ it.effect(
         );
         const [runAction] = yield* readRunActions(elsewhere, "acme/relay");
         assert.ok(runAction !== undefined);
+
         return {
           own,
           elsewhere,
@@ -817,6 +892,7 @@ it.effect(
           revisions: yield* listRevisions(stranger.userId, task.id),
         };
       }).pipe(Effect.provide(services));
+
       const token = yield* Effect.promise(() =>
         mintedToken(auth, member.cookie, {
           clientId: MCP_CLIENT.id,
@@ -824,6 +900,7 @@ it.effect(
           resource: RESOURCE,
         }),
       );
+
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
       const workspace = `workspace-${rows.elsewhere}`;
       const { taskId, agentId, threadId, memoryId, automationId } = rows;
@@ -912,9 +989,11 @@ it.effect(
         ([name, args]) =>
           Effect.promise(async () => {
             const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
+
             return { name, refused: answer.isError === true, text: answer.content[0].text };
           }),
       );
+
       // A forget in the member's own workspace of a memory of another's forgets nothing there.
       yield* Effect.promise(() =>
         client.callTool({
@@ -923,6 +1002,7 @@ it.effect(
         }),
       );
       yield* Effect.promise(() => client.close());
+
       const after = yield* Effect.gen(function* () {
         return {
           task: yield* readTask(stranger.userId, taskId),
@@ -949,6 +1029,7 @@ it.effect(
             !answer.text.includes("Invoices lag."),
         );
       }
+
       const task = Option.getOrThrow(after.task);
       assert.equal(task.task.name, "A stranger's task");
       // Revision 1 is the first save alone, so a restore of it would have changed the description and added a revision.
@@ -990,11 +1071,14 @@ it.effect(
     Effect.gen(function* () {
       const { auth, fetch, services } = yield* standing;
       const member = yield* Effect.promise(() => signUp(auth));
+
       const agentId = yield* Effect.gen(function* () {
         const own = yield* openWorkspace(member.userId);
         yield* descriptionsIn(own, member.userId, true);
+
         return yield* openAgentOnOwnTask(member.userId, own);
       }).pipe(Effect.provide(services));
+
       const token = yield* Effect.promise(() =>
         mintedToken(auth, member.cookie, {
           clientId: MCP_CLIENT.id,
@@ -1002,11 +1086,14 @@ it.effect(
           resource: RESOURCE,
         }),
       );
+
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
       const call = (name: string, args: Record<string, unknown>) =>
         Effect.promise(async () => {
           const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
           assert.notEqual(answer.isError, true, `${name}: ${answer.content[0].text}`);
+
           return JSON.parse(answer.content[0].text);
         });
 
@@ -1016,13 +1103,17 @@ it.effect(
           description: "## Problem\n\nSeats drift.",
         }),
       );
+
       const taskId = made.task.id;
+
       const refused = (name: string, args: Record<string, unknown>) =>
         Effect.promise(async () => {
           const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
           assert.equal(answer.isError, true, name);
+
           return answer.content[0].text;
         });
+
       // A client that listed the tools before the rename is told what each is called now, and nothing is written.
       assert.match(
         yield* refused("edit_plan", {
@@ -1053,9 +1144,11 @@ it.effect(
       yield* call(MEMBER_MCP_TOOL.UPDATE_TASK, { taskId, status: TASK_STATUS.IN_PROGRESS });
       // A task found by its key is the one made; a blocker of it moved to its sub-task in one call.
       const found = decodeMade(yield* call(MEMBER_MCP_TOOL.FIND_TASK, { task: made.task.key }));
+
       const blockerId = decodeMade(
         yield* call(MEMBER_MCP_TOOL.CREATE_TASK, { name: "Invoice lag" }),
       ).task.id;
+
       yield* call(MEMBER_MCP_TOOL.UPDATE_TASK, { taskId, blockedBy: { add: [blockerId] } });
       yield* call(MEMBER_MCP_TOOL.CHANGE_TASK_RELATION, {
         taskId,
@@ -1065,6 +1158,7 @@ it.effect(
       });
       const related = decodeRelated(yield* call(MEMBER_MCP_TOOL.READ_TASK, { taskId }));
       yield* call(MEMBER_MCP_TOOL.UPDATE_AGENT, { agentId, archived: true, reason: "Done." });
+
       const automationId = decodeAutomation(
         yield* call(MEMBER_MCP_TOOL.CREATE_AUTOMATION, {
           name: "Weekly sweep",
@@ -1072,16 +1166,20 @@ it.effect(
           trigger: WEEKLY,
         }),
       ).automation.id;
+
       yield* call(MEMBER_MCP_TOOL.UPDATE_AUTOMATION, { automationId, name: "Monday sweep" });
       yield* call(MEMBER_MCP_TOOL.RUN_AUTOMATION, { automationId });
+
       const automations = yield* Effect.gen(function* () {
         return {
           made: Option.getOrThrow(yield* readAutomation(member.userId, automationId)),
           runs: yield* listAutomationRuns(member.userId, automationId),
         };
       }).pipe(Effect.provide(services));
+
       yield* call(MEMBER_MCP_TOOL.DELETE_AUTOMATION, { automationId });
       yield* Effect.promise(() => client.close());
+
       const after = yield* Effect.gen(function* () {
         return {
           task: Option.getOrThrow(yield* readTask(member.userId, taskId)),
@@ -1128,6 +1226,7 @@ it.effect(
       const calls: GraphqlCall[] = [];
       const drafted = publishedPullRequestDrafted(() => true);
       const installation = freshInstallation();
+
       const github = githubReaching(
         [installation],
         undefined,
@@ -1138,9 +1237,11 @@ it.effect(
             : drafted(sent),
         ),
       );
+
       const { auth, fetch, services } = yield* memberMcpStanding({ github: github.layer });
       const member = yield* Effect.promise(() => signUp(auth));
       const teammate = yield* Effect.promise(() => signUp(auth));
+
       const agentId = yield* Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
         yield* signInWithGitHub(member.userId, {
@@ -1150,10 +1251,12 @@ it.effect(
         const workspaceId = yield* openWorkspace(member.userId);
         yield* joinWorkspace(workspaceId, teammate.userId);
         yield* connectWorkspaceGitHub(workspaceId, installation);
+
         const task = yield* createTask(member.userId, {
           organizationId: workspaceId,
           name: "Teammate invitations",
         });
+
         const id = yield* openTaskAgent(member.userId, workspaceId, task.id);
         // The agent pushed its branch to the repository the installation reaches, from which its draft stands open.
         yield* Database.use((db) =>
@@ -1165,8 +1268,10 @@ it.effect(
             })
             .where(eq(agentTable.id, id)),
         );
+
         return id;
       }).pipe(Effect.provide(services));
+
       const clientOf = (cookie: string) =>
         Effect.flatMap(
           Effect.promise(() =>
@@ -1178,8 +1283,10 @@ it.effect(
           ),
           (token) => Effect.map(connected(fetch, token, REVISION.MODERN), ({ client }) => client),
         );
+
       const memberClient = yield* clientOf(member.cookie);
       const teammateClient = yield* clientOf(teammate.cookie);
+
       const act = (client: Client, change: Record<string, string>) =>
         Effect.promise(async () =>
           decodeAnswer(
@@ -1192,6 +1299,7 @@ it.effect(
 
       const unsigned = yield* act(teammateClient, { action: PULL_REQUEST_ACTION.READY_FOR_REVIEW });
       const ready = yield* act(memberClient, { action: PULL_REQUEST_ACTION.READY_FOR_REVIEW });
+
       const changes = yield* Effect.promise(async () =>
         decodeAnswer(
           await memberClient.callTool({
@@ -1200,25 +1308,31 @@ it.effect(
           }),
         ),
       );
+
       const { headSha } = decodeHead(JSON.parse(changes.content[0].text)).pullRequest;
+
       const merged = yield* act(memberClient, {
         action: PULL_REQUEST_ACTION.MERGE,
         method: "squash",
         headSha,
       });
+
       yield* Effect.promise(() => Promise.all([memberClient.close(), teammateClient.close()]));
 
       assert.equal(unsigned.isError, true);
       assert.match(unsigned.content[0].text, /sign in with GitHub/u);
+
       for (const answer of [ready, merged]) {
         assert.notEqual(answer.isError, true, answer.content[0].text);
         assert.deepEqual(JSON.parse(answer.content[0].text), { status: "accepted" });
       }
+
       assert.equal(headSha, PUBLISHED.headSha);
       const id = PULL_REQUEST_NODE_ID;
       assert.deepEqual(
         calls.flatMap((call) => {
           const mutation = mutationOf(call);
+
           return mutation === undefined ? [] : [[mutation, call.variables, call.authorization]];
         }),
         [
@@ -1239,6 +1353,7 @@ it.effect(
     Effect.gen(function* () {
       const calls: GraphqlCall[] = [];
       const installation = freshInstallation();
+
       const files = [
         {
           filename: "src/invite.ts",
@@ -1257,6 +1372,7 @@ it.effect(
           patch: "@@ -0,0 +1 @@",
         },
       ];
+
       const github = githubReaching(
         [installation],
         undefined,
@@ -1287,8 +1403,10 @@ it.effect(
               : publishedPullRequest(sent),
         ),
       );
+
       const { auth, fetch, services } = yield* memberMcpStanding({ github: github.layer });
       const member = yield* Effect.promise(() => signUp(auth));
+
       const agents = yield* Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
         yield* signInWithGitHub(member.userId, {
@@ -1297,10 +1415,12 @@ it.effect(
         });
         const workspaceId = yield* openWorkspace(member.userId);
         yield* connectWorkspaceGitHub(workspaceId, installation);
+
         const task = yield* createTask(member.userId, {
           organizationId: workspaceId,
           name: "Teammate invitations",
         });
+
         const published = yield* openTaskAgent(member.userId, workspaceId, task.id);
         // One agent pushed the branch its pull request stands open from; the other has opened none yet.
         yield* Database.use((db) =>
@@ -1309,11 +1429,13 @@ it.effect(
             .set({ repository: RELAY_FULL_NAME, branch: PUBLISHED.branch })
             .where(eq(agentTable.id, published)),
         );
+
         return {
           published,
           unpublished: yield* openTaskAgent(member.userId, workspaceId, task.id),
         };
       }).pipe(Effect.provide(services));
+
       const token = yield* Effect.promise(() =>
         mintedToken(auth, member.cookie, {
           clientId: MCP_CLIENT.id,
@@ -1321,30 +1443,37 @@ it.effect(
           resource: RESOURCE,
         }),
       );
+
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
       const named = { repository: RELAY_FULL_NAME, number: PUBLISHED.number };
+
       const call = (name: string, args: Record<string, unknown>) =>
         Effect.promise(async () => decodeAnswer(await client.callTool({ name, arguments: args })));
 
       const changes = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, { ...named, part: "changes" });
       const missing = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, { ...named, number: 13 });
+
       const marked = yield* call(MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED, {
         ...named,
         paths: ["src/expire.ts"],
         viewed: true,
       });
+
       const agentChanges = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, {
         agentId: agents.published,
         part: "changes",
       });
+
       const agentMarked = yield* call(MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED, {
         agentId: agents.published,
         paths: ["src/invite.ts"],
         viewed: false,
       });
+
       const unopened = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, {
         agentId: agents.unpublished,
       });
+
       yield* Effect.promise(() => client.close());
 
       // The agent's own pull request is the same pull request, read through the agent.
@@ -1360,6 +1489,7 @@ it.effect(
           ],
         );
       }
+
       assert.equal(unopened.isError, true);
       assert.match(unopened.content[0].text, /opened no pull request yet/u);
       // A number the repository holds no pull request under is refused as the hosted read refuses it.
@@ -1370,6 +1500,7 @@ it.effect(
       assert.deepEqual(
         calls.flatMap((one) => {
           const mutation = mutationOf(one);
+
           return mutation === undefined ? [] : [[mutation, one.variables, one.authorization]];
         }),
         [
@@ -1387,6 +1518,7 @@ it.effect(
       );
     }),
 );
+
 it.layer(getTestDB())("a member's start_agent on no task", (it) => {
   it.effect(
     "starts the agent on a task made for it, untitled for the agent's title to name, assigned to the member, in progress with a blank description, in the repository named, and refuses a branch with no repository",
@@ -1395,12 +1527,14 @@ it.layer(getTestDB())("a member's start_agent on no task", (it) => {
         const agentSessions = fakeAgentSessions();
         const { owner, mcpFetch } = yield* openTask({ agentSessions });
         const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+
         const call = (args: Record<string, unknown>) =>
           Effect.promise(async () =>
             decodeAnswer(
               await client.callTool({ name: MEMBER_MCP_TOOL.START_AGENT, arguments: args }),
             ),
           );
+
         const prompt = "Sweep the stale invitations.";
         const started = yield* call({ prompt, repository: RELAY_FULL_NAME });
         const bare = yield* call({ prompt, repository: null, branch: "release" });
@@ -1443,6 +1577,7 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
           yield* claimRuntimeSession(target, sessionId, yield* DateTime.nowAsDate),
           true,
         );
+
         const posted = yield* postInboxThread(
           { userId: owner, taskId: task.id, agentId: agent.id },
           {
@@ -1452,22 +1587,26 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
             ask: { type: INBOX_ASK.DECIDE, options: [{ label: "7 days" }, { label: "30 days" }] },
           },
         );
+
         assert.ok(Result.isSuccess(posted));
         const askId = openAskOf(posted.success);
         const before = agentSessions.sent.length;
         const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+
         const call = (name: string, args: Record<string, unknown>) =>
           Effect.promise(async () =>
             decodeAnswer(await client.callTool({ name, arguments: args })),
           );
 
         const read = yield* call(MEMBER_MCP_TOOL.READ_INBOX, {});
+
         const answered = yield* call(MEMBER_MCP_TOOL.ANSWER_ASK, {
           threadId: posted.success.id,
           askId,
           reply: INBOX_REPLY.CHOSE,
           choices: ["30 days"],
         });
+
         yield* Effect.promise(() => client.close());
 
         assert.notEqual(read.isError, true, read.content[0].text);
@@ -1503,19 +1642,23 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         const { owner, task, ask, mcpFetch } = yield* openTask({});
         const { agent } = yield* startedAgent(owner, task.id, ask);
         const where = { userId: owner, taskId: task.id, agentId: agent.id };
+
         const notice = yield* postInboxThread(where, {
           key: "deploy-done",
           title: "Deployed to staging",
           body: "Staging runs the new build.",
         });
+
         const asking = yield* postInboxThread(where, {
           key: "invite-expiry",
           title: "How long should an invitation stand?",
           body: "An invitation nobody accepts expires after this.",
           ask: { type: INBOX_ASK.DECIDE, options: [{ label: "7 days" }, { label: "30 days" }] },
         });
+
         assert.ok(Result.isSuccess(notice) && Result.isSuccess(asking));
         const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+
         const call = (name: string, args: Record<string, unknown>) =>
           Effect.promise(async () =>
             decodeAnswer(await client.callTool({ name, arguments: args })),
@@ -1525,10 +1668,12 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
           threadId: notice.success.id,
           revision: notice.success.revision,
         });
+
         const refused = yield* call(MEMBER_MCP_TOOL.ACKNOWLEDGE_THREAD, {
           threadId: asking.success.id,
           revision: asking.success.revision,
         });
+
         yield* Effect.promise(() => client.close());
 
         assert.notEqual(nodded.isError, true, nodded.content[0].text);
@@ -1558,27 +1703,34 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
           Effect.succeed(true),
         );
         const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+
         const call = (name: string, args: Record<string, unknown>) =>
           Effect.promise(async () =>
             decodeAnswer(await client.callTool({ name, arguments: args })),
           );
+
         const transcript = (read: ReturnType<typeof decodeAnswer>) =>
           decodeTranscript(JSON.parse(read.content[0].text)).transcript;
 
         const before = transcript(
           yield* call(MEMBER_MCP_TOOL.READ_AGENT, { agentId: agent.id, from: "start" }),
         );
+
         const line = before.at(-1);
         assert.ok(line?.lineId !== undefined, "a line sent to the agent names its lineId");
         assert.match(line.text, /Why does it stall\?/u);
+
         const rewound = yield* call(MEMBER_MCP_TOOL.REWIND_AGENT, {
           agentId: agent.id,
           lineId: line.lineId,
         });
+
         assert.notEqual(rewound.isError, true, rewound.content[0].text);
+
         const after = transcript(
           yield* call(MEMBER_MCP_TOOL.READ_AGENT, { agentId: agent.id, from: "start" }),
         );
+
         const deleted = yield* call(MEMBER_MCP_TOOL.DELETE_AGENT, { agentId: agent.id });
         const gone = yield* call(MEMBER_MCP_TOOL.READ_AGENT, { agentId: agent.id });
         yield* Effect.promise(() => client.close());
@@ -1604,10 +1756,12 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         );
         const before = agentSessions.sent.length;
         const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+
         const call = (name: string, args: Record<string, unknown>) =>
           Effect.promise(async () => {
             const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
             assert.notEqual(answer.isError, true, `${name}: ${answer.content[0].text}`);
+
             return JSON.parse(answer.content[0].text);
           });
 
@@ -1618,15 +1772,19 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
             text: "Can you look at the flaky checkout test?",
           }),
         );
+
         const unread = yield* call(MEMBER_MCP_TOOL.MARK_THREAD_READ, {
           threadId: started.thread.id,
           read: false,
         });
+
         const reminded = yield* call(MEMBER_MCP_TOOL.REMIND_THREAD, {
           threadId: started.thread.id,
           at: "2030-01-07T09:00-08:00",
         });
+
         yield* TestClock.setTime(Date.parse("2026-11-10T00:00Z"));
+
         const past = yield* Effect.promise(async () =>
           decodeAnswer(
             await client.callTool({
@@ -1635,6 +1793,7 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
             }),
           ),
         );
+
         yield* Effect.promise(() => client.close());
 
         assert.equal(started.thread.title, "Flaky checkout test");
@@ -1658,20 +1817,25 @@ it.effect(
     Effect.gen(function* () {
       const { auth, fetch, services, heard } = yield* standing;
       const member = yield* Effect.promise(() => signUp(auth));
+
       const { own, taskId, agentId } = yield* Effect.gen(function* () {
         const own = yield* openWorkspace(member.userId);
+
         // A second workspace keeps Task descriptions on, so the tool stays listed once the first turns it off.
         for (const workspace of [own, yield* openWorkspace(member.userId)]) {
           yield* descriptionsIn(workspace, member.userId, true);
         }
+
         yield* connectAgentApiKeys(member.userId);
         const task = yield* createTask(member.userId, { organizationId: own, name: "Seats" });
         yield* recordMemberDescriptionNotes(
           { userId: member.userId, taskId: task.id },
           { notes: [DESCRIPTION_NOTE] },
         );
+
         return { own, taskId: task.id, agentId: yield* standingAgent(member.userId, task.id) };
       }).pipe(Effect.provide(services));
+
       const token = yield* Effect.promise(() =>
         mintedToken(auth, member.cookie, {
           clientId: MCP_CLIENT.id,
@@ -1679,13 +1843,17 @@ it.effect(
           resource: RESOURCE,
         }),
       );
+
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
       const call = (name: string, args: Record<string, unknown>) =>
         Effect.promise(async () => {
           const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
           assert.notEqual(answer.isError, true, `${name}: ${answer.content[0].text}`);
+
           return JSON.parse(answer.content[0].text);
         });
+
       const mention = `[@Seats](https://vespin.dev/acme/plan/${taskId}/agent/${agentId})`;
 
       const { thread } = decodeThread(
@@ -1695,12 +1863,16 @@ it.effect(
           words: `${mention} do seats still drift?`,
         }),
       );
+
       yield* call(MEMBER_MCP_TOOL.REPLY_TO_COMMENT, { taskId, thread, words: "Invoices too." });
       const open = decodeThreads(yield* call(MEMBER_MCP_TOOL.READ_COMMENTS, { taskId }));
+
       const resolved = decodeThread(
         yield* call(MEMBER_MCP_TOOL.UPDATE_COMMENT, { taskId, thread, resolved: true }),
       );
+
       yield* descriptionsIn(own, member.userId, false).pipe(Effect.provide(services));
+
       const planless = decodeAnswer(
         yield* Effect.promise(() =>
           client.callTool({
@@ -1709,14 +1881,18 @@ it.effect(
           }),
         ),
       );
+
       yield* Effect.promise(() => client.close());
+
       const lines = yield* Effect.gen(function* () {
         const db = yield* Database;
+
         return yield* db
           .select({ words: sql<string>`${messages.metadata} ->> 'words'` })
           .from(messages)
           .where(sql`${messages.metadata} ->> 'thread_id' = ${thread}`);
       }).pipe(Effect.provide(services));
+
       const stored = yield* readDescriptionCommentThreads(member.userId, taskId).pipe(
         Effect.provide(services),
       );
@@ -1769,12 +1945,16 @@ it.effect(
     Effect.gen(function* () {
       const { auth, fetch, services } = yield* standing;
       const member = yield* Effect.promise(() => signUp(auth));
+
       const workspaceId = yield* Effect.gen(function* () {
         const own = yield* openWorkspace(member.userId);
         yield* memoryIn(yield* openWorkspace(member.userId), member.userId);
+
         return own;
       }).pipe(Effect.provide(services));
+
       const workspace = `workspace-${workspaceId}`;
+
       const token = yield* Effect.promise(() =>
         mintedToken(auth, member.cookie, {
           clientId: MCP_CLIENT.id,
@@ -1782,12 +1962,16 @@ it.effect(
           resource: RESOURCE,
         }),
       );
+
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
       const call = (name: string, args: Record<string, unknown>) =>
         Effect.promise(async () => {
           const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
+
           return { refused: answer.isError === true, read: JSON.parse(answer.content[0].text) };
         });
+
       const settings = readWorkspaceMemories(member.userId, workspaceId).pipe(
         Effect.provide(services),
       );
@@ -1796,25 +1980,32 @@ it.effect(
         workspace,
         text: "Tests run on PGlite.",
       });
+
       yield* memoryIn(workspaceId, member.userId).pipe(Effect.provide(services));
+
       const kept = decodeKept(
         (yield* call(MEMBER_MCP_TOOL.SAVE_MEMORY, { workspace, text: "Tests run on PGlite." }))
           .read,
       );
+
       const listed = yield* settings;
+
       const found = decodeFound(
         (yield* call(MEMBER_MCP_TOOL.SEARCH_MEMORY, { workspace, query: "pglite" })).read,
       );
+
       yield* call(MEMBER_MCP_TOOL.SAVE_MEMORY, {
         workspace,
         text: "Tests run on PGlite through test:store.",
         replaces: kept.memory.id,
       });
       const corrected = yield* settings;
+
       const forgot = yield* call(MEMBER_MCP_TOOL.FORGET_MEMORY, {
         workspace,
         memoryId: kept.memory.id,
       });
+
       const forgotten = yield* settings;
       yield* Effect.promise(() => client.close());
 
@@ -1845,6 +2036,7 @@ it.effect(
     Effect.gen(function* () {
       const { auth, fetch } = yield* standing;
       const member = yield* Effect.promise(() => signUp(auth));
+
       const token = yield* Effect.promise(() =>
         mintedToken(auth, member.cookie, {
           clientId: MCP_CLIENT.id,
@@ -1852,18 +2044,23 @@ it.effect(
           resource: RESOURCE,
         }),
       );
+
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
       const call = (name: string, args: Record<string, unknown>) =>
         Effect.promise(async () => {
           const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
+
           return { refused: answer.isError === true, text: answer.content[0].text };
         });
 
       const before = yield* call(MEMBER_MCP_TOOL.LIST_MODELS, {});
+
       const unoffered = yield* call(MEMBER_MCP_TOOL.UPDATE_PREFERENCES, {
         model: "anthropic/claude-opus-5.5",
         effort: "high",
       });
+
       const after = yield* call(MEMBER_MCP_TOOL.LIST_MODELS, {});
       yield* Effect.promise(() => client.close());
 
@@ -1884,11 +2081,14 @@ it.effect(
       const { auth, fetch, services } = yield* standing;
       const owner = yield* Effect.promise(() => signUp(auth));
       const admin = yield* Effect.promise(() => signUp(auth));
+
       const workspaceId = yield* Effect.gen(function* () {
         const workspaceId = yield* openWorkspace(owner.userId);
         yield* joinWorkspace(workspaceId, admin.userId, WORKSPACE_ROLE.ADMIN);
+
         return workspaceId;
       }).pipe(Effect.provide(services));
+
       const callAs = (cookie: string, name: string, args: Record<string, unknown>) =>
         Effect.gen(function* () {
           const token = yield* Effect.promise(() =>
@@ -1898,21 +2098,28 @@ it.effect(
               resource: RESOURCE,
             }),
           );
+
           const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
           const answer = decodeAnswer(
             yield* Effect.promise(() => client.callTool({ name, arguments: args })),
           );
+
           yield* Effect.promise(() => client.close());
+
           return answer;
         });
 
       const members = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS, {});
+
       const refused = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG, {
         slug: "seats",
       });
+
       const changed = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG, {
         slug: "seats",
       });
+
       const photo = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO, {
         photo: "data:image/png;base64,iVBORw0KGgo=",
       });
@@ -1950,6 +2157,7 @@ it.effect(
         const workspaceId = yield* openWorkspace(owner.userId);
         yield* joinWorkspace(workspaceId, admin.userId, WORKSPACE_ROLE.ADMIN);
       }).pipe(Effect.provide(services));
+
       const callAs = (cookie: string, name: string, args: Record<string, unknown>) =>
         Effect.gen(function* () {
           const token = yield* Effect.promise(() =>
@@ -1959,13 +2167,18 @@ it.effect(
               resource: RESOURCE,
             }),
           );
+
           const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
           const answer = decodeAnswer(
             yield* Effect.promise(() => client.callTool({ name, arguments: args })),
           );
+
           yield* Effect.promise(() => client.close());
+
           return answer;
         });
+
       const rolesOf = (text: string) =>
         JSON.parse(text).members.map(({ userId, role }: { userId: string; role: string }) => [
           userId,
@@ -1976,19 +2189,24 @@ it.effect(
         email: "Newcomer@Example.com",
         role: WORKSPACE_ROLE.MEMBER,
       });
+
       const invitation = JSON.parse(invited.content[0].text).invitation;
       const listed = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.LIST_WORKSPACE_INVITATIONS, {});
+
       const canceled = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.CANCEL_WORKSPACE_INVITATION, {
         invitationId: invitation.id,
       });
+
       const unranked = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.CHANGE_WORKSPACE_MEMBER_ROLE, {
         userId: owner.userId,
         role: WORKSPACE_ROLE.MEMBER,
       });
+
       const demoted = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.CHANGE_WORKSPACE_MEMBER_ROLE, {
         userId: admin.userId,
         role: WORKSPACE_ROLE.MEMBER,
       });
+
       const removed = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.REMOVE_WORKSPACE_MEMBER, {
         userId: admin.userId,
       });
@@ -2015,15 +2233,19 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const returns: string[] = [];
+
       const signingIn = integrationConnectOf(() => ({
         ...CONNECTOR_ASKED_NOTHING,
         authorize: (_subject, callbackUrl) => {
           returns.push(callbackUrl);
+
           return Effect.succeed({ url: GRANTING_SIGN_IN_URL });
         },
       }));
+
       const { auth, fetch } = yield* memberMcpStanding({ integrations: signingIn });
       const member = yield* Effect.promise(() => signUp(auth));
+
       const token = yield* Effect.promise(() =>
         mintedToken(auth, member.cookie, {
           clientId: MCP_CLIENT.id,
@@ -2031,7 +2253,9 @@ it.effect(
           resource: RESOURCE,
         }),
       );
+
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
       const answer = decodeAnswer(
         yield* Effect.promise(() =>
           client.callTool({
@@ -2040,6 +2264,7 @@ it.effect(
           }),
         ),
       );
+
       yield* Effect.promise(() => client.close());
 
       assert.equal(answer.isError, undefined);
@@ -2062,6 +2287,7 @@ it.effect(
     Effect.gen(function* () {
       const { auth, fetch } = yield* standing;
       const member = yield* Effect.promise(() => signUp(auth));
+
       const token = yield* Effect.promise(() =>
         mintedToken(auth, member.cookie, {
           clientId: MCP_CLIENT.id,
@@ -2069,7 +2295,9 @@ it.effect(
           resource: RESOURCE,
         }),
       );
+
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
       const answer = decodeAnswer(
         yield* Effect.promise(() =>
           client.callTool({
@@ -2082,6 +2310,7 @@ it.effect(
           }),
         ),
       );
+
       yield* Effect.promise(() => client.close());
 
       assert.equal(answer.isError, true);
@@ -2104,13 +2333,17 @@ it.effect(
       const { auth, fetch, services } = yield* keyedStanding;
       const owner = yield* Effect.promise(() => signUp(auth));
       const plain = yield* Effect.promise(() => signUp(auth));
+
       const workspaceId = yield* Effect.gen(function* () {
         const id = yield* openWorkspace(owner.userId);
         yield* joinWorkspace(id, plain.userId);
+
         return id;
       }).pipe(Effect.provide(services));
+
       const workspace = `workspace-${workspaceId}`;
       const value = "postgres://owner:s3cret@db.test/app";
+
       const callerAs = (cookie: string) =>
         Effect.gen(function* () {
           const token = yield* Effect.promise(() =>
@@ -2120,38 +2353,49 @@ it.effect(
               resource: RESOURCE,
             }),
           );
+
           const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
           const call = (name: string, args: Record<string, unknown>) =>
             Effect.promise(async () => {
               const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
               const { text } = answer.content[0];
+
               return { refused: answer.isError === true, text, read: JSON.parse(text) };
             });
+
           return { client, call };
         });
+
       const ring = Result.getOrThrow(parseKeyRing(AGENT_KEY_RING));
       const handed = openWorkspaceEnvironment(ring, workspaceId).pipe(Effect.provide(services));
 
       const asOwner = yield* callerAs(owner.cookie);
       const asPlain = yield* callerAs(plain.cookie);
+
       const set = yield* asOwner.call(MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE, {
         workspace,
         name: "DATABASE_URL",
         value,
       });
+
       const afterSet = yield* handed;
+
       const listed = yield* asPlain.call(MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES, {
         workspace,
       });
+
       const refused = yield* asPlain.call(MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE, {
         workspace,
         name: "DATABASE_URL",
         value: "postgres://plain@db.test/app",
       });
+
       const deleted = yield* asOwner.call(MEMBER_MCP_TOOL.DELETE_ENVIRONMENT_VARIABLE, {
         workspace,
         name: "DATABASE_URL",
       });
+
       const afterDelete = yield* handed;
       yield* Effect.promise(() => Promise.all([asOwner.client.close(), asPlain.client.close()]));
 
@@ -2165,6 +2409,7 @@ it.effect(
       assert.equal(refused.refused, true);
       assert.deepEqual(decodeVariableNames(deleted.read).variables, []);
       assert.deepEqual(afterDelete, {});
+
       for (const answered of [set, listed, refused, deleted]) {
         assert.ok(!answered.text.includes("s3cret"));
       }
@@ -2178,6 +2423,7 @@ it.effect(
       const { auth, fetch, services } = yield* standing;
       const owner = yield* Effect.promise(() => signUp(auth));
       const workspaceId = yield* openWorkspace(owner.userId).pipe(Effect.provide(services));
+
       const token = yield* Effect.promise(() =>
         mintedToken(auth, owner.cookie, {
           clientId: MCP_CLIENT.id,
@@ -2185,7 +2431,9 @@ it.effect(
           resource: RESOURCE,
         }),
       );
+
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
+
       const answer = decodeAnswer(
         yield* Effect.promise(() =>
           client.callTool({
@@ -2194,8 +2442,10 @@ it.effect(
           }),
         ),
       );
+
       yield* Effect.promise(() => client.close());
       const ring = Result.getOrThrow(parseKeyRing(AGENT_KEY_RING));
+
       const stored = yield* openWorkspaceEnvironment(ring, workspaceId).pipe(
         Effect.provide(services),
       );

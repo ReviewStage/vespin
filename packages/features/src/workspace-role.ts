@@ -24,6 +24,7 @@ export const WORKSPACE_ROLE_WORDS = {
 /** Whether the reader's role removes a member of `role`, as the service holds it. */
 function removesMember(reader: WorkspaceRole, role: WorkspaceRole): boolean {
   if (reader === WORKSPACE_ROLE.OWNER) return role !== WORKSPACE_ROLE.OWNER;
+
   return reader === WORKSPACE_ROLE.ADMIN && role === WORKSPACE_ROLE.MEMBER;
 }
 
@@ -52,6 +53,7 @@ export function memberActs(
 ): MemberActs {
   const owner = workspace.role === WORKSPACE_ROLE.OWNER && !self;
   const admin = member.role === WORKSPACE_ROLE.ADMIN;
+
   return {
     promote: owner && member.role === WORKSPACE_ROLE.MEMBER,
     demote: owner && admin,

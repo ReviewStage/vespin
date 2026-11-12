@@ -25,15 +25,18 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
 test("each piece is a press named for its kind and caption, or its kind alone without one, listed under the option, opening its own", () => {
   const opened: string[] = [];
+
   const pieces = [
     { id: "page", kind: OPTION_MEDIA_KIND.PAGE, caption: "Directions", thumb: null },
     { id: "shot", kind: OPTION_MEDIA_KIND.PICTURE, caption: undefined, thumb: null },
   ].map((piece) => ({ ...piece, onOpen: () => opened.push(piece.id) }));
+
   const drawn = mount(createElement(OptionMedia, { label: "A card", pieces }));
   expect(drawn.querySelector("ul")?.getAttribute("aria-label")).toBe("A card media");
   const presses = [...drawn.querySelectorAll("button")];

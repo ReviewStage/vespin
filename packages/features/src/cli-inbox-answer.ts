@@ -43,6 +43,7 @@ export type CliAnswer =
 /** The label a name stands for among those offered, whatever its case; the name itself where none matches. */
 function labelOf(offered: readonly string[], name: string): string {
   const wanted = name.trim().toLowerCase();
+
   return offered.find((label) => label.toLowerCase() === wanted) ?? name;
 }
 
@@ -52,19 +53,24 @@ function formValues(
   labels: readonly string[],
 ): readonly InboxFormValue[] | undefined {
   let read: unknown;
+
   try {
     read = JSON.parse(text);
   } catch {
     return undefined;
   }
+
   if (typeof read !== "object" || read === null || Array.isArray(read)) return undefined;
   const values: InboxFormValue[] = [];
+
   for (const [name, value] of Object.entries(read)) {
     if (typeof value !== "string" && typeof value !== "number" && typeof value !== "boolean") {
       return undefined;
     }
+
     values.push({ label: labelOf(labels, name), value });
   }
+
   return values;
 }
 
@@ -78,6 +84,7 @@ function answerOf(ask: InboxAsk, id: string, given: CliAnswerInput): CliAnswer {
       const unknown = choices.find((choice) => !labels.includes(choice));
       // None of these is a pick of no option, which a choice whose options carry media offers; an option labeled so is that option.
       const [only, ...more] = given.words;
+
       if (
         unknown !== undefined &&
         more.length === 0 &&
@@ -88,37 +95,48 @@ function answerOf(ask: InboxAsk, id: string, given: CliAnswerInput): CliAnswer {
           answers: { ask: id, reply: INBOX_REPLY.CHOSE, choices: [] },
         };
       }
+
       if (unknown !== undefined) {
         return { refusal: `${unknown} is not an option. The options: ${labels.join(", ")}.` };
       }
+
       return { text: given.input ?? "", answers: { ask: id, reply: INBOX_REPLY.CHOSE, choices } };
     }
+
     case INBOX_ASK.DO: {
       const [word, ...rest] = given.words;
       const steps = ask.steps.map((_step, index) => index);
+
       if (word === CLI_DO_ANSWER.DONE && rest.length === 0) {
         return { text: given.input ?? "", answers: { ask: id, reply: INBOX_REPLY.DONE, steps } };
       }
+
       if (word === CLI_DO_ANSWER.NOT_DONE && rest.length === 0) {
         return {
           text: given.input ?? "",
           answers: { ask: id, reply: INBOX_REPLY.NOT_DONE, steps: [] },
         };
       }
+
       return { refusal: `Answer a to-do with ${CLI_DO_ANSWER.DONE} or ${CLI_DO_ANSWER.NOT_DONE}.` };
     }
+
     case INBOX_ASK.ANSWER: {
       if (ask.fields === undefined) {
         const text = given.input ?? given.words.join(" ");
+
         return { text, answers: { ask: id, reply: INBOX_REPLY.ANSWERED } };
       }
+
       const labels = ask.fields.map((field) => field.label);
       const values = given.input === undefined ? undefined : formValues(given.input, labels);
+
       if (values === undefined) {
         return {
           refusal: `Answer the form with -F and a JSON object of values by field: ${labels.join(", ")}.`,
         };
       }
+
       return { text: "", answers: { ask: id, reply: INBOX_REPLY.SUBMITTED, values } };
     }
   }
@@ -132,11 +150,15 @@ function answerOf(ask: InboxAsk, id: string, given: CliAnswerInput): CliAnswer {
 export function cliInboxAnswer(asking: InboxAsking | undefined, given: CliAnswerInput): CliAnswer {
   if (asking === undefined) return { refusal: "The thread holds no open ask." };
   const ask = knownAsk(asking.ask);
+
   if (ask === undefined) {
     return { refusal: "The ask is of a kind this version cannot answer. Update vespin." };
   }
+
   const made = answerOf(ask, asking.message.id, given);
+
   if ("refusal" in made) return made;
   const refusal = inboxAnswersRefusal(ask, made.answers, made.text.trim());
+
   return refusal === undefined ? { text: made.text.trim(), answers: made.answers } : { refusal };
 }

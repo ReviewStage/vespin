@@ -165,6 +165,7 @@ function MarkChip({ mark, words }: { mark: React.JSX.Element; words: string }): 
 /** One open pull request as its compact chip. */
 function PullRequest({ number }: { number: number }): React.JSX.Element {
   const Glyph = PULL_REQUEST_GLYPH[PULL_REQUEST_STATE.OPEN];
+
   return (
     <Chip look={CHIP_LOOK.PILL} size={CHIP_SIZE.COMPACT} onClick={ignore}>
       <Glyph />
@@ -280,6 +281,7 @@ function CatalogTaskRow({
 function RelatedTasks(): React.JSX.Element {
   const [open, setOpen] = useState(true);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+
   return (
     <TaskRows label="Related tasks" selection={{ selected, onChange: setSelected }}>
       <CatalogTaskRow
@@ -307,6 +309,7 @@ function RelatedTasksRun(): React.JSX.Element {
   const scroller = useRef<HTMLDivElement | null>(null);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
   const fit = taskRowFit(RUN_TASKS.map((task) => ({ key: task.key, relation: task.kind?.words })));
+
   return (
     <ScrollArea ref={scroller} size={SCROLL_SIZE.CONTENT}>
       <VirtualTaskRows
@@ -343,6 +346,7 @@ function RelatedTasksRun(): React.JSX.Element {
       >
         {(index, place) => {
           const task = RUN_TASKS[index];
+
           return task === undefined ? null : <CatalogTaskRow task={task} place={place} />;
         }}
       </VirtualTaskRows>
@@ -383,6 +387,7 @@ function DockRow({ task, remove }: { task: CatalogTask; remove: ReactNode }): Re
 /** A composer's dock of the tasks a new task will be related to, each row bare, its first cell at its inset and its × at its end. */
 function ComposerDock(): React.JSX.Element {
   const [docked, setDocked] = useState<readonly CatalogTask[]>([PARENT, RELATED]);
+
   return (
     <TaskRows label="Related tasks" cells={DOCK_CELLS} edges={TASK_ROW_EDGES.BARE}>
       {docked.map((task) => (

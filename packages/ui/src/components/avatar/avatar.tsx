@@ -158,6 +158,7 @@ interface Look {
 function typeClass({ size, shape }: Look): string {
   if (shape !== AVATAR_SHAPE.TILE) return SIZE_CLASS[size];
   const box = BOX_CLASS[size];
+
   return size === AVATAR_SIZE.CARD
     ? `${box} text-(length:--text-dialog)`
     : `${box} text-(length:--text-caption)`;
@@ -172,18 +173,25 @@ function typeClass({ size, shape }: Look): string {
  */
 function groundClass({ glyph, tiled, branded, blank, hue }: Look): string {
   if (hue !== undefined) return `${HUE_CLASS[hue] ?? ""} text-on-identity`;
+
   if (glyph && branded) return "bg-avatar-tile text-avatar-ink";
+
   if (glyph && tiled)
     return "bg-ground bg-[linear-gradient(var(--color-secondary),var(--color-secondary))] text-inherit";
+
   if (glyph) return "bg-transparent text-inherit";
+
   if (blank) return "bg-transparent text-muted-foreground";
+
   return "bg-secondary text-muted-foreground";
 }
 
 /** A disc's edge: a hairline, so a picture keeps its edge on a ground of its own color; a tile's, only where it is `edged`; none round an app's glyph. */
 function edgeClass({ shape, glyph, edged }: Look): string {
   if (glyph) return "after:content-none";
+
   if (shape !== AVATAR_SHAPE.TILE) return "after:shadow-avatar-edge";
+
   return edged ? "after:shadow-avatar-tile-edge" : "after:content-none";
 }
 
@@ -224,8 +232,10 @@ export const UNASSIGNED_WORDS = "Unassigned";
 /** What stands on the disc while no picture is shown: the caller's glyph, the letter, or the figure where there is no letter. */
 function standIn(glyph: ReactNode, letter: string): ReactNode {
   if (glyph !== undefined) return <span className={GLYPH_BOX}>{glyph}</span>;
+
   // Note that the letter is always a person's or a workspace's name, so a screen recording masks it whatever stands round the disc.
   if (letter !== "") return <ReplayMask>{letter}</ReplayMask>;
+
   return (
     <span className={GLYPH_BOX}>
       <UserIcon />
@@ -263,18 +273,23 @@ function AvatarDisc({
   const url = picture === PICTURE.FAILED ? undefined : src;
   const shown = url !== undefined && picture === PICTURE.LOADED;
   const letter = identityLetter(name);
+
   // A blank name has nothing to say to a reader, so its figure is hidden as a decorative disc is.
   const named =
     decorative || letter === "" ? { "aria-hidden": true } : { role: "img", "aria-label": name };
+
   const lettered = !shown && !blank && glyph === undefined && letter !== "";
+
   // Note that a server-rendered picture is not hidden until the page takes it over, because a page read without scripts must still show it.
   const client = useSyncExternalStore(
     noChange,
     () => true,
     () => false,
   );
+
   const hue = lettered ? identityHue(id) : undefined;
   const look = { size, shape, glyph: glyph !== undefined, tiled, branded, edged, blank, hue };
+
   return (
     <ShadcnAvatar
       className={discClass(look)}

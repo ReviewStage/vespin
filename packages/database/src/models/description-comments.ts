@@ -463,13 +463,16 @@ function entryOf(row: EntryRow, files: readonly FileRow[]): DescriptionCommentEn
     row.actor === DESCRIPTION_COMMENT_ACTOR.MEMBER && row.userId !== null && row.userName !== null
       ? { by: { userId: row.userId, name: row.userName } }
       : undefined;
+
   const agent = row.agentId === null ? undefined : { agentId: row.agentId };
+
   const asked: DescriptionCommentAsked | undefined =
     row.askedActor === DESCRIPTION_COMMENT_ACTOR.APP
       ? { actor: DESCRIPTION_COMMENT_ACTOR.APP }
       : row.askedActor === DESCRIPTION_COMMENT_ACTOR.AGENT && row.askedAgentId !== null
         ? { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId: row.askedAgentId }
         : undefined;
+
   return {
     id: row.id,
     kind: row.kind,
@@ -490,6 +493,7 @@ function filesOf(
   const carried = files
     .filter((file) => file.descriptionCommentId === entryId)
     .map((file) => ({ attachmentId: file.id, name: file.name, mediaType: file.contentType }));
+
   return carried.length === 0 ? undefined : { files: carried };
 }
 
@@ -503,11 +507,14 @@ function threadOf(
     row.anchorFrom === null || row.anchorTo === null
       ? undefined
       : { anchor: { from: row.anchorFrom, to: row.anchorTo } };
+
   const element = row.pageElement === null ? undefined : { element: row.pageElement };
+
   const page =
     row.pageId === null || row.pageVersion === null
       ? undefined
       : { page: { id: row.pageId, version: row.pageVersion, ...element } };
+
   return {
     id: row.id,
     scope: row.scope,
@@ -532,13 +539,16 @@ function threadsOf(
 ): TaskStoreEffect<DescriptionCommentThread[]> {
   return Effect.gen(function* () {
     const rows = yield* findThreads({ taskId, ...of });
+
     if (rows.length === 0) return [];
     const entries = yield* findEntries({ taskId, threadIds: rows.map((row) => row.id) });
     const comments = entries.filter((entry) => entry.kind === DESCRIPTION_COMMENT_ENTRY.COMMENT);
+
     const files =
       comments.length === 0
         ? []
         : yield* findFiles({ taskId, entryIds: comments.map((entry) => entry.id) });
+
     return rows.map((row) => threadOf(row, entries, files));
   });
 }
@@ -570,9 +580,11 @@ function fileRowsOf(
 ): Effect.Effect<(typeof attachment.$inferInsert)[]> {
   return Effect.forEach(files, (file, index) => {
     const bytes = Base64.decode(file.data);
+
     // Note that the wire schema held the data to padded base64, so a decode that fails is a broken contract, not a refusal.
     if (Result.isFailure(bytes))
       return Effect.die(new Error("description comment file is not base64"));
+
     return Effect.succeed({
       organizationId: place.organizationId,
       userId,
@@ -621,7 +633,9 @@ function writeEntry(
         createdAt: now,
       }),
     );
+
     if (files.length > 0) yield* Database.use((db) => db.insert(attachment).values(files));
+
     return txid;
   });
 }
@@ -644,11 +658,14 @@ function filesEdited(
   return Effect.gen(function* () {
     if (edit.keep === undefined && edit.attachments === undefined) return undefined;
     const carried = yield* findCarriedFiles({ taskId: place.taskId, entryId });
+
     const kept =
       edit.keep === undefined
         ? carried
         : [...new Set(edit.keep)].flatMap((id) => carried.filter((file) => file.id === id));
+
     const named = new Set(kept.map((file) => file.id));
+
     const added = yield* fileRowsOf(
       place,
       entryId,
@@ -657,23 +674,30 @@ function filesEdited(
       now,
       kept.length,
     );
+
     const bytes = [...kept, ...added].reduce((sum, file) => sum + file.byteCount, 0);
+
     if (
       kept.length + added.length > AGENT_BOUNDS.MAX_ATTACHMENTS ||
       bytes > AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES
     ) {
       return DESCRIPTION_COMMENT_REFUSAL.TOO_MANY_FILES;
     }
+
     const gone = carried.filter((file) => !named.has(file.id)).map((file) => file.id);
+
     if (gone.length > 0) {
       yield* Database.use((db) => db.delete(attachment).where(inArray(attachment.id, gone)));
     }
+
     yield* Effect.forEach(kept, (file, position) =>
       Database.use((db) =>
         db.update(attachment).set({ position }).where(eq(attachment.id, file.id)),
       ),
     );
+
     if (added.length > 0) yield* Database.use((db) => db.insert(attachment).values(added));
+
     return undefined;
   });
 }
@@ -734,7 +758,9 @@ function refused(refusal: DescriptionCommentRefusal): DescriptionCommentOutcome 
 /** Whether an entry is the writer's own, which only they edit or delete. */
 function writtenBy(row: EntryRow, writer: DescriptionCommentWriterRef): boolean {
   if (row.actor !== writer.actor) return false;
+
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT) return row.agentId === writer.agentId;
+
   return row.userId === writer.userId;
 }
 
@@ -745,6 +771,7 @@ function writtenBy(row: EntryRow, writer: DescriptionCommentWriterRef): boolean 
  */
 function mayDeleteThread(starter: EntryRow, writer: DescriptionCommentWriterRef): boolean {
   if (writtenBy(starter, writer)) return true;
+
   return (
     starter.actor !== DESCRIPTION_COMMENT_ACTOR.MEMBER &&
     writer.actor === DESCRIPTION_COMMENT_ACTOR.MEMBER
@@ -759,7 +786,9 @@ export function readDescriptionCommentThreads(
 ): TaskStoreEffect<Option.Option<readonly DescriptionCommentThread[]>> {
   return Effect.gen(function* () {
     const reached = yield* findReachableTask({ userId, taskId });
+
     if (Option.isNone(reached)) return Option.none();
+
     return Option.some(yield* threadsOf(taskId, { pageId: pageId ?? null }));
   });
 }
@@ -772,8 +801,10 @@ export function readDescriptionCommentThread(
 ): TaskStoreEffect<Option.Option<DescriptionCommentThread>> {
   return Effect.gen(function* () {
     const reached = yield* findReachableTask({ userId, taskId });
+
     if (Option.isNone(reached)) return Option.none();
     const [thread] = yield* threadsOf(taskId, { ids: [threadId] });
+
     return Option.fromNullishOr(thread);
   });
 }
@@ -810,7 +841,9 @@ function placedOnDescription(
   const anchor = spanWithin(request.anchor, request.text.length)
     ? textChange(request.text, text)(request.anchor)
     : undefined;
+
   if (anchor === undefined) return refused(DESCRIPTION_COMMENT_REFUSAL.NO_WORDS);
+
   return {
     scope: request.scope,
     quote: request.quote,
@@ -837,9 +870,11 @@ function placedOnPage(
       onSome: ({ title }) => {
         const on = { pageId: request.page.id, pageVersion: request.page.version };
         const { element } = request;
+
         if (element === undefined) {
           return { ...on, scope: DESCRIPTION_COMMENT_SCOPE.PAGE, quote: title, section: "" };
         }
+
         return {
           ...on,
           scope:
@@ -876,31 +911,41 @@ export function startDescriptionCommentThread(
   return inTransaction(
     Effect.gen(function* () {
       const locked = yield* lockOpenDescriptionText({ userId: writer.userId, taskId });
+
       if (Option.isNone(locked)) return { status: DESCRIPTION_COMMENT_OUTCOME.NO_TASK } as const;
       const taken = yield* findKeyedThread({ taskId, clientKey: request.clientKey });
+
       if (Option.isSome(taken)) return yield* answeredAgain(taskId, taken.value.threadId);
+
       if (request.id !== undefined) {
         const held = yield* findThreadTask({ threadId: request.id });
+
         if (Option.isSome(held)) {
           return held.value.taskId === taskId
             ? yield* answeredAgain(taskId, request.id)
             : ({ status: DESCRIPTION_COMMENT_OUTCOME.ID_TAKEN } as const);
         }
       }
+
       const onPage = "page" in request;
+
       const { count } = yield* countThreads({
         taskId,
         pageId: onPage ? request.page.id : null,
       }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+
       if (count >= DESCRIPTION_COMMENT_BOUNDS.MAX_THREADS_PER_DESCRIPTION) {
         return refused(DESCRIPTION_COMMENT_REFUSAL.TOO_MANY);
       }
+
       const placed = onPage
         ? yield* placedOnPage(taskId, request)
         : placedOnDescription(locked.value.text, request);
+
       if ("status" in placed) return placed;
       const id = request.id ?? randomUUID();
       const now = yield* DateTime.nowAsDate;
+
       const made = yield* Database.use((db) =>
         db
           .insert(descriptionCommentThread)
@@ -916,16 +961,20 @@ export function startDescriptionCommentThread(
           .onConflictDoNothing({ target: descriptionCommentThread.id })
           .returning({ id: descriptionCommentThread.id }),
       );
+
       // Note that a start of this task waits on the plan's lock, so an id taken meanwhile is another task's.
       if (made.length === 0) return { status: DESCRIPTION_COMMENT_OUTCOME.ID_TAKEN } as const;
+
       const first = {
         kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
         words: request.words,
         clientKey: request.clientKey,
         ...(request.attachments === undefined ? undefined : { files: request.attachments }),
       };
+
       const place = { taskId, organizationId: locked.value.organizationId, threadId: id };
       const txid = yield* writeEntry(place, writer, first, now);
+
       return yield* answered(taskId, id, txid);
     }),
   );
@@ -954,26 +1003,34 @@ function replied(
 ): TaskStoreEffect<DescriptionCommentOutcome> {
   return Effect.gen(function* () {
     const { taskId } = place;
+
     if (reply.clientKey !== undefined) {
       const taken = yield* findKeyedThread({ taskId, clientKey: reply.clientKey });
+
       if (Option.isSome(taken) && taken.value.threadId !== thread.id) {
         return refused(DESCRIPTION_COMMENT_REFUSAL.KEY_TAKEN);
       }
+
       if (Option.isSome(taken)) return yield* answeredAgain(taskId, thread.id);
     }
+
     const comments = thread.entries.filter(
       (entry) => entry.kind === DESCRIPTION_COMMENT_ENTRY.COMMENT,
     );
+
     if (comments.length >= DESCRIPTION_COMMENT_BOUNDS.MAX_ENTRIES_PER_THREAD) {
       return refused(DESCRIPTION_COMMENT_REFUSAL.TOO_MANY);
     }
+
     const entry = {
       kind: DESCRIPTION_COMMENT_ENTRY.COMMENT,
       words: reply.words,
       ...(reply.clientKey === undefined ? undefined : { clientKey: reply.clientKey }),
       ...(reply.attachments === undefined ? undefined : { files: reply.attachments }),
     };
+
     const txid = yield* writeEntry(place, writer, entry, now);
+
     return yield* answered(taskId, thread.id, txid);
   });
 }
@@ -990,23 +1047,29 @@ function askedOf(
     const { taskId } = place;
     // Note that a key answers as a retry only for the same ask of the same thread, so no other entry's key hands the thread over unrecorded.
     const taken = yield* findKeyedEntry({ taskId, clientKey: ask.clientKey });
+
     if (Option.isSome(taken)) {
       const { threadId, kind, askedActor, askedAgentId } = taken.value;
+
       const same =
         threadId === thread.id &&
         kind === DESCRIPTION_COMMENT_ENTRY.ASKED &&
         askedActor === ask.to.actor &&
         askedAgentId === (ask.to.agentId ?? null);
+
       return same
         ? yield* answered(taskId, thread.id)
         : refused(DESCRIPTION_COMMENT_REFUSAL.KEY_TAKEN);
     }
+
     const entry = {
       kind: DESCRIPTION_COMMENT_ENTRY.ASKED,
       asked: ask.to,
       clientKey: ask.clientKey,
     };
+
     const txid = yield* writeEntry(place, writer, entry, now);
+
     return yield* answered(taskId, thread.id, txid);
   });
 }
@@ -1038,19 +1101,24 @@ function settled(
 ): TaskStoreEffect<DescriptionCommentOutcome> {
   return Effect.gen(function* () {
     const { taskId } = place;
+
     if (thread.status === status) return yield* answered(taskId, thread.id);
     const { txid } = yield* movedOn(thread.id, now, { status });
+
     // Note that past the bound the change is made and goes unsaid, because a resolve must never be refused, and its lines must not grow a thread without end.
     const lines = thread.entries.filter(
       (entry) => entry.kind !== DESCRIPTION_COMMENT_ENTRY.COMMENT,
     );
+
     if (lines.length < DESCRIPTION_COMMENT_BOUNDS.MAX_ENTRIES_PER_THREAD) {
       const kind =
         status === DESCRIPTION_COMMENT_STATUS.RESOLVED
           ? DESCRIPTION_COMMENT_ENTRY.RESOLVED
           : DESCRIPTION_COMMENT_ENTRY.REOPENED;
+
       yield* writeEntry(place, writer, { kind }, now);
     }
+
     return yield* answered(taskId, thread.id, txid);
   });
 }
@@ -1072,13 +1140,16 @@ export function actOnDescriptionCommentThread(
   return inTransaction(
     Effect.gen(function* () {
       const locked = yield* lockOpenDescriptionText({ userId: writer.userId, taskId });
+
       if (Option.isNone(locked)) return { status: DESCRIPTION_COMMENT_OUTCOME.NO_TASK } as const;
       const [row] = yield* findThreads({ taskId, ids: [threadId] });
+
       if (row === undefined) return { status: DESCRIPTION_COMMENT_OUTCOME.NO_THREAD } as const;
       const entries = yield* findEntries({ taskId, threadIds: [threadId] });
       const thread = threadOf(row, entries);
       const place = { taskId, organizationId: locked.value.organizationId, threadId };
       const now = yield* DateTime.nowAsDate;
+
       switch (request.action) {
         case DESCRIPTION_COMMENT_ACTION.REPLY:
           return yield* replied(place, thread, writer, request, now);
@@ -1088,22 +1159,29 @@ export function actOnDescriptionCommentThread(
           return yield* settled(place, thread, writer, DESCRIPTION_COMMENT_STATUS.OPEN, now);
         case DESCRIPTION_COMMENT_ACTION.DELETE_THREAD: {
           const starter = entries.find((each) => each.kind === DESCRIPTION_COMMENT_ENTRY.COMMENT);
+
           if (starter !== undefined && !mayDeleteThread(starter, writer)) {
             return refused(DESCRIPTION_COMMENT_REFUSAL.NOT_YOURS);
           }
+
           return yield* deletedThread(threadId);
         }
+
         case DESCRIPTION_COMMENT_ACTION.ASK:
           return yield* askedOf(place, thread, writer, request, now);
         case DESCRIPTION_COMMENT_ACTION.EDIT:
         case DESCRIPTION_COMMENT_ACTION.DELETE: {
           const entry = entryIn(thread, entries, request.entry);
+
           if (entry === undefined || entry.kind !== DESCRIPTION_COMMENT_ENTRY.COMMENT) {
             return refused(DESCRIPTION_COMMENT_REFUSAL.NO_ENTRY);
           }
+
           if (!writtenBy(entry, writer)) return refused(DESCRIPTION_COMMENT_REFUSAL.NOT_YOURS);
+
           if (request.action === DESCRIPTION_COMMENT_ACTION.EDIT) {
             const tooMany = yield* filesEdited(place, entry.id, writer.userId, request, now);
+
             if (tooMany !== undefined) return refused(tooMany);
             yield* Database.use((db) =>
               db
@@ -1112,14 +1190,18 @@ export function actOnDescriptionCommentThread(
                 .where(eq(descriptionComment.id, entry.id)),
             );
             const { txid } = yield* movedOn(threadId, now);
+
             return yield* answered(taskId, threadId, txid);
           }
+
           const first = entries.find((each) => each.kind === DESCRIPTION_COMMENT_ENTRY.COMMENT);
+
           if (first?.id === entry.id) return yield* deletedThread(threadId);
           yield* Database.use((db) =>
             db.delete(descriptionComment).where(eq(descriptionComment.id, entry.id)),
           );
           const { txid } = yield* movedOn(threadId, now);
+
           return yield* answered(taskId, threadId, txid);
         }
       }
@@ -1139,6 +1221,7 @@ export function withdrawDescriptionCommentAsk(
   return inTransaction(
     Effect.gen(function* () {
       const taken = yield* findKeyedThread({ taskId, clientKey });
+
       if (Option.isNone(taken)) return;
       yield* Database.use((db) =>
         db
@@ -1199,17 +1282,21 @@ export function moveDescriptionCommentAnchors(
 ): TaskStoreEffect<void> {
   return Effect.gen(function* () {
     const rows = yield* findThreads({ taskId, pageId: null });
+
     if (rows.length === 0) return;
     const change = textChange(before, after);
     const fromReport = reported === undefined ? undefined : textChange(reported.text, after);
     const carried = new Set(reported?.anchors.carried ?? []);
     const now = yield* DateTime.nowAsDate;
+
     for (const row of rows) {
       const was: CommentSpan | undefined =
         row.anchorFrom === null || row.anchorTo === null
           ? undefined
           : { from: row.anchorFrom, to: row.anchorTo };
+
       let moved: CommentSpan | undefined;
+
       if (reported !== undefined && fromReport !== undefined && carried.has(row.id)) {
         const report = reported.anchors.anchors.find((anchor) => anchor.thread === row.id);
         moved =
@@ -1220,6 +1307,7 @@ export function moveDescriptionCommentAnchors(
         moved = change(was);
       } else continue;
       const section = moved === undefined ? row.section : sectionAt(after, moved.from);
+
       if (moved?.from === was?.from && moved?.to === was?.to && section === row.section) continue;
       yield* movedOn(row.id, now, {
         anchorFrom: moved?.from ?? null,

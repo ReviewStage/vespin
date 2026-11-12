@@ -512,6 +512,7 @@ export function firewallSessionOf(place: SandboxRunning, userId: string): Firewa
 function heldAtFirewall(credentials: readonly RunnerCredential[]): DeliveredCredentials {
   const env: Record<string, string> = {};
   const swaps = new Map<LaunchSwapKind, FirewallEntry>();
+
   for (const credential of credentials) {
     const placeholder = Redacted.value(newPlaceholder());
     env[credential.variable] = placeholder;
@@ -525,6 +526,7 @@ function heldAtFirewall(credentials: readonly RunnerCredential[]): DeliveredCred
       }),
     );
   }
+
   return { env, swaps };
 }
 
@@ -547,6 +549,7 @@ function storedRecord(
   if (record.kind === RUNNER_RECORD.NONE) return undefined;
   const mark = record.kind === RUNNER_RECORD.LAUNCHED ? record.mark : record.runner.mark;
   const runner = record.kind === RUNNER_RECORD.RUNNING ? record.runner.handle : undefined;
+
   return {
     agentId,
     sandboxName: name,
@@ -569,6 +572,7 @@ function recordedIn(
   record: RunnerRecord,
 ) {
   const stored = storedRecord(place.name, place.agentId, record);
+
   return stored === undefined
     ? forgetAgentRunnerRecord(place.userId, place.session, place.name)
     : writeAgentRunnerRecord(place.userId, place.session, stored);
@@ -581,6 +585,7 @@ function runnerInSession(
   record: AgentRunnerRecord,
 ): RecordedRunner | undefined {
   const { sandboxSessionId, commandId } = record;
+
   if (
     sandboxSessionId === null ||
     commandId === null ||
@@ -589,6 +594,7 @@ function runnerInSession(
   ) {
     return undefined;
   }
+
   return {
     handle: { ...sandboxPlace(session, sandbox.name, sandboxSessionId), command: commandId },
     mark: markOf(record),
@@ -611,11 +617,14 @@ function foundOf(
   const own = Option.getOrUndefined(
     Option.filter(record, (each) => each.sandboxName === sandbox.name),
   );
+
   const running =
     sandbox.status === SANDBOX_STATUS.RUNNING && sandbox.running !== undefined
       ? sandboxPlace(session, sandbox.name, sandbox.running)
       : undefined;
+
   const kept: KeptPlace = { userId, sandbox };
+
   return {
     machine: AGENT_MACHINE.VERCEL,
     session,
@@ -653,9 +662,11 @@ const diedAtStart = (
     const exit = yield* api
       .commandExit(place, commandId)
       .pipe(Effect.orElseSucceed(() => undefined));
+
     const stderr = yield* api
       .commandStderrTail(place, commandId, secrets)
       .pipe(Effect.orElseSucceed(() => undefined));
+
     yield* Effect.logWarning(
       `A runner's launch took no stdin: exit ${exit === null || exit === undefined ? "unknown" : String(exit)}, stderr: ${stderr ?? "none"}`,
     );
@@ -694,6 +705,7 @@ export function repositoryFirewallOver(
   carries?: string,
 ): RepositoryFirewall {
   const firewall = sandboxFirewall(api);
+
   return {
     write: (sources) =>
       Effect.provideContext(
@@ -745,13 +757,16 @@ function readFileCommand(path: string, maxBytes: number) {
  */
 export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
   const firewall = sandboxFirewall(api);
+
   /** The run of the session's sandbox; unavailable where it is not up. */
   const runningSession = (sessionId: string) =>
     Effect.gen(function* () {
       const up = yield* agentSandboxOf(api, sessionId);
+
       if (up === undefined || !UP_STATUSES.has(up.status) || up.running === undefined) {
         return yield* new SandboxUnavailable({});
       }
+
       return { name: up.name, running: up.running } satisfies SandboxRunning;
     });
 
@@ -782,6 +797,7 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
     discard: (found) =>
       Effect.gen(function* () {
         const legacy = yield* legacySandboxOf(api, found.session);
+
         if (legacy !== undefined && legacy.name !== found.name) yield* api.delete(legacy.name);
         yield* api.delete(found.name);
         yield* recordedSandboxDiscarded(found.name);
@@ -863,9 +879,11 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
   ) =>
     Effect.gen(function* () {
       if (from === CREATED_FROM.IMAGE) return yield* cloneAgentRepository(agent, sandbox, read);
+
       if (from === CREATED_FROM.WORKSPACE) {
         return yield* claimAgentCheckout(agent, sandbox, read, workspaceFolderOf(read.fullName));
       }
+
       const holds = yield* runInSandbox(
         sandbox,
         { command: `test -d ${CHECKOUT_GIT_PATH}` },
@@ -876,6 +894,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         ),
         Effect.withSpan("web/checkoutHeld"),
       );
+
       if (holds.exitCode !== 0) yield* cloneAgentRepository(agent, sandbox, read);
     });
 
@@ -902,14 +921,17 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         "A cloud setup's run record",
         Effect.gen(function* () {
           const exit = yield* api.commandExit(opened, commandId, SETUP_RECORD_WAIT);
+
           if (typeof exit !== "number") {
             return yield* Effect.logDebug("A cloud setup outlived its record's wait");
           }
+
           const stderr = yield* api.commandStderrTail(
             opened,
             commandId,
             Object.values(setup.environment),
           );
+
           yield* Effect.forEach(setupExits(stderr ?? ""), ({ script, exitCode }) =>
             scriptRanIn(agent, script, exitCode, ranAt).pipe(Effect.provide(context)),
           );
@@ -944,13 +966,16 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       if (setup === undefined) return;
       const ranAt = yield* DateTime.nowAsDate;
       const encoder = new TextEncoder();
+
       const files = [
         { path: SETUP_FILE.INSTALL, script: setup.install },
         { path: SETUP_FILE.REPOSITORY, script: setup.repository },
       ].flatMap(({ path, script }) =>
         script === undefined ? [] : [{ path, contents: encoder.encode(script), mode: 0o644 }],
       );
+
       yield* api.writeFiles(opened, files);
+
       // Note that the scripts run as the sandbox's default user, as the clone's commands do.
       const commandId = yield* api.start(opened, {
         command: "bash",
@@ -959,6 +984,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         env: setup.environment,
         sudo: false,
       });
+
       yield* recordedSetup(context, later, agent, opened, commandId, ranAt, setup);
     }).pipe(
       Effect.catch((failure) =>
@@ -990,6 +1016,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       const sandbox = checkoutOver(context, opened, userId, { github }, github.fullName);
       yield* writeAgentCredential(sandbox, github);
       yield* checkedOutAs(checkout.agent, sandbox, checkout.read, from);
+
       // A source's snapshot ran the setup on its own disk already, which this one is a copy of.
       if (from !== CREATED_FROM.SOURCE) {
         yield* setUp(context, later, checkout.agent, opened, yield* checkout.setup);
@@ -1020,6 +1047,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       // Note that the create's own setup runs on the edge's runner, so what waits past the answer is handed to it from here.
       const later = yield* Effect.serviceOption(AfterResponse);
       let refused: CheckoutRefused | undefined;
+
       const { sandbox, created } = yield* openAgentSandbox(
         {
           sessionId,
@@ -1046,7 +1074,9 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         Effect.provideService(Sandbox, api),
         Effect.mapError((failure) => refused ?? failure),
       );
+
       yield* recordedSandboxOpen(agent.id, agentSandboxName(sessionId), created);
+
       return { ...runningOf(sandbox), created, from: attempt.from };
     });
 
@@ -1058,8 +1088,10 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
   const sourceSnapshotOf = (agent: Agent) =>
     Effect.gen(function* () {
       const source = agent.startedFrom?.sandbox;
+
       if (source === undefined) return undefined;
       const snapshotId = (yield* api.get(source))?.snapshotId;
+
       return snapshotId === undefined ? undefined : { sandbox: source, snapshotId };
     }).pipe(
       Effect.catch((failure) =>
@@ -1084,6 +1116,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     Effect.gen(function* () {
       for (const attempt of attempts) {
         const opened = yield* Effect.result(gotOn(agent, sessionId, attempt, checkout));
+
         // Note that a sandbox standing under the name failed after its create, in its setup, so the
         // next attempt would resume it with nothing checked out; only a create refused is passed by.
         const gone =
@@ -1094,11 +1127,13 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
             Effect.map((standing) => standing === undefined),
             Effect.orElseSucceed(() => false),
           ));
+
         if (!gone) return opened;
         yield* Effect.logWarning(
           `An agent's sandbox was not created from its ${attempt.from}${attempt.drive === undefined ? "" : " with a forked drive"}, which was gone`,
         );
       }
+
       // The image alone is always the last attempt, and is never passed by.
       return yield* Effect.die(new Error("an agent's sandbox was opened from nothing"));
     });
@@ -1124,18 +1159,17 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     setup: Effect.Effect<SandboxSetup | undefined>,
   ) =>
     Effect.gen(function* () {
-      const [read, source] = yield* Effect.all(
-        [
-          repositoryRead,
-          sourceSnapshotOf(agent),
-        ],
-        { concurrency: "unbounded" },
-      );
+      const [read, source] = yield* Effect.all([repositoryRead, sourceSnapshotOf(agent)], {
+        concurrency: "unbounded",
+      });
+
       const checkout =
         hasRepository(agent) && read !== undefined ? { agent, read, setup } : undefined;
+
       // A drive the sandboxes could not be asked about, or one a fill holds, is passed by.
       const drive =
         checkout === undefined ? undefined : workspaceDriveName(checkout.read.workspaceId);
+
       const driveReady =
         drive !== undefined &&
         Option.exists(
@@ -1146,6 +1180,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           ),
           (each) => each.state === DRIVE_STATE.READY,
         );
+
       const fromSource = (drive: SandboxDrive | undefined): CreateAttempt[] =>
         source === undefined
           ? []
@@ -1156,6 +1191,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
                 drive,
               },
             ];
+
       const attempts: readonly CreateAttempt[] = [
         // A source of drives hands its checkout on its drive; one from before them, on its snapshot alone.
         ...fromSource(
@@ -1175,8 +1211,11 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
             ]),
         FROM_IMAGE,
       ];
+
       const opened = yield* openedFromFirst(agent, sessionId, attempts, checkout);
+
       if (Result.isFailure(opened)) return yield* Effect.fail(opened.failure);
+
       return opened.success;
     });
 
@@ -1201,10 +1240,12 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         command: "git",
         args: ["config", "--file", CHECKOUT_CONFIG_PATH, "--get", "user.email"],
       });
+
       if (finished.exitCode === 0) return;
       const holds = yield* api.run(place, { command: "test", args: ["-d", CHECKOUT_GIT_PATH] });
       const read = yield* agentRepositoryRead(target, agent);
       const sandbox = yield* checkoutIn(place, agent.userId);
+
       // The commit identity is read on the one token minted while the clone runs on it.
       const [, plan] = yield* Effect.all(
         [
@@ -1219,6 +1260,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         ],
         { concurrency: "unbounded" },
       );
+
       yield* finishCheckoutWith(sandbox, plan);
       yield* Effect.logWarning(
         holds.exitCode === 0
@@ -1245,6 +1287,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       Effect.gen(function* () {
         yield* recordedSandboxBooting(ask.agent.id, agentSandboxName(ask.session));
         const agent = ask.agent;
+
         const identifying = yield* Effect.forkChild(
           Effect.exit(
             hasRepository(agent)
@@ -1256,6 +1299,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
               : Effect.succeed(undefined),
           ),
         );
+
         const [{ name, running, created, from }, [plan, beside]] = yield* Effect.all(
           [
             openedCheckout(
@@ -1269,12 +1313,15 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           ],
           { concurrency: "unbounded" },
         );
+
         const repositorySandbox = yield* checkoutIn({ name, running }, ask.agent.userId);
+
         const finishCheckout = Effect.flatMap(plan, (read) =>
           read === undefined
             ? openWorkingFolder(repositorySandbox)
             : finishCheckoutWith(repositorySandbox, read),
         );
+
         return yield* use(
           {
             place: sandboxPlace(ask.session, name, running),
@@ -1299,22 +1346,29 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     resume: (found, agent) =>
       Effect.gen(function* () {
         const legacy = found.name !== agentSandboxName(found.session);
+
         if (legacy && found.running !== undefined) return { place: found.running, created: false };
         // Note that the boot is recorded under the session's own name, which a legacy sandbox is reopened under and the task list reads.
         yield* recordedSandboxBooting(agent.id, agentSandboxName(found.session));
+
         const standing = legacy
           ? ((yield* api.get(found.name)) ?? keptOf(found).sandbox)
           : keptOf(found).sandbox;
+
         const { snapshot } = yield* reopenedOf(found.session, standing);
+
         const attempts: readonly CreateAttempt[] =
           snapshot !== undefined
             ? [{ from: CREATED_FROM.SOURCE, snapshot, drive: undefined }, FROM_IMAGE]
             : hasRepository(agent)
               ? [{ ...FROM_IMAGE, drive: { own: true, at: WORKSPACE_DRIVE.MOUNT } }, FROM_IMAGE]
               : [FROM_IMAGE];
+
         const opened = yield* openedFromFirst(agent, found.session, attempts, undefined);
+
         if (Result.isFailure(opened)) return yield* opened.failure;
         const { name, running, created, from } = opened.success;
+
         return {
           place: sandboxPlace(found.session, name, running),
           created: created && from === CREATED_FROM.IMAGE,
@@ -1351,18 +1405,22 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
             })),
           );
         }).pipe(Effect.withSpan("web/uploadRunner"));
+
         const started = Effect.gen(function* () {
           yield* Effect.all([launch.started ?? Effect.void, uploaded], {
             concurrency: "unbounded",
             discard: true,
           });
+
           const readied = yield* api
             .run(place, {
               command: "sudo",
               args: ["-n", "bash", "-c", readyScript()],
             })
             .pipe(Effect.withSpan("web/readyRunnerSandbox"));
+
           if (readied.exitCode !== 0) return yield* new SandboxUnavailable({ detail: NOT_READIED });
+
           // Note that the runner starts on the sandbox by its name, as the user, as it always has.
           return yield* api
             .start(launch.name, {
@@ -1380,13 +1438,17 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
             })
             .pipe(Effect.withSpan("web/startRunner"));
         });
+
         const [readyExit, commandId] = yield* Effect.all([Effect.exit(launch.ready), started], {
           concurrency: "unbounded",
         });
+
         if (Exit.isFailure(readyExit)) {
           yield* Effect.ignore(api.kill(place, commandId));
+
           return yield* Effect.failCause(readyExit.cause);
         }
+
         const ready = readyExit.value;
         const handle: RunnerHandle = { ...place, command: commandId };
         yield* Effect.gen(function* () {
@@ -1412,6 +1474,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
             Effect.ignore(Effect.andThen(api.kill(place, commandId), launch.abandon(ready))),
           ),
         );
+
         return { handle, ready };
       }).pipe(Effect.tapError(() => recordedSandboxBootFailed(launch.name))),
   };

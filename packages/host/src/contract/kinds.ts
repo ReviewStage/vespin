@@ -1266,9 +1266,11 @@ export function actPortForwarder<Port, Source>(
   forward: (port: Port) => void,
 ): (message: ActPortMessage<Port, Source>) => void {
   let forwarded = false;
+
   return (message) => {
     if (forwarded || message.source !== self || message.data !== ACT_PORT.REQUEST) return;
     const [port] = message.ports;
+
     if (port === undefined) return;
     forwarded = true;
     forward(port);

@@ -299,6 +299,7 @@ function cloneUrl(repository: string): string {
 /** A git run in the checkout that failed, refused with as much of git's own word as the model is told. */
 function gitRefusal(failed: CommandRun): RepositoryRefusal {
   const detail = failed.stderr.trim().slice(0, REPOSITORY_SHELL_BOUNDS.CHECKOUT_ERROR_MAX_CHARS);
+
   return new RepositoryRefusal({
     reason:
       detail === ""
@@ -347,17 +348,21 @@ const underCloneCredential = /* @__PURE__ */ Effect.fn("web/underCloneCredential
   accepted: readonly number[] = [0],
 ): Effect.fn.Return<number, RepositoryRefusal> {
   const firewall = sandbox.firewall;
+
   if (firewall === undefined)
     return yield* new RepositoryRefusal({ reason: REPOSITORY_REFUSAL.NO_FIREWALL });
   const refused = () => new RepositoryRefusal({ reason: REPOSITORY_REFUSAL.CHECKOUT_FAILED });
+
   const timed = run.pipe(
     Effect.timeoutOrElse({
       duration: REPOSITORY_SHELL_BOUNDS.CHECKOUT_TIMEOUT,
       orElse: () => new RepositoryRefusal({ reason: REPOSITORY_REFUSAL.CHECKOUT_FAILED }),
     }),
   );
+
   const carried = firewall.carries?.toLowerCase() === fullName.toLowerCase();
   const withdrawn = firewall.write({}).pipe(Effect.mapError(refused));
+
   const ended = yield* (
     carried
       ? timed
@@ -367,9 +372,12 @@ const underCloneCredential = /* @__PURE__ */ Effect.fn("web/underCloneCredential
           Effect.onInterrupt(() => Effect.ignore(withdrawn)),
         )
   ).pipe(Effect.exit);
+
   if (!carried) yield* withdrawn;
   const ran = yield* ended;
+
   if (!accepted.includes(ran.exitCode)) return yield* gitRefusal(ran);
+
   return ran.exitCode;
 });
 
@@ -398,6 +406,7 @@ export const cloneRepository = /* @__PURE__ */ Effect.fn("web/cloneRepository")(
     },
     REPOSITORY_REFUSAL.CHECKOUT_FAILED,
   );
+
   yield* underCloneCredential(sandbox, confirmed.fullName, token, access, clone);
 });
 
@@ -428,6 +437,7 @@ export const syncWorkspaceRepository = /* @__PURE__ */ Effect.fn("web/syncWorksp
       },
       REPOSITORY_REFUSAL.CHECKOUT_FAILED,
     );
+
     yield* underCloneCredential(sandbox, confirmed.fullName, token, access, sync);
   },
 );
@@ -447,6 +457,7 @@ export const prunedWorkspaceFolders = /* @__PURE__ */ Effect.fn("web/pruneWorksp
       },
       REPOSITORY_REFUSAL.CHECKOUT_FAILED,
     );
+
     if (pruned.exitCode !== 0) return yield* gitRefusal(pruned);
   },
 );
@@ -480,10 +491,12 @@ export const claimWorkspaceCheckout = /* @__PURE__ */ Effect.fn("web/claimWorksp
       },
       REPOSITORY_REFUSAL.CHECKOUT_FAILED,
     );
+
     const exit = yield* underCloneCredential(sandbox, confirmed.fullName, token, access, claim, [
       0,
       NOT_HELD_EXIT,
     ]);
+
     return exit === 0;
   },
 );
@@ -502,6 +515,7 @@ export const linkWorkspaceFolder = /* @__PURE__ */ Effect.fn("web/linkWorkspaceF
     },
     REPOSITORY_REFUSAL.CHECKOUT_FAILED,
   );
+
   if (linked.exitCode !== 0) return yield* gitRefusal(linked);
 });
 
@@ -526,5 +540,6 @@ export const setCheckoutIdentity = /* @__PURE__ */ Effect.fn("web/setCheckoutIde
     },
     REPOSITORY_REFUSAL.CHECKOUT_FAILED,
   );
+
   if (set.exitCode !== 0) return yield* gitRefusal(set);
 });

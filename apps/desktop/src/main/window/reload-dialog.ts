@@ -36,5 +36,6 @@ export async function askReloadPanel(
   if (process.platform === "darwin") doors.app.focus({ steal: true });
   window.show();
   const { response } = await doors.dialog.showMessageBox(window, RELOAD_OR_QUIT);
+
   return response === RELOAD_ANSWER;
 }

@@ -113,6 +113,7 @@ export function startHighlighting(
       follow: () => Promise.resolve(),
     };
   }
+
   const pool = new WorkerPoolManager(
     {
       workerFactory: startWorker,
@@ -129,12 +130,15 @@ export function startHighlighting(
       preferredHighlighter: preferredHighlighter(),
     },
   );
+
   const settled = pool.initialize().then(
     () => (pool.isWorkingPool() ? HIGHLIGHT_MODE.POOL : HIGHLIGHT_MODE.MAIN_THREAD),
     () => HIGHLIGHT_MODE.MAIN_THREAD,
   );
+
   // Note that a look not taken, the pool having failed, leaves the list on the window's own thread in its own look.
   const follow = (next: DiffLook) =>
     pool.setRenderOptions(poolRenderOptions(next, maxLineDiffLength)).catch(() => undefined);
+
   return { pool, settled, follow };
 }

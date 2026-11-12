@@ -79,6 +79,7 @@ export class AccountAccessClient {
     const write = grant
       ? this.#inSession.supportAccess.grant
       : this.#inSession.supportAccess.revoke;
+
     return askHosted(write, undefined).pipe(Effect.provide(this.#client));
   }
 }
@@ -120,14 +121,17 @@ export function accountAccessHolder(options: AccountAccessHolderOptions): Accoun
 
   const current = (): AppAccessSlice => {
     const key = accountKey();
+
     return key !== undefined && held?.accountKey === key ? held.access : NO_ACCESS;
   };
 
   const refresh = Effect.gen(function* () {
     const key = accountKey();
+
     if (key === undefined) return;
     const asked = generation;
     const access = yield* client.readAccess();
+
     if (generation !== asked || accountKey() !== key) return;
     held = { accountKey: key, access };
     publish(current());

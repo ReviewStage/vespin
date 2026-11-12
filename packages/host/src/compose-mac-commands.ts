@@ -98,8 +98,10 @@ import type { RunMode } from "./run-mode.js";
 
 /** How long the follow rests after a turn that died, before it tries again. */
 const DIED_REST = Duration.seconds(5);
+
 /** How often a Mac following its commands says it listens: a third of the service's forty-five-second freshness window. */
 const LISTENING_EVERY = Duration.seconds(15);
+
 /**
  * How a claim the service did not answer is asked again: a second apart, a
  * few times, well inside the service's thirty-second claim window, since
@@ -189,9 +191,11 @@ const NO_HOME: MacShellResult = {
 const macShell = Effect.gen(function* () {
   const environment = yield* Environment;
   const home = yield* Effect.orDie(Config.option(Config.String(VARIABLE.HOME)).parse(environment));
+
   const shell = yield* Effect.orDie(
     Config.withDefault(Config.String(VARIABLE.SHELL), DEFAULT_SHELL).parse(environment),
   );
+
   return Option.map(home, (folder): MacShell => ({ path: shell, home: folder }));
 });
 
@@ -208,6 +212,7 @@ export function composeMacCommands(
     const services = yield* Effect.context<ChildProcessSpawner.ChildProcessSpawner>();
     const http = yield* HttpClient.HttpClient;
     const { kernel, account, mode, allowAlways, client } = dependencies;
+
     /** The asks waiting on the developer, by the command's id, the earliest asked first, each with the account it was claimed for. */
     const asks = new Map<
       string,
@@ -241,6 +246,7 @@ export function composeMacCommands(
         });
         tellAsks();
         const now = yield* Clock.currentTimeMillis;
+
         return yield* Deferred.await(decided).pipe(
           Effect.timeoutOption(Duration.millis(Math.max(0, deadline - now))),
           Effect.map(Option.getOrUndefined),
@@ -256,6 +262,7 @@ export function composeMacCommands(
     /** The asks of any account but the one signed in, let go: their prompts come down, and their calls hear nothing from this Mac. */
     const withdrawOtherAccounts = Effect.gen(function* () {
       const signedIn = dependencies.accountId();
+
       for (const held of asks.values()) {
         if (held.userId !== signedIn) yield* Deferred.interrupt(held.decided);
       }
@@ -267,6 +274,7 @@ export function composeMacCommands(
     /** What one command comes to, by its kind: a shell command run, and any other kind refused. */
     const ran = (command: MacCommandRead): Effect.Effect<MacCommandResult> => {
       if (!isMacShellCommand(command)) return Effect.succeed(CANNOT_RUN);
+
       return Option.match(shell, {
         onNone: () => Effect.succeed(NO_HOME),
         onSome: (where) => runMacCommand(command, where),
@@ -301,17 +309,25 @@ export function composeMacCommands(
         if ((yield* mode) !== MAC_COMMAND_MODE.ASK || !isMacShellCommand(command)) {
           return yield* run(command);
         }
+
         const deadline =
           (yield* Clock.currentTimeMillis) +
           Duration.toMillis(Duration.seconds(command.timeoutSeconds));
+
         const decision = yield* Effect.interruptible(consent(command, userId, deadline));
+
         if (decision === undefined) return yield* settled(command.id, UNANSWERED);
+
         if (decision === MAC_COMMAND_DECISION.DENY) return yield* settled(command.id, DECLINED);
+
         if (dependencies.accountId() !== userId) return yield* settled(command.id, ACCOUNT_CHANGED);
+
         if (decision === MAC_COMMAND_DECISION.ALLOW_ALWAYS && !(yield* allowAlways)) {
           report("the Always allow setting could not be saved; the next command asks again");
         }
+
         const left = Math.ceil((deadline - (yield* Clock.currentTimeMillis)) / 1000);
+
         if (left < 1) return yield* settled(command.id, UNANSWERED);
         yield* run({ ...command, timeoutSeconds: Math.min(command.timeoutSeconds, left) });
       });
@@ -330,16 +346,19 @@ export function composeMacCommands(
     const gateFor = Effect.map(gateOpen, (open) => (open ? dependencies.accountId() : undefined));
     /** How many times the gate has moved: shut, opened, or opened for another account. */
     let moves = 0;
+
     const gateMoved = Effect.flatMap(gateFor, (userId) =>
       Effect.map(SubscriptionRef.getAndSet(gate, userId), (was) => {
         if (was !== userId) moves += 1;
       }),
     );
+
     /** Waits until the gate stands open, for whichever account. */
     const opened = SubscriptionRef.changes(gate).pipe(
       Stream.filter((userId) => userId !== undefined),
       Stream.runHead,
     );
+
     /** Waits until the gate no longer stands open for `userId`: shut, or open for another account. */
     const left = (userId: string) =>
       SubscriptionRef.changes(gate).pipe(
@@ -370,13 +389,17 @@ export function composeMacCommands(
               !("failure" in granted) || granted.failure !== MAC_COMMAND_CALL_FAILURE.UNANSWERED,
           }),
         );
+
         // A claim refused, or never answered, runs nothing: the command is another Mac's, or its call has given up.
         if ("failure" in answer) return;
         const { command: granted } = answer;
+
         if (!(yield* gateOpen) || dependencies.accountId() !== userId) {
           yield* asked(client.settle(granted.id, SWITCHED_OFF));
+
           return;
         }
+
         yield* FiberSet.run(running, decided(granted, userId));
       }).pipe(Effect.uninterruptible);
 
@@ -419,23 +442,29 @@ export function composeMacCommands(
     ) =>
       Effect.suspend(() => {
         let tried = new Set<string>();
+
         const claimNew = (commands: readonly MacCommandRead[]) =>
           Effect.gen(function* () {
             const fresh = commands.filter((command) => !tried.has(command.id));
             tried = new Set(commands.map((command) => command.id));
+
             for (const command of fresh) {
               yield* FiberSet.run(claims, claimed(running, userId, command));
             }
           });
+
         const rows = decodedLiveRows(
           { poll: (after) => seal(userId, true, after) },
           first,
           MAC_COMMANDS_READ.rows,
         );
+
         const following = Stream.runForEach(rows, (read) => claimNew(macCommandsOfLiveRows(read)));
+
         const follow = Effect.raceFirst(following, presence).pipe(
           Effect.catch(() => waitOrRegained(LIVE_RESTART)),
         );
+
         return Effect.raceFirst(follow, Effect.asVoid(left(userId)));
       });
 
@@ -456,19 +485,25 @@ export function composeMacCommands(
     const turn = (running: FiberSet.FiberSet, claims: FiberSet.FiberSet) =>
       Effect.gen(function* () {
         yield* withdrawOtherAccounts;
+
         if (moves !== clearedAt) {
           clearedAt = moves;
           yield* FiberSet.clear(running);
+
           // Note that the clear waits out any claim under way, during which the gate may have moved again, so the next turn starts from where it stands now.
           if (moves !== clearedAt) return;
         }
+
         // The account the follow starts for, which every read names, so one under another's session is refused as signed out.
         const userId = yield* SubscriptionRef.get(gate);
+
         if (userId === undefined) return yield* Effect.asVoid(opened);
         const sealed = yield* seal(userId, false);
+
         if ("failure" in sealed) {
           return yield* Effect.raceFirst(waitOrRegained(LIVE_RESTART), Effect.asVoid(left(userId)));
         }
+
         yield* followed(running, claims, userId, sealed);
       });
 
@@ -479,6 +514,7 @@ export function composeMacCommands(
       const changes = yield* dependencies.changed;
       yield* gateMoved;
       yield* Effect.forkScoped(Stream.runForEach(changes, () => gateMoved));
+
       // A turn that died is reported and the reads rest before the next.
       const guarded = Effect.catchDefect(turn(running, claims), () =>
         Effect.andThen(
@@ -486,19 +522,23 @@ export function composeMacCommands(
           Effect.sleep(DIED_REST),
         ),
       );
+
       yield* Effect.forkScoped(Effect.forever(guarded));
     });
 
     const methods: PlatformConcernMethods<typeof HOST_PLATFORM_CONCERN.MAC_COMMANDS> = {};
+
     const acts: HostActTable<typeof MAC_COMMAND_ACTS> = {
       /** The developer's answer to one ask, by its id; one no longer waiting, answered or timed out, is answered all the same, since the prompt goes with it. */
       MAC_COMMAND_ANSWER: ({ id, decision }) =>
         Effect.gen(function* () {
           const held = asks.get(id);
+
           if (held === undefined) return;
           yield* Deferred.succeed(held.decided, decision);
         }),
     };
+
     return { methods, acts, lifetime } satisfies MacCommandsComposer;
   });
 }

@@ -65,6 +65,7 @@ function fixture() {
   const opened: ScriptedPort[] = [];
   const pageGone = new Map<Window, () => void>();
   let ids = 0;
+
   const spawn = (folder: string, cols: number, rows: number): MacShell | undefined => {
     if (folder !== FOLDER) return undefined;
     const heard: string[] = [];
@@ -77,6 +78,7 @@ function fixture() {
       print: (text) => data?.(new TextEncoder().encode(text)),
       exit: (code) => exit?.(code),
     });
+
     return {
       onData: (listener) => {
         data = listener;
@@ -91,6 +93,7 @@ function fixture() {
       kill: () => void heard.push("kill"),
     };
   };
+
   const actPort = testActPort(
     macShellProcedures<Window>({
       mirror: () => Effect.succeed(undefined),
@@ -99,6 +102,7 @@ function fixture() {
         open: (sender, ticket) => {
           let listener: ((message: WireBoundaryInput) => void) | undefined;
           let hungUp: (() => void) | undefined;
+
           const port: ScriptedPort = {
             sender,
             ticket,
@@ -107,7 +111,9 @@ function fixture() {
             send: (message) => listener?.(message),
             hangUp: () => hungUp?.(),
           };
+
           opened.push(port);
+
           return {
             post: (message) => void port.posted.push(message),
             onMessage: (heard) => {
@@ -126,7 +132,9 @@ function fixture() {
       createId: () => `shell-${++ids}`,
     }),
   );
+
   ports.push(actPort);
+
   return {
     actPort,
     shells,
@@ -139,10 +147,12 @@ const open = {
   kind: ACT_KIND.MAC_SHELL_OPEN,
   payload: { agentId: AGENT_ID, folder: FOLDER, cols: 100, rows: 30 },
 };
+
 const attach = (terminalId: string) => ({
   kind: ACT_KIND.MAC_SHELL_ATTACH,
   payload: { agentId: AGENT_ID, terminalId, cols: 120, rows: 32 },
 });
+
 const shellOf = (terminalId: string) => ({ agentId: AGENT_ID, terminalId });
 
 /** What a port carried, its bytes read as text. */
@@ -166,6 +176,7 @@ it.effect(
         { ...open, payload: { agentId: AGENT_ID, folder: "/nowhere" } },
         one,
       );
+
       const notPanel = yield* actPort.perform(open, { ...one, panel: false });
       const made = yield* actPort.perform(open, one);
       assert.deepEqual(made, { answer: { terminalId: "shell-1" } });

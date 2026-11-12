@@ -56,18 +56,23 @@ export function keptBlankLines(words: string, most: number): string {
   const kept: string[] = [];
   let fence: string | undefined;
   let blanks = 0;
+
   for (const line of words.split(NEWLINE)) {
     const coded = fence !== undefined;
     fence = fenceAfter(fence, line);
+
     if (!coded && line.trim() === "") {
       blanks += 1;
       continue;
     }
+
     for (let at = 0; at < Math.min(blanks, most); at += 1) kept.push("");
     blanks = 0;
     kept.push(line);
   }
+
   for (let at = 0; at < Math.min(blanks, most); at += 1) kept.push("");
+
   return kept.join(NEWLINE);
 }
 
@@ -75,6 +80,7 @@ export function keptBlankLines(words: string, most: number): string {
 export function cutReply(reply: string, chars: number): string {
   if (reply.length <= chars) return reply;
   const keep = chars - ELLIPSIS.length;
+
   return keep <= 0 ? "" : `${reply.slice(0, keep).trimEnd()}${ELLIPSIS}`;
 }
 
@@ -94,9 +100,12 @@ export function quoteOf(reply: string): string {
 /** Where a quote that starts at `at` ends, past its last line; nothing where no quote starts there, a blank line or the message's edge on either side. */
 function quoteEnd(lines: readonly string[], at: number): number | undefined {
   if (!QUOTE_LINE.test(lines[at] ?? "")) return undefined;
+
   if (at > 0 && lines[at - 1] !== "") return undefined;
   let end = at;
+
   while (end < lines.length && QUOTE_LINE.test(lines[end] ?? "")) end += 1;
+
   return end < lines.length && lines[end] !== "" ? undefined : end;
 }
 
@@ -113,9 +122,11 @@ export function messageBlocks(text: string): readonly MessageBlock[] {
   let words: string[] = [];
   let fence: string | undefined;
   let at = 0;
+
   while (at < lines.length) {
     // Note that a quote's own lines all open with `>`, so none opens or closes a fence, and only the developer's lines move it.
     const end = fence === undefined ? quoteEnd(lines, at) : undefined;
+
     if (end === undefined) {
       const line = lines[at] ?? "";
       fence = fenceAfter(fence, line);
@@ -123,19 +134,24 @@ export function messageBlocks(text: string): readonly MessageBlock[] {
       at += 1;
       continue;
     }
+
     // Note that the blank line before a quote is the gap, unless the quote before it took it.
     words.pop();
+
     if (words.length > 0) blocks.push({ kind: MESSAGE_BLOCK.WORDS, lines: words });
     words = [];
     const quoted = lines.slice(at, end).map((line) => line.slice(2));
     blocks.push({ kind: MESSAGE_BLOCK.QUOTE, words: quoted.join(NEWLINE) });
     // The blank line after it is the gap too, and where it ends the message, an empty line follows.
     at = end + 1;
+
     if (at === lines.length) words.push("");
   }
+
   if (words.length > 0 || blocks.length === 0) {
     blocks.push({ kind: MESSAGE_BLOCK.WORDS, lines: words.length > 0 ? words : [""] });
   }
+
   return blocks;
 }
 

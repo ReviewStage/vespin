@@ -78,11 +78,14 @@ export function useInboxNotifications(signedIn: boolean): void {
     if (!signedIn || response === undefined || response === null) return;
     // Note that the response is let go first, so a later render never opens it twice.
     clearLastNotificationResponse();
+
     const opened = inboxPushResponseOf(response.notification.request.content.data, {
       actionId: response.actionIdentifier,
       ...(response.userText === undefined ? undefined : { text: response.userText }),
     });
+
     if (opened === undefined) return;
+
     if (opened.press !== undefined) pressFromNotification(opened.press);
     router.push(opened.route);
   }, [signedIn, response, router]);

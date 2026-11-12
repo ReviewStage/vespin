@@ -103,6 +103,7 @@ export function WorkspaceRef({
   card?: ReactNode;
 }): React.JSX.Element {
   const nameClass = cn("workspace-ref-name", NAME_OF_SIZE[size]);
+
   const named = (
     <ReplayMask>
       {name === undefined ? (
@@ -114,6 +115,7 @@ export function WorkspaceRef({
       )}
     </ReplayMask>
   );
+
   // Note that the head fills its row, so its chevron stands at the row's end.
   const ref = (
     <span
@@ -140,7 +142,9 @@ export function WorkspaceRef({
       )}
     </span>
   );
+
   if (card === undefined) return ref;
+
   return (
     <Tooltip label={workspace.name} card={card}>
       {ref}

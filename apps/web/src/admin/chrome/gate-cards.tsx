@@ -27,6 +27,7 @@ export function SignInCard(): React.JSX.Element {
     callbackURL: () => window.location.pathname,
     onStarted: () => SIGN_IN_CHOSEN.write(true),
   });
+
   return (
     <SocialSignInCard
       mark={<AdminMark />}
@@ -76,6 +77,7 @@ export function ForbiddenCard({
   const session = authClient.useSession().data;
   // Note that the stop answers the service's words where it refused, rather than throwing them.
   const stopping = useMutation({ mutationFn: stopImpersonating });
+
   const card = (
     <Centered
       title="Not authorized"
@@ -88,7 +90,9 @@ export function ForbiddenCard({
       action={{ label: "Sign out", onPress: onSignOut }}
     />
   );
+
   if (!session?.session.impersonatedBy) return card;
+
   return (
     <>
       <ViewingAsBanner

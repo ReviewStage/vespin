@@ -87,13 +87,18 @@ export function isVideoPicture(picture: Picture): boolean {
  */
 export function pictureOfDataUrl(text: string): Picture | undefined {
   const [, contentType, base64] = PICTURE_DATA_URL.exec(text) ?? [];
+
   if (contentType === undefined || base64 === undefined || !isPictureMediaType(contentType)) {
     return undefined;
   }
+
   const bytes = Base64.decode(base64);
+
   if (Result.isFailure(bytes) || sniffMediaType(bytes.success) !== contentType) return undefined;
   const picture: Picture = { contentType, bytes: bytes.success };
+
   if (isVideoPicture(picture) && webmDimensions(picture.bytes) === undefined) return undefined;
+
   return picture;
 }
 
@@ -106,6 +111,7 @@ function sentBytesOf(picture: Picture): number {
 export const pictureDataUrlSchema = EffectSchema.String.check(
   EffectSchema.makeFilter((text: string) => {
     const picture = pictureOfDataUrl(text);
+
     return picture !== undefined && picture.bytes.length <= sentBytesOf(picture);
   }),
 );

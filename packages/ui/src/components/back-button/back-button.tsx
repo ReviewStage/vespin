@@ -72,6 +72,7 @@ export function BackButton({
 }): React.JSX.Element {
   const hint = backToWords(place);
   const command = named ?? undefined;
+
   // Note that the hint stays one component while its words and key do, because a new one each draw would remount the button and drop its focus.
   const WayBackHint = useMemo<FoldingButtonHint>(
     () =>
@@ -84,6 +85,7 @@ export function BackButton({
       },
     [hint, command],
   );
+
   if (look === BACK_BUTTON_LOOK.COLUMN) {
     return (
       <Tooltip label={hint} command={command}>
@@ -93,6 +95,7 @@ export function BackButton({
       </Tooltip>
     );
   }
+
   return (
     <FoldingButton
       label={label}

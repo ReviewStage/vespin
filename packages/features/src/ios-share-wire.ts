@@ -77,6 +77,7 @@ const decodeDraft = EffectSchema.decodeUnknownOption(EffectSchema.fromJsonString
 /** The draft the share sheet kept, from its file's text, or none where it does not read or was kept under another account than `accountId`. */
 export function shareDraftOf(json: string, accountId: string): ShareDraft | undefined {
   const read = decodeDraft(json);
+
   return read._tag === "Some" && read.value.accountId === accountId ? read.value : undefined;
 }
 
@@ -97,6 +98,7 @@ function workspaceRepositories(
       workspaceReaches(workspace, repository) &&
       (listed === undefined || listed.includes(repository)),
   );
+
   return [...new Set([...reached, ...(listed ?? [])])];
 }
 
@@ -116,6 +118,7 @@ export function shareSnapshotOf(
   service: { readonly origin: string; readonly client: ClientIdentity },
 ): ShareSnapshot {
   const recent = recentRepositories(tasks);
+
   return {
     accountId,
     chosenWorkspaceId,

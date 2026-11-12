@@ -104,6 +104,7 @@ const snapshotAgent = (
  */
 function snapshotAnswer(row: AccountPreferencesRow | undefined, agent: ModelChoice) {
   const updatedAt = row?.updatedAt;
+
   return {
     ...accountPreferencesParts(row?.preferences ?? {}),
     agent,
@@ -130,8 +131,10 @@ const acceptedAgentChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
   value: UnparsedWireValue,
 ): Effect.fn.Return<ModelChoice, HostedRefusal, ModelCatalog | DatabaseServices> {
   const read = readModelChoice(value);
+
   if (Result.isFailure(read)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   const fastOffer = yield* hostedStoreOrUnavailable(seams.accountFastOffer(userId));
+
   const accepted = yield* acceptedModelChoice(read.success, fastOffer).pipe(
     Effect.catchTag("ModelChoiceRefused", () => Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST)),
     Effect.catchTag("ModelCatalogUnavailable", (unavailable) =>
@@ -140,15 +143,19 @@ const acceptedAgentChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
       ).pipe(Effect.andThen(Effect.fail(HOSTED_REFUSAL.UNAVAILABLE))),
     ),
   );
+
   const row = yield* hostedStoreOrUnavailable(seams.readPreferences(userId));
   const standing = yield* snapshotAgent(userId, row);
+
   if (accepted.model === standing.model) return accepted;
   // Note that the default never moves to a model nothing pays for, because every Start on it would be refused.
   const unconnected = yield* hostedStoreOrUnavailable(unconnectedProviders(userId));
   const provider = providerModelOf(accepted.model)?.provider;
+
   if (provider !== undefined && unconnected.has(provider)) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   return accepted;
 });
 
@@ -163,6 +170,7 @@ export const readOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
 ) {
   const row = yield* hostedStoreOrUnavailable(seams.readPreferences(userId));
+
   return snapshotAnswer(row, yield* snapshotAgent(userId, row));
 });
 
@@ -179,6 +187,7 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   // SAFETY: Request JSON is untrusted boundary data; each part's reader validates it before use.
   const body = input as Readonly<Record<keyof typeof input, UnparsedWireValue>>;
+
   if (
     body.preferences === undefined &&
     body.linkOpen === undefined &&
@@ -201,98 +210,134 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
   }
 
   const write: AccountPreferencesWrite = {};
+
   if (body.preferences !== undefined) {
     const preferences = accountPreferencesFromWire(body.preferences);
+
     if (preferences === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     write.preferences = preferences;
   }
+
   if (body.linkOpen !== undefined) {
     const linkOpen = ownPreferenceFromWire("linkOpen", body.linkOpen);
+
     if (linkOpen === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     write.linkOpen = linkOpen;
   }
+
   if (body.pullRequestOpen !== undefined) {
     const pullRequestOpen = ownPreferenceFromWire("pullRequestOpen", body.pullRequestOpen);
+
     if (pullRequestOpen === undefined) {
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     }
+
     write.pullRequestOpen = pullRequestOpen;
   }
+
   if (body.agentEnter !== undefined) {
     const agentEnter = ownPreferenceFromWire("agentEnter", body.agentEnter);
+
     if (agentEnter === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     write.agentEnter = agentEnter;
   }
+
   if (body.commitAuthor !== undefined) {
     const commitAuthor = ownPreferenceFromWire("commitAuthor", body.commitAuthor);
+
     if (commitAuthor === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     write.commitAuthor = commitAuthor;
   }
+
   if (body.agentPermissionMode !== undefined) {
     const agentPermissionMode = ownPreferenceFromWire(
       "agentPermissionMode",
       body.agentPermissionMode,
     );
+
     if (agentPermissionMode === undefined) {
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     }
+
     write.agentPermissionMode = agentPermissionMode;
   }
+
   if (body.setupFinished !== undefined) {
     const setupFinished = ownPreferenceFromWire("setupFinished", body.setupFinished);
+
     if (setupFinished === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     write.setupFinished = setupFinished;
   }
+
   if (body.setupPlace !== undefined) {
     const setupPlace = ownPreferenceFromWire("setupPlace", body.setupPlace);
+
     if (setupPlace === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     write.setupPlace = setupPlace;
   }
+
   if (body.soundWhen !== undefined) {
     const soundWhen = ownPreferenceFromWire("soundWhen", body.soundWhen);
+
     if (soundWhen === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     write.soundWhen = soundWhen;
   }
+
   if (body.completionSound !== undefined) {
     const completionSound = ownPreferenceFromWire("completionSound", body.completionSound);
+
     if (completionSound === undefined) {
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     }
+
     write.completionSound = completionSound;
   }
+
   if (body.askSound !== undefined) {
     const askSound = ownPreferenceFromWire("askSound", body.askSound);
+
     if (askSound === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     write.askSound = askSound;
   }
+
   if (body.turnNotifications !== undefined) {
     const turnNotifications = ownPreferenceFromWire("turnNotifications", body.turnNotifications);
+
     if (turnNotifications === undefined) {
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     }
+
     write.turnNotifications = turnNotifications;
   }
+
   if (body.onboardingSurvey !== undefined) {
     // Note that the answers are stored as read, so a key the survey does not name is not kept.
     const onboardingSurvey = onboardingSurveyFrom(
       ownPreferenceFromWire("onboardingSurvey", body.onboardingSurvey),
     );
+
     if (onboardingSurvey === undefined) {
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     }
+
     write.onboardingSurvey = onboardingSurveyStored(onboardingSurvey);
   }
+
   if (body.agent !== undefined) {
     write.agent = yield* acceptedAgentChoice(seams, userId, body.agent);
   }
+
   if (body.chaptersModel !== undefined) {
     if (!isChaptersModel(body.chaptersModel)) {
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     }
+
     write.chaptersModel = body.chaptersModel;
   }
+
   if (body.experiments !== undefined) {
     const experiments = experimentChoicesFrom(body.experiments);
+
     if (experiments === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     write.experiments = experiments;
   }
@@ -303,11 +348,14 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
       ? undefined
       : (yield* hostedStoreOrUnavailable(seams.readPreferences(userId)))?.preferences
           .onboardingSurvey;
+
   const row = yield* hostedStoreOrUnavailable(seams.writePreferences(userId, write));
   // The survey's answers, once kept and changed, are recorded as a response to our onboarding survey.
   const answered = onboardingSurveyFrom(write.onboardingSurvey);
+
   if (answered !== undefined && !sameSurvey(onboardingSurveyFrom(answeredBefore), answered)) {
     yield* onboardingSurveyAnswered(userId, answered);
   }
+
   return { ...snapshotAnswer(row, yield* snapshotAgent(userId, row)), txid: row.txid };
 });

@@ -90,6 +90,7 @@ function bareActor(
   title: string | null = null,
 ): Actor {
   if (known !== undefined) return agentActor(known, agentName(known, undefined));
+
   return {
     kind: ACTOR_KIND.AGENT,
     agentId,
@@ -109,6 +110,7 @@ function agentChip(
 ): ReactNode {
   const target: ToolTarget = { kind: TOOL_TARGET.AGENT, agent: agentId };
   const actor = cards?.agent?.(agentId) ?? bareActor(agentId, known, title);
+
   return (
     <ActorRef
       actor={actor}
@@ -141,19 +143,23 @@ export function agentForkDoors(input: {
   const forks = new Map(forksOf(listed, agent.id));
   // An agent's page lists that agent alone, so the forks its own summary names stand beside the list's.
   const named = agent.continuedBy ?? [];
+
   for (const each of named) {
     if (each.messageId === undefined || listed.some((one) => one.id === each.agentId)) continue;
     forks.set(each.messageId, [...(forks.get(each.messageId) ?? []), each.agentId]);
   }
+
   // A listed agent opens its tab, an archived one's among them.
   const opens = (agentId: string) => listedIds.has(agentId);
   // Note that an archived agent, on its page or in its task's tab, opens no draft.
   const drafts = control.onUnarchive === undefined && agent.archivedAt === undefined;
   const forkable = onFork !== undefined && drafts;
+
   const open =
     onOpenTarget === undefined
       ? undefined
       : (agentId: string) => onOpenTarget({ kind: TOOL_TARGET.AGENT, agent: agentId });
+
   return {
     onFork: forkable
       ? (messageId, words, cut) =>
@@ -196,7 +202,9 @@ export function ForkMessageAction({
   cut?: ForkCut | undefined;
 }): ReactNode {
   const onFork = useContext(ForkContext)?.onFork;
+
   if (onFork === undefined) return null;
+
   return (
     <MessageAction
       label={FORK_WORDS.ACTION}
@@ -211,7 +219,9 @@ export function ForkMessageAction({
 /** The quiet trail under a message naming the agents forked at it, a list's gap under its foot (tasks.css); nothing where none was. */
 export function ForkedToLine({ messageId }: { messageId: string }): ReactNode {
   const chips = useContext(ForkContext)?.forkedTo(messageId) ?? [];
+
   if (chips.length === 0) return null;
+
   return (
     <NoteLine look={NOTE_LINE_LOOK.TRAIL} glyph={<SplitIcon />} data-forked-to="">
       <span>{FORK_WORDS.TO}</span>
@@ -250,6 +260,7 @@ export function ForkChip({
   const { agentId, messageId } = fork;
   // A source the list does not hold is opened on its own page.
   const task = source === undefined ? undefined : { planId: source.planId };
+
   const open =
     openPlace === undefined
       ? undefined
@@ -259,8 +270,10 @@ export function ForkChip({
               ? { kind: LINK_DESTINATION.AGENT, ...task, agentId }
               : { kind: LINK_DESTINATION.MESSAGE, ...task, agentId, messageId },
           );
+
   const quote = `“${fork.opening}”`;
   const drop = messageId === undefined ? FORK_WORDS.DROP_CONTINUE : FORK_WORDS.DROP;
+
   return (
     <div className="draft-fork-dock">
       <Card

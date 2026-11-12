@@ -28,10 +28,12 @@ import { type SandboxMachineOptions, sandboxLifecycle, sandboxMachine } from "./
 function routedLifecycle(cloud: MachineLifecycle, mac: DeviceMachineService): MachineLifecycle {
   const of = (machine: AgentMachineKind): MachineLifecycle =>
     machine === AGENT_MACHINE.DEVICE ? mac : cloud;
+
   const bySession = <A, E, R>(
     session: string,
     call: (machine: MachineLifecycle) => Effect.Effect<A, E, R>,
   ) => Effect.flatMap(mac.owns(session), (owned) => call(owned ? mac : cloud));
+
   return {
     findPlace: (userId, session) =>
       bySession(session, (machine) => machine.findPlace(userId, session)),
@@ -63,6 +65,7 @@ function routedLifecycle(cloud: MachineLifecycle, mac: DeviceMachineService): Ma
 function routedMachine(cloud: AgentMachineService, mac: DeviceMachineService): AgentMachineService {
   const of = (machine: AgentMachineKind | undefined): AgentMachineService =>
     machine === AGENT_MACHINE.DEVICE ? mac : cloud;
+
   return {
     ...routedLifecycle(cloud, mac),
     layout: (agent) => of(agent.machine).layout(agent),

@@ -50,10 +50,13 @@ export type HeldCall = {
 function ApprovalPresses({ answering, onAnswer }: Pick<HeldCall, "answering" | "onAnswer">) {
   const large = useAccessibilitySize();
   const out = answering !== undefined;
+
   const deny =
     answering === HELD_ANSWER.DENY ? APPROVAL_PRESS_WORDS.DENYING : APPROVAL_PRESS_WORDS.DENY;
+
   const allow =
     answering === HELD_ANSWER.ALLOW ? APPROVAL_PRESS_WORDS.ALLOWING : APPROVAL_PRESS_WORDS.ALLOW;
+
   // Note that each button is keyed by its words, so a busy press is drawn anew rather than left saying what it first said.
   const presses = (
     <>
@@ -72,6 +75,7 @@ function ApprovalPresses({ answering, onAnswer }: Pick<HeldCall, "answering" | "
       />
     </>
   );
+
   return large ? (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
       {presses}
@@ -88,6 +92,7 @@ function ApprovalPresses({ answering, onAnswer }: Pick<HeldCall, "answering" | "
  */
 export function HeldCallBody({ held }: { readonly held: HeldCall }) {
   const colors = useColors();
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
       <Text
@@ -141,6 +146,7 @@ export function HeldCallBanner({
   const large = useAccessibilitySize();
   // Note that the banner is told to VoiceOver as it stands, since an agent held for an answer waits on the reader wherever they are.
   useAnnounced(`${waiting}, ${asks}`, true);
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
       <HStack spacing={SPACE.ROW}>

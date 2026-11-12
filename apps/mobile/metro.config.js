@@ -7,6 +7,7 @@ const { getSentryExpoConfig } = require("@sentry/react-native/metro");
 
 const REPOSITORY_ROOT = path.resolve(__dirname, "..", "..");
 const WORKSPACE_SCOPE = "@repo/";
+
 /** The source a `.js` specifier may name, in the order Metro tries them. */
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js"];
 
@@ -19,22 +20,28 @@ const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js"];
 function readWorkspacePackages() {
   const packages = new Map();
   const root = path.join(REPOSITORY_ROOT, "packages");
+
   for (const folder of fs.readdirSync(root)) {
     const manifestPath = path.join(root, folder, "package.json");
+
     if (!fs.existsSync(manifestPath)) continue;
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
     packages.set(manifest.name, { directory: path.join(root, folder), exports: manifest.exports });
   }
+
   return packages;
 }
 
 /** The first source file `target` names once its `.js` is read as the `.ts` beside it, or undefined. */
 function sourceFileFor(directory, target) {
   const stem = target.replace(/\.js$/u, "");
+
   for (const extension of SOURCE_EXTENSIONS) {
     const candidate = path.join(directory, `${stem}${extension}`);
+
     if (fs.existsSync(candidate)) return candidate;
   }
+
   return undefined;
 }
 
@@ -42,9 +49,12 @@ function sourceFileFor(directory, target) {
 function exportTarget(exportsTable, subpath) {
   const entry =
     typeof exportsTable === "string" && subpath === "." ? exportsTable : exportsTable?.[subpath];
+
   if (typeof entry === "string") return entry;
+
   if (entry && typeof entry === "object")
     return entry["react-native"] ?? entry.import ?? entry.default;
+
   return undefined;
 }
 
@@ -66,23 +76,29 @@ function workspaceConfig(projectRoot, options) {
       const packageName = slash === -1 ? moduleName : moduleName.slice(0, slash);
       const subpath = slash === -1 ? "." : `.${moduleName.slice(slash)}`;
       const workspacePackage = workspacePackages.get(packageName);
+
       if (workspacePackage) {
         const target = exportTarget(workspacePackage.exports, subpath);
         const filePath = target && sourceFileFor(workspacePackage.directory, target);
+
         if (!filePath) {
           throw new Error(
             `${moduleName} is not a door of ${packageName}: its package.json exports no "${subpath}"`,
           );
         }
+
         return { type: "sourceFile", filePath };
       }
     }
+
     try {
       return context.resolveRequest(context, moduleName, platform);
     } catch (error) {
       if (!moduleName.startsWith(".") || !moduleName.endsWith(".js")) throw error;
       const filePath = sourceFileFor(path.dirname(context.originModulePath), moduleName);
+
       if (!filePath) throw error;
+
       return { type: "sourceFile", filePath };
     }
   };

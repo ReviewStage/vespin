@@ -63,11 +63,14 @@ async function windowStill(
     { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
     { stayHidden: true, stayAwake: true },
   );
+
   if (image.isEmpty()) return null;
+
   const scaled =
     image.getSize().width > STILL_WIDTH
       ? image.resize({ width: STILL_WIDTH, quality: "good" })
       : image;
+
   return `data:image/jpeg;base64,${scaled.toJPEG(STILL_QUALITY).toString("base64")}`;
 }
 
@@ -80,6 +83,7 @@ function portTo(channel: string) {
     const { port1, port2 } = new MessageChannelMain();
     sender.postMessage(channel, ticket, [port2]);
     port1.start();
+
     return {
       post: (message: unknown) => port1.postMessage(message),
       onMessage: (listener: (message: WireBoundaryInput) => void) =>
@@ -114,6 +118,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
     run,
     services: effectServices,
   } = services;
+
   const { launch } = config;
   const { panels } = windows;
   const recordProductEvent = telemetry.recordProductEvent;
@@ -173,8 +178,10 @@ export function registerDesktopIpc(services: DesktopServices): void {
       copyRich: ({ html, text }) => clipboard.write({ html, text }),
       copyImage: (png) => {
         const image = nativeImage.createFromBuffer(Buffer.from(png, "base64"));
+
         if (image.isEmpty()) return false;
         clipboard.writeImage(image);
+
         return true;
       },
       captureStill: (sender, rect) => windowStill(sender, rect),
@@ -183,11 +190,14 @@ export function registerDesktopIpc(services: DesktopServices): void {
       saveFile: async (sender, name, text) => {
         const window = BrowserWindow.fromWebContents(sender);
         const options = { defaultPath: name };
+
         const chosen = await (window === null
           ? dialog.showSaveDialog(options)
           : dialog.showSaveDialog(window, options));
+
         if (chosen.canceled) return false;
         await fs.promises.writeFile(chosen.filePath, text, "utf8");
+
         return true;
       },
       deliverFeedback: (submission) => telemetry.deliverFeedback(submission),
@@ -199,14 +209,18 @@ export function registerDesktopIpc(services: DesktopServices): void {
     reportOnline: (_context, online) => services.tellOnline(online),
     notifyReady: async (context) => {
       windows.panelReady();
+
       if (!launch.captureOutput) return;
       const window = BrowserWindow.fromWebContents(context.sender);
+
       if (!window || window.isDestroyed()) return;
       await new Promise((resolve) => setTimeout(resolve, 350));
+
       const image = await window.webContents.capturePage(undefined, {
         stayHidden: true,
         stayAwake: true,
       });
+
       const destination = path.resolve(launch.captureOutput);
       fs.mkdirSync(path.dirname(destination), { recursive: true });
       fs.writeFileSync(destination, image.toPNG());
@@ -238,6 +252,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
           // this process's own is one the reporter is minted for.
           reporterOf: (actor) => {
             const contents = webContents.getAllWebContents().find((open) => open === actor.sender);
+
             return contents === undefined ? undefined : windows.reporterOf(contents);
           },
           lastSettings: () => operator.settings(),
@@ -265,6 +280,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
     snapshotFor: async (sender): Promise<AppStateSnapshot> => {
       await run(operator.readBootstrap());
       native.refreshMicrophoneStatus();
+
       return windows.appStateFor(sender);
     },
   });

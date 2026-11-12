@@ -181,6 +181,7 @@ const CARDS_NOW = new Date(2026, 9, 26, 15).getTime();
 /** Main's document holding the plan, its page, and an Inbox item waiting on it. */
 const STATE: AppStateSnapshot = (() => {
   const snapshot = stateWith({}, {});
+
   return {
     ...snapshot,
     tasks: {
@@ -291,6 +292,7 @@ let automationHolds: readonly AutomationsHold[] = [];
  */
 function heldPagesOf(place: PagePlace): AppHolderPages {
   if (place.taskId === TASK_ID) return { rows: [UNFURL_PAGE] };
+
   return { rows: place.taskId === OTHER_TASK ? [ROLLOUT_PAGE] : [] };
 }
 
@@ -369,10 +371,12 @@ async function drawn(
   fakeAppPlatform({ pageFrameUrl });
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   const words: ReactNode = createElement(TaskMentions, {
     value: page,
     children: createElement(TranscriptWords, { text }),
   });
+
   act(() =>
     root?.render(
       withQueryClient(
@@ -385,6 +389,7 @@ async function drawn(
     ),
   );
   await settle();
+
   return container;
 }
 
@@ -405,6 +410,7 @@ async function cardOf(chip: Element | undefined) {
   );
   const card = [...document.querySelectorAll(".ui-tooltip-card > *")].at(-1);
   assert.ok(card, "the chip hangs a card");
+
   const look = {
     card: [...card.attributes].map((attribute) => attribute.name).find((name) => name !== "class"),
     name: card.querySelector(".ui-hover-card-name")?.textContent,
@@ -419,10 +425,12 @@ async function cardOf(chip: Element | undefined) {
       ...card.querySelectorAll('.ui-hover-card-row[data-look="detail"] .ui-hover-card-row-label'),
     ].map((label) => label.textContent),
   };
+
   assert.equal(carriesWords(card, look.name ?? ""), false, "the card's words ride no attribute");
   act(() => {
     chip.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
   });
+
   return look;
 }
 
@@ -460,6 +468,7 @@ test("a plan's chip hangs the plan's card, and a section's the same card's head 
       `[v4](${HOME}/plan/${TASK_ID}/version/4)`,
     ].join(" "),
   );
+
   const [task, section, gone, version] = chipsOf(container);
 
   const taskCard = await cardOf(task);
@@ -483,6 +492,7 @@ test("a plan's chip on another plan's page hangs the card the plan's tab hangs, 
     taskName: "Another plan",
     doors: { ...PAGE.doors, holder: { taskId: OTHER_TASK }, anchors: new Set() },
   };
+
   const container = await drawn(
     [
       mentionMarkdown({ kind: MENTION_KIND.TASK, taskId: TASK_ID }, "the plan", PLACE),
@@ -494,6 +504,7 @@ test("a plan's chip on another plan's page hangs the card the plan's tab hangs, 
     ].join(" "),
     elsewhere,
   );
+
   const [listed, unlisted] = chipsOf(container);
 
   const listedCard = await cardOf(listed);
@@ -527,6 +538,7 @@ test("a page's chip hangs its title, its version and who showed it, and when it 
       ),
     ].join(" "),
   );
+
   const [held, unheld, elsewhere, closed] = chipsOf(container);
 
   const page = await cardOf(held);
@@ -563,6 +575,7 @@ test("a file's and a folder's chips hang their path, their repository, and where
       mentionMarkdown({ kind: MENTION_KIND.FOLDER, path: "apps/web" }, "web", PLACE),
     ].join(" "),
   );
+
   const [file, lines, folder] = chipsOf(container);
 
   assert.deepEqual(
@@ -587,6 +600,7 @@ test("an Inbox item's chip hangs its Inbox row's own card, whether the item wait
       `[swept](${HOME}/agent/${WAITING.agentId}/inbox/${SWEEP_ITEM})`,
     ].join(" "),
   );
+
   const [waiting, answered, swept] = chipsOf(container);
 
   const asking = await cardOf(waiting);
@@ -631,6 +645,7 @@ test("an Inbox item's chip whose feed could not be read keeps the card main's br
     STATE,
     { failed: true },
   );
+
   const [waiting, answered] = chipsOf(container);
 
   const brief = await cardOf(waiting);
@@ -681,9 +696,11 @@ test("an automation's chip is called by its name now, its workspace's automation
 
 test("a member's and an automation's chips under another workspace's link are read as that workspace holds them, not the words' own", async () => {
   vi.useFakeTimers({ now: CARDS_NOW, toFake: ["Date", "setTimeout", "clearTimeout"] });
+
   const container = await drawn(
     `Ask [Sam](https://vespin.dev/beta/person/${SAM}) about [the audit](https://vespin.dev/beta/automation/${AUDIT.id}).`,
   );
+
   const [person, automation] = chipsOf(container);
 
   const member = await cardOf(person);

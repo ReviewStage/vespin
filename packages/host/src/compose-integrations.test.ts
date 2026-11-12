@@ -98,6 +98,7 @@ function fakeService(script: ServiceScript) {
   let settles = 0;
   const live = polledLive(["connections"] as const);
   const beside = { offered: INTEGRATION_PROVIDER_LIST, multiple: [] };
+
   const client: IntegrationsClient = {
     // SAFETY: the integrations' read is the one live read the client is asked for, answering its script's rows.
     liveRead: ((_read: unknown, _params: unknown, poll?: { readonly after?: string | undefined }) =>
@@ -113,6 +114,7 @@ function fakeService(script: ServiceScript) {
     connect: (provider) =>
       Effect.sync(() => {
         asked.push(provider);
+
         return script.connectRefused
           ? { failure: INTEGRATION_CALL_FAILURE.UNAVAILABLE }
           : { url: SIGN_IN };
@@ -120,19 +122,23 @@ function fakeService(script: ServiceScript) {
     tools: (provider) =>
       Effect.sync(() => {
         asked.push(provider);
+
         return script.tools ?? LINEAR_TOOLS;
       }),
     cancel: (provider) =>
       Effect.sync(() => {
         asked.push(provider);
+
         if (script.status === INTEGRATION_STATUS.PENDING)
           script.status = INTEGRATION_STATUS.DISCONNECTED;
+
         return { status: script.status };
       }),
     disconnect: (provider) =>
       Effect.sync(() => {
         asked.push(provider);
         script.status = INTEGRATION_STATUS.DISCONNECTED;
+
         return { status: script.status, txid: DISCONNECT_TXID };
       }),
     rename: (provider, connection, label) =>
@@ -140,7 +146,9 @@ function fakeService(script: ServiceScript) {
         script.renameAnswered === undefined ? Effect.void : Deferred.await(script.renameAnswered),
         Effect.sync(() => {
           asked.push(provider);
+
           if (script.renameRefused) return { failure: INTEGRATION_CALL_FAILURE.UNANSWERED };
+
           return {
             account: { provider, connection, label, primary: false, status: script.status },
             txid: RENAME_TXID,
@@ -148,6 +156,7 @@ function fakeService(script: ServiceScript) {
         }),
       ),
   };
+
   const mcpClients: McpClientsClient = {
     list: () =>
       Effect.sync(() => ({ serverUrl: SERVER_URL, clients: [...(script.clients ?? [])] })),
@@ -155,9 +164,11 @@ function fakeService(script: ServiceScript) {
       Effect.sync(() => {
         if (script.revokeFails) return { failure: MCP_CLIENTS_CALL_FAILURE.UNANSWERED };
         script.clients = (script.clients ?? []).filter((each) => each.clientId !== clientId);
+
         return { serverUrl: SERVER_URL, clients: [...script.clients] };
       }),
   };
+
   return { client, mcpClients, opened, asked, live, settles: () => settles };
 }
 
@@ -170,6 +181,7 @@ function subject(
     const focus = yield* windowFocus;
     // Every event the host emitted, in order: the servers' tools, where the integrations stand, and the outside MCP clients each told on its slice.
     const emitted: { kind: GatewayEventKind; payload: WireValue }[] = [];
+
     const composer = yield* composeIntegrations({
       kernel: {
         runMode: { sendsNetwork: options.sendsNetwork ?? true },
@@ -184,16 +196,21 @@ function subject(
       openExternal: (url) =>
         Effect.sync(() => {
           service.opened.push(url);
+
           return options.opens ?? true;
         }),
     }).pipe(Effect.provide(noNetwork));
+
     /** One window's hold on where the integrations stand, until `letIntegrationsGo`. */
     let held = yield* Scope.make();
+
     const holdIntegrations = Effect.gen(function* () {
       held = yield* Scope.make();
       yield* composer.acts.INTEGRATIONS_FOLLOW.hold(undefined).pipe(Scope.provide(held));
     });
+
     const letIntegrationsGo = Effect.suspend(() => Scope.close(held, Exit.void));
+
     return {
       ...service,
       acts: composer.acts,
@@ -224,6 +241,7 @@ it.effect(
       for (const options of [{ signedIn: false }, { sendsNetwork: false }]) {
         const script = { status: INTEGRATION_STATUS.CONNECTED };
         const { holdIntegrations, acts, opened, asked } = yield* subject(script, options);
+
         for (const act of [
           acts.INTEGRATIONS_CONNECT,
           acts.INTEGRATIONS_CANCEL,
@@ -233,6 +251,7 @@ it.effect(
             failure: INTEGRATION_CALL_FAILURE.UNANSWERED,
           });
         }
+
         yield* acts.INTEGRATIONS_TOOLS_FOLLOW.hold(LINEAR);
         yield* holdIntegrations;
         yield* after(A_WHILE);
@@ -263,6 +282,7 @@ it.effect(
       const mended = {
         tools: [...LINEAR_TOOLS.tools, { name: "save_issue", description: "Save." }],
       };
+
       script.tools = mended;
       yield* focus.raise;
       yield* settled;
@@ -278,8 +298,10 @@ it.effect(
         yield* subject({
           status: INTEGRATION_STATUS.CONNECTED,
         });
+
       const drawn = () =>
         integrations().at(-1)?.[USER_ID]?.rows?.integrations[INTEGRATION_PROVIDER.LINEAR];
+
       live.set({ connections: [row("linear", INTEGRATION_PROVIDER.LINEAR, "connected")] });
       yield* holdIntegrations;
       yield* after(A_WHILE);
@@ -320,6 +342,7 @@ it.effect(
       const { letIntegrationsGo, holdIntegrations, settles, live, focus } = yield* subject({
         status: INTEGRATION_STATUS.CONNECTED,
       });
+
       // Linear answers no account's name, so an empty label there is a grant that named nothing, called by its place.
       const placed = { ...row("linear", INTEGRATION_PROVIDER.LINEAR, "connected"), label: "" };
       live.set({ connections: [placed] });
@@ -348,16 +371,19 @@ it.effect(
       const { letIntegrationsGo, holdIntegrations, acts, integrations, live } = yield* subject({
         status: INTEGRATION_STATUS.CONNECTED,
       });
+
       const listed = () =>
         integrations()
           .at(-1)
           ?.[USER_ID]?.rows?.accounts?.map((account) => account.connection) ?? [];
+
       live.set({ connections: [row("linear", INTEGRATION_PROVIDER.LINEAR, "connected")] }, ["1"]);
       yield* holdIntegrations;
       yield* after(Duration.millis(500));
       assert.deepEqual(listed(), ["linear"]);
 
       let answered = false;
+
       const disconnecting = yield* Effect.forkChild(
         Effect.tap(acts.INTEGRATIONS_DISCONNECT(LINEAR), () =>
           Effect.sync(() => {
@@ -365,6 +391,7 @@ it.effect(
           }),
         ),
       );
+
       yield* after(Duration.seconds(1));
       assert.equal(answered, false, "the read does not carry the disconnect yet");
 
@@ -384,8 +411,10 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const script: ServiceScript = { status: INTEGRATION_STATUS.CONNECTED };
+
       const { letIntegrationsGo, holdIntegrations, acts, integrations, live } =
         yield* subject(script);
+
       const label = () => integrations().at(-1)?.[USER_ID]?.rows?.accounts?.[0]?.label;
       live.set({ connections: [row("linear", INTEGRATION_PROVIDER.LINEAR, "connected")] }, ["1"]);
       yield* holdIntegrations;
@@ -429,9 +458,11 @@ it.effect(
       const { acts, clients } = yield* subject(script);
       yield* acts.MCP_CLIENTS_FOLLOW.hold(undefined);
       yield* settled;
+
       const held = (listed: readonly McpClient[]) => ({
         "user-dana": { rows: { serverUrl: SERVER_URL, clients: listed } },
       });
+
       assert.deepEqual(clients().at(-1), held([CLAUDE]));
 
       script.revokeFails = true;

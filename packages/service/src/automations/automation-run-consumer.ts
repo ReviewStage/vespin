@@ -72,14 +72,19 @@ export const consumeAutomationRunMessage = /* @__PURE__ */ Effect.fn(
 ): Effect.fn.Return<void, unknown, StartServices> {
   const now = yield* Clock.currentTimeMillis;
   const delivered = yield* Effect.option(decodeDelivered(message));
+
   if (Option.isNone(delivered)) {
     return yield* Effect.logError("an automation-runs message did not decode; it is dropped");
   }
+
   const firing =
     "executionId" in delivered.value ? scheduledFiring(delivered.value, now) : delivered.value;
+
   const automation = yield* recordFiring(firing);
+
   if (Option.isNone(automation)) return;
   const { trigger } = automation.value;
+
   if (
     firing.firing.kind === AUTOMATION_FIRING.SCHEDULE &&
     trigger.kind === AUTOMATION_TRIGGER.SCHEDULE
@@ -89,7 +94,9 @@ export const consumeAutomationRunMessage = /* @__PURE__ */ Effect.fn(
       nextScheduledRun(trigger, new Date(now)) ?? null,
     );
   }
+
   const run = yield* automationRunToAct(firing.automationId, firing.dedupeKey);
+
   if (Option.isSome(run) && run.value.status === AUTOMATION_RUN_STATUS.QUEUED) {
     yield* actOnAutomationRun(sessionsFor, run.value);
   }

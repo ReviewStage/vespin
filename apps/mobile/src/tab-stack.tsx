@@ -15,6 +15,7 @@ import { Stack } from "expo-router";
  */
 export function TabStack() {
   const colors = useColors();
+
   return (
     <Stack
       screenOptions={{

@@ -133,9 +133,11 @@ test("a task the service will not hand the reader, as a link to another workspac
       ),
     ),
   );
+
   const close = [...container.querySelectorAll("button")].find(
     (each) => each.textContent === "Close task",
   );
+
   act(() => close?.click());
 
   assert.match(
@@ -153,6 +155,7 @@ test("a task the service will not hand the reader, as a link to another workspac
 test("a task's comments are held from its open, so its first ready frame marks them", async () => {
   const body = "## Goal\n\nAn invite lands as a single-use link that expires in seven days.\n";
   const from = body.indexOf("seven days");
+
   const thread = {
     id: "0f9b5f6e-6a8e-4c51-9a0e-2c1f2f0b7a11",
     scope: DESCRIPTION_COMMENT_SCOPE.WORDS,
@@ -176,6 +179,7 @@ test("a task's comments are held from its open, so its first ready frame marks t
     updatedAt: 1,
     revision: 1,
   };
+
   const held: TasksCommentsFollow[] = [];
   fakeAppBridge({});
   handState(experimentsOn(EXPERIMENT.DESCRIPTIONS));
@@ -190,15 +194,18 @@ test("a task's comments are held from its open, so its first ready frame marks t
           [COMMENT_SUBJECT.PAGE]: {},
         }),
       );
+
       return quietHold();
     },
   });
+
   const listed = {
     id: TASK.workspaceId,
     name: "Personal",
     role: WORKSPACE_ROLE.OWNER,
     github: null,
   };
+
   const opened = (region: TasksControl["region"]) =>
     withQueryClient(
       createElement(DesktopTasks, {
@@ -213,6 +220,7 @@ test("a task's comments are held from its open, so its first ready frame marks t
         }),
       }),
     );
+
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -249,6 +257,7 @@ function markupOf(element: ReactElement): string {
   act(() => drawn.render(element));
   const markup = page.innerHTML;
   act(() => drawn.unmount());
+
   return markup;
 }
 
@@ -256,12 +265,16 @@ test("a listed task draws its name, its status, and the column's tab from its ro
   const listed = { ...TASK, status: TASK_STATUS.IN_PROGRESS, priority: TASK_PRIORITY.HIGH };
   /** The rename door the page offers ⌘K, as it stood at the last draw. */
   let renameOffer: ReturnType<typeof useTaskRenameOffer>;
+
   function RenameOfferProbe(): null {
     renameOffer = useTaskRenameOffer();
+
     return null;
   }
+
   const page = document.body.appendChild(document.createElement("div"));
   const root = createRoot(page);
+
   const draw = (experiments: ExperimentChoices) => {
     act(() =>
       root.render(
@@ -294,8 +307,10 @@ test("a listed task draws its name, its status, and the column's tab from its ro
         ),
       ),
     );
+
     return [...page.querySelectorAll('[role="status"]')].map((each) => each.textContent);
   };
+
   const reading = draw(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   assert.ok(
     [...page.querySelectorAll("h1, h2")].some((each) => each.textContent === TASK.name),
@@ -330,6 +345,7 @@ test("a listed task draws its name, its status, and the column's tab from its ro
 
 test("a task with no agent tab draws a new agent's draft", () => {
   const DRAFT_ID = "draft-1";
+
   const drawn = () => {
     const page = document.createElement("div");
     page.innerHTML = markupOf(
@@ -361,8 +377,10 @@ test("a task with no agent tab draws a new agent's draft", () => {
         ),
       ),
     );
+
     return page;
   };
+
   const page = drawn();
   assert.ok(page.querySelector(".desktop-agent .agent-composer"), "the draft's composer is drawn");
 });
@@ -376,6 +394,7 @@ test("a run's task leads its bar with the path to the automation whose run made 
       disconnect(): void {}
     },
   );
+
   const agent: AgentSummary = {
     id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
     planId: TASK.id,
@@ -388,6 +407,7 @@ test("a run's task leads its bar with the path to the automation whose run made 
     automationId: "3f0e6f5c-7d1a-4f6e-9a55-000000000001",
     automationName: "Daily standup",
   };
+
   const page = document.createElement("div");
   page.innerHTML = markupOf(
     windowRouter().provide(
@@ -443,15 +463,18 @@ test("a wide task's details with no agent offer New agent on its Agents group's 
       ),
     ),
   );
+
   const newAgent =
     container.querySelector<HTMLElement>(".plan-agents button[aria-label='New agent']") ??
     assert.fail("New agent is offered");
 
   act(() => newAgent.click());
+
   const back =
     [...container.querySelectorAll<HTMLButtonElement>(".desktop-document button")].find(
       (each) => each.textContent === "Agents",
     ) ?? assert.fail("the way back to the agents stands");
+
   act(() => back.click());
 
   assert.deepEqual(chosen, [draftTab("draft"), draftTab("draft")], "both open a draft alike");
@@ -485,8 +508,10 @@ function panelTab(): HTMLElement {
       ),
     ),
   );
+
   const page = document.createElement("div");
   page.innerHTML = markup;
+
   return page;
 }
 
@@ -566,15 +591,18 @@ async function _narrowTaskInbox(
       removeEventListener: () => undefined,
     }),
   });
+
   // The plan's held read holds `items` from the start, or what `first` says once it settles, and
   // again what `later` says once it settles; one that fails after it answered keeps its rows, as the host keeps them.
   const heldOf = (read: AppHolderInbox): AppHolderInboxes => ({
     [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: read },
   });
+
   let standing: AppHolderInbox = first === undefined ? { rows: items } : UNREAD;
   // Note that the window is a fresh one, so nothing a test before handed it stands.
   fakeAppBridge({});
   const reads = handHostReads({ items: feed, holders: heldOf(standing) });
+
   const pushed = (answer: AgentInboxAnswerView) => {
     standing =
       "failure" in answer
@@ -584,6 +612,7 @@ async function _narrowTaskInbox(
         : { rows: answer.items };
     reads.deliverHolders(heldOf(standing));
   };
+
   void first?.then(pushed);
   void later.then(pushed);
   const container = document.body.appendChild(document.createElement("div"));
@@ -626,6 +655,7 @@ async function _narrowTaskInbox(
   assert.ok(tab, "the plan's Inbox tab");
   vi.spyOn(tab, "getBoundingClientRect").mockReturnValue(DOMRect.fromRect({ width, height: 800 }));
   act(() => relayout());
+
   return {
     /** What a reader finds standing: the list or the item, and the item's title. */
     standing: () => [
@@ -646,9 +676,11 @@ async function _narrowTaskInbox(
     /** What the list's foot says of a refresh that did not land, and whether it offers Retry. */
     refreshFailure: () => {
       const alert = tab.querySelector('.inbox-tasks [role="alert"]');
+
       const retry = [...tab.querySelectorAll(".inbox-tasks button")].some((button) =>
         button.textContent?.includes("Retry"),
       );
+
       return [alert?.firstElementChild?.nextElementSibling?.textContent ?? null, retry];
     },
     back: () =>
@@ -693,9 +725,11 @@ interface HeldAnswer {
 /** A read held open until the test settles it. */
 function _heldAnswer(): HeldAnswer {
   let settle: (answer: AgentInboxAnswerView) => void = () => undefined;
+
   const promise = new Promise<AgentInboxAnswerView>((resolve) => {
     settle = resolve;
   });
+
   return {
     promise,
     settle: async (answer) => {
@@ -714,6 +748,7 @@ test("a plan's document, its way back to the agents pinned in its card, opens on
     role: WORKSPACE_ROLE.MEMBER,
     github: null,
   };
+
   const task: Task = {
     ...TASK,
     repository: "acme/web",
@@ -724,6 +759,7 @@ test("a plan's document, its way back to the agents pinned in its card, opens on
       duringCall: false,
     },
   };
+
   handState(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -751,9 +787,11 @@ test("a plan's document, its way back to the agents pinned in its card, opens on
   await vi.waitFor(() =>
     assert.match(container.querySelector(".description-byline")?.textContent ?? "", /Edited /u),
   );
+
   const body = container.querySelector(
     ".desktop-document .description-document-body .description-body",
   );
+
   // A task from before statuses draws no standing chip.
   const path = body?.firstElementChild;
   const first = path?.nextElementSibling;
@@ -779,12 +817,14 @@ test("a sub-task's row opens the task as a sidebar row does, never a link to its
   fakeAppBridge({});
   fakeActPort({});
   handMembers(() => ({ rows: { members: [] } }));
+
   const home = {
     id: TASK.workspaceId,
     name: "Personal",
     role: WORKSPACE_ROLE.MEMBER,
     github: null,
   };
+
   const child = {
     ...TASK,
     id: "task-child",
@@ -792,6 +832,7 @@ test("a sub-task's row opens the task as a sidebar row does, never a link to its
     number: 2,
     parentTaskId: TASK.id,
   };
+
   const selected: string[] = [];
   const linked: ReadLink[] = [];
   const container = document.body.appendChild(document.createElement("div"));
@@ -839,7 +880,9 @@ test("opening another task draws only its own title and sub-tasks, none of the t
     role: WORKSPACE_ROLE.MEMBER,
     github: null,
   };
+
   const other: Task = { ...TASK, id: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a11", name: "Slack bot" };
+
   const subTask = (id: string, number: number, parentTaskId: string) => ({
     id,
     workspaceId: TASK.workspaceId,
@@ -852,10 +895,12 @@ test("opening another task draws only its own title and sub-tasks, none of the t
     number,
     parentTaskId,
   });
+
   const listed = [subTask("t-2", 2, TASK.id), subTask("t-3", 3, other.id)];
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
+
   const open = (task: Task) =>
     act(() =>
       root.render(
@@ -877,6 +922,7 @@ test("opening another task draws only its own title and sub-tasks, none of the t
         ),
       ),
     );
+
   open(TASK);
   open(other);
 
@@ -905,14 +951,17 @@ test("a chip in the plan naming a pull request one of the task's agents opened o
     status: AGENT_STATUS.COMPLETED,
     turnId: null,
   };
+
   const url = "https://github.com/acme/relay/pull/42";
   const other = "https://github.com/acme/relay/pull/7";
+
   const archived: AgentSummary = {
     ...agent,
     id: "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32",
     title: "An earlier try",
     archivedAt: 4,
   };
+
   const archivedUrl = "https://github.com/acme/relay/pull/9";
   const elsewhere = "https://github.com/acme/billing/pull/3";
   const opened: unknown[] = [];
@@ -922,9 +971,11 @@ test("a chip in the plan naming a pull request one of the task's agents opened o
   fakeActPort({
     [ACT_KIND.GITHUB_OPEN]: ({ url }) => {
       onGitHub.push(url);
+
       return Promise.resolve();
     },
   });
+
   const task: Task = {
     ...TASK,
     repository: "acme/relay",
@@ -933,6 +984,7 @@ test("a chip in the plan naming a pull request one of the task's agents opened o
       assumptions: [],
     },
   };
+
   handState(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -991,6 +1043,7 @@ test("a chip in the plan naming a pull request one of the task's agents opened o
       ),
     ),
   );
+
   const chip = (name: string) =>
     [...container.querySelectorAll<HTMLButtonElement>(".desktop-document [data-mention-ref]")].find(
       (each) => each.querySelector(".ui-inline-ref-label")?.textContent?.includes(name),
@@ -1000,8 +1053,10 @@ test("a chip in the plan naming a pull request one of the task's agents opened o
   const own = await vi.waitFor(() => {
     const found = chip("relay#42");
     assert.ok(found, "the agent's pull request is its chip");
+
     return found;
   });
+
   act(() => own.click());
   assert.deepEqual(opened, [
     { agentId: agent.id, view: PULL_REQUEST_VIEW.CONVERSATION },
@@ -1032,6 +1087,7 @@ test("a chip in the plan naming a pull request one of the task's agents opened o
 function panelPage(tab: SidePanelTab, overrides: Partial<TasksControl> = {}) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
+
   const draw = (shown: SidePanelTab, more: Partial<TasksControl> = {}) =>
     act(() =>
       root.render(
@@ -1053,7 +1109,9 @@ function panelPage(tab: SidePanelTab, overrides: Partial<TasksControl> = {}) {
         ),
       ),
     );
+
   draw(tab);
+
   return {
     container,
     draw,
@@ -1066,6 +1124,7 @@ function panelPage(tab: SidePanelTab, overrides: Partial<TasksControl> = {}) {
 
 test("the description stays drawn, hidden, while an agent's tab of the column is shown, so an edit not yet saved outlives the switch", () => {
   const agentId = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
+
   const column = (tab: MainTab): Partial<TasksControl> => ({
     mainTabs: {
       ...tasksControl().mainTabs,
@@ -1074,6 +1133,7 @@ test("the description stays drawn, hidden, while an agent's tab of the column is
       openAgents: [agentId],
     },
   });
+
   const page = panelPage(NOTES, column(MAIN_TAB.OVERVIEW));
   const document = page.container.querySelector(".desktop-document");
   assert.ok(document, "the description is drawn on Overview");
@@ -1098,6 +1158,7 @@ test("a page of the task's Overview opens in the side panel beside the agents, a
   const columnChosen: MainTab[] = [];
   const closed: string[] = [];
   const agentId = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
+
   const column = (tab: MainTab): Partial<TasksControl> => ({
     mainTabs: {
       ...tasksControl().mainTabs,
@@ -1115,10 +1176,13 @@ test("a page of the task's Overview opens in the side panel beside the agents, a
     },
     pages: [{ id: "page-1", title: "Invite funnel", version: 1, at: 1 }],
   });
+
   const page = panelPage(NOTES, column(MAIN_TAB.OVERVIEW));
+
   const row = [...page.container.querySelectorAll<HTMLButtonElement>("li button")].find((each) =>
     each.textContent?.includes("Invite funnel"),
   );
+
   assert.ok(row, "the Overview lists the task's page");
   act(() => row.click());
   assert.deepEqual(chosen, [pageTab("page-1")]);
@@ -1135,17 +1199,20 @@ test("a page of the task's Overview opens in the side panel beside the agents, a
 function standingPageMounted(keeps: boolean) {
   fakeAppPlatform(QUIET_PANEL);
   fakeAppBridge({});
+
   const task: Task = {
     ...TASK,
     number: 7,
     status: TASK_STATUS.IN_PROGRESS,
     priority: TASK_PRIORITY.HIGH,
   };
+
   const sent: TaskStanding[] = [];
   // A change of standing leaves on the act port, which the service keeps or refuses.
   fakeActPort({
     [ACT_KIND.TASKS_SET_STANDING]: ({ taskId: _taskId, ...standing }) => {
       sent.push(standing);
+
       return Promise.resolve(keeps);
     },
   });
@@ -1174,21 +1241,26 @@ function standingPageMounted(keeps: boolean) {
       ),
     ),
   );
+
   /** The chip named `label`, which says its value after its name. */
   const chip = (label: string) =>
     [...container.querySelectorAll<HTMLButtonElement>("button")].find((each) =>
       each.getAttribute("aria-label")?.startsWith(`${label}:`),
     );
+
   /** Picks `words` from the menu the `label` chip drops, and lets the answer land. */
   const pick = async (label: string, words: string) => {
     act(() => chip(label)?.click());
+
     const row = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((each) =>
       each.textContent?.includes(words),
     );
+
     assert.ok(row, `the ${label} menu offers ${words}`);
     act(() => row.click());
     await act(async () => undefined);
   };
+
   return {
     sent,
     chip,

@@ -116,6 +116,7 @@ function measured(
   image: HTMLImageElement | null,
 ): ImageFrame | undefined {
   if (frame === null || image === null || image.offsetWidth === 0) return undefined;
+
   return {
     frame: { width: frame.clientWidth, height: frame.clientHeight },
     fitted: { width: image.offsetWidth, height: image.offsetHeight },
@@ -125,7 +126,9 @@ function measured(
 /** A wheel's delta in CSS pixels, whatever its `deltaMode` counts: a page is the frame's own length along the delta's axis, `page`. */
 function wheelPixels(event: WheelEvent, delta: number, page: number): number {
   if (event.deltaMode === WHEEL_DELTA.LINE) return delta * WHEEL_LINE_PX;
+
   if (event.deltaMode === WHEEL_DELTA.PAGE) return delta * page;
+
   return delta;
 }
 
@@ -152,11 +155,13 @@ function pinched(
 ): ImageView {
   const { was, now, held } = fingers;
   const apartBefore = Math.hypot(was.x - held.x, was.y - held.y);
+
   if (apartBefore === 0) return view;
   const apartAfter = Math.hypot(now.x - held.x, now.y - held.y);
   const from = between(was, held);
   const to = between(now, held);
   const zoomed = zoomedTo(view, sizes, (view.scale * apartAfter) / apartBefore, from);
+
   return pannedBy(zoomed, sizes, to.x - from.x, to.y - from.y);
 }
 
@@ -164,12 +169,14 @@ function pinched(
 function ownPixels(view: ImageView, sizes: ImageFrame, natural: ImageSize): ImageView {
   if (sizes.fitted.width <= 0) return view;
   const corner = { x: -sizes.fitted.width / 2, y: -sizes.fitted.height / 2 };
+
   return zoomedTo(view, sizes, natural.width / sizes.fitted.width, corner);
 }
 
 /** Where a pointer at `clientX`, `clientY` stands from the frame's center. */
 function pointIn(frame: HTMLElement, clientX: number, clientY: number): FramePoint {
   const box = frame.getBoundingClientRect();
+
   return { x: clientX - box.left - box.width / 2, y: clientY - box.top - box.height / 2 };
 }
 
@@ -192,10 +199,13 @@ export function useImageZoom(
     view: FITTED_VIEW,
     glide: false,
   });
+
   const isShown = (subject: Subject) => subject.name === name && subject.url === url;
+
   const shown: Shown = isShown(stored.subject)
     ? stored
     : { subject: { name, url }, view: FITTED_VIEW, glide: false };
+
   const frame = useRef<HTMLDivElement | null>(null);
   const image = useRef<HTMLImageElement | null>(null);
   // The picture's own pixels once it has loaded, which a frame may fit it by
@@ -212,11 +222,13 @@ export function useImageZoom(
   const change = useCallback(
     (glide: boolean, next: (view: ImageView, sizes: ImageFrame) => ImageView) => {
       const sizes = measured(frame.current, image.current);
+
       if (sizes === undefined) return;
       setShown((last) => {
         const same = last.subject.name === name && last.subject.url === url;
         const from = same ? last.view : FITTED_VIEW;
         const view = next(from, sizes);
+
         // A change that moves nothing, a resize's or a scroll's on a fitted picture, draws nothing.
         return same && sameView(view, from) ? last : { subject: { name, url }, view, glide };
       });
@@ -230,53 +242,70 @@ export function useImageZoom(
   const frameRef = useCallback(
     (element: HTMLDivElement | null) => {
       frame.current = element;
+
       if (element === null) return undefined;
+
       const wheel = (event: WheelEvent) => {
         const at = pointIn(element, event.clientX, event.clientY);
         const dx = wheelPixels(event, event.deltaX, element.clientWidth);
         const dy = wheelPixels(event, event.deltaY, element.clientHeight);
+
         if (event.ctrlKey) {
           event.preventDefault();
           change(false, (view, sizes) => zoomedByWheel(view, sizes, dy, at));
+
           return;
         }
+
         change(false, (view, sizes) => pannedBy(view, sizes, -dx, -dy));
       };
+
       // A frame or a fitted picture resized holds the picture's edges to the frame's again.
       const resized = new ResizeObserver(() =>
         change(false, (view, sizes) => pannedBy(view, sizes, 0, 0)),
       );
+
       resized.observe(element);
+
       if (image.current !== null) resized.observe(image.current);
+
       const down = (event: PointerEvent) => {
         fingers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
         // A second finger, on the picture or the frame around it, makes the press a pinch, which is no press.
         if (fingers.current.size > 1 && press.current !== undefined) press.current.moved = true;
       };
+
       // Note that a finger is heard on the frame rather than the picture, so
       // a pinch begun on the frame's ground around a small picture still
       // zooms it, and before the picture's own handlers, which leave a pinch alone.
       const move = (event: PointerEvent) => {
         const was = fingers.current.get(event.pointerId);
+
         if (was === undefined) return;
         const now = { x: event.clientX, y: event.clientY };
         fingers.current.set(event.pointerId, now);
+
         if (fingers.current.size !== 2) return;
         const held = [...fingers.current].find(([id]) => id !== event.pointerId)?.[1];
+
         if (held === undefined) return;
         const at = (spot: Spot) => pointIn(element, spot.x, spot.y);
         change(false, (view, sizes) =>
           pinched(view, sizes, { was: at(was), now: at(now), held: at(held) }),
         );
       };
+
       const up = (event: PointerEvent) => {
         fingers.current.delete(event.pointerId);
       };
+
       element.addEventListener("wheel", wheel, { passive: false });
       element.addEventListener("pointerdown", down);
       element.addEventListener("pointermove", move);
       element.addEventListener("pointerup", up);
       element.addEventListener("pointercancel", up);
+
       return () => {
         resized.disconnect();
         element.removeEventListener("wheel", wheel);
@@ -295,6 +324,7 @@ export function useImageZoom(
   // pixels are read here, before it is painted at the last picture's.
   useLayoutEffect(() => {
     const element = image.current;
+
     if (element === null || !element.complete || element.naturalWidth === 0) return;
     setLoaded({ width: element.naturalWidth, height: element.naturalHeight });
   }, [url]);
@@ -304,14 +334,17 @@ export function useImageZoom(
 
   const keyDown = (event: React.KeyboardEvent): boolean => {
     if (event.metaKey || event.ctrlKey || event.altKey) return false;
+
     if (ZOOM_KEY.IN.has(event.key)) step(1);
     else if (ZOOM_KEY.OUT.has(event.key)) step(-1);
     else if (event.key === ZOOM_KEY.FIT) change(true, () => FITTED_VIEW);
     else return false;
+
     return true;
   };
 
   const { view, glide } = shown;
+
   return {
     zoomed: isZoomed(view),
     frameRef,
@@ -335,17 +368,22 @@ export function useImageZoom(
           width: event.currentTarget.naturalWidth,
           height: event.currentTarget.naturalHeight,
         };
+
         setLoaded(natural);
+
         if (opening !== IMAGE_OPENING.OWN_PIXELS) return;
         change(false, (view, sizes) => (isZoomed(view) ? view : ownPixels(view, sizes, natural)));
       },
       onPointerDown: (event) => {
         if (event.button !== 0) return;
+
         // A second finger down makes the press a pinch, which is no press.
         if (fingers.current.size > 1) {
           if (press.current !== undefined) press.current.moved = true;
+
           return;
         }
+
         press.current = {
           pointerId: event.pointerId,
           startX: event.clientX,
@@ -358,37 +396,47 @@ export function useImageZoom(
       },
       onPointerMove: (event) => {
         const held = press.current;
+
         if (held === undefined || (event.buttons & 1) === 0) return;
+
         // A pinch zooms on the frame (above); the finger that began the press
         // keeps its place, so lifting the other drags on from where it stands.
         if (fingers.current.size > 1 || event.pointerId !== held.pointerId) {
           held.moved = true;
+
           if (event.pointerId === held.pointerId) {
             held.x = event.clientX;
             held.y = event.clientY;
           }
+
           return;
         }
+
         const dx = event.clientX - held.x;
         const dy = event.clientY - held.y;
         held.x = event.clientX;
         held.y = event.clientY;
         const wandered = Math.hypot(event.clientX - held.startX, event.clientY - held.startY);
+
         if (wandered > PRESS_SLACK_PX) held.moved = true;
         change(false, (last, sizes) => pannedBy(last, sizes, dx, dy));
       },
       onClick: (event) => {
         const held = press.current;
         press.current = undefined;
+
         // A drag that ends on the picture moved it, and is no press.
         if (held?.moved === true) return;
         pulsePress(event.currentTarget, PRESS_PULSE.QUIET);
+
         if (frame.current === null) return;
         const at = pointIn(frame.current, event.clientX, event.clientY);
+
         const natural = {
           width: event.currentTarget.naturalWidth,
           height: event.currentTarget.naturalHeight,
         };
+
         change(true, (last, sizes) => pressedAt(last, sizes, natural, at));
       },
     },

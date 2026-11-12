@@ -34,6 +34,7 @@ const decodeFiles = Schema.decodeUnknownOption(FilesSchema);
  */
 function memoryStorage(): Storage {
   const items = new Map<string, string>();
+
   return {
     get length() {
       return items.size;
@@ -59,6 +60,7 @@ export function tabStorage(): Storage {
     return window.localStorage;
   } catch (error) {
     console.warn("The browser blocks this site's storage; settings last only this tab.", error);
+
     return memoryStorage();
   }
 }
@@ -112,11 +114,13 @@ export function localStorageFileSystem(
       try: () => storage.setItem(FILES_KEY, JSON.stringify(change(readFiles(storage)))),
       catch: (cause) => refused(method, path, cause),
     });
+
   return FileSystem.layerNoop({
     exists: (path) => Effect.sync(() => Object.hasOwn(readFiles(storage), path)),
     readFileString: (path) =>
       Effect.suspend(() => {
         const files = readFiles(storage);
+
         return Object.hasOwn(files, path)
           ? Effect.succeed(files[path] ?? "")
           : Effect.fail(missing("readFileString", path));
@@ -133,21 +137,27 @@ export function localStorageFileSystem(
     rename: (oldPath, newPath) =>
       Effect.suspend(() => {
         const files = readFiles(storage);
+
         if (!Object.hasOwn(files, oldPath)) return Effect.fail(missing("rename", oldPath));
+
         return write("rename", newPath, () => {
           const { [oldPath]: moved = "", ...rest } = files;
+
           return { ...rest, [newPath]: moved };
         });
       }),
     remove: (path, options) =>
       Effect.suspend(() => {
         const files = readFiles(storage);
+
         const gone = Object.keys(files).filter((held) =>
           options?.recursive === true ? within(held, path) : held === path,
         );
+
         if (gone.length === 0) {
           return options?.force === true ? Effect.void : Effect.fail(missing("remove", path));
         }
+
         return write("remove", path, () =>
           Object.fromEntries(Object.entries(files).filter(([held]) => !gone.includes(held))),
         );

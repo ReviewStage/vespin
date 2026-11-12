@@ -68,6 +68,7 @@ function isWireSchema(schema: unknown): schema is Schema.Codec<unknown, unknown>
 function carried(kind: PortActKind, answer: unknown): boolean {
   const [declared] = actContract[kind]["~orpc"].outputSchemas ?? [];
   assert.ok(isWireSchema(declared), `${kind} declares a wire schema`);
+
   return Result.isSuccess(Schema.encodeUnknownResult(Schema.flip(declared))(answer));
 }
 
@@ -79,6 +80,7 @@ function answered<Kind extends PortActKind>(
 ): PortActResult<Kind> {
   const staged = agentActAnswer(profile, kind, payload as PortActPayload<PortActKind>);
   assert.ok(staged, `${profile} answers ${kind}`);
+
   // SAFETY: the profile answered this kind's read, with this kind's result.
   return staged.answer as PortActResult<Kind>;
 }
@@ -97,23 +99,31 @@ it("every read an agent profile answers is one the act port's contract carries",
 /** What each hunk of a patch says it counts and what it holds, old side and new, as `old/new`. */
 function hunkCounts(patch: string): readonly { readonly said: string; readonly held: string }[] {
   const hunks: { said: string; old: number; new: number }[] = [];
+
   for (const line of patch.split("\n")) {
     const header = /^@@ -\d+(?:,(\d+))? \+\d+(?:,(\d+))? @@/u.exec(line);
+
     if (header !== null) {
       hunks.push({ said: `${header[1] ?? "1"}/${header[2] ?? "1"}`, old: 0, new: 0 });
       continue;
     }
+
     const hunk = hunks.at(-1);
+
     if (hunk === undefined) continue;
+
     if (!line.startsWith("+")) hunk.old += 1;
+
     if (!line.startsWith("-")) hunk.new += 1;
   }
+
   return hunks.map((hunk) => ({ said: hunk.said, held: `${hunk.old}/${hunk.new}` }));
 }
 
 it("every changed file's patch counts the lines its hunks hold, as the diff view reads it", () => {
   const changes = answered(RUN_PROFILE.AGENT_FILES, ACT_KIND.AGENTS_CHANGES, AGENT);
   assert.ok("pullRequest" in changes && changes.pullRequest !== null);
+
   const miscounted = changes.pullRequest.files.flatMap((file) =>
     hunkCounts(file.patch ?? "").flatMap(({ said, held }) =>
       said === held ? [] : [`${file.path}: says ${said}, holds ${held}`],
@@ -129,9 +139,12 @@ function listedFiles(path: string): readonly string[] {
     planId: FIXTURE_TASK_ID,
     path,
   });
+
   assert.ok("folder" in listed, `${path || "the root"} is listed`);
+
   return listed.folder.entries.flatMap((entry) => {
     const at = path === "" ? entry.name : `${path}/${entry.name}`;
+
     return entry.kind === TASK_TREE_ENTRY.FOLDER ? listedFiles(at) : [at];
   });
 }
@@ -140,6 +153,7 @@ it("every file the File tab's tree lists, and every file the pull request change
   const changes = answered(RUN_PROFILE.AGENT_FILES, ACT_KIND.AGENTS_CHANGES, AGENT);
   assert.ok("pullRequest" in changes && changes.pullRequest !== null);
   const listed = listedFiles("");
+
   const unread = [
     ...new Set([...listed, ...changes.pullRequest.files.map((file) => file.path)]),
   ].filter((path) => {
@@ -150,6 +164,7 @@ it("every file the File tab's tree lists, and every file the pull request change
       lastLine: 1,
       raw: true,
     });
+
     return !("text" in read);
   });
 
@@ -182,10 +197,12 @@ it.effect(
       fakeActPort({
         [ACT_KIND.AGENTS_LIST]: () => {
           sent.push(ACT_KIND.AGENTS_LIST);
+
           return Promise.resolve({ agents: [] });
         },
         [ACT_KIND.GITHUB_TOKEN_REMOVE]: () => {
           sent.push(ACT_KIND.GITHUB_TOKEN_REMOVE);
+
           return Promise.resolve({ token: null });
         },
       });
@@ -193,6 +210,7 @@ it.effect(
       const listed = yield* Effect.promise(() =>
         askAct(ACT_KIND.AGENTS_LIST, { taskId: FIXTURE_TASK_ID }),
       );
+
       const token = yield* Effect.promise(() => askAct(ACT_KIND.GITHUB_TOKEN_REMOVE));
 
       assert.ok("agents" in listed);

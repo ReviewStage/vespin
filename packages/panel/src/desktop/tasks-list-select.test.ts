@@ -183,29 +183,39 @@ async function mountPage(held?: TasksPageHeld): Promise<{
   hold: (tasks: readonly TaskSummary[], taskSections?: TaskSections) => void;
 }> {
   let restand: ((view: TasksView) => void) | undefined;
+
   /** A status the service keeps, written down. */
   const keepStanding = (payload: unknown) => {
     const standing = Option.getOrUndefined(readStanding(payload));
+
     if (standing !== undefined) asked.push([standing.taskId, standing.status]);
+
     return Promise.resolve(true);
   };
+
   // Note that the status and section writes and deletes are sent on their mutations, which reach the act port, each answered as kept.
   fakeActPort({
     [ACT_KIND.TASKS_SET_STANDING]: keepStanding,
     [ACT_KIND.TASKS_WRITE_SECTION]: (payload) => {
       const places = Option.getOrUndefined(readPlaces(payload))?.writes ?? [];
+
       for (const place of places) placed.push([place.taskId, place.sectionId]);
+
       return Promise.resolve(true);
     },
     [ACT_KIND.TASKS_DELETE]: (payload) => {
       const doomed = Option.getOrUndefined(readDelete(payload));
+
       if (doomed !== undefined) deleted.push(doomed.taskId);
+
       return Promise.resolve(doomed === undefined || !refusing.has(doomed.taskId));
     },
   });
+
   function Page() {
     const [view, setView] = useState(viewOf(TASKS));
     restand = setView;
+
     const control = useTasksTab({
       tasks: view,
       run: { fixtureMode: false, profile: RUN_PROFILE.IDLE },
@@ -229,8 +239,10 @@ async function mountPage(held?: TasksPageHeld): Promise<{
       startStands: () => undefined,
       leaveStart: () => false,
     });
+
     return createElement(TasksPage, { tasks: control, room: SHELL_ROOM.WIDE, held });
   }
+
   // Note that the sections are read off main's document, as the window's surfaces read them (`use-pin-writes.ts`).
   writeListedTasks({ taskSections: sectionsHolding([]) });
   const page = document.createElement("div");
@@ -247,6 +259,7 @@ async function mountPage(held?: TasksPageHeld): Promise<{
     ),
   );
   await settle();
+
   return {
     page,
     hold: (tasks, taskSections = sectionsHolding([])) =>
@@ -270,8 +283,10 @@ function pressOf(page: HTMLElement, key: string): HTMLButtonElement {
   const row = [...page.querySelectorAll<HTMLElement>(".tasks-list-group li")].find(
     (each) => each.querySelector("[data-task-key]")?.textContent === key,
   );
+
   const press = row?.querySelector<HTMLButtonElement>("[data-card-press]");
   assert.ok(press, `the row of ${key} stands`);
+
   return press;
 }
 
@@ -296,6 +311,7 @@ function choose(name: string): void {
   const item = [
     ...document.querySelectorAll<HTMLElement>('[role="menu"]:not([data-leaving]) .ui-menu-item'),
   ].find((each) => each.querySelector(".ui-menu-item-label")?.textContent === name);
+
   assert.ok(item, `${name} is in the menu`);
   act(() => item.click());
 }
@@ -313,6 +329,7 @@ function rightClick(page: HTMLElement, key: string): void {
 function openMenu(): { heading: string | undefined; items: string[] } {
   const menu = document.querySelector<HTMLElement>('[role="menu"]:not([data-leaving])');
   assert.ok(menu, "a menu stands open");
+
   return {
     heading: menu.querySelector(".ui-menu-heading")?.textContent ?? undefined,
     items: [...menu.querySelectorAll(".ui-menu-item-label")].map(
@@ -326,7 +343,9 @@ function barButton(page: HTMLElement, name: string): HTMLButtonElement {
   const button = [...page.querySelectorAll<HTMLButtonElement>('[role="toolbar"] button')].find(
     (each) => each.textContent?.trim() === name,
   );
+
   assert.ok(button, `the bar offers ${name}`);
+
   return button;
 }
 
@@ -537,9 +556,11 @@ test("the bar's Permanently delete asks first, naming how many, and deletes only
   const question = document.querySelector<HTMLElement>('[role="alertdialog"]');
   assert.match(question?.textContent ?? "", /Permanently delete 2 tasks\?/u);
   assert.deepEqual(deleted, [], "nothing goes before the answer");
+
   const confirm = [...(question?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
     (button) => button.textContent === "Permanently delete tasks",
   );
+
   assert.ok(confirm, "the question offers Permanently delete tasks");
   act(() => confirm.click());
   await settle();
@@ -554,10 +575,12 @@ test("a delete the service refuses for some tasks keeps only those asked of and 
   commandClick(page, "ACME-42");
   refusing.add("t-42");
   const question = () => document.querySelector<HTMLElement>('[role="alertdialog"]');
+
   const press = (verb: string) => {
     const button = [...(question()?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
       (each) => each.textContent === verb,
     );
+
     act(() => (button ?? assert.fail(`the question offers ${verb}`)).click());
   };
 
@@ -581,6 +604,7 @@ test("a delete the service refuses for some tasks keeps only those asked of and 
 test("a task folded away leaves the selection, and reopening its group chooses it no more", async () => {
   const { page } = await mountPage();
   commandClick(page, "ACME-39");
+
   const fold = () => {
     const head = page.querySelector<HTMLButtonElement>('section[aria-label="Todo"] h2 button');
     assert.ok(head, "Todo folds by its head");

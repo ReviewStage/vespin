@@ -42,6 +42,7 @@ const BLEED = {
 /** The step's way on, the foot's one primary press. */
 function NextButton({ next }: { next: AuthStepNext }): React.JSX.Element {
   const { label, onPress, ...pressed } = next;
+
   return (
     <Button variant={BUTTON_VARIANT.PRIMARY} onClick={onPress} {...pressed}>
       {label}

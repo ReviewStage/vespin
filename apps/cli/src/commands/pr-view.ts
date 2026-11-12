@@ -63,6 +63,7 @@ export const pullRequestNamed = Effect.fnUntraced(function* (
   number: Option.Option<number>,
 ) {
   const named = cliPullRequestRefOf(argument);
+
   if (named === undefined) {
     return {
       by: NAMED_BY.AGENT,
@@ -70,13 +71,16 @@ export const pullRequestNamed = Effect.fnUntraced(function* (
       ...(Option.isSome(number) ? { number: String(number.value) } : {}),
     } as const;
   }
+
   if (Option.isSome(number)) {
     return yield* new CommandFailed({
       exit: CLI_EXIT.USAGE,
       message: "--number goes with an agent's id alone; a pull request's link names its own.",
     });
   }
+
   const { workspace } = yield* resolveWorkspace;
+
   return {
     by: NAMED_BY.REPOSITORY,
     query: {
@@ -92,8 +96,10 @@ const readsOf = Effect.fnUntraced(function* (
   named: Effect.Success<ReturnType<typeof pullRequestNamed>>,
 ) {
   const { hosted } = yield* session;
+
   if (named.by === NAMED_BY.REPOSITORY) {
     const { query } = named;
+
     return {
       pullRequest: askService(hosted.pullRequests.pullRequest, query),
       overview: askService(hosted.pullRequests.overviewPullRequest, query),
@@ -103,7 +109,9 @@ const readsOf = Effect.fnUntraced(function* (
       viewed: askService(hosted.pullRequests.viewed, query),
     };
   }
+
   const { by: _by, ...input } = named;
+
   return {
     pullRequest: askService(hosted.agentPullRequests.pullRequest, input),
     overview: askService(hosted.agentPullRequests.overviewPullRequest, input),
@@ -125,8 +133,10 @@ function overviewLines(
   overview: AgentOverviewPullRequest | null,
 ): string[] {
   const counts = `checks ${pullRequest.checks}  +${pullRequest.additions} -${pullRequest.deletions}`;
+
   if (overview === null) return [counts];
   const labels = overview.labels?.map((label) => label.name).join(", ") ?? "";
+
   return [
     `${overview.title} #${overview.number}`,
     `${overview.state}  merge ${overview.merge}  ${counts}`,
@@ -140,6 +150,7 @@ function overviewLines(
 
 function checksLines(checks: AgentOverviewChecks | null): string[] {
   if (checks === null) return ["No checks."];
+
   return [
     ...columns(checks.checks.map((check) => [check.state, check.name, check.url ?? ""])),
     ...columns(
@@ -156,6 +167,7 @@ function checksLines(checks: AgentOverviewChecks | null): string[] {
 function entryLines(entry: ConversationEntry): string[] {
   const state = entry.state === undefined ? entry.kind : `${entry.kind} ${entry.state}`;
   const at = new Date(entry.at).toISOString();
+
   return [
     `${entry.by.login} (${state}) ${at}`,
     ...indented(entry.body),
@@ -172,6 +184,7 @@ function entryLines(entry: ConversationEntry): string[] {
 
 function conversationLines(conversation: AgentOverviewConversation | null): string[] {
   if (conversation === null) return ["No conversation."];
+
   return [
     ...(conversation.earlier > 0
       ? [`${conversation.earlier} earlier entries are on GitHub alone.`, ""]
@@ -217,12 +230,14 @@ export const viewCommand = Command.make(
       const json: Record<string, unknown> = {};
       const lines: string[] = [];
       let ids: readonly string[] | undefined;
+
       if (overview) {
         const published = yield* reads.pullRequest;
         const read = yield* reads.overview;
         json.pullRequest = published.pullRequest;
         json.branch = published.branch;
         json.overview = read.pullRequest;
+
         if (published.pullRequest === null) {
           lines.push("No pull request: the agent opened none yet.");
         } else {
@@ -230,35 +245,44 @@ export const viewCommand = Command.make(
           ids = [published.pullRequest.url];
         }
       }
+
       if (checks) {
         const read = yield* reads.checks;
         json.checks = read.pullRequest;
         lines.push(...checksLines(read.pullRequest));
       }
+
       if (conversation) {
         const read = yield* reads.conversation;
         json.conversation = read.pullRequest;
         lines.push(...conversationLines(read.pullRequest));
       }
+
       if (diff || stat) {
         const { pullRequest: changes } = yield* reads.changes;
         json.changes = changes;
+
         if (changes?.truncated === true) {
           yield* note(`GitHub listed only the first ${changes.files.length} files.`);
         }
+
         const files = changes?.files ?? [];
         ids = files.map((file) => file.path);
+
         if (stat) {
           const viewed = yield* reads.viewed;
           json.viewed = viewed;
           const marks = viewedMarks(viewed);
+
           if (marks === undefined) yield* note("Could not read which files you marked viewed.");
           lines.push(
             ...columns(files.map((file) => [...fileStatRow(file), marks?.get(file.path) ?? ""])),
           );
         }
+
         if (diff) lines.push(...files.flatMap(fileDiffLines));
       }
+
       yield* answer({ json, lines, ...(ids === undefined ? {} : { ids }) });
     }),
 ).pipe(

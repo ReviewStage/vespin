@@ -67,17 +67,24 @@ function browser(
   pages?: readonly PageTarget[],
 ) {
   const sent: FakeCdpCommand[] = [];
+
   const answer = (command: FakeCdpCommand): FakeCdpAnswer | undefined => {
     sent.push(command);
     const answered = own(command);
+
     if (answered !== undefined) return answered;
+
     if (command.method === "Target.attachToTarget") {
       return { result: { sessionId: `session-${String(command.params.targetId)}` } };
     }
+
     if (command.method === "Page.navigate") return { result: { frameId: "frame-1" } };
+
     if (command.method === "Page.getLayoutMetrics") return { result: LAYOUT };
+
     return PLAIN.has(command.method) ? { result: {} } : undefined;
   };
+
   return Effect.map(fakeCdpPeer(pages === undefined ? { answer } : { answer, pages }), (peer) => ({
     peer,
     sent,
@@ -93,10 +100,12 @@ function run(
 ) {
   const { api } = fakeSandboxApi({ status: "running", sessionId: SESSION });
   const service = agentBrowserOver(api, fakeBridgePty(peer), FAKE_IMAGE);
+
   const options = {
     ...(cursor === undefined ? undefined : { cursor }),
     ...(keep ? { keepScreenshots: true } : undefined),
   };
+
   return Effect.scoped(
     Effect.flatMap(service.connect(SESSION), (cdp) => runBrowserActions(cdp, actions, options)),
   );
@@ -108,6 +117,7 @@ const base64Of = (bytes: number) => "A".repeat(Math.ceil(bytes / 3) * 4);
 /** A cursor that writes each move it hears into the browser's own record, so the order of moves and commands reads as one. */
 function cursorInto(sent: FakeCdpCommand[]) {
   const moves: BrowserCursorMove[] = [];
+
   const cursor: BrowserCursor = {
     report: (move) =>
       Effect.sync(() => {
@@ -115,6 +125,7 @@ function cursorInto(sent: FakeCdpCommand[]) {
         sent.push({ method: "cursor", params: { kind: move.kind, x: move.x, y: move.y } });
       }),
   };
+
   return { cursor, moves };
 }
 
@@ -124,6 +135,7 @@ function pageCommands(sent: readonly FakeCdpCommand[]) {
     .filter((command) => command.method !== "Target.getTargets")
     .map(({ method, params, sessionId }) => {
       if (method === "Runtime.evaluate") return { method, sessionId };
+
       return sessionId === undefined ? { method, params } : { method, params, sessionId };
     });
 }
@@ -308,15 +320,18 @@ it.effect(
       const { peer, sent } = yield* browser(
         (command) => {
           if (command.method === "Accessibility.getFullAXTree") return { result: SHOP_TREE };
+
           if (command.method === "DOM.getContentQuads" && command.params.backendNodeId === 42) {
             return { result: { quads: [[100, 200, 140, 200, 140, 220, 100, 220]] } };
           }
+
           if (
             command.method === "DOM.scrollIntoViewIfNeeded" &&
             command.params.backendNodeId === 99
           ) {
             return { error: { code: -32000, message: "No node with given id found" } };
           }
+
           return undefined;
         },
         [{ targetId: "page-shop", url: "https://shop.example/", title: "Shop" }],
@@ -325,6 +340,7 @@ it.effect(
       const snapshotted = yield* run(peer, [
         { action: BROWSER_AGENT_ACTION.SNAPSHOT, tab: "page-shop" },
       ]);
+
       const clicked = yield* run(peer, [
         { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", ref: "e42" },
         { action: BROWSER_AGENT_ACTION.CLICK, ref: "e99" },
@@ -347,10 +363,12 @@ it.effect(
           truncated: false,
         },
       ]);
+
       const pressed = sent.find(
         (command) =>
           command.method === "Input.dispatchMouseEvent" && command.params.type === "mousePressed",
       );
+
       assert.deepEqual([pressed?.params.x, pressed?.params.y], [120, 210]);
       assert.equal(clicked.steps[0]?.status, BROWSER_STEP_STATUS.DONE);
       assert.match(
@@ -367,17 +385,20 @@ it.effect("a ref whose middle another element covers fails before it is clicked"
         if (command.method === "DOM.getContentQuads") {
           return { result: { quads: [[100, 200, 140, 200, 140, 220, 100, 220]] } };
         }
+
         if (command.method === "DOM.resolveNode") {
           return {
             result: { object: { objectId: `node-${String(command.params.backendNodeId)}` } },
           };
         }
+
         if (command.method === "Runtime.callFunctionOn") {
           // A cookie banner lies over e42; e5 is clear.
           return {
             result: { result: { value: command.params.objectId === "node-42" ? "div" : "" } },
           };
         }
+
         return undefined;
       },
       [{ targetId: "page-shop", url: "https://shop.example/", title: "Shop" }],
@@ -386,7 +407,9 @@ it.effect("a ref whose middle another element covers fails before it is clicked"
     const covered = yield* run(peer, [
       { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", ref: "e42" },
     ]);
+
     const pressedBefore = sent.filter((command) => command.params.type === "mousePressed").length;
+
     const clear = yield* run(peer, [
       { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", ref: "e5" },
     ]);
@@ -405,6 +428,7 @@ it.effect("typing where nothing that takes text has the focus fails, and sends n
         if (command.method !== "Runtime.evaluate") return undefined;
         // The page's body has the focus, so only the check that asks whether it takes text answers no.
         const asksTakesText = String(command.params.expression).includes("isContentEditable");
+
         return { result: { result: { value: asksTakesText ? false : null } } };
       },
       [{ targetId: "page-shop", url: "https://shop.example/", title: "Shop" }],
@@ -413,6 +437,7 @@ it.effect("typing where nothing that takes text has the focus fails, and sends n
     const nowhere = yield* run(peer, [
       { action: BROWSER_AGENT_ACTION.TYPE, tab: "page-shop", text: "hello" },
     ]);
+
     const button = yield* run(peer, [
       { action: BROWSER_AGENT_ACTION.TYPE, tab: "page-shop", ref: "e42", text: "hello" },
     ]);
@@ -429,9 +454,11 @@ it.effect("a sequence stops at its first failure, says why, and counts what neve
       if (command.method === "Target.closeTarget" && command.params.targetId === "page-vanished") {
         return { result: { success: false } };
       }
+
       if (command.method === "Target.attachToTarget" && command.params.targetId === "page-gone") {
         return { error: { code: -32602, message: "No target with given id found" } };
       }
+
       return command.method === "Page.navigate" && command.params.url === "https://nowhere.invalid/"
         ? { result: { frameId: "frame-1", errorText: "net::ERR_NAME_NOT_RESOLVED" } }
         : undefined;
@@ -443,11 +470,14 @@ it.effect("a sequence stops at its first failure, says why, and counts what neve
       { action: BROWSER_AGENT_ACTION.SNAPSHOT },
       { action: BROWSER_AGENT_ACTION.CLOSE },
     ]);
+
     const unnamed = yield* run(peer, [{ action: BROWSER_AGENT_ACTION.SCREENSHOT }]);
+
     const unclosed = yield* run(peer, [
       { action: BROWSER_AGENT_ACTION.CLOSE, tab: "page-vanished" },
       { action: BROWSER_AGENT_ACTION.LIST },
     ]);
+
     const unknown = yield* run(peer, [
       { action: BROWSER_AGENT_ACTION.KEY, tab: "page-gone", key: "Enter" },
       { action: BROWSER_AGENT_ACTION.LIST },
@@ -489,26 +519,34 @@ it.effect(
   () =>
     Effect.gen(function* () {
       let asked = 0;
+
       const { peer } = yield* browser((command) => {
         if (command.method === "Input.dispatchMouseEvent") return { silent: true };
+
         if (command.method !== "Runtime.evaluate") return undefined;
         asked += 1;
+
         return { result: { result: { value: asked < 3 || asked > 10 ? "loading" : "complete" } } };
       });
+
       const tab = "page-blank";
 
       const loading = yield* Effect.forkChild(
         run(peer, [{ action: BROWSER_AGENT_ACTION.WAIT, tab }]),
       );
+
       yield* TestClock.adjust(Duration.seconds(1));
       const loaded = yield* Fiber.join(loading);
       asked = 10;
+
       const stuck = yield* Effect.forkChild(
         run(peer, [{ action: BROWSER_AGENT_ACTION.WAIT, tab, timeoutMs: 2_000 }]),
       );
+
       const slow = yield* Effect.forkChild(
         run(peer, [{ action: BROWSER_AGENT_ACTION.CLICK, tab, x: 1, y: 1 }]),
       );
+
       yield* TestClock.adjust(Duration.millis(BROWSER_AGENT_LIMITS.ACTION_TIMEOUT_MS));
 
       assert.deepEqual(loaded.steps, [{ action: "wait", status: "done", tab }]);
@@ -529,6 +567,7 @@ it.effect(
     Effect.gen(function* () {
       const tooLarge = "A".repeat(Math.ceil((BROWSER_SCREENSHOT.MAX_BYTES + 3) / 3) * 4);
       const qualities: unknown[] = [];
+
       const { peer, sent } = yield* browser((command) => {
         if (command.method === "Page.getLayoutMetrics") {
           return {
@@ -538,9 +577,12 @@ it.effect(
             },
           };
         }
+
         if (command.method === "Runtime.evaluate") return { result: { result: { value: 2 } } };
+
         if (command.method !== "Page.captureScreenshot") return undefined;
         qualities.push(command.params.quality);
+
         return { result: { data: command.params.quality === 70 ? tooLarge : "/9j/AAAA" } };
       });
 
@@ -571,8 +613,10 @@ it.effect(
 it.effect("a screenshot that never fits the byte cap fails and says what to do instead", () =>
   Effect.gen(function* () {
     const tooLarge = "A".repeat(Math.ceil((BROWSER_SCREENSHOT.MAX_BYTES + 3) / 3) * 4);
+
     const { peer } = yield* browser((command) => {
       if (command.method === "Runtime.evaluate") return { result: { result: { value: 1 } } };
+
       return command.method === "Page.captureScreenshot"
         ? { result: { data: tooLarge } }
         : undefined;
@@ -590,6 +634,7 @@ it.effect(
     Effect.gen(function* () {
       const kept = base64Of(600_000);
       const captures: unknown[] = [];
+
       const { peer } = yield* browser((command) => {
         if (command.method === "Page.getLayoutMetrics") {
           return {
@@ -599,11 +644,15 @@ it.effect(
             },
           };
         }
+
         if (command.method === "Runtime.evaluate") return { result: { result: { value: 2 } } };
+
         if (command.method !== "Page.captureScreenshot") return undefined;
         const { format, quality, clip } = command.params;
         captures.push({ format, quality, clip });
+
         if (format === "png") return { result: { data: base64Of(900_000) } };
+
         return { result: { data: quality === 85 ? kept : "/9j/AAAA" } };
       });
 
@@ -635,10 +684,14 @@ it.effect(
 it.effect("a kept copy is a PNG where the PNG is the smaller", () =>
   Effect.gen(function* () {
     const png = base64Of(200_000);
+
     const { peer } = yield* browser((command) => {
       if (command.method === "Runtime.evaluate") return { result: { result: { value: 1 } } };
+
       if (command.method !== "Page.captureScreenshot") return undefined;
+
       if (command.params.format === "png") return { result: { data: png } };
+
       return { result: { data: command.params.quality === 85 ? base64Of(400_000) : "/9j/AAAA" } };
     });
 
@@ -664,17 +717,24 @@ it.effect(
       let fitAt = 50;
       let shown = false;
       const kept: unknown[] = [];
+
       const { peer } = yield* browser((command) => {
         if (command.method === "Runtime.evaluate") return { result: { result: { value: 1 } } };
+
         if (command.method !== "Page.captureScreenshot") return undefined;
+
         // Note that the model's copy is asked for first, so the first JPEG is its own.
         if (command.params.format === "jpeg" && !shown) {
           shown = true;
+
           return { result: { data: "/9j/AAAA" } };
         }
+
         kept.push(command.params.quality ?? command.params.format);
+
         return { result: { data: command.params.quality === fitAt ? fits : over } };
       });
+
       const screenshot = [{ action: BROWSER_AGENT_ACTION.SCREENSHOT, tab: "page-blank" }] as const;
 
       const lowered = yield* run(peer, screenshot, undefined, true);
@@ -718,6 +778,7 @@ it.effect("the console answers the page's latest messages, oldest first, each cu
   Effect.gen(function* () {
     const { peer: inner } = yield* browser();
     const own = "session-page-blank";
+
     const replayed: CdpEvent[] = [
       ...Array.from({ length: 55 }, (_, index) =>
         consoleCall(own, index + 1, index % 2 === 0 ? "log" : "warning", "message"),
@@ -731,6 +792,7 @@ it.effect("the console answers the page's latest messages, oldest first, each cu
         sessionId: own,
       },
     ];
+
     // Note that the browser replays what a page logged before it answers the enable, as Chrome does.
     const peer: FakeCdpPeer = {
       ...inner,
@@ -771,6 +833,7 @@ it.effect("a listed title and a long page's snapshot hold to their caps", () =>
       name: { value: `Button number ${index}` },
       backendDOMNodeId: index + 100,
     }));
+
     const tree = {
       nodes: [
         {
@@ -782,6 +845,7 @@ it.effect("a listed title and a long page's snapshot hold to their caps", () =>
         ...buttons,
       ],
     };
+
     const { peer } = yield* browser(
       (command) =>
         command.method === "Accessibility.getFullAXTree" ? { result: tree } : undefined,
@@ -823,16 +887,20 @@ it.effect(
           if (command.method === "DOM.getContentQuads" && command.params.backendNodeId === 42) {
             return { result: { quads: [[100, 200, 140, 200, 140, 220, 100, 220]] } };
           }
+
           if (command.method === "DOM.getContentQuads" && command.params.backendNodeId === 7) {
             return { result: { quads: [[10, 20, 50, 20, 50, 40, 10, 40]] } };
           }
+
           if (command.method === "Runtime.evaluate") {
             return { result: { result: { value: { x: 300, y: 400 } } } };
           }
+
           return undefined;
         },
         [{ targetId: "page-shop", url: "https://shop.example/", title: "Shop" }],
       );
+
       const { cursor, moves } = cursorInto(sent);
       const tab = "page-shop";
 
@@ -860,12 +928,14 @@ it.effect(
           { tab, x: 640, y: 400, kind: "move", viewport },
         ],
       );
+
       // Each move is heard after its point is found and before the input that acts there.
       const order = sent
         .filter((command) =>
           ["cursor", "Input.dispatchMouseEvent", "Input.insertText"].includes(command.method),
         )
         .map((command) => String(command.params.kind ?? command.params.type ?? "insertText"));
+
       assert.deepEqual(order, [
         "click",
         "mouseMoved",
@@ -892,6 +962,7 @@ it.effect("typing nowhere the page can point to moves no cursor, and the text st
         command.method === "Runtime.evaluate" ? { result: { result: { value: null } } } : undefined,
       [{ targetId: "page-shop", url: "https://shop.example/", title: "Shop" }],
     );
+
     const { cursor, moves } = cursorInto(sent);
 
     const ran = yield* run(
@@ -918,7 +989,9 @@ it.effect(
             : undefined,
         [{ targetId: "page-shop", url: "https://shop.example/", title: "Shop" }],
       );
+
       const { cursor } = cursorInto(sent);
+
       const mouse = () =>
         sent
           .filter((command) => command.method === "Input.dispatchMouseEvent")
@@ -927,6 +1000,7 @@ it.effect(
       const clicking = yield* Effect.forkChild(
         run(peer, [{ action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", x: 40, y: 60 }], cursor),
       );
+
       yield* TestClock.adjust(Duration.subtract(BROWSER_CURSOR_BEAT, Duration.millis(1)));
       const beforeBeat = mouse();
       yield* TestClock.adjust(Duration.millis(1));
@@ -946,6 +1020,7 @@ it.effect(
 function advance(by: Duration.Duration) {
   const step = Duration.millis(50);
   const steps = Math.ceil(Duration.toMillis(by) / Duration.toMillis(step));
+
   return Effect.repeat(TestClock.adjust(step), { times: steps - 1 });
 }
 
@@ -964,14 +1039,18 @@ it.effect(
   () =>
     Effect.gen(function* () {
       let shown = "Login";
+
       const { peer } = yield* browser((command) => {
         if (command.method === "Page.enable") return { result: {} };
+
         if (command.method === "Accessibility.getFullAXTree") return { result: pageTree(shown) };
+
         // The login page stays loaded until the next document commits.
         return command.method === "Runtime.evaluate"
           ? { result: { result: { value: "complete" } } }
           : undefined;
       });
+
       const tab = "page-blank";
 
       const running = yield* Effect.forkChild(
@@ -981,6 +1060,7 @@ it.effect(
           { action: BROWSER_AGENT_ACTION.SNAPSHOT },
         ]),
       );
+
       yield* advance(Duration.millis(100));
       yield* peer.emit(frameEvent("Page.frameStartedLoading"));
       yield* advance(Duration.seconds(1));
@@ -1006,10 +1086,12 @@ it.effect("a wait after a click is let go by a loading iframe the page removes m
   Effect.gen(function* () {
     const { peer } = yield* browser((command) => {
       if (command.method === "Page.enable") return { result: {} };
+
       return command.method === "Runtime.evaluate"
         ? { result: { result: { value: "complete" } } }
         : undefined;
     });
+
     const tab = "page-blank";
 
     const running = yield* Effect.forkChild(
@@ -1018,6 +1100,7 @@ it.effect("a wait after a click is let go by a loading iframe the page removes m
         { action: BROWSER_AGENT_ACTION.WAIT, timeoutMs: 2_000 },
       ]),
     );
+
     yield* advance(Duration.millis(100));
     yield* peer.emit(frameEvent("Page.frameStartedLoading", "auth-frame"));
     yield* advance(Duration.millis(100));
@@ -1035,22 +1118,26 @@ it.effect(
     Effect.gen(function* () {
       const { peer } = yield* browser((command) => {
         if (command.method === "Page.enable") return { result: {} };
+
         return command.method === "Runtime.evaluate"
           ? { result: { result: { value: "complete" } } }
           : undefined;
       });
+
       const tab = "page-blank";
 
       const typed = yield* run(peer, [
         { action: BROWSER_AGENT_ACTION.TYPE, tab, text: "dean" },
         { action: BROWSER_AGENT_ACTION.WAIT },
       ]);
+
       const clicked = yield* Effect.forkChild(
         run(peer, [
           { action: BROWSER_AGENT_ACTION.CLICK, tab, x: 40, y: 60 },
           { action: BROWSER_AGENT_ACTION.WAIT },
         ]),
       );
+
       yield* advance(Duration.seconds(1));
       const still = yield* Fiber.join(clicked);
 
@@ -1064,24 +1151,32 @@ it.effect(
   () =>
     Effect.gen(function* () {
       let refusals = 3;
+
       const { peer } = yield* browser((command) => {
         if (command.method === "Runtime.evaluate") return { result: { result: { value: 1 } } };
+
         if (command.method !== "Page.captureScreenshot") return undefined;
+
         if (refusals <= 0) return { result: { data: "/9j/AAAA" } };
         refusals -= 1;
+
         return { error: { code: -32000, message: "Unable to capture screenshot" } };
       });
+
       const tab = "page-blank";
 
       const painting = yield* Effect.forkChild(
         run(peer, [{ action: BROWSER_AGENT_ACTION.SCREENSHOT, tab }]),
       );
+
       yield* advance(Duration.seconds(1));
       const painted = yield* Fiber.join(painting);
       refusals = Number.POSITIVE_INFINITY;
+
       const blank = yield* Effect.forkChild(
         run(peer, [{ action: BROWSER_AGENT_ACTION.SCREENSHOT, tab }]),
       );
+
       yield* advance(Duration.seconds(2));
       const never = yield* Fiber.join(blank);
 
@@ -1108,15 +1203,19 @@ it.effect(
         (command) => (command.method === "Page.getLayoutMetrics" ? { silent: true } : undefined),
         [{ targetId: "page-shop", url: "https://shop.example/", title: "Shop" }],
       );
+
       const pressed = () =>
         sent.filter(
           (command) =>
             command.method === "Input.dispatchMouseEvent" && command.params.type === "mousePressed",
         ).length;
+
       const click = [
         { action: BROWSER_AGENT_ACTION.CLICK, tab: "page-shop", x: 40, y: 60 },
       ] as const;
+
       const reported: BrowserCursorMove[] = [];
+
       const hearing: BrowserCursor = {
         report: (move) => Effect.sync(() => void reported.push(move)),
       };
@@ -1128,6 +1227,7 @@ it.effect(
       const { peer: answering, sent: answered } = yield* browser(undefined, [
         { targetId: "page-shop", url: "https://shop.example/", title: "Shop" },
       ]);
+
       const stalled: BrowserCursor = { report: () => Effect.never };
       const stalling = yield* Effect.forkChild(run(answering, click, stalled));
       yield* advance(Duration.seconds(2));
@@ -1197,6 +1297,7 @@ class PageSelect extends EventTarget {
           disabledBy === DISABLED_BY.GROUP,
         ),
     );
+
     for (const type of ["input", "change"]) {
       this.addEventListener(type, (event) => {
         const value = this.options.find((option) => option.selected)?.value ?? "";
@@ -1222,10 +1323,12 @@ function callOnSelect(select: PageSelect, params: FakeCdpCommand["params"]): Fak
   assert.equal(typeof made, "function");
   // SAFETY: the declaration the browser is sent is a function the page calls on the element.
   const onSelect = made as SelectFunction;
+
   const called = onSelect.call(
     select,
     ...args.map((arg: { readonly value?: unknown }) => arg.value),
   );
+
   return { result: { result: { type: "object", value: called } } };
 }
 
@@ -1270,19 +1373,25 @@ function dropdownBrowser(select: PageSelect) {
   return browser(
     (command) => {
       const node = command.params.backendNodeId;
+
       if (command.method === "Accessibility.getFullAXTree") return { result: DROPDOWN_TREE };
+
       if (command.method === "DOM.resolveNode" && node === 7) {
         return { result: { object: { objectId: "select-7", className: "HTMLSelectElement" } } };
       }
+
       if (command.method === "DOM.resolveNode" && node === 5) {
         return { result: { object: { objectId: "heading-5", className: "HTMLHeadingElement" } } };
       }
+
       if (command.method === "DOM.resolveNode") {
         return { error: { code: -32000, message: "No node with given id found" } };
       }
+
       if (command.method === "DOM.getContentQuads" && node === 7) {
         return { result: { quads: [[100, 200, 300, 200, 300, 230, 100, 230]] } };
       }
+
       return command.method === "Runtime.callFunctionOn" && command.params.objectId === "select-7"
         ? callOnSelect(select, command.params)
         : undefined;
@@ -1300,6 +1409,7 @@ it.effect(
         ["Option 1", "1"],
         ["Option 2", "2"],
       ]);
+
       const { peer, sent } = yield* dropdownBrowser(select);
       const tab = "page-drop";
 
@@ -1360,28 +1470,35 @@ it.effect(
         ["Option 1", "1"],
         ["Option 2", "2"],
       ]);
+
       const { peer, sent } = yield* dropdownBrowser(select);
       const tab = "page-drop";
 
       const unmatched = yield* run(peer, [
         { action: BROWSER_AGENT_ACTION.SELECT, tab, ref: "e7", option: "Option 3" },
       ]);
+
       const disabled = yield* run(peer, [
         { action: BROWSER_AGENT_ACTION.SELECT, tab, ref: "e7", option: "Please select an option" },
       ]);
+
       const heading = yield* run(peer, [
         { action: BROWSER_AGENT_ACTION.SELECT, tab, ref: "e5", option: "Option 1" },
       ]);
+
       const gone = yield* run(peer, [
         { action: BROWSER_AGENT_ACTION.SELECT, tab, ref: "e99", option: "Option 1" },
       ]);
+
       const long = new PageSelect(
         Array.from(
           { length: 300 },
           (_, index) => [`Country number ${index}`, String(index)] as const,
         ),
       );
+
       const { peer: longPeer } = yield* dropdownBrowser(long);
+
       const many = yield* run(longPeer, [
         { action: BROWSER_AGENT_ACTION.SELECT, tab, ref: "e7", option: "Atlantis" },
       ]);
@@ -1423,6 +1540,7 @@ it.effect("a select moves the cursor to the dropdown's middle as a click, before
       ["Option 1", "1"],
       ["Option 2", "2"],
     ]);
+
     const { peer, sent } = yield* dropdownBrowser(select);
     const { cursor, moves } = cursorInto(sent);
     const tab = "page-drop";
@@ -1438,9 +1556,11 @@ it.effect("a select moves the cursor to the dropdown's middle as a click, before
       moves.map(({ at: _at, ...move }) => move),
       [{ tab, x: 200, y: 215, kind: "click", viewport: { width: 1280, height: 800 } }],
     );
+
     const order = sent
       .map((command) => command.method)
       .filter((method) => method === "cursor" || method === "Runtime.callFunctionOn");
+
     assert.deepEqual(order, ["cursor", "Runtime.callFunctionOn"]);
   }),
 );
@@ -1453,17 +1573,21 @@ it.effect(
         ["Basic", "basic"],
         ["Old", "old", DISABLED_BY.GROUP],
       ]);
+
       const fenced = new PageSelect([["Basic", "basic"]]);
       fenced.inDisabledFieldset = true;
+
       const reset = new PageSelect([
         ["Basic", "basic"],
         ["Premium", "premium"],
       ]);
+
       // The page's own handler takes Premium back, as a page with none left would.
       reset.addEventListener("change", () => {
         for (const option of reset.options) option.selected = option.value === "basic";
       });
       const tab = "page-drop";
+
       const choose = (select: PageSelect, option: string) =>
         Effect.flatMap(dropdownBrowser(select), ({ peer }) =>
           run(peer, [{ action: BROWSER_AGENT_ACTION.SELECT, tab, ref: "e7", option }]),

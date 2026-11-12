@@ -204,16 +204,20 @@ function savedUnderLock<T extends TextTaken, F>(
     DatabaseServices
   > {
     const stored = yield* readTaskForUpdate(binding.userId, binding.taskId);
+
     if (Option.isNone(stored)) return NO_TASK_RESULT;
     const now = yield* Clock.currentTimeMillis;
     const outcome = yield* take(stored.value, now);
+
     if (Result.isFailure(outcome)) return outcome.failure;
     const taken = outcome.success;
     const before = stored.value.text;
     const after = taken.text;
+
     if (after.length > TASK_BOUNDS.MAX_BODY_CHARS) return TOO_LONG_RESULT;
     const moved = after !== before;
     let txid: string | undefined;
+
     if (moved) {
       txid = yield* recordRevision({
         taskId: binding.taskId,
@@ -227,16 +231,20 @@ function savedUnderLock<T extends TextTaken, F>(
           : Option.none(),
       });
     }
+
     if (moved || taken.anchors !== undefined) {
       yield* moveDescriptionCommentAnchors(binding.taskId, before, after, taken.anchors);
     }
+
     const saved = yield* saveDescriptionText(
       binding.userId,
       binding.taskId,
       after,
       taken.agentEdits === undefined ? {} : { agentEdits: taken.agentEdits },
     );
+
     if (Option.isNone(saved)) return NO_TASK_RESULT;
+
     // A member's own edit is counted, from the window or an outside agent alike; a restore is none.
     if (writer.actor === DESCRIPTION_ACTOR.DEVELOPER && writer.restoredFrom === undefined) {
       const workspaceId = saved.value.workspaceId;
@@ -246,8 +254,10 @@ function savedUnderLock<T extends TextTaken, F>(
         {},
       );
     }
+
     return { status: DESCRIPTION_SAVE_STATUS.SAVED, task: saved.value, taken, moved, txid };
   });
+
   return Effect.flatMap(SqlClient.SqlClient, (client) => client.withTransaction(locked));
 }
 
@@ -281,6 +291,7 @@ export function saveNotes(
   const take = (stored: StoredTask, now: number) =>
     Effect.sync((): Result.Result<TextTaken, NotesConflict> => {
       const noted = applyNotesToText(stored.text, notes);
+
       if (noted.missed !== undefined) {
         return Result.fail({
           status: DESCRIPTION_SAVE_STATUS.CONFLICT,
@@ -289,6 +300,7 @@ export function saveNotes(
           why: noted.why,
         });
       }
+
       // An agent's save is journaled with its notes; one that took none changed nothing to journal.
       const journaled =
         writer.actor === DESCRIPTION_ACTOR.AGENT && notes.length > 0
@@ -300,13 +312,16 @@ export function saveNotes(
               }),
             }
           : undefined;
+
       return Result.succeed({ text: noted.text, changes: notes.length, ...journaled });
     });
+
   const saved = Effect.map(
     savedUnderLock(binding, writer, take),
     (result): DescriptionSaveResult => {
       if (result.status !== DESCRIPTION_SAVE_STATUS.SAVED) return result;
       const { task } = result;
+
       return {
         status: DESCRIPTION_SAVE_STATUS.SAVED,
         document: task.document,
@@ -316,6 +331,7 @@ export function saveNotes(
       };
     },
   );
+
   return reachedStore(saved);
 }
 
@@ -346,12 +362,15 @@ function conflictWriter(
   const mine = new Set(changedSections(base, value));
   const contested = new Set(changedSections(base, current).filter((heading) => mine.has(heading)));
   const writers = (stored.task.sectionEdits ?? []).filter(({ section }) => contested.has(section));
+
   const newest = writers.reduce<(typeof writers)[number] | undefined>(
     (latest, each) => (latest === undefined || each.at > latest.at ? each : latest),
     undefined,
   );
+
   if (newest === undefined) return stored.task.lastEdit;
   const { section: _section, ...by } = newest;
+
   return by;
 }
 
@@ -364,14 +383,18 @@ function takeDocumentEdit(
   edit: DescriptionEditRequest,
 ): Result.Result<TextTaken, DescriptionConflict> {
   const outcome = applyDocumentEdit(stored.text, edit);
+
   if ("conflict" in outcome) {
     const { current } = outcome.conflict;
     const by = conflictWriter(stored, edit, current);
     const status = DESCRIPTION_SAVE_STATUS.CONFLICT;
+
     return Result.fail(by === undefined ? { status, current } : { status, current, by });
   }
+
   const anchors =
     edit.comments === undefined ? undefined : { text: edit.document.value, anchors: edit.comments };
+
   return Result.succeed({
     text: outcome.applied,
     changes: 1,
@@ -394,6 +417,7 @@ export function saveDeveloperEdit(
     Effect.succeed<Result.Result<TextTaken, DescriptionConflict | DescriptionNotSaved>>(
       takeDocumentEdit(stored, edit),
     );
+
   const saved = Effect.map(
     savedUnderLock(binding, DEVELOPER, take),
     (result): DescriptionEditSaveResult =>
@@ -401,6 +425,7 @@ export function saveDeveloperEdit(
         ? { status: DESCRIPTION_SAVE_STATUS.SAVED, task: result.task, txid: result.txid }
         : result,
   );
+
   return reachedStore(saved);
 }
 
@@ -433,25 +458,31 @@ export function restoreRevision(
     DatabaseServices
   > {
     const content = yield* readRevisionContent(binding.userId, binding.taskId, seq);
+
     if (Option.isNone(content)) {
       return {
         status: DESCRIPTION_SAVE_STATUS.NOT_SAVED,
         reason: DESCRIPTION_SAVE_REFUSAL.NO_REVISION,
       } as const;
     }
+
     const text = content.value;
+
     const take = (stored: StoredTask) =>
       Effect.succeed<Result.Result<TextTaken, DescriptionNotSaved>>(
         Result.succeed({ text, changes: changedSections(stored.text, text).length }),
       );
+
     const saved = yield* savedUnderLock(
       binding,
       { actor: DESCRIPTION_ACTOR.DEVELOPER, restoredFrom: seq },
       take,
     );
+
     return saved.status === DESCRIPTION_SAVE_STATUS.SAVED
       ? { status: saved.status, task: saved.task, txid: saved.txid }
       : saved;
   });
+
   return reachedStore(restored);
 }

@@ -105,11 +105,14 @@ export function agentFailureSaid(
 ): Effect.Effect<void> {
   return Effect.gen(function* () {
     yield* Effect.logError(said);
+
     if (!reported) return;
     const annotated = yield* References.CurrentLogAnnotations;
+
     const annotations = Object.fromEntries(
       REPORTED_KEYS.flatMap((key) => (key in annotated ? [[key, annotated[key]]] : [])),
     );
+
     yield* ErrorReporter.report(
       Cause.fail(new AgentStartFailed({ message: said, reason, annotations })),
     );

@@ -94,9 +94,11 @@ export const namedMember = (workspaceId: string, named: string) =>
     const { members } = yield* askService(hosted.workspaces.members, { workspaceId });
     const email = named.toLowerCase();
     const member = members.find((one) => one.userId === named || one.email.toLowerCase() === email);
+
     if (member !== undefined) {
       return { userId: member.userId, name: member.name, email: member.email, role: member.role };
     }
+
     return yield* new CommandFailed({
       exit: CLI_EXIT.USAGE,
       message: [
@@ -119,6 +121,7 @@ function membersAnswer(
   said: string,
 ) {
   const listed = members.map(({ userId, name, email, role }) => ({ userId, name, email, role }));
+
   return answer({
     json: { members: listed },
     lines: [
@@ -150,12 +153,14 @@ export const workspaceMembersCommand = Command.make("members", {}, () =>
     const { workspace } = yield* resolveWorkspace;
     const { hosted } = yield* session;
     const read = yield* askService(hosted.workspaces.members, { workspaceId: workspace.id });
+
     const members = read.members.map(({ userId, name, email, role }) => ({
       userId,
       name,
       email,
       role,
     }));
+
     const former = (read.former ?? []).map(({ userId, name }) => ({ userId, name }));
     yield* answer({
       json: { members, former },
@@ -187,12 +192,14 @@ export const workspaceSlugCommand = Command.make(
     Effect.gen(function* () {
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
+
       const { workspace: changed } = yield* askService(
         hosted.workspaces.setSlug,
         { workspaceId: workspace.id, slug },
         HOSTED_DEADLINE.USUAL,
         SLUG_REFUSAL_WORDS,
       );
+
       yield* answer({
         json: { workspace: { id: changed.id, slug: changed.slug, name: changed.name } },
         lines: [`${changed.name} is now at ${changed.slug ?? slug}.`],
@@ -226,12 +233,14 @@ export const workspaceRemoveCommand = Command.make(
         "Nobody was removed.",
       );
       const { hosted } = yield* session;
+
       const { members } = yield* askService(
         hosted.workspaces.removeMember,
         { workspaceId: workspace.id, userId: member.userId },
         HOSTED_DEADLINE.USUAL,
         REMOVE_REFUSAL_WORDS,
       );
+
       yield* membersAnswer(members, `Removed ${member.name} from ${workspace.name}.`);
     }),
 ).pipe(
@@ -255,12 +264,14 @@ export const workspaceRoleCommand = Command.make(
       const { workspace } = yield* resolveWorkspace;
       const member = yield* namedMember(workspace.id, named);
       const { hosted } = yield* session;
+
       const { members } = yield* askService(
         hosted.workspaces.changeRole,
         { workspaceId: workspace.id, userId: member.userId, role },
         HOSTED_DEADLINE.USUAL,
         ROLE_REFUSAL_WORDS,
       );
+
       yield* membersAnswer(
         members,
         `${member.name} is now ${role === ASSIGNABLE_ROLE.ADMIN ? "an admin" : "a member"}.`,
@@ -277,12 +288,14 @@ export const workspaceInvitationsCommand = Command.make("invitations", {}, () =>
   Effect.gen(function* () {
     const { workspace } = yield* resolveWorkspace;
     const { hosted } = yield* session;
+
     const { invitations } = yield* askService(
       hosted.workspaceInvitations.list,
       { workspaceId: workspace.id },
       HOSTED_DEADLINE.USUAL,
       INVITATIONS_REFUSAL_WORDS,
     );
+
     yield* invitationsAnswer(invitations);
   }),
 ).pipe(
@@ -306,12 +319,14 @@ export const workspaceInviteCommand = Command.make(
     Effect.gen(function* () {
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
+
       const { invitation } = yield* askService(
         hosted.workspaceInvitations.invite,
         { workspaceId: workspace.id, email, role },
         HOSTED_DEADLINE.USUAL,
         INVITE_REFUSAL_WORDS,
       );
+
       yield* answer({
         json: { invitation },
         lines: [
@@ -342,12 +357,14 @@ export const workspaceUninviteCommand = Command.make(
     Effect.gen(function* () {
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
+
       const { invitations } = yield* askService(
         hosted.workspaceInvitations.cancel,
         { workspaceId: workspace.id, invitationId: invitation },
         HOSTED_DEADLINE.USUAL,
         UNINVITE_REFUSAL_WORDS,
       );
+
       yield* invitationsAnswer(invitations, `Canceled invitation ${invitation}.`);
     }),
 ).pipe(
@@ -366,12 +383,14 @@ export const workspaceRenameCommand = Command.make(
     Effect.gen(function* () {
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
+
       const { workspace: renamed } = yield* askService(
         hosted.workspaces.rename,
         { workspaceId: workspace.id, name },
         HOSTED_DEADLINE.USUAL,
         RENAME_REFUSAL_WORDS,
       );
+
       yield* answer({
         json: { workspace: { id: renamed.id, slug: renamed.slug, name: renamed.name } },
         lines: [`${workspace.name} is now ${renamed.name}; its links are unchanged.`],

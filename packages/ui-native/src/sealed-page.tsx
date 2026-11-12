@@ -36,6 +36,7 @@ const styles = StyleSheet.create({ page: { flex: 1 } });
 /** The theme a page reads, in the brand's colors for the window's scheme, as the panel hands a page its own. */
 function themeOf(colors: BrandColors, dark: boolean): PageTheme {
   const [chart1, chart2, chart3, chart4, chart5] = CHART_INKS;
+
   const variables: Record<PageThemeVariable, string> = {
     [PAGE_THEME_VARIABLE.BACKGROUND]: colors.GROUND,
     [PAGE_THEME_VARIABLE.FOREGROUND]: colors.TEXT,
@@ -61,6 +62,7 @@ function themeOf(colors: BrandColors, dark: boolean): PageTheme {
     [PAGE_THEME_VARIABLE.RADIUS]: "10px",
     [PAGE_THEME_VARIABLE.READING_WIDTH]: "100%",
   };
+
   return {
     scheme: dark ? PAGE_THEME_SCHEME.DARK : PAGE_THEME_SCHEME.LIGHT,
     variables,
@@ -79,6 +81,7 @@ function themeOf(colors: BrandColors, dark: boolean): PageTheme {
  */
 function textScaleScript(fontScale: number): string {
   const percent = `${String(Math.round(fontScale * 100))}%`;
+
   return `(function () {
   var scale = function () { document.documentElement.style.webkitTextSizeAdjust = ${JSON.stringify(percent)}; };
   if (document.documentElement) scale(); else document.addEventListener("DOMContentLoaded", scale);
@@ -97,11 +100,13 @@ true;`;
  */
 function staysSealed(request: WebViewNavigation): boolean {
   if (request.url === HANDED_IN) return true;
+
   if (request.navigationType === "click" && /^https?:\/\//u.test(request.url)) {
     Linking.openURL(request.url).catch((error: unknown) =>
       console.error("The page's link did not open.", error),
     );
   }
+
   return false;
 }
 
@@ -124,10 +129,12 @@ export function SealedPage({ html, title }: SealedPageProps) {
   const colors = useColors();
   const dark = useColorScheme() === "dark";
   const { fontScale } = useWindowDimensions();
+
   const document = useMemo(
     () => sealedPageDocument(html, themeOf(colors, dark)),
     [html, colors, dark],
   );
+
   return (
     <WebView
       // Note that the page is drawn anew at a new text size, since its script runs once, before the page.

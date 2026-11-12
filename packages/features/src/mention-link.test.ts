@@ -37,8 +37,10 @@ const PLACE: MentionPlace = { workspace: "acme", repository: REPOSITORY };
 /** Whether a target names no file or folder of a task about `repository`: nothing, or a page of GitHub's own. */
 function namesNoFile(target: string, repository: string | null): boolean {
   const kind = decodeMention(target, repository)?.kind;
+
   return kind !== MENTION_KIND.FILE && kind !== MENTION_KIND.FOLDER;
 }
+
 const TASK: Mention = { kind: MENTION_KIND.TASK, taskId: TASK_ID };
 const ROLLOUT: Mention = { kind: MENTION_KIND.SECTION, taskId: TASK_ID, anchor: "rollout" };
 
@@ -67,6 +69,7 @@ test("a task's address a later build writes under task reads as the one written 
   ]) {
     assert.deepEqual(decodeMention(target, null), ROLLOUT, target);
   }
+
   assert.deepEqual(decodeMention(`https://vespin.dev/acme/task/${TASK_ID}`, null), TASK);
   assert.equal(decodeMention(`https://vespin.dev/acme/tasks/${TASK_ID}`, null), undefined);
 });
@@ -134,6 +137,7 @@ test("a heading at its bound, borne twice, still has an anchor that reads back f
     const section: Mention = { kind: MENTION_KIND.SECTION, taskId: TASK_ID, anchor };
     assert.deepEqual(decodeMention(encodeMention(section, PLACE), null), section);
   }
+
   assert.equal(anchors[1]?.endsWith("-1"), true);
 });
 
@@ -184,6 +188,7 @@ test("a file's lines are pinned to the commit they were read at, and lines on HE
     path: "src/a.ts",
     lines: { commit: "0123456789abcdef0123456789abcdef01234567", startLine: 3, endLine: 5 },
   };
+
   const line: Mention = {
     kind: MENTION_KIND.FILE,
     path: "src/a.ts",
@@ -218,6 +223,7 @@ test("a GitHub page is a file or a folder only of the plan's own repository, and
     assert.ok(namesNoFile(target, null), target);
     assert.ok(namesNoFile(target, "acme/other"), target);
   }
+
   for (const target of [
     "https://github.com/acme/checkout/pull/12",
     "https://github.com/acme/checkout",
@@ -231,6 +237,7 @@ test("a GitHub page is a file or a folder only of the plan's own repository, and
 test("words of no repository read a GitHub page of a file or a folder as of the repository its address names, and any other page as of none", () => {
   const file =
     "https://github.com/Acme/Relay/blob/0123456789abcdef0123456789abcdef01234567/src/a.ts#L3-L5";
+
   const repository = pageRepositoryOf(file);
 
   assert.equal(repository, "Acme/Relay");
@@ -240,6 +247,7 @@ test("words of no repository read a GitHub page of a file or a folder as of the 
     lines: { commit: "0123456789abcdef0123456789abcdef01234567", startLine: 3, endLine: 5 },
   });
   assert.equal(pageRepositoryOf("https://github.com/acme/relay/tree/HEAD/src/"), "acme/relay");
+
   for (const target of [
     "https://github.com/acme/relay/blob/main/src/a.ts",
     "https://github.com/acme/relay/pull/12",
@@ -298,8 +306,10 @@ test("only a label that starts with @ and says more is a mention's, which its ch
 
 test("any link whose target names a mention is one, whatever its label says, named by its label without its @", () => {
   const lines = `https://github.com/${REPOSITORY}/blob/0a1b2c3d/apps/web/store.ts#L3-L5`;
+
   const read = (label: string, target: string) => {
     const found = linkChipOf(label, target, REPOSITORY);
+
     return found?.kind === LINK_CHIP.MENTION ? [found.mention.kind, found.name] : undefined;
   };
 
@@ -576,6 +586,7 @@ test("an MCP server and one of its tools read back as the mention they were writ
       mention.kind,
     );
   }
+
   assert.equal(
     encodeMention(
       {
@@ -632,6 +643,7 @@ test("a page on an integration's host, its own or one under it, reads as that in
     decodeMention("https://acme.sentry.io/issues/12345/", REPOSITORY)?.kind,
     MENTION_KIND.LINK,
   );
+
   for (const target of [
     "https://example.com/linear.app/issue",
     "https://notlinear.app/acme",
@@ -722,6 +734,7 @@ test("a GitHub page that is a file of the plan stays the file's mention, while o
     decodeMention(`https://github.com/${REPOSITORY}/blob/HEAD/src/app.ts`, REPOSITORY)?.kind,
     MENTION_KIND.FILE,
   );
+
   for (const target of [
     `https://github.com/${REPOSITORY}/blob/main/src/app.ts`,
     "https://github.com/acme/other/pull/12",
@@ -795,6 +808,7 @@ test("a server or tool of an account past a provider's first names it by its con
     connection: "notion-2",
     tool: "notion-search",
   } as const;
+
   assert.equal(encodeMention(personal, PLACE), "mention://mcp/notion-2/notion-search");
   assert.deepEqual(decodeMention("luke://mcp/notion-2/notion-search", REPOSITORY), personal);
   assert.deepEqual(decodeMention("luke://mcp/notion-2", REPOSITORY), {
@@ -806,6 +820,7 @@ test("a server or tool of an account past a provider's first names it by its con
     kind: MENTION_KIND.SERVER,
     provider: INTEGRATION_PROVIDER.NOTION,
   });
+
   for (const target of ["luke://mcp/notion-1", "luke://mcp/jira-2", "luke://mcp/notion-02"]) {
     assert.equal(decodeMention(target, REPOSITORY), undefined, target);
   }
@@ -828,6 +843,7 @@ test("a page of a plan is its Vespin link, an agent of one is the agent's own, a
     name: "Page",
   });
   assert.deepEqual(linkChipOf("", `${taskLink}/agent/agent-1`, null)?.name, "Agent");
+
   for (const target of [
     `${taskLink}/page/page-1/version/2`,
     `${taskLink}/agent/agent-1/changes`,
@@ -851,6 +867,7 @@ test("an agent on no task is mentioned by its own Vespin link under the workspac
     mention: agent,
     name: "Agent",
   });
+
   for (const target of [
     "https://vespin.dev/acme/agent/agent-9/inbox/item-1",
     "https://vespin.dev/acme/agent/agent-9#top",
@@ -873,6 +890,7 @@ test("a page an agent on no task showed is mentioned under the agent's own link,
     mention: page,
     name: "Page",
   });
+
   for (const bent of [
     `${target}/source`,
     `${target}#top`,
@@ -905,6 +923,7 @@ test("a person is mentioned by their page's Vespin link under the workspace, rea
     handedMentionsIn(`Ask ${page} or [@Dana](${page}).`, REPOSITORY).map(({ mention }) => mention),
     [person, person],
   );
+
   for (const target of [
     "https://vespin.dev/acme/person/user_Ab-9/tasks",
     "https://vespin.dev/acme/person/user_Ab-9//",
@@ -928,11 +947,13 @@ test("an old Vespin issue page's link names nothing now that Vespin keeps no iss
 
 test("words pasted whole become the chip their link is drawn as once sent: an address of Vespin's own, a file of the plan, and a place no mention names, an Inbox thread", () => {
   const pasted = (words: string) => pastedLinkChip(words, REPOSITORY);
+
   const mentioned = (mention: Mention, name: string) => ({
     kind: LINK_CHIP.MENTION,
     mention,
     name,
   });
+
   const page: Mention = { kind: MENTION_KIND.PAGE, taskId: TASK_ID, pageId: "page-1" };
   const agent: Mention = { kind: MENTION_KIND.AGENT, agentId: "agent-2" };
   const file: Mention = { kind: MENTION_KIND.FILE, path: "src/app.ts" };
@@ -964,6 +985,7 @@ test("words pasted whole become the chip their link is drawn as once sent: an ad
 test("an agent is handed each @ mention and each bare address of Vespin's own, in order, a bare address ending where GFM ends it", () => {
   const section = encodeMention(ROLLOUT, PLACE);
   const taskLink = encodeMention(TASK, PLACE);
+
   const words = [
     `Read (${taskLink}), then [@app.ts](luke://file/app.ts) and **${section}**.`,
     `Not https://github.com/${REPOSITORY}/blob/HEAD/a.ts, https://linear.app/acme/issue/LUKE-1,`,
@@ -1014,6 +1036,7 @@ test("the links written in words are every inline link whatever its label, an au
     " ![chart](https://example.com/c.png) and `https://example.com/d`.",
     " \\[not a link](https://example.com/e)",
   ].join("");
+
   assert.deepEqual(
     linksIn(words).map(({ label, target }) => [label, target]),
     [
@@ -1034,6 +1057,7 @@ test("Vespin on a task is mentioned by the task's link and `/app`, read back by 
   assert.deepEqual(decodeMention("https://vespin.dev/acme/plan/plan-1/app", null), app);
   assert.deepEqual(decodeMention("vespin://vespin.dev/acme/plan/plan-1/app", null), app);
   assert.deepEqual(decodeMention("https://vespin.dev/acme/plan/plan-1/luke", null), app);
+
   for (const target of [
     "https://vespin.dev/acme/app",
     "https://vespin.dev/acme/plan/plan-1/app/more",
@@ -1069,12 +1093,14 @@ test("a comment's words ask an agent though twenty other mentions come before it
 
 test("a date is written in the app's own form, a day, a time with its offset, or a range, and read back as written", () => {
   const day: Mention = { kind: MENTION_KIND.DATE, start: "2026-10-20" };
+
   const dates: Mention[] = [
     day,
     { kind: MENTION_KIND.DATE, start: "2026-10-20T15:00-07:00" },
     { kind: MENTION_KIND.DATE, start: "2026-10-20T15:00+05:30", end: "2026-10-20T17:00+05:30" },
     { kind: MENTION_KIND.DATE, start: "2026-10-20", end: "2026-10-24" },
   ];
+
   assert.deepEqual(
     dates.map((date) => encodeMention(date, PLACE)),
     [
@@ -1084,9 +1110,11 @@ test("a date is written in the app's own form, a day, a time with its offset, or
       "mention://date/2026-10-20/2026-10-24",
     ],
   );
+
   for (const date of dates) {
     assert.deepEqual(decodeMention(encodeMention(date, PLACE), REPOSITORY), date);
   }
+
   assert.equal(
     mentionMarkdown(day, "Oct 20, 2026", PLACE),
     "[@Oct 20, 2026](mention://date/2026-10-20)",
@@ -1125,6 +1153,7 @@ test("words that are one member's mention link, written whole or as its address,
   const task = `[@Checkout](${encodeMention({ kind: MENTION_KIND.TASK, taskId: TASK_ID }, PLACE)})`;
   assert.deepEqual(memberMentionOf(link), person);
   assert.deepEqual(memberMentionOf(address), person);
+
   for (const words of [luke, task, "#general", "@agent-2", `${link} and more`]) {
     assert.equal(memberMentionOf(words), undefined, words);
   }

@@ -46,14 +46,18 @@ function useListedInboxGroups(tasks: TasksControl): {
 } {
   const { inboxTasks } = useListedInbox(tasks);
   const listed = tasks.listed.tasks;
+
   // Note that every plan holding an item is read, not only those main counts as waiting on the
   // account, because those are its own agents' alone, and the Inbox lists every member's.
   const holdings = useMemo(() => {
     const listedIds = new Set(listed.map((task) => task.id));
+
     return inboxTasks.filter((holding) => listedIds.has(holding.taskId));
   }, [inboxTasks, listed]);
+
   const read = useHolderInboxItems(useMemo(() => taskHoldings(holdings), [holdings]));
   const groups = inboxGroups(read.items, { tasks: holdings, listed });
+
   return { groups, read };
 }
 
@@ -62,6 +66,7 @@ export function useWaitingItems(tasks: TasksControl): WaitingItems {
   const { groups, read } = useListedInboxGroups(tasks);
   // Note that every open item is kept as one that waits, whoever started its agent.
   const items = openItems(groups);
+
   return {
     items,
     readTasks: read.current,

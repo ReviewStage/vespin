@@ -155,10 +155,12 @@ const launchSteps = (services: DesktopServices): Layer.Layer<HostTag, never, Hos
   const { config, state, telemetry, native, operator, updates, windows } = services;
   const { report } = config;
   const channels = Layer.effectDiscard(Effect.sync(() => registerDesktopIpc(services)));
+
   const machine = layersInOrder([
     effectServiceLayer(telemetry, report),
     serviceLayer(native, report),
   ]).pipe(Layer.provideMerge(channels));
+
   // The one place the document becomes a push. Every window reads its state
   // on one channel, so what a window is told and what `app:state-request`
   // answers it are the same document read twice, and a window's own write is
@@ -187,11 +189,13 @@ const launchSteps = (services: DesktopServices): Layer.Layer<HostTag, never, Hos
       report,
     ),
   );
+
   const throughWindows = layersInOrder([
     effectServiceLayer(operator, report),
     Layer.effectDiscard(Effect.sync(() => updates.start())),
     serviceLayer(windows, report),
   ]).pipe(Layer.provideMerge(hostStandingLayer), Layer.provideMerge(machine));
+
   return stateBroadcast.pipe(Layer.provideMerge(throughWindows));
 };
 
@@ -221,8 +225,10 @@ export function composeDesktop(
       // building it rather than assembled again: every act's Effect runs
       // under them, never under a context of their own.
       const services: Context.Context<never> = yield* Effect.context();
+
       const run = <A>(effect: Effect.Effect<A>): Promise<A> =>
         Effect.runPromiseWith(services)(Effect.withErrorReporting(effect, { defectsOnly: true }));
+
       // Nothing to install without a signed build, a network, and the platform
       // Squirrel serves; the row says so rather than offering a press that could
       // not land, and the document says so from its first version.
@@ -230,6 +236,7 @@ export function composeDesktop(
         config.packaged && config.runMode.sendsNetwork && config.platform === "darwin"
           ? createElectronUpdaterEngine()
           : undefined;
+
       const state = new AppStateStore(
         initialAppState(
           config,
@@ -239,9 +246,11 @@ export function composeDesktop(
         ),
         services,
       );
+
       // Every report main sends names the account signed in, from its first document on.
       yield* followAccountInReports(state);
       const native = createNativeNode({ config, state });
+
       const operator = yield* createOperatorClient({
         report: config.report,
         gateway: host.gateway,
@@ -250,6 +259,7 @@ export function composeDesktop(
         node: native.capabilities,
         state,
       });
+
       const telemetry = createTelemetryService({
         config,
         // A counted event is begun rather than waited on: nothing the windows
@@ -259,6 +269,7 @@ export function composeDesktop(
         },
         workingAgents: () => workingAgentCount(state.snapshot().tasks),
       });
+
       const windows = createWindowService({
         config,
         state,
@@ -266,6 +277,7 @@ export function composeDesktop(
         run,
         launchStanding: quit.launchStanding,
       });
+
       const colorCode = yield* colorCodeInUtilityProcess(config.resourceDirectory);
       // A quit, a restart to update, and a sign-out asked for while a panel
       // holds unsaved work ask first, with Cancel the default, as a Mac app
@@ -279,16 +291,19 @@ export function composeDesktop(
         (stop) => Effect.sync(stop),
       );
       const atStake = () => ({ unsavedWork: unsavedWork.holding() });
+
       const askFirst = leaveGate({
         atStake,
         ask: (question) => askBeforeLeaving(windows.panels.primaryPanel(), question),
       });
+
       // ⌘R reloads the window chosen over, asking first, as a sheet on that
       // window, while its page holds edits that haven't saved.
       const askBeforeReload = reloadGate<BrowserWindow>({
         holds: (window) => unsavedWork.holds(window.webContents),
         ask: askBeforeLeaving,
       });
+
       config.showMenuBar({
         reload: {
           // Note that only a browser window has a page to reload.
@@ -307,6 +322,7 @@ export function composeDesktop(
           again: () => config.quit(),
         }),
       );
+
       // A command ask's notification clicked brings the window forward, where its prompt stands; a
       // notification of news, on the place it names, which opens as an app link's place does, under
       // the workspace the window stands in.
@@ -319,6 +335,7 @@ export function composeDesktop(
         panels: windows.panels,
         report: config.report,
       });
+
       const notices = yield* linkClientNotices({
         state,
         host: operator.host,
@@ -332,9 +349,11 @@ export function composeDesktop(
         onPanelFocusChanged: windows.onPanelFocusChanged,
         report: config.report,
       }).pipe(Effect.provideService(AgentNoticeDoors, noticeDoors));
+
       // The network as main reads it once at launch, then as its windows tell it,
       // since Electron announces no change of it to the main process.
       const online = yield* SubscriptionRef.make(net.isOnline());
+
       // A run that sends nothing, a fixture's or a capture's, is never offline.
       if (config.runMode.sendsNetwork) {
         yield* linkNetworkWatch({
@@ -344,6 +363,7 @@ export function composeDesktop(
           report: config.report,
         });
       }
+
       const updates = yield* createUpdateServiceHost({
         config,
         recordProductEvent: telemetry.recordProductEvent,

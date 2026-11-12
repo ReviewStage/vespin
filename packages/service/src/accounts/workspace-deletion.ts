@@ -53,6 +53,7 @@ export const beforeWorkspaceDeletion = /* @__PURE__ */ Effect.fn("web/beforeWork
   function* (organizationId: string) {
     const agents = yield* workspaceAgentConversations(organizationId);
     const schedules = yield* workspaceScheduledAutomations(organizationId);
+
     return {
       conversationIds: agents.map((agent) => agent.conversationId),
       sessionIds: agents.flatMap((agent) => (agent.sessionId === null ? [] : [agent.sessionId])),

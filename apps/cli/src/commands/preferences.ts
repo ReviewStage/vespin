@@ -20,7 +20,9 @@ import { askService, session } from "../session.js";
 /** The coding-agent default a snapshot carries, as the answer prints it, or a failure where the service answered none that reads as one. */
 const defaultOf = Effect.fnUntraced(function* (agent: unknown) {
   const read = Schema.decodeUnknownOption(modelChoiceSchema)(agent);
+
   if (Option.isSome(read)) return read.value;
+
   return yield* new CommandFailed({
     exit: CLI_EXIT.UNAVAILABLE,
     message: "The service did not answer with a default model.",
@@ -54,6 +56,7 @@ const setCommand = Command.make(
   ({ model, effort, contextWindow }) =>
     Effect.gen(function* () {
       const { hosted } = yield* session;
+
       const written = yield* askService(
         hosted.account.writePreferences,
         {
@@ -69,6 +72,7 @@ const setCommand = Command.make(
             "You are not offered that model and effort, or no credential of yours pays for that model; vespin models lists the choices.",
         },
       );
+
       yield* answerDefault(yield* defaultOf(written.agent));
     }),
 ).pipe(

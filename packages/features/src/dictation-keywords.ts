@@ -33,13 +33,19 @@ export function dictationKeywords(input: {
     ...(input.body?.match(PATH_PATTERN) ?? []),
     ...(input.body?.match(FILE_PATTERN) ?? []),
   ];
+
   const kept = new Set<string>();
+
   for (const word of named) {
     const trimmed = word.trim();
+
     if (trimmed === "" || trimmed.length > DICTATION_BOUNDS.MAX_KEYWORD_CHARS) continue;
+
     if (REFUSED_CHARACTER.test(trimmed)) continue;
     kept.add(trimmed);
+
     if (kept.size === DICTATION_BOUNDS.MAX_KEYWORDS) break;
   }
+
   return [...kept];
 }

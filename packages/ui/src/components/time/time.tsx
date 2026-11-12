@@ -89,7 +89,9 @@ function wordsOf(look: TimeLook, at: number, now: number): string {
 /** A time: a `<time>` in `look`'s words, its full moment on hover where the look hints it. */
 export function Time(props: TimeProps): React.JSX.Element {
   const { now, look = TIME_LOOK.SINCE } = props;
+
   if (now !== undefined) return <TimeAt {...props} look={look} now={now} />;
+
   return look === TIME_LOOK.DURATION ? (
     <SecondTime {...props} look={look} />
   ) : (
@@ -111,6 +113,7 @@ type TimeAtProps = TimeProps & { look: TimeLook; now: number };
 
 function TimeAt({ at, look, now, className, hint }: TimeAtProps): React.JSX.Element {
   const duration = look === TIME_LOOK.DURATION;
+
   // Note that a count is a timer to a reader rather than a live region, because a count announced each second drowns everything else.
   const time = (
     <time
@@ -122,6 +125,7 @@ function TimeAt({ at, look, now, className, hint }: TimeAtProps): React.JSX.Elem
       {wordsOf(look, at, now)}
     </time>
   );
+
   // Note that a time raising no pill is drawn bare, because a sidebar row draws several, and a tooltip saying nothing still costs each its own.
   return (hint ?? HINTED_LOOKS.includes(look)) ? (
     <Tooltip label={momentText(at)}>{time}</Tooltip>

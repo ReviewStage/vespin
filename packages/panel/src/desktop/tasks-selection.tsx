@@ -126,17 +126,22 @@ function selectionActs(
   },
 ): SelectionAct[] {
   const { onActed } = doors;
+
   const acted = (act: () => void) => () => {
     act();
     onActed();
   };
+
   const chosen = tasks.tasks.filter((task) => taskIds.includes(task.id));
   const status = statusSubmenu(doors.standing, taskIds, sharedStatus(chosen), onActed);
   const workspaceId = tasks.workspace?.id;
   const sections = workspaceId === undefined ? [] : workspaceSections(doors.sections, workspaceId);
+
   const move = (sectionId: string | null) =>
     acted(() => moveToSection(doors.sections, taskIds, sectionId, doors.move));
+
   const put = (sectionId: string) => placeAllWrites(latest(), taskIds, sectionId, Date.now());
+
   const sectionMenu = (workspace: string) => [
     [
       ...sections.map((section) => ({
@@ -152,6 +157,7 @@ function selectionActs(
     ],
     ...(sections.length === 0 ? [] : [[{ label: SELECTION_ACT.NO_SECTION, onSelect: move(null) }]]),
   ];
+
   return [
     {
       label: status.label,
@@ -180,6 +186,7 @@ function selectionActs(
 function deleteChosenQuestion(count: number): DialogQuestion {
   const one = count === 1;
   const named = countWords(count, TERM.TASK);
+
   return {
     title: `Permanently delete ${named}?`,
     body: `${one ? "The task and its board and transcript" : `The ${named} and their boards and transcripts`} will be deleted. ${IRREVERSIBLE_WORDS}`,
@@ -220,6 +227,7 @@ export function useChosen(drawn: ReadonlySet<string>, held?: ChosenTasksStore): 
   useEffect(() => {
     if (stale) store.setState((was) => new Set([...was].filter((id) => drawn.has(id))));
   });
+
   return {
     regionId,
     selected,
@@ -240,10 +248,12 @@ export function useChosenOf(
 ): (key: string) => ChosenRows | undefined {
   const actsNow = useSteadyDoor(() => acts);
   const count = selected.size;
+
   const several: ChosenRows | undefined = useMemo(
     () => (count > 1 ? { count, noun, acts: actsNow } : undefined),
     [count, noun, actsNow],
   );
+
   return (key) => (several !== undefined && selected.has(key) ? several : undefined);
 }
 
@@ -288,25 +298,33 @@ export function useTasksSelection(
   const { regionId, selected, setChosen, onClear } = useChosen(drawn, held);
   // The tasks Permanently delete was asked of, held as it asks, so a selection changed meanwhile deletes none it never named.
   const [doomed, setDoomed] = useState<readonly string[]>([]);
+
   // Note that a refusal said once the tab went away is said in a toast, since the question went with it.
   const heard = useRefusalHeard(doomed.length > 0 && tasks.shown, {
     surface: FAILURE_SURFACE.TASK_DELETE,
   });
+
   // Note that a refusal leaves only the tasks refused asked of, so Retry sends none already deleted.
   const deleting = useMutation(useTasksDelete());
+
   const deletionAct = useConfirmAct(deleting, {
     send: async () => {
       const answers = await deleting.mutateAsync(doomed);
+
       const refused = doomed.filter(
         (_, at) => answers[at]?.status !== ACTION_RESULT_STATUS.ACCEPTED,
       );
+
       if (refused.length === 0) {
         onClear();
+
         return ACCEPTED;
       }
+
       setDoomed(refused);
       // Note that the tasks refused are chosen again, since each left the selection as the host drew it gone, and the deleted stay out.
       setChosen((held) => new Set([...[...held].filter((id) => !doomed.includes(id)), ...refused]));
+
       return heard(
         answers.find((answer) => answer.status !== ACTION_RESULT_STATUS.ACCEPTED) ?? ACCEPTED,
       );
@@ -314,11 +332,13 @@ export function useTasksSelection(
     answered: (answers) =>
       answers.find((answer) => answer.status !== ACTION_RESULT_STATUS.ACCEPTED) ?? ACCEPTED,
   });
+
   const deletion = useConfirmDialog(
     { subject: doomed.length > 0, surfaceOpen: tasks.shown },
     deletionAct,
     confirmFailure(FAILURE_SURFACE.TASK_DELETE),
   );
+
   const acts = selectionActs(tasks, () => latest.current, [...selected], {
     sections: sections.sections,
     standing,
@@ -330,7 +350,9 @@ export function useTasksSelection(
       deletion.ask();
     },
   });
+
   const chosenOf = useChosenOf(selected, TERM.TASK, acts);
+
   return {
     regionId,
     selected,

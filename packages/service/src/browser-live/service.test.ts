@@ -61,6 +61,7 @@ test("a bearer with or without an origin, and a page of the deployment's own wit
 test("no credential, another site's origin carrying only a cookie, and a cookie with no origin are refused before any socket stands", () => {
   const refused = (headers: Record<string, string>) =>
     admitBrowserLiveUpgrade(address(ASKED), headers, OWN);
+
   assert.deepEqual(refused({}), { status: RELAY_UPGRADE_STATUS.UNAUTHORIZED });
   assert.deepEqual(refused({ authorization: "Bearer " }), {
     status: RELAY_UPGRADE_STATUS.UNAUTHORIZED,
@@ -88,6 +89,7 @@ test("another path and an unreadable agent, task, or tab are refused", () => {
   assert.deepEqual(admitBrowserLiveUpgrade(address(ASKED, "/api/terminal/sessions"), BEARER, OWN), {
     status: RELAY_UPGRADE_STATUS.NOT_FOUND,
   });
+
   for (const unreadable of [
     { ...ASKED, tab: "not-an-id" },
     { agent: "not-an-id", tab: TAB },
@@ -153,19 +155,23 @@ it.effect(
         { credential: { bearer: BEARER.authorization }, ask: ASK },
         admission,
       );
+
       assert.deepEqual(admitted, { ask: { ...ASK, userId: "member-1" }, reached: REACHED });
 
       const unknown = yield* admitBrowserLiveAccount(
         { credential: { bearer: "Bearer other" }, ask: ASK },
         admission,
       );
+
       assert.deepEqual(unknown, { status: RELAY_UPGRADE_STATUS.UNAUTHORIZED });
 
       const page = new Headers({ cookie: COOKIE.cookie });
+
       const unreached = yield* admitBrowserLiveAccount(
         { credential: { page }, ask: ASK },
         admission,
       );
+
       assert.deepEqual(
         unreached,
         { status: RELAY_UPGRADE_STATUS.NOT_FOUND },
@@ -176,6 +182,7 @@ it.effect(
         { credential: { bearer: BEARER.authorization }, ask: ASK },
         { ...admission, readTab: () => Effect.fail("store down") },
       );
+
       assert.deepEqual(outage, { status: RELAY_UPGRADE_STATUS.SERVICE_UNAVAILABLE });
     }),
 );

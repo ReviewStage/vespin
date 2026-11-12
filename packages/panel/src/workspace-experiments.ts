@@ -36,6 +36,7 @@ export function useWorkspaceExperiment(
     (state: AppStateSnapshot) => workspaceExperimentOnIn(state, workspaceId, experiment),
     [workspaceId, experiment],
   );
+
   return useQuery({ ...appStateQuery, select }).data === true;
 }
 
@@ -53,10 +54,12 @@ export function useWorkspaceExperimentOnSince(
       const choice = state.tasks.workspaces
         .find((each) => each.id === workspaceId)
         ?.experiments?.find((each) => each.experiment === experiment);
+
       return choice?.on === true ? choice.changedAt : undefined;
     },
     [workspaceId, experiment],
   );
+
   return useQuery({ ...appStateQuery, select }).data;
 }
 
@@ -75,5 +78,6 @@ export function useExperimentsIn(workspaceId: string | undefined): ExperimentCho
       ),
     [workspaceId],
   );
+
   return useQuery({ ...appStateQuery, select }).data ?? NO_EXPERIMENTS;
 }

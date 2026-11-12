@@ -103,11 +103,13 @@ const STOPPED = sql<number>`count(${turns.cancelRequestedAt})::int`;
 
 /** The journal of the turn that took a developer's line in, which shares the turn's id as its client id. */
 const takingJournal = alias(messages, "taking_journal");
+
 /** The coding agent that sent a line, apart from the agent the statement's membership reads. */
 const sendingAgent = alias(agentTable, "sending_agent");
 
 /** A message of the window, and one of its parts, as their live rows declare them, which an expression among their columns is typed to. */
 type WindowRow = (typeof AGENT_TRANSCRIPT_READ.parts.window.row)["Encoded"];
+
 type PartRow = (typeof AGENT_TRANSCRIPT_READ.parts.windowParts.row)["Encoded"];
 
 /** The newest messages' own rows, by id, which the parts statement reads the parts of. */
@@ -180,7 +182,9 @@ function windowPartsOf(target: ConversationTarget, reached: SQL, past: MessageCu
     )
     .where(sql`not ${retired(sql`element.value`)}`)
     .as("part");
+
   const cut = sql`coalesce(length(${element.words}) > ${AGENT_BOUNDS.MAX_PART_CHARS}, false)`;
+
   const newest = queryBuilder
     .select({ id: windowMessage.id })
     .from(windowMessage)
@@ -194,6 +198,7 @@ function windowPartsOf(target: ConversationTarget, reached: SQL, past: MessageCu
     )
     .orderBy(desc(windowMessage.seq))
     .limit(TRANSCRIPT_WINDOW);
+
   return liveRowsStatement(
     AGENT_TRANSCRIPT_READ.parts.windowParts,
     {
@@ -360,6 +365,7 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
   const { ownerId: userId, conversationId, parentConversationId } = params;
   const target = { userId, conversationId };
   const reached = agentFollowedBy(userId, parentConversationId, params.userId);
+
   const written = liveRowsStatement(
     AGENT_TRANSCRIPT_READ.parts.messages,
     {
@@ -382,6 +388,7 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
           ),
         ),
   );
+
   const run = liveRowsStatement(
     AGENT_TRANSCRIPT_READ.parts.turns,
     {
@@ -401,6 +408,7 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
         .where(and(eq(turns.conversationId, conversationId), eq(turns.userId, userId), reached))
         .groupBy(turns.status),
   );
+
   const conversation = liveRowsStatement(
     AGENT_TRANSCRIPT_READ.parts.conversation,
     {
@@ -419,6 +427,7 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
           and(eq(conversations.id, conversationId), eq(conversations.userId, userId), reached),
         ),
   );
+
   const agent = liveRowsStatement(
     AGENT_TRANSCRIPT_READ.parts.agent,
     { ordered: false, columns: { id: agentTable.id, title: agentTable.title } },
@@ -434,6 +443,7 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
           ),
         ),
   );
+
   const workers = liveRowsStatement(
     AGENT_TRANSCRIPT_READ.parts.workers,
     {
@@ -460,6 +470,7 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
           ),
         ),
   );
+
   // The agent's queue as its revision, which every write to the queue or its pause moves on in the same
   // transaction (`agent-queue-store.ts`), so one number wakes the read for all of them. Note that its
   // column is selected bare under its own name, as the statement always selected it, so its text is as released.
@@ -479,6 +490,7 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
           ),
         ),
   );
+
   // The agent's newest launch line, on a device, as its claim, its step, and its settling stand,
   // read on the agent's own transcript alone, since a worker's conversation is no agent's.
   const launch = liveRowsStatement(
@@ -511,6 +523,7 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
           .limit(1),
       ),
   );
+
   // The agent's first launch while its boot record stands, read on its own transcript alone.
   const boot = liveRowsStatement(
     AGENT_TRANSCRIPT_READ.parts.boot,
@@ -537,6 +550,7 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
           ),
       ),
   );
+
   return {
     messages: written,
     turns: run,
@@ -554,7 +568,9 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
 /** The delegation call a query named, where one is a call id; one of any other shape names no worker, and is not found. */
 const callIdOf = /* @__PURE__ */ Effect.fnUntraced(function* (call: string) {
   const read = readEither(agentCallIdSchema)(unparsedWire(call));
+
   if (Result.isFailure(read)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return read.success;
 });
 
@@ -612,6 +628,7 @@ export const agentTranscriptRead = bindLiveRead(AGENT_TRANSCRIPT_READ, {
   topics: ({ conversationId, parentConversationId, agentId, userId }) => {
     const parent: readonly SyncTopic[] =
       parentConversationId === conversationId ? [] : [[TOPIC.CONVERSATION, parentConversationId]];
+
     return [
       [TOPIC.CONVERSATION, conversationId],
       ...parent,
@@ -639,13 +656,16 @@ export const agentTranscriptRead = bindLiveRead(AGENT_TRANSCRIPT_READ, {
       const call = query.call;
       const callId = call === undefined ? undefined : yield* callIdOf(call);
       const cursor = query[LIVE_POLL.CURSOR];
+
       if (
         cursor !== undefined &&
         Result.isFailure(readEither(agentCursorSchema)(unparsedWire(cursor)))
       ) {
         return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
       }
+
       const { agent, target } = yield* reachedAgentById(userId, id);
+
       return {
         ownerId: target.userId,
         conversationId:

@@ -15,6 +15,7 @@ import { useScreenFailureReport } from "./crash-reports.js";
  */
 export function ScreenBoundary({ error, retry }: ErrorBoundaryProps) {
   useScreenFailureReport(error);
+
   return (
     <>
       <Stack.Screen options={{ title: "" }} />
@@ -26,5 +27,6 @@ export function ScreenBoundary({ error, retry }: ErrorBoundaryProps) {
 /** The root layout's `ErrorBoundary`: a throw no screen's boundary caught, said and reported as a screen's is, with no stack to name. */
 export function RootBoundary({ error, retry }: ErrorBoundaryProps) {
   useScreenFailureReport(error);
+
   return <ScreenFailure error={error} retry={retry} />;
 }

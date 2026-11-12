@@ -45,6 +45,7 @@ const openAgent = Effect.gen(function* () {
   yield* db.insert(user).values({ id: userId, name: "Dean", email: `${userId}@app.test` });
   const organizationId = yield* openWorkspace(userId);
   const task = yield* createTask(userId, { organizationId, name: "Teammate invitations" });
+
   const started = Option.getOrThrow(
     yield* createAgent(userId, {
       taskId: task.id,
@@ -57,6 +58,7 @@ const openAgent = Effect.gen(function* () {
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     }),
   );
+
   return { userId, taskId: task.id, organizationId, agentId: started.agent.id };
 });
 
@@ -65,11 +67,13 @@ const readBack = (itemId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
     const [item] = yield* db.select().from(inboxItem).where(eq(inboxItem.id, itemId));
+
     const messages = yield* db
       .select()
       .from(inboxMessage)
       .where(eq(inboxMessage.itemId, itemId))
       .orderBy(inboxMessage.createdAt);
+
     return { item, messages };
   });
 
@@ -80,15 +84,18 @@ const { ask: _ask, answers: _answers, ...messageColumnsBefore } = getTableColumn
 const readBefore = (itemId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const [item] = yield* db
       .select(itemColumnsBefore)
       .from(inboxItem)
       .where(eq(inboxItem.id, itemId));
+
     const messages = yield* db
       .select(messageColumnsBefore)
       .from(inboxMessage)
       .where(eq(inboxMessage.itemId, itemId))
       .orderBy(inboxMessage.createdAt);
+
     return { item, messages };
   });
 
@@ -100,8 +107,10 @@ it.layer(getTestDB())("inbox_message_ask over a database from before it", (it) =
       Effect.gen(function* () {
         const sql = yield* SqlClient.SqlClient;
         const place = yield* openAgent;
+
         // The database as it stood before the migration: no sync capture yet, and the migration undone.
         for (const statement of syncCaptureTakenOff()) yield* sql.unsafe(statement);
+
         for (const statement of UNDO) yield* sql.unsafe(statement);
 
         // Written as a deployment from before the migration writes them, naming none of its columns.
@@ -115,7 +124,9 @@ it.layer(getTestDB())("inbox_message_ask over a database from before it", (it) =
         const before = yield* readBefore(itemId);
 
         const migration = yield* migrationStatements(MIGRATION);
+
         for (const statement of migration) yield* sql.unsafe(statement);
+
         for (const statement of migration) yield* sql.unsafe(statement);
 
         const agentMessageId = randomUUID();

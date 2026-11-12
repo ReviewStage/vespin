@@ -41,7 +41,9 @@ export function layTitle(layout: TitleLayout): { restore: () => void } {
     configurable: true,
     value(this: Element) {
       if (this.matches(layout.room)) return box(layout.roomWidth);
+
       if (this.matches(layout.words)) return box(layout.whole);
+
       return box(0);
     },
   });
@@ -53,13 +55,17 @@ export function layTitle(layout: TitleLayout): { restore: () => void } {
   });
   globalThis.requestAnimationFrame = (run: FrameRequestCallback) => {
     run(0);
+
     return 0;
   };
+
   globalThis.ResizeObserver = StillObserver as unknown as typeof ResizeObserver;
   document.documentElement.style.setProperty("--ui-title-floor", `${layout.floor}px`);
+
   return {
     restore: () => {
       if (rect !== undefined) Object.defineProperty(proto, "getBoundingClientRect", rect);
+
       if (scroll !== undefined) Object.defineProperty(proto, "scrollWidth", scroll);
       globalThis.requestAnimationFrame = frame;
       globalThis.ResizeObserver = observer;

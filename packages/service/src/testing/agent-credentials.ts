@@ -37,8 +37,10 @@ interface AgentKeysSaved {
 export const connectAgentApiKeys = (userId: string, saved: AgentKeysSaved = {}) =>
   Effect.gen(function* () {
     const ring = parseKeyRing(AGENT_KEY_RING);
+
     if (Result.isFailure(ring)) return yield* Effect.die(new Error("the fixture ring is no ring"));
     const providers = saved.providers ?? Object.values(PROVIDER_KEY_PROVIDER);
+
     for (const provider of providers) {
       const owner = { userId, provider, kind: PROVIDER_KEY_KIND.API_KEY };
       yield* saveProviderKey(

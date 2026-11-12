@@ -142,7 +142,9 @@ function sessionSandboxesOver(api: SandboxService): SessionSandboxesService {
     deleteFor: (sessionId) =>
       Effect.gen(function* () {
         const sandboxes = yield* api.listTagged(SESSION_TAG, sessionId);
+
         for (const sandbox of sandboxes) yield* api.delete(sandbox.name);
+
         return sandboxes.length;
       }),
     archiveFor: (sessionId, archive) => archiveScriptRun(api, sessionId, archive),
@@ -195,11 +197,14 @@ const archiveScriptRanWhileArchived = /* @__PURE__ */ Effect.fnUntraced(function
   sessionId: string,
 ) {
   const current = yield* readAgent(agent.userId, agent.id);
+
   if (Option.isNone(current) || current.value.archivedAt === null) return;
   const archive = yield* archiveScriptOf(current.value);
+
   if (archive === undefined) return;
   const sandboxes = yield* SessionSandboxes;
   const ran = yield* holdingRunner(agent.id, sandboxes.archiveFor(sessionId, archive));
+
   if (ran === undefined) return;
   yield* scriptRanIn(current.value, CLOUD_SETUP_SCRIPT.ARCHIVE, ran.exitCode, ran.ranAt);
 });
@@ -231,11 +236,14 @@ export const archivedInBackground = /* @__PURE__ */ Effect.fnUntraced(function* 
       ),
     ),
   );
+
   // An agent that never opened a sandbox has no session, and no script to run.
   const sessions = agents.flatMap((agent, at) => {
     const sessionId = read[at];
+
     return sessionId === undefined ? [] : [{ agent, sessionId }];
   });
+
   const scriptOne = ({ agent, sessionId }: (typeof sessions)[number]) =>
     archiveScriptRanWhileArchived(agent, sessionId).pipe(
       Effect.provide(reach.sessionSandboxes),
@@ -245,6 +253,7 @@ export const archivedInBackground = /* @__PURE__ */ Effect.fnUntraced(function* 
         ),
       ),
     );
+
   const scripts = Effect.forEach(sessions, scriptOne, {
     concurrency: "unbounded",
     discard: true,
@@ -256,6 +265,7 @@ export const archivedInBackground = /* @__PURE__ */ Effect.fnUntraced(function* 
         : Effect.logWarning("archived agents' archive scripts were left at the archive's deadline"),
     ),
   );
+
   yield* reach.keepAwake(
     Effect.all(
       [
@@ -296,6 +306,7 @@ export const deletedWithWorkspace = /* @__PURE__ */ Effect.fnUntraced(function* 
         ),
       ),
     );
+
   const deleteDrive = (name: string) =>
     deletedFilledDrive({ name, drive: name }).pipe(
       Effect.timeout(ARCHIVE_DELETE.TIMEOUT),
@@ -305,6 +316,7 @@ export const deletedWithWorkspace = /* @__PURE__ */ Effect.fnUntraced(function* 
         ),
       ),
     );
+
   yield* reach.keepAwake(
     Effect.all(
       [
@@ -367,18 +379,24 @@ function sandboxReleaseDue(usedAt: Date, now: number, turnOpen: boolean): boolea
 const releasedHolding = (sandboxName: string) =>
   Effect.gen(function* () {
     const row = yield* agentSandboxRelease(sandboxName);
+
     if (Option.isNone(row) || row.value.state !== AGENT_SANDBOX_STATE.RELEASING) {
       return SANDBOX_RELEASE_OUTCOME.NOT_RELEASING;
     }
+
     const turnOpen = yield* hasOpenTurn(row.value.conversationId);
+
     if (!sandboxReleaseDue(row.value.usedAt, yield* Clock.currentTimeMillis, turnOpen)) {
       yield* settleAgentSandboxRelease(sandboxName, AGENT_SANDBOX_STATE.LIVE);
+
       return SANDBOX_RELEASE_OUTCOME.USED_SINCE;
     }
+
     yield* (yield* Sandbox)
       .delete(sandboxName)
       .pipe(Effect.timeout(SANDBOX_RELEASE.DELETE_TIMEOUT));
     yield* settleAgentSandboxRelease(sandboxName, AGENT_SANDBOX_STATE.RELEASED);
+
     return SANDBOX_RELEASE_OUTCOME.RELEASED;
   });
 
@@ -396,15 +414,21 @@ export const consumeSandboxRelease = /* @__PURE__ */ Effect.fn("web/consumeSandb
   ): Effect.fn.Return<SandboxReleaseOutcome, unknown, DatabaseServices | Sandbox> {
     const outcome: SandboxReleaseOutcome = yield* Effect.gen(function* () {
       const row = yield* agentSandboxRelease(sandboxName);
+
       if (Option.isNone(row) || row.value.state !== AGENT_SANDBOX_STATE.RELEASING) {
         return SANDBOX_RELEASE_OUTCOME.NOT_RELEASING;
       }
+
       const held = yield* holdingRunnerIfFree(row.value.agentId, releasedHolding(sandboxName));
+
       if (Option.isSome(held)) return held.value;
       yield* settleAgentSandboxRelease(sandboxName, AGENT_SANDBOX_STATE.LIVE);
+
       return SANDBOX_RELEASE_OUTCOME.USED_SINCE;
     });
+
     yield* Effect.logInfo(`an unused sandbox's release ended: ${outcome}`);
+
     return outcome;
   },
   (effect, sandboxName) =>
@@ -433,6 +457,7 @@ export const releaseUnusedSandboxes = /* @__PURE__ */ Effect.fn("web/releaseUnus
     const releases = yield* SandboxReleases;
     const usedBy = unusedSince(now);
     const rows = yield* releasableAgentSandboxes(usedBy, SANDBOX_RELEASE.SWEEP_LIMIT);
+
     const sent = yield* Effect.forEach(
       rows,
       ({ sandboxName, state }) =>
@@ -444,17 +469,22 @@ export const releaseUnusedSandboxes = /* @__PURE__ */ Effect.fn("web/releaseUnus
           ) {
             return false;
           }
+
           yield* releases.publish(sandboxName);
+
           return true;
         }),
       { concurrency: SANDBOX_RELEASE.PUBLISH_CONCURRENCY },
     );
+
     const published = sent.filter(Boolean).length;
+
     if (rows.length > 0) {
       yield* Effect.logInfo(
         `${published} unused sandboxes' releases published of ${rows.length} read`,
       );
     }
+
     return { due: rows.length, published };
   },
 );
@@ -541,11 +571,15 @@ export function sandboxReleasesHandler(
         const decoded = yield* Effect.option(
           Schema.decodeUnknownEffect(releaseMessageSchema)(message),
         );
+
         if (Option.isNone(decoded)) {
           yield* Effect.logError("a sandbox-releases message did not decode; it is dropped");
+
           return QUEUE_ACKNOWLEDGED;
         }
+
         yield* consumeSandboxRelease(decoded.value.sandboxName);
+
         return QUEUE_ACKNOWLEDGED;
       }),
     SANDBOX_RELEASE.FAILED_AGAIN,

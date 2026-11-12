@@ -63,6 +63,7 @@ interface Account {
 
 async function withAuth(body: (auth: Auth) => Promise<void>): Promise<void> {
   const client = await openMigratedPglite();
+
   try {
     await body(invitationAuth(client));
   } finally {
@@ -73,16 +74,20 @@ async function withAuth(body: (auth: Auth) => Promise<void>): Promise<void> {
 /** An account signed up and signed in; verified unless asked otherwise, as a provider's sign-in leaves it. */
 async function signUp(auth: Auth, name: string, verified = true): Promise<Account> {
   const email = `${name}@example.com`;
+
   const { headers, response } = await auth.api.signUpEmail({
     body: { name, email, password: "a-password-long-enough" },
     returnHeaders: true,
   });
+
   if (verified) await verify(auth, response.user.id);
+
   // A browser sends back each cookie's name and value, and none of its attributes.
   const cookie = headers
     .getSetCookie()
     .map((line) => line.split(";")[0])
     .join("; ");
+
   return { id: response.user.id, email, cookie };
 }
 
@@ -96,7 +101,9 @@ async function workspaceOf(auth: Auth, owner: Account): Promise<string> {
   const created = await auth.api.createOrganization({
     body: { name: "Acme", slug: "acme", userId: owner.id },
   });
+
   assert.ok(created);
+
   return created.id;
 }
 
@@ -108,6 +115,7 @@ async function call(
   body?: Readonly<Record<string, string>>,
 ): Promise<Response> {
   const headers = { origin: BASE_URL, cookie: account.cookie, "content-type": "application/json" };
+
   const request =
     body === undefined
       ? new Request(`${BASE_URL}/api/auth${path}`, { headers })
@@ -116,6 +124,7 @@ async function call(
           headers,
           body: JSON.stringify(body),
         });
+
   return auth.handler(request);
 }
 
@@ -153,6 +162,7 @@ async function cancelInvitation(auth: Auth, account: Account, invitationId: stri
 
 async function refusal(response: Response): Promise<{ status: number; code: string }> {
   const { code } = Schema.decodeUnknownSync(RefusalSchema)(await response.json());
+
   return { status: response.status, code };
 }
 
@@ -186,6 +196,7 @@ test("an admin invites by address, and the invitee reads the invitation and acce
     const { answer: accepted, counts } = await withAuthCounts(() =>
       call(auth, invitee, "/organization/accept-invitation", { invitationId: invitation.id }),
     );
+
     assert.equal(accepted.status, 200);
     // Note that the acceptance is counted under the invitee, and the inviter's own send is the procedure's to count.
     assert.deepEqual(counts, [
@@ -236,9 +247,11 @@ test("a member invites no one and cancels nothing, and an invitation its owner c
 
     const ownerCancel = await cancelInvitation(auth, owner, id);
     assert.equal(ownerCancel.status, 200);
+
     const accepted = await call(auth, invitee, "/organization/accept-invitation", {
       invitationId: id,
     });
+
     assert.deepEqual(await refusal(accepted), { status: 400, code: "INVITATION_NOT_FOUND" });
   });
 });
@@ -251,6 +264,7 @@ test("an invitation is accepted only by the invited address, and only once its p
     const workspaceId = await workspaceOf(auth, owner);
     const invited = await invite(auth, owner, workspaceId, invitee.email);
     const { id } = Schema.decodeUnknownSync(InvitationSchema)(await invited.json());
+
     const accept = (account: Account) =>
       call(auth, account, "/organization/accept-invitation", { invitationId: id });
 

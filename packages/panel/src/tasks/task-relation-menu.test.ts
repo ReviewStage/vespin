@@ -77,6 +77,7 @@ function head(door: TaskRelationDoor, task: Task = TASK): (ask: TaskRelationAsk)
   document.body.append(host);
   const root = createRoot(host);
   roots.push(root);
+
   return (ask) =>
     act(() =>
       root.render(
@@ -106,6 +107,7 @@ const DOOR = {
 
 test("a pick on Parent sets the task's parent to it, and on Sub-task sets its parent to the task", () => {
   const parents: [string, string | null][] = [];
+
   const ask = head({
     ...DOOR,
     onSetParent: (taskId, parentTaskId) => parents.push([taskId, parentTaskId]),
@@ -146,6 +148,7 @@ test("on Sub-task a task above this one or in another repository says why and ta
 
 test("New task opens New task from the new task's side: on Sub-task as a sub-task of this task, on Blocked by as one blocking it", () => {
   const asked: string[] = [];
+
   const ask = head({
     ...DOOR,
     onSetParent: () => undefined,
@@ -163,6 +166,7 @@ test("New task opens New task from the new task's side: on Sub-task as a sub-tas
 test("a task from a service before statuses, which draws no chips, still opens the add menu on an ask", () => {
   const parents: [string, string | null][] = [];
   const { status: _status, priority: _priority, ...before } = TASK;
+
   const ask = head(
     { ...DOOR, onSetParent: (taskId, parentTaskId) => parents.push([taskId, parentTaskId]) },
     before,

@@ -57,6 +57,7 @@ function frameSize(height: PageEmbedHeight): {
       style: cssCustomProperties({ "--page-embed-height": `${height.height}px` }),
     };
   }
+
   return {
     className:
       height.kind === PAGE_EMBED_HEIGHT.FILL ? "h-page-embed-fill" : "h-page-embed-stand-in",
@@ -67,6 +68,7 @@ function frameSize(height: PageEmbedHeight): {
 /** Whether the frame has loaded the page it names now, and the load to hand it. */
 function useLoaded(src: string): { loaded: boolean; onLoaded: () => void } {
   const [loadedFrom, setLoadedFrom] = useState<string | undefined>(undefined);
+
   return { loaded: loadedFrom === src, onLoaded: () => setLoadedFrom(src) };
 }
 
@@ -122,6 +124,7 @@ export function PageEmbed({
 }): React.JSX.Element {
   const size = frameSize(height);
   const load = useLoaded(frame.src);
+
   return (
     <div
       className="ui-page-embed bg-muted data-[loaded=true]:bg-transparent"

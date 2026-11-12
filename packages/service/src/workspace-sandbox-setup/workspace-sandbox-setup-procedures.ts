@@ -27,6 +27,7 @@ export interface WorkspaceSandboxSetupProcedureSeams {
 /** The workspace sandbox setup resource: every procedure to a signed-in caller. */
 export function workspaceSandboxSetupProcedures(seams: WorkspaceSandboxSetupProcedureSeams) {
   const signedIn = hosted.workspaceSandboxSetup.use(accountMiddleware(seams.resolveUserId));
+
   return {
     read: signedIn.read.effect(function* ({ input, context: { userId } }) {
       return yield* readSandboxSetup(userId, input.workspaceId);

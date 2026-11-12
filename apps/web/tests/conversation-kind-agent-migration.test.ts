@@ -29,12 +29,15 @@ const foldersBefore = (migration: string) =>
     const fileSystem = yield* FileSystem;
     const path = yield* Path;
     const folder = yield* fileSystem.makeTempDirectoryScoped({ prefix: "before-kind-" });
+
     const names = (yield* fileSystem.readDirectory(MIGRATIONS_FOLDER)).filter(
       (name) => name.localeCompare(migration) < 0,
     );
+
     for (const name of names) {
       yield* fileSystem.copy(path.join(MIGRATIONS_FOLDER, name), path.join(folder, name));
     }
+
     return folder;
   });
 
@@ -55,9 +58,11 @@ it.effect.each(MIGRATIONS)(
         const sql = yield* SqlClient.SqlClient;
         yield* runWebMigrations(yield* foldersBefore(migration));
         yield* sql`insert into "user" (id, name, email) values ('dean', 'dean', 'dean@app.test')`;
+
         for (const [order, [kind]] of KINDS.entries()) {
           yield* sql`insert into conversations (user_id, kind, created_at) values ('dean', ${kind}, ${new Date(order * 1000)})`;
         }
+
         const stored = Effect.map(
           sql<{
             readonly kind: string;
@@ -75,12 +80,15 @@ it.effect.each(MIGRATIONS)(
         // A second run, as a deploy that ran it before recording it would, changes nothing.
         const fileSystem = yield* FileSystem;
         const path = yield* Path;
+
         const rewrites = (yield* fileSystem.readFileString(
           path.join(MIGRATIONS_FOLDER, migration, "migration.sql"),
         ))
           .split("--> statement-breakpoint")
           .filter((statement) => /^(--.*\n)*UPDATE "conversations"/u.test(statement.trim()));
+
         assert.ok(rewrites.length > 0, "the migration rewrites conversations");
+
         for (const statement of rewrites) yield* sql.unsafe(statement);
         assert.deepEqual(
           yield* stored,

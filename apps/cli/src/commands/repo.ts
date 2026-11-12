@@ -55,20 +55,24 @@ const listCommand = Command.make("list", {}, () =>
     const { workspace } = yield* resolveWorkspace;
     const { hosted } = yield* session;
     const listed = yield* askService(hosted.github.repositories, { workspaceId: workspace.id });
+
     const added = yield* askService(hosted.github.tokenRepositories, {
       workspaceId: workspace.id,
     });
+
     if (!listed.installed) {
       yield* note(
         `No GitHub installation is connected to this workspace; install ${PRODUCT_NAME}'s GitHub App at ${listed.installationUrl}`,
       );
     }
+
     const rows = listed.repositories.map((one) => [
       one.fullName,
       one.access ?? "",
       one.private ? "private" : "public",
       one.defaultBranch,
     ]);
+
     yield* answer({
       json: { ...listed, tokenRepositories: added.repositories },
       lines: [
@@ -98,12 +102,14 @@ function setTokenRepository(repository: string, added: boolean) {
   return Effect.gen(function* () {
     const { workspace } = yield* resolveWorkspace;
     const { hosted } = yield* session;
+
     const answered = yield* askService(
       hosted.github.setTokenRepository,
       { workspaceId: workspace.id, repository, added },
       undefined,
       TOKEN_REPOSITORY_REFUSAL_WORDS,
     );
+
     yield* answer({
       json: answered,
       lines: [
@@ -154,6 +160,7 @@ const catCommand = Command.make(
     Effect.gen(function* () {
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
+
       // Note that a raw read carries the whole text, so its window stands for nothing.
       const read = yield* askService(hosted.github.repositoryFile, {
         workspaceId: workspace.id,
@@ -164,7 +171,9 @@ const catCommand = Command.make(
         raw: TASK_FILE_QUERY_FLAG,
         ...(Option.isSome(commit) ? { ref: commit.value } : undefined),
       });
+
       if ("refusal" in read) return yield* fileRefused(read, REPOSITORY_REFUSAL_WORDS);
+
       if (!("text" in read))
         return yield* fileRefused(
           { refusal: TASK_FILE_REFUSAL.NOT_TEXT },
@@ -208,17 +217,21 @@ const lsCommand = Command.make(
     Effect.gen(function* () {
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
+
       const listed = yield* askService(hosted.github.repositoryTree, {
         workspaceId: workspace.id,
         repository,
         ...(Option.isSome(path) && path.value !== "" ? { path: path.value } : undefined),
         ...(recursive ? { recursive: GITHUB_REPOSITORY_TREE_RECURSIVE } : undefined),
       });
+
       if ("refusal" in listed) return yield* fileRefused(listed, REPOSITORY_REFUSAL_WORDS);
       const { folder } = listed;
+
       const names = folder.entries.map((entry) =>
         entry.kind === TASK_TREE_ENTRY.FOLDER ? `${entry.name}/` : entry.name,
       );
+
       if (folder.truncated) yield* note("The folder holds more entries than one listing carries.");
       yield* answer({ json: folder, lines: names, ids: names });
     }),
@@ -236,11 +249,13 @@ const skillsCommand = Command.make("skills", { repository: repositoryArgument },
   Effect.gen(function* () {
     const { workspace } = yield* resolveWorkspace;
     const { hosted } = yield* session;
+
     const read = yield* askService(hosted.github.repositorySkills, {
       workspaceId: workspace.id,
       repository,
       installed: TASK_SKILLS_INSTALLED,
     });
+
     if ("refusal" in read) return yield* fileRefused(read, REPOSITORY_REFUSAL_WORDS);
     const { skills } = read;
     yield* answer({
@@ -279,17 +294,21 @@ const issueCommand = Command.make(
       const place = { workspaceId: workspace.id, repository, number: String(number) };
       // Note that GitHub numbers issues and pull requests in one series, so the issue is asked only where no pull request answered.
       const { pullRequest } = yield* askService(hosted.github.repositoryPullRequest, place);
+
       const { issue } =
         pullRequest === null
           ? yield* askService(hosted.github.repositoryIssue, place)
           : { issue: null };
+
       const found = pullRequest ?? issue;
+
       if (found === null) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.REFUSED,
           message: `No issue or pull request #${number} of ${repository} is reached.`,
         });
       }
+
       yield* answer({
         json: { pullRequest, issue },
         lines: [`#${found.number}  ${found.state}  ${found.title}`, found.url],

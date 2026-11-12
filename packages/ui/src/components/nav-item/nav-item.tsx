@@ -222,7 +222,9 @@ function Name({ children }: { children: ReactNode }): React.JSX.Element {
 /** What stands at rest: the mark, then the count, read with its noun. */
 function AtRest({ mark, count }: { mark: ReactNode; count: NavCount | undefined }) {
   const counted = count !== undefined && count.value > 0;
+
   if (!said(mark) && !counted) return null;
+
   return (
     <span className="ui-nav-item-rest ml-auto">
       {said(mark) ? <span className={MARK}>{mark}</span> : null}
@@ -280,6 +282,7 @@ export function NavItemLink({
   "aria-label"?: string | undefined;
 }): React.JSX.Element {
   const press = pulseOnPress(onClick, PRESS_PULSE.QUIET);
+
   return (
     <a
       className={ROW}
@@ -323,10 +326,12 @@ export function NavItem({
   const framed = said(actions);
   // Note that a place in a list that chooses rows is a row that cannot be chosen, so going there lets the set go where a plain press does; dropping a menu goes nowhere.
   const selecting = useContext(ListSelectionContext);
+
   const go = (event: MouseEvent<HTMLButtonElement>) => {
     selecting?.passOver(event);
     onClick?.(event);
   };
+
   const press = (
     <button
       type="button"
@@ -369,7 +374,9 @@ export function NavItem({
       {said(shortcut) ? <span className="ui-nav-item-shortcut ml-auto">{shortcut}</span> : null}
     </button>
   );
+
   if (!framed) return press;
+
   return (
     <div
       className="ui-nav-item-frame relative flex min-w-0"

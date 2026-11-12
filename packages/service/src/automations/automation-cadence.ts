@@ -115,6 +115,7 @@ export interface AutomationCadenceShape {
  */
 export const recordFiring = Effect.fnUntraced(function* (firing: AutomationFiringMessage) {
   const automation = yield* readAutomationToRun(firing.automationId);
+
   if (Option.isNone(automation)) return Option.none<Automation>();
   yield* recordAutomationRun(automation.value, {
     dedupeKey: firing.dedupeKey,
@@ -122,6 +123,7 @@ export const recordFiring = Effect.fnUntraced(function* (firing: AutomationFirin
     firedAt: new Date(firing.firedAt),
     ...(firing.payload === undefined ? undefined : { payload: firing.payload }),
   });
+
   return automation;
 });
 
@@ -168,13 +170,16 @@ const forgetSchedule = (automation: Pick<CadencedAutomation, "id" | "organizatio
  */
 const keepSchedule = Effect.fnUntraced(function* (automation: CadencedAutomation) {
   const { trigger } = automation;
+
   if (trigger.kind !== AUTOMATION_TRIGGER.SCHEDULE) return yield* forgetSchedule(automation);
   const identity = { name: automation.id, namespace: automation.organizationId };
+
   const cadence = {
     expression: { type: "cron", cron: trigger.cron },
     timezone: trigger.timezone,
     target: { topic: AUTOMATION_RUNS.TOPIC },
   } as const;
+
   const kept: Schedule = yield* vercelCall(CADENCE_OPERATION.KEEP, () =>
     Schedules.update({ ...identity, ...cadence }),
   ).pipe(
@@ -183,10 +188,13 @@ const keepSchedule = Effect.fnUntraced(function* (automation: CadencedAutomation
       () => vercelCall(CADENCE_OPERATION.KEEP, () => Schedules.create({ ...identity, ...cadence })),
     ),
   );
+
   const active = kept.state === "active";
+
   if (automation.enabled && !active) {
     yield* vercelCall(CADENCE_OPERATION.KEEP, () => Schedules.enable(identity));
   }
+
   if (!automation.enabled && active) {
     yield* vercelCall(CADENCE_OPERATION.KEEP, () => Schedules.disable(identity));
   }

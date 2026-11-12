@@ -21,5 +21,6 @@ export function fakeCheckoutSnapshots(missing = false) {
     take: (cwd, _agentId, lineId) =>
       Effect.succeed(missing ? undefined : fakeSnapshotOf(cwd, lineId)),
   });
+
   return { layer };
 }

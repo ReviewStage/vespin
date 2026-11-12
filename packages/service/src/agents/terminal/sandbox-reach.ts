@@ -40,11 +40,15 @@ export const reachedAgentSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   id: string,
 ): Effect.fn.Return<ReachedAgentSession, HostedRefusal, DatabaseServices> {
   const { agent } = yield* reachedAgentById(userId, id);
+
   if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+
   if (agent.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_RETIRED);
+
   const [session] = yield* hostedStoreOrUnavailable(
     standingSessionsOf(agent.userId, [agent.conversationId]),
   );
+
   return {
     sessionId: session?.sessionId,
     machine: agent.machine,
@@ -78,6 +82,7 @@ export function sandboxOrUpstream<A, R>(
 /** Why a shell could not be had, as the refusal a route answers. */
 export function shellRefusal(refusal: ShellRefusal): HostedRefusal {
   if (refusal.kind === SHELL_REFUSAL.NOT_FOUND) return HOSTED_REFUSAL.NOT_FOUND;
+
   return refusal.sandbox === SANDBOX_STATE.STARTING
     ? HOSTED_REFUSAL.AGENT_NOT_READY
     : HOSTED_REFUSAL.SANDBOX_STOPPED;
@@ -89,5 +94,6 @@ export const listedShells = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   if (sessionId === undefined) return { sandbox: SANDBOX_STATE.STARTING, terminals: [] };
   const sandbox = yield* AgentSandbox;
+
   return yield* sandboxOrUpstream(sandbox.terminals(sessionId));
 });

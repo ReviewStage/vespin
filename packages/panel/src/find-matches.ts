@@ -152,6 +152,7 @@ function unread(element: Element, skipped: string | undefined): boolean {
 /** The element a node stands in, crossing from a shadow root to its host. */
 function parentAcross(node: Node): Element | null {
   if (node.parentElement !== null) return node.parentElement;
+
   return node.parentNode instanceof ShadowRoot ? node.parentNode.host : null;
 }
 
@@ -160,17 +161,21 @@ function searchedShadow(
   element: Element,
 ): { root: ShadowRoot; skipped: string | undefined } | undefined {
   const root = element.shadowRoot;
+
   if (root === null || !element.hasAttribute(FIND_SHADOW_ATTRIBUTE)) return undefined;
   const skipped = element.getAttribute(FIND_SHADOW_ATTRIBUTE) ?? "";
+
   return { root, skipped: skipped === "" ? undefined : skipped };
 }
 
 /** The nearest element around a text node that sets its text apart from the next block's, or the shadow root it stands at the top of. */
 function blockOf(node: Text, root: Element): Node {
   let element = node.parentElement;
+
   while (element !== null && element !== root && INLINE_TAGS.has(element.tagName)) {
     element = element.parentElement;
   }
+
   return element ?? (node.parentNode instanceof ShadowRoot ? node.parentNode : root);
 }
 
@@ -202,18 +207,23 @@ function readNodes(
     if (node instanceof Text) {
       if (node.data.length === 0) continue;
       const own = blockOf(node, root);
+
       if (into.block !== undefined && own !== into.block) into.text += BLOCK_BREAK;
       into.block = own;
       into.runs.push({ node, start: into.text.length });
       into.text += node.data;
       continue;
     }
+
     if (!(node instanceof Element) || unread(node, skipped)) continue;
+
     if (node instanceof HTMLSlotElement) {
       readNodes(node.assignedNodes({ flatten: true }), root, undefined, into);
       continue;
     }
+
     const shadow = searchedShadow(node);
+
     if (shadow === undefined) readUnder(node, root, skipped, into);
     else readUnder(shadow.root, root, shadow.skipped, into);
   }
@@ -223,13 +233,16 @@ function readNodes(
 function readText(root: Element, leftOut: string | undefined): ReadText {
   const into: Reading = { text: "", runs: [], block: undefined };
   readUnder(root, root, leftOut, into);
+
   return { text: into.text, runs: into.runs };
 }
 
 /** The node a node stands for in the document's own tree: itself, or the host of each shadow root it stands in. */
 function inDocumentTree(node: Node): Node {
   let at = node;
+
   for (let top = at.getRootNode(); top instanceof ShadowRoot; top = at.getRootNode()) at = top.host;
+
   return at;
 }
 
@@ -238,6 +251,7 @@ function inFlatTree(node: Node): Node {
   for (let at: Node | null = node; at !== null; at = at.parentNode) {
     if (at instanceof Element && at.assignedSlot !== null) return at.assignedSlot;
   }
+
   return node;
 }
 
@@ -253,13 +267,17 @@ function startsBefore(a: Range, b: Range): boolean {
   if (a.startContainer.getRootNode() === b.startContainer.getRootNode()) {
     return a.compareBoundaryPoints(Range.START_TO_START, b) < 0;
   }
+
   const drawnOne = inFlatTree(a.startContainer);
   const drawnOther = inFlatTree(b.startContainer);
+
   if (drawnOne !== drawnOther && drawnOne.getRootNode() === drawnOther.getRootNode()) {
     return (drawnOne.compareDocumentPosition(drawnOther) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
   }
+
   const one = inDocumentTree(drawnOne);
   const other = inDocumentTree(drawnOther);
+
   return (
     one !== other && (one.compareDocumentPosition(other) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
   );
@@ -269,14 +287,19 @@ function startsBefore(a: Range, b: Range): boolean {
 function runAt(runs: readonly TextRun[], offset: number): TextRun {
   let low = 0;
   let high = runs.length - 1;
+
   while (low < high) {
     const middle = Math.ceil((low + high) / 2);
     const run = runs[middle];
+
     if (run !== undefined && run.start <= offset) low = middle;
     else high = middle - 1;
   }
+
   const run = runs[low];
+
   if (run === undefined) throw new Error(`no text run holds offset ${offset}`);
+
   return run;
 }
 
@@ -287,17 +310,20 @@ function rangeOver(read: ReadText, start: number, end: number): Range {
   const range = document.createRange();
   range.setStart(first.node, start - first.start);
   range.setEnd(last.node, end - last.start);
+
   return range;
 }
 
 /** The highlight a name paints, registered the first time it is asked for. */
 function highlightOf(name: FindHighlight): Highlight {
   const registered = CSS.highlights.get(name);
+
   if (registered !== undefined) return registered;
   const highlight = new Highlight();
   // The match a find is at is drawn over the tint every match wears.
   highlight.priority = name === FIND_HIGHLIGHT.CURRENT ? 1 : 0;
   CSS.highlights.set(name, highlight);
+
   return highlight;
 }
 
@@ -305,7 +331,9 @@ function highlightOf(name: FindHighlight): Highlight {
 function scrollsAlong(element: Element, axis: "x" | "y"): boolean {
   const style = getComputedStyle(element);
   const overflow = axis === "y" ? style.overflowY : style.overflowX;
+
   if (overflow !== "auto" && overflow !== "scroll") return false;
+
   return axis === "y"
     ? element.scrollHeight > element.clientHeight
     : element.scrollWidth > element.clientWidth;
@@ -320,15 +348,19 @@ function scrollsAlong(element: Element, axis: "x" | "y"): boolean {
  */
 function scrollToRange(range: Range, root: Element): void {
   let element = parentAcross(range.startContainer);
+
   while (element !== null) {
     const box = element.getBoundingClientRect();
     const target = range.getBoundingClientRect();
+
     if (scrollsAlong(element, "y") && (target.top < box.top || target.bottom > box.bottom)) {
       element.scrollTop += target.top - box.top - (box.height - target.height) / 2;
     }
+
     if (scrollsAlong(element, "x") && (target.left < box.left || target.right > box.right)) {
       element.scrollLeft += target.left - box.left - (box.width - target.width) / 2;
     }
+
     if (element === root) return;
     element = parentAcross(element);
   }
@@ -353,8 +385,10 @@ function letGo(folds: Set<HTMLDetailsElement>, fold: HTMLDetailsElement): void {
 function holdFold(folds: Set<HTMLDetailsElement>, fold: HTMLDetailsElement): void {
   const press = (event: Event) => {
     const line = event.target instanceof Element ? event.target.closest("summary") : null;
+
     if (line?.parentElement === fold) letGo(folds, fold);
   };
+
   fold.addEventListener("click", press);
   heldFolds.set(fold, () => fold.removeEventListener("click", press));
   folds.add(fold);
@@ -365,6 +399,7 @@ function closeFolds(folds: Set<HTMLDetailsElement>, around: ReadonlySet<Element>
   for (const fold of folds) {
     if (around.has(fold)) continue;
     letGo(folds, fold);
+
     // Note that a fold whose row was let go is left as it is.
     if (fold.isConnected && fold.open) fold.open = false;
   }
@@ -385,9 +420,11 @@ export function findRanges(root: Element, query: string, leftOut?: string): Rang
   const read = readText(root, leftOut);
   const pattern = new RegExp(query.replace(PATTERN_SYNTAX, "\\$&"), "giu");
   const ranges: Range[] = [];
+
   for (const match of read.text.matchAll(pattern)) {
     ranges.push(rangeOver(read, match.index, match.index + match[0].length));
   }
+
   return ranges;
 }
 
@@ -399,13 +436,17 @@ export function findRanges(root: Element, query: string, leftOut?: string): Rang
 function viewOf(range: Range, root: Element, seen: Map<Element, Element>): Element {
   const start = parentAcross(range.startContainer) ?? root;
   const known = seen.get(start);
+
   if (known !== undefined) return known;
   let element: Element | null = start;
+
   while (element !== null && element !== root && !scrollsAlong(element, "y")) {
     element = parentAcross(element);
   }
+
   const view = element ?? root;
   seen.set(start, view);
+
   return view;
 }
 
@@ -424,12 +465,14 @@ export function matchFrom(
 ): number {
   if (ranges.length === 0) return -1;
   const seen = new Map<Element, Element>();
+
   const after = ranges.findIndex((range) =>
     anchor === undefined
       ? range.getBoundingClientRect().bottom >=
         viewOf(range, root, seen).getBoundingClientRect().top
       : !startsBefore(range, anchor),
   );
+
   return Math.max(0, after);
 }
 
@@ -439,11 +482,15 @@ export function repaint(previous: FindPainting, next: FindPainting): void {
   if (previous.ranges.length === 0 && next.ranges.length === 0) return;
   const match = highlightOf(FIND_HIGHLIGHT.MATCH);
   const current = highlightOf(FIND_HIGHLIGHT.CURRENT);
+
   for (const range of previous.ranges) match.delete(range);
   const was = previous.ranges[previous.at];
+
   if (was !== undefined) current.delete(was);
+
   for (const range of next.ranges) match.add(range);
   const now = next.ranges[next.at];
+
   if (now !== undefined) current.add(now);
 }
 
@@ -457,6 +504,7 @@ export function repaint(previous: FindPainting, next: FindPainting): void {
  */
 export function reveal(range: Range, root: Element, folds?: Set<HTMLDetailsElement>): void {
   const around = new Set<Element>();
+
   for (
     let element = parentAcross(range.startContainer);
     element !== null && element !== root;
@@ -464,17 +512,22 @@ export function reveal(range: Range, root: Element, folds?: Set<HTMLDetailsEleme
   ) {
     around.add(element);
   }
+
   if (folds !== undefined) closeFolds(folds, around);
+
   for (const element of around) {
     if (element instanceof HTMLDetailsElement && !element.open) {
       element.open = true;
+
       if (folds !== undefined) holdFold(folds, element);
     }
+
     if (hiddenUntilFound(element)) {
       element.dispatchEvent(new Event(BEFORE_MATCH, { bubbles: true }));
       element.removeAttribute("hidden");
     }
   }
+
   scrollToRange(range, root);
 }
 
@@ -483,6 +536,7 @@ function containsAcross(root: Element, element: Element): boolean {
   for (let at: Element | null = element; at !== null; at = parentAcross(at)) {
     if (at === root) return true;
   }
+
   return false;
 }
 
@@ -498,14 +552,17 @@ function containsAcross(root: Element, element: Element): boolean {
 export function watchText(root: Element, onChange: () => void): () => void {
   const watched = new WeakSet<Node>();
   let frame: number | undefined;
+
   const watchShadows = () => {
     for (const host of root.querySelectorAll(`[${FIND_SHADOW_ATTRIBUTE}]`)) {
       const shadow = host.shadowRoot;
+
       if (shadow === null || watched.has(shadow)) continue;
       watched.add(shadow);
       observer.observe(shadow, WATCHED);
     }
   };
+
   const observer = new MutationObserver(() => {
     if (frame !== undefined) return;
     frame = requestAnimationFrame(() => {
@@ -514,10 +571,13 @@ export function watchText(root: Element, onChange: () => void): () => void {
       onChange();
     });
   });
+
   observer.observe(root, WATCHED);
   watchShadows();
+
   return () => {
     observer.disconnect();
+
     if (frame !== undefined) cancelAnimationFrame(frame);
   };
 }
@@ -529,12 +589,16 @@ export function watchText(root: Element, onChange: () => void): () => void {
  */
 export function selectedWords(root: Element): string | undefined {
   const selection = document.getSelection();
+
   if (selection === null || selection.isCollapsed || selection.rangeCount === 0) return undefined;
   const within = selection.getRangeAt(0).commonAncestorContainer;
   const element = within instanceof Element ? within : within.parentElement;
+
   // Words selected in the bar's own field are the query already.
   if (element === null || !containsAcross(root, element)) return undefined;
+
   if (element.closest(`[${FIND_SKIP_ATTRIBUTE}]`) !== null) return undefined;
   const words = selection.toString();
+
   return words.length === 0 || words.includes("\n") ? undefined : words;
 }

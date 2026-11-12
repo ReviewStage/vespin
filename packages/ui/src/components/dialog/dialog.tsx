@@ -289,7 +289,9 @@ function DialogHead({
       </ReplayWords>
     </Text>
   );
+
   if (subtitle === undefined && closeLabel === undefined) return words;
+
   return (
     <div className="ui-dialog-head flex items-start gap-control-gap">
       <div className="flex min-w-0 flex-1 flex-col gap-tight-gap">
@@ -319,6 +321,7 @@ const SHEET_ROOM =
 /** The dimmed window's room by the card's size. */
 function roomOf(size: DialogSize): string {
   if (size === DIALOG_SIZE.WINDOW) return WINDOW_ROOM;
+
   return size === DIALOG_SIZE.SHEET ? SHEET_ROOM : "ui-dialog-backdrop";
 }
 
@@ -403,6 +406,7 @@ function useRefusalShake(card: React.RefObject<HTMLDivElement | null>, refused: 
     if (refused && !was.current && card.current !== null) {
       replayMotion(card.current, CARD_ANSWER.REFUSED);
     }
+
     was.current = refused;
   }, [card, refused]);
 }
@@ -415,6 +419,7 @@ function reachable(element: HTMLElement): boolean {
 /** What takes focus in `row`, where it stands within reach. */
 function rowFocus(row: Element | null): HTMLElement | null {
   if (!(row instanceof HTMLElement) || !reachable(row)) return null;
+
   return row.querySelector<HTMLElement>(ROW_FOCUS);
 }
 
@@ -428,11 +433,15 @@ interface RowPlace {
 /** The row after `place`'s, or its list's first row but its own, whichever still stands within reach. */
 function neighborIn({ row, next, list }: RowPlace): HTMLElement | null {
   const after = rowFocus(next);
+
   if (after !== null) return after;
+
   for (const each of list.children) {
     const head = each === row ? null : rowFocus(each);
+
     if (head !== null) return head;
   }
+
   return null;
 }
 
@@ -440,7 +449,9 @@ function neighborIn({ row, next, list }: RowPlace): HTMLElement | null {
 function rowPlaces(opener: HTMLElement): RowPlace[] {
   const row = opener.closest("li");
   const list = row?.parentElement;
+
   if (row === null || list === null || list === undefined) return [];
+
   return [{ row, next: row.nextElementSibling, list }, ...rowPlaces(list)];
 }
 
@@ -457,11 +468,14 @@ function rowPlaces(opener: HTMLElement): RowPlace[] {
  */
 export const nextRowOrHead: RestoreTo = (opener) => {
   const places = rowPlaces(opener);
+
   return () => {
     for (const place of places) {
       const found = neighborIn(place);
+
       if (found !== null) return found;
     }
+
     return null;
   };
 };
@@ -475,7 +489,9 @@ interface Opener {
 /** Whether focus has gone somewhere of its own outside the card, where a hand-back leaves it, since the card no longer holds it to give back. */
 function focusTaken(card: HTMLElement | null): boolean {
   const now = document.activeElement;
+
   if (!(now instanceof HTMLElement) || now === document.body || !reachable(now)) return false;
+
   return !(card?.contains(now) ?? false);
 }
 
@@ -490,9 +506,11 @@ function handBack(
 ): Opener | null {
   const back = invoker.current;
   invoker.current = null;
+
   if (back === null || focusTaken(card)) return back;
   const to = reachable(back.element) ? back.element : back.restore?.();
   to?.focus({ preventScroll: true });
+
   return back;
 }
 
@@ -522,6 +540,7 @@ function useInvokerFocus(
   useLayoutEffect(() => {
     if (!open || invoker.current !== null) return;
     const element = opener ?? document.activeElement;
+
     if (!(element instanceof HTMLElement)) return;
     invoker.current = { element, restore: restoreTo?.(element) };
   }, [open, restoreTo, opener]);
@@ -533,6 +552,7 @@ function useInvokerFocus(
     () => () => {
       const back = handBack(invoker, card.current);
       const restore = back?.restore;
+
       if (back === null || restore === undefined) return;
       queueMicrotask(() => {
         if (reachable(back.element) || focusTaken(null)) return;
@@ -541,6 +561,7 @@ function useInvokerFocus(
     },
     [card],
   );
+
   return () => {
     handBack(invoker, card.current);
   };
@@ -563,14 +584,19 @@ function useFootClaim(): {
   const [slot, setSlot] = useState<HTMLDivElement | null>(null);
   const [claimed, setClaimed] = useState<FootClaim | undefined>(undefined);
   const asker = useRef<Opener | null>(null);
+
   const claim = useCallback((next: FootClaim) => {
     if (asker.current === null && document.activeElement instanceof HTMLElement) {
       asker.current = { element: document.activeElement, restore: undefined };
     }
+
     setClaimed(next);
+
     return () => setClaimed((standing) => (standing === next ? undefined : standing));
   }, []);
+
   const foot = useMemo(() => ({ slot, claim }), [slot, claim]);
+
   return { foot, claimed, asker, setSlot };
 }
 
@@ -622,6 +648,7 @@ export function Dialog({
   // Whether a draft has already held the card back once, which the next
   // dismissal goes through; a card opened again holds its draft afresh.
   const [held, setHeld] = useState(false);
+
   if (held && (!holding || !open)) setHeld(false);
   // What the held draft's notice said, taken back once the card closes or goes, which ends what it told.
   const heldSaid = useRef<Retire>(() => undefined);
@@ -657,21 +684,28 @@ export function Dialog({
     // A question at the foot is what Escape takes back, the card staying.
     if (claimed !== undefined) {
       if (!claimed.withdraw()) nudge(card.current);
+
       return;
     }
+
     if (busy) {
       nudge(card.current);
       onDismiss();
+
       return;
     }
+
     if (holding && !held) {
       setHeld(true);
       nudge(card.current);
       heldSaid.current = announce(ANNOUNCE.POLITE, HELD_NOTICE);
+
       return;
     }
+
     onDismiss();
   };
+
   useImperativeHandle(ref, () => ({ dismiss }));
 
   // Note that the owner hears it gone only once the card has stood, because
@@ -680,12 +714,15 @@ export function Dialog({
   useEffect(() => {
     if (open) stood.current = true;
   }, [open]);
+
   const exited = () => {
     handBackFocus();
+
     if (!stood.current) return;
     stood.current = false;
     onExited?.();
   };
+
   // Note that reduced motion and a capture run take the card away in the
   // render that closes it, rather than a frame later once Base UI finds no
   // fade to wait on. Only a card that has stood asks, because the ask reads
@@ -704,17 +741,23 @@ export function Dialog({
     // Note that no key pressed in the card goes on to the window. A button's
     // own Enter and Space are its default action, which this leaves alone.
     event.stopPropagation();
+
     // A key an input method is composing with is the method's, not the dialog's.
     if (isComposingKey(event)) return;
+
     if (closesCard(event)) {
       event.preventDefault();
       dismiss();
+
       return;
     }
+
     if (event.key === "Tab") {
       trappedTab(event);
+
       return;
     }
+
     // Note that Escape is Base UI's, heard on the nearest card alone and
     // handed to `dismiss` (`onOpenChange`), so the window behind it stays as
     // it was.
@@ -761,7 +804,9 @@ export function Dialog({
         }}
         onClick={(event) => {
           const { target } = event;
+
           if (target !== pressedOn.current || !(target instanceof Element)) return;
+
           if (target.hasAttribute(VEIL_ATTRIBUTE)) dismiss();
         }}
         viewport={{

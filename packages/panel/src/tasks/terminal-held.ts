@@ -101,11 +101,14 @@ function readHeld(): HeldState {
     const decoded = Schema.decodeUnknownOption(keptShellsJson)(
       window.sessionStorage.getItem(HELD_KEY),
     );
+
     if (Option.isNone(decoded)) return NONE_KEPT;
     const { cloud, local, account, accounts } = decoded.value;
     const top = { [TERMINAL_KIND.CLOUD]: cloud, [TERMINAL_KIND.LOCAL]: local };
+
     if (accounts === undefined) return { ...NONE_KEPT, unclaimed: top };
     const others = Object.entries(accounts).filter(([key]) => key !== account);
+
     return {
       accounts: new Map<string | undefined, HeldShells>([...others, [account, top]]),
       top: account,
@@ -126,12 +129,15 @@ function readHeld(): HeldState {
  */
 function writeHeld(state: HeldState): void {
   const top = state.accounts.get(state.top) ?? NONE_HELD;
+
   const accounts = Object.fromEntries(
     [...state.accounts].flatMap(([key, shells]) =>
       key === undefined || key === state.top ? [] : [[key, shells] as const],
     ),
   );
+
   const kept = { ...top, ...(state.top === undefined ? {} : { account: state.top }), accounts };
+
   try {
     window.sessionStorage.setItem(HELD_KEY, Schema.encodeSync(keptShellsJson)(kept));
   } catch {
@@ -147,9 +153,11 @@ function ownedOf(state: HeldState, account: string | undefined): HeldShells {
 /** The state with what a build before this one kept taken by the account, where it holds none of its own. */
 function claimed(state: HeldState, account: string | undefined): HeldState {
   if (state.unclaimed === undefined) return state;
+
   const accounts = state.accounts.has(account)
     ? state.accounts
     : new Map(state.accounts).set(account, state.unclaimed);
+
   return { ...state, accounts, unclaimed: undefined };
 }
 
@@ -182,10 +190,12 @@ export class TerminalsHeld {
     const state = claimed(this.all.state, account);
     const owned = ownedOf(state, account);
     const { [agentId]: _was, ...others } = owned[kind];
+
     const next = {
       ...owned,
       [kind]: shells.length === 0 ? others : { ...others, [agentId]: shells },
     };
+
     this.#write({ ...state, accounts: new Map(state.accounts).set(account, next) });
   }
 
@@ -197,6 +207,7 @@ export class TerminalsHeld {
    */
   own(account: string | undefined): void {
     const state = account === undefined ? this.all.state : claimed(this.all.state, account);
+
     if (state === this.all.state && state.top === account) return;
     this.#write({ ...state, top: account });
   }
@@ -231,8 +242,10 @@ export function holdsShell(
 export function nextShellTitle(kind: TerminalKind, shells: readonly HeldShell[]): string {
   const word = TITLE_WORDS[kind];
   const pattern = new RegExp(`^${word} (\\d+)$`, "u");
+
   const highest = shells
     .map((shell) => Number(pattern.exec(shell.title)?.[1]))
     .reduce((most, each) => (Number.isFinite(each) ? Math.max(most, each) : most), 0);
+
   return `${word} ${highest + 1}`;
 }

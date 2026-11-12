@@ -84,8 +84,10 @@ export function FileTypeIcon({
   className?: string | undefined;
 }): React.JSX.Element {
   const loaded = useQuery(useSideBundles().fileTree);
+
   if (!loaded.isSuccess) return <FileIcon aria-hidden="true" />;
   const icon = loaded.data.fileIcon(name);
+
   return (
     <svg
       className={cn("file-type-icon fill-current", TYPE_INK[icon.type] ?? UNCOLORED_INK, className)}

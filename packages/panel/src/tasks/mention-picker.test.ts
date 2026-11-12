@@ -48,6 +48,7 @@ afterEach(() => {
 /** The list drawn as a plan's box draws it, over a description whose one section is Margins, each mention picked recorded and the latest it answered kept for the test to drive. */
 function mounted(chosen: MentionNode[] = []) {
   let latest: MentionPicker | undefined;
+
   function Picker() {
     const room = useRef<HTMLDivElement>(null);
     latest = useMentionPicker({
@@ -62,17 +63,21 @@ function mounted(chosen: MentionNode[] = []) {
       side: MENTION_MENU_SIDE.ABOVE,
       onChoose: (mention) => chosen.push(mention),
     });
+
     return createElement("div", { ref: room }, latest.menu);
   }
+
   const page = document.createElement("div");
   document.body.append(page);
   root = createRoot(page);
   act(() =>
     root?.render(withExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS), createElement(Picker))),
   );
+
   return {
     picker: (): MentionPicker => {
       assert.ok(latest, "the picker is drawn");
+
       return latest;
     },
     page,
@@ -137,6 +142,7 @@ test("a row read late above the highlighted one moves it down, and Enter still w
   const { picker, page } = mounted(chosen);
   await act(async () => {
     picker().onTrigger(word("mar"));
+
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   assert.deepEqual(rows(page), ["Margins"]);
@@ -156,6 +162,7 @@ test("a row read late above the highlighted one moves it down, and Enter still w
         },
       },
     });
+
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await vi.waitFor(() => assert.deepEqual(rows(page), ["Mara Lind", "Margins"]));
@@ -175,6 +182,7 @@ test("a row read late above the highlighted one moves it down, and Enter still w
 /** The list drawn as a description's editor draws it, on `plan-1` of the Stage workspace, each mention picked recorded. */
 async function mountedOnDescription(chosen: MentionNode[]) {
   let latest: MentionPicker | undefined;
+
   function Picker() {
     const room = useRef<HTMLDivElement>(null);
     latest = useMentionPicker({
@@ -189,8 +197,10 @@ async function mountedOnDescription(chosen: MentionNode[]) {
       side: MENTION_MENU_SIDE.BELOW,
       onChoose: (mention) => chosen.push(mention),
     });
+
     return createElement("div", { ref: room }, latest.menu);
   }
+
   const page = document.createElement("div");
   document.body.append(page);
   root = createRoot(page);
@@ -200,9 +210,11 @@ async function mountedOnDescription(chosen: MentionNode[]) {
   await act(async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
+
   return {
     picker: (): MentionPicker => {
       assert.ok(latest, "the picker is drawn");
+
       return latest;
     },
     page,
@@ -403,6 +415,7 @@ test("on a plan, the workspace's automations are found by their name, a pick wri
       },
     },
   );
+
   const automation = (id: string, name: string) => ({
     id,
     planId: null,
@@ -417,7 +430,9 @@ test("on a plan, the workspace's automations are found by their name, a pick wri
     lastRun: null,
     createdAt: 1,
   });
+
   fakeActPort({});
+
   const { asked } = holdAutomations(handHostReads({}).deliverAutomations, {
     [AUTOMATION_FOLLOW.WORKSPACE]: () => ({
       rows: [
@@ -426,11 +441,13 @@ test("on a plan, the workspace's automations are found by their name, a pick wri
       ],
     }),
   });
+
   const chosen: MentionNode[] = [];
   const { picker, page } = await mountedOnDescription(chosen);
 
   await act(async () => {
     picker().onTrigger(word("automations:deploy"));
+
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   assert.deepEqual(asked, [{ kind: AUTOMATION_FOLLOW.WORKSPACE, id: "workspace-stage" }]);
@@ -459,6 +476,7 @@ test("in New task's box, which no member directory stands around, the @ list off
     },
   );
   const reads = handHostReads({});
+
   const held = holdMembers(reads.deliverMembers, (workspaceId) =>
     workspaceId === "workspace-stage"
       ? {
@@ -482,7 +500,9 @@ test("in New task's box, which no member directory stands around, the @ list off
         }
       : undefined,
   );
+
   let latest: MentionPicker | undefined;
+
   // The list as New task's box draws it: the workspace given by its id, no task holding the words.
   function Picker() {
     const room = useRef<HTMLDivElement>(null);
@@ -499,17 +519,21 @@ test("in New task's box, which no member directory stands around, the @ list off
       side: MENTION_MENU_SIDE.BELOW,
       onChoose: () => undefined,
     });
+
     return createElement("div", { ref: room }, latest.menu);
   }
+
   const page = document.body.appendChild(document.createElement("div"));
   root = createRoot(page);
   await act(async () => {
     root?.render(withExperiments({}, createElement(Picker)));
+
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
 
   await act(async () => {
     latest?.onTrigger(word("people:"));
+
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await vi.waitFor(() =>

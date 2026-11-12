@@ -34,6 +34,7 @@ test("an unknown tool's call settled with a new input, as Codex settles one, kee
       report: () => undefined,
     },
   );
+
   assert.deepEqual(
     result.writes.flatMap((write) =>
       write.kind === NATIVE_WRITE.EVENT &&
@@ -59,6 +60,7 @@ test("a connection lost to the provider holds the turn open with a notice, count
     registered: () => true,
     report: () => undefined,
   };
+
   const lost = projectMoments(
     heldProjection(null),
     [
@@ -68,11 +70,13 @@ test("a connection lost to the provider holds the turn open with a notice, count
     ],
     { ...context, sequence: 1, now: 1_000 },
   );
+
   const noticed = lost.writes.flatMap((write) =>
     write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.CONNECTION_LOST
       ? [write.event]
       : [],
   );
+
   assert.equal(noticed.length, 1);
   assert.deepEqual(noticed[0]?.notice, { provider: "Anthropic", restoredAt: null });
   assert.ok(lost.state.turn !== undefined, "the turn stays open");
@@ -89,17 +93,21 @@ test("a connection lost to the provider holds the turn open with a notice, count
     [{ kind: NATIVE_MOMENT.CONNECTION_LOST, host: "api.anthropic.com" }],
     { ...context, sequence: 2, now: 31_000 },
   );
+
   assert.deepEqual(lostTwice.writes, []);
+
   const restored = projectMoments(
     lostTwice.state,
     [{ kind: NATIVE_MOMENT.CONNECTION_RESTORED, host: "api.anthropic.com", carryOn: true }],
     { ...context, sequence: 2, now: 61_000 },
   );
+
   const settled = restored.writes.flatMap((write) =>
     write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.CONNECTION_RESTORED
       ? [write.event]
       : [],
   );
+
   assert.equal(settled.length, 1);
   assert.equal(settled[0]?.lostSequence, noticed[0]?.sequence);
   assert.equal(settled[0]?.restoredAt, 61_000);
@@ -107,6 +115,7 @@ test("a connection lost to the provider holds the turn open with a notice, count
     restored.writes.filter((write) => write.kind === NATIVE_WRITE.CARRY_ON),
     [{ kind: NATIVE_WRITE.CARRY_ON, turnId: "turn-1", lostSequence: noticed[0]?.sequence }],
   );
+
   // A second loss of the same turn asks for a carry-on of its own, keyed apart from the first.
   const lostAgain = projectMoments(
     restored.state,
@@ -116,6 +125,7 @@ test("a connection lost to the provider holds the turn open with a notice, count
     ],
     { ...context, sequence: 3, now: 121_000 },
   );
+
   const second = lostAgain.writes.find((write) => write.kind === NATIVE_WRITE.CARRY_ON);
   assert.ok(second !== undefined && second.kind === NATIVE_WRITE.CARRY_ON);
   assert.notEqual(second.lostSequence, noticed[0]?.sequence);
@@ -131,6 +141,7 @@ test("a connection lost to the provider holds the turn open with a notice, count
     [{ kind: NATIVE_MOMENT.CONNECTION_RESTORED, host: "api.anthropic.com", carryOn: false }],
     { ...context, sequence: 2, now: 61_000 },
   );
+
   assert.equal(
     lineNext.writes.some((write) => write.kind === NATIVE_WRITE.CARRY_ON),
     false,
@@ -147,6 +158,7 @@ test("a launch that gives up on the provider fails its turn as expected, with th
     registered: () => true,
     report: () => undefined,
   };
+
   const lost = projectMoments(
     heldProjection(null),
     [
@@ -156,6 +168,7 @@ test("a launch that gives up on the provider fails its turn as expected, with th
     ],
     { ...context, sequence: 1, now: 1_000 },
   );
+
   const gaveUp = projectMoments(
     lost.state,
     [
@@ -167,6 +180,7 @@ test("a launch that gives up on the provider fails its turn as expected, with th
     ],
     { ...context, sequence: 2, now: 601_000 },
   );
+
   const failed = gaveUp.writes.filter((write) => write.kind === NATIVE_WRITE.FAILED);
   assert.equal(failed.length, 1);
   assert.equal(failed[0]?.expected, true);
@@ -185,6 +199,7 @@ test("a warm launch that fails after its turn ended at its IDLE fails no turn of
     registered: () => true,
     report: () => undefined,
   };
+
   const idled = projectMoments(
     heldProjection(null),
     [
@@ -193,6 +208,7 @@ test("a warm launch that fails after its turn ended at its IDLE fails no turn of
     ],
     { ...context, sequence: 0 },
   );
+
   const crashed = projectMoments(
     idled.state,
     [
@@ -205,11 +221,13 @@ test("a warm launch that fails after its turn ended at its IDLE fails no turn of
     ],
     { ...context, sequence: 1 },
   );
+
   assert.deepEqual(crashed.writes, []);
 });
 
 test("a warm runner a newer launch cut off with no turn under way or queued fails no turn, says so, and lets its limit go", () => {
   const reports: string[] = [];
+
   const cutOff = projectMoments(
     { rateLimit: "usage limit reached" },
     [
@@ -232,6 +250,7 @@ test("a warm runner a newer launch cut off with no turn under way or queued fail
       report: (said) => reports.push(said),
     },
   );
+
   assert.deepEqual(cutOff.writes, []);
   assert.deepEqual(cutOff.state, {});
   assert.deepEqual(reports, [
@@ -251,13 +270,16 @@ test("an exhausted payer pool leaves a notice at the pause, and a payer with roo
     registered: () => true,
     report: () => undefined,
   };
+
   const moments = [
     { kind: NATIVE_MOMENT.ACTIVE },
     { kind: NATIVE_MOMENT.RATE_LIMIT, refused: true, detail: "limited", resetsAt: 60000 },
     { kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.LIMIT_REACHED },
     { kind: NATIVE_MOMENT.ENDED, ending: NATIVE_ENDING.FAILED },
   ] as const;
+
   const moved = { from: "Work plan", to: "API key · sk-…a91F" };
+
   const notices = (movedAfterLimit: typeof moved | undefined) =>
     projectMoments(heldProjection(null), moments, {
       ...context,
@@ -267,13 +289,16 @@ test("an exhausted payer pool leaves a notice at the pause, and a payer with roo
         ? [write.event.notice]
         : [],
     );
+
   assert.deepEqual(notices(undefined), [{ agent: "Claude", resetsAt: 60000 }]);
   assert.deepEqual(notices(moved), [{ agent: "Claude", resetsAt: null, moved }]);
+
   const stopped = projectMoments(
     heldProjection(null),
     moments.filter((moment) => moment.kind !== NATIVE_MOMENT.RATE_LIMIT),
     context,
   );
+
   assert.deepEqual(
     stopped.writes.flatMap((write) =>
       write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.USAGE_LIMIT_REACHED
@@ -307,6 +332,7 @@ test("a successful result after a reported limit ends without a usage-limit noti
       report: () => undefined,
     },
   );
+
   assert.equal(
     result.writes.some((write) => write.kind === NATIVE_WRITE.WAIT),
     false,
@@ -353,11 +379,13 @@ test("a limit lifted before the turn failed for another reason fails it as that 
       report: () => undefined,
     },
   );
+
   const ended = result.writes.flatMap((write) =>
     write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.TURN_ENDED
       ? [write.event.failure]
       : [],
   );
+
   assert.deepEqual(ended, [TURN_FAILURE.MODEL]);
   assert.equal(
     result.writes.some(
@@ -378,24 +406,29 @@ test("a turn whose launch lost its session goes on once in a replayed launch, an
     registered: () => true,
     report: () => undefined,
   };
+
   const lostLaunch = [
     { kind: NATIVE_MOMENT.LINE_ACCEPTED, clientId: "line_lost" },
     { kind: NATIVE_MOMENT.RESULT, failure: "error_during_execution No conversation found" },
     { kind: NATIVE_MOMENT.SESSION_LOST },
     { kind: NATIVE_MOMENT.ENDED, ending: NATIVE_ENDING.DONE },
   ] as const;
+
   const first = projectMoments(heldProjection(null), lostLaunch, {
     ...context,
     sequence: 0,
     attempt: 1,
   });
+
   const second = projectMoments(first.state, lostLaunch, { ...context, sequence: 1, attempt: 2 });
+
   const kinds = (writes: typeof first.writes) =>
     writes.flatMap((write) =>
       write.kind === NATIVE_WRITE.RETRY || write.kind === NATIVE_WRITE.FAILED
         ? [{ kind: write.kind, replay: write.kind === NATIVE_WRITE.RETRY && write.replay }]
         : [],
     );
+
   assert.deepEqual(
     [kinds(first.writes), kinds(second.writes)],
     [[{ kind: NATIVE_WRITE.RETRY, replay: true }], [{ kind: NATIVE_WRITE.FAILED, replay: false }]],

@@ -63,6 +63,7 @@ function mount(pressed: string[]): HTMLElement {
       ),
     ),
   );
+
   return container;
 }
 
@@ -80,6 +81,7 @@ function type(container: HTMLElement, label: string, words: string): void {
   const labeled = [...container.querySelectorAll("label")].find(
     (candidate) => candidate.textContent?.startsWith(label) === true,
   );
+
   const input = document.getElementById(labeled?.htmlFor ?? "");
   assert.ok(input instanceof HTMLInputElement, `no ${label} field`);
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -94,6 +96,7 @@ test("Cancel and Escape before Create make nothing and put the cards away", () =
   fakeActPort({
     [WORKSPACE_ACT_KIND.WORKSPACE_CREATE]: ({ name }) => {
       made.push(name);
+
       return Promise.resolve(PAPERSTAR);
     },
   });
@@ -115,6 +118,7 @@ test("Create makes the workspace and lists it, goes on to GitHub, and Skip lands
   fakeActPort({
     [WORKSPACE_ACT_KIND.WORKSPACE_CREATE]: ({ name }) => {
       made.push(name);
+
       return Promise.resolve(PAPERSTAR);
     },
   });
@@ -150,9 +154,11 @@ test("an invitation refused holds the first card on what was refused, and Contin
   await act(async () => button(container, "Create").click());
   await settle();
   const title = container.querySelector("h1")?.textContent;
+
   const refused = [...container.querySelectorAll("button")].find(
     (each) => each.textContent === "dana@paperstar.app",
   );
+
   const why = document.getElementById(refused?.getAttribute("aria-describedby") ?? "")?.textContent;
   act(() => button(container, "Continue").click());
 

@@ -114,6 +114,7 @@ const ONE_TASK = (taskId: string) => `${TASKS}/${taskId}`;
 const FILE = (taskId: string) => `${ONE_TASK(taskId)}/file`;
 const SKILLS = (taskId: string) => `${ONE_TASK(taskId)}/skills`;
 const TREE = (taskId: string) => `${ONE_TASK(taskId)}/tree`;
+
 /** A window of a file the File tab asks for. */
 const README_WINDOW = { path: "README.md", first: "1", last: "10" } as const;
 const PAGES = (taskId: string) => `${ONE_TASK(taskId)}/pages`;
@@ -121,6 +122,7 @@ const REVISIONS = (taskId: string) => `${ONE_TASK(taskId)}/description/revisions
 const REVISION = (taskId: string, seq: number) => `${REVISIONS(taskId)}/${seq}`;
 const RESTORE = (taskId: string, seq: number) => `${REVISION(taskId, seq)}/restore`;
 const EDIT = (taskId: string) => `${ONE_TASK(taskId)}/description`;
+
 const PAGE = (taskId: string, pageId: string, version: string) =>
   `${PAGES(taskId)}/${pageId}/versions/${version}`;
 
@@ -158,6 +160,7 @@ const openAccounts = (github: FakeGitHub = UNREACHED_GITHUB) =>
     const owner = yield* openGithubUser();
     const other = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id: other, name: "Test User", email: `${other}@app.test` });
+
     const signedIn: SignedIn = {
       bearers: new Map([
         [`Bearer ${owner}`, owner],
@@ -168,8 +171,10 @@ const openAccounts = (github: FakeGitHub = UNREACHED_GITHUB) =>
         [sessionCookieOf(other), other],
       ]),
     };
+
     const ask = (request: Request, landedAs?: string) =>
       answer(signedIn, github, request, landedAs);
+
     return { owner, other, ask };
   });
 
@@ -188,6 +193,7 @@ function sessionCookieOf(userId: string): string {
 function userInfoOf(bearers: ReadonlyMap<string, string>): UserInfoEndpoint {
   return (input) => {
     const sub = bearers.get(input.headers.get("authorization") ?? "");
+
     return Effect.succeed(sub === undefined ? undefined : { sub });
   };
 }
@@ -216,6 +222,7 @@ const countedFor = (userId: string, name: string) =>
 const answer = (signedIn: SignedIn, github: FakeGitHub, request: Request, landedAs?: string) =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
+
     // The handler runs on the router's own fiber, so it is handed the test's clock: the account rows hang off it.
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, client),
@@ -226,6 +233,7 @@ const answer = (signedIn: SignedIn, github: FakeGitHub, request: Request, landed
       modelCatalogOf([]),
       integrationConnectOver(LINEAR_CONNECTORS),
     );
+
     const seams = {
       // The account read as `resolveHostedUserId` reads it: the bearer where one is carried, else the session cookie.
       resolveUserId: (incoming: Request) =>
@@ -234,29 +242,37 @@ const answer = (signedIn: SignedIn, github: FakeGitHub, request: Request, landed
       sessionSandboxes: sessionSandboxesLayer,
       keepAwake: keepAwakeDetached,
     };
+
     const { handler, dispose } = HttpRouter.toWebHandler(
       tasksApp(seams).pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
+
     // SAFETY: the plans and transcript procedures yield the services above alone, which is all a test provides of the web runtime's services.
     const webServices = (yield* Effect.context<never>().pipe(
       Effect.provide(services),
     )) as Context.Context<WebServices>;
+
     const routed = hostedFetch({
       messages: messagesProcedures(seams),
       plans: tasksProcedures(seams),
       taskFiles: taskFilesProcedures(seams),
     });
+
     const tasksRoute = { fetch: (each: Request) => routed(each, webServices) };
+
     const response = yield* Effect.promise(() => {
       if (landedAs !== undefined) {
         return dispatched(request, new Map([[landedAs, { fetch: (each) => handler(each) }]]));
       }
+
       return dispatched(request, new Map([[ORPC_ROUTE_KEY, tasksRoute]]));
     });
+
     // SAFETY: the group answers JSON; the test compares it as the wire value it is.
     const body = (yield* Effect.promise(() => response.json())) as WireBoundaryInput;
     yield* Effect.promise(() => dispose());
+
     return { status: response.status, body } satisfies Answer;
   });
 
@@ -274,14 +290,21 @@ function request(
   } = {},
 ): Request {
   const url = new URL(path, ORIGIN);
+
   if (init.id !== undefined) url.searchParams.set("id", init.id);
+
   for (const [name, value] of Object.entries(init.query ?? {})) url.searchParams.set(name, value);
+
   if (init.command !== undefined) url.searchParams.set("command", init.command);
   const headers = new Headers();
+
   if (userId !== undefined) headers.set("authorization", `Bearer ${userId}`);
+
   if (init.cookie !== undefined) headers.set("cookie", init.cookie);
+
   // Every client sends its JSON body as JSON, which the oRPC routes read the body by.
   if (init.body !== undefined) headers.set("content-type", "application/json");
+
   return new Request(url, {
     method: init.method ?? "GET",
     headers,
@@ -297,8 +320,10 @@ function readAnswer<S extends Schema.ConstraintDecoder<unknown>>(
 ): S["Type"] {
   assert.equal(answered.status, status);
   const read = readEither(schema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read))
     return assert.fail(`the answer is not the wire's: ${read.failure.refusal}`);
+
   return read.success;
 }
 
@@ -341,6 +366,7 @@ const CONTENTS = new Map([
 /** The contents API's answer for a regular file of the text given. */
 function fileContents(text: string): Response {
   const bytes = Buffer.from(text);
+
   return Response.json({
     type: "file",
     size: bytes.length,
@@ -354,8 +380,10 @@ const CONTENTS_PATH = /^\/repos\/Acme\/Relay\/contents\/(.+)$/u;
 /** The fixture repository's contents, as GitHub answers them on the repository's own paths. */
 function contentsOf(sent: SentToGitHub): Response | undefined {
   const named = CONTENTS_PATH.exec(new URL(sent.url).pathname);
+
   if (named === null) return undefined;
   const contents = CONTENTS.get(decodeURIComponent(named[1] ?? ""));
+
   return contents === undefined
     ? Response.json({ message: "Not Found" }, { status: 404 })
     : contents();
@@ -373,6 +401,7 @@ const openConnectedWorkspace = (ownerId: string, installation: InstallationFixtu
   Effect.gen(function* () {
     const workspaceId = yield* openWorkspace(ownerId);
     assert.equal(yield* connectWorkspaceGitHub(workspaceId, installation), LINK_OUTCOME.LINKED);
+
     return workspaceId;
   });
 
@@ -381,10 +410,12 @@ it.layer(getTestDB())("the plan routes", (it) => {
     Effect.gen(function* () {
       const { owner, ask } = yield* openAccounts();
       const taskId = startedId(yield* ask(request(TASKS, owner, { method: "POST", body: RELAY })));
+
       const saved = yield* saveNotes({ userId: owner, taskId: taskId }, [
         added("Context", "Only admins can invite."),
         added("Open questions", "- Who can withdraw an invite?"),
       ]);
+
       assert.equal(saved.status, DESCRIPTION_SAVE_STATUS.SAVED);
 
       const listed = yield* ask(request(TASKS, owner));
@@ -409,8 +440,10 @@ it.layer(getTestDB())("the plan routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, ask } = yield* openAccounts();
+
         const start = (body: WireBoundaryInput) =>
           ask(request(TASKS, owner, { method: "POST", body }));
+
         const nameOf = (answer: Answer) =>
           readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, answer).plan.name;
 
@@ -432,11 +465,13 @@ it.layer(getTestDB())("the plan routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, ask } = yield* openAccounts();
+
         const briefOf = (answer: Answer) =>
           Effect.map(
             readTask(owner, startedId(answer)),
             (read) => Option.getOrUndefined(read)?.brief,
           );
+
         // Note that a control character is the widest a character escapes to in JSON, six bytes.
         const widest = "\u0001".repeat(TASK_BOUNDS.MAX_BRIEF_CHARS);
 
@@ -446,9 +481,11 @@ it.layer(getTestDB())("the plan routes", (it) => {
             body: { ...RELAY, brief: "Let any member invite a teammate." },
           }),
         );
+
         const atBound = yield* ask(
           request(TASKS, owner, { method: "POST", body: { ...LEDGER, brief: widest } }),
         );
+
         const overlong = yield* ask(
           request(TASKS, owner, {
             method: "POST",
@@ -526,11 +563,13 @@ it.layer(getTestDB())("the plan routes", (it) => {
         const { owner, other, ask } = yield* openAccounts();
         const shared = yield* openWorkspace(other);
         yield* joinWorkspace(shared, owner);
+
         const taskId = startedId(
           yield* ask(
             request(TASKS, owner, { method: "POST", body: { ...RELAY, workspaceId: shared } }),
           ),
         );
+
         const db = yield* Database;
         yield* db.update(user).set({ name: "Charles Pan" }).where(eq(user.id, owner));
 
@@ -540,11 +579,13 @@ it.layer(getTestDB())("the plan routes", (it) => {
               (task) => [task.ownerId, task.createdBy],
             ),
           );
+
         const opened = readAnswer(
           taskAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(ONE_TASK(taskId), other)),
         ).plan;
+
         const creator = { userId: owner, name: "Charles Pan" };
 
         assert.deepEqual(yield* ownersOf(owner), [[owner, creator]]);
@@ -567,6 +608,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         const refused = yield* ask(
           request(TASKS, owner, { method: "POST", body: { ...RELAY, workspaceId: theirs } }),
         );
+
         const unknown = yield* ask(
           request(TASKS, owner, { method: "POST", body: { ...RELAY, workspaceId: "nowhere" } }),
         );
@@ -590,6 +632,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         const started = yield* ask(request(TASKS, owner, { method: "POST", body: RELAY }));
         const plain = readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started).plan;
         assert.deepEqual([plain.status, plain.priority], [TASK_STATUS.TODO, TASK_PRIORITY.NONE]);
+
         const filed = readAnswer(
           taskAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
@@ -600,16 +643,19 @@ it.layer(getTestDB())("the plan routes", (it) => {
             }),
           ),
         ).plan;
+
         assert.deepEqual([filed.status, filed.priority], [TASK_STATUS.BACKLOG, TASK_PRIORITY.LOW]);
         assert.equal(filed.number, (plain.number ?? 0) + 1);
 
         const patch = (userId: string, body: WireBoundaryInput) =>
           ask(request(ONE_TASK(plain.id), userId, { method: "PATCH", body }));
+
         const changed = readAnswer(
           taskAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* patch(owner, { status: TASK_STATUS.DONE, priority: TASK_PRIORITY.URGENT }),
         ).plan;
+
         assert.deepEqual(
           [changed.status, changed.priority, changed.number],
           [TASK_STATUS.DONE, TASK_PRIORITY.URGENT, plain.number],
@@ -622,12 +668,14 @@ it.layer(getTestDB())("the plan routes", (it) => {
           yield* patch(other, { status: TASK_STATUS.CANCELED }),
           refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
         );
+
         // A plan is archived no longer: an older build's archive keeps a settled status, answers no archive, and the plan still takes a change after it.
         const settled = readAnswer(
           taskAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* patch(owner, { archived: true }),
         ).plan;
+
         assert.equal(settled.status, TASK_STATUS.DONE);
         assert.equal("archivedAt" in settled, false, "no archive is answered");
         assert.equal(
@@ -661,6 +709,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         yield* db
           .insert(user)
           .values({ id: stranger, name: "Stranger", email: `${stranger}@app.test` });
+
         const start = (body: WireBoundaryInput) =>
           ask(request(TASKS, owner, { method: "POST", body }));
 
@@ -669,6 +718,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           HOSTED_HTTP_STATUS.CREATED,
           yield* start({ ...RELAY, workspaceId: shared, assigneeId: other }),
         ).plan;
+
         assert.deepEqual(assigned.assignee, { userId: other, name: "Test User" });
         assert.deepEqual(
           yield* start({ ...RELAY, workspaceId: shared, assigneeId: stranger }),
@@ -677,27 +727,33 @@ it.layer(getTestDB())("the plan routes", (it) => {
 
         const patch = (body: WireBoundaryInput) =>
           ask(request(ONE_TASK(assigned.id), other, { method: "PATCH", body }));
+
         const reassigned = readAnswer(
           taskAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* patch({ assigneeId: owner }),
         ).plan;
+
         assert.equal(reassigned.assignee?.userId, owner);
         assert.deepEqual(
           yield* patch({ assigneeId: stranger }),
           refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST),
         );
+
         const unassigned = readAnswer(
           taskAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* patch({ assigneeId: null }),
         ).plan;
+
         assert.equal(unassigned.assignee, undefined);
+
         const listed = readAnswer(
           heldTaskListAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(TASKS, owner)),
         ).plans;
+
         assert.deepEqual(
           listed.map((task) => task.assignee),
           [undefined],
@@ -722,9 +778,11 @@ it.layer(getTestDB())("the plan routes", (it) => {
         body: { plans: [] },
       });
       assert.equal((yield* ask(request(ONE_TASK(taskId), owner))).status, HOSTED_HTTP_STATUS.OK);
+
       // The reads that need only where the plan stands, not its document, refuse it as the open does, and a plan that is none alike.
       for (const id of [taskId, randomUUID()]) {
         const bearer = id === taskId ? other : owner;
+
         for (const read of [
           request(FILE(id), bearer, { query: README_WINDOW }),
           request(TREE(id), bearer),
@@ -741,9 +799,11 @@ it.layer(getTestDB())("the plan routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, ask } = yield* openAccounts();
+
         const taskId = startedId(
           yield* ask(request(TASKS, owner, { method: "POST", body: RELAY })),
         );
+
         const now = yield* DateTime.nowAsDate;
         // A revision a later build wrote, by a kind of writer this build has no name for.
         yield* Database.use((db) =>
@@ -762,6 +822,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           yield* ask(request(ONE_TASK(taskId), owner)),
           refusal(HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE, HOSTED_API_ERROR.UNAVAILABLE),
         );
+
         for (const read of [
           request(FILE(taskId), owner, { query: README_WINDOW }),
           request(TREE(taskId), owner),
@@ -783,13 +844,18 @@ it.layer(getTestDB())("the plan routes", (it) => {
       Effect.gen(function* () {
         const { owner, other, ask } = yield* openAccounts();
         const cookie = sessionCookieOf(owner);
+
         const started = (body: typeof RELAY | typeof LEDGER) =>
           Effect.map(ask(request(TASKS, undefined, { method: "POST", body, cookie })), startedId);
+
         const relay = yield* started(RELAY);
         const ledger = yield* started(LEDGER);
+
         const deletedBy = (taskId: string, by: string) =>
           ask(request(ONE_TASK(taskId), undefined, { method: "DELETE", cookie: by }));
+
         const notFound = refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND);
+
         // A delete is answered with the transaction it committed in, whichever that is.
         const deletedAs = (taskId: string, by: string) =>
           Effect.map(
@@ -823,9 +889,11 @@ it.layer(getTestDB())("the plan routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, other, ask } = yield* openAccounts();
+
         const taskId = startedId(
           yield* ask(request(TASKS, owner, { method: "POST", body: RELAY })),
         );
+
         const body = {
           document: { base: "", value: "Mine now.\n" },
         };
@@ -856,11 +924,13 @@ it.layer(getTestDB())("the plan routes", (it) => {
       Effect.gen(function* () {
         const network = fakeGitHub(() => Response.json({ message: "Not Found" }, { status: 404 }));
         const { owner, ask } = yield* openAccounts(network);
+
         const start = (body: WireBoundaryInput) =>
           ask(request(TASKS, owner, { method: "POST", body }));
 
         // Note that the keys are spelled as v0.22.0 sends them, because nothing on this side declares them now.
         const fromLinear = yield* start({ ...RELAY, linearIssueId: "issue-1" });
+
         const linking = yield* start({
           ...LEDGER,
           issues: [
@@ -887,15 +957,18 @@ it.layer(getTestDB())("the plan routes", (it) => {
       Effect.gen(function* () {
         const { owner, other, ask } = yield* openAccounts();
         const invalid = refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST);
+
         const start = (body: WireBoundaryInput) =>
           ask(request(TASKS, owner, { method: "POST", body }));
 
         const naming = yield* start({ ...RELAY, userId: other });
         const issued = yield* start({ ...RELAY, issueId: "3f0e6f5c-7d1a-4f6e-9a55-1b2c3d4e5f60" });
+
         const shaped = yield* start({
           name: RELAY.name,
           repository: { owner: "acme", name: "relay" },
         });
+
         const pathed = yield* start({ name: RELAY.name, repository: "acme/../relay" });
         const bare = yield* start({ name: RELAY.name, repository: "relay" });
 
@@ -917,13 +990,17 @@ it.layer(getTestDB())("the plan routes", (it) => {
         const github = githubReaching([
           { id: 1, login: "acme", repositories: [{ owner: "acme", name: "relay" }] },
         ]);
+
         const { owner, ask } = yield* openAccounts(github);
+
         const taskId = startedId(
           yield* ask(request(TASKS, owner, { method: "POST", body: RELAY })),
         );
+
         const unchosen = yield* ask(
           request(TASKS, owner, { method: "POST", body: { ...RELAY, repository: "acme/ledger" } }),
         );
+
         const elsewhere = yield* ask(
           request(ONE_TASK(taskId), owner, {
             method: "PATCH",
@@ -941,11 +1018,13 @@ it.layer(getTestDB())("the plan routes", (it) => {
             }),
           ],
         );
+
         const opened = readAnswer(
           taskAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(ONE_TASK(taskId), owner)),
         );
+
         assert.deepEqual([opened.plan.name, opened.plan.repository], [RELAY.name, null]);
         assert.equal(
           readAnswer(
@@ -966,6 +1045,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         const github = githubReaching([relay], undefined, {}, contentsOf);
         const { owner, other, ask } = yield* openAccounts(github);
         const workspaceId = yield* openConnectedWorkspace(owner, relay);
+
         const taskId = startedId(
           yield* ask(
             request(TASKS, owner, {
@@ -974,6 +1054,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
             }),
           ),
         );
+
         const window = (userId: string, path: string, first: string, last: string) =>
           ask(request(FILE(taskId), userId, { query: { path, first, last } }));
 
@@ -982,6 +1063,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* window(owner, "src/invite.ts", "2", "3"),
         );
+
         assert.deepEqual(read, {
           file: {
             path: "src/invite.ts",
@@ -1030,13 +1112,16 @@ it.layer(getTestDB())("the plan routes", (it) => {
       Effect.gen(function* () {
         const head = "0123456789abcdef0123456789abcdef01234567";
         const relay = relayInstallation(7011);
+
         const github = githubReaching([relay], undefined, {}, (sent) =>
           new URL(sent.url).pathname === "/repos/Acme/Relay/git/ref/heads/main"
             ? Response.json({ ref: "refs/heads/main", object: { type: "commit", sha: head } })
             : contentsOf(sent),
         );
+
         const { owner, ask } = yield* openAccounts(github);
         const workspaceId = yield* openConnectedWorkspace(owner, relay);
+
         const taskId = startedId(
           yield* ask(
             request(TASKS, owner, {
@@ -1080,6 +1165,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         const github = githubReaching([relay], undefined, {}, contentsOf);
         const { owner, ask } = yield* openAccounts(github);
         const workspaceId = yield* openConnectedWorkspace(owner, relay);
+
         const taskId = startedId(
           yield* ask(
             request(TASKS, owner, {
@@ -1088,11 +1174,13 @@ it.layer(getTestDB())("the plan routes", (it) => {
             }),
           ),
         );
+
         const refusalOf = (path: string) =>
           Effect.map(
             ask(request(FILE(taskId), owner, { query: { path, first: "1", last: "10" } })),
             (answered) => readAnswer(taskFileAnswerSchema, HOSTED_HTTP_STATUS.OK, answered),
           );
+
         const asked = () =>
           github.sent.filter((sent) => CONTENTS_PATH.test(new URL(sent.url).pathname)).length;
 
@@ -1125,6 +1213,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         const { owner, other, ask } = yield* openAccounts(github);
         const workspaceId = yield* openConnectedWorkspace(owner, relay);
         yield* joinWorkspace(workspaceId, other);
+
         const taskId = startedId(
           yield* ask(
             request(TASKS, owner, {
@@ -1144,6 +1233,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
             }),
           ),
         );
+
         assert.deepEqual(read, {
           file: {
             path: "src/invite.ts",
@@ -1162,11 +1252,14 @@ it.layer(getTestDB())("the plan routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, ask } = yield* openAccounts();
+
         const taskId = startedId(
           yield* ask(request(TASKS, owner, { method: "POST", body: RELAY })),
         );
+
         // A rename the bound would admit, padded with the whitespace JSON reads past to a body larger than any change.
         const body = `${JSON.stringify({ name: "Invitation expiry" })}${" ".repeat(16_384)}`;
+
         const padded = new Request(new URL(ONE_TASK(taskId), ORIGIN), {
           method: "PATCH",
           headers: {
@@ -1208,9 +1301,11 @@ it.layer(getTestDB())("the plan routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, other, ask } = yield* openAccounts();
+
         const taskId = startedId(
           yield* ask(request(TASKS, owner, { method: "POST", body: RELAY })),
         );
+
         yield* twoRevisions(owner, taskId);
         const notFound = refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND);
 
@@ -1223,11 +1318,13 @@ it.layer(getTestDB())("the plan routes", (it) => {
           yield* ask(request(RESTORE(taskId, 1), other, { method: "POST" })),
           notFound,
         );
+
         const page = readAnswer(
           descriptionRevisionsAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(REVISIONS(taskId), owner)),
         );
+
         assert.deepEqual(
           page.revisions.map(({ seq }) => seq),
           [2, 1],
@@ -1240,9 +1337,11 @@ it.layer(getTestDB())("the plan routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, other, ask } = yield* openAccounts();
+
         const taskId = startedId(
           yield* ask(request(TASKS, owner, { method: "POST", body: RELAY })),
         );
+
         const page = Option.getOrThrow(
           yield* writePage(
             owner,
@@ -1251,8 +1350,10 @@ it.layer(getTestDB())("the plan routes", (it) => {
             { kind: PAGE_SHOWER.APP },
           ),
         );
+
         const version = (asker: string, pageId: string, number: string, method?: string) =>
           ask(request(PAGE(taskId, pageId, number), asker, method === undefined ? {} : { method }));
+
         const notFound = refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND);
 
         assert.deepEqual(yield* ask(request(PAGES(taskId), other)), {
@@ -1291,9 +1392,11 @@ it.layer(getTestDB())("the plan routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, ask } = yield* openAccounts();
+
         const taskId = startedId(
           yield* ask(request(TASKS, owner, { method: "POST", body: RELAY })),
         );
+
         const unreadable = { query: { path: "src/invite.ts", first: "1", last: "2", raw: "2" } };
 
         assert.deepEqual(
@@ -1321,9 +1424,11 @@ it.layer(getTestDB())("the plan routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, ask } = yield* openAccounts();
+
         const taskId = startedId(
           yield* ask(request(TASKS, owner, { method: "POST", body: RELAY })),
         );
+
         const steered = (method?: string) =>
           ask(
             request(PAGES(taskId), owner, {
@@ -1350,9 +1455,11 @@ it.layer(getTestDB())("the plan routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, ask } = yield* openAccounts();
+
         const taskId = startedId(
           yield* ask(request(TASKS, owner, { method: "POST", body: RELAY })),
         );
+
         yield* makeSavedDocumentTask(taskId, INVITATIONS_TEXT);
         const value = INVITATIONS_TEXT.replace("Only an admin", "Only an owner");
 
@@ -1366,11 +1473,13 @@ it.layer(getTestDB())("the plan routes", (it) => {
             }),
           ),
         );
+
         const page = readAnswer(
           descriptionRevisionsAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(REVISIONS(taskId), owner)),
         );
+
         const { revision } = readAnswer(
           descriptionRevisionAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -1406,11 +1515,14 @@ it.layer(getTestDB())("the plan routes", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, ask } = yield* openAccounts();
+
         const taskId = startedId(
           yield* ask(request(TASKS, owner, { method: "POST", body: RELAY })),
         );
+
         const appText = `${INVITATIONS_TEXT}- An accepted invite is never reused.\n`;
         yield* makeDocumentTask(taskId, appText);
+
         const edit = (id: string, value: string) =>
           ask(
             request(EDIT(id), owner, {
@@ -1421,15 +1533,18 @@ it.layer(getTestDB())("the plan routes", (it) => {
 
         // At the bound alone, but past it once laid over the line we added.
         const padding = "x".repeat(TASK_BOUNDS.MAX_BODY_CHARS - INVITATIONS_TEXT.length);
+
         const oversized = yield* edit(
           taskId,
           INVITATIONS_TEXT.replace("Only an admin", `Only an admin${padding}`),
         );
+
         const merged = readAnswer(
           descriptionEditAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* edit(taskId, INVITATIONS_TEXT.replace("Only an admin", "Only an owner")),
         );
+
         const conflicted = yield* edit(
           taskId,
           INVITATIONS_TEXT.replace("Only an admin", "Only a workspace admin"),
@@ -1456,14 +1571,17 @@ it.layer(getTestDB())("the plan routes", (it) => {
         const { owner, other, ask } = yield* openAccounts();
         const shared = yield* openWorkspace(other);
         yield* joinWorkspace(shared, owner);
+
         const taskId = startedId(
           yield* ask(
             request(TASKS, owner, { method: "POST", body: { ...RELAY, workspaceId: shared } }),
           ),
         );
+
         yield* makeSavedDocumentTask(taskId, INVITATIONS_TEXT);
         const db = yield* Database;
         yield* db.update(user).set({ name: "Charles Pan" }).where(eq(user.id, other));
+
         const edit = (as: string, base: string, value: string) =>
           Effect.map(
             ask(request(EDIT(taskId), as, { method: "POST", body: { document: { base, value } } })),
@@ -1475,6 +1593,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         // The owner's own later save of another section is the description's newest revision.
         const goal = theirs.replace("invite a teammate", "invite a teammate or a guest");
         yield* edit(owner, theirs, goal);
+
         const conflicted = yield* edit(
           owner,
           INVITATIONS_TEXT,
@@ -1498,38 +1617,48 @@ it.layer(getTestDB())("the plan routes", (it) => {
           accountId: 9101,
           repositories: [{ owner: "acme", name: "relay" }],
         };
+
         const github = githubReaching([
           acmeInstallation,
           { id: 7102, login: "octocat", repositories: [{ owner: "octocat", name: "dotfiles" }] },
         ]);
+
         const { owner, ask } = yield* openAccounts(github);
         const acme = yield* openConnectedWorkspace(owner, acmeInstallation);
+
         const start = (body: WireBoundaryInput) =>
           ask(request(TASKS, owner, { method: "POST", body }));
+
         const change = (taskId: string, repository: string) =>
           ask(request(ONE_TASK(taskId), owner, { method: "PATCH", body: { repository } }));
+
         const repositoryOf = (status: number, answered: Answer) =>
           readAnswer(taskAnswerSchema, status, answered).plan.repository;
+
         const ofOtherOwner = unreachable({
           reason: REPOSITORY_UNREACHED.OTHER_OWNER,
           repository: "octocat/dotfiles",
           connectedTo: "acme",
         });
+
         const notConnected = (repository: string) =>
           unreachable({ reason: REPOSITORY_UNREACHED.NOT_CONNECTED, repository });
 
         const relay = yield* start({ ...RELAY, workspaceId: acme, repository: "acme/relay" });
+
         const otherStart = yield* start({
           ...LEDGER,
           workspaceId: acme,
           repository: "octocat/dotfiles",
         });
+
         const unnamed = startedId(yield* start({ ...LEDGER, workspaceId: acme }));
         const otherChange = yield* change(unnamed, "octocat/dotfiles");
         const ownChange = yield* change(unnamed, "acme/relay");
         // The personal workspace has nothing connected, so even the repository the account's own workspace reaches is refused there.
         const personalStart = yield* start({ ...LEDGER, repository: "acme/relay" });
         const personal = startedId(yield* start(LEDGER));
+
         const personalChanges = [
           yield* change(personal, "octocat/dotfiles"),
           yield* change(personal, "acme/relay"),
@@ -1546,17 +1675,21 @@ it.layer(getTestDB())("the plan routes", (it) => {
             notConnected("acme/relay"),
           ],
         );
+
         const opened = readAnswer(
           taskAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(ONE_TASK(personal), owner)),
         );
+
         assert.equal(opened.plan.repository, null);
+
         const listed = readAnswer(
           heldTaskListAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* ask(request(TASKS, owner)),
         );
+
         assert.equal(listed.plans.length, 3);
       }),
   );
@@ -1571,12 +1704,14 @@ it.layer(getTestDB())("the plan routes", (it) => {
           accountId: 9201,
           repositories: [{ owner: "acme", name: "relay" }],
         };
+
         const octocatInstallation = {
           id: 7202,
           login: "octocat",
           accountId: 9202,
           repositories: [{ owner: "octocat", name: "dotfiles" }],
         };
+
         const github = githubReaching([acmeInstallation, octocatInstallation]);
         const { owner, other, ask } = yield* openAccounts(github);
         const bare = yield* openWorkspace(owner);
@@ -1584,11 +1719,13 @@ it.layer(getTestDB())("the plan routes", (it) => {
         const octocat = yield* openConnectedWorkspace(owner, octocatInstallation);
         const strangers = yield* openWorkspace(other);
         yield* joinWorkspace(bare, other);
+
         const task = yield* createTask(owner, {
           organizationId: bare,
           name: RELAY.name,
           repository: "acme/relay",
         });
+
         const move = (bearer: string, workspaceId: string) =>
           ask(request(ONE_TASK(task.id), bearer, { method: "PATCH", body: { workspaceId } }));
 

@@ -29,6 +29,7 @@ const SIGN_IN_PATH = "/api/auth/sign-in/social";
 type Answer = { readonly status: number; readonly body?: unknown };
 
 const SIGNED_OUT: Answer = { status: 200, body: null };
+
 const SIGNED_IN: Answer = {
   status: 200,
   body: { session: { id: "session-1" }, user: { id: "user-1" } },
@@ -42,8 +43,10 @@ async function openPage(
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
     const answer = answers.get(url.pathname);
+
     if (!answer) return new Promise(() => undefined);
     const { status, body } = answer();
+
     return Promise.resolve(
       new Response(body === undefined ? null : JSON.stringify(body), {
         status,
@@ -59,6 +62,7 @@ async function openPage(
   await act(async () => {
     await import("../src/connect-github");
   });
+
   return root;
 }
 
@@ -73,7 +77,9 @@ function buttonNamed(page: HTMLElement, name: string): HTMLButtonElement {
   const button = Array.from(page.querySelectorAll("button")).find(
     (candidate) => (candidate.getAttribute("aria-label") ?? candidate.textContent) === name,
   );
+
   if (!button) throw new Error(`No button named ${name}`);
+
   return button;
 }
 
@@ -118,6 +124,7 @@ test("a sign-in that cannot start is announced and gives the choices back", asyn
       [SIGN_IN_PATH, () => ({ status: 500, body: { message: "unavailable" } })],
     ]),
   );
+
   await titled(page, "Sign in to connect GitHub");
 
   await act(async () => buttonNamed(page, "Continue with Google").click());

@@ -88,6 +88,7 @@ test("a range across both sides runs from its first line on the one to its last 
     side: DIFF_SIDE.RIGHT,
     startSide: DIFF_SIDE.LEFT,
   });
+
   assert.equal(
     preview?.patch.split("\n").slice(3).join("\n"),
     [
@@ -114,6 +115,7 @@ test("a thread on a file's first added lines previews them alone, the old side w
     originalLine: 2,
     originalStartLine: 1,
   });
+
   assert.equal(
     preview?.patch.split("\n").slice(3).join("\n"),
     ["@@ -0,0 +1,2 @@", "+one", "+two", ""].join("\n"),
@@ -401,6 +403,7 @@ function changedFrom(
   overrides: Partial<AgentChangedFile> = {},
 ): AgentChangedFile {
   const whole = createPatch("src/a.ts", before, after, "", "", { context: 3 });
+
   return changed("src/a.ts", { patch: whole.slice(whole.indexOf("@@")), ...overrides });
 }
 
@@ -411,6 +414,7 @@ function numbered(count: number, from = 1): string[] {
 
 test("a changed file's text before is its text after with each hunk turned back, wherever its hunks stand", () => {
   const lines = numbered(40);
+
   const cases: Array<[string, string[]]> = [
     ["a line changed between others", lines.map((line, at) => (at === 20 ? "changed" : line))],
     ["the first line changed", lines.map((line, at) => (at === 0 ? "first" : line))],
@@ -428,7 +432,9 @@ test("a changed file's text before is its text after with each hunk turned back,
       ),
     ],
   ];
+
   const before = `${lines.join("\n")}\n`;
+
   for (const [name, afterLines] of cases) {
     const after = `${afterLines.join("\n")}\n`;
     assert.deepEqual(textsOf(changedFrom(before, after), after), { before, after }, name);
@@ -437,6 +443,7 @@ test("a changed file's text before is its text after with each hunk turned back,
 
 test("a file ending without a newline, before or after, is turned back to the ending it had", () => {
   const base = numbered(12);
+
   const pairs: Array<[string, string, string]> = [
     ["the newline taken away", `${base.join("\n")}\n`, `${base.join("\n")}`],
     ["the newline added", `${base.join("\n")}`, `${base.join("\n")}\n`],
@@ -447,6 +454,7 @@ test("a file ending without a newline, before or after, is turned back to the en
       `${["start", ...base.slice(1)].join("\n")}`,
     ],
   ];
+
   for (const [name, before, after] of pairs) {
     assert.deepEqual(textsOf(changedFrom(before, after), after), { before, after }, name);
   }
@@ -455,14 +463,18 @@ test("a file ending without a newline, before or after, is turned back to the en
 test("a file moved with changes is turned back too, and one whose lines between hunks are not drawn is not", () => {
   const before = `${numbered(20).join("\n")}\n`;
   const after = before.replace("line 10", "ten");
+
   const moved = changedFrom(before, after, {
     status: CHANGED_FILE_STATUS.RENAMED,
     previousPath: "src/old.ts",
   });
+
   assert.deepEqual(textsOf(moved, after), { before, after });
+
   for (const status of [CHANGED_FILE_STATUS.ADDED, CHANGED_FILE_STATUS.DELETED]) {
     assert.equal(textsOf(changedFrom(before, after, { status }), after), undefined, status);
   }
+
   const omitted = changedFrom(before, after, { patch: null, omitted: PATCH_OMITTED.TOO_LARGE });
   assert.equal(textsOf(omitted, after), undefined);
 });

@@ -98,9 +98,12 @@ function clampShare(share: number): number {
 /** The finger's speed lately, in share open per millisecond; none where it has not moved long enough to say. */
 function speed(samples: readonly Sample[]): number {
   const last = samples.at(-1);
+
   if (last === undefined) return 0;
   const first = samples.find((sample) => last.at - sample.at <= DRAWER_SWIPE.SPEED_WINDOW_MS);
+
   if (first === undefined || last.at === first.at) return 0;
+
   return (last.progress - first.progress) / (last.at - first.at);
 }
 
@@ -118,9 +121,12 @@ function startsSwipe(
   open: boolean,
 ): boolean {
   if (!(target instanceof Node)) return false;
+
   if (open) return drawer?.contains(target) === true;
+
   if (!stage.contains(target)) return false;
   const left = x - stage.getBoundingClientRect().left;
+
   return left >= DRAWER_SWIPE.EDGE_MARGIN && left <= DRAWER_SWIPE.EDGE_REACH;
 }
 
@@ -147,27 +153,36 @@ export function useDrawerSwipe(options: DrawerSwipeOptions): void {
 
   useEffect(() => {
     if (!enabled) return;
+
     const write = (progress: number) => {
       stage.current?.style.setProperty(PROGRESS_PROPERTY, String(progress));
     };
+
     const settle = (opens: boolean) => {
       const { open: was, onOpen, onClose } = latest.current;
+
       if (opens === was) {
         stage.current?.removeAttribute(DRAG_ATTRIBUTE);
         stage.current?.style.removeProperty(PROGRESS_PROPERTY);
+
         return;
       }
+
       // Note that the mark stays until the owner has drawn the change, so the drawer travels on from the finger rather than from where it last stood.
       settling.current = true;
       write(opens ? 1 : 0);
+
       if (opens) onOpen();
       else onClose();
     };
+
     const down = (event: PointerEvent) => {
       const { open: isOpen, drawer } = latest.current;
       const box = stage.current;
+
       if (event.pointerType !== "touch" || !event.isPrimary || box === null) return;
       const drawn = drawer();
+
       if (drawn === null || !startsSwipe(event.clientX, event.target, box, drawn, isOpen)) return;
       const from = isOpen ? 1 : 0;
       swipe.current = {
@@ -180,39 +195,52 @@ export function useDrawerSwipe(options: DrawerSwipeOptions): void {
         samples: [{ at: event.timeStamp, progress: from }],
       };
     };
+
     const move = (event: PointerEvent) => {
       const held = swipe.current;
+
       if (held === undefined || held.pointerId !== event.pointerId) return;
       const dx = event.clientX - held.x;
       const dy = event.clientY - held.y;
+
       if (held.state === SWIPE_STATE.WAITING) {
         if (Math.abs(dx) < DRAWER_SWIPE.SLOP && Math.abs(dy) < DRAWER_SWIPE.SLOP) return;
         // Note that only the way the drawer can go claims it: in while it is away, out while it stands.
         const toward = held.from === 0 ? dx > 0 : dx < 0;
+
         if (!toward || Math.abs(dx) < Math.abs(dy) * DRAWER_SWIPE.LEAN) {
           swipe.current = undefined;
+
           return;
         }
+
         held.state = SWIPE_STATE.CLAIMED;
         stage.current?.setAttribute(DRAG_ATTRIBUTE, "");
       }
+
       event.stopPropagation();
       const progress = clampShare(held.from + dx / held.width);
       held.samples.push({ at: event.timeStamp, progress });
       write(progress);
     };
+
     const touchMove = (event: TouchEvent) => {
       const held = swipe.current;
       const touch = event.touches[0];
+
       if (held === undefined || touch === undefined || !event.cancelable) return;
       // Note that a move still being read is held from the page while it leans sideways, since a scroll the browser starts now cannot be taken back.
       const sideways = Math.abs(touch.clientX - held.x) >= Math.abs(touch.clientY - held.y);
+
       if (held.state === SWIPE_STATE.CLAIMED || sideways) event.preventDefault();
     };
+
     const up = (event: PointerEvent) => {
       const held = swipe.current;
+
       if (held === undefined || held.pointerId !== event.pointerId) return;
       swipe.current = undefined;
+
       if (held.state !== SWIPE_STATE.CLAIMED) return;
       // Note that the release is a sample of its own, so a finger held still before it lifts carries no speed from before the pause.
       const last = clampShare(held.from + (event.clientX - held.x) / held.width);
@@ -221,12 +249,14 @@ export function useDrawerSwipe(options: DrawerSwipeOptions): void {
         event.type === "pointerup" ? opensOnRelease(last, speed(held.samples)) : held.from === 1,
       );
     };
+
     const capture = { capture: true } as const;
     window.addEventListener("pointerdown", down, capture);
     window.addEventListener("pointermove", move, capture);
     window.addEventListener("pointerup", up, capture);
     window.addEventListener("pointercancel", up, capture);
     window.addEventListener("touchmove", touchMove, { capture: true, passive: false });
+
     return () => {
       window.removeEventListener("pointerdown", down, capture);
       window.removeEventListener("pointermove", move, capture);

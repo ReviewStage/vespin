@@ -78,9 +78,11 @@ const RELEASE_FILLED: Readonly<Record<string, string>> = {
 /** The script with the release written in and the origin left for each request. */
 function withRelease(template: string): string {
   let script = template;
+
   for (const [placeholder, value] of Object.entries(RELEASE_FILLED)) {
     script = script.replaceAll(placeholder, value);
   }
+
   return script;
 }
 
@@ -88,11 +90,14 @@ function withRelease(template: string): string {
 function scriptEndpoint(script: string) {
   return Effect.gen(function* () {
     const incoming = yield* HttpServerRequest.HttpServerRequest;
+
     if (incoming.method !== HTTP_METHOD.GET) {
       return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
     }
+
     const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
     const origin = new URL(request.url).origin;
+
     return HttpServerResponse.text(script.replaceAll(ORIGIN_PLACEHOLDER, origin), {
       status: HOSTED_HTTP_STATUS.OK,
       headers: SCRIPT_HEADERS,

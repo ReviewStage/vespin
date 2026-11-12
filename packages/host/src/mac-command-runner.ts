@@ -55,8 +55,10 @@ const NOTHING_CAPTURED: Captured = { chunks: [], bytes: 0, dropped: false };
 /** A chunk kept while the stream is under its byte bound, and the rest counted as dropped. */
 function captureChunk(captured: Captured, chunk: Uint8Array): Captured {
   const room = MAX_OUTPUT_BYTES - captured.bytes;
+
   if (room <= 0) return { ...captured, dropped: true };
   const kept = chunk.length <= room ? chunk : chunk.subarray(0, room);
+
   return {
     chunks: [...captured.chunks, kept],
     bytes: captured.bytes + kept.length,
@@ -73,10 +75,13 @@ interface CapturedText {
 function capturedText(captured: Captured): CapturedText {
   // Note that the chunks are decoded as one stream, so a character split across two is read whole.
   const decoder = new TextDecoder();
+
   const text =
     captured.chunks.map((chunk) => decoder.decode(chunk, { stream: true })).join("") +
     decoder.decode();
+
   const cut = captured.dropped || text.length > MAC_COMMAND_BOUNDS.MAX_OUTPUT_CHARS;
+
   return { text: text.slice(0, MAC_COMMAND_BOUNDS.MAX_OUTPUT_CHARS), cut };
 }
 
@@ -100,21 +105,26 @@ function runned(
         stdin: "ignore",
         forceKillAfter: MAC_COMMAND_RUN.KILL_GRACE,
       });
+
       const stdout = yield* Ref.make(NOTHING_CAPTURED);
       const stderr = yield* Ref.make(NOTHING_CAPTURED);
+
       const drains = yield* Effect.forkScoped(
         Effect.all([drainInto(handle.stdout, stdout), drainInto(handle.stderr, stderr)], {
           concurrency: 2,
         }),
       );
+
       const exited = yield* Effect.timeoutOption(
         handle.exitCode,
         Duration.seconds(command.timeoutSeconds),
       );
+
       // Note that the streams are waited on only briefly, because a child the command left running, or the command itself past its timeout, holds them open; what it wrote just before the end is read either way.
       yield* Effect.ignore(Effect.timeoutOption(Fiber.join(drains), MAC_COMMAND_RUN.DRAIN_GRACE));
       const out = capturedText(yield* Ref.get(stdout));
       const err = capturedText(yield* Ref.get(stderr));
+
       return {
         exitCode: Option.getOrNull(exited),
         stdout: out.text,

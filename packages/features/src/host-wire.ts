@@ -69,12 +69,14 @@ const USER_CODE_LETTERS = new RegExp(
 /** A code as typed or as its link names it, read whatever its case, dashes, and spaces: its eight letters, upper case; nothing where it is no code. */
 export function hostUserCodeOf(typed: string): string | undefined {
   const letters = typed.replace(/[\s-]/gu, "").toUpperCase();
+
   return USER_CODE_LETTERS.test(letters) ? letters : undefined;
 }
 
 /** A code's eight letters as a box shows them and its link names them: `XXXX-XXXX`. */
 export function shownHostUserCode(code: string): string {
   const half = HOST_USER_CODE.LENGTH / 2;
+
   return `${code.slice(0, half)}${HOST_USER_CODE.SEPARATOR}${code.slice(half)}`;
 }
 
@@ -89,7 +91,9 @@ const HOST_VERSION = /^(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})\.(0|[1-9]\d{0,8})$/u;
 /** A daemon's version as its three numbers, or nothing where it is not `MAJOR.MINOR.PATCH`. */
 export function readHostVersion(version: string): readonly [number, number, number] | undefined {
   const parts = HOST_VERSION.exec(version.trim());
+
   if (parts === null) return undefined;
+
   return [Number(parts[1]), Number(parts[2]), Number(parts[3])];
 }
 
@@ -97,11 +101,15 @@ export function readHostVersion(version: string): readonly [number, number, numb
 export function hostVersionMeets(version: string, floor: string): boolean {
   const read = readHostVersion(version);
   const wanted = readHostVersion(floor);
+
   if (read === undefined || wanted === undefined) return false;
+
   for (let place = 0; place < 3; place += 1) {
     const [have, need] = [read[place] ?? 0, wanted[place] ?? 0];
+
     if (have !== need) return have > need;
   }
+
   return true;
 }
 

@@ -23,9 +23,11 @@ export interface ViewportBox {
 /** The visible part of the window now: the visual viewport where there is one, otherwise the window. */
 export function visibleViewport(): ViewportBox {
   const viewport = window.visualViewport;
+
   if (viewport === null || viewport === undefined) {
     return { top: 0, bottom: window.innerHeight, left: 0, right: window.innerWidth };
   }
+
   return {
     top: viewport.offsetTop,
     bottom: viewport.offsetTop + viewport.height,

@@ -34,6 +34,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const terminals = `/api/agents/${AGENT_ID}/terminals`;
+
       const api = fakeCloudApi({
         [`GET ${terminals}`]: { answer: () => LISTED },
         [`POST ${terminals}`]: { answer: () => ({ terminal: SHELL }), status: 201 },
@@ -45,15 +46,18 @@ it.effect(
           answer: () => ({ sandbox: SANDBOX_STATE.RUNNING }),
         },
       });
+
       const terminal = client();
 
       const listed = yield* Effect.provide(terminal.list(AGENT_ID), api.layer);
       const created = yield* Effect.provide(terminal.create(AGENT_ID, "server"), api.layer);
       const unnamed = yield* Effect.provide(terminal.create(AGENT_ID, undefined), api.layer);
+
       const renamed = yield* Effect.provide(
         terminal.rename(AGENT_ID, SHELL_ID, "server"),
         api.layer,
       );
+
       const killed = yield* Effect.provide(terminal.kill(AGENT_ID, SHELL_ID), api.layer);
       const resumed = yield* Effect.provide(terminal.resume(AGENT_ID), api.layer);
 

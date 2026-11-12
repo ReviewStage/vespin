@@ -102,6 +102,7 @@ function stillOpen(
 ): pullRequest is TaskPullRequestLine & { readonly url: string } {
   const open =
     pullRequest.state === PULL_REQUEST_STATE.OPEN || pullRequest.state === PULL_REQUEST_STATE.DRAFT;
+
   return open && pullRequest.url !== undefined;
 }
 
@@ -115,7 +116,9 @@ function OpenPullRequests({ task }: { task: TaskSummary }): React.JSX.Element | 
   // Its page opens as a link to it does: in its agent's Pull request tab where the window knows the agent, else on GitHub.
   const openLink = useOpenLink();
   const open = openPullRequests(useTaskPullRequests(task.id));
+
   if (open.length === 0) return null;
+
   return (
     <>
       {/* Note that a pull request's number names the person's work, so it is masked in a screen recording. */}
@@ -212,11 +215,13 @@ export function TaskListRow({
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const drawn = (cell: TaskRowCell) => cells.includes(cell);
   const pullRequests = useTaskPullRequests(task.id);
+
   // Note that where its open pull requests stand as chips, the agents' mark is left out while it would only say one is open, so the run says it once.
   const agentsSaidByChips =
     drawn(TASK_ROW_CELL.PULL_REQUESTS) &&
     openPullRequests(pullRequests).length > 0 &&
     taskAgentsStatus(task.agents, pullRequests).kind === TASK_AGENTS_STATUS.PULL_REQUEST;
+
   const actions = useTaskMenuItems(tasks, task.id, task.name, {
     rename: rename.begin,
     drawn: true,
@@ -228,12 +233,15 @@ export function TaskListRow({
     },
     opened,
   });
+
   const press = useRef<HTMLButtonElement | null>(null);
   const key = task.number === undefined ? undefined : taskKey(workspaceName, task.number);
+
   const repository =
     task.repository === null
       ? undefined
       : (repositoryName ?? repositoryLabel(task.repository, [{ repository: task.repository }]));
+
   // Note that a task not listed yet offers only its list's groups, because the task's own acts read the listed task, which is not there to read.
   const own = unlisted
     ? rowMenu("Task", menuGroups, tasks.shown, true)
@@ -242,12 +250,15 @@ export function TaskListRow({
         footer: actions.footer,
         subject: taskSubject(task, repository, key),
       };
+
   const menu = rename.editing
     ? undefined
     : chosen === undefined
       ? own
       : chosenRowMenu(own.thing, chosen, tasks.shown);
+
   const endedByKey = useRefocusAfterEdit(rename.editing, press);
+
   // Note that the marks before the name are a control and decoration to a screen reader, so the key and status are said in the press, and left out of find, which finds them drawn.
   const spoken = [
     drawn(TASK_ROW_CELL.KEY) ? key : undefined,
@@ -257,6 +268,7 @@ export function TaskListRow({
     .filter((each) => each !== undefined)
     .map((each) => `, ${each}`)
     .join("");
+
   const row = (
     <TaskRow
       taskId={task.id}
@@ -356,6 +368,7 @@ export function TaskListRow({
       {actions.dialog}
     </TaskRow>
   );
+
   // Note that the card reaches the row's hint by its options, because the row takes its hint as a component, which must stay one across renders.
   return card === undefined ? row : <RowHintOptions card={card}>{row}</RowHintOptions>;
 }

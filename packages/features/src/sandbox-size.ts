@@ -40,6 +40,7 @@ export const SANDBOX_SIZE = {
 /** The vCPUs an agent's sandbox opens with: what its repository asks for, or `SANDBOX_SIZE.VCPUS` for one that asks for nothing and for an agent with no repository. */
 export function sandboxVcpus(repository: string | null): number {
   if (repository === null) return SANDBOX_SIZE.VCPUS;
+
   return SANDBOX_SIZE.VCPUS_BY_REPOSITORY.get(repository.toLowerCase()) ?? SANDBOX_SIZE.VCPUS;
 }
 

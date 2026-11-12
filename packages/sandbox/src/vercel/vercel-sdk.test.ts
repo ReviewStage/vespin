@@ -24,6 +24,7 @@ const NAME = "luke-native-fixture";
 const REFUSAL = { code: "bad_request", message: "Invalid request: the fixture's refusal" } as const;
 const SECRET_ENV = "fixture-secret-env-value";
 const CREATED_AT = Date.UTC(2026, 10, 5);
+
 /** Vercel's answer for a snapshot past its expiration, as it answered on Nov 8, 2026, naming no code of its own. */
 const SNAPSHOT_EXPIRED = { code: "bad_request", message: "Snapshot expired or deleted." } as const;
 
@@ -64,6 +65,7 @@ function apiOver(respond: Responder, readToken?: () => Promise<string>) {
     sandboxFetchOver(respond),
     ...(readToken === undefined ? [] : [Layer.succeed(SandboxToken, readToken)]),
   );
+
   return Effect.provide(Effect.service(Sandbox), Layer.provide(vercelSandboxLayer, under));
 }
 
@@ -77,6 +79,7 @@ const refusedWith = (status: number) => () => Response.json({ error: REFUSAL }, 
 it.effect("each call Vercel refused names the call, its status, and Vercel's error", () =>
   Effect.gen(function* () {
     const api = yield* apiOver(refusedWith(400));
+
     for (const { call, ask } of CALLS) {
       const failure = yield* Effect.flip(ask(api));
       assert.equal(failure._tag, "SandboxUnavailable");
@@ -99,6 +102,7 @@ it.effect("a refusal's detail is one line of at most 300 characters", () =>
         { status: 400 },
       ),
     );
+
     const detail = detailOf(yield* Effect.flip(api.updateTags(NAME, {})));
     assert.ok(detail !== undefined);
     assert.equal(detail.length, "Vercel answered 400: ".length + 300);
@@ -109,13 +113,16 @@ it.effect("a refusal's detail is one line of at most 300 characters", () =>
 it.effect("a secret Vercel or a cause echoes back is redacted from the detail", () =>
   Effect.gen(function* () {
     const echoed = `env SECRET=${SECRET_ENV} under Bearer ${fixtureToken()}`;
+
     const refusing = yield* apiOver(() =>
       Response.json({ error: { code: "bad_request", message: echoed } }, { status: 400 }),
     );
+
     // Note that the cause is an abort, because the SDK tries any other failure to connect again on a real timer.
     const throwing = yield* apiOver(() => {
       throw Object.assign(new Error(echoed), { name: "AbortError" });
     });
+
     for (const api of [refusing, throwing]) {
       const failure = yield* Effect.flip(api.create(CREATE_ASK));
       assert.match(detailOf(failure) ?? "", /env SECRET=\[redacted\] under Bearer \[redacted\]/u);
@@ -133,6 +140,7 @@ it.effect("a long error code of Vercel's own is kept whole", () =>
         { status: 415 },
       ),
     );
+
     const failure = yield* Effect.flip(api.get(NAME));
     assert.equal(
       detailOf(failure),
@@ -146,6 +154,7 @@ it.effect("a token that could not be read names the call and why", () =>
     const unread = yield* apiOver(refusedWith(400), () =>
       Promise.reject(new Error("the token endpoint was down")),
     );
+
     const failure = yield* Effect.flip(unread.listTagged("sessionId", "session_fixture"));
     assert.equal(failure.call, SANDBOX_CALL.LIST);
     assert.equal(detailOf(failure), "Error: the token endpoint was down");
@@ -164,21 +173,28 @@ it.effect(
       const gets: (string | null)[] = [];
       let standing = true;
       let taken: string | undefined;
+
       const api = yield* apiOver((url, init) => {
         if (init.method === "POST") {
           if (taken !== undefined) {
             standing = true;
+
             return Response.json(
               { error: { code: taken, message: "the name is taken" } },
               { status: 409 },
             );
           }
+
           return Response.json(sandboxFound(RUNNING_SANDBOX));
         }
+
         gets.push(new URL(url).searchParams.get("resume"));
+
         return standing ? Response.json(sandboxFound(RUNNING_SANDBOX)) : refusedWith(404)();
       });
+
       const setUp: string[] = [];
+
       const onCreate = async (created: { readonly running: string }) => {
         setUp.push(created.running);
       };
@@ -213,12 +229,16 @@ it.effect(
 it.effect("a get-or-create that resumes a sandbox closes the ports its last run left open", () =>
   Effect.gen(function* () {
     const patched: unknown[] = [];
+
     const api = yield* apiOver((_url, init) => {
       if (init.method === "PATCH") {
         patched.push(JSON.parse(String(init.body)));
+
         return Response.json({ ...sandboxDeleted(RUNNING_SANDBOX), routes: [] });
       }
+
       const route = { port: 3000, subdomain: "fixture-3000", url: "https://fixture-3000.example" };
+
       return Response.json({ ...sandboxFound(RUNNING_SANDBOX), routes: [route], resumed: true });
     });
 
@@ -267,17 +287,23 @@ it.effect(
   () =>
     Effect.gen(function* () {
       let deleted = false;
+
       const api = yield* apiOver((url, init) => {
         if (init.method === "DELETE") {
           deleted = true;
+
           return Response.json(sandboxDeleted(STOPPED_SANDBOX));
         }
+
         if (init.method === "POST") return Response.json(sandboxFound(RUNNING_SANDBOX));
+
         if (deleted) return refusedWith(404)();
+
         return new URL(url).searchParams.get("resume") === "true"
           ? Response.json({ error: SNAPSHOT_EXPIRED }, { status: 410 })
           : Response.json(sandboxFound(STOPPED_SANDBOX));
       });
+
       const setUp: string[] = [];
 
       const opened = yield* api.getOrCreate(CREATE_ASK, async (created) => {
@@ -304,11 +330,14 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const asked: { readonly method: string; readonly url: URL }[] = [];
+
       let answer: (method: string, url: URL) => Response = (method, url) =>
         onDrive(url) ? refusedWith(404)() : sandboxAnswer(method);
+
       const api = yield* apiOver((url, init) => {
         const method = init.method ?? "GET";
         asked.push({ method, url: new URL(url) });
+
         return answer(method, new URL(url));
       });
 
@@ -334,17 +363,22 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const writes: string[] = [];
+
       const api = yield* apiOver((url, init) => {
         const method = init.method ?? "GET";
         const { pathname } = new URL(url);
+
         // The path as Vercel's REST reference spells it, past the SDK's own prefix.
         if (method !== "GET") writes.push(`${method} ${pathname.replace(/^\/api/u, "")}`);
+
         if (onDrive(new URL(url))) {
           return Response.json(driveAnswered({ id: "drv_own", name: `${NAME}-drive` }));
         }
+
         if (pathname.endsWith("/stop")) {
           return Response.json(sessionAnswered({ id: SESSION, status: "stopped" }));
         }
+
         return Response.json(
           method === "DELETE" ? sandboxDeleted(RUNNING_SANDBOX) : sandboxFound(RUNNING_SANDBOX),
         );
@@ -370,20 +404,24 @@ it.effect(
         "ws://sbx-fixture.vercel.run/ws",
         "wss://user:pass@sbx-fixture.vercel.run/ws",
       ];
+
       for (const address of addresses) {
         const api = yield* apiOver((url) =>
           new URL(url).pathname.endsWith("/interactive")
             ? Response.json({ url: address, token: "pty-token" })
             : Response.json(sandboxFound(RUNNING_SANDBOX)),
         );
+
         const refused = yield* Effect.flip(api.openInteractive(NAME));
         assert.equal(refused._tag, "SandboxUnavailable", address);
       }
+
       const minted = yield* apiOver((url) =>
         new URL(url).pathname.endsWith("/interactive")
           ? Response.json({ url: "wss://sbx-fixture.vercel.run/ws", token: "pty-token" })
           : Response.json(sandboxFound(RUNNING_SANDBOX)),
       );
+
       assert.equal((yield* minted.openInteractive(NAME)).url, "wss://sbx-fixture.vercel.run/ws");
     }),
 );
@@ -396,18 +434,23 @@ it.effect(
       let status = "running";
       let timeout = minutes(5);
       const extensions: number[] = [];
+
       const api = yield* apiOver((url, init) => {
         if (status === "gone") return refusedWith(404)();
+
         if (!new URL(url).pathname.endsWith("/extend-timeout")) {
           return Response.json(sandboxFound({ ...RUNNING_SANDBOX, status, timeout }));
         }
+
         const { duration } = JSON.parse(String(init.body)) as { readonly duration: number };
         extensions.push(duration);
         timeout += duration;
+
         return Response.json(
           sessionAnswered({ id: SESSION, status, createdAt: CREATED_AT, timeout }),
         );
       });
+
       const touchedAt = (since: number) =>
         Effect.andThen(TestClock.setTime(CREATED_AT + since), api.touch(NAME));
 

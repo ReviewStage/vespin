@@ -55,10 +55,12 @@ afterEach(() => {
 /** The view's element for a note, made the first time it is asked for. */
 function noteElement(key: string): HTMLElement {
   const held = kept.get(key);
+
   if (held !== undefined) return held;
   const element = document.createElement("div");
   element.textContent = `note ${key}`;
   kept.set(key, element);
+
   return element;
 }
 
@@ -80,6 +82,7 @@ function mountFile(drawn: FileViewProps): { host: HTMLElement; handle: FileViewH
   document.body.append(host);
   const handle = diffView.mountFile(host, drawn);
   mounted.push(handle);
+
   return { host, handle };
 }
 
@@ -87,6 +90,7 @@ function mountFile(drawn: FileViewProps): { host: HTMLElement; handle: FileViewH
 function drawnRoot(host: HTMLElement): ShadowRoot {
   const root = host.querySelector("diffs-container")?.shadowRoot;
   assert.ok(root, "the file is drawn in a shadow root");
+
   return root;
 }
 
@@ -103,10 +107,12 @@ function drawnLines(root: ShadowRoot, selector = "[data-line]"): number[] {
 // Note that Pierre draws nothing until its highlighter has loaded, once for the run, so the tests wait for it here rather than each on its first frame.
 beforeAll(async () => {
   const { host, handle } = mountFile(props());
+
   for (let frame = 0; frame < 300; frame += 1) {
     if (host.querySelector("diffs-container")?.shadowRoot?.querySelector("[data-line]")) break;
     await nextFrame();
   }
+
   handle.unmount();
   mounted = [];
   document.body.replaceChildren();
@@ -181,9 +187,11 @@ test("no lines are picked until the reader picks some", async () => {
 test("lines picked by pressing their numbers are the reader's pick, until the view lights others", async () => {
   const { host, handle } = mountFile(props({ lit: { startLine: 1, endLine: 1 } }));
   await nextFrame();
+
   const press = (line: number, shiftKey = false) => {
     const number = drawnRoot(host).querySelector(`[data-column-number="${line}"]`);
     assert.ok(number);
+
     const at = {
       bubbles: true,
       composed: true,
@@ -192,9 +200,11 @@ test("lines picked by pressing their numbers are the reader's pick, until the vi
       pointerType: "mouse",
       shiftKey,
     };
+
     number.dispatchEvent(new PointerEvent("pointerdown", at));
     document.dispatchEvent(new PointerEvent("pointerup", at));
   };
+
   press(3);
   press(2, true);
   assert.deepEqual(handle.pickedLines(), { startLine: 2, endLine: 3 });
@@ -218,8 +228,10 @@ test("lines picked in one file are no pick once another file takes its place", a
 test("a patch drawn alone draws each note in the view's own element under its line", async () => {
   const host = document.createElement("div");
   document.body.append(host);
+
   const patch =
     "--- a/seats.ts\n+++ b/seats.ts\n@@ -10,2 +10,2 @@\n const kept = 1;\n-const gone = 2;\n+const come = 2;\n";
+
   const handle = diffView.mount(host, {
     patch,
     look: LOOK,
@@ -227,6 +239,7 @@ test("a patch drawn alone draws each note in the view's own element under its li
     annotations: [{ key: "t1", side: "additions", line: 11 }],
     renderAnnotation: noteElement,
   });
+
   mounted.push(handle);
   await nextFrame();
   assert.equal(kept.get("t1")?.parentElement?.getAttribute("slot"), "annotation-additions-11");
@@ -234,19 +247,25 @@ test("a patch drawn alone draws each note in the view's own element under its li
 
 test("a whole file and a patch drawn alone with wrapped lines mark each indented line with its indent, which a wrapped line hangs by", async () => {
   const wrapped = { ...LOOK, wrap: true };
+
   const { host: fileHost } = mountFile(
     props({ text: "function f() {\n    return 1;\n}\n", look: wrapped }),
   );
+
   const patchHost = document.createElement("div");
   document.body.append(patchHost);
+
   const patch =
     "--- a/seats.ts\n+++ b/seats.ts\n@@ -1,2 +1,2 @@\n function f() {\n-  return 1;\n+  return 2;\n";
+
   mounted.push(diffView.mount(patchHost, { patch, look: wrapped, excerpt: true }));
   await nextFrame();
+
   const indents = (host: HTMLElement) =>
     [...drawnRoot(host).querySelectorAll<HTMLElement>("[data-line]")].map((row) =>
       row.style.getPropertyValue("--ui-line-indent"),
     );
+
   assert.deepEqual(indents(fileHost), ["", "4ch", ""]);
   assert.deepEqual(indents(patchHost), ["", "2ch", "2ch"]);
 });
@@ -255,8 +274,10 @@ test("a list draws each file's notes in the view's own element for that file and
   const host = document.createElement("div");
   document.body.append(host);
   const asked: Array<{ path: string; key: string }> = [];
+
   const patch =
     "--- a/src/seats.ts\n+++ b/src/seats.ts\n@@ -10,2 +10,2 @@\n const kept = 1;\n-const gone = 2;\n+const come = 2;\n";
+
   const handle = diffView.mountList(host, {
     files: [
       {
@@ -272,10 +293,12 @@ test("a list draws each file's notes in the view's own element for that file and
     renderHeader: () => document.createElement("div"),
     renderAnnotation: (path, key) => {
       asked.push({ path, key });
+
       return noteElement(key);
     },
     onTopFile: () => undefined,
   });
+
   mounted.push(handle);
   await nextFrame();
   await nextFrame();
@@ -288,11 +311,14 @@ test("a list is written with no style as markup, which the panel's policy would 
     vi.spyOn(Element.prototype, "innerHTML", "set"),
     vi.spyOn(ShadowRoot.prototype, "innerHTML", "set"),
   ];
+
   const inserted = vi.spyOn(Element.prototype, "insertAdjacentHTML");
   const host = document.createElement("div");
   document.body.append(host);
+
   const patch =
     "--- a/src/seats.ts\n+++ b/src/seats.ts\n@@ -10,2 +10,2 @@\n const kept = 1;\n-const gone = 2;\n+const come = 2;\n";
+
   const handle = diffView.mountList(host, {
     files: [
       {
@@ -309,21 +335,26 @@ test("a list is written with no style as markup, which the panel's policy would 
     renderAnnotation: noteElement,
     onTopFile: () => undefined,
   });
+
   mounted.push(handle);
   await nextFrame();
   await nextFrame();
+
   const written = [
     ...writers.flatMap((writer) => writer.mock.calls.map(([html]) => String(html))),
     ...inserted.mock.calls.map(([, html]) => html),
   ];
+
   const code = written.filter((html) => html.includes("data-line"));
   assert.ok(code.length > 0, "the list's lines are written as markup");
+
   for (const html of code) assert.doesNotMatch(html, /\sstyle="/);
 });
 
 /** A patch adding twenty lines to a file of a path's name. */
 function addingPatch(path: string): string {
   const lines = Array.from({ length: 20 }, (_, at) => `+const line${at} = ${at};`).join("\n");
+
   return `--- a/${path}\n+++ b/${path}\n@@ -0,0 +1,20 @@\n${lines}\n`;
 }
 
@@ -351,6 +382,7 @@ async function scrolledTops(): Promise<number[]> {
     },
   });
   const paths = Array.from({ length: 8 }, (_, at) => `src/f${at}.ts`);
+
   const handle = diffView.mountList(host, {
     files: paths.map((path) => ({
       path,
@@ -365,10 +397,13 @@ async function scrolledTops(): Promise<number[]> {
     renderAnnotation: noteElement,
     onTopFile: () => undefined,
   });
+
   mounted.push(handle);
   await nextFrame();
   handle.reveal("src/f5.ts");
+
   for (const _ of [1, 2, 3, 4]) await nextFrame();
+
   return tops;
 }
 

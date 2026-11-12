@@ -67,11 +67,13 @@ const jsonCall = (at: number, size = 2_500): ReplayStep =>
 const jsonSteps = (bytes: number): ReplayStep[] => {
   const steps: ReplayStep[] = [];
   let used = 0;
+
   while (used < bytes) {
     const step = jsonCall(steps.length);
     steps.push(step);
     used += stepsBytes([step]);
   }
+
   return steps;
 };
 
@@ -86,13 +88,16 @@ const said = (at: number, size = 1_000): ReplayStep => ({
 function scripted(answer: (prompt: string) => string | undefined, finish = "stop") {
   const asked: string[] = [];
   const bounds: (number | undefined)[] = [];
+
   const model = new MockLanguageModelV4({
     doGenerate: async (options) => {
       const prompt = JSON.stringify(options.prompt);
       asked.push(prompt);
       bounds.push(options.maxOutputTokens);
       const text = answer(prompt);
+
       if (text === undefined) return new Promise<never>(() => {});
+
       return {
         content: [{ type: "text", text }],
         finishReason: { unified: finish as "stop" | "length", raw: finish },
@@ -104,7 +109,9 @@ function scripted(answer: (prompt: string) => string | undefined, finish = "stop
       };
     },
   });
+
   const summary: SummaryModel = { model, providerOptions: {} };
+
   return { summary, asked, bounds };
 }
 
@@ -121,6 +128,7 @@ it.effect(
       const { summary, asked } = scripted((prompt) =>
         prompt.includes("Part 1:") ? "Whole recap." : "Recap.",
       );
+
       const narrow: SummaryModel = { ...summary, windowTokens: windowFor(25_000) };
       const steps = Array.from({ length: 6 }, (_, at) => said(at, 10_000));
       const written = yield* summarizeSteps(narrow, steps, 1_000_000);
@@ -180,6 +188,7 @@ it.effect("steps past one call's room are summarized in chunks, then combined ol
         ? "Whole recap."
         : `Recap of ${/Step (\d+)\./u.exec(prompt)?.[1]}.`,
     );
+
     const steps = Array.from({ length: 6 }, (_, at) => said(at, 10_000));
     const written = yield* summarizeSteps(summary, steps, windowFor(25_000));
 
@@ -199,6 +208,7 @@ it.effect(
       const { summary, asked, bounds } = scripted((prompt) =>
         prompt.includes("Part 1:") ? "Whole recap." : "Part.",
       );
+
       const steps = Array.from({ length: REPLAY_FIT.MAX_CHUNKS + 2 }, (_, at) => said(at, 20_000));
       const written = yield* summarizeSteps(summary, steps, windowFor(25_000));
 
@@ -226,6 +236,7 @@ it.effect(
       const { summary, asked } = scripted((prompt) =>
         prompt.includes("Part 1:") ? "Whole recap." : "Part.",
       );
+
       const earlier = { text: "The first twenty steps built the store.", steps: 20 };
       // Each step fills a chunk, the recap riding in the first: one chunk past the cap.
       const steps = Array.from({ length: REPLAY_FIT.MAX_CHUNKS + 1 }, (_, at) => said(at, 20_000));
@@ -258,18 +269,23 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const steps = Array.from({ length: 40 }, (_, at) => said(at, 2_000));
+
       const whole = yield* fitReplay(steps, undefined, stepsBytes(steps), () =>
         Effect.die("no summary asked for"),
       );
+
       assert.deepEqual(whole, { kept: steps, summary: undefined });
 
       const budget = 60_000;
       const recap = { text: "Recap.", steps: 0 };
       const summarized: number[] = [];
+
       const beside = yield* fitReplay(steps, undefined, budget, (dropped) => {
         summarized.push(dropped.length);
+
         return Effect.succeed(Option.some({ ...recap, steps: dropped.length }));
       });
+
       const alone = yield* fitReplay(steps, undefined, budget, () => Effect.succeed(Option.none()));
 
       assert.equal(beside.summary?.steps, steps.length - beside.kept.length);
@@ -298,9 +314,11 @@ it.effect(
       );
 
       const steps = [said(0), said(1)];
+
       const kept = yield* fitReplay(steps, earlier, 1_000_000, () =>
         Effect.die("no summary asked for"),
       );
+
       assert.deepEqual(kept, { kept: steps, summary: earlier });
 
       const folded: (typeof earlier | undefined)[] = [];
@@ -310,6 +328,7 @@ it.effect(
         60_000,
         (_, carried) => {
           folded.push(carried);
+
           return Effect.succeed(Option.none());
         },
       );
@@ -330,19 +349,23 @@ it.effect(
       assert.ok(replayTokens(PRODUCTION.REFUSED_BYTES) >= PRODUCTION.REFUSED_TOKENS);
 
       const steps = jsonSteps(PRODUCTION.REFUSED_BYTES);
+
       const budget = replayBudgetBytes(
         PRODUCTION.WINDOW_TOKENS,
         PRODUCTION.INSTRUCTIONS_TOKENS,
         20_000,
       );
+
       const fitted = yield* fitReplay(steps, undefined, budget, () =>
         Effect.succeed(Option.none()),
       );
 
       assert.ok(fitted.kept.length < steps.length, "the whole did not fit, and was cut");
+
       const counted =
         PRODUCTION.INSTRUCTIONS_TOKENS +
         (stepsBytes(fitted.kept) + 20_000) / PROVIDER_BYTES_PER_TOKEN;
+
       assert.ok(
         counted < PRODUCTION.WINDOW_TOKENS,
         `the provider would count ${Math.round(counted)} tokens`,
@@ -358,14 +381,18 @@ it.effect(
       const measured = { inputTokens: PRODUCTION.SOURCE_MEASURED_TOKENS, compacted: true };
       const bound = measuredBoundBytes(measured, stepsBytes(steps));
       assert.ok(bound !== undefined);
+
       const budget = replayBudgetBytes(
         PRODUCTION.WINDOW_TOKENS,
         PRODUCTION.INSTRUCTIONS_TOKENS,
         20_000,
       );
+
       const summarized: number[] = [];
+
       const fitted = yield* fitReplay(steps, undefined, Math.min(budget, bound), (dropped) => {
         summarized.push(dropped.length);
+
         return Effect.succeed(Option.some({ text: "Recap.", steps: dropped.length }));
       });
 
@@ -400,8 +427,10 @@ it("a first prompt still past the window drops the oldest steps kept, then the s
   const steps = jsonSteps(100_000);
   const fitted: FittedSteps = { kept: steps, summary: { text: "Recap.", steps: 7 } };
   const fixedTokens = 10_000;
+
   const promptTokens = (held: FittedSteps) =>
     fixedTokens + replayTokens(stepsBytes(held.kept) + summaryBytes(held.summary));
+
   const window = promptTokens(fitted);
 
   assert.equal(withinWindow(fitted, promptTokens, window), fitted, "a prompt that fits stands");

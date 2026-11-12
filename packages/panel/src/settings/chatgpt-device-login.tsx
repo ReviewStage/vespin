@@ -99,12 +99,15 @@ function useDeviceLogin(
   const { mutateAsync: sendChatgptDeviceStart } = useMutation(
     actMutation(ACT_KIND.CHATGPT_DEVICE_START),
   );
+
   const { mutateAsync: sendChatgptDeviceWait } = useMutation(
     actMutation(ACT_KIND.CHATGPT_DEVICE_WAIT),
   );
+
   const { mutate: sendChatgptDeviceCancel } = useMutation(
     actMutation(ACT_KIND.CHATGPT_DEVICE_CANCEL),
   );
+
   const [standing, setStanding] = useState<Standing>(STARTING);
   // Note that a ref counts the starts, because a start's answer reads it as it lands, which no render stands between.
   const starts = useRef(0);
@@ -122,8 +125,10 @@ function useDeviceLogin(
           if (!("failure" in answer)) {
             sendChatgptDeviceCancel({ loginId: answer.loginId });
           }
+
           return;
         }
+
         setStanding(
           "failure" in answer
             ? { kind: STANDING.FAILED, words: WORDS.START_FAILED }
@@ -134,6 +139,7 @@ function useDeviceLogin(
 
   useEffect(() => {
     start();
+
     return () => {
       // Note that going away counts as a start, so a code still on its way lands nowhere and is withdrawn.
       starts.current += 1;
@@ -150,15 +156,21 @@ function useDeviceLogin(
       .then((answer) => {
         if (!waiting) return;
         waiting = false;
+
         if ("failure" in answer) {
           setStanding({ kind: STANDING.FAILED, words: WORDS.WAIT_FAILED });
+
           return;
         }
+
         const { outcome } = answer;
+
         if (outcome === CHATGPT_DEVICE_LOGIN.CONNECTED) {
           connected.current();
+
           return;
         }
+
         // Note that the host answers only once the login settles, so a pending answer is none it gives.
         if (outcome === CHATGPT_DEVICE_LOGIN.PENDING) return;
         setStanding({
@@ -166,6 +178,7 @@ function useDeviceLogin(
           words: answer.message ?? CHATGPT_DEVICE_FAILURE_MESSAGE[outcome],
         });
       });
+
     return () => {
       if (!waiting) return;
       waiting = false;
@@ -180,6 +193,7 @@ function useDeviceLogin(
 function CodeSteps({ login }: { login: ChatGptDeviceStartAnswer }): React.JSX.Element {
   const openLink = useOpenLink();
   const url = login.verificationUrl;
+
   return (
     <OutsideSteps waiting={WORDS.WAITING}>
       <Step number={1} title={WORDS.TURN_ON} state={STEP_STATE.CURRENT}>
@@ -219,6 +233,7 @@ export function ChatGptDeviceLogin({
   onConnected: () => void;
 }): React.JSX.Element {
   const { standing, retry } = useDeviceLogin(add, onConnected);
+
   return standing.kind === STANDING.STARTING ? (
     <WaitingLine>{WORDS.GETTING_CODE}</WaitingLine>
   ) : standing.kind === STANDING.WAITING ? (

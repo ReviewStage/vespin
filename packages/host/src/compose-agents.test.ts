@@ -388,6 +388,7 @@ it.effect(
         idempotencyKey: "press-continue",
         from: { agentId: AGENT_ID },
       });
+
       yield* acts.AGENTS_START({
         taskId: TASK_ID,
         idempotencyKey: "press-fork",
@@ -503,14 +504,17 @@ it.effect(
         pageNewest,
         live,
       } = yield* subject();
+
       sealTranscript(LIVE_ANSWERED);
       const newest = newestPage("1:0", "Reading the invites.", "40");
       pageNewest(newest);
+
       // A message written after the newest page was read, before the live read's first rows landed.
       const between = {
         ...pageNow("2:0", { holds: true, text: "Writing the expiry." }),
         wakeIn: 3_000,
       };
+
       script(between);
       const letGo = yield* holding(acts.AGENTS_TRANSCRIPT.hold(FOLLOWED));
       yield* settled;
@@ -582,6 +586,7 @@ it.effect(
         pageNewest,
         live,
       } = yield* subject();
+
       sealTranscript(LIVE_ANSWERED);
       pageNewest(newestPage("1:0", "Reading the invites."));
       script(pageNow("1:0", { holds: true }));
@@ -668,6 +673,7 @@ it.effect(
         pageNewest,
         live,
       } = yield* subject();
+
       sealTranscript(LIVE_ANSWERED);
       pageNewest(newestPage("1:0", "Reading the invites.", "40"));
       script(pageNow("1:0", { holds: false, text: "Reading the invites." }));
@@ -738,6 +744,7 @@ function queueFollowed() {
     transcriptRows(harness.live, 1);
     yield* settled;
     assert.deepEqual(queuedTexts(harness.held), ["Run the tests"]);
+
     return harness;
   });
 }
@@ -804,6 +811,7 @@ function laidBesideRead(pageCursor: string, pageText: string) {
       pageNewest,
       live,
     } = yield* subject();
+
     sealTranscript(LIVE_ANSWERED);
     pageNewest(newestPage("1:0", "Reading the invites."));
     script(pageNow("1:0", { holds: true }));
@@ -815,10 +823,12 @@ function laidBesideRead(pageCursor: string, pageText: string) {
 
     const answer = yield* Deferred.make<void>();
     holdPages(Deferred.await(answer));
+
     const read: TranscriptNowAnswer = {
       ...pageNow(pageCursor, { holds: false }),
       messages: [said(2, pageText), said(3, "Testing the expiry.")],
     };
+
     script(read);
     // A turn opening reads the page, which the service is slow to answer.
     transcriptRows(live, 2, 2);
@@ -833,6 +843,7 @@ function laidBesideRead(pageCursor: string, pageText: string) {
     // The rows answer again as they stood, which lays nothing older than the page.
     live.transcript.set({ windowParts: [drawn.part] });
     yield* nextPoll;
+
     return { beside, after: held().slice(laidBefore + beside.length) };
   });
 }
@@ -884,6 +895,7 @@ it.effect(
     Effect.gen(function* () {
       const { acts, asked, held, sealTranscript, pageNow: script, live } = yield* subject();
       sealTranscript(LIVE_ANSWERED);
+
       const full: TranscriptNowAnswer = {
         ...pageNow("2:0", { holds: false }),
         messages: Array.from({ length: AGENT_BOUNDS.MESSAGES_PAGE }, (_, index) => ({
@@ -892,6 +904,7 @@ it.effect(
           parts: [{ type: "text" as const, text: `Step ${index}` }],
         })),
       };
+
       const rest = pageNow("3:0", { holds: true, text: "Done." });
       script(full, rest);
       yield* acts.AGENTS_TRANSCRIPT.hold(FOLLOWED);
@@ -1016,6 +1029,7 @@ it.effect(
         pageNewest,
         live,
       } = yield* subject();
+
       sealTranscript(LIVE_ANSWERED);
       pageNewest({
         ...newestPage("2:0", "Writing the expiry."),
@@ -1034,6 +1048,7 @@ it.effect(
         messages: [said(1, "Reading the invites.")],
         rewound: 1,
       };
+
       pageNewest(rewound);
       script({ ...pageNow("3:1", { holds: true }), rewound: 1 });
       transcriptRows(live, 3, 2);
@@ -1175,6 +1190,7 @@ it.effect(
       const harness = yield* subject();
       yield* followedOnce(harness);
       const { held, live } = harness;
+
       // The service answers a message older than the cursor again once its revision passed it.
       const rewrite = {
         ...pageNow("2:1", { holds: false }),
@@ -1186,6 +1202,7 @@ it.effect(
           },
         ],
       };
+
       harness.pageNow(rewrite);
       transcriptRows(live, 2);
       yield* settled;
@@ -1298,6 +1315,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const picture = { agentId: AGENT_ID, pictureId: PICTURE_ID };
+
       const pictureReads = (asked: readonly string[]) =>
         asked.filter((ask) => ask === `picture:${AGENT_ID}:${PICTURE_ID}:`).length;
 
@@ -1315,11 +1333,13 @@ it.effect(
       assert.equal(pictureReads(switched.asked), 2);
 
       type Harness = Effect.Success<ReturnType<typeof subject>>;
+
       const lettingGo = [
         (harness: Harness) => harness.reset,
         (harness: Harness) => harness.acts.AGENTS_ARCHIVE({ agentId: AGENT_ID, archived: true }),
         (harness: Harness) => harness.acts.AGENTS_DELETE({ agentId: AGENT_ID }),
       ];
+
       for (const letGo of lettingGo) {
         const harness = yield* subject();
         yield* harness.acts.AGENTS_PICTURE(picture);
@@ -1339,11 +1359,14 @@ it.effect(
       const shown = { kind: TRANSCRIPT_KIND.AGENT, agentId: "agent-shown" };
       yield* harness.acts.AGENTS_TRANSCRIPT.hold(shown);
       yield* settled;
+
       const transcripts = Array.from({ length: HELD_TRANSCRIPTS + 1 }, (_, index) => ({
         kind: TRANSCRIPT_KIND.AGENT,
         agentId: `agent-${index}`,
       }));
+
       for (const transcript of transcripts) yield* followedOnce(harness, transcript);
+
       const newestReads = (agentId: string) =>
         harness.asked.filter((ask) => ask === `messages-newest:${agentId}:cut`).length;
 
@@ -1392,6 +1415,7 @@ function heldOf(
 ): WireValue | undefined {
   const last = told().at(-1);
   const ofKind = isRecord(last) ? last[scope.kind] : undefined;
+
   return isRecord(ofKind) ? ofKind[scope.id] : undefined;
 }
 
@@ -1409,12 +1433,14 @@ it.effect(
       yield* toldTimes(told, 1);
       live.scope.set({ items: [ITEM_ROW] });
       yield* nextPoll;
+
       const closed = {
         ...ITEM_ROW,
         revision: 3,
         status: INBOX_STATUS.CLOSED,
         closedReason: "Done",
       };
+
       live.scope.set({ items: [closed] });
       yield* nextPoll;
       yield* toldTimes(told, 2);
@@ -1466,12 +1492,14 @@ it.effect(
         kind: INBOX_SCOPE_KIND.PLAN,
         id: `0000000${at}-1111-4a6b-9c33-0d1e2f3a4b5c`,
       }));
+
       for (const scope of others) {
         const letGoOther = yield* holding(acts.AGENTS_INBOX_FOLLOW.hold(scope));
         yield* settled;
         yield* letGoOther;
         yield* settled;
       }
+
       assert.equal(heldOf(told, PLAN_SCOPE), undefined, "the plan is told no more");
       assert.equal(
         asked.filter((read) => read === `description-inbox-live:${TASK_ID}`).length,
@@ -1499,6 +1527,7 @@ it.effect(
       yield* settled;
       live.scope.set({ messages: [], files: [], items: [ITEM_ROW] });
       yield* toldTimes(told, 1);
+
       const message = {
         id: "6f1d2a10-7b0f-4e3b-9a55-5e3b2c1d4c7a",
         itemId: ITEM.id,
@@ -1510,6 +1539,7 @@ it.effect(
         answers: null,
         createdAt: ITEM.updatedAt,
       };
+
       live.scope.set({ messages: [message] });
       yield* nextPoll;
       yield* toldTimes(told, 2);
@@ -1714,6 +1744,7 @@ const HELD_ITEM: InboxItem = LIVE_ITEM;
 
 /** A second task of the account's, and an item on it changed a minute before the first. */
 const OTHER_TASK_ID = "3c4d5e6f-7a8b-4c9d-8e0f-1a2b3c4d5e6f";
+
 const OTHER_ITEM: InboxItem = {
   ...HELD_ITEM,
   id: "6a7b8c9d-0e1f-4a2b-8c3d-4e5f6a7b8c9d",
@@ -1779,11 +1810,14 @@ it.effect(
         byPlan({ [TASK_ID]: [HELD_ITEM], [OTHER_TASK_ID]: [OTHER_ITEM] }),
         byPlan({ [TASK_ID]: [moved], [OTHER_TASK_ID]: [OTHER_ITEM] }),
       ]);
+
       const otherPlanOf = (told: WireValue | undefined) => {
         const rows = isRecord(told) ? told.rows : undefined;
         const plans = isRecord(rows) ? rows[INBOX_SCOPE_KIND.PLAN] : undefined;
+
         return isRecord(plans) ? plans[OTHER_TASK_ID] : undefined;
       };
+
       const [first, second] = accountItems();
       assert.equal(otherPlanOf(second), otherPlanOf(first));
     }),
@@ -1876,9 +1910,11 @@ it.effect(
   () =>
     Effect.gen(function* () {
       let signedIn: string | undefined = "user-dana";
+
       const { open, asked, sealItems, live, accountItems, reset } = yield* subject({
         accountId: () => signedIn,
       });
+
       sealItems(LIVE_ANSWERED);
       yield* open;
       yield* settled;
@@ -1930,14 +1966,18 @@ function bothHold(
 ): readonly [boolean, boolean] {
   const firstOf = (items: WireValue | undefined) => {
     const first = Array.isArray(items) ? items[0] : undefined;
+
     // SAFETY: a telling's items are inbox items, as the window is told them.
     return first === undefined ? false : holds(first as InboxItem);
   };
+
   const plan = heldOf(harness.told, PLAN_SCOPE);
   // SAFETY: the account's items are told as wire values.
   const account = harness.accountItems().at(-1) as WireValue | undefined;
+
   const plans =
     isRecord(account) && isRecord(account.rows) ? account.rows[INBOX_SCOPE_KIND.PLAN] : undefined;
+
   return [
     firstOf(isRecord(plan) ? plan.rows : undefined),
     firstOf(isRecord(plans) ? plans[TASK_ID] : undefined),
@@ -1971,10 +2011,12 @@ it.effect(
       const unread = (item: InboxItem) => item.unread === true;
 
       commitIn("9200");
+
       const marked = yield* acts.AGENTS_INBOX_READ_STATE({
         itemId: ITEM.id,
         unread: true,
       });
+
       yield* settled;
       assert.deepEqual(marked, { id: ITEM.id, unread: true, txid: "9200" });
       assert.deepEqual(bothHold(harness, unread), [true, true]);
@@ -1994,6 +2036,7 @@ it.effect(
       const overtaken = { ...LIVE_ITEM, revision: 3, title: "Push to main instead?" };
       changeFirst(overtaken);
       commitIn(undefined);
+
       const closing = yield* Effect.forkChild(
         acts.AGENTS_INBOX_CLOSE({
           itemId: ITEM.id,
@@ -2001,6 +2044,7 @@ it.effect(
           clientKey: "close-1",
         }),
       );
+
       yield* settled;
       assert.deepEqual(yield* Fiber.join(closing), { item: overtaken, taken: false });
       assert.deepEqual(
@@ -2023,10 +2067,12 @@ it.effect(
       yield* toldTimes(told, 1);
 
       answerMarks(false);
+
       const marked = yield* acts.AGENTS_INBOX_READ_STATE({
         itemId: ITEM.id,
         unread: false,
       });
+
       yield* settled;
       const drawn = planInboxOf(told().at(-1)).get(ITEM.id)?.unread;
 
@@ -2046,6 +2092,7 @@ function planInboxOf(told: WireValue | undefined): ReadonlyMap<string, InboxItem
   const plans = isRecord(told) ? told[PLAN_SCOPE.kind] : undefined;
   const read = isRecord(plans) ? plans[PLAN_SCOPE.id] : undefined;
   const rows = isRecord(read) ? read.rows : undefined;
+
   // SAFETY: a telling's rows are inbox items, as the window is told them.
   return new Map(((Array.isArray(rows) ? rows : []) as InboxItem[]).map((item) => [item.id, item]));
 }
@@ -2058,6 +2105,7 @@ it.effect(
       sealScope(LIVE_ANSWERED);
       yield* acts.AGENTS_INBOX_FOLLOW.hold(PLAN_SCOPE);
       yield* settled;
+
       const unread = Array.from({ length: 10 }, (_, n) => ({
         ...ITEM_ROW,
         id: `${ITEM.id.slice(0, -2)}${String(n).padStart(2, "0")}`,
@@ -2065,6 +2113,7 @@ it.effect(
         unread: true,
         updatedAt: ITEM.updatedAt - n * 1_000,
       }));
+
       const arrived = { ...ITEM_ROW, id: OTHER_ITEM.id, key: OTHER_ITEM.key };
       // The read is woken by a write once, so it hands a wait for the marks.
       live.scope.set({ items: unread, messages: [], files: [] }, ["9100"]);
@@ -2072,6 +2121,7 @@ it.effect(
       const toldBefore = told().length;
 
       commitIn("9200");
+
       const marking = yield* Effect.forkChild(
         Effect.forEach(
           unread,
@@ -2079,6 +2129,7 @@ it.effect(
           { concurrency: "unbounded" },
         ),
       );
+
       yield* settled;
       assert.notEqual(
         marking.pollUnsafe(),
@@ -2098,9 +2149,11 @@ it.effect(
 
       assert.equal(meanwhile.has(arrived.id), true, "the arrival draws while the marks stand");
       assert.equal(planInboxOf(told().at(-1)).has(arrived.id), true);
+
       const stillUnread = told()
         .slice(toldBefore)
         .map((each) => unread.filter((item) => planInboxOf(each).get(item.id)?.unread).length);
+
       assert.deepEqual(
         stillUnread,
         [...stillUnread].sort((one, other) => other - one),
@@ -2186,6 +2239,7 @@ it.effect(
       yield* settled;
       const askId = "6f1c2a4e-1b9d-4c7e-9a52-3d8e0f4b7c11";
       const postId = "8d3e5f7a-2c4b-4d6e-8f1a-3b5c7d9e1f2a";
+
       const row = (id: string, at: number) => ({
         id,
         itemId: ITEM.id,
@@ -2197,6 +2251,7 @@ it.effect(
         answers: null,
         createdAt: at,
       });
+
       const ask = {
         ...row(askId, ITEM.postedAt),
         ask: {
@@ -2205,6 +2260,7 @@ it.effect(
           status: INBOX_ASK_STATUS.OPEN,
         },
       };
+
       const answers = { ask: askId, reply: INBOX_REPLY.CHOSE, choices: ["Push"] };
       live.scope.set(
         { items: [{ ...ITEM_ROW, openAskMessageId: askId }], messages: [ask], files: [] },
@@ -2215,6 +2271,7 @@ it.effect(
       commitIn("9400");
       const answering = yield* Deferred.make<void>();
       holdMessages(Deferred.await(answering));
+
       const sending = yield* Effect.forkChild(
         acts.AGENTS_INBOX_MESSAGE({
           itemId: ITEM.id,
@@ -2223,6 +2280,7 @@ it.effect(
           answers,
         }),
       );
+
       yield* settled;
 
       // The service took the answer and the agent posted after it, opening the item again, before the answer came back.
@@ -2269,15 +2327,18 @@ it.effect(
       const update = { ...WAITING, asking: false };
       live.account.set({ ...parts, items: [update], plans: [plan] }, ["9100"]);
       yield* toldTimes(accountInboxes, 1);
+
       /** What waits, and each task's count, as the account inbox was last told. */
       const waiting = () => {
         const told = accountInboxes().at(-1);
         assert.ok(isRecord(told) && Array.isArray(told.items) && Array.isArray(told.plans));
+
         return {
           items: told.items.length,
           toDo: told.plans.map((each) => (isRecord(each) ? each.toDo : undefined)),
         };
       };
+
       assert.deepEqual(waiting(), { items: 1, toDo: [1] });
 
       commitIn("9300");
@@ -2306,6 +2367,7 @@ it.effect(
     Effect.gen(function* () {
       const pool = yield* entityPool({ mintKey: () => "write-key", replayRefused: Effect.void });
       const { asked, queueable } = yield* subject({ pool });
+
       // Note that the names are spelled here, not read from the composer, because they are what a disk written before this build holds.
       const waiting = [
         {
@@ -2358,11 +2420,13 @@ it.effect(
     Effect.gen(function* () {
       const drawn: (readonly AgentSummary[])[] = [];
       const pool = yield* entityPool();
+
       const list = yield* taskListCollections({
         pool,
         draw: ({ taskAgents }) => void drawn.push(taskAgents),
         txWait: () => undefined,
       });
+
       yield* list.answer({ plans: [], agents: [{ ...agentListRow(TASK_ID, NOW), id: AGENT_ID }] });
       const answered = yield* Deferred.make<void>();
       const { acts, holdChanges } = yield* subject({ pool });
@@ -2384,6 +2448,7 @@ it.effect(
           { concurrency: "unbounded" },
         ),
       );
+
       yield* settled;
       const pressed = standing();
       yield* Deferred.succeed(answered, undefined);
@@ -2412,6 +2477,7 @@ it.effect(
     Effect.gen(function* () {
       const carried = yield* Deferred.make<void>();
       const waited: (string | undefined)[] = [];
+
       const { acts, startCommits } = yield* subject({
         listed: (txid) =>
           Effect.andThen(
@@ -2419,11 +2485,13 @@ it.effect(
             Deferred.await(carried),
           ),
       });
+
       startCommits("9104");
 
       const starting = yield* Effect.forkChild(
         acts.AGENTS_START({ taskId: TASK_ID, idempotencyKey: "press-1" }),
       );
+
       yield* settled;
       assert.equal(starting.pollUnsafe(), undefined, "no answer while the list is behind");
 
@@ -2447,6 +2515,7 @@ it.effect(
       const starting = yield* Effect.forkChild(
         acts.AGENTS_START({ taskId: TASK_ID, idempotencyKey: "press-1" }),
       );
+
       yield* settled;
       const meanwhile = starting.pollUnsafe();
       const waiting = pool.queued().length;

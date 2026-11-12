@@ -18,6 +18,7 @@ import { keepRunnerGroup, keptRunnerGroups } from "../local-agent-state.js";
 import { hostRunnersLeftStopped } from "./host-runners-left.js";
 
 const AGENT_ID = "0b6f9a4e-1c1d-4d2e-9f3a-5b7c8d9e0f12";
+
 /** The process group the runner a daemon left running leads. */
 const GROUP = 48_213;
 
@@ -33,10 +34,14 @@ const signals = () => {
   let alive = true;
   vi.spyOn(process, "kill").mockImplementation((pid, signal) => {
     sent.push([pid, signal]);
+
     if (!alive) throw Object.assign(new Error("no such process"), { code: "ESRCH" });
+
     if (signal === "SIGKILL") alive = false;
+
     return true;
   });
+
   return sent;
 };
 
@@ -53,9 +58,11 @@ describe("hostRunnersLeftStopped", () => {
         yield* TestClock.adjust(Duration.minutes(10));
         yield* keepRunnerGroup(stateRoot, AGENT_ID, GROUP);
         const sent = signals();
+
         const stopping = yield* Effect.forkChild(
           hostRunnersLeftStopped(stateRoot, Duration.toMillis(Duration.minutes(1))),
         );
+
         yield* TestClock.adjust(Duration.seconds(3)).pipe(
           Effect.andThen(Effect.yieldNow.pipe(Effect.repeat({ times: 200 }))),
           Effect.repeat({ until: () => stopping.pollUnsafe() !== undefined, times: 50 }),

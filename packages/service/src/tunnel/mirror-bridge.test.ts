@@ -28,8 +28,10 @@ const sha256 = (text: string) => createHash("sha256").update(text).digest("hex")
 async function checkout(t: TestContext) {
   const upstream = await temporaryDirectory(t, "mirror-upstream-");
   const root = await temporaryDirectory(t, "mirror-");
+
   const git = (cwd: string, ...args: string[]) =>
     execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd });
+
   git(upstream, "init", "--quiet", "--initial-branch=main");
   fs.writeFileSync(path.join(upstream, ".gitignore"), "*.log\n");
   fs.writeFileSync(path.join(upstream, "a.txt"), "tracked");
@@ -39,6 +41,7 @@ async function checkout(t: TestContext) {
   fs.writeFileSync(path.join(root, "b.sh"), "#!/bin/sh\n", { mode: 0o755 });
   fs.writeFileSync(path.join(root, "out.log"), "ignored");
   fs.symlinkSync("a.txt", path.join(root, "link"));
+
   return { root, head: git(root, "rev-parse", "HEAD").toString().trim() };
 }
 
@@ -47,20 +50,26 @@ function bridge(t: TestContext, root: string) {
   const child = spawn(process.execPath, ["--no-warnings", "-e", MIRROR_BRIDGE_SOURCE, root], {
     stdio: ["pipe", "pipe", "inherit"],
   });
+
   t.onTestFinished(() => void child.kill());
   const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
   const frame = async () => JSON.parse(String((await lines.next()).value));
+
   const next = async () => {
     const data = await frame();
     assert.equal(data.type, "data");
     assert.equal(data.channel, CHANNEL);
+
     return readMessage(JSON.parse(Buffer.from(data.data, "base64").toString("utf8")));
   };
+
   const send = (frame: object) => child.stdin.write(`${JSON.stringify(frame)}\r\n`);
+
   const ask = (paths: string[]) => {
     const request = JSON.stringify({ type: "request", paths });
     send({ type: "data", channel: CHANNEL, data: Buffer.from(request).toString("base64") });
   };
+
   return { frame, next, send, ask };
 }
 

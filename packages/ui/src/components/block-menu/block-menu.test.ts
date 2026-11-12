@@ -89,6 +89,7 @@ function mount(groups: readonly BlockMenuGroup[], active = 0): { menu: HTMLEleme
       }),
     ),
   );
+
   return { menu: container, told };
 }
 

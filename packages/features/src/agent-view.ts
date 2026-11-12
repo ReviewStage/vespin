@@ -354,6 +354,7 @@ function factsUnheard<
   >,
 ) {
   const [output, failed] = view.members;
+
   return EffectSchema.Union([
     output,
     EffectSchema.Struct({ failure: failed.fields.failure, cause: failed.fields.cause }),

@@ -59,8 +59,10 @@ function stepOf(item: TranscriptItem): string | undefined {
       return plainWords(item.words);
     case TRANSCRIPT_ITEM.CALL: {
       const { verb, subject } = item.line;
+
       return subject === undefined || subject === "" ? verb : `${verb} ${subject}`;
     }
+
     case TRANSCRIPT_ITEM.FOLD:
       return item.summary;
     default:
@@ -78,7 +80,9 @@ export function latestStep(items: readonly TranscriptItem[]): string | undefined
   for (let at = items.length - 1; at >= 0; at -= 1) {
     const item = items[at];
     const step = item === undefined ? undefined : stepOf(item);
+
     if (step !== undefined && step !== "") return step;
   }
+
   return undefined;
 }

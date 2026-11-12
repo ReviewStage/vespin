@@ -31,7 +31,9 @@ function parsedFeed(markdown: string): Document {
     changelogFeed(parseReleases(markdown)),
     "application/xml",
   );
+
   assert.equal(feed.querySelector("parsererror"), null, "the feed is well-formed XML");
+
   return feed;
 }
 

@@ -28,7 +28,9 @@ export const NATIVE_CALL_KEY_WINDOW_MS = 10 * 60_000;
 /** A value with every record's keys in order, so a retry that spells the same input in another order digests the same. */
 function ordered(value: UnparsedWireValue): unknown {
   if (Array.isArray(value)) return value.map(ordered);
+
   if (!isRecord(value)) return value;
+
   return Object.fromEntries(
     Object.keys(value)
       .sort()
@@ -50,6 +52,7 @@ export function workspaceMcpCallKey(
   input: UnparsedWireValue,
 ): Effect.Effect<string, StoreFailure, DatabaseServices> {
   const { userId, conversationId } = admitted.target;
+
   return nativeCallKeyOf(
     userId,
     conversationId,

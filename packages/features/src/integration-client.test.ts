@@ -46,14 +46,17 @@ it.effect(
         client.connect(INTEGRATION_PROVIDER.NOTION, { add: true }),
         api.layer,
       );
+
       assert.deepEqual(added, {
         url: "https://vercel.com/connect/authorize/r",
         connection: "notion-3",
       });
+
       const renamed = yield* Effect.provide(
         client.rename(INTEGRATION_PROVIDER.NOTION, "notion-2", "Home"),
         api.layer,
       );
+
       assert.ok("account" in renamed);
       assert.equal(renamed.account.label, "Home");
       assert.deepEqual(

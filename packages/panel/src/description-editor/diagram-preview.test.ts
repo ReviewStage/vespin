@@ -34,6 +34,7 @@ afterEach(() => {
 function mounted(markdown: string) {
   const host = document.createElement("div");
   document.body.append(host);
+
   const handle = mountDescriptionEditor(host, {
     markdown,
     placement: undefined,
@@ -45,12 +46,15 @@ function mounted(markdown: string) {
     onLeaveUp: () => undefined,
     drawDiagram: (element, diagram) => {
       element.textContent = `${diagram.previous ?? "nothing"} then ${diagram.code}`;
+
       return () => undefined;
     },
   });
+
   editors.push(handle);
   const editor = host.querySelector<TiptapEditorHTMLElement>(".description-document-text")?.editor;
   assert.ok(editor, "the editor is running");
+
   return { host, handle, editor };
 }
 

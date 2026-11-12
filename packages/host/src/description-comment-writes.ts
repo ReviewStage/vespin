@@ -93,11 +93,14 @@ function placed(start: DescriptionCommentStart) {
       section: sectionAt(start.text, start.anchor.from),
     };
   }
+
   const { element } = start;
   const page = { id: start.page.id, version: start.page.version };
+
   if (element === undefined) {
     return { scope: DESCRIPTION_COMMENT_SCOPE.PAGE, quote: "", page, section: "" };
   }
+
   return {
     scope:
       element.words === true ? DESCRIPTION_COMMENT_SCOPE.WORDS : DESCRIPTION_COMMENT_SCOPE.ELEMENT,
@@ -157,6 +160,7 @@ function keptFiles(
   if (keep === undefined || entry.files === undefined) return entry;
   const { files, ...rest } = entry;
   const kept = keep.flatMap((id) => files.filter((file) => file.attachmentId === id));
+
   return kept.length === 0 ? rest : { ...rest, files: kept };
 }
 
@@ -216,8 +220,10 @@ function writtenOf(
   if ("deleted" in answer) {
     return { answer, txid: answer.txid, taken: () => ROW_GONE };
   }
+
   if (!("thread" in answer)) return { refused: answer };
   const { thread } = answer;
+
   return {
     answer,
     txid: answer.txid,
@@ -228,6 +234,7 @@ function writtenOf(
 /** The comment writes a window makes, each declared on the thread it changes. */
 export function descriptionCommentWrites(dependencies: DescriptionCommentWritesDependencies) {
   const { member, now } = dependencies;
+
   const started: WriteDeclaration<
     CommentThreadRow,
     FieldChange<CommentThreadRow>,
@@ -241,6 +248,7 @@ export function descriptionCommentWrites(dependencies: DescriptionCommentWritesD
     send: ({ planId, start }) =>
       Effect.map(dependencies.start(planId, start), (answer) => writtenOf(planId, answer, true)),
   };
+
   const acted: WriteDeclaration<
     CommentThreadRow,
     FieldChange<CommentThreadRow>,
@@ -255,5 +263,6 @@ export function descriptionCommentWrites(dependencies: DescriptionCommentWritesD
         writtenOf(planId, answer, false),
       ),
   };
+
   return { started, acted };
 }

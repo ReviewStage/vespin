@@ -47,6 +47,7 @@ const workspaceAgentsToStop = Effect.fn("web/workspaceAgentsToStop")(function* (
   workspaceId: string,
 ) {
   const agents: Agent[] = [];
+
   for (;;) {
     const page = yield* hostedStoreOrUnavailable(
       listAgentsOfDeletedWorkspace(workspaceId, {
@@ -54,7 +55,9 @@ const workspaceAgentsToStop = Effect.fn("web/workspaceAgentsToStop")(function* (
         limit: DELETE_AGENTS_PAGE,
       }),
     );
+
     agents.push(...page);
+
     if (page.length < DELETE_AGENTS_PAGE) return agents;
   }
 });
@@ -70,15 +73,19 @@ export const workspaceDelete = Effect.fn("web/workspaceDelete")(function* (
   ifAlone: boolean,
 ) {
   const workspace = yield* ownedWorkspace(userId, workspaceId);
+
   if (workspace.personal === true) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   const agents = yield* workspaceAgentsToStop(workspace.id);
+
   // Note that the members are read here rather than trusted from the asking window, whose list may be stale.
   if (ifAlone) {
     const members = yield* hostedStoreOrUnavailable(listMembers(workspace.id));
+
     if (agents.length > 0 || members.some((member) => member.userId !== userId)) {
       return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
     }
   }
+
   yield* everyTurnStoppedByStarter(STOPPER, agents);
   const pending = yield* hostedStoreOrUnavailable(beforeWorkspaceDeletion(workspace.id));
   yield* hostedStoreOrUnavailable(deleteWorkspaceRows(workspace.id));
@@ -88,5 +95,6 @@ export const workspaceDelete = Effect.fn("web/workspaceDelete")(function* (
     ),
   );
   yield* memberChanged(userId, workspace.id, SERVER_WORKSPACE_MEMBER_ACTION.DELETE);
+
   return { workspaceId: workspace.id };
 });

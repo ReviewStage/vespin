@@ -33,10 +33,13 @@ function headingWords(heading: Element): string {
           : NodeFilter.FILTER_ACCEPT,
     },
   );
+
   let words = "";
+
   for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
     if (node.nodeType === Node.TEXT_NODE) words += node.textContent ?? "";
   }
+
   return words.replace(/\s+/gu, " ").trim();
 }
 
@@ -62,19 +65,26 @@ export function useHeadingAway(
   useEffect(() => {
     const scroller = root.current;
     const heading = header.current?.querySelector("h1");
+
     if (scroller === null || heading === null || heading === undefined) return undefined;
+
     if (typeof IntersectionObserver === "undefined") return undefined;
+
     const seen = new IntersectionObserver(
       (entries) => {
         const entry = entries.at(-1);
+
         if (entry === undefined) return;
         const top = entry.rootBounds?.top ?? 0;
         setAway(!entry.isIntersecting && entry.boundingClientRect.bottom <= top);
       },
       { root: scroller },
     );
+
     seen.observe(heading);
+
     return () => seen.disconnect();
   }, [root, header]);
+
   return { name, away };
 }

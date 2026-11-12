@@ -37,6 +37,7 @@ export function dismissThreadNotifications(itemId: string): Promise<void> {
         presented
           .filter((notification) => {
             const push = inboxPushOf(notification.request.content.data);
+
             return push !== undefined && "itemId" in push && push.itemId === itemId;
           })
           .map((notification) => dismissNotificationAsync(notification.request.identifier)),
@@ -49,6 +50,7 @@ export function dismissThreadNotifications(itemId: string): Promise<void> {
 function settledItemOf(payload: NotificationTaskPayload): string | undefined {
   if ("actionIdentifier" in payload) return undefined;
   const push = inboxPushOf(payload.data);
+
   return push?.kind === PUSH_KIND.SETTLED ? push.itemId : undefined;
 }
 
@@ -56,25 +58,32 @@ function settledItemOf(payload: NotificationTaskPayload): string | undefined {
 function badgeOf(payload: NotificationTaskPayload): number | undefined {
   if ("actionIdentifier" in payload) return undefined;
   const badge = payload.aps?.badge;
+
   return typeof badge === "number" ? badge : undefined;
 }
 
 defineTask<NotificationTaskPayload>(SETTLED_PUSH_TASK, ({ data, error }) => {
   if (error !== null && error !== undefined) {
     console.error("The background push could not be read.", error);
+
     return Promise.resolve(BackgroundNotificationTaskResult.Failed);
   }
+
   const itemId = settledItemOf(data);
+
   if (itemId === undefined) return Promise.resolve(BackgroundNotificationTaskResult.NoData);
+
   try {
     settleInboxWidget(itemId, badgeOf(data));
   } catch (failure) {
     console.error("The Inbox widget was not moved by the settled thread.", failure);
   }
+
   return dismissThreadNotifications(itemId).then(
     () => BackgroundNotificationTaskResult.NewData,
     (failure: unknown) => {
       console.error("The settled thread's notification was not removed.", failure);
+
       return BackgroundNotificationTaskResult.Failed;
     },
   );

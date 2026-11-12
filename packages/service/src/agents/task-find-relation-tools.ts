@@ -107,15 +107,20 @@ export function runFindTask(
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const asked = readFindAsked(input);
   const ref = Result.isSuccess(asked) ? cliTaskRefOf(asked.success.task) : undefined;
+
   if (ref === undefined || !("number" in ref)) {
     return Effect.succeed(agentToolRejected(FIND_TASK_REFUSAL.UNREADABLE));
   }
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(call.caller);
+
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
       const found = yield* taskIdOfNumber(callerUserId(call.caller), workspace.value, ref.number);
+
       if (Option.isNone(found)) return agentToolRejected(FIND_TASK_REFUSAL.NO_TASK);
+
       return yield* runReadTask(call, { taskId: found.value });
     }),
   );
@@ -133,15 +138,19 @@ export function runChangeTaskRelation(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const asked = readRelationAsked(input);
+
   if (Result.isFailure(asked) || asked.success.from === asked.success.to) {
     return Effect.succeed(agentToolRejected(CHANGE_TASK_RELATION_REFUSAL.UNREADABLE));
   }
+
   const { taskId, otherTaskId, from, to } = asked.success;
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const userId = callerUserId(call.caller);
       const workspace = yield* callerWorkspace(call.caller);
       const read = yield* readTask(userId, taskId);
+
       if (
         Option.isNone(workspace) ||
         Option.isNone(read) ||
@@ -149,6 +158,7 @@ export function runChangeTaskRelation(
       ) {
         return agentToolRejected(UPDATE_TASK_REFUSAL.NO_TASK);
       }
+
       const moved = yield* moveTaskRelation(userId, taskId, { taskId: otherTaskId, from, to }).pipe(
         Effect.map((written) =>
           Option.match(written, {
@@ -170,10 +180,13 @@ export function runChangeTaskRelation(
             Effect.succeed(Result.fail(CHANGE_TASK_RELATION_REFUSAL.PARENT_REPOSITORY)),
         }),
       );
+
       if (Result.isFailure(moved)) return agentToolRejected(moved.failure);
       // The task is read again, since a parent set or cleared changed its own row.
       const after = yield* readTask(userId, taskId);
+
       if (Option.isNone(after)) return agentToolRejected(UPDATE_TASK_REFUSAL.NO_TASK);
+
       return yield* taskUpdateAnswer(userId, after.value.task, {
         already: !moved.success,
         section: undefined,

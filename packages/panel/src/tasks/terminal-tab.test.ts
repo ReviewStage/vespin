@@ -99,6 +99,7 @@ function keep(shells: readonly HeldShell[], account?: string): void {
 function kept(account?: string): readonly HeldShell[] {
   const all = keptValue();
   const lists = all.account === account ? all : all.accounts?.[account ?? ""];
+
   return lists?.cloud[AGENT.id] ?? [];
 }
 
@@ -145,21 +146,25 @@ const roots: Root[] = [];
 
 // The terminal bundle landed before any tab is drawn, as it is once a terminal has been shown in this window.
 let FITTED: SideBundles;
+
 beforeAll(async () => {
   FITTED = await Effect.runPromise(fittedTerminalBundles());
 });
+
 let main: Main;
 
 beforeEach(() => {
   keep([{ shell: TAB.shell, title: TAB.title }]);
   const sent: SentAct[] = [];
   let made = 0;
+
   const answer = (request: TerminalAct): PortActResult<TerminalActKind> => {
     switch (request.kind) {
       case ACT_KIND.TERMINAL_CREATE:
         if (main.createRefused !== undefined) return { failure: main.createRefused };
         // Note that each shell made has an id of its own, as the service mints one per shell, the first of them MADE.
         made += 1;
+
         return { terminal: shell(made === 1 ? MADE : crypto.randomUUID()) };
       case ACT_KIND.TERMINAL_KILL:
         return { sandbox: SANDBOX_STATE.RUNNING, terminals: [] };
@@ -167,15 +172,18 @@ beforeEach(() => {
         return { sandbox: SANDBOX_STATE.RUNNING, terminals: main.listed };
       case ACT_KIND.TERMINAL_RESUME:
         if (main.resumeRefused !== undefined) return { failure: main.resumeRefused };
+
         // A resumed sandbox runs, so a shell is made in it.
         if (!main.staysStopped && main.createRefused === TERMINAL_REFUSAL.SANDBOX_STOPPED) {
           main.createRefused = undefined;
         }
+
         return { sandbox: SANDBOX_STATE.RUNNING };
       default:
         return undefined;
     }
   };
+
   main = {
     sent,
     down: new Set(),
@@ -199,6 +207,7 @@ beforeEach(() => {
           }),
         );
       });
+
       return {
         posted,
         closed: () => close.mock.calls.length > 0,
@@ -208,16 +217,20 @@ beforeEach(() => {
       };
     },
   };
+
   /** A terminal act answered as main's procedure would: refused, or answered now. */
   const respond = (request: TerminalAct): Promise<PortActResult<TerminalActKind>> => {
     sent.push(request);
+
     if (main.down.has(request.kind)) {
       return Promise.reject(
         new ORPCError(ACT_ERROR.REFUSED, { message: "Could not reach this agent's sandbox." }),
       );
     }
+
     return Promise.resolve(answer(request));
   };
+
   fakeAppBridge({});
   // SAFETY: each procedure answers its own kind, whose answer `answer` gives by the same kind; the casts are the one dispatch on it.
   fakeActPort({
@@ -262,6 +275,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.useRealTimers();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
   document.head.innerHTML = "";
@@ -290,16 +304,22 @@ async function mount(shown = true, still = true, account?: string) {
   const terminals = windowTerminals();
   let closed = 0;
   let end: ((tab: TerminalStripTab) => void) | undefined;
+
   const Ender = () => {
     end = useEndTerminalTab();
+
     return null;
   };
+
   // The account signed in, as the window's root hands it on.
   const Owner = ({ of }: { of: string | undefined }) => {
     useTerminalsOwner(of);
+
     return null;
   };
+
   let signedIn = account;
+
   const render = (on: boolean, drawn = true) => {
     const tab = createElement(TerminalTab, {
       tab: TAB,
@@ -310,6 +330,7 @@ async function mount(shown = true, still = true, account?: string) {
         closed += 1;
       },
     });
+
     act(() =>
       root.render(
         withQueryClient(
@@ -334,13 +355,17 @@ async function mount(shown = true, still = true, account?: string) {
       ),
     );
   };
+
   render(shown);
   await settle();
+
   const keyboard = () => {
     const field = container.querySelector("textarea");
     assert.ok(field, "the screen takes the keyboard");
+
     return field;
   };
+
   return {
     container,
     terminals,
@@ -373,6 +398,7 @@ async function mount(shown = true, still = true, account?: string) {
       const field = keyboard();
       const down = new KeyboardEvent("keydown", { key, keyCode, bubbles: true, cancelable: true });
       field.dispatchEvent(down);
+
       if (!down.defaultPrevented) {
         const charCode = key.length === 1 ? key.charCodeAt(0) : keyCode;
         field.dispatchEvent(
@@ -385,6 +411,7 @@ async function mount(shown = true, still = true, account?: string) {
           }),
         );
       }
+
       await settle();
     },
   };
@@ -394,6 +421,7 @@ async function mount(shown = true, still = true, account?: string) {
 function lastPayload(kind: TerminalActKind) {
   const request = main.sent.findLast((each) => each.kind === kind);
   assert.ok(request && "payload" in request, `the tab sent ${kind}`);
+
   return request.payload;
 }
 
@@ -449,12 +477,14 @@ test("another account signing in detaches the tab's shell and ends none: its por
 test("what the window keeps reads, through the shape the build before this one reads, as the signed-in account's terminals", async () => {
   keep([{ shell: TAB.shell, title: TAB.title }], "ada");
   await mount(true, true, "ada");
+
   // The shape a build that held one list for every account reads, as that build declares it.
   const shell = Schema.Struct({
     shell: Schema.String,
     title: Schema.String,
     terminal: Schema.optional(Schema.String),
   });
+
   const byAgent = Schema.Record(Schema.String, Schema.Array(shell));
   const before = Schema.fromJsonString(Schema.Struct({ cloud: byAgent, local: byAgent }));
 
@@ -524,9 +554,11 @@ test("while another account is signed in, nothing the first's shell says reaches
 
   // Note that the tab stays drawn, as a strip that still held it would draw it.
   await tab.signIn("grace", true);
+
   const ada = tab.terminals.sessions.session("ada", TERMINAL_KIND.CLOUD, AGENT.id, TAB.shell, () =>
     assert.fail("the first account's session stands"),
   );
+
   const detached = ada.state;
   await tab.type("a", 65);
   port.say({ type: "state", state: "exited", code: 0 });

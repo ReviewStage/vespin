@@ -242,9 +242,12 @@ export const deletedIfStill = (read: ListedSandbox) =>
   Effect.gen(function* () {
     const sandbox = yield* Sandbox;
     const now = yield* sandbox.get(read.name);
+
     if (now === undefined) return true;
+
     if (!sameSandbox(now, read)) return false;
     yield* sandbox.delete(read.name);
+
     return true;
   });
 
@@ -272,12 +275,14 @@ export const touchedWhileUsed = (
 ): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function* () {
     const touchedAt = yield* Ref.make(Number.NEGATIVE_INFINITY);
+
     const touchIfUsed = Effect.gen(function* () {
       if ((yield* lastUsedAt) <= (yield* Ref.get(touchedAt))) return;
       const at = yield* Clock.currentTimeMillis;
       yield* touch;
       yield* Ref.set(touchedAt, at);
     });
+
     yield* Effect.forkScoped(
       Effect.repeat(loggedIfUnconfirmed(touchIfUsed), {
         schedule: Schedule.spaced(SANDBOX_TOUCH_EVERY),
@@ -321,6 +326,7 @@ export const filledDrive = <E, R>(
 ) =>
   Effect.gen(function* () {
     const sandbox = yield* Sandbox;
+
     const created = yield* sandbox
       .create({
         name: ask.name,
@@ -335,6 +341,7 @@ export const filledDrive = <E, R>(
         Effect.map(Option.some),
         Effect.catchTag("SandboxNameTaken", () => Effect.succeed(Option.none<OpenedSandbox>())),
       );
+
     if (Option.isNone(created)) return false;
     const running = { name: ask.name, running: created.value.running };
     yield* Effect.gen(function* () {
@@ -350,6 +357,7 @@ export const filledDrive = <E, R>(
     );
     yield* sandbox.stop(running);
     yield* sandbox.delete(ask.name);
+
     return true;
   }).pipe(Effect.withSpan("web/fillDrive"));
 
@@ -365,9 +373,11 @@ export const deletedFilledDrive = (fill: Pick<DriveFill, "name" | "drive">) =>
   Effect.gen(function* () {
     const sandbox = yield* Sandbox;
     const found = yield* sandbox.get(fill.name);
+
     if (found?.running !== undefined && UP_STATUSES.has(found.status)) {
       yield* sandbox.stop({ name: fill.name, running: found.running });
     }
+
     yield* sandbox.delete(fill.name);
     yield* sandbox.deleteDrive(fill.drive);
   }).pipe(Effect.withSpan("web/deleteFilledDrive"));
@@ -382,6 +392,7 @@ export const resumedRunning = (name: string) =>
   Effect.gen(function* () {
     const sandbox = yield* Sandbox;
     const resumed = yield* sandbox.resume(name);
+
     const running = yield* sandbox.get(name).pipe(
       Effect.map((found) => (found?.status === SANDBOX_STATUS.RUNNING ? found.running : undefined)),
       Effect.repeat({
@@ -389,5 +400,6 @@ export const resumedRunning = (name: string) =>
         until: (found) => found !== undefined,
       }),
     );
+
     return { name: resumed.name, running: running ?? resumed.running } satisfies SandboxRunning;
   });

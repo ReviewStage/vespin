@@ -42,5 +42,6 @@ export function actProcedure(sentence: string) {
  */
 export function exactInput<Type, Encoded>(schema: EffectSchema.Codec<Type, Encoded>) {
   const copy = EffectSchema.make<EffectSchema.Codec<Type, Encoded>>(schema.ast);
+
   return EffectSchema.toStandardSchemaV1(copy, { parseOptions: { onExcessProperty: "error" } });
 }

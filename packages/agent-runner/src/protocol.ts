@@ -148,7 +148,9 @@ export const PERMISSION_MODE = {
   ASK: "ask",
   AUTO: "auto",
 } as const;
+
 export type PermissionMode = (typeof PERMISSION_MODE)[keyof typeof PERMISSION_MODE];
+
 const PermissionModeSchema = Schema.Literals(Object.values(PERMISSION_MODE));
 
 /**
@@ -190,6 +192,7 @@ export const RUNNER_HARNESS = {
   CLAUDE_CODE: "claude_code",
   CODEX: "codex",
 } as const;
+
 export type RunnerHarness = (typeof RUNNER_HARNESS)[keyof typeof RUNNER_HARNESS];
 
 /**
@@ -209,6 +212,7 @@ export const LAUNCH_PATH = {
   FRESH: "fresh",
   WARM: "warm",
 } as const;
+
 export type LaunchPath = (typeof LAUNCH_PATH)[keyof typeof LAUNCH_PATH];
 
 /** The reasoning efforts the pinned SDK takes, as its `EffortLevel` spells them. */
@@ -219,7 +223,9 @@ export const EFFORT = {
   XHIGH: "xhigh",
   MAX: "max",
 } as const;
+
 export type Effort = (typeof EFFORT)[keyof typeof EFFORT];
+
 const EffortSchema = Schema.Literals(Object.values(EFFORT));
 
 /**
@@ -234,7 +240,9 @@ export const CODEX_EFFORT = {
   HIGH: "high",
   XHIGH: "xhigh",
 } as const;
+
 export type CodexEffort = (typeof CODEX_EFFORT)[keyof typeof CODEX_EFFORT];
+
 const CodexEffortSchema = Schema.Literals(Object.values(CODEX_EFFORT));
 
 /** The line types a stdin line after the config may carry. */
@@ -260,7 +268,9 @@ export const APPROVAL_DECISION = {
   ALLOW_FOR_AGENT: "allow_for_agent",
   DENY: "deny",
 } as const;
+
 export type ApprovalDecision = (typeof APPROVAL_DECISION)[keyof typeof APPROVAL_DECISION];
+
 const ApprovalDecisionSchema = Schema.Literals(Object.values(APPROVAL_DECISION));
 
 /** What settled a tool call's ask, as APPROVAL_RESOLVED names it. */
@@ -274,7 +284,9 @@ export const APPROVAL_BY = {
   /** The launch ended while it waited: denied. */
   ENDED: "ended",
 } as const;
+
 export type ApprovalBy = (typeof APPROVAL_BY)[keyof typeof APPROVAL_BY];
+
 const ApprovalBySchema = Schema.Literals(Object.values(APPROVAL_BY));
 
 /**
@@ -299,6 +311,7 @@ export const RunnerTokenAnswerSchema = Schema.Struct({
   accessToken: Schema.String,
   chatgptAccountId: Schema.optionalKey(Schema.String),
 });
+
 export type RunnerTokenAnswer = typeof RunnerTokenAnswerSchema.Type;
 
 /**
@@ -326,6 +339,7 @@ const LinePlaceSchema = Schema.Number.check(Schema.isInt(), Schema.isGreaterThan
 export const RunnerLinesAnswerSchema = Schema.Struct({
   lines: Schema.Array(Schema.Struct({ seq: LinePlaceSchema, text: Schema.String })),
 });
+
 export type RunnerLinesAnswer = typeof RunnerLinesAnswerSchema.Type;
 
 /**
@@ -363,6 +377,7 @@ export function rolloutSubpathContained(subpath: string): boolean {
   if (!subpath.endsWith(".jsonl") || subpath.includes("\\") || subpath.includes("\0")) {
     return false;
   }
+
   return subpath
     .split("/")
     .every((segment) => segment !== "" && segment !== "." && segment !== "..");
@@ -382,12 +397,15 @@ const CLAUDE_PROJECT_KEY_CHARS = 200;
 export function claudeProjectKey(checkoutPath: string): string {
   const path = checkoutPath.normalize("NFC");
   const key = path.replace(/[^a-zA-Z0-9]/g, "-");
+
   if (key.length <= CLAUDE_PROJECT_KEY_CHARS) return key;
   let hash = 0;
+
   for (let index = 0; index < path.length; index += 1) {
     hash = (hash << 5) - hash + path.charCodeAt(index);
     hash |= 0;
   }
+
   return `${key.slice(0, CLAUDE_PROJECT_KEY_CHARS)}-${Math.abs(hash).toString(36)}`;
 }
 
@@ -433,12 +451,14 @@ export const RunnerTranscriptCallSchema = Schema.Union([
     key: Schema.Struct({ projectKey: Schema.String, sessionId: Schema.String }),
   }),
 ]);
+
 export type RunnerTranscriptCall = typeof RunnerTranscriptCallSchema.Type;
 
 /** What a load is answered: the whole transcript, none where it was never written. */
 export const RunnerTranscriptLoadSchema = Schema.Struct({
   entries: Schema.NullOr(Schema.Array(TranscriptEntrySchema)),
 });
+
 export type RunnerTranscriptLoad = typeof RunnerTranscriptLoadSchema.Type;
 
 /** What a page's load is answered: its entries in order, and the cursor the next is read after, none past the last. */
@@ -446,18 +466,21 @@ export const RunnerTranscriptPageSchema = Schema.Struct({
   entries: Schema.Array(TranscriptEntrySchema),
   next: Schema.NullOr(TranscriptCursorSchema),
 });
+
 export type RunnerTranscriptPage = typeof RunnerTranscriptPageSchema.Type;
 
 /** What a listing of a project's sessions is answered: each with its last append, in epoch milliseconds. */
 export const RunnerTranscriptSessionsSchema = Schema.Struct({
   sessions: Schema.Array(Schema.Struct({ sessionId: Schema.String, mtime: Schema.Number })),
 });
+
 export type RunnerTranscriptSessions = typeof RunnerTranscriptSessionsSchema.Type;
 
 /** What a listing of a session's subkeys is answered. */
 export const RunnerTranscriptSubkeysSchema = Schema.Struct({
   subkeys: Schema.Array(Schema.String),
 });
+
 export type RunnerTranscriptSubkeys = typeof RunnerTranscriptSubkeysSchema.Type;
 
 /** The image types the Messages API takes in a base64 image block. */
@@ -486,6 +509,7 @@ const IntegrationServerSchema = Schema.Struct({
   name: Schema.String.check(Schema.isPattern(/^[a-z0-9][a-z0-9-]*$/)),
   url: Schema.String,
 });
+
 export type IntegrationServer = typeof IntegrationServerSchema.Type;
 
 const SequenceSchema = Schema.Number.check(
@@ -511,6 +535,7 @@ const RunnerTraceSchema = Schema.Struct({
   baggage: Schema.optionalKey(Schema.String),
   path: Schema.optionalKey(Schema.String),
 });
+
 export type RunnerTrace = typeof RunnerTraceSchema.Type;
 
 /**
@@ -582,6 +607,7 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   /** The commands the launch runs unasked in a mode that asks (`AllowedCommandsSchema`); none where absent, as with full access. */
   allowedCommands: Schema.optionalKey(AllowedCommandsSchema),
 });
+
 export type ClaudeCodeConfig = typeof ClaudeCodeConfigSchema.Type;
 
 /**
@@ -649,13 +675,16 @@ export const CodexConfigSchema = Schema.Struct({
   /** How the launch answers its agent's tool calls (`PERMISSION_MODE`), as the Codex app means each; full access where absent, as in a config written before modes. */
   permissionMode: Schema.optionalKey(PermissionModeSchema),
 });
+
 export type CodexConfig = typeof CodexConfigSchema.Type;
 
 /** The first stdin line, for either harness. */
 export const RunnerConfigSchema = Schema.Union([CodexConfigSchema, ClaudeCodeConfigSchema]);
+
 export type RunnerConfig = typeof RunnerConfigSchema.Type;
 
 const TextBlockSchema = Schema.Struct({ type: Schema.Literal("text"), text: Schema.String });
+
 const ImageBlockSchema = Schema.Struct({
   type: Schema.Literal("image"),
   source: Schema.Struct({
@@ -664,7 +693,9 @@ const ImageBlockSchema = Schema.Struct({
     data: Schema.String,
   }),
 });
+
 export const ContentBlockSchema = Schema.Union([TextBlockSchema, ImageBlockSchema]);
+
 export type ContentBlock = typeof ContentBlockSchema.Type;
 
 /** A UUID as the SDK spells one, which is what a message's `uuid` must be. */
@@ -694,6 +725,7 @@ const MessageLineSchema = Schema.Struct({
   resent: Schema.optionalKey(Schema.Boolean),
   compact: Schema.optionalKey(Schema.Boolean),
 });
+
 /**
  * Stop the running turn. `launch` names the launch the stop is for by its
  * first event number (its config's `firstSequence`): one launch runs one of
@@ -705,6 +737,7 @@ const StopLineSchema = Schema.Struct({
   type: Schema.Literal(INPUT_LINE.STOP),
   launch: Schema.optionalKey(SequenceSchema),
 });
+
 /**
  * A model or effort change, applied from the next model call on Claude Code
  * and from the next turn on Codex. An effort the launch's harness does not
@@ -765,6 +798,7 @@ export const InputLineSchema = Schema.Union([
   WarmLineSchema,
   ApprovalLineSchema,
 ]);
+
 export type InputLine = typeof InputLineSchema.Type;
 
 /**
@@ -819,6 +853,7 @@ export const RUNNER_END = {
   /** A warm launch ended with no turn under way: retired by the service or its host, or past its warm window on its own (`RUNNER_WARM`). Its turn was already over at its IDLE, or it never took a message. */
   IDLED: "idled",
 } as const;
+
 export type RunnerEnd = (typeof RUNNER_END)[keyof typeof RUNNER_END];
 
 /**
@@ -1007,6 +1042,7 @@ export const RunnerApprovalRequestedSchema = Schema.Struct({
   input: Schema.Record(Schema.String, Schema.Unknown),
   commandPrefix: Schema.optionalKey(Schema.Array(Schema.String)),
 });
+
 export type RunnerApprovalRequested = typeof RunnerApprovalRequestedSchema.Type;
 
 /** The APPROVAL_RESOLVED event: the ask by its `requestId` settled, with what was decided and what decided it. */
@@ -1016,6 +1052,7 @@ export const RunnerApprovalResolvedSchema = Schema.Struct({
   decision: ApprovalDecisionSchema,
   by: ApprovalBySchema,
 });
+
 export type RunnerApprovalResolved = typeof RunnerApprovalResolvedSchema.Type;
 
 /**
@@ -1071,6 +1108,7 @@ export function codexErrorKind(info: unknown): CodexErrorKind | undefined {
       : typeof info === "object" && info !== null && Object.keys(info).length === 1
         ? Object.keys(info)[0]
         : undefined;
+
   return Option.getOrUndefined(decodeCodexErrorKind(named));
 }
 

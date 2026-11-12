@@ -57,9 +57,11 @@ const WORDMARK = {
   CAP_HEIGHT: 71,
   INK: { LEFT: 1.9, RIGHT: 310.2, TOP: -75, BOTTOM: 15 },
 };
+
 // The lockup: the disc 1.3 times the cap height, centered on it, a third of
 // the disc from the word.
 const LOCKUP = { DISC: 1.3, GAP: 0.34 };
+
 // The stacked lockup: the disc twice the cap height, under half the
 // word's width, centered over it, and 0.45 of the cap height above the i's dot.
 const STACKED = { DISC: 2, GAP: 0.45 };
@@ -67,6 +69,7 @@ const STACKED = { DISC: 2, GAP: 0.45 };
 // ---------- Palette ----------
 // Inks are named for the UI mode they serve: the dark-mode asset is light.
 const INKS = { light: BRAND.LIGHT.TEXT, dark: BRAND.DARK.TEXT };
+
 // The app icon's two tiles: the dark mode's is the night ground under the
 // mark in copper, the light mode's is copper under a white mark. Flat, both:
 // no gradient and no shadow.
@@ -77,9 +80,12 @@ const TILES = {
 
 // ---------- Helpers ----------
 const fmt = (v) => Math.round(v * 100) / 100;
+
 const svgOpenAt = (x, y, w, h) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${fmt(x)} ${fmt(y)} ${fmt(w)} ${fmt(h)}" fill="none">`;
+
 const svgOpen = (w, h) => svgOpenAt(0, 0, w, h);
+
 // The mark in one ink, its 100-unit disc set at (x, y) and `side` across.
 const markAt = (x, y, side, ink, path = MARK.PATH) =>
   `<g transform="translate(${fmt(x)} ${fmt(y)}) scale(${fmt(side / 100)})"><path d="${path}" fill="${ink}"/></g>`;
@@ -90,15 +96,18 @@ function lockup(ink, markInk = ink) {
   const disc = WORDMARK.CAP_HEIGHT * LOCKUP.DISC;
   const gap = disc * LOCKUP.GAP;
   const top = -WORDMARK.CAP_HEIGHT / 2 - disc / 2;
+
   const body =
     markAt(0, top, disc, markInk) +
     `<path transform="translate(${fmt(disc + gap)} 0)" d="${WORDMARK.PATH}" fill="${ink}"/>`;
+
   const box = {
     left: 0,
     right: disc + gap + WORDMARK.INK.RIGHT,
     top: Math.min(top, WORDMARK.INK.TOP),
     bottom: Math.max(top + disc, WORDMARK.INK.BOTTOM),
   };
+
   return { body, box };
 }
 
@@ -110,6 +119,7 @@ function stackedLockup(ink, markInk = ink) {
   const top = INK.TOP - CAP_HEIGHT * STACKED.GAP - disc;
   const left = (INK.LEFT + INK.RIGHT) / 2 - disc / 2;
   const body = markAt(left, top, disc, markInk) + `<path d="${WORDMARK.PATH}" fill="${ink}"/>`;
+
   return { body, box: { left: INK.LEFT, right: INK.RIGHT, top, bottom: INK.BOTTOM } };
 }
 
@@ -119,12 +129,15 @@ function stackedLockup(ink, markInk = ink) {
 // units.
 function placement(box, width, height, fill, edge) {
   const k = (width * fill) / (box.right - box.left);
+
   const tx =
     edge === undefined ? width / 2 - (k * (box.left + box.right)) / 2 : width * edge - k * box.left;
+
   const ty = height / 2 - (k * (box.top + box.bottom)) / 2;
   const at = (x, y) => [tx + k * x, ty + k * y];
   const [left, top] = at(box.left, box.top);
   const [right, bottom] = at(box.right, box.bottom);
+
   return { k, tx, ty, box: { left, top, right, bottom } };
 }
 
@@ -132,6 +145,7 @@ function placement(box, width, height, fill, edge) {
 // its ink box.
 function centered({ body, box }, width, height, fill) {
   const { k, tx, ty } = placement(box, width, height, fill);
+
   return `<g transform="translate(${fmt(tx)} ${fmt(ty)}) scale(${fmt(k)})">${body}</g>`;
 }
 
@@ -145,9 +159,12 @@ const stale = [];
 function put(path, content) {
   if (CHECK_ONLY) {
     const current = existsSync(path) ? readFileSync(path, "utf8") : undefined;
+
     if (current !== content) stale.push(path);
+
     return;
   }
+
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, content);
 }
@@ -167,15 +184,19 @@ function emit(relPath, svg, title) {
 // logos come in color as well: the mark in each mode's copper beside the
 // name in that mode's ink.
 const ONE_INKS = { ...INKS, black: "#000000", white: "#ffffff" };
+
 const COLOR_INKS = {
   light: { word: INKS.light, mark: BRAND.LIGHT.ACCENT },
   dark: { word: INKS.dark, mark: BRAND.DARK.ACCENT },
 };
+
 const LOGO_CUTS = [
   ["logo", lockup],
   ["logo-stacked", stackedLockup],
 ];
+
 const PAD = 6;
+
 const padded = (box) =>
   svgOpenAt(
     box.left - PAD,
@@ -183,6 +204,7 @@ const padded = (box) =>
     box.right - box.left + 2 * PAD,
     box.bottom - box.top + 2 * PAD,
   );
+
 for (const [name, ink] of Object.entries(ONE_INKS)) {
   const { INK } = WORDMARK;
   emit(
@@ -190,11 +212,13 @@ for (const [name, ink] of Object.entries(ONE_INKS)) {
     `${padded({ left: INK.LEFT, right: INK.RIGHT, top: INK.TOP, bottom: INK.BOTTOM })}<path d="${WORDMARK.PATH}" fill="${ink}"/></svg>`,
     PRODUCT_NAME,
   );
+
   for (const [cutName, cut] of LOGO_CUTS) {
     const { body, box } = cut(ink);
     emit(`logo/${cutName}-${name}.svg`, `${padded(box)}${body}</svg>`, PRODUCT_NAME);
   }
 }
+
 for (const [mode, { word, mark }] of Object.entries(COLOR_INKS)) {
   for (const [cutName, cut] of LOGO_CUTS) {
     const { body, box } = cut(word, mark);
@@ -216,10 +240,12 @@ const ICON_MARK = 0.78;
 // the Dock and the app switcher draw the whole canvas at one size, so a tile
 // that filled it would stand a fifth larger than every other app's.
 const ICON_GRID = { canvas: 1024, tile: 824, radius: 185.4 };
+
 {
   const origin = (ICON_GRID.canvas - ICON_GRID.tile) / 2;
   const disc = ICON_GRID.tile * ICON_MARK;
   const at = (ICON_GRID.canvas - disc) / 2;
+
   for (const [mode, { tile, ink }] of Object.entries(TILES)) {
     emit(
       `icon/icon-${mode}.svg`,
@@ -237,12 +263,15 @@ const ICON_GRID = { canvas: 1024, tile: 824, radius: 185.4 };
 // tile and ink are TILES', and the clear and tinted looks are the system's
 // own from the layer's shape.
 const IOS_ICON = { canvas: 1024, name: "ios/Vespin.icon" };
+
 const iosColor = (hex) => {
   const [r, g, b] = [1, 3, 5].map(
     (i) => Math.round((Number.parseInt(hex.slice(i, i + 2), 16) / 255) * 1e4) / 1e4,
   );
+
   return `srgb:${r},${g},${b},1`;
 };
+
 {
   const disc = IOS_ICON.canvas * ICON_MARK;
   const at = (IOS_ICON.canvas - disc) / 2;
@@ -252,6 +281,7 @@ const iosColor = (hex) => {
     `${PRODUCT_NAME} mark`,
   );
   const solid = (hex) => ({ solid: iosColor(hex) });
+
   const icon = {
     fill: solid(TILES.light.tile),
     "fill-specializations": [{ appearance: "dark", value: solid(TILES.dark.tile) }],
@@ -272,6 +302,7 @@ const iosColor = (hex) => {
     ],
     "supported-platforms": { squares: "shared" },
   };
+
   put(join(OUT, IOS_ICON.name, "icon.json"), `${JSON.stringify(icon, null, 2)}\n`);
   written.push(`${IOS_ICON.name}/icon.json`);
 }
@@ -297,6 +328,7 @@ const iosColor = (hex) => {
 // apple-touch-icon and its manifest's icons, as is and maskable, are cut from
 // it -- see packages/brand/README.md.
 const WEB_ICON = { side: 100 };
+
 {
   const { tile, ink } = TILES.dark;
   const disc = WEB_ICON.side * ICON_MARK;
@@ -314,6 +346,7 @@ const WEB_ICON = { side: 100 };
 // serves it as /favicon.svg, with /favicon.ico cut from it for readers that
 // take no SVG -- see packages/brand/README.md.
 const FAVICON = { side: 240, inset: 8, radius: 52 };
+
 {
   const tile = FAVICON.side - FAVICON.inset * 2;
   const disc = tile * ICON_MARK;
@@ -331,9 +364,11 @@ const FAVICON = { side: 240, inset: 8, radius: 52 };
 // for its own theme, such as an integration's icon on Sentry, which takes no
 // color but black. The disc on a tile is the avatar, below.
 const SQUARE = { side: 120, disc: 100 };
+
 {
   const at = (SQUARE.side - SQUARE.disc) / 2;
   const open = svgOpen(SQUARE.side, SQUARE.side);
+
   for (const [name, ink] of [
     ...Object.entries(INKS),
     ["white", "#ffffff"],
@@ -351,9 +386,11 @@ const SQUARE = { side: 120, disc: 100 };
 // organization avatar) clips nothing. Opaque tiles, because a profile photo
 // rarely shows through.
 const AVATAR = { side: 100, disc: 100 * ICON_MARK };
+
 {
   const at = (AVATAR.side - AVATAR.disc) / 2;
   const open = svgOpen(AVATAR.side, AVATAR.side);
+
   for (const [mode, { tile, ink }] of Object.entries(TILES)) {
     emit(
       `avatar/avatar-${mode}.svg`,
@@ -361,6 +398,7 @@ const AVATAR = { side: 100, disc: 100 * ICON_MARK };
       PRODUCT_NAME,
     );
   }
+
   emit(
     "avatar/avatar-black.svg",
     `${open}<rect width="${AVATAR.side}" height="${AVATAR.side}" fill="#000000"/>${markAt(at, at, AVATAR.disc, "#ffffff")}</svg>`,
@@ -374,6 +412,7 @@ const AVATAR = { side: 100, disc: 100 * ICON_MARK };
 // crop takes the top and bottom edges. One card, dark only: a link preview
 // follows no UI theme. Its PNG is cut into apps/web/public/.
 const CARD = { WIDTH: 1200, HEIGHT: 630, FILL: 0.56 };
+
 emit(
   "social/og-card.svg",
   `${svgOpen(CARD.WIDTH, CARD.HEIGHT)}<rect width="${CARD.WIDTH}" height="${CARD.HEIGHT}" fill="${BRAND.DARK.GROUND}"/>${centered(lockup(INKS.dark), CARD.WIDTH, CARD.HEIGHT, CARD.FILL)}</svg>`,
@@ -394,6 +433,7 @@ const BANNER_GROUNDS = {
   light: { ground: BRAND.LIGHT.GROUND, ink: INKS.light },
   copper: { ground: TILES.light.tile, ink: TILES.light.ink },
 };
+
 const BANNERS = {
   "4x1": { WIDTH: 3168, HEIGHT: 792, FILL: 0.5 },
   "3x1": { WIDTH: 3000, HEIGHT: 1000, FILL: 0.54 },
@@ -401,6 +441,7 @@ const BANNERS = {
   "9x2": { WIDTH: 1800, HEIGHT: 400, FILL: 0.82 },
   "16x9": { WIDTH: 3840, HEIGHT: 2160, FILL: 0.56 },
 };
+
 for (const [shape, { WIDTH, HEIGHT, FILL }] of Object.entries(BANNERS)) {
   for (const [name, { ground, ink }] of Object.entries(BANNER_GROUNDS)) {
     emit(
@@ -433,6 +474,7 @@ const clamp01 = (v) => Math.min(1, Math.max(0, v));
 // A smooth step from 0 at `from` to 1 at `to`.
 function smooth(from, to, v) {
   const t = clamp01((v - from) / (to - from));
+
   return t * t * (3 - 2 * t);
 }
 
@@ -441,6 +483,7 @@ function mix(from, to, share) {
   const channels = (hex) => [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
   const [a, b] = [channels(from), channels(to)];
   const blend = a.map((v, n) => Math.round(v + (b[n] - v) * share));
+
   return `#${blend.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
 
@@ -450,23 +493,29 @@ function mix(from, to, share) {
 function lattice(i, j, seed) {
   let h = (i * 374761393 + j * 668265263 + seed * 982451653) | 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
+
   return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
 }
+
 function noise(x, y, seed) {
   const [i, j] = [Math.floor(x), Math.floor(y)];
   const [u, v] = [smooth(0, 1, x - i), smooth(0, 1, y - j)];
   const [a, b] = [lattice(i, j, seed), lattice(i + 1, j, seed)];
   const [c, d] = [lattice(i, j + 1, seed), lattice(i + 1, j + 1, seed)];
+
   return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
 }
+
 function fractal(x, y, seed, octaves) {
   let [sum, weight, total, scale] = [0, 0.5, 0, 1];
+
   for (let octave = 0; octave < octaves; octave++) {
     sum += weight * noise(x * scale, y * scale, seed + octave * 17);
     total += weight;
     scale *= 2.03;
     weight *= 0.5;
   }
+
   return sum / total;
 }
 
@@ -477,16 +526,20 @@ function markRings(path) {
   const tokens = path.match(/[a-zA-Z]|-?\d*\.?\d+/g);
   const rings = [];
   let [ring, x, y, command, at] = [[], 0, 0, "", 0];
+
   const take = (count) => {
     const values = tokens.slice(at, at + count).map(Number);
     at += count;
+
     return values;
   };
+
   while (at < tokens.length) {
     if (/[a-zA-Z]/.test(tokens[at])) command = tokens[at++];
     const relative = command === command.toLowerCase();
     const [ox, oy] = relative ? [x, y] : [0, 0];
     const kind = command.toUpperCase();
+
     if (kind === "Z") {
       rings.push(ring);
       ring = [];
@@ -496,6 +549,7 @@ function markRings(path) {
       ring.push([x, y]);
     } else if (kind === "C") {
       const [x1, y1, x2, y2, x3, y3] = take(6).map((v, n) => v + (n % 2 ? oy : ox));
+
       for (let step = 1; step <= 12; step++) {
         const t = step / 12;
         const s = 1 - t;
@@ -505,22 +559,29 @@ function markRings(path) {
           w[0] * y + w[1] * y1 + w[2] * y2 + w[3] * y3,
         ]);
       }
+
       [x, y] = [x3, y3];
     } else {
       throw new Error(`The mark's path has a ${command}, which markRings does not draw`);
     }
   }
+
   return rings;
 }
+
 const MARK_RINGS = markRings(MARK.PATH);
+
 function inMark(x, y) {
   let inside = false;
+
   for (const ring of MARK_RINGS) {
     for (let a = 0, b = ring.length - 1; a < ring.length; b = a++) {
       const [[xa, ya], [xb, yb]] = [ring[a], ring[b]];
+
       if (ya > y !== yb > y && x < ((xb - xa) * (y - ya)) / (yb - ya) + xa) inside = !inside;
     }
   }
+
   return inside;
 }
 
@@ -529,13 +590,16 @@ function inMark(x, y) {
 const BALL_LIGHT = (() => {
   const light = [-0.5, -0.62, 0.6];
   const length = Math.hypot(...light);
+
   return light.map((v) => v / length);
 })();
+
 function ballLight(mx, my) {
   const [dx, dy] = [(mx - 50) / 50, (my - 50) / 50];
   const nz = Math.sqrt(Math.max(0, 1 - dx * dx - dy * dy));
   const diffuse = Math.max(0, dx * BALL_LIGHT[0] + dy * BALL_LIGHT[1] + nz * BALL_LIGHT[2]);
   const rim = (1 - nz) ** 4 * 0.5 * smooth(-0.2, 0.8, dx + dy);
+
   return clamp01(0.06 + 0.82 * diffuse ** 1.4 + 0.6 * diffuse ** 24 + rim);
 }
 
@@ -543,18 +607,22 @@ function ballLight(mx, my) {
 // light at (x, y), or nothing outside it.
 function markBall(x, y, { left, top, side }) {
   const [mx, my] = [((x - left) / side) * 100, ((y - top) / side) * 100];
+
   if (mx < 0 || mx > 100 || my < 0 || my > 100 || !inMark(mx, my)) return 0;
+
   return ballLight(mx, my);
 }
 
 // How far into the field (x, y) stands from the lockup's box: 0 inside
 // CLEAR of the ellipse the box spans, 1 past CLEAR + RAMP of it.
 const FIELD_CLEAR = { CLEAR: 1.15, RAMP: 1.1 };
+
 function clearOf(box, x, y) {
   const away = Math.hypot(
     (x - (box.left + box.right) / 2) / ((box.right - box.left) / 2),
     (y - (box.top + box.bottom) / 2) / ((box.bottom - box.top) / 2),
   );
+
   return smooth(FIELD_CLEAR.CLEAR, FIELD_CLEAR.CLEAR + FIELD_CLEAR.RAMP, away);
 }
 
@@ -570,6 +638,7 @@ const DOT_DESIGNS = {
     value: (x, y, { WIDTH, HEIGHT }, box) => {
       const side = Math.min(HEIGHT * 0.78, WIDTH * 0.36);
       const center = Math.max(WIDTH * 0.79, box.right + WIDTH * 0.04 + side / 2);
+
       return markBall(x, y, { left: center - side / 2, top: (HEIGHT - side) / 2, side });
     },
   },
@@ -579,6 +648,7 @@ const DOT_DESIGNS = {
     value: (x, y, { WIDTH, HEIGHT }, box) => {
       const side = Math.min(HEIGHT * 1.6, WIDTH * 0.6);
       const left = Math.max(WIDTH - side * 0.8, box.right + WIDTH * 0.04);
+
       return markBall(x, y, { left, top: HEIGHT / 2 - side * 0.46, side });
     },
   },
@@ -591,6 +661,7 @@ const DOT_DESIGNS = {
       const bendX = fractal(u + 3.1, v + 1.7, 7, 3);
       const bendY = fractal(u - 2.3, v + 4.1, 9, 3);
       const height = fractal(u + bendX * 1.8, v + bendY * 1.8, 3, 5);
+
       return clearOf(box, x, y) * smooth(0.34, 0.74, height);
     },
   },
@@ -603,6 +674,7 @@ const DOT_DESIGNS = {
       const right = Math.hypot((x - WIDTH) / (WIDTH * 0.45), y / (HEIGHT * 1.1));
       const left = Math.hypot(x / (WIDTH * 0.38), (y - HEIGHT) / HEIGHT);
       const reach = Math.max(1 - right, 0.85 * (1 - left)) + (grain - 0.5) * 0.55;
+
       return clearOf(box, x, y) * smooth(0, 0.8, reach);
     },
   },
@@ -614,6 +686,7 @@ const DOT_DESIGNS = {
 // deep copper. On a light ground (`LIGHT`) the ball is drawn in its shadow,
 // so its light reads as the ground.
 const DEEP_COPPER = mix(BRAND.DARK.GROUND, BRAND.DARK.ACCENT, 0.45);
+
 const DOT_COLORWAYS = {
   night: {
     GROUND: BRAND.DARK.GROUND,
@@ -707,6 +780,7 @@ const DOT_BANNERS = {
   "6x1": { ...BANNERS["6x1"], LEFT: 0.3, CELL: 24, BODY_CELL: 12 },
   "16x9": { ...BANNERS["16x9"], LEFT: 0.075, CELL: 16, BODY_CELL: 10 },
 };
+
 // A left-set lockup's share of the width; how much of its cell a field's dot
 // fills, and a body's; and the landing's cell in its CSS pixels.
 const DOT = { LEFT_FILL: 0.4, SHARE: 0.46, BODY_SHARE: 0.86, LANDING_CELL: 7 };
@@ -720,14 +794,17 @@ function dotCover(design, colorway, cover, box) {
   const side = Math.round(cell * (design.BODY ? DOT.BODY_SHARE : DOT.SHARE));
   const landing = DOT.LANDING_CELL / cover.CELL;
   const paths = DOTS.map(() => ({ d: "", x: 0, y: 0 }));
+
   for (let j = 0, y = cell / 2; y < cover.HEIGHT; y += cell, j++) {
     for (let i = 0, x = cell / 2; x < cover.WIDTH; x += cell, i++) {
       const lit = design.value(x, y, cover, box, landing);
+
       if (lit <= 0) continue;
       const value = design.BODY && LIGHT ? clamp01(1.1 - lit) : lit;
       // Note that the ink is picked by the same threshold that lights the
       // cell, so a value between two inks dithers between them, flatly.
       const ink = Math.min(DOTS.length, Math.floor(value * DOTS.length + bayerAt(i, j)));
+
       if (ink === 0) continue;
       const path = paths[ink - 1];
       const [at, to] = [Math.round(x - side / 2), Math.round(y - side / 2)];
@@ -735,18 +812,22 @@ function dotCover(design, colorway, cover, box) {
       [path.x, path.y] = [at, to];
     }
   }
+
   return paths.map(({ d }, n) => (d ? `<path d="${d}" fill="${DOTS[n]}"/>` : "")).join("");
 }
 
 for (const [shape, cover] of Object.entries(DOT_BANNERS)) {
   const { WIDTH, HEIGHT } = cover;
+
   for (const [designName, design] of Object.entries(DOT_DESIGNS)) {
     for (const [name, colorway] of Object.entries(DOT_COLORWAYS)) {
       const cut = lockup(colorway.WORD, colorway.MARK);
+
       const { k, tx, ty, box } =
         design.ALIGN === "left"
           ? placement(cut.box, WIDTH, HEIGHT, DOT.LEFT_FILL, cover.LEFT)
           : placement(cut.box, WIDTH, HEIGHT, cover.FILL);
+
       emit(
         `banner/dots/banner-dots-${designName}-${name}-${shape}.svg`,
         `${svgOpen(WIDTH, HEIGHT)}<rect width="${WIDTH}" height="${HEIGHT}" fill="${colorway.GROUND}"/>${dotCover(design, colorway, cover, box)}<g transform="translate(${fmt(tx)} ${fmt(ty)}) scale(${fmt(k)})">${cut.body}</g></svg>`,
@@ -770,10 +851,12 @@ const CTA = {
   FONT_SIZE: 14,
   WEIGHT: 600,
 };
+
 const CTA_INKS = {
   light: { fill: BRAND.LIGHT.ACCENT, ink: BRAND.LIGHT.ON_ACCENT },
   dark: { fill: BRAND.DARK.ACCENT, ink: BRAND.DARK.ON_ACCENT },
 };
+
 const CTA_BUTTONS = [
   {
     name: "download",
@@ -782,18 +865,23 @@ const CTA_BUTTONS = [
     title: `Download ${PRODUCT_NAME} for macOS`,
   },
 ];
+
 for (const { name, label, advance, title } of CTA_BUTTONS) {
   const width = advance + 2 * CTA.PAD_X;
+
   for (const [mode, inks] of Object.entries(CTA_INKS)) {
     const ground = `<rect width="${width}" height="${CTA.HEIGHT}" rx="${CTA.RADIUS}" fill="${inks.fill}"/>`;
+
     const text =
       `<text x="${fmt(width / 2)}" y="${fmt(CTA.HEIGHT / 2)}" text-anchor="middle" dominant-baseline="central" ` +
       `font-family="${CTA.FONT}" font-size="${CTA.FONT_SIZE}" font-weight="${CTA.WEIGHT}" ` +
       `textLength="${advance}" fill="${inks.ink}">${label}</text>`;
+
     // Sized explicitly: an <img> gives a viewBox-only SVG no intrinsic size.
     const open =
       `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${CTA.HEIGHT}" ` +
       `viewBox="0 0 ${width} ${CTA.HEIGHT}" fill="none">`;
+
     emit(`button/cta-${name}-${mode}.svg`, `${open}${ground}${text}</svg>`, title);
   }
 }
@@ -805,6 +893,7 @@ const arrowY = DMG_WINDOW.POSITIONS.APP.Y;
 const arrowStart = DMG_WINDOW.POSITIONS.APP.X + DMG_WINDOW.ICON_SIZE;
 const arrowEnd = DMG_WINDOW.POSITIONS.APPLICATIONS.X - DMG_WINDOW.ICON_SIZE;
 const arrowHead = 28;
+
 emit(
   "dmg/dmg-background.svg",
   `${svgOpen(dmgBackground.WIDTH, dmgBackground.HEIGHT)}` +
@@ -820,6 +909,7 @@ emit(
 // Biome never breaks after), and on the next line where it is neither.
 function tsEntry(key, value) {
   const line = `  ${key}: "${value}",`;
+
   return line.length <= 100 || key.length <= 4 ? line : `  ${key}:\n    "${value}",`;
 }
 

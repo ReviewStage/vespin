@@ -101,6 +101,7 @@ class LocalServerRefused extends Schema.TaggedError<LocalServerRefused>()("Local
 function flagsProvider(argv: readonly string[]): ConfigProvider.ConfigProvider {
   const flag = argv.indexOf(PORT_FLAG);
   const port = flag === -1 ? undefined : argv[flag + 1];
+
   return ConfigProvider.fromEnvRecord(port === undefined ? {} : { [ENV.PORT]: port });
 }
 
@@ -114,6 +115,7 @@ function answerRawImports(): void {
     load(url, context, nextLoad) {
       if (!url.endsWith(RAW_QUERY)) return nextLoad(url, context);
       const text = readFileSync(fileURLToPath(url), "utf8");
+
       return {
         format: "module",
         shortCircuit: true,
@@ -138,6 +140,7 @@ async function localRoutes(): Promise<ReadonlyMap<string, Route>> {
     import("@repo/service/demo/demo-seed"),
     import("../server/local-sign-in.js"),
   ]);
+
   return new Map([[LOCAL_SIGN_IN_PATH, localSignIn(auth, DEMO_DEAN.id)]]);
 }
 
@@ -178,12 +181,16 @@ function answer(origin: string, site: LocalSite) {
     const request = yield* HttpServerRequest.HttpServerRequest;
     const asked = new URL(request.url, origin);
     const own = site.local.get(asked.pathname);
+
     if (own !== undefined) return yield* HttpEffect.fromWebHandler(own.fetch);
+
     if (site.deployment.answers(asked.pathname)) {
       return yield* HttpEffect.fromWebHandler(site.deployment.fetch);
     }
+
     const served = new URL(asked);
     served.pathname = site.pageOf(asked.pathname);
+
     return yield* page(site.vite, request, served);
   });
 }
@@ -196,7 +203,9 @@ function sweepOnSchedule(deployment: LocalDeployment, origin: string, secret: Re
         headers: { authorization: `Bearer ${Redacted.value(secret)}` },
       }),
     );
+
     await answered.body?.cancel();
+
     return answered.status;
   }).pipe(
     Effect.flatMap((status) =>
@@ -204,11 +213,13 @@ function sweepOnSchedule(deployment: LocalDeployment, origin: string, secret: Re
     ),
     Effect.catch((error) => Effect.logWarning("The scheduled sweep failed", error)),
   );
+
   return Effect.repeat(sweep, Schedule.cron(MAINTENANCE_SWEEP.CRONTAB)).pipe(Effect.orDie);
 }
 
 const program = Effect.gen(function* () {
   const refusal = localServerRefusal(process.env);
+
   if (refusal !== undefined) return yield* new LocalServerRefused({ reason: refusal });
   const port = yield* Config.Port(ENV.PORT).pipe(Config.withDefault(DEFAULT_PORT));
   const cronSecret = yield* Config.option(Config.Redacted(ENV.CRON_SECRET));
@@ -218,26 +229,32 @@ const program = Effect.gen(function* () {
     if (!process.env[ENV.AUTH_URL]?.trim()) process.env[ENV.AUTH_URL] = origin;
   });
   yield* Effect.sync(answerRawImports);
+
   const { localDeployment, localPages } = yield* Effect.promise(
     () => import("../server/local-deployment.js"),
   );
+
   const deployment = yield* Effect.promise(() => localDeployment(WEB));
   const pageOf = yield* Effect.promise(() => localPages(WEB));
   const local = yield* Effect.promise(localRoutes);
+
   const vite = yield* Effect.acquireRelease(
     Effect.promise(() => createViteServer(VITE)),
     (server) => Effect.promise(() => server.close()),
   );
+
   if (Option.isSome(cronSecret)) {
     yield* Effect.forkScoped(sweepOnSchedule(deployment, origin, cronSecret.value));
   } else {
     yield* Effect.logWarning(`${ENV.CRON_SECRET} is not set, so the scheduled sweep does not run`);
   }
+
   const listening = NodeHttpServer.layer(createServer, {
     port,
     host: LOOPBACK,
     gracefulShutdownTimeout: SHUTDOWN_GRACE,
   });
+
   return yield* Layer.launch(
     HttpServer.serve(answer(origin, { local, deployment, pageOf, vite })).pipe(
       HttpServer.withLogAddress,

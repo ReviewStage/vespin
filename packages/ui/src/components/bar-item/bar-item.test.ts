@@ -28,7 +28,9 @@ function mount(element: React.ReactElement): HTMLButtonElement {
   roots.push(root);
   act(() => root.render(element));
   const found = container.querySelector("button");
+
   if (found === null) throw new Error("no button drawn");
+
   return found;
 }
 
@@ -45,6 +47,7 @@ test("the place shown is announced as the page, the rest are not", () => {
   const shown = mount(
     createElement(BarItem, { icon: null, current: true, onPress: () => {}, children: "Tasks" }),
   );
+
   expect(shown.getAttribute("aria-current")).toBe("page");
   const other = mount(createElement(BarItem, { icon: null, onPress: () => {}, children: "Board" }));
   expect(other.hasAttribute("aria-current")).toBe(false);
@@ -54,15 +57,18 @@ test("an item that opens something says whether it stands open", () => {
   const button = mount(
     createElement(BarItem, { icon: null, expanded: true, onPress: () => {}, children: "More" }),
   );
+
   expect(button.getAttribute("aria-expanded")).toBe("true");
 });
 
 test("a press and a pointer's press reach the caller", () => {
   const onPress = vi.fn();
   const onPointerDown = vi.fn();
+
   const button = mount(
     createElement(BarItem, { icon: null, onPress, onPointerDown, children: "More" }),
   );
+
   act(() => {
     button.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));
     button.click();
@@ -75,13 +81,16 @@ test("an inert item is inert", () => {
   const button = mount(
     createElement(BarItem, { icon: null, inert: true, onPress: () => {}, children: "Inbox" }),
   );
+
   expect(button.hasAttribute("inert")).toBe(true);
 });
 
 /** What a reader hears an item named: its words, less what is drawn for the eye alone. */
 function spokenName(button: HTMLButtonElement): string {
   const heard = button.cloneNode(true) as HTMLElement;
+
   for (const unheard of heard.querySelectorAll("[aria-hidden='true']")) unheard.remove();
+
   return heard.textContent ?? "";
 }
 
@@ -94,6 +103,7 @@ test("a count is drawn on the glyph and said after the name with its noun, and s
       children: "Inbox",
     }),
   );
+
   expect(spokenName(counted)).toBe("Inbox, 3 need you");
   expect(counted.querySelector("[aria-hidden='true']")?.textContent).toBe("3");
 
@@ -105,12 +115,14 @@ test("a count is drawn on the glyph and said after the name with its noun, and s
       children: "Board",
     }),
   );
+
   expect(spokenName(none)).toBe("Board");
   expect(none.textContent).toBe("Board");
 });
 
 test("the bar's action is named by its label, and takes no press while disabled", () => {
   const onPress = vi.fn();
+
   const button = mount(
     createElement(BarAction, {
       icon: createElement("svg"),
@@ -119,6 +131,7 @@ test("the bar's action is named by its label, and takes no press while disabled"
       onPress,
     }),
   );
+
   act(() => button.click());
   expect(button.getAttribute("aria-label")).toBe("New task");
   expect(onPress).not.toHaveBeenCalled();

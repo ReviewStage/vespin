@@ -35,6 +35,7 @@ export function logNamingAccount<Log extends SentLog>(
   accountId: string | undefined,
 ): Log {
   if (accountId === undefined) return log;
+
   return { ...log, attributes: { ...log.attributes, [USER_ID_ATTRIBUTE]: accountId } };
 }
 
@@ -44,5 +45,6 @@ export function eventNamingAccount<Event extends SentEvent>(
   accountId: string | undefined,
 ): Event {
   if (accountId === undefined) return event;
+
   return { ...event, user: { ...event.user, id: accountId } };
 }

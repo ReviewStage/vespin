@@ -74,32 +74,41 @@ export function useAsyncAction<Refusal = string>(
   const run = useCallback((act: AsyncActionAct<Refusal>): Promise<boolean> => {
     if (out.current) return Promise.resolve(false);
     let started: ReturnType<AsyncActionAct<Refusal>>;
+
     try {
       started = act();
     } catch (thrown) {
       // Note that an act that throws before it starts anything is refused as one that rejects is.
       started = Promise.reject(thrown);
     }
+
     if (started === undefined) {
       setState(IDLE);
+
       return Promise.resolve(true);
     }
+
     out.current = true;
     setState(RUNNING);
+
     const settle = (refusal: Refusal | undefined): boolean => {
       out.current = false;
       setState(refusal === undefined ? IDLE : { stage: ASYNC_ACTION_STAGE.REFUSED, refusal });
+
       return refusal === undefined;
     };
+
     return Promise.resolve(started).then(
       (refusal) => settle(refusal ?? undefined),
       (rejected: unknown) => settle(newestUnanswered.current(rejected)),
     );
   }, []);
+
   const refuse = useCallback((refusal: Refusal) => {
     if (out.current) return;
     setState({ stage: ASYNC_ACTION_STAGE.REFUSED, refusal });
   }, []);
+
   const clear = useCallback(() => {
     if (out.current) return;
     setState(IDLE);

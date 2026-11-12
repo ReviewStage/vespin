@@ -37,11 +37,13 @@ import { RUN_ACTION_EXIT, RUN_ACTION_SIGNAL, TMUX_EXIT } from "./tmux.js";
  */
 
 const SESSION = "wrun_fixture";
+
 /** The agents' image as a deploy names it, the fixture's. */
 const FIXTURE_IMAGE = {
   reference: Effect.succeed("agent-image:fixture"),
   runner: Effect.succeed([]),
 };
+
 const SANDBOX = agentSandboxName(SESSION);
 const RUNNING_SESSION = "sbs_running";
 const SHELL = "8b3c7a1e-2f4d-4c6b-9e0a-1d2f3a4b5c6d";
@@ -54,6 +56,7 @@ const ownSession = Effect.gen(function* () {
   yield* Effect.flatMap(Database, (db) =>
     db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
   );
+
   return { userId, name: SANDBOX, sandboxSessionId: RUNNING_SESSION };
 });
 
@@ -76,14 +79,19 @@ function standing(
       // Every command is `sh -c <script> sh <tmux args>`; the list is the one with none.
       const scriptAt = ask.args.indexOf("-c") + 1;
       const tmuxArgs = ask.args.slice(scriptAt + 2);
+
       if (tmuxArgs.length === 0) return ran(listExit, shells.join("\n"));
+
       if (tmuxArgs[0] === "new-session") return ran(0);
       const named = tmuxArgs.some((arg) => arg.startsWith(`=terminal-${SHELL}`));
+
       // The shell check exits its own code for a session tmux does not hold, or what a tmux that would not start exits.
       if (ask.args[scriptAt]?.includes("has-session")) return ran(named ? 0 : shellCheckExit);
+
       return ran(named ? 0 : 1);
     },
   });
+
   if (status !== undefined) {
     sandbox.stand({
       name: SANDBOX,
@@ -92,6 +100,7 @@ function standing(
       tags: { sessionId: SESSION },
     });
   }
+
   const layer = Layer.provide(
     agentSandboxLayer,
     Layer.mergeAll(
@@ -100,6 +109,7 @@ function standing(
       sandbox.layer,
     ),
   );
+
   return { layer, state: sandbox.state, sandbox };
 }
 
@@ -123,42 +133,54 @@ function actionTmux(probesLived?: number) {
   let pane = "0  ";
   let probes = 0;
   const sent: string[] = [];
+
   const sandbox = memorySandbox({
     run: ({ ask }) => {
       const scriptAt = ask.args.indexOf("-c") + 1;
       const rest = ask.args.slice(scriptAt + 2);
+
       // Note that the list has no arguments, and a signal names its shell and the signal.
       if (rest.length === 2 && ask.args[scriptAt]?.includes("kill -")) {
         if (started === undefined) return ran(RUN_ACTION_EXIT.NO_SESSION);
         sent.push(rest[1] ?? "");
+
         if (rest[1] === RUN_ACTION_SIGNAL.KILL) return ran(RUN_ACTION_EXIT.ENDED);
+
         if (rest[1] === RUN_ACTION_SIGNAL.PROBE) probes += 1;
+
         return ran(probesLived !== undefined && probes >= probesLived ? RUN_ACTION_EXIT.ENDED : 0);
       }
+
       if (rest.length === 0) {
         if (started === undefined) return ran(0);
         const line = [`terminal-${started}`, "100", field("Dev server"), field("bash")];
+
         return ran(
           0,
           [...line, field("/workspace/repository"), field(ACTION), field(pane)].join(" "),
         );
       }
+
       if (rest[0] === "new-session") {
         started = (rest[rest.indexOf("-s") + 1] ?? "").replace("terminal-", "");
       }
+
       if (rest[0] === "respawn-pane") {
         if (pane.startsWith("0")) return ran(1);
         pane = "0  ";
       }
+
       return ran(0);
     },
   });
+
   sandbox.stand({
     name: SANDBOX,
     status: SANDBOX_STATUS.RUNNING,
     running: RUNNING_SESSION,
     tags: { sessionId: SESSION },
   });
+
   const layer = Layer.provide(
     agentSandboxLayer,
     Layer.mergeAll(
@@ -167,6 +189,7 @@ function actionTmux(probesLived?: number) {
       sandbox.layer,
     ),
   );
+
   return {
     layer,
     /** The process exits, its pane standing dead with the dead flag, status, and signal given. */
@@ -192,6 +215,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
 
         const { listed, ports, started } = yield* Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
+
           return {
             listed: yield* sandbox.terminals(SESSION),
             ports: yield* sandbox.listeningPorts(SESSION),
@@ -219,7 +243,9 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
         const listed = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
           sandbox.terminals(SESSION),
         ).pipe(Effect.provide(api.layer));
+
         const never = standing(undefined);
+
         const unopened = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
           sandbox.terminals(SESSION),
         ).pipe(Effect.provide(never.layer));
@@ -258,6 +284,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           "   0: 00000000000000000000000000000000:0BB8 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1002        0 4500 1",
           "   1: 00000000000000000000000000000000:1435 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1001        0 4600 1",
         ];
+
         // Then the listeners the script printed as root: both servers started by one `pnpm dev`, as a
         // monorepo's are, so each is named by what listens on it, and a line it could not have printed.
         const listeners = [
@@ -274,12 +301,14 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           }),
           "not a listener",
         ];
+
         const api = standing(SANDBOX_STATUS.RUNNING, [...tables, ...listeners]);
         const unread = standing(SANDBOX_STATUS.RUNNING, [], 1);
 
         const ports = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
           sandbox.listeningPorts(SESSION),
         ).pipe(Effect.provide(api.layer));
+
         const outage = yield* Effect.flip(
           Effect.flatMap(AgentSandbox, (sandbox) => sandbox.listeningPorts(SESSION)).pipe(
             Effect.provide(unread.layer),
@@ -308,6 +337,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
 
         const { started, renamedOther } = yield* Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
+
           return {
             started: yield* sandbox.start(SESSION, SHELL, undefined),
             renamedOther: yield* sandbox.rename(SESSION, other, "tests"),
@@ -335,6 +365,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
         const tmux = actionTmux();
         const stopped = standing(SANDBOX_STATUS.STOPPED);
         const other = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
+
         const press = (terminalId: string) =>
           Effect.flatMap(AgentSandbox, (agentSandbox) =>
             agentSandbox.run(SESSION, terminalId, ACTION_RUN),
@@ -345,6 +376,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
         // The action's process exits 1, its pane kept, as tmux's `remain-on-exit` leaves it.
         tmux.exit("1 1 ");
         const exited = yield* press(other);
+
         const refused = yield* Effect.flatMap(AgentSandbox, (agentSandbox) =>
           agentSandbox.run(SESSION, SHELL, ACTION_RUN),
         ).pipe(Effect.provide(stopped.layer));
@@ -357,6 +389,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           running: true,
           runAction: ACTION,
         };
+
         assert.deepEqual(first, Result.succeed(runningShell));
         assert.deepEqual(again, first);
         assert.deepEqual(exited, first);
@@ -378,10 +411,12 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
     () =>
       Effect.gen(function* () {
         const stubborn = actionTmux();
+
         const stop = (tmux: ReturnType<typeof actionTmux>) =>
           Effect.flatMap(AgentSandbox, (agentSandbox) => agentSandbox.stop(SESSION, ACTION)).pipe(
             Effect.provide(tmux.layer),
           );
+
         yield* Effect.flatMap(AgentSandbox, (agentSandbox) =>
           agentSandbox.run(SESSION, SHELL, ACTION_RUN),
         ).pipe(Effect.provide(stubborn.layer));
@@ -418,11 +453,14 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
         const run = { actionId: action, label: "Dev server", command: "pnpm dev", environment: {} };
         // tmux as two presses at once leave it: both list no shell, the other press's start lands first, and this one's start is refused, its name taken.
         let shells: string[] = [];
+
         const sandbox = memorySandbox({
           run: ({ ask }) => {
             const scriptAt = ask.args.indexOf("-c") + 1;
             const tmuxArgs = ask.args.slice(scriptAt + 2);
+
             if (tmuxArgs.length === 0) return ran(0, shells.join("\n"));
+
             if (tmuxArgs[0] !== "new-session") return ran(0);
             shells = [
               [
@@ -434,15 +472,18 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
                 field(action),
               ].join(" "),
             ];
+
             return ran(1);
           },
         });
+
         sandbox.stand({
           name: SANDBOX,
           status: SANDBOX_STATUS.RUNNING,
           running: RUNNING_SESSION,
           tags: { sessionId: SESSION },
         });
+
         const layer = Layer.provide(
           agentSandboxLayer,
           Layer.mergeAll(
@@ -504,12 +545,14 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
       Effect.gen(function* () {
         const api = standing(undefined);
         const tags = { sessionId: SESSION, agentId: "agent-fixture" };
+
         const expired = api.sandbox.stand({
           name: agentSandboxName(SESSION),
           status: SANDBOX_STATUS.STOPPED,
           snapshotId: "snap_expired",
           tags,
         });
+
         api.state.goneSnapshots.add("snap_expired");
 
         const resumed = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
@@ -534,6 +577,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
       const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
         sandbox.attach(SESSION, SHELL),
       ).pipe(Effect.provide(running.layer));
+
       const refused = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
         sandbox.attach(SESSION, SHELL),
       ).pipe(Effect.provide(stopped.layer));

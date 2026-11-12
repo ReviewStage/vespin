@@ -222,6 +222,7 @@ export function agentBootsOf(
   agentIds: readonly string[],
 ): AgentBootEffect<ReadonlyMap<string, AgentBootRow>> {
   if (agentIds.length === 0) return Effect.succeed(new Map());
+
   return Effect.map(
     findBoots({ agentIds }),
     (rows) => new Map(rows.map((row) => [row.agentId, bootOf(row)])),
@@ -254,11 +255,13 @@ export function beginAgentBoot(
     | undefined,
 ): AgentBootEffect<void> {
   let inserted = false;
+
   return Effect.asVoid(
     underAgentQueueLock(
       agentId,
       Effect.gen(function* () {
         yield* upsertStarting({ agentId, at });
+
         if (first === undefined) return;
         const queued = yield* queueLineInLock(agentId, first.userId, first);
         inserted = queued.inserted;
@@ -284,6 +287,7 @@ export function agentBootRunnerUp(
     agentId,
     Effect.gen(function* () {
       const holds = yield* queueHoldsInLock(agentId);
+
       return yield* moved(agentId, {
         attempt,
         from: BOOTING_PHASES,
@@ -319,6 +323,7 @@ export function failAgentBoot(
   attempt?: number,
 ): AgentBootEffect<boolean> {
   let paused = false;
+
   return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
@@ -329,8 +334,10 @@ export function failAgentBoot(
         at,
         failure,
       });
+
       if (Option.isNone(failed)) return false;
       paused = yield* pauseInLock(agentId, QUEUE_PAUSE.BOOT_FAILED);
+
       return true;
     }),
     () => paused,
@@ -347,6 +354,7 @@ export function rebootAgent(
   at: Date,
 ): AgentBootEffect<Option.Option<AgentBootRow>> {
   let resumed = false;
+
   return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
@@ -356,7 +364,9 @@ export function rebootAgent(
         at,
         nextAttempt: true,
       });
+
       if (Option.isSome(boot)) resumed = yield* resumeInLock(agentId, QUEUE_PAUSE.BOOT_FAILED);
+
       return boot;
     }),
     () => resumed,

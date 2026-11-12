@@ -62,6 +62,7 @@ const NEWER_KIND: DeviceAgentLine = {
 
 /** The platform's script that makes the agent's repository, named so the scripted spawner answers it. */
 const WORKTREE_SCRIPT = "make-the-agents-repository";
+
 /** The runner's own start on the box, as the platform launches it. */
 const RUNNER = "/opt/vespin-host/node/bin/node";
 
@@ -139,9 +140,11 @@ const following = (lines: readonly DeviceAgentLine[]) =>
     const settled: string[] = [];
     const discardSettled = Deferred.makeUnsafe<void>();
     let linesRead = 0;
+
     const fetchLike = async (url: string | URL | Request, init?: RequestInit) => {
       const { pathname } = new URL(String(url));
       const body = init?.body === undefined ? {} : JSON.parse(String(init.body));
+
       switch (pathname) {
         case HOSTED_SERVICE_PATH.DEVICE_AGENT_DEVICES:
         case HOSTED_SERVICE_PATH.DEVICE_AGENT_PRESENCE:
@@ -151,20 +154,27 @@ const following = (lines: readonly DeviceAgentLine[]) =>
         case HOSTED_SERVICE_PATH.DEVICE_AGENT_LINES:
           if (init?.method === "POST") {
             settled.push(body.id);
+
             if (body.id === DISCARD.id) Deferred.doneUnsafe(discardSettled, Exit.void);
+
             return json({ done: true });
           }
+
           return linesRead++ === 0 ? json({ lines }) : held();
         default:
           return held();
       }
     };
+
     // Note that the discard's snapshot script is answered as saved, so the discard goes on to remove the folder.
     const spawner = scriptedSpawner((program, args) => {
       if (program !== "/bin/bash") return undefined;
+
       if (args[0] === "-l") return { stdout: "/usr/bin:/bin", exitCode: 0 };
+
       return args[0] === "-c" ? { exitCode: 0 } : undefined;
     });
+
     const services = Layer.mergeAll(
       spawner.layer,
       NodePath.layer,
@@ -174,6 +184,7 @@ const following = (lines: readonly DeviceAgentLine[]) =>
       Layer.succeed(Reporter, { report: () => {} }),
       Layer.succeed(LocalAgentPlatform, directMac(path.join(root, "tmp"))),
     );
+
     const composer = yield* composeLocalAgents({
       kernel: { stateRoot: path.join(root, "state"), createId: () => DEVICE_ID },
       deviceId: DEVICE_ID,
@@ -183,7 +194,9 @@ const following = (lines: readonly DeviceAgentLine[]) =>
         serviceBaseUrl: SERVICE,
       }),
     }).pipe(Effect.provide(services));
+
     yield* composer.lifetime;
+
     return { folder, owned, settled, discardSettled: Deferred.await(discardSettled) };
   });
 
@@ -225,6 +238,7 @@ const LAUNCH: DeviceAgentLine = {
   kind: DEVICE_AGENT_LINE_KIND.LAUNCH,
   payload: {},
 };
+
 /** A launch's first lines that continue a Claude Code session: its config, then the developer's message. */
 const RESUMING_LINES = [
   { harness: "claude_code", resume: "session-fixture", firstSequence: 0 },
@@ -239,6 +253,7 @@ const firstLinesOf = (spawned: ScriptedSpawner["spawned"]) =>
     const stdin = spawned.find((each) => each.program === RUNNER)?.stdin;
     assert.ok(typeof stdin === "object" && "stream" in stdin && typeof stdin.stream === "object");
     const first = Option.getOrThrow(yield* Stream.runHead(stdin.stream));
+
     return new TextDecoder()
       .decode(first)
       .split("\n")
@@ -261,29 +276,36 @@ const launching = (workStands: boolean, repositoryHangs = false, tempPlanted = f
     const root = yield* temporaryDirectoryScoped("agent-launch-");
     const home = path.join(root, "home");
     const layout = layoutUnder(root);
+
     if (workStands) mkdirSync(path.join(layout.checkoutPath, ".git"), { recursive: true });
+
     // Note that a planted root is a link to a folder someone else chose, as another user could leave on a temp folder every user shares.
     if (tempPlanted) {
       mkdirSync(path.join(root, "planted"));
       mkdirSync(path.join(root, "tmp"));
       symlinkSync(path.join(root, "planted"), path.dirname(layout.sharedFiles));
     }
+
     const launchSettled = Deferred.makeUnsafe<void>();
     const starting = Deferred.makeUnsafe<void>();
     const hung = Deferred.makeUnsafe<void>();
     const reported: string[] = [];
     const steps: string[] = [];
     let linesRead = 0;
+
     const fetchLike = async (url: string | URL | Request, init?: RequestInit) => {
       const { pathname } = new URL(String(url));
       const body = init?.body === undefined ? {} : JSON.parse(String(init.body));
+
       switch (pathname) {
         case HOSTED_SERVICE_PATH.DEVICE_AGENT_DEVICES:
         case HOSTED_SERVICE_PATH.DEVICE_AGENT_PRESENCE:
           return json({ done: true });
         case HOSTED_SERVICE_PATH.DEVICE_AGENT_LINE_STEP:
           steps.push(body.step);
+
           if (body.step === DEVICE_LAUNCH_STEP.STARTING) Deferred.doneUnsafe(starting, Exit.void);
+
           return json({ done: true });
         case HOSTED_SERVICE_PATH.DEVICE_AGENT_LINE_CLAIM:
           return json({
@@ -301,18 +323,23 @@ const launching = (workStands: boolean, repositoryHangs = false, tempPlanted = f
         case HOSTED_SERVICE_PATH.DEVICE_AGENT_LINES:
           if (init?.method === "POST") {
             if (body.id === LAUNCH.id) Deferred.doneUnsafe(launchSettled, Exit.void);
+
             return json({ done: true });
           }
+
           return linesRead++ === 0 ? json({ lines: [LAUNCH] }) : held();
         default:
           return held();
       }
     };
+
     const worktrees: { readonly branch: string | null }[] = [];
+
     const spawner = scriptedSpawner((program, args) => {
       if (program === "/bin/bash" && args[0] === "-l") {
         return { stdout: "/usr/bin:/bin", exitCode: 0 };
       }
+
       if (program === "/bin/bash" && args[1] === WORKTREE_SCRIPT) {
         return {
           exitCode: 0,
@@ -323,10 +350,14 @@ const launching = (workStands: boolean, repositoryHangs = false, tempPlanted = f
               }),
         };
       }
+
       if (program === "/bin/bash") return { exitCode: 0 };
+
       return program === RUNNER ? { exitCode: 0 } : undefined;
     });
+
     const platform = directMac(path.join(root, "tmp"));
+
     const services = Layer.mergeAll(
       spawner.layer,
       NodePath.layer,
@@ -340,10 +371,12 @@ const launching = (workStands: boolean, repositoryHangs = false, tempPlanted = f
         deviceArch: DEVICE_ARCH.X64,
         worktreeScript: (input) => {
           worktrees.push(input);
+
           return WORKTREE_SCRIPT;
         },
       }),
     );
+
     const composer = yield* composeLocalAgents({
       kernel: { stateRoot: path.join(root, "state"), createId: () => DEVICE_ID },
       deviceId: DEVICE_ID,
@@ -353,7 +386,9 @@ const launching = (workStands: boolean, repositoryHangs = false, tempPlanted = f
         serviceBaseUrl: SERVICE,
       }),
     }).pipe(Effect.provide(services));
+
     yield* composer.lifetime;
+
     return {
       spawned: spawner.spawned,
       worktrees,

@@ -17,6 +17,7 @@ export type PtyFrame = { readonly text: string } | { readonly bytes: Uint8Array 
 /** The PTY's output as the lines what it runs wrote, ending where that exits; a text frame that is not its exit is output sent as text. */
 export function ptyLinesOf(frames: Stream.Stream<PtyFrame>): Stream.Stream<string> {
   const decoder = new TextDecoder();
+
   return frames.pipe(
     Stream.takeWhile(
       (frame) =>

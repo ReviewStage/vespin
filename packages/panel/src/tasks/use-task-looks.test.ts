@@ -30,6 +30,7 @@ const CHARLES = { userId: "user-charles", name: "Charles Pan" };
 const LOOKED_AT = 1_000;
 
 const roots: Root[] = [];
+
 /** Every read mark the window asked of the service, in order, as `<mark>:<task>`. */
 let readMarks: string[] = [];
 
@@ -39,8 +40,10 @@ beforeEach(() => {
     act: (request: AnyAct) => {
       if (request.kind === ACT_KIND.TASKS_MARK_READ) {
         readMarks.push(`${request.payload.readMark}:${request.payload.taskId}`);
+
         return Promise.resolve({ status: FAKE_ANSWER.DONE, value: true });
       }
+
       return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not in this test." });
     },
   });
@@ -60,6 +63,7 @@ function windowOn(): {
   readonly looks: () => typeof NO_LOOKS;
 } {
   let looks = NO_LOOKS;
+
   function Reader({
     open,
     readerId,
@@ -70,10 +74,13 @@ function windowOn(): {
     row: Pick<TaskSummary, "readThrough" | "agents"> | undefined;
   }) {
     looks = useTaskLooks(open, readerId, row);
+
     return null;
   }
+
   const root = createRoot(document.createElement("div"));
   roots.push(root);
+
   return {
     draw: (open, readerId, row) =>
       act(() => root.render(withQueryClient(createElement(Reader, { open, readerId, row })))),
@@ -90,8 +97,10 @@ function changedFor(
     ...DOCUMENT_TASK,
     sectionEdits: edits.map((edit) => ({ ...edit, at: LOOKED_AT + 1, duringCall: false })),
   };
+
   const window = windowOn();
   window.draw(task, readerId, { readThrough: LOOKED_AT });
+
   return [...window.looks().changed].sort();
 }
 
@@ -118,6 +127,7 @@ test("a reader's id arriving while the plan stays open lights a teammate's saves
     ...DOCUMENT_TASK,
     sectionEdits: EDITS.map((edit) => ({ ...edit, at: LOOKED_AT + 1, duringCall: false })),
   };
+
   const window = windowOn();
   window.draw(task, undefined, { readThrough: LOOKED_AT });
   assert.deepEqual([...window.looks().changed].sort(), ["Context"]);
@@ -128,11 +138,13 @@ test("a reader's id arriving while the plan stays open lights a teammate's saves
 
 test("a reader's id arriving mid-stay lights neither a save that landed during the stay nor a section dismissed", () => {
   const charles = { section: "Approach", actor: DESCRIPTION_ACTOR.DEVELOPER, by: CHARLES };
+
   const task: Task = {
     ...DOCUMENT_TASK,
     updatedAt: LOOKED_AT + 1,
     sectionEdits: [{ ...charles, at: LOOKED_AT + 1, duringCall: false }],
   };
+
   const saved: Task = {
     ...task,
     updatedAt: LOOKED_AT + 2,
@@ -146,12 +158,15 @@ test("a reader's id arriving mid-stay lights neither a save that landed during t
       },
     ],
   };
+
   const stay = (dismissing: boolean) => {
     const window = windowOn();
     window.draw(task, undefined, { readThrough: LOOKED_AT });
+
     if (dismissing) act(() => window.looks().dismiss());
     window.draw(saved, undefined, { readThrough: LOOKED_AT });
     window.draw(saved, DEAN.userId, { readThrough: LOOKED_AT });
+
     return [...window.looks().changed];
   };
 
@@ -187,16 +202,21 @@ test("a task reads unread while it changed after the reader's mark or stands mar
     readThrough: LOOKED_AT + 1,
     agents: agentsAt(LOOKED_AT + 1),
   };
+
   const finished: TaskSummary = { ...read, agents: agentsAt(LOOKED_AT + 2) };
   const marked: TaskSummary = { ...read, markedUnread: true };
   const drawn: { unread: (task: TaskSummary) => boolean } = { unread: () => false };
+
   function Sidebar({ open }: { open: Task | undefined }) {
     useTaskLooks(open, DEAN.userId);
     drawn.unread = useUnreadTasks({ staged: false });
+
     return null;
   }
+
   const root = createRoot(document.createElement("div"));
   roots.push(root);
+
   const draw = (open: Task | undefined) =>
     act(() => root.render(withQueryClient(createElement(Sidebar, { open }))));
 

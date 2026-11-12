@@ -396,8 +396,10 @@ export interface BeatReading {
  */
 export function deviceStanding(beat: BeatReading, readFailed: boolean): DeviceStanding {
   if (beat.sinceBeatMs <= MAC_PRESENCE.FRESH_MS) return DEVICE_STANDING.ONLINE;
+
   if (readFailed) return DEVICE_STANDING.UNKNOWN;
   const ageAtRead = beat.sinceBeatMs - beat.sinceReadMs;
+
   return beat.sinceReadMs <= PRESENCE_READ_STANDS_MS && ageAtRead > MAC_PRESENCE.FRESH_MS
     ? DEVICE_STANDING.OFFLINE
     : DEVICE_STANDING.UNKNOWN;
@@ -571,6 +573,7 @@ export const MAXIMUM_START_BODY_BYTES =
 /** The bytes standard padded base64 spells, as an attachment's data carries them. */
 export function base64Bytes(base64: string): number {
   const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+
   return Math.floor(base64.length / 4) * 3 - padding;
 }
 
@@ -585,6 +588,7 @@ function spellsUtf8(base64: string): boolean {
   try {
     const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
     new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+
     return true;
   } catch {
     return false;
@@ -599,6 +603,7 @@ function attachmentIsReadable(attachment: {
   if (attachment.data.length > base64Chars(AGENT_ATTACHMENT_BYTES[attachment.mediaType])) {
     return false;
   }
+
   return attachment.mediaType !== AGENT_ATTACHMENT_TYPE.TEXT || spellsUtf8(attachment.data);
 }
 
@@ -804,6 +809,7 @@ export const startBrief = EffectSchema.makeFilter(
     if (blank === true) {
       return [prompt, attachments, from, note].every((each) => each === undefined);
     }
+
     return from === undefined
       ? note === undefined && carriesFiles(prompt, attachments)
       : prompt === undefined && carriesFiles(note, attachments);
@@ -1110,9 +1116,11 @@ export interface AgentOwnerRead {
  */
 export function agentOwnerOf(read: AgentOwnerRead): AgentOwner | undefined {
   if (read.taskId !== null) return { kind: AGENT_OWNER.TASK, taskId: read.taskId };
+
   if (read.runId !== null && read.runAutomationId !== null) {
     return { kind: AGENT_OWNER.RUN, automationId: read.runAutomationId, runId: read.runId };
   }
+
   return undefined;
 }
 
@@ -1475,6 +1483,7 @@ type PullRequestAuthor = Pick<AgentPullRequest, "author" | "authorAvatarUrl" | "
 /** Who opened a pull request, each field where the read held it, so a line built from it names them as the read did; nothing where GitHub named no one. */
 export function pullRequestAuthorOf(pullRequest: PullRequestAuthor): PullRequestAuthor {
   const { author, authorAvatarUrl, authorBot } = pullRequest;
+
   return {
     ...(author === undefined ? undefined : { author }),
     ...(authorAvatarUrl === undefined ? undefined : { authorAvatarUrl }),
@@ -2222,9 +2231,11 @@ const AGENT_MESSAGE_REPLY = new RegExp(
  */
 export function agentMessageWords(text: string): string | undefined {
   const [head, ...rest] = text.split("\n\n");
+
   if (head === undefined || !AGENT_MESSAGE_HEAD.test(head)) return undefined;
   const last = rest.at(-1);
   const words = last !== undefined && AGENT_MESSAGE_REPLY.test(last) ? rest.slice(0, -1) : rest;
+
   return words.join("\n\n").trim();
 }
 
@@ -2807,13 +2818,18 @@ export function applyMessagesPage(
 ): readonly AgentTranscriptMessage[] {
   if (page.length === 0) return held;
   const heard = new Map(page.map((message) => [message.id, message]));
+
   const joined = held.map((message) => {
     const again = heard.get(message.id);
+
     return again === undefined ? message : keepIdentity(message, again);
   });
+
   const known = new Set(held.map((message) => message.id));
   const appended = page.filter((message) => !known.has(message.id));
+
   const unchanged =
     appended.length === 0 && joined.every((message, index) => message === held[index]);
+
   return unchanged ? held : [...joined, ...appended];
 }

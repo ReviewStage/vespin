@@ -23,6 +23,7 @@ const YOUNG = new Date(NOW.getTime() - 60 * 60 * 1_000);
 const logRow = (at: Date) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const [row] = yield* db
       .insert(syncLog)
       .values({
@@ -33,6 +34,7 @@ const logRow = (at: Date) =>
         topics: [],
       })
       .returning({ txid: syncLog.txid });
+
     return row?.txid ?? assert.fail("the row was not logged");
   });
 

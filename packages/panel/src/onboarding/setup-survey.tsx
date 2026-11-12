@@ -43,7 +43,9 @@ import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
 
 /* Each question's answers, as the account keeps them. */
 type Referral = NonNullable<OnboardingSurvey["referral"]>;
+
 type Role = NonNullable<OnboardingSurvey["role"]>;
+
 type Intent = NonNullable<OnboardingSurvey["intent"]>;
 
 /** A question's options, in the order its words are declared. */
@@ -72,11 +74,14 @@ export interface Survey {
 function kept(answers: OnboardingSurvey): OnboardingSurvey {
   const words = (picked: string | undefined, other: string | undefined) => {
     const trimmed = other?.trim();
+
     return picked === SURVEY_OTHER && trimmed ? trimmed : undefined;
   };
+
   const referralOther = words(answers.referral, answers.referralOther);
   const roleOther = words(answers.role, answers.roleOther);
   const intentOther = words(answers.intent, answers.intentOther);
+
   return {
     ...(answers.referral === undefined ? undefined : { referral: answers.referral }),
     ...(referralOther === undefined ? undefined : { referralOther }),
@@ -143,18 +148,23 @@ function Question<Value extends string>({
 /** The survey's answers, held by setup so Back finds them as they were left, and the account's once kept. */
 export function useSurvey(): Survey {
   const { mutate: updateSetting } = useMutation(actMutation(ACT_KIND.SETTING_UPDATE));
+
   const stored = onboardingSurveyFrom(
     useQuery({ ...appStateQuery, select: selectAppSettingsView }).data?.onboardingSurvey,
   );
+
   const [draft, setDraft] = useState<OnboardingSurvey>();
   const saving = useRef<OnboardingSurvey | undefined>(undefined);
   // Note that the account's answers stand until a pick here, so setup on another machine opens on them.
   const answers = draft ?? stored ?? {};
+
   const answered =
     answers.referral !== undefined || answers.role !== undefined || answers.intent !== undefined;
+
   const keep = () => {
     if (!answered) return;
     const keeping = kept(answers);
+
     if (sameAnswers(saving.current ?? stored, keeping)) return;
     saving.current = keeping;
     updateSetting(
@@ -170,6 +180,7 @@ export function useSurvey(): Survey {
       },
     );
   };
+
   return {
     answers,
     answered,
@@ -181,6 +192,7 @@ export function useSurvey(): Survey {
 /** The survey's three questions. */
 export function SurveyQuestions({ survey }: { survey: Survey }): React.JSX.Element {
   const { answers, answer } = survey;
+
   return (
     <Stack gap={GAP.FIELD}>
       <Question

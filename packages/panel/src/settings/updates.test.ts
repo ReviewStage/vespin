@@ -48,8 +48,10 @@ function about(initial: UpdateSnapshot): AboutGroup {
   let asked = 0;
   let openedLatest = 0;
   let moved = 0;
+
   function MainProcess(): React.JSX.Element {
     const [update, setUpdate] = useState<UpdateSnapshot>(initial);
+
     return createElement(UpdatesSection, {
       offered: true,
       control: {
@@ -62,6 +64,7 @@ function about(initial: UpdateSnapshot): AboutGroup {
             currentVersion: update.currentVersion,
             installSupported: update.installSupported,
           });
+
           return Promise.resolve();
         },
         onInstall: () => undefined,
@@ -74,11 +77,13 @@ function about(initial: UpdateSnapshot): AboutGroup {
       },
     });
   }
+
   const page = document.createElement("div");
   document.body.append(page);
   const root = createRoot(page);
   roots.push(root);
   act(() => root.render(withQueryClient(createElement(MainProcess))));
+
   return { page, asked: () => asked, openedLatest: () => openedLatest, moved: () => moved };
 }
 
@@ -102,6 +107,7 @@ function pressed(target: HTMLAnchorElement | undefined): boolean {
   act(() => {
     target?.dispatchEvent(click);
   });
+
   return !click.defaultPrevented;
 }
 
@@ -112,6 +118,7 @@ test("at rest, Check for updates starts a check the row then shows running", () 
     installSupported: true,
     upToDate: true,
   });
+
   assert.match(page.textContent ?? "", /Up to date/);
 
   act(() => button(page, "Check for updates")?.click());
@@ -127,6 +134,7 @@ test("while a check runs, its press stays focusable, says so, and asks for no se
     currentVersion: "0.17.0",
     installSupported: true,
   });
+
   const busy = button(page, "Checking for updates");
   assert.ok(busy, "no button named Checking for updates");
 
@@ -143,6 +151,7 @@ test("a check that failed reads as an alert under the row, whose Retry checks ag
     currentVersion: "0.17.0",
     installSupported: true,
   });
+
   const alerts = page.querySelectorAll('[role="alert"]');
   assert.equal(alerts.length, 1);
   assert.equal(alerts[0]?.textContent, "Couldn't check for updatesRetry");
@@ -171,10 +180,13 @@ test("an install that failed reads as an alert with no Retry, beside the Downloa
 
 test("an install a read-only volume refused offers the move beside the Download, and is reported as a refusal", () => {
   const reports: ShownFailureReport[] = [];
+
   const uninstall = installShownFailureReporter((report) => {
     reports.push(report);
+
     return undefined;
   }, testQueryClientNow());
+
   const { page, moved } = about({
     status: UPDATE_STATUS.ERROR,
     currentVersion: "0.17.0",
@@ -182,6 +194,7 @@ test("an install a read-only volume refused offers the move beside the Download,
     installSupported: true,
     failure: UPDATE_FAILURE.READ_ONLY_VOLUME,
   });
+
   uninstall();
 
   assert.equal(
@@ -204,6 +217,7 @@ test("Download is a link to the release page whose press opens it through the up
     latestVersion: "0.18.0",
     installSupported: true,
   });
+
   const download = link(page, "Download");
   assert.equal(
     download?.getAttribute("href"),
@@ -222,15 +236,18 @@ test("Open changelog is a link to the changelog page whose press sends the chang
   fakeActs({
     act: (request) => {
       sent.push(request);
+
       return Promise.resolve({ status: FAKE_ANSWER.DONE, value: undefined });
     },
   });
+
   const { page } = about({
     status: UPDATE_STATUS.IDLE,
     currentVersion: "0.17.0",
     installSupported: true,
     upToDate: true,
   });
+
   const open = link(page, "Open changelog");
   assert.equal(open?.getAttribute("href"), "https://vespin.dev/changelog");
   assert.equal(link(page, "Open"), undefined, "the link names the page it opens");

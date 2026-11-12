@@ -175,7 +175,9 @@ const deviceLapse = (agent: ReconciledAgent, now: number) =>
     if (agent.machine !== AGENT_MACHINE.DEVICE || agent.deviceId == null) return undefined;
     const device = (yield* devicesNamed([agent.deviceId])).get(agent.deviceId);
     const seenBefore = new Date(now - DEVICE_LEASE.MS);
+
     if (device === undefined || device.lastSeenAt >= seenBefore) return undefined;
+
     return { deviceName: device.name, seenBefore };
   });
 
@@ -186,8 +188,10 @@ const placeOf = (machine: MachineLifecycle, agent: ReconciledAgent) =>
       userId: agent.userId,
       conversationId: agent.conversationId,
     });
+
     if (sessionId === undefined) return undefined;
     const found = Option.getOrUndefined(yield* machine.findPlace(agent.userId, sessionId));
+
     return found?.agentId === agent.id ? found : undefined;
   });
 
@@ -205,6 +209,7 @@ const stderrOf = (runner: RecordedRunner) =>
 /** A lost runner's turn's failure detail: the fixed sentence the status words match on, then how the runner ended, redacted and bounded as a runner's own failure is. */
 function exitedDetail(exit: Exclude<CommandExit, null>, stderr: string | undefined): string {
   const ended = `exit ${exit === COMMAND_GONE ? "unknown" : String(exit)}, stderr: ${stderr ?? "none"}`;
+
   return `${RUNNER_LOST_DETAIL}: ${redactCredentials(ended)}`.slice(0, FAILURE_CHARS);
 }
 
@@ -250,23 +255,32 @@ const unmade = (what: string) => (cause: Cause.Cause<unknown>) =>
 const runnerStanding = (machine: MachineLifecycle, agent: ReconciledAgent) =>
   Effect.gen(function* () {
     const place = yield* Effect.exit(placeOf(machine, agent));
+
     if (Exit.isFailure(place)) {
       yield* unread("place", place.cause);
+
       return { kind: RUNNER.UNREAD } satisfies RunnerStanding;
     }
+
     const found = place.value;
     const runner = found?.runner;
+
     if (found === undefined || runner === undefined) {
       return { kind: RUNNER.NONE, found } satisfies RunnerStanding;
     }
+
     const exit = yield* Effect.exit(machine.runnerExit(runner.handle, CODER.RUNNER_EXIT_READ));
+
     if (Exit.isFailure(exit)) {
       yield* unread("exit", exit.cause);
+
       return { kind: RUNNER.UNKNOWN, found, runner } satisfies RunnerStanding;
     }
+
     if (exit.value === null)
       return { kind: RUNNER.RUNNING, found, runner } satisfies RunnerStanding;
     const detail = exitedDetail(exit.value, yield* stderrOf(runner));
+
     return { kind: RUNNER.EXITED, found, exit: exit.value, detail } satisfies RunnerStanding;
   });
 
@@ -294,6 +308,7 @@ function endOf(
   retrying: string | undefined,
 ): LostTurnEnd {
   if (turn.cancelRequestedAt !== null) return { status: RUN_STATUS.CANCELED };
+
   if (pastCap(turn, at)) {
     return {
       status: RUN_STATUS.FAILED,
@@ -301,6 +316,7 @@ function endOf(
       failureDetail: PAST_CAP_DETAIL,
     };
   }
+
   // Note that a turn kept open on its plan's limit that no launch took up again failed for the limit, not for a stuck runner.
   if (turn.id === retrying) {
     return {
@@ -309,6 +325,7 @@ function endOf(
       failureDetail: PLAN_LIMIT_DETAIL,
     };
   }
+
   if (turn.status === TURN_STATUS.QUEUED) {
     // Note that a runner that ended cleanly, as a warm one does past its window, lost nothing of a line it never took.
     return runner.kind === RUNNER.EXITED && runner.exit !== RUNNER_EXIT.ENDED
@@ -323,6 +340,7 @@ function endOf(
           failureDetail: LINE_UNTAKEN_DETAIL,
         };
   }
+
   if (!ownedByLaunch(turn, launch)) {
     return {
       status: RUN_STATUS.FAILED,
@@ -330,6 +348,7 @@ function endOf(
       failureDetail: REPLACED_DETAIL,
     };
   }
+
   if (runner.kind === RUNNER.EXITED) {
     return {
       status: RUN_STATUS.FAILED,
@@ -337,6 +356,7 @@ function endOf(
       failureDetail: runner.detail,
     };
   }
+
   if (runner.kind === RUNNER.NONE) {
     return {
       status: RUN_STATUS.FAILED,
@@ -344,6 +364,7 @@ function endOf(
       failureDetail: RUNNER_LOST_DETAIL,
     };
   }
+
   return {
     status: RUN_STATUS.FAILED,
     failure: TURN_FAILURE.NO_PROGRESS,
@@ -364,9 +385,11 @@ const letGo = (machine: MachineLifecycle, agent: ReconciledAgent, runner: Runner
   Effect.gen(function* () {
     if (runner.kind === RUNNER.UNREAD) return;
     yield* recordAgentRunnerToken(agent.userId, agent.id, null);
+
     if (runner.kind === RUNNER.RUNNING || runner.kind === RUNNER.UNKNOWN) {
       yield* machine.kill(runner.runner.handle).pipe(Effect.catchCause(unmade("ended")));
     }
+
     if (runner.found === undefined) return;
     const place = { ...runner.found, userId: agent.userId, agentId: agent.id };
     yield* machine
@@ -384,6 +407,7 @@ const reported = (
     new Set(failed.map((turn) => turn.failure)),
     (failure) => {
       const turnIds = failed.filter((turn) => turn.failure === failure).map((turn) => turn.id);
+
       const report = new RunnerLost({
         agentId: agent.id,
         conversationId: agent.conversationId,
@@ -391,6 +415,7 @@ const reported = (
         failure,
         exitCode,
       });
+
       return Effect.andThen(
         Effect.logError(`a lapsed turn was failed: ${failure}`).pipe(
           Effect.annotateLogs({ turnId: turnIds.join(","), failure, exitCode }),
@@ -415,19 +440,24 @@ const deviceRunTaken = (
 ) =>
   Effect.gen(function* () {
     const turnIds = yield* runningTurnIds(agent.conversationId);
+
     if (turnIds.length === 0) return [];
     const launch = yield* latestDeviceAgentLaunch(agent.userId, agent.id);
+
     if (Option.isSome(launch)) {
       const taken = yield* settleLapsedDeviceAgentLine(
         agent.userId,
         launch.value.id,
         lapse.seenBefore,
       );
+
       // A launch the guard left open is one whose Mac beat since.
       if (Option.isNone(taken) && (yield* deviceLapse(agent, now)) === undefined) return [];
     }
+
     yield* recordAgentRunnerToken(agent.userId, agent.id, null);
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+
     const failed = yield* settleRunnerLostTurns(
       writer,
       agent.conversationId,
@@ -435,11 +465,13 @@ const deviceRunTaken = (
       hostAwayDetail(lapse.deviceName),
       new Set(turnIds),
     );
+
     yield* reported(
       agent,
       failed.map((id) => ({ id, failure: TURN_FAILURE.MODEL })),
       "device",
     );
+
     return failed;
   });
 
@@ -448,24 +480,30 @@ const reapedHolding = (agent: ReconciledAgent, readFirst: ReadonlySet<string>) =
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
     const device = yield* deviceLapse(agent, now);
+
     if (device !== undefined) return yield* deviceRunTaken(agent, device, now);
     const at = new Date(now);
+
     // Read again under the lease, so a turn whose runner moved it on since the first read keeps running.
     const lapsed = (yield* lapsedTurnsOf(agent.conversationId, at)).filter((turn) =>
       readFirst.has(turn.id),
     );
+
     if (lapsed.length === 0) return [];
     const machine = yield* deploymentLifecycle;
     // Note that the launch is read under the lease, which every launch holds, so the runner read is that launch's.
     const launch = yield* runnerLaunchOf(agent.id);
     const runner = yield* runnerStanding(machine, agent);
+
     // The turn the plan's limit cut short that no launch has taken up since, which the projection keeps until one does.
     const projected = yield* readNativeProjection({
       userId: agent.userId,
       conversationId: agent.conversationId,
     });
+
     const held = heldProjection(Option.getOrNull(projected)).turn;
     const retrying = held?.retrying === true ? held.id : undefined;
+
     const ends: readonly LapsedTurnEnd[] = lapsed.map((turn) => ({
       turn: {
         id: turn.id,
@@ -475,26 +513,32 @@ const reapedHolding = (agent: ReconciledAgent, readFirst: ReadonlySet<string>) =
       },
       end: endOf(turn, runner, launch, at, retrying),
     }));
+
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     const settled = new Set(yield* settleLapsedTurns(writer, agent.conversationId, ends, now, now));
+
     if (settled.size === 0) return [];
     // A runner is let go only for a turn of its own it settled: one a newer launch replaced leaves that launch's
     // runner be, and one it never took leaves it be where a turn stands open for it to take.
     const own = lapsed.filter((turn) => settled.has(turn.id) && ownedByLaunch(turn, launch));
     const ran = own.some((turn) => turn.status === TURN_STATUS.RUNNING);
+
     if (ran || (own.length > 0 && !(yield* hasOpenTurn(agent.conversationId)))) {
       yield* letGo(machine, agent, runner);
     }
+
     const failed = ends.flatMap(({ turn, end }) =>
       settled.has(turn.id) && end.status === RUN_STATUS.FAILED
         ? [{ id: turn.id, failure: end.failure }]
         : [],
     );
+
     yield* reported(
       agent,
       failed,
       runner.kind === RUNNER.EXITED ? String(runner.exit) : runner.kind,
     );
+
     return [...settled];
   });
 
@@ -512,11 +556,14 @@ export const reconcileAgent = /* @__PURE__ */ Effect.fn("web/reconcileAgent")(fu
     const now = yield* Clock.currentTimeMillis;
     const lapsed = yield* lapsedTurnsOf(agent.conversationId, new Date(now));
     const device = yield* deviceLapse(agent, now);
+
     if (lapsed.length === 0 && device === undefined) return [];
+
     const reaped = yield* holdingRunnerIfFree(
       agent.id,
       reapedHolding(agent, new Set(lapsed.map((turn) => turn.id))),
     );
+
     return Option.getOrElse(reaped, (): readonly string[] => []);
   }).pipe(Effect.annotateLogs(agentLogIds(agent)));
 });
@@ -550,6 +597,7 @@ const reapLapsedBoots = (now: Date) =>
   Effect.gen(function* () {
     const boots = yield* lapsedAgentBoots(now, RECONCILE_SWEEP.AGENTS);
     let failed = 0;
+
     for (const boot of boots) {
       if (yield* failAgentBoot(boot.agentId, BOOT_FAILURE.NO_RESPONSE, now, boot.attempt)) {
         failed += 1;
@@ -558,6 +606,7 @@ const reapLapsedBoots = (now: Date) =>
         );
       }
     }
+
     return failed;
   });
 
@@ -578,24 +627,31 @@ export const reconcileAgents = /* @__PURE__ */ Effect.fn("web/reconcileAgents")(
       Effect.as(Effect.logError(`lapsed first launches were not failed: ${causeKind(cause)}`), 0),
     ),
   );
+
   const agents = yield* lapsedAgents(new Date(now), RECONCILE_SWEEP.AGENTS);
+
   const exits = yield* Effect.forEach(agents, (agent) => Effect.exit(reconcileAgent(agent)), {
     concurrency: RECONCILE_SWEEP.CONCURRENCY,
   });
+
   let settled = 0;
   let failures = 0;
+
   for (const [index, exit] of exits.entries()) {
     if (Exit.isSuccess(exit)) {
       settled += exit.value.length;
       continue;
     }
+
     failures += 1;
     const agent = agents[index];
     yield* Effect.logError(
       `an agent's lapsed turns were not reaped: ${causeKind(exit.cause)}`,
     ).pipe(Effect.annotateLogs(agent === undefined ? {} : agentLogIds(agent)));
   }
+
   if (failures > 0) return yield* new ReapsFailed({ failures, settled: settled + boots });
+
   return settled + boots;
 });
 
@@ -610,6 +666,7 @@ export const reconcileAgents = /* @__PURE__ */ Effect.fn("web/reconcileAgents")(
 export const keepRunningSandboxesUp = /* @__PURE__ */ Effect.fn("web/keepRunningSandboxesUp")(
   function* (now: number) {
     const names = yield* runningTurnSandboxes(new Date(now), KEEP_UP_SWEEP.SANDBOXES);
+
     const touched = (name: string) =>
       touchAgentSandbox(name).pipe(
         Effect.timeoutOption(KEEP_UP_SWEEP.TOUCH),
@@ -619,13 +676,16 @@ export const keepRunningSandboxesUp = /* @__PURE__ */ Effect.fn("web/keepRunning
             : Effect.logWarning("a running turn's sandbox was not touched in time"),
         ),
       );
+
     const swept = yield* Effect.forEach(names, touched, {
       concurrency: KEEP_UP_SWEEP.CONCURRENCY,
       discard: true,
     }).pipe(Effect.timeoutOption(KEEP_UP_SWEEP.SWEEP));
+
     if (Option.isNone(swept)) {
       yield* Effect.logWarning("the running turns' sandboxes were not all touched in time");
     }
+
     return names.length;
   },
 );

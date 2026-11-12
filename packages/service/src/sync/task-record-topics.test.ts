@@ -58,6 +58,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -69,6 +70,7 @@ const wakes = <A, E, R>(
 ) =>
   Effect.gen(function* () {
     const fired = yield* expectTopicsFire(write, topics);
+
     for (const woken of reads) {
       // Note that each read here names its topics by its params alone, never looking them up.
       assert.ok(Array.isArray(woken), "the read names its topics");
@@ -77,6 +79,7 @@ const wakes = <A, E, R>(
         "the read is woken by a topic the write notifies",
       );
     }
+
     return fired;
   });
 
@@ -99,6 +102,7 @@ it.layer(getTestDB())("what moves an open task's record notifies", (it) => {
           [...onTask, [TOPIC.WORKSPACE, task.workspaceId]],
           [taskRecordRead.topics(params), taskHistoryRead.topics(params)],
         );
+
         const shown = yield* wakes(
           writePage(
             owner,
@@ -109,6 +113,7 @@ it.layer(getTestDB())("what moves an open task's record notifies", (it) => {
           onTask,
           [taskRecordRead.topics(params), taskPagesRead.topics(params)],
         );
+
         const pageId = Option.getOrThrow(shown.value).id;
         yield* wakes(
           startDescriptionCommentThread(
@@ -132,6 +137,7 @@ it.layer(getTestDB())("what moves an open task's record notifies", (it) => {
       Effect.gen(function* () {
         const owner = yield* openAccount;
         const task = yield* startTask(owner, { name: "Checkout flow" });
+
         const started = yield* createAgent(owner, {
           taskId: task.id,
           idempotencyKey: randomUUID(),
@@ -142,6 +148,7 @@ it.layer(getTestDB())("what moves an open task's record notifies", (it) => {
           repository: null,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         const agent = Option.getOrThrow(started).agent;
         const params = { userId: owner, id: task.id };
         const tabs = [taskBrowserTabsRead.topics(params)];
@@ -160,6 +167,7 @@ it.layer(getTestDB())("what moves an open task's record notifies", (it) => {
           onTask,
           tabs,
         );
+
         const tabId = opened.value.id;
         yield* wakes(
           pointBrowserTab(agent.conversationId, {
@@ -199,12 +207,14 @@ it.layer(getTestDB())("what moves an open task's record notifies", (it) => {
         const sealed = (yield* readGitHubTokenRow(teammate))?.sealedToken ?? "";
         const now = new Date(yield* Clock.currentTimeMillis);
         const params = { userId: teammate, id: task.id };
+
         const reads = [
           taskRecordRead.topics(params),
           taskPagesRead.topics(params),
           taskHistoryRead.topics(params),
           taskBrowserTabsRead.topics(params),
         ];
+
         const teammateTopic: SyncTopic = [TOPIC.ACCOUNT, teammate];
 
         yield* wakes(

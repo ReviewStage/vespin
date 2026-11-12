@@ -4,7 +4,9 @@ import type { ExperimentChoices } from "./experiments.js";
 import { APP_SETTING_DEFAULTS, type StoredAppSettings } from "./schema-access.js";
 
 export type { SettingsResetScope } from "./schema.js";
+
 export { SETTINGS_RESET_SCOPE } from "./schema.js";
+
 export type {
   AppSettingField,
   AppSettingValue,
@@ -44,6 +46,7 @@ type ResolvedSettingField =
   | "pullRequestOpen"
   | "commitAuthor"
   | "agentPermissionMode";
+
 export type AppSettingsView = Omit<StoredAppSettings, ResolvedSettingField> & {
   [Field in ResolvedSettingField]-?: NonNullable<StoredAppSettings[Field]>;
 } & { experiments: ExperimentChoices; accountRead: boolean };

@@ -94,6 +94,7 @@ export function fixtureBridge(profile: RunProfile): AppBridge {
     version: 1,
     window: { fullScreen: false },
   };
+
   const quiet = Object.fromEntries([
     ...Object.keys(PUSH_METHOD).map((method) => [method, () => () => undefined]),
     ...bridgeEntries().map(([method, entry]) => [
@@ -103,6 +104,7 @@ export function fixtureBridge(profile: RunProfile): AppBridge {
         : () => undefined,
     ]),
   ]);
+
   // SAFETY: the map derives every method of the contract from BRIDGE by its kind's shape, as the web root's fixture does.
   return {
     ...quiet,
@@ -141,15 +143,18 @@ export async function drawPanel() {
     root.render(withQueryClient(createElement(PanelRouterProvider, { router }))),
   );
   await settle();
+
   const buttonOf = (label: string) =>
     [...element.querySelectorAll("button")].findLast(
       (one) => one.getAttribute("aria-label") === label,
     );
+
   const click = (label: string) => {
     const button = buttonOf(label);
     assert.ok(button !== undefined, `a ${label} button stands`);
     button.click();
   };
+
   return {
     shows: (label: string) => element.querySelector(`[aria-label="${label}"]`) !== null,
     offers: (label: string) => buttonOf(label) !== undefined,

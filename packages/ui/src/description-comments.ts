@@ -98,6 +98,7 @@ function pendingIn(
   ) {
     return pending;
   }
+
   if (laid?.from !== pending.text || laid.to !== descriptionText) {
     laid = {
       from: pending.text,
@@ -105,7 +106,9 @@ function pendingIn(
       change: textChange(pending.text, descriptionText),
     };
   }
+
   const span = laid.change(pending);
+
   return span === undefined ? undefined : { ...pending, ...span };
 }
 
@@ -122,6 +125,7 @@ export function commentSpansIn(
   descriptionText?: string,
 ): readonly CommentSpan[] {
   const begun = pending === undefined ? undefined : pendingIn(pending, descriptionText);
+
   const anchored = threads.flatMap((thread) =>
     thread.anchor !== undefined && openThread(thread)
       ? [
@@ -133,6 +137,7 @@ export function commentSpansIn(
         ]
       : [],
   );
+
   const all =
     begun === undefined
       ? anchored
@@ -145,10 +150,13 @@ export function commentSpansIn(
             block: begun.scope === DESCRIPTION_COMMENT_SCOPE.BLOCK,
           },
         ];
+
   return all.flatMap((span) => {
     const from = Math.max(span.from, section.from);
     const to = Math.min(span.to, section.to);
+
     if (from >= to) return [];
+
     return [
       {
         from: from - section.from,
@@ -182,6 +190,7 @@ export interface MarginView {
  */
 function keptInView(top: number, height: number, view: MarginView): number {
   if (top + height <= view.bottom || top >= view.bottom) return top;
+
   return Math.max(Math.min(top, view.top), view.bottom - height);
 }
 
@@ -199,8 +208,10 @@ export function hungTop(
   view: MarginView,
 ): number {
   const below = line + drop;
+
   if (below + height <= view.bottom || line < view.top || line >= view.bottom) return below;
   const above = line - gap - height;
+
   return above >= view.top ? above : Math.max(view.top, view.bottom - height);
 }
 
@@ -221,22 +232,27 @@ export function marginTops(
   const tops = sorted.map((card) => card.top);
   const at = sorted.findIndex((card) => card.id === active);
   const open = sorted[at];
+
   if (open !== undefined && view !== undefined) {
     tops[at] = keptInView(open.top, open.height, view);
   }
+
   if (at >= 0) {
     for (let index = at + 1; index < sorted.length; index += 1) {
       const above = sorted[index - 1];
       const own = tops[index];
       const aboveTop = tops[index - 1];
+
       if (above !== undefined && own !== undefined && aboveTop !== undefined) {
         tops[index] = Math.max(own, aboveTop + above.height + gap);
       }
     }
+
     for (let index = at - 1; index >= 0; index -= 1) {
       const card = sorted[index];
       const own = tops[index];
       const belowTop = tops[index + 1];
+
       if (card !== undefined && own !== undefined && belowTop !== undefined) {
         tops[index] = Math.min(own, belowTop - card.height - gap);
       }
@@ -246,10 +262,12 @@ export function marginTops(
       const above = sorted[index - 1];
       const own = tops[index];
       const aboveTop = tops[index - 1];
+
       if (above !== undefined && own !== undefined && aboveTop !== undefined) {
         tops[index] = Math.max(own, aboveTop + above.height + gap);
       }
     }
   }
+
   return new Map(sorted.map((card, index) => [card.id, tops[index] ?? card.top]));
 }

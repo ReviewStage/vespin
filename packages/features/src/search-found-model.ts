@@ -71,6 +71,7 @@ export function taskSearchSubject(
     workspaceName === undefined || task.number === undefined
       ? undefined
       : taskKey(workspaceName, task.number);
+
   return {
     label: task.name,
     lines: [task.repository, key].filter((line): line is string => line != null && line !== ""),

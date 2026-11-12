@@ -93,9 +93,11 @@ export function readRepositoryFolder(
     const treeish = encodeURIComponent(`${repository.defaultBranch}:${path}`);
     const listing = `/repos/${repository.fullName}/git/trees/${treeish}`;
     const request = githubRead(recursive ? `${listing}?recursive=1` : listing, token);
+
     return yield* Effect.scoped(
       Effect.gen(function* () {
         const response = yield* send(request);
+
         // Note that GitHub answers a path naming a file as unprocessable,
         // since `<branch>:<file>` is a blob and no tree.
         if (
@@ -104,7 +106,9 @@ export function readRepositoryFolder(
         ) {
           return NO_FOLDER;
         }
+
         const answer = yield* readBody(response, TreeSchema);
+
         return {
           found: true,
           entries: answer.tree.map((entry) => ({

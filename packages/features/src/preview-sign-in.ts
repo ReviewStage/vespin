@@ -17,6 +17,8 @@ export const PREVIEW_SIGN_IN = {
 /** The step the sign-in page's query asks to return to, where it is the preview's step; none for anything else. */
 export function previewSignInReturn(search: string): string | undefined {
   const asked = new URLSearchParams(search).get(PREVIEW_SIGN_IN.RETURN_PARAM);
+
   if (asked === null || !asked.startsWith(`${PREVIEW_SIGN_IN.PATH}?`)) return undefined;
+
   return asked;
 }

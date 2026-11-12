@@ -78,6 +78,7 @@ const ACME = { id: "workspace-acme", name: "Acme", role: WORKSPACE_ROLE.OWNER, g
 const DEAN = { userId: "user-dean", name: "Dean Stratakos" };
 const CHARLES = { userId: "user-charles", name: "Charles Pan" };
 const PRIYA = { userId: "user-priya", name: "Priya Raman" };
+
 /** An automation of the workspace's or of one member's own, made by `by`. */
 function automation(
   n: number,
@@ -124,9 +125,11 @@ const AUTOMATIONS = [
 ];
 
 const PRIYA_PICTURE = "https://lh3.googleusercontent.com/a/photo-11";
+
 /** Someone who left having only revised a task, whom no task or agent names. */
 const OLA = { userId: "user-ola", name: "Ola Berg" };
 const FORMER = [{ ...PRIYA, pictureUrl: PRIYA_PICTURE }, OLA];
+
 const MEMBERS: readonly WorkspaceMember[] = [
   { ...DEAN, email: "dean@example.com", role: WORKSPACE_ROLE.OWNER },
   { ...CHARLES, email: "charles@example.com", role: WORKSPACE_ROLE.MEMBER },
@@ -180,8 +183,11 @@ function task(
     createdBy,
     ...(assignee === undefined ? undefined : { assignee }),
   };
+
   LINES.set(summary.id, agents);
+
   if (agents.length === 0) return summary;
+
   return { ...summary, agents: { total: agents.length, working: 0, pullRequestTotal: 0 } };
 }
 
@@ -257,20 +263,28 @@ const HOLDING: Partial<AppInboxSlice> = {
 let inboxRead: Partial<AppInboxSlice> = HOLDING;
 
 let root: Root | undefined;
+
 /** Whether the Inbox's reads are refused, as a read that failed is. */
 let inboxRefused = false;
+
 /** Whether the automations' reads are refused, as a read that failed is. */
 let automationsRefused = false;
+
 /** Whether the Inbox's reads are still out, answering nothing yet. */
 let inboxHeld = false;
+
 /** Whether the automations' reads are still out, answering nothing yet. */
 let automationsHeld = false;
+
 /** Whether the workspace's people are held back until the test lays them with `answerMembers`. */
 let membersHeld = false;
+
 /** Whether the read of the workspace's people is refused, as a read that failed is. */
 let membersRefused = false;
+
 /** Lays the held-back people on the document, the fixture's members and who left. */
 let answerMembers: () => void = () => undefined;
+
 /** Every text the page asked the window to copy, in order. */
 let copied: string[] = [];
 
@@ -325,7 +339,9 @@ interface Opened {
 /** The account's feed as the host holds it: each task's items, unless the test holds or refuses it. */
 function feedNow(): AppHostRead<AppInboxItems> {
   if (inboxHeld) return UNREAD;
+
   if (inboxRefused) return { failed: true };
+
   return {
     rows: {
       [INBOX_SCOPE_KIND.PLAN]: Object.fromEntries(
@@ -343,15 +359,18 @@ function feedNow(): AppHostRead<AppInboxItems> {
 function holdPeople(deliver: HostReadsHanded["deliverMembers"]): void {
   const people = (): AppWorkspaceMembersRead =>
     membersRefused ? { failed: true } : { rows: { members: MEMBERS, former: FORMER } };
+
   holdMembers(deliver, (workspaceId) => {
     if (!membersHeld) return people();
     answerMembers = () => deliver({ [workspaceId]: people() });
+
     return undefined;
   });
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.WORKSPACE_MEMBERS_RETRY]: ({ workspaceId }) => {
       deliver({ [workspaceId]: people() });
+
       return Promise.resolve();
     },
   });
@@ -376,10 +395,12 @@ function mountWith(
   holdAutomations(reads.deliverAutomations, {
     [AUTOMATION_FOLLOW.WORKSPACE]: () => {
       if (automationsHeld) return undefined;
+
       return automationsRefused ? { failed: true } : { rows: AUTOMATIONS };
     },
   });
   holdPeople(reads.deliverMembers);
+
   const control = (more: Partial<TasksControl>) =>
     tasksControl({
       liveAgents: followedOf(more.tasks ?? overrides.tasks ?? TASKS),
@@ -392,10 +413,12 @@ function mountWith(
       ...overrides,
       ...more,
     });
+
   // The page stands at its person's address under Acme, as the router stands it.
   const router = windowRouter(
     createMemoryHistory({ initialEntries: [`/acme/person/${encodeURIComponent(userId)}`] }),
   );
+
   const draw = (tasks: TasksControl) =>
     act(() =>
       root?.render(
@@ -410,12 +433,14 @@ function mountWith(
         ),
       ),
     );
+
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
   draw(control({}));
   /** Draws the page again over the workspace with `more` on top of what it was mounted with. */
   const redraw = (more: Partial<TasksControl>) => draw(control(more));
+
   return { page: container, opened, redraw, router };
 }
 
@@ -449,7 +474,9 @@ function sections(page: HTMLElement): Record<string, string[]> {
 /** What an element says to a reader: its words without its marks, which are hidden from one. */
 function said(element: Element): string {
   const copy = element.cloneNode(true) as Element;
+
   for (const hidden of copy.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+
   return copy.textContent ?? "";
 }
 
@@ -475,7 +502,9 @@ function openRowMenu(page: HTMLElement, name: string, thing: string): string[] {
   const more = button(page, name)
     .closest("li")
     ?.querySelector<HTMLButtonElement>(`button[aria-label="${thing} actions"]`);
+
   act(() => (more ?? assert.fail(`${name} offers its ⋯`)).click());
+
   return [...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent ?? "");
 }
 
@@ -501,7 +530,9 @@ function button(page: HTMLElement, text: string): HTMLButtonElement {
   const found = [...page.querySelectorAll("button")].find((each) =>
     (each.querySelector(".ui-list-row-title") ?? each).textContent?.startsWith(text),
   );
+
   assert.ok(found, `${text} stands`);
+
   return found;
 }
 
@@ -593,10 +624,12 @@ test("a waiting item is the Inbox's own row: its task named on a line of its own
 test("an agent's row says its failure at its end and hangs the agent's card while rested on, as the sidebar's row does", async () => {
   const broken = agent(9, "Flaky retry", CHARLES, AGENT_STATUS.FAILED, 5 * MINUTE);
   const failing = task(9, "Retry flake hunt", CHARLES, 5 * MINUTE, [broken]);
+
   const { page } = mountWith(
     { tasks: [...TASKS, failing], listed: { tasks: [...TASKS, failing] } },
     CHARLES.userId,
   );
+
   await settle();
 
   const row = button(page, "Flaky retry");
@@ -646,6 +679,7 @@ test("a person's tasks assigned to them stand above those they created, a task b
   const handed = [5, 6, 7, 8, 9, 10].map((n) =>
     task(n, `Handed over ${n}`, DEAN, n * MINUTE, [], CHARLES),
   );
+
   const own = task(11, "Charles's own retries", CHARLES, 60 * MINUTE, [], CHARLES);
   const listed = [...TASKS, ...handed, own];
   const { page } = mountWith({ tasks: listed, listed: { tasks: listed } }, CHARLES.userId);
@@ -667,10 +701,12 @@ test("a person's tasks assigned to them stand above those they created, a task b
   const head = page.querySelector<HTMLButtonElement>(
     'section[aria-label="Assigned"] button[aria-expanded]',
   );
+
   const foot = () =>
     [...page.querySelectorAll("button")].some((each) =>
       each.textContent?.startsWith("Show 2 more"),
     );
+
   act(() => head?.click());
   await vi.waitFor(() => assert.deepEqual(sections(page).Assigned, []));
   assert.equal(head?.getAttribute("aria-expanded"), "false");
@@ -687,10 +723,12 @@ test("a person's task is the Tasks page's row: its status before its name, one f
   const listed = [RETRIES, CACHE, started, SHIM];
   const { page } = mountWith({ tasks: listed, listed: { tasks: listed } }, CHARLES.userId);
   await settle();
+
   const row = (name: string) =>
     [...page.querySelectorAll('section[aria-label="Created"] li')].find((each) =>
       each.querySelector(".ui-task-row-press")?.textContent?.includes(name),
     ) ?? assert.fail(`${name} is listed`);
+
   const status = (name: string) =>
     row(name).querySelector('[data-cell="status"] [data-status]')?.getAttribute("data-status");
 
@@ -761,6 +799,7 @@ test("Copy link copies their page's link under the slug of the workspace it stan
     },
     CHARLES.userId,
   );
+
   await settle();
 
   act(() => page.querySelector<HTMLButtonElement>('button[aria-label="Person actions"]')?.click());
@@ -873,6 +912,7 @@ test("while the Inbox is read, its placeholder stands where the section waiting 
       section.querySelector('[role="status"]')?.textContent ??
       "",
   );
+
   assert.deepEqual(order.slice(0, 3), ["Working now", "Reading your inbox…", "Created"]);
 });
 
@@ -938,10 +978,12 @@ test("a link to someone who left whom only the former members read names opens t
 
 test("on a phone the page is headed by its way back's glyph, their name centered, and one ⋯ holding the sidebar's filter beside the page's own actions", async () => {
   const left: string[] = [];
+
   const { page } = mountWith({}, CHARLES.userId, undefined, MEMBERS.length, {
     label: "Inbox",
     onPress: () => left.push("away"),
   });
+
   await settle();
   const head = page.querySelector<HTMLElement>(".person-page-head");
   assert.ok(head, "the phone's head stands");
@@ -965,15 +1007,19 @@ test("on a phone the page is headed by its way back's glyph, their name centered
 
 test("on a phone a page for someone nobody names still leads with its way back", async () => {
   const left: string[] = [];
+
   const { page } = mountWith({}, "user-stranger", undefined, MEMBERS.length, {
     label: "Inbox",
     onPress: () => left.push("away"),
   });
+
   await settle();
   assert.match(page.textContent ?? "", /Not found/u);
+
   const back = [...page.querySelectorAll<HTMLButtonElement>(".person-page-head button")].find(
     (each) => each.textContent?.trim() === "Inbox",
   );
+
   assert.ok(back, "the way back stands");
   act(() => back.click());
   assert.deepEqual(left, ["away"]);
@@ -984,12 +1030,14 @@ test("a task's row offers the sidebar's acts from its ⋯, and Rename makes its 
   await settle();
 
   const items = openRowMenu(page, "Retry budget dashboard", "Task");
+
   for (const act of ["Copy link", "Rename", "Permanently delete"]) {
     assert.ok(
       items.some((item) => item.startsWith(act)),
       `${act} is offered`,
     );
   }
+
   act(() => button(document.body, "Rename").click());
   await settle();
 
@@ -1085,6 +1133,7 @@ test("a task no longer theirs slides out of its section, drawn on out of reach u
 
 test("a teammate's agent at rest is archived from its row at once, read again by its own id though no task is open", async () => {
   const archived: string[] = [];
+
   const { page } = mountWith(
     {
       agents: {
@@ -1092,12 +1141,14 @@ test("a teammate's agent at rest is archived from its row at once, read again by
         me: DEAN.userId,
         onArchive: (agentId) => {
           archived.push(agentId);
+
           return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
         },
       },
     },
     CHARLES.userId,
   );
+
   await settle();
 
   openRowMenu(page, "Tenant cache keys", "Agent");
@@ -1118,6 +1169,7 @@ test("archiving chosen agents where a teammate's still works asks once before an
   const GUARD = agent(4, "Retry storm guard", CHARLES, AGENT_STATUS.RUNNING, 4 * MINUTE);
   const STORM = task(5, "Retry storm", CHARLES, 4 * MINUTE, [GUARD]);
   const tasks = [...TASKS, STORM];
+
   const { page } = mountWith(
     {
       tasks,
@@ -1126,23 +1178,28 @@ test("archiving chosen agents where a teammate's still works asks once before an
         me: DEAN.userId,
         onArchive: (agentId, _, how) => {
           archived.push([agentId, how?.asked === true]);
+
           return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
         },
       }),
     },
     CHARLES.userId,
   );
+
   await settle();
 
   for (const title of [BACKOFF.title, GUARD.title]) {
     const box = button(page, title).closest("li")?.querySelector<HTMLElement>('[role="checkbox"]');
     act(() => (box ?? assert.fail(`${title} draws its box`)).click());
   }
+
   openRowMenu(page, BACKOFF.title, "Agent");
   act(() => button(document.body, "Archive").click());
   await settle();
+
   const dialog =
     document.querySelector<HTMLElement>('[role="alertdialog"]') ?? assert.fail("it asks first");
+
   assert.match(dialog.textContent ?? "", /Archive agents\?/u);
   assert.deepEqual(archived, [], "nothing is archived before the answer");
 
@@ -1165,6 +1222,7 @@ test("Mark as unread on a task's row asks the service to mark it unread for the 
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_MARK_READ]: ({ taskId, readMark }) => {
       marks.push(`${readMark}:${taskId}`);
+
       return Promise.resolve(true);
     },
   });

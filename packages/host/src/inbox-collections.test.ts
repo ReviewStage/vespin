@@ -20,6 +20,7 @@ const ITEM: InboxItem = {
 /** The item as a reminder change draws it over `item`. */
 function reminded(item: InboxItem, until: number | null): InboxItem | undefined {
   const drawn = INBOX_ITEM.drawn({ kind: INBOX_CHANGE.REMINDED, itemId: item.id, until }, item);
+
   return typeof drawn === "object" ? drawn : undefined;
 }
 

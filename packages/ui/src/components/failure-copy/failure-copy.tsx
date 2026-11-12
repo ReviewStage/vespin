@@ -36,12 +36,15 @@ export function useFailureDetails(failure: ReportedFailure | undefined): string 
     readonly of: ReportedFailure;
     readonly details: string | undefined;
   }>();
+
   // Note that it is said shown before the first paint, so a glyph that will stand is drawn at once and none flashes in.
   useLayoutEffect(() => {
     if (failure === undefined) return undefined;
     setRead({ of: failure, details: failure.shown() });
+
     return () => failure.hidden();
   }, [failure]);
+
   return read !== undefined && read.of === failure ? read.details : undefined;
 }
 
@@ -55,7 +58,9 @@ export function FailureCopy({
 }): React.JSX.Element | null {
   const reported = isReported(failure) ? failure : undefined;
   const details = useFailureDetails(reported);
+
   if (reported === undefined || details === undefined) return null;
+
   return (
     <CopyButton
       text={details}

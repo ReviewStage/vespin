@@ -83,6 +83,7 @@ function useActivityTokens(): {
   const [ends, setEnds] = useState<readonly EndedActivity[]>([]);
   useEffect(() => {
     if (liveActivityModule === null) return undefined;
+
     const subscriptions = [
       liveActivityModule.addListener("onStartToken", ({ token }) => setStart(token)),
       liveActivityModule.addListener("onActivityToken", ({ token }) => setActivity(token)),
@@ -91,14 +92,17 @@ function useActivityTokens(): {
         setEnds((waiting) => [...waiting, { token: token ?? undefined }]);
       }),
     ];
+
     return () => {
       for (const subscription of subscriptions) subscription.remove();
     };
   }, []);
+
   const told = useCallback(
     (end: EndedActivity) => setEnds((waiting) => waiting.filter((each) => each !== end)),
     [],
   );
+
   return { start, activity, ends, told };
 }
 
@@ -146,22 +150,26 @@ export function useLiveActivity(signedIn: boolean): void {
   const [retries, setRetries] = useState(0);
   useEffect(() => {
     if (phone === undefined) return;
+
     // Note that a failure retries only after a change it ran over, so a service that refuses never loops.
     const failed = () => {
       if (!missed.current) return;
       missed.current = false;
       setRetries((count) => count + 1);
     };
+
     for (const end of ends) {
       // Note that an end naming no token would clear whatever activity stands, so it is dropped while a newer one does.
       if (end.token === undefined && activity !== undefined) {
         told(end);
         continue;
       }
+
       if (telling.current.has(end)) {
         missed.current = true;
         continue;
       }
+
       telling.current.add(end);
       // Note that the end names its own token, so the service clears it alone, and a late one never clears a newer activity's.
       acts[ACT_KIND.LIVE_ACTIVITY_ENDED]({
@@ -172,6 +180,7 @@ export function useLiveActivity(signedIn: boolean): void {
         (answer) => {
           logRefusal(answer);
           telling.current.delete(end);
+
           // An end the service did not take waits for the phone's next change.
           if ("failure" in answer) failed();
           else told(end);
@@ -198,20 +207,24 @@ export function useLiveActivity(signedIn: boolean): void {
   useEffect(() => {
     if (liveActivityModule === null || !signedIn) return undefined;
     const module = liveActivityModule;
+
     const subscription = module.addListener("onStop", ({ request, agentId }) => {
       write(() => acts[ACT_KIND.AGENTS_STOP]({ agentId }), {
         refused: (answer) => {
           if (!("failure" in answer)) return undefined;
           console.error(`The stop was refused: ${answer.failure}.`);
+
           return STOP_FAILED;
         },
         unanswered: STOP_FAILED,
       }).finally(() => module.answerStop(request));
     });
+
     return () => subscription.remove();
   }, [acts, write, signedIn]);
   useEffect(() => {
     if (liveActivityModule === null || !fixture) return;
+
     // Note that the state is encoded through the service's own Schema, so the widget decodes the bytes a push would carry.
     const started = launchLiveActivity()
       ? liveActivityModule.startFixture(
@@ -220,6 +233,7 @@ export function useLiveActivity(signedIn: boolean): void {
           ),
         )
       : liveActivityModule.endAll();
+
     started.catch((error: unknown) =>
       console.error("The fixture's Live Activity was not started or ended.", error),
     );

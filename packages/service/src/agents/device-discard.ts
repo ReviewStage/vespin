@@ -37,11 +37,13 @@ const discardedWhileArchived = /* @__PURE__ */ Effect.fnUntraced(function* (
   agent: Pick<Agent, "id" | "userId">,
 ) {
   const read = yield* readAgent(agent.userId, agent.id);
+
   if (Option.isNone(read) || read.value.machine !== AGENT_MACHINE.DEVICE) return;
   yield* holdingRunner(
     agent.id,
     Effect.gen(function* () {
       const current = yield* readAgent(agent.userId, agent.id);
+
       if (Option.isNone(current) || current.value.archivedAt === null) return;
       yield* queueDeviceAgentLine(agent.userId, {
         agentId: agent.id,

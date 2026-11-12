@@ -43,12 +43,15 @@ interface RunActionAgent {
 /** The agent's repository, where it has run actions at all: a cloud agent with one, in a workspace with the experiment on; not found otherwise. */
 const runActionRepositoryOf = /* @__PURE__ */ Effect.fnUntraced(function* (agent: RunActionAgent) {
   const repository = agent.repository;
+
   if (agent.machine === AGENT_MACHINE.DEVICE || repository === null) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
+
   if (!(yield* experimentOnIn(agent.organizationId, EXPERIMENT.RUN_ACTIONS))) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
+
   return repository;
 });
 
@@ -60,7 +63,9 @@ const runActionOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   const repository = yield* runActionRepositoryOf(agent);
   const actions = yield* hostedStoreOrUnavailable(readRunActions(agent.organizationId, repository));
   const action = actions.find((each) => each.id === actionId);
+
   if (action === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return {
     id: action.id,
     label: action.label,
@@ -82,11 +87,15 @@ export const ranRunAction = Effect.fn("web/ranRunAction")(function* (
 ) {
   const { sessionId, agent } = yield* reachedAgentSession(userId, agentId);
   const action = yield* runActionOf(agent, actionId);
+
   if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
+
   const environment = yield* hostedStoreOrUnavailable(
     workspaceEnvironmentOf(agent, AGENT_MACHINE.VERCEL),
   );
+
   const sandbox = yield* AgentSandbox;
+
   const ran = yield* sandboxOrUpstream(
     // Note that the action's shell is started under the action's own id, so two presses at once start one shell, never two.
     sandbox.run(sessionId, action.id, {
@@ -96,7 +105,9 @@ export const ranRunAction = Effect.fn("web/ranRunAction")(function* (
       environment,
     }),
   );
+
   if (Result.isFailure(ran)) return yield* Effect.fail(shellRefusal(ran.failure));
+
   return { terminal: ran.success };
 });
 
@@ -114,9 +125,12 @@ export const stoppedRunAction = Effect.fn("web/stoppedRunAction")(function* (
 ) {
   const { sessionId, agent } = yield* reachedAgentSession(userId, agentId);
   yield* runActionRepositoryOf(agent);
+
   if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const sandbox = yield* AgentSandbox;
   const stopped = yield* sandboxOrUpstream(sandbox.stop(sessionId, actionId));
+
   if (Result.isFailure(stopped)) return yield* Effect.fail(shellRefusal(stopped.failure));
+
   return yield* listedShells(sessionId);
 });

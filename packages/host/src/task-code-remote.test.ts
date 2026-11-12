@@ -34,6 +34,7 @@ function forkChild(
   forked(child);
   child.on("message", (message) => listeners.onMessage(message));
   child.on("exit", () => listeners.onExit());
+
   return {
     send: (message) => {
       child.send(message as object);
@@ -51,6 +52,7 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         const color = yield* taskCodeProcessColoring((listeners) => forkChild(listeners));
+
         // Note that each side colors every block once first: Shiki stops a line's coloring past its
         // time limit, and a grammar's first use compiles it, which a loaded runner can push past that.
         for (const { language, code } of BLOCKS) {
@@ -72,13 +74,16 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         let spawned = 0;
+
         const color = yield* taskCodeProcessColoring((listeners) => {
           spawned += 1;
+
           // The first process is killed the moment it is handed its block, as a crash would end it.
           return spawned === 1
             ? forkChild(listeners, (child) => child.kill("SIGKILL"))
             : forkChild(listeners);
         });
+
         const [block] = BLOCKS;
 
         assert.deepEqual(yield* color(block.language, block.code), plainCodeLines(block.code));
@@ -103,9 +108,11 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         const children: ChildProcess[] = [];
+
         const color = yield* taskCodeProcessColoring((listeners) =>
           forkChild(listeners, undefined, (child) => children.push(child)),
         );
+
         const [block] = BLOCKS;
         yield* color(block.language, block.code);
 

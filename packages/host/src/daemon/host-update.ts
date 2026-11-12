@@ -182,6 +182,7 @@ export const hostUpdate = Effect.fnUntraced(function* (options: HostUpdateOption
   const stagedRemoved = (release: DeviceAgentRelease | undefined) =>
     Effect.gen(function* () {
       if (release === undefined || release.version === releases.running) return;
+
       if (Option.contains(yield* currentNamed, release.version)) return;
       yield* fileSystem.remove(folderOf(release.version), { recursive: true, force: true });
     }).pipe(Effect.ignore);
@@ -204,9 +205,11 @@ export const hostUpdate = Effect.fnUntraced(function* (options: HostUpdateOption
     Effect.gen(function* () {
       const { version } = release;
       const sha256 = release.sha256[target];
+
       if (sha256 === undefined) {
         return yield* Effect.fail(`${PRODUCT_NAME} host ${version} has no build for ${target}`);
       }
+
       report(`${PRODUCT_NAME} host: fetching ${version}, to switch to once no agent runs.`);
       yield* stagedFolder(
         {
@@ -217,27 +220,33 @@ export const hostUpdate = Effect.fnUntraced(function* (options: HostUpdateOption
         (staging) =>
           Effect.gen(function* () {
             const saved = path.join(staging, TARBALL.FILE);
+
             const archive = yield* streamedArchive(
               hostTarballUrl(version, target),
               saved,
               HOST_FETCH,
             ).pipe(Effect.mapError((failure) => `the ${version} download ${failure}`));
+
             if (archive.sha256 !== sha256) {
               return yield* Effect.fail(`the ${version} download did not match its SHA-256`);
             }
+
             yield* unpackedArchive(saved, staging).pipe(
               Effect.mapError((failure) => `the ${version} download ${failure}`),
             );
             const unpacked = path.join(staging, TARBALL.ROOT);
+
             const command = yield* Effect.option(
               fileSystem.stat(path.join(unpacked, ...TARBALL.COMMAND)),
             );
+
             // Note that the command must be a file someone may run, since the service manager starts the release through it.
             if (
               !Option.exists(command, (info) => info.type === "File" && (info.mode & 0o111) !== 0)
             ) {
               return yield* Effect.fail(`the ${version} download holds no vespin-host to run`);
             }
+
             return unpacked;
           }),
       ).pipe(
@@ -276,7 +285,9 @@ export const hostUpdate = Effect.fnUntraced(function* (options: HostUpdateOption
           ["version"],
           { stdin: "ignore", stderr: "ignore" },
         );
+
         const printed = yield* Stream.mkString(Stream.decodeText(handle.stdout));
+
         return Number(yield* handle.exitCode) === 0 ? printed.trim() : "";
       }),
     ).pipe(
@@ -289,6 +300,7 @@ export const hostUpdate = Effect.fnUntraced(function* (options: HostUpdateOption
   const othersRemoved = (version: string) =>
     Effect.gen(function* () {
       const kept = new Set([releases.running, version, ...Option.toArray(yield* currentNamed)]);
+
       for (const entry of yield* fileSystem.readDirectory(versions)) {
         if (kept.has(entry)) continue;
         yield* Effect.ignore(
@@ -313,6 +325,7 @@ export const hostUpdate = Effect.fnUntraced(function* (options: HostUpdateOption
     Effect.gen(function* () {
       const { version } = release;
       const answered = yield* versionAnswered(version);
+
       if (answered !== version) {
         return yield* Effect.fail(
           answered === ""
@@ -320,6 +333,7 @@ export const hostUpdate = Effect.fnUntraced(function* (options: HostUpdateOption
             : `${version} did not start: it says it is ${answered.slice(0, 32)}`,
         );
       }
+
       yield* othersRemoved(version);
       yield* Ref.set(standing, { release, update: { update: HOST_UPDATE.UPDATING } });
       report(`${PRODUCT_NAME} host: switching to ${version}.`);
@@ -334,22 +348,27 @@ export const hostUpdate = Effect.fnUntraced(function* (options: HostUpdateOption
       Effect.gen(function* () {
         const release = named !== undefined && newer(named.version) ? named : undefined;
         const held = (yield* Ref.get(standing)).release;
+
         if (
           held?.version === release?.version &&
           held?.sha256[target] === release?.sha256[target]
         ) {
           return;
         }
+
         // Note that a fetch under way for another release is ended first, so one fetch runs at a time.
         yield* FiberHandle.clear(fetching);
         yield* stagedRemoved(held);
         yield* Ref.set(standing, { release, update: undefined });
+
         if (release !== undefined) yield* FiberHandle.run(fetching, attempts(release));
       }).pipe(Effect.provideContext(services)),
     switched: (beat) =>
       Effect.gen(function* () {
         const { release, update } = yield* Ref.get(standing);
+
         if (release === undefined || update?.update !== HOST_UPDATE.WAITING) return false;
+
         // Note that a switch cut off, as the follow ends with a lease lost, waits again, since every step of it can be taken once more.
         const outcome = yield* Effect.result(
           switchedTo(release, beat).pipe(
@@ -358,14 +377,18 @@ export const hostUpdate = Effect.fnUntraced(function* (options: HostUpdateOption
             ),
           ),
         );
+
         if (Result.isSuccess(outcome)) {
           report(`${PRODUCT_NAME} host: switched to ${release.version}, so it starts again on it.`);
           yield* Deferred.succeed(switched, undefined);
+
           return true;
         }
+
         yield* stagedRemoved(release);
         yield* failed(release, outcome.failure);
         yield* FiberHandle.run(fetching, Effect.delay(attempts(release), RETRY_AFTER));
+
         return false;
       }).pipe(Effect.provideContext(services)),
   };

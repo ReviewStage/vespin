@@ -36,7 +36,9 @@ const QUEUED = "Queued";
 /** The words under an entry: queued where the merge queue holds it, and that it opens on GitHub where no agent of the workspace opened it and it is not the one shown. */
 function entryDetail(entry: PullRequestStackEntry, current: boolean): string | undefined {
   const onGitHub = current || entry.agent !== undefined ? undefined : ON_GITHUB;
+
   if (entry.queued !== true) return onGitHub;
+
   return onGitHub === undefined ? QUEUED : `${QUEUED} · ${onGitHub}`;
 }
 
@@ -59,6 +61,7 @@ function placeOf(agent: NonNullable<PullRequestStackEntry["agent"]>): LinkDestin
 function useOpenEntry(): (entry: PullRequestStackEntry) => void {
   const { mutate: openOnGitHub } = useMutation(pressMutation(ACT_KIND.GITHUB_OPEN));
   const openPlace = useOpenPlace();
+
   return (entry) => {
     if (entry.agent !== undefined && openPlace !== undefined) {
       openPlace(placeOf(entry.agent));
@@ -89,10 +92,13 @@ export function PullRequestStack({
   const shown = stack.length > 1 && at !== -1;
   const menu = useMenu(shown);
   const open = useOpenEntry();
+
   if (!shown) return null;
   const label = `Stack, ${at + 1} of ${stack.length}`;
+
   const actions: MenuAction[] = [...stack].reverse().map((entry) => {
     const current = entry.number === number;
+
     return {
       label: pullRequestLabelOf(entry),
       replayMasked: true,
@@ -103,6 +109,7 @@ export function PullRequestStack({
       onSelect: current ? () => undefined : () => open(entry),
     };
   });
+
   return (
     <>
       {/* Note that the chip keeps its words whole where the row runs short, as the base branch does, because a cut "Sta…" says nothing; the head gives way instead. */}

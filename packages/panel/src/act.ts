@@ -45,6 +45,7 @@ import { appStateIn } from "./use-app-state.js";
  * generic signature that names it.
  */
 type ActPayloads = { readonly [Kind in PortActKind]: PortActPayload<Kind> };
+
 type ActResults = { readonly [Kind in PortActKind]: PortActResult<Kind> };
 
 /** What a kind takes. */
@@ -78,10 +79,13 @@ function stagedAnswer(
 ): { readonly answer: PortActResult<PortActKind> } | undefined {
   // Note that only a fixture run, which loads the fixture, reads the run, because a read starts the document's follow.
   const fixture = loadedTasksFixture();
+
   if (fixture === undefined) return undefined;
   const client = fixtureClient();
   const run = client === undefined ? undefined : appStateIn(client)?.run;
+
   if (run?.fixtureMode !== true) return undefined;
+
   return fixture.fixtureActAnswer(run, kind, payload);
 }
 
@@ -100,7 +104,9 @@ async function portAct(
   trace?: SendTrace,
 ): Promise<PortActResult<PortActKind>> {
   const staged = stagedAnswer(kind, payload);
+
   if (staged !== undefined) return staged.answer;
+
   try {
     // SAFETY: the contract keys each procedure by its kind, and ActArguments
     // paired this payload with it; the erasure is the one dispatch on the kind.
@@ -108,9 +114,11 @@ async function portAct(
       payload: PortActPayload<PortActKind>,
       options?: { readonly context: ActPortCallContext },
     ) => Promise<PortActResult<PortActKind>>;
+
     return await call(payload, trace === undefined ? undefined : { context: { trace } });
   } catch (error) {
     const refusal = actRefusalSentence(error);
+
     if (refusal !== undefined) throw new ActRefusal(refusal, { cause: error });
     // Note that the failure's own text goes to the log, where a fault is diagnosed, and never to a person.
     console.error(`The act ${kind} failed on its way to the service.`, error);
@@ -250,6 +258,7 @@ export function askKept(asked: Promise<boolean>): Promise<Kept> {
 /** What refused the first of several writes that was not kept; nothing where each was kept. */
 export function firstRefusal(answers: readonly Kept[]): unknown {
   const refused = answers.find((answer) => !answer.kept);
+
   return refused === undefined || refused.kept ? undefined : refused.cause;
 }
 

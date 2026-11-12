@@ -62,6 +62,7 @@ const FUNCTION_GROUP = {
   PREVIEW_PROXY: "preview-proxy",
   PULL_REQUEST_CHAPTERS: "pull-request-chapters",
 } as const;
+
 type FunctionGroup = (typeof FUNCTION_GROUP)[keyof typeof FUNCTION_GROUP];
 
 export interface FunctionDefinition {
@@ -187,12 +188,15 @@ export function functionDefinitions(routeKeys: readonly string[]): readonly Func
   if (routeKeys.includes(ORPC_ROUTE_KEY)) {
     throw new Error(`the route key ${ORPC_ROUTE_KEY} is the hosted oRPC route's, not a file's`);
   }
+
   const claimed = new Set([
     ...GROUPS.flatMap((group) => group.routes),
     ...STANDALONE_ROUTES,
     ...QUEUE_CONSUMERS.flatMap((consumer) => consumer.routes),
   ]);
+
   const unclaimed = routeKeys.filter((key) => !claimed.has(key));
+
   const definitions: FunctionDefinition[] = [
     { file: FUNCTION_GROUP.DEFAULT, routes: [...unclaimed, ORPC_ROUTE_KEY], dispatches: true },
     ...GROUPS.map((group) => ({ ...group, dispatches: true })),
@@ -204,5 +208,6 @@ export function functionDefinitions(routeKeys: readonly string[]): readonly Func
     })),
     ...QUEUE_CONSUMERS,
   ];
+
   return definitions.sort((left, right) => left.file.localeCompare(right.file));
 }

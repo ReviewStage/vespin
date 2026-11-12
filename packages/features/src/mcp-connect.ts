@@ -77,6 +77,7 @@ function cursorEntry(serverUrl: string): { readonly url: string } {
 /** Cursor's install link for a remote server: its name and its config, `{ url }`, in base64 (cursor.com/docs/mcp/install-links). */
 export function cursorInstallUrl(serverUrl: string): string {
   const config = btoa(JSON.stringify(cursorEntry(serverUrl)));
+
   return `https://cursor.com/en/install-mcp?name=${MCP_SERVER_NAME}&config=${encodeURIComponent(config)}`;
 }
 
@@ -98,9 +99,12 @@ export function cursorConfigWithServer(
   serverUrl: string,
 ): Readonly<Record<string, unknown>> | undefined {
   const existing = config ?? {};
+
   if (!isRecord(existing)) return undefined;
   const servers = existing.mcpServers ?? {};
+
   if (!isRecord(servers)) return undefined;
+
   return { ...existing, mcpServers: { ...servers, [MCP_SERVER_NAME]: cursorEntry(serverUrl) } };
 }
 

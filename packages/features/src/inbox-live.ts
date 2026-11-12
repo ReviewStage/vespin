@@ -126,6 +126,7 @@ function latestFirst<Row extends { readonly updatedAt: number }>(
   return (a, b) => {
     if (a.updatedAt !== b.updatedAt) return b.updatedAt - a.updatedAt;
     const [left, right] = [key(a), key(b)];
+
     return left < right ? 1 : left > right ? -1 : 0;
   };
 }
@@ -134,15 +135,18 @@ function latestFirst<Row extends { readonly updatedAt: number }>(
 function digest(text: string): string {
   let first = 0xdeadbeef;
   let second = 0x41c6ce57;
+
   for (let index = 0; index < text.length; index++) {
     const code = text.charCodeAt(index);
     first = Math.imul(first ^ code, 2654435761);
     second = Math.imul(second ^ code, 1597334677);
   }
+
   first =
     Math.imul(first ^ (first >>> 16), 2246822507) ^ Math.imul(second ^ (second >>> 13), 3266489909);
   second =
     Math.imul(second ^ (second >>> 16), 2246822507) ^ Math.imul(first ^ (first >>> 13), 3266489909);
+
   return (4294967296 * (2097151 & second) + (first >>> 0)).toString(16);
 }
 
@@ -172,6 +176,7 @@ function liveCursorOf(answer: Omit<AccountInboxAnswer, "cursor" | "readAt">): st
     item.asking ?? null,
     item.remindAt ?? null,
   ];
+
   return digest(
     JSON.stringify([
       answer.items.map(itemStamp),
@@ -214,6 +219,7 @@ export function accountInboxOfLiveRows(
       .filter((run) => run.failedAt >= now - FAILED_RUN_WINDOW_MILLIS)
       .toSorted((a, b) => b.failedAt - a.failedAt),
   };
+
   return { ...answer, cursor: liveCursorOf(answer), readAt: now };
 }
 
@@ -230,6 +236,7 @@ export function nextFailedRunExpiry(
   const expiries = failedRuns
     .map((run) => run.failedAt + FAILED_RUN_WINDOW_MILLIS)
     .filter((expiry) => expiry > now);
+
   return expiries.length === 0 ? undefined : Math.min(...expiries);
 }
 
@@ -341,7 +348,9 @@ export type ScopeInboxLiveAnswer = LiveReadAnswer<typeof TASK_INBOX_READ>;
 export type ScopeInboxLiveRows = typeof TASK_INBOX_READ.rows.Type;
 
 type InboxLiveRow = typeof inboxLiveRowSchema.Type;
+
 type InboxLiveMessage = typeof inboxLiveMessageSchema.Type;
+
 type InboxLiveFile = typeof inboxLiveFileSchema.Type;
 
 /** The rows grouped under a key each names, a row naming none left out. */
@@ -350,11 +359,14 @@ function groupedBy<Row>(
   keyOf: (row: Row) => string | null,
 ): ReadonlyMap<string, readonly Row[]> {
   const groups = new Map<string, Row[]>();
+
   for (const row of rows) {
     const key = keyOf(row);
+
     if (key === null) continue;
     groups.set(key, [...(groups.get(key) ?? []), row]);
   }
+
   return groups;
 }
 
@@ -372,6 +384,7 @@ function inboxMessageOfLiveRow(
   item: InboxAskStanding,
 ): InboxMessage {
   const files = filesInOrder(filesOf.get(row.id));
+
   return {
     id: row.id,
     author: row.author,
@@ -401,6 +414,7 @@ function threadOf(
   const ordered = messages.toSorted(threadOrder);
   const latest = new Set(ordered.slice(-INBOX_BOUNDS.MAX_MESSAGES_READ).map((each) => each.id));
   const firstId = ordered[0]?.id;
+
   return ordered.filter(
     (each) => latest.has(each.id) || each.id === firstId || each.id === openAskMessageId,
   );
@@ -409,6 +423,7 @@ function threadOf(
 /** A thread's messages oldest first, as the held read orders them. */
 function threadOrder(one: InboxLiveMessage, other: InboxLiveMessage): number {
   if (one.createdAt !== other.createdAt) return one.createdAt - other.createdAt;
+
   return one.id < other.id ? -1 : one.id > other.id ? 1 : 0;
 }
 
@@ -435,13 +450,16 @@ function inboxItemOfLiveRow(
     snoozedUntil: _snoozedUntil,
     ...item
   } = row;
+
   const thread = threadOf(threads.get(row.id) ?? [], openAskMessageId);
+
   const message = (each: InboxLiveMessage) =>
     inboxMessageOfLiveRow(each, messageFilesOf, {
       status: row.status,
       openAskMessageId,
       closedReason,
     });
+
   return {
     ...item,
     ...(startedByName === null
@@ -467,6 +485,7 @@ function inboxItemOfLiveRow(
 /** Items as the held read orders a scope's: every open one, then the settled, each the latest changed first. */
 export function inboxInOrder(items: readonly InboxItem[]): readonly InboxItem[] {
   const ordered = latestFirst((item: InboxItem) => item.id);
+
   return [
     ...items.filter((item) => item.status === INBOX_STATUS.OPEN).toSorted(ordered),
     ...items.filter((item) => item.status !== INBOX_STATUS.OPEN).toSorted(ordered),
@@ -477,6 +496,7 @@ export function inboxInOrder(items: readonly InboxItem[]): readonly InboxItem[] 
 export function inboxOfLiveRows(rows: ScopeInboxLiveRows): readonly InboxItem[] {
   const threads = groupedBy(rows.messages, (message) => message.itemId);
   const messageFilesOf = groupedBy(rows.files, (file) => file.messageId);
+
   return inboxInOrder(rows.items.map((row) => inboxItemOfLiveRow(row, threads, messageFilesOf)));
 }
 

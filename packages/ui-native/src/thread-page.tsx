@@ -124,6 +124,7 @@ type ThreadPageProps = {
 /** A thread's heading under its bar: its title in 20 pt semibold, and how it ended under it, 13 pt muted, once it is settled. */
 function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standing">) {
   const colors = useColors();
+
   return (
     <VStack
       alignment="leading"
@@ -160,6 +161,7 @@ function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standi
  */
 export function PathTitle({ path, status }: Pick<ThreadPageProps, "path" | "status">) {
   const colors = useColors();
+
   return (
     <HStack spacing={SPACE.TIGHT + 2}>
       {status === undefined ? null : <TaskStatusMark status={status} />}
@@ -191,6 +193,7 @@ const STAMP_HEARD = { AHEAD: "Went ahead", HELD: "Held back" } as const;
 /** A sent answer's stamp under its writer's name, where its words start: its mark and its words, 13 pt. */
 function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["stamp"]> }) {
   const colors = useColors();
+
   return (
     <HStack
       spacing={SPACE.TIGHT + 2}
@@ -230,6 +233,7 @@ function MessageView({
   const large = useAccessibilitySize();
   const { writer } = message;
   const moment = now ?? Date.now();
+
   // Note that the writer's line is heard as one heading, who and when, so VoiceOver's Headings rotor steps from message to message.
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
@@ -303,6 +307,7 @@ export function ThreadPage(props: ThreadPageProps) {
   const { path, status, title, messages, ask, menu, foot, standing, ...drawing } = props;
   // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
   const footRoom = useDockRoom();
+
   return (
     <Toolbar>
       <VStack spacing={0}>

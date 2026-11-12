@@ -78,6 +78,7 @@ const TITLE_CLASS = "min-w-0 flex-1 overflow-hidden whitespace-nowrap";
 /** The plan's title on the header, cut to the line, behind its label in the muted ink where it has one. */
 export function PlanTitle({ label, previews = false, children }: TaskTitleProps): ReactNode {
   const previewed = useDisclosurePreviewShown(previews && label !== undefined);
+
   if (label !== undefined && !previewed) {
     return (
       <OneLine className={TITLE_CLASS} words={label}>
@@ -85,6 +86,7 @@ export function PlanTitle({ label, previews = false, children }: TaskTitleProps)
       </OneLine>
     );
   }
+
   return (
     <OneLine
       className={TITLE_CLASS}

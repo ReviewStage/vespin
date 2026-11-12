@@ -43,21 +43,26 @@ function tellingStore(store: AccountStore, sink: IssuedTokenSink): AccountStore 
     once: false,
     refused: false,
   };
+
   const tell = (issued: IssuedToken | undefined) =>
     Effect.sync(() => {
       told.once = true;
       told.issued = issued;
       told.refused = !sink.keep(issued);
     });
+
   // Note that a read of no account removes a token not yet known to be gone, and a refused telling is told again.
   const afterRead = (account: StoredAccount | undefined) => {
     if (account === undefined && (!told.once || told.issued !== undefined)) return tell(undefined);
+
     return told.refused ? tell(told.issued) : Effect.void;
   };
+
   const issue = (account: StoredAccount) =>
     Effect.flatMap(Clock.currentTimeMillis, (now) =>
       tell({ token: account.accessToken, expiresAt: now + sink.lifetimeMs }),
     );
+
   return {
     readAccount: () => store.readAccount().pipe(Effect.tap(afterRead)),
     setAccount: (account: StoredAccount) =>
@@ -77,6 +82,7 @@ export function issuedTokenAccountSourceLayer<E, R>(
     AccountSource,
     Effect.gen(function* () {
       const opened = yield* AccountSource;
+
       return {
         tokenCipher: opened.tokenCipher,
         open: (host: AccountSourceHost) =>

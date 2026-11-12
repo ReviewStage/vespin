@@ -92,6 +92,7 @@ const PLACEHOLDER_BRACKETS = /^<(.*)>$/u;
 /** Whether a title names nothing: the untitled name, in any case, bare or in a placeholder's angle brackets. */
 export function titlesNothing(title: string): boolean {
   const bare = title.trim().replace(PLACEHOLDER_BRACKETS, "$1").trim();
+
   return bare.toLowerCase() === UNTITLED_TASK_NAME.toLowerCase();
 }
 
@@ -307,6 +308,7 @@ export function startRelationsOf(request: {
   readonly relations?: readonly TaskCreateRelation[];
 }): readonly TaskCreateRelation[] {
   if (request.relations !== undefined) return request.relations;
+
   return request.relation === undefined ? [] : [request.relation];
 }
 
@@ -333,10 +335,13 @@ function relationsEachOnce(request: {
   relations?: readonly TaskCreateRelation[];
 }): boolean {
   const relations = startRelationsOf(request);
+
   const parents = relations.filter(
     (relation) => relation.kind === TASK_CREATE_RELATION_KIND.SUB_TASK_OF,
   );
+
   const named = new Set(relations.map((relation) => relation.taskId));
+
   return parents.length <= 1 && named.size === relations.length;
 }
 
@@ -1186,6 +1191,7 @@ function codeRangeIsReadable(ref: { startLine?: number; endLine?: number }): boo
   if (ref.startLine === undefined || ref.endLine === undefined) {
     return ref.startLine === ref.endLine;
   }
+
   return ref.endLine >= ref.startLine && ref.endLine - ref.startLine < CODE_REF_MAX_LINES;
 }
 

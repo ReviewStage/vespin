@@ -167,17 +167,21 @@ export function SplitButton({
   const { label: menuLabel, ...trigger } = menu;
   const chevron = useRef<HTMLButtonElement | null>(null);
   const { ref: triggerRef, ...triggerProps } = trigger;
+
   // Note that the chevron is held here as well as by its owner, so a press on it is told apart.
   const chevronRef = useCallback(
     (element: HTMLButtonElement | null) => {
       chevron.current = element;
+
       if (typeof triggerRef === "function") triggerRef(element);
       else if (triggerRef !== undefined && triggerRef !== null) triggerRef.current = element;
     },
     [triggerRef],
   );
+
   // Note that the main part is told how its press landed while it is not busy too, since the ring's leaving is what it reads it at.
   const busyProps = { busy: busy === true, busyLabel: busyLabel ?? "", succeeded };
+
   const main = (
     <Button
       variant={variant}
@@ -191,6 +195,7 @@ export function SplitButton({
       {children}
     </Button>
   );
+
   return (
     <span
       className={cn(
@@ -204,6 +209,7 @@ export function SplitButton({
           ? undefined
           : (event) => {
               const target = event.target;
+
               if (!(target instanceof Node && chevron.current?.contains(target)))
                 onMainPress(event);
             }

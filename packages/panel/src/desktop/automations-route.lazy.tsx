@@ -18,6 +18,7 @@ function automationsPlaceKey(place: AutomationsPlace): string {
 function AutomationsRoutePlace(): React.JSX.Element {
   const { tasks, room } = useShellPlaces();
   const { place } = useAutomationsPlace();
+
   return (
     <PageFind page={FIND_PAGE.AUTOMATIONS} at={automationsPlaceKey(place)} active={tasks.shown}>
       <AutomationsPage tasks={tasks} room={room} />

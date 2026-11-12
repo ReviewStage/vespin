@@ -28,6 +28,7 @@ const openAgent = Effect.gen(function* () {
     db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
   );
   const task = yield* startTask(userId, { name: "Invitations" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -38,6 +39,7 @@ const openAgent = Effect.gen(function* () {
     repository: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   return { userId, conversationId: Option.getOrThrow(started).agent.conversationId };
 });
 

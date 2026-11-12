@@ -47,13 +47,18 @@ function accountPreferencesAnswerFromWire(
   if (!isRecord(value)) return undefined;
   // Note that the link choice is joined from its own part, which a service that predates it answers none of.
   const preferences = accountPreferencesFromParts(value);
+
   if (preferences === undefined) return undefined;
+
   if (value.updatedAt !== undefined && !isWireNumber(value.updatedAt)) return undefined;
+
   // Note that experiments are read on their own reader, which passes over a key it does not know,
   // because a newer service's experiment must not cost this Mac the preferences beside it.
   const experiments =
     value.experiments === undefined ? NO_EXPERIMENTS : experimentChoicesFrom(value.experiments);
+
   if (experiments === undefined) return undefined;
+
   return {
     preferences,
     hasStoredSnapshot: value.updatedAt !== undefined,

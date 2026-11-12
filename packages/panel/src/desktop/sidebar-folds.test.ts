@@ -52,6 +52,7 @@ function mount(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(withQueryClient(element)));
+
   return container;
 }
 
@@ -65,7 +66,9 @@ function fold(within: HTMLElement, name: string): HTMLButtonElement {
   const found = [...within.querySelectorAll<HTMLButtonElement>("button[aria-expanded]")].find(
     (button) => button.textContent?.startsWith(name),
   );
+
   assert.ok(found, `a fold named ${name} is drawn`);
+
   return found;
 }
 
@@ -75,16 +78,19 @@ test("Pinned folds on its name, counts its pins folded, and leaves the pin that 
     pinnedAt: 5,
     pinPosition: position,
   });
+
   const sidebar = mountSidebar(
     tasksControl({
       tasks: [pinned("p-1", "Invite expiry", "a0"), pinned("p-2", "Retry audit", "a1")],
       activeTaskId: "p-2",
     }),
   );
+
   const names = () =>
     [...sidebar.querySelectorAll('nav[aria-label="Pinned"] .ui-list-row-title')].map(
       (title) => title.firstChild?.textContent,
     );
+
   assert.equal(fold(sidebar, "Pinned").getAttribute("aria-expanded"), "true");
   assert.equal(fold(sidebar, "Pinned").textContent, "Pinned");
   assert.deepEqual(names(), ["Invite expiry", "Retry audit"]);
@@ -108,6 +114,7 @@ test("a folded repository leaves only the task that is open standing, one that n
       },
     ],
   });
+
   const sidebar = mountSidebar(
     tasksControl({
       tasks: [
@@ -119,10 +126,12 @@ test("a folded repository leaves only the task that is open standing, one that n
       activeTaskId: "p-1",
     }),
   );
+
   const names = () =>
     [...sidebar.querySelectorAll('nav[aria-label="My tasks"] .ui-list-row-title')]
       .map((title) => title.firstChild?.textContent)
       .sort();
+
   assert.deepEqual(names(), ["Billing export", "Invite expiry", "Retry audit", "Webhook retries"]);
 
   act(() => fold(sidebar, "relay").click());
@@ -135,6 +144,7 @@ test("a folded repository leaves only the task that is open standing, one that n
 test("a repository's header folds on its name, says it is kept at top, counts its plans folded, keeps its + outside the fold, and opens its menu on a right-click", () => {
   const asked: string[] = [];
   writeListedTasks({ repositoryPins: [{ repository: "acme/relay", pinnedAt: 1 }] });
+
   const sidebar = mountSidebar(
     tasksControl({
       tasks: [
@@ -145,6 +155,7 @@ test("a repository's header folds on its name, says it is kept at top, counts it
       newTask: newTaskControl({ onOpenIn: (repository) => asked.push(repository) }),
     }),
   );
+
   const relay = () => fold(sidebar, "relay");
   assert.equal(relay().getAttribute("aria-expanded"), "true");
   assert.equal(relay().textContent, "relay(kept at top)");
@@ -178,6 +189,7 @@ test("a child task stands under its parent, folded until the parent's chevron op
     updatedAt,
     ...(parentTaskId === undefined ? undefined : { parentTaskId }),
   });
+
   const tasks = tasksControl({
     tasks: [
       listed("Parent", 40),
@@ -186,17 +198,22 @@ test("a child task stands under its parent, folded until the parent's chevron op
       listed("Grandchild", 10, "Child"),
     ],
   });
+
   const names = (within: HTMLElement) =>
     [...within.querySelectorAll('nav[aria-label="My tasks"] .ui-list-row-title')].map(
       (title) => title.firstChild?.textContent,
     );
+
   const chevron = (within: HTMLElement, name: string) => {
     const found = within.querySelector<HTMLButtonElement>(
       `button[aria-label="Sub-tasks of ${name}"]`,
     );
+
     assert.ok(found, `${name}'s fold is drawn`);
+
     return found;
   };
+
   const sidebar = mountSidebar(tasks);
   assert.deepEqual(names(sidebar), ["Parent", "Other"]);
   assert.equal(chevron(sidebar, "Parent").getAttribute("aria-expanded"), "false");
@@ -233,7 +250,9 @@ function childFold(within: HTMLElement, name: string): HTMLButtonElement {
   const found = within.querySelector<HTMLButtonElement>(
     `button[aria-label="Sub-tasks of ${name}"]`,
   );
+
   assert.ok(found, `${name}'s fold is drawn`);
+
   return found;
 }
 
@@ -247,6 +266,7 @@ test("a pinned parent's child tasks stand under it in Pinned, folded until opene
       ],
     }),
   );
+
   assert.deepEqual(rowNames(sidebar, "Pinned"), ["Cleanup"]);
   assert.deepEqual(rowNames(sidebar, "My tasks"), []);
 
@@ -266,6 +286,7 @@ test("a finished sub-task the view hides hands its open child tasks to the neare
       ],
     }),
   );
+
   assert.deepEqual(rowNames(sidebar, "My tasks"), ["Onboarding"]);
 
   act(() => childFold(sidebar, "Onboarding").click());
@@ -284,5 +305,6 @@ test("a canceled parent the view hides takes its child tasks to do out of the si
       ],
     }),
   );
+
   assert.deepEqual(rowNames(sidebar, "My tasks"), ["Other"]);
 });

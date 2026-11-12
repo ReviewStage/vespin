@@ -27,12 +27,16 @@ const SERVICE_BASE_URL = "https://app.example.test";
 /** A settings concern in a run that sends, over a service that answers every request and keeps what each carried. */
 const sendingSettings = Effect.fnUntraced(function* (packaged: boolean) {
   const requests: { readonly url: string; readonly authorization: string | null }[] = [];
+
   const service: typeof globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     requests.push({ url: request.url, authorization: request.headers.get("authorization") });
+
     return new Response(null, { status: 204 });
   };
+
   const stateRoot = yield* temporaryDirectoryScoped("settings-sending-");
+
   const machine = Layer.mergeAll(
     Layer.succeed(
       HostKernelTag,
@@ -58,9 +62,11 @@ const sendingSettings = Effect.fnUntraced(function* (packaged: boolean) {
     NodeFileSystem.layer,
     NodePath.layer,
   );
+
   const settings = yield* Effect.provide(composeSettings(), machine).pipe(
     Effect.provideService(FetchHttpClient.Fetch, service),
   );
+
   yield* settings.link({
     credential: NO_CREDENTIAL,
     readAccountKey: () => Effect.succeed(undefined),
@@ -68,10 +74,12 @@ const sendingSettings = Effect.fnUntraced(function* (packaged: boolean) {
   });
   // The lifetime arms the counted events, where usage data is shared, and counts this launch.
   yield* settings.lifetime;
+
   const sent = () =>
     requests.filter(
       (request) => request.url === `${SERVICE_BASE_URL}${HOSTED_SERVICE_PATH.EVENTS}`,
     );
+
   return { settings, sent, service };
 });
 
@@ -84,6 +92,7 @@ it.effect(
       yield* Effect.provideService(settings.flushProductEvents, FetchHttpClient.Fetch, service);
 
       assert.ok(sent().length > 0, "the launch's count was sent");
+
       for (const request of sent()) assert.equal(request.authorization, null);
     }).pipe(Effect.provide([NodeFileSystem.layer, NodePath.layer])),
 );
@@ -93,6 +102,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const { settings, sent, service } = yield* sendingSettings(false);
+
       const countAndFlush = Effect.andThen(
         Effect.sync(() => {
           settings.recordProductEvent(PRODUCT_EVENT.APP_LAUNCH, { app_version: "1.0.0" });
@@ -119,6 +129,7 @@ const tabOver = Effect.fnUntraced(function* (
   changedElsewhere: Layer.Layer<never> | Layer.Layer<SettingsChangedElsewhere>,
 ) {
   const sent = yield* Queue.unbounded<{ kind: GatewayEventKind; payload: WireValue }>();
+
   const machine = Layer.mergeAll(
     Layer.succeed(
       HostKernelTag,
@@ -146,6 +157,7 @@ const tabOver = Effect.fnUntraced(function* (
     NodeFileSystem.layer,
     NodePath.layer,
   );
+
   const settings = yield* Effect.provide(composeSettings(), machine);
   yield* settings.link({
     credential: NO_CREDENTIAL,
@@ -153,6 +165,7 @@ const tabOver = Effect.fnUntraced(function* (
     confirmAccount: () => Effect.void,
   });
   yield* settings.lifetime;
+
   return { settings, sent };
 });
 
@@ -161,10 +174,12 @@ const twoTabs = Effect.fnUntraced(function* () {
   const stateRoot = yield* temporaryDirectoryScoped("settings-elsewhere-");
   const signal = yield* Queue.unbounded<void>();
   const writer = yield* tabOver(stateRoot, Layer.empty);
+
   const reader = yield* tabOver(
     stateRoot,
     Layer.succeed(SettingsChangedElsewhere, Stream.fromQueue(signal)),
   );
+
   return { writer, reader, signal };
 });
 
@@ -182,10 +197,12 @@ it.effect(
       const event = yield* Queue.take(reader.sent);
       assert.equal(event.kind, GATEWAY_EVENT.SETTINGS_CHANGED);
       const { payload } = event;
+
       const sentTheme =
         isRecord(payload) && isRecord(payload.settings) && isRecord(payload.settings.stored)
           ? payload.settings.stored.theme
           : undefined;
+
       assert.equal(sentTheme, THEME.DARK);
       assert.equal((yield* reader.settings.store.snapshot()).stored.theme, THEME.DARK);
     }).pipe(

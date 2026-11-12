@@ -41,6 +41,7 @@ interface InProcessBridge {
 
 /** An unsubscribe with nothing to end. */
 const unsubscribe = (): void => {};
+
 /** What has no listener in a page that runs no Browser tab, menu bar, or global key. */
 const neverDelivered = (): (() => void) => unsubscribe;
 
@@ -67,11 +68,13 @@ type EventListeners = {
 function listeners<Payload>(report: (message: string) => void): Listeners<Payload> {
   const held = new Set<{ readonly listener: (payload: Payload) => void }>();
   let closed = false;
+
   return {
     subscribe: (listener) => {
       if (closed) return unsubscribe;
       const entry = { listener };
       held.add(entry);
+
       return () => {
         held.delete(entry);
       };
@@ -107,6 +110,7 @@ export function createInProcessBridge(
   dependencies: InProcessBridgeDependencies,
 ): Effect.Effect<InProcessBridge, never, Scope.Scope> {
   const { state, windowFacts, reports, report } = dependencies;
+
   return Effect.gen(function* () {
     const snapshot = (): AppStateSnapshot => ({ ...state.snapshot(), window: windowFacts() });
     const appState = listeners<AppStateDelivery>(report);
@@ -121,20 +125,25 @@ export function createInProcessBridge(
           const next = snapshot();
           const delivery = appStateDelivery(sent, next);
           sent = next;
+
           if (delivery !== undefined) appState.emit(delivery);
         }),
       report,
     );
+
     const said: EventListeners = {
       onShowLink: listeners(report),
     };
+
     // A page whose bridge is closed hears nothing more, whoever still holds `events`.
     yield* Effect.addFinalizer(() =>
       Effect.sync(() => {
         appState.close();
+
         for (const set of Object.values(said)) set.close();
       }),
     );
+
     const bridge: AppBridge = {
       requestAppState: async () => snapshot(),
       onAppState: appState.subscribe,
@@ -145,9 +154,11 @@ export function createInProcessBridge(
       // The tab's own doors play a chime where it is heard (`web-notices.ts`), so none is pushed.
       onChime: neverDelivered,
     };
+
     const events: InProcessEvents = {
       onShowLink: said.onShowLink.emit,
     };
+
     return { bridge, events };
   });
 }

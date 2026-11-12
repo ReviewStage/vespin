@@ -14,6 +14,7 @@ interface Drawn {
 export function webpBytes(length = 16): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(length);
   bytes.set([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
+
   return bytes;
 }
 
@@ -37,5 +38,6 @@ export function stubCanvas(width: number, height: number, bytes: Uint8Array<Arra
   vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback, type) =>
     callback(new Blob([bytes], type === undefined ? {} : { type })),
   );
+
   return drawn;
 }

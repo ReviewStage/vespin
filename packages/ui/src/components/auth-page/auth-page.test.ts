@@ -31,6 +31,7 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -40,6 +41,7 @@ const { failure: FAILURE } = recordedFailure();
 /** A sign-in page whose provider choice fails to start when pressed. */
 function SignIn(): React.JSX.Element {
   const [failure, setFailure] = useState<string | undefined>(undefined);
+
   return createElement(AuthPage, {
     mark: createElement("svg", { width: 52, height: 52 }),
     title: "Sign in to Vespin",
@@ -77,6 +79,7 @@ test("a page with nothing to say past its title says its title alone", () => {
   const container = mount(
     createElement(AuthPage, { title: "Continuing to Vespin…", description: "", footnote: null }),
   );
+
   expect(container.querySelector("main")?.textContent).toBe("Continuing to Vespin…");
   expect(container.querySelector('[aria-hidden="true"]')).toBeNull();
 });
@@ -90,6 +93,7 @@ test("a badged page is still named by its title alone", () => {
         description: "You can close this tab.",
       }),
     );
+
     const region = container.querySelector("section");
     const name = document.getElementById(region?.getAttribute("aria-labelledby") ?? "");
     expect(name?.textContent).toBe("GitHub is connected");
@@ -100,6 +104,7 @@ test("a badged page is still named by its title alone", () => {
 
 test("the way on is one link, named by its words, going where it says", () => {
   const pressed: string[] = [];
+
   const container = mount(
     createElement(AuthPage, {
       title: "Vespin could not reach GitHub",
@@ -114,6 +119,7 @@ test("the way on is one link, named by its words, going where it says", () => {
       },
     }),
   );
+
   const links = Array.from(container.querySelectorAll("a"));
   expect(links.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
     ["Open Vespin", "/app"],

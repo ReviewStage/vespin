@@ -76,8 +76,10 @@ const ADD_REACTION = "Add reaction";
 /** What a reaction's tooltip says: who gave it, as many as the read named, the rest counted. */
 function reactedWords(names: readonly string[], count: number, name: string): string {
   const others = count - names.length;
+
   if (names.length === 0) return `${count} reacted with ${name}`;
   const who = others > 0 ? [...names, `${others} more`] : names;
+
   return `${andList(who)} reacted with ${name}`;
 }
 
@@ -89,6 +91,7 @@ function drawnReactions(
   if (given === undefined || reactions.some((reaction) => reaction.content === given)) {
     return reactions;
   }
+
   return [...reactions, { content: given, count: 1, mine: true }].sort(
     (a, b) => REACTION_ORDER.indexOf(a.content) - REACTION_ORDER.indexOf(b.content),
   );
@@ -117,15 +120,19 @@ function settledReactions(
   { isMine, isYou }: Reader,
 ): readonly ReactionGroup[] {
   const read = reactions ?? [];
+
   if (settled === undefined || settled.on !== reactions) return read;
   const held = read.find((reaction) => reaction.content === settled.content);
+
   if ((held !== undefined && isMine(held)) === settled.mine) return read;
   const count = (held?.count ?? 0) + (settled.mine ? 1 : -1);
   const rest = read.filter((reaction) => reaction.content !== settled.content);
+
   if (count <= 0) return rest;
   // Note that who else gave it is kept for its tooltip, the reader left out where they took theirs back.
   const by = settled.mine ? held?.by : held?.by?.filter((person) => !isYou(person));
   const group = { content: settled.content, count, mine: settled.mine };
+
   return [...rest, by === undefined ? group : { ...group, by }].sort(
     (a, b) => REACTION_ORDER.indexOf(a.content) - REACTION_ORDER.indexOf(b.content),
   );
@@ -141,10 +148,13 @@ interface Reader {
 
 function useReader(): Reader {
   const { members, readerId, former } = useMemberDirectory();
+
   const isYou = (person: GitHubPerson) => {
     const actor = githubActor(person, { members, readerId, former });
+
     return actor.kind === ACTOR_KIND.PERSON && actor.you;
   };
+
   return { isYou, isMine: (reaction) => reaction.mine ?? (reaction.by ?? []).some(isYou) };
 }
 
@@ -168,10 +178,13 @@ function ReactionPill({
 }): React.JSX.Element {
   const { members, readerId, former } = useMemberDirectory();
   const face = REACTION_FACES[reaction.content];
+
   const names = (reaction.by ?? []).map((person, at) =>
     actorName(githubActor(person, { members, readerId, former }), { sentence: at > 0 }),
   );
+
   const words = reactedWords(names, reaction.count, face.name);
+
   const inner = (
     <>
       <span aria-hidden="true">{face.emoji}</span>
@@ -180,6 +193,7 @@ function ReactionPill({
       </span>
     </>
   );
+
   return (
     <li>
       <Tooltip label={words}>
@@ -236,13 +250,16 @@ function AddReaction({
   const root = useRef<HTMLLIElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
   const first = useRef<HTMLButtonElement>(null);
+
   // Note that focus goes back to the button, as a menu returns it, because closing takes the focused row away.
   const close = () => {
     setOpen(false);
     trigger.current?.focus();
   };
+
   const move = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const step = PICKER_STEP.get(event.key);
+
     const next =
       event.key === "Home"
         ? 0
@@ -251,6 +268,7 @@ function AddReaction({
           : step === undefined
             ? undefined
             : (at + step + REACTION_ORDER.length) % REACTION_ORDER.length;
+
     if (next === undefined) return;
     event.preventDefault();
     setAt(next);
@@ -258,6 +276,7 @@ function AddReaction({
       ?.querySelectorAll<HTMLButtonElement>(".pull-request-reaction-choices button")
       [next]?.focus();
   };
+
   return (
     <li className="relative" ref={root}>
       <Tooltip label={ADD_REACTION}>
@@ -346,8 +365,10 @@ export function Reactions({
   const busyOn = waiting ? pressed : undefined;
   const drawn = drawnReactions(settledReactions(reactions, settled, reader), busyOn);
   const pressable = writing !== undefined && subject !== undefined;
+
   if (drawn.length === 0 && !pressable) return null;
   const mine = new Set(drawn.flatMap((reaction) => (isMine(reaction) ? [reaction.content] : [])));
+
   // Note that a press takes the reader's own back and gives any other, so it follows what is lit.
   const send = (content: Reaction) => {
     if (subject === undefined || waiting) return;
@@ -362,6 +383,7 @@ export function Reactions({
       () => setSettled({ on: reactions, content, mine: given }),
     );
   };
+
   return (
     <>
       <Inline

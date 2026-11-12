@@ -92,14 +92,19 @@ export type FoldingButtonHint = ComponentType<{
  */
 function useFolded(): [(box: HTMLElement | null) => (() => void) | undefined, boolean] {
   const [folded, setFolded] = useState(false);
+
   const measured = useCallback((box: HTMLElement | null) => {
     if (box === null) return undefined;
+
     const observer = new ResizeObserver(() =>
       setFolded(getComputedStyle(box).getPropertyValue("--ui-fold").trim() === FOLDED),
     );
+
     observer.observe(box);
+
     return () => observer.disconnect();
   }, []);
+
   return [measured, folded];
 }
 
@@ -159,6 +164,7 @@ function FoldingBox({
 }): React.JSX.Element {
   // Note that the main part is told how its press landed while it is not busy too, since the ring's leaving is what it reads it at.
   const busyProps = { busy: busy === true, busyLabel: busyLabel ?? "", succeeded };
+
   return (
     <span
       ref={measured}
@@ -232,6 +238,7 @@ export function FoldingButton({
     hint?: FoldingButtonHint | undefined;
   }): React.JSX.Element {
   const [measured, folded] = useFolded();
+
   const box = (
     <FoldingBox
       measured={measured}
@@ -251,5 +258,6 @@ export function FoldingButton({
       doors={doors}
     />
   );
+
   return <Hint label={folded ? label : undefined}>{box}</Hint>;
 }

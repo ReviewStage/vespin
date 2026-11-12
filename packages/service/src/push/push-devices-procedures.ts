@@ -39,6 +39,7 @@ const DONE: PushDeviceDoneAnswer = { done: true };
 /** The push devices resource: every procedure to a signed-in caller. */
 export function pushDevicesProcedures(seams: PushDevicesProcedureSeams) {
   const signedIn = hosted.pushDevices.use(accountMiddleware(seams.resolveUserId));
+
   return {
     register: signedIn.register.effect(function* ({ input, context: { userId } }) {
       yield* hostedStoreOrUnavailable(
@@ -48,6 +49,7 @@ export function pushDevicesProcedures(seams: PushDevicesProcedureSeams) {
           bundleId: input.bundleId,
         }),
       );
+
       return DONE;
     }),
 
@@ -58,6 +60,7 @@ export function pushDevicesProcedures(seams: PushDevicesProcedureSeams) {
           environment: input.environment,
         }),
       );
+
       return DONE;
     }),
 
@@ -68,7 +71,9 @@ export function pushDevicesProcedures(seams: PushDevicesProcedureSeams) {
           environment: input.environment,
         }),
       );
+
       if (Option.isNone(standing)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       return standing.value;
     }),
 
@@ -80,7 +85,9 @@ export function pushDevicesProcedures(seams: PushDevicesProcedureSeams) {
           input.notify,
         ),
       );
+
       if (!held) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       return DONE;
     }),
   };

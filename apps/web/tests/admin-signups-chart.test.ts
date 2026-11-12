@@ -23,6 +23,7 @@ const DAILY = [
   { day: "2026-10-14", count: 0 },
   { day: "2026-10-15", count: 4 },
 ];
+
 const GENERATED_AT = Date.UTC(2026, 9, 15, 12);
 const TREND = { days: 7, recent: 5, prior: 4 };
 
@@ -38,6 +39,7 @@ function render(element: React.ReactElement): HTMLElement {
   document.body.replaceChildren(container);
   root = createRoot(container);
   act(() => root?.render(element));
+
   return container;
 }
 
@@ -50,7 +52,9 @@ function renderSignupsChart(): HTMLElement {
 /** The chart's plot, the one stop a keyboard reader lands on. */
 function plot(page: HTMLElement): SVGElement {
   const surface = page.querySelector<SVGElement>("svg[tabindex='0']");
+
   if (surface === null) throw new Error("the chart drew no plot");
+
   return surface;
 }
 
@@ -97,6 +101,7 @@ test("the sign-in methods chart draws each linked method and leaves out the rest
       totalAccounts: 4,
     }),
   );
+
   const surface = plot(page);
 
   expect(page.textContent).not.toContain("No linked sign-in methods recorded yet.");

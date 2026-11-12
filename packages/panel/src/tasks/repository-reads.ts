@@ -44,18 +44,21 @@ export class ReadRefused extends Error {
 /** A file's lines or text as read, a refusal or a failure thrown as `ReadRefused`. */
 function landedFile(answer: TasksFileAnswer) {
   if ("refusal" in answer || "failure" in answer) throw new ReadRefused(answer);
+
   return answer;
 }
 
 /** A folder's listing as read, a refusal or a failure thrown as `ReadRefused`. */
 function landedTree(answer: TasksTreeAnswer) {
   if ("refusal" in answer || "failure" in answer) throw new ReadRefused(answer);
+
   return answer;
 }
 
 /** A page source's lines as read, a failure thrown as `ReadRefused`. */
 function landedSource(answer: TasksPageSourceAnswer) {
   if ("failure" in answer) throw new ReadRefused(answer);
+
   return answer;
 }
 
@@ -69,6 +72,7 @@ function placeIds(
   place: FileReadPlace | undefined,
 ): readonly [string | null, string | null, string | null] {
   if (place === undefined) return [null, null, null];
+
   return "taskId" in place
     ? [place.taskId, null, null]
     : [null, place.workspaceId, place.repository];
@@ -82,6 +86,7 @@ function placeIds(
  */
 export function taskFileQueryOptions(place: FileReadPlace | undefined, request: TaskFileRequest) {
   const { path, firstLine, lastLine, raw = false, ref } = request;
+
   return queryOptions({
     queryKey: [
       QUERY_ROOT.TASK_FILE,

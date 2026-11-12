@@ -154,6 +154,7 @@ describe("the Spotlight index", () => {
     const indexed = new Map(
       spotlightItems({ ...read, workspace: ACME }).map((item) => [item.id, item]),
     );
+
     const renamed = { ...INVITES, name: "Resend invites" };
 
     expect(

@@ -435,11 +435,13 @@ function transacted<A>(work: PairingEffect<A>): PairingEffect<A> {
 function clearLapsed(now: Date): PairingEffect<void> {
   return Effect.gen(function* () {
     const lapsed = yield* deleteLapsed({ now });
+
     const uncollected = lapsed.flatMap((pairing) =>
       pairing.status === HOST_PAIRING_STATUS.APPROVED && pairing.deviceId !== null
         ? [pairing.deviceId]
         : [],
     );
+
     if (uncollected.length > 0) yield* deleteUncollected({ ids: uncollected });
     yield* deleteEndedWindows({ now });
   });
@@ -459,16 +461,21 @@ function guessed<A>(
     Effect.gen(function* () {
       const now = yield* DateTime.nowAsDate;
       const endsAt = new Date(now.getTime() + Duration.toMillis(HOST_PAIRING.MISS_WINDOW));
+
       const window = yield* openGuessWindow({ userId, now, endsAt }).pipe(
         // An upsert that returned no row is the database breaking its own contract, not an outcome.
         Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
       );
+
       if (window.misses >= HOST_PAIRING.MISS_LIMIT) {
         return { guess: HOST_PAIRING_GUESS.HELD, heldUntil: window.windowEndsAt } as const;
       }
+
       const found = yield* attempt(now);
+
       if (Option.isSome(found)) return { guess: HOST_PAIRING_GUESS.FOUND, found: found.value };
       yield* countMiss({ userId });
+
       return { guess: HOST_PAIRING_GUESS.MISSED } as const;
     }),
   );
@@ -487,6 +494,7 @@ export function openHostPairing(opening: HostPairingOpening): PairingEffect<Opti
       yield* clearLapsed(now);
       const expiresAt = new Date(now.getTime() + Duration.toMillis(HOST_PAIRING.LIFETIME));
       const opened = yield* insertPairing({ ...opening, now, expiresAt });
+
       return Option.map(Option.fromNullishOr(opened[0]), (row) => row.expiresAt);
     }),
   );
@@ -513,13 +521,17 @@ export function pollHostPairing(
       const now = yield* DateTime.nowAsDate;
       const floor = new Date(now.getTime() - Duration.toMillis(HOST_PAIRING.POLL_FLOOR));
       const stamped = yield* stampPolled({ pollSecretHash, now, floor });
+
       if (Option.isNone(stamped)) {
         const standing = yield* findByPollSecret({ pollSecretHash });
+
         return standing.length > 0
           ? ({ status: HOST_PAIRING_POLL_STATUS.SLOW_DOWN } as const)
           : ({ status: HOST_PAIRING_POLL_STATUS.EXPIRED } as const);
       }
+
       const pairing = stamped.value;
+
       switch (pairing.status) {
         case HOST_PAIRING_STATUS.PENDING:
           return pairing.expiresAt > now
@@ -533,10 +545,13 @@ export function pollHostPairing(
             return { status: HOST_PAIRING_POLL_STATUS.EXPIRED } as const;
           // Note that the stamp above holds the row's lock, so a poll racing this one waits and finds it gone.
           const handed = yield* deleteApproved({ id: pairing.id });
+
           if (Option.isNone(handed)) return { status: HOST_PAIRING_POLL_STATUS.EXPIRED } as const;
           const { deviceId, userId } = handed.value;
           const keyed = yield* keyPairedHost({ deviceId, userId, secretHash, now });
+
           if (keyed.length === 0) return { status: HOST_PAIRING_POLL_STATUS.DENIED } as const;
+
           return { status: HOST_PAIRING_POLL_STATUS.APPROVED, deviceId, userId } as const;
         }
       }
@@ -568,10 +583,12 @@ export function approveHostPairing(
     Effect.gen(function* () {
       const collectBy = new Date(now.getTime() + Duration.toMillis(HOST_PAIRING.COLLECT_GRACE));
       const settled = yield* settleApproved({ userCode, userId, now, collectBy });
+
       if (Option.isNone(settled)) return Option.none();
       const { id, ...box } = settled.value;
       yield* insertPairedHost({ id: deviceId, userId, ...box, now });
       yield* namePairedHost({ id, deviceId });
+
       return Option.some(deviceId);
     }),
   );

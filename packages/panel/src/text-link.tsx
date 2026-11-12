@@ -67,6 +67,7 @@ export function TextLink({
 }): React.JSX.Element {
   const face = words === undefined ? undefined : linkFace(href, words);
   const opens = onOpen !== undefined && opensAsLink(href);
+
   return (
     <Tooltip label={hintOf(href)} card={opens ? <LinkPreviewCard href={href} /> : undefined}>
       <SharedTextLink

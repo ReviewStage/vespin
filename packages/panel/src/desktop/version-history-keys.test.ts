@@ -87,6 +87,7 @@ function drawn(
   sectionsOf: number | undefined = undefined,
 ): HTMLElement {
   const base = tasksControl();
+
   const tasks = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     activeTaskId: DOCUMENT_TASK.id,
@@ -110,6 +111,7 @@ function drawn(
       ...(older.onLoadEarlier === undefined ? {} : { onLoadEarlier: older.onLoadEarlier }),
     },
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -160,6 +162,7 @@ function drawn(
       ),
     ),
   );
+
   return container;
 }
 
@@ -214,10 +217,12 @@ function foot(view: HTMLElement): HTMLButtonElement | null {
 test("the foot counts the older versions, and reading them is its press", async () => {
   // Version 3 is the oldest listed, so versions 2 and 1 are the older ones.
   const read: Array<(landed: boolean) => void> = [];
+
   const view = drawn([], {
     earlier: 3,
     onLoadEarlier: () => new Promise<boolean>((landed) => read.push(landed)),
   });
+
   expect(foot(view)?.textContent).toBe("Show 2 more");
 
   act(() => foot(view)?.click());
@@ -235,10 +240,12 @@ test("the foot counts the older versions, and reading them is its press", async 
 test("a read of older versions that failed says so with Retry, which reads again", async () => {
   const outcomes = [false, true];
   let reads = 0;
+
   const view = drawn([], {
     earlier: 3,
     onLoadEarlier: () => Promise.resolve(outcomes[reads++] ?? true),
   });
+
   await act(async () => foot(view)?.click());
   await vi.waitFor(() => expect(foot(view) === null).toBe(true));
   expect(view.querySelector('[role="alert"]')?.textContent).toContain(
@@ -266,16 +273,20 @@ function hintOf(button: HTMLButtonElement): string | null | undefined {
   });
   vi.useRealTimers();
   delete document.documentElement.dataset.keyboard;
+
   return document.querySelector('[role="tooltip"]')?.textContent;
 }
 
 test("the Back row leaves the history when pressed, and its hint says where it leads", () => {
   let exits = 0;
+
   const view = drawn([], {}, () => {
     exits += 1;
   });
+
   const back = backRow(view);
   expect(back).toBeDefined();
+
   if (back === undefined) return;
   expect(hintOf(back)).toContain(`Back to ${DOCUMENT_TASK.name}`);
 
@@ -287,6 +298,7 @@ test("the Back row names the page the window goes back to, where the history ope
   const view = drawn([], {}, ignore, "Inbox");
   const back = backRow(view);
   expect(back).toBeDefined();
+
   if (back === undefined) return;
   expect(hintOf(back)).toContain("Back to Inbox");
 });
@@ -304,6 +316,7 @@ test("with a version's sections open, All versions shows Esc and the Back row do
   const all = allVersionsRow(view);
   expect(back).toBeDefined();
   expect(all).toBeDefined();
+
   if (back === undefined || all === undefined) return;
   expect(hintOf(all)).toContain(SHORTCUT_KEY.ESCAPE.glyph);
   expect(hintOf(back)).not.toContain(SHORTCUT_KEY.ESCAPE.glyph);
@@ -312,6 +325,7 @@ test("with a version's sections open, All versions shows Esc and the Back row do
 test("with the sections closed, the Back row shows Esc", () => {
   const back = backRow(drawn([]));
   expect(back).toBeDefined();
+
   if (back === undefined) return;
   expect(hintOf(back)).toContain(SHORTCUT_KEY.ESCAPE.glyph);
 });

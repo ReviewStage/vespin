@@ -43,11 +43,13 @@ const sealed = (sealedKey: string) => ({ keyVersion: 1, sealedDataKey: "wrap", s
 
 const openAccounts = Effect.gen(function* () {
   const [owner, other] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
   for (const id of [owner, other]) {
     yield* Database.use((db) =>
       db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` }),
     );
   }
+
   return { owner, other };
 });
 
@@ -139,9 +141,11 @@ it.layer(getTestDB())("the provider key store", (it) => {
         ]);
         assert.deepEqual(yield* listProviderKeyRows(other, CLAUDE_SETUP_TOKEN), []);
         assert.deepEqual(yield* listProviderKeyRows(other, API_KEY), []);
+
         const everyOfOwner = (yield* listEveryProviderKeyRow()).filter(
           (row) => row.userId === owner,
         );
+
         assert.deepEqual(
           everyOfOwner.map((row) => [row.provider, row.kind]),
           [
@@ -159,12 +163,14 @@ it.layer(getTestDB())("the provider key store", (it) => {
         const { owner, other } = yield* openAccounts;
         const { ANTHROPIC } = PROVIDER_KEY_PROVIDER;
         const { API_KEY, CLAUDE_SETUP_TOKEN } = PROVIDER_KEY_KIND;
+
         const save = (
           userId: string,
           kind: typeof API_KEY | typeof CLAUDE_SETUP_TOKEN,
           key: string,
         ) =>
           saveProviderKey(userId, ANTHROPIC, kind, sealed(key), "sk-ant-…test", null, new Date(1));
+
         yield* save(owner, API_KEY, "key");
         yield* save(owner, CLAUDE_SETUP_TOKEN, "token");
         yield* save(other, API_KEY, "other-key");
@@ -216,6 +222,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
 
         const [held] = yield* listProviderKeyRows(owner, CHATGPT_OAUTH);
         const id = held?.id ?? "";
+
         const resealed = yield* withProviderKeyLocked(
           owner,
           OPENAI,
@@ -230,6 +237,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
               new Date(7_200_000),
             ),
         );
+
         const stale = yield* resealProviderKey(
           owner,
           id,
@@ -237,6 +245,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
           sealed("signin-3"),
           new Date(9_000_000),
         );
+
         const othersReseal = yield* resealProviderKey(
           other,
           id,
@@ -244,6 +253,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
           sealed("signin-4"),
           new Date(9_000_000),
         );
+
         const othersLocked = yield* withProviderKeyLocked(other, OPENAI, CHATGPT_OAUTH, id, (row) =>
           Effect.succeed(Option.isNone(row)),
         );
@@ -267,6 +277,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
         const { owner, other } = yield* openAccounts;
         const { ANTHROPIC } = PROVIDER_KEY_PROVIDER;
         const { CLAUDE_SETUP_TOKEN } = PROVIDER_KEY_KIND;
+
         const connect = (account: string, seal: string) =>
           saveProviderKey(
             account,
@@ -277,10 +288,12 @@ it.layer(getTestDB())("the provider key store", (it) => {
             null,
             new Date(0),
           );
+
         const forAgents = (account: string) =>
           Effect.map(listProviderKeyRows(account, CLAUDE_SETUP_TOKEN), (rows) =>
             rows.map((row) => row.forAgents),
           );
+
         yield* connect(owner, "first");
         yield* connect(other, "theirs");
         assert.deepEqual(yield* forAgents(owner), [true]);
@@ -312,6 +325,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
         const { owner, other } = yield* openAccounts;
         const { OPENAI } = PROVIDER_KEY_PROVIDER;
         const { CHATGPT_OAUTH } = PROVIDER_KEY_KIND;
+
         for (const account of [owner, other]) {
           yield* saveProviderKey(
             account,
@@ -323,11 +337,13 @@ it.layer(getTestDB())("the provider key store", (it) => {
             new Date(1_000),
           );
         }
+
         const read = (account: string) =>
           Effect.map(listProviderKeyRows(account, CHATGPT_OAUTH), ([row]) => [
             row?.status,
             row?.limitResetsAt?.getTime() ?? null,
           ]);
+
         const write = (
           status: Parameters<typeof setPlanStatus>[3],
           savedBy: number,
@@ -342,6 +358,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
             new Date(savedBy),
             new Date(5_000),
           );
+
         const seen: unknown[] = [];
 
         yield* write(PROVIDER_KEY_STATUS.LIMIT_REACHED, 2_000, 9_000);
@@ -378,6 +395,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
         const { owner } = yield* openAccounts;
         const { OPENAI } = PROVIDER_KEY_PROVIDER;
         const { CHATGPT_OAUTH } = PROVIDER_KEY_KIND;
+
         const save = (seal: string, placement: Parameters<typeof saveProviderKey>[8]) =>
           saveProviderKey(
             owner,
@@ -390,6 +408,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
             null,
             placement,
           );
+
         const order = () =>
           Effect.map(listProviderKeyRows(owner, CHATGPT_OAUTH), (rows) =>
             rows.map((row) => [row.id, row.sealedKey, row.accountEmail]),
@@ -422,6 +441,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
         const { owner, other } = yield* openAccounts;
         const { ANTHROPIC } = PROVIDER_KEY_PROVIDER;
         const { CLAUDE_SETUP_TOKEN } = PROVIDER_KEY_KIND;
+
         const add = (account: string, seal: string) =>
           saveProviderKey(
             account,
@@ -434,9 +454,11 @@ it.layer(getTestDB())("the provider key store", (it) => {
             null,
             { add: true },
           );
+
         const first = yield* add(owner, "first");
         const second = yield* add(owner, "second");
         yield* add(other, "theirs");
+
         const shownOf = (account: string) =>
           Effect.map(listProviderKeyRows(account, CLAUDE_SETUP_TOKEN), (rows) =>
             rows.map((row) => [row.sealedKey, row.status, row.forAgents]),
@@ -475,6 +497,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
           false,
         );
         yield* removeProviderKey(other, ANTHROPIC, CLAUDE_SETUP_TOKEN, second);
+
         const othersLock = yield* withProviderKeyLocked(
           other,
           ANTHROPIC,
@@ -482,6 +505,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
           first,
           (row) => Effect.succeed(Option.isNone(row)),
         );
+
         assert.equal(othersLock, true);
         yield* add(other, "theirs-2");
         assert.deepEqual(
@@ -512,6 +536,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
         const { owner, other } = yield* openAccounts;
         const { ANTHROPIC } = PROVIDER_KEY_PROVIDER;
         const { CLAUDE_SETUP_TOKEN } = PROVIDER_KEY_KIND;
+
         const add = (account: string, seal: string) =>
           saveProviderKey(
             account,
@@ -524,10 +549,12 @@ it.layer(getTestDB())("the provider key store", (it) => {
             null,
             { add: true },
           );
+
         const first = yield* add(owner, "first");
         const second = yield* add(owner, "second");
         const third = yield* add(owner, "third");
         const theirs = yield* add(other, "theirs");
+
         const shownOf = (account: string) =>
           Effect.map(listProviderKeyRows(account, CLAUDE_SETUP_TOKEN), (rows) =>
             rows.map((row) => [row.sealedKey, row.label]),
@@ -566,6 +593,7 @@ it.layer(getTestDB())("the provider key store", (it) => {
       Effect.gen(function* () {
         const { owner } = yield* openAccounts;
         const { CHATGPT_OAUTH } = PROVIDER_KEY_KIND;
+
         const plan = yield* saveProviderKey(
           owner,
           PROVIDER_KEY_PROVIDER.OPENAI,
@@ -575,9 +603,11 @@ it.layer(getTestDB())("the provider key store", (it) => {
           null,
           new Date(1_000),
         );
+
         const windowsOf = Effect.map(listProviderKeyRows(owner, CHATGPT_OAUTH), (rows) =>
           rows.map((row) => row.usageWindows),
         );
+
         const session = { usedPercent: 10, windowMins: 300 };
 
         yield* setPlanUsageWindows(owner, plan, [session], new Date(2_000));

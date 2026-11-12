@@ -98,6 +98,7 @@ afterEach(() => {
 function KeyedWindow({ opened }: { opened: string[] }): ReactElement | null {
   useAppKeymap(true);
   useAppCommand(APP_COMMAND.COMMAND_PALETTE, () => opened.push("command palette"));
+
   return null;
 }
 
@@ -105,6 +106,7 @@ function KeyedWindow({ opened }: { opened: string[] }): ReactElement | null {
 async function opened() {
   const started: DescriptionCommentStartRequest[] = [];
   const palette: string[] = [];
+
   const control: DescriptionCommentsControl = {
     planId: PLAN.id,
     threads: [],
@@ -114,10 +116,12 @@ async function opened() {
     notes: new Map(),
     start: async (start) => {
       if (!("page" in start)) started.push(start);
+
       return { note: "not in this test" };
     },
     act: async () => true,
   };
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -151,6 +155,7 @@ async function opened() {
   await act(async () => undefined);
   const element = container.querySelector<TiptapEditorHTMLElement>(".ProseMirror");
   const editor = element?.editor ?? assert.fail("the editor is running");
+
   return { container, element: element as TiptapEditorHTMLElement, editor, started, palette };
 }
 
@@ -159,8 +164,10 @@ function positionsOf(editor: Editor, words: string): { from: number; to: number 
   let found: { from: number; to: number } | undefined;
   editor.state.doc.descendants((node, pos) => {
     const at = node.isText ? (node.text ?? "").indexOf(words) : -1;
+
     if (found === undefined && at >= 0) found = { from: pos + at, to: pos + at + words.length };
   });
+
   return found ?? assert.fail(`${words} is in the text`);
 }
 
@@ -179,37 +186,48 @@ function toolbarIn(container: HTMLElement): HTMLElement | null {
 /** The standing toolbar's button named `name`. */
 function press(container: HTMLElement, name: string): HTMLButtonElement {
   const toolbar = toolbarIn(container) ?? assert.fail("the toolbar stands");
+
   const button = [...toolbar.querySelectorAll("button")].find(
     (each) => (each.getAttribute("aria-label") ?? each.textContent) === name,
   );
+
   return button ?? assert.fail(`the toolbar holds ${name}`);
 }
 
 /** The block named `block` chosen from the standing toolbar's Turn into. */
 function turnInto(container: HTMLElement, block: string): void {
   const toolbar = toolbarIn(container) ?? assert.fail("the toolbar stands");
+
   const opener =
     [...toolbar.querySelectorAll("button")].find((each) =>
       (each.getAttribute("aria-label") ?? each.textContent ?? "").startsWith("Turn into"),
     ) ?? assert.fail("the toolbar holds Turn into");
+
   act(() => opener.click());
+
   const menu =
     document.querySelector<HTMLElement>('[role="menu"]') ?? assert.fail("the menu opens");
+
   const row =
     [...menu.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')].find(
       (each) => each.querySelector(".ui-menu-item-label")?.textContent === block,
     ) ?? assert.fail(`the menu offers ${block}`);
+
   act(() => row.click());
 }
 
 /** The element the words stand in, by its tag, and whether a list or a quote holds it. */
 function blockOf(element: HTMLElement, words: string): { tag: string; wrapped: boolean } {
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+
   for (let text = walker.nextNode(); text !== null; text = walker.nextNode()) {
     const block = text.parentElement?.closest("p, h1, h2, h3, pre");
+
     if (!(text.textContent ?? "").includes(words) || block == null) continue;
+
     return { tag: block.tagName.toLowerCase(), wrapped: block.closest("li, blockquote") !== null };
   }
+
   return assert.fail(`${words} is drawn`);
 }
 
@@ -223,9 +241,11 @@ function commandK(element: HTMLElement): KeyboardEvent {
     bubbles: true,
     cancelable: true,
   });
+
   act(() => {
     element.dispatchEvent(event);
   });
+
   return event;
 }
 
@@ -258,9 +278,11 @@ test("words in a table's cell raise the toolbar with its marks and Link, and no 
   select(editor, "Anyone");
 
   const toolbar = toolbarIn(container) ?? assert.fail("the toolbar stands");
+
   const names = [...toolbar.querySelectorAll("button")].map(
     (each) => each.getAttribute("aria-label") ?? each.textContent ?? "",
   );
+
   assert.ok(names.includes("Bold"), "the marks stand");
   assert.ok(names.includes("Link"), "Link stands");
   assert.ok(!names.some((name) => name.startsWith("Turn into")), "Turn into stands nowhere");
@@ -277,9 +299,11 @@ test("words that run through a table, from a line before it to one after, raise 
   });
 
   const toolbar = toolbarIn(container) ?? assert.fail("the toolbar stands");
+
   const names = [...toolbar.querySelectorAll("button")].map(
     (each) => each.getAttribute("aria-label") ?? each.textContent ?? "",
   );
+
   assert.ok(names.includes("Bold"), "the marks stand");
   assert.ok(!names.some((name) => name.startsWith("Turn into")), "Turn into stands nowhere");
 });
@@ -308,11 +332,14 @@ test("Turn into Heading 2 turns the line the words stand in into a heading", asy
   select(editor, "withdraw");
 
   act(() => press(container, "Turn into Text").click());
+
   const menu =
     document.querySelector<HTMLElement>('[role="menu"]') ?? assert.fail("the menu opens");
+
   const heading = [...menu.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')].find((row) =>
     row.textContent?.includes("Heading 2"),
   );
+
   act(() => heading?.click());
 
   const headings = [...element.querySelectorAll("h2")].map((each) => each.textContent);
@@ -345,8 +372,10 @@ test("⌘K over words selected opens the link field, whose Enter links them, a w
 
   const pressed = commandK(element);
   assert.ok(pressed.defaultPrevented, "the editor takes ⌘K over words");
+
   const field =
     container.querySelector<HTMLInputElement>('input[type="url"]') ?? assert.fail("the link field");
+
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(
       field,
@@ -384,12 +413,16 @@ test("⌘K with the caret in a link opens the field holding it, whose Remove unl
   });
 
   commandK(element);
+
   const field =
     container.querySelector<HTMLInputElement>('input[type="url"]') ?? assert.fail("the link field");
+
   assert.equal(field.value, "https://example.com/members");
+
   const remove =
     container.querySelector<HTMLButtonElement>('button[aria-label="Remove link"]') ??
     assert.fail("Remove stands beside a link");
+
   act(() => remove.click());
 
   assert.equal(element.querySelector("a"), null, "the words are linked no more");
@@ -401,9 +434,11 @@ test("Remove over a few words of a link unlinks those words alone, leaving the r
   select(editor, "members");
 
   commandK(element);
+
   const remove =
     container.querySelector<HTMLButtonElement>('button[aria-label="Remove link"]') ??
     assert.fail("Remove stands beside a link");
+
   act(() => remove.click());
 
   assert.deepEqual(
@@ -420,9 +455,11 @@ test("Comment on the toolbar starts a thread on the words selected", async () =>
   select(editor, "a teammate");
 
   act(() => press(container, "Comment").click());
+
   const field =
     container.querySelector<HTMLElement>(`.comment-card[data-thread="pending"] .composer-editor`) ??
     assert.fail("the thread is being started");
+
   writeInComposer(field, "Only admins?");
   pressInComposer(field, "Enter");
   await act(async () => undefined);
@@ -440,6 +477,7 @@ test("Comment on the toolbar starts a thread on the words selected", async () =>
 test("⇧⌘M starts a thread on the words selected while the toolbar stands over them, as its Comment does", async () => {
   const { container, element, editor } = await opened();
   const pending = () => container.querySelector(`.comment-card[data-thread="pending"]`);
+
   const commentKey = () =>
     act(() => {
       element.dispatchEvent(

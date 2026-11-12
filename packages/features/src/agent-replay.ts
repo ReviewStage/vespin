@@ -141,6 +141,7 @@ export function toolStep(call: {
     call.state === REPLAY_TOOL_STATE.RUNNING
       ? TOOL_WORDS.NO_RESULT
       : `${call.state === REPLAY_TOOL_STATE.FAILED ? TOOL_WORDS.FAILED : ""}${call.output ?? ""}`;
+
   return {
     kind: REPLAY_STEP_KIND.TOOL,
     summary: call.summary,
@@ -206,6 +207,7 @@ export interface FirstMessage {
 const MARKER_SPACE = "agent";
 const LEGACY_MARKER_SPACE = "luke";
 const MARKER_SPACES = [MARKER_SPACE, LEGACY_MARKER_SPACE] as const;
+
 /** Either namespace, as a marker's pattern reads it. */
 const SPACE = `(?:${MARKER_SPACE}|${LEGACY_MARKER_SPACE})`;
 
@@ -221,6 +223,7 @@ const NOTE_OPEN = new RegExp(
   `^<!-- ${SPACE}:note text-files=(\\d+) other-files=(\\d+) chars=(\\d+) -->\\n`,
   "u",
 );
+
 const NOTE_OPEN_START = `<!-- ${MARKER_SPACE}:note `;
 const NOTE_OPEN_STARTS = MARKER_SPACES.map((space) => `<!-- ${space}:note `);
 
@@ -228,26 +231,32 @@ const REPLAY_OPEN = new RegExp(
   `^<!-- ${SPACE}:replay agent=([0-9a-f-]+)(?: message=([0-9a-f-]+))?( carried=1)? steps=(\\d+) total-steps=(\\d+) chars=(\\d+) -->\\n`,
   "u",
 );
+
 const STEP_OPEN = new RegExp(
   `^<!-- ${SPACE}:step kind=([a-z]+)((?: [a-z-]+=[A-Za-z0-9_.:@-]+)*) chars=(\\d+) -->\\n`,
   "u",
 );
+
 const STEP_ATTRIBUTE = / ([a-z-]+)=([A-Za-z0-9_.:@-]+)/gu;
 const ATTRIBUTE_VALUE = /^[A-Za-z0-9_.:@-]+$/u;
 const INSTANT_VALUE = /^\d+$/u;
 const isReplayToolState = Schema.is(Schema.Literals(Object.values(REPLAY_TOOL_STATE)));
 const isReplaySenderKind = Schema.is(Schema.Literals(Object.values(REPLAY_SENDER)));
+
 /** The app's sender as a marker written before it was `app` spells it. */
 const LEGACY_APP_SENDER = "luke";
 const isReplayValueForm = Schema.is(Schema.Literals(Object.values(REPLAY_VALUE_FORM)));
+
 /** Whose words a summary is, as its marker says: the app's, `luke` before it. */
 const SUMMARY_BY = "app";
+
 const SUMMARY_OPEN = new RegExp(
   `^<!-- ${SPACE}:summary by=(?:${SUMMARY_BY}|luke) steps=(\\d+) chars=(\\d+) -->\\n`,
   "u",
 );
 
 const isReplayStepKind = Schema.is(Schema.Literals(Object.values(REPLAY_STEP_KIND)));
+
 /** Each heading a note may stand under, as it is spelled and as it is read: today's, then the retired spelling. */
 const NOTE_HEADINGS: readonly (readonly [string, StartNoteHeading])[] = [
   ...Object.values(START_NOTE_HEADING).map((heading) => [heading, heading] as const),
@@ -257,6 +266,7 @@ const NOTE_HEADINGS: readonly (readonly [string, StartNoteHeading])[] = [
 /** Where the first of the needles stands in the text from `from`, in either namespace; -1 where none does. */
 function firstIndexOf(text: string, needles: readonly string[], from: number): number {
   const found = needles.map((needle) => text.indexOf(needle, from)).filter((at) => at >= 0);
+
   return found.length === 0 ? -1 : Math.min(...found);
 }
 
@@ -279,20 +289,25 @@ function instant(at: number | undefined): string {
 function stepAttributes(step: ReplayStep): string {
   if (step.kind === REPLAY_STEP_KIND.TOOL && step.state !== undefined && step.input !== undefined) {
     const forms = `${spelled("input-form", step.inputForm)}${spelled("output-form", step.outputForm)}`;
+
     return ` state=${step.state} input-chars=${step.input.length}${spelled("tool", step.tool)}${forms}`;
   }
+
   if (step.kind !== REPLAY_STEP_KIND.LINE) return "";
+
   // A member id the marker cannot spell is left out, and the line is still the member's.
   const sender =
     step.sender === undefined
       ? ""
       : ` sender=${step.sender.kind}${spelled("member", step.sender.memberId)}`;
+
   return `${sender}${instant(step.at)}`;
 }
 
 /** One step as the block spells it. */
 function stepText(step: ReplayStep): string {
   const body = `${oneLine(step.summary)}\n${step.words}`;
+
   return `<!-- ${MARKER_SPACE}:step kind=${step.kind}${stepAttributes(step)} chars=${body.length}${MARKER_END}${body}\n`;
 }
 
@@ -307,11 +322,14 @@ function toolFields(
   words: string,
 ): Pick<ReplayStep, "state" | "input" | "output" | "tool" | "inputForm" | "outputForm"> {
   const called = calledFields(attributes, words);
+
   if (called.state === undefined) return called;
   const tool = attributes.get("tool");
   const inputForm = formOf(attributes.get("input-form"));
+
   const outputForm =
     called.output === undefined ? undefined : formOf(attributes.get("output-form"));
+
   return {
     ...called,
     ...(tool === undefined ? undefined : { tool }),
@@ -327,15 +345,22 @@ function calledFields(
 ): Pick<ReplayStep, "state" | "input" | "output"> {
   const state = attributes.get("state") ?? "";
   const inputChars = Number(attributes.get("input-chars") ?? Number.NaN);
+
   if (!isReplayToolState(state) || !Number.isInteger(inputChars)) return {};
+
   if (!words.startsWith(TOOL_WORDS.INPUT)) return {};
   const inputEnd = TOOL_WORDS.INPUT.length + inputChars;
+
   if (!words.startsWith(TOOL_WORDS.RESULT, inputEnd)) return {};
   const input = words.slice(TOOL_WORDS.INPUT.length, inputEnd);
   const result = words.slice(inputEnd + TOOL_WORDS.RESULT.length);
+
   if (state === REPLAY_TOOL_STATE.RUNNING) return { state, input };
+
   if (state === REPLAY_TOOL_STATE.DONE) return { state, input, output: result };
+
   if (!result.startsWith(TOOL_WORDS.FAILED)) return {};
+
   return { state, input, output: result.slice(TOOL_WORDS.FAILED.length) };
 }
 
@@ -343,6 +368,7 @@ function calledFields(
 function lineFields(attributes: ReadonlyMap<string, string>): Pick<ReplayStep, "sender" | "at"> {
   const at = attributes.get("at") ?? "";
   const when = INSTANT_VALUE.test(at) && Number.isSafeInteger(Number(at)) ? { at: Number(at) } : {};
+
   return { ...senderFields(attributes), ...when };
 }
 
@@ -350,18 +376,22 @@ function lineFields(attributes: ReadonlyMap<string, string>): Pick<ReplayStep, "
 function senderFields(attributes: ReadonlyMap<string, string>): Pick<ReplayStep, "sender"> {
   const spelled = attributes.get("sender") ?? "";
   const kind = spelled === LEGACY_APP_SENDER ? REPLAY_SENDER.APP : spelled;
+
   if (!isReplaySenderKind(kind)) return {};
   const member = attributes.get("member");
+
   const sender = {
     kind,
     ...(member === undefined ? undefined : { memberId: member }),
   };
+
   return { sender };
 }
 
 /** The summary as the block spells it, marked as the app's words rather than the agent's. */
 function summaryText(summary: ReplaySummary | undefined): string {
   if (summary === undefined) return "";
+
   return `<!-- ${MARKER_SPACE}:summary by=${SUMMARY_BY} steps=${summary.steps} chars=${summary.text.length}${MARKER_END}${summary.text}\n`;
 }
 
@@ -369,10 +399,13 @@ function summaryText(summary: ReplaySummary | undefined): string {
 export function replayText(replay: Replay): string {
   const message = replay.messageId === undefined ? "" : ` message=${replay.messageId}`;
   const carried = replay.carried === true ? " carried=1" : "";
+
   const open =
     `${REPLAY_OPEN_START}agent=${replay.agentId}${message}${carried} steps=${replay.steps.length} ` +
     `total-steps=${replay.totalSteps} chars=${replay.preamble.length}${MARKER_END}`;
+
   const steps = replay.steps.map(stepText).join("");
+
   return `${REPLAY_HEADING}\n\n${open}${replay.preamble}\n${summaryText(replay.summary)}${steps}${REPLAY_CLOSE}`;
 }
 
@@ -394,6 +427,7 @@ export function summaryBytes(summary: ReplaySummary | undefined): number {
 /** The note as it ends a first message: its heading, then a marker naming its files and its length, then its words. */
 function noteText(note: string, heading: StartNoteHeading, files: NoteFiles): string {
   const marker = `${NOTE_OPEN_START}text-files=${files.text} other-files=${files.other} chars=${note.length}${MARKER_END}`;
+
   return `${SECTION_GAP}${heading}${SECTION_GAP}${marker}${note}`;
 }
 
@@ -406,6 +440,7 @@ export function firstMessageText(
   noteFiles: NoteFiles = NO_NOTE_FILES,
 ): string {
   const replayed = replay === undefined ? brief : `${brief}${SECTION_GAP}${replayText(replay)}`;
+
   return note === undefined ? replayed : `${replayed}${noteText(note, heading, noteFiles)}`;
 }
 
@@ -420,14 +455,18 @@ export function newestStepsWithin(
 ): readonly ReplayStep[] {
   let used = 0;
   let first = steps.length;
+
   while (first > 0) {
     const step = steps[first - 1];
+
     if (step === undefined) break;
     const size = utf8Bytes(stepText(step));
+
     if (used + size > maximumBytes) break;
     used += size;
     first -= 1;
   }
+
   return steps.slice(first);
 }
 
@@ -438,7 +477,9 @@ function markedRun(
   chars: number,
 ): { readonly run: string; readonly next: number } | undefined {
   const end = at + chars;
+
   if (end >= text.length || text[end] !== "\n") return undefined;
+
   return { run: text.slice(at, end), next: end + 1 };
 }
 
@@ -448,10 +489,13 @@ function summaryFrom(
   at: number,
 ): { readonly summary: ReplaySummary | undefined; readonly next: number } | undefined {
   const open = SUMMARY_OPEN.exec(text.slice(at, at + 96));
+
   if (open === null) return { summary: undefined, next: at };
   const [marker, steps = "", chars = ""] = open;
   const body = markedRun(text, at + marker.length, Number(chars));
+
   if (body === undefined) return undefined;
+
   return { summary: { text: body.run, steps: Number(steps) }, next: body.next };
 }
 
@@ -463,17 +507,23 @@ function stepsFrom(
   const steps: ReplayStep[] = [];
   let at = start;
   let close = REPLAY_CLOSES.find((each) => text.startsWith(each, at));
+
   while (close === undefined) {
     const open = STEP_OPEN.exec(text.slice(at, at + 512));
     const [marker, kind = "", named = "", chars = ""] = open ?? [];
+
     if (marker === undefined || !isReplayStepKind(kind)) return undefined;
     const body = markedRun(text, at + marker.length, Number(chars));
+
     if (body === undefined) return undefined;
     const split = body.run.indexOf("\n");
+
     if (split < 0) return undefined;
+
     const attributes = new Map(
       [...named.matchAll(STEP_ATTRIBUTE)].map(([, key = "", value = ""]) => [key, value]),
     );
+
     const words = body.run.slice(split + 1);
     steps.push({
       kind,
@@ -485,6 +535,7 @@ function stepsFrom(
     at = body.next;
     close = REPLAY_CLOSES.find((each) => text.startsWith(each, at));
   }
+
   return { steps, next: at + close.length };
 }
 
@@ -492,15 +543,20 @@ function stepsFrom(
 function markedNoteAt(text: string, at: number): FirstMessageNote | undefined {
   for (const [spelled, heading] of NOTE_HEADINGS) {
     const lead = `${SECTION_GAP}${spelled}${SECTION_GAP}`;
+
     if (!text.startsWith(lead, at)) continue;
     const start = at + lead.length;
     const open = NOTE_OPEN.exec(text.slice(start, start + 96));
+
     if (open === null) return undefined;
     const [marker, textFiles = "", otherFiles = "", chars = ""] = open;
+
     if (start + marker.length + Number(chars) !== text.length) return undefined;
     const files = { text: Number(textFiles), other: Number(otherFiles) };
+
     return { heading, text: text.slice(start + marker.length), files };
   }
+
   return undefined;
 }
 
@@ -513,33 +569,44 @@ function markedNoteAt(text: string, at: number): FirstMessageNote | undefined {
 function noteFrom(text: string, at: number): FirstMessageNote | null | undefined {
   if (at === text.length) return null;
   const marked = markedNoteAt(text, at);
+
   if (marked !== undefined) return marked;
+
   for (const [spelled, heading] of NOTE_HEADINGS) {
     const lead = `${SECTION_GAP}${spelled}${SECTION_GAP}`;
+
     if (!text.startsWith(lead, at)) continue;
     // A whole marker that does not add up is a note damaged, never one from before the marker,
     // whose words may still open with the marker's first words.
     const start = at + lead.length;
+
     if (NOTE_OPEN.test(text.slice(start, start + 96))) return undefined;
+
     return { heading, text: text.slice(at + lead.length), files: NO_NOTE_FILES };
   }
+
   return undefined;
 }
 
 /** The first marked note that ends the message, with the brief before it; nothing where none adds up. */
 function markedNoteIn(text: string): FirstMessage | undefined {
   let at = firstIndexOf(text, NOTE_OPEN_STARTS, 0);
+
   while (at >= 0) {
     // The marker stands after its heading, so the note starts at the gap before that heading.
     for (const [spelled] of NOTE_HEADINGS) {
       const lead = `${SECTION_GAP}${spelled}${SECTION_GAP}`;
       const from = at - lead.length;
+
       if (from < 0 || !text.startsWith(lead, from)) continue;
       const note = markedNoteAt(text, from);
+
       if (note !== undefined) return { brief: text.slice(0, from), note };
     }
+
     at = firstIndexOf(text, NOTE_OPEN_STARTS, at + 1);
   }
+
   return undefined;
 }
 
@@ -547,16 +614,22 @@ function markedNoteIn(text: string): FirstMessage | undefined {
 function replayAt(text: string, at: number): Omit<FirstMessage, "brief"> | undefined {
   const start = at + REPLAY_HEADING_LEAD.length;
   const open = REPLAY_OPEN.exec(text.slice(start, start + 256));
+
   if (open === null) return undefined;
   const [marker, agentId = "", messageId, carried, kept = "", total = "", chars = ""] = open;
   const preamble = markedRun(text, start + marker.length, Number(chars));
+
   if (preamble === undefined) return undefined;
   const summarized = summaryFrom(text, preamble.next);
+
   if (summarized === undefined) return undefined;
   const read = stepsFrom(text, summarized.next);
+
   if (read === undefined || read.steps.length !== Number(kept)) return undefined;
   const note = noteFrom(text, read.next);
+
   if (note === undefined) return undefined;
+
   const replay: Replay = {
     agentId,
     ...(messageId === undefined ? undefined : { messageId }),
@@ -566,6 +639,7 @@ function replayAt(text: string, at: number): Omit<FirstMessage, "brief"> | undef
     steps: read.steps,
     totalSteps: Number(total),
   };
+
   return { replay, ...(note === null ? undefined : { note }) };
 }
 
@@ -578,10 +652,13 @@ function replayAt(text: string, at: number): Omit<FirstMessage, "brief"> | undef
  */
 export function firstMessageParts(text: string): FirstMessage {
   let at = firstIndexOf(text, REPLAY_LEADS, 0);
+
   while (at >= 0) {
     const read = replayAt(text, at);
+
     if (read !== undefined) return { brief: text.slice(0, at), ...read };
     at = firstIndexOf(text, REPLAY_LEADS, at + 1);
   }
+
   return markedNoteIn(text) ?? { brief: text };
 }

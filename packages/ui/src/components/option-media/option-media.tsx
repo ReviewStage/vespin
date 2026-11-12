@@ -84,6 +84,7 @@ function captionOf(piece: Pick<OptionMediaPiece, "kind" | "caption">): string {
 function OptionMediaTile({ piece }: { piece: OptionMediaPiece }): React.JSX.Element {
   const caption = captionOf(piece);
   const mark = piece.mark ?? KIND_MARK[piece.kind];
+
   return (
     <li className="ui-option-media-tile min-w-0">
       <Tooltip label={caption}>
@@ -125,6 +126,7 @@ export function OptionMedia({
   pieces: readonly OptionMediaPiece[];
 }): React.JSX.Element | null {
   if (pieces.length === 0) return null;
+
   return (
     <ul
       className="ui-option-media m-0 grid list-none grid-cols-option-media gap-item-gap p-0"

@@ -75,6 +75,7 @@ it.effect(
           commands: { capability: "c", queryFingerprint: "f", expiresAt: 1_800_000_060_000 },
         },
       };
+
       const api = fakeCloudApi({ "GET /api/live/mac-commands": { answer: () => sealed } });
       const kinds = [MAC_COMMAND_KIND.SHELL];
 
@@ -98,6 +99,7 @@ it.effect(
           status: HTTP_STATUS.UNAUTHORIZED,
         },
       });
+
       assert.deepEqual(
         yield* Effect.provide(
           client().liveRead(MAC_COMMANDS_READ, {
@@ -118,6 +120,7 @@ it.effect(
       const granted = fakeCloudApi({
         "POST /api/mac-commands/claim": { answer: () => ({ command: COMMAND }) },
       });
+
       assert.deepEqual(yield* Effect.provide(client().claim(COMMAND_ID), granted.layer), {
         command: COMMAND,
       });

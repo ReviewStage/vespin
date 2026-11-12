@@ -92,6 +92,7 @@ export function Checkbox({
 }): React.JSX.Element {
   const words = label === undefined;
   const box = useRef<HTMLElement | null>(null);
+
   const checkbox = (
     // biome-ignore lint/a11y/noLabelWithoutControl: the box inside is Base UI's checkbox, whose native input the label's press reaches, which the rule cannot see through a component.
     <label
@@ -121,6 +122,7 @@ export function Checkbox({
         // A read-only box hands nothing on, so it stays as its caller holds it.
         onCheckedChange={(next) => {
           if (readOnly) return;
+
           // Note that a box ticked springs up by its own tick, which outranks the pulse, so the pulse is an unticking's.
           if (box.current !== null) pulsePress(box.current);
           onChange(mixed ? true : next);
@@ -129,7 +131,9 @@ export function Checkbox({
       {words ? <span className="ui-checkbox-words min-w-0 wrap-anywhere">{children}</span> : null}
     </label>
   );
+
   if (detail === undefined || !words) return checkbox;
+
   return (
     <div className="ui-checkbox-detailed flex min-w-0 flex-col gap-tight-gap">
       {checkbox}

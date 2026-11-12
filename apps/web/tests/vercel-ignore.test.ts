@@ -20,6 +20,7 @@ const IGNORED_BUILD_STEP =
 
 /** What Vercel makes of the step's exit: 0 skips the deployment, 1 builds it, and anything else fails it. */
 const VERDICT = { SKIP: "skip", BUILD: "build", FAIL: "fail" } as const;
+
 type Verdict = (typeof VERDICT)[keyof typeof VERDICT];
 
 /** A commit no remote holds, so the step cannot fetch it. */
@@ -27,6 +28,7 @@ const UNKNOWN_COMMIT = "0123456789abcdef0123456789abcdef01234567";
 
 /** What Vercel names a build of `main` itself, the production deployment. */
 const PRODUCTION = { VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main" } as const;
+
 /** What Vercel names a build of any other branch. */
 const PREVIEW = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "feat/branch" } as const;
 
@@ -73,17 +75,22 @@ function git(root: string, ...args: string[]): string {
       env: { PATH: process.env.PATH, HOME: root, GIT_CONFIG_NOSYSTEM: "1" },
     },
   );
+
   assert.equal(ran.status, 0, ran.stderr);
+
   return ran.stdout.trim();
 }
 
 /** A repository holding the ignore step and the workspace, so its first commit has the step to run. */
 async function repository(t: TestContext, withScript = true): Promise<string> {
   const root = await temporaryDirectory(t, "vercel-ignore-");
+
   if (withScript) {
     mkdirSync(join(root, "scripts"));
+
     for (const script of SCRIPTS) copyFileSync(join(ROOT, script), join(root, script));
   }
+
   for (const [path, content] of Object.entries(WORKSPACE)) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
     writeFileSync(
@@ -91,9 +98,11 @@ async function repository(t: TestContext, withScript = true): Promise<string> {
       typeof content === "string" ? content : `${JSON.stringify(content)}\n`,
     );
   }
+
   git(root, "init", "-q", "-b", "main");
   git(root, "add", "--all");
   git(root, "commit", "-q", "-m", "workspace");
+
   return root;
 }
 
@@ -114,6 +123,7 @@ async function cloneOf(
     `file://${origin}`,
     ".",
   );
+
   return root;
 }
 
@@ -126,6 +136,7 @@ function commit(root: string, path: string, content?: string): string {
   writeFileSync(join(root, path), content ?? `${path}, edit ${edits}\n`);
   git(root, "add", "--all");
   git(root, "commit", "-q", "-m", `change ${path}`);
+
   return git(root, "rev-parse", "HEAD");
 }
 
@@ -148,7 +159,9 @@ function decide(
       ...vercel,
     },
   });
+
   if (ran.status === 0) return VERDICT.SKIP;
+
   return ran.status === 1 ? VERDICT.BUILD : VERDICT.FAIL;
 }
 
@@ -240,10 +253,12 @@ async function forkedOrigin(t: TestContext, branchPaths: readonly string[]): Pro
   const origin = await repository(t);
   commit(origin, "README.md");
   git(origin, "checkout", "-q", "-b", PREVIEW.VERCEL_GIT_COMMIT_REF);
+
   for (const path of branchPaths) commit(origin, path);
   git(origin, "checkout", "-q", "main");
   commit(origin, "apps/web/src/main.tsx");
   commit(origin, "packages/service/src/index.ts");
+
   return origin;
 }
 
@@ -347,6 +362,7 @@ test("a checkout with no usable origin fetches the last deployment from the repo
   commit(clone, "apps/desktop/src/main/main.ts");
   commit(clone, "apps/web/src/main.tsx", "web v1\n");
   assert.equal(decide(clone, deployed), VERDICT.BUILD);
+
   // Note that git's own URL rewriting stands the origin in for GitHub, so the test reaches no network.
   const vercel = {
     VERCEL_GIT_PROVIDER: "github",
@@ -356,6 +372,7 @@ test("a checkout with no usable origin fetches the last deployment from the repo
     GIT_CONFIG_KEY_0: `url.file://${origin}.insteadOf`,
     GIT_CONFIG_VALUE_0: "https://github.com/ReviewStage/web.git",
   };
+
   assert.equal(decide(clone, deployed, process.env.PATH, vercel), VERDICT.SKIP);
   commit(clone, "apps/web/src/main.tsx", "web v2\n");
   assert.equal(decide(clone, deployed, process.env.PATH, vercel), VERDICT.BUILD);

@@ -82,6 +82,7 @@ import {
 import { ProfilerImport } from "./trace.js";
 
 const BEARER = "runner-bearer-for-tests";
+
 /**
  * What the CLI's credential variable holds, which the runner hands on and
  * takes out of every event alike: in a sandbox the launch's placeholder, on a
@@ -148,6 +149,7 @@ function kinds(events: readonly RunnerEvent[]): string[] {
   return withoutAccepted(events).map(({ message }) => {
     if (!("type" in message)) return message.method;
     const subtype = "subtype" in message ? message.subtype : undefined;
+
     return subtype === undefined ? message.type : `${message.type}/${subtype}`;
   });
 }
@@ -166,6 +168,7 @@ function launch(
     const stdin = yield* Queue.unbounded<string, Cause.Done>();
     const writeText = (text: string) => Queue.offer(stdin, text);
     const write = (line: RunnerConfig | InputLine) => writeText(JSON.stringify(line));
+
     const run = yield* runAgent({ lines: Stream.fromQueue(stdin), env }).pipe(
       Effect.scoped,
       Effect.provide(
@@ -179,6 +182,7 @@ function launch(
       ),
       Effect.forkScoped,
     );
+
     return {
       cli: cli.record,
       prompted: cli.prompted,
@@ -197,6 +201,7 @@ function settled<A, E>(fiber: Fiber.Fiber<A, E>) {
   return Effect.gen(function* () {
     for (;;) {
       const exit = fiber.pollUnsafe();
+
       if (exit !== undefined) return exit;
       yield* TestClock.adjust("1 second");
     }
@@ -428,6 +433,7 @@ function untilPosted(service: ReturnType<typeof fakeService>, type: string) {
   return Effect.gen(function* () {
     const posted = () =>
       service.applied.some(({ message }) => "type" in message && message.type === type);
+
     for (let step = 0; step < 5_000 && !posted(); step += 1) yield* Effect.yieldNow;
     assert.ok(posted(), `the service took no ${type}`);
   });
@@ -439,6 +445,7 @@ it.effect(
     Effect.gen(function* () {
       const service = fakeService();
       const probe = fakeProbe(2);
+
       const { cli, write, run, probed } = yield* launch(
         CONNECTION_LOST_TURN,
         service,
@@ -447,6 +454,7 @@ it.effect(
         true,
         probe,
       );
+
       yield* write(CONFIG);
       yield* write(FIRST_MESSAGE);
       yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
@@ -475,9 +483,11 @@ it.effect(
         "result/success",
         RUNNER_EVENT.END,
       ]);
+
       const restored = service.applied.find(
         ({ message }) => "type" in message && message.type === RUNNER_EVENT.CONNECTION_RESTORED,
       )?.message;
+
       assert.deepEqual(restored, {
         type: RUNNER_EVENT.CONNECTION_RESTORED,
         host: ANTHROPIC_HOST,
@@ -496,6 +506,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const service = fakeService();
+
       const { cli, write, run } = yield* launch(
         CONNECTION_LOST_TURN,
         service,
@@ -504,6 +515,7 @@ it.effect(
         true,
         fakeProbe(1),
       );
+
       yield* write(CONFIG);
       yield* write(FIRST_MESSAGE);
       yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
@@ -513,9 +525,11 @@ it.effect(
 
       yield* TestClock.adjust(RUNNER_RECONNECT.FIRST_WAIT_MS);
       assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+
       const restored = service.applied.find(
         ({ message }) => "type" in message && message.type === RUNNER_EVENT.CONNECTION_RESTORED,
       )?.message;
+
       assert.deepEqual(restored, {
         type: RUNNER_EVENT.CONNECTION_RESTORED,
         host: ANTHROPIC_HOST,
@@ -528,6 +542,7 @@ it.effect(
 it.effect("ends the launch failed, saying why, once the host stays silent past the wait", () =>
   Effect.gen(function* () {
     const service = fakeService();
+
     const { cli, write, run } = yield* launch(
       CONNECTION_LOST_TURN,
       service,
@@ -536,6 +551,7 @@ it.effect("ends the launch failed, saying why, once the host stays silent past t
       true,
       fakeProbe(Number.POSITIVE_INFINITY),
     );
+
     yield* write(CONFIG);
     yield* write(FIRST_MESSAGE);
     yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
@@ -563,6 +579,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const service = fakeService();
+
       const { write, run, probed } = yield* launch(
         CONNECTION_LOST_TWICE,
         service,
@@ -571,6 +588,7 @@ it.effect(
         true,
         fakeProbe(),
       );
+
       yield* write(CONFIG);
       yield* write(FIRST_MESSAGE);
       yield* untilPosted(service, RUNNER_EVENT.CONNECTION_RESTORED);
@@ -589,6 +607,7 @@ it.effect(
 it.effect("ends a stopped launch at once while the host is probed", () =>
   Effect.gen(function* () {
     const service = fakeService();
+
     const { write, run } = yield* launch(
       CONNECTION_LOST_TURN,
       service,
@@ -597,6 +616,7 @@ it.effect("ends a stopped launch at once while the host is probed", () =>
       true,
       fakeProbe(Number.POSITIVE_INFINITY),
     );
+
     yield* write(CONFIG);
     yield* write(FIRST_MESSAGE);
     yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
@@ -631,6 +651,7 @@ it.effect.each([
 ])("probes where the CLI reaches the API, given $env", ({ env, target }) =>
   Effect.gen(function* () {
     const service = fakeService();
+
     const { write, run, probed } = yield* launch(
       CONNECTION_LOST_TURN,
       service,
@@ -639,6 +660,7 @@ it.effect.each([
       true,
       fakeProbe(),
     );
+
     yield* write(CONFIG);
     yield* write(FIRST_MESSAGE);
     yield* untilPosted(service, RUNNER_EVENT.CONNECTION_RESTORED);
@@ -730,6 +752,7 @@ it.effect(
       const linesUrl = "https://app.test/runner/lines";
       const uuid = "00000000-0000-4000-8000-0000000000aa";
       const reads: { launch: string | null; after: string | null; bearer: string | null }[] = [];
+
       // The first read is answered the message; every later one is held until the launch lets it go.
       const respond: FakeResponder = (url, init) => {
         if (!url.startsWith(linesUrl)) return service.respond(url, init);
@@ -739,18 +762,23 @@ it.effect(
           after: query.get(RUNNER_LINES.QUERY.AFTER),
           bearer: new Headers(init.headers).get("authorization"),
         });
+
         if (reads.length > 1) {
           return new Promise<Response>((_, reject) =>
             init.signal?.addEventListener("abort", () => reject(new Error("aborted"))),
           );
         }
+
         const lines = [{ seq: 12, text: JSON.stringify({ ...FIRST_MESSAGE, uuid }) }];
+
         return Response.json({ lines });
       };
+
       const { cli, write, run, closeStdin } = yield* launch(SHORT_TURN, {
         ...service,
         layer: fakeHttpClientLayer(respond),
       });
+
       yield* write({ ...CONFIG, linesUrl });
       yield* closeStdin;
 
@@ -775,35 +803,43 @@ it.effect("takes its line from the read on a traced launch whose profiler cannot
     const linesUrl = "https://app.test/runner/lines";
     const uuid = "00000000-0000-4000-8000-0000000000ab";
     let read = false;
+
     // The first read is answered the message; every later one is held until the launch lets it go.
     const respond: FakeResponder = (url, init) => {
       if (!url.startsWith(linesUrl)) return service.respond(url, init);
+
       if (read) {
         return new Promise<Response>((_, reject) =>
           init.signal?.addEventListener("abort", () => reject(new Error("aborted"))),
         );
       }
+
       read = true;
+
       return Response.json({
         lines: [{ seq: 12, text: JSON.stringify({ ...FIRST_MESSAGE, uuid }) }],
       });
     };
+
     // A sandbox whose disk predates the profiler's binary cannot load its module.
     const unloadable = Layer.succeed(ProfilerImport, () =>
       Promise.reject(
         new Error("Cannot find module './sentry_cpu_profiler-linux-x64-glibc-137.node'"),
       ),
     );
+
     const { cli, write, run, closeStdin } = yield* launch(SHORT_TURN, {
       ...service,
       layer: Layer.merge(fakeHttpClientLayer(respond), unloadable),
     });
+
     // Note that the trace names no DSN, so Sentry sends nothing from the test.
     const trace = {
       dsn: "",
       environment: "test",
       sentryTrace: "0123456789abcdef0123456789abcdef-0123456789abcdef-1",
     };
+
     yield* write({ ...CONFIG, linesUrl, trace });
     yield* closeStdin;
 
@@ -816,12 +852,15 @@ it.effect("ends the launch as failed, saying why, when Vespin refuses its line r
   Effect.gen(function* () {
     const service = fakeService();
     const linesUrl = "https://app.test/runner/lines";
+
     const respond: FakeResponder = (url, init) =>
       url.startsWith(linesUrl) ? new Response(null, { status: 401 }) : service.respond(url, init);
+
     const { cli, write, run, closeStdin } = yield* launch(SHORT_TURN, {
       ...service,
       layer: fakeHttpClientLayer(respond),
     });
+
     yield* write({ ...CONFIG, linesUrl });
     yield* closeStdin;
 
@@ -859,11 +898,14 @@ it.effect("a warm line runs a warm launch's window again from now", () =>
     yield* untilIdles(service, 1);
     yield* TestClock.adjust(Duration.seconds(50));
     yield* write({ type: INPUT_LINE.WARM });
+
     // The input loop's fiber takes the line, which leaves nothing to wait on but its turn to run.
     for (let step = 0; step < 50; step += 1) yield* Effect.yieldNow;
     yield* TestClock.adjust(Duration.seconds(50));
+
     const ended = () =>
       service.applied.some(({ message }) => "type" in message && message.type === RUNNER_EVENT.END);
+
     for (let step = 0; step < 500 && !ended(); step += 1) yield* Effect.yieldNow;
     assert.equal(ended(), false, "the warm line kept it past its first window");
 
@@ -907,17 +949,22 @@ it.effect(
     Effect.gen(function* () {
       const service = fakeService([], "Working on the first message.");
       const { prompted, release, write, run } = yield* launch(FOLLOW_UP_TURNS, service);
+
       const heartbeats = () =>
         service.bodies.filter((body) => JSON.parse(body).events.length === 0).length;
+
       yield* write(CONFIG);
       yield* write(FIRST_MESSAGE);
       yield* service.seen;
       const beforeAny = heartbeats();
+
       // Each interval is let run out, and its heartbeat land, before the next begins.
       for (const beat of [1, 2]) {
         yield* TestClock.adjust(Duration.millis(RUNNER_HEARTBEAT.EVERY_MS));
+
         for (let step = 0; step < 500 && heartbeats() < beat; step += 1) yield* Effect.yieldNow;
       }
+
       const whileSilent = heartbeats();
       yield* write({ type: INPUT_LINE.MESSAGE, content: [{ type: "text", text: "Also this." }] });
       yield* Queue.take(prompted);
@@ -937,29 +984,37 @@ it.effect("lets a heartbeat Vespin never answers go, and posts the next one an i
   Effect.gen(function* () {
     const service = fakeService([], "Working on the first message.");
     let hung = 0;
+
     // The service holds the first heartbeat open, answering nothing until the runner lets it go.
     const stalling: typeof service = {
       ...service,
       layer: fakeHttpClientLayer((url, init) => {
         if (hung === 0 && JSON.parse(String(init.body)).events.length === 0) {
           hung += 1;
+
           return new Promise<Response>((_, reject) =>
             init.signal?.addEventListener("abort", () => reject(new Error("let go"))),
           );
         }
+
         return service.respond(url, init);
       }),
     };
+
     const { prompted, release, write, run } = yield* launch(FOLLOW_UP_TURNS, stalling);
+
     const heartbeats = () =>
       service.bodies.filter((body) => JSON.parse(body).events.length === 0).length;
+
     yield* write(CONFIG);
     yield* write(FIRST_MESSAGE);
     yield* service.seen;
     yield* TestClock.adjust(Duration.millis(RUNNER_HEARTBEAT.EVERY_MS));
+
     for (let step = 0; step < 500 && hung === 0; step += 1) yield* Effect.yieldNow;
     yield* TestClock.adjust(Duration.millis(RUNNER_HEARTBEAT.TIMEOUT_MS));
     yield* TestClock.adjust(Duration.millis(RUNNER_HEARTBEAT.EVERY_MS));
+
     for (let step = 0; step < 500 && heartbeats() === 0; step += 1) yield* Effect.yieldNow;
     const afterStall = heartbeats();
     yield* write({ type: INPUT_LINE.MESSAGE, content: [{ type: "text", text: "Also this." }] });
@@ -1019,6 +1074,7 @@ it.effect.each([
       yield* write(ASK_CONFIG);
       yield* write(FIRST_MESSAGE);
       yield* service.seen;
+
       for (let step = 0; step < 50; step += 1) yield* Effect.yieldNow;
       assert.deepEqual(cli.permissions, [], "the call waits on the member");
       assert.equal(run.pollUnsafe(), undefined);
@@ -1103,6 +1159,7 @@ it.effect(
         decision: APPROVAL_DECISION.DENY,
         by: APPROVAL_BY.MESSAGE,
       });
+
       // The ask is resolved before the message that denied it is taken.
       const taken = service.applied.flatMap(({ message }) =>
         "type" in message &&
@@ -1110,6 +1167,7 @@ it.effect(
           ? [message.type]
           : [],
       );
+
       assert.deepEqual(taken, [
         RUNNER_EVENT.ACCEPTED,
         RUNNER_EVENT.APPROVAL_RESOLVED,
@@ -1127,11 +1185,13 @@ it.effect.each([
   ({ mode, cliMode, asking }) =>
     Effect.gen(function* () {
       const { cli, write, run } = yield* launch(SHORT_TURN, fakeService());
+
       // The starter's always-allowed commands, one no plain prefix, which would widen its rule.
       const allowedCommands = [
         ["pnpm", "test"],
         ["git", "log;rm"],
       ];
+
       yield* write({ ...CONFIG, permissionMode: mode, allowedCommands });
       yield* write(FIRST_MESSAGE);
       yield* Fiber.join(run);
@@ -1141,12 +1201,15 @@ it.effect.each([
       assert.equal(options.permissionMode, cliMode);
       // Under full access nothing could call it.
       assert.equal(options.canUseTool !== undefined, asking);
+
       for (const unasked of ["Read", "WebFetch", "mcp__workspace", "mcp__linear"]) {
         assert.equal(options.allowedTools?.includes(unasked), asking, unasked);
       }
+
       for (const asked of ["Bash", "Edit", "Write", "NotebookEdit"]) {
         assert.ok(!options.allowedTools?.includes(asked), asked);
       }
+
       assert.deepEqual(
         options.allowedTools?.filter((rule) => rule.startsWith("Bash(")),
         asking ? ["Bash(pnpm test *)"] : [],
@@ -1177,6 +1240,7 @@ it.effect("interrupts a turn a wakeup started when Vespin stops it", () =>
 it.effect("takes the launch's secrets out of every event it posts", () =>
   Effect.gen(function* () {
     const service = fakeService();
+
     const leak: Step = {
       emit: {
         type: "assistant",
@@ -1189,6 +1253,7 @@ it.effect("takes the launch's secrets out of every event it posts", () =>
         parent_tool_use_id: null,
       },
     };
+
     const { write, run } = yield* launch([leak, ...SHORT_TURN], service);
     yield* write(CONFIG);
     yield* write(FIRST_MESSAGE);
@@ -1205,6 +1270,7 @@ it.effect("takes the launch's secrets out of every event it posts", () =>
       parent_tool_use_id: null,
     });
     const posted = JSON.stringify(service.applied);
+
     for (const secret of [CLAUDE_TOKEN, BEARER]) {
       assert.ok(!posted.includes(JSON.stringify(secret).slice(1, -1)));
     }
@@ -1217,6 +1283,7 @@ it.effect(
     Effect.gen(function* () {
       const apiKey = "account-api-key-for-tests";
       const service = fakeService();
+
       const leak: Step = {
         emit: {
           type: "assistant",
@@ -1224,11 +1291,13 @@ it.effect(
           parent_tool_use_id: null,
         },
       };
+
       const { cli, write, run } = yield* launch([leak, ...SHORT_TURN], service, {
         [RUNNER_ENV.BEARER]: BEARER,
         [RUNNER_ENV.API_KEY]: apiKey,
         PATH: "/usr/bin",
       });
+
       yield* write(CONFIG);
       yield* write(FIRST_MESSAGE);
       yield* Fiber.join(run);
@@ -1241,6 +1310,7 @@ it.effect(
 it.effect("leaves an escape that only looks like a secret's spelling as it was", () =>
   Effect.gen(function* () {
     const service = fakeService();
+
     const said: Step = {
       emit: {
         type: "assistant",
@@ -1248,10 +1318,12 @@ it.effect("leaves an escape that only looks like a secret's spelling as it was",
         parent_tool_use_id: null,
       },
     };
+
     const { write, run } = yield* launch([said, ...SHORT_TURN], service, {
       ...ENV,
       [RUNNER_ENV.CLAUDE_TOKEN]: "\n",
     });
+
     yield* write(CONFIG);
     yield* write(FIRST_MESSAGE);
     yield* Fiber.join(run);
@@ -1305,6 +1377,7 @@ function downUntil(service: ReturnType<typeof fakeService>, isUp: () => boolean)
     ...service,
     layer: fakeHttpClientLayer((url, init) => {
       if (!isUp()) return Promise.reject(new Error("network is down"));
+
       return service.respond(url, init);
     }),
   };
@@ -1316,10 +1389,12 @@ it.effect(
     Effect.gen(function* () {
       let up = false;
       const service = fakeService();
+
       const { write, run } = yield* launch(
         SHORT_TURN,
         downUntil(service, () => up),
       );
+
       yield* write(CONFIG);
       yield* write(FIRST_MESSAGE);
 
@@ -1348,19 +1423,23 @@ it.effect("lets a post Vespin never answers go after its bound, and posts it aga
   Effect.gen(function* () {
     const service = fakeService();
     let hung = 0;
+
     // The first post is held open, answering nothing until the runner lets it go.
     const stalling: typeof service = {
       ...service,
       layer: fakeHttpClientLayer((url, init) => {
         if (hung === 0) {
           hung += 1;
+
           return new Promise<Response>((_, reject) =>
             init.signal?.addEventListener("abort", () => reject(new Error("let go"))),
           );
         }
+
         return service.respond(url, init);
       }),
     };
+
     const { write, run } = yield* launch(SHORT_TURN, stalling);
     yield* write(CONFIG);
     yield* write(FIRST_MESSAGE);
@@ -1384,10 +1463,12 @@ it.effect("lets a post Vespin never answers go after its bound, and posts it aga
 it.effect("ends a stopped launch within one post's bound while Vespin is still unreachable", () =>
   Effect.gen(function* () {
     const service = fakeService();
+
     const { cli, write, run } = yield* launch(
       SHORT_TURN,
       downUntil(service, () => false),
     );
+
     yield* write(CONFIG);
     yield* write({ type: INPUT_LINE.STOP });
 
@@ -1418,9 +1499,11 @@ it.effect(
       yield* release;
 
       assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+
       const accepted = service.applied.filter(
         ({ message }) => "type" in message && message.type === RUNNER_EVENT.ACCEPTED,
       );
+
       // The first message opens a turn, so its ACCEPTED carries the checkout as it stood before it; the second landed in that turn, so its carries none.
       assert.deepEqual(
         accepted.map(({ message }) => message),
@@ -1493,10 +1576,12 @@ it.effect(
       assert.deepEqual(options.settingSources, ["project"]);
       assert.equal(options.permissionMode, "bypassPermissions");
       assert.equal(options.includePartialMessages, true);
+
       // The tools the prompt names that CLI 2.1.304 leaves out of its default set, and the built-ins beside our own.
       for (const tool of ["Glob", "Grep", "TaskCreate", "TaskUpdate"]) {
         assert.ok(options.allowedTools?.includes(tool), tool);
       }
+
       // The CLI's own wakeup among them, since it holds the sandbox up for the whole wait.
       for (const tool of [
         "ListAgents",
@@ -1507,10 +1592,13 @@ it.effect(
       ]) {
         assert.ok(options.disallowedTools?.includes(tool), tool);
       }
+
       const worker = options.agents?.worker;
+
       for (const tool of ["Edit", "Write", "mcp__workspace"]) {
         assert.ok(worker?.disallowedTools?.includes(tool), tool);
       }
+
       const mcp = options.mcpServers?.workspace;
       assert.equal(mcp?.type, "sdk");
       assert.ok(!JSON.stringify(options).includes(BEARER));
@@ -1520,6 +1608,7 @@ it.effect(
       assert.equal(options.env?.PLAYWRIGHT_BROWSERS_PATH, "0");
       // The first turn waits on no server the CLI may connect in the background.
       assert.equal(options.env?.CLAUDE_CODE_MCP_STARTUP_WAIT_MS, "0");
+
       // The main conversation alone keeps its prompt cache for an hour, and only where the config asks for it,
       // whatever the runner's own environment holds.
       const inheritedEnv = {
@@ -1528,6 +1617,7 @@ it.effect(
         ENABLE_PROMPT_CACHING_1H: "1",
         FORCE_PROMPT_CACHING_5M: "1",
       };
+
       const cacheEnvOf = (config: RunnerConfig) =>
         Effect.gen(function* () {
           const launched = yield* launch(SHORT_TURN, fakeService(), inheritedEnv);
@@ -1535,12 +1625,14 @@ it.effect(
           yield* launched.write(FIRST_MESSAGE);
           yield* Fiber.join(launched.run);
           const env = launched.cli.options?.env;
+
           return [
             env?.CLAUDE_CODE_PROMPT_CACHE_TTL,
             env?.ENABLE_PROMPT_CACHING_1H,
             env?.FORCE_PROMPT_CACHING_5M,
           ];
         });
+
       assert.deepEqual(yield* cacheEnvOf(CONFIG), [undefined, undefined, "1"]);
       assert.deepEqual(yield* cacheEnvOf({ ...CONFIG, promptCacheHour: true }), [
         "1h",
@@ -1569,6 +1661,7 @@ function launchedAs(options: Options | undefined) {
   assert.ok(options);
   const { hooks: _hooks, mcpServers, env, ...rest } = options;
   const { [RUNNER_ENV.PLACE]: _place, ...environment } = env ?? {};
+
   return { ...rest, servers: Object.keys(mcpServers ?? {}), environment };
 }
 
@@ -1582,8 +1675,10 @@ it.effect(
           yield* write(CONFIG);
           yield* write(FIRST_MESSAGE);
           yield* Fiber.join(run);
+
           return cli.options;
         });
+
       const sandbox = yield* optionsIn(ENV);
       const host = yield* optionsIn({ ...ENV, [RUNNER_ENV.PLACE]: RUNNER_PLACE.HOST });
 
@@ -1592,6 +1687,7 @@ it.effect(
         PLAYWRIGHT_BROWSERS_PATH: browsers,
         ...shared
       } = launchedAs(sandbox).environment;
+
       assert.deepEqual(launchedAs(host), { ...launchedAs(sandbox), environment: shared });
       assert.equal(token, CLAUDE_TOKEN);
       assert.equal(browsers, "0");
@@ -1616,6 +1712,7 @@ it.effect(
           yield* write({ ...CONFIG, installedSkills });
           yield* write(FIRST_MESSAGE);
           yield* Fiber.join(run);
+
           return cli.options;
         });
 
@@ -1634,13 +1731,18 @@ it.effect(
 /** The MCP route of a fake service: answers each request as its server does, notifications with 202, and keeps what each post carried. */
 function fakeMcpRoute(answer: "take" | "refuse" = "take") {
   const calls: { authorization: string | null; body: unknown }[] = [];
+
   const respond = async (_url: string, init: RequestInit) => {
     const body = JSON.parse(String(init.body));
     calls.push({ authorization: new Headers(init.headers).get("authorization"), body });
+
     if (answer === "refuse") return new Response(null, { status: 401 });
+
     if (!("id" in body)) return new Response(null, { status: 202 });
+
     return Response.json({ jsonrpc: "2.0", id: body.id, result: { tools: [] } });
   };
+
   return { calls, respond };
 }
 
@@ -1648,6 +1750,7 @@ function fakeMcpRoute(answer: "take" | "refuse" = "take") {
 function fakeCliTransport() {
   const sent: unknown[] = [];
   const answered = Deferred.makeUnsafe<void>();
+
   const transport = {
     onmessage: undefined as
       | ((message: { jsonrpc: "2.0"; method: string; id?: number }) => void)
@@ -1659,6 +1762,7 @@ function fakeCliTransport() {
       Deferred.doneUnsafe(answered, Exit.void);
     },
   };
+
   return { transport, sent, answered };
 }
 
@@ -1672,22 +1776,27 @@ function launchWithMcp(
 ) {
   return Effect.gen(function* () {
     const service = fakeService();
+
     const routed: typeof service = {
       ...service,
       layer: fakeHttpClientLayer((url, init) =>
         url === named.url ? mcp.respond(url, init) : service.respond(url, init),
       ),
     };
+
     const launched = yield* launch(SHORT_TURN, routed);
     yield* launched.write(CONFIG);
+
     for (let step = 0; step < 500 && launched.cli.options === undefined; step += 1) {
       yield* Effect.yieldNow;
     }
+
     const server = launched.cli.options?.mcpServers?.[named.name];
     assert.ok(server?.type === "sdk" && "instance" in server);
     const cli = fakeCliTransport();
     // @ts-expect-error -- the fake stands in for the SDK's own control-channel transport.
     yield* Effect.promise(() => server.instance.connect(cli.transport));
+
     return { ...launched, channel: cli };
   });
 }
@@ -1772,6 +1881,7 @@ it.effect(
       const listen = vi.spyOn(Server.prototype, "listen");
       const service = fakeService();
       const stdin = yield* Queue.unbounded<string, Cause.Done>();
+
       const run = yield* runAgent({ lines: Stream.fromQueue(stdin), env: ENV }).pipe(
         Effect.scoped,
         Effect.provide(
@@ -1785,6 +1895,7 @@ it.effect(
         ),
         Effect.forkScoped,
       );
+
       yield* Queue.offer(stdin, JSON.stringify({ ...CONFIG, executable, cwd: directory }));
       const ended = yield* Fiber.join(run);
       const listened = listen.mock.calls.length;
@@ -1920,9 +2031,11 @@ it.effect(
       yield* write({ ...FIRST_MESSAGE, uuid: line, resent: true });
 
       assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+
       const accepted = service.applied.flatMap(({ message }) =>
         "type" in message && message.type === RUNNER_EVENT.ACCEPTED ? [message.uuid] : [],
       );
+
       assert.deepEqual([accepted, cli.prompts.length], [[line], 1]);
     }),
 );

@@ -27,16 +27,19 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
 const slugOf = (organizationId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const [row] = yield* db
       .select({ slug: organization.slug })
       .from(organization)
       .where(eq(organization.id, organizationId));
+
     return row?.slug ?? assert.fail("the workspace was not written");
   });
 
@@ -123,6 +126,7 @@ it.layer(getTestDB())("a task found by its number", (it) => {
           Option.some({ slug, number: 1 }),
         );
         assert.deepEqual(yield* taskKeyOfAgent(stranger, second.id), Option.none());
+
         for (const agent of [first, second]) {
           const head = agent.id.slice(0, 6);
           assert.deepEqual(

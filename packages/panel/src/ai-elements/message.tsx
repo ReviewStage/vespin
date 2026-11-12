@@ -130,6 +130,7 @@ export function MessageAction({
   const button = (
     <IconButton icon={children} label={label} size={BUTTON_SIZE.COMPACT} onClick={onClick} />
   );
+
   if (card !== undefined) {
     return (
       <Tooltip label={label} card={card}>
@@ -137,7 +138,9 @@ export function MessageAction({
       </Tooltip>
     );
   }
+
   if (tooltip === false) return button;
+
   return <Tooltip label={tooltip === true ? label : tooltip}>{button}</Tooltip>;
 }
 
@@ -158,6 +161,7 @@ export type MessageResponseProps = Omit<MarkdownProps, "look" | "className"> & {
 export const MessageResponse = memo(
   ({ line = false, ...props }: MessageResponseProps): ReactNode => {
     const parsed = useQuery(markdownHtmlParserQuery).data === true;
+
     // Note that the words are drawn anew once the parser lands, because Streamdown keeps each block it has drawn while its words stand.
     return (
       <Markdown

@@ -33,6 +33,7 @@ const openUser = (name: string, image: string | null = null) =>
     yield* Database.use((db) =>
       db.insert(user).values({ id: userId, name, email: `${userId}@app.test`, image }),
     );
+
     return userId;
   });
 
@@ -40,13 +41,16 @@ const openUser = (name: string, image: string | null = null) =>
 const livePeopleOf = (readerId: string, organizationId: string) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+
     const statements = Option.getOrThrow(
       workspaceMembersRead.statements({ userId: readerId, workspaceId: organizationId }),
     );
+
     const rows = yield* Effect.all({
       members: sql.unsafe(statements.members.sql, [...statements.members.params]),
       former: sql.unsafe(statements.former.sql, [...statements.former.params]),
     });
+
     return workspaceMembersOfLiveRows(
       yield* Schema.decodeUnknownEffect(WORKSPACE_MEMBERS_READ.rows)(rows),
     );
@@ -80,9 +84,11 @@ it.layer(getTestDB())("a workspace's people, live", (it) => {
           former.map((one) => one.userId),
           [leaver],
         );
+
         for (const reader of [owner, admin, teammate]) {
           assert.deepEqual(yield* livePeopleOf(reader, workspaceId), { members, former });
         }
+
         const nobody = { members: [] };
         assert.deepEqual(yield* livePeopleOf(outsider, workspaceId), nobody);
         assert.deepEqual(yield* livePeopleOf(leaver, workspaceId), nobody);

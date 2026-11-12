@@ -147,6 +147,7 @@ export const agentSpansAnnotated = (ids: AgentTraceIds): Effect.Effect<void> =>
       Effect.sync(() => {
         const attributes = Object.entries(agentSpanAttributes(ids));
         let span: Tracer.AnySpan | undefined = current;
+
         while (span?._tag === "Span") {
           for (const [key, value] of attributes) span.attribute(key, value);
           span = Option.getOrUndefined(span.parent);
@@ -229,14 +230,17 @@ const DB_QUERY_TEXT = "db.query.text";
  */
 function namedForStatement<Span extends { name: string; attributes?: object }>(span: Span): Span {
   const attributes = span.attributes;
+
   const text =
     attributes !== undefined && DB_QUERY_TEXT in attributes ? attributes[DB_QUERY_TEXT] : undefined;
+
   return typeof text === "string" && text.length > 0 ? { ...span, name: text } : span;
 }
 
 /** Attributes without any a model was handed or answered, and with their addresses scrubbed. */
 function scrubbedSpanAttributes<Attributes extends object>(attributes: Attributes): Attributes {
   const kept = Object.entries(attributes).filter(([name]) => !MODEL_CONTENT_ATTRIBUTES.has(name));
+
   // SAFETY: only whole entries are dropped, and every attribute a span or a trace context carries is optional.
   return scrubbedAttributes(Object.fromEntries(kept) as Attributes);
 }
@@ -281,6 +285,7 @@ const REFUSAL_CAUSE_DEPTH = 5;
  */
 function isRefusal(failure: Error, depth = 0): boolean {
   const { cause } = failure;
+
   return (
     Object.getPrototypeOf(failure) === Error.prototype &&
     Object.keys(failure).every((key) => key === "cause") &&
@@ -303,6 +308,7 @@ function isRefusal(failure: Error, depth = 0): boolean {
  */
 function dropAnsweredToolRefusals(event: ErrorEvent, hint: EventHint): ErrorEvent | null {
   const failure = hint.originalException;
+
   if (!isAnsweredToolError(event) || !(failure instanceof Error) || !isRefusal(failure))
     return event;
   const exception = event.exception?.values?.at(-1);
@@ -315,6 +321,7 @@ function dropAnsweredToolRefusals(event: ErrorEvent, hint: EventHint): ErrorEven
       toolCallId: event.tags?.[AI_TOOL_ERROR.CALL_TAG],
     },
   });
+
   return null;
 }
 
@@ -322,6 +329,7 @@ function dropAnsweredToolRefusals(event: ErrorEvent, hint: EventHint): ErrorEven
 function scrubbedEvent(event: Sentry.ErrorEvent): Sentry.ErrorEvent {
   const { request, contexts, breadcrumbs } = event;
   const trace = contexts?.trace;
+
   return {
     ...event,
     ...(request && {
@@ -369,6 +377,7 @@ export function sentryOptions(): SentryOptions {
     dataCollection: { genAI: { inputs: false, outputs: false }, httpBodies: [] },
     beforeSend: (event, hint) => {
       const kept = dropAnsweredToolRefusals(event, hint);
+
       return kept && scrubbedEvent(kept);
     },
     // Note that a span is scrubbed as it streams, because Sentry streams spans by default
@@ -431,10 +440,13 @@ const SENTRY_LOG_METHOD = {
 /** A line's message as one string, folded as Sentry's own Effect logger folds it, so a search for its words still matches. */
 function foldedLogMessage(message: unknown): string {
   if (Predicate.isString(message)) return message;
+
   if (Array.isArray(message) && message.length === 1) {
     const [only] = message;
+
     return Predicate.isString(only) ? only : JSON.stringify(only);
   }
+
   return JSON.stringify(message);
 }
 
@@ -454,9 +466,11 @@ function foldedLogMessage(message: unknown): string {
 export const sentryLogger: Logger.Logger<unknown, void> = Logger.make(
   ({ fiber, logLevel, message }) => {
     if (logLevel === "All" || logLevel === "None") return;
+
     const { [ACCOUNT_KEY]: account, ...annotations } = fiber.getRef(
       References.CurrentLogAnnotations,
     );
+
     SENTRY_LOG_METHOD[logLevel](foldedLogMessage(message), {
       ...annotations,
       ...(Predicate.isString(account) ? { [SENTRY_USER_ID]: account } : undefined),
@@ -500,6 +514,7 @@ function reportContext(
   const tags: Record<string, string> = {};
   const extra: Record<string, unknown> = {};
   const account = Predicate.isString(reported) ? reported : annotations[ACCOUNT_KEY];
+
   for (const [name, value] of Object.entries(attributes)) {
     // Note that only a primitive becomes a tag, and nothing is serialized here, because a
     // cyclic or BigInt value would throw and lose the report; Sentry normalizes extra data.
@@ -507,12 +522,15 @@ function reportContext(
       Predicate.isString(value) || Predicate.isNumber(value) || Predicate.isBoolean(value)
         ? String(value)
         : undefined;
+
     if (!REPORT_TAG_ATTRIBUTES.has(name) || text === undefined) extra[name] = value;
     else {
       tags[name] = text.slice(0, TAG_VALUE_MAX_LENGTH);
+
       if (text.length > TAG_VALUE_MAX_LENGTH) extra[name] = value;
     }
   }
+
   return { tags, extra, ...(Predicate.isString(account) ? { user: { id: account } } : undefined) };
 }
 
@@ -572,6 +590,7 @@ export function sentryLayer(options: SentryOptions = sentryOptions()): Layer.Lay
       }),
     ),
   );
+
   return Layer.mergeAll(started, sentryReporting, sentryTelemetry);
 }
 
@@ -596,9 +615,12 @@ export function sentryQueueSent(): Promise<boolean> {
  */
 export function sentryRunnerTrace(): Omit<RunnerTrace, "path"> | undefined {
   const options = Sentry.getClient()?.getOptions();
+
   if (options?.dsn === undefined || options.dsn === "") return undefined;
   const { "sentry-trace": sentryTrace, baggage } = Sentry.getTraceData();
+
   if (sentryTrace === undefined) return undefined;
+
   return {
     dsn: options.dsn,
     environment: options.environment ?? UNNAMED_DEPLOYMENT,
@@ -662,10 +684,13 @@ export function standReported<E, R>(
   service: Effect.Effect<never, E, R>,
 ): Promise<void> {
   let ran = false;
+
   const reported = Effect.suspend(() => {
     ran = true;
+
     return Effect.withErrorReporting(service);
   });
+
   return run(reported).catch((error) => {
     if (!ran) Sentry.captureException(error, { mechanism: PROMISE_EDGE_MECHANISM });
   });
@@ -699,6 +724,7 @@ function monitorConfig(monitor: CronMonitor): MonitorConfig {
  */
 export function sentryCronCheckIns(monitor: CronMonitor) {
   const config = monitorConfig(monitor);
+
   return {
     run: <A, E, R>(job: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
       Effect.flatMap(

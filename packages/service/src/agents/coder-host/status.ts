@@ -82,6 +82,7 @@ export interface AgentStanding {
 /** Whether an agent was started blank, as a full read or a list line says it. */
 export function startedBlank(agent: Agent | Pick<AgentLine, "brief">): boolean {
   const brief = "brief" in agent ? agent.brief : agentBriefOf(agent);
+
   return brief === AGENT_BRIEF.BLANK;
 }
 
@@ -236,10 +237,13 @@ export function hostLostOf(
   turn: Pick<AgentLatestTurn, "status" | "failure" | "failureDetail"> | undefined,
 ): { readonly host: string } | undefined {
   if (turn?.status !== TURN_STATUS.FAILED) return undefined;
+
   if (turn.failure !== TURN_FAILURE.MODEL) return undefined;
   const detail = turn.failureDetail ?? "";
+
   if (!detail.endsWith(HOST_AWAY_DETAIL)) return undefined;
   const host = detail.slice(0, -HOST_AWAY_DETAIL.length);
+
   return host.length > 0 ? { host } : undefined;
 }
 
@@ -259,8 +263,10 @@ export function launchStoppedDetail(
   const known =
     DEVICE_LAUNCH_STEPS.find((each) => each === step) ??
     (unstarted === undefined ? undefined : DEVICE_LAUNCH_STEP.PREPARING);
+
   if (known === undefined) return undefined;
   const why = unstarted === undefined ? "" : `${LAUNCH_UNSTARTED_DETAIL}${unstarted}`;
+
   return `${LAUNCH_STOPPED_DETAIL}${known}${why}`;
 }
 
@@ -269,12 +275,16 @@ function launchStoppedParts(
   turn: Pick<AgentLatestTurn, "status" | "failure" | "failureDetail"> | undefined,
 ): { readonly step: string; readonly unstarted: string | undefined } | undefined {
   if (turn?.status !== TURN_STATUS.FAILED) return undefined;
+
   if (turn.failure !== TURN_FAILURE.MODEL) return undefined;
   const detail = turn.failureDetail ?? "";
+
   if (!detail.startsWith(LAUNCH_STOPPED_DETAIL)) return undefined;
+
   const [step = "", unstarted] = detail
     .slice(LAUNCH_STOPPED_DETAIL.length)
     .split(LAUNCH_UNSTARTED_DETAIL);
+
   return { step, unstarted };
 }
 
@@ -283,6 +293,7 @@ export function launchStoppedOf(
   turn: Pick<AgentLatestTurn, "status" | "failure" | "failureDetail"> | undefined,
 ): DeviceLaunchStep | undefined {
   const parts = launchStoppedParts(turn);
+
   return DEVICE_LAUNCH_STEPS.find((each) => each === parts?.step);
 }
 
@@ -291,6 +302,7 @@ export function launchUnstartedOf(
   turn: Pick<AgentLatestTurn, "status" | "failure" | "failureDetail"> | undefined,
 ): DeviceLaunchUnstarted | undefined {
   const parts = launchStoppedParts(turn);
+
   return Object.values(DEVICE_LAUNCH_UNSTARTED).find((each) => each === parts?.unstarted);
 }
 
@@ -299,12 +311,16 @@ export function agentFailureOf(
   turn: Pick<AgentLatestTurn, "status" | "failure" | "failureDetail"> | undefined,
 ): AgentFailure | undefined {
   if (turn === undefined) return AGENT_FAILURE.NOT_STARTED;
+
   if (turn.status !== TURN_STATUS.FAILED) return undefined;
   const settled = SETTLED_FAILURES.find(([failure]) => failure === turn.failure);
+
   if (settled !== undefined) return settled[1];
+
   if (turn.failure !== TURN_FAILURE.MODEL) return AGENT_FAILURE.OTHER;
   const detail = turn.failureDetail ?? "";
   const named = FAILURE_WORDS.find(([, words]) => words.some((word) => detail.includes(word)));
+
   return named?.[0] ?? AGENT_FAILURE.MODEL;
 }
 
@@ -312,6 +328,7 @@ export function agentFailureOf(
 function agentTurnOf(turn: AgentLatestTurn | undefined): AgentTurn | undefined {
   if (turn === undefined) return undefined;
   const failure = agentFailureOf(turn);
+
   return {
     id: turn.id,
     queuedAt: turn.queuedAt.getTime(),
@@ -364,6 +381,7 @@ export function agentActivityAt(
 /** Who archived an agent as its banner says it: the member, where their account stands, the agent acting for them, and why. */
 function archivedByOf(archive: StoredArchive, names: ReadonlyMap<string, string>): AgentArchivedBy {
   const member = names.get(archive.userId);
+
   return {
     by: archive.by,
     ...(member === undefined ? undefined : { member: { userId: archive.userId, name: member } }),
@@ -385,6 +403,7 @@ function macOf(
 ): AgentSummary["mac"] {
   if (agent.machine !== AGENT_MACHINE.DEVICE || agent.deviceId == null) return undefined;
   const device = macs.get(agent.deviceId);
+
   return device === undefined
     ? undefined
     : { name: device.name, seenAt: device.lastSeenAt.getTime(), deviceId: device.id };
@@ -410,13 +429,16 @@ function summaryFields(
 ): Omit<AgentSummary, "id" | "planId"> {
   const starter = names.get(agent.userId);
   const mac = macOf(agent, macs);
+
   // Every agent stands on a task, which owns it, so the run's automation is never asked.
   const owner = agentOwnerOf({
     taskId: agent.taskId,
     runId: agent.automationRunId,
     runAutomationId: null,
   });
+
   const turn = agentTurnOf(standing.turn);
+
   const summary: Omit<AgentSummary, "id" | "planId"> = {
     model: agent.model,
     effort: agent.effort,
@@ -469,8 +491,10 @@ function summaryFields(
           })),
         }),
   };
+
   const stoppable =
     summary.status !== AGENT_STATUS.RUNNING || turnStoppable(statusTurnOf(standing.turn));
+
   return {
     ...summary,
     runStartedAt: agentRunStartedAt(standing.turn, agent),
@@ -489,6 +513,7 @@ export function agentSummary(
   macs: ReadonlyMap<string, Device> = NO_MACS,
 ): AgentSummary {
   const line = "brief" in agent ? agent : agentLineOf(agent);
+
   return {
     id: line.id,
     planId: line.taskId,
@@ -504,11 +529,14 @@ export function agentSummary(
  */
 function originOf(origin: StoredAutomationOrigin, names: ReadonlyMap<string, string>): AgentOrigin {
   const { firing } = origin;
+
   const runner =
     firing.kind === AUTOMATION_FIRING.MANUAL && firing.userId !== undefined
       ? firing.userId
       : undefined;
+
   const name = runner === undefined ? undefined : names.get(runner);
+
   return {
     prompt: origin.prompt,
     ...originSubjectsOf(firing),
@@ -529,6 +557,7 @@ export function summaryAccounts(
 /** The accounts an agent's page names: its summary's, and whoever asked for the run that started it. */
 export function pageAccounts(agent: Agent): readonly string[] {
   const firing = agent.automationOrigin?.firing;
+
   return firing?.kind === AUTOMATION_FIRING.MANUAL && firing.userId !== undefined
     ? [...summaryAccounts(agent), firing.userId]
     : summaryAccounts(agent);

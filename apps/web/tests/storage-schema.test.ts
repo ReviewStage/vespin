@@ -29,6 +29,7 @@ import { afterAll, test } from "vitest";
  */
 
 const database = await openHostedStoreTestDatabase();
+
 afterAll(() => database.close());
 
 /** Every table the migrations declare, by its Postgres name, better-auth's own alongside ours. */
@@ -148,13 +149,16 @@ async function publicTableNames(): Promise<readonly string[]> {
   const rows = await database.run(
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
+
       return yield* sql`
         select table_name as name from information_schema.tables
         where table_schema = 'public' and table_type = 'BASE TABLE'
       `;
     }),
   );
+
   const NameRowSchema = Schema.Struct({ name: Schema.String });
+
   return rows
     .map((row) => Schema.decodeUnknownSync(NameRowSchema)(row).name)
     .filter((name) => name !== DRIZZLE_MIGRATIONS.TABLE && name !== EFFECT_MIGRATIONS_TABLE)
@@ -205,12 +209,15 @@ async function populateAccount(userId: string): Promise<{ main: string; child: s
   const main = await insertTestConversation(userId);
   const turnId = await insertTestTurn(userId, main);
   await insertTestMessage(userId, main, { turnId });
+
   const child = await insertTestConversation(userId, {
     kind: CONVERSATION_KIND.CHILD,
     parentConversationId: main,
   });
+
   await insertTestTurn(userId, child);
   await insertTestMessage(userId, child, { role: MESSAGE_ROLE.ASSISTANT, metadata: undefined });
+
   return { main, child };
 }
 

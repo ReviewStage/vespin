@@ -18,6 +18,7 @@ import { scriptedSpawner } from "../testing/scripted-spawner.js";
 import { hostKeepAwake } from "./host-keep-awake.js";
 
 const FILES = Layer.merge(NodeFileSystem.layer, NodePath.layer);
+
 const POWER = {
   ADAPTER: "Now drawing from 'AC Power'\n -InternalBattery-0\t100%; charged\n",
   BATTERY: "Now drawing from 'Battery Power'\n -InternalBattery-0\t80%; discharging\n",
@@ -27,24 +28,30 @@ const POWER = {
 const keptAwake = (choice: KeepAwake | undefined, power: string) =>
   Effect.gen(function* () {
     const stateRoot = yield* temporaryDirectoryScoped("keep-awake-");
+
     if (choice !== undefined) yield* handKeepAwake(stateRoot, choice);
     let drawing = power;
+
     const spawner = scriptedSpawner((program) =>
       program === "/usr/bin/pmset" ? { stdout: drawing, exitCode: 0 } : {},
     );
+
     const working = yield* SubscriptionRef.make(false);
     yield* Effect.forkScoped(
       hostKeepAwake({ stateRoot, working: SubscriptionRef.changes(working), pid: 4242 }).pipe(
         Effect.provide(spawner.layer),
       ),
     );
+
     const holding = () =>
       spawner.spawned.filter(
         (process) => process.program === "/usr/bin/caffeinate" && process.ended === "running",
       );
+
     const powered = (source: string) => {
       drawing = source;
     };
+
     return { holding, working, powered };
   });
 
@@ -63,6 +70,7 @@ const until = (holds: () => boolean) =>
       yield* TestClock.adjust(Duration.millis(100));
       yield* Effect.yieldNow;
     }
+
     assert.ok(holds(), "the hold never got there");
   });
 

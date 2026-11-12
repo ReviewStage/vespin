@@ -51,20 +51,25 @@ const handleBaseDriveRefresh = /* @__PURE__ */ Effect.fn("web/handleBaseDriveRef
   E,
 >(options: BaseDriveRefreshOptions<E>): Effect.fn.Return<Response, E, RefreshServices> {
   const { request } = options;
+
   if (request.method !== "GET") {
     return errorResponse(
       HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED,
       HOSTED_API_ERROR.METHOD_NOT_ALLOWED,
     );
   }
+
   if (options.cronSecret === undefined) {
     return errorResponse(HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE, HOSTED_API_ERROR.UNAVAILABLE);
   }
+
   if (!bearerMatchesSecret(request, options.cronSecret)) {
     return errorResponse(HOSTED_HTTP_STATUS.UNAUTHORIZED, HOSTED_API_ERROR.INVALID_TOKEN);
   }
+
   // Note that no member waits on the refresh, so what it asks GitHub waits in the background lane (`github-rate-gate.ts`).
   const refreshed = yield* options.refresh.pipe(Effect.provideService(GitHubBackground, true));
+
   return jsonResponse(
     refreshed.failed > 0 ? HOSTED_HTTP_STATUS.INTERNAL_ERROR : HOSTED_HTTP_STATUS.OK,
     refreshed,
@@ -77,12 +82,14 @@ export function baseDriveRefreshApp(
 ): WebRoutes<RefreshServices | HostedEnvironment> {
   const refreshEffect = Effect.fn("web/baseDriveRefreshEffect")(function* (request: Request) {
     const environment = yield* HostedEnvironment;
+
     return yield* handleBaseDriveRefresh({
       request,
       cronSecret: environment.cronSecret,
       refresh: refreshBaseDrives(options.run).pipe(Effect.provide(options.image)),
     });
   });
+
   return Layer.mergeAll(
     HttpRouter.add(ANY_METHOD, BASE_DRIVE_REFRESH_PATH, effectPassthrough(refreshEffect)),
     hostedNotFoundRoute,

@@ -78,6 +78,7 @@ function listedHoldings(
   listed: TasksControl["tasks"],
 ): readonly AppInboxTaskHolding[] {
   const ids = new Set(listed.map((task) => task.id));
+
   return holdings.filter((holding) => ids.has(holding.taskId));
 }
 
@@ -130,26 +131,32 @@ function useChoiceFirst(
   const waiting = useRef(new Set<ChoiceOnItsWay>());
   // The choices handed to the window, so one handed on while another waits is known as this Inbox's own.
   const handed = useRef(new WeakSet<InboxChoice>());
+
   const choose = useCallback((choice: InboxChoice) => {
     const way: ChoiceOnItsWay = { choice, over: latest.current.chosen };
     waiting.current.add(way);
     setHeld((was) => [...was, way]);
     afterPaint(() => {
       if (!waiting.current.delete(way)) return;
+
       if (unmoved(way, latest.current.chosen, handed.current)) {
         handed.current.add(choice);
         latest.current.onChoose(choice);
       }
+
       setHeld((was) => was.filter((each) => each !== way));
     });
   }, []);
+
   const clear = useCallback(() => {
     waiting.current.clear();
     setHeld([]);
     latest.current.onClear();
   }, []);
+
   const newest = held.at(-1);
   const stands = newest !== undefined && unmoved(newest, chosen, handed.current);
+
   return { chosen: stands ? newest.choice : chosen, settling: stands, choose, clear };
 }
 
@@ -164,22 +171,27 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   const { choose: onChoose } = useInboxDoor(tasks);
   const choices = useInboxViewChoices();
   const { open: onOpenAutomations } = useAutomationsDoor(tasks);
+
   // Note that the Inbox reads the automations whenever it stands, because an agent's card names the automation that started it.
   const openAutomation = useCallback(
     (automationId: string) => onOpenAutomations({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     [onOpenAutomations],
   );
+
   const { inboxTasks } = useListedInbox(tasks);
   const listedTasks = tasks.listed.tasks;
   const inboxWaiting = useInboxWaitingTasks();
+
   const holdings = useMemo(
     () => listedHoldings(inboxTasks, listedTasks),
     [inboxTasks, listedTasks],
   );
+
   const read = useHolderInboxItems(useMemo(() => taskHoldings(holdings), [holdings]));
   // Note that a task the feed holds nothing of is read for the list, but its own read may still hold an item a link names.
   const settlesTask = (id: string) => read.current.has(id) && !read.feedHoldsNothing.has(id);
   const { onClear } = view;
+
   // Note that the item chosen here is drawn before the window holds it (`useChoiceFirst`).
   const {
     chosen: asked,
@@ -187,11 +199,14 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     choose: chooseFirst,
     clear,
   } = useChoiceFirst(inbox.chosen, onChoose, onClear);
+
   const chosenTask =
     asked !== undefined && "taskId" in asked
       ? tasks.tasks.find((task) => task.id === asked.taskId)
       : undefined;
+
   const taskId = chosenTask?.id;
+
   const agents = useAgents({
     taskId,
     repository: chosenTask?.repository ?? null,
@@ -204,7 +219,9 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     onStarted: () => undefined,
     me: tasks.me,
   });
+
   const liveScope = { taskId };
+
   const live = useHeldTaskInbox({
     ...liveScope,
     shown: tasks.shown,
@@ -213,6 +230,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     readerId: tasks.me,
     agents,
   });
+
   // Note that the drafts the read no longer holds are let go here, where the read stands, rather than in the pane, which goes with its item.
   useInboxDraftsLetGo(live, liveScope);
   // Note that the models come from the open task's agents where this task's have not read them, so an agent is named alike in both.
@@ -220,30 +238,38 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   // The chosen task's own held read stands in for the list's once it answered, so an answer shows
   // at once, and only while it holds, since one that failed stops hearing what changed.
   const liveBoard = live.board;
+
   const liveItems = useMemo(
     (): readonly InboxItem[] => [...liveBoard.open, ...liveBoard.settled],
     [liveBoard],
   );
+
   const holdsLive = live.read && !live.failed;
   const liveId = holdsLive ? taskId : undefined;
   const readItems = read.items;
+
   const held = useMemo(
     () => (liveId === undefined ? readItems : new Map(readItems).set(liveId, liveItems)),
     [readItems, liveId, liveItems],
   );
+
   // Note that every read here draws the window's own marks, answers, and messages already, as the host draws them into each (`@repo/host`'s `inbox-collections.ts`).
   const everyTask = tasks.tasks;
+
   const everyItem: readonly InboxGroup[] = useMemo(
     () => inboxGroups(held, { tasks: holdings, listed: everyTask }),
     [held, holdings, everyTask],
   );
+
   // Note that a reminder is weighed on the window's clock, since no read of the service's may read one, so an item comes back within the minute its reminder comes due.
   const now = useMinute();
+
   const standing = useMemo(
     () =>
       inboxAtNow(narrowedTask === undefined ? everyItem : taskGroups(everyItem, narrowedTask), now),
     [everyItem, narrowedTask, now],
   );
+
   // Note that every item marked read is pushed with each followed inbox, its marker among its rows, so nothing is read again.
   const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id, readerId: tasks.me });
   // The list's search, which narrows what it lists, never what it counts.
@@ -256,6 +282,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   // Note that Mark all as read stands while a notice waits on the reader, read or not, since it acknowledges each (`settledOnRead`).
   const markable = useMemo(() => anyToMarkRead(standing, me, now), [standing, me, now]);
   const filter = useMemo(() => ({ show, whose, search, readerId: me }), [show, whose, search, me]);
+
   // The rows hold what the filter lists and the chosen row they drew, while the steps keep the item the pane shows in its place,
   // both held still while the page stands: every row while the pointer is over the list, and the chosen row while it stays chosen.
   const { list, steps, onPointing } = useHeldInboxList(
@@ -264,31 +291,38 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     asked?.itemId,
     inbox.open && tasks.shown,
   );
+
   const listedRows = useMemo(() => listedItems(list), [list]);
   const askedId = asked?.itemId;
+
   const chosen = useMemo(
     () => listedItems(steps).find(({ item }) => item.id === askedId),
     [steps, askedId],
   );
+
   // Note that a scope leaving out every item listed is said apart from an Inbox holding none.
   const searched = search.length > 0 ? query : undefined;
+
   const filteredOut =
     searched === undefined &&
     listedRows.length === 0 &&
     (show !== INBOX_SHOW.ALL || whose.kind !== INBOX_WHOSE.EVERYONE) &&
     standing.some(({ items }) => items.length > 0);
+
   // Note that a chosen item whose task is listed but not read yet keeps its place, because
   // it may be listed once the read lands; one whose task left the list, deleted elsewhere, gives way.
   // A task whose agents' read answered none holds no Inbox to read; one whose agents are not
   // read yet may still hold the item, until its Inbox's own read answers.
   const holderEmpty = agents.heldIds?.length === 0;
   const agentsUnread = agents.heldIds === undefined;
+
   // Note that a plan's items read before main's latest word of it may lack the item asked for, so only a current read settles it.
   const chosenWaits =
     taskId !== undefined &&
     !settlesTask(taskId) &&
     !live.read &&
     (holdings.some((holding) => holding.taskId === taskId) || agentsUnread);
+
   // Note that the holdings are filtered against the task list, so until it is read they hold nothing and prove nothing.
   const listUnread = !tasks.listRead && !tasks.listFailed;
   const reading = listUnread || holdings.some((holding) => !read.items.has(holding.taskId));
@@ -297,25 +331,32 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   // says so rather than standing empty.
   // Note that only the asked task's own reads are waited on, since another's that failed says nothing of this item.
   const holderRead = taskId === undefined || settlesTask(taskId) || live.read || holderEmpty;
+
   const missing =
     asked?.opened === true && chosen === undefined && !chosenWaits && holderRead && !listUnread;
+
   // An item opened whose holder's own read failed says so, with a way to read it again, rather than waiting on it for good,
   // since nothing reads a failed holder again by itself.
   const chosenFailed = asked?.opened === true && chosen === undefined && !missing && live.failed;
   const { onRetry: retryLive } = live;
   const { onRetryList: retryAgents } = agents;
+
   const onRetryChosen = useCallback(() => {
     retryLive();
     retryAgents();
   }, [retryLive, retryAgents]);
+
   const choose = useCallback((listed: InboxListed) => chooseFirst(choiceOf(listed)), [chooseFirst]);
   const resolveItems = useInboxResolver();
   // Note that a task list that failed leaves the Inbox holding nothing to read, which would otherwise say it was empty.
   const failed = read.failed || tasks.listFailed;
+
   const onRetry = () => {
     read.onRetry();
+
     if (tasks.listFailed) tasks.onRetryList();
   };
+
   return {
     view,
     choices,

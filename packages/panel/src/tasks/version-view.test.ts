@@ -30,6 +30,7 @@ afterEach(() => {
 /** Hands the test the window's way of showing a toast. */
 function Shower(): null {
   show = useToast();
+
   return null;
 }
 
@@ -53,11 +54,13 @@ function mountVersion(answer: ActionResult, asked: (number | undefined)[], lande
       {
         onRestore: (seq) => {
           asked.push(seq);
+
           return Promise.resolve(answer);
         },
       },
       () => landed.push("restored"),
     );
+
     return createElement(VersionView, {
       onRetry: () => undefined,
       viewing: {
@@ -77,6 +80,7 @@ function mountVersion(answer: ActionResult, asked: (number | undefined)[], lande
       restore,
     });
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() =>
@@ -116,6 +120,7 @@ test("a restore with a version before it says so with an Undo, which restores th
   act(() =>
     sayRestored(toast, () => {
       undone.push("restored the version before");
+
       return Promise.resolve(KEPT);
     }),
   );

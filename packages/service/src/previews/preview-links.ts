@@ -101,6 +101,7 @@ function signatureOf(key: Redacted.Redacted, purpose: PreviewTokenPurpose, claim
 function sameText(offered: string, held: string): boolean {
   const left = Buffer.from(offered);
   const right = Buffer.from(held);
+
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
@@ -119,30 +120,39 @@ export function previewNameOf(slug: string, number: number, agentId: string): Pr
     number,
     agentHead: agentId.slice(0, AGENT_HEAD_DIGITS),
   };
+
   const fits = previewLabel(byTask).length <= MAX_LABEL_CHARS;
+
   return fits ? byTask : { kind: PREVIEW_NAME_KIND.AGENT, agentId };
 }
 
 /** The name a preview host's label spells, or none for a label that spells none. */
 export function previewNameOfLabel(label: string): PreviewName | undefined {
   const bare = label.toLowerCase();
+
   if (AGENT_LABEL.test(bare)) {
     const agentId = [8, 12, 16, 20].reduceRight(
       (id, at) => `${id.slice(0, at)}-${id.slice(at)}`,
       bare,
     );
+
     return { kind: PREVIEW_NAME_KIND.AGENT, agentId };
   }
+
   const match = bare.length <= MAX_LABEL_CHARS ? TASK_LABEL.exec(bare) : null;
+
   if (match === null) return undefined;
   const [, slug, number, agentHead] = match;
+
   if (slug === undefined || number === undefined || agentHead === undefined) return undefined;
+
   return { kind: PREVIEW_NAME_KIND.TASK, slug, number: Number(number), agentHead };
 }
 
 /** The preview host an agent's shared port is served on. */
 export function previewOrigin(sandbox: PageSandbox, name: PreviewName): string {
   const { protocol, host } = new URL(sandbox.origin);
+
   return `${protocol}//${previewLabel(name)}.${host}`;
 }
 
@@ -150,7 +160,9 @@ export function previewOrigin(sandbox: PageSandbox, name: PreviewName): string {
 export function previewNameOfHost(sandbox: PageSandbox, host: string): PreviewName | undefined {
   const suffix = `.${new URL(sandbox.origin).host}`;
   const bare = host.replace(/\.$/u, "").toLowerCase();
+
   if (!bare.endsWith(suffix)) return undefined;
+
   return previewNameOfLabel(bare.slice(0, -suffix.length));
 }
 
@@ -163,9 +175,11 @@ function mintToken(
   now: number,
 ): string {
   const until = now + Duration.toMillis(lifetime);
+
   const claims = Buffer.from(Schema.encodeSync(PreviewClaimsJson)({ ...member, until })).toString(
     "base64url",
   );
+
   return `${claims}.${signatureOf(sandbox.key, purpose, claims)}`;
 }
 
@@ -177,12 +191,17 @@ function readToken(
   now: number,
 ): PreviewMember | undefined {
   const [claims, signature, ...rest] = token.split(".");
+
   if (claims === undefined || signature === undefined || rest.length > 0) return undefined;
+
   if (!sameText(signature, signatureOf(sandbox.key, purpose, claims))) return undefined;
+
   const read = Schema.decodeUnknownOption(PreviewClaimsJson)(
     Buffer.from(claims, "base64url").toString("utf8"),
   );
+
   if (Option.isNone(read) || now >= read.value.until) return undefined;
+
   return { userId: read.value.userId, agentId: read.value.agentId };
 }
 

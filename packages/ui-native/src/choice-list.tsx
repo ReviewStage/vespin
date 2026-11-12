@@ -67,12 +67,14 @@ const HAIRLINE = 0.5;
 /** The mark leading an option, 18 pt: a ring filled with the accent at its heart once picked, or, where several may be picked, Reminders' round check, since iOS has no square checkbox. */
 function pickMark(picked: boolean, multiple: boolean) {
   if (multiple) return picked ? "checkmark.circle.fill" : "circle";
+
   return picked ? "smallcircle.filled.circle.fill" : "circle";
 }
 
 /** The small bordered tag after the recommended option's label, muted, as the panel's stands, so copper is left for the option picked. */
 function RecommendedTag() {
   const colors = useColors();
+
   return (
     <Text
       modifiers={[
@@ -99,6 +101,7 @@ function nextPicked(
   multiple: boolean,
 ): readonly string[] {
   if (!multiple) return [label];
+
   return picked.includes(label) ? picked.filter((each) => each !== label) : [...picked, label];
 }
 
@@ -117,6 +120,7 @@ function ChoiceRow({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+
   return (
     <Button
       onPress={onPress}
@@ -191,6 +195,7 @@ function ChoiceMediaBlock({ media }: { readonly media: readonly ChoiceMedia[] })
 export function ChoiceList(props: ChoiceListProps) {
   const { choices, recommended = [], picked, multiple = false, onChange, title, none } = props;
   const colors = useColors();
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
       {title === undefined ? null : (

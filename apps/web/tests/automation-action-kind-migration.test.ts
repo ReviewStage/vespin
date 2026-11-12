@@ -29,9 +29,11 @@ function foldersWhere(keep: (name: string) => boolean) {
     const path = yield* Path;
     const folder = yield* fileSystem.makeTempDirectoryScoped({ prefix: "action-kind-" });
     const names = (yield* fileSystem.readDirectory(MIGRATIONS_FOLDER)).filter(keep);
+
     for (const name of names) {
       yield* fileSystem.copy(path.join(MIGRATIONS_FOLDER, name), path.join(folder, name));
     }
+
     return folder;
   });
 }
@@ -51,10 +53,12 @@ it.effect.each([MIGRATION, STRAGGLERS])(
         yield* runWebMigrations(yield* foldersWhere((name) => name.localeCompare(migration) < 0));
         yield* sql`insert into "user" (id, name, email) values ('dean', 'dean', 'dean@app.test')`;
         const workspaceId = yield* openWorkspace("dean");
+
         for (const [order, action] of BEFORE.entries()) {
           yield* sql`insert into automation (user_id, organization_id, name, enabled, trigger_kind, trigger, action, guards)
             values ('dean', ${workspaceId}, ${`automation-${order}`}, true, 'webhook', '{"kind":"webhook"}'::jsonb, ${JSON.stringify(action)}::jsonb, '{"maxConcurrentRuns":1,"dailyRunCap":1}'::jsonb)`;
         }
+
         const stored = sql<{
           readonly action: unknown;
         }>`select action from automation where organization_id = ${workspaceId} order by name`;

@@ -27,8 +27,10 @@ export function colorCodeInUtilityProcess(
     const child = utilityProcess.fork(path.join(resourceDirectory, ENTRY), [], {
       serviceName: SERVICE_NAME,
     });
+
     child.on("message", (message: unknown) => listeners.onMessage(message));
     child.on("exit", () => listeners.onExit());
+
     return {
       send: (message) => child.postMessage(message),
       kill: () => {

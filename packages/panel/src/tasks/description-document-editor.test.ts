@@ -87,9 +87,11 @@ const STAND_IN: DescriptionEditorModule = {
     const placed: DescriptionEditorPlacement[] = [];
     const editor = { props, destroyed: false, took, placed };
     mounted.push(editor);
+
     return {
       take: (sent, merged) => {
         editor.took.push([sent, merged]);
+
         return { base: merged, text: merged };
       },
       chooseMention: () => undefined,
@@ -123,6 +125,7 @@ const STAND_IN: DescriptionEditorModule = {
 /** The diagram bundle's stand-in: a picture named by the code and the appearance it was asked to draw. */
 const diagramPicture = (code: string, appearance: string) =>
   `data:image/svg+xml,${encodeURIComponent(`${appearance}:${code}`)}`;
+
 const DIAGRAM_STAND_IN: DiagramModule = {
   draw: (code, appearance) =>
     Promise.resolve({ kind: DIAGRAM_DRAWING.DRAWN, url: diagramPicture(code, appearance) }),
@@ -159,6 +162,7 @@ afterEach(async () => {
   wordsLine = undefined;
   caretOn = undefined;
   vi.restoreAllMocks();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   // Note that the saves a description left as it went answer before the test's client is cleared.
   await settledWrites();
@@ -277,19 +281,25 @@ function mount(
   roots.push(root);
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   const saved: TasksEditAnswer = { saved: true };
+
   const onEdit = (request: DescriptionEditRequest) => {
     sent.push(request);
+
     return Promise.resolve(answers[sent.length - 1] ?? saved);
   };
+
   const onRename = (name: string) => {
     renamed.push(name);
+
     return Promise.resolve(true);
   };
+
   // Note that a description with no comments control draws none, as a template does.
   const commented = (page: ReactElement) =>
     threads === undefined
       ? page
       : createElement(DescriptionCommentsProvider, { value: commentsOver(threads) }, page);
+
   const draw = (page: ReactElement) =>
     act(() =>
       root.render(
@@ -308,6 +318,7 @@ function mount(
         ),
       ),
     );
+
   const render = (task: Task, door: typeof onEdit = onEdit) =>
     draw(
       createElement(DescriptionBody, {
@@ -316,14 +327,18 @@ function mount(
         onRename,
       }),
     );
+
   /** The description as a task's page draws it, saving through `edit` by the task's id. */
   const renderPage = (task: Task, edit: TaskEdit) =>
     draw(createElement(TaskPage, { task, edit, onRename }));
+
   render(first);
+
   const unmount = () => {
     act(() => root.unmount());
     roots.splice(roots.indexOf(root), 1);
   };
+
   return { container, sent, renamed, render, renderPage, unmount };
 }
 
@@ -350,6 +365,7 @@ function TaskPage({
 function block(container: HTMLElement, label: string): HTMLElement {
   const found = container.querySelector<HTMLElement>(`[role="group"][aria-label="${label}"]`);
   assert.ok(found, `the ${label} block`);
+
   return found;
 }
 
@@ -363,18 +379,21 @@ function _press(element: Element, key: string): void {
 function open(): DescriptionEditorProps {
   const editor = mounted.filter((held) => !held.destroyed).at(-1);
   assert.ok(editor, "an open editor");
+
   return editor.props;
 }
 
 function _button(container: HTMLElement, text: string): HTMLButtonElement {
   const found = [...container.querySelectorAll("button")].find((b) => b.textContent === text);
   assert.ok(found, text);
+
   return found;
 }
 
 function title(container: HTMLElement): HTMLElement {
   const text = container.querySelector<HTMLElement>('[aria-label="Task name"]');
   assert.ok(text, "the title's words");
+
   return text;
 }
 
@@ -483,11 +502,13 @@ test("a press on a video in a section, on its frame, its scrubber, Play, Full sc
     configurable: true,
     value: () => Promise.resolve(),
   });
+
   try {
     const address = descriptionAttachmentAddress(
       { taskId: DOCUMENT_TASK.id, attachmentId: "8c2d4e6f-1a3b-4c5d-9e7f-0a1b2c3d4e5f" },
       "acme",
     );
+
     const { container } = mount([], {
       ...DOCUMENT_TASK,
       document: {
@@ -495,6 +516,7 @@ test("a press on a video in a section, on its frame, its scrubber, Play, Full sc
         assumptions: [],
       },
     });
+
     await vi.waitFor(() =>
       assert.equal(container.querySelector(".picture-block[data-video] video") === null, false),
     );
@@ -503,8 +525,10 @@ test("a press on a video in a section, on its frame, its scrubber, Play, Full sc
     // The bar stands once the video's size is read, as a browser reads it.
     act(() => video?.dispatchEvent(new Event("loadedmetadata")));
     const seek = block?.querySelector<HTMLElement>('[aria-label="Seek"]');
+
     const named = (label: string) =>
       block?.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`) ?? undefined;
+
     const [play, fullScreen, expand] = ["Play", "Full screen", "Expand"].map(named);
     const caption = block?.querySelector<HTMLElement>(".picture-caption");
     assert.ok(
@@ -520,6 +544,7 @@ test("a press on a video in a section, on its frame, its scrubber, Play, Full sc
         );
       });
     }
+
     act(() => expand.click());
 
     // Note that the check is a boolean, because a failing comparison would print the whole editor's DOM.
@@ -537,6 +562,7 @@ test("a press on a video in a section, on its frame, its scrubber, Play, Full sc
   } finally {
     URL.createObjectURL = own.create;
     URL.revokeObjectURL = own.revoke;
+
     if (fullScreen === undefined) Reflect.deleteProperty(Element.prototype, "requestFullscreen");
     else Object.defineProperty(Element.prototype, "requestFullscreen", fullScreen);
   }
@@ -555,11 +581,13 @@ test("a press on a task's checkbox ticks or clears that one item in the saved te
     "> 1. [ ] Quoted",
     "",
   ].join("\n");
+
   const { container, sent, render } = mount([
     { saved: true },
     { conflict: { current: body } },
     { saved: true },
   ]);
+
   render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } });
   await settle();
   const boxes = [...block(container, "Steps").querySelectorAll<HTMLElement>('[role="checkbox"]')];
@@ -609,9 +637,11 @@ test("a press on the label around a task's checkbox, which takes a finger's pres
   const { container, sent, render } = mount([{ saved: true }]);
   render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } });
   await settle();
+
   const label = block(container, "Steps").querySelector<HTMLLabelElement>(
     ".ui-markdown-task > label",
   );
+
   assert.ok(label, "the box stands in its label");
 
   act(() => label.click());
@@ -627,15 +657,20 @@ test("a press on the label around a task's checkbox, which takes a finger's pres
 
 test("a press while a tick is out waits its turn, and both land, the second over the text the first saved", async () => {
   const body = "## Steps\n- [ ] One\n- [ ] ![Upload screenshot](shot.png)\n";
+
   const answers = [
     Promise.withResolvers<TasksEditAnswer>(),
     Promise.withResolvers<TasksEditAnswer>(),
   ];
+
   const sent: DescriptionEditRequest[] = [];
+
   const door = (request: DescriptionEditRequest): Promise<TasksEditAnswer> => {
     sent.push(request);
+
     return answers[sent.length - 1]?.promise ?? Promise.resolve({ saved: true });
   };
+
   const { container, render } = mount();
   render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } }, door);
   await settle();
@@ -697,10 +732,13 @@ test("a description drawn anew while a tick is out is what the next tick is writ
   const appText = `${body}\nLuke's line.\n`;
   const first = Promise.withResolvers<TasksEditAnswer>();
   const sent: DescriptionEditRequest[] = [];
+
   const door = (request: DescriptionEditRequest): Promise<TasksEditAnswer> => {
     sent.push(request);
+
     return sent.length === 1 ? first.promise : Promise.resolve({ saved: true });
   };
+
   const { container, render } = mount();
   render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } }, door);
   await settle();
@@ -743,10 +781,13 @@ test("a box pressed twice while its first tick is out, whose first is refused, s
   const body = "## Steps\n- [ ] One\n";
   const first = Promise.withResolvers<TasksEditAnswer>();
   const sent: DescriptionEditRequest[] = [];
+
   const door = (request: DescriptionEditRequest): Promise<TasksEditAnswer> => {
     sent.push(request);
+
     return first.promise;
   };
+
   const { container, render } = mount();
   render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } }, door);
   await settle();
@@ -792,12 +833,14 @@ test("a box in a later section ticks its own item after an earlier section's wor
 
 test("a press on the name in a section's byline opens no editor, while a press on the section's words still does", () => {
   const { container, render } = mount();
+
   const edit = {
     actor: DESCRIPTION_ACTOR.DEVELOPER,
     by: CHARLES,
     at: Date.now(),
     duringCall: false,
   };
+
   render({ ...DOCUMENT_TASK, sectionEdits: [{ section: "Goal", ...edit }] });
   const goal = block(container, "Goal");
   const name = goal.querySelector(".description-unit-byline [data-actor-ref]");
@@ -828,10 +871,12 @@ function pressAt(target: Element, x: number, y: number): boolean {
     clientX: x,
     clientY: y,
   });
+
   act(() => {
     target.dispatchEvent(down);
     target.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: x, clientY: y }));
   });
+
   return down.defaultPrevented;
 }
 
@@ -904,6 +949,7 @@ test("an empty description pressed while the editor's bundle loads goes on sayin
   const landed = bundles;
   const gate = Promise.withResolvers<DescriptionEditorModule>();
   bundles = standInBundles({ descriptionEditor: () => gate.promise });
+
   try {
     const { container, render } = mount();
     render(EMPTY_TASK);
@@ -950,6 +996,7 @@ test("a press on the room while the editor's bundle loads is where the editor op
   const landed = bundles;
   const gate = Promise.withResolvers<DescriptionEditorModule>();
   bundles = standInBundles({ descriptionEditor: () => gate.promise });
+
   try {
     const { container } = mount();
     const scroller = scrollerOf(container);
@@ -1006,10 +1053,13 @@ test("words handed over and not yet saved are sent when the developer leaves the
 test("words typed in one description are saved to that description when another opens", async () => {
   const { container, render } = mount();
   const doors: string[] = [];
+
   const door = (taskId: string) => () => {
     doors.push(taskId);
+
     return Promise.resolve<TasksEditAnswer>({ saved: true });
   };
+
   const other = { ...DOCUMENT_TASK, id: "0c4f2e9a-7d1b-4a3e-8f6c-2b9d5e1a7c40" };
   render(DOCUMENT_TASK, door(DOCUMENT_TASK.id));
   act(() => block(container, "Goal").click());
@@ -1103,10 +1153,13 @@ test("words left before the window has drawn another account signing in are not 
 test("words whose leaving save waits on one still out are not sent once another account signs in", async () => {
   const first = Promise.withResolvers<TasksEditAnswer>();
   const sent: DescriptionEditRequest[] = [];
+
   const door = (request: DescriptionEditRequest): Promise<TasksEditAnswer> => {
     sent.push(request);
+
     return sent.length === 1 ? first.promise : Promise.resolve({ saved: true });
   };
+
   const { container, render } = mount();
   const other = { ...DOCUMENT_TASK, id: "0c4f2e9a-7d1b-4a3e-8f6c-2b9d5e1a7c40" };
   render(DOCUMENT_TASK, door);
@@ -1203,10 +1256,12 @@ test("words a description was left with stay unsaved work while their save is ou
   let answer: (saved: TasksEditAnswer) => void = () => assert.fail("no save went");
   const { container, render } = mount();
   const other = { ...DOCUMENT_TASK, id: "0c4f2e9a-7d1b-4a3e-8f6c-2b9d5e1a7c40" };
+
   const held = () =>
     new Promise<TasksEditAnswer>((resolve) => {
       answer = resolve;
     });
+
   render(DOCUMENT_TASK, held);
   act(() => block(container, "Goal").click());
   act(() => open().onDraft(`${BODY}Mine.\n`));
@@ -1224,10 +1279,12 @@ test("a plan left twice while its first save is out stays unsaved work until bot
   const answers: ((saved: TasksEditAnswer) => void)[] = [];
   const { container, render } = mount();
   const other = { ...DOCUMENT_TASK, id: "0c4f2e9a-7d1b-4a3e-8f6c-2b9d5e1a7c40" };
+
   const held = () =>
     new Promise<TasksEditAnswer>((resolve) => {
       answers.push(resolve);
     });
+
   const editAndLeave = async (words: string) => {
     render(DOCUMENT_TASK, held);
     await settle();
@@ -1236,6 +1293,7 @@ test("a plan left twice while its first save is out stays unsaved work until bot
     render(other, held);
     await settle();
   };
+
   await editAndLeave(`${BODY}Mine.\n`);
   await editAndLeave(`${BODY}Mine again.\n`);
   // Note that a plan's writes run one at a time, in order, so the newer waits its turn behind the first.
@@ -1373,10 +1431,13 @@ test("the toast's Retry over words a refused save left saves them to the descrip
   const { container, renderPage } = mount();
   const doors: [string, DescriptionEditRequest][] = [];
   const answers: TasksEditAnswer[] = [{ failure: TASK_CALL_FAILURE.UNANSWERED }, { saved: true }];
+
   const edit: TaskEdit = (taskId, request) => {
     doors.push([taskId, request]);
+
     return Promise.resolve<TasksEditAnswer>(answers[doors.length - 1] ?? { saved: true });
   };
+
   const other = { ...DOCUMENT_TASK, id: "0c4f2e9a-7d1b-4a3e-8f6c-2b9d5e1a7c40" };
   renderPage(DOCUMENT_TASK, edit);
   act(() => block(container, "Goal").click());
@@ -1412,9 +1473,11 @@ function pointLandsOn(words: Text, offset: number, top: number): void {
 function wordsNode(within: HTMLElement, words: string, nth = 0): Text {
   const walker = document.createTreeWalker(within, NodeFilter.SHOW_TEXT);
   const found: Text[] = [];
+
   for (let at = walker.nextNode(); at !== null; at = walker.nextNode()) {
     if (at instanceof Text && at.data === words) found.push(at);
   }
+
   return found[nth] ?? assert.fail(`the words ${words}`);
 }
 
@@ -1424,6 +1487,7 @@ test("a click hands the editor the words it landed on, so the caret finds them h
   render({ ...DOCUMENT_TASK, document: { body, assumptions: [] } });
   const goal = block(container, "Goal");
   pointLandsOn(wordsNode(goal, "Ship it.", 1), 5, 300);
+
   try {
     act(() => {
       goal.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 60, clientY: 310 }));
@@ -1476,6 +1540,7 @@ test("the words a click opened the editor on stay under the finger, as it opens 
   // The words stand this far down the column in the editor: 59 lower than the text drew them, for a taller picture above.
   let wordsDown = 859;
   wordsLine = () => wordsDown - scroller.scrollTop;
+
   try {
     act(() => {
       goal.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 60, clientY: 310 }));
@@ -1483,6 +1548,7 @@ test("the words a click opened the editor on stay under the finger, as it opens 
   } finally {
     Reflect.deleteProperty(document, "caretRangeFromPoint");
   }
+
   assert.equal(wordsLine(), 300, "the words stand where they were clicked as the editor opens");
 
   // A diagram's preview above them lands later, 200 tall.
@@ -1504,6 +1570,7 @@ test("a click whose words the editor did not find scrolls nothing", () => {
   const scroller = scrollerOf(container);
   scroller.scrollTop = 500;
   pointLandsOn(wordsNode(goal, "Invites land by email."), 3, 300);
+
   try {
     act(() => {
       goal.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 60, clientY: 310 }));
@@ -1521,11 +1588,13 @@ test("a press on the room after a click while the editor's bundle loads opens th
   const landed = bundles;
   const gate = Promise.withResolvers<DescriptionEditorModule>();
   bundles = standInBundles({ descriptionEditor: () => gate.promise });
+
   try {
     const { container } = mount();
     const scroller = scrollerOf(container);
     scroller.scrollTop = 500;
     pointLandsOn(wordsNode(block(container, "Goal"), "Invites land by email."), 3, 300);
+
     try {
       act(() => {
         block(container, "Goal").dispatchEvent(
@@ -1535,6 +1604,7 @@ test("a press on the room after a click while the editor's bundle loads opens th
     } finally {
       Reflect.deleteProperty(document, "caretRangeFromPoint");
     }
+
     pressAt(scroller, 300, 500);
     wordsLine = () => 700;
     await act(async () => {
@@ -1640,17 +1710,21 @@ test("a teammate's save reaching an open editor holding nothing unsaved is laid 
 
 test("an open editor holding unsaved words keeps them as a teammate saves, saves them as a change from what it opened on, and takes the merged answer", async () => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
   try {
     const mine = `${BODY}Mine.\n`;
     const merged = `${BODY}Charles's.\n\nMine.\n`;
     const sent: DescriptionEditRequest[] = [];
     let answer: (answered: TasksEditAnswer) => void = () => undefined;
+
     const door = (request: DescriptionEditRequest) => {
       sent.push(request);
+
       return new Promise<TasksEditAnswer>((resolve) => {
         answer = resolve;
       });
     };
+
     const { container, render } = mount();
     render(DOCUMENT_TASK, door);
     act(() => block(container, "Goal").click());
@@ -1680,6 +1754,7 @@ test("an open editor holding unsaved words keeps them as a teammate saves, saves
 
 test("the editor is handed the open threads' words, and none while no open thread stands on any, so its drafts map no anchors for nothing", () => {
   const open1 = threadOn("0f9b5f6e-6a8e-4c51-9a0e-2c1f2f0b7a11", DESCRIPTION_COMMENT_STATUS.OPEN);
+
   const resolved = threadOn(
     "0f9b5f6e-6a8e-4c51-9a0e-2c1f2f0b7a22",
     DESCRIPTION_COMMENT_STATUS.RESOLVED,

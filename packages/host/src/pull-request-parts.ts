@@ -112,6 +112,7 @@ function keptOver<Answer extends object>(
   held: Answer | undefined,
 ): Option.Option<Answer> {
   if (!("failure" in answer)) return Option.some(answer);
+
   return held !== undefined && !("failure" in held) ? Option.none() : Option.some(answer);
 }
 
@@ -129,9 +130,11 @@ function lineMoved(before: AgentPullRequest, after: AgentPullRequest | undefined
 /** Each pull request the list names, by its address, the first line naming it where several do. */
 function linesOf(listing: PullRequestListing): ReadonlyMap<string, AgentPullRequest> {
   const lines = new Map<string, AgentPullRequest>();
+
   for (const { pullRequest } of listing.pullRequests) {
     if (!lines.has(pullRequest.url)) lines.set(pullRequest.url, pullRequest);
   }
+
   return lines;
 }
 
@@ -146,22 +149,31 @@ function movedOf(
   readonly heads: ReadonlySet<string>;
 } {
   const agents = new Set<string>();
+
   for (const [agentId, status] of before.statuses) {
     if (after.statuses.get(agentId) !== status) agents.add(agentId);
   }
+
   const opened = new Set<string>();
+
   for (const { agentId, pullRequest } of after.pullRequests) {
     const was = before.pullRequests.find((listed) => listed.agentId === agentId);
+
     if (was?.pullRequest.url !== pullRequest.url) opened.add(agentId);
   }
+
   const urls = new Set<string>();
   const heads = new Set<string>();
   const afterLines = linesOf(after);
+
   for (const [url, line] of linesOf(before)) {
     const now = afterLines.get(url);
+
     if (lineMoved(line, now)) urls.add(url);
+
     if (now?.headSha !== line.headSha) heads.add(url);
   }
+
   return { agents, opened, urls, heads };
 }
 
@@ -173,6 +185,7 @@ export function pullRequestParts(
     const { gate, focus, ask, tell } = dependencies;
     /** Each held pull request's address, as its pull request or published part last answered it. */
     const urls = MutableHashMap.empty<PullRequestKey, string>();
+
     const pullRequest = yield* heldFetch<typeof LIVE_READ.PULL_REQUEST, PullRequestKey>({
       empty: NO_KEYS_HELD,
       path: pathOf,
@@ -183,10 +196,12 @@ export function pullRequestParts(
           if (!("failure" in answer) && answer.pullRequest !== null) {
             MutableHashMap.set(urls, key, answer.pullRequest.url);
           }
+
           return keptOver(answer, held);
         }),
       tell: tell[LIVE_READ.PULL_REQUEST],
     });
+
     const checks = yield* heldFetch<typeof LIVE_READ.PULL_REQUEST_CHECKS, PullRequestKey>({
       empty: NO_KEYS_HELD,
       path: pathOf,
@@ -195,6 +210,7 @@ export function pullRequestParts(
       fetch: (key, held) => Effect.map(ask.checks(key), (answer) => keptOver(answer, held)),
       tell: tell[LIVE_READ.PULL_REQUEST_CHECKS],
     });
+
     const conversation = yield* heldFetch<
       typeof LIVE_READ.PULL_REQUEST_CONVERSATION,
       PullRequestKey
@@ -206,6 +222,7 @@ export function pullRequestParts(
       fetch: (key, held) => Effect.map(ask.conversation(key), (answer) => keptOver(answer, held)),
       tell: tell[LIVE_READ.PULL_REQUEST_CONVERSATION],
     });
+
     const published = yield* heldFetch<typeof LIVE_READ.PULL_REQUEST_PUBLISHED, PullRequestKey>({
       empty: NO_KEYS_HELD,
       path: pathOf,
@@ -216,10 +233,12 @@ export function pullRequestParts(
           if (!("failure" in answer) && answer.pullRequest !== null) {
             MutableHashMap.set(urls, key, answer.pullRequest.url);
           }
+
           return keptOver(answer, held);
         }),
       tell: tell[LIVE_READ.PULL_REQUEST_PUBLISHED],
     });
+
     const reviewOptions = yield* heldFetch<typeof LIVE_READ.REVIEW_OPTIONS, PullRequestKey>({
       empty: NO_KEYS_HELD,
       path: pathOf,
@@ -228,6 +247,7 @@ export function pullRequestParts(
       fetch: (key, held) => Effect.map(ask.reviewOptions(key), (answer) => keptOver(answer, held)),
       tell: tell[LIVE_READ.REVIEW_OPTIONS],
     });
+
     const viewed = yield* heldFetch<typeof LIVE_READ.PULL_REQUEST_VIEWED, PullRequestKey>({
       empty: NO_KEYS_HELD,
       path: pathOf,
@@ -236,6 +256,7 @@ export function pullRequestParts(
       fetch: (key) => Effect.map(ask.viewed(key), Option.some),
       tell: tell[LIVE_READ.PULL_REQUEST_VIEWED],
     });
+
     const fetches: { readonly [Part in PullRequestPart]: PartFetch } = {
       [PULL_REQUEST_PART.PULL_REQUEST]: pullRequest,
       [PULL_REQUEST_PART.CHECKS]: checks,
@@ -244,6 +265,7 @@ export function pullRequestParts(
       [PULL_REQUEST_PART.REVIEW_OPTIONS]: reviewOptions,
       [PULL_REQUEST_PART.VIEWED]: viewed,
     };
+
     const every = Object.values(fetches);
     /** The parts asked again together as the pull request or its agent moves. */
     const moving: readonly PartFetch[] = [pullRequest, checks, conversation, published];
@@ -257,30 +279,40 @@ export function pullRequestParts(
 
     // Note that the first drawing asks nothing, since nothing moved yet that a part was read before.
     let before: PullRequestListing | undefined;
+
     const heard = (listing: PullRequestListing) =>
       Effect.suspend(() => {
         const was = before;
         before = listing;
+
         if (was === undefined) return Effect.void;
         const moved = movedOf(was, listing);
+
         if (moved.agents.size === 0 && moved.opened.size === 0 && moved.urls.size === 0) {
           return Effect.void;
         }
+
         const named = (key: PullRequestKey) => {
           if (moved.agents.has(key.agentId)) return true;
+
           if (key.number === undefined && moved.opened.has(key.agentId)) return true;
           const url = urlOf(key, was);
+
           return url !== undefined && moved.urls.has(url);
         };
+
         const pushed = (key: PullRequestKey) => {
           const url = urlOf(key, was);
+
           return url !== undefined && moved.heads.has(url);
         };
+
         return Effect.andThen(
           Effect.forEach(moving, (fetch) => fetch.wake(named), { discard: true }),
           viewed.wake(pushed),
         );
       });
+
     yield* Effect.forkScoped(Stream.runForEach(yield* dependencies.listings, heard));
 
     return {

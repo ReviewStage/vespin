@@ -24,12 +24,15 @@ const foldersBeforeBackfill = Effect.gen(function* () {
   const fileSystem = yield* FileSystem;
   const path = yield* Path;
   const folder = yield* fileSystem.makeTempDirectoryScoped({ prefix: "before-backfill-" });
+
   const names = (yield* fileSystem.readDirectory(MIGRATIONS_FOLDER)).filter(
     (name) => name.localeCompare(BACKFILL) < 0,
   );
+
   for (const name of names) {
     yield* fileSystem.copy(path.join(MIGRATIONS_FOLDER, name), path.join(folder, name));
   }
+
   return folder;
 });
 
@@ -52,6 +55,7 @@ it.effect(
         const rows = yield* sql<{ readonly organization_id: string }>`
           select organization_id from personal_workspace where user_id = 'ada'
         `;
+
         assert.deepEqual(
           rows.map((row) => row.organization_id),
           ["standing"],

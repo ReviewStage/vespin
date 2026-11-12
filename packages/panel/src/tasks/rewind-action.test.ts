@@ -100,6 +100,7 @@ async function settle(): Promise<void> {
 async function box(rewound: AgentAgentAnswer, sent: AgentAgentAnswer = REWOUND) {
   const calls: string[] = [];
   const held: { composer: HeldComposer | undefined } = { composer: undefined };
+
   function Box(): ReactNode {
     held.composer = useAgentComposer({
       agentId: "agent-1",
@@ -107,24 +108,31 @@ async function box(rewound: AgentAgentAnswer, sent: AgentAgentAnswer = REWOUND) 
       messages: TRANSCRIPT,
       send: (_agentId, text) => {
         calls.push(`send:${text}`);
+
         return Promise.resolve(sent);
       },
       rewind: (_agentId, messageId) => {
         calls.push(`rewind:${messageId}`);
+
         return Promise.resolve(rewound);
       },
     });
+
     return null;
   }
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
   await act(async () => root.render(withQueryClient(createElement(Box))));
+
   const composer = () => {
     if (held.composer === undefined) throw new Error("the box never drew");
+
     return held.composer;
   };
+
   return { calls, composer };
 }
 
@@ -261,6 +269,7 @@ test("a rewind names the teammates whose messages it drops and how many, and non
     false,
     "user-1",
   );
+
   assert.equal(own.revertTakes.size, 0);
   assert.equal(own.editTakes.size, 0);
 });
@@ -297,10 +306,13 @@ async function revertBody(
       ),
     ),
   );
+
   const revert = container.querySelector<HTMLButtonElement>(
     '[aria-label="Rewind conversation to here"]',
   );
+
   await act(async () => revert?.click());
+
   return document.querySelector('[role="alertdialog"]')?.textContent ?? undefined;
 }
 
@@ -312,13 +324,16 @@ test("Rewind conversation to here says whose messages it drops where a teammate'
     ),
     String(shared),
   );
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
+
   const alone = await revertBody("user-1", [
     lineFrom("a", "Dean", "user-1"),
     message("reply-1", MESSAGE_ROLE.ASSISTANT),
     lineFrom("b", "Dean", "user-1"),
   ]);
+
   assert.ok(
     alone?.includes("Everything after it will be removed from the transcript"),
     String(alone),
@@ -358,19 +373,24 @@ async function revertOffered(shared: readonly AgentTranscriptMessage[], restores
       ),
     ),
   );
+
   const revert = container.querySelector<HTMLButtonElement>(
     '[aria-label="Rewind conversation to here"]',
   );
+
   await act(async () => revert?.click());
   const dialog = () => document.querySelector<HTMLElement>('[role="alertdialog"]');
   const checkbox = () => dialog()?.querySelector<HTMLElement>('[role="checkbox"]') ?? undefined;
+
   const confirm = async () => {
     const button = [...(dialog()?.querySelectorAll("button") ?? [])].find((each) =>
       each.textContent?.startsWith("Rewind conversation"),
     );
+
     assert.ok(button, "the question offers the rewind");
     await act(async () => button.click());
   };
+
   return { dialog, checkbox, confirm, reverted };
 }
 
@@ -381,6 +401,7 @@ test("Rewind conversation to here offers the files back only where the next line
     lineFrom("b", "Dean", "user-1"),
     message("reply-2", MESSAGE_ROLE.ASSISTANT),
   ];
+
   const recorded = unrecorded.map((each) =>
     each.id === "b" ? { ...each, filesRestorable: true as const } : each,
   );
@@ -393,6 +414,7 @@ test("Rewind conversation to here offers the files back only where the next line
   );
   await plain.confirm();
   assert.deepEqual(plain.reverted, [["b", false]]);
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 
@@ -400,6 +422,7 @@ test("Rewind conversation to here offers the files back only where the next line
   assert.equal(off.checkbox(), undefined, "with the experiment off, a recorded point offers none");
   await off.confirm();
   assert.deepEqual(off.reverted, [["b", false]]);
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 

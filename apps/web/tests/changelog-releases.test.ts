@@ -20,11 +20,13 @@ function changelogOf(count: number): string {
   const sections = Array.from({ length: count }, (_, index) => count - 1 - index).map((minor) =>
     releaseSection(minor, `### Fixes\n\n- Fixed thing ${minor}\n`),
   );
+
   return `# Changelog\n\nIntro.\n\n${sections.join("\n")}`;
 }
 
 function versionsOf(view: ChangelogView | undefined): readonly string[] {
   assert.ok(view !== undefined && view.kind === CHANGELOG_VIEW.PAGE);
+
   return view.releases.map((release) => release.version);
 }
 
@@ -102,9 +104,11 @@ test("a release's head names its first feature, opens on its first paragraph, an
       "- Something smaller",
     ].join("\n"),
   )}`;
+
   const route = changelogRoutes(parseReleases(markdown)).find(
     (candidate) => candidate.path === "/changelog/1.4.0",
   );
+
   assert.ok(route !== undefined);
   assert.equal(route.head.title, "Vespin 1.4.0: The Call tab — Changelog");
   assert.equal(
@@ -122,6 +126,7 @@ test("a release with only standing sections is titled by its version and opens o
   const route = changelogRoutes(parseReleases(changelogOf(1))).find(
     (candidate) => candidate.path === "/changelog/1.0.0",
   );
+
   assert.ok(route !== undefined);
   assert.equal(route.head.title, "Vespin 1.0.0 — Changelog");
   assert.equal(route.head.description, "Fixed thing 0");
@@ -151,7 +156,9 @@ test("every route of the real changelog reads back, from its address, the view i
     join(import.meta.dirname, "..", "..", "..", "CHANGELOG.md"),
     "utf8",
   );
+
   const releases = parseReleases(markdown);
+
   for (const route of changelogRoutes(releases)) {
     assert.deepEqual(changelogViewForPath(releases, route.path), route.view, route.path);
   }

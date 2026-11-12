@@ -125,6 +125,7 @@ function Box({ sender }: { sender: MessageSender }): ReactNode {
     messages: [],
     send: sender,
   });
+
   return createElement(AgentComposer, {
     ...QUIET_COMPOSER,
     composer,
@@ -135,10 +136,13 @@ function Box({ sender }: { sender: MessageSender }): ReactNode {
 /** A task's page drawing the file's tab and, unless it is asked not to, the agent's box, every message the box sends written down. */
 async function page({ box = true }: { box?: boolean } = {}) {
   const sent: string[] = [];
+
   const sender: MessageSender = (_agentId, text) => {
     sent.push(text);
+
     return new Promise<AgentAgentAnswer>(ignore);
   };
+
   fakeActPort({ ...fakeActPortCalls(), ...readingFiles(readFile) });
   const container = document.createElement("div");
   document.body.append(container);
@@ -164,6 +168,7 @@ async function page({ box = true }: { box?: boolean } = {}) {
   );
   await settle();
   await wholeFileDrawn(container);
+
   return { container, sent };
 }
 
@@ -171,6 +176,7 @@ async function page({ box = true }: { box?: boolean } = {}) {
 function lineText(container: HTMLElement, line: number): Node {
   const text = wholeFileRoot(container)?.querySelector(`[data-line="${line}"] span`)?.firstChild;
   assert.ok(text, `line ${line} is drawn`);
+
   return text;
 }
 
@@ -180,13 +186,16 @@ function cardOn(element: Element | undefined): (string | null | undefined)[] {
   restOn(element);
   const card = document.querySelector(".ui-tooltip-card [data-file-card]");
   assert.ok(card, "the file's card is hung");
+
   const read = [
     card.querySelector(".ui-hover-card-name")?.textContent,
     card.querySelector(".ui-hover-card-note")?.textContent,
   ];
+
   act(() => {
     element.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
   });
+
   return read;
 }
 
@@ -200,16 +209,19 @@ function mentionSelected(from: Node, fromOffset: number, to: Node, toOffset: num
   const range = document.createRange();
   range.setStart(from, fromOffset);
   range.setEnd(to, toOffset);
+
   const held: Selection = Object.create(Selection.prototype, {
     isCollapsed: { value: false },
     rangeCount: { value: 1 },
     getComposedRanges: { value: () => [range] },
   });
+
   // Note that only the tab's reads are stood in for, the message box reading the window's own.
   const read = vi
     .spyOn(document, "getSelection")
     .mockReturnValueOnce(held)
     .mockReturnValueOnce(held);
+
   try {
     return runAppCommand(APP_COMMAND.MENTION_LINES);
   } finally {

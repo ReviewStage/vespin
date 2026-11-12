@@ -343,7 +343,9 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
         (payload): HostSettingsChange | undefined => {
           if (!isRecord(payload) || !isRecord(payload.settings)) return undefined;
           const settings = answered<AppSettings>(payload.settings);
+
           if (!settings) return undefined;
+
           return {
             settings,
             ...(isWireString(payload.reporter) ? { reporter: payload.reporter } : undefined),
@@ -474,8 +476,10 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
         GATEWAY_EVENT.TERMINAL_OUTPUT,
         (payload) => {
           const output = Result.getOrUndefined(readEither(terminalOutputEventSchema)(payload));
+
           if (output === undefined) return undefined;
           const bytes = Base64.decode(output.data);
+
           return Result.isSuccess(bytes)
             ? { connectionId: output.connectionId, data: bytes.success }
             : undefined;
@@ -493,6 +497,7 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
         client.call(GATEWAY_METHOD.MIRRORS_ENSURE, { agentId: params.agentId }),
         (answer) => {
           const folder = record(answer)?.folder;
+
           return typeof folder === "string" ? folder : undefined;
         },
       ),
@@ -533,6 +538,7 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
         GATEWAY_EVENT.PORT_FORWARDS_CHANGED,
         (payload) => {
           const read = readEither(portForwardingSchema)(payload);
+
           return Result.isSuccess(read) ? { forwarding: read.success } : undefined;
         },
         ({ forwarding }) => listener(forwarding),
@@ -542,6 +548,7 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
         GATEWAY_EVENT.MIRRORS_CHANGED,
         (payload) => {
           const read = readEither(mirrorStandingsSchema)(payload);
+
           return Result.isSuccess(read) ? { mirrors: read.success } : undefined;
         },
         ({ mirrors }) => listener(mirrors),

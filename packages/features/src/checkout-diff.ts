@@ -99,12 +99,14 @@ const NO_SIDE = "/dev/null";
 /** The paths a header names where the two sides are the same path: `a/<path> b/<path>`, the path's length what is left once the four marks are taken off. */
 function samePathOf(header: string): string {
   const rest = header.slice(FILE_HEADER.length);
+
   return rest.slice(2, 2 + (rest.length - 5) / 2);
 }
 
 /** A side's path off its `--- ` or `+++ ` line, none for no side. Note that git ends a path holding a space with a tab, so patch tells it from a date after it, which is taken off. */
 function sideOf(line: string): string | undefined {
   const named = line.slice(4).replace(/\t$/u, "");
+
   return named === NO_SIDE ? undefined : named.slice(2);
 }
 
@@ -118,13 +120,16 @@ function fileOf(lines: readonly string[]): AgentChangedFile {
   let additions = 0;
   let deletions = 0;
   const hunks: string[] = [];
+
   for (const line of lines.slice(1)) {
     if (hunks.length > 0 || line.startsWith(HUNK_HEADER)) {
       hunks.push(line);
+
       if (line.startsWith("+")) additions += 1;
       else if (line.startsWith("-")) deletions += 1;
       continue;
     }
+
     if (line.startsWith("new file mode")) status = CHANGED_FILE_STATUS.ADDED;
     else if (line.startsWith("deleted file mode")) status = CHANGED_FILE_STATUS.DELETED;
     else if (line.startsWith("rename from ")) {
@@ -135,9 +140,11 @@ function fileOf(lines: readonly string[]): AgentChangedFile {
     else if (line.startsWith("--- ")) path ??= sideOf(line);
     else if (line.startsWith("+++ ")) path = sideOf(line) ?? path;
   }
+
   path ??= samePathOf(header);
   const patch = hunks.join("\n");
   const secret = isSecretFile(path) || (previousPath !== null && isSecretFile(previousPath));
+
   const omitted = secret
     ? PATCH_OMITTED.SECRET
     : binary
@@ -145,6 +152,7 @@ function fileOf(lines: readonly string[]): AgentChangedFile {
       : patch.length > CHANGES_BOUNDS.MAX_PATCH_CHARS
         ? PATCH_OMITTED.TOO_LARGE
         : null;
+
   return {
     path,
     previousPath,
@@ -167,17 +175,21 @@ function fileOf(lines: readonly string[]): AgentChangedFile {
  */
 export function checkoutDiffFiles(output: string): CheckoutDiffFiles {
   const sections: string[][] = [];
+
   for (const line of output.split("\n")) {
     if (line.startsWith(FILE_HEADER)) sections.push([line]);
     else sections.at(-1)?.push(line);
   }
+
   // A last line of nothing is the newline the diff ends on, not a line of the last file.
   const last = sections.at(-1);
+
   if (last !== undefined && last.at(-1) === "") last.pop();
   // The bound is the script's, in bytes, so the output is measured as the bytes it came as.
   const cut = new TextEncoder().encode(output).length >= CHECKOUT_DIFF_BOUNDS.MAX_BYTES;
   const whole = cut ? sections.slice(0, -1) : sections;
   const kept = whole.slice(0, CHANGES_BOUNDS.MAX_FILES);
+
   return {
     files: kept.map(fileOf),
     truncated: cut || whole.length > kept.length,

@@ -104,6 +104,7 @@ function StartingLine({
   sentAt: number;
 }): React.JSX.Element {
   const now = useSecond();
+
   return (
     <WorkingLine
       startedAt={sentAt}
@@ -136,33 +137,40 @@ export function DraftAgentTab({
   latest.current = control;
 
   const { fork } = draft;
+
   const source =
     fork === undefined
       ? undefined
       : [...(control.agents ?? []), ...(control.archived ?? [])].find(
           (agent) => agent.id === fork.agentId,
         );
+
   // A fork runs on its source's model and effort until the developer picks another.
   const choice = draft.choice ?? (source === undefined ? fallback : forkChoice(source));
+
   // The mode the agent starts in: the one picked on the chip's menu, else the member's Default permissions.
   const mode = useNewAgentPermissionMode({
     model: choice?.model,
     picked: draft.permissionMode,
     choose: (permissionMode) => control.onDraftChange({ permissionMode }),
   });
+
   // Note that a model nothing of the account's pays for holds Send, with the press that connects one, rather than being refused once sent.
   const unpaid =
     control.models === undefined || choice === undefined
       ? undefined
       : unrunnableChoice(control.models, choice);
+
   // Runs on stands only while Bring your own host is on, and reads the member's devices where no read has listed them.
   const placesOn =
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.BRING_YOUR_OWN_HOST) })
       .data === true;
+
   useEffect(() => {
     if (placesOn && latest.current.macs === undefined) latest.current.readModels();
   }, [placesOn]);
   const devices = (placesOn ? control.macs : undefined) ?? NO_DEVICES;
+
   const [device, choosePlace] = useStartRunsOn(
     devices,
     draft.runsOn,
@@ -173,15 +181,19 @@ export function DraftAgentTab({
     },
     (runsOn) => control.onDraftChange({ runsOn }),
   );
+
   const send = () => {
     const prompt = draft.prompt.trim();
+
     if (unpaid !== undefined) return;
+
     if (fork === undefined && !hasWordsOrFiles(prompt, draft.attachments)) return;
     void starting.run(() => {
       if (draft.refused !== undefined) latest.current.onDraftChange({ refused: undefined });
       const { id, choice, attachments, disabledServers, permissionMode } = draft;
       // Note that a place picked while the experiment was on is not sent once it is off.
       const runsOn = placesOn ? draft.runsOn : undefined;
+
       const started =
         fork === undefined
           ? latest.current.startPrompt(
@@ -203,11 +215,14 @@ export function DraftAgentTab({
               runsOn,
               permissionMode,
             );
+
       // Note that the working line stands only once the Start is out, and goes however it lands.
       if (fork !== undefined) setSentAt(Date.now());
+
       return started.finally(() => setSentAt(undefined));
     });
   };
+
   const composer: AgentComposerControl = {
     draft: draft.prompt,
     setDraft: (prompt) => control.onDraftChange({ prompt }),

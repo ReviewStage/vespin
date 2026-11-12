@@ -153,35 +153,47 @@ const callbackLanding = /* @__PURE__ */ Effect.fnUntraced(function* (
   state: string | null,
 ): Effect.fn.Return<Landing, HostedRefusal, DatabaseServices | IntegrationConnect> {
   const expired = { provider: undefined, status: INTEGRATION_LANDING_STATUS.EXPIRED } as const;
+
   if (state === null || !STATE_PATTERN.test(state)) return expired;
   const row = yield* hostedStoreOrUnavailable(seams.readSignIn(state));
+
   if (row === undefined) return expired;
+
   const landed = (status: IntegrationLandingStatus): Landing => ({
     provider: row.provider,
     status,
   });
+
   if (!signInStands(seams, row.stateIssuedAt)) return landed(INTEGRATION_LANDING_STATUS.EXPIRED);
+
   const connector = (yield* hostedStoreOrUnavailable(accountIntegrationConnect(row.userId)))[
     row.provider
   ];
+
   // A provider no longer offered to the account completes nothing for it.
   if (!connector.configured) return landed(INTEGRATION_LANDING_STATUS.UNAVAILABLE);
   const issued = yield* Effect.result(connector.token(row.connectSubject, { fresh: true }));
+
   if (Result.isFailure(issued)) {
     // Back without a grant: the sign-in is over, so the window waiting on it hears so at its next read.
     if (issued.failure.reason === INTEGRATION_CONNECT_FAILURE.NOT_AUTHORIZED) {
       yield* hostedStoreOrUnavailable(seams.endSignIn(row.userId, row.connectionName, state));
+
       return landed(INTEGRATION_LANDING_STATUS.NOT_COMPLETED);
     }
+
     yield* Effect.logWarning(
       `Vercel Connect could not settle a ${INTEGRATION_NAME[row.provider]} sign-in`,
       issued.failure.message,
     );
+
     return landed(INTEGRATION_LANDING_STATUS.UNAVAILABLE);
   }
+
   const completed = yield* hostedStoreOrUnavailable(
     seams.completeSignIn(row.userId, row.connectionName, state, issued.success.accountName),
   );
+
   if (completed) {
     yield* recordServerEvent(
       SERVER_EVENT.INTEGRATION_CONNECTION_CREATE,
@@ -191,6 +203,7 @@ const callbackLanding = /* @__PURE__ */ Effect.fnUntraced(function* (
       },
     );
   }
+
   // A Disconnect pressed while the browser was away, or a sign-in begun again, wins: this one completes nothing.
   return landed(
     completed ? INTEGRATION_LANDING_STATUS.CONNECTED : INTEGRATION_LANDING_STATUS.NOT_COMPLETED,
@@ -207,11 +220,13 @@ const connectedEndpoint = /* @__PURE__ */ Effect.fn("web/integrationConnectedEnd
 > {
   const request = yield* HttpServerRequest.HttpServerRequest;
   const query = new URL(request.url, "https://localhost").searchParams;
+
   const landed = yield* callbackLanding(seams, query.get(INTEGRATION_CALLBACK_QUERY.STATE)).pipe(
     Effect.catch(() =>
       Effect.succeed({ provider: undefined, status: INTEGRATION_LANDING_STATUS.UNAVAILABLE }),
     ),
   );
+
   return landing(landed);
 });
 

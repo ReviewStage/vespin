@@ -53,10 +53,13 @@ test("a tab draws the pull request the task list carries over a held read that f
     [PULL_REQUEST_PART.PUBLISHED]: () => Promise.resolve({ ...PUBLISHED, pullRequest: null }),
   });
   let held: AgentPullRequestAnswer | undefined;
+
   function Probe(): null {
     held = useAgentPullRequest({ agentId: AGENT, shown: true, known: opened }).published;
+
     return null;
   }
+
   root = createRoot(document.body.appendChild(document.createElement("div")));
   await act(async () => root?.render(withQueryClient(createElement(Probe))));
   // Note that what the read found reaches the hook once it lands in its query.
@@ -70,16 +73,21 @@ const LATER = "5d1e2f3a-4b5c-4d6e-8f70-000000000001";
 test("a task's agents' pull requests are those the task list carries of its own agents", () => {
   const opened = PUBLISHED.pullRequest ?? assert.fail("a pull request");
   const other = { ...opened, number: 7, url: "https://github.com/acme/relay/pull/7" };
+
   const listed = [
     { agentId: AGENT, taskId: TASK, pullRequest: opened },
     { agentId: LATER, taskId: TASK, pullRequest: other },
     { agentId: ELSEWHERE, taskId: "another-task", pullRequest: other },
   ];
+
   const held: { task?: ReadonlyMap<string, unknown> } = {};
+
   function Holders(): null {
     held.task = useListedPullRequests(listed, TASK);
+
     return null;
   }
+
   root = createRoot(document.body.appendChild(document.createElement("div")));
   act(() => root?.render(createElement(Holders)));
   assert.deepEqual(

@@ -51,10 +51,12 @@ export function AddMenuButton({
   const menuId = useId();
   const holder = useRef<HTMLSpanElement>(null);
   const button = useRef<HTMLButtonElement>(null);
+
   const close = () => {
     setOpen(false);
     button.current?.focus();
   };
+
   return (
     <span
       className="settings-picker relative inline-flex min-w-0 flex-initial items-center"

@@ -107,5 +107,6 @@ export function pageFitAfter(fit: PageFit, height: number, frameHeight: number):
   if (fit.kind !== PAGE_FIT.CONTENT && Math.abs(height - frameHeight) <= FRAME_SLACK) {
     return { kind: PAGE_FIT.FILLS };
   }
+
   return { kind: PAGE_FIT.CONTENT, height };
 }

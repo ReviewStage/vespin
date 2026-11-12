@@ -41,6 +41,7 @@ afterEach(() => {
 function open(document: string): InstanceType<typeof FakeWindow> {
   const window = new FakeWindow(`file:///Applications/Vespin.app/renderer/${document}`);
   electronApp.emit("browser-window-created", {}, window);
+
   return window;
 }
 

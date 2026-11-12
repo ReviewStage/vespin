@@ -75,6 +75,7 @@ export const FILES_RESTORED_WORDS =
  */
 function revertQuestion(takes: string | undefined, restoring: boolean): DialogQuestion {
   const dropped = `Everything after it${takes === undefined ? "" : `, including ${takes},`} will be removed from the transcript, and the agent stopped if it is working.`;
+
   return {
     title: "Rewind conversation to this message?",
     body: restoring
@@ -138,7 +139,9 @@ const PERSON_SENDERS: ReadonlySet<string> = new Set([AGENT_SENDER.MEMBER, AGENT_
  */
 function writtenByPerson(message: AgentTranscriptMessage): boolean {
   const sender = message.sentBy;
+
   if (sender === undefined) return true;
+
   return sender.agent !== true && (sender.kind === undefined || PERSON_SENDERS.has(sender.kind));
 }
 
@@ -152,13 +155,16 @@ type Takes = { userId: string | undefined; name: string; count: number }[];
  */
 function writtenByOther(message: AgentTranscriptMessage, readerId: string | undefined): boolean {
   const sender = message.sentBy;
+
   if (sender === undefined || !writtenByPerson(message)) return false;
+
   return sender.userId === undefined || (readerId !== undefined && sender.userId !== readerId);
 }
 
 /** Counts one more of a member's messages in `takes`, a sender met later standing first because the transcript is read from its end. */
 function tally(takes: Takes, sender: NonNullable<AgentTranscriptMessage["sentBy"]>): void {
   const found = takes.find((each) => each.userId === sender.userId && each.name === sender.name);
+
   if (found === undefined) takes.unshift({ userId: sender.userId, name: sender.name, count: 1 });
   else found.count += 1;
 }
@@ -166,6 +172,7 @@ function tally(takes: Takes, sender: NonNullable<AgentTranscriptMessage["sentBy"
 /** What `takes` says of whose messages go: "2 messages from Sam", or none where none are another member's. */
 function takesWords(takes: Takes): string | undefined {
   if (takes.length === 0) return undefined;
+
   return andList(takes.map((each) => `${countWords(each.count, MESSAGE)} from ${each.name}`));
 }
 
@@ -206,41 +213,55 @@ export function rewindPoints(
   const revertTakes = new Map<string, string>();
   const editTakes = new Map<string, string>();
   const restorable = new Set<string>();
+
   const followed = new Set(
     (pending ? messages : messages.slice(0, -1)).map((message) => message.id),
   );
+
   // What a rewind to just before each line that opened a turn drops of other members' messages.
   const takenFrom = new Map<string, string>();
   const takes: Takes = [];
   let next: string | undefined;
+
   // Read from the end, so each reply finds the opening line nearest after it.
   for (let at = messages.length - 1; at >= 0; at -= 1) {
     const message = messages[at];
+
     if (message === undefined) continue;
+
     if (message.role !== MESSAGE_ROLE.USER) {
       if (next === undefined) continue;
       revertsAt.set(message.id, next);
       const dropped = takenFrom.get(next);
+
       if (dropped !== undefined) revertTakes.set(message.id, dropped);
       continue;
     }
+
     const opens = message.arrivedIn === undefined;
     const answered = message.clientId === undefined || !going.has(message.clientId);
+
     // Note that an edit drops what follows the line, so its words are read before the line itself is counted.
     if (opens && answered && writtenByPerson(message)) {
       editable.add(message.id);
       const after = takesWords(takes);
+
       if (after !== undefined) editTakes.set(message.id, after);
     }
+
     if (message.sentBy !== undefined && writtenByOther(message, readerId)) {
       tally(takes, message.sentBy);
     }
+
     if (!opens) continue;
+
     if (restores && answered && message.filesRestorable === true) restorable.add(message.id);
     const from = takesWords(takes);
+
     if (from !== undefined) takenFrom.set(message.id, from);
     next = answered ? message.id : undefined;
   }
+
   return { editable, revertsAt, followed, revertTakes, editTakes, restorable };
 }
 
@@ -258,7 +279,9 @@ export function RewindProvider({
 /** A line's Edit, after its Copy and Copy link; nothing where its tab offers no rewind, or the line opened no turn. */
 export function EditMessageAction({ messageId }: { messageId: string }): ReactNode {
   const doors = useContext(RewindContext);
+
   if (doors === undefined || !doors.editable.has(messageId)) return null;
+
   return (
     <MessageAction
       label={REWIND_WORDS.EDIT}
@@ -277,6 +300,7 @@ export function RevertMessageAction({ messageId }: { messageId: string }): React
   const restorable = lineId !== undefined && doors?.restorable.has(lineId) === true;
   // Note that the choice is off each time the question is asked, so a rewind never puts the files back unasked.
   const [restoring, setRestoring] = useState(false);
+
   // Note that the revert answers at once: the box takes it in turn behind any send, and says there if it did not go.
   const confirm = useConfirmDialog(
     { subject: lineId !== undefined, surfaceOpen: true },
@@ -285,7 +309,9 @@ export function RevertMessageAction({ messageId }: { messageId: string }): React
     }),
     confirmFailure(FAILURE_SURFACE.AGENT_REWIND),
   );
+
   if (doors === undefined || lineId === undefined) return null;
+
   return (
     <>
       <MessageAction
@@ -316,7 +342,9 @@ export function RevertMessageAction({ messageId }: { messageId: string }): React
 /** What the line named is written again with, where it is open for writing; none while it is not open, or its tab offers no rewind. */
 export function useMessageEdit(messageId: string): EditComposerDoors | undefined {
   const doors = useContext(RewindContext);
+
   if (doors === undefined || doors.editing !== messageId) return undefined;
+
   return {
     ...doors.editor(),
     onCancel: doors.onCancelEdit,

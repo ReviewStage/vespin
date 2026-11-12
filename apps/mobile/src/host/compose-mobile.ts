@@ -104,6 +104,7 @@ export const SERVICE_ORIGIN = process.env.EXPO_PUBLIC_SERVICE_ORIGIN ?? LINK_ORI
 
 /** The one place every act is from: the app's screens, which stand as the host's one panel. */
 const APP_SCREENS = Symbol("app screens");
+
 type MobileSender = typeof APP_SCREENS;
 
 /** What the app's root reads of the host once it stands: the bridge the screens read state through, and the client their acts go out on. */
@@ -192,6 +193,7 @@ function accountSeams(device: DeviceSeams) {
 /** Every seam the host's kernel and assembly stand on, as the app answers it. */
 function seamLayers(options: MobileHostOptions) {
   const { stateRoot, appVersion, fixture, device } = options;
+
   return Layer.mergeAll(
     Layer.succeed(StateRoot, stateRoot),
     Layer.succeed(RunMode, runModeFor({ capture: false, fixture: fixture !== undefined })),
@@ -221,6 +223,7 @@ function portDependencies(
 ): ActPortDependencies {
   const host = operator.host;
   const { openExternal } = device;
+
   return {
     account: {
       host,
@@ -277,6 +280,7 @@ const servedActPort = (dependencies: ActPortDependencies, services: Context.Cont
       channel.port2.start();
       const link = new RPCLink({ port: channel.port1 });
       channel.port1.start();
+
       return { channel, acts: createORPCClient<ActPortClient>(link) };
     }),
     ({ channel }) =>
@@ -315,6 +319,7 @@ const composedMobile = (options: MobileHostOptions) =>
       const assembly = yield* HostAssemblyTag;
       const services: Context.Context<never> = yield* Effect.context();
       const runMode = runModeFor({ capture: false, fixture: fixture !== undefined });
+
       const state = new AppStateStore(
         initialAppState(
           {
@@ -333,6 +338,7 @@ const composedMobile = (options: MobileHostOptions) =>
         ),
         services,
       );
+
       const operator = yield* createOperatorClient({
         report,
         gateway: assembly.gateway,
@@ -341,6 +347,7 @@ const composedMobile = (options: MobileHostOptions) =>
         node: { openExternal: device.openExternal },
         state,
       });
+
       // Note that the device is taken as online: what it can reach is what the service's reach says (`serviceReachLayer`), which the watch follows.
       yield* linkNetworkWatch({
         state,
@@ -348,6 +355,7 @@ const composedMobile = (options: MobileHostOptions) =>
         regained: operator.host.tasksRegained(),
         report,
       });
+
       // No notification, badge, or chime leaves the app yet: those come with the screens that draw the Inbox.
       const notices = yield* linkClientNotices({
         state,
@@ -362,6 +370,7 @@ const composedMobile = (options: MobileHostOptions) =>
           chime: () => undefined,
         }),
       );
+
       const count: AppBridge["recordSurfaceEvent"] = (name, properties) => {
         // A count that fails is said on the console, never left as a rejection nobody hears.
         fork(
@@ -370,16 +379,19 @@ const composedMobile = (options: MobileHostOptions) =>
           ),
         );
       };
+
       const made = yield* createInProcessBridge({
         state,
         windowFacts: () => ({ fullScreen: false }),
         reports: { notifyReady: () => undefined, recordSurfaceEvent: count },
         report,
       });
+
       const acts = yield* servedActPort(
         portDependencies(operator, notices, device.createId(), device),
         services,
       );
+
       return { bridge: made.bridge, acts, operator, state };
     }),
   );
@@ -397,6 +409,7 @@ export function composeMobile(
   options: MobileHostOptions,
 ): Layer.Layer<MobileHostTag | HostTag, DuplicateGatewayMethod | DuplicateHostAct> {
   const { httpClient, device } = options;
+
   // Every call the host makes to the service tells the service's reach beside it, which the network watch follows.
   const assembly = Layer.provide(
     hostAssemblyLayer([HOST_PLATFORM_CONCERN.TERMINALS]),
@@ -414,6 +427,7 @@ export function composeMobile(
       ),
     ),
   ).pipe(Layer.provideMerge(serviceReachLayer));
+
   const launched = Layer.unwrap(
     Effect.map(ComposedMobileTag, (mobile) => {
       const standing = Layer.mergeAll(
@@ -431,13 +445,16 @@ export function composeMobile(
         }),
         effectServiceLayer(mobile.operator, report),
       ).pipe(Layer.provideMerge(hostStandingLayer));
+
       const staged =
         options.fixture === undefined
           ? Layer.empty
           : stagedFixture(mobile.state, options.fixtureUpdateNeeded === true);
+
       return Layer.provideMerge(staged, standing);
     }),
   );
+
   return launched.pipe(
     Layer.provideMerge(composedMobile(options)),
     Layer.provideMerge(assembly),

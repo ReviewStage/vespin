@@ -393,6 +393,7 @@ export function listTaskSections(userId: string): TaskStoreEffect<TaskSections> 
   return Effect.gen(function* () {
     const sections = yield* findSections(userId);
     const entries = yield* findEntries(userId);
+
     return { sections: sections.map(sectionOf), entries: entries.map(entryOf), agentEntries: [] };
   });
 }
@@ -404,10 +405,13 @@ function createSection(
 ): TaskStoreEffect<Applied> {
   return Effect.gen(function* () {
     if (Option.isSome(yield* findSection({ userId, id: write.id }))) return UNCHANGED;
+
     if (!(yield* isWorkspaceMember(userId, write.workspaceId))) return REFUSED;
     const [counted] = yield* countSections(userId);
+
     if ((counted?.held ?? 0) >= TASK_SECTION_BOUNDS.MAX_SECTIONS) return REFUSED;
     const now = yield* DateTime.nowAsDate;
+
     const written = yield* insertSection({
       id: write.id,
       userId,
@@ -416,6 +420,7 @@ function createSection(
       icon: write.icon ?? null,
       now,
     });
+
     // Note that an id another account's section holds is written as nothing, so it is read back rather than trusted.
     return Option.isSome(yield* findSection({ userId, id: write.id })) ? done(written) : REFUSED;
   });
@@ -433,17 +438,24 @@ function placeTask(
 ): TaskStoreEffect<Applied> {
   return Effect.gen(function* () {
     const { taskId, sectionId, position } = write;
+
     if (sectionId === null) return done(yield* deleteEntry({ userId, taskId }));
     const section = yield* findSection({ userId, id: sectionId });
+
     if (Option.isNone(section)) return REFUSED;
     const organizationId = section.value.organizationId;
+
     if (Option.isNone(yield* findTaskIn({ userId, taskId, organizationId }))) return REFUSED;
     const standing = yield* findEntry({ userId, taskId });
+
     if (Option.isSome(standing) && standing.value.sectionId === sectionId) {
       if (position === undefined) return UNCHANGED;
+
       return done(yield* placeEntry({ userId, taskId, position }));
     }
+
     const now = yield* DateTime.nowAsDate;
+
     return done(yield* putEntry({ userId, taskId, sectionId, position: position ?? null, now }));
   });
 }
@@ -468,12 +480,16 @@ function sectionTaken(
 ): TaskStoreEffect<Option.Option<DeletedTaskSection>> {
   return Effect.gen(function* () {
     const found = yield* findSection({ userId, id });
+
     if (Option.isNone(found)) return Option.none();
+
     if (workspaceId !== undefined && found.value.organizationId !== workspaceId) {
       return Option.none();
     }
+
     const [entries] = yield* countEntriesIn({ userId, id });
     const [written] = yield* deleteSection({ userId, id });
+
     return Option.some({
       section: sectionOf(found.value),
       returnedTasks: entries?.held ?? 0,
@@ -490,6 +506,7 @@ function applyWrite(userId: string, write: TaskSectionWrite): TaskStoreEffect<Ap
     case TASK_SECTION_WRITE.EDIT:
       return Effect.gen(function* () {
         if (Option.isNone(yield* findSection({ userId, id: write.id }))) return REFUSED;
+
         return done(
           yield* editSection({ userId, id: write.id, title: write.title, icon: write.icon }),
         );
@@ -497,6 +514,7 @@ function applyWrite(userId: string, write: TaskSectionWrite): TaskStoreEffect<Ap
     case TASK_SECTION_WRITE.MOVE:
       return Effect.gen(function* () {
         if (Option.isNone(yield* findSection({ userId, id: write.id }))) return REFUSED;
+
         return done(yield* moveSection({ userId, id: write.id, position: write.position }));
       });
     case TASK_SECTION_WRITE.DELETE:
@@ -528,9 +546,11 @@ export function writeTaskSections(
       Effect.gen(function* () {
         if (Option.isNone(yield* lockAccount(userId))) return Option.none();
         const applied = yield* applyWrite(userId, write);
+
         if (Option.isNone(applied)) return Option.none();
         const sections = yield* listTaskSections(userId);
         const txid = applied.value;
+
         return Option.some(txid === undefined ? sections : { ...sections, txid });
       }),
     ),
@@ -553,6 +573,7 @@ export function deleteTaskSectionIn(
     client.withTransaction(
       Effect.gen(function* () {
         if (Option.isNone(yield* lockAccount(userId))) return Option.none();
+
         return yield* sectionTaken(userId, id, workspaceId);
       }),
     ),

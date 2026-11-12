@@ -59,12 +59,15 @@ export function useConfirmAct<Answer>(
 ): ConfirmAct {
   const [first, setFirst] = useState<ActionResult | undefined>(undefined);
   const { isPending, data, error, reset } = mutation;
+
   const answer =
     error !== null ? act.failed?.(error) : data === undefined ? undefined : act.answered(data);
+
   return {
     run: () => {
       const refusal = act.refusedFirst?.();
       setFirst(refusal);
+
       return refusal === undefined ? act.send() : Promise.resolve();
     },
     busy: isPending,

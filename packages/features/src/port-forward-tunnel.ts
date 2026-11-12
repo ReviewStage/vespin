@@ -98,10 +98,14 @@ function frameText(frame: TunnelFrame): string {
 function heard(tunnel: Tunnel, text: string): Effect.Effect<void> {
   const frame = Result.getOrUndefined(readFrame(unparsedWire(text)));
   const connection = frame === undefined ? undefined : tunnel.channels.get(frame.channel);
+
   if (frame === undefined || connection === undefined) return Effect.void;
+
   if (frame.type === TUNNEL_FRAME.DATA) return connection.write(frame.data);
+
   if (frame.type !== TUNNEL_FRAME.CLOSE) return Effect.void;
   tunnel.channels.delete(frame.channel);
+
   return connection.close;
 }
 
@@ -109,14 +113,18 @@ function heard(tunnel: Tunnel, text: string): Effect.Effect<void> {
 function listened(listen: ListenOnLoopback, target: ForwardTarget) {
   return Effect.gen(function* () {
     const first = target.localPort ?? target.port;
+
     const last =
       target.localPort === undefined
         ? Math.min(first + LOCAL_PORT_TRIES - 1, FORWARD_PORT.MAX)
         : first;
+
     for (let localPort = first; localPort <= last; localPort++) {
       const accepted = yield* listen(localPort);
+
       if (accepted !== undefined) return { localPort, accepted };
     }
+
     return undefined;
   });
 }
@@ -137,11 +145,13 @@ export function forwardPort(
   /** One port's socket from its open until it closes, every connection it carried closed with it. */
   const tunneled = (forward: Forward, opened: Deferred.Deferred<Tunnel | undefined>) => {
     let tunnel: Tunnel | undefined;
+
     const ended = Effect.suspend(() => {
       forward.tunnel = undefined;
       forward.connected = false;
       const held = [...(tunnel?.channels.values() ?? [])];
       tunnel?.channels.clear();
+
       return Effect.andThen(
         Deferred.succeed(opened, undefined),
         Effect.andThen(
@@ -150,13 +160,17 @@ export function forwardPort(
         ),
       );
     });
+
     const open = Effect.gen(function* () {
       if (socketOrigin === undefined) return;
+
       const address = portForwardAddress(socketOrigin, {
         agentId: forward.agentId,
         port: forward.port,
       });
+
       const opening = yield* openedUnderCredential(credential, openSocket, address);
+
       if (!("socket" in opening)) return;
       const standing: Tunnel = { socket: opening.socket, channels: new Map(), nextChannel: 0 };
       tunnel = standing;
@@ -167,6 +181,7 @@ export function forwardPort(
         "text" in arrival ? heard(standing, arrival.text) : Effect.void,
       );
     });
+
     return Effect.ensuring(Effect.scoped(open), ended);
   };
 
@@ -176,6 +191,7 @@ export function forwardPort(
       if (forward.tunnel !== undefined) return Deferred.await(forward.tunnel);
       const opened = Deferred.makeUnsafe<Tunnel | undefined>();
       forward.tunnel = opened;
+
       return Effect.andThen(
         Effect.forkIn(tunneled(forward, opened), forward.scope),
         Deferred.await(opened),
@@ -186,6 +202,7 @@ export function forwardPort(
   const carry = (forward: Forward, connection: LoopbackConnection) =>
     Effect.gen(function* () {
       const tunnel = yield* tunnelOf(forward);
+
       if (tunnel === undefined) return yield* connection.close;
       const channel = tunnel.nextChannel++;
       tunnel.channels.set(channel, connection);
@@ -196,6 +213,7 @@ export function forwardPort(
           ? send({ type: TUNNEL_FRAME.DATA, channel, data })
           : Effect.void,
       );
+
       // Note that a channel the relay closed first is gone already, so nothing more is said of it.
       if (tunnel.channels.delete(channel)) yield* send({ type: TUNNEL_FRAME.CLOSE, channel });
     });
@@ -203,6 +221,7 @@ export function forwardPort(
   return Effect.gen(function* () {
     const scope = yield* Effect.scope;
     const bound = yield* listened(listen, target);
+
     const forward: Forward = {
       agentId: target.agentId,
       port: target.port,
@@ -210,6 +229,7 @@ export function forwardPort(
       tunnel: undefined,
       connected: false,
     };
+
     if (bound !== undefined) {
       yield* Effect.forkIn(
         Stream.runForEach(bound.accepted, (connection) =>
@@ -218,6 +238,7 @@ export function forwardPort(
         scope,
       );
     }
+
     return {
       port: target.port,
       localPort: bound?.localPort,

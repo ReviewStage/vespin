@@ -53,6 +53,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -64,6 +65,7 @@ const openSharedTask = Effect.gen(function* () {
   const workspace = yield* openWorkspace(owner);
   yield* joinWorkspace(workspace, teammate);
   const { id: taskId } = yield* createTask(owner, { organizationId: workspace, name: "Invites" });
+
   return { owner, teammate, outsider, taskId };
 });
 
@@ -71,6 +73,7 @@ const openSharedTask = Effect.gen(function* () {
 function keptId(kept: { readonly status: string; readonly id?: string }): string {
   assert.equal(kept.status, DESCRIPTION_ATTACHMENT_KEEP.KEPT);
   assert.ok(kept.id);
+
   return kept.id;
 }
 
@@ -110,6 +113,7 @@ it.layer(getTestDB())("a description's pictures", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, taskId } = yield* openSharedTask;
+
         for (let kept = 0; kept < DESCRIPTION_ATTACHMENT_BOUNDS.MAX_PER_DESCRIPTION; kept += 1) {
           keptId(yield* keepDescriptionAttachment(owner, taskId, PICTURE));
         }
@@ -132,6 +136,7 @@ it.layer(getTestDB())("a description's pictures", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, teammate, taskId } = yield* openSharedTask;
+
         const video: Picture = {
           contentType: PICTURE_MEDIA_TYPE.WEBM,
           bytes: paddedTo(webmBytes(1280, 800), PICTURE_BOUNDS.MAX_VIDEO_BYTES),
@@ -143,17 +148,21 @@ it.layer(getTestDB())("a description's pictures", (it) => {
         assert.ok(Option.isSome(read));
         assert.equal(read.value.contentType, PICTURE_MEDIA_TYPE.WEBM);
         assert.equal(read.value.bytes.length, PICTURE_BOUNDS.MAX_VIDEO_BYTES);
+
         const tooLong = {
           ...video,
           bytes: paddedTo(video.bytes, PICTURE_BOUNDS.MAX_VIDEO_BYTES + 1),
         };
+
         assert.ok(
           Exit.isFailure(yield* Effect.exit(keepDescriptionAttachment(owner, taskId, tooLong))),
         );
+
         const large: Picture = {
           contentType: PICTURE_TYPE.PNG,
           bytes: paddedTo(pngBytes(4000, 3000), PICTURE_BOUNDS.MAX_BYTES + 1),
         };
+
         assert.ok(
           Exit.isFailure(yield* Effect.exit(keepDescriptionAttachment(owner, taskId, large))),
         );
@@ -165,6 +174,7 @@ it.layer(getTestDB())("a description's pictures", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, taskId } = yield* openSharedTask;
+
         for (
           let kept = 0;
           kept < DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION;
@@ -186,10 +196,13 @@ it.layer(getTestDB())("a description's pictures", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, teammate, outsider, taskId } = yield* openSharedTask;
+
         const id = keptId(
           yield* keepDescriptionAttachment(owner, taskId, { ...VIDEO, mp4Bytes: MP4 }),
         );
+
         const older = keptId(yield* keepDescriptionAttachment(owner, taskId, VIDEO));
+
         const served = (account: string, attachmentId: string, playable: PlayableVideoType) =>
           Effect.map(
             readServedDescriptionAttachment(account, taskId, attachmentId, playable),

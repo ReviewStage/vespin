@@ -29,6 +29,7 @@ function barOver(github: { href: string; open: (url: string) => void } | undefin
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(withQueryClient(createElement(FileGitHubButton, { github }))));
+
   return container;
 }
 

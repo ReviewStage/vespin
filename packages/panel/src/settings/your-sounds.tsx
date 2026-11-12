@@ -135,13 +135,16 @@ const FIELD_OF_SLOT = {
 /** The slot whose setting `field` is; none for any other setting. */
 function slotOf(field: AppSettingField): SoundClipSlot | undefined {
   if (field === FIELD_OF_SLOT[SOUND_CLIP_SLOT.FINISH]) return SOUND_CLIP_SLOT.FINISH;
+
   if (field === FIELD_OF_SLOT[SOUND_CLIP_SLOT.ASK]) return SOUND_CLIP_SLOT.ASK;
+
   return undefined;
 }
 
 /** The heading a sound is listed under in its menu: Yours, Simple, or Playful. */
 function sectionOf(token: string): string | undefined {
   const group = COMPLETION_SOUND_GROUP_OF[token as CompletionSound];
+
   return group === undefined ? undefined : COMPLETION_SOUND_GROUP_LABEL[group];
 }
 
@@ -176,6 +179,7 @@ function useSlot(
 ): Slot {
   const field = FIELD_OF_SLOT[slot];
   const token = CLIP_SOUND_OF_SLOT[slot];
+
   // Note that a pick of one of the account's own sounds writes here rather than through the row's write, so a refusal toasts, as no tick or line under the row says it.
   const write = useSettingRowWrite(
     field,
@@ -183,9 +187,11 @@ function useSlot(
     undefined,
     true,
   );
+
   const { mutate: sendChoice } = useMutation(pressMutation(ACT_KIND.SOUND_CHOOSE));
   const stored = view.settings[field] === token;
   const chosen = chosenSound(sounds, slot)?.id;
+
   // Note that the row is stored as the account's own only once the service
   // took this very choice, so a refused one, or one that answers another
   // sound because this one was removed meanwhile, leaves the sound it played.
@@ -200,6 +206,7 @@ function useSlot(
       },
     );
   };
+
   return {
     menu: {
       section: sectionOf,
@@ -214,6 +221,7 @@ function useSlot(
             rows: SOUND_ACTS,
             onPick: (act: string) => {
               if (act === SOUND_ACT.RENAME) return manage.rename(sound);
+
               if (act === SOUND_ACT.REMOVE) return manage.remove(sound);
               throw new Error(`Unknown sound act: ${act}`);
             },
@@ -250,10 +258,12 @@ function useNameDialog(
   const { mutate: sendRename } = useMutation(pressMutation(ACT_KIND.SOUND_RENAME));
   const trimmed = name.trim();
   const valid = trimmed.length > 0 && trimmed.length <= SOUND_CLIP_BOUNDS.MAX_NAME_CHARS;
+
   const confirm = useConfirmDialog(
     { subject: naming !== undefined, surfaceOpen: true },
     neverBusyAct(() => {
       if (naming === undefined) return;
+
       if ("sound" in naming) {
         sendRename(
           { id: naming.sound.id, name: trimmed },
@@ -263,8 +273,10 @@ function useNameDialog(
             },
           },
         );
+
         return;
       }
+
       const { slot, read } = naming;
       sendAdd(
         { name: trimmed, clip: read.clip, slot },
@@ -278,7 +290,9 @@ function useNameDialog(
     }),
     confirmFailure(FAILURE_SURFACE.SOUND_CLIP_WRITE),
   );
+
   const form = useFormDialog(confirm, valid);
+
   const dialog =
     naming === undefined ? null : (
       <Dialog
@@ -315,6 +329,7 @@ function useNameDialog(
         </ReplayMask>
       </Dialog>
     );
+
   return {
     ask: (next: Naming, start: string) => {
       setNaming(next);
@@ -329,6 +344,7 @@ function useNameDialog(
 function PlaySound({ sound }: { sound: Sound }): React.JSX.Element {
   const [reading, setReading] = useState(false);
   const label = SOUND_WORDS.PLAY(sound.name);
+
   return (
     <Tooltip label={label}>
       <IconButton
@@ -397,8 +413,10 @@ export function useYourSounds(view: SettingsRowsInput): YourSounds {
   const sounds = useAccountPreferences().data?.sounds;
   const [refusals, setRefusals] = useState<Partial<Record<SoundClipSlot, string>>>({});
   const target = useRef<SoundClipSlot>(SOUND_CLIP_SLOT.FINISH);
+
   const refuse = (slot: SoundClipSlot, words: string | undefined) =>
     setRefusals((was) => ({ ...was, [slot]: words }));
+
   const naming = useNameDialog(
     (slot, sound, bytes) => {
       clipLoaded(slot, sound.sha256, bytes).catch(() => undefined);
@@ -406,6 +424,7 @@ export function useYourSounds(view: SettingsRowsInput): YourSounds {
     },
     (slot) => refuse(slot, SOUND_WORDS.NOT_ADDED),
   );
+
   const picker = useFilePicker({
     accept: CLIP_ACCEPT,
     onFiles: ([picked]) => {
@@ -420,20 +439,25 @@ export function useYourSounds(view: SettingsRowsInput): YourSounds {
       );
     },
   });
+
   const add = (slot: SoundClipSlot) => {
     target.current = slot;
     refuse(slot, undefined);
     picker.open();
   };
+
   // Note that these are hoisted, since the remove's confirm is held below the rows that offer it.
   const manage: SoundManage = { rename: askRename, remove: askRemove };
+
   function askRename(sound: Sound) {
     naming.ask({ sound }, sound.name);
   }
+
   function askRemove(sound: Sound) {
     setRemoving(sound);
     remove.ask();
   }
+
   const finish = useSlot(
     SOUND_CLIP_SLOT.FINISH,
     view,
@@ -442,6 +466,7 @@ export function useYourSounds(view: SettingsRowsInput): YourSounds {
     manage,
     refusals[SOUND_CLIP_SLOT.FINISH],
   );
+
   const ask = useSlot(
     SOUND_CLIP_SLOT.ASK,
     view,
@@ -450,14 +475,18 @@ export function useYourSounds(view: SettingsRowsInput): YourSounds {
     manage,
     refusals[SOUND_CLIP_SLOT.ASK],
   );
+
   const slots = { [SOUND_CLIP_SLOT.FINISH]: finish, [SOUND_CLIP_SLOT.ASK]: ask } as const;
 
   const [removing, setRemoving] = useState<Sound>();
   const removal = useMutation(actMutation(ACT_KIND.SOUND_REMOVE));
+
   const removeAct = useConfirmAct(removal, {
     send: () => {
       const sound = removing;
+
       if (sound === undefined) return Promise.resolve();
+
       return removal.mutateAsync({ id: sound.id }).then((answer) => {
         if ("failure" in answer) return;
         finish.forget(sound.id);
@@ -470,6 +499,7 @@ export function useYourSounds(view: SettingsRowsInput): YourSounds {
         : ANSWER_ACCEPTED,
     failed: refusedWith,
   });
+
   const remove = useConfirmDialog(
     { subject: removing !== undefined, surfaceOpen: true },
     removeAct,
@@ -477,13 +507,16 @@ export function useYourSounds(view: SettingsRowsInput): YourSounds {
   );
 
   const list = sounds?.list ?? [];
+
   return {
     menus: (field) => {
       const slot = slotOf(field);
+
       return slot === undefined ? undefined : slots[slot].menu;
     },
     upload: (field) => {
       const slot = slotOf(field);
+
       return slot === undefined ? undefined : slots[slot].upload;
     },
     list:

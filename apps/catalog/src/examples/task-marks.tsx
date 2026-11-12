@@ -47,6 +47,7 @@ function agents(
             ...(queued === undefined ? undefined : { queued }),
           },
         ];
+
   return {
     summary: { total: 1, working: 0, pullRequestTotal: pullRequests.length, ...counts },
     pullRequests,

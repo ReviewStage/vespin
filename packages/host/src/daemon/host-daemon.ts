@@ -55,17 +55,20 @@ export interface HostDaemonOptions {
 /** The daemon run until the service refuses the box's secret, every runner it started stopped and its record marked refused before it returns, or until it switched to a newer release, every runner stopped. */
 export const hostDaemon = Effect.fnUntraced(function* (options: HostDaemonOptions) {
   const { report } = yield* Reporter;
+
   const standing = yield* hostServiceStanding({
     serviceOrigin: options.device.serviceOrigin,
     version: options.version,
     report,
   });
+
   const secret = `Bearer ${options.device.deviceSecret}`;
   const { deviceId } = options.device;
   const { releases, platform } = options;
   const target = hostTargetOf(platform.devicePlatform, platform.deviceArch);
   const now = yield* Clock.currentTimeMillis;
   yield* hostRunnersLeftStopped(options.stateRoot, now - os.uptime() * 1000);
+
   // Note that the follower and the update live in this scope alone, so closing it once the secret is refused, or the daemon switched releases, stops every runner it started.
   const ended = yield* Effect.scoped(
     Effect.gen(function* () {
@@ -74,7 +77,9 @@ export const hostDaemon = Effect.fnUntraced(function* (options: HostDaemonOption
         releases === undefined || target === undefined
           ? undefined
           : yield* hostUpdate({ releases, version: options.version, target });
+
       const working = yield* SubscriptionRef.make(false);
+
       // Note that only a Mac is kept awake, by the choice its app hands the host (`host-keep-awake.ts`).
       if (platform.devicePlatform === DEVICE_PLATFORM.DARWIN) {
         yield* Effect.forkScoped(
@@ -85,6 +90,7 @@ export const hostDaemon = Effect.fnUntraced(function* (options: HostDaemonOption
           }),
         );
       }
+
       const composer = yield* composeLocalAgents({
         kernel: { stateRoot: options.stateRoot, createId: randomUUID },
         deviceId,
@@ -99,6 +105,7 @@ export const hostDaemon = Effect.fnUntraced(function* (options: HostDaemonOption
         Effect.provide(Layer.succeed(LocalAgentPlatform, platform)),
         Effect.updateService(HttpClient.HttpClient, standing.client),
       );
+
       return yield* Effect.andThen(
         composer.lifetime,
         Effect.race(
@@ -108,9 +115,11 @@ export const hostDaemon = Effect.fnUntraced(function* (options: HostDaemonOption
       );
     }),
   );
+
   if (ended === HOST_DAEMON_END.REMOVED) {
     yield* Effect.ignore(markHostDeviceRefused(options.stateRoot, options.device.deviceSecret));
   }
+
   return ended;
 });
 

@@ -30,6 +30,7 @@ test("an address that is not http or https is refused", () => {
       url,
     );
   }
+
   assert.equal(
     readsAction({ action: BROWSER_AGENT_ACTION.OPEN, url: "http://localhost:3000/" }),
     true,

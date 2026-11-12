@@ -59,18 +59,24 @@ async function window(first: AppStateSnapshot): Promise<{
     requestAppState: () => Promise.resolve(structuredClone(first)),
     onAppState: (listener) => {
       listeners.add(listener);
+
       return () => listeners.delete(listener);
     },
   });
   const drawn: AppStateSnapshot[] = [];
+
   function Reader(): null {
     const state = useQuery(appStateQuery).data;
+
     if (state) drawn.push(state);
+
     return null;
   }
+
   root = createRoot(document.createElement("div"));
   act(() => root?.render(withQueryClient(createElement(Reader))));
   await vi.waitFor(() => expect(drawn.length > 0).toBe(true));
+
   return {
     drawn,
     deliver: async (snapshot) => {
@@ -141,25 +147,31 @@ test("a delivery older than the document held is dropped", async () => {
 
 test("a delivery heard after the window's second read is refused asks for the whole document again, rather than laying itself over the document an earlier read left", async () => {
   const before = signedInAs({ id: "user-ada", email: "ada@example.com", name: "Ada" });
+
   const after = {
     ...signedInAs({ id: "user-bo", email: "bo@example.com", name: "Bo" }),
     version: 3,
     network: { online: false, reachable: true },
   };
+
   const listeners = new Set<(delivery: AppStateDelivery) => void>();
+
   const answers = [
     () => Promise.resolve(before),
     () => Promise.reject(new Error("gone")),
     () => Promise.resolve(after),
   ];
+
   let reads = 0;
   fakeAppBridge({
     requestAppState: () => {
       reads += 1;
+
       return answers[reads - 1]?.() ?? Promise.resolve(after);
     },
     onAppState: (listener) => {
       listeners.add(listener);
+
       return () => listeners.delete(listener);
     },
   });

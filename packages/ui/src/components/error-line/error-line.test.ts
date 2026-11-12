@@ -37,6 +37,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -74,9 +75,11 @@ function describedByErrorLine(container: HTMLElement): void {
   const input = container.querySelector("input");
   assert.ok(input);
   const ids = (input.getAttribute("aria-describedby") ?? "").split(" ");
+
   const line = ids
     .map((id) => document.getElementById(id))
     .find((element) => element?.dataset.slot === "field-error");
+
   assert.ok(line, "the control is described by its error line");
 }
 
@@ -96,6 +99,7 @@ function saidOnArrival(place: (error: string | undefined) => ReactElement): {
   roots.push(root);
   act(() => root.render(place(undefined)));
   act(() => root.render(place(REFUSED)));
+
   return {
     polite: document.querySelector('[role="status"]')?.textContent,
     alert: document.querySelector('[role="alert"]')?.textContent,

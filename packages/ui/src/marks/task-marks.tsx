@@ -137,6 +137,7 @@ function priorityBody(priority: TaskPriority): React.JSX.Element {
       </>
     );
   }
+
   if (priority === TASK_PRIORITY.NONE) {
     return (
       <>
@@ -154,7 +155,9 @@ function priorityBody(priority: TaskPriority): React.JSX.Element {
       </>
     );
   }
+
   const lit = LIT_BARS[priority];
+
   return (
     <>
       {BARS.map(({ x, y, height }, index) => (

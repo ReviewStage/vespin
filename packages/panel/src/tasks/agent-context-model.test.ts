@@ -86,11 +86,13 @@ test("an agent handed a prompt names its brief so; once the harness compacted, t
     contextRows(CONTEXT, AGENT_BRIEF.PROMPT).map((row) => row.label),
     ["System prompt", "Tool definitions", "Prompt", "Conversation"],
   );
+
   const compacted: AgentContext = {
     ...CONTEXT,
     estimated: { systemPromptTokens: 1_200, toolDefinitionTokens: 2_800 },
     compactedAt: NOW - 120_000,
   };
+
   assert.deepEqual(
     contextRows(compacted, AGENT_BRIEF.DESCRIPTION).map((row) => [row.label, rowCount(row)]),
     [

@@ -137,6 +137,7 @@ function MastheadFrame({
 /** What the workspace is: whether it is someone's personal one, when it was made, and the GitHub accounts it installed the App on. */
 function Masthead({ detail }: { detail: AdminWorkspaceDetail }): React.JSX.Element {
   const { workspace } = detail;
+
   return (
     <MastheadFrame
       created={
@@ -195,6 +196,7 @@ function WorkspaceSections({
   onOpenAccount: (id: string) => void;
 }): React.JSX.Element {
   const memberTableColumns = useMemo(() => memberColumns(onOpenAccount), [onOpenAccount]);
+
   return (
     <>
       {detail === undefined ? <MastheadSkeleton /> : <Masthead detail={detail} />}

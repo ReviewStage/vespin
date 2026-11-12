@@ -57,28 +57,34 @@ function windowPort(
 ) {
   let held: AppSettings = options.settings ?? appSettingsWire(settingsView());
   const writes: unknown[] = [];
+
   const accepted = (): SettingsUpdateResult => ({
     status: ACTION_RESULT_STATUS.ACCEPTED,
     settings: held,
   });
+
   const acts: SettingsProceduresDependencies["acts"] = {
     SETTING_UPDATE: ({ field, value }) =>
       Effect.map(Effect.service(ActReporter), (reporter) => {
         writes.push([field, value, reporter]);
         held = { ...held, stored: { ...held.stored, [field]: value } };
+
         return accepted();
       }),
     SETTINGS_RESET: ({ scope }) =>
       Effect.map(Effect.service(ActReporter), (reporter) => {
         writes.push([scope, reporter]);
+
         return accepted();
       }),
     EXPERIMENT_SET: ({ experiment, on }) =>
       Effect.map(Effect.service(ActReporter), (reporter) => {
         writes.push([experiment, on, reporter]);
+
         return accepted();
       }),
   };
+
   port = testActPort(
     settingsProcedures({
       host: { settingsSnapshot: () => Effect.sync(() => Option.some(held)) },
@@ -90,12 +96,14 @@ function windowPort(
     }),
   );
   const client = port.as(PANEL, { trusted: true });
+
   return { client, writes, stored: () => held.stored };
 }
 
 /** A call settled to the sentence of its refusal, or a failure where it answered. */
 async function refusal(call: Promise<unknown>): Promise<string> {
   const settled = await settledAct(call);
+
   return "refused" in settled
     ? settled.refused
     : assert.fail("the call was answered rather than refused");
@@ -133,6 +141,7 @@ it("a write reaches its handler as its field's guard reads it, under the asking 
 
 it("the settings a write answers cross whole, a stored field this build does not name among them", async () => {
   const settings = appSettingsWire(settingsView());
+
   const { client } = windowPort({
     settings: { ...settings, stored: { ...settings.stored, ...{ aNewerBuildsField: "kept" } } },
   });
@@ -160,6 +169,7 @@ it("a sender that is no window of the platform's is refused every settings write
 it("a value its field's guard refuses, or a key the payload does not take, is refused in the kind's own words, and the host is not asked", async () => {
   const { client, writes } = windowPort();
   const update = client[SETTINGS_ACT_KIND.SETTING_UPDATE];
+
   const extra = {
     field: "theme",
     value: THEME.DARK,

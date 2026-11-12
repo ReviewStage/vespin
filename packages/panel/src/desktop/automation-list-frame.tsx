@@ -96,10 +96,12 @@ export function AutomationGroupList({
   children: ReactNode;
 }): React.JSX.Element {
   const root = useRef<HTMLElement | null>(null);
+
   // Note that the group is a div or a section by whether it is headed, so the motion's root is held by a callback either takes.
   const hold = useCallback((node: HTMLElement | null) => {
     root.current = node;
   }, []);
+
   const list = (
     <ListMotion root={root}>
       <SettingsSection
@@ -112,6 +114,7 @@ export function AutomationGroupList({
       </SettingsSection>
     </ListMotion>
   );
+
   return headed ? (
     <div ref={hold} className={AUTOMATION_GROUP}>
       {list}

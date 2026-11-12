@@ -35,11 +35,13 @@ export function useSessionReplay(
   const applied = useRef<SessionReplayWord | undefined>(undefined);
   const started = useRef(false);
   const latest = useRef<SessionReplayWord | undefined>(undefined);
+
   const tell = useCallback((word: SessionReplayWord | undefined) => {
     if (!word || sameWord(applied.current, word)) return;
     applied.current = word;
     appPlatform().applySessionReplay(word);
   }, []);
+
   useEffect(() => {
     latest.current =
       run && sessionReplay
@@ -48,6 +50,7 @@ export function useSessionReplay(
             ...(workspaceId ? { workspaceId } : undefined),
           }
         : undefined;
+
     if (started.current) tell(latest.current);
   }, [run, sessionReplay, workspaceId, tell]);
   useWhenIdle(() => {

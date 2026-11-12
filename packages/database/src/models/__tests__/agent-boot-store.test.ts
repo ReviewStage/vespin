@@ -47,6 +47,7 @@ const openAccount = Effect.gen(function* () {
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const task = yield* startTask(userId, { name: "Invitations" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -57,6 +58,7 @@ const openAccount = Effect.gen(function* () {
     repository: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   return { userId, agentId: Option.getOrThrow(started).agent.id };
 });
 
@@ -207,6 +209,7 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
             .filter((id) =>
               [starting.agentId, handingOff.agentId, failed.agentId, ready.agentId].includes(id),
             );
+
         assert.deepEqual(mine(before), []);
         assert.deepEqual(mine(after).toSorted(), [starting.agentId, handingOff.agentId].toSorted());
         // The sweep fails the stuck hand-off as it fails a boot that never came up, so Retry can boot it again.
@@ -227,6 +230,7 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
     () =>
       Effect.gen(function* () {
         const { userId, agentId } = yield* openAccount;
+
         const automation = {
           id: randomUUID(),
           sendKey: JSON.stringify({ run: "run-1" }),
@@ -240,16 +244,20 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
             serverWords: "Triage the inbox.",
           },
         };
+
         const beforeBoot = yield* queueWhileBooting(agentId, userId, automation);
         yield* beginAgentBoot(agentId, AT, undefined);
         const queued = yield* queueWhileBooting(agentId, userId, automation);
+
         const repeated = yield* queueWhileBooting(agentId, userId, {
           ...automation,
           id: randomUUID(),
         });
+
         const read = yield* agentQueueNow(agentId);
         yield* agentBootRunnerUp(agentId, past(1_000), 1);
         yield* agentBootHandedOff(agentId, past(2_000));
+
         const afterBoot = yield* queueWhileBooting(agentId, userId, {
           ...automation,
           sendKey: randomUUID(),

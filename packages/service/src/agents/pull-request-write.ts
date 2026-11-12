@@ -78,6 +78,7 @@ const reached = (userId: string, agent: WithRepository<Agent>) =>
 const memberToken = (userId: string) =>
   Effect.gen(function* () {
     const app = yield* GitHubApp;
+
     return yield* app.userToken(userId);
   }).pipe(
     Effect.map((token): Redacted.Redacted | undefined => token),
@@ -134,7 +135,9 @@ export const memberWriteOnReached = <A>(
 ): Effect.Effect<MemberWritten<A>, HostedRefusal, WriteServices> =>
   Effect.gen(function* () {
     const token = yield* memberToken(userId);
+
     if (token === undefined) return SIGN_IN_REQUIRED;
+
     return yield* write({ ...pullRequest, token }).pipe(
       Effect.map(
         (value): MemberWritten<A> => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE, value }),

@@ -120,18 +120,24 @@ export function runCreateSection(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   const asked = readCreateAsked(input);
+
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(TASK_SECTION_TOOL_REFUSAL.UNREADABLE_CREATE));
   }
+
   const { title, emoji } = asked.success;
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(call.caller);
+
       if (Option.isNone(workspace)) {
         return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
       }
+
       const userId = callerUserId(call.caller);
       const id = calledId(userId, call.clientKey);
+
       const written = yield* writeTaskSections(userId, {
         kind: TASK_SECTION_WRITE.CREATE,
         id,
@@ -141,11 +147,14 @@ export function runCreateSection(
           ? undefined
           : { icon: { kind: TASK_SECTION_ICON_KIND.EMOJI, emoji } }),
       });
+
       // Note that the member was just read in the workspace, so a create refused is the bound's.
       if (Option.isNone(written)) return agentToolRejected(TASK_SECTION_TOOL_REFUSAL.FULL);
       // A call run again finds the section it made first, which keeps the title it was made with.
       const made = written.value.sections.find((section) => section.id === id);
+
       if (made === undefined) return agentToolRejected(TASK_SECTION_TOOL_REFUSAL.UNAVAILABLE);
+
       return { status: ACTION_RESULT_STATUS.ACCEPTED, section: sectionReading(made) };
     }),
   );
@@ -164,21 +173,28 @@ export function runDeleteSection(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   const asked = readDeleteAsked(input);
+
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(TASK_SECTION_TOOL_REFUSAL.UNREADABLE_SECTION));
   }
+
   const { sectionId } = asked.success;
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const workspace = yield* callerWorkspace(call.caller);
+
       if (Option.isNone(workspace)) {
         return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
       }
+
       const userId = callerUserId(call.caller);
       // Note that the read, the count, and the delete are one write under the account's lock, so the answer is what this call took.
       const deleted = yield* deleteTaskSectionIn(userId, workspace.value, sectionId);
+
       // A section already gone, or none of this workspace, is deleted as nothing, as the sidebar's delete is.
       if (Option.isNone(deleted)) return { ...NO_SECTION_DELETED };
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         section: sectionReading(deleted.value.section),

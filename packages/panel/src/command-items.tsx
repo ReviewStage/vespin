@@ -78,7 +78,9 @@ const NOUN = {
 function keyed(command: KeyedCommand, icon: React.JSX.Element, noun?: string): PanelCommand {
   const label = appCommandLabel(command);
   const ending = noun === undefined ? "" : ` ${noun}`;
+
   if (!label.endsWith(ending)) throw new Error(`"${label}" does not end in its noun "${noun}"`);
+
   return { verb: label.slice(0, label.length - ending.length), noun, icon, command };
 }
 
@@ -178,6 +180,7 @@ export function panelCommandOf(command: AppCommand): PanelCommand | undefined {
 /** What a command says where it is offered: the verb on a row's menu, the verb and its noun in ⌘K. */
 export function commandWords(item: PanelCommand, place: CommandPlace): string {
   if (place === COMMAND_PLACE.MENU || item.noun === undefined) return item.verb;
+
   return `${item.verb} ${item.noun}`;
 }
 
@@ -199,6 +202,7 @@ export function commandAction(
   subject: ShortcutSubject | undefined,
 ): MenuAction {
   const action: MenuAction = { ...commandHead(item), onSelect };
+
   return subject === undefined || item.command === undefined
     ? action
     : { ...action, command: item.command, subject };

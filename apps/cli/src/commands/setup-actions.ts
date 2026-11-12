@@ -77,13 +77,17 @@ const iconOf = Effect.fnUntraced(function* (
   if (Option.isSome(emoji) && Option.isSome(glyph)) {
     return yield* usage("Name --emoji or --glyph, not both.");
   }
+
   if (Option.isSome(color) && Option.isNone(glyph)) {
     return yield* usage("Name --color with --glyph.");
   }
+
   if (Option.isSome(emoji)) {
     return Option.some<TaskSectionIcon>({ kind: TASK_SECTION_ICON_KIND.EMOJI, emoji: emoji.value });
   }
+
   if (Option.isNone(glyph)) return Option.none<TaskSectionIcon>();
+
   return Option.some<TaskSectionIcon>({
     kind: TASK_SECTION_ICON_KIND.GLYPH,
     glyph: glyph.value,
@@ -95,6 +99,7 @@ const iconOf = Effect.fnUntraced(function* (
 function actionRow(action: RunAction, runByDefault: boolean): string[] {
   const emoji = action.icon?.kind === TASK_SECTION_ICON_KIND.EMOJI ? `${action.icon.emoji} ` : "";
   const label = `${emoji}${action.label}${runByDefault ? " (default)" : ""}`;
+
   return [action.id, label, action.command];
 }
 
@@ -106,8 +111,10 @@ function defaultOf(list: RepositoryRunActions): RunAction | undefined {
 /** Each repository's run actions, as a person reads them. */
 export function runActionsLines(lists: readonly RepositoryRunActions[]): string[] {
   if (lists.length === 0) return ["No run actions."];
+
   return lists.flatMap((list, index) => {
     const runByDefault = defaultOf(list);
+
     return [
       ...(index === 0 ? [] : [""]),
       `${list.repository} run actions:`,
@@ -122,6 +129,7 @@ function listOf(
   repository: string,
 ): RepositoryRunActions | undefined {
   const lowered = repository.trim().toLowerCase();
+
   return (setup.runActions ?? []).find((list) => list.repository.toLowerCase() === lowered);
 }
 
@@ -134,14 +142,17 @@ const repositoryOf = Effect.fnUntraced(function* (
   if (Option.isSome(repo)) return repo.value;
   const { hosted } = yield* session;
   const setup = yield* askService(hosted.workspaceSandboxSetup.read, { workspaceId });
+
   const holding = (setup.runActions ?? []).find((list) =>
     list.actions.some((action) => action.id === actionId),
   );
+
   if (holding === undefined) {
     return yield* usage(
       `No repository has a run action ${actionId}; vespin setup actions lists them.`,
     );
   }
+
   return holding.repository;
 });
 
@@ -152,10 +163,12 @@ const sentEdit = Effect.fnUntraced(function* (
 ) {
   const { workspace } = yield* resolveWorkspace;
   const { hosted } = yield* session;
+
   const setup = yield* askService(hosted.workspaceSandboxSetup.editRunAction, {
     ...edit,
     workspaceId: workspace.id,
   });
+
   const list = listOf(setup, edit.repository);
   yield* answer({
     json: setup,
@@ -168,17 +181,22 @@ const listCommand = Command.make("actions", { repo: repoFlag }, ({ repo }) =>
   Effect.gen(function* () {
     const { workspace } = yield* resolveWorkspace;
     const { hosted } = yield* session;
+
     const setup = yield* askService(hosted.workspaceSandboxSetup.read, {
       workspaceId: workspace.id,
     });
+
     const all = setup.runActions ?? [];
+
     const lists = Option.match(repo, {
       onNone: () => all,
       onSome: (named) => {
         const list = listOf(setup, named);
+
         return list === undefined ? [] : [list];
       },
     });
+
     yield* answer({
       json: { runActions: lists },
       lines: runActionsLines(lists),
@@ -202,6 +220,7 @@ const addCommand = Command.make(
       if (Option.isNone(repo) || Option.isNone(label) || Option.isNone(command)) {
         return yield* usage("Name --repo, --label, and --command.");
       }
+
       const icon = yield* iconOf(emoji, glyph, color);
       yield* sentEdit(
         {
@@ -251,9 +270,11 @@ const editCommand = Command.make(
   ({ action, repo, label, command, emoji, glyph, color, position, clearIcon, isDefault }) =>
     Effect.gen(function* () {
       const icon = yield* iconOf(emoji, glyph, color);
+
       if (clearIcon && Option.isSome(icon)) {
         return yield* usage("Name --clear-icon or a new icon, not both.");
       }
+
       const changes = {
         ...(Option.isSome(label) ? { label: label.value } : {}),
         ...(Option.isSome(command) ? { command: command.value } : {}),
@@ -261,11 +282,13 @@ const editCommand = Command.make(
         ...(Option.isSome(isDefault) ? { isDefault: isDefault.value } : {}),
         ...(Option.isSome(position) ? { position: position.value } : {}),
       };
+
       if (Object.keys(changes).length === 0) {
         return yield* usage(
           "Name what changes: --label, --command, an icon or --clear-icon, --default or --no-default, or --position.",
         );
       }
+
       const { workspace } = yield* resolveWorkspace;
       const repository = yield* repositoryOf(workspace.id, repo, action);
       yield* sentEdit(

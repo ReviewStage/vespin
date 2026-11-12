@@ -17,6 +17,7 @@ const LINE_INDENT = "--ui-line-indent";
 /** A shadow root's code column as Pierre draws it, one row per line, at a tab width of two. */
 function drawnLines(texts: readonly string[]): HTMLElement {
   const content = document.createElement("div");
+
   for (const text of texts) {
     const line = document.createElement("div");
     line.setAttribute("data-line", "");
@@ -24,15 +25,18 @@ function drawnLines(texts: readonly string[]): HTMLElement {
     line.textContent = text;
     content.append(line);
   }
+
   return content;
 }
 
 test("a line is marked with its indent in columns, tabs to the next stop", () => {
   const content = drawnLines(["    four", "\ttab", " \tspace then tab", "none"]);
   markLineIndents(content);
+
   const marks = [...content.children].map((line) =>
     (line as HTMLElement).style.getPropertyValue(LINE_INDENT),
   );
+
   assert.deepEqual(marks, ["4ch", "2ch", "2ch", ""]);
 });
 

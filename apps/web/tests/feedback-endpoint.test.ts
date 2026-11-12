@@ -29,11 +29,15 @@ function mailService() {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
     if (new URL(String(url)).origin === POSTHOG_HOST) {
       recorded.push({ url: String(url), body: String(init?.body) });
+
       return new Response("{}", { status: 200 });
     }
+
     mailed.push(JSON.parse(String(init?.body)));
+
     return new Response(JSON.stringify({ id: "mail-1" }), { status: 200 });
   });
+
   return { mailed, recorded };
 }
 
@@ -91,6 +95,7 @@ test("a delivered note is recorded as a feedback survey response, its screenshot
   vi.stubEnv("VERCEL_ENV", "production");
   // The smallest PNG signature the endpoint accepts as a screenshot.
   const screenshot = { name: "board.png", mediaType: "image/png", base64: "iVBORw0KGgo=" };
+
   const answered = await POST(
     note({ name: "Ada Example", email: "ada@example.test", images: [screenshot] }),
   );

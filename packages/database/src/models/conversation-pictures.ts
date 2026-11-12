@@ -213,6 +213,7 @@ export function keepConversationPictures(
     const hashed = pictures.map((picture) => ({ ...picture, sha256: sha256Hex(picture.bytes) }));
     const sha256s = [...new Set(hashed.map((picture) => picture.sha256))];
     const held = byHash(yield* findByHashes({ conversationId, sha256s }));
+
     // Note that bytes the set names twice are kept once.
     const fresh = [
       ...new Map(
@@ -221,33 +222,45 @@ export function keepConversationPictures(
           .map((picture) => [picture.sha256, picture]),
       ).values(),
     ];
+
     let kept = held;
+
     if (fresh.length > 0) {
       const [summed] = yield* sumKept({ conversationId });
       const keptBytes = summed?.kept ?? 0;
       const freshBytes = fresh.reduce((total, picture) => total + picture.bytes.byteLength, 0);
+
       if (keptBytes + freshBytes > CONVERSATION_PICTURE_BOUNDS.MAX_BYTES_PER_CONVERSATION) {
         return Option.none();
       }
+
       const now = yield* DateTime.nowAsDate;
+
       const inserted = byHash(
         yield* insertPictures({ userId: target.userId, conversationId, pictures: fresh, now }),
       );
+
       const raced = fresh
         .map((picture) => picture.sha256)
         .filter((sha256) => !inserted.has(sha256));
+
       const winners =
         raced.length === 0
           ? new Map<string, KeptPicture>()
           : byHash(yield* findByHashes({ conversationId, sha256s: raced }));
+
       kept = new Map([...held, ...inserted, ...winners]);
     }
+
     const answered: KeptPicture[] = [];
+
     for (const { sha256 } of hashed) {
       const one = kept.get(sha256);
+
       if (one === undefined) return Option.none();
       answered.push(one);
     }
+
     return Option.some(answered);
   });
 }

@@ -49,7 +49,9 @@ export function untaken<Change, Answer>(
   if (failure === WRITE_UNTAKEN.ALREADY_WRITTEN) {
     return { answer: answers.kept, txid: undefined, settled: true };
   }
+
   if (failure === WRITE_UNTAKEN.UNANSWERED) return { refused: answers.refused, unanswered: true };
+
   return { refused: answers.refused };
 }
 
@@ -74,6 +76,7 @@ export interface OfflineRefused {
 /** The count, none to start with, each move told through `tell` as the whole count. */
 export function offlineRefusedCount(tell: (count: number) => void): OfflineRefused {
   let count = 0;
+
   return {
     raise: () => {
       count += 1;

@@ -51,16 +51,21 @@ interface Drawn<T> {
 /** Draws a surface that calls `hook`, and answers what it last returned. */
 function draw<T>(hook: () => T): Drawn<T> {
   let latest: T | undefined;
+
   function Surface(): null {
     latest = hook();
+
     return null;
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() => root?.render(createElement(Surface)));
+
   return {
     now: () => {
       if (latest === undefined) throw new Error("the surface has not drawn");
+
       return latest;
     },
   };
@@ -119,11 +124,13 @@ test("the list, the file tree and the Runs panel stand at the widths they were k
   keep("app.inboxListWidth", "9999");
   keep("app.fileTreeWidth", "1");
   keep("app.automationRunsPanel", '{"width":300,"open":false}');
+
   const drawn = draw(() => ({
     inbox: useInboxListWidth(),
     tree: useFileTreeWidth(),
     runs: useRunsPanel(),
   }));
+
   expect(drawn.now().inbox.width).toBe(INBOX_LIST_WIDTH.MAX);
   expect(drawn.now().tree.width).toBe(FILE_TREE_WIDTH.MIN);
   expect(drawn.now().runs).toMatchObject({ width: 300, open: false });
@@ -151,10 +158,12 @@ test("a sidebar never folded opens", () => {
 
 test("a task list view kept with no Assigned to opens on the reader's own tasks, its finished sub-tasks hidden, and Anyone chosen is kept", () => {
   keep("app.sidebarTaskViews", '{"w1":{"grouping":"repository"},"w2":{"grouping":"none"}}');
+
   const list = draw(() => ({
     w1: useTaskListView("w1", false),
     w2: useTaskListView("w2", false),
   }));
+
   expect(list.now().w1.view).toEqual({
     grouping: "repository",
     assignedTo: { kind: "me" },
@@ -181,6 +190,7 @@ test("the sidebar and a person's page draw one task list view at once", () => {
     sidebar: useTaskListView("w1", false),
     person: useTaskListView("w1", false),
   }));
+
   act(() => drawn.now().person.onAssignedTo({ kind: "member", userId: "u2" }));
   expect(drawn.now().sidebar.view.assignedTo).toEqual({ kind: "member", userId: "u2" });
 });
@@ -192,6 +202,7 @@ test("the chosen workspace is read from the id it was kept as", () => {
     role: WORKSPACE_ROLE.OWNER,
     github: null,
   });
+
   keep("app.chosenWorkspace", '"w2"');
   const chosen = draw(() => useChosenWorkspace([workspace("w1"), workspace("w2")], false));
   expect(chosen.now().chosen?.id).toBe("w2");

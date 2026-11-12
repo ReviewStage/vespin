@@ -142,10 +142,12 @@ function useAgentAddress(
 ): string {
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspace = workspaces.find(({ id }) => id === workspaceId);
+
   const place =
     taskId === undefined
       ? { kind: LINK_DESTINATION.AGENT, agentId }
       : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId };
+
   return linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
 }
 
@@ -154,12 +156,16 @@ function cardMergeOf(pullRequest: AgentOverviewPullRequest | undefined) {
   const action = pullRequest === undefined ? undefined : mergeActionFor(pullRequest);
   const headSha = pullRequest?.merging?.headSha ?? "";
   const method = pullRequest?.merging?.methods[0];
+
   if (action === MERGE_ACTION.MERGE_WHEN_READY) {
     const request = { action: PULL_REQUEST_ACTION.ENABLE_AUTO_MERGE, headSha } as const;
+
     return { words: MERGE_WORDS.MERGE_WHEN_READY, request };
   }
+
   if (action !== MERGE_ACTION.MERGE || method === undefined) return undefined;
   const request = { action: PULL_REQUEST_ACTION.MERGE, method, headSha } as const;
+
   return { words: MERGE_PRESS_WORDS[method], request };
 }
 
@@ -180,7 +186,9 @@ function CardMergeAsk({
 }) {
   const writes = usePullRequestWrites({ agentId, number: pullRequest.number });
   const merge = cardMergeOf(pullRequest);
+
   if (merge === undefined) return null;
+
   return (
     <ConfirmAsk
       title={MERGE_QUESTION}
@@ -210,6 +218,7 @@ function AgentComposerBar({
   readonly note: string | undefined;
 }) {
   const said = composer.note ?? note;
+
   const head =
     banner === undefined &&
     composer.queued.length === 0 &&
@@ -238,6 +247,7 @@ function AgentComposerBar({
         {said === undefined ? null : <AskNote words={said} />}
       </>
     );
+
   return (
     <Composer
       placeholder={composer.placeholder}
@@ -336,6 +346,7 @@ export function AgentScreen() {
   const colors = useColors();
   const agent = useFollowedAgent(id);
   const pullRequests = useAgentPullRequests(id);
+
   const open = useMemo(
     () =>
       pullRequests
@@ -343,6 +354,7 @@ export function AgentScreen() {
         .map(({ number }) => number),
     [pullRequests],
   );
+
   const offers = usePullRequestsRead(id, open);
   // The pull request whose card's Merge is being asked about.
   const [merging, setMerging] = useState<number | undefined>(undefined);
@@ -354,6 +366,7 @@ export function AgentScreen() {
   const transcript = held?.rows;
   const status = agent?.status ?? transcript?.word?.status;
   const messages = transcript?.messages;
+
   const items = useMemo(
     () =>
       transcriptItems(messages ?? [], {
@@ -365,6 +378,7 @@ export function AgentScreen() {
       }),
     [messages, status, readerId, toggles, pullRequests],
   );
+
   const mediaIds = useMemo(() => shownMediaIds(items), [items]);
   const approvals = useAgentApprovals(agent, id);
   const composer = useAgentComposer(id, agent, transcript, status, approvals.messageSent);
@@ -386,10 +400,12 @@ export function AgentScreen() {
         ),
   );
   const failed = held?.failed === true || transcript?.failure !== undefined;
+
   const openOptions =
     agent === undefined
       ? undefined
       : () => router.push({ pathname: "/agent-model", params: { agent: id } });
+
   const mode = useAgentMode(id);
   const pick = useAgentModelPick(id);
   const actions = useAgentActions(id, address);
@@ -397,11 +413,13 @@ export function AgentScreen() {
   const [renaming, setRenaming] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
+
   const openPage = (item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>) =>
     router.push({
       pathname: "/tasks/agent/[id]/page",
       params: { id, page: item.page, version: String(item.version), title: item.title },
     });
+
   return (
     <>
       <Stack.Screen
@@ -547,7 +565,9 @@ export function AgentPageScreen() {
     version: string;
     title: string;
   }>();
+
   const agent = useFollowedAgent(id);
+
   return (
     <PageScreen
       workspaceId={agent?.workspaceId}
@@ -577,6 +597,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
   const pick = useAgentModelPick(agentId);
   const mode = useAgentMode(agentId);
   const servers = useAgentServers(agentId);
+
   const serversFooter =
     servers.note ??
     (!servers.read
@@ -584,6 +605,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
       : servers.servers.length === 0
         ? OPTIONS_WORDS.NO_SERVERS
         : OPTIONS_WORDS.MORE_SERVERS);
+
   return (
     <>
       <Stack.Screen
@@ -638,6 +660,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
                 picked={mode.mode}
                 onPick={(picked) => {
                   const chosen = mode.modes.find((option) => option.id === picked);
+
                   if (chosen !== undefined) mode.choose(chosen.id);
                 }}
               />

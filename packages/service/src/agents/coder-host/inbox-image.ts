@@ -79,10 +79,12 @@ export interface SandboxImage<Type extends string> {
 function joined(chunks: readonly Uint8Array[], length: number): Uint8Array {
   const bytes = new Uint8Array(length);
   let at = 0;
+
   for (const chunk of chunks) {
     bytes.set(chunk, at);
     at += chunk.byteLength;
   }
+
   return bytes;
 }
 
@@ -109,23 +111,31 @@ const readImageStream = Effect.fnUntraced(function* <Type extends string>(
   const chunks: Uint8Array[] = [];
   let length = 0;
   let contentType: Type | undefined;
+
   return yield* Effect.gen(function* () {
     while (true) {
       const next = yield* Effect.tryPromise(() => reader.read());
+
       if (next.done) break;
       chunks.push(next.value);
       length += next.value.byteLength;
+
       if (length > maxBytes) return Result.fail(STREAM_REFUSAL.TOO_LARGE);
+
       if (contentType === undefined && length >= SIGNATURE_BYTES) {
         contentType = sniff(joined(chunks, length).subarray(0, SIGNATURE_BYTES));
+
         if (contentType === undefined) return Result.fail(STREAM_REFUSAL.NOT_IMAGE);
       }
     }
+
     const bytes = joined(chunks, length);
     // A file shorter than the longest signature is sniffed whole, since a JPEG's is three bytes.
     contentType ??= sniff(bytes);
+
     if (contentType === undefined) return Result.fail(STREAM_REFUSAL.NOT_IMAGE);
     const image: SandboxImage<Type> = { contentType, bytes };
+
     return Result.succeed(image);
   }).pipe(Effect.ensuring(Effect.promise(() => reader.cancel().catch(() => undefined))));
 });
@@ -163,11 +173,14 @@ export function readSandboxImage<Type extends string>(
   terms: SandboxImageTerms<Type>,
 ): Effect.Effect<Result.Result<SandboxImage<Type>, string>> {
   const resolved = posix.resolve(checkout, path);
+
   return Effect.gen(function* () {
     const sandbox = yield* Effect.tryPromise(() => door());
     const stream = yield* Effect.tryPromise(() => sandbox.readFile({ path: resolved }));
+
     if (stream === null) return refused<Type>(terms.refusals.NO_FILE, path);
     const read = yield* readImageStream(stream, terms.maxBytes, terms.sniff);
+
     return Result.isFailure(read) ? streamRefused<Type>(read.failure, terms.refusals, path) : read;
   }).pipe(Effect.catch(() => Effect.succeed(refused<Type>(terms.refusals.UNREADABLE, path))));
 }
@@ -187,8 +200,10 @@ export function phoneVideoOfSandbox(
 ): Effect.Effect<Uint8Array | undefined> {
   if (contentType !== CONVERSATION_MEDIA_TYPE.WEBM) return Effect.succeed(undefined);
   const resolved = posix.resolve(checkout, path);
+
   return Effect.tryPromise(async () => {
     const sandbox = await door();
+
     return (await sandbox.phoneVideo?.({ path: resolved })) ?? undefined;
   }).pipe(Effect.catch(() => Effect.succeed(undefined)));
 }
@@ -196,6 +211,7 @@ export function phoneVideoOfSandbox(
 /** The most bytes a posted file of the type may be: a still's bound, a recording's, or a PDF's. */
 function postedBytesOf(type: PostedFileType): number {
   if (type === INBOX_FILE_TYPE.PDF) return AGENT_BOUNDS.MAX_PDF_BYTES;
+
   return isVideoType(type) ? INBOX_BOUNDS.MAX_VIDEO_BYTES : INBOX_BOUNDS.MAX_IMAGE_BYTES;
 }
 
@@ -221,21 +237,25 @@ function readSandboxPosted<Type extends PostedFileType>(
   sniff: (head: Uint8Array) => Type | undefined,
 ): Effect.Effect<Result.Result<SandboxPostedFile<Type>, string>> {
   const terms = { maxBytes: INBOX_BOUNDS.MAX_VIDEO_BYTES, refusals, sniff };
+
   const read = Effect.map(
     readSandboxImage(door, checkout, path, terms),
     Result.flatMap((file) => {
       if (file.bytes.byteLength > postedBytesOf(file.contentType)) {
         return refused<Type>(refusals.TOO_LARGE, path);
       }
+
       if (
         file.contentType === CONVERSATION_MEDIA_TYPE.WEBM &&
         mediaDimensions(file.bytes, file.contentType) === undefined
       ) {
         return refused<Type>(refusals.NOT_IMAGE, path);
       }
+
       return Result.succeed(file);
     }),
   );
+
   return Effect.flatMap(read, (file) =>
     Result.isFailure(file)
       ? Effect.succeed<Result.Result<SandboxPostedFile<Type>, string>>(file)

@@ -52,9 +52,12 @@ export function withDeletionServices<A>(
 
 async function run<A, E>(effect: Effect.Effect<A, E, DeletionServices>): Promise<A> {
   const services = handed.getStore();
+
   if (services === undefined) throw new Error("A deletion's services were not handed to it.");
   const exit = await Effect.runPromiseExitWith(services)(effect);
+
   if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
+
   return exit.value;
 }
 

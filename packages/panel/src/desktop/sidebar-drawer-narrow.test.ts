@@ -68,15 +68,18 @@ async function mountIn(room: ShellRoom): Promise<HTMLElement> {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const tasks = tasksControl({
     tasks: [task(1, "Invite expiry"), task(2, "Retry audit")],
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
   });
+
   act(() => root.render(withQueryClient(drawnSidebar({ ...sidebarProps(tasks), room }))));
   await act(async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
+
   return container;
 }
 
@@ -84,12 +87,15 @@ async function mountIn(room: ShellRoom): Promise<HTMLElement> {
 function scrolled(sidebar: HTMLElement) {
   const scroller =
     sidebar.querySelector(".sidebar-section .ui-scroll-area") ?? assert.fail("the scroller");
+
   // Note that the Automations row is read, because a phone's bar holds the rows above it (`mobile-bar.tsx`).
   const home =
     [...sidebar.querySelectorAll("button")].find((each) =>
       each.textContent?.startsWith("Automations"),
     ) ?? assert.fail("the Automations row");
+
   const list = sidebar.querySelector('nav[aria-label="My tasks"]') ?? assert.fail("the Tasks list");
+
   return { home: scroller.contains(home), tasks: scroller.contains(list) };
 }
 

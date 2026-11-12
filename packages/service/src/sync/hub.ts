@@ -219,6 +219,7 @@ function wake(watcher: Watcher, heard?: { readonly txid: string; readonly at: nu
     watcher.txids.add(heard.txid);
     watcher.heardAt ??= heard.at;
   }
+
   Deferred.doneUnsafe(watcher.woken, Effect.void);
 }
 
@@ -242,11 +243,13 @@ function taken(watcher: Watcher): readonly string[] {
   watcher.woken = Deferred.makeUnsafe();
   watcher.answeredHeardAt = watcher.heardAt;
   watcher.heardAt = undefined;
+
   return txids;
 }
 
 function register(watchers: Watchers, watcher: Watcher, topics: readonly SyncTopic[]): void {
   watchers.all.add(watcher);
+
   for (const [kind, id] of topics) {
     const ofKind = watchers.byTopic.get(kind) ?? new Map<string, Set<Watcher>>();
     watchers.byTopic.set(kind, ofKind.set(id, (ofKind.get(id) ?? new Set()).add(watcher)));
@@ -255,11 +258,14 @@ function register(watchers: Watchers, watcher: Watcher, topics: readonly SyncTop
 
 function unregister(watchers: Watchers, watcher: Watcher, topics: readonly SyncTopic[]): void {
   watchers.all.delete(watcher);
+
   for (const [kind, id] of topics) {
     const ofKind = watchers.byTopic.get(kind);
     const ofId = ofKind?.get(id);
     ofId?.delete(watcher);
+
     if (ofId?.size === 0) ofKind?.delete(id);
+
     if (ofKind?.size === 0) watchers.byTopic.delete(kind);
   }
 }
@@ -289,6 +295,7 @@ const stood = (hub: Hub, listening: Listening, connection: Connection) =>
     wakeAll(hub.watchers);
     Latch.openUnsafe(listening.settled);
     yield* countDown(listening);
+
     if (reconnected) yield* Metric.update(SYNC_METRIC.RECONNECTS, 1);
   });
 
@@ -307,6 +314,7 @@ const lost = (hub: Hub, listening: Listening, loss: Loss) =>
     listening.state = LISTENER_STATE.OPENING;
     listening.connection = undefined;
     listening.lost = true;
+
     if (watched) listening.downSince ??= now;
     Latch.closeUnsafe(listening.settled);
     wakeAll(hub.watchers);
@@ -325,6 +333,7 @@ const unopened = (listening: Listening, error: ListenerUnopened) =>
     listening.downSince ??= now;
     Latch.openUnsafe(listening.settled);
     yield* countDown(listening);
+
     if (!wasDown)
       yield* Effect.logWarning("sync: the listener could not open; waits run on their clock", {
         reason: error.cause.reason._tag,
@@ -349,6 +358,7 @@ const beat = (
     const nonce = randomUUID();
     const arrived = Deferred.makeUnsafe<void>();
     beats.set(nonce, arrived);
+
     return Effect.gen(function* () {
       const usage = yield* listening.notify(yield* encodeNotification({ h: nonce }));
       yield* Metric.update(SYNC_METRIC.QUEUE_USAGE, usage);
@@ -375,6 +385,7 @@ const heard = (
           "h" in notification
             ? Effect.sync(() => {
                 const arrived = beats.get(notification.h);
+
                 if (arrived !== undefined) Deferred.doneUnsafe(arrived, Effect.void);
               })
             : Effect.andThen(
@@ -407,13 +418,17 @@ const connected = (hub: Hub, listening: Listening) =>
       const channel = yield* hub.listener.listen.pipe(
         Effect.mapError((cause) => new ListenerUnopened({ cause })),
       );
+
       const beats = new Map<string, Deferred.Deferred<void>>();
       const dropped = Deferred.makeUnsafe<void>();
+
       const connection: Connection = {
         beat: (within) => beat(channel, beats, within),
         drop: Effect.asVoid(Deferred.succeed(dropped, undefined)),
       };
+
       yield* stood(hub, listening, connection);
+
       return yield* Effect.raceFirst(
         heard(hub, channel.payloads, beats),
         Effect.raceFirst(
@@ -454,8 +469,10 @@ const opened = (hub: Hub) =>
       idle: false,
       downSince: undefined,
     };
+
     yield* Effect.forkScoped(listened(hub, listening));
     yield* Effect.addFinalizer(() => countDown(listening));
+
     return listening;
   });
 
@@ -472,13 +489,17 @@ const confirmed = (listening: Listening) =>
       if (!listening.idle) return;
       listening.idle = false;
       const standing = listening.connection;
+
       if (listening.state !== LISTENER_STATE.UP || standing === undefined) return;
       listening.state = LISTENER_STATE.OPENING;
       Latch.closeUnsafe(listening.settled);
+
       const proved = yield* restore(standing.beat(LISTENER.CONFIRM)).pipe(
         Effect.onInterrupt(() => standing.drop),
       );
+
       if (!proved) return yield* standing.drop;
+
       // Note that a connection lost meanwhile is the listener's own to settle.
       if (listening.connection !== standing) return;
       listening.state = LISTENER_STATE.UP;
@@ -490,14 +511,17 @@ const confirmed = (listening: Listening) =>
 const nextOf = (watcher: Watcher, listening: Listening, fallback: Duration.Duration) =>
   Effect.gen(function* () {
     const woken = Effect.as(Deferred.await(watcher.woken), true);
+
     const notified =
       listening.state === LISTENER_STATE.UP
         ? yield* woken
         : yield* Effect.race(woken, Effect.as(Effect.sleep(fallback), false));
+
     if (notified) {
       yield* Effect.sleep(COALESCE);
       yield* Metric.update(SYNC_METRIC.WAKES, 1);
     } else yield* Metric.update(SYNC_METRIC.FALLBACK_WAKES, 1);
+
     return taken(watcher);
   });
 
@@ -522,20 +546,24 @@ const watchOn =
       const listening = yield* RcRef.get(listener);
       yield* confirmed(listening);
       yield* Effect.timeoutOption(listening.settled.await, fallback);
+
       const watcher: Watcher = {
         txids: new Set(),
         woken: Deferred.makeUnsafe(),
         heardAt: undefined,
         answeredHeardAt: undefined,
       };
+
       yield* Effect.acquireRelease(
         Effect.sync(() => register(hub.watchers, watcher, topics)),
         () =>
           Effect.sync(() => {
             unregister(hub.watchers, watcher, topics);
+
             if (hub.watchers.all.size === 0) listening.idle = true;
           }),
       );
+
       return {
         next: nextOf(watcher, listening, fallback),
         heardAt: Effect.sync(() => Option.fromUndefinedOr(watcher.answeredHeardAt)),
@@ -554,7 +582,9 @@ export const syncHub = Layer.effect(
       listener: yield* SyncListener,
       watchers: { byTopic: new Map(), all: new Set() },
     };
+
     const listener = yield* RcRef.make({ acquire: opened(hub), idleTimeToLive: LISTENER.IDLE });
+
     return { watch: watchOn(hub, listener) } satisfies SyncShape;
   }),
 );

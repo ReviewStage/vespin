@@ -79,12 +79,15 @@ export const standingsOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   const runtimes = yield* hostedStoreOrUnavailable(nativeRuntimesOfReached(conversationIds));
   const sandboxes = yield* hostedStoreOrUnavailable(openSandboxesOfReached(conversationIds));
   const boots = yield* hostedStoreOrUnavailable(agentBootsOf(booting.map((agent) => agent.id)));
+
   const bootOf = new Map(
     booting.flatMap((agent) => {
       const boot = boots.get(agent.id);
+
       return boot === undefined ? [] : [[agent.conversationId, boot.phase] as const];
     }),
   );
+
   return (conversationId) => ({
     turn: turns.get(conversationId),
     runtime: runtimes.get(conversationId),
@@ -103,6 +106,7 @@ export const continuedByOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   DatabaseServices
 > {
   const continued = yield* hostedStoreOrUnavailable(continuationsOf(userId, agentIds));
+
   return (agentId) => continued.get(agentId) ?? [];
 });
 
@@ -115,6 +119,7 @@ export const summaryOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   const names = yield* hostedStoreOrUnavailable(readAccountNames(summaryAccounts(agent)));
   const continuedBy = yield* continuedByOf(userId, [agent.id]);
   const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices([agent])));
+
   return agentSummary(
     agent,
     standing(agent.conversationId),
@@ -132,6 +137,7 @@ export const statusOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   const { turn, boot } = (yield* standingsOf([agent.conversationId], [agent]))(
     agent.conversationId,
   );
+
   return agentStatusOf(turn, {
     createdAt: agent.createdAt,
     now: yield* Clock.currentTimeMillis,
@@ -169,6 +175,7 @@ export const stoppedTurn = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   // An agent its starter's plan pays for is stopped by those the plan's policy admits.
   yield* admitsPlanWriter(account, agent);
+
   return yield* canceledTurn(routedSessions(account), writer, agent, stop);
 });
 
@@ -180,6 +187,7 @@ export const stoppedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   stop: TurnStop = {},
 ): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   const stopped = yield* stoppedTurn(writer, account, agent, stop);
+
   if (stopped) {
     yield* recordServerEvent(
       SERVER_EVENT.AGENT_STOP,
@@ -187,6 +195,7 @@ export const stoppedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
       { agent_kind: agent.kind },
     );
   }
+
   return stopped;
 });
 
@@ -221,13 +230,16 @@ export const canceledTurn = /* @__PURE__ */ Effect.fnUntraced(function* (
   // A turn past its deadline has nothing to stop, and is reaped first (`reconcile.ts`).
   yield* reconciledBeforeWrite(agent);
   const turn = (yield* standingsOf([agent.conversationId]))(agent.conversationId).turn;
+
   if (!stoppable(turn)) return false;
   const sessionId = yield* hostedStoreOrUnavailable(recordedRuntimeSession(target));
+
   if (sessionId === undefined) return false;
   // The cancel names the turn the row was written for, never the session's turn under way, so a
   // turn that ended between the read above and the harness's answer is answered `no_active_turn` and
   // nothing newer is stopped in its place.
   const agentSessions = yield* agentSessionsOf;
+
   const canceled = yield* agentSessions.cancel(sessionId, turn.runtimeTurnId).pipe(
     Effect.catchTag("SessionUnreachable", (failure) =>
       Effect.as(
@@ -241,11 +253,14 @@ export const canceledTurn = /* @__PURE__ */ Effect.fnUntraced(function* (
       ),
     ),
   );
+
   if (canceled.outcome === SESSION_CANCEL_OUTCOME.FAILED) {
     return yield* Effect.fail(failedCallRefusal(canceled));
   }
+
   const accepted = canceled.outcome === SESSION_CANCEL_OUTCOME.ACCEPTED;
   const at = yield* DateTime.nowAsDate;
+
   const stamped = yield* hostedStoreOrUnavailable(
     Effect.flatMap(writer, (write) =>
       write.requestTurnCancel(target, {
@@ -256,7 +271,9 @@ export const canceledTurn = /* @__PURE__ */ Effect.fnUntraced(function* (
       }),
     ),
   );
+
   if (Result.isFailure(stamped)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return accepted;
 });
 
@@ -278,6 +295,7 @@ export const stoppedForGood = /* @__PURE__ */ Effect.fnUntraced(function* (
 /** Refused as not ready where the agent still reads as starting or running once its Stop has gone out. */
 const endedOrNotReady = /* @__PURE__ */ Effect.fnUntraced(function* (agent: Agent) {
   const status = yield* statusOf(agent);
+
   if (status === AGENT_STATUS.STARTING || status === AGENT_STATUS.RUNNING) {
     return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
   }
@@ -318,6 +336,7 @@ export const everyTurnStoppedByStarter = /* @__PURE__ */ Effect.fnUntraced(funct
   agents: readonly Agent[],
 ): Effect.fn.Return<void, never, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   const sessionsOf = yield* sessionsRouter;
+
   // Note that only an agent with a turn to stop is touched, read for all at once, because a Stop
   // pauses the agent's queue first, which a delete refused after it would otherwise leave paused.
   const standing = yield* standingsOf(agents.map((agent) => agent.conversationId)).pipe(
@@ -328,6 +347,7 @@ export const everyTurnStoppedByStarter = /* @__PURE__ */ Effect.fnUntraced(funct
       ),
     ),
   );
+
   if (standing === undefined) return;
   const running = agents.filter((agent) => stoppable(standing(agent.conversationId).turn));
   yield* everySettled(running, (agent) =>
@@ -354,7 +374,9 @@ function everySettled<E, R>(
     const stops = yield* Effect.forEach(agents, (agent) => Effect.exit(stop(agent)), {
       concurrency: AGENT_STOP_CONCURRENCY,
     });
+
     const refused = stops.find(Exit.isFailure);
+
     if (refused !== undefined) return yield* refused;
   });
 }
@@ -366,6 +388,7 @@ export const everyStopsForGood = /* @__PURE__ */ Effect.fnUntraced(function* (
   const ready = yield* Effect.forEach(agents, stopsForGood, {
     concurrency: AGENT_STOP_CONCURRENCY,
   });
+
   return !ready.includes(false);
 });
 
@@ -380,13 +403,16 @@ const stopsForGood = /* @__PURE__ */ Effect.fnUntraced(function* (agent: Agent) 
   const { turn, boot } = (yield* standingsOf([agent.conversationId], [agent]))(
     agent.conversationId,
   );
+
   const status = agentStatusOf(turn, {
     createdAt: agent.createdAt,
     now: yield* Clock.currentTimeMillis,
     blank: startedBlank(agent),
     boot,
   });
+
   if (status === AGENT_STATUS.STARTING) return false;
+
   return status !== AGENT_STATUS.RUNNING || stoppable(turn);
 });
 
@@ -405,14 +431,17 @@ const standingTurns = /* @__PURE__ */ Effect.fnUntraced(function* (
   const turns = yield* latestTurnsOfReached(conversationIds);
   const boots = yield* agentBootsOf(agents.map(({ id }) => id));
   const now = yield* Clock.currentTimeMillis;
+
   return agents.map((agent) => {
     const turn = turns.get(agent.conversationId);
+
     const status = agentStatusOf(turn, {
       createdAt: agent.createdAt,
       now,
       blank: agent.blank,
       boot: boots.get(agent.id)?.phase,
     });
+
     return { agent, turn, status };
   });
 });

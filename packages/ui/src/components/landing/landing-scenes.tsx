@@ -127,6 +127,7 @@ function useWindowStory(
   beat: number,
 ): number {
   const from = useNarrowPage(ref) ? story.NARROW_FROM : 0;
+
   return Math.min(useStory(ref, story.STEPS - from, beat) + from, story.LAST);
 }
 
@@ -222,6 +223,7 @@ type InboxItem = {
 /** An Inbox row as the panel draws it: the task above, the ask's glyph before its last line, its age beside the title. */
 function InboxRow({ item }: { item: InboxItem }): React.JSX.Element {
   const open = item.kind !== LINE.SETTLED;
+
   return (
     <ListRow
       motionKey={item.id}
@@ -311,6 +313,7 @@ const OTHER_ITEMS: readonly InboxItem[] = [
 function inboxItems(step: number): readonly InboxItem[] {
   if (step < 1) return OTHER_ITEMS;
   const answered = step >= 5;
+
   const question: InboxItem = {
     id: "question",
     task: QUESTION.TASK,
@@ -322,6 +325,7 @@ function inboxItems(step: number): readonly InboxItem[] {
     unread: step < 2,
     current: step >= 2,
   };
+
   return [question, ...OTHER_ITEMS];
 }
 
@@ -445,6 +449,7 @@ function DraftAnswer({ picked, note }: { picked: boolean; note: string }): React
  */
 function QuestionThread({ step }: { step: number }): React.JSX.Element {
   const sent = step >= 5;
+
   return (
     <div className="ui-landing-thread">
       <header className="ui-landing-subject">
@@ -487,6 +492,7 @@ function QuestionThread({ step }: { step: number }): React.JSX.Element {
 /** The Inbox's page at `step`: the list, a question arriving, opened, answered in the draft under it, and sent. */
 function InboxPage({ step }: { step: number }): React.JSX.Element {
   const open = step >= 2;
+
   return (
     <div className="ui-landing-app">
       <DesktopSidebar place={DESKTOP_PLACE.INBOX} />
@@ -545,6 +551,7 @@ function InboxPage({ step }: { step: number }): React.JSX.Element {
 function InboxScene(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const step = useWindowStory(ref, STORY.INBOX, BEAT.INBOX);
+
   return (
     <div ref={ref} className="ui-landing-scene">
       <DesktopWindow label="The Inbox, where an agent's question is answered">
@@ -607,6 +614,7 @@ type SubTask = {
 function subTasks(step: number): readonly SubTask[] {
   const at = (from: number, to: number): TaskStatus =>
     step >= to ? TASK_STATUS.DONE : step >= from ? TASK_STATUS.IN_PROGRESS : TASK_STATUS.TODO;
+
   return [
     { id: "schema", name: "Pending memberships schema", status: TASK_STATUS.DONE, key: "ACME-54" },
     {
@@ -643,6 +651,7 @@ function TaskTabs({ step }: { step: number }): React.JSX.Element {
 /** The agent's log at `step`: its words, its folded calls, the other agent's messages, and its working line. */
 function AgentLog({ step }: { step: number }): React.JSX.Element {
   const calls = step >= 3 ? 3 : step >= 1 ? 2 : 1;
+
   return (
     <div className="ui-landing-log">
       <MessageFrame>
@@ -754,6 +763,7 @@ function AgentFoot({ step }: { step: number }): React.JSX.Element {
 function PlanPanel({ step }: { step: number }): React.JSX.Element {
   const tasks = subTasks(step);
   const done = tasks.filter((task) => task.status === TASK_STATUS.DONE).length;
+
   return (
     <aside className="ui-landing-side">
       <div className="ui-landing-side-bar">
@@ -851,6 +861,7 @@ function TaskPage({ step }: { step: number }): React.JSX.Element {
 function AgentsScene(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const step = useWindowStory(ref, STORY.AGENTS, BEAT.AGENTS);
+
   return (
     <div ref={ref} className="ui-landing-scene">
       <DesktopWindow label="A task's agent starting another agent, and the two trading messages">
@@ -970,13 +981,16 @@ function AutomationSettings(): React.JSX.Element {
 /** The automation's runs at `step`: a scheduled run firing, working, and finishing on top of the earlier ones. */
 function AutomationRuns({ step }: { step: number }): React.JSX.Element {
   const working = step >= 1 && step < 3;
+
   const latest: Run = {
     id: "236",
     ago: 0,
     title: step >= 3 ? "Wait for the invite email in the accept test" : "Scheduled run",
     line: "Finished",
   };
+
   const runs = step >= 1 ? [latest, ...RUNS] : RUNS;
+
   return (
     <aside className="ui-landing-runs">
       <Text as={TEXT_ELEMENT.H2} variant={TEXT_VARIANT.SECTION} tone={TEXT_TONE.MUTED}>
@@ -985,6 +999,7 @@ function AutomationRuns({ step }: { step: number }): React.JSX.Element {
       <List label="Runs">
         {runs.map((run) => {
           const running = run.id === latest.id && working;
+
           return (
             <ListRow
               key={run.id}
@@ -1034,6 +1049,7 @@ function AutomationPage({ step }: { step: number }): React.JSX.Element {
 function AutomationsScene(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const step = useStory(ref, 5, BEAT.RUNS);
+
   return (
     <div ref={ref} className="ui-landing-scene">
       <DesktopWindow label="An automation's page, a scheduled run firing and finishing">
@@ -1143,6 +1159,7 @@ const KEY_ROWS: readonly KeyRow[] = [
 function KeysScene(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const step = useStory(ref, 5, BEAT.KEYS);
+
   return (
     <div
       ref={ref}
@@ -1155,6 +1172,7 @@ function KeysScene(): React.JSX.Element {
         <SettingsSection title="Agents">
           {KEY_ROWS.map((row) => {
             const connected = step >= row.at;
+
             return (
               <SettingsRow
                 key={row.id}
@@ -1193,5 +1211,6 @@ const SCENES: Readonly<Record<LandingScene, () => React.JSX.Element>> = {
 /** The scene that shows `scene`'s feature. */
 export function LandingSceneView({ scene }: { scene: LandingScene }): React.JSX.Element {
   const Scene = SCENES[scene];
+
   return <Scene />;
 }

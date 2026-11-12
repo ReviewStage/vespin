@@ -88,6 +88,7 @@ async function opened(standing: IntegrationStatuses = statuses) {
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const render = (statuses: IntegrationStatuses) =>
     act(() =>
       root.render(
@@ -104,6 +105,7 @@ async function opened(standing: IntegrationStatuses = statuses) {
         ),
       ),
     );
+
   render(standing);
   act(() =>
     container
@@ -114,13 +116,16 @@ async function opened(standing: IntegrationStatuses = statuses) {
   await act(async () => {
     for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
   });
+
   const field = () =>
     container.querySelector<HTMLInputElement>('.agent-servers-menu input[type="text"]') ??
     assert.fail("no field");
+
   const key = (name: string) =>
     act(() => {
       field().dispatchEvent(new KeyboardEvent("keydown", { key: name, bubbles: true }));
     });
+
   const type = (text: string) =>
     act(() => {
       const input = field();
@@ -128,6 +133,7 @@ async function opened(standing: IntegrationStatuses = statuses) {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, text);
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
+
   return { container, switched, field, key, type, render };
 }
 
@@ -140,6 +146,7 @@ function sections(container: HTMLElement) {
       const account = name.nextElementSibling?.classList.contains("ui-account-words")
         ? name.nextElementSibling.textContent
         : undefined;
+
       return account ? `${name.textContent} · ${account}` : name.textContent;
     }),
   ]);
@@ -159,6 +166,7 @@ function serverButton(container: HTMLElement, name: string, words: string): HTML
   const row = [...container.querySelectorAll<HTMLElement>(".agent-servers-list li")].find((each) =>
     each.textContent?.includes(name),
   );
+
   return (
     [...(row?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
       (button) => button.textContent === words,
@@ -207,6 +215,7 @@ test("a press on a connected server's row flips its switch", async () => {
 
 test("two accounts at a provider stand as two rows, each named by its label, and one switched off leaves the other on", async () => {
   const notion = INTEGRATION_PROVIDER.NOTION;
+
   const accounts = [
     {
       provider: notion,
@@ -223,6 +232,7 @@ test("two accounts at a provider stand as two rows, each named by its label, and
       status: INTEGRATION_STATUS.CONNECTED,
     },
   ];
+
   const two: IntegrationStatuses = {
     ...statuses,
     statusOf: (server) =>
@@ -231,6 +241,7 @@ test("two accounts at a provider stand as two rows, each named by its label, and
         : INTEGRATION_STATUS.UNAVAILABLE,
     accountsOf: (provider) => (provider === notion ? accounts : []),
   };
+
   const { container, switched } = await opened(two);
 
   assert.deepEqual(sections(container), [["Connected", ["Notion · Acme", "Notion · Personal"]]]);
@@ -277,6 +288,7 @@ test("a server's problem fades where its row cuts it short, as every cut line of
   const problem = await vi.waitFor(
     () => container.querySelector(".agent-servers-problem") ?? assert.fail("no problem"),
   );
+
   assert.equal(problem?.textContent, "Linear refused the sign-in.");
 });
 
@@ -286,9 +298,11 @@ test("a server's own error is no part of its row's sentence, and stands quoted i
     message: "workspace is suspended",
   });
   const { container } = await opened();
+
   const problem = await vi.waitFor(
     () => container.querySelector(".agent-servers-problem") ?? assert.fail("no problem"),
   );
+
   const words = problem.textContent;
 
   restOn(problem);
@@ -305,10 +319,12 @@ function buttonsOf(container: HTMLElement, name: string) {
   const row = [...container.querySelectorAll<HTMLElement>(".agent-servers-list li")].find((each) =>
     each.textContent?.includes(name),
   );
+
   // Note that the row's own press holds its name; what stands beside it is the row's buttons.
   const beside = [...(row?.querySelectorAll<HTMLButtonElement>("button") ?? [])].filter(
     (button) => button.querySelector(".agent-servers-name") === null,
   );
+
   return beside.map((button) => ({
     words: button.textContent,
     busy: button.getAttribute("aria-busy") === "true",
@@ -344,11 +360,13 @@ test("a Cancel shows it is working while Reopen waits, and a sign-in that failed
   const cancel = Promise.withResolvers<boolean>();
   const waiting = { kind: SIGN_IN.WAITING, since: 1, deadline: 1000, seenPending: true } as const;
   const failed = { kind: SIGN_IN.FAILED, since: 2 } as const;
+
   const { container } = await opened({
     ...statuses,
     signInOf: (server) => (server === INTEGRATION_PROVIDER.MERCURY ? waiting : undefined),
     cancelSignIn: () => cancel.promise,
   });
+
   assert.deepEqual(
     buttonsOf(container, "Mercury").map(({ words }) => words),
     ["Reopen", "Cancel"],
@@ -376,6 +394,7 @@ test("a Cancel shows it is working while Reopen waits, and a sign-in that failed
     ...statuses,
     signInOf: (server) => (server === INTEGRATION_PROVIDER.MERCURY ? failed : undefined),
   });
+
   assert.deepEqual(
     buttonsOf(after, "Mercury").map(({ words }) => words),
     ["Retry"],
@@ -396,9 +415,11 @@ function holdPanelExits() {
       if (!this.hasAttribute("data-ending-style")) return [];
       const exit = new EventTarget();
       exits.push(exit);
+
       return [exit];
     },
   });
+
   return () => {
     for (const exit of exits.splice(0)) exit.dispatchEvent(new Event("finish"));
   };
@@ -407,9 +428,11 @@ function holdPanelExits() {
 test("Escape from the home fades the popover out, inert and ending, then takes it away, and it opens afresh", async () => {
   const finishExits = holdPanelExits();
   const { container, key, type, field } = await opened();
+
   const button = () =>
     container.querySelector<HTMLButtonElement>('.agent-servers button[aria-haspopup="dialog"]') ??
     assert.fail("no button");
+
   type("deploy");
 
   key("Escape");
@@ -435,6 +458,7 @@ test("Escape from the home fades the popover out, inert and ending, then takes i
 test("a popover opened again while it fades out hands its field the focus, so the keys still reach it", async () => {
   holdPanelExits();
   const { container, key, field } = await opened();
+
   const button = () =>
     container.querySelector<HTMLButtonElement>('.agent-servers button[aria-haspopup="dialog"]') ??
     assert.fail("no button");
@@ -469,6 +493,7 @@ function layRowsInOrder() {
   ) {
     const rows = [...(this.closest(".agent-servers-list")?.querySelectorAll("li") ?? [])];
     const top = this.matches("li") ? rows.indexOf(this) * ROW : 0;
+
     return { top, bottom: top + ROW, left: 0, right: 0, width: 0, height: ROW } as DOMRect;
   });
 }
@@ -483,13 +508,16 @@ function withStanding(provider: string, standing: IntegrationStatus): Integratio
 
 test("a server that connects glides from Not connected into Connected, followed by its connection", async () => {
   const motions = playListMotions();
+
   try {
     const { container, render } = await opened();
     layRowsInOrder();
+
     const mercury = () =>
       [...container.querySelectorAll<HTMLElement>(".agent-servers-list li")].find((row) =>
         row.textContent?.includes("Mercury"),
       ) ?? assert.fail("no Mercury row");
+
     assert.equal(mercury().dataset.motionKey, INTEGRATION_PROVIDER.MERCURY);
 
     render(withStanding(INTEGRATION_PROVIDER.MERCURY, INTEGRATION_STATUS.CONNECTED));
@@ -507,10 +535,12 @@ test("a server that connects glides from Not connected into Connected, followed 
 
 test("with motion held still, a server that connects takes its place and nothing plays", async () => {
   const motions = playListMotions();
+
   try {
     for (const name of ["--ui-duration-exit", "--ui-duration-shape"]) {
       document.documentElement.style.setProperty(name, "0ms");
     }
+
     const { container, render } = await opened();
     layRowsInOrder();
 

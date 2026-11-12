@@ -105,6 +105,7 @@ function monthOf(day: string): string {
 function shiftedDay(day: string, count: number): string {
   const date = dateOf(day);
   date.setUTCDate(date.getUTCDate() + count);
+
   return dayOfDate(date);
 }
 
@@ -117,6 +118,7 @@ function monthShiftedDay(day: string, count: number): string {
   const last = new Date(date);
   last.setUTCMonth(last.getUTCMonth() + 1, 0);
   date.setUTCDate(Math.min(wanted, last.getUTCDate()));
+
   return dayOfDate(date);
 }
 
@@ -149,10 +151,12 @@ interface DrawnWeek {
 function weeksOf(month: string): readonly DrawnWeek[] {
   const first = `${month}-01`;
   const sunday = shiftedDay(first, -weekdayOf(first));
+
   return Array.from({ length: WEEKS_SHOWN }, (_, row) => ({
     row,
     days: Array.from({ length: DAYS_PER_WEEK }, (_, slot) => {
       const day = shiftedDay(sunday, row * DAYS_PER_WEEK + slot);
+
       return onCalendar(day) ? day : undefined;
     }),
   }));
@@ -165,42 +169,57 @@ function placeOf(
   end: string | undefined,
 ): CalendarPlace | undefined {
   if (start === undefined) return undefined;
+
   if (end === undefined || end === start) return day === start ? CALENDAR_PLACE.SINGLE : undefined;
   const [low, high] = start < end ? [start, end] : [end, start];
+
   if (day === low) return CALENDAR_PLACE.START;
+
   if (day === high) return CALENDAR_PLACE.END;
+
   return day > low && day < high ? CALENDAR_PLACE.BETWEEN : undefined;
 }
 
 /** The day a key steps to from `day`, wherever it lands, or none for a key that moves nothing. */
 function keyStep(event: KeyboardEvent<HTMLElement>, day: string): string | undefined {
   const step = ARROW_STEPS.get(event.key);
+
   if (step !== undefined) return shiftedDay(day, step);
   const months = event.shiftKey ? MONTHS_PER_YEAR : 1;
+
   if (event.key === "PageUp") return monthShiftedDay(day, -months);
+
   if (event.key === "PageDown") return monthShiftedDay(day, months);
+
   if (event.key === "Home") return shiftedDay(day, -weekdayOf(day));
+
   if (event.key === "End") return shiftedDay(day, DAYS_PER_WEEK - 1 - weekdayOf(day));
+
   return undefined;
 }
 
 /** The day the grid's tab stop rests on in `month` before the keyboard has moved in it. */
 function restingDay(month: string, start: string | undefined, today: string): string {
   if (start !== undefined && monthOf(start) === month) return start;
+
   if (monthOf(today) === month) return today;
+
   return `${month}-01`;
 }
 
 /** The ink a day's number is drawn in: on the accent where picked, then today's, then a neighboring month's, then the text's own. */
 function dayInk(place: CalendarPlace | undefined, today: boolean, outside: boolean): string {
   if (place !== undefined && place !== CALENDAR_PLACE.BETWEEN) return CALENDAR_DAY_INK.PICKED;
+
   if (today) return CALENDAR_DAY_INK.TODAY;
+
   return outside ? CALENDAR_DAY_INK.OUTSIDE : CALENDAR_DAY_INK.OWN;
 }
 
 /** The weekday headings, Sunday first: two letters drawn, the whole name read. */
 const WEEKDAYS = Array.from({ length: DAYS_PER_WEEK }, (_, slot) => {
   const day = shiftedDay(A_SUNDAY, slot);
+
   return {
     day,
     short: spelled(day, { weekday: "short" }).slice(0, 2),
@@ -239,8 +258,10 @@ export function Calendar({
   // The day a key moved the keyboard to, until the grid draws it and it takes the focus.
   const following = useRef<string | undefined>(undefined);
   const [moved, setMoved] = useState<string | undefined>(undefined);
+
   const focusDay =
     moved !== undefined && monthOf(moved) === month ? moved : restingDay(month, start, today);
+
   const ranged = start !== undefined && end !== undefined && end !== start;
   const first = `${month}-01`;
   const caption = spelled(first, { month: "long", year: "numeric" });
@@ -251,8 +272,10 @@ export function Calendar({
   // the caller to show that month, which it may do renders later.
   useEffect(() => {
     const target = following.current;
+
     if (target === undefined || monthOf(target) !== month) return;
     const button = grid.current?.querySelector<HTMLElement>(`[data-day="${target}"]`);
+
     if (button === null || button === undefined) return;
     following.current = undefined;
     button.focus();
@@ -271,19 +294,26 @@ export function Calendar({
 
   const onKeyDown = (event: KeyboardEvent<HTMLTableElement>) => {
     const day = event.target instanceof HTMLElement ? event.target.dataset.day : undefined;
+
     if (day === undefined) return;
+
     if (PICK_KEYS.has(event.key)) {
       event.preventDefault();
       pick(day);
+
       return;
     }
+
     const target = keyStep(event, day);
+
     if (target === undefined) return;
     // Note that a moving key is the grid's even where the span stops it, so it never scrolls the page.
     event.preventDefault();
+
     if (!onCalendar(target)) return;
     following.current = target;
     setMoved(target);
+
     if (monthOf(target) !== month) onShowMonth(monthOf(target));
   };
 
@@ -291,6 +321,7 @@ export function Calendar({
   // so a month shown later never pulls the keyboard back from elsewhere.
   const onBlur = (event: FocusEvent<HTMLTableElement>) => {
     const to = event.relatedTarget;
+
     if (to instanceof Node && event.currentTarget.contains(to)) return;
     following.current = undefined;
   };
@@ -355,6 +386,7 @@ export function Calendar({
                 const isToday = day === today;
                 const outside = monthOf(day) !== month;
                 const picked = place !== undefined && place !== CALENDAR_PLACE.BETWEEN;
+
                 return (
                   // biome-ignore lint/a11y/useAriaPropsSupportedByRole: inside a grid a cell is a gridcell, which takes aria-selected; the rule reads it as a plain table's cell.
                   <td

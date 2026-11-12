@@ -68,6 +68,7 @@ export const openWorkspace = (ownerId: string) =>
       .insert(organization)
       .values({ id, name: TEST_WORKSPACE_NAME, slug: `workspace-${id}`, createdAt: now });
     yield* joinWorkspace(id, ownerId, WORKSPACE_ROLE.OWNER);
+
     return id;
   });
 
@@ -93,6 +94,7 @@ export const openInstallationWorkspace = (ownerId: string, installation: TestIns
         updatedAt: now,
       }),
     );
+
     return id;
   });
 
@@ -103,6 +105,7 @@ export const openInstallationWorkspace = (ownerId: string, installation: TestIns
  */
 export const fakeWorkspaceSeams = Effect.gen(function* () {
   const db = yield* Database;
+
   const seams: WorkspaceSeams = {
     createOrganization: (creation) =>
       Effect.gen(function* () {
@@ -110,11 +113,13 @@ export const fakeWorkspaceSeams = Effect.gen(function* () {
           .select({ id: organization.id })
           .from(organization)
           .where(eq(organization.slug, creation.slug));
+
         if (taken.length > 0) {
           return yield* Effect.fail(
             new Cause.UnknownError(undefined, "Organization already exists"),
           );
         }
+
         const id = randomUUID();
         const now = yield* DateTime.nowAsDate;
         yield* db.insert(organization).values({
@@ -125,6 +130,7 @@ export const fakeWorkspaceSeams = Effect.gen(function* () {
           createdAt: now,
         });
         yield* joinWorkspace(id, creation.userId, WORKSPACE_ROLE.OWNER);
+
         return { id };
       }).pipe(
         Effect.catchTag("EffectDrizzleQueryError", (failure) =>
@@ -133,6 +139,7 @@ export const fakeWorkspaceSeams = Effect.gen(function* () {
         Effect.provideService(Database, db),
       ),
   };
+
   return seams;
 });
 
@@ -149,12 +156,15 @@ export const unreachedWorkspaceSeams: WorkspaceSeams = {
 const workspaceOf = (userId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const [owned] = yield* db
       .select({ organizationId: member.organizationId })
       .from(member)
       .where(and(eq(member.userId, userId), eq(member.role, WORKSPACE_ROLE.OWNER)))
       .limit(1);
+
     if (owned !== undefined) return owned.organizationId;
+
     return yield* openWorkspace(userId);
   });
 

@@ -77,6 +77,7 @@ export class ChangesFailed extends Error {
 /** An agent's changes as read, a failure thrown as `ChangesFailed`. */
 function landedChanges(answer: AgentChangesAnswerView) {
   if ("failure" in answer) throw new ChangesFailed(answer);
+
   return answer;
 }
 

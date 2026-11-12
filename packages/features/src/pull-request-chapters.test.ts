@@ -63,6 +63,7 @@ const SEATS = changed("src/seats.ts", `${[...SEATS_FIRST, ...SEATS_SECOND].join(
   additions: 2,
   deletions: 1,
 });
+
 const ADDED = changed(
   "src/invite.ts",
   "@@ -0,0 +1,2 @@\n+export const a = 1;\n+export const b = 2;",
@@ -71,11 +72,14 @@ const ADDED = changed(
     additions: 2,
   },
 );
+
 const LOGO = changed("assets/logo.png", null, { omitted: PATCH_OMITTED.BINARY });
+
 const MOVED = changed("src/moved.ts", "", {
   status: CHANGED_FILE_STATUS.RENAMED,
   previousPath: "src/old.ts",
 });
+
 const FILES = [SEATS, ADDED, LOGO, MOVED];
 const HUNKS = chapterHunks(FILES);
 
@@ -95,6 +99,7 @@ function story(title: string, hunkRefs: readonly HunkRef[], rest: Partial<Chapte
 
 const seatsFirst = { path: "src/seats.ts", oldStart: 1 };
 const seatsSecond = { path: "src/seats.ts", oldStart: 10 };
+
 // A hunk adding a file starts at 0 on the old side, as a file with no hunks is named.
 const added = { path: "src/invite.ts", oldStart: 0 };
 const logo = { path: "assets/logo.png", oldStart: HEADER_ONLY_OLD_START };
@@ -138,6 +143,7 @@ test("lockfiles, folder metadata, minified files, maps, snapshots, images, fonts
   ]) {
     assert.equal(ignoredForChapters(path), true, path);
   }
+
   for (const path of [
     "src/seats.ts",
     "src/sitemap.ts",
@@ -161,6 +167,7 @@ test("every hunk lands in exactly one chapter: an unknown ref is dropped, a hunk
     ],
     HUNKS,
   );
+
   assert.deepEqual(
     chapters.map((chapter) => [chapter.title, chapter.hunkRefs]),
     [
@@ -191,6 +198,7 @@ function lines(path: string, side: LineRef["side"], startLine: number, endLine: 
 test("a key change keeps only references wholly inside one of its chapter's own hunks on their side, each once, and goes when none is left", () => {
   const inFirst = lines("src/seats.ts", LINE_REF_SIDE.ADDITIONS, 2, 4);
   const removed = lines("src/seats.ts", LINE_REF_SIDE.DELETIONS, 11, 11);
+
   const chapter = story("Seat counts", [seatsFirst, seatsSecond], {
     keyChanges: [
       {
@@ -214,6 +222,7 @@ test("a key change keeps only references wholly inside one of its chapter's own 
       },
     ],
   });
+
   assert.deepEqual(validLineRefs(chapter, HUNKS).keyChanges, [
     { content: "Is the new line counted?", lineRefs: [inFirst, removed] },
   ]);
@@ -231,6 +240,7 @@ test("no line is on the side a hunk adding a file counts nothing of", () => {
       },
     ],
   });
+
   assert.deepEqual(validLineRefs(chapter, HUNKS).keyChanges[0]?.lineRefs, [
     lines("src/invite.ts", LINE_REF_SIDE.ADDITIONS, 1, 2),
   ]);
@@ -260,6 +270,7 @@ test("a chapter draws its files in the order it first names them, each patch hol
     story("Seat counts", [added, seatsSecond, { path: "src/gone.ts", oldStart: 0 }]),
     FILES,
   );
+
   assert.deepEqual(
     drawn.map((file) => file.path),
     ["src/invite.ts", "src/seats.ts"],
@@ -303,8 +314,10 @@ function thread(rest: Partial<ReviewThread>): ReviewThread {
 test("a thread stands in a chapter where one of its hunks counts the thread's line on its side, an outdated one by the line it was made on among the old lines", () => {
   const first = story("First", [seatsFirst]);
   const second = story("Second", [seatsSecond]);
+
   const where = (each: ReviewThread) =>
     [first, second].filter((chapter) => threadInChapter(each, chapter, HUNKS)).map((c) => c.title);
+
   // New line 4 is the first hunk's last; new line 11 the second's first.
   assert.deepEqual(where(thread({ line: 4 })), ["First"]);
   assert.deepEqual(where(thread({ line: 11 })), ["Second"]);
@@ -345,6 +358,7 @@ test("a chapter's file with no hunks counts the lines GitHub says it changes, as
     additions: 120,
     deletions: 30,
   });
+
   const other = otherChangesChapter([{ path: "pnpm-lock.yaml", oldStart: HEADER_ONLY_OLD_START }]);
   assert.deepEqual(chapterLineCounts(other, [huge]), { additions: 120, deletions: 30, files: 1 });
 });

@@ -15,5 +15,6 @@ export const admitWorkspaceMember = /* @__PURE__ */ Effect.fnUntraced(function* 
   readonly workspaceId: string;
 }) {
   const member = yield* hostedStoreOrUnavailable(isWorkspaceMember(userId, workspaceId));
+
   if (!member) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 });

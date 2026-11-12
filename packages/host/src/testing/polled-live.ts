@@ -31,16 +31,19 @@ export function polledLive<
   let refusal: Refused | undefined;
   let polls = 0;
   let held = 0;
+
   const wake = () => {
     Deferred.doneUnsafe(moved, Effect.void);
     moved = Deferred.makeUnsafe<void>();
   };
+
   const answer = () => ({
     url: LIVE_POLL_URL,
     // SAFETY: every part is written here, and no other.
     queries: Object.fromEntries(
       parts.map((part) => {
         const carried = rows.get(part) ?? derive?.()[part];
+
         const query: SealedLiveQueryWire = {
           capability: LIVE_POLL_URL,
           queryFingerprint: LIVE_POLL_URL,
@@ -49,24 +52,30 @@ export function polledLive<
           ...(carried === undefined ? undefined : { rows: carried }),
           ...(woken === undefined ? undefined : { txids: woken }),
         };
+
         return [part, query];
       }),
     ) as Record<Part, SealedLiveQueryWire>,
   });
+
   /** Whether `after` names where the rows stand now: every part's digest it joins (`liveDigestOf`), whichever parts the reader follows, at the version standing. */
   const standing = (after: string) => after.split(",").every((each) => each === String(version));
+
   /** The read past `after`, held while the rows stand where it names. */
   const poll = (after: string | undefined): Effect.Effect<ReturnType<typeof answer> | Refused> =>
     Effect.suspend(() => {
       if (refusal !== undefined) return Effect.succeed(refusal);
+
       if (after === undefined || !standing(after)) return Effect.succeed(answer());
       const waiting = moved;
       held += 1;
+
       return Deferred.await(waiting).pipe(
         Effect.ensuring(Effect.sync(() => (held -= 1))),
         Effect.andThen(poll(after)),
       );
     });
+
   return {
     /** The read as its first ask is answered: the rows as they stand, or the refusal standing. */
     first: (): ReturnType<typeof answer> | Refused => refusal ?? answer(),
@@ -82,8 +91,10 @@ export function polledLive<
     set: (next: Partial<Record<Part, readonly unknown[]>>, txids?: readonly string[]) => {
       for (const part of parts) {
         const carried = next[part];
+
         if (carried !== undefined) rows.set(part, carried);
       }
+
       woken = txids;
       version += 1;
       wake();

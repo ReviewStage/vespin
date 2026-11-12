@@ -123,6 +123,7 @@ export const descriptionDocumentReads = /* @__PURE__ */ Effect.fn("host/descript
     function laidNow(entry: Followed, read: number): boolean {
       if (read < entry.laid) return false;
       entry.laid = read;
+
       return true;
     }
 
@@ -130,8 +131,11 @@ export const descriptionDocumentReads = /* @__PURE__ */ Effect.fn("host/descript
     function wanted(taskId: string, entry: Followed): boolean {
       if (!gate() || entry.confirming > 0) return false;
       const rows = held.rowsOf(taskId);
+
       if (rows === undefined) return true;
+
       if (!("task" in rows)) return false;
+
       return (
         entry.descriptionSavedAt !== undefined && entry.descriptionSavedAt > rows.task.updatedAt
       );
@@ -154,23 +158,31 @@ export const descriptionDocumentReads = /* @__PURE__ */ Effect.fn("host/descript
         entry.started += 1;
         const read = entry.started;
         const opened = yield* dependencies.open(taskId);
+
         if (!opened.ok) {
           if (opened.failure !== TASK_CALL_FAILURE.NOT_FOUND) {
             answers.unanswered();
+
             return yield* Effect.fail(opened.failure);
           }
+
           if (held.rowsOf(taskId) === undefined && laidNow(entry, read))
             answers.answered(DESCRIPTION_GONE);
+
           return;
         }
+
         const standing = held.rowsOf(taskId);
+
         const older =
           standing !== undefined &&
           "task" in standing &&
           opened.answer.updatedAt < standing.task.updatedAt;
+
         if (older || !laidNow(entry, read)) return yield* Effect.fail(OVERTAKEN);
         answers.answered({ task: dependencies.listed(opened.answer) });
       });
+
       return Effect.ignore(
         Effect.retry(once, { schedule: FOLLOW_BACKOFF, while: () => wanted(taskId, entry) }),
       );
@@ -187,6 +199,7 @@ export const descriptionDocumentReads = /* @__PURE__ */ Effect.fn("host/descript
     function followRecord(taskId: string, entry: Followed): Effect.Effect<void> {
       // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
       const userId = dependencies.accountId();
+
       const seal = (
         poll: boolean,
         after?: string,
@@ -203,11 +216,14 @@ export const descriptionDocumentReads = /* @__PURE__ */ Effect.fn("host/descript
                       sealed.failure === LIVE_SIGNED_OUT.failure,
                   },
             );
+
       /** One seal followed until it stops: whether it delivered, or why it never did. */
       const attempt = Effect.gen(function* () {
         const sealed = yield* seal(false);
+
         if ("failure" in sealed) return yield* Effect.fail(sealed);
         let delivered = false;
+
         const moves = taskRecordMoves(
           {
             poll: (after) => seal(true, after),
@@ -217,22 +233,28 @@ export const descriptionDocumentReads = /* @__PURE__ */ Effect.fn("host/descript
           },
           sealed,
         );
+
         yield* Stream.runForEach(moves, ({ descriptionSavedAt }) =>
           Effect.sync(() => {
             delivered = true;
+
             if (descriptionSavedAt === undefined) return;
             entry.descriptionSavedAt = descriptionSavedAt;
             entry.ask();
           }),
         ).pipe(Effect.ignore);
+
         if (!delivered)
           return yield* Effect.fail<LiveFailure>({ failure: TASK_CALL_FAILURE.UNANSWERED });
+
         return true;
       });
+
       const followedRecord = attempt.pipe(
         Effect.retry({ schedule: FOLLOW_BACKOFF, while: (why) => why.gone !== true && gate() }),
         Effect.option,
       );
+
       return Effect.asVoid(
         Effect.repeat(followedRecord, {
           schedule: Schedule.spaced(FOLLOW_RESEAL.FIRST),
@@ -252,6 +274,7 @@ export const descriptionDocumentReads = /* @__PURE__ */ Effect.fn("host/descript
       return Effect.scoped(
         Effect.gen(function* () {
           const asked = yield* Queue.sliding<true>(1);
+
           const entry: Followed = {
             descriptionSavedAt: undefined,
             started: 0,
@@ -262,6 +285,7 @@ export const descriptionDocumentReads = /* @__PURE__ */ Effect.fn("host/descript
               Queue.offerUnsafe(asked, true);
             },
           };
+
           followed.set(taskId, entry);
           yield* Effect.addFinalizer(() =>
             Effect.sync(() => {
@@ -275,6 +299,7 @@ export const descriptionDocumentReads = /* @__PURE__ */ Effect.fn("host/descript
           );
           entry.ask();
           yield* followRecord(taskId, entry);
+
           return yield* Effect.never;
         }),
       );
@@ -287,6 +312,7 @@ export const descriptionDocumentReads = /* @__PURE__ */ Effect.fn("host/descript
       follow: followDescription,
       tell: dependencies.tell,
     });
+
     /** The hold a start took on each task's description, one fiber standing until a window takes it over or the start is taken back. */
     const holds = yield* FiberMap.make<string>();
 
@@ -305,6 +331,7 @@ export const descriptionDocumentReads = /* @__PURE__ */ Effect.fn("host/descript
     /** `taskId`'s description as held now; none where none is, or the task is gone. */
     const heldTask = (taskId: string): Task | undefined => {
       const rows = held.rowsOf(taskId);
+
       return rows !== undefined && "task" in rows ? rows.task : undefined;
     };
 
@@ -319,35 +346,44 @@ export const descriptionDocumentReads = /* @__PURE__ */ Effect.fn("host/descript
       written: (taskId, laid) => {
         const rows = held.rowsOf(taskId);
         const entry = followed.get(taskId);
+
         if (rows === undefined ? entry === undefined : !("task" in rows)) return;
         const task = laid(heldTask(taskId));
+
         if (task === undefined) return;
+
         // Note that a write counts as a read that started and landed, so no read that left before it lands over it.
         if (entry !== undefined) {
           entry.started += 1;
           entry.laid = entry.started;
         }
+
         held.lay(taskId, { task });
       },
       // Note that the task is laid before a window opens it, and held by the host meanwhile, so the window's first frame of it draws its description; the window's own hold then joins this one, and its letting go lets the description go.
       started: (task) =>
         Effect.suspend(() => {
           held.lay(task.id, { task });
+
           return follow(task.id);
         }),
       relisted: () => {
         for (const taskId of followed.keys()) {
           const task = heldTask(taskId);
+
           if (task === undefined) continue;
           const listed = dependencies.listed(task);
+
           if (!Equal.equals(listed, task)) held.lay(taskId, { task: listed });
         }
       },
       confirmed: (taskId, txid) =>
         Effect.suspend(() => {
           const entry = followed.get(taskId);
+
           if (entry === undefined) return Effect.void;
           entry.confirming += 1;
+
           return confirmWrite(entry.txWait, txid).pipe(
             Effect.ensuring(
               Effect.sync(() => {

@@ -168,6 +168,7 @@ function modifiersOf(held: RemoteModifiers): number {
 function fitted(body: CloudBrowserViewport, aspect: number | undefined): CloudBrowserViewport {
   if (aspect === undefined || body.width < 1 || body.height < 1) return body;
   const width = Math.min(body.width, body.height * aspect);
+
   return { width: Math.floor(width), height: Math.floor(width / aspect) };
 }
 
@@ -236,25 +237,33 @@ function CloudBrowserBar({
   const field = useRef<HTMLInputElement>(null);
   // What the bar holds while it is being typed into, none while it shows the page's address.
   const [typed, setTyped] = useState<string | undefined>(undefined);
+
   const go = () => {
     const opened = browserAddressOf(typed ?? "");
+
     if (opened === undefined) return;
+
     if (!holdTyped) {
       setTyped(undefined);
       field.current?.blur();
     }
+
     onOpen(opened);
   };
+
   // Note that an `onEscape` ends the whole tab, so the first Escape clears the words and only one on an empty field answers it.
   const leave = () => {
     if (onEscape === undefined) {
       setTyped(undefined);
       field.current?.blur();
+
       return;
     }
+
     if ((typed ?? address) === "") onEscape();
     else setTyped("");
   };
+
   // Note that a step's hint is its name while it works, and the name with the reason while it is off.
   const hintOf = (name: string) => (onStep === undefined ? `${name}: ${whyOff}` : name);
   // A phone keeps the address as the page's own field, its steps items of the task's header's ⋯,
@@ -304,6 +313,7 @@ function CloudBrowserBar({
         ].filter((group) => group.length > 0)
       : undefined,
   );
+
   return (
     <PaneBar
       middle={
@@ -360,10 +370,13 @@ function CloudBrowserBar({
 /** Whether the agent acted at `lastActedAt` within `CLOUD_BROWSER_AGENT_RECENT` of now, and false again once that span has passed. */
 function agentLately(lastActedAt: number): Stream.Stream<boolean> {
   const span = Duration.toMillis(CLOUD_BROWSER_AGENT_RECENT);
+
   return Stream.fromEffect(Clock.currentTimeMillis).pipe(
     Stream.flatMap((now) => {
       const left = lastActedAt + span - now;
+
       if (left <= 0) return Stream.make(false);
+
       return Stream.make(true).pipe(
         Stream.concat(Stream.fromEffect(Effect.as(Effect.sleep(Duration.millis(left)), false))),
       );
@@ -395,6 +408,7 @@ function useAgentLately(lastActedAt: number): boolean {
     [lastActedAt, said],
   );
   const reading = useSelector(said);
+
   return reading?.lastActedAt === lastActedAt
     ? reading.lately
     : Date.now() - lastActedAt < Duration.toMillis(CLOUD_BROWSER_AGENT_RECENT);
@@ -411,8 +425,11 @@ function standingOf(input: {
 }): string | undefined {
   const { view, tab, owner, memberName, lately } = input;
   const driver = view.driver?.driver ?? tab.driver;
+
   if (view.driver?.yours === true) return "You're driving";
+
   if (driver !== null) return `${memberName(driver.userId) ?? "A teammate"} is driving`;
+
   return lately ? `${owner.name} is using this tab` : undefined;
 }
 
@@ -428,11 +445,14 @@ function noticeOf(view: CloudBrowserView): Notice | undefined {
       view.ended === BROWSER_LIVE_CLOSE_REASON.GONE
         ? "This tab has closed"
         : "Paused while no one watched";
+
     return { waiting: false, words };
   }
+
   if (view.phase === CLOUD_BROWSER_PHASE.RECONNECTING) {
     return { waiting: true, label: "Reconnecting" };
   }
+
   return view.painted ? undefined : { waiting: true, label: "Waiting for the page" };
 }
 
@@ -443,7 +463,9 @@ function stepsOffOf(view: CloudBrowserView): string {
       ? "this tab has closed"
       : "watch again to use it";
   }
+
   if (view.phase === CLOUD_BROWSER_PHASE.RECONNECTING) return "reconnecting";
+
   return "the browser is not live yet";
 }
 
@@ -464,6 +486,7 @@ const DARK_PAGE_LUMA = 0.32;
 /** One sRGB channel byte in linear light, as WCAG 2's relative luminance reads it. */
 function linearOf(byte: number): number {
   const channel = byte / 255;
+
   return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
 }
 
@@ -484,25 +507,32 @@ function darkBeneath(
   point: { readonly x: number; readonly y: number },
 ): boolean | undefined {
   const context = canvas?.getContext("2d");
+
   if (canvas === null || context === null || context === undefined) return undefined;
   const ratio = window.devicePixelRatio || 1;
   const side = Math.min(GROUND_SAMPLE, canvas.width, canvas.height);
+
   if (side < 1) return undefined;
+
   const at = (value: number, most: number) =>
     Math.max(0, Math.min(most - side, Math.round((value + GROUND_INSET) * ratio - side / 2)));
+
   const { data } = context.getImageData(
     at(point.x, canvas.width),
     at(point.y, canvas.height),
     side,
     side,
   );
+
   let luma = 0;
+
   for (let index = 0; index < data.length; index += 4) {
     luma +=
       0.2126 * linearOf(data[index] ?? 0) +
       0.7152 * linearOf(data[index + 1] ?? 0) +
       0.0722 * linearOf(data[index + 2] ?? 0);
   }
+
   return luma / (data.length / 4) < DARK_PAGE_LUMA;
 }
 
@@ -539,28 +569,34 @@ export function CloudBrowserPane({
   const pointer = useRef(placed);
   pointer.current = placed;
   const [onDarkPage, setOnDarkPage] = useState(false);
+
   const readGround = useCallback(() => {
     const point = pointer.current;
     const dark = point === undefined ? undefined : darkBeneath(canvas.current, point);
+
     if (dark !== undefined) setOnDarkPage(dark);
   }, []);
+
   useEffect(() => {
     if (placed !== undefined) readGround();
   }, [readGround, placed?.x, placed?.y]);
 
   // The last frame drawn, kept only to paint it again once the canvas changes size, which clears it.
   const shownFrame = useRef<HTMLImageElement | undefined>(undefined);
+
   const onFrame = useCallback(
     (frame: CloudBrowserFrame) => {
       if (frame.pageWidth > 0 && frame.pageHeight > 0) {
         setAspect(frame.pageWidth / frame.pageHeight);
       }
+
       const image = new Image();
       image.onload = () => {
         shownFrame.current = image;
         paint(canvas.current, image);
         readGround();
       };
+
       image.src = `data:image/jpeg;base64,${frame.data}`;
     },
     [readGround],
@@ -571,6 +607,7 @@ export function CloudBrowserPane({
   // Note that no view opens while the task list says the agent's sandbox is not open, because the relay would only answer not opened; it opens as the list says it opened.
   const sandboxWaited = useSandboxOpen(tab.agentId) === false;
   const watched = shown && visible && !sandboxWaited;
+
   // A pane shown again opens a new view, since the one before closed as it was hidden, or as idle meanwhile.
   const live = useMemo(
     () =>
@@ -582,12 +619,15 @@ export function CloudBrowserPane({
       }),
     [tab.agentId, tab.id, onFrame, generation, watched],
   );
+
   // Note that a view is kept with the connection it came from, so a pane shown again opens anew.
   const views = useCreateStore<
     { readonly live: CloudBrowserLive; readonly view: CloudBrowserView } | undefined
   >(undefined);
+
   useEffect(() => {
     if (!watched) return;
+
     return forkEffect(
       Stream.runForEach(live.views, (view) =>
         Effect.sync(() => views.setState(() => ({ live, view }))),
@@ -598,11 +638,13 @@ export function CloudBrowserPane({
   const view = watched && reading?.live === live ? reading.view : OPENING_VIEW;
   useLayoutEffect(() => {
     const element = body.current;
+
     if (element === null) return;
     const measure = () => setBodySize({ width: element.clientWidth, height: element.clientHeight });
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
+
     return () => observer.disconnect();
   }, []);
   // The viewport goes again each time the canvas changes size, and the page is painted again on it.
@@ -613,6 +655,7 @@ export function CloudBrowserPane({
   }, [live, size.width, size.height]);
 
   const yours = view.driver?.yours === true;
+
   const pointerInput = (input: RemotePointer) => {
     live.input({
       type: BROWSER_LIVE_CLIENT.MOUSE,
@@ -628,6 +671,7 @@ export function CloudBrowserPane({
       modifiers: modifiersOf(input.modifiers),
     });
   };
+
   const wheelInput = (input: RemoteWheel) => {
     const clamp = (delta: number) => Math.max(-10_000, Math.min(10_000, delta));
     live.input({
@@ -639,17 +683,22 @@ export function CloudBrowserPane({
       modifiers: modifiersOf(input.modifiers),
     });
   };
+
   const keyInput = (input: RemoteKey): boolean => {
     const { key, modifiers: held } = input;
     const chord = { key, meta: held.meta, shift: held.shift, alt: held.alt, control: held.control };
     // A chord the window answers is left to it, but off a Mac a Ctrl chord, which is the page's; ⌘V, or Control-V off a Mac, arrives as the paste it is.
     const keptHere = surfaceKeepsPress({ ctrlKey: held.control, metaKey: held.meta });
+
     if (!keptHere && chordIsWindows(chord)) return false;
+
     if ((held.meta || held.control) && !held.alt && key.toLowerCase() === "v") return false;
     const edit = held.meta && PAGE_EDIT_KEYS.has(key.toLowerCase());
+
     const modifiers = edit
       ? (modifiersOf(held) & ~BROWSER_LIVE_MODIFIER.META) | BROWSER_LIVE_MODIFIER.CONTROL
       : modifiersOf(held);
+
     const message: InputMessage = {
       type: BROWSER_LIVE_CLIENT.KEY,
       action: KEY_ACTION[input.action],
@@ -658,9 +707,12 @@ export function CloudBrowserPane({
       keyCode: Math.max(0, Math.min(255, input.keyCode)),
       modifiers,
     };
+
     live.input(message);
+
     return true;
   };
+
   const pasteInput = (text: string) => {
     for (let from = 0; from < text.length; from += TEXT_PIECE_CHARS) {
       live.input({
@@ -673,24 +725,28 @@ export function CloudBrowserPane({
   // A view the relay closed as idle opens again on a press; one whose tab closed does not.
   const resumable =
     view.phase === CLOUD_BROWSER_PHASE.ENDED && view.ended === BROWSER_LIVE_CLOSE_REASON.IDLE;
+
   const notice = noticeOf(view);
   const lately = useAgentLately(tab.lastActedAt);
   const standing = standingOf({ view, tab, owner, memberName, lately });
   const address = view.page?.address ?? tab.address;
   const driver = view.driver?.driver ?? tab.driver;
   const driven = driver !== null;
+
   // A refusal says why first, then who has the tab.
   const refusal = view.takeoverRefused
     ? "Only whoever started this agent can drive its tab."
     : view.stepRefused
       ? `${(driver === null ? undefined : memberName(driver.userId)) ?? "A teammate"} is driving this tab. Wait until they hand it back.`
       : undefined;
+
   const said = refusal ?? standing;
   // Note that who has the tab is said politely as it changes, and a refusal as an alert, since it answers a press.
   useAnnounce(ANNOUNCE.POLITE, refusal === undefined ? (standing ?? "") : "");
   useAnnounceShown(ANNOUNCE.ALERT, refusal ?? "");
   useAnnounceShown(ANNOUNCE.POLITE, notice?.waiting === false ? notice.words : "");
   const isLive = view.phase === CLOUD_BROWSER_PHASE.LIVE;
+
   return (
     <Fill
       as={FILL_ELEMENT.SECTION}
@@ -800,31 +856,39 @@ export function CloudBrowserDraftPane({
   // A draft is drawn for the account that holds it alone, so the tab it opens is noted as that account's.
   const account = useWindowAccount();
   const client = useQueryClient();
+
   // Note that the draft stays opening once a tab answers, because `onOpened` replaces it with that tab.
   const opened = useMutation({
     ...actMutation(ACT_KIND.TASKS_BROWSER_TAB_OPEN),
     onSuccess: (answer) => {
       if (!("tab" in answer)) return;
       noteOpenedCloudTab(account, place, answer.tab);
+
       // An answer that lands once another account signed in chooses nothing on its panel, the draft let go for the tab it opened.
       if (windowAccountOf(appStateIn(client)?.account) !== account) {
         discardCloudDraft(account, place, draft.id);
+
         return;
       }
+
       onOpened(answer.tab);
     },
   });
+
   const answer = opened.data;
   const opening = opened.isPending || (answer !== undefined && "tab" in answer);
+
   const refused = opened.isError
     ? openFailureWords(BROWSER_TAB_OPEN_FAILURE.UNANSWERED, owner.name)
     : answer !== undefined && "failure" in answer
       ? openFailureWords(answer.failure, owner.name)
       : undefined;
+
   const open = (address: string) => {
     if (opening) return;
     opened.mutate({ agentId: draft.agentId, address });
   };
+
   return (
     <Fill
       as={FILL_ELEMENT.SECTION}

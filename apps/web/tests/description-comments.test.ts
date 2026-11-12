@@ -107,6 +107,7 @@ const openAccount = (name: string) =>
     const db = yield* Database;
     const id = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id, name, email: `${id}@app.test` });
+
     return id;
   });
 
@@ -124,6 +125,7 @@ const fakeAgentSessions = (): ScriptedSessions => ({
   open: (message) =>
     Effect.sync(() => {
       opened.push(message);
+
       return {
         outcome: SESSION_SEND_OUTCOME.ACCEPTED,
         sessionId: `wrun_01M${String(opened.length).padStart(22, "0")}`,
@@ -132,6 +134,7 @@ const fakeAgentSessions = (): ScriptedSessions => ({
   send: (sessionId, message) =>
     Effect.sync(() => {
       opened.push(message);
+
       return {
         outcome: SESSION_SEND_OUTCOME.ACCEPTED,
         sessionId,
@@ -173,6 +176,7 @@ const webServicesOver = (clock: Clock.Clock, after?: Layer.Layer<AfterResponse>)
     const provided = yield* Effect.context<Database>().pipe(
       Effect.provide(yield* servicesOver(clock, after)),
     );
+
     // SAFETY: the procedures yield the database, the clock, GitHub and the analytics alone, which is all a test provides of the web runtime's services.
     return provided as Context.Context<WebServices>;
   });
@@ -181,12 +185,15 @@ const webServicesOver = (clock: Clock.Clock, after?: Layer.Layer<AfterResponse>)
 const commentsAnswer = (request: Request, clock: Clock.Clock, after?: Layer.Layer<AfterResponse>) =>
   Effect.gen(function* () {
     const services = yield* webServicesOver(clock, after);
+
     const handle = hostedFetch({
       descriptionComments: descriptionCommentsProcedures({
         resolveUserId,
       }),
     });
+
     const response = yield* Effect.promise(() => handle(request, services));
+
     return {
       status: response.status,
       body: yield* Effect.promise(() => response.text()),
@@ -199,6 +206,7 @@ const answer = (routes: "comments" | "plans", request: Request) =>
   Effect.gen(function* () {
     if (routes === "comments") return yield* commentsAnswer(request, yield* Clock.Clock);
     const services = yield* webServicesOver(yield* Clock.Clock);
+
     const plans = hostedFetch({
       plans: tasksProcedures({
         resolveUserId,
@@ -207,7 +215,9 @@ const answer = (routes: "comments" | "plans", request: Request) =>
         keepAwake: keepAwakeDetached,
       }),
     });
+
     const response = yield* Effect.promise(() => plans(request, services));
+
     return {
       status: response.status,
       body: yield* Effect.promise(() => response.text()),
@@ -221,7 +231,9 @@ function request(
   body?: DescriptionCommentStart | DescriptionCommentActionRequest | DescriptionEditRequest,
 ): Request {
   const url = new URL(path, ORIGIN);
+
   for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
+
   return new Request(url, {
     method: body === undefined ? "GET" : "POST",
     headers: {
@@ -235,7 +247,9 @@ function request(
 /** The threads a read answered, failing the test where it does not read. */
 function threadsIn(answered: Answered): readonly DescriptionCommentThread[] {
   const read = readEither(descriptionCommentsAnswerSchema)(unparsedWire(JSON.parse(answered.body)));
+
   if (Result.isFailure(read)) return assert.fail(answered.body);
+
   return read.success.threads;
 }
 
@@ -244,7 +258,9 @@ function threadIn(answered: Answered): DescriptionCommentThread {
   const read = readEither(descriptionCommentThreadAnswerSchema)(
     unparsedWire(JSON.parse(answered.body)),
   );
+
   if (Result.isFailure(read) || !("thread" in read.success)) return assert.fail(answered.body);
+
   return read.success.thread;
 }
 
@@ -260,6 +276,7 @@ const openSharedTask = Effect.gen(function* () {
   yield* descriptionsFor(owner, true);
   const { id: taskId } = yield* createTask(owner, { organizationId: workspace, name: "Invites" });
   yield* saveDescriptionText(owner, taskId, DESCRIPTION_TEXT);
+
   return { owner, teammate, outsider, taskId };
 });
 
@@ -279,12 +296,15 @@ const startAgent = (owner: string, taskId: string) =>
         payer: AGENT_PAYER.API_KEY,
       }),
     );
+
     const claimed = yield* claimRuntimeSession(
       { userId: owner, conversationId: agent.conversationId },
       `wrun_${randomUUID()}`,
       yield* DateTime.nowAsDate,
     );
+
     assert.ok(claimed, "the agent's session stands");
+
     return agent.id;
   });
 
@@ -298,6 +318,7 @@ const appLink = (taskId: string) => `[@Vespin](https://vespin.dev/acme/plan/${ta
 /** A start of a thread on the sentence above. */
 function startBody(comment: string) {
   const from = DESCRIPTION_TEXT.indexOf(WORDS);
+
   return {
     clientKey: randomUUID(),
     scope: DESCRIPTION_COMMENT_SCOPE.WORDS,
@@ -319,6 +340,7 @@ it.layer(getTestDB())("a description's comment threads through the routes", (it)
           "comments",
           request(commentsPath(taskId), teammate, {}, startBody("Is withdrawing in v1?")),
         );
+
         assert.equal(started.status, HOSTED_HTTP_STATUS.CREATED);
         const thread = threadIn(started);
 
@@ -326,6 +348,7 @@ it.layer(getTestDB())("a description's comment threads through the routes", (it)
           "comments",
           request(commentsPath(taskId), owner, { after: DESCRIPTION_COMMENTS_CURSOR_START }),
         );
+
         assert.equal(read.status, HOSTED_HTTP_STATUS.OK);
         const threads = threadsIn(read);
         assert.deepEqual(
@@ -334,10 +357,12 @@ it.layer(getTestDB())("a description's comment threads through the routes", (it)
         );
 
         const outsiderRead = yield* answer("comments", request(commentsPath(taskId), outsider, {}));
+
         const outsiderStart = yield* answer(
           "comments",
           request(commentsPath(taskId), outsider, {}, startBody("Hello")),
         );
+
         const outsiderResolve = yield* answer(
           "comments",
           request(
@@ -347,6 +372,7 @@ it.layer(getTestDB())("a description's comment threads through the routes", (it)
             { action: DESCRIPTION_COMMENT_ACTION.RESOLVE },
           ),
         );
+
         assert.equal(outsiderRead.status, HOSTED_HTTP_STATUS.NOT_FOUND);
         assert.equal(outsiderStart.status, HOSTED_HTTP_STATUS.NOT_FOUND);
         assert.equal(outsiderResolve.status, HOSTED_HTTP_STATUS.NOT_FOUND);
@@ -364,6 +390,7 @@ it.layer(getTestDB())("a description's comment threads through the routes", (it)
   it.effect("any member resolves a teammate's thread, and it reads resolved", () =>
     Effect.gen(function* () {
       const { owner, teammate, taskId } = yield* openSharedTask;
+
       const thread = threadIn(
         yield* answer("comments", request(commentsPath(taskId), teammate, {}, startBody("v1?"))),
       );
@@ -389,9 +416,11 @@ it.layer(getTestDB())("a description's comment threads through the routes", (it)
     () =>
       Effect.gen(function* () {
         const { owner, taskId } = yield* openSharedTask;
+
         const thread = threadIn(
           yield* answer("comments", request(commentsPath(taskId), owner, {}, startBody("v1?"))),
         );
+
         const deleted = DESCRIPTION_TEXT.replace(`${WORDS} `, "");
 
         const deleting = yield* answer(
@@ -406,10 +435,13 @@ it.layer(getTestDB())("a description's comment threads through the routes", (it)
             },
           ),
         );
+
         assert.equal(deleting.status, HOSTED_HTTP_STATUS.OK);
+
         const afterDelete = threadsIn(
           yield* answer("comments", request(commentsPath(taskId), owner, {})),
         )[0];
+
         assert.equal(afterDelete?.anchor, undefined);
         assert.equal(afterDelete?.quote, WORDS);
 
@@ -429,9 +461,11 @@ it.layer(getTestDB())("a description's comment threads through the routes", (it)
             },
           ),
         );
+
         const afterUndo = threadsIn(
           yield* answer("comments", request(commentsPath(taskId), owner, {})),
         )[0];
+
         assert.deepEqual(afterUndo?.anchor, { from, to: from + WORDS.length });
         assert.deepEqual(countedProperties(owner, SERVER_EVENT.DESCRIPTION_EDIT), [{}, {}]);
       }),
@@ -465,12 +499,14 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
         const words = JSON.stringify(message.message);
         assert.ok(words.includes("Charles Pan sent you a comment thread"));
         assert.ok(words.includes(thread.id));
+
         const lines = yield* Database.use((db) =>
           db
             .select({ metadata: messages.metadata })
             .from(messages)
             .where(sql`${messages.metadata} ->> 'thread_id' = ${thread.id}`),
         );
+
         assert.deepEqual(
           lines.map((line) => line.metadata),
           [
@@ -483,9 +519,11 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
             },
           ],
         );
+
         const [after] = threadsIn(
           yield* answer("comments", request(commentsPath(taskId), teammate, {})),
         );
+
         assert.deepEqual(
           after?.entries.map((entry) => [entry.kind, entry.asked?.actor]),
           [
@@ -502,6 +540,7 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
       Effect.gen(function* () {
         const { owner, teammate, taskId } = yield* openSharedTask;
         const agentId = yield* startAgent(owner, taskId);
+
         const thread = threadIn(
           yield* answer(
             "comments",
@@ -513,7 +552,9 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
             ),
           ),
         );
+
         const before = opened.length;
+
         const reply = (words: string) =>
           answer(
             "comments",
@@ -532,9 +573,11 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
 
         // An agent whose workspace has Task descriptions off is told nothing of the description's comments.
         yield* descriptionsFor(owner, false);
+
         const planless = readEither(descriptionCommentThreadAnswerSchema)(
           unparsedWire(JSON.parse((yield* reply("And by link?")).body)),
         );
+
         assert.ok(Result.isSuccess(planless) && "thread" in planless.success);
         assert.deepEqual(planless.success.unsent, [
           { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId },
@@ -560,6 +603,7 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
         const agentId = yield* startAgent(owner, taskId);
         // Note that a page's threads are no description's, so its workspace's Task descriptions off keeps none of them from the agent.
         yield* descriptionsFor(owner, false);
+
         const page = Option.getOrThrow(
           yield* writePage(
             owner,
@@ -568,6 +612,7 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
             { kind: PAGE_SHOWER.AGENT, agentId },
           ),
         );
+
         const before = opened.length;
         const kept = keptAfterResponse();
 
@@ -588,6 +633,7 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
             kept.layer,
           ),
         );
+
         assert.equal(opened.length, before, "the comment was answered before any agent was woken");
         yield* kept.run;
 
@@ -599,6 +645,7 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
         assert.ok(words.includes(thread.id));
 
         yield* archiveAgent(owner, agentId, true);
+
         const replied = yield* answer(
           "comments",
           request(
@@ -612,9 +659,11 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
             },
           ),
         );
+
         const read = readEither(descriptionCommentThreadAnswerSchema)(
           unparsedWire(JSON.parse(replied.body)),
         );
+
         assert.ok(Result.isSuccess(read) && "thread" in read.success, replied.body);
         assert.deepEqual(read.success.unsent, [
           { actor: DESCRIPTION_COMMENT_ACTOR.AGENT, agentId },
@@ -629,6 +678,7 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
       Effect.gen(function* () {
         const { owner, teammate, taskId } = yield* openSharedTask;
         const agentId = yield* startAgent(owner, taskId);
+
         const page = Option.getOrThrow(
           yield* writePage(
             owner,
@@ -637,6 +687,7 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
             { kind: PAGE_SHOWER.AGENT, agentId },
           ),
         );
+
         const on = { id: page.id, version: page.version };
         const before = opened.length;
 
@@ -657,7 +708,9 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
             ),
           ),
         );
+
         assert.equal(opened.length, before, "a held comment hands over nothing");
+
         const sent = threadIn(
           yield* answer(
             "comments",
@@ -680,12 +733,15 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
         assert.equal(handed.length, 1, "the review reached the page's writer as one message");
         const words = JSON.stringify(handed[0]?.message);
         assert.ok(words.includes("2 comment threads"), words);
+
         for (const said of [held.id, sent.id, "Say who it goes to.", "Is this a week's worth?"]) {
           assert.ok(words.includes(said), said);
         }
+
         const threads = threadsIn(
           yield* answer("comments", request(commentsPath(taskId), teammate, { page: page.id })),
         );
+
         assert.deepEqual(
           threads.map((thread) =>
             thread.entries.map((entry) => [entry.kind, entry.asked?.agentId]),
@@ -722,6 +778,7 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
             ),
           ),
         );
+
         const replied = threadIn(
           yield* answer(
             "comments",
@@ -761,12 +818,14 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
       Effect.gen(function* () {
         const { owner, teammate, taskId } = yield* openSharedTask;
         const agentId = yield* startAgent(owner, taskId);
+
         const thread = threadIn(
           yield* answer(
             "comments",
             request(commentsPath(taskId), teammate, {}, startBody("Is withdrawing in v1?")),
           ),
         );
+
         const reply = (words: string, clientKey: string) =>
           answer(
             "comments",
@@ -777,6 +836,7 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
               { action: DESCRIPTION_COMMENT_ACTION.REPLY, clientKey, words },
             ),
           );
+
         const before = opened.length;
         const key = randomUUID();
         const words = `${agentLink(taskId, agentId)} what do you think?`;
@@ -793,6 +853,7 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
           `[@Other](https://vespin.dev/acme/plan/${randomUUID()}/agent/${randomUUID()}) saw this`,
           randomUUID(),
         );
+
         const [elsewhere] = threadsIn(
           yield* answer("comments", request(commentsPath(taskId), owner, {})),
         );
@@ -828,9 +889,11 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
             { ...startBody("First thread"), clientKey: taken },
           ),
         );
+
         const other = threadIn(
           yield* answer("comments", request(commentsPath(taskId), owner, {}, startBody("Second"))),
         );
+
         const before = opened.length;
 
         const refused = yield* answer(
@@ -860,10 +923,13 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
       Effect.gen(function* () {
         const { owner, taskId } = yield* openSharedTask;
         const agentId = yield* startAgent(owner, taskId);
+
         const thread = threadIn(
           yield* answer("comments", request(commentsPath(taskId), owner, {}, startBody("v1?"))),
         );
+
         const key = randomUUID();
+
         const reply = (words: string) =>
           answer(
             "comments",
@@ -874,6 +940,7 @@ it.layer(getTestDB())("a description's comment thread sent to an agent", (it) =>
               { action: DESCRIPTION_COMMENT_ACTION.REPLY, clientKey: key, words },
             ),
           );
+
         yield* reply("No action needed.");
         const before = opened.length;
 
@@ -893,9 +960,11 @@ it.layer(getTestDB())("a description's comments read held on the test's clock", 
   const heldRead = (userId: string, taskId: string, after: string) =>
     Effect.gen(function* () {
       const { clock, asleep } = yield* announcingClock;
+
       const fiber = yield* Effect.forkChild(
         commentsAnswer(request(commentsPath(taskId), userId, { after }), clock),
       );
+
       return { fiber, asleep };
     });
 
@@ -905,6 +974,7 @@ it.layer(getTestDB())("a description's comments read held on the test's clock", 
       Effect.gen(function* () {
         const { owner, teammate, taskId } = yield* openSharedTask;
         const first = yield* answer("comments", request(commentsPath(taskId), owner, {}));
+
         const { cursor } = readEither(descriptionCommentsAnswerSchema)(
           unparsedWire(JSON.parse(first.body)),
         ).pipe(Result.getOrThrow);
@@ -912,12 +982,14 @@ it.layer(getTestDB())("a description's comments read held on the test's clock", 
         const held = yield* heldRead(owner, taskId, cursor);
         yield* Queue.take(held.asleep);
         assert.equal(held.fiber.pollUnsafe(), undefined, "the read is held while nothing moved");
+
         const thread = threadIn(
           yield* answer(
             "comments",
             request(commentsPath(taskId), teammate, {}, startBody("Is withdrawing in v1?")),
           ),
         );
+
         const answered = yield* driven(held, CODER.MESSAGES_POLL);
 
         assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
@@ -959,10 +1031,12 @@ it.layer(getTestDB())("the comment paths' refusals, byte for byte", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, taskId } = yield* openSharedTask;
+
         const cursor = yield* answer(
           "comments",
           request(commentsPath(taskId), owner, { after: "" }),
         );
+
         const excess = yield* answer(
           "comments",
           new Request(new URL(commentsPath(taskId), ORIGIN), {
@@ -971,6 +1045,7 @@ it.layer(getTestDB())("the comment paths' refusals, byte for byte", (it) => {
             body: JSON.stringify({ ...startBody("v1?"), extra: true }),
           }),
         );
+
         for (const answered of [cursor, excess]) {
           assert.equal(answered.status, HOSTED_HTTP_STATUS.BAD_REQUEST);
           assert.equal(answered.body, '{"error":"invalid-request"}');
@@ -981,9 +1056,11 @@ it.layer(getTestDB())("the comment paths' refusals, byte for byte", (it) => {
   it.effect("a reply whose stated length is past the action's cap is refused as too large", () =>
     Effect.gen(function* () {
       const { owner, taskId } = yield* openSharedTask;
+
       const thread = threadIn(
         yield* answer("comments", request(commentsPath(taskId), owner, {}, startBody("v1?"))),
       );
+
       const body = JSON.stringify({
         action: DESCRIPTION_COMMENT_ACTION.REPLY,
         clientKey: randomUUID(),
@@ -991,6 +1068,7 @@ it.layer(getTestDB())("the comment paths' refusals, byte for byte", (it) => {
           DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS * 6 + MAXIMUM_ATTACHMENTS_BODY_BYTES + 2_048,
         ),
       });
+
       const answered = yield* answer(
         "comments",
         new Request(new URL(threadPath(taskId, thread.id), ORIGIN), {
@@ -1003,6 +1081,7 @@ it.layer(getTestDB())("the comment paths' refusals, byte for byte", (it) => {
           body,
         }),
       );
+
       assert.equal(answered.status, HOSTED_HTTP_STATUS.PAYLOAD_TOO_LARGE);
       assert.equal(answered.body, '{"error":"request-too-large"}');
     }),

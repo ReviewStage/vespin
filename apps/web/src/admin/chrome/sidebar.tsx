@@ -84,6 +84,7 @@ function AccountFoot({
   onSignOut: () => void;
 }): React.JSX.Element {
   const menu = useMenu(shown);
+
   return (
     <>
       <NavItem
@@ -134,15 +135,18 @@ function AdminSidebar({
 }): React.JSX.Element {
   // Note that a refusal stays up until the next press, since the account is still signed in.
   const [refused, setRefused] = useState(false);
+
   const signOut = () => {
     setRefused(false);
     onSignOut().catch(() => setRefused(true));
   };
+
   const go = (tab: AdminTab) => (event: React.MouseEvent<HTMLAnchorElement>) => {
     if (!plainLeftClick(event)) return;
     event.preventDefault();
     onNavigate(tab);
   };
+
   return (
     <aside ref={ref} className="desktop-sidebar" inert={!inSight}>
       <div className="desktop-drag-strip" />
@@ -195,21 +199,29 @@ function useDrawerDismiss(
   useEffect(() => {
     if (!open) return undefined;
     drawer.current?.querySelector<HTMLElement>('[aria-current="page"]')?.focus();
+
     const press = (event: PointerEvent) => {
       const target = event.target;
+
       if (!(target instanceof Node) || shell.current?.contains(target) !== true) return;
+
       if (drawer.current?.contains(target) || toggle.current?.contains(target)) return;
       onClose();
     };
+
     const key = (event: KeyboardEvent) => {
       const target = event.target;
+
       if (event.key !== "Escape" || !(target instanceof Node)) return;
+
       if (shell.current?.contains(target) !== true) return;
       onClose();
       toggle.current?.focus();
     };
+
     document.addEventListener("pointerdown", press);
     document.addEventListener("keydown", key);
+
     return () => {
       document.removeEventListener("pointerdown", press);
       document.removeEventListener("keydown", key);
@@ -244,6 +256,7 @@ export function AdminShell({
   const stage = useStageRoom();
   const narrow = stage.room === SHELL_ROOM.NARROW;
   const [overlay, setOverlay] = useState<SidebarOverlay>(SIDEBAR_OVERLAY.CLOSED);
+
   // Note that a drawer left open as the room widens is put away, so the room
   // narrowing again opens on the view rather than on the drawer.
   if (!narrow && overlay === SIDEBAR_OVERLAY.OPEN) setOverlay(SIDEBAR_OVERLAY.CLOSED);
@@ -259,14 +272,18 @@ export function AdminShell({
   const onToggle = () => {
     if (!narrow) {
       onToggleHidden();
+
       return;
     }
+
     setOverlay(drawerOpen ? SIDEBAR_OVERLAY.CLOSED : SIDEBAR_OVERLAY.OPEN);
   };
+
   const navigate = (tab: AdminTab) => {
     closeDrawer();
     onNavigate(tab);
   };
+
   const label = inSight ? SIDEBAR_TOGGLE_LABEL.HIDE : SIDEBAR_TOGGLE_LABEL.SHOW;
 
   return (

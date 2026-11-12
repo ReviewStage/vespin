@@ -58,13 +58,17 @@ export function resolveCliWorkspace<Listed extends Pick<Workspace, "id" | "slug"
         : names.config !== undefined
           ? { name: names.config, source: CLI_WORKSPACE_SOURCE.CONFIG }
           : undefined;
+
   if (named !== undefined) {
     const workspace = workspaceOfSlug(workspaces, named.name);
+
     return workspace === undefined
       ? { unsettled: CLI_WORKSPACE_UNSETTLED.UNKNOWN, named }
       : { workspace, source: named.source };
   }
+
   const [only, ...others] = workspaces;
+
   return only !== undefined && others.length === 0
     ? { workspace: only, source: CLI_WORKSPACE_SOURCE.ONLY }
     : { unsettled: CLI_WORKSPACE_UNSETTLED.UNNAMED };

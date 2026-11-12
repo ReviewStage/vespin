@@ -19,8 +19,10 @@ import { ephemeralCluster } from "./cluster.ts";
 function accepts(port: number) {
   return Effect.promise(async () => {
     const socket = connect(port, "127.0.0.1");
+
     try {
       await once(socket, "connect");
+
       return true;
     } catch {
       return false;
@@ -41,6 +43,7 @@ describe("ephemeralCluster", () => {
           }),
         ),
       );
+
       expect(existsSync(cluster.folder)).toBe(false);
       expect(yield* accepts(cluster.port)).toBe(false);
     }).pipe(Effect.provide(NodeServices.layer)),

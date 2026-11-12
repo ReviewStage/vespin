@@ -66,6 +66,7 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
 const RELAY = { owner: "Acme", name: "Relay" } as const;
 const RELAY_REPOSITORY = `${RELAY.owner}/${RELAY.name}`;
+
 /** One installation for each test's workspace, since one installation connects to one workspace and the suite's tests share a database. */
 const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 12 }, (_, index) => ({
   id: 8_000 + index,
@@ -73,6 +74,7 @@ const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 12 },
   accountId: 80_000 + index,
   repositories: [RELAY],
 }));
+
 let installationsConnected = 0;
 
 const TASK = "Find the flakiest test in CI this week and fix it.";
@@ -80,6 +82,7 @@ const TASK = "Find the flakiest test in CI this week and fix it.";
 /** The agent's sessions, writing down the first message of every session opened. */
 function fakeAgentSessions() {
   const opened: SessionMessage[] = [];
+
   const sessions: AgentSessions = {
     // Note that the machine is up at once, so the first message the Start queued goes as its boot answers.
     boot: () =>
@@ -91,17 +94,21 @@ function fakeAgentSessions() {
     open: (message) =>
       Effect.sync(() => {
         opened.push(message);
+
         return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: `wrun_${randomUUID()}` };
       }),
     send: (sessionId, message) =>
       Effect.sync(() => {
         opened.push(message);
+
         return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId, deliveryId: randomUUID() };
       }),
     cancel: () => Effect.succeed({ outcome: SESSION_CANCEL_OUTCOME.ACCEPTED }),
     reset: () => Effect.succeed({ outcome: SESSION_RESET_OUTCOME.RESET }),
   };
+
   const agentSessions = Effect.succeed(sessions);
+
   return { opened, sessions, agentSessions };
 }
 
@@ -126,6 +133,7 @@ const openConnectedWorkspace = Effect.gen(function* () {
   const installation = INSTALLATIONS[installationsConnected++];
   assert.ok(installation);
   yield* connectWorkspaceGitHub(workspaceId, installation);
+
   return { owner, workspaceId };
 });
 
@@ -172,6 +180,7 @@ const openedLineTaken = (
     assert.equal(Result.getOrUndefined(taken)?.length, 1);
 
     const db = yield* Database;
+
     const lines = yield* db
       .select({
         sender: messages.sender,
@@ -183,6 +192,7 @@ const openedLineTaken = (
       .where(
         and(eq(messages.conversationId, conversationId), eq(messages.role, MESSAGE_ROLE.USER)),
       );
+
     return { lines, heard: yield* heardFromAnotherAccount(target) };
   });
 
@@ -235,6 +245,7 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
         const theirs = yield* startAgent(agentSessions, teammate, ask).pipe(
           Effect.provide(services),
         );
+
         const refused = yield* Effect.result(
           startAgent(agentSessions, outsider, { ...ask, idempotencyKey: randomUUID() }).pipe(
             Effect.provide(services),
@@ -253,11 +264,13 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
+
         const booting = (up: Effect.Effect<BootFailure | MachineUp>) =>
           Effect.gen(function* () {
             const { opened, agentSessions } = fakeAgentSessions();
             const sessions = yield* agentSessions;
             const after = keptAfterResponse();
+
             const { agent } = yield* startAgent(
               Effect.succeed<AgentSessions>({
                 ...sessions,
@@ -269,11 +282,14 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
               owner,
               yield* promptAsk(owner, workspaceId),
             ).pipe(Effect.provide(Layer.merge(services, after.layer)));
+
             const queuedWhileBooting = (yield* agentQueueNow(agent.id)).messages.map(
               (message) => message.text,
             );
+
             const sentWhileBooting = opened.length;
             yield* after.run;
+
             return {
               queuedWhileBooting,
               sentWhileBooting,
@@ -326,11 +342,13 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
         const unreached = yield* promptAsk(owner, workspaceId);
+
         const refused = yield* Effect.result(
           startAgent(Effect.fail(HOSTED_REFUSAL.UNAVAILABLE), owner, unreached).pipe(
             Effect.provide(services),
           ),
         );
+
         // Each Start is held where it never gets past, and interrupted there. Note that one held while
         // its open is asked waits out its first line's hand-over deadline, as a send's does, which the
         // clock is moved past.
@@ -340,22 +358,29 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
           Effect.gen(function* () {
             const reached = yield* Deferred.make<void>();
             const ask = yield* promptAsk(owner, workspaceId);
+
             const starting = yield* startAgent(agentSessions(reached), owner, ask).pipe(
               Effect.provide(services),
               Effect.forkChild,
             );
+
             yield* Deferred.await(reached);
             const interrupting = yield* Effect.forkChild(Fiber.interrupt(starting));
+
             for (let second = 0; second <= 30; second += 1) {
               yield* Effect.yieldNow;
               yield* TestClock.adjust("1 second");
             }
+
             yield* Fiber.join(interrupting);
+
             return yield* readAgentByKey(owner, ask.idempotencyKey);
           });
+
         const beforeAsking = yield* cutAt((reached) =>
           Effect.andThen(Deferred.succeed(reached, undefined), Effect.never),
         );
+
         const whileAsking = yield* cutAt((reached) =>
           Effect.succeed({
             ...fakeAgentSessions().sessions,
@@ -377,16 +402,19 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
         const reported: Readonly<Record<string, unknown>>[] = [];
+
         const reporting = ErrorReporter.layer([
           ErrorReporter.make(({ attributes }) => {
             reported.push(attributes);
           }),
         ]);
+
         const refusing = (failed: SessionFailed) =>
           Effect.succeed<AgentSessions>({
             ...fakeAgentSessions().sessions,
             boot: () => Effect.succeed(failed),
           });
+
         const started = (failed: SessionFailed) =>
           Effect.flatMap(promptAsk(owner, workspaceId), (ask) =>
             Effect.result(
@@ -419,14 +447,18 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
+
         const openedTaken = (ask: StartAsk) =>
           Effect.gen(function* () {
             const { opened, agentSessions } = fakeAgentSessions();
+
             const { agent } = yield* startAgent(agentSessions, owner, ask).pipe(
               Effect.provide(services),
             );
+
             return yield* openedLineTaken(owner, agent.conversationId, opened);
           });
+
         const ranFor = (firing: AutomationFiring) =>
           Effect.map(
             promptAsk(owner, workspaceId),
@@ -450,13 +482,17 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
           "the prompt is the conversation's one line",
         );
         assert.equal(byHand.heard, false, "by hand");
+
         const scheduled = yield* openedTaken(
           yield* ranFor({ kind: AUTOMATION_FIRING.SCHEDULE, dueAt: 0 }),
         );
+
         assert.equal(scheduled.heard, false, "a schedule's run, its owner's prompt alone");
+
         const hooked = yield* openedTaken(
           yield* ranFor({ kind: AUTOMATION_FIRING.WEBHOOK, bytes: 2 }),
         );
+
         assert.equal(hooked.heard, true, "a webhook's run, its caller's body beside the prompt");
       }),
   );
@@ -476,6 +512,7 @@ it.layer(SUITE)("an agent started on a task", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
+
         const made = (status: TaskStatus) =>
           createTask(owner, {
             organizationId: workspaceId,
@@ -483,6 +520,7 @@ it.layer(SUITE)("an agent started on a task", (it) => {
             repository: RELAY_REPOSITORY,
             status,
           });
+
         const filed = yield* made(TASK_STATUS.BACKLOG);
         const todo = yield* made(TASK_STATUS.TODO);
         const done = yield* made(TASK_STATUS.DONE);
@@ -494,6 +532,7 @@ it.layer(SUITE)("an agent started on a task", (it) => {
 
         const statusOf = (taskId: string) =>
           Effect.map(readTask(owner, taskId), (read) => Option.getOrUndefined(read)?.task.status);
+
         assert.equal(yield* statusOf(filed.id), TASK_STATUS.IN_PROGRESS);
         assert.equal(yield* statusOf(todo.id), TASK_STATUS.IN_PROGRESS);
         assert.equal(yield* statusOf(done.id), TASK_STATUS.IN_PROGRESS);
@@ -504,6 +543,7 @@ it.layer(SUITE)("an agent started on a task", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
+
         const made = (assigneeId?: string) =>
           createTask(owner, {
             organizationId: workspaceId,
@@ -511,6 +551,7 @@ it.layer(SUITE)("an agent started on a task", (it) => {
             repository: RELAY_REPOSITORY,
             ...(assigneeId === undefined ? undefined : { assigneeId }),
           });
+
         const byHand = yield* made();
         const byAutomation = yield* made();
         const { agentSessions } = fakeAgentSessions();
@@ -530,6 +571,7 @@ it.layer(SUITE)("an agent started on a task", (it) => {
             readTask(owner, taskId),
             (read) => Option.getOrUndefined(read)?.task.assignee?.userId,
           );
+
         assert.equal(yield* assigneeOf(byHand.id), owner);
         assert.equal(yield* assigneeOf(byAutomation.id), undefined);
       }),
@@ -538,11 +580,13 @@ it.layer(SUITE)("an agent started on a task", (it) => {
   it.effect("on a task stored in pilot mode with no agent, a Start makes a coder", () =>
     Effect.gen(function* () {
       const { owner, workspaceId } = yield* openConnectedWorkspace;
+
       const made = yield* createTask(owner, {
         organizationId: workspaceId,
         name: "Invites",
         repository: RELAY_REPOSITORY,
       });
+
       // Note that nothing writes pilot mode now, so the task is made one in place, as a release before stored it.
       yield* Database.use((db) =>
         db.update(task).set({ mode: TASK_MODE.PILOT }).where(eq(task.id, made.id)),

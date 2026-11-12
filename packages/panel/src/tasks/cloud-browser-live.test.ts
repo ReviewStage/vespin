@@ -53,11 +53,13 @@ function harness() {
   const sockets: FakeSocket[] = [];
   const frames: CloudBrowserFrame[] = [];
   const views: CloudBrowserView[] = [];
+
   const live = cloudBrowserLive({
     open: (target, listener) => {
       assert.deepEqual(target, TARGET);
       const socket: FakeSocket = { sent: [], listener, closed: false };
       sockets.push(socket);
+
       return {
         send: (text) => socket.sent.push(JSON.parse(text)),
         close: () => {
@@ -69,11 +71,14 @@ function harness() {
     viewport: () => VIEWPORT,
     onFrame: (frame) => frames.push(frame),
   });
+
   const say = (socket: FakeSocket | undefined, message: object) =>
     Effect.sync(() => socket?.listener.message(JSON.stringify(message)));
+
   const run = Effect.forkChild(
     Stream.runForEach(live.views, (view) => Effect.sync(() => views.push(view))),
   );
+
   return { live, sockets, frames, views, say, run, last: () => views.at(-1) };
 }
 

@@ -9,6 +9,7 @@ import { FIXTURE_IDS, FIXTURE_PAGE, fixturePage } from "./fixture-stage.js";
 it("a fixture run's page frame reads every version of the fixture's page it lists, and nothing else", () => {
   const read = (version: number) =>
     fixturePage({ taskId: FIXTURE_IDS.TASK, pageId: FIXTURE_PAGE.id, version });
+
   const listed = Array.from({ length: FIXTURE_PAGE.version }, (_, at) => read(at + 1));
 
   assert.ok(

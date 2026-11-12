@@ -38,6 +38,7 @@ test("a block after a reply's first words is colored once its closing fence arri
   fakeActPort({
     [ACT_KIND.TASKS_COLOR_CODE]: ({ code }) => {
       asked.push(code);
+
       return Promise.resolve([]);
     },
   });
@@ -45,10 +46,12 @@ test("a block after a reply's first words is colored once its closing fence arri
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (text: string) =>
     act(() =>
       root.render(withQueryClient(createElement(TranscriptWords, { text, streaming: true }))),
     );
+
   draw(`${LEAD}const reader = open(`);
   draw(`${LEAD}const reader = open(path);\nreader.`);
   draw(`${LEAD}const reader = open(path);\nreader.close();\n\`\`\`\n\nThat closes it.`);
@@ -61,6 +64,7 @@ test("a ```slack block draws its marks and copies as rich text", async () => {
   fakeAppPlatform({
     copyRich: (rich) => {
       copied.push({ ...rich });
+
       return Promise.resolve();
     },
   });

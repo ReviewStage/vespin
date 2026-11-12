@@ -62,9 +62,11 @@ function useDirectoryOf(
   const workspaceId = workspace?.id;
   const read = useQuery(workspaceMembersQuery(workspaceId));
   const { mutate } = useMutation(workspaceMembersRetryMutation());
+
   const retry = useCallback(() => {
     if (workspaceId !== undefined) mutate({ workspaceId });
   }, [mutate, workspaceId]);
+
   const rows = read.data;
   const members = rows?.members;
   // Note that who left stands unread as long as the members do, and as nobody once a read names nobody.
@@ -74,6 +76,7 @@ function useDirectoryOf(
   // Note that the directory is the same across draws while none of it moves, because every
   // face and name inside it is drawn again for a new one.
   const memberCount = workspace?.memberCount;
+
   return useMemo(
     () => ({
       members,
@@ -100,6 +103,7 @@ export function MemberDirectory({
   children: ReactNode;
 }): React.JSX.Element {
   const directory = useDirectoryOf(workspace, readerId);
+
   return <DirectoryContext.Provider value={directory}>{children}</DirectoryContext.Provider>;
 }
 
@@ -121,10 +125,12 @@ export function useWorkspaceDirectory(
   const around = useMemberDirectory();
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
   const held = workspace === undefined || around.workspaceId === workspace.id;
+
   const own = useDirectoryOf(
     held ? undefined : workspace,
     around.readerId ?? signedInAccountId(account),
   );
+
   return held ? around : own;
 }
 
@@ -133,6 +139,7 @@ export function usePerson(
   ref: { readonly userId: string; readonly name: string } | undefined,
 ): Actor {
   const { members, readerId, former } = useMemberDirectory();
+
   return personActor(ref, members, readerId, former);
 }
 
@@ -150,5 +157,6 @@ export function useCreator(
   const directory = useMemberDirectory();
   const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
   const you = account?.status === ACCOUNT_STATUS.SIGNED_IN ? accountActor(account) : undefined;
+
   return creatorActor(task, { ...directory, readerId: directory.readerId ?? readerId }, you);
 }

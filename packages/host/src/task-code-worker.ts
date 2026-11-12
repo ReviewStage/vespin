@@ -47,6 +47,7 @@ export function serveTaskCode(port: TaskCodeParentPort): Effect.Effect<never> {
     port.onMessage((message) => {
       Queue.offerUnsafe(sent, message);
     });
+
     return yield* Effect.forever(
       Effect.flatMap(Queue.take(sent), (message) =>
         Option.match(Schema.decodeUnknownOption(taskCodeRequestSchema)(message), {

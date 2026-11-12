@@ -39,10 +39,12 @@ function entry(
   } = {},
 ): JsonValue {
   const tags = options.tags ?? ["tool-use", "reasoning"];
+
   const reasoning =
     options.reasoning === undefined
       ? [{ type: "effort", values: ["low", "medium", "high"] }]
       : options.reasoning;
+
   return {
     id,
     object: "model",
@@ -115,6 +117,7 @@ const CATALOG: JsonValue = {
 function gateway(answers: (request: RecordedRequest) => Response) {
   const http = recordingHttpClient(answers);
   const layer = modelCatalogLayer.pipe(Layer.provide(http.layer));
+
   return { http, layer };
 }
 
@@ -165,15 +168,19 @@ it.effect(
 it.effect("a refetch that fails past the hour answers the catalog read before it", () =>
   Effect.gen(function* () {
     let up = true;
+
     const { layer } = gateway(() =>
       up ? jsonResponse(CATALOG) : new Response(null, { status: 503 }),
     );
+
     const [before, after] = yield* Effect.gen(function* () {
       const first = yield* readCatalog;
       up = false;
       yield* TestClock.adjust(Duration.hours(2));
+
       return [first, yield* readCatalog] as const;
     }).pipe(Effect.provide(layer));
+
     assert.deepEqual(
       after.map((model) => model.id),
       before.map((model) => model.id),

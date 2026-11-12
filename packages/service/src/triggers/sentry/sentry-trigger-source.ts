@@ -77,6 +77,7 @@ const SUMMARY_CUT = "\n…";
 const verifySignature = hmacVerifier({ header: SENTRY_HEADER.SIGNATURE, encoding: "hex" });
 
 const OptionalText = Schema.optionalKey(Schema.NullOr(Schema.String));
+
 const OptionalCount = Schema.optionalKey(
   Schema.NullOr(Schema.Union([Schema.String, Schema.Number])),
 );
@@ -154,7 +155,9 @@ const IssueSchema = Schema.Struct({
 });
 
 type EventAlert = typeof EventAlertSchema.Type;
+
 type Issue = typeof IssueSchema.Type;
+
 type Frame = typeof FrameSchema.Type;
 
 /** A delivery read against the few fields it is read for; every other key Sentry sends is dropped unread. */
@@ -169,6 +172,7 @@ function readDelivery<S extends Schema.ConstraintDecoder<unknown>>(
 function present(value: string | number | null | undefined): string | undefined {
   if (value === null || value === undefined) return undefined;
   const text = String(value).trim();
+
   return text.length === 0 ? undefined : text;
 }
 
@@ -179,6 +183,7 @@ function present(value: string | number | null | undefined): string | undefined 
  */
 function dedupeKeyOf(delivery: TriggerDelivery): string {
   const requestId = present(delivery.headers[SENTRY_HEADER.REQUEST_ID]);
+
   return requestId === undefined
     ? createHash("sha256").update(delivery.body).digest("hex")
     : createHash("sha256").update(requestId).digest("hex");
@@ -187,6 +192,7 @@ function dedupeKeyOf(delivery: TriggerDelivery): string {
 /** The project's slug an event's API address names (`/projects/<org>/<project>/events/`). */
 function projectOfEventUrl(url: string | undefined): string | undefined {
   if (url === undefined) return undefined;
+
   return /\/projects\/[^/]+\/([^/]+)\/events\//u.exec(url)?.[1];
 }
 
@@ -194,12 +200,14 @@ function projectOfEventUrl(url: string | undefined): string | undefined {
 function issueUrlOfEventUrl(url: string | undefined): string | undefined {
   if (url === undefined) return undefined;
   const issue = /^(.*\/issues\/[^/]+\/)events\//u.exec(url)?.[1];
+
   return issue ?? url;
 }
 
 /** A tag's value among an event's tags. */
 function tagOf(tags: EventAlert["data"]["event"]["tags"], name: string): string | undefined {
   const found = (tags ?? []).find((tag) => tag[0] === name);
+
   return present(found?.[1]);
 }
 
@@ -208,6 +216,7 @@ function frameLine(frame: Frame): string {
   const where = present(frame.filename) ?? present(frame.module) ?? "?";
   const line = frame.lineno == null ? where : `${where}:${frame.lineno}`;
   const name = present(frame.function);
+
   return name === undefined ? line : `${name} (${line})`;
 }
 
@@ -216,6 +225,7 @@ function topFrames(exception: EventAlert["data"]["event"]["exception"]): readonl
   const values = exception?.values ?? [];
   const primary = values[values.length - 1];
   const frames = primary?.stacktrace?.frames ?? [];
+
   return frames
     .filter((frame) => frame.in_app === true)
     .slice(-SUMMARY_FRAMES)
@@ -226,6 +236,7 @@ function topFrames(exception: EventAlert["data"]["event"]["exception"]): readonl
 /** One summary line where its value is present, the value cut to its bound. */
 function field(label: string, value: string | number | null | undefined): readonly string[] {
   const text = present(value);
+
   return text === undefined ? [] : [`${label}: ${text.slice(0, SUMMARY_VALUE_CHARS)}`];
 }
 
@@ -233,15 +244,19 @@ function field(label: string, value: string | number | null | undefined): readon
 function boundedSummary(lines: readonly string[]): string {
   const joined = lines.join("\n");
   const encoder = new TextEncoder();
+
   if (encoder.encode(joined).byteLength <= SUMMARY_MAX_BYTES) return joined;
   const budget = SUMMARY_MAX_BYTES - encoder.encode(SUMMARY_CUT).byteLength;
   let spent = 0;
   let end = 0;
+
   for (const character of joined) {
     spent += encoder.encode(character).byteLength;
+
     if (spent > budget) break;
     end += character.length;
   }
+
   return `${joined.slice(0, end)}${SUMMARY_CUT}`;
 }
 
@@ -255,6 +270,7 @@ function alertEvent(alert: EventAlert, dedupeKey: string): NormalizedEvent {
   const environment = present(event.environment) ?? tagOf(event.tags, "environment");
   const level = present(event.level);
   const frames = topFrames(event.exception);
+
   return {
     event: SENTRY_TRIGGER_EVENT.ALERT_TRIGGERED,
     dedupeKey,
@@ -296,6 +312,7 @@ function issueEvent(read: Issue, dedupeKey: string): NormalizedEvent {
   const url = present(issue.permalink) ?? present(issue.web_url);
   const project = present(issue.project?.slug);
   const level = present(issue.level);
+
   return {
     event: SENTRY_TRIGGER_EVENT.ISSUE_CREATED,
     dedupeKey,
@@ -326,7 +343,9 @@ function issueEvent(read: Issue, dedupeKey: string): NormalizedEvent {
 /** The resource and action a delivery names, and the installation it came through. */
 function envelopeOf(delivery: TriggerDelivery) {
   const read = readDelivery(EnvelopeSchema, delivery.payload);
+
   if (Result.isFailure(read)) return undefined;
+
   return {
     resource: delivery.headers[SENTRY_HEADER.RESOURCE] ?? "",
     action: read.success.action,
@@ -341,7 +360,9 @@ export const sentryTriggerSource: TriggerSource<SentryApp> = {
   verify: (request, body) =>
     Effect.gen(function* () {
       const settings = yield* Effect.option((yield* SentryApp).settings);
+
       if (Option.isNone(settings)) return TRIGGER_VERIFICATION.UNCONFIGURED;
+
       return verifySignature(request, body, settings.value.clientSecret)
         ? TRIGGER_VERIFICATION.VALID
         : TRIGGER_VERIFICATION.INVALID;
@@ -349,34 +370,44 @@ export const sentryTriggerSource: TriggerSource<SentryApp> = {
   lifecycle: (delivery) =>
     Effect.gen(function* () {
       const envelope = envelopeOf(delivery);
+
       if (envelope?.resource !== SENTRY_RESOURCE.INSTALLATION) return false;
+
       // An install is linked by the install flow, which holds the workspace it was asked for; only an uninstall is read here.
       if (envelope.action === SENTRY_ACTION.DELETED) {
         yield* markIntegrationInstallationDeleted(TRIGGER_PROVIDER.SENTRY, envelope.installation);
       }
+
       return true;
     }),
   workspaceOf: (delivery) => {
     const envelope = envelopeOf(delivery);
+
     return envelope === undefined
       ? Effect.succeed(Option.none())
       : activeInstallationWorkspace(TRIGGER_PROVIDER.SENTRY, envelope.installation);
   },
   normalize: (delivery) => {
     const envelope = envelopeOf(delivery);
+
     if (envelope === undefined) return [];
     const dedupeKey = dedupeKeyOf(delivery);
+
     if (
       envelope.resource === SENTRY_RESOURCE.EVENT_ALERT &&
       envelope.action === SENTRY_ACTION.TRIGGERED
     ) {
       const read = readDelivery(EventAlertSchema, delivery.payload);
+
       return Result.isFailure(read) ? [] : [alertEvent(read.success, dedupeKey)];
     }
+
     if (envelope.resource === SENTRY_RESOURCE.ISSUE && envelope.action === SENTRY_ACTION.CREATED) {
       const read = readDelivery(IssueSchema, delivery.payload);
+
       return Result.isFailure(read) ? [] : [issueEvent(read.success, dedupeKey)];
     }
+
     return [];
   },
 };

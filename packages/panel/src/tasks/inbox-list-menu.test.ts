@@ -107,6 +107,7 @@ function mount(
   );
   const opened: string[] = [];
   const marked: string[] = [];
+
   function Inbox() {
     return createElement(InboxList, {
       view: VIEW,
@@ -123,28 +124,35 @@ function mount(
       onChoose: (listed) => opened.push(listed.item.id),
       onMark: async (listed) => {
         marked.push(listed.item.id);
+
         return KEPT;
       },
     });
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(withQueryClient(createElement(Inbox))));
+
   return { opened, marked };
 }
 
 /** The first row of the list, its item. */
 function firstRow(): HTMLElement {
   const row = document.querySelector<HTMLElement>(".ui-list-row");
+
   if (row === null) throw new Error("No row drawn");
+
   return row;
 }
 
 /** The row's ⋯, named for what the row is. */
 function moreOf(row: HTMLElement): HTMLButtonElement {
   const more = row.querySelector<HTMLButtonElement>("button[aria-label='Inbox item actions']");
+
   if (more === null) throw new Error("The row offers no ⋯");
+
   return more;
 }
 
@@ -207,6 +215,7 @@ test("a row's ⋯ takes the keyboard's focus, is described by the item's title, 
   const read = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((entry) =>
     entry.textContent?.startsWith("Mark as"),
   );
+
   act(() => read?.click());
   expect(marked).toEqual([VIEW.items[0]?.item.id]);
   expect(opened).toEqual([]);
@@ -228,6 +237,7 @@ test("a finger's list standing alone draws no row open and no ⋯ at rest, a lon
   const row = firstRow();
   expect(row.querySelector("button[aria-label='Inbox item actions']")).toBeNull();
   vi.useFakeTimers();
+
   try {
     act(() => {
       row.querySelector("button.ui-list-row-main")?.dispatchEvent(
@@ -247,6 +257,7 @@ test("a finger's list standing alone draws no row open and no ⋯ at rest, a lon
   } finally {
     vi.useRealTimers();
   }
+
   expect(
     menuItems()
       .find((words) => words.startsWith("Mark as"))

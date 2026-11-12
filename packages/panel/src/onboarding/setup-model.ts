@@ -89,15 +89,21 @@ export function setupGate(account: {
   readonly agent: boolean | undefined;
 }): SetupGate {
   if (account.id === undefined || account.finished) return SETUP_GATE.NONE;
+
   if (account.started) return account.accountRead ? SETUP_GATE.OWED : SETUP_GATE.WAIT;
+
   if (account.agent === true) {
     return account.fresh && !account.accountRead ? SETUP_GATE.WAIT : SETUP_GATE.NONE;
   }
+
   if (account.invited === true) {
     return account.accountRead && account.agent === false ? SETUP_GATE.OWED : SETUP_GATE.NONE;
   }
+
   if (!account.fresh) return SETUP_GATE.NONE;
+
   const unread =
     !account.accountRead || account.invited === undefined || account.agent === undefined;
+
   return unread ? SETUP_GATE.WAIT : SETUP_GATE.OWED;
 }

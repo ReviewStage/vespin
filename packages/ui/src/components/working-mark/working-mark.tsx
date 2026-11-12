@@ -75,6 +75,7 @@ function cellAt(column: number, row: number): CellCorner {
 /** The `transform` that sets a pixel on the track cell at `index`, lapping past the last, from the first cell it is drawn on. */
 function cellTransform(index: number): string {
   const [column, row] = TRACK[index % TRACK.length] ?? TRACK[0];
+
   return `translate(${column * PITCH}px, ${row * PITCH}px)`;
 }
 
@@ -112,13 +113,17 @@ function WorkingDots({
 /** The moving pixels stepping on the shared beat, each beat writing their `transform`s itself. */
 function LappingDots(): React.JSX.Element {
   const dotRefs = useRef<(SVGRectElement | null)[]>([]);
+
   const step = useCallback((beat: number) => {
     WORKING_DOTS.forEach(({ restsOn }, index) => {
       const rect = dotRefs.current[index];
+
       if (rect) rect.style.transform = cellTransform(restsOn + beat);
     });
   }, []);
+
   useOnBeat(step);
+
   return <WorkingDots dotRefs={dotRefs} />;
 }
 
@@ -126,6 +131,7 @@ function LappingDots(): React.JSX.Element {
 export function WorkingMark(): React.JSX.Element {
   // Note that a held mark never reads the beat at all, and one already standing stops as the setting changes.
   const held = useMotionHeld();
+
   return (
     <svg
       className="ui-working-mark [&[viewBox]]:block [&[viewBox]]:size-working-mark [&[viewBox]]:flex-none [&[viewBox]]:fill-current"

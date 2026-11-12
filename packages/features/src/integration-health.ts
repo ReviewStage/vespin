@@ -69,10 +69,13 @@ function problemLines(
   problem: { readonly reason: IntegrationToolsProblemReason; readonly message?: string },
 ): { readonly problem: string; readonly said?: string } {
   const name = INTEGRATION_NAME[provider];
+
   if (problem.reason === INTEGRATION_TOOLS_PROBLEM.REFUSED) {
     return { problem: `${name} refused the sign-in.` };
   }
+
   const sentence = `${name} could not be reached.`;
+
   return problem.message === undefined
     ? { problem: sentence }
     : { problem: sentence, said: saidWords(name, problem.message) };
@@ -84,9 +87,12 @@ export function connectionHealth(
   read: IntegrationToolsView | undefined,
 ): ConnectionHealth {
   if (read === undefined) return { kind: CONNECTION_HEALTH.CHECKING };
+
   if ("failure" in read) return { kind: CONNECTION_HEALTH.FAILED };
+
   if ("problem" in read) {
     const reason = read.problem.reason;
+
     return {
       kind: CONNECTION_HEALTH.BROKEN,
       ...problemLines(provider, read.problem),
@@ -95,5 +101,6 @@ export function connectionHealth(
         reason === INTEGRATION_TOOLS_PROBLEM.REJECTED,
     };
   }
+
   return { kind: CONNECTION_HEALTH.WORKING };
 }

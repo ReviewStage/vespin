@@ -25,16 +25,21 @@ function PanePins(): React.JSX.Element {
   useEffect(() => {
     if (!floating) return;
     pinned.current = false;
+
     const press = () => {
       if (!pinned.current) setFloating(false);
       pinned.current = false;
     };
+
     document.addEventListener("pointerdown", press);
+
     return () => document.removeEventListener("pointerdown", press);
   }, [floating]);
+
   const pin = () => {
     pinned.current = true;
   };
+
   return (
     <CatalogSection id="pane-pin-float" title="A floating pane">
       <Stack gap={GAP.FIELD}>

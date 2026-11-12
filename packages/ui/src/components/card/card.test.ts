@@ -31,11 +31,13 @@ function draw(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
 test("a card's hint is the whole card's, and its element reaches what measures it", () => {
   const ref = createRef<HTMLDivElement>();
+
   const container = draw(
     createElement(Card, {
       title: "Counted since launch",
@@ -43,6 +45,7 @@ test("a card's hint is the whole card's, and its element reaches what measures i
       children: createElement("p", null, "1,204"),
     }),
   );
+
   const paragraph = container.querySelector("p");
   expect(paragraph?.closest("[title]")?.getAttribute("title")).toBe("Counted since launch");
   expect(ref.current?.contains(paragraph ?? null)).toBe(true);
@@ -63,6 +66,7 @@ test("a card in running words is a span inside its paragraph, named and labeled 
       }),
     ),
   );
+
   const frame = container.querySelector(".picture-frame");
   expect(frame?.getAttribute("role")).toBe("img");
   expect(frame?.getAttribute("aria-label")).toBe("Login screen");

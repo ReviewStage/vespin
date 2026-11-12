@@ -43,6 +43,7 @@ function mount(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(withExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS), element)));
+
   return container;
 }
 
@@ -53,6 +54,7 @@ function saidOf(at: number) {
     updatedAt: at,
     lastEdit: { actor: DESCRIPTION_ACTOR.DEVELOPER, at, duringCall: false, by: DANA },
   };
+
   const row = mount(
     createElement(SidebarTask, {
       tasks: tasksControl({ tasks: [task] }),
@@ -63,7 +65,9 @@ function saidOf(at: number) {
       onOpen: () => undefined,
     }),
   );
+
   const body = mount(createElement(DescriptionBody, { task, reader: { readerId: DANA.userId } }));
+
   return {
     row: row.querySelector(".sidebar-task-time time")?.textContent,
     edited: lineWords(body.querySelector(".description-byline-edited")),

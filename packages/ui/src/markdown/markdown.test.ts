@@ -44,6 +44,7 @@ function drawn(props: MarkdownProps): { container: HTMLElement; root: Root } {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Markdown, props)));
+
   return { container, root };
 }
 
@@ -63,6 +64,7 @@ test("a note draws its headings as paragraphs at their level, its pictures as th
     look: MARKDOWN_LOOK.NOTE,
     words: "## Goal\n\n![a plan](https://example.com/a.png) and <b>bold</b>",
   });
+
   assert.equal(
     html,
     '<div class="ui-markdown ui-markdown-flow ui-prose"><p class="ui-markdown-heading" data-level="2">Goal</p>\n<p>a plan and &lt;b&gt;bold&lt;/b&gt;</p></div>',
@@ -79,6 +81,7 @@ test("a line draws its inline Markdown, and its blocks' words as one run, with n
     look: MARKDOWN_LOOK.INLINE,
     words: "Open **Domains**\n\n- add `a.example`\n- [ ] wait\n\n```\nverify\n```",
   });
+
   assert.equal(
     html,
     "Open <strong>Domains</strong>\n\nadd <code>a.example</code>\n wait\n\n<code>verify\n</code>",
@@ -90,6 +93,7 @@ test("a transcript's line draws its blocks' words as one paragraph: no other blo
     look: MARKDOWN_LOOK.TRANSCRIPT_LINE,
     words: "Open **Domains**  \nnow\n\n- add `a.example`\n- wait\n\n```\nverify\nit\n```",
   });
+
   assert.equal(container.querySelectorAll("p").length, 1);
   assert.equal(container.querySelector("ul, li, pre, br"), null);
   assert.equal(container.textContent, "Open Domains now add a.example wait verify it");
@@ -105,22 +109,26 @@ test("one step handed by two places draws with each place's own value", () => {
     words: "Words.",
     rehypePlugins: [markdownStep(stamp, () => "first")],
   });
+
   const second = markup({
     look: MARKDOWN_LOOK.NOTE,
     words: "Words.",
     rehypePlugins: [markdownStep(stamp, () => "second")],
   });
+
   assert.match(first, /data-stamp="first"/u);
   assert.match(second, /data-stamp="second"/u);
 });
 
 test("a note follows a new address rewriter for the same words", () => {
   const words = "[the spec](https://example.com/spec)";
+
   const { container, root } = drawn({
     look: MARKDOWN_LOOK.NOTE,
     words,
     urlTransform: (url) => url,
   });
+
   assert.equal(container.querySelector("a")?.getAttribute("href"), "https://example.com/spec");
   act(() =>
     root.render(
@@ -133,6 +141,7 @@ test("a note follows a new address rewriter for the same words", () => {
 test("a task box is named by its item, asks with its item's place in the words, and stands as written while its tick asks nothing", async () => {
   const asked: number[] = [];
   const words = "Steps:\n\n- [ ] Write the migration\n- [ ] Wire the row";
+
   const { container } = drawn({
     look: MARKDOWN_LOOK.NOTE,
     words,
@@ -143,6 +152,7 @@ test("a task box is named by its item, asks with its item's place in the words, 
         write: { run: () => asked.push(at), asked: undefined },
       }),
   });
+
   const boxes = [...container.querySelectorAll<HTMLElement>('[role="checkbox"]')];
   assert.deepEqual(
     boxes.map((box) => box.getAttribute("aria-label")),
@@ -164,6 +174,7 @@ test("a task box a reader cannot tick is the shared box, named by its item, tick
     look: MARKDOWN_LOOK.NOTE,
     words: "- [x] Write the migration\n- [ ] Wire the row",
   });
+
   const boxes = [...container.querySelectorAll<HTMLElement>('[role="checkbox"]')];
   assert.deepEqual(
     boxes.map((box) => [box.getAttribute("aria-label"), box.getAttribute("aria-checked")]),
@@ -180,6 +191,7 @@ test("a task box a reader cannot tick is the shared box, named by its item, tick
 
 test("words nested too deep to parse are drawn as plain text in every look, never parsed", () => {
   const words = `${">".repeat(8000)} **hi**`;
+
   for (const look of Object.values(MARKDOWN_LOOK)) {
     const html = markup({ look, words });
     assert.ok(html.includes(">&gt;&gt;"), look);

@@ -27,6 +27,7 @@ export function RowCount({
   tone?: StatusTone | undefined;
 }): React.JSX.Element | null {
   if (value === 0) return null;
+
   return (
     <span
       className="ui-row-count flex-none text-caption-inline text-muted-foreground tabular-nums data-[tone]:text-tone-ink"

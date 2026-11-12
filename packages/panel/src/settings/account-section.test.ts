@@ -40,6 +40,7 @@ const ADA: SignedIn = {
 function drawn(element: React.ReactElement): HTMLElement {
   const page = document.createElement("div");
   page.innerHTML = renderToStaticMarkup(element);
+
   return page;
 }
 
@@ -104,6 +105,7 @@ function mountSection(onSignOut: () => Promise<void>): { container: HTMLElement;
       ),
     ),
   );
+
   return { container, root };
 }
 
@@ -114,8 +116,10 @@ const signOutButton = (within: ParentNode) =>
 
 test("Sign out signs the account out on the press, with no question first", async () => {
   let signOuts = 0;
+
   const { container, root } = mountSection(() => {
     signOuts += 1;
+
     return Promise.resolve();
   });
 
@@ -211,6 +215,7 @@ function typeGate(words: string): void {
   const field =
     document.querySelector<HTMLInputElement>('[role="alertdialog"] input') ??
     assert.fail("no gate");
+
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, words);
     field.dispatchEvent(new Event("input", { bubbles: true }));
@@ -247,6 +252,7 @@ test.each([
 
   const dialog =
     document.querySelector<HTMLElement>('[role="alertdialog"]') ?? assert.fail("no question");
+
   await act(async () => deleteButton(dialog, "Delete account").click());
 
   const said = dialog.textContent ?? "";

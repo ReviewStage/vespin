@@ -30,6 +30,7 @@ interface BaseDriveRefresh {
 export const refreshBaseDrives = Effect.fn("web/refreshBaseDrives")(function* (run: SandboxRunner) {
   const image = yield* Effect.flatMap(AgentImage, (agentImage) => agentImage.reference);
   const counts = { filled: 0, passed: 0, failed: 0 };
+
   for (const workspace of yield* listBaseDriveWorkspaces()) {
     const filled = yield* fillWorkspaceDrive(run, image, workspace).pipe(
       // An interruption, the function's own deadline, still ends the run.
@@ -42,13 +43,16 @@ export const refreshBaseDrives = Effect.fn("web/refreshBaseDrives")(function* (r
             ),
       ),
     );
+
     if (filled === undefined) counts.failed += 1;
     else if (filled) counts.filled += 1;
     else counts.passed += 1;
   }
+
   const refreshed: BaseDriveRefresh = counts;
   yield* Effect.logInfo(
     `workspace drives refreshed: ${counts.filled} filled, ${counts.passed} passed by, ${counts.failed} failed`,
   );
+
   return refreshed;
 });

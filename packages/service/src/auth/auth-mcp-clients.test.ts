@@ -73,9 +73,11 @@ const CIMD_DOCUMENTS: ReadonlyMap<string, object> = new Map([
 function fetchMetadataDocument(input: RequestInfo | URL): Promise<Response> {
   const url = input instanceof Request ? input.url : String(input);
   const document = CIMD_DOCUMENTS.get(url);
+
   if (document === undefined) {
     return Promise.reject(new Error(`this test publishes no document at ${url}`));
   }
+
   return Promise.resolve(
     new Response(JSON.stringify(document), { headers: { "content-type": "application/json" } }),
   );
@@ -84,13 +86,16 @@ function fetchMetadataDocument(input: RequestInfo | URL): Promise<Response> {
 const decodeRegistered = Schema.decodeUnknownSync(
   Schema.Struct({ client_id: Schema.String, scope: Schema.String }),
 );
+
 const decodeRefusal = Schema.decodeUnknownSync(Schema.Struct({ error: Schema.String }));
+
 const decodeClaims = Schema.decodeUnknownSync(
   Schema.Struct({
     aud: Schema.Union([Schema.String, Schema.Array(Schema.String)]),
     scope: Schema.String,
   }),
 );
+
 const decodeAuthServerMetadata = Schema.decodeUnknownSync(
   Schema.Struct({
     issuer: Schema.String,
@@ -104,6 +109,7 @@ const decodeAuthServerMetadata = Schema.decodeUnknownSync(
 /** The claims a signed access token carries, read without verifying, which is the server's job. */
 function claimsOf(token: string) {
   const [, payload] = token.split(".");
+
   return decodeClaims(JSON.parse(Buffer.from(payload ?? "", "base64url").toString()));
 }
 
@@ -113,6 +119,7 @@ function userInfoOver(auth: MemberMcpTestAuth): UserInfoEndpoint {
     Effect.tryPromise(async () => {
       // SAFETY: Better Auth hands back its parsed userinfo answer as structured-clone data; the wire guard validates the selected field.
       const answer = (await auth.api.oauth2UserInfo(input)) as WireBoundaryInput;
+
       return oauthUserInfoFromAuthAnswer(unparsedWire(answer));
     });
 }
@@ -186,16 +193,19 @@ it.effect(
           resource: RESOURCE,
         }),
       );
+
       assert.equal(unnamed.status, HOSTED_HTTP_STATUS.BAD_REQUEST, yield* text(unnamed));
       assert.equal(
         decodeRefusal(yield* Effect.promise(() => unnamed.json())).error,
         "invalid_scope",
       );
+
       // A client of either door asking `openid` at authorization is sent back with the refusal and no code.
       for (const clientId of [CIMD_CLIENT.ID, dynamic.client_id]) {
         const landed = yield* Effect.promise(() =>
           authorize(auth, cookie, { clientId, scope: ["openid"], resource: RESOURCE }),
         );
+
         assert.equal(landed.searchParams.get("error"), "invalid_scope", landed.href);
         assert.equal(landed.searchParams.get("code"), null);
       }
@@ -207,6 +217,7 @@ it.effect(
           resource: RESOURCE,
         }),
       );
+
       const forbidden = yield* post(fetch, desktop);
       assert.equal(forbidden.status, HOSTED_HTTP_STATUS.FORBIDDEN);
       assert.match(forbidden.challenge ?? "", /^Bearer error="insufficient_scope"/u);
@@ -218,10 +229,12 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const { auth } = yield* standing;
+
       for (const { carried } of AUTH_SERVER_METADATA_PATHS) {
         const answered = yield* Effect.promise(() =>
           auth.handler(new Request(`${ORIGIN}${carried}`)),
         );
+
         assert.equal(
           answered.status,
           HOSTED_HTTP_STATUS.OK,

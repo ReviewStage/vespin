@@ -37,6 +37,7 @@ const PATTERNS: Readonly<Record<LandingFieldPattern, Shade>> = {
   [LANDING_FIELD.RINGS]: (x, y, t, width, height) => {
     const reach = Math.hypot(x - width / 2, y - height * 1.05);
     const fade = Math.max(0, 1 - reach / (height * 1.4));
+
     return 0.22 * (0.5 + 0.5 * Math.sin(reach * 0.04 - t * 0.7)) * fade + 0.06;
   },
   [LANDING_FIELD.WAVES]: (x, y, t) =>
@@ -60,11 +61,13 @@ function drawDots(
   const context = canvas.getContext("2d");
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
+
   if (!context || width === 0 || height === 0) return;
   context.setTransform(ratio, 0, 0, ratio, 0, 0);
   context.clearRect(0, 0, width, height);
   context.fillStyle = ink;
   const dot = Math.max(1, cell * CELL.DOT);
+
   for (let j = 0, y = cell / 2; y < height; y += cell, j++) {
     for (let i = 0, x = cell / 2; x < width; x += cell, i++) {
       if (shade(x, y, t, width, height) > bayerAt(i, j))
@@ -79,16 +82,20 @@ function useDots(cell: number, shadeFor: (canvas: HTMLCanvasElement) => Shade) {
   const shadeRef = useRef(shadeFor);
   useEffect(() => {
     const canvas = ref.current;
+
     if (!canvas) return undefined;
     const ink = accentOf(canvas);
     const shade = shadeRef.current(canvas);
+
     return paintLoop(canvas, (t) => drawDots(canvas, shade, t, cell, ink));
   }, [cell]);
+
   return ref;
 }
 
 /** A stage's field of drifting dots, filling the stage behind what it holds. */
 export function LandingField({ pattern }: { pattern: LandingFieldPattern }): React.JSX.Element {
   const ref = useDots(CELL.FIELD, () => PATTERNS[pattern]);
+
   return <canvas ref={ref} className="ui-landing-field" />;
 }

@@ -48,6 +48,7 @@ export function launchPermissionMode(
   agent: Pick<Agent, "permissionMode">,
 ): { readonly permissionMode: PermissionMode } | undefined {
   const mode = permissionModeOf(agent);
+
   return mode === AGENT_PERMISSION_MODE.FULL_ACCESS
     ? undefined
     : { permissionMode: RUNNER_MODE_OF[mode] };
@@ -66,6 +67,7 @@ export function launchAllowedCommands(
   DatabaseServices
 > {
   if (mode === undefined) return Effect.succeed(undefined);
+
   return Effect.map(listAllowedCommands(agent.userId), (rows) =>
     rows.length === 0 ? undefined : { allowedCommands: rows.map((row) => row.prefix) },
   );
@@ -83,6 +85,7 @@ export function startingPermissionMode(
   automated: boolean,
 ): AgentPermissionMode {
   const mode = automated ? undefined : chosen;
+
   return mode !== undefined && harnessTakesMode(runtime, mode)
     ? mode
     : AGENT_PERMISSION_MODE.FULL_ACCESS;

@@ -103,6 +103,7 @@ const describingAgent = (userId: string, started: NewAgent) =>
   Effect.gen(function* () {
     const { agent } = Option.getOrThrow(yield* createAgent(userId, started));
     yield* descriptionsIn(agent, true);
+
     return agent;
   });
 
@@ -124,11 +125,14 @@ const agentOn = (
 const openAgent = (brief?: AgentBriefText) =>
   Effect.gen(function* () {
     const userId = yield* openGithubUser();
+
     const task = yield* startTask(userId, {
       name: "Teammate invitations",
       repository: "acme/relay",
     });
+
     const agent = yield* agentOn(userId, task.id, brief);
+
     return { userId, agent, admitted: admittedOf(agent) };
   });
 
@@ -138,6 +142,7 @@ const openThread = (userId: string, taskId: string) =>
     yield* saveDescriptionText(userId, taskId, DESCRIPTION_TEXT);
     const quote = "Invite a teammate";
     const from = DESCRIPTION_TEXT.indexOf(quote);
+
     const started = yield* startDescriptionCommentThread(
       { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, userId },
       taskId,
@@ -150,7 +155,9 @@ const openThread = (userId: string, taskId: string) =>
         words: "By link too?",
       },
     );
+
     assert.ok("answer" in started && "thread" in started.answer);
+
     return started.answer.thread.id;
   });
 
@@ -188,6 +195,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
         const { userId, agent, admitted } = yield* openAgent();
         assert.ok(agent.taskId !== null);
         const before = Option.getOrThrow(yield* readTask(userId, agent.taskId));
+
         const notes = [
           {
             kind: "add",
@@ -230,9 +238,11 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
 
         assert.deepEqual(answer, { status: ACTION_RESULT_STATUS.ACCEPTED, taken: 2 });
         const stored = Option.getOrThrow(yield* readTask(userId, agent.taskId));
+
         const sectionText = (heading: string) =>
           descriptionSections(stored.text).find((section) => section.heading === heading)?.text ??
           "";
+
         assert.ok(
           sectionText("Open questions").endsWith(
             "\n\n- Who may withdraw an invite? Going on as: the member who sent it.",
@@ -266,6 +276,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
           0,
           noSandbox,
         );
+
         yield* updateTask(userId, sibling.id, { organizationId: yield* openWorkspace(userId) });
 
         assert.deepEqual(answer, { status: ACTION_RESULT_STATUS.ACCEPTED, taken: 1 });
@@ -284,10 +295,12 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
       Effect.gen(function* () {
         const { userId, admitted } = yield* openAgent();
         const elsewhere = yield* openWorkspace(userId);
+
         const other = yield* createTask(userId, {
           name: "Side project",
           organizationId: elsewhere,
         });
+
         const before = Option.getOrThrow(yield* readTask(userId, other.id));
         const notes = [{ kind: "add", section: "Approach", text: "- Ship it." }];
 
@@ -297,6 +310,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
           0,
           noSandbox,
         );
+
         const outside = yield* runAgentEditDescription(
           admitted,
           unparsedWire({ taskId: other.id, notes }),
@@ -323,20 +337,25 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
       Effect.gen(function* () {
         const { userId, admitted } = yield* openAgent();
         const sibling = yield* startTask(userId, { name: "Seat billing" });
+
         const elsewhere = yield* createTask(userId, {
           name: "Side project",
           organizationId: yield* openWorkspace(userId),
         });
+
         const picture = {
           contentType: PICTURE_TYPE.PNG,
           bytes: Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 4, 2]),
         };
+
         const look = (taskId: string, descriptionsOn = true) =>
           Effect.gen(function* () {
             const kept = yield* keepDescriptionAttachment(userId, taskId, picture);
             assert.equal(kept.status, DESCRIPTION_ATTACHMENT_KEEP.KEPT);
+
             if (kept.status !== DESCRIPTION_ATTACHMENT_KEEP.KEPT) return assert.fail("no picture");
             const address = descriptionAttachmentAddress({ taskId, attachmentId: kept.id }, "acme");
+
             return yield* runAgentLookAtPicture(
               admitted,
               unparsedWire({ address }),
@@ -359,12 +378,15 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
     () =>
       Effect.gen(function* () {
         const { userId, agent, admitted } = yield* openAgent();
+
         const elsewhere = yield* createTask(userId, {
           name: "Side project",
           organizationId: yield* openWorkspace(userId),
         });
+
         const outsider = yield* agentOn(userId, elsewhere.id);
         const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 4, 2]);
+
         const look = (on: Agent) =>
           Effect.gen(function* () {
             const poster = {
@@ -373,6 +395,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
               agentId: on.id,
               organizationId: on.organizationId,
             };
+
             yield* postToInbox(
               poster,
               unparsedWire({ key: "mockup", title: "Which mockup?", body: "Have a look." }),
@@ -392,11 +415,14 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
               ],
             });
             const read = Option.getOrThrow(yield* readInboxItem(userId, item.id)).item;
+
             const attachmentId = read.thread?.flatMap((message) => message.files ?? [])[0]
               ?.attachmentId;
+
             assert.ok(attachmentId);
             const place = { kind: LINK_DESTINATION.INBOX_ITEM, planId: on.taskId, itemId: item.id };
             const address = inboxAttachmentAddress(place, attachmentId, "acme");
+
             return yield* runAgentLookAtPicture(admitted, unparsedWire({ address }), true);
           });
 
@@ -419,6 +445,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
         const { userId, agent, admitted } = yield* openAgent();
         const sibling = yield* startTask(userId, { name: "Seat billing" });
         const thread = yield* openThread(userId, sibling.id);
+
         const call = (
           name: Parameters<typeof runAgentComment>[1],
           input: Readonly<Record<string, string | boolean>>,
@@ -433,9 +460,11 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
           [read, replied, resolved, reopened].map((answer) => answer.status),
           Array(4).fill(ACTION_RESULT_STATUS.ACCEPTED),
         );
+
         const [stored] = Option.getOrThrow(
           yield* readDescriptionCommentThreads(userId, sibling.id),
         );
+
         assert.equal(stored?.status, DESCRIPTION_COMMENT_STATUS.OPEN);
         assert.deepEqual(
           stored?.entries
@@ -454,22 +483,27 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
         const teammate = yield* openGithubUser();
         const own = yield* startTask(userId, { name: "Seat billing" });
         yield* joinWorkspace(own.workspaceId, teammate);
+
         const theirs = yield* createTask(teammate, {
           name: "Teammate's invites",
           organizationId: own.workspaceId,
         });
+
         const elsewhere = yield* createTask(userId, {
           name: "Side project",
           organizationId: yield* openWorkspace(userId),
         });
+
         yield* openThread(teammate, theirs.id);
         const outsideThread = yield* openThread(userId, elsewhere.id);
         const agent = yield* agentOn(userId, own.id);
         const admitted = admittedOf(agent);
+
         const reply = (input: Readonly<Record<string, string>>) =>
           runAgentComment(admitted, AGENT_TOOL.REPLY_TO_COMMENT, unparsedWire(input), true);
 
         const outside = yield* reply({ taskId: elsewhere.id, thread: outsideThread, words: "x" });
+
         const read = yield* runAgentComment(
           admitted,
           AGENT_TOOL.READ_COMMENTS,
@@ -482,6 +516,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
           reason: COMMENT_TOOL_REFUSAL.NO_TASK,
         });
         assert.equal(read.status, ACTION_RESULT_STATUS.ACCEPTED);
+
         for (const [owner, taskId] of [
           [teammate, theirs.id],
           [userId, elsewhere.id],

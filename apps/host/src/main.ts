@@ -227,19 +227,23 @@ function realInstallFolder(): string {
  */
 function accountReleases(): HostReleases | undefined {
   let real: string;
+
   try {
     real = realpathSync(installFolder);
   } catch {
     return undefined;
   }
+
   const versions = path.dirname(real);
   const folder = path.dirname(versions);
+
   if (
     path.basename(versions) !== ACCOUNT_RELEASES.VERSIONS ||
     !folder.endsWith(`/${ACCOUNT_RELEASES.FOLDER}`)
   ) {
     return undefined;
   }
+
   return { folder, running: path.basename(real) };
 }
 
@@ -278,6 +282,7 @@ if (SENTRY_DSN !== "") {
 /** Writes a line to the bundled daemon's log file, where it keeps one; a line it cannot write is left to stderr alone. */
 function logToFile(message: string): void {
   if (LOG_FILE === undefined) return;
+
   try {
     mkdirSync(path.dirname(LOG_FILE), { recursive: true });
     appendFileSync(LOG_FILE, `${new Date().toISOString()} ${message}\n`);
@@ -290,9 +295,11 @@ function logToFile(message: string): void {
 function reportEverywhere(message: string): void {
   reportToStderr(message);
   logToFile(message);
+
   if (SENTRY_DSN === "") return;
   // Note that a line is sent up to what its step said of itself, so an error's or a tool's words after it stay in the log.
   const ours = message.split(": ").slice(0, 2).join(": ");
+
   if (FAILING.test(ours)) Sentry.captureMessage(ours, "error");
   else Sentry.logger.info(ours);
 }
@@ -312,6 +319,7 @@ const nodeServices = Layer.mergeAll(
 const arch = ({ os: hostOs }: HostRuntime) =>
   Effect.suspend(() => {
     const read = hostArch(hostOs, process.arch);
+
     return read === undefined
       ? Effect.fail(
           `${PRODUCT_NAME} host runs on ${hostOs.arches.join(" and ")} ${hostOs.name}, not ${process.arch}.`,
@@ -324,19 +332,25 @@ const follow = (runtime: HostRuntime, releases: HostReleases | undefined) =>
   Effect.gen(function* () {
     const { stateRoot } = runtime;
     const device = yield* readHostDevice(stateRoot);
+
     if (Option.isNone(device)) {
       reportToStderr(
         `${PRODUCT_NAME} host: this box is not connected. Run ${HOST_COMMAND} connect, or the install command from Settings › Machines › Add a machine (${DEFAULT_INSTALL_COMMAND}), and approve the code it shows in ${PRODUCT_NAME}.`,
       );
       yield* hostDeviceWhen(stateRoot, Option.isSome);
+
       return undefined;
     }
+
     // Note that a box the service refused rests until it is connected again.
     if (device.value.refused === true) {
       yield* hostRefusedRest({ stateRoot, device: device.value });
+
       return undefined;
     }
+
     const boxArch = yield* arch(runtime);
+
     const platform = hostPlatform({
       os: runtime.os,
       installFolder,
@@ -347,9 +361,11 @@ const follow = (runtime: HostRuntime, releases: HostReleases | undefined) =>
       // Note that every agent runs as the daemon's user, the member's own or root on a dedicated box.
       user: { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 },
     });
+
     reportToStderr(
       `${PRODUCT_NAME} host ${VERSION}: following ${device.value.serviceOrigin} as ${platform.deviceName}.`,
     );
+
     const ended = yield* hostDaemon({
       stateRoot,
       device: device.value,
@@ -358,11 +374,14 @@ const follow = (runtime: HostRuntime, releases: HostReleases | undefined) =>
       releases,
       pid: process.pid,
     });
+
     if (ended === HOST_DAEMON_END.REMOVED) {
       reportToStderr(`${PRODUCT_NAME} host: every agent it ran is stopped.`);
+
       // Note that only the account install removes itself, since a bundled or any other run has no install of its own to remove, and rests as a refused box does.
       return releases === undefined ? undefined : ended;
     }
+
     return ended;
   }).pipe(Effect.repeat({ until: (ended) => ended !== undefined }));
 
@@ -374,10 +393,12 @@ const follow = (runtime: HostRuntime, releases: HostReleases | undefined) =>
 const serviceRunning = (runtime: HostRuntime) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
+
     const cgroup =
       runtime.os.platform === LINUX_HOST.platform
         ? yield* fileSystem.readFileString(CGROUP_FILE).pipe(Effect.orElseSucceed(() => ""))
         : "";
+
     return hostServiceOf({
       platform: runtime.os.platform,
       cgroup,
@@ -430,6 +451,7 @@ const restartAsked = (service: HostService | undefined) =>
  */
 const uninstallApart = (service: HostService | undefined) => {
   const command = path.join(installFolder, RELEASE_COMMAND);
+
   if (service === HOST_SERVICE.UNIT) {
     return Effect.scoped(
       Effect.flatMap(
@@ -453,6 +475,7 @@ const uninstallApart = (service: HostService | undefined) => {
       Effect.orElseSucceed(() => false),
     );
   }
+
   // Note that a command that cannot start fails as an `error` event after the spawn returns, so the answer waits on `spawn` or `error`, whichever comes first.
   return Effect.callback<boolean>((resume) => {
     try {
@@ -460,6 +483,7 @@ const uninstallApart = (service: HostService | undefined) => {
         detached: true,
         stdio: ["ignore", "inherit", "inherit"],
       });
+
       child.once("spawn", () => {
         child.unref();
         resume(Effect.succeed(true));
@@ -484,6 +508,7 @@ const removeItself = (service: HostService | undefined) =>
     reportToStderr(
       `${PRODUCT_NAME} host: removed in Settings › Machines, so it removes itself from this account: its service, its state and its releases. Its agents' folders and this log stay.`,
     );
+
     if (!(yield* uninstallApart(service))) {
       reportToStderr(
         `${PRODUCT_NAME} host: could not start its uninstall. Run ${HOST_COMMAND} uninstall --keep-agents to remove it.`,
@@ -506,13 +531,18 @@ const run = (runtime: HostRuntime, bundled: boolean) =>
       reportToStderr(
         `${PRODUCT_NAME} host: another ${HOST_COMMAND} already runs on ${runtime.stateRoot}, so this one exits.`,
       );
+
       return 0;
     }
+
     if (bundled) return yield* Effect.as(follow(runtime, undefined), 0);
     const service = yield* serviceRunning(runtime);
     const ended = yield* follow(runtime, accountReleases());
+
     if (ended === HOST_DAEMON_END.UPDATED) yield* restartAsked(service);
+
     if (ended === HOST_DAEMON_END.REMOVED) yield* removeItself(service);
+
     return 0;
   }).pipe(Effect.scoped);
 
@@ -521,6 +551,7 @@ const leave = (runtime: HostRuntime) =>
   Effect.map(leaveHostDevice({ stateRoot: runtime.stateRoot, version: VERSION }), (outcome) => {
     if (outcome !== HOST_LEAVE_OUTCOME.UNANSWERED) return LEAVE_EXIT.LEFT;
     process.stderr.write(`Could not reach ${PRODUCT_NAME} to remove this box from it.\n`);
+
     return LEAVE_EXIT.UNANSWERED;
   });
 
@@ -561,42 +592,51 @@ const connect = (runtime: HostRuntime, name: string, origin: string) =>
       version: VERSION,
       shown: showCode,
     });
+
     switch (outcome.outcome) {
       case HOST_CONNECT_OUTCOME.CONNECTED:
         process.stdout.write(
           `Connected as ${name} (secret kept readable by ${os.userInfo().username} only)\n`,
         );
+
         return CONNECT_EXIT.CONNECTED;
       case HOST_CONNECT_OUTCOME.ALREADY_CONNECTED:
         process.stdout.write(
           `This box is already connected to ${outcome.serviceOrigin}, so nothing was changed.\n`,
         );
+
         return CONNECT_EXIT.CONNECTED;
       case HOST_CONNECT_OUTCOME.DENIED:
         process.stderr.write(
           `The code was denied in ${PRODUCT_NAME}, so this box was not connected. Run ${connectCommand(origin)} again for a new code.\n`,
         );
+
         return CONNECT_EXIT.DENIED;
       case HOST_CONNECT_OUTCOME.EXPIRED:
         process.stderr.write(
           `The code expired before it was approved, so this box was not connected. Run ${connectCommand(origin)} again for a new code.\n`,
         );
+
         return CONNECT_EXIT.EXPIRED;
       case HOST_CONNECT_OUTCOME.BRAKED:
         process.stderr.write(
           `${PRODUCT_NAME} is taking no more connections from this address for now. Wait a few minutes, then run ${connectCommand(origin)} again.\n`,
         );
+
         return CONNECT_EXIT.BRAKED;
       case HOST_CONNECT_OUTCOME.UPGRADE_NEEDED:
         process.stderr.write(
           `${PRODUCT_NAME} needs a newer host than ${VERSION}${outcome.minimumVersion === undefined ? "" : ` (${outcome.minimumVersion} or later)`}. Run the install command again to fetch it.\n`,
         );
+
         return CONNECT_EXIT.UPGRADE_NEEDED;
       case HOST_CONNECT_OUTCOME.REFUSED:
         process.stderr.write(`${PRODUCT_NAME} at ${origin} refused to pair this box.\n`);
+
         return CONNECT_EXIT.FAILED;
       case HOST_CONNECT_OUTCOME.UNANSWERED:
         process.stderr.write(`Could not reach ${PRODUCT_NAME} at ${origin}.\n`);
+
         return CONNECT_EXIT.FAILED;
     }
   }).pipe(
@@ -609,6 +649,7 @@ const connect = (runtime: HostRuntime, name: string, origin: string) =>
 function statusLine(status: Option.Option<SetupStatus>): string {
   if (Option.isNone(status)) return NOT_STARTED_WORDS;
   const { step, failure } = status.value;
+
   return step === SETUP_STEP.FAILED && failure !== undefined
     ? `${STATUS_WORDS[step]}: ${failure}.`
     : STATUS_WORDS[step];
@@ -623,21 +664,27 @@ const status = (runtime: HostRuntime, wait: boolean) =>
   Effect.gen(function* () {
     const read = readSetupStatus(runtime.stateRoot);
     let printed: string | undefined;
+
     const print = (line: string) =>
       Effect.sync(() => {
         if (line !== printed) process.stdout.write(`${line}\n`);
         printed = line;
       });
+
     const settled = Effect.gen(function* () {
       for (;;) {
         const now = yield* read;
         yield* print(statusLine(now));
+
         if (!wait) return 0;
+
         if (Option.isSome(now) && now.value.step === SETUP_STEP.READY) return 0;
+
         if (Option.isSome(now) && now.value.step === SETUP_STEP.FAILED) return 1;
         yield* Effect.sleep(STATUS_READ_EVERY);
       }
     });
+
     return yield* settled.pipe(
       Effect.timeoutOrElse({
         duration: STATUS_WAIT,
@@ -658,13 +705,16 @@ type HostServices = Layer.Success<typeof nodeServices>;
 /** The command the process was started with, as the exit code it ends with. */
 function main(argv: readonly string[]): Effect.Effect<number, unknown, HostServices> {
   const [command, ...rest] = argv;
+
   // Note that the app owns the host it carries, its registration and its record, so its copy answers only its LaunchAgent's run and version, and changes nothing behind it.
   if (appRefusesCommand(realInstallFolder(), command)) {
     return Effect.sync(() => process.stderr.write(`${APP_RUNS_HOST_WORDS}\n`)).pipe(Effect.as(1));
   }
+
   if (command === COMMAND.VERSION) {
     return Effect.sync(() => process.stdout.write(`${VERSION}\n`)).pipe(Effect.as(0));
   }
+
   if (runtime === undefined) {
     return Effect.sync(() =>
       process.stderr.write(
@@ -672,28 +722,38 @@ function main(argv: readonly string[]): Effect.Effect<number, unknown, HostServi
       ),
     ).pipe(Effect.as(1));
   }
+
   if (command === COMMAND.RUN) {
     const { values } = parseArgs({ args: [...rest], options: { bundled: { type: "boolean" } } });
+
     return run(runtime, values.bundled === true);
   }
+
   if (command === COMMAND.LEAVE) return leave(runtime);
+
   if (command === COMMAND.STATUS) {
     const { values } = parseArgs({ args: [...rest], options: { wait: { type: "boolean" } } });
+
     return status(runtime, values.wait === true);
   }
+
   if (command === COMMAND.CONNECT) {
     const { values } = parseArgs({
       args: [...rest],
       options: { name: { type: "string" }, origin: { type: "string" } },
     });
+
     const name = values.name ?? runtime.os.deviceName();
+
     if (name.length === 0) {
       return Effect.sync(() => process.stderr.write("vespin-host connect needs a --name\n")).pipe(
         Effect.as(CONNECT_EXIT.USAGE),
       );
     }
+
     return connect(runtime, name, (values.origin ?? DEFAULT_SERVICE_ORIGIN).replace(/\/+$/u, ""));
   }
+
   return Effect.sync(() =>
     process.stderr.write(
       "usage: vespin-host run [--bundled] | connect [--origin <url>] [--name <name>] | status [--wait] | version | uninstall [--keep-agents]\n",

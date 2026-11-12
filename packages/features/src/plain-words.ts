@@ -25,17 +25,20 @@ const FENCE_LINE = /^\s*(?:```|~~~)/u;
  */
 export function cardTitle(text: string): string {
   const first = text.split("\n").find((line) => line.trim().length > 0 && !FENCE_LINE.test(line));
+
   return first === undefined ? "" : plainLine(first);
 }
 
 function plainLine(line: string): string {
   // A link is said by its name, as its chip names it, never its destination, and a picture by its alt words (`linkLabels`).
   const words = linkLabels(line.trim().replace(LINE_MARKS, ""));
+
   // Note that the marks are read as a message box reads them (`composer-markdown.ts`), so a preview says what the box showed: each mark's words without its delimiters or the escapes in them, a code span's words as they are, and words wearing none as typed but for a stray mark.
   return readInline(words, [])
     .map((span) => {
       const said = words.slice(span.from, span.to);
       const marked = span.kind === INLINE_SPAN.WORDS && span.marks.length > 0;
+
       return marked ? said : said.replace(STRAY_MARKS, "");
     })
     .join("")

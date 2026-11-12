@@ -36,6 +36,7 @@ export function isZoomPercent(value: UnparsedWireValue): value is ZoomPercent {
 /** The size one step from `percent`, held at the smallest and the largest rather than wrapping. */
 export function zoomStepped(percent: ZoomPercent, step: ZoomStep): ZoomPercent {
   const index = ZOOM_PERCENTS.indexOf(percent) + step;
+
   return ZOOM_PERCENTS[Math.min(Math.max(index, 0), ZOOM_PERCENTS.length - 1)] ?? percent;
 }
 

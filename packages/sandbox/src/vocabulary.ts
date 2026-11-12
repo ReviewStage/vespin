@@ -74,6 +74,7 @@ export class SandboxUnavailable extends Data.TaggedError("SandboxUnavailable")<{
 }> {
   override get message(): string {
     const answer = `${asked(this.call)} was unavailable`;
+
     return this.detail === undefined ? answer : `${answer}: ${this.detail}`;
   }
 }

@@ -72,6 +72,7 @@ export function SignInGate({
   const busy = waiting !== undefined || account.status === ACCOUNT_STATUS.SIGNING_IN;
   const primary = lastUsed ?? ACCOUNT_PROVIDER.GOOGLE;
   useAnnounceShown(ANNOUNCE.POLITE, waiting ? FINISH_IN_BROWSER : "");
+
   return (
     <AuthPage
       mark={<ProductMark />}

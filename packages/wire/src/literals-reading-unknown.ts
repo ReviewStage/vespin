@@ -22,6 +22,7 @@ export function literalsReadingUnknown<const Values extends ReadonlyArray<string
   unknown: Values[number],
 ) {
   const known: ReadonlySet<string> = new Set(values);
+
   return Schema.declare(
     (input: unknown): input is Values[number] => typeof input === "string",
   ).pipe(

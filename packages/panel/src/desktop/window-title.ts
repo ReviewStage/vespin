@@ -23,7 +23,9 @@ export function windowTitle(input: {
   readonly workspace: Pick<Workspace, "name"> | undefined;
 }): string {
   if (!input.signedIn) return PRODUCT_NAME;
+
   if (input.workspace === undefined) return input.subject ?? PRODUCT_NAME;
+
   return input.subject === undefined
     ? input.workspace.name
     : `${input.subject} — ${input.workspace.name}`;

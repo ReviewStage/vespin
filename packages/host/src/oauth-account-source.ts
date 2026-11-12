@@ -49,6 +49,7 @@ export const oauthAccountSourceLayerFor = (
     Effect.gen(function* () {
       const cipher = yield* SecretCipher;
       const consent = yield* SignInConsent;
+
       return {
         tokenCipher: cipher,
         open: (host: AccountSourceHost) => openOAuthSession(host, consent.open, client),
@@ -116,6 +117,7 @@ const openOAuthSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   };
 
   const credential = accountBearer(token);
+
   // Note that a hand-off that did not land is no failure of the call that
   // asked for it: the call retries on whatever session stands, and its
   // second refusal is what gets reported. A client with no hand-off makes
@@ -142,7 +144,9 @@ const openOAuthSession = /* @__PURE__ */ Effect.fnUntraced(function* (
       const initial: AccountSnapshot = runMode.requiresAccount
         ? yield* Effect.orDie(store.accountSnapshot())
         : { status: ACCOUNT_STATUS.SIGNED_OUT };
+
       session.initialize(initial);
+
       return initial;
     }),
     beginSignIn: (provider) => session.beginSignIn(provider),

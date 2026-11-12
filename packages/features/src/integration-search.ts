@@ -60,5 +60,6 @@ export function integrationFound(
 /** Whether a query finds the integration itself, by its name or what it is for. */
 export function integrationNamed(provider: IntegrationProvider, query: string): boolean {
   const tokens = searchTokens(query);
+
   return tokens.length > 0 && integrationFound(provider, tokens);
 }

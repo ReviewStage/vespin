@@ -61,7 +61,9 @@ const SHEET_BY_IMPORT = {
 const SHEETS = [
   ...[...entry.matchAll(/^@import "([^"]+)";$/gm)].map(([, specifier = ""]) => {
     const sheet = Object.entries(SHEET_BY_IMPORT).find(([named]) => named === specifier)?.[1];
+
     if (sheet === undefined) throw new Error(`container-width.ts lays no sheet for ${specifier}`);
+
     return { specifier, css: sheet };
   }),
   { specifier: UTILITIES, css: utilities },
@@ -108,31 +110,41 @@ interface Resolution {
 function blockEnd(css: string, from: number): number {
   let depth = 1;
   let at = from;
+
   while (depth > 0 && at < css.length) {
     if (css[at] === "{") depth += 1;
+
     if (css[at] === "}") depth -= 1;
     at += 1;
   }
+
   return at;
 }
 
 /** Whether a container `width` pixels wide meets the query's one condition. */
 function widthHolds(width: number, comparison: string, length: number): boolean {
   if (comparison === "max-width" || comparison === "<=") return width <= length;
+
   if (comparison === "min-width" || comparison === ">=") return width >= length;
+
   if (comparison === "<") return width < length;
+
   return width > length;
 }
 
 /** Whether an input-type media query, its features joined by `and` and the whole perhaps negated, holds for the device the layout says. */
 function mediaHolds(media: string, layout: ContainerLayout): boolean {
   const negated = media.startsWith("not all and ");
+
   const device: Readonly<Record<string, string>> =
     layout.touch === true ? DEVICE.TOUCH : DEVICE.MOUSE;
+
   const features = [...media.matchAll(/\((hover|pointer): ?([a-z]+)\)/g)];
+
   const answered = features.every(
     ([, feature, value]) => feature !== undefined && device[feature] === value,
   );
+
   return negated ? !answered : answered;
 }
 
@@ -140,8 +152,10 @@ function mediaHolds(media: string, layout: ContainerLayout): boolean {
 function holds(query: RegExpExecArray, resolution: Resolution): boolean {
   const [, name, word, wordLength, sign, signLength, media] = query;
   const { widths, layout } = resolution;
+
   if (media !== undefined) return mediaHolds(media, layout);
   const width = name === undefined ? layout.unnamed : widths[name];
+
   return (
     width !== undefined && widthHolds(width, word ?? sign ?? "", Number(wordLength ?? signLength))
   );
@@ -152,11 +166,13 @@ function resolvedAt(css: string, resolution: Resolution): string {
   const rules = new RegExp(AT_RULE);
   let resolved = "";
   let from = 0;
+
   for (let rule = rules.exec(css); rule !== null; rule = rules.exec(css)) {
     const open = rule.index + rule[0].length;
     const end = blockEnd(css, open);
     const layer = rule[7];
     resolved += css.slice(from, rule.index);
+
     if (layer !== undefined) {
       const gathered = resolution.layers.get(layer) ?? [];
       resolution.layers.set(layer, gathered);
@@ -164,9 +180,11 @@ function resolvedAt(css: string, resolution: Resolution): string {
     } else if (holds(rule, resolution)) {
       resolved += resolvedAt(css.slice(open, end - 1), resolution);
     }
+
     from = end;
     rules.lastIndex = end;
   }
+
   return resolved + css.slice(from);
 }
 
@@ -180,14 +198,17 @@ export function layContainersAt(
   layout: ContainerLayout = {},
 ): HTMLStyleElement {
   const resolution: Resolution = { widths, layout, layers: new Map() };
+
   const laid = SHEETS.filter(
     ({ specifier }) => layout.only === undefined || layout.only.includes(specifier),
   );
+
   const unlayered = laid.map(({ css }) => resolvedAt(css, resolution));
   const style = document.head.appendChild(document.createElement("style"));
   style.textContent = [...[...resolution.layers.values()].flat(), ...unlayered, STILL_MOTION].join(
     "\n",
   );
+
   return style;
 }
 
@@ -196,5 +217,6 @@ export function shown(element: Element): boolean {
   for (let at: Element | null = element; at !== null; at = at.parentElement) {
     if (getComputedStyle(at).display === "none") return false;
   }
+
   return true;
 }

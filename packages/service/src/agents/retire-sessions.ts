@@ -78,6 +78,7 @@ const retireOne = (
     Effect.flatMap((answered) => {
       if (Option.isNone(answered)) return Effect.logWarning("A session was not retired in time");
       const reset = answered.value;
+
       return reset.outcome === SESSION_RESET_OUTCOME.FAILED
         ? Effect.logWarning(`A session was not retired: ${reset.status}`)
         : Effect.void;
@@ -102,6 +103,7 @@ export function retireSessions(
   return Effect.gen(function* () {
     const settled = yield* Ref.make(0);
     const agents = sessions.filter((session) => session.kind === CONVERSATION_KIND.AGENT);
+
     const all = Effect.forEach(
       agents,
       (session) =>
@@ -111,7 +113,9 @@ export function retireSessions(
         ),
       { concurrency: RETIRE_SESSIONS.CONCURRENCY, discard: true },
     );
+
     const finished = yield* Effect.timeoutOption(all, RETIRE_SESSIONS.BUDGET);
+
     if (Option.isSome(finished)) return;
     const skipped = agents.length - (yield* Ref.get(settled));
     yield* Effect.logWarning(

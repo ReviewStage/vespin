@@ -83,8 +83,10 @@ function Runs({
     // Note that a run's place is its identity: a draft's runs are read afresh, never reordered.
     if (run.kind === DRAFT_RUN.TEXT) return <span key={at}>{run.text}</span>;
     const inner = <Runs runs={run.runs} link={link} />;
+
     if (run.kind === DRAFT_RUN.LINK) return <span key={at}>{link(run.url, inner)}</span>;
     const Mark = MARK_ELEMENT[run.mark];
+
     return <Mark key={at}>{inner}</Mark>;
   });
 }
@@ -111,6 +113,7 @@ export function DraftCard({
   const draft = useMemo(() => readDraft(kind, text), [kind, text]);
   const rich = useMemo(() => draftCopy(draft), [draft]);
   const Glyph = GLYPH[kind];
+
   return (
     <Card
       as={CARD_ELEMENT.FIGURE}

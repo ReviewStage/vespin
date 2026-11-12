@@ -94,6 +94,7 @@ function changedBy(
     const was = before[field];
     // SAFETY: as above, from the settings the reset left.
     const now = after[field];
+
     return sameSetting(was, now) ? [] : [{ field, before: was, after: now }];
   });
 }
@@ -105,6 +106,7 @@ function standing(
   side: Exclude<keyof ResetField, "field">,
 ): readonly ResetField[] {
   if (settings === undefined) return [];
+
   return changed.filter((each) => sameSetting(settings[each.field], each[side]));
 }
 
@@ -156,9 +158,11 @@ const resetWrite = (
   // Note that the reset keeps every field of its group but those it takes back, so nothing else moves.
   act: (send, { changed }, settings) => {
     const due = standing(settings, changed, "before").map(({ field }) => field);
+
     const kept = APP_SETTING_FIELDS.filter(
       (field) => APP_SETTING_SCHEMA[field].resetScope === scope && !due.includes(field),
     );
+
     return send({ scope, kept }).then(
       (result): ResetAnswer =>
         result.status === ACTION_RESULT_STATUS.ACCEPTED
@@ -216,21 +220,28 @@ function ResetPageButton({
 }): React.JSX.Element {
   const toast = useToast();
   const client = useQueryClient();
+
   // Note that the Undo reads the window's settings as they stand, through the client, because the control is gone once its reset lands.
   const now = () => {
     const state = appStateIn(client);
+
     return state === undefined ? undefined : selectAppSettingsView(state);
   };
+
   const doors: RowDoors<AppSettingsView | undefined, typeof ACT_KIND.SETTINGS_RESET> = {
     rows: now,
     send: ({ scope, kept }) => writes.reset(scope, kept),
   };
+
   const reset = (asked: SettingsResetScope): Promise<ActionResult> => {
     const before = settings;
+
     const unseen = APP_SETTING_FIELDS.filter(
       (field) => APP_SETTING_SCHEMA[field].resetScope === asked && !settingVisible(field, rows),
     );
+
     const keep = keepWrite(resetWrite(asked), doors);
+
     return writes.reset(asked, unseen).then((result) => {
       if (result.status !== ACTION_RESULT_STATUS.ACCEPTED) {
         toast({
@@ -238,18 +249,24 @@ function ResetPageButton({
           tone: STATUS_TONE.DANGER,
           failure: { surface: FAILURE_SURFACE.SETTINGS_RESET, cause: result },
         });
+
         return result;
       }
+
       // Note that a kept row never enters the Undo, because another window may have changed it since this page read it.
       const changed = changedBy(before, appSettingsView(result.settings), asked).filter(
         ({ field }) => !unseen.includes(field),
       );
+
       keep({ changed, writes });
+
       return result;
     });
   };
+
   // Note that the reset is a mutation of the page's writes (`useSettingsWrites`), so the control rests while one by its key is out.
   const busy = useIsMutating({ mutationKey: actMutation(ACT_KIND.SETTINGS_RESET).mutationKey }) > 0;
+
   // Note that a reset that never answered is said as a refused one is, since the control has no row to say it under.
   const run = (asked: SettingsResetScope) => {
     void reset(asked).catch((error: unknown) =>
@@ -260,6 +277,7 @@ function ResetPageButton({
       }),
     );
   };
+
   // Note that a phone's bar holds the reset as a glyph alone, since a ⋯ over its one item would only hide it.
   if (more !== undefined) {
     return (
@@ -273,6 +291,7 @@ function ResetPageButton({
       />
     );
   }
+
   return (
     <Button
       variant={BUTTON_VARIANT.QUIET}
@@ -304,7 +323,9 @@ export function pageResetControl(
   if (!(view in PAGE_RESET)) return undefined;
   // SAFETY: `in` narrows the view to the pages the table names.
   const scope = PAGE_RESET[view as keyof typeof PAGE_RESET];
+
   if (!settings || !rows || !settingsScopeChanged(settings, scope, rows)) return undefined;
+
   // Keyed to the page, so a press out on one page does not rest the next one's.
   return (
     <ResetPageButton

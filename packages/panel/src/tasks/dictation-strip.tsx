@@ -64,6 +64,7 @@ export function DictateButton({
   disabled: boolean;
 }): React.JSX.Element {
   const label = dictation.keyMissing ? OPENAI_KEY_MISSING_NOTE : LABEL.DICTATE;
+
   return (
     // Note that the box is what a narrow card's stylesheet hides and its ⋯ reads, and
     // the press keeps the caret where it was in the box, which is where the words go.
@@ -93,10 +94,12 @@ function DictationWave({ analyzer }: { analyzer: AnalyserNode | undefined }): Re
     let frame = 0;
     let loudest = 0;
     let animationFrame = 0;
+
     const draw = () => {
       analyzer.getByteTimeDomainData(samples);
       loudest = Math.max(loudest, frameLevel(samples));
       frame += 1;
+
       if (frame % FRAMES_PER_BAR === 0) {
         levels.shift();
         levels.push(loudest);
@@ -108,9 +111,12 @@ function DictationWave({ analyzer }: { analyzer: AnalyserNode | undefined }): Re
           );
         });
       }
+
       animationFrame = requestAnimationFrame(draw);
     };
+
     animationFrame = requestAnimationFrame(draw);
+
     return () => cancelAnimationFrame(animationFrame);
   }, [analyzer, reduced]);
 
@@ -139,12 +145,15 @@ function DictationClock({ startedAt }: { startedAt: number | undefined }): React
   useEffect(() => {
     if (startedAt === undefined) return;
     let animationFrame = 0;
+
     // React keeps a render whose second is the one already shown, so this draws once a second.
     const tick = () => {
       setElapsed(Math.floor((performance.now() - startedAt) / MS_PER_SECOND) * MS_PER_SECOND);
       animationFrame = requestAnimationFrame(tick);
     };
+
     animationFrame = requestAnimationFrame(tick);
+
     return () => cancelAnimationFrame(animationFrame);
   }, [startedAt]);
 
@@ -161,6 +170,7 @@ function DictationClock({ startedAt }: { startedAt: number | undefined }): React
 /** The card's foot while a dictation stands: recording, then transcribing. */
 export function DictationStrip({ dictation }: { dictation: DictationControl }): React.JSX.Element {
   const transcribing = dictation.phase === DICTATION_PHASE.TRANSCRIBING;
+
   return (
     <div
       className="dictation-strip flex h-control min-w-0 flex-1 items-center gap-control-gap text-muted-foreground"

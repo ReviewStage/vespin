@@ -57,6 +57,7 @@ export function mountWindow(
   // below subscribes or draws. What only the shell can do is answered beside
   // it, through `appPlatform()`, by the desktop's own acts and events.
   const preloadWindow: Window & { readonly appBridge?: PreloadBridge } = window;
+
   if (preloadWindow.appBridge === undefined) throw new Error("The preload's bridge is missing");
   // The window's act port, as oRPC's Electron adapter opens one: this page
   // keeps one end and posts the other to itself, where the preload takes it
@@ -81,7 +82,9 @@ export function mountWindow(
   installShownFailureReporter(sentry.reportShownFailure, queryClient);
 
   const rootElement = document.getElementById("root");
+
   if (!rootElement) throw new Error("Renderer root element is missing");
+
   // A surface that fails to render draws its Reload instead, which is no
   // first paint, so it is left untimed as it is reported: the root reports
   // it as it commits, before the commit's draw is heard. Note that a nested
@@ -126,8 +129,10 @@ export function mountWindow(
       draw(
         <ReloadState failure={WINDOW_FAILED} room={RELOAD_ROOM.WINDOW} onReload={reloadWindow} />,
       );
+
       return;
     }
+
     endWindowSpanOnFirstDraw(rootElement, PANEL_SPAN.WINDOW_FIRST_PAINT);
     draw(
       <QueryProvider>

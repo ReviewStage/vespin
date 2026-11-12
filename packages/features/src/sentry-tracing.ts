@@ -132,6 +132,8 @@ export function sendTraceOf(
 ): SendTrace | undefined {
   const sentryTrace = headers[SENTRY_TRACE_HEADER.TRACE];
   const baggage = headers[SENTRY_TRACE_HEADER.BAGGAGE];
+
   if (!Predicate.isString(sentryTrace)) return undefined;
+
   return { sentryTrace, ...(Predicate.isString(baggage) ? { baggage } : undefined) };
 }

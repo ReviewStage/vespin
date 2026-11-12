@@ -158,9 +158,12 @@ const readAuthor = /* @__PURE__ */ Effect.fn("web/agentReadAuthor")(function* (
   agent: WithRepository<Agent>,
 ): Effect.fn.Return<AgentAuthor, StoreFailure, CheckoutServices> {
   if (automationRun(agent) !== undefined) return AGENT_AUTHOR.APP_AUTOMATION;
+
   if (agent.githubAccess === GITHUB_ACCESS.TOKEN) return AGENT_AUTHOR.TOKEN;
+
   if (appAuthors(yield* commitAuthorOf(target.userId))) return AGENT_AUTHOR.APP_CHOSEN;
   const app = yield* GitHubApp;
+
   return yield* app.userPusher(target.userId, agent.repository).pipe(
     Effect.map((pusher) =>
       Option.isSome(pusher) ? AGENT_AUTHOR.DEVELOPER : AGENT_AUTHOR.APP_NO_PUSH,
@@ -190,6 +193,7 @@ const agentAuthor = /* @__PURE__ */ Effect.fn("web/agentAuthor")(function* (
   if (agent.author !== null) return agent.author;
   const read = yield* readAuthor(target, agent);
   const settled = yield* settleAgentAuthor(target.userId, agent.id, read);
+
   return Option.getOrElse(settled, () => read);
 });
 
@@ -228,17 +232,23 @@ const coAuthorOf = /* @__PURE__ */ Effect.fn("web/agentCoAuthorOf")(function* (
 ) {
   if (!coAuthorCredited(choice)) return undefined;
   const app = yield* GitHubApp;
+
   if (author === AGENT_AUTHOR.APP_CHOSEN) {
     const token = yield* app.userToken(target.userId);
+
     return coAuthorTrailer(identityOf(yield* app.tokenUser(token)));
   }
+
   if (author !== AGENT_AUTHOR.DEVELOPER && author !== AGENT_AUTHOR.TOKEN) return undefined;
+
   // Note that an agent on its starter's own token reads the bot on that token, which stands where their sign-in may not.
   const token =
     author === AGENT_AUTHOR.TOKEN
       ? (yield* agentRepositoryToken(target, agent)).token
       : yield* app.userToken(target.userId);
+
   const bot = yield* app.appBot(token);
+
   return coAuthorTrailer({ name: bot.login, email: noreplyAddress(bot) });
 });
 
@@ -258,21 +268,26 @@ export const agentAuthorship = /* @__PURE__ */ Effect.fn("web/agentAuthorship")(
     Effect.logWarning(
       `The ${what} of conversation ${target.conversationId}'s commits was not read: ${failure._tag}`,
     );
+
   const author = yield* agentAuthor(target, agent).pipe(
     Effect.tapError(unread("author")),
     Effect.option,
   );
+
   if (Option.isNone(author)) return { by: COMMIT_BY.APP, coAuthor: undefined };
+
   const by =
     author.value === AGENT_AUTHOR.DEVELOPER || author.value === AGENT_AUTHOR.TOKEN
       ? COMMIT_BY.DEVELOPER
       : COMMIT_BY.APP;
+
   const coAuthor = yield* Effect.flatMap(commitAuthorOf(target.userId), (choice) =>
     coAuthorOf(target, agent, author.value, choice),
   ).pipe(
     Effect.tapError(unread("co-author")),
     Effect.orElseSucceed(() => undefined),
   );
+
   return { by, coAuthor };
 });
 
@@ -307,31 +322,41 @@ export const agentRepositoryToken = /* @__PURE__ */ Effect.fn("web/agentReposito
     CheckoutServices
   > {
     const app = yield* GitHubApp;
+
     const repositories = yield* readAgentRepositories(target.userId, agent.id).pipe(
       Effect.mapError(refusedBy),
     );
+
     if (repositories.length > 1) {
       const names = repositories.map((each) => each.repository);
+
       const answered =
         named === undefined
           ? 0
           : names.findIndex((each) => each.toLowerCase() === named.toLowerCase());
+
       if (answered < 0) {
         return yield* new CheckoutRefused({
           reason: CODER_REFUSAL.NOT_REACHABLE,
           detail: `Not reached: ${named}.`,
         });
       }
+
       return yield* agentRepositoriesToken(target, agent, names, answered);
     }
+
     const reached = yield* Effect.gen(function* () {
       const workspace = yield* agentWorkspace(target, agent);
+
       if (Option.isNone(workspace)) return Option.none();
+
       return yield* app.repositoryWriteToken(workspace.value, agent.repository, agentMember(agent));
     }).pipe(Effect.mapError(refusedBy));
+
     if (Option.isNone(reached))
       return yield* new CheckoutRefused({ reason: CODER_REFUSAL.NOT_REACHABLE });
     const { repository, token, access } = reached.value;
+
     return {
       token,
       defaultBranch: repository.defaultBranch,
@@ -353,6 +378,7 @@ export const agentFirewallSources = /* @__PURE__ */ Effect.fn("web/agentFirewall
   ): Effect.fn.Return<FirewallSources, CheckoutRefused, CheckoutServices> {
     if (!hasRepository(agent)) return {};
     const { token, fullName, access } = yield* agentRepositoryToken(target, agent);
+
     return { github: { token, fullName, access } };
   },
 );
@@ -365,30 +391,40 @@ const agentRepositoriesToken = Effect.fnUntraced(function* (
   answered: number,
 ) {
   const app = yield* GitHubApp;
+
   const minted = yield* Effect.gen(function* () {
     const workspace = yield* agentWorkspace(target, agent);
+
     if (Option.isNone(workspace)) return Option.none();
+
     return Option.some(
       yield* app.repositoriesWriteToken(workspace.value, repositories, agentMember(agent)),
     );
   }).pipe(Effect.mapError(refusedBy));
+
   if (Option.isNone(minted))
     return yield* new CheckoutRefused({ reason: CODER_REFUSAL.NOT_REACHABLE });
+
   if (Result.isFailure(minted.value)) {
     const refused = minted.value.failure;
+
     const repository =
       refused.why === REPOSITORY_SET_UNREACHED.UNREACHED
         ? refused.unreached.repository
         : refused.repository;
+
     return yield* new CheckoutRefused({
       reason: CODER_REFUSAL.NOT_REACHABLE,
       detail: `Not reached: ${repository}.`,
     });
   }
+
   const { repositories: reached, token, access } = minted.value.success;
   const one = reached[answered];
+
   if (one === undefined)
     return yield* Effect.die("a set of repositories answered fewer than asked");
+
   return { token, defaultBranch: one.defaultBranch, fullName: one.fullName, access };
 });
 
@@ -408,18 +444,23 @@ const commitIdentity = /* @__PURE__ */ Effect.fn("web/agentCommitIdentity")(func
   credential: RepositoryCredential,
 ): Effect.fn.Return<CheckoutIdentity, CheckoutRefused, CheckoutServices> {
   const app = yield* GitHubApp;
+
   if (author === AGENT_AUTHOR.TOKEN && credential.access.kind === GITHUB_ACCESS.TOKEN) {
     return identityOf(yield* app.tokenUser(credential.token).pipe(Effect.mapError(refusedBy)));
   }
+
   if (author === AGENT_AUTHOR.DEVELOPER) {
     const pusher = yield* Effect.option(app.userPusher(target.userId, agent.repository));
     const developer = Option.flatten(pusher);
+
     if (Option.isSome(developer)) return identityOf(developer.value.user);
     yield* Effect.logWarning(
       `The developer of conversation ${target.conversationId} no longer pushes to its repository; its commits are the App's`,
     );
   }
+
   const bot = yield* app.appBot(credential.token).pipe(Effect.mapError(refusedBy));
+
   return { name: bot.login, email: noreplyAddress(bot) };
 });
 
@@ -464,9 +505,11 @@ export const agentRepositoryRead = /* @__PURE__ */ Effect.fn("web/agentRepositor
 ): Effect.fn.Return<AgentRepositoryRead, CheckoutRefused, CheckoutServices> {
   // Note that a store that could not be read refuses as GitHub unavailable.
   const workspace = yield* agentWorkspace(target, agent).pipe(Effect.mapError(refusedBy));
+
   if (Option.isNone(workspace))
     return yield* new CheckoutRefused({ reason: CODER_REFUSAL.NOT_REACHABLE });
   const minted = yield* agentRepositoryToken(target, agent);
+
   return { workspaceId: workspace.value, ...minted };
 });
 
@@ -536,6 +579,7 @@ export const claimAgentCheckout = /* @__PURE__ */ Effect.fn("web/claimAgentCheck
     read.token,
     read.access,
   ).pipe(Effect.mapError(refusedWith));
+
   if (claimed) return;
   yield* cloneAgentRepository(agent, sandbox, read);
   yield* linkWorkspaceFolder(sandbox, folder).pipe(Effect.mapError(refusedWith));
@@ -559,6 +603,7 @@ export const openWorkingFolder = /* @__PURE__ */ Effect.fn("web/openWorkingFolde
     { command: MAKE_WORKING_FOLDER, workingDirectory: REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE },
     REPOSITORY_REFUSAL.SANDBOX_UNAVAILABLE,
   ).pipe(Effect.mapError(refusedWith));
+
   if (made.exitCode !== 0) {
     return yield* new CheckoutRefused({
       reason: `\`${MAKE_WORKING_FOLDER}\` exited ${made.exitCode}`,
@@ -611,9 +656,11 @@ export const writeAgentCredential = /* @__PURE__ */ Effect.fn("web/writeAgentCre
     credential: RepositoryCredential,
   ): Effect.fn.Return<void, CheckoutRefused> {
     const firewall = sandbox.firewall;
+
     if (firewall === undefined) {
       return yield* new CheckoutRefused({ reason: REPOSITORY_REFUSAL.NO_FIREWALL });
     }
+
     // The token is revealed only into the firewall rules set for GitHub.
     yield* firewall
       .write({ github: credential })

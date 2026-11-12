@@ -51,10 +51,12 @@ async function readThroughHost<T>(
   // SAFETY: every admin query is a set of optional string parameters (`admin-wire.ts`).
   const params: AdminReadParams = { procedure, query: query as Record<string, string> };
   const answered = await askAct(ACT_KIND.ADMIN_READ, params);
+
   if ("refused" in answered) {
     if (answered.refused === ADMIN_UNANSWERED) throw new Error("The admin read was not answered.");
     throw new AdminReadRefused(answered.refused satisfies AdminRefused);
   }
+
   // SAFETY: the host passes the service's answer through as it came, which is the shape `admin-answer-wire.ts` names for this procedure.
   return answered.answer as T;
 }
@@ -116,5 +118,6 @@ const APP_ADMIN_DOORS: AdminDoors = {
 export function AppAdminDoors({ children }: { children: React.ReactNode }): React.JSX.Element {
   const openLink = useOpenLink();
   const doors = useMemo<AdminDoors>(() => ({ ...APP_ADMIN_DOORS, openLink }), [openLink]);
+
   return <AdminDoorsProvider value={doors}>{children}</AdminDoorsProvider>;
 }

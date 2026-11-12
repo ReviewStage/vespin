@@ -358,8 +358,10 @@ export function recordApprovalAsked(asked: ApprovalAsked): ApprovalEffect<boolea
   return Effect.gen(function* () {
     const agents = yield* findAgentOfConversation({ conversationId: asked.conversationId });
     const agent = agents[0];
+
     if (agent === undefined) return false;
     const id = randomUUID();
+
     const landed = yield* insertAsked({
       id,
       agentId: agent.id,
@@ -380,6 +382,7 @@ export function recordApprovalAsked(asked: ApprovalAsked): ApprovalEffect<boolea
       },
       at: asked.at,
     });
+
     return landed.length > 0;
   });
 }
@@ -469,7 +472,9 @@ export function releaseApprovalClaim(release: {
   readonly at: Date;
 }): ApprovalEffect<Option.Option<AgentApprovalRow>> {
   const { to, at, ...claim } = release;
+
   const released =
     to === APPROVAL_STATUS.PENDING ? reopenClaim(claim) : expireClaim({ ...claim, at });
+
   return Effect.map(released, (rows) => Option.fromNullishOr(rows[0]));
 }

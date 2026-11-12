@@ -30,11 +30,14 @@ export const runCommand = Command.make(
   ({ agent: id, action, stop }) =>
     Effect.gen(function* () {
       const { hosted } = yield* session;
+
       if (stop) {
         const shells = yield* askService(hosted.agents.stopRunAction, { id, action });
         yield* answer({ json: shells, lines: [`Stopped run action ${action}.`], ids: [action] });
+
         return;
       }
+
       const { terminal } = yield* askService(hosted.agents.runAction, { id, action });
       yield* answer({
         json: { terminal },

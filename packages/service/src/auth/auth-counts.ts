@@ -45,6 +45,7 @@ interface HookRequest {
 /** The sign-in method a request names, one of the two providers' ids, and `unknown` for anything else. */
 function signInMethodOf(request: HookRequest | null) {
   const named = request?.params?.["id"];
+
   return (
     Object.values(SERVER_SIGN_IN_METHOD).find(
       (method) => method !== SERVER_SIGN_IN_METHOD.UNKNOWN && method === named,
@@ -66,6 +67,7 @@ export async function withAuthCounts<A>(
 ): Promise<{ readonly answer: A; readonly counts: readonly AuthCount[] }> {
   const counts: AuthCount[] = [];
   const answer = await noted.run(counts, handle);
+
   return { answer, counts };
 }
 
@@ -106,12 +108,14 @@ export const authDatabaseHooks = {
     create: {
       after: async (account: { readonly userId: string; readonly providerId: string }) => {
         if (account.providerId !== GITHUB_PROVIDER_ID) return;
+
         const signedUpHere = noted
           .getStore()
           ?.some(
             (count) =>
               count.name === SERVER_EVENT.ACCOUNT_SIGN_UP && count.actor.userId === account.userId,
           );
+
         if (signedUpHere === true) return;
         countFromAuth({
           name: SERVER_EVENT.GITHUB_ACCOUNT_LINK,

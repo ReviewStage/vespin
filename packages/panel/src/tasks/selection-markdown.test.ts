@@ -24,18 +24,21 @@ afterEach(() => {
 function whole(element: Node): Range {
   const range = document.createRange();
   range.selectNodeContents(element);
+
   return range;
 }
 
 test("a code card's lines, each drawn as a box of its own, are quoted as lines", () => {
   const pre = document.createElement("pre");
   const code = document.createElement("code");
+
   for (const words of ["const a = 1;", "", "const b = 2;"]) {
     const row = document.createElement("span");
     row.style.display = "block";
     row.textContent = words === "" ? "\n" : words;
     code.append(row);
   }
+
   pre.append(code);
   document.body.append(pre);
 

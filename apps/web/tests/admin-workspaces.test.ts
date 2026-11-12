@@ -88,6 +88,7 @@ async function openWorkspaces(body: AdminWorkspaceList) {
   const opened: string[] = [];
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
     asked.push(String(input));
+
     return new Response(JSON.stringify(body), {
       status: 200,
       headers: { "content-type": "application/json" },
@@ -113,12 +114,14 @@ async function openWorkspaces(body: AdminWorkspaceList) {
     );
   });
   await readLanded(page);
+
   return { page, asked, opened };
 }
 
 /** Types `words` into the search box the way React hears a keystroke. */
 function type(page: HTMLElement, words: string): void {
   const box = page.querySelector<HTMLInputElement>('input[aria-label="Search workspaces by name"]');
+
   if (box === null) throw new Error("no search box");
   act(() => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(box, words);

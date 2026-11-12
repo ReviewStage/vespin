@@ -33,6 +33,7 @@ const arrived = (name: string): Block => ({ part: ROW_PART.ARRIVED, name });
 function scanned(rows: readonly TurnRow<Block>[]): unknown[] {
   return rows.map((row) => {
     if (row.kind === TURN_ROW.BLOCK) return row.block.name;
+
     return [
       row.summary,
       row.blocks.map((block) => block.name),
@@ -67,6 +68,7 @@ test("a finished turn folds only its work, so every one of its words stands, an 
     call("gh pr view"),
     words("Every check passed."),
   ];
+
   const closed = { open: false, running: false };
   assert.deepEqual(rowsOf(turn, false), [
     [
@@ -89,6 +91,7 @@ test("a message that reached a turn while it ran stands where it arrived, betwee
     call("c"),
     words("Fixed."),
   ];
+
   assert.deepEqual(rowsOf(turn.slice(0, 4), true), [
     ["2 tool calls", ["a", "b"], { open: false, running: false }],
     "GitHub reviewed the pull request.",
@@ -131,8 +134,11 @@ test("a finished turn's run of one call alone stands on its own row rather than 
 /** A value read otherwise: words with more, a flag flipped, a list one item shorter, a record with a key more. */
 function changed(value: unknown): unknown {
   if (typeof value === "string") return `${value} again`;
+
   if (typeof value === "boolean") return !value;
+
   if (Array.isArray(value)) return value.slice(1);
+
   return { ...(value as object), more: true };
 }
 
@@ -140,23 +146,29 @@ test("a row of each kind reads alike copied whole, and otherwise once any of its
   const moving = turnRows([call("read"), call("grep"), words("Reading.")], READING, {
     moving: true,
   });
+
   const finished = turnRows([call("read"), thought("why"), call("grep"), words("Done.")], READING, {
     moving: false,
   });
+
   const rows = [...moving, ...finished];
+
   for (const kind of Object.values(TURN_ROW)) {
     assert.ok(
       rows.some((row) => row.kind === kind),
       `the turns hold a ${kind} row`,
     );
   }
+
   for (const row of rows) {
     assert.ok(sameTurnRow(row, structuredClone(row)), `a ${row.kind} row copied whole`);
+
     for (const key of Object.keys(row)) {
       const other = { ...row, [key]: changed(row[key as keyof typeof row]) } as TurnRow<Block>;
       assert.ok(!sameTurnRow(row, other), `a ${row.kind} row whose ${key} changed`);
     }
   }
+
   const block = finished.find((row) => row.kind === TURN_ROW.BLOCK);
   assert.ok(block?.kind === TURN_ROW.BLOCK, "a block row");
   assert.ok(

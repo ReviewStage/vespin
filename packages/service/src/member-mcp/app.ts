@@ -88,6 +88,7 @@ export interface MemberMcpAuth {
 export function memberMcpAuth(client: MemberMcpResourceClient, baseURL: string): MemberMcpAuth {
   const resource = memberMcpResourceUrl(baseURL);
   const issuer = memberMcpIssuer(baseURL);
+
   return {
     verify: (request) =>
       client.verifyAccessTokenRequest(request, {
@@ -125,12 +126,17 @@ const toolCallSchema = Schema.Struct({
 function renamedWords(params: (typeof toolCallSchema.Type)["params"]): string | undefined {
   const { name } = params;
   const renamed = RENAMED_MEMBER_MCP_TOOL.get(name);
+
   if (renamed !== undefined) {
     return `\`${name}\` was renamed \`${renamed}\`, and nothing was done: call \`${renamed}\` with the same input.`;
   }
+
   if (name !== MEMBER_MCP_TOOL.CREATE_TASK || params.arguments === undefined) return undefined;
+
   if ("plan" in params.arguments) return CREATE_TASK_REFUSAL.RENAMED_DESCRIPTION;
+
   if ("relation" in params.arguments) return CREATE_TASK_REFUSAL.RENAMED_RELATION;
+
   return undefined;
 }
 
@@ -153,11 +159,15 @@ const renamedToolAnswer = /* @__PURE__ */ Effect.fn("web/memberMcpRenamedTool")(
       .json()
       .catch(() => undefined),
   );
+
   const call = Schema.decodeUnknownOption(toolCallSchema)(body);
+
   if (Option.isNone(call)) return Option.none<Response>();
   const { id, params } = call.value;
   const text = renamedWords(params);
+
   if (text === undefined) return Option.none<Response>();
+
   return Option.some(
     Response.json({
       jsonrpc: "2.0",
@@ -180,25 +190,33 @@ const mcpEndpoint = /* @__PURE__ */ Effect.fn("web/memberMcpEndpoint")(function*
   const incoming = yield* HttpServerRequest.HttpServerRequest;
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
   const crossOrigin = originValidationResponse(request, [...NO_ORIGINS]);
+
   if (crossOrigin !== undefined) return HttpServerResponse.raw(crossOrigin);
   const admitted = yield* admitMember(auth.verify, request);
+
   if (Result.isFailure(admitted)) return HttpServerResponse.raw(admitted.failure);
   const member: AdmittedMemberValues = { ...admitted.success, baseURL: auth.baseURL };
   // Note that the handler is built per request, because the tools run on
   // the services this request's fiber holds, which the SDK's factory is
   // handed nothing of; a handler holds nothing between requests besides.
   const renamed = yield* renamedToolAnswer(request);
+
   if (Option.isSome(renamed)) return HttpServerResponse.raw(renamed.value);
+
   // Note that a member whose workspaces' experiments cannot be read is listed none of their tools, as a workspace with them off would be.
   const experimentsOn = yield* memberExperimentsOn(member.userId).pipe(
     Effect.tapError(logStoreFailure),
     Effect.orElseSucceed(() => new Set<WorkspaceExperiment>()),
   );
+
   const services = yield* Effect.context<MemberMcpRequestServices>();
+
   const handler = createMcpHandler(() =>
     memberMcpServer(services, agentSandbox, workspaces, member, experimentsOn),
   );
+
   const answer = yield* Effect.promise(() => handler.fetch(request));
+
   return HttpServerResponse.raw(answer);
 });
 
@@ -207,10 +225,13 @@ const metadataEndpoint = /* @__PURE__ */ Effect.fn("web/memberMcpMetadataEndpoin
   auth: MemberMcpAuth,
 ) {
   const incoming = yield* HttpServerRequest.HttpServerRequest;
+
   if (incoming.method !== HTTP_METHOD.GET) {
     return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
   }
+
   const metadata = yield* Effect.orDie(Effect.tryPromise(auth.metadata));
+
   return HttpServerResponse.jsonUnsafe(metadata);
 });
 

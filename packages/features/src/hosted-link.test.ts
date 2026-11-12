@@ -43,6 +43,7 @@ function invalidToken(): Response {
 function account(tokens: (string | undefined)[], holders: string[] = ["account-1"]) {
   let token = tokens.shift();
   let holder = holders.shift();
+
   return accountBearer({
     readAccessToken: () => Effect.succeed(token),
     refreshAccount: () =>
@@ -57,6 +58,7 @@ function account(tokens: (string | undefined)[], holders: string[] = ["account-1
 /** The models procedure asked through the link under the credential and deadline given. */
 function askModels(credential: CallCredential, deadline?: HostedDeadline) {
   const hosted = hostedClient({ baseUrl: `${BASE_URL}/`, credential });
+
   return askHosted(hosted.models.list, undefined, deadline);
 }
 
@@ -67,6 +69,7 @@ const TRACE_ID = /^[0-9a-f]{32}$/;
 function traceOf(failure: HostedFailure): string {
   const traceId = failure.traceId ?? "";
   assert.match(traceId, TRACE_ID);
+
   return traceId;
 }
 
@@ -169,6 +172,7 @@ it.effect("a procedure is unanswered at the deadline its ask names, and not befo
     const usual = yield* Effect.forkChild(
       Effect.flip(Effect.provide(askModels(account(["token-1"])), silent.layer)),
     );
+
     yield* untilAsked(silent.requests);
     yield* TestClock.adjust("9 seconds");
     assert.equal(usual.pollUnsafe(), undefined, "still waiting short of the usual deadline");
@@ -184,11 +188,13 @@ it.effect("a procedure is unanswered at the deadline its ask names, and not befo
     );
 
     const heldSilent = recordingHttpClient(() => new Promise<Response>(() => undefined));
+
     const held = yield* Effect.forkChild(
       Effect.flip(
         Effect.provide(askModels(account(["token-1"]), HOSTED_DEADLINE.HELD), heldSilent.layer),
       ),
     );
+
     yield* untilAsked(heldSilent.requests);
     yield* TestClock.adjust("34 seconds");
     assert.equal(held.pollUnsafe(), undefined, "a held read outlasts the usual deadline");
@@ -209,17 +215,20 @@ it.effect("a body that arrives past what is left of the deadline is let go at th
   Effect.gen(function* () {
     let answer: (response: Response) => void = () => undefined;
     let bodyAsked = false;
+
     // Note that the body is pulled only once the link reads it, so the test knows its deadline is armed, and its cancel never settles, so the deadline must not wait on it.
     const body = new ReadableStream<Uint8Array>(
       {
         pull: () => {
           bodyAsked = true;
+
           return new Promise<void>(() => undefined);
         },
         cancel: () => new Promise<void>(() => undefined),
       },
       { highWaterMark: 0 },
     );
+
     const slow = recordingHttpClient(
       () =>
         new Promise<Response>((resolve) => {
@@ -230,16 +239,20 @@ it.effect("a body that arrives past what is left of the deadline is let go at th
     const asked = yield* Effect.forkChild(
       Effect.flip(Effect.provide(askModels(account(["token-1"])), slow.layer)),
     );
+
     yield* untilAsked(slow.requests);
     yield* TestClock.adjust("8 seconds");
     answer(new Response(body, { status: HTTP_STATUS.OK }));
+
     while (!bodyAsked) yield* Effect.yieldNow;
     yield* TestClock.adjust("1 second");
     assert.equal(asked.pollUnsafe(), undefined, "still reading short of the deadline");
     yield* TestClock.adjust("1 second");
+
     for (let step = 0; step < 100 && asked.pollUnsafe() === undefined; step++) {
       yield* Effect.yieldNow;
     }
+
     assert.notEqual(asked.pollUnsafe(), undefined, "let go at the one deadline");
     const failure = yield* Fiber.join(asked);
     assert.deepEqual(
@@ -256,6 +269,7 @@ it.effect("a body that arrives past what is left of the deadline is let go at th
 it.effect("a 401's renewal and retry share the one deadline rather than starting a fresh one", () =>
   Effect.gen(function* () {
     let refuse: (response: Response) => void = () => undefined;
+
     const recording = recordingHttpClient((request) =>
       request.authorization === "Bearer stale"
         ? new Promise<Response>((resolve) => {
@@ -267,9 +281,11 @@ it.effect("a 401's renewal and retry share the one deadline rather than starting
     const asked = yield* Effect.forkChild(
       Effect.flip(Effect.provide(askModels(account(["stale", "fresh"])), recording.layer)),
     );
+
     yield* untilAsked(recording.requests);
     yield* TestClock.adjust("4 seconds");
     refuse(invalidToken());
+
     while (recording.requests.length < 2) yield* Effect.yieldNow;
     yield* TestClock.adjust("5 seconds");
     assert.equal(asked.pollUnsafe(), undefined, "still waiting short of the one deadline");
@@ -289,12 +305,14 @@ it.effect("a 401's renewal and retry share the one deadline rather than starting
 it.effect("a repository out of reach reaches the caller with why", () =>
   Effect.gen(function* () {
     const unreached = { reason: REPOSITORY_UNREACHED.GONE, repository: "Acme/Relay" };
+
     const api = fakeCloudApi({
       [CHAPTERS_ROUTE]: {
         answer: () => ({ error: HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE, unreached }),
         status: HTTP_STATUS.FORBIDDEN,
       },
     });
+
     const hosted = hostedClient({ baseUrl: `${BASE_URL}/`, credential: account(["token-1"]) });
 
     // A pull request's chapters stand in for a procedure that declares the refusal.
@@ -357,6 +375,7 @@ it.effect(
       const [, traceId, , flags] = (recording.requests[0]?.headers.get("traceparent") ?? "").split(
         "-",
       );
+
       assert.equal(traceId, traceOf(failure), "the server continues the trace the report names");
       assert.equal(flags, "00", "an ask past the sample rate is sent unsampled, not untraced");
     }),
@@ -370,6 +389,7 @@ it.effect(
         sentryTrace: "771a43a4192642f0b136d5159a501700-b7ad6b7169203331-1",
         baggage: "sentry-trace_id=771a43a4192642f0b136d5159a501700,sentry-sampled=true",
       };
+
       const recording = recordingHttpClient(
         () => new Response("", { status: HTTP_STATUS.SERVER_ERROR }),
       );

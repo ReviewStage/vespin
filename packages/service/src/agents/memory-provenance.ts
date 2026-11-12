@@ -100,6 +100,7 @@ function calledTool(part: {
 }): string | undefined {
   if (part.type === "dynamic-tool")
     return typeof part.toolName === "string" ? part.toolName : undefined;
+
   return toolPartName(part.type);
 }
 
@@ -117,6 +118,7 @@ const automationLine = (agent: Agent, messageId: string) =>
     lineSendersOf({ userId: agent.userId, conversationId: agent.conversationId }, [messageId]),
     (senders) => {
       const sent = senders.get(messageId);
+
       return sent === undefined
         ? automationRun(agent) !== undefined
         : sent.kind === MESSAGE_SENDER.AUTOMATION;
@@ -137,16 +139,20 @@ const turnUnderWay = (
     const turn = (yield* latestTurnsOf(agent.userId, [agent.conversationId])).get(
       agent.conversationId,
     );
+
     if (turn === undefined || !RUNNING_TURN_STATUSES.has(turn.status)) return undefined;
+
     const openers = yield* listTurnOpeners(agent.userId, agent.conversationId, CODER_TOOL_SET, [
       turn.id,
     ]);
+
     return { id: turn.id, openers };
   });
 
 /** Where words the agent keeps or recalls in the turn come from: the agent, and the line that opened the turn where one did and reads. */
 function sourceOf(agent: Agent, turn: TurnUnderWay | undefined): MemorySource {
   const opener = turn?.openers.ok === true ? turn.openers.value[0] : undefined;
+
   return { agentId: agent.id, messageId: opener?.id ?? null };
 }
 
@@ -155,7 +161,9 @@ const openedByAutomation = (agent: Agent, openers: MessageListRead) =>
   Effect.gen(function* () {
     if (!openers.ok) return undefined;
     const opener = openers.value[0];
+
     if (opener === undefined) return false;
+
     return yield* automationLine(agent, opener.id);
   });
 
@@ -165,6 +173,7 @@ const readTheWeb = (agent: Agent, turnId: string) =>
     readMessageByClientId(agent.userId, agent.conversationId, CODER_TOOL_SET, turnId),
     (journal) => {
       if (!journal.ok) return undefined;
+
       return journal.value.some((record) =>
         record.message.parts.some((part) => WEB_READS.has(calledTool(part) ?? "")),
       );
@@ -182,13 +191,18 @@ export interface MemoryProvenance {
 const refusalOf = (agent: Agent, turn: TurnUnderWay | undefined, words: ProvenanceRefusals) =>
   Effect.gen(function* () {
     if (turn === undefined) return undefined;
+
     const [automation, web] = yield* Effect.all(
       [openedByAutomation(agent, turn.openers), readTheWeb(agent, turn.id)],
       { concurrency: "unbounded" },
     );
+
     if (automation === true) return words.AUTOMATION;
+
     if (web === true) return words.WEB_READ;
+
     if (automation === undefined || web === undefined) return words.UNREADABLE;
+
     return undefined;
   });
 
@@ -202,6 +216,7 @@ export function rememberProvenance(
 ): Effect.Effect<MemoryProvenance, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const turn = yield* turnUnderWay(agent);
+
     return {
       refusal: yield* refusalOf(agent, turn, MEMORY_PROVENANCE_REFUSAL),
       source: sourceOf(agent, turn),
@@ -215,6 +230,7 @@ export function forgetProvenance(
 ): Effect.Effect<MemoryProvenance, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const turn = yield* turnUnderWay(agent);
+
     return {
       refusal: yield* refusalOf(agent, turn, FORGET_PROVENANCE_REFUSAL),
       source: sourceOf(agent, turn),

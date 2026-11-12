@@ -85,16 +85,19 @@ interface SlackCall {
 function fakeSlack(calls: SlackCall[], postedTs = "1700000000.000100"): SlackWebApi {
   return (method, args) => {
     calls.push({ method, args });
+
     switch (method) {
       case "users.lookupByEmail":
         return Effect.succeed({ ok: true, user: { id: `U-${args.email}` } });
       case "users.info": {
         const email = args.user?.startsWith("U-") ? args.user.slice(2) : undefined;
+
         return Effect.succeed({
           ok: true,
           user: { profile: email === undefined ? {} : { email } },
         });
       }
+
       case "chat.getPermalink":
         return Effect.succeed({ ok: true, permalink: "https://team.slack.com/archives/C0001/p1" });
       case "chat.postMessage":
@@ -118,6 +121,7 @@ function fakeFiles(read: string[]): SlackFileTransfer {
     read: (url) =>
       Effect.sync(() => {
         read.push(url);
+
         return new Uint8Array(PNG);
       }),
   };
@@ -158,6 +162,7 @@ const openAskedMember = (
     const owner = yield* openGithubUser();
     yield* connectAgentApiKeys(owner);
     const task = yield* startTask(owner, { name: "Teammate invitations" });
+
     const started = yield* createAgent(owner, {
       taskId: task.id,
       idempotencyKey: randomUUID(),
@@ -169,6 +174,7 @@ const openAskedMember = (
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
       payer: AGENT_PAYER.API_KEY,
     });
+
     assert.ok(Option.isSome(started));
     const agent = started.value.agent;
     yield* claimRuntimeSession(
@@ -183,6 +189,7 @@ const openAskedMember = (
       teamName: "Team",
       userId: owner,
     });
+
     const item = Result.getOrThrow(
       yield* postInboxThread(
         { userId: owner, taskId: task.id, agentId: agent.id },
@@ -195,9 +202,11 @@ const openAskedMember = (
         },
       ),
     );
+
     yield* dmThreadPost({ organizationId, item, asked: true, wasOpen: false }).pipe(
       Effect.provide(bot),
     );
+
     return { owner, item };
   });
 
@@ -241,13 +250,16 @@ const answer = (
       bot,
       after,
     );
+
     const { handler, dispose } = HttpRouter.toWebHandler(
       slackEventsApp(verify).pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
+
     const response = yield* Effect.promise(() => handler(request));
     const body: unknown = yield* Effect.promise(() => response.json());
     yield* Effect.promise(() => dispose());
+
     return { status: response.status, body };
   });
 
@@ -266,6 +278,7 @@ function press(
     actions: [{ ...button, type: "button", block_id: "b", action_ts: "1700000001.000200" }],
     state: { values: state },
   };
+
   return new Request(new URL(EVENTS, ORIGIN), {
     method: "POST",
     headers: {
@@ -291,6 +304,7 @@ function mention(slackUserId: string, eventId: string): Request {
       channel: "C0001",
     },
   };
+
   return new Request(new URL(EVENTS, ORIGIN), {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${CONNECT_TOKEN}` },
@@ -314,6 +328,7 @@ function threadMention(slackUserId: string, eventId: string, threadTs: string): 
       channel: "C0001",
     },
   };
+
   return new Request(new URL(EVENTS, ORIGIN), {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${CONNECT_TOKEN}` },
@@ -329,6 +344,7 @@ function directShare(slackUserId: string, eventId: string): Request {
     size: 120,
     url_private_download: `https://files.slack.com/files-pri/T0001-F0001/download/${name}`,
   });
+
   const payload = {
     type: "event_callback",
     team_id: "T0001",
@@ -352,6 +368,7 @@ function directShare(slackUserId: string, eventId: string): Request {
       ],
     },
   };
+
   return new Request(new URL(EVENTS, ORIGIN), {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${CONNECT_TOKEN}` },
@@ -380,6 +397,7 @@ function dmReply(
       channel: dm.channel,
     },
   };
+
   return new Request(new URL(EVENTS, ORIGIN), {
     method: "POST",
     headers: { "content-type": "application/json", authorization: `Bearer ${CONNECT_TOKEN}` },
@@ -392,10 +410,12 @@ const openThreadAgent = (runtime: ConversationRuntime, inBeacon: boolean) =>
   Effect.gen(function* () {
     const owner = yield* openGithubUser();
     yield* connectAgentApiKeys(owner);
+
     const task = yield* startTask(owner, {
       name: "Flaky tests",
       repository: inBeacon ? "Acme/Beacon" : null,
     });
+
     const { workspaceId } = task;
     yield* linkSlackInstallation({
       organizationId: workspaceId,
@@ -403,7 +423,9 @@ const openThreadAgent = (runtime: ConversationRuntime, inBeacon: boolean) =>
       teamName: "Team",
       userId: owner,
     });
+
     if (inBeacon) yield* connectWorkspaceGitHub(workspaceId, BEACON_INSTALLATION);
+
     const started = yield* createAgent(owner, {
       taskId: task.id,
       idempotencyKey: randomUUID(),
@@ -415,6 +437,7 @@ const openThreadAgent = (runtime: ConversationRuntime, inBeacon: boolean) =>
       runtime,
       payer: AGENT_PAYER.API_KEY,
     });
+
     assert.ok(Option.isSome(started));
     const agent = started.value.agent;
     yield* claimRuntimeSession(
@@ -432,10 +455,12 @@ const openThreadAgent = (runtime: ConversationRuntime, inBeacon: boolean) =>
       userId: owner,
       origin: SLACK_THREAD_ORIGIN.START,
     });
+
     const [row] = yield* (yield* Database)
       .select({ email: user.email })
       .from(user)
       .where(eq(user.id, owner));
+
     return { owner, agent, taskId: task.id, threadTs, slackUserId: `U-${row?.email}` };
   });
 
@@ -445,17 +470,22 @@ it.layer(SUITE)("our Slack route", (it) => {
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
+
       return Effect.gen(function* () {
         const { owner, item } = yield* openAskedMember(bot);
         // The DM saying the thread's title, then the ask as a reply under it.
         const [title, posted] = calls.filter((call) => call.method === "chat.postMessage");
+
         const [actions] = JSON.parse(posted?.args.blocks ?? "[]").filter(
           (block: { type: string }) => block.type === "actions",
         );
+
         const [month] = actions.elements.filter(
           (element: { text: { text: string } }) => element.text.text === "A month",
         );
+
         const slackUserId = title?.args.channel ?? "";
+
         const askStatus = Effect.map(
           readInboxItem(owner, item.id),
           (stored) => Option.getOrThrow(stored).item.thread?.find((m) => m.ask)?.ask?.status,
@@ -482,9 +512,11 @@ it.layer(SUITE)("our Slack route", (it) => {
           HARNESS.heard.filter((heard) => heard.account === owner),
           [{ call: "send", account: owner }],
         );
+
         const updated = calls.filter(
           (call) => call.method === "chat.update" && call.args.text !== title?.args.text,
         );
+
         assert.equal(updated.length, 1);
         assert.equal(
           updated[0]?.args.text,
@@ -499,26 +531,33 @@ it.layer(SUITE)("our Slack route", (it) => {
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
+
       return Effect.gen(function* () {
         const { owner, item } = yield* openAskedMember(bot, {
           type: INBOX_ASK.DECIDE,
           options: [{ label: "Email" }, { label: "Slack" }, { label: "SMS" }],
           multiple: true,
         });
+
         const [title, posted] = calls.filter((call) => call.method === "chat.postMessage");
+
         const elements = JSON.parse(posted?.args.blocks ?? "[]").flatMap(
           (block: { type: string; elements?: unknown[] }) =>
             block.type === "actions" ? (block.elements ?? []) : [],
         );
+
         const checkboxes = elements.find(
           (element: { type: string }) => element.type === "checkboxes",
         );
+
         const submit = elements.find(
           (element: { text?: { text: string } }) => element.text?.text === "Submit",
         );
+
         const ticked = checkboxes.options.filter(
           (option: { text: { text: string } }) => option.text.text !== "Slack",
         );
+
         const kept = keptAfterResponse();
         yield* answer(
           bot,
@@ -535,9 +574,11 @@ it.layer(SUITE)("our Slack route", (it) => {
         const stored = Option.getOrThrow(yield* readInboxItem(owner, item.id));
         const asked = stored.item.thread?.find((message) => message.ask);
         assert.equal(asked?.ask?.status, INBOX_ASK_STATUS.ANSWERED);
+
         const updated = calls.filter(
           (call) => call.method === "chat.update" && call.args.text !== title?.args.text,
         );
+
         assert.equal(
           updated[0]?.args.text,
           "How long should an invitation last? · You chose Email, SMS",
@@ -551,15 +592,19 @@ it.layer(SUITE)("our Slack route", (it) => {
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
+
       return Effect.gen(function* () {
         const { owner, item } = yield* openAskedMember(bot);
         const [title, posted] = calls.filter((call) => call.method === "chat.postMessage");
+
         const [actions] = JSON.parse(posted?.args.blocks ?? "[]").filter(
           (block: { type: string }) => block.type === "actions",
         );
+
         const [month] = actions.elements.filter(
           (element: { text: { text: string } }) => element.text.text === "A month",
         );
+
         yield* archiveAgent(owner, item.agentId, true);
         const heard = HARNESS.heard.length;
 
@@ -583,13 +628,16 @@ it.layer(SUITE)("our Slack route", (it) => {
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
+
       return Effect.gen(function* () {
         const { owner, item } = yield* openAskedMember(bot, {
           type: INBOX_ASK.DO,
           steps: ["Open the repository's settings.", "Run this:\n```\npnpm install\n```"],
         });
+
         const [title, posted] = calls.filter((call) => call.method === "chat.postMessage");
         const blocks = JSON.parse(posted?.args.blocks ?? "[]");
+
         const done = blocks
           .flatMap((block: { type: string; elements?: unknown[] }) =>
             block.type === "actions" ? (block.elements ?? []) : [],
@@ -603,13 +651,16 @@ it.layer(SUITE)("our Slack route", (it) => {
 
         const words =
           "Pick how long an invitation stays open.\n\n1. Open the repository's settings.\n\n2. Run this:\n   ```\n   pnpm install\n   ```";
+
         assert.equal(blocks[0]?.text, words);
         const stored = Option.getOrThrow(yield* readInboxItem(owner, item.id));
         const asked = stored.item.thread?.find((message) => message.ask);
         assert.equal(asked?.ask?.status, INBOX_ASK_STATUS.ANSWERED);
+
         const updated = calls.filter(
           (call) => call.method === "chat.update" && call.args.text !== title?.args.text,
         );
+
         assert.equal(
           updated[0]?.args.text,
           "How long should an invitation last? · You marked it done",
@@ -625,6 +676,7 @@ it.layer(SUITE)("our Slack route", (it) => {
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
+
       return Effect.gen(function* () {
         const owner = yield* openGithubUser();
         yield* connectAgentApiKeys(owner);
@@ -637,11 +689,14 @@ it.layer(SUITE)("our Slack route", (it) => {
         });
         yield* connectWorkspaceGitHub(task.workspaceId, RELAY_INSTALLATION);
         yield* writeSlackChannelRepository(task.workspaceId, "C0001", "Acme/Relay");
+
         const [row] = yield* (yield* Database)
           .select({ email: user.email })
           .from(user)
           .where(eq(user.id, owner));
+
         const opened = () => HARNESS.heard.filter((heard) => heard.call === "open").length;
+
         const replies = () =>
           calls.filter((call) => call.method === "chat.postMessage" && call.args.thread_ts);
 
@@ -661,6 +716,7 @@ it.layer(SUITE)("our Slack route", (it) => {
           reactions.map((call) => call.args),
           [{ channel: "C0001", timestamp: "1700000002.000300", name: "eyes" }],
         );
+
         const [startedAgent] = yield* (yield* Database)
           .select({
             agentId: agentTable.id,
@@ -674,6 +730,7 @@ it.layer(SUITE)("our Slack route", (it) => {
           .innerJoin(agentTable, eq(agentTable.id, slackAgentThread.agentId))
           .innerJoin(messages, eq(messages.conversationId, agentTable.conversationId))
           .where(eq(slackAgentThread.userId, owner));
+
         assert.equal(startedAgent?.repository, "Acme/Relay");
         // The thread links the agent at once, before its first turn settles.
         assert.deepEqual(
@@ -727,11 +784,13 @@ it.layer(SUITE)("our Slack route", (it) => {
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
+
       return Effect.gen(function* () {
         const { owner, agent, threadTs, slackUserId } = yield* openThreadAgent(
           CONVERSATION_RUNTIME.CLAUDE_CODE,
           false,
         );
+
         yield* archiveAgent(owner, agent.id, true);
 
         const answered = yield* answer(
@@ -759,6 +818,7 @@ it.layer(SUITE)("our Slack route", (it) => {
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
+
       return Effect.gen(function* () {
         // An agent left on the retired runtime runs on no harness, so its session has ended for good.
         const { owner, agent, taskId, threadTs, slackUserId } = yield* openThreadAgent(
@@ -772,11 +832,13 @@ it.layer(SUITE)("our Slack route", (it) => {
         );
 
         assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
+
         const [thread] = yield* (yield* Database)
           .select({ agentId: slackAgentThread.agentId })
           .from(slackAgentThread)
           .innerJoin(agentTable, eq(agentTable.id, slackAgentThread.agentId))
           .where(eq(agentTable.userId, owner));
+
         assert.ok(thread !== undefined && thread.agentId !== agent.id);
         const continued = Option.getOrThrow(yield* readAgent(owner, thread.agentId));
         assert.deepEqual(continued.startedFrom?.agentId, agent.id);
@@ -800,6 +862,7 @@ it.layer(SUITE)("our Slack route", (it) => {
       const calls: SlackCall[] = [];
       // Note that the DM's timestamp is this test's own, because the store is shared with the press above.
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls, "1700000004.000500")));
+
       return Effect.gen(function* () {
         const { owner, item } = yield* openAskedMember(bot);
         const posted = calls.find((call) => call.method === "chat.postMessage");
@@ -848,6 +911,7 @@ it.layer(SUITE)("our Slack route", (it) => {
       const calls: SlackCall[] = [];
       const read: string[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls), fakeFiles(read)));
+
       return Effect.gen(function* () {
         const owner = yield* openGithubUser();
         yield* connectAgentApiKeys(owner);
@@ -858,6 +922,7 @@ it.layer(SUITE)("our Slack route", (it) => {
           teamName: "Team",
           userId: owner,
         });
+
         const [row] = yield* (yield* Database)
           .select({ email: user.email })
           .from(user)
@@ -871,15 +936,18 @@ it.layer(SUITE)("our Slack route", (it) => {
           "https://files.slack.com/files-pri/T0001-F0001/download/screen.png",
           "https://files.slack.com/files-tmb/T0001-F0002/mac_720.png",
         ]);
+
         const [first] = yield* (yield* Database)
           .select({ parts: messages.parts })
           .from(slackAgentThread)
           .innerJoin(agentTable, eq(agentTable.id, slackAgentThread.agentId))
           .innerJoin(messages, eq(messages.conversationId, agentTable.conversationId))
           .where(eq(slackAgentThread.channelId, "D0002"));
+
         const files = (first?.parts ?? []).flatMap((part) =>
           part.type === "file" ? [{ filename: part.filename, mediaType: part.mediaType }] : [],
         );
+
         assert.deepEqual(files, [
           { filename: "screen.png", mediaType: "image/png" },
           { filename: "mac.heic", mediaType: "image/png" },

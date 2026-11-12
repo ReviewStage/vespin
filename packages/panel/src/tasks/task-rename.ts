@@ -61,6 +61,7 @@ function taskRenameMutation(
 export function useTaskRename(drawn: () => TasksView) {
   const fixture = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const doors = useTaskRowDoors(ROW_WRITE.TASK_RENAME.kind, drawn);
+
   return fixture
     ? taskRenameMutation(() => Promise.resolve(false), undefined)
     : taskRenameMutation((asked) => sendAct(ROW_WRITE.TASK_RENAME.kind, asked), doors);

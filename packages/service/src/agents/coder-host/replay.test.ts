@@ -101,6 +101,7 @@ it("a source handed in its stopped sandbox's snapshot is told to stand in the ne
   const from = startFrom(1, [
     { repository: "acme/web", baseBranch: null, headBranch: "agent/invite", pullRequest: null },
   ]);
+
   const onSnapshot = (inPullRequest: boolean) =>
     replayOf(
       {
@@ -161,6 +162,7 @@ it("a source that never made a branch of its own sends the new agent to the work
     title: "Add PR tab",
     branch: "luke/pull-request-tab",
   };
+
   const pullRequest: AgentPullRequest = {
     number: 3030,
     title: "Add a PR tab",
@@ -171,7 +173,9 @@ it("a source that never made a branch of its own sends the new agent to the work
     deletions: 4,
     changedFiles: 6,
   };
+
   const from = startFrom(3);
+
   const carriedFrom = (copiedBranch: string | undefined) =>
     replayOf(
       {
@@ -217,6 +221,7 @@ it("a source that never made a branch of its own sends the new agent to the work
     from.steps,
     undefined,
   ).replay.preamble;
+
   assert.match(onMac, /git switch 'luke\/pull-request-tab'/u);
   assert.match(onMac, /stays on the Mac it ran on, so it is not in that branch/u);
 
@@ -235,6 +240,7 @@ it("a source that never made a branch of its own sends the new agent to the work
     from.steps,
     undefined,
   ).replay.preamble;
+
   assert.match(unread, /took up the work of another agent, whose checkout was copied for it/u);
   assert.match(unread, /git switch 'luke\/add-pr-tab-continued-1a2b3c4d'/u);
 
@@ -288,6 +294,7 @@ it("a native harness's calls replay named as the retired runtime's are, its edit
 
 it("a source whose transcript is carried is told it goes on from that transcript, with no steps replayed, and its session kept", () => {
   const from = startFrom(0);
+
   const carried = replayOf(
     { ...from, told: { ...from.told, transcript: "6f1c2a4e-0d3b-4c55-9a8e-2f7d1b9c0e11" } },
     [],

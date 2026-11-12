@@ -33,7 +33,9 @@ export interface RunOnMacInput {
 /** Why `run_on_mac` is off for the agent, the first of the three reasons that holds; nothing where it is on, or not known to be off. */
 export function runOnMacReason(input: RunOnMacInput): RunOnMacReason | undefined {
   const { standing } = input;
+
   // Note that the service's answer comes first, because another Mac of the starter's may listen while this one is set to Never.
   if (standing === undefined || standing.on) return undefined;
+
   return input.settingsOff ? RUN_ON_MAC_REASON.SETTINGS_OFF : standing.reason;
 }

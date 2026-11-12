@@ -51,7 +51,9 @@ export function queueConsumer<R>(
       const exit = await Effect.runPromiseExitWith(services)(
         consume(message, metadata.deliveryCount),
       );
+
       if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
+
       if (!exit.value.acknowledged) {
         throw new DeliveredAgain({ afterSeconds: secondsOf(exit.value.again) });
       }
@@ -59,6 +61,7 @@ export function queueConsumer<R>(
     {
       retry: (error) => {
         if (error instanceof DeliveredAgain) return { afterSeconds: error.afterSeconds };
+
         return failedAgain === undefined ? undefined : { afterSeconds: secondsOf(failedAgain) };
       },
     },

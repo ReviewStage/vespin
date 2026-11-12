@@ -18,6 +18,7 @@ function drawn(provider: ModelProvider): Element {
   page.innerHTML = renderToStaticMarkup(
     createElement(HarnessMark, { provider, codexArt: CODEX_ART }),
   );
+
   return page.querySelector(".ui-harness-mark") ?? assert.fail("a mark is drawn");
 }
 

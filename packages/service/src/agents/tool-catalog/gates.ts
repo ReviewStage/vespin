@@ -101,6 +101,7 @@ export function standingOfAgent(
   if (Option.isNone(agent)) {
     return Effect.succeed({ agent, open: new Set(), experiments: NO_EXPERIMENT_ON });
   }
+
   return Effect.map(experimentsOnIn(agent.value.organizationId), (experiments) => ({
     agent,
     open: new Set(
@@ -113,5 +114,6 @@ export function standingOfAgent(
 /** The standing of the agent whose conversation the call was admitted to. */
 export function standingOf(admitted: AdmittedConversation): AgentStoreEffect<AgentStanding> {
   const { userId, conversationId } = admitted.target;
+
   return Effect.flatMap(readAgentOfConversation(userId, conversationId), standingOfAgent);
 }

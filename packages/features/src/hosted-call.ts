@@ -68,6 +68,7 @@ type DeclaredBy<Failure> =
 /** The input a poll asks with: the rows inline, past `after` where it names one. */
 function polledInput<Input>(input: Input, poll: HostedPoll | undefined): Input {
   if (poll === undefined) return input;
+
   return {
     ...input,
     [LIVE_POLL.QUERY]: LIVE_POLL.ON,
@@ -84,9 +85,12 @@ function failedOf(
     if (reading.live === true && failed.refusal === HOSTED_API_ERROR.INVALID_TOKEN) {
       return LIVE_SIGNED_OUT;
     }
+
     const failure = spelledFailure(failed.refusal, reading);
+
     if (failure !== undefined) return { ...failed.data, failure };
   }
+
   return { failure: HOSTED_CALL_FAILURE.UNANSWERED, cause: hostedFailureFacts(failed) };
 }
 
@@ -112,6 +116,7 @@ export function hostedCall<
 > {
   const { poll } = options;
   const held = poll?.after === undefined ? undefined : HOSTED_DEADLINE.HELD;
+
   return Effect.catch(
     askHosted(
       procedure,
@@ -150,11 +155,13 @@ export function askLiveRead<Read extends AnyLiveRead, As extends HostedRenames =
     LiveReadAnswer<Read>,
     ORPCErrorFromErrorMap<Read["errors"]>
   >;
+
   // SAFETY: a read's params are the fields of its input its mode's poll fields stand beside, each as text.
   const input = params as LivePollInput & { readonly [LIVE_POLL.SYNC]?: string };
   // Note that a read past a sync id is held by the service until something moves, polled or not, so it travels under the held deadline, as a poll past `after` does.
   const sync = input[LIVE_POLL.SYNC];
   const held = sync !== undefined && sync !== "";
+
   return hostedCall(procedure, input, {
     live: true,
     ...(poll === undefined ? {} : { poll }),

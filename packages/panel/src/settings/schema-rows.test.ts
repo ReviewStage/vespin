@@ -32,8 +32,10 @@ const REFUSED = "The setting could not be saved. Try again.";
 
 /** Each stored setting a row wrote, with the value it wrote. */
 let written: [AppSettingField, unknown][] = [];
+
 /** What the store answers the next write. */
 let answer: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
+
 /** A write the store has not answered yet, for a test that reads the row while it waits. */
 let held: PromiseWithResolvers<ActionResult> | undefined;
 const roots: Root[] = [];
@@ -43,6 +45,7 @@ function standStore(): void {
   fakeActPort({
     [SETTINGS_ACT_KIND.SETTING_UPDATE]: ({ field, value }) => {
       written.push([field, value]);
+
       return (held?.promise ?? Promise.resolve(answer)).then((answered) => ({
         ...answered,
         settings: appSettingsWire(settingsView()),
@@ -80,7 +83,9 @@ function rows(page: DrawnPage, settings: ReturnType<typeof settingsView>) {
     accountDrawn: true,
     capabilities: DESKTOP_CAPABILITIES,
   };
+
   const section = DRAWN_SECTION[page];
+
   return createElement(
     Fragment,
     null,
@@ -97,6 +102,7 @@ function mount(page: DrawnPage = SETTINGS_PAGE.APPEARANCE): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(withQueryClient(rows(page, settingsView()))));
+
   return container;
 }
 
@@ -109,12 +115,16 @@ function mountThroughActs(): {
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   function Page({ settings }: { settings: ReturnType<typeof settingsView> }) {
     return rows(SETTINGS_PAGE.THIS_MAC, settings);
   }
+
   const redraw = (settings: ReturnType<typeof settingsView>) =>
     act(() => root.render(withQueryClient(createElement(Page, { settings }))));
+
   redraw(settingsView());
+
   return { page: container, redraw };
 }
 
@@ -122,6 +132,7 @@ function mountThroughActs(): {
 function control(page: HTMLElement, name: string): HTMLButtonElement {
   const found = page.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
   assert.ok(found, `${name} is drawn`);
+
   return found;
 }
 
@@ -260,6 +271,7 @@ test("a switch whose write the host refuses outright flips back with the host's 
 test("a choice the store refuses says why under its own row and marks its pop-up invalid until a choice is kept", async () => {
   const page = mount();
   answer = { status: ACTION_RESULT_STATUS.REJECTED, reason: REFUSED };
+
   const choose = (words: string) => {
     act(() => control(page, "Zoom: 100%").click());
     act(() => optionNamed(words).click());

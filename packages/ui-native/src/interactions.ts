@@ -52,6 +52,7 @@ export function dropPictures(
   return createModifierWithEventListener(MODIFIER.DROP_PICTURES, (event: unknown) => {
     Option.map(decodeDroppedPictures(event), ({ uris, dropped }) => {
       const unreadable = Math.max(0, (dropped ?? uris.length) - uris.length);
+
       if (uris.length + unreadable > 0) onDrop(uris, unreadable);
     });
   });

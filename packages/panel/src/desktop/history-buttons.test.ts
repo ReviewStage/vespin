@@ -62,6 +62,7 @@ const BACK: readonly HistoryStep[] = [
 function mount(steps: readonly HistoryStep[]) {
   const went: number[] = [];
   const pressed: string[] = [];
+
   const history: NavigationHistory = {
     canGoBack: steps.length > 0,
     canGoForward: false,
@@ -70,6 +71,7 @@ function mount(steps: readonly HistoryStep[]) {
     steps: { back: steps, forward: [] },
     onGoTo: (number) => went.push(number),
   };
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -79,6 +81,7 @@ function mount(steps: readonly HistoryStep[]) {
   );
   const back = container.querySelector<HTMLButtonElement>('button[aria-label="Back"]');
   assert.ok(back);
+
   return { back, went, pressed };
 }
 
@@ -86,6 +89,7 @@ function mount(steps: readonly HistoryStep[]) {
 function menuWords(): string[] {
   const menu = document.querySelector('[role="menu"]');
   assert.ok(menu, "the list stands");
+
   return [...menu.querySelectorAll('[role="menuitem"], hr')].map((each) =>
     each.tagName === "HR" ? "—" : (each.textContent ?? ""),
   );
@@ -147,6 +151,7 @@ test("choosing a step from Back's list goes straight to it, without a step of Ba
 test("Back held opens its list and its release takes no step, while a quick press takes one step", () => {
   vi.useFakeTimers();
   const window = mount(BACK);
+
   const down = () =>
     act(() => {
       window.back.dispatchEvent(
@@ -158,6 +163,7 @@ test("Back held opens its list and its release takes no step, while a quick pres
         }),
       );
     });
+
   const up = () =>
     act(() => {
       window.back.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
@@ -178,6 +184,7 @@ test("Back held opens its list and its release takes no step, while a quick pres
 
 test("repeated steps named nothing are listed in separate page groups, one for each time the window returned to the page", () => {
   const home = { kind: "routed", of: "/acme" } as const;
+
   const window = mount([
     { number: 3, title: undefined, page: home },
     { number: 2, title: undefined, page: home },
@@ -188,6 +195,7 @@ test("repeated steps named nothing are listed in separate page groups, one for e
     },
     { number: 0, title: undefined, page: home },
   ]);
+
   act(() => {
     window.back.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
   });
@@ -228,6 +236,7 @@ test("a press held into the list and let go there leaves the list's first click 
 test("a touch held on Back opens its list and no hint over it, and Android's own contextmenu before the hold's timer spends the hold, so the lift takes no step", () => {
   vi.useFakeTimers();
   const window = mount(BACK);
+
   const touchDown = () =>
     act(() => {
       window.back.dispatchEvent(
@@ -239,6 +248,7 @@ test("a touch held on Back opens its list and no hint over it, and Android's own
         }),
       );
     });
+
   touchDown();
   act(() => vi.advanceTimersByTime(1000));
   assert.ok(document.querySelector('[role="menu"]'), "the held touch opened the list");

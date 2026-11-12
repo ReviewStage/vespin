@@ -38,6 +38,7 @@ function originAgentOf(
   taskNames: ReadonlyMap<string, string>,
 ): OriginAgent {
   const taskName = taskId === null ? undefined : taskNames.get(taskId);
+
   return {
     name: agentName(agent),
     provider: providerOf(agent.model),
@@ -54,9 +55,11 @@ const selectOriginAgents = memoizedSelect(
   (planning): ReadonlyMap<string, OriginAgent> => {
     const agents = new Map<string, OriginAgent>();
     const names = new Map(planning.tasks.map((task) => [task.id, task.name]));
+
     for (const agent of planning.taskAgents ?? []) {
       agents.set(agent.id, originAgentOf(agent, agent.planId, names));
     }
+
     return agents;
   },
 );
@@ -79,6 +82,7 @@ function useOriginAgent(agentId: string): OriginAgent | undefined {
     (state: AppStateSnapshot) => selectOriginAgents(state).get(agentId),
     [agentId],
   );
+
   return useQuery({ ...appStateQuery, select }).data;
 }
 
@@ -91,9 +95,11 @@ type OriginTask = Pick<TaskSummary, "origin">;
  */
 export function useTaskOrigin(): (task: OriginTask) => Actor | undefined {
   const agents = useQuery({ ...appStateQuery, select: selectOriginAgents }).data ?? NO_AGENTS;
+
   return useCallback(
     (task: OriginTask) => {
       const agentId = task.origin?.agentId;
+
       return originActor(task.origin, agentId === undefined ? undefined : agents.get(agentId));
     },
     [agents],
@@ -110,6 +116,8 @@ interface TaskMadeBy {
 export function useTaskMaker(task: OriginTask): TaskMadeBy | undefined {
   const agent = useOriginAgent(task.origin?.agentId ?? NO_AGENT);
   const actor = originActor(task.origin, agent);
+
   if (actor === undefined) return undefined;
+
   return agent?.taskName === undefined ? { actor } : { actor, fromTask: agent.taskName };
 }

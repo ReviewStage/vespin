@@ -87,6 +87,7 @@ test("a model is named by the catalog where it has been read, else by its own id
       efforts: ["high"],
     },
   ];
+
   assert.equal(modelLabel("anthropic/claude-opus-5.5", models), "Opus 5.5");
   assert.equal(modelLabel("openai/gpt-5.6-terra", models), "GPT-5.6 Terra");
   assert.equal(modelLabel("anthropic/claude-opus-5.5"), "Opus 5.5");
@@ -150,6 +151,7 @@ test("a stored message's parts are read for drawing: text, reasoning, a tool cal
 
 test("a finished turn that ended with end_turn replies in its summary, folding the words it wrote on the way with its work, while a turn still moving keeps its words", () => {
   const summary = "- Fixed the failing check.\n- Pushed to #214.";
+
   const turn: AgentTranscriptMessage = {
     id: "t",
     role: MESSAGE_ROLE.ASSISTANT,
@@ -165,6 +167,7 @@ test("a finished turn that ended with end_turn replies in its summary, folding t
       { type: "text", text: "It's all in the summary above." },
     ],
   };
+
   const words = (moving: boolean) =>
     agentRows(turn, moving).flatMap((row) =>
       row.kind === TURN_ROW.BLOCK && row.block.kind === AGENT_PART.TEXT ? [row.block.text] : [],
@@ -174,6 +177,7 @@ test("a finished turn that ended with end_turn replies in its summary, folding t
   assert.deepEqual(words(true), ["Reading the check's log.", "It's all in the summary above."]);
   assert.equal(messageWords(turn), summary);
   assert.equal(finishedReplyLead([turn])?.lead, "Fixed the failing check.");
+
   // A follow-up offered twice is one to tick.
   const twice: AgentTranscriptMessage = {
     ...turn,
@@ -187,7 +191,9 @@ test("a finished turn that ended with end_turn replies in its summary, folding t
       },
     ],
   };
+
   assert.deepEqual(lastTurnEnding([twice])?.followUps, ["Add a Members page", "Resend"]);
+
   // A line the turn took in under way stands after its journal yet waits on no turn; one no turn took does.
   const line = (taken: boolean): AgentTranscriptMessage => ({
     id: taken ? "steer" : "next",
@@ -195,8 +201,10 @@ test("a finished turn that ended with end_turn replies in its summary, folding t
     parts: [{ type: "text", text: "Keep the link valid for a week." }],
     ...(taken ? { arrivedIn: { journalId: twice.id, afterStep: 1 } } : {}),
   });
+
   assert.equal(lastTurnEnding([twice, line(true)])?.messageId, twice.id);
   assert.equal(lastTurnEnding([twice, line(false)]), undefined);
+
   // A later call refused stands for the turn, which then replies in its own words.
   const refused: AgentTranscriptMessage = {
     ...turn,
@@ -211,11 +219,13 @@ test("a finished turn that ended with end_turn replies in its summary, folding t
       },
     ],
   };
+
   assert.equal(messageWords(refused), "Reading the check's log.\n\nIt's all in the summary above.");
 });
 
 test("the wakeup a turn booked is read off Claude Code's own call or ours alike, by the delay held or asked, past a cancel or a refused call", () => {
   type Call = { input: Record<string, number | string | boolean>; output?: WireValue };
+
   const turnWith = (tool: string, ...calls: Call[]) => ({
     id: "t",
     role: "assistant" as const,
@@ -230,6 +240,7 @@ test("the wakeup a turn booked is read off Claude Code's own call or ours alike,
       })),
     ],
   });
+
   assert.equal(
     wakeupDelayOf(turnWith("ScheduleWakeup", { input: { delaySeconds: 270, prompt: "Check CI" } })),
     270_000,
@@ -278,18 +289,22 @@ function developer(id: string, text: string): AgentTranscriptMessage {
 
 test("a line after a turn still open is placed in that turn, unless it did not go, when it stands where the order puts it", () => {
   const ask = developer("m-1", "Add invitations.");
+
   const open: AgentTranscriptMessage = {
     id: "m-2",
     role: MESSAGE_ROLE.ASSISTANT,
     parts: [{ type: "step-start" }],
     startedAt: 1_000,
   };
+
   const steer = developer("m-3", "Use the mailer.");
+
   const placed = (unsent: (id: string) => boolean) =>
     placedMessages([ask, open, steer], unsent).map((each) => [
       each.message.id,
       each.arrived.map((line) => line.id),
     ]);
+
   assert.deepEqual(
     placed(() => false),
     [
@@ -387,17 +402,20 @@ const PULL_REQUEST: AgentPullRequest = {
 test("the dock lists every pull request the agent opened, one still open before its newest merged one, and none of another agent's", () => {
   const agentId = "8f1c3a52-6b0e-4d7a-9c21-5e4b7a0d2f10";
   const merged = { ...PULL_REQUEST, state: PULL_REQUEST_STATE.MERGED };
+
   const line = (number: number, opener: string) => ({
     ...PULL_REQUEST,
     number,
     url: `https://github.com/acme/relay/pull/${number}`,
     agentId: opener,
   });
+
   const docked = dockedPullRequests(
     { repository: "acme/relay", branch: "luke/invites", pullRequest: merged },
     [line(121, agentId), line(122, "2d6e9b1f-0c47-4a83-b5e2-7f19c4a6d830"), { ...merged, agentId }],
     agentId,
   );
+
   assert.deepEqual(
     docked.map(({ pullRequest, current }) => [pullRequest.number, current]),
     [
@@ -439,6 +457,7 @@ test("a fast or Ultrafast version is folded into its base model by its id, read 
     provider: MODEL_PROVIDER.ANTHROPIC,
     efforts: ["low", "high"],
   });
+
   const models = [
     model("anthropic/claude-opus-5.5-fast", "Claude Opus 5.5 (Fast)"),
     model("anthropic/claude-opus-5.5", "Claude Opus 5.5"),
@@ -452,6 +471,7 @@ test("a fast or Ultrafast version is folded into its base model by its id, read 
     },
     { ...model("openai/gpt-6.1-sol-fast", "GPT-6.1 Sol (Fast)"), provider: MODEL_PROVIDER.OPENAI },
   ];
+
   const offered = offeredModels(models);
   assert.deepEqual(
     offered.map((each) => [each.model.id, each.fast?.id, each.ultrafast?.id]),
@@ -523,11 +543,13 @@ test("a choice names its window after the effort only where it runs on the stand
       efforts: ["low", "high"],
     },
   ];
+
   const standard = {
     model: "openai/gpt-5.5",
     effort: "high",
     contextWindow: CONTEXT_WINDOW.STANDARD,
   };
+
   assert.equal(choiceLabel(standard, models), "GPT-5.5 High 272K");
   assert.equal(choiceLabel({ model: "openai/gpt-5.5", effort: "high" }, models), "GPT-5.5 High");
   assert.equal(
@@ -589,11 +611,14 @@ test("a tab reads its agent from the newer of its summary's turn and its answere
     status,
     ...more,
   });
+
   const idle: TabSends = { turn: undefined, unanswered: false, rewinding: false };
   const settled = turn("t-1", 1_000, TURN_STATUS.SETTLED);
   const queued = turn("t-2", 2_000, TURN_STATUS.QUEUED);
+
   const read = (agent: Pick<AgentSummary, "status" | "turn">, sends = idle) => {
     const { working, phase, status, failure } = tabTurnOf(agent, sends);
+
     return [working, phase, status, failure];
   };
 
@@ -622,10 +647,12 @@ test("a tab reads its agent from the newer of its summary's turn and its answere
   );
   // A turn held open for a usage limit's reset works, its line naming when the limit resets.
   const resetsAt = new Date(2026, 10, 9, 15, 40).getTime();
+
   const waiting = tabTurnOf(
     { status: AGENT_STATUS.RUNNING, turn: { ...running, waitsUntil: resetsAt } },
     idle,
   );
+
   assert.equal(waiting.working, true);
   assert.equal(
     workingLineWords(waiting.phase, waiting.waitsUntil, resetsAt - 60_000),
@@ -671,13 +698,16 @@ test("the working line counts from the press of the line that opened the turn, t
     parts: [{ type: AGENT_PART.TEXT, text }],
     sentAt,
   });
+
   const ask = said("m-ask", "Add invitations.", 500);
+
   const opened: AgentTranscriptMessage = {
     id: "m-turn",
     role: MESSAGE_ROLE.ASSISTANT,
     parts: [{ type: AGENT_PART.STEP_START }],
     startedAt: 1_000,
   };
+
   const steer = said("m-steer", "Use the mailer.", 4_000);
   assert.equal(agentWorkingSince([ask]), 500, "a line awaiting the first turn");
   assert.equal(agentWorkingSince([ask, opened]), 500);
@@ -714,6 +744,7 @@ test("a planning transcript's raw parts read as the agent tab reads them: the re
       { type: "tool-bash", toolCallId: "b", state: TOOL_STATE.OUTPUT_AVAILABLE, input: {} },
     ],
   });
+
   assert.ok(worker?.kind === AGENT_PART.TOOL && started?.kind === AGENT_PART.TOOL);
   assert.ok(refused?.kind === AGENT_PART.TOOL && coding?.kind === AGENT_PART.TOOL);
   assert.equal(delegates(worker), true);
@@ -737,6 +768,7 @@ test("a message refused for a repository out of reach names the plan's remedy on
     reason: FAILURE_REASON.OTHER,
     text: messageFailureWords(AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE),
   });
+
   // Giving the repository to our GitHub App is pressed on GitHub, not the task, so it stands for an agent with no task.
   const notSelected = messageFailureNote(
     {
@@ -749,6 +781,7 @@ test("a message refused for a repository out of reach names the plan's remedy on
     },
     null,
   );
+
   assert.deepEqual(notSelected, {
     reason: FAILURE_REASON.ADD_REPOSITORY,
     text: "Vespin's GitHub App doesn't have access to acme/relay.",
@@ -766,6 +799,7 @@ test("a refusal for the member's own GitHub token reads with its remedy, Update 
 
   const noToken = messageFailureNote(refused(REPOSITORY_UNREACHED.NO_TOKEN), null);
   const noAccess = startFailureNote(refused(REPOSITORY_UNREACHED.TOKEN_NO_ACCESS), null);
+
   const cannotPush = startFailureNote(
     refused(REPOSITORY_UNREACHED.TOKEN_CANNOT_PUSH),
     "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
@@ -789,6 +823,7 @@ test("a refusal for the member's own GitHub token reads with its remedy, Update 
 test("a message a Claude plan refused says to reconnect it, a limit says when it resets, and a plan's refusal says nothing of turning to another payer", () => {
   const resetsAt = Date.UTC(2026, 9, 21, 15, 40);
   const claude = planPayerOf(AGENT_RUNTIME.CLAUDE_CODE);
+
   const words = (refused: Parameters<typeof messageFailureNote>[0], payer = claude) =>
     messageFailureNote(refused, null, payer).text;
 
@@ -851,6 +886,7 @@ test("a message to an agent whose device is away offers to continue it in the cl
     localAgentRefusal: LOCAL_AGENT_REFUSAL.MAC_AWAY,
     refusedDevice: { name: "Studio" },
   };
+
   const note = messageFailureNote(refused, null);
 
   assert.deepEqual(
@@ -1016,11 +1052,13 @@ test("a plan payer names the reader's plan the page named, a new agent's first w
     position,
     ...more,
   });
+
   const plans: SubscriptionKeySummary[] = [
     plan("third", 2, { email: "side@work.test" }),
     plan("first", 0, { email: "ana@work.test", status: PROVIDER_KEY_STATUS.LIMIT_REACHED }),
     plan("second", 1, { email: "ana@home.test", label: "Home" }),
   ];
+
   const { CHATGPT_SUBSCRIPTION, API_KEY } = AGENT_PAYER;
   assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, "third", false), "side@work.test");
   assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, undefined, true), "Home");

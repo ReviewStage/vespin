@@ -31,13 +31,16 @@ async function* heldAfter(...words: string[]): AsyncGenerator<string> {
 function port(...streams: (Stream | undefined)[]) {
   const taken: string[] = [];
   let opens = 0;
+
   const open = () => {
     const stream = streams[opens];
     opens += 1;
+
     return stream === undefined
       ? Promise.reject(new Error("port refused"))
       : Promise.resolve(stream);
   };
+
   return {
     taken,
     opens: () => opens,
@@ -66,6 +69,7 @@ it.effect("a stream that ends is opened again as one that broke", () =>
     async function* ended(): AsyncGenerator<string> {
       yield "a";
     }
+
     const fake = port(ended(), heldAfter("b"));
     const fiber = yield* Effect.forkChild(fake.follow);
     yield* settle;
@@ -103,10 +107,12 @@ it.effect("a stream that cannot be opened is asked again on a wait that doubles"
 it.effect("a follow let go lets its stream go and opens nothing more", () =>
   Effect.gen(function* () {
     let returned = false;
+
     const held: Stream = {
       next: () => Promise.withResolvers<IteratorResult<string>>().promise,
       return: () => {
         returned = true;
+
         return Promise.resolve({ done: true, value: undefined });
       },
       [Symbol.asyncIterator]() {
@@ -114,6 +120,7 @@ it.effect("a follow let go lets its stream go and opens nothing more", () =>
       },
       [Symbol.asyncDispose]: () => Promise.resolve(),
     };
+
     const fake = port(held);
     const fiber = yield* Effect.forkChild(fake.follow);
     yield* settle;
@@ -129,10 +136,12 @@ it.effect("a follow let go lets its stream go and opens nothing more", () =>
 it.effect("a follow let go while its stream opens lets the stream go once it opens", () =>
   Effect.gen(function* () {
     let returned = 0;
+
     const late: Stream = {
       next: () => Promise.withResolvers<IteratorResult<string>>().promise,
       return: () => {
         returned += 1;
+
         return Promise.resolve({ done: true, value: undefined });
       },
       [Symbol.asyncIterator]() {
@@ -140,17 +149,21 @@ it.effect("a follow let go while its stream opens lets the stream go once it ope
       },
       [Symbol.asyncDispose]: () => Promise.resolve(),
     };
+
     const opening = Promise.withResolvers<Stream>();
     let opens = 0;
+
     const fiber = yield* Effect.forkChild(
       followStream(
         () => {
           opens += 1;
+
           return opening.promise;
         },
         () => undefined,
       ),
     );
+
     yield* settle;
     const letGo = yield* Effect.forkChild(Fiber.interrupt(fiber));
     yield* settle;

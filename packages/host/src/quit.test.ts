@@ -41,6 +41,7 @@ function composedQuit(holdFirst?: () => boolean) {
   const unsavedWork = unsavedWorkHolders<symbol>(() => false);
   const atStake = () => ({ unsavedWork: unsavedWork.holding() });
   const asked: Asked[] = [];
+
   const askFirst = leaveGate({
     atStake,
     ask: (question) =>
@@ -48,7 +49,9 @@ function composedQuit(holdFirst?: () => boolean) {
         asked.push({ question, answer });
       }),
   });
+
   const quit = desktopQuit();
+
   if (holdFirst) quit.holdWhile(holdFirst);
   let quitAgain = 0;
   quit.holdWhile(
@@ -60,6 +63,7 @@ function composedQuit(holdFirst?: () => boolean) {
       },
     }),
   );
+
   return {
     quit,
     askFirst,
@@ -149,9 +153,11 @@ it("a window that is gone holds no unsaved work, whatever it last said", () => {
 
 it("a quit, a restart to update, and a sign-out ask under the same conditions, naming what each would lose", () => {
   const stakes: AtStake = { unsavedWork: true };
+
   const asks = (leave: Leave) => {
     const question = leaveQuestion(leave, stakes);
     assert.ok(question !== undefined);
+
     return {
       message: question.message,
       detail: question.detail,
@@ -178,6 +184,7 @@ it("a quit, a restart to update, and a sign-out ask under the same conditions, n
     act: "Sign out",
     returnPresses: "Cancel",
   });
+
   for (const leave of Object.values(LEAVE)) {
     assert.equal(leaveQuestion(leave, NOTHING), undefined);
   }
@@ -224,6 +231,7 @@ it("the updater's own quit, behind the teardown it runs first, is never held, th
 function composedReload() {
   const unsavedWork = unsavedWorkHolders<string>(() => false);
   const asked: (Asked & { readonly page: string })[] = [];
+
   const askBeforeReload = reloadGate<string>({
     holds: unsavedWork.holds,
     ask: (page, question) =>
@@ -231,6 +239,7 @@ function composedReload() {
         asked.push({ page, question, answer });
       }),
   });
+
   return { askBeforeReload, asked, tell: unsavedWork.tell };
 }
 

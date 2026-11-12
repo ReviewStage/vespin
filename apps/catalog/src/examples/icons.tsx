@@ -41,6 +41,7 @@ function Icons(): React.JSX.Element {
             <Inline key={seat} gap={GAP.CONTROL}>
               {SEAT_CONCEPTS.map((concept) => {
                 const Glyph = GLYPH[concept];
+
                 return (
                   <GlyphSlot key={concept} size={seat}>
                     <Glyph />

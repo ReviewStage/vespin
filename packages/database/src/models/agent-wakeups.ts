@@ -96,6 +96,7 @@ export function bookAgentWakeup(agentId: string, wakeup: AgentWakeup): WakeupEff
       Effect.gen(function* () {
         yield* deleteOfAgent({ agentId });
         const inserted = yield* insertWakeup({ agentId, ...wakeup });
+
         // Note that an insert with no conflict target always answers its row, so none here is a defect.
         return Option.getOrThrow(inserted).id;
       }),

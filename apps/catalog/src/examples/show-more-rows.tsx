@@ -24,6 +24,7 @@ const TASKS = [
 /** Tasks capped at three rows, ending in the foot that shows the rest. */
 function CappedTasks({ tasks }: { tasks: readonly string[] }): React.JSX.Element {
   const [shown, setShown] = useState(false);
+
   return (
     <div className="catalog-column">
       <List label="Tasks">

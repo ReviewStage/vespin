@@ -54,12 +54,15 @@ function drawn(part: WireRecord | readonly WireRecord[], todos = false) {
     role: MESSAGE_ROLE.ASSISTANT,
     parts: Array.isArray(part) ? part : [part],
   };
+
   const lists = taskTodos([message]);
   const standing = newestTodos([message], lists);
+
   const place =
     todos && standing !== undefined
       ? { kept: standing.callId, open: standing.callId, live: undefined, lists }
       : undefined;
+
   const opened: ToolTarget[] = [];
   const container = document.createElement("div");
   document.body.append(container);
@@ -79,6 +82,7 @@ function drawn(part: WireRecord | readonly WireRecord[], todos = false) {
       ),
     ),
   );
+
   return { container, opened };
 }
 
@@ -88,6 +92,7 @@ function opened(part: WireRecord): { readonly line: string; readonly body: strin
   const line = container.querySelector("summary") ?? assert.fail("the call is a fold's line");
   const said = line.textContent ?? "";
   act(() => line.click());
+
   return { line: said, body: container.textContent ?? "" };
 }
 
@@ -218,7 +223,9 @@ const CLI_CALLS: readonly {
 for (const call of CLI_CALLS) {
   test(`Claude Code's ${call.tool} is drawn on the renderer of Vespin's tool of its kind`, () => {
     const { line, body } = opened(storedPart(call.tool, call.input, call.output));
+
     for (const words of call.line) assert.ok(line.includes(words), `${line} says ${words}`);
+
     for (const words of call.body) assert.ok(body.includes(words), `${body} shows ${words}`);
     assert.ok(!body.includes(ESCAPE), "a terminal's escapes are taken out");
   });
@@ -231,16 +238,19 @@ test("Claude Code's Agent is drawn as a subagent's row, named by its description
     model: "sonnet",
     effort: "high",
   };
+
   const running = drawn({
     type: "tool-Agent",
     toolCallId: "toolu_agent",
     state: "input-available",
     input,
   }).container;
+
   const row = running.querySelector("[data-subagent-row]") ?? assert.fail("a subagent's row");
   assert.ok(row.textContent?.includes("Find the invoice callers"), row.textContent ?? "");
   assert.ok(row.textContent?.includes("Sonnet"), row.textContent ?? "");
   assert.notEqual(row.tagName, "BUTTON", "no worker's tab to open yet");
+
   const settled = drawn({
     type: "tool-Agent",
     toolCallId: "toolu_agent",
@@ -248,6 +258,7 @@ test("Claude Code's Agent is drawn as a subagent's row, named by its description
     input,
     output: "Two callers round: src/export.ts and src/print.ts.",
   }).container;
+
   const line = settled.querySelector<HTMLElement>("[data-subagent-row]") ?? assert.fail("a row");
   act(() => line.click());
   // With no worker's tab to read it in, the task and the answer fold open under the row.
@@ -263,10 +274,13 @@ test("an Edit's patch marks the lines it changed, the newline ending its words o
       "The file has been updated successfully.",
     ),
   );
+
   const line = container.querySelector("summary") ?? assert.fail("the call is a fold's line");
   act(() => line.click());
+
   const marked = (kind: string) =>
     [...container.querySelectorAll(`[data-row="${kind}"]`)].map((each) => each.textContent);
+
   assert.deepEqual(marked("removed"), ["-a;"]);
   assert.deepEqual(marked("added"), ["+b;", "+", "+c;"]);
 });
@@ -285,6 +299,7 @@ test("a failed Bash call shows the error the CLI answered", () => {
     output: "Exit code 1\nlint failed",
     errorText: "Exit code 1\nlint failed",
   });
+
   assert.ok(body.includes("lint failed"));
 });
 
@@ -302,10 +317,12 @@ test("Claude Code's TodoWrite is drawn as the agent's to-do list, a completed it
       "Todos have been modified successfully.",
     ),
   );
+
   const line = container.querySelector("summary") ?? assert.fail("the list is a fold's line");
   assert.ok(line.textContent?.includes("1 of 3 done"), line.textContent ?? "");
   act(() => line.click());
   const words = container.textContent ?? "";
+
   for (const item of ["Round the totals", "Export the invoices", "Open the pull request"]) {
     assert.ok(words.includes(item), `${words} lists ${item}`);
   }
@@ -331,6 +348,7 @@ test("Claude Code's task calls are drawn as the agent's to-do list as it stood a
     ],
     true,
   );
+
   // The newest list stands folded on a row of its own; the calls before it fold with the turn, as a whole list's writes do.
   const lines = [...container.querySelectorAll("summary")];
   const newest = lines.at(-1) ?? assert.fail("the newest list is a fold's line");
@@ -338,6 +356,7 @@ test("Claude Code's task calls are drawn as the agent's to-do list as it stood a
   assert.ok(!container.textContent?.includes("Export the invoices"), container.textContent ?? "");
   act(() => newest.click());
   const words = container.textContent ?? "";
+
   for (const item of ["Round the totals", "Export the invoices"]) {
     assert.ok(words.includes(item), `${words} lists ${item}`);
   }
@@ -347,9 +366,11 @@ test("Vespin's read_agent, called over its MCP server and stored under its own n
   const { container, opened } = drawn(
     storedPart("read_agent", { agentId: "agent-7" }, { status: "running" }),
   );
+
   const row =
     container.querySelector<HTMLButtonElement>('button[data-call-id="toolu_read_agent"]') ??
     assert.fail("the row is a button");
+
   act(() => row.click());
   assert.deepEqual(opened, [{ kind: TOOL_TARGET.AGENT, agent: "agent-7" }]);
 });
@@ -359,12 +380,14 @@ test("an agent's payer says whose it is: the reader's own, by its name masked fr
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const theo = {
     kind: ACTOR_KIND.PERSON,
     userId: "user-theo",
     name: "Theo Lindqvist",
     you: false,
   } as const;
+
   act(() =>
     root.render(
       withQueryClient(
@@ -424,6 +447,7 @@ test("a usage-limit notice stays visible between the work before a pause and the
     storedPart("Bash", { command: "pnpm test" }, "Tests passed."),
     { type: "text", text: "The work is complete." },
   ]);
+
   assert.ok(container.textContent?.includes("Claude usage limit reached"));
   assert.ok(container.textContent?.includes("Resumes at"));
   assert.ok(
@@ -439,6 +463,7 @@ test("a compaction says so where it happened, with the tokens it folded where th
     { type: "data-compacted", data: { tokensBefore: null } },
     { type: "data-session-cleared", data: { at: Date.UTC(2026, 10, 10) } },
   ]);
+
   const said = container.textContent ?? "";
   assert.ok(said.includes("Compacted the conversation from 148K tokens"), said);
   assert.equal(said.split("Compacted the conversation").length - 1, 2, said);
@@ -450,6 +475,7 @@ test("a usage limit with no known reset tells the reader to send a message", () 
     type: "data-usage-limit",
     data: { agent: "Codex", resetsAt: null },
   });
+
   assert.ok(container.textContent?.includes("Codex usage limit reached"));
   assert.ok(container.textContent?.includes("Send a message to continue"));
 });
@@ -463,6 +489,7 @@ test("a usage limit that moved the turn on names the payer it ran out on and the
       moved: { from: "Work plan", to: "API key · sk-…a91F" },
     },
   });
+
   assert.ok(container.textContent?.includes("Claude usage limit reached on Work plan"));
   assert.ok(container.textContent?.includes("Continuing on API key · sk-…a91F"));
   assert.ok(!container.textContent?.includes("Send a message to continue"));
@@ -481,6 +508,7 @@ test.each([
         { usageLimit: { agent, resetsAt: null } },
       ),
     );
+
     const words = container.textContent ?? "";
     assert.ok(words.includes(`${agent} usage limit reached`), words);
     // The worker's card says its title alone, since nothing goes on from the worker.

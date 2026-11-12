@@ -13,12 +13,14 @@ const MIGRATING_TIMEOUT_MS = 30_000;
 
 /** The PGlite calls a first opening makes that a test fails: the migration's queries, then the dump. */
 const FAILING_METHOD = { QUERY: "query", DUMP_DATA_DIR: "dumpDataDir" } as const;
+
 type FailingMethod = (typeof FAILING_METHOD)[keyof typeof FAILING_METHOD];
 
 /** A migrated PGlite of the test's own, closed when the test ends. */
 async function opened(t: TestContext): Promise<PGlite> {
   const client = await openMigratedPglite();
   t.onTestFinished(() => client.close());
+
   return client;
 }
 
@@ -26,6 +28,7 @@ async function tables(client: PGlite): Promise<string[]> {
   const { rows } = await client.query<{ name: string }>(
     "select table_name as name from information_schema.tables where table_schema = 'public' order by 1",
   );
+
   return rows.map((row) => row.name);
 }
 
@@ -58,12 +61,16 @@ test(
  */
 function failingOnce(method: FailingMethod): () => PGlite | undefined {
   let failed: PGlite | undefined;
+
   const refuse = (client: PGlite) => {
     if (failed !== undefined || !client.ready) return false;
     failed = client;
+
     return true;
   };
+
   const refusal = () => Promise.reject(new Error(`${method} refused`));
+
   if (method === FAILING_METHOD.DUMP_DATA_DIR) {
     const dump = PGlite.prototype.dumpDataDir;
     vi.spyOn(PGlite.prototype, FAILING_METHOD.DUMP_DATA_DIR).mockImplementation(function (
@@ -81,6 +88,7 @@ function failingOnce(method: FailingMethod): () => PGlite | undefined {
       return refuse(this) ? refusal() : query.apply(this, args);
     });
   }
+
   return () => failed;
 }
 

@@ -7,5 +7,6 @@ export { ScreenBoundary as ErrorBoundary } from "../screen-boundary.js";
 
 export default function StartAgentRoute() {
   const { task = "" } = useLocalSearchParams<{ task: string }>();
+
   return <NewAgentScreen taskId={task} />;
 }

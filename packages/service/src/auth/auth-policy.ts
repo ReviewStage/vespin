@@ -173,6 +173,7 @@ export const SUPPORT_ACCESS_GRANT_SECONDS = 7 * 24 * 60 * 60;
 /** When a member's grant of support access ends, in epoch milliseconds, while it stands at `now`; null where none does. */
 export function standingSupportAccess(until: Date | null | undefined, now: number): number | null {
   const end = until?.getTime();
+
   return end !== undefined && end > now ? end : null;
 }
 
@@ -404,6 +405,7 @@ async function deleteAlone<Pending>(
 ) {
   const permissions: { organization: ["delete"] } = { organization: ["delete"] };
   const { success } = await api.hasPermission({ headers, body: { organizationId, permissions } });
+
   if (!success) await steps.claim(userId, organizationId);
   await api.deleteOrganization({ headers, body: { organizationId } });
 }
@@ -421,6 +423,7 @@ async function longestStanding({ api, headers, organizationId }: Leaving, role: 
       limit: 1,
     },
   });
+
   return members[0];
 }
 
@@ -433,14 +436,18 @@ async function longestStanding({ api, headers, organizationId }: Leaving, role: 
  */
 async function handOver(leaving: Leaving) {
   const { api, headers, userId, organizationId } = leaving;
+
   const owners = await api.listMembers({
     headers,
     query: { organizationId, filterField: "role", filterValue: WORKSPACE_ROLE.OWNER },
   });
+
   if (owners.total !== 1 || owners.members[0]?.userId !== userId) return;
+
   const heir =
     (await longestStanding(leaving, WORKSPACE_ROLE.ADMIN)) ??
     (await longestStanding(leaving, WORKSPACE_ROLE.MEMBER));
+
   if (heir === undefined) return;
   await api.updateMemberRole({
     headers,
@@ -475,21 +482,25 @@ export function accountDeletion<Pending>(
   steps: AccountDeletionSteps<Pending>,
 ) {
   const pending = new WeakMap<Request, Pending>();
+
   return {
     enabled: true,
     beforeDelete: async (user: { id: string }, request?: Request) => {
       if (request === undefined) throw new Error("An account is deleted only at /delete-user.");
       pending.set(request, await steps.before(user.id));
       const { headers } = request;
+
       for (const { id: organizationId } of await api().listOrganizations({ headers })) {
         const leaving = { api: api(), headers, userId: user.id, organizationId };
         const { total } = await leaving.api.listMembers({ headers, query: { organizationId } });
+
         if (total === 1) await deleteAlone(leaving, steps);
         else await handOver(leaving);
       }
     },
     afterDelete: async (user: { id: string }, request?: Request) => {
       const read = request === undefined ? undefined : pending.get(request);
+
       if (read !== undefined) await steps.after(user.id, read);
     },
   };
@@ -511,6 +522,7 @@ export interface WorkspaceDeletionSteps<Pending> {
  */
 export function workspaceDeletion<Pending>(steps: WorkspaceDeletionSteps<Pending>) {
   const pending = new Map<string, Pending>();
+
   return {
     beforeDeleteOrganization: async ({ organization }: { organization: { id: string } }) => {
       pending.set(organization.id, await steps.before(organization.id));
@@ -518,6 +530,7 @@ export function workspaceDeletion<Pending>(steps: WorkspaceDeletionSteps<Pending
     afterDeleteOrganization: async ({ organization }: { organization: { id: string } }) => {
       const read = pending.get(organization.id);
       pending.delete(organization.id);
+
       if (read !== undefined) await steps.after(read);
     },
   };

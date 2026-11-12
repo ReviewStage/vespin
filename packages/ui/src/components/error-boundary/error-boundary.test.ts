@@ -43,6 +43,7 @@ afterEach(() => {
 function placeThatThrows(broken: { now: boolean }): () => React.JSX.Element {
   return () => {
     if (broken.now) throw new Error("The place could not draw.");
+
     return createElement("p", null, "The place");
   };
 }
@@ -54,11 +55,13 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
 test("a child that throws while drawing draws the failure and Reload rather than nothing, and what stands beside it stays", () => {
   const Place = placeThatThrows({ now: true });
+
   const page = mount(
     createElement(
       Fragment,
@@ -67,6 +70,7 @@ test("a child that throws while drawing draws the failure and Reload rather than
       createElement(ErrorBoundary, { failure: FAILURE }, createElement(Place)),
     ),
   );
+
   const alerts = page.querySelectorAll('[role="alert"]');
   expect(alerts).toHaveLength(1);
   expect(alerts[0]?.textContent).toBe(alertSaying(FAILURE));
@@ -86,6 +90,7 @@ test("a place that names no failure says the boundary's own sentence", () => {
 
 test("a boundary over the whole window heads its failure as the window's one heading", () => {
   const Place = placeThatThrows({ now: true });
+
   const page = mount(
     createElement(
       ErrorBoundary,
@@ -93,6 +98,7 @@ test("a boundary over the whole window heads its failure as the window's one hea
       createElement(Place),
     ),
   );
+
   expect(page.querySelector("h1")?.textContent).toBe("Something went wrong");
 });
 
@@ -100,6 +106,7 @@ test("Reload runs what it is handed, then draws the place again", () => {
   const broken = { now: true };
   const Place = placeThatThrows(broken);
   const reloads: string[] = [];
+
   const page = mount(
     createElement(
       ErrorBoundary,
@@ -113,6 +120,7 @@ test("Reload runs what it is handed, then draws the place again", () => {
       createElement(Place),
     ),
   );
+
   act(() => page.querySelector("button")?.click());
   expect(reloads).toEqual(["reload"]);
   expect(page.textContent).toBe("The place");

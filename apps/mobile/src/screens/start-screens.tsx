@@ -100,6 +100,7 @@ function useKeptWords(drafted: boolean): KeptWords {
   const [letGo, setLetGo] = useState(false);
   const [leave, setLeave] = useState<(() => void) | undefined>(undefined);
   const disable = usePreventRemove(drafted && !letGo, ({ repeat }) => setLeave(() => repeat));
+
   return {
     asking: leave !== undefined,
     discard: () => {
@@ -137,6 +138,7 @@ function SheetBar({
 }) {
   const colors = useColors();
   const router = useRouter();
+
   return (
     <>
       {/* Note that the bar has no ground of its own, so the system draws its buttons in glass over the sheet's. */}
@@ -276,13 +278,17 @@ function useSheetStart(
   const router = useRouter();
   const write = useWrite();
   const [starting, setStarting] = useState(false);
+
   const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
     if (starting) return;
+
     if (refusal !== undefined) {
       setNote(refusal);
       buzz(BUZZ.WARNING);
+
       return;
     }
+
     setStarting(true);
     setNote(undefined);
     const started: { answer?: StartAnswer } = {};
@@ -291,6 +297,7 @@ function useSheetStart(
       () =>
         start().then((answer) => {
           started.answer = answer;
+
           return answer;
         }),
       {
@@ -301,16 +308,19 @@ function useSheetStart(
     )
       .then((went) => {
         const answer = started.answer;
+
         if (!went || answer === undefined || "refused" in answer) return;
         kept.release();
         router.dismiss();
         router.navigate(`/tasks/${encodeURIComponent(answer.taskId)}`);
+
         if (answer.agentId !== undefined) {
           router.push(`/tasks/agent/${encodeURIComponent(answer.agentId)}`);
         }
       })
       .finally(() => setStarting(false));
   };
+
   return { starting, go };
 }
 
@@ -329,6 +339,7 @@ export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
+
   const start = () =>
     go(
       () =>
@@ -340,6 +351,7 @@ export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
         }),
       pictures.refusal,
     );
+
   return (
     <>
       <SheetBar title={WORDS.NEW_AGENT} ready={drafted && !starting} onStart={start} kept={kept} />
@@ -418,7 +430,9 @@ function useRelationPick(
   const [kind, setKind] = useState<string>(
     parent === undefined ? NO_RELATION : TASK_CREATE_RELATION_KIND.SUB_TASK_OF,
   );
+
   const [picked, setPicked] = useState<string | undefined>(parent);
+
   const tasks = useMemo(
     () =>
       listed.filter(
@@ -428,7 +442,9 @@ function useRelationPick(
       ),
     [listed, workspaceId, parent],
   );
+
   const taskId = picked ?? tasks[0]?.id;
+
   return {
     relation: isRelationKind(kind) && taskId !== undefined ? { kind, taskId } : undefined,
     kind,
@@ -510,9 +526,11 @@ export function NewTaskScreen({
   const place = { repository: repository.picked, relation: relation.relation };
   // Note that a relation picked holds the start until it names a task, so the task never starts unrelated.
   const relationReady = relation.kind === NO_RELATION || relation.relation !== undefined;
+
   const tree = inTree(relation.relation)
     ? relation.tasks.find((task) => task.id === relation.taskId)
     : undefined;
+
   const start = () => {
     if (!drafted) return;
     go(
@@ -527,9 +545,11 @@ export function NewTaskScreen({
       pictures.refusal,
     );
   };
+
   const file = () => {
     if (filed !== undefined) go(() => fileTask({ filed, ...place }));
   };
+
   return (
     <>
       <SheetBar

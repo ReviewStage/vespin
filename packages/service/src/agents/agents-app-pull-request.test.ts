@@ -122,9 +122,11 @@ function reviewsAnswering(
 ): (call: GraphqlCall) => Response {
   return (call) => {
     if (call.query.includes("mutation")) return mutation(call);
+
     if (call.query.includes("reviews(states: PENDING")) {
       return Response.json({ data: { node: { reviews: { nodes: pending } } } });
     }
+
     return Response.json({ data: { repository: { pullRequest: { id: PULL_REQUEST_NODE_ID } } } });
   };
 }
@@ -151,16 +153,20 @@ function threadActionAs(bearer: string, agentId: string, body: WireBoundaryInput
  */
 function viewedAnswering(call: GraphqlCall): Response {
   if (call.query.includes("mutation")) return Response.json({ data: {} });
+
   if (!call.query.includes("viewerViewedState")) {
     return Response.json({ data: { repository: { pullRequest: { id: PULL_REQUEST_NODE_ID } } } });
   }
+
   const first = call.variables.after === null;
+
   const nodes = first
     ? [
         { path: "src/seats.ts", viewerViewedState: "VIEWED" },
         { path: "src/plan.ts", viewerViewedState: "DISMISSED" },
       ]
     : [{ path: "README.md", viewerViewedState: "UNVIEWED" }];
+
   return Response.json({
     data: {
       repository: {
@@ -179,9 +185,11 @@ function viewedAnswering(call: GraphqlCall): Response {
 function threadsAnswering(threadPullRequestId: string): (call: GraphqlCall) => Response {
   return (call) => {
     if (call.query.includes("mutation")) return Response.json({ data: {} });
+
     if (call.query.includes("PullRequestReviewThread")) {
       return Response.json({ data: { node: { pullRequest: { id: threadPullRequestId } } } });
     }
+
     return Response.json({ data: { repository: { pullRequest: { id: PULL_REQUEST_NODE_ID } } } });
   };
 }
@@ -332,13 +340,16 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
   }) =>
     Effect.gen(function* () {
       const calls: GraphqlCall[] = [];
+
       const opened = yield* openTask({
         github: graphqlAnswering(calls, options.answer, options.repository),
         ...(options.otherToken === undefined ? undefined : { otherToken: options.otherToken }),
       });
+
       if (options.otherJoins ?? true) yield* joinWorkspace(opened.task.workspaceId, opened.other);
       const { agent } = yield* startedAgent(opened.owner, opened.task.id, opened.ask);
       yield* updateAgentBranch(opened.owner, agent.id, PUBLISHED.branch);
+
       return { ...opened, agent, calls };
     });
 
@@ -402,6 +413,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         assert.deepEqual(
           calls.flatMap((call) => {
             const mutation = mutationOf(call);
+
             return mutation === undefined ? [] : [[mutation, call.variables]];
           }),
           [
@@ -434,6 +446,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
             actionAs(other, agent.id, "edit-title", { title: "  Expire invitations weekly " }),
           ),
         ];
+
         const blank = yield* ask(actionAs(other, agent.id, "edit-title", { title: "   " }));
 
         assert.deepEqual(
@@ -449,6 +462,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         assert.deepEqual(
           calls.flatMap((call) => {
             const mutation = mutationOf(call);
+
             return mutation === undefined ? [] : [[mutation, call.variables]];
           }),
           [
@@ -469,13 +483,16 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
       Effect.gen(function* () {
         // GitHub holds the description as github.com saves it, with Windows line endings.
         const onGitHub = "Invitations expire.\r\n\r\n- weekly";
+
         const { other, agent, calls, ask } = yield* published({
           otherToken: "ghu_teammate",
           answer: (call) => {
             if (call.query.includes("mutation")) return Response.json({ data: {} });
+
             if (call.query.includes("... on PullRequest { body }")) {
               return Response.json({ data: { node: { body: onGitHub } } });
             }
+
             return Response.json({
               data: { repository: { pullRequest: { id: PULL_REQUEST_NODE_ID } } },
             });
@@ -488,6 +505,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
             expectedBody: "Invitations expire.\n\n- weekly",
           }),
         );
+
         const stale = yield* ask(
           actionAs(other, agent.id, "edit-description", {
             body: "Invitations never expire.",
@@ -509,6 +527,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         assert.deepEqual(
           calls.flatMap((call) => {
             const mutation = mutationOf(call);
+
             return mutation === undefined ? [] : [[mutation, call.variables]];
           }),
           [
@@ -531,6 +550,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
             : Response.json({
                 data: { repository: { pullRequest: { id: PULL_REQUEST_NODE_ID } } },
               });
+
         const refusing = yield* published({
           otherToken: "ghu_teammate",
           answer: (call) =>
@@ -541,10 +561,12 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
                 })
               : description(call),
         });
+
         const expired = yield* published({
           otherToken: "ghu_expired",
           answer: () => Response.json({ message: "Bad credentials" }, { status: 401 }),
         });
+
         const edit = { body: "Weekly.", expectedBody: "" };
 
         assert.deepEqual(
@@ -572,8 +594,10 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
           branch: "luke/teammate-invitations-base",
           headSha: "beef0001",
         };
+
         const repository: RepositoryScript = (sent) => {
           const path = `/repos/${RELAY.owner}/${RELAY.name}`;
+
           switch (new URL(sent.url).pathname) {
             case `${path}/pulls/${earlier.number}`:
               return Response.json({
@@ -606,7 +630,9 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
               return publishedPullRequest(sent);
           }
         };
+
         const { owner, other, agent, calls, ask } = yield* published({ repository });
+
         const header = (number?: string) =>
           Effect.map(
             ask(
@@ -622,6 +648,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
 
         assert.equal(yield* header(String(earlier.number)), "Lay the invitations' base");
         assert.equal(yield* header(), "Expire teammate invitations");
+
         const named = readAnswer(
           agentPullRequestAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -629,11 +656,13 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
             request(AGENT_PULL_REQUEST, owner, { id: agent.id, number: String(earlier.number) }),
           ),
         );
+
         assert.deepEqual(
           [named.branch, named.pullRequest?.number, named.pullRequest?.additions],
           [earlier.branch, earlier.number, 9],
         );
         const before = calls.length;
+
         const ready = yield* ask(
           request(AGENT_PULL_REQUEST_ACTION, other, {
             method: "POST",
@@ -642,6 +671,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
             body: { action: "ready-for-review" },
           }),
         );
+
         assert.deepEqual(ready, { status: HOSTED_HTTP_STATUS.OK, body: { outcome: "done" } });
         assert.deepEqual(
           calls
@@ -688,12 +718,14 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
     () =>
       Effect.gen(function* () {
         let answering = true;
+
         const { owner, agent, calls, ask } = yield* published({
           answer: () =>
             answering
               ? Response.json(MERGING_ANSWER)
               : Response.json({ message: "Server Error" }, { status: 502 }),
         });
+
         const header = () =>
           Effect.map(
             ask(request(AGENT_OVERVIEW_PULL_REQUEST, owner, { id: agent.id })),
@@ -800,10 +832,12 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
     () =>
       Effect.gen(function* () {
         let draft = true;
+
         const { owner, other, agent, ask } = yield* published({
           repository: publishedPullRequestDrafted(() => draft),
           answer: (call) => {
             if (call.query.includes("markPullRequestReadyForReview")) draft = false;
+
             return Response.json({
               data: call.query.includes("mutation")
                 ? {}
@@ -811,6 +845,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
             });
           },
         });
+
         const stateAs = (bearer: string) =>
           Effect.map(
             ask(request(AGENT_PULL_REQUEST, bearer, { id: agent.id })),
@@ -818,6 +853,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
               readAnswer(agentPullRequestAnswerSchema, HOSTED_HTTP_STATUS.OK, answered).pullRequest
                 ?.state,
           );
+
         assert.equal(yield* stateAs(owner), PULL_REQUEST_STATE.DRAFT);
 
         yield* ask(actionAs(other, agent.id, "ready-for-review"));
@@ -834,9 +870,11 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         let opened = false;
         const pulls = `/repos/${RELAY.owner}/${RELAY.name}/pulls`;
         const headed = publishedPullRequestDrafted(() => false, LINE_HEAD);
+
         const { other, agent, ask } = yield* published({
           repository: (sent) => {
             const { pathname } = new URL(sent.url);
+
             if (pathname === `${pulls}/${PUBLISHED.number}/files`) {
               return Response.json([
                 {
@@ -850,10 +888,12 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
                 },
               ]);
             }
+
             return !opened && pathname === pulls ? Response.json([]) : headed(sent);
           },
           answer: (call) => {
             if (call.query.includes("mutation")) opened = true;
+
             return Response.json({
               data: call.query.includes("mutation")
                 ? {}
@@ -861,12 +901,14 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
             });
           },
         });
+
         const changedUrl = Effect.map(
           ask(request(AGENT_CHANGES, other, { id: agent.id })),
           (answered) =>
             readAnswer(agentChangesAnswerSchema, HOSTED_HTTP_STATUS.OK, answered).pullRequest
               ?.url ?? null,
         );
+
         assert.equal(yield* changedUrl, null);
 
         const changed = yield* ask(
@@ -924,6 +966,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         const commented = yield* ask(
           reviewAs(other, agent.id, { event: "comment", body: "Looks close; one question." }),
         );
+
         const approved = yield* ask(reviewAs(other, agent.id, { event: "approve", body: "" }));
 
         assert.deepEqual(commented, { status: HOSTED_HTTP_STATUS.OK, body: { outcome: "done" } });
@@ -964,6 +1007,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         const changes = yield* ask(
           reviewAs(other, agent.id, { event: "request-changes", body: "Please split this." }),
         );
+
         const kept = yield* ask(reviewAs(other, agent.id, { event: "comment", body: "  " }));
 
         assert.deepEqual(changes, { status: HOSTED_HTTP_STATUS.OK, body: { outcome: "done" } });
@@ -991,6 +1035,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
             body: { action: "submit-review", event: "dismiss", body: "" },
           }),
         );
+
         const long = yield* ask(
           reviewAs(owner, agent.id, {
             event: "comment",
@@ -1004,6 +1049,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
             refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST),
           );
         }
+
         assert.deepEqual(calls, []);
       }),
   );
@@ -1036,6 +1082,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         for (const answered of answers) {
           assert.deepEqual(answered, { status: HOSTED_HTTP_STATUS.OK, body: { outcome: "done" } });
         }
+
         assert.deepEqual(
           calls
             .filter((call) => call.query.includes("mutation"))
@@ -1064,6 +1111,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         const elsewhere = yield* ask(
           threadActionAs(other, agent.id, { action: "resolve-thread", threadId: "PRRT_elsewhere" }),
         );
+
         const blank = yield* ask(
           threadActionAs(other, agent.id, {
             action: "reply-to-thread",
@@ -1096,6 +1144,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         const commented = yield* ask(
           threadActionAs(other, agent.id, { action: "comment", body: "Shipping after lunch." }),
         );
+
         const blank = yield* ask(
           threadActionAs(other, agent.id, { action: "comment", body: "\n" }),
         );
@@ -1146,6 +1195,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
               },
             }),
         });
+
         const readAs = (bearer: string) =>
           Effect.map(
             ask(request(AGENT_OVERVIEW[2], bearer, { id: agent.id })),
@@ -1186,6 +1236,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
                     },
             }),
         });
+
         const react = (action: string, subject: string) =>
           ask(
             request(AGENT_PULL_REQUEST_ACTION, other, {
@@ -1266,15 +1317,18 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
     () =>
       Effect.gen(function* () {
         const fresh = yield* published({ answer: linesAnswering([]) });
+
         const started = yield* fresh.ask(
           lineCommentAs(fresh.other, fresh.agent.id, { mode: "review", side: "left" }),
         );
+
         const holding = yield* published({
           answer: linesAnswering([
             { id: "PRR_someone_else", viewerDidAuthor: false },
             { id: "PRR_member_pending", viewerDidAuthor: true, commit: { oid: LINE_HEAD } },
           ]),
         });
+
         const joined = yield* holding.ask(
           lineCommentAs(holding.other, holding.agent.id, { mode: "review" }),
         );
@@ -1282,10 +1336,12 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         for (const answered of [started, joined]) {
           assert.deepEqual(answered, { status: HOSTED_HTTP_STATUS.OK, body: { outcome: "done" } });
         }
+
         const mutations = (calls: readonly GraphqlCall[]) =>
           calls
             .filter((call) => call.query.includes("mutation"))
             .map((call) => [mutationName(call.query), call.variables]);
+
         assert.deepEqual(mutations(fresh.calls), [
           [
             "addPullRequestReview",
@@ -1357,6 +1413,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
             { id: "PRR_member_pending", viewerDidAuthor: true },
           ]),
         });
+
         const empty = yield* published({
           answer: linesAnswering([{ id: "PRR_someone_else", viewerDidAuthor: false }]),
         });
@@ -1364,6 +1421,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         const discarded = yield* holding.ask(
           actionAs(holding.other, holding.agent.id, "discard-review"),
         );
+
         const refused = yield* empty.ask(actionAs(empty.other, empty.agent.id, "discard-review"));
 
         assert.deepEqual(discarded, { status: HOSTED_HTTP_STATUS.OK, body: { outcome: "done" } });
@@ -1400,6 +1458,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
             refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST),
           );
         }
+
         assert.deepEqual(calls, []);
       }),
   );
@@ -1414,21 +1473,25 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
           state,
           pullRequest: { id: pullRequest },
         });
+
         const COMMENTS = new Map([
           ["PRRC_own", commentNode(true, "PENDING", PULL_REQUEST_NODE_ID)],
           ["PRRC_theirs", commentNode(false, "PENDING", PULL_REQUEST_NODE_ID)],
           ["PRRC_published", commentNode(true, "SUBMITTED", PULL_REQUEST_NODE_ID)],
           ["PRRC_elsewhere", commentNode(true, "PENDING", "PR_elsewhere")],
         ]);
+
         const { other, agent, calls, ask } = yield* published({
           otherToken: "ghu_teammate",
           answer: (call) => {
             if (call.query.includes("mutation")) return Response.json({ data: {} });
+
             if (call.query.includes("PullRequestReviewComment")) {
               return Response.json({
                 data: { node: COMMENTS.get(String(call.variables.id)) ?? null },
               });
             }
+
             return Response.json({
               data: { repository: { pullRequest: { id: PULL_REQUEST_NODE_ID } } },
             });
@@ -1441,10 +1504,13 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
             body: "Renamed.",
           }),
         );
+
         const deleted = yield* ask(
           actionAs(other, agent.id, "delete-review-comment", { commentId: "PRRC_own" }),
         );
+
         const refusals = [];
+
         for (const commentId of ["PRRC_theirs", "PRRC_published", "PRRC_elsewhere", "PRRC_gone"]) {
           refusals.push(
             yield* ask(actionAs(other, agent.id, "edit-review-comment", { commentId, body: "x" })),
@@ -1467,6 +1533,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
             ["deletePullRequestReviewComment", { id: "PRRC_own" }, "Bearer ghu_teammate"],
           ],
         );
+
         for (const refused of refusals) {
           assert.deepEqual(refused, {
             status: HOSTED_HTTP_STATUS.OK,
@@ -1485,16 +1552,20 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
       Effect.gen(function* () {
         const pendingAnswer = (call: GraphqlCall) => {
           if (!call.query.includes("ViewerPendingReview")) return Response.json({ data: null });
+
           if (call.authorization === "Bearer ghu_broken") {
             return Response.json({ message: "Server Error" }, { status: 502 });
           }
+
           const teammate = call.authorization === "Bearer ghu_teammate";
+
           const nodes = teammate
             ? [
                 { id: "PRR_other", viewerDidAuthor: false, comments: { totalCount: 1 } },
                 { id: "PRR_own", viewerDidAuthor: true, comments: { totalCount: 2 } },
               ]
             : [];
+
           return Response.json({
             data: {
               repository: {
@@ -1506,6 +1577,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
             },
           });
         };
+
         const pendingOf = (
           opened: { readonly ask: (request: Request) => Effect.Effect<Answer> },
           bearer: string,
@@ -1517,6 +1589,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
               readAnswer(agentOverviewConversationAnswerSchema, HOSTED_HTTP_STATUS.OK, answered)
                 .pullRequest?.pendingReview,
           );
+
         const two = yield* published({ otherToken: "ghu_teammate", answer: pendingAnswer });
         const unsigned = yield* published({ otherToken: null, answer: pendingAnswer });
         const broken = yield* published({ otherToken: "ghu_broken", answer: pendingAnswer });
@@ -1583,16 +1656,20 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
       Effect.gen(function* () {
         const canUpdate = (call: GraphqlCall) => {
           if (!call.query.includes("ViewerRights")) return Response.json({ data: null });
+
           if (call.authorization === "Bearer ghu_broken") {
             return Response.json({ message: "Server Error" }, { status: 502 });
           }
+
           // Note that each right answers for a different member, so a right read off the other's field is caught.
           const viewerCanUpdate = call.authorization === "Bearer ghu_teammate";
           const viewerCanMergeAsAdmin = call.authorization === "Bearer ghu_standing";
+
           return Response.json({
             data: { repository: { pullRequest: { viewerCanUpdate, viewerCanMergeAsAdmin } } },
           });
         };
+
         const header = (
           opened: { readonly ask: (request: Request) => Effect.Effect<Answer> },
           bearer: string,
@@ -1604,6 +1681,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
               readAnswer(agentOverviewPullRequestAnswerSchema, HOSTED_HTTP_STATUS.OK, answered)
                 .pullRequest,
           );
+
         const two = yield* published({ otherToken: "ghu_teammate", answer: canUpdate });
         const unsigned = yield* published({ otherToken: null, answer: canUpdate });
         const broken = yield* published({ otherToken: "ghu_broken", answer: canUpdate });
@@ -1654,6 +1732,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
       Effect.gen(function* () {
         const headed = publishedPullRequestDrafted(() => false, LINE_HEAD);
         const blob = "b".repeat(40);
+
         const listed: RepositoryScript = (sent) =>
           new URL(sent.url).pathname.endsWith(`/pulls/${PUBLISHED.number}/files`)
             ? Response.json([
@@ -1677,6 +1756,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
                 },
               ])
             : headed(sent);
+
         const { owner, agent, ask } = yield* published({ repository: listed });
 
         const changes = readAnswer(
@@ -1705,9 +1785,11 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         });
 
         const viewed = yield* ask(request(AGENT_PULL_REQUEST_VIEWED, other, { id: agent.id }));
+
         const marked = yield* ask(
           threadActionAs(other, agent.id, { action: "mark-file-viewed", path: "README.md" }),
         );
+
         const unmarked = yield* ask(
           threadActionAs(other, agent.id, { action: "unmark-file-viewed", path: "src/seats.ts" }),
         );
@@ -1764,6 +1846,7 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
           otherToken: "ghu_revoked",
           answer: () => Response.json({ message: "Bad credentials" }, { status: 401 }),
         });
+
         assert.deepEqual(
           yield* revoked.ask(
             request(AGENT_PULL_REQUEST_VIEWED, revoked.other, { id: revoked.agent.id }),
@@ -1809,14 +1892,18 @@ function peopleAndLabelsAnswering(
   return (sent) => {
     const path = decodeURIComponent(new URL(sent.url).pathname);
     const reviewersOrLabels = /\/(requested_reviewers|labels)(\/|$)/u.test(path);
+
     if (!reviewersOrLabels || sent.method === "GET") return publishedPullRequest(sent);
+
     const write = {
       authorization: sent.headers.get("authorization"),
       method: sent.method,
       path,
       body: sent.body === "" ? undefined : JSON.parse(sent.body),
     };
+
     writes.push(write);
+
     return answer(write);
   };
 }
@@ -1833,6 +1920,7 @@ it.layer(getTestDB())("asking reviews and labeling an agent's pull request", (it
       yield* joinWorkspace(opened.task.workspaceId, opened.other);
       const { agent } = yield* startedAgent(opened.owner, opened.task.id, opened.ask);
       yield* updateAgentBranch(opened.owner, agent.id, PUBLISHED.branch);
+
       return { ...opened, agent };
     });
 
@@ -1896,6 +1984,7 @@ it.layer(getTestDB())("asking reviews and labeling an agent's pull request", (it
     () =>
       Effect.gen(function* () {
         const writes: RestWrite[] = [];
+
         const { other, agent, ask } = yield* published(
           peopleAndLabelsAnswering(writes, () =>
             Response.json(
@@ -1943,10 +2032,13 @@ it.layer(getTestDB())("what the reviewer and label pickers offer", (it) => {
       Effect.gen(function* () {
         const repository = `/repos/${RELAY.owner}/${RELAY.name}`;
         const asked: SentToGitHub[] = [];
+
         const { owner, task, ask } = yield* openTask({
           github: (sent) => {
             const path = new URL(sent.url).pathname;
+
             if (path.startsWith(repository)) asked.push(sent);
+
             switch (path) {
               case `${repository}/labels`:
                 return Response.json([{ name: "bug", color: "d73a4a" }]);
@@ -1972,6 +2064,7 @@ it.layer(getTestDB())("what the reviewer and label pickers offer", (it) => {
             }
           },
         });
+
         const { agent } = yield* startedAgent(owner, task.id, ask);
 
         const answered = yield* ask(request(AGENT_REVIEW_OPTIONS, owner, { id: agent.id }));
@@ -2002,6 +2095,7 @@ it.layer(getTestDB())("what the reviewer and label pickers offer", (it) => {
     () =>
       Effect.gen(function* () {
         const repository = `/repos/${RELAY.owner}/${RELAY.name}`;
+
         const { owner, task, ask } = yield* openTask({
           github: (sent) =>
             new URL(sent.url).pathname === `${repository}/labels`
@@ -2011,6 +2105,7 @@ it.layer(getTestDB())("what the reviewer and label pickers offer", (it) => {
                 ? Response.json([])
                 : publishedPullRequest(sent),
         });
+
         const { agent } = yield* startedAgent(owner, task.id, ask);
 
         const answered = yield* ask(request(AGENT_REVIEW_OPTIONS, owner, { id: agent.id }));
@@ -2035,12 +2130,16 @@ it.layer(getTestDB())("an agent's kept pull request", (it) => {
     (standing: Standing): RepositoryScript =>
     async (sent) => {
       const pull = `/repos/${RELAY.owner}/${RELAY.name}/pulls/${PUBLISHED.number}`;
+
       if (standing.limited === true) {
         return Response.json({ message: "API rate limit exceeded" }, { status: 429 });
       }
+
       const answered = await publishedPullRequest(sent);
+
       if (answered === undefined || new URL(sent.url).pathname !== pull) return answered;
       const merged = standing.mergedAt !== null;
+
       return Response.json({
         ...(await answered.json()),
         ...(merged || standing.closed === true ? { state: "closed" } : undefined),
@@ -2057,15 +2156,19 @@ it.layer(getTestDB())("an agent's kept pull request", (it) => {
       const { owner, task, ask } = yield* openTask({ github: standingPullRequest(standing) });
       const { agent } = yield* startedAgent(owner, task.id, ask);
       yield* updateAgentBranch(owner, agent.id, PUBLISHED.branch);
+
       const readAfter = (wait: Duration.Duration) =>
         Effect.gen(function* () {
           yield* TestClock.adjust(wait);
           const answered = yield* ask(request(AGENT_PULL_REQUEST, owner, { id: agent.id }));
           assert.equal(answered.status, HOSTED_HTTP_STATUS.OK, JSON.stringify(answered.body));
+
           return answered.body;
         });
+
       const read = readAfter(CODER.PUBLISHED_ROW_FRESH);
       const kept = readAgentPublished(owner, agent.id);
+
       return { owner, agentId: agent.id, task, read, readAfter, kept };
     });
 
@@ -2137,6 +2240,7 @@ it.layer(getTestDB())("an agent's kept pull request", (it) => {
       Effect.gen(function* () {
         const standing: Standing = { mergedAt: null, closed: true };
         const { readAfter } = yield* publishedAs(standing);
+
         // Long enough after its Start that the agent, which never ran a turn, has ended.
         const stateAfter = (wait: Duration.Duration) =>
           Effect.map(
@@ -2147,6 +2251,7 @@ it.layer(getTestDB())("an agent's kept pull request", (it) => {
                 body,
               }).pullRequest?.state,
           );
+
         assert.equal(yield* stateAfter(Duration.hours(1)), PULL_REQUEST_STATE.CLOSED);
 
         standing.closed = false;

@@ -35,12 +35,15 @@ const foldersBefore = Effect.gen(function* () {
   const fileSystem = yield* FileSystem;
   const path = yield* Path;
   const folder = yield* fileSystem.makeTempDirectoryScoped({ prefix: "before-remind-expand-" });
+
   const names = (yield* fileSystem.readDirectory(MIGRATIONS_FOLDER)).filter(
     (name) => name.localeCompare(MIGRATION) < 0 || name === DESCRIPTION_RENAME,
   );
+
   for (const name of names) {
     yield* fileSystem.copy(path.join(MIGRATIONS_FOLDER, name), path.join(folder, name));
   }
+
   return folder;
 });
 
@@ -75,8 +78,10 @@ it.effect(
         }>`select item_id as "itemId", remind_at::text as "remindAt", remind_through::text as "remindThrough",
           (remind_at, remind_through) is not distinct from (snoozed_until, snoozed_through) as mirrored
           from inbox_item_read where user_id = 'dean' order by item_id`;
+
         const marker = (itemId: string) =>
           Effect.map(markers, (rows) => rows.find((row) => row.itemId === itemId));
+
         assert.deepEqual(yield* marker(earlier), {
           itemId: earlier,
           remindAt: "2099-01-01 09:00:00+00",
@@ -99,22 +104,27 @@ it.effect(
 
         // This release cancels the earlier item's reminder, which the one before then reads as none.
         yield* remindInboxItem("dean", earlier, null);
+
         const [canceled] = yield* sql<{
           readonly none: boolean;
         }>`select snoozed_until is null as none from inbox_item_read where item_id = ${earlier}`;
+
         assert.deepEqual(canceled, { none: true });
         assert.equal((yield* marker(earlier))?.mirrored, true);
 
         // A second run of the backfill, as a deploy that ran it before recording it would, changes nothing.
         const fileSystem = yield* FileSystem;
         const path = yield* Path;
+
         const backfill = (yield* fileSystem.readFileString(
           path.join(MIGRATIONS_FOLDER, MIGRATION, "migration.sql"),
         ))
           .split("--> statement-breakpoint")
           .filter((statement) => statement.trim().startsWith("UPDATE"));
+
         assert.equal(backfill.length, 1);
         const before = yield* markers;
+
         for (const statement of backfill) yield* sql.unsafe(statement);
         assert.deepEqual(yield* markers, before);
       }),

@@ -28,6 +28,7 @@ afterEach(() => {
 
 function Probe({ photo, onRemove }: { photo: string | undefined; onRemove?: () => void }) {
   const picker = useFilePicker({ accept: "image/png", onFiles: () => undefined });
+
   return createElement(PhotoPick, {
     name: "Acme",
     unnamed: "Workspace",
@@ -42,6 +43,7 @@ function render(photo: string | undefined, onRemove?: () => void): void {
     const container = document.body.appendChild(document.createElement("div"));
     root = createRoot(container);
   }
+
   act(() =>
     root?.render(createElement(Probe, { photo, ...(onRemove === undefined ? {} : { onRemove }) })),
   );

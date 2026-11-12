@@ -126,12 +126,14 @@ interface HeldRepository {
 /** The drive's name, and its fill's sandbox's: the prefix and a digest of the workspace. */
 export function workspaceDriveName(workspaceId: string): string {
   const digest = createHash("sha256").update(workspaceId).update("\0").digest("hex");
+
   return `${WORKSPACE_DRIVE.NAME_PREFIX}${digest.slice(0, 32)}`;
 }
 
 /** Whether a sandbox is a fill still within its grace: up, and created less than `FILL_GRACE` ago. */
 function stillFilling(found: ListedSandbox, now: number): boolean {
   const up = UP_STATUSES.has(found.status) || found.status === SANDBOX_STATUS.STOPPING;
+
   return (
     up &&
     found.createdAt !== undefined &&
@@ -142,7 +144,9 @@ function stillFilling(found: ListedSandbox, now: number): boolean {
 /** The fill's sandbox found under a drive's name: none, so the drive is free to fork; one filling; or one a fill left. */
 export function readOf(found: ListedSandbox | undefined, now: number): DriveRead {
   if (found === undefined) return { state: DRIVE_STATE.READY };
+
   if (stillFilling(found, now)) return { state: DRIVE_STATE.FILLING };
+
   return { state: DRIVE_STATE.WANTED, stale: found };
 }
 
@@ -154,6 +158,7 @@ export function baseDriveName(workspaceId: string, fullName: string): string {
     .update(fullName.toLowerCase())
     .update("\0")
     .digest("hex");
+
   return `${REPOSITORY_DRIVE_PREFIX}${digest.slice(0, 32)}`;
 }
 
@@ -166,15 +171,19 @@ export function workspaceFolderOf(fullName: string): string {
 const heldRepositories = (workspace: BaseDriveWorkspace) =>
   Effect.gen(function* () {
     const listed = yield* (yield* GitHubApp).workspaceRepositories(workspace.workspaceId);
+
     const installed: HeldRepository[] = Option.getOrElse(listed, () => []).map((repository) => ({
       fullName: repository.fullName,
       member: undefined,
     }));
+
     const seen = new Set(installed.map((each) => workspaceFolderOf(each.fullName)));
     const added = yield* listWorkspaceTokenRepositories(workspace.userId, workspace.workspaceId);
+
     const onTokens = added
       .filter((row) => !seen.has(workspaceFolderOf(row.repository)))
       .map((row) => ({ fullName: row.repository, member: row.addedByUserId }));
+
     return [...installed, ...onTokens];
   });
 
@@ -186,6 +195,7 @@ const heldOne = (sandbox: RepositorySandbox, workspaceId: string, held: HeldRepo
       held.fullName,
       held.member,
     );
+
     if (Option.isNone(reached)) return;
     const { repository, token, access } = reached.value;
     yield* syncWorkspaceRepository(
@@ -215,10 +225,13 @@ export const fillWorkspaceDrive = Effect.fn("web/fillWorkspaceDrive")(function* 
   const api = yield* Sandbox;
   const name = workspaceDriveName(workspace.workspaceId);
   const read = readOf(yield* api.get(name), yield* Clock.currentTimeMillis);
+
   if (read.state === DRIVE_STATE.FILLING) return false;
+
   if (read.state === DRIVE_STATE.WANTED && !(yield* deletedIfStill(read.stale))) return false;
   const repositories = yield* heldRepositories(workspace);
   const context = yield* Effect.context<DatabaseServices>();
+
   return yield* filledDrive(
     { name, drive: name, at: WORKSPACE_DRIVE.MOUNT, image, vcpus: SANDBOX_SIZE.VCPUS },
     (running) =>
@@ -229,6 +242,7 @@ export const fillWorkspaceDrive = Effect.fn("web/fillWorkspaceDrive")(function* 
           run,
           repositoryFirewallOver(api, context, firewallSessionOf(running, workspace.userId), {}),
         );
+
         for (const held of repositories) {
           yield* heldOne(sandbox, workspace.workspaceId, held).pipe(
             Effect.catchCause((cause) =>
@@ -238,6 +252,7 @@ export const fillWorkspaceDrive = Effect.fn("web/fillWorkspaceDrive")(function* 
             ),
           );
         }
+
         // A repository that failed above is still connected, so its folder is kept as it stood.
         yield* prunedWorkspaceFolders(
           sandbox,
@@ -252,6 +267,7 @@ const regeneratedFor = (workspace: Option.Option<BaseDriveWorkspace>) =>
   Effect.gen(function* () {
     const fills = yield* Effect.serviceOption(WorkspaceDriveFills);
     const sandbox = yield* Effect.serviceOption(Sandbox);
+
     if (Option.isNone(fills) || Option.isNone(sandbox) || Option.isNone(workspace)) return;
     const { run, image } = fills.value;
     yield* afterResponse(

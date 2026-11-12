@@ -193,7 +193,10 @@ export function socketEnding(
   attached: boolean,
 ): RelaySocketEnd {
   const said = closeCode === undefined ? undefined : END_BY_CLOSE.get(closeCode);
+
   if (said === RELAY_SOCKET_END.EXITED) return { kind: said, code: exitCode };
+
   if (said !== undefined) return { kind: said };
+
   return { kind: attached ? RELAY_SOCKET_END.DROPPED : RELAY_SOCKET_END.UNATTACHED };
 }

@@ -91,6 +91,7 @@ function writeSearch(search: Record<string, unknown>): string {
       value === undefined ? [] : [[key, String(value)]],
     ),
   ).toString();
+
   return written === "" ? "" : `?${written}`;
 }
 
@@ -116,14 +117,18 @@ function reloadDocument(): void {
 function RouteFailed({ reset }: ErrorComponentProps): React.JSX.Element {
   const router = useRouter();
   const loadFailed = useMatch({ strict: false, select: (match) => match.status === "error" });
+
   const reload = () => {
     if (loadFailed) {
       reloadDocument();
+
       return;
     }
+
     reset();
     void router.invalidate();
   };
+
   return <ReloadState onReload={reload} />;
 }
 
@@ -312,6 +317,7 @@ const inboxRoute = createRoute({
   path: "inbox",
   beforeLoad: ({ context, params, location }) => {
     const { listed } = context.access;
+
     if (workspaceRouteStands(params.workspace, context.access) || listed === undefined) return;
     throw redirect({
       href: `${pathUnder(location.pathname, listed)}${location.searchStr}`,
@@ -353,6 +359,7 @@ const automationPagesRoute = createRoute({
   id: "automation-pages",
   beforeLoad: ({ context, params, location }) => {
     const { listed } = context.access;
+
     if (workspaceRouteStands(params.workspace, context.access) || listed === undefined) return;
     throw redirect({ href: pathUnder(location.pathname, listed), replace: true });
   },
@@ -409,6 +416,7 @@ const personRoute = createRoute({
   path: "person/$userId",
   beforeLoad: ({ context, params }) => {
     const { listed } = context.access;
+
     if (workspaceRouteStands(params.workspace, context.access) || listed === undefined) return;
     throw redirect({
       to: "/$workspace/person/$userId",
@@ -677,6 +685,7 @@ export function PanelRouterProvider({ router }: { router: PanelRouter }): React.
     asked.current = access;
     void router.invalidate();
   }, [router, access]);
+
   return <RouterProvider router={router} context={{ access }} />;
 }
 

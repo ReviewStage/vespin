@@ -86,9 +86,12 @@ function stageLayout(): void {
     if (this.classList.contains("agent-model-chip")) {
       const fast = this.querySelector(".model-label")?.textContent?.includes("Fast") ?? false;
       const width = fast ? CHIP_WIDTH.FAST : CHIP_WIDTH.STANDARD;
+
       return box(CHIP_RIGHT - width, 700, width, 24);
     }
+
     if (this.classList.contains("ui-anchored-popover")) return box(0, 0, 340, MENU_HEIGHT);
+
     return box(0, 0, 0, 0);
   });
 }
@@ -99,6 +102,7 @@ function Owned(): React.JSX.Element {
     model: "anthropic/claude-opus-5.5",
     effort: "high",
   });
+
   return createElement(AgentModelChip, {
     model: { choice, note: undefined, choose: setChoice },
     models: MODELS,
@@ -115,8 +119,10 @@ function menuLeft(view: HTMLElement): number {
   assert.ok(anchor !== null && layer !== null, "the menu is open over the chip");
   const chip = anchor.getBoundingClientRect();
   const width = Number.parseFloat(layer.style.width);
+
   if (layer.style.left !== "") return chip.left + Number.parseFloat(layer.style.left);
   assert.notEqual(layer.style.right, "", "the layer is placed by one of the chip's edges");
+
   return chip.right - Number.parseFloat(layer.style.right) - width;
 }
 
@@ -233,15 +239,18 @@ function openMenuOn(
   assert.ok(menu, "the menu is open");
   const foot = menu.querySelector(".ui-searchable-menu-foot")?.textContent ?? "";
   const line = menu.querySelector(".ui-searchable-menu-last-line")?.textContent ?? "";
+
   const listed = [...menu.querySelectorAll('[role="listbox"] [role="option"]')].map(
     (row) => row.textContent ?? "",
   );
+
   return { models: listed, foot, line, menu };
 }
 
 test("on a Claude Code agent the menu offers Claude models alone with Fast and no Context row, on a Codex agent GPT models alone with neither but a Speed choice of Standard, Fast, and Ultrafast in Fast's place where its API key pays, while on an agent on the retired runtime it offers every model with both", () => {
   const claudeCode = openMenuOn(AGENT_RUNTIME.CLAUDE_CODE);
   const codex = openMenuOn(AGENT_RUNTIME.CODEX);
+
   const codexOnApiKey = openMenuOn(
     AGENT_RUNTIME.CODEX,
     { model: "openai/gpt-6.1-sol", effort: "high" },
@@ -249,6 +258,7 @@ test("on a Claude Code agent the menu offers Claude models alone with Fast and n
     undefined,
     AGENT_PAYER.API_KEY,
   );
+
   const retired = openMenuOn(undefined);
 
   assert.equal(claudeCode.models.length, 2, claudeCode.models.join(" | "));
@@ -276,10 +286,12 @@ test("on a Claude Code agent the menu offers Claude models alone with Fast and n
 test("a Codex agent's menu ends on \"Your Codex plan\" and Manage usage, before its first turn settles too, the link opening ChatGPT's usage settings, while a Claude Code agent's says its Claude plan and the menu of an agent on the retired runtime names no payer", () => {
   const opened: string[] = [];
   fakeAppPlatform({ assetBase: () => "https://app.test/", openWeb: (href) => opened.push(href) });
+
   const codex = openMenuOn(AGENT_RUNTIME.CODEX, {
     model: "openai/gpt-6.1-sol",
     effort: "low",
   });
+
   assert.equal(codex.line, "Your Codex planManage usage");
   const link = [...codex.menu.querySelectorAll("a")].find((a) => a.textContent === "Manage usage");
   assert.ok(link, "Manage usage is a link");
@@ -297,7 +309,9 @@ test("a Codex agent its OpenAI API key pays for names the key rather than a plan
     RUNTIME_MODELS,
     { inputTokens: 1000, outputTokens: 200, costUsd: 0.42, payer: AGENT_PAYER.API_KEY },
   );
+
   assert.equal(onKey.line, "Your OpenAI API key · $0.42 so far");
+
   // Before its first turn settles, the payer the page names says the same.
   const first = openMenuOn(
     AGENT_RUNTIME.CODEX,
@@ -306,11 +320,13 @@ test("a Codex agent its OpenAI API key pays for names the key rather than a plan
     undefined,
     AGENT_PAYER.API_KEY,
   );
+
   assert.equal(first.line, "Your OpenAI API key");
 });
 
 test("an automation's chip, whose choice a new agent starts on, says a model nothing of the reader's pays for cannot run, while a running agent's chip says nothing of it", () => {
   const unconnected = MODELS.map((model) => ({ ...model, credentialMissing: true }));
+
   const footOf = (startsNew: boolean): string => {
     const view = document.createElement("div");
     document.body.append(view);
@@ -337,10 +353,13 @@ test("an automation's chip, whose choice a new agent starts on, says a model not
     const chip = view.querySelector<HTMLButtonElement>(".agent-model-chip button");
     assert.ok(chip);
     act(() => chip.click());
+
     const foot = [
       ...view.querySelectorAll(".ui-searchable-menu-foot, .ui-searchable-menu-last-line"),
     ].map((block) => block.textContent ?? "");
+
     act(() => chip.click());
+
     return foot.join("");
   };
 
@@ -386,19 +405,25 @@ test("a chip handed the agent's permission mode names it off Full access, and it
   assert.ok(chip);
   assert.match(chip.getAttribute("aria-label") ?? "", /Ask for approval$/u);
   act(() => chip.click());
+
   const permissions =
     [...document.querySelectorAll<HTMLElement>('[aria-haspopup="listbox"]')].find((row) =>
       row.textContent?.startsWith("Permissions"),
     ) ?? assert.fail("the menu offers Permissions");
+
   act(() => permissions.click());
+
   const modes =
     document.querySelector<HTMLElement>('[aria-label="Permissions"][role="listbox"]') ??
     assert.fail("Permissions opens its modes");
+
   assert.match(modes.textContent ?? "", /^How should actions be approved\?/u);
+
   const approve =
     [...modes.querySelectorAll<HTMLElement>('[role="option"]')].find((option) =>
       option.textContent?.startsWith("Approve for me"),
     ) ?? assert.fail("the modes offer Approve for me");
+
   act(() => approve.click());
 
   assert.deepEqual(chosen, ["auto"]);
@@ -450,6 +475,7 @@ test("a /model the box runs opens the model menu with its search focused, choosi
   const root = createRoot(view);
   roots.push(root);
   const chosen: ModelChoice[] = [];
+
   const render = (asked: number) =>
     act(() =>
       root.render(

@@ -122,15 +122,18 @@ export function AgentListRow({
   const changesPeople = useChangesPeople(pullRequest === undefined ? undefined : agent.id);
   const people = pullRequest === undefined ? undefined : peopleOf(changesPeople, pullRequest);
   const { name } = subject;
+
   const actions = useAgentActions(agent, agents, {
     label: name,
     shown,
     terminals: { onOpenTerminal: undefined },
   });
+
   const press = useRef<HTMLButtonElement | null>(null);
   const { rename } = actions;
   const editing = rename?.editing === true;
   const endedByKey = useRefocusAfterEdit(editing, press);
+
   const row = (
     <TaskRow
       taskId={agent.id}
@@ -203,6 +206,7 @@ export function AgentListRow({
       {actions.dialog}
     </TaskRow>
   );
+
   // Note that the card reaches the row's hint by its options, because the row takes its hint as a component, which must stay one across renders.
   return card === undefined ? row : <RowHintOptions card={card}>{row}</RowHintOptions>;
 }

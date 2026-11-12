@@ -58,7 +58,9 @@ export function compactionSummaryMessage(
   summary: CompactionSummary,
 ): CompactionMessage | undefined {
   const text = summary.text.trim();
+
   if (text.length === 0) return undefined;
+
   const read = readEither(ASSISTANT_MESSAGE_METADATA)(
     unparsedWire({
       author: MESSAGE_AUTHOR.MODEL,
@@ -70,8 +72,10 @@ export function compactionSummaryMessage(
       },
     }),
   );
+
   if (Result.isFailure(read) || read.success.compaction === undefined) return undefined;
   const part: TextUIPart = { type: "text", text, state: TEXT_PART_STATE_DONE };
+
   return {
     id,
     role: MESSAGE_ROLE.ASSISTANT,

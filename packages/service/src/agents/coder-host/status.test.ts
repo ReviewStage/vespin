@@ -33,9 +33,11 @@ test("a prompt the provider refused as longer than the window reads as a context
   const refused = failedOnModel(
     "MODEL_CALL_FAILED [statusCode] prompt is too long: 1368155 tokens > 1000000 maximum",
   );
+
   const openAi = failedOnModel(
     "MODEL_CALL_FAILED [code] context_length_exceeded This model's maximum context length is 272000 tokens.",
   );
+
   const overloaded = failedOnModel("MODEL_CALL_FAILED [statusCode] Overloaded");
 
   expect(agentFailureOf(refused)).toBe(AGENT_FAILURE.CONTEXT_OVERFLOW);
@@ -57,9 +59,11 @@ test("a turn its runner ended over a provider it waited for in vain reads as the
   const gaveUp = failedOnModel(
     `failed ${connectionLostFailure("api.anthropic.com", CONNECTION_LOST_DETAIL.GAVE_UP)}`,
   );
+
   const lostAgain = failedOnModel(
     `failed ${connectionLostFailure("chatgpt.com", CONNECTION_LOST_DETAIL.LOST_AGAIN)}; responseStreamDisconnected`,
   );
+
   // The harness's own words for a connection it gave up on, from a runner that probed nothing, stay the model's.
   const unprobed = failedOnModel("success: API Error: Connection error.");
 
@@ -70,6 +74,7 @@ test("a turn its runner ended over a provider it waited for in vain reads as the
 
 test("a local agent's summary names its Mac and when it last beat; an agent in a sandbox names none", () => {
   const DEVICE = "device-1";
+
   const line: AgentLine = {
     id: "agent-1",
     userId: "user-1",
@@ -99,7 +104,9 @@ test("a local agent's summary names its Mac and when it last beat; an agent in a
     machine: AGENT_MACHINE.DEVICE,
     deviceId: DEVICE,
   };
+
   const now = 100_000;
+
   const seen = (lastSeenAt: number) =>
     agentSummary(
       line,

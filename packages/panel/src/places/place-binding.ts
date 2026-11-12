@@ -99,17 +99,23 @@ function bindingMove(before: BindingReading, now: BindingReading): BindingMove {
   if (now.place !== before.place && holdsNone(now.place)) {
     return now.bound === undefined ? BINDING_MOVE.STAY : BINDING_MOVE.UNBIND;
   }
+
   // The developer arriving on another task's own place asks for that task, over whatever the host bound in the same breath.
   if (arrived(before, now) && holdsTask(now.place) && now.task !== undefined) {
     return now.task === now.bound ? BINDING_MOVE.STAY : BINDING_MOVE.SELECT;
   }
+
   if (now.bound === before.bound) return BINDING_MOVE.STAY;
+
   if (now.bound !== undefined && holdsNone(now.place)) return BINDING_MOVE.TO_BOUND;
+
   // Note that only the task's own place follows the binding, never a place standing over it.
   if (now.bound !== undefined && holdsTask(now.place) && now.task !== undefined) {
     return now.task === now.bound ? BINDING_MOVE.STAY : BINDING_MOVE.TO_BOUND;
   }
+
   if (now.bound === undefined && holdsTask(now.place)) return BINDING_MOVE.TO_UNBOUND;
+
   return BINDING_MOVE.STAY;
 }
 
@@ -125,9 +131,11 @@ const arrivalsBeside = new WeakMap<object, Arrivals>();
 /** The arrivals counted beside `history`, made as they are first read. */
 function arrivalsOf(history: object): Arrivals {
   const kept = arrivalsBeside.get(history);
+
   if (kept !== undefined) return kept;
   const made: Arrivals = { count: 0, following: undefined };
   arrivalsBeside.set(history, made);
+
   return made;
 }
 
@@ -136,6 +144,7 @@ function countArrival(counted: Arrivals, before: BindingReading, now: BindingRea
   if (!arrived(before, now)) return;
   const { following } = counted;
   counted.following = undefined;
+
   if (following?.binding === bindingOf(now.place) && following.task === now.task) return;
   counted.count += 1;
 }
@@ -149,6 +158,7 @@ function countArrival(counted: Arrivals, before: BindingReading, now: BindingRea
  */
 export function usePlaceArrivals(): () => number {
   const { history } = useRouter();
+
   return useCallback(() => arrivalsOf(history).count, [history]);
 }
 
@@ -184,28 +194,35 @@ export function usePlaceBinding(input: PlaceBindingInput): void {
   useEffect(() => {
     if (!known) {
       read.current = undefined;
+
       return;
     }
+
     const now = { place, task, page, bound };
     // Note that the first reading takes the place it opened on as already there, the binding as just made.
     const before = read.current ?? { place, task, page, bound: undefined };
     read.current = now;
     const counted = arrivalsOf(history);
     countArrival(counted, before, now);
+
     switch (bindingMove(before, now)) {
       case BINDING_MOVE.UNBIND:
         doors.current.onUnbind();
+
         return;
       case BINDING_MOVE.SELECT:
         if (task !== undefined) doors.current.onSelect(task);
+
         return;
       case BINDING_MOVE.TO_BOUND:
         counted.following = { binding: PLACE_BINDING.TASK, task: bound };
         doors.current.onToBound();
+
         return;
       case BINDING_MOVE.TO_UNBOUND:
         counted.following = { binding: PLACE_BINDING.NONE, task: undefined };
         doors.current.onToUnbound();
+
         return;
       case BINDING_MOVE.STAY:
         return;
@@ -241,6 +258,7 @@ export function useTaskAsk(open: string | undefined): TaskAsking {
   // Note that what is bound for is read at the call too, from the ask as it was last made or taken back rather than as it
   // was last drawn, since an arrival may be drawn before the ask that led there is.
   const latest = useRef<TaskAsk | undefined>(undefined);
+
   // Note that the host's next move answers the ask, so it is let go there, because an ask kept would stand again where
   // the host binds back the task it was asked over, as a delete of a task opened from Home binds none again.
   // The ask as it was last made is let go as the move commits, before any door reads it, so a draw React throws away
@@ -252,20 +270,26 @@ export function useTaskAsk(open: string | undefined): TaskAsking {
   const boundFor = asked !== undefined && asked.over === open ? asked.taskId : open;
   const openNow = useRef(open);
   openNow.current = open;
+
   // Note that the ask stands over the task open as it is made, though the door making it was handed long before, as a toast's is.
   const ask = useCallback((taskId: string | undefined) => {
     const made = { taskId, over: openNow.current };
     latest.current = made;
     setAsked(made);
+
     return () => {
       if (latest.current === made) latest.current = undefined;
       setAsked((held) => (held === made ? undefined : held));
     };
   }, []);
+
   const boundForNow = useCallback(() => {
     const made = latest.current;
+
     return made !== undefined && made.over === openNow.current ? made.taskId : openNow.current;
   }, []);
+
   const boundNow = useCallback((taskId: string) => boundForNow() === taskId, [boundForNow]);
+
   return { boundFor, ask, boundNow, boundForNow };
 }

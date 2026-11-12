@@ -151,7 +151,9 @@ export function useAssigneeRows(assignee: TaskSummary["assignee"]): readonly Men
   const person = usePerson(assignee);
   const value = assignee?.userId ?? NO_ASSIGNEE;
   const listed = assigneeRows(members, readerId);
+
   if (listed.some((row) => row.id === value)) return listed;
+
   return [
     ...listed,
     {
@@ -178,6 +180,7 @@ function TaskAssigneePicker({
 }): React.JSX.Element {
   const { members, readerId, reading, refused, retry } = useMemberDirectory();
   const person = usePerson(assignee);
+
   return (
     <Picker
       replayUnmasked
@@ -201,6 +204,7 @@ function TaskAssigneePicker({
       disabled={onPick === undefined}
       onPick={(id) => {
         const picked = id === NO_ASSIGNEE ? null : id;
+
         if (picked !== (assignee?.userId ?? null)) onPick?.(picked);
       }}
     />
@@ -259,6 +263,7 @@ export function TaskKey({
   tokens?: readonly string[] | undefined;
 }): React.JSX.Element | null {
   if (workspaceName === undefined || number === undefined) return null;
+
   return (
     <span
       className="task-key inline-flex shrink-0 items-center whitespace-nowrap tabular-nums"
@@ -288,6 +293,7 @@ const PATH_LABEL = "Task path";
  */
 function parentOf(task: TaskSummary, tasks: readonly TaskSummary[]): TaskSummary | undefined {
   const parentId = tasks.find((each) => each.id === task.id)?.parentTaskId ?? task.parentTaskId;
+
   return parentId === undefined ? undefined : tasks.find((each) => each.id === parentId);
 }
 
@@ -298,8 +304,10 @@ function useParentCrumb(
   onOpen: ((taskId: string) => void) | undefined,
 ): Crumb | undefined {
   const card = useTaskCard(parent?.id);
+
   if (parent === undefined) return undefined;
   const key = parent.number === undefined ? undefined : taskKey(workspaceName, parent.number);
+
   return {
     label: key === undefined ? parent.name : `${key} ${parent.name}`,
     glyph: parent.status === undefined ? undefined : <TaskStatusMark status={parent.status} />,
@@ -312,6 +320,7 @@ function useParentCrumb(
 /** The key's crumb, where the reader stands, kept whole however narrow the path; none for a task from a service before keys. */
 function keyCrumb(task: TaskSummary, workspaceName: string): Crumb | undefined {
   if (task.number === undefined) return undefined;
+
   return { label: taskKey(workspaceName, task.number), current: true, fixed: true };
 }
 
@@ -328,7 +337,9 @@ function PathLine({
   note?: string | undefined;
 }): React.JSX.Element | null {
   const drawn = crumbs.filter((crumb) => crumb !== undefined);
+
   if (drawn.length === 0) return null;
+
   // Note that the menu hangs from the line rather than from its crumb, because the path clips what stands inside it,
   // and that the line is pulled back by a crumb's inset, so its first mark stands on the title's edge.
   return (
@@ -370,6 +381,7 @@ function RepositoryPath({
     onAsked: door.onAsked,
     align: POPOVER_ALIGN.START,
   });
+
   // Note that the crumb is kept, because words that name the repository must not be folded away, yet it may still be cut short, so a long name never pushes the key out of the path.
   const repository: Crumb = {
     label: menu.label,
@@ -379,6 +391,7 @@ function RepositoryPath({
     expanded: menu.open,
     onPress: menu.press,
   };
+
   return (
     <PathLine crumbs={[repository, ...rest]} room={menu.room} menu={menu.menu} note={door.note} />
   );
@@ -401,7 +414,9 @@ export function TaskPath({
     door.workspaceName,
     door.onOpenTask,
   );
+
   const rest = [parent, keyCrumb(task, door.workspaceName)];
+
   return door.repository === undefined ? (
     <PathLine crumbs={rest} />
   ) : (
@@ -445,6 +460,7 @@ function TaskStatusPicker({
         openRequest={openRequest}
         onPick={(id) => {
           const picked = statusOf(id);
+
           if (picked !== undefined && picked !== status) onPick?.(picked);
         }}
       />
@@ -482,6 +498,7 @@ export function TaskStandingChips({
       ? () => setStatusAsks((asks) => asks + 1)
       : undefined,
   );
+
   // The box the add menu hangs from, standing with or without the chips, so the task's menus and ⌘K open it on any task.
   const asked =
     relations === undefined ? null : (
@@ -492,7 +509,9 @@ export function TaskStandingChips({
         onAsked={relations.onAsked}
       />
     );
+
   if (status === undefined || priority === undefined) return asked;
+
   return (
     <div className="plan-task-standing">
       {/* Note that the line is pulled back by a chip's inset, so the status's mark stands on the title's edge. */}
@@ -517,6 +536,7 @@ export function TaskStandingChips({
             disabled={onSet === undefined}
             onPick={(id) => {
               const picked = priorityOf(id);
+
               if (picked !== undefined && picked !== priority) onSet?.({ priority: picked });
             }}
           />

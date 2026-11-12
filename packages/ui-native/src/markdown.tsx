@@ -181,6 +181,7 @@ function ChipGlyph({
   if (!isLucideSymbol(glyph)) {
     return <SymbolView name={glyph} size={size} tintColor={color} accessibilityElementsHidden />;
   }
+
   return (
     <Host style={{ width: size, height: size }}>
       <SwiftUIImage
@@ -204,6 +205,7 @@ function MentionChip({
   const { colors, fontScale } = drawing;
   const onPress = open(chip.target, drawing);
   const size = TEXT_SIZE.FOOTNOTE;
+
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
       <Pressable
@@ -256,6 +258,7 @@ function Runs({
 
 function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing: Drawing }) {
   const { colors } = drawing;
+
   switch (run.kind) {
     case MARKDOWN_RUN.WORDS:
       return <Text style={wordStyle(run)}>{run.text}</Text>;
@@ -273,6 +276,7 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
       );
     case MARKDOWN_RUN.LINK: {
       const onPress = open(run.target, drawing);
+
       return (
         <Text
           onPress={onPress}
@@ -283,6 +287,7 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
         </Text>
       );
     }
+
     case MARKDOWN_RUN.CHIP:
       return <MentionChip chip={run.chip} drawing={drawing} />;
     case MARKDOWN_RUN.BREAK:
@@ -305,6 +310,7 @@ const OPEN_WORD = "Open";
 function lineOpenings(runs: readonly MarkdownRun[], drawing: Drawing): readonly LineOpening[] {
   const openings: LineOpening[] = [];
   collectOpenings(runs, drawing, openings);
+
   return openings;
 }
 
@@ -317,6 +323,7 @@ function collectOpenings(
   for (const run of runs) {
     if (run.kind === MARKDOWN_RUN.CHIP) {
       const onOpen = open(run.chip.target, drawing);
+
       if (onOpen !== undefined) {
         openings.push({
           name: `open-${openings.length}`,
@@ -327,9 +334,11 @@ function collectOpenings(
     } else if (run.kind === MARKDOWN_RUN.LINK) {
       const onOpen = open(run.target, drawing);
       const words = heardLine(run.runs) ?? runsText(run.runs);
+
       if (onOpen !== undefined && words !== "") {
         openings.push({ name: `open-${openings.length}`, label: `${OPEN_WORD} ${words}`, onOpen });
       }
+
       collectOpenings(run.runs, drawing, openings);
     }
   }
@@ -373,6 +382,7 @@ function Line({
   readonly heading?: boolean | undefined;
 }) {
   const openings = lineOpenings(runs, drawing);
+
   const actions =
     openings.length === 0
       ? {}
@@ -381,6 +391,7 @@ function Line({
           onAccessibilityAction: (event: AccessibilityActionEvent) =>
             openings.find((opening) => opening.name === event.nativeEvent.actionName)?.onOpen(),
         };
+
   return (
     <Text
       accessibilityLabel={heardLine(runs)}
@@ -408,6 +419,7 @@ function Marker({
 }) {
   const { colors, fontScale } = drawing;
   const width = PROSE_SIZE * MARKER_WIDTH * fontScale;
+
   if (checked !== undefined) {
     return (
       <View
@@ -425,6 +437,7 @@ function Marker({
       </View>
     );
   }
+
   // Note that a bullet is never heard, while an ordered list's number is, since its order is part of what it says.
   return (
     <Text
@@ -452,6 +465,7 @@ function ListView({
   readonly drawing: Drawing;
 }) {
   const indent = PROSE_SIZE * MARKER_WIDTH * drawing.fontScale + SPACE.TIGHT;
+
   return (
     <View style={styles.flow}>
       {block.items.map((item, at) => (
@@ -486,13 +500,16 @@ function TableView({
 }) {
   const { colors, fontScale } = drawing;
   const [widths, setWidths] = useState<readonly number[]>([]);
+
   const measured = (column: number, width: number) =>
     setWidths((held) => {
       if ((held[column] ?? 0) >= width) return held;
       const wider = [...held];
       wider[column] = width;
+
       return wider;
     });
+
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}>
       <View style={[styles.table, { borderColor: colors.CHIP_EDGE }]}>
@@ -540,6 +557,7 @@ function TableView({
 /** A block of code, in the monospaced face on a well, scrolling sideways rather than wrapping its lines. */
 function CodeView({ text, drawing }: { readonly text: string; readonly drawing: Drawing }) {
   const { colors } = drawing;
+
   return (
     <View style={[styles.well, { backgroundColor: colors.WELL }]}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -583,10 +601,12 @@ export function Picture({ source, alt, shape }: PictureProps) {
   const [aspect, setAspect] = useState<number | undefined>(undefined);
   const [full, setFull] = useState(false);
   const heard = alt === "" ? "Picture" : alt;
+
   const well = [
     styles.picture,
     { aspectRatio: shape ?? aspect ?? 16 / 9, backgroundColor: colors.WELL },
   ];
+
   if (source === undefined) {
     return (
       <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
@@ -594,6 +614,7 @@ export function Picture({ source, alt, shape }: PictureProps) {
       </View>
     );
   }
+
   return (
     <>
       <Pressable
@@ -607,6 +628,7 @@ export function Picture({ source, alt, shape }: PictureProps) {
           resizeMode="contain"
           onLoad={(event) => {
             const loaded = event.nativeEvent.source;
+
             if (loaded.width > 0 && loaded.height > 0) setAspect(loaded.width / loaded.height);
           }}
           style={well}
@@ -663,7 +685,9 @@ function PictureBlock({
   readonly drawing: Drawing;
 }) {
   const video = drawing.videoAt(source);
+
   if (video === undefined) return <Picture source={drawing.pictureSource(source)} alt={alt} />;
+
   return (
     <Video
       source={video.source}
@@ -681,6 +705,7 @@ function BlockView({
   readonly drawing: Drawing;
 }) {
   const { colors } = drawing;
+
   switch (block.kind) {
     case MARKDOWN_BLOCK.HEADING:
       // Note that a message's heading is styled, never announced as one, as the panel's are: a reader walking the screen's headings meets the screen's, not a message's. A page of words alone, such as a task's description opened whole, announces its own.
@@ -777,10 +802,12 @@ export function Markdown({
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
+
   const blocks = useMemo(
     () => markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed }),
     [words, repository, typed],
   );
+
   const drawing: Drawing = {
     colors,
     fontScale,
@@ -790,6 +817,7 @@ export function Markdown({
     videoAt,
     headings,
   };
+
   return (
     <View style={styles.flow}>
       <Blocks blocks={blocks} drawing={drawing} />

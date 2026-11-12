@@ -82,6 +82,7 @@ export interface ImageSides {
 /** The raw file of the repository at a commit, the address the service reads a repository's picture by. */
 function rawAddress(repository: string, sha: string, path: string): string {
   const segments = [...repository.split("/"), sha, ...path.split("/")];
+
   return `https://raw.githubusercontent.com/${segments.map(encodeURIComponent).join("/")}`;
 }
 
@@ -99,15 +100,19 @@ function useNearView(element: HTMLElement | null): boolean {
   const [near, setNear] = useState(false);
   useEffect(() => {
     if (element === null || near) return undefined;
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) setNear(true);
       },
       { rootMargin: "400px 0px" },
     );
+
     observer.observe(element);
+
     return () => observer.disconnect();
   }, [element, near]);
+
   return near;
 }
 
@@ -116,12 +121,14 @@ function SidePicture({ state, label }: { state: PictureState; label: string }) {
   if (state.kind === PICTURE_STATE.READY) {
     return <img className="image-diff-picture" src={state.url} alt={label} />;
   }
+
   // Note that the side's words are its caption's, drawn above it, so what stands in for it says this picture.
   if (state.kind === PICTURE_STATE.FAILED) {
     return (
       <PictureStandIn failure={state.failure} state={state.kind} words="" onRetry={state.retry} />
     );
   }
+
   return <PictureStandIn state={state.kind} words="" />;
 }
 
@@ -138,6 +145,7 @@ function OneSide({
   note?: string | undefined;
 }): React.JSX.Element {
   const state = usePicture(pictureQuery(agentId, address, useImageRead()), pictureUnread);
+
   return (
     <div className="flex w-full flex-wrap justify-center gap-block-gap">
       <figure className="m-0 flex min-w-0 shrink grow basis-image-diff-side flex-col items-center gap-item-gap [&>figcaption]:text-caption-inline [&>figcaption]:text-muted-foreground">
@@ -174,6 +182,7 @@ function Stacked({
   const swipe = compare === IMAGE_COMPARE.SWIPE;
   // Note that the after is cut or faded through the CSSOM (`style`), which the panel's policy admits where it refuses a style written as markup.
   const style = swipe ? { clipPath: `inset(0 0 0 ${amount}%)` } : { opacity: amount / 100 };
+
   return (
     <div className="flex max-w-full flex-col items-center gap-control-gap">
       <div className="image-diff-stack">
@@ -207,16 +216,20 @@ function BothSides({
   const beforeState = usePicture(pictureQuery(agentId, before, read), pictureUnread);
   const afterState = usePicture(pictureQuery(agentId, after, read), pictureUnread);
   const { compare, amount } = comparison;
+
   const ready =
     beforeState.kind === PICTURE_STATE.READY && afterState.kind === PICTURE_STATE.READY
       ? { before: beforeState.url, after: afterState.url }
       : undefined;
+
   const panelId = useId();
+
   const tabIds = {
     [IMAGE_COMPARE.SIDE_BY_SIDE]: useId(),
     [IMAGE_COMPARE.SWIPE]: useId(),
     [IMAGE_COMPARE.ONION_SKIN]: useId(),
   } satisfies Record<ImageCompare, string>;
+
   return (
     <>
       <div className="flex justify-center">
@@ -264,20 +277,24 @@ function BothSides({
 /** What of a changed image is drawn: both sides, one, or neither, by what became of it and which commits the service named. */
 function sidesOf(file: AgentChangedFile, sides: ImageSides) {
   const { repository, headSha, baseSha } = sides;
+
   const before =
     file.status === CHANGED_FILE_STATUS.ADDED || baseSha === undefined
       ? undefined
       : rawAddress(repository, baseSha, file.previousPath ?? file.path);
+
   const after =
     file.status === CHANGED_FILE_STATUS.DELETED || headSha === undefined
       ? undefined
       : rawAddress(repository, headSha, file.path);
+
   return { before, after };
 }
 
 /** Whether a changed image can be drawn at all: the commit of a side it has is known. */
 export function imageDrawable(file: AgentChangedFile, sides: ImageSides): boolean {
   const { before, after } = sidesOf(file, sides);
+
   return file.status === CHANGED_FILE_STATUS.DELETED ? before !== undefined : after !== undefined;
 }
 
@@ -301,6 +318,7 @@ function ImageSidesNear({
   const near = useNearView(box);
   const { before, after } = sidesOf(file, sides);
   const { agentId } = sides;
+
   const drawn = (() => {
     if (before !== undefined && after !== undefined) {
       return (
@@ -313,8 +331,10 @@ function ImageSidesNear({
         />
       );
     }
+
     if (after !== undefined) {
       const added = file.status === CHANGED_FILE_STATUS.ADDED;
+
       return (
         <OneSide
           agentId={agentId}
@@ -324,10 +344,12 @@ function ImageSidesNear({
         />
       );
     }
+
     return before === undefined ? null : (
       <OneSide agentId={agentId} address={before} label={IMAGE_WORDS.DELETED} />
     );
   })();
+
   return (
     <div
       ref={setBox}
@@ -354,6 +376,7 @@ export function ImageDiff({
   sides: ImageSides;
 }): React.JSX.Element {
   const [comparison, setComparison] = useState(FIRST_COMPARISON);
+
   return (
     <ImageSidesNear
       key={sides.read}

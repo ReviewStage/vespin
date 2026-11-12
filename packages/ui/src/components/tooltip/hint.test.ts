@@ -54,6 +54,7 @@ beforeEach(() => {
 /** The pointer arriving on `target` and resting there past the hint's wait, on a faked clock. */
 function restOn(target: Element): void {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
   try {
     act(() => {
       target.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
@@ -70,6 +71,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 });
@@ -136,6 +138,7 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -163,6 +166,7 @@ function press(target: Element, type: string, pointerType: string): void {
  */
 function release(target: Element, pointerType: string): boolean {
   press(target, "pointerup", pointerType);
+
   return clickOf(target, pointerType);
 }
 
@@ -171,9 +175,11 @@ function clickOf(target: Element, pointerType: string): boolean {
   const touchEnd = new TouchEvent("touchend", { bubbles: true, cancelable: true });
   act(() => {
     if (pointerType === "touch") target.dispatchEvent(touchEnd);
+
     if (touchEnd.defaultPrevented) return;
     target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
   });
+
   return !touchEnd.defaultPrevented;
 }
 
@@ -184,10 +190,13 @@ function clickOf(target: Element, pointerType: string): boolean {
  */
 function tap(target: Element, pointerType = "touch"): boolean {
   const touched = pointerType === "touch";
+
   if (touched) press(target, "pointerover", pointerType);
   press(target, "pointerdown", pointerType);
   press(target, "pointerup", pointerType);
+
   if (touched) press(target, "pointerout", pointerType);
+
   return clickOf(target, pointerType);
 }
 
@@ -199,6 +208,7 @@ function longPress(target: Element): boolean {
     vi.advanceTimersByTime(2000);
   });
   vi.useRealTimers();
+
   return release(target, "touch");
 }
 
@@ -234,6 +244,7 @@ test("a card a tap opened goes on a tap elsewhere, or on Escape, and stays for a
   const page = mount(
     createElement("div", null, WORKED, createElement("p", { "data-else": "" }, "Else")),
   );
+
   const line = page.querySelector("[data-worked]") ?? assert.fail("the line");
   const elsewhere = page.querySelector("[data-else]") ?? assert.fail("elsewhere");
 
@@ -267,6 +278,7 @@ test("with a mouse, a click on the words opens no card", () => {
 
 test("a link's tap still goes where it leads and opens no card; a long press opens its card, and its release goes nowhere", () => {
   const followed: string[] = [];
+
   const page = mount(
     createElement(Tooltip, {
       label: "Fix the refresh",
@@ -284,6 +296,7 @@ test("a link's tap still goes where it leads and opens no card; a long press ope
       ),
     }),
   );
+
   const link = page.querySelector("a") ?? assert.fail("the link");
 
   assert.equal(tap(link), true);
@@ -315,6 +328,7 @@ test("a control whose long press opens its context menu shows no hint for the ho
 
 test("a tap on a control inside hinted words works the control alone, and a long press on it opens the hint and presses nothing", () => {
   const chosen: string[] = [];
+
   const page = mount(
     createElement(Tooltip, {
       label: "Relation",
@@ -352,6 +366,7 @@ test("a finger that scrolls from a link, which the browser takes over, opens no 
       ),
     }),
   );
+
   const link = page.querySelector("a") ?? assert.fail("the link");
 
   vi.useFakeTimers();
@@ -377,16 +392,19 @@ function waiting(): void {
 /** A card that notes it was mounted, which only a card drawn is. */
 function Card({ row }: { row: string }): React.JSX.Element {
   const noted = useRef(false);
+
   if (!noted.current) {
     noted.current = true;
     mounted.push(row);
   }
+
   return createElement("p", null, `${row}'s card`);
 }
 
 /** A row's press hanging its card beside it, its row counting as its control, as a sidebar row's does. */
 function CardedRow({ row }: { row: string }): React.JSX.Element {
   const item = useRef<HTMLElement | null>(null);
+
   return createElement(
     "li",
     { ref: item, "data-row": row },
@@ -414,6 +432,7 @@ function drawRows(rows: readonly string[]): (row: string) => HTMLElement {
       ),
     ),
   );
+
   return (row) =>
     container.querySelector<HTMLElement>(`[data-row="${row}"] button`) ??
     assert.fail(`${row} is drawn`);
@@ -428,9 +447,11 @@ function drawRows(rows: readonly string[]): (row: string) => HTMLElement {
 function move(from: Element | undefined, to: Element): void {
   act(() => {
     from?.dispatchEvent(new MouseEvent("pointerout", { bubbles: true, relatedTarget: to }));
+
     for (let left = from ?? null; left !== null && !left.contains(to); left = left.parentElement) {
       left.dispatchEvent(new MouseEvent("pointerleave", { relatedTarget: to }));
     }
+
     to.dispatchEvent(new MouseEvent("pointerover", { bubbles: true, relatedTarget: from ?? null }));
   });
 }
@@ -505,6 +526,7 @@ test("a key, a scroll, or the window losing the keyboard while the pointer rests
     () => document.body.dispatchEvent(new Event("scroll")),
     () => window.dispatchEvent(new Event("blur")),
   ];
+
   for (const leave of leaves) {
     waiting();
     const press = drawRows(["Alpha"]);
@@ -513,6 +535,7 @@ test("a key, a scroll, or the window losing the keyboard while the pointer rests
     act(leave);
     pass(2 * MOTION_DELAY_MS.HINT);
     assert.deepEqual(mounted, [], "the hint waiting is called off");
+
     for (const root of roots.splice(0)) act(() => root.unmount());
     vi.useRealTimers();
   }
@@ -521,8 +544,10 @@ test("a key, a scroll, or the window losing the keyboard while the pointer rests
 test("a modifier held alone, as a screenshot's chord begins, neither calls a waiting card off nor takes a standing one down; the key it begins does", () => {
   waiting();
   const press = drawRows(["Alpha"]);
+
   const modifier = (key: string) =>
     act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key })));
+
   move(undefined, press("Alpha"));
   pass(MOTION_DELAY_MS.HINT / 2);
   modifier("Shift");
@@ -605,6 +630,7 @@ test("a control is described by its hint from its first render, before any point
       }),
     ),
   );
+
   const [copy, stop] = [...container.querySelectorAll("button")];
   assert.ok(copy && stop);
   assert.equal(document.querySelector('[role="tooltip"]'), null, "no hint is drawn");
@@ -645,9 +671,11 @@ test("a control whose own name already says its hint is told it by its name alon
       }),
     ),
   );
+
   for (const control of container.querySelectorAll("button, span")) {
     assert.equal(control.hasAttribute("aria-describedby"), false, control.textContent ?? "");
   }
+
   assert.equal(container.textContent, "Fix the refresh×a-long-name.yml3 KB");
 });
 
@@ -679,6 +707,7 @@ test("words that take no focus own their hint as hidden text, read at their end,
       ),
     ),
   );
+
   const [time, roving] = [...container.querySelectorAll("li")];
   assert.ok(time && roving);
   assert.deepEqual(
@@ -713,6 +742,7 @@ test("words cut short inside a control hanging a card raise its card, not their 
       ),
     }),
   );
+
   restOn(page.querySelector("[data-label]") ?? assert.fail("the label"));
 
   assert.equal(cardStands(), true, "the card stands");
@@ -722,6 +752,7 @@ test("words cut short inside a control hanging a card raise its card, not their 
 
 test("a button inside a control hanging a card raises its own pill, and the words beside it the card", () => {
   waiting();
+
   const page = mount(
     createElement(Tooltip, {
       label: "Fix the refresh",
@@ -748,6 +779,7 @@ test("a button inside a control hanging a card raises its own pill, and the word
       ),
     }),
   );
+
   const button = page.querySelector("[data-remove]") ?? assert.fail("the button");
   move(document.body.appendChild(document.createElement("div")), button);
   pass(MOTION_DELAY_MS.HINT);

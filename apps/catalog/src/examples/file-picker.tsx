@@ -20,10 +20,13 @@ import { CatalogSection } from "../section";
 
 function Picks(): React.JSX.Element {
   const [said, setSaid] = useState("Nothing picked yet");
+
   const note = (files: readonly File[]) =>
     setSaid(files.length === 0 ? "Nothing picked" : files.map((file) => file.name).join(", "));
+
   const images = useFilePicker({ accept: "image/*", multiple: true, onFiles: note });
   const single = useFilePicker({ onFiles: note });
+
   return (
     <Stack gap={GAP.CONTROL} align={ALIGN.START}>
       <Button onClick={images.open}>Choose images</Button>
@@ -37,12 +40,14 @@ function Picks(): React.JSX.Element {
 
 function Photo({ name }: { name: string }): React.JSX.Element {
   const [photo, setPhoto] = useState<string | undefined>(undefined);
+
   const picker = useFilePicker({
     accept: "image/*",
     onFiles: ([picked]) => {
       if (picked !== undefined) setPhoto(URL.createObjectURL(picked));
     },
   });
+
   // Note that a picture replaced or left behind lets its blob go, since the page holds it until then.
   useEffect(
     () => () => {
@@ -50,6 +55,7 @@ function Photo({ name }: { name: string }): React.JSX.Element {
     },
     [photo],
   );
+
   return <PhotoPick name={name} unnamed="Workspace" photo={photo} picker={picker} />;
 }
 

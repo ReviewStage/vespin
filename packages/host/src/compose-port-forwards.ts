@@ -136,7 +136,9 @@ export function composePortForwards(
         forwarding === undefined
           ? null
           : { agentId: forwarding.agentId, ...standing(forwarding.agentId) };
+
       const text = JSON.stringify(told);
+
       if (text === toldText) return;
       toldText = text;
       kernel.emit(GATEWAY_EVENT.PORT_FORWARDS_CHANGED, carried(told));
@@ -149,6 +151,7 @@ export function composePortForwards(
     const forwarded = (current: Forwarding, port: number) =>
       Effect.gen(function* () {
         const scope = yield* Scope.fork(current.scope);
+
         const forwarded = yield* Scope.provide(
           forwardPort(
             { socketOrigin, credential: account.credential, openSocket, listen },
@@ -157,6 +160,7 @@ export function composePortForwards(
           ),
           scope,
         );
+
         return { forwarded, scope } satisfies Forward;
       });
 
@@ -164,33 +168,42 @@ export function composePortForwards(
     const look = (current: Forwarding) =>
       Effect.gen(function* () {
         const answer = yield* withHttp(client.list(current.agentId));
+
         if ("failure" in answer) return;
+
         // Note that a sandbox seen running and now stopped ends the forward, so the next agent may take the ports, and the release is forked because it closes the scope this read runs in.
         if (current.running && !answer.running) {
           yield* Effect.forkIn(released(current), lifetimeScope);
+
           return;
         }
+
         current.running = answer.running;
         current.labels = new Map((answer.labels ?? []).map(({ port, label }) => [port, label]));
         const read = new Set(answer.ports);
+
         for (const [port, forward] of current.forwards) {
           if (read.has(port)) continue;
           current.forwards.delete(port);
           yield* Scope.close(forward.scope, Exit.void);
         }
+
         for (const port of answer.ports) {
           if (!current.forwards.has(port))
             current.forwards.set(port, yield* forwarded(current, port));
         }
+
         if (
           answer.running &&
           (current.share.read === SHARE_READ.UNREAD || sharedLink(current) !== undefined)
         ) {
           const moves = current.shareMoves;
           const read = yield* withHttp(client.shared(current.agentId));
+
           if (!("failure" in read) && moves === current.shareMoves)
             current.share = shareRead(read.shared);
         }
+
         yield* tell;
       });
 
@@ -199,6 +212,7 @@ export function composePortForwards(
       Effect.gen(function* () {
         if (sharedLink(ending) === undefined) return;
         const answer = yield* withHttp(client.unshare(ending.agentId));
+
         if ("failure" in answer)
           yield* Effect.logWarning(
             `port-forwards: a shared link was not closed (${answer.failure})`,
@@ -215,6 +229,7 @@ export function composePortForwards(
       Effect.suspend(() => {
         const ending = forwarding;
         forwarding = undefined;
+
         return ending === undefined
           ? Effect.void
           : (closeLink ? unshared(ending) : Effect.void).pipe(
@@ -222,6 +237,7 @@ export function composePortForwards(
               Effect.andThen(tell),
             );
       });
+
     /** Forwarding let go for the agent, unless another agent has taken it since. */
     const turnOff = (agentId: string) =>
       oneAtATime(
@@ -237,6 +253,7 @@ export function composePortForwards(
       Effect.gen(function* () {
         if (forwarding?.agentId === agentId) return;
         yield* letGo(false);
+
         const current: Forwarding = {
           agentId,
           scope: yield* Scope.fork(lifetimeScope),
@@ -246,6 +263,7 @@ export function composePortForwards(
           share: { read: SHARE_READ.UNREAD },
           shareMoves: 0,
         };
+
         forwarding = current;
         yield* tell;
         yield* Effect.forkIn(
@@ -257,11 +275,14 @@ export function composePortForwards(
     /** How the agent's forwarding stands, its ports the lowest first. */
     const standing = (agentId: string): PortForwardingAnswer => {
       if (forwarding?.agentId !== agentId) return OFF;
+
       const forwards = [...forwarding.forwards.values()]
         .map((forward) => forward.forwarded)
         .sort((a, b) => a.port - b.port);
+
       const { labels } = forwarding;
       const shared = sharedLink(forwarding);
+
       return {
         on: true,
         running: forwarding.running,
@@ -269,46 +290,59 @@ export function composePortForwards(
         ports: forwards.map((forward) => {
           const label = labels.get(forward.port);
           const served = label === undefined ? {} : { label };
+
           if (forward.localPort === undefined) {
             return { port: forward.port, state: PORT_FORWARD_STATE.UNAVAILABLE, ...served };
           }
+
           const state = forward.connected
             ? PORT_FORWARD_STATE.CONNECTED
             : PORT_FORWARD_STATE.LISTENING;
+
           return { port: forward.port, localPort: forward.localPort, state, ...served };
         }),
       };
     };
 
     const methods: PlatformConcernMethods<typeof HOST_PLATFORM_CONCERN.PORT_FORWARDS> = {};
+
     const acts: HostActTable<typeof PORT_FORWARD_ACTS> = {
       PORT_FORWARD_SET: ({ agentId, on }) =>
         Effect.gen(function* () {
           if (!on) {
             yield* turnOff(agentId);
+
             return standing(agentId);
           }
+
           // Note that a signed-out host refuses in the act's own sentence, as the Gateway's refusal of its method was drawn.
           if (!gate()) return yield* Effect.fail(new ActRefused({}));
           yield* turnOn(agentId);
+
           return standing(agentId);
         }),
       PORT_SHARE_SET: ({ agentId, port }) =>
         Effect.gen(function* () {
           const current = forwarding;
+
           if (current?.agentId !== agentId || !gate())
             return yield* Effect.fail(new ActRefused({}));
+
           if (port === null) {
             const answer = yield* withHttp(client.unshare(agentId));
+
             if ("failure" in answer) return yield* Effect.fail(new ActRefused({}));
             current.share = shareRead(null);
           } else {
             const answer = yield* withHttp(client.share(agentId, port));
+
             if ("failure" in answer) return yield* Effect.fail(new ActRefused({}));
             current.share = shareRead({ port, url: answer.url });
           }
+
           current.shareMoves++;
           yield* tell;
+
           return standing(agentId);
         }),
     };

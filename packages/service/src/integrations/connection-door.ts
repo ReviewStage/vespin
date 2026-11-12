@@ -183,6 +183,7 @@ function handedConnection(
 /** Whether a token read's sentence is one the member answers by connecting the integration again in settings. */
 function asksSignIn(provider: IntegrationProvider, sentence: string): boolean {
   const sentences = integrationUnavailable(provider);
+
   return [sentences.NOT_CONNECTED, sentences.EXPIRED].includes(sentence);
 }
 
@@ -201,6 +202,7 @@ function refusedFor(connection: HandedConnection, sentence: string): ConnectionR
  */
 function noToolsLogged(name: string, refusal: ConnectionRefusal): Effect.Effect<void> {
   const line = `integration server ${name} lists no tools: ${refusal.error}`;
+
   return refusal.requiresSignIn ? Effect.logDebug(line) : Effect.logWarning(line);
 }
 
@@ -230,6 +232,7 @@ function grantToken(
   grant: IntegrationGrantRef,
 ): Effect.Effect<Result.Result<string, ConnectionRefusal>, never, ConnectionDoorServices> {
   const { connectionName } = connection;
+
   return grantAccessToken(grant).pipe(
     Effect.map((answer) =>
       Result.isSuccess(answer)
@@ -268,14 +271,19 @@ function onGrantToken<A>(
 > {
   const attempt = Effect.gen(function* () {
     const bearer = yield* grantToken(connection, grant);
+
     if (Result.isFailure(bearer)) return Result.fail(bearer.failure);
+
     return Result.succeed(yield* Effect.result(work(bearer.success)));
   });
+
   return Effect.flatMap(attempt, (first) => {
     if (Result.isFailure(first)) return Effect.succeed(first);
     const done = first.success;
+
     const refusedByProvider =
       Result.isFailure(done) && done.failure.reason === MCP_TOOLS_FAILURE.REFUSED;
+
     return refusedByProvider
       ? Effect.andThen(evictGrantToken(grant), attempt)
       : Effect.succeed(first);
@@ -301,7 +309,9 @@ function sessionFailed(connectionName: string, doing: string, failure: McpToolsF
   if (failure.reason === MCP_TOOLS_FAILURE.REFUSED) {
     return `Authorization failed for "${connectionName}": the service refused the connection's credential.`;
   }
+
   const said = failure.serverMessage === undefined ? "" : `: ${failure.serverMessage}`;
+
   return `Failed to ${doing} "${connectionName}": the service was ${failure.reason}${said}.`;
 }
 
@@ -352,38 +362,53 @@ export function listConnectionTools(
 ): Effect.Effect<readonly McpToolSchema[], never, ConnectionDoorServices> {
   const listed = Effect.gen(function* () {
     const connection = yield* handedConnection(admitted, name);
+
     if (Option.isNone(connection)) return [];
     const grant = yield* connectionGrant(admitted, connection.value);
+
     if (Result.isFailure(grant)) {
       yield* noToolsLogged(name, grant.failure);
+
       return [];
     }
+
     const from = yield* DateTime.nowAsDate;
     const kept = yield* readStoredTools(grant.success);
+
     if (
       kept !== undefined &&
       from.getTime() - kept.listedAt.getTime() < Duration.toMillis(TOOLS_KEPT)
     ) {
       return kept.tools;
     }
+
     const url = INTEGRATION[connection.value.provider].MCP_URL;
+
     const read = yield* onGrantToken(connection.value, grant.success, (token) =>
       listMcpToolSchemas(url, token),
     );
+
     if (Result.isFailure(read)) {
       yield* noToolsLogged(name, read.failure);
+
       return [];
     }
+
     const tools = read.success;
+
     if (Result.isSuccess(tools)) {
       yield* keepTools(name, grant.success, tools.success, from);
+
       return tools.success;
     }
+
     yield* Effect.logWarning(
       `integration server ${name} lists no tools: ${sessionFailed(name, "load tools for", tools.failure)}`,
     );
+
     return [];
   });
+
   return listed.pipe(
     Effect.timeoutOrElse({
       duration: LIST_TIMEOUT,
@@ -415,32 +440,43 @@ export function callConnectionTool(
 ): Effect.Effect<ConnectionCall, never, ConnectionDoorServices> {
   return Effect.gen(function* () {
     const connection = yield* handedConnection(admitted, name);
+
     if (Option.isNone(connection)) {
       return Result.fail(refused(`Connection "${name}" is not available to this agent.`));
     }
+
     const grant = yield* connectionGrant(admitted, connection.value);
+
     if (Result.isFailure(grant)) return Result.fail(grant.failure);
     const from = yield* DateTime.nowAsDate;
     const url = INTEGRATION[connection.value.provider].MCP_URL;
+
     const read = yield* onGrantToken(connection.value, grant.success, (token) =>
       callMcpTool(url, token, tool, input),
     );
+
     if (Result.isFailure(read)) return Result.fail(read.failure);
     const call = read.success;
     const listed = Result.isSuccess(call) ? call.success.tools : call.failure.listed;
+
     if (listed !== undefined) yield* keepTools(name, grant.success, listed, from);
+
     if (Result.isFailure(call)) {
       return Result.fail(refused(sessionFailed(name, "call a tool of", call.failure)));
     }
+
     if (!call.success.called) {
       return Result.fail(refused(`Connection "${name}" has no tool named "${tool}".`));
     }
+
     const { result } = call.success;
+
     if (!isRecord(result)) {
       return Result.fail(
         refused(`Failed to call a tool of "${name}": the service was unreadable.`),
       );
     }
+
     return Result.succeed(result);
   }).pipe(
     Effect.catchCause((cause) =>

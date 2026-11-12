@@ -98,6 +98,7 @@ export const bootBecameReady = Effect.fn("web/bootBecameReady")(function* (
   sessionsFor: QueueSessions = routedSessions,
 ) {
   const moved = yield* agentBootRunnerUp(agent.id, yield* DateTime.nowAsDate, attempt);
+
   if (Option.isNone(moved)) return;
   yield* queueAtTouch(sessionsFor, agent);
 });
@@ -125,7 +126,9 @@ const machineCameUp = (
     "an agent's first launch's machine",
     Effect.gen(function* () {
       const came = yield* up;
+
       if (came === MACHINE_UP.AWAITS_HOST) return;
+
       if (came !== MACHINE_UP.READY) return yield* bootFailed(agent, came, attempt);
       yield* bootBecameReady(agent, attempt, sessionsFor);
     }).pipe(Effect.annotateLogs(agentLogIds(agent))),
@@ -147,10 +150,12 @@ export const startBoot = Effect.fn("web/startBoot")(function* (
     beginAgentBoot(agent.id, yield* DateTime.nowAsDate, { userId: agent.userId, ...first }),
   );
   const boot = yield* booted(sessions, agent);
+
   if (boot === undefined || boot.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) return boot;
   yield* claimedFor(agent, boot.sessionId);
   // Note that the first message goes through the very sessions that booted its machine.
   yield* machineCameUp(agent, boot.up, FIRST_ATTEMPT, () => Effect.succeed(sessions));
+
   return { outcome: boot.outcome, sessionId: boot.sessionId } as const;
 });
 
@@ -164,16 +169,21 @@ export const startBoot = Effect.fn("web/startBoot")(function* (
  */
 export const retryBoot = Effect.fn("web/retryBoot")(function* (userId: string, agent: Agent) {
   if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+
   const rebooted = yield* hostedStoreOrUnavailable(
     rebootAgent(agent.id, yield* DateTime.nowAsDate),
   );
+
   if (Option.isNone(rebooted)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   const { attempt } = rebooted.value;
   const boot = yield* booted(yield* routedSessions(agent.userId), agent);
+
   if (boot === undefined || boot.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) {
     yield* hostedStoreOrUnavailable(bootFailed(agent, BOOT_FAILURE.MACHINE_UNAVAILABLE, attempt));
+
     return;
   }
+
   yield* claimedFor(agent, boot.sessionId);
   yield* machineCameUp(agent, boot.up, attempt, routedSessions);
 });

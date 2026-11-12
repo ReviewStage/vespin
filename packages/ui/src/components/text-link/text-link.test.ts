@@ -30,6 +30,7 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -90,6 +91,7 @@ test("an external link in a new tab opens there and is named by its words, not i
 
 test("a press on a TextLink is heard, and the link is still followed", () => {
   const presses: boolean[] = [];
+
   const container = mount(
     createElement(TextLink, {
       href: "/admin/users",
@@ -97,6 +99,7 @@ test("a press on a TextLink is heard, and the link is still followed", () => {
       children: "Users",
     }),
   );
+
   const link = container.querySelector("a");
   // Note that jsdom cannot follow a link, so the page stops it once the press has bubbled past the component.
   document.addEventListener("click", (event) => event.preventDefault(), { once: true });
@@ -108,6 +111,7 @@ test("a press on a TextLink is heard, and the link is still followed", () => {
 
 test("a middle-click is handed to the link's press, which keeps the browser from following where it opens the address itself", () => {
   const presses: number[] = [];
+
   const container = mount(
     createElement(TextLink, {
       href: "https://github.com/acme/app/pull/42",
@@ -118,6 +122,7 @@ test("a middle-click is handed to the link's press, which keeps the browser from
       children: "Fix the refresh",
     }),
   );
+
   const link = container.querySelector("a");
   let followed = true;
   act(() => {
@@ -147,6 +152,7 @@ test("a TextLink with no address is its words, and no link", () => {
 test("an OutsideLink hands its address to its opener and tells its step, and the browser does not follow it", () => {
   const opened: string[] = [];
   let told = 0;
+
   const container = mount(
     createElement(OutsideLink, {
       href: "https://example.com/keys",
@@ -157,6 +163,7 @@ test("an OutsideLink hands its address to its opener and tells its step, and the
       children: "Open the console",
     }),
   );
+
   const link = container.querySelector("a");
   expect(link?.getAttribute("href")).toBe("https://example.com/keys");
   const click = new MouseEvent("click", { bubbles: true, cancelable: true });

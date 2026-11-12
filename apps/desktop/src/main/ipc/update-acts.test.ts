@@ -39,11 +39,13 @@ afterEach(() => {
 
 function fixture(answer: UpdateSnapshot = SNAPSHOT) {
   const heard: string[] = [];
+
   const port = testActPort(
     updateProcedures({
       updates: {
         check: async () => {
           heard.push("check");
+
           return answer;
         },
         install: () => heard.push("install"),
@@ -53,7 +55,9 @@ function fixture(answer: UpdateSnapshot = SNAPSHOT) {
       },
     }),
   );
+
   ports.push(port);
+
   return { port, heard };
 }
 

@@ -24,6 +24,7 @@ import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { diffCheckout, restoreCheckout } from "./checkout-restore.js";
 
 const SESSION = "session-for-restore";
+
 const SNAPSHOT = {
   commit: "0123456789abcdef0123456789abcdef01234567",
   head: "89abcdef0123456789abcdef0123456789abcdef",
@@ -34,6 +35,7 @@ const SNAPSHOT = {
 const restored = (exitCode: number, sessionId = SESSION) =>
   Effect.gen(function* () {
     const memory = memorySandbox({ run: () => ({ exitCode, stdout: "", stderr: "" }) });
+
     const outcome = yield* Effect.gen(function* () {
       const sandboxes = yield* Sandbox;
       yield* sandboxes.getOrCreate({
@@ -42,8 +44,10 @@ const restored = (exitCode: number, sessionId = SESSION) =>
         tags: { sessionId: SESSION },
         env: {},
       });
+
       return yield* restoreCheckout(sandboxes, { sessionId, snapshot: SNAPSHOT });
     }).pipe(Effect.provide(memory.layer));
+
     return { outcome, state: memory.state };
   });
 
@@ -51,6 +55,7 @@ const restored = (exitCode: number, sessionId = SESSION) =>
 const diffed = (exitCode: number, stdout = "", sessionId = SESSION) =>
   Effect.gen(function* () {
     const memory = memorySandbox({ run: () => ({ exitCode, stdout, stderr: "" }) });
+
     const outcome = yield* Effect.gen(function* () {
       const sandboxes = yield* Sandbox;
       yield* sandboxes.getOrCreate({
@@ -59,11 +64,13 @@ const diffed = (exitCode: number, stdout = "", sessionId = SESSION) =>
         tags: { sessionId: SESSION },
         env: {},
       });
+
       return yield* diffCheckout(sandboxes, {
         sessionId,
         range: { from: SNAPSHOT.commit, to: null },
       });
     }).pipe(Effect.provide(memory.layer));
+
     return { outcome, state: memory.state };
   });
 
@@ -111,10 +118,12 @@ it.layer(getTestDB())("a cloud agent's checkout restored", (it) => {
           tags: { sessionId: SESSION },
         });
         memory.state.goneSnapshots.add("snap_expired");
+
         const outcome = yield* restoreCheckout(memory.service, {
           sessionId: SESSION,
           snapshot: SNAPSHOT,
         });
+
         assert.deepEqual([outcome, memory.state.commands], [RESTORE_OUTCOME.MISSING, []]);
       }),
   );

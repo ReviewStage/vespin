@@ -16,6 +16,7 @@ const ignore = () => undefined;
 function FloatsByWords(): React.JSX.Element {
   const words = useRef<HTMLElement>(null);
   const box = () => words.current?.getBoundingClientRect();
+
   return (
     <div className="catalog-anchor catalog-popover-stage">
       <p>

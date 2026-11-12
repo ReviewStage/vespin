@@ -52,9 +52,12 @@ function freshQueryClient(): QueryClient {
       mutations: { networkMode: "always" },
     },
   });
+
   client.setQueryDefaults(appStateQuery.queryKey, { enabled: false });
+
   if (heldForFile !== undefined) client.setQueryData(appStateQuery.queryKey, heldForFile);
   seedLanded(client);
+
   return client;
 }
 
@@ -66,6 +69,7 @@ let testQueryClient = freshQueryClient();
 /** No one signed in to the window, whose drafts it reads and writes. Note that it signs out any owner a test mounted before its first `withQueryClient`. */
 function NoOneSignedIn(): null {
   useDraftsOwner(undefined);
+
   return null;
 }
 
@@ -87,6 +91,7 @@ beforeEach(() => {
 
 afterEach(() => {
   testQueryClient.clear();
+
   if (draftsRoot !== undefined) act(() => window.dispatchEvent(new Event("pagehide")));
   act(() => draftsRoot?.unmount());
   draftsRoot = undefined;
@@ -104,6 +109,7 @@ function TestAppStateSubscription(): null {
   if (useContext(OnTestClient)) {
     throw new Error("withQueryClient is nested in another: draw the tree through one.");
   }
+
   const client = useQueryClient();
   useEffect(() => {
     const following = followAppState(client);
@@ -111,8 +117,10 @@ function TestAppStateSubscription(): null {
     following.written.catch((cause: unknown) => {
       console.error("The window's state could not be read; the next delivery asks again.", cause);
     });
+
     return following.stop;
   }, [client]);
+
   return null;
 }
 
@@ -124,6 +132,7 @@ function TestAppStateSubscription(): null {
  */
 export function withQueryClient(element: ReactNode): ReactElement {
   standDraftsOwner();
+
   return createElement(
     QueryClientProvider,
     { client: testQueryClient },
@@ -142,6 +151,7 @@ export async function settledWrites(): Promise<void> {
   await vi.waitFor(() => {
     if (testQueryClient.isMutating() > 0) throw new Error("A write is still out.");
   });
+
   for (let tick = 0; tick < 6; tick += 1) await Promise.resolve();
 }
 
@@ -208,6 +218,7 @@ const NOTIFY_ROUNDS = 3;
  */
 export async function settleQueries(between?: () => Promise<void>): Promise<void> {
   if (globalThis.setTimeout !== PLATFORM_SET_TIMEOUT) return;
+
   for (let round = 0; round < NOTIFY_ROUNDS; round += 1) {
     const notified = Promise.withResolvers<void>();
     notifyManager.schedule(() => notified.resolve());

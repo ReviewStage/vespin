@@ -132,6 +132,7 @@ export const REVISION = { MODERN: "2026-07-28", LEGACY: "2025-11-25" } as const;
 const decodeTokens = Schema.decodeUnknownSync(
   Schema.Struct({ access_token: Schema.String, refresh_token: Schema.optionalKey(Schema.String) }),
 );
+
 const decodeConsentAnswer = Schema.decodeUnknownSync(
   Schema.Struct({ redirect: Schema.Boolean, url: Schema.String }),
 );
@@ -229,8 +230,10 @@ export function memberMcpStanding(options: MemberMcpStandingOptions = {}) {
     const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
       Effect.promise(() => opened.close()),
     );
+
     const auth = memberMcpTestAuth(client, options.fetchClientMetadataResource);
     const harness = recordingHarness();
+
     const services = Layer.mergeAll(
       memorySandbox().layer,
       Layer.succeedContext(yield* Layer.build(sqlClientOverPglite(client))),
@@ -248,17 +251,21 @@ export function memberMcpStanding(options: MemberMcpStandingOptions = {}) {
       options.integrations ?? integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
       Layer.succeed(SlackBot, slackBotOver(undefined)),
     );
+
     yield* seedRows.pipe(Effect.provide(services));
     const workspaces = yield* fakeWorkspaceSeams.pipe(Effect.provide(services));
     // The key set is fetched from the auth service over HTTP, as on a deployment: here the in-process handler, and nothing else answers.
     vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
       const request = new Request(input, init);
+
       if (!request.url.startsWith(`${MEMBER_MCP_TEST.ORIGIN}${AUTH_BASE_PATH}/`)) {
         return Promise.reject(new Error(`this test reaches no network: ${request.url}`));
       }
+
       return auth.handler(request);
     });
     const resourceClient = oauthProviderResourceClient(auth).getActions();
+
     const web = HttpRouter.toWebHandler(
       memberMcpApp(
         memberMcpAuth(resourceClient, MEMBER_MCP_TEST.ORIGIN),
@@ -267,9 +274,12 @@ export function memberMcpStanding(options: MemberMcpStandingOptions = {}) {
       ).pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
+
     yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()));
+
     const fetch = (input: string | URL | Request, init?: RequestInit) =>
       web.handler(new Request(input, init));
+
     return { auth, fetch, services, heard: harness.heard };
   });
 }
@@ -277,14 +287,17 @@ export function memberMcpStanding(options: MemberMcpStandingOptions = {}) {
 /** A signed-up account, and the cookie its browser carries. */
 export async function signUp(auth: MemberMcpTestAuth): Promise<{ userId: string; cookie: string }> {
   const name = `member-${randomUUID()}`;
+
   const { headers, response } = await auth.api.signUpEmail({
     body: { name, email: `${name}@app.test`, password: "a-password-long-enough" },
     returnHeaders: true,
   });
+
   const cookie = headers
     .getSetCookie()
     .map((line) => line.split(";")[0])
     .join("; ");
+
   return { userId: response.user.id, cookie };
 }
 
@@ -335,6 +348,7 @@ export async function authorizeAnswer(
     code_challenge_method: "S256",
     ...(grant.resource === undefined ? undefined : { resource: grant.resource }),
   });
+
   return auth.handler(
     new Request(`${MEMBER_MCP_TEST.ORIGIN}${AUTH_BASE_PATH}/oauth2/authorize?${query}`, {
       headers: { accept: "text/html", "sec-fetch-mode": "navigate", cookie },
@@ -351,6 +365,7 @@ export async function authorize(
   const authorized = await authorizeAnswer(auth, cookie, grant);
   const location = authorized.headers.get("location");
   assert.ok(location !== null, `${authorized.status}: ${await authorized.clone().text()}`);
+
   return new URL(location, MEMBER_MCP_TEST.ORIGIN);
 }
 
@@ -367,7 +382,9 @@ export async function allowConsent(
       body: JSON.stringify({ accept: true, oauth_query: consentPage.search.slice(1) }),
     }),
   );
+
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK, await answered.clone().text());
+
   return new URL(decodeConsentAnswer(await answered.json()).url);
 }
 
@@ -384,6 +401,7 @@ export async function exchangeCode(
 export async function exchangeTokens(auth: MemberMcpTestAuth, grant: Grant, landed: URL) {
   assert.equal(`${landed.origin}${landed.pathname}`, MEMBER_MCP_TEST.LOOPBACK, landed.href);
   assert.ok(landed.searchParams.has("code"), `${grant.clientId} ${grant.scope}: ${landed.search}`);
+
   const exchanged = await auth.handler(
     new Request(`${MEMBER_MCP_TEST.ORIGIN}${AUTH_BASE_PATH}/oauth2/token`, {
       method: "POST",
@@ -398,7 +416,9 @@ export async function exchangeTokens(auth: MemberMcpTestAuth, grant: Grant, land
       }),
     }),
   );
+
   assert.equal(exchanged.status, HOSTED_HTTP_STATUS.OK, await exchanged.clone().text());
+
   return decodeTokens(await exchanged.json());
 }
 
@@ -418,13 +438,17 @@ export function post(fetch: typeof globalThis.fetch, bearer: string | undefined,
       "content-type": "application/json",
       accept: "application/json, text/event-stream",
     });
+
     if (bearer !== undefined) headers.set("authorization", `Bearer ${bearer}`);
+
     if (origin !== undefined) headers.set("origin", origin);
+
     const response = await fetch(`${MEMBER_MCP_TEST.ORIGIN}${MEMBER_MCP_PATH}`, {
       method: "POST",
       headers,
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
     });
+
     return { status: response.status, challenge: response.headers.get("www-authenticate") };
   });
 }
@@ -440,11 +464,14 @@ export function connected(fetch: typeof globalThis.fetch, bearer: string, revisi
         },
       },
     );
+
     const transport = new StreamableHTTPClientTransport(
       new URL(`${MEMBER_MCP_TEST.ORIGIN}${MEMBER_MCP_PATH}`),
       { fetch, requestInit: { headers: { authorization: `Bearer ${bearer}` } } },
     );
+
     await client.connect(transport);
+
     return { client, transport };
   });
 }

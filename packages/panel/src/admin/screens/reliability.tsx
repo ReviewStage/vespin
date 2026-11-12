@@ -159,10 +159,12 @@ function retiredLast<Row>(
   toBreakdown: (row: Row) => BreakdownRow,
 ): BreakdownRow[] {
   const live = rows.filter((row) => !retired(row)).map(toBreakdown);
+
   const old = rows
     .filter(retired)
     .map(toBreakdown)
     .map((row) => ({ ...row, label: retiredTitle(row.label) }));
+
   return [...live, ...old];
 }
 
@@ -293,6 +295,7 @@ const FAILURE_STATS: readonly StatSpec<AdminReliability>[] = [
     value: ({ headline }) => formatPercent(share(headline.automationRuns), RATE_PLACES),
     hint: ({ headline, windowDays }) => {
       const automations = headline.automationRuns;
+
       return automations.total === 0
         ? ofHint(automations, "runs", windowDays)
         : `+ ${formatPercent(automations.skipped / automations.total, RATE_PLACES)} skipped`;
@@ -349,6 +352,7 @@ function AnalyticsNote({
   consoleUrl: string | null | undefined;
 }): React.JSX.Element {
   const pressOf = useExternalPress();
+
   return (
     <Text tone={TEXT_TONE.MUTED}>
       Per-request HTTP error rates live in{" "}
@@ -404,6 +408,7 @@ function ReliabilityRecords({
   onOpenAccount: (id: string) => void;
 }): React.JSX.Element {
   const attentionTableColumns = useMemo(() => attentionColumns(onOpenAccount), [onOpenAccount]);
+
   return (
     <>
       <AdminSection title="Failures">
@@ -606,6 +611,7 @@ export function ReliabilityScreen({
   const read = useQuery({ ...adminReliabilityQuery(reads, query), enabled: !gate.heldAtGate() });
   const withdraw = useAdminSignOut(onSignOut);
   const signOut = () => withdraw.mutate();
+
   const controls = (
     <AdminViewOptions
       windowDays={shownWindow}

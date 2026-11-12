@@ -26,7 +26,9 @@ export const MOTION_TOKEN = {
 /** A CSS time, `240ms` or `0.24s`, in milliseconds; anything else is none. */
 export function milliseconds(value: string): number {
   const match = /^\s*([\d.]+)(ms|s)\s*$/u.exec(value);
+
   if (match === null) return 0;
+
   return Number(match[1]) * (match[2] === "s" ? 1000 : 1);
 }
 
@@ -43,8 +45,10 @@ export function tokenTiming(
   const style = getComputedStyle(element);
   const duration = milliseconds(style.getPropertyValue(durationToken));
   const easing = style.getPropertyValue(easingToken).trim();
+
   // Note that reduced motion leaves 1ms rather than none, which is no motion either.
   if (duration <= 1 || easing === "") return undefined;
+
   return { duration, easing };
 }
 
@@ -59,6 +63,8 @@ export function tokenTiming(
  */
 export function motionHeld(element: Element = document.body): boolean {
   const duration = getComputedStyle(element).getPropertyValue(MOTION_TOKEN.DURATION_FAST);
+
   if (duration.trim() === "") return false;
+
   return milliseconds(duration) <= 1;
 }

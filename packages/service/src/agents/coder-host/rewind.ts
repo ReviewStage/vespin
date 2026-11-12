@@ -65,11 +65,14 @@ const stoppedForRewind = /* @__PURE__ */ Effect.fnUntraced(function* (
   // A wakeup the agent booked belongs to the work the rewind drops.
   yield* hostedStoreOrUnavailable(cancelAgentWakeup(agent.id));
   const sessionId = yield* hostedStoreOrUnavailable(recordedRuntimeSession(target));
+
   if (sessionId === undefined) return;
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(agent.userId, agent.id));
   // Note that an agent on no harness ended for good, so nothing of it runs to stop.
   const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
+
   if (runtime === undefined) return;
+
   if (!(yield* runnerHalted(agent, runtime, sessionId))) {
     return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   }
@@ -81,7 +84,9 @@ const restorePointOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   messageId: string,
 ): Effect.fn.Return<TurnCheckoutSnapshot, HostedRefusal, DatabaseServices> {
   const snapshot = yield* hostedStoreOrUnavailable(readRewindSnapshot(target, messageId));
+
   if (Option.isNone(snapshot)) return yield* Effect.fail(HOSTED_REFUSAL.CHECKOUT_SNAPSHOT_MISSING);
+
   return snapshot.value;
 });
 
@@ -89,9 +94,11 @@ const restorePointOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 export function refusedByMachine(failure: unknown): HostedRefusal {
   if (failure instanceof LaunchRefused && failure.deviceRemoved === true)
     return HOST_REMOVED_REFUSAL;
+
   if (failure instanceof LaunchRefused && failure.deviceAway === true) {
     return localAgentRefused(LOCAL_AGENT_REFUSAL.MAC_AWAY);
   }
+
   return HOSTED_REFUSAL.UNAVAILABLE;
 }
 
@@ -101,18 +108,23 @@ const restoredForRewind = /* @__PURE__ */ Effect.fnUntraced(function* (
   snapshot: TurnCheckoutSnapshot,
 ): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   const sessionId = yield* hostedStoreOrUnavailable(recordedRuntimeSession(target));
+
   if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.CHECKOUT_SNAPSHOT_MISSING);
   const machines = yield* deploymentLifecycle;
+
   const outcome = yield* machines
     .restoreCheckout(sessionId, snapshot)
     .pipe(Effect.mapError(refusedByMachine));
+
   if (outcome === RESTORE_OUTCOME.MISSING) {
     return yield* Effect.fail(HOSTED_REFUSAL.CHECKOUT_SNAPSHOT_MISSING);
   }
+
   // A Mac whose host predates the line records no snapshot either, so the window offers it none; the request alone reaches here.
   if (outcome === RESTORE_OUTCOME.UNSUPPORTED) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   if (outcome === RESTORE_OUTCOME.FAILED) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
 });
 
@@ -132,22 +144,29 @@ export const rewoundAgent = /* @__PURE__ */ Effect.fn("web/rewoundAgent")(functi
   // An agent on its starter's own GitHub token takes words from its starter alone, and so is rewound by them alone.
   if (!controlsAgent(account, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* admitsPlanWriter(account, agent);
+
   if (agent.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   // The files go back only while the agent's workspace has the experiment on: off, no window offers the choice, so a request asking it is malformed.
   if (restoreFiles && !(yield* experimentOnIn(agent.organizationId, EXPERIMENT.REWIND_FILES))) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   const target = { userId: agent.userId, conversationId: agent.conversationId };
   // A cut that would be refused stops nothing.
   const rewindable = yield* hostedStoreOrUnavailable(readRewindable(target, messageId));
+
   if (Result.isFailure(rewindable)) {
     return yield* Effect.fail(REFUSAL_OF_REWIND[rewindable.failure]);
   }
+
   const snapshot = restoreFiles ? yield* restorePointOf(target, messageId) : undefined;
   yield* stoppedForRewind(agent);
+
   // The files go back before the cut, so a restore that fails leaves the conversation whole.
   if (snapshot !== undefined) yield* restoredForRewind(target, snapshot);
   const cut = yield* hostedStoreOrUnavailable(rewindConversation(target, messageId));
+
   if (Result.isFailure(cut)) return yield* Effect.fail(REFUSAL_OF_REWIND[cut.failure]);
   // Note that a message sent between the stop and the cut may have started the agent again on
   // what the cut dropped, so whatever runs now is stopped too, and the next message starts clean.

@@ -52,6 +52,7 @@ interface UnavailableSentences {
 export function integrationUnavailable(provider: IntegrationProvider): UnavailableSentences {
   const name = INTEGRATION_NAME[provider];
   const signedIn = INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.GITHUB_SIGN_IN;
+
   return {
     NOT_CONNECTED: signedIn
       ? `${name} is not connected for this account. The developer can sign in with GitHub in ${PRODUCT_NAME}'s Settings › Integrations; carry on without it.`
@@ -86,12 +87,14 @@ const signedInToken = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   const sentences = integrationUnavailable(provider);
   const grant = yield* githubSignInGrant(userId);
+
   if (Result.isSuccess(grant)) {
     return Result.succeed({
       token: Redacted.value(grant.success.token),
       expiresAt: grant.success.expiresAt,
     });
   }
+
   switch (grant.failure) {
     case GITHUB_GRANT_REFUSAL.NOT_CONFIGURED:
       return Result.fail(sentences.NOT_CONFIGURED);
@@ -163,19 +166,24 @@ const accountGrant = /* @__PURE__ */ Effect.fnUntraced(function* (
       userId,
     });
   }
+
   const sentences = integrationUnavailable(provider);
   const read = yield* readIntegrationConnection(userId, connectionName);
+
   const row =
     connectSubject === undefined || read?.connectSubject === connectSubject ? read : undefined;
+
   if (row?.status !== INTEGRATION_ROW_STATUS.CONNECTED) {
     return Result.fail(
       row?.status === INTEGRATION_ROW_STATUS.EXPIRED ? sentences.EXPIRED : sentences.NOT_CONNECTED,
     );
   }
+
   // A provider not offered to the account answers it as one this deployment never set up.
   if (!(yield* accountIntegrationConnect(userId))[provider].configured) {
     return Result.fail(sentences.NOT_CONFIGURED);
   }
+
   return Result.succeed<IntegrationGrantRef>({
     holder: INTEGRATION_GRANT_HOLDER.ACCOUNT,
     provider,
@@ -197,11 +205,13 @@ const accountToken = /* @__PURE__ */ Effect.fnUntraced(function* (
   const sentences = integrationUnavailable(provider);
   const connector = (yield* accountIntegrationConnect(userId))[provider];
   const issued = yield* Effect.result(connector.token(connectSubject, { fresh: false }));
+
   if (Result.isFailure(issued)) {
     switch (issued.failure.reason) {
       case INTEGRATION_CONNECT_FAILURE.NOT_AUTHORIZED:
         // Connect holds no grant to use, so the account is told so in settings too.
         yield* expireIntegrationConnection(userId, connectionName);
+
         return Result.fail(sentences.EXPIRED);
       case INTEGRATION_CONNECT_FAILURE.NOT_CONFIGURED:
         return Result.fail(sentences.NOT_CONFIGURED);
@@ -210,16 +220,20 @@ const accountToken = /* @__PURE__ */ Effect.fnUntraced(function* (
           `Vercel Connect gave no ${INTEGRATION_NAME[provider]} token`,
           issued.failure.message,
         );
+
         return Result.fail(sentences.UNREACHABLE);
     }
   }
+
   const standing = yield* readIntegrationConnection(userId, connectionName);
+
   if (
     standing?.status !== INTEGRATION_ROW_STATUS.CONNECTED ||
     standing.connectSubject !== connectSubject
   ) {
     return Result.fail(sentences.NOT_CONNECTED);
   }
+
   return Result.succeed({
     token: Redacted.value(issued.success.token),
     expiresAt: issued.success.expiresAt,
@@ -256,13 +270,16 @@ export function integrationGrant(
   admission: IntegrationAdmission,
 ): Effect.Effect<IntegrationGrantAnswer, never, IntegrationTokenServices> {
   const { provider } = account;
+
   return orUnreachable(
     provider,
     Effect.gen(function* () {
       const admitted = yield* admission;
+
       if (Result.isFailure(admitted)) {
         return Result.fail(integrationUnavailable(provider).NO_ACCOUNT);
       }
+
       return yield* accountGrant(account, admitted.success.caller);
     }),
   );

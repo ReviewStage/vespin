@@ -88,21 +88,26 @@ export function popoverPlace(input: {
   const high = room.right - POPOVER_MARGIN - width;
   const startLeft = anchor.left;
   const endLeft = anchor.right - width;
+
   const [asked, other] =
     align === POPOVER_ALIGN.START ? [startLeft, endLeft] : [endLeft, startLeft];
+
   const fits = (left: number) => left >= low && left <= high;
   const left = fits(asked) ? asked : fits(other) ? other : clamp(asked, low, high);
   const above = anchor.top - room.top - POPOVER_GAP - POPOVER_MARGIN;
   const below = room.bottom - anchor.bottom - POPOVER_GAP - POPOVER_MARGIN;
   const wanted = input.side ?? POPOVER_SIDE.ABOVE;
+
   const [own, across, turned] =
     wanted === POPOVER_SIDE.ABOVE
       ? [above, below, POPOVER_SIDE.BELOW]
       : [below, above, POPOVER_SIDE.ABOVE];
+
   // Note that it turns only where its own side cannot hold it and the other holds it, or holds more of it.
   const turns = own < input.height && (across >= input.height || across > own);
   const side = turns ? turned : wanted;
   const inset = align === POPOVER_ALIGN.START ? left - anchor.left : anchor.right - left - width;
+
   return { side, inset, width, room: Math.max(side === POPOVER_SIDE.BELOW ? below : above, 0) };
 }
 

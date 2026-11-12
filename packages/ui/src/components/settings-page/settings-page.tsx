@@ -107,6 +107,7 @@ export function SettingsPage({
   const named = useHeadingAway(page, head);
   const [scroll] = useState((): PageScroll => ({ scroller: page, shiftedBy: sections }));
   const phone = look === TOOLBAR_LOOK.PHONE;
+
   return (
     <div className="ui-settings-page-frame flex h-full min-h-0 min-w-0 grow basis-0 flex-col">
       <Toolbar

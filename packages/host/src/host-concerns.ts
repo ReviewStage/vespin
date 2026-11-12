@@ -106,10 +106,13 @@ export function hostCapabilities(
   client: readonly ClientCapability[],
 ): readonly HostCapability[] {
   const offered = new Set<HostCapability>(client);
+
   for (const concern of ALL_HOST_PLATFORM_CONCERNS) {
     const capability = capabilityOf[concern];
+
     if (concerns.has(concern) && capability !== undefined) offered.add(capability);
   }
+
   return Object.values(HOST_CAPABILITY).filter((capability) => offered.has(capability));
 }
 
@@ -152,8 +155,10 @@ export const NOT_ON_THIS_PLATFORM = "not available on this platform";
 /** A platform concern this host left out: nothing begun, and each of its methods refused. */
 export function unavailableConcern(concern: HostPlatformConcern): Composer {
   const methods: HostMethodTable = {};
+
   for (const method of PLATFORM_CONCERN_METHODS[concern]) {
     methods[method] = () => Effect.fail(new RefusedRefusal({ message: NOT_ON_THIS_PLATFORM }));
   }
+
   return { methods, lifetime: Effect.void };
 }

@@ -239,6 +239,7 @@ export const FAILURE_SURFACE = {
   WORKSPACE_VARIABLE_SAVE: "workspace_variable.save",
   WORKSPACE_WRITE: "workspace.write",
 } as const;
+
 export type FailureSurface = (typeof FAILURE_SURFACE)[keyof typeof FAILURE_SURFACE];
 
 /**
@@ -260,6 +261,7 @@ export const FAILURE_CONDITION = {
 
 /** Whether a failure was a refusal something named, which is expected, or anything else. */
 export const FAILURE_KIND = { REFUSED: "refused", UNEXPECTED: "unexpected" } as const;
+
 export type FailureKind = (typeof FAILURE_KIND)[keyof typeof FAILURE_KIND];
 
 /** The ids of what a failure was about, each where it is known. */
@@ -442,6 +444,7 @@ const CAUSE_KEY = "cause";
 function stringOf(value: unknown, key: string): string | undefined {
   if (!Predicate.hasProperty(value, key)) return undefined;
   const read = value[key];
+
   return Predicate.isString(read) ? read : undefined;
 }
 
@@ -449,6 +452,7 @@ function stringOf(value: unknown, key: string): string | undefined {
 function numberOf(value: unknown, key: string): number | undefined {
   if (!Predicate.hasProperty(value, key)) return undefined;
   const read = value[key];
+
   return Predicate.isNumber(read) ? read : undefined;
 }
 
@@ -460,12 +464,14 @@ function numberOf(value: unknown, key: string): number | undefined {
  */
 function sendableText(text: string): string {
   const redacted = redactCredentials(text);
+
   return redacted.length > TEXT_BOUND ? `${redacted.slice(0, TEXT_BOUND)}…` : redacted;
 }
 
 /** A string a cause holds under `key`, as it may be sent, or nothing. */
 function sendableOf(value: unknown, key: string): string | undefined {
   const read = stringOf(value, key);
+
   return read === undefined ? undefined : sendableText(read);
 }
 
@@ -479,9 +485,11 @@ function sendableOf(value: unknown, key: string): string | undefined {
  */
 function factsOf(cause: unknown): CauseFacts {
   if (FAILURE_CONDITIONS.has(cause) && Predicate.isString(cause)) return { code: cause };
+
   if (Predicate.isString(cause)) return { message: sendableText(cause) };
   const code = numberOf(cause, "code")?.toString() ?? sendableOf(cause, "code");
   const message = stringOf(cause, "message") ?? stringOf(cause, "reason");
+
   return {
     name:
       sendableOf(cause, "errorName") ??
@@ -502,11 +510,14 @@ function factsOf(cause: unknown): CauseFacts {
 function chainOf(cause: unknown): readonly unknown[] {
   const chain = [cause];
   let next = cause;
+
   while (chain.length < CHAIN_BOUND && Predicate.hasProperty(next, CAUSE_KEY)) {
     next = next[CAUSE_KEY];
+
     if (next === undefined || next === null || chain.includes(next)) break;
     chain.push(next);
   }
+
   return chain;
 }
 
@@ -518,6 +529,7 @@ function chainOf(cause: unknown): readonly unknown[] {
  */
 function codeOf(chain: readonly CauseFacts[]): string {
   const named = chain.find((facts) => (facts.code ?? facts.fault ?? facts.tag) !== undefined);
+
   return named?.code ?? named?.fault ?? named?.tag ?? chain.at(-1)?.name ?? UNNAMED_CODE;
 }
 
@@ -527,20 +539,26 @@ function factAttributes(
   names: { readonly [Key in keyof Required<CauseFacts>]: string },
 ): FailureAttributes {
   const attributes: FailureAttributes = {};
+
   for (const key of Object.keys(names) as (keyof CauseFacts)[]) {
     const value = facts[key];
+
     if (value !== undefined) attributes[names[key]] = value;
   }
+
   return attributes;
 }
 
 /** Each id under its attribute's name, for those that are known. */
 function aboutAttributes(about: FailureAbout): FailureAttributes {
   const attributes: FailureAttributes = {};
+
   for (const key of Object.keys(ABOUT_ATTRIBUTE) as (keyof FailureAbout)[]) {
     const value = about[key];
+
     if (value !== undefined) attributes[ABOUT_ATTRIBUTE[key]] = value;
   }
+
   return attributes;
 }
 
@@ -554,8 +572,10 @@ function aboutAttributes(about: FailureAbout): FailureAttributes {
 function hostedTraceOf(chain: readonly unknown[]): string | undefined {
   for (const cause of chain) {
     const traceId = stringOf(cause, "traceId");
+
     if (traceId !== undefined && TRACE_ID_PATTERN.test(traceId)) return traceId;
   }
+
   return undefined;
 }
 
@@ -567,6 +587,7 @@ function attributesOf(
   trace: string | undefined,
 ) {
   const root = chain.length > 1 ? chain.at(-1) : undefined;
+
   return {
     [FAILURE_ATTRIBUTE.SURFACE]: report.surface,
     [FAILURE_ATTRIBUTE.KIND]: report.kind,
@@ -590,12 +611,16 @@ function attributesOf(
  */
 function sendableStack(cause: Error, sent: Error): string | undefined {
   const stack = cause.stack;
+
   if (stack === undefined) return undefined;
   const header = cause.message === "" ? cause.name : `${cause.name}: ${cause.message}`;
+
   if (!stack.startsWith(header)) {
     return cause.message !== "" && stack.includes(cause.message) ? undefined : stack;
   }
+
   const sentHeader = sent.message === "" ? sent.name : `${sent.name}: ${sent.message}`;
+
   return `${sentHeader}${stack.slice(header.length)}`;
 }
 
@@ -622,7 +647,9 @@ function sendableError(
   const sent = new Error(own?.message ?? unsaid.message, linked);
   sent.name = own?.tag ?? own?.name ?? unsaid.name;
   const stack = cause instanceof Error ? sendableStack(cause, sent) : undefined;
+
   if (stack !== undefined) sent.stack = stack;
+
   return sent;
 }
 
@@ -644,6 +671,7 @@ function readReport(report: ShownFailureReport) {
   const facts = chain.map(factsOf);
   const code = codeOf(facts);
   const trace = hostedTraceOf(chain);
+
   return { chain, facts, code, trace, attributes: attributesOf(report, facts, code, trace) };
 }
 
@@ -682,15 +710,20 @@ export function sendShownFailure(
 ): ShownFailureSent {
   const { chain, facts, code, trace, attributes } = readReport(report);
   const line = `A failure was shown on ${report.surface}: ${code}`;
+
   const traceId =
     sentry.getActiveSpan()?.spanContext().traceId ??
     sentry.getCurrentScope().getPropagationContext().traceId;
+
   if (report.kind === FAILURE_KIND.REFUSED || !report.state.online || unansweredOf(facts)) {
     sentry.logger.warn(line, attributes);
+
     return { traceId };
   }
+
   sentry.logger.error(line, attributes);
   const unsaid = { name: report.surface, message: code };
+
   const eventId = sentry.captureException(sendableError(chain, facts, unsaid), {
     mechanism: { type: SHOWN_FAILURE_MECHANISM, handled: true },
     captureContext: {
@@ -705,6 +738,7 @@ export function sendShownFailure(
       contexts: { [SHOWN_FAILURE_CONTEXT]: attributes },
     },
   });
+
   return { eventId: eventId === "" ? undefined : eventId, traceId };
 }
 
@@ -719,6 +753,7 @@ export function sendShownFailure(
  */
 export function shownFailureDetails(report: ShownFailureReport, told: ShownFailureTold): string {
   const { attributes } = readReport(report);
+
   const lines: Record<string, string | number | boolean | undefined> = {
     [DETAIL_KEY.TIME]: new Date(told.at).toISOString(),
     [DETAIL_KEY.VERSION]: told.version,
@@ -726,8 +761,10 @@ export function shownFailureDetails(report: ShownFailureReport, told: ShownFailu
     [DETAIL_KEY.EVENT]: told.sent?.eventId,
     [DETAIL_KEY.TRACE]: told.sent?.traceId,
   };
+
   const said = Object.entries(lines).flatMap(([key, value]) =>
     value === undefined || value === "" ? [] : [`${key}: ${value}`],
   );
+
   return [DETAILS_HEADING, ...said].join("\n");
 }

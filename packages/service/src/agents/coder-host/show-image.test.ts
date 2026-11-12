@@ -42,7 +42,9 @@ function sandboxWith(files: Readonly<Record<string, Uint8Array>>): ShowImageBind
     Promise.resolve({
       readFile: ({ path }: { path: string }) => {
         const bytes = files[path];
+
         if (bytes === undefined) return Promise.resolve(null);
+
         return Promise.resolve(
           new ReadableStream<Uint8Array>({
             start(controller) {
@@ -59,12 +61,15 @@ const openConversation = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   const [row] = yield* db
     .insert(conversations)
     .values({ userId, kind: CONVERSATION_KIND.AGENT })
     .returning({ id: conversations.id });
+
   assert.ok(row);
   const target: ConversationTarget = { userId, conversationId: row.id };
+
   return target;
 });
 
@@ -94,6 +99,7 @@ it.layer(getTestDB())("show_image", (it) => {
     () =>
       Effect.gen(function* () {
         const target = yield* openConversation;
+
         const sandbox = sandboxWith({
           [`${CHECKOUT}/shots/members.png`]: pngBytes(1200, 720),
           "/tmp/accept.png": pngBytes(390, 700),
@@ -138,14 +144,18 @@ it.layer(getTestDB())("show_image", (it) => {
     () =>
       Effect.gen(function* () {
         const target = yield* openConversation;
+
         const sandbox = sandboxWith({
           "/tmp/a.png": pngBytes(10, 10),
           "/tmp/b.png": pngBytes(20, 20),
         });
+
         const binding = { target, sandbox, checkout: CHECKOUT };
+
         const [earlier] = readShown(
           yield* show(binding, { images: [{ path: "/tmp/b.png", caption: "B" }] }),
         ).pictures;
+
         assert.ok(earlier);
 
         const answer = readShown(
@@ -171,12 +181,15 @@ it.layer(getTestDB())("show_image", (it) => {
         const target = yield* openConversation;
         const tooLarge = new Uint8Array(CONVERSATION_PICTURE_BOUNDS.MAX_BYTES + 1);
         tooLarge.set(pngBytes(10, 10));
+
         const sandbox = sandboxWith({
           [`${CHECKOUT}/ok.png`]: pngBytes(10, 10),
           [`${CHECKOUT}/notes.txt`]: new TextEncoder().encode("not a picture at all"),
           [`${CHECKOUT}/huge.png`]: tooLarge,
         });
+
         const binding = { target, sandbox, checkout: CHECKOUT };
+
         const withSecond = (path: string) => ({
           images: [
             { path: "ok.png", caption: "Kept only if every file is" },
@@ -197,10 +210,12 @@ it.layer(getTestDB())("show_image", (it) => {
           refused(`${SHOW_IMAGE_REFUSAL.TOO_LARGE} huge.png`),
         );
         const db = yield* Database;
+
         const kept = yield* db
           .select({ id: attachment.id })
           .from(attachment)
           .where(eq(attachment.conversationId, target.conversationId));
+
         assert.deepEqual(kept, [], "the file read before a refused one is not kept either");
       }),
   );
@@ -211,6 +226,7 @@ it.layer(getTestDB())("show_image", (it) => {
       Effect.gen(function* () {
         const target = yield* openConversation;
         const recording = webmBytes(1280, 800);
+
         const sandbox = sandboxWith({
           "/tmp/video/flow.webm": recording,
           [`${CHECKOUT}/after.png`]: pngBytes(1200, 720),
@@ -286,6 +302,7 @@ it.layer(getTestDB())("show_image", (it) => {
       Effect.gen(function* () {
         const target = yield* openConversation;
         const binding = { target, sandbox: sandboxWith({}), checkout: CHECKOUT };
+
         const many = Array.from(
           { length: CONVERSATION_PICTURE_BOUNDS.MAX_PER_CALL + 1 },
           (_, at) => ({
@@ -322,6 +339,7 @@ it.layer(getTestDB())("show_image", (it) => {
         bytes: new Uint8Array([0]),
         createdAt: new Date(),
       });
+
       const binding = {
         target,
         sandbox: sandboxWith({ [`${CHECKOUT}/one.png`]: pngBytes(10, 10) }),
@@ -354,6 +372,7 @@ it.layer(getTestDB())("show_image", (it) => {
           bytes: new Uint8Array([0]),
           createdAt: new Date(),
         });
+
         const binding = {
           target,
           sandbox: sandboxWith({
@@ -371,10 +390,12 @@ it.layer(getTestDB())("show_image", (it) => {
         });
 
         assert.deepEqual(answer, refused(SHOW_IMAGE_REFUSAL.FULL));
+
         const kept = yield* db
           .select({ sha256: attachment.sha256 })
           .from(attachment)
           .where(eq(attachment.conversationId, target.conversationId));
+
         assert.deepEqual(kept, [{ sha256: "e".repeat(64) }], "the first picture was not kept");
       }),
   );

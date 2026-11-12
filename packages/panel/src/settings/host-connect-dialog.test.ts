@@ -74,6 +74,7 @@ async function opened(): Promise<string[]> {
   await vi.waitFor(() =>
     assert.equal((document.body.textContent ?? "").includes("Reading the code"), false),
   );
+
   return told;
 }
 
@@ -83,6 +84,7 @@ test("Connect approves the code the link named, once the box it names is shown, 
     [ACT_KIND.HOSTS_PAIRING_READ]: () => Promise.resolve(BOX),
     [ACT_KIND.HOSTS_PAIRING_APPROVE]: (payload) => {
       approved.push(payload);
+
       return Promise.resolve({ deviceId: "3f6b0c2e-8d1a-4b5e-9c7d-2a4e6f8b0d14" });
     },
   });
@@ -100,6 +102,7 @@ test("Connect approves the code the link named, once the box it names is shown, 
   const connect = [...document.querySelectorAll("button")].find(
     (each) => each.textContent === "Connect",
   );
+
   assert.ok(connect !== undefined, "Connect is drawn");
   await act(async () => connect.click());
   await settle();
@@ -125,6 +128,7 @@ test("a code no pairing has, or one held after too many such codes, says so and 
       ![...document.querySelectorAll("button")].some((each) => each.textContent === "Connect"),
       "nothing offers to approve it",
     );
+
     for (const root of roots.splice(0)) act(() => root.unmount());
     document.body.replaceChildren();
   }

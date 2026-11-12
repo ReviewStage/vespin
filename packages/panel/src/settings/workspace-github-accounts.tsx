@@ -70,6 +70,7 @@ export type ShownConnection = Pick<WorkspaceGithubInstallation, "login" | "activ
 /** A row's line: how many repositories it holds, all of them where its installation was given every one. */
 export function repositoryCount(count: number, all = false): string {
   const counted = countWords(count, TERM.REPOSITORY);
+
   return all ? `All ${counted}` : counted;
 }
 
@@ -82,13 +83,16 @@ function repositoriesByOwner(
   repositories: readonly GitHubRepository[],
 ): ReadonlyMap<string, readonly GitHubRepository[]> {
   const byOwner = new Map<string, GitHubRepository[]>();
+
   for (const one of repositories) {
     if (one.access === GITHUB_ACCESS.TOKEN) continue;
     const key = one.owner.toLowerCase();
     const owned = byOwner.get(key);
+
     if (owned === undefined) byOwner.set(key, [one]);
     else owned.push(one);
   }
+
   return byOwner;
 }
 
@@ -133,6 +137,7 @@ export function GitHubOwnerRow({
 }): React.JSX.Element {
   const pictures = useRepositoryPictures();
   const label = `${login}'s repositories`;
+
   return (
     <MenuRow
       thing={login}
@@ -175,6 +180,7 @@ export function GitHubAccountRows({
   connections: readonly ShownConnection[];
 }): React.JSX.Element | null {
   if (connections.length === 0) return null;
+
   return <ListedAccountRows workspaceId={workspaceId} connections={connections} />;
 }
 
@@ -193,10 +199,12 @@ function ListedAccountRows({
   const reading = answer === undefined && !failed;
   useAnnounceShown(ANNOUNCE.POLITE, reading ? WORDS.READING : "");
   const byOwner = answer === undefined ? undefined : repositoriesByOwner(answer.repositories);
+
   return (
     <>
       {connections.map((connection) => {
         const key = connection.installationId ?? connection.login;
+
         if (answer === undefined || byOwner === undefined) {
           return (
             <GitHubOwnerRow
@@ -207,10 +215,12 @@ function ListedAccountRows({
             />
           );
         }
+
         // Note that the login GitHub answers now names the row and finds its repositories, because the store keeps an account's old one after a rename on GitHub.
         const listed = listedOf(answer, connection);
         const login = listed?.login ?? connection.login;
         const repositories = byOwner.get(login.toLowerCase()) ?? NONE;
+
         return (
           <GitHubOwnerRow
             key={key}

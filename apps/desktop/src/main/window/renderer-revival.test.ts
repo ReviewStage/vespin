@@ -16,8 +16,10 @@ import { PanelManager, type PanelSystem } from "./panel-manager";
  */
 
 const windows: FakeBrowserWindow[] = [];
+
 /** The answers the next sheets give, by button, and the windows each was shown on. */
 const sheets = { answers: [] as number[], shownOn: [] as unknown[] };
+
 /** Whether a quit asked for tears the launch down, or a live call holds it; and whether it was asked. */
 const quit = { goes: true, asked: false, tearingDown: false };
 
@@ -40,6 +42,7 @@ class FakeBrowserWindow extends EventEmitter {
   isDestroyed = () => this.destroyed;
   loadFile = () => {
     this.loads += 1;
+
     return Promise.resolve();
   };
   show = () => {
@@ -62,12 +65,14 @@ const SYSTEM = {
     focus: () => undefined,
     quit: () => {
       quit.asked = true;
+
       if (quit.goes) quit.tearingDown = true;
     },
   },
   dialog: {
     showMessageBox: (window: unknown) => {
       sheets.shownOn.push(window);
+
       return Promise.resolve({ response: sheets.answers.shift() ?? 0 });
     },
   },
@@ -88,6 +93,7 @@ const PAST_THE_PAUSE_MS = 5_000;
 /** The panel's one window, its first page drawn, and every reason its renderer was reported gone. */
 function drawnPanel() {
   const gone: string[] = [];
+
   const panels = new PanelManager({
     system: SYSTEM,
     runMode: RUN_MODE,
@@ -99,10 +105,13 @@ function drawnPanel() {
     closing: () => quit.tearingDown,
     onRendererGone: (reason) => gone.push(reason),
   });
+
   panels.reconcile();
   const [window] = windows;
+
   if (window === undefined) throw new Error("The panel opened no window.");
   window.emit("ready-to-show");
+
   return { window, gone };
 }
 
@@ -148,10 +157,12 @@ test("a panel whose page fails to load loads it again, though a subframe's failu
 
 test("past the bound the panel stops reloading and asks, and Reload loads it once more", async () => {
   const { window, gone } = drawnPanel();
+
   for (let death = 0; death < 3; death += 1) {
     crash(window);
     vi.advanceTimersByTime(PAST_THE_PAUSE_MS);
   }
+
   expect(window.loads).toBe(4);
   expect(sheets.shownOn).toEqual([]);
 
@@ -164,16 +175,19 @@ test("past the bound the panel stops reloading and asks, and Reload loads it onc
   );
   // Reload was answered: the page loads at once, and the count starts over.
   expect(window.loads).toBe(5);
+
   for (let death = 0; death < 3; death += 1) {
     crash(window);
     vi.advanceTimersByTime(PAST_THE_PAUSE_MS);
   }
+
   expect(window.loads).toBe(8);
 });
 
 /** Crashes the panel's renderer past the bound and lets the sheet answer `answer`. */
 async function crashPastTheBound(window: FakeBrowserWindow, answer: number) {
   sheets.answers.push(answer);
+
   for (let death = 0; death < 4; death += 1) {
     crash(window);
     await vi.advanceTimersByTimeAsync(PAST_THE_PAUSE_MS);
@@ -197,11 +211,13 @@ test("Quit Vespin held by a live call that is kept loads the panel once more rat
 
 test("a load that finishes between deaths starts the count over", () => {
   const { window } = drawnPanel();
+
   for (let death = 0; death < 5; death += 1) {
     crash(window);
     vi.advanceTimersByTime(PAST_THE_PAUSE_MS);
     window.webContents.emit("did-finish-load");
   }
+
   expect(window.loads).toBe(6);
   expect(sheets.shownOn).toEqual([]);
 });

@@ -53,6 +53,7 @@ function client(): HostedAgentClient {
 function uncaused(answer: object): object {
   if (!("cause" in answer)) return answer;
   const { cause: _cause, ...named } = answer;
+
   return named;
 }
 
@@ -65,19 +66,23 @@ function causeTraceOf(answer: object): unknown {
     "traceId" in answer.cause
       ? answer.cause.traceId
       : undefined;
+
   assert.match(String(traceId), /^[0-9a-f]{32}$/);
+
   return traceId;
 }
 
 it.effect("starts an agent with the request as sent", () =>
   Effect.gen(function* () {
     const request = { idempotencyKey: "press-1", ...CHOICE };
+
     const api = fakeCloudApi({
       [`POST /api/plans/${TASK_ID}/agents`]: {
         answer: () => ({ agent: AGENT }),
         status: 201,
       },
     });
+
     const started = yield* Effect.provide(client().start(TASK_ID, request), api.layer);
     assert.deepEqual(started, { agent: AGENT });
     assert.deepEqual(JSON.parse(api.requests()[0]?.body ?? "{}"), request);
@@ -103,6 +108,7 @@ it.effect(
         client().start(TASK_ID, { idempotencyKey: "press-1", ...CHOICE }),
         refusing.layer,
       );
+
       const chosen = yield* Effect.provide(client().choose(AGENT_ID, CHOICE), refusing.layer);
 
       assert.deepEqual(started, { failure: AGENT_CALL_FAILURE.INVALID_CHOICE });
@@ -135,6 +141,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const request = { idempotencyKey: "press-1" };
+
       const refusingWith = (unreached: JsonValue) =>
         fakeCloudApi({
           [`POST /api/plans/${TASK_ID}/agents`]: {
@@ -142,6 +149,7 @@ it.effect(
             status: HTTP_STATUS.FORBIDDEN,
           },
         });
+
       const unreached = {
         reason: REPOSITORY_UNREACHED.OTHER_WORKSPACE,
         repository: "Acme/Relay",
@@ -152,10 +160,12 @@ it.effect(
         client().start(TASK_ID, request),
         refusingWith(unreached).layer,
       );
+
       const newer = yield* Effect.provide(
         client().start(TASK_ID, request),
         refusingWith({ reason: "a-reason-from-later", repository: "Acme/Relay" }).layer,
       );
+
       const elsewhere = yield* Effect.provide(
         client().start(TASK_ID, request),
         refusingWith({
@@ -221,6 +231,7 @@ it.effect(
         localAgentRefusal: LOCAL_AGENT_REFUSAL.NOT_OWNER,
         refusedDevice: { name: "Studio", owner: "Charles" },
       });
+
       assert.deepEqual(named, {
         failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED,
         localAgentRefusal: LOCAL_AGENT_REFUSAL.NOT_OWNER,
@@ -233,6 +244,7 @@ it.effect(
         localAgentRefusal: "a-reason-from-a-newer-service",
         refusedDevice: { name: "Studio" },
       });
+
       assert.deepEqual(unread, { failure: AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED });
     }),
 );
@@ -242,6 +254,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const resetsAt = Date.UTC(2026, 9, 21, 15, 40);
+
       const refusingWith = (body: JsonValue) =>
         fakeCloudApi({
           "POST /api/agents/agent-1/messages": {
@@ -249,12 +262,14 @@ it.effect(
             status: HTTP_STATUS.CONFLICT,
           },
         });
+
       const request = { text: "Also the emails.", clientKey: "key-1" };
 
       const named = yield* Effect.provide(
         client().message("agent-1", request),
         refusingWith({ error: HOSTED_API_ERROR.AGENT_PLAN_LIMIT_REACHED, resetsAt }).layer,
       );
+
       const bare = yield* Effect.provide(
         client().message("agent-1", request),
         refusingWith({ error: HOSTED_API_ERROR.AGENT_PLAN_LIMIT_REACHED }).layer,
@@ -273,6 +288,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const key = "sk-ant-api03-synthetic-0000000000000000wxyz";
+
       const kept = {
         provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
         hint: "sk-ant-…wxyz",
@@ -280,6 +296,7 @@ it.effect(
         status: PROVIDER_KEY_STATUS.VERIFIED,
         statusAt: 1,
       };
+
       const api = fakeCloudApi({
         "GET /api/account/provider-keys": { answer: () => ({ keys: [kept] }) },
         "PUT /api/account/provider-keys": {
@@ -289,14 +306,17 @@ it.effect(
       });
 
       const read = yield* Effect.provide(client().readProviderKeys(), api.layer);
+
       const saved = yield* Effect.provide(
         client().saveProviderKey({ provider: PROVIDER_KEY_PROVIDER.ANTHROPIC, key }),
         api.layer,
       );
+
       const removed = yield* Effect.provide(
         client().removeProviderKey({ provider: PROVIDER_KEY_PROVIDER.ANTHROPIC }),
         api.layer,
       );
+
       yield* Effect.provide(
         client().removeProviderKey({
           provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
@@ -334,9 +354,11 @@ it.effect(
         workspaceId: "workspace-1",
         repository: "acme/relay",
       };
+
       const api = fakeCloudApi({
         [`GET /api/agents/${AGENT_ID}`]: { answer: () => ({ agent: page }) },
       });
+
       const refusing = fakeCloudApi({
         [`GET /api/agents/${AGENT_ID}`]: {
           answer: () => ({ error: HOSTED_API_ERROR.NOT_FOUND }),
@@ -357,6 +379,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const itemId = "5d2b8f0e-1a3c-4e6f-9b7d-2c4e6a8b0d1f";
+
       const item = {
         id: itemId,
         agentId: AGENT_ID,
@@ -378,27 +401,33 @@ it.effect(
         postedAt: 1,
         updatedAt: 2,
       };
+
       const path = `POST /api/inbox/${itemId}/messages`;
       const api = fakeCloudApi({ [path]: { answer: () => ({ item }) } });
+
       const refusing = fakeCloudApi({
         [path]: {
           answer: () => ({ error: HOSTED_API_ERROR.AGENT_NOT_READY }),
           status: HTTP_STATUS.CONFLICT,
         },
       });
+
       const message = { text: "  Drop the emoji.  ", clientKey: "key-1" };
 
       const sent = yield* Effect.provide(client().messageInbox(itemId, message), api.layer);
       const refused = yield* Effect.provide(client().messageInbox(itemId, message), refusing.layer);
+
       const empty = yield* Effect.provide(
         client().messageInbox(itemId, { text: " ", clientKey: "key-2" }),
         api.layer,
       );
+
       const answers = {
         ask: "7f4d0b2a-3c5e-4a81-9d9f-4e6a8c0d2f3b",
         reply: INBOX_REPLY.CHOSE,
         choices: ["Short"],
       };
+
       const answered = yield* Effect.provide(
         client().messageInbox(itemId, { text: " ", clientKey: "key-3", answers }),
         api.layer,
@@ -424,11 +453,13 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const itemId = "5d2b8f0e-1a3c-4e6f-9b7d-2c4e6a8b0d1f";
+
       const api = fakeCloudApi({
         [`PUT /api/inbox/${itemId}/read`]: { answer: () => ({ id: itemId, unread: false }) },
         [`DELETE /api/inbox/${itemId}/read`]: { answer: () => ({ id: itemId, unread: true }) },
         "PUT /api/inbox/read": { answer: () => ({ marked: 3 }) },
       });
+
       const refusing = fakeCloudApi({
         [`PUT /api/inbox/${itemId}/read`]: {
           answer: () => ({ error: HOSTED_API_ERROR.NOT_FOUND }),
@@ -438,12 +469,15 @@ it.effect(
 
       const read = yield* Effect.provide(client().markInboxItemRead(itemId), api.layer);
       const unread = yield* Effect.provide(client().markInboxItemUnread(itemId), api.layer);
+
       const all = yield* Effect.provide(
         client().markInboxRead({ workspaceId: WORKSPACE_ID }),
         api.layer,
       );
+
       const everywhere = yield* Effect.provide(client().markInboxRead(), api.layer);
       const missing = yield* Effect.provide(client().markInboxItemRead(itemId), refusing.layer);
+
       const malformed = yield* Effect.provide(
         client().markInboxRead({ workspaceId: "" }),
         api.layer,
@@ -549,6 +583,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const api = fakeCloudApi({ "GET /api/agents": { answer: () => ({ agents: [AGENT] }) } });
+
       const refusing = fakeCloudApi({
         "GET /api/agents": {
           answer: () => ({ error: HOSTED_API_ERROR.NOT_FOUND }),
@@ -560,6 +595,7 @@ it.effect(
         client().listWorkspace({ workspaceId: "workspace-1", repository: "acme/relay" }),
         api.layer,
       );
+
       const refused = yield* Effect.provide(
         client().listWorkspace({ workspaceId: "workspace-2" }),
         refusing.layer,
@@ -582,10 +618,12 @@ it.effect(
     Effect.gen(function* () {
       const itemId = "5d2b8f0e-1a3c-4e6f-9b7d-2c4e6a8b0d1f";
       const attachmentId = "6e3c9a1f-2b4d-4f70-8c8e-3d5f7b9c1e2a";
+
       const servedAs = (type: string) =>
         recordingHttpClient(
           () => new Response("%PDF", { status: 200, headers: { "content-type": type } }),
         );
+
       const read = (type: string) =>
         Effect.provide(client().inboxAttachment(itemId, attachmentId), servedAs(type).layer);
 
@@ -601,10 +639,12 @@ it.effect(
         failure: AGENT_CALL_FAILURE.UNANSWERED,
       });
       const dropped = recordingHttpClient(() => Promise.reject(new TypeError("Load failed")));
+
       const unreached = yield* Effect.provide(
         client().inboxAttachment(itemId, attachmentId),
         dropped.layer,
       );
+
       assert.deepEqual(unreached, {
         failure: AGENT_CALL_FAILURE.UNANSWERED,
         cause: {
@@ -613,6 +653,7 @@ it.effect(
           errorName: "TypeError",
         },
       });
+
       const cut = recordingHttpClient(
         () =>
           new Response(
@@ -622,10 +663,12 @@ it.effect(
             { status: 200, headers: { "content-type": "image/png" } },
           ),
       );
+
       const unread = yield* Effect.provide(
         client().inboxAttachment(itemId, attachmentId),
         cut.layer,
       );
+
       assert.deepEqual(unread, {
         failure: AGENT_CALL_FAILURE.UNANSWERED,
         cause: {
@@ -643,17 +686,22 @@ it.effect(
     Effect.gen(function* () {
       const pictureId = "3ea06f44-b05d-4182-ad94-6f7a8b9cadb4";
       const bytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47]);
+
       const served = recordingHttpClient(
         () => new Response(bytes, { status: 200, headers: { "content-type": "image/png" } }),
       );
+
       const read = yield* Effect.provide(client().agentPicture(AGENT_ID, pictureId), served.layer);
+
       const worker = yield* Effect.provide(
         client().agentPicture(AGENT_ID, pictureId, "call-worker"),
         served.layer,
       );
+
       const other = recordingHttpClient(
         () => new Response("<svg/>", { status: 200, headers: { "content-type": "image/svg+xml" } }),
       );
+
       const unexpected = yield* Effect.provide(
         client().agentPicture(AGENT_ID, pictureId),
         other.layer,
@@ -678,15 +726,18 @@ it.effect(
     Effect.gen(function* () {
       const request = { idempotencyKey: "press-1", from: { agentId: AGENT_ID } };
       let answer: (response: Response) => void = () => undefined;
+
       const slow = recordingHttpClient(
         () =>
           new Promise<Response>((resolve) => {
             answer = resolve;
           }),
       );
+
       const asked = yield* Effect.forkChild(
         Effect.provide(client().start(TASK_ID, request), slow.layer),
       );
+
       yield* TestClock.adjust("30 seconds");
       answer(
         new Response(JSON.stringify({ agent: AGENT }), {
@@ -697,9 +748,11 @@ it.effect(
       assert.deepEqual(yield* Fiber.join(asked), { agent: AGENT });
 
       const silent = recordingHttpClient(() => new Promise<Response>(() => undefined));
+
       const unanswered = yield* Effect.forkChild(
         Effect.provide(client().start(TASK_ID, request), silent.layer),
       );
+
       yield* TestClock.adjust("119 seconds");
       assert.equal(unanswered.pollUnsafe(), undefined, "still waiting short of its deadline");
       yield* TestClock.adjust("1 second");
@@ -723,15 +776,18 @@ it.effect(
       const request = { text: "Also the emails.", clientKey: "key-1" };
       const ran = { agent: AGENT };
       let answer: (response: Response) => void = () => undefined;
+
       const slow = recordingHttpClient(
         () =>
           new Promise<Response>((resolve) => {
             answer = resolve;
           }),
       );
+
       const asked = yield* Effect.forkChild(
         Effect.provide(client().message(AGENT_ID, request), slow.layer),
       );
+
       yield* TestClock.adjust("40 seconds");
       answer(
         new Response(JSON.stringify(ran), {
@@ -742,9 +798,11 @@ it.effect(
       assert.deepEqual(yield* Fiber.join(asked), ran);
 
       const silent = recordingHttpClient(() => new Promise<Response>(() => undefined));
+
       const unanswered = yield* Effect.forkChild(
         Effect.provide(client().message(AGENT_ID, request), silent.layer),
       );
+
       yield* TestClock.adjust("44 seconds");
       assert.equal(unanswered.pollUnsafe(), undefined, "still waiting short of its deadline");
       yield* TestClock.adjust("1 second");
@@ -759,6 +817,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const request = { idempotencyKey: "press-1", from: { agentId: AGENT_ID } };
+
       const api = fakeCloudApi({
         [`POST /api/agents/${AGENT_ID}/agents`]: {
           answer: () => ({ agent: AGENT }),
@@ -767,6 +826,7 @@ it.effect(
       });
 
       const started = yield* Effect.provide(client().startFrom(request), api.layer);
+
       const nowhere = yield* Effect.provide(
         client().startFrom({ idempotencyKey: "press-2", prompt: "Go." }),
         api.layer,
@@ -784,6 +844,7 @@ it.effect(
 it.effect("a pull request's chapters are generated with the tab's number in the query", () =>
   Effect.gen(function* () {
     const path = `/api/agents/${AGENT_ID}/chapters`;
+
     const answer = {
       pullRequest: {
         number: 7,
@@ -791,6 +852,7 @@ it.effect("a pull request's chapters are generated with the tab's number in the 
         chapters: { status: PULL_REQUEST_CHAPTERS_STATE.NONE },
       },
     };
+
     const api = fakeCloudApi({
       [`POST ${path}`]: { answer: () => answer },
     });
@@ -823,6 +885,7 @@ it.effect(
         );
 
       const unavailable = yield* refusedWith({ error: HOSTED_API_ERROR.UNAVAILABLE });
+
       const unreached = yield* refusedWith({
         error: HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE,
         unreached: { reason: REPOSITORY_UNREACHED.GONE, repository: "Acme/Relay" },

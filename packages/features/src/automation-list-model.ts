@@ -130,8 +130,10 @@ function agentLine(
   // Note that the agent's own account is whose keys it ran on, a same-agent run's a teammate's agent's,
   // so the service's word for it goes before the guess the caller makes from the automation's maker.
   const holder = agent.ownKey === undefined ? keyHolder : agent.ownKey ? undefined : AGENT_OWNER;
+
   const why =
     agent.failureReason === undefined ? undefined : agentFailureWords(agent.failureReason, holder);
+
   return agent.status === AGENT_STATUS.FAILED && why !== undefined
     ? `${standing}: ${why}`
     : standing;
@@ -208,13 +210,18 @@ export function parseAutomationClock(
   text: string,
 ): { readonly hour: number; readonly minute: number } | undefined {
   const typed = TYPED_CLOCK.exec(text.trim());
+
   if (typed === null) return undefined;
   const [, hourDigits = "", minuteDigits = "0", half] = typed;
   const spoken = Number(hourDigits);
   const minute = Number(minuteDigits);
+
   if (minute > 59) return undefined;
+
   if (half === undefined) return spoken > 23 ? undefined : { hour: spoken, minute };
+
   if (spoken < 1 || spoken > 12) return undefined;
+
   return { hour: (spoken % 12) + (half.toLowerCase() === "p" ? 12 : 0), minute };
 }
 
@@ -222,17 +229,22 @@ export function parseAutomationClock(
 function scheduleText(cron: string, timezone: string): string {
   const spelled = cron.trim();
   const city = zoneCity(timezone);
+
   if (spelled === SCHEDULE_PRESET.HOURLY) return `Every hour · ${city}`;
   const [minuteField, hourField, dayOfMonth, month, dayOfWeek] = spelled.split(/\s+/u);
   const minute = cronNumber(minuteField);
   const hour = cronNumber(hourField);
   const daily = dayOfMonth === "*" && month === "*";
+
   if (minute === undefined || hour === undefined || !daily) return `${spelled} · ${city}`;
   const at = clockText(hour, minute);
+
   if (dayOfWeek === "*") return `Every day at ${at} · ${city}`;
+
   if (dayOfWeek === "1-5") return `Weekdays at ${at} · ${city}`;
   const day = cronNumber(dayOfWeek);
   const name = day === undefined ? undefined : WEEKDAY_NAMES[day % 7];
+
   return name === undefined ? `${spelled} · ${city}` : `${name} at ${at} · ${city}`;
 }
 
@@ -271,6 +283,7 @@ export function automationTriggerText(
       const senders = Object.values(GITHUB_SENDER).filter((sender) => named.includes(sender));
       const fires = trigger.moments ?? PULL_REQUEST_DEFAULT_MOMENTS;
       const moments = Object.values(PULL_REQUEST_MOMENT).filter((moment) => fires.includes(moment));
+
       // A check names no sender, so its sentence says by whom nothing.
       const by =
         trigger.event === GITHUB_TRIGGER_EVENT.CHECK_FAILED
@@ -278,23 +291,29 @@ export function automationTriggerText(
           : senders.length === Object.values(GITHUB_SENDER).length
             ? " by anyone"
             : ` by ${orList(senders.map((sender) => GITHUB_SENDER_WORDS[sender]))}`;
+
       const happens =
         trigger.event === GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED && moments.length > 0
           ? `is ${orList(moments.map((moment) => PULL_REQUEST_MOMENT_WORDS[moment]))}`
           : words.happens;
+
       const pullRequest = PULL_REQUEST_EVENTS.has(trigger.event);
+
       const included = [
         ...(pullRequest && trigger.drafts === true ? ["drafts"] : []),
         ...(pullRequest && trigger.forks === true ? ["forks"] : []),
       ];
+
       const also = included.length === 0 ? "" : `, ${andList(included)} included`;
       const where = repositories.length === 0 ? "" : ` in ${orList(repositories)}`;
       const labels = trigger.labels ?? [];
       const branches = trigger.branches ?? [];
       const labeled = labels.length === 0 ? "" : ` labeled ${orList(labels)}`;
       const on = branches.length === 0 ? "" : ` on ${orList(branches)}`;
+
       return `When ${words.what}${by} ${happens}${where}${labeled}${on}${also}`;
     }
+
     case AUTOMATION_TRIGGER.WEBHOOK:
       return "When its webhook is called";
     case AUTOMATION_TRIGGER.INTEGRATION: {
@@ -302,9 +321,11 @@ export function automationTriggerText(
       // Levels are said least severe first, whatever order they were picked in.
       const picked = trigger.filters?.level ?? [];
       const levels = Object.values(SENTRY_LEVEL).filter((level) => picked.includes(level));
+
       const kept = [trigger.filters?.project ?? [], trigger.filters?.environment ?? [], levels]
         .filter((values) => values.length > 0)
         .map((values) => ` · ${values.join(", ")}`);
+
       return `When ${provider.events[trigger.event].words} in ${provider.name}${kept.join("")}`;
     }
   }
@@ -317,7 +338,9 @@ export function automationTriggerText(
  */
 export function automationRunStanding(run: AutomationRunSummary | null): AutomationRunStanding {
   if (run === null) return AUTOMATION_RUN_STANDING.REST;
+
   if (run.status === AUTOMATION_RUN_STATUS.FAILED) return AUTOMATION_RUN_STANDING.FAILED;
+
   switch (run.agent?.status) {
     case AGENT_STATUS.STARTING:
     case AGENT_STATUS.RUNNING:
@@ -332,9 +355,12 @@ export function automationRunStanding(run: AutomationRunSummary | null): Automat
 /** When an automation runs next: off before any instant, since it fires at all, and an event's trigger has none to name. */
 export function automationNext(automation: AutomationSummary): AutomationNext {
   if (!automation.enabled) return { kind: AUTOMATION_NEXT.OFF };
+
   if (automation.trigger.kind !== AUTOMATION_TRIGGER.SCHEDULE)
     return { kind: AUTOMATION_NEXT.EVENT };
+
   if (automation.nextRunAt === null) return { kind: AUTOMATION_NEXT.UNSCHEDULED };
+
   return { kind: AUTOMATION_NEXT.AT, at: automation.nextRunAt };
 }
 
@@ -344,7 +370,9 @@ export function automationFiringTitle(firing: AutomationRunSummary["firing"]): s
   if (firing.kind === AUTOMATION_FIRING.INTEGRATION) {
     return firing.subject.title ?? `${TRIGGER_CATALOG[firing.provider].name} event`;
   }
+
   if (firing.kind === AUTOMATION_FIRING.GITHUB && firing.title !== undefined) return firing.title;
+
   return FIRING_WORDS[firing.kind];
 }
 
@@ -352,7 +380,9 @@ export function automationFiringTitle(firing: AutomationRunSummary["firing"]): s
 export function automationRunTitle(run: AutomationRunSummary): string {
   // Note that a placeholder title ("<untitled>") names nothing, so the run is titled as one whose agent has no title.
   const title = run.agent?.title ?? null;
+
   if (title !== null && !titlesNothing(title)) return title;
+
   return automationFiringTitle(run.firing);
 }
 
@@ -379,14 +409,19 @@ export function automationRunPlace(
   agentId: string,
 ): AutomationRunPlace | undefined {
   const seen = new Set<string>();
+
   const steps = runs.filter((run) => {
     if (run.agent === null || seen.has(run.agent.id)) return false;
     seen.add(run.agent.id);
+
     return true;
   });
+
   const index = steps.findIndex((run) => run.agent?.id === agentId);
   const run = steps[index];
+
   if (run === undefined) return undefined;
+
   return {
     run,
     at: steps.length - index,
@@ -404,9 +439,12 @@ export function automationRunLine(
 ): string {
   if (run.status === AUTOMATION_RUN_STATUS.STARTED) {
     const standing = run.agent === null ? "Its agent is gone" : agentLine(run.agent, keyHolder);
+
     return run.reason === null ? standing : `${standing} · ${RUN_REASON_WORDS[run.reason]}`;
   }
+
   if (run.reason !== null) return RUN_REASON_WORDS[run.reason];
+
   switch (run.status) {
     case AUTOMATION_RUN_STATUS.QUEUED:
       return "Waiting to start";

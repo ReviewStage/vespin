@@ -45,6 +45,7 @@ class StandInAudioContext {
   }
   createOscillator(): StandInNode {
     if (oscillatorsRefused) throw new Error("The audio device is gone.");
+
     return new StandInNode();
   }
   createGain = (): StandInNode => new StandInNode();
@@ -62,6 +63,7 @@ class StandInAudioContext {
 /** A fresh player module, since its one audio context, its busy mark, and its clip live as long as the module. */
 async function freshModule(): Promise<typeof import("./completion-sound.js")> {
   vi.resetModules();
+
   return await import("./completion-sound.js");
 }
 
