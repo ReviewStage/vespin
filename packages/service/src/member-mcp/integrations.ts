@@ -87,7 +87,7 @@ const accepted = <A extends object, R>(
   unavailable: string = MEMBER_INTEGRATION_REFUSAL.UNANSWERED,
 ) =>
   work.pipe(
-    Effect.map((answer): object => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answer })),
+    Effect.map((answer) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answer })),
     Effect.catch((refusal) =>
       Effect.succeed(
         agentToolRejected(

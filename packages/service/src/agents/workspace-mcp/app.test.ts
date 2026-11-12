@@ -319,19 +319,22 @@ const agentInNoRepositoryWithBearer = Effect.gen(function* () {
 });
 
 /** What a fake Chromium's page answers beside its targets, as Chrome does for a screenshot of it. */
-const PAGE_ANSWERS: Readonly<Record<string, { readonly result: unknown }>> = {
-  "Target.attachToTarget": { result: { sessionId: "session-tab-1" } },
-  "Target.detachFromTarget": { result: {} },
-  "Target.activateTarget": { result: {} },
-  "Page.getLayoutMetrics": {
-    result: {
-      cssLayoutViewport: { clientWidth: 1280, clientHeight: 800 },
-      cssVisualViewport: { pageX: 0, pageY: 0, clientWidth: 1280, clientHeight: 800 },
+const PAGE_ANSWERS: ReadonlyMap<string, { readonly result: unknown }> = new Map([
+  ["Target.attachToTarget", { result: { sessionId: "session-tab-1" } }],
+  ["Target.detachFromTarget", { result: {} }],
+  ["Target.activateTarget", { result: {} }],
+  [
+    "Page.getLayoutMetrics",
+    {
+      result: {
+        cssLayoutViewport: { clientWidth: 1280, clientHeight: 800 },
+        cssVisualViewport: { pageX: 0, pageY: 0, clientWidth: 1280, clientHeight: 800 },
+      },
     },
-  },
-  "Runtime.evaluate": { result: { result: { value: "complete" } } },
-  "Page.captureScreenshot": { result: { data: "/9j/AAAA" } },
-};
+  ],
+  ["Runtime.evaluate", { result: { result: { value: "complete" } } }],
+  ["Page.captureScreenshot", { result: { data: "/9j/AAAA" } }],
+]);
 
 /** The session a native agent's sandbox is tagged with, as its conversation records it. */
 const SESSION = "runner_session_fixture";
@@ -881,7 +884,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         // A browser that would answer and keep its tab, were the door run.
         const peer = yield* fakeCdpPeer({
           pages: [{ targetId: "tab-1", url: "https://shop.test/", title: "Shop" }],
-          answer: (command) => PAGE_ANSWERS[command.method],
+          answer: (command) => PAGE_ANSWERS.get(command.method),
         });
 
         const fetch = yield* standingOver(
@@ -1195,7 +1198,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       Effect.gen(function* () {
         const peer = yield* fakeCdpPeer({
           pages: [{ targetId: "tab-1", url: "https://shop.test/", title: "Shop" }],
-          answer: (command) => PAGE_ANSWERS[command.method],
+          answer: (command) => PAGE_ANSWERS.get(command.method),
         });
 
         const fetch = yield* standingOver(

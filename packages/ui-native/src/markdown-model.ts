@@ -171,7 +171,7 @@ const PICTURE_SOURCE = /^(?:https:\/\/|data:image\/)/u;
 
 const PLAIN: WordMarks = { strong: false, emphasis: false, struck: false };
 
-const ALIGN: { readonly [K in NonNullable<Table["align"]>[number] & string]: ColumnAlign } = {
+const ALIGN: Readonly<Record<NonNullable<Table["align"]>[number] & string, ColumnAlign>> = {
   left: COLUMN_ALIGN.START,
   center: COLUMN_ALIGN.CENTER,
   right: COLUMN_ALIGN.END,

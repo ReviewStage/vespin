@@ -72,11 +72,10 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+type DrawnResult = { view: HTMLElement; exits: string[] };
+
 /** The description's version history in `room` over its versions 3 and 2, as `history` stands, every way out written down. */
-function drawn(
-  room: ShellRoom,
-  history: Partial<VersionHistoryControl>,
-): { view: HTMLElement; exits: string[] } {
+function drawn(room: ShellRoom, history: Partial<VersionHistoryControl>): DrawnResult {
   const exits: string[] = [];
   const base = tasksControl();
 

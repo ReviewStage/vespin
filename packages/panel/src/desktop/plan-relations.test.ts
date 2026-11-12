@@ -190,8 +190,10 @@ test("New sub-task's + on a folded group opens it on a draft, whose Return adds 
   assert.equal(draft()?.value, "", "the next draft stands, empty");
 });
 
+type Sent = { changes: TaskRelationChangeRequest[]; removed: [TaskBlockRelation, string][] };
+
 test("a relation stands while the list does not hold its task, and picking another kind on its pill moves it in one call, and Remove relation takes the block away", async () => {
-  const sent: { changes: TaskRelationChangeRequest[]; removed: [TaskBlockRelation, string][] } = {
+  const sent: Sent = {
     changes: [],
     removed: [],
   };

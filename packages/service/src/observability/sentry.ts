@@ -125,14 +125,14 @@ export interface AgentTraceIds {
  * of a person is among them but the account's id: no name, email, prompt,
  * or credential.
  */
-export function agentSpanAttributes(ids: AgentTraceIds): Record<string, string> {
+export function agentSpanAttributes(ids: AgentTraceIds) {
   return {
     "agent.id": ids.agentId,
     "user.id": ids.userId,
     "workspace.id": ids.workspaceId,
     ...(ids.repository === null ? undefined : { repository: ids.repository }),
     ...(ids.harness === undefined ? undefined : { harness: ids.harness }),
-  };
+  } satisfies Record<string, string>;
 }
 
 /**
@@ -500,6 +500,12 @@ type ReportedAttributes = Parameters<Parameters<typeof ErrorReporter.make>[0]>[0
 /** The extra data an issue carries, as Sentry types it. */
 type SentryExtras = Parameters<typeof Sentry.setExtras>[0];
 
+type ReportContextResult = {
+  tags: Record<string, string>;
+  extra: SentryExtras;
+  user?: { id: string };
+};
+
 /**
  * A report's attributes as an issue carries them: those it is searched by as
  * tags where they are a string, a number, or a boolean, the rest as extra data. Note that a tag's value is cut to Sentry's
@@ -512,11 +518,7 @@ type SentryExtras = Parameters<typeof Sentry.setExtras>[0];
 function reportContext(
   { [ACCOUNT_KEY]: reported, ...attributes }: ReportedAttributes,
   annotations: ReportedAttributes,
-): {
-  tags: Record<string, string>;
-  extra: SentryExtras;
-  user?: { id: string };
-} {
+): ReportContextResult {
   const tags: Record<string, string> = {};
   const extra: SentryExtras = {};
   const account = Predicate.isString(reported) ? reported : annotations[ACCOUNT_KEY];

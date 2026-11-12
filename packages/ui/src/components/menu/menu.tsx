@@ -534,8 +534,10 @@ export function useMenu(shown: boolean) {
   return { open: standing ? menu : undefined, drawn, show, close, trigger, contextMenu, keyMenu };
 }
 
+type PointAtResult = { getBoundingClientRect: () => DOMRect };
+
 /** A point in the window as the box of no size a menu hangs from. */
-function pointAt(x: number, y: number): { getBoundingClientRect: () => DOMRect } {
+function pointAt(x: number, y: number): PointAtResult {
   const box = { x, y, left: x, top: y, right: x, bottom: y, width: 0, height: 0 };
 
   return { getBoundingClientRect: () => ({ ...box, toJSON: () => box }) };

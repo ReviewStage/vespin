@@ -33,6 +33,11 @@ export interface WaitingItems {
   readonly onRetry: () => void;
 }
 
+type UseListedInboxGroupsResult = {
+  readonly groups: readonly InboxGroup[];
+  readonly read: HolderInboxItems;
+};
+
 /**
  * Every plan of the listed workspace's Inbox, its items open and settled
  * alike, read as the window's Inbox reads them: each plan main says holds
@@ -40,10 +45,7 @@ export interface WaitingItems {
  * agent's items among them, as every member's Inbox lists them; and the
  * read they come from.
  */
-function useListedInboxGroups(tasks: TasksControl): {
-  readonly groups: readonly InboxGroup[];
-  readonly read: HolderInboxItems;
-} {
+function useListedInboxGroups(tasks: TasksControl): UseListedInboxGroupsResult {
   const { inboxTasks } = useListedInbox(tasks);
   const listed = tasks.listed.tasks;
 

@@ -76,11 +76,10 @@ function polledInput<Input>(input: Input, poll: HostedPoll | undefined): Input {
   };
 }
 
+type Failed = { readonly failure: string; readonly cause?: FailureFacts };
+
 /** A call's failure as its domain reads it. */
-function failedOf(
-  failed: HostedFailure,
-  reading: HostedReading<HostedRenames, boolean>,
-): { readonly failure: string; readonly cause?: FailureFacts } {
+function failedOf(failed: HostedFailure, reading: HostedReading<HostedRenames, boolean>): Failed {
   if (Predicate.isTagged(failed, "HostedRefused")) {
     if (reading.live === true && failed.refusal === HOSTED_API_ERROR.INVALID_TOKEN) {
       return LIVE_SIGNED_OUT;

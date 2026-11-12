@@ -188,8 +188,10 @@ function layLogsOut(): void {
   });
 }
 
+type LayOutResult = { readonly writes: number[] };
+
 /** Every scroll written to the log's box from now on. */
-function layOut(box: HTMLElement): { readonly writes: number[] } {
+function layOut(box: HTMLElement): LayOutResult {
   const writes: number[] = [];
   logWrites.set(box, writes);
 
@@ -630,11 +632,13 @@ test("older messages put before the first under a long log leave the row the rea
   assert.ok(drawnRows(container).includes("m-101"), "the row the reader was on is still drawn");
 });
 
-/** A read the test answers when it hands the answer. */
-function handed<T>(): {
+type Handed<T> = {
   readonly read: () => Promise<T>;
   readonly hand: (answer: T) => Promise<void>;
-} {
+};
+
+/** A read the test answers when it hands the answer. */
+function handed<T>(): Handed<T> {
   let answer: (value: T) => void = () => undefined;
 
   const pending = new Promise<T>((resolve) => {

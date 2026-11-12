@@ -265,8 +265,10 @@ export function focusRovingStop(box: HTMLElement): boolean {
   return stop !== undefined;
 }
 
+type RovingItemResult = { readonly "data-roving-item": "" };
+
 /** What an item of a roving set wears, spread on the element that takes the focus. */
-export function rovingItem(): { readonly "data-roving-item": "" } {
+export function rovingItem(): RovingItemResult {
   return { [ITEM_ATTRIBUTE]: "" };
 }
 

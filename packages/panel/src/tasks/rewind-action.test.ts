@@ -96,10 +96,12 @@ async function settle(): Promise<void> {
   });
 }
 
+type Held = { composer: HeldComposer | undefined };
+
 /** The agent's box over the transcript, every call it makes written down in order, a rewind answered by `rewound` and a send by `sent`. */
 async function box(rewound: AgentAgentAnswer, sent: AgentAgentAnswer = REWOUND) {
   const calls: string[] = [];
-  const held: { composer: HeldComposer | undefined } = { composer: undefined };
+  const held: Held = { composer: undefined };
 
   function Box(): ReactNode {
     held.composer = useAgentComposer({

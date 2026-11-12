@@ -269,6 +269,8 @@ const SAID = {
   title: null,
 };
 
+type CommittedIn = { readonly txid?: string };
+
 /** The service as a script, writing down every ask in the order it was made. */
 function fakeService() {
   const asked: string[] = [];
@@ -322,7 +324,7 @@ function fakeService() {
   // Whether a Start goes unanswered, as one sent offline does.
   let startsUnanswered = false;
   // The transaction the service says each inbox write committed in; none says it changed nothing.
-  let committedIn: { readonly txid?: string } = {};
+  let committedIn: CommittedIn = {};
   /** The item as the agent changed it first, which a close is answered not taken with; none takes every close. */
   let changedFirst: InboxItem | undefined;
   /** The transaction the service says wrote a sent message's row; none says none was written. */

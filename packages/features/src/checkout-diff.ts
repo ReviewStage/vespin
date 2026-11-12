@@ -82,8 +82,8 @@ export interface CheckoutDiffRange {
 }
 
 /** The script's variables for the range given. */
-export function checkoutDiffEnv(range: CheckoutDiffRange): Readonly<Record<string, string>> {
-  return { [FROM]: range.from, [TO]: range.to ?? "" };
+export function checkoutDiffEnv(range: CheckoutDiffRange) {
+  return { [FROM]: range.from, [TO]: range.to ?? "" } satisfies Readonly<Record<string, string>>;
 }
 
 /** The files a diff names, as the Changes view draws them, and whether the diff was cut short of some. */

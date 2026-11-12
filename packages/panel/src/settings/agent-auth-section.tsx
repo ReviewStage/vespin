@@ -883,6 +883,12 @@ function credentialsOf(
   );
 }
 
+type UseCredentialOrderResult = {
+  ordered: readonly Credential[];
+  move: (from: number, to: number) => void;
+  refused: string | undefined;
+};
+
 /**
  * The harness's credentials in the order the account keeps, a reorder drawn
  * at once and sent as the whole order, its key's place among it; the list
@@ -892,11 +898,7 @@ function credentialsOf(
 function useCredentialOrder(
   provider: ProviderKeyProvider,
   credentials: readonly Credential[],
-): {
-  ordered: readonly Credential[];
-  move: (from: number, to: number) => void;
-  refused: string | undefined;
-} {
+): UseCredentialOrderResult {
   const { mutateAsync: sendReorder } = useMutation(actMutation(ACT_KIND.SUBSCRIPTIONS_REORDER));
   const [sentOrder, setSentOrder] = useState<readonly string[] | undefined>(undefined);
   const [refused, setRefused] = useState<string | undefined>(undefined);
@@ -1511,6 +1513,12 @@ function HarnessCredentials({
   );
 }
 
+type UseCredentialsResult = {
+  answer: ProviderKeysAnswer | undefined;
+  readFailed: boolean;
+  retry: () => void;
+};
+
 /* ----- The lists ----- */
 
 /**
@@ -1526,7 +1534,7 @@ function useCredentials({
   signedIn: boolean;
   onKeys?: ((keys: readonly ProviderKeySummary[]) => void) | undefined;
   onConnected?: ((connected: boolean) => void) | undefined;
-}): { answer: ProviderKeysAnswer | undefined; readFailed: boolean; retry: () => void } {
+}): UseCredentialsResult {
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
   const keys = useQuery(providerKeysQuery(signedIn ? accountId : undefined));
   const retryKeys = useMutation(providerKeysRetryMutation());

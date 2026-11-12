@@ -85,7 +85,7 @@ const TESTS: MemorySummary = {
 };
 
 /** The memories the test's service holds, by the workspace, held and forgotten by the page. */
-let stored: Readonly<Record<string, readonly MemorySummary[]>> = {};
+let stored: ReadonlyMap<string, readonly MemorySummary[]> = new Map();
 
 /** Every act the page sent, in order. */
 let sent: AnyAct[] = [];
@@ -138,7 +138,7 @@ function lay(workspaceId: string, read: AppHostRead<readonly MemorySummary[]>): 
 /** Lays a workspace's memories as the test's host reads them now; nothing while it reads nothing. */
 function layRead(workspaceId: string): void {
   if (readsNothing) return;
-  lay(workspaceId, readFails ? { failed: true } : { rows: stored[workspaceId] ?? [] });
+  lay(workspaceId, readFails ? { failed: true } : { rows: stored.get(workspaceId) ?? [] });
 }
 
 /** The bridge, answering the page's acts the way the host would. */
@@ -160,7 +160,7 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
       return Promise.resolve(done(undefined));
     case ACT_KIND.MEMORIES_FORGET: {
       const { workspaceId, id } = request.payload;
-      const before = stored[workspaceId] ?? [];
+      const before = stored.get(workspaceId) ?? [];
       const after = before.filter((memory) => memory.id !== id);
       // The host draws the memory gone the moment it is asked, and puts it back where the service refused it.
       lay(workspaceId, { rows: after });
@@ -171,7 +171,7 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
         return Promise.resolve(done(unanswered));
       }
 
-      stored = { ...stored, [workspaceId]: after };
+      stored = new Map([...stored, [workspaceId, after]]);
 
       return Promise.resolve(done({ memories: after }));
     }
@@ -190,7 +190,7 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
 const roots: Root[] = [];
 
 beforeEach(() => {
-  stored = { [ACME.id]: [DEPLOYS, TESTS] };
+  stored = new Map([[ACME.id, [DEPLOYS, TESTS]]]);
   sent = [];
   readFails = false;
   refuseForget = false;
@@ -395,7 +395,7 @@ test("what Vespin kept in the workspace is held for it and drawn a row each, its
 
 test("a memory's code in backticks is drawn as inline code, never as the backticks themselves", async () => {
   const written = { ...TESTS, text: "Run `pnpm db:generate` after changing a schema." };
-  stored = { [ACME.id]: [written] };
+  stored = new Map([[ACME.id, [written]]]);
   const { page } = await mount();
 
   const code = [
@@ -485,7 +485,7 @@ test("several memories chosen are forgotten on one question, one after another, 
     text: "Pricing lives in the billing service.",
   };
 
-  stored = { [ACME.id]: [DEPLOYS, pricing, TESTS] };
+  stored = new Map([[ACME.id, [DEPLOYS, pricing, TESTS]]]);
   const { page } = await mount();
 
   for (const memory of [DEPLOYS, pricing, TESTS]) act(() => boxOf(page, memory).click());
@@ -510,7 +510,7 @@ test("several memories chosen are forgotten on one question, one after another, 
 });
 
 test("showing another workspace holds that workspace's memories in place of the first's", async () => {
-  stored = { ...stored, [GLOBEX.id]: [] };
+  stored = new Map([...stored, [GLOBEX.id, []]]);
   const { page, show } = await mount();
 
   await show(GLOBEX);
@@ -526,7 +526,7 @@ test("showing another workspace holds that workspace's memories in place of the 
 });
 
 test("a workspace Vespin has remembered nothing in says so", async () => {
-  stored = { [ACME.id]: [] };
+  stored = new Map([[ACME.id, []]]);
   const { page } = await mount();
 
   assert.deepEqual(words(page), []);
@@ -599,7 +599,7 @@ test("the memories agents recalled most in the last 30 days stand first, then th
     lastRecalledAt: Date.UTC(2026, 9, 21, 12),
   };
 
-  stored = { [ACME.id]: [DEPLOYS, TESTS, pricing, flags] };
+  stored = new Map([[ACME.id, [DEPLOYS, TESTS, pricing, flags]]]);
   const { page } = await mount();
 
   assert.deepEqual(words(page), [flags.text, pricing.text, DEPLOYS.text, TESTS.text]);

@@ -106,7 +106,7 @@ const REFUSAL = {
 } as const;
 
 /** A payload each declared act's schema takes, so a window refused it was refused for who it is alone. */
-const PAYLOAD: { readonly [Name in keyof typeof AGENT_ACTS]: WireBoundaryInput } = {
+const PAYLOAD: Readonly<Record<keyof typeof AGENT_ACTS, WireBoundaryInput>> = {
   AGENTS_DEFAULT_WRITE: { model: "anthropic/claude-opus-5.5", effort: "high" },
   AGENTS_CHAPTERS_PROVIDER_WRITE: { provider: "openai" },
   AGENTS_PREFERENCES_RETRY: undefined,

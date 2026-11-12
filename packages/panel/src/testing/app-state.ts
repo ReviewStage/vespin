@@ -623,6 +623,12 @@ export interface AutomationsHold {
   closed: boolean;
 }
 
+type HoldAutomationsResult = {
+  readonly holds: readonly AutomationsHold[];
+  readonly asked: readonly AutomationFollow[];
+  readonly lay: () => void;
+};
+
 /**
  * Answers the window's holds on the automations' reads as the host does,
  * beside whatever acts the test answers by now: each key `readsOf`
@@ -637,11 +643,7 @@ export interface AutomationsHold {
 export function holdAutomations(
   deliver: HostReadsHanded["deliverAutomations"],
   readsOf: AutomationReadsOf,
-): {
-  readonly holds: readonly AutomationsHold[];
-  readonly asked: readonly AutomationFollow[];
-  readonly lay: () => void;
-} {
+): HoldAutomationsResult {
   const holds: AutomationsHold[] = [];
   const asked: AutomationFollow[] = [];
 
@@ -861,6 +863,11 @@ type RepositoriesAnswer = (
   workspace: string,
 ) => RepositoriesRead | Promise<RepositoriesRead> | undefined;
 
+type HoldRepositoryListsResult = {
+  readonly asked: readonly string[];
+  readonly again: () => Promise<void>;
+};
+
 /**
  * Answers the window's holds on each workspace's repositories, and its Try
  * again on one, as the host does, beside whatever acts the test answers by
@@ -874,7 +881,7 @@ type RepositoriesAnswer = (
 export function holdRepositoryLists(
   deliver: HostReadsHanded["deliverRepositoryLists"],
   listOf: RepositoriesAnswer,
-): { readonly asked: readonly string[]; readonly again: () => Promise<void> } {
+): HoldRepositoryListsResult {
   const asked: string[] = [];
   const scopes = new Map<string, { readonly workspaceId?: string }>();
   let held: AppRepositoryLists = NO_KEYS_HELD;

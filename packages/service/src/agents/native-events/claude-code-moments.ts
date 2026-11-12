@@ -341,14 +341,15 @@ const WEEK_MINS = 7 * 24 * 60;
  * counts one (`seven_day_opus`), as its own window beside the week on every
  * model. A limit the SDK names that is no window (`overage`) has none.
  */
-const RATE_LIMIT_WINDOWS: Readonly<
-  Record<string, { readonly windowMins: number; readonly model?: string }>
-> = {
-  five_hour: { windowMins: 5 * 60 },
-  seven_day: { windowMins: WEEK_MINS },
-  seven_day_opus: { windowMins: WEEK_MINS, model: "Opus" },
-  seven_day_sonnet: { windowMins: WEEK_MINS, model: "Sonnet" },
-};
+const RATE_LIMIT_WINDOWS: ReadonlyMap<
+  string,
+  { readonly windowMins: number; readonly model?: string }
+> = new Map([
+  ["five_hour", { windowMins: 5 * 60 }],
+  ["seven_day", { windowMins: WEEK_MINS }],
+  ["seven_day_opus", { windowMins: WEEK_MINS, model: "Opus" }],
+  ["seven_day_sonnet", { windowMins: WEEK_MINS, model: "Sonnet" }],
+]);
 
 /**
  * The errors an answer carries that say the provider refused the plan's
@@ -382,6 +383,8 @@ const RATE_LIMITED = "rate_limit" satisfies NonNullable<
 const MCP_TOOL_PREFIX = "mcp__";
 const MCP_SERVER_SEPARATOR = "__";
 
+type StoredClaudeCodeCallResult = { readonly name: string; readonly input: UnparsedWireValue };
+
 /**
  * The name and input a call is stored under: our tool's own for a call
  * to our MCP server; for a call to an integration's own server, its
@@ -392,7 +395,7 @@ function storedClaudeCodeCall(
   callId: string,
   name: string,
   input: WireValue,
-): { readonly name: string; readonly input: UnparsedWireValue } {
+): StoredClaudeCodeCallResult {
   const workspaceTool = claudeCodeWorkspaceTool(name);
 
   if (workspaceTool !== undefined) return { name: workspaceTool, input };
@@ -716,7 +719,7 @@ function rateLimitMoments(message: WireValue): readonly NativeMoment[] {
 
   if (resetsAtMs !== undefined) words.push(`resets ${new Date(resetsAtMs).toISOString()}`);
   const refused = status === RATE_LIMIT_REFUSED;
-  const window = rateLimitType === undefined ? undefined : RATE_LIMIT_WINDOWS[rateLimitType];
+  const window = rateLimitType === undefined ? undefined : RATE_LIMIT_WINDOWS.get(rateLimitType);
 
   return [
     // Note that the SDK reports utilization as a share of one, which the plan's row keeps in percent.

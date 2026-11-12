@@ -189,11 +189,15 @@ export function readPageLink(
   return site === sandbox.origin && now < until ? page : undefined;
 }
 
-/** The sandbox an environment record names, or why it names none: nothing for either where both variables are unset. */
-function pageSandboxIn(environment: Readonly<Record<string, string | undefined>>): {
+type PageSandboxInResult = {
   readonly sandbox: PageSandbox | undefined;
   readonly unset: string | undefined;
-} {
+};
+
+/** The sandbox an environment record names, or why it names none: nothing for either where both variables are unset. */
+function pageSandboxIn(
+  environment: Readonly<Record<string, string | undefined>>,
+): PageSandboxInResult {
   const secret = text(environment[AGENT_PAGES_ENVIRONMENT.SECRET]);
   const origin = text(environment[AGENT_PAGES_ENVIRONMENT.ORIGIN]);
   const none = (unset: string | undefined) => ({ sandbox: undefined, unset });

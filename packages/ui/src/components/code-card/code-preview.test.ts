@@ -24,7 +24,9 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function drawn(code: string): { lines: string[]; more: boolean } {
+type DrawnResult = { lines: string[]; more: boolean };
+
+function drawn(code: string): DrawnResult {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);

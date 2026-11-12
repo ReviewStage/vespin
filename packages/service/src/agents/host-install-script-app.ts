@@ -58,7 +58,7 @@ const url = (target: HostTarget) =>
 const cliUrl = (target: HostTarget) =>
   cliRelease === undefined ? "" : cliTarballUrl(cliRelease.VERSION, target);
 
-const RELEASE_FILLED: Readonly<Record<string, string>> = {
+const RELEASE_FILLED = {
   "@@VERSION@@": release?.VERSION ?? "",
   "@@SHA256_X64@@": release?.SHA256[HOST_TARGET.LINUX_X64] ?? "",
   "@@SHA256_ARM64@@": release?.SHA256[HOST_TARGET.LINUX_ARM64] ?? "",
@@ -73,7 +73,7 @@ const RELEASE_FILLED: Readonly<Record<string, string>> = {
   "@@CLI_URL_X64@@": cliUrl(HOST_TARGET.LINUX_X64),
   "@@CLI_URL_ARM64@@": cliUrl(HOST_TARGET.LINUX_ARM64),
   "@@CLI_URL_DARWIN_ARM64@@": cliUrl(HOST_TARGET.DARWIN_ARM64),
-};
+} satisfies Readonly<Record<string, string>>;
 
 /** The script with the release written in and the origin left for each request. */
 function withRelease(template: string): string {

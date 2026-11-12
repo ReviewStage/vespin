@@ -55,7 +55,7 @@ interface RefusalRow {
 }
 
 /** Every declared act's row, keyed by its name, so an act declared with no row here does not compile. */
-const REFUSAL_ROWS: { readonly [Name in keyof typeof WORKSPACE_ACTS]: RefusalRow } = {
+const REFUSAL_ROWS: Readonly<Record<keyof typeof WORKSPACE_ACTS, RefusalRow>> = {
   WORKSPACE_CREATE: {
     refusal: "Could not make that workspace on this system.",
     payload: { name: "Relay Labs" },

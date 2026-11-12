@@ -215,6 +215,11 @@ function pickedOver<T>(
   return [...kept, ...added];
 }
 
+type Picked<T> = {
+  readonly shown: readonly T[];
+  readonly draw: (chosen: T, on: boolean) => () => void;
+};
+
 /**
  * One list's picks over what the read holds of it: the list drawn, and the
  * door that draws a pick at once and answers what lets go of it again.
@@ -222,10 +227,7 @@ function pickedOver<T>(
  * or its time runs out (`@repo/ui/pending-values`), so one GitHub took
  * never flickers back while the pull request is read again.
  */
-function usePicks<T>(
-  held: readonly T[],
-  keyOf: (each: T) => string,
-): { readonly shown: readonly T[]; readonly draw: (chosen: T, on: boolean) => () => void } {
+function usePicks<T>(held: readonly T[], keyOf: (each: T) => string): Picked<T> {
   const [picks, setPicks] = useState<Picks<T>>(() => new Map());
   const now = usePendingNow(picks.size > 0);
   useEffect(() => {

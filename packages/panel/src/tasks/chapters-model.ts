@@ -102,14 +102,14 @@ export type ChaptersShown =
     };
 
 /** Every chapters model's label, Claude's and OpenAI's alike, by its provider's id. */
-const MODEL_LABELS: Readonly<Record<string, string>> = {
-  ...CHAPTERS_MODEL_LABEL,
-  ...OPENAI_CHAPTERS_MODEL_LABEL,
-};
+const MODEL_LABELS: ReadonlyMap<string, string> = new Map([
+  ...Object.entries(CHAPTERS_MODEL_LABEL),
+  ...Object.entries(OPENAI_CHAPTERS_MODEL_LABEL),
+]);
 
 /** A chapters model as the view names it, one that told them or one a Generate would run on: its label where Generate offers it, else the id as stored. */
 export function chaptersModelLabel(model: string): string {
-  return Object.hasOwn(MODEL_LABELS, model) ? (MODEL_LABELS[model] ?? model) : model;
+  return MODEL_LABELS.get(model) ?? model;
 }
 
 /**

@@ -334,7 +334,7 @@ function headersOf(
   notification: ApnsNotification,
   bundleId: string,
   providerToken: Redacted.Redacted,
-): Readonly<Record<string, string>> {
+) {
   return {
     authorization: `bearer ${Redacted.value(providerToken)}`,
     "apns-topic": topicOf(bundleId, notification.pushType),
@@ -345,7 +345,7 @@ function headersOf(
     ...(notification.collapseId === undefined
       ? undefined
       : { "apns-collapse-id": notification.collapseId }),
-  };
+  } satisfies Readonly<Record<string, string>>;
 }
 
 /** A record of what became of a send, run past Apple's answer: one that would not land is logged, and the delivery answered all the same. */

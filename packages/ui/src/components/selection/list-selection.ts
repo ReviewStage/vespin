@@ -97,18 +97,24 @@ const RUN_ATTRIBUTE = "data-selection-run";
 /** What finds the run a row stands in. */
 const RUN_SELECTOR = `[${RUN_ATTRIBUTE}]`;
 
+type SelectionRootResult = { readonly "data-selection-root": "" };
+
 /** What the box whose rows are chosen together wears. */
-export function selectionRoot(): { readonly "data-selection-root": "" } {
+export function selectionRoot(): SelectionRootResult {
   return { [ROOT_ATTRIBUTE]: "" };
 }
 
+type SelectionRunResult = { readonly "data-selection-run": "" };
+
 /** What a run of rows wears, a board's column, across which alone a ⇧-press reaches. */
-export function selectionRun(): { readonly "data-selection-run": "" } {
+export function selectionRun(): SelectionRunResult {
   return { [RUN_ATTRIBUTE]: "" };
 }
 
+type SelectableRowResult = { readonly "data-select-key": string };
+
 /** What a row's press wears in a list that chooses rows. */
-export function selectableRow(key: string): { readonly "data-select-key": string } {
+export function selectableRow(key: string): SelectableRowResult {
   return { [KEY_ATTRIBUTE]: key };
 }
 
@@ -204,6 +210,11 @@ export function holdRun(event: MouseEvent<HTMLElement>): void {
   event.currentTarget.focus();
 }
 
+type UseListSelectionResult = {
+  readonly selecting: ListSelecting | undefined;
+  readonly onKeyDown: (event: KeyboardEvent<HTMLElement>) => boolean;
+};
+
 /**
  * The selection a `List` keeps over its rows: what its rows read, and the
  * keys it hears, which answer whether they chose anything so the arrows'
@@ -219,10 +230,7 @@ export function useListSelection(
   order?: readonly (readonly string[])[],
   bringIn?: (key: string, then: () => void) => boolean,
   plain: PlainPress = PLAIN_PRESS.KEEPS,
-): {
-  readonly selecting: ListSelecting | undefined;
-  readonly onKeyDown: (event: KeyboardEvent<HTMLElement>) => boolean;
-} {
+): UseListSelectionResult {
   const anchor = useRef<Anchor | undefined>(undefined);
   // The latest selection, which a caller hands anew on every render.
   const latest = useRef(selection);

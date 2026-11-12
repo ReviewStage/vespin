@@ -76,8 +76,10 @@ function props(overrides: Partial<FileViewProps> = {}): FileViewProps {
   };
 }
 
+type MountFileResult = { host: HTMLElement; handle: FileViewHandle };
+
 /** A file mounted under a host of its own, and the host. */
-function mountFile(drawn: FileViewProps): { host: HTMLElement; handle: FileViewHandle } {
+function mountFile(drawn: FileViewProps): MountFileResult {
   const host = document.createElement("div");
   document.body.append(host);
   const handle = diffView.mountFile(host, drawn);

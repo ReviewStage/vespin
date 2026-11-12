@@ -81,11 +81,13 @@ export function LineWords({ pieces }: { pieces: readonly (string | FileChip)[] }
   );
 }
 
-/** The viewer a message's files open in: open one by its name, walking `files` from it, and the viewer while one is open. */
-export function useWordFileViewer(files: readonly FileChip[]): {
+type UseWordFileViewerResult = {
   readonly open: (name: string) => void;
   readonly viewer: ReactNode;
-} {
+};
+
+/** The viewer a message's files open in: open one by its name, walking `files` from it, and the viewer while one is open. */
+export function useWordFileViewer(files: readonly FileChip[]): UseWordFileViewerResult {
   // The file open, by its name, so a file taken off meanwhile closes it rather than opening its neighbor.
   const [viewing, setViewing] = useState<string | undefined>(undefined);
   const at = viewing === undefined ? -1 : files.findIndex((file) => file.name === viewing);

@@ -180,18 +180,27 @@ const CREATE = {
   action: SUMMARY.action,
 };
 
+type Replies = {
+  change: Effect.Success<ReturnType<AutomationsClient["change"]>>;
+  create: Effect.Success<ReturnType<AutomationsClient["create"]>>;
+  createAnswered: Effect.Effect<void>;
+  run: Effect.Success<ReturnType<AutomationsClient["runNow"]>>;
+};
+
+type Live = {
+  readonly list: PolledLive<"automations", typeof LIVE_SIGNED_OUT>;
+  readonly workspaceRuns: PolledLive<"runs">;
+  /** What the runs' live read answers first, and what a poll past it answers; not found, and held, where unsaid. */
+  runs?: AutomationRunsLiveAnswer;
+  runsPolled?: { readonly failure: typeof AUTOMATION_CALL_FAILURE.NOT_FOUND };
+};
+
 /** The service as a script that writes down every ask it hears, as the ask runs. */
 function fakeService(options: { replaceRefused?: boolean } = {}) {
   const asked: unknown[] = [];
 
   /** The live reads as the service answers them polled (`testing/polled-live.ts`): a workspace's list, every run of it, and one automation's runs. */
-  const live: {
-    readonly list: PolledLive<"automations", typeof LIVE_SIGNED_OUT>;
-    readonly workspaceRuns: PolledLive<"runs">;
-    /** What the runs' live read answers first, and what a poll past it answers; not found, and held, where unsaid. */
-    runs?: AutomationRunsLiveAnswer;
-    runsPolled?: { readonly failure: typeof AUTOMATION_CALL_FAILURE.NOT_FOUND };
-  } = {
+  const live: Live = {
     list: polledLive<"automations", typeof LIVE_SIGNED_OUT>(["automations"]),
     workspaceRuns: polledLive<"runs">(["runs"]),
   };
@@ -201,12 +210,7 @@ function fakeService(options: { replaceRefused?: boolean } = {}) {
   live.workspaceRuns.set({ runs: [] });
 
   /** What a change, a create, and a Run now answer, and what a create waits on before it answers, which a test may replace. */
-  const replies: {
-    change: Effect.Success<ReturnType<AutomationsClient["change"]>>;
-    create: Effect.Success<ReturnType<AutomationsClient["create"]>>;
-    createAnswered: Effect.Effect<void>;
-    run: Effect.Success<ReturnType<AutomationsClient["runNow"]>>;
-  } = {
+  const replies: Replies = {
     change: { automation: SUMMARY },
     create: { automation: SUMMARY },
     createAnswered: Effect.void,

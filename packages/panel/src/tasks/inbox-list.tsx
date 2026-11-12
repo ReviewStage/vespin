@@ -345,6 +345,8 @@ function drawnWidth(width: number, alone: boolean): string | undefined {
 /** No step ticked, the one list every row ticking none is handed, so its props hold while its draft ticks nothing. */
 const NO_TICKS: readonly number[] = [];
 
+type InboxRowDraftResult = { readonly drafted: boolean; readonly ticked: readonly number[] };
+
 /**
  * What an item's row shows of its draft as its list read every row's at
  * once (`useInboxRowDrafts`): whether it wears the pencil, which it does
@@ -356,7 +358,7 @@ export function inboxRowDraft(
   draft: InboxRowDraft | undefined,
   item: InboxItem,
   open: boolean,
-): { readonly drafted: boolean; readonly ticked: readonly number[] } {
+): InboxRowDraftResult {
   const picks = rowPicks(draft, item);
 
   const ticks =

@@ -621,6 +621,11 @@ function foldedAs(folded: ReadonlySet<string>, value: string, now: boolean): Rea
   return next;
 }
 
+type UseOwnFoldResult = {
+  readonly optionRef: (option: HTMLElement | null) => (() => void) | undefined;
+  readonly folded: ReadonlySet<string>;
+};
+
 /**
  * Which options of a fill bar folding by its own width it draws by their
  * glyphs alone, by value, read as each option resizes, which folding its
@@ -630,10 +635,7 @@ function foldedAs(folded: ReadonlySet<string>, value: string, now: boolean): Rea
  * reads its fold; and that an option is observed rather than its name,
  * because a name folded from the first frame reports no change of size.
  */
-function useOwnFold(on: boolean): {
-  readonly optionRef: (option: HTMLElement | null) => (() => void) | undefined;
-  readonly folded: ReadonlySet<string>;
-} {
+function useOwnFold(on: boolean): UseOwnFoldResult {
   const [folded, setFolded] = useState(NONE_FOLDED);
 
   const optionRef = useCallback(

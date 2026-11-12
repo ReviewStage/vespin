@@ -184,8 +184,10 @@ export function commandWords(item: PanelCommand, place: CommandPlace): string {
   return `${item.verb} ${item.noun}`;
 }
 
+type CommandHeadResult = { label: string; icon: React.JSX.Element };
+
 /** The command's verb and glyph as a row's menu draws them, for a submenu or a row's mark, which hold or run it some way of their own. */
-export function commandHead(item: PanelCommand): { label: string; icon: React.JSX.Element } {
+export function commandHead(item: PanelCommand): CommandHeadResult {
   return { label: commandWords(item, COMMAND_PLACE.MENU), icon: item.icon };
 }
 

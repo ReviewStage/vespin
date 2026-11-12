@@ -182,8 +182,10 @@ function itemKey(item: TranscriptItem): string {
   return JSON.stringify(item.place satisfies TranscriptPlace);
 }
 
+type InsetResult = { readonly paddingLeft: number };
+
 /** The step a row stands in by, for the folds that hold it. */
-function inset(depth: number): { readonly paddingLeft: number } {
+function inset(depth: number): InsetResult {
   return { paddingLeft: SPACE.PAGE + depth * DEPTH_INSET };
 }
 

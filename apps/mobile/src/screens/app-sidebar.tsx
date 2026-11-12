@@ -85,6 +85,13 @@ function placeOf(id: string): (typeof PLACES)[number] | undefined {
   return PLACES.find((place) => place.id === id);
 }
 
+type UseAppSidebarResult = {
+  readonly columns: (list?: ListColumn | undefined) => SidebarColumns;
+  /** How the tab's list stands: plain beside the app sidebar, in the sidebar's look where it stands first. */
+  readonly listLook: ListLook;
+  readonly ask: ReactNode;
+};
+
 /**
  * A tab's first columns in a regular window. Where the window is wide enough
  * for three, an iPad's in landscape, the app sidebar stands where the
@@ -105,12 +112,7 @@ export function useAppSidebar(
   place: SidebarPlace,
   tasks: SidebarTasks,
   openTask?: string | undefined,
-): {
-  readonly columns: (list?: ListColumn | undefined) => SidebarColumns;
-  /** How the tab's list stands: plain beside the app sidebar, in the sidebar's look where it stands first. */
-  readonly listLook: ListLook;
-  readonly ask: ReactNode;
-} {
+): UseAppSidebarResult {
   const router = useRouter();
   const waiting = useInboxBadge();
   const openSettings = useOpenSettings();

@@ -50,13 +50,15 @@ function fitsOver(reports: ReadonlyArray<(frame: number) => number>): PageFit[] 
   return fits;
 }
 
+type FramedPageResult = { posted: unknown[]; handTheme: () => void };
+
 /**
  * A page's window running the height and theme scripts, laid out
  * `PAGE_HEIGHT` tall: an event target for its own events and a parent that
  * keeps what is posted to it. Answers what it posted, and a way to hand it
  * the window's theme.
  */
-function framedPage(): { posted: unknown[]; handTheme: () => void } {
+function framedPage(): FramedPageResult {
   const posted: unknown[] = [];
   const page = new EventTarget();
   const parent = { postMessage: (data: unknown) => posted.push(data) };

@@ -1384,13 +1384,15 @@ export interface HeldCall {
   readonly actions: ReactNode;
 }
 
+type UseHeldOpenResult = { open: boolean; onOpenChange: (open: boolean) => void };
+
 /**
  * Whether a held call's row stands open, and its toggle: open while the call
  * waits, so what it would do stands above its answers without a press, and
  * closed again as it is answered, as a finished row stands; a press opens
  * and closes it between.
  */
-function useHeldOpen(waiting: boolean): { open: boolean; onOpenChange: (open: boolean) => void } {
+function useHeldOpen(waiting: boolean): UseHeldOpenResult {
   const [open, setOpen] = useState(waiting);
   const [was, setWas] = useState(waiting);
 

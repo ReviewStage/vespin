@@ -900,9 +900,7 @@ const TASK_FILE_REFUSAL_WORDS = {
 } as const satisfies Record<TaskFileRefusal, string>;
 
 /** A read's answer to the agent: accepted with what it found, or rejected and why, naming the branch GitHub found nothing on. */
-function taskFileAnswerOf(
-  read: Option.Option<TaskFileAnswer | TaskTreeAnswer>,
-): MemberMcpToolResult {
+function taskFileAnswerOf(read: Option.Option<TaskFileAnswer | TaskTreeAnswer>) {
   if (Option.isNone(read)) return agentToolRejected(READ_TASK_REFUSAL.NO_TASK);
   const answer = read.value;
 
@@ -2906,12 +2904,10 @@ const repositoryAsMember = <A extends object, R>(
     if (Result.isFailure(workspace)) return agentToolRejected(workspace.failure);
 
     return yield* run(member.userId, workspace.success).pipe(
-      Effect.map(
-        (found): MemberMcpToolResult => ({
-          status: ACTION_RESULT_STATUS.ACCEPTED,
-          ...found,
-        }),
-      ),
+      Effect.map((found) => ({
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        ...found,
+      })),
       Effect.catch((refusal) =>
         Effect.succeed(
           agentToolRejected(

@@ -46,8 +46,10 @@ function steps(done: number): Todos {
   }));
 }
 
+type DockedResult = { view: HTMLElement; to: (next: Todos) => void };
+
 /** The dock drawn into the page, and a way to draw it again as the agent writes the list anew. */
-function docked(todos: Todos): { view: HTMLElement; to: (next: Todos) => void } {
+function docked(todos: Todos): DockedResult {
   const view = document.body.appendChild(document.createElement("div"));
   const root = createRoot(view);
   roots.push(root);

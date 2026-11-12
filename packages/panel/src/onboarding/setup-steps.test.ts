@@ -139,11 +139,13 @@ const GRACE_JOINED = {
   role: WORKSPACE_ROLE.MEMBER,
 };
 
+type FinishingWithResult = { count: number };
+
 /** Setup standing at its last step for the account alone, after Paperstar was made and left, with `joined` in it beside Dana. */
 function finishingWith(
   deleted: unknown[],
   joined: readonly (typeof GRACE_JOINED)[],
-): { count: number } {
+): FinishingWithResult {
   const place = JSON.stringify({ audience: "me", at: 4, team: PAPERSTAR.id });
   const members = { [PAPERSTAR.id]: { rows: { members: [DANA_OWNS, ...joined] } } };
   writeAppState(

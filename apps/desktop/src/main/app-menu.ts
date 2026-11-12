@@ -515,6 +515,11 @@ export type MenuBarChange =
   /** The commands the focused panel offers now; none known while no panel has told it, which dims nothing. */
   | { readonly offered: readonly AppCommand[] | undefined };
 
+type MenuGateResult = {
+  readonly shown: (command: KeyedCommand) => boolean;
+  readonly named: (command: KeyedCommand) => string;
+};
+
 /**
  * Whether a command's item stands, and what it is called, for the account's
  * own experiments, the platform's capabilities, and the commands the focused
@@ -529,10 +534,7 @@ function menuGate(
   experiments: ExperimentChoices,
   capabilities: readonly HostCapability[],
   offered: readonly AppCommand[] | undefined,
-): {
-  readonly shown: (command: KeyedCommand) => boolean;
-  readonly named: (command: KeyedCommand) => string;
-} {
+): MenuGateResult {
   const choices = experimentsIn(experiments, experimentsOffered(offered ?? []));
 
   return {

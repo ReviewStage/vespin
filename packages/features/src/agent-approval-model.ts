@@ -133,11 +133,13 @@ export function markedAsk<Answering, Failure>(
     : { ...ask, messaged: false };
 }
 
-/** Why an answer did not go, by the failure it came back with, and whether the service refused it, which a press again will not mend. */
-export function answerFailedOf(failure: string): {
+type AnswerFailed = {
   readonly words: string;
   readonly refused: boolean;
-} {
+};
+
+/** Why an answer did not go, by the failure it came back with, and whether the service refused it, which a press again will not mend. */
+export function answerFailedOf(failure: string): AnswerFailed {
   if (failure === AGENT_CALL_FAILURE.NOT_PERMITTED) {
     return { words: ANSWER_FAILED.NOT_PERMITTED, refused: true };
   }

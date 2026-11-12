@@ -27,11 +27,13 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-/** Draws a foot with `props` and hands back its root, to draw it again, and what it was drawn into. */
-function draw(props: React.ComponentProps<typeof ComposerFoot>): {
+type DrawResult = {
   container: HTMLElement;
   redraw: (next: React.ComponentProps<typeof ComposerFoot>) => void;
-} {
+};
+
+/** Draws a foot with `props` and hands back its root, to draw it again, and what it was drawn into. */
+function draw(props: React.ComponentProps<typeof ComposerFoot>): DrawResult {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);

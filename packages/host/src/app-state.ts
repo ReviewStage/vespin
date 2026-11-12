@@ -1403,7 +1403,7 @@ function recordLaid(
           return [field, kept ? keepIdentity(heldRecord[field], value) : value] as const;
         });
 
-  const record: Keyed = { ...Object.fromEntries(fields), [rowsAt]: list };
+  const record = { ...Object.fromEntries(fields), [rowsAt]: list };
   const entries = Object.entries(record);
 
   const kept =
@@ -1418,8 +1418,8 @@ function withIdsMoved(
   entry: HostReadSliceEntry,
   held: Keyed | undefined,
   moves: readonly KeyMoved[],
-): Keyed {
-  const next: Record<string, HeldValue> = { ...held };
+) {
+  const next = { ...held };
 
   for (const move of moves) {
     const id = move.key[move.key.length - 1] ?? "";
@@ -1437,8 +1437,8 @@ function withKindsMoved(
   entry: HostReadSliceEntry,
   held: Keyed | undefined,
   moves: readonly KeyMoved[],
-): Keyed {
-  const next: Record<string, HeldValue> = { ...held };
+) {
+  const next = { ...held };
 
   for (const kind of new Set(moves.map((move) => move.key[0] ?? ""))) {
     // SAFETY: each kind of a slice keyed by two holds a record of its ids.

@@ -50,8 +50,10 @@ function Harness({
   );
 }
 
+type OpenResult = { rows: HTMLElement[]; turned: WritingBlock[] };
+
 /** Opens Turn into over a line that is `current`; answers its rows and what it told. */
-function open(current: WritingBlock | undefined): { rows: HTMLElement[]; turned: WritingBlock[] } {
+function open(current: WritingBlock | undefined): OpenResult {
   const turned: WritingBlock[] = [];
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);

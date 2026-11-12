@@ -267,13 +267,15 @@ function quotedOffset(line: string, at: number): number {
   return at + prefixes;
 }
 
+type LineRunsResult = { runs: TextRun[]; length: number };
+
 /** The runs of words of one line of the document, `start` the place its paragraph stands at and `offset` where its words start, a quote's lines shifted past their `> `. */
 function lineRuns(
   paragraph: PmNode,
   start: number,
   offset: number,
   quoted: boolean,
-): { runs: TextRun[]; length: number } {
+): LineRunsResult {
   const children: PmNode[] = [];
   const starts: number[] = [];
   paragraph.forEach((child, childStart) => {

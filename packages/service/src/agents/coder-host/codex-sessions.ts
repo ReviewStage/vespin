@@ -152,13 +152,15 @@ function effortOf(effort: string): CodexEffort | undefined {
   return Object.values(CODEX_EFFORT).find((level) => level === effort);
 }
 
+type SpeedKeys = { readonly fast: boolean; readonly ultrafast?: true };
+
 /**
  * The service tiers the agent's model runs on, as the runner takes them: a
  * fast version on `fast`, and an Ultrafast one on `ultrafast` with `fast`
  * beside it, so a runner from before Ultrafast runs the fast tier rather
  * than the standard one. The runner asks for neither on the plan.
  */
-function speedKeysOf(agent: Agent): { readonly fast: boolean; readonly ultrafast?: true } {
+function speedKeysOf(agent: Agent): SpeedKeys {
   const speed = providerModelOf(agent.model)?.speed;
 
   if (speed === MODEL_SPEED.ULTRAFAST) return { fast: true, ultrafast: true };

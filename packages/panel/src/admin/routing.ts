@@ -318,13 +318,15 @@ export function workspacesReadQuery(
   };
 }
 
-/** The Admin place's link fields for a view: the Overview none, a section its name, an account's, a workspace's, or a day's page its own. */
-export function adminLinkFields(view: AdminView): {
+type AdminLinkFieldsResult = {
   readonly section?: AdminLinkSection;
   readonly userId?: string;
   readonly workspaceId?: string;
   readonly day?: string;
-} {
+};
+
+/** The Admin place's link fields for a view: the Overview none, a section its name, an account's, a workspace's, or a day's page its own. */
+export function adminLinkFields(view: AdminView): AdminLinkFieldsResult {
   switch (view.kind) {
     case ADMIN_PAGE.ACCOUNT:
       return { userId: view.id };

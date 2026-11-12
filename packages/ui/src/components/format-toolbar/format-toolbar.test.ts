@@ -42,11 +42,13 @@ interface Told {
   comments: number;
 }
 
+type MountResult = { toolbar: HTMLElement; told: Told };
+
 /** The toolbar over a selection wearing `marks`, offering Turn into from `current` and Comment where asked. */
 function mount(
   marks: readonly WritingMark[],
   offer: { turnInto?: boolean; current?: WritingBlock; comment?: boolean } = {},
-): { toolbar: HTMLElement; told: Told } {
+): MountResult {
   const told: Told = { marks: [], turned: [], comments: 0 };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);

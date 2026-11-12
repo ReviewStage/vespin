@@ -795,6 +795,11 @@ function useSaveRunActions(workspaceId: string) {
 /** The section's one save of a repository's run actions. */
 type RunActionSave = ReturnType<typeof useSaveRunActions>;
 
+type UseRunActionOrderResult = {
+  ordered: readonly RunAction[];
+  move: (from: number, to: number) => void;
+};
+
 /**
  * A repository's run actions in the order the service keeps, a drag drawn
  * at once and saved as the whole list; the list rests on the order sent
@@ -805,7 +810,7 @@ function useRunActionOrder(
   saving: RunActionSave,
   repository: string,
   actions: readonly RunAction[],
-): { ordered: readonly RunAction[]; move: (from: number, to: number) => void } {
+): UseRunActionOrderResult {
   const [sentOrder, setSentOrder] = useState<readonly string[] | undefined>(undefined);
   const byId = new Map(actions.map((action) => [action.id, action]));
 

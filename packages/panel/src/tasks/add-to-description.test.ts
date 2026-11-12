@@ -144,8 +144,10 @@ const SHOWN: AgentTranscriptMessage = {
   ],
 };
 
+type RecordedResult = { shown: AgentTranscriptMessage; door: AgentPictureDoor };
+
 /** A recording the agent showed, which its door answers as the bytes given. */
-function recorded(base64: string): { shown: AgentTranscriptMessage; door: AgentPictureDoor } {
+function recorded(base64: string): RecordedResult {
   const door: AgentPictureDoor = {
     owner: `agent-add-video-${String(base64.length)}`,
     read: () => Promise.resolve({ contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64 }),

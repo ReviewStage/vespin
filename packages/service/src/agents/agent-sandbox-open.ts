@@ -99,8 +99,8 @@ export function agentSandboxName(sessionId: string): string {
 }
 
 /** The tags a sandbox we open carries: its session's, and the agent it is opened for. */
-export function agentSandboxTags(sessionId: string, agentId: string): Record<string, string> {
-  return { [SESSION_TAG]: sessionId, [AGENT_TAG]: agentId };
+export function agentSandboxTags(sessionId: string, agentId: string) {
+  return { [SESSION_TAG]: sessionId, [AGENT_TAG]: agentId } satisfies Record<string, string>;
 }
 
 /** The calls the lookup makes of `Sandbox`. */

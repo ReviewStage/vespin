@@ -126,6 +126,11 @@ function branchActions(
   return [copies, open].filter((group) => group.length > 0);
 }
 
+type PullRequestPlacesResult = {
+  readonly press: () => void;
+  readonly other: MenuAction | undefined;
+};
+
 /**
  * A pull request's press and the menu's other place: where it opens in its
  * Pull request tab (`inApp`), a press opens the tab and the menu GitHub's
@@ -138,7 +143,7 @@ function pullRequestPlaces(
   inApp: (() => void) | undefined,
   onGitHub: boolean,
   doors: PublishedDoors,
-): { readonly press: () => void; readonly other: MenuAction | undefined } {
+): PullRequestPlacesResult {
   const openGitHub = () => doors.openGitHub(url);
 
   if (inApp === undefined) return { press: openGitHub, other: undefined };

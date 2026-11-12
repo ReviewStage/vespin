@@ -71,13 +71,15 @@ function logRefusal(answer: { readonly failure: string } | { readonly done: true
 /** An activity that ended on the phone and is not yet told: its update token, or none where it never handed one. */
 type EndedActivity = { readonly token: string | undefined };
 
-/** The latest push-to-start token and activity token ActivityKit handed this launch, the activity's none once it ends, and the ends not yet told. */
-function useActivityTokens(): {
+type UseActivityTokensResult = {
   readonly start: string | undefined;
   readonly activity: string | undefined;
   readonly ends: readonly EndedActivity[];
   readonly told: (end: EndedActivity) => void;
-} {
+};
+
+/** The latest push-to-start token and activity token ActivityKit handed this launch, the activity's none once it ends, and the ends not yet told. */
+function useActivityTokens(): UseActivityTokensResult {
   const [start, setStart] = useState<string | undefined>(undefined);
   const [activity, setActivity] = useState<string | undefined>(undefined);
   const [ends, setEnds] = useState<readonly EndedActivity[]>([]);

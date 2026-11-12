@@ -715,6 +715,11 @@ test("a terminal's row in the panel's + counts the agent's Local terminals, leav
   assert.equal(standing, "2 terminals");
 });
 
+type LocalDoors = {
+  open: (agentId: string, fresh: boolean) => void;
+  end: (tab: LocalStripTab) => void;
+};
+
 /** The doors that open the agent's Local tabs and end one, over a side panel that writes down each tab it is asked to choose. */
 function localDoors(
   open: readonly LocalStripTab[] = [],
@@ -723,7 +728,7 @@ function localDoors(
   terminals = windowTerminals(),
 ) {
   const chosen: SidePanelTab[] = [];
-  let doors: { open: (agentId: string, fresh: boolean) => void; end: (tab: LocalStripTab) => void };
+  let doors: LocalDoors;
 
   const Doors = () => {
     const opened = useOpenTerminalTab(

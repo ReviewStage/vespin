@@ -692,11 +692,13 @@ export function recommendedLabels(choice: Recommending): readonly string[] {
   return Predicate.isString(choice.recommended) ? [choice.recommended] : choice.recommended;
 }
 
-/** A posted recommendation as a choice keeps it: nothing, its one label, or its first label and every label. */
-function keptRecommendation(choice: Recommending): {
+type KeptRecommendationResult = {
   recommended?: string;
   recommendations?: readonly string[];
-} {
+};
+
+/** A posted recommendation as a choice keeps it: nothing, its one label, or its first label and every label. */
+function keptRecommendation(choice: Recommending): KeptRecommendationResult {
   const labels = recommendedLabels(choice);
   const [first] = labels;
 

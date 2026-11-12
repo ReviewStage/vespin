@@ -327,8 +327,10 @@ function rightClick(page: HTMLElement, key: string): void {
   });
 }
 
+type OpenMenuResult = { heading: string | undefined; items: string[] };
+
 /** The open menu's heading, and its items' labels, in order. */
-function openMenu(): { heading: string | undefined; items: string[] } {
+function openMenu(): OpenMenuResult {
   const menu = document.querySelector<HTMLElement>('[role="menu"]:not([data-leaving])');
   assert.ok(menu, "a menu stands open");
 

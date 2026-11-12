@@ -168,6 +168,8 @@ afterEach(() => {
   for (const port of ports.splice(0)) port.close();
 });
 
+type Script = { connectPage: string | undefined };
+
 /**
  * A window's act port serving the task procedures alone, opened as the bridge opens one, over a fake host:
  * the window standing as `actor`, trusted or not.
@@ -179,7 +181,7 @@ function windowPort(
   const asked: string[] = [];
   const browsed: string[] = [];
   /** The page the host names to connect the account's own GitHub, or none. */
-  const script: { connectPage: string | undefined } = { connectPage: CONNECT_PAGE };
+  const script: Script = { connectPage: CONNECT_PAGE };
 
   const ask = <A>(line: string, answer: () => A) =>
     Effect.sync(() => {

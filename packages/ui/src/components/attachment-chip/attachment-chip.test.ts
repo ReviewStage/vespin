@@ -53,11 +53,13 @@ function drawn(props: Parameters<typeof AttachmentChip>[0]): HTMLElement {
   return list;
 }
 
-/** One chip drawn into a list of the page, and a way to draw it again as it changes. */
-function redrawn(props: Parameters<typeof AttachmentChip>[0]): {
+type RedrawnResult = {
   list: HTMLElement;
   to: (next: Parameters<typeof AttachmentChip>[0]) => void;
-} {
+};
+
+/** One chip drawn into a list of the page, and a way to draw it again as it changes. */
+function redrawn(props: Parameters<typeof AttachmentChip>[0]): RedrawnResult {
   const list = document.createElement("ul");
   document.body.append(list);
   const root = createRoot(list);

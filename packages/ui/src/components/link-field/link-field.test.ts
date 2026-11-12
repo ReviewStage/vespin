@@ -31,13 +31,15 @@ afterEach(() => {
 /** What a test's field told its owner, in order. */
 type Told = string[];
 
-/** The field over words linked to `href`, or none, and a way to hand the same field another link. */
-function mount(href?: string): {
+type MountResult = {
   popover: HTMLElement;
   field: HTMLInputElement;
   told: Told;
   relink: (href: string | undefined) => void;
-} {
+};
+
+/** The field over words linked to `href`, or none, and a way to hand the same field another link. */
+function mount(href?: string): MountResult {
   const told: Told = [];
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);

@@ -570,13 +570,14 @@ export function composeLocalAgents(
      */
     const shellEnvironment = Effect.map(
       loginPath,
-      (loginShellPath): Readonly<Record<string, string>> => ({
-        ...handedOn,
-        ...Option.match(loginShellPath, {
-          onNone: () => ({}),
-          onSome: (value) => ({ [VARIABLE.PATH]: value }),
-        }),
-      }),
+      (loginShellPath) =>
+        ({
+          ...handedOn,
+          ...Option.match(loginShellPath, {
+            onNone: () => ({}),
+            onSome: (value) => ({ [VARIABLE.PATH]: value }),
+          }),
+        }) satisfies Readonly<Record<string, string>>,
     );
 
     // -- the follow --------------------------------------------------

@@ -361,11 +361,10 @@ function withSettledCall(turn: Turn, callId: string): Turn {
   return { ...settled, running };
 }
 
+type UnknownCallResult = { readonly name: string; readonly input: WireValue };
+
 /** A call to a tool no transcript registers, as it is stored: under `UNKNOWN_TOOL`, the name it called and its input kept in its input. */
-function unknownCall(
-  called: string,
-  input: UnparsedWireValue,
-): { readonly name: string; readonly input: WireValue } {
+function unknownCall(called: string, input: UnparsedWireValue): UnknownCallResult {
   return {
     name: UNKNOWN_TOOL,
     input: input === undefined ? { name: called } : { name: called, input },

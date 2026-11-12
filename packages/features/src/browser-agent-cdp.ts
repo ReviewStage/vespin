@@ -1538,8 +1538,10 @@ function stepOf<R>(
   );
 }
 
+type Bound = { readonly millis: number; readonly reason: string };
+
 /** How long an action may take, and what is said when it takes longer. */
-function boundOf(action: BrowserAgentAction): { readonly millis: number; readonly reason: string } {
+function boundOf(action: BrowserAgentAction): Bound {
   if (action.action === BROWSER_AGENT_ACTION.STOP_RECORDING) {
     const millis = BROWSER_AGENT_LIMITS.RECORDING_STOP_TIMEOUT_MS;
 

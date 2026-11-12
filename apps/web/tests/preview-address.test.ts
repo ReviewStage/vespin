@@ -217,10 +217,9 @@ async function rebasedBranch(t: TestContext, webBeforeRebase: string): Promise<F
   return { checkout, answers, bin, earlier, between, head };
 }
 
-function previewAddress(
-  fixture: Fixture,
-  attempts = 1,
-): { status: number | null; address: string } {
+type PreviewAddressResult = { status: number | null; address: string };
+
+function previewAddress(fixture: Fixture, attempts = 1): PreviewAddressResult {
   const ran = spawnSync("bash", ["scripts/preview-address.sh", "--repo", REPOSITORY], {
     cwd: fixture.checkout,
     encoding: "utf8",

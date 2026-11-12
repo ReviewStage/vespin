@@ -239,8 +239,10 @@ test("a preset a read does not list is let go, so a later read listing it does n
   assert.equal(chip.textContent?.includes("octo/tools"), false, chip.textContent ?? "");
 });
 
+type Scope = { id: string | undefined };
+
 test("a preset survives a read made before the workspace resolved and stands once its workspace's read lists it", async () => {
-  const scope: { id: string | undefined } = { id: undefined };
+  const scope: Scope = { id: undefined };
 
   const { container, redraw } = await mount(
     (workspace) =>

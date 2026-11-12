@@ -22,11 +22,13 @@ import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "re
 /** Reads a message the frame posted as the zoom's, nothing for anything else the page posts. */
 const readZoom = Schema.decodeUnknownOption(pageZoomAnswerSchema);
 
-/** The page's size in `frame`, and a step of it the menu takes. */
-export function usePageZoom(frame: RefObject<HTMLIFrameElement | null>): {
+type UsePageZoomResult = {
   readonly zoom: number;
   readonly press: (key: PageZoomKey) => void;
-} {
+};
+
+/** The page's size in `frame`, and a step of it the menu takes. */
+export function usePageZoom(frame: RefObject<HTMLIFrameElement | null>): UsePageZoomResult {
   const [zoom, setZoom] = useState(PAGE_ZOOM_ACTUAL);
   const latest = useRef(zoom);
   useLayoutEffect(() => {

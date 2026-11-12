@@ -133,8 +133,10 @@ function expiresAt(at: number): string {
   return clockText(moment.getHours(), moment.getMinutes());
 }
 
+type RefusalWordsResult = { title: string; body: string };
+
 /** What a code that cannot be approved says: why, and what to do next. */
-function refusalWords(refusal: HostPairingFailed): { title: string; body: string } {
+function refusalWords(refusal: HostPairingFailed): RefusalWordsResult {
   if (refusal.failure !== HOST_PAIRING_CALL_FAILURE.HELD) {
     return { title: WORDS.NOT_FOUND_TITLE, body: `${WORDS.NOT_FOUND} ${WORDS.AGAIN}` };
   }

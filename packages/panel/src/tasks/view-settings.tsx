@@ -484,6 +484,11 @@ function ViewSettingsPopover({
   );
 }
 
+type UseViewSettingsSheetResult = {
+  readonly action: MenuAction;
+  readonly sheet: React.ReactNode;
+};
+
 /**
  * View options as a phone offers it, where the bar it stands in is not
  * drawn: an item of the task's header's ⋯ (`useTabActions`), which opens
@@ -491,10 +496,7 @@ function ViewSettingsPopover({
  * the popover to hang from, and Done, Escape, or a press on the dimmed
  * screen puts it away.
  */
-export function useViewSettingsSheet(scope: ViewSettingsScope): {
-  readonly action: MenuAction;
-  readonly sheet: React.ReactNode;
-} {
+export function useViewSettingsSheet(scope: ViewSettingsScope): UseViewSettingsSheetResult {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
 

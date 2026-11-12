@@ -208,7 +208,7 @@ function ownChoices(record: Partial<Record<OwnPartField, UnparsedWireValue>>): A
 
 /** An account's preferences without its own parts' choices: its shared part. */
 function sharedOf(preferences: AccountPreferences): AccountPreferences {
-  const shared: Record<string, UnparsedWireValue> = { ...preferences };
+  const shared = { ...preferences };
 
   for (const field of OWN_PART_FIELDS) delete shared[field];
 
@@ -276,7 +276,7 @@ export function accountPreferencesToWrite(
   local: AccountPreferences,
   baseline: AccountPreferences | undefined,
 ): AccountPreferences {
-  const written: Record<string, UnparsedWireValue> = { ...local };
+  const written: Partial<Record<AccountPreferenceField, UnparsedWireValue>> = { ...local };
 
   for (const field of OWN_PART_FIELDS) {
     if (local[field] === undefined && baseline?.[field] !== undefined) {
@@ -285,7 +285,7 @@ export function accountPreferencesToWrite(
   }
 
   // SAFETY: each value is the device's own choice or the preference's default.
-  return written;
+  return written as AccountPreferences;
 }
 
 /**
@@ -298,9 +298,7 @@ export function accountPreferencesToPush(
   local: AccountPreferences,
   baseline: AccountPreferences | undefined,
 ): AccountPreferences {
-  const written: Record<string, UnparsedWireValue> = {
-    ...accountPreferencesToWrite(local, baseline),
-  };
+  const written = { ...accountPreferencesToWrite(local, baseline) };
 
   for (const field of OWN_PART_FIELDS) {
     if (written[field] === baseline?.[field]) delete written[field];

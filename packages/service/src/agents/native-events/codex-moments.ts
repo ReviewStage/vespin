@@ -312,16 +312,15 @@ function mcpAnswerText(content: readonly WireValue[], workspaceTool: boolean): s
     .join("\n");
 }
 
+type StoredMcpCallResult = { readonly name: string; readonly input: UnparsedWireValue };
+
 /**
  * The name and input a call to an MCP server is stored under: our tool's own
  * for our own server; for an integration's own server, its integration's
  * fixed name and envelope, as the retired runtime's nested call of the tool is stored
  * (`storedServerCall`); `mcpToolCall` naming the server and tool otherwise.
  */
-function storedMcpCall(
-  call: typeof McpToolCallSchema.Type,
-  args: WireValue,
-): { readonly name: string; readonly input: UnparsedWireValue } {
+function storedMcpCall(call: typeof McpToolCallSchema.Type, args: WireValue): StoredMcpCallResult {
   if (WORKSPACE_MCP_SERVER_NAMES.has(call.server)) return { name: call.tool, input: args };
 
   return (

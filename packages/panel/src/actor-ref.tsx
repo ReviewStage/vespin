@@ -935,6 +935,8 @@ function KnownAutomationActorCard({ automationId }: { automationId: string }): R
   );
 }
 
+type ActorCards = { readonly [K in Actor["kind"]]: (actor: ActorOf<K>) => ReactNode };
+
 /**
  * The card each kind of actor hangs where the place naming it adds
  * nothing, one entry per kind, so a kind added fails to compile until it
@@ -943,7 +945,7 @@ function KnownAutomationActorCard({ automationId }: { automationId: string }): R
  * An agent or an automation named by its name alone hangs none, its name
  * standing as a pill.
  */
-const ACTOR_CARD: { readonly [K in Actor["kind"]]: (actor: ActorOf<K>) => ReactNode } = {
+const ACTOR_CARD: ActorCards = {
   [ACTOR_KIND.PERSON]: (actor) => <PersonCard actor={actor} />,
   [ACTOR_KIND.SOMEONE]: (actor) => <SomeoneCard actor={actor} />,
   [ACTOR_KIND.GITHUB]: (actor) => <GitHubCard actor={actor} />,

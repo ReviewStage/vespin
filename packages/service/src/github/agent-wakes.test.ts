@@ -625,6 +625,8 @@ test("a person's review reaches an agent at work or not, Vespin's App's only an 
   );
 });
 
+type Held = { checkRuns: object[]; statuses: object[] };
+
 it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
   it.effect(
     "a review on the branch of an agent's pull request in a repository it works in beside its own, and a comment on that pull request by its number, are told to the agent",
@@ -1115,7 +1117,7 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
         yield* runningTurn(owner, agent.conversationId);
         yield* publishedAt(owner, agent.id, HEAD);
 
-        const held: { checkRuns: object[]; statuses: object[] } = {
+        const held: Held = {
           checkRuns: [checkRun(1, "lint", "success", MADE_AT), checkRun(2, "test", null, MADE_AT)],
           statuses: [{ state: "pending", updated_at: new Date(MADE_AT).toISOString() }],
         };

@@ -102,8 +102,10 @@ async function settle(): Promise<void> {
   });
 }
 
+type DrawResult = { rerender: (next: React.ReactElement) => void };
+
 /** Draws an element on the test's Query client, as the window's root does. */
-function draw(element: React.ReactElement): { rerender: (next: React.ReactElement) => void } {
+function draw(element: React.ReactElement): DrawResult {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);

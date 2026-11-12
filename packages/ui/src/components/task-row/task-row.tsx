@@ -362,7 +362,10 @@ const ROWS =
   "ui-task-rows m-0 grid list-none grid-cols-tasks-list content-start gap-x-block-gap gap-y-0 p-0";
 
 /** Which way a key asks a row's fold to stand: → open, ← folded. */
-const FOLD_KEY_OPENS: Readonly<Record<string, boolean>> = { ArrowRight: true, ArrowLeft: false };
+const FOLD_KEY_OPENS: ReadonlyMap<string, boolean> = new Map([
+  ["ArrowRight", true],
+  ["ArrowLeft", false],
+]);
 
 /** Whether a cell is drawn before the row's name, in a column of its own. */
 function leads(cell: TaskRowCell): cell is LeadingCell {
@@ -714,7 +717,7 @@ export function TaskRow({
   // Note that → and ← are the row's only while they would move its fold, so the list still hears the rest.
   const foldKeys = (event: KeyboardEvent<HTMLElement>) => {
     if (fold === undefined) return;
-    const asked = FOLD_KEY_OPENS[event.key];
+    const asked = FOLD_KEY_OPENS.get(event.key);
 
     if (asked === undefined || asked === fold.open) return;
     event.preventDefault();

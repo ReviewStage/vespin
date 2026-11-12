@@ -316,10 +316,12 @@ test("a run anchored to its end, first drawn in a scroller not laid out, opens a
   assert.equal(top, 49_400);
 });
 
+type Held = { runs?: VirtualRuns };
+
 test("a list's runs answer every row's key, those left undrawn among them, in the order the runs stand", () => {
   vi.stubGlobal("ResizeObserver", StandInResizeObserver);
   const scroller = createRef<HTMLDivElement>();
-  const held: { runs?: VirtualRuns } = {};
+  const held: Held = {};
   const keysOf = (name: string) => Array.from({ length: 200 }, (_, index) => `${name}-${index}`);
 
   function Run({ name, runs }: { name: string; runs: VirtualRuns }) {

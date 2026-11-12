@@ -50,11 +50,13 @@ function draw(element: ReactElement): void {
   act(() => root.render(element));
 }
 
+type WayBackResult = { button: HTMLButtonElement; backs: () => number };
+
 /** A way back to the inbox drawn in `look`, and how many times it went back. */
 function wayBack(
   look: BackButtonLook,
   keyed: Pick<Parameters<typeof BackButton>[0], "command" | "tabbable" | "keepFocus" | "name"> = {},
-): { button: HTMLButtonElement; backs: () => number } {
+): WayBackResult {
   let backs = 0;
   draw(
     createElement(BackButton, {

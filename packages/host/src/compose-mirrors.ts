@@ -253,12 +253,12 @@ function standingOf(mirror: Mirror): MirrorStanding {
 }
 
 /** A failure's step, why, and code as a span's attributes. */
-function droppedAttributes(dropped: MirrorDropped): Record<string, string | number> {
+function droppedAttributes(dropped: MirrorDropped) {
   return {
     [SPAN_ATTRIBUTE.STEP]: dropped.step,
     [SPAN_ATTRIBUTE.FAILURE]: dropped.failure,
     ...(dropped.code !== undefined && { [CODE_ATTRIBUTE[dropped.step]]: dropped.code }),
-  };
+  } satisfies Record<string, string | number>;
 }
 
 /** Why a tunnel closed before its header, by its close code. */

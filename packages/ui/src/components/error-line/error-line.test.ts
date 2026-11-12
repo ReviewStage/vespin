@@ -88,11 +88,13 @@ test("a form field's error and a Settings row's each describe their control", ()
   describedByErrorLine(render(settingsRow(REFUSED)));
 });
 
-/** What the window's polite and alert regions say once `place` goes from no error to `REFUSED`. */
-function saidOnArrival(place: (error: string | undefined) => ReactElement): {
+type SaidOnArrivalResult = {
   polite: string | null | undefined;
   alert: string | null | undefined;
-} {
+};
+
+/** What the window's polite and alert regions say once `place` goes from no error to `REFUSED`. */
+function saidOnArrival(place: (error: string | undefined) => ReactElement): SaidOnArrivalResult {
   render(createElement(Announcer));
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);

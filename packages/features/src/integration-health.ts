@@ -63,11 +63,13 @@ export function saidWords(source: string, words: string): string {
   return `${source} said: “${words}”`;
 }
 
+type ProblemLinesResult = { readonly problem: string; readonly said?: string };
+
 /** The sentence that says why a provider's server listed no tools, and its own message quoted where it sent one. */
 function problemLines(
   provider: IntegrationProvider,
   problem: { readonly reason: IntegrationToolsProblemReason; readonly message?: string },
-): { readonly problem: string; readonly said?: string } {
+): ProblemLinesResult {
   const name = INTEGRATION_NAME[provider];
 
   if (problem.reason === INTEGRATION_TOOLS_PROBLEM.REFUSED) {

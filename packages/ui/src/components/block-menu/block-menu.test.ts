@@ -72,8 +72,10 @@ interface Told {
   chosen: string[];
 }
 
+type MountResult = { menu: HTMLElement; told: Told };
+
 /** The menu over `groups`, `active` highlighted. */
-function mount(groups: readonly BlockMenuGroup[], active = 0): { menu: HTMLElement; told: Told } {
+function mount(groups: readonly BlockMenuGroup[], active = 0): MountResult {
   const told: Told = { active: [], chosen: [] };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);

@@ -119,8 +119,10 @@ function restOn(target: Element): void {
   }
 }
 
+type RenderUnhintedResult = { view: HTMLElement; line: Element };
+
 /** A line as the window draws it, its box `width` wide against words 120 wide, with no hint of its caller's. */
-function renderUnhinted(width: number): { view: HTMLElement; line: Element } {
+function renderUnhinted(width: number): RenderUnhintedResult {
   vi.stubGlobal("ResizeObserver", StandInObserver);
   const view = render(createElement(OneLine, { children: "A very long task name" }));
   const line = view.querySelector(".ui-one-line") ?? assert.fail("the line");

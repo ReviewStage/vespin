@@ -473,13 +473,13 @@ export const EDITOR_ROOT_SELECTOR = ".ProseMirror";
 export type EditorAria = Readonly<Record<string, string | undefined>>;
 
 /** The names a list's field carries (`useComboboxField`'s), as the editor root that steers the list takes them; the root's role is the editor's own (`rootAria`). */
-export function listAria(field: ComboboxFieldProps): EditorAria {
+export function listAria(field: ComboboxFieldProps) {
   return {
     "aria-expanded": String(field["aria-expanded"]),
     "aria-controls": field["aria-controls"],
     "aria-autocomplete": field["aria-autocomplete"],
     "aria-activedescendant": field["aria-activedescendant"],
-  };
+  } satisfies EditorAria;
 }
 
 /** Whether two sets of attributes say the same, so an editor handed what it holds already is not updated again. */

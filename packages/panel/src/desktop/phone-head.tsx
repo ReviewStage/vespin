@@ -68,11 +68,13 @@ export function useAskedMenu(
   }, [ask, show]);
 }
 
-/** A page's own menu the ⋯ opens in its place: the ask, and the door that makes one from the ⋯. */
-export function useMenuAsk(): {
+type UseMenuAskResult = {
   ask: MenuAsk | undefined;
   onAsk: (opener: HTMLElement) => void;
-} {
+};
+
+/** A page's own menu the ⋯ opens in its place: the ask, and the door that makes one from the ⋯. */
+export function useMenuAsk(): UseMenuAskResult {
   const [ask, setAsk] = useState<MenuAsk | undefined>(undefined);
 
   return {

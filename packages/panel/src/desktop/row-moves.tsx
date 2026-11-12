@@ -129,6 +129,11 @@ const ROW_INDEX = "data-index";
 /** A press of a key in what is typed into belongs to the field, so a row's own name being edited keeps ⇧⌘↑ for its text. */
 const TYPING = "input, textarea, select, [contenteditable]";
 
+type UseRowMoveKeysResult = {
+  ref: (list: HTMLElement | null) => void;
+  [MOVE_LIST]: "";
+};
+
 /**
  * Offers ⇧⌘↑ and ⇧⌘↓ while a row of the list has the keyboard, moving that
  * row one place by the same move a drop makes, and keeping it focused so the
@@ -139,10 +144,9 @@ const TYPING = "input, textarea, select, [contenteditable]";
  * focused row in the document takes the focus from it, as the tab strip's
  * step finds (`tabs.tsx`).
  */
-export function useRowMoveKeys(move: ((from: number, to: number) => void) | undefined): {
-  ref: (list: HTMLElement | null) => void;
-  [MOVE_LIST]: "";
-} {
+export function useRowMoveKeys(
+  move: ((from: number, to: number) => void) | undefined,
+): UseRowMoveKeysResult {
   const [list, setList] = useState<HTMLElement | null>(null);
   const [held, setHeld] = useState(false);
   useEffect(() => {

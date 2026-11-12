@@ -1514,12 +1514,12 @@ function withoutOwner(held: HeldState, taskId: string | undefined, tab: SidePane
  * every kind the panel holds, so a kind added draws nowhere until it says
  * where it does.
  */
-const DRAWN_OF_KIND: {
-  readonly [K in Exclude<SidePanelTab, FixedSidePanelTab>["kind"]]: (
-    held: HeldState,
-    drawn: DrawnTabs,
-  ) => readonly SidePanelTab[];
-} = {
+const DRAWN_OF_KIND: Readonly<
+  Record<
+    Exclude<SidePanelTab, FixedSidePanelTab>["kind"],
+    (held: HeldState, drawn: DrawnTabs) => readonly SidePanelTab[]
+  >
+> = {
   [STRIP_TAB_KIND.TRANSCRIPT]: (held, drawn) =>
     held.transcripts.filter((each) => drawsTranscript(each, drawn)),
   [STRIP_TAB_KIND.SUBAGENT]: drawnSubagents,

@@ -70,8 +70,10 @@ export function shellLine(command: McpCommand): string {
   return command.map((word) => (PLAIN_WORD.test(word) ? word : shellQuoted(word))).join(" ");
 }
 
+type CursorEntryResult = { readonly url: string };
+
 /** The entry Cursor keeps for a remote server: its address alone. */
-function cursorEntry(serverUrl: string): { readonly url: string } {
+function cursorEntry(serverUrl: string): CursorEntryResult {
   return { url: serverUrl };
 }
 

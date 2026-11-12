@@ -149,7 +149,7 @@ function chord(host: HTMLElement, letter: string, shift = false): boolean {
 }
 
 /** What the box's words hold in each mark's element, by the element's tag. */
-function marked(host: HTMLElement): Record<string, string[]> {
+function marked(host: HTMLElement) {
   const found: Record<string, string[]> = {};
 
   for (const tag of ["strong", "em", "s", "code", "a"]) {

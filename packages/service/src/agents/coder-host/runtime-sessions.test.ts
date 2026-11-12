@@ -103,6 +103,16 @@ import { CODER_TOOL_SET } from "./tool-set.js";
 import { consumeTurnDelivery } from "./turn-delivery.js";
 import { TURN_DELIVERY } from "./turn-delivery-bounds.js";
 
+type Answers = {
+  open: string;
+  status: number;
+  planRefusal?: PlanRefusal;
+  planResetsAt?: number;
+  halts: boolean;
+  keyRefusal?: KeyRefusal;
+  handover: TurnHandover;
+};
+
 /**
  * runtime-sessions.test.ts -- every way the service reaches a coding agent's session answers it by the runtime its conversation runs on.
  *
@@ -131,15 +141,7 @@ function recording(sessionPrefix: string) {
   const messages: SessionMessage[] = [];
   const booted = new Set<string>();
 
-  const answers: {
-    open: string;
-    status: number;
-    planRefusal?: PlanRefusal;
-    planResetsAt?: number;
-    halts: boolean;
-    keyRefusal?: KeyRefusal;
-    handover: TurnHandover;
-  } = {
+  const answers: Answers = {
     open: SESSION_SEND_OUTCOME.ACCEPTED,
     status: 0,
     halts: true,

@@ -537,7 +537,7 @@ function codeOf(chain: readonly CauseFacts[]): string {
 function factAttributes(
   facts: CauseFacts,
   names: { readonly [Key in keyof Required<CauseFacts>]: string },
-): FailureAttributes {
+) {
   const attributes: FailureAttributes = {};
 
   // SAFETY: `names` is keyed by every key of CauseFacts, and by nothing else.
@@ -551,7 +551,7 @@ function factAttributes(
 }
 
 /** Each id under its attribute's name, for those that are known. */
-function aboutAttributes(about: FailureAbout): FailureAttributes {
+function aboutAttributes(about: FailureAbout) {
   const attributes: FailureAttributes = {};
 
   // SAFETY: ABOUT_ATTRIBUTE is a literal keyed by every key of FailureAbout, and by nothing else.
@@ -756,13 +756,13 @@ export function sendShownFailure(
 export function shownFailureDetails(report: ShownFailureReport, told: ShownFailureTold): string {
   const { attributes } = readReport(report);
 
-  const lines: Record<string, string | number | boolean | undefined> = {
+  const lines = {
     [DETAIL_KEY.TIME]: new Date(told.at).toISOString(),
     [DETAIL_KEY.VERSION]: told.version,
     ...attributes,
     [DETAIL_KEY.EVENT]: told.sent?.eventId,
     [DETAIL_KEY.TRACE]: told.sent?.traceId,
-  };
+  } satisfies Record<string, string | number | boolean | undefined>;
 
   const said = Object.entries(lines).flatMap(([key, value]) =>
     value === undefined || value === "" ? [] : [`${key}: ${value}`],

@@ -155,8 +155,10 @@ function runLength(line: string, at: number, char: string): number {
   return end - at;
 }
 
+type FlankingResult = { canOpen: boolean; canClose: boolean };
+
 /** Whether a delimiter run may open and may close, as CommonMark's flanking rules say. */
-function flanking(line: string, at: number, run: number): { canOpen: boolean; canClose: boolean } {
+function flanking(line: string, at: number, run: number): FlankingResult {
   const before = line[at - 1];
   const after = line[at + run];
   const beforeSpace = before === undefined || WHITESPACE.test(before);
@@ -499,8 +501,10 @@ function closing(mark: InlineMark): string {
   return `${CLOSE_BRACKET}(${writtenAddress(mark.href ?? "")})`;
 }
 
+type CodeFencesResult = { fence: string; pad: string };
+
 /** Code's words between fences longer than any run of backticks in them, padded where they start or end in a backtick or stand between spaces. */
-function codeFences(words: string): { fence: string; pad: string } {
+function codeFences(words: string): CodeFencesResult {
   const longest = Math.max(0, ...(words.match(TICK_RUNS) ?? []).map((run) => run.length));
   const between = words.startsWith(SPACE) && words.endsWith(SPACE) && words.trim() !== "";
   const pad = words.startsWith(TICK) || words.endsWith(TICK) || between ? SPACE : "";
@@ -517,6 +521,11 @@ function keptOpen(open: readonly InlineMark[], marks: readonly InlineMark[]): nu
   return kept === -1 ? open.length : kept;
 }
 
+type WriteInlineResult = {
+  readonly text: string;
+  readonly segments: readonly WrittenSegment[];
+};
+
 /**
  * One line written as Markdown: each piece's words wearing its marks, a
  * mark opened and closed only where the marks change, the spaces at a
@@ -524,10 +533,7 @@ function keptOpen(open: readonly InlineMark[], marks: readonly InlineMark[]): nu
  * CommonMark needs them to. Answers the line, and where every stretch of
  * each piece's words landed in it.
  */
-export function writeInline(pieces: readonly InlinePiece[]): {
-  readonly text: string;
-  readonly segments: readonly WrittenSegment[];
-} {
+export function writeInline(pieces: readonly InlinePiece[]): WriteInlineResult {
   let text = "";
   const segments: WrittenSegment[] = [];
   const open: InlineMark[] = [];

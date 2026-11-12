@@ -92,11 +92,13 @@ interface Opened {
   readonly key: number;
 }
 
+type UseOpenedResult = { opened: Opened; said: (markdown: string) => void };
+
 /**
  * Note that the editor opens on its words once, so words the owner changed
  * outside it, rather than the ones it last handed over, open it again.
  */
-function useOpened(value: string): { opened: Opened; said: (markdown: string) => void } {
+function useOpened(value: string): UseOpenedResult {
   const handed = useRef(value);
   const opened = useRef<Opened>({ markdown: value, key: 0 });
 

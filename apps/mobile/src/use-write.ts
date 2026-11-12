@@ -222,6 +222,8 @@ export function useWrite(): Write {
   return write;
 }
 
+type Said = { words?: string };
+
 /**
  * Sends `act` through `write` for a press that says its refusal in place
  * with `@repo/ui-native`'s `useAsyncAction`: answers the words to say, the
@@ -231,7 +233,7 @@ export function refusalOf<Answer>(
   write: Write,
   act: () => PromiseLike<Answer>,
 ): Promise<string | undefined> {
-  const said: { words?: string } = {};
+  const said: Said = {};
 
   return write(act, {
     inPlace: (words) => {

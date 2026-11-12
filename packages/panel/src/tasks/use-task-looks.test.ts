@@ -53,15 +53,17 @@ afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount());
 });
 
-/** A window drawing `open`, or no plan, for `readerId`, from the row the list carries: a render each call. */
-function windowOn(): {
+type WindowOnResult = {
   readonly draw: (
     open: Task | undefined,
     readerId: string | undefined,
     row?: Pick<TaskSummary, "readThrough" | "agents">,
   ) => void;
   readonly looks: () => typeof NO_LOOKS;
-} {
+};
+
+/** A window drawing `open`, or no plan, for `readerId`, from the row the list carries: a render each call. */
+function windowOn(): WindowOnResult {
   let looks = NO_LOOKS;
 
   function Reader({
@@ -195,6 +197,8 @@ test("a plan's look is sent as it opens, as its agents move while it stays open,
   );
 });
 
+type Drawn = { unread: (task: TaskSummary) => boolean };
+
 test("a task reads unread while it changed after the reader's mark or stands marked so, never for a pull request merging alone, and never while it is the one open but by hand", () => {
   const read: TaskSummary = {
     ...DOCUMENT_TASK,
@@ -205,7 +209,7 @@ test("a task reads unread while it changed after the reader's mark or stands mar
 
   const finished: TaskSummary = { ...read, agents: agentsAt(LOOKED_AT + 2) };
   const marked: TaskSummary = { ...read, markedUnread: true };
-  const drawn: { unread: (task: TaskSummary) => boolean } = { unread: () => false };
+  const drawn: Drawn = { unread: () => false };
 
   function Sidebar({ open }: { open: Task | undefined }) {
     useTaskLooks(open, DEAN.userId);

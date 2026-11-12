@@ -293,6 +293,12 @@ export interface ListRowNest {
   readonly size: number;
 }
 
+type NestedItemResult = {
+  "aria-level"?: number;
+  "aria-posinset"?: number;
+  "aria-setsize"?: number;
+};
+
 /**
  * What a reader hears of a row's nesting, spread on its item: its level, 1
  * at the top, and its place among its siblings, in a list that nests rows;
@@ -300,10 +306,7 @@ export interface ListRowNest {
  * rows stand flat in one list, as their motion, their drag, and a grid's
  * columns need, so the place is said rather than left to the list to count.
  */
-export function nestedItem(
-  depth: number,
-  nest: ListRowNest | undefined,
-): { "aria-level"?: number; "aria-posinset"?: number; "aria-setsize"?: number } {
+export function nestedItem(depth: number, nest: ListRowNest | undefined): NestedItemResult {
   if (nest === undefined) return depth === 0 ? {} : { "aria-level": depth + 1 };
 
   return { "aria-level": depth + 1, "aria-posinset": nest.position, "aria-setsize": nest.size };
@@ -370,7 +373,10 @@ const FOLD_CLASS =
   "ui-list-row-fold col-[leading] row-1 z-1 grid min-h-control-icon min-w-control-icon cursor-press place-items-center rounded-control border-0 bg-transparent p-0 text-muted-foreground";
 
 /** Which way a key asks a row's fold to stand: → open, ← folded. */
-const FOLD_KEY_OPENS: Readonly<Record<string, boolean>> = { ArrowRight: true, ArrowLeft: false };
+const FOLD_KEY_OPENS: ReadonlyMap<string, boolean> = new Map([
+  ["ArrowRight", true],
+  ["ArrowLeft", false],
+]);
 
 /** The press spans the mark, the words, and the end, its parts standing in the row's own tracks. */
 const MAIN_CLASS =
@@ -805,7 +811,7 @@ export function ListRow({
   // Note that → and ← are the row's only while they would move its fold, so a list walking its rows along them still hears the rest.
   const foldKeys = (event: KeyboardEvent<HTMLElement>) => {
     if (fold === undefined) return;
-    const asked = FOLD_KEY_OPENS[event.key];
+    const asked = FOLD_KEY_OPENS.get(event.key);
 
     if (asked === undefined || asked === fold.open) return;
     event.preventDefault();

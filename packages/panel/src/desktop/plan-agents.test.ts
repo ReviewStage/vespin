@@ -86,6 +86,8 @@ function waitingOn(agentId: string, count: number): ReadonlyMap<string, readonly
   return new Map([[agentId, items]]);
 }
 
+type Opened = { agents: string[]; pullRequests: string[]; phone: string[] };
+
 /** The group over `agents`, `NEWEST` holding a merged pull request, unfolded unless `folded` says, offering New agent on its head where `newAgent` says, a phone's where `phone` says; every agent, pull request, and start it opens recorded. */
 function mount(
   agents: readonly AgentSummary[],
@@ -104,7 +106,7 @@ function mount(
     acts?: Partial<AgentsControl>;
   } = {},
 ) {
-  const opened: { agents: string[]; pullRequests: string[]; phone: string[] } = {
+  const opened: Opened = {
     agents: [],
     pullRequests: [],
     phone: [],

@@ -222,8 +222,10 @@ function turnInto(container: HTMLElement, block: string): void {
   act(() => row.click());
 }
 
+type Block = { tag: string; wrapped: boolean };
+
 /** The element the words stand in, by its tag, and whether a list or a quote holds it. */
-function blockOf(element: HTMLElement, words: string): { tag: string; wrapped: boolean } {
+function blockOf(element: HTMLElement, words: string): Block {
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
 
   for (let text = walker.nextNode(); text !== null; text = walker.nextNode()) {

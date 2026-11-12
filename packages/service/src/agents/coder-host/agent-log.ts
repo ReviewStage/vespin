@@ -54,18 +54,18 @@ const REPORTED_KEYS = [
 export function agentLogIds(
   agent: Partial<Pick<Agent, "id" | "conversationId" | "taskId">>,
   sessionId?: string,
-): Readonly<Record<string, string>> {
+) {
   return {
     ...(agent.id === undefined ? undefined : { agentId: agent.id }),
     ...(agent.conversationId === undefined ? undefined : { conversationId: agent.conversationId }),
     ...(agent.taskId === undefined ? undefined : { taskId: agent.taskId }),
     ...(sessionId === undefined ? undefined : { sessionId }),
-  };
+  } satisfies Readonly<Record<string, string>>;
 }
 
 /** Where the agent's machine runs it, a line is annotated with: the sandbox's run, on a sandbox. */
-export function runningLogId(running: string): Readonly<Record<string, string>> {
-  return { sandboxSessionId: running };
+export function runningLogId(running: string) {
+  return { sandboxSessionId: running } satisfies Readonly<Record<string, string>>;
 }
 
 /** A failure's own words as a line or a turn's record may keep them: every credential-shaped run redacted, then cut. */

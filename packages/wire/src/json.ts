@@ -32,7 +32,7 @@ export type UnparsedWireValue = WireValue | undefined;
  * decided; {@link isWireRecordValue}, {@link WireValueSchema}, and
  * {@link isPlainRecord} below all read it back rather than restating it.
  */
-function isPlainWireRecordShape(value: unknown): value is WireRecord {
+function isPlainWireRecordShape<T>(value: T): value is T & WireRecord {
   if (!Predicate.isObject(value)) return false;
 
   if (Object.prototype.toString.call(value) !== "[object Object]") return false;
@@ -241,7 +241,7 @@ export function resolveOptions<K extends string>(
     readonly nonNegative?: readonly K[];
   },
 ): ResolvedNumericOptions<K> {
-  const resolved: { [P in K]: number } = { ...defaults };
+  const resolved: Record<K, number> = { ...defaults };
 
   for (const key of bounds.positive ?? []) {
     resolved[key] = positiveInteger(options[key], defaults[key]);

@@ -75,6 +75,11 @@ export function CommentFiles({ chips }: { chips: readonly FileChip[] }): React.R
   );
 }
 
+type UseCommentFileEntriesResult = {
+  readonly entries: readonly AgentAttachment[];
+  readonly idOf: (entry: AgentAttachment) => string | undefined;
+};
+
 /**
  * A comment's files as its edit's box holds them, each read as the
  * comment's are: a file of the box's, its bytes empty until they land, and
@@ -88,10 +93,7 @@ export function CommentFiles({ chips }: { chips: readonly FileChip[] }): React.R
 export function useCommentFileEntries(
   planId: string,
   files: readonly DescriptionCommentFile[],
-): {
-  readonly entries: readonly AgentAttachment[];
-  readonly idOf: (entry: AgentAttachment) => string | undefined;
-} {
+): UseCommentFileEntriesResult {
   const urls = useCommentFileReads(planId, files);
   const known = useRef(new Map<string, AgentAttachment>());
 

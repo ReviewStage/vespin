@@ -241,11 +241,13 @@ export function reregisterPushDevice(acts: ActPortClient, fixture: boolean): Pro
   return key === undefined ? Promise.resolve() : registeredPushDevice(acts, key);
 }
 
-/** The phone's standing as Settings draws it, none until the service answers, and the "Notify me" choice made from it. */
-export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
+type UsePushDeviceStandingResult = {
   readonly standing: PushDeviceStatusAnswer | undefined;
   readonly choose: (notify: PushNotify) => void;
-} {
+};
+
+/** The phone's standing as Settings draws it, none until the service answers, and the "Notify me" choice made from it. */
+export function usePushDeviceStanding(key: PushDeviceKey | undefined): UsePushDeviceStandingResult {
   const acts = useHostActs();
   const write = useWrite();
   const [standing, setStanding] = useState<PushDeviceStatusAnswer | undefined>(undefined);

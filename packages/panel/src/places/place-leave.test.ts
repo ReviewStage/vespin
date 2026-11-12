@@ -44,11 +44,13 @@ interface Asked {
   readonly stay: () => void;
 }
 
+type Shell = { heard: ShellLeaveAsk | undefined };
+
 /** The window's leave guard under a router over `history`, the page standing an ask that records each time it is asked, and what the shell heard last. */
 function mount(history: RouterHistory) {
   const held = windowRouter(history);
   const asked: Asked[] = [];
-  const shell: { heard: ShellLeaveAsk | undefined } = { heard: undefined };
+  const shell: Shell = { heard: undefined };
   let leave: PlaceLeave | undefined;
 
   function Probe() {

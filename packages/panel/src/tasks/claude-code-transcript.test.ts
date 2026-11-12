@@ -86,8 +86,10 @@ function drawn(part: WireRecord | readonly WireRecord[], todos = false) {
   return { container, opened };
 }
 
+type OpenedResult = { readonly line: string; readonly body: string };
+
 /** What a row says on its line, and everything it shows once its fold is opened. */
-function opened(part: WireRecord): { readonly line: string; readonly body: string } {
+function opened(part: WireRecord): OpenedResult {
   const { container } = drawn(part);
   const line = container.querySelector("summary") ?? assert.fail("the call is a fold's line");
   const said = line.textContent ?? "";

@@ -58,8 +58,10 @@ export interface MenuEnds {
   readonly footer?: React.ReactNode;
 }
 
+type KeyedByResult = { hint: React.ReactNode; pressedBy: MenuKeyMatch };
+
 /** A command's chord as a shared item prints it and hears it: muted at its end, and choosing it while the menu stands. */
-function keyedBy(command: KeyedCommand): { hint: React.ReactNode; pressedBy: MenuKeyMatch } {
+function keyedBy(command: KeyedCommand): KeyedByResult {
   const { chord } = APP_SHORTCUTS[command];
 
   return { hint: <Shortcut chord={chord} />, pressedBy: (event) => shortcutMatches(chord, event) };

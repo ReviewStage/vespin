@@ -145,13 +145,17 @@ export const LIST_MOTION_WAY = {
 
 export type ListMotionWay = (typeof LIST_MOTION_WAY)[keyof typeof LIST_MOTION_WAY];
 
+type MotionRowsResult = { readonly "data-motion-rows": "" };
+
 /** The attributes a list whose children move wears, spread on it. */
-export function motionRows(): { readonly "data-motion-rows": "" } {
+export function motionRows(): MotionRowsResult {
   return { [ROWS_ATTRIBUTE]: "" };
 }
 
+type MotionKeyResult = { readonly "data-motion-key": string };
+
 /** The attribute a row followed by its key wears, spread on it. */
-export function motionKey(key: string): { readonly "data-motion-key": string } {
+export function motionKey(key: string): MotionKeyResult {
   return { [KEY_ATTRIBUTE]: key };
 }
 
@@ -397,8 +401,10 @@ function scrollerOf(element: HTMLElement): HTMLElement | undefined {
   return undefined;
 }
 
+type View = { readonly top: number; readonly bottom: number };
+
 /** The band of the window, top to bottom, that shows what `root` draws: the scroller's box around it, cut to the window. */
-function viewOf(root: HTMLElement): { readonly top: number; readonly bottom: number } {
+function viewOf(root: HTMLElement): View {
   const scroller = scrollerOf(root)?.getBoundingClientRect();
   const height = root.ownerDocument.defaultView?.innerHeight ?? Number.POSITIVE_INFINITY;
 

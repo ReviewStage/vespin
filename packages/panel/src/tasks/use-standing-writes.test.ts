@@ -47,14 +47,16 @@ const WORKING_VIEW: TasksView = {
   tasks: [{ ...NOTES, agents: { total: 1, working: 1, pullRequestTotal: 0 } }],
 };
 
+type MountWritesResult = {
+  writes: () => StandingWrites;
+  payloads: unknown[];
+};
+
 /** The standing writes over `view`, drawn with their question under the window's toasts, the act port answering `standing` and writing down each payload. */
 function mountWrites(
   standing: FakeActPort[typeof ACT_KIND.TASKS_SET_STANDING],
   view: TasksView = VIEW,
-): {
-  writes: () => StandingWrites;
-  payloads: unknown[];
-} {
+): MountWritesResult {
   const payloads: unknown[] = [];
   fakeAppBridge({});
   fakeActPort({

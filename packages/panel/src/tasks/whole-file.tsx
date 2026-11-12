@@ -84,8 +84,10 @@ function sameReadNotes(a: readonly ReadNote[], b: readonly ReadNote[]): boolean 
   );
 }
 
+type Place = { line: number | undefined; note: string | undefined };
+
 /** The line a range of drawn words stands on, read from the row Pierre drew it in, or the note its words are in. */
-function placeOf(range: Range): { line: number | undefined; note: string | undefined } {
+function placeOf(range: Range): Place {
   const start = range.startContainer;
   const element = start instanceof Element ? start : start.parentElement;
   const note = element?.closest(`[${NOTE_KEY_ATTRIBUTE}]`)?.getAttribute(NOTE_KEY_ATTRIBUTE);

@@ -513,7 +513,7 @@ function withKeyLaid<Read extends object>(
   keyed: SliceLevel,
   path: readonly string[],
   read: Read | undefined,
-): SliceLevel {
+) {
   const [id, ...below] = path;
 
   if (id === undefined) return keyed;

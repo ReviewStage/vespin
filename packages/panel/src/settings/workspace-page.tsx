@@ -180,16 +180,15 @@ const TRANSFER_WORDS = {
   BODY: "You become an admin. The new owner can change anyone's role and remove anyone, you included, and only they can give it back.",
 } as const;
 
+type TransferAskResult = { gate: string; question: DialogQuestion };
+
 /**
  * The one question either door to the handover asks, a member row's Make
  * owner and the owner's Transfer ownership: its title names the new owner
  * where the door already knows them, and the act waits on the workspace's
  * name typed, since only the new owner can give it back.
  */
-function transferAsk(
-  workspace: Workspace,
-  heir: string | undefined,
-): { gate: string; question: DialogQuestion } {
+function transferAsk(workspace: Workspace, heir: string | undefined): TransferAskResult {
   const to = heir === undefined ? "" : ` to ${heir}`;
 
   return {

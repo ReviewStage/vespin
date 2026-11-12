@@ -252,8 +252,10 @@ function drawnOf(rows: AgentTranscriptLiveRows): Drawn {
   };
 }
 
+type CursorPartsResult = { readonly seq: number; readonly revision: string };
+
 /** A cursor's highest message sequence, and the journal revision it was read at. */
-function cursorParts(cursor: string): { readonly seq: number; readonly revision: string } {
+function cursorParts(cursor: string): CursorPartsResult {
   const [seq = "0", revision = "0"] = cursor.split(":");
 
   return { seq: Number(seq), revision };

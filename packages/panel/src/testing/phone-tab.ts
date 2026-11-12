@@ -17,11 +17,13 @@ export interface PhoneHanded {
   readonly press: (label: string, opener?: HTMLElement) => void;
 }
 
-/** `element` as a phone's panel draws it, and what it hands its header's ⋯. */
-export function onPhone(element: React.ReactNode): {
+type OnPhoneResult = {
   readonly element: React.ReactElement;
   readonly handed: PhoneHanded;
-} {
+};
+
+/** `element` as a phone's panel draws it, and what it hands its header's ⋯. */
+export function onPhone(element: React.ReactNode): OnPhoneResult {
   let held: TabActionGroups | undefined;
 
   const find = (label: string) => {
