@@ -624,7 +624,10 @@ export function AgentScreen() {
         presented={archiving}
         onAct={() => {
           setArchiving(false);
-          actions.archive(leave);
+          actions.archiveAsk.answered(
+            () => actions.archive(leave),
+            () => setArchiving(true),
+          );
         }}
         onDismiss={() => setArchiving(false)}
       />

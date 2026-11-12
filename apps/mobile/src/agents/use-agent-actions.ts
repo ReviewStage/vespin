@@ -69,43 +69,61 @@ function archiveQuestion(working: boolean): ArchiveQuestion {
     : { title: ARCHIVE_AT_REST.title, message: undefined, act: ARCHIVE_AT_REST.act };
 }
 
-/** What Archive asks of one agent, and the way to raise it. */
+/** What Archive asks of one agent, the way to raise it, and the way to answer it. */
 export interface ArchiveAsk {
   /** What Archive asks, by where the agent stood when it was raised. */
   readonly question: ArchiveQuestion;
   /** Reads the agent `agentId` names afresh, and answers whether the question may stand: false where a later ask overtook this one. */
   readonly ask: (agentId: string) => Promise<boolean>;
+  /** The question's act pressed: runs `archive` where the agent stands as it was asked about, and otherwise asks again, calling `present` once the fresh read lands. */
+  readonly answered: (archive: () => void, present: () => void) => void;
 }
 
 /**
  * What Archive asks of the agent `agentId` names, read afresh before it's
  * raised, as the panel reads an agent again before archiving it
- * (`agent-archive.tsx`). Note that it asks Stop and archive where the list
- * or the fresh read finds the agent at work, or where the read failed,
- * because one that started a turn since would otherwise be stopped without
- * a word of it, while a needless Stop and archive costs only its words.
- * Only the latest ask answers, so a slow read for one agent never stands
- * its question over another's.
+ * (`agent-archive.tsx`). Note that it asks Stop and archive where the fresh
+ * read finds the agent at work, or where the read failed, because one that
+ * started a turn since would otherwise be stopped without a word of it,
+ * while a needless Stop and archive costs only its words. The question
+ * keeps the words it was raised with while it stands, and an agent asked
+ * about at rest that started a turn before the act was pressed is asked
+ * about again rather than archived, for the same reason. Only the latest
+ * ask answers, so a slow read for one agent never stands its question over
+ * another's.
  */
 export function useArchiveAsk(agentId: string): ArchiveAsk {
   const agent = useFollowedAgent(agentId);
   const readAgent = useReadAgent();
-  const [freshWorking, setFreshWorking] = useState(false);
+  const [askedWorking, setAskedWorking] = useState(false);
   const latest = useRef(0);
 
-  const working = freshWorking || (agent !== undefined && agentStillWriting(agent.status));
+  const ask = (asked: string): Promise<boolean> => {
+    latest.current += 1;
+    const mine = latest.current;
+
+    return readAgent(asked).then((fresh) => {
+      if (latest.current !== mine) return false;
+      setAskedWorking(fresh === undefined || agentStillWriting(fresh.status));
+
+      return true;
+    });
+  };
 
   return {
-    question: archiveQuestion(working),
-    ask: (asked) => {
-      latest.current += 1;
-      const mine = latest.current;
+    question: archiveQuestion(askedWorking),
+    ask,
+    answered: (archive, present) => {
+      const workingNow = agent !== undefined && agentStillWriting(agent.status);
 
-      return readAgent(asked).then((fresh) => {
-        if (latest.current !== mine) return false;
-        setFreshWorking(fresh === undefined || agentStillWriting(fresh.status));
+      if (askedWorking || !workingNow) {
+        archive();
 
-        return true;
+        return;
+      }
+
+      void ask(agentId).then((stands) => {
+        if (stands) present();
       });
     },
   };
