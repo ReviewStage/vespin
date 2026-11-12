@@ -39,7 +39,7 @@ import { useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
-import { useAgentPage, useFollowedAgent } from "./use-agent.js";
+import { useFollowedAgent, useReadAgent } from "./use-agent.js";
 
 /** Why each act did not take, said over the composer. */
 const ACT_FAILED = {
@@ -69,32 +69,36 @@ function archiveQuestion(working: boolean): ArchiveQuestion {
     : { title: ARCHIVE_AT_REST.title, message: undefined, act: ARCHIVE_AT_REST.act };
 }
 
-/** What Archive asks of one agent, and the way to ask it. */
+/** What Archive asks of one agent, and the way to raise it. */
 export interface ArchiveAsk {
-  /** What Archive asks, by where the agent stands now. */
+  /** What Archive asks, by where the agent stood when it was raised. */
   readonly question: ArchiveQuestion;
-  /** Reads the agent afresh as the question is raised. */
-  readonly ask: () => void;
+  /** Reads the agent `agentId` names afresh, and answers once the question is ready to stand. */
+  readonly ask: (agentId: string) => Promise<void>;
 }
 
 /**
- * What Archive asks of the agent `agentId` names, read afresh each time it's
- * asked, as the panel reads a teammate's agent again before archiving it
- * (`agent-archive.tsx`). Note that it asks Stop and archive where either the
- * list or the fresh read finds the agent at work, because an agent the list
- * doesn't hold is followed by nothing, and one that started a turn since
- * would otherwise be stopped without a word of it.
+ * What Archive asks of the agent `agentId` names, read afresh before it's
+ * raised, as the panel reads an agent again before archiving it
+ * (`agent-archive.tsx`). Note that it asks Stop and archive where the list
+ * or the fresh read finds the agent at work, or where the read failed,
+ * because one that started a turn since would otherwise be stopped without
+ * a word of it, while a needless Stop and archive costs only its words.
  */
 export function useArchiveAsk(agentId: string): ArchiveAsk {
   const agent = useFollowedAgent(agentId);
-  const [asked, setAsked] = useState(0);
-  const fresh = useAgentPage(agentId, asked > 0, asked);
+  const readAgent = useReadAgent();
+  const [freshWorking, setFreshWorking] = useState(false);
 
-  const working = [agent, fresh].some(
-    (read) => read !== undefined && agentStillWriting(read.status),
-  );
+  const working = freshWorking || (agent !== undefined && agentStillWriting(agent.status));
 
-  return { question: archiveQuestion(working), ask: () => setAsked((was) => was + 1) };
+  return {
+    question: archiveQuestion(working),
+    ask: (asked) =>
+      readAgent(asked).then((fresh) =>
+        setFreshWorking(fresh === undefined || agentStillWriting(fresh.status)),
+      ),
+  };
 }
 
 /** What the agent's menu does. */

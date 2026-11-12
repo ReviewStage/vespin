@@ -13,7 +13,7 @@
 
 import { type AgentPartCut, WHOLE_PART, type WholePartRead } from "@repo/features/agent-parts";
 import { ARCHIVE_FAILED, STOP_FAILED } from "@repo/features/agent-refusal-words";
-import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
+import { type AgentPageAnswerView, TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
   type AgentPullRequest,
   type AgentStatus,
@@ -32,7 +32,7 @@ import {
   selectTranscript,
 } from "@repo/host/app-state-reads";
 import { BUZZ, latestStep, NO_TOGGLES, type OlderPages, transcriptItems } from "@repo/ui-native";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cachedVideo } from "../cached-media.js";
@@ -48,7 +48,7 @@ function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not land.`, error);
 }
 
-/** The key one agent's own read is held under, by its id and the ask it answers. */
+/** The key one agent's own read is held under, by its id. */
 const AGENT_PAGE_QUERY = "agent-page";
 
 /** Whether the host has read the task list once, so an agent it doesn't hold is one it never will, rather than one on its way. */
@@ -56,38 +56,60 @@ function selectTasksRead(state: AppStateSnapshot): boolean {
   return state.tasks.listStatus === TASKS_READ.READY;
 }
 
-/**
- * One agent read by its id as its own page reads it (`AGENTS_PAGE`), while
- * `enabled`, as the panel reads an agent the list doesn't hold
- * (`agentPageQueryOptions`); none until it answers, or where it can't be
- * read. Note that each `ask` reads it afresh, as a question that must know
- * where the agent stands now asks.
- */
-export function useAgentPage(agentId: string, enabled: boolean, ask = 0): ListedAgent | undefined {
-  const acts = useHostActs();
-
-  return useQuery({
-    queryKey: [AGENT_PAGE_QUERY, agentId, ask],
+/** One agent's own read (`AGENTS_PAGE`), as the panel's `agentPageQueryOptions` asks it: every ask reads afresh, and a failure is never tried again on its own. */
+function agentPageQuery(acts: ReturnType<typeof useHostActs>, agentId: string) {
+  return {
+    queryKey: [AGENT_PAGE_QUERY, agentId],
     queryFn: () => acts[ACT_KIND.AGENTS_PAGE]({ agentId }),
-    enabled: enabled && agentId !== "",
     retry: false,
-    select: (answer) => ("failure" in answer ? undefined : listedAgentOfPage(answer.agent)),
-  }).data;
+  } as const;
+}
+
+/** The agent an answer to its own read carries, in the list's shape; none where it could not be read. */
+function agentOfAnswer(answer: AgentPageAnswerView): ListedAgent | undefined {
+  return "failure" in answer ? undefined : listedAgentOfPage(answer.agent);
+}
+
+/** The agent as the task list follows it, by its id; none until the list holds it. */
+export function useFollowedAgent(agentId: string): FollowedAgent | undefined {
+  const select = useMemo(() => selectFollowedAgent(agentId), [agentId]);
+
+  return useQuery({ ...appStateQuery, select }).data;
 }
 
 /**
- * The agent as the task list follows it, by its id; one the list doesn't
- * hold, such as an archived or a teammate's agent a link names, read once
- * the list has been read and found without it (`useAgentPage`), as the
- * panel's agent page reads one. None until either holds it.
+ * The agent a page draws, by its id: as the task list follows it, or, for
+ * one the list doesn't hold, such as an archived agent or a teammate's a
+ * link names, as its own read answered once the list was read without it,
+ * as the panel's agent page reads one. Note that such a read is taken once
+ * and followed by nothing, so it names the agent and its place, while what
+ * acts on the agent or follows its turn reads the list alone
+ * (`useFollowedAgent`) and its status is the transcript's to say.
  */
-export function useFollowedAgent(agentId: string): FollowedAgent | undefined {
-  const select = useMemo(() => selectFollowedAgent(agentId), [agentId]);
-  const listed = useQuery({ ...appStateQuery, select }).data;
+export function useShownAgent(agentId: string): FollowedAgent | undefined {
+  const acts = useHostActs();
+  const listed = useFollowedAgent(agentId);
   const { data: read = false } = useQuery({ ...appStateQuery, select: selectTasksRead });
-  const page = useAgentPage(agentId, read && listed === undefined);
+
+  const page = useQuery({
+    ...agentPageQuery(acts, agentId),
+    enabled: read && listed === undefined && agentId !== "",
+    select: agentOfAnswer,
+  }).data;
 
   return listed ?? page;
+}
+
+/** Reads one agent afresh by its id, whether the list holds it or not; none where it could not be read. */
+export function useReadAgent(): (agentId: string) => Promise<ListedAgent | undefined> {
+  const acts = useHostActs();
+  const queryClient = useQueryClient();
+
+  return useCallback(
+    (agentId: string) =>
+      queryClient.fetchQuery(agentPageQuery(acts, agentId)).then(agentOfAnswer, () => undefined),
+    [acts, queryClient],
+  );
 }
 
 /** No pull requests, held as one value so a list that holds none reads the same each time. */

@@ -1103,10 +1103,8 @@ export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
   const letGo = () => setAsked((was) => (was === undefined ? was : { ...was, presented: false }));
 
   return {
-    archive: (agentId) => {
-      readAfresh();
-      setAsked({ agentId, presented: true });
-    },
+    archive: (agentId) =>
+      void readAfresh(agentId).then(() => setAsked({ agentId, presented: true })),
     ask: (
       <ConfirmAsk
         title={question.title}
