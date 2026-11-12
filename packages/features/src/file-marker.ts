@@ -53,8 +53,8 @@ const BLANK_NAME = "File";
 /** A name and the extension after it, so a numbered name keeps its type: "notes.txt" as "notes" and ".txt". */
 const EXTENSION = /^(.+?)(\.[^.\s]{1,16})?$/u;
 
-/** A picture's name that says nothing of it: none, or the clipboard's "image" under whatever type, as a pasted screenshot comes. */
-const UNNAMED_PICTURE = /^\s*(?:image)?\s*(?:\.[^.]*)?$/iu;
+/** The stem the clipboard gives a picture pasted with no file of its own, "image.png", which says nothing of it. */
+const CLIPBOARD_STEM = "image";
 
 /** A marker found in the words: where it starts and ends, and the file it names. */
 export interface FileMarkerToken {
@@ -132,7 +132,12 @@ export function unusedName(name: string, used: ReadonlySet<string>): string {
  * the way in keeps the name it was handed under, which its chip says.
  */
 export function attachedPictureName(name: string, used: ReadonlySet<string>): string {
-  return UNNAMED_PICTURE.test(name) ? nextPictureName(used) : unusedName(writableName(name), used);
+  // Note that the stem is cut by hand rather than by a pattern, so no name, however long, reads slowly.
+  const dot = name.lastIndexOf(".");
+  const stem = (dot === -1 ? name : name.slice(0, dot)).trim().toLowerCase();
+  const unnamed = stem === "" || stem === CLIPBOARD_STEM;
+
+  return unnamed ? nextPictureName(used) : unusedName(writableName(name), used);
 }
 
 /** Every marker written in the words, in order, code's among them: what the words hold of each file, which undo may bring back. */
