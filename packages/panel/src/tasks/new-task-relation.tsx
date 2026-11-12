@@ -1,4 +1,5 @@
 import { sameRepository } from "@repo/features/github-repositories-wire";
+import { REMOVE_RELATION, TASK_RELATION_MENU } from "@repo/features/task-relation-model";
 import { TASK_CREATE_RELATION_WORDS, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import {
   TASK_BOUNDS,
@@ -29,7 +30,6 @@ import { CornerLeftUpIcon, GLYPH, HandIcon, NetworkIcon, OctagonMinusIcon } from
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useState } from "react";
 import { RelationKindPill } from "./relation-kind-pill.js";
-import { TASK_RELATION_MENU } from "./task-relation-menu.js";
 import { TaskKey } from "./task-standing.js";
 
 /**
@@ -77,7 +77,7 @@ const WORDS = {
   FIND: "Find a task",
   NO_MATCH: "No tasks match",
   ROWS: "Related tasks",
-  REMOVE: "Remove relation",
+  REMOVE: REMOVE_RELATION,
   SWAP: "Swap task",
   OTHER_REPOSITORY: "Another repository",
   HAS_PARENT: "Already has a parent",

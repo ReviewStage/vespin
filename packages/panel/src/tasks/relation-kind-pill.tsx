@@ -1,3 +1,4 @@
+import { CHANGE_RELATION, REMOVE_RELATION } from "@repo/features/task-relation-model";
 import {
   CHIP_LOOK,
   CHIP_SIZE,
@@ -29,8 +30,8 @@ import { useId, useRef, useState } from "react";
 
 /** What the pill's menu names the kinds and the relation's taking away. */
 const WORDS = {
-  CHANGE: "Change relation",
-  REMOVE: "Remove relation",
+  CHANGE: CHANGE_RELATION,
+  REMOVE: REMOVE_RELATION,
   NO_MATCH: "No kinds match",
 } as const;
 
