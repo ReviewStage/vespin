@@ -1,10 +1,11 @@
 import { SKILL_PASTE_KIND } from "@repo/features/installed-skill-route-wire";
+import type { WireRecord } from "@repo/wire";
 import { expect, it } from "vitest";
 import { parseSkillPaste } from "./skill-paste.js";
 
 /** What Add skill's one box reads a paste as: a GitHub source, a skill's text, or nothing we install from. */
 
-const source = (rest: Readonly<Record<string, unknown>> = {}) => ({
+const source = (rest: WireRecord = {}) => ({
   kind: SKILL_PASTE_KIND.SOURCE,
   owner: "o",
   repo: "r",

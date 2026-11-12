@@ -29,6 +29,7 @@ import {
   sqlClientOverPglite,
 } from "@repo/database/testing";
 import { memorySandbox } from "@repo/sandbox/testing";
+import type { WireRecord } from "@repo/wire";
 import { betterAuth } from "better-auth";
 import { jwt } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/pglite";
@@ -315,10 +316,7 @@ export function registration(scope: readonly string[]) {
 }
 
 /** One registration as a client posts it, answered as the provider answers it. */
-export async function register(
-  auth: MemberMcpTestAuth,
-  body: Readonly<Record<string, unknown>>,
-): Promise<Response> {
+export async function register(auth: MemberMcpTestAuth, body: WireRecord): Promise<Response> {
   return auth.handler(
     new Request(`${MEMBER_MCP_TEST.ORIGIN}${AUTH_BASE_PATH}/oauth2/register`, {
       method: "POST",

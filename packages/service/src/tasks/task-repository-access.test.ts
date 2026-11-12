@@ -11,6 +11,7 @@ import {
 import { HOSTED_API_ERROR } from "@repo/features";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import type { WireRecord } from "@repo/wire";
 import { Clock, type Context, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { sessionSandboxesLayer } from "../agents/session-sandboxes.js";
@@ -80,12 +81,7 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
     // SAFETY: a repository change or a start yields the store, the clock, and GitHub alone, which is all a test provides of the web runtime's services.
     const webServices = services as Context.Context<WebServices>;
 
-    return (
-      method: string,
-      path: string,
-      bearer: string,
-      body: Readonly<Record<string, unknown>>,
-    ) =>
+    return (method: string, path: string, bearer: string, body: WireRecord) =>
       Effect.promise(async () => {
         const response = await handle(
           new Request(new URL(path, ORIGIN), {
@@ -121,7 +117,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
           ]),
         );
 
-        const patch = (taskId: string, bearer: string, body: Readonly<Record<string, unknown>>) =>
+        const patch = (taskId: string, bearer: string, body: WireRecord) =>
           send("PATCH", `/api/plans/${taskId}`, bearer, body);
 
         const accessOf = Effect.map(readTask(owner, task.id), (read) => {
@@ -171,7 +167,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
 
         const send = yield* standing(new Map([["Bearer owner", owner]]));
 
-        const start = (body: Readonly<Record<string, unknown>>) =>
+        const start = (body: WireRecord) =>
           send("POST", "/api/plans", "Bearer owner", { workspaceId: workspace, ...body });
 
         const made = yield* start({
