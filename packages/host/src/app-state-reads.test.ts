@@ -36,6 +36,7 @@ describe("shareAppState", () => {
 describe("selectAgentNames", () => {
   it("names an agent with no title yet by the automation whose run started it, as the panel does", () => {
     const agentId = "a1b2c3d4-0000-4000-8000-0000000000aa";
+
     const state: AppStateSnapshot = {
       ...initialAppState(
         {

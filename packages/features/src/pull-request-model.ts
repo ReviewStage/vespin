@@ -84,6 +84,7 @@ export function pullRequestMarkLabel(pullRequest: {
   readonly queued?: boolean | undefined;
 }): string {
   const mark = pullRequestMarkState(pullRequest);
+
   return mark === PULL_REQUEST_MARK_QUEUED ? QUEUED_LABEL : PULL_REQUEST_STATE_LABEL[mark];
 }
 

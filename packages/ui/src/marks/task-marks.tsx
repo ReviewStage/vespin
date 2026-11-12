@@ -100,6 +100,7 @@ function statusBody(status: TaskStatus): React.JSX.Element {
 /** A task's status as its mark, in the tone of the status it stands for. */
 export function TaskStatusMark({ status }: { status: TaskStatus }): React.JSX.Element {
   const tone: StatusTone = TASK_STATUS_TONE[status];
+
   return (
     <svg
       className="ui-task-mark ui-task-status-mark"

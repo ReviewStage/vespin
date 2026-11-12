@@ -350,6 +350,7 @@ export function AgentPreview({
     | undefined;
 }) {
   const colors = useColors();
+
   const pull =
     pullRequest === undefined ? undefined : PULL_REQUEST_LOOK[pullRequestMarkState(pullRequest)];
 

@@ -398,9 +398,11 @@ export function AgentScreen() {
   const older = useOlderPages(id, transcript?.before);
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
+
   const title = cardTitle(
     agent === undefined ? (transcript?.word?.title ?? UNLISTED_AGENT) : agentName(agent),
   );
+
   useScreenActivity((workspaces) =>
     agent === undefined
       ? undefined

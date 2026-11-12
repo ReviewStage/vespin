@@ -104,6 +104,7 @@ export function ToneGlyph({
  */
 export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
   const colors = useColors();
+
   return (
     <Image
       systemName={STATUS_MARK_SYMBOL[status]}
