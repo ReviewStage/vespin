@@ -28,6 +28,7 @@ import {
   unfollowTask,
 } from "@repo/database/models/task-follower-store";
 import { readTaskHeader } from "@repo/database/models/task-store";
+import { workspaceExperimentOn } from "@repo/database/models/workspace-experiment-store";
 import type { TaskFollowersAnswer } from "@repo/features/task-wire";
 import { EXPERIMENT } from "@repo/settings";
 import type { TaskFollowerWire } from "@repo/wire";
@@ -75,15 +76,19 @@ const followingOnFor = Effect.fnUntraced(function* (userId: string, taskId: stri
 
   if (Option.isNone(header)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
-  if (!(yield* experimentOnIn(header.value.workspaceId, EXPERIMENT.FOLLOWING))) {
-    return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-  }
+  // A read that failed is an outage, never Following off.
+  const on = yield* hostedStoreOrUnavailable(
+    workspaceExperimentOn(header.value.workspaceId, EXPERIMENT.FOLLOWING),
+  );
+
+  if (!on) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 });
 
 /** The account follows the task by hand, its machines off; one following already keeps its row. */
 export function followTaskAsked(userId: string, taskId: string): FollowingEffect {
   return Effect.gen(function* () {
     yield* followingOnFor(userId, taskId);
+
     const written = yield* hostedStoreOrUnavailable(
       followTask(userId, { taskId, followerId: userId, machines: false }),
     );
@@ -100,6 +105,7 @@ export function addTaskFollowerAsked(
 ): FollowingEffect {
   return Effect.gen(function* () {
     yield* followingOnFor(userId, taskId);
+
     const written = yield* hostedStoreOrUnavailable(
       followTask(userId, { taskId, followerId, machines: false }),
     );

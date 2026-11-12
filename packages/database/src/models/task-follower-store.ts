@@ -97,6 +97,25 @@ const findReachableTask = SqlSchema.findOneOption({
     ),
 });
 
+/**
+ * The task under this id and its assignee, where the account reaches it,
+ * its row held for update, so an assignment under way commits first and an
+ * unfollow reads the assignee it left.
+ */
+const lockReachableTask = SqlSchema.findOneOption({
+  Request: KeySchema,
+  Result: ReachedRowSchema,
+  execute: ({ taskId, userId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: task.id, assigneeId: task.assigneeId })
+        .from(task)
+        .where(reachableTask(userId, taskId))
+        .limit(1)
+        .for("update"),
+    ),
+});
+
 /** The task under this id, where the account reaches it and the follower is a member of its workspace. */
 const findFollowableTask = SqlSchema.findOneOption({
   Request: Schema.Struct({ ...KeySchema.fields, followerId: Schema.String }),
@@ -366,9 +385,10 @@ export function unfollowTask(
 ): TaskFollowerEffect<Option.Option<TaskFollowersWritten>, TaskFollowerIsAssignee> {
   return transaction(
     Effect.gen(function* () {
-      const reached = yield* findReachableTask({ taskId, userId });
+      const reached = yield* lockReachableTask({ taskId, userId });
 
       if (Option.isNone(reached)) return Option.none();
+
       if (reached.value.assigneeId === userId) return yield* new TaskFollowerIsAssignee();
       const written = yield* deleteFollower({ taskId, userId });
 

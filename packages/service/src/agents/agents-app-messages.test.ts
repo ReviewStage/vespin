@@ -1030,12 +1030,15 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
+
         const { owner, other, task, agent, ask } = yield* messagedAgent(agentSessions, {
           running: false,
         });
+
         const mentioned = yield* openGithubUser();
         yield* joinWorkspace(task.workspaceId, other);
         yield* joinWorkspace(task.workspaceId, mentioned);
+
         const mention = mentionMarkdown(
           { kind: MENTION_KIND.PERSON, userId: mentioned },
           "Charles",

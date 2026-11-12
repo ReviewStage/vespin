@@ -1002,8 +1002,8 @@ export const steerMemberWords = /* @__PURE__ */ Effect.fn("web/steerMemberWords"
     sender: { kind: MESSAGE_SENDER.MEMBER, userId },
   });
 
-  // A member who messages one of the task's agents follows the task, with their machines on where they did not yet.
-  yield* followAsMessaged(userId, agent.taskId);
+  // A member who messages one of the task's agents follows the task, with their machines on where they did not yet; a repeat wrote nothing new.
+  if (written.outcome !== STEER_OUTCOME.REPEATED) yield* followAsMessaged(userId, agent.taskId);
 
   if (written.sent !== undefined) {
     yield* recordServerEvent(
