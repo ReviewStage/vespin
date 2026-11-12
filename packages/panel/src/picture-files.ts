@@ -1,8 +1,8 @@
 /**
  * picture-files.ts -- which picked, pasted, or dropped files are pictures, a HEIC photo among them however the system typed it.
  *
- * Every place a picture is taken in reads its files through `imageFiles`,
- * the message box, feedback, and the description's editor alike, so a photo
+ * Every place a picture is taken in tells one by `isPictureFile`, the
+ * message box, feedback, and the description's editor alike, so a photo
  * off an iPhone is taken by all of them or none. Kept free of every other
  * import, because the description's editor, which loads as a bundle of its
  * own, reads it too.
