@@ -523,3 +523,12 @@ test.each([
 
   assert.equal(handedOver(), saved);
 });
+
+test("a kept line over an indented code block keeps the code apart once the heading between them is deleted", () => {
+  const { editor, handedOver } = opened("Intro\n## Remove\n    alpha\n\n    beta\n");
+  const intro = editor.state.doc.child(0).nodeSize;
+
+  editor.commands.deleteRange({ from: intro, to: intro + editor.state.doc.child(1).nodeSize });
+
+  assert.equal(handedOver(), "Intro\n\n    alpha\n\n    beta\n");
+});

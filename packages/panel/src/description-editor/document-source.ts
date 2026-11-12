@@ -254,9 +254,19 @@ function blockMarkdown(manager: MarkdownManager, node: PmNode, held: HeldSources
   return held.sources.get(node) ?? reprinted(manager, node) + BLOCK_GAP;
 }
 
-/** Whether two sources written one against the other still read as two blocks, as a heading over its paragraph does and two paragraphs do not. */
+/**
+ * Whether two sources written one against the other still read as the two
+ * blocks they were, as a heading over its paragraph does and two paragraphs
+ * do not: more than one block, the first ending where `source` does. Note
+ * that a block can still read as two after it took the next's first lines,
+ * as a paragraph takes an indented code block's up to its blank line.
+ */
 function readsApart(manager: MarkdownManager, source: string, next: string): boolean {
-  return manager.instance.lexer(source + next).filter((token) => token.type !== "space").length > 1;
+  const [first, ...rest] = manager.instance
+    .lexer(source + next)
+    .filter((token) => token.type !== "space");
+
+  return rest.length > 0 && first?.raw.trimEnd() === source.trimEnd();
 }
 
 /**
