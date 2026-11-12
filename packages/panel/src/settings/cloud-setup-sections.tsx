@@ -9,7 +9,10 @@ import {
   REPOSITORY_SCRIPT_KIND,
   type RepositoryRunActions,
   type RepositoryScriptKind,
+  RUN_ACTION_AVAILABILITY,
   type RunAction,
+  type RunActionAvailability,
+  runActionAvailability,
   WORKSPACE_SANDBOX_SETUP_BOUNDS,
   type WorkspaceSandboxSetupAnswer,
 } from "@repo/features/workspace-sandbox-setup-wire";
@@ -710,6 +713,16 @@ function RepositoryScriptsSection({
   );
 }
 
+/** Where a run action may run, as its row's ⋯ offers it and its badge says it; both, the unsaid, wears no badge. */
+const AVAILABILITY_WORDS = {
+  [RUN_ACTION_AVAILABILITY.BOTH]: { item: "Cloud and local agents", badge: undefined },
+  [RUN_ACTION_AVAILABILITY.CLOUD]: { item: "Cloud agents only", badge: "Cloud only" },
+  [RUN_ACTION_AVAILABILITY.LOCAL]: { item: "Local agents only", badge: "Local only" },
+} as const satisfies Record<
+  RunActionAvailability,
+  { readonly item: string; readonly badge: string | undefined }
+>;
+
 /** A run action as its row edits it: its label, its command, and its icon. */
 interface RunActionDraft {
   readonly label: string;
@@ -730,6 +743,7 @@ interface RunActionWritten {
   readonly command: string;
   readonly icon: TaskSectionIcon | undefined;
   readonly isDefault: boolean;
+  readonly availableIn: RunActionAvailability;
 }
 
 /** An action as saved, written back as it stands. */
@@ -740,6 +754,7 @@ function writtenOf(action: RunAction): RunActionWritten {
     command: action.command,
     icon: action.icon === undefined ? undefined : knownTaskSectionIcon(action.icon),
     isDefault: action.isDefault === true,
+    availableIn: runActionAvailability(action),
   };
 }
 
@@ -778,13 +793,14 @@ function useSaveRunActions(workspaceId: string) {
       sendAct(ACT_KIND.WORKSPACE_RUN_ACTIONS_PUT, {
         workspaceId,
         repository,
-        // An action new to the list names no id, and the service names it; an icon and the default are named only where they stand.
-        actions: actions.map(({ id, label, command, icon, isDefault }) => ({
+        // An action new to the list names no id, and the service names it; an icon, the default, and an availability short of both are named only where they stand.
+        actions: actions.map(({ id, label, command, icon, isDefault, availableIn }) => ({
           ...(id === undefined ? undefined : { id }),
           label,
           command,
           ...(icon === undefined ? undefined : { icon }),
           ...(isDefault ? { isDefault: true } : undefined),
+          ...(availableIn === RUN_ACTION_AVAILABILITY.BOTH ? undefined : { availableIn }),
         })),
       }),
     onSuccess: (answer, { repository }) =>
@@ -842,7 +858,8 @@ function useRunActionOrder(
 /**
  * One run action's row, as compact as a subscription's: its icon in the
  * row's mark column, its name, renamed by pressing it (`RenamableName`), a Default badge on the
- * repository's default, and its command's first lines under the label in
+ * repository's default, a Cloud only or Local only badge on one kept to
+ * cloud or local agents, and its command's first lines under the label in
  * its colors (`CodePreview`). Its
  * chevron folds the whole command open under the row, on the label's edge,
  * in the numbered, Bash-colored editor a setup script stands in, to read; an owner or admin edits it there as a script is
@@ -851,8 +868,9 @@ function useRunActionOrder(
  * picked from the well is saved as soon as it is picked, as a section's is,
  * and a rename as it ends, pressing the name or Rename in the ⋯ opening it. The ⋯
  * also moves it up or down, which a keyboard reaches where the grip's drag
- * does not, makes it the default or lets the default go, and removes it, a
- * removal asking first. An action just added stands open, its label being
+ * does not, makes it the default or lets the default go, picks where it may
+ * run (cloud and local agents, cloud agents only, or local agents only),
+ * saved as soon as it is picked, and removes it, a removal asking first. An action just added stands open, its label being
  * typed, Cancel letting it go, until it is saved, when the saved list draws
  * it in its place. A member reads each, its command folded open read-only.
  */
@@ -902,10 +920,16 @@ function RunActionRow({
   // A new action's label and icon, held until its first save; a saved one's are saved as they change.
   const [newLabel, setNewLabel] = useState("");
   const [newIcon, setNewIcon] = useState<TaskSectionIcon | undefined>(undefined);
+
+  const [newAvailability, setNewAvailability] = useState<RunActionAvailability>(
+    RUN_ACTION_AVAILABILITY.BOTH,
+  );
+
   // The command as typed, held apart from what is saved until a save agrees with it.
   const [edited, setEdited] = useState<string | undefined>(undefined);
   const label = action === undefined ? newLabel : savedLabel;
   const icon = action === undefined ? newIcon : savedIcon;
+  const availability = action === undefined ? newAvailability : runActionAvailability(action);
 
   // An edit the saved command now agrees with, its own save's or another's, is let go, as a script's is (`ScriptRow`).
   if (edited !== undefined && action !== undefined && edited === savedCommand && !busy) {
@@ -933,7 +957,10 @@ function RunActionRow({
 
     const next =
       action === undefined
-        ? [...standing(), { id: undefined, isDefault: false, ...typed }]
+        ? [
+            ...standing(),
+            { id: undefined, isDefault: false, availableIn: newAvailability, ...typed },
+          ]
         : standing().map((each) => (each.id === action.id ? { ...each, ...typed } : each));
 
     saving.mutate({ repository, actions: next }, { onSuccess: () => added?.onCancel() });
@@ -978,6 +1005,24 @@ function RunActionRow({
 
   const place = action === undefined ? -1 : actions.findIndex((each) => each.id === action.id);
 
+  const pickAvailability = (next: RunActionAvailability) => {
+    if (next === availability) return;
+
+    if (action === undefined) setNewAvailability(next);
+    else saveChange({ availableIn: next });
+  };
+
+  // Where it may run, one of three, checked as a setting is; a new action holds its pick until its first save.
+  const availabilityItems = Object.values(RUN_ACTION_AVAILABILITY).map((each) => ({
+    label: AVAILABILITY_WORDS[each].item,
+    key: each,
+    checked: each === availability,
+    disabled: busy,
+    onSelect: () => pickAvailability(each),
+  }));
+
+  const availabilityBadge = AVAILABILITY_WORDS[availability].badge;
+
   const menu = !manages
     ? []
     : action === undefined
@@ -990,6 +1035,7 @@ function RunActionRow({
               onSelect: () => setRenaming(true),
             },
           ],
+          availabilityItems,
         ]
       : [
           [
@@ -1027,6 +1073,7 @@ function RunActionRow({
                   onSelect: () => setDefault(true),
                 },
           ],
+          availabilityItems,
           [
             {
               label: "Remove",
@@ -1118,7 +1165,13 @@ function RunActionRow({
               </RenamableName>
             </ReplayMask>
           ),
-          adornment: isDefault ? <Badge>Default</Badge> : undefined,
+          adornment:
+            isDefault || availabilityBadge !== undefined ? (
+              <>
+                {isDefault ? <Badge>Default</Badge> : null}
+                {availabilityBadge === undefined ? null : <Badge>{availabilityBadge}</Badge>}
+              </>
+            ) : undefined,
           // Note that the command's first lines stand under the label in its colors, so a script of several lines reads as several at a glance.
           description:
             savedCommand === "" ? undefined : (
@@ -1241,7 +1294,7 @@ function RunActionsSection({
   return (
     <SettingsSection
       title="Run actions"
-      caption="Listed in each cloud agent's Run menu, the default on its button. Each runs in a Terminal tab of the agent's sandbox when pressed."
+      caption="Listed in each agent's Run menu, the default on its button. Each runs when pressed: in a cloud agent's sandbox, or on the Mac a local agent runs on."
       action={
         manages ? (
           <AddRepositoryButton

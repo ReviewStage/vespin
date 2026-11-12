@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_repository_run_action" ADD COLUMN "available_in" text DEFAULT 'both' NOT NULL;

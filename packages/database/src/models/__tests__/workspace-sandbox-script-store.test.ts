@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { TASK_SECTION_ICON_KIND } from "@repo/features/task-section-wire";
-import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
+import {
+  REPOSITORY_SCRIPT_KIND,
+  RUN_ACTION_AVAILABILITY,
+} from "@repo/features/workspace-sandbox-setup-wire";
 import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
@@ -103,7 +106,7 @@ it.layer(getTestDB())("the workspace sandbox script store", (it) => {
   );
 
   it.effect(
-    "a save replaces a repository's run actions in its order with their icons and one default, an action keeps only its own repository's id and only once, and an empty list removes them",
+    "a save replaces a repository's run actions in its order with their icons, one default, and where each may run, both where unsaid, an action keeps only its own repository's id and only once, and an empty list removes them",
     () =>
       Effect.gen(function* () {
         const workspace = yield* openOwnedWorkspace;
@@ -128,9 +131,20 @@ it.layer(getTestDB())("the workspace sandbox script store", (it) => {
           workspace,
           "Acme/Relay",
           [
-            { label: "Storybook", command: "pnpm storybook", icon: BOOKS },
+            {
+              label: "Storybook",
+              command: "pnpm storybook",
+              icon: BOOKS,
+              availableIn: RUN_ACTION_AVAILABILITY.LOCAL,
+            },
             { id: dev, label: "Dev", command: "pnpm dev --port 3000", isDefault: true },
-            { id: dev, label: "Dev again", command: "pnpm dev", isDefault: true },
+            {
+              id: dev,
+              label: "Dev again",
+              command: "pnpm dev",
+              isDefault: true,
+              availableIn: RUN_ACTION_AVAILABILITY.CLOUD,
+            },
             { id: api, label: "Serve", command: "uv run serve" },
           ],
           LATER,
@@ -153,13 +167,28 @@ it.layer(getTestDB())("the workspace sandbox script store", (it) => {
             row.command,
             row.icon,
             row.isDefault,
+            row.availableIn,
             row.updatedAt.getTime(),
           ]),
           [
-            ["Storybook", "pnpm storybook", BOOKS, false, LATER.getTime()],
-            ["Dev", "pnpm dev --port 3000", null, true, LATER.getTime()],
-            ["Dev again", "pnpm dev", null, false, LATER.getTime()],
-            ["Serve", "uv run serve", null, false, LATER.getTime()],
+            [
+              "Storybook",
+              "pnpm storybook",
+              BOOKS,
+              false,
+              RUN_ACTION_AVAILABILITY.LOCAL,
+              LATER.getTime(),
+            ],
+            [
+              "Dev",
+              "pnpm dev --port 3000",
+              null,
+              true,
+              RUN_ACTION_AVAILABILITY.BOTH,
+              LATER.getTime(),
+            ],
+            ["Dev again", "pnpm dev", null, false, RUN_ACTION_AVAILABILITY.CLOUD, LATER.getTime()],
+            ["Serve", "uv run serve", null, false, RUN_ACTION_AVAILABILITY.BOTH, LATER.getTime()],
           ],
         );
         const ids = relay.map((row) => row.id);

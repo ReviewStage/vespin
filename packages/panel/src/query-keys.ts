@@ -56,6 +56,8 @@ export const QUERY_ROOT = {
   AGENT_SHARED_PORT: "agent-shared-port",
   /** A cloud agent's shells and where its sandbox stands, as its Run button reads which run actions run (`tasks/run-actions-button.tsx`). */
   AGENT_SHELLS: "agent-shells",
+  /** A local agent's run actions on this Mac and whether each runs, as its Run button and its run actions' Local tabs read them (`tasks/run-action-shells.tsx`). */
+  MAC_RUN_ACTIONS: "mac-run-actions",
   /** What this Mac spends on the app, read every few seconds while the Resources popover stands open (`desktop/mac-resources.tsx`). */
   MAC_RESOURCES: "mac-resources",
   /** One version of a plan, as its version history draws it (`tasks/use-description-history.ts`). */
