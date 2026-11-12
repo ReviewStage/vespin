@@ -21,6 +21,7 @@ import {
   PULL_REQUEST_MOMENT,
   type PullRequestMoment,
 } from "./automation-wire.js";
+import { readerZone } from "./date-mention.js";
 import { PRODUCT_NAME } from "./product-name.js";
 import { titlesNothing } from "./task-wire.js";
 import { clockText } from "./time-format.js";
@@ -193,16 +194,20 @@ function cronNumber(field: string | undefined): number | undefined {
   return field !== undefined && /^\d+$/u.test(field) ? Number(field) : undefined;
 }
 
-/** The city of an IANA zone, its underscores spaced: "America/New_York" is "New York". */
-function zoneCity(timezone: string): string {
-  return (timezone.split("/").at(-1) ?? timezone).replaceAll("_", " ");
-}
-
-/** The zone a schedule's clock is read in, said after the clock as words: "New York time", or "UTC" alone. */
+/**
+ * The zone a schedule's clock is read in, as the platform names it to a
+ * person: "Eastern Time", "United Kingdom Time", "India Standard Time", and
+ * UTC as itself, since its generic name is an offset. Note that the generic
+ * name holds through summer time, as a schedule's zone does.
+ */
 function zoneWords(timezone: string): string {
-  const city = zoneCity(timezone);
+  if (timezone === "UTC" || timezone === "Etc/UTC") return "UTC";
 
-  return city === "UTC" ? city : `${city} time`;
+  return (
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone, timeZoneName: "longGeneric" })
+      .formatToParts(0)
+      .find((part) => part.type === "timeZoneName")?.value ?? timezone
+  );
 }
 
 /** A time of day as it is typed: hour, optional minutes, optional AM or PM ("2:00 AM", "2pm", "14:30"). */
@@ -233,9 +238,12 @@ export function parseAutomationClock(
 }
 
 /** A schedule in words where the picker could have written it, and its cron otherwise. */
-function scheduleText(cron: string, timezone: string): string {
+function scheduleText(cron: string, timezone: string, reader: string): string {
   const spelled = cron.trim();
-  const zone = zoneWords(timezone);
+  // Note that a schedule set in the reader's own zone names none, so a zone said is one to mind.
+  const named = timezone === reader ? undefined : zoneWords(timezone);
+  const zone = named === undefined ? "" : ` ${named}`;
+  const cronZone = named === undefined ? "" : `, ${named}`;
 
   // Note that an hourly schedule names no zone, since an hour starts at the same moment in nearly every zone.
   if (spelled === SCHEDULE_PRESET.HOURLY) return "Every hour";
@@ -244,16 +252,16 @@ function scheduleText(cron: string, timezone: string): string {
   const hour = cronNumber(hourField);
   const daily = dayOfMonth === "*" && month === "*";
 
-  if (minute === undefined || hour === undefined || !daily) return `${spelled}, ${zone}`;
+  if (minute === undefined || hour === undefined || !daily) return `${spelled}${cronZone}`;
   const at = clockText(hour, minute);
 
-  if (dayOfWeek === "*") return `Every day at ${at} ${zone}`;
+  if (dayOfWeek === "*") return `Every day at ${at}${zone}`;
 
-  if (dayOfWeek === "1-5") return `Weekdays at ${at} ${zone}`;
+  if (dayOfWeek === "1-5") return `Weekdays at ${at}${zone}`;
   const day = cronNumber(dayOfWeek);
   const name = day === undefined ? undefined : WEEKDAY_NAMES[day % 7];
 
-  return name === undefined ? `${spelled}, ${zone}` : `${name} at ${at} ${zone}`;
+  return name === undefined ? `${spelled}${cronZone}` : `${name} at ${at}${zone}`;
 }
 
 /** Who owns an automation; one a service before scopes answered is its creator's own. */
@@ -281,10 +289,12 @@ export function automationGroups(
 export function automationTriggerText(
   trigger: AutomationTrigger,
   repositories: readonly string[] = [],
+  /** The reader's own zone, which a schedule set in it does not name. */
+  reader: string = readerZone(),
 ): string {
   switch (trigger.kind) {
     case AUTOMATION_TRIGGER.SCHEDULE:
-      return scheduleText(trigger.cron, trigger.timezone);
+      return scheduleText(trigger.cron, trigger.timezone, reader);
     case AUTOMATION_TRIGGER.GITHUB: {
       const words = GITHUB_EVENT_WORDS[trigger.event];
       // Note that each list is read in its own order and once, because a trigger may name one twice.

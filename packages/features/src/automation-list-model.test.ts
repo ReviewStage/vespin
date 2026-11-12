@@ -89,19 +89,20 @@ test("the workspace's automations come before the personal ones, and an owner wi
   assert.deepEqual(automationGroups([]), []);
 });
 
-test("a schedule the picker writes is said in words in its zone's time, and any other as its cron", () => {
-  const said = (cron: string, timezone = "America/New_York") =>
-    automationTriggerText({ kind: AUTOMATION_TRIGGER.SCHEDULE, cron, timezone });
+test("a schedule the picker writes is said in words, naming its zone only where it is not the reader's, and any other as its cron", () => {
+  const said = (cron: string, timezone = "America/New_York", reader = "Europe/Paris") =>
+    automationTriggerText({ kind: AUTOMATION_TRIGGER.SCHEDULE, cron, timezone }, [], reader);
 
-  assert.equal(said("0 9 * * 1-5"), "Weekdays at 9:00 AM New York time");
-  assert.equal(said("30 7 * * *", "Europe/London"), "Every day at 7:30 AM London time");
-  assert.equal(said("0 9 * * 1"), "Mondays at 9:00 AM New York time");
-  assert.equal(said("0 9 * * 0"), "Sundays at 9:00 AM New York time");
+  assert.equal(said("0 9 * * 1-5"), "Weekdays at 9:00 AM Eastern Time");
+  assert.equal(said("30 7 * * *", "Europe/London"), "Every day at 7:30 AM United Kingdom Time");
+  assert.equal(said("0 9 * * 1"), "Mondays at 9:00 AM Eastern Time");
+  assert.equal(said("0 9 * * 0"), "Sundays at 9:00 AM Eastern Time");
   assert.equal(said("0 * * * *", "UTC"), "Every hour");
   assert.equal(said("0 9 * * 1-5", "UTC"), "Weekdays at 9:00 AM UTC");
-  assert.equal(said("5 14 * * *"), "Every day at 2:05 PM New York time");
-  assert.equal(said("0 9 1 * *"), "0 9 1 * *, New York time");
-  assert.equal(said("*/30 9-17 * * 1-5"), "*/30 9-17 * * 1-5, New York time");
+  assert.equal(said("5 14 * * *"), "Every day at 2:05 PM Eastern Time");
+  assert.equal(said("0 9 1 * *"), "0 9 1 * *, Eastern Time");
+  assert.equal(said("*/30 9-17 * * 1-5"), "*/30 9-17 * * 1-5, Eastern Time");
+  assert.equal(said("0 9 * * 1-5", "America/New_York", "America/New_York"), "Weekdays at 9:00 AM");
 });
 
 test("a GitHub event is said as what happens, by whom, where, and the labels, branches, drafts, and forks it keeps to, and a webhook as its call", () => {

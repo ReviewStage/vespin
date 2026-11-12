@@ -1108,11 +1108,11 @@ test("on a narrow stage each row says when it runs next before what fires it, un
   const line = (name: string) =>
     rowOf(page, name).querySelector(".ui-list-row-description")?.textContent ?? "";
 
-  assert.match(line("Nightly flaky-test sweep"), /^Next: .+ \(Weekdays at 9:00 AM UTC\)$/u);
-  assert.equal(line("Dependency bumps"), "Weekdays at 9:00 AM UTC");
+  assert.match(line("Nightly flaky-test sweep"), /^Next: .+ \(Weekdays at 9:00 AM\)$/u);
+  assert.equal(line("Dependency bumps"), "Weekdays at 9:00 AM");
   assert.match(
     line("Yearly audit"),
-    /^Next: .*2099.* \(Weekdays at 9:00 AM UTC\)$/u,
+    /^Next: .*2099.* \(Weekdays at 9:00 AM\)$/u,
     "a far run names its year",
   );
   assert.ok(rowOf(page, "Dependency bumps").querySelector(".failed-mark"));

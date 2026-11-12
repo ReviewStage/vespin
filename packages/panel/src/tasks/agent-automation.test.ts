@@ -12,6 +12,7 @@ import {
   type AutomationSummary,
   GITHUB_TRIGGER_EVENT,
 } from "@repo/features/automation-wire";
+import { readerZone } from "@repo/features/date-mention";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -49,7 +50,7 @@ const TRIAGE: AutomationSummary = {
   name: "Morning Sentry triage",
   enabled: true,
   pausedReason: null,
-  trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: "0 9 * * 1-5", timezone: "UTC" },
+  trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: "0 9 * * 1-5", timezone: readerZone() },
   action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Triage Sentry." },
   guards: AUTOMATION_DEFAULT_GUARDS,
   nextRunAt: null,
@@ -195,7 +196,7 @@ test("the automation's name hangs its card over the agent's: its schedule, whose
   );
   assert.equal(
     automation.querySelector(".ui-hover-card-sub")?.textContent,
-    "Weekdays at 9:00 AM UTC · Acme",
+    "Weekdays at 9:00 AM · Acme",
   );
   assert.equal(automation.querySelector(".ui-hover-card-corner"), null);
 
