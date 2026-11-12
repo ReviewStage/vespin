@@ -123,7 +123,6 @@ function cutValue(value: unknown, depth: number): WireBoundaryInput {
     return value as WireBoundaryInput;
   }
 
-  // oxlint-disable-next-line anti-slop/no-known-value-widening -- a walk over any value of a call's input answers any value; `null` is one, past the bound.
   if (depth >= MAX_INPUT_DEPTH) return null;
 
   if (Array.isArray(value)) {
