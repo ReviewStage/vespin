@@ -16,6 +16,7 @@ import {
   accessibilityLabel,
   accessibilityValue,
   buttonStyle,
+  disabled,
   font,
   foregroundStyle,
   frame,
@@ -373,7 +374,7 @@ export function LinkRow({
   label,
   detail,
   tone = LINK_ROW_TONE.PLAIN,
-  disabled = false,
+  disabled: off = false,
   onPress,
 }: LinkRowProps) {
   const colors = useColors();
@@ -382,8 +383,8 @@ export function LinkRow({
   return (
     <SwiftUIButton
       onPress={onPress}
-      {...(disabled ? { disabled: true } : {})}
       modifiers={[
+        disabled(off),
         ...rowPlacement(colors),
         buttonStyle("borderless"),
         accessibilityLabel(label),
