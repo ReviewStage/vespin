@@ -1,0 +1,39 @@
+# feedback.yaml -- Settings' Send feedback on the Inbox fixture: the form under its Feedback and Prompt control, a note typed, signed by the fixture's account, and sent, landing back on Settings.
+#
+# Launched on the host's Inbox fixture, signed in as Ada Lovelace, whose
+# act door answers a send as delivered (`@repo/host/fixture-inbox`), so no
+# note reaches the feedback service.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Send feedback"
+- tapOn: "Send feedback"
+- waitForAnimationToEnd
+- assertVisible: "Include my name and email"
+- assertVisible: "Ada Lovelace.*"
+- takeScreenshot: feedback-empty
+- tapOn:
+    id: "feedback-words"
+- inputText: "The Inbox count lags a moment after a thread settles."
+- hideKeyboard
+- waitForAnimationToEnd
+- takeScreenshot: feedback-written
+# Prompt keeps its own words, so the field stands empty under its own hint.
+- tapOn: "Prompt"
+- assertNotVisible: "The Inbox count lags.*"
+- takeScreenshot: feedback-prompt
+- tapOn: "Feedback"
+- tapOn: "Send"
+- waitForAnimationToEnd
+# Settings' list stands again, Email beside Send feedback under About.
+- assertVisible: "Email"
+- takeScreenshot: feedback-sent

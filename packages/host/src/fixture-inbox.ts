@@ -1886,6 +1886,8 @@ const ANSWERS: StagedAnswers = {
   },
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
+  // Note that a note to the people who make the app is taken as the feedback service takes one, and goes nowhere, so a run that sends one mails no one.
+  [ACT_KIND.FEEDBACK_SEND]: () => ({ delivered: true }),
   // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
   [ACT_KIND.AGENTS_PICTURE]: ({ pictureId, playable }) => fixtureAgentPicture(pictureId, playable),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),

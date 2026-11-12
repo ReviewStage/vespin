@@ -30,17 +30,15 @@ import {
 import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
-import { CONTACT_MAILTO } from "@repo/host/contract";
 import { BUZZ, ConfirmAsk } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { openURL } from "expo-linking";
 import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
-import { useOpenSettings } from "../settings-button.js";
+import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
@@ -381,11 +379,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
       case MENU_COMMAND.HELP:
         return openInSafari(LINK_PAGE.DOCS);
       case MENU_COMMAND.FEEDBACK:
-        openURL(CONTACT_MAILTO).catch((cause: unknown) =>
-          console.error("The feedback mail did not open.", cause),
-        );
-
-        return;
+        return openSettings(SETTINGS_ROUTE.FEEDBACK);
       // Note that Remind Me's presets were set above, by the time each sets.
       case MENU_COMMAND.REMIND_HOUR:
       case MENU_COMMAND.REMIND_TOMORROW:
