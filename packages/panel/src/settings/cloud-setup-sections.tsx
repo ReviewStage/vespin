@@ -723,6 +723,13 @@ const AVAILABILITY_WORDS = {
   { readonly item: string; readonly badge: string | undefined }
 >;
 
+/** The glyph each of the menu's three places wears: the cloud, a member's Mac, or both, as where an agent runs is drawn. */
+const AVAILABILITY_GLYPH = {
+  [RUN_ACTION_AVAILABILITY.BOTH]: GLYPH.CLOUD_AND_LOCAL,
+  [RUN_ACTION_AVAILABILITY.CLOUD]: GLYPH.CLOUD,
+  [RUN_ACTION_AVAILABILITY.LOCAL]: GLYPH.DESKTOP,
+} as const satisfies Record<RunActionAvailability, React.ComponentType>;
+
 /** A run action as its row edits it: its label, its command, and its icon. */
 interface RunActionDraft {
   readonly label: string;
@@ -1013,13 +1020,18 @@ function RunActionRow({
   };
 
   // Where it may run, one of three, checked as a setting is; a new action holds its pick until its first save.
-  const availabilityItems = Object.values(RUN_ACTION_AVAILABILITY).map((each) => ({
-    label: AVAILABILITY_WORDS[each].item,
-    key: each,
-    checked: each === availability,
-    disabled: busy,
-    onSelect: () => pickAvailability(each),
-  }));
+  const availabilityItems = Object.values(RUN_ACTION_AVAILABILITY).map((each) => {
+    const Glyph = AVAILABILITY_GLYPH[each];
+
+    return {
+      label: AVAILABILITY_WORDS[each].item,
+      icon: <Glyph />,
+      key: each,
+      checked: each === availability,
+      disabled: busy,
+      onSelect: () => pickAvailability(each),
+    };
+  });
 
   const availabilityBadge = AVAILABILITY_WORDS[availability].badge;
 

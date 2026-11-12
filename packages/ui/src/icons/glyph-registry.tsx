@@ -46,6 +46,7 @@ import {
   MemoryStick,
   MessageSquareHeart,
   MessagesSquare,
+  MonitorCloud,
   PhoneOff,
   Pin,
   PinOff,
@@ -180,6 +181,8 @@ export const GLYPH = {
   CLOUD: lucideGlyph(Cloud),
   DESKTOP: LaptopIcon,
   HOST: lucideGlyph(Server),
+  // A run action that may run wherever its agent does, in the cloud or on a member's Mac.
+  CLOUD_AND_LOCAL: lucideGlyph(MonitorCloud),
   // A cloud sandbox's state, its processors, and its memory, as its Cloud chip's popover lists them.
   SANDBOX_STATE: lucideGlyph(Activity),
   CPU: lucideGlyph(Cpu),
