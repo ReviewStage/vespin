@@ -368,14 +368,28 @@ function boxLetGo(draft: Draft): Draft {
   return { ...EMPTY_DRAFT, start: draft.start };
 }
 
+/**
+ * A held press's ask as a press now is weighed against it: one pressed before the workspaces were read
+ * named none, which the workspace read since is, so it is not taken for another start.
+ */
+function heldAsk(held: NewTaskPress, ask: AgentAsk): AgentAsk {
+  return held.ask.workspaceId === undefined
+    ? { ...held.ask, workspaceId: ask.workspaceId }
+    : held.ask;
+}
+
+/** Whether a press asks what a held one asked, files aside: `sameAsk` with the press's own files in the held one's place. */
+function asksAsHeldBarFiles(held: NewTaskPress, ask: AgentAsk): boolean {
+  const was = heldAsk(held, ask);
+
+  return sameAsk({ ...was, agent: { ...was.agent, attachments: ask.agent.attachments } }, ask);
+}
+
 /** Whether a press asks what a held one asked: as `sameAsk`, the files counted alone where a relaunch let the held press's go. */
 function asksAsHeld(held: NewTaskPress, ask: AgentAsk): boolean {
-  if (held.filesLost === undefined) return sameAsk(held.ask, ask);
+  if (held.filesLost === undefined) return sameAsk(heldAsk(held, ask), ask);
 
-  return (
-    ask.agent.attachments.length === held.filesLost &&
-    sameAsk({ ...held.ask, agent: { ...held.ask.agent, attachments: ask.agent.attachments } }, ask)
-  );
+  return ask.agent.attachments.length === held.filesLost && asksAsHeldBarFiles(held, ask);
 }
 
 /** Whether two presses ask the same: the same task, device, relations in the same order, words, files in the same order, model, servers switched off, and permission mode. */
@@ -855,10 +869,7 @@ export function NewTaskComposer({
     if (
       held?.filesLost !== undefined &&
       ask.agent.attachments.length !== held.filesLost &&
-      sameAsk(
-        { ...held.ask, agent: { ...held.ask.agent, attachments: ask.agent.attachments } },
-        ask,
-      )
+      asksAsHeldBarFiles(held, ask)
     ) {
       starts.refuse(filesAgain(held.filesLost));
 
