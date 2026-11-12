@@ -353,7 +353,7 @@ export function AddSkillDialog({
             variant={BUTTON_VARIANT.PRIMARY}
             disabled={request === undefined}
             busy={installing}
-            busyLabel="Installing"
+            busyLabel={SKILLS_LINE.INSTALLING}
             onClick={install}
           >
             {/* Note that a lone skill's Install names it, so only Install and a count show. */}

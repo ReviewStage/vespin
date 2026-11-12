@@ -43,6 +43,7 @@ export const SKILLS_LINE = {
   READING: "Reading…",
   UNSUPPORTED: "Only GitHub repositories.",
   INSTALL: "Install",
+  INSTALLING: "Installing",
   INSTALL_FOR: "Install for",
   ONLY_YOU: "Only you",
   VIEW: "Open",

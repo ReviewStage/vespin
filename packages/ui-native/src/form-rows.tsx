@@ -5,6 +5,7 @@ import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityIdentifier,
   accessibilityLabel,
+  autocorrectionDisabled,
   buttonStyle,
   font,
   frame,
@@ -12,6 +13,7 @@ import {
   listRowBackground,
   pickerStyle,
   tag,
+  textInputAutocapitalization,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { type AttachedPicture, AttachedPictures } from "./composer-head.js";
@@ -39,6 +41,8 @@ type WordsFieldProps = {
   readonly label?: string | undefined;
   /** Holds the words as they stand, such as while they are being sent. */
   readonly disabled?: boolean | undefined;
+  /** Whether the words are taken as typed, such as a command or a name, with no correction, capital, or smart dash or quote. */
+  readonly verbatim?: boolean | undefined;
 };
 
 /**
@@ -55,6 +59,7 @@ export function WordsField({
   testId,
   label,
   disabled = false,
+  verbatim = false,
 }: WordsFieldProps) {
   const colors = useColors();
   const text = useNativeState(initialWords);
@@ -73,6 +78,8 @@ export function WordsField({
         SwiftModifiers.disabled(disabled),
         ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
         ...(label === undefined ? [] : [accessibilityLabel(label)]),
+        // Note that turning correction off turns iOS's smart dashes and quotes off with it, so `--skill` stays two hyphens.
+        ...(verbatim ? [autocorrectionDisabled(), textInputAutocapitalization("never")] : []),
       ]}
     />
   );

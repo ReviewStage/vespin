@@ -167,14 +167,24 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
 
   const preview = view === undefined || "failure" in view ? undefined : view;
   const skills = preview?.kind === SKILL_PASTE_KIND.SOURCE ? preview.skills : [];
-  const shown = shownSkills(skills, query);
   const line = asks ? previewLine(view) : undefined;
+  const searching = searchesSkills(skills) && line === undefined;
+
+  // Note that the bar's field keeps its own words and comes back empty, so a search is let go with it, never left filtering out of sight.
+  if (!searching && query !== "") setQuery("");
+  const shown = shownSkills(skills, searching ? query : "");
   const failed = view !== undefined && "failure" in view ? view : undefined;
   const scopes = installScopes(workspace);
   const request = installRequest({ workspaceId: workspace.id, text, scope, preview, ticked, fill });
   const toInstall = request?.skills ?? (request?.name === undefined ? [] : [request.name]);
   const label = installLabel(toInstall);
-  const kept = useKeptWords(asks && !installing);
+  // Note that Back still asks while an install is out, so a refusal is said on a page that still stands.
+  const kept = useKeptWords(asks);
+  // The request as the page now shows it, by which an install that went knows whether it was changed while out.
+  const shownRequest = useRef(request);
+  useEffect(() => {
+    shownRequest.current = request;
+  });
 
   const tick = (name: string, on: boolean) => {
     const next = new Set(ticked);
@@ -201,7 +211,10 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
       out.current = false;
       setInstalling(false);
 
-      if (!went || !standing.current) return;
+      // Note that words changed while the install was out keep the page, as Send feedback keeps its own, so nothing typed meanwhile goes unasked.
+      const edited = JSON.stringify(shownRequest.current) !== JSON.stringify(request);
+
+      if (!went || !standing.current || edited) return;
       kept.release();
       router.back();
     });
@@ -222,6 +235,8 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
             initialWords={fill.name}
             onWords={(name) => setFill((held) => ({ ...held, name }))}
             testId={TEST_IDS.NAME}
+            disabled={busy}
+            verbatim
           />
         </ListSection>
         <ListSection title={SKILLS_LINE.WHEN}>
@@ -232,6 +247,7 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
             initialWords={fill.description}
             onWords={(description) => setFill((held) => ({ ...held, description }))}
             testId={TEST_IDS.WHEN}
+            disabled={busy}
           />
         </ListSection>
       </>
@@ -272,6 +288,8 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
           }}
           autoFocus
           testId={TEST_IDS.PASTE}
+            disabled={busy}
+          verbatim
         />
         {failed !== undefined && previewRetries(failed) ? (
           <ActionRow label={VERB.RETRY} onPress={() => void previewed.refetch()} />
@@ -304,7 +322,7 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
   return (
     <>
       <Stack.Screen options={{ title: SKILLS_LINE.ADD_SKILL }} />
-      {searchesSkills(skills) && line === undefined ? (
+      {searching ? (
         <Stack.Screen>
           <Stack.SearchBar
             placeholder={SKILLS_LINE.SEARCH}
@@ -317,11 +335,11 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
         <Stack.Toolbar.Button
           variant="prominent"
           tintColor={colors.ACCENT}
-          accessibilityLabel={busy ? "Installing" : label}
+          accessibilityLabel={busy ? SKILLS_LINE.INSTALLING : label}
           disabled={request === undefined || busy}
           onPress={install}
         >
-          {barWords}
+          {busy ? SKILLS_LINE.INSTALLING : barWords}
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <ConfirmAsk
