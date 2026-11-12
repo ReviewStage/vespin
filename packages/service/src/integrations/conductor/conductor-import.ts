@@ -163,7 +163,7 @@ interface Passing {
 }
 
 /** The queue as one runtime has it: Vercel's on production and on a Preview, this process's anywhere else. */
-interface ConductorImportQueueService {
+export interface ConductorImportQueueService {
   readonly publish: (message: ImportMessage) => Effect.Effect<void, never, ConductorImportServices>;
 }
 

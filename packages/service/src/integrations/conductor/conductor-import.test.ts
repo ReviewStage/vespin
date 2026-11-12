@@ -18,6 +18,7 @@ import { modelCatalogOf } from "../../providers/model-catalog.js";
 import { fakeGitHub } from "../../testing/github-app-fake.js";
 import {
   ConductorImportQueue,
+  type ConductorImportQueueService,
   conductorImportProgress,
   consumeImportMessage,
   runConductorImport,
@@ -114,8 +115,8 @@ const runDelivered = (userId: string, workspaceId: string) =>
   Effect.gen(function* () {
     const published: WireValue[] = [];
 
-    const queue = {
-      publish: (message: never) => Effect.sync(() => void published.push(message)),
+    const queue: ConductorImportQueueService = {
+      publish: (message) => Effect.sync(() => void published.push(message)),
     };
 
     const delivered = Effect.provideService(ConductorImportQueue, queue);
