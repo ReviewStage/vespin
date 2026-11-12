@@ -310,8 +310,15 @@ test("a page drawn larger or smaller says its size in the bar, and pressing it d
 
   assert.equal(sized()?.textContent, "110%");
 
+  sized()?.focus();
   await act(async () => sized()?.click());
+
   assert.equal(sized(), undefined);
+  assert.equal(
+    document.activeElement?.getAttribute("aria-label"),
+    "View source",
+    "the keys move on to the bar's next press",
+  );
 });
 
 test.each([{ holder: "a task's page", place: { taskId: TASK }, path: `task/${TASK}` }])(

@@ -915,6 +915,8 @@ export function PagePane({
   const frame = useRef<HTMLIFrameElement>(null);
   const room = useRef<HTMLDivElement>(null);
   const pageZoom = usePageZoom(frame);
+  // The bar's source toggle, which takes the keys from the size's press as that press goes.
+  const sourceToggle = useRef<HTMLButtonElement>(null);
   const threads = comments?.control.threads;
   // The version stepped to, none while the newest is followed.
   const [chosen, setChosen] = useState<number | undefined>(undefined);
@@ -1115,7 +1117,12 @@ export function PagePane({
                   <Tooltip label="Actual size">
                     <Button
                       variant={BUTTON_VARIANT.QUIET}
-                      onClick={() => pageZoom.press(PAGE_ZOOM_KEY.ACTUAL)}
+                      onClick={(event) => {
+                        // Note that the press is gone once the page is at actual size, so the keys it held move on to its neighbor.
+                        if (document.activeElement === event.currentTarget)
+                          sourceToggle.current?.focus();
+                        pageZoom.press(PAGE_ZOOM_KEY.ACTUAL);
+                      }}
                     >
                       {pageZoomWords(pageZoom.zoom)}
                     </Button>
@@ -1123,6 +1130,7 @@ export function PagePane({
                 )}
                 <Tooltip label={toggleLabel}>
                   <IconButton
+                    ref={sourceToggle}
                     icon={<CodeXmlIcon aria-hidden="true" />}
                     label={toggleLabel}
                     onClick={toggleView}
