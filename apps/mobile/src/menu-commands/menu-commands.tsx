@@ -40,7 +40,7 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
-import { useOpenSettings } from "../settings-button.js";
+import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
@@ -380,10 +380,17 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         return;
       case MENU_COMMAND.HELP:
         return openInSafari(LINK_PAGE.DOCS);
+      // Note that the form needs an account, so a signed-out app, or one the service refuses as too old, writes the contact mail as it always did.
       case MENU_COMMAND.FEEDBACK:
-        openURL(CONTACT_MAILTO).catch((cause: unknown) =>
-          console.error("The feedback mail did not open.", cause),
-        );
+        if (!signedIn) {
+          openURL(CONTACT_MAILTO).catch((cause: unknown) =>
+            console.error("The feedback mail did not open.", cause),
+          );
+
+          return;
+        }
+
+        if (!standing(SETTINGS_ROUTE.FEEDBACK)) openSettings(SETTINGS_ROUTE.FEEDBACK);
 
         return;
       // Note that Remind Me's presets were set above, by the time each sets.

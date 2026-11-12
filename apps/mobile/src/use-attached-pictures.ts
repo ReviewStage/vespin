@@ -3,7 +3,8 @@
  *
  * A picture is read as a JPEG at `PICTURE_QUALITY`, named "Picture 1",
  * "Picture 2", and on past every picture the holder has, and checked against
- * the service's bounds for one message (`AGENT_BOUNDS`) as it is attached
+ * the service's bounds for one message (`AGENT_BOUNDS`), or the holder's
+ * own, such as a note's to the people who make the app, as it is attached
  * and again before it goes, so a refusal is said in the panel's words rather
  * than met on the wire. What the picker or a bound says goes to the
  * holder's `onNote`, which says it over the field.
@@ -34,6 +35,25 @@ const PICTURE_REFUSAL = {
   UNREADABLE: (name: string) => `${name} couldn't be read.`,
 } as const;
 
+/** How many pictures a holder carries, how large each and all of them may be, how they are compressed as they are read, and what a holder that is full says. */
+export interface PictureBounds {
+  readonly most: number;
+  readonly pictureBytes: number;
+  readonly totalBytes: number;
+  /** The JPEG quality a picture is read at. */
+  readonly quality: number;
+  readonly full: string;
+}
+
+/** A message's or a start's bounds, the service's for one message. */
+const MESSAGE_PICTURES: PictureBounds = {
+  most: AGENT_BOUNDS.MAX_ATTACHMENTS,
+  pictureBytes: AGENT_BOUNDS.MAX_IMAGE_BYTES,
+  totalBytes: AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES,
+  quality: PICTURE_QUALITY,
+  full: PICTURE_REFUSAL.FULL(AGENT_BOUNDS.MAX_ATTACHMENTS),
+};
+
 /** A picture attached: the id it is taken off by, and the attachment it sends. */
 export interface HeldPicture {
   readonly id: string;
@@ -46,19 +66,17 @@ function nextName(pictures: readonly HeldPicture[], offset: number): string {
 }
 
 /** Why the pictures held cannot all go together, in the panel's words; none where they can. */
-function pictureRefusal(pictures: readonly HeldPicture[]): string | undefined {
-  if (pictures.length > AGENT_BOUNDS.MAX_ATTACHMENTS) {
-    return PICTURE_REFUSAL.FULL(AGENT_BOUNDS.MAX_ATTACHMENTS);
-  }
-
-  const tooLarge = pictures.find(
-    ({ file }) => base64Bytes(file.data) > AGENT_BOUNDS.MAX_IMAGE_BYTES,
-  );
+function pictureRefusal(
+  pictures: readonly HeldPicture[],
+  bounds: PictureBounds,
+): string | undefined {
+  if (pictures.length > bounds.most) return bounds.full;
+  const tooLarge = pictures.find(({ file }) => base64Bytes(file.data) > bounds.pictureBytes);
 
   if (tooLarge !== undefined) return PICTURE_REFUSAL.TOO_LARGE(tooLarge.file.name);
   const total = pictures.reduce((sum, { file }) => sum + base64Bytes(file.data), 0);
 
-  return total > AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES ? PICTURE_REFUSAL.TOO_MUCH : undefined;
+  return total > bounds.totalBytes ? PICTURE_REFUSAL.TOO_MUCH : undefined;
 }
 
 /** The pictures a composer or a sheet holds, and what changes them. */
@@ -75,6 +93,8 @@ export interface AttachedPictures {
   readonly drop: (uris: readonly string[], unreadable: number) => void;
   /** Whether the pictures the holder opened with are still being read, while nothing it sends would carry them. */
   readonly opening: boolean;
+  /** Whether pictures dropped on the holder are still being read, while a send would go without them. */
+  readonly reading: boolean;
   readonly detach: (id: string) => void;
   /** Takes every picture off, as a send does, answering what was held so a refusal can put it back. */
   readonly take: () => readonly HeldPicture[];
@@ -91,6 +111,7 @@ export interface AttachedPictures {
 export function useAttachedPictures(
   onNote: (note: string | undefined) => void,
   opensWith?: readonly string[],
+  bounds: PictureBounds = MESSAGE_PICTURES,
 ): AttachedPictures {
   const [pictures, setPictures] = useState<readonly HeldPicture[]>([]);
   // The pictures held now, which a picker answering later adds to, so pictures a refused send put back while it stood open are kept.
@@ -121,7 +142,7 @@ export function useAttachedPictures(
     const next = [...now, ...read.filter((each): each is HeldPicture => !Predicate.isString(each))];
     held.current = next;
     setPictures(next);
-    onNote(unread ?? pictureRefusal(next));
+    onNote(unread ?? pictureRefusal(next, bounds));
   };
 
   // Note that the system's photo picker reads only what the member picks, so no permission is asked for first.
@@ -129,8 +150,8 @@ export function useAttachedPictures(
     launchImageLibraryAsync({
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
-      selectionLimit: Math.max(1, AGENT_BOUNDS.MAX_ATTACHMENTS - pictures.length),
-      quality: PICTURE_QUALITY,
+      selectionLimit: Math.max(1, bounds.most - pictures.length),
+      quality: bounds.quality,
       base64: true,
     })
       .then((picked) => {
@@ -139,6 +160,9 @@ export function useAttachedPictures(
       })
       .catch((cause: unknown) => console.error("The photo picker did not open.", cause));
   };
+
+  // How many drops are still being read.
+  const [reads, setReads] = useState(0);
 
   // Each dropped JPEG is read whole and deleted, since the drop kept it under the app's temporary folder for this alone; a picture the drop could not keep at all is said as unreadable.
   const dropped = (uris: readonly string[], unreadable: number) =>
@@ -162,7 +186,8 @@ export function useAttachedPictures(
       .catch((cause: unknown) => console.error("The dropped pictures were not read.", cause));
 
   const drop = (uris: readonly string[], unreadable: number) => {
-    void dropped(uris, unreadable);
+    setReads((count) => count + 1);
+    void dropped(uris, unreadable).finally(() => setReads((count) => count - 1));
   };
 
   // Note that the pictures opened with are being read from the first render, so nothing is sent without them.
@@ -178,12 +203,16 @@ export function useAttachedPictures(
   return {
     attached: pictures.map(({ id, file }) => ({ id, name: file.name })),
     files: pictures.length === 0 ? undefined : pictures.map(({ file }) => file),
-    refusal: pictureRefusal(pictures),
+    refusal: pictureRefusal(pictures, bounds),
     attach,
     drop,
     opening,
+    reading: reads > 0,
+    // Note that the held pictures are written at once, as `add` writes them, so a drop landing before the next render adds after what stays rather than bringing back what was taken off.
     detach: (id) => {
-      setPictures((held) => held.filter((picture) => picture.id !== id));
+      const next = held.current.filter((picture) => picture.id !== id);
+      held.current = next;
+      setPictures(next);
       onNote(undefined);
     },
     take: () => {

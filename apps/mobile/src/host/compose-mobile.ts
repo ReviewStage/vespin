@@ -13,8 +13,9 @@
  * authentication session and its cipher the Keychain's.
  *
  * The screens' acts reach the host's own procedures on the act port in this
- * process, over a channel of two ends (`in-process-channel.ts`); every
- * platform kind, a copy, a download, the Mac's own terminal, is refused in
+ * process, over a channel of two ends (`in-process-channel.ts`); of the
+ * platform kinds the app answers a note's send to the feedback endpoint,
+ * and every other, a copy, a download, the Mac's own terminal, is refused in
  * its own words, so the table stays total. The composition is a `Layer`,
  * built by the app's one runtime edge (`mobile-runtime.ts`), whose close is
  * the host's drain; `fork` is that runtime's, handed in so no count runs
@@ -36,6 +37,8 @@ import {
   type AgentProceduresDependencies,
   clientSettingSideEffects,
   createActPortHandler,
+  feedbackProcedures,
+  type PlatformActProcedures,
   refusedPlatformProcedures,
   WindowPushes,
 } from "@repo/host/act-port";
@@ -84,7 +87,7 @@ import { effectServiceLayer } from "@repo/host/service-layer";
 import { plainCodeLines } from "@repo/host/task-code-remote";
 import { Cause, ConfigProvider, Context, Effect, Layer, Path, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
-import type * as HttpClient from "effect/http/HttpClient";
+import * as HttpClient from "effect/http/HttpClient";
 import { fixtureActs, stageFixture } from "./fixture-host.js";
 import { inProcessChannel } from "./in-process-channel.js";
 
@@ -255,6 +258,21 @@ function portDependencies(
   };
 }
 
+/** Where a note to the people who make the app goes: the service's own feedback endpoint, a Preview's where one is built in. */
+const FEEDBACK_PATH = "/api/feedback";
+
+/**
+ * The platform kinds the app answers itself: a note to the people who make
+ * the app, carried to the service's feedback endpoint over the host's own
+ * HTTP client (`feedbackProcedures`). Every other platform kind is refused
+ * in its own words: a copy or a save the app does through the system's own
+ * pasteboard, Photos, and share sheet, and what only the Mac has.
+ */
+const platformProcedures = (http: HttpClient.HttpClient): PlatformActProcedures<MobileSender> => ({
+  ...refusedPlatformProcedures<MobileSender>(),
+  ...feedbackProcedures<MobileSender>(http, new URL(FEEDBACK_PATH, SERVICE_ORIGIN).href),
+});
+
 /**
  * The act port as the app opens it: a channel in the process, the host's end
  * upgraded with the act port's handler and the screens' end linked to the
@@ -263,20 +281,21 @@ function portDependencies(
  * every call is the panel's and trusted; the procedures' effects run on the
  * app's runtime. Both ends close with the host's scope.
  */
-const servedActPort = (dependencies: ActPortDependencies, services: Context.Context<never>) =>
+const servedActPort = (
+  dependencies: ActPortDependencies,
+  services: Context.Context<never>,
+  http: HttpClient.HttpClient,
+) =>
   Effect.acquireRelease(
     Effect.sync(() => {
       const channel = inProcessChannel();
-      createActPortHandler(dependencies, refusedPlatformProcedures<MobileSender>()).upgrade(
-        channel.port2,
-        {
-          context: () => ({
-            actor: { sender: APP_SCREENS, panel: true },
-            trusted: true,
-            "effect/context": services,
-          }),
-        },
-      );
+      createActPortHandler(dependencies, platformProcedures(http)).upgrade(channel.port2, {
+        context: () => ({
+          actor: { sender: APP_SCREENS, panel: true },
+          trusted: true,
+          "effect/context": services,
+        }),
+      });
       channel.port2.start();
       const link = new RPCLink({ port: channel.port1 });
       channel.port1.start();
@@ -390,6 +409,7 @@ const composedMobile = (options: MobileHostOptions) =>
       const acts = yield* servedActPort(
         portDependencies(operator, notices, device.createId(), device),
         services,
+        yield* HttpClient.HttpClient,
       );
 
       return { bridge: made.bridge, acts, operator, state };

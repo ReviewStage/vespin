@@ -22,7 +22,8 @@
  * New task, a sub-task or a related task among it, or one filed for later
  * with no agent, with the models and the repositories they pick among followed;
  * Settings' Account page: Share usage data, support access, and the
- * account's deletion; a workspace made from the switcher, which New
+ * account's deletion; Settings' Send feedback, its words and pictures
+ * sent as the panel's form sends them; a workspace made from the switcher, which New
  * workspace names; Settings' Workspace page: the rename, the members read
  * and their roles changed or removed, the invitations read, sent, and
  * canceled, and Leave; its Agents page: the default model and the settings
@@ -125,12 +126,7 @@ const IOS = {
   DICTATION: byDesign("iOS uses the keyboard's own dictation"),
   DIFF: byDesign("iOS v1 opens the diff on GitHub"),
   CHANGELOG: byDesign("iOS opens the changelog in its own Safari sheet (Settings › What's new)"),
-  CONTACT_MAIL: byDesign(
-    "iOS writes the contact mail itself through openURL (Settings › Send feedback)",
-  ),
-  FEEDBACK: notYet(
-    "iOS sends feedback as mail; the panel's form with pictures isn't built there yet",
-  ),
+  CONTACT_MAIL: byDesign("iOS writes the contact mail itself through openURL (Settings › Email)"),
   LINKS: byDesign("iOS opens a link through the system itself (openURL)"),
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
@@ -441,7 +437,7 @@ export const CLIENT_PARITY = {
     notYet("iOS v1 has no editor to hold unsaved work"),
   ),
   [PORT_ACT_KIND.WINDOW_MENU_OFFERS]: desktopOnly(WEB.MENU_BAR, IOS.MENU_BAR),
-  [PORT_ACT_KIND.FEEDBACK_SEND]: panel(IOS.FEEDBACK),
+  [PORT_ACT_KIND.FEEDBACK_SEND]: EVERYWHERE,
 
   [PORT_ACT_KIND.WORKSPACE_CREATE]: EVERYWHERE,
   [PORT_ACT_KIND.WORKSPACE_RENAME]: EVERYWHERE,
