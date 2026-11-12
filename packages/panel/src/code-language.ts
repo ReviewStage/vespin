@@ -76,9 +76,9 @@ const PLAIN_CHOICE_NAME = "Plain text";
  */
 export const CODE_LANGUAGE_CHOICES: readonly CodeLanguageChoice[] = [
   { id: "", name: PLAIN_CHOICE_NAME },
-  ...[...LANGUAGE_NAMES]
-    .filter(([, name], at, all) => all.findIndex(([, first]) => first === name) === at)
-    .map(([id, name]) => ({ id, name })),
+  ...[...LANGUAGE_NAMES].flatMap(([id, name], at, all) =>
+    all.findIndex(([, first]) => first === name) === at ? [{ id, name }] : [],
+  ),
 ];
 
 /** The choice a fence's language stands for, by its extension, so a fence written ```typescript stands checked as TypeScript; none for one this file names no choice for. */
