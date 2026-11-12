@@ -1475,15 +1475,19 @@ export function shownShortcutGroups(
   readonly commands: readonly KeyedCommand[];
   readonly keys: readonly InContextKey[];
 }[] {
-  return APP_SHORTCUT_GROUPS.map((group) => ({
-    title: group.title,
-    commands: group.commands.filter(
-      (command) =>
-        !shortcutLayered(APP_SHORTCUTS[command].chord) &&
-        shortcutShown(command, experiments, capabilities),
-    ),
-    keys: group.keys.filter((key) => inContextShown(key, capabilities)),
-  })).filter((group) => group.commands.length + group.keys.length > 0);
+  return APP_SHORTCUT_GROUPS.flatMap((group) => {
+    const shown = {
+      title: group.title,
+      commands: group.commands.filter(
+        (command) =>
+          !shortcutLayered(APP_SHORTCUTS[command].chord) &&
+          shortcutShown(command, experiments, capabilities),
+      ),
+      keys: group.keys.filter((key) => inContextShown(key, capabilities)),
+    };
+
+    return shown.commands.length + shown.keys.length > 0 ? [shown] : [];
+  });
 }
 
 /** A command's name as the window says it, keyed, the menu bar's own, or ⌘K's own. */

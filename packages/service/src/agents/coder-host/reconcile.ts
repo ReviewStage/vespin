@@ -406,7 +406,7 @@ const reported = (
   Effect.forEach(
     new Set(failed.map((turn) => turn.failure)),
     (failure) => {
-      const turnIds = failed.filter((turn) => turn.failure === failure).map((turn) => turn.id);
+      const turnIds = failed.flatMap((turn) => (turn.failure === failure ? [turn.id] : []));
 
       const report = new RunnerLost({
         agentId: agent.id,

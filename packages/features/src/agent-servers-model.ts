@@ -278,9 +278,11 @@ function sectionOf(row: ServerRow): ServerSection | undefined {
 export function serverGroups(rows: readonly ServerRow[]): readonly ServerGroup[] {
   const order = [undefined, SERVER_SECTION.CONNECTED, SERVER_SECTION.NOT_CONNECTED] as const;
 
-  return order
-    .map((heading) => ({ heading, rows: rows.filter((row) => sectionOf(row) === heading) }))
-    .filter((group) => group.rows.length > 0);
+  return order.flatMap((heading) => {
+    const grouped = rows.filter((row) => sectionOf(row) === heading);
+
+    return grouped.length === 0 ? [] : [{ heading, rows: grouped }];
+  });
 }
 
 /** What the Connected heading counts: how many of its servers this agent has on, of how many ("2 of 3 on"). */

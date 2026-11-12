@@ -60,9 +60,11 @@ function Fruit({ chosen, entered }: { chosen: string[]; entered: string[] }): Re
   const [active, setActive] = useState(0);
   const [shut, setShut] = useState(false);
 
-  const options: ComboboxOption[] = FRUIT.filter(
-    (name) => value !== "" && name.toLowerCase().startsWith(value.toLowerCase()),
-  ).map((name) => ({ id: name, label: name }));
+  const options: ComboboxOption[] = FRUIT.flatMap((name) =>
+    value !== "" && name.toLowerCase().startsWith(value.toLowerCase())
+      ? [{ id: name, label: name }]
+      : [],
+  );
 
   return createElement(Combobox, {
     label: "Fruit",

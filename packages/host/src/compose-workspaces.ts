@@ -476,13 +476,13 @@ function workspacesAnswered(
 
     // Note that a workspace whose GitHub installations moved reaches other repositories now, so its list is asked again.
     const reinstalled = new Set(
-      workspaces
-        .filter((each) => {
-          const was = installed.get(each.id);
+      workspaces.flatMap((each) => {
+        const was = installed.get(each.id);
 
-          return was !== undefined && was !== JSON.stringify(each.githubInstallations ?? []);
-        })
-        .map((each) => each.id),
+        return was !== undefined && was !== JSON.stringify(each.githubInstallations ?? [])
+          ? [each.id]
+          : [];
+      }),
     );
 
     const listed = new Set(workspaces.map((each) => each.id));

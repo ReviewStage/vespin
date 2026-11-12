@@ -128,9 +128,9 @@ const done = (value: PortActResult<PortActKind>): FakeActAnswer => ({
 
 /** The position past the bottom of a provider's order, plans and key alike, where the service adds. */
 function bottomOf(provider: ProviderKeySummary["provider"]): number {
-  const places = [...held.keys, ...(held.subscriptions ?? [])]
-    .filter((one) => one.provider === provider)
-    .map((one) => one.position ?? 0);
+  const places = [...held.keys, ...(held.subscriptions ?? [])].flatMap((one) =>
+    one.provider === provider ? [one.position ?? 0] : [],
+  );
 
   return Math.max(-1, ...places) + 1;
 }
@@ -351,8 +351,11 @@ const meterOf = (within: Element) =>
 const metersOf = (within: Element) =>
   [...within.querySelectorAll("[data-window]")].map((row) =>
     [...row.querySelectorAll("span")]
-      .filter((span) => span.children.length === 0 && span.closest("[aria-hidden]") === null)
-      .map((span) => span.textContent)
+      .flatMap((span) =>
+        span.children.length === 0 && span.closest("[aria-hidden]") === null
+          ? [span.textContent]
+          : [],
+      )
       .join(""),
   );
 

@@ -158,15 +158,13 @@ function ChoosingMail(): React.JSX.Element {
                   label: "Read",
                   count: MAIL.filter((item) => !item.unread).length,
                   onSelect: () =>
-                    setSelected(
-                      new Set(MAIL.filter((item) => !item.unread).map((item) => item.id)),
-                    ),
+                    setSelected(new Set(MAIL.flatMap((item) => (item.unread ? [] : [item.id])))),
                 },
                 {
                   label: "Unread",
                   count: MAIL.filter((item) => item.unread).length,
                   onSelect: () =>
-                    setSelected(new Set(MAIL.filter((item) => item.unread).map((item) => item.id))),
+                    setSelected(new Set(MAIL.flatMap((item) => (item.unread ? [item.id] : [])))),
                 },
               ]}
             />

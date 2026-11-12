@@ -204,11 +204,11 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
         const after = yield* lapsedAgentBoots(past(BOOT_BOUNDS.DEADLINE_MS), 100);
 
         const mine = (boots: readonly { readonly agentId: string }[]) =>
-          boots
-            .map((boot) => boot.agentId)
-            .filter((id) =>
-              [starting.agentId, handingOff.agentId, failed.agentId, ready.agentId].includes(id),
-            );
+          boots.flatMap(({ agentId }) =>
+            [starting.agentId, handingOff.agentId, failed.agentId, ready.agentId].includes(agentId)
+              ? [agentId]
+              : [],
+          );
 
         assert.deepEqual(mine(before), []);
         assert.deepEqual(mine(after).toSorted(), [starting.agentId, handingOff.agentId].toSorted());

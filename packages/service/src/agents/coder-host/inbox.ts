@@ -598,7 +598,7 @@ function rowsOf(items: readonly InboxItem[], readerId: string): readonly AgentTh
   const order = [INBOX_STATUS.OPEN, INBOX_STATUS.ANSWERED, INBOX_STATUS.CLOSED];
 
   return order.flatMap((status) =>
-    items.filter((item) => item.status === status).map((item) => rowOf(item, readerId)),
+    items.flatMap((item) => (item.status === status ? [rowOf(item, readerId)] : [])),
   );
 }
 
@@ -770,7 +770,7 @@ function bodyFiles(
     }
 
     const pdfs = new Set(
-      read.filter((file) => file.contentType === INBOX_FILE_TYPE.PDF).map((file) => file.path),
+      read.flatMap((file) => (file.contentType === INBOX_FILE_TYPE.PDF ? [file.path] : [])),
     );
 
     const words = pdfs.size === 0 ? body : withoutSandboxPictures(body, (path) => pdfs.has(path));

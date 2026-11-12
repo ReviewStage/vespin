@@ -158,12 +158,15 @@ function retiredLast<Row>(
   retired: (row: Row) => boolean,
   toBreakdown: (row: Row) => BreakdownRow,
 ): BreakdownRow[] {
-  const live = rows.filter((row) => !retired(row)).map(toBreakdown);
+  const live = rows.flatMap((row) => (retired(row) ? [] : [toBreakdown(row)]));
 
-  const old = rows
-    .filter(retired)
-    .map(toBreakdown)
-    .map((row) => ({ ...row, label: retiredTitle(row.label) }));
+  const old = rows.flatMap((row) => {
+    if (!retired(row)) return [];
+
+    const breakdown = toBreakdown(row);
+
+    return [{ ...breakdown, label: retiredTitle(breakdown.label) }];
+  });
 
   return [...live, ...old];
 }

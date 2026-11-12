@@ -241,7 +241,7 @@ export function coverHunks(
     return own.length === 0 ? [] : [{ ...chapter, hunkRefs: own.map((each) => each.ref) }];
   });
 
-  const missing = hunks.filter((each) => !placed.has(each)).map((each) => each.ref);
+  const missing = hunks.flatMap((each) => (placed.has(each) ? [] : [each.ref]));
 
   return { chapters: covered, missing };
 }

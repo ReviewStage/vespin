@@ -343,7 +343,7 @@ function repositoryMenu(
 /** The rows of `rows` whose repository is among `picked`, by the id each row spells it with, which a pick may spell in another case. */
 function checkedAmong(rows: readonly MenuRow[], picked: readonly string[]): ReadonlySet<string> {
   return new Set(
-    rows.filter((row) => picked.some((each) => sameName(each, row.id))).map((row) => row.id),
+    rows.flatMap((row) => (picked.some((each) => sameName(each, row.id)) ? [row.id] : [])),
   );
 }
 

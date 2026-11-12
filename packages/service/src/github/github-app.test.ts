@@ -160,9 +160,11 @@ const relayInstallation = (id: number): InstallationFixture => ({
 
 /** The permissions of every token GitHub was asked to mint for a repository, in the order asked. */
 function repositoryMints(sent: readonly SentToGitHub[]): readonly unknown[] {
-  return sent
-    .filter((one) => one.url.endsWith("/access_tokens") && "repositories" in JSON.parse(one.body))
-    .map((one) => JSON.parse(one.body).permissions);
+  return sent.flatMap((one) =>
+    one.url.endsWith("/access_tokens") && "repositories" in JSON.parse(one.body)
+      ? [JSON.parse(one.body).permissions]
+      : [],
+  );
 }
 
 const OTHER_INSTALLATION: InstallationFixture = {

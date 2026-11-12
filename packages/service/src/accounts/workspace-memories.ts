@@ -200,13 +200,12 @@ function matchingMemories(
   most: number,
 ): readonly StoredMemory[] {
   return memories
-    .map((memory, recency) => {
+    .flatMap((memory, recency) => {
       const own = wordsOf(memory.text);
       const score = asked.filter((word) => own.some((held) => held.startsWith(word))).length;
 
-      return { memory, score, recency };
+      return score > 0 ? [{ memory, score, recency }] : [];
     })
-    .filter((scored) => scored.score > 0)
     .sort((a, b) => b.score - a.score || a.recency - b.recency)
     .slice(0, most)
     .map((scored) => scored.memory);

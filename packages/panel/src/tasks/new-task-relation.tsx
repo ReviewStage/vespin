@@ -388,8 +388,7 @@ function RelationRow({
   const key = task.number === undefined ? undefined : taskKey(workspaceName, task.number);
 
   const spoken = [key, task.status === undefined ? undefined : TASK_STATUS_WORDS[task.status]]
-    .filter((each) => each !== undefined)
-    .map((each) => `, ${each}`)
+    .flatMap((each) => (each === undefined ? [] : [`, ${each}`]))
     .join("");
 
   return (

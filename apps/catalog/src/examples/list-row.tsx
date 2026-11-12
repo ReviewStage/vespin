@@ -157,10 +157,11 @@ function NestedRows(): React.JSX.Element {
 
   return (
     <List label="Tasks" density={LIST_DENSITY.DENSE}>
-      {NESTED.filter((task) => shown(task.parent)).map((task) => {
+      {NESTED.flatMap((task) => {
+        if (!shown(task.parent)) return [];
         const folds = NESTED.some((child) => child.parent === task.id);
 
-        return (
+        return [
           <ListRow
             key={task.id}
             leading={<GLYPH.TIME />}
@@ -192,8 +193,8 @@ function NestedRows(): React.JSX.Element {
                 : undefined
             }
             onPress={ignore}
-          />
-        );
+          />,
+        ];
       })}
     </List>
   );

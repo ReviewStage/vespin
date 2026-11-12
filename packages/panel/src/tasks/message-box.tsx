@@ -244,13 +244,11 @@ function hiddenPresses(
 ): readonly OverflowPress[] {
   if (card === null) return [];
 
-  return offers
-    .map((offer) => offer.press)
-    .filter((press) => {
-      const element = card.querySelector(`.${press}`);
+  return offers.flatMap(({ press }) => {
+    const element = card.querySelector(`.${press}`);
 
-      return element !== null && getComputedStyle(element).display === "none";
-    });
+    return element !== null && getComputedStyle(element).display === "none" ? [press] : [];
+  });
 }
 
 /**

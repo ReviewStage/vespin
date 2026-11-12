@@ -498,7 +498,7 @@ export const apnsSenderFromEnvironment: Layer.Layer<ApnsSender, never, ApnsTrans
         [APNS_ENVIRONMENT.BUNDLE_ID, bundleId],
       ] as const;
 
-      const unset = missing.filter(([, value]) => value === undefined).map(([name]) => name);
+      const unset = missing.flatMap(([name, value]) => (value === undefined ? [name] : []));
 
       if (
         unset.length > 0 ||

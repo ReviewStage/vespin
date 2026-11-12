@@ -303,8 +303,8 @@ const FIXTURE_HISTORY: readonly {
 /** A page of the fixture task's history, newest first, before the revision `before` names where it names one. */
 function historyPage(before: number | undefined): DescriptionRevisionsAnswer {
   return {
-    revisions: FIXTURE_HISTORY.filter(({ line }) => before === undefined || line.seq < before).map(
-      ({ line }) => line,
+    revisions: FIXTURE_HISTORY.flatMap(({ line }) =>
+      before === undefined || line.seq < before ? [line] : [],
     ),
   };
 }

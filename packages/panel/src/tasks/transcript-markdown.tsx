@@ -155,10 +155,7 @@ function rowsOf(language: string, code: string): readonly Row[] | undefined {
 
 /** The words of the rows added, which is what a suggestion copies. */
 function addedText(rows: readonly Row[]): string {
-  return rows
-    .filter((row) => row.kind === CODE_ROW.ADDED)
-    .map((row) => row.text)
-    .join("\n");
+  return rows.flatMap((row) => (row.kind === CODE_ROW.ADDED ? [row.text] : [])).join("\n");
 }
 
 /**

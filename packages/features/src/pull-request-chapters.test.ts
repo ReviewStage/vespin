@@ -316,7 +316,9 @@ test("a thread stands in a chapter where one of its hunks counts the thread's li
   const second = story("Second", [seatsSecond]);
 
   const where = (each: ReviewThread) =>
-    [first, second].filter((chapter) => threadInChapter(each, chapter, HUNKS)).map((c) => c.title);
+    [first, second].flatMap((chapter) =>
+      threadInChapter(each, chapter, HUNKS) ? [chapter.title] : [],
+    );
 
   // New line 4 is the first hunk's last; new line 11 the second's first.
   assert.deepEqual(where(thread({ line: 4 })), ["First"]);

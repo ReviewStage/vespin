@@ -39,9 +39,9 @@ function drawn(id: string) {
   return {
     root: box,
     opened: () =>
-      [...box.querySelectorAll<HTMLElement>("[data-select-key]")]
-        .filter((press) => press.textContent?.includes("(open)"))
-        .map((press) => press.getAttribute("data-select-key") ?? ""),
+      [...box.querySelectorAll<HTMLElement>("[data-select-key]")].flatMap((press) =>
+        press.textContent?.includes("(open)") ? [press.getAttribute("data-select-key") ?? ""] : [],
+      ),
     unmount: () => {
       act(() => root.unmount());
       container.remove();

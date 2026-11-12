@@ -37,18 +37,25 @@ export function previewMessages(
   harness?: ModelProvider | undefined,
 ): readonly PreviewMessage[] {
   return messages
-    .map((message) => ({
-      id: message.id,
-      writer: message.writer.name,
-      agent: message.writer.agent,
-      picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
-      harness: message.writer.agent ? harness : undefined,
-      at: message.at,
-      words: [message.stamp?.words, plainWords(message.words)]
+    .flatMap((message) => {
+      const words = [message.stamp?.words, plainWords(message.words)]
         .filter((part) => part !== undefined && part !== "")
-        .join(STAMP_PART),
-    }))
-    .filter((message) => message.words !== "")
+        .join(STAMP_PART);
+
+      if (words === "") return [];
+
+      return [
+        {
+          id: message.id,
+          writer: message.writer.name,
+          agent: message.writer.agent,
+          picture: message.writer.agent ? undefined : pictureOf(message.writer.userId),
+          harness: message.writer.agent ? harness : undefined,
+          at: message.at,
+          words,
+        },
+      ];
+    })
     .slice(-PREVIEW_MESSAGES);
 }
 

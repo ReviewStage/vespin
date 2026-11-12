@@ -200,8 +200,7 @@ function nameIndex(names: readonly string[], word: string): number {
 /** The nearest `month`/`day` to `today`, a year before or after where that one is nearer. */
 function nearestDay(today: Day, month: number, day: number): Day | undefined {
   const near = [today.year - 1, today.year, today.year + 1]
-    .map((year) => realDay(year, month, day))
-    .filter((each): each is Day => each !== undefined)
+    .flatMap((year) => realDay(year, month, day) ?? [])
     .sort((a, b) => Math.abs(daysBetween(today, a)) - Math.abs(daysBetween(today, b)));
 
   return near[0];

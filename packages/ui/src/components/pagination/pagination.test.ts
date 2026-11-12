@@ -59,9 +59,11 @@ function drawPages(current: number, count: number): HTMLElement {
 function items(container: HTMLElement): string[] {
   const nav = container.querySelector("nav");
 
-  return [...(nav?.children ?? [])]
-    .filter((item) => item.getAttribute("aria-hidden") !== "true")
-    .map((item) => item.getAttribute("aria-label") ?? item.textContent ?? "");
+  return [...(nav?.children ?? [])].flatMap((item) =>
+    item.getAttribute("aria-hidden") === "true"
+      ? []
+      : [item.getAttribute("aria-label") ?? item.textContent ?? ""],
+  );
 }
 
 test("the steps link to the pages beside this one, named for where they go", () => {

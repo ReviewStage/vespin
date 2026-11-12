@@ -158,7 +158,9 @@ export function integrationStatusesOfLive(
     return {
       provider,
       status: first?.status ?? INTEGRATION_STATUS.DISCONNECTED,
-      accounts: held.filter((row) => row.status !== INTEGRATION_STATUS.DISCONNECTED).map(accountOf),
+      accounts: held.flatMap((row) =>
+        row.status === INTEGRATION_STATUS.DISCONNECTED ? [] : [accountOf(row)],
+      ),
     };
   });
 

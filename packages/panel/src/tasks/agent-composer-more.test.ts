@@ -171,9 +171,9 @@ test("the ⋯'s menu closes once the card changes width, as a panel dragged narr
 
   // What the standing menu offers; a closed one, held drawn while its exit plays, is inert.
   const offered = () =>
-    [...document.querySelectorAll('[role="menuitem"]')]
-      .filter((item) => item.closest("[inert]") === null)
-      .map((item) => item.textContent);
+    [...document.querySelectorAll('[role="menuitem"]')].flatMap((item) =>
+      item.closest("[inert]") === null ? [item.textContent] : [],
+    );
 
   act(() => box.press("Composer actions").click());
   assert.deepEqual(offered(), ["62% of context used", "Dictate"]);

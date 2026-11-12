@@ -1202,9 +1202,11 @@ export function openings(card: string): string[] {
   const standing = document.querySelector(`.ui-tooltip-card ${card}`);
   assert.ok(standing, "a card is hung");
 
-  return [...standing.querySelectorAll("button")]
-    .map((button) => button.textContent ?? "")
-    .filter((words) => words.startsWith("Open"));
+  return [...standing.querySelectorAll("button")].flatMap((button) => {
+    const words = button.textContent ?? "";
+
+    return words.startsWith("Open") ? [words] : [];
+  });
 }
 
 /** Whether a reference wears an agent's tile, the solid rounded square every agent is drawn on. */
@@ -1313,9 +1315,11 @@ export function attachedNames(within: Element): (string | null)[] {
 
 /** The files the words name, by the name each one's chip there says, in the order the words name them. */
 function namedInWords(within: Element): (string | null)[] {
-  return [...within.querySelectorAll(".ui-inline-ref")]
-    .filter((chip) => FILE_KINDS.has(chip.querySelector(".ui-visually-hidden")?.textContent ?? ""))
-    .map((chip) => chip.querySelector(".ui-inline-ref-label")?.textContent ?? null);
+  return [...within.querySelectorAll(".ui-inline-ref")].flatMap((chip) =>
+    FILE_KINDS.has(chip.querySelector(".ui-visually-hidden")?.textContent ?? "")
+      ? [chip.querySelector(".ui-inline-ref-label")?.textContent ?? null]
+      : [],
+  );
 }
 
 /** Whether an item's row wears the Draft pencil. */

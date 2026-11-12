@@ -141,8 +141,9 @@ function pickedRepositories(
       ...addedOnly.map((one) => ({ ...one, access: GITHUB_ACCESS.TOKEN })),
     ].sort(byRecent),
     addable: onToken
-      .filter((one) => !listed.has(nameKey(one.fullName)))
-      .map((one) => ({ ...one, access: GITHUB_ACCESS.TOKEN }))
+      .flatMap((one) =>
+        listed.has(nameKey(one.fullName)) ? [] : [{ ...one, access: GITHUB_ACCESS.TOKEN }],
+      )
       .sort(byRecent),
   };
 }

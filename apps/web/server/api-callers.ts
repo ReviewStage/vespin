@@ -593,9 +593,11 @@ function routeTable(
   aliases: readonly string[],
 ): RouteTable {
   return {
-    rewrites: rewrites
-      .filter((rewrite) => rewrite.src !== ORPC_FALLBACK_SRC)
-      .map((rewrite) => ({ rewrite, pattern: new RegExp(`^${rewrite.src}$`, "u") })),
+    rewrites: rewrites.flatMap((rewrite) =>
+      rewrite.src === ORPC_FALLBACK_SRC
+        ? []
+        : [{ rewrite, pattern: new RegExp(`^${rewrite.src}$`, "u") }],
+    ),
     procedures: procedures.map((procedure) => ({
       path: procedure.path,
       pattern: procedurePattern(procedure.path),

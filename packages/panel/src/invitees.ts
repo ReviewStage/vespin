@@ -103,7 +103,7 @@ function joined(
 }
 
 function pendingOf(invitees: readonly Invitee[]): readonly string[] {
-  return invitees.filter((one) => one.state === EMAIL_CHIP_STATE.DRAFT).map((one) => one.email);
+  return invitees.flatMap((one) => (one.state === EMAIL_CHIP_STATE.DRAFT ? [one.email] : []));
 }
 
 /**

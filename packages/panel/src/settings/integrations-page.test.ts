@@ -408,9 +408,9 @@ function rowNames(page: HTMLElement): (string | undefined)[] {
 
 /** The words of the buttons standing on a row, its ⋯ aside. */
 function rowButtons(row: Element): (string | null)[] {
-  return [...row.querySelectorAll("button")]
-    .filter((button) => !button.hasAttribute("aria-expanded"))
-    .map((button) => button.textContent);
+  return [...row.querySelectorAll("button")].flatMap((button) =>
+    button.hasAttribute("aria-expanded") ? [] : [button.textContent],
+  );
 }
 
 /** What a row's ⋯ offers, and the line it stands under. */
@@ -1350,9 +1350,9 @@ test("an account added under the provider's own name, beside one that stands, wa
     ) ?? assert.fail("the account added has a row of its own");
 
   assert.deepEqual(
-    [...added.querySelectorAll("button")]
-      .map((button) => button.textContent)
-      .filter((text) => text === "Reopen" || text === "Cancel"),
+    [...added.querySelectorAll("button")].flatMap(({ textContent: text }) =>
+      text === "Reopen" || text === "Cancel" ? [text] : [],
+    ),
     ["Reopen", "Cancel"],
   );
 });

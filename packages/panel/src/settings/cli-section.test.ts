@@ -101,8 +101,9 @@ function dialog(): HTMLElement {
 /** The page's words, apart from any dialog over it. */
 function pageText(): string {
   return [...document.body.children]
-    .filter((each) => each.querySelector('[role="alertdialog"]') === null)
-    .map((each) => each.textContent ?? "")
+    .flatMap((each) =>
+      each.querySelector('[role="alertdialog"]') === null ? [each.textContent ?? ""] : [],
+    )
     .join(" ");
 }
 

@@ -148,7 +148,7 @@ export function useInboxReadMarks({
   const onMarkAll = useCallback(
     (items: readonly InboxItem[]) => {
       nodAll(items);
-      const itemIds = items.filter(isUnread).map((item) => item.id);
+      const itemIds = items.flatMap((item) => (isUnread(item) ? [item.id] : []));
 
       if (itemIds.length === 0) return;
       sendReadAll({

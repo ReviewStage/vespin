@@ -144,8 +144,11 @@ test("every row a tier finds ranks above every row the next tier finds, a label 
   ];
 
   const ranked = rows
-    .map((row) => ({ row, score: searchHit(row, "set")?.score ?? 0 }))
-    .filter((each) => each.score > 0)
+    .flatMap((row) => {
+      const score = searchHit(row, "set")?.score ?? 0;
+
+      return score > 0 ? [{ row, score }] : [];
+    })
     .sort((a, b) => b.score - a.score)
     .map((each) => each.row.label);
 

@@ -650,7 +650,7 @@ test("on the page of an agent no plan holds an @ offers its repository's files, 
 
   assert.deepEqual(listed(container), ["rollout-store.ts"]);
   assert.deepEqual(
-    told.filter((each) => each.kind === ACT_KIND.TASKS_TREE).map((each) => each.payload),
+    told.flatMap((each) => (each.kind === ACT_KIND.TASKS_TREE ? [each.payload] : [])),
     [{ workspaceId: "workspace-1", repository: "acme/relay", path: "", recursive: true }],
   );
 });
@@ -1102,9 +1102,9 @@ function agentsListed(container: HTMLElement): [string, string][] {
 
 /** The searches of the workspace's agents the list asked, each as the act carried it. */
 function workspaceReads(): unknown[] {
-  return told
-    .filter((each) => each.kind === ACT_KIND.AGENTS_WORKSPACE_LIST)
-    .map((each) => each.payload);
+  return told.flatMap((each) =>
+    each.kind === ACT_KIND.AGENTS_WORKSPACE_LIST ? [each.payload] : [],
+  );
 }
 
 test("an @ narrowed to agents offers the workspace's agents after the task's own, each labeled by its task, and no archived one before a word is typed", async () => {

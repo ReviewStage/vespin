@@ -233,9 +233,11 @@ export function nextFailedRunExpiry(
   failedRuns: readonly AccountFailedRun[],
   now: number,
 ): number | undefined {
-  const expiries = failedRuns
-    .map((run) => run.failedAt + FAILED_RUN_WINDOW_MILLIS)
-    .filter((expiry) => expiry > now);
+  const expiries = failedRuns.flatMap((run) => {
+    const expiry = run.failedAt + FAILED_RUN_WINDOW_MILLIS;
+
+    return expiry > now ? [expiry] : [];
+  });
 
   return expiries.length === 0 ? undefined : Math.min(...expiries);
 }

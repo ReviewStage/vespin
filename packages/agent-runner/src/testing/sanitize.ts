@@ -151,15 +151,15 @@ export class Sanitizer {
  * shape. Empty is the one answer under which a recording may be written.
  */
 export function findLeaks(text: string, secrets: readonly KnownSecret[]): readonly string[] {
-  const known = secrets
-    .filter((secret) => secret.value.length >= 4 && text.includes(secret.value))
-    .map((secret) => secret.kind);
+  const known = secrets.flatMap((secret) =>
+    secret.value.length >= 4 && text.includes(secret.value) ? [secret.kind] : [],
+  );
 
-  const shaped = SECRET_SHAPES.filter(
-    (shape) =>
-      shape.name !== "sha256" &&
-      text.replaceAll("user@example.com", "").match(shape.pattern) !== null,
-  ).map((shape) => shape.name);
+  const shaped = SECRET_SHAPES.flatMap((shape) =>
+    shape.name !== "sha256" && text.replaceAll("user@example.com", "").match(shape.pattern) !== null
+      ? [shape.name]
+      : [],
+  );
 
   return [...known, ...shaped];
 }

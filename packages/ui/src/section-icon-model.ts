@@ -143,14 +143,13 @@ export function findGlyphs(choices: readonly GlyphChoice[], query: string): read
 
 /** Every emoji every Mac draws, by category in Unicode's order, from `unicode-emoji-json`'s groups. */
 export function emojiGroups(groups: readonly UnicodeEmojiGroup[]): EmojiGroup[] {
-  return groups
-    .map((group) => ({
-      name: group.name,
-      emojis: group.emojis
-        .filter((one) => Number(one.emoji_version) <= NEWEST_EMOJI_VERSION)
-        .map((one) => ({ emoji: one.emoji, name: one.name })),
-    }))
-    .filter((group) => group.emojis.length > 0);
+  return groups.flatMap((group) => {
+    const emojis = group.emojis
+      .filter((one) => Number(one.emoji_version) <= NEWEST_EMOJI_VERSION)
+      .map((one) => ({ emoji: one.emoji, name: one.name }));
+
+    return emojis.length === 0 ? [] : [{ name: group.name, emojis }];
+  });
 }
 
 /** The emoji a query finds, each category keeping only what it found and none left empty; every one for a blank query. */
@@ -159,10 +158,9 @@ export function findEmoji(groups: readonly EmojiGroup[], query: string): readonl
 
   if (tokens.length === 0) return groups;
 
-  return groups
-    .map((group) => ({
-      name: group.name,
-      emojis: group.emojis.filter((one) => matchesTokens([one.name], tokens)),
-    }))
-    .filter((group) => group.emojis.length > 0);
+  return groups.flatMap((group) => {
+    const emojis = group.emojis.filter((one) => matchesTokens([one.name], tokens));
+
+    return emojis.length === 0 ? [] : [{ name: group.name, emojis }];
+  });
 }

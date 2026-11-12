@@ -721,9 +721,11 @@ function namedIn(
   payloads: readonly { readonly kind: PortActKind; readonly payload: unknown }[],
   kind: PortActKind,
 ): (string | undefined)[] {
-  return payloads
-    .filter((asked) => asked.kind === kind)
-    .map((asked) => Option.getOrUndefined(readWorkspaceNamed(asked.payload))?.workspaceId);
+  return payloads.flatMap((asked) =>
+    asked.kind === kind
+      ? [Option.getOrUndefined(readWorkspaceNamed(asked.payload))?.workspaceId]
+      : [],
+  );
 }
 
 /** The workspace each start the tab asked for named. */
@@ -3127,9 +3129,11 @@ test("a person's page opened in another workspace lists it without reopening its
 function opensAsked(
   payloads: readonly { readonly kind: PortActKind; readonly payload: unknown }[],
 ) {
-  return payloads
-    .filter((asked) => asked.kind === ACT_KIND.TASKS_SELECT)
-    .map((asked) => Option.getOrUndefined(readOpened(asked.payload))?.taskId);
+  return payloads.flatMap((asked) =>
+    asked.kind === ACT_KIND.TASKS_SELECT
+      ? [Option.getOrUndefined(readOpened(asked.payload))?.taskId]
+      : [],
+  );
 }
 
 const readOpened = Schema.decodeUnknownOption(Schema.Struct({ taskId: Schema.String }));

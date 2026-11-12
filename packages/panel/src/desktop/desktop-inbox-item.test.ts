@@ -1049,9 +1049,9 @@ test("split, K and J hand the keyboard to the row they choose, so the arrows go 
 
 /** The titles of the list's rows Tab stops on, in the order drawn. */
 function rowTabStops(page: HTMLElement): (string | null | undefined)[] {
-  return [...page.querySelectorAll<HTMLButtonElement>(".inbox-tasks li button.ui-list-row-main")]
-    .filter((row) => row.tabIndex === 0)
-    .map((row) => row.querySelector(ROW_TITLE)?.textContent);
+  return [
+    ...page.querySelectorAll<HTMLButtonElement>(".inbox-tasks li button.ui-list-row-main"),
+  ].flatMap((row) => (row.tabIndex === 0 ? [row.querySelector(ROW_TITLE)?.textContent] : []));
 }
 
 test("the list's rows are one Tab stop, across its tasks, that ↓ walks and End ends, the walk wrapping and the stop following the row last focused", async () => {
@@ -2345,9 +2345,9 @@ function commentHeads(pane: HTMLElement): (string | undefined | (string | undefi
     (comment) => [
       comment.dataset.inboxComment,
       [...comment.querySelectorAll<HTMLElement>(".ui-comment-face")].map(faceKind),
-      [...comment.querySelectorAll<HTMLElement>(".actor-mark")]
-        .filter((mark) => mark.closest(".ui-comment-head, .inbox-comment-body") === null)
-        .map((mark) => mark.dataset.kind),
+      [...comment.querySelectorAll<HTMLElement>(".actor-mark")].flatMap((mark) =>
+        mark.closest(".ui-comment-head, .inbox-comment-body") === null ? [mark.dataset.kind] : [],
+      ),
     ],
   );
 }
@@ -2886,9 +2886,13 @@ function draftReplyIn(pane: HTMLElement): Element {
 
 /** The words at the head's end of each comment of the thread that says its reply is on its way. */
 function sendingMarks(page: HTMLElement): (string | undefined)[] {
-  return [...itemPane(page).querySelectorAll(".inbox-thread .ui-comment-trailing")]
-    .map((trailing) => wordsOf(trailing))
-    .filter((words) => words === "Sending");
+  return [...itemPane(page).querySelectorAll(".inbox-thread .ui-comment-trailing")].flatMap(
+    (trailing) => {
+      const words = wordsOf(trailing);
+
+      return words === "Sending" ? [words] : [];
+    },
+  );
 }
 
 test("a plain reply stands at the thread's end marked Sending the moment it is sent, and once a read or its answer holds it, the message stands in its place once; refused, it leaves the thread as its words go back into the box, which says why", async () => {

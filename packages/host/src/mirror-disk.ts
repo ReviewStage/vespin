@@ -169,5 +169,5 @@ export const mirrorMatched = (
       { concurrency: READ_CONCURRENCY },
     );
 
-    return manifest.filter((_, index) => differing[index]).map((file) => file.path);
+    return manifest.flatMap((file, index) => (differing[index] ? [file.path] : []));
   });

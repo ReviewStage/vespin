@@ -630,9 +630,9 @@ test("a save that writes a section above the one the keyboard stands on leaves T
     );
 
   const entered = () =>
-    [...container.querySelectorAll<HTMLElement>("[role='group'][aria-label]")]
-      .filter((block) => block.tabIndex === 0)
-      .map((block) => block.getAttribute("aria-label"));
+    [...container.querySelectorAll<HTMLElement>("[role='group'][aria-label]")].flatMap((block) =>
+      block.tabIndex === 0 ? [block.getAttribute("aria-label")] : [],
+    );
 
   drawDescription(opened);
   await settle();

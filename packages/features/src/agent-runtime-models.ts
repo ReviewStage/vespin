@@ -167,8 +167,8 @@ export function runtimeModels<
 
   return models
     .filter((model) => rule.provider === undefined || model.provider === rule.provider)
-    .filter((model) => runsSpeedOf(rule, model.id))
-    .map((model) => {
+    .flatMap((model) => {
+      if (!runsSpeedOf(rule, model.id)) return [];
       const { contextWindows: _windows, fastNotEnabled: _fast, ...rest } = model;
 
       const kept = {
@@ -182,7 +182,7 @@ export function runtimeModels<
       };
 
       // SAFETY: only the two optional keys are left out, which `M` holds as optional.
-      return kept as unknown as M;
+      return [kept as unknown as M];
     });
 }
 

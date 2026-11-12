@@ -200,13 +200,14 @@ function slashGroups(
   offers: BlockPickerOffers,
   rows: BlockPickerRows,
 ): readonly SlashGroup[] {
-  return SLASH_GROUPS.map((group) => ({
-    label: group.label,
-    entries: [
+  return SLASH_GROUPS.flatMap((group) => {
+    const entries = [
       ...group.entries,
       ...rows.added.filter((added) => added.group === group.label).map(documentEntry),
-    ].filter((entry) => offered(entry, offers, rows) && answers(entry, query)),
-  })).filter((group) => group.entries.length > 0);
+    ].filter((entry) => offered(entry, offers, rows) && answers(entry, query));
+
+    return entries.length > 0 ? [{ label: group.label, entries }] : [];
+  });
 }
 
 /** The `/` word as reported, and where the box the editor stands in stood then, which the menu is carried with as it scrolls. */

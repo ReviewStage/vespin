@@ -154,9 +154,11 @@ function commandClick(page: HTMLElement, title: string): void {
 
 /** The titles of the rows the list holds chosen, in the order drawn. */
 function picked(page: HTMLElement): string[] {
-  return [...page.querySelectorAll<HTMLButtonElement>(".inbox-tasks li button.ui-list-row-main")]
-    .filter((row) => heardOf(row.getAttribute("aria-describedby")).startsWith("Selected, "))
-    .map(titleOf);
+  return [
+    ...page.querySelectorAll<HTMLButtonElement>(".inbox-tasks li button.ui-list-row-main"),
+  ].flatMap((row) =>
+    heardOf(row.getAttribute("aria-describedby")).startsWith("Selected, ") ? [titleOf(row)] : [],
+  );
 }
 
 /** The selection's acts in the list's head, named by how many are chosen, or none while nothing is. */
@@ -1667,9 +1669,9 @@ test("the Inbox's head is one row in the list, its search beside its buttons and
   const row = page.querySelector<HTMLElement>(".inbox-head-row") ?? assert.fail("the row stands");
 
   const buttons = () =>
-    [...row.querySelectorAll("button")]
-      .filter((each) => each.closest("search") === null)
-      .map((each) => each.getAttribute("aria-label"));
+    [...row.querySelectorAll("button")].flatMap((each) =>
+      each.closest("search") === null ? [each.getAttribute("aria-label")] : [],
+    );
 
   assert.deepEqual(buttons(), ["Mark all as read", "View options"]);
   assert.equal(

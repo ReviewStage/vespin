@@ -897,8 +897,8 @@ function contactSheet(results: readonly ShotResult[], skipped: readonly Scene[])
 
   const sections = places.map((place) => {
     const blocks = scenes
-      .filter((scene) => scene.place === place)
-      .map((scene) => {
+      .flatMap((scene) => {
+        if (scene.place !== place) return [];
         const mine = results.filter((result) => result.shot.scene === scene);
 
         const rows = TARGETS.flatMap((target) =>
@@ -921,7 +921,9 @@ function contactSheet(results: readonly ShotResult[], skipped: readonly Scene[])
           }),
         ).join("");
 
-        return `<article id="${escapeHtml(scene.id)}"><h3>${escapeHtml(scene.title)} <code>${escapeHtml(scene.profile)}</code></h3>${rows}</article>`;
+        return [
+          `<article id="${escapeHtml(scene.id)}"><h3>${escapeHtml(scene.title)} <code>${escapeHtml(scene.profile)}</code></h3>${rows}</article>`,
+        ];
       })
       .join("");
 

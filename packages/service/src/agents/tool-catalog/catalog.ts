@@ -629,9 +629,9 @@ export const TOOL_CATALOG: ReadonlyMap<ServedTool, CatalogTool<ServedTool>> = ne
 const SERVED_NAMES: ReadonlySet<string> = new Set(TOOL_CATALOG.keys());
 
 /** The tools a Claude Code agent's worker may not call: every one that does more than read (`CatalogTool`'s `reads`). */
-export const WORKER_DENIED_TOOLS: readonly ServedTool[] = CATALOG.filter(
-  (tool: CatalogTool<ServedTool>) => tool.reads !== true,
-).map((tool) => tool.name);
+export const WORKER_DENIED_TOOLS: readonly ServedTool[] = CATALOG.flatMap(
+  (tool: CatalogTool<ServedTool>) => (tool.reads === true ? [] : [tool.name]),
+);
 
 /** Whether a name a harness called is one of the catalog's tools. */
 export function isServedTool(name: string): name is ServedTool {

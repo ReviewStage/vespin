@@ -806,7 +806,7 @@ it.layer(SUITE)("our Slack route", (it) => {
           [],
         );
         assert.deepEqual(
-          calls.filter((call) => call.method === "reactions.add").map((call) => call.args),
+          calls.flatMap((call) => (call.method === "reactions.add" ? [call.args] : [])),
           [{ channel: "C0001", timestamp: "1700000003.000400", name: "eyes" }],
         );
       });
@@ -849,7 +849,7 @@ it.layer(SUITE)("our Slack route", (it) => {
         assert.equal(replies[0]?.args.thread_ts, threadTs);
         assert.match(replies[0]?.args.text ?? "", /had stopped/u);
         assert.deepEqual(
-          calls.filter((call) => call.method === "reactions.add").map((call) => call.args),
+          calls.flatMap((call) => (call.method === "reactions.add" ? [call.args] : [])),
           [{ channel: "C0001", timestamp: "1700000003.000400", name: "eyes" }],
         );
       });
@@ -899,7 +899,7 @@ it.layer(SUITE)("our Slack route", (it) => {
           [],
         );
         assert.deepEqual(
-          calls.filter((call) => call.method === "reactions.add").map((call) => call.args),
+          calls.flatMap((call) => (call.method === "reactions.add" ? [call.args] : [])),
           [{ channel: "D0001", timestamp: "1700000005.000600", name: "eyes" }],
         );
       });

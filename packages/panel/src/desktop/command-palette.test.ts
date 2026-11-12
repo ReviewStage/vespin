@@ -342,8 +342,7 @@ function rows(): string[] {
       row.querySelector(".ui-combobox-option-detail"),
       row.querySelector("[data-task-key]"),
     ]
-      .filter((part) => part !== null)
-      .map(heard)
+      .flatMap((part) => (part === null ? [] : [heard(part)]))
       .join(" · "),
   );
 }

@@ -1028,7 +1028,7 @@ it.layer(getTestDB())("a task's work beginning", (it) => {
 const idleBut =
   (busy: string) =>
   (agents: readonly TaskStandingAgent[]): Effect.Effect<ReadonlySet<string>> =>
-    Effect.succeed(new Set(agents.map(({ id }) => id).filter((id) => id !== busy)));
+    Effect.succeed(new Set(agents.flatMap(({ id }) => (id === busy ? [] : [id]))));
 
 /** Who archived the agent, as Dean reads it: none while it stands unarchived. */
 const archiveOf = (dean: string, agentId: string) =>

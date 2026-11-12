@@ -16,9 +16,9 @@ function firstLetter(word: string): string | undefined {
 export function monogramOf(name: string): string {
   const words = name.trim().split(/\s+/u);
 
-  const letters = [words[0], words.length > 1 ? words.at(-1) : undefined]
-    .map((word) => (word === undefined ? undefined : firstLetter(word)))
-    .filter((letter): letter is string => letter !== undefined);
+  const letters = [words[0], words.length > 1 ? words.at(-1) : undefined].flatMap((word) =>
+    word === undefined ? [] : (firstLetter(word) ?? []),
+  );
 
   return letters.length === 0 ? NO_LETTER : letters.join("").toLocaleUpperCase("en-US");
 }

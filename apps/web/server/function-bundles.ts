@@ -138,9 +138,9 @@ function dispatcherSource(web: string, definition: FunctionDefinition): string {
 
 function dispatcherPlugin(web: string, functions: readonly FunctionDefinition[]): Plugin {
   const sources = new Map(
-    functions
-      .filter((definition) => definition.dispatches)
-      .map((definition) => [definition.file, dispatcherSource(web, definition)]),
+    functions.flatMap((definition) =>
+      definition.dispatches ? [[definition.file, dispatcherSource(web, definition)] as const] : [],
+    ),
   );
 
   const filter = new RegExp(`^${DISPATCHER_NAMESPACE}:`);

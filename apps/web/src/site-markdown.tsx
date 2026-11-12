@@ -215,11 +215,10 @@ export function policyOf(markdown: string): Policy {
 
   return {
     title,
-    sections: sections
-      .filter((section) => section.title !== null || section.blocks.length > 0)
-      .map((section) => ({
-        title: section.title,
-        html: documentHtml(writtenAs(markdown, section.blocks)),
-      })),
+    sections: sections.flatMap((section) =>
+      section.title !== null || section.blocks.length > 0
+        ? [{ title: section.title, html: documentHtml(writtenAs(markdown, section.blocks)) }]
+        : [],
+    ),
   };
 }

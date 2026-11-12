@@ -24,12 +24,16 @@ export function menuItems(): { label: string; checked: string | null }[] {
 
   if (menu === undefined) throw new Error("no menu stands");
 
-  return [...menu.querySelectorAll<HTMLElement>(".ui-menu-item")]
-    .filter((item) => item.closest('[role="menu"]') === menu)
-    .map((item) => ({
-      label: item.querySelector(".ui-menu-item-label")?.textContent ?? "",
-      checked: item.getAttribute("aria-checked"),
-    }));
+  return [...menu.querySelectorAll<HTMLElement>(".ui-menu-item")].flatMap((item) =>
+    item.closest('[role="menu"]') === menu
+      ? [
+          {
+            label: item.querySelector(".ui-menu-item-label")?.textContent ?? "",
+            checked: item.getAttribute("aria-checked"),
+          },
+        ]
+      : [],
+  );
 }
 
 /** Presses the standing menus' items named `names`, in order: a submenu, then its items. */

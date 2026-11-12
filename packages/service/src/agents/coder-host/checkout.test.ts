@@ -322,9 +322,11 @@ const APP_CREDENTIAL = {
 
 /** The mints sent to GitHub for one repository, by the permissions each asked for. */
 const repositoryMints = (sent: readonly SentToGitHub[]) =>
-  sent
-    .filter((one) => one.url.endsWith("/access_tokens") && "repositories" in JSON.parse(one.body))
-    .map((one) => JSON.parse(one.body));
+  sent.flatMap((one) =>
+    one.url.endsWith("/access_tokens") && "repositories" in JSON.parse(one.body)
+      ? [JSON.parse(one.body)]
+      : [],
+  );
 
 it.layer(getTestDB())("a coding agent's checkout", (it) => {
   it.effect(

@@ -973,8 +973,11 @@ function matching(rows: readonly MentionRow[], query: string): readonly MentionR
   if (query.trim() === "") return rows;
 
   return rows
-    .map((row) => ({ row, score: rowScore(row, query) }))
-    .filter((each) => each.score > 0)
+    .flatMap((row) => {
+      const score = rowScore(row, query);
+
+      return score > 0 ? [{ row, score }] : [];
+    })
     .sort((first, second) => second.score - first.score)
     .map((each) => each.row);
 }
@@ -1208,7 +1211,9 @@ function groupsFor(
       // Note that each server's own kind stays, for its provider's word, but only the one row of them all is browsed.
       {
         label: MENTION_GROUP.FROM,
-        rows: kinds.filter((each) => each.narrow.from !== MENTION_FROM.SERVER).map(kindRow),
+        rows: kinds.flatMap((each) =>
+          each.narrow.from === MENTION_FROM.SERVER ? [] : [kindRow(each)],
+        ),
       },
     ].filter((group) => group.rows.length > 0);
   }
@@ -1237,7 +1242,7 @@ function groupsFor(
 
   // Note that a kind the words name leads, so `@agent` still offers the way into the agents.
   const named = matching(
-    kinds.filter((each) => each.narrow.from !== MENTION_FROM.SERVER).map(kindRow),
+    kinds.flatMap((each) => (each.narrow.from === MENTION_FROM.SERVER ? [] : [kindRow(each)])),
     term,
   );
 
@@ -1749,9 +1754,9 @@ function kindsOf(
     [MENTION_FROM.SERVERS, MENTION_GROUP.SERVERS, servers.length > 0],
   ];
 
-  const own = offered
-    .filter(([, , offers]) => offers)
-    .map(([from, name]): MentionKind => ({ narrow: { from }, name, keyword: from }));
+  const own = offered.flatMap(([from, name, offers]): MentionKind[] =>
+    offers ? [{ narrow: { from }, name, keyword: from }] : [],
+  );
 
   const named = new Set<IntegrationProvider>();
 

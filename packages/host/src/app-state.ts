@@ -1508,7 +1508,7 @@ export function appStateDelivery(
   return {
     version: next.version,
     entries: Object.fromEntries(
-      moved.filter((name) => next[name] !== undefined).map((name) => [name, next[name]]),
+      moved.flatMap((name) => (next[name] === undefined ? [] : [[name, next[name]]])),
     ),
     ...(gone.length === 0 ? undefined : { gone }),
     ...(keys.length === 0 ? undefined : { moved: Object.fromEntries(keys) }),
