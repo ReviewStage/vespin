@@ -149,7 +149,7 @@ import {
 import { type InboxPager, InboxPagerControls } from "./inbox-pager.js";
 import type { InboxReminder } from "./inbox-remind.js";
 import { InboxStamp } from "./inbox-stamp.js";
-import type { UndeliveredReply } from "./inbox-undelivered.js";
+import { filesLost, type UndeliveredReply } from "./inbox-undelivered.js";
 import { REPLY_SCOPE, ReplyDoorProvider } from "./reply-to-selection.js";
 import { SentWords } from "./skill-chip.js";
 import { TAB_KIND, tabLook } from "./tab-look.js";
@@ -463,6 +463,9 @@ function PendingReply({
 }
 
 /** What a reply that did not go says at its head's end, and its mark's acts. */
+/** What a reply's mark says where a relaunch took the files it went with. */
+const FILES_LOST = "Its files didn't survive a relaunch. Edit to attach them again, then send it.";
+
 const UNDELIVERED_WORDS = {
   NOT_DELIVERED: "Not delivered",
   RETRY: "Retry",
@@ -472,7 +475,8 @@ const UNDELIVERED_WORDS = {
 
 /** What a reply that did not go is pressed through: Retry, Edit, and Delete on it alone. */
 interface UndeliveredDoors {
-  readonly onRetry: () => void;
+  /** None where a relaunch took the reply's files, which Edit attaches again. */
+  readonly onRetry: (() => void) | undefined;
   readonly onEdit: () => void;
   readonly onDelete: () => void;
 }
@@ -524,11 +528,19 @@ function UndeliveredReplyRow({
           </Text>
           <MessageFailedMark
             label={UNDELIVERED_WORDS.NOT_DELIVERED}
-            reason={reply.why}
+            reason={filesLost(reply) ? FILES_LOST : reply.why}
             replayUnmasked
             groups={[
               [
-                { label: UNDELIVERED_WORDS.RETRY, icon: <GLYPH.RETRY />, onSelect: doors.onRetry },
+                ...(doors.onRetry === undefined
+                  ? []
+                  : [
+                      {
+                        label: UNDELIVERED_WORDS.RETRY,
+                        icon: <GLYPH.RETRY />,
+                        onSelect: doors.onRetry,
+                      },
+                    ]),
                 { label: UNDELIVERED_WORDS.EDIT, icon: <GLYPH.RENAME />, onSelect: doors.onEdit },
               ],
               [
@@ -1894,8 +1906,8 @@ export function InboxPane({
   const pending = pendingRepliesOn(control.pendingReplies, item);
 
   const undelivered = useMemo(
-    () => undeliveredRepliesOn(control.undelivered, item),
-    [control.undelivered, item],
+    () => undeliveredRepliesOn(control, item),
+    [control.undelivered, control.pendingReplies, item],
   );
 
   const events = useMemo(() => threadEvents(item, thread), [item, thread]);
@@ -2130,7 +2142,9 @@ export function InboxPane({
                             now={now}
                             place={place}
                             doors={{
-                              onRetry: () => control.onRetryUndelivered(item, key),
+                              onRetry: filesLost(row.reply)
+                                ? undefined
+                                : () => control.onRetryUndelivered(item, key),
                               onEdit: () => control.onEditUndelivered(item, key),
                               onDelete: () => control.onDropUndelivered(key),
                             }}

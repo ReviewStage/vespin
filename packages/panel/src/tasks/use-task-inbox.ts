@@ -52,7 +52,12 @@ import { useSendQueue } from "../send-queue.js";
 import type { InboxAcknowledger } from "./inbox-acknowledge.js";
 import { useInboxArrivals } from "./inbox-arrivals.js";
 import { type InboxBoardView, type InboxNote, inboxBoard } from "./inbox-model.js";
-import { type UndeliveredReply, undeliveredOn, undeliveredReplies } from "./inbox-undelivered.js";
+import {
+  filesLost,
+  type UndeliveredReply,
+  undeliveredOn,
+  undeliveredReplies,
+} from "./inbox-undelivered.js";
 import { type HeldUpdate, joinedAhead } from "./refused-send.js";
 
 /**
@@ -193,10 +198,17 @@ export function pendingRepliesOn(
 
 /** The replies on `item` that did not go, in the order they failed, but for those the thread drawn holds under their keys already, as a read may before they are let go of. */
 export function undeliveredRepliesOn(
-  undelivered: TaskInboxControl["undelivered"],
+  control: Pick<TaskInboxControl, "undelivered" | "pendingReplies">,
   item: InboxItem,
 ): readonly UndeliveredReply[] {
-  return undeliveredOn(undelivered, item.id, (key) => holdsSent(item, key));
+  const pending = control.pendingReplies.get(item.id) ?? NO_REPLIES;
+
+  // Note that an answer on its way again stands drawn by the host under its key as the message's id.
+  const out = (key: string) =>
+    pending.some((reply) => reply.key === key) ||
+    (item.thread ?? []).some((message) => message.id === key);
+
+  return undeliveredOn(control.undelivered, item.id, (key) => holdsSent(item, key) || out(key));
 }
 
 /** What the tab draws and presses. */
@@ -351,6 +363,7 @@ function undeliveredOf(reply: QueuedReply, taskId: string | null, why: string): 
     itemId,
     text,
     attachments: attachments ?? [],
+    files: attachments?.length ?? 0,
     ...(answers === undefined ? undefined : { answers }),
     ...(revision === undefined ? undefined : { revision }),
     at: reply.at,
@@ -785,10 +798,15 @@ export function useHeldTaskInbox(input: {
           const unheard = answer.failure === AGENT_CALL_FAILURE.UNANSWERED;
           const why = unheard ? UNHEARD_UNDELIVERED : messageFailureWords(answer.failure);
 
-          undeliveredReplies.set((now) => [
-            ...now,
+          const lines = [
             undeliveredOf(reply, keptOn, why),
             ...behind.map((each) => undeliveredOf(each, keptOn, BEHIND_UNDELIVERED)),
+          ];
+
+          // Note that a reply Retry sent again stands where it stood, so its line is written over rather than kept twice.
+          undeliveredReplies.set((now) => [
+            ...now.filter((line) => !lines.some((each) => each.key === line.key)),
+            ...lines,
           ]);
 
           // Note that a refusal is said in the box too, which offers what mends it, as Unarchive.
@@ -799,6 +817,7 @@ export function useHeldTaskInbox(input: {
 
         // Note that the reply is let go under its own key, in the render its answer's item lands in, so it never stands beside the message it became.
         requeue(item.id, (was) => was.filter((each) => !ours(each)));
+        undeliveredReplies.set((now) => now.filter((line) => line.key !== reply.params.clientKey));
         answered.current.set(item.id, answer.item);
         // Note that the item as the service answered it lands in the render the reply on its way leaves, whichever of the answer and the host's push comes first.
         setHeld((standing) =>
@@ -835,9 +854,10 @@ export function useHeldTaskInbox(input: {
     (item: InboxItem, key: string) => {
       const reply = undeliveredReplies.store.state.find((each) => each.key === key);
 
-      if (reply === undefined || out.current.has(item.id)) return;
-      undeliveredReplies.set((now) => now.filter((each) => each.key !== key));
+      // Note that a reply a relaunch took the files from never goes without them; Edit attaches them again.
+      if (reply === undefined || filesLost(reply) || out.current.has(item.id)) return;
       note(item.id, undefined);
+      // Note that its line stays kept while it goes again, so a reload meanwhile loses nothing; its answer lets it go.
       sendReply(item, queuedReply(item.id, reply, key));
     },
     [note, sendReply],

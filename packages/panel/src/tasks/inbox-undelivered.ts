@@ -31,6 +31,8 @@ export interface UndeliveredReply {
   readonly itemId: string;
   readonly text: string;
   readonly attachments: readonly AgentAttachment[];
+  /** How many files it went with, which storage keeps though not the files, so one a relaunch took its files from says so rather than going again without them (`filesLost`). */
+  readonly files: number;
   /** The answer to the thread's open ask it carried; none for a plain reply. */
   readonly answers?: InboxAnswers | undefined;
   /** The revision of the notice it was written on, which it settles where the notice still stands there. */
@@ -47,6 +49,7 @@ const keptSchema = Schema.Struct({
   taskId: Schema.NullOr(Schema.String),
   itemId: Schema.String,
   text: Schema.String,
+  files: Schema.optionalKey(Schema.Number),
   answers: Schema.optionalKey(inboxAnswersSchema),
   revision: Schema.optionalKey(Schema.Number),
   at: Schema.Number,
@@ -57,14 +60,20 @@ const keptSchema = Schema.Struct({
 export const undeliveredReplies = keptLines<UndeliveredReply, typeof keptSchema.Type>({
   key: STORAGE_KEY,
   kept: keptSchema,
-  toKept: ({ attachments: _files, answers, revision, ...rest }) => ({
+  toKept: ({ attachments: _attached, files, answers, revision, ...rest }) => ({
     ...rest,
+    ...(files === 0 ? undefined : { files }),
     ...(answers === undefined ? undefined : { answers }),
     ...(revision === undefined ? undefined : { revision }),
   }),
-  fromKept: (kept) => ({ ...kept, attachments: [] }),
+  fromKept: ({ files, ...kept }) => ({ ...kept, files: files ?? 0, attachments: [] }),
   idOf: (kept) => kept.key,
 });
+
+/** Whether a relaunch took the files a reply went with, so Retry would send it without them: it offers Edit to attach them again instead. */
+export function filesLost(reply: Pick<UndeliveredReply, "attachments" | "files">): boolean {
+  return reply.attachments.length < reply.files;
+}
 
 /** No replies that did not go, one array so an item with none hands down the same one. */
 const NO_UNDELIVERED: readonly UndeliveredReply[] = [];
@@ -72,7 +81,8 @@ const NO_UNDELIVERED: readonly UndeliveredReply[] = [];
 /**
  * The replies on `itemId` that did not go, in the order they failed, but for
  * those its thread holds under their keys already, as a read may before the
- * line is let go of.
+ * line is let go of, and those Retry has on their way again, which stand on
+ * the thread as sending meanwhile.
  */
 export function undeliveredOn(
   all: readonly UndeliveredReply[],
