@@ -5,8 +5,8 @@
  * an automation started, as the panel's tab asks nothing of any other
  * (`AGENTS_ORIGIN_FOLLOW`). The host writes it into the document, read here
  * by the agent's id. A read our own service couldn't answer is asked again
- * each time the page comes back into view (`AGENTS_ORIGIN_RETRY`), as the
- * panel's query reads again when its window is focused; until then the
+ * each time the page comes back into view, or the app back to the
+ * foreground, as from Safari (`AGENTS_ORIGIN_RETRY`); until then the
  * transcript's first line stands as it was sent.
  */
 
@@ -16,7 +16,8 @@ import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffectEvent, useMemo } from "react";
+import { useCallback, useEffect, useEffectEvent, useMemo } from "react";
+import { AppState } from "react-native";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
@@ -39,7 +40,7 @@ export function useAgentOrigin(agentId: string, automated: boolean): AgentOrigin
   const read = useQuery({ ...appStateQuery, select }).data;
   const failed = followed !== undefined && read?.failed === true;
 
-  // Note that the read is asked again only as the page comes into view, never as it fails, so a read that keeps failing isn't asked in a loop.
+  // Note that the read is asked again only as the page or the app comes into view, never as it fails, so a read that keeps failing isn't asked in a loop.
   const retry = useEffectEvent(() => {
     if (!failed || followed === undefined) return;
 
@@ -49,6 +50,13 @@ export function useAgentOrigin(agentId: string, automated: boolean): AgentOrigin
   });
 
   useFocusEffect(useCallback(() => retry(), []));
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") retry();
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   return read?.rows ?? undefined;
 }

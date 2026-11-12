@@ -388,8 +388,9 @@ function CallRow({
 /** What a webhook call's body is called, folded under the prompt it rode in with, and its block's title, as the panel names them. */
 const WEBHOOK_BODY = { LABEL: "Webhook body", KIND: "body" } as const;
 
-/** What a part of an automation's sender line that opens somewhere is offered to VoiceOver as. */
+/** What a part of an automation's sender line that opens somewhere is offered to VoiceOver as, and the name its action goes by before its place in the line. */
 const OPEN_WORD = "Open";
+const OPEN_ACTION = "open-";
 
 /**
  * Who sent an automation's prompt, as the panel's sender line names it: the
@@ -406,19 +407,23 @@ function OriginFrom({
   readonly onOpenAddress: (address: string) => void;
 }) {
   const colors = useColors();
-  const opening = parts.filter((part) => part.address !== undefined);
+
+  // Note that each part that opens somewhere is offered by its place in the line, since two parts may read alike.
+  const opening = parts.flatMap(({ words, address }, at) =>
+    address === undefined ? [] : [{ name: `${OPEN_ACTION}${at}`, words, address }],
+  );
 
   const actions =
     opening.length === 0
       ? {}
       : {
-          accessibilityActions: opening.map((part) => ({
-            name: part.words,
-            label: `${OPEN_WORD} ${part.words}`,
+          accessibilityActions: opening.map(({ name, words }) => ({
+            name,
+            label: `${OPEN_WORD} ${words}`,
           })),
           onAccessibilityAction: (event: AccessibilityActionEvent) => {
             const address = opening.find(
-              (part) => part.words === event.nativeEvent.actionName,
+              ({ name }) => name === event.nativeEvent.actionName,
             )?.address;
 
             if (address !== undefined) onOpenAddress(address);
@@ -428,7 +433,7 @@ function OriginFrom({
   return (
     <Text {...actions} style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
       {parts.map(({ words, address }, at) => (
-        <Fragment key={words}>
+        <Fragment key={at}>
           {at === 0 ? null : " · "}
           <Text
             onPress={address === undefined ? undefined : () => onOpenAddress(address)}
