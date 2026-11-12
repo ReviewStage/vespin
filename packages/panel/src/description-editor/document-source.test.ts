@@ -65,10 +65,14 @@ afterEach(() => {
 });
 
 /** The document in an editor, with what it would hand over now, as a document or, by `ends`, a message. */
-function opened(markdown: string, ends: BlankEnds = BLANK_ENDS.KEPT) {
+function opened(
+  markdown: string,
+  ends: BlankEnds = BLANK_ENDS.KEPT,
+  namesChip?: (target: string) => boolean,
+) {
   const extensions = markdownExtensions();
   const manager = documentManager(extensions);
-  const source = documentOpened(manager, markdown);
+  const source = documentOpened(manager, markdown, namesChip);
   const host = document.createElement("div");
   document.body.append(host);
 
@@ -551,4 +555,19 @@ test("a paragraph wrapped onto a second line draws as one line and keeps its wra
   await retype(host, "its rollback", "its rollback today");
 
   assert.equal(handedOver(), "We ship the migration\nand its rollback today\n");
+});
+
+test("links the read view draws as chips open as chips and are saved as written when their line is edited", () => {
+  const text =
+    "Shipped in https://github.com/acme/app/pull/12 with [`store.ts`](https://github.com/acme/app/blob/HEAD/store.ts).\n";
+
+  const { editor, handedOver } = opened(text, BLANK_ENDS.KEPT, (target) =>
+    target.startsWith("https://github.com/"),
+  );
+
+  typedAtEnd(editor, " Done.");
+  const chips = editor.getJSON().content?.[0]?.content?.filter((node) => node.type === "mention");
+
+  assert.equal(chips?.length, 2);
+  assert.equal(handedOver(), text.replace(").\n", "). Done.\n"));
 });

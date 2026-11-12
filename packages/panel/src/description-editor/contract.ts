@@ -377,6 +377,8 @@ interface ComposerMentions {
 export interface MentionNode {
   readonly name: string;
   readonly target: string;
+  /** The link's own words, where it was written as a plain link the read view draws as a chip rather than as `@name`; drawn as the read view draws them. */
+  readonly label?: string | undefined;
 }
 
 /**
@@ -408,9 +410,12 @@ export interface DescriptionEditorMentions {
   readonly retarget: (target: string, change: HeadingsChange) => MentionNode | undefined;
   /** The chip words pasted whole stand for, any link the read view draws as one; nothing for any other words, which paste as words. */
   readonly pasted: (words: string) => MentionNode | undefined;
-  /** Whether a link's target is one the read view draws as a chip, so the editor draws the link in a chip's light look. */
-  readonly namesChip: (target: string) => boolean;
+  /** Whether a link's target is one the read view draws as a chip, so the editor opens the link as that chip, and draws one laid in while editing in a chip's light look. */
+  readonly namesChip: NamesChip;
 }
+
+/** Whether a link's target is one the read view draws as a chip. */
+export type NamesChip = (target: string) => boolean;
 
 /** Words of the editor a thread is started on: where they stand in `text`, the Markdown the editor would hand over now, and the words themselves. */
 export interface EditorSpan {

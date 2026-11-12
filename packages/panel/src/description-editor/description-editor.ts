@@ -747,7 +747,7 @@ export function mountDescriptionEditor(
   const written = () =>
     withLineEnding(documentMarkdown(manager, editor.state.doc, held, ends), ending);
 
-  const opened = documentOpened(manager, source);
+  const opened = documentOpened(manager, source, mentions?.namesChip);
   held = { sources: new Map(), lead: opened.lead, ending: opened.ending };
   // The threads the editor carries marks for, and whether they are being laid on, which hands over no draft.
   let carried: readonly string[] = [];
@@ -883,7 +883,15 @@ export function mountDescriptionEditor(
   return {
     ...editorFormatting(editor),
     take: (sent, merged) => {
-      const answer = documentTook(editor, manager, held, withLf(sent), withLf(merged));
+      const answer = documentTook(
+        editor,
+        manager,
+        held,
+        withLf(sent),
+        withLf(merged),
+        mentions?.namesChip,
+      );
+
       held = answer.held;
 
       return { base: withLineEnding(answer.base, ending), text: written() };
