@@ -66,6 +66,10 @@
         "pages": ["index", "install", "quickstart"]
       },
       {
+        "group": "How Vespin works",
+        "pages": ["inbox", "where-agents-run", "agent-isolation"]
+      },
+      {
         "group": "Guides",
         "pages": ["vespin-mcp", "cli", "automations", "slack"]
       },
