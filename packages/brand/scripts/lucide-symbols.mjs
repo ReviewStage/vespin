@@ -223,7 +223,7 @@ function subpathsOf(data) {
   };
 
   while (index < tokens.length) {
-    if (/[a-zA-Z]/.test(tokens[index])) command = tokens[index++];
+    if (/^[a-zA-Z]$/.test(tokens[index])) command = tokens[index++];
     const relative = command === command.toLowerCase();
     const offset = (p) => (relative ? add(at, p) : p);
     const kind = command.toLowerCase();
@@ -296,6 +296,10 @@ function subpathsOf(data) {
         if (current !== undefined) draw(lineSegment(at, start));
         at = start;
         current = undefined;
+        // Note that a close takes no numbers, so one standing after it is refused, because it would loop here.
+        if (index < tokens.length && !/^[a-zA-Z]$/.test(tokens[index])) {
+          throw new Error(`lucide-symbols: a number "${tokens[index]}" follows a close`);
+        }
         break;
       default:
         throw new Error(`lucide-symbols: no outline for the path command "${command}"`);
@@ -452,7 +456,6 @@ function capCubics(point, radius, from, ahead) {
   return [quarter(from, ahead), quarter(ahead, times(from, -1))];
 }
 
-// One side of a segment, `side` the normal's sign, traveled forward or back.
 // A cubic's point and slope at `t`.
 const cubicPoint = ({ from, c1, c2, to }, t) => {
   const u = 1 - t;
@@ -517,6 +520,7 @@ function cubicOffset(segment, distance) {
 // inner side meets at its center, which a radius this small stands for.
 const LEAST_RADIUS = 0.01;
 
+// One side of a segment, `side` the normal's sign, traveled forward or back.
 function sideOf(segment, half, side, forward) {
   if (segment.kind === "cubic") {
     const pieces = cubicPieces(segment).map((piece) => cubicOffset(piece, half * side));
