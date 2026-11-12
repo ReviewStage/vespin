@@ -6,7 +6,7 @@ import type {
   HostUpdate,
 } from "@repo/features/device-agent-wire";
 import { sql } from "drizzle-orm";
-import { index, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, jsonb, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { createdAt, timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
 
@@ -37,6 +37,10 @@ import { user } from "./auth.js";
  * refused at once while its agents keep the name they ran under; the
  * account's signed-in session enrolling that id again brings it back with a
  * new secret.
+ *
+ * A device is also where an agent's terminal commands and computer use go
+ * (`agent.target_device_id`, `mac_command.device_id`), so it keeps the
+ * machine's own opt-in for them and the apps allowed on it without asking.
  */
 export const device = pgTable(
   "device",
@@ -103,6 +107,15 @@ export const device = pgTable(
     updatePhase: text("update_phase").$type<HostUpdate>(),
     /** The host's own words for why its update failed, naming no secret; null unless `update_phase` is failed. */
     updateFailure: text("update_failure"),
+    /**
+     * Whether the member lets us use this machine for terminal commands
+     * and computer use, its one opt-in, kept here so any device of theirs can
+     * change it. Null until the machine first carries its own setting up,
+     * which it does once, and for a host that never ran the app.
+     */
+    commandsAllowed: boolean("commands_allowed"),
+    /** The apps on this machine the member answered Always allow for, by bundle id; null until the machine first carries its own list up. */
+    alwaysAllowedApps: jsonb("always_allowed_apps").$type<readonly string[]>(),
     /** The device's secret as its SHA-256 in hex, never the secret; null for a device that never enrolled, which the service no longer takes a call from, and for a removed one. */
     secretHash: text("secret_hash"),
     /** The host program version the device last called with; null for one that never enrolled. */
