@@ -52,7 +52,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { provenanceText } from "@repo/features/time-format";
-import { countWords, readingWords, TERM, VERB } from "@repo/features/words";
+import { countWords, readFailedWords, readingWords, TERM, VERB } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
@@ -109,6 +109,7 @@ import {
   threadOpen,
   threadsOnBlocks,
   useTaskComments,
+  useTaskCommentsRetry,
 } from "../tasks/use-comments.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import {
@@ -167,6 +168,8 @@ const WORDS = {
   RENAME_TASK: "Rename task",
   NEW_SUB_TASK: "New sub-task",
   COMMENTS: "Comments",
+  DESCRIPTION_UNREAD: readFailedWords("the description"),
+  COMMENTS_UNREAD: readFailedWords("the comments"),
   DELETE: "Permanently delete",
   NO_TASKS: "No tasks",
   UNLISTED_TASK: "Task",
@@ -1328,10 +1331,38 @@ function OverviewDescription({
  * comment's words and when it last moved, opening the thread with its reply
  * field; none where no thread stands open.
  */
+/** A read of the page's that failed, said in the panel's words, which a press reads again. */
+function ReadFailedRow({
+  words,
+  onRetry,
+}: {
+  readonly words: string;
+  readonly onRetry: () => void;
+}) {
+  return (
+    <LinkRow
+      symbol="exclamationmark.triangle"
+      label={words}
+      detail={VERB.RETRY}
+      tone={LINK_ROW_TONE.ATTENTION}
+      onPress={onRetry}
+    />
+  );
+}
+
 function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
   const { task } = overview;
   const open = useTaskComments(task.id).filter(threadOpen);
+  const retry = useTaskCommentsRetry(task.id);
+
+  if (retry !== undefined) {
+    return (
+      <ListSection title={WORDS.COMMENTS}>
+        <ReadFailedRow words={WORDS.COMMENTS_UNREAD} onRetry={retry} />
+      </ListSection>
+    );
+  }
 
   if (open.length === 0) return null;
 
@@ -1398,7 +1429,11 @@ function OverviewPage({
       <OverviewRelations overview={overview} />
       <OverviewAgents overview={overview} onArchiveAgent={onArchiveAgent} />
       <OverviewPages overview={overview} />
-      {!descriptions || document === undefined || document.document.body.trim() === "" ? null : (
+      {!descriptions ? null : overview.documentRetry !== undefined ? (
+        <ListSection title={WORDS.DESCRIPTION}>
+          <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
+        </ListSection>
+      ) : document === undefined || document.document.body.trim() === "" ? null : (
         <OverviewDescription overview={overview} body={document.document.body} />
       )}
       {descriptions ? <OverviewComments overview={overview} /> : null}
