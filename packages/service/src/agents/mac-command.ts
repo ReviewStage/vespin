@@ -21,6 +21,7 @@ import {
   type MacCommand,
   type MacCommandKind,
   type MacCommandResult,
+  type MacComputerAction,
   type MacComputerResult,
   type MacShellResult,
   macCommandSchema,
@@ -139,11 +140,18 @@ export type MacCommandAnswer =
  * What a call asks of the Mac: a command of one kind, what that kind
  * carries, and how long it may run, the default where unsaid.
  */
-export type MacCommandAsk = {
-  readonly kind: typeof MAC_COMMAND_KIND.SHELL;
-  readonly command: string;
-  readonly timeoutSeconds?: number;
-};
+export type MacCommandAsk =
+  | {
+      readonly kind: typeof MAC_COMMAND_KIND.SHELL;
+      readonly command: string;
+      readonly timeoutSeconds?: number;
+    }
+  | {
+      readonly kind: typeof MAC_COMMAND_KIND.COMPUTER;
+      readonly conversationId: string;
+      readonly action: MacComputerAction;
+      readonly timeoutSeconds?: number;
+    };
 
 const readMacCommand = readEither(macCommandSchema);
 

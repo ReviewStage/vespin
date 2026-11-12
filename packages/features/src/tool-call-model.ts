@@ -1230,6 +1230,19 @@ const AGENT_TOOL_VIEWS = {
       output: output === undefined ? undefined : macCommandOutput(output),
     };
   },
+  // Note that an action on an app is drawn as a command on the Mac until its own row, with the app's icon and window, stands.
+  [AGENT_TOOL.COMPUTER]: ({ input, output }) => {
+    const subject = [stringAt(input, "action"), stringAt(input, "app")].filter(Boolean).join(" ");
+    const description = commandDescription(stringAt(input, "description"));
+
+    return {
+      kind: CALL_KIND.MAC_COMMAND,
+      subject,
+      ...(description === undefined ? undefined : { description }),
+      input: jsonBlock(input ?? {}),
+      output: output === undefined ? undefined : jsonBlock(output),
+    };
+  },
   [AGENT_TOOL.BROWSER]: ({ input, output }) => {
     const tab = browserTabName(input, output);
     const words = browserCallWords(browserActions(input), tab !== undefined);

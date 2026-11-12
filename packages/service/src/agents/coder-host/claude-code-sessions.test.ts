@@ -998,6 +998,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             "reply_to_comment",
             "update_comment",
             "run_on_mac",
+            "computer",
             "browser",
             "list_ports",
             "share_port",

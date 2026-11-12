@@ -1623,7 +1623,8 @@ export const runnerSessions = <
           opened.descriptionsOn !== standing.descriptionsOn ||
           opened.memoryOn !== standing.memoryOn ||
           (opened.turnEndOn ?? false) !== standing.turnEndOn ||
-          (opened.replyButtonsOn ?? false) !== standing.replyButtonsOn
+          (opened.replyButtonsOn ?? false) !== standing.replyButtonsOn ||
+          (opened.computerUseOn ?? false) !== standing.computerUseOn
         );
       });
 
