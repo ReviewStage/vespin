@@ -1,4 +1,4 @@
-// workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile and name at the bar's leading edge, opening the menu of every workspace, the account opening Settings, New workspace, and Workspace settings.
+// workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile and name at the bar's leading edge, opening the menu of every workspace, the account opening Settings, New workspace, and the chosen workspace's Settings… under its name.
 
 import { LIVE_READ } from "@repo/features/live-wire";
 import { workspaceSharedWords } from "@repo/features/workspace-tile";
@@ -9,7 +9,6 @@ import {
   newWorkspaceAction,
   type SwitcherWorkspace,
   type WorkspaceSwitcher,
-  workspaceSettingsAction,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
@@ -61,8 +60,8 @@ export function switcherWorkspace(
  * choice is kept as the phone's (`chosen-workspace.ts`), which the Inbox, its
  * count, Tasks, and New task follow at once; the account opens Settings on
  * its main list, as Notion's one workspace button does, so the bar holds no
- * photo of its own beside it; New workspace opens its sheet, and Workspace
- * settings opens Settings on the chosen workspace's page. None before the
+ * photo of its own beside it; New workspace opens its sheet, and the
+ * Settings… under the chosen workspace's name opens Settings on its page. None before the
  * account's workspaces are read.
  */
 export function useWorkspaceSwitcher(): SwitcherProps | undefined {
@@ -85,9 +84,7 @@ export function useWorkspaceSwitcher(): SwitcherProps | undefined {
     chosen: switcherWorkspace(chosen, chosen.id === first, photos),
     onChoose: choose,
     account: account === undefined ? undefined : { name: account.name, onPress: account.onPress },
-    actions: [
-      newWorkspaceAction(() => router.push("/new-workspace")),
-      workspaceSettingsAction(() => openSettings(SETTINGS_ROUTE.WORKSPACE)),
-    ],
+    actions: [newWorkspaceAction(() => router.push("/new-workspace"))],
+    onWorkspaceSettings: () => openSettings(SETTINGS_ROUTE.WORKSPACE),
   };
 }
