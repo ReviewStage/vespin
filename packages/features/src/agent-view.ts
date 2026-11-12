@@ -736,6 +736,8 @@ export interface SendingMessage {
   readonly restoresFiles?: boolean;
   /** The agent's task, whose row is marked while it stands refused; none for an agent with no task. */
   readonly taskId?: string;
+  /** The account that sent it, whose windows alone draw it; none for one sent while nobody was signed in. */
+  readonly sentBy?: string;
   /** Why the service did not take it, where it did not; none while it is on its way. */
   readonly refused?: AgentMessageRefusal;
 }

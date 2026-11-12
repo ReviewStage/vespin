@@ -160,6 +160,25 @@ export function useAgentComposer(
     setNote(refusal);
   };
 
+  // The lines this screen sent, whose refusal its own send hands back.
+  const ownSends = useRef(new Set<string>());
+
+  // A message refused while no screen of the agent stood, or sent from one since left, waits in the host's record,
+  // which the phone draws no line of: its words come back to the field as this screen opens, the refusal said, and
+  // the line is let go. Its pictures stay with the screen that attached them.
+  const sending = transcript?.sending;
+  useEffect(() => {
+    for (const message of sending ?? []) {
+      if (message.refused === undefined || ownSends.current.has(message.id)) continue;
+      ownSends.current.add(message.id);
+      handBack(
+        { id: message.clientKey, words: message.text, pictures: [] },
+        messageFailureWords(message.refused.failure),
+      );
+      void acts[ACT_KIND.AGENTS_UNSEND]({ agentId, lineId: message.id }).catch(() => undefined);
+    }
+  }, [sending, acts, agentId]);
+
   const send = () => {
     const text = words.trim();
 
@@ -176,6 +195,7 @@ export function useAgentComposer(
       pictures.files === undefined ? undefined : { attachments: [...pictures.files] };
 
     const sent: Sent = { id: randomUUID(), words: text, pictures: pictures.take() };
+    ownSends.current.add(sentLineId(sent.id));
     setWords("");
     setNote(undefined);
 
@@ -215,7 +235,8 @@ export function useAgentComposer(
     write(() => message, {
       ...saying,
       // A refused message's words come back to the field, so its line in the host's record is let
-      // go; a screen left meanwhile has no field to take them, so the line stands for its return.
+      // go; a screen left meanwhile has no field to take them, so the line stands until a screen
+      // of the agent opens again and takes them back.
       inPlace: (words: string) => {
         if (!mounted.current) return;
         handBack(sent, words);

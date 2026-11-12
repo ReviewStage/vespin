@@ -1092,7 +1092,12 @@ function composed(
       }),
     // Note that a send answers as the service does, while the line stands drawn on its way until its row lands.
     AGENTS_MESSAGE: declaredWrite(dependencies.pool, sent, {
-      read: (read) => Effect.map(Clock.currentTimeMillis, (sentAt) => ({ ...read, sentAt })),
+      read: (read) =>
+        Effect.map(Clock.currentTimeMillis, (sentAt) => ({
+          ...read,
+          sentAt,
+          sentBy: dependencies.accountId(),
+        })),
     }),
     AGENTS_CHOOSE: declaredWrite(dependencies.pool, chosen),
     AGENTS_RENAME: declaredWrite(dependencies.pool, renamed),

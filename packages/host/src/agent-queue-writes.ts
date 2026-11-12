@@ -1,14 +1,15 @@
 import type { AgentQueue, QueuedMessage } from "@repo/features/agent-queue-wire";
-import type {
-  AgentAgentAnswer,
-  AgentMessageAnswerView,
-  AgentMessageParams,
-  AgentMessageRefusal,
-  AgentQueueAnswerView,
-  AgentQueueParams,
-  AgentRewindParams,
-  AgentUnsendParams,
-  SendingMessage,
+import {
+  AGENT_CALL_FAILURE,
+  type AgentAgentAnswer,
+  type AgentMessageAnswerView,
+  type AgentMessageParams,
+  type AgentMessageRefusal,
+  type AgentQueueAnswerView,
+  type AgentQueueParams,
+  type AgentRewindParams,
+  type AgentUnsendParams,
+  type SendingMessage,
 } from "@repo/features/agent-view";
 import {
   type AgentAttachment,
@@ -117,8 +118,11 @@ export type QueuedWrite = QueueWrite & {
   readonly steered?: SendingMessage;
 };
 
-/** A message sent as the host writes it: the window's params, and when it went, by the host's clock. */
-export type MessageWrite = AgentMessageParams & { readonly sentAt: number };
+/** A message sent as the host writes it: the window's params, when it went by the host's clock, and the account signed in as it was sent. */
+export type MessageWrite = AgentMessageParams & {
+  readonly sentAt: number;
+  readonly sentBy: string | undefined;
+};
 
 /** The files a message carries, by the ids the window keeps their bytes under, where it named them; none where it carries none. */
 function filesOf(
@@ -175,6 +179,7 @@ function steered(
   change: Extract<AgentQueueChange, { change: typeof QUEUE_CHANGE.STEER }>,
   pictures: readonly string[] | undefined,
   sentAt: number,
+  sentBy: string,
 ): SendingMessage {
   const clientKey = message.sendKey ?? message.id;
 
@@ -188,6 +193,7 @@ function steered(
     files,
     sentAt,
     steers: true,
+    ...(sentBy === "" ? undefined : { sentBy }),
   };
 }
 
@@ -253,7 +259,10 @@ function drawnChange({ change, pictures, queuedBy }: QueueWrite, sentAt: number)
             ...outbox.queue,
             messages: outbox.queue.messages.filter((each) => each.id !== change.messageId),
           },
-          sending: sendingWith(outbox.sending, steered(message, change, pictures, sentAt)),
+          sending: sendingWith(
+            outbox.sending,
+            steered(message, change, pictures, sentAt, queuedBy),
+          ),
         };
       };
   }
@@ -274,6 +283,7 @@ function sendingOf({
   rewinds,
   sentAt,
   taskId,
+  sentBy,
 }: MessageWrite): SendingMessage {
   return {
     id: sentLineId(clientKey),
@@ -285,6 +295,7 @@ function sendingOf({
     ...(rewinds === undefined ? undefined : { rewinds: rewinds.messageId }),
     ...(rewinds?.restoreFiles === true ? { restoresFiles: true } : undefined),
     ...(taskId === undefined ? undefined : { taskId }),
+    ...(sentBy === undefined ? undefined : { sentBy }),
   };
 }
 
@@ -308,11 +319,13 @@ function laid(
   rows: AppTranscript,
   outbox: Outbox | undefined,
   refused: readonly SendingMessage[],
+  reader: string | undefined,
 ): AppTranscript {
   // Note that the rows may be as the record last drew them, so what they carried of it is laid anew, never kept.
   const { sending: _drawn, ...page } = rows;
   const landed = landedLines(page.messages);
-  const going = outbox?.sending ?? [];
+  // Note that a message on its way is drawn for the account that sent it alone, as a sign-out may leave one standing.
+  const going = (outbox?.sending ?? []).filter((message) => message.sentBy === reader);
   // Note that a refused message sent again is drawn on its way alone, under the same id.
 
   const sending = [
@@ -467,7 +480,7 @@ export function agentQueues(
           const rows = answers.rows();
 
           if (rows !== undefined) {
-            answers.answered(laid(rows, outboxes.row(agentId), refusedOf(agentId)));
+            answers.answered(laid(rows, outboxes.row(agentId), refusedOf(agentId), accountId()));
           }
         });
 
@@ -502,7 +515,7 @@ export function agentQueues(
             const rows = answers.rows();
 
             if (rows === undefined || outboxes.pending().length === 0) return;
-            answers.answered(laid(rows, outboxes.synced()[0], refusedOf(agentId)));
+            answers.answered(laid(rows, outboxes.synced()[0], refusedOf(agentId), accountId()));
           }),
         );
 
@@ -510,14 +523,16 @@ export function agentQueues(
           rows: () => {
             const rows = answers.rows();
 
-            return rows === undefined ? undefined : laid(rows, outboxes.synced()[0], []);
+            return rows === undefined
+              ? undefined
+              : laid(rows, outboxes.synced()[0], [], accountId());
           },
           answered: (rows) =>
             Effect.gen(function* () {
               const queue = rows.word?.queue;
 
               if (queue !== undefined) yield* taken(queue);
-              answers.answered(laid(rows, outboxes.row(agentId), refusedOf(agentId)));
+              answers.answered(laid(rows, outboxes.row(agentId), refusedOf(agentId), accountId()));
               yield* waits.lines.answered;
             }),
         } satisfies HeldTranscript;
@@ -619,12 +634,18 @@ export function agentQueues(
             taskId: _taskId,
             rewinds,
             sentAt: _sentAt,
+            sentBy: sender,
             ...request
           } = input;
 
           const line = sendingOf(input);
-          // The account sending it, which a refusal is kept for.
-          const sender = accountId();
+
+          // A message waiting behind another while its sender signed out never goes under the next account's sign-in.
+          if (sender === undefined || sender !== accountId()) {
+            return {
+              refused: { failure: AGENT_CALL_FAILURE.UNANSWERED },
+            } satisfies Refused<AgentAgentAnswer>;
+          }
 
           // A line in place of another takes the agent back to just before that one first; one that did not go sends nothing.
           if (rewinds !== undefined) {
@@ -707,7 +728,11 @@ export function agentQueues(
 
       return message === undefined
         ? { ...write, sentAt }
-        : { ...write, sentAt, steered: steered(message, change, write.pictures, sentAt) };
+        : {
+            ...write,
+            sentAt,
+            steered: steered(message, change, write.pictures, sentAt, write.queuedBy),
+          };
     };
 
     const unsend = ({ agentId, lineId }: AgentUnsendParams) =>

@@ -773,7 +773,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const { acts, held, answerQueue, pageNow: script, live } = yield* queueFollowed();
-      answerQueue({ queue: queueOf("Run the tests and fix them", 2) });
+      answerQueue({ queue: queueOf("Run the tests and fix them", 3) });
       yield* acts.AGENTS_QUEUE(EDITED);
       assert.deepEqual(queuedTexts(held), ["Run the tests and fix them"]);
 
@@ -929,22 +929,55 @@ it.effect(
 );
 
 it.effect(
-  "a message one account sent that the service refused is never drawn for another account signed in to the same host",
+  "a message one account sent, on its way or refused, is never drawn for another account signed in to the same host",
   () =>
     Effect.gen(function* () {
       let signedIn = "user-dana";
       const { acts, held, answerMessage, answerQueue } = yield* queueFollowed(() => signedIn);
+
+      // On its way: drawn for its sender, and for nobody else.
+      const answered = yield* Deferred.make<void>();
+      answerMessage({ agent: AGENT }, Deferred.await(answered));
+
+      const going = yield* Effect.forkChild(
+        acts.AGENTS_MESSAGE({ ...SENT, clientKey: "b4e2d3c5-6f7a-4b8c-9d0e-1f2a3b4c5d6e" }),
+      );
+
+      yield* settled;
+      assert.equal(held().at(-1)?.sending?.length, 1);
+      signedIn = "user-ravi";
+      answerQueue({ queue: queueOf("Run the tests and fix them", 2) });
+      // Note that the change waits behind the send, but is drawn as it is asked, which draws the transcript again.
+      const resumed = yield* Effect.forkChild(acts.AGENTS_QUEUE(EDITED));
+      yield* settled;
+      assert.equal(held().at(-1)?.sending, undefined);
+      signedIn = "user-dana";
+      yield* Deferred.succeed(answered, undefined);
+      yield* Fiber.join(going);
+      yield* Fiber.join(resumed);
+
+      // Refused: kept for its sender, and drawn for nobody else.
       answerMessage({ failure: AGENT_CALL_FAILURE.UNANSWERED });
       yield* acts.AGENTS_MESSAGE(SENT);
       yield* settled;
-      assert.equal(held().at(-1)?.sending?.length, 1);
-
-      // Another member signs in to the same host, and a change of the queue draws the transcript again.
+      assert.equal(
+        held()
+          .at(-1)
+          ?.sending?.filter((each) => each.refused !== undefined).length,
+        1,
+      );
       signedIn = "user-ravi";
-      answerQueue({ queue: queueOf("Run the tests and fix them", 2) });
-      yield* acts.AGENTS_QUEUE(EDITED);
+      answerQueue({ queue: queueOf("Run the tests, then ship it", 3) });
+      yield* acts.AGENTS_QUEUE({
+        agentId: AGENT_ID,
+        change: {
+          change: QUEUE_CHANGE.EDIT,
+          messageId: QUEUED_ID,
+          text: "Run the tests, then ship it",
+        },
+      });
       yield* settled;
-      assert.deepEqual(queuedTexts(held), ["Run the tests and fix them"]);
+      assert.deepEqual(queuedTexts(held), ["Run the tests, then ship it"]);
       assert.equal(held().at(-1)?.sending, undefined);
     }),
 );
