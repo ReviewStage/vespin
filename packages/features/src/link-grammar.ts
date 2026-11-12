@@ -154,6 +154,7 @@ export const ADMIN_LINK_SECTION = {
   RELIABILITY: "reliability",
   WORKSPACES: "workspaces",
   USERS: "users",
+  LIMITS: "limits",
 } as const;
 
 export type AdminLinkSection = (typeof ADMIN_LINK_SECTION)[keyof typeof ADMIN_LINK_SECTION];
