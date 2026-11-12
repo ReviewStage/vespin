@@ -99,6 +99,8 @@ import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
 import {
+  DESCRIPTION_ACTOR,
+  type DescriptionRevisionsAnswer,
   TASK_PRIORITY,
   TASK_SKILL_SOURCE,
   TASK_STATUS,
@@ -1277,6 +1279,54 @@ function invitesDocument(listed: TaskSummary): Task {
   };
 }
 
+/**
+ * The reference journey's description history, newest first, as its
+ * version history lists it: its agent's last revision, which is the
+ * description as it stands, Ada's before it, and the description before
+ * its history began.
+ */
+const INVITES_HISTORY: DescriptionRevisionsAnswer = {
+  revisions: [
+    {
+      seq: 3,
+      lastEdit: {
+        actor: DESCRIPTION_ACTOR.AGENT,
+        label: "Build the invite flow",
+        agentId: AGENT.INVITES,
+        at: LANDED - HOUR,
+        duringCall: false,
+      },
+      agentId: AGENT.INVITES,
+      startedAt: LANDED - 2 * HOUR,
+      changes: 4,
+    },
+    {
+      seq: 2,
+      lastEdit: {
+        actor: DESCRIPTION_ACTOR.DEVELOPER,
+        by: { userId: ADA.userId, name: ADA.name },
+        at: LANDED - DAY,
+        duringCall: false,
+      },
+      startedAt: LANDED - DAY - HOUR,
+      changes: 2,
+    },
+    {
+      seq: 1,
+      lastEdit: { actor: DESCRIPTION_ACTOR.EARLIER, at: LANDED - 3 * DAY, duringCall: false },
+      startedAt: LANDED - 3 * DAY,
+      changes: 0,
+    },
+  ],
+};
+
+/** The reference journey's description as one of its versions left it: whole at the newest, its opening alone before. */
+function invitesVersionBody(seq: number): string {
+  const newest = INVITES_HISTORY.revisions[0]?.seq;
+
+  return seq === newest ? INVITES_DESCRIPTION : (INVITES_DESCRIPTION.split("\n\n")[0] ?? "");
+}
+
 /** The pages the reference journey's agent showed, as its task's page lists them. */
 const INVITES_PAGES: readonly PageLine[] = [
   {
@@ -1698,6 +1748,7 @@ export function inboxAppState(
         rows: { hosts: HOSTS, installScriptUrl: "https://vespin.dev/install-host.sh" },
       },
     },
+    [LIVE_READ.HISTORY]: { ...state[LIVE_READ.HISTORY], [TASK.INVITES]: { rows: INVITES_HISTORY } },
     [LIVE_READ.WORKSPACE_PHOTOS]: {
       ...state[LIVE_READ.WORKSPACE_PHOTOS],
       [TEAM_WORKSPACE.id]: { rows: TEAM_PHOTO },
@@ -1966,6 +2017,11 @@ const ANSWERS: StagedAnswers = {
   },
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
+  // Note that a version of the reference journey's description is read as the service reads one, and a restore is taken as the service takes one, though nothing here moves.
+  [ACT_KIND.TASKS_REVISION]: ({ seq }) => ({
+    revision: { seq, document: { body: invitesVersionBody(seq), assumptions: [] }, previous: null },
+  }),
+  [ACT_KIND.TASKS_RESTORE]: () => true,
   // Note that a note to the people who make the app is taken as the feedback service takes one, and goes nowhere, so a run that sends one mails no one.
   [ACT_KIND.FEEDBACK_SEND]: () => ({ delivered: true }),
   // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.

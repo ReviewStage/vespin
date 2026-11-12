@@ -1,3 +1,4 @@
+import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { dayAndTimeText, momentText } from "@repo/features/time-format";
 import { readFailedWords } from "@repo/features/words";
@@ -99,19 +100,13 @@ const BAR_SKELETON = {
  * never reaches ⌘Z, because a restore rewrites the whole description.
  */
 const VERSION_RESTORE = {
-  words: "Version restored",
-  refused: (undone) => (undone.kept ? undefined : "The restore could not be undone. Try again."),
+  words: VERSION_HISTORY_WORDS.RESTORED,
+  refused: (undone) => (undone.kept ? undefined : VERSION_HISTORY_WORDS.UNDO_REFUSED),
   surface: FAILURE_SURFACE.DESCRIPTION_RESTORE,
 } satisfies Pick<
   UndoWrite<unknown, unknown, unknown, PortActKind, Kept>,
   "words" | "refused" | "surface"
 >;
-
-/** Why Restore this version is unavailable over the newest version. */
-const CURRENT_HINT = "This version is already current";
-
-/** What the version's restore says. */
-const RESTORE_LABEL = "Restore this version";
 
 /** What a phone's ⋯ over a version is called: "Version actions". */
 const VERSION_THING = "Version";
@@ -454,7 +449,7 @@ export function VersionView({
         </Tooltip>
       }
       actions={
-        <Tooltip label={viewing.current ? CURRENT_HINT : undefined}>
+        <Tooltip label={viewing.current ? VERSION_HISTORY_WORDS.ALREADY_CURRENT : undefined}>
           <Button
             variant={BUTTON_VARIANT.PRIMARY}
             disabled={viewing.current}
@@ -463,17 +458,17 @@ export function VersionView({
             busyLabel={RESTORING}
             onClick={() => restore.onRestore()}
           >
-            {RESTORE_LABEL}
+            {VERSION_HISTORY_WORDS.RESTORE}
           </Button>
         </Tooltip>
       }
       phoneGroups={() => [
         [
           {
-            label: RESTORE_LABEL,
+            label: VERSION_HISTORY_WORDS.RESTORE,
             icon: <RotateCcwIcon />,
             disabled: viewing.current || restore.busy,
-            detail: viewing.current ? CURRENT_HINT : undefined,
+            detail: viewing.current ? VERSION_HISTORY_WORDS.ALREADY_CURRENT : undefined,
             onSelect: () => restore.onRestore(),
           },
         ],

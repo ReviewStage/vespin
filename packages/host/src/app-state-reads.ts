@@ -38,6 +38,7 @@ import { type AppSettingsView, appSettingsView } from "@repo/settings/wire";
 import { Predicate } from "effect";
 import type { ReadonlyRecord } from "effect/Record";
 import {
+  type AppHistories,
   type AppHostRead,
   type AppStateDelivery,
   type AppStateSnapshot,
@@ -646,6 +647,13 @@ export function selectTranscript(
 ): (state: AppStateSnapshot) => AppHostRead<AppTranscript> | undefined {
   return (state) =>
     state[LIVE_READ.TRANSCRIPT][transcript.agentId]?.[transcript.callId ?? OWN_TRANSCRIPT];
+}
+
+/** One task's description history as the host follows it (`ACT_KIND.TASKS_HISTORY_FOLLOW`): its newest page, then each older page read, as a `select`; none before it is read. */
+export function selectTaskHistory(
+  taskId: string,
+): (state: AppStateSnapshot) => AppHistories[string] | undefined {
+  return (state) => state[LIVE_READ.HISTORY][taskId];
 }
 
 /** The models the account may start an agent on, and the devices that may run one, as the host holds their read (`ACT_KIND.AGENTS_MODELS_FOLLOW`); none before it is read or while no one is signed in. */

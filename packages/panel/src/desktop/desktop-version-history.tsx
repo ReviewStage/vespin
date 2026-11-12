@@ -1,6 +1,7 @@
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { descriptionSections } from "@repo/features/description-document";
+import { revisionSummary, VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { sectionAnchors } from "@repo/features/mention-link";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -76,7 +77,6 @@ import {
   type RevisionSource,
   revisionAuthorOf,
   revisionSource,
-  revisionSummary,
   sectionName,
   sourceLabel,
   VERSION_CHANGE,
@@ -177,9 +177,6 @@ export interface VersionSubject {
   /** The task the versions are of, which their mentions are read against; none while it is read. */
   readonly task?: MentionedTask | undefined;
 }
-
-/** What the page says while the subject has no revision yet. */
-const NO_HISTORY_LINE = "No versions yet.";
 
 /** What the menu item that opens a revision's sections says. */
 const SECTIONS_LABEL = "Show changes";
@@ -287,7 +284,7 @@ function RevisionRow({
     ],
     onRestore === undefined
       ? []
-      : [{ label: "Restore this version", icon: <RotateCcwIcon />, onSelect: onRestore }],
+      : [{ label: VERSION_HISTORY_WORDS.RESTORE, icon: <RotateCcwIcon />, onSelect: onRestore }],
   ].filter((group) => group.length > 0);
 
   // Note that the author's card hangs beside the row as the pointer rests on it, the app's its own; an agent or an automation the version names by name alone hangs nothing.
@@ -324,9 +321,6 @@ function RevisionRow({
 /** What the way back from a revision's sections to the versions says, and where it leads as a hint names it. */
 const ALL_VERSIONS = "All versions";
 const ALL_VERSIONS_PLACE = "all versions";
-
-/** The list's title. */
-const VERSION_HISTORY = "Version history";
 
 /**
  * The head of a revision's sections: the way back to every version, and who
@@ -509,7 +503,7 @@ function EarlierRow({
           failure={unreadShown(FAILURE_SURFACE.DESCRIPTION_HISTORY_OLDER_READ)}
           onRetry={read}
         >
-          Could not read older versions.
+          {VERSION_HISTORY_WORDS.OLDER_UNREAD}
         </FailureNote>
       ) : (
         <ShowMoreRow
@@ -723,7 +717,7 @@ function VersionPage({
             The history could not be read.
           </ErrorState>
         ) : (
-          <EmptyState>{NO_HISTORY_LINE}</EmptyState>
+          <EmptyState>{VERSION_HISTORY_WORDS.NONE}</EmptyState>
         )}
       </Fill>
     </>
@@ -977,7 +971,7 @@ export function DesktopVersionHistory({
                 />
               )
             }
-            title={VERSION_HISTORY}
+            title={VERSION_HISTORY_WORDS.TITLE}
             end={null}
           />
         ) : (
@@ -1005,7 +999,7 @@ export function DesktopVersionHistory({
                 variant={TEXT_VARIANT.TITLE}
                 className={`version-log-title ${PLACE_LIST_TITLE}`}
               >
-                {VERSION_HISTORY}
+                {VERSION_HISTORY_WORDS.TITLE}
               </Text>
             )}
             <Fill className="sidebar-section -m-ring-reach">
