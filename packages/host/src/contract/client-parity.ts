@@ -108,9 +108,7 @@ const IOS = {
     "iOS's agent page leaves a rewind, a fresh session, and a restart of the agent's machine to the desktop and the web for now",
   ),
   AUTOMATIONS: byDesign("iOS v1 leaves Automations to the desktop and the web"),
-  COMPOSER: notYet(
-    "iOS's New task and New agent sheets offer no Try again, skills, or warm-keeping yet",
-  ),
+  COMPOSER: notYet("iOS's New task and New agent sheets offer no skills or warm-keeping yet"),
   COPY_PICTURE: byDesign(
     "iOS copies a picture to the system's pasteboard itself (expo-clipboard), from its long press or the viewer's share button",
   ),
@@ -214,7 +212,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.LIVE_ACTIVITY_ENDED]: PHONE_ONLY,
 
   [PORT_ACT_KIND.AGENTS_MODELS_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_MODELS_RETRY]: panel(IOS.COMPOSER),
+  [PORT_ACT_KIND.AGENTS_MODELS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_DEFAULT_WRITE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CHAPTERS_PROVIDER_WRITE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.AGENTS_PREFERENCES_RETRY]: panel(IOS.SETTINGS),
@@ -359,7 +357,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_PIN_REPOSITORY]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_WRITE_SECTION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REPOSITORIES_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_REPOSITORIES_RETRY]: panel(IOS.COMPOSER),
+  [PORT_ACT_KIND.TASKS_REPOSITORIES_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_SET_REPOSITORY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_MOVE]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_BLOCK]: panel(IOS.TASKS),

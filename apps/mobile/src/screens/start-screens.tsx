@@ -15,6 +15,7 @@ import {
 import { filedTaskOf } from "@repo/features/tasks-model";
 import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
+  ActionRow,
   AttachRow,
   BAR_TITLE,
   BUZZ,
@@ -69,6 +70,7 @@ const WORDS = {
   NO_RELATION: "None",
   CANCEL: "Cancel",
   NO_REPOSITORIES: "The workspace's GitHub reaches no repository yet.",
+  TRY_AGAIN: "Try again",
 } as const;
 
 /** The names each sheet's flow finds its words and its + by. */
@@ -148,7 +150,7 @@ function SheetBar({
   );
 }
 
-/** The agent's section: its model and effort, and where it runs where the account may run one on its own device. */
+/** The agent's section: its model and effort, and where it runs where the account may run one on its own device; where the models could not be read, why, with Try again. */
 function AgentSection({
   pick,
   runsOn,
@@ -159,13 +161,16 @@ function AgentSection({
   readonly onRunsOn: (place: string) => void;
 }) {
   return (
-    <ListSection title={WORDS.AGENT}>
+    <ListSection title={WORDS.AGENT} footer={pick.failed}>
       <MenuPickRow
         label={WORDS.MODEL}
         options={pick.models}
         picked={pick.shown?.model}
         onPick={pick.pickModel}
       />
+      {pick.failed === undefined ? null : (
+        <ActionRow label={WORDS.TRY_AGAIN} symbol="arrow.clockwise" onPress={pick.retry} />
+      )}
       {pick.efforts.length <= 1 ? null : (
         <MenuPickRow
           label={WORDS.EFFORT}
@@ -541,13 +546,20 @@ export function NewTaskScreen({
           <ListSection
             title={WORDS.REPOSITORY}
             footer={
-              tree === undefined && repository.options.length === 0
-                ? WORDS.NO_REPOSITORIES
-                : undefined
+              tree !== undefined
+                ? undefined
+                : (repository.failed ??
+                  (repository.options.length === 0 ? WORDS.NO_REPOSITORIES : undefined))
             }
           >
             {tree !== undefined ? (
               <ValueRow label={WORDS.REPOSITORY} value={tree.repository ?? NO_REPOSITORY} />
+            ) : repository.failed !== undefined ? (
+              <ActionRow
+                label={WORDS.TRY_AGAIN}
+                symbol="arrow.clockwise"
+                onPress={repository.retry}
+              />
             ) : repository.options.length === 0 ? null : (
               <MenuPickRow
                 label={WORDS.REPOSITORY}
