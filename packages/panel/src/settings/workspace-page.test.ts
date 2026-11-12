@@ -749,9 +749,14 @@ async function confirm(verb: string): Promise<void> {
   await settle();
 }
 
-/** The page's first row: the workspace's tile, name, and line, its Rename, and its ⋯. */
+/** The page's first row: the workspace's tile, name, and line, and its ⋯. */
 const identity = (page: HTMLElement) =>
   page.querySelector<HTMLElement>(".menu-row") ?? assert.fail("no identity row");
+
+/** The workspace's name as a press that renames it, where the reader may rename it. */
+const renamePresses = (page: HTMLElement) => [
+  ...identity(page).querySelectorAll<HTMLElement>('button[aria-description="Rename"]'),
+];
 
 /** What a row says its last act was refused with, in its error line, or nothing while that is empty. */
 const refusalOf = (within: Element) =>
@@ -801,9 +806,9 @@ const sharedLine = (page: HTMLElement) =>
 const renames = () =>
   sent.flatMap((request) => (request.kind === ACT_KIND.WORKSPACE_RENAME ? [request.payload] : []));
 
-/** Opens the name's field with Rename, types `typed` over the name, and ends the edit with `key`. */
+/** Opens the name's field by pressing the name, types `typed` over it, and ends the edit with `key`. */
 async function renameTo(page: HTMLElement, typed: string, key: string): Promise<void> {
-  act(() => button(identity(page), "Rename").click());
+  act(() => (renamePresses(page)[0] ?? assert.fail("no rename press")).click());
   const field =
     page.querySelector<HTMLInputElement>('input[aria-label="Workspace name"]') ??
     assert.fail("no name field");
@@ -828,7 +833,7 @@ test("an owner renames the workspace in place with its ends trimmed, and Escape 
   assert.equal(page.querySelector('input[aria-label="Workspace name"]') === null, true);
   // Note that the elements are compared as a yes or no, because a failure's
   // diff of two would print the whole document.
-  assert.equal(document.activeElement === button(identity(page), "Rename"), true);
+  assert.equal(document.activeElement === renamePresses(page)[0], true);
 });
 
 test("an admin's rename the service refuses says so under the row and reopens the field over the name asked, and a member is offered no rename", async () => {
@@ -844,7 +849,7 @@ test("an admin's rename the service refuses says so under the row and reopens th
   );
 
   const member = await mount(ACME);
-  assert.equal(buttons(member.page, "Rename").length, 0);
+  assert.equal(renamePresses(member.page).length, 0);
   assert.equal(member.page.querySelector('input[aria-label="Workspace name"]') === null, true);
 });
 
@@ -869,12 +874,12 @@ test("a personal workspace shows its owner's name with no Rename to its owner an
     const { page } = await mount({ ...FIRST, role });
 
     assert.equal(nameShown(page), FIRST.name);
-    assert.equal(buttons(page, "Rename").length, 0);
+    assert.equal(renamePresses(page).length, 0);
     assert.deepEqual(rowActions(identity(page)), acts);
     assert.ok(photoTile(page), "the photo is still offered, on its tile");
   }
   const team = await mount({ ...ACME, role: WORKSPACE_ROLE.OWNER });
-  assert.equal(buttons(team.page, "Rename").length, 1);
+  assert.equal(renamePresses(team.page).length, 1);
 });
 
 /** The slugs the page sent, by their payloads. */
@@ -2066,14 +2071,14 @@ test("the page has no workspace picker of its own, and shows another workspace, 
   const rowNames = [...page.querySelectorAll(".settings-row strong")].map(
     (name) => name.textContent,
   );
-  const listed = [nameShown(page), buttons(page, "Rename").length];
+  const listed = [nameShown(page), renamePresses(page).length];
 
   await relist(beta);
 
   assert.equal(page.querySelector('button[aria-label^="Workspace:"]'), null, "no picker");
   assert.equal(rowNames.includes("Workspace"), false, "no Workspace row");
   assert.deepEqual(listed, [ACME.name, 0]);
-  assert.deepEqual([nameShown(page), buttons(page, "Rename").length], [beta.name, 1]);
+  assert.deepEqual([nameShown(page), renamePresses(page).length], [beta.name, 1]);
   assert.deepEqual(
     sent
       .filter((request) => request.kind === ACT_KIND.WORKSPACE_MEMBERS_FOLLOW)

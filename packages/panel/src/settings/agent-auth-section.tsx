@@ -40,8 +40,6 @@ import {
   type DialogQuestion,
   GAP,
   type Gap,
-  INLINE_EDIT_LOOK,
-  InlineEdit,
   MARK_PROVIDER,
   type MarkProvider,
   MoreButton,
@@ -53,6 +51,7 @@ import {
   PROVIDER_MARK_SIZE,
   type ProgressTone,
   ProviderMark,
+  RenamableName,
   SETTINGS_ORDER_HANDLE,
   SETTINGS_ROW_CONTROLS,
   SETTINGS_ROW_MARK_WIDTH,
@@ -1074,9 +1073,9 @@ function renameIn(rename: InlineRename, onClose: () => void): void {
 }
 
 /**
- * One plan's row in its harness's order: its logo, its name, renamed in
- * place for a Claude plan, and its line, how much of its window it has used
- * with a bar under it, or how it stands; its fix where its state asks for
+ * One plan's row in its harness's order: its logo, its name, renamed by
+ * pressing it for a Claude plan (`RenamableName`), and its line, how much
+ * of its window it has used with a bar under it, or how it stands; its fix where its state asks for
  * one, and a ⋯ holding Rename, Move up and down, Replace token, and
  * Disconnect. Its replace's steps open under it.
  */
@@ -1125,11 +1124,11 @@ function PlanRow({
       <SettingsRow
         leading={<ProviderMark provider={harness.planMark} size={PROVIDER_MARK_SIZE.ROW} />}
         label={
-          <InlineEdit
+          <RenamableName
             value={rename.asked ?? name}
             label={WORDS.PLAN_NAME}
             editing={rename.editing}
-            look={INLINE_EDIT_LOOK.INPUT}
+            onBegin={claude ? () => renameIn(rename, onClose) : undefined}
             maxLength={SUBSCRIPTION_LABEL_MAX_CHARS}
             onEnd={({ value }) => rename.end(value === name ? undefined : value)}
           />
@@ -1187,8 +1186,8 @@ function PlanRow({
 
 /**
  * One of the harness's API keys' rows in the same order: its provider's
- * logo, its name, renamed in place as a Claude plan is, and Ready, or what
- * is wrong with it; Replace key beside a ⋯ where its provider refused it,
+ * logo, its name, renamed by pressing it as a Claude plan's is, and Ready,
+ * or what is wrong with it; Replace key beside a ⋯ where its provider refused it,
  * and a ⋯ holding Rename, Move up and down, Replace key, and Remove key.
  * Its replace's steps open under it.
  */
@@ -1235,11 +1234,11 @@ function KeyRow({
       <SettingsRow
         leading={<ProviderMark provider={harness.planMark} size={PROVIDER_MARK_SIZE.ROW} />}
         label={
-          <InlineEdit
+          <RenamableName
             value={rename.asked ?? name}
             label={WORDS.KEY_NAME}
             editing={rename.editing}
-            look={INLINE_EDIT_LOOK.INPUT}
+            onBegin={named ? () => renameIn(rename, onClose) : undefined}
             maxLength={SUBSCRIPTION_LABEL_MAX_CHARS}
             onEnd={({ value }) => rename.end(value === name ? undefined : value)}
           />

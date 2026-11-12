@@ -350,7 +350,9 @@ const WAITING = { line: "Waiting for Granola in your browser…", buttons: ["Reo
 /** A row's name as it reads: its provider's, and the account's words beside it where it draws them. */
 function nameOf(label: Element | null): string | undefined {
   const beside = label?.nextElementSibling;
-  const account = beside?.classList.contains("ui-account-words") ? beside.textContent : undefined;
+  // Note that an account renamed by pressing its words draws them inside the press.
+  const words = beside?.classList.contains("ui-renamable-name") ? beside.firstElementChild : beside;
+  const account = words?.classList.contains("ui-account-words") ? words.textContent : undefined;
   return account ? `${label?.textContent} · ${account}` : (label?.textContent ?? undefined);
 }
 

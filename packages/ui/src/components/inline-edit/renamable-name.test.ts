@@ -48,11 +48,14 @@ function Owned({ ended }: { ended: (value: string | undefined) => void }): React
   });
 }
 
-test("pressing the name opens a field over it, and Return keeps what was typed", () => {
+test("pressing the name opens a field over it, and Return keeps what was typed and hands focus back to the name", () => {
   const ends: (string | undefined)[] = [];
   const container = render(createElement(Owned, { ended: (value) => ends.push(value) }));
   const press = container.querySelector("button") ?? expect.fail("No press");
-  expect(press.textContent).toBe("Rename Dev server");
+  expect({ name: press.textContent, says: press.getAttribute("aria-description") }).toEqual({
+    name: "Dev server",
+    says: "Rename",
+  });
   act(() => press.click());
   const field = container.querySelector("input") ?? expect.fail("No field");
   expect(field.value).toBe("Dev server");
@@ -62,9 +65,14 @@ test("pressing the name opens a field over it, and Return keeps what was typed",
     field.dispatchEvent(new Event("input", { bubbles: true }));
   });
   act(() => field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
-  expect({ ends, open: container.querySelector("input") !== null }).toEqual({
+  expect({
+    ends,
+    open: container.querySelector("input") !== null,
+    focused: document.activeElement === container.querySelector("button"),
+  }).toEqual({
     ends: ["Web server"],
     open: false,
+    focused: true,
   });
 });
 

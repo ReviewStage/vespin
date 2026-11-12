@@ -47,13 +47,12 @@ import {
   type DialogQuestion,
   FormField,
   GAP,
-  INLINE_EDIT_LOOK,
-  InlineEdit,
   type InlineEditEnd,
   MENU_DETAIL,
   OneLine,
   PhotoPick,
   ProviderMark,
+  RenamableName,
   SETTINGS_ROW_MARK_WIDTH,
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
@@ -119,7 +118,6 @@ import { memberRows } from "../member-rows.js";
 import { useOpenPerson } from "../person-door.js";
 import { type RenameShape, renameWrite } from "../rename-write.js";
 import { useToast } from "../toast.js";
-import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { PHOTO_ACCEPT, photoOfFile } from "../workspace-photo.js";
 import { useInviteDialog } from "./invite-dialog.js";
 import { ReadFailed, replayMaskedError } from "./marks.js";
@@ -1638,8 +1636,9 @@ const WORKSPACE_RENAME_SHAPE: RenameShape<
 
 /**
  * The page's first row, drawn as Account's account row is: the workspace's
- * tile, its name, and who shares it. An account's first workspace is named
- * by its owner's account name, so it offers no Rename. The new name stands
+ * tile, its name, renamed by pressing it (`RenamableName`), and who shares
+ * it. An account's first workspace is named by its owner's account name, so
+ * its name is drawn plain. The new name stands
  * at once, as the host draws it on the press, and the photo once the
  * service answers it; a refusal, its name back, or a file that cannot be a
  * photo, is said under the row until the next try.
@@ -1655,7 +1654,6 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
   const rename = useInlineRename(workspaceId, renameWrite(renaming, WORKSPACE_RENAME_SHAPE));
   const [uploading, setUploading] = useState(false);
   const [refusal, setRefusal] = useState<string>();
-  const button = useRef<HTMLButtonElement | null>(null);
   const set = workspace.photoVersion !== undefined;
   const photoRemoving = useMutation(actMutation(ACT_KIND.WORKSPACE_PHOTO_SET));
   const removeAct = useConfirmAct(photoRemoving, {
@@ -1668,10 +1666,7 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
     removeAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_WRITE),
   );
-  // Note that focus goes back to Rename once the edit ends, since the host draws the new name on the press.
-  const endedByKey = useRefocusAfterEdit(rename.editing, button);
-  const end = ({ value: name, byKey }: InlineEditEnd) => {
-    endedByKey(byKey);
+  const end = ({ value: name }: InlineEditEnd) => {
     // Note that a field reopened over a refused name and typed back to the one drawn changes nothing.
     rename.end(name === workspace.name ? undefined : name);
   };
@@ -1702,12 +1697,6 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
       : [];
   // Note that the photo's acts are its tile's own (`PhotoPick`), as setup and New workspace draw it, so the ⋯ holds the slug alone.
   const actions = slugActs.length === 0 ? [] : [slugActs];
-  const renamePress =
-    renamable && !rename.editing ? (
-      <Button ref={button} variant={BUTTON_VARIANT.OUTLINE} onClick={rename.begin}>
-        Rename
-      </Button>
-    ) : null;
   const tileUrl = useWorkspaceTileUrl(workspace);
   return (
     <Stack gap={GAP.NONE} {...searchAnchorProps(SETTINGS_SEARCH_ROW.WORKSPACE_RENAME)}>
@@ -1740,12 +1729,12 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
           ),
           label: (
             <ReplayMask>
-              <InlineEdit
+              <RenamableName
                 value={rename.asked ?? workspace.name}
                 label="Workspace name"
                 editing={rename.editing}
+                onBegin={renamable ? rename.begin : undefined}
                 maxLength={WORKSPACE_BOUNDS.MAX_NAME_CHARS}
-                look={INLINE_EDIT_LOOK.INPUT}
                 onEnd={end}
               />
             </ReplayMask>
@@ -1758,7 +1747,6 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
               FAILURE_SURFACE.WORKSPACE_WRITE,
             ),
           ),
-          control: renamePress,
         }}
       />
       <ConfirmDialog

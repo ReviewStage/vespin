@@ -1,5 +1,4 @@
-import type { ReactNode } from "react";
-import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
+import { type ReactNode, useEffect, useRef } from "react";
 import { INLINE_EDIT_LOOK, InlineEdit, type InlineEditEnd } from "./inline-edit.js";
 
 /**
@@ -13,15 +12,17 @@ import { INLINE_EDIT_LOOK, InlineEdit, type InlineEditEnd } from "./inline-edit.
  * Return or Space with it focused, opens the field in its place, bare in
  * the same type with no box, all of it selected, so the name being typed
  * stands where it was drawn. Return or the focus leaving keeps what was
- * typed, Escape the name it opened on (`InlineEdit`). The caller holds
- * whether it is open, as `useInlineRename` holds it, so the row's ⋯ may
- * open it too, as the keyboard's other way in. A row whose press opens
+ * typed, Escape the name it opened on (`InlineEdit`); an edit a key ended
+ * hands focus back to the name, so the keyboard goes on from where it was.
+ * The caller holds whether it is open, as `useInlineRename` holds it, so
+ * the row's ⋯ may open it too, as the keyboard's other way in. A row whose press opens
  * what it names (a task, an agent, a tab) renames from its menu instead,
  * through `InlineEdit` itself, since a press on its name already means
  * open. A name the reader may not rename, or one with nothing to open it,
- * is drawn plain. The press says "Rename" to a reader before the name,
- * in words rather than an attribute, so a screen recording masks the name
- * with the rest of the words.
+ * is drawn plain. The press is named by the name alone and says "Rename"
+ * to a reader as its description, so the row's label, which names the
+ * row's group and controls too, stays the name, and the attribute carries
+ * no one's words for a screen recording to mask.
  */
 
 /** The name at rest: the line's own type and ink, washing under the pointer and the keyboard, a text caret over it. */
@@ -53,6 +54,14 @@ export function RenamableName({
   /** What stands for the name at rest; `value` in plain text where none is given. */
   children?: ReactNode;
 }): React.JSX.Element {
+  const press = useRef<HTMLButtonElement | null>(null);
+  const refocus = useRef(false);
+  // Note that the field takes the press's place while it stands, so focus would fall to the page as it closes.
+  useEffect(() => {
+    if (editing || !refocus.current) return;
+    refocus.current = false;
+    press.current?.focus();
+  }, [editing]);
   if (editing) {
     return (
       <InlineEdit
@@ -62,15 +71,23 @@ export function RenamableName({
         look={INLINE_EDIT_LOOK.FIELD}
         maxLength={maxLength}
         placeholder={placeholder}
-        onEnd={onEnd}
+        onEnd={(end) => {
+          refocus.current = end.byKey;
+          onEnd(end);
+        }}
       />
     );
   }
   const shown = children ?? value;
   if (onBegin === undefined) return <>{shown}</>;
   return (
-    <button type="button" className={NAME_PRESS} onClick={onBegin}>
-      <VisuallyHidden>Rename </VisuallyHidden>
+    <button
+      ref={press}
+      type="button"
+      className={NAME_PRESS}
+      aria-description="Rename"
+      onClick={onBegin}
+    >
       {shown}
     </button>
   );

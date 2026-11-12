@@ -28,11 +28,10 @@ import {
   CONFIRM_LOSS,
   ConfirmDialog,
   GAP,
-  INLINE_EDIT_LOOK,
-  InlineEdit,
   type InlineEditEnd,
   motionKey,
   ProviderMark,
+  RenamableName,
   RetryButton,
   SETTINGS_ROW_CONTROLS,
   SETTINGS_ROW_STATE,
@@ -423,10 +422,10 @@ export function IntegrationRow({
             </SettingsRowMark>
           ),
           label: <Highlighted text={INTEGRATION_NAME[provider]} tokens={tokens} />,
-          // Note that a rename edits the account's words in their place beside the provider's name, since the account is what it names.
+          // Note that the account's words are renamed by pressing them beside the provider's name, since the account is what a rename names.
           adornment:
             accountName === undefined ? undefined : (
-              <InlineEdit
+              <RenamableName
                 value={
                   account === undefined
                     ? accountName
@@ -434,8 +433,8 @@ export function IntegrationRow({
                 }
                 label={`${name} account name`}
                 editing={rename.editing}
+                onBegin={several ? rename.begin : undefined}
                 maxLength={INTEGRATION_LABEL_MAX}
-                look={INLINE_EDIT_LOOK.INPUT}
                 onEnd={renamed}
               >
                 <AccountWords words={accountName}>
@@ -443,7 +442,7 @@ export function IntegrationRow({
                     <Highlighted text={accountName} tokens={tokens} />
                   </ReplayMask>
                 </AccountWords>
-              </InlineEdit>
+              </RenamableName>
             ),
           description:
             line === undefined ? (

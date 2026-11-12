@@ -12,9 +12,8 @@ import { CatalogSection } from "../section";
 
 /**
  * inline-edits.tsx -- an InlineEdit showing a name and renaming it in
- * place, as a field bare across its line, as a settings input, and bare in a
- * well that rings it, and
- * a long name in a narrow column.
+ * place, as a field bare across its line and bare in a well that rings it,
+ * a name renamed by pressing it, and a long name in a narrow column.
  */
 
 /** A name the example renames in place, as a list renames a row. */
@@ -50,7 +49,7 @@ function Renamed({ start, look }: { start: string; look: InlineEditLook }): Reac
   );
 }
 
-/** A name renamed by pressing it, as a run action's or a workspace's is: a press opens the field in its place, Return keeps what was typed. */
+/** A name renamed by pressing it, as a settings row's is: a press opens the field in its place, Return keeps what was typed. */
 function PressedName({ start }: { start: string }): React.JSX.Element {
   const [name, setName] = useState(start);
   const [editing, setEditing] = useState(false);
@@ -74,11 +73,6 @@ function InlineEdits(): React.JSX.Element {
       <CatalogSection id="inline-edit-field" title="As a field">
         <div className="catalog-column">
           <Renamed start="Ship the beta" look={INLINE_EDIT_LOOK.FIELD} />
-        </div>
-      </CatalogSection>
-      <CatalogSection id="inline-edit-input" title="As an input">
-        <div className="catalog-column">
-          <Renamed start="Acme" look={INLINE_EDIT_LOOK.INPUT} />
         </div>
       </CatalogSection>
       <CatalogSection id="inline-edit-well" title="In a well">
