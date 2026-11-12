@@ -193,6 +193,7 @@ export const COMPUTER_TOOL = {
 /** The action the input names, as the Mac's helper reads it; nothing where its fields do not make one. */
 function actionOf(input: ComputerInput): MacComputerAction | undefined {
   const { action, secondary_action, description: _description, ...fields } = input;
+
   const read = readAction({
     op: action,
     ...fields,
@@ -201,6 +202,7 @@ function actionOf(input: ComputerInput): MacComputerAction | undefined {
       ? { shots: [COMPUTER_SHOTS.MODEL, COMPUTER_SHOTS.KEPT] }
       : undefined),
   });
+
   return Result.isSuccess(read) ? read.success : undefined;
 }
 
@@ -221,9 +223,11 @@ function kept(
   const bytes = new Uint8Array(Buffer.from(base64, "base64"));
   const contentType = sniffImageType(bytes);
   const dimensions = contentType === undefined ? undefined : imageDimensions(bytes, contentType);
+
   if (contentType === undefined || dimensions === undefined) {
     return Effect.succeed({ omitted: PICTURE_OMISSION.UNSUPPORTED, byteCount: bytes.byteLength });
   }
+
   return keepConversationPicture(transcript, { bytes, contentType, ...dimensions }).pipe(
     Effect.map(
       (picture): KeptNote =>
@@ -250,7 +254,9 @@ function namedApp(
   app: ComputerApp,
 ): Effect.Effect<object, never, DatabaseServices> {
   const { iconPng, ...named } = app;
+
   if (iconPng === undefined) return Effect.succeed(named);
+
   return Effect.map(kept(transcript, iconPng), (icon) => ({ ...named, icon }));
 }
 
@@ -260,16 +266,22 @@ function answeredOutcome(
   outcome: ComputerOutcome,
 ): Effect.Effect<ComputerRan, never, DatabaseServices> {
   const ran = { status: MAC_COMMAND_STATUS.RAN };
+
   if ("done" in outcome) return Effect.succeed({ ...ran, done: outcome.done });
+
   if ("apps" in outcome) {
     // Note that the list leaves the apps' icons out, since a read of each app keeps its own.
     const apps = outcome.apps.map(({ iconPng: _icon, ...app }) => app);
+
     return Effect.succeed({ ...ran, apps });
   }
+
   const [shown, full]: readonly (ComputerShot | undefined)[] = outcome.shots;
+
   return Effect.gen(function* () {
     const app = yield* namedApp(transcript, outcome.app);
     const keptShot = full === undefined ? undefined : yield* kept(transcript, full.jpeg);
+
     return {
       ...ran,
       app,
@@ -304,19 +316,25 @@ export function runComputerTool(
 ): Effect.Effect<MacCommandAnswer | ComputerRan, never, DatabaseServices> {
   const read = readInput(input);
   const action = Result.isSuccess(read) ? actionOf(read.success) : undefined;
+
   if (action === undefined)
     return Effect.succeed(macCommandNotRun(COMPUTER_TOOL_REFUSAL.UNREADABLE));
+
   return Effect.gen(function* () {
     const owner = yield* Effect.result(macOwnerOf(target));
+
     // Note that a read that fails refuses, because an action on a guess could land on the wrong Mac.
     if (Result.isFailure(owner)) return macCommandNotRun(COMPUTER_TOOL_REFUSAL.UNAVAILABLE);
+
     const answer = yield* askMac(owner.success, {
       kind: MAC_COMMAND_KIND.COMPUTER,
       conversationId: target.conversationId,
       action,
       timeoutSeconds: COMPUTER_TOOL_TIMEOUT_SECONDS,
     });
+
     if (!("computer" in answer)) return answer;
+
     return yield* answeredOutcome(target, answer.computer);
   });
 }
@@ -327,6 +345,7 @@ export function computerScreenshot(
 ): { readonly mime: string; readonly data: string } | undefined {
   if (!isRecord(output) || !isRecord(output.screenshot)) return undefined;
   const { mime, data } = output.screenshot;
+
   return Predicate.isString(mime) && Predicate.isString(data) ? { mime, data } : undefined;
 }
 
@@ -334,5 +353,6 @@ export function computerScreenshot(
 export function storedComputerOutput(output: UnparsedWireValue): UnparsedWireValue {
   if (!isRecord(output) || !isRecord(output.screenshot)) return output;
   const { data: _data, ...screenshot } = output.screenshot;
+
   return unparsedWire({ ...output, screenshot });
 }

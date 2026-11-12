@@ -140,6 +140,7 @@ export const EXPERIMENTS = [
   },
   {
     key: EXPERIMENT.COMPUTER_USE,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
     name: "Computer use",
     detail:
       "Let agents see and use the apps you allow on your Mac, in the background, while you keep working.",

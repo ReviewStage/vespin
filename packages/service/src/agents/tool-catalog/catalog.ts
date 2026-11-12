@@ -418,6 +418,7 @@ function computerContent(result: WorkspaceMcpToolResult): readonly McpContent[] 
   const output = unparsedWire(result);
   const text: McpContent = { type: "text", text: JSON.stringify(storedComputerOutput(output)) };
   const shot = computerScreenshot(output);
+
   return shot === undefined
     ? [text]
     : [text, { type: "image", data: shot.data, mimeType: shot.mime }];

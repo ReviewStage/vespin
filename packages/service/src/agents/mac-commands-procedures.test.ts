@@ -429,10 +429,12 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
         Effect.gen(function* () {
           yield* account("user-computer");
           const db = yield* Database;
+
           const [row] = yield* db
             .insert(conversations)
             .values({ userId: "user-computer", kind: CONVERSATION_KIND.AGENT })
             .returning({ id: conversations.id });
+
           assert.ok(row);
           const target = { userId: "user-computer", conversationId: row.id };
           yield* markMacListening("user-computer");
@@ -446,6 +448,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
               const [claimed] = yield* claimMacCommands("user-computer", new Date(0), [
                 MAC_COMMAND_KIND.COMPUTER,
               ]);
+
               assert.ok(claimed !== undefined && claimed.kind === MAC_COMMAND_KIND.COMPUTER);
               assert.equal(
                 claimed.conversationId,
@@ -475,6 +478,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
           const answer = unparsedWire(call.answered);
           assert.equal(computerScreenshot(answer)?.data, shown, "the model is handed its own copy");
           const stored = JSON.stringify(storedComputerOutput(answer));
+
           for (const base64 of [shown, full, icon]) {
             assert.equal(
               stored.includes(base64),
@@ -482,6 +486,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
               "no picture is spelled out in what is stored",
             );
           }
+
           const read = Schema.decodeUnknownSync(
             Schema.Struct({
               app: Schema.Struct({
@@ -492,7 +497,9 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
               }),
             }),
           )(answer);
+
           assert.equal(read.kept.picture.width, 1280);
+
           for (const id of [read.kept.picture.id, read.app.icon.picture.id]) {
             assert.ok(
               Option.isSome(yield* readConversationPicture(row.id, id)),

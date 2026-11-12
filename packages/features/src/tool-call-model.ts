@@ -1234,6 +1234,7 @@ const AGENT_TOOL_VIEWS = {
   [AGENT_TOOL.COMPUTER]: ({ input, output }) => {
     const subject = [stringAt(input, "action"), stringAt(input, "app")].filter(Boolean).join(" ");
     const description = commandDescription(stringAt(input, "description"));
+
     return {
       kind: CALL_KIND.MAC_COMMAND,
       subject,
