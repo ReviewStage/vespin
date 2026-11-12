@@ -55,7 +55,7 @@ function documentUnread(state: AppStateSnapshot, taskId: string): boolean {
   return state[LIVE_READ.DESCRIPTION_DOCUMENT][taskId]?.rows === undefined;
 }
 
-/** The account signed in, whose finds are held under it; none while signed out. */
+/** The account signed in, whose finds are held under it; none while signed out, or for an account stored with no id. */
 function selectAccountId(state: AppStateSnapshot): string | undefined {
   return signedInAccountId(state.account);
 }
@@ -87,7 +87,7 @@ export function useFoundTask(named: string | undefined, workspace: string | unde
 
   const finds = number !== undefined && workspace !== undefined && listed === undefined;
 
-  // Note that the find is held by the account too, so one account's answer never stands for another's after a switch.
+  // Note that the find is held by the account too, so one account's answer never stands for another's after a switch; it never waits on the id, which an account may lack.
   const found = useQuery({
     queryKey: [TASK_BY_NUMBER_QUERY, accountId, workspace, number],
     queryFn: () =>
@@ -98,7 +98,7 @@ export function useFoundTask(named: string | undefined, workspace: string | unde
           return answer.taskId;
         },
       ),
-    enabled: finds && accountId !== undefined,
+    enabled: finds,
     retry: FIND_RETRIES,
   });
 
