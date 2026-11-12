@@ -2865,6 +2865,7 @@ test("Edit on an answer that did not go puts no pick back once the agent asked a
     ],
     { revision: shown.revision + 1 },
   );
+
   await act(async () =>
     world.main.push(
       { kind: INBOX_SCOPE_KIND.PLAN, id: BILLING.id },
