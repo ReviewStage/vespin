@@ -1508,6 +1508,7 @@ function bubbleOver(words: string, box: { top: number; bottom: number }): HTMLEl
   // Note that jsdom lays nothing out, so the layer the bubble floats in is handed the page as its box and a toolbar's height to place.
   vi.spyOn(HTMLElement.prototype, "offsetParent", "get").mockReturnValue(document.body);
   vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(40);
+
   try {
     const { container } = drawn("page");
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
@@ -1530,6 +1531,7 @@ function bubbleOver(words: string, box: { top: number; bottom: number }): HTMLEl
     return bubble;
   } finally {
     vi.restoreAllMocks();
+
     if (rect !== undefined) Object.defineProperty(Range.prototype, "getBoundingClientRect", rect);
     else Reflect.deleteProperty(Range.prototype, "getBoundingClientRect");
     answerMouse();

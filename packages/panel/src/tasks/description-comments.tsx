@@ -2604,6 +2604,7 @@ export function DescriptionCommentLayer({
 
         return;
       }
+
       const index = [...element.querySelectorAll(`.${unitClass}`)].indexOf(start);
       const section = sections[index];
       const quote = selection.toString().trim();
@@ -2795,6 +2796,7 @@ export function DescriptionCommentLayer({
         open
         anchor={() => {
           const box = bubble.words();
+
           return box === undefined || !bubble.coarse
             ? box
             : {
