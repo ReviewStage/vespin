@@ -276,6 +276,7 @@ import {
 import { CopyMessageAction } from "./copy-message.js";
 import { DescriptionPictures } from "./description-pictures.js";
 import { EditComposer } from "./edit-composer.js";
+import { FollowOfferDock } from "./follow-offer-dock.js";
 import { ForkedToLine, useForkOffered } from "./fork-action.js";
 import { type ForkCut, forkCutOf, openReply } from "./fork-model.js";
 import { GitHubSignInCard, type GitHubSignInDoors, RETRY_LINE } from "./github-sign-in-card.js";
@@ -3120,6 +3121,7 @@ function AgentTabView({
   );
 
   const lines = useMemo(() => agentLines(kept, composer.sent), [kept, composer.sent]);
+  const pendingWords = useMemo(() => composer.sent.map((line) => line.text), [composer.sent]);
   const queue = useAgentQueue(agent.id, transcript.queue);
   const pictures = useAgentPictureDoor(agent.id);
   const queueEditing = useQueueEditing(composer, queue, pictures);
@@ -3456,6 +3458,12 @@ function AgentTabView({
           doors={doors}
         />
         <ThreadsDock threads={threads} />
+        <FollowOfferDock
+          taskId={agent.planId}
+          messages={kept}
+          pending={pendingWords}
+          readerId={readerId}
+        />
         <AgentPicturesProvider value={pictures}>
           <AgentQueueDock
             messages={queue.messages}
