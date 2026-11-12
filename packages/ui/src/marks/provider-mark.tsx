@@ -695,6 +695,33 @@ function PostHogMark({ className }: MarkProps): React.JSX.Element {
 }
 
 /**
+ * Mintlify's logomark, verbatim from the leaf of `logo/light.svg` and
+ * `logo/dark.svg` in Mintlify's own documentation repository
+ * (https://github.com/mintlify/docs/tree/main/logo), which its docs site
+ * leads with, framed to the leaf's own square rather than the wordmark's.
+ * Both files draw the leaf in the same two greens, so it wears them on
+ * either ground.
+ */
+function MintlifyMark({ className }: MarkProps): React.JSX.Element {
+  return (
+    <svg className={className} viewBox="-1.6 3.2 333.2 333.2" aria-hidden="true" focusable="false">
+      <path
+        fill="#18E299"
+        d="M331.596 125.814V23.0709C331.596 12.0456 322.652 3.25732 311.791 3.25732H209.096C192.965 3.25732 176.994 6.45294 162.141 12.5248C147.287 18.7565 133.712 27.7047 122.372 39.2093L121.574 40.0083C106.561 55.188 95.8599 74.0427 90.4297 94.815C100.172 92.2584 110.234 90.9801 120.296 90.8204C147.127 90.5008 173.48 99.1293 194.882 115.268C214.207 129.649 228.9 149.462 236.886 172.312C245.191 195.481 246.149 220.727 239.921 244.535C260.524 239.103 279.53 228.397 294.703 213.377L295.501 212.578C306.841 201.233 315.944 187.651 322.173 172.791C328.402 157.931 331.437 141.952 331.437 125.814H331.596Z"
+      />
+      <path
+        fill="#0C8C5E"
+        d="M87.3642 124.079C87.5233 92.5605 100.093 62.3154 122.209 39.7112L36.7663 125.193C36.4481 125.512 36.1297 125.671 35.8115 125.989C14.9679 146.683 2.39839 174.381 0.329946 203.671C-1.57939 231.051 5.58047 258.112 20.8552 280.717C22.3121 282.873 26.2654 283.582 28.493 281.513L80.8405 229.3C97.2289 212.904 102.321 188.549 94.5242 166.74C89.5917 153.21 87.2051 138.724 87.3642 124.079Z"
+      />
+      <path
+        fill="#0C8C5E"
+        d="M295.003 212.586C278.615 228.664 258.089 239.807 235.813 244.742C213.379 249.676 190.149 248.244 168.51 240.603C168.51 240.603 168.35 240.603 168.191 240.603C146.393 232.803 122.049 237.897 105.661 254.134L53.3124 306.346C51.0848 308.575 51.403 312.236 54.1079 313.987C76.7017 329.11 103.751 336.432 131.118 334.522C160.395 332.452 187.921 319.877 208.764 299.024L209.56 298.228L295.003 212.746V212.586Z"
+      />
+    </svg>
+  );
+}
+
+/**
  * Resend's logomark, verbatim from `resend-icon-black.svg` and
  * `resend-icon-white.svg` on Resend's brand page (https://resend.com/brand),
  * framed to the glyph's own square rather than the file's padded one. Resend
@@ -1046,6 +1073,8 @@ export function ProviderMark({
       return <LinearMark className={className} />;
     case MARK_PROVIDER.MERCURY:
       return <MercuryMark className={className} />;
+    case MARK_PROVIDER.MINTLIFY:
+      return <MintlifyMark className={className} />;
     case MARK_PROVIDER.NEON:
       return <NeonMark className={className} />;
     case MARK_PROVIDER.NOTION:

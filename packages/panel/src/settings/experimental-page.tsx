@@ -92,6 +92,12 @@ const WORDS = {
 
 /** What turning each workspace experiment on or off changes for everyone in `workspace`, as its question says it. */
 const FLIP_WORDS = {
+  [EXPERIMENT.REPLY_BUTTONS]: {
+    on: (workspace: string) =>
+      `Lets agents in ${workspace} put buttons in their replies, each starting a new agent or messaging a running one with a brief the agent wrote, once someone presses it.`,
+    off: (workspace: string) =>
+      `Stops agents in ${workspace} from adding buttons, draws the buttons already in replies as plain links, and stops any from being pressed.`,
+  },
   [EXPERIMENT.RUN_ACTIONS]: {
     on: (workspace: string) =>
       `Lets owners and admins of ${workspace} keep each repository's run actions in Cloud environment, and shows a Run button over an agent's tabs, with Run rows in ⌘K and a phone's ⋯ menu, that runs one when pressed: in a cloud agent's sandbox, or on the Mac a local agent runs on.`,

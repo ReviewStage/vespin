@@ -26,6 +26,8 @@ export const EXPERIMENT = {
   TURN_CHANGES: "turn-changes",
   /** Merge queue: every pull request GitHub's merge queues hold across the repositories the workspace's tasks work in, on a page of its own. */
   MERGE_QUEUE: "merge-queue",
+  /** Reply buttons: a button an agent puts in its reply, beside the line it is about, that starts a new agent on a brief it wrote, or sends one to a running agent, once a member presses it. */
+  REPLY_BUTTONS: "reply-buttons",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -95,6 +97,16 @@ export const EXPERIMENTS = [
       "Under each of an agent's turns, the files it changed, which open the turn's changes in a tab of their own.",
     owner: "Dean",
     since: "2026-11-12",
+  },
+  {
+    key: EXPERIMENT.REPLY_BUTTONS,
+    scope: EXPERIMENT_SCOPE.WORKSPACE,
+    name: "Reply buttons",
+    detail:
+      "Agents put buttons in their replies that start a new agent, or message a running one, " +
+      "with a brief they wrote, when you press one.",
+    owner: "Dean",
+    since: "2026-11-10",
   },
   {
     key: EXPERIMENT.REWIND_FILES,

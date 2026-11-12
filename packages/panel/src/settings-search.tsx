@@ -9,7 +9,9 @@ import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import {
   APP_SETTING_SCHEMA,
   describedSettings,
+  EXPERIMENT,
   EXPERIMENTS,
+  experimentOn,
   HOST_CAPABILITY,
   type SettingsRowsInput,
   settingFieldForId,
@@ -473,6 +475,47 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           label: "Workspace URL",
           page: SETTINGS_VIEW.WORKSPACE,
           haystack: ["Workspace URL", "Change URL slug link address workspace"],
+        }
+      : undefined,
+    // Cloud environment's sections, drawn for the workspace Settings shows, Run actions only while that workspace has its experiment on.
+    ...(input.workspace === undefined
+      ? []
+      : [
+          {
+            id: SETTINGS_SEARCH_ROW.ENVIRONMENT_VARIABLES,
+            label: "Variables",
+            page: SETTINGS_VIEW.ENVIRONMENT,
+            haystack: ["Variables", "environment variables env vars secrets cloud sandbox"],
+          },
+          {
+            id: SETTINGS_SEARCH_ROW.ENVIRONMENT_INSTALL,
+            label: "Install software",
+            page: SETTINGS_VIEW.ENVIRONMENT,
+            haystack: ["Install software", "install script sudo apt packages tools cloud sandbox"],
+          },
+          {
+            id: SETTINGS_SEARCH_ROW.ENVIRONMENT_SETUP,
+            label: "Setup scripts",
+            page: SETTINGS_VIEW.ENVIRONMENT,
+            haystack: ["Setup scripts", "setup script repository checkout cloud sandbox"],
+          },
+          {
+            id: SETTINGS_SEARCH_ROW.ENVIRONMENT_ARCHIVE,
+            label: "Archive scripts",
+            page: SETTINGS_VIEW.ENVIRONMENT,
+            haystack: ["Archive scripts", "archive script cleanup teardown archived cloud sandbox"],
+          },
+        ]),
+    input.workspace !== undefined &&
+    experimentOn(input.settings.experiments, EXPERIMENT.RUN_ACTIONS)
+      ? {
+          id: SETTINGS_SEARCH_ROW.ENVIRONMENT_RUN_ACTIONS,
+          label: "Run actions",
+          page: SETTINGS_VIEW.ENVIRONMENT,
+          haystack: [
+            "Run actions",
+            "run action command run menu run button terminal cloud sandbox",
+          ],
         }
       : undefined,
     // The Skills page's Add skill, on its first group's heading, drawn once the page has the workspace it lists the skills of.
