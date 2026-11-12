@@ -198,16 +198,17 @@ function lastRunOf(
   };
 }
 
-/** The workspace's sandbox setup as it stands, for the wire, each script with how it last ran. */
+/** The workspace's sandbox setup as it stands, for the wire, each script with how it last ran where the reader sees the agent it ran for. */
 const setupAnswer = Effect.fn("web/workspaceSandboxSetupAnswer")(function* (
   workspaceId: string,
+  userId: string,
 ): Effect.fn.Return<WorkspaceSandboxSetupAnswer, HostedRefusal, DatabaseServices> {
   const [install, scripts, runActions, runs] = yield* hostedStoreOrUnavailable(
     Effect.all([
       readInstallScript(workspaceId),
       listRepositorySetups(workspaceId),
       listRunActions(workspaceId),
-      listScriptRuns(workspaceId),
+      listScriptRuns(workspaceId, userId),
     ]),
   );
 
@@ -243,7 +244,7 @@ export const readSandboxSetup = Effect.fn("web/readSandboxSetup")(function* (
 ): Effect.fn.Return<WorkspaceSandboxSetupAnswer, HostedRefusal, DatabaseServices> {
   const workspace = yield* answeredWorkspace(userId, workspaceId);
 
-  return yield* setupAnswer(workspace.id);
+  return yield* setupAnswer(workspace.id, userId);
 });
 
 /** The install script of a workspace the account manages saved, or removed where it is empty; the setup as it then stands. */
@@ -260,7 +261,7 @@ export const saveInstallScript = Effect.fn("web/saveInstallScript")(function* (
       : setInstallScript(workspace.id, script, now),
   );
 
-  return yield* setupAnswer(workspace.id);
+  return yield* setupAnswer(workspace.id, userId);
 });
 
 /** A repository's setup or archive script in a workspace the account manages saved, replacing the one of that kind under any casing of its name, or removed where it is empty; the setup as it then stands. */
@@ -279,7 +280,7 @@ export const saveRepositorySetup = Effect.fn("web/saveRepositorySetup")(function
       : setRepositorySetup(workspace.id, repository, kind, script, now),
   );
 
-  return yield* setupAnswer(workspace.id);
+  return yield* setupAnswer(workspace.id, userId);
 });
 
 /**
@@ -299,7 +300,7 @@ export const saveRunActions = Effect.fn("web/saveRunActions")(function* (
   const now = yield* DateTime.nowAsDate;
   yield* hostedStoreOrUnavailable(setRunActions(workspace.id, repository, actions, now));
 
-  return yield* setupAnswer(workspace.id);
+  return yield* setupAnswer(workspace.id, userId);
 });
 
 /**
@@ -344,7 +345,7 @@ export const editRunAction = Effect.fn("web/editRunAction")(function* (
 
   if (Result.isFailure(written)) return yield* Effect.fail(written.failure);
   const actionId = at === undefined ? undefined : written.success[at];
-  const setup = yield* setupAnswer(workspace.id);
+  const setup = yield* setupAnswer(workspace.id, userId);
 
   return actionId === undefined ? setup : { ...setup, actionId };
 });

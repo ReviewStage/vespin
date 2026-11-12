@@ -4319,7 +4319,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
         assert.deepEqual(
-          yield* listScriptRuns(workspace),
+          yield* listScriptRuns(workspace, agent.userId),
           [],
           "nothing is recorded while the run goes on",
         );
@@ -4334,7 +4334,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         ended.exitCode = 0;
         yield* kept.run;
         assert.deepEqual(
-          (yield* listScriptRuns(workspace))
+          (yield* listScriptRuns(workspace, agent.userId))
             .map((run) => [run.script, run.repository, run.exitCode, run.agent.id])
             .sort(),
           [
