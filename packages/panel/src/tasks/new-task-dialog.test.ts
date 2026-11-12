@@ -892,11 +892,12 @@ test("a start refused for a missing credential says which harness to connect, an
   assert.equal(card.field().textContent, "Dark mode toggle", "the words stay");
 });
 
-test("a start whose outcome is unknown opens the card again on no words, saying it may have started; after a relaunch its Retry, and a Start of the words Edit takes back unchanged, are the same start, under the same key and task id, words changed are another, and Remove lets it go", async () => {
+test("a start whose outcome is unknown, pressed before the workspaces were read, opens the card again on no words, saying it may have started; once they are read and after a relaunch, its Retry, and a Start of the words Edit takes back unchanged, are the same start, under the same key and task id, words changed are another, and Remove lets it go", async () => {
   const card = await mount(OUTCOME_UNKNOWN);
   card.type("Dark mode toggle");
   await card.key("Enter");
   assert.equal(card.field().textContent, "", "the words are not put back");
+  await card.list("workspace-personal");
   await card.relaunch();
   assert.match(card.note() ?? "", /couldn't tell whether this task started/u);
   act(() => card.button("Retry").click());
