@@ -1434,9 +1434,9 @@ function SuggestionSender({
 }): React.JSX.Element {
   return (
     <ActorLine>
-      <SuggestionLineHead suggestedBy={suggestedBy} />
+      <SuggestionLineHead suggestedBy={suggestedBy} then="," />
       <ActorLine>
-        {starter === undefined ? ", started by you" : ", started by "}
+        {starter === undefined ? " started by you" : " started by "}
         {starter === undefined ? null : <ActorRef actor={starter} sentence />}
       </ActorLine>
     </ActorLine>

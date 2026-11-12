@@ -145,10 +145,13 @@ export function ThreadLineHead({
 export function SuggestionLineHead({
   suggestedBy,
   fit,
+  then,
 }: {
   suggestedBy: SuggestedBy;
   /** How much of the line the chip takes: the rest of it alone, or its own width beside its sender (`MessageHead`). */
   fit?: SubjectFit | undefined;
+  /** What follows the chip with no gap before it, as the comma before who started an agent does; nothing where the head ends there. */
+  then?: string | undefined;
 }): React.JSX.Element {
   const doors = useMentionDoors();
   const href =
@@ -160,7 +163,10 @@ export function SuggestionLineHead({
         );
   return (
     <SubjectLine lead={SUGGESTION_LEAD} fit={fit} data-suggestion-line="">
-      {href === undefined ? suggestedBy.name : linkChip(href, suggestedBy.name, doors)}
+      <span className="inline-flex min-w-0 items-center">
+        {href === undefined ? suggestedBy.name : linkChip(href, suggestedBy.name, doors)}
+        {then}
+      </span>
     </SubjectLine>
   );
 }
