@@ -2,6 +2,7 @@ import {
   AVATAR_SIZE,
   Avatar,
   IconButtonLink,
+  LandingBackedBy,
   MARK_PROVIDER,
   PROVIDER_MARK_SIZE,
   ProviderMark,
@@ -13,7 +14,13 @@ import {
   TEXT_VARIANT,
   Text,
 } from "@repo/ui";
-import { SITE_PAGE, SiteBarDownload, SiteFooterLinks, SiteNavigation } from "./SiteChrome";
+import {
+  SITE_PAGE,
+  SiteBarDownload,
+  SiteFooterLinks,
+  SiteNavigation,
+  Y_COMBINATOR_PAGE,
+} from "./SiteChrome";
 
 type Founder = {
   readonly name: string;
@@ -58,7 +65,7 @@ const FOUNDERS: readonly Founder[] = [
   },
 ];
 
-/** Who is behind the app: a page of its own, linked from the header and footer. */
+/** What the app is and who is behind it: a page of its own, linked from the header and footer. */
 export function AboutPage(): React.JSX.Element {
   return (
     <PublicPage
@@ -66,8 +73,12 @@ export function AboutPage(): React.JSX.Element {
       bannerCall={<SiteBarDownload />}
       footer={<SiteFooterLinks current={{ page: SITE_PAGE.ABOUT }} />}
       title="About"
+      lead="Vespin lets you work with many coding agents at once. Instead of jumping between chats, your agents post to one inbox when they need a decision, a to-do, or your review, and you reply there."
     >
       <PublicSection>
+        <LandingBackedBy href={Y_COMBINATOR_PAGE} />
+      </PublicSection>
+      <PublicSection title="Founders">
         {/* Two up where the 700px column still leaves each card its measure, and
             stacked below that rather than squeezed beside a photo. */}
         <div className="grid gap-8 min-[560px]:grid-cols-2 min-[560px]:gap-6">

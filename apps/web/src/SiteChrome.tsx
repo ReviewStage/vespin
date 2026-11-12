@@ -20,6 +20,9 @@ import { captureSiteEvent, SITE_EVENT } from "./analytics";
 
 export const REPOSITORY_URL = "https://github.com/ReviewStage/vespin";
 
+/** Our page among Y Combinator's companies, which the backing chip opens on the landing and on About. */
+export const Y_COMBINATOR_PAGE = "https://www.ycombinator.com/companies/vespin";
+
 /** The newest release's version-free DMG, named for the product as the Release workflow names it. */
 export const DMG_URL = `${REPOSITORY_URL}/releases/latest/download/${PRODUCT_NAME}.dmg`;
 
