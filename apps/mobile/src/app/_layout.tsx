@@ -20,7 +20,7 @@ import { usePushRegistration } from "../push-device.js";
 import { useShareSheet } from "../share-sheet.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
-import { useOfflineNotice } from "../use-write.js";
+import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
@@ -46,7 +46,8 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
  * enabled while one is signed in (`menu-commands/`), and the share sheet's
  * snapshot is kept current and its draft opens New task (`share-sheet.ts`).
  * Over every screen stands the one notice of a write that did not go
- * (`use-write.ts`), which lets its offline word go once the service answers.
+ * (`use-write.ts`), which lets its offline word go once the service answers,
+ * and every word with its Try again once the account it was said for is gone.
  */
 function GuardedScreens() {
   const { data: signedIn = false } = useQuery({
@@ -66,6 +67,7 @@ function GuardedScreens() {
   useSystemActivity(signedIn);
   useCrashReportAccount();
   useOfflineNotice();
+  useNoticeForAccount();
   useShareSheet(updateNeeded);
 
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.

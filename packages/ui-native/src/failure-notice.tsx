@@ -31,6 +31,7 @@ import {
   NOTICE_KIND,
   type NoticeAsk,
   noticeAsked,
+  noticeCleared,
   noticeGone,
   noticeOnline,
   type ShownNotice,
@@ -82,6 +83,8 @@ export interface FailureNotices {
   readonly say: (asked: NoticeAsk) => void;
   /** Says the phone is online again: the offline notice goes, and the next time it is offline is said anew. */
   readonly online: () => void;
+  /** Lets every notice go, its Try again or Undo with it, as the account it was said for is signed out or changed. */
+  readonly clear: () => void;
 }
 
 const Notices = createContext<FailureNotices | undefined>(undefined);
@@ -299,6 +302,7 @@ export function FailureNoticeProvider({ children }: { readonly children: ReactNo
     () => ({
       say: (asked) => setState((was) => noticeAsked(was, asked)),
       online: () => setState(noticeOnline),
+      clear: () => setState(noticeCleared),
     }),
     [],
   );

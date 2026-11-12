@@ -7,7 +7,8 @@
  * so the writes that fail while it is offline buzz rather than each say it,
  * until the phone is online and a later stretch offline is said anew.
  * Nothing here draws or times anything; the banner (`failure-notice.tsx`)
- * holds the state this answers and lets each notice go.
+ * holds the state this answers and lets each notice go, and lets every
+ * notice go at once when the account it was said for is gone.
  */
 
 /** What a notice says: a write that did not go, that the phone is offline, or a write that went and can be undone, as the panel's Undo toast says it. */
@@ -73,4 +74,15 @@ export function noticeOnline(state: NoticeState): NoticeState {
 /** The notice once the one numbered `serial` has gone, which lets nothing go where a newer one stands. */
 export function noticeGone(state: NoticeState, serial: number): NoticeState {
   return state.shown?.serial === serial ? { ...state, shown: undefined } : state;
+}
+
+/**
+ * The notice once the account it was said for is gone, signed out or
+ * changed: nothing stands, so no Try again or Undo it offered acts for the
+ * next account with the last one's words or pictures, and the next offline
+ * stretch is said anew. The count goes on, so a banner still leaving is
+ * never taken for a newer notice.
+ */
+export function noticeCleared(state: NoticeState): NoticeState {
+  return { shown: undefined, serial: state.serial, offlineSaid: false };
 }
