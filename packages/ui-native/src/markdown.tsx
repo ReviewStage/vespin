@@ -1,6 +1,6 @@
 // markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, links, mention chips, and pictures that open full screen and zoom.
 
-import { Host, Image as SwiftUIImage } from "@expo/ui/swift-ui";
+import { Image as SwiftUIImage } from "@expo/ui/swift-ui";
 import { accessibilityHidden, frame } from "@expo/ui/swift-ui/modifiers";
 import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
@@ -22,6 +22,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type Glyph, isLucideSymbol } from "./glyph.js";
 import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
+import { InlineHost } from "./inline-host.js";
 import { KEPT_KIND } from "./keep-model.js";
 import {
   COLUMN_ALIGN,
@@ -195,14 +196,14 @@ function ChipGlyph({
   }
 
   return (
-    <Host style={{ width: size, height: size }}>
+    <InlineHost style={{ width: size, height: size }}>
       <SwiftUIImage
         assetName={glyph}
         size={size * CHIP_SYMBOL_SCALE}
         color={color}
         modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}
       />
-    </Host>
+    </InlineHost>
   );
 }
 

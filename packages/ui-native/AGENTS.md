@@ -75,7 +75,10 @@ builds a control of its own.
   request an agent opened stands under its call as `PullRequestCard`, as the
   task list holds it now. A page an agent showed is `SealedPage`, the app's
   one web view, handed the page's HTML sealed by `@repo/features/sealed-page`. `Pressable`,
-  `TextInput`, and the rest of React Native's controls appear only here.
+  `TextInput`, and the rest of React Native's controls appear only here. SwiftUI standing inside those views, such as a message's long press
+  menu, a call's glyph, or a pull request card in a transcript, stands in
+  `InlineHost`, which ignores the window's safe area, so a row scrolled
+  under the bar or over the keyboard draws where the row is.
 - **Markdown** is drawn by `Markdown` in React Native views, and a page of
   it by `MarkdownPage`, which hosts them in SwiftUI's scroller through
   `RNHostView`. Its words are parsed by `@repo/features/markdown-tree`, the
