@@ -80,6 +80,7 @@ test("every app used this turn stands once, the one used last first, each with i
 
 test("the app used last is no longer in use once another tool is called, and nothing stands once the agent stops working", () => {
   const using = [asked("ask-1"), turn("turn-1", [read("r1", "Simulator", WINDOW)])];
+
   const movedOn = [
     ...using,
     turn("turn-2", [call("b1", "bash", { command: "ls" }, { stdout: "", exitCode: 0 })]),

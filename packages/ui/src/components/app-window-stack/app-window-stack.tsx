@@ -46,6 +46,7 @@ export interface StackedApp {
 /** The window on top, at its own shape: its picture, a spinner while it is read, or the app's icon where it is gone or none was read. */
 function WindowFace({ app }: { app: StackedApp }): React.JSX.Element {
   const window = app.window;
+
   if (window?.state.kind === PICTURE_STATE.READY) {
     return (
       <img
@@ -57,6 +58,7 @@ function WindowFace({ app }: { app: StackedApp }): React.JSX.Element {
       />
     );
   }
+
   return (
     <span
       className="ui-app-window-stand-in flex h-app-window-tall max-w-app-window-wide items-center justify-center bg-muted aspect-picture"
@@ -89,8 +91,10 @@ export function AppWindowStack({
   className?: string | undefined;
 }): React.JSX.Element | null {
   const [top, ...others] = apps;
+
   if (top === undefined) return null;
   const behind = BEHIND_CLASS.slice(0, others.length);
+
   return (
     <section
       className={`ui-app-window-stack ph-no-capture grid w-fit ${PEEK_ROOM[behind.length] ?? ""} ${className ?? ""}`}

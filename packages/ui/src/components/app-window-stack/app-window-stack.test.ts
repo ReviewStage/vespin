@@ -53,6 +53,7 @@ test("the window on top opens when pressed, named for its app", () => {
   const press = [...document.querySelectorAll("button")].find(
     (each) => each.getAttribute("aria-label") === "Enlarge Simulator",
   );
+
   act(() => press?.click());
   assert.deepEqual(opened, ["open"]);
 });

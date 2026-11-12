@@ -82,10 +82,13 @@ interface ReadCall {
 function* turnCallsNewestFirst(messages: readonly AgentTranscriptMessage[]): Generator<ReadCall> {
   for (let at = messages.length - 1; at >= 0; at -= 1) {
     const message = messages[at];
+
     if (message === undefined || message.role === MESSAGE_ROLE.USER) return;
     const parts = agentParts(message);
+
     for (let index = parts.length - 1; index >= 0; index -= 1) {
       const part = parts[index];
+
       if (part?.kind === AGENT_PART.TOOL) yield part;
     }
   }
@@ -94,6 +97,7 @@ function* turnCallsNewestFirst(messages: readonly AgentTranscriptMessage[]): Gen
 /** The window a computer call kept, where it read one. */
 function keptWindow(call: ReadCall): KeptPicture | undefined {
   const [called] = calledPicturesOf(call.tool, call.input, call.output);
+
   return called?.kept === true ? called.picture : undefined;
 }
 
@@ -110,10 +114,13 @@ export function appsInUse(
   if (!working) return undefined;
   const found = new Map<string, UsedApp>();
   let newest: ReadCall | undefined;
+
   for (const call of turnCallsNewestFirst(messages)) {
     newest ??= call;
+
     const app =
       call.tool === AGENT_TOOL.COMPUTER ? computerAppName(call.input, call.output) : undefined;
+
     if (app === undefined) continue;
     const held = found.get(app);
     found.set(app, {
@@ -122,11 +129,15 @@ export function appsInUse(
       window: held?.window ?? keptWindow(call),
     });
   }
+
   const apps = [...found.values()];
   const top = apps[0];
+
   if (top === undefined || newest === undefined) return undefined;
+
   const using =
     newest.tool === AGENT_TOOL.COMPUTER && computerAppName(newest.input, newest.output) === top.app;
+
   return { apps, using };
 }
 
@@ -152,17 +163,22 @@ export function ComputerDock({
   const { open, viewer } = useKeptPictureViewer();
   const stop = useAsyncAction(rejectionWords);
   const [hidden, setHidden] = useState(() => WINDOWS_HIDDEN.has(agentId));
+
   if (inUse === undefined || top === undefined) return null;
+
   const windows = inUse.apps.flatMap((each) =>
     each.window === undefined ? [] : [{ picture: each.window, words: each.app }],
   );
+
   const shown = top.window;
   const others = inUse.apps.length - 1;
+
   const toggle = () => {
     if (hidden) WINDOWS_HIDDEN.delete(agentId);
     else WINDOWS_HIDDEN.add(agentId);
     setHidden(!hidden);
   };
+
   return (
     <div className={`agent-computer-dock ${COMPOSER_DOCK_CLASS}`}>
       {hidden ? null : (

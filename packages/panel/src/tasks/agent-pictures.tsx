@@ -469,6 +469,7 @@ export function KeptAppIcon({
 }): ReactNode {
   const door = useContext(AgentPicturesContext);
   const state = usePicture(pictureQuery(door?.owner ?? "", id, door?.read), pictureUnread);
+
   return <AppIcon src={state.kind === PICTURE_STATE.READY ? state.url : undefined} size={size} />;
 }
 
@@ -476,6 +477,7 @@ export function KeptAppIcon({
 export function useKeptPicture(id: string | undefined): PictureState {
   const door = useContext(AgentPicturesContext);
   const read = id === undefined ? undefined : door?.read;
+
   return usePicture(pictureQuery(door?.owner ?? "", id ?? "", read), pictureUnread);
 }
 
