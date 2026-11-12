@@ -305,6 +305,20 @@ test("a patch names the first file it touches and how many more, a moved file by
   });
 });
 
+test("a call stored as an unknown tool is drawn as the call it made, under the name it called", () => {
+  const view = toolCallView({
+    tool: "unknown_tool",
+    input: { name: "mcp__notes__find", input: { query: "launch" } },
+    output: { found: 2 },
+  });
+
+  assert.equal(view.kind, CALL_KIND.MCP_TOOL);
+  assert.equal(view.subject, "find");
+  assert.equal(view.server, "notes");
+  assert.deepEqual(view.input, { kind: TOOL_BLOCK.JSON, text: '{\n  "query": "launch"\n}' });
+  assert.deepEqual(view.output, { kind: TOOL_BLOCK.JSON, text: '{\n  "found": 2\n}' });
+});
+
 test("a tool this build does not know is named as it is, with its input and answer as JSON", () => {
   const view = toolCallView({
     tool: "gh",

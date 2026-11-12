@@ -8,6 +8,7 @@ import {
   CONNECTION_TOOL,
   EVE_TOOL,
   RETIRED_TOOL,
+  UNKNOWN_TOOL,
 } from "./agent-tools.js";
 import { AGENT_TODO_STATUS, type AgentTodos, agentTodosInputSchema } from "./agent-wire.js";
 import { fileRefText, shortCommit } from "./code-ref-words.js";
@@ -1457,6 +1458,21 @@ const TOOL_VIEWS: ReadonlyMap<string, ToolReader> = new Map(
   Object.entries({ ...AGENT_TOOL_VIEWS, ...RETIRED_TOOL_VIEWS, ...OTHER_TOOL_VIEWS }),
 );
 
+/**
+ * The call an `UNKNOWN_TOOL` part holds, as it was made: the name it called
+ * and that call's own input, which the part keeps in its input as
+ * `{ name, input }`; nothing for a part whose input holds no name.
+ */
+function unwrappedUnknownCall(
+  input: WireValue | undefined,
+): { readonly tool: string; readonly input: WireValue | undefined } | undefined {
+  const name = stringAt(input, "name");
+
+  if (name === undefined || !isRecord(input)) return undefined;
+
+  return { tool: name, input: input.input };
+}
+
 /** How one tool call is drawn: its row and its body, from the part's input and output, a stop naming the worker it stopped by its job where `jobs` knows it. */
 export function toolCallView(input: {
   readonly tool: string;
@@ -1464,6 +1480,10 @@ export function toolCallView(input: {
   readonly output: WireValue | undefined;
   readonly jobs?: WorkerJobs | undefined;
 }): ToolCallView {
+  // Note that a call to a tool no transcript registers is drawn as the call it was, under the name it called.
+  const unknown = input.tool === UNKNOWN_TOOL ? unwrappedUnknownCall(input.input) : undefined;
+
+  if (unknown !== undefined) return toolCallView({ ...input, ...unknown });
   const call = { ...input, jobs: input.jobs };
 
   return (
