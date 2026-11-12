@@ -144,7 +144,7 @@ export function ReplyButtonLink({
     return linkChip(href, reached.title, doors, undefined, after) ?? plain(href);
   }
 
-  const suggestion = draftSuggestionOf(view, label);
+  const suggestion = draftSuggestionOf(link, action, label);
 
   // Note that a press only fills a draft in and opens it, never sends: a new agent's in the task's draft, where this tab opens one, and a message's in its agent's own box.
   const open = () => {

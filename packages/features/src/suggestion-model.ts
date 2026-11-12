@@ -24,8 +24,8 @@ import type { ModelChoice } from "./models-wire.js";
 import {
   REPLY_BUTTON_ACTION,
   type ReplyButtonAction,
+  type ReplyButtonLink,
   type ReplyButtonSent,
-  type ReplyButtonView,
 } from "./reply-button-wire.js";
 import type { Unreached } from "./unreached.js";
 
@@ -75,14 +75,22 @@ export const MESSAGE_SUGGESTION_REFUSAL: SuggestionRefusal = (refused) => ({
   text: messageFailureWords(refused.failure),
 });
 
-/** The draft a suggestion opens keeps, from the button as the service answers it and the label it is drawn with. */
-export function draftSuggestionOf(view: ReplyButtonView, label: string): DraftSuggestion {
-  const { action } = view;
+/**
+ * The draft a suggestion opens keeps, from its link, what it does, and the
+ * label it is drawn with. Note that the ids are the link's as written, since
+ * the client keys the button's read and its draft by them, where the
+ * service's answer spells them its own way.
+ */
+export function draftSuggestionOf(
+  link: Pick<ReplyButtonLink, "agentId" | "buttonId">,
+  action: ReplyButtonAction,
+  label: string,
+): DraftSuggestion {
   const start = action.kind === REPLY_BUTTON_ACTION.START ? action : undefined;
 
   return {
-    agentId: view.agentId,
-    buttonId: view.id,
+    agentId: link.agentId,
+    buttonId: link.buttonId,
     label,
     ...(start?.title === undefined ? undefined : { title: start.title }),
     ...(start?.branch === undefined ? undefined : { branch: start.branch }),
