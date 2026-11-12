@@ -138,6 +138,8 @@ export interface ComposerNote {
   readonly onRetry?: (() => void) | undefined;
   /** The press that mends what went wrong where trying again alone cannot, as "Unarchive". */
   readonly remedy?: ErrorStateRemedy | undefined;
+  /** Remove's press, which lets go of what did not go. */
+  readonly onRemove?: (() => void) | undefined;
   /** What mends it under the line where that is more than one press, as a closed agent's Continue in new agent. */
   readonly mends?: ReactNode;
 }
@@ -304,7 +306,12 @@ function StopButton({ stop }: { stop: ComposerStop }): React.JSX.Element {
 export function ComposerFootNote({ note }: { note: ComposerNote }): React.JSX.Element {
   return (
     <div className="ui-composer-foot-note flex flex-col items-start gap-tight-gap">
-      <ErrorState onRetry={note.onRetry} remedy={note.remedy} failure={note.failure}>
+      <ErrorState
+        onRetry={note.onRetry}
+        remedy={note.remedy}
+        onRemove={note.onRemove}
+        failure={note.failure}
+      >
         {note.words}
       </ErrorState>
       {note.mends}

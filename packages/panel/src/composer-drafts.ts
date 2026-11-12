@@ -293,6 +293,8 @@ const keptStartSchema = Schema.Struct({
   key: Schema.String,
   taskId: Schema.String,
   words: Schema.String,
+  /** That Edit took its words back into the box, where a Start of them unchanged is still this start. */
+  edited: Schema.optionalKey(Schema.Literal(true)),
   ask: Schema.Struct({
     repository: Schema.NullOr(Schema.String),
     workspaceId: Schema.optionalKey(Schema.String),

@@ -222,6 +222,9 @@ export const BUTTON = {
   SAVE: "Save",
 } as const;
 
+/** What the note's press that takes a kept send's words back into the box says. */
+const EDIT_KEPT = "Edit";
+
 /**
  * The room the composer's card stands in, a note under it, on the
  * transcript's own inset so the card and the column line up, with none above
@@ -579,10 +582,14 @@ export function AgentComposer({
             cause: sendNote.cause ?? sendNote,
             about: { agentId },
           }),
+          // Note that a send kept whose outcome is unknown offers Edit in the remedy's place, and Remove beside Retry.
           remedy:
-            remedyWords === undefined || remedy === undefined
-              ? undefined
-              : { label: remedyWords, onClick: remedy },
+            composer.noteActs !== undefined
+              ? { label: EDIT_KEPT, onClick: composer.noteActs.edit }
+              : remedyWords === undefined || remedy === undefined
+                ? undefined
+                : { label: remedyWords, onClick: remedy },
+          onRemove: composer.noteActs?.remove,
           onRetry:
             remedyWords === undefined || retriesBesideRemedy(sendNote) ? composer.retry : undefined,
         });

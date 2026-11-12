@@ -132,6 +132,8 @@ export interface AgentComposerControl {
   retry: () => void;
   /** The message the note's remedy is for, as it was sent, whether or not its row is still drawn; none where the note is of no message. */
   notedLine?: SentLine | undefined;
+  /** What the note offers beside Retry for a send it keeps whose outcome is unknown: Edit, which takes its words back into the box, and Remove, which lets it go; none for any other note. */
+  noteActs?: { readonly edit: () => void; readonly remove: () => void } | undefined;
   /** The lines sent that the transcript has not read back yet, in order. */
   sent: readonly SentLine[];
 }

@@ -890,7 +890,7 @@ test("a start refused for a missing credential says which harness to connect, an
   assert.equal(card.field().textContent, "Dark mode toggle", "the words stay");
 });
 
-test("a start whose outcome is unknown opens the card again on no words, saying it may have started, and its Retry after a relaunch is the same start, under the same key and task id; other words are another", async () => {
+test("a start whose outcome is unknown opens the card again on no words, saying it may have started; after a relaunch its Retry, and a Start of the words Edit takes back unchanged, are the same start, under the same key and task id, words changed are another, and Remove lets it go", async () => {
   const card = await mount(OUTCOME_UNKNOWN);
   card.type("Dark mode toggle");
   await card.key("Enter");
@@ -899,15 +899,29 @@ test("a start whose outcome is unknown opens the card again on no words, saying 
   assert.match(card.note() ?? "", /couldn't tell whether this task started/u);
   act(() => card.button("Retry").click());
   await settle();
-  card.type("Dark mode toggle for the sidebar");
+  act(() => card.button("Edit").click());
+  await settle();
+  assert.equal(card.field().textContent, "Dark mode toggle", "Edit takes the words back");
+  assert.equal(card.note(), undefined, "and the note with them");
   await card.key("Enter");
+  act(() => card.button("Edit").click());
+  await settle();
+  card.type(" for the sidebar");
+  await card.key("Enter");
+  act(() => card.button("Remove").click());
+  await settle();
   const keys = card.agents.map((agent) => agent?.idempotencyKey);
+  const taskIds = card.taskIds;
 
-  assert.equal(keys.length, 3);
+  assert.equal(keys.length, 4);
   assert.equal(card.agents[1]?.prompt, "Dark mode toggle", "Retry asks the kept press again");
-  assert.equal(keys[1], keys[0], "a press asking the same again is the same start");
-  assert.equal(card.taskIds[1], card.taskIds[0], "and makes the same task");
-  assert.notEqual(keys[2], keys[1], "other words are another start");
+  assert.deepEqual(
+    [keys[1], keys[2], taskIds[1], taskIds[2]],
+    [keys[0], keys[0], taskIds[0], taskIds[0]],
+    "Retry, and a Start of the words unchanged, are the same start, making the same task",
+  );
+  assert.notEqual(keys[3], keys[0], "words changed are another start");
+  assert.equal(card.note(), undefined, "Remove lets the kept start go");
 });
 
 test("a workspace switch lets the pick go for the new workspace's recent repository", async () => {

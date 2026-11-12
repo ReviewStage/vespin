@@ -61,7 +61,7 @@ import {
   treeRelationOf,
 } from "./new-task-relation.js";
 import { NoRepositoriesBanner } from "./no-repositories-banner.js";
-import { putBackRefused } from "./refused-send.js";
+import { joinedAhead, putBackRefused } from "./refused-send.js";
 import { CHIP_PLACE, RepositoryChip } from "./repository-chip.js";
 import { keptSkills } from "./repository-skills.js";
 import { NewTaskRunsOnChip, newTaskRunsOn, useNewTaskRunsOn } from "./runs-on.js";
@@ -143,8 +143,10 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * way, may have made its task, so the card opens again on no words: it keeps
  * the press with its draft (`../composer-drafts.ts`), which a relaunch keeps,
  * says the task may have started, and its Retry asks that press again
- * whatever the box holds. A read of the tasks listing the press's task
- * settles it, and the card lets it go and says the task started, with Open.
+ * whatever the box holds; Edit takes its words and files back into the box,
+ * where a Start of them unchanged is still that start and words changed are
+ * another, and Remove lets it go. A read of the tasks listing the press's
+ * task settles it, and the card lets it go and says the task started, with Open.
  *
  * Return starts, Shift+Return is a new line, and ⌘Return on a box with
  * neither words nor files starts a bare task: an empty description, no call, and
@@ -499,12 +501,13 @@ export function NewTaskComposer({
   );
 
   // A start whose outcome is unknown, kept with the draft until a read or its Retry settles it, said as
-  // the answer that left it so where the card opened on it, and plainly after a relaunch.
+  // the answer that left it so where the card opened on it, and plainly after a relaunch, until Edit
+  // takes its words back into the box.
   const keptStart = draft.draft.start;
 
   const keptNote = useMemo(
     () =>
-      keptStart === undefined
+      keptStart === undefined || keptStart.edited === true
         ? undefined
         : refused?.unknown === true && refused.card.press.key === keptStart.key
           ? refused.note
@@ -871,6 +874,25 @@ export function NewTaskComposer({
     );
   };
 
+  // Edit takes a kept start's words, and its files where this window pressed it, back into the box
+  // ahead of what it holds, keeping the press marked so, so a Start of them unchanged is still that
+  // start, after a relaunch too, and words changed are another; Remove lets it go.
+  const editKept = (start: KeptStart) => {
+    const held = pressed.current?.key === start.key ? pressed.current : pressOfKept(start);
+    pressed.current = held;
+    draft.update((was) => ({
+      ...was,
+      ...joinedAhead({ text: start.words, attachments: held.ask.agent.attachments }, was),
+      start: { ...start, edited: true },
+    }));
+  };
+
+  const removeKept = (start: KeptStart) => {
+    draft.update(withoutStart);
+
+    if (pressed.current?.key === start.key) pressed.current = undefined;
+  };
+
   // A kept start the window's tasks now list made its task: the card lets it go and says so, with Open.
   // Note that a start out holds it, since the task it is making is drawn in the list as it is asked.
   const keptLanded =
@@ -941,9 +963,13 @@ export function NewTaskComposer({
     send: start,
     retry: devicesFailed
       ? () => readModels.current()
-      : note === keptNote && keptStart !== undefined
+      : keptNote !== undefined && note === keptNote && keptStart !== undefined
         ? () => resend(keptStart)
         : start,
+    noteActs:
+      !devicesFailed && keptNote !== undefined && note === keptNote && keptStart !== undefined
+        ? { edit: () => editKept(keptStart), remove: () => removeKept(keptStart) }
+        : undefined,
     sent: [],
   };
 
