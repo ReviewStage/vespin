@@ -365,6 +365,8 @@ export interface NewTaskDraft {
   /** The workspace it was kept for, where one was picked; the phone's own otherwise. */
   readonly workspaceId?: string | undefined;
   readonly repository?: string | undefined;
+  /** The addresses of the JPEGs its pictures were kept in, in the App Group, which New task reads and deletes. */
+  readonly pictures?: readonly string[] | undefined;
 }
 
 /** No task list read yet. */
@@ -499,9 +501,10 @@ export function NewTaskScreen({
   const startTask = useStartTask(workspaceId);
   const fileTask = useFileTask(workspaceId);
   const [note, setNote] = useState<string | undefined>(undefined);
-  const pictures = useAttachedPictures(setNote);
-  const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
-  const filed = pictures.files === undefined ? filedTaskOf(prompt) : undefined;
+  const pictures = useAttachedPictures(setNote, draft?.pictures);
+  // Note that a share draft's pictures are read as the sheet opens, and nothing starts or files until they are in, so its words never go without them.
+  const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
+  const filed = pictures.files === undefined && !pictures.opening ? filedTaskOf(prompt) : undefined;
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
   const place = { repository: repository.picked, relation: relation.relation };
@@ -510,7 +513,8 @@ export function NewTaskScreen({
   const tree = inTree(relation.relation)
     ? relation.tasks.find((task) => task.id === relation.taskId)
     : undefined;
-  const start = () =>
+  const start = () => {
+    if (!drafted) return;
     go(
       () =>
         startTask({
@@ -522,6 +526,7 @@ export function NewTaskScreen({
         }),
       pictures.refusal,
     );
+  };
   const file = () => {
     if (filed !== undefined) go(() => fileTask({ filed, ...place }));
   };

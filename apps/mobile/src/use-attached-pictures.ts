@@ -20,7 +20,7 @@ import type { AttachedPicture } from "@repo/ui-native";
 import { randomUUID } from "expo-crypto";
 import { File } from "expo-file-system";
 import { launchImageLibraryAsync } from "expo-image-picker";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 /** How a picture is compressed as it is read from the library: JPEG at this quality keeps a phone's photo under the service's bound for an image. */
 const PICTURE_QUALITY = 0.7;
@@ -69,6 +69,8 @@ export interface AttachedPictures {
   readonly attach: () => void;
   /** Adds pictures dropped on the holder, by the addresses of the JPEGs the drop kept (`dropPictures`), each file deleted once read, and says how many it could not keep. */
   readonly drop: (uris: readonly string[], unreadable: number) => void;
+  /** Whether the pictures the holder opened with are still being read, while nothing it sends would carry them. */
+  readonly opening: boolean;
   readonly detach: (id: string) => void;
   /** Takes every picture off, as a send does, answering what was held so a refusal can put it back. */
   readonly take: () => readonly HeldPicture[];
@@ -79,8 +81,13 @@ export interface AttachedPictures {
 /**
  * The pictures a composer or a sheet attaches, saying what the picker or a
  * bound refused through `onNote`, and nothing once a picture is taken off.
+ * `opensWith` names JPEGs the holder opens holding, such as a share sheet
+ * draft's, read and deleted as a drop's are, once, as it mounts.
  */
-export function useAttachedPictures(onNote: (note: string | undefined) => void): AttachedPictures {
+export function useAttachedPictures(
+  onNote: (note: string | undefined) => void,
+  opensWith?: readonly string[],
+): AttachedPictures {
   const [pictures, setPictures] = useState<readonly HeldPicture[]>([]);
   // The pictures held now, which a picker answering later adds to, so pictures a refused send put back while it stood open are kept.
   const held = useRef(pictures);
@@ -122,7 +129,7 @@ export function useAttachedPictures(onNote: (note: string | undefined) => void):
       .catch((error: unknown) => console.error("The photo picker did not open.", error));
   };
   // Each dropped JPEG is read whole and deleted, since the drop kept it under the app's temporary folder for this alone; a picture the drop could not keep at all is said as unreadable.
-  const drop = (uris: readonly string[], unreadable: number) => {
+  const dropped = (uris: readonly string[], unreadable: number) =>
     Promise.all(
       uris.map((uri) => {
         const file = new File(uri);
@@ -140,13 +147,23 @@ export function useAttachedPictures(onNote: (note: string | undefined) => void):
     )
       .then((contents) => add(contents, unreadable))
       .catch((error: unknown) => console.error("The dropped pictures were not read.", error));
+  const drop = (uris: readonly string[], unreadable: number) => {
+    void dropped(uris, unreadable);
   };
+  // Note that the pictures opened with are being read from the first render, so nothing is sent without them.
+  const [opening, setOpening] = useState(opensWith !== undefined && opensWith.length > 0);
+  const open = useEffectEvent(() => {
+    if (opensWith === undefined || opensWith.length === 0) return;
+    void dropped(opensWith, 0).finally(() => setOpening(false));
+  });
+  useEffect(() => open(), []);
   return {
     attached: pictures.map(({ id, file }) => ({ id, name: file.name })),
     files: pictures.length === 0 ? undefined : pictures.map(({ file }) => file),
     refusal: pictureRefusal(pictures),
     attach,
     drop,
+    opening,
     detach: (id) => {
       setPictures((held) => held.filter((picture) => picture.id !== id));
       onNote(undefined);

@@ -12,7 +12,11 @@
  * comes forward. The keys are the Swift's, exactly (`apps/mobile/share-extension/`),
  * which reads the snapshot loosely and writes the draft, so a key renamed
  * here is a sheet that offers nothing or a draft the app drops. An instant
- * travels as epoch milliseconds in a JSON number.
+ * travels as epoch milliseconds in a JSON number. A draft's pictures are
+ * JPEGs the extension writes beside it, under the fixed names
+ * `SHARE_DRAFT_PICTURE_FILES` lists, which the draft names back; a name
+ * outside that list is refused, so a draft can never point the app at
+ * another file.
  */
 
 import { Schema as EffectSchema } from "effect";
@@ -44,10 +48,23 @@ interface ShareSnapshot {
   readonly service: ShareService;
 }
 
-/** What the share sheet kept for New task: the words, and the workspace and repository picked, for the account it was kept under. */
+/** The files a draft's pictures are kept in, beside it at the group's root, one per picture the share sheet takes, in order. */
+export const SHARE_DRAFT_PICTURE_FILES = [
+  "share-draft-picture-1.jpg",
+  "share-draft-picture-2.jpg",
+  "share-draft-picture-3.jpg",
+  "share-draft-picture-4.jpg",
+] as const;
+
+export type ShareDraftPictureFile = (typeof SHARE_DRAFT_PICTURE_FILES)[number];
+
+/** What the share sheet kept for New task: the words, the pictures' files, and the workspace and repository picked, for the account it was kept under. */
 const shareDraftSchema = EffectSchema.Struct({
   accountId: EffectSchema.String,
   prompt: EffectSchema.String,
+  pictures: EffectSchema.optionalKey(
+    EffectSchema.Array(EffectSchema.Literals(SHARE_DRAFT_PICTURE_FILES)),
+  ),
   workspaceId: EffectSchema.optionalKey(EffectSchema.String),
   repository: EffectSchema.optionalKey(EffectSchema.String),
   keptAt: EffectSchema.Number,

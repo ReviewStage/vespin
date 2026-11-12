@@ -1,4 +1,4 @@
-// ShareStart.swift -- the share sheet's Start as the app's New task sends it: one POST of the task and its agent's words to the service, under the account's access token.
+// ShareStart.swift -- the share sheet's Start as the app's New task sends it: one POST of the task and its agent's words and pictures to the service, under the account's access token.
 //
 // The extension holds no session of its own. It reads the access token the
 // app keeps in their shared Keychain item (`ShareToken.swift`), which reads
@@ -53,8 +53,9 @@ enum ShareStart {
 
   /// The path New task's start is sent to (`HOSTED_SERVICE_PATH.TASKS`).
   private static let path = "/api/plans"
-  /// How long the sheet waits on the service, in all, before it keeps the draft instead.
+  /// How long the sheet waits on the service, in all, before it keeps the draft instead, and how much longer each picture it sends adds.
   private static let limit: Duration = .seconds(20)
+  private static let limitPerPicture: Duration = .seconds(10)
   /// A session that keeps no cookies or cache of its own.
   private static let session = URLSession(configuration: .ephemeral)
 
@@ -62,7 +63,14 @@ enum ShareStart {
   static func start(_ draft: ShareDraft, service: ShareService, token: String, idempotencyKey: String)
     async -> Outcome
   {
-    let agent: [String: Any] = ["idempotencyKey": idempotencyKey, "prompt": draft.prompt]
+    var agent: [String: Any] = ["idempotencyKey": idempotencyKey, "prompt": draft.prompt]
+    if !draft.pictures.isEmpty {
+      // Named as the app names a picture, "Picture 1" and on (`pictureName`, `@repo/features/file-marker`).
+      agent["attachments"] = draft.pictures.enumerated().map { index, picture in
+        ["name": "Picture \(index + 1)", "mediaType": "image/jpeg", "data": picture.jpeg.base64EncodedString()]
+      }
+    }
+    let wait = limit + limitPerPicture * draft.pictures.count
     var body: [String: Any] = ["planning": false, "agent": agent]
     if let workspaceId = draft.workspaceId { body["workspaceId"] = workspaceId }
     if let repository = draft.repository { body["repository"] = repository }
@@ -76,7 +84,7 @@ enum ShareStart {
     return await withTaskGroup(of: Outcome.self) { group in
       group.addTask { await send(request) }
       group.addTask {
-        try? await Task.sleep(for: limit)
+        try? await Task.sleep(for: wait)
         return .notStarted
       }
       let first = await group.next() ?? .notStarted
