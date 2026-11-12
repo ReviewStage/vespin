@@ -55,6 +55,7 @@ import {
   BAR_TITLE,
   type BarMenu,
   ConfirmAsk,
+  EmptyRow,
   EmptyState,
   LINK_ROW_TONE,
   LIST_LOOK,
@@ -680,8 +681,14 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
     );
   }
 
-  // Note that an empty workspace draws the system's empty view, as the Inbox's does, rather than a bare list.
-  if (treeEmpty(tree)) return <EmptyState title={WORDS.NO_TASKS} symbol="checklist" />;
+  // Note that an empty workspace draws the system's empty view inside the list, rather than a bare list, so a pull still refreshes it.
+  if (treeEmpty(tree)) {
+    return (
+      <RowList look={look} onRefresh={onRefresh}>
+        <EmptyRow title={WORDS.NO_TASKS} symbol="checklist" />
+      </RowList>
+    );
+  }
 
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>

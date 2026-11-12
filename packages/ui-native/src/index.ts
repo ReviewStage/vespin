@@ -47,7 +47,7 @@ export {
   SkillSuggestions,
 } from "./composer-head.js";
 
-export { EmptyState } from "./empty-state.js";
+export { EmptyRow, EmptyState } from "./empty-state.js";
 
 export {
   FailureNoticeProvider,
