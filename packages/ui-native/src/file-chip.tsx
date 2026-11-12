@@ -50,6 +50,9 @@ const WEB_ADDRESS = /^https?:\/\//u;
 /** The scheme of an address on the device, the file's own. */
 const FILE_ADDRESS = "file://";
 
+/** What the viewer's page stands as to a flow that drives the app, once the PDF has loaded and is drawn. */
+const FILE_VIEWER_ID = "file-viewer";
+
 /** The web view's whitelist: every address, so that each navigation reaches `staysOnFile`. */
 const EVERY_ADDRESS = ["*"];
 
@@ -82,6 +85,7 @@ const styles = StyleSheet.create({
   barTitle: { flex: 1, textAlign: "center" },
   page: { flex: 1 },
   cannot: { flex: 1, alignItems: "center", justifyContent: "center", padding: SPACE.PAGE },
+  loading: { ...StyleSheet.absoluteFill, alignItems: "center", justifyContent: "center" },
 });
 
 /** A file's kind as its chip names it: PDF, its extension in capitals, or File where it has none to name. */
@@ -129,13 +133,15 @@ type FileViewerProps = {
  * refuses without asking. Only a PDF is handed it, cached under its `.pdf`
  * extension, because WebKit draws a file by its extension, and any other
  * file, an HTML one among them, would be drawn as a page that loads what it
- * names from the web. A PDF the web view cannot draw says so in its place,
- * and Share still opens it in another app.
+ * names from the web. While WebKit reads the PDF the system's spinner stands
+ * over the page, as Photos stands one, and a PDF the web view cannot draw
+ * says so in its place, and Share still opens it in another app.
  */
 function FileViewer({ source, name, visible, onClose }: FileViewerProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const staysOnFile = (request: WebViewNavigation): boolean => {
     // Note that any file's address is let through, since the web view may read the file alone (`allowingReadAccessToURL`) and spells its address as WebKit escapes it.
     if (request.url.startsWith(FILE_ADDRESS)) return true;
@@ -215,22 +221,30 @@ function FileViewer({ source, name, visible, onClose }: FileViewerProps) {
             </Text>
           </View>
         ) : (
-          <WebView
-            source={{ uri: source }}
-            allowingReadAccessToURL={source}
-            originWhitelist={EVERY_ADDRESS}
-            onShouldStartLoadWithRequest={staysOnFile}
-            onError={() => setFailed(true)}
-            javaScriptEnabled={false}
-            domStorageEnabled={false}
-            cacheEnabled={false}
-            incognito
-            allowsLinkPreview={false}
-            setSupportMultipleWindows={false}
-            accessibilityLabel={name}
-            testID="file-viewer"
-            style={[styles.page, { backgroundColor: colors.GROUND }]}
-          />
+          <View style={styles.page}>
+            <WebView
+              source={{ uri: source }}
+              allowingReadAccessToURL={source}
+              originWhitelist={EVERY_ADDRESS}
+              onShouldStartLoadWithRequest={staysOnFile}
+              onLoad={() => setLoaded(true)}
+              onError={() => setFailed(true)}
+              javaScriptEnabled={false}
+              domStorageEnabled={false}
+              cacheEnabled={false}
+              incognito
+              allowsLinkPreview={false}
+              setSupportMultipleWindows={false}
+              accessibilityLabel={name}
+              testID={loaded ? FILE_VIEWER_ID : undefined}
+              style={[styles.page, { backgroundColor: colors.GROUND }]}
+            />
+            {loaded ? null : (
+              <View style={styles.loading} pointerEvents="none">
+                <ActivityIndicator color={colors.TEXT_MUTED} />
+              </View>
+            )}
+          </View>
         )}
       </View>
     </Modal>

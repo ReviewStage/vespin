@@ -106,10 +106,13 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: inbox-file
 - tapOn: "invite-test-plan.pdf, PDF.*"
-- assertVisible:
-    id: "file-viewer"
-- waitForAnimationToEnd:
-    timeout: 3000
+# The viewer stands as file-viewer only once WebKit has drawn the PDF, so the
+# flow waits for it rather than shooting the spinner.
+- extendedWaitUntil:
+    visible:
+      id: "file-viewer"
+    timeout: 15000
+- waitForAnimationToEnd
 - takeScreenshot: inbox-pdf
 - tapOn:
     id: "file-viewer-done"
