@@ -63,7 +63,6 @@ const WORDS = {
   RUNS_ON: "Runs on",
   START: "Start",
   FILE_FOR_LATER: "File for later",
-  TASK_RELATION: "Task relation",
   RELATION: "Relation",
   TASK: "Task",
   NO_RELATION: "None",
@@ -423,7 +422,8 @@ function useRelationPick(
 /** New task's relation: its kind, and the task it names once a kind is picked. */
 function RelationSection({ pick }: { readonly pick: RelationPick }) {
   return (
-    <ListSection title={WORDS.TASK_RELATION}>
+    // Note that the section has no header, since its first row already names it, as a system form's single-purpose group stands.
+    <ListSection>
       <MenuPickRow
         label={WORDS.RELATION}
         options={RELATION_OPTIONS}
@@ -538,8 +538,8 @@ export function NewTaskScreen({
             testIds={TEST_IDS.NEW_TASK}
           />
           <RelationSection pick={relation} />
+          {/* Note that the section has no header, since its one row already names it, as a system form's single-row group stands. */}
           <ListSection
-            title={WORDS.REPOSITORY}
             footer={
               tree === undefined && repository.options.length === 0
                 ? WORDS.NO_REPOSITORIES
