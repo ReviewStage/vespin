@@ -75,7 +75,12 @@ import {
   pollHostPairing,
 } from "@repo/database/models/host-pairing-store";
 import { enrollOwnDevice, hostsOf, registerHost } from "@repo/database/models/host-store";
-import { DEVICE_LAUNCH_STEP, type DeviceAgentRelease } from "@repo/features/device-agent-wire";
+import {
+  DEVICE_LAUNCH_STEP,
+  type DeviceAgentRelease,
+  type DevicePlatform,
+} from "@repo/features/device-agent-wire";
+import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { HOST_RELEASE } from "@repo/features/host-release";
 import {
   HOST_PAIRING_POLL_STATUS,
@@ -206,11 +211,13 @@ const macRunnerStarted = (userId: string, agentId: string) =>
   });
 
 /**
- * The name a machine gave itself, as it is kept: on one line, with no
- * control or format character (`cleanMachineName`), as a link's words are
- * kept clean; refused as invalid where nothing is left of it. Note that a
- * member approves a pairing over this name, so a line break or a bidi
- * override in it would let a stranger's machine draw itself as theirs.
+ * The name a machine gave itself, as a pairing's start keeps it: on one
+ * line, with no control or format character but an emoji's joiners
+ * (`cleanMachineName`), as a link's words are kept clean; refused as invalid
+ * where nothing that draws is left, since a person stands at the terminal to
+ * start again. Note that a member approves a pairing over this name, so a
+ * line break or a bidi override in it would let a stranger's machine draw
+ * itself as theirs.
  */
 const keptMachineName = (name: string) =>
   Effect.gen(function* () {
@@ -221,10 +228,22 @@ const keptMachineName = (name: string) =>
     return kept;
   });
 
+/**
+ * The name a machine already joined to the account keeps on its enroll or
+ * register, cleaned as a start's is, or its platform's name where nothing
+ * that draws is left, since a refusal there would hold the machine off the
+ * account on every call with no one at a terminal to see why.
+ */
+const joinedMachineName = (name: string, platform: DevicePlatform): string => {
+  const kept = cleanMachineName(name);
+
+  return kept === "" ? DEVICE_PLATFORM_NAME[platform] : kept;
+};
+
 /** The machine an own enroll names, all of its name, platform and architecture or none; refused as invalid where it names only some. */
 const enrollingMachine = ({ name, platform, arch }: OwnDeviceEnrollRequest) => {
   if (name !== undefined && platform !== undefined && arch !== undefined) {
-    return keptMachineName(name).pipe(Effect.map((kept) => ({ name: kept, platform, arch })));
+    return Effect.succeed({ name: joinedMachineName(name, platform), platform, arch });
   }
 
   return name === undefined && platform === undefined && arch === undefined
@@ -363,7 +382,7 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
       yield* ownDevice(context, input.deviceId);
       const { userId } = context;
       const { deviceId, ...device } = input;
-      const name = yield* keptMachineName(device.name);
+      const name = joinedMachineName(device.name, device.platform);
 
       // Note that a host that restarts registers before its first beat, so the register carries its agents on as the beat does.
       const registered = yield* hostedStoreOrUnavailable(

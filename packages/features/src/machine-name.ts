@@ -12,27 +12,39 @@
  * machine by its own name.
  */
 
+/** A control character, a line break or a tab among them, which stands between words. */
+const CONTROL_CHARACTER = /\p{Cc}/gu;
+
 /**
- * What no machine's name may hold: control and format characters, a line
- * break and a bidi override among them, but for the zero-width joiner and
- * non-joiner (U+200D, U+200C), which an emoji sequence and some scripts need
- * to draw at all.
+ * A format character, which draws as nothing, a bidi override among them,
+ * but for the zero-width joiner and non-joiner (U+200D, U+200C), which an
+ * emoji sequence and some scripts need to draw at all.
  */
-const UNSHOWN_CHARACTERS = /(?![\u200C\u200D])[\p{Cc}\p{Cf}]/gu;
+const FORMAT_CHARACTER = /(?![\u200C\u200D])\p{Cf}/gu;
+
+/** The two joiners a name keeps, which draw nothing alone. */
+const JOINER = /[\u200C\u200D]/gu;
 
 /** A run of white space. */
 const WHITE_RUN = /\s+/gu;
 
 /**
  * A name a machine gave itself, as it is kept and shown: on one line, each
- * control or format character a space, each run of white space one, and
- * trimmed; empty where nothing else was left. Note that a machine chooses
- * its own name, and its pairing is approved over it, so a line break would
- * draw a facts line of its own under it and a bidi override would turn its
- * words around.
+ * control character a space, each format character but the joiners gone,
+ * each run of white space one space, and trimmed; empty where nothing that
+ * draws was left. Note that a machine chooses its own name, and its pairing
+ * is approved over it, so a line break would draw a facts line of its own
+ * under it, a bidi override would turn its words around, and a name of
+ * joiners alone would draw as nothing.
  */
 export function cleanMachineName(name: string): string {
-  return name.replace(UNSHOWN_CHARACTERS, " ").replace(WHITE_RUN, " ").trim();
+  const kept = name
+    .replace(FORMAT_CHARACTER, "")
+    .replace(CONTROL_CHARACTER, " ")
+    .replace(WHITE_RUN, " ")
+    .trim();
+
+  return kept.replace(JOINER, "").trim() === "" ? "" : kept;
 }
 
 /** What the machine the desktop app runs on is called. */

@@ -829,7 +829,7 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
 
   // Note that the regression this catches is a name kept as the box sent it, whose line break draws a facts line of a stranger's own under it where a member approves its pairing, or whose bidi override turns its words around.
   it.effect(
-    "a machine's name is kept on one line with no control or format character but an emoji's joiner, from its start and its register, and a name with nothing else is refused",
+    "a machine's name is kept on one line with no control or format character, from its start and its register; a start with nothing else is refused, and a register is named for its platform",
     () =>
       Effect.gen(function* () {
         const owner = yield* account();
@@ -858,14 +858,27 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
         );
 
         const listed = yield* answerOf(request(owner, PATH.HOSTS));
-        const joined = yield* answerOf(startPairing({ name: "Dean's 👨\u200D💻 Mac" }));
-        const joinedCode: string = joined.body.userCode;
-        const joinedRead = yield* byCode(owner, PATH.PAIRING, joinedCode);
+
+        // Note that a joined machine whose name keeps nothing that draws is named for its platform, never refused, since no one stands at its terminal.
+        const blankRegister = yield* statusOf(
+          request(secret, PATH.DEVICES, {
+            version: HOST_VERSION.FLOOR,
+            body: {
+              ...registered(deviceId),
+              name: "\u200D\t",
+              platform: DEVICE_PLATFORM.LINUX,
+              home: "/srv/luke",
+            },
+          }),
+        );
+
+        const relisted = yield* answerOf(request(owner, PATH.HOSTS));
         const blank = yield* statusOf(startPairing({ name: "\u202E\n\t" }));
 
         assert.equal(read.body.name, "Dean's MacBook Pro macOS · arm64 · 192.168.1.23");
         assert.equal(listed.body.hosts[0]?.name, "fra-01 box");
-        assert.equal(joinedRead.body.name, "Dean's 👨\u200D💻 Mac", "an emoji's joiner stays");
+        assert.equal(blankRegister, HOSTED_HTTP_STATUS.OK);
+        assert.equal(relisted.body.hosts[0]?.name, "Linux server");
         assert.equal(blank, HOSTED_HTTP_STATUS.BAD_REQUEST);
       }),
   );
