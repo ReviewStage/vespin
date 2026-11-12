@@ -1,15 +1,16 @@
-import { type ReactNode, useMemo } from "react";
 import {
   DRAFT_KIND,
   DRAFT_MARK,
   DRAFT_RUN,
+  DRAFT_WORDS,
   type DraftCopy,
   type DraftKind,
   type DraftMark,
   type DraftRun,
   draftCopy,
   readDraft,
-} from "../../draft-text.js";
+} from "@repo/features/draft-text";
+import { type ReactNode, useMemo } from "react";
 import { DraftIcon, MailIcon } from "../../icons/lucide-glyphs.js";
 import { MARK_PROVIDER, ProviderMark } from "../../marks/provider-mark.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
@@ -35,17 +36,13 @@ import { PROSE_CLASS } from "../prose/prose.js";
  * is pasted into a field of its own.
  *
  * The header's Copy puts the body on the clipboard as rich text, its HTML
- * and its plain words together (`@repo/ui/draft-text`'s `draftCopy`),
+ * and its plain words together (`@repo/features/draft-text`'s `draftCopy`),
  * through the caller's act (`copy`), so it pastes into Slack or Mail with
  * its links and bold; the subject's copies its words alone (`copyText`).
  */
 
 /** What each draft's header says it is. */
-const TITLE = {
-  [DRAFT_KIND.SLACK]: "Slack message",
-  [DRAFT_KIND.EMAIL]: "Email",
-  [DRAFT_KIND.DRAFT]: "Draft",
-} as const satisfies Record<DraftKind, string>;
+const TITLE = DRAFT_WORDS.TITLE;
 
 /** The glyph each draft's header leads with: where it goes. */
 const GLYPH = {
@@ -55,10 +52,7 @@ const GLYPH = {
 } as const satisfies Record<DraftKind, () => React.JSX.Element>;
 
 /** What each Copy copies, as "Copy message" and "Copy subject". */
-const COPY_WHAT = {
-  BODY: "message",
-  SUBJECT: "subject",
-} as const;
+const COPY_WHAT = DRAFT_WORDS.COPY_WHAT;
 
 /** The element each Slack mark is drawn as. */
 const MARK_ELEMENT = {
@@ -69,7 +63,7 @@ const MARK_ELEMENT = {
 } as const satisfies Record<DraftMark, keyof React.JSX.IntrinsicElements>;
 
 /** The word a subject's row leads with. */
-const SUBJECT_LABEL = "Subject";
+const SUBJECT_LABEL = DRAFT_WORDS.SUBJECT;
 
 /** Runs drawn as their marks, links, and words. */
 function Runs({

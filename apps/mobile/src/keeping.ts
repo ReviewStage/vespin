@@ -2,7 +2,7 @@
  * keeping.ts -- what the app does with a picture, a recording, a file, or a message's words that a long press or the full-screen viewer's share button asks for: copies it to the system's pasteboard, saves it to Photos, or opens the system's share sheet on it, buzzing as a copy or a save goes and saying in the failure notice what did not.
  *
  * The desktop and the web copy and save through the window's act port
- * (`WINDOW_COPY_IMAGE`, `WINDOW_SAVE_FILE`); the phone has the system's
+ * (`WINDOW_COPY_IMAGE`, `WINDOW_COPY_RICH`, `WINDOW_SAVE_FILE`); the phone has the system's
  * own pasteboard, Photos, and share sheet, so it answers them here, as it
  * copies a link through `expo-clipboard`. A picture is held as its
  * `data:` address, so it is written under the app's caches before Photos
@@ -10,11 +10,13 @@
  * file is already the file the app wrote (`cached-media.ts`). Photos is
  * asked for add-only access, once, the first time something is saved, and
  * a refusal says where it is allowed again rather than offering Try again.
+ * A draft's Copy message puts its body on the pasteboard as rich text.
  * Note that these do not go through `useWrite`, since nothing here reaches
  * the service: a copy that fails while the phone is offline failed on the
  * phone, and says so rather than the offline hint.
  */
 
+import type { DraftCopy } from "@repo/features/draft-text";
 import {
   BUZZ,
   buzz,
@@ -27,7 +29,7 @@ import {
   NOTICE_KIND,
   useFailureNotices,
 } from "@repo/ui-native";
-import { setImageAsync, setStringAsync } from "expo-clipboard";
+import { StringFormat, setImageAsync, setStringAsync } from "expo-clipboard";
 import { randomUUID } from "expo-crypto";
 import { File } from "expo-file-system";
 import { Asset, requestPermissionsAsync } from "expo-media-library";
@@ -93,6 +95,21 @@ async function copied(kept: Kept): Promise<void> {
   await setStringAsync(await new File(kept.source).text());
 }
 
+/**
+ * Copies a draft's body as rich text: the system reads its HTML into the
+ * pasteboard's rich text, HTML, and plain words at once (expo-clipboard's
+ * HTML input), as the desktop writes HTML and plain words together. Note
+ * that the words are set in the system's face, since HTML read with no face
+ * of its own pastes into Mail in Times; and that the plain words are the
+ * system's reading of the HTML, each link by its label alone, since one
+ * item cannot hold words of our own beside it without native code.
+ */
+async function copiedRich(copy: DraftCopy): Promise<void> {
+  await setStringAsync(`<span style="font-family: -apple-system, sans-serif">${copy.html}</span>`, {
+    inputFormat: StringFormat.HTML,
+  });
+}
+
 /** Saves a picture or a recording to Photos, asking for add-only access the first time. */
 async function savedToPhotos(kept: Kept): Promise<void> {
   const access = await requestPermissionsAsync(true);
@@ -146,6 +163,8 @@ export function useKeeping(): Keeping {
         run(() => KEEP_WORK[act](kept), KEEP_FAILED[act], act !== KEEP_ACT.SHARE),
       copyWords: (words) =>
         run(() => setStringAsync(words).then(() => undefined), KEEP_FAILED[KEEP_ACT.COPY], true),
+      copyRich: (copy) =>
+        run(() => copiedRich(copy).then(() => undefined), KEEP_FAILED[KEEP_ACT.COPY], true),
     };
   }, [notices]);
 }
