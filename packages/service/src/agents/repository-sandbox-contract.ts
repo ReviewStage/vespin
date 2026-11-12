@@ -41,5 +41,9 @@ export const REPOSITORY_SANDBOX_CONTRACT = {
     FOLDER: "APP_CHECKOUT_FOLDER",
     /** The folders a workspace drive keeps, one `owner/name` a line; its presence is what makes a run the drive's prune. */
     KEEP: "APP_KEEP_FOLDERS",
+    /** A workspace drive's batch: one line per repository, its folder, branch, and clone address. */
+    SYNC_LIST: "APP_SYNC_LIST",
+    /** The script that syncs one repository of a batch, which the batch runs for each line. */
+    SYNC_ONE: "APP_SYNC_ONE",
   },
 } as const;

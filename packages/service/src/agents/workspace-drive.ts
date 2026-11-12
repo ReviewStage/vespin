@@ -22,12 +22,14 @@
  * (`workspaceDriveFillsHandler`), which resumes the same sandbox; a step
  * that failed comes again. The first step runs where the fill was asked.
  *
- * A fill lists the repositories as they stand now and, one after another,
- * brings each to its default branch in its folder, fetched where it stands
- * and cloned where it does not (`syncWorkspaceRepository`), on a read token
- * for that repository alone at the firewall for the run, its installation's
- * or its adder's own. No dependency is installed on it. A repository that
- * fails is logged and the next one goes on, so one broken repository never leaves the rest unfilled. Then
+ * A fill lists the repositories as they stand now and, a batch of
+ * `WORKSPACE_DRIVE_FILL.BATCH` at a time, brings each to its default branch
+ * in its folder, fetched where it stands and cloned where it does not
+ * (`syncedWorkspaceRepositories`), several at once in one run, on a read
+ * token for each repository alone, its installation's or its adder's own,
+ * every token of the batch at the firewall for the run. No dependency is
+ * installed on it. A repository that fails is reported and the rest go on,
+ * so one broken repository never leaves the rest unfilled. Then
  * every folder of a repository no longer listed is deleted
  * (`prunedWorkspaceFolders`), so a disconnected repository leaves the drive;
  * a listing that failed fills nothing, so nothing is deleted on a GitHub
@@ -104,7 +106,7 @@ import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
 import {
   prunedWorkspaceFolders,
   type RepositorySandbox,
-  syncWorkspaceRepository,
+  syncedWorkspaceRepositories,
 } from "./repository-shell.js";
 import { WORKSPACE_DRIVE_FILL } from "./workspace-drive-fill-bounds.js";
 
@@ -269,28 +271,63 @@ const heldRepositories = (workspace: BaseDriveWorkspace) =>
     return [...installed, ...onTokens];
   });
 
-/** One repository brought to its default branch in its folder, on a read token minted for it now, nothing where the workspace no longer reaches it. */
-const heldOne = (sandbox: RepositorySandbox, workspaceId: string, held: HeldRepository) =>
+/** A repository's sync failure reported and passed by; an interruption, the function's own deadline, still ends the step. */
+const reportedFailed = (workspaceId: string) => (cause: Cause.Cause<unknown>) =>
+  Cause.hasInterruptsOnly(cause)
+    ? Effect.failCause(cause)
+    : reportedBroken(workspaceId, DRIVE_BROKEN.REPOSITORY_FAILED, causeKind(cause));
+
+/**
+ * A batch of repositories each brought to its default branch in its folder,
+ * in one run, on read tokens minted for them now, all at once; one the
+ * workspace no longer reaches is left out, and each that failed, to mint or
+ * to sync, is reported and passed by.
+ */
+const heldBatch = (
+  sandbox: RepositorySandbox,
+  workspaceId: string,
+  held: readonly HeldRepository[],
+) =>
   Effect.gen(function* () {
-    const reached = yield* (yield* GitHubApp).repositoryReadToken(
-      workspaceId,
-      held.fullName,
-      held.member,
+    const app = yield* GitHubApp;
+
+    const reached = yield* Effect.forEach(
+      held,
+      (each) =>
+        app
+          .repositoryReadToken(workspaceId, each.fullName, each.member)
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.as(reportedFailed(workspaceId)(cause), Option.none()),
+            ),
+          ),
+      { concurrency: "unbounded" },
     );
 
-    if (Option.isNone(reached)) return;
-    const { repository, token, access } = reached.value;
-    yield* syncWorkspaceRepository(
-      sandbox,
-      {
-        fullName: repository.fullName,
-        branch: repository.defaultBranch,
-        folder: workspaceFolderOf(repository.fullName),
-      },
-      token,
-      access,
+    const batch = reached.flatMap((each) =>
+      Option.isNone(each)
+        ? []
+        : [
+            {
+              fullName: each.value.repository.fullName,
+              branch: each.value.repository.defaultBranch,
+              folder: workspaceFolderOf(each.value.repository.fullName),
+              token: each.value.token,
+              access: each.value.access,
+            },
+          ],
     );
-  });
+
+    if (batch.length === 0) return;
+    const failed = yield* syncedWorkspaceRepositories(sandbox, batch);
+
+    // Note that the folder is left out of the report, since a repository's name is the workspace's own.
+    yield* Effect.forEach(
+      failed,
+      () => reportedBroken(workspaceId, DRIVE_BROKEN.REPOSITORY_FAILED, "the sync failed"),
+      { discard: true },
+    );
+  }).pipe(Effect.catchCause(reportedFailed(workspaceId)));
 
 /** What a fill's steps run against: the store, GitHub, and the sandboxes. */
 export type DriveFillServices = DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox;
@@ -405,23 +442,17 @@ const filledFrom = (
         Effect.forkScoped,
       );
 
-      for (const [offset, held] of repositories.slice(from).entries()) {
+      for (let at = from; at < repositories.length; at += WORKSPACE_DRIVE_FILL.BATCH) {
         if ((yield* Clock.currentTimeMillis) >= deadline) {
-          yield* (yield* DriveFillSteps).publish({ run, image, workspace, from: from + offset });
+          yield* (yield* DriveFillSteps).publish({ run, image, workspace, from: at });
 
           return false;
         }
 
-        yield* heldOne(sandbox, workspace.workspaceId, held).pipe(
-          Effect.catchCause((cause) =>
-            Cause.hasInterruptsOnly(cause)
-              ? Effect.failCause(cause)
-              : reportedBroken(
-                  workspace.workspaceId,
-                  DRIVE_BROKEN.REPOSITORY_FAILED,
-                  causeKind(cause),
-                ),
-          ),
+        yield* heldBatch(
+          sandbox,
+          workspace.workspaceId,
+          repositories.slice(at, at + WORKSPACE_DRIVE_FILL.BATCH),
         );
       }
 
