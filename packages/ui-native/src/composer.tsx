@@ -52,13 +52,19 @@ const PRESS_FRAME = [
 /** The mark inside the round button, centered in the circle's own size, so the system's circle draws at Send's size around it. */
 const ROUND_MARK = [frame({ width: SEND_SIZE - 12, height: SEND_SIZE - 12 })];
 
-/** The round button's look: the system's prominent circle in the ink, its mark in the ground, inside the composer's press frame. */
-function roundModifiers(colors: ReturnType<typeof useColors>) {
+/**
+ * The round button's look: the system's prominent circle in the ink, its mark
+ * in the ground, inside the composer's press frame. Note that a disabled
+ * circle is the system's faint gray, so its mark turns muted rather than
+ * staying in the ground, which drew a white arrow on a near-white disc that
+ * vanished in light mode.
+ */
+function roundModifiers(colors: ReturnType<typeof useColors>, enabled = true) {
   return [
     buttonStyle("borderedProminent"),
     SwiftModifiers.buttonBorderShape("circle"),
     tint(colors.TEXT),
-    foregroundStyle(colors.GROUND),
+    foregroundStyle(enabled ? colors.GROUND : colors.TEXT_MUTED),
     ...PRESS_FRAME,
     hoverEffect(HOVER_EFFECT.HIGHLIGHT),
   ];
@@ -180,12 +186,14 @@ function SendButton({
     );
   }
 
+  const sendable = !empty && onSend !== undefined;
+
   return (
     <Button
       onPress={() => onSend?.()}
       modifiers={[
-        ...roundModifiers(colors),
-        disabled(empty || onSend === undefined),
+        ...roundModifiers(colors, sendable),
+        disabled(!sendable),
         accessibilityLabel("Send"),
       ]}
     >
