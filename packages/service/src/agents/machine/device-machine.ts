@@ -763,8 +763,10 @@ function deviceMachineOver(
     // Note that the file goes in a files line of its own, which its Mac settles once it wrote it, and the
     // write waits on that as a read waits on its answer, so the agent never reads before the file stands; a
     // line the Mac has not taken by then is withdrawn, so a Mac back later writes nothing no one waits on.
-    // It is queued outside the runner's lease, since a file under a path of its own changes nothing a line
-    // around it does.
+    // A host settles the line 0 where it wrote the file and 1 where it did not; one from before that settles
+    // every files line with no exit, which says nothing either way, so the path is answered and the agent's
+    // own read finds whether it stands. It is queued outside the runner's lease, since a file under a path
+    // of its own changes nothing a line around it does.
     writeFile: (session, file) =>
       Effect.gen(function* () {
         const pin = yield* pinOfSession(session);
@@ -795,6 +797,9 @@ function deviceMachineOver(
         );
 
         if (Option.isNone(settled)) return yield* unavailable();
+        const exit = settled.value.read;
+
+        if (exit !== 0 && exit !== COMMAND_GONE) return yield* unavailable();
 
         return path;
       }),

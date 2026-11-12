@@ -475,7 +475,7 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
     );
 
     it.effect(
-      "a file written by session goes in a files line under the agent's attachments folder its Mac registered, and the write answers its path once the Mac settled the line",
+      "a file written by session goes in a files line under the agent's attachments folder its Mac registered, and the write answers its path once the Mac settled the line as written, and is unavailable where the Mac settled it as not",
       () =>
         Effect.gen(function* () {
           const { userId, deviceId, agent, session } = yield* openLocalAgent();
@@ -490,12 +490,27 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           yield* claimedDeviceAgentLine(userId, deviceId, line.id);
           yield* TestClock.adjust("1 second");
           const waiting = writing.pollUnsafe();
-          yield* settledDeviceAgentLine(userId, deviceId, line.id);
+          yield* settledDeviceAgentLine(userId, deviceId, line.id, 0);
           yield* TestClock.adjust("1 second");
           const path = `${DEVICE_LAYOUT.attachmentsFolder}/${agent.id}/description/spec.pdf`;
+          const written = yield* Fiber.join(writing);
+
+          const failing = yield* Effect.forkChild(
+            machine.writeFile(session, { name: "description/other.pdf", contents }),
+          );
+
+          const unwritten = yield* untilQueued(userId, deviceId);
+          yield* claimedDeviceAgentLine(userId, deviceId, unwritten.id);
+          yield* settledDeviceAgentLine(userId, deviceId, unwritten.id, 1);
+          yield* TestClock.adjust("1 second");
+          const failed = yield* Effect.flip(Fiber.join(failing));
 
           assert.equal(waiting, undefined, "the write waits for the Mac to settle its line");
-          assert.equal(yield* Fiber.join(writing), path);
+          assert.equal(written, path);
+          assert.ok(
+            failed instanceof SandboxUnavailable,
+            "a file the Mac did not write is no path",
+          );
           assert.equal(line.kind, DEVICE_AGENT_LINE_KIND.FILES);
           assert.deepEqual(Schema.decodeUnknownSync(deviceAgentFilesPayloadSchema)(line.payload), {
             files: [{ path, mode: 0o644, contents }],
