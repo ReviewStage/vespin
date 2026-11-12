@@ -55,6 +55,8 @@ interface Played {
 let root: Root | undefined;
 let played: Played[] = [];
 
+type Motion = { onfinish: (() => void) | null; cancel: () => void };
+
 beforeEach(() => {
   played = [];
   Object.defineProperty(Element.prototype, "animate", {
@@ -62,7 +64,7 @@ beforeEach(() => {
     value(this: Element, keyframes: Keyframe[], timing: KeyframeAnimationOptions) {
       let canceled = false;
 
-      const motion: { onfinish: (() => void) | null; cancel: () => void } = {
+      const motion: Motion = {
         onfinish: null,
         cancel: () => {
           canceled = true;

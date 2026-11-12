@@ -79,6 +79,8 @@ function topOf(element: Element): number {
   return topOf(parent) + before.filter(laidOut).reduce((sum, each) => sum + heightOf(each), 0);
 }
 
+type Motion = { onfinish: (() => void) | null; cancel: () => void };
+
 beforeEach(() => {
   played = [];
 
@@ -89,7 +91,7 @@ beforeEach(() => {
   Object.defineProperty(Element.prototype, "animate", {
     configurable: true,
     value(this: Element, keyframes: Keyframe[], timing: KeyframeAnimationOptions) {
-      const motion: { onfinish: (() => void) | null; cancel: () => void } = {
+      const motion: Motion = {
         onfinish: null,
         cancel: () => undefined,
       };

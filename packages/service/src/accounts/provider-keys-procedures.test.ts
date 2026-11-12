@@ -376,6 +376,8 @@ const DEVICE_SECRETS = [
   DEVICE_TOKENS.id_token,
 ];
 
+type State = { codePollStatus: number };
+
 /**
  * OpenAI's device-code endpoints as Codex reaches them: a user code issued
  * with its interval as a string, a code poll answering whatever the test
@@ -384,7 +386,7 @@ const DEVICE_SECRETS = [
  * beside them.
  */
 function fakeDeviceAuth() {
-  const state: { codePollStatus: number } = { codePollStatus: HTTP_STATUS.FORBIDDEN };
+  const state: State = { codePollStatus: HTTP_STATUS.FORBIDDEN };
 
   const auth = (request: RecordedRequest): Response => {
     if (request.url === CODEX_DEVICE_OAUTH.USER_CODE_URL) {

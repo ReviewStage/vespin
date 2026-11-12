@@ -497,6 +497,8 @@ test("the Filter narrows the List to the values chosen, several in one visit, a 
   assert.equal(again.querySelector("[data-dot='true']"), null);
 });
 
+type Motion = { onfinish: (() => void) | null; cancel: () => void };
+
 /** The list motion's tokens, as the app's sheets set them, and an engine that records each motion rather than playing it; answers what was played and a way to take both away. */
 function recordMotions() {
   const tokens = {
@@ -516,7 +518,7 @@ function recordMotions() {
   Object.defineProperty(Element.prototype, "animate", {
     configurable: true,
     value(this: Element, keyframes: Keyframe[]) {
-      const motion: { onfinish: (() => void) | null; cancel: () => void } = {
+      const motion: Motion = {
         onfinish: null,
         cancel: () => undefined,
       };

@@ -780,11 +780,13 @@ export const launchRead = <Config>(
     lines: lines.map(readInputLine),
   }));
 
+type StdinRead<Config> = { readonly config: Config; readonly lines: readonly InputLine[] };
+
 /** A launch's stdin as its runner reads it: its config as `readConfig` reads it, then each line written after it. */
 export function stdinRead<Config>(
   command: FakeCommand | undefined,
   readConfig: (input: unknown) => Config,
-): { readonly config: Config; readonly lines: readonly InputLine[] } {
+): StdinRead<Config> {
   const [config, ...lines] = linesOf(command);
 
   return { config: readConfig(config), lines: lines.map(readInputLine) };

@@ -55,6 +55,8 @@ const NOTES: AgentAttachment = { name: "notes.txt", mediaType: "text/plain", dat
 let root: Root | undefined;
 let played: Played[] = [];
 
+type Motion = { onfinish: (() => void) | null; cancel: () => void };
+
 beforeEach(() => {
   played = [];
 
@@ -65,7 +67,7 @@ beforeEach(() => {
   Object.defineProperty(Element.prototype, "animate", {
     configurable: true,
     value(this: Element, keyframes: Keyframe[]) {
-      const motion: { onfinish: (() => void) | null; cancel: () => void } = {
+      const motion: Motion = {
         onfinish: null,
         cancel: () => undefined,
       };
