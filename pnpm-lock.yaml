@@ -126,6 +126,9 @@ patchedDependencies:
   '@sentry/browser@11.8.0':
     hash: af32b6645b074a081cae42956870b6c779240a52fac319191531b3724c5be619
     path: patches/@sentry__browser@11.8.0.patch
+  '@sentry/react-native@8.28.0':
+    hash: 36b8f59785f409f30a3092710dfe5ee36af61e2a35e82694f6ba3bbb77052a48
+    path: patches/@sentry__react-native@8.28.0.patch
   '@tiptap/extension-list@3.33.1':
     hash: bb7489824f41b416b467a2ad6911a14b3c76d71068ee395dd0842a6a59b5d456
     path: patches/@tiptap__extension-list@3.33.1.patch
@@ -480,7 +483,7 @@ importers:
         version: link:../../packages/ui-native
       '@sentry/react-native':
         specifier: 8.28.0
-        version: 8.28.0(@babel/core@7.29.7)(@expo/config-types@58.0.3)(@expo/config@58.0.11)(@expo/env@2.5.4)(dotenv@17.4.2)(expo-router@58.0.30)(expo@58.0.23)(metro-config@0.87.3)(metro-resolver@0.87.3)(metro@0.87.3)(open@8.4.2)(promise@8.3.0)(react-native@0.88.1)(react@19.3.0)(rollup@4.62.4)
+        version: 8.28.0(patch_hash=36b8f59785f409f30a3092710dfe5ee36af61e2a35e82694f6ba3bbb77052a48)(@babel/core@7.29.7)(@expo/config-types@58.0.3)(@expo/config@58.0.11)(@expo/env@2.5.4)(dotenv@17.4.2)(expo-router@58.0.30)(expo@58.0.23)(metro-config@0.87.3)(metro-resolver@0.87.3)(metro@0.87.3)(open@8.4.2)(promise@8.3.0)(react-native@0.88.1)(react@19.3.0)(rollup@4.62.4)
       '@tanstack/react-query':
         specifier: 5.106.1
         version: 5.106.1(@types/react@19.3.0)(react@19.3.0)
@@ -13550,7 +13553,7 @@ snapshots:
       - rollup
       - webpack
 
-  '@sentry/react-native@8.28.0(@babel/core@7.29.7)(@expo/config-types@58.0.3)(@expo/config@58.0.11)(@expo/env@2.5.4)(dotenv@17.4.2)(expo-router@58.0.30)(expo@58.0.23)(metro-config@0.87.3)(metro-resolver@0.87.3)(metro@0.87.3)(open@8.4.2)(promise@8.3.0)(react-native@0.88.1)(react@19.3.0)(rollup@4.62.4)':
+  '@sentry/react-native@8.28.0(patch_hash=36b8f59785f409f30a3092710dfe5ee36af61e2a35e82694f6ba3bbb77052a48)(@babel/core@7.29.7)(@expo/config-types@58.0.3)(@expo/config@58.0.11)(@expo/env@2.5.4)(dotenv@17.4.2)(expo-router@58.0.30)(expo@58.0.23)(metro-config@0.87.3)(metro-resolver@0.87.3)(metro@0.87.3)(open@8.4.2)(promise@8.3.0)(react-native@0.88.1)(react@19.3.0)(rollup@4.62.4)':
     dependencies:
       '@sentry/browser': 10.75.2
       '@sentry/bundler-plugins': 10.75.2(rollup@4.62.4)
