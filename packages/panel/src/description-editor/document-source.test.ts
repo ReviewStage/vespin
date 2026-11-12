@@ -404,14 +404,14 @@ test("a tight list switching between bullets and task items is handed over untou
 
 test("inline code inside a link, bold, or italics opens valid and keeps them when its line is edited", () => {
   const text =
-    "See [`store.ts`](https://x.dev/store.ts), run **`pnpm i`**, then *`dev`*, `a`**`b`**.\n";
+    "See [`store.ts`](https://x.dev/store.ts), run **`pnpm i`**, then *`dev`*, `a`**`b`**`c`.\n";
 
   const { editor, handedOver } = opened(text);
 
   editor.state.doc.check();
   typedAtEnd(editor, " Done.");
 
-  assert.equal(handedOver(), text.replace("*.", "*. Done."));
+  assert.equal(handedOver(), text.replace(".\n", ". Done.\n"));
 });
 
 test("blocks written with no blank line between them stay so when another block is edited", () => {
