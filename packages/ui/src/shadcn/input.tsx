@@ -14,7 +14,7 @@ import { cn } from "../cn.js";
  * every control wears while it cannot be used (`opacity-disabled`). None of
  * shadcn's outline or ring utilities, because the window's own focus ring
  * (`@repo/panel`'s base.css) draws the keyboard's ring and a utility would
- * outrank it; no `file:` utilities, as no field
+ * outrank it (`vespin/no-shadcn-focus-ring`); no `file:` utilities, as no field
  * here takes a file; and no `dark:` grounds, as the palette's roles carry
  * both themes. `INPUT_CONTROL` is the control's own size and ground,
  * exported so a field drawn at another size (`components/text-field`)

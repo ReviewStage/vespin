@@ -16,7 +16,7 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
  * cloud-environment-page.tsx -- Settings › Cloud environment: what the workspace's cloud agents start with, its variables and then its scripts, on one page since both exist only for those agents.
  *
  * Variables comes first, Add variable on its heading, then Install
- * software, Setup scripts, and Archive scripts, each section reading and
+ * software and Setup scripts, each section reading and
  * saving its own as it did on a page of its own.
  */
 

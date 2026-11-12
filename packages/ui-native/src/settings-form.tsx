@@ -40,7 +40,7 @@ import { Avatar } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
-import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-switcher.js";
+import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
 
 /** An account's face in its row, larger than a list's. */
 const ACCOUNT_FACE_SIZE = 36;
@@ -374,6 +374,8 @@ type ActionRowProps = {
   readonly destructive?: boolean | undefined;
   /** Whether it takes no press, such as while another act on the page is out. */
   readonly disabled?: boolean | undefined;
+  /** What the row is heard as, where its words alone would be heard as another row's, such as a workspace's Settings… beside the account's; its words where none is given. */
+  readonly heard?: string | undefined;
   readonly onPress: () => void;
 };
 
@@ -383,6 +385,7 @@ export function ActionRow({
   symbol,
   destructive = false,
   disabled: off = false,
+  heard = label,
   onPress,
 }: ActionRowProps) {
   const colors = useColors();
@@ -392,7 +395,7 @@ export function ActionRow({
       {...actContent(label, symbol)}
       role={destructive ? "destructive" : "default"}
       onPress={onPress}
-      modifiers={[listRowBackground(colors.SURFACE), disabled(off)]}
+      modifiers={[accessibilityLabel(heard), listRowBackground(colors.SURFACE), disabled(off)]}
     />
   );
 }

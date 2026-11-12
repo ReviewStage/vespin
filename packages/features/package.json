@@ -248,6 +248,7 @@
     "./task-list-model": "./src/task-list-model.js",
     "./task-relation-model": "./src/task-relation-model.js",
     "./task-sections-model": "./src/task-sections-model.js",
+    "./task-followers-model": "./src/task-followers-model.js",
     "./task-standing-words": "./src/task-standing-words.js",
     "./task-tree-model": "./src/task-tree-model.js",
     "./attachment-model": "./src/attachment-model.js",

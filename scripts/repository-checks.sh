@@ -321,7 +321,7 @@ node --input-type=module -e '
   const root = process.argv[1];
   const { TEST_TASK: WHOLE } = await import(path.join(root, "scripts/lib/turbo.mjs"));
   const configured = [];
-  for await (const found of glob(["apps/*/vitest.config.ts", "packages/*/vitest.config.ts", "tools/*/vitest.config.ts"], { cwd: root })) {
+  for await (const found of glob(["apps/*/vitest.config.ts", "packages/*/vitest.config.ts", "tools/*/vitest.config.ts", "tools/oxlint/*/vitest.config.ts"], { cwd: root })) {
     configured.push(path.dirname(found).split(path.sep).join("/"));
   }
   const rootConfig = await readFile(path.join(root, "vitest.config.ts"), "utf8");
@@ -432,6 +432,16 @@ if [[ -n "$node_reaching_effect" ]]; then
         "$node_reaching_effect" >&2
     exit 1
 fi
+
+# The rules about the repository's state a lint rule cannot see: the agents'
+# pins against what is installed, the probes' committed fixtures
+# against their own leak guards, the lint rules' baselines against the files
+# they name, the catalog against `@repo/ui`'s components, the panel's launch
+# bundle, and the site's page heads and Tailwind entries. Each was a test that
+# read the repository, which root AGENTS.md's "Testing" leaves to a check
+# (`tools/oxlint/vespin/repository-guard.ts`); several load the module whose
+# constants they compare, so they run under the tsx loader.
+(cd "$APP_REPO_ROOT" && node --import tsx tools/oxlint/vespin/repository-guard.ts)
 
 # The repository is written in American English (AGENTS.md's "Code style"):
 # prose, comments, identifiers, user-facing words, and file names. A British

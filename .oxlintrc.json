@@ -13,7 +13,8 @@
     ".roo/**",
     ".windsurf/**",
     "packages/agent-runner/src/codex-protocol/**",
-    "tools/oxlint/anti-slop/**"
+    "tools/oxlint/anti-slop/**",
+    "tools/oxlint/vespin/**"
   ],
   "jsPlugins": [
     {
@@ -23,6 +24,10 @@
     {
       "name": "anti-slop-effect",
       "specifier": "./tools/oxlint/anti-slop/effect/index.ts"
+    },
+    {
+      "name": "vespin",
+      "specifier": "./tools/oxlint/vespin/index.ts"
     }
   ],
   "rules": {
@@ -63,7 +68,39 @@
     "anti-slop-effect/no-manual-tagged-construction": "error",
     "anti-slop-effect/no-service-constructor-imports": "error",
     "anti-slop-effect/prefer-effect-match": "error",
-    "anti-slop-effect/no-manual-tag-comparison": "error"
+    "anti-slop-effect/no-manual-tag-comparison": "error",
+    "vespin/agent-box-reads-agent": "error",
+    "vespin/archive-through-agent-change": "error",
+    "vespin/ask-beside-screen": "error",
+    "vespin/async-press-needs-busy": "error",
+    "vespin/enforce-delete-with-where": "error",
+    "vespin/enforce-update-with-where": "error",
+    "vespin/no-browser-form-validation": "error",
+    "vespin/no-direct-view-storage": "error",
+    "vespin/no-document-press-listener": "error",
+    "vespin/no-focused-or-skipped-test": "error",
+    "vespin/no-follow-outside-host-read": "error",
+    "vespin/no-hand-written-arrow-keys": "error",
+    "vespin/no-hand-written-live-region": "error",
+    "vespin/no-lucide-outside-door": "error",
+    "vespin/no-node-test": "error",
+    "vespin/no-open-page-from-button": "error",
+    "vespin/no-placeholder-ellipsis": "error",
+    "vespin/no-product-name": "error",
+    "vespin/no-raw-heading-outside-ui": "error",
+    "vespin/no-raw-press-outside-ui": "error",
+    "vespin/no-raw-press-outside-ui-native": "error",
+    "vespin/no-reduced-motion-query": "error",
+    "vespin/no-shadcn-focus-ring": "error",
+    "vespin/no-shortcut-flag": "error",
+    "vespin/no-source-read-in-test": "error",
+    "vespin/one-message-box": "error",
+    "vespin/retired": "error",
+    "vespin/row-behavior-in-row": "error",
+    "vespin/sandbox-delete-in-one-place": "error",
+    "vespin/settings-row-end": "error",
+    "vespin/settings-section-declared": "error",
+    "vespin/skeleton-through-components": "error"
   },
   "overrides": [
     {
@@ -83,6 +120,12 @@
         "react/set-state-in-effect": "off",
         "react/use-memo": "off",
         "react-hooks/exhaustive-deps": "off"
+      }
+    },
+    {
+      "files": ["**/*.test.ts", "**/*.test.mjs", "**/*.test.tsx"],
+      "rules": {
+        "vespin/enforce-delete-with-where": "off"
       }
     }
   ]

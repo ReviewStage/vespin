@@ -3,7 +3,6 @@
 import type { SfSymbol } from "./sf-symbol.js";
 import type { StatusTone } from "./tokens/colors.js";
 import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
-import { tileSymbol } from "./workspace-tile-model.js";
 
 declare const GLYPH_NAME: unique symbol;
 
@@ -34,8 +33,8 @@ const system = (name: SfSymbol): Glyph => name as Glyph;
  * symbol by `@repo/brand`, so it sizes with Dynamic Type and weighs with its
  * words as an SF Symbol does. An SF Symbol stays only where iOS draws the
  * thing its own way (Share) or where the panel draws a mark of its own rather
- * than a Lucide glyph (a task's status ring, a check box, a letter tile, a
- * face), whose drawings are SF Symbols' nearest.
+ * than a Lucide glyph (a task's status ring, a check box, a face, an MCP
+ * server, and the panel's product mark), whose drawings are SF Symbols' nearest.
  */
 export const GLYPH = {
   // Places.
@@ -48,6 +47,7 @@ export const GLYPH = {
   AUTOMATION: lucide(LUCIDE_SYMBOL.ZAP),
   ADMIN: lucide(LUCIDE_SYMBOL.SHIELD_USER),
   WORKSPACE: lucide(LUCIDE_SYMBOL.BUILDING_COMPLEX),
+  MAKE_OWNER: lucide(LUCIDE_SYMBOL.CROWN),
   // Things.
   AGENT: lucide(LUCIDE_SYMBOL.BOT),
   PAGE: lucide(LUCIDE_SYMBOL.APP_WINDOW),
@@ -162,7 +162,7 @@ export const GLYPH = {
   STOP_TURN: system("stop.fill"),
   // The panel's own marks, which no Lucide glyph draws: a task's status ring,
   // a check box and a radio, a check still running, a face and the app's,
-  // an MCP server and its tool, the apps that reach Vespin over MCP (the
+  // an MCP server and its tool, the apps that reach the service over MCP (the
   // panel's product mark), and an unassigned task.
   STATUS_BACKLOG: system("circle.dashed"),
   STATUS_TODO: system("circle"),
@@ -182,11 +182,6 @@ export const GLYPH = {
   MCP_TOOL: system("wrench.and.screwdriver"),
   MCP_CLIENTS: system("app.connected.to.app.below.fill"),
 } as const;
-
-/** A workspace's letter tile as a menu's row draws it, SF Symbols' filled square holding its letter, since a menu's row takes an image and never the tile itself. */
-export function tileGlyph(name: string): Glyph {
-  return system(tileSymbol(name));
-}
 
 const LUCIDE_SYMBOLS: ReadonlySet<string> = new Set(Object.values(LUCIDE_SYMBOL));
 

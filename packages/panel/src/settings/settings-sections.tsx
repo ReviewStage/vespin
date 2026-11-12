@@ -130,7 +130,6 @@ export const SECTION = {
   ENVIRONMENT_VARIABLES: SETTINGS_SEARCH_ROW.ENVIRONMENT_VARIABLES,
   ENVIRONMENT_INSTALL: SETTINGS_SEARCH_ROW.ENVIRONMENT_INSTALL,
   ENVIRONMENT_SETUP: SETTINGS_SEARCH_ROW.ENVIRONMENT_SETUP,
-  ENVIRONMENT_ARCHIVE: SETTINGS_SEARCH_ROW.ENVIRONMENT_ARCHIVE,
   ENVIRONMENT_RUN_ACTIONS: SETTINGS_SEARCH_ROW.ENVIRONMENT_RUN_ACTIONS,
   ADD_HOSTS: SETTINGS_SEARCH_ROW.ADD_HOSTS,
   HOSTS: SETTINGS_SEARCH_ROW.HOSTS,
@@ -146,6 +145,7 @@ export const SECTION = {
   PREFERENCES_AGENTS: "preferences-agents",
   PRIVACY: "privacy",
   NEW_AGENTS: "new-agents",
+  ALWAYS_ALLOWED: SETTINGS_SEARCH_ROW.ALWAYS_ALLOWED,
   STARTUP: "startup",
   DICTATION: "dictation",
   NOTIFICATIONS: "notifications",
@@ -221,13 +221,6 @@ const SETTINGS_SECTIONS = {
     words: `setup script repository checkout ${CLOUD_WORDS}`,
     drawn: workspaceShown,
   },
-  [SECTION.ENVIRONMENT_ARCHIVE]: {
-    found: SECTION_FOUND.HEAD,
-    page: SETTINGS_VIEW.ENVIRONMENT,
-    head: "Archive scripts",
-    words: `archive script cleanup teardown archived ${CLOUD_WORDS}`,
-    drawn: workspaceShown,
-  },
   [SECTION.ENVIRONMENT_RUN_ACTIONS]: {
     found: SECTION_FOUND.HEAD,
     page: SETTINGS_VIEW.ENVIRONMENT,
@@ -240,6 +233,14 @@ const SETTINGS_SECTIONS = {
     found: SECTION_FOUND.ROWS,
     rows: SECTION_ROWS.SCHEMA,
     head: "New agents",
+  },
+  [SECTION.ALWAYS_ALLOWED]: {
+    found: SECTION_FOUND.HEAD,
+    page: SETTINGS_VIEW.AGENTS,
+    head: "Always allowed",
+    words:
+      "always allow allowlist allowed commands permissions approval ask run without asking shell bash claude code",
+    drawn: accountDrawn,
   },
   [SECTION.ADD_HOSTS]: {
     found: SECTION_FOUND.HEAD,

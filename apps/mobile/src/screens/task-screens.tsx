@@ -96,8 +96,8 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactElement, useMemo, useState } from "react";
-import { useAgentRowActs, useFollowedAgent, useHeldAgentStep } from "../agents/use-agent.js";
-import { archiveQuestion } from "../agents/use-agent-actions.js";
+import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
+import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
@@ -1098,18 +1098,21 @@ type UseAgentArchiveAskResult = {
  * an agent, and `ask` is the system's alert that asks it, which the screen
  * stands beside its `<Screen>`, as every list's questions stand. Note that
  * the question reads where the agent stands now, as the agent page's menu
- * asks (`archiveQuestion`), because one that starts working while the alert
- * is up would otherwise be stopped and archived without a word of it.
+ * asks (`useArchiveAsk`), read afresh as it's raised, because one that
+ * starts working while the alert is up would otherwise be stopped and
+ * archived without a word of it.
  */
 export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
   const acts = useAgentRowActs();
   const [asked, setAsked] = useState<{ readonly agentId: string; readonly presented: boolean }>();
-  const agent = useFollowedAgent(asked?.agentId ?? "");
-  const question = archiveQuestion(agent !== undefined && agentStillWriting(agent.status));
+  const { question, ask: readAfresh } = useArchiveAsk(asked?.agentId ?? "");
   const letGo = () => setAsked((was) => (was === undefined ? was : { ...was, presented: false }));
 
   return {
-    archive: (agentId) => setAsked({ agentId, presented: true }),
+    archive: (agentId) =>
+      void readAfresh(agentId).then((stands) => {
+        if (stands) setAsked({ agentId, presented: true });
+      }),
     ask: (
       <ConfirmAsk
         title={question.title}

@@ -188,7 +188,8 @@ page, gives the hand on both. Every pressable component reads the one rule
 (`--ui-cursor-press` and `--ui-cursor-link` in `profiles.css`, the
 `cursor-press` and `cursor-link` utilities); a control that takes no press
 shows the plain arrow, a busy one `progress`, words the I-beam, and a resize,
-drag, or zoom its own. The hand is spelled nowhere else.
+drag, or zoom its own. The style guard's `pointer-cursor` refuses the hand
+spelled anywhere else.
 
 Every pointer action has a keyboard path and an accessible name. Tab lists use
 one tab stop and Left/Right/Home/End navigation. A control that floats over a

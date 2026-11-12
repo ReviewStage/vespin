@@ -1,4 +1,6 @@
 import {
+  AVATAR_SIZE,
+  Avatar,
   ChipPopover,
   type ChipPopoverFact,
   type MenuRow,
@@ -6,16 +8,23 @@ import {
   StatusGlyph,
   type StatusTone,
   StatusWords,
+  TEXT_ELEMENT,
+  TEXT_TONE,
+  TEXT_VARIANT,
+  Text,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
+import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**
  * chip-popovers.tsx -- a toolbar chip whose press opens a popover of facts:
  * a cloud sandbox off, booting, and running, its state on the chip's dot
- * and in the popover's Status, and one with a menu section under the facts,
- * the places to move its agent to.
+ * and in the popover's Status, one with a menu section under the facts,
+ * the places to move its agent to, and one with no title and no facts,
+ * whose rows only say, a task's followers, with rows pinned under them: a
+ * switch and Unfollow.
  */
 
 const STATES = [
@@ -78,6 +87,60 @@ function WithMoveTo(): React.JSX.Element {
   );
 }
 
+/** A follower's row: their face, their name, a muted Assignee, and a laptop where agents may use their machines. */
+function followerRow(id: string, name: string, assignee: boolean, machines: boolean): MenuRow {
+  return {
+    id,
+    label: name,
+    icon: <Avatar id={id} name={name} size={AVATAR_SIZE.INLINE} decorative />,
+    end: (
+      <>
+        {assignee ? (
+          <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+            Assignee
+          </Text>
+        ) : null}
+        {machines ? <GLYPH.DESKTOP aria-label="Agents may use their machines" /> : null}
+      </>
+    ),
+  };
+}
+
+/** A task's followers, the reader first: rows that only say, then the reader's switch and Unfollow pinned under them. */
+function Followers(): React.JSX.Element {
+  const [machines, setMachines] = useState(true);
+
+  return (
+    <ChipPopover
+      label="Followers"
+      glyph={<GLYPH.SHOW aria-hidden="true" />}
+      words="Following"
+      menu={{
+        rows: [
+          followerRow("ada", "You", true, machines),
+          followerRow("manuel", "Manuel Ruiz", false, true),
+          followerRow("charles", "Charles Lin", false, false),
+        ],
+        noMatch: "No followers",
+        foot: [
+          {
+            id: "machines",
+            label: "Let agents here use my machines",
+            icon: <GLYPH.DESKTOP aria-hidden="true" />,
+            toggle: { on: machines, onToggle: () => setMachines(!machines) },
+          },
+          {
+            id: "unfollow",
+            label: "Unfollow",
+            icon: <GLYPH.HIDE aria-hidden="true" />,
+            disabled: "You're the assignee",
+          },
+        ],
+      }}
+    />
+  );
+}
+
 function ChipPopovers(): React.JSX.Element {
   return (
     <>
@@ -99,6 +162,11 @@ function ChipPopovers(): React.JSX.Element {
       <CatalogSection id="chip-popover-menu" title="With a menu section under the facts">
         <div className="catalog-glyph-line catalog-chip-popover-stage">
           <WithMoveTo />
+        </div>
+      </CatalogSection>
+      <CatalogSection id="chip-popover-rows" title="Rows that only say, with pinned rows">
+        <div className="catalog-glyph-line catalog-chip-popover-stage">
+          <Followers />
         </div>
       </CatalogSection>
     </>

@@ -5,13 +5,12 @@ import { looseTaskSectionIconSchema, taskSectionIconSchema } from "./task-sectio
 import { workspaceIdSchema } from "./task-wire.js";
 
 /**
- * workspace-sandbox-setup-wire.ts -- a workspace's cloud sandbox setup, as Settings reads and saves it: its install script, each repository's setup and archive scripts, and each repository's run actions.
+ * workspace-sandbox-setup-wire.ts -- a workspace's cloud sandbox setup, as Settings reads and saves it: its install script, each repository's setup script, and each repository's run actions.
  *
  * Kept together, in the workspace's settings: the install
  * script runs once per build of each of the workspace's repositories' base
  * snapshots, a repository's setup script runs once in each new agent
- * sandbox of it, after its checkout, and its archive script once in each
- * just before the sandbox is deleted for good, as its agent is archived.
+ * sandbox of it, after its checkout.
  * `GET /api/workspaces/sandbox-setup` answers them all to any member;
  * `PUT /api/workspaces/sandbox-setup/install` and
  * `PUT /api/workspaces/sandbox-setup/repository` save one, each to an owner
@@ -41,7 +40,12 @@ export const WORKSPACE_SANDBOX_SETUP_BOUNDS = {
   MAX_RUN_ACTION_COMMAND_CHARS: 4 * 1024,
 } as const;
 
-/** Which of a repository's scripts a row holds: the one its new sandboxes run after their checkout, or the one each runs just before it is deleted for good. */
+/**
+ * Which of a repository's scripts a row holds: the one its new sandboxes run
+ * after their checkout, or an archive script, which a row or a released
+ * build from before archive scripts were removed may still name, and which
+ * nothing runs, reads, or saves now.
+ */
 export const REPOSITORY_SCRIPT_KIND = {
   SETUP: "setup",
   ARCHIVE: "archive",
@@ -50,7 +54,7 @@ export const REPOSITORY_SCRIPT_KIND = {
 export type RepositoryScriptKind =
   (typeof REPOSITORY_SCRIPT_KIND)[keyof typeof REPOSITORY_SCRIPT_KIND];
 
-/** Which of the workspace's scripts a run was of: its install script, or a repository's setup or archive script. */
+/** Which of the workspace's scripts a run was of: its install script, or a repository's setup script; an archive script's run from before archive scripts were removed is never read. */
 export const CLOUD_SETUP_SCRIPT = {
   INSTALL: "install",
   ...REPOSITORY_SCRIPT_KIND,
@@ -185,10 +189,11 @@ const repositoryRunActionsSchema = EffectSchema.Struct({
 
 export type RepositoryRunActions = typeof repositoryRunActionsSchema.Type;
 
-/** The workspace's sandbox setup (GET, and every save's answer): its install script where one is saved, each repository's setup script and archive script, and each repository's run actions, each list in the order of their names. */
+/** The workspace's sandbox setup (GET, and every save's answer): its install script where one is saved, each repository's setup script, and each repository's run actions, each list in the order of their names. */
 export const workspaceSandboxSetupAnswerSchema = EffectSchema.Struct({
   install: EffectSchema.NullOr(savedScriptSchema),
   setups: EffectSchema.Array(repositorySetupSchema),
+  /** Always empty since archive scripts were removed; kept for the released builds that read it. */
   archives: EffectSchema.Array(repositorySetupSchema),
   /** Absent from a service older than run actions, which reads as none. */
   runActions: EffectSchema.optionalKey(EffectSchema.Array(repositoryRunActionsSchema)),
@@ -202,12 +207,12 @@ export const workspaceInstallScriptPutRequestSchema = EffectSchema.Struct({
   script: scriptSchema,
 });
 
-/** Saving a repository's setup script, or its archive script where `kind` names it (PUT to `/repository`), replacing the one of that kind that stood under any casing of its name; an empty script removes it. */
+/** Saving a repository's setup script (PUT to `/repository`), replacing the one that stood under any casing of its name; an empty script removes it. */
 export const workspaceRepositorySetupPutRequestSchema = EffectSchema.Struct({
   workspaceId: workspaceIdSchema,
   repository: githubRepositoryFullNameSchema,
   script: scriptSchema,
-  /** Which of the repository's scripts is saved; its setup script where unsaid. */
+  /** Which of the repository's scripts is saved; its setup script where unsaid, and a save naming an archive script, as a released build may, is ignored. */
   kind: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(REPOSITORY_SCRIPT_KIND))),
 });
 
