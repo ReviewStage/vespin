@@ -80,6 +80,7 @@ function harnessRows(read: AgentsRead): HarnessRow[] {
     ...read.harnesses.map((harness) => harness.runtime),
     ...read.cost.byHarness.map((harness) => harness.runtime),
   ]);
+
   return [...runtimes]
     .map((runtime) => ({
       runtime,
@@ -95,6 +96,7 @@ function harnessRows(read: AgentsRead): HarnessRow[] {
 
 function failedShare(row: HarnessRow): number | null {
   const runs = row.reliability?.runs;
+
   return runs === undefined || runs.total === 0 ? null : runs.failed / runs.total;
 }
 
@@ -145,6 +147,7 @@ const HARNESS_COLUMNS = column.columns([
     cell: ({ row: { original: row } }) => {
       const runs = row.reliability?.runs.total ?? 0;
       const spend = row.cost?.spendUsd ?? null;
+
       return runs === 0 || spend === null ? NO_FIGURE : formatUsd(spend / runs);
     },
   }),
@@ -176,6 +179,7 @@ const AGENTS_STATS: readonly StatSpec<AgentsRead>[] = [
     label: () => "Runs failed",
     value: (read) => {
       const total = sumRuns(read, "total");
+
       return formatPercent(total === 0 ? null : sumRuns(read, "failed") / total, 1);
     },
     hint: (read) => `${formatCount(sumRuns(read, "failed"))} runs`,
@@ -186,6 +190,7 @@ const AGENTS_STATS: readonly StatSpec<AgentsRead>[] = [
     value: (read) => formatUsd(sumSpend(read)),
     hint: (read) => {
       const runs = sumRuns(read, "total");
+
       return runs === 0 ? "no runs to divide by" : `${formatUsd(sumSpend(read) / runs)} per run`;
     },
   },
@@ -198,6 +203,7 @@ const AGENTS_STATS: readonly StatSpec<AgentsRead>[] = [
  */
 function AgentsSections({ read }: { read: AgentsRead | undefined }): React.JSX.Element {
   const rows = read === undefined ? [] : harnessRows(read);
+
   return (
     <>
       <AdminSection>
@@ -279,6 +285,7 @@ export function AgentsScreen({
   const read = useQuery({ ...adminAgentsQuery(reads, query), enabled: !gate.heldAtGate() });
   const withdraw = useAdminSignOut(onSignOut);
   const signOut = () => withdraw.mutate();
+
   const controls = (
     <AdminViewOptions
       windowDays={shownWindow}
@@ -288,6 +295,7 @@ export function AgentsScreen({
       onHideAdminsChange={onHideAdminsChange}
     />
   );
+
   return adminReadView({
     read,
     gate,

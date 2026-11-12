@@ -274,17 +274,22 @@ function spendBy<Key>(
   keyOf: (row: PricedCostRow) => Key | undefined,
 ): [Key, KeyedSpend][] {
   const byKey = new Map<Key, KeyedSpend>();
+
   for (const row of priced) {
     const key = keyOf(row);
+
     if (!days.has(row.day) || row.tokens === 0 || key === undefined) continue;
     const spend = byKey.get(key) ?? { usd: 0, priced: 0, unpriced: 0 };
+
     if (row.usd === undefined) spend.unpriced += row.tokens;
     else {
       spend.usd += row.usd;
       spend.priced += row.tokens;
     }
+
     byKey.set(key, spend);
   }
+
   return [...byKey].sort(([, left], [, right]) =>
     right.usd === left.usd ? right.unpriced - left.unpriced : right.usd - left.usd,
   );

@@ -118,6 +118,7 @@ const openAgent = (userId: string, organizationId: string, createdAt: Date) =>
       null,
       CONVERSATION_RUNTIME.CLAUDE_CODE,
     );
+
     const { id: taskId } = yield* createTask(userId, { organizationId, name: "Flaky tests" });
     yield* Database.use((db) =>
       db.insert(agentTable).values({

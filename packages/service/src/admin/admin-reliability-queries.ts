@@ -450,12 +450,14 @@ const readTurnSeries = /* @__PURE__ */ Effect.fn("web/readReliabilityTurns")(fun
     const work = turnWorkOf(row.kind, row.parentKind);
 
     if (work === TURN_WORK.AGENT_SUBAGENT) continue;
+
     if (work === TURN_WORK.AGENT) {
       bump(harnessRuns, row.runtime, NO_FAILURES, (counted) => ({
         failed: counted.failed + failed,
         total: counted.total + row.value,
       }));
     }
+
     bump(work === TURN_WORK.AGENT ? agentRuns : appTurns, row.day, NO_FAILURES, (counted) => ({
       failed: counted.failed + failed,
       total: counted.total + row.value,
@@ -464,12 +466,14 @@ const readTurnSeries = /* @__PURE__ */ Effect.fn("web/readReliabilityTurns")(fun
 
   const agentFailures = new Map<AgentFailure, number>();
   const harnessFailures = new Map<AgentRuntime | null, Map<AgentFailure, number>>();
+
   for (const row of failures) {
     const failure = agentFailureOf({
       status: TURN_STATUS.FAILED,
       failure: row.failure,
       failureDetail: row.failureDetail,
     });
+
     if (failure === undefined) continue;
     agentFailures.set(failure, (agentFailures.get(failure) ?? 0) + row.value);
     const classes = harnessFailures.get(row.runtime) ?? new Map<AgentFailure, number>();

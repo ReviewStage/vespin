@@ -95,6 +95,7 @@ export function adminAgentsQuery(reads: AdminReads, query: AdminWindowedQuery) {
         reads.cost(query, signal),
         reads.reliability(query, signal),
       ]);
+
       return { cost, harnesses: reliability.agentHarnesses };
     },
     placeholderData: keepPreviousData,
