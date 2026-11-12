@@ -549,6 +549,13 @@ export function useQueueEditing(
         went: { text, attachments },
         most: AGENT_BOUNDS.MAX_MESSAGE_CHARS,
         update: (next) => {
+          // Note that a Put back pressed once the message has gone, sent again, taken back, or deleted, lays nothing in: it is handed an empty box, whose answer is dropped, so no toast opens anew.
+          if (!unsentQueued.store.state.some((each) => each.id === id)) {
+            next({ text: "", attachments: [] });
+
+            return;
+          }
+
           let laid = false;
           composer.updateHeld((now) => {
             const joined = next(now);

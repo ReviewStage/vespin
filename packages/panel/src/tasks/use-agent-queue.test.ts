@@ -281,6 +281,36 @@ test("a message not delivered that would pass a message's bound beside the box's
   );
 });
 
+test("a Put back left standing once its message not delivered was deleted lays nothing in the box", async () => {
+  const toasts = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(toasts);
+  act(() => toasts.render(withQueryClient(createElement(ToastHost))));
+  act(() => now().composer.setDraft("a".repeat(AGENT_BOUNDS.MAX_MESSAGE_CHARS - 4)));
+  act(() => now().editing.queue());
+  act(() => now().composer.setDraft("And the docs"));
+  await answer(refused);
+  const [unsent] = now().queue.unsent;
+  assert.ok(unsent !== undefined, "the message stays, not delivered");
+  act(() => now().editing.takeBack(unsent.id));
+  act(() => now().queue.drop(unsent.id));
+  act(() => now().composer.setDraft("Ok"));
+
+  const putBack = [...document.querySelectorAll<HTMLButtonElement>(".ui-toast button")].find(
+    (button) => button.textContent === "Put back",
+  );
+
+  act(() => (putBack ?? assert.fail("a toast keeps the message with Put back")).click());
+
+  assert.equal(now().composer.draft, "Ok");
+  assert.deepEqual(
+    [...document.querySelectorAll(`${STANDING_TOAST} button`)].flatMap(({ textContent: label }) =>
+      label === "Put back" ? [label] : [],
+    ),
+    [],
+    "no toast opens anew",
+  );
+});
+
 test("an edit the queue refused to save stays open with its new words, the box's own still kept aside", async () => {
   act(() => now().page({ messages: [message("m1", "Run tests")], revision: 1 }));
   act(() => now().composer.setDraft("my own words"));
