@@ -402,6 +402,16 @@ test("a tight list switching between bullets and task items is handed over untou
   assert.equal(handedOver(), text.replace("two", "two again"));
 });
 
+test("inline code inside a link, bold, or italics opens valid and keeps them when its line is edited", () => {
+  const text = "See [`store.ts`](https://x.dev/store.ts), run **`pnpm i`**, then *`dev`*.\n";
+  const { editor, handedOver } = opened(text);
+
+  editor.state.doc.check();
+  typedAtEnd(editor, " Done.");
+
+  assert.equal(handedOver(), text.replace("*.", "*. Done."));
+});
+
 test("blocks written with no blank line between them stay so when another block is edited", () => {
   const text = "## Steps\nDo these in order:\n- Install\n- Run\n\n```sh\npnpm dev\n```\nThe end.\n";
   const { editor, handedOver } = opened(text);
