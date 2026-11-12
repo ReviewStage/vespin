@@ -4,8 +4,9 @@
  * Which are offered, which run, and their words are the panel's
  * (`@repo/features/run-actions-model`): only where the agent's workspace has
  * the Run actions experiment on, the agent runs in the cloud, never on a
- * member's own Mac, whose actions run only there, and its repository keeps
- * any (`WORKSPACE_SANDBOX_SETUP_READ`). Which run is read off the agent's
+ * member's own Mac, whose actions run only through that Mac's host, and its
+ * repository keeps any that may run in the cloud (`runActionsIn`, as the
+ * panel filters by the agent's machine) (`WORKSPACE_SANDBOX_SETUP_READ`). Which run is read off the agent's
  * shells (`TERMINAL_LIST`) every few seconds while the page is in focus, and
  * none is offered until they are read, so a running one is never offered as
  * idle. A press under way holds its action until it settles. A
@@ -25,7 +26,11 @@ import {
   SHELLS_LOOK_EVERY_MS,
   sandboxStopped,
 } from "@repo/features/run-actions-model";
-import type { RunAction } from "@repo/features/workspace-sandbox-setup-wire";
+import {
+  RUN_ACTION_PLACE,
+  type RunAction,
+  runActionsIn,
+} from "@repo/features/workspace-sandbox-setup-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
 import { EXPERIMENT } from "@repo/settings";
@@ -78,7 +83,14 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
     queryFn: () => acts[ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]({ workspaceId: workspaceId ?? "" }),
   });
 
-  const actions = asks ? repositoryRunActions(setup?.runActions, agent?.repository) : [];
+  // Note that an action kept to local agents never runs in a sandbox, so a cloud agent offers only those that may run there.
+  const actions = asks
+    ? runActionsIn(
+        repositoryRunActions(setup?.runActions, agent?.repository),
+        RUN_ACTION_PLACE.CLOUD,
+      )
+    : [];
+
   const offered = actions.length > 0;
   const shellsKey = [QUERY_ROOT.SHELLS, agentId];
   const pressing = useRef(new Set<string>());

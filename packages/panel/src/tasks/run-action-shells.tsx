@@ -45,7 +45,7 @@ export function localRunsQuery(agentId: string, shown: boolean, enabled: boolean
     queryKey: [QUERY_ROOT.MAC_RUN_ACTIONS, agentId],
     queryFn: () => askAct(ACT_KIND.MAC_SHELL_ACTIONS, { agentId }),
     enabled,
-    refetchInterval: shown ? SHELLS_EVERY_MS : false,
+    refetchInterval: shown ? SHELLS_LOOK_EVERY_MS : false,
     retry: false,
   });
 }

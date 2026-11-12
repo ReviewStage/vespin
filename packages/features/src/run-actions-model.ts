@@ -5,8 +5,10 @@
  * environment, run in a shell of the agent's sandbox when pressed
  * (`AGENTS_RUN_ACTION`) and stopped there (`AGENTS_RUN_ACTION_STOP`).
  * They are offered only where the agent's workspace has the Run actions
- * experiment on, the agent runs in the cloud, never on a member's own Mac,
- * and its repository has any; which run is read off the agent's shells,
+ * experiment on and its repository has any that may run where the agent
+ * does (`runActionsIn`); a local agent's run on the Mac it runs on, so only
+ * the desktop app there offers them, and a phone offers a cloud agent's
+ * alone (`runActionsAsked`). Which run is read off a cloud agent's shells,
  * each marked with the action it was started for (`TERMINAL_LIST`). The
  * panel's Run button, ⌘K, and narrow ⋯ (`@repo/panel`'s
  * `run-actions-button.tsx`) and the iOS agent page's ⋯ read them from here.
@@ -31,7 +33,7 @@ export const RUN_ACTION_WORDS = {
 /** How often a shown list of an agent's shells is read again, as the Terminal tab's own list goes. */
 export const SHELLS_LOOK_EVERY_MS = 5_000;
 
-/** Whether an agent's run actions are asked for: its workspace's experiment on, the agent in the cloud (no `machine`, as a sandbox's row says none), and its repository known. */
+/** Whether a client that reaches no Mac's shells, such as a phone, asks for an agent's run actions: its workspace's experiment on, the agent in the cloud (no `machine`, as a sandbox's row says none), and its repository known. */
 export function runActionsAsked(input: {
   readonly experiment: boolean;
   readonly machine: AgentMachineKind | undefined;
