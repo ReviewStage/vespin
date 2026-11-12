@@ -26,6 +26,8 @@ export const EXPERIMENT = {
   TURN_CHANGES: "turn-changes",
   /** Reply buttons: a button an agent puts in its reply, beside the line it is about, that starts a new agent on a brief it wrote, or sends one to a running agent, once a member presses it. */
   REPLY_BUTTONS: "reply-buttons",
+  /** Following: the members who follow each task, who starts, is assigned, or messages its agents, and each follower's switch letting the task's agents use their machines. */
+  FOLLOWING: "following",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -78,6 +80,15 @@ export interface ExperimentEntry {
  * there is no status to drift and every experiment is off until turned on.
  */
 export const EXPERIMENTS = [
+  {
+    key: EXPERIMENT.FOLLOWING,
+    scope: EXPERIMENT_SCOPE.WORKSPACE,
+    name: "Following",
+    detail:
+      "Follow the tasks you care about, and choose on each whether its agents may use your machines.",
+    owner: "Dean",
+    since: "2026-11-12",
+  },
   {
     key: EXPERIMENT.TURN_CHANGES,
     scope: EXPERIMENT_SCOPE.ACCOUNT,

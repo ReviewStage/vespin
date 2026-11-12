@@ -34,6 +34,7 @@ import {
   type TaskCreateAsked,
   type TaskCreateRelationRefused,
 } from "../tasks/task-create-relation.js";
+import { followerReadingsOf } from "../tasks/task-following.js";
 import {
   AGENT_CALLER,
   AGENT_TOOL_REFUSAL,
@@ -125,7 +126,9 @@ export function readTaskToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
       "key (such as ACME-42), name, where it stands (its status) and how much it matters (its " +
       "priority), repository, who started it (startedBy, and startedByUserId to link them by), whether it is the task you " +
       "work on, the brief the developer started it with (null for none), the tasks " +
-      "it is blocked by and the tasks it blocks (each with its id, name, and status)" +
+      "it is blocked by and the tasks it blocks (each with its id, name, and status), its followers " +
+      "(each with their name and id, whether they are its assignee, and whether its " +
+      "agents may use their machines; absent where your workspace keeps none)" +
       `${READ_TASK_DESCRIPTION_WORDS[on.descriptionsOn ? "on" : "off"]} Read one before you start an agent on it, or to learn what another task is about; ` +
       `${AGENT_TOOL.LIST_AGENTS} with its taskId names the agents on it.`,
     inputSchema: READ_TASK_INPUT,
@@ -176,6 +179,8 @@ export function runReadTask(
       const descriptionsOn = yield* callerDescriptionsOn(call.caller);
       const blocks = yield* taskBlockReadings(userId, task);
 
+      const followers = yield* followerReadingsOf(userId, workspace.value, [task.id]);
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         task: {
@@ -188,6 +193,9 @@ export function runReadTask(
           isYourTask: task.id === callerTask(call.caller),
           brief: brief ?? null,
           ...blocks,
+          ...(followers === undefined
+            ? undefined
+            : { followers: (followers.get(task.id) ?? []).map((follower) => ({ ...follower })) }),
         },
         ...(descriptionsOn
           ? {

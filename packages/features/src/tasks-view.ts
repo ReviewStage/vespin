@@ -1,3 +1,4 @@
+import { taskFollowerSchema } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { browserTabsPlaceSchema } from "./agent-browser-tab-wire.js";
 import { agentAgentAnswerSchema } from "./agent-view.js";
@@ -7,6 +8,7 @@ import { descriptionCommentsContract } from "./contract/description-comments.js"
 import { githubContract } from "./contract/github.js";
 import { repositoryPinsContract } from "./contract/repository-pins.js";
 import { taskFilesContract } from "./contract/task-files.js";
+import { taskFollowersContract } from "./contract/task-followers.js";
 import { taskSectionsContract } from "./contract/task-sections.js";
 import { tasksContract } from "./contract/tasks.js";
 import {
@@ -351,6 +353,29 @@ export const tasksBlockParamsSchema = EffectSchema.Struct({
 
 export type TasksBlockParams = typeof tasksBlockParamsSchema.Type;
 
+/** A follow or an unfollow of a task by the account, as the window asks it: the task. */
+export const tasksFollowParamsSchema = EffectSchema.Struct({
+  taskId: EffectSchema.NonEmptyString,
+});
+
+export type TasksFollowParams = typeof tasksFollowParamsSchema.Type;
+
+/** The account's own switch on a task it follows, as the window asks it: the task, and whether its agents may use the account's machines. */
+export const tasksSetFollowerMachinesParamsSchema = EffectSchema.Struct({
+  taskId: EffectSchema.NonEmptyString,
+  machines: EffectSchema.Boolean,
+});
+
+export type TasksSetFollowerMachinesParams = typeof tasksSetFollowerMachinesParamsSchema.Type;
+
+/** Another member added as a follower of a task, as the window asks it: the task, and the member by their account's id. */
+export const tasksAddFollowerParamsSchema = EffectSchema.Struct({
+  taskId: EffectSchema.NonEmptyString,
+  userId: taskAssigneeIdSchema,
+});
+
+export type TasksAddFollowerParams = typeof tasksAddFollowerParamsSchema.Type;
+
 /** A task's parent set or cleared, as the window asks it: the task, and the parent the service takes, null for none. */
 export const tasksSetParentParamsSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
@@ -528,6 +553,21 @@ export const tasksSetParentAnswerSchema = EffectSchema.Union([
 ]);
 
 export type TasksSetParentAnswer = typeof tasksSetParentAnswerSchema.Type;
+
+/** Why a follower write wrote nothing: the service did not answer, the task is out of reach or its workspace has Following off, or, for an unfollow, the account is its assignee. */
+export const FOLLOWER_CALL_FAILURE = failureSetOf(taskFollowersContract);
+
+const FOLLOWER_CALL_FAILURES = Object.values(FOLLOWER_CALL_FAILURE);
+
+export type FollowerCallFailure = (typeof FOLLOWER_CALL_FAILURES)[number];
+
+/** A follow, an unfollow, a switch, or an add, as the window hears it: the task's followers as they then stand, the earliest to follow first, or why they are unchanged. */
+export const tasksFollowersAnswerSchema = EffectSchema.Union([
+  EffectSchema.Struct({ followers: EffectSchema.Array(taskFollowerSchema) }),
+  EffectSchema.Struct({ failure: EffectSchema.Literals(FOLLOWER_CALL_FAILURES) }),
+]);
+
+export type TasksFollowersAnswer = typeof tasksFollowersAnswerSchema.Type;
 
 /** Why a relation's move wrote nothing: a block's reasons, or a parent's. */
 const RELATION_CALL_FAILURES = Object.values(
