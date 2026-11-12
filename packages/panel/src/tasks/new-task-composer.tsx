@@ -339,6 +339,16 @@ function settledUnder(key: string): (draft: Draft) => Draft {
   return (draft) => (draft.start?.key === key ? withoutStart(draft) : draft);
 }
 
+/**
+ * A draft once a read settled its kept start: the start let go, and the words Edit took back with it
+ * where the box still holds them as they were, since a Start of them would make the task again.
+ */
+function settledByRead(draft: Draft): Draft {
+  return draft.start?.edited === true && draft.text === draft.start.words
+    ? EMPTY_DRAFT
+    : withoutStart(draft);
+}
+
 /** An agent's press lets the box's words go and keeps whatever start stands kept, until its own outcome is known. */
 function boxLetGo(draft: Draft): Draft {
   return { ...EMPTY_DRAFT, start: draft.start };
@@ -852,16 +862,19 @@ export function NewTaskComposer({
 
   // A kept start asked again goes as it was pressed, under its key and task id, whatever the card holds
   // now, its files this window's where it pressed it, and the relations it names that the window lists.
-  const resend = (start: KeptStart) => {
-    const press = keptPressOf(start);
-    const { ask } = press;
-    pressed.current = press;
-
-    const cardRelations = ask.relations.flatMap((relation) => {
+  // The relations a kept press names that the window lists, as the card draws them.
+  const listedRelations = (asked: readonly TaskCreateRelation[]): NewTaskRelation[] =>
+    asked.flatMap((relation) => {
       const task = newTask.tasks.find((each) => each.id === relation.taskId);
 
       return task === undefined ? [] : [{ kind: relation.kind, task }];
     });
+
+  const resend = (start: KeptStart) => {
+    const press = keptPressOf(start);
+    const { ask } = press;
+    pressed.current = press;
+    const cardRelations = listedRelations(ask.relations);
 
     begin(
       {
@@ -892,9 +905,21 @@ export function NewTaskComposer({
   // Edit takes a kept start's words, and its files where this window pressed it, back into the box
   // ahead of what it holds, keeping the press marked so, so a Start of them unchanged is still that
   // start, after a relaunch too, and words changed are another; Remove lets it go.
+  // Note that the card's chips stand again as the press asked, after a relaunch too, so a Start of the
+  // words unchanged asks the same.
   const editKept = (start: KeptStart) => {
     const held = keptPressOf(start);
+    const { ask } = held;
     pressed.current = held;
+    setChosen(ask.repository);
+    setRelated(listedRelations(ask.relations));
+    setDisabledServers(ask.agent.disabledServers);
+    pickMode(ask.agent.permissionMode);
+
+    if (ask.agent.choice !== undefined) choose(ask.agent.choice);
+
+    if (runsOnStands) chooseDevice(ask.deviceId);
+
     draft.update((was) => ({
       ...was,
       ...joinedAhead({ text: start.words, attachments: held.ask.agent.attachments }, was),
@@ -922,7 +947,7 @@ export function NewTaskComposer({
   settle.current = { said: newTask.onStartSettled, letGo: draft.update };
   useEffect(() => {
     if (settledTaskId === undefined) return;
-    settle.current.letGo(withoutStart);
+    settle.current.letGo(settledByRead);
 
     if (pressed.current?.taskId === settledTaskId) pressed.current = undefined;
 
