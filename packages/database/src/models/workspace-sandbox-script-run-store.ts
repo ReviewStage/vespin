@@ -3,7 +3,8 @@
  *
  * Every function is an effect over the ambient `SqlClient`, keyed by the
  * workspace, so no workspace reads or replaces another's runs, and a run
- * names its agent only where that agent is the workspace's own. A
+ * names its agent only where that agent is the workspace's own and is read
+ * only by a member who sees that agent (`agentVisibleTo`). A
  * repository is kept lowercased, since GitHub's names ignore case. A run holds facts alone, never what its script printed
  * (`../schemas/workspace-sandbox-script-run.ts`).
  */
@@ -16,6 +17,7 @@ import { Database, type DatabaseServices, type StoreFailure } from "../core/quer
 import { agentTable } from "../schemas/agent.js";
 import { workspaceSandboxScriptRun as run } from "../schemas/workspace-sandbox-script-run.js";
 import { InstantColumnSchema } from "./columns.js";
+import { agentVisibleTo } from "./workspace-store.js";
 
 const ScriptSchema = Schema.Literals(Object.values(CLOUD_SETUP_SCRIPT));
 
@@ -68,9 +70,9 @@ const upsertRun = SqlSchema.void({
 });
 
 const findRuns = SqlSchema.findAll({
-  Request: Schema.String,
+  Request: Schema.Struct({ organizationId: Schema.String, readerId: Schema.String }),
   Result: RunSchema,
-  execute: (organizationId) =>
+  execute: ({ organizationId, readerId }) =>
     Database.use((db) =>
       db
         .select({
@@ -90,7 +92,11 @@ const findRuns = SqlSchema.findAll({
         // Note that the agent is joined within the workspace too, so a row can never name another workspace's agent.
         .innerJoin(
           agentTable,
-          and(eq(agentTable.id, run.agentId), eq(agentTable.organizationId, run.organizationId)),
+          and(
+            eq(agentTable.id, run.agentId),
+            eq(agentTable.organizationId, run.organizationId),
+            agentVisibleTo(readerId),
+          ),
         )
         .where(eq(run.organizationId, organizationId)),
     ),
@@ -103,9 +109,10 @@ export function recordScriptRun(
   return upsertRun(write);
 }
 
-/** The last run of each of the workspace's scripts that has run, in no order. */
+/** The last run of each of the workspace's scripts that has run, in no order, of those whose agent the reader sees. */
 export function listScriptRuns(
   organizationId: string,
+  readerId: string,
 ): Effect.Effect<readonly WorkspaceScriptRun[], StoreFailure, DatabaseServices> {
-  return findRuns(organizationId);
+  return findRuns({ organizationId, readerId });
 }
