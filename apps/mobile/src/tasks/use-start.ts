@@ -223,10 +223,14 @@ export interface RepositoryPick {
   readonly retry: () => void;
 }
 
-/** The repositories a workspace's GitHub reaches, by full name, and whether their list has been read. */
+/** The repositories a workspace's GitHub reaches, by full name, whether their list has been read or could not be, and what reads it again. */
 export interface WorkspaceRepositories {
   readonly listed: readonly string[];
   readonly read: boolean;
+  /** Whether the list could not be read before it listed anything. */
+  readonly failed: boolean;
+  /** Reads the workspace's repositories again. */
+  readonly retry: () => void;
 }
 
 /** No repositories read yet. */
@@ -247,14 +251,28 @@ export function useWorkspaceRepositories(workspaceId: string | undefined): Works
     return (state: AppStateSnapshot) => list(state)?.rows;
   }, [workspaceId]);
 
+  const failedSelect = useMemo(() => {
+    const list = selectRepositoryList(workspaceId ?? "");
+
+    return (state: AppStateSnapshot) => list(state)?.failed === true;
+  }, [workspaceId]);
+
   const { data: rows } = useQuery({ ...appStateQuery, select });
+  const { data: failed = false } = useQuery({ ...appStateQuery, select: failedSelect });
 
   return useMemo(
     () => ({
       listed: rows?.repositories.map(({ fullName }) => fullName) ?? NO_REPOSITORIES,
       read: rows !== undefined,
+      failed: failed && rows === undefined,
+      retry: () => {
+        if (workspaceId === undefined) return;
+        acts[ACT_KIND.TASKS_REPOSITORIES_RETRY]({ workspaceId }).catch(
+          retryRefused("the repositories"),
+        );
+      },
     }),
-    [rows],
+    [rows, failed, workspaceId, acts],
   );
 }
 
@@ -269,7 +287,7 @@ export function useRepositoryPick(
   workspace: Workspace | undefined,
   drafted?: string | undefined,
 ): RepositoryPick {
-  const { listed, read } = useWorkspaceRepositories(workspace?.id);
+  const { listed, read, failed, retry } = useWorkspaceRepositories(workspace?.id);
   const { data: tasks } = useQuery({ ...appStateQuery, select: selectTasks });
   const [picked, setPicked] = useState<string | undefined>(drafted);
   const recent = useMemo(() => recentRepositories(tasks?.tasks ?? []), [tasks]);
@@ -287,17 +305,9 @@ export function useRepositoryPick(
     options: listed.map((repository) => ({ id: repository, label: repository })),
     picked: kept ?? starting,
     pick: setPicked,
-    read: read?.rows !== undefined,
-    failed:
-      read?.failed === true && read.rows === undefined
-        ? repositoryFailureNote(TASK_CALL_FAILURE.UNANSWERED)
-        : undefined,
-    retry: () => {
-      if (workspaceId === undefined) return;
-      acts[ACT_KIND.TASKS_REPOSITORIES_RETRY]({ workspaceId }).catch(
-        retryRefused("the repositories"),
-      );
-    },
+    read,
+    failed: failed ? repositoryFailureNote(TASK_CALL_FAILURE.UNANSWERED) : undefined,
+    retry,
   };
 }
 
