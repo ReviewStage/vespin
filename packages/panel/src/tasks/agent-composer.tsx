@@ -188,7 +188,7 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * its status, its model chip and permission mode, its servers, its payer's
  * owner, and its place and forwarding chips, both owners read through one
  * hook (`agent-box.tsx`'s `useAgentBox`) and spread onto the box as it is,
- * so a chip added there stands on both.
+ * so a chip added there stands on both (`[check: vespin/agent-box-reads-agent]`).
  * Its owner hands what only an answer has (`answer`), an open question's controls
  * over the field, the checkbox that starts a new thread under the card, Send
  * lit by a pick as by words and reading Got it or Start thread in words, what

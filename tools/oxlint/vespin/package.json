@@ -1,0 +1,22 @@
+{
+  "name": "@repo/vespin-lint",
+  "version": "0.24.0",
+  "private": true,
+  "type": "module",
+  "description": "Vespin's own oxlint rules, beside upstream's anti-slop plugin in tools/oxlint/anti-slop: the design system's press, heading, skeleton, row, shortcut and shadcn focus-ring guards and its retired classes, glyphs and patterns, the testing policy's mock, skip and source-read rules, Drizzle writes, and the app's own one-place rules; the style guard over its CSS and class strings; and the repository guards over what a lint rule cannot see",
+  "scripts": {
+    "test:vitest": "vitest run",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@oxlint/plugins": "1.79.0",
+    "effect": "catalog:",
+    "oxc-parser": "0.152.0"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "oxlint": "1.79.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
