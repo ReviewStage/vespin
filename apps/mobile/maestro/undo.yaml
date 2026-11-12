@@ -27,11 +27,10 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: got-it
 - tapOn: "Got it"
+# Note that the notice stands 6 seconds, so it is found by its words in one wait and Undo is pressed straight after, before it slides away under the bar's ⋯.
 - extendedWaitUntil:
-    visible:
-      id: "failure-notice-undo"
+    visible: "Got it: “acceptInvite can add a member twice”"
     timeout: 5000
-- assertVisible: "Got it: “acceptInvite can add a member twice”"
 - takeScreenshot: got-it-undo
 - tapOn:
     id: "failure-notice-undo"
@@ -80,10 +79,8 @@ appId: dev.vespin.ios
           index: 1
 - tapOn: "Resolve"
 - extendedWaitUntil:
-    visible:
-      id: "failure-notice-undo"
+    visible: "Resolved “What the expired invite page says”"
     timeout: 5000
-- assertVisible: "Resolved “What the expired invite page says”"
 - takeScreenshot: resolve-undo
 - tapOn:
     id: "failure-notice-undo"
