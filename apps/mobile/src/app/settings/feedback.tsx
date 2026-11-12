@@ -31,7 +31,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
-import { useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import {
@@ -83,11 +83,13 @@ function screenshotsOf(pictures: AttachedPictures): readonly FeedbackImage[] {
  * head, Feedback or Prompt, each kind keeping its own words and screenshots
  * while the page stands; the words, the screenshots under them, and Include
  * my name and email, the line under it saying who signs it or that it goes
- * unsigned. Send in the bar is lit once there are words; what it carries is
- * exactly what the page shows (`draftSubmission`). A send refused says why
- * under the words and keeps the note; one that went buzzes and goes back to
- * Settings. Back, or a swipe down of Settings, asks first while the page
- * holds a note.
+ * unsigned. Send in the bar is lit once there are words and no dropped
+ * picture is still being read; what it carries is exactly what the page
+ * shows (`draftSubmission`). A send refused says why under the words and
+ * keeps the note; one that went buzzes and takes off what it carried, and
+ * goes back to Settings unless the page still holds a note: the other
+ * kind's, or what was written or attached while it was out. Back, or a
+ * swipe down of Settings, asks first while the page holds a note.
  */
 export default function FeedbackScreen() {
   const colors = useColors();
@@ -105,6 +107,8 @@ export default function FeedbackScreen() {
   const [signed, setSigned] = useState(true);
   const [note, setNote] = useState<string | undefined>(undefined);
   const [sending, setSending] = useState(false);
+  // How many notes went, by which the field is drawn afresh once the words it held were sent.
+  const [sends, setSends] = useState(0);
   const feedbackPictures = useAttachedPictures(setNote, undefined, FEEDBACK_PICTURES);
   const promptPictures = useAttachedPictures(setNote, undefined, FEEDBACK_PICTURES);
   const pictures = kind === FEEDBACK_KIND.FEEDBACK ? feedbackPictures : promptPictures;
@@ -117,8 +121,19 @@ export default function FeedbackScreen() {
 
   const kept = useKeptWords(drafted);
 
+  // What each kind holds now, for a send that answers renders after it began, since the other kind or an edit made meanwhile may still hold a note.
+  const held = useRef({
+    words,
+    feedback: feedbackPictures.attached,
+    prompt: promptPictures.attached,
+  });
+
+  useEffect(() => {
+    held.current = { words, feedback: feedbackPictures.attached, prompt: promptPictures.attached };
+  });
+
   const send = () => {
-    if (sending || message.trim() === "") return;
+    if (sending || pictures.reading || message.trim() === "") return;
 
     if (pictures.refusal !== undefined) {
       setNote(pictures.refusal);
@@ -128,6 +143,8 @@ export default function FeedbackScreen() {
     }
 
     const draft = { message, images: screenshotsOf(pictures), signed };
+    const sent = new Set(pictures.attached.map((picture) => picture.id));
+    const detach = pictures.detach;
     setSending(true);
     setNote(undefined);
 
@@ -145,6 +162,21 @@ export default function FeedbackScreen() {
       setSending(false);
 
       if (!went) return;
+      // Note that only what was sent is taken off: words changed while it was out, a picture added meanwhile, and the other kind's note all stay, and keep the page.
+      const now = held.current;
+      const other = kind === FEEDBACK_KIND.FEEDBACK ? FEEDBACK_KIND.PROMPT : FEEDBACK_KIND.FEEDBACK;
+      const edited = now.words[kind] !== message;
+      const added = now[kind].some((picture) => !sent.has(picture.id));
+      const otherHeld = now.words[other].trim() !== "" || now[other].length > 0;
+
+      for (const id of sent) detach(id);
+
+      if (!edited) {
+        setWords((current) => ({ ...current, [kind]: "" }));
+        setSends((count) => count + 1);
+      }
+
+      if (edited || added || otherHeld) return;
       kept.release();
       router.back();
     });
@@ -168,7 +200,7 @@ export default function FeedbackScreen() {
           variant="prominent"
           tintColor={colors.ACCENT}
           accessibilityLabel={sending ? FEEDBACK_WORDS.SENDING : FEEDBACK_WORDS.SEND}
-          disabled={sending || message.trim() === ""}
+          disabled={sending || pictures.reading || message.trim() === ""}
           onPress={send}
         />
       </Stack.Toolbar>
@@ -184,15 +216,17 @@ export default function FeedbackScreen() {
         <ScopePicker label={KIND_LABEL} scopes={scopes}>
           <SettingsForm>
             <ListSection footer={note}>
-              {/* Note that each kind's field stands apart, so a change of kind shows that kind's own words. */}
-              <WordsField
-                key={kind}
-                placeholder={FEEDBACK_COPY[kind].placeholder}
-                initialWords={message}
-                onWords={(typed) => setWords((held) => ({ ...held, [kind]: typed }))}
-                autoFocus
-                testId={TEST_IDS.WORDS}
-              />
+              {/* Note that each kind's field stands apart, so a change of kind shows that kind's own words, and is drawn afresh once its words were sent. */}
+              <Fragment key={sends}>
+                <WordsField
+                  key={kind}
+                  placeholder={FEEDBACK_COPY[kind].placeholder}
+                  initialWords={message}
+                  onWords={(typed) => setWords((held) => ({ ...held, [kind]: typed }))}
+                  autoFocus
+                  testId={TEST_IDS.WORDS}
+                />
+              </Fragment>
               <AttachRow
                 pictures={pictures.attached}
                 onAdd={pictures.attach}

@@ -93,6 +93,8 @@ export interface AttachedPictures {
   readonly drop: (uris: readonly string[], unreadable: number) => void;
   /** Whether the pictures the holder opened with are still being read, while nothing it sends would carry them. */
   readonly opening: boolean;
+  /** Whether pictures dropped on the holder are still being read, while a send would go without them. */
+  readonly reading: boolean;
   readonly detach: (id: string) => void;
   /** Takes every picture off, as a send does, answering what was held so a refusal can put it back. */
   readonly take: () => readonly HeldPicture[];
@@ -159,6 +161,9 @@ export function useAttachedPictures(
       .catch((cause: unknown) => console.error("The photo picker did not open.", cause));
   };
 
+  // How many drops are still being read.
+  const [reads, setReads] = useState(0);
+
   // Each dropped JPEG is read whole and deleted, since the drop kept it under the app's temporary folder for this alone; a picture the drop could not keep at all is said as unreadable.
   const dropped = (uris: readonly string[], unreadable: number) =>
     Promise.all(
@@ -181,7 +186,8 @@ export function useAttachedPictures(
       .catch((cause: unknown) => console.error("The dropped pictures were not read.", cause));
 
   const drop = (uris: readonly string[], unreadable: number) => {
-    void dropped(uris, unreadable);
+    setReads((count) => count + 1);
+    void dropped(uris, unreadable).finally(() => setReads((count) => count - 1));
   };
 
   // Note that the pictures opened with are being read from the first render, so nothing is sent without them.
@@ -201,6 +207,7 @@ export function useAttachedPictures(
     attach,
     drop,
     opening,
+    reading: reads > 0,
     detach: (id) => {
       setPictures((held) => held.filter((picture) => picture.id !== id));
       onNote(undefined);
