@@ -39,7 +39,7 @@ import { useMemberDirectory } from "../member-directory.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
-import { DeviceStandingGlyph } from "./runs-on.js";
+import { DeviceStandingGlyph, STANDING_WORDS } from "./runs-on.js";
 
 /**
  * following-chip.tsx -- the task page's Following chip: the faces of the task's followers, and the popover listing them, where the reader follows or stops and lets the task's agents use their machines or not.
@@ -53,7 +53,7 @@ import { DeviceStandingGlyph } from "./runs-on.js";
  * may use that person's machines, nothing where they may not. A press on a
  * row changes nothing; each hangs the person's card: who they are, Assignee
  * or Following, the reader's own machines each with the Runs on menu's dot
- * and Online or Offline, and what the task's agents may do on their
+ * and its words for where the machine stands, and what the task's agents may do on their
  * machines. Pinned under the list stand the reader's own switch and
  * Unfollow, which the assignee may not press, or Follow alone where the
  * reader does not follow. A write is drawn on the task at once
@@ -124,13 +124,6 @@ function useFollowerActors(
   });
 }
 
-/** Where one of the reader's machines stands, as its card says it: Online, or Offline for anything else. */
-function machineWords(book: PresenceBook, deviceId: string): string {
-  return presenceStanding(book, deviceId) === DEVICE_STANDING.ONLINE
-    ? FOLLOWING_WORDS.ONLINE
-    : FOLLOWING_WORDS.OFFLINE;
-}
-
 /** A follower's card: who they are and Assignee or Following, the reader's own machines with where each stands, and what the task's agents may do on their machines. */
 function FollowerCard({
   follower,
@@ -151,21 +144,20 @@ function FollowerCard({
       <ActorHead actor={actor} sub={followerRoleWords(follower)} />
       {machines.length === 0 ? null : (
         <HoverCardList label="Machines">
-          {machines.map((host) => (
-            <li key={host.id}>
-              <HoverCardRow
-                glyph={
-                  <DeviceStandingGlyph
-                    device={host}
-                    standing={presenceStanding(book, host.id) ?? DEVICE_STANDING.CHECKING}
-                    hinted={false}
-                  />
-                }
-                label={host.name}
-                end={machineWords(book, host.id)}
-              />
-            </li>
-          ))}
+          {machines.map((host) => {
+            // Note that the card names a machine's standing as the Runs on menu does, its words matching its dot.
+            const standing = presenceStanding(book, host.id) ?? DEVICE_STANDING.CHECKING;
+
+            return (
+              <li key={host.id}>
+                <HoverCardRow
+                  glyph={<DeviceStandingGlyph device={host} standing={standing} hinted={false} />}
+                  label={host.name}
+                  end={STANDING_WORDS[standing]}
+                />
+              </li>
+            );
+          })}
         </HoverCardList>
       )}
       <HoverCardNote>{followerMachinesSentence(follower, whose)}</HoverCardNote>
