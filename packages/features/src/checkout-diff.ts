@@ -60,12 +60,11 @@ const { FROM, TO } = CHECKOUT_DIFF_VARIABLE;
  * What git brought in from upstream during the turn is not the turn's: a
  * snapshot is a commit on the `HEAD` it was taken over, so where the merge
  * base of that `HEAD` with `origin/HEAD` moved between the two sides (a
- * merge, a rebase, or a pull), upstream's change between the two bases is
- * replayed onto the side before the turn first (`git merge-tree`), and the
- * turn is diffed from what that makes. Where the replay clashes with the
- * checkout before the turn, or the machine's git has no such merge, the
- * paths upstream changed are taken as the side after the turn holds them
- * instead, so they drop out of the diff whoever changed them. Note that
+ * merge, a rebase, or a pull), every path upstream changed between the two
+ * bases is taken as the side after the turn holds it, so it drops out of
+ * the diff. Note that a file the turn changed too drops out with it, which
+ * leaves a turn naming less than it did, never upstream's work as its own,
+ * and works on any git a machine has. Note too that
  * where a commit between the two bases was committed by the checkout's own
  * committer, it may be the turn's own work that reached upstream, as an
  * agent's push to the default branch does, and history cannot tell it from
@@ -101,18 +100,14 @@ export const CHECKOUT_DIFF_SCRIPT = [
   '    if [ -n "$me" ] && grep -qxF -- "$me" "$run/committers"; then was="$now"; fi',
   "  fi",
   '  if [ -n "$was" ] && [ -n "$now" ] && [ "$was" != "$now" ]; then',
-  '    if replayed=$(git merge-tree --write-tree --merge-base "$was" "$from" "$now" 2>/dev/null); then',
-  '      from=$(printf "%s\\n" "$replayed" | head -n 1)',
-  "    else",
-  '      git diff --name-only -z --no-renames "$was" "$now" > "$run/upstream"',
-  '      GIT_INDEX_FILE="$run/before" git read-tree "$from"',
-  '      if [ -s "$run/upstream" ]; then',
-  '        GIT_INDEX_FILE="$run/before" xargs -0 git update-index --force-remove -- < "$run/upstream"',
-  '        xargs -0 git ls-tree -r -z --full-tree "$to" -- < "$run/upstream" > "$run/after"',
-  '        GIT_INDEX_FILE="$run/before" git update-index -z --index-info < "$run/after"',
-  "      fi",
-  '      from=$(GIT_INDEX_FILE="$run/before" git write-tree)',
+  '    git diff --name-only -z --no-renames "$was" "$now" > "$run/upstream"',
+  '    GIT_INDEX_FILE="$run/before" git read-tree "$from"',
+  '    if [ -s "$run/upstream" ]; then',
+  '      GIT_INDEX_FILE="$run/before" xargs -0 git update-index --force-remove -- < "$run/upstream"',
+  '      xargs -0 git ls-tree -r -z --full-tree "$to" -- < "$run/upstream" > "$run/after"',
+  '      GIT_INDEX_FILE="$run/before" git update-index -z --index-info < "$run/after"',
   "    fi",
+  '    from=$(GIT_INDEX_FILE="$run/before" git write-tree)',
   "  fi",
   "fi",
   `git -c core.quotepath=false diff --no-color --no-ext-diff --no-textconv --find-renames "$from" "$to" > "$run/out"`,

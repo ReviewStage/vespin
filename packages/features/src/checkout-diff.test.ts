@@ -3,7 +3,7 @@
  */
 
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -90,17 +90,6 @@ const UPSTREAM_COMMITTER = {
   GIT_COMMITTER_EMAIL: "teammate@example.invalid",
 };
 
-/**
- * Whether the git these tests run can replay one side's change onto another
- * (`merge-tree --merge-base`, git 2.40), which the script falls back from
- * where it cannot, as Apple's git 2.39 cannot.
- */
-const REPLAYS = (() => {
-  const help = spawnSync("git", ["merge-tree", "-h"], { encoding: "utf8", env: GIT_ENV });
-
-  return `${help.stdout}${help.stderr}`.includes("merge-base");
-})();
-
 /** A git command run in the repository as the checkout's own committer, or as `as` where given, its output trimmed. */
 function git(cwd: string, ...args: string[]): string {
   return gitAs(cwd, {}, ...args);
@@ -122,19 +111,16 @@ function numbered(count: number, at?: { readonly line: number; readonly words: s
  * A turn during which the agent merged its upstream in: `origin/HEAD` moved
  * past the commit the turn started on, editing `upstream.txt` and the end of
  * `shared.txt`, and the agent merged it, then edited `agent.txt` and the
- * start of `shared.txt`. Where `clashing`, upstream also edited line 5 of
- * `clash.txt`, which the agent had already edited before the turn, so the
- * merge conflicted and the agent settled it on its own words. Answers the
- * turn's diff of its snapshot to the working tree, as the script reads it,
- * by path and lines added.
+ * start of `shared.txt`. Answers the turn's diff of its snapshot to the
+ * working tree, as the script reads it, by path and lines added.
  */
-function turnAcrossAMerge(clashing: boolean) {
+function turnAcrossAMerge() {
   const cwd = mkdtempSync(join(tmpdir(), "checkout-diff-"));
   made.push(cwd);
   const write = (path: string, words: string) => writeFileSync(join(cwd, path), `${words}\n`);
   git(cwd, "init", "--quiet", "--initial-branch=main");
 
-  for (const path of ["agent.txt", "upstream.txt", "clash.txt"]) write(path, numbered(10));
+  for (const path of ["agent.txt", "upstream.txt"]) write(path, numbered(10));
   write("shared.txt", numbered(40));
   git(cwd, "add", "-A");
   git(cwd, "commit", "--quiet", "-m", "first");
@@ -144,19 +130,14 @@ function turnAcrossAMerge(clashing: boolean) {
   git(cwd, "checkout", "--quiet", "-b", "upstream");
   write("upstream.txt", numbered(10, { line: 2, words: "from upstream" }));
   write("shared.txt", numbered(40, { line: 38, words: "from upstream" }));
-
-  if (clashing) write("clash.txt", numbered(10, { line: 5, words: "upstream's five" }));
   gitAs(cwd, UPSTREAM_COMMITTER, "commit", "--quiet", "-am", "upstream");
   git(cwd, "update-ref", "refs/remotes/origin/main", "HEAD");
   git(cwd, "checkout", "--quiet", "-b", "agent", "main");
-  write("clash.txt", numbered(10, { line: 5, words: "the agent's five" }));
-  git(cwd, "commit", "--quiet", "-am", "the agent's earlier work");
   // The snapshot before the turn, committed on HEAD without moving it, as the runner takes one.
   const tree = git(cwd, "write-tree");
   const from = git(cwd, "commit-tree", tree, "-p", "HEAD", "-m", "The checkout before a turn");
-  // The turn: upstream merged in, a clash settled on the agent's words, then the agent's own edits, left uncommitted.
-  git(cwd, "merge", "--quiet", "--no-commit", "-X", "ours", "refs/remotes/origin/main");
-  git(cwd, "commit", "--quiet", "--no-edit");
+  // The turn: upstream merged in, then the agent's own edits, left uncommitted.
+  git(cwd, "merge", "--quiet", "--no-edit", "refs/remotes/origin/main");
   write("agent.txt", numbered(10, { line: 3, words: "the agent's three" }));
   write(
     "shared.txt",
@@ -322,21 +303,8 @@ test("the script's variables carry the two commits, the second empty for the wor
   });
 });
 
-test("a turn that merged its upstream in names only the agent's own changes, leaving out what the merge brought", () => {
-  // Note that a git that cannot replay upstream takes every path upstream changed out, `shared.txt` among them.
-  assert.deepEqual(
-    turnAcrossAMerge(false),
-    REPLAYS
-      ? [
-          ["agent.txt", 1],
-          ["shared.txt", 1],
-        ]
-      : [["agent.txt", 1]],
-  );
-});
-
-test("where upstream clashes with the checkout before the turn, the files upstream changed are left out and the agent's others kept", () => {
-  assert.deepEqual(turnAcrossAMerge(true), [["agent.txt", 1]]);
+test("a turn that merged its upstream in names only the agent's own files, leaving out every file the merge changed, one the agent changed too among them", () => {
+  assert.deepEqual(turnAcrossAMerge(), [["agent.txt", 1]]);
 });
 
 test("a commit the turn made that reached upstream, as an agent's push to the default branch does, stays the turn's", () => {
