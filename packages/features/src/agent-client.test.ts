@@ -64,7 +64,7 @@ function causeTraceOf<Answer extends object>(answer: Answer): string {
       ? answer.cause.traceId
       : undefined;
 
-  assert.ok(typeof traceId === "string");
+  assert.ok(Predicate.isString(traceId));
   assert.match(traceId, /^[0-9a-f]{32}$/);
 
   return traceId;
