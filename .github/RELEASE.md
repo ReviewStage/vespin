@@ -311,10 +311,14 @@ The switch itself is a change of credentials, not of code:
    and its scripts never name a team, so nothing else changes.
 5. **Rehearse** with a manual dispatch, and on the rehearsal's unzipped app check that
    `codesign -dvv` names the new team's `Authority=Developer ID Application` and that
-   `codesign -d -r-` still prints the bridge requirement. Install that app over a bridge
-   install on a Mac to see what macOS asks for again: its Keychain item, since the
-   Keychain trusts the app that made an item by its signature, and every permission the
-   app holds, since macOS ties a grant to the signing team.
+   `codesign -d -r-` still prints the bridge requirement. Then install that app on a Mac
+   the way an existing user will meet it, since macOS records a Keychain item's maker and
+   a permission's grantee by the app's requirement at the time: start from a release
+   older than the bridge, sign in and grant the microphone, update through the bridge
+   release, and only then install the rehearsal build. Note what macOS asks for again:
+   the Keychain item, and each permission. A fresh install of the bridge followed by the
+   rehearsal build is a second, easier case, whose grants were recorded against the
+   bridge requirement; the release notes describe the first.
 6. **Tag the switch release.** Its changelog entry says what the switch costs an install
    in plain words: signing in again once where macOS does not let the new build read the
    old one's Keychain item, and granting again any permission the app held, such as the
