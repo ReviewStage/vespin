@@ -611,7 +611,8 @@ export interface SurveyAnswer {
   /** PostHog's property for this question's answer, `$survey_response_` and the question's id. */
   readonly responseKey: string;
   readonly question: string;
-  readonly response: string | undefined;
+  /** One answer, or a multiple-choice question's list of them. */
+  readonly response: string | readonly string[] | undefined;
 }
 
 /** One response to one of our PostHog surveys, from one account. */
