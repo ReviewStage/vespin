@@ -35,9 +35,12 @@ appId: dev.vespin.ios
 - takeScreenshot: got-it-undo
 - tapOn:
     id: "failure-notice-undo"
+# Note that the notice slides away first, so the chip is found by itself rather than by the notice's own "Got it: …".
 - extendedWaitUntil:
-    visible: "Got it"
+    notVisible:
+      id: "failure-notice-undo"
     timeout: 5000
+- assertVisible: "Got it"
 - waitForAnimationToEnd
 - takeScreenshot: got-it-undone
 
@@ -54,9 +57,21 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - tapOn: "What the expired invite page says"
 - waitForAnimationToEnd
+# Note that the thread's ⋯ is the last "More" (a split view's list has its own first), and a tap that lands before the bar button is ready opens nothing, so it is tapped again where its menu did not open.
+- extendedWaitUntil:
+    visible: "More"
+    timeout: 5000
 - tapOn:
     text: "More"
     index: -1
+- runFlow:
+    when:
+      notVisible: "Resolve"
+    commands:
+      - waitForAnimationToEnd
+      - tapOn:
+          text: "More"
+          index: -1
 - tapOn: "Resolve"
 - extendedWaitUntil:
     visible:
@@ -66,9 +81,20 @@ appId: dev.vespin.ios
 - takeScreenshot: resolve-undo
 - tapOn:
     id: "failure-notice-undo"
-- waitForAnimationToEnd
+- extendedWaitUntil:
+    notVisible:
+      id: "failure-notice-undo"
+    timeout: 5000
 - tapOn:
     text: "More"
     index: -1
+- runFlow:
+    when:
+      notVisible: "Resolve"
+    commands:
+      - waitForAnimationToEnd
+      - tapOn:
+          text: "More"
+          index: -1
 - assertVisible: "Resolve"
 - takeScreenshot: resolve-undone
