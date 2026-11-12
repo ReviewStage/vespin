@@ -737,7 +737,9 @@ export class HostedAgentClient {
     params: ProviderKeyResetCreditParams,
   ): Effect.Effect<ProviderKeysAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(providerKeyResetCreditRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.account.useResetCredit, admitted);
   }
 
