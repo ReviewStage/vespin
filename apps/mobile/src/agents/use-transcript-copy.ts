@@ -19,7 +19,7 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import { BUZZ, buzz, shareWords } from "@repo/ui-native";
 import { setStringAsync } from "expo-clipboard";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 
 /** What the copy says where the transcript couldn't be read or copied, in the panel's words. */
@@ -43,47 +43,55 @@ export function useTranscriptCopy(
 ): TranscriptCopying {
   const acts = useHostActs();
   const [note, setNote] = useState<string | undefined>(undefined);
+  const latest = useRef(0);
 
-  /** The transcript's words in the way asked; none where it couldn't be read, which is said. */
-  const words = (way: TranscriptCopy): Promise<string | undefined> => {
+  // Note that leaving the page outdates every press, so a read that settles after it neither copies, shares, nor says anything.
+  useEffect(
+    () => () => {
+      latest.current += 1;
+    },
+    [],
+  );
+
+  /**
+   * Reads the transcript whole and hands its words in the way asked to
+   * `land`. Only the latest press lands or says why it failed, so a slow
+   * earlier read never overwrites a later copy or shows a failure over it.
+   */
+  const press = (way: TranscriptCopy, land: (words: string) => Promise<void> | void) => {
+    latest.current += 1;
+    const pressed = latest.current;
+    const stands = () => pressed === latest.current;
+
+    const failed = (cause: unknown) => {
+      console.error(TRANSCRIPT_UNREAD, cause);
+
+      if (stands()) setNote(TRANSCRIPT_UNREAD);
+    };
+
     setNote(undefined);
+    void readWholeTranscript((params) => acts[ACT_KIND.AGENTS_MESSAGES](params), { agentId })
+      .then(async (messages) => {
+        if (!stands()) return;
 
-    return readWholeTranscript((params) => acts[ACT_KIND.AGENTS_MESSAGES](params), {
-      agentId,
-    }).then((messages) => {
-      if (!("unread" in messages)) {
-        return transcriptMarkdown(agentTranscript({ title, messages, brief }), way);
-      }
+        if ("unread" in messages) {
+          failed(messages.unread);
 
-      console.error(TRANSCRIPT_UNREAD, messages.unread);
-      setNote(TRANSCRIPT_UNREAD);
+          return;
+        }
 
-      return undefined;
-    });
-  };
-
-  const failed = (cause: unknown) => {
-    console.error(TRANSCRIPT_UNREAD, cause);
-    setNote(TRANSCRIPT_UNREAD);
+        await land(transcriptMarkdown(agentTranscript({ title, messages, brief }), way));
+      })
+      .catch(failed);
   };
 
   return {
-    copy: (way) => {
-      void words(way)
-        .then(async (copied) => {
-          if (copied === undefined) return;
-          await setStringAsync(copied);
-          buzz(BUZZ.SUCCESS);
-        })
-        .catch(failed);
-    },
-    share: (way) => {
-      void words(way)
-        .then((shared) => {
-          if (shared !== undefined) shareWords(shared);
-        })
-        .catch(failed);
-    },
+    copy: (way) =>
+      press(way, async (words) => {
+        await setStringAsync(words);
+        buzz(BUZZ.SUCCESS);
+      }),
+    share: (way) => press(way, shareWords),
     note,
   };
 }
