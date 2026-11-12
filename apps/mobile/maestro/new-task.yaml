@@ -99,9 +99,12 @@ appId: dev.vespin.ios
 - takeScreenshot: new-task-add
 - tapOn:
     id: "new-task-attach"
+# Note that the waits on the photo picker and on the picked photo are long,
+# because the picker's process and the Photos file provider start cold on a
+# fresh simulator, which has taken a loaded runner thirteen seconds.
 - extendedWaitUntil:
     visible: "Select up to .*"
-    timeout: 10000
+    timeout: 30000
 - waitForAnimationToEnd
 - takeScreenshot: new-task-picker
 - tapOn:
@@ -122,7 +125,7 @@ appId: dev.vespin.ios
 - tapOn: "Add|Done"
 - extendedWaitUntil:
     visible: "Picture 1"
-    timeout: 5000
+    timeout: 30000
 - waitForAnimationToEnd
 - takeScreenshot: new-task-picture
 - tapOn: "Cancel"

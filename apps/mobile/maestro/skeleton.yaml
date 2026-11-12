@@ -29,16 +29,20 @@ appId: dev.vespin.ios
 # notice, opens on its words; it may stand below the fold of a short window,
 # so the list is scrolled to it, and settles before the tap, which a list
 # still gliding takes as a stop rather than a pick.
-- tapOn: "Inbox"
-- scrollUntilVisible:
-    element: "acceptInvite can add a member twice"
-    direction: DOWN
-- waitForAnimationToEnd
-- tapOn: "acceptInvite can add a member twice"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Inbox
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "acceptInvite can add a member twice"
 - assertVisible: ".*adds them twice.*"
 - takeScreenshot: inbox-thread
-- tapOn: "Inbox"
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - assertVisible: "Tasks"
 - takeScreenshot: tasks
 - tapOn: "Teammate invitations"

@@ -25,7 +25,7 @@ the macOS run below. Every command here runs from `apps/mobile`.
 | `xcrun simctl launch booted dev.vespin.ios -fixture inbox -refuseWrites true` | Launch it on the Inbox fixture with a task's status and pin refused, as `maestro/failure-notice.yaml` does, to see the failure notice |
 | `xcrun simctl launch booted dev.vespin.ios -sentryTest js` | Send Sentry a test report from a live launch (`native` crashes the app instead, sent on the next launch), to check a build's reports arrive symbolicated (`src/crash-reports.ts`); `xcrun devicectl device process launch --device <iPhone> dev.vespin.ios -sentryTest js` does it on a connected iPhone |
 | `scripts/simulator-build.sh` | Generate `ios/` and build a Release app for the simulator, its bundle embedded, naming the `.app` on its last line |
-| `scripts/simulator-screenshots.sh <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
+| `scripts/simulator-screenshots.sh [--flows inbox,tasks] <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it, or only those `--flows` names (`notification` for the notification flow), in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
 | `xcrun simctl io booted screenshot shot.png` | One screenshot of the booted simulator by hand |
 | `pnpm export:ios` | Bundle the app with Metro, as CI's Linux job does; it catches a module Hermes cannot resolve |
 | `pnpm typecheck`, `pnpm test:vitest` | The TypeScript and the logic tests |
@@ -72,8 +72,10 @@ device problems show in the TestFlight builds. For screenshots, ask for a run
 on your branch: Vespin's GitHub App cannot dispatch a workflow, so it is
 started from the developer's Mac (`gh workflow run ios-simulators.yml --ref
 <branch>`). Each simulator takes about an hour, every flow in the light
-appearance and the dark, after a 20-minute build, so name fewer for a quicker
-look (`-f simulators="iPhone 18 Pro"`).
+appearance and the dark, after a 20-minute build, so name fewer simulators or
+flows for a quicker look (`-f simulators="iPhone 18 Pro" -f flows=inbox,tasks`),
+each flow as its file under `maestro/` is named without `.yaml`, and the
+notification flow as `notification`.
 Then read its screenshots:
 
 ```
@@ -84,9 +86,10 @@ gh run download <run id> --name mobile-screenshots --dir /tmp/mobile-screenshots
 Each simulator's pictures, in each appearance, are under
 `/tmp/mobile-screenshots/<slug>/<light|dark>/debug/<flow>/takeScreenshot/`,
 named as the flow's `takeScreenshot` steps name them; a failed step's own
-screenshot is under `debug/<flow>/screenshots/` beside them. A flow that
-failed runs once more, alone, its second run under `<light|dark>/retry/`
-laid out the same way. The notification flow, whose push Maestro cannot
+screenshot is under `debug/<flow>/screenshots/` beside them, with the screen's
+tree at that step under `debug/<flow>/screen-hierarchy/` and Maestro's log
+under `debug/<flow>/logs/`. A failed flow is not run again, so a pass is a
+pass. The notification flow, whose push Maestro cannot
 send, runs apart: the script installs the app afresh, lets it notify through
 the applesimutils Maestro installs (Maestro's own `permissions` cannot grant
 notifications), runs `maestro/notification/background.yaml`, pushes
@@ -248,6 +251,30 @@ Logic is tested with vitest, under `src/**/*.test.ts`, as root `AGENTS.md`'s
 Testing section says. Screens are not unit-tested: each is checked by a Maestro
 flow under `maestro/` that drives the simulator and takes a screenshot. A new screen adds its steps to a flow, or a flow of its own, and a
 pull request with UI shows its screenshots to the developer in a thread.
+
+A flow is written one way throughout:
+
+- **A control is found by its id** where it has one (`workspace-switcher`,
+  `composer-field`), and a row or a line by its words. A tab is opened
+  through `maestro/subflows/tab.yaml`, by its id (`inbox-tab`, `tasks-tab`,
+  `search-tab`), since a list's title and a back button share its name.
+- **A repeated step is a subflow** under `maestro/subflows/`, run with
+  `runFlow` and its `env`: `open-row.yaml` and `row-menu.yaml` scroll to a
+  row and let the list settle before its tap or long press, `scroll-to.yaml`
+  centers an element on a page, so neither a bar nor the reply box covers
+  it, `tab.yaml` opens a tab, and `dismiss.yaml` closes a menu by a tap off
+  it. Maestro reads a swipe's points as the flow is parsed, so a swipe stays
+  in its flow.
+- **A swipe is closed before the next press**, by pressing its action or a
+  tap on the row across from it, since a row left open takes the next press
+  on the list only to close itself; a tap off the list, on a bar, leaves it
+  open.
+- **No step waits or retries around a flake.** A step that fails now and
+  then has a cause to find; a wait stays only where the simulator itself is
+  slow, a cold launch or a system picker, with why beside it.
+- **A launch argument's value is quoted** (`refuseWrites: "true"`), since
+  Maestro hands a YAML boolean to the app without its dash, and iOS never
+  reads it.
 
 ## Conventions
 

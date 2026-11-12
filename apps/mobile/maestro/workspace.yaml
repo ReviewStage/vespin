@@ -36,7 +36,10 @@ appId: dev.vespin.ios
 - assertNotVisible: "Recorded the invite flow"
 - waitForAnimationToEnd
 - takeScreenshot: workspace-switched
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - assertNotVisible: "Weekly digest email"
 # The choice outlives a relaunch, as the phone keeps it.
 - stopApp

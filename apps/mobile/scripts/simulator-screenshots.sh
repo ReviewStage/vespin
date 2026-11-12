@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # simulator-screenshots.sh -- install a simulator build on each named simulator and run the Maestro flows on it, keeping their screenshots.
 #
-# Usage: scripts/simulator-screenshots.sh <path to Vespin.app> <output directory> <simulator name>...
+# Usage: scripts/simulator-screenshots.sh [--flows <name>,...] <path to Vespin.app> <output directory> <simulator name>...
 #
-# Each simulator is booted, handed the app, driven through every flow under
-# maestro/ and the notification flow under maestro/notification/, and shut
-# down again, so the Mac holds no booted simulator once
-# the run ends. Every flow runs once in the light appearance and once in the
-# dark, and a device's screenshots land under
-# <output>/<device slug>/<appearance>/debug/<flow>/takeScreenshot/; a flow
-# that failed runs once more, its second run's under <appearance>/retry/.
+# Each simulator is booted, handed the app, driven through the flows, and
+# shut down again, so the Mac holds no booted simulator once the run ends.
+# The flows are every one under maestro/ and the notification flow under
+# maestro/notification/, or with --flows only those named, each as its file
+# under maestro/ is named without `.yaml` (`inbox`, `tasks`), the
+# notification flow as `notification`. Every flow runs once in the light
+# appearance and once in the dark, and a device's screenshots land under
+# <output>/<device slug>/<appearance>/debug/<flow>/takeScreenshot/.
 # The simulator is named as `xcrun simctl list devices` names it, such as
 # "iPhone 18 Pro" or "iPhone Duo"; the first available device of that name
 # is used, and where none exists one is created from the device type of that
@@ -17,9 +18,39 @@
 set -euo pipefail
 
 APP_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+USAGE="usage: $0 [--flows <name>,...] <path to Vespin.app> <output directory> <simulator name>..."
 
+# The flows under test, as paths under maestro/, and whether the
+# notification flow is among them: every flow, or those --flows names.
+flows=("$APP_DIRECTORY/maestro")
+notification=1
+if [[ "${1:-}" == "--flows" ]]; then
+    (($# >= 2)) || {
+        echo "$USAGE" >&2
+        exit 2
+    }
+    flows=()
+    notification=0
+    while IFS= read -r name; do
+        if [[ -z "$name" ]]; then
+            continue
+        elif [[ "$name" == "notification" ]]; then
+            notification=1
+        elif [[ -f "$APP_DIRECTORY/maestro/$name.yaml" ]]; then
+            flows+=("$APP_DIRECTORY/maestro/$name.yaml")
+        else
+            echo "error: no flow named \"$name\" under maestro/" >&2
+            exit 2
+        fi
+    done < <(printf '%s\n' "$2" | tr ',' '\n' | sed 's/^ *//; s/ *$//')
+    if ((${#flows[@]} == 0 && notification == 0)); then
+        echo "error: --flows named no flow" >&2
+        exit 2
+    fi
+    shift 2
+fi
 if (($# < 3)); then
-    echo "usage: $0 <path to Vespin.app> <output directory> <simulator name>..." >&2
+    echo "$USAGE" >&2
     exit 2
 fi
 app=$1
@@ -116,42 +147,16 @@ run_maestro() {
         "$3"
 }
 
-# Prints the flows Maestro's JUnit report `$1` names failed, one path under
-# maestro/ a line; nothing where the report is missing or names none.
-failed_flows() {
-    [[ -f "$1" ]] || return 0
-    node -e '
-      const [report, directory] = process.argv.slice(1);
-      const xml = require("fs").readFileSync(report, "utf8");
-      for (const [, attributes, body = ""] of xml.matchAll(/<testcase\b([^>]*?)(?:\/>|>([\s\S]*?)<\/testcase>)/g)) {
-        const file = /\bfile="([^"]*)"/.exec(attributes)?.[1];
-        if (file && body.includes("<failure")) console.log(require("path").join(directory, require("path").basename(file)));
-      }
-    ' "$1" "$APP_DIRECTORY/maestro"
-}
-
-# Runs every flow under maestro/ on the booted simulator `$1`, its output
-# under `$2`, and runs again, under `$2/retry`, only the flows that failed.
-# Note that a second run of a failed flow alone replaces what was an erase of
-# the simulator and a second run of every flow, which doubled a run with one
-# red flow; and that where the first run wrote no report, as when the driver
-# never started, every flow runs again.
+# Runs the flows under test on the booted simulator `$1`, its output under
+# `$2`. Note that a flow that fails is not run again: a second run passed a
+# flow that failed now and then, which hid the cause.
 run_suite() {
-    local report="$2/report.xml"
+    ((${#flows[@]} > 0)) || return 0
     maestro --udid "$1" test \
         --test-output-dir "$2" \
         --debug-output "$2/debug" \
         --flatten-debug-output \
-        --format junit --output "$report" \
-        "$APP_DIRECTORY/maestro" && return 0
-    local flows=()
-    while IFS= read -r flow; do flows+=("$flow"); done < <(failed_flows "$report")
-    ((${#flows[@]} > 0)) || flows=("$APP_DIRECTORY/maestro")
-    echo "running the ${#flows[@]} failed flow(s) again on $1: ${flows[*]##*/}" >&2
-    maestro --udid "$1" test \
-        --test-output-dir "$2/retry" \
-        --debug-output "$2/retry/debug" \
-        --flatten-debug-output \
+        --format junit --output "$2/report.xml" \
         "${flows[@]}"
 }
 
@@ -162,26 +167,28 @@ run_suite() {
 # cleared by the flow's `launchApp`, because Maestro's clear reinstalls the
 # app, which takes back the permission.
 run_notification_flow() {
-    local notification="$APP_DIRECTORY/maestro/notification"
+    local directory="$APP_DIRECTORY/maestro/notification"
     xcrun simctl uninstall "$1" "$bundle_id" || true
     xcrun simctl install "$1" "$app" || return 1
     allow_notifications "$1" || return 1
-    run_maestro "$1" "$2" "$notification/background.yaml" || return 1
-    xcrun simctl push "$1" "$bundle_id" "$notification/ask.apns" || return 1
-    run_maestro "$1" "$2" "$notification/open.yaml"
+    run_maestro "$1" "$2" "$directory/background.yaml" || return 1
+    xcrun simctl push "$1" "$bundle_id" "$directory/ask.apns" || return 1
+    run_maestro "$1" "$2" "$directory/open.yaml"
 }
 
-# Runs every flow under maestro/ on the booted simulator `$1`, from a clean
-# app, its output under `$2`, which a run before it is cleared from, then the
-# notification flow, and fails where either failed. Note that the
-# notification flow runs whatever the others did, so its screenshots are
-# kept even where another flow fails.
+# Runs the flows under test on the booted simulator `$1`, from a clean app,
+# their output under `$2`, which a run before it is cleared from, then the
+# notification flow where it is under test, and fails where either failed.
+# Note that the notification flow runs whatever the others did, so its
+# screenshots are kept even where another flow fails.
 run_flows() {
     rm -rf "$2"
     xcrun simctl terminate "$1" "$bundle_id" 2>/dev/null || true
     local failed=0
     run_suite "$1" "$2" || failed=1
-    run_notification_flow "$1" "$2/notification" || failed=1
+    if ((notification)); then
+        run_notification_flow "$1" "$2/notification" || failed=1
+    fi
     return "$failed"
 }
 

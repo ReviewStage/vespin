@@ -16,7 +16,11 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
-- assertVisible: "Add a way to resend an invite that expired."
+# Note that the launch waits up to half a minute for its first words, as
+# `pull-request.yaml`'s do.
+- extendedWaitUntil:
+    visible: "Add a way to resend an invite that expired."
+    timeout: 30000
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-latest
@@ -36,13 +40,14 @@ appId: dev.vespin.ios
 - tapOn: "Edited.*"
 # The second turn: the page it showed as a card, and its recording, read as
 # its MP4 copy, which the system's player plays in place.
-# Note that the card is left near the top as it scrolls in, clear of Jump to
-# latest, which floats over the middle of a short window such as the Duo's.
-- scrollUntilVisible:
-    element: "Invite funnel, Page"
-    direction: UP
-- waitForAnimationToEnd:
-    timeout: 5000
+# Note that the card is scrolled to the window's middle, because a scroll
+# that stops once it shows leaves it under the bar, where the tap lands on the
+# status bar and scrolls the list to its top instead.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Invite funnel, Page"
+      DIRECTION: UP
 - takeScreenshot: agent-page-card
 - tapOn: "Invite funnel, Page"
 # Note that the wait is long, because the first web view a freshly booted
@@ -74,12 +79,11 @@ appId: dev.vespin.ios
 - takeScreenshot: agent-recording
 # The first turn finished: its run of calls folded under one line, the
 # pictures it showed standing apart after it.
-- scrollUntilVisible:
-    element: "The invite dialog"
-    direction: UP
-    centerElement: true
-- waitForAnimationToEnd:
-    timeout: 5000
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "The invite dialog"
+      DIRECTION: UP
 - takeScreenshot: agent-pictures
 # The pull request it opened after them, as its card with Review.
 - scrollUntilVisible:
@@ -101,12 +105,17 @@ appId: dev.vespin.ios
 # At the top, the page older than the transcript's first is read; the
 # fixture's first read is not heard back, so it offers Try again, and the
 # next lays the older turn before the first.
-# Note that the list scrolls to the notice's words rather than to Try again
-# under them, because a scroll that stops once Try again shows leaves the
-# words under the bar.
+# Note that the list is then pulled on to its top, because the notice is its
+# first row, which no scroll can center, and a scroll that stops once the
+# notice shows leaves Try again under the bar, where a press lands beside it.
 - scrollUntilVisible:
     element: "Earlier messages could not be read."
     direction: UP
+- swipe:
+    start: "50%, 30%"
+    end: "50%, 80%"
+- waitForAnimationToEnd:
+    timeout: 5000
 - assertVisible: "Try again"
 - waitForAnimationToEnd:
     timeout: 5000
@@ -175,10 +184,11 @@ appId: dev.vespin.ios
 # Note that the Model row is centered as the form scrolls back, because one
 # left at the top stands under the sheet's bar, and its menu is opened from
 # its value, since the system's menu picker opens from its value alone.
-- scrollUntilVisible:
-    element: "Model.*"
-    direction: UP
-    centerElement: true
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Model.*"
+      DIRECTION: UP
 - tapOn: "Opus 5.5"
 - assertVisible: ".*Sonnet 5.5"
 - waitForAnimationToEnd:

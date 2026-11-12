@@ -4,28 +4,28 @@
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
 ---
-# Note that what a step types is pressed Send on only once Send stands lit,
-# and is typed again where it does not light, because the field now and then
-# keeps a word Maestro typed without telling the app of it, so Send stays
-# dimmed with the words still in the field, which a person's typing never
-# did (checked with idb's keys on the iPhone 18 Pro, iOS 27.2).
+# Note that Send is pressed only once it stands lit, so words the field
+# kept without telling the app fail at the press's step rather than later.
 #
 # Launched on the host's Inbox fixture, as `inbox.yaml` is, so no server is
 # reached: the fixture takes each reply and resolve as the service would, but
 # for the migration's approval, which it refuses (`@repo/host/fixture-inbox`).
 # Each thread is opened from a fresh launch, so a compact window's pushed
 # thread and a regular window's split view are reached the same way, with no
-# back button between them.
+# back button between them. Note that a row is scrolled to rather than to the
+# list's middle, because the list's last row, the expired invite page's,
+# can never stand there.
 - launchApp:
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Who can withdraw an invite?"
-- waitForAnimationToEnd
 # A decide: the options as a card of radio rows, the recommended tagged; a
 # pick lights Send, which sends it with the note typed, and the thread reads
 # it answered at once: the card gone, and the answer's stamp under "You".
-- tapOn: "Who can withdraw an invite?"
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Who can withdraw an invite\\?"
 - assertVisible: "The member who sent it"
 - waitForAnimationToEnd
 - takeScreenshot: answer-decide
@@ -47,9 +47,10 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Run the memberships migration on preview?"
-- waitForAnimationToEnd
-- tapOn: "Run the memberships migration on preview?"
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Run the memberships migration on preview\\?"
 - assertVisible: "Decline"
 - tapOn: "Approve, Recommended.*"
 - tapOn: "Send"
@@ -66,12 +67,10 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- scrollUntilVisible:
-    element: "Invite limits"
-    direction: DOWN
-    centerElement: true
-- waitForAnimationToEnd
-- tapOn: "Invite limits"
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Invite limits"
 - assertVisible: "Choose"
 - waitForAnimationToEnd
 - takeScreenshot: answer-fields
@@ -86,14 +85,6 @@ appId: dev.vespin.ios
     id: "answer-field-Invites a member may send a day"
 - waitForAnimationToEnd
 - inputText: "."
-- runFlow:
-    when:
-      visible:
-        text: "Send"
-        enabled: false
-    commands:
-      - eraseText: 60
-      - inputText: "."
 - assertVisible:
     text: "Send"
     enabled: true
@@ -101,14 +92,6 @@ appId: dev.vespin.ios
 - assertVisible: "Write a number in Invites a member may send a day."
 - eraseText: 1
 - inputText: "20"
-- runFlow:
-    when:
-      visible:
-        text: "Send"
-        enabled: false
-    commands:
-      - eraseText: 60
-      - inputText: "20"
 - assertVisible:
     text: "Send"
     enabled: true
@@ -128,12 +111,10 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- scrollUntilVisible:
-    element: "Verify the digest's sender domain"
-    direction: DOWN
-    centerElement: true
-- waitForAnimationToEnd
-- tapOn: "Verify the digest's sender domain"
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Verify the digest's sender domain"
 - assertVisible: "Mark done"
 - tapOn: ".*Add the three DNS records.*"
 - assertVisible: ".*your registrar\\., ticked"
@@ -152,24 +133,14 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- scrollUntilVisible:
-    element: "The digest's subject line"
-    direction: DOWN
-    centerElement: true
-- waitForAnimationToEnd
-- tapOn: "The digest's subject line"
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "The digest's subject line"
 - tapOn:
     id: "composer-field"
 - waitForAnimationToEnd
 - inputText: "What shipped in Relay this week"
-- runFlow:
-    when:
-      visible:
-        text: "Send"
-        enabled: false
-    commands:
-      - eraseText: 60
-      - inputText: "What shipped in Relay this week"
 - assertVisible:
     text: "Send"
     enabled: true
@@ -191,25 +162,15 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- scrollUntilVisible:
-    element: "acceptInvite can add a member twice"
-    direction: DOWN
-    centerElement: true
-- waitForAnimationToEnd
-- tapOn: "acceptInvite can add a member twice"
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "acceptInvite can add a member twice"
 - assertVisible: "Reply"
 - tapOn:
     id: "composer-field"
 - waitForAnimationToEnd
 - inputText: "Thanks, one transaction sounds right."
-- runFlow:
-    when:
-      visible:
-        text: "Send"
-        enabled: false
-    commands:
-      - eraseText: 60
-      - inputText: "Thanks, one transaction sounds right."
 - assertVisible:
     text: "Send"
     enabled: true
@@ -228,12 +189,10 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- scrollUntilVisible:
-    element: "What the expired invite page says"
-    direction: DOWN
-    centerElement: true
-- waitForAnimationToEnd
-- tapOn: "What the expired invite page says"
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "What the expired invite page says"
 - waitForAnimationToEnd
 - tapOn:
     text: "More"

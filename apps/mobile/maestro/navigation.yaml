@@ -40,7 +40,10 @@ onFlowComplete:
       - assertVisible: "Find a task, an Inbox item, or an agent."
       - waitForAnimationToEnd
       - takeScreenshot: ipad-sidebar-search
-      - tapOn: "Inbox"
+      - runFlow:
+          file: subflows/tab.yaml
+          env:
+            TAB: Inbox
       - tapOn:
           id: "workspace-switcher"
       - assertVisible: ".*, Settings"
@@ -67,7 +70,10 @@ onFlowComplete:
       - tapOn:
           point: "50%, 90%"
       - waitForAnimationToEnd
-      - tapOn: "Tasks"
+      - runFlow:
+          file: subflows/tab.yaml
+          env:
+            TAB: Tasks
       - assertVisible: "Weekly digest email"
       - waitForAnimationToEnd
       - takeScreenshot: tab-bar

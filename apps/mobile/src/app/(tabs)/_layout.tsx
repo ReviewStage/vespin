@@ -42,6 +42,9 @@ import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
 // rotation, or a resize keeps the open thread or task. Nor is it on wherever
 // the app sidebar stands, so a phone-idiom window that wide never shows the
 // system's tab sidebar beside it.
+// Each tab carries an id of its own (`inbox-tab`, `tasks-tab`, `search-tab`),
+// as the app sidebar's places do, since a list's title, a back button, and a
+// split view's search field share their names, and a flow taps a tab by it.
 export default function TabsLayout() {
   const colors = useColors();
   const router = useRouter();
@@ -59,7 +62,7 @@ export default function TabsLayout() {
       tintColor={colors.ACCENT}
       badgeBackgroundColor={colors.ATTENTION_FILL}
     >
-      <NativeTabs.Trigger name="inbox" accessibilityLabel="Inbox">
+      <NativeTabs.Trigger name="inbox" accessibilityLabel="Inbox" testID="inbox-tab">
         <NativeTabs.Trigger.Icon sf="tray" />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Inbox</NativeTabs.Trigger.Label>
         {/* Note that the badge is left out at none rather than marked hidden, since NativeTabs draws a badge that holds a value whatever its hidden says. */}
@@ -67,11 +70,10 @@ export default function TabsLayout() {
           <NativeTabs.Trigger.Badge>{String(waiting)}</NativeTabs.Trigger.Badge>
         )}
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="tasks" accessibilityLabel="Tasks">
+      <NativeTabs.Trigger name="tasks" accessibilityLabel="Tasks" testID="tasks-tab">
         <NativeTabs.Trigger.Icon sf="checklist" />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Tasks</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
-      {/* Note that the Search tab carries an id of its own, since a list's round search button and a split view's search field are named Search too, and a flow taps the tab by it. */}
       <NativeTabs.Trigger
         name="search"
         role="search"

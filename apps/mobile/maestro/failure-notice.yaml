@@ -7,17 +7,25 @@ appId: dev.vespin.ios
 # Launched on the host's Inbox fixture with `-refuseWrites true`, so the
 # fixture refuses a task's status and its pin as the service would
 # (`src/host/fixture-host.ts`), and no server is reached.
+# Note that the value is quoted, as every launch argument's is, because
+# Maestro hands a YAML boolean to the app without its dash, which iOS then
+# never reads as a setting, and the fixture refuses nothing.
 - launchApp:
     clearState: true
     arguments:
       fixture: inbox
-      refuseWrites: true
-- tapOn: "Tasks"
-- assertVisible: "Weekly digest email"
-- waitForAnimationToEnd
+      refuseWrites: "true"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 # Unpin from the row's long press menu is refused: the row stays pinned and
 # the notice says why, with Try again.
-- longPressOn: "Weekly digest email"
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: Unpin
 - tapOn: "Unpin"
 - assertVisible: "The task could not be unpinned. Try again."
 - assertVisible:
@@ -40,7 +48,11 @@ appId: dev.vespin.ios
 # task's agent is at work and only the person can decide to stop it; once
 # confirmed, it is refused too: the task stays in the list and the notice
 # says it could not be marked done.
-- longPressOn: "Weekly digest email"
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: Mark done
 - tapOn: "Mark done"
 - tapOn: "Stop agents"
 - assertVisible: "The task could not be marked done. Try again."

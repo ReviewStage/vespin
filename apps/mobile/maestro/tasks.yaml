@@ -16,7 +16,10 @@ onFlowComplete:
     clearState: true
     arguments:
       fixture: inbox
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - assertVisible: "Pinned"
 - assertVisible: "Weekly digest email"
 - waitForAnimationToEnd
@@ -29,22 +32,18 @@ onFlowComplete:
 - tapOn: "Launch, [0-9]+"
 - assertVisible: "Launch checklist"
 # A long press offers Mark done in the row's menu, and a swipe from the
-# trailing edge marks it done at once; either way the row leaves the list.
+# trailing edge reveals it too; either way the row leaves the list once it
+# is pressed.
 # Note that a row may stand below the fold of a short window, the folded
 # iPhone Duo's, so the list is scrolled to it.
-- scrollUntilVisible:
-    element: "Launch checklist"
-    direction: DOWN
-- waitForAnimationToEnd
-- longPressOn: "Launch checklist"
-- assertVisible: "Mark done"
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Launch checklist
+      ITEM: Mark done
 - takeScreenshot: tasks-menu
 - tapOn: "Mark done"
 - assertNotVisible: "Launch checklist"
-- scrollUntilVisible:
-    element: "Usage alerts"
-    direction: DOWN
-- waitForAnimationToEnd
 # Note that a swipe on a split view's sidebar reads as a tap under Maestro's
 # driver, so a regular window, which stands "Select a task" beside its list,
 # marks the task done from its menu instead.
@@ -52,17 +51,23 @@ onFlowComplete:
     when:
       notVisible: "Select a task"
     commands:
+      - scrollUntilVisible:
+          element: "Usage alerts"
+          direction: DOWN
+      - waitForAnimationToEnd
       - swipe:
           from: "Usage alerts"
           direction: LEFT
-      - tapOn:
-          text: "Mark done"
-          optional: true
+      - tapOn: "Mark done"
 - runFlow:
     when:
       visible: "Select a task"
     commands:
-      - longPressOn: "Usage alerts"
+      - runFlow:
+          file: subflows/row-menu.yaml
+          env:
+            ROW: Usage alerts
+            ITEM: Mark done
       - tapOn: "Mark done"
 - assertNotVisible: "Usage alerts"
 - takeScreenshot: tasks-marked-done
@@ -77,8 +82,11 @@ onFlowComplete:
 - waitForAnimationToEnd
 # A swipe from the leading edge reveals Unpin, which a full swipe would
 # press at once, so the flow swipes partway across the first row, under
-# Pinned's header, and a tap on the Tasks tab closes it unpressed. Note that
-# a regular window, whose swipes read as taps, is left out.
+# Pinned's header, and a tap on the row's own words closes it unpressed.
+# Note that the row is closed before anything else is pressed, because a row
+# left open takes the next press on the list, the long press below among
+# them, only to close itself; and that a regular window, whose swipes read
+# as taps, is left out.
 - runFlow:
     when:
       notVisible: "Select a task"
@@ -87,18 +95,15 @@ onFlowComplete:
           start: "8%, 21%"
           end: "38%, 21%"
           duration: 900
-      - takeScreenshot: tasks-swipe-leading
-      - tapOn: "Tasks"
       - waitForAnimationToEnd
-# Note that the long press is pressed again where the menu did not open,
-# because a swipe left open takes the first press to close itself.
-- longPressOn: "Weekly digest email"
+      - takeScreenshot: tasks-swipe-leading
+      - tapOn: "Weekly digest email"
+      - waitForAnimationToEnd
 - runFlow:
-    when:
-      notVisible: "Open"
-    commands:
-      - longPressOn: "Weekly digest email"
-- assertVisible: "Open"
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: Open
 - assertVisible: "Status"
 - assertVisible: "Copy link"
 - assertVisible: "Rename"
@@ -117,7 +122,11 @@ onFlowComplete:
 - waitForAnimationToEnd
 # Permanently delete asks first, in the panel's words, and Cancel keeps the
 # task.
-- longPressOn: "Weekly digest email"
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: Permanently delete
 - tapOn: "Permanently delete"
 - assertVisible: "Permanently delete task?"
 - waitForAnimationToEnd
@@ -128,22 +137,32 @@ onFlowComplete:
 # Copy link raises the system's share sheet on the task's address, whose
 # first row copies it; its close puts it away, which iOS 27.2 names
 # "dismiss popup" where earlier releases said "Close".
-- longPressOn: "Weekly digest email"
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: Copy link
 - tapOn: "Copy link"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-copy-link
-- tapOn:
-    text: "Close|dismiss popup"
-    optional: true
+- tapOn: "Close|dismiss popup"
 - waitForAnimationToEnd
-- longPressOn: "Weekly digest email"
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: Mark as unread
 # Mark as unread draws the row's dot.
 - tapOn: "Mark as unread"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-row-unread
 # Mark done on a task whose agent is at work asks first, as the panel does,
 # and Cancel leaves the task where it stands.
-- longPressOn: "Weekly digest email"
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Weekly digest email
+      ITEM: Mark done
 - tapOn: "Mark done"
 - assertVisible: "Mark as Done?"
 - assertVisible: "Stop agents"
@@ -154,8 +173,10 @@ onFlowComplete:
 # Opening the task reads it, so its dot is gone once the list shows again.
 - tapOn: "Weekly digest email"
 - assertVisible: "Created by .*"
-- tapOn: "Tasks"
-- waitForAnimationToEnd
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - takeScreenshot: tasks-row-read
 # A task opens on its Overview: its path in the bar, its name, its chips, and
 # who created it,
@@ -175,15 +196,18 @@ onFlowComplete:
 # holds its transcript, and its pull request, over Open and Stop, which a
 # swipe from its trailing edge reveals too while it works; once it rests the
 # swipe offers Archive, which asks first. A tap off the preview closes it.
-- longPressOn: "Build teammate invitations"
-- assertVisible: "Open"
-- waitForAnimationToEnd
+- runFlow:
+    file: subflows/row-menu.yaml
+    env:
+      ROW: Build teammate invitations
+      ITEM: Open
 - takeScreenshot: task-agent-preview
-# Note that the tap lands on the dimmed screen above the preview, since one
-# on the status bar is taken by the system and leaves the menu open.
-- tapOn:
-    point: "50%, 30%"
-- waitForAnimationToEnd
+# Note that the tap lands on the dimmed screen above the preview, which
+# lifts low on the screen under the agent's row.
+- runFlow:
+    file: subflows/dismiss.yaml
+    env:
+      POINT: 50%, 30%
 - runFlow:
     when:
       notVisible: "Select a task"
@@ -192,15 +216,15 @@ onFlowComplete:
       # Overview opened at its top stands it, as the leading swipe above
       # does, because a swipe from the row's name either holds long enough
       # to lift its preview or runs far enough to press Open; a tap on the
-      # page's plain line then closes it.
+      # page's plain line, inside the same list, then closes it.
       - swipe:
           start: "85%, 66%"
           end: "50%, 66%"
           duration: 900
+      - waitForAnimationToEnd
       - takeScreenshot: task-agent-swipe
       - tapOn: "Created by .*"
       - waitForAnimationToEnd
-- waitForAnimationToEnd
 - scrollUntilVisible:
     element: "Goal"
     direction: DOWN
@@ -221,9 +245,8 @@ onFlowComplete:
 - tapOn: "More"
 - assertVisible: "Open in browser"
 - takeScreenshot: task-page-menu
-- tapOn:
-    point: "50%, 90%"
-- waitForAnimationToEnd
+- runFlow:
+    file: subflows/dismiss.yaml
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd
@@ -295,15 +318,11 @@ onFlowComplete:
 - waitForAnimationToEnd
 # Back on the list, a landscape window stands it as a split view: on an iPad
 # the app sidebar, the list, and the task side by side.
-# Note that the tab is pressed again where the list did not come back,
-# because the first press after the reply's keyboard lowers can be spent.
-- tapOn: "Tasks"
 - runFlow:
-    when:
-      notVisible: "Pinned"
-    commands:
-      - tapOn: "Tasks"
-      - waitForAnimationToEnd
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- assertVisible: "Pinned"
 - setOrientation: LANDSCAPE_LEFT
 - waitForAnimationToEnd
 - takeScreenshot: tasks-wide

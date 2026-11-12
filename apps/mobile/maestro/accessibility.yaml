@@ -37,7 +37,10 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - extendedWaitUntil:
     visible: "Weekly digest email"
     timeout: 15000

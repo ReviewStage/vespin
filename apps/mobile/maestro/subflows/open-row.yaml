@@ -1,0 +1,11 @@
+# open-row.yaml -- scrolls down to the row `ROW` names, lets the list settle, and opens it; a row above is scrolled back to first.
+#
+# Note that the list is let settle before the tap, because a list still
+# gliding takes a tap as a stop rather than a pick.
+appId: dev.vespin.ios
+---
+- scrollUntilVisible:
+    element: "${ROW}"
+    direction: DOWN
+- waitForAnimationToEnd
+- tapOn: "${ROW}"

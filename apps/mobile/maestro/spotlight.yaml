@@ -2,9 +2,7 @@
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
-# Spotlight's own words are the system's, not the app's, so each wait on them
-# is optional; the Overview the tap opens is the app's, and is what the flow
-# checks. Handoff has no part a simulator shows, so it waits for a device.
+# Handoff has no part a simulator shows, so it waits for a device.
 appId: dev.vespin.ios
 ---
 # Launched on the host's Inbox fixture, whose workspace holds the account's
@@ -14,8 +12,14 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
-- waitForAnimationToEnd
+# Note that the Tasks list is read before the app is left, because the
+# index is written from it, so a search typed sooner can come back without
+# the app's row.
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
+- assertVisible: "Weekly digest email"
 - pressKey: Home
 - waitForAnimationToEnd
 # A swipe down from the Home Screen's middle opens Spotlight's search.
@@ -23,15 +27,19 @@ appId: dev.vespin.ios
     start: "50%,40%"
     end: "50%,70%"
 - inputText: "Weekly digest"
+# Note that the app's row is found by its title and the summary Spotlight
+# reads beside it, "In progress · Ada Lovelace", since Maestro matches words
+# whatever their case and Safari suggests "weekly digest email" too; and
+# that the keyboard is put away before the row is tapped, because Spotlight
+# lists the app's results under the web's, behind the keyboard, where a tap
+# lands on a key.
 - extendedWaitUntil:
-    visible: ".*Weekly digest email.*"
-    timeout: 15000
-    optional: true
+    visible: "Weekly digest email, .*"
+    timeout: 30000
+- hideKeyboard
 - waitForAnimationToEnd
 - takeScreenshot: spotlight-results
-# Note that the result is tapped by its title and anything Spotlight reads
-# beside it, its summary "In progress · Ada Lovelace" among it.
-- tapOn: ".*Weekly digest email.*"
+- tapOn: "Weekly digest email, .*"
 - extendedWaitUntil:
     visible: "Created by .*"
     timeout: 10000

@@ -1,0 +1,14 @@
+# row-menu.yaml -- scrolls down to the row `ROW` names (a row above is scrolled back to first), lets the list settle, and long presses it, so its menu stands with `ITEM` among its acts.
+#
+# Note that the list is let settle before the press, because a press on a row
+# still gliding is taken as the scroll's stop rather than held, and no menu
+# lifts.
+appId: dev.vespin.ios
+---
+- scrollUntilVisible:
+    element: "${ROW}"
+    direction: DOWN
+- waitForAnimationToEnd
+- longPressOn: "${ROW}"
+- assertVisible: "${ITEM}"
+- waitForAnimationToEnd

@@ -1,0 +1,23 @@
+# tab.yaml -- opens the tab `TAB` names (Inbox, Tasks, or Search): by its id, where the tab bar or the app sidebar carries it, and otherwise by its name, last in the tree, in the iPad's floating bar, which carries no id.
+#
+# Note that a tab is never tapped by its name alone where an id stands,
+# because a list's title and a back button share the name and come first in
+# the tree: a tap meant for the Tasks tab lands on the Tasks list's title.
+appId: dev.vespin.ios
+---
+- runFlow:
+    when:
+      visible:
+        id: "${TAB.toLowerCase()}-tab"
+    commands:
+      - tapOn:
+          id: "${TAB.toLowerCase()}-tab"
+- runFlow:
+    when:
+      notVisible:
+        id: "${TAB.toLowerCase()}-tab"
+    commands:
+      - tapOn:
+          text: "${TAB}"
+          index: -1
+- waitForAnimationToEnd
