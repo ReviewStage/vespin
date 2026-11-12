@@ -148,6 +148,7 @@ const readConnectionRestored = Schema.decodeUnknownOption(
 
 /** A move of the agent's goal the runner read where the harness's own stream says none (`claude-goals.ts`), its fields the goal notice's own. */
 const readGoal = Schema.decodeUnknownOption(GoalNoticeSchema);
+
 /**
  * The end a runner posted where it let a wait on wakeups go so its sandbox
  * could stop, read as a turn that ended, the wakeups it named dropped. A

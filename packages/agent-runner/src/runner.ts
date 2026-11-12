@@ -723,6 +723,7 @@ const takeMessage = Effect.fn("agent-runner/takeMessage")(function* (
   if (message.type === SDK_MESSAGE.RESULT) {
     for (const goal of MutableRef.getAndSet(launch.goals, [])) yield* launch.sink.emit(goal);
   }
+
   yield* launch.sink.emit(launch.annotate(message));
 
   if (message.type !== SDK_MESSAGE.RESULT) return;
@@ -1025,10 +1026,12 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
 
   const prompts = yield* Queue.unbounded<SDKUserMessage, Cause.Done>();
   const goals = MutableRef.make<readonly RunnerGoal[]>([]);
+
   const store =
     config.transcriptsUrl === undefined
       ? undefined
       : goalWatchedStore(transcriptStore(config.transcriptsUrl, bearer, trace.headers), goals);
+
   const resumed = yield* resumePointOf(claudeCode, config, store).pipe(Effect.result);
 
   if (Result.isFailure(resumed)) {

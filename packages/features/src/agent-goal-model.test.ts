@@ -51,6 +51,7 @@ describe("agentGoal", () => {
         notice(GOAL_EVENT.NOT_MET, { reason: "1 test fails." }),
       ]),
     ]);
+
     expect(goal).toEqual({
       condition: CONDITION,
       state: AGENT_GOAL_STATE.ACTIVE,
@@ -65,6 +66,7 @@ describe("agentGoal", () => {
 
   it("reads a verdict whose condition holds the words that part it from its reason as the goal's", () => {
     const condition = "lint says [ok]: nothing to fix";
+
     const goal = agentGoal([
       turn("t1", [
         notice(GOAL_EVENT.SET, { condition }),
@@ -75,6 +77,7 @@ describe("agentGoal", () => {
         }),
       ]),
     ]);
+
     expect(goal).toMatchObject({ condition, turns: 2, reason: "2 warnings." });
   });
 
@@ -98,6 +101,7 @@ describe("agentGoal", () => {
         notice(GOAL_EVENT.MET, { reason: "All pass.", turns: 2 }),
       ]),
     ];
+
     expect(agentGoal(met)).toMatchObject({
       state: AGENT_GOAL_STATE.MET,
       turns: 2,
@@ -124,6 +128,7 @@ describe("agentGoal", () => {
       },
       { ...line("s"), arrivedIn: { journalId: "t1", afterStep: 1 } },
     ];
+
     expect(agentGoal(steered)).toMatchObject({ state: AGENT_GOAL_STATE.MET });
 
     const cleared = [
@@ -131,6 +136,7 @@ describe("agentGoal", () => {
       line("l2"),
       turn("t2", [notice(GOAL_EVENT.CLEARED)]),
     ];
+
     expect(agentGoal(cleared)).toBeUndefined();
   });
 });

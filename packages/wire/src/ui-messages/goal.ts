@@ -22,6 +22,7 @@ export const GOAL_EVENT = {
   /** The goal was cleared before it settled. */
   CLEARED: "cleared",
 } as const;
+
 export type GoalEvent = (typeof GOAL_EVENT)[keyof typeof GOAL_EVENT];
 
 export const GoalNoticeSchema = Schema.Struct({
@@ -37,4 +38,5 @@ export const GoalNoticeSchema = Schema.Struct({
   /** The goal's token budget, where it has one; null where it has none or the harness did not say. */
   tokenBudget: Schema.NullOr(Schema.Number),
 });
+
 export type GoalNotice = typeof GoalNoticeSchema.Type;

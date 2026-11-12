@@ -39,16 +39,21 @@ const readGoalStatus = Schema.decodeUnknownOption(
 /** The GOAL event a transcript entry settles, met or judged impossible; none for any other entry, a verdict that it is not met yet among them. */
 export function settledGoal(entry: unknown): RunnerGoal | undefined {
   const read = readGoalStatus(entry);
+
   if (Option.isNone(read)) return undefined;
   const status = read.value.attachment;
+
   if (status.sentinel === true) return undefined;
+
   const event =
     status.met === true
       ? GOAL_EVENT.MET
       : status.failed === true
         ? GOAL_EVENT.IMPOSSIBLE
         : undefined;
+
   if (event === undefined) return undefined;
+
   return {
     type: RUNNER_EVENT.GOAL,
     event,
@@ -70,8 +75,10 @@ export function goalWatchedStore<Store extends Pick<SessionStore, "append">>(
     // Note that the goals are held once the append went through, because the SDK retries a batch the store refused, which would hold them again.
     append: async (key, entries) => {
       await store.append(key, entries);
+
       if (key.subpath !== undefined) return;
       const settled = entries.flatMap((entry) => settledGoal(entry) ?? []);
+
       if (settled.length > 0) MutableRef.update(held, (was) => [...was, ...settled]);
     },
   };

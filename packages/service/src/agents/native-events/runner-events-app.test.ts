@@ -1367,6 +1367,7 @@ it.layer(SUITE)("the runner events route", (it) => {
         const agent = yield* agentWithBearer;
         const top = { parent_tool_use_id: null, session_id: SESSION };
         const condition = "every billing test passes";
+
         const messagesOfTurn = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
           // Claude Code's own answer to `/goal`, which it writes as a synthetic assistant message.
@@ -1407,6 +1408,7 @@ it.layer(SUITE)("the runner events route", (it) => {
           { type: "result", subtype: "success", is_error: false, ...top },
           { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
         ];
+
         // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
         const events = messagesOfTurn.map(
           (message, sequence) => ({ sequence, message }) as RunnerEvent,

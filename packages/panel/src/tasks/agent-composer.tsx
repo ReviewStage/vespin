@@ -673,7 +673,9 @@ export function AgentComposer({
       case SLASH_COMMAND.COMPACT:
       case SLASH_COMMAND.GOAL: {
         const words = leadingCommand(composer.draft)?.words ?? "";
+
         if (chosen) editor.current?.replace(`/${name} ${words}`);
+
         return;
       }
 

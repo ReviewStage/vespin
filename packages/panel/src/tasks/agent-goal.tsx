@@ -85,6 +85,7 @@ const TRAILS: ReadonlySet<GoalNotice["event"]> = new Set([
 /** How much of its budget the goal has spent, or the turn it is on, as the row and its card say it. */
 function spentWords(goal: AgentGoal): string {
   if (goal.tokens === null) return `Turn ${goal.turns}`;
+
   return goal.tokenBudget === null
     ? `${TOKENS.format(goal.tokens)} tokens`
     : `${TOKENS.format(goal.tokens)} of ${TOKENS.format(goal.tokenBudget)} tokens`;
@@ -131,6 +132,7 @@ function GoalStanding({ goal, working }: { goal: AgentGoal; working: boolean }):
 /** The card the row hangs as the pointer rests on it: the goal whole, the checker's newest word, and how far it has run. */
 function GoalCard({ goal, working }: { goal: AgentGoal; working: boolean }): ReactNode {
   const stopped = goal.state === AGENT_GOAL_STATE.ACTIVE && !working;
+
   return (
     <HoverCard>
       <HoverCardHead glyph={<GoalMark goal={goal} />} name={goal.condition} sub={GOAL_THING} />
@@ -180,9 +182,11 @@ export function GoalDock({
   const goal = useMemo(() => agentGoal(messages, older), [messages, older]);
   const coarse = useCoarsePointer();
   const copy = useCopyToast();
+
   if (goal === undefined) return null;
   const settled = goalSettled(goal);
   const paused = goal.state === AGENT_GOAL_STATE.PAUSED;
+
   const menu = rowMenu(
     GOAL_THING,
     [
@@ -200,6 +204,7 @@ export function GoalDock({
     undefined,
     true,
   );
+
   const resume =
     paused && onResume !== undefined ? (
       <Button
@@ -211,6 +216,7 @@ export function GoalDock({
         Resume
       </Button>
     ) : undefined;
+
   return (
     <div className={`agent-goal-dock ${COMPOSER_DOCK_CLASS}`}>
       <List label={GOAL_THING} variant={LIST_VARIANT.CARD} fingerTall>
@@ -244,9 +250,11 @@ export function GoalDock({
  */
 export function centerNewestGoalNotice(row: HTMLElement): void {
   const log = row.closest('[role="log"]');
+
   if (!(log instanceof HTMLElement)) return;
   const notices = log.querySelectorAll("[data-goal-notice]");
   const newest = notices.item(notices.length - 1);
+
   if (newest instanceof HTMLElement) centerWithin(log, newest);
 }
 
@@ -271,10 +279,12 @@ export function GoalNoticeView({ notice }: { notice: GoalNotice }): ReactNode {
       </NoteLine>
     );
   }
+
   const body = notice.event === GOAL_EVENT.SET ? notice.condition : notice.reason;
   const folds = body !== null && body !== "";
   const said = NOTICE_WORDS[notice.event];
   const turn = notice.turns === null ? undefined : `Turn ${notice.turns}`;
+
   // Note that a notice stands at a received line's measure, as a check's card does, rather than across the column.
   return (
     <div className="max-w-bubble">

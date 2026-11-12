@@ -528,22 +528,29 @@ function goalMoment(
 /** Claude Code's answer to `/goal` where it set or cleared a goal, as the goal's move rather than words; none for any other message, its answer with the goal's status among them. */
 function goalCommandMoments(message: WireValue): readonly NativeMoment[] | undefined {
   const command = readLocalCommand(message);
+
   if (Option.isNone(command) || command.value.local_command_run.command !== GOAL_COMMAND.NAME) {
     return undefined;
   }
+
   const read = readAssistant(message);
+
   if (Option.isNone(read)) return undefined;
+
   const said = read.value.message.content
     .flatMap((block) =>
       Option.match(readTextBlock(block), { onSome: ({ text }) => [text], onNone: () => [] }),
     )
     .join("");
+
   if (said.startsWith(GOAL_COMMAND.SET)) {
     return [goalMoment(GOAL_EVENT.SET, said.slice(GOAL_COMMAND.SET.length), null)];
   }
+
   if (said.startsWith(GOAL_COMMAND.CLEARED)) {
     return [goalMoment(GOAL_EVENT.CLEARED, said.slice(GOAL_COMMAND.CLEARED.length), null)];
   }
+
   return undefined;
 }
 
@@ -554,10 +561,12 @@ function goalVerdictMoments(content: string | readonly unknown[]): readonly Nati
     : content.flatMap((block) =>
         Option.match(readTextBlock(block), { onSome: ({ text }) => [text], onNone: () => [] }),
       );
+
   return texts.flatMap((text) => {
     const feedback = STOP_HOOK_FEEDBACK.exec(text);
     const condition = feedback?.[1];
     const reason = feedback?.[2];
+
     return condition === undefined || reason === undefined
       ? []
       : [goalMoment(GOAL_EVENT.NOT_MET, condition, reason.trim())];
@@ -567,6 +576,7 @@ function goalVerdictMoments(content: string | readonly unknown[]): readonly Nati
 /** A model call's answer, or the one block of it the SDK streams as a message: a step, and its words, reasoning, and calls. */
 function assistantMoments(message: WireValue): readonly NativeMoment[] {
   const goal = goalCommandMoments(message);
+
   if (goal !== undefined) return goal;
   const read = readAssistant(message);
 
@@ -658,6 +668,7 @@ function userMoments(message: WireValue, held: NativeHeld): readonly NativeMomen
   const { content } = read.value.message;
 
   if (read.value.isSynthetic === true) return goalVerdictMoments(content);
+
   if (Predicate.isString(content)) return [];
   const moments: NativeMoment[] = [];
 

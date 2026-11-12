@@ -197,10 +197,12 @@ export function agentPart(part: WireValue): AgentPart {
 
   if (part.type === AGENT_PART.GOAL) {
     const notice = Schema.decodeUnknownOption(GoalNoticeSchema)(part.data);
+
     return Option.isSome(notice)
       ? { kind: AGENT_PART.GOAL, notice: notice.value }
       : { kind: AGENT_PART.OTHER };
   }
+
   if (part.type === AGENT_PART.STEP_START) return { kind: AGENT_PART.STEP_START };
 
   if (part.type.startsWith(TOOL_PART_TYPE_PREFIX)) {

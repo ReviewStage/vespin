@@ -2064,13 +2064,17 @@ const goalMoved = /* @__PURE__ */ Effect.fnUntraced(function* (
   event: Extract<RunEvent, { kind: typeof RUN_EVENT.GOAL }>,
 ): Effect.fn.Return<StoreWriteResult, StoreFailure, DatabaseServices> {
   const opened = yield* journal(context, event.turnId);
+
   if (Result.isFailure(opened)) return Result.fail(opened.failure);
   const row = opened.success;
   const id = String(event.sequence);
+
   if (row.parts.some((part) => part.type === GOAL_PART && part.id === id)) {
     return Result.succeed(STORE_WRITE_EFFECT.REPEATED);
   }
+
   if (row.finishedAt !== null) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FINISHED });
+
   return yield* amendJournal(context, event.turnId, row, [
     ...row.parts,
     { type: GOAL_PART, id, data: event.notice },

@@ -2882,6 +2882,7 @@ function AgentTranscriptView({
       const entry = last
         ? entries.findLast((each) => each.row.message.id === messageId)
         : entries.find((each) => entryDraws(each, messageId));
+
       return entry !== undefined && rowsHandle.current?.bringIn(entry.key, then) === true;
     };
   });

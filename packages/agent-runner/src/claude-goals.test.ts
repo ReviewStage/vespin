@@ -24,10 +24,12 @@ describe("goalWatchedStore", () => {
   it("holds the settling of a goal, met or impossible, and passes every entry to the store", async () => {
     const appended: unknown[] = [];
     const held = MutableRef.make<readonly RunnerGoal[]>([]);
+
     const store = goalWatchedStore(
       { append: async (_key, entries) => void appended.push(...entries) },
       held,
     );
+
     const met = goalStatus({
       met: true,
       reason: "All pass.",
@@ -35,6 +37,7 @@ describe("goalWatchedStore", () => {
       durationMs: 7221,
       tokens: 988,
     });
+
     const entries = [
       goalStatus({ met: false, sentinel: true }),
       goalStatus({ met: false, reason: "2 tests still fail." }),
@@ -72,6 +75,7 @@ describe("goalWatchedStore", () => {
 
   it("holds nothing of a batch the store refused, which the SDK sends again", async () => {
     const held = MutableRef.make<readonly RunnerGoal[]>([]);
+
     const store = goalWatchedStore<Pick<SessionStore, "append">>(
       {
         append: async () => {
@@ -80,6 +84,7 @@ describe("goalWatchedStore", () => {
       },
       held,
     );
+
     const met = goalStatus({ met: true, reason: "All pass." });
     await expect(store.append({ projectKey: "p", sessionId: "s" }, [met])).rejects.toThrow();
     expect(MutableRef.get(held)).toEqual([]);

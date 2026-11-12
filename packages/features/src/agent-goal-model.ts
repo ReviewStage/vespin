@@ -29,6 +29,7 @@ export const AGENT_GOAL_STATE = {
   /** It spent its token budget, and the agent wrapped up. */
   BUDGET_LIMITED: "budget_limited",
 } as const;
+
 export type AgentGoalState = (typeof AGENT_GOAL_STATE)[keyof typeof AGENT_GOAL_STATE];
 
 /** The agent's goal as its transcript says it stands. */
@@ -83,9 +84,11 @@ const FEEDBACK_SPLIT = "]: ";
  */
 function ofGoal(notice: GoalNotice, condition: string): GoalNotice | undefined {
   if (notice.condition === condition) return notice;
+
   if (notice.event !== GOAL_EVENT.NOT_MET || notice.reason === null) return undefined;
   const said = `${notice.condition}${FEEDBACK_SPLIT}${notice.reason}`;
   const head = `${condition}${FEEDBACK_SPLIT}`;
+
   return said.startsWith(head)
     ? { ...notice, condition, reason: said.slice(head.length) }
     : undefined;
@@ -94,6 +97,7 @@ function ofGoal(notice: GoalNotice, condition: string): GoalNotice | undefined {
 /** Whether a line is the developer's own, rather than one the app, an automation, or GitHub sent, as a wakeup or a check's word is. */
 function developersLine(message: AgentTranscriptMessage): boolean {
   const kind = message.sentBy?.kind;
+
   return kind === undefined || kind === AGENT_SENDER.MEMBER || kind === AGENT_SENDER.FORMER;
 }
 
@@ -107,6 +111,7 @@ function moved(
     ...(notice.tokens === null ? undefined : { tokens: notice.tokens }),
     ...(notice.tokenBudget === null ? undefined : { tokenBudget: notice.tokenBudget }),
   };
+
   if (notice.event === GOAL_EVENT.SET) {
     return {
       condition: notice.condition,
@@ -120,12 +125,16 @@ function moved(
       ...counted,
     };
   }
+
   if (goal === undefined) return goal;
   const own = ofGoal(notice, goal.condition);
+
   // A move of another goal than the one standing is a project's own hook or a goal long gone.
   if (own === undefined) return goal;
+
   if (own.event === GOAL_EVENT.CLEARED) return undefined;
   const at = { ...goal, ...counted, messageId: message.id };
+
   switch (own.event) {
     case GOAL_EVENT.NOT_MET:
       return { ...at, turns: own.turns ?? goal.turns + 1, reason: own.reason };
@@ -157,6 +166,7 @@ function afterStepOf(line: AgentTranscriptMessage): number {
  */
 function takenUp(notice: GoalNotice, message: AgentTranscriptMessage): AgentGoal | undefined {
   if (notice.event === GOAL_EVENT.CLEARED || notice.event === GOAL_EVENT.NOT_MET) return undefined;
+
   const standing: AgentGoal = {
     condition: notice.condition,
     state: AGENT_GOAL_STATE.ACTIVE,
@@ -167,6 +177,7 @@ function takenUp(notice: GoalNotice, message: AgentTranscriptMessage): AgentGoal
     reason: null,
     messageId: message.id,
   };
+
   return moved(standing, notice, message);
 }
 
@@ -185,46 +196,61 @@ export function agentGoal(
 ): AgentGoal | undefined {
   const journals = new Set(messages.map((message) => message.id));
   const arrived = new Map<string, AgentTranscriptMessage[]>();
+
   for (const message of messages) {
     const journalId = message.arrivedIn?.journalId;
+
     if (journalId === undefined || !journals.has(journalId)) continue;
     arrived.set(journalId, [...(arrived.get(journalId) ?? []), message]);
   }
+
   let goal: AgentGoal | undefined;
+
   // A line the developer wrote once the goal settled lets it go: its end was seen, and the conversation moved on.
   const seen = (line: AgentTranscriptMessage) => {
     if (goal !== undefined && goalSettled(goal) && developersLine(line)) goal = undefined;
   };
+
   for (const message of messages) {
     if (message.role === MESSAGE_ROLE.USER) {
       const journalId = message.arrivedIn?.journalId;
+
       if (journalId === undefined || !journals.has(journalId)) seen(message);
       continue;
     }
+
     const waiting = (arrived.get(message.id) ?? []).toSorted(
       (a, b) => afterStepOf(a) - afterStepOf(b),
     );
+
     let begun = 0;
+
     const arrive = (steps: number) => {
       while (waiting[0] !== undefined && afterStepOf(waiting[0]) <= steps) {
         const line = waiting.shift();
+
         if (line !== undefined) seen(line);
       }
     };
+
     for (const stored of message.parts) {
       const part = agentPart(stored);
+
       if (part.kind === AGENT_PART.STEP_START) {
         arrive(begun);
         begun += 1;
         continue;
       }
+
       if (part.kind !== AGENT_PART.GOAL) continue;
       goal =
         goal === undefined && older && part.notice.event !== GOAL_EVENT.SET
           ? takenUp(part.notice, message)
           : moved(goal, part.notice, message);
     }
+
     arrive(Number.POSITIVE_INFINITY);
   }
+
   return goal;
 }
