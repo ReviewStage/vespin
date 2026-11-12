@@ -21,6 +21,7 @@ import {
 } from "./installed-skill-wire.js";
 import { fencedBlock } from "./markdown-fence.js";
 import { TASK_SKILL_SOURCE, type TaskSkillSource } from "./task-wire.js";
+import { withoutTrailingNewlines } from "./trailing-newlines.js";
 import type { Workspace, WorkspaceMember } from "./workspace-wire.js";
 
 /** How many characters of a commit a row shows. */
@@ -189,7 +190,7 @@ export function removeSkillQuestion(
  * the block ends on its last line.
  */
 export function fencedSkillFile(text: string): string {
-  return fencedBlock(text.replace(/\n+$/u, ""), "markdown");
+  return fencedBlock(withoutTrailingNewlines(text), "markdown");
 }
 
 /* ----- Words for what went wrong ----- */

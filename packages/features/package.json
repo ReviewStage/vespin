@@ -31,6 +31,7 @@
     "./markdown-fence": "./src/markdown-fence.js",
     "./memory-live": "./src/memory-live.js",
     "./skills-settings-words": "./src/skills-settings-words.js",
+    "./trailing-newlines": "./src/trailing-newlines.js",
     "./memory-settings-words": "./src/memory-settings-words.js",
     "./member-mcp-tool": "./src/member-mcp-tool.js",
     "./memory-wire": "./src/memory-wire.js",
