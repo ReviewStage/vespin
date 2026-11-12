@@ -54,6 +54,7 @@ import {
 } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import { keptPictureIdOf } from "@repo/features/conversation-picture-wire";
+import { DEVICE_CAPABILITY } from "@repo/features/device-agent-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
 import { EXPERIMENT } from "@repo/settings";
@@ -742,7 +743,12 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   );
 
   /** A source whose stopped sandbox holds a change it never committed, over a checkout and remote on disk, and a continue of it; GitHub answers its pull request's reads as `pull` does, where given. */
-  const copyScenario = (t: TestContext, pull?: RepositoryScript, snapshotted = false) =>
+  const copyScenario = (
+    t: TestContext,
+    pull?: RepositoryScript,
+    snapshotted = false,
+    onMac = false,
+  ) =>
     Effect.gen(function* () {
       vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureOidcToken());
       const checkout = sourceCheckout(yield* Effect.promise(() => temporaryDirectory(t, "copy-")));
@@ -756,6 +762,19 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
       yield* claimRuntimeSession(opened.stored, SOURCE_SANDBOX.SESSION, new Date());
       yield* sourceIdle(opened.stored);
 
+      const deviceId = randomUUID();
+
+      if (onMac) {
+        // The source runs Codex, which the Mac has too.
+        yield* registerDevice(opened.owner, {
+          id: deviceId,
+          name: "Studio",
+          ...DEVICE_LAYOUT,
+          codexExecutable: "/Users/fixture/.vespin/bin/codex",
+          capabilities: [DEVICE_CAPABILITY.GITHUB_SIGN_IN],
+        });
+      }
+
       const continued = Effect.gen(function* () {
         const started = readAnswer(
           agentAnswerSchema,
@@ -764,6 +783,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             startAs(opened.owner, opened.task.id, {
               idempotencyKey: randomUUID(),
               from: { agentId: opened.source.id },
+              ...(onMac ? { runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId } } : undefined),
             }),
           ),
         ).agent;
@@ -841,6 +861,23 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         );
 
         assert.equal(row[0]?.startedFrom?.sandbox, agentSandboxName(SOURCE_SANDBOX.SESSION));
+      }),
+  );
+
+  it.effect(
+    "a move onto a Mac of a source whose sandbox stopped on a snapshot copies its checkout to a branch of its own, since a Mac never reads a sandbox's snapshot",
+    (t) =>
+      Effect.gen(function* () {
+        const { checkout, sandbox, continued } = yield* copyScenario(t, undefined, true, true);
+
+        const { started, preamble } = yield* continued;
+
+        const branch = started.from?.branch ?? "";
+        assert.match(branch, /^luke\/teammate-invitations-continued-[0-9a-f]{8}$/u);
+        assert.ok(!preamble.includes("Your checkout is a copy of its own"), preamble);
+        const fresh = fetchedAsHanded(checkout, preamble);
+        assert.equal(readFileSync(join(fresh, "invites.ts"), "utf8"), "export const ttl = 7;\n");
+        assert.deepEqual(sandbox.ran, [SOURCE_SANDBOX.WOKEN]);
       }),
   );
 

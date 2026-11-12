@@ -2,9 +2,11 @@
  * snapshot.ts -- the work of a source agent whose sandbox is not stopped on a snapshot, pushed or not, copied to a new branch for an agent continued or forked from it.
  *
  * A source whose sandbox stands stopped on a snapshot hands that sandbox
- * instead, whose latest snapshot the new agent's is created from
- * (`takeover.ts`'s `sourceWorkOf`), so this copy serves a source still
- * running, or one opened before sandboxes were named for their session.
+ * to a new agent in the cloud instead, whose latest snapshot the new
+ * agent's is created from (`takeover.ts`'s `sourceWorkOf`), so this copy
+ * serves a source still running, one whose new agent runs on a Mac, which
+ * never reads a snapshot, or one opened before sandboxes were named for
+ * their session.
  *
  * Each agent runs in a sandbox of its own, so what the source never
  * committed and pushed would be lost to the agent started from it. As that
@@ -179,8 +181,8 @@ const copyIn = <R>(ask: SnapshotAsk<R>) =>
     }
 
     // MIGRATION: a legacy sandbox (`agentSandboxOf`) is never woken in place; a stopped one with a
-    // snapshot is handed by it instead (`takeover.ts`'s `sourceWorkOf`), and one in any other
-    // state is a miss.
+    // snapshot is handed by it to a new agent in the cloud instead (`takeover.ts`'s `sourceWorkOf`),
+    // and one in any other state, or going to a Mac, is a miss.
     if (!UP_STATUSES.has(sandbox.status) && sandbox.name !== agentSandboxName(ask.sessionId)) {
       return { copied: false, miss: SNAPSHOT_MISS.FAILED } as const;
     }

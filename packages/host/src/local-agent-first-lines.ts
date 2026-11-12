@@ -51,11 +51,20 @@ const isMessage = Schema.is(
   }),
 );
 
-/** Whether the first lines' config continues a harness's session. */
-export function sessionResumed(stdin: string): boolean {
+/**
+ * Whether the first lines' config continues the agent's own harness
+ * session. Note that a fork of another agent's session, which a continued
+ * or forked agent's first launch makes (`fork`), continues none of its own:
+ * the service hands that session back from its copy, and the folder it
+ * starts in is new to it rather than cleared.
+ */
+export function ownSessionResumed(stdin: string): boolean {
   const config = readLine(stdin.split("\n")[0] ?? "");
 
-  return Option.exists(config, (line) => RESUME_KEYS.some((key) => line[key] !== undefined));
+  return Option.exists(
+    config,
+    (line) => line.fork !== true && RESUME_KEYS.some((key) => line[key] !== undefined),
+  );
 }
 
 /**
