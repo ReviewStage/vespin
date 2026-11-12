@@ -140,9 +140,6 @@ const IOS = {
   HOSTS_STANDING: byDesign(
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
   ),
-  SKILL_INSTALL: notYet(
-    "iOS's Skills page reads and deletes skills; Add skill's paste isn't built there yet",
-  ),
   INTEGRATION_EXTRAS: notYet(
     "iOS's Integrations page connects, cancels, and disconnects; a server's tools and an account's rename aren't built there yet",
   ),
@@ -324,8 +321,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.INSTALLED_SKILLS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.INSTALLED_SKILLS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.INSTALLED_SKILLS_READ]: EVERYWHERE,
-  [PORT_ACT_KIND.INSTALLED_SKILLS_PREVIEW]: panel(IOS.SKILL_INSTALL),
-  [PORT_ACT_KIND.INSTALLED_SKILLS_INSTALL]: panel(IOS.SKILL_INSTALL),
+  [PORT_ACT_KIND.INSTALLED_SKILLS_PREVIEW]: EVERYWHERE,
+  [PORT_ACT_KIND.INSTALLED_SKILLS_INSTALL]: EVERYWHERE,
   [PORT_ACT_KIND.INSTALLED_SKILLS_REMOVE]: EVERYWHERE,
 
   [PORT_ACT_KIND.INTEGRATIONS_FOLLOW]: EVERYWHERE,

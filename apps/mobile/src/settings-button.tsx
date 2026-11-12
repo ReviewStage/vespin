@@ -26,6 +26,8 @@ export const SETTINGS_ROUTE = {
   SKILLS: "/settings/skills",
   /** One skill's file, by the `skill` and `name` it is pushed with. */
   SKILL: "/settings/skill",
+  /** Add skill's paste. */
+  SKILL_ADD: "/settings/skill-add",
   /** The workspace the app works in, as the Settings… under the workspace switcher's workspace opens it. */
   WORKSPACE: "/settings/workspace",
 } as const;
