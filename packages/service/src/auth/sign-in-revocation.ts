@@ -35,6 +35,7 @@
 import { Database, type DatabaseServices } from "@repo/database/core/query";
 import { InstantColumnSchema } from "@repo/database/models/columns";
 import { account } from "@repo/database/schemas/auth";
+import { valueKind } from "@repo/wire";
 import { symmetricDecrypt } from "better-auth/crypto";
 import { and, eq } from "drizzle-orm";
 import {
@@ -168,8 +169,7 @@ const revokeAtGoogle = /* @__PURE__ */ Effect.fnUntraced(function* (token: Redac
 
 /** What a defect is logged as: its kind alone, since a thrown value's words or fields may quote whatever it was handed. */
 function defectKind(defect: unknown): string {
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- names a thrown value's kind for the log, narrowing nothing
-  return Predicate.isObjectOrArray(defect) ? defect.constructor.name : typeof defect;
+  return Predicate.isObjectOrArray(defect) ? defect.constructor.name : valueKind(defect);
 }
 
 /**

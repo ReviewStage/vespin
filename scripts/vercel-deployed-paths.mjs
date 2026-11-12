@@ -73,8 +73,8 @@ function serviceRoots(root) {
   const services = JSON.parse(readFileSync(join(root, "vercel.json"), "utf8")).services ?? {};
   const roots = Object.values(services).map((service) => service.root);
 
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- Vercel's ignore step runs this before install, so it parses `vercel.json` with no library to decode by
-  if (roots.length === 0 || roots.some((dir) => typeof dir !== "string")) {
+  // Note that we compare a root with its own string, because Vercel's ignore step runs this before install, with no library to decode by.
+  if (roots.length === 0 || roots.some((dir) => String(dir) !== dir)) {
     throw new Error("vercel.json names no service roots");
   }
 

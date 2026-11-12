@@ -106,3 +106,5 @@ export {
   USER_MESSAGE_METADATA,
   type UserMessageMetadata,
 } from "./ui-message-metadata.js";
+
+export { valueKind } from "./value-kind.js";

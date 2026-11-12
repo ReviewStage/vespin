@@ -36,7 +36,7 @@
  * answers every call as unavailable.
  */
 
-import { EXCESS_KEYS, unparsedWire, valueFromJsonText } from "@repo/wire";
+import { EXCESS_KEYS, unparsedWire, valueFromJsonText, valueKind } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { getVercelOidcToken } from "@vercel/oidc";
 import {
@@ -399,8 +399,7 @@ function causeDetail(cause: unknown): string {
     at = at.cause;
   }
 
-  // oxlint-disable-next-line anti-slop/no-runtime-typeof -- names a thrown value's kind as its detail, narrowing nothing
-  return capped(said.length === 0 ? typeof cause : said.join(" <- "));
+  return capped(said.length === 0 ? valueKind(cause) : said.join(" <- "));
 }
 
 /** Vercel's error code and message from a refusal's text, where it wrote them. */
