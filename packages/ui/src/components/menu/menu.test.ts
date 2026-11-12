@@ -848,6 +848,55 @@ test("a value that stays leaves its menu and submenu standing as it is chosen, w
   expect(openMenu()).toBeNull();
 });
 
+test.each([
+  { layout: "a floating menu", phone: false },
+  { layout: "a phone's sheet", phone: true },
+])(
+  "in $layout, actions naming one row stand in one group named by it, each an item named by its label that the arrows walk in turn, and one that stays leaves the menu standing",
+  ({ phone }) => {
+    if (phone) {
+      vi.stubGlobal("ResizeObserver", StandInResizeObserver);
+      inPhoneLayout();
+    }
+
+    const chosen: Chosen = [];
+
+    const step = (label: string, extra: { detail?: string } = {}) => ({
+      ...action(label, chosen),
+      ...extra,
+      row: "Zoom",
+      stays: true,
+    });
+
+    mount(
+      createElement(Harness, {
+        groups: [
+          [action("Rename", chosen)],
+          [step("Zoom out"), step("Actual size", { detail: "125%" }), step("Zoom in")],
+        ],
+      }),
+    );
+    press(button("More"));
+
+    const row =
+      document.querySelector('[role="group"][aria-label="Zoom"]') ?? expect.fail("no row");
+
+    expect(
+      [...row.querySelectorAll('[role="menuitem"]')].map((item) => item.getAttribute("aria-label")),
+    ).toEqual(["Zoom out", "Actual size, 125%", "Zoom in"]);
+    expect(row.textContent).toBe("ZoomZoom out125%Zoom in");
+
+    key("ArrowDown");
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Zoom out");
+    key("ArrowDown");
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Actual size, 125%");
+
+    press(button("Zoom in"));
+    expect(chosen).toEqual(["Zoom in"]);
+    expect(openMenu()).not.toBeNull();
+  },
+);
+
 test("the menu key or Shift-F10 on a row opens its menu under it on the first item", () => {
   function Row(): React.JSX.Element {
     const menu = useMenu(true);
