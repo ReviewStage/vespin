@@ -413,7 +413,7 @@ const SETUP_RAN_MARK = `${DRIVE_STATE_FOLDER}/setup-ran`;
 /**
  * The workspace's cloud setup scripts run in a sandbox just created, after
  * its checkout, by bash as its default user, as a detached command nothing
- * waits on, once per sandbox: its setup
+ * waits on: its setup
  * script once a workspace is created and checked out: the install script as
  * root from the workspace folder, on every boot, since what it installs
  * stands outside the drive, then, where it succeeded and the drive holds no
