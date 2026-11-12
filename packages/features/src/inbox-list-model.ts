@@ -1064,7 +1064,9 @@ export interface InboxPinnedRuns {
 export function inboxPinnedRuns(view: InboxListView): InboxPinnedRuns | undefined {
   if (view.pinnedFirst !== true) return undefined;
   const pinned = view.items.filter(({ holder }) => isPinned(holder));
+
   if (pinned.length === 0) return undefined;
+
   return { pinned, rest: view.items.filter(({ holder }) => !isPinned(holder)) };
 }
 

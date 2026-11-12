@@ -283,6 +283,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   const counts = useMemo(() => inboxCounts(standing, me, whose), [standing, me, whose]);
   // Note that Mark all as read stands while a notice waits on the reader, read or not, since it acknowledges each (`settledOnRead`).
   const markable = useMemo(() => anyToMarkRead(standing, me, now), [standing, me, now]);
+
   const filter = useMemo(
     () => ({ show, whose, search, readerId: me, pinnedFirst }),
     [show, whose, search, me, pinnedFirst],

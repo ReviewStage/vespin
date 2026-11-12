@@ -716,6 +716,7 @@ function windowEntries(
       onSelect: () => choices.onPinnedFirst(!choices.pinnedFirst),
     },
   ];
+
   if (!narrowedByWhose(choices.show)) return [order];
 
   return [
@@ -1462,11 +1463,14 @@ function useRowFocusKept(rows: InboxRowPresses): RowFocus {
 
     // Note that a row leaving, or one in a group leaving, is drawn on, out of reach, while it fades, so the keyboard still in it is in no row.
     const found = rows.find(row);
+
     if (found !== undefined && found.closest(LIST_LEAVING_SELECTOR) === null) {
       // Note that a row moving into or out of Pinned is drawn anew, which drops the keyboard to the page, so it is handed back.
       if (document.activeElement === document.body) found.focus();
+
       return;
     }
+
     focusedRow.current = undefined;
     const active = document.activeElement;
 
@@ -1598,7 +1602,9 @@ function InboxRuns({
   row: (listed: InboxListed, leaving: boolean, at: VirtualRowPlace) => React.ReactNode;
 }): React.JSX.Element {
   const runs = inboxPinnedRuns(view);
+
   if (runs === undefined) return <InboxRows items={view.items} place={place} row={row} />;
+
   return (
     <>
       <GroupHeader {...sidebarHead(undefined)} label={PINNED_RUN_WORDS.PINNED}>

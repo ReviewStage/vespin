@@ -494,10 +494,12 @@ test("asked for its pinned tasks first, the list stands a pinned task's items be
   // The pinned task's one item changed before every other, so only the pin can stand it first.
   const [billing] = TASKS;
   assert.ok(billing !== undefined);
+
   const pinned = {
     holder: taskHolder({ ...INVITES, pinnedAt: 5 }),
     items: [item({ id: "late", updatedAt: 5 })],
   };
+
   const view = inboxList([billing, pinned], all);
   assert.deepEqual(drawn(view), ["late", "retry", "threshold", "channel"]);
   const runs = inboxPinnedRuns(view);
