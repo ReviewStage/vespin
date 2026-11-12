@@ -1,15 +1,7 @@
 // empty-state.tsx -- what a screen or a column says when it has nothing to show, as the system's own ContentUnavailableView, or the system's spinner over its words while what it shows is still read.
 
 import { ContentUnavailableView, ProgressView, Text } from "@expo/ui/swift-ui";
-import {
-  containerRelativeFrame,
-  font,
-  foregroundStyle,
-  frame,
-  listRowBackground,
-  listRowSeparator,
-  tint,
-} from "@expo/ui/swift-ui/modifiers";
+import { font, foregroundStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
 import { Fragment } from "react";
 import { Button } from "./button.js";
 import type { SfSymbol } from "./sf-symbol.js";
@@ -75,26 +67,5 @@ export function EmptyState({
           : { actions: <Button label={action.label} onPress={action.onPress} /> })}
       />
     </Fragment>
-  );
-}
-
-/**
- * An empty list's symbol and title, drawn as the list's one row and filling
- * its visible height, so the list under it stays: pulled down, it still
- * refreshes, as Mail's empty mailbox does. Note that the row has no ground or
- * separator of its own, so it reads as the screen's empty view, not a row.
- */
-export function EmptyRow({ title, symbol }: Pick<EmptyStateProps, "title" | "symbol">) {
-  return (
-    <ContentUnavailableView
-      key={title}
-      title={title}
-      systemImage={symbol}
-      modifiers={[
-        listRowBackground("clear"),
-        listRowSeparator("hidden"),
-        containerRelativeFrame({ axes: "vertical" }),
-      ]}
-    />
   );
 }
