@@ -7,7 +7,7 @@ import {
   writeInline,
 } from "@repo/features/composer-markdown";
 import { fenceAfter } from "@repo/features/description-document";
-import { fileMarker, fileMarkers } from "@repo/features/file-marker";
+import { fileMarker, fileMarkers, isPictureName } from "@repo/features/file-marker";
 import {
   cutReply,
   MESSAGE_BLOCK,
@@ -1006,7 +1006,12 @@ function adoptedSlice(slice: Slice, state: ComposerState, props: ComposerEditorP
   });
 
   const taken =
-    fresh.length === 0 ? [] : copies?.pasted(fresh.map((each) => fileOfCopy(each.file, each.name)));
+    fresh.length === 0
+      ? []
+      : // Note that a picture named as a box numbers one comes with no name, so the box numbers it after its own pictures rather than beside one of the same name.
+        copies?.pasted(
+          fresh.map((each) => fileOfCopy(each.file, isPictureName(each.name) ? "" : each.name)),
+        );
 
   // Each carried chip's name in the box: its own where the box knows its file, the one the box took it in under, or none where it took none.
   const names = new Map(

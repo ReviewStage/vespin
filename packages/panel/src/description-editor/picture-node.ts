@@ -1,4 +1,5 @@
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
+import { fileMarkers } from "@repo/features/file-marker";
 import type { JSONContent } from "@tiptap/core";
 import Image from "@tiptap/extension-image";
 import {
@@ -19,7 +20,7 @@ import {
 } from "@tiptap/pm/state";
 import { insertPoint } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
-import { descriptionFiles, isPdfUpload } from "../picture-files.js";
+import { descriptionFiles, isPdfUpload, isPictureFile } from "../picture-files.js";
 import {
   type DescriptionEditorPictures,
   PICTURE_LEAVE,
@@ -28,6 +29,7 @@ import {
   type PictureNode,
   type PictureTaken,
 } from "./contract.js";
+import { copiedFileOf, fileOfCopy } from "./copied-files.js";
 import { inTableCell } from "./writing-keys.js";
 
 /**
@@ -347,6 +349,48 @@ function onControl(event: Event): boolean {
   return event.target instanceof Element && event.target.closest(PICTURE_CONTROLS) !== null;
 }
 
+/** A message box's copied file chip, as its copy writes it: a picture's image, or another file's chip carrying it (`./copied-files.ts`). */
+const COMPOSER_CHIP = '[data-chip="fileChip"]';
+
+/** The image a message box's copied chip is read in as: its file's name its alt, its data address its source. */
+const COMPOSER_PICTURE = 'img[data-chip="fileChip"]';
+
+/**
+ * A paste's markup with each of a message box's copied chips that carried a
+ * picture or a PDF written as its image, its alt the file's name, so it is
+ * read in as a picture; every other chip as it was, which pastes as its
+ * marker's words.
+ */
+function composerChipsAsPictures(html: string): string {
+  if (!html.includes(COMPOSER_CHIP.slice(1, -1))) return html;
+  const template = document.createElement("template");
+  template.innerHTML = html;
+
+  for (const chip of template.content.querySelectorAll(COMPOSER_CHIP)) {
+    const address = chip.getAttribute(chip.tagName === "IMG" ? "src" : "data-file");
+    const name = fileMarkers(chip.getAttribute("alt") ?? chip.textContent)[0]?.name;
+    const file = copiedFileOf(address);
+    const kind = { name: name ?? "", type: file?.mediaType ?? "" };
+
+    if (name === undefined || file === undefined || !(isPictureFile(kind) || isPdfUpload(kind))) {
+      continue;
+    }
+
+    const image = template.ownerDocument.createElement("img");
+    image.dataset.chip = "fileChip";
+    image.alt = name;
+    image.setAttribute("src", address ?? "");
+    chip.replaceWith(image);
+  }
+
+  return template.innerHTML;
+}
+
+/** The picture of a message box's copied chip, rewritten by `composerChipsAsPictures`, which TipTap's own image leaves out for its data address. */
+function composerPictureRule() {
+  return { tag: COMPOSER_PICTURE };
+}
+
 /**
  * The picture node: TipTap's image, inline, with the upload it waits on;
  * drawn into its own element by the panel where it can draw one, and as an
@@ -363,8 +407,16 @@ export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
   if (pictures === undefined) return node;
 
   return node.extend({
+    parseHTML() {
+      return [composerPictureRule(), ...(this.parent?.() ?? [])];
+    },
     addProseMirrorPlugins() {
-      return [...(this.parent?.() ?? []), settledPictures(), pictureCaret()];
+      return [
+        ...(this.parent?.() ?? []),
+        settledPictures(),
+        pictureCaret(),
+        new Plugin({ props: { transformPastedHTML: composerChipsAsPictures } }),
+      ];
     },
     addNodeView() {
       return ({ node: held, getPos, editor }) => {
@@ -650,19 +702,25 @@ function withPictures(fragment: Fragment, change: (picture: PmNode) => PmNode): 
 }
 
 /**
- * A pasted slice's pictures of another description, each made to wait on a new
- * upload that keeps it again on this description, and handed to the panel to keep;
- * every other picture as it was.
+ * A pasted slice's pictures of another description, and those a message box's
+ * copied chips carried in, each made to wait on a new upload that keeps it on
+ * this description, and handed to the panel to keep; every other picture as it was.
  */
 export function copiedPictures(slice: Slice, pictures: DescriptionEditorPictures): Slice {
   const taken: PictureTaken[] = [];
 
   const content = withPictures(slice.content, (picture) => {
     const src = String(picture.attrs.src ?? "");
+    const carried = copiedFileOf(src);
 
-    if (!pictures.copies(src)) return picture;
+    if (carried === undefined && !pictures.copies(src)) return picture;
     const upload = uploadName();
-    taken.push({ upload, from: src });
+
+    taken.push(
+      carried === undefined
+        ? { upload, from: src }
+        : { upload, file: fileOfCopy(carried, String(picture.attrs.alt ?? "")) },
+    );
 
     return picture.type.create({ ...picture.attrs, src: "", upload }, null, picture.marks);
   });

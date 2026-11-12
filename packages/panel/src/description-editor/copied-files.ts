@@ -1,4 +1,3 @@
-import { isPictureName } from "@repo/features/file-marker";
 import type { CopiedFile } from "./contract.js";
 
 /**
@@ -7,8 +6,9 @@ import type { CopiedFile } from "./contract.js";
  * A copy of the message box's words writes each file's chip into the
  * clipboard's HTML with the file in it, a picture as an image any editor
  * that takes HTML pastes as one, so a chip pasted into another box comes
- * with its file rather than as the words of its marker. Only a data address is read back: nothing pasted is ever
- * fetched.
+ * with its file rather than as the words of its marker, and one pasted into a
+ * description comes as its picture, or its PDF. Only a data address is read
+ * back: nothing pasted is ever fetched.
  */
 
 /** A data address carrying base64 bytes: its type, and the bytes. */
@@ -34,13 +34,9 @@ export function sameFile(first: CopiedFile, second: CopiedFile): boolean {
   return first.mediaType === second.mediaType && first.data === second.data;
 }
 
-/**
- * The file a chip carried, as a file handed to a box. Note that a picture
- * named as a box numbers one comes with no name, so the box it lands in
- * numbers it after its own pictures rather than beside one of the same name.
- */
+/** The file a chip carried, under the name given, as a file handed to an editor. */
 export function fileOfCopy(file: CopiedFile, name: string): File {
   const bytes = Uint8Array.from(atob(file.data), (character) => character.charCodeAt(0));
 
-  return new File([bytes], isPictureName(name) ? "" : name, { type: file.mediaType });
+  return new File([bytes], name, { type: file.mediaType });
 }
