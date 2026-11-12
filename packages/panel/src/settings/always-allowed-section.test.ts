@@ -186,9 +186,11 @@ test("Edit command opens the words as a field and sends one write putting the ne
   await mount([GIT_STATUS]);
 
   await pressInMenu("Edit command");
+
   const field =
     document.querySelector<HTMLInputElement>('input[aria-label="Command"]') ??
     assert.fail("no field");
+
   assert.equal(field.value, "git status");
 
   await typeAndEnter("Command", "git diff");

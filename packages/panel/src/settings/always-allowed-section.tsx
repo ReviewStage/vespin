@@ -418,8 +418,10 @@ function CommandRows({
   };
 
   const editing = edit !== undefined && edit.accountId === accountId ? edit : undefined;
+
   const edited =
     editing?.id === undefined ? undefined : commands.find((each) => each.id === editing.id);
+
   // Note that a save's answer is laid only on the edit that sent it, read as it stands when the answer lands, because a newer edit, another account's among them, may have taken its place.
   const current = useRef(editing);
   current.current = editing;
@@ -468,6 +470,7 @@ function CommandRows({
         }
 
         setLanded(prefix);
+
         if (!still) return;
         setProblem(undefined);
         onEdit(undefined);

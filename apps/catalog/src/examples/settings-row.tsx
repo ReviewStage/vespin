@@ -323,6 +323,7 @@ function CompactRows(): React.JSX.Element {
 function EditedRows(): React.JSX.Element {
   const [typed, setTyped] = useState("pnpm test");
   const [editing, setEditing] = useState(true);
+
   const words = (children: React.ReactNode) => (
     <Text as="span" variant={TEXT_VARIANT.LABEL} font={TEXT_FONT.MONO}>
       {children}
