@@ -364,7 +364,7 @@ function standInResizeObserver(): void {
   );
 }
 
-test("an item standing for a wait is heard with its words after its label and detail", () => {
+test("an item standing for a wait, or tagged beside a detail, is heard with those words after its label", () => {
   mount(
     createElement(Harness, {
       groups: [
@@ -376,6 +376,13 @@ test("an item standing for a wait is heard with its words after its label and de
             onSelect: () => undefined,
           },
           { label: "Check", busy: "Running", onSelect: () => undefined },
+          {
+            label: "Serve",
+            tag: "Default",
+            tagWords: "Default",
+            detail: "pnpm serve",
+            onSelect: () => undefined,
+          },
         ],
       ],
     }),
@@ -386,6 +393,7 @@ test("an item standing for a wait is heard with its words after its label and de
   expect(items.map((item) => item.getAttribute("aria-label"))).toEqual([
     "Stop Dev server, pnpm dev, Running",
     "Check, Running",
+    "Serve, Default, pnpm serve",
   ]);
 });
 

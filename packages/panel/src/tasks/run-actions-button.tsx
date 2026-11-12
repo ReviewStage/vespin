@@ -7,16 +7,7 @@ import type { AppStateSnapshot } from "@repo/host/app-state";
 import { EXPERIMENT, HOST_CAPABILITY } from "@repo/settings";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import {
-  GAP,
-  INLINE_REF_LOOK,
-  Inline,
-  InlineRef,
-  PlayIcon,
-  SplitButton,
-  STATUS_TONE,
-  useMenu,
-} from "@repo/ui";
+import { Badge, PlayIcon, SplitButton, STATUS_TONE, useMenu } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
@@ -64,9 +55,9 @@ import { listedAgentIn } from "./use-workspace-agents.js";
 const WORDS = {
   MENU: "Run actions",
   SUBMENU: "Run",
-  SUBMENU_IN: "Run in",
   EDIT: "Edit run actions…",
   RUNNING: "Running",
+  DEFAULT: "Default",
   RUN: (label: string) => `Run ${label}`,
   STOP: (label: string) => `Stop ${label}`,
   IN: (words: string, agent: string) => `${words} in ${agent}`,
@@ -309,6 +300,9 @@ function runItems(offer: RunOffer): MenuAction[][] {
       detail: offered.action.command,
       busy: offered.runs ? WORDS.RUNNING : undefined,
       icon: actionGlyph(offered),
+      // The default wears the badge its Settings row does.
+      tag: offered.action.isDefault === true ? <Badge>{WORDS.DEFAULT}</Badge> : undefined,
+      tagWords: offered.action.isDefault === true ? WORDS.DEFAULT : undefined,
       replayMasked: true,
       onSelect: offered.onPress,
     };
@@ -354,19 +348,16 @@ export function runPaletteRows(offer: RunOffer | undefined): readonly RunPalette
 
 /**
  * The Run button: its main part runs the primary action, or stops it while
- * it runs, and its chevron drops every action under the agent they run in,
- * named by its glyph and name as a mention is; it answers ⌥⌘R on the agent
- * shown in the desktop app. Its words name the agent it acts on.
+ * it runs, and its chevron drops every action, with no heading, since the
+ * agent's own tab already says which agent they run in; it answers ⌥⌘R on
+ * the agent shown in the desktop app. Its words name the agent it acts on.
  */
 export function RunActionsButton({
   offer,
-  agentGlyph,
   agentName,
 }: {
   offer: RunOffer;
-  /** The glyph the agent's tab wears, which its menu's heading names it with. */
-  agentGlyph: React.JSX.Element;
-  /** The agent the button acts on, as its tab names it, which its hint and menu say. */
+  /** The agent the button acts on, as its tab names it, which its hint says. */
   agentName: string;
 }): React.JSX.Element {
   const menu = useMenu(true);
@@ -391,17 +382,6 @@ export function RunActionsButton({
       {menu.drawn && (
         <ActionMenu
           label={WORDS.MENU}
-          heading={
-            <Inline gap={GAP.ICON} wrap={false}>
-              {WORDS.SUBMENU_IN}
-              <InlineRef
-                look={INLINE_REF_LOOK.PILL}
-                glyph={agentGlyph}
-                label={agentName}
-                hint={false}
-              />
-            </Inline>
-          }
           menu={menu.drawn}
           groups={runItems(offer)}
           onClose={menu.close}
