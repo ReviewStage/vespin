@@ -12,8 +12,13 @@
  * machine by its own name.
  */
 
-/** What no machine's name may hold: control and format characters, a line break and a bidi override among them. */
-const UNSHOWN_CHARACTERS = /[\p{Cc}\p{Cf}]/gu;
+/**
+ * What no machine's name may hold: control and format characters, a line
+ * break and a bidi override among them, but for the zero-width joiner and
+ * non-joiner (U+200D, U+200C), which an emoji sequence and some scripts need
+ * to draw at all.
+ */
+const UNSHOWN_CHARACTERS = /(?![\u200C\u200D])[\p{Cc}\p{Cf}]/gu;
 
 /** A run of white space. */
 const WHITE_RUN = /\s+/gu;
