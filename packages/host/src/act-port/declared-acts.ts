@@ -1,5 +1,5 @@
 import { createORPCErrorConstructorMap } from "@orpc/contract";
-import type { ContractedRouter } from "@orpc/server";
+import type { AnyProcedure, ContractedRouter } from "@orpc/server";
 import { Cause, Effect, Schema as EffectSchema, Option } from "effect";
 import {
   ACT_ERROR,
@@ -45,7 +45,7 @@ type DeclaredProcedures<
 interface DeclaredProcedureBuilder {
   effect(
     body: (options: { readonly input: unknown }) => Generator<unknown, unknown, never>,
-  ): unknown;
+  ): AnyProcedure;
 }
 
 /** Whether a handler's failure is its own refusal. */

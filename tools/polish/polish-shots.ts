@@ -222,18 +222,18 @@ interface PlaywrightLocator {
   hover(options: Record<string, unknown>): Promise<void>;
   waitFor(options: Record<string, unknown>): Promise<void>;
   isVisible(): Promise<boolean>;
-  screenshot(options: Record<string, unknown>): Promise<unknown>;
+  screenshot(options: Record<string, unknown>): Promise<Buffer>;
 }
 
 interface PlaywrightPage {
   url(): string;
-  goto(url: string, options?: Record<string, unknown>): Promise<unknown>;
-  waitForSelector(selector: string, options?: Record<string, unknown>): Promise<unknown>;
+  goto(url: string, options?: Record<string, unknown>): Promise<void>;
+  waitForSelector(selector: string, options?: Record<string, unknown>): Promise<void>;
   waitForTimeout(ms: number): Promise<void>;
-  waitForFunction(script: string, arg?: unknown, options?: { timeout: number }): Promise<unknown>;
+  waitForFunction(script: string, arg?: unknown, options?: { timeout: number }): Promise<void>;
   evaluate<Result>(script: string): Promise<Result>;
   emulateMedia(options: Record<string, unknown>): Promise<void>;
-  screenshot(options: Record<string, unknown>): Promise<unknown>;
+  screenshot(options: Record<string, unknown>): Promise<Buffer>;
   on(event: "pageerror", listener: (error: Error) => void): void;
   on(event: "crash", listener: () => void): void;
   getByRole(role: string, options: Record<string, unknown>): PlaywrightLocator;
@@ -265,7 +265,10 @@ interface ElectronApplication {
   windows(): PlaywrightPage[];
   browserWindow(page: PlaywrightPage): Promise<PlaywrightHandle>;
   waitForEvent(event: "window", options: Record<string, unknown>): Promise<PlaywrightPage>;
-  evaluate<Arg>(script: (electron: never, arg: Arg) => unknown, arg: Arg): Promise<unknown>;
+  evaluate<Arg, Result>(
+    script: (electron: never, arg: Arg) => Result,
+    arg: Arg,
+  ): Promise<Awaited<Result>>;
   process(): ChildProcess;
 }
 

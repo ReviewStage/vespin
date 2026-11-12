@@ -461,9 +461,11 @@ type ListAnswer = Exclude<
 /** Each part of the task list's rows by id as they stood at each sync id answered, so a read past one is answered what moved since. */
 type ListAt = Map<string, ReadonlyMap<"plans" | "agents", ReadonlyMap<string, string>>>;
 
-/** A row's id; none where it is no object carrying one. */
-function rowIdOf(row: unknown): unknown {
-  return typeof row === "object" && row !== null && "id" in row ? row.id : undefined;
+/** A row's id; none where it is no object carrying one as words. */
+function rowIdOf(row: unknown): string | undefined {
+  return typeof row === "object" && row !== null && "id" in row && typeof row.id === "string"
+    ? row.id
+    : undefined;
 }
 
 /** A part's rows by id, each as JSON, to tell which moved. */

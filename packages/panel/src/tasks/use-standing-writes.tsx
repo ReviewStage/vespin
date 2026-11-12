@@ -33,7 +33,7 @@ import { CONFIRM_LOSS, ConfirmDialog, STATUS_TONE, useConfirmDialog } from "@rep
 import { neverBusyAct } from "@repo/ui/confirm-state";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { askKept, firstRefusal, KEPT, type Kept, notKept } from "../act.js";
+import { askKept, firstNotKept, KEPT, type Kept, notKept } from "../act.js";
 import { confirmFailure } from "../failure-report.js";
 import { useToast } from "../toast.js";
 import { heldTask, pressRows, ROW_WRITE, type TaskRows } from "../undo-stack.js";
@@ -157,7 +157,11 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
         .filter((_, index) => changed[index]?.kept === true)
         .map(({ taskId }) => taskId);
 
-      return { landed, refused: changes.length - landed.length, cause: firstRefusal(changed) };
+      return {
+        landed,
+        refused: changes.length - landed.length,
+        cause: firstNotKept(changed)?.cause,
+      };
     });
   };
 

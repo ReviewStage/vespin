@@ -145,8 +145,15 @@ function answerBytes(answer: DeviceAgentAnswer): Uint8Array | null {
   return new TextEncoder().encode(`${answer.exit}\n${answer.diff}`);
 }
 
+/** A diff's answer as its column is read back, its exit line split off what it printed. */
+interface DiffAnswerRead {
+  readonly kind: typeof DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT;
+  readonly exit: number;
+  readonly diff: string;
+}
+
 /** An answer read back off the column, as `answerBytes` kept it. */
-function answerOf(row: typeof AnswerRowSchema.Type): unknown {
+function answerOf(row: typeof AnswerRowSchema.Type): typeof AnswerRowSchema.Type | DiffAnswerRead {
   if (row.kind !== DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT) return row;
   const kept = new TextDecoder().decode(row.bytes ?? new Uint8Array());
   const line = kept.indexOf("\n");

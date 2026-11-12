@@ -346,7 +346,7 @@ export const ORGANIZATION_OPTIONS = {
   requireEmailVerificationOnInvitation: true,
 } as const;
 
-/** What `accountDeletion` asks of the organization plugin, as `auth.api` answers it, under the headers of the session being deleted. */
+/** What `accountDeletion` asks of the organization plugin, as `auth.api` answers it, under the headers of the session being deleted. Its two writes answer the record they changed, or none, which nothing here reads. */
 export interface OrganizationDeletionApi {
   listOrganizations(input: { headers: Headers }): Promise<readonly { id: string }[]>;
   listMembers(input: {
@@ -367,11 +367,11 @@ export interface OrganizationDeletionApi {
   updateMemberRole(input: {
     headers: Headers;
     body: { organizationId: string; memberId: string; role: typeof WORKSPACE_ROLE.OWNER };
-  }): Promise<unknown>;
+  }): Promise<object | null>;
   deleteOrganization(input: {
     headers: Headers;
     body: { organizationId: string };
-  }): Promise<unknown>;
+  }): Promise<object | null>;
 }
 
 /** What the account's deletion does of its own around Better Auth's, as its hooks await it (`accounts/deletion-hooks.ts`). */

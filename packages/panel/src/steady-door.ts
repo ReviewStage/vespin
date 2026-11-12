@@ -50,10 +50,14 @@ interface KeptPlace {
   readonly within: ReadonlyMap<string | number, KeptPlace> | undefined;
 }
 
-/** A steady door, standing across draws, and the newest door it calls. */
+/**
+ * A steady door, standing across draws, and the newest door it calls. Note
+ * that a door is typed as answering nothing, because nothing here reads its
+ * answer: the steady door still hands back whatever the newest one answers.
+ */
 interface KeptDoor {
-  newest: (...args: never[]) => unknown;
-  readonly call: (...args: never[]) => unknown;
+  newest: (...args: never[]) => void;
+  readonly call: (...args: never[]) => void;
 }
 
 /** A door's name: `onOpen`, `onChoose`, the press handlers a part is handed, whose identity no reader keys a read on. */
@@ -69,7 +73,7 @@ function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown
   return proto === Object.prototype || proto === null;
 }
 
-function keptDoor(kept: KeptPlace | undefined, handed: (...args: never[]) => unknown): KeptPlace {
+function keptDoor(kept: KeptPlace | undefined, handed: (...args: never[]) => void): KeptPlace {
   const door: KeptDoor = kept?.door ?? {
     newest: handed,
     call: (...args: never[]) => door.newest(...args),
@@ -89,7 +93,7 @@ function keptPlace(
   if (kept !== undefined && kept.handed === handed) return kept;
 
   if (doorName && typeof handed === "function") {
-    return keptDoor(kept, handed as (...args: never[]) => unknown);
+    return keptDoor(kept, handed as (...args: never[]) => void);
   }
 
   if (Array.isArray(handed)) {

@@ -6,7 +6,7 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type SelectionGlyphAct, STATUS_TONE } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { useRef } from "react";
-import { firstRefusal, type Kept } from "../act.js";
+import { firstNotKept, type Kept } from "../act.js";
 import { COMMAND_PLACE, commandWords, PANEL_COMMAND } from "../command-items.js";
 import { useToast } from "../toast.js";
 import type { InboxResolver } from "./inbox-close.js";
@@ -103,7 +103,7 @@ export function useInboxSelection({
           replayUnmasked: true,
           words: note,
           tone: STATUS_TONE.DANGER,
-          failure: { surface: FAILURE_SURFACE.INBOX_MARK, cause: firstRefusal(taken) },
+          failure: { surface: FAILURE_SURFACE.INBOX_MARK, cause: firstNotKept(taken)?.cause },
         });
       },
     );

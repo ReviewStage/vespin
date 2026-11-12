@@ -1,4 +1,4 @@
-import type { ContractedRouter } from "@orpc/server";
+import type { AnyProcedure, ContractedRouter } from "@orpc/server";
 import { Stream } from "effect";
 import type { AnyHostAct, AnyLiveFollow, FollowKey } from "../contract/index.js";
 import { isLiveFollow } from "../contract/index.js";
@@ -72,7 +72,7 @@ type FollowProcedures<
 interface FollowProcedureBuilder {
   effect(
     body: (options: { readonly input: unknown }) => Generator<unknown, unknown, never>,
-  ): unknown;
+  ): AnyProcedure;
 }
 
 /** `actPort`'s builder of the procedure `kind` keys. */

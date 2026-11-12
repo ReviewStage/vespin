@@ -202,7 +202,7 @@ export interface BrowserCall {
   /** The transcript the call is written to, which keeps its screenshots: the agent's own, since no worker is offered the tool. */
   readonly transcript: ConversationTarget;
   /** Opens the sandbox the browser runs in; one already open is answered as it stands. */
-  readonly openSandbox: () => PromiseLike<unknown>;
+  readonly openSandbox: () => PromiseLike<void>;
 }
 
 /** A call that ran nothing, and why. */

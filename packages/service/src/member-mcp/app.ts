@@ -35,6 +35,7 @@ import {
   type AdmittedMemberValues,
   admitMember,
   type MemberMcpResourceClient,
+  type VerifiedToken,
 } from "./admission.js";
 import { MEMBER_MCP_PATH, MEMBER_MCP_SCOPE, memberMcpResourceUrl } from "./resource.js";
 import {
@@ -72,7 +73,7 @@ const NO_ORIGINS: readonly string[] = [];
 
 /** How a token for the resource is verified and what its metadata says, over the resource client on the auth service. */
 export interface MemberMcpAuth {
-  readonly verify: (request: Request) => Promise<unknown>;
+  readonly verify: (request: Request) => Promise<VerifiedToken>;
   readonly metadata: () => Promise<object>;
   /** The deployment's base URL, which a link to one of its own routes is built on. */
   readonly baseURL: string;

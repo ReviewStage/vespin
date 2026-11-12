@@ -29,7 +29,7 @@ import type { AppStateSnapshot } from "@repo/host/app-state";
 import { STATUS_TONE } from "@repo/ui";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { askKept, firstRefusal, KEPT, type Kept, notKept } from "../act.js";
+import { askKept, firstNotKept, KEPT, type Kept, notKept } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { useToast } from "../toast.js";
 import { pressRows, ROW_WRITE } from "../undo-stack.js";
@@ -359,7 +359,7 @@ export function usePinWrites(drawn: () => TasksView): PinWrites {
         replayUnmasked: true,
         words: PIN_MOVE_FAILED_NOTE,
         tone: STATUS_TONE.DANGER,
-        failure: { surface: FAILURE_SURFACE.PIN_MOVE, cause: firstRefusal(asked) },
+        failure: { surface: FAILURE_SURFACE.PIN_MOVE, cause: firstNotKept(asked)?.cause },
       });
     });
   };

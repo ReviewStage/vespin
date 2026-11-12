@@ -236,7 +236,10 @@ export async function askActResult(asked: Promise<ActionResult>): Promise<ActedR
 }
 
 /** Whether a write was kept, with what refused it where it was not, which a shown failure reports. */
-export type Kept = { readonly kept: true } | { readonly kept: false; readonly cause: unknown };
+/** A write not kept, with what refused it. */
+export type NotKept = { readonly kept: false; readonly cause: unknown };
+
+export type Kept = { readonly kept: true } | NotKept;
 
 /** A write kept. */
 export const KEPT: Kept = { kept: true };
@@ -255,11 +258,9 @@ export function askKept(asked: Promise<boolean>): Promise<Kept> {
   return asked.then((kept) => (kept ? KEPT : notKept(FAILURE_CONDITION.NOT_KEPT)), notKept);
 }
 
-/** What refused the first of several writes that was not kept; nothing where each was kept. */
-export function firstRefusal(answers: readonly Kept[]): unknown {
-  const refused = answers.find((answer) => !answer.kept);
-
-  return refused === undefined || refused.kept ? undefined : refused.cause;
+/** The first of several writes that was not kept, with what refused it; nothing where each was kept. */
+export function firstNotKept(answers: readonly Kept[]): NotKept | undefined {
+  return answers.find((answer): answer is NotKept => !answer.kept);
 }
 
 /**

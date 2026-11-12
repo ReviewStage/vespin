@@ -299,8 +299,8 @@ function serialOf(value: WeakKey): number {
  * the step reads; a step's values are the same objects for as long as a
  * place memoises them, so the cache still serves a redraw.
  */
-export function markdownStep<Values extends readonly unknown[]>(
-  step: (...values: Values) => unknown,
+export function markdownStep<Values extends readonly unknown[], Tree>(
+  step: (...values: Values) => (tree: Tree) => void,
   ...values: Values
 ): MarkdownStep {
   let keyed = keyedSteps.get(step);

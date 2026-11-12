@@ -61,10 +61,10 @@ const REFUSED_BY_STATUS: ReadonlyMap<number, AdminRefused> = new Map([
  * One read on the browser client, its refusal worded for the screens; any
  * other failure passes through as it came, as the screen's own.
  */
-async function asked<T>(read: () => Promise<unknown>): Promise<T> {
+async function asked<T>(read: Promise<unknown>): Promise<T> {
   try {
     // SAFETY: each admin procedure answers the shape `@repo/features/admin-answer-wire` names for it, for which the contract declares no output.
-    return (await read()) as T;
+    return (await read) as T;
   } catch (cause) {
     if (cause instanceof BrowserRedirected) throw new AdminReadRefused(ADMIN_REFUSED.INTERCEPTED);
     const status = browserRefusal(cause)?.status;
@@ -76,20 +76,17 @@ async function asked<T>(read: () => Promise<unknown>): Promise<T> {
 }
 
 const WEB_ADMIN_READS: AdminReads = {
-  metrics: (query, signal) =>
-    asked<AdminMetrics>(() => browserClient.admin.metrics(query, { signal })),
-  cost: (query, signal) => asked<AdminCost>(() => browserClient.admin.cost(query, { signal })),
+  metrics: (query, signal) => asked<AdminMetrics>(browserClient.admin.metrics(query, { signal })),
+  cost: (query, signal) => asked<AdminCost>(browserClient.admin.cost(query, { signal })),
   reliability: (query, signal) =>
-    asked<AdminReliability>(() => browserClient.admin.reliability(query, { signal })),
-  users: (query, signal) =>
-    asked<AdminUserList>(() => browserClient.admin.users(query, { signal })),
-  user: (query, signal) =>
-    asked<AdminUserDetail>(() => browserClient.admin.user(query, { signal })),
-  day: (query, signal) => asked<AdminDayDetail>(() => browserClient.admin.day(query, { signal })),
+    asked<AdminReliability>(browserClient.admin.reliability(query, { signal })),
+  users: (query, signal) => asked<AdminUserList>(browserClient.admin.users(query, { signal })),
+  user: (query, signal) => asked<AdminUserDetail>(browserClient.admin.user(query, { signal })),
+  day: (query, signal) => asked<AdminDayDetail>(browserClient.admin.day(query, { signal })),
   workspaces: (query, signal) =>
-    asked<AdminWorkspaceList>(() => browserClient.admin.workspaces(query, { signal })),
+    asked<AdminWorkspaceList>(browserClient.admin.workspaces(query, { signal })),
   workspace: (query, signal) =>
-    asked<AdminWorkspaceDetail>(() => browserClient.admin.workspace(query, { signal })),
+    asked<AdminWorkspaceDetail>(browserClient.admin.workspace(query, { signal })),
   // A refusal of the star did not land, whatever it was.
   favorite: (id, favorite) => {
     const input = { query: { [ADMIN_USER_ID_PARAM]: id } };

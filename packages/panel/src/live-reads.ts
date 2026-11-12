@@ -377,25 +377,23 @@ function isDocumentRecord(value: unknown): value is DocumentRecord {
   return typeof value === "object" && value !== null;
 }
 
-/** What `value` holds at `path`, record by record; none where it holds none. */
-function valueAt(value: unknown, path: readonly string[]): unknown {
-  let at = value;
-
-  for (const segment of path) {
-    at = isDocumentRecord(at) && Object.hasOwn(at, segment) ? at[segment] : undefined;
-  }
-
-  return at;
-}
-
-/** What the document holds of `read` at `ids`; none before the first read, or where it holds nothing there. */
+/**
+ * What the document holds of `read` at `ids`, record by record; none before
+ * the first read, or where it holds nothing there.
+ */
 function heldAt<Read extends LiveReadName>(
   document: AppStateSnapshot | undefined,
   read: Read,
   ids: readonly LiveReadId[],
 ): AppHostRead<AppHostReads[Read]> | undefined {
+  let at: unknown = document?.[read];
+
+  for (const segment of ids.map(String)) {
+    at = isDocumentRecord(at) && Object.hasOwn(at, segment) ? at[segment] : undefined;
+  }
+
   // SAFETY: what a read's slice holds at its whole path of ids is that read (`@repo/host`'s `HOST_READ_SLICE`).
-  return valueAt(document?.[read], ids.map(String)) as AppHostRead<AppHostReads[Read]> | undefined;
+  return at as AppHostRead<AppHostReads[Read]> | undefined;
 }
 
 /** Whether `query` is the app-state document's. */

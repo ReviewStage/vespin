@@ -18,7 +18,7 @@ export function useMutationAct(action: () => Promise<ActionResult>): ConfirmAct 
   const { mutateAsync, isPending, data, reset } = useMutation({ mutationFn: action });
 
   return {
-    run: () => mutateAsync(),
+    run: () => mutateAsync().then(() => undefined),
     busy: isPending,
     refused: isPending ? undefined : data,
     reset,

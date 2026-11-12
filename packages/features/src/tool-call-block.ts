@@ -10,6 +10,8 @@
  * surface's own, the panel's `tool.tsx` and the iPhone's transcript.
  */
 
+import type { WireValue } from "@repo/wire";
+
 /** The states a tool part may stand in, as the AI SDK spells them. */
 export const TOOL_STATE = {
   INPUT_STREAMING: "input-streaming",
@@ -59,7 +61,7 @@ const ACKNOWLEDGMENTS: ReadonlySet<unknown> = new Set(["accepted", "Done.", "don
 const ACKNOWLEDGING_KEYS: ReadonlySet<string> = new Set(["ok", "success"]);
 
 /** A JSON block's value, or its text where it is no JSON, as a string answer is drawn as it is. */
-function blockValue(block: ToolBlock): unknown {
+function blockValue(block: ToolBlock): WireValue {
   try {
     return JSON.parse(block.text);
   } catch {

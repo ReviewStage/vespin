@@ -24,7 +24,7 @@ import type {
   PermissionResult,
   PermissionUpdate,
 } from "@anthropic-ai/claude-agent-sdk";
-import { type CommandPrefix, CommandPrefixSchema } from "@repo/wire";
+import { type CommandPrefix, CommandPrefixSchema, type WireBoundaryInput } from "@repo/wire";
 import { Deferred, Effect, Option, Predicate, Ref, Schema, Stream } from "effect";
 import type { EventSink } from "./events.js";
 import {
@@ -65,11 +65,13 @@ export interface Approvals {
 type AskOptions = Parameters<CanUseTool>[2];
 
 /** A call's input as its ask is posted: each string and list in it cut to `APPROVAL_INPUT`'s bounds. */
-export function cutInput(input: Readonly<Record<string, unknown>>): Record<string, unknown> {
+export function cutInput(
+  input: Readonly<Record<string, unknown>>,
+): Record<string, WireBoundaryInput> {
   return Object.fromEntries(Object.entries(input).map(([key, value]) => [key, cut(value)]));
 }
 
-function cut(value: unknown): unknown {
+function cut(value: unknown): WireBoundaryInput {
   if (Predicate.isString(value)) {
     return value.length > APPROVAL_INPUT.TEXT_MAX
       ? `${value.slice(0, APPROVAL_INPUT.TEXT_MAX)}…`
@@ -78,7 +80,8 @@ function cut(value: unknown): unknown {
 
   if (Array.isArray(value)) return value.slice(0, APPROVAL_INPUT.ITEMS_MAX).map(cut);
 
-  return Predicate.isObject(value) ? cutInput(value) : value;
+  // SAFETY: a call's input is the JSON its tool was called with, so what is left is a JSON scalar.
+  return Predicate.isObject(value) ? cutInput(value) : (value as WireBoundaryInput);
 }
 
 /** The trailing wildcards a Bash rule names a command prefix with, the space-separated form first: `Bash(pnpm test *)` and `Bash(pnpm test:*)` alike. */

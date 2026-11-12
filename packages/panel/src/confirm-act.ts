@@ -29,8 +29,8 @@ export interface ConfirmMutation<Answer> {
 }
 
 /** How a question's act is sent through its mutation, and its answer read as the act's own. */
-export interface ConfirmSend<Answer> {
-  readonly send: () => Promise<unknown>;
+export interface ConfirmSend<Answer, Sent> {
+  readonly send: () => Promise<Sent> | Promise<void>;
   readonly answered: (answer: Answer) => ActionResult;
   /** The refusal a failed send stands for, where the act refuses by failing; none draws no refusal for it. */
   readonly failed?: ((error: Error) => ActionResult) | undefined;
@@ -53,9 +53,9 @@ export function sameAnswer(answer: ActionResult): ActionResult {
 }
 
 /** The act `mutation` stands for, sent and read as `act` says. */
-export function useConfirmAct<Answer>(
+export function useConfirmAct<Answer, Sent>(
   mutation: ConfirmMutation<Answer>,
-  act: ConfirmSend<Answer>,
+  act: ConfirmSend<Answer, Sent>,
 ): ConfirmAct {
   const [first, setFirst] = useState<ActionResult | undefined>(undefined);
   const { isPending, data, error, reset } = mutation;
@@ -68,7 +68,7 @@ export function useConfirmAct<Answer>(
       const refusal = act.refusedFirst?.();
       setFirst(refusal);
 
-      return refusal === undefined ? act.send() : Promise.resolve();
+      return refusal === undefined ? act.send().then(() => undefined) : Promise.resolve();
     },
     busy: isPending,
     refused: isPending ? undefined : (first ?? answer),

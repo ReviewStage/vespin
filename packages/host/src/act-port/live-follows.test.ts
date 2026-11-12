@@ -369,16 +369,20 @@ async function until(ready: () => boolean): Promise<void> {
 }
 
 /** A level of a held slice: its keys by id, each holding a level below or a key's read. */
-type SliceLevel = Readonly<Record<string, unknown>>;
+type SliceLevel = { readonly [id: string]: WireBoundaryInput };
 
 /** Whether `value` is a level whose keys can be read by id, rather than a primitive or nothing. */
-function isSliceLevel(value: unknown): value is SliceLevel {
+function isSliceLevel(value: WireBoundaryInput): value is SliceLevel {
   return typeof value === "object" && value !== null;
 }
 
 /** What `held` holds at `at`, the key's path in its slice. */
-function readAt(held: unknown, at: readonly string[]): unknown {
-  return at.reduce<unknown>((level, id) => (isSliceLevel(level) ? level[id] : undefined), held);
+function readAt(held: unknown, at: readonly string[]): WireBoundaryInput {
+  return at.reduce<WireBoundaryInput>(
+    (level, id) => (isSliceLevel(level) ? level[id] : undefined),
+    // SAFETY: a slice the window is told is the document's data, as it crossed the port.
+    held as WireBoundaryInput,
+  );
 }
 
 it.effect(

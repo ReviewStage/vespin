@@ -55,6 +55,11 @@ export type MemberMcpResourceClient = ReturnType<
   ReturnType<typeof oauthProviderResourceClient<ResourceClientAuth>>["getActions"]
 >;
 
+/** A verified token's payload, as the resource client answers it. */
+export type VerifiedToken = Awaited<
+  ReturnType<MemberMcpResourceClient["verifyAccessTokenRequest"]>
+>;
+
 /** The claims admission reads of a verified token; the rest, the scopes among them, are the verifier's to check. */
 const AdmittedClaimsSchema = Schema.Struct({ sub: Schema.String, client_id: Schema.String });
 
@@ -96,7 +101,7 @@ const NO_MEMBER: Response = jsonResponse(
  * be read, or forbidden where the token names no member.
  */
 export function admitMember(
-  verify: (request: Request) => Promise<unknown>,
+  verify: (request: Request) => Promise<VerifiedToken>,
   request: Request,
 ): Effect.Effect<Result.Result<AdmittedClaims, Response>> {
   return Effect.tryPromise(() => verify(request)).pipe(

@@ -431,13 +431,13 @@ function moduleExports(source: string, file: string): readonly ModuleExport[] {
 }
 
 /**
- * An exported function is a builder; what it answers is read as a string at
- * the call, since the module is untyped here. The check is still `typeof` on
- * a function, but it is stated as the call this module makes of one: v4
- * narrows through an intersection, and `string & Function` has no call
- * signature for the probe to reach.
+ * An exported function is a builder, stated as the path it must answer; the
+ * module is untyped here, so the call still decodes what it answers as a
+ * string. The check is still `typeof` on a function, but it is stated as the
+ * call this module makes of one: v4 narrows through an intersection, and
+ * `string & Function` has no call signature for the probe to reach.
  */
-type PathBuilderCall = (...segments: readonly string[]) => unknown;
+type PathBuilderCall = (...segments: readonly string[]) => string;
 
 const PathBuilder = Schema.declare((input: unknown): input is PathBuilderCall =>
   Predicate.isFunction(input),

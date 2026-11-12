@@ -487,7 +487,7 @@ type MessageContent = Extract<InputLine, { type: "message" }>["content"];
  * `RUNNER_CONTROL.ANSWER_MS`. Note that one it never answers is let go, so
  * it holds up none of the service's later lines.
  */
-function control(step: string, call: () => Promise<unknown>) {
+function control<Answer>(step: string, call: () => Promise<Answer>) {
   return Effect.tryPromise(call).pipe(
     Effect.timeoutOption(Duration.millis(RUNNER_CONTROL.ANSWER_MS)),
     Effect.flatMap((answer) =>

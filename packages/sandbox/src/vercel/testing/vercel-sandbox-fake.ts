@@ -290,7 +290,9 @@ export function fakeDrives(attached: (mounts: (mounts: unknown) => boolean) => b
   return {
     drives,
     /** What a create's body mounts, kept as it was sent. */
-    mountsSent: (created: { readonly mounts?: unknown }): unknown => created.mounts,
+    mountsSent: (created: { readonly mounts?: unknown }): FakeMounts | undefined =>
+      // SAFETY: a create's body mounts drives by path, as Vercel's API spells them.
+      created.mounts as FakeMounts | undefined,
     /** Whether every drive a create's mounts name stands. */
     mountable: (mounts: unknown) =>
       Object.values(mountsOf(mounts)).every((mount) => named(mount.drive) !== undefined),

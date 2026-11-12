@@ -46,7 +46,7 @@ export function ArchivedComposerNote({
   // list carries the stop a moment after the answer.
   if (out === ARCHIVED_PRESS.STOP && stop === undefined) setOut(undefined);
 
-  const press = (which: ArchivedPress, run: () => unknown) => {
+  const press = (which: ArchivedPress, run: () => void | Promise<void> | Promise<boolean>) => {
     if (out !== undefined) return;
     const settles = run();
 

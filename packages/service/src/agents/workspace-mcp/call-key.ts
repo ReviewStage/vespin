@@ -18,7 +18,7 @@
 import { createHash } from "node:crypto";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { nativeCallKeyOf } from "@repo/database/models/native-call-keys";
-import { isRecord, type UnparsedWireValue } from "@repo/wire";
+import { isRecord, type UnparsedWireValue, type WireBoundaryInput } from "@repo/wire";
 import type { Effect } from "effect";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 
@@ -26,7 +26,7 @@ import type { AdmittedConversation } from "../sessions/admitted-conversation.js"
 export const NATIVE_CALL_KEY_WINDOW_MS = 10 * 60_000;
 
 /** A value with every record's keys in order, so a retry that spells the same input in another order digests the same. */
-function ordered(value: UnparsedWireValue): unknown {
+function ordered(value: UnparsedWireValue): WireBoundaryInput {
   if (Array.isArray(value)) return value.map(ordered);
 
   if (!isRecord(value)) return value;

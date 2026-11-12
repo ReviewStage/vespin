@@ -38,6 +38,7 @@ import {
   snapshotOf,
   vercelSandboxOver,
 } from "@repo/sandbox/vercel/testing";
+import type { WireValue } from "@repo/wire";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { Effect, Layer, Option } from "effect";
@@ -728,7 +729,7 @@ export const launchLines = (command: FakeCommand | undefined) =>
       )
       .orderBy(asc(runnerLine.seq));
 
-    return [config, ...stdin, ...queued.map((row): unknown => JSON.parse(row.text))];
+    return [config, ...stdin, ...queued.map((row): WireValue => JSON.parse(row.text))];
   });
 
 /** Every message queued for the agent's runner stamped taken, what its words handed kept, as each one's ACCEPTED would, which the fake runner never posts. */

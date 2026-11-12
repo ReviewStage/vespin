@@ -113,8 +113,8 @@ export const AppProcesses = Context.Reference<AppProcessesShape>("@repo/desktop/
 
 /** A window as its responsiveness is followed: Electron's own events on it, and its page. */
 export interface FollowedWindow {
-  on(event: WindowEvent, listener: () => void): unknown;
-  removeListener(event: WindowEvent, listener: () => void): unknown;
+  on(event: WindowEvent, listener: () => void): void;
+  removeListener(event: WindowEvent, listener: () => void): void;
   readonly webContents: FollowedPage;
 }
 

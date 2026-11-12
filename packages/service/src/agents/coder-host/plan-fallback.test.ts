@@ -44,7 +44,7 @@ import {
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { fixtureToken } from "@repo/sandbox/vercel/testing";
-import { TURN_STATUS, type WireRecord } from "@repo/wire";
+import { TURN_STATUS, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { Clock, DateTime, Duration, Effect, Layer, Option, Redacted, Result, Schema } from "effect";
 import { HttpRouter } from "effect/http";
@@ -385,7 +385,7 @@ const macLaunch = (userId: string, deviceId: string, lineId: string) =>
     const [config, ...lines] = secrets.stdin
       .trimEnd()
       .split("\n")
-      .map((line): unknown => JSON.parse(line)) as [RunnerConfig, ...InputLine[]];
+      .map((line): WireValue => JSON.parse(line)) as [RunnerConfig, ...InputLine[]];
 
     const launched: Launched = {
       bearer: secrets.env[RUNNER_ENV.BEARER] ?? "",

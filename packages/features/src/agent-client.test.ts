@@ -58,7 +58,7 @@ function uncaused<Answer extends object>(answer: Answer): object {
 }
 
 /** The trace a failed answer's cause names, checked to be a trace id, since every ask mints its own. */
-function causeTraceOf<Answer extends object>(answer: Answer): unknown {
+function causeTraceOf<Answer extends object>(answer: Answer): string {
   const traceId =
     "cause" in answer &&
     typeof answer.cause === "object" &&
@@ -67,7 +67,8 @@ function causeTraceOf<Answer extends object>(answer: Answer): unknown {
       ? answer.cause.traceId
       : undefined;
 
-  assert.match(String(traceId), /^[0-9a-f]{32}$/);
+  assert.ok(typeof traceId === "string");
+  assert.match(traceId, /^[0-9a-f]{32}$/);
 
   return traceId;
 }

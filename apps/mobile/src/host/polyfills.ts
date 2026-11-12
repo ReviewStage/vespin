@@ -44,6 +44,7 @@ import "@formatjs/intl-listformat/locale-data/en.js";
 // from a word by its graphemes (`@repo/features/task-section-wire.ts`).
 import "@formatjs/intl-segmenter/polyfill.js";
 import type { DateTimeFormatConstructor as FormatJsDateTimeFormat } from "@formatjs/intl-datetimeformat";
+import type { WireValue } from "@repo/wire";
 import { fetch as streamingFetch } from "expo/fetch";
 import { CryptoDigestAlgorithm, digest, getRandomValues, randomUUID } from "expo-crypto";
 import { getCalendars } from "expo-localization";
@@ -232,7 +233,7 @@ class StreamingResponse extends PlatformResponse {
     return new TextDecoder().decode(await readWhole(this.#stream));
   }
 
-  override async json(): Promise<unknown> {
+  override async json(): Promise<WireValue> {
     return JSON.parse(await this.text());
   }
 }

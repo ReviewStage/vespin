@@ -351,7 +351,10 @@ const isRefusedStatus = Schema.is(Schema.Struct({ status: Schema.Number }));
  * A procedure's failure, a refusal its contract does not declare read as no
  * answer, kept with the status it came under and its slug as the code.
  */
-function declaredOnly(path: readonly string[], error: unknown): unknown {
+function declaredOnly<Failure>(
+  path: readonly string[],
+  error: Failure,
+): Failure | HostedUnanswered {
   if (!(error instanceof ORPCError) || !(error.cause instanceof HostedRefused)) return error;
   const { refusal } = error.cause;
 

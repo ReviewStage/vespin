@@ -45,7 +45,7 @@ export interface BridgeHostDependencies {
   snapshotFor: (sender: WebContents) => Promise<AppStateSnapshot>;
 }
 
-type ErasedHandler = (context: BridgeContext, ...args: never[]) => unknown;
+type ErasedHandler = (context: BridgeContext, ...args: never[]) => void;
 
 /**
  * Every channel the sandboxed renderers reach this process through, attached
