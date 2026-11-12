@@ -198,7 +198,7 @@ export {
 
 export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
 
-export { askForName, type NameAsk, shareLink } from "./system-asks.js";
+export { askForName, type NameAsk, shareLink, shareWords } from "./system-asks.js";
 
 export {
   AGENT_ROW_STATE,

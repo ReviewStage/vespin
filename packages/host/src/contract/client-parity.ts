@@ -32,7 +32,8 @@
  * read again where it could not be, a cloud agent's
  * listening ports listed and shared by a public link, opened in Safari or
  * no longer shared, its repository's run actions run and stopped in its
- * sandbox, and the agent renamed, pinned, archived, and deleted; New agent
+ * sandbox, its transcript read whole and copied concise or whole, or
+ * shared, and the agent renamed, pinned, archived, and deleted; New agent
  * on a task and New task, a sub-task or a related task among it, or one
  * filed for later with no agent, with the models and the repositories they
  * pick among followed, and read again where they could not be;
@@ -130,7 +131,6 @@ const IOS = {
   RUN_ON_MAC_STANDING: byDesign(
     "Whether run_on_mac is on for an agent is the desktop's Runs on card's to say, about the Mac its commands would run on",
   ),
-  AGENT_TRANSCRIPT_COPY: notYet("iOS's agent page doesn't offer Copy transcript yet"),
   AGENT_SESSION: notYet(
     "iOS's agent page leaves a rewind, a fresh session, and a restart of the agent's machine to the desktop and the web for now",
   ),
@@ -280,7 +280,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_LIST]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_WORKSPACE_LIST]: panel(IOS.AUTOMATIONS),
   [PORT_ACT_KIND.AGENTS_START]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_MESSAGES]: panel(IOS.AGENT_TRANSCRIPT_COPY),
+  [PORT_ACT_KIND.AGENTS_MESSAGES]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_TRANSCRIPT]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_TRANSCRIPT_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PART]: EVERYWHERE,
