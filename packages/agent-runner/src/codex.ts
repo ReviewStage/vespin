@@ -33,7 +33,14 @@
  * warm from its start too. A message line marked `compact` compacts the
  * thread in its place (`thread/compact/start`) once no turn runs, the turn
  * app-server runs for it taken up from its `turn/started` and over at its
- * `turn/completed` by the same rule. One interrupted
+ * `turn/completed` by the same rule. A message line marked `goal` changes the
+ * thread's goal in its place (`thread/goal/set` or `thread/goal/clear`,
+ * `codex-goals.ts`), and each move app-server says of the goal is posted as
+ * a GOAL event. While the goal runs, app-server goes on toward it in turns
+ * of its own, which the launch takes up from their `turn/started`; a turn that
+ * completes with the goal still running is not the agent's turn's end, which
+ * comes once the goal stops running or no turn starts toward it within
+ * `GOAL_CONTINUE_WAIT`. One interrupted
  * after the service's stop ends the launch as `stopped`; a
  * failed turn, or one interrupted without a stop, as `failed`, with the
  * turn's error, so it shows as interrupted and Continue resumes the thread. A
@@ -153,6 +160,7 @@ import {
   settleAsk,
 } from "./approvals.js";
 import { CheckoutSnapshots } from "./checkout-snapshot.js";
+import { GOAL_ASK, goalAskOf, goalCleared, goalMoves, goalRuns } from "./codex-goals.js";
 import { CODEX_BUNDLED_MODELS_JSON } from "./codex-protocol/bundled-models.js";
 import type {
   ApprovalsReviewer,
@@ -162,6 +170,7 @@ import type {
   CommandExecutionApprovalDecision,
   SandboxMode,
   SandboxPolicy,
+  ThreadGoal,
   ThreadStartParams,
   TurnStatus,
   UserInput,
@@ -284,6 +293,10 @@ const METHOD = {
   THREAD_TURNS_LIST: "thread/turns/list",
   THREAD_REVERT: "thread/revert",
   THREAD_COMPACT_START: "thread/compact/start",
+  THREAD_GOAL_SET: "thread/goal/set",
+  THREAD_GOAL_CLEAR: "thread/goal/clear",
+  THREAD_GOAL_UPDATED: "thread/goal/updated",
+  THREAD_GOAL_CLEARED: "thread/goal/cleared",
   TURN_START: "turn/start",
   TURN_STEER: "turn/steer",
   TURN_INTERRUPT: "turn/interrupt",
@@ -312,6 +325,11 @@ const SIGNAL = {
   PROBED: "probed",
   EXITED: "exited",
   CUT_OFF: "cut_off",
+  /** App-server said the thread's goal changed, or was cleared (`codex-goals.ts`). */
+  GOAL_UPDATED: "goal_updated",
+  GOAL_CLEARED: "goal_cleared",
+  /** A turn ended with the goal running, and app-server started none toward it within `GOAL_CONTINUE_WAIT`. */
+  GOAL_STALLED: "goal_stalled",
 } as const;
 
 type Signal =
@@ -329,7 +347,10 @@ type Signal =
     }
   | { readonly kind: typeof SIGNAL.PROBED; readonly answered: boolean }
   | { readonly kind: typeof SIGNAL.EXITED; readonly stderrTail: string }
-  | { readonly kind: typeof SIGNAL.CUT_OFF; readonly why: string };
+  | { readonly kind: typeof SIGNAL.CUT_OFF; readonly why: string }
+  | { readonly kind: typeof SIGNAL.GOAL_UPDATED; readonly goal: ThreadGoal }
+  | { readonly kind: typeof SIGNAL.GOAL_CLEARED }
+  | { readonly kind: typeof SIGNAL.GOAL_STALLED };
 
 const LAUNCH_STATE = {
   IDLE: "idle",
@@ -797,6 +818,10 @@ interface CodexLaunch {
   waiting: Outgoing[];
   /** A compaction the service asked for while a turn ran, started once none runs. */
   compactNext: Outgoing | undefined;
+  /** The thread's goal as app-server last said it; none where it set none or cleared it (`codex-goals.ts`). */
+  goal: ThreadGoal | undefined;
+  /** Whether the launch's turn ended with the goal running, and the launch waits for the turn app-server starts toward it rather than calling the agent's turn over. */
+  goalWait: boolean;
   /** The service's lines this launch has said app-server took, each said once. */
   readonly accepted: Set<string>;
   /** The credential app-server runs on. */
@@ -1083,6 +1108,22 @@ function listenerFor(
 
           if (threadId !== seen.threadId) return;
           yield* Queue.offer(seen.signals, { kind: SIGNAL.TURN_STARTED, turnId: turn.id });
+
+          return;
+        }
+
+        if (notification.method === METHOD.THREAD_GOAL_UPDATED) {
+          const { threadId, goal } = notification.params;
+
+          if (threadId !== seen.threadId) return;
+          yield* Queue.offer(seen.signals, { kind: SIGNAL.GOAL_UPDATED, goal });
+
+          return;
+        }
+
+        if (notification.method === METHOD.THREAD_GOAL_CLEARED) {
+          if (notification.params.threadId !== seen.threadId) return;
+          yield* Queue.offer(seen.signals, { kind: SIGNAL.GOAL_CLEARED });
 
           return;
         }
@@ -1421,6 +1462,15 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
 const COMPACTION_TURN = "";
 
 /**
+ * How long a launch whose turn ended with the goal running waits for the
+ * turn app-server starts toward it before calling the agent's turn over:
+ * app-server goes on at once, at its next idle moment, so a goal that starts
+ * no turn in this long was left as it stood (its continuation suppressed
+ * after a turn that made no tool call), and the next message picks it up.
+ */
+const GOAL_CONTINUE_WAIT = Duration.seconds(30);
+
+/**
  * Compacts the thread in the message's place, a turn app-server runs of
  * its own, which takes no words; the line is said taken once app-server
  * took the ask. Note that it is never among the messages a turn was
@@ -1460,6 +1510,12 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
       const uuid = value.uuid ?? randomUUID();
       const outgoing: Outgoing = { clientId: uuid, input: userInput(value.content), lines: [uuid] };
       const { state } = launch;
+
+      if (value.goal === true) {
+        yield* askGoal(launch, outgoing, value.content);
+
+        return undefined;
+      }
 
       // A compaction waits for a turn running, or a host being probed, to be over, as app-server compacts no thread at work.
       if (value.compact === true) {
@@ -1655,15 +1711,103 @@ const takeTurnCompleted = Effect.fn("agent-runner/codex/takeTurnCompleted")(func
     return undefined;
   }
 
+  // A goal still running goes on in a turn app-server starts of its own, so the agent's turn is not over yet.
+  if (goalRuns(launch.goal)) {
+    launch.goalWait = true;
+    yield* Effect.forkScoped(
+      Effect.sleep(GOAL_CONTINUE_WAIT).pipe(
+        Effect.andThen(Queue.offer(launch.signals, { kind: SIGNAL.GOAL_STALLED })),
+      ),
+    );
+
+    return undefined;
+  }
+
+  return yield* turnOver(launch);
+});
+
+/** The agent's turn is over: the launch ends, or, where the config asks it to stay warm, posts IDLE and waits for the service's next message. */
+const turnOver = Effect.fn("agent-runner/codex/turnOver")(function* (launch: CodexLaunch) {
+  launch.goalWait = false;
+
   if (launch.context.config.warm !== true) return ended(RUNNER_END.TURN_ENDED);
-  // The agent's turn is over: the launch stays warm for the service's next message
-  // rather than ending.
   launch.state = { kind: LAUNCH_STATE.IDLE, warm: true };
   const files = yield* turnFilesOf(launch);
   yield* launch.context.sink.emit({
     type: RUNNER_EVENT.IDLE,
     ...(files === undefined ? undefined : { files }),
   });
+
+  return undefined;
+});
+
+/**
+ * A goal line, asked of the thread's goal (`codex-goals.ts`): set it, pause
+ * it, resume it, or clear it, as the line's words after `/goal` say. The
+ * line is said taken once app-server took the ask; a goal set or resumed on
+ * an idle thread starts the turn app-server runs toward it, which the launch
+ * takes up from its `turn/started`. Note that it is never among the messages
+ * a turn was handed (`sent`), because no message item ever names it.
+ */
+const askGoal = Effect.fn("agent-runner/codex/askGoal")(function* (
+  launch: CodexLaunch,
+  outgoing: Outgoing,
+  content: readonly ContentBlock[],
+) {
+  const text = content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
+  const ask = goalAskOf(text);
+  const { threadId } = launch;
+
+  switch (ask.kind) {
+    case GOAL_ASK.SET:
+      yield* launch.server.request(METHOD.THREAD_GOAL_SET, {
+        threadId,
+        origin: "user",
+        objective: ask.objective,
+        status: "active",
+      });
+      break;
+    case GOAL_ASK.PAUSE:
+      yield* launch.server.request(METHOD.THREAD_GOAL_SET, {
+        threadId,
+        origin: "user",
+        status: "paused",
+      });
+      break;
+    case GOAL_ASK.RESUME:
+      yield* launch.server.request(METHOD.THREAD_GOAL_SET, {
+        threadId,
+        origin: "user",
+        status: "active",
+      });
+      break;
+    case GOAL_ASK.CLEAR:
+      yield* launch.server.request(METHOD.THREAD_GOAL_CLEAR, { threadId, origin: "user" });
+      break;
+    case GOAL_ASK.NONE:
+      break;
+  }
+
+  yield* accepted(launch, outgoing);
+});
+
+/** The thread's goal as app-server now says it, posted as the moves it made; a launch waiting on the goal goes on to the turn's end once the goal no longer runs. */
+const goalSaid = Effect.fn("agent-runner/codex/goalSaid")(function* (
+  launch: CodexLaunch,
+  goal: ThreadGoal | undefined,
+) {
+  const cleared = goal === undefined ? goalCleared(launch.goal) : undefined;
+
+  const moves =
+    goal !== undefined ? goalMoves(launch.goal, goal) : cleared === undefined ? [] : [cleared];
+
+  launch.goal = goal;
+
+  for (const move of moves) yield* launch.context.sink.emit(move);
+
+  if (launch.goalWait && !goalRuns(goal) && launch.state.kind === LAUNCH_STATE.IDLE) {
+    return yield* turnOver(launch);
+  }
 
   return undefined;
 });
@@ -1766,7 +1910,22 @@ function takeSignal(
         launch.state = { ...launch.state, id: signal.turnId };
       }
 
+      // A turn app-server started of its own toward the running goal is the launch's turn, as one a message started is.
+      if (launch.state.kind === LAUNCH_STATE.IDLE && goalRuns(launch.goal)) {
+        launch.goalWait = false;
+        launch.open = true;
+        launch.state = { kind: LAUNCH_STATE.TURN, id: signal.turnId, stopping: false };
+      }
+
       return Effect.succeed(undefined);
+    case SIGNAL.GOAL_UPDATED:
+      return goalSaid(launch, signal.goal);
+    case SIGNAL.GOAL_CLEARED:
+      return goalSaid(launch, undefined);
+    case SIGNAL.GOAL_STALLED:
+      return launch.goalWait && launch.state.kind === LAUNCH_STATE.IDLE
+        ? turnOver(launch)
+        : Effect.succeed(undefined);
     case SIGNAL.TURN_COMPLETED:
       return takeTurnCompleted(launch, signal);
     case SIGNAL.PROBED:
@@ -1959,6 +2118,8 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     sent: new Map(),
     waiting: [],
     compactNext: undefined,
+    goal: undefined,
+    goalWait: false,
     accepted: new Set(),
     auth,
     permissions,

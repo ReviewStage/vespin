@@ -943,6 +943,86 @@ it.effect("compacts the thread in a compaction line's place, its words dropped",
   }),
 );
 
+it.effect(
+  "sets the thread's goal from a goal line, takes up each turn app-server runs toward it, and ends once it is met",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService("turn/completed");
+      const started = RESUMED_TURN.reply.find((line) => line.method === "turn/started");
+
+      if (started === undefined) throw new Error("the resumed turn has no turn/started");
+      const objective = "every billing test passes";
+
+      const goal = (status: string, tokensUsed: number) => ({
+        method: "thread/goal/updated",
+        params: {
+          threadId: THREAD,
+          turnId: null,
+          goal: {
+            threadId: THREAD,
+            objective,
+            status,
+            tokenBudget: 500_000,
+            tokensUsed,
+            timeUsedSeconds: 60,
+            createdAt: 1,
+            updatedAt: 2,
+          },
+        },
+      });
+
+      const script: Script = {
+        exchanges: [
+          ...RESUME,
+          {
+            method: "thread/goal/set",
+            // App-server runs a turn toward the goal, then goes on with another of its own, in which the goal is met.
+            reply: [
+              { id: 3, result: { goal: goal("active", 0).params.goal } },
+              goal("active", 0),
+              started,
+              goal("active", 40_000),
+              ...RESUMED_TURN_END,
+              started,
+              goal("complete", 90_000),
+              ...RESUMED_TURN_END,
+            ],
+          },
+        ],
+      };
+
+      const { spawned, write, run } = yield* launch([script], service);
+      yield* write({ ...CONFIG, threadId: THREAD });
+      yield* write({
+        type: INPUT_LINE.MESSAGE,
+        uuid: LINE.FIRST,
+        content: [{ type: "text", text: `/goal ${objective}` }],
+        goal: true,
+      });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      const [process] = spawned;
+      assert.deepEqual(process?.unexpected, []);
+      assert.deepEqual(received(process, "thread/goal/set"), [
+        { threadId: THREAD, origin: "user", objective, status: "active" },
+      ]);
+      assert.deepEqual(received(process, "turn/start"), []);
+      assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST]);
+      // Only the goal's moves are posted as its events, not each change of its token count.
+      assert.deepEqual(
+        service.applied.flatMap(({ message: posted }) =>
+          "type" in posted && posted.type === RUNNER_EVENT.GOAL
+            ? [[posted.event, posted.tokens]]
+            : [],
+        ),
+        [
+          ["set", 0],
+          ["met", 90_000],
+        ],
+      );
+    }),
+);
+
 it.effect("starts the next turn for a message Vespin sent just before the turn completed", () =>
   Effect.gen(function* () {
     const service = fakeService("turn/completed");
