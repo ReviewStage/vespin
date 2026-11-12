@@ -68,8 +68,6 @@ export const SETTINGS_SEARCH_ROW = {
   ENVIRONMENT_INSTALL: "environment-install",
   /** Cloud environment's Setup scripts, each repository's. */
   ENVIRONMENT_SETUP: "environment-setup",
-  /** Cloud environment's Archive scripts, each repository's. */
-  ENVIRONMENT_ARCHIVE: "environment-archive",
   /** Cloud environment's Run actions, each repository's, drawn while the workspace has Run actions on. */
   ENVIRONMENT_RUN_ACTIONS: "environment-run-actions",
 } as const;
@@ -90,4 +88,5 @@ export const EXPERIMENT_ANCHOR = {
   [EXPERIMENT.RUN_ACTIONS]: "experiment-run-actions",
   [EXPERIMENT.TURN_CHANGES]: "experiment-turn-changes",
   [EXPERIMENT.REPLY_BUTTONS]: "experiment-reply-buttons",
+  [EXPERIMENT.FOLLOWING]: "experiment-following",
 } as const satisfies Record<Experiment, string>;

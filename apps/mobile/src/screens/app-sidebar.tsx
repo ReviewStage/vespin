@@ -11,7 +11,7 @@ import {
   MARK_SIZE,
   RowList,
   SWITCHER_LOOK,
-  WorkspaceSwitcherMenu,
+  WorkspaceSwitcherItem,
 } from "@repo/ui-native";
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
@@ -127,7 +127,7 @@ export function useAppSidebar(
   const switcher = useWorkspaceSwitcher();
   const threeColumns = useThreeColumns();
   const { shown, setShown } = useSidebarShown();
-  const header = switcher === undefined ? undefined : <WorkspaceSwitcherMenu {...switcher} />;
+  const header = switcher === undefined ? undefined : <WorkspaceSwitcherItem {...switcher} />;
   const selected = openTask !== undefined && tasks.ids.has(openTask) ? openTask : place;
 
   const pick = (id: string) => {
@@ -144,7 +144,7 @@ export function useAppSidebar(
       // Note that the photo leads only until the workspaces are read, as the compact bar's does, so Settings is never out of reach.
       const leading =
         switcher !== undefined ? (
-          <WorkspaceSwitcherMenu
+          <WorkspaceSwitcherItem
             {...switcher}
             look={SWITCHER_LOOK.TILE}
             tileSize={MARK_SIZE.COLUMN_BAR_FACE}

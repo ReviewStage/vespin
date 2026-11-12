@@ -2183,6 +2183,16 @@ export function unreadSentLines(
   return sent.filter((line) => line.state === SENT_LINE_STATE.UNDELIVERED || !landed.has(line.id));
 }
 
+/** The sent lines whose row the transcript holds, written under the id their send key names. */
+export function landedSentLines(
+  sent: readonly SentLine[],
+  messages: readonly AgentTranscriptMessage[],
+): readonly SentLine[] {
+  const landed = landedLines(messages);
+
+  return sent.filter((line) => landed.has(line.id));
+}
+
 /**
  * The sent lines the box still holds: all but those the service took whose
  * row has landed. Note that a line whose row was read back is held, undrawn,

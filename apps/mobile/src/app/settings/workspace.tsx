@@ -1,4 +1,4 @@
-// workspace.tsx -- Settings' Workspace page for the workspace the app works in: its name, renamed by an owner or admin; its members, whose roles the owner changes and whom an owner or admin removes; its invitations, sent and canceled by an owner or admin; and Leave.
+// workspace.tsx -- Settings' Workspace page for the workspace the app works in: its name, renamed by an owner or admin; its members, whose roles the owner changes, to whom the owner hands it, and whom an owner or admin removes; its invitations, sent and canceled by an owner or admin; and Leave.
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -14,6 +14,8 @@ import {
   INVITATION_WORDS,
   LEAVE_WORDS,
   MEMBER_WORDS,
+  TRANSFER_WORDS,
+  transferQuestionTitle,
   WORKSPACE_READ_FAILED,
 } from "@repo/features/workspace-settings-words";
 import {
@@ -65,6 +67,7 @@ const ASKING = {
   REMOVE: "remove",
   CANCEL: "cancel",
   LEAVE: "leave",
+  TRANSFER: "transfer",
 } as const;
 
 /** What the page asks first, by the act it asks about. */
@@ -73,7 +76,8 @@ type Asking =
   | { readonly kind: typeof ASKING.INVITE }
   | { readonly kind: typeof ASKING.REMOVE; readonly member: WorkspaceMember }
   | { readonly kind: typeof ASKING.CANCEL; readonly invitation: WorkspaceInvitation }
-  | { readonly kind: typeof ASKING.LEAVE };
+  | { readonly kind: typeof ASKING.LEAVE }
+  | { readonly kind: typeof ASKING.TRANSFER; readonly member: WorkspaceMember };
 
 /** The members and invitations the host holds for one workspace, as a `select`; each none until read. */
 function heldPeople(workspaceId: string) {
@@ -139,8 +143,11 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
   const people = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const invite = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const leave = useAsyncAction(() => ACT_UNREACHED_WORDS);
+  const transfer = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const dismiss = () => setAsking(undefined);
-  const hasAdmin = members?.some((member) => member.role === WORKSPACE_ROLE.ADMIN) === true;
+  // Note that Transfer ownership offers the first admin, as the panel's chooser stands on; another is made owner from their own row.
+  const heir = members?.find((member) => member.role === WORKSPACE_ROLE.ADMIN);
+  const hasAdmin = heir !== undefined;
 
   const actsOn = (member: WorkspaceMember): readonly MemberRowAct[] => {
     const may = memberActs(workspace, member, member.userId === readerId);
@@ -162,6 +169,14 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
         : []),
       ...(may.demote
         ? [{ label: MEMBER_WORDS.MAKE_MEMBER, onPress: role(ASSIGNABLE_ROLE.MEMBER) }]
+        : []),
+      ...(may.transfer
+        ? [
+            {
+              label: MEMBER_WORDS.MAKE_OWNER,
+              onPress: () => setAsking({ kind: ASKING.TRANSFER, member }),
+            },
+          ]
         : []),
       ...(may.remove
         ? [
@@ -247,8 +262,18 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             </ListSection>
           ) : null}
           {personal ? null : owner ? (
-            <ListSection footer={hasAdmin ? LEAVE_WORDS.OWNER : LEAVE_WORDS.OWNER_NO_ADMIN}>
-              {null}
+            <ListSection
+              footer={
+                transfer.refusal ?? (hasAdmin ? LEAVE_WORDS.OWNER : LEAVE_WORDS.OWNER_NO_ADMIN)
+              }
+            >
+              {heir === undefined ? null : (
+                <ActionRow
+                  label={TRANSFER_WORDS.VERB}
+                  symbol={GLYPH.MAKE_OWNER}
+                  onPress={() => setAsking({ kind: ASKING.TRANSFER, member: heir })}
+                />
+              )}
             </ListSection>
           ) : (
             <ListSection footer={leave.refusal ?? LEAVE_WORDS.LINE}>
@@ -334,6 +359,26 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             refusalOf(write, () =>
               acts[ACT_KIND.WORKSPACE_INVITATION_CANCEL]({ workspaceId, invitationId }),
             ),
+          );
+        }}
+      />
+      {/* Note that a handover asks in the accent rather than red, as the panel's does, and waits on the workspace's name typed, since only the new owner can give it back. */}
+      <ConfirmAsk
+        title={transferQuestionTitle(
+          workspace.name,
+          asking?.kind === ASKING.TRANSFER ? asking.member.name : undefined,
+        )}
+        message={TRANSFER_WORDS.BODY}
+        act={TRANSFER_WORDS.VERB}
+        gate={workspace.name}
+        presented={asking?.kind === ASKING.TRANSFER}
+        onDismiss={dismiss}
+        onAct={() => {
+          if (asking?.kind !== ASKING.TRANSFER) return;
+          const { userId } = asking.member;
+          dismiss();
+          void transfer.run(() =>
+            refusalOf(write, () => acts[ACT_KIND.WORKSPACE_TRANSFER]({ workspaceId, userId })),
           );
         }}
       />

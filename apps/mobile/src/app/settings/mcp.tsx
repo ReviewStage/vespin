@@ -1,4 +1,4 @@
-// mcp.tsx -- Settings' MCP page: the apps the account allowed to use Vespin over MCP, each by its name, where it signs in from, and when it was allowed and last active, and Disconnect, asked first; an app is connected from the computer it runs on, so the phone offers no Connect.
+// mcp.tsx -- Settings' MCP page: the apps the account allowed to use the service over MCP, each by its name, where it signs in from, and when it was allowed and last active, and Disconnect, asked first; an app is connected from the computer it runs on, so the phone offers no Connect.
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -80,14 +80,23 @@ function McpPage({ accountId }: { readonly accountId: string }) {
 
   const clients = held?.rows?.clients;
   const now = Date.now();
+  const live = clients === undefined ? [] : listedMcpClients(clients);
+
+  // Note that a disconnected app keeps its row only while the list shows that same grant or none; one that signed in again under its id comes back with a newer grant, and its live row with Disconnect.
+  const standing = new Map(
+    [...revoked].filter(([clientId, gone]) => {
+      const row = live.find((client) => client.clientId === clientId);
+
+      return row === undefined || row.allowedAt === gone.allowedAt;
+    }),
+  );
 
   const shown =
     clients === undefined
       ? []
-      : [
-          ...listedMcpClients(clients).filter((client) => !revoked.has(client.clientId)),
-          ...revoked.values(),
-        ].toSorted((one, other) => (other.allowedAt ?? 0) - (one.allowedAt ?? 0));
+      : [...live.filter((client) => !standing.has(client.clientId)), ...standing.values()].toSorted(
+          (one, other) => (other.allowedAt ?? 0) - (one.allowedAt ?? 0),
+        );
 
   const revoke = (client: McpClient) =>
     void write(
@@ -130,7 +139,7 @@ function McpPage({ accountId }: { readonly accountId: string }) {
           footer={shown.length === 0 ? MCP_CLIENTS_WORDS.NONE : MCP_CLIENTS_WORDS.CAPTION}
         >
           {shown.map((client) =>
-            revoked.has(client.clientId) ? (
+            standing.has(client.clientId) ? (
               <ConnectionRow
                 key={client.clientId}
                 name={mcpClientName(client)}

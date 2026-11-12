@@ -41,6 +41,7 @@
     "./pull-request-link": "./src/pull-request-link.js",
     "./link-face": "./src/link-face.js",
     "./quote-face": "./src/quote-face.js",
+    "./code-face": "./src/code-face.js",
     "./picture-read": "./src/picture-read.js",
     "./image-zoom": "./src/image-zoom.js",
     "./confirm-state": "./src/confirm-state.js",

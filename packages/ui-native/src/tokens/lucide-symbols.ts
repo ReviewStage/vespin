@@ -39,6 +39,7 @@ export const LUCIDE_SYMBOL = {
   CORNER_DOWN_RIGHT: "CornerDownRight",
   CORNER_LEFT_UP: "CornerLeftUp",
   CPU: "Cpu",
+  CROWN: "Crown",
   DOWNLOAD: "Download",
   ELLIPSIS: "Ellipsis",
   EXTERNAL_LINK: "ExternalLink",

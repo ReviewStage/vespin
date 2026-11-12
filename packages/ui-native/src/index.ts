@@ -261,11 +261,13 @@ export { Video } from "./video.js";
 export {
   newWorkspaceAction,
   SWITCHER_LOOK,
+  SWITCHER_PRESENTATION,
   type SwitcherAccount,
   type SwitcherAction,
   type SwitcherLook,
-  type SwitcherWorkspace,
+  type SwitcherPresentation,
   WorkspaceSwitcher,
-  WorkspaceSwitcherMenu,
-  WorkspaceTile,
+  WorkspaceSwitcherItem,
 } from "./workspace-switcher.js";
+
+export { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";

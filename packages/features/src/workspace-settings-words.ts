@@ -89,3 +89,16 @@ export const LEAVE_WORDS = {
       ? "Your own workspace isn't affected."
       : `Your own workspace, ${name}, isn't affected.`,
 } as const;
+
+/** What the handover says: its press, its question's body, its running verb, and the field naming whom it goes to. The old owner becomes an admin, one way. */
+export const TRANSFER_WORDS = {
+  VERB: "Transfer ownership",
+  RUNNING: "Transferring",
+  BODY: "You become an admin. The new owner can change anyone's role and remove anyone, you included, and only they can give it back.",
+  NEW_OWNER: "New owner",
+} as const;
+
+/** The handover's question: its title names the new owner where the door already knows them. */
+export function transferQuestionTitle(workspace: string, heir: string | undefined): string {
+  return `Transfer ownership of ${workspace}${heir === undefined ? "" : ` to ${heir}`}?`;
+}

@@ -19,6 +19,8 @@ import {
   INVITATION_WORDS,
   LEAVE_WORDS,
   MEMBER_WORDS,
+  TRANSFER_WORDS,
+  transferQuestionTitle,
   WORKSPACE_READ_FAILED,
 } from "@repo/features/workspace-settings-words";
 import { workspaceSharedWords } from "@repo/features/workspace-tile";
@@ -172,13 +174,6 @@ export const DELETE_WORDS = {
     "The GitHub App, the Slack bot, and the Sentry integration stay installed on GitHub, Slack, and Sentry. Remove them there if you no longer need them.",
 } as const;
 
-/** What the handover says: its press, its question's body, and its running verb. The old owner becomes an admin, one way. */
-const TRANSFER_WORDS = {
-  VERB: "Transfer ownership",
-  RUNNING: "Transferring",
-  BODY: "You become an admin. The new owner can change anyone's role and remove anyone, you included, and only they can give it back.",
-} as const;
-
 type TransferAskResult = { gate: string; question: DialogQuestion };
 
 /**
@@ -188,12 +183,10 @@ type TransferAskResult = { gate: string; question: DialogQuestion };
  * name typed, since only the new owner can give it back.
  */
 function transferAsk(workspace: Workspace, heir: string | undefined): TransferAskResult {
-  const to = heir === undefined ? "" : ` to ${heir}`;
-
   return {
     gate: workspace.name,
     question: {
-      title: `Transfer ownership of ${workspace.name}${to}?`,
+      title: transferQuestionTitle(workspace.name, heir),
       body: TRANSFER_WORDS.BODY,
       verb: TRANSFER_WORDS.VERB,
       running: TRANSFER_WORDS.RUNNING,
@@ -632,7 +625,7 @@ function HeirChip({
           chevron
           ref={door}
           id={id}
-          aria-label={`New owner: ${chosen.name}`}
+          aria-label={`${TRANSFER_WORDS.NEW_OWNER}: ${chosen.name}`}
           {...menu.trigger()}
         >
           <ReplayMask>
@@ -645,7 +638,7 @@ function HeirChip({
       </div>
       {menu.drawn === undefined ? null : (
         <ActionMenu
-          label="New owner"
+          label={TRANSFER_WORDS.NEW_OWNER}
           menu={menu.drawn}
           groups={[
             memberRows(admins, undefined).map((row) => ({
@@ -736,7 +729,7 @@ function OwnerLeave({
       {/* Note that the new owner goes unnamed in the title, because the field below chooses them. */}
       {heir === undefined ? null : (
         <ConfirmDialog open confirm={transfer} {...transferAsk(workspace, undefined)}>
-          <FormField label="New owner">
+          <FormField label={TRANSFER_WORDS.NEW_OWNER}>
             {(field) => (
               <HeirChip
                 id={field.id}

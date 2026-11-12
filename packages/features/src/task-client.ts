@@ -1,4 +1,9 @@
-import { HTTP_METHOD, type UnparsedWireValue, unparsedWire } from "@repo/wire";
+import {
+  HTTP_METHOD,
+  type TaskFollowerWire,
+  type UnparsedWireValue,
+  unparsedWire,
+} from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { Effect, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
@@ -95,6 +100,7 @@ import {
   type BlockCallFailure,
   BROWSER_TAB_RENAMES,
   DESCRIPTION_COMMENT_CALL_FAILURE,
+  type FollowerCallFailure,
   type ParentCallFailure,
   PICTURE_KEEP_FAILURE,
   type RelationCallFailure,
@@ -134,6 +140,12 @@ export interface TaskStarted {
 /** A task as a write answered it, and the transaction the write committed in where it changed a row. */
 export interface TaskWritten {
   readonly task: Task;
+  readonly txid?: string;
+}
+
+/** A task's followers as a follower write left them, and the transaction it committed in where it changed a row. */
+export interface FollowersWritten {
+  readonly followers: readonly TaskFollowerWire[];
   readonly txid?: string;
 }
 
@@ -198,6 +210,21 @@ function writtenOf(changed: { readonly plan: Task; readonly txid?: string }): Ta
   return changed.txid === undefined
     ? { task: changed.plan }
     : { task: changed.plan, txid: changed.txid };
+}
+
+/** A follower write's answer as the window takes it: the followers, and the transaction where the write changed a row. */
+function followersOf(
+  changed:
+    | { readonly followers: readonly TaskFollowerWire[]; readonly txid?: string }
+    | { readonly failure: FollowerCallFailure; readonly cause?: FailureFacts },
+): TaskCallResult<FollowersWritten, FollowerCallFailure> {
+  if ("failure" in changed) return failedResult(changed);
+
+  return succeeded(
+    changed.txid === undefined
+      ? { followers: changed.followers }
+      : { followers: changed.followers, txid: changed.txid },
+  );
 }
 
 /** A call's failure as `hostedCall` reads it: a refusal its procedure declares, or no answer with what failed beneath it. */
@@ -571,6 +598,61 @@ export class HostedTaskClient {
         { as: TASK_BLOCK_RENAMES },
       ),
       (changed) => ("failure" in changed ? failedResult(changed) : succeeded(writtenOf(changed))),
+    );
+  }
+
+  /** The account follows one task, its machines off; answers the task's followers as they then stand, or why they are unchanged. */
+  follow(
+    taskId: string,
+  ): Effect.Effect<
+    TaskCallResult<FollowersWritten, FollowerCallFailure>,
+    never,
+    HttpClient.HttpClient
+  > {
+    return Effect.map(hostedCall(this.#hosted.taskFollowers.follow, { id: taskId }), followersOf);
+  }
+
+  /** The account stops following one task, which its assignee may not; answers as `follow` does. */
+  unfollow(
+    taskId: string,
+  ): Effect.Effect<
+    TaskCallResult<FollowersWritten, FollowerCallFailure>,
+    never,
+    HttpClient.HttpClient
+  > {
+    return Effect.map(hostedCall(this.#hosted.taskFollowers.unfollow, { id: taskId }), followersOf);
+  }
+
+  /** The account's own switch on one task it follows: whether the task's agents may use its machines; answers as `follow` does. */
+  setFollowerMachines(
+    taskId: string,
+    machines: boolean,
+  ): Effect.Effect<
+    TaskCallResult<FollowersWritten, FollowerCallFailure>,
+    never,
+    HttpClient.HttpClient
+  > {
+    return Effect.map(
+      hostedCall(this.#hosted.taskFollowers.setMachines, {
+        params: { id: taskId },
+        body: { machines },
+      }),
+      followersOf,
+    );
+  }
+
+  /** Another member of the task's workspace added as a follower, their machines off; answers as `follow` does. */
+  addFollower(
+    taskId: string,
+    userId: string,
+  ): Effect.Effect<
+    TaskCallResult<FollowersWritten, FollowerCallFailure>,
+    never,
+    HttpClient.HttpClient
+  > {
+    return Effect.map(
+      hostedCall(this.#hosted.taskFollowers.add, { params: { id: taskId }, body: { userId } }),
+      followersOf,
     );
   }
 

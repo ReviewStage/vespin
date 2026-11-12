@@ -846,7 +846,9 @@ function rereadKept(): void {
  * starts from what storage holds, because another window keeps its lines
  * there too: it changes the lines it changed, adds the ones it added, and
  * lets go of the ones it let go, so a line another window let go is never
- * written back. A window not signed in keeps nothing.
+ * written back. A window not signed in keeps nothing in storage, which
+ * keeps each line under its account, and holds its lines in the window
+ * alone, as `heldLines` does.
  */
 export function keptLines<Line, Kept>(spec: KeptLines<Line, Kept>): AccountLines<Line> {
   const stored = Schema.fromJsonString(
@@ -856,14 +858,19 @@ export function keptLines<Line, Kept>(spec: KeptLines<Line, Kept>): AccountLines
   const idOf = (line: Line) => spec.idOf(spec.toKept(line));
   // Each line as this window last wrote it, its files among it, by its id.
   const held = new Store<ReadonlyMap<string, Line>>(new Map());
+  // The lines of a window signed in to no account, which storage cannot keep.
+  const unowned = new Store<readonly Line[]>(NO_LINES);
   HELD_BESIDE.push({
     adopt: () => undefined,
-    forget: () => held.setState(() => new Map()),
+    forget: () => {
+      held.setState(() => new Map());
+      unowned.setState(() => NO_LINES);
+    },
   });
 
   const read = (owner: Owner, lines: ReadonlyMap<string, Line>): readonly Line[] =>
     owner === null
-      ? NO_LINES
+      ? unowned.state
       : readKept(spec.key, stored, [])
           .filter((entry) => entry.accountId === owner)
           .map(({ line: kept }) => {
@@ -884,7 +891,12 @@ export function keptLines<Line, Kept>(spec: KeptLines<Line, Kept>): AccountLines
   const set = (change: (now: readonly Line[]) => readonly Line[]): void => {
     const owner = ownerStore.state;
 
-    if (owner === null) return;
+    if (owner === null) {
+      unowned.setState(change);
+
+      return;
+    }
+
     const now = store.state;
     const next = change(now);
     const was = new Set(now.map(idOf));

@@ -213,6 +213,7 @@ const LUCIDE_SYMBOLS = {
   CORNER_DOWN_RIGHT: "corner-down-right",
   CORNER_LEFT_UP: "corner-left-up",
   CPU: "cpu",
+  CROWN: "crown",
   DOWNLOAD: "download",
   ELLIPSIS: "ellipsis",
   EXTERNAL_LINK: "external-link",
