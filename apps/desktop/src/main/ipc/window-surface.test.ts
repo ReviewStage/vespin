@@ -105,6 +105,7 @@ function fixture() {
       tellUnsavedWork: (sender, holding) =>
         heard.push(`unsaved:${sender === panelContents ? "panel" : "other"}:${holding}`),
       tellMenuOffers: (_sender, commands) => heard.push(`offers:${commands.join()}`),
+      tellHandoff: () => undefined,
     }),
   );
 

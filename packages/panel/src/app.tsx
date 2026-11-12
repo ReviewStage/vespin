@@ -47,6 +47,7 @@ import { TabSwitcher } from "./desktop/tab-switcher.js";
 import { useExpiredServerToasts } from "./expired-server-toasts.js";
 import { FeedbackDialog } from "./feedback-dialog.js";
 import { GitHubConnectProvider } from "./github-connect.js";
+import { useHandoff } from "./handoff.js";
 import { stepTitle } from "./history-titles.js";
 import { useInboxRoute } from "./inbox-route.js";
 import { useKeyboardModality } from "./keyboard-modality.js";
@@ -568,6 +569,13 @@ function AppWindow(): React.JSX.Element {
     adminView.open ? adminView.view : undefined,
     routedHere?.place,
   );
+
+  // What the window shows is handed off to the member's iPhone, as the phone's own screen for it would be (`handoff.ts`).
+  useHandoff(accountGated ? undefined : copyLink.linksAt(false)[0]?.link, {
+    tasks: tasks.tasks,
+    workspaces: tasks.workspaces,
+    pullRequests: planning?.taskPullRequests ?? [],
+  });
 
   // A fixture run's profile opens the window on its place once, as a link to it would; an Automations page once its workspace is listed, whose address it stands under.
   const launchedOnce = useRef(false);

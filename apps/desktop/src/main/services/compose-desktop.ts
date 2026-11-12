@@ -40,6 +40,7 @@ import { BrowserWindow, net, type WebContents } from "electron";
 import { registerDesktopIpc } from "../ipc/register-desktop-ipc";
 import { moveToApplications } from "../move-to-applications";
 import { createElectronUpdaterEngine } from "../update-installer";
+import { advertiseHandoff, type Handoff, handoff } from "../window/handoff";
 import { type MenuOffers, menuOffers } from "../window/menu-offers";
 import { electronNoticeDoors } from "../window/notice-doors";
 import { askBeforeLeaving } from "../window/quit-dialog";
@@ -117,6 +118,8 @@ export interface DesktopServices {
   readonly unsavedWork: UnsavedWorkHolders<WebContents>;
   /** Which commands each panel offers the menu bar, as each tells it. */
   readonly menuOffers: MenuOffers;
+  /** What each panel shows, as each tells it, the focused one's handed off to the member's iPhone. */
+  readonly handoff: Handoff;
   /** Whether the machine has a network, as any window tells it. */
   readonly tellOnline: (online: boolean) => void;
   /**
@@ -290,6 +293,16 @@ export function composeDesktop(
         Effect.sync(() => windows.onPanelFocusChanged(() => offers.focusMoved())),
         (stop) => Effect.sync(stop),
       );
+
+      // The focused panel's thread, task, agent, or pull request is handed off to the member's iPhone, advertised again as the focus moves.
+      const handedOff = handoff((activity) => {
+        if (config.platform === "darwin") advertiseHandoff(activity);
+      });
+
+      yield* Effect.acquireRelease(
+        Effect.sync(() => windows.onPanelFocusChanged(() => handedOff.focusMoved())),
+        (stop) => Effect.sync(stop),
+      );
       const atStake = () => ({ unsavedWork: unsavedWork.holding() });
 
       const askFirst = leaveGate({
@@ -392,6 +405,7 @@ export function composeDesktop(
         services,
         unsavedWork,
         menuOffers: offers,
+        handoff: handedOff,
         tellOnline: (found) => void run(SubscriptionRef.set(online, found)),
         askBeforeLeaving: askFirst,
       };

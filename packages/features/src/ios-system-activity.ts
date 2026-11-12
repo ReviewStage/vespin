@@ -25,11 +25,13 @@ import {
   type LinkDestination,
   linkOf,
   linkWorkspaceStep,
+  type ReadLink,
   readLink,
+  taskLinkStep,
 } from "./link-grammar.js";
 import { cardTitle } from "./plain-words.js";
 import { TASK_STATUS_WORDS } from "./task-standing-words.js";
-import type { TaskSummary } from "./task-wire.js";
+import type { TaskPullRequests, TaskSummary } from "./task-wire.js";
 import type { Workspace } from "./workspace-wire.js";
 
 /** What a Spotlight item is: one of the member's tasks, or one of their Inbox threads. */
@@ -39,6 +41,12 @@ export const SPOTLIGHT_DOMAIN = {
 } as const;
 
 type SpotlightDomain = (typeof SPOTLIGHT_DOMAIN)[keyof typeof SPOTLIGHT_DOMAIN];
+
+/** Our activity type, which the iPhone app declares in `NSUserActivityTypes` and the desktop advertises. */
+export const HANDOFF_ACTIVITY_TYPE = "dev.vespin.viewing";
+
+/** The `userInfo` key a pull request's activity names its number under, since its page is its agent's Changes. */
+export const HANDOFF_PULL_REQUEST_KEY = "pullRequest";
 
 /** What parts a Spotlight item's summary. */
 const SUMMARY_PART = " · ";
@@ -146,6 +154,63 @@ export function pullRequestActivity(
     webpageUrl: linkOf(place, step),
     pullRequest: pullRequest.number,
   };
+}
+
+/** What a desktop window advertises for Handoff: an activity as a screen's, less its title, which Electron sets none of. */
+export type HandoffActivity = Omit<IosActivity, "title">;
+
+/** What the window holds that a link names only by its number or its agent: its tasks, their workspaces, and the pull requests their agents opened. */
+export interface HandoffReads {
+  readonly tasks: readonly Pick<TaskSummary, "id" | "number" | "workspaceId">[];
+  readonly workspaces: readonly Workspace[];
+  readonly pullRequests: readonly TaskPullRequests[];
+}
+
+/**
+ * The activity a desktop window advertises while `link` is what it shows,
+ * as the phone's screen for the same thing advertises it, so the phone
+ * opens it where it would open its own (`iosContinuedRouteOf`); none for a
+ * place the phone draws no screen for. A task is named by its id, as the
+ * phone's own activity names it, since a number is its workspace's alone. A
+ * pull request is named by its agent's Changes and its number, and one the
+ * window holds no number for is handed off as its agent.
+ */
+export function desktopHandoffOf(link: ReadLink, reads: HandoffReads): HandoffActivity | undefined {
+  const { place, workspace } = link;
+
+  switch (place.kind) {
+    case LINK_DESTINATION.INBOX_ITEM:
+    case LINK_DESTINATION.AGENT:
+      return { webpageUrl: linkOf(place, workspace) };
+    case LINK_DESTINATION.TASK: {
+      const task = reads.tasks.find(
+        (each) =>
+          taskLinkStep(each) === place.planId &&
+          linkWorkspaceStep(each.workspaceId, reads.workspaces) === workspace,
+      );
+
+      const planId = task?.id ?? place.planId;
+
+      return { webpageUrl: linkOf({ kind: LINK_DESTINATION.TASK, planId }, workspace) };
+    }
+
+    case LINK_DESTINATION.CHANGES: {
+      const number = reads.pullRequests
+        .flatMap((each) => each.pullRequests)
+        .find((each) => each.agentId === place.agentId)?.number;
+
+      if (number === undefined) {
+        const agent: LinkDestination = { ...place, kind: LINK_DESTINATION.AGENT };
+
+        return { webpageUrl: linkOf(agent, workspace) };
+      }
+
+      return { webpageUrl: linkOf(place, workspace), pullRequest: number };
+    }
+
+    default:
+      return undefined;
+  }
 }
 
 /**

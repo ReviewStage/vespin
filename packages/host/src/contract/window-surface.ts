@@ -199,6 +199,22 @@ export const windowSurfaceActsContract = {
       ),
     )
     .output(EffectSchema.Void),
+  [WINDOW_SURFACE_ACT_KIND.WINDOW_HANDOFF]: actProcedure(
+    "Could not tell the Mac what this window shows.",
+  )
+    .input(
+      exactInput(
+        EffectSchema.Struct({
+          activity: EffectSchema.NullOr(
+            EffectSchema.Struct({
+              webpageUrl: EffectSchema.String,
+              pullRequest: EffectSchema.optionalKey(EffectSchema.Int),
+            }),
+          ),
+        }),
+      ),
+    )
+    .output(EffectSchema.Void),
   [WINDOW_SURFACE_ACT_KIND.FEEDBACK_SEND]: actProcedure("Could not send that on this system.")
     .input(exactInput(EffectSchema.Struct({ submission: feedbackSubmissionSchema })))
     .output(feedbackResultSchema),
