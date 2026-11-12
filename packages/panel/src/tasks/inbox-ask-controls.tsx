@@ -71,6 +71,7 @@ import { OptionCardMedia } from "./inbox-option-media.js";
 import { ANSWER_STATUS_TONE } from "./inbox-stamp.js";
 import { REPLY_SCOPE } from "./reply-to-selection.js";
 import { SentWords } from "./skill-chip.js";
+import { useMentionLink } from "./task-mentions.js";
 import { DraftFence } from "./transcript-markdown.js";
 import { useOpenLink } from "./use-open-link.js";
 
@@ -618,6 +619,7 @@ function StepBox({
   onChange: () => void;
 }): React.JSX.Element {
   const openLink = useOpenLink();
+  const link = useMentionLink();
   const { say, fences } = stepParts(step);
   const detail =
     fences.length === 0 ? undefined : (
@@ -646,7 +648,11 @@ function StepBox({
       onChange={onChange}
       detail={detail}
     >
-      {say === "" ? `Step ${at + 1}` : <MarkdownMessage words={say} inline openLink={openLink} />}
+      {say === "" ? (
+        `Step ${at + 1}`
+      ) : (
+        <MarkdownMessage words={say} inline link={link} openLink={openLink} />
+      )}
     </Checkbox>
   );
 }

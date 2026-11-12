@@ -219,9 +219,9 @@ test("a picture whose alt text, address, and title need escaping reads back as t
 /** How many checkboxes the read view draws for a description's text. */
 function drawnCheckboxes(words: string): number {
   return (
-    renderToStaticMarkup(withQueryClient(createElement(MarkdownMessage, { words }))).split(
-      'type="checkbox"',
-    ).length - 1
+    renderToStaticMarkup(
+      withQueryClient(createElement(MarkdownMessage, { words, link: null })),
+    ).split('type="checkbox"').length - 1
   );
 }
 
@@ -286,9 +286,9 @@ test("blank lines left before, between, and after paragraphs are saved as ones t
 
   assert.equal(saved, "&nbsp;\n\nOne.\n\n&nbsp;\n\nTwo.\n\n&nbsp;\n");
   assert.equal(
-    renderToStaticMarkup(withQueryClient(createElement(MarkdownMessage, { words: saved }))).split(
-      "<p",
-    ).length - 1,
+    renderToStaticMarkup(
+      withQueryClient(createElement(MarkdownMessage, { words: saved, link: null })),
+    ).split("<p").length - 1,
     5,
   );
   assert.deepEqual(

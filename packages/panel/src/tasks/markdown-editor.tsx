@@ -1,4 +1,4 @@
-import { decodeMention } from "@repo/features/mention-link";
+import { linkChipOf } from "@repo/features/mention-link";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { ANNOUNCE, Checkbox } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
@@ -182,7 +182,7 @@ function MountedEditor({
                 latest.current.mentions?.drawMention(element, mention, node) ?? (() => undefined),
               retarget: (target, renamed) => latest.current.mentions?.retarget(target, renamed),
               pasted: (words) => latest.current.mentions?.pasted(words),
-              namesMention: (target) => latest.current.mentions?.namesMention(target) ?? false,
+              namesChip: (target) => latest.current.mentions?.namesChip(target) ?? false,
             },
       drawDiagram:
         latest.current.drawDiagram === undefined
@@ -338,8 +338,8 @@ export function MarkdownEditor({
                 taskId: mentions.source.holder?.taskId,
                 text,
               }),
-            namesMention: (target) =>
-              decodeMention(target, mentions.doors.place.repository) !== undefined,
+            namesChip: (target) =>
+              linkChipOf(target, target, mentions.doors.place.repository) !== undefined,
           },
     drawDiagram: diagrams ? previews.draw : undefined,
     drawTaskBox: taskBoxes.draw,

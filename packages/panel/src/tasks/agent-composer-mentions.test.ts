@@ -1424,7 +1424,7 @@ test("a section's address pasted whole into the box on a plan's page is drawn as
   assert.equal(carryingTarget(container), undefined);
 });
 
-test("a page's address pasted in the app's own scheme is called by the name the window holds, an agent's it holds none for by its kind, and a file of the plan's repository pastes as words", async () => {
+test("a page's address pasted in the app's own scheme is called by the name the window holds, an agent's it holds none for by its kind, and a file of the plan's repository and an Inbox thread become the chips they are drawn as once sent", async () => {
   fakeAppBridge({
     ...fakeAppBridgeCalls(),
     onAppState: () => () => undefined,
@@ -1444,7 +1444,10 @@ test("a page's address pasted in the app's own scheme is called by the name the 
   const { container, sent } = await box(planPage([]));
   const page = encodeMention({ kind: MENTION_KIND.PAGE, taskId: TASK_ID, pageId: PAGE.id }, PLACE);
   const agent = encodeMention({ kind: MENTION_KIND.AGENT, agentId: STORE_AGENT.id }, PLACE);
-  const file = "https://github.com/acme/relay/blob/HEAD/apps/web/rollout-store.ts";
+  // A file's page at a commit keeps that commit, so its chip opens the code it was pasted at.
+  const file =
+    "https://github.com/acme/relay/blob/3f9c2e1d5b7a4c6e8f0a2b4c6d8e0f1a3b5c7d9e/apps/web/rollout-store.ts";
+  const thread = "https://vespin.dev/acme/inbox/e4519584-9b91-4c47-8ba4-e7b0e636f625";
 
   typeInComposer(container, "Build ");
   pasteInComposer(container, page.replace("https:", "vespin:"));
@@ -1452,13 +1455,17 @@ test("a page's address pasted in the app's own scheme is called by the name the 
   pasteInComposer(container, agent);
   typeInComposer(container, "in ");
   pasteInComposer(container, file);
+  typeInComposer(container, "from ");
+  pasteInComposer(container, thread);
   await settle();
   const chips = [...composerEditor(container).querySelectorAll("[data-mention-ref]")];
   pressInComposer(container, "Enter");
   await settle();
 
-  assert.deepEqual(chips.map(chipName), [PAGE.title, "Agent"]);
-  assert.deepEqual(sent, [`Build [@${PAGE.title}](${page}) on [@Agent](${agent}) in ${file}`]);
+  assert.deepEqual(chips.map(chipName), [PAGE.title, "Agent", "rollout-store.ts", "Inbox item"]);
+  assert.deepEqual(sent, [
+    `Build [@${PAGE.title}](${page}) on [@Agent](${agent}) in [@rollout-store.ts](${file}) from [@Inbox item](${thread})`,
+  ]);
 });
 
 /** The repository with folders and more files than a narrowed list shows, as the plan's page names it. */
@@ -1969,7 +1976,7 @@ test("a sent message's mention of a person is drawn as the chip wearing their ma
   assert.equal(carryingTarget(container), undefined);
 });
 
-test("a person's page pasted into the box becomes their chip called by their name, and one of another workspace pastes as the words it is", async () => {
+test("a person's page pasted into the box becomes their chip called by their name, and one of another workspace keeps its own address", async () => {
   const { container, sent } = await memberBox();
   const here = "https://vespin.dev/acme/person/u_dana";
   const elsewhere = "https://vespin.dev/other/person/u_dana";
@@ -1985,9 +1992,9 @@ test("a person's page pasted into the box becomes their chip called by their nam
 
   assert.deepEqual(
     chips.map((chip) => chip.textContent),
-    ["Dana Reyes"],
+    ["Dana Reyes", "Dana Reyes"],
   );
-  assert.deepEqual(sent, [`Ask [@Dana Reyes](${here}) not ${elsewhere}`]);
+  assert.deepEqual(sent, [`Ask [@Dana Reyes](${here}) not [@Dana Reyes](${elsewhere})`]);
 });
 
 test("an old Vespin issue page's link pasted into the box stays the words it is, since Vespin keeps no issues of its own", async () => {

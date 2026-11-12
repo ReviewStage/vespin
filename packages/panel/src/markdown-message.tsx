@@ -580,7 +580,7 @@ export const MarkdownMessage = memo(function MarkdownMessage({
   words,
   className,
   edit,
-  link,
+  link: drawer,
   openLink,
   picture,
   found,
@@ -592,8 +592,14 @@ export const MarkdownMessage = memo(function MarkdownMessage({
   className?: string;
   /** The changes and comments the words are drawn with marked; drawn plain without one. */
   edit?: MarkdownEdit | undefined;
-  /** Draws the links the place knows better, a mention's chip say; every link is drawn as words without one. */
-  link?: LinkDrawer | undefined;
+  /**
+   * Draws every link a chip names as that chip (`tasks/task-mentions.tsx`'s
+   * `useMentionLink`), as every place drawing words does; `null` only where
+   * the place draws every link as words on purpose. Note that it is asked of
+   * every caller, so a place that forgets chips fails to build rather than
+   * drawing a link as words that every other place draws as its chip.
+   */
+  link: LinkDrawer | null;
   /** Opens a plain link pressed; every plain link is words going nowhere without one. */
   openLink?: ((href: string) => void) | undefined;
   /** Draws the pictures the place knows how to, a description's say; every picture is its alt text without one. */
@@ -607,6 +613,7 @@ export const MarkdownMessage = memo(function MarkdownMessage({
   /** Whether the words are one line's, a to-do's step say: drawn in the place's own element as one run of inline words, with no root, its blocks' words run together. */
   inline?: boolean | undefined;
 }): React.JSX.Element {
+  const link = drawer ?? undefined;
   const keyTargets = useWordTargets();
   const rehypePlugins = useMemo(() => {
     const plugins: MarkdownSteps = [];

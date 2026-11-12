@@ -643,7 +643,7 @@ function unitClass(changed: boolean): string {
 
 /**
  * What draws the description's mentions as chips, on a task's own page: a link
- * whose destination names a mention, whoever wrote it (`linkMention`),
+ * `linkChipOf` draws as a chip, whoever wrote it,
  * drawn against the anchors of the description's headings as they stand; nothing
  * off a task's page, where mentions stay words. Note that it is made again
  * only when a heading changes, since every unit's words are drawn again
@@ -1004,7 +1004,7 @@ const DocumentUnit = memo(function DocumentUnit({
       words={view.words}
       className={unitClass(changed)}
       edit={edit}
-      link={link}
+      link={link ?? null}
       openLink={openLink}
       diagrams
       picture={picture}

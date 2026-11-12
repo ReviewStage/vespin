@@ -10,7 +10,7 @@ import {
 import { type LinkDestination, readLink } from "@repo/features/link-grammar";
 import { markdownTooDeep } from "@repo/features/markdown-nesting";
 import { markdownTree } from "@repo/features/markdown-tree";
-import { isBareLink, linkMention, MENTION_KIND, mentionName } from "@repo/features/mention-link";
+import { LINK_CHIP, linkChipOf, MENTION_KIND } from "@repo/features/mention-link";
 import { placeChipLook } from "@repo/features/place-chip-model";
 import { Match } from "effect";
 import type {
@@ -31,10 +31,10 @@ import type {
  * node is drawn on the iPhone, which has no DOM to hand it to. A block
  * stands on its own lines; a paragraph's pictures each stand as a block of
  * their own between its words, since a picture opens full screen and a run
- * of words cannot hold one. A link is read as the panel's chip reads it
- * (`mention-chip.tsx`'s `linkChip`): a mention's target as its chip
- * (`linkMention`), a link to a place in the app as that place's chip
- * (`readLink`), and any other link as underlined words. Raw HTML is drawn as
+ * of words cannot hold one. A link is read by the rule the panel's chip
+ * reads (`@repo/features/mention-link`'s `linkChipOf`): a mention's target
+ * as its chip, a link to a place in the app as that place's chip, and any
+ * other link as underlined words. Raw HTML is drawn as
  * the words it was written with, as a note draws it.
  */
 
@@ -233,21 +233,19 @@ const NO_NAMES = {
   automations: new Map(),
 } as const;
 
-/** A link as its chip, as the panel's `linkChip` reads it; nothing where it names nothing, and stays a link. */
+/** A link as its chip, by the rule the panel's `linkChip` reads (`linkChipOf`); nothing where it names nothing, and stays a link. */
 function linkChip(href: string, label: string, reading: MarkdownReading): MarkdownChip | undefined {
-  const found = linkMention(label, href, reading.repository);
-  if (found?.mention.kind === MENTION_KIND.DATE) {
-    const name = dateChipText(found.mention, reading.now, reading.zone);
+  const chip = linkChipOf(label, href, reading.repository);
+  if (chip === undefined) return undefined;
+  if (chip.kind === LINK_CHIP.PLACE) {
+    const look = placeChipLook(chip.link.place, chip.name, NO_NAMES);
+    return chipOf(entityOfDestination(chip.link.place).kind, look.name, linkTarget(href));
+  }
+  if (chip.mention.kind === MENTION_KIND.DATE) {
+    const name = dateChipText(chip.mention, reading.now, reading.zone);
     return chipOf(MENTION_KIND.DATE, name, { kind: LINK_TARGET.NONE });
   }
-  if (found !== undefined) {
-    return chipOf(entityOfMention(found.mention).kind, found.name, linkTarget(href));
-  }
-  const read = readLink(href);
-  if (read === undefined) return undefined;
-  const written = isBareLink(label, href) ? undefined : mentionName(label.trim());
-  const look = placeChipLook(read.place, written, NO_NAMES);
-  return chipOf(entityOfDestination(read.place).kind, look.name, linkTarget(href));
+  return chipOf(entityOfMention(chip.mention).kind, chip.name, linkTarget(href));
 }
 
 function linkRun(

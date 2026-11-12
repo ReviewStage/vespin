@@ -18,7 +18,7 @@ import { LINK_SITE, type LinkSite } from "@repo/features/link-site";
 import {
   type DescriptionMention,
   handedMentionsIn,
-  linkMention,
+  linkChipOf,
   MENTION_KIND,
   type Mention,
   mentionName,
@@ -566,7 +566,7 @@ export function mentionedContext(
       continue;
     }
     // A bare address is named by what it says of the thing, a section by its anchor, as its chip is.
-    const name = linkMention(label, target, repository)?.name ?? mentionName(label);
+    const name = linkChipOf(label, target, repository)?.name ?? mentionName(label);
     if (!named.some((each) => sameMention(each.mention, handed))) {
       named.push({ mention: handed, name });
     }

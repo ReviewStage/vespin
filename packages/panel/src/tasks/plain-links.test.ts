@@ -235,6 +235,7 @@ test("a bare address a change marks inside is drawn whole, its marks where they 
   const changed = drawn(
     createElement(MarkdownMessage, {
       words,
+      link: null,
       edit: {
         marks: [{ kind: MARKDOWN_MARK.INSERTED, from: inside, to: inside + "current".length }],
       },
@@ -271,7 +272,10 @@ test("a plain link to an address the window refuses to open is drawn going nowhe
 test("a plain link hangs its whole address in the window's hint, an address past the hint's bound cut short", () => {
   const long = `https://example.com/${"a".repeat(2_100)}`;
   const container = drawn(
-    createElement(MarkdownMessage, { words: `See ${BARE} and [the long page](${long}).` }),
+    createElement(MarkdownMessage, {
+      words: `See ${BARE} and [the long page](${long}).`,
+      link: null,
+    }),
   );
   const [bare, longLink] = [...container.querySelectorAll<HTMLElement>(".ui-text-link")];
   assert.ok(bare !== undefined && longLink !== undefined);
