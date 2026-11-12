@@ -90,10 +90,15 @@ export function useExpiredServerToasts(): void {
   const withdraw = useWithdrawToast();
   const said = useRef(new Map<string, Said>());
   const dismissed = useRef(new Set<string>());
-  const latest = useRef({ grant, toast, withdraw });
-  latest.current = { grant, toast, withdraw };
+  const latest = useRef({ grant, toast, withdraw, held });
+  latest.current = { grant, toast, withdraw, held };
 
   useEffect(() => {
+    // Note that a dismissal ends once its server stands clear, held or not, so one reconnected while held is said when it expires anew.
+    for (const connection of dismissed.current) {
+      if (standsOf(statuses, connection) === STANDS.CLEAR) dismissed.current.delete(connection);
+    }
+
     // Note that what was said is withdrawn rather than left standing, so each server still expired is said anew once released.
     if (held) {
       for (const entry of said.current.values()) latest.current.withdraw(entry.subject);
@@ -120,7 +125,8 @@ export function useExpiredServerToasts(): void {
 
       if (entry !== undefined) entry.says = SAYS.BEGINNING;
       void latest.current.grant.begin(server.connection).then((outcome) => {
-        if (outcome === GRANT_OUTCOME.BEGUN) return;
+        // Note that a reconnect begun before a hold says nothing once held, since the server is said anew on release.
+        if (outcome === GRANT_OUTCOME.BEGUN || latest.current.held) return;
         say(server, SAYS.FAILED, (subject) =>
           latest.current.toast({
             words:
