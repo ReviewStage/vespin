@@ -62,7 +62,7 @@ export const folderMoves = (
           move.path === name ? Effect.succeed(false) : standing(fileSystem, folder),
         ),
         Stream.catchIf(
-          (error) => error.reason._tag === "NotFound",
+          (error) => Predicate.isTagged(error.reason, "NotFound"),
           () => Stream.succeed(false),
         ),
         // Note that a folder removed between its check and its watch is a folder gone too, because the system's watch throws as it is laid, which reaches here as a defect rather than a failure.

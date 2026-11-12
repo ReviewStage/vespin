@@ -8,7 +8,7 @@
  * and writes `settings.json` unless handed another file of the state root,
  * as the sealed entity store's (`../entity-store.ts`).
  */
-import { Effect, Path } from "effect";
+import { Effect, Path, Predicate } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import type { PlatformError } from "effect/PlatformError";
 
@@ -34,7 +34,7 @@ function isIgnorableReadFailure(error: PlatformError): boolean {
   // still what names these four. A rejected argument is none of them.
   const reason = error.reason;
 
-  if (reason._tag === "BadArgument") return false;
+  if (Predicate.isTagged(reason, "BadArgument")) return false;
   const cause = reason.cause;
 
   return (

@@ -6,7 +6,7 @@ import type {
   TasksPictureAnswer,
 } from "@repo/features/tasks-view";
 import type { PlayableVideoType } from "@repo/features/video-signature";
-import { Data, Effect, MutableHashMap, Option } from "effect";
+import { Data, Effect, Match, MutableHashMap, Option } from "effect";
 
 /**
  * kept-content.ts -- content the service answers under a key it never changes under, kept in this process alone so a thing shown again asks the service nothing.
@@ -167,31 +167,29 @@ function charactersOf(value: unknown): number {
 
 /** Whether a key names content of the agent: its pictures and its workers', and its pull request's images. */
 export function keptOfAgent(agentId: string): (key: KeptKey) => boolean {
-  return (key) => {
-    switch (key._tag) {
-      case KEPT_KIND.AGENT_PICTURE:
-      case KEPT_KIND.GITHUB_IMAGE:
-        return key.agentId === agentId;
-      default:
-        return false;
-    }
-  };
+  return (key) =>
+    Match.value(key).pipe(
+      Match.tag(
+        KEPT_KIND.AGENT_PICTURE,
+        KEPT_KIND.GITHUB_IMAGE,
+        (kept) => kept.agentId === agentId,
+      ),
+      Match.orElse(() => false),
+    );
 }
 
 /** Whether a key names content of the task: its description's pictures and its comments' files, its pages, and the files read through it. */
 export function keptOfTask(taskId: string): (key: KeptKey) => boolean {
-  return (key) => {
-    switch (key._tag) {
-      case KEPT_KIND.DESCRIPTION_PICTURE:
-        return key.planId === taskId;
-      case KEPT_KIND.PAGE_VERSION:
-        return key.ownerKind === PAGE_OWNER.TASK && key.ownerId === taskId;
-      case KEPT_KIND.FILE_AT_COMMIT:
-        return key.taskId === taskId;
-      default:
-        return false;
-    }
-  };
+  return (key) =>
+    Match.value(key).pipe(
+      Match.tag(KEPT_KIND.DESCRIPTION_PICTURE, (kept) => kept.planId === taskId),
+      Match.tag(
+        KEPT_KIND.PAGE_VERSION,
+        (kept) => kept.ownerKind === PAGE_OWNER.TASK && kept.ownerId === taskId,
+      ),
+      Match.tag(KEPT_KIND.FILE_AT_COMMIT, (kept) => kept.taskId === taskId),
+      Match.orElse(() => false),
+    );
 }
 
 /** The content kept, within `budget` characters in all. */

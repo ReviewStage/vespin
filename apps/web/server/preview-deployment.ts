@@ -1,4 +1,4 @@
-import { Duration, Effect, type Redacted, Schedule, Schema } from "effect";
+import { Duration, Effect, Predicate, type Redacted, Schedule, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import type * as HttpClientError from "effect/http/HttpClientError";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
@@ -199,7 +199,7 @@ const readPreview = /* @__PURE__ */ Effect.fn("web/readPreview")(
     // turned down is one `HttpClientError` in v4, whichever reason it
     // carries; a body that failed to decode is not retried, since a second
     // read of the same records would decode no better.
-    while: (error) => error._tag === "HttpClientError",
+    while: (error) => Predicate.isTagged(error, "HttpClientError"),
   }),
 );
 

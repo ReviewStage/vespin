@@ -11,7 +11,7 @@
  * (`hooks.fail`), and moves a command's exit itself (`exited`).
  */
 
-import { Clock, Duration, Effect, Layer, Redacted } from "effect";
+import { Clock, Duration, Effect, Layer, Redacted, Result } from "effect";
 import { SANDBOX_IDLE, Sandbox, type SandboxService } from "../sandbox.js";
 import {
   COMMAND_GONE,
@@ -409,9 +409,9 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
           if (standing !== undefined) {
             const woken = yield* Effect.result(resumed(standing));
 
-            if (woken._tag === "Success") return listedOf(woken.success);
+            if (Result.isSuccess(woken)) return listedOf(woken.success);
 
-            if (woken.failure._tag !== "SnapshotGone") return yield* woken.failure;
+            // Note that a resume fails only with `SnapshotGone`, so a failed one is a sandbox to make anew.
             state.sandboxes.delete(ask.name);
             state.deleted.push(ask.name);
           }

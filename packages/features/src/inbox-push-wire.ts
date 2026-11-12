@@ -14,7 +14,7 @@
  * the same way.
  */
 
-import { Schema as EffectSchema } from "effect";
+import { Schema as EffectSchema, Option } from "effect";
 import { iosAgentRoute, iosAppRouteOf } from "./ios-app-links.js";
 import { LINK_DESTINATION } from "./link-grammar.js";
 
@@ -144,7 +144,7 @@ const decodePush = EffectSchema.decodeUnknownOption(inboxPushSchema);
 export function inboxPushOf(payload: unknown): InboxPush | undefined {
   const read = decodePush(payload);
 
-  return read._tag === "Some" ? read.value : undefined;
+  return Option.isSome(read) ? read.value : undefined;
 }
 
 /** The route a push opens on. */

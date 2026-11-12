@@ -9,7 +9,7 @@ import {
   type InstalledSkillRefusal,
 } from "@repo/features/installed-skill-wire";
 import { eq } from "drizzle-orm";
-import { Effect, Option, Result } from "effect";
+import { Effect, Option, Predicate, Result } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
 import {
@@ -96,7 +96,7 @@ const refusalOf = (userId: string, made: NewInstalledSkill) =>
     Result.match(result, {
       onSuccess: (): InstalledSkillRefusal | string => "installed",
       onFailure: (failure) =>
-        failure._tag === "InstalledSkillFilesRefused" ? failure.reason : failure._tag,
+        Predicate.isTagged(failure, "InstalledSkillFilesRefused") ? failure.reason : failure._tag,
     }),
   );
 

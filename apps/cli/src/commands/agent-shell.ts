@@ -42,6 +42,7 @@ import {
   Duration,
   Effect,
   Option,
+  Predicate,
   Queue,
   Ref,
   Schedule,
@@ -331,7 +332,7 @@ function attached(agentId: string, terminalId: string) {
       // The socket opened, and opened again after each drop, until the shell exits or the relay ends it.
       const reopening = attempt.pipe(
         Effect.retry({
-          while: (failure): boolean => failure._tag === "RelayDropped",
+          while: (failure): boolean => Predicate.isTagged(failure, "RelayDropped"),
           times: REOPEN.TIMES,
           schedule: Schedule.exponential(REOPEN.FIRST).pipe(
             Schedule.modifyDelay(({ duration }) =>
@@ -344,7 +345,7 @@ function attached(agentId: string, terminalId: string) {
           while: (socket) => socket.ending === SOCKET_ENDING.DROPPED,
         }),
         Effect.mapError((failure) =>
-          failure._tag === "RelayDropped"
+          Predicate.isTagged(failure, "RelayDropped")
             ? new CommandFailed({
                 exit: CLI_EXIT.UNAVAILABLE,
                 message: "Could not reach the agent's shell.",

@@ -119,7 +119,20 @@ import { randomUUID } from "node:crypto";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
-import { Data, Duration, Effect, Exit, Fiber, Option, Queue, Schema, Scope, Stream } from "effect";
+import {
+  Data,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  Option,
+  Predicate,
+  Queue,
+  Result,
+  Schema,
+  Scope,
+  Stream,
+} from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import type { ChildProcessSpawner } from "effect/process";
 import {
@@ -1853,12 +1866,14 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     Fiber.join(restoring),
   ).pipe(Effect.result);
 
-  if (opened._tag === "Failure") {
+  if (Result.isFailure(opened)) {
     const failure = opened.failure;
 
     return ended(
       RUNNER_END.FAILED,
-      failure._tag === "RolloutUnread" ? ROLLOUT_UNREAD : `${failure.method}: ${failure.detail}`,
+      Predicate.isTagged(failure, "RolloutUnread")
+        ? ROLLOUT_UNREAD
+        : `${failure.method}: ${failure.detail}`,
     );
   }
 

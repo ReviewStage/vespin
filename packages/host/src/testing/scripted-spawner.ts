@@ -13,7 +13,7 @@
  * observe.
  */
 
-import { Deferred, Duration, Effect, Layer, Sink, Stream } from "effect";
+import { Deferred, Duration, Effect, Layer, Predicate, Sink, Stream } from "effect";
 import * as PlatformError from "effect/PlatformError";
 import type { ChildProcess } from "effect/process";
 import { ChildProcessSpawner } from "effect/process";
@@ -72,7 +72,8 @@ export function scriptedSpawner(
 
   const spawn = (command: ChildProcess.Command) =>
     Effect.gen(function* () {
-      if (command._tag !== "StandardCommand") return yield* Effect.die("a pipeline was spawned");
+      if (!Predicate.isTagged(command, "StandardCommand"))
+        return yield* Effect.die("a pipeline was spawned");
       const script = scriptFor(command.command, command.args);
 
       if (script === undefined) {

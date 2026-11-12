@@ -27,7 +27,7 @@ import {
 import { CLI_EXIT, type CliExit, cliExitOfFault, cliExitOfStatus } from "@repo/features/cli-exit";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { HTTP_METHOD } from "@repo/wire";
-import { Data, Effect, Schema, type Scope } from "effect";
+import { Data, Effect, Predicate, Result, Schema, type Scope } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
   ACCOUNT_FAILURE_ACTION,
@@ -123,7 +123,7 @@ function renewed(store: CliAccountStore, client: AccountClient) {
 
     const refreshed = yield* Effect.result(client.refresh(account.refreshToken));
 
-    if (refreshed._tag === "Success") {
+    if (Result.isSuccess(refreshed)) {
       return yield* Effect.mapError(
         store.write({ ...account, ...refreshed.success }),
         (failed) => new AccountRefreshFailed({ message: failed.message }),
@@ -214,10 +214,12 @@ export const cliIdentity = Effect.fnUntraced(function* (
 
 /** A failure on the account service, as the sign-in or sign-out says it. */
 function accountFailed(failed: AccountClientFailure | CliAccountFailed): CliAccountFailed {
-  if (failed._tag === "CliAccountFailed") return failed;
+  if (Predicate.isTagged(failed, "CliAccountFailed")) return failed;
 
   return new CliAccountFailed({
-    exit: failed._tag === "AccountTransportError" ? CLI_EXIT.UNAVAILABLE : CLI_EXIT.REFUSED,
+    exit: Predicate.isTagged(failed, "AccountTransportError")
+      ? CLI_EXIT.UNAVAILABLE
+      : CLI_EXIT.REFUSED,
     message: failed.message,
   });
 }
@@ -322,5 +324,5 @@ export const cliSignOut = Effect.fnUntraced(function* (
   const revoked = yield* Effect.result(client.revoke(account.refreshToken));
   yield* Effect.mapError(store.clear, storeFailed);
 
-  return { signedIn: true, revoked: revoked._tag === "Success" } satisfies CliSignOut;
+  return { signedIn: true, revoked: Result.isSuccess(revoked) } satisfies CliSignOut;
 });

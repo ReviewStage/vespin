@@ -59,6 +59,7 @@ import {
   Exit,
   Layer,
   Match,
+  Predicate,
   PubSub,
   Ref,
   Result,
@@ -516,8 +517,11 @@ export function agentBrowserOver(
           schedule: Schedule.spaced(AGENT_BROWSER.RESUME_SPACING),
           times: AGENT_BROWSER.RESUME_TRIES,
           while: (failure) =>
-            failure._tag === "BrowserUnreachable" ||
-            !(failure._tag === "SnapshotGone" || failure._tag === "ImageNotReady"),
+            Predicate.isTagged(failure, "BrowserUnreachable") ||
+            !(
+              Predicate.isTagged(failure, "SnapshotGone") ||
+              Predicate.isTagged(failure, "ImageNotReady")
+            ),
         }),
         Effect.mapError((failure) =>
           Match.value(failure).pipe(

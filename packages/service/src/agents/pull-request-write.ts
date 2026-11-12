@@ -31,7 +31,7 @@ import {
   type PullRequestRefusal,
   type PullRequestWriteAnswer,
 } from "@repo/features/pull-request-write-wire";
-import { Effect, type Redacted } from "effect";
+import { Effect, Match, type Redacted } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { GitHubApp } from "../github/github-app.js";
 import { logGitHubReadFailure, logWorkspaceReadFailure } from "../github/github-refusal.js";
@@ -104,18 +104,18 @@ export const memberReadToken = (
 
 /** A write's failure as how it went: the token refused, GitHub's refusal, or a GitHub that did not answer. */
 function writtenOf<A>(failure: GitHubWriteFailure): Effect.Effect<MemberWritten<A>, HostedRefusal> {
-  switch (failure._tag) {
-    case "GitHubTokenRefused":
-      return Effect.succeed(SIGN_IN_REQUIRED);
-    case "GitHubWriteRefused":
-      return Effect.succeed({
+  return Match.valueTags(failure, {
+    GitHubTokenRefused: (): Effect.Effect<MemberWritten<A>, HostedRefusal> =>
+      Effect.succeed(SIGN_IN_REQUIRED),
+    GitHubWriteRefused: (refused): Effect.Effect<MemberWritten<A>, HostedRefusal> =>
+      Effect.succeed({
         outcome: PULL_REQUEST_WRITE_OUTCOME.REFUSED,
-        words: failure.words,
-        ...(failure.reason === undefined ? undefined : { reason: failure.reason }),
-      });
-    case "GitHubUnavailable":
-      return Effect.andThen(logGitHubReadFailure(failure), Effect.fail(HOSTED_REFUSAL.UNAVAILABLE));
-  }
+        words: refused.words,
+        ...(refused.reason === undefined ? undefined : { reason: refused.reason }),
+      }),
+    GitHubUnavailable: (unavailable): Effect.Effect<MemberWritten<A>, HostedRefusal> =>
+      Effect.andThen(logGitHubReadFailure(unavailable), Effect.fail(HOSTED_REFUSAL.UNAVAILABLE)),
+  });
 }
 
 /** The write a caller makes on a pull request, on the member's token. */

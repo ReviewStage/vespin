@@ -62,7 +62,7 @@
     "anti-slop-effect/no-manual-tagged-construction": "error",
     "anti-slop-effect/no-service-constructor-imports": "error",
     "anti-slop-effect/prefer-effect-match": "error",
-    "anti-slop-effect/no-manual-tag-comparison": "off"
+    "anti-slop-effect/no-manual-tag-comparison": "error"
   },
   "overrides": [
     {

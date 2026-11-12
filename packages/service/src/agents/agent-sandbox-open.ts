@@ -30,7 +30,7 @@ import {
   type SandboxService,
   SandboxUnavailable,
 } from "@repo/sandbox";
-import { Duration, Effect, Schedule } from "effect";
+import { Duration, Effect, Predicate, Schedule } from "effect";
 import { afterResponse } from "../http/after-response.js";
 import { AgentImage } from "./coder-host/agent-image.js";
 
@@ -262,7 +262,7 @@ export const openAgentSandbox = (
     Effect.retry({
       schedule: Schedule.spaced(IMAGE_RETRY.SPACED),
       times: IMAGE_RETRY.TIMES,
-      while: (failure) => failure._tag === "ImageNotReady",
+      while: (failure) => Predicate.isTagged(failure, "ImageNotReady"),
     }),
   );
 
@@ -278,7 +278,7 @@ export const openAgentSandbox = (
 export const openAgentSandboxPromptly = (of: AgentSandboxOf) =>
   openedOnce(of).pipe(
     Effect.tapError((failure) =>
-      failure._tag === "ImageNotReady"
+      Predicate.isTagged(failure, "ImageNotReady")
         ? afterResponse("an agent's sandbox opened on its image", openAgentSandbox(of))
         : Effect.void,
     ),

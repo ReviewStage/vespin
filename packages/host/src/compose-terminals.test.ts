@@ -197,7 +197,7 @@ function subject(
         if (output === undefined) return [];
         const bytes = Base64.decode(output.data);
 
-        return bytes._tag === "Success" ? [new TextDecoder().decode(bytes.success)] : [];
+        return Result.isSuccess(bytes) ? [new TextDecoder().decode(bytes.success)] : [];
       });
 
     return {

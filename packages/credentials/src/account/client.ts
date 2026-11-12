@@ -9,7 +9,7 @@ import {
   wireRecord,
 } from "@repo/wire";
 import { webResponseFromClientResponse } from "@repo/wire/effect";
-import { Data, Duration, Effect, type Layer } from "effect";
+import { Data, Duration, Effect, type Layer, Predicate } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import * as HttpBody from "effect/http/HttpBody";
 import * as HttpClient from "effect/http/HttpClient";
@@ -444,7 +444,7 @@ type AccountFailureAction = (typeof ACCOUNT_FAILURE_ACTION)[keyof typeof ACCOUNT
 
 /** Only the OAuth server's definitive revocation answer removes a stored account. */
 export function accountFailureAction(error: AccountClientFailure): AccountFailureAction {
-  return error._tag === "AccountClientError" && error.oauthError === "invalid_grant"
+  return Predicate.isTagged(error, "AccountClientError") && error.oauthError === "invalid_grant"
     ? ACCOUNT_FAILURE_ACTION.SIGN_OUT
     : ACCOUNT_FAILURE_ACTION.KEEP_ACCOUNT;
 }
@@ -452,7 +452,7 @@ export function accountFailureAction(error: AccountClientFailure): AccountFailur
 /** Whether the pinned auth provider has definitively rejected an access token. */
 export function accessTokenNeedsRefresh(error: AccountClientFailure): boolean {
   return (
-    error._tag === "AccountClientError" &&
+    Predicate.isTagged(error, "AccountClientError") &&
     (error.status === 401 || error.oauthError === "invalid_scope")
   );
 }
@@ -460,7 +460,7 @@ export function accessTokenNeedsRefresh(error: AccountClientFailure): boolean {
 /** Whether the OAuth provider answered that the account a token names no longer exists. */
 export function accountNotFound(error: AccountClientFailure): boolean {
   return (
-    error._tag === "AccountClientError" &&
+    Predicate.isTagged(error, "AccountClientError") &&
     error.oauthError === OAUTH_USER_NOT_FOUND.ERROR &&
     error.message === OAUTH_USER_NOT_FOUND.DESCRIPTION
   );
@@ -480,7 +480,7 @@ export function accountGateOpen(
  * since the account it names still stands.
  */
 export function deletionNeedsNewSession(error: AccountClientFailure): boolean {
-  return error._tag === "AccountClientError" && error.code === SESSION_EXPIRED;
+  return Predicate.isTagged(error, "AccountClientError") && error.code === SESSION_EXPIRED;
 }
 
 /**
@@ -492,7 +492,7 @@ export function deletionNeedsNewSession(error: AccountClientFailure): boolean {
  */
 export function deletionSessionRefused(error: AccountClientFailure): boolean {
   return (
-    error._tag === "AccountClientError" &&
+    Predicate.isTagged(error, "AccountClientError") &&
     error.status === HTTP_STATUS.UNAUTHORIZED &&
     error.code !== SESSION_EXPIRED
   );

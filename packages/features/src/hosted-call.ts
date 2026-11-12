@@ -20,7 +20,7 @@
 
 import type { ORPCError } from "@orpc/client";
 import type { ORPCErrorFromErrorMap } from "@orpc/contract";
-import { Effect } from "effect";
+import { Effect, Predicate } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import type { FailureFacts } from "./failure-facts.js";
 import {
@@ -81,7 +81,7 @@ function failedOf(
   failed: HostedFailure,
   reading: HostedReading<HostedRenames, boolean>,
 ): { readonly failure: string; readonly cause?: FailureFacts } {
-  if (failed._tag === "HostedRefused") {
+  if (Predicate.isTagged(failed, "HostedRefused")) {
     if (reading.live === true && failed.refusal === HOSTED_API_ERROR.INVALID_TOKEN) {
       return LIVE_SIGNED_OUT;
     }

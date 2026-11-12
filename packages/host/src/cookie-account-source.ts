@@ -33,6 +33,7 @@ import {
   Effect,
   Fiber,
   Layer,
+  Predicate,
   PubSub,
   Result,
   Schedule,
@@ -505,7 +506,7 @@ const openCookieSession = /* @__PURE__ */ Effect.fnUntraced(function* (
   // sign-out pressed while it was asked, reads again rather than settling on
   // nothing, so a confirmation always answers for a read begun after it asked.
   const reread = Effect.retry(joinRead, {
-    while: (error) => error._tag === "ReadSuperseded",
+    while: (error) => Predicate.isTagged(error, "ReadSuperseded"),
   });
 
   /** The arrival under way shown, while no later change passed it over; not its capabilities' starting. */

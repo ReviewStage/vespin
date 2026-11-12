@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { CDP_FAILURE, type CdpFailure } from "@repo/features/browser-cdp";
 import { ImageNotReady, SANDBOX_STATUS, SandboxUnavailable, SnapshotGone } from "@repo/sandbox";
-import { Duration, Effect, Exit, Fiber, Stream } from "effect";
+import { Duration, Effect, Exit, Fiber, Option, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { keptAfterResponse } from "../../http/after-response.js";
 import {
@@ -267,7 +267,7 @@ it.effect("a browser that cannot be reached says why", () =>
         Effect.map(Effect.exit(Effect.scoped(service.connect(SESSION))), (exit) => {
           const error = reasonOf(exit);
 
-          return error === undefined || error._tag === "None" ? undefined : error.value.reason;
+          return error === undefined || Option.isNone(error) ? undefined : error.value.reason;
         }),
     );
 

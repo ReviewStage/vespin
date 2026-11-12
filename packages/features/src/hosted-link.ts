@@ -55,6 +55,7 @@ import {
   Duration,
   Effect,
   Exit,
+  Predicate,
   Random,
   Result,
   Schema,
@@ -230,7 +231,7 @@ export function hostedFailureFacts(failed: HostedFailure): FailureFacts {
   const { traceId } = failed;
   const trace = traceId === undefined ? undefined : { traceId };
 
-  if (failed._tag === "HostedRefused") {
+  if (Predicate.isTagged(failed, "HostedRefused")) {
     return { _tag: FAILURE_FACT.HOSTED_REFUSED, refusal: failed.refusal, ...trace };
   }
 
@@ -578,7 +579,7 @@ function hostedFailureOf(error: unknown): HostedFailure {
 
 /** A failure with the trace its call traveled under, which the service's log lines for it carry. */
 function traced(failed: HostedFailure, traceId: string): HostedFailure {
-  if (failed._tag === "HostedRefused") {
+  if (Predicate.isTagged(failed, "HostedRefused")) {
     const { refusal, data } = failed;
 
     return new HostedRefused({ refusal, ...(data === undefined ? undefined : { data }), traceId });

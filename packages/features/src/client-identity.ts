@@ -8,7 +8,7 @@
  * The host daemon names itself apart, by `HOST_WIRE.VERSION_HEADER`.
  */
 
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import { PRODUCT_PLATFORM } from "./analytics/product-events.js";
@@ -96,7 +96,7 @@ export function presentedClient(headers: {
   const apiVersion = readApiVersion(headers.get(CLIENT_HEADER.API_VERSION)?.trim());
   const version = named.slice(at + 1);
 
-  if (platform._tag === "None" || apiVersion._tag === "None" || !VERSION_PATTERN.test(version)) {
+  if (Option.isNone(platform) || Option.isNone(apiVersion) || !VERSION_PATTERN.test(version)) {
     return undefined;
   }
 

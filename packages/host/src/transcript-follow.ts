@@ -29,6 +29,7 @@ import {
   Fiber,
   Option,
   RcMap,
+  Result,
   Schedule,
   type Scope,
   Stream,
@@ -635,10 +636,10 @@ export function followTranscript<Key>(
       const opening = Option.isSome(recalled) ? undefined : yield* Effect.forkScoped(readNewest);
       const sealed = yield* Effect.result(RcMap.get(follows, key));
 
-      if (sealed._tag === "Failure" || sealed.success.kind === LIVE_STATE.REFUSED) {
+      if (Result.isFailure(sealed) || sealed.success.kind === LIVE_STATE.REFUSED) {
         if (opening !== undefined) yield* Fiber.interrupt(opening);
 
-        if (sealed._tag === "Failure") {
+        if (Result.isFailure(sealed)) {
           yield* RcMap.invalidate(follows, key);
 
           return yield* tell(unansweredPage(sealFacts(sealed.failure)));

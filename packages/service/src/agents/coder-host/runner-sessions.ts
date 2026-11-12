@@ -195,6 +195,7 @@ import {
   Exit,
   Match,
   Option,
+  Predicate,
   Redacted,
   Result,
   Schedule,
@@ -788,12 +789,12 @@ function resumedPath(created: boolean, wasUp: boolean): LaunchPath {
 
 /** Whether a call failed because its sandbox's run was stopping, or being snapshotted, under it: one a resume mends. */
 function sandboxEnding(failure: { readonly _tag: string }): boolean {
-  return failure._tag === "SandboxEnding";
+  return Predicate.isTagged(failure, "SandboxEnding");
 }
 
 /** Whether a call failed because what it named is gone: a sandbox's run, or a Mac's runner, ended. */
 function sandboxGone(failure: { readonly _tag: string }): boolean {
-  return failure._tag === "SandboxGone";
+  return Predicate.isTagged(failure, "SandboxGone");
 }
 
 /** A resume past an answer tried again while its sandbox is still stopping or being snapshotted (`CODER.RESUME_WHILE_ENDING`). */

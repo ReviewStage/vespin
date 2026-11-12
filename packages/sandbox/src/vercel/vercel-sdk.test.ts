@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { Duration, Effect, Layer } from "effect";
+import { Duration, Effect, Layer, Predicate } from "effect";
 import { FetchHttpClient } from "effect/http";
 import { TestClock } from "effect/testing";
 import { Sandbox, type SandboxService } from "../sandbox.js";
@@ -71,7 +71,7 @@ function apiOver(respond: Responder, readToken?: () => Promise<string>) {
 
 /** The failure's line, where it is one that carries one. */
 function detailOf(failure: SandboxError): string | undefined {
-  return failure._tag === "SandboxUnavailable" ? failure.detail : undefined;
+  return Predicate.isTagged(failure, "SandboxUnavailable") ? failure.detail : undefined;
 }
 
 const refusedWith = (status: number) => () => Response.json({ error: REFUSAL }, { status });
