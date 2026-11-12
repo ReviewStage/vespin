@@ -11,6 +11,7 @@
  */
 
 import type { TaskFollowerWire } from "@repo/wire";
+import { FOLLOWER_CALL_FAILURE, type FollowerCallFailure } from "./tasks-view.js";
 
 /** How many faces the Following chip draws before a count of the rest, as every face pile does. */
 export const FOLLOWING_FACES = 4;
@@ -78,4 +79,21 @@ export function followerMachinesSentence(follower: TaskFollowerWire, whose: stri
   return follower.machines
     ? `Agents on this task may use ${whose} machines for terminal commands and computer use.`
     : `Agents on this task may not use ${whose} machines for terminal commands or computer use.`;
+}
+
+/**
+ * What a refused follower write says, in a notice, since the popover that
+ * asked has changed nothing: the assignee may not unfollow, the task is out
+ * of reach or Following is off for its workspace, or the service did not
+ * answer.
+ */
+export function followerRefusedNote(failure: FollowerCallFailure): string {
+  switch (failure) {
+    case FOLLOWER_CALL_FAILURE.NOT_PERMITTED:
+      return "The assignee can't unfollow their own task.";
+    case FOLLOWER_CALL_FAILURE.NOT_FOUND:
+      return "This task can't be followed. It may be gone, or Following is off for its workspace.";
+    default:
+      return "Following could not be changed. Try again.";
+  }
 }
