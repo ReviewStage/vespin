@@ -331,19 +331,26 @@ it.layer(getTestDB())("the preferences snapshot's sound and notification parts",
 
 it.layer(getTestDB())("the preferences snapshot's survey part", (it) => {
   it.effect(
-    "keeps the account's answers with their words beside Other, records them for PostHog's onboarding survey once, keeps no key it does not name and no other account's, and refuses an answer no set offers or words beside no Other",
+    "keeps the account's answers with their words beside Other, an older app's lone hope as a list of one, records them for PostHog's onboarding survey once, keeps no key it does not name and no other account's, and refuses an answer no set offers, words beside no Other, or no hope picked",
     () =>
       Effect.gen(function* () {
         const { owner, other, ask } = yield* openAccounts;
-        const answers = '{"referral":"other","referralOther":"A meetup","role":"founder"}';
+
+        // Note that an older desktop app sends the one hope it took before the question took several.
+        const lone =
+          '{"referral":"other","referralOther":"A meetup","role":"founder","intent":"cloud_agents"}';
+
+        const answers =
+          '{"referral":"other","referralOther":"A meetup","role":"founder","intent":["cloud_agents"]}';
+
         assert.equal(
-          partOf(yield* ask(request(owner, { onboardingSurvey: answers })), "onboardingSurvey"),
+          partOf(yield* ask(request(owner, { onboardingSurvey: lone })), "onboardingSurvey"),
           answers,
         );
 
         // Note that the same answers written again, as a retry or another machine's sync writes them, post nothing more, and a key the survey does not name is not kept.
         const padded =
-          '{"referral":"other","referralOther":"A meetup","role":"founder","notes":"x"}';
+          '{"referral":"other","referralOther":"A meetup","role":"founder","intent":["cloud_agents"],"notes":"x"}';
 
         assert.equal(
           partOf(yield* ask(request(owner, { onboardingSurvey: padded })), "onboardingSurvey"),
@@ -356,6 +363,7 @@ it.layer(getTestDB())("the preferences snapshot's survey part", (it) => {
           '{"referral":"a billboard"}',
           '{"role":"founder","roleOther":"CEO"}',
           '{"role":"other","roleOther":"  "}',
+          '{"intent":[]}',
         ]) {
           assert.deepEqual(yield* ask(request(owner, { onboardingSurvey: refused })), {
             status: HOSTED_HTTP_STATUS.BAD_REQUEST,
@@ -378,7 +386,7 @@ it.layer(getTestDB())("the preferences snapshot's survey part", (it) => {
               [
                 ["$survey_response_e1bfce32-292a-4a8c-a63c-751003d06501", "A meetup"],
                 ["$survey_response_977afcf0-6d7b-4b69-a758-3e8487161ea1", "Founder"],
-                ["$survey_response_b5f283ca-a870-4fc9-ae2a-a0b673b4fda0", undefined],
+                ["$survey_response_b5f283ca-a870-4fc9-ae2a-a0b673b4fda0", ["Cloud agents"]],
               ],
             ],
           ],

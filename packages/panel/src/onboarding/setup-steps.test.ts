@@ -241,7 +241,7 @@ test("Keep it and finish finishes setup and leaves the team's workspace someone 
   assert.deepEqual(deleted, []);
 });
 
-test("the survey keeps its answers on the account, Other's words among them, and again after a refusal", async () => {
+test("the survey keeps its answers on the account, Other's words and every hope picked among them, and again after a refusal", async () => {
   // Setup stands at the survey, for the account alone, as the account keeps it.
   const place = JSON.stringify({ audience: "me", at: 1 });
   writeAppState(stateWith({}, { settings: appSettingsWire(settingsView({ setupPlace: place })) }));
@@ -279,8 +279,19 @@ test("the survey keeps its answers on the account, Other's words among them, and
   act(() => buttonStarting(container, "Other").click());
   typeInto(container.querySelector<HTMLInputElement>('input[aria-label$="Other"]'), "  A meetup ");
   act(() => buttonStarting(container, "Founder").click());
+
+  // Note that hopes are kept in the order the survey offers them, whatever order they were picked in.
+  act(() => buttonStarting(container, "Just exploring").click());
+  act(() => buttonStarting(container, "Cloud agents").click());
+
   // Note that the account's place comes back from no write here, so Continue leaves setup at the survey to be pressed again.
-  const answers = { referral: "other", referralOther: "A meetup", role: "founder" };
+  const answers = {
+    referral: "other",
+    referralOther: "A meetup",
+    role: "founder",
+    intent: ["cloud_agents", "exploring"],
+  };
+
   act(() => buttonStarting(container, "Continue").click());
   // Note that the write reaches the act port a tick after the press, and its refusal a tick after that, as a mutation's do.
   await vi.waitFor(() => assert.deepEqual(kept, [answers]));

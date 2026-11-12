@@ -5,7 +5,9 @@
  * questions, the account keeps its answers (`@repo/settings`'s
  * `OnboardingSurvey`), and each set the service saves is recorded here under
  * the account's person, each answer in its own words and an Other in the
- * person's words where they wrote some. A PostHog destination posts each
+ * person's words where they wrote some. What it hopes we help with takes
+ * several answers, so it is recorded as the list of them, as PostHog's
+ * multiple-choice question holds one. A PostHog destination posts each
  * production response to #signups. Setup
  * keeps a set only where it changed, so a walk back and forth posts once.
  */
@@ -43,15 +45,31 @@ const ONBOARDING_SURVEY = {
   },
 } as const;
 
-/** What a question was answered, in the words the survey offers it, or the person's own beside an Other. */
+/** One answer in the words the survey offers it, or the person's own beside an Other. */
+function wordsOf<Value extends string>(
+  labels: Readonly<Record<Value, string>>,
+  answer: Value,
+  other: string | undefined,
+): string {
+  return answer === SURVEY_OTHER && other !== undefined ? other : labels[answer];
+}
+
+/** What a question of one answer was answered, in its words. */
 function responseOf<Value extends string>(
   labels: Readonly<Record<Value, string>>,
   answer: Value | undefined,
   other: string | undefined,
 ): string | undefined {
-  if (answer === undefined) return undefined;
+  return answer === undefined ? undefined : wordsOf(labels, answer, other);
+}
 
-  return answer === SURVEY_OTHER && other !== undefined ? other : labels[answer];
+/** What a question of several answers was answered, each in its words. */
+function responsesOf<Value extends string>(
+  labels: Readonly<Record<Value, string>>,
+  answers: readonly Value[] | undefined,
+  other: string | undefined,
+): readonly string[] | undefined {
+  return answers?.map((answer) => wordsOf(labels, answer, other));
 }
 
 /** Records the account's kept answers as one response to the onboarding survey, once the request has answered. */
@@ -76,7 +94,7 @@ export function onboardingSurveyAnswered(
       id: ONBOARDING_SURVEY.INTENT.ID,
       responseKey: ONBOARDING_SURVEY.INTENT.RESPONSE_KEY,
       question: SURVEY_QUESTION.INTENT,
-      response: responseOf(SURVEY_INTENT_LABEL, survey.intent, survey.intentOther),
+      response: responsesOf(SURVEY_INTENT_LABEL, survey.intent, survey.intentOther),
     },
   ];
 

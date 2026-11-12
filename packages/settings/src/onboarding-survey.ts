@@ -1,6 +1,12 @@
 /**
  * onboarding-survey.ts -- what a new account answered in setup's survey: how it heard of us, its role, and what it hopes we help with, and its own words beside any answered Other.
  *
+ * How it heard of us and its role are one answer each; what it hopes we help
+ * with is any that apply, kept as a list of one or more, never an empty one.
+ * Note that answers kept before that question took several hold its one
+ * answer alone, as an older desktop app still sends it, so a lone answer
+ * reads as a list of one and is kept as one.
+ *
  * The answers are the account's (`APP_SETTING_SCHEMA.onboardingSurvey`), so
  * each is kept with the account it came from, and setup on another machine
  * finds them as they were left. They are stored as their JSON, because a
@@ -12,7 +18,7 @@
 
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { UnparsedWireValue } from "@repo/wire";
-import { Option, Schema } from "effect";
+import { Option, Schema, SchemaTransformation } from "effect";
 
 /** The answer every question offers last, which takes the person's own words. */
 export const SURVEY_OTHER = "other";
@@ -95,9 +101,27 @@ const otherWords = Schema.String.check(
 );
 
 /** Whether words stand only beside the Other they belong to; an Other may stand without them. */
-function wordsBesideOther(answer: string | undefined, words: string | undefined): boolean {
-  return words === undefined || answer === SURVEY_OTHER;
+function wordsBesideOther(otherPicked: boolean, words: string | undefined): boolean {
+  return words === undefined || otherPicked;
 }
+
+const intentAnswer = Schema.Literals(Object.values(SURVEY_INTENT));
+
+const intentAnswers = Schema.NonEmptyArray(intentAnswer).check(Schema.isUnique());
+
+/** The lone answer kept before the question took several, read as a list of one. */
+const loneIntent = intentAnswer.pipe(
+  Schema.decodeTo(
+    intentAnswers,
+    SchemaTransformation.transform({
+      decode: (lone): typeof intentAnswers.Type => [lone],
+      encode: (intents) => intents[0],
+    }),
+  ),
+);
+
+/** What it hopes we help with: one or more answers, or an older lone one. Note that a list is tried first, so answers are always written back as a list. */
+const intentsSchema = Schema.Union([intentAnswers, loneIntent]);
 
 /** What the account answered; a question left has no answer, and an Other may carry words. */
 const onboardingSurveySchema = Schema.Struct({
@@ -105,14 +129,14 @@ const onboardingSurveySchema = Schema.Struct({
   referralOther: Schema.optionalKey(otherWords),
   role: Schema.optionalKey(Schema.Literals(Object.values(SURVEY_ROLE))),
   roleOther: Schema.optionalKey(otherWords),
-  intent: Schema.optionalKey(Schema.Literals(Object.values(SURVEY_INTENT))),
+  intent: Schema.optionalKey(intentsSchema),
   intentOther: Schema.optionalKey(otherWords),
 }).check(
   Schema.makeFilter(
     (survey) =>
-      wordsBesideOther(survey.referral, survey.referralOther) &&
-      wordsBesideOther(survey.role, survey.roleOther) &&
-      wordsBesideOther(survey.intent, survey.intentOther),
+      wordsBesideOther(survey.referral === SURVEY_OTHER, survey.referralOther) &&
+      wordsBesideOther(survey.role === SURVEY_OTHER, survey.roleOther) &&
+      wordsBesideOther(survey.intent?.includes(SURVEY_OTHER) === true, survey.intentOther),
   ),
 );
 
