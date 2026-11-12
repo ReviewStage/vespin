@@ -25,7 +25,7 @@ import type {
   ReachFeature,
 } from "./admin-overview-vocabulary.js";
 import type { ADMIN_ATTENTION_KIND, AdminWorkspacesKind } from "./admin-wire.js";
-import type { AgentFailure, AgentStatus, ContextWindow } from "./agent-wire.js";
+import type { AgentFailure, AgentRuntime, AgentStatus, ContextWindow } from "./agent-wire.js";
 import type { AutomationRunReason } from "./automation-wire.js";
 import type { GitHubInstallationStatus } from "./github-installation-wire.js";
 import type { IntegrationRowStatus } from "./integration-row-wire.js";
@@ -490,6 +490,15 @@ export interface AdminAttentionAccount {
   failedAgents: number;
 }
 
+/** One coding-agent harness's runs over the window and why they failed; runs that never got a turn are not split by harness. */
+export interface AdminHarnessReliability {
+  /** What answered the agents' conversations; null for a conversation from before the column. */
+  runtime: AgentRuntime | null;
+  runs: AdminFailureCount;
+  /** Its failed runs by class, most first; a class with none is absent. */
+  failures: { failure: AgentFailure; count: number }[];
+}
+
 export interface AdminReliability {
   generatedAt: number;
   windowDays: number;
@@ -503,6 +512,8 @@ export interface AdminReliability {
   daily: AdminReliabilityDay[];
   /** Failed coding-agent runs by class, most first; a class with none is absent. */
   agentFailures: { failure: AgentFailure; count: number }[];
+  /** Coding-agent runs by harness, the most runs first. */
+  agentHarnesses: AdminHarnessReliability[];
   /** Skipped and failed automation runs by reason, most first. */
   automationReasons: { reason: AutomationRunReason | null; skipped: number; failed: number }[];
   attention: {

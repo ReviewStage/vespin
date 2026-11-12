@@ -15,7 +15,7 @@ import { automation, automationRun } from "@repo/database/schemas/automation";
 import { githubInstallation } from "@repo/database/schemas/github-installation";
 import { integrationConnection } from "@repo/database/schemas/integration";
 import { conversations, turns } from "@repo/database/schemas/storage";
-import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
+import { CONVERSATION_KIND, CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   getTestDB,
   joinWorkspace,
@@ -78,12 +78,13 @@ const openConversation = (
   userId: string,
   kind: (typeof CONVERSATION_KIND)[keyof typeof CONVERSATION_KIND],
   parentConversationId: string | null = null,
+  runtime: (typeof CONVERSATION_RUNTIME)[keyof typeof CONVERSATION_RUNTIME] | null = null,
 ) =>
   Effect.map(
     Database.use((db) =>
       db
         .insert(conversations)
-        .values({ userId, kind, parentConversationId })
+        .values({ userId, kind, parentConversationId, runtime })
         .returning({ id: conversations.id }),
     ),
     (rows) => rows[0]?.id ?? "",
@@ -111,7 +112,12 @@ const endTurn = (
 
 const openAgent = (userId: string, organizationId: string, createdAt: Date) =>
   Effect.gen(function* () {
-    const conversationId = yield* openConversation(userId, CONVERSATION_KIND.AGENT);
+    const conversationId = yield* openConversation(
+      userId,
+      CONVERSATION_KIND.AGENT,
+      null,
+      CONVERSATION_RUNTIME.CLAUDE_CODE,
+    );
     const { id: taskId } = yield* createTask(userId, { organizationId, name: "Flaky tests" });
     yield* Database.use((db) =>
       db.insert(agentTable).values({
@@ -274,6 +280,25 @@ it.layer(getTestDB())("the reliability read's failure counts", (it) => {
             { failure: AGENT_FAILURE.MODEL, count: 1 },
             { failure: AGENT_FAILURE.NOT_STARTED, count: 2 },
             { failure: AGENT_FAILURE.SANDBOX, count: 1 },
+          ],
+        );
+        // Only the runs that got a turn split by harness: the agent's three, two of them failed.
+        assert.deepEqual(
+          answer.agentHarnesses.map((harness) => ({
+            ...harness,
+            failures: [...harness.failures].sort((left, right) =>
+              left.failure.localeCompare(right.failure),
+            ),
+          })),
+          [
+            {
+              runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+              runs: { failed: 2, total: 3 },
+              failures: [
+                { failure: AGENT_FAILURE.MODEL, count: 1 },
+                { failure: AGENT_FAILURE.SANDBOX, count: 1 },
+              ],
+            },
           ],
         );
         assert.deepEqual(

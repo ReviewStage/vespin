@@ -76,6 +76,32 @@ export function adminReliabilityQuery(reads: AdminReads, query: AdminWindowedQue
   });
 }
 
+/**
+ * The Agents page's read: the Cost and Reliability answers asked together,
+ * since the page joins them by harness and draws nothing until both are in;
+ * its key names both reads, apart from either page's own.
+ */
+export function adminAgentsQuery(reads: AdminReads, query: AdminWindowedQuery) {
+  return queryOptions({
+    queryKey: [
+      QUERY_ROOT.ADMIN,
+      ADMIN_READ.COST,
+      ADMIN_READ.RELIABILITY,
+      query.scope,
+      query.window,
+    ],
+    queryFn: async ({ signal }) => {
+      const [cost, reliability] = await Promise.all([
+        reads.cost(query, signal),
+        reads.reliability(query, signal),
+      ]);
+      return { cost, harnesses: reliability.agentHarnesses };
+    },
+    placeholderData: keepPreviousData,
+    ...ADMIN_READ_OPTIONS,
+  });
+}
+
 /** The roster's read, which the star writes into. */
 export function adminUsersQuery(reads: AdminReads, query: AdminUsersQuery) {
   return queryOptions({

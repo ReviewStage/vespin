@@ -7,6 +7,7 @@
  */
 
 import type { AdminTrend, AdminWorkspaceOwner } from "./admin-answer-wire.js";
+import type { AgentRuntime } from "./agent-wire.js";
 
 /** Where a dollar went: the two kinds of model turns, and dictation's metered seconds. */
 export const COST_SOURCE = {
@@ -59,6 +60,17 @@ export interface AdminCostDay {
   [COST_SOURCE.DICTATION]: number;
 }
 
+/** One coding-agent harness's model tokens over the window, as `AdminCostModel` counts a model's. */
+export interface AdminCostHarness {
+  /** What answered the agents' conversations; null for a conversation from before the column. */
+  runtime: AgentRuntime | null;
+  /** The priced share's dollars; null where the catalog priced none of its tokens. */
+  spendUsd: number | null;
+  pricedTokens: number;
+  /** Tokens the catalog does not price, never counted as dollars. */
+  unpricedTokens: number;
+}
+
 export interface AdminCostModel {
   /** The catalog id; null for turns that named no model. */
   model: string | null;
@@ -92,6 +104,8 @@ export interface AdminCost {
   };
   daily: AdminCostDay[];
   byModel: AdminCostModel[];
+  /** Coding agents' model tokens by harness, the most spent first and the unpriced after them; the app's own turns are not here. */
+  byHarness: AdminCostHarness[];
   topAccounts: AdminCostAccount[];
   prices: typeof SECONDS_LIST_PRICE;
 }

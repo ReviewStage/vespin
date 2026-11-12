@@ -17,6 +17,7 @@ import { AppAdminDoors } from "./app-admin-doors.js";
 import { ADMINS_HIDDEN } from "./prefs.js";
 import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "./routing.js";
 import { AccountScreen } from "./screens/account.js";
+import { AgentsScreen } from "./screens/agents.js";
 import { CostScreen } from "./screens/cost.js";
 import { DashboardScreen } from "./screens/dashboard.js";
 import { DayScreen } from "./screens/day.js";
@@ -119,6 +120,16 @@ function AdminViews({ view, onOpen }: AdminPlaceProps): React.JSX.Element {
           windowDays={windowDays}
           onWindowDaysChange={setWindowDays}
           onOpenAccount={openAccount}
+        />
+      );
+    case ADMIN_TAB.AGENTS:
+      return (
+        <AgentsScreen
+          {...shared}
+          hideAdmins={hideAdmins}
+          onHideAdminsChange={changeHideAdmins}
+          windowDays={windowDays}
+          onWindowDaysChange={setWindowDays}
         />
       );
     case ADMIN_TAB.WORKSPACES:

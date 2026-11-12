@@ -22,6 +22,7 @@ import {
   type AdminCost,
   type AdminCostAccountInfo,
   type AdminCostDay,
+  type AdminCostHarness,
   type AdminCostModel,
   COST_SOURCE,
   type CostSource,
@@ -37,6 +38,7 @@ import {
   adminMetricsScope,
   adminMetricsWindow,
 } from "@repo/features/admin-wire";
+import type { AgentRuntime } from "@repo/features/agent-wire";
 import { Clock, Effect } from "effect";
 import { costOfTurns } from "../agents/coder-host/usage.js";
 import { DAY_MS } from "../core.js";
@@ -52,6 +54,8 @@ export interface AdminCostTokenRow {
   userId: string;
   /** The catalog id the counts ran on; null for a turn that named none, which nothing prices. */
   model: string | null;
+  /** What answered the turn's conversation, or its parent's for a worker's; null for the app's own turns and a conversation from before the column. */
+  runtime: AgentRuntime | null;
   /** Anthropic refused a fast step, so these ran, and are priced, at the base model's speed. */
   fastRefused: boolean;
   inputTokens: number;
@@ -94,6 +98,8 @@ export interface PricedCostRow {
   userId: string;
   /** The catalog id for tokens, the list price's own name for seconds; null for a turn that named none. */
   model: string | null;
+  /** The harness that ran a coding agent's tokens; null for every other row. */
+  runtime: AgentRuntime | null;
   usd: number | undefined;
   /** Input and output tokens, the cache's share and reasoning counted inside them. */
   tokens: number;
@@ -137,6 +143,7 @@ function priceTokenRow(row: AdminCostTokenRow, offered: readonly OfferedModel[])
     source: row.source,
     userId: row.userId,
     model: row.model,
+    runtime: row.runtime,
     usd,
     tokens: row.inputTokens + row.outputTokens,
     seconds: 0,
@@ -152,6 +159,7 @@ function priceSecondsRow(row: AdminCostSecondsRow): PricedCostRow {
     source: row.source,
     userId: row.userId,
     model: price.model,
+    runtime: null,
     usd: (row.seconds / SECONDS_PER_MINUTE) * price.usdPerMinute,
     tokens: 0,
     seconds: row.seconds,
@@ -249,36 +257,67 @@ function dailySpend(
   return [...byDay.values()];
 }
 
-/** The window's model tokens by model, the most spent first and the unpriced after them. */
+/** One key's priced dollars and tokens, and the tokens the catalog does not price. */
+interface KeyedSpend {
+  usd: number;
+  priced: number;
+  unpriced: number;
+}
+
+/**
+ * The window's model tokens summed by `keyOf`, the most spent first and the
+ * unpriced after them; a row `keyOf` keeps out (`undefined`) counts nowhere.
+ */
+function spendBy<Key>(
+  priced: readonly PricedCostRow[],
+  days: ReadonlySet<string>,
+  keyOf: (row: PricedCostRow) => Key | undefined,
+): [Key, KeyedSpend][] {
+  const byKey = new Map<Key, KeyedSpend>();
+  for (const row of priced) {
+    const key = keyOf(row);
+    if (!days.has(row.day) || row.tokens === 0 || key === undefined) continue;
+    const spend = byKey.get(key) ?? { usd: 0, priced: 0, unpriced: 0 };
+    if (row.usd === undefined) spend.unpriced += row.tokens;
+    else {
+      spend.usd += row.usd;
+      spend.priced += row.tokens;
+    }
+    byKey.set(key, spend);
+  }
+  return [...byKey].sort(([, left], [, right]) =>
+    right.usd === left.usd ? right.unpriced - left.unpriced : right.usd - left.usd,
+  );
+}
+
+/** A key's spend as the answer says it: no dollars where the catalog priced none of its tokens. */
+function spendWords(spend: KeyedSpend) {
+  return {
+    spendUsd: spend.priced === 0 ? null : spend.usd,
+    pricedTokens: spend.priced,
+    unpricedTokens: spend.unpriced,
+  };
+}
+
+/** The window's model tokens by model. */
 function spendByModel(
   priced: readonly PricedCostRow[],
   days: ReadonlySet<string>,
 ): AdminCostModel[] {
-  const byModel = new Map<string | null, { usd: number; priced: number; unpriced: number }>();
+  return spendBy(priced, days, (row) => row.model).map(([model, spend]) => ({
+    model,
+    ...spendWords(spend),
+  }));
+}
 
-  for (const row of priced) {
-    if (!days.has(row.day) || row.tokens === 0) continue;
-    const model = byModel.get(row.model) ?? { usd: 0, priced: 0, unpriced: 0 };
-
-    if (row.usd === undefined) model.unpriced += row.tokens;
-    else {
-      model.usd += row.usd;
-      model.priced += row.tokens;
-    }
-
-    byModel.set(row.model, model);
-  }
-
-  return [...byModel]
-    .sort(([, left], [, right]) =>
-      right.usd === left.usd ? right.unpriced - left.unpriced : right.usd - left.usd,
-    )
-    .map(([model, spend]) => ({
-      model,
-      spendUsd: spend.priced === 0 ? null : spend.usd,
-      pricedTokens: spend.priced,
-      unpricedTokens: spend.unpriced,
-    }));
+/** The window's coding-agent tokens by the harness that ran them; the app's own turns count nowhere. */
+function spendByHarness(
+  priced: readonly PricedCostRow[],
+  days: ReadonlySet<string>,
+): AdminCostHarness[] {
+  return spendBy(priced, days, (row) =>
+    row.source === COST_SOURCE.AGENTS ? row.runtime : undefined,
+  ).map(([runtime, spend]) => ({ runtime, ...spendWords(spend) }));
 }
 
 /** Merged pull requests per account over the days named. */
@@ -366,6 +405,7 @@ export function buildAdminCost(input: {
     },
     daily: dailySpend(input.priced, keys.window),
     byModel: spendByModel(input.priced, window),
+    byHarness: spendByHarness(input.priced, window),
     topAccounts,
     prices: SECONDS_LIST_PRICE,
   };

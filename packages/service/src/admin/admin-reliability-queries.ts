@@ -21,7 +21,7 @@ import { automationRun } from "@repo/database/schemas/automation";
 import { githubInstallation } from "@repo/database/schemas/github-installation";
 import { integrationConnection } from "@repo/database/schemas/integration";
 import { conversations, turns } from "@repo/database/schemas/storage";
-import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
+import { CONVERSATION_KIND, CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import type {
   AdminAttentionAccount,
   AdminAttentionProblem,
@@ -36,7 +36,7 @@ import {
   type AdminMetricsScope,
   type AdminMetricsWindow,
 } from "@repo/features/admin-wire";
-import { AGENT_STATUS, type AgentFailure } from "@repo/features/agent-wire";
+import { AGENT_STATUS, type AgentFailure, type AgentRuntime } from "@repo/features/agent-wire";
 import {
   AUTOMATION_RUN_REASON,
   AUTOMATION_RUN_STATUS,
@@ -125,12 +125,16 @@ const TURN_DAY = utcDay(turns.settledAt);
  * themselves rather than a case over them, so the fold below decides which
  * turns are the app's and which a coding agent's.
  */
+/** What answered a turn's conversation, as its row records it; null for a conversation from before the column. */
+const RuntimeColumnSchema = Schema.NullOr(Schema.Literals(Object.values(CONVERSATION_RUNTIME)));
+
 const findTurnOutcomes = SqlSchema.findAll({
   Request: WindowScopeSchema,
   Result: Schema.Struct({
     day: Schema.String,
     kind: Schema.String,
     parentKind: Schema.NullOr(Schema.String),
+    runtime: RuntimeColumnSchema,
     status: Schema.String,
     failure: Schema.NullOr(Schema.String),
     value: AggregateColumnSchema,
@@ -142,6 +146,7 @@ const findTurnOutcomes = SqlSchema.findAll({
           day: TURN_DAY,
           kind: conversations.kind,
           parentKind: parentConversation.kind,
+          runtime: conversations.runtime,
           status: turns.status,
           failure: turns.failure,
           value: count(),
@@ -161,6 +166,7 @@ const findTurnOutcomes = SqlSchema.findAll({
           TURN_DAY,
           conversations.kind,
           parentConversation.kind,
+          conversations.runtime,
           turns.status,
           turns.failure,
         ),
@@ -175,6 +181,7 @@ const findTurnOutcomes = SqlSchema.findAll({
 const findAgentFailures = SqlSchema.findAll({
   Request: WindowScopeSchema,
   Result: Schema.Struct({
+    runtime: RuntimeColumnSchema,
     failure: Schema.NullOr(Schema.String),
     failureDetail: Schema.NullOr(Schema.String),
     value: AggregateColumnSchema,
@@ -182,7 +189,12 @@ const findAgentFailures = SqlSchema.findAll({
   execute: (request) =>
     Database.use((db) =>
       db
-        .select({ failure: turns.failure, failureDetail: turns.failureDetail, value: count() })
+        .select({
+          runtime: conversations.runtime,
+          failure: turns.failure,
+          failureDetail: turns.failureDetail,
+          value: count(),
+        })
         .from(turns)
         .innerJoin(conversations, eq(conversations.id, turns.conversationId))
         .innerJoin(user, eq(user.id, turns.userId))
@@ -194,7 +206,7 @@ const findAgentFailures = SqlSchema.findAll({
             keptByScope(request.scope),
           ),
         )
-        .groupBy(turns.failure, turns.failureDetail),
+        .groupBy(conversations.runtime, turns.failure, turns.failureDetail),
     ),
 });
 
@@ -369,14 +381,14 @@ const findFailedAgentCounts = SqlSchema.findAll({
     ),
 });
 
-/** One day's count bumped in place, the empty count first where the day has none. */
-function bump<Count>(
-  map: Map<string, Count>,
-  day: string,
+/** One key's count bumped in place, a day's or a harness's, the empty count first where the key has none. */
+function bump<Key, Count>(
+  map: Map<Key, Count>,
+  key: Key,
   empty: Count,
   change: (count: Count) => Count,
 ): void {
-  map.set(day, change(map.get(day) ?? empty));
+  map.set(key, change(map.get(key) ?? empty));
 }
 
 const NO_FAILURES: AdminFailureCount = { failed: 0, total: 0 };
@@ -425,6 +437,7 @@ const readTurnSeries = /* @__PURE__ */ Effect.fn("web/readReliabilityTurns")(fun
 
   const appTurns = new Map<string, AdminFailureCount>();
   const agentRuns = new Map<string, AdminFailureCount>();
+  const harnessRuns = new Map<AgentRuntime | null, AdminFailureCount>();
   const abandonedTurns = new Map<string, number>();
 
   for (const row of outcomes) {
@@ -437,6 +450,12 @@ const readTurnSeries = /* @__PURE__ */ Effect.fn("web/readReliabilityTurns")(fun
     const work = turnWorkOf(row.kind, row.parentKind);
 
     if (work === TURN_WORK.AGENT_SUBAGENT) continue;
+    if (work === TURN_WORK.AGENT) {
+      bump(harnessRuns, row.runtime, NO_FAILURES, (counted) => ({
+        failed: counted.failed + failed,
+        total: counted.total + row.value,
+      }));
+    }
     bump(work === TURN_WORK.AGENT ? agentRuns : appTurns, row.day, NO_FAILURES, (counted) => ({
       failed: counted.failed + failed,
       total: counted.total + row.value,
@@ -444,16 +463,18 @@ const readTurnSeries = /* @__PURE__ */ Effect.fn("web/readReliabilityTurns")(fun
   }
 
   const agentFailures = new Map<AgentFailure, number>();
-
+  const harnessFailures = new Map<AgentRuntime | null, Map<AgentFailure, number>>();
   for (const row of failures) {
     const failure = agentFailureOf({
       status: TURN_STATUS.FAILED,
       failure: row.failure,
       failureDetail: row.failureDetail,
     });
-
-    if (failure !== undefined)
-      agentFailures.set(failure, (agentFailures.get(failure) ?? 0) + row.value);
+    if (failure === undefined) continue;
+    agentFailures.set(failure, (agentFailures.get(failure) ?? 0) + row.value);
+    const classes = harnessFailures.get(row.runtime) ?? new Map<AgentFailure, number>();
+    classes.set(failure, (classes.get(failure) ?? 0) + row.value);
+    harnessFailures.set(row.runtime, classes);
   }
 
   // An agent with no turn is a run only once the coder host reads it failed,
@@ -475,7 +496,14 @@ const readTurnSeries = /* @__PURE__ */ Effect.fn("web/readReliabilityTurns")(fun
     agentFailures.set(failure, (agentFailures.get(failure) ?? 0) + 1);
   }
 
-  return { appTurns, agentRuns, abandonedTurns, agentFailures };
+  const agentHarnesses = new Map(
+    [...harnessRuns].map(([runtime, runs]) => [
+      runtime,
+      { runs, failures: harnessFailures.get(runtime) ?? new Map<AgentFailure, number>() },
+    ]),
+  );
+
+  return { appTurns, agentRuns, abandonedTurns, agentFailures, agentHarnesses };
 });
 
 const readAutomationSeries = /* @__PURE__ */ Effect.fn("web/readReliabilityAutomations")(function* (
@@ -643,6 +671,7 @@ function emptySource(
       automationRuns: new Map(),
     },
     agentFailures: new Map(),
+    agentHarnesses: new Map(),
     automationReasons: new Map(),
     attention: { total: 0, accounts: [] },
     analyticsConsoleUrl,
@@ -694,6 +723,7 @@ export function readAdminReliabilitySource(input: {
         automationRuns: automations.automationRuns,
       },
       agentFailures: turnSeries.agentFailures,
+      agentHarnesses: turnSeries.agentHarnesses,
       automationReasons: automations.automationReasons,
       attention,
       analyticsConsoleUrl: input.analyticsConsoleUrl,
