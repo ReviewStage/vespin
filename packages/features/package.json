@@ -187,6 +187,7 @@
     "./presence-wire": "./src/presence-wire.js",
     "./github-token-wire": "./src/github-token-wire.js",
     "./workspace-environment-wire": "./src/workspace-environment-wire.js",
+    "./conductor-import-wire": "./src/conductor-import-wire.js",
     "./workspace-sandbox-setup-wire": "./src/workspace-sandbox-setup-wire.js",
     "./repository-reach-wire": "./src/repository-reach-wire.js",
     "./terminal-view": "./src/terminal-view.js",

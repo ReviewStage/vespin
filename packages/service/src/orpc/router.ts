@@ -84,6 +84,10 @@ import {
   installedSkillsProcedures,
 } from "../installed-skills/installed-skills-procedures.js";
 import {
+  type ConductorImportProcedureSeams,
+  conductorImportProcedures,
+} from "../integrations/conductor/conductor-import-procedures.js";
+import {
   type IntegrationsProcedureSeams,
   integrationsProcedures,
 } from "../integrations/integrations-procedures.js";
@@ -166,6 +170,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   TaskFilesProcedureSeams &
   TaskSectionsProcedureSeams &
   TasksProcedureSeams &
+  ConductorImportProcedureSeams &
   WorkspaceEnvironmentProcedureSeams &
   WorkspaceSandboxSetupProcedureSeams &
   WorkspaceGithubProcedureSeams &
@@ -188,6 +193,7 @@ export function hostedRouter(seams: HostedRouterSeams) {
     agentPullRequests: agentPullRequestProcedures(published),
     agents: agentsProcedures(published),
     automations: automationsProcedures(seams),
+    conductorImport: conductorImportProcedures(seams),
     dictation: dictationProcedures(seams),
     events: eventsProcedures(seams),
     github: githubProcedures(seams),

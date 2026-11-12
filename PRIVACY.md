@@ -103,6 +103,22 @@ agents is handed them as environment variables in its sandbox as it starts a
 turn, so the agent can read them, and a value it reads or prints may reach its
 model and its transcript. Agents on your Mac are never handed them.
 
+### Importing from Conductor
+
+If you import from Conductor, we read with the Conductor API key you paste
+every workspace and chat it can see, archived ones included, and change
+nothing in Conductor. The key is sealed the same way as a saved credential,
+kept only while the import runs and for at most a day, and then deleted; we
+never log it or put it in analytics, error reports, or screen recordings. Each
+Conductor workspace becomes a task in your Vespin workspace, described from
+its name, creator, dates, and chats, and each chat becomes an agent on it with
+its whole transcript: your messages, the agent's replies, its thinking, its
+tool calls and their output, and any pictures. We store them as we store our
+own agents' conversations, deleted with their task or agent and with your
+account, and no model is called to import them. We keep which Conductor
+workspaces and chats your workspace imported, so a second import skips them,
+and the progress of each import for a week.
+
 ### Integrations and connected apps
 
 If you connect an integration (such as Linear, Notion, Sentry, Slack, Gmail,

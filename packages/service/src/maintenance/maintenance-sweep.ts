@@ -41,6 +41,8 @@ interface MaintenanceSweeps {
   markAwayHosts: (now: number) => SweepRead<number>;
   /** Queues the release of the cloud agents' sandboxes unused past their keep, and of those whose release stands unfinished, a sweep's worth, or only logs them where deleting is off (`agents/session-sandboxes.ts`'s `releaseUnusedSandboxes`). */
   releaseSandboxes: (now: number) => SweepRead<SandboxReleaseSweep>;
+  /** Clears the Conductor key of every import run past its day, and deletes the runs past their keep, answering how many keys it cleared (`integrations/conductor/conductor-import.ts`). */
+  sweepConductorImports: (now: number) => SweepRead<number>;
 }
 
 /**
@@ -79,6 +81,8 @@ interface MaintenanceSweepAnswer {
   awayHosts: Swept<number>;
   /** Cloud agents' sandboxes due for release, and the releases published. */
   sandboxReleases: Swept<SandboxReleaseSweep>;
+  /** Conductor import keys past their day, cleared. */
+  conductorImportKeys: Swept<number>;
 }
 
 /** What a sweep that failed answers in its place: the failure is logged, and the other sweeps run on. */
@@ -123,6 +127,10 @@ const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
     liveActivities: yield* isolated("refreshLiveActivities", sweeps.refreshLiveActivities(now)),
     awayHosts: yield* isolated("markAwayHosts", sweeps.markAwayHosts(now)),
     sandboxReleases: yield* isolated("releaseSandboxes", sweeps.releaseSandboxes(now)),
+    conductorImportKeys: yield* isolated(
+      "sweepConductorImports",
+      sweeps.sweepConductorImports(now),
+    ),
   };
 });
 

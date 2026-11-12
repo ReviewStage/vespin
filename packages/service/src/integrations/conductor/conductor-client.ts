@@ -28,6 +28,13 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 /** Conductor's API, where every read is made. */
 const CONDUCTOR_API_URL = "https://api.conductor.build";
 
+/**
+ * The client every request names itself as. Conductor's API sits behind a
+ * proxy that refuses some clients' default signatures with a 403, and its
+ * documentation asks a custom client to send one of its own.
+ */
+const USER_AGENT = "Vespin-Conductor-Import/1";
+
 /** How long one request may take before it counts as no answer. */
 const CALL_TIMEOUT = Duration.seconds(30);
 
@@ -54,6 +61,7 @@ const HTTP_STATUS = {
 
 /** The query parameters the reads send, as the API documents them. */
 const QUERY = {
+  AFTER: "after",
   INCLUDE_ARCHIVED: "includeArchived",
   LIMIT: "limit",
   OFFSET: "offset",
@@ -109,7 +117,7 @@ const ConductorProjectSchema = Schema.Struct({
 });
 
 /** A workspace; `state` is Conductor's own word for where it stands (`archived`, `ready`, `sleeping`, and others). */
-const ConductorWorkspaceSchema = Schema.Struct({
+export const ConductorWorkspaceSchema = Schema.Struct({
   id: Schema.String,
   name: OptionalText,
   number: Schema.optionalKey(Schema.NullOr(Schema.Number)),
@@ -123,7 +131,7 @@ const ConductorWorkspaceSchema = Schema.Struct({
 });
 
 /** A chat (Conductor's session); `archivedAt` is set where it was archived. */
-const ConductorChatSchema = Schema.Struct({
+export const ConductorChatSchema = Schema.Struct({
   id: Schema.String,
   name: OptionalText,
   model: OptionalText,
@@ -217,6 +225,7 @@ const getJson = Effect.fnUntraced(function* (
   const request = HttpClientRequest.get(`${CONDUCTOR_API_URL}/${path}`).pipe(
     HttpClientRequest.acceptJson,
     HttpClientRequest.bearerToken(key),
+    HttpClientRequest.setHeader("user-agent", USER_AGENT),
     HttpClientRequest.setUrlParams(query),
   );
 
@@ -261,6 +270,42 @@ const readAllPages = Effect.fnUntraced(function* (
     items.push(...data);
 
     if (!hasMore || data.length === 0) return items;
+  }
+
+  return yield* unreadable();
+});
+
+/** One stored record's id, which the next page of a chat is read after. */
+const RecordIdSchema = Schema.Struct({ id: Schema.String });
+
+/**
+ * A chat's every stored record, walked by `after`, the id of the last
+ * record read, as Conductor's documentation asks of a transcript: the
+ * server finds where to go on from by the id, rather than counting past
+ * every record before an offset, which costs most on the longest chats.
+ * `after` is exclusive and its answer in the chat's order, so no record is
+ * read twice or skipped. The walk ends where a page says there is no more
+ * or comes back empty.
+ */
+const readMessagePages = Effect.fnUntraced(function* (
+  key: Redacted.Redacted<string>,
+  chatId: string,
+) {
+  const items: unknown[] = [];
+  let after: string | undefined;
+
+  for (let page = 0; page < MAXIMUM_PAGES; page += 1) {
+    const body = yield* getJson(key, ["v0", "sessions", chatId, "messages"], {
+      [QUERY.LIMIT]: PAGE_SIZE,
+      ...(after === undefined ? undefined : { [QUERY.AFTER]: after }),
+    });
+
+    const { data, hasMore } = yield* decoded(PageSchema)(body);
+    items.push(...data);
+    const last = data.at(-1);
+
+    if (!hasMore || last === undefined) return items;
+    after = (yield* decoded(RecordIdSchema)(last)).id;
   }
 
   return yield* unreadable();
@@ -311,9 +356,29 @@ export const readConductorMessages = Effect.fnUntraced(function* (
   key: Redacted.Redacted<string>,
   chatId: string,
 ) {
-  const items = yield* readAllPages(key, ["v0", "sessions", chatId, "messages"], {});
+  const items = yield* readMessagePages(key, chatId);
   const records = yield* decoded(Schema.Array(StoredRecordSchema))(items);
   const known = items.filter((_, index) => KNOWN_MESSAGE_TYPES.has(records[index]?.type ?? ""));
+
+  return yield* decoded(Schema.Array(ConductorMessageSchema))(known);
+});
+
+/**
+ * A chat's first stored page, oldest first, read as `readConductorMessages`
+ * reads every page: enough for its first message without walking a chat
+ * that may hold thousands.
+ */
+export const readConductorFirstMessages = Effect.fnUntraced(function* (
+  key: Redacted.Redacted<string>,
+  chatId: string,
+) {
+  const body = yield* getJson(key, ["v0", "sessions", chatId, "messages"], {
+    [QUERY.LIMIT]: PAGE_SIZE,
+  });
+
+  const { data } = yield* decoded(PageSchema)(body);
+  const records = yield* decoded(Schema.Array(StoredRecordSchema))(data);
+  const known = data.filter((_, index) => KNOWN_MESSAGE_TYPES.has(records[index]?.type ?? ""));
 
   return yield* decoded(Schema.Array(ConductorMessageSchema))(known);
 });
