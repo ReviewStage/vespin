@@ -48,6 +48,7 @@ import {
   Sandbox,
   type SandboxRunning,
   type SandboxService,
+  SandboxUnavailable,
   UP_STATUSES,
 } from "@repo/sandbox";
 import { Duration, Effect, Option } from "effect";
@@ -91,13 +92,23 @@ function stderrTail(stderr: string): string {
     .slice(-CHECKOUT_RESTORE.STDERR_TAIL);
 }
 
-/** The stopped sandbox made again on its own drive as the Terminal wakes it, read again for the run it is up in; none where it is not up yet, as on an image still being prepared. */
+/**
+ * The stopped sandbox made again on its own drive as the Terminal wakes it,
+ * read again for the run it is up in. Note that one not up yet, as on an
+ * image still being prepared, fails the call rather than answering none,
+ * because its checkout still stands on the drive, so it is no snapshot missing.
+ */
 const wokenOnDrive = (sandboxes: SandboxService, sessionId: string, name: string) =>
   Effect.gen(function* () {
     yield* (yield* AgentSandbox).resume(sessionId);
     const woken = yield* sandboxes.get(name);
+    const running = woken === undefined ? undefined : runningOf(woken);
 
-    return woken === undefined ? undefined : runningOf(woken);
+    if (running === undefined) {
+      return yield* new SandboxUnavailable({ detail: "the agent's sandbox is still starting" });
+    }
+
+    return running;
   });
 
 /**

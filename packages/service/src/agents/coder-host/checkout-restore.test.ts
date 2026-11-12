@@ -15,9 +15,10 @@ import {
   CHECKOUT_RESTORE_SCRIPT,
   checkoutRestoreEnv,
 } from "@repo/features/checkout-restore";
-import { SANDBOX_STATUS, Sandbox } from "@repo/sandbox";
+import { ImageNotReady, SANDBOX_CALL, SANDBOX_STATUS, Sandbox } from "@repo/sandbox";
 import { type MemorySandbox, memorySandbox } from "@repo/sandbox/testing";
 import { Effect, Layer } from "effect";
+import { AfterResponse } from "../../http/after-response.js";
 import { AGENT_OWN_DRIVE, agentSandboxName } from "../agent-sandbox-open.js";
 import { CHECKOUT_DIFF_OUTCOME, RESTORE_OUTCOME } from "../machine/agent-machine.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
@@ -176,6 +177,43 @@ it.layer(getTestDB())("a cloud agent's checkout restored", (it) => {
             ],
           ],
         );
+      }),
+  );
+  it.effect(
+    "answers failed, never missing, where a stopped sandbox on its own drive is still starting on an image being prepared",
+    () =>
+      Effect.gen(function* () {
+        let imageReady = true;
+
+        const memory = memorySandbox({
+          fail: (call) =>
+            call === SANDBOX_CALL.GET_OR_CREATE && !imageReady
+              ? new ImageNotReady({ call })
+              : undefined,
+        });
+
+        const outcome = yield* Effect.gen(function* () {
+          const sandboxes = yield* Sandbox;
+
+          const first = yield* sandboxes.getOrCreate({
+            name: agentSandboxName(SESSION),
+            from: { image: "agents" },
+            drive: AGENT_OWN_DRIVE,
+            tags: { sessionId: SESSION },
+            env: {},
+          });
+
+          yield* sandboxes.stop(first);
+          imageReady = false;
+
+          return yield* restoreCheckout(sandboxes, { sessionId: SESSION, snapshot: SNAPSHOT });
+        }).pipe(
+          Effect.provide(withWake(memory)),
+          // The open the wake hands past the answer is let go of, as the request's answer leaves first.
+          Effect.provideService(AfterResponse, { keep: () => Effect.void }),
+        );
+
+        assert.deepEqual([outcome, memory.state.commands], [RESTORE_OUTCOME.FAILED, []]);
       }),
   );
 });
