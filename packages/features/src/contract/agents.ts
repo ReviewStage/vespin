@@ -310,7 +310,13 @@ export const agentsContract = {
   /** One suggestion in the agent's reply sent from its draft, as the member asking: run once, and answered as it then stands, the first send's answer to every send after it. */
   pressButton: declaredProcedure
     .errors(refuses(...PRESS_REFUSALS))
-    .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/buttons/{button}/press` }))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: `${AGENT_PATH}/buttons/{button}/press`,
+        inputStructure: "detailed",
+      }),
+    )
     .input(exactBodyInput(buttonParams, replyButtonSentSchema))
     .output(EffectSchema.flip(replyButtonViewSchema)),
   /** One agent as its own page. */
