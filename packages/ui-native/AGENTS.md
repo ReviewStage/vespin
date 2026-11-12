@@ -192,7 +192,10 @@ navigation, tab bar, swipes, menus, sheets and glass.
   its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
   New task; a regular window's bar keeps its labels. A window wide enough
   for three columns hides it and stands the app sidebar instead, whose
-  `GroupRow`s carry the places' names.
+  `GroupRow`s carry the places' names. A compact window hides it too while a
+  conversation stands in front (a thread, an agent's page, or a pull
+  request it opened), as Messages does, so the composer stands alone at
+  the foot (the developer, Nov 12, 2026).
 
 ## Accessibility
 

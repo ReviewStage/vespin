@@ -1,7 +1,8 @@
-// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and the prominent round + that opens New task; hidden in a window wide enough for three columns, where the app sidebar stands instead.
+// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and the prominent round + that opens New task; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation.
 
+import { iosRouteHidesTabs } from "@repo/features/ios-app-links";
 import { useColors } from "@repo/ui-native";
-import { useRouter } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { Platform } from "react-native";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
@@ -50,10 +51,11 @@ export default function TabsLayout() {
   useMemberPicturesFollow();
   const iconOnly = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const appSidebar = useThreeColumns();
+  const conversation = iosRouteHidesTabs(usePathname());
 
   return (
     <NativeTabs
-      hidden={appSidebar}
+      hidden={appSidebar || (iconOnly && conversation)}
       minimizeBehavior="onScrollDown"
       sidebarAdaptable={!appSidebar && !(Platform.OS === "ios" && Platform.isPad)}
       tintColor={colors.ACCENT}
