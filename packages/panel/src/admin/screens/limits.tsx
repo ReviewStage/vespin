@@ -134,11 +134,6 @@ const LIMIT_GROUPS: readonly LimitGroup[] = [
         "AGENT_BOUNDS.MAX_START_WORDS_CHARS",
       ),
       limit(
-        "Extra repositories one start names",
-        formatCount(AGENT_BOUNDS.MAX_ALSO_REPOSITORIES),
-        "AGENT_BOUNDS.MAX_ALSO_REPOSITORIES",
-      ),
-      limit(
         "Messages queued for an agent",
         formatCount(AGENT_QUEUE_BOUNDS.MAX_MESSAGES),
         "AGENT_QUEUE_BOUNDS.MAX_MESSAGES",
