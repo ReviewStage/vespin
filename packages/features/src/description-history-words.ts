@@ -27,6 +27,8 @@ export const VERSION_HISTORY_WORDS = {
   RESTORE_REFUSED: "The version could not be restored. Try again.",
   /** What a restore's Undo says where the version before it could not be put back. */
   UNDO_REFUSED: "The restore could not be undone. Try again.",
+  /** Why the history stands empty where its first read failed. */
+  UNREAD: "The history could not be read.",
   OLDER_UNREAD: "Could not read older versions.",
   VERSION_UNREAD: "Could not read this version.",
 } as const;

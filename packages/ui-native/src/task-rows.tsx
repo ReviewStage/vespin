@@ -358,7 +358,13 @@ export function LinkRow({
     <SwiftUIButton
       onPress={onPress}
       {...(disabled ? { disabled: true } : {})}
-      modifiers={[...rowPlacement(colors), buttonStyle("borderless"), accessibilityLabel(label)]}
+      modifiers={[
+        ...rowPlacement(colors),
+        buttonStyle("borderless"),
+        accessibilityLabel(label),
+        // Note that the detail is heard after the label, since the label stands for the whole row.
+        ...(detail === undefined ? [] : [accessibilityValue(detail)]),
+      ]}
     >
       <RowHead
         unread={false}

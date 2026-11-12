@@ -49,6 +49,20 @@ function retryLost(cause: unknown): void {
   console.error("Reading the version history again did not go.", cause);
 }
 
+/** The number of the version that stands now, as the history the list follows holds it; none while it is unread. */
+export function useNewestVersion(taskId: string): number | undefined {
+  const { data: newest } = useQuery({
+    ...appStateQuery,
+    select: useMemo(
+      () => (state: Parameters<ReturnType<typeof selectTaskHistory>>[0]) =>
+        selectTaskHistory(taskId)(state)?.rows?.revisions[0]?.seq,
+      [taskId],
+    ),
+  });
+
+  return newest;
+}
+
 /** One task's version history, followed while the screen that calls it stands. */
 export function useTaskHistory(taskId: string): TaskHistory {
   const acts = useHostActs();

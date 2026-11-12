@@ -23,10 +23,15 @@ import {
   WordsRow,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import { useOpenLink } from "../open-link.js";
-import { HISTORY_READ, useTaskHistory, useTaskVersion } from "../tasks/use-history.js";
+import {
+  HISTORY_READ,
+  useNewestVersion,
+  useTaskHistory,
+  useTaskVersion,
+} from "../tasks/use-history.js";
 import { useWrite } from "../use-write.js";
 
 /** The route a version is opened on: the task by its id, and the version by its number in the query. */
@@ -74,7 +79,7 @@ export function HistoryScreen() {
   const body =
     history.read === HISTORY_READ.FAILED ? (
       <EmptyState
-        title={VERSION_HISTORY_WORDS.OLDER_UNREAD}
+        title={VERSION_HISTORY_WORDS.UNREAD}
         symbol="exclamationmark.triangle"
         action={{ label: VERB.RETRY, onPress: history.retry }}
       />
@@ -191,26 +196,36 @@ function Version({
   const notices = useFailureNotices();
   const version = useTaskVersion(taskId, seq);
   const [restoring, setRestoring] = useState(false);
-  const current = newest === seq;
+  // The version that stands now, as the history beneath this screen follows it, else as the list stood when it was left.
+  const standingNow = useNewestVersion(taskId) ?? newest;
+  const current = standingNow === seq;
+  // Whether the screen still stands, since a restore that lands after it was left must not go back from the screen in front.
+  const standing = useRef(true);
+  useEffect(() => {
+    standing.current = true;
+
+    return () => {
+      standing.current = false;
+    };
+  }, []);
   const answer = version.data;
   const read = answer === undefined || "failure" in answer ? undefined : answer.revision;
 
-  // Note that the Undo puts back the version that was newest when the history was left for this one, as the panel's does; there is none to put back where the route did not say which.
-  const undoTo = newest;
-
-  const undo =
-    undoTo === undefined
-      ? undefined
-      : () =>
-          void write(() => acts[ACT_KIND.TASKS_RESTORE]({ taskId, seq: undoTo }), {
-            refused: (restored) => (restored ? undefined : VERSION_HISTORY_WORDS.UNDO_REFUSED),
-            unanswered: VERSION_HISTORY_WORDS.UNDO_REFUSED,
-            went: BUZZ.SUCCESS,
-          });
-
   const restore = () => {
     if (restoring) return;
+    // Note that the Undo puts back the version that stood when the restore was pressed, as the panel's does.
+    const undoTo = standingNow;
     setRestoring(true);
+
+    const undo =
+      undoTo === undefined || undoTo === seq
+        ? undefined
+        : () =>
+            void write(() => acts[ACT_KIND.TASKS_RESTORE]({ taskId, seq: undoTo }), {
+              refused: (restored) => (restored ? undefined : VERSION_HISTORY_WORDS.UNDO_REFUSED),
+              unanswered: VERSION_HISTORY_WORDS.UNDO_REFUSED,
+              went: BUZZ.SUCCESS,
+            });
 
     void write(() => acts[ACT_KIND.TASKS_RESTORE]({ taskId, seq }), {
       refused: (restored) => (restored ? undefined : VERSION_HISTORY_WORDS.RESTORE_REFUSED),
@@ -221,7 +236,8 @@ function Version({
 
       if (!went) return;
       notices.say({ kind: NOTICE_KIND.DONE, words: VERSION_HISTORY_WORDS.RESTORED, undo });
-      router.back();
+
+      if (standing.current) router.back();
     });
   };
 

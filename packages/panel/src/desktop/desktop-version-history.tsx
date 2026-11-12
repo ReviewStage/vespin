@@ -714,7 +714,7 @@ function VersionPage({
             onRetry={versions.onRetry}
             placement={ERROR_STATE_PLACEMENT.CENTERED}
           >
-            The history could not be read.
+            {VERSION_HISTORY_WORDS.UNREAD}
           </ErrorState>
         ) : (
           <EmptyState>{VERSION_HISTORY_WORDS.NONE}</EmptyState>
