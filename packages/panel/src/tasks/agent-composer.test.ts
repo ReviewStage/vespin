@@ -983,6 +983,15 @@ test("a message refused for want of a connected credential is reported as the se
   assert.equal(issues, 0);
 });
 
+test("a message the host never heard comes back into the box, since nothing drew it", async () => {
+  const box = await mounted(() => Promise.reject(new Error("the act port closed")));
+  typeInComposer(box.container, "Fix the bug");
+  pressInComposer(box.container, "Enter");
+  await settle();
+
+  assert.equal(box.shown(), "Fix the bug");
+});
+
 test("every message refused as the agent ends for good is kept for Continue, in the order sent", async () => {
   const box = await answeredInTurn();
   typeInComposer(box.container, "Fix tests");

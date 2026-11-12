@@ -1593,8 +1593,9 @@ export function useAgents(input: {
 
   // Note that a message that opens the agent's sandbox anew while its image is prepared is
   // taken at once, its relaunch waiting on the image in the service, so it is asked once.
+  // A send that never reached the host fails, so the box takes its words back.
   const onMessage = useCallback<MessageSender>(
-    (agentId, message) => sendMessage({ agentId, ...message }).catch(agentUnreached),
+    (agentId, message) => sendMessage({ agentId, ...message }),
     [sendMessage],
   );
 

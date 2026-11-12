@@ -78,7 +78,12 @@ export function withOutbox(agentId: string, rows: AppTranscript): AppTranscript 
   );
 
   const { sending: _drawn, ...page } = rows;
-  const sending = outboxOf(agentId).filter((message) => !landed.has(message.id));
+  // Note that a message whose row landed leaves the record, as the host lets it go.
+  record.set(
+    agentId,
+    outboxOf(agentId).filter((message) => !landed.has(message.id)),
+  );
+  const sending = outboxOf(agentId);
 
   return sending.length === 0 ? page : { ...page, sending };
 }

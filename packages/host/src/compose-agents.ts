@@ -398,7 +398,7 @@ export function composeAgents(
     });
 
     const gate = gateOf(dependencies);
-    const queues = yield* agentQueues(dependencies.pool);
+    const queues = yield* agentQueues(dependencies.pool, dependencies.accountId);
 
     // Note that a transcript no window holds stops following, its messages standing for a window that steps back to it, since a working agent nobody looks at would otherwise stream its journal on.
     const transcriptSlice = yield* heldSlice<typeof LIVE_READ.TRANSCRIPT, TranscriptKey>({

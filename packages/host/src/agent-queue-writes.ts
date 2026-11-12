@@ -56,6 +56,10 @@ import type { HeldTranscript } from "./transcript-follow.js";
  * still, until it is sent again under its key, which draws it on its way in
  * the same draw, or let go (`agents.unsend`). The refusal is kept before the
  * write is taken back, so the line never leaves the transcript between.
+ * Note that the refusals are kept by the account that sent them, and drawn
+ * only while that account is signed in, because a host one member signs out
+ * of may next be signed in to by another, who may reach the same agent but
+ * never another member's words that did not go.
  */
 
 /** Where an agent's messages on their way stand: its queue and the messages sending. */
@@ -384,26 +388,57 @@ export interface AgentQueues {
 const unchanged: OutboxStep = (outbox) => outbox;
 
 /** The agents' messages on their way in `pool`, each held while its own transcript is followed, for as long as the scope stands. */
-export function agentQueues(pool: EntityPool): Effect.Effect<AgentQueues, never, Scope.Scope> {
+export function agentQueues(
+  pool: EntityPool,
+  accountId: () => string | undefined,
+): Effect.Effect<AgentQueues, never, Scope.Scope> {
   return Effect.sync(() => {
     /** Each followed agent's waits on what its pages carry, while its follow stands. */
     const standing = MutableHashMap.empty<string, Standing>();
-    /** The messages the service refused, by the agent's id, in the order sent, kept for as long as the host runs. */
-    const refused = MutableHashMap.empty<string, readonly SendingMessage[]>();
+    /** The messages the service refused, by the account that sent them and then the agent's id, in the order sent, kept for as long as the host runs. */
 
+    const refused = MutableHashMap.empty<
+      string,
+      MutableHashMap.MutableHashMap<string, readonly SendingMessage[]>
+    >();
+
+    /** The refusals of `account`'s, by the agent's id; none for no account. */
+    const refusedBy = (account: string | undefined) =>
+      account === undefined
+        ? undefined
+        : Option.getOrUndefined(MutableHashMap.get(refused, account));
+
+    /** The agent's refused messages the account signed in now sent; none while nobody is signed in. */
     const refusedOf = (agentId: string): readonly SendingMessage[] =>
-      Option.getOrElse(MutableHashMap.get(refused, agentId), () => []);
+      Option.getOrElse(
+        Option.flatMap(Option.fromUndefinedOr(refusedBy(accountId())), (byAgent) =>
+          MutableHashMap.get(byAgent, agentId),
+        ),
+        () => [],
+      );
 
-    /** The agent's refused messages as `change` leaves them, its transcript drawn again where a follow stands for it. */
+    /**
+     * The agent's refused messages of `account`'s as `change` leaves them, its
+     * transcript drawn again where a follow stands for it. Note that the
+     * account is the one that sent the message, read as it was sent, so a
+     * refusal landing after a sign-out is kept for its sender alone.
+     */
     const refusedChanged = (
+      account: string | undefined,
       agentId: string,
       change: (was: readonly SendingMessage[]) => readonly SendingMessage[],
     ) =>
       Effect.suspend(() => {
-        const now = change(refusedOf(agentId));
+        if (account === undefined) return Effect.void;
 
-        if (now.length === 0) MutableHashMap.remove(refused, agentId);
-        else MutableHashMap.set(refused, agentId, now);
+        const byAgent =
+          refusedBy(account) ?? MutableHashMap.empty<string, readonly SendingMessage[]>();
+
+        MutableHashMap.set(refused, account, byAgent);
+        const now = change(Option.getOrElse(MutableHashMap.get(byAgent, agentId), () => []));
+
+        if (now.length === 0) MutableHashMap.remove(byAgent, agentId);
+        else MutableHashMap.set(byAgent, agentId, now);
 
         return Option.match(MutableHashMap.get(standing, agentId), {
           onNone: () => Effect.void,
@@ -588,6 +623,8 @@ export function agentQueues(pool: EntityPool): Effect.Effect<AgentQueues, never,
           } = input;
 
           const line = sendingOf(input);
+          // The account sending it, which a refusal is kept for.
+          const sender = accountId();
 
           // A line in place of another takes the agent back to just before that one first; one that did not go sends nothing.
           if (rewinds !== undefined) {
@@ -598,7 +635,7 @@ export function agentQueues(pool: EntityPool): Effect.Effect<AgentQueues, never,
             );
 
             if ("failure" in rewound) {
-              yield* refusedChanged(agentId, (was) => [
+              yield* refusedChanged(sender, agentId, (was) => [
                 ...without(line.id)(was),
                 { ...line, refused: rewound },
               ]);
@@ -613,7 +650,7 @@ export function agentQueues(pool: EntityPool): Effect.Effect<AgentQueues, never,
             const said: AgentMessageRefusal =
               rewinds === undefined ? answer : { ...answer, rewound: true };
 
-            yield* refusedChanged(agentId, (was) => [
+            yield* refusedChanged(sender, agentId, (was) => [
               ...without(line.id)(was),
               { ...line, refused: said },
             ]);
@@ -621,7 +658,7 @@ export function agentQueues(pool: EntityPool): Effect.Effect<AgentQueues, never,
             return { refused: said } satisfies Refused<AgentAgentAnswer>;
           }
 
-          yield* refusedChanged(agentId, without(line.id));
+          yield* refusedChanged(sender, agentId, without(line.id));
 
           // A message the agent's first launch holds stands as the queue it waits in, which the service answered, in the line's place.
           if (answer.queued !== undefined) {
@@ -674,7 +711,7 @@ export function agentQueues(pool: EntityPool): Effect.Effect<AgentQueues, never,
     };
 
     const unsend = ({ agentId, lineId }: AgentUnsendParams) =>
-      refusedChanged(agentId, without(lineId));
+      refusedChanged(accountId(), agentId, without(lineId));
 
     return { held, queuedWrite, queue, message, rewind, unsend };
   });

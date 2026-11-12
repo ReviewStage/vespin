@@ -731,9 +731,9 @@ const EDITED = {
 };
 
 /** A held transcript whose newest page and first page past it carry the queue holding "Run the tests" at its first revision. */
-function queueFollowed() {
+function queueFollowed(accountId?: () => string | undefined) {
   return Effect.gen(function* () {
-    const harness = yield* subject();
+    const harness = yield* subject(accountId === undefined ? {} : { accountId });
     harness.sealTranscript(LIVE_ANSWERED);
     harness.pageNewest({
       ...newestPage("1:0", "Reading the invites."),
@@ -925,6 +925,27 @@ it.effect(
       yield* acts.AGENTS_UNSEND({ agentId: AGENT_ID, lineId: sentLineId(SENT_KEY) });
       yield* settled;
       assert.deepEqual(refused(), []);
+    }),
+);
+
+it.effect(
+  "a message one account sent that the service refused is never drawn for another account signed in to the same host",
+  () =>
+    Effect.gen(function* () {
+      let signedIn = "user-dana";
+      const { acts, held, answerMessage, answerQueue } = yield* queueFollowed(() => signedIn);
+      answerMessage({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+      yield* acts.AGENTS_MESSAGE(SENT);
+      yield* settled;
+      assert.equal(held().at(-1)?.sending?.length, 1);
+
+      // Another member signs in to the same host, and a change of the queue draws the transcript again.
+      signedIn = "user-ravi";
+      answerQueue({ queue: queueOf("Run the tests and fix them", 2) });
+      yield* acts.AGENTS_QUEUE(EDITED);
+      yield* settled;
+      assert.deepEqual(queuedTexts(held), ["Run the tests and fix them"]);
+      assert.equal(held().at(-1)?.sending, undefined);
     }),
 );
 

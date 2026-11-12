@@ -5,6 +5,7 @@ import {
   type SendingMessage,
 } from "@repo/features/agent-view";
 import {
+  AGENT_BOUNDS,
   type AgentAttachment,
   type AgentPayer,
   type AgentTranscriptMessage,
@@ -29,7 +30,7 @@ import {
   SENT_LINE_STATE,
   type SentLine,
 } from "./agent-model.js";
-import type { HeldUpdate } from "./refused-send.js";
+import { type HeldUpdate, putBackRefused } from "./refused-send.js";
 
 /**
  * use-agent-composer.ts -- the message box under an agent's transcript as one control: the words being written, and the lines the member sent, drawn from the one record of their messages on their way the host holds.
@@ -84,7 +85,7 @@ import type { HeldUpdate } from "./refused-send.js";
 /** A message as the box sends it: the request the service takes, and what the host draws it by while it goes. */
 export type OutgoingMessage = Omit<AgentMessageParams, "agentId">;
 
-/** How one message is sent to an agent, answered as the view hears it. */
+/** How one message is sent to an agent, answered as the view hears it; it fails where the host never heard it, so it drew nothing. */
 export type MessageSender = (agentId: string, message: OutgoingMessage) => Promise<AgentActAnswer>;
 
 /** How the agent is taken back to just before one of the developer's lines, by its message id, answered as the view hears it. */
@@ -352,6 +353,15 @@ export function useAgentComposer(input: {
     setHeld((was) => (was.agentId === agentId ? change(was) : was));
 
   const { update } = kept;
+
+  /** Moves the box's words and files on together from what its draft holds as the change lands. */
+  const updateHeld: HeldUpdate = (next) =>
+    kept.update((was) => {
+      const moved = next(was);
+
+      return moved === undefined ? was : { ...was, ...moved };
+    });
+
   const at = latest.current;
 
   /** Why a refused message did not go, in the box's words. */
@@ -438,21 +448,34 @@ export function useAgentComposer(input: {
               },
             }),
       })
-      .catch(() => UNANSWERED)
-      .then((answer) => {
-        if ("failure" in answer) {
-          sayWhereAway(answer);
+      .then(
+        (answer) => answered(answer),
+        // A send the host never heard drew nothing, so its words come back into the box.
+        () => {
+          putBackRefused({
+            went: { text: line.text, attachments: line.attachments },
+            most: AGENT_BOUNDS.MAX_MESSAGE_CHARS,
+            update: updateHeld,
+          });
+          answered(UNANSWERED);
+        },
+      );
 
-          // A rewind that did not go drops nothing, so the messages it would have dropped are drawn again.
-          if (line.rewinds !== undefined && !("rewound" in answer)) {
-            ours((was) => ({ ...was, cut: undefined }));
-          }
+    /** What the send's answer leaves: a refusal said where the tab is away, or the turn it opened. */
+    const answered = (answer: AgentActAnswer) => {
+      if ("failure" in answer) {
+        sayWhereAway(answer);
 
-          return;
+        // A rewind that did not go drops nothing, so the messages it would have dropped are drawn again.
+        if (line.rewinds !== undefined && !("rewound" in answer)) {
+          ours((was) => ({ ...was, cut: undefined }));
         }
 
-        ours((was) => ({ ...was, turn: newerTurn(answer.agent.turn, was.turn) }));
-      });
+        return;
+      }
+
+      ours((was) => ({ ...was, turn: newerTurn(answer.agent.turn, was.turn) }));
+    };
   };
 
   const sendDraft = (clientKey: string = crypto.randomUUID()) => {
@@ -543,13 +566,26 @@ export function useAgentComposer(input: {
   };
 
   /**
+   * The refused line by `id` with every one of its files, which a Retry or an
+   * Edit carries; none where this window holds no bytes of one, as for a
+   * message sent with files from another window, since it would go without
+   * them. Its Delete still lets it go.
+   */
+  const wholeLine = (id: string): SentLine | undefined => {
+    const line = refusedLine(id);
+    const files = sending.find((message) => message.id === id)?.files ?? [];
+
+    return line?.attachments.length === files.length ? line : undefined;
+  };
+
+  /**
    * Sends a refused line again, under its key, as the newest line, as a chat
    * app moves a message tried again to the conversation's end; the host draws
    * it on its way in place of the refusal in the one draw. An edit whose
    * rewind went only sends, since the line it stood in place of is gone.
    */
   const resend = (id: string) => {
-    const line = refusedLine(id);
+    const line = wholeLine(id);
 
     if (line === undefined) return;
 
@@ -580,7 +616,7 @@ export function useAgentComposer(input: {
 
   /** Takes a refused line back into the box to be written again, ahead of what the box holds, which is newer. */
   const takeBackLine = (id: string) => {
-    const line = refusedLine(id);
+    const line = wholeLine(id);
 
     if (line === undefined) return;
     latest.current.unsend(agentId, id);
@@ -603,12 +639,7 @@ export function useAgentComposer(input: {
     attachments: shown.attachments,
     setAttachments: (next) =>
       kept.update((was) => ({ ...was, attachments: next(was.attachments) })),
-    updateHeld: (next) =>
-      kept.update((was) => {
-        const moved = next(was);
-
-        return moved === undefined ? was : { ...was, ...moved };
-      }),
+    updateHeld,
     sending: false,
     note: closed === undefined ? (held.revertFailed?.note ?? remediedNote) : undefined,
     closed,

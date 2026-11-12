@@ -389,9 +389,12 @@ export function useAgentApprovals(input: {
       });
 
     mark(true);
-    sent.then((answer) => {
-      if ("failure" in answer) mark(false);
-    });
+    sent.then(
+      (answer) => {
+        if ("failure" in answer) mark(false);
+      },
+      () => mark(false),
+    );
   }, []);
 
   const asks = useMemo(

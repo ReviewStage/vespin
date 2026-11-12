@@ -44,7 +44,7 @@ import { type AttachedPicture, BUZZ, buzz, type QueuedLine } from "@repo/ui-nati
 import { sentLineId } from "@repo/wire/host-ids";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { type HeldPicture, useAttachedPictures } from "../use-attached-pictures.js";
@@ -138,6 +138,16 @@ export function useAgentComposer(
   const planId = agent?.planId;
   const skills = useSkillOffer(words, setWords, planId === undefined ? undefined : { planId });
 
+  // Whether the screen still stands, since a refusal may land after it was left.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
   // A Stop stands pressed until the agent stops writing.
   useEffect(() => {
     if (!writing) setStopping(false);
@@ -204,8 +214,10 @@ export function useAgentComposer(
     );
     write(() => message, {
       ...saying,
-      // A refused message's words come back to the field, so its line in the host's record is let go.
+      // A refused message's words come back to the field, so its line in the host's record is let
+      // go; a screen left meanwhile has no field to take them, so the line stands for its return.
       inPlace: (words: string) => {
+        if (!mounted.current) return;
         handBack(sent, words);
         void acts[ACT_KIND.AGENTS_UNSEND]({ agentId, lineId: sentLineId(sent.id) }).catch(
           () => undefined,
