@@ -1,21 +1,26 @@
 /**
- * device-warm-runner.test.ts -- a local agent's runner kept warm past its turn, over a real store and the Mac's machine: its IDLE leaves it warm and the next message is written to it, but a host waiting to switch release has it retired there; a Stop with no turn under way leaves it warm; a Stop that lands as its turn ends, which the runner ends on, sends the next message to a new launch rather than to the runner on its way down; and a runner that ends on its own past its turn leaves the agent as that turn ended.
+ * device-warm-runner.test.ts -- a local agent's runner kept warm past its turn, over a real store and the Mac's machine: its IDLE leaves it warm and the next message is written to it, but a host waiting to switch release has it retired there; a Stop with no turn under way leaves it warm; a Stop that lands as its turn ends, which the runner ends on, sends the next message to a new launch rather than to the runner on its way down; a transcript with no session behind it opens a fresh session with its steps replayed; and a runner that ends on its own past its turn leaves the agent as that turn ended.
  *
  * Synthetic accounts, agents, Macs, and keys throughout.
  */
 
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import type { ClaudeCodeConfig } from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
-import { latestTurnsOf, recordAgentNativeSession } from "@repo/database/models/agent-store";
+import {
+  latestTurnsOf,
+  NATIVE_SESSION,
+  recordAgentNativeSession,
+} from "@repo/database/models/agent-store";
 import {
   deviceAgentLinesWaiting,
   latestDeviceAgentLaunch,
 } from "@repo/database/models/device-agent-store";
 import { beatDevice } from "@repo/database/models/device-store";
 import { recordHostVersion } from "@repo/database/models/host-store";
-import { turns } from "@repo/database/schemas/storage";
+import { messages, turns } from "@repo/database/schemas/storage";
 import { getTestDB } from "@repo/database/testing";
 import {
   DEVICE_AGENT_LINE_KIND,
@@ -23,7 +28,7 @@ import {
   HOST_UPDATE,
 } from "@repo/features/device-agent-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
+import { MESSAGE_AUTHOR, MESSAGE_ROLE, TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
 import { DateTime, Effect, Layer, Option, Schema } from "effect";
@@ -219,6 +224,65 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
 
           const config: ClaudeCodeConfig = JSON.parse(stdin.split("\n")[0] ?? "");
           assert.deepEqual([config.resume, config.transcriptsUrl], [BEGUN_BEFORE, undefined]);
+        }),
+    );
+
+    it.effect(
+      "a message to an agent whose transcript has no session behind it launches a fresh session on its Mac, its steps so far replayed ahead of the message, rather than resuming one from the disk",
+      () =>
+        Effect.gen(function* () {
+          const warm = yield* warmLocalAgent;
+          const { userId, deviceId, agent } = warm;
+          yield* recordHostVersion(deviceId, "0.11.0");
+          assert.equal(
+            yield* recordAgentNativeSession(userId, agent.id, NATIVE_SESSION.REPLAY),
+            true,
+          );
+          // The transcript holds a step written with no session behind it.
+          yield* (yield* Database).insert(messages).values({
+            id: randomUUID(),
+            userId,
+            conversationId: agent.conversationId,
+            seq: 10,
+            clientId: "imported-step",
+            role: MESSAGE_ROLE.ASSISTANT,
+            parts: [{ type: "text", text: "I renamed InviteToken to InvitationToken." }],
+            metadata: { author: MESSAGE_AUTHOR.MODEL },
+            placedAt: new Date(0),
+            finishedAt: new Date(0),
+          });
+          const launch = yield* latestDeviceAgentLaunch(userId, agent.id);
+          assert.ok(Option.isSome(launch));
+          yield* TestClock.adjust("1 minute");
+          yield* settledDeviceAgentLine(userId, deviceId, launch.value.id, 0);
+
+          const sent = yield* warm.sessions.send(
+            warm.sessionId,
+            typedMessage(agent, "And the tests."),
+          );
+
+          assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+
+          const relaunch = (yield* deviceAgentLinesWaiting(userId, deviceId)).find(
+            (line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH,
+          );
+
+          assert.ok(relaunch !== undefined);
+
+          const claimed = Option.getOrThrow(
+            yield* claimedDeviceAgentLine(userId, deviceId, relaunch.id),
+          );
+
+          assert.ok("secrets" in claimed);
+
+          const { stdin } = Schema.decodeUnknownSync(deviceAgentLaunchSecretsSchema)(
+            claimed.secrets,
+          );
+
+          const config: ClaudeCodeConfig = JSON.parse(stdin.split("\n")[0] ?? "");
+          assert.equal(config.resume, undefined);
+          assert.ok(stdin.includes("I renamed InviteToken to InvitationToken."));
+          assert.ok(stdin.includes("And the tests."));
         }),
     );
 
