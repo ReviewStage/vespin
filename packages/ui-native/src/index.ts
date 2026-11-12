@@ -178,6 +178,8 @@ export {
   SettingsForm,
   ToggleRow,
   ValueRow,
+  type WorkspacePickOption,
+  WorkspacePickRows,
   WorkspaceRow,
 } from "./settings-form.js";
 
