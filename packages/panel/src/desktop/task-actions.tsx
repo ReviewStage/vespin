@@ -59,6 +59,7 @@ import { useInlineRename } from "@repo/ui/use-inline-rename";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
+  memo,
   type RefObject,
   useCallback,
   useContext,
@@ -1181,23 +1182,12 @@ function SidebarTaskCard({
  * hands focus back to the row.
  *
  */
-export function SidebarTask({
-  tasks,
-  task,
-  current,
-  open = current,
-  unread,
-  now,
-  at = task.updatedAt,
-  repository,
-  faces = EVERY_FACE,
-  depth,
-  nest,
-  place,
-  fold,
-  childCount,
-  onOpen,
-}: {
+export function SidebarTask({ tasks, ...rest }: SidebarTaskProps): React.JSX.Element {
+  return <SidebarTaskRow tasks={tasks} {...useSteadyDoors(rest)} />;
+}
+
+/** What a sidebar task row is handed (`SidebarTask`). */
+interface SidebarTaskProps {
   tasks: TasksControl;
   task: TaskSummary;
   /** Whether this is the task the work column is showing. */
@@ -1225,7 +1215,32 @@ export function SidebarTask({
   /** How many of the task's child tasks are finished, of all of them, said before its time; none where it has none. */
   childCount?: ChildTaskCount | undefined;
   onOpen: () => void;
-}): React.JSX.Element {
+}
+
+/**
+ * The row `SidebarTask` draws, drawn again only when what it is handed
+ * changed. Note that it holds, because the sidebar draws every row anew
+ * whenever anything in it changes, a group folded or the pointer coming
+ * over it, and each row's menu and marks cost enough that a list of a
+ * hundred tasks drawn whole drops the frames a fold's motion plays in.
+ */
+const SidebarTaskRow = memo(function SidebarTaskRow({
+  tasks,
+  task,
+  current,
+  open = current,
+  unread,
+  now,
+  at = task.updatedAt,
+  repository,
+  faces = EVERY_FACE,
+  depth,
+  nest,
+  place,
+  fold,
+  childCount,
+  onOpen,
+}: SidebarTaskProps): React.JSX.Element {
   const renaming = useMutation(useTaskRename(tasks.drawnTasks));
   const pins = usePinWrites(tasks.drawnTasks);
   const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_TERMS));
@@ -1376,4 +1391,4 @@ export function SidebarTask({
       {actions.dialog}
     </>
   );
-}
+});
