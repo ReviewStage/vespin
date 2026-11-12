@@ -21,6 +21,7 @@ import {
 } from "effect/http";
 import { agentPublished } from "../agents/coder-host/published.js";
 import { routedSessions } from "../agents/coder-host/runtime-sessions.js";
+import { installationDriveRegenerated } from "../agents/workspace-drive.js";
 import { cadenceOrUnavailable } from "../automations/automation-cadence.js";
 import { queueGithubRuns } from "../automations/automation-github.js";
 import type { SessionsForAccount } from "../automations/automation-runs.js";
@@ -82,10 +83,13 @@ import { GitHubBackground } from "./github-rate-gate.js";
  * suspended and brought back keeps its members and its tasks. GitHub never
  * redelivers a failed delivery on its own, so a status one missed is mended
  * by the next read of the installation from GitHub (`github-app.ts`). Its
- * `installation_repositories` deliveries, a repository given or taken, are
- * answered and ignored, because no repository of an installation is held:
- * the chip lists them from GitHub each time it opens, and every start checks
- * its repository there (`github-procedures.ts`, `workspace-repository.ts`).
+ * `installation_repositories` deliveries, a repository given or taken, move
+ * nothing held, because no repository of an installation is held: the chip
+ * lists them from GitHub each time it opens, and every start checks its
+ * repository there (`github-procedures.ts`, `workspace-repository.ts`). But
+ * a repository given or taken, or an installation made, deleted, or brought
+ * back, regenerates its workspace's drive past the answer
+ * (`workspace-drive.ts`), so the drive holds what the workspace connects.
  *
  * A user revoking their authorization of the App, which GitHub also sends
  * without subscribing (`github_app_authorization`), drops that GitHub user's
@@ -129,6 +133,8 @@ const WEBHOOK_EVENT = {
   STATUS: "status",
   /** The App installed, removed, suspended, or brought back on an account. */
   INSTALLATION: "installation",
+  /** Repositories given to an installation or taken from it. */
+  INSTALLATION_REPOSITORIES: "installation_repositories",
   /** A user revoked their authorization of the App. */
   APP_AUTHORIZATION: "github_app_authorization",
   /** A repository created, renamed, transferred, or otherwise changed. */
@@ -149,6 +155,33 @@ const INSTALLATION_ACTION_STATUS: ReadonlyMap<string, GitHubInstallationStatus> 
   ["deleted", GITHUB_INSTALLATION_STATUS.DELETED],
   ["suspend", GITHUB_INSTALLATION_STATUS.SUSPENDED],
   ["unsuspend", GITHUB_INSTALLATION_STATUS.ACTIVE],
+]);
+
+/** The installation actions after which the repositories it grants changed, as GitHub spells them. */
+const GRANT_CHANGE_ACTION = {
+  CREATED: "created",
+  DELETED: "deleted",
+  UNSUSPEND: "unsuspend",
+  /** An `installation_repositories` delivery's: repositories given to the installation. */
+  ADDED: "added",
+  /** An `installation_repositories` delivery's: repositories taken from it. */
+  REMOVED: "removed",
+} as const;
+
+/** The actions, by event, after which the workspace's drive is regenerated, since the repositories it connects changed. */
+const DRIVE_CHANGE_ACTIONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  [
+    WEBHOOK_EVENT.INSTALLATION,
+    new Set<string>([
+      GRANT_CHANGE_ACTION.CREATED,
+      GRANT_CHANGE_ACTION.DELETED,
+      GRANT_CHANGE_ACTION.UNSUSPEND,
+    ]),
+  ],
+  [
+    WEBHOOK_EVENT.INSTALLATION_REPOSITORIES,
+    new Set<string>([GRANT_CHANGE_ACTION.ADDED, GRANT_CHANGE_ACTION.REMOVED]),
+  ],
 ]);
 
 /** A pull request's actions that change what a task's row says of it: where it stands, its merge queue among it, its title, or its size. */
@@ -370,6 +403,15 @@ function installationTarget(
     : { installationId: read.success.installation.id, status };
 }
 
+/** The installation a delivery says now grants other repositories; nothing for any other event or action. */
+function installationRegranted(event: string, payload: UnparsedWireValue): number | undefined {
+  const actions = DRIVE_CHANGE_ACTIONS.get(event);
+  if (actions === undefined) return undefined;
+  const read = readDelivery(InstallationDeliverySchema, payload);
+  if (Result.isFailure(read) || !actions.has(read.success.action)) return undefined;
+  return read.success.installation.id;
+}
+
 /** The GitHub user whose authorization a delivery says was revoked; nothing for any other action. */
 function revokedAuthorization(payload: UnparsedWireValue): number | undefined {
   const read = readDelivery(AuthorizationDeliverySchema, payload);
@@ -434,11 +476,14 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
     const event = request.headers[DELIVERY_HEADER.EVENT] ?? "";
     if (event === WEBHOOK_EVENT.PING) return hostedJsonResponse(200, { read: 0 });
     const payload = yield* parseJsonBytes(body);
-    if (event === WEBHOOK_EVENT.INSTALLATION) {
-      const moved = installationTarget(payload);
+    if (event === WEBHOOK_EVENT.INSTALLATION || event === WEBHOOK_EVENT.INSTALLATION_REPOSITORIES) {
+      const moved = event === WEBHOOK_EVENT.INSTALLATION ? installationTarget(payload) : undefined;
       if (moved !== undefined) {
         yield* hostedStoreOrUnavailable(setInstallationStatus(moved.installationId, moved.status));
       }
+      // Note that the status is moved first, so an installation deleted regenerates a drive that drops its repositories.
+      const regranted = installationRegranted(event, payload);
+      if (regranted !== undefined) yield* installationDriveRegenerated(regranted);
       return hostedJsonResponse(200, { read: 0 });
     }
     if (event === WEBHOOK_EVENT.APP_AUTHORIZATION) {
