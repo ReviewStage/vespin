@@ -61,6 +61,7 @@ export function macCommandsOfLiveRows(
 ): readonly MacCommand[] {
   return orderedLiveRows(MAC_COMMANDS_READ.parts.commands, rows.commands).flatMap((row) => {
     const command = macCommandOfStored(row);
+
     return command === undefined ? [] : [command];
   });
 }

@@ -229,7 +229,9 @@ function neverOffered(app: string): MacCommandRefusal {
 /** What an action came to, as the helper answered it. */
 function computerResult(answer: ComputerHelperAnswer): MacCommandResult {
   if ("outcome" in answer) return { computer: answer.outcome };
+
   if ("failure" in answer) return { refused: `Not run: ${answer.message}` };
+
   return { refused: "Not run: the computer-use helper answered something else." };
 }
 
@@ -274,13 +276,16 @@ export function composeMacCommands(
     const services = yield* Effect.context<ChildProcessSpawner.ChildProcessSpawner>();
     const http = yield* HttpClient.HttpClient;
     const { kernel, account, mode, allowAlways, client, computer } = dependencies;
+
     /** The kinds of command this Mac runs, which every read names: actions on apps only where it ships the helper. */
     const runs: readonly MacCommandKind[] =
       computer === undefined
         ? [MAC_COMMAND_KIND.SHELL]
         : [MAC_COMMAND_KIND.SHELL, MAC_COMMAND_KIND.COMPUTER];
+
     /** The apps each agent's conversation was allowed once, by its id, until the gate moves. */
     const allowedOnce = new Map<string, Set<string>>();
+
     /** The asks waiting on the developer, by the command's id, the earliest asked first, each with the account it was claimed for. */
     const asks = new Map<
       string,
@@ -371,6 +376,7 @@ export function composeMacCommands(
     const decided = (command: MacCommandRead, userId: string) =>
       Effect.gen(function* () {
         if (isMacComputerCommand(command)) return yield* used(command, userId);
+
         // Note that a kind this Mac cannot run is refused without asking, since nothing would run.
         if ((yield* mode) !== MAC_COMMAND_MODE.ASK || !isMacShellCommand(command)) {
           return yield* run(command);
@@ -379,6 +385,7 @@ export function composeMacCommands(
         const deadline =
           (yield* Clock.currentTimeMillis) +
           Duration.toMillis(Duration.seconds(command.timeoutSeconds));
+
         const decision = yield* Effect.interruptible(
           consent(
             { id: command.id, command: command.command, askedAt: kernel.now() },
@@ -386,6 +393,7 @@ export function composeMacCommands(
             deadline,
           ),
         );
+
         if (decision === undefined) return yield* settled(command.id, UNANSWERED);
 
         if (decision === MAC_COMMAND_DECISION.DENY) return yield* settled(command.id, DECLINED);
@@ -418,15 +426,23 @@ export function composeMacCommands(
           { op: COMPUTER_HELPER_OP.DESCRIBE_APP, app: command.action.app },
           DESCRIBE_WITHIN,
         );
+
         if ("failure" in named) return { refused: `Not run: ${named.message}` };
-        if (!("described" in named)) return computerResult(named) as MacCommandRefusal;
+
+        if (!("described" in named)) {
+          return { refused: "Not run: the computer-use helper answered something else." };
+        }
+
         const app = named.described;
+
         if (app.refused) return neverOffered(app.name);
         const key = app.bundleId ?? app.name;
         const allowed = yield* use.allowedApps;
+
         if (allowed.includes(key) || allowedOnce.get(command.conversationId)?.has(key) === true) {
           return undefined;
         }
+
         const asked: MacAppAsk = {
           id: command.id,
           app: {
@@ -436,17 +452,24 @@ export function composeMacCommands(
           },
           askedAt: kernel.now(),
         };
+
         const decision = yield* Effect.interruptible(consent(asked, userId, deadline));
+
         if (decision === undefined) return APP_UNANSWERED;
+
         if (decision === MAC_COMMAND_DECISION.DENY) return APP_DECLINED;
+
         if (dependencies.accountId() !== userId) return ACCOUNT_CHANGED;
+
         if (decision === MAC_COMMAND_DECISION.ALLOW_ALWAYS && !(yield* use.allowApp(key))) {
           report("an app's Always allow could not be saved; the next agent asks again");
         }
+
         allowedOnce.set(
           command.conversationId,
           new Set([...(allowedOnce.get(command.conversationId) ?? []), key]),
         );
+
         return undefined;
       });
 
@@ -460,16 +483,23 @@ export function composeMacCommands(
     const used = (command: MacComputerCommand, userId: string) =>
       Effect.gen(function* () {
         if (computer === undefined) return yield* settled(command.id, CANNOT_RUN);
+
         if (!(yield* computer.enabled)) return yield* settled(command.id, APPS_SWITCHED_OFF);
+
         const deadline =
           (yield* Clock.currentTimeMillis) +
           Duration.toMillis(Duration.seconds(command.timeoutSeconds));
+
         const { action } = command;
+
         if (action.op !== COMPUTER_ACTION.LIST_APPS) {
           const refusal = yield* appAllowed(computer, { ...command, action }, userId, deadline);
+
           if (refusal !== undefined) return yield* settled(command.id, refusal);
         }
+
         const left = deadline - (yield* Clock.currentTimeMillis);
+
         if (left < 1000) return yield* settled(command.id, APP_UNANSWERED);
         const answer = yield* computer.helper.ask(action, Duration.millis(left));
         yield* settled(command.id, computerResult(answer));

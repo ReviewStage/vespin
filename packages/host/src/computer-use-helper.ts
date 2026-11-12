@@ -130,12 +130,17 @@ function wireApp(app: typeof helperAppSchema.Type): ComputerApp {
 /** What a request came to, read off the helper's line for it. */
 function answerOf(line: HelperLine): ComputerHelperAnswer {
   if (!line.ok) return { failure: line.error.kind, message: line.error.message };
+
   if ("apps" in line) return { outcome: { apps: line.apps.map(wireApp) } };
+
   if ("window" in line) {
     const { app, window, elements, truncated, shots } = line;
+
     return { outcome: { app: wireApp(app), window, elements, truncated, shots } };
   }
+
   if ("app" in line) return { described: wireApp(line.app) };
+
   return { outcome: { done: line.done } };
 }
 
@@ -158,8 +163,10 @@ function answerFor(
   return Effect.gen(function* () {
     for (;;) {
       const line = yield* Effect.option(Queue.take(running.lines));
+
       if (Option.isNone(line)) return Option.none();
       const read = readLine(line.value);
+
       if (Option.isSome(read) && read.value.id === id) return Option.some(answerOf(read.value));
     }
   });
@@ -189,6 +196,7 @@ export function computerUseHelperProcess(
       const scope = yield* Scope.fork(outer);
       const requests = yield* Queue.unbounded<string>();
       const lines = yield* Queue.unbounded<string, Cause.Done>();
+
       const handle = yield* ChildProcess.make(binary, [], {
         stdin: {
           stream: Stream.fromQueue(requests).pipe(Stream.map((text) => encoder.encode(text))),
@@ -196,10 +204,13 @@ export function computerUseHelperProcess(
         },
         stderr: "ignore",
       }).pipe(Scope.provide(scope), Effect.provideContext(spawner), Effect.option);
+
       if (Option.isNone(handle)) {
         yield* Scope.close(scope, Exit.void);
+
         return Option.none<Running>();
       }
+
       yield* handle.value.stdout.pipe(
         Stream.decodeText(),
         Stream.splitLines,
@@ -208,6 +219,7 @@ export function computerUseHelperProcess(
         Effect.ensuring(Queue.end(lines)),
         Effect.forkIn(scope),
       );
+
       return Option.some<Running>({ scope, requests, lines });
     });
 
@@ -215,6 +227,7 @@ export function computerUseHelperProcess(
     const ended = (was: Running) =>
       Effect.suspend(() => {
         if (running === was) running = undefined;
+
         return Scope.close(was.scope, Exit.void);
       });
 
@@ -223,13 +236,16 @@ export function computerUseHelperProcess(
         Effect.gen(function* () {
           if (running === undefined) running = Option.getOrUndefined(yield* started);
           const current = running;
+
           if (current === undefined) return failed("The computer-use helper could not be started.");
           asked += 1;
           const id = asked;
           yield* Queue.offer(current.requests, `${JSON.stringify({ ...request, id })}\n`);
           const answer = yield* Effect.timeoutOption(answerFor(current, id), within);
+
           if (Option.isSome(answer) && Option.isSome(answer.value)) return answer.value.value;
           yield* ended(current);
+
           return failed(
             Option.isNone(answer)
               ? "The computer-use helper did not answer in time, so it was stopped."

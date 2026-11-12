@@ -19,7 +19,11 @@ import { isRecord, type WireValue } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
 import { ConfigProvider, Duration, Effect, Layer, Predicate, PubSub, Stream } from "effect";
 import { TestClock } from "effect/testing";
-import { composeMacCommands, type MacCommandClient } from "./compose-mac-commands.js";
+import {
+  composeMacCommands,
+  type MacCommandClient,
+  type MacCommandsDependencies,
+} from "./compose-mac-commands.js";
 import {
   COMPUTER_HELPER_FAILURE,
   COMPUTER_HELPER_OP,
@@ -97,17 +101,21 @@ const computerCommand = (id: string, conversationId: string, app: string): MacCo
 /** The helper as a script: the apps it names, every request it was asked, and each action answered done. */
 function scriptedHelper(apps: readonly ComputerApp[]) {
   const asked: ComputerHelperRequest[] = [];
+
   const helper: ComputerUseHelperSeam = {
     ask: (request) =>
       Effect.sync(() => {
         asked.push(request);
+
         if (request.op !== COMPUTER_HELPER_OP.DESCRIBE_APP) return { outcome: { done: "pressed" } };
         const app = apps.find((each) => each.name === request.app);
+
         return app === undefined
           ? { failure: COMPUTER_HELPER_FAILURE.NOT_FOUND, message: "No such app." }
           : { described: app };
       }),
   };
+
   return { helper, asked };
 }
 
@@ -275,6 +283,7 @@ const subject = (
   type ToldAsk =
     | { readonly id: string; readonly command: string }
     | { readonly id: string; readonly app: string };
+
   const told: ToldAsk[][] = [];
   const written: MacCommandMode[] = [];
   const reported: string[] = [];
@@ -284,9 +293,11 @@ const subject = (
     const asks = Array.isArray(payload.asks) ? payload.asks : [];
     told.push(
       asks.flatMap((ask): ToldAsk[] => {
-        if (!isRecord(ask) || typeof ask.id !== "string") return [];
-        if (typeof ask.command === "string") return [{ id: ask.id, command: ask.command }];
-        return isRecord(ask.app) && typeof ask.app.name === "string"
+        if (!isRecord(ask) || !Predicate.isString(ask.id)) return [];
+
+        if (Predicate.isString(ask.command)) return [{ id: ask.id, command: ask.command }];
+
+        return isRecord(ask.app) && Predicate.isString(ask.app.name)
           ? [{ id: ask.id, app: ask.app.name }]
           : [];
       }),
@@ -296,7 +307,7 @@ const subject = (
   return Effect.gen(function* () {
     const moves = yield* PubSub.unbounded<void>();
 
-    const composer = yield* composeMacCommands({
+    const dependencies: MacCommandsDependencies = {
       kernel: { runMode: { sendsNetwork: true }, now: () => NOW, emit },
       account: { capabilitiesActive: () => gate.signedIn },
       accountId: () => gate.account ?? ACCOUNT,
@@ -310,21 +321,25 @@ const subject = (
         return true;
       }),
       client: service.client,
-      ...(gate.computer === undefined
-        ? {}
-        : {
-            computer: {
-              helper: gate.computer.helper,
-              enabled: Effect.sync(() => gate.computer?.enabled === true),
-              allowedApps: Effect.sync(() => [...(gate.computer?.allowed ?? [])]),
-              allowApp: (app: string) =>
-                Effect.sync(() => {
-                  gate.computer?.allowed.push(app);
-                  return true;
-                }),
-            },
+    };
+
+    if (gate.computer !== undefined) {
+      dependencies.computer = {
+        helper: gate.computer.helper,
+        enabled: Effect.sync(() => gate.computer?.enabled === true),
+        allowedApps: Effect.sync(() => [...(gate.computer?.allowed ?? [])]),
+        allowApp: (app: string) =>
+          Effect.sync(() => {
+            gate.computer?.allowed.push(app);
+
+            return true;
           }),
-    }).pipe(Effect.provide(machine(spawner, reported)));
+      };
+    }
+
+    const composer = yield* composeMacCommands(dependencies).pipe(
+      Effect.provide(machine(spawner, reported)),
+    );
 
     return {
       composer,
@@ -823,15 +838,18 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const scripted = scriptedHelper([SIMULATOR]);
+
       const gate: Gate = {
         // Note that shell commands' Always allow lets no app go unasked.
         mode: MAC_COMMAND_MODE.ALWAYS,
         signedIn: true,
         computer: { helper: scripted.helper, enabled: true, allowed: [] },
       };
+
       const service = scriptedService();
       const first = computerCommand(COMMAND.id, AGENT, "Simulator");
       service.queue(first, NOW);
+
       const { composer, asks, answer } = yield* subject(
         service,
         scriptedSpawner(() => ({ exitCode: 0 })),
@@ -880,6 +898,7 @@ it.effect(
         const service = scriptedService();
         const command = computerCommand(COMMAND.id, AGENT, "Terminal");
         service.queue(command, NOW);
+
         const { composer, told } = yield* subject(
           service,
           scriptedSpawner(() => ({ exitCode: 0 })),

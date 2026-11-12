@@ -109,10 +109,12 @@ export function hostAssemblyLayerFor(
   dependencies: HostSeamDependencies,
 ): Layer.Layer<HostAssemblyTag | ServiceReach, DuplicateGatewayMethod | DuplicateHostAct> {
   const seams = hostSeamLayersFor(dependencies);
+
   const spawning = Layer.provideMerge(
     NodeChildProcessSpawner.layer,
     Layer.mergeAll(NodeFileSystem.layer.pipe(Layer.provide(armedWatchLayer)), NodePath.layer),
   );
+
   return Layer.provide(
     // The desktop runs every platform concern: it is the host they were written for.
     hostAssemblyLayer(ALL_HOST_PLATFORM_CONCERNS),

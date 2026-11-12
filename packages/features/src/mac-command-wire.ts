@@ -149,16 +149,20 @@ const appName = EffectSchema.String.check(
   EffectSchema.isMinLength(1),
   EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_APP_CHARS),
 );
+
 const elementIndex = EffectSchema.Int.check(
   EffectSchema.isBetween({ minimum: 0, maximum: COMPUTER_BOUNDS.MAX_ELEMENT_INDEX }),
 );
+
 const coordinate = EffectSchema.Finite.check(
   EffectSchema.isBetween({
     minimum: -COMPUTER_BOUNDS.MAX_COORDINATE,
     maximum: COMPUTER_BOUNDS.MAX_COORDINATE,
   }),
 );
+
 const typed = EffectSchema.String.check(EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_TEXT_CHARS));
+
 const keyName = EffectSchema.String.check(
   EffectSchema.isMinLength(1),
   EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_KEY_CHARS),
@@ -306,7 +310,9 @@ export function storedMacCommandText(command: MacCommand): string {
 /** A command the queue kept, read back; none where a computer request no longer reads, which no Mac could run. */
 export function macCommandOfStored(stored: StoredMacCommand): MacCommand | undefined {
   const { id, kind, command, timeoutSeconds } = stored;
+
   if (kind === MAC_COMMAND_KIND.SHELL) return { id, kind, command, timeoutSeconds };
+
   return Option.match(decodeStoredComputerRequest(command), {
     onNone: () => undefined,
     onSome: ({ conversationId, action }) => ({ id, kind, conversationId, action, timeoutSeconds }),

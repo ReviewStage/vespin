@@ -530,6 +530,7 @@ export function claimMacCommands(
     Effect.map(claimWaiting({ userId, queuedSince, kinds, now }), (rows) =>
       rows.flatMap((row) => {
         const command = macCommandOfStored(row);
+
         return command === undefined ? [] : [command];
       }),
     ),

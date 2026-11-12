@@ -28,9 +28,7 @@ import {
   APP_SETTING_SCHEMA,
   computerUseAppsOf,
   computerUseAppsWith,
-  experimentOn,
   MAC_COMMAND_MODE,
-  NO_EXPERIMENTS,
 } from "@repo/settings";
 import { entityPool } from "@repo/sync";
 import { Effect, Exit, Layer, Option, Scope, Stream } from "effect";
@@ -127,6 +125,7 @@ type HostAssemblyRequirements =
  */
 function macComputerUse(settings: SettingsComposer, helper: ComputerUseHelperSeam): MacComputerUse {
   const stored = Effect.map(Effect.orDie(settings.store.snapshot()), (snapshot) => snapshot.stored);
+
   return {
     helper,
     enabled: Effect.map(
@@ -447,8 +446,10 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         }),
       }),
     );
+
     // Note that the helper is optional, so the Mac's commands stand where this process ships none.
     const computerHelper = yield* Effect.serviceOption(ComputerUseHelper);
+
     const macCommands = platform.has(HOST_PLATFORM_CONCERN.MAC_COMMANDS)
       ? yield* served(
           composeMacCommands({
