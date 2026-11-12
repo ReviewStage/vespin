@@ -6,8 +6,6 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
-import { hide as hideSplash } from "expo-splash-screen";
-import { useEffect } from "react";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
@@ -18,12 +16,16 @@ import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
 import { useShareSheet } from "../share-sheet.js";
+import { holdSplash } from "../splash.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
+
+// The splash stands until the host's first screen has drawn (`HostProvider`), rather than going with expo-router's own hide over a blank screen.
+holdSplash();
 
 /**
  * The screens, each behind the account's standing: the tabs, Settings, and
@@ -127,17 +129,8 @@ function KeptScreens() {
   );
 }
 
-/**
- * The root, with the splash taken down once it first draws. Note that
- * expo-router takes the splash down once a launch, a frame after its
- * navigation is ready, and that one try can be lost (its frame canceled, or
- * the native splash not standing yet), which leaves the splash over every
- * screen for the whole launch while the app answers under it. So the root
- * takes it down as well; a hide with no splash standing does nothing.
- */
+/** The root: the host, the one notice of a write that did not go, and the screens under both. */
 export default function RootLayout() {
-  useEffect(() => hideSplash(), []);
-
   return (
     <HostProvider>
       <FailureNoticeProvider>
