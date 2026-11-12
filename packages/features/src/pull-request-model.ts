@@ -19,6 +19,7 @@ import {
   type ReviewState,
 } from "./agent-wire.js";
 import { saidWords } from "./integration-health.js";
+import { MERGE_QUEUE_ENTRY_STATE, type MergeQueueEntryState } from "./merge-queue-wire.js";
 import {
   MERGE_METHOD,
   type MergeMethod,
@@ -65,6 +66,38 @@ export const QUEUED_LABEL = "Queued";
 /** How a pull request the merge queue holds is said where its place is known: "Queued #3", else "Queued". */
 export function queuedLabel(position: number | undefined): string {
   return position === undefined ? QUEUED_LABEL : `${QUEUED_LABEL} #${position}`;
+}
+
+/** Where a pull request in a merge queue stands, as the Merge queue page's badge says it. */
+export const MERGE_QUEUE_STAGE = {
+  WAITING: "waiting",
+  CHECKING: "checking",
+  MERGING: "merging",
+  FAILING: "failing",
+} as const;
+
+export type MergeQueueStage = (typeof MERGE_QUEUE_STAGE)[keyof typeof MERGE_QUEUE_STAGE];
+
+/** The stage each of GitHub's queue states reads as: a locked queue still merges what it holds, so it reads as merging. */
+const STAGE_OF_STATE = {
+  [MERGE_QUEUE_ENTRY_STATE.QUEUED]: MERGE_QUEUE_STAGE.WAITING,
+  [MERGE_QUEUE_ENTRY_STATE.AWAITING_CHECKS]: MERGE_QUEUE_STAGE.CHECKING,
+  [MERGE_QUEUE_ENTRY_STATE.MERGEABLE]: MERGE_QUEUE_STAGE.MERGING,
+  [MERGE_QUEUE_ENTRY_STATE.LOCKED]: MERGE_QUEUE_STAGE.MERGING,
+  [MERGE_QUEUE_ENTRY_STATE.UNMERGEABLE]: MERGE_QUEUE_STAGE.FAILING,
+} as const satisfies Record<MergeQueueEntryState, MergeQueueStage>;
+
+/** Each stage in the word its badge says. */
+export const MERGE_QUEUE_STAGE_LABEL = {
+  [MERGE_QUEUE_STAGE.WAITING]: "Waiting",
+  [MERGE_QUEUE_STAGE.CHECKING]: "Checking",
+  [MERGE_QUEUE_STAGE.MERGING]: "Merging",
+  [MERGE_QUEUE_STAGE.FAILING]: "Failing",
+} as const satisfies Record<MergeQueueStage, string>;
+
+/** The stage a queue entry in GitHub's `state` stands at. */
+export function mergeQueueStage(state: MergeQueueEntryState): MergeQueueStage {
+  return STAGE_OF_STATE[state];
 }
 
 /** What leaving GitHub's merge queue costs the pull requests behind it, said as Remove from queue and a queued Close each ask. */

@@ -83,6 +83,7 @@ import {
   historyRetryMutation,
   pagesQuery,
 } from "../live-reads.js";
+import { useMergeQueueRoute } from "../merge-queue-route.js";
 import {
   beginPanelSpan,
   PANEL_SPAN,
@@ -788,6 +789,7 @@ export function useTasksTab(input: {
   const pagesNow = useRef({ board: routedBoard, person: routedPerson });
   pagesNow.current = { board: routedBoard, person: routedPerson };
   const routedAutomations = useAutomationsRoute({ narrow: narrowRoom });
+  const routedMergeQueue = useMergeQueueRoute();
 
   // The routed places a door into a place of the window's state leaves, the Inbox, an agent's page, and a workspace not there, which stand in the task's place.
   const overPlan =
@@ -1033,6 +1035,22 @@ export function useTasksTab(input: {
   useEffect(() => {
     if (automationsElsewhere && listedStep !== undefined) turnAutomations(listedStep);
   }, [automationsElsewhere, listedStep, turnAutomations]);
+
+  // The Merge queue page is the listed workspace's too, so another listed in its place stands its page in the step's place.
+  const mergeQueueWorkspace =
+    routedMergeQueue.standingIn === undefined
+      ? undefined
+      : workspaceOfSlug(viewed.workspaces, routedMergeQueue.standingIn)?.id;
+
+  const mergeQueueElsewhere =
+    listedWorkspace !== undefined &&
+    mergeQueueWorkspace !== undefined &&
+    mergeQueueWorkspace !== listedWorkspace.id;
+
+  const turnMergeQueue = routedMergeQueue.onTurn;
+  useEffect(() => {
+    if (mergeQueueElsewhere && listedStep !== undefined) turnMergeQueue(listedStep);
+  }, [mergeQueueElsewhere, listedStep, turnMergeQueue]);
 
   // The Inbox lists the listed workspace's items alone, so another listed in its place stands that one's Inbox, on its list, in the step's place.
   const inboxWorkspace =
@@ -1355,7 +1373,8 @@ export function useTasksTab(input: {
     routedAdmin.open ||
     routedBoard.open ||
     routedPerson.userId !== undefined ||
-    routedAutomations.open;
+    routedAutomations.open ||
+    routedMergeQueue.open;
 
   const stateShown = shown && !routedOver;
   const columnInView = stateShown && !historyRoute.open && !overPlan && !sidePanel.fullScreen;
@@ -1918,6 +1937,7 @@ export function useTasksTab(input: {
 
     if (routedBoard.open) turnBoard(step);
     else if (routedAutomations.standingIn !== undefined) turnAutomations(step);
+    else if (routedMergeQueue.standingIn !== undefined) turnMergeQueue(step);
     else if (routedInbox.standingIn !== undefined) turnInbox(step);
     else if (input.homeView.open && boundFor === undefined) turnHome(step);
 

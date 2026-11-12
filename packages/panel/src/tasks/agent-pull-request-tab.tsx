@@ -177,6 +177,7 @@ import {
   pullRequestPublishedQuery,
   pullRequestQuery,
 } from "../live-reads.js";
+import { useMergeQueueOpener } from "../merge-queue-route.js";
 import { pictureQuery } from "../picture-query.js";
 import { scrollerOf } from "../scroll-within.js";
 import { SHELL_ROOM } from "../shell-room.js";
@@ -3586,6 +3587,8 @@ function PullRequestTabBody({
       : source.published;
 
   const held = headerPullRequestOf(landed(parts.pullRequest), landed(parts.checks), published);
+  // The pill offers the Merge queue page while the account has it on.
+  const openMergeQueue = useMergeQueueOpener();
 
   const none = [parts.pullRequest, parts.checks, parts.conversation].some(
     (part) => part.kind === PART.NONE,
@@ -3789,6 +3792,11 @@ function PullRequestTabBody({
                           queued={headerQueuedOf(overview, published, held.number)}
                           shown={shown}
                           writes={writes}
+                          onViewQueue={
+                            openMergeQueue === undefined
+                              ? undefined
+                              : () => openMergeQueue(held.url)
+                          }
                         />
                       </div>
                     )}

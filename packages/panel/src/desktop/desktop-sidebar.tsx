@@ -109,6 +109,7 @@ import {
   ArrowDownFromLineIcon,
   ArrowUpToLineIcon,
   FolderPlusIcon,
+  GLYPH,
   MailOpenIcon,
 } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
@@ -122,7 +123,9 @@ import { LinkWorkspaceProvider, openInTabOf } from "../copy-link-item.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
+import { MERGE_QUEUE_WORDS } from "../history-titles.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
+import { useMergeQueueOn } from "../merge-queue-route.js";
 import {
   endWindowSpan,
   leaveWindowSpan,
@@ -135,6 +138,7 @@ import {
   useAutomationsDoor,
   useBoardDoor,
   useInboxDoor,
+  useMergeQueueDoor,
 } from "../places/routed-doors.js";
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
 import type { NavigationHistory } from "../places/window-history.js";
@@ -1647,6 +1651,33 @@ function SidebarAutomationsRow({
   );
 }
 
+/**
+ * The Merge queue page's row, after the Automations page's and drawn as it
+ * is: the queue's glyph and its name, with no count, since counting would
+ * read every repository's queue as the window opens. A press opens the
+ * window's Merge queue page, and the row is the place shown while it stands.
+ */
+function SidebarMergeQueueRow({
+  current,
+  disabled,
+  onOpen,
+}: {
+  current: boolean;
+  disabled: boolean;
+  onOpen: () => void;
+}): React.JSX.Element {
+  return (
+    <NavItem
+      icon={<GLYPH.QUEUED />}
+      current={current ? NAV_CURRENT.PAGE : undefined}
+      disabled={disabled}
+      onClick={onOpen}
+    >
+      {MERGE_QUEUE_WORDS}
+    </NavItem>
+  );
+}
+
 /** What the sidebar is drawn from. */
 interface DesktopSidebarProps {
   sidebar: SidebarCollapse;
@@ -1794,6 +1825,8 @@ function SidebarColumn({
   const board = useBoardDoor(tasks);
   const admin = useAdminDoor(tasks);
   const automations = useAutomationsDoor(tasks);
+  const mergeQueue = useMergeQueueDoor(tasks);
+  const mergeQueueOn = useMergeQueueOn();
   const inbox = useInboxDoor(tasks);
   const automationsStanding = useAutomationsPlace();
   const inAdmin = place === ROUTED_PLACE.ADMIN;
@@ -1801,6 +1834,7 @@ function SidebarColumn({
   const inAutomations = onTasks && automationsStanding.open;
   const inBoard = onTasks && !inAdmin && place === ROUTED_PLACE.BOARD;
   const inPerson = onTasks && !inAdmin && place === ROUTED_PLACE.PERSON;
+  const inMergeQueue = onTasks && !inAdmin && place === ROUTED_PLACE.MERGE_QUEUE;
   // Opening an automation sees its failed run, which the Automations row is marked for until then.
   const { place: automationsPlace } = automationsStanding;
 
@@ -1824,6 +1858,7 @@ function SidebarColumn({
   const standingIn =
     inInbox ||
     inAutomations ||
+    inMergeQueue ||
     inBoard ||
     inPerson ||
     inAdmin ||
@@ -1854,6 +1889,7 @@ function SidebarColumn({
   const openInbox = () => inbox.open();
   const openBoard = () => board.open();
   const openAutomations = () => automations.open();
+  const openMergeQueue = () => mergeQueue.open();
   const openAdmin = () => admin.open();
   const goHome = () => arriveFor(() => tasks.onGoHome());
   // Home is the place of no task bound, standing on its own route. New task's
@@ -2225,6 +2261,13 @@ function SidebarColumn({
           onOpen={chosen(openAutomations)}
           onOpenInTab={inTab({ kind: LINK_DESTINATION.AUTOMATIONS })}
         />
+        {mergeQueueOn ? (
+          <SidebarMergeQueueRow
+            current={inMergeQueue}
+            disabled={!tasks.signedIn}
+            onOpen={chosen(openMergeQueue)}
+          />
+        ) : null}
       </SidebarPlaces>
       <SidebarRule />
     </>
