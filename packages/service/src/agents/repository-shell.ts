@@ -183,19 +183,23 @@ const NOT_HELD_EXIT = 3;
 
 /**
  * The agent's own checkout claimed from a fresh fork of its workspace's
- * drive (`workspace-drive.ts`): the picked repository's folder moved to
- * where the agent's checkout stands, a link left at the folder pointing
- * back to it, the branch asked for fetched into its remote-tracking ref and
- * checked out tracking it, the branch added to the remote's fetched ones
- * where the drive's clone of the default branch alone left it out, its writes the group's (`GROUP_WRITES`), and the
+ * drive (`workspace-drive.ts`): in the picked repository's folder, the
+ * branch asked for fetched into its remote-tracking ref and checked out
+ * tracking it, the branch added to the remote's fetched ones where the
+ * drive's clone of the default branch alone left it out; then the folder
+ * moved to where the agent's checkout stands, a link left at the folder
+ * pointing back to it, its writes the group's (`GROUP_WRITES`), and the
  * checkout recorded under the name the caller keeps. Note that the
  * checkout is moved rather than linked to, because a harness started in a
  * linked folder reads its working directory as the folder linked to,
- * which no reader of the checkout's path knows; that a fork with no
- * checkout in the folder exits `NOT_HELD_EXIT` before anything moves, so
- * the caller clones instead; and that the empty checkout of a repository
- * with no commits yet, whose remote still names no HEAD, is already as
- * GitHub has it, as a refresh finds it (`REFRESH_SCRIPT`).
+ * which no reader of the checkout's path knows; that it moves only once
+ * the branch stands, so a fetch that failed leaves no checkout where the
+ * agent's stands, which the next launch clones rather than finishing one
+ * on the wrong branch; that a fork with no checkout in the folder exits
+ * `NOT_HELD_EXIT` before anything runs, so the caller clones instead; and
+ * that the empty checkout of a repository with no commits yet, whose
+ * remote still names no HEAD, is left with its HEAD on the branch asked
+ * for, as the clone leaves one (`CHECKOUT_SCRIPT`).
  */
 const WORKSPACE_CLAIM_SCRIPT = [
   "set -e",
@@ -203,21 +207,20 @@ const WORKSPACE_CLAIM_SCRIPT = [
   LINK_SANDBOX_STATE_FOLDER,
   `folder="$${SANDBOX_VARIABLE.FOLDER}"`,
   `if [ -L "$folder" ] || [ ! -d "$folder/.git" ]; then exit ${NOT_HELD_EXIT}; fi`,
+  `branch="$${SANDBOX_VARIABLE.BRANCH}"`,
+  'refspec="+refs/heads/$branch:refs/remotes/origin/$branch"',
+  'if ! git -C "$folder" config --get-all remote.origin.fetch | grep -qxF "$refspec"; then git -C "$folder" remote set-branches --add origin "$branch"; fi',
+  'if git -C "$folder" fetch --quiet origin "$refspec"; then',
+  '  git -C "$folder" checkout --quiet -B "$branch" --track "origin/$branch"',
+  "else",
+  '  if git -C "$folder" rev-parse --quiet --verify HEAD >/dev/null; then exit 1; fi',
+  '  head="$(git -C "$folder" ls-remote origin HEAD)"',
+  '  test -z "$head"',
+  '  git -C "$folder" symbolic-ref HEAD "refs/heads/$branch"',
+  "fi",
   "rm -rf repository",
   'mv "$folder" repository',
   `ln -s ${SANDBOX_PATH.CHECKOUT} "$folder"`,
-  "cd repository",
-  `branch="$${SANDBOX_VARIABLE.BRANCH}"`,
-  'refspec="+refs/heads/$branch:refs/remotes/origin/$branch"',
-  'if ! git config --get-all remote.origin.fetch | grep -qxF "$refspec"; then git remote set-branches --add origin "$branch"; fi',
-  'if git fetch --quiet origin "$refspec"; then',
-  '  git checkout --quiet -B "$branch" --track "origin/$branch"',
-  "else",
-  "  if git rev-parse --quiet --verify HEAD >/dev/null; then exit 1; fi",
-  '  head="$(git ls-remote origin HEAD)"',
-  '  test -z "$head"',
-  "fi",
-  "cd ..",
   `mkdir -p ${SANDBOX_STATE_FOLDER}`,
   `printf '%s' "$${SANDBOX_VARIABLE.REPOSITORY}" > ${SANDBOX_PATH.CHECKOUT_RECORD}`,
 ].join("\n");
