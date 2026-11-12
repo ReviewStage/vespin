@@ -138,4 +138,48 @@ describe("the bundled host's uninstall", () => {
       expect(yield* standing([stateRoot, folders.owned])).toEqual([false, true]);
     }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer))),
   );
+
+  it.effect("removes the state where a file lands in it as it empties", () =>
+    Effect.gen(function* () {
+      const { home, stateRoot } = yield* mac;
+      const http = recordingHttpClient(() => jsonResponse({ done: true }));
+      let landed = false;
+
+      // Note that the first removal of the state has the app's keep-awake choice land in it, which fails it as not empty, as Node's `rm` fails with ENOTEMPTY.
+      const raced = Layer.effect(
+        FileSystem.FileSystem,
+        Effect.map(FileSystem.FileSystem, (fileSystem) => ({
+          ...fileSystem,
+          remove: (path: string, options?: Parameters<typeof fileSystem.remove>[1]) =>
+            Effect.suspend(() => {
+              if (path !== stateRoot || landed) return fileSystem.remove(path, options);
+              landed = true;
+
+              return Effect.andThen(
+                fileSystem.writeFileString(`${stateRoot}/keep-awake.json`, "{}\n"),
+                Effect.fail(
+                  systemError({
+                    // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- Effect's systemError takes its tag as data
+                    _tag: "Unknown",
+                    module: "FileSystem",
+                    method: "remove",
+                    pathOrDescriptor: path,
+                  }),
+                ),
+              );
+            }),
+        })),
+      ).pipe(Layer.provide(NodeFileSystem.layer));
+
+      const left = yield* uninstallBundledHost({
+        stateRoot,
+        home,
+        version: "0.1.0",
+        removeAgentFolders: false,
+      }).pipe(Effect.provide(Layer.merge(http.layer, raced)));
+
+      expect(left).toBe(HOST_LEAVE_OUTCOME.LEFT);
+      expect(yield* standing([stateRoot])).toEqual([false]);
+    }).pipe(Effect.scoped, Effect.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer))),
+  );
 });
