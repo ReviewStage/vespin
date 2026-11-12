@@ -6,11 +6,10 @@
  * sandbox is opened: the one standing under it is resumed, and
  * one is created where none stands, or where the one standing can never
  * resume, its snapshot gone. A sandbox the call creates is created from the
- * first of these that stands, and set up in its `onCreate`: from the latest
- * snapshot of the sandbox of the agent
- * it was continued or forked from, with a fork of the drive that sandbox
- * owns where it owns one, its checkout as that agent left it at its last
- * stop; from the agents' image (`../coder-host/agent-image.ts`), which
+ * first of these that stands, and set up in its `onCreate`: from the image
+ * with a fork of the drive the sandbox of the agent it was continued
+ * or forked from owns, where its Start handed one, its checkout as that
+ * agent left it at its last stop; from the agents' image (`../coder-host/agent-image.ts`), which
  * carries the runner and every tool the harnesses run, with a fork of its
  * workspace's drive (`../workspace-drive.ts`), every repository the
  * workspace connects in a folder of its own, the picked repository's folder
@@ -453,8 +452,9 @@ function sandboxPlace(session: string, name: string, sandboxSessionId: string): 
 
 /**
  * What a created sandbox was created from, which says how its checkout is
- * made: a snapshot of the sandbox of the agent it was started from, a fork
- * of its workspace's drive, or the image alone.
+ * made: a fork of the drive of the agent it was started from, a fork of its
+ * workspace's drive, or the image alone. A sandbox reopened from its own
+ * snapshot (`reopenedOf`) counts as the first, its checkout on that snapshot.
  */
 const CREATED_FROM = { SOURCE: "source", WORKSPACE: "workspace", IMAGE: "image" } as const;
 
@@ -867,8 +867,8 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
 
   /**
    * The agent's checkout in the sandbox just created, as it was created:
-   * from the source agent's snapshot it stands as that agent left it, and is
-   * cloned only where that snapshot holds none; on a fork of the workspace's
+   * on a fork of the source agent's drive it stands as that agent left it,
+   * and is cloned only where that fork holds none; on a fork of the workspace's
    * drive the repository's folder there is claimed and brought up to the
    * agent's branch, or cloned where the fork holds none (`claimAgentCheckout`);
    * from the image alone the repository is cloned whole.
@@ -1018,11 +1018,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       const sandbox = checkoutOver(context, opened, userId, { github }, github.fullName);
       yield* writeAgentCredential(sandbox, github);
       yield* checkedOutAs(checkout.agent, sandbox, checkout.read, from);
-
-      // A source's snapshot ran the setup on its own disk already, which this one is a copy of.
-      if (from !== CREATED_FROM.SOURCE) {
-        yield* setUp(context, later, checkout.agent, opened, yield* checkout.setup);
-      }
+      yield* setUp(context, later, checkout.agent, opened, yield* checkout.setup);
     });
 
   /**
@@ -1083,28 +1079,6 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     });
 
   /**
-   * The sandbox of the agent this one was started from and its latest
-   * snapshot, where the Start named one and it still holds one; none where
-   * it could not be read, which the open then passes by.
-   */
-  const sourceSnapshotOf = (agent: Agent) =>
-    Effect.gen(function* () {
-      const source = agent.startedFrom?.sandbox;
-
-      if (source === undefined) return undefined;
-      const snapshotId = (yield* api.get(source))?.snapshotId;
-
-      return snapshotId === undefined ? undefined : { sandbox: source, snapshotId };
-    }).pipe(
-      Effect.catch((failure) =>
-        Effect.as(
-          Effect.logWarning(`A source agent's sandbox was not read: ${failure.message}`),
-          undefined,
-        ),
-      ),
-    );
-
-  /**
    * The agent's sandbox opened from the first attempt whose snapshot and
    * drive stand (`gotOn`), each one found gone at the create logged and
    * passed by, as the open ended.
@@ -1148,13 +1122,12 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
   /**
    * The agent's sandbox opened through `getOrCreate` (`gotOn`), its
    * repository checked out where it has one and the sandbox was created:
-   * from its source's snapshot, with a fork of the drive the source owns
-   * where it owns one, else from the image with a fork of its workspace's
-   * drive where no fill holds it, else from the image alone, each
-   * snapshot or drive found gone at the create passed by for the next. The
-   * repository, on the write token its start minted (`read`), and the
-   * source's snapshot are read at once, since none waits on another. Nothing
-   * fills the workspace's drive here:
+   * from the image with a fork of the drive its source's sandbox owns where
+   * a Start handed one (`../coder-host/takeover.ts`), else from the image
+   * with a fork of its workspace's drive where no fill holds it, else from
+   * the image alone, each drive found gone at the create passed by for the
+   * next. The repository is read on the write token its start minted
+   * (`read`). Nothing fills the workspace's drive here:
    * its fills keep it (`../workspace-drive.ts`), and a start that finds none
    * clones.
    */
@@ -1166,9 +1139,8 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     setup: Effect.Effect<SandboxSetup | undefined>,
   ) =>
     Effect.gen(function* () {
-      const [read, source] = yield* Effect.all([repositoryRead, sourceSnapshotOf(agent)], {
-        concurrency: "unbounded",
-      });
+      const read = yield* repositoryRead;
+      const source = agent.startedFrom?.sandbox;
 
       const checkout =
         hasRepository(agent) && read !== undefined ? { agent, read, setup } : undefined;
@@ -1192,25 +1164,16 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         yield* reportedBroken(checkout.read.workspaceId, DRIVE_BROKEN.UNFINISHED);
       }
 
-      const fromSource = (drive: SandboxDrive | undefined): CreateAttempt[] =>
-        source === undefined
+      const attempts: readonly CreateAttempt[] = [
+        ...(source === undefined
           ? []
           : [
               {
                 from: CREATED_FROM.SOURCE,
-                snapshot: { snapshotId: source.snapshotId, holdsUser: true },
-                drive,
+                snapshot: undefined,
+                drive: { fork: { ownedBy: source }, at: WORKSPACE_DRIVE.MOUNT },
               },
-            ];
-
-      const attempts: readonly CreateAttempt[] = [
-        // A source of drives hands its checkout on its drive; one from before them, on its snapshot alone.
-        ...fromSource(
-          source === undefined
-            ? undefined
-            : { fork: { ownedBy: source.sandbox }, at: WORKSPACE_DRIVE.MOUNT },
-        ),
-        ...fromSource(undefined),
+            ]),
         ...(drive === undefined || !driveReady
           ? []
           : [

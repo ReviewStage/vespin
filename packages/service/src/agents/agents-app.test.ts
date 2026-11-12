@@ -742,12 +742,12 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   );
 
   /** A source whose stopped sandbox holds a change it never committed, over a checkout and remote on disk, and a continue of it; GitHub answers its pull request's reads as `pull` does, where given. */
-  const copyScenario = (t: TestContext, pull?: RepositoryScript, snapshotted = false) =>
+  const copyScenario = (t: TestContext, pull?: RepositoryScript, ownsDrive = false) =>
     Effect.gen(function* () {
       vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureOidcToken());
       const checkout = sourceCheckout(yield* Effect.promise(() => temporaryDirectory(t, "copy-")));
       writeFileSync(join(checkout.checkout, "invites.ts"), "export const ttl = 7;\n");
-      const sandbox = sourceSandbox(checkout, "stopped", snapshotted);
+      const sandbox = sourceSandbox(checkout, "stopped", ownsDrive);
 
       const opened = yield* sourceAgentOn(
         pull === undefined ? sandbox.answer : (sent) => sandbox.answer(sent) ?? pull(sent),
@@ -822,7 +822,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   );
 
   it.effect(
-    "a continue of a source whose sandbox stopped on a snapshot wakes nothing and copies nothing, and tells the new agent its checkout is the source's own",
+    "a continue of a source whose sandbox stopped owning a drive wakes nothing and copies nothing, and tells the new agent its checkout is the source's own",
     (t) =>
       Effect.gen(function* () {
         const { sandbox, continued } = yield* copyScenario(t, undefined, true);
