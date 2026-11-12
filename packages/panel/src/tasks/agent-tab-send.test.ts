@@ -16,6 +16,7 @@ import { Effect } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
+import { useDraftsOwner } from "../composer-drafts.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import {
   composerEditor,
@@ -39,7 +40,7 @@ import type { AgentThreads } from "./threads-dock.js";
  * words, and the row the service writes for it lands in the line's place,
  * drawn once, whichever of the row and the send's answer comes first; a
  * message refused stays where it went, marked Not delivered, whether its tab
- * stood as it landed or not, its alert offering Retry and Edit; the working line stands from the
+ * stood as it landed or not, or the window reloaded since, its alert offering Retry and Edit; the working line stands from the
  * press, before the service takes the line. Synthetic throughout.
  */
 
@@ -513,6 +514,44 @@ test("a refusal that lands while the tab is closed is drawn where the line went 
 
   assert.equal(statusOf(tab.lines("Rebase on main")[0]), "Not delivered");
   assert.equal(composerEditor(tab.container).textContent, "");
+});
+
+/** Signs an account in to the window, as the panel's root hands it the drafts and the lines beside them, once the test's first tree stands, which signs no one in. */
+function signIn(): void {
+  const SignedIn = () => {
+    useDraftsOwner({ id: "user-ada", email: "ada@example.com" });
+
+    return null;
+  };
+
+  const root = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(root);
+  act(() => root.render(createElement(SignedIn)));
+}
+
+/** Ends the window's document and draws it afresh, as a reload or a relaunch does. */
+function reload(): void {
+  act(() => {
+    window.dispatchEvent(new Event("pagehide"));
+  });
+
+  for (const root of roots.splice(0)) act(() => root.unmount());
+  document.body.innerHTML = "";
+  signIn();
+}
+
+test("a message not delivered still stands where it went once the window reloads, its Retry sending it under the key it went under", async () => {
+  const before = await drawnTab([]);
+  signIn();
+  await before.send("Rebase on main");
+  await before.answer(0, { failure: AGENT_CALL_FAILURE.UNANSWERED });
+
+  reload();
+  const tab = await drawnTab([]);
+  assert.equal(statusOf(tab.lines("Rebase on main")[0]), "Not delivered");
+
+  await tab.pick("Rebase on main", "Retry");
+  assert.deepEqual(tab.sent, [{ text: "Rebase on main", clientKey: before.sent[0]?.clientKey }]);
 });
 
 test("a line another hand sent after a stopped turn puts the tab to work once the list names the turn it queued: no Stopped under it, and ⌘ turns Send into Queue", async () => {
