@@ -344,6 +344,7 @@ export function ExperimentalPage({
   }
 
   const workspaceEntries = entries.filter(isWorkspaceEntry).toSorted(byName);
+
   const accountEntries = entries
     .filter((entry) => !isWorkspaceExperiment(entry.key))
     .toSorted(byName);
