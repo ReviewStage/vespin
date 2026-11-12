@@ -21,11 +21,10 @@ import {
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
 import {
+  foldedTaskRows,
   TASK_TREE_GROUP,
   type TaskTree,
   type TaskTreeGroup,
-  type TaskTreeNode,
-  taskTreeNodes,
 } from "@repo/features/task-tree-model";
 import {
   TASK_RELATION_KIND,
@@ -58,12 +57,14 @@ import {
   RelationRow,
   ROW_ACTION_TONE,
   type RowAction,
+  RowForEach,
   RowList,
   type RowSubmenu,
   type RowSwipe,
   Screen,
   SplitView,
   shareLink,
+  type TaskFold,
   TaskHead,
   TaskPreview,
   TaskRow,
@@ -72,7 +73,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { type ReactElement, useState } from "react";
+import { type ReactElement, useMemo, useState } from "react";
 import { useAgentRowActs, useFollowedAgent, useHeldAgentStep } from "../agents/use-agent.js";
 import { archiveQuestion } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -156,6 +157,9 @@ const STATUS_ORDER: readonly TaskStatus[] = [
 
 /** What parts who created a task from when, on its page. */
 const LINE_PART = " · ";
+
+/** No parent's sub-tasks stand open, as a section opens. */
+const NONE_OPEN: ReadonlySet<string> = new Set();
 
 /** What the list's search says where it finds nothing. */
 function noMatchWords(search: string): string {
@@ -332,17 +336,18 @@ function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly
   );
 }
 
-/** One task's row and, folded under it, its sub-tasks' rows, each a level deeper, to any depth: the one row every list of tasks draws, the Search tab's among them. */
-export function TaskNodeRow({
-  node,
+/** One task's row, set in by how deep it stands and led by its sub-tasks' fold where it has any: the one row every list of tasks draws, the Search tab's among them. */
+export function TaskListRow({
+  task,
   listing,
   depth = 0,
+  fold,
 }: {
-  readonly node: TaskTreeNode;
+  readonly task: TaskSummary;
   readonly listing: TasksListing;
   readonly depth?: number;
+  readonly fold?: TaskFold | undefined;
 }) {
-  const { task, children } = node;
   const look = listing.lookOf(task);
 
   return (
@@ -366,14 +371,23 @@ export function TaskNodeRow({
               listing.workspace.slug ?? listing.workspace.id,
             )
       }
-      subRows={
-        children.length === 0
-          ? undefined
-          : children.map((child) => (
-              <TaskNodeRow key={child.task.id} node={child} listing={listing} depth={depth + 1} />
-            ))
-      }
+      fold={fold}
     />
+  );
+}
+
+/** A run of tasks on rows of their own, none nested, recycled as the list scrolls: what a search finds. */
+export function TaskRows({
+  tasks,
+  listing,
+}: {
+  readonly tasks: readonly TaskSummary[];
+  readonly listing: TasksListing;
+}) {
+  return (
+    <RowForEach data={tasks} keyOf={(task) => task.id}>
+      {(task) => <TaskListRow task={task} listing={listing} />}
+    </RowForEach>
   );
 }
 
@@ -465,6 +479,21 @@ function GroupSection({
   readonly listing: TasksListing;
 }) {
   const place = placeIn(group, listing);
+  // Note that the section holds which parents stand open, rather than each row, since a recycled row draws another task once scrolled past.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
+  const rows = useMemo(
+    () => foldedTaskRows(group.rows, (taskId) => opened.has(taskId)),
+    [group.rows, opened],
+  );
+
+  const toggle = (taskId: string) =>
+    setOpened((was) => {
+      const next = new Set(was);
+
+      if (!next.delete(taskId)) next.add(taskId);
+
+      return next;
+    });
 
   return (
     <ListSection
@@ -477,9 +506,20 @@ function GroupSection({
         if (task !== undefined) place(task);
       }}
     >
-      {taskTreeNodes(group.rows).map((node) => (
-        <TaskNodeRow key={node.task.id} node={node} listing={listing} />
-      ))}
+      <RowForEach data={rows} keyOf={(row) => row.task.id}>
+        {(row) => (
+          <TaskListRow
+            task={row.task}
+            listing={listing}
+            depth={row.depth}
+            fold={
+              row.open === undefined
+                ? undefined
+                : { open: row.open, onToggle: () => toggle(row.task.id) }
+            }
+          />
+        )}
+      </RowForEach>
     </ListSection>
   );
 }
@@ -520,9 +560,7 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
     return (
       <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
         <ListSection>
-          {found.map((task) => (
-            <TaskNodeRow key={task.id} node={{ task, children: [] }} listing={listing} />
-          ))}
+          <TaskRows tasks={found} listing={listing} />
         </ListSection>
       </RowList>
     );

@@ -58,6 +58,7 @@ import {
   PATH_PART,
   previewMessages,
   ROW_ACTION_TONE,
+  RowForEach,
   RowList,
   SCOPE_LOOK,
   type Scope,
@@ -166,18 +167,43 @@ function InboxRows({
 
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
-      {listed.map((each) => (
-        <InboxRow
-          key={each.item.id}
-          listed={each}
-          readerId={readerId}
-          pictureOf={pictureOf}
-          onMark={onMark}
-          onRemind={onRemind}
-          onResolve={onResolve}
-        />
-      ))}
+      <InboxItemRows
+        listed={listed}
+        readerId={readerId}
+        pictureOf={pictureOf}
+        onMark={onMark}
+        onRemind={onRemind}
+        onResolve={onResolve}
+      />
     </RowList>
+  );
+}
+
+type InboxRowActs = {
+  readonly readerId: string | undefined;
+  /** Each member's picture by their id, read once by the list the row stands in. */
+  readonly pictureOf: PictureOf;
+  readonly onMark: (itemId: string, unread: boolean) => void;
+  /** Opens Remind me on the thread, which a swipe from the trailing edge offers. */
+  readonly onRemind: (item: InboxItem) => void;
+  /** Resolves the open thread, which a full swipe from the trailing edge runs. */
+  readonly onResolve: (item: InboxItem) => void;
+};
+
+/**
+ * A run of Inbox items, each on its own `InboxRow`, recycled as the list
+ * scrolls, so an Inbox of a thousand threads mounts only the rows near the
+ * screen: the one run every list of Inbox items draws, the Search tab's
+ * among them.
+ */
+export function InboxItemRows({
+  listed,
+  ...acts
+}: InboxRowActs & { readonly listed: readonly InboxListed[] }) {
+  return (
+    <RowForEach data={listed} keyOf={(each) => each.item.id}>
+      {(each) => <InboxRow listed={each} {...acts} />}
+    </RowForEach>
   );
 }
 
@@ -189,26 +215,15 @@ function InboxRows({
  * while it stands open, which a full swipe runs, or opens Remind me. A long
  * press lifts its preview, the thread's newest messages, over the same acts.
  * On an iPad it drags out as its vespin.dev link.
- * The one row every list of Inbox items draws, the Search tab's among them.
  */
-export function InboxRow({
+function InboxRow({
   listed,
   readerId,
   pictureOf,
   onMark,
   onRemind,
   onResolve,
-}: {
-  readonly listed: InboxListed;
-  readonly readerId: string | undefined;
-  /** Each member's picture by their id, read once by the list the row stands in. */
-  readonly pictureOf: PictureOf;
-  readonly onMark: (itemId: string, unread: boolean) => void;
-  /** Opens Remind me on the thread, which a swipe from the trailing edge offers. */
-  readonly onRemind: (item: InboxItem) => void;
-  /** Resolves the open thread, which a full swipe from the trailing edge runs. */
-  readonly onResolve: (item: InboxItem) => void;
-}) {
+}: InboxRowActs & { readonly listed: InboxListed }) {
   const { holder, item } = listed;
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
