@@ -286,7 +286,7 @@ export function spotlightChanges(
  * the system has not answered.
  */
 export interface SpotlightIndexPort {
-  /** Empties the index and adds the items, answered once the items are added, and refused where emptying was refused by then. */
+  /** Empties the index and adds the items, answered once both are done, or a while after the items where emptying is never answered, and refused where either was. */
   readonly replaceAll: (items: readonly SpotlightItem[]) => Promise<void>;
   /** Adds the items, or updates those it holds by their ids. */
   readonly index: (items: readonly SpotlightItem[]) => Promise<void>;

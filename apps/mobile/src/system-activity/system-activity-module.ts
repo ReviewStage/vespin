@@ -27,7 +27,7 @@ declare class SystemActivityModule extends NativeModule<SystemActivityEvents> {
   setCurrent(activity: IosActivity): Promise<void>;
   /** Takes back the activity of this page, unless another screen's stands by now. */
   clearCurrent(webpageUrl: string): Promise<void>;
-  /** Empties the app's Spotlight index and adds the items, answered once they are added, and refused where emptying it was refused by then. */
+  /** Empties the app's Spotlight index and adds the items, answered once both are done, or a while after the items where emptying it is never answered, and refused where either was. */
   replaceAll(items: readonly SpotlightItem[]): Promise<void>;
   /** Adds the items to the app's Spotlight index, or updates those it holds by their ids. */
   index(items: readonly SpotlightItem[]): Promise<void>;

@@ -69,14 +69,60 @@ final class ContinuedLinks {
   }
 }
 
-/// A call's refusal, written by one completion and read by another, on whichever queues the system answers on.
-final class Refusal: @unchecked Sendable {
-  private let lock = NSLock()
-  private var error: Error?
+/// A `replaceAll`'s two answers, the delete-all's and the items', settling its promise once both are in, or a while after the items' where the delete-all never answers, refused where either was. Note that the system documents no order between the two completions, so neither is assumed to come first; and that the delete-all is waited on only so long, because the system was seen never to answer one on an index it held nothing of. Its state is read and written on its own queue alone.
+final class Replacement: @unchecked Sendable {
+  /// How long the delete-all may still answer once the items are added.
+  private static let grace: DispatchTimeInterval = .seconds(5)
 
-  func hold(_ error: Error) { lock.withLock { self.error = error } }
+  private let queue = DispatchQueue(label: "dev.vespin.spotlight.replacement")
+  private let settle: @Sendable (Error?) -> Void
+  private var emptying: Result<Void, Error>?
+  private var adding: Result<Void, Error>?
+  private var settled = false
 
-  var held: Error? { lock.withLock { error } }
+  init(_ settle: @escaping @Sendable (Error?) -> Void) {
+    self.settle = settle
+  }
+
+  func emptied(_ error: Error?) {
+    queue.async {
+      self.emptying = Self.result(error)
+      self.settleOnceAnswered()
+    }
+  }
+
+  func added(_ error: Error?) {
+    queue.async {
+      self.adding = Self.result(error)
+      self.settleOnceAnswered()
+      self.queue.asyncAfter(deadline: .now() + Self.grace) { self.settleUnemptied() }
+    }
+  }
+
+  private static func result(_ error: Error?) -> Result<Void, Error> {
+    error.map { .failure($0) } ?? .success(())
+  }
+
+  private static func failure(_ result: Result<Void, Error>?) -> Error? {
+    guard case .failure(let error) = result else { return nil }
+    return error
+  }
+
+  /// Settles once both have answered, or at once where the items were refused.
+  private func settleOnceAnswered() {
+    guard !settled, let adding else { return }
+    let refusal = Self.failure(adding) ?? Self.failure(emptying)
+    guard emptying != nil || refusal != nil else { return }
+    settled = true
+    settle(refusal)
+  }
+
+  /// Settles with the items' answer alone where the delete-all has not answered by the grace's end.
+  private func settleUnemptied() {
+    guard !settled, let adding else { return }
+    settled = true
+    settle(Self.failure(adding))
+  }
 }
 
 public final class SystemActivityModule: Module {
@@ -124,17 +170,18 @@ public final class SystemActivityModule: Module {
     }.runOnQueue(.main)
 
     // Note that each Spotlight call is handed to the index on Expo's async queue, which is serial, so the system takes them in the order JavaScript made them, and each is answered by its own completion alone. No call waits on the answer to the one before, because the system was seen never to answer a delete-all on an index it held nothing of, and every call awaiting it then never reached the index.
-    // Note that a delete-all refused by the time its items are added refuses the whole call, so the index is never taken as holding the lists alone while an earlier account's items may stand in it; the system answers in the order it was asked, so a refusal comes before the items' answer if it comes at all.
+    // Note that a refused delete-all refuses the whole call (`Replacement`), so the index is never taken as holding the lists alone while an earlier account's items may stand in it.
     AsyncFunction("replaceAll") { (items: [SpotlightRecord], promise: Promise) in
-      let emptying = Refusal()
+      let replacement = Replacement(Self.answer(promise))
       self.index.deleteAllSearchableItems { error in
-        guard let error else { return Self.log.notice("Spotlight's delete-all was answered") }
-        Self.log.error("Spotlight's delete-all was refused: \(error.localizedDescription, privacy: .public)")
-        emptying.hold(error)
+        if let error {
+          Self.log.error("Spotlight's delete-all was refused: \(error.localizedDescription, privacy: .public)")
+        } else {
+          Self.log.notice("Spotlight's delete-all was answered")
+        }
+        replacement.emptied(error)
       }
-      self.index.indexSearchableItems(items.map(Self.searchableItem)) { error in
-        Self.answer(promise)(error ?? emptying.held)
-      }
+      self.index.indexSearchableItems(items.map(Self.searchableItem), completionHandler: replacement.added)
     }
 
     AsyncFunction("index") { (items: [SpotlightRecord], promise: Promise) in
