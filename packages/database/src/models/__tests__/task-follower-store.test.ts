@@ -79,6 +79,7 @@ it.layer(getTestDB())("the members following a task", (it) => {
           followerId: mallory,
           machines: true,
         });
+
         const outsiderAdded = yield* followTask(dean, {
           taskId,
           followerId: mallory,
