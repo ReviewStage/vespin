@@ -246,6 +246,7 @@ export {
   type TranscriptToggles,
   toggledAt,
   transcriptItems,
+  transcriptOriginOf,
 } from "./transcript-model.js";
 
 export {
