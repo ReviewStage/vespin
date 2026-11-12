@@ -64,6 +64,9 @@ const PLACEHOLDER_STANDING: AgentStanding = {
 
 const HEADING_MARK = "## ";
 
+/** How far a schema's levels are indented where it is printed for reading; its size is measured unprinted. */
+const SCHEMA_INDENT = 2;
+
 /** The environments whose turns ride Vercel Queues, as `turn-delivery.ts` decides it. */
 const QUEUED_ENVIRONMENTS: ReadonlySet<string> = new Set([
   DEPLOYMENT_ENVIRONMENT.PRODUCTION,
@@ -208,7 +211,7 @@ function sectionsOf(text: string): AdminPromptSection[] {
 }
 
 function prompt(label: string, source: string, text: string): AdminCatalogPrompt {
-  return { label, source, chars: text.length, sections: sectionsOf(text) };
+  return { label, source, chars: text.length, sections: sectionsOf(text), text };
 }
 
 function prompts(): AdminCatalogPrompt[] {
@@ -239,6 +242,8 @@ function prompts(): AdminCatalogPrompt[] {
 function tools(): AdminCatalogTool[] {
   return [...TOOL_CATALOG.values()].map((tool) => ({
     name: tool.name,
+    description: tool.description,
+    inputSchema: JSON.stringify(tool.inputSchema, null, SCHEMA_INDENT),
     definitionChars: tool.description.length + JSON.stringify(tool.inputSchema).length,
     loading: tool.alwaysLoad ? ADMIN_TOOL_LOADING.FIRST_TURN : ADMIN_TOOL_LOADING.SEARCH,
     gate: tool.gate ?? null,

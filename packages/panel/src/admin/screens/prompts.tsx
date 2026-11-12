@@ -25,11 +25,16 @@ import {
 import { AdminSection } from "../charts/stat-card.js";
 import { PageNote } from "../chrome/notes.js";
 import type { ViewerAccount } from "../chrome/page-header.js";
-import { CatalogPage } from "./catalog-page.js";
+import {
+  type CatalogDetail,
+  CatalogDetailDialog,
+  CatalogPage,
+  useCatalogDetail,
+} from "./catalog-page.js";
 
 /** What the page holds, said once over it. */
 const PROMPTS_NOTE =
-  "The prompts this deploy hands a model, read from the code that holds them. The coding agent's are measured for a sandbox agent on a repository with every workspace experiment off. Prompts a module keeps private, such as the title writer's, are not listed.";
+  "The prompts this deploy hands a model, read from the code that holds them; press one for its whole text. The coding agent's are measured for a sandbox agent on a repository with every workspace experiment off. Prompts a module keeps private, such as the title writer's, are not listed.";
 
 /** How many rows the table's skeleton stands. */
 const SKELETON_ROWS = 4;
@@ -83,7 +88,22 @@ const SECTION_COLUMNS = sectionColumn.columns([
   }),
 ]);
 
+/** A prompt's detail as its dialog shows it: its source, its size, then its whole text. */
+function promptDetail(prompt: AdminCatalogPrompt): CatalogDetail {
+  return {
+    title: prompt.label,
+    facts: [
+      { label: "Source", value: <Text font={TEXT_FONT.MONO}>{prompt.source}</Text> },
+      { label: "Size", value: characters(prompt.chars) },
+      { label: "Sections", value: formatCount(prompt.sections.length) },
+    ],
+    blocks: [{ title: "Text", code: prompt.text }],
+  };
+}
+
 function PromptSections({ catalog }: { catalog: AdminCatalog | undefined }): React.JSX.Element {
+  const detail = useCatalogDetail<AdminCatalogPrompt>();
+
   return (
     <>
       <AdminSection>
@@ -101,6 +121,7 @@ function PromptSections({ catalog }: { catalog: AdminCatalog | undefined }): Rea
             columns={PROMPT_COLUMNS}
             rows={catalog.prompts}
             getRowId={(prompt) => prompt.label}
+            onRowPress={detail.show}
             empty="This deploy lists no prompts."
             minWidth={DATA_TABLE_MIN_WIDTH.MEDIUM}
           />
@@ -121,6 +142,13 @@ function PromptSections({ catalog }: { catalog: AdminCatalog | undefined }): Rea
             />
           </AdminSection>
         ))}
+
+      <CatalogDetailDialog
+        detail={detail.shown === undefined ? undefined : promptDetail(detail.shown)}
+        open={detail.open}
+        onClose={detail.close}
+        onExited={detail.exited}
+      />
     </>
   );
 }

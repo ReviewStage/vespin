@@ -4,7 +4,9 @@
  * Nothing in it is read from the database or counted from use: each figure
  * is measured from the module that holds it, so it says what the running
  * deploy offers, never what was called. A size is in characters of the text
- * a model is handed, since a token count depends on its tokenizer.
+ * a model is handed, since a token count depends on its tokenizer. The text
+ * itself comes too (each tool's description and schema, each prompt whole),
+ * so a reader can see what a size measures; it is code, never a member's.
  */
 
 /** Where a coding agent meets a tool: listed from its first turn, or found only through tool search. */
@@ -34,6 +36,10 @@ export type AdminTurnPipeline = (typeof ADMIN_TURN_PIPELINE)[keyof typeof ADMIN_
 /** One of Vespin's own tools as a coding agent is offered it. */
 export interface AdminCatalogTool {
   name: string;
+  /** What the agent is told the tool does, as its definition words it. */
+  description: string;
+  /** Its input's JSON Schema, as the agent is handed it, printed for reading. */
+  inputSchema: string;
   /** Its description and its input's JSON Schema together, in characters. */
   definitionChars: number;
   loading: AdminToolLoading;
@@ -55,6 +61,8 @@ export interface AdminCatalogPrompt {
   source: string;
   chars: number;
   sections: AdminPromptSection[];
+  /** The whole text as measured, a placeholder in each member's place. */
+  text: string;
 }
 
 /** One limit only the service holds, as its constant says it. */

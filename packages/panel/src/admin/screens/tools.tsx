@@ -24,11 +24,16 @@ import {
 import { AdminSection, STAT_LAYOUT, StatCards, type StatSpec } from "../charts/stat-card.js";
 import { PageNote } from "../chrome/notes.js";
 import type { ViewerAccount } from "../chrome/page-header.js";
-import { CatalogPage } from "./catalog-page.js";
+import {
+  type CatalogDetail,
+  CatalogDetailDialog,
+  CatalogPage,
+  useCatalogDetail,
+} from "./catalog-page.js";
 
 /** What the page holds, said once over it. */
 const TOOLS_NOTE =
-  "Vespin's own tools as a coding agent is offered them, in the order its tool list names them. A tool loaded on the first turn costs its definition on every turn; one found on search costs a search step the first time it is called. A gated tool is offered only where its gate opens.";
+  "Vespin's own tools as a coding agent is offered them, in the order its tool list names them; press one for what the agent is told. A tool loaded on the first turn costs its definition on every turn; one found on search costs a search step the first time it is called. A gated tool is offered only where its gate opens.";
 
 const LOADING_LABEL = {
   [ADMIN_TOOL_LOADING.FIRST_TURN]: "First turn",
@@ -91,7 +96,23 @@ const TOOL_STATS: readonly StatSpec<AdminCatalog>[] = [
   },
 ];
 
+/** A tool's detail as its dialog shows it: where it loads, its gate, its size, then what the agent is told. */
+function toolDetail(tool: AdminCatalogTool): CatalogDetail {
+  return {
+    title: tool.name,
+    facts: [
+      { label: "Loads", value: LOADING_LABEL[tool.loading] },
+      { label: "Gate", value: tool.gate ?? "Every agent" },
+      { label: "Definition", value: characters(tool.definitionChars) },
+    ],
+    prose: tool.description,
+    blocks: [{ title: "Input schema", code: tool.inputSchema }],
+  };
+}
+
 function ToolSections({ catalog }: { catalog: AdminCatalog | undefined }): React.JSX.Element {
+  const detail = useCatalogDetail<AdminCatalogTool>();
+
   return (
     <>
       <AdminSection>
@@ -113,11 +134,19 @@ function ToolSections({ catalog }: { catalog: AdminCatalog | undefined }): React
             columns={TOOL_COLUMNS}
             rows={catalog.tools}
             getRowId={(tool) => tool.name}
+            onRowPress={detail.show}
             empty="This deploy offers no tools."
             minWidth={DATA_TABLE_MIN_WIDTH.MEDIUM}
           />
         )}
       </AdminSection>
+
+      <CatalogDetailDialog
+        detail={detail.shown === undefined ? undefined : toolDetail(detail.shown)}
+        open={detail.open}
+        onClose={detail.close}
+        onExited={detail.exited}
+      />
     </>
   );
 }

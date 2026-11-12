@@ -8,7 +8,20 @@
 
 import type { AdminCatalog } from "@repo/features/admin-catalog-wire";
 import { readFailedWords } from "@repo/features/words";
+import {
+  CodeCard,
+  DIALOG_SIZE,
+  Dialog,
+  DialogActions,
+  Fact,
+  Facts,
+  GAP,
+  Stack,
+  Text,
+} from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { copyThroughShell } from "../../copy-feedback.js";
 import { useAdminDoors } from "../admin-doors.js";
 import { adminCatalogQuery, useAdminSignOut } from "../admin-queries.js";
 import { adminReadView } from "../admin-read-view.js";
@@ -65,4 +78,83 @@ export function CatalogPage({
         </AdminPage>,
       ),
   });
+}
+
+/** One block of a detail's text: what it is, and its words. */
+export interface CatalogDetailBlock {
+  title: string;
+  code: string;
+}
+
+/** What a detail dialog shows of the row pressed: its facts by name, its prose, and its blocks of code. */
+export interface CatalogDetail {
+  title: string;
+  facts: readonly { label: string; value: React.ReactNode }[];
+  prose?: string | undefined;
+  blocks: readonly CatalogDetailBlock[];
+}
+
+/**
+ * The row a table opened, held through the dialog's fade out so its words
+ * stay while it goes: `open` presses a row, `close` puts the dialog away.
+ */
+export function useCatalogDetail<Row>() {
+  const [shown, setShown] = useState<Row | undefined>(undefined);
+  const [open, setOpen] = useState(false);
+
+  return {
+    shown,
+    open,
+    show: (row: Row) => {
+      setShown(row);
+      setOpen(true);
+    },
+    close: () => setOpen(false),
+    exited: () => setShown(undefined),
+  };
+}
+
+/** A pressed row's detail over the page: its facts, then its text, each block with its Copy. */
+export function CatalogDetailDialog({
+  detail,
+  open,
+  onClose,
+  onExited,
+}: {
+  detail: CatalogDetail | undefined;
+  open: boolean;
+  onClose: () => void;
+  onExited: () => void;
+}): React.JSX.Element | null {
+  if (detail === undefined) return null;
+
+  return (
+    <Dialog
+      open={open}
+      title={detail.title}
+      size={DIALOG_SIZE.WIDE}
+      onDismiss={onClose}
+      onExited={onExited}
+      actions={<DialogActions onDone={onClose} />}
+    >
+      <Stack gap={GAP.FIELD}>
+        <Facts>
+          {detail.facts.map((fact) => (
+            <Fact key={fact.label} label={fact.label}>
+              {fact.value}
+            </Fact>
+          ))}
+        </Facts>
+        {detail.prose === undefined ? null : <Text>{detail.prose}</Text>}
+        {detail.blocks.map((block) => (
+          <CodeCard
+            key={block.title}
+            title={block.title}
+            code={block.code}
+            copy={copyThroughShell}
+          />
+        ))}
+      </Stack>
+    </Dialog>
+  );
 }

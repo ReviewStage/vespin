@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import type { AdminUserList, AdminWorkspaceList } from "@repo/features/admin-answer-wire";
+import { ADMIN_TOOL_LOADING, ADMIN_TURN_PIPELINE } from "@repo/features/admin-catalog-wire";
 import { ADMIN_WORKSPACES_KIND } from "@repo/features/admin-wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -7,14 +8,16 @@ import { afterEach, expect, test, vi } from "vitest";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { ToastHost } from "../toast.js";
 import { type AdminDoors, AdminDoorsProvider, type AdminReads } from "./admin-doors.js";
+import { ToolsScreen } from "./screens/tools.js";
 import { UsersScreen } from "./screens/users.js";
 import { WorkspacesScreen } from "./screens/workspaces.js";
 
 /**
  * admin-search-and-star.test.ts -- the Users and Workspaces pages as a reader
  * meets them once read: a search finds each word it holds wherever the row
- * keeps it, an empty table says whether a search emptied it, and a star the
- * service refuses says so and goes back. Synthetic accounts.
+ * keeps it, an empty table says whether a search emptied it, a star the
+ * service refuses says so and goes back, and a tool pressed on the Tools page
+ * opens what the agent is told of it. Synthetic accounts and tools.
  */
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
@@ -194,4 +197,38 @@ test("a star the service refuses goes back and says so in a toast", async () => 
     expect(document.body.textContent).toContain("The favorite could not be saved. Try again."),
   );
   expect(star()?.getAttribute("aria-label")).toBe("Favorite Jane Doe");
+});
+
+test("a tool pressed on the Tools page opens its description and input schema", async () => {
+  const tool = {
+    name: "fetch_weather",
+    description: "Read tomorrow's forecast for a city.",
+    inputSchema: '{ "type": "object" }',
+    definitionChars: 56,
+    loading: ADMIN_TOOL_LOADING.SEARCH,
+    gate: null,
+  };
+  const catalog = async () => ({
+    generatedAt: Date.UTC(2026, 9, 24),
+    tools: [tool],
+    prompts: [],
+    limits: [],
+    pipeline: ADMIN_TURN_PIPELINE.IN_PROCESS,
+  });
+
+  const page = await draw(createElement(ToolsScreen, QUIET), { catalog });
+  const row = page.querySelector("tbody tr");
+
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  await act(async () => row?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+
+  const dialog = await vi.waitFor(() => {
+    const found = document.querySelector('[role="dialog"]');
+
+    expect(found).not.toBeNull();
+
+    return found;
+  });
+  expect(dialog?.textContent).toContain("Read tomorrow's forecast for a city.");
+  expect(dialog?.textContent).toContain('"type": "object"');
 });
