@@ -266,6 +266,64 @@ protecting should be entered.
 
 After rotating anything here, dispatch a rehearsal run before the next tag.
 
+## Moving to another signing team
+
+Squirrel.Mac, under electron-updater, installs an update only where the new bundle
+satisfies the installed app's designated requirement, and the requirement codesign writes
+by default names the signing team alone. So an app signed by one team refuses every
+update signed by another, and a team can only change through a **bridge release**: one
+still signed by the old team whose bundle carries an explicit requirement accepting either
+team's Developer ID. Installs on the bridge, or any later build, then take an update
+signed by the new team; installs older than the bridge do not, and are stuck until their
+owner downloads the DMG by hand.
+
+The app bundle is signed with that requirement by `signElectronBuilderApp`
+(`apps/desktop/scripts/electron-builder-hooks.mjs`): `macAppDesignatedRequirement` in
+`apps/desktop/scripts/package-config.mjs` names every team in `MAC_SIGNING_TEAM_ID`, the
+retiring team and Stage Incorporated's. Nested code keeps codesign's own requirement, since
+one naming the app's identifier would fail every nested check. After signing, the build
+reads the requirement back with `codesign -d -r-` and refuses to go on where it does not
+name every team, so a release cannot lose the bridge unnoticed. An ad-hoc package carries
+no such requirement. To see what an installed build accepts:
+
+```sh
+codesign -d -r- /Applications/Vespin.app
+```
+
+The switch itself is a change of credentials, not of code:
+
+1. **Ship the bridge** under the retiring team and leave it out long enough that the
+   installs still updating have taken it. `app:launch` in PostHog carries `app_version`;
+   the switch is safe for whoever launched a bridge build or later.
+2. **Create the new team's Developer ID Application certificate.** Only the team's Account
+   Holder can, under **Certificates, Identifiers & Profiles → Certificates**, from a
+   certificate signing request Keychain Access makes on their Mac (**Keychain Access →
+   Certificate Assistant → Request a Certificate From a Certificate Authority**, saved to
+   disk). Install the downloaded certificate on that Mac and export it with its private key
+   as a password-protected `.p12`, as "Export the signing certificate" above says.
+3. **Create the new team's App Store Connect API key** for notarization, with the
+   Developer role, under **Users and Access → Integrations**, and download its `.p8` at
+   once. Notarization must come from the team that signed, so the old team's key stops
+   working the moment the certificate changes.
+4. **Replace the five Apple secrets**: `MACOS_CERTIFICATE_P12_BASE64`,
+   `MACOS_CERTIFICATE_PASSWORD`, `APPLE_API_KEY_P8_BASE64`, `APPLE_API_KEY_ID`, and
+   `APPLE_API_ISSUER_ID`, with the commands under "GitHub Actions secrets". The workflow
+   and its scripts never name a team, so nothing else changes.
+5. **Rehearse** with a manual dispatch, and on the rehearsal's unzipped app check that
+   `codesign -dvv` names the new team's `Authority=Developer ID Application` and that
+   `codesign -d -r-` still prints the bridge requirement. Install that app over a bridge
+   install on a Mac to see what macOS asks for again: its Keychain item, since the
+   Keychain trusts the app that made an item by its signature, and every permission the
+   app holds, since macOS ties a grant to the signing team.
+6. **Tag the switch release.** Its changelog entry says what the switch costs an install
+   in plain words: signing in again once where macOS does not let the new build read the
+   old one's Keychain item, and granting again any permission the app held, such as the
+   microphone or a folder. `PRIVACY.md` says the same where it describes what the Mac
+   keeps.
+7. **Drop the retiring team** from `MAC_SIGNING_TEAM_ID` in a later release, once no
+   install that could still update is older than the switch; a build signed by the new
+   team never needs it.
+
 ## Emergency fallback: release from a Mac
 
 **Use this only when Actions cannot cut the release** — the hosted path above is the
