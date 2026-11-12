@@ -8,8 +8,9 @@
  *
  * - The read takes any member, and answers whether this deployment holds
  *   the bot and the Slack team the workspace's bot is connected to.
- * - A connect takes an owner or admin, asks Slack which team the bot's token
- *   answers for (`auth.test`), and keeps it as the workspace's installation.
+ * - A connect takes an owner or admin who is someone in the team the bot's
+ *   token answers for (`auth.test`), and keeps it as the workspace's
+ *   installation.
  * - A disconnect takes an owner or admin, and deletes the installation,
  *   every member's Slack id with it; the bot stays installed in Slack, where
  *   only Slack's admins remove it.
@@ -169,7 +170,7 @@ export const readSlackBot = Effect.fn("web/readSlackBot")(function* (
   return yield* workspaceSlackBot(workspace, userId);
 });
 
-/** The bot connected to the team its token answers for; unavailable where the deployment holds no bot or Slack did not answer. */
+/** The bot connected to the team its token answers for, by someone in that team; unavailable where the deployment holds no bot or Slack did not answer. */
 export const connectSlackBot = Effect.fn("web/connectSlackBot")(function* (
   userId: string,
   workspaceId: string,
@@ -185,6 +186,15 @@ export const connectSlackBot = Effect.fn("web/connectSlackBot")(function* (
     ),
     Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
   );
+
+  const inTeam = yield* bot.inTeam(team.id, userId).pipe(
+    Effect.tapError((failure) =>
+      Effect.logWarning("The Slack bot could not find who connects it", failure.message),
+    ),
+    Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
+  );
+
+  if (!inTeam) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
 
   const txid = yield* hostedStoreOrUnavailable(
     linkSlackInstallation({
