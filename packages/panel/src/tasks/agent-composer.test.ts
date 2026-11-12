@@ -493,7 +493,7 @@ test("a / opening the message lists the box's commands ahead of the skills, a sk
 
   typeInComposer(box.container, "/");
   await settle();
-  assert.deepEqual(names(), ["/model", "/compact", "/clear", "/release", "/deploy"]);
+  assert.deepEqual(names(), ["/model", "/compact", "/clear", "/goal", "/release", "/deploy"]);
   typeInComposer(box.container, "new");
   await settle();
   // An alias finds its command.
