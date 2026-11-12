@@ -1,8 +1,10 @@
 /**
  * queue-change.ts -- one member's change to a coding agent's queue, as their window and their MCP's `message_agent` ask it.
  *
- * The queue is its starter's own messages to come, so the starter alone
- * changes it. A change that leaves its first message free to go while the
+ * Any member who may message the agent changes its queue, every message in
+ * it whoever queued it, as they may steer it (`controlsAgent`): its starter
+ * alone for one on the starter's own GitHub token or Mac. A message keeps
+ * the member who queued it, whose message it goes as, whoever edits it. A change that leaves its first message free to go while the
  * agent stands idle hands it on here, since no turn's end is coming to: the
  * message is claimed before the queue is read back, so the answer never
  * lists a message about to go, and sent once the answer is out
@@ -31,6 +33,7 @@ import { type AgentQueueChange, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { DateTime, Effect, Option } from "effect";
 import { afterResponse } from "../../http/after-response.js";
 import { HOSTED_REFUSAL, hostedStoreOrUnavailable } from "../../http/http-effect.js";
+import { controlsAgent } from "../agent-reach.js";
 import { claimNext, sendClaimed, sendQueued, wireQueue } from "./agent-queue.js";
 import { routedSessions } from "./runtime-sessions.js";
 
@@ -138,15 +141,15 @@ const applyChange = Effect.fn("web/applyQueueChange")(function* (
 
 /**
  * The member's change to the agent's queue, and the queue as it then
- * stands: refused as not permitted for anyone but the agent's starter, who
- * alone changes it, and a teammate reads it.
+ * stands: refused as not permitted for a member who may not message the
+ * agent, who reads it.
  */
 export const changeAgentQueue = Effect.fn("web/changeAgentQueue")(function* (
   userId: string,
   agent: Agent,
   body: AgentQueueChange,
 ) {
-  if (agent.userId !== userId) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+  if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* applyChange(userId, agent, body);
 
   const claimed = HANDS_ON.has(body.change)
