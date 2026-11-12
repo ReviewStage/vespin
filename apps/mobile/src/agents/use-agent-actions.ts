@@ -75,7 +75,7 @@ export interface ArchiveAsk {
   readonly question: ArchiveQuestion;
   /** Reads the agent `agentId` names afresh, and answers whether the question may stand: false where a later ask overtook this one. */
   readonly ask: (agentId: string) => Promise<boolean>;
-  /** The question's act pressed: runs `archive` where the agent stands as it was asked about, and otherwise asks again, calling `present` once the fresh read lands. */
+  /** The question's act pressed: runs `archive` where the agent stands as it was asked about; where it was asked about at rest and the list now has it working, reads it afresh and asks again (`present`) where it works, or runs `archive` where it rests after all. */
   readonly answered: (archive: () => void, present: () => void) => void;
 }
 
@@ -98,21 +98,23 @@ export function useArchiveAsk(agentId: string): ArchiveAsk {
   const [askedWorking, setAskedWorking] = useState(false);
   const latest = useRef(0);
 
-  const ask = (asked: string): Promise<boolean> => {
+  /** Reads the agent `asked` names afresh and keeps where it stands for the question: whether it works, or none where a later ask overtook this one. */
+  const read = (asked: string): Promise<boolean | undefined> => {
     latest.current += 1;
     const mine = latest.current;
 
     return readAgent(asked).then((fresh) => {
-      if (latest.current !== mine) return false;
-      setAskedWorking(fresh === undefined || agentStillWriting(fresh.status));
+      if (latest.current !== mine) return undefined;
+      const working = fresh === undefined || agentStillWriting(fresh.status);
+      setAskedWorking(working);
 
-      return true;
+      return working;
     });
   };
 
   return {
     question: archiveQuestion(askedWorking),
-    ask,
+    ask: (asked) => read(asked).then((working) => working !== undefined),
     answered: (archive, present) => {
       const workingNow = agent !== undefined && agentStillWriting(agent.status);
 
@@ -122,8 +124,12 @@ export function useArchiveAsk(agentId: string): ArchiveAsk {
         return;
       }
 
-      void ask(agentId).then((stands) => {
-        if (stands) present();
+      // Note that the fresh read decides, not the list, so a list that lags the service never asks the same question twice.
+      void read(agentId).then((working) => {
+        if (working === undefined) return;
+
+        if (working) present();
+        else archive();
       });
     },
   };

@@ -1103,10 +1103,13 @@ export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
   const letGo = () => setAsked((was) => (was === undefined ? was : { ...was, presented: false }));
 
   return {
-    archive: (agentId) =>
+    archive: (agentId) => {
+      // Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
+      letGo();
       void readAfresh(agentId).then((stands) => {
         if (stands) setAsked({ agentId, presented: true });
-      }),
+      });
+    },
     ask: (
       <ConfirmAsk
         title={question.title}
