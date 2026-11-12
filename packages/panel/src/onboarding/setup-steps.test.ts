@@ -293,3 +293,18 @@ test("the survey keeps its answers on the account, Other's words among them, and
 
   assert.deepEqual(kept, [answers, answers], "answers kept are not kept again");
 });
+
+test("an account a team invited finishes setup at Connect an agent without connecting one", async () => {
+  // Setup stands at its last step, Connect an agent, for an account a team invited, with no agent connected.
+  const place = JSON.stringify({ audience: "invited", at: 1 });
+  writeAppState(stateWith({}, { settings: appSettingsWire(settingsView({ setupPlace: place })) }));
+  answeringDeletes(place, []);
+  const finished = { count: 0 };
+  const container = setupDrawn([], finished);
+
+  // Note that an agent on the account's Mac or a host runs on the sign-in already there, so none is required here.
+  act(() => buttonStarting(container, "Skip").click());
+  await act(() => Promise.resolve());
+
+  assert.equal(finished.count, 1);
+});

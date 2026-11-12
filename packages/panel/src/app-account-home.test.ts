@@ -212,8 +212,9 @@ test("an account a team invited stays in setup once it connects an agent, until 
   await settle();
   await deliver({ ...ADA, account: { status: ACCOUNT_STATUS.SIGNED_OUT } }, 2);
   await deliver(graceInvited(false), 3);
-  await vi.waitFor(() => assert.equal(finishStands(), true));
-  assert.equal(button("Finish").disabled, true, "Finish waits on an agent");
+  // Note that the step offers Skip until an agent is connected, since one on a Mac or a host needs none.
+  await vi.waitFor(() => assert.ok(button("Skip")));
+  assert.equal(finishStands(), false, "Finish waits on an agent or a skip");
 
   // Note that connecting the agent moves no place, so setup stands on the step it stood on.
   await deliver(graceInvited(true), 4);
