@@ -123,19 +123,25 @@ const openQueuedWorkspace = Effect.fnUntraced(function* (
   return { github, member, workspace, task };
 });
 
-/** The GraphQL body as GitHub answers it, and nothing for any other request. */
-function graphqlAnswering(body: object): RepositoryScript {
-  return (sent) =>
-    new URL(sent.url).pathname === "/graphql" && sent.method === "POST"
-      ? Response.json(body)
-      : undefined;
-}
-
 const REFUSED = {
   type: "FORBIDDEN",
   path: ["r0", "mergeQueue"],
   message: "Resource not accessible by integration",
 };
+
+/** A GraphQL body that refuses the queue: its alias's data, where it answers any, and its errors. */
+interface RefusingAnswer {
+  readonly data?: { readonly r0: { readonly mergeQueue: null } };
+  readonly errors: readonly (typeof REFUSED)[];
+}
+
+/** The GraphQL body as GitHub answers it, and nothing for any other request. */
+function graphqlAnswering(body: RefusingAnswer): RepositoryScript {
+  return (sent) =>
+    new URL(sent.url).pathname === "/graphql" && sent.method === "POST"
+      ? Response.json(body)
+      : undefined;
+}
 
 /**
  * GitHub refusing `acme/relay`'s queue to the App's token: its alias null,
