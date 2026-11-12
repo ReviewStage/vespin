@@ -35,6 +35,7 @@ import {
   workspaceExperimentChoicesFrom,
 } from "@repo/settings";
 import { type AppSettingsView, appSettingsView } from "@repo/settings/wire";
+import type { ReadonlyRecord } from "effect/Record";
 import {
   type AppHostRead,
   type AppStateDelivery,
@@ -401,7 +402,7 @@ function isObject(value: unknown): value is object {
 }
 
 /** Whether `value` is an object literal's kind: one made by `{}` or with no prototype at all. */
-function isPlainObject(value: unknown): value is Readonly<Record<string, unknown>> {
+function isPlainObject(value: unknown): value is ReadonlyRecord<string, unknown> {
   if (!isObject(value)) return false;
   const prototype: unknown = Object.getPrototypeOf(value);
 
@@ -433,9 +434,9 @@ export function shareAppState<T>(held: unknown, next: T, depth = 0): T {
 
   if (!array && !(isPlainObject(held) && isPlainObject(next))) return next;
   // SAFETY: both are plain arrays or plain objects, each read by its own keys.
-  const before = held as Readonly<Record<PropertyKey, unknown>>;
+  const before = held as ReadonlyRecord<string, unknown>;
   // SAFETY: both are plain arrays or plain objects, each read by its own keys.
-  const after = next as Readonly<Record<PropertyKey, unknown>>;
+  const after = next as ReadonlyRecord<string, unknown>;
   // SAFETY: where `array` holds, both are plain arrays.
   const heldSize = array ? (held as readonly unknown[]).length : Object.keys(before).length;
   const nextKeys = array ? undefined : Object.keys(after);

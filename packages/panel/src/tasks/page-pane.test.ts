@@ -24,6 +24,7 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import type { DescriptionCommentsControl } from "@repo/ui/description-comments";
+import type { WireBoundaryInput } from "@repo/wire";
 import type { TiptapEditorHTMLElement } from "@tiptap/core";
 import { Effect } from "effect";
 import { act, createElement } from "react";
@@ -899,7 +900,7 @@ test("a reply held in a review stands Pending as its thread's last comment, and 
     revision: 1,
   };
 
-  const sent: Record<string, unknown>[] = [];
+  const sent: Readonly<Record<string, WireBoundaryInput>>[] = [];
 
   const control: DescriptionCommentsControl = {
     planId: TASK,

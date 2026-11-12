@@ -122,6 +122,22 @@ const readsOf = Effect.fnUntraced(function* (
   };
 });
 
+/** What each of a pull request's reads answers, by its name in `readsOf`. */
+type PullRequestReads = Effect.Success<ReturnType<typeof readsOf>>;
+
+type ReadOf<Name extends keyof PullRequestReads> = Effect.Success<PullRequestReads[Name]>;
+
+/** What `--json` prints: each read the flags asked for, under its own name. */
+interface PullRequestViewJson {
+  pullRequest?: ReadOf<"pullRequest">["pullRequest"];
+  branch?: ReadOf<"pullRequest">["branch"];
+  overview?: ReadOf<"overview">["pullRequest"];
+  checks?: ReadOf<"checks">["pullRequest"];
+  conversation?: ReadOf<"conversation">["pullRequest"];
+  changes?: ReadOf<"changes">["pullRequest"];
+  viewed?: ReadOf<"viewed">;
+}
+
 /** Words as lines indented under what they belong to, a blank line where there are none. */
 function indented(text: string, indent = "    "): string[] {
   return text === "" ? [] : text.split("\n").map((line) => `${indent}${line}`);
@@ -227,7 +243,7 @@ export const viewCommand = Command.make(
     Effect.gen(function* () {
       const reads = yield* readsOf(yield* pullRequestNamed(pr, number));
       const overview = !(checks || conversation || diff || stat);
-      const json: Record<string, unknown> = {};
+      const json: PullRequestViewJson = {};
       const lines: string[] = [];
       let ids: readonly string[] | undefined;
 

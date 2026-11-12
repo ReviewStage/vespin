@@ -20,6 +20,7 @@
  * it, stands where it arrived: it ends the group before it.
  */
 
+import { Predicate } from "effect";
 import { countWords } from "./words.js";
 
 /** The kinds of call a row can be, across both tabs. */
@@ -494,11 +495,6 @@ export type TurnRow<B> =
       readonly running: boolean;
     };
 
-/** Whether a value is a record of its own keys, rather than an array or a primitive. */
-function isRecordValue(value: unknown): value is Readonly<Record<string, unknown>> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
 /**
  * Whether two values read alike, `depth` records deep: the same value;
  * arrays alike item by item; or records with the same keys, each value
@@ -520,7 +516,7 @@ export function sameShape(a: unknown, b: unknown, depth: number): boolean {
     );
   }
 
-  if (depth <= 0 || !isRecordValue(a) || !isRecordValue(b)) return false;
+  if (depth <= 0 || !Predicate.isObject(a) || !Predicate.isObject(b)) return false;
   const keys = Object.keys(a);
 
   return (

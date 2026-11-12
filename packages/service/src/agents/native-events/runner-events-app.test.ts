@@ -90,6 +90,9 @@ import {
   runnerEventsApp,
 } from "./runner-events-app.js";
 
+/** The attributes an error reporter is handed beside the failure it reports. */
+type ReportedAttributes = Parameters<Parameters<typeof ErrorReporter.make>[0]>[0]["attributes"];
+
 /** What every case runs over: the store, and sandboxes kept in memory. */
 const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
@@ -2593,7 +2596,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
     "an API key of the starter's that OpenAI refused as expired is marked invalid and opens no issue, as a local agent's machine's own login refused so reads as a machine to sign in on, where Vespin's own key refused so opens one",
     () =>
       Effect.gen(function* () {
-        const reported: Readonly<Record<string, unknown>>[] = [];
+        const reported: ReportedAttributes[] = [];
 
         const reporting = ErrorReporter.layer([
           ErrorReporter.make(({ attributes }) => {
@@ -2677,7 +2680,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
     "a turn OpenAI refused on the starter's ChatGPT plan is reported with OpenAI's error whole, its code as OpenAI said it",
     () =>
       Effect.gen(function* () {
-        const reported: Readonly<Record<string, unknown>>[] = [];
+        const reported: ReportedAttributes[] = [];
 
         const reporting = ErrorReporter.layer([
           ErrorReporter.make(({ attributes }) => {

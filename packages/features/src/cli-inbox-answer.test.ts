@@ -1,3 +1,4 @@
+import type { WireRecord } from "@repo/wire";
 import { describe, expect, it } from "vitest";
 import { cliInboxAnswer } from "./cli-inbox-answer.js";
 import {
@@ -9,7 +10,7 @@ import {
 
 const MESSAGE_ID = "6b1c7f2e-0d4a-4c1b-9a51-3f0f6d2a7e10";
 
-function asking(ask: Record<string, unknown>): InboxAsking {
+function asking(ask: WireRecord): InboxAsking {
   // SAFETY: each case's ask carries the fields of an open ask its kind declares.
   const read = { ...ask, status: INBOX_ASK_STATUS.OPEN } as InboxAsking["ask"];
 

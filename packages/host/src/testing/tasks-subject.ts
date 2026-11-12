@@ -94,7 +94,7 @@ import {
   type GatewayMethod,
 } from "@repo/gateway";
 import { type EntityPool, entityPool } from "@repo/sync";
-import type { WireRecord, WireValue } from "@repo/wire";
+import type { WireBoundaryInput, WireRecord, WireValue } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { noNetwork } from "@repo/wire/testing";
 import { Data, Deferred, Duration, Effect, FiberMap, Result, type Scope } from "effect";
@@ -1759,10 +1759,16 @@ export function subject(
 }
 
 /** A window's hold on one of the Tasks tab's live follows: the follow's name, and the key it holds. */
-class WindowHold extends Data.Class<{ readonly name: string; readonly [field: string]: unknown }> {}
+class WindowHold extends Data.Class<{
+  readonly name: string;
+  readonly [field: string]: WireBoundaryInput;
+}> {}
 
 /** `name`'s hold at `key`, equal to another of the same follow and the same key, field by field. */
-function windowHoldOf<Key extends object>(name: string, key: Key): WindowHold {
+function windowHoldOf<Key extends Readonly<Record<string, WireBoundaryInput>>>(
+  name: string,
+  key: Key,
+): WindowHold {
   return new WindowHold({ ...key, name });
 }
 

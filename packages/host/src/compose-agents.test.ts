@@ -32,7 +32,7 @@ import {
 } from "@repo/features/pull-request-write-wire";
 import { GATEWAY_METHOD } from "@repo/gateway";
 import { entityPool } from "@repo/sync";
-import { isRecord, type WireValue } from "@repo/wire";
+import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
 import { Deferred, Duration, Effect, Exit, Fiber, Scope, SubscriptionRef } from "effect";
 import { TestClock } from "effect/testing";
 import type { AppTranscript } from "./app-state.js";
@@ -1754,7 +1754,7 @@ const OTHER_ITEM: InboxItem = {
 };
 
 /** Where an item on `planId` stands as its stamp carries it, waiting on Dana with nothing on its thread, unless `moved` says otherwise. */
-function stampOf(item: InboxItem, planId: string, moved: Record<string, unknown> = {}) {
+function stampOf(item: InboxItem, planId: string, moved: WireRecord = {}) {
   return {
     id: item.id,
     planId,
@@ -1774,7 +1774,7 @@ function stampOf(item: InboxItem, planId: string, moved: Record<string, unknown>
 function deliverItems(
   live: { readonly items: PolledLive<(typeof ITEMS_PARTS)[number]> },
   stamps: readonly unknown[],
-  items: readonly (InboxItem | Record<string, unknown>)[],
+  items: readonly (InboxItem | WireRecord)[],
 ) {
   live.items.set({
     stamps,

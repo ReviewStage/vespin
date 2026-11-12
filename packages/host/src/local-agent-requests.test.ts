@@ -5,6 +5,7 @@ import { CHECKOUT_DIFF_EXIT } from "@repo/features/checkout-diff";
 import {
   DEVICE_AGENT_REQUEST_KIND,
   type DeviceAgentLayout,
+  type DeviceAgentRequest,
   deviceAgentAttachmentsFolder,
   deviceAgentLayoutIn,
   deviceAgentsFolder,
@@ -71,7 +72,7 @@ const read = (layout: DeviceAgentLayout, path: string) =>
     args: { path, maxBytes: 1_024 },
   });
 
-const diff = (layout: DeviceAgentLayout, args: Record<string, unknown>) =>
+const diff = (layout: DeviceAgentLayout, args: DeviceAgentRequest["args"]) =>
   answeredLocalAgentRequest(layout, BOX, { kind: DEVICE_AGENT_REQUEST_KIND.DIFF_CHECKOUT, args });
 
 /** A home with one agent's worktree as a git repository: one file committed, then changed, and another left untracked; answers the commit. */

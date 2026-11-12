@@ -114,6 +114,11 @@ const PICTURE_SETS = [
   },
 ] as const;
 
+/** One build configuration of the Xcode project, as its section holds it: its settings by name. */
+interface XcodeBuildConfiguration {
+  buildSettings?: Record<string, string>;
+}
+
 /**
  * A Swift file an app extension builds, copied into its folder beside the
  * app's from the app's directory, under a name of its own (`AS`) where
@@ -332,10 +337,13 @@ const withAccentColor = (config: ExpoConfig): ExpoConfig => {
   return withXcodeProject(written, (modConfig) => {
     // SAFETY: the Xcode project's build configuration section is an object keyed by configuration id.
     for (const settings of Object.values(
-      modConfig.modResults.pbxXCBuildConfigurationSection() as Record<string, unknown>,
+      modConfig.modResults.pbxXCBuildConfigurationSection() as Record<
+        string,
+        XcodeBuildConfiguration | string
+      >,
     )) {
-      // SAFETY: each build configuration is an object whose `buildSettings`, where present, map names to values.
-      const build = (settings as { buildSettings?: Record<string, string> }).buildSettings;
+      // Note that a section's comment entries are strings, which carry no build settings.
+      const build = typeof settings === "string" ? undefined : settings.buildSettings;
 
       if (build?.PRODUCT_NAME)
         build.ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = ACCENT_COLOR_NAME;
@@ -576,10 +584,10 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
 
     // SAFETY: the Xcode project's build configuration section is an object keyed by configuration id.
     for (const settings of Object.values(
-      project.pbxXCBuildConfigurationSection() as Record<string, unknown>,
+      project.pbxXCBuildConfigurationSection() as Record<string, XcodeBuildConfiguration | string>,
     )) {
-      // SAFETY: each build configuration is an object whose `buildSettings`, where present, map names to values.
-      const build = (settings as { buildSettings?: Record<string, string> }).buildSettings;
+      // Note that a section's comment entries are strings, which carry no build settings.
+      const build = typeof settings === "string" ? undefined : settings.buildSettings;
 
       if (build?.PRODUCT_NAME !== `"${extension.TARGET}"`) continue;
       Object.assign(build, {

@@ -34,6 +34,7 @@ import {
   linkOf,
   type ReadLink,
 } from "@repo/features/link-grammar";
+import type { WireBoundaryInput } from "@repo/wire";
 import type { HistoryLocation, RegisteredRouter, RouteIds } from "@tanstack/react-router";
 import { type PlaceParams, placeParamsOf } from "./place-params.js";
 
@@ -43,7 +44,7 @@ export type PanelRouteId = RouteIds<RegisteredRouter["routeTree"]>;
 /** What a link place reads of an address its route matched: its params, its query as its route's schema read it, and its fragment, without its `#`. */
 interface LinkAddress {
   readonly params: PlaceParams;
-  readonly search: Readonly<Record<string, unknown>>;
+  readonly search: Readonly<Record<string, WireBoundaryInput>>;
   readonly hash: string;
 }
 
@@ -88,7 +89,7 @@ function commentOf(search: LinkAddress["search"]): string | undefined {
 }
 
 /** An agent's place as its route's params name it, under the task an address names it under or none, read through the link grammar's own schema; none where they name no such place. */
-function agentPlaceOf(params: PlaceParams, fields: Readonly<Record<string, unknown>>) {
+function agentPlaceOf(params: PlaceParams, fields: Readonly<Record<string, WireBoundaryInput>>) {
   const { workspace, taskId, agentId } = params;
 
   if (workspace === undefined || agentId === undefined) return undefined;
@@ -98,7 +99,7 @@ function agentPlaceOf(params: PlaceParams, fields: Readonly<Record<string, unkno
 }
 
 /** The place a route's params spell, read through the link grammar's own schema; none where they spell no place. */
-function placeOf(fields: Readonly<Record<string, unknown>>): LinkDestination | undefined {
+function placeOf(fields: Readonly<Record<string, WireBoundaryInput>>): LinkDestination | undefined {
   return isLinkDestination(fields) ? fields : undefined;
 }
 

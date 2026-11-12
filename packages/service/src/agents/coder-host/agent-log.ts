@@ -73,6 +73,9 @@ export function keptFailureWords(words: string): string {
   return redactCredentials(words).slice(0, AGENT_FAILURE_CHARS);
 }
 
+/** The attributes a report carries, as Effect's reporter types them. */
+type ReportedAttributes = Parameters<Parameters<typeof ErrorReporter.make>[0]>[0]["attributes"];
+
 /**
  * A coding agent's Start or launch that failed with nothing to explain it,
  * as Sentry's issue names it: named for the failure's kind, which its type
@@ -82,7 +85,7 @@ export function keptFailureWords(words: string): string {
 class AgentStartFailed extends Data.TaggedError("AgentStartFailed")<{
   readonly message: string;
   readonly reason: string;
-  readonly annotations: Readonly<Record<string, unknown>>;
+  readonly annotations: ReportedAttributes;
 }> {
   override readonly name = `AgentStartFailed(${this.reason})`;
 

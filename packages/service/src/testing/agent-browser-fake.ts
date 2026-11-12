@@ -65,7 +65,7 @@ export type FakeCdpAnswer =
 /** A command as the fake Chromium reads it off its line. */
 export interface FakeCdpCommand {
   readonly method: string;
-  readonly params: { readonly [key: string]: unknown };
+  readonly params: NonNullable<(typeof CommandLineSchema.Type)["params"]>;
   readonly sessionId?: string | undefined;
 }
 

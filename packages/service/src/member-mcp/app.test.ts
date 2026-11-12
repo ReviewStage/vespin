@@ -133,6 +133,9 @@ import {
   type MemberMcpTool,
 } from "./tools.js";
 
+/** The arguments an MCP tool call carries, as the client takes them. */
+type ToolArguments = NonNullable<Parameters<Client["callTool"]>[0]["arguments"]>;
+
 /**
  * The member MCP server, answered by its group the way a function answers
  * it, over the auth service and the migrated PGlite the tools read too. The tokens are the
@@ -544,7 +547,7 @@ it.effect(
 
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
 
-      const call = (name: string, args: Record<string, unknown>) =>
+      const call = (name: string, args: ToolArguments) =>
         Effect.promise(async () => {
           const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
 
@@ -596,7 +599,7 @@ it.effect(
 
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
 
-      const call = (name: string, args: Record<string, unknown>) =>
+      const call = (name: string, args: ToolArguments) =>
         Effect.promise(async () => decodeAnswer(await client.callTool({ name, arguments: args })));
 
       const created = yield* call(MEMBER_MCP_TOOL.CREATE_WORKSPACE, { name: "  Research  " });
@@ -678,7 +681,7 @@ it.effect(
 
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
 
-      const call = (name: string, args: Record<string, unknown>) =>
+      const call = (name: string, args: ToolArguments) =>
         Effect.promise(async () => {
           const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
 
@@ -1089,7 +1092,7 @@ it.effect(
 
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
 
-      const call = (name: string, args: Record<string, unknown>) =>
+      const call = (name: string, args: ToolArguments) =>
         Effect.promise(async () => {
           const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
           assert.notEqual(answer.isError, true, `${name}: ${answer.content[0].text}`);
@@ -1106,7 +1109,7 @@ it.effect(
 
       const taskId = made.task.id;
 
-      const refused = (name: string, args: Record<string, unknown>) =>
+      const refused = (name: string, args: ToolArguments) =>
         Effect.promise(async () => {
           const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
           assert.equal(answer.isError, true, name);
@@ -1447,7 +1450,7 @@ it.effect(
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
       const named = { repository: RELAY_FULL_NAME, number: PUBLISHED.number };
 
-      const call = (name: string, args: Record<string, unknown>) =>
+      const call = (name: string, args: ToolArguments) =>
         Effect.promise(async () => decodeAnswer(await client.callTool({ name, arguments: args })));
 
       const changes = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, { ...named, part: "changes" });
@@ -1528,7 +1531,7 @@ it.layer(getTestDB())("a member's start_agent on no task", (it) => {
         const { owner, mcpFetch } = yield* openTask({ agentSessions });
         const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
 
-        const call = (args: Record<string, unknown>) =>
+        const call = (args: ToolArguments) =>
           Effect.promise(async () =>
             decodeAnswer(
               await client.callTool({ name: MEMBER_MCP_TOOL.START_AGENT, arguments: args }),
@@ -1593,7 +1596,7 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         const before = agentSessions.sent.length;
         const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
 
-        const call = (name: string, args: Record<string, unknown>) =>
+        const call = (name: string, args: ToolArguments) =>
           Effect.promise(async () =>
             decodeAnswer(await client.callTool({ name, arguments: args })),
           );
@@ -1659,7 +1662,7 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         assert.ok(Result.isSuccess(notice) && Result.isSuccess(asking));
         const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
 
-        const call = (name: string, args: Record<string, unknown>) =>
+        const call = (name: string, args: ToolArguments) =>
           Effect.promise(async () =>
             decodeAnswer(await client.callTool({ name, arguments: args })),
           );
@@ -1704,7 +1707,7 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         );
         const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
 
-        const call = (name: string, args: Record<string, unknown>) =>
+        const call = (name: string, args: ToolArguments) =>
           Effect.promise(async () =>
             decodeAnswer(await client.callTool({ name, arguments: args })),
           );
@@ -1757,7 +1760,7 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         const before = agentSessions.sent.length;
         const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
 
-        const call = (name: string, args: Record<string, unknown>) =>
+        const call = (name: string, args: ToolArguments) =>
           Effect.promise(async () => {
             const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
             assert.notEqual(answer.isError, true, `${name}: ${answer.content[0].text}`);
@@ -1846,7 +1849,7 @@ it.effect(
 
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
 
-      const call = (name: string, args: Record<string, unknown>) =>
+      const call = (name: string, args: ToolArguments) =>
         Effect.promise(async () => {
           const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
           assert.notEqual(answer.isError, true, `${name}: ${answer.content[0].text}`);
@@ -1965,7 +1968,7 @@ it.effect(
 
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
 
-      const call = (name: string, args: Record<string, unknown>) =>
+      const call = (name: string, args: ToolArguments) =>
         Effect.promise(async () => {
           const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
 
@@ -2047,7 +2050,7 @@ it.effect(
 
       const { client } = yield* connected(fetch, token, REVISION.MODERN);
 
-      const call = (name: string, args: Record<string, unknown>) =>
+      const call = (name: string, args: ToolArguments) =>
         Effect.promise(async () => {
           const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
 
@@ -2089,7 +2092,7 @@ it.effect(
         return workspaceId;
       }).pipe(Effect.provide(services));
 
-      const callAs = (cookie: string, name: string, args: Record<string, unknown>) =>
+      const callAs = (cookie: string, name: string, args: ToolArguments) =>
         Effect.gen(function* () {
           const token = yield* Effect.promise(() =>
             mintedToken(auth, cookie, {
@@ -2158,7 +2161,7 @@ it.effect(
         yield* joinWorkspace(workspaceId, admin.userId, WORKSPACE_ROLE.ADMIN);
       }).pipe(Effect.provide(services));
 
-      const callAs = (cookie: string, name: string, args: Record<string, unknown>) =>
+      const callAs = (cookie: string, name: string, args: ToolArguments) =>
         Effect.gen(function* () {
           const token = yield* Effect.promise(() =>
             mintedToken(auth, cookie, {
@@ -2356,7 +2359,7 @@ it.effect(
 
           const { client } = yield* connected(fetch, token, REVISION.MODERN);
 
-          const call = (name: string, args: Record<string, unknown>) =>
+          const call = (name: string, args: ToolArguments) =>
             Effect.promise(async () => {
               const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
               const { text } = answer.content[0];

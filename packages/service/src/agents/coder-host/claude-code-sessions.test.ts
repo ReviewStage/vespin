@@ -92,7 +92,7 @@ import { SANDBOX_IDLE, type Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { fixtureToken, vercelSandboxOver } from "@repo/sandbox/vercel/testing";
 import { EXPERIMENT } from "@repo/settings";
-import { MESSAGE_ROLE } from "@repo/wire";
+import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { temporaryDirectory } from "@repo/wire/testing";
 import { eq, sql } from "drizzle-orm";
@@ -4415,9 +4415,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(beforeClaim.length, 1);
 
         // SAFETY: the fake keeps each network policy as the service sent it, whose rules are listed by host under `allow`.
-        const firstWrite = beforeClaim[0]?.policy as
-          | { readonly allow?: Readonly<Record<string, unknown>> }
-          | undefined;
+        const firstWrite = beforeClaim[0]?.policy as { readonly allow?: WireRecord } | undefined;
 
         assert.ok(
           JSON.stringify(firstWrite?.allow?.["api.github.com"] ?? null).includes(writeHeader),

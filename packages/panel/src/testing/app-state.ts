@@ -645,7 +645,10 @@ export function holdAutomations(
   const holds: AutomationsHold[] = [];
   const asked: AutomationFollow[] = [];
 
-  const laid: Record<keyof AppAutomationReads, Readonly<Record<string, object>>> = {
+  const laid: Record<
+    keyof AppAutomationReads,
+    Readonly<Record<string, { readonly rows?: unknown }>>
+  > = {
     [LIVE_READ.AUTOMATIONS]: {},
     [LIVE_READ.AUTOMATION_RUNS]: {},
     [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: {},
@@ -657,7 +660,7 @@ export function holdAutomations(
 
     if (read === undefined) return false;
     const slice = AUTOMATIONS_READ_OF[kind];
-    const held: { readonly rows?: unknown } | undefined = laid[slice][id];
+    const held = laid[slice][id];
 
     if (read.rows === undefined && held?.rows !== undefined) return false;
     laid[slice] = { ...laid[slice], [id]: read };

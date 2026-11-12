@@ -98,6 +98,17 @@ interface ShotResult {
 }
 
 // Playwright's surface this script touches, typed here because the package is not installed beside it.
+interface ScreenshotOptions {
+  readonly path: string;
+  readonly animations: "disabled";
+  readonly caret: "hide";
+}
+
+interface ContextOptions {
+  readonly viewport: { readonly width: number; readonly height: number };
+  readonly hasTouch?: boolean;
+}
+
 interface PlaywrightPage {
   goto(url: string): Promise<void>;
   waitForSelector(selector: string): Promise<void>;
@@ -106,7 +117,7 @@ interface PlaywrightPage {
   evaluate<Result>(script: string): Promise<Result>;
   on(event: "pageerror", listener: (value: never) => void): void;
   locator(selector: string): {
-    screenshot(options: Record<string, unknown>): Promise<Buffer>;
+    screenshot(options: ScreenshotOptions): Promise<Buffer>;
   };
   close(): Promise<void>;
 }
@@ -117,7 +128,7 @@ interface PlaywrightContext {
 }
 
 interface PlaywrightBrowser {
-  newContext(options: Record<string, unknown>): Promise<PlaywrightContext>;
+  newContext(options: ContextOptions): Promise<PlaywrightContext>;
   close(): Promise<void>;
 }
 

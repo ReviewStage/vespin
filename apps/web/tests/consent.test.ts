@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+
+import type { WireRecord } from "@repo/wire";
 import { act } from "react";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
 
@@ -60,7 +62,7 @@ function signedAuthorization(): string {
 /** One request the page sent: its path and its JSON body. */
 interface Sent {
   readonly path: string;
-  readonly body: Record<string, unknown> | undefined;
+  readonly body: WireRecord | undefined;
 }
 
 let sent: Sent[] = [];
@@ -69,7 +71,7 @@ let sent: Sent[] = [];
 let leaves = 0;
 
 /** Better Auth's answers, by path and body; every other request hangs. */
-function answer(path: string, body: Record<string, unknown> | undefined): Response | undefined {
+function answer(path: string, body: WireRecord | undefined): Response | undefined {
   if (path === PATH.SESSION) {
     return Response.json({ session: { id: "session-1", userId: ACCOUNT.id }, user: ACCOUNT });
   }

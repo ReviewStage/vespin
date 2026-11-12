@@ -62,7 +62,7 @@ interface SentSpan {
 }
 
 /** Every item of every envelope the window handed main, as JSON. */
-function sentItems(): { readonly items?: readonly SentSpan[]; readonly [key: string]: unknown }[] {
+function sentItems(): { readonly items?: readonly SentSpan[] }[] {
   return envelopes.flatMap((body) =>
     body.split("\n").flatMap((line) => {
       try {

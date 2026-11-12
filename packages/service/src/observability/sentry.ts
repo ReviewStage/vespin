@@ -494,6 +494,12 @@ const REPORT_TAG_ATTRIBUTES: ReadonlySet<string> = new Set([
 /** The longest value Sentry keeps on a tag; a longer one is dropped from the event. */
 const TAG_VALUE_MAX_LENGTH = 200;
 
+/** The attributes a reporter is handed beside the failure it reports, and the fiber's log annotations, as Effect types both. */
+type ReportedAttributes = Parameters<Parameters<typeof ErrorReporter.make>[0]>[0]["attributes"];
+
+/** The extra data an issue carries, as Sentry types it. */
+type SentryExtras = Parameters<typeof Sentry.setExtras>[0];
+
 /**
  * A report's attributes as an issue carries them: those it is searched by as
  * tags where they are a string, a number, or a boolean, the rest as extra data. Note that a tag's value is cut to Sentry's
@@ -504,15 +510,15 @@ const TAG_VALUE_MAX_LENGTH = 200;
  * without each report saying so.
  */
 function reportContext(
-  { [ACCOUNT_KEY]: reported, ...attributes }: Readonly<Record<string, unknown>>,
-  annotations: Readonly<Record<string, unknown>>,
+  { [ACCOUNT_KEY]: reported, ...attributes }: ReportedAttributes,
+  annotations: ReportedAttributes,
 ): {
   tags: Record<string, string>;
-  extra: Record<string, unknown>;
+  extra: SentryExtras;
   user?: { id: string };
 } {
   const tags: Record<string, string> = {};
-  const extra: Record<string, unknown> = {};
+  const extra: SentryExtras = {};
   const account = Predicate.isString(reported) ? reported : annotations[ACCOUNT_KEY];
 
   for (const [name, value] of Object.entries(attributes)) {

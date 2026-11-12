@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import type { Properties } from "hast";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -50,7 +51,7 @@ function drawn(props: MarkdownProps): { container: HTMLElement; root: Root } {
 
 /** A step that writes what a function it closes over answers on every paragraph, as a place's drawer would be read. */
 function stamp(answer: () => string) {
-  return (tree: { children: { type: string; properties?: Record<string, unknown> }[] }) => {
+  return (tree: { children: { type: string; properties?: Properties }[] }) => {
     for (const child of tree.children) {
       if (child.type === "element" && child.properties !== undefined) {
         child.properties.dataStamp = answer();

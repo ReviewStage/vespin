@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { LiveStatement } from "@repo/database/core/live-statement";
 import { LIVE_POLL_URL, type SealedLiveQueryWire } from "@repo/features/live-wire";
+import type { WireValue } from "@repo/wire";
 import { Clock, Data, Effect } from "effect";
 import type { SqlClient } from "effect/sql";
 
@@ -23,6 +24,11 @@ const DIGEST_COLUMN = "_live_digest";
 
 /** The column a sealed statement answers its snapshot under, beside its digest. */
 const SNAPSHOT_COLUMN = "_live_snapshot";
+
+/** The one row a sealed statement answers: its digest and its snapshot, as text. */
+type SealedRow = Readonly<
+  Partial<Record<typeof DIGEST_COLUMN | typeof SNAPSHOT_COLUMN, WireValue>>
+>;
 
 /**
  * The snapshot the statement that selects it reads at, as Postgres spells
@@ -118,7 +124,7 @@ export function pollSealer(sql: SqlClient.SqlClient): LiveSealer {
       ),
     seal: (statement) =>
       Effect.all({
-        read: sql.unsafe<Readonly<Record<string, unknown>>>(sealedSql(statement), statement.params),
+        read: sql.unsafe<SealedRow>(sealedSql(statement), statement.params),
         now: Clock.currentTimeMillis,
       }).pipe(
         Effect.mapError(refused),
