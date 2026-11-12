@@ -296,7 +296,8 @@ The switch itself is a change of credentials, not of code:
    installs still updating have taken it. `app:launch` in PostHog carries `app_version`;
    the switch is safe for whoever launched a bridge build or later.
 2. **Create the new team's Developer ID Application certificate.** Only the team's Account
-   Holder can, under **Certificates, Identifiers & Profiles → Certificates**, from a
+   Holder can, or an Admin the Account Holder has allowed to, under **Certificates,
+   Identifiers & Profiles → Certificates**, from a
    certificate signing request Keychain Access makes on their Mac (**Keychain Access →
    Certificate Assistant → Request a Certificate From a Certificate Authority**, saved to
    disk). Install the downloaded certificate on that Mac and export it with its private key
