@@ -4,8 +4,10 @@ import { useColorScheme } from "react-native";
 import { useIncreaseContrast } from "../accessibility.js";
 import { BRAND_COLOR } from "./brand-colors.js";
 
-/** One theme's colors, by the role each names. */
-export type BrandColors = { readonly [Role in keyof typeof BRAND_COLOR.LIGHT]: string };
+/** One theme's colors, by the role each names, and the selected row's fill (`SELECTED`). */
+export type BrandColors = {
+  readonly [Role in keyof typeof BRAND_COLOR.LIGHT | "SELECTED"]: string;
+};
 
 /**
  * Where something stands, as its color says it: the same six tones
@@ -56,9 +58,23 @@ function strongerContrast(colors: BrandColors): BrandColors {
   };
 }
 
+/**
+ * A theme with the roles derived from the brand's own: a selected row's fill
+ * is the hairline's color, which Increase Contrast leaves as it is, since it
+ * stands under words that must keep 4.5:1 rather than the 3:1 of a boundary.
+ */
+function theme(colors: (typeof BRAND_COLOR)[keyof typeof BRAND_COLOR]): BrandColors {
+  return { ...colors, SELECTED: colors.CHIP_EDGE };
+}
+
+const THEME = {
+  LIGHT: theme(BRAND_COLOR.LIGHT),
+  DARK: theme(BRAND_COLOR.DARK),
+} as const;
+
 const STRONGER = {
-  LIGHT: strongerContrast(BRAND_COLOR.LIGHT),
-  DARK: strongerContrast(BRAND_COLOR.DARK),
+  LIGHT: strongerContrast(THEME.LIGHT),
+  DARK: strongerContrast(THEME.DARK),
 } as const;
 
 /**
@@ -73,7 +89,7 @@ export function useColors(): BrandColors {
 
   if (stronger) return dark ? STRONGER.DARK : STRONGER.LIGHT;
 
-  return dark ? BRAND_COLOR.DARK : BRAND_COLOR.LIGHT;
+  return dark ? THEME.DARK : THEME.LIGHT;
 }
 
 /** The ink a tone is drawn in. */

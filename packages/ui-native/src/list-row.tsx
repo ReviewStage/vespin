@@ -55,7 +55,7 @@ import {
   UnreadDot,
   WorkingMark,
 } from "./marks.js";
-import { RowOpenContext } from "./row-open.js";
+import { RowOpenContext, RowSelectedContext } from "./row-open.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
@@ -285,10 +285,16 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
   );
 }
 
-/** Where a row stands in its list: on the list's own ground, inset so the unread dot stands in the margin, its hairline starting under the words. */
-export function rowPlacement(colors: BrandColors) {
+/**
+ * Where a row stands in its list: on the list's own ground, inset so the
+ * unread dot stands in the margin, its hairline starting under the words.
+ * Note that a selected row stands on the `SELECTED` gray, as iOS's own
+ * selection does, since a clear row ground leaves the system no fill to draw,
+ * so an iPad's selected row showed only the keyboard focus's black outline.
+ */
+export function rowPlacement(colors: BrandColors, selected = false) {
   return [
-    listRowBackground("clear"),
+    listRowBackground(selected ? colors.SELECTED : "clear"),
     listRowInsets({
       leading: ROW_INSET.LEADING,
       trailing: SPACE.EDGE,
@@ -346,12 +352,13 @@ export function RowFrame({
 }) {
   const colors = useColors();
   const open = useContext(RowOpenContext);
+  const selected = useContext(RowSelectedContext) === id;
   const swiped = [...trailingActions, ...leadingActions];
 
   // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
   const frameModifiers = [
     tag(id),
-    ...rowPlacement(colors),
+    ...rowPlacement(colors, selected),
     ...(heard === undefined
       ? []
       : [
