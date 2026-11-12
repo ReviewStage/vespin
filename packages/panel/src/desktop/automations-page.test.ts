@@ -19,22 +19,16 @@ import {
   announced,
   automation,
   automationRows,
-  bar,
   button,
   CI_DIGEST,
-  crumbs,
   DIGEST,
-  dialogButton,
   FAILING,
-  headings,
   layStanding,
   listed,
   menuItem,
   mount,
   mountPages,
-  nameOf,
   onLedger,
-  optionWords,
   PERSONAL,
   pick,
   picked,
@@ -44,9 +38,7 @@ import {
   promptEditor,
   render,
   rowOf,
-  rows,
   SWEEP,
-  serversChip,
   settle,
   tasksView,
   type,
@@ -66,6 +58,81 @@ import { newTaskControl, tasksControl } from "../testing/tasks-control.js";
  *
  * The window, its fakes, and the helpers both files read stand in `testing/automations-page.ts`.
  */
+
+/** Each row's name and owner, top to bottom. */
+function rows(page: HTMLElement): string[][] {
+  return automationRows(page).map((row) => [
+    row.querySelector(".automation-row-name")?.textContent ?? "",
+    row.querySelector(".automation-owner-name")?.textContent ?? "",
+  ]);
+}
+
+/** The button named, wherever it is drawn. */
+/** What a reader names `control` by: the elements its `aria-labelledby` lists, itself among them, in order. */
+function nameOf(control: HTMLElement): string {
+  const ids = (control.getAttribute("aria-labelledby") ?? "").split(" ");
+
+  return ids
+    .map((id) => document.getElementById(id)?.textContent ?? "")
+    .join(" ")
+    .trim();
+}
+
+/** The servers chip, found as a reader names it: by its hidden field name, then its own face. */
+function serversChip(root: ParentNode = document): HTMLButtonElement | undefined {
+  return [...root.querySelectorAll<HTMLButtonElement>("button[aria-labelledby]")].find((each) => {
+    const [fieldName] = (each.getAttribute("aria-labelledby") ?? "").split(" ");
+
+    return (
+      fieldName !== undefined && document.getElementById(fieldName)?.textContent === "MCP servers"
+    );
+  });
+}
+
+/** The option of the list standing open whose words are `words`. */
+function optionWords(words: string): HTMLElement {
+  const found = [...document.querySelectorAll<HTMLElement>("[role=option]")].find(
+    (each) => each.textContent === words,
+  );
+
+  assert.ok(found, `no option ${words}`);
+
+  return found;
+}
+
+/** The button of the dialog standing whose words are `name`. */
+function dialogButton(name: string): HTMLButtonElement {
+  const found = [
+    ...document.querySelectorAll<HTMLButtonElement>(
+      "[role=dialog] button, [role=alertdialog] button",
+    ),
+  ].find((each) => each.textContent === name);
+
+  assert.ok(found, `no dialog button ${name}`);
+
+  return found;
+}
+
+/** The toolbar's crumbs' words, in order. */
+function crumbs(page: HTMLElement): string {
+  return page.querySelector(".automation-toolbar nav")?.textContent ?? "";
+}
+
+/** The page's headings: an automation's page has one, its name, written in its title. */
+function headings(page: HTMLElement): string[] {
+  return [...page.querySelectorAll("h1")].map(
+    (each) => each.querySelector("input")?.value ?? each.textContent?.trim() ?? "",
+  );
+}
+
+type BarResult = { banner: HTMLElement; parts: Element[] };
+
+/** The window's bar over `page`, its parts in the order they stand, each by its text. */
+function bar(page: HTMLElement): BarResult {
+  const banner = page.querySelector<HTMLElement>("header") ?? assert.fail("no bar");
+
+  return { banner, parts: [...banner.children] };
+}
 
 test("the listed workspace's automations stand before the personal ones, under a heading each, every row naming its owner", async () => {
   const page = mount();

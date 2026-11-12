@@ -27,19 +27,14 @@ import {
   automation,
   button,
   CI_DIGEST,
-  copiedShown,
-  copyFieldValue,
   DIGEST,
   FAILING,
-  glyphs,
-  isOn,
   layStanding,
   MADE_SECRET,
   menuItem,
   mount,
   mountPages,
   PERSONAL,
-  phoneRuns,
   pick,
   picked,
   picker,
@@ -48,11 +43,8 @@ import {
   ROTATED_SECRET,
   routerAt,
   rowOf,
-  runRows,
   SWEEP,
-  says,
   settle,
-  switchNamed,
   type,
   WORKSPACE,
   world,
@@ -72,6 +64,76 @@ import { AutomationsPage } from "./automations-page.js";
  *
  * The window, its fakes, and the helpers both files read stand in `testing/automations-page.ts`.
  */
+
+/** The runs' rows in the Runs panel, newest first. */
+function runRows(page: HTMLElement | Element | null | undefined): Element[] {
+  const panel = page?.matches("aside[aria-label='Runs']")
+    ? page
+    : page?.querySelector("aside[aria-label='Runs']");
+
+  return [...(panel?.querySelectorAll("li") ?? [])];
+}
+
+/** Whether a row says `words` among its own. */
+function says(row: Element, words: string): boolean {
+  return (row.textContent ?? "").includes(words);
+}
+
+/** The value a copy field shows beside its "Copy {what}", or nothing where none stands. */
+function copyFieldValue(page: HTMLElement, what: string): HTMLElement | undefined {
+  let at: Element | null | undefined = [...page.querySelectorAll("button")].find(
+    (each) => each.getAttribute("aria-label") === `Copy ${what}`,
+  );
+
+  while (at && at !== page) {
+    const value = at.querySelector<HTMLElement>("code");
+
+    if (value !== null) return value;
+    at = at.parentElement;
+  }
+
+  return undefined;
+}
+
+/** Stands a phone's automation's runs, from its head's ⋯, where its Runs now stands. */
+function phoneRuns(): void {
+  act(() => button("Automation actions").click());
+  act(() => menuItem("Runs").click());
+}
+
+/** Whether a copy button shows its copy landed, its glyph turned to the check, once the clipboard took it. */
+function copiedShown(copyButton: HTMLButtonElement): boolean {
+  return copyButton.querySelector(".ui-copy-glyph")?.getAttribute("data-state") === "copied";
+}
+
+/** The switch named, wherever it is drawn. */
+function switchNamed(name: string): HTMLButtonElement {
+  const found = document.querySelector<HTMLButtonElement>(`[role=switch][aria-label="${name}"]`);
+  assert.ok(found, `no switch ${name}`);
+
+  return found;
+}
+
+/** Whether the switch named is on. */
+function isOn(name: string): boolean {
+  return switchNamed(name).getAttribute("aria-checked") === "true";
+}
+
+/** What each row's glyph draws, in order: Sentry's or GitHub's mark, or the lucide icon's name. */
+function glyphs(rows: readonly Element[]): string[] {
+  return rows.map((row) => {
+    if (row.querySelector(".integration-mark-sentry") !== null) return "sentry";
+
+    if (row.querySelector(".ui-provider-mark") !== null) return "github";
+    const icon = row.querySelector(".state-glyph svg");
+
+    const named = [...(icon?.classList ?? [])].find(
+      (name) => name.startsWith("lucide-") && name !== "lucide-icon",
+    );
+
+    return named?.slice("lucide-".length) ?? "none";
+  });
+}
 
 test("a run whose agent works on a task opens the agent on its task, its tab chosen, not its own page", async () => {
   const taskId = "0f6a2c4e-8b1d-4f3a-9c5e-7d2b4a6c8e10";

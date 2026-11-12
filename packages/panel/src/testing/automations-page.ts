@@ -706,28 +706,6 @@ export function automationRows(page: HTMLElement): Element[] {
   return [...page.querySelectorAll(".automation-group li")];
 }
 
-/** The runs' rows in the Runs panel, newest first. */
-export function runRows(page: HTMLElement | Element | null | undefined): Element[] {
-  const panel = page?.matches("aside[aria-label='Runs']")
-    ? page
-    : page?.querySelector("aside[aria-label='Runs']");
-
-  return [...(panel?.querySelectorAll("li") ?? [])];
-}
-
-/** Each row's name and owner, top to bottom. */
-export function rows(page: HTMLElement): string[][] {
-  return automationRows(page).map((row) => [
-    row.querySelector(".automation-row-name")?.textContent ?? "",
-    row.querySelector(".automation-owner-name")?.textContent ?? "",
-  ]);
-}
-
-/** Whether a row says `words` among its own. */
-export function says(row: Element, words: string): boolean {
-  return (row.textContent ?? "").includes(words);
-}
-
 /** The row of the automation named. */
 export function rowOf(page: HTMLElement, name: string): Element {
   const row = automationRows(page).find(
@@ -874,72 +852,12 @@ export function mountPages(start: AutomationsPlace, workspace: Workspace = WORKS
   return container;
 }
 
-/** The button named, wherever it is drawn. */
-/** What a reader names `control` by: the elements its `aria-labelledby` lists, itself among them, in order. */
-export function nameOf(control: HTMLElement): string {
-  const ids = (control.getAttribute("aria-labelledby") ?? "").split(" ");
-
-  return ids
-    .map((id) => document.getElementById(id)?.textContent ?? "")
-    .join(" ")
-    .trim();
-}
-
-/** The servers chip, found as a reader names it: by its hidden field name, then its own face. */
-export function serversChip(root: ParentNode = document): HTMLButtonElement | undefined {
-  return [...root.querySelectorAll<HTMLButtonElement>("button[aria-labelledby]")].find((each) => {
-    const [fieldName] = (each.getAttribute("aria-labelledby") ?? "").split(" ");
-
-    return (
-      fieldName !== undefined && document.getElementById(fieldName)?.textContent === "MCP servers"
-    );
-  });
-}
-
 export function button(name: string): HTMLButtonElement {
   const found = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
     (each) => each.textContent === name || each.getAttribute("aria-label") === name,
   );
 
   assert.ok(found, `no button ${name}`);
-
-  return found;
-}
-
-/** The value a copy field shows beside its "Copy {what}", or nothing where none stands. */
-export function copyFieldValue(page: HTMLElement, what: string): HTMLElement | undefined {
-  let at: Element | null | undefined = [...page.querySelectorAll("button")].find(
-    (each) => each.getAttribute("aria-label") === `Copy ${what}`,
-  );
-
-  while (at && at !== page) {
-    const value = at.querySelector<HTMLElement>("code");
-
-    if (value !== null) return value;
-    at = at.parentElement;
-  }
-
-  return undefined;
-}
-
-/** Stands a phone's automation's runs, from its head's ⋯, where its Runs now stands. */
-export function phoneRuns(): void {
-  act(() => button("Automation actions").click());
-  act(() => menuItem("Runs").click());
-}
-
-/** Whether a copy button shows its copy landed, its glyph turned to the check, once the clipboard took it. */
-export function copiedShown(copyButton: HTMLButtonElement): boolean {
-  return copyButton.querySelector(".ui-copy-glyph")?.getAttribute("data-state") === "copied";
-}
-
-/** The option of the list standing open whose words are `words`. */
-export function optionWords(words: string): HTMLElement {
-  const found = [...document.querySelectorAll<HTMLElement>("[role=option]")].find(
-    (each) => each.textContent === words,
-  );
-
-  assert.ok(found, `no option ${words}`);
 
   return found;
 }
@@ -953,19 +871,6 @@ export function menuItem(name: string): HTMLButtonElement {
   ].find((each) => each.textContent === name);
 
   assert.ok(found, `no menu item ${name}`);
-
-  return found;
-}
-
-/** The button of the dialog standing whose words are `name`. */
-export function dialogButton(name: string): HTMLButtonElement {
-  const found = [
-    ...document.querySelectorAll<HTMLButtonElement>(
-      "[role=dialog] button, [role=alertdialog] button",
-    ),
-  ].find((each) => each.textContent === name);
-
-  assert.ok(found, `no dialog button ${name}`);
 
   return found;
 }
@@ -1040,54 +945,4 @@ export function pick(page: HTMLElement, label: string, option: string): void {
 
   assert.ok(row, `no ${option} in ${label}`);
   act(() => row.click());
-}
-
-/** The switch named, wherever it is drawn. */
-export function switchNamed(name: string): HTMLButtonElement {
-  const found = document.querySelector<HTMLButtonElement>(`[role=switch][aria-label="${name}"]`);
-  assert.ok(found, `no switch ${name}`);
-
-  return found;
-}
-
-/** Whether the switch named is on. */
-export function isOn(name: string): boolean {
-  return switchNamed(name).getAttribute("aria-checked") === "true";
-}
-
-/** The toolbar's crumbs' words, in order. */
-export function crumbs(page: HTMLElement): string {
-  return page.querySelector(".automation-toolbar nav")?.textContent ?? "";
-}
-
-/** The page's headings: an automation's page has one, its name, written in its title. */
-export function headings(page: HTMLElement): string[] {
-  return [...page.querySelectorAll("h1")].map(
-    (each) => each.querySelector("input")?.value ?? each.textContent?.trim() ?? "",
-  );
-}
-
-type BarResult = { banner: HTMLElement; parts: Element[] };
-
-/** The window's bar over `page`, its parts in the order they stand, each by its text. */
-export function bar(page: HTMLElement): BarResult {
-  const banner = page.querySelector<HTMLElement>("header") ?? assert.fail("no bar");
-
-  return { banner, parts: [...banner.children] };
-}
-
-/** What each row's glyph draws, in order: Sentry's or GitHub's mark, or the lucide icon's name. */
-export function glyphs(rows: readonly Element[]): string[] {
-  return rows.map((row) => {
-    if (row.querySelector(".integration-mark-sentry") !== null) return "sentry";
-
-    if (row.querySelector(".ui-provider-mark") !== null) return "github";
-    const icon = row.querySelector(".state-glyph svg");
-
-    const named = [...(icon?.classList ?? [])].find(
-      (name) => name.startsWith("lucide-") && name !== "lucide-icon",
-    );
-
-    return named?.slice("lucide-".length) ?? "none";
-  });
 }
