@@ -174,6 +174,8 @@ export {
   MenuRow,
   type MenuRowAct,
   NoteRow,
+  type PersonPickOption,
+  PersonPickRows,
   type PickOption,
   PickRows,
   PUSH_ROW_GOES,
