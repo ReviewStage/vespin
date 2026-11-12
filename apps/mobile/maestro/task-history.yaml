@@ -1,0 +1,38 @@
+# task-history.yaml -- a task description's version history on the Inbox fixture: Version history from the task's ⋯, its versions under their writers, the newest marked Current, an older one opened whole, and Restore this version taken at once with its Undo offered.
+#
+# Launched on the host's Inbox fixture, whose reference journey holds three
+# versions of its description and whose act door reads a version and takes
+# a restore as the service would (`@repo/host/fixture-inbox`), so no server
+# is reached.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- tapOn: "Tasks"
+- scrollUntilVisible:
+    element: "Teammate invitations"
+    direction: DOWN
+- tapOn: "Teammate invitations"
+- assertVisible: "Created by .*"
+- tapOn: "More"
+- tapOn: "Version history"
+- waitForAnimationToEnd
+- assertVisible: "Build the invite flow"
+- assertVisible: "Current.*"
+- assertVisible: "Ada Lovelace|You"
+- assertVisible: "Earlier"
+- takeScreenshot: task-history
+# An older version opens whole, and its restore goes at once, offering Undo.
+- tapOn: "Earlier"
+- waitForAnimationToEnd
+- assertVisible: "Context"
+- takeScreenshot: task-version
+- tapOn: "Restore this version"
+- waitForAnimationToEnd
+- assertVisible: "Version restored"
+- assertVisible:
+    id: "failure-notice-undo"
+- assertVisible: "Version history"
+- takeScreenshot: task-version-restored

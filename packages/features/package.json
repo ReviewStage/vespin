@@ -172,6 +172,7 @@
     "./description-comment-wire": "./src/description-comment-wire.js",
     "./description-document": "./src/description-document.js",
     "./description-edit": "./src/description-edit.js",
+    "./description-history-words": "./src/description-history-words.js",
     "./description-markdown": "./src/description-markdown.js",
     "./description-notes": "./src/description-notes.js",
     "./task-section-wire": "./src/task-section-wire.js",
