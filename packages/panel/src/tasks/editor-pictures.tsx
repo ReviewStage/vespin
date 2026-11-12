@@ -14,9 +14,12 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   ATTACHMENT_CHIP_STATE,
   BUTTON_VARIANT,
+  CAPTION_LEAVE,
   CARD_CORNER,
   CARD_ELEMENT,
   CARD_PADDING,
+  CaptionField,
+  type CaptionLeave,
   Card,
   ErrorState,
   FoldingButton,
@@ -36,12 +39,14 @@ import { type ReactNode, useCallback, useLayoutEffect, useRef, useState } from "
 import { createPortal } from "react-dom";
 import { actMutation } from "../act-mutations.js";
 import { useAppCommand } from "../app-commands.js";
-import type {
-  DescriptionEditorHandle,
-  DescriptionEditorPictures,
-  PictureNode,
-  PictureNodeDoors,
-  PictureTaken,
+import {
+  type DescriptionEditorHandle,
+  type DescriptionEditorPictures,
+  PICTURE_LEAVE,
+  type PictureLeave,
+  type PictureNode,
+  type PictureNodeDoors,
+  type PictureTaken,
 } from "../description-editor/contract.js";
 import { failureShown, pictureUnread } from "../failure-report.js";
 import { encodeImage } from "../feedback-images.js";
@@ -78,8 +83,14 @@ import { documentScrollerOf } from "./document-frame.js";
  * video an agent recorded is carried across as it is, and waits as a quiet
  * box, since its bytes draw no picture, and so does a PDF laid in, which
  * once kept is drawn as its file's chip (`picture-block.tsx`).
- * Selected, a picture offers its tools: Alt text and Caption, each a field
- * under it, Enlarge, and Delete. They hang above the picture from its left
+ * Selected, a picture offers its tools: Alt text, a field under it,
+ * Caption, Enlarge, and Delete. Its caption is typed in place, the muted
+ * line under it that the text draws (`@repo/ui`'s `CaptionField`): Caption
+ * puts the caret at its end, a press on its words puts it there, Return
+ * starts a new line after the picture, ↓ goes on to the line after it, and
+ * ↑ or Escape go back to the picture, selected. A picture with no caption draws nothing
+ * under it until Caption opens one, which shows its placeholder while it
+ * holds the caret and goes again when left empty. They hang above the picture from its left
  * edge, as wide as their own names, so a skinny picture neither squeezes
  * them nor sits under them, unless the description's scroller would cut them off
  * there, when they stand inside its top edge; in a column too narrow for
@@ -107,13 +118,15 @@ const TOOL = {
   DELETE: "Delete",
 } as const;
 
-/** What a field under a picture describes. */
-const DESCRIBING = {
-  ALT: { label: TOOL.ALT },
-  CAPTION: { label: TOOL.CAPTION },
-} as const;
+/** What an empty caption says while it holds the caret. */
+const CAPTION_PLACEHOLDER = "Write a caption";
 
-type Describing = (typeof DESCRIBING)[keyof typeof DESCRIBING];
+/** Where the caret goes in the text as each way out of a caption leaves it. */
+const CAPTION_LEFT_TO = {
+  [CAPTION_LEAVE.UP]: PICTURE_LEAVE.UP,
+  [CAPTION_LEAVE.DOWN]: PICTURE_LEAVE.DOWN,
+  [CAPTION_LEAVE.NEW_LINE]: PICTURE_LEAVE.NEW_LINE,
+} as const satisfies Record<CaptionLeave, PictureLeave>;
 
 /** The narrowest column a selected picture's tools say their names in; narrower, each is its glyph. */
 const TOOLS_WORDED_PX = 360;
@@ -263,14 +276,12 @@ function UploadingPicture({
   );
 }
 
-/** The field under a picture that describes it anew: its words saved on Return, let go on Escape. */
+/** The field under a picture that says its alt text anew: its words saved on Return, let go on Escape. */
 function DescribeField({
-  describing,
   value,
   onSave,
   onClose,
 }: {
-  describing: Describing;
   value: string;
   onSave: (words: string) => void;
   onClose: () => void;
@@ -284,8 +295,8 @@ function DescribeField({
 
   return (
     <span className="mx-0 mt-item-gap mb-block-gap grid w-picture-describe">
-      {/* Note that a picture's words may be cleared, so the field says it may be left empty. */}
-      <FormField label={describing.label} optional>
+      {/* Note that a picture's alt text may be cleared, so the field says it may be left empty. */}
+      <FormField label={TOOL.ALT} optional>
         {(field) => (
           <TextField
             field={field}
@@ -397,19 +408,35 @@ function KeptPicture({
     pictureUnread,
   );
 
-  const [describing, setDescribing] = useState<Describing | undefined>(undefined);
+  const [describing, setDescribing] = useState(false);
+  // Whether an empty caption stands open under the picture, as Caption opens one.
+  const [captioning, setCaptioning] = useState(false);
+  // How many times Caption has asked for the caret, which each ask puts at the caption's end.
+  const [asked, setAsked] = useState(0);
+  const captionField = useRef<HTMLTextAreaElement>(null);
   const own = named?.taskId === door.taskId;
+
+  useLayoutEffect(() => {
+    const field = captionField.current;
+
+    if (asked === 0 || field === null) return;
+    field.focus();
+    field.setSelectionRange(field.value.length, field.value.length);
+  }, [asked]);
 
   const tools: PictureTool[] = [
     {
       label: TOOL.ALT,
       icon: <TextCursorInputIcon aria-hidden="true" />,
-      run: () => setDescribing(DESCRIBING.ALT),
+      run: () => setDescribing(true),
     },
     {
       label: TOOL.CAPTION,
       icon: <CaptionsIcon aria-hidden="true" />,
-      run: () => setDescribing(DESCRIBING.CAPTION),
+      run: () => {
+        setCaptioning(true);
+        setAsked((was) => was + 1);
+      },
     },
     ...(own && named !== undefined
       ? [
@@ -436,19 +463,36 @@ function KeptPicture({
       <PictureBlock
         state={named === undefined ? { kind: PICTURE_STATE.MISSING } : state}
         alt={picture.alt}
-        caption={picture.title === "" ? undefined : picture.title}
+        caption={undefined}
+        captionField={
+          picture.title === "" && !captioning ? undefined : (
+            <CaptionField
+              ref={captionField}
+              label={TOOL.CAPTION}
+              placeholder={CAPTION_PLACEHOLDER}
+              value={picture.title}
+              onChange={(words) => doors.describe({ title: words })}
+              onLeave={(way) => doors.leave(CAPTION_LEFT_TO[way])}
+              onEscape={() => doors.leave(PICTURE_LEAVE.UP)}
+              onBlur={() => {
+                // Note that the words are kept as typed, spaces and all, until the caret leaves them.
+                setCaptioning(false);
+                const kept = picture.title.trim();
+
+                if (kept !== picture.title) doors.describe({ title: kept });
+              }}
+            />
+          )
+        }
       />
       {selected ? <PictureTools column={drawn.element} tools={tools} /> : null}
-      {describing === undefined ? null : (
+      {describing ? (
         <DescribeField
-          describing={describing}
-          value={describing === DESCRIBING.ALT ? picture.alt : picture.title}
-          onSave={(words) =>
-            doors.describe(describing === DESCRIBING.ALT ? { alt: words } : { title: words })
-          }
-          onClose={() => setDescribing(undefined)}
+          value={picture.alt}
+          onSave={(words) => doors.describe({ alt: words })}
+          onClose={() => setDescribing(false)}
         />
-      )}
+      ) : null}
     </span>
   );
 }
