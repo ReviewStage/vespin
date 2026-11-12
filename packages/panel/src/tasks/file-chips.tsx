@@ -106,7 +106,10 @@ export function useWordFileViewer(files: readonly FileChip[]): UseWordFileViewer
 }
 
 /** The files among a message's that its words name, in the order they first name each. */
-function filesInWords(files: readonly FileChip[], words: string): readonly FileChip[] {
+function filesInWords<File extends FileChip>(
+  files: readonly File[],
+  words: string,
+): readonly File[] {
   const named = [...new Set(fileMarkers(words).map((marker) => marker.name))];
 
   return named.flatMap((name) => {
@@ -114,6 +117,16 @@ function filesInWords(files: readonly FileChip[], words: string): readonly FileC
 
     return file === undefined ? [] : [file];
   });
+}
+
+/** The files among a message's that its words name none of, in the order given, for a row over the words that draws nothing where the words name every file. */
+export function filesBesideWords<File extends FileChip>(
+  files: readonly File[],
+  words: string,
+): readonly File[] {
+  const placed = filesInWords(files, words);
+
+  return files.filter((file) => !placed.includes(file));
 }
 
 /** A message's files as its words draw them: those the words name, for the words to draw where each marker stands, the rest for the row over them, and the viewer a chip opens. */
