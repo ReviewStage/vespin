@@ -149,7 +149,7 @@ const WORDS = {
   NEW_SUB_TASK: "New sub-task",
   COMMENTS: "Comments",
   DELETE: "Permanently delete",
-  NO_TASKS: "No tasks to do",
+  NO_TASKS: "No tasks",
   UNLISTED_TASK: "Task",
   STOP: "Stop",
   ARCHIVE: "Archive",
@@ -680,6 +680,9 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
     );
   }
 
+  // Note that an empty workspace draws the system's empty view, as the Inbox's does, rather than a bare list.
+  if (treeEmpty(tree)) return <EmptyState title={WORDS.NO_TASKS} symbol="checklist" />;
+
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
       {tree.pinned === undefined ? null : <GroupSection group={tree.pinned} listing={listing} />}
@@ -689,7 +692,6 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
       {tree.tasks.map((group) => (
         <GroupSection key={group.key} group={group} listing={listing} />
       ))}
-      {treeEmpty(tree) ? <ListSection footer={WORDS.NO_TASKS}>{[]}</ListSection> : null}
     </RowList>
   );
 }
