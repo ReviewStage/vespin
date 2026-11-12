@@ -86,11 +86,11 @@ interface MacOptions {
 /** The clock nudged, and the state folder's reads and writes, which wait on no clock, let land, until the condition holds. */
 const until = (holds: () => boolean) =>
   Effect.gen(function* () {
-    for (let round = 0; round < 20_000 && !holds(); round += 1) {
+    // Note that no count of rounds bounds the wait, because the reads and writes run on the disk however slowly it answers; a condition that never holds ends at the test's timeout.
+    while (!holds()) {
       yield* TestClock.adjust(Duration.millis(100));
       yield* Effect.yieldNow;
     }
-    assert.ok(holds(), "the composer never got there");
   });
 
 /** The clock nudged, and the state folder's reads and writes let land, for the time given. */
@@ -113,6 +113,7 @@ const nudged = (time: Duration.Input) =>
 const thisMac = (stateRoot: string, options: MacOptions = {}) =>
   Effect.gen(function* () {
     const asked: string[] = [];
+    const reported: string[] = [];
     const enrolled: { deviceId: string; version: string | null }[] = [];
     let failedRegisters = options.failedRegisters ?? 0;
     let status = options.status ?? THIS_MAC_AGENT_STATUS.NOT_REGISTERED;
@@ -193,7 +194,9 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
               ? new Response("{}", { status: 503 })
               : Response.json({ done: true });
           }),
-          reporterLayer(() => undefined),
+          reporterLayer((message) => {
+            reported.push(message);
+          }),
           Layer.succeed(ThisMacHost, {
             stateRoot,
             home: homeOf(stateRoot),
@@ -272,7 +275,18 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
       userId = undefined;
       return PubSub.publish(settingsTold, undefined);
     });
-    return { asked, enrolled, scripts, held, turn, flip, allow, keepAwakeChosen, signOut };
+    return {
+      asked,
+      reported,
+      enrolled,
+      scripts,
+      held,
+      turn,
+      flip,
+      allow,
+      keepAwakeChosen,
+      signOut,
+    };
   });
 
 /** A state folder of the test's own, standing empty beside the home its host runs with (`homeOf`), which a removal of the host deletes. */
@@ -439,13 +453,10 @@ it.effect(
         const mac = yield* thisMac(stateRoot, { listed: [KEPT_ID] });
 
         yield* until(() => mac.asked.includes("register"));
-        let target = yield* fileSystem.readLink(link);
-        for (let round = 0; round < 2_000 && target !== launcherOf(stateRoot); round += 1) {
-          yield* nudged(Duration.millis(100));
-          target = yield* fileSystem.readLink(link);
-        }
+        // Note that the link is moved on the disk, which takes no clock, so the test reads it until it names the launcher, the test's timeout bounding a move that never lands; a link gone between its removal and its making reads as none.
+        const linked = Effect.orElseSucceed(fileSystem.readLink(link), () => undefined);
+        while ((yield* linked) !== launcherOf(stateRoot)) yield* nudged(Duration.millis(100));
 
-        assert.equal(target, launcherOf(stateRoot));
         assert.deepEqual(Option.getOrUndefined(yield* readHostDevice(stateRoot)), STANDING);
         for (const folder of kept) assert.ok(yield* fileSystem.exists(folder), folder);
       }).pipe(Effect.provide(FILES)),
@@ -553,7 +564,10 @@ it.effect(
         yield* fileSystem.makeDirectory(folder, { recursive: true });
         yield* keepOwnedAgent(stateRoot, AGENT_ID);
         const mac = yield* thisMac(stateRoot, { status: THIS_MAC_AGENT_STATUS.ENABLED });
-        yield* until(() => mac.asked.length > 0);
+        // Note that the removal deletes real folders, which take no clock to finish, so the test waits on the report the composer makes once they are gone.
+        yield* until(() =>
+          mac.reported.some((line) => line.includes("removed, as the service refused")),
+        );
         yield* nudged(Duration.minutes(1));
 
         assert.deepEqual(mac.asked, ["unregister"], "a refused record has nothing to leave");
@@ -595,17 +609,19 @@ it.effect.each([
     case: "unregisters its agent before the host leaves and its state goes",
     registers: true,
     deleteFolders: true,
+    launched: [],
     removed: ["unregister", "leave"],
   },
   {
     case: "runs the account install's uninstall, keeping its agents' folders as asked, where this build does not register the agent",
     registers: false,
     deleteFolders: false,
+    launched: ["install"],
     removed: ["uninstall --keep-agents"],
   },
 ] as const)(
   "turning This Mac off $case, and reads off until it is turned on again",
-  ({ registers, deleteFolders, removed }) =>
+  ({ registers, deleteFolders, launched, removed }) =>
     Effect.scoped(
       Effect.gen(function* () {
         const stateRoot = yield* recorded(STANDING);
@@ -614,9 +630,10 @@ it.effect.each([
           registers,
           status: THIS_MAC_AGENT_STATUS.ENABLED,
         });
-        yield* until(() => mac.held()?.enrolled === true);
+        // Note that a build that does not register runs the install script at launch, as it keeps the account's host running, so the turn is asked only once the launch's own steps have landed, and only what the turn asked is read.
+        yield* until(() => mac.held()?.enrolled === true && mac.asked.length >= launched.length);
         yield* nudged(Duration.minutes(1));
-        // Note that a build that does not register runs the install script at launch, as it keeps the account's host running, so only what the turn asked is read.
+        assert.deepEqual(mac.asked, launched);
         const before = mac.asked.length;
 
         assert.deepEqual(yield* mac.turn(false, deleteFolders), { done: true });
