@@ -94,6 +94,10 @@ import {
   type PushDeviceNotifyParams,
   type PushDeviceRegisterParams,
   type PushDeviceStatusAnswerView,
+  type ReplyButtonAnswerView,
+  type ReplyButtonParams,
+  type ReplyButtonPressAnswerView,
+  type ReplyButtonPressParams,
   type SoundAddAnswerView,
   type SoundAddParams,
   type SoundChoiceAnswerView,
@@ -1321,6 +1325,27 @@ export class HostedAgentClient {
   /** Keeps one agent on screen warm for the next message (`agentWarmAnswerSchema`). */
   warm(agentId: string): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.agents.warm, { id: agentId });
+  }
+
+  /** One button in an agent's reply as the window draws it, or why it is not drawn. */
+  replyButton(
+    params: ReplyButtonParams,
+  ): Effect.Effect<ReplyButtonAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agents.readButton, {
+      id: params.agentId,
+      button: params.buttonId,
+    });
+  }
+
+  /** One suggestion in an agent's reply sent from its draft as the member, run once: the button as its send then stands, or why the send was refused. */
+  pressReplyButton(
+    params: ReplyButtonPressParams,
+  ): Effect.Effect<ReplyButtonPressAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(
+      this.#hosted.agents.pressButton,
+      { params: { id: params.agentId, button: params.buttonId }, body: params.sent },
+      { deadline: HOSTED_DEADLINE.START },
+    );
   }
 
   /** Takes one agent back to just before one of the developer's lines, stopping it first where it still works, answering it as it then stands. */

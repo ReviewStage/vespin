@@ -125,6 +125,7 @@ import { continuedByOf, standingsOf, stoppedAgent, summaryOf } from "./coder-hos
 import { startedFromBefore } from "./coder-host/takeover.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import { turnChangesOf } from "./coder-host/turn-changes.js";
+import { pressReplyButton, readReplyButtonView } from "./reply-buttons/press.js";
 import { ranRunAction, stoppedRunAction } from "./run-actions.js";
 import type { SandboxDeleteReach } from "./session-sandboxes.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
@@ -445,6 +446,21 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
 
       return startAnswer(started);
     }),
+    /** One button in the agent's reply as the window draws it. */
+    readButton: signedIn.readButton.effect(function* ({ input, context }) {
+      return yield* readReplyButtonView(context.userId, input.id, input.button);
+    }),
+    /** One suggestion in the agent's reply sent from its draft as the member, run once (`reply-buttons/press.ts`). */
+    pressButton: signedIn.pressButton.effect(function* ({ input, context }) {
+      return yield* pressReplyButton(
+        writer,
+        context.userId,
+        input.params.id,
+        input.params.button,
+        input.body,
+        yield* summaryModelOf,
+      );
+    }),
     /** The agent as its own page. */
     read: signedIn.read.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
@@ -608,11 +624,13 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /** The agent taken back to just before one of the developer's lines (`agent-lifecycle.ts`), answered as it then stands. */
     rewind: signedIn.rewind.effect(function* ({ input, context }) {
       return {
-        agent: yield* rewoundAgentById(
-          context.userId,
-          input.params.id,
-          input.body.messageId,
-          input.body.restoreFiles === true,
+        agent: yield* inSandbox(
+          rewoundAgentById(
+            context.userId,
+            input.params.id,
+            input.body.messageId,
+            input.body.restoreFiles === true,
+          ),
         ),
       };
     }),
@@ -620,7 +638,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     turnChanges: signedIn.turnChanges.effect(function* ({ input, context }) {
       const { agent } = yield* reachedAgentById(context.userId, input.id);
 
-      return yield* turnChangesOf(context.userId, agent, input.messageId);
+      return yield* inSandbox(turnChangesOf(context.userId, agent, input.messageId));
     }),
     /**
      * The agent's changes: the files of the pull request its kept published

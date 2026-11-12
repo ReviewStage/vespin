@@ -414,7 +414,8 @@ function useIntegrationActs(
   };
 
   const menuOf = (row: ServerRow): readonly MemberRowAct[] => {
-    if (bySignIn(row.provider)) return [];
+    // Note that a row whose act is out offers no menu until it answers, as its button is held; a Disconnect asked then would go nowhere.
+    if (bySignIn(row.provider) || busy.has(row.connection)) return [];
 
     if (row.kind === SERVER_ROW.SIGNING_IN) {
       return [{ label: SIGN_IN_ACTION.REOPEN, onPress: () => connect(row) }];

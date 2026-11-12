@@ -2542,6 +2542,21 @@ svg.lucide {
   outline-offset: 2px;
 }
 
+/* ProseMirror's own hack nodes beside a picture, a separator before it and a
+   separator and line break after it at its line's end, which each stand on a
+   line of their own beside the picture's block and draw an empty line with a
+   caret of the picture's height. The editor never puts the caret there
+   (`picture-node.ts`'s `pictureCaret`), so they draw nothing. */
+.description-document-text
+:is(
+  .ProseMirror-separator:has(+ .editor-picture),
+  .editor-picture + .ProseMirror-separator,
+  .editor-picture + .ProseMirror-separator + .ProseMirror-trailingBreak,
+  .editor-picture + .ProseMirror-trailingBreak
+) {
+  display: none;
+}
+
 /* A version's changes (`version-view.tsx`, `markdown-message.tsx`'s change
    marks): words written in on a green wash, words struck out struck on a red
    one and dimmed, so neither reads by its color alone. The washes are the

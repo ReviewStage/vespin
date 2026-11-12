@@ -166,18 +166,6 @@ const STATUS_OF_VERCEL: ReadonlyMap<string, SandboxStatus> = new Map([
 ]);
 
 /**
- * The snapshots Vercel keeps of a sandbox: the newest alone, which is all a
- * resume reads, so snapshot storage stays flat however many runs stop it.
- * An evicted one is deleted at once, and the kept one expires `EXPIRATION`
- * after it was last used unless the create names its own lapse, as Vercel's
- * persistent sandbox examples keep one
- * (https://vercel.com/docs/sandbox/concepts/persistent-sandboxes), named here
- * because Vercel's own pages disagree on the default. The cost: a sandbox
- * resumed after 7 idle days finds no snapshot (`SnapshotGone`).
- */
-const KEPT_SNAPSHOTS = { COUNT: 1, EXPIRATION: Duration.days(7), DELETE_EVICTED: true } as const;
-
-/**
  * How a touch lengthens a running session (`touch`). Vercel's extension adds
  * to the session's timeout, so the touch reads where the session ends and
  * extends it by the difference to `SANDBOX_IDLE` from now: only where that
@@ -721,11 +709,15 @@ async function replacedOnOwnDrive(
 }
 
 /**
- * A create as `@vercel/sandbox` takes it: persistent, each run `SANDBOX_IDLE`
- * long, from the image or the snapshot the ask names, with the drive mounted
- * read-write at its path in the drive's own region where it opens with one,
- * as Vercel's drives must be, keeping its newest snapshot alone
- * (`KEPT_SNAPSHOTS`), on the open internet.
+ * A create as `@vercel/sandbox` takes it: not persistent, so a stop
+ * discards its disk and Vercel keeps no snapshot of it, each run
+ * `SANDBOX_IDLE` long, from the image or the snapshot the ask names, with
+ * the drive mounted read-write at its path in the drive's own region where
+ * it opens with one, as Vercel's drives must be, on the open internet. Note
+ * that Vercel resumes no stopped sandbox that is not persistent
+ * (https://vercel.com/docs/sandbox/concepts/persistent-sandboxes), so one
+ * is made again on its own drive (`replacedOnOwnDrive`), while a sandbox
+ * created persistent before keeps the setting it was created with.
  */
 function createParams(ask: SandboxCreate, mounted: MountedDrive | undefined) {
   return {
@@ -736,15 +728,10 @@ function createParams(ask: SandboxCreate, mounted: MountedDrive | undefined) {
       ? undefined
       : { mounts: { [mounted.at]: mounted.drive }, region: mounted.drive.region }),
     name: ask.name,
-    persistent: true,
+    persistent: false,
     tags: { ...ask.tags },
     timeout: Duration.toMillis(SANDBOX_IDLE),
     ...(ask.vcpus === undefined ? undefined : { resources: { vcpus: ask.vcpus } }),
-    keepLastSnapshots: {
-      count: KEPT_SNAPSHOTS.COUNT,
-      expiration: Duration.toMillis(ask.snapshotLapse ?? KEPT_SNAPSHOTS.EXPIRATION),
-      deleteEvicted: KEPT_SNAPSHOTS.DELETE_EVICTED,
-    },
     env: { ...ask.env },
     networkPolicy: sdkPolicyOf(OPEN_INTERNET),
   };

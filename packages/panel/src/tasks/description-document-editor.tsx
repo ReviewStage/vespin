@@ -30,6 +30,7 @@ import {
   type EditorAnchors,
   type PictureLanding,
   PLACEMENT_END,
+  type PlacedPicture,
   type PlacedWords,
 } from "../description-editor/contract.js";
 import { descriptionFiles, offersDescriptionFiles } from "../picture-files.js";
@@ -85,6 +86,9 @@ export const EDITOR_ROOM_CLASS = "description-document-editor";
 
 /** What the developer does that ends the editor keeping the words it opened on where they stood: a scroll, a press, or a key. */
 const KEEPING_ENDS = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+
+/** A picture drawn in the text, whose press opens the editor with it selected. */
+const PICTURE_SELECTOR = ".picture-block";
 
 /** How long the typing pauses before the document hears the text. */
 const DRAFT_PAUSE = Duration.millis(150);
@@ -183,6 +187,20 @@ function sectionWordsAt(
   return { section, text, occurrence, offset: range.startOffset, code, top: lineTop(range, words) };
 }
 
+/** The picture a press landed on in a section's drawn block, by how many the block draws before it (`PlacedPicture`); none off a picture, and none on a picture's caption, which is words. */
+function sectionPictureAt(
+  block: HTMLElement,
+  section: number,
+  target: Element,
+): PlacedPicture | undefined {
+  const picture = target.closest(PICTURE_SELECTOR);
+
+  if (picture === null || target.closest(".picture-caption") !== null) return undefined;
+  const occurrence = [...block.querySelectorAll(PICTURE_SELECTOR)].indexOf(picture);
+
+  return occurrence === -1 ? undefined : { section, occurrence };
+}
+
 /** Whether an element is a heading that opens a section, as the editor counts them (`SECTION_LEVELS`). */
 function opensSection(element: Element | null | undefined): element is HTMLHeadingElement {
   return (
@@ -236,7 +254,8 @@ export function documentWordsAt(root: HTMLElement, range: Range): PlacedWords | 
 
 /**
  * Where a click on drawn words opens their editor, each of its words found
- * by `place`: on the words the click landed on, or, where its press selected
+ * by `place`: on the picture the click landed on, found by `pictureOf`, which
+ * the editor opens selected, on the words it landed on, or, where its press selected
  * words, selecting them again from where the selection started to where it
  * ended, so the editor's format toolbar stands over them as over words
  * selected in the editor. None where it landed on no words to edit, or
@@ -248,8 +267,13 @@ export function clickPlacement(
   x: number,
   y: number,
   place: (range: Range) => PlacedWords | undefined,
+  pictureOf?: (target: Element) => PlacedPicture | undefined,
 ): DescriptionEditorPlacement | undefined {
   if (!pressesWords(target)) return undefined;
+  const picture = target instanceof Element ? pictureOf?.(target) : undefined;
+
+  // A press on a picture opens the editor with that picture selected, never on words beside it.
+  if (picture !== undefined) return { x, y, picture };
   const selection = window.getSelection();
 
   if (selection === null || selection.isCollapsed) {
@@ -836,8 +860,12 @@ export function DocumentBlock({
         editing.select(host);
       }}
       onPress={({ target, x, y, block: pressed }) => {
-        const placement = clickPlacement(target, x, y, (range) =>
-          sectionWordsAt(pressed, section, range),
+        const placement = clickPlacement(
+          target,
+          x,
+          y,
+          (range) => sectionWordsAt(pressed, section, range),
+          (at) => sectionPictureAt(pressed, section, at),
         );
 
         if (placement !== undefined) editing.open(placement);

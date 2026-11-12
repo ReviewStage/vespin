@@ -7,6 +7,7 @@ import { createContext, type ReactElement, type ReactNode, useContext } from "re
 import { StyleSheet } from "react-native";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
+import { InlineHost } from "./inline-host.js";
 import {
   KEEP_ACT,
   KEEP_SYMBOL,
@@ -141,11 +142,11 @@ export function HeldMenu({
   if (acts.length === 0) return children;
 
   return (
-    <Host matchContents={{ vertical: true }} style={styles.host}>
+    <InlineHost matchContents={{ vertical: true }} style={styles.host}>
       <HeldSwiftMenu acts={acts}>
         <RNHostView matchContents={{ vertical: true }}>{children}</RNHostView>
       </HeldSwiftMenu>
-    </Host>
+    </InlineHost>
   );
 }
 

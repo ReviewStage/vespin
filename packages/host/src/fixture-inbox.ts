@@ -96,6 +96,7 @@ import {
 } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { McpClient } from "@repo/features/mcp-client-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import {
   MODEL_PROVIDER,
@@ -1228,6 +1229,24 @@ const INSTALLED_SKILL_FILES: ReadonlyMap<
   ],
 ]);
 
+/** The apps the account allowed to use it over MCP, as Settings › MCP lists them: one signing in on this computer, active today, and one on the web. */
+const MCP_CLIENTS: readonly McpClient[] = [
+  {
+    clientId: "mcp-client-terminal",
+    name: "Claude Code",
+    redirectUris: ["http://localhost:53682/callback"],
+    allowedAt: LANDED - 12 * DAY,
+    lastRefreshedAt: LANDED - 3 * HOUR,
+  },
+  {
+    clientId: "mcp-client-web",
+    name: "ChatGPT",
+    redirectUris: ["https://chatgpt.com/connector_platform_oauth_redirect"],
+    allowedAt: LANDED - 30 * DAY,
+    lastRefreshedAt: null,
+  },
+];
+
 /** The fixture workspace's one pending invitation, a week from running out. */
 const INVITATIONS: readonly WorkspaceInvitation[] = [
   {
@@ -1899,6 +1918,9 @@ export function inboxAppState(
     [LIVE_READ.MEMORIES]: {
       [FIXTURE_IDS.WORKSPACE]: { rows: MEMORIES },
       [TEAM_WORKSPACE.id]: { rows: [] },
+    },
+    [LIVE_READ.MCP_CLIENTS]: {
+      [ADA.userId]: { rows: { serverUrl: "https://vespin.dev/api/mcp", clients: MCP_CLIENTS } },
     },
     [LIVE_READ.INSTALLED_SKILLS]: {
       [FIXTURE_IDS.WORKSPACE]: { rows: INSTALLED_SKILLS },

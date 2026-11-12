@@ -162,7 +162,8 @@ export const GLYPH = {
   STOP_TURN: system("stop.fill"),
   // The panel's own marks, which no Lucide glyph draws: a task's status ring,
   // a check box and a radio, a check still running, a face and the app's,
-  // an MCP server and its tool, and an unassigned task.
+  // an MCP server and its tool, the apps that reach Vespin over MCP (the
+  // panel's product mark), and an unassigned task.
   STATUS_BACKLOG: system("circle.dashed"),
   STATUS_TODO: system("circle"),
   STATUS_IN_PROGRESS: system("circle.righthalf.filled"),
@@ -179,6 +180,7 @@ export const GLYPH = {
   APP: system("app"),
   MCP_SERVER: system("server.rack"),
   MCP_TOOL: system("wrench.and.screwdriver"),
+  MCP_CLIENTS: system("app.connected.to.app.below.fill"),
 } as const;
 
 /** A workspace's letter tile as a menu's row draws it, SF Symbols' filled square holding its letter, since a menu's row takes an image and never the tile itself. */
