@@ -5,19 +5,22 @@
  * task, so no account reads or presses a button of a workspace it is not in,
  * or of a task kept from it. Its press runs once: the claim writes who
  * pressed it only where no one has, or where a press that has not landed is
- * the same member's own or one whose presser's account is gone, so a
- * second press from anyone else reads the first rather than running again,
+ * the same member's own, one whose presser's account is gone, or one left
+ * standing past `PRESS_CLAIM_LAPSE`, so a second press from anyone else
+ * reads the first rather than running again,
  * and the presser's retry runs again under the same key, which the start or
- * the send it runs answers once (`@repo/service`'s `reply-button-press.ts`).
+ * the send it runs answers once (`@repo/service`'s `reply-buttons/press.ts`).
  * Each claim is its own attempt, which alone releases it, so an attempt
  * refused after its presser's retry claimed again leaves the retry's claim
- * standing. A press that landed keeps the agent it reached; one refused is
- * released, so the button may be pressed again.
+ * standing. A press that landed keeps the agent it reached, and an attempt
+ * that ran lands even where a later attempt of the same member's was refused
+ * and released the claim; one refused is released, so the button may be
+ * pressed again.
  */
 
 import { type ReplyButtonAction, replyButtonActionSchema } from "@repo/features/reply-button-wire";
-import { and, eq, exists, isNull, or, sql } from "drizzle-orm";
-import { Effect, type Option, Schema } from "effect";
+import { and, eq, exists, isNull, lt, or, sql } from "drizzle-orm";
+import { Duration, Effect, type Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
@@ -26,6 +29,16 @@ import { task } from "../schemas/task.js";
 import { taskReachableBy } from "./workspace-store.js";
 
 type ButtonEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
+
+/**
+ * How long a press that has not landed holds its button against another
+ * member. Note that it outlasts the longest a function of the service runs
+ * (800 seconds), so the attempt holding a claim this old is gone, and the
+ * button is not left unpressable for good by a press cut off past its
+ * release; a presser's own retry claims afresh, so a press still running
+ * keeps it.
+ */
+const PRESS_CLAIM_LAPSE = Duration.minutes(15);
 
 const ReplyButtonSchema = Schema.Struct({
   id: Schema.String,
@@ -88,9 +101,9 @@ const insertButton = SqlSchema.findOne({
 const PressSchema = Schema.Struct({ buttonId: Schema.String, userId: Schema.String });
 
 const claimPress = SqlSchema.findAll({
-  Request: Schema.Struct({ ...PressSchema.fields, now: Schema.Date }),
+  Request: Schema.Struct({ ...PressSchema.fields, now: Schema.Date, lapsedBefore: Schema.Date }),
   Result: Schema.Struct({ attempt: Schema.String }),
-  execute: ({ buttonId, userId, now }) =>
+  execute: ({ buttonId, userId, now, lapsedBefore }) =>
     Database.use((db) =>
       db
         .update(button)
@@ -101,7 +114,9 @@ const claimPress = SqlSchema.findAll({
             isNull(button.landedAt),
             or(
               isNull(button.pressedAt),
-              or(eq(button.pressedBy, userId), isNull(button.pressedBy)),
+              eq(button.pressedBy, userId),
+              isNull(button.pressedBy),
+              lt(button.pressedAt, lapsedBefore),
             ),
             // Note that a member presses only a button whose agent's task they reach, as they read one.
             exists(
@@ -127,9 +142,21 @@ const settlePress = SqlSchema.void({
     Database.use((db) =>
       db
         .update(button)
-        .set({ reachedAgentId, landedAt: now })
-        // Note that a press landed is kept as it landed, so a late settle of the same press changes nothing.
-        .where(and(eq(button.id, buttonId), eq(button.pressedBy, userId), isNull(button.landedAt))),
+        .set({
+          pressedBy: userId,
+          pressedAt: sql`coalesce(${button.pressedAt}, ${now})`,
+          reachedAgentId,
+          landedAt: now,
+        })
+        .where(
+          and(
+            eq(button.id, buttonId),
+            // Note that a press landed is kept as it landed, so a late settle of the same press changes nothing.
+            isNull(button.landedAt),
+            // Note that a claim a later attempt of the member's released still lands, since this attempt ran.
+            or(eq(button.pressedBy, userId), isNull(button.pressedBy)),
+          ),
+        ),
     ),
 });
 
@@ -179,18 +206,24 @@ export function readReplyButton(
  * task, answering the attempt that holds the claim: where no one had
  * pressed it, where the member's own earlier press has not landed, which
  * runs again under the same key, or where one that has not landed is of an
- * account since gone; none where another member's press stands, any press
- * landed, or the member reaches no such button.
+ * account since gone or was claimed longer than `PRESS_CLAIM_LAPSE` ago;
+ * none where another member's press stands, any press landed, or the member
+ * reaches no such button.
  */
 export function claimReplyButtonPress(
   buttonId: string,
   userId: string,
   now: Date,
 ): ButtonEffect<string | undefined> {
-  return Effect.map(claimPress({ buttonId, userId, now }), (rows) => rows[0]?.attempt);
+  const lapsedBefore = new Date(now.getTime() - Duration.toMillis(PRESS_CLAIM_LAPSE));
+
+  return Effect.map(
+    claimPress({ buttonId, userId, now, lapsedBefore }),
+    (rows) => rows[0]?.attempt,
+  );
 }
 
-/** The member's press settled on the agent it started or sent to, landed for good. */
+/** The member's press settled on the agent it started or sent to, landed for good, where it has not landed and no other member's press holds it. */
 export function settleReplyButtonPress(
   buttonId: string,
   userId: string,

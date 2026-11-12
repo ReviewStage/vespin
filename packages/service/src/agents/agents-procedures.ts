@@ -125,6 +125,7 @@ import { continuedByOf, standingsOf, stoppedAgent, summaryOf } from "./coder-hos
 import { startedFromBefore } from "./coder-host/takeover.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import { turnChangesOf } from "./coder-host/turn-changes.js";
+import { pressReplyButton, readReplyButtonView } from "./reply-buttons/press.js";
 import { ranRunAction, stoppedRunAction } from "./run-actions.js";
 import type { SandboxDeleteReach } from "./session-sandboxes.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
@@ -444,6 +445,21 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       );
 
       return startAnswer(started);
+    }),
+    /** One button in the agent's reply as the window draws it. */
+    readButton: signedIn.readButton.effect(function* ({ input, context }) {
+      return yield* readReplyButtonView(context.userId, input.id, input.button);
+    }),
+    /** One suggestion in the agent's reply sent from its draft as the member, run once (`reply-buttons/press.ts`). */
+    pressButton: signedIn.pressButton.effect(function* ({ input, context }) {
+      return yield* pressReplyButton(
+        writer,
+        context.userId,
+        input.params.id,
+        input.params.button,
+        input.body,
+        yield* summaryModelOf,
+      );
     }),
     /** The agent as its own page. */
     read: signedIn.read.effect(function* ({ input, context }) {

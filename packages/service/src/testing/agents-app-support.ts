@@ -164,6 +164,9 @@ const TRANSCRIPT_PART_PATH =
 /** An ask of an agent's a member answers, at its public path on the hosted oRPC router. */
 const AGENT_APPROVAL_PATH = /^\/api\/agents\/[^/]+\/approvals\/[^/]+$/u;
 
+/** A suggestion in an agent's reply, read or sent, at its public path on the hosted oRPC router. */
+const AGENT_BUTTON_PATH = /^\/api\/agents\/[^/]+\/buttons\/[^/]+(?:\/press)?$/u;
+
 export const RELAY = { owner: "Acme", name: "Relay" } as const;
 export const RELAY_FULL_NAME = `${RELAY.owner}/${RELAY.name}`;
 
@@ -628,7 +631,8 @@ export const standing = (
         if (
           pathname === WORKSPACE_AGENTS ||
           TRANSCRIPT_PART_PATH.test(pathname) ||
-          AGENT_APPROVAL_PATH.test(pathname)
+          AGENT_APPROVAL_PATH.test(pathname) ||
+          AGENT_BUTTON_PATH.test(pathname)
         ) {
           return routed(request, webServices);
         }
