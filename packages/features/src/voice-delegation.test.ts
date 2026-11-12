@@ -81,34 +81,41 @@ it.effect("a delegation while the agent is mid-turn is queued, and sent once it 
   }),
 );
 
-it.effect("a reply over 500 tokens goes to the voice cut to its opening sentences", () =>
-  Effect.gen(function* () {
-    // A hundred and twenty sentences of 48 characters, one of them the euro
-    // sign, which UTF-8 spells in 3 bytes: 50 bytes a sentence and 51 with
-    // the space after it. The bound is 500 bytes, so 9 sentences and their
-    // spaces spell 459 and fit, and a 10th would spell 510. A bound counted
-    // in characters would keep more than it may.
-    const sentences = Array.from(
-      { length: 120 },
-      (_, at) => `Fact ${String(at + 1).padStart(2, "0")} costs 9 € now, and the voice may say it.`,
-    );
+it.effect(
+  "a reply over 500 tokens goes to the voice as its opening sentences in four appends",
+  () =>
+    Effect.gen(function* () {
+      // A hundred and twenty sentences of 48 characters, one of them the euro
+      // sign, which UTF-8 spells in 3 bytes: 50 bytes a sentence and 51 with
+      // the space after it. An append holds 500 bytes, so 9 sentences and
+      // their spaces spell 459 and fit, and a 10th would spell 510; a bound
+      // counted in characters would hold more than it may. Four appends tell
+      // the first 36 sentences, and the rest is dropped.
+      const sentences = Array.from(
+        { length: 120 },
+        (_, at) =>
+          `Fact ${String(at + 1).padStart(2, "0")} costs 9 € now, and the voice may say it.`,
+      );
 
-    assert.equal(sentences[0]?.length, 48);
+      assert.equal(sentences[0]?.length, 48);
 
-    const outputs = yield* outputsOf([
-      said("What did you find?"),
-      delegation("item_1"),
-      agent({ kind: AGENT_TURN.STARTED }),
-      agent({ kind: AGENT_TURN.REPLY, text: sentences.join(" ") }),
-    ]);
+      const outputs = yield* outputsOf([
+        said("What did you find?"),
+        delegation("item_1"),
+        agent({ kind: AGENT_TURN.STARTED }),
+        agent({ kind: AGENT_TURN.REPLY, text: sentences.join(" ") }),
+      ]);
 
-    assert.deepEqual(outputs.at(-1), {
-      kind: VOICE_OUTPUT.TELL,
-      event: {
-        type: LIVE_CLIENT_EVENT.COMMENTARY_APPEND,
-        delegation_id: "item_1",
-        content: sentences.slice(0, 9).join(" "),
-      },
-    });
-  }),
+      assert.deepEqual(
+        outputs.slice(1),
+        [0, 9, 18, 27].map((from) => ({
+          kind: VOICE_OUTPUT.TELL,
+          event: {
+            type: LIVE_CLIENT_EVENT.COMMENTARY_APPEND,
+            delegation_id: "item_1",
+            content: sentences.slice(from, from + 9).join(" "),
+          },
+        })),
+      );
+    }),
 );

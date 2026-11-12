@@ -12,10 +12,10 @@
  * turn is over (`agent-queue-wire.ts`), so no second queue stands here.
  *
  * What the agent does goes back as context appends, each within GPT-Live's
- * 500 tokens, held as 500 UTF-8 bytes: a tool's progress as quiet thinking, each
- * finished reply as commentary the voice says in its own words, cut to its
- * opening sentences, and a line the caller typed during the call as
- * thinking, since the agent has it already through the ordinary send. An
+ * 500 tokens, held as 500 UTF-8 bytes: a tool's progress as quiet thinking,
+ * each finished reply as commentary the voice says in its own words, split
+ * at its sentences into a few appends on the one delegation, as GPT-Live
+ * takes several, and a line the caller typed during the call as thinking, since the agent has it already through the ordinary send. An
  * append names the delegation the turn answers, or none for a turn no
  * delegation opened.
  *
@@ -52,6 +52,9 @@ export const LIVE_CLIENT_EVENT = {
  * bytes a token than English prose, and an append over the bound is refused.
  */
 const LIVE_APPEND_MAX_BYTES = 500;
+
+/** How many commentary appends one reply is said in at most: its opening, about 250 words of English, never the whole of a long reply. */
+const REPLY_MAX_APPENDS = 4;
 
 /** Where an input to the loop came from: GPT-Live's data channel, the agent's transcript, or the caller's composer. */
 export const VOICE_INPUT = {
@@ -177,35 +180,58 @@ function segmentsOf(segmenter: Intl.Segmenter, text: string): Iterable<string> {
   return Array.from(segmenter.segment(text), ({ segment }) => segment);
 }
 
-/**
- * The text cut to the bound in UTF-8 bytes, keeping its opening: the whole
- * sentences that fit, or where even the first does not, its words (or, for
- * one word too long alone, its characters) up to the bound with room for an
- * ellipsis.
- */
-function openingWithin(text: string, maxBytes: number): string {
-  const trimmed = text.trim();
-
-  if (bytesOf(trimmed) <= maxBytes) return trimmed;
-  const sentences = prefixWithin(segmentsOf(SENTENCES, trimmed), maxBytes).trimEnd();
-
-  if (sentences !== "") return sentences;
+/** One sentence too long alone, cut to the bound: its words, or for one word too long alone its characters, and an ellipsis counted inside it. */
+function cutWithin(sentence: string, maxBytes: number): string {
   const room = maxBytes - bytesOf(ELLIPSIS);
-  const words = prefixWithin(segmentsOf(WORDS, trimmed), room);
-  const cut = words === "" ? prefixWithin(trimmed, room) : words;
+  const words = prefixWithin(segmentsOf(WORDS, sentence.trim()), room);
+  const cut = words === "" ? prefixWithin(sentence.trim(), room) : words;
 
   return `${cut.trimEnd()}${ELLIPSIS}`;
 }
 
-function tell(type: LiveAppend["type"], delegationId: string | null, content: string): VoiceOutput {
-  return {
+/**
+ * The text as at most the given number of pieces within the bound in UTF-8
+ * bytes, in order from its opening: whole sentences gathered into each, a
+ * sentence too long alone cut as a piece of its own, and what is left past
+ * the last piece dropped.
+ */
+function piecesWithin(text: string, maxBytes: number, maxPieces: number): readonly string[] {
+  const pieces: string[] = [];
+  let piece = "";
+
+  for (const sentence of segmentsOf(SENTENCES, text.trim())) {
+    if (bytesOf(piece + sentence) <= maxBytes) {
+      piece += sentence;
+      continue;
+    }
+
+    if (piece !== "") pieces.push(piece.trimEnd());
+    piece = sentence;
+
+    if (bytesOf(sentence) > maxBytes) {
+      pieces.push(cutWithin(sentence, maxBytes));
+      piece = "";
+    }
+
+    if (pieces.length >= maxPieces) break;
+  }
+
+  if (piece.trim() !== "") pieces.push(piece.trimEnd());
+
+  return pieces.slice(0, maxPieces);
+}
+
+/** The appends that tell the voice the content, at most the number given, each within GPT-Live's bound. */
+function tell(
+  type: LiveAppend["type"],
+  delegationId: string | null,
+  content: string,
+  maxAppends = 1,
+): readonly VoiceOutput[] {
+  return piecesWithin(content, LIVE_APPEND_MAX_BYTES, maxAppends).map((piece) => ({
     kind: VOICE_OUTPUT.TELL,
-    event: {
-      type,
-      delegation_id: delegationId,
-      content: openingWithin(content, LIVE_APPEND_MAX_BYTES),
-    },
-  };
+    event: { type, delegation_id: delegationId, content: piece },
+  }));
 }
 
 type Step = readonly [VoiceState, readonly VoiceOutput[]];
@@ -220,13 +246,11 @@ function delegated(state: VoiceState, delegationId: string): Step {
   if (text === "") {
     return [
       state,
-      [
-        tell(
-          LIVE_CLIENT_EVENT.THINKING_APPEND,
-          delegationId,
-          "Nothing was transcribed for this request yet, so it was not passed to the agent.",
-        ),
-      ],
+      tell(
+        LIVE_CLIENT_EVENT.THINKING_APPEND,
+        delegationId,
+        "Nothing was transcribed for this request yet, so it was not passed to the agent.",
+      ),
     ];
   }
 
@@ -258,9 +282,12 @@ function followedAgent(state: VoiceState, event: AgentTurnEvent): Step {
     case AGENT_TURN.STARTED:
       return [{ ...state, working: true, answering: event.delegationId ?? state.answering }, []];
     case AGENT_TURN.PROGRESS:
-      return [state, [tell(LIVE_CLIENT_EVENT.THINKING_APPEND, state.answering, event.step)]];
+      return [state, tell(LIVE_CLIENT_EVENT.THINKING_APPEND, state.answering, event.step)];
     case AGENT_TURN.REPLY:
-      return [state, [tell(LIVE_CLIENT_EVENT.COMMENTARY_APPEND, state.answering, event.text)]];
+      return [
+        state,
+        tell(LIVE_CLIENT_EVENT.COMMENTARY_APPEND, state.answering, event.text, REPLY_MAX_APPENDS),
+      ];
     case AGENT_TURN.ENDED:
       return [{ ...state, working: false, answering: null }, []];
   }
@@ -283,13 +310,11 @@ function stepped(state: VoiceState, input: ReadInput): Step {
     case VOICE_INPUT.TYPED:
       return [
         state,
-        [
-          tell(
-            LIVE_CLIENT_EVENT.THINKING_APPEND,
-            null,
-            `The caller typed to the agent: ${input.text}`,
-          ),
-        ],
+        tell(
+          LIVE_CLIENT_EVENT.THINKING_APPEND,
+          null,
+          `The caller typed to the agent: ${input.text}`,
+        ),
       ];
   }
 }
