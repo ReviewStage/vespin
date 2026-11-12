@@ -30,9 +30,7 @@ import { useMemberDirectory } from "../member-directory.js";
  * reviewer's face wears where they stand at its corner, a disc in GitHub's
  * own colors with its glyph cut from it: approved a green check, changes
  * asked for a red cross, a review asked for and not given an amber dot, and
- * a comment or a dismissed review quiet. Every name and word here is
- * the repository's, so the places drawing them are left out of the screen
- * recording, as the Changes tab is. The pull request's card names them too,
+ * a comment or a dismissed review quiet. The pull request's card names them too,
  * each reviewer on a row of its own (`pull-request-card.tsx`).
  */
 
@@ -62,6 +60,7 @@ const FACE_GLYPHS = {
 /** Names the people as the members around the caller say. */
 export function useNamer(): (person: GitHubPerson) => Actor {
   const { members, readerId, former } = useMemberDirectory();
+
   return useCallback(
     (person: GitHubPerson) => githubActor(person, { members, readerId, former }),
     [members, readerId, former],
@@ -138,10 +137,12 @@ function ReviewerPile({
   drawn: number;
 }): React.JSX.Element {
   const name = useNamer();
+
   const faces: StackFace[] = reviewers.map(({ state }) => ({
     says: REVIEW_WORDS[state],
     badge: <FaceBadge state={state} />,
   }));
+
   return (
     <ActorStack
       actors={reviewers.map(({ by }) => name(by))}
@@ -170,6 +171,7 @@ export function OpenedLine({
   merged: ReactNode | undefined;
 }): React.JSX.Element {
   const verb = person === undefined ? "Opened" : "opened";
+
   return (
     <span className="pull-request-opened inline-flex min-w-0 items-center gap-tight-gap whitespace-nowrap">
       {person === undefined ? null : <PersonRef person={person} />}

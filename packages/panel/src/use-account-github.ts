@@ -35,12 +35,14 @@ export function useAccountGitHub(): GitHubConnectControl {
   const { mutateAsync: sendConnect } = useMutation(actMutation(ACT_KIND.GITHUB_CONNECT));
   const { mutateAsync: sendDisconnect } = useMutation(actMutation(ACT_KIND.GITHUB_DISCONNECT));
   const toast = useToast();
+
   return useMemo(() => {
     const ask = (
       kind: typeof ACT_KIND.GITHUB_CONNECT | typeof ACT_KIND.GITHUB_DISCONNECT,
     ): Promise<boolean> => {
       if (staged) return Promise.resolve(false);
       const send = kind === ACT_KIND.GITHUB_CONNECT ? sendConnect : sendDisconnect;
+
       return send().then(
         () => true,
         (refused: Error) => {
@@ -49,10 +51,12 @@ export function useAccountGitHub(): GitHubConnectControl {
             tone: STATUS_TONE.DANGER,
             failure: { surface: FAILURE_SURFACE.GITHUB_ACCOUNT, act: kind, cause: refused },
           });
+
           return false;
         },
       );
     };
+
     return {
       connection,
       connect: () => ask(ACT_KIND.GITHUB_CONNECT),

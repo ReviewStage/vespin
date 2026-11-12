@@ -63,10 +63,12 @@ async function workerTabFor(reader: string): Promise<string> {
       title: null,
     },
   ]);
+
   const control = agentsControl({
     agents: [AGENT],
     me: reader,
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() =>
@@ -92,6 +94,7 @@ async function workerTabFor(reader: string): Promise<string> {
   // The place's words, the owner's disc left out of them.
   const place = container.querySelector(".actor-words") ?? assert.fail("the row says whose Mac");
   const disc = place.querySelector(".actor-mark") ?? assert.fail("by the owner's disc");
+
   return (place.textContent ?? "").replace(disc.textContent ?? "", "");
 }
 

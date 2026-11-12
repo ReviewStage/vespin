@@ -42,6 +42,7 @@ const PANEL_PATHS: ReadonlySet<string> = new Set([PANEL_PATH, `${PANEL_PATH}.htm
 /** The place the tab's address `here` names, read as its link on the home; nothing for the panel's own paths or a path naming no place. */
 function linkHere(here: HistoryLocation): ShownLink | undefined {
   if (PANEL_PATHS.has(here.pathname.replace(/\/$/u, ""))) return undefined;
+
   return readShownLink(`${LINK_ORIGIN}${here.href}`);
 }
 
@@ -55,10 +56,13 @@ function addressOfLink(link: ReadLink, here: HistoryLocation): string {
   const url = new URL(linkOf(link.place, link.workspace));
   // Note that the link's own keys are read before any is kept, so a key the tab's query repeats keeps every value.
   const own = new Set(url.searchParams.keys());
+
   for (const [key, value] of new URLSearchParams(here.search)) {
     if (!own.has(key)) url.searchParams.append(key, value);
   }
+
   const hash = url.hash === "" ? here.hash : url.hash;
+
   return `${url.pathname}${url.search}${hash}`;
 }
 
@@ -81,21 +85,28 @@ function standAt(history: RouterHistory, address: string): void {
 export function withLoadLink(bridge: AppBridge, history: RouterHistory): AppBridge {
   standAt(history, currentTaskPath(history.location.href));
   const here = savesStep(history.location) ? undefined : linkHere(history.location);
+
   // A link place lands on its route at the address its link is written at now, which opens it.
   if (routedHere(here)) standAt(history, addressOfLink(here, history.location));
   let loaded = routedHere(here) ? undefined : here;
+
   return {
     ...bridge,
     onShowLink: (listener) => {
       const stop = bridge.onShowLink(listener);
+
       const stopLanding = history.subscribe(({ location, action }) => {
         if (action.type === "PUSH" || action.type === "REPLACE" || savesStep(location)) return;
         const link = linkHere(location);
+
         if (link !== undefined && !routedHere(link)) listener(link);
       });
+
       const waiting = loaded;
       loaded = undefined;
+
       if (waiting !== undefined) listener(waiting);
+
       return () => {
         stop();
         stopLanding();

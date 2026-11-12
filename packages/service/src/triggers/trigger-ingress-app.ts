@@ -76,11 +76,15 @@ const queueEvent = Effect.fnUntraced(function* (
     event.event,
     MAXIMUM_AUTOMATIONS,
   );
+
   const cadence = yield* AutomationCadence;
   let queued = 0;
+
   for (const automation of listening) {
     const { trigger } = automation;
+
     if (trigger.kind !== AUTOMATION_TRIGGER.INTEGRATION) continue;
+
     if (!integrationFiltersMatch(trigger.filters, event.attributes)) continue;
     yield* cadence.publish({
       automationId: automation.id,
@@ -96,6 +100,7 @@ const queueEvent = Effect.fnUntraced(function* (
     });
     queued += 1;
   }
+
   return queued;
 });
 
@@ -107,36 +112,47 @@ function deliveryEndpoint(source: TriggerSource<TriggerSourceServices>) {
     HttpServerRequest.HttpServerRequest | DatabaseServices | TriggerSourceServices
   > {
     const request = yield* HttpServerRequest.HttpServerRequest;
+
     if (request.method !== HTTP_METHOD.POST) {
       return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
     }
+
     const body = yield* readBodyBytesEffect(MAXIMUM_DELIVERY_BYTES);
     const headers = request.headers;
     const verification = yield* source.verify({ headers }, body);
+
     if (verification === TRIGGER_VERIFICATION.UNCONFIGURED) {
       return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     }
+
     if (verification !== TRIGGER_VERIFICATION.VALID) {
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
     }
+
     const delivery: TriggerDelivery = { headers, body, payload: yield* parseJsonBytes(body) };
+
     if (
       source.lifecycle !== undefined &&
       (yield* hostedStoreOrUnavailable(source.lifecycle(delivery)))
     ) {
       return hostedJsonResponse(HOSTED_HTTP_STATUS.OK, { queued: 0 });
     }
+
     const workspace = yield* hostedStoreOrUnavailable(source.workspaceOf(delivery));
+
     if (Option.isNone(workspace)) {
       return hostedJsonResponse(HOSTED_HTTP_STATUS.ACCEPTED, { queued: 0 });
     }
+
     const firedAt = yield* Clock.currentTimeMillis;
     let queued = 0;
+
     for (const event of source.normalize(delivery)) {
       queued += yield* cadenceOrUnavailable(
         queueEvent(source.provider, workspace.value, event, firedAt),
       );
     }
+
     return hostedJsonResponse(HOSTED_HTTP_STATUS.ACCEPTED, { queued });
   });
 }
@@ -146,5 +162,6 @@ export function triggerIngressApp(): WebRoutes<DatabaseServices | TriggerSourceS
   const deliveries = Object.values(TRIGGER_SOURCES).map((source) =>
     HttpRouter.add(ANY_METHOD, source.path, hostedRefusing(deliveryEndpoint(source)())),
   );
+
   return Layer.mergeAll(hostedNotFoundRoute, ...deliveries);
 }

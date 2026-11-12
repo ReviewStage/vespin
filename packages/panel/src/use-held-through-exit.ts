@@ -22,13 +22,18 @@ interface HeldThroughExit<T> {
 /** `shown` while it is anything but nothing, held after it goes until `onExited`. */
 export function useHeldThroughExit<T>(shown: T | undefined): HeldThroughExit<T> {
   const [last, setLast] = useState(shown);
+
   if (shown !== undefined && last !== shown) setLast(shown);
   const onExited = useCallback(() => setLast(undefined), []);
+
   return { held: shown ?? last, onExited };
 }
 
+type UseDrawnThroughExitResult = { drawn: boolean; onExited: () => void };
+
 /** Whether the card is drawn, from `open` until its fade has run, and what to hand its dialog's `onExited`. */
-export function useDrawnThroughExit(open: boolean): { drawn: boolean; onExited: () => void } {
+export function useDrawnThroughExit(open: boolean): UseDrawnThroughExitResult {
   const { held, onExited } = useHeldThroughExit(open ? true : undefined);
+
   return { drawn: held !== undefined, onExited };
 }

@@ -57,6 +57,7 @@ function openedCall(
     ),
   );
   act(() => container.querySelector<HTMLElement>("summary")?.click());
+
   return container;
 }
 
@@ -74,8 +75,11 @@ function buttonNamed(drawing: HTMLElement, name: string): HTMLButtonElement | un
 /** The lines the card found by `selector` shows now, less what it holds `hidden` and the newline that closes the last. */
 function cardLines(drawing: HTMLElement, selector = "[data-tool-output]"): string[] {
   const body = drawing.querySelector(`${selector} pre`)?.cloneNode(true);
+
   if (!(body instanceof Element)) return assert.fail(`No card at ${selector}`);
+
   for (const hidden of body.querySelectorAll("[hidden]")) hidden.remove();
+
   return (body.textContent ?? "").replace(/\n$/u, "").split("\n");
 }
 
@@ -118,6 +122,7 @@ test("Copy copies the whole output, even while it is cut", async () => {
   const copy = drawing.querySelector<HTMLButtonElement>(
     '[data-tool-output] button[aria-label="Copy code"]',
   );
+
   await act(async () => copy?.click());
   assert.deepEqual(copied, [output]);
 });
@@ -125,6 +130,7 @@ test("Copy copies the whole output, even while it is cut", async () => {
 test("a command is one Terminal card, its prompt line over what it printed and its failure under it, and its Copy takes the command alone", async () => {
   const copied: string[] = [];
   fakeAppPlatform(copyingInto(copied));
+
   const drawing = openedCall(
     { kind: TOOL_BLOCK.TEXT, text: "lint passed\nexit 1" },
     {
@@ -179,6 +185,7 @@ test.each([
     subject: "search",
     input: { kind: TOOL_BLOCK.JSON, text: JSON.stringify(value, null, 2) },
   });
+
   assert.deepEqual(cardLines(drawing, "[data-tool-input]"), lines);
   assert.equal(cardTitle(drawing, "[data-tool-input]"), "Input");
 });

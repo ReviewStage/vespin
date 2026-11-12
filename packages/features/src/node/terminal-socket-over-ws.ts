@@ -23,12 +23,14 @@ import type {
 /** A frame's bytes as one array, whatever shape `ws` handed them in. */
 function bytesOf(data: RawData): Uint8Array {
   if (Array.isArray(data)) return new Uint8Array(Buffer.concat(data));
+
   return data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data);
 }
 
 export const openTerminalSocketOverWs: OpenTerminalSocket = (url, headers) =>
   Effect.gen(function* () {
     const arrivals = yield* Queue.unbounded<TerminalSocketArrival, Cause.Done>();
+
     const socket = yield* Effect.acquireRelease(
       Effect.sync(() => {
         const opened = new WebSocket(url, { headers: { ...headers } });
@@ -44,6 +46,7 @@ export const openTerminalSocketOverWs: OpenTerminalSocket = (url, headers) =>
         });
         // A close follows every error, and it is the close that is read.
         opened.on("error", () => undefined);
+
         return opened;
       }),
       (opened) =>
@@ -52,13 +55,16 @@ export const openTerminalSocketOverWs: OpenTerminalSocket = (url, headers) =>
           else opened.terminate();
         }),
     );
+
     return yield* Effect.callback<TerminalSocketOpening>((resume) => {
       let settled = false;
+
       const settle = (opening: TerminalSocketOpening) => {
         if (settled) return;
         settled = true;
         resume(Effect.succeed(opening));
       };
+
       socket.once("open", () =>
         settle({
           socket: {
@@ -66,6 +72,7 @@ export const openTerminalSocketOverWs: OpenTerminalSocket = (url, headers) =>
             send: (frame) =>
               Effect.sync(() => {
                 if (socket.readyState !== WebSocket.OPEN) return;
+
                 if ("bytes" in frame) socket.send(frame.bytes, { binary: true });
                 else socket.send(frame.text);
               }),

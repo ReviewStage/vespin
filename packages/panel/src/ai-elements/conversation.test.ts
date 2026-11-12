@@ -108,6 +108,7 @@ function mountLog(onNearTop?: () => void) {
     ),
   );
   const box = container.querySelector<HTMLElement>("[role=log]") ?? assert.fail("the log");
+
   return { container, box };
 }
 

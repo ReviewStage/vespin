@@ -62,6 +62,7 @@ const anotherConnection = Effect.gen(function* () {
   const url = new URL(process.env[STORE_TEST_DATABASE_ENVIRONMENT.URL] ?? "");
   url.pathname = `/${row?.name ?? ""}`;
   const layer = Layer.fresh(sqlClientOverUrl(url.toString()));
+
   return <A, E>(effect: Effect.Effect<A, E, DatabaseServices>) => Effect.provide(effect, layer);
 });
 
@@ -79,6 +80,7 @@ const takeTxid = Effect.flatMap(SqlClient.SqlClient, (client) =>
 const logProbe = Effect.gen(function* () {
   const db = yield* Database;
   yield* db.insert(PROBE).values({ id: randomUUID(), workspaceId: randomUUID() });
+
   return yield* takeTxid;
 });
 
@@ -106,10 +108,12 @@ const LOOKS = 10_000;
 const settledPast = (txid: number) =>
   Effect.gen(function* () {
     let standing = yield* syncStanding();
+
     for (let look = 1; look < LOOKS && standing.settled <= txid; look += 1) {
       yield* Effect.yieldNow;
       standing = yield* syncStanding();
     }
+
     return standing;
   });
 
@@ -135,12 +139,15 @@ it.layer(probeDB)("the sync log's settled id", (it) => {
                 if (bFirst) yield* takeTxid;
                 yield* Deferred.succeed(bHasTxid, undefined);
                 yield* Deferred.await(bMayLog);
+
                 return yield* logProbe;
               }),
             ),
           ),
         );
+
         yield* Deferred.await(bHasTxid);
+
         const a = yield* Effect.forkChild(
           onA(
             transacted(
@@ -151,6 +158,7 @@ it.layer(probeDB)("the sync log's settled id", (it) => {
             ),
           ),
         );
+
         const aTxid = yield* Deferred.await(aLogged);
         yield* Deferred.succeed(bMayLog, undefined);
         const bTxid = yield* Fiber.join(b);

@@ -391,8 +391,8 @@ subagent's tab stays in the side panel.
   The web app asks the browser's leave as the switch is turned on, never on
   load, and says under the switch where the browser or macOS refuses.
 - **Privacy.** Every word is the agent's, the developer's, or the description's,
-  which the recording masks; its pictures, videos, and code are left out of it
-  (`ph-no-capture`).
+  which the recording masks; its pictures and videos draw empty there, their
+  addresses masked.
 
 ### Settings › Agents
 
@@ -564,9 +564,8 @@ The service lays each save over what others wrote meanwhile
   alone, never on disk.
 - **Undo.** Inside the editor, the editor's own undo. A saved edit is undone
   from the description's history.
-- **Recording.** The editor's text and the title stand under `ph-no-capture`,
-  and their words are document text, which the recording masks in any case;
-  the toolbar and the menus over the text record masked.
+- **Recording.** The editor's text and the title are document text, which
+  the recording masks; the toolbar and the menus over the text record masked.
 
 ### History
 
@@ -719,7 +718,7 @@ it, draws the Runs on chip for the agent it starts like any other start. A
 device that is not the starter's, was removed, or is away refuses the start
 by name, and nothing moves it to the cloud on its own.
 
-While Bring your own machine is on, an agent's ⋯ menu offers Move to ›: Cloud
+An agent's ⋯ menu offers Move to ›: Cloud
 and each of the member's own devices, but not the place the agent runs now,
 a device that takes no agent now dimmed and saying why. It stands only
 where Continue in new agent could run: on an agent at rest, not archived,

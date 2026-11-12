@@ -41,10 +41,12 @@ function watched(
     const machine = yield* SubscriptionRef.make(online);
     const regained = { times: 0 };
     const reported: string[] = [];
+
     const reach = yield* SubscriptionRef.make<ServiceReachState>({
       reachable: true,
       answeredAt: 0,
     });
+
     const state = new AppStateStore(initialAppState(RUN, false, []), yield* Effect.context());
     yield* linkNetworkWatch({
       state,
@@ -57,6 +59,7 @@ function watched(
       ),
       report: (message) => reported.push(message),
     }).pipe(Scope.provide(scope), Effect.provideService(ServiceReach, reach));
+
     return { machine, reach, state, regained, reported };
   });
 }
@@ -137,17 +140,23 @@ it.effect(
       const scope = yield* Scope.make();
       // The service fails one call, answers the next, and then answers nothing.
       let asked = 0;
+
       const service = recordingHttpClient(() => {
         asked += 1;
+
         if (asked === 1) throw new TypeError("Load failed");
+
         return asked === 2 ? jsonResponse({ ok: true }) : new Promise<Response>(() => undefined);
       });
+
       const call = accountCall({ baseUrl: "https://app.test", credential: NO_CREDENTIAL });
       const reReads: unknown[] = [];
+
       const send = (reach: SubscriptionRef.SubscriptionRef<ServiceReachState>) =>
         call
           .send({ method: HTTP_METHOD.GET, path: "/api/live/tasks" })
           .pipe(Effect.provide(service.layer), Effect.provideService(ServiceReach, reach));
+
       const { reach, state, regained } = yield* watched(scope, true, (reach) =>
         Effect.map(send(reach), (answer) => reReads.push(answer)),
       );
@@ -161,9 +170,11 @@ it.effect(
       });
 
       yield* send(reach);
+
       while (asked < 3) yield* Effect.yieldNow;
       assert.equal(regained.times, 1);
       yield* TestClock.adjust("10 seconds");
+
       while (reReads.length === 0) yield* Effect.yieldNow;
 
       assert.deepEqual(reReads, [{ fault: "network", errorName: "TimeoutError" }]);

@@ -1,5 +1,5 @@
 import {
-  AVATAR_SHAPE,
+  AVATAR_OUTLINE,
   AVATAR_SIZE,
   Avatar,
   DocumentIcon,
@@ -139,7 +139,7 @@ function InlineRefs(): React.JSX.Element {
               <Avatar
                 name="Nightly triage"
                 glyph={<CalendarIcon />}
-                shape={AVATAR_SHAPE.SQUARE}
+                outline={AVATAR_OUTLINE.SQUARE}
                 size={AVATAR_SIZE.INLINE}
                 decorative
               />

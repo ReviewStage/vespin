@@ -42,6 +42,7 @@ const MCP_SCOPES = [MEMBER_MCP_SCOPE.MCP, MEMBER_MCP_SCOPE.OFFLINE_ACCESS] as co
 
 const decodeRegistered = Schema.decodeUnknownSync(Schema.Struct({ client_id: Schema.String }));
 const decodeRefusal = Schema.decodeUnknownSync(Schema.Struct({ error: Schema.String }));
+
 const decodeListed = Schema.decodeUnknownSync(
   Schema.Struct({
     serverUrl: Schema.String,
@@ -70,18 +71,23 @@ function resource(services: Context.Context<DatabaseServices>) {
       memberMcpServerUrl: RESOURCE,
     }),
   });
+
   // SAFETY: the resource yields the database alone, which is all a test provides of the web runtime's services.
   const webServices = services as Context.Context<WebServices>;
+
   const ask = (path: string, init: RequestInit) =>
     Effect.promise(async () => {
       const response = await handle(
         new Request(`${MEMBER_MCP_TEST.ORIGIN}${path}`, init),
         webServices,
       );
+
       // SAFETY: the route answers JSON; the test reads it as the wire value it is.
       const body = (await response.json()) as WireBoundaryInput;
+
       return { status: response.status, body };
     });
+
   return {
     list: (userId: string) =>
       ask(HOSTED_SERVICE_PATH.ACCOUNT_MCP_CLIENTS, {
@@ -99,6 +105,7 @@ function resource(services: Context.Context<DatabaseServices>) {
 const registered = (auth: MemberMcpTestAuth) =>
   Effect.promise(async () => {
     const answer = await register(auth, registration(MCP_SCOPES));
+
     return decodeRegistered(await answer.json()).client_id;
   });
 
@@ -111,6 +118,7 @@ const signedIn = (auth: MemberMcpTestAuth, cookie: string, clientId: string) =>
     const landed = await allowConsent(auth, cookie, asked);
     const { refresh_token } = await exchangeTokens(auth, grant, landed);
     assert.ok(refresh_token !== undefined, "the client asked offline_access");
+
     return refresh_token;
   });
 
@@ -129,7 +137,9 @@ const refreshed = (auth: MemberMcpTestAuth, clientId: string, refreshToken: stri
         }),
       }),
     );
+
     const body: unknown = await answer.json();
+
     return answer.ok ? "refreshed" : decodeRefusal(body).error;
   });
 
@@ -144,6 +154,7 @@ it.effect("a client a member signed in through consent is listed to them alone",
     const other = yield* Effect.promise(() => signUp(auth));
     const clientId = yield* registered(auth);
     yield* signedIn(auth, owner.cookie, clientId);
+
     const clients = resource(
       yield* Effect.context<DatabaseServices>().pipe(Effect.provide(services)),
     );
@@ -174,6 +185,7 @@ it.effect(
       const clientId = yield* registered(auth);
       const ownerRefresh = yield* signedIn(auth, owner.cookie, clientId);
       const otherRefresh = yield* signedIn(auth, other.cookie, clientId);
+
       const clients = resource(
         yield* Effect.context<DatabaseServices>().pipe(Effect.provide(services)),
       );
@@ -182,9 +194,11 @@ it.effect(
       assert.equal(revoked.status, HOSTED_HTTP_STATUS.OK);
       assert.deepEqual(listedIds(revoked), []);
       assert.equal(yield* refreshed(auth, clientId, otherRefresh), "invalid_grant");
+
       const asked = yield* Effect.promise(() =>
         authorize(auth, other.cookie, { clientId, scope: MCP_SCOPES, resource: RESOURCE }),
       );
+
       assert.equal(asked.pathname, MEMBER_MCP_TEST.CONSENT_PAGE, asked.href);
 
       assert.deepEqual(listedIds(yield* clients.list(owner.userId)), [clientId]);
@@ -199,11 +213,14 @@ it.effect(
       const { auth, services } = yield* memberMcpStanding();
       const owner = yield* Effect.promise(() => signUp(auth));
       const firstParty = [DESKTOP_OAUTH_CLIENT.id, IOS_OAUTH_CLIENT.id];
+
       const held = Effect.gen(function* () {
         const db = yield* Database;
         const rows = yield* db.select().from(oauthRefreshToken);
+
         return rows.filter((row) => row.userId === owner.userId).map((row) => row.clientId);
       }).pipe(Effect.provide(services));
+
       yield* Effect.gen(function* () {
         const db = yield* Database;
         yield* db
@@ -220,6 +237,7 @@ it.effect(
           })),
         );
       }).pipe(Effect.provide(services));
+
       const clients = resource(
         yield* Effect.context<DatabaseServices>().pipe(Effect.provide(services)),
       );
@@ -227,6 +245,7 @@ it.effect(
       for (const clientId of firstParty) {
         assert.equal((yield* clients.revoke(owner.userId, clientId)).status, HOSTED_HTTP_STATUS.OK);
       }
+
       assert.deepEqual([...(yield* held)].sort(), [...firstParty].sort());
     }),
 );

@@ -119,6 +119,7 @@ function PageNumbers({
   readonly pageCount: number;
 }): React.JSX.Element | null {
   if (pageCount < 2) return null;
+
   return (
     <div className={UNDER_NOTES}>
       <Pagination
@@ -174,8 +175,10 @@ export function ChangelogPage({ view }: { readonly view: ChangelogView }): React
     page: SITE_PAGE.CHANGELOG,
     beneath: view.kind !== CHANGELOG_VIEW.PAGE || view.page !== 1,
   };
+
   const page = view.kind === CHANGELOG_VIEW.PAGE;
   const releases = page ? view.releases : [view.release];
+
   // Wide: the rail and its gutter sit beside the notes, which keep about
   // the reading column's own measure. Each release stands under a rule.
   return (

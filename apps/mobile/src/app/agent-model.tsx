@@ -7,5 +7,6 @@ export { ScreenBoundary as ErrorBoundary } from "../screen-boundary.js";
 
 export default function AgentModelRoute() {
   const { agent = "" } = useLocalSearchParams<{ agent: string }>();
+
   return <AgentOptionsScreen agentId={agent} />;
 }

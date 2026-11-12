@@ -8,7 +8,7 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { UPDATE_STATUS } from "@repo/settings/update";
 import { updateInSidebar } from "@repo/settings/update-row";
 import {
-  BUTTON_SHAPE,
+  BUTTON_CORNERS,
   BUTTON_SIZE,
   BUTTON_VARIANT,
   type ButtonVariant,
@@ -80,6 +80,7 @@ export function AccountAvatar({ account }: { account: AccountSnapshot }): React.
   if (account.status !== ACCOUNT_STATUS.SIGNED_IN) {
     return <ActorMark actor={NOBODY_SIGNED_IN} size={ACTOR_SIZE.ACCOUNT} />;
   }
+
   return (
     <ReplayMask>
       <ActorMark actor={accountActor(account)} size={ACTOR_SIZE.ACCOUNT} />
@@ -111,13 +112,14 @@ function UpdatePill({
       ({ children }) => <Tooltip label={hint}>{children}</Tooltip>,
     [hint],
   );
+
   return (
     <span className="sidebar-update flex flex-none">
       <FoldingButton
         label={word}
         icon={icon}
         variant={variant}
-        shape={BUTTON_SHAPE.ROUND}
+        corners={BUTTON_CORNERS.ROUND}
         size={BUTTON_SIZE.COMPACT}
         onClick={onClick}
         hint={saying}
@@ -139,12 +141,17 @@ function UpdatePill({
  */
 function SidebarUpdate({ updates }: { updates: UpdateControl }): React.JSX.Element | null {
   const { update } = updates;
+
   const offered =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.UPDATES) }).data === true;
+
   const updateNeeded =
     useQuery({ ...appStateQuery, select: (state) => state.network.updateNeeded }).data === true;
+
   const toastStanding = useReadyToastStanding();
+
   if (!offered) return null;
+
   // The service refused this build as older than it serves: the check fetches the release, and the pill then offers its Restart.
   if (updateNeeded && update.status === UPDATE_STATUS.IDLE) {
     return (
@@ -157,10 +164,13 @@ function SidebarUpdate({ updates }: { updates: UpdateControl }): React.JSX.Eleme
       />
     );
   }
+
   if (!updateInSidebar(update)) return null;
+
   if (update.status === UPDATE_STATUS.READY) {
     // The toast offers the same Restart while it stands; the pill is the way back once it is dismissed.
     if (toastStanding) return null;
+
     return (
       <UpdatePill
         word="Restart"
@@ -171,8 +181,10 @@ function SidebarUpdate({ updates }: { updates: UpdateControl }): React.JSX.Eleme
       />
     );
   }
+
   // The sidebar carries a failure only once a release was named.
   if (update.status !== UPDATE_STATUS.ERROR || update.latestVersion === undefined) return null;
+
   return (
     <UpdatePill
       word="Download"
@@ -223,8 +235,6 @@ export function AccountHeading({
  */
 function accountMenuGroups(
   signedIn: boolean,
-  /** Whether the window is an installed app's, whose menu bar's chords the Keyboard shortcuts page lists. */
-  desktopApp: boolean,
   acts: {
     /** Opens the reader's own page; none outside the window, or before the account's id is known. */
     onProfile: (() => void) | undefined;
@@ -238,20 +248,17 @@ function accountMenuGroups(
     acts.onProfile === undefined
       ? []
       : [{ label: "Your profile", icon: <UserRoundIcon />, onSelect: acts.onProfile }];
+
   const groups: MenuEntry[][] = [
     ...(profile.length === 0 ? [] : [profile]),
     [
       { label: "Changelog", icon: <NewspaperIcon />, onSelect: acts.onOpenChangelog },
-      ...(desktopApp
-        ? [
-            {
-              label: "Keyboard shortcuts",
-              icon: <KeyboardIcon />,
-              command: APP_COMMAND.KEYBOARD_SHORTCUTS,
-              onSelect: () => runAppCommand(APP_COMMAND.KEYBOARD_SHORTCUTS),
-            },
-          ]
-        : []),
+      {
+        label: "Keyboard shortcuts",
+        icon: <KeyboardIcon />,
+        command: APP_COMMAND.KEYBOARD_SHORTCUTS,
+        onSelect: () => runAppCommand(APP_COMMAND.KEYBOARD_SHORTCUTS),
+      },
       {
         label: "Contact us",
         icon: <LifeBuoyIcon />,
@@ -266,8 +273,10 @@ function accountMenuGroups(
       },
     ],
   ];
+
   if (signedIn)
     groups.push([{ label: VERB.SIGN_OUT, icon: <LogOutIcon />, onSelect: acts.onSignOut }]);
+
   return groups;
 }
 
@@ -285,10 +294,8 @@ export function useAccountMenuGroups(
   const { mutate: sendEmail } = useMutation(pressMutation(ACT_KIND.CONTACT_EMAIL));
   const openPerson = useOpenPerson();
   const accountId = account.status === ACCOUNT_STATUS.SIGNED_IN ? account.id : undefined;
-  const desktopApp =
-    useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.DESKTOP_APP) }).data ===
-    true;
-  return accountMenuGroups(account.status === ACCOUNT_STATUS.SIGNED_IN, desktopApp, {
+
+  return accountMenuGroups(account.status === ACCOUNT_STATUS.SIGNED_IN, {
     onProfile:
       openPerson === undefined || accountId === undefined ? undefined : () => openPerson(accountId),
     onOpenChangelog: () => openChangelog(),
@@ -311,6 +318,7 @@ function AccountMenu({
   const signedIn = account.status === ACCOUNT_STATUS.SIGNED_IN;
   const { drawn, close, trigger } = useMenu(shown);
   const groups = useAccountMenuGroups(account, onSignOut);
+
   return (
     <>
       <NavItem

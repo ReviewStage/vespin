@@ -76,13 +76,14 @@ const NO_TASKS: AppStateSnapshot["tasks"]["tasks"] = [];
 const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
 
 /** Says on the console an act the host refused, which the next delivery of the document corrects. */
-function refused(what: string): (error: unknown) => void {
+function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not go.`, error);
 }
 
 /** The workspace the phone works in, among the account's, as Settings chose it. */
 export function useTasksWorkspace(): Workspace | undefined {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+
   return useChosenWorkspace(workspaces).chosen;
 }
 
@@ -95,16 +96,22 @@ export function useWaiting(workspaceId: string | undefined): {
     ...appStateQuery,
     select: selectInboxGroupsIn(workspaceId),
   });
+
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
+
   return useMemo(() => {
     const now = Date.now();
     const byTask = new Map<string, number>();
     const byAgent = new Map<string, number>();
+
     for (const { holder, items } of groups) {
       const waiting = items.filter((item) => waitsOnReaderNow(item, readerId, now));
+
       for (const item of waiting) byAgent.set(item.agentId, (byAgent.get(item.agentId) ?? 0) + 1);
+
       if (waiting.length > 0) byTask.set(holder.task.id, waiting.length);
     }
+
     return { byTask, byAgent };
   }, [groups, readerId]);
 }
@@ -119,9 +126,11 @@ function agentsWorkingIn(
 ): (taskId: string) => boolean {
   return (taskId) => {
     const listed = view?.taskAgents;
+
     if (listed !== undefined) {
       return agentsOfTask(listed, taskId).some((agent) => agentStillWriting(agent.status));
     }
+
     return (tasks.find((task) => task.id === taskId)?.agents?.working ?? 0) > 0;
   };
 }
@@ -137,11 +146,13 @@ const statusReaders = new Set<() => void>();
 
 function holdStatuses(next: HeldStatuses): void {
   heldStatuses = next;
+
   for (const reader of statusReaders) reader();
 }
 
 function watchStatuses(reader: () => void): () => void {
   statusReaders.add(reader);
+
   return () => {
     statusReaders.delete(reader);
   };
@@ -150,11 +161,18 @@ function watchStatuses(reader: () => void): () => void {
 /** The tasks as the screens draw them: each with the status a press set over the one the document holds. */
 function withHeld(tasks: readonly TaskSummary[], held: HeldStatuses): readonly TaskSummary[] {
   if (held.size === 0) return tasks;
+
   return tasks.map((task) => {
     const status = held.get(task.id);
+
     return status === undefined ? task : { ...task, status };
   });
 }
+
+type UseStatusWritesResult = {
+  readonly held: HeldStatuses;
+  readonly setStatus: SetStatus;
+};
 
 /**
  * The statuses a press set, drawn at once on every screen as the panel draws
@@ -162,10 +180,7 @@ function withHeld(tasks: readonly TaskSummary[], held: HeldStatuses): readonly T
  * (`TASKS_SET_STANDING`), and let go where the host refuses it, so the row
  * stands as it did; one the document has since drawn is dropped too.
  */
-function useStatusWrites(tasks: readonly TaskSummary[]): {
-  readonly held: HeldStatuses;
-  readonly setStatus: SetStatus;
-} {
+function useStatusWrites(tasks: readonly TaskSummary[]): UseStatusWritesResult {
   const acts = useHostActs();
   const write = useWrite();
   const held = useSyncExternalStore(watchStatuses, () => heldStatuses);
@@ -174,9 +189,11 @@ function useStatusWrites(tasks: readonly TaskSummary[]): {
     const drawn = [...held].filter(([id, status]) =>
       tasks.some((task) => task.id === id && task.status === status),
     );
+
     if (drawn.length === 0) return;
     holdStatuses(new Map([...heldStatuses].filter(([id]) => !drawn.some(([at]) => at === id))));
   }, [tasks, held]);
+
   const setStatus: SetStatus = (taskId, status, stopAgents) => {
     const letGo = () => holdStatuses(new Map([...heldStatuses].filter(([id]) => id !== taskId)));
     const stopping = stopAgents === undefined ? undefined : { stopAgents };
@@ -184,14 +201,16 @@ function useStatusWrites(tasks: readonly TaskSummary[]): {
     write(
       () => {
         holdStatuses(new Map(heldStatuses).set(taskId, status));
+
         return acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, status, ...stopping }).then(
           (landed) => {
             if (!landed) letGo();
+
             return landed;
           },
-          (error: unknown) => {
+          (cause: unknown) => {
             letGo();
-            throw error;
+            throw cause;
           },
         );
       },
@@ -203,6 +222,7 @@ function useStatusWrites(tasks: readonly TaskSummary[]): {
       },
     );
   };
+
   return { held, setStatus };
 }
 
@@ -218,6 +238,7 @@ export interface TaskWrites {
 export function useTaskWrites(): TaskWrites {
   const acts = useHostActs();
   const write = useWrite();
+
   return useMemo(
     () => ({
       rename: (taskId, name) => {
@@ -275,12 +296,15 @@ export interface TaskGlance {
 /** The agents not archived, by the task they work on, read once for every row. */
 function agentsByTask(view: TasksView | undefined): ReadonlyMap<string, readonly ListedAgent[]> {
   const byTask = new Map<string, ListedAgent[]>();
+
   for (const agent of view?.taskAgents ?? []) {
     if (agent.archivedAt !== undefined) continue;
     const onTask = byTask.get(agent.planId);
+
     if (onTask === undefined) byTask.set(agent.planId, [agent]);
     else onTask.push(agent);
   }
+
   return byTask;
 }
 
@@ -315,8 +339,10 @@ export function useTasksListing(search: string): ReadListing {
   const listed = view?.tasks ?? NO_TASKS;
   const { held, setStatus } = useStatusWrites(listed);
   const { rename } = useTaskWrites();
+
   return useMemo(() => {
     const tasks = withHeld(listed, held);
+
     const tree = taskTree({
       view: { tasks, taskSections: view?.taskSections, repositoryPins: view?.repositoryPins },
       workspaceId: workspace?.id,
@@ -324,14 +350,17 @@ export function useTasksListing(search: string): ReadListing {
       noRepository: NO_REPOSITORY,
       tasksHead: TASKS_HEAD_WORDS[ASSIGNED_TO.ME],
     });
+
     const found = searchedTasks({
       tasks,
       workspaceId: workspace?.id,
       workspaceName: workspace?.name,
       tokens: searchTokens(search),
     });
+
     const lookOf = (task: TaskSummary) =>
       taskRowLook(task, waiting.byTask.get(task.id) ?? 0, view?.taskPullRequests);
+
     // Note that the host draws a mark and a pin on the row the moment they are asked, and puts either back where the service refused it.
     const markRead = (taskId: string, unread: boolean) => {
       const readMark = unread ? READ_MARK.UNREAD : READ_MARK.READ;
@@ -340,6 +369,7 @@ export function useTasksListing(search: string): ReadListing {
         subject: { kind: WRITE_SUBJECT.TASK_READ, id: taskId },
       });
     };
+
     // Note that a pin taps as a toggle does, lighter than a status's buzz.
     const pin = (taskId: string, pinned: boolean) => {
       write(() => acts[ACT_KIND.TASKS_PIN]({ taskId, pinned }), {
@@ -350,6 +380,7 @@ export function useTasksListing(search: string): ReadListing {
         went: BUZZ.SELECTION,
       });
     };
+
     // Note that the host draws the move on the list the moment it is asked, and puts it back where the service refused it, which the failure notice says.
     const place = (taskId: string, sectionId: string | null) =>
       write(
@@ -362,13 +393,16 @@ export function useTasksListing(search: string): ReadListing {
           went: BUZZ.SUCCESS,
         },
       );
+
     const agentsWorking = agentsWorkingIn(view, tasks);
     // Note that the agents are grouped by task once, since every row's preview reads its own.
     const byTask = agentsByTask(view);
+
     const glanceOf = (taskId: string): TaskGlance => ({
       waiting: waiting.byTask.get(taskId) ?? 0,
       agents: taskAgentsInOrder(byTask, taskId, waiting.byAgent),
     });
+
     return {
       tree,
       found,
@@ -448,6 +482,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   const taskId = task?.id;
   useLiveFollow(taskId, (id) => acts[ACT_KIND.TASKS_DOCUMENT_FOLLOW]({ taskId: id }));
   useLiveFollow(taskId, (id) => acts[ACT_KIND.TASKS_PAGES_FOLLOW]({ taskId: id }));
+
   const { data: held } = useQuery({
     ...appStateQuery,
     select: (state) =>
@@ -458,13 +493,17 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
             pages: state[LIVE_READ.PAGES][PAGE_OWNER.TASK][taskId]?.rows,
           },
   });
+
   return useMemo(() => {
     if (task === undefined) return undefined;
+
     const agents = taskAgentsInOrder(agentsByTask(view), task.id, waiting.byAgent).map((agent) =>
       agentLine(agent, waiting.byAgent, view),
     );
+
     const listedWaiting = agents.reduce((sum, line) => sum + line.waiting, 0);
     const document = held?.document;
+
     return {
       task,
       document: document !== undefined && "task" in document ? document.task : undefined,
@@ -486,6 +525,7 @@ export function useTasksRead(): boolean {
     ...appStateQuery,
     select: (state) => state.tasks.listStatus,
   });
+
   return status === TASKS_READ.READY;
 }
 
@@ -499,10 +539,13 @@ export function useTaskReadOnOpen(taskId: string | undefined): void {
   const acts = useHostActs();
   useEffect(() => {
     if (taskId === undefined) return;
+
     const look = (readMark: ReadMark) => {
       acts[ACT_KIND.TASKS_MARK_READ]({ taskId, readMark }).catch(refused("The look"));
     };
+
     look(READ_MARK.READ);
+
     return () => look(READ_MARK.SEEN);
   }, [acts, taskId]);
 }
@@ -527,6 +570,11 @@ export interface StatusQuestion {
   readonly dismiss: () => void;
 }
 
+type UseStatusAskResult = {
+  readonly setStatus: (taskId: string, status: TaskStatus) => void;
+  readonly question: StatusQuestion;
+};
+
 /**
  * Sets a task's status as the panel does (`useStandingWrites`): Done or
  * Canceled on a task whose agents are working asks first, since it stops
@@ -534,19 +582,23 @@ export interface StatusQuestion {
  * settle that stops them; anything else goes out at once. Answers the
  * asking `setStatus` and its question, which the screen draws.
  */
-export function useStatusAsk(doors: Pick<TasksListing, "setStatus" | "agentsWorking">): {
-  readonly setStatus: (taskId: string, status: TaskStatus) => void;
-  readonly question: StatusQuestion;
-} {
+export function useStatusAsk(
+  doors: Pick<TasksListing, "setStatus" | "agentsWorking">,
+): UseStatusAskResult {
   const [held, setHeld] = useState<HeldStatus>();
+
   const setStatus = (taskId: string, status: TaskStatus) => {
     if (isTaskSettled(status) && doors.agentsWorking(taskId)) {
       setHeld({ taskId, status, words: settleStopWords(status), presented: true });
+
       return;
     }
+
     doors.setStatus(taskId, status);
   };
+
   const letGo = () => setHeld((was) => (was === undefined ? was : { ...was, presented: false }));
+
   const question: StatusQuestion = {
     words: held?.words ?? NO_WORDS,
     presented: held?.presented === true,
@@ -557,6 +609,7 @@ export function useStatusAsk(doors: Pick<TasksListing, "setStatus" | "agentsWork
     },
     dismiss: letGo,
   };
+
   return { setStatus, question };
 }
 
@@ -567,6 +620,11 @@ interface HeldDelete {
   readonly presented: boolean;
 }
 
+type UseDeleteAskResult = {
+  readonly askDelete: (task: TaskSummary) => void;
+  readonly question: StatusQuestion;
+};
+
 /**
  * Deletes a task for good as the panel does, asking first in the panel's
  * words (`deleteTaskWords`), since nothing brings it back. Answers the
@@ -576,12 +634,10 @@ interface HeldDelete {
 export function useDeleteAsk(
   remove: TaskWrites["remove"],
   onDeleted?: () => void,
-): {
-  readonly askDelete: (task: TaskSummary) => void;
-  readonly question: StatusQuestion;
-} {
+): UseDeleteAskResult {
   const [held, setHeld] = useState<HeldDelete>();
   const letGo = () => setHeld((was) => (was === undefined ? was : { ...was, presented: false }));
+
   const question: StatusQuestion = {
     words: held?.words ?? NO_WORDS,
     presented: held?.presented === true,
@@ -593,6 +649,7 @@ export function useDeleteAsk(
     },
     dismiss: letGo,
   };
+
   return {
     askDelete: (task) =>
       setHeld({ taskId: task.id, words: deleteTaskWords(task.name, task), presented: true }),
@@ -600,20 +657,23 @@ export function useDeleteAsk(
   };
 }
 
+type UseListingAsksResult = {
+  readonly listing: TasksListing;
+  readonly status: StatusQuestion;
+  readonly deletion: StatusQuestion;
+};
+
 /**
  * A list's acts that ask first, as every list of tasks offers them: its
  * status set, asking where it stops agents, and its delete, asking always.
  * Answers the listing its rows act through and the two questions, which the
  * screen draws.
  */
-export function useListingAsks(read: ReadListing): {
-  readonly listing: TasksListing;
-  readonly status: StatusQuestion;
-  readonly deletion: StatusQuestion;
-} {
+export function useListingAsks(read: ReadListing): UseListingAsksResult {
   const { setStatus, question } = useStatusAsk(read);
   const { remove } = useTaskWrites();
   const deletion = useDeleteAsk(remove);
+
   return {
     listing: { ...read, setStatus, askDelete: deletion.askDelete },
     status: question,

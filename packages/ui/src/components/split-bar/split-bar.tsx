@@ -54,6 +54,7 @@ interface Measured {
 /** The bar's measures as they stand: its width, its type size, its gap, and the folded segment's width where one is drawn. */
 function measure(bar: HTMLElement, more: HTMLElement | null): Measured {
   const style = getComputedStyle(bar);
+
   return {
     width: bar.clientWidth,
     em: Number.parseFloat(style.fontSize) || DEFAULT_EM,
@@ -79,6 +80,7 @@ function MoreSegment<Item>({
 }): React.JSX.Element {
   const menu = useMenu(true);
   const trigger = menu.trigger();
+
   return (
     <div ref={measured} className="ui-split-bar-more">
       <List label={more.label} variant={LIST_VARIANT.CARD}>
@@ -125,22 +127,28 @@ export function SplitBar<Item>({
   const bar = useRef<HTMLDivElement | null>(null);
   const moreSegment = useRef<HTMLDivElement | null>(null);
   const [measured, setMeasured] = useState<Measured | undefined>(undefined);
+
   const settle = useRef(() => {
     const element = bar.current;
+
     if (element === null) return;
     const next = measure(element, moreSegment.current);
     setMeasured((was) => (was !== undefined && sameMeasure(was, next) ? was : next));
   });
+
   // Note that every render measures again, since the folded segment's width moves with its count.
   useLayoutEffect(() => settle.current());
   useLayoutEffect(() => {
     const element = bar.current;
+
     if (element === null) return;
     const observer = new ResizeObserver(() => settle.current());
     observer.observe(element);
+
     return () => observer.disconnect();
   }, []);
   const em = measured?.em ?? DEFAULT_EM;
+
   const fit = splitBarFit({
     width: measured?.width ?? Number.POSITIVE_INFINITY,
     count: items.length,
@@ -148,7 +156,9 @@ export function SplitBar<Item>({
     gap: measured?.gap ?? 0,
     more: measured?.more ?? MORE_GUESS_EM * em,
   });
+
   const shownRoomy = fit.segment >= roomy * em;
+
   return (
     <div ref={bar} className="ui-split-bar">
       {items.slice(0, fit.shown).map((item) => (

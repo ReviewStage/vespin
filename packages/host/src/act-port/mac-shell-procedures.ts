@@ -72,6 +72,7 @@ function post(held: Held, bytes: Uint8Array): void {
   if (held.port === undefined) return;
   held.port.post({ type: TERMINAL_PORT_MESSAGE.OUTPUT, data: bytes });
   held.unacked += bytes.length;
+
   if (held.paused || held.unacked <= TERMINAL_FLOW.PAUSE_ABOVE_BYTES) return;
   held.paused = true;
   held.shell.pause();
@@ -82,6 +83,7 @@ function detach(held: Held): void {
   held.port?.close();
   held.port = undefined;
   held.unacked = 0;
+
   if (!held.paused) return;
   held.paused = false;
   held.shell.resume();
@@ -90,17 +92,23 @@ function detach(held: Held): void {
 /** What the panel sent on a shell's port, read and handed to the shell; anything else is dropped. */
 function heard(held: Held, message: WireBoundaryInput): void {
   const read = readInbound(unparsedWire(message));
+
   if (Result.isFailure(read)) return;
   const inbound = read.success;
+
   if (inbound.type === TERMINAL_PORT_MESSAGE.ACK) {
     held.unacked = Math.max(0, held.unacked - inbound.bytes);
+
     if (!held.paused || held.unacked >= TERMINAL_FLOW.RESUME_BELOW_BYTES) return;
     held.paused = false;
     held.shell.resume();
+
     return;
   }
+
   // Note that a shell that exited takes nothing more, because its terminal is closed; one on this Mac holds nothing a shown tab need keep.
   if (held.exitCode !== undefined || inbound.type === TERMINAL_PORT_MESSAGE.SHOWN) return;
+
   if (inbound.type === TERMINAL_PORT_MESSAGE.INPUT) held.shell.write(inbound.data);
   else held.shell.resize(inbound.cols, inbound.rows);
 }
@@ -116,11 +124,13 @@ export function macShellProcedures<Sender>(
   /** The window's shells, its page's end watched the first time it opens one, which ends them. */
   const shellsOf = (sender: Sender) => {
     const held = windows.get(sender);
+
     if (held !== undefined) return held;
     const fresh = new Map<string, Map<string, Held>>();
     windows.set(sender, fresh);
     ports.whenGone(sender, () => {
       windows.delete(sender);
+
       for (const shells of fresh.values()) {
         for (const each of shells.values()) {
           detach(each);
@@ -128,6 +138,7 @@ export function macShellProcedures<Sender>(
         }
       }
     });
+
     return fresh;
   };
 
@@ -140,7 +151,9 @@ export function macShellProcedures<Sender>(
       function* ({ input, context, errors }) {
         yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
         const folder = yield* mirror(input.agentId);
+
         if (folder === undefined) return yield* Effect.fail(errors.REFUSED());
+
         return { folder };
       },
     ),
@@ -148,8 +161,10 @@ export function macShellProcedures<Sender>(
       function* ({ input, context, errors }) {
         yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
         const shell = spawn(input.folder, input.cols, input.rows);
+
         if (shell === undefined) return yield* Effect.fail(errors.REFUSED());
         const ticket = { agentId: input.agentId, terminalId: createId() };
+
         const held: Held = {
           shell,
           ticket,
@@ -158,6 +173,7 @@ export function macShellProcedures<Sender>(
           paused: false,
           exitCode: undefined,
         };
+
         const agents = shellsOf(context.actor.sender);
         const shells = agents.get(ticket.agentId) ?? new Map<string, Held>();
         agents.set(ticket.agentId, shells.set(ticket.terminalId, held));
@@ -170,6 +186,7 @@ export function macShellProcedures<Sender>(
             code,
           });
         });
+
         return { terminalId: ticket.terminalId };
       },
     ),
@@ -178,7 +195,9 @@ export function macShellProcedures<Sender>(
         yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
         const sender = context.actor.sender;
         const held = named(sender, input);
+
         if (held === undefined) return yield* Effect.fail(errors.REFUSED());
+
         if (held.exitCode === undefined) held.shell.resize(input.cols, input.rows);
         // Note that a port an earlier attach opened is closed first, because the panel asked again before taking it, and the shell writes to one port alone.
         detach(held);
@@ -196,6 +215,7 @@ export function macShellProcedures<Sender>(
       function* ({ input, context, errors }) {
         yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
         const held = named(context.actor.sender, input);
+
         if (held === undefined) return;
         windows.get(context.actor.sender)?.get(input.agentId)?.delete(input.terminalId);
         detach(held);

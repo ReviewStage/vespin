@@ -39,6 +39,7 @@ function Box(): ReactNode {
     messages: [],
     send: () => new Promise(() => undefined),
   });
+
   return createElement(AgentComposer, { ...QUIET_COMPOSER, composer });
 }
 
@@ -49,13 +50,16 @@ test("a box whose editor bundle could not be loaded says so beside Retry and sta
   roots.push(root);
   // Note that the chunk fails the first time it is asked for and lands the next, as a connection that dropped for a moment does.
   let failed = false;
+
   const bundles = standInBundles({
     descriptionEditor: () => {
       if (failed) return Promise.resolve(descriptionEditor);
       failed = true;
+
       return Promise.reject(new Error("The chunk could not be loaded."));
     },
   });
+
   await act(async () => root.render(withQueryClient(onSideBundles(bundles, createElement(Box)))));
   await settleQueries();
 

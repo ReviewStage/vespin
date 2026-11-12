@@ -53,7 +53,9 @@ function header(headers: Headers, name: string): string | undefined {
 /** The body as sent, when it was sent as text; a test records nothing else. */
 function requestBody(body: BodyInit | null | undefined): string | undefined {
   if (body === null || body === undefined) return undefined;
+
   if (Object.prototype.toString.call(body) !== "[object String]") return undefined;
+
   // SAFETY: Object.prototype.toString confirmed a string body before recording.
   return body as string;
 }
@@ -72,9 +74,11 @@ export function recordingHttpClient(
   respond: (request: RecordedRequest) => Response | Promise<Response>,
 ): RecordingHttpClient {
   const requests: RecordedRequest[] = [];
+
   const layer = fakeHttpClientLayer((url, init) => {
     const parsed = new URL(url);
     const headers = new Headers(init.headers);
+
     const request: RecordedRequest = {
       method: init.method ?? "",
       url,
@@ -88,9 +92,12 @@ export function recordingHttpClient(
       headers,
       init,
     };
+
     requests.push(request);
+
     return respond(request);
   });
+
   return { layer, requests };
 }
 
@@ -103,5 +110,6 @@ export function recordingHttpClient(
 export function recordedRequest(requests: readonly RecordedRequest[], index = 0): RecordedRequest {
   const request = requests[index];
   assert.ok(request, `no request was recorded at index ${index}`);
+
   return request;
 }

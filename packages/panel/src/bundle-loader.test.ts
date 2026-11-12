@@ -12,13 +12,15 @@ import { bundleLanded } from "./testing/side-bundles.js";
  * life, its own error kept as the failure's cause; and one that landed is had by every later reader. The bundle is a stand-in, failing until the connection is back.
  */
 
-/** The Terminal tab's bundle as it lands; nothing reads past who it is. */
-// SAFETY: a stand-in compared by identity alone, never drawn.
-const TERMINAL = { stand: "terminal" } as unknown as TerminalModule;
+/** The Terminal tab's bundle as it lands; nothing reads past who it is, so it is never drawn. */
+const TERMINAL: TerminalModule = {
+  create: () => assert.fail("the stand-in bundle is compared by identity alone, never drawn"),
+};
 
 it.effect("a bundle whose import failed is imported again by its next reader", () =>
   Effect.gen(function* () {
     let online = false;
+
     const bundles = sideBundles({
       terminal: () => (online ? Promise.resolve(TERMINAL) : Promise.reject(new Error("offline"))),
     });
@@ -37,9 +39,11 @@ it.effect("a bundle whose import failed is imported again by its next reader", (
 it.effect("a bundle that landed is had by a later reader though its import would fail now", () =>
   Effect.gen(function* () {
     let online = true;
+
     const bundles = sideBundles({
       terminal: () => (online ? Promise.resolve(TERMINAL) : Promise.reject(new Error("offline"))),
     });
+
     assert.equal(yield* bundleLanded(bundles.terminal), TERMINAL);
 
     online = false;

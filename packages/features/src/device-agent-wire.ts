@@ -1,5 +1,6 @@
 import { Schema as EffectSchema } from "effect";
 import { checkoutIdentitySchema } from "./checkout-identity.js";
+import { DEVICE_AGENT_FOLDER } from "./checkout-path.js";
 import { HOST_TARGET } from "./host-release.js";
 import { wireUuidSchema } from "./service-wire.js";
 
@@ -311,14 +312,6 @@ export const deviceAgentAnswerSchema = EffectSchema.Union([
 
 export type DeviceAgentAnswer = typeof deviceAgentAnswerSchema.Type;
 
-/** The folders under a Mac's home its local agents' things stand in (`deviceAgentLayoutIn`). */
-const DEVICE_AGENT_FOLDER = {
-  /** Every local agent's folder, one per agent under its id. */
-  ROOT: ".vespin/agents",
-  /** The agent's worktree, which the Mac makes as it takes the launch line. */
-  REPOSITORY: "repository",
-} as const;
-
 /** The folders a Mac keeps its local agents' other things in, each under a folder of the machine's own, one per agent under its id. */
 const DEVICE_AGENT_ROOT = {
   /** Under the machine's own temp folder: what an agent saves for us to read back, made `0700`. */
@@ -351,8 +344,10 @@ export interface DeviceAgentRoots {
 /** The path given under the folder given, the folder's trailing slashes taken off. */
 function under(parent: string, child: string): string {
   let end = parent.length;
+
   // Note that the trailing slashes are counted off by hand, because a regular expression anchored at the end runs in quadratic time on a path of many slashes.
   while (end > 1 && parent[end - 1] === "/") end -= 1;
+
   return [parent.slice(0, end), child].join("/");
 }
 
@@ -379,6 +374,7 @@ export function deviceAgentCheckoutPath(home: string, agentId: string): string {
 /** The agent's folder and its other things, under the folders the Mac registered (`DeviceAgentRoots`). */
 export function deviceAgentLayoutIn(roots: DeviceAgentRoots, agentId: string): DeviceAgentLayout {
   const folder = [roots.agentsFolder, agentId].join("/");
+
   return {
     folder,
     checkoutPath: [folder, DEVICE_AGENT_FOLDER.REPOSITORY].join("/"),

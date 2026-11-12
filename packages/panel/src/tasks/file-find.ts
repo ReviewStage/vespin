@@ -36,7 +36,9 @@ export interface FileMatch {
 /** How many times `pattern` stands in `words`. */
 function countIn(words: string, pattern: RegExp): number {
   let count = 0;
+
   for (const _match of words.matchAll(pattern)) count += 1;
+
   return count;
 }
 
@@ -53,23 +55,28 @@ export function fileMatches(
   if (query.length === 0) return [];
   const pattern = new RegExp(query.replace(PATTERN_SYNTAX, "\\$&"), "giu");
   const under = new Map<number, FindNote[]>();
+
   for (const note of notes) under.set(note.line, [...(under.get(note.line) ?? []), note]);
   const matches: FileMatch[] = [];
   lines.forEach((text, at) => {
     const line = at + 1;
+
     for (let nth = 0; nth < countIn(text, pattern); nth += 1) {
       matches.push({ line, note: undefined, nth });
     }
+
     for (const note of under.get(line) ?? []) {
       for (let nth = 0; nth < note.matches; nth += 1) matches.push({ line, note: note.key, nth });
     }
   });
+
   return matches;
 }
 
 /** The match a find starts at: the first on or after `line`, the first of all where none follows, and -1 where there is none. */
 export function matchFrom(matches: readonly FileMatch[], line: number): number {
   if (matches.length === 0) return -1;
+
   return Math.max(
     0,
     matches.findIndex((match) => match.line >= line),

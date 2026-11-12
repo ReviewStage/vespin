@@ -143,6 +143,7 @@ const CURSOR_SEPARATOR = ":";
 /** The cursor the wire carries, as the store reads it; the start for the start's own spelling. */
 export function cursorOfWire(after: string): MessageCursor {
   const [seq, revision] = after.split(CURSOR_SEPARATOR);
+
   return { seq: Number(seq ?? 0), revision: Number(revision ?? 0) };
 }
 
@@ -243,20 +244,24 @@ const statusNow = (target: ConversationTarget, { createdAt, blank }: AgentStart,
       },
       { concurrency: CODER.READ_CONCURRENCY },
     );
+
     const now = yield* Clock.currentTimeMillis;
     const turn = turns.get(target.conversationId);
     const bootRow = Option.getOrUndefined(booted);
     const standing = { createdAt, now, blank, boot: bootRow?.phase };
     const status = agentStatusOf(turn, standing);
     const runStartedAt = agentRunStartedAt(turn, { createdAt });
+
     // Note that a failed first launch is said by its boot, so it names no turn that never started; an agent that never started otherwise still does.
     const failed =
       status === AGENT_STATUS.FAILED &&
       (turn !== undefined || bootRow?.phase !== BOOT_PHASE.FAILED);
+
     const failureReason = failed ? agentFailureOf(turn) : undefined;
     const hostLost = failed ? hostLostOf(turn) : undefined;
     const graceEdge = statusClockEdge(turn, standing);
     const boot = bootRow === undefined ? undefined : bootOnPage(bootRow);
+
     return { status, runStartedAt, failureReason, hostLost, turn, graceEdge, boot };
   });
 
@@ -283,15 +288,20 @@ const launchOf = (
   if (own?.machine === AGENT_MACHINE.DEVICE && status === AGENT_STATUS.FAILED) {
     return Effect.succeed(launchStoppedOf(turn));
   }
+
   if (own?.machine !== AGENT_MACHINE.DEVICE || !WAITING_STATUSES.has(status)) {
     return Effect.succeed(undefined);
   }
+
   return Effect.map(latestDeviceAgentLaunch(target.userId, own.id), (newest) => {
     if (Option.isNone(newest)) return undefined;
     const { createdAt, claimed, step, settled, stopped } = newest.value;
     const opened = turn !== undefined && turn.queuedAt >= createdAt;
+
     if (settled || stopped || opened) return undefined;
+
     if (!claimed) return AGENT_LAUNCH.WAITING;
+
     return DEVICE_LAUNCH_STEPS.find((known) => known === step);
   });
 };
@@ -307,6 +317,7 @@ type HeldContext = Option.Option.Value<Effect.Success<ReturnType<typeof readAgen
 /** Whether the catalog lists a window for the model, one or two. */
 const windowListed = (offered: readonly OfferedModel[], modelId: string) => {
   const model = offered.find((each) => each.id === modelId);
+
   return model?.contextWindow !== undefined || model?.contextWindows !== undefined;
 };
 
@@ -348,7 +359,9 @@ const journalTurnsOf = (userId: string, records: readonly StoredMessageRecord[])
   const journals = records.filter(
     (record) => record.message.role === MESSAGE_ROLE.ASSISTANT && !spokenOnCall(record.message),
   );
+
   const ids = new Set(journals.flatMap((record) => record.turnId ?? []));
+
   return Effect.map(
     turnsNamed(userId, [...ids]),
     (turns) =>
@@ -403,9 +416,9 @@ function senderOf(sent: LineSent): AgentSender {
 }
 
 function lineIdsAmong(records: readonly StoredMessageRecord[]): readonly string[] {
-  return records
-    .filter((record) => record.message.role === MESSAGE_ROLE.USER)
-    .map((record) => record.id);
+  return records.flatMap((record) =>
+    record.message.role === MESSAGE_ROLE.USER ? [record.id] : [],
+  );
 }
 
 /** What a page knows of the developer's lines among its rows, by row: what sent each where its row kept it, and where in a turn under way each arrived where one took it in. */
@@ -418,6 +431,7 @@ interface LinesRead {
 function spokenOnCall(message: StoredUIMessage): boolean {
   if (message.role === MESSAGE_ROLE.SYSTEM) return false;
   const { metadata } = message;
+
   return "channel" in metadata && metadata.channel === MESSAGE_CHANNEL.VOICE;
 }
 
@@ -437,6 +451,7 @@ function transcriptMessageOf(
   if (record.message.role === MESSAGE_ROLE.USER) {
     const sent = senders.get(record.id);
     const place = places.get(record.id);
+
     return {
       ...record.message,
       clientId: record.clientId,
@@ -445,11 +460,15 @@ function transcriptMessageOf(
       ...(place === undefined ? undefined : { arrivedIn: place }),
     };
   }
+
   if (spokenOnCall(record.message)) {
     return { ...record.message, sentAt: record.placedAt.getTime() };
   }
+
   const turn = record.turnId === undefined ? undefined : journalTurns.get(record.turnId);
+
   if (turn === undefined) return record.message;
+
   return {
     ...record.message,
     startedAt: turn.startedAt,
@@ -474,6 +493,7 @@ const delegationsUnderWay = (
     if (turn === undefined) return [];
     const read = yield* readMessageByClientId(target.userId, target.conversationId, tools, turn.id);
     const parts = read.ok ? (read.value[0]?.message.parts ?? []) : [];
+
     const calls = parts
       .filter(isStoredToolPart)
       .filter(
@@ -481,16 +501,20 @@ const delegationsUnderWay = (
           storedToolName(part) === AGENT_DELEGATE_TOOL && !isSettledToolPartState(part.state),
       )
       .map((part) => part.toolCallId);
+
     const children = calls.map((callId) => ({
       callId,
       child: childConversationId(target.conversationId, callId),
     }));
+
     const started = yield* delegationStartsOf(
       target,
       children.map((each) => each.child),
     );
+
     return children.flatMap(({ callId, child }) => {
       const at = started.get(child);
+
       return at === undefined ? [] : [{ callId, startedAt: at.getTime() }];
     });
   });
@@ -508,12 +532,16 @@ const subagentStandingsOf = (
 ): TranscriptEffect<readonly AgentSubagentStanding[]> =>
   Effect.gen(function* () {
     const delegations = yield* delegationsOf(target);
+
     if (delegations.length === 0) return [];
+
     const turns = yield* latestTurnsOf(
       target.userId,
       delegations.map((each) => each.childConversationId),
     );
+
     const now = yield* Clock.currentTimeMillis;
+
     return delegations.map((each) => ({
       callId: each.callId,
       status: agentStatusOf(turns.get(each.childConversationId), {
@@ -553,6 +581,7 @@ const withUsage = (
 ): TranscriptEffect<TranscriptPage, ModelCatalog> =>
   Effect.gen(function* () {
     const catalog = yield* ModelCatalog;
+
     const { rows, offered, routing, held, delegations, subagentTitles, subagents, queue, launch } =
       yield* Effect.all(
         {
@@ -578,6 +607,7 @@ const withUsage = (
         },
         { concurrency: CODER.READ_CONCURRENCY },
       );
+
     // Note that why a launch never started is said only beside the step it stopped at, as its failed turn records both.
     const launchUnstarted =
       launch !== undefined &&
@@ -585,17 +615,21 @@ const withUsage = (
       page.status === AGENT_STATUS.FAILED
         ? launchUnstartedOf(turn)
         : undefined;
+
     // Note that an agent from before payers were recorded has none.
     const payer = Option.isNone(routing) ? null : routing.value.payer;
+
     // Note that only a plan payer names a subscription, since a key or the app pays for no plan of the starter's.
     const payerSubscriptionId =
       Option.isNone(routing) || payer === null || !PLAN_PAYERS_NAMED.has(payer)
         ? null
         : routing.value.subscriptionId;
+
     const priced = usageOfTurns(rows, offered);
     // Note that the payer rides on the usage, because the one line that draws a price is the one that says who paid.
     const usage = priced === undefined || payer === null ? priced : { ...priced, payer };
     const context = contextOf(held, routing, offered);
+
     return {
       ...page,
       ...(usage === undefined ? undefined : { usage }),
@@ -618,6 +652,7 @@ const transcriptMessagesOf = (
 ): TranscriptEffect<readonly TranscriptMessage[]> =>
   Effect.gen(function* () {
     const lines = lineIdsAmong(records);
+
     const { journalTurns, ...linesRead } = yield* Effect.all(
       {
         journalTurns: journalTurnsOf(target.userId, records),
@@ -626,6 +661,7 @@ const transcriptMessagesOf = (
       },
       { concurrency: CODER.READ_CONCURRENCY },
     );
+
     return records.map((record) => transcriptMessageOf(record, journalTurns, linesRead));
   });
 
@@ -655,8 +691,10 @@ function pagePast(
       },
       { concurrency: CODER.READ_CONCURRENCY },
     );
+
     const { read, cursor } = past;
     const { status, runStartedAt, failureReason, hostLost, turn, graceEdge, boot } = standing;
+
     return {
       page: {
         messages: yield* transcriptMessagesOf(target, read.ok ? read.value : []),
@@ -692,8 +730,10 @@ function delegationStanding(
 ): TranscriptEffect<DelegationStanding> {
   return Effect.gen(function* () {
     const found = yield* readDelegation(parent, childConversationId);
+
     if (Option.isSome(found)) return { read: { delegation: found.value }, graceEdge: undefined };
     const { status, graceEdge } = yield* statusNow(parent, agent);
+
     return { read: { delegation: undefined, agentRuns: WAITING_STATUSES.has(status) }, graceEdge };
   });
 }
@@ -752,20 +792,25 @@ function ownTitleWindow(
 ): TranscriptEffect<Option.Option<Date>> {
   return Effect.gen(function* () {
     const own = yield* readAgentHeaderOfConversation(target.userId, target.conversationId);
+
     if (Option.isNone(own) || own.value.title !== null) return Option.none();
     const turns = yield* latestTurnsOf(target.userId, [target.conversationId]);
     const newest = turns.get(target.conversationId);
+
     const completed =
       newest?.status === TURN_STATUS.SETTLED &&
       newest.settledAt !== null &&
       newest.settledAt >= since;
+
     if (!completed) return Option.none();
+
     const ran = yield* turnsBefore(
       target.userId,
       target.conversationId,
       CODER.TITLE_TURNS,
       undefined,
     );
+
     return ran.earlier ? Option.none() : Option.some(newest.settledAt);
   });
 }
@@ -785,7 +830,9 @@ export function titleMayLand(
     const now = yield* Clock.currentTimeMillis;
     const since = new Date(now - Duration.toMillis(CODER.TITLE_TIMEOUT));
     const untitled = yield* untitledDelegationsSince(parent, since);
+
     if (childConversationId !== undefined) return untitled.has(childConversationId);
+
     return untitled.size > 0 || Option.isSome(yield* ownTitleWindow(parent, since));
   });
 }
@@ -812,16 +859,22 @@ export function titleWindowEdge(
     const bound = Duration.toMillis(CODER.TITLE_TIMEOUT);
     const since = new Date(now - bound);
     const untitled = yield* untitledDelegationsSince(parent, since);
+
     const named = (child: string) =>
       untitled.has(child) && (childConversationId === undefined || child === childConversationId);
+
     const workers =
       untitled.size === 0
         ? []
         : (yield* delegationsOf(parent)).filter((each) => named(each.childConversationId));
+
     const own =
       childConversationId === undefined ? yield* ownTitleWindow(parent, since) : Option.none();
+
     const opened = [...workers.map((each) => each.createdAt), ...Option.toArray(own)];
+
     if (opened.length === 0) return undefined;
+
     return Math.max(...opened.map((at) => at.getTime())) + bound + 1;
   });
 }
@@ -829,7 +882,9 @@ export function titleWindowEdge(
 /** Whether a held read keeps waiting on a page: nothing new on it while the agent may still write, or while a title may still land. */
 const holdsFor = (page: TranscriptPage, titleAwaited: TitleAwaited): TranscriptEffect<boolean> => {
   if (page.messages.length > 0) return Effect.succeed(false);
+
   if (WAITING_STATUSES.has(page.status)) return Effect.succeed(true);
+
   return titleAwaited;
 };
 
@@ -849,6 +904,7 @@ const holdEdgeOf = (
  */
 function transcriptTopics(target: ConversationTarget, own?: OwnAgent): readonly SyncTopic[] {
   const conversation: SyncTopic = [TOPIC.CONVERSATION, target.conversationId];
+
   return own === undefined ? [conversation] : [conversation, [TOPIC.AGENT, own.id]];
 }
 
@@ -881,9 +937,12 @@ export function transcriptPast(
 ): TranscriptEffect<TranscriptPage, ModelCatalog> {
   const look = Effect.gen(function* () {
     const read = yield* pagePast(target, tools, after, agent, own);
+
     if (!(yield* holdsFor(read.page, titleAwaited))) return { read, holds: false, edge: undefined };
+
     return { read, holds: true, edge: yield* holdEdgeOf(read.page, read.graceEdge, titleEdge) };
   });
+
   return heldUntil(
     look,
     ({ holds }) => !holds,
@@ -928,10 +987,13 @@ export function transcriptNow(
     const { page, turn, graceEdge } = yield* pagePast(target, tools, after, agent, own);
     const holds = yield* holdsFor(page, titleAwaited);
     const read = { page: yield* withUsage(target, tools, page, turn, own), holds };
+
     if (!holds) return read;
     const edge = yield* holdEdgeOf(page, graceEdge, titleEdge);
+
     if (edge === undefined) return read;
     const now = yield* Clock.currentTimeMillis;
+
     return { ...read, wakeIn: Math.max(1, edge - now) };
   });
 }
@@ -965,6 +1027,7 @@ const olderPageOf = (
     const records = read.value;
     const messages = yield* transcriptMessagesOf(target, records);
     const [oldest] = records;
+
     return records.length < AGENT_BOUNDS.MESSAGES_PAGE || oldest === undefined
       ? { messages }
       : { messages, before: oldest.seq };
@@ -987,6 +1050,7 @@ export function transcriptNewest(
 ): TranscriptEffect<TranscriptNewest, ModelCatalog> {
   return Effect.gen(function* () {
     const cursor = yield* messageCursorNow(target.userId, target.conversationId);
+
     const { read, standing } = yield* Effect.all(
       {
         read: listMessagesBefore(
@@ -1000,8 +1064,10 @@ export function transcriptNewest(
       },
       { concurrency: CODER.READ_CONCURRENCY },
     );
+
     const { messages, before } = yield* olderPageOf(target, read);
     const { status, runStartedAt, failureReason, hostLost, turn, boot } = standing;
+
     const page: TranscriptPage = {
       messages,
       cursor,
@@ -1011,6 +1077,7 @@ export function transcriptNewest(
       ...(hostLost === undefined ? undefined : { hostLost }),
       ...(boot === undefined ? undefined : { boot }),
     };
+
     return {
       page: yield* withUsage(target, tools, page, turn, own),
       ...(before === undefined ? undefined : { before }),

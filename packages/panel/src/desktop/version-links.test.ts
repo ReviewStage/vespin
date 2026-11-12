@@ -65,6 +65,7 @@ afterEach(() => {
 /** The description's version history over the window, its versions read. */
 function drawn(): HTMLElement {
   const base = tasksControl();
+
   const tasks = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     activeTaskId: DOCUMENT_TASK.id,
@@ -77,6 +78,7 @@ function drawn(): HTMLElement {
       selected: 3,
     },
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -120,14 +122,17 @@ function drawn(): HTMLElement {
       ),
     ),
   );
+
   return container;
 }
 
 test("a version's row offers Copy link, which copies its plan's address under the version's number and says Link copied", async () => {
   const container = drawn();
+
   const second = container.querySelectorAll<HTMLButtonElement>(
     '[aria-label="Version list"] li > button',
   )[1];
+
   assert.ok(second, "the second version is listed");
 
   act(() => {
@@ -135,9 +140,11 @@ test("a version's row offers Copy link, which copies its plan's address under th
       new MouseEvent("contextmenu", { bubbles: true, clientX: 20, clientY: 20 }),
     );
   });
+
   const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
     (each) => each.textContent === "Copy link",
   );
+
   assert.ok(item, "the row's menu offers Copy link");
   await act(async () => item.click());
 

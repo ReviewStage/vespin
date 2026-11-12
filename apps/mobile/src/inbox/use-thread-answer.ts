@@ -52,6 +52,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { selectAccount } from "@repo/host/app-state-reads";
 import { BUZZ, buzz } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -72,7 +73,9 @@ const NOTHING_HELD: ThreadHeld = { draft: EMPTY_INBOX_DRAFT, sending: new Map(),
 /** What a refused reply says, by why it was refused, in the panel's words. */
 export function refusedWords(failure: AgentCallFailure): string {
   if (failure === AGENT_CALL_FAILURE.NOT_FOUND) return "This agent no longer exists.";
+
   if (failure === AGENT_CALL_FAILURE.UNANSWERED) return "No answer came back. Try again.";
+
   return "The message could not be sent. Try again.";
 }
 
@@ -86,10 +89,12 @@ export const NOT_RESOLVED = {
 /** The label of the open ask's first number field whose words read as no number, which the box holds the answer back for; none where every number reads. */
 function unreadableNumber(thread: readonly InboxMessage[], draft: InboxDraft): string | undefined {
   const ask = openAskOf(thread)?.ask;
+
   if (ask === undefined || !knownAsk(ask) || ask.type !== INBOX_ASK.ANSWER) return undefined;
+
   return ask.fields?.find(
     (field) =>
-      field.type === INBOX_FIELD.NUMBER && typeof fieldValueOf(draft, field.label) === "string",
+      field.type === INBOX_FIELD.NUMBER && Predicate.isString(fieldValueOf(draft, field.label)),
   )?.label;
 }
 
@@ -105,9 +110,12 @@ function pressedDraft(
 ): InboxDraft | undefined {
   if (press.kind === INBOX_PUSH_PRESS.REPLY) return { ...EMPTY_INBOX_DRAFT, note: press.text };
   const asking = openAskOf(thread);
+
   if (asking?.message.id !== press.messageId || !knownAsk(asking.ask)) return undefined;
   const { ask } = asking;
+
   if (ask.type !== INBOX_ASK.DECIDE) return undefined;
+
   return ask.options.some((option) => option.label === press.option)
     ? withChoice(ask, EMPTY_INBOX_DRAFT, press.option)
     : undefined;
@@ -121,6 +129,7 @@ const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
+
   return () => listeners.delete(listener);
 }
 
@@ -131,6 +140,7 @@ function heldNow(): ReadonlyMap<string, ThreadHeld> {
 /** The store with the thread's holding changed as `change` says. */
 function hold(itemId: string, change: (was: ThreadHeld) => ThreadHeld): void {
   held = new Map(held).set(itemId, change(held.get(itemId) ?? NOTHING_HELD));
+
   for (const listener of listeners) listener();
 }
 
@@ -149,6 +159,7 @@ function letGoCarriedCloses(items: readonly InboxItem[]): void {
         (sending) => sending.kind === INBOX_SENDING.CLOSE,
       ),
   );
+
   for (const item of carried) {
     hold(item.id, (was) => ({
       ...was,
@@ -169,6 +180,7 @@ export function pressFromNotification(press: InboxPushPress): void {
 /** The account signed in, as an answer or a resolve names who gave it; none while none is. */
 function useReader(): InboxReader | undefined {
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
+
   return useMemo(
     () =>
       account?.status === ACCOUNT_STATUS.SIGNED_IN && account.id !== undefined
@@ -189,14 +201,18 @@ export function useSendsDrawn<Group extends { readonly items: readonly InboxItem
   const store = useSyncExternalStore(subscribe, heldNow);
   const reader = useReader();
   useEffect(() => letGoCarriedCloses(groups.flatMap((group) => group.items)), [groups]);
+
   return useMemo(() => {
     if (store.size === 0) return groups;
+
     return groups.map((group) => {
       if (!group.items.some((item) => (store.get(item.id)?.sending.size ?? 0) > 0)) return group;
+
       return {
         ...group,
         items: group.items.map((item) => {
           const sending = store.get(item.id)?.sending;
+
           return sending === undefined || sending.size === 0
             ? item
             : inboxSendingDrawn(item, [...sending.values()], reader);
@@ -231,28 +247,36 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
   const store = useSyncExternalStore(subscribe, heldNow);
   const { draft, note } = store.get(itemId) ?? NOTHING_HELD;
   const thread = item.thread ?? [];
+
   const onDraft = useCallback(
     (next: InboxDraft) => hold(itemId, (was) => ({ ...was, draft: next, note: undefined })),
     [itemId],
   );
+
   // A send let go once refused: its words and picks back on the box, ahead of nothing typed since, and the refusal said.
   const refuse = (key: string, sent: InboxDraft, words: string) => {
     hold(itemId, (was) => {
       const sending = new Map(was.sending);
       sending.delete(key);
       const typed = was.draft.note.trim() === "" ? sent : was.draft;
+
       return { draft: typed, sending, note: words };
     });
   };
+
   const send = (pressed?: InboxDraft) => {
     const sending = pressed ?? draft;
     const unreadable = unreadableNumber(thread, sending);
+
     if (unreadable !== undefined) {
       hold(itemId, (was) => ({ ...was, note: unreadableWords(unreadable) }));
       buzz(BUZZ.WARNING);
+
       return;
     }
+
     const sent = inboxThreadSend(thread, sending);
+
     if (sent === undefined) {
       const missing = inboxMissing(thread, sending);
       hold(itemId, (was) => ({
@@ -260,8 +284,10 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
         note: missing === undefined ? undefined : missingWords(missing),
       }));
       buzz(BUZZ.WARNING);
+
       return;
     }
+
     const key = randomUUID();
     const revision = awaitsNod(item) ? item.revision : undefined;
     hold(itemId, (was) => ({
@@ -294,6 +320,7 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
       },
     );
   };
+
   const resolve = () => {
     const key = randomUUID();
     hold(itemId, (was) => ({
@@ -320,14 +347,17 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
       },
     );
   };
+
   // A notification's action held for this thread, taken once and sent as though pressed here.
   const pressed = store.get(itemId)?.pressed;
   useEffect(() => {
     if (pressed === undefined) return;
     hold(itemId, ({ pressed: _taken, ...was }) => was);
     const sending = pressedDraft(thread, pressed);
+
     if (sending !== undefined) send(sending);
   }, [pressed]);
+
   return {
     draft,
     onDraft,

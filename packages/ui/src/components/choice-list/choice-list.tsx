@@ -299,10 +299,13 @@ function afterPress<Value extends string>(
 ): readonly Value[] | undefined {
   const { value, select = CHOICE_SELECT.ONE } = props;
   const checked = value.includes(pressed);
+
   if (select === CHOICE_SELECT.MANY) {
     return checked ? value.filter((each) => each !== pressed) : [...value, pressed];
   }
+
   if (!checked) return [pressed];
+
   return props.clearable === true ? [] : undefined;
 }
 
@@ -310,7 +313,9 @@ function afterPress<Value extends string>(
 function labelFlex(option: ChoiceOption<string>, look: ChoiceLook | undefined): string {
   // Note that a pill sizes to its words, and that only a badge asks a label for a measure, since a number alone stands beside any label.
   if (look === CHOICE_LOOK.PILL) return "flex-initial";
+
   if (option.badge === undefined) return "flex-[1_1_0]";
+
   // A card's label is a name of a few words, so its badge keeps the head's right on a phone's width too.
   return look === CHOICE_LOOK.CARD ? "flex-[1_1_6em]" : "flex-[1_1_10em]";
 }
@@ -338,6 +343,7 @@ function ChoiceWords({
   number?: number | undefined;
 }): React.JSX.Element {
   const hung = after ?? option.after;
+
   return (
     <span className={cn("ui-choice-words flex flex-auto flex-col gap-0.5 min-w-0")}>
       <span className="ui-choice-head flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
@@ -393,9 +399,10 @@ function ChoiceControl({
   tone: StatusTone | undefined;
   inCard: boolean;
 }): React.JSX.Element {
-  const shape = radio ? "radio" : "box";
+  const control = radio ? "radio" : "box";
   // Note that a neutral tone says nothing of what picking means, so its control fills in the accent.
   const toned = tone !== undefined && tone !== STATUS_TONE.NEUTRAL;
+
   return (
     <span
       className={cn(
@@ -407,10 +414,10 @@ function ChoiceControl({
           : "self-start mt-[calc((var(--ui-type-body-leading)-var(--ui-space-16))/2)]",
         !checked && "border-muted-foreground",
         checked && (toned ? CONTROL_TONE_FILL : CONTROL_ACCENT_FILL),
-        checked && CONTROL_MARK[shape],
-        checked && CONTROL_INK[shape][toned ? "toned" : "accent"],
+        checked && CONTROL_MARK[control],
+        checked && CONTROL_INK[control][toned ? "toned" : "accent"],
       )}
-      data-shape={shape}
+      data-control={control}
       aria-hidden="true"
     />
   );
@@ -495,6 +502,7 @@ function ChoiceRow({
   onPress: () => void;
 }): React.JSX.Element {
   const card = held(look);
+
   const attributes = {
     ref: focusRef,
     render: <button type="button" />,
@@ -522,6 +530,7 @@ function ChoiceRow({
     onClick: (event: React.MouseEvent<HTMLElement> & { preventBaseUIHandler: () => void }) => {
       // Note that the list answers the press itself, because Base UI's own takes no choice back.
       event.preventBaseUIHandler();
+
       if (readOnly) return;
       // Note that a row's radio or box is what gives, as a checkbox's box does; a pill gives whole.
       const control = event.currentTarget.querySelector<HTMLElement>(":scope > .ui-choice-control");
@@ -537,16 +546,20 @@ function ChoiceRow({
       event.preventBaseUIHandler();
     },
   } as const;
+
   const inside = (
     <RowInside radio={radio} option={option} checked={checked} look={look} number={number} />
   );
+
   const row = radio ? (
     <Radio.Root {...attributes}>{inside}</Radio.Root>
   ) : (
     <Checkbox.Root {...attributes}>{inside}</Checkbox.Root>
   );
+
   if (!card) return row;
   const rows = look === CHOICE_LOOK.ROWS;
+
   return (
     <div
       className={cn(
@@ -575,6 +588,7 @@ function ChoiceRow({
 /** The list's own box, by its look and flow. */
 function listClass(look: ChoiceLook, flow: ChoiceFlow): string {
   const down = look !== CHOICE_LOOK.PILL && flow === CHOICE_FLOW.DOWN;
+
   return cn(LIST, LIST_LOOK[look], down ? "flex-col" : "flex-row");
 }
 
@@ -596,10 +610,12 @@ function OpenChoices<Value extends string>(props: ChoiceListOpen<Value>): React.
     numbered = false,
     flow = CHOICE_FLOW.DOWN,
   } = props;
+
   const one = select === CHOICE_SELECT.ONE;
   const still = disabled || readOnly;
   const open = options.filter((option) => option.disabled !== true);
   const landing = open.find((option) => value.includes(option.value)) ?? open[0];
+
   // An arrow, Home, or End takes the keyboard to an open row, wrapping at
   // either end; along a pick-one list it chooses the row it lands on, and
   // along a pick-several one it toggles nothing. Note that a pick-one
@@ -611,22 +627,28 @@ function OpenChoices<Value extends string>(props: ChoiceListOpen<Value>): React.
     moveTo: (row) => {
       row.focus();
       const landed = options.find((option) => option.value === row.dataset.value);
+
       if (one && landed !== undefined && !value.includes(landed.value)) {
         props.onChange([landed.value]);
       }
     },
   });
+
   const press = (pressed: Value) => {
     const next = afterPress(props, pressed);
+
     if (next !== undefined) props.onChange(next);
   };
+
   // Note that Base UI's own arrows never run, so a key pressed in a card's controls stays theirs.
   const onKeyDown = (
     event: React.KeyboardEvent<HTMLElement> & { preventBaseUIHandler: () => void },
   ) => {
     event.preventBaseUIHandler();
+
     if (!still) roving.onKeyDown(event);
   };
+
   const rows = options.map((option, index) => (
     <ChoiceRow
       key={option.value}
@@ -644,6 +666,7 @@ function OpenChoices<Value extends string>(props: ChoiceListOpen<Value>): React.
       onPress={() => press(option.value)}
     />
   ));
+
   const group = {
     "aria-label": legend,
     "aria-describedby": describedBy,
@@ -655,6 +678,7 @@ function OpenChoices<Value extends string>(props: ChoiceListOpen<Value>): React.
     "data-look": look,
     "data-read-only": readOnly || undefined,
   };
+
   if (!one) {
     return (
       <CheckboxGroup
@@ -668,6 +692,7 @@ function OpenChoices<Value extends string>(props: ChoiceListOpen<Value>): React.
       </CheckboxGroup>
     );
   }
+
   return (
     <RadioGroup
       {...group}
@@ -697,6 +722,7 @@ function SettledChoices<Value extends string>({
     <ul aria-label={legend} className={listClass(CHOICE_LOOK.PLAIN, CHOICE_FLOW.DOWN)}>
       {options.map((option) => {
         const picked = value.includes(option.value);
+
         return (
           <li key={option.value} className={ROW} data-picked={picked}>
             {option.mark === undefined ? null : (

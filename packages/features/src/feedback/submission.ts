@@ -91,6 +91,7 @@ const BASE64_PATTERN = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/
 
 function decodedByteLength(base64: string): number {
   const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+
   return (base64.length / 4) * 3 - padding;
 }
 
@@ -146,8 +147,10 @@ const readFeedbackSubmission = Schema.decodeUnknownOption(feedbackSubmissionSche
 export function feedbackSubmission(value: UnparsedWireValue): FeedbackSubmission | undefined {
   if (!isRecord(value)) return undefined;
   const read = Option.getOrUndefined(readFeedbackSubmission(value));
+
   if (read === undefined) return undefined;
   const { kind, message, name, email, images, experiment } = read;
+
   return {
     kind,
     message,

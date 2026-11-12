@@ -62,8 +62,10 @@ export function inboxNoteReading(
   connected: boolean,
 ): InboxNoteReading {
   const archived = note.failure === AGENT_CALL_FAILURE.NOT_FOUND && agent?.archivedAt !== undefined;
+
   if (archived) return { words: AGENT_ARCHIVED_NOTE, unarchive: true };
   const offline = !connected && note.failure === AGENT_CALL_FAILURE.UNANSWERED;
+
   return { words: offline ? UNHEARD_OFFLINE.ALONE : note.words, unarchive: false };
 }
 
@@ -105,6 +107,7 @@ export function inboxBoard(
   const open = items
     .filter((item) => item.status === INBOX_STATUS.OPEN)
     .toSorted((a, b) => a.postedAt - b.postedAt);
+
   return {
     open,
     waiting: open.filter((item) => waitsOnReaderNow(item, readerId, now)),
@@ -196,7 +199,9 @@ export function codeNotice(block: InboxCodeBlock, repository: string | null): st
   if (repository === null || repository.toLowerCase() !== block.repo.toLowerCase()) {
     return `These lines are in ${block.repo}, which this task no longer reads.`;
   }
+
   if (!codeLinesReadable(block)) return "These lines cannot be read.";
+
   return undefined;
 }
 
@@ -214,8 +219,10 @@ export function codeReadOf(block: InboxCodeBlock, answer: TasksFileAnswer): Code
       again: refusalPasses(answer.refusal),
     };
   }
+
   if (!("file" in answer)) return { kind: CODE_READ.NOTICE, line: CODE_UNREAD, again: true };
   const { file } = answer;
+
   // Note that a file ending inside the lines is said too, because a card
   // drawing some of them would read, and copy, as all the agent meant.
   if (file.firstLine + file.lines.length <= block.endLine) {
@@ -225,6 +232,7 @@ export function codeReadOf(block: InboxCodeBlock, answer: TasksFileAnswer): Code
       again: false,
     };
   }
+
   return {
     kind: CODE_READ.READY,
     code: {

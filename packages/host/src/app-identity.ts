@@ -71,6 +71,7 @@ export function resolveInstance(launch: {
   requested: string | undefined;
 }): string | undefined {
   if (launch.packaged || launch.requested === undefined) return undefined;
+
   return isInstanceName(launch.requested) ? launch.requested : undefined;
 }
 
@@ -86,6 +87,7 @@ export function resolveAppName({
   instance,
 }: AppIdentityContext): string {
   if (packaged) return developerIdSigned ? RELEASE_APP_NAME : AD_HOC_APP_NAME;
+
   return instance === undefined ? DEVELOPMENT_APP_NAME : `${DEVELOPMENT_APP_NAME} ${instance}`;
 }
 

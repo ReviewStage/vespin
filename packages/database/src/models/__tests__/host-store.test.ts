@@ -46,9 +46,11 @@ import { keepRunsOnPick, readRunsOnPick } from "../runs-on-pick.js";
 const openAccounts = Effect.gen(function* () {
   const db = yield* Database;
   const [owner, other] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
   for (const id of [owner, other]) {
     yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
   }
+
   return { owner, other };
 });
 
@@ -61,6 +63,7 @@ const enrolledHost = (
     const id = randomUUID();
     const secretHash = `secret-${randomUUID()}`;
     const platform = host.platform ?? DEVICE_PLATFORM.DARWIN;
+
     const enrolled = yield* enrollOwnDevice(userId, {
       id,
       version: "0.5.0",
@@ -68,6 +71,7 @@ const enrolledHost = (
       ...(host.machineId === undefined ? undefined : { machineId: host.machineId }),
       machine: { name: host.name, platform, arch: DEVICE_ARCH.ARM64 },
     });
+
     return { id, secretHash, folded: Option.getOrThrow(enrolled) };
   });
 
@@ -86,12 +90,14 @@ it.layer(getTestDB())("the host store", (it) => {
           version: "0.1.0",
           secretHash: `secret-${randomUUID()}`,
         });
+
         const created = yield* enrollOwnDevice(owner, {
           id,
           version: "0.1.0",
           secretHash: ownerHash,
           machine,
         });
+
         const byOther = yield* enrollOwnDevice(other, {
           id,
           version: "0.1.0",
@@ -131,19 +137,23 @@ it.layer(getTestDB())("the host store", (it) => {
           version: "0.1.0",
           secretHash: otherHash,
         });
+
         const first = yield* enrollOwnDevice(owner, {
           id,
           version: "0.1.0",
           secretHash: firstHash,
         });
+
         const listed = yield* hostsOf(owner);
         // Start offers and launches only on what this read answers the starter.
         const layoutForOther = yield* deviceLayout(other, id);
+
         const rotated = yield* enrollOwnDevice(owner, {
           id,
           version: "0.1.0",
           secretHash: rotatedHash,
         });
+
         const firstAfterRotate = yield* hostBySecret(firstHash);
         const removedByOther = yield* removeHost(other, id);
         const removed = yield* removeHost(owner, id);
@@ -177,13 +187,16 @@ it.layer(getTestDB())("the host store", (it) => {
         const { owner } = yield* openAccounts;
         const machineId = "a".repeat(64);
         const old = yield* enrolledHost(owner, { name: "Air", machineId });
+
         const box = yield* enrolledHost(owner, {
           name: "Box",
           machineId,
           platform: DEVICE_PLATFORM.LINUX,
         });
+
         const runsOn = { machine: AGENT_MACHINE.DEVICE, deviceId: old.id } as const;
         const started = yield* startTask(owner, { name: "Invitations" });
+
         const { agent } = Option.getOrThrow(
           yield* createAgent(owner, {
             taskId: started.id,
@@ -197,6 +210,7 @@ it.layer(getTestDB())("the host store", (it) => {
             ...runsOn,
           }),
         );
+
         yield* keepRunsOnPick(owner, runsOn);
         yield* queueDeviceAgentLine(owner, {
           agentId: agent.id,
@@ -210,6 +224,7 @@ it.layer(getTestDB())("the host store", (it) => {
         const launch = yield* latestDeviceAgentLaunch(owner, agent.id);
         const bearerReaches = yield* readRunnerTokenConversation(bearerDigest);
         const db = yield* Database;
+
         const [movedAgent] = yield* db
           .select({ deviceId: agentTable.deviceId })
           .from(agentTable)
@@ -264,11 +279,13 @@ it.layer(getTestDB())("the host store", (it) => {
         yield* registerHost(owner, { id: running.id, name: "Air", ...DEVICE_LAYOUT });
         // Note that a host older than the field names no machine at its first register.
         const older = yield* enrolledHost(owner, { name: "Studio" });
+
         const first = yield* registerHost(owner, {
           id: older.id,
           name: "Studio",
           ...DEVICE_LAYOUT,
         });
+
         const later = yield* registerHost(owner, {
           id: older.id,
           name: "Studio",

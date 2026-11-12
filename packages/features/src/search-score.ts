@@ -88,11 +88,14 @@ export interface SearchHit {
 function merged(ranges: readonly MatchRange[]): readonly MatchRange[] {
   const sorted = [...ranges].sort((a, b) => a.start - b.start || a.end - b.end);
   const out: MatchRange[] = [];
+
   for (const range of sorted) {
     const last = out.at(-1);
+
     if (last !== undefined && range.start <= last.end) last.end = Math.max(last.end, range.end);
     else out.push({ ...range });
   }
+
   return out;
 }
 
@@ -100,17 +103,21 @@ function merged(ranges: readonly MatchRange[]): readonly MatchRange[] {
 function startsWord(text: string, at: number): boolean {
   if (at === 0) return true;
   const before = text.charAt(at - 1);
+
   if (!WORD_CHARACTER.test(before)) return true;
   const here = text.charAt(at);
+
   return CAPITAL.test(here) && before === before.toLowerCase() && before !== before.toUpperCase();
 }
 
 /** Where `token` first stands in `text`, at a word's start where `wordStart` asks it; -1 where it does not. */
 function placeOf(text: string, token: string, wordStart: boolean): number {
   const lowered = text.toLowerCase();
+
   for (let at = lowered.indexOf(token); at !== -1; at = lowered.indexOf(token, at + 1)) {
     if (!wordStart || startsWord(text, at)) return at;
   }
+
   return -1;
 }
 
@@ -125,12 +132,15 @@ function placed(
   wordStart: boolean,
 ): MatchRange[][] | undefined {
   const ranges: MatchRange[][] = texts.map(() => []);
+
   for (const token of tokens) {
     const index = texts.findIndex((text) => placeOf(text, token, wordStart) !== -1);
+
     if (index === -1) return undefined;
     const at = placeOf(texts[index] ?? "", token, wordStart);
     ranges[index]?.push({ start: at, end: at + token.length });
   }
+
   return ranges;
 }
 
@@ -145,25 +155,32 @@ function looseRun(
 ): { positions: number[]; span: number } | undefined {
   const lowered = text.toLowerCase();
   let best: { positions: number[]; span: number } | undefined;
+
   for (let start = lowered.indexOf(letters.charAt(0)); start !== -1; ) {
     const positions = [start];
     let at = start;
+
     for (const letter of letters.slice(1)) {
       at = lowered.indexOf(letter, at + 1);
+
       if (at === -1) break;
       positions.push(at);
     }
+
     if (at === -1) break;
     const span = at - start + 1;
+
     if (best === undefined || span < best.span) best = { positions, span };
     start = lowered.indexOf(letters.charAt(0), start + 1);
   }
+
   return best;
 }
 
 /** A hit of `tier`, its closeness under one, its ranges merged. */
 function hitOf(tier: SearchTier, closeness: number, ranges: readonly MatchRange[][]): SearchHit {
   const [label = [], ...lines] = ranges;
+
   return {
     tier,
     score: TIER_RANK[tier] + Math.min(closeness, 1) * CLOSENESS_CEILING,
@@ -181,11 +198,14 @@ function labelShare(ranges: readonly MatchRange[][], tokens: readonly string[]):
 function looseHit(texts: readonly string[], letters: string): SearchHit | undefined {
   for (const [index, text] of texts.entries()) {
     const run = looseRun(text, letters);
+
     if (run === undefined) continue;
     const ranges: MatchRange[][] = texts.map(() => []);
     ranges[index] = run.positions.map((at) => ({ start: at, end: at + 1 }));
+
     return hitOf(SEARCH_TIER.LOOSE, letters.length / run.span, ranges);
   }
+
   return undefined;
 }
 
@@ -195,43 +215,59 @@ function looseHit(texts: readonly string[], letters: string): SearchHit | undefi
  */
 export function searchHit(subject: SearchSubject, query: string): SearchHit | undefined {
   const tokens = searchTokens(query);
+
   if (tokens.length === 0) return undefined;
   const { label, key, keywords } = subject;
   const lines = subject.lines ?? [];
   const texts = [label, ...lines];
   const none = (): MatchRange[][] => texts.map(() => []);
+
   if (key !== undefined && namesTaskKey(query, key.toUpperCase())) {
     const ranges = texts.map((text) => {
       const at = placeOf(text, key.toLowerCase(), false);
+
       return at === -1 ? [] : [{ start: at, end: at + key.length }];
     });
+
     return hitOf(SEARCH_TIER.KEY, 1, ranges);
   }
+
   const typed = tokens.join(" ");
+
   if (label.toLowerCase().startsWith(typed)) {
     const ranges = none();
     ranges[0] = [{ start: 0, end: typed.length }];
+
     // Note that a label typed whole ranks first, and the rest it begins keep the caller's order.
     return hitOf(SEARCH_TIER.PREFIX, typed.length === label.length ? 1 : 0, ranges);
   }
+
   const starts = placed(texts, tokens, true);
+
   if (starts !== undefined)
     return hitOf(SEARCH_TIER.WORD_STARTS, labelShare(starts, tokens), starts);
   const anywhere = placed(texts, tokens, false);
+
   if (anywhere !== undefined)
     return hitOf(SEARCH_TIER.WORDS, labelShare(anywhere, tokens), anywhere);
+
   if (keywords !== undefined && placed([...texts, ...keywords], tokens, false) !== undefined) {
     // Note that only what lands in the drawn words is marked, since the keywords are never drawn.
     const ranges = texts.map((text) =>
       tokens.flatMap((token) => {
         const at = placeOf(text, token, false);
+
         return at === -1 ? [] : [{ start: at, end: at + token.length }];
       }),
     );
+
     return hitOf(SEARCH_TIER.KEYWORDS, 0, ranges);
   }
+
   const letters = tokens.join("");
+
   if (subject.loose !== true || letters.length < LOOSE_FROM) return undefined;
+
   return looseHit(texts, letters);
 }
 
@@ -248,11 +284,14 @@ export function hitRangesIn(
   hit: SearchHit,
 ): readonly MatchRange[] {
   const found: MatchRange[] = [];
+
   for (const [index, line] of (subject.lines ?? []).entries()) {
     const ranges = hit.lines[index] ?? [];
+
     if (ranges.length === 0 || line === "") continue;
     const inText = text.indexOf(line);
     const inLine = line.indexOf(text);
+
     for (const range of ranges) {
       if (inText !== -1) {
         found.push({ start: range.start + inText, end: range.end + inText });
@@ -264,5 +303,6 @@ export function hitRangesIn(
       }
     }
   }
+
   return merged(found);
 }

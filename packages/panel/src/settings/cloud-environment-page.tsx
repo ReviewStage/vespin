@@ -28,6 +28,7 @@ export function CloudEnvironmentPage({
 }): React.JSX.Element | null {
   if (control === undefined) return null;
   const workspace = shownWorkspace(control);
+
   if (workspace === undefined) {
     return control.listFailed ? (
       <SettingsSection>
@@ -44,6 +45,7 @@ export function CloudEnvironmentPage({
       />
     );
   }
+
   // Keyed to the workspace, so another one listed reads its own variables and scripts and asks nothing left over.
   return (
     <Fragment key={workspace.id}>

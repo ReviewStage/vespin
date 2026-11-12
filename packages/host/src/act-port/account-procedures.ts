@@ -45,12 +45,14 @@ export interface AccountProceduresDependencies {
 
 export function accountProcedures(dependencies: AccountProceduresDependencies) {
   const { host, acts, haltSessionReplay, resumeSessionReplay, askBeforeSignOut } = dependencies;
+
   /** The halt, the host's answer, and the resume an answer that never came owes. */
   const halted = (
     action: Effect.Effect<AccountSnapshot, unknown>,
   ): Effect.Effect<AccountSnapshot, unknown> =>
     Effect.suspend(() => {
       haltSessionReplay();
+
       return Effect.tapCause(action, (cause) =>
         Cause.hasInterruptsOnly(cause) ? Effect.void : Effect.sync(resumeSessionReplay),
       );
@@ -64,8 +66,10 @@ export function accountProcedures(dependencies: AccountProceduresDependencies) {
       function* ({ input }) {
         if (askBeforeSignOut !== undefined && !(yield* Effect.promise(askBeforeSignOut))) {
           const standing = yield* host.accountSnapshot();
+
           if (Option.isSome(standing)) return standing.value;
         }
+
         return yield* halted(
           declaredAnswer(ACCOUNT_ACTS.ACCOUNT_SIGN_OUT, acts.ACCOUNT_SIGN_OUT, input),
         );

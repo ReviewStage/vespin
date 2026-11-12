@@ -74,6 +74,7 @@ export interface HeldAsk<Answering, Failure> {
 /** The line an ask that stopped waiting with no answer of this window's settles into. */
 export function vanishedLine(byMessage: boolean, running: boolean): string {
   if (byMessage) return HELD_WORDS.DENIED;
+
   return running ? HELD_WORDS.ELSEWHERE : HELD_WORDS.EXPIRED;
 }
 
@@ -92,22 +93,28 @@ export function heldWith<Answering, Failure>(
 ): ReadonlyMap<string, HeldAsk<Answering, Failure>> {
   const waiting = new Set(pending.map((each) => each.id));
   const next = new Map(held);
+
   for (const approval of pending) {
     const was = next.get(approval.id);
+
     if (was === undefined) next.set(approval.id, { approval });
     else if (was.vanished === true) next.set(approval.id, { approval, error: was.error });
   }
+
   for (const [id, ask] of next) {
     if (waiting.has(id) || ask.settled !== undefined || ask.answering !== undefined) continue;
     next.set(id, { ...ask, settled: vanishedLine(ask.messaged === true, running), vanished: true });
   }
+
   return next;
 }
 
 /** Whether two holdings hold the same asks as they stand. */
 export function sameHeld<Ask>(a: ReadonlyMap<string, Ask>, b: ReadonlyMap<string, Ask>): boolean {
   if (a.size !== b.size) return false;
+
   for (const [id, ask] of a) if (b.get(id) !== ask) return false;
+
   return true;
 }
 
@@ -118,32 +125,41 @@ export function markedAsk<Answering, Failure>(
   running: boolean,
 ): HeldAsk<Answering, Failure> {
   if (messaged) return ask.settled === undefined ? { ...ask, messaged: true } : ask;
+
   if (ask.messaged !== true) return ask;
+
   return ask.vanished === true
     ? { ...ask, messaged: false, settled: vanishedLine(false, running) }
     : { ...ask, messaged: false };
 }
 
-/** Why an answer did not go, by the failure it came back with, and whether the service refused it, which a press again will not mend. */
-export function answerFailedOf(failure: string): {
+type AnswerFailed = {
   readonly words: string;
   readonly refused: boolean;
-} {
+};
+
+/** Why an answer did not go, by the failure it came back with, and whether the service refused it, which a press again will not mend. */
+export function answerFailedOf(failure: string): AnswerFailed {
   if (failure === AGENT_CALL_FAILURE.NOT_PERMITTED) {
     return { words: ANSWER_FAILED.NOT_PERMITTED, refused: true };
   }
+
   if (failure === AGENT_CALL_FAILURE.NOT_FOUND) {
     return { words: ANSWER_FAILED.NOT_FOUND, refused: true };
   }
+
   return { words: ANSWER_FAILED.UNANSWERED, refused: false };
 }
 
 /** What a held call's body says of who asks and why: the subagent where one does, and the CLI's own words where they are not the call's own description. */
 export function heldAbout(approval: AgentPendingApproval): string | undefined {
   const asker = approval.subagentId === undefined ? undefined : SUBAGENT_ASKS;
+
   const why =
     approval.description === approval.input.description ? undefined : approval.description;
+
   const words = [asker, why].filter((each) => each !== undefined);
+
   return words.length === 0 ? undefined : words.join(" ");
 }
 

@@ -55,7 +55,9 @@ function confirmStage(
   { subject, surfaceOpen }: ConfirmSurroundings,
 ): ConfirmStage {
   if (held === CONFIRM_STAGE.ACTING) return held;
+
   if (!subject || !surfaceOpen) return CONFIRM_STAGE.RESTING;
+
   return held;
 }
 
@@ -100,7 +102,7 @@ export type ConfirmFailure = (refused: ActionResult) => ReportedFailure;
  * its own.
  */
 export interface ConfirmAct {
-  readonly run: () => Promise<unknown>;
+  readonly run: () => Promise<void>;
   readonly busy: boolean;
   readonly refused: ActionResult | undefined;
   readonly reset: () => void;
@@ -111,6 +113,7 @@ export function neverBusyAct(act: () => void): ConfirmAct {
   return {
     run: () => {
       act();
+
       return Promise.resolve();
     },
     busy: false,
@@ -173,11 +176,14 @@ export function useConfirm(
   const [ran, setRan] = useState(false);
   const newestRan = useRef(ran);
   newestRan.current = ran;
+
   if (held === CONFIRM_STAGE.ACTING && answered && !act.busy) {
     setHeld(CONFIRM_STAGE.RESTING);
     setAnswered(false);
   }
+
   const stage = confirmStage(held, surroundings);
+
   if (stage !== held) setHeld(stage);
   // Read by the withdrawal, which a dialog holds as a callback rather than a
   // render's closure: an Escape must find the stage as it stands, not as it
@@ -192,6 +198,7 @@ export function useConfirm(
     if (!confirmWithdrawable(standing.current)) return;
     setHeld(CONFIRM_STAGE.RESTING);
   }, []);
+
   // Whatever the last answer was refused for is let go on the way in: a
   // fresh question is a fresh decision, not one carrying the last one's
   // answer under it.
@@ -199,11 +206,14 @@ export function useConfirm(
     if (newestRan.current) newestAct.current.reset();
     setRan(false);
   }, []);
+
   const forget = useCallback(() => setRan(false), []);
+
   const ask = useCallback(() => {
     letGo();
     setHeld(CONFIRM_STAGE.ASKING);
   }, [letGo]);
+
   const run = useCallback(() => {
     setRan(true);
     setHeld(CONFIRM_STAGE.ACTING);
@@ -223,6 +233,7 @@ export function useConfirm(
   const newestFailure = useRef(failure);
   newestFailure.current = failure;
   const refused = stage === CONFIRM_STAGE.ACTING || !ran ? undefined : act.refused;
+
   const rejection = useMemo(
     () =>
       refused === undefined || refused.status === ACTION_RESULT_STATUS.ACCEPTED
@@ -230,6 +241,7 @@ export function useConfirm(
         : { words: refused.reason, failure: newestFailure.current(refused) },
     [refused],
   );
+
   return useMemo(
     () => ({
       stage,

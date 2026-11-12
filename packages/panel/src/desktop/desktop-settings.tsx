@@ -130,6 +130,7 @@ function SettingsPageRow({
   const menu = useMenu(true);
   const links = useLinkItems()({ kind: LINK_DESTINATION.SETTINGS, page: view });
   const openInTab = useOpenInTab()({ kind: LINK_DESTINATION.SETTINGS, page: view });
+
   return (
     <li>
       <NavItem
@@ -184,6 +185,7 @@ function ListHead({
       onBack={onExit}
     />
   );
+
   if (room === SHELL_ROOM.NARROW) {
     return (
       <PhoneHead
@@ -195,6 +197,7 @@ function ListHead({
       />
     );
   }
+
   return (
     <>
       <div className="desktop-drag-strip" />
@@ -225,6 +228,7 @@ function PageGroup({
   children: ReactNode;
 }): React.JSX.Element {
   const workspace = group === SETTINGS_PAGE_GROUP.WORKSPACE ? listed : undefined;
+
   return (
     <section className="settings-nav-group [.settings-nav-group+&]:mt-section-gap">
       <GroupHeader
@@ -321,28 +325,35 @@ export function DesktopSettings({
   const page = useRef<HTMLElement>(null);
   // The pages, or the results of a search, are one Tab stop that ↑↓ walk.
   const roving = useRovingKeys<HTMLDivElement>();
+
   // The Integrations page's search is the page's, so turning to another page leaves it.
   if (integrationsQuery !== "" && settings.view !== SETTINGS_VIEW.INTEGRATIONS) {
     setIntegrationsQuery("");
   }
+
   useAppCommand(APP_COMMAND.EXIT_SETTINGS, onExit);
   const shown = settingsPageOf(settings.view);
+
   // The workspace the tasks' sidebar lists, which heads the first group and is the one the Workspace page shows.
   const listed =
     settings.account.status === ACCOUNT_STATUS.SIGNED_IN && settings.workspace
       ? shownWorkspace(settings.workspace)
       : undefined;
+
   const named = settings.view === SETTINGS_VIEW.WORKSPACE && listed !== undefined;
   const title = named ? listed.name : shown.title;
   const writes = useSettingsWrites();
   const rows = settingsRowsInput(settings);
+
   // The experiments on where Settings shows: the account's own, and the listed workspace's.
   const experiments = experimentsShown(
     useQuery({ ...appStateQuery, select: selectStoredExperimentChoices }).data ?? NO_EXPERIMENTS,
     listed,
   );
+
   // A page standing alone is headed as a phone's, whose ⋯ holds its reset.
   const split = useScreenSplit(room);
+
   const reset = pageResetControl(
     settings.view,
     settings.settings,
@@ -350,26 +361,32 @@ export function DesktopSettings({
     rows,
     split.single ? title : undefined,
   );
+
   // Built only while a query stands: an empty field searches nothing.
   const search =
     rows && query !== "" ? searchSettings(settingsSearchCorpus(rows), query) : undefined;
+
   const stops = search ? settingsSearchStops(search) : [];
+
   const open = (view: SettingsView) => {
     appPlatform().recordSurfaceEvent(PRODUCT_SURFACE_EVENT.SETTINGS_VIEW_OPEN, {
       settings_view: SETTINGS_VIEW_COUNTED_AS[view],
     });
     settings.onViewChange(view);
   };
+
   const changeQuery = (next: string) => {
     setQuery(next);
     setActive(-1);
   };
+
   // The page the result named opens and the view follows to the row itself.
   // The seek gives itself up after its own frame limit, and sooner when the
   // next result is pressed or Settings closes, so it never lands on a row of
   // a page it was not sent to.
   const landing = useRef<() => void>(undefined);
   useEffect(() => () => landing.current?.(), []);
+
   // A row's page opens and the view lands on the row, handing it the
   // keyboard only where it was chosen rather than stepped to; a page's own
   // result opens it at its top.
@@ -377,45 +394,59 @@ export function DesktopSettings({
     landing.current?.();
     landing.current = undefined;
     const { entry } = stop;
+
     if (entry === undefined) {
       const heading = page.current?.querySelector<HTMLElement>("h1");
+
       if (stop.page === settings.view && heading) scrollerOf(heading)?.scrollTo({ top: 0 });
       settings.onViewChange(stop.page);
+
       return;
     }
+
     // An integration opens with the query handed down where the page's own
     // search finds it by those words, else with that search cleared, so the
     // row the landing seeks is drawn either way.
     const provider = INTEGRATION_PROVIDER_LIST.find((each) => each === entry.id);
+
     if (entry.page === SETTINGS_VIEW.INTEGRATIONS && provider) {
       setIntegrationsQuery(integrationNamed(provider, query) ? query : "");
     }
+
     settings.onViewChange(entry.page);
     landing.current = landOnSettingsRow(entry.id, keyboard);
   };
+
   // A key stepped onto a result: it is lit and kept in the list's view, and
   // its page shown beside the list unless the page would stand in its place.
   const stepTo = (index: number) => {
     const stop = stops[index];
+
     if (stop === undefined) return;
     setActive(index);
     const row = document.getElementById(settingsSearchStopId(listId, index));
     const lines = row === null ? undefined : scrollerOf(row);
+
     if (row !== null && lines !== undefined) revealWithin(lines, row);
+
     if (!split.single) showStop(stop, false);
   };
+
   // A result chosen, by Return or a press: the best one where none was stepped to.
   const choose = (index: number) => {
     const at = index < 0 && search ? bestSettingsStop(search) : index;
     const stop = stops[at];
+
     if (stop === undefined) return;
     setActive(at);
     showStop(stop, true);
   };
+
   const edge = useListEdge(sidebar);
   const hidden = hiddenColumns(split.columns, step.listed);
   const screen = useScreenRef(useNarrowFocus(split.columns, step.listed), split.ref);
   const onList = split.single ? step.onList : undefined;
+
   // The page with a search of its own takes Command-F while it shows; a page hidden behind the list does not.
   const pageSearched =
     settings.view === SETTINGS_VIEW.INTEGRATIONS &&

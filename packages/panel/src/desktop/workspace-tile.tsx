@@ -1,5 +1,5 @@
 import type { Workspace } from "@repo/features/workspace-wire";
-import { AVATAR_SHAPE, AVATAR_SIZE, Avatar } from "@repo/ui";
+import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { workspacePhotoQuery } from "../live-reads.js";
 
@@ -48,6 +48,7 @@ const AVATAR_OF = {
 /** The workspace's photo as a `data:` URL, as the host holds it at the version the list names; nothing where it has none, while it loads, or where it could not be read. */
 function useWorkspacePhoto(workspaceId: string, version: string | undefined): string | undefined {
   const rows = useQuery(workspacePhotoQuery(version === undefined ? undefined : workspaceId)).data;
+
   return rows?.version === version ? rows?.url : undefined;
 }
 
@@ -56,6 +57,7 @@ export function useWorkspaceTileUrl(
   workspace: Pick<Workspace, "id" | "photoVersion" | "pictureUrl">,
 ): string | undefined {
   const photo = useWorkspacePhoto(workspace.id, workspace.photoVersion);
+
   return workspace.photoVersion === undefined ? workspace.pictureUrl : photo;
 }
 
@@ -68,6 +70,7 @@ export function WorkspaceTile({
   size?: TileSize;
 }): React.JSX.Element {
   const url = useWorkspaceTileUrl(workspace);
+
   // Note that the letter and its hue stand until the picture has loaded, because an avatar on the network may take a while, and go once it has, because a transparent photo would show them through.
   return (
     <Avatar
@@ -75,7 +78,7 @@ export function WorkspaceTile({
       id={workspace.id}
       src={url}
       size={AVATAR_OF[size]}
-      shape={AVATAR_SHAPE.TILE}
+      outline={AVATAR_OUTLINE.TILE}
       decorative
     />
   );

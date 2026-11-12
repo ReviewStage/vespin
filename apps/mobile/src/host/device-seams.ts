@@ -26,6 +26,7 @@ function onAppActiveChanged(listener: (active: boolean) => void): () => void {
   const subscription = AppState.addEventListener("change", (state) => {
     listener(state === "active");
   });
+
   return () => subscription.remove();
 }
 

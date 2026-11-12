@@ -59,6 +59,7 @@ const openAccount = (name: string) =>
     const db = yield* Database;
     const id = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id, name, email: `${id}@app.test` });
+
     return id;
   });
 
@@ -73,6 +74,7 @@ function threadOf(outcome: DescriptionCommentOutcome): DescriptionCommentThread 
     outcome.status === DESCRIPTION_COMMENT_OUTCOME.DONE && "thread" in outcome.answer,
     JSON.stringify(outcome),
   );
+
   return outcome.answer.thread;
 }
 
@@ -90,11 +92,13 @@ const liveThreadsOf = (reader: string, subject: TaskCommentsSubject) =>
         page: subject.pageId ?? "",
       }),
     );
+
     const rows = yield* Schema.decodeUnknownEffect(TASK_COMMENTS_READ.rows)({
       threads: yield* runLive(statements.threads),
       entries: yield* runLive(statements.entries),
       files: yield* runLive(statements.files),
     });
+
     return threadsOfLiveRows(rows);
   });
 
@@ -108,11 +112,14 @@ it.layer(getTestDB())("a task's comments followed live", (it) => {
         const stranger = yield* openAccount("Someone Else");
         const workspace = yield* openWorkspace(owner);
         yield* joinWorkspace(workspace, teammate);
+
         const { id: taskId } = yield* createTask(owner, {
           organizationId: workspace,
           name: "Invites",
         });
+
         yield* saveDescriptionText(owner, taskId, DESCRIPTION_TEXT);
+
         const page = (write: { readonly pageId?: string; readonly html: string }) =>
           Effect.map(
             writePage(
@@ -123,23 +130,29 @@ it.layer(getTestDB())("a task's comments followed live", (it) => {
             ),
             Option.getOrThrow,
           );
+
         const shown = yield* page({ html: "<h1>Invites</h1><p>12 sent</p>" });
         const onPlan = { taskId };
         const onPage = { taskId, pageId: shown.id };
+
         const agrees = (subject: TaskCommentsSubject) =>
           Effect.gen(function* () {
             const held = Option.getOrThrow(
               yield* readDescriptionCommentThreads(owner, taskId, subject.pageId),
             );
+
             assert.deepEqual(yield* liveThreadsOf(owner, subject), held);
+
             return held;
           });
+
         const later = TestClock.adjust(Duration.minutes(1));
 
         assert.deepEqual(yield* agrees(onPlan), []);
         assert.deepEqual(yield* agrees(onPage), []);
 
         const from = DESCRIPTION_TEXT.indexOf("seven days");
+
         const started = threadOf(
           yield* startDescriptionCommentThread(member(teammate), taskId, {
             clientKey: randomUUID(),
@@ -162,6 +175,7 @@ it.layer(getTestDB())("a task's comments followed live", (it) => {
             ],
           }),
         );
+
         // Note that these start in the millisecond the description's thread did, so the threads are ordered by their ids.
         const onElement = threadOf(
           yield* startDescriptionCommentThread(member(teammate), taskId, {
@@ -171,6 +185,7 @@ it.layer(getTestDB())("a task's comments followed live", (it) => {
             words: "Is this a week's worth?",
           }),
         );
+
         yield* startDescriptionCommentThread(member(owner), taskId, {
           clientKey: randomUUID(),
           page: { id: shown.id, version: 1 },
@@ -183,6 +198,7 @@ it.layer(getTestDB())("a task's comments followed live", (it) => {
           page: { id: shown.id, version: 2 },
           words: "Better.",
         });
+
         const agent = yield* createAgent(owner, {
           taskId,
           idempotencyKey: randomUUID(),
@@ -193,7 +209,9 @@ it.layer(getTestDB())("a task's comments followed live", (it) => {
           repository: "acme/relay",
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         yield* later;
+
         const reply = threadOf(
           yield* actOnDescriptionCommentThread(member(owner), taskId, started.id, {
             action: DESCRIPTION_COMMENT_ACTION.REPLY,
@@ -201,6 +219,7 @@ it.layer(getTestDB())("a task's comments followed live", (it) => {
             words: "No files here.",
           }),
         ).entries.at(-1);
+
         yield* actOnDescriptionCommentThread(
           {
             actor: DESCRIPTION_COMMENT_ACTOR.AGENT,

@@ -30,8 +30,10 @@ const DIAGRAM: BlockMenuRow = {
   icon: <BoardIcon />,
   markdown: "```mermaid",
 };
+
 const TABLE: BlockMenuRow = { id: "table", label: "Table", icon: <TableIcon /> };
 const PICTURE: BlockMenuRow = { id: "picture", label: "Picture", icon: <ImageIcon /> };
+
 const MENTION: BlockMenuRow = {
   id: "mention",
   label: "Mention",
@@ -84,6 +86,7 @@ function Sample({ groups }: { groups: readonly BlockMenuGroup[] }): React.JSX.El
   const id = useId();
   const [active, setActive] = useState(0);
   const rows = groups.flatMap((group) => group.rows);
+
   return (
     <BlockMenu
       id={id}

@@ -20,6 +20,7 @@ async function opened(t: TestContext): Promise<PGlite> {
   const client = new PGlite();
   t.onTestFinished(() => client.close());
   await client.exec("create table probe (at timestamptz not null)");
+
   return client;
 }
 
@@ -27,15 +28,18 @@ async function opened(t: TestContext): Promise<PGlite> {
 function rendered(statement: { toSQL(): { readonly sql: string } }, alias: string): string {
   const match = new RegExp(`^select (.*) as "${alias}" from "probe"$`).exec(statement.toSQL().sql);
   assert.ok(match?.[1], statement.toSQL().sql);
+
   return match[1];
 }
 
 test("an instant a live read selects is immutable, as Realtime requires", async (t) => {
   const client = await opened(t);
+
   const expression = rendered(
     queryBuilder.select(liveSelection({}, { at: probe.at })).from(probe),
     "at",
   );
+
   await client.exec(`create index probe_at_millis on probe ((${expression}))`);
   await client.exec("insert into probe values ('2026-10-19T23:44:23.347Z')");
   const { rows } = await client.query<{ at: number }>(`select ${expression} as at from probe`);
@@ -44,10 +48,12 @@ test("an instant a live read selects is immutable, as Realtime requires", async 
 
 test("a group's latest instant is immutable around its max, as Realtime requires", async (t) => {
   const client = await opened(t);
+
   const latest = rendered(
     queryBuilder.select({ latest: liveLatest(probe.at).as("latest") }).from(probe),
     "latest",
   );
+
   // Note that we read the max as its one row, because an index takes no aggregate: what wraps it is what Realtime checks.
   const wrapping = latest.replace('max("probe"."at")', '"probe"."at"');
   assert.notEqual(wrapping, latest);

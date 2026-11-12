@@ -40,6 +40,7 @@ const openUser = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -51,6 +52,7 @@ const runLive = (statement: LiveStatement) =>
 const liveRecordOf = (reader: string, taskId: string) =>
   Effect.gen(function* () {
     const statements = Option.getOrThrow(taskRecordRead.statements({ userId: reader, id: taskId }));
+
     return yield* Schema.decodeUnknownEffect(TASK_RECORD_READ.rows)({
       description: yield* runLive(statements.description),
       pages: yield* runLive(statements.pages),
@@ -98,6 +100,7 @@ it.layer(getTestDB())("a task's record followed live", (it) => {
 
         let live = yield* liveRecordOf(owner, task.id);
         let held = yield* heldRecordOf(owner, task.id);
+
         const step = (
           expected: readonly Part[],
           write: Effect.Effect<unknown, unknown, DatabaseServices>,
@@ -129,6 +132,7 @@ it.layer(getTestDB())("a task's record followed live", (it) => {
             { kind: PAGE_SHOWER.APP },
           ),
         );
+
         live = yield* liveRecordOf(owner, task.id);
         held = yield* heldRecordOf(owner, task.id);
         assert.deepEqual(live.pages, [{ pageId: shown.id, version: 1 }]);
@@ -172,6 +176,7 @@ it.layer(getTestDB())("a task's record followed live", (it) => {
         yield* joinWorkspace(task.workspaceId, teammate);
 
         let live = yield* liveRecordOf(teammate, task.id);
+
         const step = (
           expected: readonly Part[],
           write: Effect.Effect<unknown, unknown, DatabaseServices>,

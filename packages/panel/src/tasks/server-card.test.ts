@@ -191,6 +191,7 @@ async function drawn(node: ReactNode): Promise<HTMLElement> {
     root.render(withQueryClient(createElement(TaskMentions, { value: PAGE, children: node }))),
   );
   await settle();
+
   return container;
 }
 
@@ -207,10 +208,12 @@ function agentTab(
       title: null,
     },
   ]);
+
   const control = agentsControl({
     agents: [agent],
     onMessage: () => new Promise<AgentAgentAnswer>(ignore),
   });
+
   return drawn(
     createElement(AgentTab, {
       agent,
@@ -229,6 +232,7 @@ async function cardOf(chip: Element | null | undefined) {
   await settle();
   const card = [...document.querySelectorAll(".ui-tooltip-card > [data-server-card]")].at(-1);
   assert.ok(card, "the chip hangs the server's card");
+
   const look = {
     name: card.querySelector(".ui-hover-card-name")?.textContent,
     sub: card.querySelector(".ui-hover-card-sub")?.textContent,
@@ -236,9 +240,11 @@ async function cardOf(chip: Element | null | undefined) {
     note: card.querySelector(".ui-hover-card-head + .ui-hover-card-note")?.textContent,
     presses: card.querySelectorAll("button, [role=switch]").length,
   };
+
   act(() => {
     chip.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
   });
+
   return look;
 }
 
@@ -339,6 +345,7 @@ test("off an agent, as in a description's or Vespin's words, the server's row ha
   const container = await drawn(
     createElement(TranscriptWords, { text: `Check ${SERVER} and ${TOOL}.` }),
   );
+
   const [server, tool] = container.querySelectorAll("[data-mention-ref]");
 
   const serverCard = await cardOf(server);

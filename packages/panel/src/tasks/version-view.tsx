@@ -7,7 +7,7 @@ import {
   Button,
   ErrorState,
   Fill,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   SkeletonRegion,
   STATUS_TONE,
@@ -166,6 +166,7 @@ function VersionBody({
   const link = useMentionLink(task);
   const openLink = useOpenLink();
   const picture = useDescriptionPictureDrawer();
+
   return (
     <VersionText>
       {title === undefined || section !== undefined ? null : <TextTitle name={title} />}
@@ -233,8 +234,10 @@ function VersionContent({
   onRetry: () => void;
 }): React.JSX.Element {
   const { read } = viewing;
+
   if (read.kind === HISTORY_READ.READING)
     return <VersionSkeleton title={title} section={section} />;
+
   if (read.kind === HISTORY_READ.FAILED) {
     return (
       <div className={VERSION_NOTE}>
@@ -247,9 +250,11 @@ function VersionContent({
       </div>
     );
   }
+
   const diff = versionDiff(read.previous, read.document);
   // Note that the first version is compared with nothing, so it is never said to have changed nothing.
   const unchanged = read.previous !== null && !diff.changed;
+
   return (
     <>
       {unchanged ? <p className={VERSION_NOTE}>{NO_CHANGE_LINE}</p> : null}
@@ -291,6 +296,7 @@ export function useVersionRestore(
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const restoring = useRef(false);
+
   const onRestore = (seq?: number) => {
     if (restoring.current) return;
     restoring.current = true;
@@ -298,6 +304,7 @@ export function useVersionRestore(
     history.onRestore(seq).then((result) => {
       restoring.current = false;
       setBusy(false);
+
       if (result.status === ACTION_RESULT_STATUS.ACCEPTED) onRestored();
       else {
         toast({
@@ -309,6 +316,7 @@ export function useVersionRestore(
       }
     });
   };
+
   return { busy, onRestore };
 }
 
@@ -327,12 +335,15 @@ export function sayRestored(
       words: VERSION_RESTORE.words,
       tone: STATUS_TONE.COMPLETE,
     });
+
     return;
   }
+
   toast(
     toastOnlyUndo(TOAST_ONLY_UNDO.VERSION_RESTORE, VERSION_RESTORE.words, () => {
       undo().then((undone) => {
         const words = VERSION_RESTORE.refused(undone);
+
         if (words === undefined || undone.kept) return;
         toast({
           replayUnmasked: true,
@@ -377,6 +388,7 @@ function VersionPageFrame({
       {title}
     </Text>
   );
+
   return (
     <>
       {lead === undefined ? (
@@ -430,6 +442,7 @@ export function VersionView({
   onRetry: () => void;
 }): React.JSX.Element {
   const { line } = viewing;
+
   return (
     <VersionPageFrame
       lead={lead}
@@ -496,7 +509,7 @@ export function VersionPageSkeleton({
     <VersionPageFrame
       lead={lead}
       title={<Skeleton width={BAR_SKELETON.MOMENT} />}
-      actions={<Skeleton shape={SKELETON_SHAPE.CONTROL} width={BAR_SKELETON.RESTORE} />}
+      actions={<Skeleton kind={SKELETON_KIND.CONTROL} width={BAR_SKELETON.RESTORE} />}
     >
       <VersionSkeleton title={title} section={section} />
     </VersionPageFrame>

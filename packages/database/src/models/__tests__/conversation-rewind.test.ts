@@ -38,6 +38,7 @@ const openConversation = Effect.gen(function* () {
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const task = yield* startTask(userId, { name: "Teammate invitations" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -48,7 +49,9 @@ const openConversation = Effect.gen(function* () {
     repository: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   const agent = Option.getOrThrow(started).agent;
+
   return { userId, conversationId: agent.conversationId };
 });
 
@@ -66,6 +69,7 @@ const turnAt = (target: Target, at: number) =>
       status: TURN_STATUS.SETTLED,
       queuedAt: new Date(at),
     });
+
     return id;
   });
 
@@ -93,6 +97,7 @@ const rowAt = (
       createdAt: new Date(at),
       takenAfterStep,
     });
+
     return id;
   });
 
@@ -100,10 +105,12 @@ const rowAt = (
 const rowOf = (target: Target, seq: number) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const [row] = yield* db
       .select({ id: messages.id })
       .from(messages)
       .where(and(eq(messages.conversationId, target.conversationId), eq(messages.seq, seq)));
+
     return row?.id ?? assert.fail(`no row stands at ${seq}`);
   });
 
@@ -117,6 +124,7 @@ const threeLines = (target: Target) =>
     const secondLine = yield* rowAt(target, 3, MESSAGE_ROLE.USER, second, 2_000);
     const answer = yield* rowAt(target, 4, MESSAGE_ROLE.ASSISTANT, second, 2_001);
     yield* rowAt(target, 5, MESSAGE_ROLE.USER, null, 3_000);
+
     return { first, firstLine, second, secondLine, answer };
   });
 
@@ -124,15 +132,18 @@ const threeLines = (target: Target) =>
 const standing = (target: Target) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const rows = yield* db
       .select({ seq: messages.seq })
       .from(messages)
       .where(eq(messages.conversationId, target.conversationId))
       .orderBy(asc(messages.seq));
+
     const turnRows = yield* db
       .select({ id: turns.id, status: turns.status })
       .from(turns)
       .where(eq(turns.conversationId, target.conversationId));
+
     const [conversation] = yield* db
       .select({
         journalRevision: conversations.journalRevision,
@@ -140,6 +151,7 @@ const standing = (target: Target) =>
       })
       .from(conversations)
       .where(eq(conversations.id, target.conversationId));
+
     return {
       seqs: rows.map((row) => row.seq),
       turns: turnRows.map((row) => row.id),
@@ -155,11 +167,13 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
       Effect.gen(function* () {
         const target = yield* openConversation;
         const { first, firstLine, secondLine } = yield* threeLines(target);
+
         const snapshot = {
           commit: "0123456789abcdef0123456789abcdef01234567",
           head: "89abcdef0123456789abcdef0123456789abcdef",
           branch: null,
         };
+
         yield* (yield* Database)
           .update(turns)
           .set({ snapshotCommit: snapshot.commit, snapshotHead: snapshot.head })
@@ -181,6 +195,7 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
         const target = yield* openConversation;
         const { first, firstLine, second, secondLine } = yield* threeLines(target);
         const db = yield* Database;
+
         const [before, after] = [
           "0123456789abcdef0123456789abcdef01234567",
           "89abcdef0123456789abcdef0123456789abcdef",
@@ -238,11 +253,13 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
           title: "Run pnpm test?",
           description: null,
           input: { command: "pnpm test" },
+          commandPrefix: null,
           at: new Date(1_000),
         });
 
         const rewound = yield* rewindConversation(target, firstLine);
         const after = yield* standing(target);
+
         const asks = yield* (yield* Database)
           .select({ status: agentApproval.status })
           .from(agentApproval)
@@ -274,6 +291,7 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
           .where(eq(conversations.id, target.conversationId));
 
         const cutting = yield* Effect.forkChild(rewindConversation(target, secondLine));
+
         // The clock moves a step at a time, a round trip apart, so the wait passes on a real Postgres too.
         const passing = (until: () => boolean) =>
           Effect.gen(function* () {
@@ -282,6 +300,7 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
               yield* standing(target);
             }
           });
+
         let steps = 0;
         // Twenty seconds on, longer than a send waits for a claim, the cut is still waiting.
         yield* passing(() => cutting.pollUnsafe() !== undefined || ++steps > 200);
@@ -339,6 +358,7 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
     Effect.gen(function* () {
       const target = yield* openConversation;
       const { first, second } = yield* threeLines(target);
+
       const [awaiting] = yield* (yield* Database)
         .select({ id: messages.id })
         .from(messages)
@@ -382,6 +402,7 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
         const target = yield* openConversation;
         const { secondLine } = yield* threeLines(target);
         const db = yield* Database;
+
         const worker = (at: number) =>
           Effect.gen(function* () {
             const id = randomUUID();
@@ -392,12 +413,15 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
               parentConversationId: target.conversationId,
               createdAt: new Date(at),
             });
+
             return id;
           });
+
         const kept = yield* worker(1_500);
         yield* worker(2_500);
 
         yield* rewindConversation(target, secondLine);
+
         const rows = yield* db
           .select({ id: conversations.id })
           .from(conversations)

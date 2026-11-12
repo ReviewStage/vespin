@@ -50,13 +50,18 @@ const answer = (
 ) =>
   Effect.gen(function* () {
     const headers = new Headers();
+
     if (init.signedIn !== false) headers.set("authorization", `Bearer ${USER_ID}`);
+
     if (init.body !== undefined) headers.set("content-type", "application/json");
+
     if (init.contentLength !== undefined) {
       headers.set("content-length", String(init.contentLength));
     }
+
     // SAFETY: every case here is refused before a procedure yields a service, so an empty context stands in for the web runtime's.
     const services = Context.empty() as Context.Context<WebServices>;
+
     const response = yield* Effect.promise(() =>
       handle(
         new Request(new URL(path, ORIGIN), {
@@ -67,6 +72,7 @@ const answer = (
         services,
       ),
     );
+
     return { status: response.status, text: yield* Effect.promise(() => response.text()) };
   });
 
@@ -82,12 +88,14 @@ it.effect(
         HOSTED_HTTP_STATUS.UNAUTHORIZED,
         HOSTED_API_ERROR.INVALID_TOKEN,
       );
+
       for (const path of [
         `${MESSAGES}?after=not-a-cursor`,
         `/api/agents/${AGENT_ID}/subagents/call-1/messages`,
       ]) {
         assert.deepEqual(yield* answer(path, { signedIn: false }), unauthenticated, path);
       }
+
       assert.deepEqual(
         yield* answer(MESSAGES, { method: "POST", signedIn: false, body: '{"text":7}' }),
         unauthenticated,
@@ -150,6 +158,7 @@ it.effect("a held read's path under a method it does not take is refused as such
       HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED,
       HOSTED_API_ERROR.METHOD_NOT_ALLOWED,
     );
+
     assert.deepEqual(yield* answer(MESSAGES, { method: "PUT" }), notAllowed);
     assert.deepEqual(
       yield* answer(`/api/agents/${AGENT_ID}/subagents/call-1/messages`, { method: "POST" }),

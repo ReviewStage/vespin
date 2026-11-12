@@ -67,9 +67,11 @@ export const streamedArchive = (url: string, saved: string, bounds: FetchBounds)
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const client = yield* HttpClient.HttpClient;
+
     const response = yield* client
       .get(url)
       .pipe(Effect.mapError((): FetchFailure => FETCH_FAILURE.UNREACHED));
+
     if (response.status !== HTTP_OK) return yield* Effect.fail(FETCH_FAILURE.REFUSED);
     const hash = createHash("sha256");
     let received = 0;
@@ -85,12 +87,14 @@ export const streamedArchive = (url: string, saved: string, bounds: FetchBounds)
           : Effect.sync(() => {
               received += chunk.length;
               hash.update(chunk);
+
               return chunk;
             }),
       ),
       Stream.run(fileSystem.sink(saved)),
       Effect.mapError((error) => (isFetchFailure(error) ? error : FETCH_FAILURE.UNWRITTEN)),
     );
+
     return { sha256: hash.digest("hex"), bytes: received } satisfies FetchedArchive;
   }).pipe(
     Effect.timeoutOrElse({
@@ -102,12 +106,15 @@ export const streamedArchive = (url: string, saved: string, bounds: FetchBounds)
 /** The system's own `tar`, from the first of its folders that keeps one. */
 const systemTar = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
+
   for (const folder of SYSTEM_FOLDERS) {
     const tar = `${folder}/tar`;
+
     if (yield* fileSystem.exists(tar).pipe(Effect.orElseSucceed(() => false))) {
       return Option.some(tar);
     }
   }
+
   return Option.none<string>();
 });
 
@@ -115,7 +122,9 @@ const systemTar = Effect.gen(function* () {
 export const unpackedArchive = (saved: string, into: string, members: readonly string[] = []) =>
   Effect.gen(function* () {
     const tar = yield* systemTar;
+
     if (Option.isNone(tar)) return yield* Effect.fail(FETCH_FAILURE.NO_TAR);
+
     // Note that no compression is named, since GNU tar and macOS's bsdtar both read it off the archive, a gzipped
     // tar or on a Mac a zip, and GNU tar runs `gzip` for it from the PATH handed here, the system's folders alone.
     const code = yield* Effect.scoped(
@@ -130,6 +139,7 @@ export const unpackedArchive = (saved: string, into: string, members: readonly s
         (handle) => handle.exitCode,
       ),
     ).pipe(Effect.mapError((): FetchFailure => FETCH_FAILURE.UNPACKED));
+
     if (Number(code) !== 0) return yield* Effect.fail(FETCH_FAILURE.UNPACKED);
   });
 
@@ -158,17 +168,20 @@ export const stagedFolder = <E, R>(
     const path = yield* Path.Path;
     yield* fileSystem.makeDirectory(place.parent, { recursive: true });
     yield* fileSystem.makeDirectory(path.dirname(place.target), { recursive: true });
+
     for (const entry of yield* fileSystem.readDirectory(place.parent)) {
       if (entry.startsWith(place.prefix)) {
         yield* fileSystem.remove(path.join(place.parent, entry), { recursive: true, force: true });
       }
     }
+
     yield* Effect.scoped(
       Effect.gen(function* () {
         const staging = yield* fileSystem.makeTempDirectoryScoped({
           directory: place.parent,
           prefix: place.prefix,
         });
+
         const folder = yield* built(staging);
         yield* fileSystem.remove(place.target, { recursive: true, force: true });
         yield* fileSystem.rename(folder, place.target);

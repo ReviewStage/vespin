@@ -87,9 +87,12 @@ export function MessageLine({
   ) : (
     sender
   );
+
   const named = drawsSomething(lead);
+
   if (!named && at === undefined && !drawsSomething(actions)) return null;
   const actionsFirst = align === MESSAGE_LINE_ALIGN.END;
+
   return (
     <div
       className={`ui-message-line flex max-w-full items-center gap-ui-2 text-caption-inline text-muted-foreground ${align === MESSAGE_LINE_ALIGN.START ? "justify-start" : "justify-end"}${wrap ? " flex-wrap gap-y-ui-2" : ""}`}

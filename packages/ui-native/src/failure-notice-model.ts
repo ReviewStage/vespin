@@ -51,6 +51,7 @@ export const NO_NOTICE: NoticeState = { shown: undefined, serial: 0, offlineSaid
 export function noticeAsked(state: NoticeState, asked: NoticeAsk): NoticeState {
   if (asked.kind === NOTICE_KIND.OFFLINE && state.offlineSaid) return state;
   const serial = state.serial + 1;
+
   return {
     shown: { ...asked, serial },
     serial,
@@ -62,6 +63,7 @@ export function noticeAsked(state: NoticeState, asked: NoticeAsk): NoticeState {
 export function noticeOnline(state: NoticeState): NoticeState {
   if (!state.offlineSaid) return state;
   const shown = state.shown?.kind === NOTICE_KIND.OFFLINE ? undefined : state.shown;
+
   return { ...state, shown, offlineSaid: false };
 }
 

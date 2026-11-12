@@ -84,6 +84,7 @@ const AGENT: AgentSummary = {
 };
 
 let root: Root | undefined;
+
 /** The workspace's automations, as the host lays them once read. */
 let automations: readonly AutomationSummary[] = [TRIAGE];
 
@@ -117,10 +118,12 @@ function cards(): HTMLElement[] {
 /** The agent named in a place of the workspace as Dean reads it, its card hung, and every automation page opened. */
 async function agentCard() {
   const opened: string[] = [];
+
   const read = agentCardReading(AGENT, "Triage", NOTHING_HELD, false, {
     me: DEAN.userId,
     pullRequests: new Map(),
   });
+
   const named = createElement(AgentRef, {
     subject: { name: "Triage", tile: agentActor(AGENT, "Triage"), read },
     models: [],
@@ -128,6 +131,7 @@ async function agentCard() {
     glyph: undefined,
     label: "Triage",
   });
+
   const place = createElement(MemberDirectory, {
     workspace: WORKSPACE,
     readerId: DEAN.userId,
@@ -138,19 +142,23 @@ async function agentCard() {
       children: named,
     }),
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   act(() => root?.render(withQueryClient(place)));
   await act(async () => {
     for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
   });
+
   // Note that the card names the automation once the workspace's automations reach their query, each hover drawing it afresh.
   const card = await vi.waitFor(() => {
     hover(container.querySelector("[data-agent-ref]") ?? assert.fail("the agent is named"));
     const hung = cards()[0] ?? assert.fail("the agent's card hangs");
     assert.equal(hung.textContent?.includes("Morning Sentry triage"), true);
+
     return hung;
   });
+
   return { card, opened };
 }
 
@@ -190,9 +198,11 @@ test("the automation's name hangs its card over the agent's: its schedule, whose
     "Weekdays at 9:00 AM · UTC · Acme",
   );
   assert.equal(automation.querySelector(".ui-hover-card-corner"), null);
+
   const notes = [...automation.querySelectorAll(".ui-hover-card-note")].map(
     (note) => note.textContent,
   );
+
   assert.equal(notes[0], "Not scheduled");
   assert.match(notes[1] ?? "", /^Last ran .+ · Finished$/u);
 

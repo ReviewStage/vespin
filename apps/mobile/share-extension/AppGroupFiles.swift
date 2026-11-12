@@ -29,6 +29,7 @@ struct ShareSnapshot {
 struct ShareDraft {
   let accountId: String
   let prompt: String
+  let pictures: [SharedPicture]
   let workspaceId: String?
   let repository: String?
 }
@@ -36,6 +37,8 @@ struct ShareDraft {
 enum AppGroupFiles {
   private static let snapshotFile = "share-snapshot.json"
   private static let draftFile = "share-draft.json"
+  /// The files a draft's pictures are kept in, in order (`SHARE_DRAFT_PICTURE_FILES`), which the app reads by these names alone.
+  private static let pictureFiles = (1...SharedItems.maxPictures).map { "share-draft-picture-\($0).jpg" }
   private static let groupKey = "VespinAppGroup"
 
   /// The snapshot the app wrote, or none where it never wrote one or the account signed out.
@@ -61,18 +64,29 @@ enum AppGroupFiles {
     return ShareService(origin: origin, headers: json["headers"] as? [String: String] ?? [:])
   }
 
-  /// Keeps `draft` for New task, in place of any kept before; whether it was kept.
+  /// Keeps `draft` for New task, its pictures in files beside it, in place of any kept before; whether all of it was kept.
   static func keep(_ draft: ShareDraft) -> Bool {
     guard let url = file(draftFile) else { return false }
+    for name in pictureFiles { if let old = file(name) { try? FileManager.default.removeItem(at: old) } }
+    var pictures: [String] = []
+    for (picture, name) in zip(draft.pictures, pictureFiles) {
+      guard let pictureURL = file(name), (try? picture.jpeg.write(to: pictureURL, options: protection)) != nil
+      else { return false }
+      pictures.append(name)
+    }
     var json: [String: Any] = [
       "accountId": draft.accountId, "prompt": draft.prompt,
       "keptAt": (Date().timeIntervalSince1970 * 1000).rounded(),
     ]
+    if !pictures.isEmpty { json["pictures"] = pictures }
     if let workspaceId = draft.workspaceId { json["workspaceId"] = workspaceId }
     if let repository = draft.repository { json["repository"] = repository }
     guard let data = try? JSONSerialization.data(withJSONObject: json) else { return false }
-    return (try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])) != nil
+    return (try? data.write(to: url, options: protection)) != nil
   }
+
+  /// How each kept file is written: whole or not at all, and readable once the phone has been unlocked since it started.
+  private static let protection: Data.WritingOptions = [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
 
   /// The file named, in the group's container, or none where this build reaches no container.
   private static func file(_ name: String) -> URL? {

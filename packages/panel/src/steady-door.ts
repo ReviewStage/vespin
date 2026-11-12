@@ -7,6 +7,8 @@
  * handed does (`memo`) is handed the steady door instead.
  */
 
+import { Predicate } from "effect";
+import type { ReadonlyRecord } from "effect/Record";
 import { useCallback, useRef } from "react";
 
 /**
@@ -26,14 +28,19 @@ export function useSteadyDoor<Args extends readonly unknown[], Answer>(
   door: ((...args: Args) => Answer) | undefined,
 ): ((...args: Args) => Answer) | undefined {
   const latest = useRef(door);
+
   if (door !== undefined) latest.current = door;
+
   const steady = useCallback((...args: Args): Answer => {
     const newest = latest.current;
+
     // Note that the steady door is handed out only once a door has been, so one always stands here.
     if (newest === undefined)
       throw new Error("A steady door was called before any was handed over.");
+
     return newest(...args);
   }, []);
+
   return door === undefined ? undefined : steady;
 }
 
@@ -45,71 +52,96 @@ interface KeptPlace {
   readonly within: ReadonlyMap<string | number, KeptPlace> | undefined;
 }
 
-/** A steady door, standing across draws, and the newest door it calls. */
+/**
+ * A steady door, standing across draws, and the newest door it calls. Note
+ * that a door is typed as answering nothing, because nothing here reads its
+ * answer: the steady door still hands back whatever the newest one answers.
+ */
 interface KeptDoor {
-  newest: (...args: never[]) => unknown;
-  readonly call: (...args: never[]) => unknown;
+  newest: (...args: never[]) => void;
+  readonly call: (...args: never[]) => void;
 }
 
 /** A door's name: `onOpen`, `onChoose`, the press handlers a part is handed, whose identity no reader keys a read on. */
 const DOOR_NAME = /^on[A-Z]/;
 
-/** An object `useSteadyDoors` looks into: one made of plain fields, not a React element, a class's instance, or a collection. */
-function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+/** Whether an object (`Predicate.isObject`) is one `useSteadyDoors` looks into: made of plain fields, not a React element, a class's instance, or a collection. */
+function isPlainRecord(value: ReadonlyRecord<string, unknown>): boolean {
   if ("$$typeof" in value) return false;
   const proto: unknown = Object.getPrototypeOf(value);
+
   return proto === Object.prototype || proto === null;
 }
 
-function keptDoor(kept: KeptPlace | undefined, handed: (...args: never[]) => unknown): KeptPlace {
+function keptDoor(kept: KeptPlace | undefined, handed: (...args: never[]) => void): KeptPlace {
   const door: KeptDoor = kept?.door ?? {
     newest: handed,
     call: (...args: never[]) => door.newest(...args),
   };
+
   door.newest = handed;
+
   return { handed, steady: door.call, door, within: undefined };
 }
 
-function keptPlace(
+function keptPlace<Handed>(
   kept: KeptPlace | undefined,
-  handed: unknown,
+  handed: Handed,
   doorName: boolean,
   isDoor: (key: string) => boolean = (key) => DOOR_NAME.test(key),
 ): KeptPlace {
   if (kept !== undefined && kept.handed === handed) return kept;
-  if (doorName && typeof handed === "function") {
-    return keptDoor(kept, handed as (...args: never[]) => unknown);
+
+  if (doorName && Predicate.isFunction(handed)) {
+    // SAFETY: `doorName` marks a door, a function the panel calls with its own arguments, which `keptDoor` passes through unread.
+    return keptDoor(kept, handed as (...args: never[]) => void);
   }
+
   if (Array.isArray(handed)) {
     const within = new Map<number, KeptPlace>();
-    const steady = handed.map((item: unknown, index) => {
+
+    const items: readonly unknown[] = handed;
+
+    const steady = items.map((item, index) => {
       const place = keptPlace(kept?.within?.get(index), item, false, isDoor);
       within.set(index, place);
+
       return place.steady;
     });
+
     const last = kept?.steady;
+
     const same =
       Array.isArray(last) &&
       last.length === steady.length &&
       steady.every((item, index) => item === last[index]);
+
     return { handed, steady: same ? last : steady, door: undefined, within };
   }
-  if (isPlainRecord(handed)) {
+
+  if (Predicate.isObject(handed) && isPlainRecord(handed)) {
     const within = new Map<string, KeptPlace>();
-    const steady: Record<string, unknown> = {};
-    for (const [key, item] of Object.entries(handed)) {
-      const place = keptPlace(kept?.within?.get(key), item, isDoor(key), isDoor);
-      within.set(key, place);
-      steady[key] = place.steady;
-    }
+
+    const steady = Object.fromEntries(
+      Object.entries(handed).map(([key, item]) => {
+        const place = keptPlace(kept?.within?.get(key), item, isDoor(key), isDoor);
+        within.set(key, place);
+
+        return [key, place.steady];
+      }),
+    );
+
     const last = kept?.steady;
+
     const same =
+      Predicate.isObject(last) &&
       isPlainRecord(last) &&
       Object.keys(last).length === within.size &&
       Object.entries(steady).every(([key, item]) => key in last && last[key] === item);
+
     return { handed, steady: same ? last : steady, door: undefined, within };
   }
+
   return { handed, steady: handed, door: undefined, within: undefined };
 }
 
@@ -129,5 +161,7 @@ export function useSteadyDoors<Value>(value: Value): Value {
   const kept = useRef<KeptPlace | undefined>(undefined);
   const place = keptPlace(kept.current, value, false);
   kept.current = place;
+
+  // SAFETY: a value's steady copy has the value's own shape, each door in it replaced by a steady one of the same signature.
   return place.steady as Value;
 }

@@ -67,12 +67,14 @@ async function mount(listSide: MentionMenuSide = MENTION_MENU_SIDE.BELOW): Promi
     ),
   );
   await settle();
+
   return container;
 }
 
 /** Which side of the caret's line a list opened in the card hangs on, as the layer it hangs in says. */
 function sideOf(list: HTMLElement): string | null {
   const layer = list.closest(".ui-rect-float") ?? assert.fail("the list hangs in a layer");
+
   return layer.getAttribute("data-side");
 }
 
@@ -80,6 +82,7 @@ function sideOf(list: HTMLElement): string | null {
 async function listOpenedBy(container: HTMLElement, word: string, list: string) {
   typeInComposer(container, word);
   await settle();
+
   return container.querySelector<HTMLElement>(list) ?? assert.fail(`${word} opens its list`);
 }
 
@@ -106,10 +109,12 @@ test("in the dialog the / list still opens over the line too", async () => {
 test("the / list closes on a press outside it and the box, and a press in the box leaves it open", async () => {
   const container = await mount();
   const list = await listOpenedBy(container, "/", ".skill-menu");
+
   const press = (target: Element) =>
     act(() => {
       target.dispatchEvent(new Event("pointerdown", { bubbles: true }));
     });
+
   press(list);
   const field = container.querySelector(".composer-editor") ?? assert.fail("the box's editor");
   press(field);

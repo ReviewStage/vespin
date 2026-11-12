@@ -47,6 +47,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -58,6 +59,7 @@ it.layer(getTestDB())("the account store's experiments", (it) => {
       const turnedOn = yield* writeAccountPreferences(userId, {
         experiments: { [EXPERIMENT.MEMORY]: true },
       });
+
       assert.deepEqual(turnedOn.experiments, { [EXPERIMENT.MEMORY]: true });
 
       // An empty patch asks nothing of what stood.
@@ -71,6 +73,7 @@ it.layer(getTestDB())("the account store's experiments", (it) => {
       const turnedOff = yield* writeAccountPreferences(userId, {
         experiments: { [EXPERIMENT.MEMORY]: false },
       });
+
       assert.deepEqual(turnedOff.experiments, { [EXPERIMENT.MEMORY]: false });
     }),
   );
@@ -96,9 +99,11 @@ it.layer(getTestDB())("the account store's experiments", (it) => {
   it.effect("an experiments write is no snapshot a Mac would take over its own settings", () =>
     Effect.gen(function* () {
       const userId = yield* openAccount;
+
       const written = yield* writeAccountPreferences(userId, {
         experiments: { [EXPERIMENT.MEMORY]: true },
       });
+
       assert.equal(written.updatedAt, undefined);
       assert.deepEqual(written.preferences, {});
     }),
@@ -185,9 +190,11 @@ it.layer(getTestDB())("the account store's chapters model", (it) => {
     () =>
       Effect.gen(function* () {
         const userId = yield* openAccount;
+
         const chosen = yield* writeAccountPreferences(userId, {
           chaptersModel: CHAPTERS_MODEL.OPUS,
         });
+
         assert.equal(chosen.chaptersModel, CHAPTERS_MODEL.OPUS);
         assert.equal(chosen.updatedAt, undefined);
 

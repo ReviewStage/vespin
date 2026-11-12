@@ -46,6 +46,7 @@ it.effect(
       live.set({ chapters: [READY_ROW] });
       let generator: ChaptersGenerator = { generatable: false };
       const told: AppChapters[] = [];
+
       const chapters = yield* heldChapters({
         seal: (_key, poll, _userId, after) =>
           Effect.map(poll ? live.poll(after) : Effect.succeed(live.first()), (answer) => ({
@@ -56,6 +57,7 @@ it.effect(
         gate: () => true,
         tell: (held) => told.push(held),
       });
+
       const held = yield* Effect.forkScoped(
         Effect.scoped(
           Effect.andThen(
@@ -64,6 +66,7 @@ it.effect(
           ),
         ),
       );
+
       const drawn = () => told.at(-1)?.[AGENT_ID]?.["7"]?.rows?.pullRequest?.runsOn?.provider;
 
       yield* nextPoll;

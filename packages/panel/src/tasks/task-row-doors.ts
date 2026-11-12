@@ -40,5 +40,6 @@ export function useTaskRowDoors<Kind extends TaskRowKind>(
 ): RowDoors<TaskRows, Kind> {
   const client = useQueryClient();
   const { mutateAsync: send } = useMutation(actMutation(kind));
+
   return { rows: () => drawnTaskRows(drawn, client), send };
 }

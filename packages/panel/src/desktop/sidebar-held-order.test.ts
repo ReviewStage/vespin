@@ -64,6 +64,7 @@ function mountSidebar(tasks: readonly TaskSummary[]) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (
     listed: readonly TaskSummary[],
     { folded = false, ...rest }: Partial<TasksControl> & { folded?: boolean } = {},
@@ -71,19 +72,23 @@ function mountSidebar(tasks: readonly TaskSummary[]) {
     const props = sidebarProps(
       tasksControl({ tasks: [...listed], workspaces: [WORKSPACE], workspace: WORKSPACE, ...rest }),
     );
+
     const sidebar = { ...props.sidebar, collapsed: folded };
     act(() => root.render(withQueryClient(drawnSidebar({ ...props, sidebar }))));
   };
+
   draw(tasks);
   const tasksNav = container.querySelector('nav[aria-label="My tasks"]');
   assert.ok(tasksNav !== null);
   pointerCross(document.body, tasksNav);
+
   return { container, draw, leave: () => pointerCross(tasksNav, document.body) };
 }
 
 /** The names of the tasks drawn under Tasks, in the order drawn. */
 function names(sidebar: HTMLElement): string[] {
   const region = sidebar.querySelector('nav[aria-label="My tasks"]');
+
   return [...(region?.querySelectorAll(".ui-list-row-title") ?? [])].map(
     (name) => name.firstChild?.textContent ?? "",
   );
@@ -94,6 +99,7 @@ test("a task an update would sort first holds its place while the pointer is ove
     task("t-1", "Invite expiry", 3),
     task("t-2", "Retry audit", 2),
   ]);
+
   assert.deepEqual(names(container), ["Invite expiry", "Retry audit"]);
 
   draw([task("t-1", "Invite expiry", 3), task("t-2", "Retry audit", 9)]);
@@ -106,6 +112,7 @@ test("once the pointer leaves the sidebar, its tasks sort where they stand now",
     task("t-1", "Invite expiry", 3),
     task("t-2", "Retry audit", 2),
   ]);
+
   draw([task("t-1", "Invite expiry", 3), task("t-2", "Retry audit", 9)]);
 
   leave();
@@ -118,6 +125,7 @@ test("folded away and back, the sidebar sorts its tasks where they stand now", (
     task("t-1", "Invite expiry", 3),
     task("t-2", "Retry audit", 2),
   ]);
+
   const updated = [task("t-1", "Invite expiry", 3), task("t-2", "Retry audit", 9)];
   draw(updated);
 
@@ -144,20 +152,26 @@ test("a task newly listed stands where it sorts, those drawn already holding the
 
 test("a chosen child task the view comes to hide with its parent is no longer chosen, so a menu on another chosen row acts on that row alone", () => {
   const working = { status: TASK_STATUS.IN_PROGRESS };
+
   const listed = (status: TaskStatus) => [
     { ...task("t-1", "Cleanup", 3), status },
     { ...task("t-2", "Probe", 2), status, parentTaskId: "t-1" },
     { ...task("t-3", "Usage report", 1), ...working },
   ];
+
   const { container, draw } = mountSidebar(listed(TASK_STATUS.IN_PROGRESS));
+
   const fold = container.querySelector<HTMLButtonElement>(
     'button[aria-label="Sub-tasks of Cleanup"]',
   );
+
   act(() => fold?.click());
+
   const rowOf = (name: string) =>
     [...container.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].find((each) =>
       each.textContent?.includes(name),
     ) ?? assert.fail(`no ${name} row`);
+
   const heading = () => {
     act(() => {
       rowOf("Usage report").dispatchEvent(
@@ -170,8 +184,10 @@ test("a chosen child task the view comes to hide with its parent is no longer ch
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
       );
     });
+
     return words;
   };
+
   for (const name of ["Probe", "Usage report"]) {
     act(() => {
       rowOf(name).dispatchEvent(
@@ -179,6 +195,7 @@ test("a chosen child task the view comes to hide with its parent is no longer ch
       );
     });
   }
+
   assert.equal(heading(), "2 tasks");
 
   draw(listed(TASK_STATUS.DONE));

@@ -44,14 +44,17 @@ afterEach(() => {
 test("a link's workspace is named in Settings' address, which the Workspace page shows while the sidebar lists another, and a page turned keeps it in the link's step", () => {
   const held = windowRouter();
   let settings: SettingsRoute | undefined;
+
   function Probe() {
     settings = useSettingsRoute({
       workspaces: [PERSONAL, ACME],
       listedId: PERSONAL.id,
       narrow: false,
     });
+
     return null;
   }
+
   const root = createRoot(document.createElement("div"));
   roots.push(root);
   act(() => root.render(held.provide(withQueryClient(createElement(Probe)))));
@@ -85,6 +88,7 @@ test("an old link's GitHub repositories section lands on the Workspace page's co
       ),
     ),
   );
+
   const landed = document.querySelector(
     `[${SETTINGS_SEARCH_ANCHOR_ATTRIBUTE}="${SETTINGS_SECTION.GITHUB_REPOSITORIES}"]`,
   );

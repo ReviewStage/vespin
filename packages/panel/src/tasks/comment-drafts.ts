@@ -49,16 +49,19 @@ export function openDraft(
 ): CommentDrafts {
   const was = drafts.open.find((draft) => endsAt(draft, picked.path, lines));
   const draft = { id: was?.id ?? id, picked, lines };
+
   const open =
     was === undefined
       ? [...drafts.open, draft]
       : drafts.open.map((each) => (each === was ? draft : each));
+
   return { ...drafts, open, lit: draft.id };
 }
 
 /** Closes a comment, its words kept in the drafts store; the lines of the one opened last before it stand lit where its did. */
 export function closeDraft(drafts: CommentDrafts, id: string): CommentDrafts {
   const open = drafts.open.filter((draft) => draft.id !== id);
+
   return { ...drafts, open, lit: drafts.lit === id ? open.at(-1)?.id : drafts.lit };
 }
 
@@ -75,6 +78,7 @@ export function lineCommentPlace(
 ): LineCommentPlace {
   const { side, line } = draft.lines;
   const place = { kind: DRAFT_PLACE.LINE_COMMENT, agentId, path: draft.picked.path, side, line };
+
   return number === undefined ? place : { ...place, number };
 }
 
@@ -95,6 +99,7 @@ export interface HeldBodies {
 export function heldBodies(): HeldBodies {
   // Note that this is a mutable map, because it is read as a box opens and written as words are typed, and neither should draw every thread of the tab again.
   const held = new Map<string, string>();
+
   return {
     of: (id) => held.get(id),
     keep: (id, body) => {

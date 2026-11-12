@@ -55,8 +55,10 @@ class FixtureClient extends Sentry.Client {
 function eventsOf(body: string): SentEvent[] {
   const [, ...lines] = body.split("\n").filter((line) => line.length > 0);
   const events: SentEvent[] = [];
+
   for (let at = 0; at + 1 < lines.length; at += 2) {
     const header: { type?: string } = JSON.parse(lines[at] ?? "{}");
+
     if (header.type !== "event") continue;
     const payload: Sentry.Event = JSON.parse(lines[at + 1] ?? "{}");
     events.push({
@@ -67,6 +69,7 @@ function eventsOf(body: string): SentEvent[] {
       })),
     });
   }
+
   return events;
 }
 
@@ -83,6 +86,7 @@ function recordingSentry(
   } = {},
 ): RecordingSentry {
   const sent: SentEvent[] = [];
+
   const clientOptions: Sentry.ClientOptions = {
     dsn: FIXTURE_SENTRY_DSN,
     integrations: [],
@@ -92,14 +96,18 @@ function recordingSentry(
         const body = Predicate.isString(request.body)
           ? request.body
           : new TextDecoder().decode(request.body);
+
         sent.push(...eventsOf(body));
+
         return (options.delivered?.() ?? Promise.resolve()).then(() => ({}));
       }),
   };
+
   if (options.beforeSend !== undefined) clientOptions.beforeSend = options.beforeSend;
   const client = new FixtureClient(clientOptions);
   Sentry.setCurrentClient(client);
   client.init();
+
   return { sent, sentry: { captureException: Sentry.captureException, flush: Sentry.flush } };
 }
 
@@ -167,6 +175,7 @@ it.effect(
       const { sent, sentry } = recordingSentry({
         beforeSend: (event) => (JSON.stringify(event).includes("access_token") ? null : event),
       });
+
       yield* Effect.exit(
         Effect.withErrorReporting(Effect.die(new Error("join failed: wss://x/rtc?access_token=t"))),
       ).pipe(Effect.provide(sentryReporterLayer(sentry)));
@@ -179,13 +188,17 @@ it.effect("a failed launch is sent as fatal, and returns only once its event has
   Effect.gen(function* () {
     // Note that the network is held by hand, because the quit after a failed launch takes whatever is still in flight.
     let release = () => {};
+
     const network = new Promise<void>((resolve) => {
       release = resolve;
     });
+
     const { sent, sentry } = recordingSentry({ delivered: () => network });
+
     const reported = yield* Effect.forkChild(
       launchFailureReported(sentry, new Error("the keychain could not be read")),
     );
+
     for (let turn = 0; turn < 10; turn++) yield* Effect.yieldNow;
     assert.equal(reported.pollUnsafe(), undefined);
     release();

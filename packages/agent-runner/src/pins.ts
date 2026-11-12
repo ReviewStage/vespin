@@ -1,8 +1,8 @@
 /**
  * pins.ts -- what a coding agent's sandbox pins of Claude Code and Codex: their versions and where the image puts them, read by the image, the sessions, and the protocol generator alike.
  *
- * The image (`apps/web/agent-image/Dockerfile`, which
- * `tools/anti-slop/guards/agent-pins.ts` holds to these) installs
+ * The image (`apps/web/agent-image/Dockerfile`, whose `ARG`s must match
+ * these) installs
  * exactly these, the sessions (`claude-code-sessions.ts`,
  * `codex-sessions.ts`) point the runner at the paths, the runner bundles
  * the same Agent SDK (this package's `package.json`), and Codex's
@@ -123,7 +123,7 @@ export const CLAUDE_EXECUTABLE = `${CLAUDE_CODE_PIN.DIRECTORY}/${CLAUDE_CODE_PIN
  * the threads it keeps there outlive a stop.
  */
 export const CODEX_PIN = {
-  VERSION: "0.167.0",
+  VERSION: "0.167.1",
   DIRECTORY: `${SANDBOX_TOOLS_DIRECTORY}/codex`,
   /** Where the image links the binary as `codex`. */
   LINK: "/usr/local/bin/codex",
@@ -231,11 +231,11 @@ export const NODE_MAC_PIN: AgentToolPin = {
 /**
  * The Agent SDK release every host's own Claude Code is, and the Codex and
  * GitHub CLI releases beside it, each written out in its pins below rather
- * than read off `CLAUDE_CODE_PIN` and `CODEX_PIN`, so a bump fails the
- * repository check (`tools/anti-slop/guards/agent-pins.ts`) until each
- * pin's address, size, and digests are read off the new release too.
+ * than read off `CLAUDE_CODE_PIN` and `CODEX_PIN`, so a bump reads each
+ * pin's address, size, and digests off the new release too
+ * (`scripts/bump-agent-pins.mjs`).
  */
-const HOST_CLI_VERSION = { CLAUDE_CODE: "0.3.322", CODEX: "0.167.0", GH: "2.103.3" } as const;
+const HOST_CLI_VERSION = { CLAUDE_CODE: "0.3.322", CODEX: "0.167.1", GH: "2.103.3" } as const;
 
 /**
  * Claude Code on a Mac host, This Mac's among them: the macOS arm64 build of
@@ -265,16 +265,16 @@ export const CODEX_MAC_PIN: AgentToolPin = {
   NAME: "codex",
   VERSION: HOST_CLI_VERSION.CODEX,
   ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-darwin-arm64.tgz`,
-  SHA256: "6989512a93d5fc74cb221dd348c972bf3cd83592e471bfd9557bccb45eb6fffc",
-  BYTES: 148_361_216,
+  SHA256: "402f0e6678eef2842ce669da71f54c44ed4743f659527beb18185ef17306b154",
+  BYTES: 148_642_185,
   ROOT: "package/vendor/aarch64-apple-darwin",
   MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
   BINARY: "bin/codex",
   TEAM: "2DC432GLL2",
   FILES: {
-    "bin/codex": "030316ecfbb41f4e7946e584b0063ef333b7a36cd312ba349f2f6869e39b62cc",
-    "bin/codex-code-mode-host": "5cc29d144fc05e3563f5f90c36adc95bdc287e2297b48ecf0bf4abdf1892d3ab",
-    "codex-path/rg": "13424ef22134a65a211e490475bc17a4671e4fad3c82ad4c613fe5978f022a6d",
+    "bin/codex": "ebabe5f0d79145a9e61274ce9ecf7c02c9021b7b04bfa59b7e61ad4461c32b0b",
+    "bin/codex-code-mode-host": "ab573dc5cbb3d378e82bf4d568ad606b071ff2a284808fc206fddbe1ae677405",
+    "codex-path/rg": "c3f42f7f9c15fe826550c9f2dbeec83e79fc203d897e5f5eab66d854d34e1b8a",
   },
 };
 
@@ -328,15 +328,15 @@ export const CODEX_LINUX_PINS: LinuxToolPins = {
     NAME: "codex",
     VERSION: HOST_CLI_VERSION.CODEX,
     ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-linux-x64.tgz`,
-    SHA256: "2dc9aa871abb513c3539d20d025f701faf1974c46ee906bda3a1e1f5026d4434",
-    BYTES: 173_743_288,
+    SHA256: "944cbabe58a2c599a30141bc0220c31963205c33e69b43b414dd5da6adaf957f",
+    BYTES: 173_799_203,
     ROOT: "package/vendor/x86_64-unknown-linux-musl",
     MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
     BINARY: "bin/codex",
     FILES: {
-      "bin/codex": "cdcb45aaa01d0f14e298985e09465aebccd47f64ecd298aea44814af7b62bbda",
+      "bin/codex": "dd5bfdf19d794dcc6fb482d2d5a2d9fb31d11f6caa44b303bb72890d461e8a02",
       "bin/codex-code-mode-host":
-        "83f3e174c2da2f1ca8655cce686e302509640d34c0f4407c1155056f64536e0f",
+        "cd8de3a734f67ecab31fd6064e3aa8a68dac7785f5135bbb1709981b09a8b6a8",
       "codex-path/rg": "e62198eb19b136b88c330af83647b5a962cb99b6b1f066758568f12de1974849",
       "codex-resources/bwrap": "77360cb751ccedc5971391444ac86a8a33c15b04d6b4a6fe45f5d25496e62c4c",
     },
@@ -345,15 +345,15 @@ export const CODEX_LINUX_PINS: LinuxToolPins = {
     NAME: "codex",
     VERSION: HOST_CLI_VERSION.CODEX,
     ARCHIVE: `https://registry.npmjs.org/@openai/codex/-/codex-${HOST_CLI_VERSION.CODEX}-linux-arm64.tgz`,
-    SHA256: "e24d7b6f0af5695a36c04692c3a79672bdadebcac7c44005259cb3cad36ac40e",
-    BYTES: 165_851_263,
+    SHA256: "06b8f5c28d4d477e19075cddc0062e199f610c386aac6039e221e506f39bd09c",
+    BYTES: 166_000_592,
     ROOT: "package/vendor/aarch64-unknown-linux-musl",
     MEMBERS: ["bin", "codex-path", "codex-resources", "codex-package.json"],
     BINARY: "bin/codex",
     FILES: {
-      "bin/codex": "2fe94d848540ff2a6868c7ebcc494126a974aa409711676d14fa0379e49e6143",
+      "bin/codex": "c912f1179d0d8b8e18ee8c4dd856d92bd54a98f1b430b243da819f2a4e63841f",
       "bin/codex-code-mode-host":
-        "e7b772ff332c16ca2df587e99fe87f217e3ab3432a63846fb1ca1bccbaa24409",
+        "8c3cc2490a29af4baa9dd8bc894812efaa735a033f55a840ee57b3decce73198",
       "codex-path/rg": "e36d0eb52e70696bdf1781392722e05a21bb91d3b7b762ef5ec20e5df2ec687b",
       "codex-resources/bwrap": "0f543a7356ab343b4827222f910461d4196778f328b28acd6c126ef18e9557ab",
     },

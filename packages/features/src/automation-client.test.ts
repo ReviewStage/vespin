@@ -96,6 +96,7 @@ it.effect("each call goes to its own path, and the list names its workspace in t
       firedAt: 2,
       settledAt: 3,
     };
+
     const api = fakeCloudApi({
       "GET /api/automations": { answer: () => ({ automations: [SUMMARY] }) },
       [`PATCH /api/automations/${AUTOMATION_ID}`]: { answer: () => ({ automation: SUMMARY }) },
@@ -103,18 +104,22 @@ it.effect("each call goes to its own path, and the list names its workspace in t
       [`POST /api/automations/${AUTOMATION_ID}/run`]: { answer: () => ({ run }) },
       [`GET /api/automations/${AUTOMATION_ID}/runs`]: { answer: () => ({ runs: [run] }) },
     });
+
     const ask = client();
     const named = { automationId: AUTOMATION_ID };
 
     const listed = yield* Effect.provide(ask.list({ workspaceId: WORKSPACE_ID }), api.layer);
+
     const changed = yield* Effect.provide(
       ask.change({ ...named, change: { enabled: false } }),
       api.layer,
     );
+
     const ran = yield* Effect.provide(
       ask.runNow({ ...named, idempotencyKey: "4d5e6f70-8192-4a3b-9c4d-5e6f708192a3" }),
       api.layer,
     );
+
     const runs = yield* Effect.provide(ask.runs(named), api.layer);
     const deleted = yield* Effect.provide(ask.remove(named), api.layer);
 
@@ -134,6 +139,7 @@ it.effect("a write the service would refuse by shape is refused as invalid and n
     const ask = client();
 
     const unnamed = yield* Effect.provide(ask.create({ ...MADE, name: "" }), api.layer);
+
     const unspelled = yield* Effect.provide(
       ask.change({ automationId: AUTOMATION_ID, change: { repositories: ["not a repository"] } }),
       api.layer,
@@ -165,6 +171,7 @@ it.effect(
         }),
         api.layer,
       );
+
       const toWebhook = yield* Effect.provide(
         client().change({
           automationId: AUTOMATION_ID,
@@ -192,6 +199,7 @@ it.effect(
         id: "5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d",
         trigger: { kind: AUTOMATION_TRIGGER.WEBHOOK },
       };
+
       const api = fakeCloudApi({
         "GET /api/automations": { answer: () => ({ automations: [SUMMARY, hooked] }) },
       });

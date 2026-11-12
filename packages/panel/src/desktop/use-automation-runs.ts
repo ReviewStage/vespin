@@ -44,11 +44,15 @@ function useRunsRead<Run>(
   const { mutateAsync: retry } = useMutation(automationsRetryMutation());
   const rows = held.data;
   const failed = held.isError;
+
   const read = useMemo((): { readonly runs: readonly Run[] } | typeof RUNS_FAILED | undefined => {
     if (id === undefined) return undefined;
+
     if (rows !== undefined) return { runs: rows };
+
     return failed ? RUNS_FAILED : undefined;
   }, [id, rows, failed]);
+
   // Note that a Try again the port refuses settles as one that landed, since the read's own failure is what the panel draws.
   const reload = useCallback(
     (): Promise<void> =>
@@ -60,25 +64,30 @@ function useRunsRead<Run>(
           ),
     [retry, kind, id],
   );
+
   return { read, reload };
 }
 
 /** One automation's runs, none held before it exists, with its Run now. */
 export function useAutomationRuns(automationId: string | undefined) {
   const { mutateAsync: runAutomation } = useMutation(actMutation(ACT_KIND.AUTOMATIONS_RUN));
+
   const { read, reload } = useRunsRead(
     AUTOMATION_FOLLOW.RUNS,
     automationId,
     useQuery(automationRunsQuery(automationId)),
   );
+
   /** Runs it now under a key of the press's own; the run it made is laid on the held runs as it lands. */
   const runNow = useCallback((): Promise<AutomationRunView> => {
     if (automationId === undefined) return Promise.resolve(UNANSWERED);
+
     return runAutomation({
       automationId,
       idempotencyKey: crypto.randomUUID(),
     }).catch((): AutomationRunView => UNANSWERED);
   }, [runAutomation, automationId]);
+
   return { read: read satisfies RunsRead, reload, runNow };
 }
 
@@ -95,5 +104,6 @@ export function useWorkspaceRuns(workspaceId: string | undefined) {
     workspaceId,
     useQuery(automationWorkspaceRunsQuery(workspaceId)),
   );
+
   return { read: read satisfies WorkspaceRunsRead, reload };
 }

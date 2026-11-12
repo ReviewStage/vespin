@@ -42,8 +42,11 @@ interface EnumeratedMicrophone {
  */
 function preferredBuiltInLabel(route: MicrophoneRoute | undefined): string | undefined {
   if (!route?.builtInName) return undefined;
+
   if (route.defaultTransport !== MICROPHONE_TRANSPORT.BLUETOOTH) return undefined;
+
   if (route.lid === LID_STATE.SHUT) return undefined;
+
   return route.builtInName;
 }
 
@@ -59,14 +62,18 @@ function microphoneConstraints(
   devices: readonly EnumeratedMicrophone[],
 ): MediaTrackConstraints {
   const label = preferredBuiltInLabel(route);
+
   if (!label) return { ...MICROPHONE_PROCESSING };
+
   const device = devices.find(
     (candidate) =>
       candidate.kind === "audioinput" &&
       candidate.deviceId !== "" &&
       candidate.label.includes(label),
   );
+
   if (!device) return { ...MICROPHONE_PROCESSING };
+
   return { ...MICROPHONE_PROCESSING, deviceId: { exact: device.deviceId } };
 }
 
@@ -86,15 +93,19 @@ export interface MicrophoneOpener {
  */
 export async function openPreferredMicrophone(opener: MicrophoneOpener): Promise<MediaStream> {
   let audio: MediaTrackConstraints = { ...MICROPHONE_PROCESSING };
+
   try {
     const route = await opener.route();
+
     if (preferredBuiltInLabel(route)) {
       audio = microphoneConstraints(route, await opener.enumerate());
     }
   } catch {
     audio = { ...MICROPHONE_PROCESSING };
   }
+
   if (audio.deviceId === undefined) return opener.open(audio);
+
   try {
     return await opener.open(audio);
   } catch {

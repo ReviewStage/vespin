@@ -15,6 +15,7 @@ async function repositoryWith(root: string, client: string): Promise<void> {
     [join("scripts", ".keep.sh"), ""],
     [join("tools", ".keep.sh"), ""],
   ]);
+
   for (const [path, contents] of files) {
     await mkdir(dirname(join(root, path)), { recursive: true });
     await writeFile(join(root, path), contents);
@@ -41,9 +42,11 @@ test("a client path resolves to an exception's rewrite first, then a hosted proc
     ].join("\n"),
   );
   const report = await checkApiCallers({ repoRoot: root, web: WEB });
+
   const resolution = new Map(
     report.resolved.map((entry) => [entry.caller.display, [entry.resolution, entry.route]]),
   );
+
   assert.deepEqual(resolution.get("/api/agents/{…}/pictures/{…}"), [
     RESOLUTION.REWRITE,
     "/api/agents/([^/]+)/pictures/([^/]+)",

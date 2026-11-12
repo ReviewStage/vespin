@@ -20,11 +20,13 @@ import { CatalogSection } from "../section";
 
 function Held({ start, label }: { start: boolean; label: string }): React.JSX.Element {
   const [on, setOn] = useState(start);
+
   return <Switch checked={on} label={label} onChange={setOn} />;
 }
 
 function HeldLabeled({ start, label }: { start: boolean; label: string }): React.JSX.Element {
   const [on, setOn] = useState(start);
+
   return <LabeledSwitch checked={on} label={label} onChange={setOn} />;
 }
 

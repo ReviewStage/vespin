@@ -64,6 +64,7 @@ export function SidebarRun({
   const handle = useRef<VirtualRowsHandle>(null);
   const { holdRun } = place;
   useLayoutEffect(() => holdRun(handle), [holdRun]);
+
   return (
     <VirtualRows
       scroller={place.scroller}

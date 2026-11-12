@@ -15,6 +15,7 @@ export const ANSWER = {
   UNREACHABLE: "unreachable",
   REFUSE: "refuse",
 } as const;
+
 export type Answer = (typeof ANSWER)[keyof typeof ANSWER];
 
 /**
@@ -42,23 +43,30 @@ export function makeFakeService(options: {
     bearers.push(new Headers(init.headers).get("authorization"));
     const answer = answers[posts] ?? ANSWER.TAKE;
     posts += 1;
+
     if (answer === ANSWER.UNREACHABLE) throw new Error("connection reset");
+
     if (answer === ANSWER.REFUSE) return new Response(null, { status: 401 });
+
     if (answer === ANSWER.SERVER_ERROR) return new Response(null, { status: 503 });
     const body = String(init.body);
     bodies.push(body);
     const batch: { events: RunnerEvent[] } = JSON.parse(body);
     const last = applied.at(-1)?.sequence ?? options.firstSequence - 1;
+
     for (const event of batch.events) {
       if (event.sequence <= last) continue;
       applied.push(event);
       const watchFor = options.watchFor;
+
       if (watchFor !== undefined && JSON.stringify(event.message).includes(watchFor)) {
         Deferred.doneUnsafe(seen, Exit.void);
       }
     }
+
     return new Response(null, { status: answer === ANSWER.TAKE_THEN_FAIL ? 500 : 204 });
   };
+
   return {
     layer: fakeHttpClientLayer(respond),
     respond,

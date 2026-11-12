@@ -33,6 +33,7 @@ import {
   Text,
   useConfirmDialog,
 } from "@repo/ui";
+import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { mutationOptions, useMutation } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -53,12 +54,7 @@ import { useAnnounceShown } from "../use-announce-shown.js";
  *
  * The token stands in the open field alone, is sent once as it is pasted or on Enter, and is
  * cleared as soon as the service keeps it; the service never answers one.
- * The dialog is kept out of the screen recording, which masks a field's
- * characters but not their count, as Settings › Agents' keys are.
  */
-
-/** The class PostHog's recorder leaves out of a recording, element and children alike. */
-const NO_CAPTURE = "ph-no-capture";
 
 /** What the token's paste says: its steps, its field, and the check while a save is out. */
 const PASTE_WORDS = {
@@ -104,6 +100,7 @@ function statusLabel(status: GitHubTokenStatus): string | undefined {
 /** A problem said in the attention tint, announced as it lands. */
 function Problem({ children }: { children: string }): React.JSX.Element {
   useAnnounceShown(ANNOUNCE.ALERT, children);
+
   return (
     <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>{children}</SettingsRowStateLine>
   );
@@ -126,15 +123,16 @@ function expiryWords(expiresAt: number): string {
  */
 export function TokenFacts({ token }: { token: GitHubTokenSummary }): React.JSX.Element {
   const status = statusLabel(token.status);
+
   return (
     <SettingsFacts>
       <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT}>
         <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} font={TEXT_FONT.MONO}>
-          {token.hint}
+          <ReplayMask>{token.hint}</ReplayMask>
         </Text>
         {"\u00a0·\u00a0"}
         <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.LABEL}>
-          {token.login}
+          <ReplayMask>{token.login}</ReplayMask>
         </Text>
         {FACT_BREAK}
       </Text>
@@ -159,6 +157,7 @@ const TOKEN_REMOVE_MUTATION = mutationOptions({
         if (answer === undefined || "failure" in answer) {
           return { status: ACTION_RESULT_STATUS.REJECTED, reason: LINE.REMOVE_FAILED };
         }
+
         return { status: ACTION_RESULT_STATUS.ACCEPTED };
       }),
 });
@@ -166,15 +165,18 @@ const TOKEN_REMOVE_MUTATION = mutationOptions({
 /** A saved token with Disconnect, which asks first, as every connection in Settings ends. */
 function SavedToken({ token }: { token: GitHubTokenSummary }): React.JSX.Element {
   const removing = useMutation(TOKEN_REMOVE_MUTATION);
+
   const removalAct = useConfirmAct(removing, {
     send: () => removing.mutateAsync(),
     answered: sameAnswer,
   });
+
   const removal = useConfirmDialog(
     { subject: true, surfaceOpen: true },
     removalAct,
     confirmFailure(FAILURE_SURFACE.GITHUB_TOKEN_REMOVE),
   );
+
   return (
     <Inline justify={JUSTIFY.BETWEEN}>
       <TokenFacts token={token} />
@@ -208,6 +210,7 @@ function SavedToken({ token }: { token: GitHubTokenSummary }): React.JSX.Element
  */
 export function useGitHubTokenSave(): (pasted: string) => Promise<ReactNode> {
   const { mutateAsync: sendGithubTokenSave } = useMutation(actMutation(ACT_KIND.GITHUB_TOKEN_SAVE));
+
   return (pasted) =>
     !pastedTokenFits(pasted)
       ? Promise.resolve(rejectionLabel(GITHUB_TOKEN_REJECTION.INVALID))
@@ -215,6 +218,7 @@ export function useGitHubTokenSave(): (pasted: string) => Promise<ReactNode> {
           .catch(() => undefined)
           .then((answer) => {
             if (answer === undefined || "failure" in answer) return LINE.SAVE_FAILED;
+
             return answer.rejected === undefined ? undefined : rejectionLabel(answer.rejected);
           });
 }
@@ -240,18 +244,22 @@ export function GitHubTokenPaste({
   const [pasted, setPasted] = useState("");
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<ReactNode>(undefined);
+
   const save = (value: string) => {
     const token = value.trim();
+
     if (token === "" || saving) return;
     setSaving(true);
     setProblem(undefined);
     void onSave(token).then((refused) => {
       setSaving(false);
       setProblem(refused);
+
       // Kept: the token leaves the field, and the surface draws the service's word for it.
       if (refused === undefined) setPasted("");
     });
   };
+
   return (
     <PasteSteps
       first={{
@@ -316,13 +324,11 @@ export function GitHubTokenDialog({
       onExited={onExited}
       actions={<DialogActions onDone={onClose} />}
     >
-      <div className={NO_CAPTURE}>
-        {token === null ? (
-          <GitHubTokenPaste field={field} onSave={save} />
-        ) : (
-          <SavedToken token={token} />
-        )}
-      </div>
+      {token === null ? (
+        <GitHubTokenPaste field={field} onSave={save} />
+      ) : (
+        <SavedToken token={token} />
+      )}
     </Dialog>
   );
 }

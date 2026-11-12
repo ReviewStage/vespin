@@ -26,6 +26,7 @@ export { githubRepositoryFullNameSchema };
 /** Whether two repositories are one: GitHub's full names match whatever their case, and none matches none. */
 export function sameRepository(one: string | null, other: string | null): boolean {
   if (one === null || other === null) return one === other;
+
   return one.toLowerCase() === other.toLowerCase();
 }
 

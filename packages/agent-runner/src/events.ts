@@ -115,8 +115,11 @@ function redactedText(text: string, secrets: readonly string[]): string {
 /** A value with every secret taken out of each string in it, keys included. */
 function redacted(value: Json, secrets: readonly string[]): Json {
   if (Predicate.isString(value)) return redactedText(value, secrets);
+
   if (Array.isArray(value)) return value.map((each) => redacted(each, secrets));
+
   if (!Predicate.isObject(value)) return value;
+
   return Object.fromEntries(
     Object.entries(value).map(([key, each]) => [
       redactedText(key, secrets),
@@ -138,9 +141,15 @@ function redacted(value: Json, secrets: readonly string[]): Json {
  * JSON, so no escape can hide a secret or be cut in half by its removal.
  */
 function batchText(batch: RunnerEventBatch, secrets: readonly Redacted.Redacted[]): string {
-  const values = secrets.map(Redacted.value).filter((value) => value !== "");
+  const values = secrets.flatMap((secret) => {
+    const value = Redacted.value(secret);
+
+    return value === "" ? [] : [value];
+  });
+
   // Note that the batch is JSON already, as the SDK parsed it from the CLI's stdout.
   const json: Json = JSON.parse(JSON.stringify(batch));
+
   return JSON.stringify(redacted(json, values));
 }
 
@@ -154,6 +163,7 @@ function postOnce(
     HttpClientRequest.bearerToken(options.bearer),
     HttpClientRequest.bodyText(batchText(batch, options.secrets), "application/json"),
   );
+
   return client.execute(request).pipe(
     Effect.timeout(POST_TIMEOUT),
     // Note that the error is not kept as the cause, because the request it
@@ -164,6 +174,7 @@ function postOnce(
     Effect.flatMap((response) => {
       if (response.status >= 200 && response.status < 300) return Effect.void;
       const transient = response.status >= SERVER_ERROR || TRANSIENT_STATUS.has(response.status);
+
       return Effect.fail(
         new EventsUndelivered({ transient, detail: `The service answered ${response.status}` }),
       );
@@ -190,7 +201,7 @@ const postBatch = Effect.fn("agent-runner/postBatch")(function* (
  * the caller's scope; a post the service refuses for good stops it, and `drain`
  * reports that failure.
  */
-export const makeEventSink = Effect.fn("agent-runner/makeEventSink")(function* (
+export const openEventSink = Effect.fn("agent-runner/openEventSink")(function* (
   options: SinkOptions,
 ): Effect.fn.Return<EventSink, never, HttpClient.HttpClient | Scope.Scope> {
   const client = yield* HttpClient.HttpClient;
@@ -204,7 +215,9 @@ export const makeEventSink = Effect.fn("agent-runner/makeEventSink")(function* (
       yield* postBatch(client, { ...options, secrets }, { events });
     }
   }).pipe(Effect.catchIf(Cause.isDone, () => Effect.void));
+
   const sender = yield* Effect.forkScoped(sendAll);
+
   // Note that a heartbeat the service did not take, or did not answer within the post's bound, is let go, since the next follows within the interval.
   // Note that `Effect.schedule` waits one interval before the first beat, as the schedule's first step sleeps.
   const heartbeat = yield* Effect.forkScoped(
@@ -220,6 +233,7 @@ export const makeEventSink = Effect.fn("agent-runner/makeEventSink")(function* (
     Effect.suspend(() => {
       const sequence = next;
       next += 1;
+
       return Queue.offer(queue, { sequence, message });
     }).pipe(Effect.asVoid);
 
@@ -227,15 +241,19 @@ export const makeEventSink = Effect.fn("agent-runner/makeEventSink")(function* (
     Effect.andThen(Queue.end(queue)),
     Effect.andThen(Fiber.join(sender)),
   );
+
   // Note that the sender is not joined to its end here, because the scope interrupts it as the launch ends.
   const drainStopped = drain.pipe(Effect.timeoutOption(STOP_DRAIN), Effect.asVoid);
+
   const undelivered = Fiber.join(sender).pipe(
     Effect.flip,
     Effect.catch(() => Effect.never),
   );
+
   const withhold = (secret: Redacted.Redacted) =>
     Effect.sync(() => {
       secrets = [...secrets, secret];
     });
+
   return { emit, drain, drainStopped, undelivered, withhold } satisfies EventSink;
 });

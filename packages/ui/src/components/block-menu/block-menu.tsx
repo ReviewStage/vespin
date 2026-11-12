@@ -65,6 +65,7 @@ export interface BlockMenuGroup {
 /** The row a writing action is offered as, its words, glyph, Markdown, and chord the vocabulary's; keyed by the action. */
 export function writingRow(action: WritingAction): BlockMenuRow {
   const shortcut: WritingShortcut = WRITING_SHORTCUTS[action];
+
   return {
     id: action,
     label: shortcut.label,
@@ -79,6 +80,7 @@ function rowHint(row: BlockMenuRow): ReactNode {
   if (row.markdown !== undefined) {
     return <code className="ui-block-menu-markdown">{row.markdown}</code>;
   }
+
   return row.chord === undefined ? undefined : <Shortcut chord={row.chord} />;
 }
 
@@ -118,6 +120,7 @@ export function BlockMenu({
   // A group with nothing left in it after the owner's narrowing is not headed.
   const shown = groups.filter((group) => group.rows.length > 0);
   const rows = shown.flatMap((group) => group.rows);
+
   return (
     <MenuSurface ref={ref} className="ui-block-menu" inset={MENU_SURFACE_INSET.NONE}>
       <ComboboxList
@@ -128,6 +131,7 @@ export function BlockMenu({
         onActiveChange={onActiveChange}
         onChoose={(index) => {
           const row = rows[index];
+
           if (row !== undefined) onChoose(row);
         }}
         empty={BLOCK_MENU_EMPTY}

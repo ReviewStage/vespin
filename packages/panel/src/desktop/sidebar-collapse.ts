@@ -112,16 +112,20 @@ export function useSidebarCollapse(fixtureMode: boolean, compact: boolean): Side
   const [overlay, setOverlay] = useState<SidebarOverlay>(SIDEBAR_OVERLAY.CLOSED);
   const collapsed = (fixtureMode ? staged : kept) || compact;
   const width = fixtureMode ? stagedWidth : clampWidth(keptWidth);
+
   const onToggle = useCallback(() => {
     if (compact) {
       setOverlay((was) =>
         was === SIDEBAR_OVERLAY.OPEN ? SIDEBAR_OVERLAY.CLOSED : SIDEBAR_OVERLAY.OPEN,
       );
+
       return;
     }
+
     setOverlay(SIDEBAR_OVERLAY.CLOSED);
     (fixtureMode ? setStaged : changeKept)((was) => !was);
   }, [compact, fixtureMode, changeKept]);
+
   const onResize = useCallback(
     (asked: number) => (fixtureMode ? setStagedWidth : keepWidth)(clampWidth(asked)),
     [fixtureMode, keepWidth],
@@ -133,6 +137,7 @@ export function useSidebarCollapse(fixtureMode: boolean, compact: boolean): Side
 
   // Note that the fold is handed back steady, so the columns handed it hold while it does.
   const shownOverlay = collapsed ? overlay : SIDEBAR_OVERLAY.CLOSED;
+
   return useMemo(
     () => ({
       collapsed,

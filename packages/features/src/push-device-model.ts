@@ -38,8 +38,10 @@ export function pushStandingText(
 ): string {
   if (standing.failingSince !== null) {
     const since = `Failing since ${dayAndTimeText(standing.failingSince)}`;
+
     return standing.failureReason === null ? since : `${since} (${standing.failureReason})`;
   }
+
   return standing.lastDeliveredAt === null
     ? PUSH_STANDING_WORDS.NONE_YET
     : PUSH_STANDING_WORDS.WORKING;

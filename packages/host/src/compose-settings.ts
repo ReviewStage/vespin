@@ -127,6 +127,7 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
     const late = yield* lateService<SettingsLinks>();
     // Note that a reader wants only that the settings moved since it last read them, so one pulse held is as good as many.
     const toldPulses = yield* PubSub.sliding<void>(1);
+
     /**
      * One link, awaited: every reader of these is an effect of its own, so a
      * read before the merge has linked suspends until it stands rather than
@@ -188,11 +189,14 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
           ),
       },
     });
+
     const accountPreferencesClient = new AccountPreferencesClient({
       serviceBaseUrl: kernel.hostedServiceBaseUrl,
       credential,
     });
+
     let accountPreferencesHydratedAccount: string | undefined;
+
     /**
      * The one writer of the account's experiments. A reconcile reads how many
      * writes it has sent before it asks the service, and caches the
@@ -217,6 +221,7 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
       readonly label: string;
       readonly work: Effect.Effect<void, unknown>;
     }
+
     const accountPreferencesActions = yield* Queue.unbounded<AccountPreferencesAction>();
 
     /**
@@ -265,9 +270,11 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
       // Note that we settle again, because an arrival whose settling failed must not hand this account another's choices.
       yield* store.settleSessionAccount(accountEmail);
       const baseline = yield* store.accountPreferencesSyncBaseline(accountEmail);
+
       if (baseline !== undefined) return baseline;
       const preferences = yield* store.accountPreferences();
       yield* store.setAccountPreferencesSyncBaseline(accountEmail, preferences);
+
       return preferences;
     });
 
@@ -278,6 +285,7 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
     function resetTouchesAccountPreferences(scope: UnparsedWireValue): boolean {
       return ACCOUNT_PREFERENCE_FIELDS.some((field) => {
         const definition = APP_SETTING_SCHEMA[field];
+
         return "resetScope" in definition && definition.resetScope === scope;
       });
     }
@@ -288,6 +296,7 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
           "reconcile",
           Effect.gen(function* () {
             const accountKey = yield* readAccountPreferenceAccountKey();
+
             if (!accountKey) return;
             // Answered or not, the read is over, so a window waiting on the account's preferences goes on.
             yield* hydrateAccountPreferences(accountKey).pipe(
@@ -295,6 +304,7 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
                 Effect.gen(function* () {
                   // Note that a read the account left during is over for nobody now signed in, so it marks nothing.
                   if ((yield* readAccountPreferenceAccountKey()) !== accountKey) return;
+
                   if (yield* store.markAccountRead(accountKey)) {
                     emitSettingsSnapshot(yield* Effect.orDie(store.snapshot()));
                   }
@@ -309,12 +319,16 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
       accountKey: string,
     ): Effect.fn.Return<boolean, PlatformError> {
       yield* confirmAccount();
+
       if ((yield* readAccountPreferenceAccountKey()) !== accountKey) return false;
       const baseline = yield* accountPreferenceHydrationBaseline(accountKey);
+
       if ((yield* readAccountPreferenceAccountKey()) !== accountKey) return false;
       const writesBefore = experiments.writesSent();
       const remote = yield* accountPreferencesClient.readPreferences();
+
       if (!remote || (yield* readAccountPreferenceAccountKey()) !== accountKey) return false;
+
       // The experiments are the service's to hold: what it answered is kept as it stands.
       if (
         experiments.writesSent() === writesBefore &&
@@ -325,25 +339,34 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
 
       // Note that a shared part never written is no snapshot to take, so this Mac's own stands in for it, while the link part, written apart, is merged either way.
       const local = yield* store.accountPreferences();
+
       if ((yield* readAccountPreferenceAccountKey()) !== accountKey) return false;
+
       const saved = yield* store.applyAccountPreferences(
         snapshotAccountPreferences(remote.preferences, remote.hasStoredSnapshot, local),
         { accountEmail: accountKey, preferences: baseline },
       );
+
       if ((yield* readAccountPreferenceAccountKey()) !== accountKey) return false;
       accountPreferencesHydratedAccount = accountKey;
       const preferences = yield* store.accountPreferences();
+
       if ((yield* readAccountPreferenceAccountKey()) !== accountKey) return false;
+
       if (saved.changed.length > 0) {
         yield* applyAccountPreferenceSideEffects(saved, saved.changed);
       }
+
       if (!accountPreferencesSame(preferences, remote.preferences)) {
         const written = yield* accountPreferencesClient.writePreferences(
           accountPreferencesToWrite(preferences, baseline),
         );
+
         if (!written || (yield* readAccountPreferenceAccountKey()) !== accountKey) return true;
       }
+
       yield* store.setAccountPreferencesSyncBaseline(accountKey, preferences);
+
       return true;
     });
 
@@ -352,25 +375,31 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
         "write",
         Effect.gen(function* () {
           const accountKey = yield* readAccountPreferenceAccountKey();
+
           if (!accountKey) return;
+
           if (
             accountPreferencesHydratedAccount !== accountKey &&
             !(yield* hydrateAccountPreferences(accountKey))
           ) {
             return;
           }
+
           yield* confirmAccount();
           const preferences = yield* store.accountPreferences();
           const baseline = yield* store.accountPreferencesSyncBaseline(accountKey);
+
           if (
             (yield* readAccountPreferenceAccountKey()) !== accountKey ||
             accountPreferencesHydratedAccount !== accountKey
           ) {
             return;
           }
+
           const written = yield* accountPreferencesClient.writePreferences(
             accountPreferencesToPush(preferences, baseline),
           );
+
           if (!written || (yield* readAccountPreferenceAccountKey()) !== accountKey) return;
           yield* store.setAccountPreferencesSyncBaseline(accountKey, preferences);
         }),
@@ -401,6 +430,7 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
       settings: SettingsUpdateResult["settings"],
     ) {
       const analytics = settingAnalytics(field, settings.stored);
+
       if (!analytics) return;
       recordProductEvent(PRODUCT_EVENT.SETTING_UPDATE, {
         setting_id: analytics.id,
@@ -425,6 +455,7 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
      * whose watch also fills it as it starts.
      */
     const carriedValues = new Map<AppSettingField, string>();
+
     const carry = (field: AppSettingField, stored: StoredSettings): void => {
       carriedValues.set(field, JSON.stringify(stored[field]));
     };
@@ -445,6 +476,7 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
       for (const field of changed) {
         yield* applyHostSettingSideEffect(field, result.settings);
       }
+
       emitSettingsSnapshot(result.settings);
     });
 
@@ -458,11 +490,13 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
     const applyChangedElsewhere = Effect.gen(function* () {
       yield* store.reload();
       const after = yield* store.snapshot();
+
       for (const field of APP_SETTING_FIELDS) {
         if (carriedValues.get(field) !== JSON.stringify(after.stored[field])) {
           yield* applyHostSettingSideEffect(field, after);
         }
       }
+
       emitSettingsSnapshot(after);
     });
 
@@ -507,12 +541,14 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
       // than from what arrived.
       [GATEWAY_METHOD.ANALYTICS_RECORD]: (params) => {
         const event = productEventFromWire(params.event);
+
         if (!event) return invalid("event is not one the allowlist names");
         // SAFETY: the reader built these properties from the allowlist for this very name.
         productEvents.record(
           event.name,
           event.properties as ProductEventPropertiesFor<typeof event.name>,
         );
+
         return Effect.succeed({});
       },
     };
@@ -533,13 +569,17 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
             "Could not save that setting on this system.",
             yield* ActReporter,
           );
+
           if (!result.reason && isAccountPreferenceField(field)) pushAccountPreferences();
+
           return result;
         }),
       EXPERIMENT_SET: ({ experiment, on }) =>
         Effect.gen(function* () {
           const accountKey = yield* readAccountPreferenceAccountKey();
+
           if (!accountKey) return yield* refusedSettings(EXPERIMENT_SIGNED_OUT);
+
           return yield* settingsWrite(
             () => experiments.write(accountKey, experiment, on),
             (saved) =>
@@ -564,10 +604,13 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
                 ? Effect.void
                 : Effect.gen(function* () {
                     recordProductEvent(PRODUCT_EVENT.SETTINGS_RESET, {});
+
                     for (const field of APP_SETTING_FIELDS) {
                       const definition = APP_SETTING_SCHEMA[field];
+
                       if (!("resetScope" in definition) || definition.resetScope !== scope)
                         continue;
+
                       if (kept.includes(field)) continue;
                       yield* applyHostSettingSideEffect(field, saved.settings);
                     }
@@ -575,7 +618,9 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
             "Could not reset those settings on this system.",
             yield* ActReporter,
           );
+
           if (!result.reason && resetTouchesAccountPreferences(scope)) pushAccountPreferences();
+
           return result;
         }),
     };
@@ -604,6 +649,7 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
           Effect.orElseSucceed(store.snapshot(), () => undefined),
           (snapshot) => snapshot?.stored.usageData === true,
         );
+
         yield* startedAndStopped(
           Effect.sync(() => {
             if (!sharesUsageData) return;
@@ -615,6 +661,7 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
         // Forked, because marking the day reads the account and the day kept
         // in the settings file, which no composer built after this one waits on.
         yield* Effect.forkScoped(productEvents.markDayActive());
+
         // A live launch removes the SQLite store an earlier build left under
         // the agent's directory; a removal that fails is reported and stops
         // nothing else. A fixture or capture run keeps nothing on disk and
@@ -628,6 +675,7 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
             ),
           );
         }
+
         // The settings read once so the file is warm for the composers built
         // after this one, waited on by none of them. The read first drops the
         // ciphertext of any provider key an earlier build stored, since no
@@ -647,15 +695,18 @@ export const composeSettings = /* @__PURE__ */ Effect.fn("host/composeSettings")
         // own lifetime scope: the scope closing interrupts it before the stop
         // above gives back what the start took.
         yield* Effect.forkScoped(drainAccountPreferencesSync);
+
         // Another writer's change to the file, where the shell can hear one:
         // read again, and carried as any update is. A read that fails is
         // written down and the next change is still heard.
         if (Option.isSome(changedElsewhere)) {
           // What this host was built on is what its side effects carry until one runs.
           const built = yield* Effect.option(store.snapshot());
+
           if (Option.isSome(built)) {
             for (const field of APP_SETTING_FIELDS) carry(field, built.value.stored);
           }
+
           yield* Effect.forkScoped(
             Stream.runForEach(changedElsewhere.value, () =>
               catchAllButInterrupt(applyChangedElsewhere, (cause) =>

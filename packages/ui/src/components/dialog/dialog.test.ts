@@ -64,6 +64,7 @@ function Owner({ heard, busy }: { heard: Heard; busy: boolean }): React.JSX.Elem
   const [shown, setShown] = useState(true);
   const field = useRef<HTMLInputElement | null>(null);
   const titleId = useId();
+
   return createElement(
     "div",
     {
@@ -109,6 +110,7 @@ function draw(element: React.ReactElement): void {
 /** The button named `name`. */
 function button(name: string): HTMLButtonElement {
   const found = [...document.querySelectorAll("button")].find((each) => each.textContent === name);
+
   return found ?? expect.fail(`no ${name} button`);
 }
 
@@ -120,6 +122,7 @@ function card(role: string = DIALOG_ROLE.DIALOG): HTMLElement | null {
 /** The card's name, read from what its `aria-labelledby` points at. */
 function nameOf(element: HTMLElement): string | null | undefined {
   const id = element.getAttribute("aria-labelledby");
+
   return id === null ? undefined : document.getElementById(id)?.textContent;
 }
 
@@ -155,8 +158,10 @@ function opened(busy = false) {
   heard.presses = 0;
   const dialog = card() ?? expect.fail("the dialog opens");
   const backdrop = dialog.parentElement ?? expect.fail("no dimmed window");
+
   const field =
     dialog.querySelector<HTMLInputElement>('input[aria-label="Name"]') ?? expect.fail("no field");
+
   return { heard, opener, dialog, backdrop, field };
 }
 
@@ -176,6 +181,7 @@ test("it opens named by its title on its field, keeps Tab and Shift-Tab among it
 
 test("⌘W puts the card away as Escape does, claimed so the menu bar's Close tab never closes the window behind it", () => {
   const { opener, field } = opened();
+
   const press = new KeyboardEvent("keydown", {
     key: "w",
     code: "KeyW",
@@ -183,6 +189,7 @@ test("⌘W puts the card away as Escape does, claimed so the menu bar's Close ta
     bubbles: true,
     cancelable: true,
   });
+
   act(() => {
     field.dispatchEvent(press);
   });
@@ -359,9 +366,11 @@ test("a dialog given a title and actions is named by its title, and what it hold
   expect(nameOf(dialog)).toBe("Send feedback");
   expect(dialog.querySelector("h2")?.textContent).toBe("Send feedback");
   expect(holds(field.current)).toBe(true);
+
   const controls = [...dialog.querySelectorAll("textarea, button")].map(
     (control) => control.textContent || control.getAttribute("aria-label"),
   );
+
   expect(controls).toEqual(["Feedback", "Attach", "Cancel", "Send"]);
   button("Send").focus();
   key("Tab");
@@ -370,6 +379,7 @@ test("a dialog given a title and actions is named by its title, and what it hold
 
 test("a dialog holding a draft is kept by the first Escape or press on the dimmed window, says why, and is put away by the next; one holding none goes at once", () => {
   let dismissals = 0;
+
   const drawn = (holding: boolean) =>
     createElement(Dialog, {
       open: true,
@@ -380,16 +390,19 @@ test("a dialog holding a draft is kept by the first Escape or press on the dimme
       },
       children: createElement("textarea", { "aria-label": "Feedback" }),
     });
+
   draw(createElement(Announcer));
   draw(drawn(true));
   const root = roots.at(-1) ?? expect.fail("no root");
   const dialog = card() ?? expect.fail("the dialog opens");
   const backdrop = dialog.parentElement ?? expect.fail("no dimmed window");
   press(backdrop, backdrop);
+
   const afterFirst = {
     dismissals,
     told: document.querySelector('[role="status"]')?.textContent,
   };
+
   key("Escape");
   const afterSecond = dismissals;
   act(() => root.render(drawn(false)));
@@ -429,6 +442,7 @@ test("an owner asks its dialog away through its handle as Escape would, a draft 
 /** A dialog that opens a second over itself, as a confirm asked from inside a settings card is. */
 function Stacked({ onOuter, onInner }: { onOuter: () => void; onInner: () => void }) {
   const [inner, setInner] = useState(false);
+
   return createElement(Dialog, {
     open: true,
     title: "Settings",
@@ -474,6 +488,7 @@ test("a dialog opened over another is the one Escape puts away, and the one bene
 /** A window holding the button that opens a dialog through `open`, whose Done closes it the same way. */
 function OpenOwner({ onExited }: { onExited?: (() => void) | undefined }): React.JSX.Element {
   const [open, setOpen] = useState(false);
+
   return createElement(
     "div",
     null,
@@ -496,6 +511,7 @@ function closedThroughOpen(onExited?: () => void): HTMLButtonElement {
   act(() => opener.click());
   expect(card()).not.toBeNull();
   act(() => button("Done").click());
+
   return opener;
 }
 
@@ -559,6 +575,7 @@ test("a dialog that never opened has no exit to tell its owner of", () => {
 function RowsOwner({ names }: { names: readonly string[] }): React.JSX.Element {
   const [rows, setRows] = useState(names);
   const [asked, setAsked] = useState<string | undefined>(undefined);
+
   return createElement(
     "div",
     null,
@@ -629,6 +646,7 @@ test("a dialog whose act took the last row hands focus to the list's head", () =
 /** One row that asks before it is deleted, its question drawn inside it, so deleting it takes the question with it. */
 function AskingRow({ name, onDelete }: { name: string; onDelete: () => void }): React.JSX.Element {
   const [asked, setAsked] = useState(false);
+
   return createElement(
     "li",
     null,
@@ -646,6 +664,7 @@ function AskingRow({ name, onDelete }: { name: string; onDelete: () => void }): 
 /** A list whose rows each hold their own question. */
 function AskingRows({ names }: { names: readonly string[] }): React.JSX.Element {
   const [rows, setRows] = useState(names);
+
   return createElement(
     "ul",
     null,
@@ -675,6 +694,7 @@ test("a dialog unmounted with the row its act took away hands focus to the row a
 function ThreadsOwner(): React.JSX.Element {
   const [threads, setThreads] = useState(["First", "Second"]);
   const [asked, setAsked] = useState(false);
+
   return createElement(
     "div",
     null,

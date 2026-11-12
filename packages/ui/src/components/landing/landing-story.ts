@@ -30,15 +30,20 @@ export function useNarrowPage(ref: RefObject<HTMLDivElement | null>): boolean {
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
     const page = ref.current?.closest(".ui-landing-page");
+
     // Note that a document with no layout, as jsdom's is, stays wide, because it has no page to measure.
     if (!page || typeof ResizeObserver === "undefined") return undefined;
+
     const watch = new ResizeObserver(([entry]) => {
       const width = entry?.contentRect.width ?? 0;
       setNarrow(width > 0 && width < NARROW_PAGE);
     });
+
     watch.observe(page);
+
     return () => watch.disconnect();
   }, [ref]);
+
   return narrow;
 }
 
@@ -55,19 +60,26 @@ export function useStory(
   const [step, setStep] = useState(0);
   useEffect(() => {
     const scene = ref.current;
+
     if (!scene) return undefined;
+
     if (heldStill()) {
       setStep(count - 1);
+
       return undefined;
     }
+
     let shown = false;
     let played = 0;
     let previous: number | undefined;
     let frame = 0;
+
     const watch = new IntersectionObserver(([entry]) => {
       shown = entry?.isIntersecting ?? false;
     });
+
     watch.observe(scene);
+
     // Note that time only counts while the scene is shown, so a reader scrolling to it meets the story's start.
     const tick = (ms: number): void => {
       if (shown && previous !== undefined) played += ms - previous;
@@ -75,11 +87,14 @@ export function useStory(
       setStep(Math.floor(played / beat) % count);
       frame = requestAnimationFrame(tick);
     };
+
     frame = requestAnimationFrame(tick);
+
     return () => {
       cancelAnimationFrame(frame);
       watch.disconnect();
     };
   }, [ref, count, beat]);
+
   return step;
 }

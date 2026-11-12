@@ -93,6 +93,7 @@ function PaletteFoot(): React.JSX.Element {
 function CommandDialogExample(): React.JSX.Element {
   const [palette, setPalette] = useState(false);
   const [reading, setReading] = useState(false);
+
   return (
     <>
       <CatalogSection id="command-dialog-palette" title="A palette, its groups, keys and notes">

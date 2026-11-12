@@ -17,6 +17,7 @@ import {
 } from "@repo/features/agent-wire";
 import { type ShownFailureSentry, sendShownFailure } from "@repo/features/shown-failure";
 import { MESSAGE_ROLE, TURN_STATUS, type WireRecord } from "@repo/wire";
+import { Predicate } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test } from "vitest";
@@ -95,10 +96,9 @@ function reply(words: string | readonly WireRecord[]): AgentTranscriptMessage {
   return {
     id: "reply",
     role: MESSAGE_ROLE.ASSISTANT,
-    parts:
-      typeof words === "string"
-        ? [{ type: "step-start" }, { type: "text", text: words }]
-        : [{ type: "step-start" }, ...words],
+    parts: Predicate.isString(words)
+      ? [{ type: "step-start" }, { type: "text", text: words }]
+      : [{ type: "step-start" }, ...words],
     startedAt: 1_000,
   };
 }
@@ -127,19 +127,23 @@ const WORKER_TASK = "Check the CSV writers";
 async function runningTab(first: AgentMessagesAnswerView, worker = false, opened = AGENT) {
   fakeAppBridge({});
   mountAnnouncer();
+
   const transcript: AgentTranscriptKey = {
     kind: TRANSCRIPT_KIND.AGENT,
     agentId: AGENT.id,
     ...(worker ? { callId: "delegation-call" } : undefined),
   };
+
   const telling = tellingTranscripts();
   telling.tell(transcript, first);
   const control = agentsControl({ agents: [AGENT] });
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   const settle = async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   };
+
   const draw = (agent: AgentSummary) =>
     root?.render(
       withQueryClient(
@@ -164,11 +168,13 @@ async function runningTab(first: AgentMessagesAnswerView, worker = false, opened
             }),
       ),
     );
+
   await act(async () => {
     draw(opened);
     await settle();
   });
   await settleQueries();
+
   return {
     container,
     /** The agent's row as the list next reads it, as its status moves. */
@@ -234,6 +240,7 @@ test("a turn that fails before writing a word says its end line as it lands", as
     title: null,
     subagents: [],
   });
+
   const tab = await runningTab(blank(AGENT_STATUS.RUNNING, "1:1"));
 
   await tab.row(failedRow(AGENT_FAILURE.OTHER));
@@ -296,7 +303,8 @@ test("a worker's reply is said once whole, under the worker's name", async () =>
 });
 
 test("a failed turn's end line reports the service's word for why, and the agent and task it is about, once, a refused own key as a refusal", async () => {
-  const reported: Readonly<Record<string, unknown>>[] = [];
+  const reported: Parameters<ShownFailureSentry["logger"]["warn"]>[1][] = [];
+
   const recording: ShownFailureSentry = {
     captureException: () => "",
     logger: {
@@ -308,12 +316,15 @@ test("a failed turn's end line reports the service's word for why, and the agent
       getPropagationContext: () => ({ traceId: "0af7651916cd43dd8448eb211c80319c" }),
     }),
   };
+
   const uninstall = installShownFailureReporter(
     (report) => sendShownFailure(recording, report),
     testQueryClientNow(),
   );
+
   try {
     const failed = failedRow(AGENT_FAILURE.PROVIDER_KEY);
+
     const tab = await runningTab(
       {
         ...page("The retry", AGENT_STATUS.FAILED, "1:1"),
@@ -322,6 +333,7 @@ test("a failed turn's end line reports the service's word for why, and the agent
       false,
       failed,
     );
+
     // A tab drawn again, as its row is read anew, reports the same failure no more.
     await tab.row({ ...failed, title: "Retry audit, renamed" });
   } finally {

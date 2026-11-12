@@ -55,6 +55,7 @@ const standingHost = (
 ) =>
   Effect.gen(function* () {
     const services = yield* Effect.context<never>();
+
     const built = yield* Layer.build(
       composeMobile({
         httpClient: noNetwork,
@@ -67,6 +68,7 @@ const standingHost = (
         device,
       }),
     );
+
     return Context.get(built, MobileHostTag);
   });
 
@@ -84,9 +86,11 @@ it.effect(
         const state = yield* Effect.promise(() => bridge.requestAppState());
 
         expect(state.account.status).toBe(ACCOUNT_STATUS.SIGNED_IN);
+
         const titles = selectInboxGroupsIn(undefined)(state).flatMap(({ items }) =>
           items.map(({ title }) => title),
         );
+
         expect(titles).toContain(STAGED_THREAD);
       }),
     ),
@@ -98,14 +102,17 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         const root = yield* ownFolder;
+
         const written = yield* Effect.scoped(
           Effect.gen(function* () {
             const { acts } = yield* standingHost(root, undefined);
+
             return yield* Effect.promise(() =>
               acts[ACT_KIND.SETTING_UPDATE]({ field: "theme", value: THEME.DARK }),
             );
           }),
         );
+
         expect(written.status).toBe(ACTION_RESULT_STATUS.ACCEPTED);
 
         const { bridge } = yield* standingHost(root, undefined);
@@ -121,37 +128,47 @@ it.effect(
   () => {
     // Each token the share sheet was handed, none standing for its removal.
     const shared: (string | undefined)[] = [];
+
     const device: DeviceSeams = {
       ...stubDevice,
       keepShareToken: (kept) => {
         shared.push(kept?.token);
+
         return true;
       },
     };
+
     // Each OAuth form the host posted, by the endpoint it went to and the client it named.
     const posted: (readonly [string, string | null])[] = [];
+
     const recording: typeof globalThis.fetch = async (input, init) => {
       const request = new Request(input, init);
       const endpoint = new URL(request.url).pathname.split("/oauth2/")[1];
+
       if (endpoint !== undefined && request.method === "POST") {
         const form = new URLSearchParams(await request.clone().text());
         posted.push([endpoint, form.get("client_id")]);
       }
+
       return stubAuthFetch(request);
     };
+
     return Effect.scoped(
       Effect.gen(function* () {
         // Note that the stub stands as the global `fetch`, as the app stands it, because the session's launch renewal reads the global.
         vi.spyOn(globalThis, "fetch").mockImplementation(recording);
         const root = yield* ownFolder;
+
         const answer = yield* Effect.scoped(
           Effect.gen(function* () {
             const { acts } = yield* standingHost(root, undefined, device);
+
             return yield* Effect.promise(() =>
               acts[ACT_KIND.ACCOUNT_BEGIN_SIGN_IN]({ provider: ACCOUNT_PROVIDER.GITHUB }),
             );
           }),
         );
+
         expect(answer).toMatchObject({
           account: { status: ACCOUNT_STATUS.SIGNED_IN, email: STUB_ACCOUNT.email },
         });

@@ -84,12 +84,15 @@ const linksOver = (variables: Readonly<Record<string, string>>) =>
       for (const name of READ) vi.stubEnv(name, variables[name]);
     });
     const logged: string[] = [];
+
     const recorder = Logger.make(({ message }) => {
       logged.push(JSON.stringify(message));
     });
+
     const { sandbox } = yield* Effect.provide(PageLinks, pageLinksFromEnvironment).pipe(
       Effect.provide(Logger.layer([recorder])),
     );
+
     return { sandbox, logged };
   });
 
@@ -99,13 +102,16 @@ const tokenOf = (link: string) => new URL(link).pathname.slice(`/${PAGE_LINK_ROU
 it("a link whose claims were changed, that another key signed, or that was minted for another sandbox admits nothing", () => {
   const token = tokenOf(mintPageLink(SANDBOX, PAGE, MINTED_AT));
   const [, signature] = token.split(".");
+
   const [anotherPage] = tokenOf(
     mintPageLink(SANDBOX, { ...PAGE, pageId: "9d1e2c3b-4a5f-4e6d-8c7b-0a1f2e3d4c5b" }, MINTED_AT),
   ).split(".");
+
   const anotherKey = { ...SANDBOX, key: Redacted.make(`${KEY}-another`) };
   const anotherSandbox = { ...SANDBOX, origin: "https://elsewhere.example" };
 
   assert.deepEqual(readPageLink(SANDBOX, token, MINTED_AT), PAGE);
+
   for (const forged of [
     `${anotherPage}.${signature}`,
     tokenOf(mintPageLink(anotherKey, PAGE, MINTED_AT)),

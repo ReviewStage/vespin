@@ -46,16 +46,20 @@ function changed(
 const commitsOf = (files: readonly AgentChangedFile[], compare: () => Response) =>
   Effect.gen(function* () {
     const sent: SentToGitHub[] = [];
+
     const github = githubReaching([], undefined, undefined, (request) => {
       sent.push(request);
+
       return new URL(request.url).pathname === COMPARE ? compare() : undefined;
     });
+
     const commits = yield* readCommits(
       TOKEN,
       REPOSITORY,
       Option.some({ headSha: HEAD, baseSha: BASE }),
       files,
     ).pipe(Effect.provide(github.layer));
+
     return { commits, sent };
   });
 
@@ -81,18 +85,21 @@ it.effect(
         [changed("logo.svg", CHANGED_FILE_STATUS.DELETED)],
         mergeBase,
       );
+
       assert.equal(removed.commits.baseSha, MERGE_BASE);
 
       const tooLarge = yield* commitsOf(
         [{ ...changed("PRIVACY.md"), omitted: PATCH_OMITTED.TOO_LARGE }],
         mergeBase,
       );
+
       assert.equal(tooLarge.commits.baseSha, MERGE_BASE);
 
       const added = yield* commitsOf(
         [changed("logo.png", CHANGED_FILE_STATUS.ADDED), changed("src/seats.ts")],
         mergeBase,
       );
+
       assert.deepEqual(added.commits, { headSha: HEAD });
       assert.equal(added.sent.length, 0);
     }),

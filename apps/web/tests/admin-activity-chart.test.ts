@@ -22,6 +22,7 @@ const TREND = { days: 7, recent: 18, prior: 12 };
 
 function day(date: string, counts: readonly number[]): AdminActivityDay {
   const [agents = 0, revisions = 0, answers = 0, runs = 0] = counts;
+
   return {
     day: date,
     [ACTIVITY_FEATURE.AGENTS_STARTED]: agents,
@@ -50,6 +51,7 @@ function render(daily: readonly AdminActivityDay[]): HTMLElement {
       }),
     ),
   );
+
   return container;
 }
 
@@ -69,6 +71,7 @@ test("the legend names every feature the stack draws, in the stack's order", () 
 test("stepping through the days reads each feature's count that day", () => {
   const page = render([day("2026-10-14", [1, 2, 3, 4]), day("2026-10-15", [6, 0, 0, 0])]);
   const surface = page.querySelector<SVGElement>("svg[tabindex='0']");
+
   if (surface === null) throw new Error("the chart drew no plot");
 
   act(() => surface.focus());

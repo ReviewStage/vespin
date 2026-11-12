@@ -176,6 +176,7 @@ function createWrite(workspaceId: string, title: string, icon: TaskSectionIcon |
 /** The writes the dialog's answer makes: the section, then what was asked to be written with it. */
 function answerWrites(ask: SectionAsk, title: string, icon: TaskSectionIcon | undefined) {
   const made = createWrite(ask.workspaceId, title, icon);
+
   return [made, ...(ask.after?.(made.id) ?? [])];
 }
 
@@ -188,6 +189,7 @@ export function movesInto(count: number, name?: string): ReactNode {
       </>
     );
   }
+
   return `${count} tasks move into it`;
 }
 
@@ -198,6 +200,7 @@ function movedNote(count: number, title: string | null): string {
       ? "Removed from its section"
       : `${countWords(count, TERM.TASK)} removed from their sections`;
   }
+
   return count === 1 ? `Moved to ${title}` : `${countWords(count, TERM.TASK)} moved to ${title}`;
 }
 
@@ -217,6 +220,7 @@ function undeleteWrites(
   now: number,
 ): TaskSectionWrite[] {
   const { id, workspaceId, title, icon } = section;
+
   const made: TaskSectionWrite = {
     kind: TASK_SECTION_WRITE.CREATE,
     id,
@@ -224,15 +228,18 @@ function undeleteWrites(
     title,
     ...(icon === undefined ? undefined : { icon }),
   };
+
   const remade = applySectionWrite(current, made, now);
   const was = workspaceSections(before, workspaceId).findIndex((each) => each.id === id);
   const order = workspaceSections(remade, workspaceId);
   const from = order.findIndex((each) => each.id === id);
   const at = Math.min(Math.max(was, 0), order.length - 1);
   const moved = from === at ? [] : sectionMoveWrites(order, from, at);
+
   const taskIds = sectionOrder(before, id)
     .map((entry) => entry.taskId)
     .filter((taskId) => sectionOfTask(current, taskId) === undefined);
+
   return [made, ...moved, ...placeAllWrites(remade, taskIds, id, now)];
 }
 
@@ -242,7 +249,9 @@ type SectionsSend = RowDoors<TaskSections, typeof ACT_KIND.TASKS_WRITE_SECTION>[
 /** Sends `writes` on `send`, where there are any. */
 function sentWrites(send: SectionsSend, writes: readonly TaskSectionWrite[]): Promise<void> {
   const [first, ...rest] = writes;
+
   if (first === undefined) return Promise.resolve();
+
   return send({ writes: [first, ...rest] }).then(() => undefined);
 }
 
@@ -305,10 +314,12 @@ const SECTION_UNDO = {
     kind: ACT_KIND.TASKS_WRITE_SECTION,
     read: (before, move) => {
       if (move.taskIds.length === 0) return undefined;
+
       const title =
         move.movedTo === null
           ? null
           : (before.sections.find((section) => section.id === move.movedTo)?.title ?? "");
+
       return { ...move, before, title };
     },
     act: (send, { writes }) => sentWrites(send, writes),
@@ -353,36 +364,46 @@ export function useSectionDialogs(
   const field = useRef<HTMLInputElement | null>(null);
   const latest = useRef({ taskSections, onWriteSections });
   latest.current = { taskSections, onWriteSections };
+
   // Note that a section's write is drawn at once and its refusal said by
   // `onWriteSections` itself, so the door answers kept as it sends.
   const doors: RowDoors<TaskSections, typeof ACT_KIND.TASKS_WRITE_SECTION> = {
     rows: () => latest.current.taskSections,
     send: ({ writes }) => {
       latest.current.onWriteSections(writes);
+
       return Promise.resolve(true);
     },
   };
+
   const writing = useMutation({
     mutationFn: (): Promise<ActionResult> => {
       const trimmed = title.trim();
+
       if (trimmed === "" || ask === undefined) {
         return Promise.resolve({ status: ACTION_RESULT_STATUS.REJECTED, reason: TITLE_ASKED });
       }
+
       onWriteSections(answerWrites(ask, trimmed, icon));
+
       return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
     },
   });
+
   const confirmAct = useConfirmAct(writing, {
     send: () => writing.mutateAsync(),
     answered: sameAnswer,
   });
+
   const confirm: DialogConfirm = useConfirmDialog(
     { subject: tasks.signedIn, surfaceOpen },
     confirmAct,
     confirmFailure(FAILURE_SURFACE.SECTION_WRITE),
   );
+
   const blank = title.trim() === "";
   const form = useFormDialog(confirm, !blank);
+
   const dialog = (
     <Dialog
       open={form.open}
@@ -430,6 +451,7 @@ export function useSectionDialogs(
                   onEnter={blank ? confirm.run : form.submit}
                   onChange={(next) => {
                     setTitle(next);
+
                     // Note that a refused answer has settled, so the refusal alone holds
                     // the card up: the question is asked again rather than cleared, or
                     // the first key typed after it would close the card.
@@ -448,6 +470,7 @@ export function useSectionDialogs(
       </Stack>
     </Dialog>
   );
+
   return {
     askNew: (workspaceId, after, moving) => {
       setAsk({ workspaceId, after, moving });
@@ -502,6 +525,7 @@ export interface SectionEdits {
 export function useSectionEdits(): SectionEdits {
   const [inPlace, setInPlace] = useState<InPlace | undefined>(undefined);
   const [focusing, setFocusing] = useState<string | undefined>(undefined);
+
   return {
     inPlace,
     focusing,
@@ -511,6 +535,7 @@ export function useSectionEdits(): SectionEdits {
       setInPlace({ kind: TASK_SECTION_WRITE.EDIT, sectionId, picking }),
     end: (focus) => {
       setInPlace(undefined);
+
       if (focus !== undefined) setFocusing(focus);
     },
     focused: () => setFocusing(undefined),
@@ -520,9 +545,11 @@ export function useSectionEdits(): SectionEdits {
 /** Whether two icons, either perhaps none, are the same: one emoji, or one glyph in one color. */
 function sameIcon(a: TaskSectionIcon | undefined, b: TaskSectionIcon | undefined): boolean {
   if (a === undefined || b === undefined) return a === b;
+
   if (a.kind === TASK_SECTION_ICON_KIND.EMOJI) {
     return b.kind === TASK_SECTION_ICON_KIND.EMOJI && a.emoji === b.emoji;
   }
+
   return b.kind === TASK_SECTION_ICON_KIND.GLYPH && a.glyph === b.glyph && a.color === b.color;
 }
 
@@ -546,6 +573,7 @@ function SectionEditor({
   const [chosen, setChosen] = useState(icon);
   const [open, setOpen] = useState(picking);
   const editor = useRef<GroupHeaderEditorHandle | null>(null);
+
   return (
     <GroupHeaderEditor
       ref={editor}
@@ -560,6 +588,7 @@ function SectionEditor({
           open={open}
           onOpenChange={(next, away) => {
             setOpen(next);
+
             // Note that a press away from the picker took the focus before it put the picker away, so it ends the edit here.
             if (away) editor.current?.leave();
           }}
@@ -593,10 +622,13 @@ export function moveToSectionEntry(
 ): MenuEntry {
   const state = dialogs.sections;
   const standing = sectionOfTask(state, taskId);
+
   const put = (sectionId: string) =>
     placeWrites(sectionOrder(state, sectionId), taskId, sectionId, 0, Date.now());
+
   const sections = workspaceSections(state, workspaceId).map((section): MenuAction => {
     const glyph = sectionGlyph(section.icon);
+
     return {
       label: section.title,
       key: section.id,
@@ -608,6 +640,7 @@ export function moveToSectionEntry(
       },
     };
   });
+
   const remove: MenuAction[] =
     standing === undefined
       ? []
@@ -617,6 +650,7 @@ export function moveToSectionEntry(
             onSelect: () => dialogs.move([taskId], null, unplaceAllWrites([taskId])),
           },
         ];
+
   return {
     ...commandHead(PANEL_COMMAND.MOVE_TO_SECTION),
     items: [
@@ -682,6 +716,7 @@ function sectionActionGroups(
 ): MenuEntry[][] {
   const { section } = drawn;
   const { dialogs, edits } = context;
+
   const edit: MenuEntry[] = [
     commandAction(PANEL_COMMAND.RENAME, () => edits.beginEdit(section.id, false), undefined),
     {
@@ -690,6 +725,7 @@ function sectionActionGroups(
       onSelect: () => edits.beginEdit(section.id, true),
     },
   ];
+
   const remove: MenuEntry[] = [
     {
       label: "Delete section",
@@ -698,9 +734,11 @@ function sectionActionGroups(
       onSelect: () => dialogs.askDelete(section, doors.opener.current),
     },
   ];
+
   const read: MenuEntry[] = drawn.tasks.some(context.unread)
     ? [{ label: "Mark all as read", icon: <MailOpenIcon />, onSelect: doors.onMarkRead }]
     : [];
+
   return [[...edit, ...read], remove];
 }
 
@@ -728,49 +766,64 @@ function SectionRows({
   const shown = useLeaving(nested, ({ task }) => task.id);
   const keys = useMemo(() => shown.map(({ key }) => key), [shown]);
   const listedAt = new Map(nested.map(({ task }, at) => [task.id, at]));
+
   // Note that a row is heard by its place among the rows drawn, rows on their way out among them, and found among those listed by its key, as the slot it is carried to is (`listedSlot`).
   const fromListed = (from: number) => {
     const key = shown[from]?.key;
+
     return key === undefined ? undefined : listedAt.get(key);
   };
+
   const storedAt = (at: number) => {
     const held = nested[at];
+
     return held === undefined ? -1 : drawn.tasks.indexOf(held.task);
   };
+
   // Note that a move lands the row's entry beside its sibling's, which alone orders the two as they are drawn.
   const besideSibling = (from: number, beside: number | undefined) => {
     if (beside === undefined) return;
     context.dialogs.write(placeWritesWithin(drawn, storedAt(from), storedAt(beside)));
   };
+
   const move = folded
     ? undefined
     : (from: number, to: number) => {
         const at = fromListed(from);
+
         if (at !== undefined)
           besideSibling(at, movedBeside(nested, at, listedSlot(shown, from, to)));
       };
+
   const drag = useRunRowDrag(move, {
     onDropOut: (from, zone, at) => {
       const held = shown[from]?.value;
+
       if (held !== undefined) context.onDropRow(held.task, zone, at);
     },
     onCarried: context.onCarried,
   });
+
   const moveKeys = useRowMoveKeys(move);
   const nests = nestsOf(shown.map(({ value }) => value));
+
   const placeOf = (key: string) => {
     const at = listedAt.get(key);
+
     if (move === undefined || at === undefined) return undefined;
     const siblings = siblingsAt(nested, at);
+
     return {
       at: siblings.indexOf(at),
       count: siblings.length,
       onMove: (from: number, to: number) => {
         const moved = siblings[from];
+
         if (moved !== undefined) besideSibling(moved, siblings[to]);
       },
     };
   };
+
   return (
     <SidebarRun
       place={context.runs}
@@ -781,6 +834,7 @@ function SectionRows({
     >
       {(index, place) => {
         const entry = shown[index];
+
         return entry === undefined ? null : (
           <RowPlaced key={entry.key} place={placeOf(entry.key)}>
             {context.row(entry.value, nests[index], place)}
@@ -794,6 +848,7 @@ function SectionRows({
 /** What a section draws in place of its rows while the view leaves none standing: a word that tasks are dragged in; nothing while it draws rows. */
 function SectionFoot({ drawn }: { drawn: DrawnSection }): React.JSX.Element | null {
   if (drawn.tasks.length > 0) return null;
+
   return (
     <div className={SIDEBAR_SECTION_SLOT}>
       <NoteLine look={NOTE_LINE_LOOK.INSET}>Drag tasks here</NoteLine>
@@ -820,12 +875,14 @@ function SidebarSection({
   const ellipsis = useRef<HTMLButtonElement | null>(null);
   const reads = useReadMarks();
   const held = drawn.tasks;
+
   const groups = sectionActionGroups(drawn, context, {
     opener: ellipsis,
     onMarkRead: () => {
       for (const task of held.filter(context.unread)) reads.mark(task, false);
     },
   });
+
   const glyph = sectionGlyph(section.icon);
   const { edits } = context;
   const root = useRef<HTMLDivElement | null>(null);
@@ -835,20 +892,25 @@ function SidebarSection({
     root.current?.querySelector<HTMLElement>(".ui-group-header-lead")?.focus();
     edits.focused();
   });
+
   const renaming =
     edits.inPlace?.kind === TASK_SECTION_WRITE.EDIT && edits.inPlace.sectionId === section.id
       ? edits.inPlace
       : undefined;
+
   const renamed = (end: GroupHeaderEditEnd, icon: TaskSectionIcon | undefined) => {
     edits.end(end.byKey ? section.id : undefined);
+
     if (!end.kept) return;
     // Note that a name left blank keeps the one it had, as a rename never leaves a section nameless.
     const title = end.value === "" ? section.title : end.value;
+
     if (title === section.title && sameIcon(icon, section.icon)) return;
     context.dialogs.write([
       { kind: TASK_SECTION_WRITE.EDIT, id: section.id, title, icon: icon ?? null },
     ]);
   };
+
   return (
     <div ref={root} className="sidebar-repository sidebar-own-section" data-row-drop={section.id}>
       <GroupHeader
@@ -907,7 +969,9 @@ function SidebarSection({
 /** The writes that stand the row at `from` in a section, as drawn, at `to`. */
 function placeWritesWithin(drawn: DrawnSection, from: number, to: number): TaskSectionWrite[] {
   const entry = drawn.entries[from];
+
   if (entry === undefined) return [];
+
   return placeWrites(drawn.entries, entry.taskId, drawn.section.id, to, Date.now());
 }
 
@@ -935,30 +999,40 @@ export function SidebarSections({
   context: SectionContext;
 }): React.JSX.Element | null {
   const order = sections.map((drawn) => drawn.section);
+
   const move = (from: number, to: number) =>
     context.dialogs.write(sectionMoveWrites(order, from, to));
+
   const drag = useRowDrag(move, { handle: SECTION_HANDLE });
   const keys = useRowMoveKeys(move);
   // Note that a section on its way out, deleted or moved away, is drawn on where it stood until its exit has played.
   const shown = useLeaving(sections, sectionKeyOf);
   const listedAt = new Map(sections.map((drawn, at) => [sectionKeyOf(drawn), at]));
   const { edits } = context;
+
   const creating =
     edits.inPlace?.kind === TASK_SECTION_WRITE.CREATE && edits.inPlace.workspaceId === workspaceId
       ? edits.inPlace
       : undefined;
+
   if (shown.length === 0 && creating === undefined) return null;
+
   const created = (end: GroupHeaderEditEnd, icon: TaskSectionIcon | undefined) => {
     if (creating === undefined) return;
+
     if (!end.kept || end.value === "") {
       edits.end();
+
       if (end.byKey) creating.from?.focus();
+
       return;
     }
+
     const made = createWrite(creating.workspaceId, end.value, icon);
     edits.end(end.byKey ? made.id : undefined);
     context.dialogs.write([made]);
   };
+
   return (
     <nav className="sidebar-group" aria-label="Sections">
       <Stack

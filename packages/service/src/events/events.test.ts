@@ -38,12 +38,15 @@ interface Forwarded {
 
 function upstream(status = 200) {
   const forwarded: Forwarded[] = [];
+
   const layer = fakeHttpClientLayer((url, init) => {
     // SAFETY: the body is the batch document this endpoint just serialized.
     const body = JSON.parse(String(init.body)) as PosthogBatch;
     forwarded.push({ url, body });
+
     return new Response("{}", { status });
   });
+
   return { layer, forwarded };
 }
 
@@ -73,6 +76,7 @@ function postOverDatabase(
 ) {
   return Effect.gen(function* () {
     yield* TestClock.setTime(NOW);
+
     return yield* Effect.provide(recordEvents(userId, batch, options(overrides)), posthog.layer);
   });
 }
@@ -88,6 +92,7 @@ const openAccount = Effect.gen(function* () {
   yield* Database.use((db) =>
     db.insert(personalWorkspace).values({ userId, organizationId: personal, createdAt: now }),
   );
+
   return { userId, personal };
 });
 
@@ -96,6 +101,7 @@ const groupsOfBatchFrom = (userId: string) =>
   Effect.gen(function* () {
     const posthog = upstream();
     yield* postOverDatabase(userId, { events: [LAUNCH, LAUNCH] }, posthog);
+
     return (posthog.forwarded[0]?.body.batch ?? []).map((item) => item.properties.$groups);
   });
 
@@ -113,6 +119,7 @@ it.effect(
       assert.equal(sent?.body.api_key, PROJECT_KEY);
       assert.equal(sent?.body.historical_migration, false);
       assert.equal(sent?.body.batch.length, 2);
+
       for (const item of sent?.body.batch ?? []) {
         assert.equal(item.event, PRODUCT_EVENT.APP_LAUNCH);
         assert.equal(item.distinct_id, "user-document");
@@ -145,6 +152,7 @@ it.effect(
     Effect.gen(function* () {
       const posthog = upstream();
       const person = { name: "Ada Lovelace", email: "ada@example.test" };
+
       const answer = yield* post(
         "user-person",
         {
@@ -183,6 +191,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const posthog = upstream();
+
       const refusal = yield* Effect.flip(
         post("user-deleted", { events: [LAUNCH] }, posthog, {
           readPerson: () => Effect.succeed(undefined),

@@ -86,6 +86,7 @@ function forgettableBy(readerId: string, workspaceId: string) {
         ),
       ),
   );
+
   // Note that a memory whose account is gone compares as unknown, so it reads forgettable only by those who manage it, as `forgetMemory` allows.
   return sql<boolean>`coalesce(${or(eq(memory.userId, readerId), manages)}, false)`;
 }

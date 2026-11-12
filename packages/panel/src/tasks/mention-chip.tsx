@@ -1,3 +1,4 @@
+import { checkoutRelativePath } from "@repo/features/checkout-path";
 import {
   type DateSpan,
   dateChipText,
@@ -35,7 +36,8 @@ import {
   decodeMention,
   encodeMention,
   isBareLink,
-  linkMention,
+  LINK_CHIP,
+  linkChipOf,
   MENTION_KIND,
   type Mention,
   type MentionLines,
@@ -43,7 +45,7 @@ import {
   mentionName,
   type NumberedTaskIdOf,
   pageRepositoryOf,
-  pastedLinkMention,
+  pastedLinkChip,
   sectionAnchors,
 } from "@repo/features/mention-link";
 import { placeChipLook } from "@repo/features/place-chip-model";
@@ -83,7 +85,6 @@ import {
   dateMentionNode,
 } from "./date-picker.js";
 import { useInboxItemTitle } from "./inbox-item-chip.js";
-import { checkoutPath } from "./inline-code-target.js";
 import { OpenedByRow, PullRequestCard } from "./pull-request-card.js";
 import { WrittenAs } from "./selection-markdown.js";
 import { useKnownNames, useWordTargets } from "./use-known-names.js";
@@ -100,7 +101,7 @@ import { useWordsDates } from "./words-dates.js";
  * mention-chip.tsx -- a mention drawn in words as its chip: its kind's glyph and its name, a button that opens what it names, or a link where that leaves the app, hanging a card that says what that is, struck through where what it names is gone.
  *
  * A mention is written into markdown as a link whose target names it
- * (`@repo/features/mention-link`'s `linkMention`), a developer's with a
+ * (`@repo/features/mention-link`'s `linkChipOf`), a developer's with a
  * label starting with `@`, and wherever words are drawn, the link is drawn
  * as this chip: a pill on the words' line, the kind's glyph and the name the
  * mention was written with, cut to the chip's width. A press opens it: a
@@ -135,7 +136,7 @@ import { useWordsDates } from "./words-dates.js";
  * running on (`useKnownNames`), or, for one the window lists not, an
  * archived agent say, the harness read for it (`mentioned-agent-card.tsx`); either
  * opens its tab through the window's opener for an app link, as a link
- * copied to it does, and an agent hangs its tab's own card where the place
+ * copied to it does, or where its place opens it (`onOpenAgent`), and an agent hangs its tab's own card where the place
  * has one, and otherwise the same card read as it is hung, on any task of
  * the workspace or on none (`mentioned-agent-card.tsx`). A person wears
  * their picture and hangs their card, their email and role, or grayed as
@@ -215,6 +216,8 @@ export interface MentionDoors {
   readonly onOpenTurnChanges?:
     | ((agentId: string, messageId: string, path: string) => void)
     | undefined;
+  /** Opens an agent's chip somewhere other than its tab's top, as a memory's opens its transcript at the line that kept it; none opens its tab as its link does. */
+  readonly onOpenAgent?: ((agentId: string) => void) | undefined;
   /** One of the plan's agents as its chip wears it, none for an agent not of the plan; the door is none where the place knows the plan's agents not. */
   readonly agentOf?: ((agentId: string) => MentionedAgentLook | undefined) | undefined;
   /** The card a pull request one of the plan's agents opened hangs on its Pull request tab, by any link to it; none for any other, or where the place knows the plan's agents not. */
@@ -242,6 +245,7 @@ export function retargetedMention(
   change: HeadingsChange,
 ): MentionNode | undefined {
   const mention = decodeMention(target, place.repository);
+
   if (mention?.kind !== MENTION_KIND.SECTION || mention.taskId !== taskId) return undefined;
   const was = sectionAnchors(change.before);
   const is = sectionAnchors(change.after);
@@ -249,9 +253,12 @@ export function retargetedMention(
   const kept = change.kept.get(at) ?? -1;
   const now = is[kept];
   const heading = change.after[kept];
+
   if (now === undefined || now === "" || heading === undefined) return undefined;
+
   // Note that a heading renamed in case or punctuation alone keeps its anchor and still renames its mentions.
   if (now === mention.anchor && heading === change.before[at]) return undefined;
+
   return { name: heading, target: encodeMention({ ...mention, anchor: now }, place) };
 }
 
@@ -270,6 +277,7 @@ function mentionState(mention: Mention, doors: MentionDoors): MentionState {
   if (mention.kind !== MENTION_KIND.SECTION || mention.taskId !== doors.holder?.taskId) {
     return MENTION_STATE.FOUND;
   }
+
   return doors.anchors.has(mention.anchor) ? MENTION_STATE.FOUND : MENTION_STATE.GONE;
 }
 
@@ -287,14 +295,17 @@ function pressOf(
     case MENTION_KIND.FILE:
     case MENTION_KIND.FOLDER: {
       const { onOpenFile } = doors;
+
       if (onOpenFile !== undefined) {
         return mention.kind === MENTION_KIND.FILE
           ? () => onOpenFile(mention.path, mention.lines)
           : undefined;
       }
+
       // Where no File tab opens it, a file or a folder written as its GitHub page opens there, as its link would.
       return isGitHubAddress(target) ? () => openLink(target) : undefined;
     }
+
     case MENTION_KIND.SERVER:
     case MENTION_KIND.TOOL:
     case MENTION_KIND.DATE:
@@ -309,9 +320,16 @@ function pressOf(
             ? mention
             : { kind: MENTION_KIND.TASK, taskId: mention.taskId },
         );
-    // A page, an agent, or a person opens as its app link does, through the window's opener, under the workspace it was written in.
+    case MENTION_KIND.AGENT: {
+      const { onOpenAgent } = doors;
+
+      return onOpenAgent === undefined
+        ? () => openLink(target)
+        : () => onOpenAgent(mention.agentId);
+    }
+
+    // A page or a person opens as its app link does, through the window's opener, under the workspace it was written in.
     case MENTION_KIND.PAGE:
-    case MENTION_KIND.AGENT:
     case MENTION_KIND.PERSON:
       return () => openLink(target);
     // The app has no tab of its own on a task, so its chip opens the task it thinks about.
@@ -328,15 +346,19 @@ function pressOf(
  */
 function leavesFor(mention: Mention, target: string, doors: MentionDoors): boolean {
   if (!isWebAddress(target) || readLink(target) !== undefined) return false;
+
   if (mention.kind === MENTION_KIND.LINK) return true;
   const paged = mention.kind === MENTION_KIND.FILE || mention.kind === MENTION_KIND.FOLDER;
+
   return paged && doors.onOpenFile === undefined;
 }
 
 /** The tile an agent of the plan drawn wears, as its tab wears it; none where the place knows the plan's agents not. */
 function agentTiles(doors: MentionDoors): AgentTiles | undefined {
   const { agentOf } = doors;
+
   if (agentOf === undefined) return undefined;
+
   return { tileOf: (agentId) => agentOf(agentId)?.actor };
 }
 
@@ -374,7 +396,9 @@ function noteOf(
   standing: LinkStanding | undefined,
 ): string | undefined {
   if (state === MENTION_STATE.GONE) return GONE_WORDS;
+
   if (mention.kind === MENTION_KIND.LINK) return standing === undefined ? mention.url : undefined;
+
   return undefined;
 }
 
@@ -401,17 +425,23 @@ function MentionCard({
     taskId: doors.holder?.taskId,
     workspace: doors.place.workspace,
   });
+
   const repository = doors.place.repository ?? undefined;
+
   // Only an agent of the page's own task has a tab here, so only its chip hangs that tab's card.
   const tabCard =
     mention.kind === MENTION_KIND.AGENT ? doors.agentOf?.(mention.agentId)?.card : undefined;
+
   if (tabCard !== undefined) return tabCard;
+
   // A pull request one of the plan's agents opened hangs its Pull request tab's card, as the tab does.
   const changesCard =
     mention.kind === MENTION_KIND.LINK ? doors.pullRequestOf?.(mention.url) : undefined;
+
   if (changesCard !== undefined) return changesCard;
   const whole = mention.kind === MENTION_KIND.FOLDER ? `${mention.path}/` : name;
   const note = noteOf(mention, state, standing);
+
   const glyph = (
     <MentionGlyph
       mention={mention}
@@ -422,6 +452,7 @@ function MentionCard({
       standing={standing}
     />
   );
+
   // A pull request GitHub answered for hangs the one card every pull request hangs, which reads what GitHub answered of it through the same workspace (`pull-request-card.tsx`).
   const card =
     mention.kind === MENTION_KIND.LINK && standing?.pullRequest !== undefined ? (
@@ -448,6 +479,7 @@ function MentionCard({
         {standing?.opener === undefined ? null : <OpenedByRow opener={standing.opener} />}
       </HoverCard>
     );
+
   // Note that what the mention names hangs the card the window hangs for it elsewhere, its own card standing in where the window holds none.
   return entityCard(entityOfMention(mention), {
     own: card,
@@ -487,6 +519,7 @@ export function MentionChipCard({
   standing: LinkStanding | undefined;
 }): ReactNode {
   const known = useKnownNames();
+
   return (
     <MentionCard
       mention={mention}
@@ -520,8 +553,10 @@ function chipName(
 ): string {
   const entity = entityOfMention(mention);
   const { live, held } = entityName(entity, known, { heading, answered: standing, repository });
+
   // Note that a plan the window still lists Untitled keeps the name it was written with, which says more.
   if (entity.kind === ENTITY_KIND.PLAN && held === UNTITLED_TASK_NAME) return written;
+
   return (live || bare ? held : undefined) ?? written;
 }
 
@@ -538,9 +573,12 @@ export function githubName(
   standing: LinkStanding | undefined,
 ): string | undefined {
   if (mention.kind !== MENTION_KIND.LINK || standing === undefined) return undefined;
+
   if (standing.pullRequest === undefined && standing.issue === undefined) return undefined;
   const address = pullRequestAddressOf(mention.url) ?? issueAddressOf(mention.url);
+
   if (address === undefined) return undefined;
+
   return pullRequestLabelOf({ number: address.number, title: standing.title });
 }
 
@@ -566,40 +604,51 @@ function MentionChip({
 }): React.JSX.Element {
   const openLink = useOpenLink();
   const known = useKnownNames();
+
   const standing = useLinkStanding(mention, {
     taskId: doors.holder?.taskId,
     workspace: doors.place.workspace,
   });
+
   const section = mention.kind === MENTION_KIND.SECTION ? mention : undefined;
   const heading = useSectionHeading(section?.taskId, section?.anchor ?? "");
   // Note that a plan written as its own key (`ACME-42`) says the key, as the words wrote it, and one labeled with another task's key its name.
   const keys = useWordTargets();
   const keyTarget = keys.get(written);
+
   const keyNames =
     keyTarget === undefined ? undefined : decodeMention(keyTarget, doors.place.repository);
+
   const keyed =
     mention.kind === MENTION_KIND.TASK &&
     keyNames?.kind === MENTION_KIND.TASK &&
     keyNames.taskId === mention.taskId;
+
   const github = githubName(mention, standing);
+
   const name =
     github ??
     (keyed
       ? written
       : chipName(mention, written, bare, known, standing, heading, doors.place.repository));
+
   // Note that a pull request's chip names its number alone, its state mark beside it, since its title fades mid-word in a chip; its card keeps the title.
   const pull = mention.kind === MENTION_KIND.LINK ? pullRequestAddressOf(mention.url) : undefined;
+
   // Note that a key off another repository (`relay#42`) keeps its repository, which says which one it is.
   // Note that only a key naming the link's own number is trimmed, so words that merely start with another `#12` stay as written.
   const label =
     pull === undefined
       ? name
       : (new RegExp(`^\\S*#${pull.number}(?=\\s)`, "u").exec(name)?.[0] ?? name);
+
   // Note that a short name read as one entity is kept whole with its mark and state, since one broken at its `/`, `-`, or space reads as two entities: a pull request GitHub answered for, called by its key alone; a task called by its key; a person; and a server or its tool.
   const whole =
     (github !== undefined && pull !== undefined) || keyed || WHOLE_KINDS.has(mention.kind);
+
   const state = mentionState(mention, doors);
   const press = pressOf(mention, target, state, doors, openLink);
+
   const card = (
     <MentionCard
       mention={mention}
@@ -611,6 +660,7 @@ function MentionChip({
       standing={standing}
     />
   );
+
   return (
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
@@ -656,6 +706,7 @@ type DateMention = Extract<Mention, { readonly kind: typeof MENTION_KIND.DATE }>
 function DateCard({ date }: { date: DateMention }): React.JSX.Element {
   const now = useMinute();
   const zone = readerZone();
+
   return (
     <HoverCard data-date-card="">
       <HoverCardHead glyph={<EntityGlyph kind={ENTITY_KIND.DATE} />} name={dateWhole(date, zone)} />
@@ -674,6 +725,7 @@ function DateChip({
   onPick?: ((chip: Element) => void) | undefined;
 }): React.JSX.Element {
   const now = useMinute();
+
   return (
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
@@ -714,6 +766,7 @@ function WrittenDateChip({
   place: MentionPlace;
 }): React.JSX.Element {
   const dates = useWordsDates();
+
   return (
     <DateChip
       date={date}
@@ -784,18 +837,22 @@ function PlaceChip({
   const held = useKnownNames("automationId" in place ? place.automationId : undefined);
   const known = read === undefined ? held : read(held);
   const { name, under } = placeChipLook(place, label, known);
+
   const glyph = (
     <PlaceGlyph place={place} name={name} workspace={workspace} known={known} doors={doors} />
   );
+
   const own = (
     <HoverCard data-mention-card="">
       <HoverCardHead glyph={glyph} name={name} />
       {under === undefined ? null : <HoverCardNote>{`In ${under}`}</HoverCardNote>}
     </HoverCard>
   );
+
   const card = (
     <PlaceCard place={place} workspace={workspace} name={name} glyph={glyph} fallback={own} />
   );
+
   return (
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
@@ -837,6 +894,7 @@ function PlaceCard({
   fallback: ReactNode;
 }): ReactNode {
   const workspaceId = useWordsWorkspaceId({ taskId: placeTaskId(place), workspace });
+
   return entityCard(entityOfDestination(place), {
     own: fallback,
     glyph,
@@ -860,6 +918,7 @@ function InboxItemChip({
   doors: MentionDoors;
 }): React.JSX.Element {
   const title = useInboxItemTitle(place);
+
   const read =
     title === undefined
       ? undefined
@@ -867,6 +926,7 @@ function InboxItemChip({
           ...known,
           inboxItems: new Map([...known.inboxItems, [place.itemId, title]]),
         });
+
   return <PlaceChip place={place} read={read} {...chip} />;
 }
 
@@ -891,11 +951,14 @@ function NumberedLinkChip({
 }): React.JSX.Element {
   const taskId = useNumberedTaskId(read.workspace, taskNumberOf(read.place));
   const bare = isBareLink(label, href);
+
   const byId =
     taskId === undefined ? undefined : linkOf(withTaskId(read.place, taskId), read.workspace);
+
   const found =
-    byId === undefined ? undefined : linkMention(bare ? byId : label, byId, doors.place.repository);
-  if (found !== undefined) {
+    byId === undefined ? undefined : linkChipOf(bare ? byId : label, byId, doors.place.repository);
+
+  if (found?.kind === LINK_CHIP.MENTION) {
     return (
       <MentionChip
         mention={found.mention}
@@ -906,6 +969,7 @@ function NumberedLinkChip({
       />
     );
   }
+
   return (
     <PlaceChip
       href={href}
@@ -929,15 +993,17 @@ const MENTION_KIND_PLACE = "place";
  */
 function pageDoors(doors: MentionDoors, href: string): MentionDoors {
   const repository = doors.place.repository === null ? pageRepositoryOf(href) : undefined;
+
   if (repository === undefined) return doors;
+
   return { ...doors, place: { ...doors.place, repository }, onOpenFile: undefined };
 }
 
 /**
- * A link in words as its chip, through the doors given: a mention's where
- * its target names one (`linkMention`), a place's in the app where it is an
- * app link no mention names (`readLink`); nothing where it is neither, and
- * it stays a link. `at` is where the link is written in the words drawn,
+ * A link in words as its chip, through the doors given, by the one rule
+ * every surface reads (`linkChipOf`): a mention's where its target names
+ * one, a place's in the app where it is an app link no mention names;
+ * nothing where it is neither, and it stays a link. `at` is where the link is written in the words drawn,
  * which a date's chip names to its picker in words that take a change.
  */
 export function linkChip(
@@ -947,6 +1013,7 @@ export function linkChip(
   at?: MarkdownSpan | undefined,
 ): React.JSX.Element | undefined {
   const chip = chipOfLink(href, label, doors, at);
+
   // Note that a selection taking the chip reads it back as the link it was written as, which a reply quotes.
   return chip === undefined ? undefined : (
     <WrittenAs markdown={markdownLink(label, href)}>{chip}</WrittenAs>
@@ -957,19 +1024,23 @@ export function linkChip(
  * A file of the task's repository as its mention chip, as a call's row
  * names one it read or wrote and a turn's files-changed row names each
  * (`turn-files.tsx`), with `state` after its name where given. An absolute
- * path is read under the checkout's folder, since Claude Code's file tools
- * name every file so (`inline-code-target.ts`'s `checkoutPath`). None where
- * the place knows no repository, or the path is no file of it, as an
- * absolute one through no checkout or one that climbs out is not.
+ * path is read into the agent's checkout, since Claude Code's file tools
+ * name every file so (`checkoutRelativePath`). None where the place knows no
+ * repository, or the path is no file of it, as an absolute one outside the
+ * checkout or one that climbs out is not.
  */
 export function fileChip(written: string, doors: MentionDoors, state?: ReactNode): ReactNode {
   const repository = doors.place.repository;
-  const path = checkoutPath(written);
+  const path = checkoutRelativePath(written);
+
   if (repository === null || path === undefined) return undefined;
   const target = encodeMention({ kind: MENTION_KIND.FILE, path }, doors.place);
-  const found = linkMention(target, target, repository);
+  const found = linkChipOf(target, target, repository);
+
   // Note that a path that climbs out of the checkout reads back as no file, or as some other page of GitHub's, so it stays words.
-  if (found?.mention.kind !== MENTION_KIND.FILE) return undefined;
+  if (found?.kind !== LINK_CHIP.MENTION || found.mention.kind !== MENTION_KIND.FILE)
+    return undefined;
+
   return (
     <MentionChip
       mention={found.mention}
@@ -991,38 +1062,44 @@ function chipOfLink(
 ): React.JSX.Element | undefined {
   const bare = isBareLink(label, href);
   const placed = pageDoors(doors, href);
-  const found = linkMention(label, href, placed.place.repository);
-  if (found?.mention.kind === MENTION_KIND.DATE) {
-    return <WrittenDateChip date={found.mention} at={at} place={doors.place} />;
-  }
-  if (found !== undefined) {
+  const chip = linkChipOf(label, href, placed.place.repository);
+
+  if (chip === undefined) return undefined;
+
+  if (chip.kind === LINK_CHIP.MENTION) {
+    if (chip.mention.kind === MENTION_KIND.DATE) {
+      return <WrittenDateChip date={chip.mention} at={at} place={doors.place} />;
+    }
+
     return (
       <MentionChip
-        mention={found.mention}
+        mention={chip.mention}
         target={href}
-        name={found.name}
+        name={chip.name}
         doors={placed}
         bare={bare}
       />
     );
   }
-  const read = readLink(href);
-  if (read === undefined) return undefined;
+
+  const read = chip.link;
+
   if (taskNumberOf(read.place) !== undefined) {
     return <NumberedLinkChip href={href} read={read} label={label} doors={placed} />;
   }
-  const written = bare ? undefined : mentionName(label.trim());
+
   if (read.place.kind === LINK_DESTINATION.INBOX_ITEM) {
     return (
       <InboxItemChip
         href={href}
         place={read.place}
         workspace={read.workspace}
-        label={written}
+        label={chip.name}
         doors={placed}
       />
     );
   }
+
   // An automation's chip reads its workspace's automations as it is drawn, so it is called and marked as its row is.
   if (
     read.place.kind === LINK_DESTINATION.AUTOMATION ||
@@ -1034,18 +1111,19 @@ function chipOfLink(
           href={href}
           place={read.place}
           workspace={read.workspace}
-          label={written}
+          label={chip.name}
           doors={placed}
         />
       </LinkAutomations>
     );
   }
+
   return (
     <PlaceChip
       href={href}
       place={read.place}
       workspace={read.workspace}
-      label={written}
+      label={chip.name}
       doors={placed}
     />
   );
@@ -1093,9 +1171,11 @@ export function ChipOrLink({
 }): ReactNode {
   const openLink = useOpenLink();
   const chip = doors === undefined ? undefined : linkChip(href, words, doors);
+
   if (chip !== undefined) {
     return frame === CHIP_OR_LINK_FRAME.BARE ? chip : <span className={ORIGIN_CHIP}>{chip}</span>;
   }
+
   const link = (
     <TextLink
       href={href}
@@ -1108,6 +1188,7 @@ export function ChipOrLink({
       {words}
     </TextLink>
   );
+
   switch (frame) {
     case CHIP_OR_LINK_FRAME.BARE:
       return link;
@@ -1147,8 +1228,10 @@ function pastedName(
 ): string {
   if (mention.kind !== MENTION_KIND.SECTION)
     return chipName(mention, said, true, names.known, undefined, undefined, repository);
+
   if (mention.taskId !== names.taskId) return said;
   const headings = descriptionSections(names.text()).map((section) => section.heading);
+
   return headings[sectionAnchors(headings).indexOf(mention.anchor)] ?? said;
 }
 
@@ -1162,37 +1245,58 @@ function pastedName(
 function byTaskId(words: string, taskIdOf: NumberedTaskIdOf): string {
   const read = readLink(words.trim());
   const number = read === undefined ? undefined : taskNumberOf(read.place);
+
   if (read === undefined || number === undefined) return words;
   const taskId = taskIdOf({ workspace: read.workspace, number });
+
   return taskId === undefined ? words : linkOf(withTaskId(read.place, taskId), read.workspace);
 }
 
 /**
- * The mention node words pasted whole stand for: an address of our own,
- * a plan's, a section's, a page's, or an agent's, by the scheme of the web
- * or the app's own, a task's by its id or by its number where the window
- * lists the task (`byTaskId`), named as its bare link's chip is
- * (`pastedName`); or a page of an integration's, named by its address's
- * readable form; nothing for any other words, a file of the plan's
- * repository among them, or a person's page in another workspace than the
- * place's.
+ * The target a pasted address's mention is laid in with: the mention's own,
+ * written under the place (`encodeMention`), so either scheme and an old
+ * form read the same; but the address as pasted where that would name
+ * another thing: a person's page of another workspace than the place's, and
+ * a file's or a folder's GitHub page, whose revision the mention keeps only
+ * with lines, so a page at a commit stays at that commit.
+ */
+function pastedTarget(mention: Mention, address: string, place: MentionPlace): string {
+  if (mention.kind === MENTION_KIND.FILE || mention.kind === MENTION_KIND.FOLDER) return address;
+
+  if (mention.kind === MENTION_KIND.PERSON && readLink(address)?.workspace !== place.workspace) {
+    return address;
+  }
+
+  return encodeMention(mention, place);
+}
+
+/**
+ * The mention node words pasted whole stand for: whatever link the words
+ * would be drawn as a chip once sent (`pastedLinkChip`, the rule every
+ * surface reads), a task's by its id or by its number where the window
+ * lists the task (`byTaskId`). A mention is named as its bare link's chip
+ * is (`pastedName`), and a place of ours no mention names, an Inbox thread
+ * or an automation, by the name the window holds for it, else its kind
+ * (`placeChipLook`); nothing for words that are no such link.
  */
 export function pastedMentionNode(
   words: string,
   place: MentionPlace,
   names: PastedNames,
 ): MentionNode | undefined {
-  const link = pastedLinkMention(byTaskId(words, names.taskIdOf), place.repository);
-  // A person's page is of the workspace its link names, so one of another workspace stays the link it is.
-  const elsewhere =
-    link?.mention.kind === MENTION_KIND.PERSON &&
-    readLink(words.trim())?.workspace !== place.workspace;
-  return link === undefined || elsewhere
-    ? undefined
-    : {
-        name: pastedName(link.mention, link.name, names, place.repository),
-        target: encodeMention(link.mention, place),
-      };
+  const address = byTaskId(words, names.taskIdOf).trim();
+  const chip = pastedLinkChip(address, place.repository);
+
+  if (chip === undefined) return undefined;
+
+  if (chip.kind === LINK_CHIP.PLACE) {
+    return { name: placeChipLook(chip.link.place, undefined, names.known).name, target: address };
+  }
+
+  return {
+    name: pastedName(chip.mention, chip.name, names, place.repository),
+    target: pastedTarget(chip.mention, address, place),
+  };
 }
 
 /** What an editor hands a chip it holds: the doors to its node, and what opens the date picker over its words. */
@@ -1213,20 +1317,24 @@ function datePicked(
 ): void {
   if (picked.how === DATE_PICKER_CLOSE.CLEAR) {
     node.remove();
+
     return;
   }
+
   const keyed = picked.how === DATE_PICKER_CLOSE.KEY;
   const { date } = picked;
+
   // Note that a zone picked names the date anew even where its moment stands, as at another zone of the same offset.
   const moved =
     picked.changed &&
     date !== undefined &&
     (date.start !== was.start || date.end !== was.end || picked.zonePicked);
+
   if (moved) node.rename(dateMentionNode(date, place, picked.zone), keyed);
   else if (keyed) node.focusAfter();
 }
 
-/** A mention an editor holds, as its node names it: its chip where its target names a mention, a place's in the app where it names a place no mention does (an Inbox thread, `linkChip`), and its words where it names neither; a date's opens its picker where the editor hands what changes it. */
+/** A mention an editor holds, as its node names it: the chip its link draws in words (`linkChip`), a mention's or a place's in the app, and its words where it names neither; a date's opens its picker where the editor hands what changes it. */
 export function MentionNodeChip({
   mention,
   doors,
@@ -1255,27 +1363,29 @@ function NodeChip({
   doors: MentionDoors;
   edit: MentionNodeEdit | undefined;
 }): React.JSX.Element {
-  const named = decodeMention(mention.target, doors.place.repository);
-  if (named === undefined) {
-    const written = `${MENTION_SIGIL}${mention.name}`;
+  const written = `${MENTION_SIGIL}${mention.name}`;
+  const chip = linkChipOf(written, mention.target, doors.place.repository);
+
+  // A date's chip held in an editor opens its picker, which names the node anew; every other chip is the one its link draws in words.
+  if (chip?.kind !== LINK_CHIP.MENTION || chip.mention.kind !== MENTION_KIND.DATE) {
     return linkChip(mention.target, written, doors) ?? <>{written}</>;
   }
-  if (named.kind === MENTION_KIND.DATE) {
-    return (
-      <DateChip
-        date={named}
-        onPick={
-          edit === undefined
-            ? undefined
-            : (chip) =>
-                edit.pickDate({
-                  at: chip,
-                  date: named,
-                  onClose: (picked) => datePicked(edit.node, named, picked, doors.place),
-                })
-        }
-      />
-    );
-  }
-  return <MentionChip mention={named} target={mention.target} name={mention.name} doors={doors} />;
+
+  const date = chip.mention;
+
+  return (
+    <DateChip
+      date={date}
+      onPick={
+        edit === undefined
+          ? undefined
+          : (at) =>
+              edit.pickDate({
+                at,
+                date,
+                onClose: (picked) => datePicked(edit.node, date, picked, doors.place),
+              })
+      }
+    />
+  );
 }

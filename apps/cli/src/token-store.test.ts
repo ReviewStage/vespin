@@ -25,10 +25,12 @@ const modeOf = (file: string) =>
 it.effect("keeps the sign-in in a file only its owner can read, under XDG_CONFIG_HOME", () =>
   Effect.gen(function* () {
     const config = yield* temporaryDirectoryScoped("vespin-cli-");
+
     const store = yield* accountStore(ORIGIN, {
       platform: "linux",
       environment: { XDG_CONFIG_HOME: config, HOME: "/nowhere" },
     });
+
     yield* store.write(ACCOUNT);
 
     const file = path.join(config, "vespin", "credentials.json");

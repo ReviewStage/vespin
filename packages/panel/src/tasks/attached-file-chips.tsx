@@ -67,14 +67,18 @@ const BOX_CHIPS = new WeakMap<AgentAttachment, FileChip>();
 export function attachmentChips(attachments: readonly AgentAttachment[]): FileChip[] {
   return attachments.map((file) => {
     const known = BOX_CHIPS.get(file);
+
     if (known !== undefined) return known;
+
     const chip = {
       name: file.name,
       mediaType: file.mediaType,
       // Note that a file whose bytes are not here yet, a comment's kept by its edit, is drawn by its name alone.
       url: file.data === "" ? "" : `data:${file.mediaType};base64,${file.data}`,
     };
+
     BOX_CHIPS.set(file, chip);
+
     return chip;
   });
 }
@@ -88,12 +92,15 @@ export interface MessageFileChip extends FileChip {
 export function messageFileChips(message: AgentTranscriptMessage): MessageFileChip[] {
   return message.parts.flatMap((part): MessageFileChip[] => {
     if (!isRecord(part) || part.type !== FILE_PART || !isWireString(part.mediaType)) return [];
+
     const chip = {
       name: isWireString(part.filename) ? part.filename : part.mediaType,
       mediaType: part.mediaType,
       url: isWireString(part.url) ? part.url : "",
     };
+
     const pictureId = chipBase64(chip) === "" ? keptPictureIdOf(part.providerMetadata) : undefined;
+
     return [pictureId === undefined ? chip : { ...chip, pictureId }];
   });
 }
@@ -125,11 +132,13 @@ function FileChipOf({
   const base64 = chipBase64(file);
   const view = base64 === "" ? ATTACHMENT_VIEW.OTHER : attachmentView(file);
   const thumbnail = view === ATTACHMENT_VIEW.IMAGE;
+
   // Note that a text file's words are read once for its file, since a chip draws again on every keystroke of the box it stands in.
   const text = useMemo(
     () => (view === ATTACHMENT_VIEW.TEXT ? wordsOf(base64) : undefined),
     [view, base64],
   );
+
   return (
     <AttachmentChip
       name={file.name}
@@ -167,15 +176,20 @@ function BoxRow({
 }): ReactNode {
   const [ids] = useState(() => new WeakMap<FileChip, string>());
   const minted = useRef(0);
+
   const idOf = (file: FileChip): string => {
     const known = ids.get(file);
+
     if (known !== undefined) return known;
     minted.current += 1;
     const id = String(minted.current);
     ids.set(file, id);
+
     return id;
   };
+
   const drawn = useLeaving(files, idOf);
+
   return (
     <Inline
       as={LAYOUT_ELEMENT.UL}
@@ -189,6 +203,7 @@ function BoxRow({
     >
       {drawn.map((entry) => {
         const index = files.indexOf(entry.value);
+
         return (
           <FileChipOf
             key={entry.key}
@@ -214,6 +229,7 @@ function BoxFileChips({
   onOpen: (file: FileChip) => void;
 }): ReactNode {
   const row = useRef<HTMLUListElement | null>(null);
+
   return (
     <ListMotion root={row} way={LIST_MOTION_WAY.SCALE}>
       <BoxRow row={row} files={files} onRemove={onRemove} onOpen={onOpen} />
@@ -236,6 +252,7 @@ export function AttachedFileChips({
   const [viewing, setViewing] = useState<number | undefined>(undefined);
   const openable = files.filter((file) => chipBase64(file) !== "");
   const open = (file: FileChip) => setViewing(openable.indexOf(file));
+
   const viewer =
     viewing === undefined ? null : (
       <AttachmentViewer
@@ -245,6 +262,7 @@ export function AttachedFileChips({
         onClose={() => setViewing(undefined)}
       />
     );
+
   if (onRemove !== undefined) {
     return (
       <>
@@ -253,7 +271,9 @@ export function AttachedFileChips({
       </>
     );
   }
+
   if (files.length === 0) return null;
+
   return (
     <Inline
       as={LAYOUT_ELEMENT.UL}

@@ -47,6 +47,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -60,9 +61,11 @@ const openPicturedTasks = Effect.gen(function* () {
   const task = yield* createTask(owner, { organizationId: workspace, name: "Invites" });
   const other = yield* createTask(owner, { organizationId: workspace, name: "Billing" });
   const kept = yield* keepDescriptionAttachment(teammate, task.id, PICTURE);
+
   if (kept.status !== DESCRIPTION_ATTACHMENT_KEEP.KEPT)
     return assert.fail("the picture was not kept");
   const address = descriptionAttachmentAddress({ taskId: task.id, attachmentId: kept.id }, "acme");
+
   return { owner, outsider, planId: task.id, otherId: other.id, attachmentId: kept.id, address };
 });
 
@@ -102,10 +105,12 @@ it.layer(getTestDB())("look_at_picture", (it) => {
           attachmentId,
           address,
         } = yield* openPicturedTasks;
+
         const missing = descriptionAttachmentAddress(
           { taskId: taskId, attachmentId: randomUUID() },
           "acme",
         );
+
         const pageOfTask = address.slice(0, address.indexOf("/files/"));
 
         const answers = [
@@ -133,6 +138,7 @@ it.layer(getTestDB())("look_at_picture", (it) => {
         const { owner, planId: taskId, address } = yield* openPicturedTasks;
 
         const statuses: string[] = [];
+
         for (let at = 0; at < 12; at += 1) {
           statuses.push((yield* look(lookCall(owner, taskId), address)).status);
         }
@@ -149,11 +155,14 @@ it.layer(getTestDB())("look_at_picture", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, planId: taskId } = yield* openPicturedTasks;
+
         const video: Picture = {
           contentType: PICTURE_MEDIA_TYPE.WEBM,
           bytes: webmBytes(1280, 800),
         };
+
         const kept = yield* keepDescriptionAttachment(owner, taskId, video);
+
         if (kept.status !== DESCRIPTION_ATTACHMENT_KEEP.KEPT)
           return assert.fail("the video was not kept");
         const address = descriptionAttachmentAddress({ taskId, attachmentId: kept.id }, "acme");
@@ -169,6 +178,7 @@ it.layer(getTestDB())("look_at_picture", (it) => {
     () =>
       Effect.sync(() => {
         const base64 = Base64.encode(webmBytes(1280, 800));
+
         const forged = unparsedWire({
           status: PICTURE_LOOK_STATUS.LOOKED,
           mediaType: PICTURE_MEDIA_TYPE.WEBM,

@@ -39,6 +39,7 @@ export function openPageInBrowserItem(place: PageLinkDestination, workspace: str
 /** Open in browser for the page an app link names; none for a link to anything else. */
 export function linkedPageInBrowserItem(href: string): MenuAction | undefined {
   const read = readLink(href);
+
   return read?.place.kind === LINK_DESTINATION.PAGE
     ? openPageInBrowserItem(read.place, read.workspace)
     : undefined;

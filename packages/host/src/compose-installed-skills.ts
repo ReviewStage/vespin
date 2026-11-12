@@ -73,6 +73,7 @@ export function composeInstalledSkills(
     const http = yield* HttpClient.HttpClient;
     const { kernel, account, client } = dependencies;
     const gate = () => kernel.runMode.sendsNetwork && account.capabilitiesActive();
+
     const skills = yield* heldInstalledSkills({
       seal: (workspaceId, userId, poll, after) =>
         gate()
@@ -91,6 +92,7 @@ export function composeInstalledSkills(
       pool: dependencies.pool,
       tell: liveTold(kernel.emit, INSTALLED_SKILL_FOLLOWS.INSTALLED_SKILLS_FOLLOW),
     });
+
     return composed(dependencies, gate, http, skills);
   });
 }
@@ -118,6 +120,7 @@ function composed(
     INSTALLED_SKILLS_INSTALL: (install) =>
       Effect.gen(function* () {
         const view = yield* asked(client.install(install));
+
         if ("skills" in view) {
           yield* Effect.forEach(
             view.skills,
@@ -125,6 +128,7 @@ function composed(
             { concurrency: "unbounded", discard: true },
           );
         }
+
         return view;
       }),
     INSTALLED_SKILLS_REMOVE: declaredWrite(

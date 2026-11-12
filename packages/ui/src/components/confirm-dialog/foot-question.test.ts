@@ -29,6 +29,7 @@ const { failure: FAILURE } = recordedFailure();
 type Answers = ((result: ActionResult) => void)[];
 
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
+
 const REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
   reason: "The key is in use.",
@@ -51,16 +52,19 @@ afterEach(() => {
 /** A key's dialog: the key with Delete key, which asks at the foot, and Done; the key goes once its deletion lands. */
 function KeyDialog({ answers, onDone }: { answers: Answers; onDone: () => void }) {
   const [key, setKey] = useState(true);
+
   const confirm = useConfirmDialog(
     { subject: key, surfaceOpen: true },
     useMutationAct(() =>
       new Promise<ActionResult>((answer) => answers.push(answer)).then((result) => {
         if (result.status === ACTION_RESULT_STATUS.ACCEPTED) setKey(false);
+
         return result;
       }),
     ),
     () => FAILURE,
   );
+
   return createElement(Dialog, {
     open: true,
     title: "OpenAI",
@@ -114,6 +118,7 @@ function pressEscape(): void {
 function card(): HTMLElement {
   const cards = document.querySelectorAll<HTMLElement>('[role="dialog"], [role="alertdialog"]');
   assert.equal(cards.length, 1, "one card stands");
+
   return cards[0] ?? assert.fail("no card");
 }
 
@@ -140,6 +145,7 @@ function asked() {
   opener.focus();
   act(() => opener.click());
   const settle = (result: ActionResult) => answerOldest(answers, result);
+
   return { opener, onDone, settle };
 }
 
@@ -157,12 +163,14 @@ test("it takes the foot's place rather than a card of its own, lands on Cancel, 
 
 test("Tab and Shift-Tab go between the question's two answers, never into the stilled body", () => {
   asked();
+
   const tab = (shiftKey: boolean) =>
     act(() => {
       (document.activeElement ?? document.body).dispatchEvent(
         new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true }),
       );
     });
+
   tab(true);
   assert.ok(holds(button("Delete")), "Shift-Tab from Cancel wraps to the act");
   tab(false);

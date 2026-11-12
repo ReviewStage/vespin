@@ -89,6 +89,7 @@ async function openCost(
 ): Promise<HTMLElement> {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     asked.push(String(input));
+
     return Promise.resolve(
       new Response(JSON.stringify(body), {
         status: 200,
@@ -117,6 +118,7 @@ async function openCost(
     );
   });
   await readLanded(page);
+
   return page;
 }
 
@@ -125,12 +127,14 @@ function cardOf(page: HTMLElement, label: string): string {
   const name = Array.from(page.querySelectorAll("div")).find(
     (element) => element.children.length === 0 && element.textContent === label,
   );
+
   return name?.parentElement?.parentElement?.textContent ?? "";
 }
 
 /** One table's body rows, each as the words of its cells. */
 function rowsOf(page: HTMLElement, label: string): string[][] {
   const table = page.querySelector(`table[aria-label="${label}"]`);
+
   return Array.from(table?.querySelectorAll("tbody tr") ?? [], (row) =>
     Array.from(row.querySelectorAll("td"), (cell) => cell.textContent ?? ""),
   );
@@ -190,9 +194,11 @@ test("an expensive account's row opens its own page", async () => {
 
   const [row] = rowsOf(page, "Accounts with the highest list-price equivalent");
   expect(row?.slice(1)).toEqual(["$12.50", "0", "—"]);
+
   const cell = page.querySelector(
     'table[aria-label="Accounts with the highest list-price equivalent"] tbody td:last-child',
   );
+
   act(() => cell?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
   expect(opened).toEqual(["account-ada"]);
 });

@@ -52,6 +52,7 @@ export interface ShownPicture {
 function fileName(path: string): string {
   const base = path.slice(path.lastIndexOf("/") + 1);
   const dot = base.lastIndexOf(".");
+
   return dot > 0 ? base.slice(0, dot) : base;
 }
 
@@ -76,9 +77,11 @@ export function shownPicturesOf(
   const list = asPictureList(input);
   const asked = isRecord(list) && Array.isArray(list.images) ? list.images : [];
   const kept = isRecord(output) && Array.isArray(output.pictures) ? output.pictures : [];
+
   return asked.flatMap((image: WireValue, index: number) => {
     if (!isRecord(image) || !isWireString(image.path)) return [];
     const caption = isWireString(image.caption) ? image.caption : "";
+
     return [{ picture: keptPictureOf(kept[index]), name: fileName(image.path), caption }];
   });
 }
@@ -96,7 +99,9 @@ export type CalledPicture =
 /** What a block names in a picture's place: the block itself, or a resource's own record. */
 function pictureHolder(block: WireRecord): WireRecord | undefined {
   if (block.type === PICTURE_BLOCK.IMAGE) return block;
+
   if (block.type === PICTURE_BLOCK.RESOURCE && isRecord(block.resource)) return block.resource;
+
   return undefined;
 }
 
@@ -109,10 +114,13 @@ const SCREENSHOT_ACTION = "screenshot";
 /** A picture as a holder names it: kept, or not kept and why with its size; nothing where it names neither. */
 function calledPicture(holder: WireRecord, name: string): CalledPicture | undefined {
   const picture = keptPictureOf(holder.picture);
+
   if (picture !== undefined) return { kept: true, picture, name };
+
   if (isOmission(holder.omitted) && isWireNumber(holder.byteCount)) {
     return { kept: false, omitted: holder.omitted, byteCount: holder.byteCount, name };
   }
+
   return undefined;
 }
 
@@ -120,11 +128,14 @@ function calledPicture(holder: WireRecord, name: string): CalledPicture | undefi
 function screenshotsOf(output: UnparsedWireValue): readonly CalledPicture[] {
   if (!isRecord(output) || !Array.isArray(output.steps)) return [];
   const found: CalledPicture[] = [];
+
   for (const step of output.steps) {
     if (!isRecord(step) || step.action !== SCREENSHOT_ACTION) continue;
     const called = calledPicture(step, `${SCREENSHOT_NAME}-${String(found.length + 1)}`);
+
     if (called !== undefined) found.push(called);
   }
+
   return found;
 }
 
@@ -145,13 +156,16 @@ export function recordedVideosOf(
 ): readonly (ShownPicture & { readonly picture: KeptPicture })[] {
   if (tool !== AGENT_TOOL.BROWSER || !isRecord(output) || !Array.isArray(output.steps)) return [];
   const found: (ShownPicture & { readonly picture: KeptPicture })[] = [];
+
   for (const step of output.steps) {
     if (!isRecord(step) || step.action !== STOP_RECORDING_ACTION) continue;
     const picture = keptPictureOf(step.picture);
+
     if (picture === undefined) continue;
     const caption = isWireString(step.caption) ? step.caption : "";
     found.push({ picture, name: `${RECORDING_NAME}-${String(found.length + 1)}`, caption });
   }
+
   return found;
 }
 
@@ -168,15 +182,20 @@ export function calledPicturesOf(
   output: UnparsedWireValue,
 ): readonly CalledPicture[] {
   if (tool === AGENT_TOOL.BROWSER) return screenshotsOf(output);
+
   if (!Array.isArray(output)) return [];
   const named = isRecord(input) && isWireString(input.remoteTool) ? input.remoteTool : tool;
   const found: CalledPicture[] = [];
+
   for (const block of output) {
     const holder = isRecord(block) ? pictureHolder(block) : undefined;
+
     if (holder === undefined) continue;
     const called = calledPicture(holder, `${named}-${String(found.length + 1)}`);
+
     if (called !== undefined) found.push(called);
   }
+
   return found;
 }
 
@@ -205,6 +224,7 @@ export interface PictureAddition {
 export function withPictureLine(text: string, line: string): PictureAddition {
   const breaks = text === "" || text.endsWith("\n\n") ? "" : text.endsWith("\n") ? "\n" : "\n\n";
   const added = `${breaks}${line}\n`;
+
   return { text: `${text}${added}`, added };
 }
 
@@ -214,6 +234,7 @@ function standsAlone(text: string, at: number, added: string): boolean {
   const end = at + added.length;
   const opens = lineAt === 0 || text.slice(Math.max(0, lineAt - 2), lineAt) === "\n\n";
   const closes = end === text.length || text[end] === "\n";
+
   return opens && closes;
 }
 
@@ -226,7 +247,9 @@ function standsAlone(text: string, at: number, added: string): boolean {
 export function withoutPictureLine(text: string, added: string): string | undefined {
   for (let at = text.lastIndexOf(added); at >= 0; at = text.lastIndexOf(added, at - 1)) {
     if (standsAlone(text, at, added)) return `${text.slice(0, at)}${text.slice(at + added.length)}`;
+
     if (at === 0) break;
   }
+
   return undefined;
 }

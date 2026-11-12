@@ -63,6 +63,7 @@ const ARCHIVE_QUESTION: DialogQuestion = {
 /** A press that archives or unarchives without a dialog, its refusal said in a toast. */
 function useArchivePress(agents: AgentsControl) {
   const toast = useToast();
+
   return (agentId: string, archived: boolean) =>
     agents.onArchive(agentId, archived).then((result: ActionResult) => {
       if (result.status === ACTION_RESULT_STATUS.ACCEPTED) return;
@@ -85,6 +86,7 @@ export interface AgentArchive {
 /** An archived agent's Unarchive as a menu offers it, its refusal said in a toast. */
 export function useAgentUnarchive(agentId: string, agents: AgentsControl): MenuAction {
   const press = useArchivePress(agents);
+
   return commandAction(
     PANEL_COMMAND.UNARCHIVE_AGENT,
     () => press(agentId, false),
@@ -106,35 +108,43 @@ export function useAgentArchive(
   shown: boolean,
 ): AgentArchive {
   const press = useArchivePress(agents);
+
   // Note that an archive asked about is drawn at once, which may take the row the dialog stands on with it.
   const heard = useRefusalHeard(shown, {
     surface: FAILURE_SURFACE.AGENT_ARCHIVE,
     about: { agentId: agent.id },
   });
+
   const archiving = useMutation(agents.archiveAgent);
+
   const confirmAct = useConfirmAct(archiving, {
     send: () =>
       archiving.mutateAsync({ agentId: agent.id, archived: true, asked: true }).then(heard),
     answered: sameAnswer,
   });
+
   const confirm = useConfirmDialog(
     { subject: true, surfaceOpen: shown },
     confirmAct,
     confirmFailure(FAILURE_SURFACE.AGENT_ARCHIVE, { agentId: agent.id }),
   );
+
   const [reading, setReading] = useState(false);
   const teammate = teammateStarter(agent.startedBy, agents.me) !== undefined;
   const archive = () => void press(agent.id, true);
+
   const asked = () => {
     if (reading) return;
     setReading(true);
     void agents.readAgent(agent.id).then((now) => {
       setReading(false);
+
       // A read that did not land asks first rather than stop a turn it could not see.
       if (now === undefined || agentStillWriting(now.status)) confirm.ask();
       else return press(agent.id, true);
     });
   };
+
   return {
     action: commandAction(
       PANEL_COMMAND.ARCHIVE_AGENT,

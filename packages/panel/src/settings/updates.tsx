@@ -114,7 +114,9 @@ export function UpdatesSection({
   const { mutate: sendUpdateOpenChangelog } = useMutation(
     pressMutation(ACT_KIND.UPDATE_OPEN_CHANGELOG),
   );
+
   const row = updateRow(control.update, control.build);
+
   return (
     <SettingsSection>
       {offered ? (

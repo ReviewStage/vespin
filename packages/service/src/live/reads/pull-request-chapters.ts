@@ -50,6 +50,7 @@ import { bindLiveRead, liveRowsStatement, ownOrder } from "../live-read-binding.
 /** A pull request's number a read's param binds, as its query spelled it; zero, which numbers no pull request, where it names none. */
 function pullRequestNumberParam(param: string): number {
   const number = Number(param);
+
   return Number.isSafeInteger(number) && number > 0 ? number : 0;
 }
 
@@ -113,10 +114,12 @@ export const pullRequestChaptersRead = bindLiveRead(PULL_REQUEST_CHAPTERS_READ, 
   serve: Effect.fnUntraced(function* ({ userId, id, number }) {
     // One number named always reads as one or is refused.
     const read = yield* pullRequestNumberOf([number]);
+
     if (read === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     const { agent } = yield* reachedAgentById(userId, id);
     // Note that an agent with no repository is answered as its rows stand, none, as it keeps no chapters.
     yield* keptUnder(userId, agent);
+
     return { workspaceId: agent.organizationId };
   }),
   beside: ({ params }) => generatorFor(params.userId),

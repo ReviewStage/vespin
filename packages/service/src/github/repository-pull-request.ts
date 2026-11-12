@@ -86,16 +86,20 @@ export const reachedRepository = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   const place = yield* memberPlace(userId, query);
   const app = yield* GitHubApp;
+
   const minted = yield* githubReadRefusal(
     app.repositoryPullRequestToken(place.workspaceId, place.repository, place.member),
   );
+
   if (Option.isNone(minted)) return yield* Effect.fail(HOSTED_REFUSAL.REPOSITORY_NOT_REACHABLE);
   const { token, repository, access } = minted.value;
+
   const subject: PullRequestSubject = {
     organizationId: place.workspaceId,
     repository: repository.fullName,
     author: null,
   };
+
   return { token, access, subject } satisfies ReachedRepository;
 });
 
@@ -115,10 +119,13 @@ export const reachedByNumber = <A, R>(
 ) =>
   Effect.gen(function* () {
     const { token, access, subject } = yield* reachedRepository(userId, query);
+
     const found = yield* githubReadRefusal(
       read(token, subject.repository, query.number).pipe(markRefusedToken(access)),
     );
+
     if (Option.isNone(found)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
     return { token, subject, found: found.value };
   });
 
@@ -143,6 +150,7 @@ const writtenOn = <A>(userId: string, query: PullRequestQuery, write: MemberWrit
 /** The pull request reached as GitHub holds it now, with its head's checks, and the branch it is from. */
 export function publishedOf(reached: ReachedPullRequest) {
   const { subject, branch, pullRequest } = reached;
+
   return { repository: subject.repository, branch, pullRequest };
 }
 

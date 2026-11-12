@@ -104,6 +104,7 @@ async function mount(
   const root = createRoot(container);
   roots.push(root);
   const base = tasksControl();
+
   const tasks = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     tasks: [SUMMARY],
@@ -125,6 +126,7 @@ async function mount(
     },
     agents: agentsControl({ agents, agentIds: agents.map((agent) => agent.id) }),
   });
+
   act(() =>
     root.render(
       windowRouter().provide(
@@ -133,6 +135,7 @@ async function mount(
     ),
   );
   await settle();
+
   return { chosen };
 }
 
@@ -141,9 +144,11 @@ async function browserRows(): Promise<HTMLElement[]> {
   const add = document.querySelector<HTMLButtonElement>(
     '.side-panel-tabs button[aria-label="Open a tab"]',
   );
+
   assert.ok(add, "the panel's +");
   await act(async () => add.click());
   await settle();
+
   return [...document.querySelectorAll<HTMLElement>('.ui-searchable-menu [role="option"]')].filter(
     (row) => row.closest('[role="group"]')?.textContent?.startsWith("Browser") === true,
   );
@@ -175,6 +180,7 @@ test("on a task with one coding agent, the panel's + New browser tab drafts a ta
   fakeActPort({
     [ACT_KIND.TASKS_BROWSER_TAB_OPEN]: (payload) => {
       asked.push(payload);
+
       return Promise.resolve({ failure: BROWSER_TAB_OPEN_FAILURE.UNANSWERED });
     },
   });
@@ -200,6 +206,7 @@ test("on a task with several coding agents, the panel's + New browser tab opens 
   fakeActPort({
     [ACT_KIND.TASKS_BROWSER_TAB_OPEN]: (payload) => {
       asked.push(payload);
+
       return Promise.resolve({ failure: BROWSER_TAB_OPEN_FAILURE.UNANSWERED });
     },
   });
@@ -257,6 +264,7 @@ test("a cloud Browser tab wears its agent's glyph in the strip and hangs a card 
   const drawn = [...document.querySelectorAll<HTMLElement>('.side-panel-tabs [role="tab"]')].find(
     (each) => each.textContent?.includes("Sign in"),
   );
+
   assert.ok(drawn, "the cloud tab stands in the strip, named by its page");
   assert.ok(!drawn.textContent?.includes("Invite emails"), "the strip names no agent in words");
   restOn(drawn);

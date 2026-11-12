@@ -70,7 +70,9 @@ export function SoundsSection({
       view.settings.completionSound ?? APP_SETTING_DEFAULTS.completionSound,
     [APP_SETTING_SCHEMA.askSound.field]: view.settings.askSound ?? APP_SETTING_DEFAULTS.askSound,
   };
+
   const clips = useYourSounds(view);
+
   const actions = (field: AppSettingField) =>
     field === APP_SETTING_SCHEMA.completionSound.field ||
     field === APP_SETTING_SCHEMA.askSound.field ? (
@@ -85,13 +87,17 @@ export function SoundsSection({
         {clips.upload(field)}
       </>
     ) : undefined;
+
   // Note that the browser is asked in the press itself, because it refuses an ask nobody made.
   const ask = () => appPlatform().askForNotifications?.();
+
   const onTurned = (field: AppSettingField, enabled: boolean) => {
     if (field === APP_SETTING_SCHEMA.turnNotifications.field && enabled) ask();
   };
+
   const notifying = view.settings.turnNotifications ?? APP_SETTING_DEFAULTS.turnNotifications;
   const onMac = view.capabilities.includes(HOST_CAPABILITY.DESKTOP_APP);
+
   return (
     <>
       <SettingsSection title="Notifications">

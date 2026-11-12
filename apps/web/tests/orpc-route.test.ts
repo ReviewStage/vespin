@@ -58,6 +58,7 @@ afterEach(async () => {
 });
 
 const ORIGIN = "https://app.test";
+
 /** The grouped function as it is deployed: the oRPC route under its key, which the fallback lands every other path on. */
 const ORPC_ROUTES = new Map([[ORPC_ROUTE_KEY, orpcRoute]]);
 
@@ -145,6 +146,7 @@ test("/api/models refuses through the committed table, the dispatcher and the de
     }),
     routes,
   );
+
   assert.equal(posted.status, HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED);
   assert.equal(posted.headers.get("cache-control"), null);
   assert.equal(await posted.text(), '{"error":"method-not-allowed"}');
@@ -167,6 +169,7 @@ test("an automation's own paths reach the automation procedures through the comm
     }),
     routes,
   );
+
   assert.equal(changed.status, HOSTED_HTTP_STATUS.UNAUTHORIZED);
   assert.equal(await changed.text(), '{"error":"invalid-token"}');
 });
@@ -174,6 +177,7 @@ test("an automation's own paths reach the automation procedures through the comm
 test("the held message reads are reached at their public paths through the committed table, their segments in the path the router matches", async () => {
   const agent = "4b0d6b5e-0a8f-4a8e-9a43-1c5f7f8b2a10";
   const routes = ORPC_ROUTES;
+
   for (const path of [
     `/api/agents/${agent}/messages?after=0:0`,
     `/api/agents/${agent}/subagents/call-1/messages?after=0:0`,
@@ -182,6 +186,7 @@ test("the held message reads are reached at their public paths through the commi
     assert.equal(unsigned.status, HOSTED_HTTP_STATUS.UNAUTHORIZED, path);
     assert.equal(await unsigned.text(), '{"error":"invalid-token"}', path);
   }
+
   // A worker's transcript takes no write: matched at its public path, it is refused by method rather than not found.
   const posted = await dispatched(
     new Request(`${ORIGIN}/api/agents/${agent}/subagents/call-1/messages`, {
@@ -190,18 +195,21 @@ test("the held message reads are reached at their public paths through the commi
     }),
     routes,
   );
+
   assert.equal(posted.status, HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED);
   assert.equal(await posted.text(), '{"error":"method-not-allowed"}');
 });
 
 test("an integration's parameterized path reaches its procedure through the committed table, the dispatcher and the deployed route, which refuses as its old group did", async () => {
   const routes = ORPC_ROUTES;
+
   const unsigned = await dispatched(
     new Request(`${ORIGIN}/api/account/integrations/slack/connect?add=true`, {
       method: HTTP_METHOD.POST,
     }),
     routes,
   );
+
   assert.equal(unsigned.status, HOSTED_HTTP_STATUS.UNAUTHORIZED);
   assert.equal(unsigned.headers.get("cache-control"), null);
   assert.equal(await unsigned.text(), '{"error":"invalid-token"}');
@@ -210,6 +218,7 @@ test("an integration's parameterized path reaches its procedure through the comm
     new Request(`${ORIGIN}/api/account/integrations/slack/rename?connection=slack`),
     routes,
   );
+
   assert.equal(fetched.status, HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED);
   assert.equal(await fetched.text(), '{"error":"method-not-allowed"}');
 });
@@ -217,12 +226,14 @@ test("an integration's parameterized path reaches its procedure through the comm
 test("a plan's routes refuse through the committed table, the dispatcher and the deployed route as their old group did, an unsigned caller before its body is read", async () => {
   const plan = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
   const routes = ORPC_ROUTES;
+
   const bytes = async (response: Response) => ({
     status: response.status,
     contentType: response.headers.get("content-type"),
     cacheControl: response.headers.get("cache-control"),
     text: await response.text(),
   });
+
   const unsigned = {
     status: HOSTED_HTTP_STATUS.UNAUTHORIZED,
     contentType: "application/json",
@@ -270,10 +281,12 @@ test("a plan's routes refuse through the committed table, the dispatcher and the
 
 test("the GitHub routes refuse through the committed table, the dispatcher and the deployed route as their old groups did", async () => {
   const routes = ORPC_ROUTES;
+
   const unsigned = await dispatched(
     new Request(`${ORIGIN}/api/github/repositories/tree?workspaceId=a&workspaceId=b`),
     routes,
   );
+
   assert.equal(unsigned.status, HOSTED_HTTP_STATUS.UNAUTHORIZED);
   assert.equal(unsigned.headers.get("cache-control"), null);
   assert.equal(await unsigned.text(), '{"error":"invalid-token"}');
@@ -287,6 +300,7 @@ test("a plan's comment thread path reaches its procedure through the committed t
   const plan = "0f8e2b7a-4c1d-4e5f-9a6b-7c8d9e0f1a2b";
   const thread = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
   const routes = ORPC_ROUTES;
+
   const unsigned = await dispatched(
     new Request(`${ORIGIN}/api/plans/${plan}/comments/${thread}`, {
       method: HTTP_METHOD.POST,
@@ -295,6 +309,7 @@ test("a plan's comment thread path reaches its procedure through the committed t
     }),
     routes,
   );
+
   assert.equal(unsigned.status, HOSTED_HTTP_STATUS.UNAUTHORIZED);
   assert.equal(unsigned.headers.get("cache-control"), null);
   assert.equal(await unsigned.text(), '{"error":"invalid-token"}');
@@ -303,6 +318,7 @@ test("a plan's comment thread path reaches its procedure through the committed t
     new Request(`${ORIGIN}/api/plans/${plan}/comments/${thread}`),
     routes,
   );
+
   assert.equal(read.status, HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED);
   assert.equal(await read.text(), '{"error":"method-not-allowed"}');
 });
@@ -311,6 +327,7 @@ test("an agent's shells refuse an unsigned caller through the committed table, t
   const routes = ORPC_ROUTES;
   const agent = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
   const shell = "8b3c7a1e-2f4d-4c6b-9e0a-1d2f3a4b5c6d";
+
   for (const path of [
     `/api/agents/${agent}/terminals`,
     `/api/agents/${agent}/terminals/${shell}`,
@@ -319,9 +336,11 @@ test("an agent's shells refuse an unsigned caller through the committed table, t
       new Request(`${ORIGIN}${path}`, { method: HTTP_METHOD.DELETE }),
       routes,
     );
+
     const expected = path.endsWith(shell)
       ? { status: HOSTED_HTTP_STATUS.UNAUTHORIZED, text: '{"error":"invalid-token"}' }
       : { status: HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED, text: '{"error":"method-not-allowed"}' };
+
     assert.deepEqual({ status: unsigned.status, text: await unsigned.text() }, expected, path);
   }
 });
@@ -329,10 +348,13 @@ test("an agent's shells refuse an unsigned caller through the committed table, t
 test("the inbox's parameterized paths reach their procedures through the committed table, the dispatcher and the deployed route", async () => {
   const routes = ORPC_ROUTES;
   const id = "5d2b8f0e-1a3c-4e6f-9b7d-2c4e6a8b0d1f";
+
   const answer = async (method: string, path: string) => {
     const response = await dispatched(new Request(`${ORIGIN}${path}`, { method }), routes);
+
     return [response.status, await response.text()];
   };
+
   const unsigned = [HOSTED_HTTP_STATUS.UNAUTHORIZED, '{"error":"invalid-token"}'];
   const otherMethod = [HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED, '{"error":"method-not-allowed"}'];
 
@@ -357,12 +379,15 @@ it.effect(
     Effect.gen(function* () {
       const route = routeFromHostedFetch(async (request) => {
         if (new URL(request.url).pathname === "/api/throws") throw new RangeError("no runtime");
+
         return new Response(null, { status: 204 });
       });
+
       // Note that the web runtime is built first, because building it starts the deployment's own Sentry, which the recording one then stands in for.
       const answered = yield* Effect.promise(() =>
         route.fetch(new Request(`${ORIGIN}/api/answers`)),
       );
+
       const sentry = recordingSentry();
 
       yield* Effect.promise(() =>
@@ -387,24 +412,30 @@ test("every procedure the contract declares is reached through the committed fal
     status: HOSTED_HTTP_STATUS.UNAUTHORIZED,
     text: JSON.stringify({ error: HOSTED_API_ERROR.INVALID_TOKEN }),
   };
+
   const signedOut = {
     status: HOSTED_HTTP_STATUS.UNAUTHORIZED,
     text: JSON.stringify({ error: ADMIN_ERROR.NOT_SIGNED_IN }),
   };
+
   const upgradeNeeded = {
     status: HOSTED_HTTP_STATUS.UPGRADE_REQUIRED,
     error: HOSTED_API_ERROR.HOST_UPGRADE_NEEDED,
   };
+
   const procedures = hostedProcedureRoutes();
   assert.ok(procedures.length > 0);
+
   for (const procedure of procedures) {
     const answer = await dispatched(
       new Request(`${ORIGIN}${readablePath(procedure)}`, { method: procedure.method }),
       ORPC_ROUTES,
     );
+
     const [resource] = procedure.key;
     const key = procedure.key.join(".");
     const text = await answer.text();
+
     if (CREDENTIAL_FREE.has(key)) {
       assert.deepEqual(
         { status: answer.status, error: JSON.parse(text).error },
@@ -413,6 +444,7 @@ test("every procedure the contract declares is reached through the committed fal
       );
       continue;
     }
+
     assert.deepEqual(
       { status: answer.status, text },
       resource === ADMIN_RESOURCE ? signedOut : unauthenticated,
@@ -424,6 +456,7 @@ test("every procedure the contract declares is reached through the committed fal
 test("a pull request's chapters are reached at their public paths through the committed table, in a function that outlasts a generation, an unsigned caller refused on both methods", async () => {
   const agent = "4b0d6b5e-0a8f-4a8e-9a43-1c5f7f8b2a10";
   const workspace = "9c1e2f3a-4b5c-4d6e-8f70-112233445566";
+
   // Through an agent, and by the repository and number for a pull request no agent opened.
   const publicPaths = new Map([
     ["agents/chapters", `/api/agents/${agent}/chapters?number=7`],
@@ -432,14 +465,17 @@ test("a pull request's chapters are reached at their public paths through the co
       `/api/pull-requests/chapters?workspaceId=${workspace}&repository=acme/relay&number=7`,
     ],
   ]);
+
   const routes = new Map([...publicPaths.keys()].map((route) => [route, orpcRoute]));
   const serving = functionDefinitions([...publicPaths.keys(), "models"]);
+
   for (const [route, path] of publicPaths) {
     for (const method of [HTTP_METHOD.GET, HTTP_METHOD.POST]) {
       const unsigned = await dispatched(new Request(`${ORIGIN}${path}`, { method }), routes);
       assert.equal(unsigned.status, HOSTED_HTTP_STATUS.UNAUTHORIZED, `${method} ${path}`);
       assert.equal(await unsigned.text(), '{"error":"invalid-token"}', `${method} ${path}`);
     }
+
     const holding = serving.find((definition) => definition.routes.includes(route));
     assert.ok((holding?.maxDuration ?? 0) > Duration.toSeconds(CHAPTERS_BOUNDS.TIMEOUT), route);
   }

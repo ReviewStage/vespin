@@ -60,6 +60,7 @@ export function InboxFormText({
   const statuses = useIntegrationStatuses();
   const { agent } = doors;
   const { labelId } = control;
+
   const box = useMessageBox({
     draft: value,
     setDraft: (typed) => onChange(typed === "" ? undefined : typed),
@@ -88,15 +89,19 @@ export function InboxFormText({
     },
     keystrokeSpan: PANEL_SPAN.KEYSTROKE_INBOX_ANSWER,
   });
+
   // Note that a press on the field's name takes the caret into its words, as a label does for its input, since an editor is no labelable element.
   const { editor } = box;
   useEffect(() => {
     const name = document.getElementById(labelId);
+
     if (name === null) return;
     const focus = () => editor.current?.focus();
     name.addEventListener("click", focus);
+
     return () => name.removeEventListener("click", focus);
   }, [labelId, editor]);
+
   return (
     <MessageField
       box={box}

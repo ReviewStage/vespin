@@ -35,6 +35,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -47,6 +48,7 @@ const openWorkspace = Effect.gen(function* () {
     slug: `workspace-${id}`,
     createdAt: yield* DateTime.nowAsDate,
   });
+
   return id;
 });
 
@@ -131,6 +133,7 @@ it.layer(getTestDB())("the Slack installation store", (it) => {
         const member = yield* openAccount;
         const ours = yield* openWorkspace;
         const theirs = yield* openWorkspace;
+
         for (const organizationId of [ours, theirs]) {
           yield* linkSlackInstallation({
             organizationId,

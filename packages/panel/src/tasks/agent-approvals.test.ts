@@ -25,6 +25,8 @@ import { AgentTab } from "./agent-tab.js";
 /**
  * agent-approvals.test.ts -- a tool call a Claude Code agent holds says so on
  * its own row, and Allow sends the answer and the row says it was allowed;
+ * Always allow names the command's first words where the harness proposed
+ * them;
  * Deny opens a box for why, whose words go to the agent with the denial;
  * a Claude Code agent's model chip and a Codex agent's both name their mode
  * off Full access.
@@ -107,13 +109,16 @@ async function drawnTab(agent: AgentSummary) {
     { messages: [...MESSAGES], cursor: "2:0", status: agent.status, title: null },
   ]);
   const answered: ApprovalAnswerRequest[] = [];
+
   const control = agentsControl({
     agents: [agent],
     onAnswerApproval: (_agentId, approvalId, request) => {
       answered.push(request);
+
       return Promise.resolve({ approval: { id: approvalId, status: "allowed" } });
     },
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -137,6 +142,7 @@ async function drawnTab(agent: AgentSummary) {
     ),
   );
   await settle();
+
   return { container, answered };
 }
 
@@ -150,6 +156,7 @@ function modelChipLabel(container: HTMLElement): string {
   const chip =
     container.querySelector<HTMLButtonElement>(".agent-model-chip button") ??
     assert.fail("the model chip");
+
   return chip.getAttribute("aria-label") ?? "";
 }
 
@@ -169,12 +176,32 @@ test("Allow on a held call's row sends the answer, and the row says it was allow
   assert.ok(call.textContent?.includes("Allowed"));
 });
 
+test("Always allow on a call whose harness proposed its first words names them in the press, and answers it", async () => {
+  const [held] = CLAUDE_AGENT.pendingApprovals ?? [];
+  assert.ok(held !== undefined);
+
+  const { container, answered } = await drawnTab({
+    ...CLAUDE_AGENT,
+    pendingApprovals: [{ ...held, commandPrefix: ["pnpm", "test"] }],
+  });
+
+  const always =
+    buttonReading(container, "Always allow pnpm test *") ?? assert.fail("Always allow");
+
+  await act(async () => always.click());
+  await settle();
+
+  assert.deepEqual(answered, [{ answer: "allow_for_agent" }]);
+});
+
 test("Deny opens a box for why, and its Deny sends the denial with the words written", async () => {
   const { container, answered } = await drawnTab(CLAUDE_AGENT);
   await act(async () => (buttonReading(container, "Deny") ?? assert.fail("Deny")).click());
   await settle();
+
   const note =
     container.querySelector<HTMLElement>(".approval-deny-note") ?? assert.fail("the box for why");
+
   typeInComposer(note, "Not on the production database.");
   await act(async () => (buttonReading(note, "Deny") ?? assert.fail("the box's Deny")).click());
   await settle();
@@ -185,15 +212,18 @@ test("Deny opens a box for why, and its Deny sends the denial with the words wri
 test("a Claude Code agent's model chip and a Codex agent's both name their mode off Full access", async () => {
   const claude = await drawnTab(CLAUDE_AGENT);
   const claudeLabel = modelChipLabel(claude.container);
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 
   const { pendingApprovals: _asks, ...plain } = CLAUDE_AGENT;
+
   const codex = await drawnTab({
     ...plain,
     model: "openai/gpt-5.5",
     runtime: AGENT_RUNTIME.CODEX,
   });
+
   const codexLabel = modelChipLabel(codex.container);
 
   assert.deepEqual(

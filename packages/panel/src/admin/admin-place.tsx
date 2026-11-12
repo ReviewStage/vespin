@@ -40,13 +40,11 @@ export interface AdminPlaceProps {
 /**
  * The Admin place's views under the app's doors: what stands in the
  * window's work column (`desktop/desktop-admin.tsx`). Every view
- * names other accounts, so the views are blocked from the screen recording
- * whole (`ph-no-capture`, `session-replay.ts`), past the masking of their
- * words, as the Inbox is.
+ * names other accounts, whose words the screen recording masks.
  */
 export function AdminPlace(props: AdminPlaceProps): React.JSX.Element {
   return (
-    <div className="flex min-h-0 flex-1 flex-col ph-no-capture">
+    <div className="admin-place flex min-h-0 flex-1 flex-col">
       <AppAdminDoors>
         <AdminViews {...props} />
       </AppAdminDoors>
@@ -56,10 +54,12 @@ export function AdminPlace(props: AdminPlaceProps): React.JSX.Element {
 
 function AdminViews({ view, onOpen }: AdminPlaceProps): React.JSX.Element {
   const [hideAdmins, setHideAdmins] = useState(ADMINS_HIDDEN.read);
+
   const changeHideAdmins = (hide: boolean) => {
     ADMINS_HIDDEN.write(hide);
     setHideAdmins(hide);
   };
+
   const [windowDays, setWindowDays] = useState<AdminMetricsWindow>(ADMIN_METRICS_WINDOW_DEFAULT);
   const openAccount = (id: string) => onOpen({ kind: ADMIN_PAGE.ACCOUNT, id });
   const openWorkspace = (id: string) => onOpen({ kind: ADMIN_PAGE.WORKSPACE, id });

@@ -75,6 +75,7 @@ const leftStandingAfter = (tag: string, statement: Statement) =>
   Effect.gen(function* () {
     yield* entering(tag);
     yield* statement();
+
     return yield* Effect.sync(() => standing.getStore());
   });
 
@@ -87,6 +88,7 @@ const refusedInsert = (test: string) =>
     yield* db.insert(driverRow).values({ id, tally: 1 });
     const refused = yield* Effect.result(db.insert(driverRow).values({ id, tally: 2 }));
     assert.ok(Result.isFailure(refused));
+
     return refused.failure;
   });
 
@@ -99,14 +101,20 @@ const refusedInsert = (test: string) =>
  */
 const insideTransaction = Effect.gen(function* () {
   const db = yield* Database;
+
   return yield* db.transaction(() => db.select().from(driverRow));
 });
+
 expectTypeOf<Effect.Error<typeof insideTransaction>>().not.toBeAny();
+
 expectTypeOf<Effect.Error<typeof insideTransaction>>().toEqualTypeOf<
   EffectDrizzleQueryError | SqlError
 >();
+
 const statementAlone = Database.use((db) => db.select().from(driverRow));
+
 expectTypeOf<Effect.Error<typeof statementAlone>>().not.toBeAny();
+
 expectTypeOf<Effect.Error<typeof statementAlone>>().toEqualTypeOf<EffectDrizzleQueryError>();
 
 it.layer(getTestDB())("Drizzle's Effect driver over the test database's client", (it) => {
@@ -116,9 +124,11 @@ it.layer(getTestDB())("Drizzle's Effect driver over the test database's client",
       Effect.gen(function* () {
         const refused = yield* refusedInsert("reason");
         assert.equal(refused._tag, "EffectDrizzleQueryError");
+
         const beneath = Cause.squash(
           Cause.isCause(refused.cause) ? refused.cause : Cause.die(refused.cause),
         );
+
         assert.ok(isSqlError(beneath));
         assert.equal(beneath.reason._tag, "UniqueViolation");
         // A log line names the failure by what the database said, not by the wrapper's name.
@@ -140,21 +150,26 @@ it.layer(getTestDB())("Drizzle's Effect driver over the test database's client",
       const sql = yield* SqlClient.SqlClient;
       const db = yield* Database;
       yield* makeTable;
+
       const ended = yield* Effect.result(
         sql.withTransaction(
           Effect.gen(function* () {
             yield* db.insert(driverRow).values({ id: "rolled-back", tally: 9 });
+
             // The read sees a row no other connection could: the insert is in
             // this transaction rather than beside it.
             const inside = yield* db
               .select()
               .from(driverRow)
               .where(eq(driverRow.id, "rolled-back"));
+
             assert.deepEqual(inside, [{ id: "rolled-back", tally: 9 }]);
+
             return yield* Effect.fail(new Error(TABLE_ROLLBACK));
           }),
         ),
       );
+
       assert.ok(Result.isFailure(ended));
       const after = yield* sql`select id from drizzle_driver_row where id = 'rolled-back'`;
       assert.deepEqual(after, []);

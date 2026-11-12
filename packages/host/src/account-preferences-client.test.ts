@@ -20,13 +20,17 @@ interface RecordedRequest {
 function service(answers: Array<() => Response>) {
   const requests: RecordedRequest[] = [];
   let call = 0;
+
   const fetchLike = async (url: string | URL | Request, init?: RequestInit): Promise<Response> => {
     requests.push({ url, init });
     const answer = answers[Math.min(call, answers.length - 1)];
     call += 1;
+
     if (!answer) throw new Error("no scripted answer");
+
     return answer();
   };
+
   return { requests, fetchLike };
 }
 
@@ -51,6 +55,7 @@ it.effect("writes account preferences as a full snapshot", () =>
     const answer = yield* client({ httpClient: fakeHttpClientLayer(fetchLike) }).writePreferences(
       {},
     );
+
     assert.deepEqual(answer, {
       preferences: PREFERENCES_ANSWER.preferences,
       hasStoredSnapshot: true,
@@ -104,6 +109,7 @@ it.effect("writes an experiment's switch as a patch of that experiment alone", (
     const answer = yield* client({ httpClient: fakeHttpClientLayer(fetchLike) }).writeExperiments({
       [EXPERIMENT.MEMORY]: true,
     });
+
     assert.deepEqual(answer?.experiments, { [EXPERIMENT.MEMORY]: true });
 
     const [request] = requests;
@@ -129,6 +135,7 @@ it.effect(
       const answer = yield* client({ httpClient: fakeHttpClientLayer(fetchLike) }).writePreferences(
         { linkOpen: LINK_OPEN.MAC_APP },
       );
+
       assert.deepEqual(answer?.preferences, { linkOpen: LINK_OPEN.MAC_APP });
 
       // Note that the shared part a build from before the choice writes back whole carries none of it.
@@ -159,6 +166,7 @@ it.effect(
       const answer = yield* client({
         httpClient: fakeHttpClientLayer(fetchLike),
       }).readPreferences();
+
       assert.deepEqual(answer?.preferences, {});
       assert.equal(answer?.hasStoredSnapshot, true);
     }),

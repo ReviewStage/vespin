@@ -113,15 +113,18 @@ export function PictureTile({
       {...hinted}
       onClick={(event) => {
         onClick?.(event);
+
         // Note that a key's press is a click the pointer counts none of, so a click count says a pointer pressed it.
         if (!pointerOpens && event.detail > 0) return;
         // Note that the face is what a press sinks, so it is what gives as the press lands.
         const pressed = event.currentTarget.querySelector<HTMLElement>(".ui-picture-tile-face");
+
         if (pressed !== null) {
           pulsePress(pressed, PRESS_PULSE.QUIET);
           // The picture opened grows from this one (`picture-expand.ts`).
           notePictureOrigin(pressed);
         }
+
         onOpen(event);
       }}
     >

@@ -49,9 +49,11 @@ export const hostActPort = /* @__PURE__ */ Effect.fn("testing/hostActPort")(func
   const stateRoot = yield* Effect.orDie(
     Effect.provide(temporaryDirectoryScoped("host-act-port-"), NodeFileSystem.layer),
   );
+
   const service = recordingHttpClient(
     options.respond ?? (() => new Response(null, { status: UNAVAILABLE })),
   );
+
   const standing = hostStandingLayer.pipe(
     Layer.provideMerge(hostAssemblyLayer([])),
     Layer.provide(
@@ -61,12 +63,15 @@ export const hostActPort = /* @__PURE__ */ Effect.fn("testing/hostActPort")(func
       ),
     ),
   );
+
   const host = yield* Effect.orDie(Layer.build(standing));
   const assembly = Context.get(host, HostAssemblyTag);
+
   const port = testActPort({
     ...declaredActProcedures(HOST_ACTS, assembly.acts),
     ...liveFollowProcedures(HOST_ACTS, assembly.acts),
   });
+
   const told: LiveReadChanged[] = [];
   const operator = createHostOperator({ client: assembly.gateway, report: () => undefined });
   const unheard = operator.onLiveReadChanged((changed) => told.push(changed));
@@ -76,5 +81,6 @@ export const hostActPort = /* @__PURE__ */ Effect.fn("testing/hostActPort")(func
       port.close();
     }),
   );
+
   return { port, requests: service.requests, told };
 });

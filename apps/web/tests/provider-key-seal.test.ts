@@ -34,16 +34,20 @@ const OWNER: SealOwner = {
   provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
   kind: PROVIDER_KEY_KIND.API_KEY,
 };
+
 const PROVIDER_KEY = Redacted.make("sk-ant-test-0000000000000000000000abcd");
 
 function ring(value: string): KeyRing {
   const parsed = parseKeyRing(Redacted.make(value));
+
   if (Result.isFailure(parsed)) return assert.fail(`not a ring: ${parsed.failure}`);
+
   return parsed.success;
 }
 
 function opened(result: Result.Result<Redacted.Redacted<string>, string>): string {
   if (Result.isFailure(result)) return assert.fail(`did not open: ${result.failure}`);
+
   return Redacted.value(result.success);
 }
 

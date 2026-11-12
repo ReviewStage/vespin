@@ -42,6 +42,7 @@ export function HoldPress({
   children: ReactNode;
 }): React.JSX.Element {
   const hold = useTouchHold();
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: it lays nothing out and hears the presses of the control it wraps, which is the keyboard's; the right-click's list is the control's context menu.
     <span
@@ -51,10 +52,12 @@ export function HoldPress({
         if (disabled) return;
         // Note that the release of a held press is no press of the control, so the hold is what its pulse answers.
         const control = event.currentTarget.firstElementChild;
+
         const held = () => {
           if (control instanceof HTMLElement) pulsePress(control, PRESS_PULSE.FACE);
           onHold();
         };
+
         hold.start(event, held, { mouse });
       }}
       onTouchEnd={hold.touchEnd}
@@ -65,6 +68,7 @@ export function HoldPress({
         // Note that the release of a press that held is no press of the control, while a press in
         // what the hold opened, drawn in a portal whose clicks still pass through here, is its own.
         const target = event.target;
+
         if (target instanceof Node && event.currentTarget.contains(target)) event.stopPropagation();
       }}
       onContextMenu={
@@ -73,8 +77,10 @@ export function HoldPress({
           : (event) => {
               // Note that a right-click in what the hold opened, drawn in a portal, is its own.
               const target = event.target;
+
               if (!(target instanceof Node && event.currentTarget.contains(target))) return;
               event.preventDefault();
+
               // Android's own contextmenu may come before the hold's timer: it spends the hold,
               // so the finger's lift presses nothing as well.
               if (hold.counting()) hold.claim();

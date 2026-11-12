@@ -84,16 +84,20 @@ function useRepositoryRows(workspaceId: string) {
   const list = useQuery(repositoryListsQuery(workspaceId));
   const { mutate: retry } = useMutation(repositoryListsRetryMutation());
   const listed = list.data;
+
   const rows: readonly MenuRowChoice[] = useMemo(
     () => listed?.repositories.map((one) => repositoryMenuRow(one.fullName, pictures)) ?? [],
     [listed, pictures],
   );
+
   const failed = list.isError;
+
   const note = failed
     ? readFailedWords(TERM.REPOSITORY.many)
     : listed === undefined
       ? readingWords(TERM.REPOSITORY.many)
       : undefined;
+
   return {
     read: failed ? () => retry(repositoryScope(workspaceId)) : () => undefined,
     note,
@@ -119,13 +123,16 @@ export function AddSlackChannel({
   const { mutateAsync: sendWorkspaceSlackBotChannel } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_CHANNEL),
   );
+
   const addable = channels.filter((channel) => !channel.private && !channel.member);
+
   const pick = (channelId: string) => {
     onRefused(undefined);
     sendWorkspaceSlackBotChannel({ workspaceId, channelId, member: true }).catch((refused: Error) =>
       onRefused(refused.message),
     );
   };
+
   return (
     <AddMenuButton
       label={WORDS.ADD}
@@ -153,9 +160,11 @@ function DefaultRepositoryRow({
   const { mutateAsync: sendWorkspaceSlackBotRepository } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_REPOSITORY),
   );
+
   const repositories = useRepositoryRows(workspaceId);
   const [refusal, setRefusal] = useState<string>();
   const [saves, setSaves] = useState(0);
+
   const pick = (id: string) => {
     setRefusal(undefined);
     const repository = id === NONE_ROW ? null : id;
@@ -164,6 +173,7 @@ function DefaultRepositoryRow({
       (refused: Error) => setRefusal(refused.message),
     );
   };
+
   return (
     <PickerRow
       indent={SETTINGS_ROW_INDENT.MARK}
@@ -204,12 +214,14 @@ function ChannelRow({
   const { mutateAsync: sendWorkspaceSlackBotChannel } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_CHANNEL),
   );
+
   const workspaceId = workspace.id;
   const channelId = channel.id;
   const repositories = useRepositoryRows(workspaceId);
   const [refusal, setRefusal] = useState<string>();
   const name = channelName(channel);
   const leaving = useMutation(actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_CHANNEL));
+
   const removeAct = useConfirmAct(leaving, {
     send: () => leaving.mutateAsync({ workspaceId, channelId, member: false }),
     answered: () => ACCEPTED,
@@ -218,11 +230,13 @@ function ChannelRow({
       reason: refused.message,
     }),
   });
+
   const remove = useConfirmDialog(
     { subject: channel.member, surfaceOpen: true },
     removeAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_SLACK_BOT_CHANNEL),
   );
+
   const pick = (id: string) => {
     setRefusal(undefined);
     const repository = id === NONE_ROW ? null : id;
@@ -230,6 +244,7 @@ function ChannelRow({
       setRefusal(refused.message),
     );
   };
+
   return (
     <>
       <MenuRow
@@ -318,6 +333,7 @@ export function SlackBotChannelRows({
   channels: readonly SlackListedChannel[] | undefined;
 }): React.JSX.Element {
   const joined = channels?.filter((channel) => channel.member);
+
   return (
     <>
       <DefaultRepositoryRow workspaceId={workspace.id} chosen={slack.defaultRepository} />

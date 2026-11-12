@@ -25,15 +25,19 @@ const MIGRATION = "20261015174747_github_installation_per_workspace_many";
 const foldersBeforeMigration = Effect.gen(function* () {
   const fileSystem = yield* FileSystem;
   const path = yield* Path;
+
   const folder = yield* fileSystem.makeTempDirectoryScoped({
     prefix: "before-installations-",
   });
+
   const names = (yield* fileSystem.readDirectory(MIGRATIONS_FOLDER)).filter(
     (name) => name.localeCompare(MIGRATION) < 0,
   );
+
   for (const name of names) {
     yield* fileSystem.copy(path.join(MIGRATIONS_FOLDER, name), path.join(folder, name));
   }
+
   return folder;
 });
 
@@ -41,9 +45,11 @@ const foldersBeforeMigration = Effect.gen(function* () {
 const migrationStatements = Effect.gen(function* () {
   const fileSystem = yield* FileSystem;
   const path = yield* Path;
+
   const text = yield* fileSystem.readFileString(
     path.join(MIGRATIONS_FOLDER, MIGRATION, "migration.sql"),
   );
+
   return text
     .split("--> statement-breakpoint")
     .map((statement) => statement.trim())
@@ -134,6 +140,7 @@ it.effect(
         );
 
         const standing = yield* installationRows(sql);
+
         for (const statement of yield* migrationStatements) yield* sql.unsafe(statement);
         assert.deepEqual(yield* installationRows(sql), standing);
       }),

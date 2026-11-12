@@ -125,38 +125,46 @@ const PLAN_NOT_INCLUDED = "To use Codex with your ChatGPT plan, upgrade";
 const HTTP_UNAUTHORIZED = 401;
 
 const readEnvelope = Schema.decodeUnknownOption(
-  Schema.Struct({ method: Schema.String, params: Schema.Unknown }),
+  Schema.Struct({ method: Schema.String, params: WireValueSchema }),
 );
+
 const readThreadOf = Schema.decodeUnknownOption(Schema.Struct({ threadId: Schema.String }));
+
 const readThreadStarted = Schema.decodeUnknownOption(
   Schema.Struct({
     thread: Schema.Struct({ id: Schema.String, parentThreadId: Schema.NullOr(Schema.String) }),
   }),
 );
-const readItemOf = Schema.decodeUnknownOption(Schema.Struct({ item: Schema.Unknown }));
+
+const readItemOf = Schema.decodeUnknownOption(Schema.Struct({ item: WireValueSchema }));
+
 const readItemKind = Schema.decodeUnknownOption(
   Schema.Struct({ type: Schema.String, id: Schema.String }),
 );
 
 /** The item a notification carries, whole, with its type and id. */
 function itemOf(
-  params: unknown,
-): Option.Option<{ readonly type: string; readonly id: string; readonly whole: unknown }> {
+  params: WireValue,
+): Option.Option<{ readonly type: string; readonly id: string; readonly whole: WireValue }> {
   return Option.flatMap(readItemOf(params), ({ item }) =>
     Option.map(readItemKind(item), ({ type, id }) => ({ type, id, whole: item })),
   );
 }
+
 const readDelta = Schema.decodeUnknownOption(
   Schema.Struct({ itemId: Schema.String, delta: Schema.String }),
 );
 
 const ITEM_FIELDS = { type: Schema.String, id: Schema.String } as const;
+
 const readAgentMessage = Schema.decodeUnknownOption(
   Schema.Struct({ ...ITEM_FIELDS, text: Schema.String }),
 );
+
 const readReasoning = Schema.decodeUnknownOption(
   Schema.Struct({ ...ITEM_FIELDS, summary: Schema.Array(Schema.String) }),
 );
+
 const readCommand = Schema.decodeUnknownOption(
   Schema.Struct({
     ...ITEM_FIELDS,
@@ -167,9 +175,11 @@ const readCommand = Schema.decodeUnknownOption(
     exitCode: Schema.optionalKey(Schema.NullOr(Schema.Number)),
   }),
 );
+
 const readFileChange = Schema.decodeUnknownOption(
   Schema.Struct({ ...ITEM_FIELDS, changes: Schema.Array(WireValueSchema), status: Schema.String }),
 );
+
 const McpToolCallSchema = Schema.Struct({
   ...ITEM_FIELDS,
   server: Schema.String,
@@ -181,7 +191,9 @@ const McpToolCallSchema = Schema.Struct({
   ),
   error: Schema.optionalKey(Schema.NullOr(Schema.Struct({ message: Schema.String }))),
 });
+
 const readMcpToolCall = Schema.decodeUnknownOption(McpToolCallSchema);
+
 const readWebSearch = Schema.decodeUnknownOption(
   Schema.Struct({
     ...ITEM_FIELDS,
@@ -190,6 +202,7 @@ const readWebSearch = Schema.decodeUnknownOption(
     results: Schema.optionalKey(WireValueSchema),
   }),
 );
+
 const readSubagent = Schema.decodeUnknownOption(
   Schema.Struct({
     ...ITEM_FIELDS,
@@ -202,18 +215,22 @@ const readSubagent = Schema.decodeUnknownOption(
     agentsStates: Schema.optionalKey(WireValueSchema),
   }),
 );
+
 const readImageView = Schema.decodeUnknownOption(
   Schema.Struct({ ...ITEM_FIELDS, path: Schema.String }),
 );
+
 const readTextBlock = Schema.decodeUnknownOption(
   Schema.Struct({ type: Schema.Literal("text"), text: Schema.String }),
 );
+
 const readPlan = Schema.decodeUnknownOption(
   Schema.Struct({
     explanation: Schema.optionalKey(Schema.NullOr(Schema.String)),
     plan: Schema.Array(WireValueSchema),
   }),
 );
+
 const BREAKDOWN = Schema.Struct({
   inputTokens: Schema.Number,
   cachedInputTokens: Schema.Number,
@@ -221,11 +238,13 @@ const BREAKDOWN = Schema.Struct({
   outputTokens: Schema.Number,
   reasoningOutputTokens: Schema.Number,
 });
+
 const readTokenUsage = Schema.decodeUnknownOption(
   Schema.Struct({
     tokenUsage: Schema.Struct({ total: BREAKDOWN, last: Schema.optionalKey(BREAKDOWN) }),
   }),
 );
+
 const readTurnCompleted = Schema.decodeUnknownOption(
   Schema.Struct({
     turn: Schema.Struct({
@@ -234,7 +253,7 @@ const readTurnCompleted = Schema.decodeUnknownOption(
         Schema.NullOr(
           Schema.Struct({
             message: Schema.String,
-            codexErrorInfo: Schema.optionalKey(Schema.NullOr(Schema.Unknown)),
+            codexErrorInfo: Schema.optionalKey(Schema.NullOr(WireValueSchema)),
             additionalDetails: Schema.optionalKey(Schema.NullOr(Schema.String)),
           }),
         ),
@@ -250,6 +269,7 @@ const RATE_LIMIT_WINDOW = Schema.NullOr(
     resetsAt: Schema.NullOr(Schema.Number),
   }),
 );
+
 const readRateLimits = Schema.decodeUnknownOption(
   Schema.Struct({
     rateLimits: Schema.Struct({
@@ -292,17 +312,17 @@ function mcpAnswerText(content: readonly WireValue[], workspaceTool: boolean): s
     .join("\n");
 }
 
+type StoredMcpCallResult = { readonly name: string; readonly input: UnparsedWireValue };
+
 /**
  * The name and input a call to an MCP server is stored under: our tool's own
  * for our own server; for an integration's own server, its integration's
  * fixed name and envelope, as the retired runtime's nested call of the tool is stored
  * (`storedServerCall`); `mcpToolCall` naming the server and tool otherwise.
  */
-function storedMcpCall(
-  call: typeof McpToolCallSchema.Type,
-  args: WireValue,
-): { readonly name: string; readonly input: UnparsedWireValue } {
+function storedMcpCall(call: typeof McpToolCallSchema.Type, args: WireValue): StoredMcpCallResult {
   if (WORKSPACE_MCP_SERVER_NAMES.has(call.server)) return { name: call.tool, input: args };
+
   return (
     storedServerCall(call.server, call.tool, args, call.id) ?? {
       name: CODEX_TOOL.MCP_TOOL_CALL,
@@ -312,15 +332,17 @@ function storedMcpCall(
 }
 
 /** A call to an MCP server, stored as `storedMcpCall` names it. */
-function mcpCall(item: unknown): Option.Option<Answered> {
+function mcpCall(item: WireValue): Option.Option<Answered> {
   return Option.map(readMcpToolCall(item), (call) => {
     const workspaceTool = WORKSPACE_MCP_SERVER_NAMES.has(call.server);
     const args = call.arguments ?? {};
+
     const text =
       call.error?.message ??
       (call.result === undefined || call.result === null
         ? ""
         : mcpAnswerText(call.result.content, workspaceTool));
+
     return {
       callId: call.id,
       ...storedMcpCall(call, args),
@@ -334,11 +356,12 @@ function mcpCall(item: unknown): Option.Option<Answered> {
 }
 
 /** An item that does Codex's work, as the call it stands for; nothing for any other item. */
-function callOf(type: string, item: unknown): Option.Option<Answered> {
+function callOf(type: string, item: WireValue): Option.Option<Answered> {
   switch (type) {
     case ITEM.COMMAND:
       return Option.map(readCommand(item), (command) => {
         const output = command.aggregatedOutput ?? "";
+
         return {
           callId: command.id,
           name: CODEX_TOOL.COMMAND_EXECUTION,
@@ -440,8 +463,9 @@ const SPAWN_AGENT = "spawnAgent";
  * run on after the call answers; none for any other collab call, or one
  * that did not do its work.
  */
-function spawnedThreads(type: string, whole: unknown): readonly string[] {
+function spawnedThreads(type: string, whole: WireValue): readonly string[] {
   if (type !== ITEM.SUBAGENT) return [];
+
   return Option.match(readSubagent(whole), {
     onSome: (call) =>
       call.tool === SPAWN_AGENT && !FAILED_STATUSES.has(call.status)
@@ -464,6 +488,7 @@ function spawnMoments(call: Call, threads: readonly string[]): readonly NativeMo
 /** A spawn's subagents running, each by its thread, the call to settle with the input it stood with. */
 function running(call: Call, threads: readonly string[]): readonly NativeMoment[] {
   const { callId, input } = call;
+
   return threads.map(
     (key): NativeMoment => ({
       kind: NATIVE_MOMENT.SUBAGENT_RUNNING,
@@ -480,12 +505,14 @@ function running(call: Call, threads: readonly string[]): readonly NativeMoment[
  * notice where the plan's usage limit stopped it, rather than OpenAI's
  * error.
  */
-function childTurnMoments(threadId: string, params: unknown): readonly NativeMoment[] {
+function childTurnMoments(threadId: string, params: WireValue): readonly NativeMoment[] {
   const read = readTurnCompleted(params);
+
   if (Option.isNone(read)) return [];
   const { status, error } = read.value.turn;
   const text = error?.message ?? status;
   const limited = planStatusOfInfo(error?.codexErrorInfo) === PLAN_STATUS.LIMIT_REACHED;
+
   return [
     {
       kind: NATIVE_MOMENT.SUBAGENT_ENDED,
@@ -500,11 +527,14 @@ function childTurnMoments(threadId: string, params: unknown): readonly NativeMom
   ];
 }
 
-function itemStartedMoments(params: unknown): readonly NativeMoment[] {
+function itemStartedMoments(params: WireValue): readonly NativeMoment[] {
   const item = itemOf(params);
+
   if (Option.isNone(item)) return [];
   const { type, id, whole } = item.value;
+
   if (type === ITEM.AGENT_MESSAGE) return [{ kind: NATIVE_MOMENT.STEP, key: id }];
+
   // Note that a spawn naming its thread as it starts is waited on from then, so a subagent that ends before the spawn completes still settles it.
   return Option.match(callOf(type, whole), {
     onSome: (call): readonly NativeMoment[] => [
@@ -521,10 +551,12 @@ function itemStartedMoments(params: unknown): readonly NativeMoment[] {
  * which the projection passes over where the item's start already did,
  * because a call can complete with no start reported.
  */
-function itemCompletedMoments(params: unknown): readonly NativeMoment[] {
+function itemCompletedMoments(params: WireValue): readonly NativeMoment[] {
   const item = itemOf(params);
+
   if (Option.isNone(item)) return [];
   const { type, id, whole } = item.value;
+
   switch (type) {
     case ITEM.AGENT_MESSAGE:
       return Option.match(readAgentMessage(whole), {
@@ -539,6 +571,7 @@ function itemCompletedMoments(params: unknown): readonly NativeMoment[] {
       return Option.match(readReasoning(whole), {
         onSome: ({ summary }): readonly NativeMoment[] => {
           const text = summary.join("\n\n").trim();
+
           return text.length === 0 ? [] : [{ kind: NATIVE_MOMENT.REASONING, text }];
         },
         onNone: () => [],
@@ -548,6 +581,7 @@ function itemCompletedMoments(params: unknown): readonly NativeMoment[] {
       return [{ kind: NATIVE_MOMENT.COMPACTED, notice: { tokensBefore: null } }];
     default: {
       const threads = spawnedThreads(type, whole);
+
       return Option.match(callOf(type, whole), {
         onSome: (call) => (threads.length === 0 ? settled(call) : spawnMoments(call, threads)),
         onNone: () => [],
@@ -557,10 +591,11 @@ function itemCompletedMoments(params: unknown): readonly NativeMoment[] {
 }
 
 /** The turn's plan set again: a todo list call, started and settled at once, under the event's own number. */
-function planMoments(params: unknown, sequence: number): readonly NativeMoment[] {
+function planMoments(params: WireValue, sequence: number): readonly NativeMoment[] {
   return Option.match(readPlan(params), {
     onSome: ({ explanation, plan }): readonly NativeMoment[] => {
       const input = { explanation: explanation ?? null, plan };
+
       return settled({
         callId: `${CODEX_TOOL.TODO_LIST}:${sequence}`,
         name: CODEX_TOOL.TODO_LIST,
@@ -579,7 +614,7 @@ function planMoments(params: unknown, sequence: number): readonly NativeMoment[]
  * within the input and the reasoning within the output, as the record
  * counts them.
  */
-function usageMoments(params: unknown): readonly NativeMoment[] {
+function usageMoments(params: WireValue): readonly NativeMoment[] {
   return Option.match(readTokenUsage(params), {
     onSome: ({ tokenUsage: { total, last } }): readonly NativeMoment[] => [
       ...(last === undefined
@@ -611,7 +646,7 @@ function usageMoments(params: unknown): readonly NativeMoment[] {
 }
 
 /** The HTTP status one kind of a `codexErrorInfo` object carries, such as `httpConnectionFailed`'s 401. */
-function httpStatusOf(value: unknown): number | undefined {
+function httpStatusOf(value: UnparsedWireValue): number | undefined {
   return Predicate.isObject(value) &&
     "httpStatusCode" in value &&
     Predicate.isNumber(value.httpStatusCode)
@@ -626,9 +661,11 @@ function httpStatusOf(value: unknown): number | undefined {
  * OpenAI refused, an expired one among them, as a connection that failed
  * with a 401 rather than as `unauthorized`.
  */
-function planStatusOfInfo(info: unknown): PlanStatus | undefined {
+function planStatusOfInfo(info: WireValue | undefined): PlanStatus | undefined {
   const kind = codexErrorKind(info);
+
   if (kind === undefined) return undefined;
+
   switch (kind) {
     case CODEX_ERROR_INFO.USAGE_LIMIT_EXCEEDED:
       return PLAN_STATUS.LIMIT_REACHED;
@@ -662,11 +699,14 @@ function planStatusOfInfo(info: unknown): PlanStatus | undefined {
 }
 
 /** Codex's own word for why a turn failed: `usageLimitExceeded`, or `httpConnectionFailed 401`. */
-function errorInfoWords(info: unknown): readonly string[] {
+function errorInfoWords(info: WireValue | undefined): readonly string[] {
   if (Predicate.isString(info)) return [info];
+
   if (!Predicate.isObject(info)) return [];
+
   return Object.entries(info).flatMap(([name, value]) => {
     const status = httpStatusOf(value);
+
     return status === undefined ? [name] : [name, String(status)];
   });
 }
@@ -677,15 +717,18 @@ function errorInfoWords(info: unknown): readonly string[] {
  * limit, an account not eligible, and a sign-in not accepted alike. The
  * failure's whole message is the launch's end's to say.
  */
-function turnCompletedMoments(params: unknown): readonly NativeMoment[] {
+function turnCompletedMoments(params: WireValue): readonly NativeMoment[] {
   const read = readTurnCompleted(params);
+
   if (Option.isNone(read) || read.value.turn.status !== TURN_FAILED) {
     const ran = Option.isSome(read) && read.value.turn.status === TURN_COMPLETED;
+
     return [
       { kind: NATIVE_MOMENT.RESULT },
       ...(ran ? [{ kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.VERIFIED } as const] : []),
     ];
   }
+
   const error = read.value.turn.error ?? undefined;
   const said = [error?.message ?? "", error?.additionalDetails ?? ""].join(" ");
   const quoted = [...said.matchAll(PLAN_REFUSAL_CODE)];
@@ -694,12 +737,15 @@ function turnCompletedMoments(params: unknown): readonly NativeMoment[] {
   const info = errorInfoWords(error?.codexErrorInfo).map((word) => redactCredentials(word));
   const words = [...info, ...codes];
   const failure = words.length === 0 ? "turn_failed" : words.join(" ");
+
   const found = new Set([
     planStatusOfInfo(error?.codexErrorInfo),
     said.includes(PLAN_NOT_INCLUDED) ? PLAN_STATUS.INELIGIBLE : undefined,
     ...quoted.map(([, , reason]) => PLAN_REASON_STATUS.get(reason ?? "")),
   ]);
+
   const plan = PLAN_REFUSAL_ORDER.find((status) => found.has(status));
+
   return [
     { kind: NATIVE_MOMENT.RESULT, failure: failure.slice(0, FAILURE_CHARS) },
     ...(plan === undefined ? [] : [{ kind: NATIVE_MOMENT.PLAN, status: plan } as const]),
@@ -717,9 +763,9 @@ function windowUsage(
           {
             kind: NATIVE_MOMENT.PLAN_USAGE,
             usedPercent: window.usedPercent,
-            ...(window.windowDurationMins == null ? {} : { windowMins: window.windowDurationMins }),
+            ...(window.windowDurationMins != null && { windowMins: window.windowDurationMins }),
             // Note that Codex counts a window's reset in seconds since the epoch.
-            ...(window.resetsAt == null ? {} : { resetsAt: window.resetsAt * 1000 }),
+            ...(window.resetsAt != null && { resetsAt: window.resetsAt * 1000 }),
           } as const,
         ],
   );
@@ -732,23 +778,31 @@ function windowUsage(
  * know, so one that names no reached limit lifts nothing: the turn's end
  * clears the limit instead.
  */
-function rateLimitMoments(params: unknown): readonly NativeMoment[] {
+function rateLimitMoments(params: WireValue): readonly NativeMoment[] {
   const read = readRateLimits(params);
+
   if (Option.isNone(read)) return [];
   const { primary, secondary, rateLimitReachedType } = read.value.rateLimits;
   const usage = windowUsage([primary, secondary]);
+
   const spent = [primary, secondary].filter(
     (window) => window != null && window.usedPercent >= WINDOW_SPENT_PERCENT,
   );
+
   const reached = rateLimitReachedType ?? (spent.length > 0 ? "rate_limit_reached" : undefined);
+
   if (reached === undefined) return usage;
+
   // Note that Codex counts a window's reset in seconds since the epoch.
   const resets = spent.flatMap((window) =>
     window?.resetsAt == null ? [] : [window.resetsAt * 1000],
   );
+
   const resetsAt = resets.length === 0 ? undefined : Math.max(...resets);
   const words = [reached];
+
   if (resetsAt !== undefined) words.push(`resets ${new Date(resetsAt).toISOString()}`);
+
   return [
     ...usage,
     {
@@ -761,15 +815,16 @@ function rateLimitMoments(params: unknown): readonly NativeMoment[] {
 }
 
 /** Whether a notification is of a thread other than the session's: a subagent's, which its call stands for. */
-function elsewhere(params: unknown, held: NativeHeld): boolean {
+function elsewhere(params: WireValue, held: NativeHeld): boolean {
   if (held.session === undefined) return false;
+
   return Option.match(readThreadOf(params), {
     onSome: ({ threadId }) => threadId !== held.session,
     onNone: () => false,
   });
 }
 
-function threadStartedMoments(params: unknown): readonly NativeMoment[] {
+function threadStartedMoments(params: WireValue): readonly NativeMoment[] {
   return Option.match(readThreadStarted(params), {
     onSome: ({ thread }): readonly NativeMoment[] =>
       thread.parentThreadId === null ? [{ kind: NATIVE_MOMENT.SESSION, sessionId: thread.id }] : [],
@@ -785,19 +840,25 @@ function threadStartedMoments(params: unknown): readonly NativeMoment[] {
  */
 export function codexMoments(message: WireValue, held: NativeHeld): readonly NativeMoment[] {
   const own = runnerMoments(message);
+
   if (Option.isSome(own)) return own.value;
   const envelope = readEnvelope(message);
+
   if (Option.isNone(envelope)) return [];
   const { method, params } = envelope.value;
+
   if (method === NOTIFICATION.THREAD_STARTED) return threadStartedMoments(params);
+
   if (elsewhere(params, held)) {
     // A subagent's thread is passed over but for its turn's end, which settles the spawn it runs under.
     if (method !== NOTIFICATION.TURN_COMPLETED) return [];
+
     return Option.match(readThreadOf(params), {
       onSome: ({ threadId }) => childTurnMoments(threadId, params),
       onNone: () => [],
     });
   }
+
   switch (method) {
     case NOTIFICATION.TURN_STARTED:
       return [{ kind: NATIVE_MOMENT.ACTIVE }];

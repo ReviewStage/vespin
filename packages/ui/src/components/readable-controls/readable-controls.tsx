@@ -26,7 +26,9 @@ interface SelectionEnds {
 /** The window's selection's ends as they stand; none where nothing is selected. */
 function selectionEnds(): SelectionEnds | undefined {
   const selection = document.getSelection();
+
   if (selection === null || selection.isCollapsed) return undefined;
+
   return {
     anchor: selection.anchorNode,
     anchorOffset: selection.anchorOffset,
@@ -38,8 +40,11 @@ function selectionEnds(): SelectionEnds | undefined {
 /** Whether a selection stands now that did not when the press went down. */
 function selectedSince(before: SelectionEnds | undefined): boolean {
   const now = selectionEnds();
+
   if (now === undefined) return false;
+
   if (before === undefined) return true;
+
   return (
     now.anchor !== before.anchor ||
     now.anchorOffset !== before.anchorOffset ||
@@ -51,6 +56,7 @@ function selectedSince(before: SelectionEnds | undefined): boolean {
 /** Controls whose words a reader may select, a press that selects holding back its press. */
 export function ReadableControls({ children }: { children: ReactNode }): React.JSX.Element {
   const before = useRef<SelectionEnds | undefined>(undefined);
+
   return (
     <div
       className="ui-readable-controls"

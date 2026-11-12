@@ -41,6 +41,7 @@ function mount(element: ReactElement): string[] {
   roots.push(root);
   const drawn = createElement("div", null, element, createElement(LinkMenu));
   act(() => root.render(withQueryClient(drawn)));
+
   return copied;
 }
 
@@ -56,7 +57,9 @@ function rightClick(element: Element): void {
 /** The items of the menu standing open, by label; none where no menu stands. */
 function menuItems(): string[] | undefined {
   const menu = document.querySelector('[role="menu"]:not([data-leaving])');
+
   if (menu === null) return undefined;
+
   return [...menu.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent ?? "");
 }
 
@@ -65,12 +68,14 @@ function choose(label: string): void {
   const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
     (button) => button.textContent === label,
   );
+
   assert.ok(item, `the menu offers ${label}`);
   act(() => item.click());
 }
 
 test("a right-click on a link in words opens it as its press does, or copies its address", async () => {
   const opened: string[] = [];
+
   const copied = mount(
     createElement(TextLink, {
       href: ADDRESS,
@@ -79,6 +84,7 @@ test("a right-click on a link in words opens it as its press does, or copies its
       children: "the pull request",
     }),
   );
+
   const link = document.querySelector("a");
   assert.ok(link);
 
@@ -95,6 +101,7 @@ test("a right-click on a link in words opens it as its press does, or copies its
 
 test("a right-click on a row that opens an address offers the same menu, opening it through the row's own press", async () => {
   const opened: string[] = [];
+
   const copied = mount(
     createElement(
       "ul",
@@ -106,6 +113,7 @@ test("a right-click on a row that opens an address offers the same menu, opening
       }),
     ),
   );
+
   const title = document.querySelector(".ui-list-row-title");
   assert.ok(title);
 
@@ -142,6 +150,7 @@ test("a right-click on a row naming an agent's page offers Open in browser, whic
 /** Words being edited, as a description's body holds them, with a link in them. */
 function EditedWords(): React.JSX.Element {
   const host = useEditedLinksHost();
+
   return createElement(
     "div",
     { ref: host },
@@ -168,6 +177,7 @@ test("a link in words being edited opens where the words stand, through the plac
       {
         value: (address: Address) => {
           if (address.href !== undefined) openedHere.push(address.href);
+
           return true;
         },
       },
@@ -217,6 +227,7 @@ test("a chip the editor holds fixed in words being edited opens through its own 
 /** A row hanging a menu of its own on a right-click, as a task's row does, around a link. */
 function RowWithMenu(): React.JSX.Element {
   const { contextMenu, open } = useMenu(true);
+
   return createElement(
     "div",
     { ...contextMenu(), "data-row-menu": open === undefined ? "closed" : "open" },

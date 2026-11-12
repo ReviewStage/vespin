@@ -76,6 +76,7 @@ function providerMarkSvg(source: LoopbackConnectionSource): string {
 
 function connectionGraphic(source: LoopbackConnectionSource | undefined): string {
   if (!source) return `<div class="solo-mark">${markSvg()}</div>`;
+
   return (
     `<div class="connection" aria-hidden="true">` +
     providerMarkSvg(source) +
@@ -144,6 +145,7 @@ export function accountLoopbackPage(page: LoopbackPage): string {
   // everything else on it: a data URL fetches nothing from anywhere. Inked
   // outright, because `currentColor` resolves to black outside the page.
   const favicon = encodeURIComponent(markSvg(INK.TEXT));
+
   return (
     `<!doctype html><html lang="en"><head><meta charset="utf-8">` +
     `<meta name="viewport" content="width=device-width, initial-scale=1">` +

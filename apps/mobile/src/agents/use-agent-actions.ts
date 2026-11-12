@@ -50,6 +50,7 @@ export interface ArchiveQuestion {
 /** What Archive asks of an agent by where it stands now: the panel's Stop and archive where it still works, which says what archiving stops, and Archive agent at rest. */
 export function archiveQuestion(working: boolean): ArchiveQuestion {
   const stopWords = archiveStopWords(false);
+
   return working
     ? { title: stopWords.title, message: stopWords.body, act: stopWords.verb }
     : { title: ARCHIVE_AT_REST.title, message: undefined, act: ARCHIVE_AT_REST.act };
@@ -106,8 +107,8 @@ export function useAgentActions(agentId: string, address: string): AgentActions 
       setNote(undefined);
       setStringAsync(address)
         .then(() => buzz(BUZZ.SUCCESS))
-        .catch((error: unknown) => {
-          console.error(ACT_FAILED.COPY, error);
+        .catch((cause: unknown) => {
+          console.error(ACT_FAILED.COPY, cause);
           setNote(ACT_FAILED.COPY);
         });
     },

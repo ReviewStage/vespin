@@ -37,6 +37,7 @@ async function render(html: string): Promise<HTMLElement> {
   mounted.push({ root, container });
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   await act(async () => root.render(createElement(Prose, { html })));
+
   return container;
 }
 

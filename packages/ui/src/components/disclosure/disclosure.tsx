@@ -76,6 +76,7 @@ export const DISCLOSURE_BODY = {
   CARD: "card",
   NONE: "none",
 } as const;
+
 export type DisclosureBodyInset = (typeof DISCLOSURE_BODY)[keyof typeof DISCLOSURE_BODY];
 
 /** A fold's state, as its summary, chevron, and body read it. */
@@ -135,7 +136,9 @@ const StateContext = createContext<DisclosureState | undefined>(undefined);
 /** The fold around the caller. */
 export function useDisclosureState(): DisclosureState {
   const state = useContext(StateContext);
+
   if (state === undefined) throw new Error("A disclosure's parts must be drawn inside one");
+
   return state;
 }
 
@@ -149,6 +152,7 @@ export function useDisclosureState(): DisclosureState {
 export function useDisclosureBodyDrawn(): boolean {
   const { drawn } = useDisclosureState();
   const finding = useContext(FindContext);
+
   return drawn || finding;
 }
 
@@ -161,6 +165,7 @@ export function useDisclosureBodyDrawn(): boolean {
  */
 export function useDisclosurePreviewShown(inBody: boolean): boolean {
   const drawn = useDisclosureBodyDrawn();
+
   return !(inBody && drawn);
 }
 
@@ -175,10 +180,12 @@ export function useDisclosureFold(
 ): DisclosureFold {
   const [kept, setKept] = useState(defaultOpen);
   const open = control === undefined ? kept : control.open;
+
   const setOpen = (next: boolean) => {
     if (control === undefined) setKept(next);
     else control.onOpenChange(next);
   };
+
   // Whether the open state is a press's, which alone plays the opening.
   const [pressed, setPressed] = useState(false);
   const replay = useListMotionReplay();
@@ -186,6 +193,7 @@ export function useDisclosureFold(
   const root = useRef<HTMLDetailsElement | null>(null);
   const held = useRef<HTMLElement | null>(null);
   const shownRef = shown.ref;
+
   const body = useCallback(
     (element: HTMLElement | null) => {
       held.current = element;
@@ -193,9 +201,11 @@ export function useDisclosureFold(
     },
     [shownRef],
   );
+
   const details = useCallback((element: HTMLDetailsElement | null) => {
     root.current = element;
   }, []);
+
   // Note that no motion plays while a find looks through, because a body
   // held open through its fade would be closed over the match a find showed
   // there, which opens only a `details` that is closed.
@@ -207,6 +217,7 @@ export function useDisclosureFold(
     if (motion === undefined || held.current === null) return;
     root.current?.style.setProperty("--disclosure-rise", `${held.current.offsetHeight}px`);
   }, [motion]);
+
   return {
     state: {
       open,
@@ -215,6 +226,7 @@ export function useDisclosureFold(
       toggle: () => {
         setPressed(true);
         setOpen(!open);
+
         if (!open) replay();
       },
       body,
@@ -242,6 +254,7 @@ export function DisclosureScope({
   children: ReactNode;
 }): React.JSX.Element {
   const frame = useContext(FrameContext);
+
   return (
     <StateContext.Provider value={state}>
       <ScopeFrameContext.Provider value={frame}>
@@ -278,6 +291,7 @@ export function useDisclosureFinding(): boolean {
  */
 export function useDisclosureSummaryClick(): (event: MouseEvent<HTMLElement>) => void {
   const { toggle } = useDisclosureState();
+
   return (event) => {
     event.preventDefault();
     toggle();
@@ -295,6 +309,7 @@ export const DISCLOSURE_LOOK = {
   CARD: "card",
   DOCK: "dock",
 } as const;
+
 export type DisclosureLook = (typeof DISCLOSURE_LOOK)[keyof typeof DISCLOSURE_LOOK];
 
 type DisclosureProps = {
@@ -329,8 +344,10 @@ export function Disclosure({
     defaultOpen,
     open === undefined ? undefined : { open, onOpenChange: onOpenChange ?? NO_CHANGE },
   );
+
   const skin = look === DISCLOSURE_LOOK.PLAIN ? undefined : look;
   const framed = lead !== undefined || actions !== undefined;
+
   const fold = (
     <DisclosureScope state={state}>
       <details
@@ -347,7 +364,9 @@ export function Disclosure({
       </details>
     </DisclosureScope>
   );
+
   if (!framed) return fold;
+
   // Note that a card's hairline and wash go round the frame, so the controls beside its head stand inside the card.
   return (
     <Frame look={skin} lead={lead} actions={actions} fill={fill}>
@@ -373,6 +392,7 @@ export const DISCLOSURE_SUMMARY = {
   HEAD: "head",
   TRANSCRIPT: "transcript",
 } as const;
+
 export type DisclosureSummaryLook = (typeof DISCLOSURE_SUMMARY)[keyof typeof DISCLOSURE_SUMMARY];
 
 /**
@@ -424,9 +444,11 @@ function summaryClass(
 ): string {
   const own = SUMMARY_LOOK[look];
   const ruled = look === DISCLOSURE_SUMMARY.ROW && open && frame === undefined;
+
   if (frame === undefined || look === DISCLOSURE_SUMMARY.TRANSCRIPT) {
     return cn("ui-disclosure-summary", own, ruled && "border-b border-border");
   }
+
   return cn(
     "ui-disclosure-summary",
     own,
@@ -452,10 +474,12 @@ export function DisclosureSummary({
   const { open } = useDisclosureState();
   const frame = useContext(ScopeFrameContext);
   const toggle = useDisclosureSummaryClick();
+
   const click = (event: MouseEvent<HTMLElement>) => {
     onClick?.(event);
     toggle(event);
   };
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: a summary is the platform's own disclosure control, focusable and opened by Enter and Space; the click it already takes is routed to React's state.
     // biome-ignore lint/a11y/useAriaPropsSupportedByRole: a summary is exposed as its details' disclosure button, which takes aria-expanded; the rule's table gives the element no role.
@@ -483,6 +507,7 @@ export const DISCLOSURE_FILL = {
   SUMMARY: "summary",
   ACTIONS: "actions",
 } as const;
+
 export type DisclosureFill = (typeof DISCLOSURE_FILL)[keyof typeof DISCLOSURE_FILL];
 
 /** What a press already does for itself: a link, a button, a field, a label, or anything that takes the focus. */
@@ -499,8 +524,10 @@ const OWN_PRESS =
 function groundPress(event: MouseEvent<HTMLElement>): void {
   const cell = event.currentTarget;
   const target = event.target;
+
   if (!(target instanceof Element) || !cell.contains(target)) return;
   const own = target.closest(OWN_PRESS);
+
   if (own !== null && cell.contains(own)) return;
   cell.parentElement?.querySelector<HTMLElement>(":scope > details > summary")?.click();
 }
@@ -521,6 +548,7 @@ function Frame({
   children: ReactNode;
 }): React.JSX.Element {
   const cells = { lead: lead !== undefined, actions: actions !== undefined };
+
   return (
     <div
       className="ui-disclosure-frame"
@@ -590,7 +618,9 @@ export function DisclosureFrame({
 export function DisclosureChevron({ open: handed }: { open?: boolean }): React.JSX.Element {
   const scoped = useContext(StateContext);
   const open = handed ?? scoped?.open;
+
   if (open === undefined) throw new Error("A disclosure's chevron must be drawn inside one");
+
   return (
     <span className="ui-disclosure-turn" data-open={open}>
       <FoldChevronIcon />
@@ -622,7 +652,9 @@ export function DisclosureBody({
 }): React.JSX.Element | null {
   const { body, leaving } = useDisclosureState();
   const drawn = useDisclosureBodyDrawn();
+
   if (!drawn) return null;
+
   return (
     <div
       ref={body}

@@ -95,9 +95,11 @@ export interface WorkspacesProcedureSeams {
 /** The workspaces resource, every procedure under the account's OAuth token. */
 export function workspacesProcedures(seams: WorkspacesProcedureSeams) {
   const account = hosted.workspaces.use(accountMiddleware(seams.resolveUserId));
+
   return {
     list: account.list.effect(function* ({ context }) {
       yield* pluginWriteOrUnavailable(ensurePersonalWorkspace(context.userId, seams.workspaces));
+
       return { workspaces: yield* hostedStoreOrUnavailable(listWorkspaces(context.userId)) };
     }),
     create: account.create.effect(function* ({ context, input }) {
@@ -147,13 +149,16 @@ export function workspacesProcedures(seams: WorkspacesProcedureSeams) {
     setExperiment: account.setExperiment.effect(function* ({ context, input }) {
       const { userId } = context;
       const { workspaceId, experiment, on } = input;
+
       if (!isExperiment(experiment) || !isWorkspaceExperiment(experiment)) {
         return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
       }
+
       const workspace = yield* managedWorkspace(userId, workspaceId);
       yield* hostedStoreOrUnavailable(
         setWorkspaceExperiment({ organizationId: workspace.id, experiment, on, by: userId }),
       );
+
       return { workspace: yield* answeredWorkspace(userId, workspace.id) };
     }),
   };

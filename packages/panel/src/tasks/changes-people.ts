@@ -21,6 +21,7 @@ type ChangesRead = Exclude<AgentChangesAnswerView, { readonly failure: unknown }
 function heldPeopleOf(answer: ChangesRead): HeldPeople | undefined {
   if (answer.pullRequest === null) return undefined;
   const { url, files: _files, truncated: _truncated, ...people } = answer.pullRequest;
+
   return { url, people };
 }
 
@@ -40,12 +41,15 @@ export function useChangesPeopleOf(agentIds: readonly string[]): ReadonlyMap<str
       const people = new Map<string, HeldPeople>();
       results.forEach((result, at) => {
         const agentId = agentIds[at];
+
         if (agentId !== undefined && result.data !== undefined) people.set(agentId, result.data);
       });
+
       return people;
     },
     [agentIds],
   );
+
   return useQueries({
     queries: agentIds.map((agentId) => ({
       ...agentChangesQueryOptions(agentId, undefined),

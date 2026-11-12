@@ -9,6 +9,7 @@ it.effect(
     Effect.gen(function* () {
       let runs = 0;
       const release = yield* Deferred.make<void>();
+
       const refresh = singleFlightEffect(() =>
         Effect.gen(function* () {
           runs += 1;

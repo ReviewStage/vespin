@@ -32,7 +32,7 @@ export type ChoiceMedia = {
 };
 
 /** Every tile's shape, a window's, as the panel's thumbs are: 16 by 10. */
-const TILE_SHAPE = 16 / 10;
+const TILE_ASPECT = 16 / 10;
 
 /** The SF Symbol a page's or an address's tile stands as, since neither has a picture of its own here. */
 const TILE_SYMBOL: Partial<Record<ChoiceMediaKind, SfSymbol>> = {
@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
   wholeTile: { width: "100%", gap: SPACE.TIGHT },
   symbol: {
     width: "100%",
-    aspectRatio: TILE_SHAPE,
+    aspectRatio: TILE_ASPECT,
     borderRadius: RADIUS.TAG * 2,
     alignItems: "center",
     justifyContent: "center",
@@ -73,7 +73,9 @@ const styles = StyleSheet.create({
 function SymbolTile({ piece }: { readonly piece: ChoiceMedia }) {
   const colors = useColors();
   const symbol = TILE_SYMBOL[piece.kind];
+
   if (symbol === undefined) return null;
+
   return (
     <Pressable
       onPress={() => piece.onOpen?.()}
@@ -91,16 +93,17 @@ function SymbolTile({ piece }: { readonly piece: ChoiceMedia }) {
 function ChoiceMediaTile({ piece }: { readonly piece: ChoiceMedia }) {
   const colors = useColors();
   const large = useAccessibilitySize();
+
   return (
     <View style={large ? styles.wholeTile : styles.tile}>
       {piece.kind === CHOICE_MEDIA.PICTURE ? (
-        <Picture source={piece.source} alt={piece.title} shape={TILE_SHAPE} />
+        <Picture source={piece.source} alt={piece.title} tileAspect={TILE_ASPECT} />
       ) : piece.kind === CHOICE_MEDIA.VIDEO ? (
         <Video
           source={piece.source}
           label={piece.title}
           onOpenElsewhere={piece.onOpen}
-          shape={TILE_SHAPE}
+          tileAspect={TILE_ASPECT}
         />
       ) : (
         <SymbolTile piece={piece} />

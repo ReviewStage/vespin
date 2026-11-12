@@ -37,6 +37,7 @@ interface OpenedTab {
 function openedTab(): OpenedTab {
   let sentTo: string | undefined;
   let closed = false;
+
   const window: ConnectTab = {
     get closed() {
       return closed;
@@ -51,6 +52,7 @@ function openedTab(): OpenedTab {
     },
     sessionStorage: { setItem: () => undefined },
   };
+
   return { window, sentTo: () => sentTo, closed: () => closed };
 }
 
@@ -66,11 +68,13 @@ function fakeBrowser(options: {
   const tabs: OpenedTab[] = [];
   const navigated: string[] = [];
   const links: string[] = [];
+
   const browser: ConnectBrowser = {
     openEmptyTab: () => {
       if (options.refusesTabs) return null;
       const tab = openedTab();
       tabs.push(tab);
+
       return tab.window;
     },
     navigate: (url) => navigated.push(url),
@@ -78,6 +82,7 @@ function fakeBrowser(options: {
     address: () => "/plan/4f0b6a0e?tab=agents#settings",
     openLink: (url) => links.push(url),
   };
+
   return { browser, tabs, navigated, links };
 }
 
@@ -94,6 +99,7 @@ function hostPort(
   const host: Partial<ActPortClient> = {
     [ACT_KIND.GITHUB_CONNECT]: async () => {
       await Promise.resolve();
+
       if (opens) open(address);
     },
     [ACT_KIND.WEB_OPEN]: async ({ url }) => {
@@ -101,6 +107,7 @@ function hostPort(
       open(url);
     },
   };
+
   // SAFETY: the connect wraps the procedures it names and hands every other one through untouched, so a test answers only those it calls.
   return host as ActPortClient;
 }
@@ -183,12 +190,14 @@ test("connects answered out of order each open in a tab, and the one that opened
   const connect = connectTabs(browser);
   // The first press's act is still out when the second's answers with its address; then the first opens nothing.
   let refuseFirst: (error: Error) => void = () => undefined;
+
   const first: Partial<ActPortClient> = {
     [ACT_KIND.GITHUB_CONNECT]: () =>
       new Promise<void>((_resolve, reject) => {
         refuseFirst = reject;
       }),
   };
+
   // SAFETY: the connect wraps the procedures it names, and this test calls the account's GitHub connect alone.
   const firstPort = connect.portClient(first as ActPortClient);
   const firstPress = firstPort[ACT_KIND.GITHUB_CONNECT]().catch(() => undefined);

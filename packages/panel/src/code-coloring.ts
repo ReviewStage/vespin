@@ -43,10 +43,12 @@ export function colorable(language: string, code: string): boolean {
  */
 export function useTypedCodeColoring(language: string, code: string): CodeLines | undefined {
   const asking = colorable(language, code);
+
   const coloring = useQuery({
     ...coloringQueryOptions(language, code),
     enabled: asking,
     placeholderData: keepPreviousData,
   });
+
   return asking ? (coloring.data ?? undefined) : undefined;
 }

@@ -41,28 +41,36 @@ function isWordCode(code: number): boolean {
 function containers(text: string, from: number, end: number, indent: number): [number, number] {
   let depth = Math.floor(indent / 2);
   let at = from;
+
   while (at < end && depth <= MARKDOWN_NESTING_LIMIT) {
     const code = text.charCodeAt(at);
     let next = at;
+
     if (code === 62) {
       next = at + 1;
     } else if (code === 45 || code === 43 || code === 42) {
       if (at + 1 === end || isSpace(text.charCodeAt(at + 1))) next = at + 1;
     } else if (isDigit(code)) {
       let digits = at;
+
       while (digits < end && digits - at <= ORDERED_DIGITS && isDigit(text.charCodeAt(digits))) {
         digits += 1;
       }
+
       const mark = text.charCodeAt(digits);
       const spaced = digits + 1 === end || isSpace(text.charCodeAt(digits + 1));
+
       if (digits - at <= ORDERED_DIGITS && (mark === 46 || mark === 41) && spaced)
         next = digits + 1;
     }
+
     if (next === at) break;
     depth += 1;
     at = next;
+
     while (at < end && isSpace(text.charCodeAt(at))) at += 1;
   }
+
   return [at, depth];
 }
 
@@ -81,27 +89,35 @@ function emphasisAfter(
 ): number {
   let depth = open;
   let at = from;
+
   while (at < end && depth <= limit) {
     const code = text.charCodeAt(at);
+
     if (code !== 42 && code !== 95) {
       at += 1;
       continue;
     }
+
     let run = at;
+
     while (run < end && text.charCodeAt(run) === code) run += 1;
     const before = at === from ? 32 : text.charCodeAt(at - 1);
     const after = run === end ? 32 : text.charCodeAt(run);
+
     if (!isSpace(after) && !isWordCode(before)) depth += run - at;
     else if (!isSpace(before) && !isWordCode(after)) depth = Math.max(0, depth - (run - at));
     at = run;
   }
+
   return depth;
 }
 
 /** How long the run of one character is at a place on a line. */
 function runLength(text: string, at: number, end: number, code: number): number {
   let run = at;
+
   while (run < end && text.charCodeAt(run) === code) run += 1;
+
   return run - at;
 }
 
@@ -113,6 +129,7 @@ function lineHas(
   test: (code: number) => boolean,
 ): boolean {
   for (let at = from; at < end; at += 1) if (test(text.charCodeAt(at))) return true;
+
   return false;
 }
 
@@ -137,27 +154,34 @@ export function markdownTooDeep(text: string): boolean {
   // Note that a fenced block's marks are tallied apart, so the words after it start from what stood open before it.
   let fencedOpen = 0;
   let start = 0;
+
   while (start <= text.length) {
     let end = start;
+
     while (end < text.length && text.charCodeAt(end) !== 10 && text.charCodeAt(end) !== 13) {
       end += 1;
     }
+
     let at = start;
     let indent = 0;
+
     while (at < end && isSpace(text.charCodeAt(at))) {
       indent += text.charCodeAt(at) === 9 ? TAB_COLUMNS : 1;
       at += 1;
     }
+
     if (at === end) {
       open = 0;
       fencedOpen = 0;
     } else {
       const [words, depth] = containers(text, at, end, indent);
+
       if (depth > MARKDOWN_NESTING_LIMIT) return true;
       // Note that a fence inside a quote or a list item opens after its markers, as it does for the parser.
       const code = text.charCodeAt(words);
       const fenced = (code === 96 || code === 126) && (words !== at || indent < TAB_COLUMNS);
       const run = fenced ? runLength(text, words, end, code) : 0;
+
       if (fence !== 0) {
         if (
           code === fence &&
@@ -166,6 +190,7 @@ export function markdownTooDeep(text: string): boolean {
         )
           fence = 0;
         else fencedOpen = emphasisAfter(text, words, end, fencedOpen, FENCE_NESTING_LIMIT);
+
         if (fencedOpen > FENCE_NESTING_LIMIT) return true;
       } else if (run >= 3 && !(code === 96 && lineHas(text, words + run, end, (c) => c === 96))) {
         fence = code;
@@ -173,10 +198,13 @@ export function markdownTooDeep(text: string): boolean {
         fencedOpen = 0;
       } else {
         open = emphasisAfter(text, words, end, open, MARKDOWN_NESTING_LIMIT);
+
         if (open > MARKDOWN_NESTING_LIMIT) return true;
       }
     }
+
     start = text.charCodeAt(end) === 13 && text.charCodeAt(end + 1) === 10 ? end + 2 : end + 1;
   }
+
   return false;
 }

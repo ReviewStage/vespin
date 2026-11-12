@@ -14,6 +14,7 @@ import { accountCall, callAnswered } from "@repo/features";
 import { CLI_EXIT, cliExitOfFault, cliExitOfStatus } from "@repo/features/cli-exit";
 import { hostedRouteOf } from "@repo/features/hosted-routes";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { valueFromJsonText } from "@repo/wire";
 import { Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { answer, CommandFailed, readInput } from "../output.js";
@@ -26,20 +27,12 @@ const API_DEADLINE_MS = 120_000;
 function jsonBody(text: string, source: string): Effect.Effect<string, CommandFailed> {
   try {
     JSON.parse(text);
+
     return Effect.succeed(text);
   } catch {
     return Effect.fail(
       new CommandFailed({ exit: CLI_EXIT.USAGE, message: `${source} is not JSON.` }),
     );
-  }
-}
-
-/** An answer's body as JSON where it is, else as its text. */
-function readable(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
   }
 }
 
@@ -61,23 +54,29 @@ export const apiCommand = Command.make(
   ({ method, path, input }) =>
     Effect.gen(function* () {
       const route = hostedRouteOf(method, path);
+
       if (route === undefined) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
           message: `No ${PRODUCT_NAME} procedure answers ${method.toUpperCase()} ${path}.`,
         });
       }
+
       const body = Option.isSome(input)
         ? yield* Effect.flatMap(readInput(input.value), (text) => jsonBody(text, input.value))
         : undefined;
+
       const { origin, credential } = yield* session;
+
       const sent = yield* accountCall({
         baseUrl: origin,
         credential,
         requestTimeoutMs: API_DEADLINE_MS,
       }).send({ method: route.method, path, body });
+
       if (!callAnswered(sent)) {
         const exit = cliExitOfFault(sent.fault);
+
         return yield* new CommandFailed({
           exit,
           message:
@@ -86,10 +85,12 @@ export const apiCommand = Command.make(
               : `Could not reach ${origin}.`,
         });
       }
+
       const text = yield* Effect.promise(() => sent.response.text());
-      const found = readable(text);
+      const found = valueFromJsonText(text);
       yield* answer({ json: found, lines: [JSON.stringify(found, null, 2)] });
       const exit = cliExitOfStatus(sent.response.status);
+
       if (exit !== CLI_EXIT.OK) {
         return yield* new CommandFailed({
           exit,

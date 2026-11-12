@@ -47,10 +47,13 @@ export function holdsNul(bytes: Uint8Array): boolean {
 /** Why the file may not be shown, or nothing where it may. */
 export function shownFileRefusal(file: ShownFileFacts): ShownFileRefusal | undefined {
   if (isSecretFile(file.path)) return SHOWN_FILE_REFUSAL.SECRET;
+
   if (!file.regular) return SHOWN_FILE_REFUSAL.MISSING;
+
   if (file.bytes > SHOWN_FILE_BOUNDS.MAX_FILE_BYTES || file.binary) {
     return SHOWN_FILE_REFUSAL.NOT_TEXT;
   }
+
   return undefined;
 }
 

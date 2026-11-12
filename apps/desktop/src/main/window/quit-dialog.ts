@@ -17,6 +17,7 @@ export async function askBeforeLeaving(
   question: LeaveQuestion,
 ): Promise<boolean> {
   if (process.platform === "darwin") app.focus({ steal: true });
+
   const options: MessageBoxOptions = {
     type: "warning",
     message: question.message,
@@ -25,9 +26,11 @@ export async function askBeforeLeaving(
     defaultId: question.defaultId,
     cancelId: question.cancelId,
   };
+
   const { response } =
     window !== undefined && window.isVisible()
       ? await dialog.showMessageBox(window, options)
       : await dialog.showMessageBox(options);
+
   return response === LEAVE_ANSWER;
 }

@@ -23,6 +23,7 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -32,6 +33,7 @@ function buttons(container: HTMLElement): HTMLButtonElement[] {
 
 test("a press on a provider's button names that provider", () => {
   const pressed: string[] = [];
+
   const container = mount(
     createElement(SocialSignInCard, {
       title: "Sign in",
@@ -39,6 +41,7 @@ test("a press on a provider's button names that provider", () => {
       onPress: (provider: string) => pressed.push(provider),
     }),
   );
+
   expect(buttons(container).map((each) => each.textContent)).toEqual([
     "Continue with Google",
     "Continue with GitHub",
@@ -55,6 +58,7 @@ test("one opening holds the other choice and is marked busy", () => {
       onPress: () => undefined,
     }),
   );
+
   const [google, github] = buttons(container);
   expect(google?.getAttribute("aria-busy")).toBe("true");
   expect(github?.disabled).toBe(true);
@@ -69,5 +73,6 @@ test("a sign-in that could not start is said in the alert region", () => {
       onPress: () => undefined,
     }),
   );
+
   expect(container.querySelector('[role="alert"]')?.textContent).toBe(SIGN_IN_UNFINISHED);
 });

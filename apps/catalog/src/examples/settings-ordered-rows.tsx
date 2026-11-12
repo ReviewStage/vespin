@@ -1,12 +1,11 @@
+import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
   BUTTON_VARIANT,
   Button,
-  MARK_PROVIDER,
+  HarnessMark,
   MoreButton,
   PROGRESS_TONE,
-  PROVIDER_MARK_SIZE,
   type ProgressTone,
-  ProviderMark,
   SETTINGS_ROW_STATE,
   SettingsOrderedRows,
   SettingsRow,
@@ -17,6 +16,9 @@ import {
   SettingsSection,
   type UsageMeterRow,
 } from "@repo/ui";
+import codexOneX from "../../../../packages/panel/marks/codex-16.png";
+import codexTwoX from "../../../../packages/panel/marks/codex-32.png";
+import codexThreeX from "../../../../packages/panel/marks/codex-48.png";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -45,6 +47,14 @@ const NOW = Date.now();
 const HOUR = 60 * 60_000;
 const DAY = 24 * HOUR;
 
+/** Codex's mark, which each of its plans' rows and its card's header lead with. */
+const CODEX = (
+  <HarnessMark
+    provider={MODEL_PROVIDER.OPENAI}
+    codexArt={{ oneX: codexOneX, twoX: codexTwoX, threeX: codexThreeX }}
+  />
+);
+
 const PLANS: readonly Plan[] = [
   {
     id: "work",
@@ -69,7 +79,7 @@ const PLANS: readonly Plan[] = [
 function PlanRow({ name, state, limited = false, meter, usage }: Plan): React.JSX.Element {
   return (
     <SettingsRow
-      leading={<ProviderMark provider={MARK_PROVIDER.CHATGPT} size={PROVIDER_MARK_SIZE.ROW} />}
+      leading={<SettingsRowMark>{CODEX}</SettingsRowMark>}
       label={name}
       description={
         <>
@@ -92,14 +102,7 @@ function PlanRow({ name, state, limited = false, meter, usage }: Plan): React.JS
 /** The card's header row, as Settings › Agents opens a harness's card. */
 function HeaderRow(): React.JSX.Element {
   return (
-    <SettingsRow
-      leading={
-        <SettingsRowMark>
-          <ProviderMark provider={MARK_PROVIDER.CHATGPT} size={PROVIDER_MARK_SIZE.ROW} />
-        </SettingsRowMark>
-      }
-      label="Codex"
-    >
+    <SettingsRow leading={<SettingsRowMark>{CODEX}</SettingsRowMark>} label="Codex">
       {() => <Button variant={BUTTON_VARIANT.OUTLINE}>Add</Button>}
     </SettingsRow>
   );

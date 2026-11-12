@@ -31,8 +31,6 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
-import { EXPERIMENT } from "@repo/settings";
-import { experimentsOn } from "@repo/settings/testing";
 import { ACTION_RESULT_STATUS, MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement, Fragment, useEffect } from "react";
@@ -41,7 +39,7 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { DRAFT_PLACE, type DraftWriter, EMPTY_DRAFT, useDraftWriter } from "../composer-drafts.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
-import { handHostReads, handState } from "../testing/app-state.js";
+import { handHostReads } from "../testing/app-state.js";
 import { composerEditor, editorBundleLanded, installEditorLayout } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
@@ -115,6 +113,7 @@ const TURN_STATUS_OF = {
 /** The agent's newest turn as its summary carries it at the status given, failed on the word given; none before its first turn, or for one that never started. */
 function turnOf(status: AgentStatus, failure: AgentFailure | undefined): AgentTurn | undefined {
   if (status === AGENT_STATUS.STARTING || failure === AGENT_FAILURE.NOT_STARTED) return undefined;
+
   return {
     id: "3f6b8d2a-1c4e-4a7b-9e5d-0b2c4d6e8f10",
     queuedAt: 1_000,
@@ -177,6 +176,7 @@ function Seeded({
       attachments: files,
     }));
   }, [writer, words, files]);
+
   return null;
 }
 
@@ -225,32 +225,36 @@ async function drawnTab(input: {
   onMessage?: (text: string) => Promise<AgentAgentAnswer>;
   /** Takes each Try again the tab asks of the service, by the words it carries, answering whether the service took it; none answers it refused. */
   onRetry?: (words: string) => Promise<boolean>;
-  /** Whether Bring your own host is on, which Move to stands behind. */
-  ownHost?: boolean;
   /** Takes each copy the tab makes, by its words. */
   copied?: string[];
 }) {
   fakeAppBridge({});
-  if (input.ownHost === true) handState(experimentsOn(EXPERIMENT.BRING_YOUR_OWN_HOST));
+
   if (input.copied !== undefined) fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(input.copied) });
   const turn = turnOf(input.status, input.failure);
+
   const source = agentOf(SOURCE, {
     status: input.status,
     ...(turn === undefined ? undefined : { turnId: turn.id, turn }),
     ...input.source,
   });
+
   const continued: {
     agentId: string;
     note: string | undefined;
     attachments: readonly unknown[] | undefined;
     runsOn?: AgentRunsOnRequest;
   }[] = [];
+
   const opened: ToolTarget[] = [];
   const drafted: { words: string; attachments: readonly AgentAttachment[] }[] = [];
+
   const continueAgent: AgentContinuer = (agentId, note, attachments, runsOn) => {
-    continued.push({ agentId, note, attachments, ...(runsOn === undefined ? {} : { runsOn }) });
+    continued.push({ agentId, note, attachments, ...(runsOn !== undefined && { runsOn }) });
+
     return input.answer?.() ?? Promise.resolve(undefined);
   };
+
   pushedTranscripts(() => [
     {
       messages: [...(input.messages ?? MESSAGES)],
@@ -266,6 +270,7 @@ async function drawnTab(input: {
       ...input.usage,
     },
   ]);
+
   const control = agentsControl({
     agents: [source, ...(input.others ?? [])],
     archived: input.archived ?? [],
@@ -275,10 +280,12 @@ async function drawnTab(input: {
     ...(input.readAgent === undefined ? undefined : { readAgent: input.readAgent }),
     onArchive: (agentId, archived) => {
       input.onArchive?.(agentId, archived);
+
       return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
     },
     onStop: (agentId) => {
       input.onStop?.(agentId);
+
       return Promise.resolve(true);
     },
     onOpenApiKeys: (provider) => input.onOpenApiKeys?.(provider),
@@ -287,6 +294,7 @@ async function drawnTab(input: {
       Promise.resolve(input.message ?? { failure: AGENT_CALL_FAILURE.UNANSWERED }),
     onRetry: (_agentId, words) => input.onRetry?.(words) ?? Promise.resolve(false),
   });
+
   // Note that what the agent published is laid over the transcripts' host, which it hands everything else on to.
   const parts = handHostReads({});
   const container = document.body.appendChild(document.createElement("div"));
@@ -325,6 +333,7 @@ async function drawnTab(input: {
     ),
   );
   await settle();
+
   if (input.repository !== undefined) {
     const { repository } = input;
     act(() =>
@@ -338,10 +347,12 @@ async function drawnTab(input: {
     );
     await settle();
   }
+
   const buttons = (within: ParentNode) =>
     [...within.querySelectorAll("button")].filter(
       (each) => each.textContent === LABEL || each.textContent === AGAIN,
     );
+
   return {
     container,
     continued,
@@ -368,7 +379,9 @@ async function drawnTab(input: {
       const words = container.querySelector<HTMLElement>(
         "[data-ended] :is(.ui-turn-end-words, .ui-failure-note-words)",
       );
+
       const row = words?.closest<HTMLElement>(".ui-turn-end") ?? null;
+
       return row === null ? null : { row, presses: buttons(row) };
     },
   };
@@ -376,6 +389,7 @@ async function drawnTab(input: {
 
 test("an agent's continuations are those its summary names, forks left out, then any the task's list names that it does not yet; with no summary's word, the list's alone", () => {
   const from = { agentId: SOURCE, steps: 4, totalSteps: 4 };
+
   const named = {
     ...agentOf(SOURCE),
     continuedBy: [
@@ -383,6 +397,7 @@ test("an agent's continuations are those its summary names, forks left out, then
       { agentId: FORK, title: "A fork", forked: true, messageId: TURN },
     ],
   };
+
   const listed = [agentOf(NEXT, { from, createdAt: 3 }), agentOf(LATER, { from, createdAt: 2 })];
 
   assert.deepEqual(continuedByIds(named, listed, []), [LATER, NEXT]);
@@ -410,6 +425,7 @@ test("the end line's words and whether it tells of a failure come apart, and nam
     })?.words,
     "Studio went offline. Unpushed changes stay on it.",
   );
+
   for (const status of [AGENT_STATUS.STARTING, AGENT_STATUS.RUNNING, AGENT_STATUS.COMPLETED]) {
     assert.equal(endLineParts(status, undefined), undefined, status);
   }
@@ -422,6 +438,7 @@ test("a failed agent whose host settled its launch unstarted ends on the step it
     launch: AGENT_LAUNCH.STARTING,
     source: { runtime: AGENT_RUNTIME.CODEX },
   });
+
   const line = tab.endLine() ?? assert.fail("the turn ends on its line");
   assert.match(
     line.textContent ?? "",
@@ -435,6 +452,7 @@ const SIGN_IN_REFUSED = {
   status: AGENT_STATUS.FAILED,
   failure: AGENT_FAILURE.OTHER,
   launch: AGENT_LAUNCH.PREPARING,
+  // SAFETY: the reason widened to its type, as an agent's summary carries it.
   launchUnstarted: DEVICE_LAUNCH_UNSTARTED.GITHUB_SIGN_IN as DeviceLaunchUnstarted,
   source: { machine: AGENT_MACHINE.DEVICE, mac: { name: "Studio" } },
 } as const;
@@ -448,19 +466,23 @@ test("a launch its Mac's GitHub sign-in could not start ends on a card naming th
   const copied: string[] = [];
   const sent: string[] = [];
   const retried: string[] = [];
+
   const tab = await drawnTab({
     ...SIGN_IN_REFUSED,
     repository: "acme/web",
     copied,
     onMessage: (text) => {
       sent.push(text);
+
       return new Promise(() => undefined);
     },
     onRetry: (words) => {
       retried.push(words);
+
       return Promise.resolve(true);
     },
   });
+
   const card = signInCard(tab.container) ?? assert.fail("the transcript ends on the card");
   // Note that the card names the repository once what the agent published reaches its query.
   await vi.waitFor(() =>
@@ -488,8 +510,8 @@ test("a launch its Mac's GitHub sign-in could not start ends on a card naming th
   assert.equal(retry.disabled, true, "a Retry the service took is not offered again");
 });
 
-test("the sign-in card's Move to cloud continues the agent in the cloud while Bring your own host is on, and is left out with it off, where an unknown Mac and repository are named as such", async () => {
-  const on = await drawnTab({ ...SIGN_IN_REFUSED, ownHost: true });
+test("the sign-in card's Move to cloud continues the agent in the cloud, and an unknown Mac and repository are named as such", async () => {
+  const on = await drawnTab(SIGN_IN_REFUSED);
   const card = signInCard(on.container) ?? assert.fail("the transcript ends on the card");
   act(() =>
     (on.named(card, "Move to cloud") ?? assert.fail("the card offers Move to cloud")).click(),
@@ -503,22 +525,25 @@ test("the sign-in card's Move to cloud continues the agent in the cloud while Br
       runsOn: { machine: AGENT_MACHINE.VERCEL },
     },
   ]);
+
   for (const root of roots.splice(0)) act(() => root.unmount());
 
-  const off = await drawnTab({ ...SIGN_IN_REFUSED, source: { machine: AGENT_MACHINE.DEVICE } });
-  const offCard = signInCard(off.container) ?? assert.fail("the transcript ends on the card");
-  assert.match(offCard.textContent ?? "", /^This Mac can't reach the repository on GitHub\./);
-  assert.equal(off.named(offCard, "Move to cloud"), undefined);
+  const unnamed = await drawnTab({ ...SIGN_IN_REFUSED, source: { machine: AGENT_MACHINE.DEVICE } });
+
+  const unnamedCard =
+    signInCard(unnamed.container) ?? assert.fail("the transcript ends on the card");
+
+  assert.match(unnamedCard.textContent ?? "", /^This Mac can't reach the repository on GitHub\./);
 });
 
-test("a turn its Mac went offline during ends on Continue in the cloud while Bring your own host is on, which continues the agent in the cloud", async () => {
+test("a turn its Mac went offline during ends on Continue in the cloud, which continues the agent in the cloud", async () => {
   const tab = await drawnTab({
     status: AGENT_STATUS.FAILED,
     failure: AGENT_FAILURE.OTHER,
     hostLost: { host: "Studio" },
     source: { machine: AGENT_MACHINE.DEVICE, mac: { name: "Studio" } },
-    ownHost: true,
   });
+
   const line = tab.endLine() ?? assert.fail("the turn ends on its line");
   assert.match(line.textContent ?? "", /Studio went offline\. Unpushed changes stay on it\./);
 
@@ -538,10 +563,10 @@ test("a turn its Mac went offline during ends on Continue in the cloud while Bri
 
 test("a message its agent's Mac was offline for says so under the box, whose Continue in the cloud carries that message on in the cloud, though a later one failed too", async () => {
   let writer: DraftWriter | undefined;
+
   const tab = await drawnTab({
     status: AGENT_STATUS.COMPLETED,
     source: { machine: AGENT_MACHINE.DEVICE, mac: { name: "Studio" } },
-    ownHost: true,
     seed: {
       words: "Review 2112 for production readiness",
       files: [NOTES],
@@ -560,6 +585,7 @@ test("a message its agent's Mac was offline for says so under the box, whose Con
           : { failure: AGENT_CALL_FAILURE.UNANSWERED },
       ),
   });
+
   act(() => (tab.sendButton() ?? assert.fail("the box offers Send")).click());
   await settle();
   // A later message fails with nothing to mend it, which leaves the note of the first.
@@ -603,6 +629,7 @@ test("a failed turn's end line names no price, while the model menu's foot still
       },
     },
   });
+
   const line = tab.endLine() ?? assert.fail("the turn ends on its line");
   assert.match(line.textContent ?? "", /Failed: /);
   assert.doesNotMatch(line.textContent ?? "", /\$/);
@@ -610,6 +637,7 @@ test("a failed turn's end line names no price, while the model menu's foot still
   const chip =
     tab.container.querySelector<HTMLButtonElement>(".agent-model-chip button") ??
     assert.fail("the box offers its model chip");
+
   act(() => chip.click());
   await settle();
   const menu = tab.container.querySelector(".ui-searchable-menu") ?? assert.fail("the menu opens");
@@ -622,7 +650,9 @@ test("a failed end line's row ends on Continue where only a new agent goes on, a
     endReason: endLineReason(AGENT_FAILURE.SESSION_ENDED),
     failure: AGENT_FAILURE.SESSION_ENDED,
   };
+
   const key = { ...failed, endReason: endLineReason(AGENT_FAILURE.PROVIDER_KEY) };
+
   // Note that a model call that failed leaves the agent taking messages, so a message carries it on.
   const model = {
     ...failed,
@@ -637,6 +667,7 @@ test("a failed end line's row ends on Continue where only a new agent goes on, a
   assert.equal(endLineOffersContinue({ ...failed, continued: false, boxClosed: true }), false);
   assert.equal(endLineOffersContinue({ ...failed, continued: true, boxClosed: true }), true);
   assert.equal(endLineOffersContinue({ ...key, continued: true, boxClosed: false }), false);
+
   for (const status of [AGENT_STATUS.CANCELED, AGENT_STATUS.COMPLETED]) {
     const settled = { ...failed, status, boxClosed: false };
     assert.equal(endLineOffersContinue({ ...settled, continued: true }), false, status);
@@ -669,20 +700,25 @@ test("a failed end line's row ends on Try again where a message carries the agen
 test("a turn failed on its sandbox ends on Try again, which asks the service to send again once however often pressed, writes no line of its own, and stands again where refused", async () => {
   const retried: string[] = [];
   const sent: string[] = [];
+
   const tab = await drawnTab({
     status: AGENT_STATUS.FAILED,
     failure: AGENT_FAILURE.SANDBOX,
     onRetry: (words) => {
       retried.push(words);
+
       return Promise.resolve(false);
     },
     onMessage: (text) => {
       sent.push(text);
+
       return Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED });
     },
   });
+
   const line = tab.endLine() ?? assert.fail("the turn ends on its line");
   assert.equal(tab.buttons(tab.container).length, 0, "no Continue beside it");
+
   const press =
     [...line.querySelectorAll("button")].find((each) => each.textContent === "Try again") ??
     assert.fail("the line offers Try again");
@@ -712,6 +748,7 @@ test("a message to an ended agent says to continue it in a new one, while a Star
 
 test("a failed turn's end line ends on Continue in new agent, which continues the agent on nothing more, held busy while out, and says beside itself why it did not start", async () => {
   let refuse: (failure: Failure | undefined) => void = () => undefined;
+
   const tab = await drawnTab({
     status: AGENT_STATUS.FAILED,
     failure: AGENT_FAILURE.SESSION_ENDED,
@@ -720,6 +757,7 @@ test("a failed turn's end line ends on Continue in new agent, which continues th
         refuse = resolve;
       }),
   });
+
   const line = tab.endLine() ?? assert.fail("the turn ends on its line");
   const [button] = tab.buttons(line);
   assert.ok(button, "the end line offers Continue in new agent");
@@ -746,6 +784,7 @@ test("no Continue stands on a turn failed on a refused API key, on an archived a
     status: AGENT_STATUS.FAILED,
     failure: AGENT_FAILURE.PROVIDER_KEY,
   });
+
   assert.equal(key.buttons(key.container).length, 0, "Connect Claude is the fix");
   assert.match(key.endLine()?.textContent ?? "", /Connect Claude/);
 
@@ -755,13 +794,16 @@ test("no Continue stands on a turn failed on a refused API key, on an archived a
     continues: false,
     onUnarchive: () => undefined,
   });
+
   assert.ok(archived.endLine(), "the turn still ends on its line");
   assert.equal(archived.buttons(archived.container).length, 0);
+
   const archivedRetry = await drawnTab({
     status: AGENT_STATUS.FAILED,
     failure: AGENT_FAILURE.SANDBOX,
     onUnarchive: () => undefined,
   });
+
   assert.equal(archivedRetry.named(archivedRetry.container, "Try again"), undefined);
 
   for (const status of [AGENT_STATUS.CANCELED, AGENT_STATUS.COMPLETED]) {
@@ -772,13 +814,16 @@ test("no Continue stands on a turn failed on a refused API key, on an archived a
 
 test("a turn failed on a refused key names the harness its model runs on, and its press turns to that harness's row", async () => {
   const opened: (ModelProvider | undefined)[] = [];
+
   const tab = await drawnTab({
     status: AGENT_STATUS.FAILED,
     failure: AGENT_FAILURE.PROVIDER_KEY,
     source: { model: "openai/gpt-6-astra" },
     onOpenApiKeys: (provider) => opened.push(provider),
   });
+
   const line = tab.endLine() ?? assert.fail("the turn ends on its line");
+
   const press =
     [...line.querySelectorAll("button")].find((each) => each.textContent === "Connect Codex") ??
     assert.fail("the line offers Connect Codex");
@@ -793,9 +838,11 @@ test("a box closed on an ended agent offers Continue in new agent beside its not
     message: { failure: AGENT_CALL_FAILURE.AGENT_RETIRED },
     seed: { words: "Now add the dark variant.", files: [NOTES] },
   });
+
   const send =
     tab.container.querySelector<HTMLButtonElement>('button[aria-label="Send"]') ??
     assert.fail("the box offers Send");
+
   await act(async () => send.click());
   await settle();
 
@@ -831,6 +878,7 @@ test("a failed agent that never wrote a line still offers Continue on the line t
     failure: AGENT_FAILURE.NOT_STARTED,
     messages: [],
   });
+
   const line = tab.endLine() ?? assert.fail("the empty tab says how it ended");
 
   assert.match(line.textContent ?? "", /^Failed/);
@@ -845,10 +893,13 @@ test("a failed agent whose box closed on its ending offers Continue in the box's
     message: { failure: AGENT_CALL_FAILURE.AGENT_RETIRED },
     seed: { words: "Finish the tests.", files: [] },
   });
+
   assert.equal(tab.buttons(tab.endLine() ?? assert.fail("the turn ends on its line")).length, 1);
+
   const send =
     tab.container.querySelector<HTMLButtonElement>('button[aria-label="Send"]') ??
     assert.fail("the box offers Send");
+
   await act(async () => send.click());
   await settle();
 
@@ -859,6 +910,7 @@ test("a failed agent whose box closed on its ending offers Continue in the box's
 test("words changed in the closed box while its continue is out stay once it lands, since the new agent was handed the earlier ones", async () => {
   let writer: DraftWriter | undefined;
   let land: (failure: Failure | undefined) => void = () => undefined;
+
   const tab = await drawnTab({
     status: AGENT_STATUS.COMPLETED,
     message: { failure: AGENT_CALL_FAILURE.AGENT_RETIRED },
@@ -874,9 +926,11 @@ test("words changed in the closed box while its continue is out stay once it lan
         land = resolve;
       }),
   });
+
   const send =
     tab.container.querySelector<HTMLButtonElement>('button[aria-label="Send"]') ??
     assert.fail("the box offers Send");
+
   await act(async () => send.click());
   await settle();
   const [button] = tab.buttons(tab.note() ?? assert.fail("the box says why it closed"));
@@ -901,6 +955,7 @@ test("words changed in the closed box while its continue is out stay once it lan
   act(() =>
     writer?.update({ kind: DRAFT_PLACE.AGENT, planId: TASK, agentId: SOURCE }, (was) => {
       kept = was.text;
+
       return was;
     }),
   );
@@ -918,6 +973,7 @@ test("once agents continue the agent, its box gives way to Continued in with eac
       agentOf(NEXT, { title: "Fix the tile (2)", from: FROM_SOURCE, createdAt: 2, archivedAt: 4 }),
     ],
   });
+
   const note = tab.continuedNote() ?? assert.fail("the box gives way to its note");
 
   assert.equal(tab.sendButton(), null, "the box takes no message");
@@ -950,6 +1006,7 @@ test("a failed agent already continued is continued again from its end line, car
     others: [agentOf(NEXT, { from: FROM_SOURCE })],
     seed: { words: "Try the other parser.", files: [NOTES] },
   });
+
   const [again] = failed.endRow()?.presses ?? [];
   assert.ok(again, "the end line offers Continue again");
   await act(async () => again.click());
@@ -957,6 +1014,7 @@ test("a failed agent already continued is continued again from its end line, car
   assert.deepEqual(failed.continued, [
     { agentId: SOURCE, note: "Try the other parser.", attachments: [NOTES] },
   ]);
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
   window.localStorage.clear();
@@ -965,6 +1023,7 @@ test("a failed agent already continued is continued again from its end line, car
     const settled = await drawnTab({ status, others: [agentOf(NEXT, { from: FROM_SOURCE })] });
     assert.ok(settled.continuedNote(), status);
     assert.equal(settled.buttons(settled.container).length, 0, status);
+
     for (const root of roots.splice(0)) act(() => root.unmount());
     document.body.innerHTML = "";
   }
@@ -975,6 +1034,7 @@ test("a failed agent already continued is continued again from its end line, car
     others: [agentOf(NEXT, { from: FROM_SOURCE })],
     drafts: true,
   });
+
   const [onLine] = drafting.endRow()?.presses ?? [];
   assert.ok(onLine);
   await act(async () => onLine.click());
@@ -992,6 +1052,7 @@ test("a failed agent already continued is continued again from its end line, car
 
 test("where the tab's place opens drafts, Continue again opens the continue's draft with the words the hidden box held, and the box lets them go", async () => {
   let writer: DraftWriter | undefined;
+
   const tab = await drawnTab({
     status: AGENT_STATUS.FAILED,
     failure: AGENT_FAILURE.SANDBOX,
@@ -1005,6 +1066,7 @@ test("where the tab's place opens drafts, Continue again opens the continue's dr
     },
     drafts: true,
   });
+
   await act(async () => tab.endRow()?.presses[0]?.click());
   await settle();
 
@@ -1013,6 +1075,7 @@ test("where the tab's place opens drafts, Continue again opens the continue's dr
   act(() =>
     writer?.update({ kind: DRAFT_PLACE.AGENT, planId: TASK, agentId: SOURCE }, (was) => {
       kept = was.text;
+
       return was;
     }),
   );
@@ -1021,13 +1084,16 @@ test("where the tab's place opens drafts, Continue again opens the continue's dr
 
 test("past three continuations, the note names the newest two by their chips and +N more opens a menu of the earlier ones, oldest first, each opening its tab; three stand whole", async () => {
   const ids = [NEXT, LATER, FORK, TURN, "d16fbf9e-8c7d-42d0-9abb-be91d07d8e76"];
+
   const continuations = ids.map((id, index) =>
     agentOf(id, { title: `Fix the tile (${index + 2})`, from: FROM_SOURCE, createdAt: index + 2 }),
   );
+
   const tab = await drawnTab({
     status: AGENT_STATUS.COMPLETED,
     others: continuations,
   });
+
   const note = tab.continuedNote() ?? assert.fail("the box gives way to its note");
   assert.deepEqual(
     [...note.querySelectorAll("button[data-actor-ref]")].map((chip) => chip.textContent),
@@ -1043,6 +1109,7 @@ test("past three continuations, the note names the newest two by their chips and
   );
   act(() => items[1]?.click());
   assert.deepEqual(tab.opened, [{ kind: TOOL_TARGET.AGENT, agent: LATER }]);
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 
@@ -1050,6 +1117,7 @@ test("past three continuations, the note names the newest two by their chips and
     status: AGENT_STATUS.COMPLETED,
     others: continuations.slice(0, 3),
   });
+
   const whole = three.continuedNote() ?? assert.fail("the box gives way to its note");
   assert.equal(whole.querySelectorAll("button[data-actor-ref]").length, 3);
   assert.equal(whole.textContent?.includes("more"), false);
@@ -1058,15 +1126,18 @@ test("past three continuations, the note names the newest two by their chips and
 test("the +N more menu names each earlier continuation apart, even where a title already reads as another's told-apart name", async () => {
   const ids = [NEXT, LATER, FORK, TURN, "d16fbf9e-8c7d-42d0-9abb-be91d07d8e76"];
   const titles = ["Fix", "Fix", "Fix · 2", "Later", "Latest"];
+
   const tab = await drawnTab({
     status: AGENT_STATUS.COMPLETED,
     others: ids.map((id, index) =>
       agentOf(id, { title: titles[index] ?? null, from: FROM_SOURCE, createdAt: index + 2 }),
     ),
   });
+
   const note = tab.continuedNote() ?? assert.fail("the box gives way to its note");
   act(() => tab.named(note, "+3 more")?.click());
   const menu = document.querySelector<HTMLElement>('[role="menu"]') ?? assert.fail("a menu opens");
+
   const labels = [...menu.querySelectorAll<HTMLElement>('[role^="menuitem"]')].map(
     (item) => item.textContent,
   );
@@ -1086,14 +1157,17 @@ test("Continued in is named once whatever the continued agent stands as: startin
     { status: AGENT_STATUS.FAILED, failure: AGENT_FAILURE.SANDBOX },
     { status: AGENT_STATUS.FAILED, failure: AGENT_FAILURE.PROVIDER_KEY },
   ];
+
   for (const each of cases) {
     const tab = await drawnTab({
       ...each,
       others: [agentOf(NEXT, { title: "Fix the tile (2)", from: FROM_SOURCE })],
     });
+
     const label = `${each.status} ${each.failure ?? ""}`;
     assert.equal(tab.continuedIn().length, 1, label);
     assert.ok(tab.continuedNote()?.contains(tab.continuedIn()[0] ?? null), label);
+
     for (const root of roots.splice(0)) act(() => root.unmount());
     document.body.innerHTML = "";
   }
@@ -1114,11 +1188,13 @@ test("an agent with only forks keeps its box, since a fork is no continuation", 
 
 test("the continued box's Archive archives the reader's own settled agent at once and asks first while it runs, and its Stop stands only while a turn runs", async () => {
   const archived: { agentId: string; archived: boolean }[] = [];
+
   const settled = await drawnTab({
     status: AGENT_STATUS.COMPLETED,
     others: [agentOf(NEXT, { from: FROM_SOURCE })],
     onArchive: (agentId, each) => archived.push({ agentId, archived: each }),
   });
+
   const quiet = settled.continuedNote() ?? assert.fail("the box gives way to its note");
   assert.equal(settled.named(quiet, "Stop"), undefined, "no turn runs to stop");
   await act(async () => settled.named(quiet, "Archive")?.click());
@@ -1127,24 +1203,30 @@ test("the continued box's Archive archives the reader's own settled agent at onc
 
   archived.length = 0;
   const stopped: string[] = [];
+
   const running = await drawnTab({
     status: AGENT_STATUS.RUNNING,
     others: [agentOf(NEXT, { from: FROM_SOURCE })],
     onArchive: (agentId, each) => archived.push({ agentId, archived: each }),
     onStop: (agentId) => stopped.push(agentId),
   });
+
   const note = running.continuedNote() ?? assert.fail("the box gives way to its note");
   act(() => running.named(note, "Stop")?.click());
   assert.deepEqual(stopped, [SOURCE]);
 
   await act(async () => running.named(note, "Archive")?.click());
   await settle();
+
   const dialog =
     document.querySelector<HTMLElement>('[role="alertdialog"]') ?? assert.fail("it asks first");
+
   assert.deepEqual(archived, [], "nothing is archived before the answer");
+
   const stop = [...dialog.querySelectorAll("button")].find(
     (each) => each.textContent === "Stop agents",
   );
+
   await act(async () => (stop ?? assert.fail("the stop is offered")).click());
   await settle();
   assert.deepEqual(archived, [{ agentId: SOURCE, archived: true }]);
@@ -1153,6 +1235,7 @@ test("the continued box's Archive archives the reader's own settled agent at onc
 test("the continued box's Archive is held busy while a teammate's agent at rest is read again first, then archives it", async () => {
   const archived: { agentId: string; archived: boolean }[] = [];
   const read = Promise.withResolvers<AgentSummary | undefined>();
+
   const tab = await drawnTab({
     status: AGENT_STATUS.COMPLETED,
     source: { startedBy: { userId: "user-teammate", name: "Charles Pan" } },
@@ -1161,6 +1244,7 @@ test("the continued box's Archive is held busy while a teammate's agent at rest 
     others: [agentOf(NEXT, { from: FROM_SOURCE })],
     onArchive: (agentId, each) => archived.push({ agentId, archived: each }),
   });
+
   const note = tab.continuedNote() ?? assert.fail("the box gives way to its note");
   const archive = tab.named(note, "Archive") ?? assert.fail("the note offers Archive");
   assert.equal(archive.getAttribute("aria-busy"), null);
@@ -1181,6 +1265,7 @@ test("an end line beside a Continue, or of an agent already continued, never tel
     failure: AGENT_FAILURE.NOT_STARTED,
     messages: [],
   });
+
   const line = offered.endLine() ?? assert.fail("the empty tab says how it ended");
   assert.match(line.textContent ?? "", /^Failed: the agent never started/);
   assert.doesNotMatch(line.textContent ?? "", /start a new one/);
@@ -1191,6 +1276,7 @@ test("an end line beside a Continue, or of an agent already continued, never tel
     failure: AGENT_FAILURE.SESSION_ENDED,
     others: [agentOf(NEXT, { from: FROM_SOURCE })],
   });
+
   assert.doesNotMatch(continued.endLine()?.textContent ?? "", /start a new one/);
 
   const unstartable = await drawnTab({
@@ -1199,6 +1285,7 @@ test("an end line beside a Continue, or of an agent already continued, never tel
     messages: [],
     continues: false,
   });
+
   assert.match(unstartable.endLine()?.textContent ?? "", /start a new one/);
   assert.equal(unstartable.buttons(unstartable.container).length, 0);
 });
@@ -1211,6 +1298,7 @@ test("where an archive took the box, the transcript's end names the agents that 
     onUnarchive: () => undefined,
     others: [agentOf(NEXT, { title: "Fix the tile (2)", from: FROM_SOURCE })],
   });
+
   const end = failed.endLine() ?? assert.fail("the turn ends on its block");
   assert.equal(failed.continuedNote(), null, "the archived note holds the box");
   assert.equal(failed.continuedIn().length, 1);
@@ -1225,6 +1313,7 @@ test("where an archive took the box, the transcript's end names the agents that 
     onUnarchive: () => undefined,
     source: { continuedBy: [{ agentId: NEXT, title: "Fix the tile (2)", forked: false }] },
   });
+
   assert.equal(
     completed.continuedIn().length,
     1,
@@ -1247,6 +1336,7 @@ test("where the tab's place opens drafts, Continue on a closed box opens the con
     seed: { words: "Now add the dark variant.", files: [NOTES] },
     drafts: true,
   });
+
   const [onLine] = tab.buttons(tab.endLine() ?? assert.fail("the turn ends on its line"));
   assert.ok(onLine, "the end line offers Continue before the box closes");
   await act(async () => onLine.click());
@@ -1255,6 +1345,7 @@ test("where the tab's place opens drafts, Continue on a closed box opens the con
   const send =
     tab.container.querySelector<HTMLButtonElement>('button[aria-label="Send"]') ??
     assert.fail("the box offers Send");
+
   await act(async () => send.click());
   await settle();
   const [button] = tab.buttons(tab.note() ?? assert.fail("the box says why it closed"));
@@ -1278,9 +1369,11 @@ test("a message refused before the transcript has read anything stands as the de
     seed: { words: "Continue testing.", files: [NOTES] },
     messages: [],
   });
+
   const send =
     tab.container.querySelector<HTMLButtonElement>('button[aria-label="Send"]') ??
     assert.fail("the box offers Send");
+
   await act(async () => send.click());
   await settle();
 

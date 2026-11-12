@@ -79,9 +79,11 @@ export function SentToAgent({
   children: ReactNode;
 }): ReactNode {
   const place = useContext(MentionedServersContext);
+
   if (place === undefined) return children;
   const steered = arrived || place.steering?.has(id) === true;
   const handed = steered ? SERVER_HANDED.STEERS : SERVER_HANDED.OPENS;
+
   return <MentionedServers value={{ ...place, handed }}>{children}</MentionedServers>;
 }
 
@@ -106,7 +108,9 @@ const SERVER_SWITCHED = {
 /** What the head says under the server's name: why its server lists no tools, or where its sign-in stands. */
 function serverSub(row: ServerRow): React.JSX.Element | undefined {
   const parts = [row.problem, row.note].filter((part) => part !== undefined);
+
   if (parts.length === 0) return undefined;
+
   return <span>{parts.join(" · ")}</span>;
 }
 
@@ -122,9 +126,12 @@ export function ServerCard({
   const place = useContext(MentionedServersContext);
   const statuses = useIntegrationStatuses();
   const rows = useServerRows(statuses, place?.disabled ?? [], connection);
+
   const row =
     rows.find((each) => each.connection === connection) ?? unreadRow(provider, connection);
+
   const note = serverMentionNote(row, place === undefined ? undefined : { handed: place.handed });
+
   return (
     <HoverCard data-server-card="">
       <HoverCardHead

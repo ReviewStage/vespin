@@ -70,6 +70,7 @@ function onThisComputer(url: URL): boolean {
  */
 export function oauthScopeLines(scope: string): readonly string[] {
   const asked = new Set(scope.split(" ").filter((each) => each !== ""));
+
   return [...asked].map((each) => (knownScope(each) ? OAUTH_SCOPE_WORDS[each] : each));
 }
 
@@ -82,5 +83,6 @@ export function oauthScopeLines(scope: string): readonly string[] {
 export function oauthRedirectDestination(redirectUri: string): string {
   if (!URL.canParse(redirectUri)) return redirectUri;
   const url = new URL(redirectUri);
+
   return onThisComputer(url) ? ON_THIS_COMPUTER : url.host;
 }

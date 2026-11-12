@@ -44,8 +44,10 @@ export function moveAccountLifecycle<Next extends { readonly kind: AccountLifecy
   next: Next,
 ): Next {
   const allowed: readonly AccountLifecycleKind[] = ACCOUNT_LIFECYCLE_MOVES[from.kind];
+
   if (!allowed.includes(next.kind)) {
     throw new Error(`Account lifecycle cannot move from ${from.kind} to ${next.kind}`);
   }
+
   return next;
 }

@@ -28,6 +28,7 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -40,6 +41,7 @@ test("a picture tile is named Enlarge and its words, opens at a press without su
   const opened: string[] = [];
   const reached: string[] = [];
   const submitted: string[] = [];
+
   const container = mount(
     createElement(
       "form",
@@ -66,6 +68,7 @@ test("a picture tile is named Enlarge and its words, opens at a press without su
       }),
     ),
   );
+
   const tiles = Array.from(container.querySelectorAll("button"));
 
   expect(tiles.map((tile) => tile.getAttribute("aria-label"))).toEqual([
@@ -73,6 +76,7 @@ test("a picture tile is named Enlarge and its words, opens at a press without su
     "Enlarge",
   ]);
   expect(tiles[0]?.textContent).toBe("After");
+
   for (const tile of tiles) act(() => tile.click());
   expect(opened).toEqual(["settings", "unnamed"]);
   expect(reached).toEqual(["form"]);
@@ -81,6 +85,7 @@ test("a picture tile is named Enlarge and its words, opens at a press without su
 
 test("a hint wrapping a picture tile hears its press, and the tile still opens", () => {
   const heard: string[] = [];
+
   const container = mount(
     createElement(PictureTile, {
       name: "Before",
@@ -98,6 +103,7 @@ test("a hint wrapping a picture tile hears its press, and the tile still opens",
 test("a tile a pointer's press does not open lets that press pass to its place, and a key's press still opens it", () => {
   const opened: string[] = [];
   const reached: string[] = [];
+
   const container = mount(
     createElement(
       "div",
@@ -110,6 +116,7 @@ test("a tile a pointer's press does not open lets that press pass to its place, 
       }),
     ),
   );
+
   const tile = container.querySelector("button") ?? expect.unreachable("the tile is drawn");
 
   act(() => tile.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 })));

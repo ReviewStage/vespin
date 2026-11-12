@@ -40,6 +40,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -62,6 +63,7 @@ const wakesTheSidebar = <A, E, R>(
       topics.some(([kind, id]) => woken.some((topic) => topic[0] === kind && topic[1] === id)),
       "the sidebar's read is woken by a topic the write notifies",
     );
+
     return fired;
   });
 
@@ -86,6 +88,7 @@ it.layer(getTestDB())("what moves an account's sidebar notifies", (it) => {
           account,
           userId,
         );
+
         assert.ok(made.value.txid !== undefined, "a write that moved a row names its transaction");
         assert.deepEqual(made.txids, [made.value.txid]);
 

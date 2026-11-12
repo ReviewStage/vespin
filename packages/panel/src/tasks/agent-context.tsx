@@ -200,6 +200,7 @@ export function AgentContextRing({
   const popoverId = useId();
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
+
   if (context === undefined) return null;
 
   // Note that we hand focus back to the ring, as a menu returns it to its

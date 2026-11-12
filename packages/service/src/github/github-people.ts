@@ -98,6 +98,7 @@ const linkedMembers = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   if (githubIds.length === 0) return new Map<number, string>();
   const rows = yield* findLinkedMembers({ organizationId, githubIds: githubIds.map(String) });
+
   return new Map(rows.map((row) => [Number(row.githubId), row.userId]));
 });
 
@@ -122,9 +123,12 @@ function personOf(held: GitHubAccount, linked: ReadonlyMap<number, string>): Git
     login: held.login,
     bot: held.bot,
   };
+
   if (held.avatarUrl !== undefined) person.avatarUrl = held.avatarUrl;
   const userId = linked.get(held.id);
+
   if (userId !== undefined) person.userId = userId;
+
   return person;
 }
 
@@ -134,6 +138,7 @@ function changesPeopleOf(
   linked: ReadonlyMap<number, string>,
 ): ChangesPeople {
   const person = (held: GitHubAccount) => personOf(held, linked);
+
   const answer: PeopleBeingNamed = {
     reviewers: people.reviewers.map(({ account: held, state }) => ({ by: person(held), state })),
     comments: people.comments.map(({ account: held, state, excerpt, at }) => ({
@@ -143,7 +148,9 @@ function changesPeopleOf(
       at,
     })),
   };
+
   if (people.author !== undefined) answer.author = person(people.author);
+
   return answer;
 }
 
@@ -160,6 +167,7 @@ export const changesPeople = /* @__PURE__ */ Effect.fn("web/changesPeople")(func
   return yield* Effect.gen(function* () {
     const people = yield* pullRequestPeople(token, agent.repository, number);
     const linked = yield* linkedMembers(agent.organizationId, idsOf(accountsOfPeople(people)));
+
     return changesPeopleOf(people, linked);
   }).pipe(
     Effect.catch((failure) =>
@@ -193,6 +201,7 @@ const overviewNamer = /* @__PURE__ */ Effect.fnUntraced(function* (
       ),
     ),
   );
+
   return (held) => personOf(held, linked);
 });
 
@@ -218,6 +227,7 @@ const stackOwnerOf = (
         ({ agent: each }) =>
           each.organizationId === agent.organizationId && each.archivedAt === null,
       )?.agent;
+
       return owner === undefined ? undefined : { id: owner.id, taskId: owner.taskId };
     }),
     Effect.catch((failure) =>
@@ -266,6 +276,7 @@ export const namedOverviewPullRequest = /* @__PURE__ */ Effect.fn("web/namedOver
   ): Effect.fn.Return<AgentOverviewPullRequest, never, DatabaseServices> {
     const { pullRequest, author, requested, stack, ...rest } = read;
     const accounts = [...(author === undefined ? [] : [author]), ...requested];
+
     const [person, named] = yield* Effect.all(
       [
         overviewNamer(agent.organizationId, accounts, `pull request ${pullRequest.number}`),
@@ -273,6 +284,7 @@ export const namedOverviewPullRequest = /* @__PURE__ */ Effect.fn("web/namedOver
       ],
       { concurrency: "unbounded" },
     );
+
     return {
       number: pullRequest.number,
       title: pullRequest.title,
@@ -316,6 +328,7 @@ function namedReactions(
   person: (held: GitHubAccount) => GitHubPerson,
 ): readonly ReactionGroup[] | undefined {
   if (reactions.length === 0) return undefined;
+
   return reactions.map(({ content, count, accounts, mine }) => ({
     content,
     count,
@@ -340,15 +353,19 @@ export const namedOverviewConversation = /* @__PURE__ */ Effect.fn("web/namedOve
       accountsOfConversation(read),
       `pull request ${number}`,
     );
+
     // Note that a reaction key stands only where something was given, so a read before reactions and one with none read alike.
     const reacted = (given: readonly GitHubReaction[], subject: string | undefined) => {
       const named = namedReactions(given, person);
+
       return {
         ...(named === undefined ? undefined : { reactions: named }),
         ...(subject === undefined ? undefined : { subject }),
       };
     };
+
     const description = namedReactions(read.descriptionReactions, person);
+
     return {
       earlier: read.earlier,
       reviewers: read.reviewers.map(({ account: held, state }) => ({ by: person(held), state })),
@@ -397,11 +414,13 @@ export const namedPendingReview = /* @__PURE__ */ Effect.fn("web/namedPendingRev
   read: ViewerPendingReview | null,
 ): Effect.fn.Return<NamedPendingReview | null, never, DatabaseServices> {
   if (read === null) return null;
+
   const person = yield* overviewNamer(
     agent.organizationId,
     read.drafts.map((draft) => draft.account),
     `the pending review on pull request ${number}`,
   );
+
   return {
     comments: read.comments,
     drafts: read.drafts.map(({ account: held, threadId, ...draft }) => ({
@@ -426,5 +445,6 @@ export const namedReviewOptions = /* @__PURE__ */ Effect.fn("web/namedReviewOpti
     read.users,
     "the repository's assignable users",
   );
+
   return { labels: read.labels, users: read.users.map(person), teams: read.teams };
 });

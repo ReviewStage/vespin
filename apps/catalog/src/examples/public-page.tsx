@@ -149,6 +149,7 @@ const RELEASES = [
 
 function Changelog({ beneath }: { beneath: boolean }): React.JSX.Element {
   const releases = beneath ? RELEASES.slice(0, 1) : RELEASES;
+
   return (
     <PublicPage
       banner={<Banner />}

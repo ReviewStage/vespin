@@ -378,6 +378,7 @@ function restoredOf(writer: DescriptionWriter): number | null {
  */
 function joins(newest: RevisionRow, record: DescriptionSaveRecord, now: Date): boolean {
   const { writer } = record;
+
   return (
     newest.restoredFrom === null &&
     restoredOf(writer) === null &&
@@ -442,6 +443,7 @@ export function recordRevision(
     const now = yield* DateTime.nowAsDate;
     const { writer, after } = record;
     const newest = yield* findNewestRevision(record.taskId);
+
     if (Option.isSome(newest) && joins(newest.value, record, now)) {
       const moved = yield* moveRevisionOn({
         taskId: record.taskId,
@@ -450,9 +452,12 @@ export function recordRevision(
         changes: newest.value.changes + record.changes,
         at: now,
       }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+
       return moved.txid;
     }
+
     const last = Option.isSome(newest) ? newest.value.seq : yield* recordEarlier(record);
+
     const inserted = yield* insertRevision({
       taskId: record.taskId,
       seq: last + 1,
@@ -465,6 +470,7 @@ export function recordRevision(
       at: now,
       restoredFrom: restoredOf(writer),
     }).pipe(Effect.catchTag("NoSuchElementError", Effect.die));
+
     return inserted.txid;
   });
 }
@@ -494,12 +500,16 @@ export function readSectionWriters(
   return Effect.gen(function* () {
     const rows = [...(yield* findSectionRevisions(taskId))].reverse();
     const first = rows[0];
+
     if (first === undefined) return [];
+
     const fromStart =
       rows.length <= DESCRIPTION_REVISION.SECTION_HISTORY &&
       first.actor !== DESCRIPTION_ACTOR.EARLIER;
+
     const base = fromStart ? "" : first.document;
     const written = fromStart ? rows : rows.slice(1);
+
     return sectionWritersOf(
       base,
       written.map((row) => ({ text: row.document, who: writerOf(row), at: row.at.getTime() })),
@@ -520,6 +530,7 @@ export function listRevisions(
 ): Effect.Effect<DescriptionRevisionsAnswer, StoreFailure, DatabaseServices> {
   return Effect.map(findRevisionLines({ userId, taskId, before: before ?? null }), (rows) => {
     const page = rows.slice(0, DESCRIPTION_HISTORY_BOUNDS.PAGE);
+
     const revisions = page.map(
       (row): DescriptionRevisionLine => ({
         seq: row.seq,
@@ -532,7 +543,9 @@ export function listRevisions(
           : { restoredFrom: { seq: row.restoredFrom, at: row.restoredAt.getTime() } }),
       }),
     );
+
     const oldest = page.at(-1);
+
     return rows.length > page.length && oldest !== undefined
       ? { revisions, earlier: oldest.seq }
       : { revisions };
@@ -568,9 +581,12 @@ export function readRevision(
   return Effect.map(findRevisionContents({ userId, taskId, seqs: [seq - 1, seq] }), (rows) => {
     const documentAt = (at: number): DescriptionDocument | null => {
       const row = rows.find((each) => each.seq === at);
+
       return row === undefined ? null : { body: row.document, assumptions: [] };
     };
+
     const document = documentAt(seq);
+
     return document === null
       ? Option.none()
       : Option.some({ seq, document, previous: documentAt(seq - 1) });

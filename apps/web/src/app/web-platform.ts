@@ -47,6 +47,7 @@ export function downloadText(file: {
   link.href = downloaded;
   link.download = file.name;
   link.click();
+
   return Promise.resolve(true);
 }
 
@@ -58,8 +59,10 @@ export function downloadText(file: {
 export function copyPng(png: Promise<string>): Promise<void> {
   const blob = png.then((base64) => {
     const bytes = Uint8Array.from(atob(base64), (each) => each.charCodeAt(0));
+
     return new Blob([bytes], { type: "image/png" });
   });
+
   return navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
 }
 
@@ -88,8 +91,10 @@ export function copyRichText({
 export function openTab(url: string): void {
   if (!isWebAddress(url)) {
     console.warn("A link that is not an http or https address was not opened.");
+
     return;
   }
+
   window.open(url, "_blank", "noopener");
 }
 
@@ -101,8 +106,10 @@ export function openTab(url: string): void {
 function openLink(url: string): void {
   if (isMailAddress(url)) {
     location.assign(url);
+
     return;
   }
+
   openTab(url);
 }
 
@@ -122,8 +129,10 @@ function openAppLinkInTab(link: string): void {
 function openGitHubTab(url: string): void {
   if (!isGitHubAddress(url)) {
     console.warn("A GitHub link whose address is not GitHub's was not opened.");
+
     return;
   }
+
   openTab(url);
 }
 
@@ -146,6 +155,7 @@ function macAppLink(): string {
  */
 function lazySessionReplay(): AppPlatform["applySessionReplay"] {
   let recording: Promise<AppPlatform["applySessionReplay"]> | undefined;
+
   return (bootstrap) => {
     if (recording === undefined && !bootstrap.permitted) return;
     recording ??= import("./web-session-replay").then((module) => module.applyWebSessionReplay);
@@ -166,6 +176,7 @@ function lazySessionReplay(): AppPlatform["applySessionReplay"] {
  */
 export function browserCommandKey(browser: SystemNaming = navigator): CommandKey {
   const system = browser.userAgentData?.platform ?? browser.platform;
+
   return /^(?:mac|iphone|ipad|ipod)/iu.test(system) ? COMMAND_KEY.META : COMMAND_KEY.CONTROL;
 }
 
@@ -178,7 +189,8 @@ export function browserCommandKey(browser: SystemNaming = navigator): CommandKey
  * live view is a socket the page opens itself (`web-browser-live.ts`); and the way to the Mac
  * app is offered only on the `linkPlatform` that can open it, a Mac; a
  * chord's Command is pressed with the browser's own `commandKey`, Ctrl off a
- * Mac; and a maintainer's sign-in as the member ends through Better Auth's
+ * Mac, and one the browser keeps for its own tabs with its `browser` chord
+ * (`browserTab`); and a maintainer's sign-in as the member ends through Better Auth's
  * admin plugin (`auth-client.ts`).
  */
 export function webPlatform(
@@ -191,6 +203,7 @@ export function webPlatform(
 ): AppPlatform {
   const platform: AppPlatform = {
     commandKey,
+    browserTab: true,
     copyText: (words) => navigator.clipboard.writeText(words),
     copyImage: copyPng,
     copyRich: copyRichText,
@@ -211,11 +224,15 @@ export function webPlatform(
     stopImpersonating,
     ...(linkPlatform === LINK_PLATFORM.MAC ? { macAppLink } : undefined),
   };
+
   // A tab with no page leave to tell (a test's) holds nothing back.
   if (shell.unsavedWork !== undefined) platform.unsavedWork = shell.unsavedWork;
+
   if (shell.unsavedDescriptionWords !== undefined)
     platform.unsavedDescriptionWords = shell.unsavedDescriptionWords;
+
   if (shell.askForNotifications !== undefined)
     platform.askForNotifications = shell.askForNotifications;
+
   return platform;
 }

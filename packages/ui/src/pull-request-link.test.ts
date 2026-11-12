@@ -12,6 +12,7 @@ test("a link to a pull request a listed task's agent opened names that task and 
     { taskId: OTHER, pullRequests: [] },
     { taskId: TASK, pullRequests: [{ url: URL, agentId: AGENT }] },
   ];
+
   assert.deepEqual(listedPullRequestOf(`${URL}/#issuecomment-1`, tasks), {
     taskId: TASK,
     agentId: AGENT,

@@ -1,3 +1,4 @@
+import type { WireRecord } from "@repo/wire";
 import { describe, expect, it } from "vitest";
 import { cliInboxAnswer } from "./cli-inbox-answer.js";
 import {
@@ -9,8 +10,10 @@ import {
 
 const MESSAGE_ID = "6b1c7f2e-0d4a-4c1b-9a51-3f0f6d2a7e10";
 
-function asking(ask: Record<string, unknown>): InboxAsking {
+function asking(ask: WireRecord): InboxAsking {
+  // SAFETY: each case's ask carries the fields of an open ask its kind declares.
   const read = { ...ask, status: INBOX_ASK_STATUS.OPEN } as InboxAsking["ask"];
+
   return {
     message: {
       id: MESSAGE_ID,
@@ -27,6 +30,7 @@ const DECIDE = asking({
   type: INBOX_ASK.DECIDE,
   options: [{ label: "Approve" }, { label: "Request changes" }],
 });
+
 const DESIGNS = asking({
   type: INBOX_ASK.DECIDE,
   options: [
@@ -37,6 +41,7 @@ const DESIGNS = asking({
     { label: "A dock" },
   ],
 });
+
 const NAMED_NONE = asking({
   type: INBOX_ASK.DECIDE,
   options: [
@@ -47,7 +52,9 @@ const NAMED_NONE = asking({
     { label: "A dock" },
   ],
 });
+
 const DO = asking({ type: INBOX_ASK.DO, steps: ["Add the secret", "Rerun the job"] });
+
 const FORM = asking({
   type: INBOX_ASK.ANSWER,
   fields: [
@@ -55,6 +62,7 @@ const FORM = asking({
     { type: "number", label: "Replicas" },
   ],
 });
+
 const WORDS = asking({ type: INBOX_ASK.ANSWER });
 
 // Note that the regression these catch is the command line mapped onto an answer the service

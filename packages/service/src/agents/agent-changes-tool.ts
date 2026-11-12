@@ -94,39 +94,52 @@ export function runReadAgentChanges(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const asked = readChangesAsked(input);
+
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(READ_AGENT_CHANGES_REFUSAL.UNREADABLE));
   }
+
   const { agentId, path } = asked.success;
+
   return orStoreRefusal(
     Effect.gen(function* () {
       const found = yield* workspaceAgentOf(call.caller, agentId);
+
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
       const { agent } = found.value;
       const userId = callerUserId(call.caller);
       const published = yield* Effect.result(githubReadRefusal(agentPublished(userId, agent)));
+
       if (Result.isFailure(published)) {
         return agentToolRejected(unreadWords(published.failure.error));
       }
+
       const { repository, branch, pullRequest } = published.success;
+
       if (pullRequest === null || !hasRepository(agent)) {
         return { status: ACTION_RESULT_STATUS.ACCEPTED, repository, branch, pullRequest: null };
       }
+
       const read = yield* Effect.result(
         githubReadRefusal(
           Effect.gen(function* () {
             const { token } = yield* agentPullRequestReach(userId, agent);
+
             return yield* pullRequestChangesRead(token, agent, pullRequest);
           }),
         ),
       );
+
       if (Result.isFailure(read)) return agentToolRejected(unreadWords(read.failure.error));
       const { headSha, files, truncated, reviewers, comments, writtenAs } = read.success;
       const named = path === undefined ? undefined : files.find((file) => file.path === path);
+
       if (path !== undefined && named === undefined) {
         return agentToolRejected(READ_AGENT_CHANGES_REFUSAL.NO_FILE);
       }
+
       const patch = named?.patch == null ? undefined : cutOnLine(named.patch, PATCH_READ_CHARS);
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         repository,

@@ -20,6 +20,7 @@ import { NodeRuntime, NodeServices } from "@effect/platform-node";
 import { CLI_EXIT, type CliExit } from "@repo/features/cli-exit";
 import { CLIENT_PLATFORM, clientHeaders } from "@repo/features/client-identity";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { valueKind } from "@repo/wire";
 import { Console, Effect, Exit, Layer, Stdio } from "effect";
 import { CliConfig, CliError, Command, GlobalFlag } from "effect/cli";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
@@ -79,11 +80,12 @@ const services = Layer.mergeAll(
 );
 
 /** How a run that did not succeed ends, and what it says on the way out. */
-function ended(failure: unknown): Effect.Effect<CliExit> {
-  if (failure instanceof CommandFailed)
-    return Effect.as(Console.error(failure.message), failure.exit);
-  if (CliError.isCliError(failure)) return Effect.succeed(CLI_EXIT.USAGE);
-  const kind = failure instanceof Error ? failure.name : typeof failure;
+function ended(cause: unknown): Effect.Effect<CliExit> {
+  if (cause instanceof CommandFailed) return Effect.as(Console.error(cause.message), cause.exit);
+
+  if (CliError.isCliError(cause)) return Effect.succeed(CLI_EXIT.USAGE);
+  const kind = cause instanceof Error ? cause.name : valueKind(cause);
+
   return Effect.as(
     Console.error(`${PRODUCT_NAME} CLI failed unexpectedly (${kind}).`),
     CLI_EXIT.REFUSED,

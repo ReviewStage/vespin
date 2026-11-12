@@ -24,10 +24,10 @@ import {
   useShortcutTargetOn,
 } from "../shortcut-target.js";
 import { useSteadyDoor } from "../steady-door.js";
-import { useAddRepository } from "../tasks/add-repository.js";
 import type { AgentFork } from "../tasks/fork-model.js";
 import { useMoveToEntry } from "../tasks/move-agent.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
+import type { HeldAction } from "../tasks/terminal-held.js";
 import { TERMINAL_KIND } from "../tasks/terminal-session.js";
 import {
   agentTranscript,
@@ -57,9 +57,7 @@ import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
  * where the platform runs one, and none for an archived agent, whose sandbox
  * takes no shell, which for a local agent opens the Mac's own Terminal in
  * its worktree instead of the relayed tab; Open in Slack, for an agent
- * started from a Slack message, which opens that message; Add repository…,
- * a repository added beside the ones the agent works in, while Several
- * repositories is on (`add-repository.tsx`); Move to ›, the
+ * started from a Slack message, which opens that message; Move to ›, the
  * cloud or another of the member's devices, while the agent may be
  * continued there (`move-agent.tsx`); Archive, asked
  * first while a teammate's agent works (`agent-archive.tsx`), or Unarchive once it is
@@ -105,8 +103,6 @@ export interface AgentMenuDoors {
   onOpenInTask?: (() => void) | undefined;
   /** Opens the Slack message the agent was started from, for an agent started from Slack whose link Slack answered. */
   onOpenInSlack?: (() => void) | undefined;
-  /** Add repository…, a repository added beside the ones the agent works in (`add-repository.tsx`). */
-  addRepository?: MenuAction | undefined;
   /** Move to ›, the places the agent may be continued at (`move-agent.tsx`). */
   moveTo?: MenuEntry | undefined;
   /** Archives the agent, or Unarchive once it is archived (`agent-archive.tsx`). */
@@ -122,7 +118,7 @@ export interface AgentMenuDoors {
  * copies; Rename; Show terminal,
  * Show browser and Run › where a phone offers them, Open in task, for an agent drawn
  * apart from its task, and Open in Slack, for one started from Slack;
- * Add repository…, Move to ›, and Archive or Unarchive; and last and alone, Permanently delete. The copies, Show
+ * Move to ›, and Archive or Unarchive; and last and alone, Permanently delete. The copies, Show
  * terminal, Open in task, and Permanently delete print ⌥⌘C, ⇧⌥⌘C, ⌘J, ⌘O,
  * and ⌘⌫ only where the chord acts on what the menu acts on (`subject`):
  * the chosen tab or a sidebar row. A group with nothing in it is left
@@ -133,7 +129,8 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
   const { links, onCopy, onRename, onOpenTerminal, onOpenLocal } = doors;
   const { onOpenInTask } = doors;
   const { onOpenBrowser, onOpenInSlack, run } = doors;
-  const { addRepository, moveTo, archive, deletion, subject } = doors;
+  const { moveTo, archive, deletion, subject } = doors;
+
   const copies: MenuEntry[] = [
     ...(links ?? []),
     // Note that the two copies share one Copy transcript beside Copy link, so the menu leads with one copy of the agent's words rather than two.
@@ -164,9 +161,11 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
           },
         ]),
   ];
+
   const named: MenuEntry[] = [
     ...(onRename === undefined ? [] : [commandAction(PANEL_COMMAND.RENAME, onRename, subject)]),
   ];
+
   const opened: MenuEntry[] = [
     ...(onOpenTerminal === undefined
       ? []
@@ -185,15 +184,12 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
       ? []
       : [commandAction(PANEL_COMMAND.OPEN_IN_SLACK, onOpenInSlack, subject)]),
   ];
+
   return [
     copies,
     named,
     opened,
-    [
-      ...(addRepository === undefined ? [] : [addRepository]),
-      ...(moveTo === undefined ? [] : [moveTo]),
-      ...(archive === undefined ? [] : [archive]),
-    ],
+    [...(moveTo === undefined ? [] : [moveTo]), ...(archive === undefined ? [] : [archive])],
     // Note that the delete names the agent it deletes, which the menu's own subject stands in for where it is drawn as a tab or a row.
     deletion === undefined ? [] : [subject === undefined ? deletion : { ...deletion, subject }],
   ].filter((group) => group.length > 0);
@@ -209,7 +205,6 @@ export type AgentDoors = Pick<
   | "onOpenBrowser"
   | "run"
   | "onOpenInSlack"
-  | "addRepository"
   | "moveTo"
   | "archive"
   | "deletion"
@@ -236,6 +231,7 @@ export type RowDoors = Omit<AgentDoors, keyof typeof NOT_ON_A_ROW>;
 /** The doors a row offers of those an agent offers, `NOT_ON_A_ROW`'s left out. */
 export function rowDoors(doors: AgentDoors): RowDoors {
   const offered = Object.entries(doors).filter(([door]) => !Object.hasOwn(NOT_ON_A_ROW, door));
+
   return Object.fromEntries(offered);
 }
 
@@ -251,10 +247,11 @@ export interface AgentTerminalDoors {
   readonly onShowShell?: ((agentId: string, terminal: ShownShell) => void) | undefined;
 }
 
-/** A shell the service started, as a Terminal tab names and attaches to it. */
+/** A shell the service started, as a Terminal tab names and attaches to it, and the run action it runs where it is one's. */
 export interface ShownShell {
   readonly id: string;
   readonly title: string;
+  readonly action?: HeldAction | undefined;
 }
 
 /** An agent's actions as a surface draws them: its doors, its rename where it is renamed, and the questions its Archive and its delete ask through, drawn beside them. */
@@ -294,12 +291,15 @@ export function useAgentTerminalDoors(
   const terminals =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.TERMINALS) }).data ===
     true;
+
   const locals =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.LOCAL_TERMINALS) })
       .data === true;
+
   const openTerminal = useOpenTerminal(sidePanel, onShown);
   const openLocal = useOpenTerminalTab(TERMINAL_KIND.LOCAL, sidePanel, onShown);
   const showShell = useShowShellTab(sidePanel, onShown);
+
   return {
     terminals,
     onShowShell: terminals ? showShell : undefined,
@@ -331,12 +331,14 @@ export function useAgentDraftDoors(
   const onFork = useSteadyDoor(
     archived ? undefined : (fork: AgentFork) => onOpenDraft(agents.onForkDraft(fork)),
   );
+
   const onContinue = useSteadyDoor(
     archived
       ? undefined
       : (agentId: string, words: string, attachments: readonly AgentAttachment[]) =>
           onOpenDraft(agents.onContinueDraft(agentId, words, attachments)),
   );
+
   return { onFork, onContinue };
 }
 
@@ -385,20 +387,22 @@ export function useAgentActions(
   const unarchive = useAgentUnarchive(agent.id, agents);
   const deletion = useAgentDelete(agent, agents, { shown, onDeleted });
   const moveTo = useMoveToEntry(agent, agents);
-  const added = useAddRepository(agent, agents, shown);
   // Note that an Unarchive stands while what the agent stands under is archived, and it is not
   // renamed then; an archived agent's tab on its task is renamed as a live one's is.
   const renamable = agents.onUnarchive === undefined;
   const { onOpenTerminal, onOpenLocal } = terminals;
+
   const macTerminal =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.MAC_TERMINAL) }).data ===
     true;
+
   const { mutate: openMacTerminal } = useMutation(pressMutation(ACT_KIND.MAC_TERMINAL_LOCAL_AGENT));
   const thisMac = useThisMac();
   const local = agent.machine === AGENT_MACHINE.DEVICE;
   // Note that a local agent runs in a worktree on its device, which no relayed tab reaches, so its
   // Terminal opens the Mac's own Terminal there, offered only where that device is This Mac.
   const onThisMac = thisMac?.deviceId !== undefined && agent.mac?.deviceId === thisMac.deviceId;
+
   const terminal = local
     ? macTerminal && onThisMac
       ? () => openMacTerminal({ agentId: agent.id })
@@ -406,8 +410,10 @@ export function useAgentActions(
     : onOpenTerminal === undefined
       ? undefined
       : () => onOpenTerminal(agent.id);
+
   const read = agentTranscriptRead(agents.readTranscript, agent.id, label, agent.brief);
   const slackUrl = agent.source?.kind === AGENT_SOURCE.SLACK ? agent.source.url : undefined;
+
   return {
     doors: {
       onCopy: copied(read),
@@ -426,7 +432,6 @@ export function useAgentActions(
           : () => onOpenBrowser(agent.id),
       run: agent.archivedAt !== undefined ? undefined : run,
       onOpenInSlack: slackUrl === undefined ? undefined : () => appPlatform().openWeb(slackUrl),
-      addRepository: added.action,
       moveTo,
       archive: agent.archivedAt === undefined ? archive.action : unarchive,
       deletion: deletion.action,
@@ -437,7 +442,6 @@ export function useAgentActions(
     rename: renamable ? rename : undefined,
     dialog: (
       <>
-        {added.dialog}
         {archive.dialog}
         {deletion.dialog}
       </>

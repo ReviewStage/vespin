@@ -5,6 +5,7 @@ import { findLeaks, type KnownSecret, Sanitizer, SECRET_KIND } from "./sanitize.
 // tracked literal shaped like a provider's credential.
 const JWT = ["eyJhbGciOiJSUzI1NiJ9", "eyJzdWIiOiJ4In0", "c2lnbmF0dXJlLXZhbHVl"].join(".");
 const ISSUED = ["oaiapp", "abc123"].join("_");
+
 const SECRETS: readonly KnownSecret[] = [
   { kind: SECRET_KIND.ACCESS_TOKEN, value: "opaque-access-value" },
   { kind: SECRET_KIND.HOST_ID, value: "urn:uuid:11111111-1111-4111-8111-111111111111" },
@@ -13,10 +14,12 @@ const SECRETS: readonly KnownSecret[] = [
 describe("Sanitizer", () => {
   it("replaces known secrets, credential shapes, addresses and home owners wherever a string holds them", () => {
     const sanitizer = new Sanitizer(SECRETS);
+
     const out = sanitizer.value({
       text: `Bearer opaque-access-value and ${JWT} for ${ISSUED} at dev@example.org in /Users/charles/x`,
       host: "urn:uuid:11111111-1111-4111-8111-111111111111",
     });
+
     expect(out).toEqual({
       text: "Bearer <redacted:access-token> and <redacted:jwt> for <redacted:issued-client-id> at user@example.com in /Users/<user>/x",
       host: "<redacted:ext-agent-host-id>",
@@ -27,6 +30,7 @@ describe("Sanitizer", () => {
     const out = new Sanitizer([]).value({
       account: { email: "x", accountId: "acct-1", planType: "pro" },
     });
+
     expect(out).toEqual({
       account: { email: "<redacted>", accountId: "<redacted>", planType: "pro" },
     });

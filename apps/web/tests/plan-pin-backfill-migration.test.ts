@@ -26,12 +26,15 @@ const foldersBeforeBackfill = Effect.gen(function* () {
   const fileSystem = yield* FileSystem;
   const path = yield* Path;
   const folder = yield* fileSystem.makeTempDirectoryScoped({ prefix: "before-plan-pin-" });
+
   const names = (yield* fileSystem.readDirectory(MIGRATIONS_FOLDER)).filter(
     (name) => name.localeCompare(BACKFILL) < 0,
   );
+
   for (const name of names) {
     yield* fileSystem.copy(path.join(MIGRATIONS_FOLDER, name), path.join(folder, name));
   }
+
   return folder;
 });
 
@@ -63,6 +66,7 @@ it.effect(
         }>`
           select user_id, task_id, pinned_at::text as pinned_at from task_pin
         `;
+
         assert.deepEqual(
           pins.map((pin) => ({
             userId: pin.user_id,

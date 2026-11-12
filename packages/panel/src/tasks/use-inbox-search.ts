@@ -33,6 +33,7 @@ export interface InboxSearch {
 /** Every item the groups hold, the reader's waiting ones first, then the latest changed first. */
 function searchOrder(groups: readonly InboxGroup[], readerId: string | undefined): InboxListed[] {
   const listed = groups.flatMap(({ holder, items }) => items.map((item) => ({ holder, item })));
+
   return listed.toSorted(
     (first, second) =>
       Number(needsYou(second, readerId)) - Number(needsYou(first, readerId)) ||
@@ -44,23 +45,26 @@ function searchOrder(groups: readonly InboxGroup[], readerId: string | undefined
 export function useInboxSearch(tasks: TasksControl, asked: boolean): InboxSearch {
   const { inboxTasks } = useListedInbox(tasks);
   const standing = tasks.listed.tasks;
+
   // Note that nothing is followed while no search asks.
-  const holdings = useMemo(
-    () =>
-      asked
-        ? taskHoldings(
-            inboxTasks.filter((holding) => standing.some((task) => task.id === holding.taskId)),
-          )
-        : NO_HOLDINGS,
-    [asked, inboxTasks, standing],
-  );
+  const holdings = useMemo(() => {
+    if (!asked) return NO_HOLDINGS;
+    const standingIds = new Set(standing.map((task) => task.id));
+
+    return taskHoldings(inboxTasks.filter((holding) => standingIds.has(holding.taskId)));
+  }, [asked, inboxTasks, standing]);
+
   const read = useHolderInboxItems(holdings);
+
   const items = useMemo(() => {
     const groups = asked ? inboxGroups(read.items, { tasks: inboxTasks, listed: standing }) : [];
+
     return searchOrder(groups, tasks.me);
   }, [asked, inboxTasks, standing, read.items, tasks.me]);
+
   // Note that an inbox counts as read only once its push holds what main says it now holds, since an older push kept from the last search may lack the item sought.
   const reading = read.pending;
   const { onRetry } = read;
+
   return { items, reading, failed: read.failed, onRetry };
 }

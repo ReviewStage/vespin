@@ -40,6 +40,7 @@ function dueText(at: number, now: number): string {
 /** When an automation runs next, in a few words; none for one an event fires, whose trigger already says when. */
 export function automationNextText(automation: AutomationSummary, now: number): string | undefined {
   const next = automationNext(automation);
+
   switch (next.kind) {
     case AUTOMATION_NEXT.OFF:
       return "Off";
@@ -59,6 +60,7 @@ export function automationOwnerName(
   mine: boolean,
 ): string {
   if (owner === AUTOMATION_SCOPE.WORKSPACE) return workspaceName ?? "Workspace";
+
   return mine ? "Only you" : "Personal";
 }
 
@@ -76,8 +78,10 @@ export function automationNarrowLine(
   now: number,
 ): string {
   const next = automationNext(automation);
+
   if (next.kind !== AUTOMATION_NEXT.AT) return trigger;
   const sameYear = new Date(next.at).getFullYear() === new Date(now).getFullYear();
   const when = sameYear ? dueText(next.at, now) : `Next ${momentText(next.at)}`;
+
   return `${when} · ${trigger}`;
 }

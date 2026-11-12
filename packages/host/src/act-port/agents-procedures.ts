@@ -42,7 +42,6 @@ type NotedAgentAct =
   | "AGENTS_RENAME"
   | "AGENTS_SERVERS"
   | "AGENTS_PERMISSION_MODE"
-  | "AGENTS_ADD_REPOSITORY"
   | "AGENTS_STOP"
   | "AGENTS_REWIND"
   | "AGENTS_CLEAR"
@@ -59,10 +58,12 @@ function noted<Answer, E>(
 
 export function agentProcedures(dependencies: AgentProceduresDependencies) {
   const { acts, notices } = dependencies;
+
   const notedAgent = <E>(answer: Effect.Effect<AgentAgentAnswer, E>) =>
     noted(answer, (value) => {
       if ("agent" in value) notices.observeAgents([value.agent]);
     });
+
   return {
     [AGENT_ACT_KIND.AGENTS_LIST]: actPort[AGENT_ACT_KIND.AGENTS_LIST].effect(function* ({ input }) {
       return yield* noted(
@@ -124,13 +125,6 @@ export function agentProcedures(dependencies: AgentProceduresDependencies) {
       function* ({ input }) {
         return yield* notedAgent(
           declaredAnswer(AGENT_ACTS.AGENTS_PERMISSION_MODE, acts.AGENTS_PERMISSION_MODE, input),
-        );
-      },
-    ),
-    [AGENT_ACT_KIND.AGENTS_ADD_REPOSITORY]: actPort[AGENT_ACT_KIND.AGENTS_ADD_REPOSITORY].effect(
-      function* ({ input }) {
-        return yield* notedAgent(
-          declaredAnswer(AGENT_ACTS.AGENTS_ADD_REPOSITORY, acts.AGENTS_ADD_REPOSITORY, input),
         );
       },
     ),

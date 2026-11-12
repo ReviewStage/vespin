@@ -38,6 +38,7 @@ async function openPage(address: string): Promise<HTMLElement> {
   await act(async () => {
     await import("../src/integration-connected");
   });
+
   return root;
 }
 
@@ -92,6 +93,7 @@ test("every other ending sends the developer back to try again", async () => {
     INTEGRATION_PROVIDER.NOTION,
     INTEGRATION_LANDING_STATUS.NOT_COMPLETED,
   );
+
   expect(said(notCompleted)).toEqual([
     "Notion was not connected",
     "Connect Notion again from Vespin.",
@@ -101,6 +103,7 @@ test("every other ending sends the developer back to try again", async () => {
     INTEGRATION_PROVIDER.NOTION,
     INTEGRATION_LANDING_STATUS.UNAVAILABLE,
   );
+
   expect(said(unavailable)).toEqual(["Vespin could not reach Notion", "Try again in a moment."]);
 
   const expired = await landing(INTEGRATION_PROVIDER.NOTION, INTEGRATION_LANDING_STATUS.EXPIRED);
@@ -210,17 +213,21 @@ test("of two app tabs, only the one that handed a sign-in off answers its landin
   const second = await appTab(1);
 
   second.landIn(0);
+
   const secondLanding = await landing(
     INTEGRATION_PROVIDER.LINEAR,
     INTEGRATION_LANDING_STATUS.CONNECTED,
   );
+
   await answered(secondLanding);
 
   first.landIn(0);
+
   const firstLanding = await landing(
     INTEGRATION_PROVIDER.NOTION,
     INTEGRATION_LANDING_STATUS.CONNECTED,
   );
+
   await answered(firstLanding);
 });
 

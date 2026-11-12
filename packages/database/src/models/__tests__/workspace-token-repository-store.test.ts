@@ -26,6 +26,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -39,6 +40,7 @@ it.layer(getTestDB())("a workspace's token repositories", (it) => {
           yield* openAccount,
           yield* openAccount,
         ];
+
         const workspace = yield* openWorkspace(dean);
         yield* joinWorkspace(workspace, charles);
 

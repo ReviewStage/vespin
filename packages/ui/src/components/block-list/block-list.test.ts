@@ -30,6 +30,7 @@ function draw(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -43,6 +44,7 @@ test("a list of blocks is named, and holds its blocks in order", () => {
       ),
     }),
   );
+
   const list = container.querySelector('ol[aria-label="Pending"]');
   expect([...(list?.children ?? [])].map((item) => item.textContent)).toEqual([
     "src/invite.ts",

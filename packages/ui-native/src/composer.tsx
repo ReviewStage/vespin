@@ -12,19 +12,18 @@ import {
   useNativeState,
   VStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityIdentifier,
   accessibilityLabel,
-  background,
   buttonStyle,
-  contentShape,
   disabled,
   font,
+  foregroundStyle,
   frame,
   glassEffect,
   lineLimit,
   padding,
-  shapes,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
@@ -47,8 +46,23 @@ const SEND_SIZE = 32;
  */
 const PRESS_FRAME = [
   frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
-  contentShape(shapes.rectangle()),
+  SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
 ];
+
+/** The mark inside the round button, centered in the circle's own size, so the system's circle draws at Send's size around it. */
+const ROUND_MARK = [frame({ width: SEND_SIZE - 12, height: SEND_SIZE - 12 })];
+
+/** The round button's look: the system's prominent circle in the ink, its mark in the ground, inside the composer's press frame. */
+function roundModifiers(colors: ReturnType<typeof useColors>) {
+  return [
+    buttonStyle("borderedProminent"),
+    SwiftModifiers.buttonBorderShape("circle"),
+    tint(colors.TEXT),
+    foregroundStyle(colors.GROUND),
+    ...PRESS_FRAME,
+    hoverEffect(HOVER_EFFECT.HIGHLIGHT),
+  ];
+}
 
 /** How far the field's words stand from the bar's edge above and below, its own room inside the thin edge. */
 const FIELD_INSET = SPACE.TIGHT * 2 - BAR_EDGE;
@@ -108,7 +122,12 @@ type ComposerProps = {
   readonly onDropPictures?: ((uris: readonly string[], unreadable: number) => void) | undefined;
 };
 
-/** The round button at the field's end: Send, filled with the ink once there is something to send and a faint well until then, or, while nothing is typed, Stop while a turn runs, the system's spinner once it is pressed, else the mic. */
+/**
+ * The round button at the field's end, the system's own prominent circle as
+ * Messages draws Send: Send in the ink once there is something to send and
+ * the system's dimmed circle until then, or, while nothing is typed, Stop
+ * while a turn runs, the system's spinner once it is pressed, else the mic.
+ */
 function SendButton({
   empty,
   onSend,
@@ -123,6 +142,7 @@ function SendButton({
   readonly stopping: boolean;
 }) {
   const colors = useColors();
+
   if (empty && onStop !== undefined && stopping) {
     return (
       <ProgressView
@@ -135,29 +155,15 @@ function SendButton({
       />
     );
   }
+
   if (empty && onStop !== undefined) {
     return (
-      <Button
-        onPress={onStop}
-        modifiers={[
-          buttonStyle("plain"),
-          ...PRESS_FRAME,
-          hoverEffect(HOVER_EFFECT.HIGHLIGHT),
-          accessibilityLabel("Stop"),
-        ]}
-      >
-        <Image
-          systemName="stop.fill"
-          size={MARK_SIZE.GLYPH - 2}
-          color={colors.GROUND}
-          modifiers={[
-            frame({ width: SEND_SIZE, height: SEND_SIZE }),
-            background(colors.TEXT, shapes.circle()),
-          ]}
-        />
+      <Button onPress={onStop} modifiers={[...roundModifiers(colors), accessibilityLabel("Stop")]}>
+        <Image systemName="stop.fill" size={MARK_SIZE.GLYPH - 2} modifiers={ROUND_MARK} />
       </Button>
     );
   }
+
   if (empty && onDictate !== undefined) {
     return (
       <Button
@@ -173,26 +179,17 @@ function SendButton({
       </Button>
     );
   }
+
   return (
     <Button
       onPress={() => onSend?.()}
       modifiers={[
-        buttonStyle("plain"),
-        ...PRESS_FRAME,
-        hoverEffect(HOVER_EFFECT.HIGHLIGHT),
+        ...roundModifiers(colors),
         disabled(empty || onSend === undefined),
         accessibilityLabel("Send"),
       ]}
     >
-      <Image
-        systemName="arrow.up"
-        size={MARK_SIZE.GLYPH + 2}
-        color={empty ? colors.TEXT_MUTED : colors.GROUND}
-        modifiers={[
-          frame({ width: SEND_SIZE, height: SEND_SIZE }),
-          background(empty ? colors.CHIP_EDGE : colors.TEXT, shapes.circle()),
-        ]}
-      />
+      <Image systemName="arrow.up" size={MARK_SIZE.GLYPH} modifiers={ROUND_MARK} />
     </Button>
   );
 }
@@ -202,6 +199,7 @@ function AddMenu({ menu }: { readonly menu: ComposerMenu }) {
   const colors = useColors();
   const submenus = menu.submenus ?? [];
   const switches = menu.switches ?? [];
+
   return (
     <Menu
       label={<Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />}
@@ -249,6 +247,7 @@ function ComposerPieces(props: ComposerProps) {
     onStop,
     stopping = false,
   } = props;
+
   const colors = useColors();
   const text = useNativeState(held ?? "");
   const [typed, setTyped] = useState(held ?? "");
@@ -260,21 +259,26 @@ function ComposerPieces(props: ComposerProps) {
     shown.current = held;
     text.set(held);
   }, [held, text]);
+
   const type = (next: string) => {
     shown.current = next;
     setTyped(next);
     onWords?.(next);
   };
+
   const empty = words.trim() === "" && !sendable;
+
   const send =
     onSend === undefined
       ? undefined
       : () => {
           onSend(words.trim());
+
           if (held !== undefined) return;
           text.set("");
           setTyped("");
         };
+
   return (
     <>
       {addMenu !== undefined ? (
@@ -303,7 +307,7 @@ function ComposerPieces(props: ComposerProps) {
           padding({
             vertical: FIELD_INSET,
             trailing: FIELD_TRAILING,
-            ...(addMenu === undefined && onAdd === undefined ? { leading: FIELD_LEADING } : {}),
+            ...(addMenu === undefined && onAdd === undefined && { leading: FIELD_LEADING }),
           }),
           accessibilityIdentifier("composer-field"),
         ]}
@@ -331,6 +335,7 @@ function ComposerPieces(props: ComposerProps) {
  */
 export function Composer(props: ComposerProps) {
   const { onDropPictures } = props;
+
   return (
     <GlassBar
       head={props.head}
@@ -351,11 +356,13 @@ export function ComposerFoot(props: ComposerProps) {
     padding({ all: BAR_EDGE }),
     glassEffect({
       glass: { variant: "regular", interactive: true },
+      // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
       shape: "roundedRectangle",
       cornerRadius: BAR_RADIUS,
     }),
     padding({ horizontal: SPACE.ROW + 2, bottom: SPACE.ROW }),
   ];
+
   if (props.head === undefined) {
     return (
       <HStack spacing={BAR_ROW_SPACING} modifiers={glass}>
@@ -363,6 +370,7 @@ export function ComposerFoot(props: ComposerProps) {
       </HStack>
     );
   }
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>
       <BarHead>{props.head}</BarHead>

@@ -39,9 +39,11 @@ export function holdExits(exiting: (element: Element) => boolean = marked) {
       if (!exiting(this)) return [];
       const exit = new HeldExit();
       exits.push(exit);
+
       return [exit];
     },
   });
+
   return {
     finish: () => {
       for (const exit of exits.splice(0)) exit.finish();

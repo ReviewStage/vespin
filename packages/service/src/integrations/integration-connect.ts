@@ -80,8 +80,11 @@ export class IntegrationConnectFailure extends Data.TaggedError("IntegrationConn
 }> {
   override get message(): string {
     const words: string[] = [`Vercel Connect answered ${this.reason}`];
+
     if (this.code !== undefined) words.push(this.code);
+
     if (this.status !== undefined) words.push(String(this.status));
+
     return words.join(" ");
   }
 }
@@ -151,14 +154,17 @@ function failureOf(cause: unknown): IntegrationConnectFailure {
   if (!(cause instanceof ConnectError)) {
     return new IntegrationConnectFailure({ reason: INTEGRATION_CONNECT_FAILURE.UNAVAILABLE });
   }
+
   const reason =
     cause instanceof UserAuthorizationRequiredError || cause instanceof NoValidTokenError
       ? INTEGRATION_CONNECT_FAILURE.NOT_AUTHORIZED
       : cause instanceof ConnectorInstallationRequiredError
         ? INTEGRATION_CONNECT_FAILURE.NOT_CONFIGURED
         : INTEGRATION_CONNECT_FAILURE.UNAVAILABLE;
+
   const code =
     cause.code !== undefined && CONNECT_CODE_PATTERN.test(cause.code) ? cause.code : undefined;
+
   return new IntegrationConnectFailure({
     reason,
     ...(code !== undefined ? { code } : undefined),
@@ -220,8 +226,10 @@ const ACCOUNT_EMAIL_PATTERN = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)
  */
 export function accountNameLine(candidate: string): string | undefined {
   const name = candidate.trim();
+
   const line =
     ACCOUNT_EMAIL_PATTERN.test(name) && !namesSecret(name) ? name : credentialFreeLine(name);
+
   return line === undefined || line.length > ACCOUNT_NAME_MAX ? undefined : line;
 }
 
@@ -270,12 +278,17 @@ function grantAccountName(response: ConnectTokenResponse): string | undefined {
     ...GRANT_NAME_READS.flatMap((read) => Option.toArray(read(response))),
     ...(response.name !== undefined ? [response.name] : []),
   ];
+
   for (const candidate of candidates) {
     const line = accountNameLine(candidate);
+
     if (line === undefined) continue;
+
     if (line === response.connector.uid || line === response.connector.id) continue;
+
     return line;
   }
+
   return undefined;
 }
 
@@ -311,6 +324,7 @@ export function vercelConnector(
       }).pipe(
         Effect.map((response): IntegrationToken => {
           const accountName = grantAccountName(response);
+
           return {
             token: Redacted.make(response.token),
             expiresAt: response.expiresAt,
@@ -348,6 +362,7 @@ export const revokeIntegrationGrant = /* @__PURE__ */ Effect.fn("web/revokeInteg
     connectSubject,
   }: IntegrationGrantKey): Effect.fn.Return<void, never, IntegrationConnect> {
     const connector = (yield* IntegrationConnect)[provider];
+
     if (!connector.configured) return;
     yield* connector
       .revoke(connectSubject)
@@ -380,7 +395,9 @@ export function revokeIntegrationGrants(
     provider,
     connectSubject: userId,
   }));
+
   const others = grants.filter((grant) => grant.connectSubject !== userId);
+
   return Effect.forEach([...firsts, ...others], revokeIntegrationGrant, { discard: true });
 }
 
@@ -405,6 +422,7 @@ function allowedAccountsOf(value: string): AllowedAccounts {
     .split(",")
     .map((entry) => entry.trim().toLowerCase())
     .filter((entry) => entry !== "");
+
   return {
     domains: entries.filter((entry) => DOMAIN_ENTRY_PATTERN.test(entry)),
     emails: entries.filter((entry) => EMAIL_ENTRY_PATTERN.test(entry)),
@@ -415,9 +433,12 @@ function allowedAccountsOf(value: string): AllowedAccounts {
 function offeredTo(connector: ConnectorService, email: string | undefined): boolean {
   if (!connector.configured) return false;
   const allowed = connector.allowedAccounts;
+
   if (allowed === undefined) return true;
+
   if (email === undefined) return false;
   const address = email.trim().toLowerCase();
+
   return (
     allowed.emails.includes(address) || allowed.domains.some((domain) => address.endsWith(domain))
   );
@@ -441,11 +462,14 @@ export const accountIntegrationConnect = /* @__PURE__ */ Effect.fn("web/accountI
     IntegrationConnect | DatabaseServices
   > {
     const connect = yield* IntegrationConnect;
+
     const restricted = INTEGRATION_PROVIDER_LIST.some(
       (provider) => connect[provider].allowedAccounts !== undefined,
     );
+
     if (!restricted) return connect;
     const email = (yield* readAccountPerson(userId))?.email;
+
     // SAFETY: one entry per provider of INTEGRATION_PROVIDER_LIST, which is every provider.
     return Object.fromEntries(
       INTEGRATION_PROVIDER_LIST.map((provider) => [
@@ -472,10 +496,12 @@ function connectorFromEnvironment(provider: IntegrationProvider) {
     MULTIPLE_ACCOUNTS_VARIABLE,
     ADD_ACCOUNT_PROMPT,
   }: IntegrationDefinition = INTEGRATION[provider];
+
   // A provider granted by the account's own sign-in has no connector to read.
   if (CONNECTOR_VARIABLE === undefined || ALLOWED_ACCOUNTS_VARIABLE === undefined) {
     return Effect.succeed(UNCONFIGURED_CONNECTOR);
   }
+
   return Effect.map(
     Config.all([
       Config.option(Config.String(CONNECTOR_VARIABLE)),
@@ -486,10 +512,13 @@ function connectorFromEnvironment(provider: IntegrationProvider) {
     ]),
     ([connectorRead, allowedRead, multipleRead]): ConnectorService => {
       const connector = text(Option.getOrUndefined(connectorRead));
+
       if (connector === undefined) return UNCONFIGURED_CONNECTOR;
+
       const multipleAccounts =
         MULTIPLE_ACCOUNTS_VARIABLE !== undefined &&
         !Option.exists(multipleRead, (word) => SINGLE_ACCOUNT_WORDS.has(word.trim().toLowerCase()));
+
       const configured: ConnectorService = {
         ...vercelConnector(connector),
         multipleAccounts,
@@ -497,6 +526,7 @@ function connectorFromEnvironment(provider: IntegrationProvider) {
           ? { addAccountPrompt: ADD_ACCOUNT_PROMPT }
           : undefined),
       };
+
       return Option.match(allowedRead, {
         onNone: () => configured,
         onSome: (listed) => ({ ...configured, allowedAccounts: allowedAccountsOf(listed) }),

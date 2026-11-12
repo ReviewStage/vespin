@@ -85,7 +85,7 @@ import { type TabMove, useTabDrag } from "./use-tab-drag.js";
  * held, so a card takes no stop; the pointer resting on it chooses it, and a
  * press picks it, on the press itself where the switcher's chord makes the
  * release a right-click (`pickOnPress`). The still is a picture of the
- * window, so the session recording leaves it out by its class.
+ * window, whose address the session recording masks, so it draws empty there.
  *
  * Its words are text, which the session recording masks with the rest.
  */
@@ -208,6 +208,7 @@ function tabHint(input: {
     input.clipped ? input.label : undefined,
     input.unread ? UNREAD_TAB_NOTE : undefined,
   ].filter((word) => word !== undefined);
+
   return words.length === 0 ? undefined : words.join(" · ");
 }
 
@@ -235,11 +236,14 @@ function reveal(strip: HTMLElement, tab: HTMLElement, glide = true): void {
   const pill = tab.closest<HTMLElement>(".ui-tab") ?? tab;
   const before = pill.previousElementSibling;
   const style = getComputedStyle(strip);
+
   const start =
     before instanceof HTMLElement
       ? before.offsetLeft + before.offsetWidth + (Number.parseFloat(style.columnGap) || 0)
       : Number.parseFloat(style.paddingLeft) || 0;
+
   const end = start + pill.offsetWidth;
+
   if (start < strip.scrollLeft) scrollStrip(strip, start - strip.scrollLeft, glide);
   else if (end > strip.scrollLeft + strip.clientWidth) {
     scrollStrip(strip, end - strip.scrollLeft - strip.clientWidth, glide);
@@ -249,6 +253,7 @@ function reveal(strip: HTMLElement, tab: HTMLElement, glide = true): void {
 /** Focus moved to a tab by the strip's own keys, which bring it into view with the strip's glide. */
 function focusTab(strip: HTMLElement | null, tab: HTMLElement | undefined | null): void {
   tab?.focus({ preventScroll: true });
+
   if (strip !== null && tab !== undefined && tab !== null) reveal(strip, tab);
 }
 
@@ -271,12 +276,14 @@ function movedLine(tab: HTMLElement | undefined, to: number, count: number): str
 /** Where a tab's menu hangs when the keyboard asks for it, or a right-click that names no point: under the tab, from its start. */
 export function tabMenuPlacement(tab: HTMLElement): MenuPlacement {
   const bounds = (tab.closest(".ui-tab") ?? tab).getBoundingClientRect();
+
   return { x: bounds.left, y: bounds.bottom + MENU_DROP, align: MENU_ALIGN.START };
 }
 
 /** The strip's tabs that move, in order: every one but an anchored tab, which leads the strip where it stands. */
 function movableTabs(strip: HTMLElement | null): HTMLElement[] {
   const tabs = [...(strip?.querySelectorAll<HTMLElement>(TAB) ?? [])];
+
   return tabs.filter((tab) => tab.closest(ANCHORED) === null);
 }
 
@@ -307,6 +314,7 @@ export function Tabs({
   children: ReactNode;
 }): React.JSX.Element {
   const strip = useRef<HTMLDivElement | null>(null);
+
   // Note that a key held with a modifier moves no focus, which the roving
   // keys leave alone, because an owner's chords move the tab itself.
   const roving = useRovingKeys<HTMLDivElement>({
@@ -314,6 +322,7 @@ export function Tabs({
     stop: ROVING_STOP.CHOSEN,
     moveTo: (tab) => focusTab(strip.current, tab),
   });
+
   const stripRef = useMemo(() => joinRefs(strip, roving.ref), [roving.ref]);
   // How many tabs the strip draws, which it asks room for at their widest (tabs.css).
   const count = Children.toArray(children).filter(isValidElement).length;
@@ -324,23 +333,28 @@ export function Tabs({
   const revealed = useRef<HTMLElement | null>(null);
   useLayoutEffect(() => {
     const at = closedAt.current;
+
     if (at === undefined || strip.current === null) return;
     closedAt.current = undefined;
     const tabs = [...strip.current.querySelectorAll<HTMLElement>(TAB)];
     const following = strip.current.nextElementSibling;
     const after = following?.matches("button") ? following : following?.querySelector("button");
     const next = tabs[Math.min(at, tabs.length - 1)];
+
     if (next === undefined && after instanceof HTMLElement) after.focus();
     else focusTab(strip.current, next);
   });
   useLayoutEffect(() => {
     const chosen = strip.current?.querySelector<HTMLElement>(`${TAB}[aria-selected="true"]`);
+
     if (strip.current === null || chosen === null || chosen === undefined) return;
+
     if (chosen === revealed.current) return;
     const drawn = revealed.current !== null;
     revealed.current = chosen;
     reveal(strip.current, chosen, drawn);
   });
+
   const move =
     onMove === undefined
       ? undefined
@@ -349,6 +363,7 @@ export function Tabs({
           announce(ANNOUNCE.POLITE, movedLine(tabs[from], to, tabs.length));
           onMove(from, to);
         };
+
   const onPointerDown = useTabDrag(move);
   useImperativeHandle(controls, () => ({
     // The focused tab one place along, drawn there before focus is put back
@@ -357,6 +372,7 @@ export function Tabs({
       const tabs = movableTabs(strip.current);
       const tab = tabs.find((each) => each === document.activeElement);
       const at = tab === undefined ? -1 : tabs.indexOf(tab);
+
       if (tab === undefined || move === undefined || at + by < 0 || at + by >= tabs.length) return;
       flushSync(() => move(at, at + by));
       focusTab(strip.current, tab);
@@ -365,6 +381,7 @@ export function Tabs({
       if (move === undefined) return undefined;
       const tabs = movableTabs(strip.current);
       const at = tabs.indexOf(tab);
+
       return at < 0 ? undefined : { at, count: tabs.length, onMove: move };
     },
   }));
@@ -372,13 +389,18 @@ export function Tabs({
   const keyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const tabs = [...event.currentTarget.querySelectorAll<HTMLElement>(TAB)];
     const at = event.target instanceof HTMLElement ? tabs.indexOf(event.target) : -1;
+
     if (at < 0) return;
+
     if (closesTab(event.key)) {
       // Only a tab that closes hands focus on; one that always stands stays.
       const pill = event.target instanceof HTMLElement ? event.target.closest(".ui-tab") : null;
+
       if (pill?.getAttribute("data-closable") === "true") closedAt.current = at;
+
       return;
     }
+
     roving.onKeyDown(event);
   };
 
@@ -388,15 +410,20 @@ export function Tabs({
   // restarted, and cut short, by every step of a turning wheel.
   const wheel = (event: React.WheelEvent<HTMLDivElement>) => {
     const node = event.currentTarget;
+
     if (!within(node, event.target)) return;
+
     if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+
     if (node.scrollWidth <= node.clientWidth) return;
+
     const unit =
       event.deltaMode === WHEEL_DELTA.LINE
         ? WHEEL_LINE
         : event.deltaMode === WHEEL_DELTA.PAGE
           ? node.clientWidth
           : 1;
+
     scrollStrip(node, event.deltaY * unit, false);
   };
 
@@ -415,6 +442,7 @@ export function Tabs({
       onWheel={wheel}
       onFocus={(event) => {
         roving.onFocus(event);
+
         if (within(event.currentTarget, event.target)) onFocusChange?.(true);
       }}
       onBlur={(event) => {
@@ -514,11 +542,13 @@ export function Tab({
   const said = tabHint({ label, clipped: clipped || !selected, unread });
   const own = useRef<HTMLButtonElement | null>(null);
   const button = tabRef ?? own;
+
   const glyph = (
     <span className="ui-tab-icon relative flex flex-none text-muted-foreground [--ui-glyph-size:var(--ui-control-icon)] [&_svg]:size-control-icon">
       {icon}
     </span>
   );
+
   const tab = (
     <button
       ref={button}
@@ -540,8 +570,10 @@ export function Tab({
         if (onMenu !== undefined && opensMenu(event)) {
           event.preventDefault();
           onMenu(tabMenuPlacement(event.currentTarget), event.currentTarget);
+
           return;
         }
+
         if (onClose === undefined || !closesTab(event.key)) return;
         event.preventDefault();
         onClose();
@@ -579,6 +611,7 @@ export function Tab({
       )}
     </button>
   );
+
   const hung =
     Hint === undefined ? (
       tab
@@ -587,6 +620,7 @@ export function Tab({
         {tab}
       </Hint>
     );
+
   return (
     <div
       className={PILL}
@@ -707,7 +741,7 @@ export function TabCard({
       }}
       onContextMenu={pickOnPress ? (event) => event.preventDefault() : undefined}
     >
-      <div className="ui-tab-card-preview ph-no-capture flex h-[110px] items-center justify-center mb-0.5 border border-solid border-border rounded-ui-6 bg-surface overflow-hidden group-data-[here=true]/card:opacity-55">
+      <div className="ui-tab-card-preview flex h-[110px] items-center justify-center mb-0.5 border border-solid border-border rounded-ui-6 bg-surface overflow-hidden group-data-[here=true]/card:opacity-55">
         {still === undefined ? (
           <span className="ui-tab-card-glyph inline-flex text-muted-foreground [--ui-glyph-size:28px] [&_:is(svg,img)]:size-[28px]">
             {icon}

@@ -37,6 +37,7 @@ function draw(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -128,8 +129,10 @@ test("over its card, a click elsewhere in the card is no press, since the press 
 
 test("its element reaches what focuses it", () => {
   const ref = createRef<HTMLButtonElement>();
+
   const container = draw(
     createElement(CardPress, { onPress: () => undefined, ref, children: "Task" }),
   );
+
   expect(ref.current).toBe(container.querySelector("button"));
 });

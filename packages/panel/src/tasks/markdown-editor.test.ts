@@ -123,6 +123,7 @@ function mounted(markdown: string, options: Partial<MarkdownEditorProps> = {}) {
   );
   const element = container.querySelector<TiptapEditorHTMLElement>(".ProseMirror");
   const editor = element?.editor ?? assert.fail("the editor is running");
+
   return {
     container,
     editor,
@@ -136,8 +137,10 @@ function positionsOf(editor: Editor, words: string): { from: number; to: number 
   let found: { from: number; to: number } | undefined;
   editor.state.doc.descendants((node, pos) => {
     const at = node.isText ? (node.text ?? "").indexOf(words) : -1;
+
     if (found === undefined && at >= 0) found = { from: pos + at, to: pos + at + words.length };
   });
+
   return found ?? assert.fail(`${words} is in the text`);
 }
 
@@ -170,6 +173,7 @@ test("a document with none of the description's options hands a GitHub body back
 
 test("a task item's box in the editor is the shared checkbox the read view draws, named by its item's words, and a press on it ticks that item alone", () => {
   const { container, last } = mounted(BODY);
+
   const box =
     container.querySelector<HTMLElement>(
       '[role="checkbox"][aria-label="A description mounts it"]',
@@ -191,16 +195,20 @@ test("words selected in a document with none of the description's options raise 
   const toolbar =
     container.querySelector<HTMLElement>('[role="toolbar"][aria-label="Formatting"]') ??
     assert.fail("the toolbar stands");
+
   const names = [...toolbar.querySelectorAll("button")].map(
     (each) => each.getAttribute("aria-label") ?? each.textContent ?? "",
   );
+
   assert.ok(
     names.some((name) => name.startsWith("Turn into")),
     "Turn into stands",
   );
+
   for (const name of ["Bold", "Italic", "Strikethrough", "Code", "Link"]) {
     assert.ok(names.includes(name), `${name} stands`);
   }
+
   assert.ok(!names.includes("Comment"), "no Comment stands where the document takes none");
 });
 
@@ -209,6 +217,7 @@ test("a / offers the document's own block in its group, less the blocks the docu
     ownBlocks: [SUGGESTION],
     droppedBlocks: new Set([SLASH_INSERT.DIAGRAM, SLASH_INSERT.TABLE]),
   });
+
   act(() => {
     editor.view.focus();
     editor.view.dispatch(
@@ -283,6 +292,7 @@ test("a body saved with Windows line endings comes back byte for byte untouched,
 /** The editor's root as a reader is told of it: its role, and the list and the row it names. */
 function named(editor: Editor) {
   const root = editor.view.dom;
+
   return {
     role: root.getAttribute("role"),
     multiline: root.getAttribute("aria-multiline"),
@@ -305,6 +315,7 @@ function press(editor: Editor, key: string): void {
 function standing(container: HTMLElement) {
   const list =
     container.querySelector<HTMLElement>('[role="listbox"]') ?? assert.fail("a list stands");
+
   return { list: list.id, active: list.querySelector('[role="option"][aria-selected="true"]')?.id };
 }
 
@@ -366,6 +377,7 @@ test("while the @ list stands over a description's text the text is a combobox n
       },
     },
   });
+
   act(() => {
     editor.view.focus();
     editor.commands.setTextSelection(editor.state.doc.content.size - 1);

@@ -2,7 +2,7 @@
  * video-player.tsx -- a recording played in place of a picture under our
  * own bar, with its Expand, and as the file viewer plays it, both on a
  * short WebM the page records from a canvas as it opens, since the catalog
- * fetches nothing. While it records it says so, and where the browser can
+ * fetches nothing, and waiting on one whose size it never reads. While it records it says so, and where the browser can
  * record no WebM, as a test's window cannot, it says that instead.
  */
 
@@ -15,6 +15,7 @@ import {
   VIDEO_PLAYER_PLACE,
   VideoPlayer,
 } from "@repo/ui";
+import { Predicate } from "effect";
 import { useEffect, useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -33,6 +34,9 @@ const STAND_IN_WORDS = {
   [STAND_IN.UNSUPPORTED]:
     "This browser cannot record a WebM, so there is no stand-in video to play.",
 } as const satisfies Record<(typeof STAND_IN)[keyof typeof STAND_IN], string>;
+
+/** A WebM whose header is cut off before its size, so the player stays on its wait as one still arriving does. */
+const UNREAD_URL = "data:video/webm;base64,GkXfow==";
 
 /** The stand-in's colors, a page with a button sliding across it. */
 const INK = { PAGE: "#f5f5f7", ROW: "#e3e3e8", BUTTON: "#3d5ac8" } as const;
@@ -57,6 +61,7 @@ function recordStandIn(done: (url: string) => void): () => void {
   canvas.width = RECORDING.WIDTH;
   canvas.height = RECORDING.HEIGHT;
   const pen = canvas.getContext("2d");
+
   if (pen === null) return () => undefined;
   const recorder = new MediaRecorder(canvas.captureStream(30), { mimeType: "video/webm" });
   const parts: Blob[] = [];
@@ -65,23 +70,30 @@ function recordStandIn(done: (url: string) => void): () => void {
   recorder.onstop = () => {
     const reader = new FileReader();
     reader.onload = () => {
-      if (!gone && typeof reader.result === "string") done(reader.result);
+      if (!gone && Predicate.isString(reader.result)) done(reader.result);
     };
+
     reader.readAsDataURL(new Blob(parts, { type: "video/webm" }));
   };
+
   let at = 0;
   let frame = 0;
+
   const draw = () => {
     drawFrame(pen, at);
     at += 1;
+
     if (at < RECORDING.FRAMES) frame = requestAnimationFrame(draw);
     else recorder.stop();
   };
+
   recorder.start();
   frame = requestAnimationFrame(draw);
+
   return () => {
     gone = true;
     cancelAnimationFrame(frame);
+
     if (recorder.state !== "inactive") recorder.stop();
   };
 }
@@ -96,24 +108,30 @@ export function useStandIn(): StandIn {
   const [standIn, setStandIn] = useState<StandIn>(() =>
     canRecord() ? STAND_IN.RECORDING : STAND_IN.UNSUPPORTED,
   );
+
   useEffect(() => {
     if (!canRecord()) return undefined;
+
     return recordStandIn((url) => setStandIn({ url }));
   }, []);
+
   return standIn;
 }
 
 function VideoPlayers(): React.JSX.Element {
   const standIn = useStandIn();
   const [expanded, setExpanded] = useState(0);
-  if (typeof standIn === "string") {
+
+  if (Predicate.isString(standIn)) {
     return (
       <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
         {STAND_IN_WORDS[standIn]}
       </Text>
     );
   }
+
   const { url } = standIn;
+
   return (
     <>
       <CatalogSection id="video-player-inline" title="In place of a picture">
@@ -134,6 +152,9 @@ function VideoPlayers(): React.JSX.Element {
           label="A button sliding across a page"
           place={VIDEO_PLAYER_PLACE.VIEWER}
         />
+      </CatalogSection>
+      <CatalogSection id="video-player-loading" title="Still loading">
+        <VideoPlayer dataUrl={UNREAD_URL} label="A recording still arriving" />
       </CatalogSection>
     </>
   );

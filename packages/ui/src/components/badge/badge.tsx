@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import type { CSSProperties, ReactNode } from "react";
 import { cssCustomProperties } from "../../css.js";
 import { ReplayWords } from "../../session-replay-marks.js";
@@ -78,8 +79,10 @@ type Rgb = readonly [number, number, number];
 /** A provider's color as its three channels; none for any spelling but six hex digits. */
 function channelsOf(color: string): Rgb | undefined {
   const hex = SWATCH_COLOR.exec(color.trim())?.[1];
+
   if (hex === undefined) return undefined;
   const channel = (at: number) => Number.parseInt(hex.slice(at, at + 2), 16);
+
   return [channel(0), channel(2), channel(4)];
 }
 
@@ -91,6 +94,7 @@ function lightnessOf([red, green, blue]: Rgb): number {
 /** A color moved toward `toward` (0 or 255) by `by`, from nought to one. */
 function mixed([red, green, blue]: Rgb, toward: number, by: number): Rgb {
   const move = (channel: number) => Math.round(channel + (toward - channel) * by);
+
   return [move(red), move(green), move(blue)];
 }
 
@@ -102,13 +106,17 @@ function hexOf(rgb: Rgb): string {
 /** The fill, edge, and words a filled badge is drawn in, in each appearance; none for a color it cannot paint. */
 function fillColors(color: string): CSSProperties | undefined {
   const rgb = channelsOf(color);
+
   if (rgb === undefined) return undefined;
   const fill = hexOf(rgb);
   const lightness = lightnessOf(rgb);
+
   // Note that the lift is how far toward white the words move for their lightness to reach the bound.
   const lift =
     lightness >= DARK_GROUND_WORDS ? 0 : (DARK_GROUND_WORDS - lightness) / (1 - lightness);
+
   const words = hexOf(mixed(rgb, 255, lift));
+
   return cssCustomProperties({
     "--ui-badge-fill-light": fill,
     "--ui-badge-edge-light": hexOf(mixed(rgb, 0, EDGE_SHADE)),
@@ -167,6 +175,7 @@ export function Badge({
   // Note that the tone's dot stands only where the words stand alone, because a glyph or a swatch already says the state.
   const toneDot = tone !== STATUS_TONE.NEUTRAL && icon == null && swatch === undefined;
   const face = lit ? BADGE_FACE.LIT : filled === undefined ? BADGE_FACE.PLAIN : BADGE_FACE.FILLED;
+
   return (
     <ShadcnBadge
       className={lit && filled !== undefined ? "ui-badge whitespace-nowrap" : "ui-badge"}
@@ -191,7 +200,7 @@ export function Badge({
         data-under={marked ? hideWordsUnder : undefined}
       >
         <ReplayWords masked={replayMasked}>
-          {filled !== undefined && typeof children === "string" ? (
+          {filled !== undefined && Predicate.isString(children) ? (
             <FilledWords>{children}</FilledWords>
           ) : (
             children

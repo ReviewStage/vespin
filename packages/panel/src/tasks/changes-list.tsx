@@ -114,6 +114,7 @@ export const LIST_WORDS = {
 /** Whether the press landed in something taking typing, which keeps its letters. */
 export function typingInto(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
+
   return target.isContentEditable || target.matches("input, textarea, select");
 }
 
@@ -125,22 +126,28 @@ export function typingInto(target: EventTarget | null): boolean {
  */
 function fileKeyOf(event: React.KeyboardEvent, standing: boolean): FilesChangedKey | undefined {
   if (event.defaultPrevented || event.nativeEvent.isComposing) return undefined;
+
   if (typingInto(event.target)) return undefined;
   const key = filesChangedKeyFor(event);
+
   return key === FILES_CHANGED_KEY.LET_GO && !standing ? undefined : key;
 }
 
 /** The path `step` files on from `from` among `paths`, held at either end; the first for a file not among them. */
 function stepped(paths: readonly string[], from: string | undefined, step: number) {
   const at = from === undefined ? -1 : paths.indexOf(from);
+
   if (at === -1) return paths[0];
+
   return paths[Math.min(paths.length - 1, Math.max(0, at + step))];
 }
 
 /** The paths with `path` turned: taken out where it stood among them, put in where it did not. */
 function turned(paths: ReadonlySet<string>, path: string): ReadonlySet<string> {
   const next = new Set(paths);
+
   if (!next.delete(path)) next.add(path);
+
   return next;
 }
 
@@ -151,7 +158,9 @@ function foldedAs(
   collapsed: boolean,
 ): ReadonlyMap<string, boolean> {
   const next = new Map(chosen);
+
   for (const file of files) next.set(file.path, collapsed);
+
   return next;
 }
 
@@ -222,14 +231,18 @@ export function useChangesList(
   const latestTop = useRef(top);
   // The file stood on among those the filter keeps, which the tree marks; set below once the filter is read.
   const standingNow = useRef<string | undefined>(undefined);
+
   const onTopFile = useCallback((path: string) => {
     latestTop.current = path;
+
     if (standingNow.current === undefined) startTransition(() => setTop(path));
   }, []);
+
   const letGo = useCallback(() => {
     setTop(latestTop.current);
     setStanding(undefined);
   }, []);
+
   const [sources, setSources] = useState<ReadonlySet<string>>(new Set());
   const [keysShown, setKeysShown] = useState(false);
   const hideKeys = useCallback(() => setKeysShown(false), []);
@@ -238,6 +251,7 @@ export function useChangesList(
   const kept = useMemo(() => filterFiles(ordered, query), [ordered, query]);
   const paths = useMemo(() => kept.map((file) => file.path), [kept]);
   const viewed = marks?.viewed;
+
   const folds = useMemo(
     () =>
       new Map(
@@ -248,6 +262,7 @@ export function useChangesList(
       ),
     [files, chosen, viewed],
   );
+
   const collapsed = useCallback((path: string) => folds.get(path) === true, [folds]);
   const allCollapsed = kept.length > 0 && kept.every((file) => collapsed(file.path));
   const keptStanding = standing !== undefined && paths.includes(standing) ? standing : undefined;
@@ -256,14 +271,17 @@ export function useChangesList(
 
   // How many times each file's fold was chosen, so a press undone puts back only a fold nothing chose since.
   const foldChoices = useRef(new Map<string, number>());
+
   const choose = useCallback((paths: readonly string[]) => {
     for (const path of paths)
       foldChoices.current.set(path, (foldChoices.current.get(path) ?? 0) + 1);
   }, []);
+
   const latestFolds = useRef(folds);
   latestFolds.current = folds;
   const latestPaths = useRef(paths);
   latestPaths.current = paths;
+
   // Note that the doors a file's header holds stay the same doors across
   // draws, reading the folds and the marks as they stand, so a header the
   // view keeps from its last draw still turns its file as it is now.
@@ -274,21 +292,26 @@ export function useChangesList(
     },
     [choose],
   );
+
   const expand = useCallback(
     (path: string) => {
       if (!latestPaths.current.includes(path)) onQuery("");
+
       if (latestFolds.current.get(path) !== true) return;
       choose([path]);
       setChosen((was) => new Map(was).set(path, false));
     },
     [choose],
   );
+
   // A file marked viewed folds, and one unmarked opens, whatever was chosen for it before, which comes back where GitHub would not take the press.
   const latestMarks = useRef({ marks, chosen });
   latestMarks.current = { marks, chosen };
+
   const markViewed = useCallback(
     (path: string) => {
       const { marks, chosen } = latestMarks.current;
+
       if (marks === undefined) return;
       const before = chosen.get(path);
       const folding = !marks.viewed(path);
@@ -299,35 +322,43 @@ export function useChangesList(
         if (stood || foldChoices.current.get(path) !== choice) return;
         setChosen((was) => {
           const next = new Map(was);
+
           if (before === undefined) next.delete(path);
           else next.set(path, before);
+
           return next;
         });
       });
     },
     [choose],
   );
+
   const asSource = useCallback((path: string) => sources.has(path), [sources]);
   const toggleSource = useCallback((path: string) => setSources((was) => turned(was, path)), []);
   const latestAll = useRef({ kept, allCollapsed });
   latestAll.current = { kept, allCollapsed };
+
   // Note that the door stays the same door across draws, as a header's others do, reading the files kept and their folds as they stand.
   const toggleAll = useCallback(() => {
     const { kept, allCollapsed } = latestAll.current;
     choose(kept.map((file) => file.path));
     setChosen((was) => foldedAs(was, kept, !allCollapsed));
   }, [choose]);
+
   // A file the filter leaves out is asked for, as a chapter's key change asks: the filter is cleared, and the list scrolled to it once it holds it again.
   const [revealing, setRevealing] = useState<string | undefined>(undefined);
+
   const go = useCallback(
     (path: string) => {
       setStanding(path);
+
       if (paths.includes(path)) return door.current?.reveal(path);
       onQuery("");
       setRevealing(path);
     },
     [paths],
   );
+
   useEffect(() => {
     if (revealing === undefined || !paths.includes(revealing)) return;
     setRevealing(undefined);
@@ -339,8 +370,10 @@ export function useChangesList(
     const next = keptStanding === undefined ? path : stepped(paths, path, step);
     go(next ?? path);
   };
+
   const onFile = (run: (path: string) => void) =>
     current === undefined ? undefined : () => run(current);
+
   // What each of the view's keys does as the list stands, none where it has
   // nothing to act on: every key but `?` and ⇧F needs a file to stand on, V
   // the marks read, I a Minimize inline comments to turn, and ⇧F a tree. Note that the record is total over the table, so a key
@@ -368,9 +401,11 @@ export function useChangesList(
       [FILES_CHANGED_KEY.SHOW_SHORTCUTS]: () => setKeysShown(true),
       [FILES_CHANGED_KEY.TOGGLE_TREE]: onToggleTree,
     }) satisfies Record<FilesChangedKey, (() => void) | undefined>;
+
   const onKeyDown = (event: React.KeyboardEvent) => {
     const key = fileKeyOf(event, keptStanding !== undefined);
     const run = key === undefined ? undefined : keyRuns()[key];
+
     if (run === undefined) return;
     // Note that an answered press goes no further, because the window's keymap would run the Inbox's J and K too.
     event.preventDefault();
@@ -413,6 +448,7 @@ const HEAD_WORDS = {
 /** A path as a header names it: its folder, quiet, then its name, each fading out where the row cuts it short. */
 function PathParts({ path }: { path: string }): React.JSX.Element {
   const cut = path.lastIndexOf("/") + 1;
+
   return (
     <>
       {cut === 0 ? null : (
@@ -476,30 +512,40 @@ export function FileHead({
   const [near, setNear] = useState(coarsePointerNow);
   // The header's hinted parts, in order: its fold, its letter, the path it moved from, and its path.
   const parts = useRef<(HTMLElement | null)[]>([]);
+
   const partAt = (at: number) => (element: HTMLElement | null) => {
     parts.current[at] = element;
   };
+
   // Which part brought the hints: the keyboard's focus on one, or the pointer over one.
   const arrived = useRef<{ readonly focused: number; readonly over: number }>({
     focused: -1,
     over: -1,
   });
+
   useLayoutEffect(() => {
     if (!near) return;
     const { focused, over } = arrived.current;
+
     const focusable = (at: number) => {
       const part = parts.current[at];
+
       return part?.matches("button") === true ? part : part?.querySelector("button");
     };
+
     if (focused !== -1) focusable(focused)?.focus();
+
     // Note that the part the pointer is already on is told so again, because the one drawn in its place has heard no arrival.
     if (over !== -1) (focusable(over) ?? parts.current[over])?.dispatchEvent(pointerOver());
   }, [near]);
+
   const partOf = (target: EventTarget) =>
     target instanceof Node
       ? parts.current.findIndex((part) => part?.contains(target) === true)
       : -1;
+
   const label = collapsed ? HEAD_WORDS.EXPAND : HEAD_WORDS.COLLAPSE;
+
   const hinted = (
     hint: string,
     part: ComponentProps<typeof Tooltip>["children"],
@@ -512,6 +558,7 @@ export function FileHead({
     ) : (
       part
     );
+
   const fold = (
     <IconButton
       ref={partAt(0)}
@@ -529,6 +576,7 @@ export function FileHead({
       onClick={(event) => (event.altKey ? onToggleAll() : onToggle())}
     />
   );
+
   const letter = (
     <span
       ref={partAt(1)}
@@ -538,6 +586,7 @@ export function FileHead({
       {STATUS_LETTER[file.status]}
     </span>
   );
+
   const pathCopy = (path: string, at: number, words: string, hint: string, moved: boolean) => (
     <span
       ref={partAt(at)}
@@ -554,6 +603,7 @@ export function FileHead({
       )}
     </span>
   );
+
   return (
     <div
       className="diff-list-head group/head cursor-default bg-surface font-sans text-foreground"

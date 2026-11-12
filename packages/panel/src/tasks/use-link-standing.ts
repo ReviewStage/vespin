@@ -86,8 +86,10 @@ export function openerOf(summary: {
   readonly authorBot?: boolean;
 }): GitHubPerson | undefined {
   const { author, authorAvatarUrl, authorBot } = summary;
+
   if (author === undefined) return undefined;
   const person = { login: author, bot: authorBot ?? author.endsWith(BOT_LOGIN_SUFFIX) };
+
   return authorAvatarUrl === undefined ? person : { ...person, avatarUrl: authorAvatarUrl };
 }
 
@@ -121,9 +123,11 @@ function whenOf(pullRequest: GitHubPullRequestSummary): StandingPullRequest["whe
   if (pullRequest.state === PULL_REQUEST_STATE.MERGED && pullRequest.mergedAt !== undefined) {
     return { moment: PULL_REQUEST_MOMENT.MERGED, at: pullRequest.mergedAt };
   }
+
   if (pullRequest.state === PULL_REQUEST_STATE.CLOSED && pullRequest.closedAt !== undefined) {
     return { moment: PULL_REQUEST_MOMENT.CLOSED, at: pullRequest.closedAt };
   }
+
   return pullRequest.openedAt === undefined
     ? undefined
     : { moment: PULL_REQUEST_MOMENT.OPENED, at: pullRequest.openedAt };
@@ -179,8 +183,10 @@ interface Asked {
 /** What an address asks GitHub for, where it is a pull request's or a GitHub issue's page. */
 function askedOf(address: string): Asked | undefined {
   const pullRequest = pullRequestAddressOf(address);
+
   if (pullRequest !== undefined) return { page: GITHUB_PAGE.PULL_REQUEST, ...pullRequest };
   const issue = issueAddressOf(address);
+
   return issue === undefined ? undefined : { page: GITHUB_PAGE.ISSUE, ...issue };
 }
 
@@ -188,6 +194,7 @@ function askedOf(address: string): Asked | undefined {
 function githubAddressOf(mention: Mention): string | undefined {
   // Note that a well-known site's page names no provider to ask.
   if (mention.kind !== MENTION_KIND.LINK || !("provider" in mention)) return undefined;
+
   return mention.provider === INTEGRATION_PROVIDER.GITHUB ? mention.url : undefined;
 }
 
@@ -199,8 +206,10 @@ function keyOf(asked: Asked): string {
 /** What a chip draws of the page a link names, from what GitHub holds of it as the host last read it; none where GitHub holds no such page. */
 function standingOf(asked: Asked, held: AppLinkStanding): LinkStanding | undefined {
   const key = keyOf(asked);
+
   if ("issue" in held) {
     const { issue } = held;
+
     return issue === null
       ? undefined
       : {
@@ -212,7 +221,9 @@ function standingOf(asked: Asked, held: AppLinkStanding): LinkStanding | undefin
           opener: openerOf(issue),
         };
   }
+
   const { pullRequest } = held;
+
   return pullRequest === null
     ? undefined
     : {
@@ -255,10 +266,12 @@ function workspaceOf(
   namedId: string | undefined,
 ): Workspace | undefined {
   const workspaces = planning?.workspaces ?? [];
+
   const taskWorkspaceId =
     taskId === undefined
       ? undefined
       : planning?.tasks.find((task) => task.id === taskId)?.workspaceId;
+
   return (
     workspaces.find((each) => each.id === taskWorkspaceId) ??
     workspaces.find((each) => each.id === namedId)
@@ -289,6 +302,7 @@ export function useNumberedTaskId(
   number: number | undefined,
 ): string | undefined {
   const planning = useWorkspacePlaces();
+
   return number === undefined ? undefined : numberedTaskIdIn(planning, { workspace, number });
 }
 
@@ -299,7 +313,9 @@ function numberedTaskIdIn(
 ): string | undefined {
   if (planning === undefined) return undefined;
   const named = workspaceOfSlug(planning.workspaces, workspace);
+
   if (named === undefined) return undefined;
+
   return planning.tasks.find((task) => task.workspaceId === named.id && task.number === number)?.id;
 }
 
@@ -311,6 +327,7 @@ export function numberedTaskIdNow(client: QueryClient): NumberedTaskIdOf {
 /** How the id of the task a link names by its number is found among the tasks the window lists (`useNumberedTaskId`), for words pasted. */
 export function useNumberedTaskIdOf(): NumberedTaskIdOf {
   const planning = useWorkspacePlaces();
+
   return (task) => numberedTaskIdIn(planning, task);
 }
 
@@ -336,14 +353,17 @@ function numberedPlaceIn(
 ): LinkDestination {
   if (!NUMBERED_PLACES.has(place.kind) || !("planId" in place)) return place;
   const task = planning?.tasks.find((each) => each.id === place.planId);
+
   if (planning === undefined || task?.number === undefined) return place;
   const home = workspaceOfSlug(planning.workspaces, workspace);
+
   return home?.id === task.workspaceId ? withTaskId(place, taskLinkStep(task)) : place;
 }
 
 /** How a place's link is written by its task's number where the window lists one (`numberedPlaceIn`), as Copy link writes it. */
 export function useNumberedPlace(): (place: LinkDestination, workspace: string) => LinkDestination {
   const planning = useWorkspacePlaces();
+
   return (place, workspace) => numberedPlaceIn(planning, place, workspace);
 }
 
@@ -364,15 +384,18 @@ function useStandingAt(
   address: string | undefined,
 ): LinkStanding | undefined {
   const asked = address === undefined ? undefined : askedOf(address);
+
   // Note that a standing stands only for the workspace and the connection it was read through, so a disconnect or another workspace holds none.
   const link =
     asked !== undefined && address !== undefined && connectedFor(workspace)
       ? { workspaceId: workspace.id, address }
       : undefined;
+
   const { data: rows } = useQuery(linkStandingQuery(link));
   const page = asked?.page;
   const repository = asked?.repository;
   const number = asked?.number;
+
   return useMemo(
     () =>
       page === undefined || repository === undefined || number === undefined || rows === undefined
@@ -385,6 +408,7 @@ function useStandingAt(
 /** What GitHub holds of the page a link mention names, through the workspace `where` stands in (`useStandingAt`). */
 export function useLinkStanding(mention: Mention, where: ChipWhere): LinkStanding | undefined {
   const workspace = wordsWorkspace(useWorkspacePlaces(), where, useContext(WordsWorkspaceContext));
+
   return useStandingAt(workspace, githubAddressOf(mention));
 }
 
@@ -394,5 +418,6 @@ export function usePlaceStanding(
   address: string | undefined,
 ): LinkStanding | undefined {
   const workspace = workspaceOf(useWorkspacePlaces(), place.taskId ?? undefined, place.workspaceId);
+
   return useStandingAt(workspace, address);
 }

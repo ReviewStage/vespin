@@ -31,9 +31,11 @@ const encodeRecord = Schema.encodeSync(Schema.fromJsonString(KeepAwakeRecordSche
 export const readKeepAwake = Effect.fnUntraced(function* (stateRoot: string) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+
   const text = yield* fileSystem
     .readFileString(path.join(stateRoot, KEEP_AWAKE_FILE))
     .pipe(Effect.orElseSucceed(() => ""));
+
   return Option.match(decodeRecord(text), {
     onNone: () => KEEP_AWAKE_DEFAULT,
     onSome: ({ keepAwake }): KeepAwake => (isKeepAwake(keepAwake) ? keepAwake : KEEP_AWAKE_DEFAULT),
@@ -49,9 +51,11 @@ export const readKeepAwake = Effect.fnUntraced(function* (stateRoot: string) {
 export const handKeepAwake = Effect.fnUntraced(function* (stateRoot: string, choice: KeepAwake) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+
   if (!(yield* fileSystem.exists(stateRoot))) return;
   const file = path.join(stateRoot, KEEP_AWAKE_FILE);
   const kept = yield* fileSystem.readFileString(file).pipe(Effect.orElseSucceed(() => ""));
+
   if (Option.exists(decodeRecord(kept), (record) => record.keepAwake === choice)) return;
   const written = `${file}.writing`;
   yield* fileSystem.writeFileString(written, `${encodeRecord({ keepAwake: choice })}\n`);

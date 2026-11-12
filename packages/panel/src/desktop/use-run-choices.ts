@@ -65,26 +65,34 @@ export function useRunChoices(input: {
   // Once a word is typed the service finds the agents it names, however many the repository holds.
   const asked = words.trim();
   const searching = wantsAgents && workspaceId !== undefined && asked !== "";
+
   const search = useQuery({
     ...workspaceAgentSearchQueryOptions(workspaceId, asked, {
       repository: repository ?? undefined,
     }),
     enabled: searching,
   });
+
   const searchAgain = search.refetch;
   // Note that nothing a search found stands while it is asked again, nor another repository's while this one's is out.
   const answer = searching && !search.isFetching ? search : undefined;
+
   const found =
     answer?.data !== undefined && !("failure" in answer.data) ? answer.data.agents : undefined;
+
   const searchFailed =
     answer !== undefined &&
     (answer.isError || (answer.data !== undefined && "failure" in answer.data));
+
   const listFailed = agents !== undefined && "failed" in agents;
+
   const retryAgents = useCallback(() => {
     // Note that the newest are the task list's, so where it failed the list's own Try again reads it.
     if (listFailed) refreshTasks();
+
     if (searching) void searchAgain();
   }, [refreshTasks, listFailed, searching, searchAgain]);
+
   return {
     models: offered.data?.models,
     modelsFailed: offered.isError,

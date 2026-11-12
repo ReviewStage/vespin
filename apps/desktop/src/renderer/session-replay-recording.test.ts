@@ -32,6 +32,7 @@ Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
  * Defined before the recorder starts, which is when it finds the accessor.
  */
 const adoptedSheets = new WeakMap<Document, readonly CSSStyleSheet[]>();
+
 Object.defineProperty(Document.prototype, "adoptedStyleSheets", {
   configurable: true,
   get(this: Document) {
@@ -49,8 +50,10 @@ const requests = vi.hoisted(() => {
   const made: string[] = [];
   globalThis.fetch = async (url) => {
     made.push(String(url));
+
     return new Response("{}", { status: 200 });
   };
+
   return made;
 });
 
@@ -125,6 +128,7 @@ function drawPage(): void {
 /** What `@repo/ui` draws over values a recording must not carry: a list picking a workspace, one picking tasks, and a file picker. */
 function Controls(): React.JSX.Element {
   const picker = useFilePicker({ onFiles: () => undefined });
+
   return createElement(
     "div",
     null,
@@ -166,6 +170,7 @@ async function useControls(): Promise<void> {
     document.querySelector<HTMLElement>('[role="checkbox"]')?.click();
   });
   const picker = document.querySelector<HTMLInputElement>('input[type="file"]');
+
   if (!picker) return;
   // The system's picker is another process: the input holds what it handed over, as a browser shows a file's path.
   Object.defineProperty(picker, "value", {
@@ -199,6 +204,7 @@ function usePage(): void {
   button?.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
   button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   const input = document.querySelector("input");
+
   if (!input) return;
   input.value = "typed-secret, again";
   input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -211,13 +217,17 @@ function usePage(): void {
  */
 function opened(value: WireValue): WireValue {
   const asText = text(value);
+
   if (asText !== undefined) {
     return asText.startsWith(GZIP_MAGIC)
       ? valueFromJsonText(gunzipSync(Buffer.from(asText, "latin1")).toString("utf8"))
       : value;
   }
+
   if (Array.isArray(value)) return value.map(opened);
+
   if (!isRecord(value)) return value;
+
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, opened(entry)]));
 }
 
@@ -262,16 +272,19 @@ test("the recorder loads before anything records, a stop while it loads holds, a
   await vi.advanceTimersByTimeAsync(10_000);
   const snapshots = jsonRoundTrip(sent.filter((event) => event.event === "$snapshot"));
   const recording = JSON.stringify(snapshots === undefined ? undefined : opened(snapshots));
+
   // The page was recorded: its elements are there, by tag.
   for (const tag of ["h1", "a", "button", "input", "div"]) {
     assert.ok(recording.includes(`"tagName":"${tag}"`), tag);
   }
+
   // A stylesheet's address and an icon's symbol are layout, not words, so the replay can still lay out.
   assert.ok(recording.includes("styles.css"), "the stylesheet's address");
   assert.ok(recording.includes("#file-icon-ts"), "the icon's symbol");
   // So is a sheet of the panel's own, adopted: the recorder sends it where this test reads it,
   // so a withheld sheet's rules would show below if the recorder ever sent them out of reach.
   assert.ok(recording.includes("own-sheet-rule"), "the panel's own adopted sheet");
+
   // And none of its words, in a text node, an attribute, a link's address, an input's value, or
   // an editor's words and chips (the agent's message box, `tasks/composer-field.tsx`), nor an id
   // or a repository's name an attribute carries, a picked file's name, an option's value as it
@@ -311,9 +324,11 @@ test("a signed-out run records nothing, a sign-in records under the person it na
   await vi.advanceTimersByTimeAsync(10_000);
   assert.equal(posthog.sessionRecordingStarted(), true);
   assert.equal(posthog.get_distinct_id(), "user-2");
+
   const identify = sent.findLast(
     (event) => event.event === "$identify" && event.properties.distinct_id === "user-2",
   );
+
   assert.deepEqual(identify?.$set, {
     name: "Ada Lovelace",
     email: "ada@app.test",

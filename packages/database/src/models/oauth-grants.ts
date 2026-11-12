@@ -195,6 +195,7 @@ export function listOAuthGrants(
     const tokenOnly = yield* findTokenOnlyClients({ userId, clients: clients.tokenOnly });
     const refreshes = yield* findLastRefreshes(userId);
     const refreshedAt = new Map(refreshes.map((each) => [each.clientId, each.lastRefreshedAt]));
+
     return [...consented, ...tokenOnly]
       .toSorted((a, b) => (b.allowedAt?.getTime() ?? 0) - (a.allowedAt?.getTime() ?? 0))
       .map((each) => ({ ...each, lastRefreshedAt: refreshedAt.get(each.clientId) ?? null }));

@@ -40,12 +40,14 @@ function documentAt(version: number): AppStateSnapshot {
 /** What one read of a stream carried, a document by its version. */
 function heard(read: IteratorResult<PushEvent>): number | string | undefined {
   if (read.done) return undefined;
+
   return read.value.push === PUSH.APP_STATE ? read.value.payload.version : read.value.push;
 }
 
 it("three documents pushed before a slow reader reads are one delivery, the third", async () => {
   const pushes = new WindowPushes();
   const stream = pushes.stream(WINDOW, undefined);
+
   for (const version of [1, 2, 3]) pushes.pushState(WINDOW, documentAt(version));
   pushes.push(WINDOW, PUSH.SHOW_LINK, LINK);
 
@@ -91,9 +93,11 @@ it("a held window's reload stays held, and its release sends the newest document
   pushes.pushState(WINDOW, documentAt(1));
   pushes.pushState(WINDOW, documentAt(2));
   let read: number | string | undefined;
+
   const reading = page.next().then((result) => {
     read = heard(result);
   });
+
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(read, undefined);
 
@@ -112,9 +116,11 @@ it("a document queued but unread as its window is held waits for the release, an
   pushes.pushState(WINDOW, documentAt(2));
   assert.equal(heard(await page.next()), PUSH.SHOW_LINK);
   let read: number | string | undefined;
+
   const reading = page.next().then((result) => {
     read = heard(result);
   });
+
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(read, undefined);
 
@@ -143,7 +149,9 @@ it("an event pushed to a held window goes out behind the document held before it
 /** What the next read of a stream carried, as the delivery of a document it must be. */
 async function delivered(stream: AsyncIteratorObject<PushEvent>): Promise<AppStateDelivery> {
   const read = await stream.next();
+
   if (read.done || read.value.push !== PUSH.APP_STATE) throw new Error("no document was sent");
+
   return read.value.payload;
 }
 

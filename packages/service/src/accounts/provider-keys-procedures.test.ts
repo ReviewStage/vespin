@@ -88,6 +88,7 @@ const JWKS_URL = `${AUTH_ORIGIN}/.well-known/jwks.json`;
 function signingKey(kid: string) {
   const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
   const { kty = "", n = "", e = "" } = publicKey.export({ format: "jwk" });
+
   return { kid, privateKey, jwk: { kty, n, e, kid, alg: "RS256" } };
 }
 
@@ -100,7 +101,9 @@ function signedJwt(
 ) {
   const part = (value: WireBoundaryInput) =>
     Buffer.from(JSON.stringify(value)).toString("base64url");
+
   const signed = `${part({ alg: "RS256", kid: key.kid, typ: "JWT" })}.${part(claims)}`;
+
   return `${signed}.${sign("RSA-SHA256", Buffer.from(signed), key.privateKey).toString("base64url")}`;
 }
 
@@ -111,7 +114,9 @@ const openAiAuth =
     if (request.url === DISCOVERY_URL) {
       return jsonResponse({ revocation_endpoint: REVOCATION_URL, jwks_uri: JWKS_URL });
     }
+
     if (request.url === JWKS_URL) return jsonResponse({ keys: [OPENAI_KEY.jwk] });
+
     return new Response(null, { status: HTTP_STATUS.OK });
   };
 
@@ -184,14 +189,18 @@ const openAccounts = (
   Effect.gen(function* () {
     const db = yield* Database;
     const [owner, other] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
     for (const id of [owner, other]) {
       yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
     }
+
     const bearers = new Map([
       [`Bearer ${owner}`, owner],
       [`Bearer ${other}`, other],
     ]);
+
     const answers = options.provider ?? ACCEPTING;
+
     const provider = recordingHttpClient((request) =>
       new URL(request.url).origin === AUTH_ORIGIN
         ? (options.auth ?? openAiAuth())(request)
@@ -201,15 +210,19 @@ const openAccounts = (
             ? (options.fast?.get(keyOf(request.headers))?.clone() ?? jsonResponse({}))
             : jsonResponse({}, answers.get(keyOf(request.headers)) ?? HTTP_STATUS.UNAUTHORIZED),
     );
+
     const logged: string[] = [];
+
     const procedures = providerKeysProcedures({
       resolveUserId: (incoming) =>
         Effect.succeed(
           Option.fromNullishOr(bearers.get(incoming.headers.get("authorization") ?? "")),
         ),
     });
+
     const ask = (request: Request, ring = options.ring) =>
       answer(procedures, request, { ring, provider: provider.layer, logged });
+
     return { owner, other, ask, checks: provider.requests, logged };
   });
 
@@ -224,14 +237,17 @@ const answer = (
 ) =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
+
     const environment: HostedEnvironmentValues = {
       ...NO_ENVIRONMENT,
       providerKeyEncryptionKeys: seams.ring === undefined ? undefined : Redacted.make(seams.ring),
     };
+
     // Every line the handler logs is kept, so the test can read what it says.
     const recorder = Logger.make(({ message, cause }) => {
       seams.logged.push(`${JSON.stringify(message)} ${Cause.pretty(cause)}`);
     });
+
     // The procedures run on oRPC's own fiber, so they are handed the test's clock and services.
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, client),
@@ -242,10 +258,12 @@ const answer = (
       ANALYTICS.layer,
       Logger.layer([recorder]),
     );
+
     const response = yield* hostedAnswer({ account: procedures }, services, request);
     const text = yield* Effect.promise(() => response.text());
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = JSON.parse(text) as WireBoundaryInput;
+
     return { status: response.status, body, text } satisfies Answer;
   });
 
@@ -254,7 +272,9 @@ function request(
   init: { method?: string; body?: WireBoundaryInput; query?: string; path?: string } = {},
 ) {
   const url = new URL(init.path ?? KEYS_PATH, ORIGIN);
+
   if (init.query !== undefined) url.search = init.query;
+
   return new Request(url, {
     method: init.method ?? "GET",
     headers: {
@@ -306,6 +326,7 @@ const ID_CLAIMS = {
 function unsignedJwt(claims: Record<string, WireBoundaryInput>) {
   const part = (value: WireBoundaryInput) =>
     Buffer.from(JSON.stringify(value)).toString("base64url");
+
   return `${part({ alg: "RS256", typ: "JWT" })}.${part(claims)}.unchecked-signature`;
 }
 
@@ -355,6 +376,8 @@ const DEVICE_SECRETS = [
   DEVICE_TOKENS.id_token,
 ];
 
+type State = { codePollStatus: number };
+
 /**
  * OpenAI's device-code endpoints as Codex reaches them: a user code issued
  * with its interval as a string, a code poll answering whatever the test
@@ -363,7 +386,8 @@ const DEVICE_SECRETS = [
  * beside them.
  */
 function fakeDeviceAuth() {
-  const state = { codePollStatus: HTTP_STATUS.FORBIDDEN as number };
+  const state: State = { codePollStatus: HTTP_STATUS.FORBIDDEN };
+
   const auth = (request: RecordedRequest): Response => {
     if (request.url === CODEX_DEVICE_OAUTH.USER_CODE_URL) {
       return jsonResponse({
@@ -372,17 +396,22 @@ function fakeDeviceAuth() {
         interval: "5",
       });
     }
+
     if (request.url === CODEX_DEVICE_OAUTH.CODE_POLL_URL) {
       if (state.codePollStatus !== HTTP_STATUS.OK) return jsonResponse({}, state.codePollStatus);
+
       return jsonResponse({
         authorization_code: DEVICE.AUTHORIZATION_CODE,
         code_challenge: "test-code-challenge",
         code_verifier: DEVICE.CODE_VERIFIER,
       });
     }
+
     if (request.url === CODEX_DEVICE_OAUTH.TOKEN_URL) return jsonResponse(DEVICE_TOKENS);
+
     return openAiAuth()(request);
   };
+
   return { state, auth };
 }
 
@@ -402,7 +431,9 @@ const removePlan = (userId: string) =>
 function startOf(answered: Answer): ChatGptDeviceStartAnswer {
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
   const read = readEither(chatGptDeviceStartAnswerSchema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read)) return assert.fail(`not the wire's: ${read.failure.refusal}`);
+
   return read.success;
 }
 
@@ -410,7 +441,9 @@ function startOf(answered: Answer): ChatGptDeviceStartAnswer {
 function pollOf(answered: Answer): ChatGptDevicePollAnswer {
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
   const read = readEither(chatGptDevicePollAnswerSchema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read)) return assert.fail(`not the wire's: ${read.failure.refusal}`);
+
   return read.success;
 }
 
@@ -421,6 +454,7 @@ const connectPlan = <E, R>(
 ) =>
   Effect.gen(function* () {
     const { loginId } = startOf(yield* ask(startDevice(userId)));
+
     return pollOf(yield* ask(pollDevice(userId, loginId)));
   });
 
@@ -428,7 +462,9 @@ const connectPlan = <E, R>(
 function keysOf(answered: Answer): ProviderKeysAnswer {
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
   const read = readEither(providerKeysAnswerSchema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read)) return assert.fail(`not the wire's: ${read.failure.refusal}`);
+
   return read.success;
 }
 
@@ -470,6 +506,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           ],
         });
         assert.deepEqual(keysOf(read), keysOf(saved));
+
         for (const answered of [saved, read]) assert.ok(!answered.text.includes(KEY.ANTHROPIC));
         assert.deepEqual(countedProviders(owner), [{ provider: PROVIDER_KEY_PROVIDER.ANTHROPIC }]);
         assert.deepEqual(
@@ -489,6 +526,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
       Effect.gen(function* () {
         const notEnabled = "sk-ant-api03-no-fast-00000000000000000nfst";
         const unsaid = "sk-ant-api03-fast-500-0000000000000000f500";
+
         const options = {
           ring: KEK.ONE,
           provider: new Map([
@@ -502,6 +540,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
             [unsaid, jsonResponse({}, HTTP_STATUS.SERVER_ERROR)],
           ]),
         };
+
         const { owner, other, ask, checks } = yield* openAccounts(options);
         const later = yield* openAccounts(options);
 
@@ -514,6 +553,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           Effect.map(listProviderKeyRows(userId, PROVIDER_KEY_KIND.API_KEY), (rows) =>
             rows.map((row) => [row.provider, row.fastAccess]),
           );
+
         assert.deepEqual(yield* fastOf(owner), [
           [PROVIDER_KEY_PROVIDER.ANTHROPIC, FAST_ACCESS.ENABLED],
           [PROVIDER_KEY_PROVIDER.OPENAI, null],
@@ -528,9 +568,11 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           ),
           "an OpenAI key is never sent to Anthropic",
         );
+
         const fastCheck = checks.find(
           (check) => check.url === FAST_CHECK_URL && keyOf(check.headers) === KEY.ANTHROPIC,
         );
+
         assert.equal(fastCheck?.headers.get("anthropic-beta"), "fast-mode-2026-02-01");
         const asked = yield* Effect.promise(() => new Response(fastCheck?.init.body).text());
         assert.deepEqual(readFastCheck(JSON.parse(asked)), {
@@ -565,6 +607,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
       Effect.gen(function* () {
         const refused = "sk-ant-api03-refused-000000000000000000rfsd";
         const failing = "sk-proj-failing-0000000000000000000000fail";
+
         const { owner, ask, checks, logged } = yield* openAccounts({
           ring: KEK.ONE,
           provider: new Map([[failing, HTTP_STATUS.SERVER_ERROR]]),
@@ -596,11 +639,13 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           checks.every((check) => keyOf(check.headers) !== KEY.OPENAI),
           "an OpenAI key is never sent to Anthropic, not even to ask about fast mode",
         );
+
         for (const key of [refused, failing, KEY.ANTHROPIC]) {
           assert.ok(
             logged.every((line) => !line.includes(key)),
             "no line logs a key",
           );
+
           for (const answered of [invalid, unreachable, misplaced]) {
             assert.ok(!answered.text.includes(key));
           }
@@ -614,6 +659,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
       Effect.gen(function* () {
         const second = "sk-ant-api03-second-key-000000000000000scnd";
         const replacement = "sk-ant-api03-replacement-00000000000000repl";
+
         const { owner, other, ask } = yield* openAccounts({
           ring: KEK.ONE,
           provider: new Map([
@@ -622,6 +668,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
             [replacement, HTTP_STATUS.OK],
           ]),
         });
+
         keysOf(yield* ask(save(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, KEY.ANTHROPIC)));
         keysOf(yield* ask(save(owner, PROVIDER_KEY_PROVIDER.OPENAI, KEY.OPENAI)));
         const added = keysOf(yield* ask(save(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, second)));
@@ -640,6 +687,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
             }),
           ),
         );
+
         const named = (userId: string, id: string) =>
           ask(
             request(userId, {
@@ -653,11 +701,13 @@ it.layer(getTestDB())("the provider keys route", (it) => {
               },
             }),
           );
+
         const removing = (userId: string, id: string) =>
           request(userId, {
             method: "DELETE",
             query: `provider=${PROVIDER_KEY_PROVIDER.ANTHROPIC}&subscriptionId=${id}`,
           });
+
         const othersRead = keysOf(yield* ask(request(other)));
         const othersRename = keysOf(yield* named(other, secondId ?? ""));
         const othersRemoval = keysOf(yield* ask(removing(other, secondId ?? "")));
@@ -698,6 +748,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         const { owner, ask, logged } = yield* openAccounts();
 
         const none = yield* ask(request(owner));
+
         const unreadable = yield* ask(
           save(owner, PROVIDER_KEY_PROVIDER.OPENAI, KEY.OPENAI),
           malformed,
@@ -707,6 +758,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
           HOSTED_API_ERROR.UNAVAILABLE,
         );
+
         assert.deepEqual({ status: none.status, body: none.body }, unavailable);
         assert.deepEqual({ status: unreadable.status, body: unreadable.body }, unavailable);
         assert.ok(logged.length > 0);
@@ -752,10 +804,12 @@ it.layer(getTestDB())("the provider keys route", (it) => {
       Effect.gen(function* () {
         const { owner, ask, checks } = yield* openAccounts({ ring: KEK.ONE });
         const ofAnswer = (answered: Answer) => ({ status: answered.status, body: answered.body });
+
         const body = JSON.stringify({
           provider: PROVIDER_KEY_PROVIDER.OPENAI,
           key: "k".repeat(2_100),
         });
+
         const stated = (userId: string) =>
           new Request(new URL(KEYS_PATH, ORIGIN), {
             method: "PUT",
@@ -789,15 +843,19 @@ it.layer(getTestDB())("the provider keys route", (it) => {
 
         const saved = yield* ask(saveToken(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, SETUP_TOKEN));
         const othersRead = keysOf(yield* ask(request(other)));
+
         const othersRemoval = keysOf(
           yield* ask(
             remove(other, PROVIDER_KEY_PROVIDER.ANTHROPIC, PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN),
           ),
         );
+
         const keyRemoval = keysOf(yield* ask(remove(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC)));
+
         const stored = JSON.stringify(
           yield* db.select().from(accountProviderKey).where(eq(accountProviderKey.userId, owner)),
         );
+
         const removed = keysOf(
           yield* ask(
             remove(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN),
@@ -815,6 +873,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           id: keysOf(saved).subscriptions?.[0]?.id ?? "",
           position: 0,
         };
+
         assert.deepEqual(keysOf(saved), { keys: [], subscriptions: [subscription] });
         assert.deepEqual(countedProviders(owner), [{ provider: PROVIDER_KEY_PROVIDER.ANTHROPIC }]);
         assert.deepEqual(othersRead, { keys: [] }, "another account reads none of it");
@@ -845,23 +904,31 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         const tokenBesideKey = keysOf(
           yield* ask(saveToken(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, SETUP_TOKEN)),
         );
+
         const checksAfterToken = checks.length;
+
         const keyBesideToken = keysOf(
           yield* ask(save(other, PROVIDER_KEY_PROVIDER.ANTHROPIC, KEY.ANTHROPIC)),
         );
+
         const checksAfterKey = checks.length;
+
         const tokenRemoved = keysOf(
           yield* ask(
             remove(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN),
           ),
         );
+
         const keyRemoved = keysOf(yield* ask(remove(other, PROVIDER_KEY_PROVIDER.ANTHROPIC)));
+
         const apiKeyAsToken = keysOf(
           yield* ask(saveToken(other, PROVIDER_KEY_PROVIDER.ANTHROPIC, KEY.ANTHROPIC)),
         );
+
         const forOpenAi = keysOf(
           yield* ask(saveToken(owner, PROVIDER_KEY_PROVIDER.OPENAI, SETUP_TOKEN)),
         );
+
         // Note that `claude setup-token` wraps its token at the terminal's width, so a copy carries a line break and indent.
         const wrapped = keysOf(
           yield* ask(
@@ -875,12 +942,16 @@ it.layer(getTestDB())("the provider keys route", (it) => {
 
         const keyHints = (answer: typeof tokenBesideKey) =>
           answer.keys.map(({ provider, hint }) => [provider, hint]);
+
         const tokenHints = (answer: typeof tokenBesideKey) =>
           answer.subscriptions?.map(({ provider, kind, hint }) => [provider, kind, hint]);
+
         const anthropicKey = [[PROVIDER_KEY_PROVIDER.ANTHROPIC, "sk-ant-…wxyz"]];
+
         const anthropicToken = [
           [PROVIDER_KEY_PROVIDER.ANTHROPIC, PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN, "sk-ant-…tokn"],
         ];
+
         assert.equal(tokenBesideKey.rejected, undefined);
         assert.deepEqual(keyHints(tokenBesideKey), anthropicKey);
         assert.deepEqual(tokenHints(tokenBesideKey), anthropicToken);
@@ -910,6 +981,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         const { owner, other, ask } = yield* openAccounts({ ring: KEK.ONE });
         keysOf(yield* ask(saveToken(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, SETUP_TOKEN)));
         keysOf(yield* ask(saveToken(other, PROVIDER_KEY_PROVIDER.ANTHROPIC, SETUP_TOKEN)));
+
         const defaults = (answer: ReturnType<typeof keysOf>) =>
           answer.subscriptions?.map(({ kind, forAgents }) => [kind, forAgents]);
 
@@ -936,6 +1008,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
   it.effect("setup-token saves are braked with key saves, ten an hour per account", () =>
     Effect.gen(function* () {
       const { owner, other, ask } = yield* openAccounts({ ring: KEK.ONE });
+
       for (let attempt = 0; attempt < 10; attempt += 1) {
         keysOf(yield* ask(saveToken(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, SETUP_TOKEN)));
       }
@@ -943,6 +1016,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
       const braked = keysOf(
         yield* ask(saveToken(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, SETUP_TOKEN)),
       );
+
       const othersSave = keysOf(
         yield* ask(saveToken(other, PROVIDER_KEY_PROVIDER.ANTHROPIC, SETUP_TOKEN)),
       );
@@ -972,6 +1046,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           now,
           now,
         );
+
         const standing = (read: Answer) =>
           keysOf(read).subscriptions?.map(({ status, limitResetsAt }) => ({
             status,
@@ -1002,11 +1077,13 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         yield* connectPlan(ask, owner);
         const now = new Date(yield* Clock.currentTimeMillis);
         const session = { usedPercent: 42, windowMins: 300, resetsAt: now.getTime() + 30 * 60_000 };
+
         const week = {
           usedPercent: 18,
           windowMins: 10_080,
           resetsAt: now.getTime() + 3 * 86_400_000,
         };
+
         for (const window of [week, session]) {
           yield* setPlanUsage(
             owner,
@@ -1017,6 +1094,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
             now,
           );
         }
+
         const usage = (read: Answer) =>
           keysOf(read).subscriptions?.map((plan) => [plan.usage, plan.usageWindows]);
 
@@ -1036,6 +1114,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         const device = fakeDeviceAuth();
         device.state.codePollStatus = HTTP_STATUS.OK;
         const resetsAt = { session: 1_800_000_000, week: 1_800_400_000 };
+
         const { owner, ask, checks } = yield* openAccounts({
           ring: KEK.ONE,
           auth: device.auth,
@@ -1060,6 +1139,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
               },
             }),
         });
+
         yield* connectPlan(ask, owner);
         const asked = () => checks.filter((check) => check.url === CHATGPT_USAGE_URL);
 
@@ -1105,6 +1185,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         let revocationStatus: number = HTTP_STATUS.OK;
         const device = fakeDeviceAuth();
         device.state.codePollStatus = HTTP_STATUS.OK;
+
         const { owner, ask, checks } = yield* openAccounts({
           ring: KEK.ONE,
           auth: (incoming) =>
@@ -1112,10 +1193,12 @@ it.layer(getTestDB())("the provider keys route", (it) => {
               ? new Response(null, { status: revocationStatus })
               : device.auth(incoming),
         });
+
         yield* connectPlan(ask, owner);
 
         const removed = keysOf(yield* ask(removePlan(owner)));
         const revocation = checks.find((check) => check.url === REVOCATION_URL);
+
         const form = new URLSearchParams(
           yield* Effect.promise(() => new Response(revocation?.init.body).text()),
         );
@@ -1141,10 +1224,12 @@ it.layer(getTestDB())("the provider keys route", (it) => {
       Effect.gen(function* () {
         const db = yield* Database;
         const device = fakeDeviceAuth();
+
         const { owner, ask, checks, logged } = yield* openAccounts({
           ring: KEK.ONE,
           auth: device.auth,
         });
+
         const startedAt = yield* Clock.currentTimeMillis;
 
         const startedAnswer = yield* ask(startDevice(owner));
@@ -1195,6 +1280,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           Effect.promise(() =>
             new Response(checks.find((check) => check.url === url)?.init.body).text(),
           );
+
         assert.deepEqual(JSON.parse(yield* bodyOf(CODEX_DEVICE_OAUTH.USER_CODE_URL)), {
           client_id: CODEX_DEVICE_OAUTH.CLIENT_ID,
         });
@@ -1228,10 +1314,12 @@ it.layer(getTestDB())("the provider keys route", (it) => {
             .from(accountChatGptDeviceLogin)
             .where(eq(accountChatGptDeviceLogin.userId, owner))),
         ]);
+
         for (const secret of DEVICE_SECRETS) {
           for (const answered of [startedAnswer, connectedAnswer]) {
             assert.ok(!answered.text.includes(secret));
           }
+
           assert.ok(!stored.includes(secret));
           assert.ok(logged.every((line) => !line.includes(secret)));
         }
@@ -1265,6 +1353,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           message: "Codex did not connect this account. Start again to try once more.",
         });
         assert.deepEqual(stillRefused, refused);
+
         for (const userId of [owner, other]) {
           assert.equal(keysOf(yield* ask(request(userId))).subscriptions, undefined);
         }
@@ -1276,10 +1365,12 @@ it.layer(getTestDB())("the provider keys route", (it) => {
     () =>
       Effect.gen(function* () {
         const device = fakeDeviceAuth();
+
         const { owner, other, ask, checks } = yield* openAccounts({
           ring: KEK.ONE,
           auth: device.auth,
         });
+
         const { loginId } = startOf(yield* ask(startDevice(owner)));
         device.state.codePollStatus = HTTP_STATUS.OK;
 

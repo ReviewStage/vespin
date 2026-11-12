@@ -72,13 +72,13 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+type DrawnResult = { view: HTMLElement; exits: string[] };
+
 /** The description's version history in `room` over its versions 3 and 2, as `history` stands, every way out written down. */
-function drawn(
-  room: ShellRoom,
-  history: Partial<VersionHistoryControl>,
-): { view: HTMLElement; exits: string[] } {
+function drawn(room: ShellRoom, history: Partial<VersionHistoryControl>): DrawnResult {
   const exits: string[] = [];
   const base = tasksControl();
+
   const tasks = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     activeTaskId: DOCUMENT_TASK.id,
@@ -93,6 +93,7 @@ function drawn(
       ...history,
     },
   });
+
   const view = document.body.appendChild(document.createElement("div"));
   const root = createRoot(view);
   roots.push(root);
@@ -124,6 +125,7 @@ function drawn(
       ),
     ),
   );
+
   return { view, exits };
 }
 
@@ -165,9 +167,11 @@ test("under a finger a version's row draws no ⋯, and held it offers its menu",
   assert.ok(view.querySelector('[aria-label="Version actions"]') === null, "no row draws a ⋯");
 
   longPress(older);
+
   const offered = [...document.querySelectorAll('[role="menuitem"]')].map(
     (each) => each.textContent,
   );
+
   assert.ok(offered.includes("Restore this version"), "the long press offers Restore");
 });
 

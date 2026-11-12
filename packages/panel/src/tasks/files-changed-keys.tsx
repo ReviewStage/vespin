@@ -51,6 +51,7 @@ export function FilesChangedKeysSheet({
   onDismiss: () => void;
 }): React.JSX.Element {
   const done = useRef<HTMLButtonElement>(null);
+
   return (
     <Dialog
       open={open}

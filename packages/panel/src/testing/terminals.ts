@@ -7,12 +7,17 @@
 
 import { createElement, type ReactElement } from "react";
 import { onTestFinished } from "vitest";
-import { makeTerminals, type Terminals, TerminalsContext } from "../tasks/use-terminal-session.js";
+import {
+  createTerminals,
+  type Terminals,
+  TerminalsContext,
+} from "../tasks/use-terminal-session.js";
 
 /** A window's terminals, read from session storage now, every session let go as the calling test finishes. */
 export function windowTerminals(): Terminals {
-  const terminals = makeTerminals();
+  const terminals = createTerminals();
   onTestFinished(() => terminals.sessions.dispose());
+
   return terminals;
 }
 

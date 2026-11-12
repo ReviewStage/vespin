@@ -68,10 +68,13 @@ test("Connect GitHub under a task opens Settings on its workspace's GitHub, read
   await writeHandedAppState();
   const links: SettingsLink[] = [];
   let open: ((taskId: string) => void) | undefined;
+
   const Probe = (): null => {
     open = useOpenWorkspaceGitHub((link) => links.push(link));
+
     return null;
   };
+
   root = createRoot(document.body.appendChild(document.createElement("div")));
   act(() => root?.render(withQueryClient(createElement(Probe))));
 

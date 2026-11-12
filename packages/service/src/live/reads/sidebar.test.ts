@@ -24,6 +24,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -35,6 +36,7 @@ const openSharedWorkspace = Effect.gen(function* () {
   yield* joinWorkspace(workspace, charles);
   const { id: first } = yield* createTask(dean, { name: "Invites", organizationId: workspace });
   const { id: second } = yield* createTask(dean, { name: "Billing", organizationId: workspace });
+
   return { dean, charles, workspace, first, second };
 });
 
@@ -44,6 +46,7 @@ const written = (userId: string, write: TaskSectionWrite) =>
     const { txid: _txid, ...sections } = Option.getOrElse(answer, () =>
       assert.fail("the write was refused"),
     );
+
     return sections satisfies TaskSections;
   });
 
@@ -65,6 +68,7 @@ const place = (taskId: string, sectionId: string | null, position?: string): Tas
 function byKey(rows: SidebarRows): SidebarRows {
   const sorted = <Row>(each: readonly Row[], key: (row: Row) => string) =>
     each.toSorted((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+
   return {
     sections: sorted(rows.sections, (row) => row.id),
     entries: sorted(rows.entries, (row) => row.taskId),
@@ -78,12 +82,14 @@ const liveSidebarOf = (userId: string) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const statements = Option.getOrThrow(sidebarRead.statements({ userId }));
+
     const rows = yield* Effect.all({
       sections: sql.unsafe(statements.sections.sql, [...statements.sections.params]),
       entries: sql.unsafe(statements.entries.sql, [...statements.entries.params]),
       agentEntries: sql.unsafe(statements.agentEntries.sql, [...statements.agentEntries.params]),
       pins: sql.unsafe(statements.pins.sql, [...statements.pins.params]),
     });
+
     return byKey(sidebarRowsOfLive(yield* Schema.decodeUnknownEffect(SIDEBAR_READ.rows)(rows)));
   });
 
@@ -117,6 +123,7 @@ it.layer(getTestDB())("the account's sidebar's live read", (it) => {
             byKey({ ...held, pins: yield* listRepositoryPins(reader) }),
           );
         }
+
         const deans = yield* liveSidebarOf(dean);
         assert.deepEqual(
           [deans.sections.length, deans.entries.length, deans.agentEntries.length],

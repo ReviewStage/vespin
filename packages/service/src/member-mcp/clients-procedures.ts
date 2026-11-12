@@ -20,6 +20,7 @@ export interface McpClientsProcedureSeams {
 /** The resource: the read and the revoke, both to the account's bearer. */
 export function mcpClientsProcedures(seams: McpClientsProcedureSeams) {
   const signedIn = hosted.mcpClients.use(accountMiddleware(seams.resolveUserId));
+
   return {
     list: signedIn.list.effect(function* ({ context }) {
       return yield* mcpClientsRead(context.userId, seams.memberMcpServerUrl);

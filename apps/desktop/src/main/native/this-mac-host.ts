@@ -68,6 +68,7 @@ const EXIT_READ_EVERY = Duration.millis(250);
 
 /** How long the account install's script, which downloads a release, and its uninstall may take. */
 const INSTALL_WITHIN = Duration.minutes(10);
+
 /** The account install's own command, by the link the install script makes under the home (`LINK` in the install script). */
 const INSTALL_COMMAND = [".local", "bin", "vespin-host"] as const;
 
@@ -84,10 +85,12 @@ const ran = (command: string, args: readonly string[]) =>
   Effect.scoped(
     Effect.gen(function* () {
       const handle = yield* ChildProcess.make(command, [...args]);
+
       const [out, code] = yield* Effect.all(
         [Stream.mkString(Stream.decodeText(handle.stdout)), handle.exitCode],
         { concurrency: "unbounded" },
       );
+
       return { code: Number(code), out };
     }),
   ).pipe(
@@ -113,6 +116,7 @@ const completed = (command: string, args: readonly string[], input?: string) =>
       const handle = yield* ChildProcess.make(command, [...args], {
         stdin: input === undefined ? "ignore" : Stream.make(new TextEncoder().encode(input)),
       });
+
       const [, said, code] = yield* Effect.all(
         [
           Stream.runDrain(handle.stdout),
@@ -121,6 +125,7 @@ const completed = (command: string, args: readonly string[], input?: string) =>
         ],
         { concurrency: "unbounded" },
       );
+
       return Number(code) === 0
         ? Result.succeed<void>(undefined)
         : Result.fail(said.trim() || `${command} ${args.join(" ")} exited ${Number(code)}`);
@@ -168,14 +173,19 @@ function thisMacHost(facts: ThisMacHostFacts): ThisMacHostSeam {
    */
   const standaloneGone = Effect.gen(function* () {
     const loaded = yield* standaloneLoaded;
+
     if (Option.isNone(loaded))
       return Result.fail(`could not ask launchd about ${STANDALONE_LABEL}`);
+
     if (!loaded.value && !existsSync(standalonePlist)) return Result.succeed<void>(undefined);
     const disabled = yield* output("launchctl", ["disable", standalone]);
+
     if (Option.isNone(disabled)) return Result.fail(`could not disable ${STANDALONE_LABEL}`);
+
     if (!loaded.value) return Result.succeed<void>(undefined);
     yield* ran("launchctl", ["bootout", standalone]);
     const still = yield* standaloneLoaded;
+
     return Option.isSome(still) && !still.value
       ? Result.succeed<void>(undefined)
       : Result.fail(`launchd still holds ${STANDALONE_LABEL}`);
@@ -220,29 +230,35 @@ function thisMacHost(facts: ThisMacHostFacts): ThisMacHostSeam {
     }),
     register: Effect.gen(function* () {
       const gone = yield* standaloneGone;
+
       if (Result.isFailure(gone)) return gone;
       yield* Effect.sync(() => app.setLoginItemSettings({ ...SERVICE, openAtLogin: true }));
       const now = yield* status;
+
       if (
         now !== THIS_MAC_AGENT_STATUS.ENABLED &&
         now !== THIS_MAC_AGENT_STATUS.REQUIRES_APPROVAL
       ) {
         return Result.fail(`macOS did not register it: ${now}`);
       }
+
       // Note that a version that could not be kept only means the next launch registers it again.
       yield* Effect.ignore(Effect.try(() => writeFileSync(registeredFile, facts.appVersion)));
+
       return Result.succeed<void>(undefined);
     }),
     unregister: Effect.gen(function* () {
       yield* Effect.sync(() => app.setLoginItemSettings({ ...SERVICE, openAtLogin: false }));
       yield* Effect.ignore(Effect.try(() => rmSync(registeredFile, { force: true })));
       const now = yield* status;
+
       if (
         now === THIS_MAC_AGENT_STATUS.ENABLED ||
         now === THIS_MAC_AGENT_STATUS.REQUIRES_APPROVAL
       ) {
         return Result.fail(`macOS did not unregister it: ${now}`);
       }
+
       return yield* daemonExited;
     }),
     loaded: Effect.map(standaloneLoaded, (loaded) => Option.getOrElse(loaded, () => false)),
@@ -256,6 +272,7 @@ function thisMacHost(facts: ThisMacHostFacts): ThisMacHostSeam {
     uninstall: (keepAgents) =>
       Effect.suspend(() => {
         const command = path.join(os.homedir(), ...INSTALL_COMMAND);
+
         return existsSync(command)
           ? completed(command, ["uninstall", ...(keepAgents ? ["--keep-agents"] : [])])
           : Effect.succeed(Result.succeed<void>(undefined));

@@ -49,18 +49,22 @@ export function TurnFilesRow({
   const doors = useMentionDoors();
   const lines = useContext(TurnFilesOnContext);
   const agentId = useContext(TranscriptAgent);
+
   const changed = useMemo(
     () => (lines === undefined ? undefined : turnFiles(agentParts(message))),
     [lines, message],
   );
+
   if (lines === undefined || changed === undefined) return null;
   // A chip opens the turn's own changes where a tab of them opens from here, and the file as any file chip does otherwise.
   const line = lines.get(message.id);
   const openTurn = doors.onOpenTurnChanges;
+
   const chipDoors: MentionDoors =
     openTurn === undefined || agentId === undefined || line === undefined
       ? doors
       : { ...doors, onOpenFile: (path) => openTurn(agentId, line, path) };
+
   return (
     <div className="mt-tight-gap flex flex-wrap items-center gap-icon-gap" data-turn-files="">
       <span className="text-caption text-muted-foreground tabular-nums">

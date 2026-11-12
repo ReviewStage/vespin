@@ -53,13 +53,16 @@ type PastedRead =
 
 function stateOf(prefix: string | undefined): string {
   const random = Base64Url.encode(crypto.getRandomValues(new Uint8Array(STATE_BYTES)));
+
   return prefix ? `${prefix}.${random}` : random;
 }
 
 function portOf(ports: readonly number[] | undefined): number {
   const [named] = ports ?? [];
+
   if (named !== undefined) return named;
   const [random = 0] = crypto.getRandomValues(new Uint16Array(1));
+
   // Note that the range is a power of two, so masking the draw keeps every port equally likely.
   return DYNAMIC_PORTS.FIRST + (random & DYNAMIC_PORTS.MASK);
 }
@@ -76,17 +79,22 @@ function readPasted(
   refused: string,
 ): PastedRead {
   let url: URL;
+
   try {
     url = new URL(pasted.trim());
   } catch {
     return { reason: PASTE_BACK_REASON.NOT_AN_ADDRESS };
   }
+
   if (url.pathname !== trip.callbackPath) return { reason: PASTE_BACK_REASON.NOT_AN_ADDRESS };
+
   if (url.searchParams.get("state") !== trip.state) return { reason: PASTE_BACK_REASON.OTHER_TRIP };
   const code = url.searchParams.get("code");
+
   if (url.searchParams.has("error") || !code) {
     return { reason: refused, failure: SIGN_IN_FAILURE.REFUSED };
   }
+
   return { code };
 }
 
@@ -105,29 +113,39 @@ export function pasteBackConsent(paste: Effect.Effect<string | undefined>): Open
       const state = stateOf(options.statePrefix);
       const redirectUri = `http://${LOOPBACK_HOST}:${portOf(options.ports)}${options.callbackPath}`;
       const challenge = yield* Effect.result(codeChallenge(codeVerifier));
+
       if (Result.isFailure(challenge)) return { reason: PASTE_BACK_REASON.CHALLENGE };
+
       const page = options.authorizationUrl({
         state,
         redirectUri,
         codeChallenge: challenge.success,
       });
+
       shown = page;
+
       const opened = yield* Effect.result(
         Effect.tryPromise(() => Promise.resolve(options.openExternal(page))),
       );
+
       if (Result.isFailure(opened)) {
         return { reason: PASTE_BACK_REASON.SHOWN, failure: SIGN_IN_FAILURE.BROWSER };
       }
+
       const pasted = yield* paste;
+
       if (pasted === undefined || pasted.trim().length === 0) {
         return { reason: PASTE_BACK_REASON.NOTHING_PASTED, failure: SIGN_IN_FAILURE.UNFINISHED };
       }
+
       const read = readPasted(
         pasted,
         { state, callbackPath: options.callbackPath },
         options.reasons.refused,
       );
+
       if ("reason" in read) return read;
+
       return yield* options.exchange({ code: read.code, state, redirectUri, codeVerifier });
     });
 

@@ -37,17 +37,22 @@ export function useStartingAgent(
   models: readonly CatalogModel[],
 ): StartingAgent | undefined {
   const openPlace = useOpenPlace();
+
   const select = useCallback(
     (state: AppStateSnapshot) => (agentId === undefined ? undefined : listedAgent(state, agentId)),
     [agentId],
   );
+
   const agent = useQuery({ ...appStateQuery, select }).data;
+
   if (agent === undefined) return undefined;
+
   const actor = {
     ...agentActor(agent, agentName(agent, models)),
     agentId: agent.id,
     taskId: agent.planId,
   };
+
   const onOpen =
     openPlace === undefined
       ? undefined
@@ -57,5 +62,6 @@ export function useStartingAgent(
             planId: agent.planId,
             agentId: agent.id,
           });
+
   return { actor, onOpen };
 }

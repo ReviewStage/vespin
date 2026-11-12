@@ -47,16 +47,19 @@ export interface StoreTestPostgres {
 function databaseNamed(connectionString: string, name: string): URL {
   const url = new URL(connectionString);
   url.pathname = `/${name}`;
+
   return url;
 }
 
 function templateNamed(connectionString: string): string {
   const name = decodeURIComponent(new URL(connectionString).pathname.slice(1));
+
   if (name.length === 0) {
     throw new Error(
       `${STORE_TEST_DATABASE_ENVIRONMENT.URL} names no database to clone the store tests' Postgres from`,
     );
   }
+
   return name;
 }
 
@@ -67,7 +70,9 @@ async function onMaintenanceDatabase<A>(
   const client = new Client({
     connectionString: databaseNamed(connectionString, MAINTENANCE_DATABASE).href,
   });
+
   await client.connect();
+
   try {
     return await statement(client);
   } finally {
@@ -84,6 +89,7 @@ export async function cloneStoreTestPostgres(connectionString: string): Promise<
       `create database ${escapeIdentifier(clone)} template ${escapeIdentifier(template)}`,
     ),
   );
+
   return {
     connectionString: databaseNamed(connectionString, clone).href,
     drop: () =>

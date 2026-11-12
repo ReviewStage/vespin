@@ -70,6 +70,7 @@ function asked(): Record<"once" | "always" | "deny", number> {
       }),
     ),
   );
+
   return heard;
 }
 

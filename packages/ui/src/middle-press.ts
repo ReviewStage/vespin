@@ -51,6 +51,7 @@ export function middleOpensTab<Target extends Element>(
   down?: ((event: MouseEvent<Target>) => void) | undefined,
 ): MiddleOpensTab<Target> {
   if (openInTab === undefined) return { onMouseDown: down, onAuxClick: undefined };
+
   return {
     onMouseDown: (event) => {
       if (event.button === MIDDLE_BUTTON) event.preventDefault();

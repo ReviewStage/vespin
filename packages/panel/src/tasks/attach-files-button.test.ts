@@ -16,6 +16,7 @@ import { AttachFilesButton } from "./attach-files-button.js";
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
 }
+
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const roots: Root[] = [];
@@ -41,9 +42,11 @@ test("a + held from taking files still opens its menu of other rows, only its At
       }),
     ),
   );
+
   const plus =
     container.querySelector<HTMLButtonElement>('button[aria-label="Add files and more"]') ??
     assert.fail("the + stands");
+
   assert.equal(plus.disabled, false);
   act(() => plus.click());
   const rows = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];

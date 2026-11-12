@@ -33,6 +33,7 @@ const roots: Root[] = [];
 
 afterEach(() => {
   vi.restoreAllMocks();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 });
@@ -43,11 +44,14 @@ test("a version written while the card stands is hidden until it loads, never th
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const render = (page: PageLine) =>
     act(() =>
       root.render(withQueryClient(createElement(PageCard, { place: { taskId: TASK }, page }))),
     );
+
   const preview = () => container.querySelector<HTMLElement>(".ui-page-thumb");
+
   const load = () =>
     act(() => {
       container.querySelector("iframe")?.dispatchEvent(new Event("load"));
@@ -73,10 +77,12 @@ test("a provenance row says who showed the version, wherever the card hangs: Ves
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const subOf = (page: PageLine) => {
     act(() =>
       root.render(withQueryClient(createElement(PageCard, { place: { taskId: TASK }, page }))),
     );
+
     return container.querySelector(".ui-hover-card-row")?.textContent;
   };
 

@@ -35,9 +35,11 @@ const readPage = (page: TasksPageParams) =>
 /** The policy's directives by name, each with its sources. */
 function directivesOf(response: Response): ReadonlyMap<string, string> {
   const policy = response.headers.get("content-security-policy") ?? "";
+
   return new Map(
     policy.split(";").map((directive) => {
       const [name = "", ...sources] = directive.trim().split(/\s+/);
+
       return [name, sources.join(" ")];
     }),
   );
@@ -51,6 +53,7 @@ it.effect(
         pageFrameUrl({ taskId: TASK_ID, pageId: CHART.id, version: 2 }),
         readPage,
       );
+
       const policy = directivesOf(response);
 
       assert.equal(response.status, 200);

@@ -54,6 +54,7 @@ export const linkNetworkWatch = /* @__PURE__ */ Effect.fn("client/linkNetworkWat
   const { state, online, regained = Effect.void, report } = dependencies;
   const scope = yield* Effect.scope;
   const reach = yield* ServiceReach;
+
   // Note that what catches up runs beside the watch, so a slow answer never holds the next change.
   const moved = (change: (before: AppState["network"]) => AppState["network"]) =>
     Effect.catchDefect(
@@ -61,6 +62,7 @@ export const linkNetworkWatch = /* @__PURE__ */ Effect.fn("client/linkNetworkWat
         Effect.suspend(() => {
           const before = state.snapshot().network;
           const after = change(before);
+
           if (
             after.online === before.online &&
             after.reachable === before.reachable &&
@@ -68,7 +70,9 @@ export const linkNetworkWatch = /* @__PURE__ */ Effect.fn("client/linkNetworkWat
           ) {
             return Effect.void;
           }
+
           state.update({ network: after });
+
           return networkConnected(after) && !networkConnected(before)
             ? Effect.asVoid(Effect.forkIn(regained, scope))
             : Effect.void;
@@ -82,6 +86,7 @@ export const linkNetworkWatch = /* @__PURE__ */ Effect.fn("client/linkNetworkWat
           ),
         ),
     );
+
   yield* Effect.forkScoped(
     Stream.runForEach(Stream.changes(online), (found) =>
       moved((before) => ({ ...before, online: found })),

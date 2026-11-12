@@ -34,12 +34,14 @@ export const SANDBOX_SIZE = {
    * `vm.overcommit_memory=1`, set on every boot, since a resumed sandbox
    * boots with the default, lets it lint there in 36 seconds.
    */
+  // SAFETY: a Map is a ReadonlyMap; the narrower type keeps callers from writing to the shared table.
   VCPUS_BY_REPOSITORY: new Map([["reviewstage/vespin", 4]]) as ReadonlyMap<string, number>,
 } as const;
 
 /** The vCPUs an agent's sandbox opens with: what its repository asks for, or `SANDBOX_SIZE.VCPUS` for one that asks for nothing and for an agent with no repository. */
 export function sandboxVcpus(repository: string | null): number {
   if (repository === null) return SANDBOX_SIZE.VCPUS;
+
   return SANDBOX_SIZE.VCPUS_BY_REPOSITORY.get(repository.toLowerCase()) ?? SANDBOX_SIZE.VCPUS;
 }
 

@@ -29,11 +29,14 @@ export async function settleJsonSchemaGolden(
 ): Promise<void> {
   const filePath = path.join(root, `${name}.json`);
   const emitted = `${JSON.stringify(emitJsonSchema(schema), undefined, 2)}\n`;
+
   if (UPDATE_FIXTURES) {
     await fs.mkdir(root, { recursive: true });
     await fs.writeFile(filePath, emitted);
+
     return;
   }
+
   const held = await fs.readFile(filePath, "utf8").catch(() => undefined);
   assert.ok(held !== undefined, `no JSON Schema recorded at ${filePath}`);
   assert.equal(emitted, held);

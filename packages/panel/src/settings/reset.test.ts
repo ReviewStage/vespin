@@ -71,9 +71,11 @@ test("a refused reset says why in a toast and can be pressed again", async () =>
       ),
     ),
   );
+
   const reset = [...container.querySelectorAll("button")].find(
     (button) => button.textContent === "Reset to defaults",
   );
+
   assert.ok(reset, "the page offers its reset");
 
   await act(async () => reset.click());
@@ -107,10 +109,12 @@ function appearanceStore(start: typeof settings) {
   let held = start;
   const deliver = () => writeAppState(stateWith({}, { settings: appSettingsWire(held) }));
   deliver();
+
   const writes: SettingsWrites = {
     setting: (field, value) => {
       held = Object.assign(settingsView(), held, { [field]: value });
       deliver();
+
       return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
     },
     reset: (_scope, kept) => {
@@ -119,6 +123,7 @@ function appearanceStore(start: typeof settings) {
         zoom: APP_SETTING_DEFAULTS.zoom,
         openAtLogin: APP_SETTING_DEFAULTS.openAtLogin,
       };
+
       held = Object.assign(
         settingsView(),
         held,
@@ -127,12 +132,14 @@ function appearanceStore(start: typeof settings) {
         ),
       );
       deliver();
+
       return Promise.resolve({
         status: ACTION_RESULT_STATUS.ACCEPTED,
         settings: appSettingsWire(held),
       });
     },
   };
+
   return { writes, now: () => held };
 }
 
@@ -155,9 +162,11 @@ test("a browser's Appearance reset returns the theme it draws to its default and
       ),
     ),
   );
+
   const reset = [...container.querySelectorAll("button")].find(
     (button) => button.textContent === "Reset to defaults",
   );
+
   assert.ok(reset, "the page offers its reset");
 
   await act(async () => reset.click());
@@ -189,15 +198,19 @@ test("Undo after a browser's reset puts back the theme it reset and leaves the z
       ),
     ),
   );
+
   const press = [...container.querySelectorAll("button")].find(
     (button) => button.textContent === "Reset to defaults",
   );
+
   assert.ok(press, "the page offers its reset");
   await act(async () => press.click());
+
   // The newest toast's Undo: an earlier test's toast may still stand in the shared host.
   const undo = [...document.querySelectorAll("button")]
     .filter((button) => button.textContent === "Undo")
     .at(-1);
+
   assert.ok(undo, "the reset offers its Undo");
 
   await act(async () => undo.click());

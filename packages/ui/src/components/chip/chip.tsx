@@ -144,6 +144,7 @@ function keptEnd(name: string): string {
   const last = name.slice(-MIDDLE_KEPT);
   const join = last.search(NAME_JOINS);
   const word = join === -1 ? "" : last.slice(join + 1);
+
   return word === "" ? last : word;
 }
 
@@ -288,6 +289,7 @@ function chipClasses(
   const compact = size === CHIP_SIZE.COMPACT;
   const toned = tone !== undefined;
   const filterish = look === CHIP_LOOK.FILTER;
+
   // Note that an outline keeps its own face under a tone, because its glyph alone says the tone, as the buttons beside it carry none.
   const face =
     toned && look !== CHIP_LOOK.OUTLINE
@@ -297,6 +299,7 @@ function chipClasses(
           look === CHIP_LOOK.TOOLBAR || look === CHIP_LOOK.FIELD ? TONED_PRESS : "",
         ]
       : [removable && filterish ? REMOVABLE_FILTER_FACE : LOOK_FACE[look]];
+
   // Note that the side room is the last of look, removal, mark alone, and compact to name it, as each narrows the one before.
   const inset = compact
     ? look === CHIP_LOOK.PILL
@@ -309,6 +312,7 @@ function chipClasses(
       : removable
         ? REMOVABLE_INSET[look]
         : LOOK_INSET[look];
+
   return [
     CHIP_BASE,
     LOOK_CORNER[look],
@@ -337,6 +341,7 @@ function faceClasses(
   busy: boolean,
 ): string {
   const smallGlyphs = look === CHIP_LOOK.PILL && size === CHIP_SIZE.COMPACT;
+
   return [
     FACE_BASE,
     // Note that a glyph wearing a status dot is sized as a bare one, its own glyph inside the dot's box.
@@ -399,6 +404,7 @@ function RemovableChip({
         {children}
       </button>
     );
+
   return (
     <span
       className={chipClasses(face, true, false)}
@@ -432,6 +438,7 @@ function LinkChip({
   ...anchor
 }: LinkChipProps): React.JSX.Element {
   const press = pulseOnPress(onClick, PRESS_PULSE.FACE);
+
   return (
     <a
       {...anchor}
@@ -451,8 +458,10 @@ function LinkChip({
 /** A chip: a button in the look of its place, a link where `href` is given, or a removable chip where `onRemove` is given. */
 export function Chip(props: ChipProps): React.JSX.Element {
   if (props.onRemove !== undefined) return <RemovableChip {...props} />;
+
   if (props.href !== undefined) return <LinkChip {...props} />;
   const { look, tone, width, size, iconOnly, chevron = false, busy, children, ...button } = props;
+
   return (
     <button
       type="button"
@@ -516,6 +525,7 @@ export function StaticChip({
   ...span
 }: StaticChipProps): React.JSX.Element {
   const compact = size === CHIP_SIZE.COMPACT;
+
   // Note that a compact pill's room is a removable compact pill's, so one standing beside the other lines up.
   const room = iconOnly
     ? "flex-none w-control p-0"
@@ -524,9 +534,11 @@ export function StaticChip({
       : look === CHIP_LOOK.PILL
         ? `flex-initial ${LOOK_INSET[CHIP_LOOK.PILL]}`
         : "flex-initial px-chip-inset";
+
   const box = compact
     ? "h-chip-compact gap-chip-tight text-caption leading-caption font-tag"
     : "h-control text-label gap-icon-gap font-label";
+
   return (
     <span
       {...span}
@@ -578,6 +590,7 @@ function ChipNameStart({ children }: { children: string }): React.JSX.Element {
  */
 export function ChipName(props: ChipNameProps): React.JSX.Element {
   const kept = props.cut === CHIP_CUT.MIDDLE ? keptEnd(props.children) : "";
+
   // Note that a name cut in its middle is a row of its two parts, so only its start ends in the ellipsis.
   return (
     <Text

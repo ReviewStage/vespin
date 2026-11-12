@@ -27,6 +27,7 @@ const NOTHING = () => undefined;
 /** The account the window reads, with a fixture run's synthetic reader taken as signed in, as the task list takes it. */
 const selectFoundingAccount = (state: AppStateSnapshot): FoundingAccount => {
   const account = selectSignedIn(state);
+
   return {
     signedIn: selectFixtureStaged(state) || account !== undefined,
     accountId: account?.id,
@@ -59,14 +60,17 @@ export function useNewWorkspace(placeLeave: PlaceLeave): NewWorkspace {
     ...appStateQuery,
     select: selectFoundingAccount,
   }).data ?? { signedIn: false, accountId: undefined };
+
   // The account the cards were opened for, which alone they stand for.
   const [founding, setFounding] = useState<{ accountId: string | undefined } | undefined>(
     undefined,
   );
+
   // A sign-out, or another account, puts the cards away for good, so the same account signing in again does not find them open.
   if (founding !== undefined && (!signedIn || founding.accountId !== accountId)) {
     setFounding(undefined);
   }
+
   return {
     open: signedIn && founding !== undefined && founding.accountId === accountId,
     // Note that the cards take the window in the page's place with no address of their own, so a page holding unsaved

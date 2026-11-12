@@ -16,8 +16,9 @@ import type { ConfirmAct } from "../confirm-state.js";
 /** The act `action` sends, held as a `useMutation` whose answer is the act's own answer. */
 export function useMutationAct(action: () => Promise<ActionResult>): ConfirmAct {
   const { mutateAsync, isPending, data, reset } = useMutation({ mutationFn: action });
+
   return {
-    run: () => mutateAsync(),
+    run: () => mutateAsync().then(() => undefined),
     busy: isPending,
     refused: isPending ? undefined : data,
     reset,
@@ -46,6 +47,7 @@ export async function answerOldest<Result>(
   });
   const answer = answers.shift();
   await act(async () => answer?.(result));
+
   for (let round = 0; round < NOTIFY_ROUNDS; round += 1) {
     const notified = Promise.withResolvers<void>();
     notifyManager.schedule(() => notified.resolve());

@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Vespin's host daemon, `vespin-host`: it runs on a Linux box or an Apple silicon Mac and follows the local agents its member starts there",
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node24 --outfile=dist/vespin-host.mjs --define:process.env.APP_HOST_VERSION='\"'$npm_package_version'\"' --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
+    "build": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node24 --outfile=dist/vespin-host.mjs --define:process.env.APP_HOST_VERSION='\"'$npm_package_version'\"' --define:process.env.APP_HOST_SENTRY_DSN='\"'${SENTRY_DSN:-}'\"' --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\"",
     "package": "tsx scripts/package.ts",
     "test:vitest": "vitest run",
     "typecheck": "tsc --project tsconfig.json"
@@ -14,6 +14,7 @@
     "@effect/platform-node": "catalog:",
     "@repo/features": "workspace:*",
     "@repo/host": "workspace:*",
+    "@sentry/node": "11.7.0",
     "effect": "catalog:"
   },
   "devDependencies": {

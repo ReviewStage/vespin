@@ -147,6 +147,7 @@ function slackOfLiveRows(
   channels: readonly SlackChannelRepositoryLiveRow[],
 ): WorkspaceSlack {
   if (installation === undefined) return { configured, channelRepositories: {} };
+
   return {
     configured,
     team: { id: installation.teamId, name: installation.teamName },

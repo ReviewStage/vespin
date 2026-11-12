@@ -62,6 +62,7 @@ export interface WorkspaceMenuDoors {
 /** The window's doors the menu's last items open, read where the menu is drawn, Admin's handed in and kept for an admin alone. */
 export function useWorkspaceMenuDoors(admin: AdminMenuDoor): WorkspaceMenuDoors {
   const isAdmin = useQuery({ ...appStateQuery, select: selectAdminAccess }).data === true;
+
   return {
     onNewWorkspace: useOpenNewWorkspace(),
     onOpenSettings: useOpenSettings(),
@@ -76,6 +77,7 @@ export function workspaceMenuGroups(
   doors: WorkspaceMenuDoors,
 ): MenuAction[][] {
   const first = tasks.workspaces[0]?.id;
+
   const choices = tasks.workspaces.map(
     (workspace): MenuAction => ({
       label: workspace.name,
@@ -92,6 +94,7 @@ export function workspaceMenuGroups(
       onSelect: () => tasks.onChooseWorkspace(workspace.id),
     }),
   );
+
   return [
     choices,
     [
@@ -144,8 +147,10 @@ export function WorkspaceSwitcher({
   const menu = useMenu(tasks.shown && inSight);
   const doors = useWorkspaceMenuDoors(admin);
   const listed = tasks.workspace;
+
   if (listed === undefined) return null;
   const personal = tasks.workspaces[0]?.id === listed.id;
+
   return (
     <div className="sidebar-workspace flex flex-none items-center gap-control-gap">
       <NavItem

@@ -21,6 +21,7 @@ async function openPage(status?: string): Promise<HTMLElement> {
     status === undefined
       ? ""
       : `?${new URLSearchParams({ [GITHUB_INSTALL_LANDING.STATUS_PARAM]: status })}`;
+
   window.history.replaceState(null, "", `${GITHUB_INSTALL_LANDING.PATH}${search}`);
   const root = document.createElement("div");
   root.id = "root";
@@ -29,6 +30,7 @@ async function openPage(status?: string): Promise<HTMLElement> {
   await act(async () => {
     await import("../src/github-installed");
   });
+
   return root;
 }
 

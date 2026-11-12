@@ -7,4 +7,5 @@ export const CompactedNoticeSchema = Schema.Struct({
   /** The tokens the session held before the fold, as the harness counted them; null where it did not say, never zero. */
   tokensBefore: Schema.NullOr(Schema.Number),
 });
+
 export type CompactedNotice = typeof CompactedNoticeSchema.Type;

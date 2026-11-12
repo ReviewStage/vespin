@@ -36,6 +36,7 @@ afterEach(() => {
 /** A button whose popover opens and closes through `open`, counting the presses away it hears. */
 function Owner({ away }: { away: { count: number } }): React.JSX.Element {
   const [open, setOpen] = useState(true);
+
   return createElement(
     "div",
     null,
@@ -88,7 +89,9 @@ test("a popover hung inside a card that scrolls turns below where the card leave
     this: HTMLElement,
   ) {
     if (this.dataset.box === "card") return new DOMRect(0, 300, 400, 400);
+
     if (this.dataset.box === "anchor") return new DOMRect(100, 320, 100, 20);
+
     return new DOMRect(100, 0, 340, 120);
   });
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(function (

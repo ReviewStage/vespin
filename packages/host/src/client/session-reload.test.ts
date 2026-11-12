@@ -44,6 +44,7 @@ function linked() {
       },
     });
     yield* settled;
+
     return { state, reloads: () => reloads };
   });
 }

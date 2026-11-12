@@ -4,18 +4,22 @@ export const MACOS_DEPLOYMENT_TARGET = "14.0";
 export const SWIFT_TARGET_TRIPLE = `${PACKAGED_ARCHITECTURE}-apple-macos${MACOS_DEPLOYMENT_TARGET}`;
 export const LICENSE_RESOURCE_NAME = "VESPIN-LICENSE.txt";
 export const NOTICE_RESOURCE_NAME = "VESPIN-NOTICE.txt";
+
 // The bundle's identifier, which macOS knows the app by.
 export const APP_ID = "dev.vespin.app";
+
 // This is the sentence macOS shows when it asks for the microphone, so it is
 // what consent is given against. It has to say where the audio goes.
 export const MICROPHONE_USAGE_DESCRIPTION =
   "Vespin uses the microphone for dictation. What you dictate is sent to OpenAI to be transcribed.";
+
 // The sentence macOS shows when it asks whether we may control another app,
 // so it is what consent is given against. Note that only a command an agent
 // runs on this Mac (an `osascript` through `run_on_mac`, which the app runs
 // as its own child and so with its entitlements) can raise it.
 export const APPLE_EVENTS_USAGE_DESCRIPTION =
   "Vespin asks before a command an agent runs on this Mac controls another app.";
+
 // The sentences macOS shows when a command run in the app touches a protected
 // place: an agent's `run_on_mac`, or the developer's own in a Terminal tab.
 // macOS asks in the app's name for what its shells touch, though the app
@@ -32,6 +36,7 @@ export const SHELL_ACCESS_USAGE_DESCRIPTIONS = Object.freeze({
   NSDownloadsFolderUsageDescription:
     "A command run in Vespin, by you or an agent, asked to use your Downloads folder. Allowing lets every later command in Vespin read and change files there; allow it if you keep code there.",
 });
+
 // The entitlements the bundled host's executables are signed with, in place
 // of the app's (`electron-builder-hooks.mjs`'s `signElectronBuilderApp`).
 // The launcher only replaces itself with Node, so it is granted nothing.
@@ -43,6 +48,7 @@ export const BUNDLED_HOST_ENTITLEMENTS = Object.freeze({
   launcher: Object.freeze([]),
   node: Object.freeze(["com.apple.security.cs.allow-jit"]),
 });
+
 // The bundle carries one icon for every mode, so the icns is cut from the dark
 // tile — space black reads on either desktop. The running app swaps the Dock
 // image between the light and dark tiles itself; see src/main/window/dock-icon.ts.
@@ -58,6 +64,7 @@ export const ICONSET_SOURCES = Object.freeze({
   "icon_512x512.png": "icon-dark-512.png",
   "icon_512x512@2x.png": "icon-dark-1024.png",
 });
+
 export const SIGNING_MODE = {
   AD_HOC: "ad-hoc",
   DEVELOPER_ID: "developer-id",
@@ -82,8 +89,10 @@ export function iconutilArguments(iconsetPath, icnsPath) {
 
 export function resolveSigningMode(env) {
   const rawIdentity = env.APP_CODESIGN_IDENTITY;
+
   const identity =
     Object.prototype.toString.call(rawIdentity) === "[object String]" ? rawIdentity.trim() : "";
+
   return identity ? { mode: SIGNING_MODE.DEVELOPER_ID, identity } : { mode: SIGNING_MODE.AD_HOC };
 }
 
@@ -115,6 +124,7 @@ export function signingModeDefine(env) {
  */
 export function replayProjectKeyDefine(env) {
   const releaseBuild = resolveSigningMode(env).mode === SIGNING_MODE.DEVELOPER_ID;
+
   return {
     PACKAGED_POSTHOG_PROJECT_API_KEY: JSON.stringify(
       releaseBuild ? (env.POSTHOG_PROJECT_API_KEY ?? "") : "",
@@ -135,4 +145,5 @@ export function replayProjectKeyDefine(env) {
  */
 export const APP_UPDATE_FEED_URL =
   "https://github.com/ReviewStage/vespin/releases/latest/download/";
+
 export const APP_UPDATE_CACHE_DIR_NAME = `${APP_ID}.updater`;

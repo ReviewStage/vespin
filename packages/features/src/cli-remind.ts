@@ -21,11 +21,14 @@ export type CliRemind = { readonly at: number } | { readonly refusal: string };
 export function cliRemindAt(words: string, now: number, zone: string): CliRemind {
   const typed = words.trim();
   const span = isDateMoment(typed) ? { start: typed } : dateOfWords(typed, now, zone);
+
   if (span === undefined) {
     return { refusal: `No date in "${typed}". Try tomorrow, fri 3pm, or nov 12 9:30am.` };
   }
+
   if (span.end !== undefined) return { refusal: "A reminder comes due at one time, not a range." };
   const wall = dateWall(span, zone);
+
   // Note that a time keeps the instant it was spelled at, since reading it again off the wall could land on the other side of a clock change.
   const timed =
     wall === undefined
@@ -33,7 +36,10 @@ export function cliRemindAt(words: string, now: number, zone: string): CliRemind
       : wall.start.time !== undefined
         ? span
         : dateOfWall({ start: { day: wall.start.day, time: MORNING } }, zone);
+
   const at = timed === undefined ? Number.NaN : Date.parse(timed.start);
+
   if (!(at > now)) return { refusal: "Pick a time after now to be reminded." };
+
   return { at };
 }

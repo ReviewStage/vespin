@@ -29,6 +29,7 @@ afterEach(() => {
 /** A button whose panel's standing is held as an owner holds it. */
 function Held(): React.JSX.Element {
   const [open, setOpen] = useState(false);
+
   return createElement(PopoverIconButton, {
     icon: "☺",
     label: "Change icon",
@@ -52,6 +53,7 @@ async function mount(): Promise<{ container: HTMLElement; button: HTMLButtonElem
   act(() => root.render(createElement(Held)));
   await settle();
   const button = container.querySelector("button") ?? assert.fail("no button");
+
   return { container, button };
 }
 

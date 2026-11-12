@@ -88,8 +88,9 @@ const GLYPH = {
 } as const;
 
 /** A glyph as the address a mask draws it from. */
-function maskOf(shapes: string): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${shapes}</svg>`;
+function maskOf(glyph: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${glyph}</svg>`;
+
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
@@ -203,14 +204,18 @@ function watchToggles(root: ShadowRoot): void {
  */
 export function dress(tree: FileTree): void {
   const root = tree.getFileTreeContainer()?.shadowRoot;
+
   if (root === null || root === undefined) return;
   watchToggles(root);
+
   // Note that a document that adopts no sheets, as jsdom's, draws the run unstyled.
   if (root.adoptedStyleSheets === undefined) return;
+
   if (sheet === undefined) {
     sheet = new CSSStyleSheet();
     sheet.replaceSync(SHEET);
   }
+
   if (!root.adoptedStyleSheets.includes(sheet)) {
     root.adoptedStyleSheets = [...root.adoptedStyleSheets, sheet];
   }
@@ -230,9 +235,11 @@ export function rowDecoration(mark: FileMark | undefined): FileTreeRowDecoration
   if (mark === undefined) return null;
   const threads = mark.threads ?? 0;
   const viewed = mark.viewed;
+
   if (threads === 0 && mark.lines === undefined && viewed === undefined) return null;
   const additions = mark.lines?.additions ?? 0;
   const deletions = mark.lines?.deletions ?? 0;
+
   // Note that the speech mark holds no words: the sheet draws it beside a count.
   const parts = [
     { text: "", color: PART_COLOR.THREADS },
@@ -240,17 +247,20 @@ export function rowDecoration(mark: FileMark | undefined): FileTreeRowDecoration
     { text: counted(additions, "+"), color: PART_COLOR.ADDED },
     { text: counted(deletions, "−"), color: PART_COLOR.REMOVED },
   ];
+
   if (viewed !== undefined) {
     parts.push({
       text: viewed ? MARK_WORDS.VIEWED : "",
       color: viewed ? PART_COLOR.VIEWED : PART_COLOR.UNVIEWED,
     });
   }
+
   const said = [
     threads > 0 ? MARK_WORDS.threads(threads) : undefined,
     mark.lines === undefined ? undefined : MARK_WORDS.lines(additions, deletions),
     viewed === true ? MARK_WORDS.VIEWED : undefined,
   ].filter((words) => words !== undefined);
+
   return { text: parts.map((each) => each.text).join(""), title: said.join(" · "), parts };
 }
 
@@ -261,13 +271,17 @@ export function rowDecoration(mark: FileMark | undefined): FileTreeRowDecoration
  */
 export function pressedToggle(event: Event): string | undefined {
   const path = event.composedPath();
+
   const lane = path.findIndex(
     (target) => target instanceof HTMLElement && target.dataset.itemSection === "decoration",
   );
+
   const pressed = path[lane - 2];
   const row = path[lane + 1];
+
   if (lane < 2 || !(pressed instanceof HTMLElement) || !(row instanceof HTMLElement))
     return undefined;
   const at = Array.prototype.indexOf.call(pressed.parentElement?.children ?? [], pressed);
+
   return at === PART.VIEWED && row.dataset.itemType === "file" ? row.dataset.itemPath : undefined;
 }

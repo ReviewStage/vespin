@@ -35,12 +35,15 @@ afterEach(() => {
 /** The editor on `TEXT`, its caret at the end of the Approach section unless `placement` says, with the panel's pictures stood in for. */
 function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { section: 0 }) {
   const taken: PictureTaken[] = [];
+
   const pictures: DescriptionEditorPictures = {
     draw: () => ({ redraw: () => undefined, undraw: () => undefined }),
     take: (each) => taken.push(...each),
     copies: (src) => src.includes(OTHER_TASK_ID),
   };
+
   const host = document.body.appendChild(document.createElement("div"));
+
   const handle = mountDescriptionEditor(host, {
     markdown,
     placement,
@@ -52,7 +55,9 @@ function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { secti
     onLeaveUp: () => undefined,
     pictures,
   });
+
   handles.push(handle);
+
   return { handle, taken, host };
 }
 
@@ -104,6 +109,7 @@ test("image files pasted are laid in as pictures, and a pasted screenshot is cal
 test("an image pasted mid-line in a list's first item stands below that line, in that item, not after the list", () => {
   const beats =
     "## Beats\n\n1. Open on the inbox.\n2. Show the agent at work.\n3. End on the logo.\n";
+
   const caret = { section: 0, text: "Open on the inbox.", occurrence: 0, offset: 4, code: false };
   const { handle, taken, host } = opened(beats, { x: 0, y: 0, words: { ...caret, top: 0 } });
   const editable = host.querySelector(".ProseMirror") ?? assert.fail("the editor stands");

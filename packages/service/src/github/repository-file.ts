@@ -61,9 +61,11 @@ const NOT_REGULAR: RepositoryFile = { regular: false, notFound: false };
 /** A path's segments, or nothing where a segment would leave the repository's contents, as a URL folds an empty, `.`, or `..` one away. */
 export function repositorySegments(path: string): readonly string[] | undefined {
   const segments = path.split("/");
+
   if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
     return undefined;
   }
+
   return segments;
 }
 
@@ -81,20 +83,27 @@ export function readRepositoryFile(
 ): Effect.Effect<RepositoryFile, GitHubUnavailable, HttpClient.HttpClient> {
   return Effect.gen(function* () {
     const encoded = contentsPath(path);
+
     if (encoded === undefined) return NOT_REGULAR;
+
     const request = githubRead(`/repos/${repository.fullName}/contents/${encoded}`, token).pipe(
       HttpClientRequest.setUrlParams({ ref }),
     );
+
     return yield* Effect.scoped(
       Effect.gen(function* () {
         const response = yield* send(request);
+
         if (response.status === GITHUB_HTTP_STATUS.NOT_FOUND) return NOT_FOUND;
         const answer = yield* readBody(response, ContentsSchema);
+
         if (!Schema.is(FileContentsSchema)(answer)) return NOT_REGULAR;
+
         const decoded =
           answer.encoding === BASE64
             ? Result.getOrUndefined(Base64.decode(answer.content.replace(/\s/gu, "")))
             : undefined;
+
         return { regular: true, bytes: answer.size, content: decoded } satisfies RepositoryFile;
       }),
     );
@@ -120,11 +129,14 @@ export function readBranchHead(
     // Note that a branch's name may hold a slash, which stays a step of the ref's path.
     const ref = branch.split("/").map(encodeURIComponent).join("/");
     const request = githubRead(`/repos/${repository.fullName}/git/ref/heads/${ref}`, token);
+
     return yield* Effect.scoped(
       Effect.gen(function* () {
         const response = yield* send(request);
+
         if (response.status === GITHUB_HTTP_STATUS.NOT_FOUND) return undefined;
         const answer = yield* readBody(response, BranchRefSchema);
+
         return answer.object.sha;
       }),
     );

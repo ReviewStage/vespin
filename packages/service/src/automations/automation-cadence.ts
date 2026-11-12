@@ -92,7 +92,7 @@ type CadencedAutomation = Pick<
   "id" | "organizationId" | "enabled" | "trigger"
 >;
 
-export interface AutomationCadenceShape {
+export interface AutomationCadenceService {
   /** The automation's schedule kept as the automation stands: made, written, enabled or disabled, or deleted where it fires on no schedule. */
   readonly keep: (
     automation: CadencedAutomation,
@@ -115,6 +115,7 @@ export interface AutomationCadenceShape {
  */
 export const recordFiring = Effect.fnUntraced(function* (firing: AutomationFiringMessage) {
   const automation = yield* readAutomationToRun(firing.automationId);
+
   if (Option.isNone(automation)) return Option.none<Automation>();
   yield* recordAutomationRun(automation.value, {
     dedupeKey: firing.dedupeKey,
@@ -122,19 +123,20 @@ export const recordFiring = Effect.fnUntraced(function* (firing: AutomationFirin
     firedAt: new Date(firing.firedAt),
     ...(firing.payload === undefined ? undefined : { payload: firing.payload }),
   });
+
   return automation;
 });
 
 /** Off production: no schedule kept, and a firing recorded queued for nothing to start. */
-const RECORDED_ONLY: AutomationCadenceShape = {
+const RECORDED_ONLY: AutomationCadenceService = {
   keep: () => Effect.void,
   forget: () => Effect.void,
   publish: (firing) => Effect.asVoid(recordFiring(firing)),
 };
 
 /** The API's code for a failure, where it was one of the API's own. */
-function codeOf(failure: unknown): string | undefined {
-  return failure instanceof SchedulesApiError ? failure.code : undefined;
+function codeOf(cause: unknown): string | undefined {
+  return cause instanceof SchedulesApiError ? cause.code : undefined;
 }
 
 /** One call to Vercel, its failure carried with the API's code. */
@@ -168,13 +170,16 @@ const forgetSchedule = (automation: Pick<CadencedAutomation, "id" | "organizatio
  */
 const keepSchedule = Effect.fnUntraced(function* (automation: CadencedAutomation) {
   const { trigger } = automation;
+
   if (trigger.kind !== AUTOMATION_TRIGGER.SCHEDULE) return yield* forgetSchedule(automation);
   const identity = { name: automation.id, namespace: automation.organizationId };
+
   const cadence = {
     expression: { type: "cron", cron: trigger.cron },
     timezone: trigger.timezone,
     target: { topic: AUTOMATION_RUNS.TOPIC },
   } as const;
+
   const kept: Schedule = yield* vercelCall(CADENCE_OPERATION.KEEP, () =>
     Schedules.update({ ...identity, ...cadence }),
   ).pipe(
@@ -183,17 +188,20 @@ const keepSchedule = Effect.fnUntraced(function* (automation: CadencedAutomation
       () => vercelCall(CADENCE_OPERATION.KEEP, () => Schedules.create({ ...identity, ...cadence })),
     ),
   );
+
   const active = kept.state === "active";
+
   if (automation.enabled && !active) {
     yield* vercelCall(CADENCE_OPERATION.KEEP, () => Schedules.enable(identity));
   }
+
   if (!automation.enabled && active) {
     yield* vercelCall(CADENCE_OPERATION.KEEP, () => Schedules.disable(identity));
   }
 });
 
 /** On production: schedules kept in Vercel Schedules under the deployment's own token, and firings sent to the topic. */
-const VERCEL_CADENCE: AutomationCadenceShape = {
+const VERCEL_CADENCE: AutomationCadenceService = {
   keep: keepSchedule,
   forget: forgetSchedule,
   publish: (firing) =>
@@ -201,7 +209,7 @@ const VERCEL_CADENCE: AutomationCadenceShape = {
 };
 
 /** The cadence one runtime has: Vercel's where the runtime provides it, a queued record and nothing more otherwise. */
-export const AutomationCadence = Context.Reference<AutomationCadenceShape>(
+export const AutomationCadence = Context.Reference<AutomationCadenceService>(
   "@repo/service/AutomationCadence",
   { defaultValue: () => RECORDED_ONLY },
 );

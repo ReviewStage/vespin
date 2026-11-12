@@ -67,9 +67,11 @@ export function BreakdownChart({
   }
 
   const series = parts.map((part) => part.key);
+
   const config: ChartConfig = Object.fromEntries(
     parts.map((part) => [part.key, { label: part.label, color: part.color }]),
   );
+
   const data = rows.map((row) => ({
     label: row.label,
     ...row.counts,
@@ -78,6 +80,7 @@ export function BreakdownChart({
     // part of nothing draws no bar for a label to stand beside.
     labelAt: series.findLast((key) => (row.counts[key] ?? 0) > 0),
   }));
+
   return (
     <ChartFrame title={title} legend={breakdownLegend(parts)}>
       <ChartContainer

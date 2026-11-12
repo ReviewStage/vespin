@@ -68,15 +68,19 @@ const wordsFlag = Flag.String("file").pipe(
 /** Who wrote an entry, as a line names them. */
 function writerOf(entry: DescriptionCommentEntry): string {
   const { writer } = entry;
+
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT)
     return `Agent ${writer.agentId ?? ""}`.trim();
+
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) return PRODUCT_NAME;
+
   return writer.by?.name ?? "A former member";
 }
 
 /** One entry's lines: a comment's writer and words, or a line of what happened to the thread. */
 function entryLines(entry: DescriptionCommentEntry): readonly string[] {
   const writer = writerOf(entry);
+
   switch (entry.kind) {
     case DESCRIPTION_COMMENT_ENTRY.COMMENT:
       return [
@@ -97,9 +101,12 @@ function entryLines(entry: DescriptionCommentEntry): readonly string[] {
 function placeOf(thread: DescriptionCommentThread): string {
   if (thread.page !== undefined) {
     const on = thread.page.element === undefined ? "the whole page" : thread.page.element;
+
     return `page ${thread.page.id} v${thread.page.version}, ${on}`;
   }
+
   const deleted = thread.anchor === undefined ? ", words since deleted" : "";
+
   return thread.section === "" ? `description${deleted}` : `${thread.section}${deleted}`;
 }
 
@@ -124,9 +131,11 @@ const written = Effect.fnUntraced(function* (
       message: REFUSAL_WORDS[saved.refused],
     });
   }
+
   if ("deleted" in saved) {
     return yield* new CommandFailed({ exit: CLI_EXIT.REFUSED, message: "The thread was deleted." });
   }
+
   const unsent = saved.unsent ?? [];
   yield* answer({
     json: { thread: saved.thread, unsent },
@@ -151,10 +160,12 @@ const actedOn = Effect.fnUntraced(function* (
 ) {
   const id = yield* resolveTaskId(task);
   const { hosted } = yield* session;
+
   const saved = yield* askService(hosted.descriptionComments.act, {
     params: { id, thread },
     body,
   });
+
   yield* written(saved, line);
 });
 
@@ -175,13 +186,16 @@ const listCommand = Command.make(
     Effect.gen(function* () {
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
+
       const read = yield* askService(hosted.descriptionComments.read, {
         id,
         ...(Option.isSome(page) ? { page: page.value } : undefined),
       });
+
       const threads = read.threads.filter(
         (thread) => status === LISTED.ALL || thread.status === status,
       );
+
       yield* answer({
         json: { threads },
         lines: threads.length === 0 ? ["No threads."] : threads.flatMap(threadLines),
@@ -218,6 +232,7 @@ const addCommand = Command.make(
       const { plan } = yield* askService(hosted.plans.open, { id });
       const text = plan.document.body;
       const anchor = locatedPhrase(text, on);
+
       if (anchor === undefined) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.REFUSED,
@@ -225,6 +240,7 @@ const addCommand = Command.make(
             "The description does not hold those words exactly once; copy them, or more of them, from vespin description show.",
         });
       }
+
       const started = yield* askService(hosted.descriptionComments.start, {
         params: { id },
         body: {
@@ -236,6 +252,7 @@ const addCommand = Command.make(
           words,
         },
       });
+
       yield* written(started.body, (thread) => `Started thread ${thread.id}.`);
     }),
 ).pipe(

@@ -340,7 +340,7 @@ export type MentionDrawer = (
 interface ComposerMentions {
   readonly onTrigger: (trigger: ComposerTrigger | undefined) => void;
   readonly drawMention: MentionDrawer;
-  /** The mention words pasted whole stand for, an address of our own or a page of an integration's; nothing for any other words, which paste as words. */
+  /** The chip words pasted whole stand for, any link the read view draws as one; nothing for any other words, which paste as words. */
   readonly pasted: (words: string) => MentionNode | undefined;
 }
 
@@ -377,10 +377,10 @@ export interface DescriptionEditorMentions {
   readonly onKey: (event: KeyboardEvent) => boolean;
   readonly drawMention: MentionDrawer;
   readonly retarget: (target: string, change: HeadingsChange) => MentionNode | undefined;
-  /** The mention words pasted whole stand for, an address of our own or a page of an integration's; nothing for any other words, which paste as words. */
+  /** The chip words pasted whole stand for, any link the read view draws as one; nothing for any other words, which paste as words. */
   readonly pasted: (words: string) => MentionNode | undefined;
-  /** Whether a link's target names a mention, which the read view draws as its chip, so the editor draws the link in a chip's light look. */
-  readonly namesMention: (target: string) => boolean;
+  /** Whether a link's target is one the read view draws as a chip, so the editor draws the link in a chip's light look. */
+  readonly namesChip: (target: string) => boolean;
 }
 
 /** Words of the editor a thread is started on: where they stand in `text`, the Markdown the editor would hand over now, and the words themselves. */
@@ -456,6 +456,7 @@ export function sameTrigger(
   b: ComposerTrigger | undefined,
 ): boolean {
   if (a === undefined || b === undefined) return a === b;
+
   return (
     a.start === b.start &&
     a.query === b.query &&
@@ -472,18 +473,19 @@ export const EDITOR_ROOT_SELECTOR = ".ProseMirror";
 export type EditorAria = Readonly<Record<string, string | undefined>>;
 
 /** The names a list's field carries (`useComboboxField`'s), as the editor root that steers the list takes them; the root's role is the editor's own (`rootAria`). */
-export function listAria(field: ComboboxFieldProps): EditorAria {
+export function listAria(field: ComboboxFieldProps) {
   return {
     "aria-expanded": String(field["aria-expanded"]),
     "aria-controls": field["aria-controls"],
     "aria-autocomplete": field["aria-autocomplete"],
     "aria-activedescendant": field["aria-activedescendant"],
-  };
+  } satisfies EditorAria;
 }
 
 /** Whether two sets of attributes say the same, so an editor handed what it holds already is not updated again. */
 export function sameAria(a: EditorAria, b: EditorAria): boolean {
   const names = new Set([...Object.keys(a), ...Object.keys(b)]);
+
   return [...names].every((name) => a[name] === b[name]);
 }
 
@@ -497,6 +499,7 @@ export function sameAria(a: EditorAria, b: EditorAria): boolean {
  */
 export function rootAria(aria: EditorAria): Readonly<Record<string, string>> {
   const open = aria["aria-expanded"] === "true";
+
   const named: EditorAria = open
     ? { ...aria, role: "combobox" }
     : {
@@ -507,6 +510,7 @@ export function rootAria(aria: EditorAria): Readonly<Record<string, string>> {
         "aria-controls": undefined,
         "aria-activedescendant": undefined,
       };
+
   return Object.fromEntries(
     Object.entries(named).filter((entry): entry is [string, string] => entry[1] !== undefined),
   );

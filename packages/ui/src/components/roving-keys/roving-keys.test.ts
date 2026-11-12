@@ -43,6 +43,7 @@ afterEach(() => {
 /** A toolbar of tools walked along its row, Italic taking ArrowRight itself. */
 function Toolbar(): React.JSX.Element {
   const roving = useRovingKeys<HTMLDivElement>({ orientation: ROVING_ORIENTATION.HORIZONTAL });
+
   return createElement(
     "div",
     { ...roving, "aria-label": "Format" },
@@ -74,7 +75,9 @@ function draw(): Record<(typeof TOOLS)[number], HTMLButtonElement> {
   roots.push(root);
   act(() => root.render(createElement(Toolbar)));
   const [bold, italic, link] = [...container.querySelectorAll("button")];
+
   if (bold === undefined || italic === undefined || link === undefined) throw new Error("No tools");
+
   return { Bold: bold, Italic: italic, Link: link };
 }
 
@@ -110,8 +113,10 @@ test("an item whose own handler takes a key keeps the focus", () => {
 test("a key heard on the box itself steps from none: forward and Home to the first, back and End to the last", () => {
   const tools = draw();
   const box = tools.Bold.parentElement;
+
   if (box === null) throw new Error("No toolbar");
   box.tabIndex = -1;
+
   for (const [name, landed] of [
     ["ArrowRight", tools.Bold],
     ["Home", tools.Bold],
@@ -130,9 +135,11 @@ function DrawnTools({ heard }: { heard: RovingReach[] }): React.JSX.Element {
     orientation: ROVING_ORIENTATION.HORIZONTAL,
     reach: (_from, to) => {
       heard.push(to);
+
       return to !== ROVING_REACH.PREVIOUS;
     },
   });
+
   return createElement(
     "div",
     { ...roving, "aria-label": "Format" },
@@ -173,6 +180,7 @@ const COLUMNS = [["Backlog one", "Backlog two"], [], ["Done one"]] as const;
 /** One column of cards, walked down by ↑↓. */
 function Column({ cards }: { cards: readonly string[] }): React.JSX.Element {
   const roving = useRovingKeys<HTMLDivElement>();
+
   return createElement(
     "div",
     roving,
@@ -185,6 +193,7 @@ function Column({ cards }: { cards: readonly string[] }): React.JSX.Element {
 /** A board of columns, the middle one holding no card, crossed by ←→. */
 function Board(): React.JSX.Element {
   const crossing = useRovingColumns<HTMLDivElement>();
+
   return createElement(
     "div",
     crossing,
@@ -198,13 +207,17 @@ test("← and → cross from a column to the next one's Tab stop, an empty colum
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Board)));
+
   const card = (name: string) => {
     const found = [...container.querySelectorAll("button")].find(
       (each) => each.textContent === name,
     );
+
     if (found === undefined) throw new Error(`No card ${name}`);
+
     return found;
   };
+
   act(() => card("Backlog one").focus());
   key("ArrowDown");
   expect(document.activeElement).toBe(card("Backlog two"));
@@ -225,6 +238,7 @@ function Rows({
   marks: Partial<Record<(typeof ROWS)[number], Record<string, string>>>;
 }): React.JSX.Element {
   const roving = useRovingKeys<HTMLDivElement>();
+
   return createElement(
     "div",
     roving,
@@ -241,6 +255,7 @@ function drawRows(marks: React.ComponentProps<typeof Rows>["marks"]): HTMLButton
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Rows, { marks })));
+
   return [...container.querySelectorAll("button")];
 }
 
@@ -265,6 +280,7 @@ test("a chosen row outranks the current one, and the row last moved to outranks 
     Second: { "aria-selected": "true" },
     Third: { "aria-current": "page" },
   });
+
   expect(rows.map((row) => row.tabIndex)).toEqual([-1, 0, -1]);
   act(() => rows[0]?.focus());
   expect(rows.map((row) => row.tabIndex)).toEqual([0, -1, -1]);

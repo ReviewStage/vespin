@@ -42,6 +42,7 @@ function sendQueue(): SendQueue {
   // answered send is kept, a settled promise, since a key is an agent's or an
   // item's id and a session meets few.
   const newest = new Map<string, Promise<void>>();
+
   return {
     after: (key, send) => {
       const before = newest.get(key) ?? Promise.resolve();
@@ -54,5 +55,6 @@ function sendQueue(): SendQueue {
 /** A send queue held for as long as the component that sends through it is mounted. */
 export function useSendQueue(): SendQueue {
   const [queue] = useState(sendQueue);
+
   return queue;
 }

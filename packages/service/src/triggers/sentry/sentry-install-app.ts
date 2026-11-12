@@ -116,9 +116,11 @@ function sentryCall<A>(
         if (response.status >= HOSTED_HTTP_STATUS.INTERNAL_ERROR) {
           return Effect.fail(SENTRY_PROOF_FAILURE.UNANSWERED);
         }
+
         if (response.status < 200 || response.status >= 300) {
           return Effect.fail(SENTRY_PROOF_FAILURE.REFUSED);
         }
+
         return HttpClientResponse.schemaBodyJson(schema)(response).pipe(
           Effect.mapError(() => SENTRY_PROOF_FAILURE.REFUSED),
         );
@@ -139,6 +141,7 @@ const proveInstallation = Effect.fn("web/sentryProveInstallation")(function* (
   code: string,
 ): Effect.fn.Return<Option.Option<string>, SentryProofFailure, HttpClient.HttpClient> {
   const installation = `${SENTRY_ORIGIN}/api/0/sentry-app-installations/${installationId}/`;
+
   const authorized = yield* sentryCall(
     HttpClientRequest.post(`${installation}authorizations/`).pipe(
       HttpClientRequest.acceptJson,
@@ -151,6 +154,7 @@ const proveInstallation = Effect.fn("web/sentryProveInstallation")(function* (
     ),
     AuthorizationAnswer,
   );
+
   const verified = yield* sentryCall(
     HttpClientRequest.put(installation).pipe(
       HttpClientRequest.bearerToken(authorized.token),
@@ -159,6 +163,7 @@ const proveInstallation = Effect.fn("web/sentryProveInstallation")(function* (
     ),
     VerifiedAnswer,
   );
+
   return Option.fromNullishOr(verified.organization?.slug);
 });
 
@@ -171,18 +176,24 @@ const installedLanding = Effect.fn("web/sentryInstalledLanding")(function* (
   DatabaseServices | SentryApp | HttpClient.HttpClient
 > {
   const state = query.get(INSTALLED_QUERY.STATE);
+
   if (state === null) return INTEGRATION_LANDING_STATUS.EXPIRED;
+
   const intent = yield* hostedStoreOrUnavailable(
     spendIntegrationInstallIntent(TRIGGER_PROVIDER.SENTRY, state),
   );
+
   if (Option.isNone(intent)) return INTEGRATION_LANDING_STATUS.EXPIRED;
   const { userId, organizationId } = intent.value;
   const workspace = yield* hostedStoreOrUnavailable(workspaceOf(userId, organizationId));
+
   if (Option.isNone(workspace) || !managesWorkspace(workspace.value)) {
     return INTEGRATION_LANDING_STATUS.EXPIRED;
   }
+
   const code = query.get(INSTALLED_QUERY.CODE);
   const installationId = query.get(INSTALLED_QUERY.INSTALLATION_ID);
+
   if (
     code === null ||
     !GRANT_CODE.test(code) ||
@@ -191,15 +202,20 @@ const installedLanding = Effect.fn("web/sentryInstalledLanding")(function* (
   ) {
     return INTEGRATION_LANDING_STATUS.NOT_COMPLETED;
   }
+
   const app = yield* SentryApp;
   const settings = yield* Effect.result(app.settings);
+
   if (Result.isFailure(settings)) return INTEGRATION_LANDING_STATUS.UNAVAILABLE;
   const proven = yield* Effect.result(proveInstallation(settings.success, installationId, code));
+
   if (Result.isFailure(proven)) {
     // Note that only the failure's kind is logged, never the code or a token.
     yield* Effect.logWarning("Sentry did not prove an installation", proven.failure);
+
     return LANDED_ON_PROOF_FAILURE[proven.failure];
   }
+
   const linked = yield* hostedStoreOrUnavailable(
     linkIntegrationInstallation({
       provider: TRIGGER_PROVIDER.SENTRY,
@@ -212,6 +228,7 @@ const installedLanding = Effect.fn("web/sentryInstalledLanding")(function* (
       }),
     }),
   );
+
   return linked === INSTALLATION_LINK.LINKED
     ? INTEGRATION_LANDING_STATUS.CONNECTED
     : INTEGRATION_LANDING_STATUS.ALREADY_CONNECTED;
@@ -220,9 +237,11 @@ const installedLanding = Effect.fn("web/sentryInstalledLanding")(function* (
 /** GET: the Redirect URL. Whatever Sentry sent, the browser lands on the page with a word. */
 const installedEndpoint = Effect.gen(function* () {
   const query = yield* requestQuery;
+
   const status = yield* installedLanding(query).pipe(
     Effect.catch(() => Effect.succeed(INTEGRATION_LANDING_STATUS.UNAVAILABLE)),
   );
+
   return HttpServerResponse.redirect(integrationLandingPath(SENTRY, status), {
     status: SEE_OTHER,
   });

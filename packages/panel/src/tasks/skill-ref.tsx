@@ -70,6 +70,7 @@ const SKILL_SOURCE_SUB = {
 /** The skill's card: its mark and name, where it comes from under the name, what it is for, and its file's line where it has one. */
 export function SkillCard({ subject }: { subject: SkillSubject }): React.JSX.Element {
   const { skill } = subject;
+
   return (
     <HoverCard data-skill-card="">
       <HoverCardHead

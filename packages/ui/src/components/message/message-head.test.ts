@@ -22,5 +22,6 @@ test("a received message's head names its sender, then what they did", () => {
     ),
     "text/html",
   );
+
   assert.equal(page.body.textContent, "AdaThread answer Ship the invites?");
 });

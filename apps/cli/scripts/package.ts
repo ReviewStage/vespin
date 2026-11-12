@@ -40,6 +40,7 @@ import { cliTarballName } from "@repo/features/cli-release";
 import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { HOST_TARGET, type HostTarget } from "@repo/features/host-release";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import type { Metafile } from "esbuild";
 
 const APP = join(import.meta.dirname, "..");
 const REPOSITORY = join(APP, "..", "..");
@@ -84,9 +85,11 @@ function sha256(bytes: Uint8Array): string {
 
 /** This workspace package's version, which the bundle was built to say and the release is tagged with. */
 function version(): string {
+  // SAFETY: this is the workspace's own package.json, which carries the version the release is tagged with.
   const manifest = JSON.parse(readFileSync(join(APP, "package.json"), "utf8")) as {
     version: string;
   };
+
   return manifest.version;
 }
 
@@ -101,31 +104,41 @@ function shippedBundle(): string {
  * own words where its folder carries them, in name order.
  */
 function thirdPartyNotices(): string {
-  const meta = JSON.parse(readFileSync(join(DIST, "meta.json"), "utf8")) as {
-    inputs: Record<string, unknown>;
-  };
+  // SAFETY: esbuild writes its metafile in its own `Metafile` shape.
+  const meta = JSON.parse(readFileSync(join(DIST, "meta.json"), "utf8")) as Metafile;
+
   const folders = new Map<string, string>();
+
   for (const input of Object.keys(meta.inputs)) {
     const at = input.lastIndexOf("node_modules/");
+
     if (at < 0) continue;
     const parts = input.slice(at + "node_modules/".length).split("/");
     const name = parts[0]?.startsWith("@") ? `${parts[0]}/${parts[1]}` : parts[0];
+
     if (name === undefined) continue;
     folders.set(name, join(APP, input.slice(0, at), "node_modules", name));
   }
+
   const sections = [...folders.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, folder]) => {
+      // SAFETY: an installed package's package.json carries its version, and its license where it names one.
       const manifest = JSON.parse(readFileSync(join(folder, "package.json"), "utf8")) as {
         version: string;
         license?: string;
       };
+
       const file = readdirSync(folder).find((each) => LICENSE_FILE.test(each));
+
       const words =
         file === undefined ? "" : `\n\n${readFileSync(join(folder, file), "utf8").trim()}`;
+
       const heading = `${name} ${manifest.version} (${manifest.license ?? "see its package"})`;
+
       return `${heading}\n${"-".repeat(heading.length)}${words}\n`;
     });
+
   return [
     "Third-party notices",
     "===================",
@@ -156,6 +169,7 @@ function npmManifest(release: string): string {
     files: ["vespin.mjs", "README.md", "skills", "LICENSE", "NOTICE", "THIRD_PARTY_NOTICES"],
     keywords: ["vespin", "cli", "coding-agents"],
   };
+
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
@@ -180,11 +194,14 @@ function stageNpm(release: string, bundle: string, notices: string): void {
 /** The pin's archive, fetched and refused unless it is exactly the pinned build. */
 async function pinnedArchive(pin: AgentToolPin): Promise<Uint8Array> {
   const response = await fetch(pin.ARCHIVE);
+
   if (!response.ok) throw new Error(`${pin.ARCHIVE} answered ${response.status}`);
   const archive = new Uint8Array(await response.arrayBuffer());
+
   if (archive.length !== pin.BYTES || sha256(archive) !== pin.SHA256) {
     throw new Error(`${pin.ARCHIVE} is not the pinned build`);
   }
+
   return archive;
 }
 
@@ -194,6 +211,7 @@ async function keepPinned(pin: AgentToolPin, folder: string, scratch: string): P
   writeFileSync(saved, await pinnedArchive(pin));
   const members = pin.MEMBERS.map((member) => `${pin.ROOT}/${member}`);
   execFileSync("tar", ["-xzf", saved, "-C", scratch, ...members]);
+
   for (const member of pin.MEMBERS) {
     mkdirSync(dirname(join(folder, member)), { recursive: true });
     copyFileSync(join(scratch, pin.ROOT, member), join(folder, member));
@@ -252,6 +270,7 @@ async function main(): Promise<void> {
   stageNpm(release, bundle, notices);
   rmSync(RELEASE, { recursive: true, force: true });
   mkdirSync(RELEASE, { recursive: true });
+
   for (const target of Object.values(HOST_TARGET)) {
     await packageTarball(release, target, bundle, notices);
   }

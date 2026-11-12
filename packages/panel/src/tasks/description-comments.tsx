@@ -273,6 +273,7 @@ function sameCards(a: readonly MarginCard[], b: readonly MarginCard[]): boolean 
     a.length === b.length &&
     a.every((card, at) => {
       const other = b[at];
+
       return (
         other !== undefined &&
         card.id === other.id &&
@@ -285,6 +286,11 @@ function sameCards(a: readonly MarginCard[], b: readonly MarginCard[]): boolean 
   );
 }
 
+type UseMarginCardsResult = {
+  drawn: readonly DrawnCard[];
+  gone: (id: string) => void;
+};
+
 /**
  * The margin's cards to draw, while it is drawn: those standing, then each
  * that left, as it was last drawn, until its fade is done (`gone`). Note that what left is
@@ -292,18 +298,14 @@ function sameCards(a: readonly MarginCard[], b: readonly MarginCard[]): boolean 
  * fading rather than one drawn again, and a card standing again is no
  * longer held.
  */
-function useMarginCards(
-  cards: readonly MarginCard[],
-  drawing: boolean,
-): {
-  drawn: readonly DrawnCard[];
-  gone: (id: string) => void;
-} {
+function useMarginCards(cards: readonly MarginCard[], drawing: boolean): UseMarginCardsResult {
   const [held, setHeld] = useState<{
     last: readonly MarginCard[];
     leaving: readonly MarginCard[];
   }>(() => ({ last: cards, leaving: [] }));
+
   let { leaving } = held;
+
   // Note that a margin not drawn, folded, holds nothing, since a card it held would fade out once it is drawn again.
   if (!sameCards(held.last, cards) || (!drawing && leaving.length > 0)) {
     const standing = new Set(cards.map((card) => card.id));
@@ -311,9 +313,11 @@ function useMarginCards(
     leaving = drawing ? [...leaving.filter((card) => !standing.has(card.id)), ...left] : [];
     setHeld({ last: cards, leaving });
   }
+
   const gone = useCallback((id: string) => {
     setHeld((now) => ({ last: now.last, leaving: now.leaving.filter((card) => card.id !== id) }));
   }, []);
+
   return {
     drawn: [
       ...cards.map((card) => ({ ...card, leaving: false })),
@@ -348,7 +352,9 @@ function MarginSlot({
   useEffect(() => {
     if (!shown.mounted) onGone(id);
   }, [shown.mounted, onGone, id]);
+
   if (!shown.mounted) return null;
+
   return (
     <div
       ref={(element) => {
@@ -463,6 +469,7 @@ const UNFOCUSED: Focused = { kind: FOCUS_KIND.NONE };
 /** The thread drawn open, the one being started under its stand-in id. */
 function activeOf(focused: Focused): string | undefined {
   if (focused.kind === FOCUS_KIND.THREAD) return focused.id;
+
   return focused.kind === FOCUS_KIND.STARTING ? PENDING_THREAD : undefined;
 }
 
@@ -481,30 +488,34 @@ export function useCommentFocus(): CommentFocus {
   return useContext(CommentFocusContext);
 }
 
+type WriterSubjectResult = { subject: AgentSubject; elsewhere: boolean };
+
 /**
  * The agent that wrote an entry: one of the task's own, or, where an agent
  * of another task wrote on the description by naming it, as the window's list
  * across the workspace names it, rather than as an agent no list holds;
  * and whether it is such an agent, which has no tab on this task.
  */
-function writerSubject(
-  agents: EditAgents,
-  agentId: string,
-): { subject: AgentSubject; elsewhere: boolean } {
+function writerSubject(agents: EditAgents, agentId: string): WriterSubjectResult {
   const line = agents.control.listed?.find((each) => each.id === agentId);
   const subject = agentSubject(agents.control, agentId, NOTHING_HELD, false, line);
+
   return { subject, elsewhere: subject.agent === undefined && line !== undefined };
 }
+
+type UseWriterResult = { author: CommentAuthor; nameRef: ReactNode };
 
 /** Who wrote an entry as a comment draws them: their face, and their name as every place naming an actor draws it. */
 function useWriter(
   writer: DescriptionCommentWriter,
   agents: EditAgents | undefined,
-): { author: CommentAuthor; nameRef: ReactNode } {
+): UseWriterResult {
   const person = usePerson(writer.by);
+
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) {
     return { author: commentAuthor(APP_ACTOR), nameRef: <ActorRef actor={APP_ACTOR} nameOnly /> };
   }
+
   if (
     writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT &&
     writer.agentId !== undefined &&
@@ -512,6 +523,7 @@ function useWriter(
   ) {
     const { agentId } = writer;
     const { subject, elsewhere } = writerSubject(agents, agentId);
+
     return {
       author: commentAuthor(subject.tile),
       nameRef: (
@@ -525,11 +537,13 @@ function useWriter(
       ),
     };
   }
+
   // Note that the service names a member's entry by nobody only once their account is deleted.
   const member =
     writer.actor === DESCRIPTION_COMMENT_ACTOR.MEMBER && writer.by === undefined
       ? DELETED_ACCOUNT_ACTOR
       : person;
+
   return { author: commentAuthor(member), nameRef: <ActorRef actor={member} nameOnly /> };
 }
 
@@ -553,6 +567,7 @@ function WrittenComment({
   children?: ReactNode;
 }): React.JSX.Element {
   const { author, nameRef } = useWriter(writer, agents);
+
   return (
     <Comment author={author} nameRef={nameRef} said={said} at={at} now={now} trailing={trailing}>
       {children}
@@ -570,6 +585,7 @@ function WriterMark({
 }): ReactNode {
   const person = usePerson(writer.by);
   let actor: Actor = person;
+
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) actor = APP_ACTOR;
   else if (
     writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT &&
@@ -578,6 +594,7 @@ function WriterMark({
   ) {
     actor = writerSubject(agents, writer.agentId).subject.tile;
   }
+
   return <ActorMark actor={actor} />;
 }
 
@@ -683,13 +700,16 @@ function CommentEntry({
   lead?: ReactNode;
 }): React.JSX.Element {
   const [editing, setEditing] = useState<string | undefined>(undefined);
+
   // The edit's words, kept where they differ from the comment's, so a Cancel or an Esc finds them as the box reopens.
   const edited = useDraft({
     kind: DRAFT_PLACE.DESCRIPTION_COMMENT,
     planId: doors.control.planId,
     on: { threadId: thread.id, entryId: entry.id },
   });
+
   const drafts = useDraftWriter();
+
   // Note that a deletion asks first, then is drawn by the host at once, so the dialog closes on the press; one refused is taken back and said in a toast.
   const deleting = useConfirmDialog(
     { subject: true, surfaceOpen: true },
@@ -709,14 +729,17 @@ function CommentEntry({
     }),
     confirmFailure(FAILURE_SURFACE.DESCRIPTION_COMMENT_DELETE),
   );
+
   const copies = useLinkItems()({
     kind: LINK_DESTINATION.COMMENT,
     planId: doors.control.planId,
     threadId: thread.id,
   });
+
   const mine = writtenByReader(entry, doors.me);
   // Note that a page thread's first comment is drawn without the quote its quote line already says.
   const shown = first ? ownWordsOf(thread, entry.words ?? "") : (entry.words ?? "");
+
   // Note that a reply copies its thread's link, since a link names a comment thread and no comment of one (`LINK_DESTINATION.COMMENT`).
   const edits: MenuAction[] = mine
     ? [
@@ -727,6 +750,7 @@ function CommentEntry({
         },
       ]
     : [];
+
   // Note that a thread's starter deletes it whole, or any member where the app or an agent started it, as the service holds it to.
   const deletes: MenuAction[] = [
     ...(mine && !first
@@ -750,18 +774,22 @@ function CommentEntry({
         ]
       : []),
   ];
+
   const groups = [copies, edits, deletes].filter((group) => group.length > 0);
   const settle = first && openThread(thread);
+
   // Note that a resolve or a reopen is drawn by the host on the press; one refused is taken back and said in a toast.
   const settleThread = () =>
     void doors.control.act(thread.id, {
       action: settle ? DESCRIPTION_COMMENT_ACTION.RESOLVE : DESCRIPTION_COMMENT_ACTION.REOPEN,
     });
+
   // The reader's own words take a date changed from its chip, as their editor would, saved as an edit of the comment.
   const openDate = useWordsDatePicker();
   const latestWords = useRef(entry.words);
   latestWords.current = entry.words;
   const { control } = doors;
+
   const dates = useMemo<WordsDates | undefined>(
     () =>
       !mine || openDate === undefined
@@ -781,6 +809,7 @@ function CommentEntry({
           ),
     [mine, openDate, control, thread.id, entry.id],
   );
+
   const write = (words: string) => {
     setEditing(words);
     // Note that words as the comment holds them, or none, keep no draft, so the box reopens on the comment as it stands.
@@ -789,13 +818,17 @@ function CommentEntry({
       text: words.trim() === "" || words === shown ? "" : words,
     }));
   };
+
   const save = (files: EditedFiles) => {
     const words = editing?.trim() ?? "";
+
     // Note that a comment is never saved empty, so an edit emptied asks to delete it, as its menu's Delete does.
     if (words === "") {
       deleting.ask();
+
       return;
     }
+
     // Note that the edit is drawn by the host on the press, so the field closes at once; words refused come back as its draft (`use-description-comments.ts`), and its files here, which Edit opens on again.
     setEditing(undefined);
     edited.update(() => EMPTY_DRAFT);
@@ -817,15 +850,18 @@ function CommentEntry({
         }));
       });
   };
+
   // The files the edit changes, kept in its draft beside its words.
   const editFiles: EditFilesHolder = {
     files: { dropped: edited.draft.dropped ?? [], attachments: edited.draft.attachments },
     update: (next) =>
       edited.update((was) => {
         const files = next({ dropped: was.dropped ?? [], attachments: was.attachments });
+
         return { ...was, dropped: files.dropped, attachments: files.attachments };
       }),
   };
+
   return (
     <div className="comment-entry relative py-tight-gap" data-entry={entry.id}>
       {/* Note that the tools stand at the head's end, shown under the pointer or the keyboard, so a long name gives way to them and nothing stands over it. */}
@@ -928,11 +964,13 @@ function CommentEditField({
   const [own, setOwn] = useState<EditFiles>({ dropped: [], attachments: attached });
   const changes = handed ?? { files: own, update: setOwn };
   const { entries, idOf } = useCommentFileEntries(planId, files);
+
   /** The box's files for what the edit changed: the comment's own it keeps, then those added. */
   const held = (edit: EditFiles) => [
     ...entries.filter((entry) => !edit.dropped.includes(idOf(entry) ?? "")),
     ...edit.attachments,
   ];
+
   const box = useMessageBox({
     draft: value,
     setDraft: onChange,
@@ -945,9 +983,11 @@ function CommentEditField({
       update: (next) =>
         changes.update((was) => {
           const now = next(held(was));
+
           return {
             dropped: entries.flatMap((entry) => {
               const id = idOf(entry);
+
               return id === undefined || now.includes(entry) ? [] : [id];
             }),
             attachments: now.filter((entry) => idOf(entry) === undefined),
@@ -959,9 +999,11 @@ function CommentEditField({
       if (box.files.reading) return;
       // Note that a file the box holds no entry of is kept as it stands, after those it holds, in their order.
       const held = new Set(box.files.attachments.flatMap((entry) => idOf(entry) ?? []));
+
       const unheld = files.filter(
         (file) => !entries.some((entry) => idOf(entry) === file.attachmentId),
       );
+
       onSave({
         kept: [
           ...[...held].flatMap((id) => files.find((file) => file.attachmentId === id) ?? []),
@@ -972,6 +1014,7 @@ function CommentEditField({
     },
     focus: true,
   });
+
   return (
     <MessageBox
       box={box}
@@ -1013,15 +1056,23 @@ const NO_FILES: readonly DescriptionCommentFile[] = [];
 /** An edit that opens holding no files of the window's. */
 const NO_ATTACHMENTS: readonly AgentAttachment[] = [];
 
+type FilesChangedResult = {
+  readonly keep?: readonly string[];
+  readonly attachments?: readonly AgentAttachment[];
+};
+
 /** What an edit says of its comment's files: nothing where it leaves them as they stand, else the files it keeps by their ids, in order, and those it adds. */
 function filesChanged(
   carried: readonly DescriptionCommentFile[],
   { kept, added }: EditedFiles,
-): { readonly keep?: readonly string[]; readonly attachments?: readonly AgentAttachment[] } {
+): FilesChangedResult {
   const keep = kept.map((file) => file.attachmentId);
+
   const same =
     keep.length === carried.length && keep.every((id, at) => carried[at]?.attachmentId === id);
+
   if (same && added.length === 0) return {};
+
   return { keep, ...(added.length === 0 ? undefined : { attachments: added }) };
 }
 
@@ -1033,8 +1084,10 @@ function filesChanged(
  */
 function leadQuoteDropped(words: string, quote: string): string {
   const [lead, ...rest] = messageBlocks(words);
+
   if (lead?.kind !== MESSAGE_BLOCK.QUOTE || lead.words !== replyOf(quote)) return words;
   const own = messageText(rest).trim();
+
   return own === "" ? words : own;
 }
 
@@ -1053,6 +1106,7 @@ function CommentWords({
 }): React.JSX.Element {
   const link = useMentionLink();
   const openLink = useOpenLink();
+
   return (
     <MarkdownMessage
       words={files === undefined ? words : withFileImages(words, files.names)}
@@ -1064,6 +1118,7 @@ function CommentWords({
           ? undefined
           : (src) => {
               const name = fileNameOf(src);
+
               return name === undefined ? undefined : files.chip(name);
             }
       }
@@ -1083,17 +1138,20 @@ const FILE_SOURCE = "#file:";
 function withFileImages(words: string, names: ReadonlySet<string>): string {
   let written = "";
   let at = 0;
+
   for (const marker of fileMarkers(words)) {
     if (!names.has(marker.name)) continue;
     written += `${words.slice(at, marker.start)}![](${FILE_SOURCE}${encodeURIComponent(marker.name)})`;
     at = marker.end;
   }
+
   return written + words.slice(at);
 }
 
 /** The file an image written by `withFileImages` names; nothing for any other image, nor for one typed by hand whose source does not decode, which is its alt text. */
 function fileNameOf(src: string): string | undefined {
   if (!src.startsWith(FILE_SOURCE)) return undefined;
+
   try {
     return decodeURIComponent(src.slice(FILE_SOURCE.length));
   } catch {
@@ -1116,6 +1174,7 @@ function CommentBody({
   folded?: boolean | undefined;
 }): React.JSX.Element {
   const shown = useWordFiles(chips, words);
+
   return (
     <>
       {folded ? null : <CommentFiles chips={shown.beside} />}
@@ -1181,6 +1240,7 @@ function ReplyField({
   const { draft, update } = useDraft(place);
   const words = draft.text;
   const setWords = (text: string) => update((was) => ({ ...was, text }));
+
   const box = useMessageBox({
     draft: words,
     setDraft: setWords,
@@ -1191,6 +1251,7 @@ function ReplyField({
     onSubmit: () => submit(),
     focus: autoFocus,
   });
+
   const { files } = box;
   // The last send refused, whose key the same words and files sent again go under, so a send whose answer was lost is taken once.
   const attempt = useRef<CommentSend | undefined>(undefined);
@@ -1198,10 +1259,13 @@ function ReplyField({
   const lines = useSelector(unsentLines.store);
   const unsent = lines.filter((each) => Equal.equals(each.place, place)).map(({ send }) => send);
   const keepUnsent = unsentLines.set;
+
   const addUnsent = (sends: readonly CommentSend[]) =>
     keepUnsent((all) => [...all, ...sends.map((send) => ({ place, send }))]);
+
   const dropUnsent = () =>
     keepUnsent((all) => all.filter((each) => !Equal.equals(each.place, place)));
+
   // The words the field holds this moment, for a send's answer that lands after the render it was made in.
   const wordsNow = useRef(words);
   wordsNow.current = words;
@@ -1209,35 +1273,45 @@ function ReplyField({
   const standing = useRef(true);
   useEffect(() => {
     standing.current = true;
+
     return () => {
       standing.current = false;
     };
   }, []);
+
   // Note that a refused send goes back above whatever was typed or added since, so neither is dropped, unless the field is gone or the two together are more than one comment carries; sends refused together stand apart under their own keys, so one the service wrote before its answer was lost is not written again under a new one.
   const takeBack = (sends: readonly CommentSend[]) => {
     const [first] = sends;
+
     if (first === undefined) return;
     attempt.current = first;
     const typed = wordsNow.current;
+
     const back = {
       words: typed.trim() === "" ? first.words : `${first.words}\n\n${typed}`,
       attachments: [...first.attachments, ...files.now()],
     };
+
     if (sends.length > 1 || !standing.current || !carried(back)) {
       addUnsent(sends);
+
       return;
     }
+
     update((now) => ({ ...now, text: back.words }));
     files.set(back.attachments);
   };
+
   // Note that the host draws a send the moment it is asked and sends a thread's in the order asked, so nothing here waits on one; one refused comes back.
   const go = (out: CommentSend) => {
     void onSend(out.words, out.key, out.attachments).then((sent) => {
       if (!sent) takeBack([out]);
     });
   };
+
   const send = () => {
     const trimmed = words.trim();
+
     // Note that sends not sent go first, so comments land in the order they were written.
     if (trimmed === "" || files.reading || unsent.length > 0) return;
     const { attachments } = files;
@@ -1254,9 +1328,11 @@ function ReplyField({
       key: same ? was.key : crypto.randomUUID(),
     });
   };
+
   // Note that holding lets the words and files go from the field as sending does, into the review rather than to the service.
   const hold = () => {
     const trimmed = words.trim();
+
     if (review === undefined || trimmed === "" || files.reading || unsent.length > 0) return;
     const { attachments } = files;
     attempt.current = undefined;
@@ -1264,9 +1340,11 @@ function ReplyField({
     files.set([]);
     review.onHold(trimmed, attachments);
   };
+
   // Note that once a review is held, every comment joins it until it is sent or discarded, as a batch of notes on a page does; until then Start a review stands beside the send.
   const holds = review?.open === true;
   const submit = holds ? hold : send;
+
   const other =
     review === undefined || holds ? undefined : (
       <Button
@@ -1277,11 +1355,14 @@ function ReplyField({
         <ReplayUnmask>{PAGE_REVIEW_WORDS.START}</ReplayUnmask>
       </Button>
     );
+
   const retry = () => {
     if (unsent.length === 0) return;
     dropUnsent();
+
     for (const each of unsent) go(each);
   };
+
   // Note that Discard asks first, since a send not sent is kept nowhere else.
   const discard = useConfirmDialog(
     { subject: unsent.length > 0, surfaceOpen: true },
@@ -1292,6 +1373,7 @@ function ReplyField({
     }),
     confirmFailure(FAILURE_SURFACE.DESCRIPTION_COMMENT_DISCARD),
   );
+
   return (
     <MessageBox
       box={box}
@@ -1369,7 +1451,9 @@ function ReplyField({
 /** Whether a draft's place is a comment's of a thread: any of its own, or one comment's edit where `entryId` names it. */
 function writtenOn(place: DraftPlace, threadId: string, entryId: string | undefined): boolean {
   if (place.kind !== DRAFT_PLACE.DESCRIPTION_COMMENT || !("threadId" in place.on)) return false;
+
   if (place.on.threadId !== threadId) return false;
+
   return entryId === undefined || ("entryId" in place.on && place.on.entryId === entryId);
 }
 
@@ -1397,8 +1481,10 @@ const unsentLines = heldLines<{
 /** Whether one comment carries these words and files: its words' bound, and a message's count of files and their bytes together. */
 function carried(send: Pick<CommentSend, "words" | "attachments">): boolean {
   if (send.words.length > DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS) return false;
+
   if (send.attachments.length > AGENT_BOUNDS.MAX_ATTACHMENTS) return false;
   const bytes = send.attachments.reduce((sum, each) => sum + base64Bytes(each.data), 0);
+
   return bytes <= AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES;
 }
 
@@ -1449,6 +1535,7 @@ function QuoteLine({
       </blockquote>
     );
   }
+
   return (
     <blockquote className={COMMENT_QUOTE_CLASS} data-clipped={!whole} data-gone={gone}>
       <Tooltip label={label}>
@@ -1490,6 +1577,7 @@ function ThreadQuote({
  */
 function threadFrame(place: ThreadPlace, open: boolean): { look: CardLook; shadow: CardShadow } {
   const raised = place === THREAD_PLACE.FLOAT || (open && place === THREAD_PLACE.MARGIN);
+
   return raised
     ? { look: CARD_LOOK.RAISED, shadow: CARD_SHADOW.MENU }
     : { look: CARD_LOOK.OUTLINE, shadow: CARD_SHADOW.NONE };
@@ -1571,9 +1659,11 @@ function ThreadCard({
   onShowWords?: (() => void) | undefined;
 }): React.JSX.Element {
   const now = useMinute();
+
   const comments = thread.entries.filter(
     (entry) => entry.kind === DESCRIPTION_COMMENT_ENTRY.COMMENT,
   );
+
   const [first] = comments;
   // Note that a page's thread stands on no words of the description, so it never reads as having lost them.
   const gone = thread.anchor === undefined && thread.page === undefined;
@@ -1585,17 +1675,21 @@ function ThreadCard({
   useEffect(() => {
     if (!open) setPressed(false);
   }, [open]);
+
   const head = (
     <>
       {gone ? <GoneQuote thread={thread} onShowWords={onShowWords} /> : null}
       {!gone && quote ? <ThreadQuote thread={thread} onShowWords={onShowWords} /> : null}
     </>
   );
+
   if (!open) {
     const replies = comments.slice(1);
+
     const faces = [
       ...new Map(replies.map((entry) => [JSON.stringify(entry.writer), entry.writer])).values(),
     ];
+
     return (
       <CommentCard
         place={place}
@@ -1653,6 +1747,7 @@ function ThreadCard({
       </CommentCard>
     );
   }
+
   return (
     <CommentCard place={place} open data-thread={thread.id}>
       {/* Note that the entries scroll inside a card taller than the room it stands in, so the field that answers them stays in view under them; a swipe past their end, or over a card with nothing to scroll, moves the description. */}
@@ -1808,7 +1903,9 @@ function PendingCard({
               ...(attachments.length === 0 ? undefined : { attachments }),
             }),
           );
+
           onStarted(clientKey);
+
           return started.then((answer) => !("note" in answer));
         }}
       />
@@ -1830,6 +1927,7 @@ function descriptionBegin(
 ): (first: FirstComment) => DescriptionCommentStart {
   return (first) => {
     const saved = pending.text === undefined ? pending : textChange(pending.text, text)(pending);
+
     return {
       ...first,
       scope: pending.scope,
@@ -1846,6 +1944,7 @@ function drawnOffset(root: HTMLElement, node: globalThis.Node, offset: number): 
   const range = document.createRange();
   range.setStart(root, 0);
   range.setEnd(node, offset);
+
   return range.toString().length;
 }
 
@@ -1853,6 +1952,7 @@ function drawnOffset(root: HTMLElement, node: globalThis.Node, offset: number): 
 function ownWords(unit: HTMLElement, block: HTMLElement) {
   const from = drawnOffset(unit, block, 0);
   const quote = ownRange(block).toString().trimEnd();
+
   return { quote, from, to: from + quote.length };
 }
 
@@ -1861,9 +1961,12 @@ function ownRange(block: HTMLElement): Range {
   const nested = [...block.childNodes].findIndex(
     (child) => child instanceof HTMLElement && (child.tagName === "UL" || child.tagName === "OL"),
   );
+
   const range = document.createRange();
   range.selectNodeContents(block);
+
   if (nested >= 0) range.setEnd(block, nested);
+
   return range;
 }
 
@@ -1874,14 +1977,17 @@ function ownRange(block: HTMLElement): Range {
  */
 function threadedWhole(block: HTMLElement): boolean {
   const own = ownRange(block);
+
   const marked = [...block.querySelectorAll(`.${COMMENT_MARK_CLASS}[data-threads]`)]
-    .filter(
-      (mark) =>
-        own.intersectsNode(mark) && mark.parentElement?.closest(`.${COMMENT_MARK_CLASS}`) === null,
+    .flatMap((mark) =>
+      own.intersectsNode(mark) && mark.parentElement?.closest(`.${COMMENT_MARK_CLASS}`) === null
+        ? [mark.textContent]
+        : [],
     )
-    .map((mark) => mark.textContent)
     .join("");
+
   const words = own.toString().replace(/\s+/gu, "");
+
   return words !== "" && marked.replace(/\s+/gu, "") === words;
 }
 
@@ -1897,6 +2003,7 @@ function sourceSpan(
   drawn: { readonly from: number; readonly to: number },
 ): { readonly from: number; readonly to: number } | undefined {
   const span = textChange(unit.textContent, section.text)(drawn);
+
   return span === undefined
     ? undefined
     : { from: section.from + span.from, to: section.from + span.to };
@@ -1911,6 +2018,7 @@ function pendingOf(
   quote: string,
 ): PendingThread | undefined {
   const span = sourceSpan(unit, section, drawn);
+
   return span === undefined
     ? undefined
     : { ...span, scope, quote: quote.slice(0, DESCRIPTION_COMMENT_BOUNDS.MAX_QUOTE_CHARS) };
@@ -1938,11 +2046,14 @@ function lineMiddleIn(body: HTMLElement, element: Element): number {
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, (node) =>
     (node.textContent ?? "").trim() === "" ? NodeFilter.FILTER_SKIP : NodeFilter.FILTER_ACCEPT,
   );
+
   const holder = walker.nextNode()?.parentElement ?? element;
   const style = getComputedStyle(holder);
   const line = style.display === "inline" ? holder.getClientRects()[0] : undefined;
+
   if (line !== undefined) return (line.top + line.bottom) / 2 - body.getBoundingClientRect().top;
   const height = Number.parseFloat(style.lineHeight);
+
   return topIn(body, holder) + (Number.isFinite(height) ? height / 2 : 0);
 }
 
@@ -1950,6 +2061,7 @@ function lineMiddleIn(body: HTMLElement, element: Element): number {
 function viewIn(scroller: HTMLElement | null, body: HTMLElement | null): MarginView | undefined {
   if (scroller === null || body === null) return undefined;
   const at = topIn(body, scroller) + scroller.clientTop;
+
   return { top: at + VIEW_EDGE, bottom: at + scroller.clientHeight - VIEW_EDGE };
 }
 
@@ -1960,13 +2072,18 @@ function blockAt(
 ): { block: HTMLElement; unit: HTMLElement } | undefined {
   if (!(target instanceof HTMLElement)) return undefined;
   const unit = target.closest<HTMLElement>(`.${unitClass}`);
+
   if (unit === null) return undefined;
+
   // A list is commented on a bullet at a time, its innermost one under the pointer, and the gaps between them offer none.
   if (target.tagName === "UL" || target.tagName === "OL") return undefined;
   const item = target.closest<HTMLElement>("li");
+
   if (item !== null && unit.contains(item)) return { block: item, unit };
   let block: HTMLElement | null = target;
+
   while (block !== null && block.parentElement !== unit) block = block.parentElement;
+
   return block === null ? undefined : { block, unit };
 }
 
@@ -1987,11 +2104,13 @@ let openThreadSheet: CSSStyleSheet | undefined;
 /** The open thread's words drawn open in the editor, as the read view draws its marks with `data-active`; none where no thread is open. */
 function editorOpenThread(thread: string | undefined): void {
   if (!("CSSStyleSheet" in globalThis) || !("adoptedStyleSheets" in document)) return;
+
   if (openThreadSheet === undefined) {
     openThreadSheet = new CSSStyleSheet();
     writeWithheldSheet(openThreadSheet, "");
     document.adoptedStyleSheets = [...document.adoptedStyleSheets, openThreadSheet];
   }
+
   // Note that a thread's id is the service's UUID, which a selector takes as it is; the rule draws the edge whole, so words inside another thread's mark, which draws none of its own, show it too.
   writeWithheldSheet(
     openThreadSheet,
@@ -2058,9 +2177,11 @@ export function DescriptionCommentLayer({
   const [anchors, setAnchors] = useState<ReadonlyMap<string, number>>(new Map());
   // The middle of the first line each thread's words stand on, which its count is centered on.
   const [lines, setLines] = useState<ReadonlyMap<string, number>>(new Map());
+
   const [hovered, setHovered] = useState<
     { top: number; middle: number; start: () => void } | undefined
   >(undefined);
+
   // Whether the pointer is on a block or its button now, rather than the margin's cards or off the description, which the button stands on after.
   const [onBlocks, setOnBlocks] = useState(false);
   // The thread whose words the pointer is on, whose card answers it before a press.
@@ -2071,16 +2192,20 @@ export function DescriptionCommentLayer({
   const pressing = useRef(false);
   // Whether the last press was a finger's, whose tap names the block its button stands by.
   const touching = useRef(false);
+
   const [bubble, setBubble] = useState<
     { top: number; left: number; below: boolean; start: () => void } | undefined
   >(undefined);
+
   const cards = useRef(new Map<string, HTMLDivElement>());
   // The cards already stood in the margin, which move to their next place rather than land there, so a card arriving lands where it belongs.
   const settled = useRef(new Set<string>());
+
   // Note that the open threads stand in the order of their words rather than of their starting, so the keyboard meets their counts and cards top to bottom.
   const open = doors.control.threads
     .filter(openThread)
     .sort((one, other) => (anchors.get(one.id) ?? 0) - (anchors.get(other.id) ?? 0));
+
   const marginCards = useMarginCards(
     [
       ...open.map((thread) => ({
@@ -2108,21 +2233,26 @@ export function DescriptionCommentLayer({
   // The margin folds where the scroller has no room for it beside the reading width. Note that the column stands centered, so the margin's room must stand on both its sides, or the card runs past the scroller's edge.
   useEffect(() => {
     const element = scroller.current;
+
     if (element === null) return;
+
     const measure = () => {
       setWide(element.clientWidth >= READING_WIDTH + 2 * MARGIN_ROOM);
       setCardRoom(Math.max(0, element.clientHeight - 2 * VIEW_EDGE));
       // Note that a scroller drawn shorter or taller resizes no card that already fits, so the open one is measured into the new view here.
       setResized((count) => count + 1);
     };
+
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(element);
+
     return () => observer.disconnect();
   }, [scroller]);
 
   useEffect(() => {
     const element = scroller.current;
+
     if (element === null) return;
     element.dataset.comments =
       wide && (open.length > 0 || pending !== undefined) ? "margin" : "folded";
@@ -2132,21 +2262,27 @@ export function DescriptionCommentLayer({
   const anchorOf = useCallback(
     (thread: string, section: string): Element | undefined => {
       const element = body.current;
+
       if (element === null) return undefined;
       const mark = element.querySelector(`.${COMMENT_MARK_CLASS}[data-threads~="${thread}"]`);
+
       if (mark !== null) return mark;
       // Note that a thread's id is the service's UUID, which a selector takes as it is.
       // A thread whose words were deleted stands where its section starts, or at the top.
       const at = sections.findIndex((each) => each.heading === section);
+
       return (at < 0 ? undefined : element.querySelectorAll(`.${unitClass}`)[at]) ?? element;
     },
     [body, sections, unitClass],
   );
+
   const anchorAt = useCallback(
     (thread: string, section: string): { top: number; middle: number } | undefined => {
       const element = body.current;
       const anchor = anchorOf(thread, section);
+
       if (element === null || anchor === undefined) return undefined;
+
       return {
         top: anchor === element ? 0 : topIn(element, anchor),
         middle: lineMiddleIn(element, anchor),
@@ -2154,6 +2290,7 @@ export function DescriptionCommentLayer({
     },
     [body, anchorOf],
   );
+
   // Note that the margin is measured again only when what it stands on
   // changes, or the description's words or a card are resized, never on every draw,
   // because each measure lays the page out, a draw for every word typed among
@@ -2164,12 +2301,16 @@ export function DescriptionCommentLayer({
   const unmeasured = useRef(false);
   useEffect(() => {
     const element = body.current;
+
     if (element === null) return;
+
     if (unmeasured.current) {
       unmeasured.current = false;
       setResized((count) => count + 1);
     }
+
     let frame: number | undefined;
+
     const observer = new ResizeObserver(() => {
       if (frame !== undefined) return;
       frame = requestAnimationFrame(() => {
@@ -2177,32 +2318,42 @@ export function DescriptionCommentLayer({
         setResized((count) => count + 1);
       });
     });
+
     observer.observe(element);
+
     for (const card of cards.current.values()) observer.observe(card);
+
     return () => {
       observer.disconnect();
+
       if (frame !== undefined) cancelAnimationFrame(frame);
     };
   }, [body, threads, pending, wide, active]);
   useLayoutEffect(() => {
     unmeasured.current = body.current === null;
+
     const placed = [
       ...threads.filter(openThread).map((thread) => ({ id: thread.id, section: thread.section })),
       ...(pending === undefined ? [] : [{ id: PENDING_THREAD, section: "" }]),
     ].flatMap(({ id, section }) => {
       const at = anchorAt(id, section);
+
       return at === undefined
         ? []
         : [{ id, ...at, height: cards.current.get(id)?.offsetHeight ?? 0 }];
     });
+
     const view = viewIn(scroller.current, body.current);
+
     const next = marginTops(
       placed,
       active ?? (pending === undefined ? undefined : PENDING_THREAD),
       CARD_GAP,
       view,
     );
+
     setTops((held) => (sameTops(held, next) ? held : next));
+
     const nextHung = new Map(
       placed.map((card) => [
         card.id,
@@ -2211,6 +2362,7 @@ export function DescriptionCommentLayer({
           : hungTop(card.top, HUNG_DROP, card.height, CARD_GAP, view),
       ]),
     );
+
     setHung((held) => (sameTops(held, nextHung) ? held : nextHung));
     const nextAnchors = new Map(placed.map((card) => [card.id, card.top]));
     setAnchors((held) => (sameTops(held, nextAnchors) ? held : nextAnchors));
@@ -2223,14 +2375,19 @@ export function DescriptionCommentLayer({
   useLayoutEffect(() => {
     const element = scroller.current;
     const room = body.current;
+
     if (revealed === undefined || element === null || room === null) return;
+
     if (scrolled.current === revealed.ask) return;
     // Note that the ask waits for the read to name the thread, since a link may open the description before its comments land.
     const asked = doors.control.threads.find((each) => each.id === revealed.thread);
+
     if (!doors.control.read || asked === undefined) return;
+
     // Note that a resolved thread has no words lit in the description; it is listed instead, under Resolved (`DescriptionCommentList`).
     if (!openThread(asked)) return;
     const at = anchorAt(asked.id, asked.section);
+
     if (at === undefined) return;
     scrolled.current = revealed.ask;
     element.scrollTop +=
@@ -2244,6 +2401,7 @@ export function DescriptionCommentLayer({
   useEffect(() => {
     if (revealed === undefined || listedAsk.current === revealed.ask) return;
     const asked = doors.control.threads.find((each) => each.id === revealed.thread);
+
     if (asked === undefined || openThread(asked)) return;
     listedAsk.current = revealed.ask;
     onListing(COMMENTS_FILTER.RESOLVED);
@@ -2257,6 +2415,7 @@ export function DescriptionCommentLayer({
   useLayoutEffect(() => {
     const room = body.current;
     const toggle = room?.querySelector(`.${COMMENTS_TOGGLE_CLASS}`);
+
     if (listing === undefined || room === null || toggle == null) return;
     const top = toggle.getBoundingClientRect().bottom - room.getBoundingClientRect().top + CARD_GAP;
     setListTop((held) => (Math.abs(held - top) < 1 ? held : top));
@@ -2265,39 +2424,53 @@ export function DescriptionCommentLayer({
   // A block under the pointer, or the one a finger last tapped, shows its button at the column's end; words selected raise the bubble over them.
   useEffect(() => {
     const element = body.current;
+
     if (element === null) return;
+
     const point = (target: EventTarget | null) => {
       const marked =
         target instanceof Element
           ? target.closest<HTMLElement>(`.${COMMENT_MARK_CLASS}[data-threads]`)
           : null;
+
       setPointed(marked?.dataset.threads?.split(" ")[0]);
+
       // A divider holds no words for a thread to stand on, so it offers no button, and the block's it came from goes.
       if (target instanceof HTMLHRElement) {
         setHovered(undefined);
+
         return;
       }
+
       const found = blockAt(target, unitClass);
+
       if (found === undefined) return;
+
       // Note that a block whose words a thread already covers is commented on through that thread, so it offers no button.
       if (threadedWhole(found.block)) {
         setHovered(undefined);
+
         return;
       }
+
       if (editor !== undefined) {
         setHovered({
           top: topIn(element, found.block),
           middle: lineMiddleIn(element, found.block),
           start: () => {
             const span = editor.current?.blockSpan(found.block);
+
             if (span !== undefined)
               setPending(editorPending(span, DESCRIPTION_COMMENT_SCOPE.BLOCK));
           },
         });
+
         return;
       }
+
       const index = [...element.querySelectorAll(`.${unitClass}`)].indexOf(found.unit);
       const section = sections[index];
+
       if (section === undefined) return;
       const { quote, from, to } = ownWords(found.unit, found.block);
       setHovered({
@@ -2311,10 +2484,12 @@ export function DescriptionCommentLayer({
             DESCRIPTION_COMMENT_SCOPE.BLOCK,
             quote,
           );
+
           if (begun !== undefined) setPending(begun);
         },
       });
     };
+
     // Note that a finger's arrival names no block, because iOS plays a tap's
     // arrival as a hover and spends the tap on a button that comes in with
     // it, a link's in the block among them; its tap names the block once
@@ -2328,92 +2503,124 @@ export function DescriptionCommentLayer({
           (target instanceof Element && target.closest(`.${BLOCK_BUTTON_CLASS}`) !== null),
       );
     };
+
     const tapped = (event: MouseEvent) => {
       if (touching.current) point(event.target);
     };
+
     // In the editor, a caret standing in a thread's words opens it, and leaving them closes the one it opened.
     const letCaretGo = () => {
       if (!caretOpened.current) return;
       caretOpened.current = false;
       onActive(undefined);
     };
+
     const caretIn = (selection: Selection) => {
       if (active === PENDING_THREAD) return;
       const node = selection.anchorNode;
       const at = node instanceof Element ? node : node?.parentElement;
+
       if (at === null || at === undefined) return;
+
       // Note that a caret in the thread itself, its reply say, takes it over, so it no longer closes as the caret leaves its words.
       if (at.closest(THREAD_ITSELF) !== null) {
         caretOpened.current = false;
+
         return;
       }
+
       if (!element.contains(at)) {
         letCaretGo();
+
         return;
       }
+
       const threads = (
         at.closest<HTMLElement>(`.${COMMENT_MARK_CLASS}[data-threads]`)?.dataset.threads ?? ""
       )
         .split(" ")
         .filter((thread) => thread !== "" && thread !== PENDING_THREAD);
+
       if (threads.length > 0) {
         if (active !== undefined && threads.includes(active)) return;
         caretOpened.current = true;
         onActive(threads[0]);
+
         return;
       }
+
       letCaretGo();
     };
+
     // The editor let go of by the keyboard, Tab say, lets go of the thread its caret opened, but for the thread itself taking the focus.
     const blurred = (event: FocusEvent) => {
       if (editor === undefined) return;
       const next = event.relatedTarget;
+
       // Note that a press on words that take no focus, a card's say, lets the focus go to nothing, and the press's own rule says whether it closes the thread.
       if (next === null) return;
+
       if (next instanceof Element && next.closest(THREAD_ITSELF) !== null) {
         caretOpened.current = false;
+
         return;
       }
+
       // Note that a press on a control, a line's count say, focuses it before its click, and the press's own rule, the count's toggle say, settles the thread.
       if (pressing.current) return;
       // Note that the focus staying is the editor's room holding it, not the description's body, whose title and buttons are Tab stops of their own.
       const room = element.querySelector(`.${EDITOR_ROOM_CLASS}`);
+
       if (next instanceof Node && room?.contains(next) === true) return;
       letCaretGo();
     };
+
     const selected = () => {
       // Note that a description kept mounted under a hidden tab keeps its selection, but its words are no longer on screen to comment on.
       if (element.closest("[hidden]") !== null) {
         setBubble(undefined);
+
         return;
       }
+
       const selection = window.getSelection();
+
       if (selection === null || selection.isCollapsed || selection.rangeCount === 0) {
         if (editor !== undefined && selection?.isCollapsed === true) caretIn(selection);
         setBubble(undefined);
+
         return;
       }
+
       // Note that in the editor the format toolbar over the words starts their thread, so no bubble stands beside it.
       if (editor !== undefined) {
         setBubble(undefined);
+
         return;
       }
+
       const range = selection.getRangeAt(0);
       const start = range.startContainer.parentElement?.closest<HTMLElement>(`.${unitClass}`);
       const end = range.endContainer.parentElement?.closest<HTMLElement>(`.${unitClass}`);
+
       if (start === null || start === undefined || start !== end || !element.contains(start)) {
         setBubble(undefined);
+
         return;
       }
+
       const box = range.getBoundingClientRect();
       const own = element.getBoundingClientRect();
+
       // Note that a finger's bubble stands under the words, because the system's own selection menu stands over them, unless the window ends first.
       const below =
         coarsePointerNow() && box.bottom + BUBBLE_ROOM_TOUCH <= visibleViewport().bottom;
+
       const top = (below ? box.bottom : box.top) - own.top;
       const index = [...element.querySelectorAll(`.${unitClass}`)].indexOf(start);
       const section = sections[index];
       const quote = selection.toString().trim();
+
       if (section === undefined || quote === "") return;
       const from = drawnOffset(start, range.startContainer, range.startOffset);
       const to = drawnOffset(start, range.endContainer, range.endOffset);
@@ -2429,36 +2636,45 @@ export function DescriptionCommentLayer({
             DESCRIPTION_COMMENT_SCOPE.WORDS,
             quote,
           );
+
           if (begun !== undefined) setPending(begun);
           setBubble(undefined);
           selection.removeAllRanges();
         },
       });
     };
+
     // Note that a press on marked words opens their thread, as the editor would otherwise open there.
     const pressed = (event: MouseEvent) => {
       if (!(event.target instanceof Element)) return;
       const mark = event.target.closest<HTMLElement>(`.${COMMENT_MARK_CLASS}[data-threads]`);
+
       // Note that words under more than one thread open the next of them each press.
       const threads = (mark?.dataset.threads ?? "")
         .split(" ")
         .filter((each) => each !== "" && each !== PENDING_THREAD);
+
       const thread = threads[(threads.indexOf(active ?? "") + 1) % Math.max(threads.length, 1)];
+
       if (thread === undefined) return;
       setPending(undefined);
       onActive(thread);
     };
+
     const left = () => {
       setPointed(undefined);
       setOnBlocks(false);
     };
+
     const down = (event: PointerEvent) => {
       pressing.current = true;
       touching.current = event.pointerType === "touch";
     };
+
     const up = () => {
       pressing.current = false;
     };
+
     element.addEventListener("pointerover", over);
     element.addEventListener("click", tapped);
     element.addEventListener("pointerleave", left);
@@ -2468,18 +2684,23 @@ export function DescriptionCommentLayer({
     document.addEventListener("pointercancel", up, true);
     // Note that a key pressed ends any press whose pointerup the window missed, so the Tab after it is the keyboard's.
     document.addEventListener("keydown", up, true);
+
     // Note that in the editor a press places the caret, so marked words there open no thread.
     if (editor === undefined) element.addEventListener("click", pressed);
     document.addEventListener("selectionchange", selected);
+
     // Note that hiding the tab the description stands in changes no selection and moves no pointer, so its `hidden` attribute is watched for itself.
     // Note that the tab shown again offers the words still selected there, though only a selection, not a caret, is read again, since a caret read opens and closes threads.
     const hiding = new MutationObserver(() => {
       if (element.closest("[hidden]") !== null) setOnBlocks(false);
+
       if (element.closest("[hidden]") !== null || window.getSelection()?.isCollapsed === false) {
         selected();
       }
     });
+
     hiding.observe(document.body, { attributes: true, attributeFilter: ["hidden"], subtree: true });
+
     return () => {
       hiding.disconnect();
       element.removeEventListener("pointerover", over);
@@ -2508,6 +2729,7 @@ export function DescriptionCommentLayer({
     if (element === null) cards.current.delete(id);
     else cards.current.set(id, element);
   };
+
   useEffect(() => {
     settled.current = new Set(tops.keys());
   });
@@ -2515,6 +2737,7 @@ export function DescriptionCommentLayer({
   const editorActive = editor !== undefined && active !== PENDING_THREAD ? active : undefined;
   useEffect(() => {
     editorOpenThread(editorActive);
+
     return () => editorOpenThread(undefined);
   }, [editorActive]);
   // A press anywhere but the thread, its words, or what it opened over the page closes it, its words kept as its draft; a thread being started goes too, but while its words are sent or it holds files or a dictation, which no draft keeps.
@@ -2529,19 +2752,23 @@ export function DescriptionCommentLayer({
             ) {
               return;
             }
+
             if (active === PENDING_THREAD) setPending(undefined);
             onActive(undefined);
           },
     holds: (target) => target instanceof Element && target.closest(KEEPS_THREAD_OPEN) !== null,
   });
+
   const close = () => {
     onActive(undefined);
     setPending(undefined);
   };
+
   const startedFromPending = (threadId: string) => {
     setPending(undefined);
     onActive(threadId);
   };
+
   const pendingCard =
     pending === undefined ? null : (
       <PendingCard
@@ -2552,6 +2779,7 @@ export function DescriptionCommentLayer({
         onStarted={startedFromPending}
       />
     );
+
   const blockButton =
     // Note that folded, a line holding a count opens its threads there, a thread whose words were deleted counted at its section's top too, so its block shows no button over it.
     hovered === undefined ||
@@ -2568,6 +2796,7 @@ export function DescriptionCommentLayer({
         </Tooltip>
       </div>
     );
+
   const bubbleDrawn =
     bubble === undefined ? null : (
       <MenuSurface
@@ -2583,11 +2812,13 @@ export function DescriptionCommentLayer({
         </Tooltip>
       </MenuSurface>
     );
+
   // Note that an open card stands no taller than the scroller it opens in, its entries scrolling inside it.
   const layerStyle =
     cardRoom === undefined
       ? undefined
       : cssCustomProperties({ "--comment-card-room": `${cardRoom}px` });
+
   // Listed, every thread of the kind chosen stands under the toggle in the margin's place, or over the words where it folds; no card stands beside its words meanwhile, so none is drawn twice.
   if (listing !== undefined) {
     return (
@@ -2606,6 +2837,7 @@ export function DescriptionCommentLayer({
       </div>
     );
   }
+
   if (wide) {
     return (
       <div className="comment-layer" style={layerStyle}>
@@ -2648,15 +2880,20 @@ export function DescriptionCommentLayer({
       </div>
     );
   }
+
   // Folded: a count at the end of each line holding marks, the open thread floating under it.
   const counts = new Map<number, DescriptionCommentThread[]>();
+
   for (const thread of open) {
     const top = anchors.get(thread.id);
+
     if (top === undefined) continue;
     counts.set(top, [...(counts.get(top) ?? []), thread]);
   }
+
   const shown = open.find((thread) => thread.id === active);
   const shownTop = shown === undefined ? undefined : anchors.get(shown.id);
+
   return (
     <div className="comment-layer" style={layerStyle}>
       {blockButton}
@@ -2669,8 +2906,10 @@ export function DescriptionCommentLayer({
               .length,
           0,
         );
+
         const first = threads[0];
         const middle = first === undefined ? undefined : lines.get(first.id);
+
         return (
           <span key={top} className="comment-count" style={{ top: middle ?? top }}>
             <Button
@@ -2737,8 +2976,10 @@ export function useEditorComment(
   editor: RefObject<DescriptionEditorHandle | undefined>,
 ): () => void {
   const setPending = useContext(PendingSetter);
+
   return () => {
     const span = editor.current?.selectionSpan();
+
     if (span !== undefined) setPending(editorPending(span, DESCRIPTION_COMMENT_SCOPE.WORDS));
   };
 }
@@ -2760,38 +3001,48 @@ export function CommentFocusScope({
   // Note that the list stands across the descriptions opened, as a document app's comments view does, until it is put back.
   const [listing, setListing] = useState<CommentsFilter | undefined>(undefined);
   const [focusedOn, setFocusedOn] = useState(planId);
+
   // Note that the thread being started is let go in the render the description changes in, so it is never posted to another description.
   if (focusedOn !== planId) {
     setFocusedOn(planId);
     setFocused(UNFOCUSED);
     setRevealed(undefined);
   }
+
   // Note that a thread opened or closed while one is being started changes nothing, since the one being started holds the focus until it is let go.
   const onActive = useCallback((thread: string | undefined) => {
     setFocused((was) => {
       if (was.kind === FOCUS_KIND.STARTING) return was;
+
       return thread === undefined ? UNFOCUSED : { kind: FOCUS_KIND.THREAD, id: thread };
     });
   }, []);
+
   // Letting go of the thread being started leaves an open thread open.
   const setPending = useCallback((pending: PendingThread | undefined) => {
     setFocused((was) => {
       if (pending !== undefined) return { kind: FOCUS_KIND.STARTING, pending };
+
       return was.kind === FOCUS_KIND.STARTING ? UNFOCUSED : was;
     });
   }, []);
+
   const asked = useRef<number | undefined>(undefined);
+
   const onReveal = useCallback((thread: string) => {
     setFocused({ kind: FOCUS_KIND.THREAD, id: thread });
     setRevealed((was) => ({ thread, ask: (was?.ask ?? 0) + 1 }));
   }, []);
+
   useEffect(() => {
     if (reveal === undefined || asked.current === reveal.ask) return;
     asked.current = reveal.ask;
     onReveal(reveal.thread);
   }, [reveal, onReveal]);
+
   const focus = useMemo(() => {
     const now = focusedOn === planId ? focused : UNFOCUSED;
+
     return {
       active: activeOf(now),
       onActive,
@@ -2802,6 +3053,7 @@ export function CommentFocusScope({
       onListing: setListing,
     };
   }, [focused, onActive, onReveal, revealed, listing, focusedOn, planId]);
+
   return (
     <CommentFocusContext.Provider value={focus}>
       <PendingSetter.Provider value={setPending}>{children}</PendingSetter.Provider>
@@ -2906,6 +3158,7 @@ function threadFindRow(thread: DescriptionCommentThread): FindRow {
     entry.words ?? "",
     ...(entry.files ?? []).map((file) => file.name),
   ]);
+
   return { key: thread.id, words: [thread.quote, ...entries].join("\n") };
 }
 
@@ -2943,6 +3196,7 @@ function ThreadList({
     listed.map((thread) => ({ id: thread.id, thread, pending: undefined, top: 0, open: true })),
     true,
   );
+
   const rows = [...held.drawn].sort((a, b) => listedRank(a) - listedRank(b));
   const keys = rows.map((card) => card.id);
   const none = !control.failed && rows.length === 0 && control.read;
@@ -2953,6 +3207,7 @@ function ThreadList({
       if (card.leaving && handle.current?.rowElement(card.id) === undefined) gone(card.id);
     }
   });
+
   return (
     <div
       className="comments-list box-border px-ui-16 pt-ui-16 pb-ui-24 data-empty:flex data-empty:min-h-full data-empty:flex-col data-flush:p-0"
@@ -2989,6 +3244,7 @@ function ThreadList({
         >
           {(index) => {
             const card = rows[index];
+
             return card?.thread === undefined ? null : (
               <MarginSlot card={card} moves={false} slotRef={NO_SLOT} onGone={gone} flows>
                 <CommentsRow>
@@ -3042,8 +3298,10 @@ function commentCount(threads: number): string {
 export function CommentsToggle(): React.JSX.Element | null {
   const control = useDescriptionCommentsControlOrUndefined();
   const { listing, onListing } = useCommentFocus();
+
   if (control === undefined || control.threads.length === 0) return null;
   const listed = listing !== undefined;
+
   return (
     <span className={`${COMMENTS_TOGGLE_CLASS} actor-line`}>
       <Tooltip label={listed ? TOGGLE_WORDS.MARGIN : TOGGLE_WORDS.LIST}>
@@ -3097,28 +3355,35 @@ function DescriptionCommentList({
   const run = useRef<VirtualRowsHandle>(null);
   // Note that the threads' words are read only while a find bar stands open over the description, which then finds in the description's words and the threads' alike.
   const finding = useFindOpen();
+
   const findRows = useMemo(
     () => (finding ? listed.map(threadFindRow) : NO_FIND_ROWS),
     [finding, listed],
   );
+
   useVirtualFind({ root: scroller, rows: findRows, handle: run, findable: shown });
   const scrolledAsk = useRef<number | undefined>(undefined);
   const broughtAsk = useRef<number | undefined>(undefined);
   useLayoutEffect(() => {
     const box = wide ? scroller.current : list.current;
+
     if (revealed === undefined || box === null || scrolledAsk.current === revealed.ask) return;
     const row = list.current?.querySelector(`.comment-card[data-thread="${revealed.thread}"]`);
+
     // A thread its run has not drawn is brought in first, and scrolled to once it is drawn.
     if (row == null) {
       if (broughtAsk.current === revealed.ask) return;
       broughtAsk.current = revealed.ask;
       run.current?.bringIn(revealed.thread);
+
       return;
     }
+
     scrolledAsk.current = revealed.ask;
     box.scrollTop +=
       row.getBoundingClientRect().top - box.getBoundingClientRect().top - REVEAL_ROOM;
   });
+
   const choice = (
     <ReplayUnmask>
       <ChoiceBar<CommentsFilter>
@@ -3143,6 +3408,7 @@ function DescriptionCommentList({
       />
     </ReplayUnmask>
   );
+
   const threads = (
     // Note that the list is drawn afresh as the choice turns, so the threads of the one let go do not fade out under the other's.
     <ThreadList
@@ -3157,6 +3423,7 @@ function DescriptionCommentList({
       handle={run}
     />
   );
+
   return wide ? (
     <div
       ref={list}
@@ -3217,6 +3484,7 @@ function ThreadsPane({
   const listed = control.threads.filter((thread) =>
     filter === COMMENTS_FILTER.OPEN ? openThread(thread) : !openThread(thread),
   );
+
   return (
     <Fill className={className}>
       <WordsDatePickerRoom>
@@ -3229,6 +3497,7 @@ function ThreadsPane({
               shown={filter === COMMENTS_FILTER.RESOLVED}
               onShown={(shown) => {
                 onFilter(shown ? COMMENTS_FILTER.RESOLVED : COMMENTS_FILTER.OPEN);
+
                 // Note that the other list starts at its top, not where the one it replaces was scrolled to.
                 if (list.current !== null) list.current.scrollTop = 0;
               }}
@@ -3280,6 +3549,7 @@ export function withQuote(text: string, words: string): string {
   const kept = messageBlocks(text).filter(
     (block) => block.kind === MESSAGE_BLOCK.QUOTE || block.lines.some((line) => line.trim() !== ""),
   );
+
   return messageText([
     ...kept,
     { kind: MESSAGE_BLOCK.QUOTE, words: replyOf(words) },
@@ -3357,22 +3627,26 @@ export function PageComments({
   // The thread opened from its pin is listed and brought into the pane's view, the pane alone moving.
   const first = open?.[0];
   const opened = control.threads.find((thread) => thread.id === first);
+
   const openedFilter =
     opened === undefined
       ? undefined
       : openThread(opened)
         ? COMMENTS_FILTER.OPEN
         : COMMENTS_FILTER.RESOLVED;
+
   useEffect(() => {
     if (openedFilter !== undefined) onFilter(openedFilter);
   }, [first, openedFilter, onFilter]);
   useLayoutEffect(() => {
     if (first === undefined || list.current === null) return;
     const card = list.current.querySelector<HTMLElement>(`.comment-card[data-thread="${first}"]`);
+
     // A thread its run has not drawn is brought into the middle of the pane as it is drawn.
     if (card === null) run.current?.bringIn(first);
     else centerWithin(list.current, card);
   }, [first, filter]);
+
   return (
     <ThreadsPane
       control={control}
@@ -3394,6 +3668,7 @@ export function PageComments({
 function inWindow(room: HTMLElement | null, box: FrameBox | undefined): FrameBox | undefined {
   if (room === null || box === undefined) return undefined;
   const at = room.getBoundingClientRect();
+
   return {
     left: at.left + box.left,
     top: at.top + box.top,
@@ -3424,6 +3699,7 @@ function pinBox(pins: ReadonlyMap<string, HTMLElement>, path: string): FrameBox 
 function underElement(room: HTMLElement | null, box: FrameBox | undefined): FrameBox | undefined {
   if (room === null || box === undefined) return undefined;
   const foot = room.getBoundingClientRect().height;
+
   return inWindow(room, box.bottom <= foot ? box : { ...box, bottom: Math.max(box.top, 0) });
 }
 
@@ -3442,8 +3718,10 @@ function pinOf(
 ): HTMLElement | undefined {
   for (const each of pins) {
     const pin = each.get(path)?.querySelector<HTMLElement>(".ui-comment-pin");
+
     if (pin !== undefined && pin !== null) return pin;
   }
+
   return undefined;
 }
 
@@ -3464,8 +3742,10 @@ function usePointedPin(
   useEffect(() => {
     if (over === undefined || !(heldDrawn || postedDrawn)) return undefined;
     const pin = pinOf([held, posted], over);
+
     if (pin === undefined) return undefined;
     pointCard(pin, true);
+
     return () => pointCard(pin, false);
   }, [over, heldDrawn, postedDrawn, held, posted]);
 }
@@ -3478,11 +3758,14 @@ export function threadsByElement(
   threads: readonly DescriptionCommentThread[],
 ): ReadonlyMap<string, readonly DescriptionCommentThread[]> {
   const by = new Map<string, DescriptionCommentThread[]>();
+
   for (const thread of threads) {
     const path = thread.page?.element;
+
     if (path === undefined || !openThread(thread)) continue;
     by.set(path, [...(by.get(path) ?? []), thread]);
   }
+
   return by;
 }
 
@@ -3527,6 +3810,7 @@ function PreviewComment({
     files.map((file) => ({ name: file.name, mediaType: file.mediaType, url: "" })),
     words,
   );
+
   return (
     <Comment {...head}>
       {quote === undefined ? null : (
@@ -3550,7 +3834,9 @@ function ThreadPreview({
   const first = thread.entries.find((entry) => entry.kind === DESCRIPTION_COMMENT_ENTRY.COMMENT);
   const fallback: DescriptionCommentWriter = { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER };
   const { author, nameRef } = useWriter(first?.writer ?? fallback, agents);
+
   if (first === undefined) return null;
+
   return (
     <PreviewComment
       head={{ author, nameRef, at: first.at, now }}
@@ -3590,6 +3876,7 @@ function PagePin({
   const fallback: DescriptionCommentWriter = { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER };
   const { author } = useWriter(first?.writer ?? fallback, doors.agents);
   const comments = threads.length;
+
   return (
     <CommentPin
       cardAt={cardAt}
@@ -3613,10 +3900,13 @@ function PagePin({
   );
 }
 
+type UseReaderWriterResult = { author: CommentAuthor; nameRef: ReactNode };
+
 /** The reader as a comment of theirs draws them: their face and their name. */
-function useReaderWriter(): { author: CommentAuthor; nameRef: ReactNode } {
+function useReaderWriter(): UseReaderWriterResult {
   const { readerId } = useMemberDirectory();
   const reader = usePerson(readerId === undefined ? undefined : { userId: readerId, name: "" });
+
   return { author: commentAuthor(reader), nameRef: <ActorRef actor={reader} nameOnly /> };
 }
 
@@ -3664,9 +3954,11 @@ export function PendingPageComment({
   useEffect(() => {
     if (!open) return undefined;
     markEditing(comment.clientKey, true);
+
     return () => markEditing(comment.clientKey, false);
   }, [open, markEditing, comment.clientKey]);
   const { clientKey, element } = comment;
+
   // What its quote line says: apart from its element, what it is on; by it, the words it was started on where they are a few of the element's.
   const quoted =
     title === undefined
@@ -3674,8 +3966,10 @@ export function PendingPageComment({
         ? element.quote
         : undefined
       : (comment.reply?.quote ?? element?.quote ?? title);
+
   // The element its quote line shows: its own, or the one its thread is on, where it is a reply.
   const shownPath = comment.reply === undefined ? element?.path : comment.reply.path;
+
   // Note that one a send posted already is the service's as it stood, so it offers neither.
   const groups: MenuAction[][] =
     busy || comment.landed === true
@@ -3697,13 +3991,16 @@ export function PendingPageComment({
             },
           ],
         ];
+
   // Note that an edit emptied deletes the comment, as a posted one's does, here at once with Undo.
   const save = ({ added }: EditedFiles) => {
     const next = editing?.trim() ?? "";
     setEditing(undefined);
+
     if (next === "") review.remove(clientKey);
     else review.edit(clientKey, next, added);
   };
+
   return (
     <div className="comment-entry relative py-tight-gap" data-pending={clientKey}>
       <Comment
@@ -3773,6 +4070,7 @@ function HeldPin({
 }): React.JSX.Element {
   const { author, nameRef } = useReaderWriter();
   const first = held[0];
+
   return (
     <CommentPin
       cardAt={cardAt}
@@ -3835,6 +4133,7 @@ function DraftPin({
   cardAt: () => FrameBox | undefined;
 }): React.JSX.Element {
   const { author, nameRef } = useReaderWriter();
+
   return (
     <CommentPin
       cardAt={cardAt}
@@ -3860,10 +4159,13 @@ function DraftPin({
 /** The comments held in a review on each element of the page, by its path, in the order they were held; one on the whole page is on none. */
 function heldByElement(held: readonly HeldComment[]): ReadonlyMap<string, readonly HeldComment[]> {
   const by = new Map<string, HeldComment[]>();
+
   for (const comment of held) {
     const path = comment.element?.path;
+
     if (path !== undefined) by.set(path, [...(by.get(path) ?? []), comment]);
   }
+
   return by;
 }
 
@@ -3881,11 +4183,16 @@ function draftPinAt(
 ): { box: FrameBox; step: number; at: FrameBox | undefined } | undefined {
   if (drafted === undefined) return undefined;
   const path = drafted.element?.path;
+
   if (path === undefined) return { box: PAGE_TOP, step: 0, at: undefined };
   const box = marks.get(path);
+
   if (box === undefined) return undefined;
+
   if (box === null) return { box: PAGE_TOP, step: 0, at: undefined };
+
   if (box.bottom < 0) return undefined;
+
   return { box, step: pinsAt(path) * HELD_PIN_STEP, at: box };
 }
 
@@ -3986,23 +4293,32 @@ export function PageCommentLayer({
   const heldPins = useRef(new Map<string, HTMLElement>());
   // The element whose held comments stand open by it, by its path; none open.
   const [heldOpen, setHeldOpen] = useState<string | undefined>(undefined);
+
   const heldThere =
     heldOpen === undefined ? [] : (heldByElement(review?.held ?? []).get(heldOpen) ?? []);
+
   // Note that the last held comment on the element deleted lets the element go, so the next held there opens nothing until its pin is pressed.
   useEffect(() => {
     if (heldOpen !== undefined && heldThere.length === 0) setHeldOpen(undefined);
   }, [heldOpen, heldThere.length]);
+
   const pins = [...byElement].flatMap(([path, threads]) => {
     const box = marks.get(path);
+
     // Note that an element scrolled up out of the frame is pinned nowhere until it comes back, and one below it stands past the room's foot, which clips it.
     if (box === undefined || box === null || box.bottom < 0) return [];
+
     return [{ path, threads, box }];
   });
+
   const heldMarks = [...heldByElement(review?.held ?? [])].flatMap(([path, held]) => {
     const box = marks.get(path);
+
     if (box === undefined || box === null || box.bottom < 0) return [];
+
     return [{ path, held, box, step: byElement.has(path) ? HELD_PIN_STEP : 0 }];
   });
+
   usePointedPin(
     over,
     {
@@ -4012,12 +4328,14 @@ export function PageCommentLayer({
     heldPins.current,
     postedPins.current,
   );
+
   // Note that a draft's pin stands left of its element's posted and held pins, so none covers another.
   const draftMark = draftPinAt(
     drafted,
     marks,
     (path) => Number(byElement.has(path)) + Number(heldMarks.some((mark) => mark.path === path)),
   );
+
   return (
     <div className="page-comment-layer">
       {review === undefined
@@ -4240,7 +4558,9 @@ function SelectedReply({
   onReply: (selected: PagePicked) => void;
 }): React.JSX.Element | null {
   const box = inWindow(room.current, selected.box);
+
   if (box === undefined || room.current === null) return null;
+
   return (
     <ReplyPress
       place={pressPlace(box, roomAround(room.current))}

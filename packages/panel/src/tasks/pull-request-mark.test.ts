@@ -55,6 +55,7 @@ function pullRequest(
 /** Every place the window draws the pull request, each rendered on its own. */
 function places(drawn: AgentPullRequest): ReadonlyMap<string, ReactElement> {
   const ignore = (): void => undefined;
+
   return new Map<string, ReactElement>([
     ["plan card", createElement(PullRequestLine, { pullRequest: drawn })],
     [
@@ -93,20 +94,25 @@ function markOf(place: ReactElement): string | null | undefined {
     renderToStaticMarkup(withQueryClient(place)),
     "text/html",
   );
+
   const mark = page.querySelector("[data-pull-request-mark]");
+
   if (mark === null) return undefined;
+
   return mark.getAttribute("aria-label");
 }
 
 test("a closed pull request whose checks failed says so wherever it is drawn", () => {
   const drawn = places(pullRequest(PULL_REQUEST_STATE.CLOSED, CHECK_SUMMARY.FAILING));
   const expected = "Pull request #42, closed, checks failing";
+
   for (const [place, element] of drawn) assert.equal(markOf(element), expected, place);
 });
 
 test("a merged pull request says so wherever it is drawn, its checks unsaid", () => {
   const drawn = places(pullRequest(PULL_REQUEST_STATE.MERGED, CHECK_SUMMARY.PASSING));
   const expected = "Pull request #42, merged";
+
   for (const [place, element] of drawn) assert.equal(markOf(element), expected, place);
 });
 
@@ -115,6 +121,7 @@ test("an open pull request the merge queue holds is drawn queued wherever it is 
     ...pullRequest(PULL_REQUEST_STATE.OPEN, CHECK_SUMMARY.PASSING),
     queued: true,
   });
+
   for (const [place, element] of drawn) {
     assert.equal(markOf(element), "Pull request #42, queued", place);
   }
@@ -125,6 +132,7 @@ test("a pull request no longer open is drawn where it stands, whatever the queue
     ...pullRequest(PULL_REQUEST_STATE.MERGED, CHECK_SUMMARY.PASSING),
     queued: true,
   });
+
   for (const [place, element] of drawn) {
     assert.equal(markOf(element), "Pull request #42, merged", place);
   }

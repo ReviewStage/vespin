@@ -47,11 +47,13 @@ const TILE: AgentChangedFile = {
 
 /** How the service answers the turn's changes this test. */
 let answer: AgentTurnChangesAnswerView = { files: [TILE], truncated: false };
+
 /** How many times the changes were asked. */
 let asked = 0;
 
 /** What the stand-in diff bundle was handed, mount first, each draw after it. */
 let drawn: DiffListProps[] = [];
+
 /** The files the list was told to stand on, in order. */
 let revealed: string[] = [];
 let root: Root | undefined;
@@ -66,6 +68,7 @@ const diffStandIn: DiffViewModule = {
   }),
   mountList: (_host, props) => {
     drawn.push(props);
+
     return {
       update: (next) => drawn.push(next),
       reveal: (path) => revealed.push(path),
@@ -79,6 +82,7 @@ const diffStandIn: DiffViewModule = {
 const treeStandIn: FileTreeModule = {
   mount: () => {
     const nothing = () => undefined;
+
     return {
       reveal: nothing,
       search: nothing,
@@ -113,10 +117,12 @@ beforeEach(() => {
   fakeActs({
     act: (request: AnyAct) => {
       if (request.kind === ACT_KIND.AGENTS_TURN_CHANGES) asked += 1;
+
       const outcome: FakeActAnswer = {
         status: FAKE_ANSWER.DONE,
         value: request.kind === ACT_KIND.AGENTS_TURN_CHANGES ? answer : undefined,
       };
+
       return Promise.resolve(outcome);
     },
   });
@@ -164,6 +170,7 @@ async function drawnTab(
     assert.notEqual(container.textContent?.includes("Reading the turn's changes"), true),
   );
   await flush();
+
   return container;
 }
 
@@ -198,9 +205,11 @@ test("a turn whose snapshot is gone says its changes are no longer available, an
   asked = 0;
   const away = await drawnTab(undefined, OTHER_LINE);
   assert.ok(away.textContent?.includes("Studio is offline"), away.textContent ?? "");
+
   const retry = [...away.querySelectorAll("button")].find((each) =>
     each.textContent?.includes("Retry"),
   );
+
   assert.ok(retry, "the read can be asked again");
   answer = { files: [TILE], truncated: false };
   await act(async () => retry.click());

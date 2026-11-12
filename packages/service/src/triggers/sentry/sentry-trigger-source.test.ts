@@ -84,12 +84,14 @@ it.effect(
 it.effect("a deployment holding no client secret trusts nothing", () =>
   Effect.gen(function* () {
     const body = fixture("issue-created");
+
     const verdict = yield* sentryTriggerSource
       .verify(
         { headers: { "sentry-hook-signature": signed(body) } },
         new TextEncoder().encode(body),
       )
       .pipe(Effect.provide(Layer.succeed(SentryApp, sentryAppService(undefined, ["SECRET"]))));
+
     assert.equal(verdict, TRIGGER_VERIFICATION.UNCONFIGURED);
   }),
 );
@@ -98,6 +100,7 @@ it("an issue alert reads as an alert on its issue, with its project, environment
   const [event, ...rest] = sentryTriggerSource.normalize(
     delivery("event_alert", fixture("event-alert-triggered")),
   );
+
   assert.equal(rest.length, 0);
   assert.ok(event);
   assert.equal(event.event, SENTRY_TRIGGER_EVENT.ALERT_TRIGGERED);
@@ -133,6 +136,7 @@ it("a new issue reads as a new issue, with its project, level, counts, and short
     [INTEGRATION_TRIGGER_FILTER.PROJECT]: ["api"],
     [INTEGRATION_TRIGGER_FILTER.LEVEL]: ["fatal"],
   });
+
   for (const line of ["Events: 3", "Users: 2", "Short id: API-1Y", "Culprit: db.pool in acquire"]) {
     assert.ok(event.summary.split("\n").includes(line), line);
   }

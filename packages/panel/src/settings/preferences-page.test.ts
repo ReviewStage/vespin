@@ -47,6 +47,7 @@ const SIGNED_IN: AccountSnapshot = {
 function neverChosen() {
   const { stored, ...rest } = appSettingsWire(settingsView());
   const { linkOpen: _never, ...held } = stored;
+
   return appSettingsView({ ...rest, stored: held });
 }
 
@@ -100,6 +101,7 @@ const PERSONAL: Workspace = {
   role: WORKSPACE_ROLE.OWNER,
   github: null,
 };
+
 const ACME: Workspace = {
   id: "workspace-acme",
   name: "Acme",
@@ -135,6 +137,7 @@ function draw(
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const workspace = {
     workspaces: [PERSONAL, ACME],
     workspaceId: PERSONAL.id,
@@ -142,6 +145,7 @@ function draw(
     listFailed: false,
     onRetryList: ignore,
   };
+
   act(() =>
     root.render(
       withQueryClient(
@@ -149,6 +153,7 @@ function draw(
       ),
     ),
   );
+
   return container;
 }
 
@@ -165,6 +170,7 @@ beforeEach(() => {
     [SETTINGS_ACT_KIND.SETTING_UPDATE]: (payload) => {
       written.push(payload);
       const settings = appSettingsWire(settingsView({ linkOpen: LINK_OPEN.MAC_APP }));
+
       return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED, settings });
     },
     // Note that the host lays what it read once the hold is taken, never inside it.
@@ -172,10 +178,12 @@ beforeEach(() => {
       void Promise.resolve().then(() =>
         reads.deliverIntegrations(integrationsWith(slackConnected)),
       );
+
       return quietHold();
     },
     [ACT_KIND.WORKSPACE_SLACK_BOT_NOTIFICATIONS]: (payload) => {
       written.push(payload);
+
       return Promise.resolve({ configured: true, notifications: payload.notifications });
     },
   });
@@ -198,15 +206,18 @@ afterEach(() => {
 
 test("Preferences asks where Vespin links open, the browser until chosen, and a choice writes the setting", async () => {
   const page = draw(SIGNED_IN);
+
   const choice =
     page.querySelector<HTMLButtonElement>('button[aria-label="Open Vespin links in: Browser"]') ??
     assert.fail("the row is drawn, naming the browser");
 
   act(() => choice.click());
+
   const app =
     [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (item) => item.textContent === "Vespin for Mac",
     ) ?? assert.fail("the menu offers Vespin for Mac");
+
   act(() => app.click());
   await act(async () => undefined);
 
@@ -222,15 +233,18 @@ test("Slack notifications stand under Notifications only once a workspace has th
   const unconnected = draw(SIGNED_IN);
   await act(async () => undefined);
   assert.equal(unconnected.textContent?.includes("Slack notifications"), false);
+
   for (const each of roots.splice(0)) act(() => each.unmount());
 
   slackConnected = [ACME.id];
   const page = draw(SIGNED_IN);
+
   const slack = await vi.waitFor(
     () =>
       page.querySelector<HTMLElement>('[role="switch"][aria-label="Slack notifications"]') ??
       assert.fail("the switch is drawn"),
   );
+
   act(() => slack.click());
   await act(async () => undefined);
 
@@ -243,14 +257,18 @@ function actsOf(page: HTMLElement, chip: string): string {
   const opener =
     page.querySelector<HTMLButtonElement>(`button[aria-label="${chip}"]`) ??
     assert.fail(`the ${chip} pop-up is drawn`);
+
   act(() => opener.click());
   const menu = document.getElementById(opener.getAttribute("aria-controls") ?? "");
+
   const more =
     menu?.querySelector<HTMLButtonElement>('[role="option"] button[aria-label="Sound actions"]') ??
     assert.fail("a sound of the account's own draws its ⋯");
+
   act(() => more.click());
   const words = menu?.querySelector('[aria-label="Sound actions"][role="listbox"]')?.textContent;
   act(() => opener.click());
+
   return words ?? assert.fail("its acts open");
 }
 
@@ -258,9 +276,11 @@ function menuOf(page: HTMLElement, chip: string): string {
   const opener =
     page.querySelector<HTMLButtonElement>(`button[aria-label="${chip}"]`) ??
     assert.fail(`the ${chip} pop-up is drawn`);
+
   act(() => opener.click());
   const words = document.getElementById(opener.getAttribute("aria-controls") ?? "")?.textContent;
   act(() => opener.click());
+
   return words ?? assert.fail(`the ${chip} menu opens`);
 }
 
@@ -273,6 +293,7 @@ test("each sound lists the account's own sounds by name, the one it plays chosen
       ),
     ),
   );
+
   act(() =>
     reads.deliverPreferences({
       rows: {

@@ -73,9 +73,9 @@ import { useOpenPlace } from "./use-open-link.js";
 import { useTaskAgent } from "./use-task-work.js";
 
 /**
- * An item put away until a reminder says when it comes back in its age's
- * place, after the clock glyph the reminder's acts wear, in the accent's
- * ink, so a row put away reads apart from one that changed.
+ * When a reminder brings a row back, after the clock glyph the reminder's
+ * acts wear, in the accent's ink, so a row put away reads apart from one
+ * that changed.
  */
 const INBOX_ROW_DUE =
   "inbox-row-due inline-flex items-center gap-tight-gap text-accent-ink [&>svg]:size-caption-glyph";
@@ -97,7 +97,9 @@ export function addressedWords(person: Actor): string {
  */
 export function AddressedTo({ to }: { to: InboxPerson | undefined }): React.JSX.Element | null {
   const person = usePerson(to);
+
   if (to === undefined) return null;
+
   return (
     <span className="inbox-addressed-to inline-flex min-w-0 items-center gap-tight-gap">
       <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
@@ -146,6 +148,7 @@ export function ItemMark({
   plain?: boolean;
 }): React.JSX.Element {
   const subject = itemSubject(useTaskAgent(agentId), models, readerId);
+
   if (subject === undefined) {
     return (
       <ReadAgentModel agentId={agentId}>
@@ -160,6 +163,7 @@ export function ItemMark({
       </ReadAgentModel>
     );
   }
+
   return plain ? (
     <ActorMark actor={subject.tile} />
   ) : (
@@ -197,9 +201,11 @@ export function inboxItemGlyph(item: InboxItem): React.JSX.Element {
 /** Where an item stands, as its row's card says it under its title. */
 function standingWords(item: InboxItem, needsYou: boolean, starter: Actor | undefined): string {
   if (needsYou) return NEEDS_YOU.LABEL;
+
   if (item.status === INBOX_STATUS.OPEN) {
     return starter === undefined ? "Waiting" : waitingOn(starter);
   }
+
   return inboxSettledStanding(item);
 }
 
@@ -234,6 +240,7 @@ export function InboxItemCard({
   const subject = itemSubject(listedAgent, models, readerId);
   // Note that the list followed live names what each of a task's agents is doing.
   const working = listedAgent !== undefined && agentStillWriting(listedAgent.status);
+
   return (
     <HoverCard data-inbox-item-card="">
       <HoverCardHead
@@ -255,7 +262,7 @@ export function InboxItemCard({
 
 /**
  * The task holding an item, as its card says it under the head, a quieter
- * row flush with the name, which wears no glyph: by its key, as the task's
+ * row flush with the name: by its key, as the task's
  * own card says it (`TaskKey`), and by its chip as a mention of it is drawn
  * (`HolderRef`), which wears the task's status as its mark, so the card
  * says no status in words. Note that the row wears no glyph of its own,
@@ -264,6 +271,7 @@ export function InboxItemCard({
 function HolderDetail({ holder }: { holder: InboxHolder }): React.JSX.Element {
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
   const workspaceName = workspaces?.find((each) => each.id === holder.task.workspaceId)?.name;
+
   return (
     <HoverCardRow
       look={HOVER_CARD_ROW_LOOK.DETAIL}
@@ -288,6 +296,7 @@ function HolderRef({ holder }: { holder: InboxHolder }): React.JSX.Element {
   const glyph = <PlanGlyph status={holder.task.status} />;
   const { task } = holder;
   const head = <HoverCardHead glyph={glyph} name={task.name} />;
+
   return (
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
@@ -325,6 +334,7 @@ function TaskStatusChip({
 }): React.JSX.Element | null {
   if (holder.task.status === undefined) return null;
   const { status } = holder.task;
+
   return (
     <span className="inbox-row-task-status inline-flex" data-task-status={status}>
       {drawn ? <TaskStatusMark status={status} /> : null}
@@ -348,9 +358,11 @@ export function useInboxStanding(listed: InboxListed, readerId: string | undefin
   const { item } = listed;
   const directory = useMemberDirectory();
   const reader = directory.readerId ?? readerId;
+
   const starter = readersItem(item, reader)
     ? undefined
     : personActor(inboxWaitsOn(item), directory.members, reader, directory.former);
+
   return {
     needsYou: needsYouOf(listed, reader),
     starter,
@@ -419,6 +431,7 @@ export function InboxItemMarks({
 }): React.JSX.Element {
   const { holder, item } = listed;
   const { needsYou, starter } = useInboxStanding(listed, readerId);
+
   return (
     <InboxRowMeta>
       {before}
@@ -429,7 +442,7 @@ export function InboxItemMarks({
       {drafted && !open ? <DraftMark /> : null}
       {needsYou && needsYouSaid ? <VisuallyHidden>{NEEDS_YOU.LABEL}</VisuallyHidden> : null}
       <TaskStatusChip holder={holder} drawn={standing} />
-      {/* Note that an item put away until a reminder says when it comes back in its age's place, as Mail's Remind Me list does. */}
+      {/* An item put away until a reminder says when it comes back in its age's place. */}
       {item.remindAt === undefined ? (
         <Time at={item.updatedAt} now={now} hint={false} />
       ) : (

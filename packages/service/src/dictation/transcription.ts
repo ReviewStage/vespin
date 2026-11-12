@@ -78,7 +78,9 @@ function transcriptionRequest(input: {
     new Blob([input.audio], { type: DICTATION_AUDIO_TYPE }),
     TRANSCRIPTION.FILE_NAME,
   );
+
   for (const keyword of input.keywords) form.append("keywords[]", keyword);
+
   return HttpClientRequest.post(`${HOSTED_OPENAI_DEFAULTS.BASE_URL}${TRANSCRIPTION.PATH}`).pipe(
     HttpClientRequest.bearerToken(Redacted.value(input.key)),
     HttpClientRequest.bodyFormData(form),
@@ -97,6 +99,7 @@ function replyOf(
   if (response.status !== HOSTED_HTTP_STATUS.OK) {
     return Effect.succeed({ status: response.status, body: unparsedWire(undefined) });
   }
+
   return Effect.map(response.json, (body) => ({
     status: response.status,
     body: unparsedWire(body),
@@ -110,6 +113,7 @@ export const transcribeClip = /* @__PURE__ */ Effect.fnUntraced(function* (input
   readonly keywords: readonly string[];
 }): Effect.fn.Return<Transcribed, TranscriptionFailed, HttpClient.HttpClient> {
   const client = yield* HttpClient.HttpClient;
+
   // A request that failed or timed out is no answer, and its cause is dropped unread.
   const answered = yield* client.execute(transcriptionRequest(input)).pipe(
     Effect.flatMap((response) => replyOf(response)),
@@ -117,11 +121,14 @@ export const transcribeClip = /* @__PURE__ */ Effect.fnUntraced(function* (input
     Effect.timeout(TRANSCRIPTION_TIMEOUT),
     Effect.option,
   );
+
   if (Option.isNone(answered)) return yield* new TranscriptionFailed({ status: undefined });
   const { status, body } = answered.value;
   const read = readEither(TranscriptionAnswerSchema, { excess: EXCESS_KEYS.DROP })(body);
+
   if (Result.isFailure(read)) return yield* new TranscriptionFailed({ status });
   const { text, usage } = read.success;
   const billedSeconds = usage?.type === USAGE_TYPE_DURATION ? usage.seconds : undefined;
+
   return { text: text.trim(), billedSeconds };
 });

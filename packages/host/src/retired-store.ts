@@ -59,6 +59,7 @@ export const removeRetiredStore = (
       RETIRED_STORE_ENTRIES,
       (entry) => {
         const target = path.join(agentRoot, entry);
+
         return Effect.catchCause(
           fileSystem.remove(target, { recursive: true, force: true }),
           (cause) =>

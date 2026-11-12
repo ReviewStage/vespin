@@ -58,6 +58,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   await letGoOfWords();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   // Note that the saves a description left as it went answer before the test's client is cleared.
   await settledWrites();
@@ -95,6 +96,7 @@ function drawn(): HTMLElement {
       ),
     ),
   );
+
   return container;
 }
 
@@ -106,6 +108,7 @@ function drawnAtRest(task: Task = TASK, editable = true, saving = false) {
   const root = createRoot(container);
   roots.push(root);
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
+
   const draw = (plan: Task) =>
     act(() =>
       root.render(
@@ -118,6 +121,7 @@ function drawnAtRest(task: Task = TASK, editable = true, saving = false) {
               edit: editable
                 ? descriptionEditMutation(plan.id, (request: DescriptionEditRequest) => {
                     saves.push(request);
+
                     return saving
                       ? Promise.resolve({ saved: true as const })
                       : Promise.reject(new Error("Nothing is saved in this test."));
@@ -136,7 +140,9 @@ function drawnAtRest(task: Task = TASK, editable = true, saving = false) {
         ),
       ),
     );
+
   draw(task);
+
   return { container, saves, draw };
 }
 
@@ -144,6 +150,7 @@ function drawnAtRest(task: Task = TASK, editable = true, saving = false) {
 function chipAtRest(container: HTMLElement): HTMLElement {
   const chip = container.querySelector<HTMLElement>('.description-unit [data-kind="date"]');
   assert.ok(chip, "the description's words hold a date chip");
+
   return chip;
 }
 
@@ -154,10 +161,13 @@ async function opened(): Promise<{ container: HTMLElement; editor: Editor }> {
   assert.ok(rollout);
   act(() => rollout.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
   await act(async () => undefined);
+
   const editor = container.querySelector<TiptapEditorHTMLElement>(
     ".description-document-text",
   )?.editor;
+
   assert.ok(editor, "the description's editor is open");
+
   return { container, editor };
 }
 
@@ -166,7 +176,9 @@ function chipIn(container: HTMLElement): HTMLElement {
   const chip = container.querySelector<HTMLElement>(
     ".description-document-text [data-mention-ref]",
   );
+
   assert.ok(chip, "the text holds a chip");
+
   return chip;
 }
 
@@ -181,6 +193,7 @@ async function pressChip(container: HTMLElement): Promise<HTMLElement> {
   await act(async () => undefined);
   const opening = picker(container);
   assert.ok(opening, "the picker is open");
+
   return opening;
 }
 
@@ -188,6 +201,7 @@ async function pressChip(container: HTMLElement): Promise<HTMLElement> {
 function control(dialog: HTMLElement, selector: string): HTMLElement {
   const found = dialog.querySelector<HTMLElement>(selector);
   assert.ok(found, `the picker holds ${selector}`);
+
   return found;
 }
 
@@ -201,11 +215,14 @@ function labelOf(dialog: HTMLElement, name: string): HTMLLabelElement | undefine
 /** A field of the picker, by its name: the words shown over it, or a name of its own where none are. */
 function fieldOf(dialog: HTMLElement, name: string): HTMLInputElement {
   const label = labelOf(dialog, name);
+
   const found =
     label === undefined
       ? dialog.querySelector<HTMLInputElement>(`input[aria-label="${name}"]`)
       : dialog.querySelector<HTMLInputElement>(`input[id="${label.htmlFor}"]`);
+
   assert.ok(found, `the picker holds the ${name} field`);
+
   return found;
 }
 
@@ -251,6 +268,7 @@ function mentionsIn(editor: Editor): { name: string; target: string }[] {
       found.push({ name: String(node.attrs.name), target: String(node.attrs.target) });
     }
   });
+
   return found;
 }
 
@@ -260,7 +278,9 @@ function readerOffset(at: number): string {
     new Intl.DateTimeFormat("en-US", { timeZoneName: "longOffset" })
       .formatToParts(at)
       .find((part) => part.type === "timeZoneName")?.value ?? "";
+
   const offset = named.replace("GMT", "");
+
   return offset === "" ? "+00:00" : offset;
 }
 
@@ -406,6 +426,7 @@ async function openZones(container: HTMLElement, dialog: HTMLElement): Promise<H
   await act(async () => undefined);
   const zones = picker(container);
   assert.ok(zones, "the picker stands on its zones");
+
   return zones;
 }
 
@@ -590,6 +611,7 @@ test("words that name no date say what to write under the field, in words, until
   typeWords(dialog, "Start", "someday");
   await pressKey(dialog, "Enter");
   const field = fieldOf(dialog, "Start");
+
   const said = () =>
     (field.getAttribute("aria-describedby") ?? "")
       .split(" ")
@@ -693,16 +715,20 @@ test("a day picked from the description at rest whose save is refused leaves the
 test("a tick, a date and a tick from the description at rest, before it is drawn anew, are each written over the one before", async () => {
   const body =
     "## Rollout\n\n- [ ] One\n- [ ] Two\n\nShip by [@Oct 23, 2026](mention://date/2026-10-23).";
+
   const { container, saves } = drawnAtRest(
     { ...TASK, document: { body, assumptions: [] } },
     true,
     true,
   );
+
   const box = (name: string) => {
     const found = container.querySelector<HTMLElement>(`[role="checkbox"][aria-label="${name}"]`);
     assert.ok(found, `${name} is drawn`);
+
     return found;
   };
+
   const settled = () =>
     act(async () => {
       for (let tick = 0; tick < 6; tick += 1) await Promise.resolve();
@@ -721,10 +747,12 @@ test("a tick, a date and a tick from the description at rest, before it is drawn
   await settled();
 
   const ticked = body.replace("[ ] One", "[x] One");
+
   const dated = ticked.replace(
     "[@Oct 23, 2026](mention://date/2026-10-23)",
     "[@Oct 24, 2026](mention://date/2026-10-24)",
   );
+
   assert.deepEqual(
     saves.map((save) => save.document),
     [
@@ -770,6 +798,7 @@ test("the picker opened from the description at rest and closed with nothing cha
 
 test("words written above a date while its picker is open leave the date changed where it then stands", async () => {
   const { container, saves, draw } = drawnAtRest();
+
   const grown: Task = {
     ...TASK,
     document: {
@@ -835,15 +864,18 @@ test("Pick a date in the @ list narrowed to dates opens the picker, and the day 
     editor.view.dispatch(editor.state.tr.insertText(" Due @dates:"));
   });
   await act(async () => undefined);
+
   const rows = [...container.querySelectorAll(".mention-menu .ui-combobox-option-label")].map(
     (row) => row.textContent,
   );
+
   const key = (name: string) =>
     act(() => {
       editor.view.dom.dispatchEvent(
         new KeyboardEvent("keydown", { key: name, bubbles: true, cancelable: true }),
       );
     });
+
   key("End");
   key("Enter");
   await act(async () => undefined);

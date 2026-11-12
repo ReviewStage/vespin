@@ -44,6 +44,7 @@ const standing = (name: string): Schedule => ({
 /** Every call the client was asked to make, by method, with what it was handed. */
 function spiedSchedules() {
   const missing = new SchedulesApiError(404, "Schedule not found", { code: "not_found" });
+
   return {
     update: vi.spyOn(Schedules, "update").mockRejectedValue(missing),
     create: vi.spyOn(Schedules, "create").mockImplementation(async (params) => ({

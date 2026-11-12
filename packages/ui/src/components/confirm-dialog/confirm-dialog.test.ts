@@ -29,6 +29,7 @@ const { failure: FAILURE } = recordedFailure();
 type Answers = ((result: ActionResult) => void)[];
 
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
+
 const REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
   reason: "The key is in use.",
@@ -60,11 +61,13 @@ function Owner({
   const [subject, setSubject] = useState(true);
   const [surfaceOpen, setSurfaceOpen] = useState(true);
   const field = useRef<HTMLInputElement | null>(null);
+
   const confirm = useConfirmDialog(
     { subject, surfaceOpen },
     useMutationAct(() => new Promise<ActionResult>((answer) => answers.push(answer))),
     () => FAILURE,
   );
+
   return createElement(
     "div",
     null,
@@ -152,6 +155,7 @@ function asked(withField = false, gate: string | undefined = undefined) {
   act(() => opener.click());
   assert.ok(question(), "the question is asked");
   const settle = (result: ActionResult) => answerOldest(answers, result);
+
   return { opener, settle };
 }
 
@@ -273,10 +277,12 @@ test("an answer that lands holds the card until the check's motion finishes", as
 
 test("a card whose check has been seen goes once its fade has run", async () => {
   vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] });
+
   const exits = holdExits(
     (element) =>
       element.classList.contains("ui-button-done") || element.hasAttribute("data-ending-style"),
   );
+
   const { opener, settle } = asked();
   press("Delete");
   await settle(ACCEPTED);
@@ -297,11 +303,13 @@ test("a card whose check has been seen goes once its fade has run", async () => 
 test("a gated question lands on its gate and offers the act only once the subject's name is typed exactly, a press or Enter before refused", async () => {
   const { settle } = asked(false, "Acme Inc");
   const gate = question()?.querySelector("input") ?? assert.fail("no gate");
+
   const type = (words: string) =>
     act(() => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(gate, words);
       gate.dispatchEvent(new Event("input", { bubbles: true }));
     });
+
   const landed = holds(gate);
   const label = document.querySelector(`label[for="${gate.id}"]`)?.textContent;
   press("Delete");

@@ -2,7 +2,7 @@ import { repositoryLabel } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import {
   type GroupFold,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   SkeletonRegion,
   TASK_ROW_CELL,
@@ -95,6 +95,7 @@ function GlanceRows({
   const [list, setList] = useState<HTMLDivElement | null>(null);
   const fitted = useFittedColumns(list, cells);
   const more = !useCoarsePointer();
+
   // Note that the list is measured from a box of its own, the width its rows stand in, so its columns fold for the room it has.
   return (
     <div ref={setList} className="recent-tasks min-w-0">
@@ -145,6 +146,7 @@ export function RecentTasks({
   const rowTab = taskRowTab(tasks);
   const opened = openedTaskOf(tasks);
   const workspaceName = tasks.workspace?.name ?? "";
+
   return (
     <>
       <GlanceRows label={label} cells={cellsOf(face)} joinsWalk={joinsWalk} moves={moves}>
@@ -194,10 +196,11 @@ export function RecentTasksSkeleton({
   fold?: GroupFold | undefined;
 }): React.JSX.Element {
   const blocks: Partial<Record<TaskRowCell, ReactNode>> = {
-    [TASK_ROW_CELL.STATUS]: <Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_MARK} />,
+    [TASK_ROW_CELL.STATUS]: <Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_MARK} />,
     [TASK_ROW_CELL.REPOSITORY]: <Skeleton width={SKELETON_REPOSITORY} />,
     [TASK_ROW_CELL.UPDATED]: <Skeleton width={SKELETON_TIME} />,
   };
+
   return (
     <SectionSkeleton fold={fold}>
       <SkeletonRegion label={label}>

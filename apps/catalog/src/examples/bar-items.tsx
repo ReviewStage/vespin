@@ -21,11 +21,13 @@ import { CatalogSection } from "../section";
  */
 
 const PLACE = { INBOX: "inbox", TASKS: "tasks" } as const;
+
 type Place = (typeof PLACE)[keyof typeof PLACE];
 
 function Bar(): React.JSX.Element {
   const [place, setPlace] = useState<Place>(PLACE.INBOX);
   const [open, setOpen] = useState(false);
+
   return (
     <nav aria-label="Places" style={{ display: "flex", maxWidth: 360 }}>
       <BarItem
@@ -54,6 +56,7 @@ function Bar(): React.JSX.Element {
 function FloatingBar(): React.JSX.Element {
   const [place, setPlace] = useState<Place>(PLACE.INBOX);
   const [asked, setAsked] = useState(0);
+
   return (
     <nav aria-label="Places" style={{ display: "flex", gap: 12, maxWidth: 360, padding: 12 }}>
       <BarItems>

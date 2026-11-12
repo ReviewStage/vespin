@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import {
-  githubShapes,
+  githubRedress,
   INLINE_PICTURE,
   inlinePictures,
   renderingPictures,
@@ -10,7 +10,7 @@ import {
 
 /**
  * github-html.test.ts -- GitHub's rendering reaches the window's HTML steps
- * whole, and what GitHub dresses its way is reshaped into what the window
+ * whole, and what GitHub dresses its way is redressed into what the window
  * draws its own: a highlighted block into a fenced one in its language, and
  * a diagram into a fenced mermaid block of its source, a themed picture
  * into an `<img>` for each theme, and a picture GitHub links to itself into
@@ -21,7 +21,7 @@ import {
  */
 
 /** A node of the parsed tree, as the step reads it. */
-type HtmlNode = Parameters<ReturnType<typeof githubShapes>>[0];
+type HtmlNode = Parameters<ReturnType<typeof githubRedress>>[0];
 
 /** An element of the parsed tree. */
 function element(
@@ -37,9 +37,10 @@ function text(value: string): HtmlNode {
 }
 
 /** The tree the step leaves of the children given. */
-function shaped(...children: HtmlNode[]) {
+function redressed(...children: HtmlNode[]) {
   const tree: HtmlNode = { type: "root", children };
-  githubShapes()(tree);
+  githubRedress()(tree);
+
   return tree.children;
 }
 
@@ -57,7 +58,8 @@ test("a highlighted block becomes a fenced block in its language, holding its wo
       text(" a = 1;\n\nconst b = 2;"),
     ]),
   ]);
-  assert.deepEqual(shaped(block), [
+
+  assert.deepEqual(redressed(block), [
     element("pre", {}, [
       element("code", { className: ["language-ts"] }, [text("const a = 1;\n\nconst b = 2;")]),
     ]),
@@ -68,7 +70,8 @@ test("a diagram becomes a fenced mermaid block of its source", () => {
   const diagram = element("section", { dataType: "mermaid" }, [
     element("div", {}, [element("pre", { lang: "mermaid" }, [text("graph TD\nA-->B")])]),
   ]);
-  assert.deepEqual(shaped(diagram), [
+
+  assert.deepEqual(redressed(diagram), [
     element("section", { dataType: "mermaid" }, [
       element("div", {}, [
         element("pre", {}, [
@@ -81,6 +84,7 @@ test("a diagram becomes a fenced mermaid block of its source", () => {
 
 test("a themed picture becomes an image for each theme, each marked as its theme's alone, so no source names an address the window would read itself", () => {
   const badge = (src: string) => element("img", { src, alt: "Review" });
+
   const picture = element("picture", {}, [
     element("source", {
       media: "(prefers-color-scheme: dark)",
@@ -92,7 +96,8 @@ test("a themed picture becomes an image for each theme, each marked as its theme
     }),
     badge("https://camo.githubusercontent.com/light"),
   ]);
-  assert.deepEqual(shaped(element("a", { href: "https://example.com/review" }, [picture])), [
+
+  assert.deepEqual(redressed(element("a", { href: "https://example.com/review" }, [picture])), [
     element("a", { href: "https://example.com/review" }, [
       element("picture", {}, [
         badge("https://camo.githubusercontent.com/light#gh-light-mode-only"),
@@ -107,22 +112,28 @@ test("a picture GitHub links to itself, or to another of its own image addresses
   const signed = "https://private-user-images.githubusercontent.com/1/2-3.png?jwt=abc";
   const tracker = "https://tracker.example.com/pixel.png";
   const picture = (src: string) => element("img", { src, alt: "before and after" });
+
   const linked = (href: string, src: string) =>
     element("a", { href, target: "_blank" }, [text(" "), picture(src), text("\n")]);
-  assert.deepEqual(shaped(linked(upload, upload)), [picture(upload)], "linked to itself");
-  assert.deepEqual(shaped(linked(upload, signed)), [picture(signed)], "linked to its upload");
+
+  assert.deepEqual(redressed(linked(upload, upload)), [picture(upload)], "linked to itself");
+  assert.deepEqual(redressed(linked(upload, signed)), [picture(signed)], "linked to its upload");
   assert.deepEqual(
-    shaped(linked(tracker, tracker)),
+    redressed(linked(tracker, tracker)),
     [picture(tracker)],
     "any picture linked to itself",
   );
   assert.deepEqual(
-    shaped(linked("https://review.example.com", upload)),
+    redressed(linked("https://review.example.com", upload)),
     [linked("https://review.example.com", upload)],
     "a link elsewhere is kept",
   );
   const captioned = element("a", { href: upload }, [picture(upload), text("the screenshot")]);
-  assert.deepEqual(shaped(captioned), [captioned], "a link with words beside its picture is kept");
+  assert.deepEqual(
+    redressed(captioned),
+    [captioned],
+    "a link with words beside its picture is kept",
+  );
 });
 
 test("a suggested change becomes a fenced block of its rows in order, a removed line marked - and an added one +, its words as they stand", () => {
@@ -131,6 +142,7 @@ test("a suggested change becomes a fenced block of its rows in order, a removed 
       element("td", { className: ["blob-num", `blob-num-${side}`] }),
       element("td", { className: ["blob-code-inner", `blob-code-${side}`] }, words),
     ]);
+
   const blob = element("div", { className: ["my-2", "js-suggested-changes-blob", "diff-view"] }, [
     element("div", { className: ["f6"] }, [text("Suggested change")]),
     element("table", {}, [
@@ -144,7 +156,8 @@ test("a suggested change becomes a fenced block of its rows in order, a removed 
       ]),
     ]),
   ]);
-  assert.deepEqual(shaped(blob), [
+
+  assert.deepEqual(redressed(blob), [
     element("pre", {}, [
       element("code", { className: ["language-suggested-change"] }, [
         text("-const a = 1;\n+\n+  const a = 2;"),
@@ -155,13 +168,16 @@ test("a suggested change becomes a fenced block of its rows in order, a removed 
 
 test("a picture sharing its line with words is marked to stand in it, a bot's glyph in its bold lead and in a summary alike; one alone in its paragraph is not", () => {
   const glyph = () => element("img", { src: "https://camo.githubusercontent.com/major", alt: "" });
+
   const inline = () =>
     element("img", {
       src: "https://camo.githubusercontent.com/major",
       alt: "",
       [INLINE_PICTURE]: true,
     });
+
   const screenshot = element("img", { src: "https://camo.githubusercontent.com/shot", alt: "" });
+
   const tree: HtmlNode = {
     type: "root",
     children: [
@@ -174,6 +190,7 @@ test("a picture sharing its line with words is marked to stand in it, a bot's gl
       ]),
     ],
   };
+
   inlinePictures()(tree);
   assert.deepEqual(tree.children, [
     element("p", {}, [element("strong", {}, [element("picture", {}, [inline()]), text(" Major")])]),
@@ -186,11 +203,13 @@ test("a picture sharing its line with words is marked to stand in it, a bot's gl
 
 test("the pictures a place opens are each one in no link, and each one alone in the link GitHub wraps it in, opening where it leads; one in any other link is the link's", () => {
   const upload = "https://github.com/user-attachments/assets/0b6f3a9c-1d2e-4f5a-8b7c-9d0e1f2a3b4c";
+
   const html = [
     '<p><img src="https://camo.githubusercontent.com/plain" alt="plain" style="max-width: 100%;"></p>',
     `<p><a href="${upload}" target="_blank"> <img src="https://private-user-images.githubusercontent.com/signed" alt="shot" style="max-width: 100%;"> </a></p>`,
     '<p><a href="https://example.com/ci"><img src="https://camo.githubusercontent.com/badge" alt="CI"></a></p>',
   ].join("\n");
+
   assert.deepEqual(renderingPictures(html, false), [
     {
       src: "https://camo.githubusercontent.com/plain",
@@ -213,6 +232,7 @@ test("the pictures a place opens are those of the theme it is drawn in, a themed
     "</picture></p>",
     '<p><img src="https://github.com/user-attachments/assets/0b6f3a9c-1d2e-4f5a-8b7c-9d0e1f2a3b4c#gh-light-mode-only" alt="light logo"></p>',
   ].join("");
+
   const opened = (dark: boolean) => renderingPictures(html, dark).map(({ src, alt }) => [src, alt]);
   assert.deepEqual(opened(true), [["https://camo.githubusercontent.com/dark", "chart"]]);
   assert.deepEqual(opened(false), [

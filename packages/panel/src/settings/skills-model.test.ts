@@ -131,6 +131,7 @@ test("every failure is said in words, a refused skill named where the service na
   for (const failure of Object.values(INSTALLED_SKILL_CALL_FAILURE)) {
     assert.notEqual(failureLine({ failure }), "");
   }
+
   assert.equal(
     failureLine({ failure: INSTALLED_SKILL_CALL_FAILURE.CREDENTIAL, skillName: "release-notes" }),
     "release-notes holds what looks like a credential. A skill must never carry one.",
@@ -144,14 +145,17 @@ test("every failure is said in words, a refused skill named where the service na
 /** The one row a skill draws, wherever its group puts it. */
 function rowOf(one: InstalledSkillSummary) {
   const groups = skillGroups([one], READER, []);
+
   return [...groups.workspace, ...groups.personal][0] ?? assert.fail("no row");
 }
 
 test("a row's ⋯ holds View, then Remove, and View alone for a skill the account may not remove", () => {
   const own = rowOf(skill("pr-style", INSTALLED_SKILL_SCOPE.PERSONAL));
+
   const locked = rowOf(
     skill("release-notes", INSTALLED_SKILL_SCOPE.WORKSPACE, { manageable: false }),
   );
+
   assert.deepEqual(skillActions(own), [[SKILL_ACTION.VIEW], [SKILL_ACTION.REMOVE]]);
   assert.deepEqual(skillActions(locked), [[SKILL_ACTION.VIEW]]);
 });

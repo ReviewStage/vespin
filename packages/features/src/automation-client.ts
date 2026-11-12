@@ -48,6 +48,7 @@ export interface HostedAutomationClientOptions {
 /** A write's answer as the window hears it: the summary with its webhook's address, and a webhook secret the write minted, the window's to show once by root AGENTS.md's carve-out. */
 function summaryOnly(serviceBaseUrl: string, read: AutomationView): AutomationView {
   if ("failure" in read) return read;
+
   return { ...read, automation: withWebhookUrl(serviceBaseUrl, read.automation) };
 }
 
@@ -73,6 +74,7 @@ export class HostedAutomationClient {
       ...(params.taskId === undefined ? undefined : { planId: params.taskId }),
       ...(params.workspaceId === undefined ? undefined : { workspaceId: params.workspaceId }),
     };
+
     return Effect.map(
       hostedCall(this.#hosted.automations.list, query, { as: AUTOMATION_RENAMES }),
       (read): AutomationListView =>
@@ -91,7 +93,9 @@ export class HostedAutomationClient {
     params: AutomationCreateParams,
   ): Effect.Effect<AutomationView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(automationCreateParamsSchema)(params));
+
     if (admitted === undefined) return Effect.succeed({ failure: AUTOMATION_CALL_FAILURE.INVALID });
+
     return Effect.map(
       hostedCall(this.#hosted.automations.create, admitted, { as: AUTOMATION_RENAMES }),
       (read) => summaryOnly(this.#serviceBaseUrl, read),
@@ -103,7 +107,9 @@ export class HostedAutomationClient {
     params: AutomationChangeParams,
   ): Effect.Effect<AutomationView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(automationChangeParamsSchema)(params));
+
     if (admitted === undefined) return Effect.succeed({ failure: AUTOMATION_CALL_FAILURE.INVALID });
+
     return this.#changed(admitted.automationId, admitted.change);
   }
 

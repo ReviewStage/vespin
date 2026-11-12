@@ -44,6 +44,7 @@ const PAGE_BYTES = 2 * 1024 * 1024;
 
 /** One transcript line, opaque but for its `type`, as the SDK's `SessionStoreEntry` is. */
 const EntrySchema = Schema.Record(Schema.String, Schema.Unknown);
+
 export type SessionEntry = typeof EntrySchema.Type;
 
 /** Where a transcript is kept: the SDK's `SessionKey`, `subpath` absent for the main transcript. */
@@ -66,6 +67,7 @@ export interface SessionListing {
 }
 
 const OwnerFields = { userId: Schema.String, conversationId: Schema.String };
+
 const KeyFields = {
   ...OwnerFields,
   projectKey: Schema.String,
@@ -192,6 +194,7 @@ const findSessions = SqlSchema.findAll({
   execute: ({ userId, conversationId, projectKey }) =>
     Database.use((db) => {
       const mtime = max(claudeSessionEntries.createdAt);
+
       return db
         .select({ sessionId: claudeSessionEntries.sessionId, mtime })
         .from(claudeSessionEntries)
@@ -347,6 +350,7 @@ const findOpening = SqlSchema.findOneOption({
  */
 function opensTranscript(subpath: string | null, entry: SessionEntry): boolean {
   if (entry.type === "session_meta") return true;
+
   return subpath === null && entry.type === "user" && entry.parentUuid === null;
 }
 
@@ -369,8 +373,10 @@ export function appendSessionEntries(
   entries: readonly SessionEntry[],
 ): EntryEffect<void> {
   if (entries.length === 0) return Effect.void;
+
   return Effect.gen(function* () {
     const own = yield* findConversation({ userId, conversationId });
+
     if (Option.isNone(own)) return;
     yield* insertEntries({ ...keyFields(userId, conversationId, key), entries });
   });
@@ -406,8 +412,10 @@ export function loadSessionEntryPage(
     Effect.map((rows) => {
       // Note that only the walk's last row can be past the page, so its entries are the rows that carry one.
       const kept: Array<{ readonly id: number; readonly entry: SessionEntry }> = [];
+
       for (const { id, entry } of rows) if (entry !== null) kept.push({ id, entry });
       const last = kept.at(-1);
+
       return {
         entries: kept.map((row) => row.entry),
         next: kept.length < rows.length && last !== undefined ? last.id : null,
@@ -462,6 +470,7 @@ export function markSessionBroken(
 ): EntryEffect<void> {
   return Effect.gen(function* () {
     const own = yield* findConversation({ userId, conversationId });
+
     if (Option.isNone(own)) return;
     yield* insertBreak({ conversationId, sessionId });
   });
@@ -493,6 +502,7 @@ export function copySessionEntries(
     sourceConversationId: source.conversationId,
     conversationId,
   };
+
   return Effect.andThen(
     copyEntries({
       ...request,

@@ -261,6 +261,7 @@ const emojiQuery = queryOptions({
 /** A glyph found in Lucide's own map, or nothing for a name it does not know. */
 function lucideGlyph(icons: LucideIcons, glyph: string): LucideIcon | undefined {
   const key = glyphKey(glyph);
+
   return Object.hasOwn(icons, key) ? icons[key] : undefined;
 }
 
@@ -274,22 +275,27 @@ function LoadedGlyph({
 }): React.JSX.Element {
   const loaded = useQuery(lucideQuery);
   const Glyph = loaded.data === undefined ? undefined : lucideGlyph(loaded.data, glyph);
+
   if (Glyph === undefined)
     return <span className="section-glyph-blank block size-control-icon" aria-hidden="true" />;
+
   return <Glyph data-icon-color={color} className={inkOf(color)} />;
 }
 
 /** A glyph in its color: one of the suggested at once, any other once Lucide has loaded. */
 function drawnGlyph(glyph: string, color: TaskSectionIconColor | undefined): React.JSX.Element {
   const Suggested = SUGGESTED_BY_NAME.get(glyph);
+
   if (Suggested !== undefined)
     return <Suggested data-icon-color={color} className={inkOf(color)} />;
+
   return <LoadedGlyph glyph={glyph} color={color} />;
 }
 
 /** A section's icon: its emoji, its glyph in its color, or nothing for a section without one, which wears none. */
 export function sectionGlyph(icon: TaskSectionIcon | undefined): React.JSX.Element | undefined {
   if (icon === undefined) return undefined;
+
   if (icon.kind === TASK_SECTION_ICON_KIND.EMOJI) {
     return (
       <span
@@ -300,6 +306,7 @@ export function sectionGlyph(icon: TaskSectionIcon | undefined): React.JSX.Eleme
       </span>
     );
   }
+
   return drawnGlyph(icon.glyph, icon.color);
 }
 
@@ -432,6 +439,7 @@ function GlyphColors({
   const start = useRef<HTMLButtonElement | null>(null);
   const roving = useRovingKeys<HTMLDivElement>({ orientation: ROVING_ORIENTATION.BOTH });
   const holder = useRef<HTMLDivElement | null>(null);
+
   return (
     <PopoverPanel
       open
@@ -443,8 +451,10 @@ function GlyphColors({
       // Note that a press on the glyph's own cell is no leaving, so its click closes the colors rather than their putting themselves away and the click opening them again: the focus goes to the glyph first where the engine focuses a pressed button, and leaves for nowhere where it does not, as Safari's, while the pointer stands over the cell. A press anywhere else puts them away (`onPressAway`).
       onLeave={(left) => {
         const cell = holder.current?.closest(".section-icon-cell");
+
         const toCell =
           left instanceof Node ? cell?.contains(left) === true : cell?.matches(":hover") === true;
+
         if (!toCell) onClose(false);
       }}
     >
@@ -514,6 +524,7 @@ function PanelNote({
   tab: IconTab;
 }): React.JSX.Element {
   const words = loaded.isError ? LOAD_FAILED[tab] : loaded.isSuccess ? NO_MATCH[tab] : READING[tab];
+
   return <NoteLine look={NOTE_LINE_LOOK.LIST}>{words}</NoteLine>;
 }
 
@@ -644,6 +655,7 @@ const GlyphGroup = memo(function GlyphGroup({
       name={name}
       choices={choices.map((choice) => {
         const pressed = chosenGlyph(icon, choice.glyph);
+
         return (
           <GlyphCell
             key={choice.glyph}
@@ -675,6 +687,7 @@ function stopIn(
   first: string | undefined,
 ): string | undefined {
   if (!chosenShown) return choices.some((choice) => choice.glyph === first) ? first : undefined;
+
   return choices.find((choice) => chosenGlyph(icon, choice.glyph))?.glyph;
 }
 
@@ -711,6 +724,7 @@ function recentChoice(
   if (one.kind === TASK_SECTION_ICON_KIND.EMOJI) {
     return emojiChoice({ emoji: one.emoji, name: one.emoji }, props, stop);
   }
+
   return (
     <GlyphCell
       key={one.glyph}
@@ -742,22 +756,28 @@ const GlyphPanel = memo(function GlyphPanel(
   const loaded = useQuery(lucideQuery);
   const icons = loaded.data;
   const choices = useMemo(() => glyphChoices(Object.keys(icons ?? {})), [icons]);
+
   const suggested = useMemo(
     () => choices.filter((choice) => isSuggestedGlyph(choice.glyph)),
     [choices],
   );
+
   const rest = useMemo(
     () => choices.filter((choice) => !isSuggestedGlyph(choice.glyph)),
     [choices],
   );
+
   if (icons === undefined) return <PanelNote loaded={loaded} tab={ICON_TAB.ICONS} />;
   const first = props.recent[0] ?? suggested[0];
+
   // Note that a glyph this Mac's Lucide does not know is chosen but shown nowhere, so the first choice keeps the stop.
   const chosenShown =
     props.recent.some((one) => chosenIcon(props.icon, one)) ||
     choices.some((choice) => chosenGlyph(props.icon, choice.glyph));
+
   const stopAt = (pressed: boolean, isFirst: boolean) => (chosenShown ? pressed : isFirst);
   const firstGlyph = first !== undefined && "glyph" in first ? first.glyph : undefined;
+
   return (
     <>
       {props.recent.length === 0 ? null : (
@@ -803,11 +823,14 @@ const GlyphPanel = memo(function GlyphPanel(
 const EmojiPanel = memo(function EmojiPanel(props: GridProps): React.JSX.Element {
   const loaded = useQuery(emojiQuery);
   const groups = loaded.data;
+
   if (groups === undefined || groups.length === 0) {
     return <PanelNote loaded={loaded} tab={ICON_TAB.EMOJI} />;
   }
+
   const all = groups.flatMap((group) => group.emojis);
   const stop = all.find((one) => chosenEmoji(props.icon, one.emoji)) ?? all[0];
+
   return (
     <>
       {groups.map((group) => (
@@ -833,24 +856,32 @@ const FoundPanel = memo(function FoundPanel(
   const emoji = useQuery(emojiQuery);
   const icons = lucide.data;
   const choices = useMemo(() => glyphChoices(Object.keys(icons ?? {})), [icons]);
+
   const glyphs = useMemo(
     () => (icons === undefined ? [] : findGlyphs(choices, props.query)),
     [icons, choices, props.query],
   );
+
   const groups = emoji.data === undefined ? [] : findEmoji(emoji.data, props.query);
   const typed = { kind: TASK_SECTION_ICON_KIND.EMOJI, emoji: props.query.trim() };
   const typedOne = isSectionIcon(typed) ? [{ emoji: typed.emoji, name: typed.emoji }] : [];
+
   const found = [
     ...typedOne,
     ...groups.flatMap((group) => group.emojis).filter((one) => one.emoji !== typed.emoji),
   ];
+
   if (glyphs.length === 0 && found.length === 0) {
     // Note that nothing found says why where a set did not load, rather than that nothing matched.
     if (!lucide.isSuccess) return <PanelNote loaded={lucide} tab={ICON_TAB.ICONS} />;
+
     if (!emoji.isSuccess) return <PanelNote loaded={emoji} tab={ICON_TAB.EMOJI} />;
+
     return <NoteLine look={NOTE_LINE_LOOK.LIST}>{NO_MATCH_EITHER}</NoteLine>;
   }
+
   const firstEmoji = typedOne.length > 0;
+
   return (
     <>
       {firstEmoji ? (
@@ -893,9 +924,11 @@ function gridChoices(root: Element, selector = "button"): HTMLButtonElement[] {
 /** Moves focus through the choices with the arrows, from whichever holds it, a row's width up and down. */
 function stepGrid(event: React.KeyboardEvent<HTMLFieldSetElement>): void {
   const step = GRID_STEPS.get(event.key);
+
   if (step === undefined) return;
   const choices = gridChoices(event.currentTarget);
   const from = event.target instanceof HTMLButtonElement ? choices.indexOf(event.target) : -1;
+
   if (from === -1) return;
   event.preventDefault();
   choices[Math.min(Math.max(from + step, 0), choices.length - 1)]?.focus();
@@ -910,12 +943,15 @@ function stepGrid(event: React.KeyboardEvent<HTMLFieldSetElement>): void {
  */
 function standTabStop(event: React.FocusEvent<HTMLFieldSetElement>): void {
   const focused = event.target;
+
   if (!(focused instanceof HTMLButtonElement) || focused.closest(".section-icon-colors") !== null) {
     return;
   }
+
   for (const stop of gridChoices(event.currentTarget, 'button:not([tabindex="-1"])')) {
     stop.tabIndex = -1;
   }
+
   focused.tabIndex = 0;
 }
 
@@ -939,6 +975,7 @@ function SectionIconPicker({
   const [tab, setTab] = useState<IconTab>(
     icon?.kind === TASK_SECTION_ICON_KIND.EMOJI ? ICON_TAB.EMOJI : ICON_TAB.ICONS,
   );
+
   const [query, setQuery] = useState("");
   const [recent] = useState(readRecent);
   const [opened, setOpened] = useState<OpenedGlyph | undefined>(undefined);
@@ -946,50 +983,63 @@ function SectionIconPicker({
   const refocus = useRef(false);
   const grid = useRef<HTMLDivElement | null>(null);
   const panelId = useId();
+
   const tabIds = {
     [ICON_TAB.ICONS]: useId(),
     [ICON_TAB.EMOJI]: useId(),
   } satisfies Record<IconTab, string>;
+
   // Note that colors Escape put away hand the focus back to the glyph they opened from once they are gone.
   useLayoutEffect(() => {
     if (opened !== undefined || !refocus.current) return;
     refocus.current = false;
+
     if (opener.current instanceof HTMLElement) opener.current.focus();
   });
   // Note that the grid's doors read the latest owner and opened glyph through refs, so they stand the same from draw to draw and a press redraws none of the cells it reaches.
   const latest = useRef({ onIcon, opened });
   latest.current = { onIcon, opened };
+
   const choose = useCallback((next: TaskSectionIcon) => {
     keepRecent(next);
     latest.current.onIcon(next);
   }, []);
+
   // A glyph pressed again closes the colors it opened, as a disclosure does.
   const open = useCallback((next: OpenedGlyph) => {
     opener.current = document.activeElement;
     setOpened((was) => (was?.group === next.group && was.glyph === next.glyph ? undefined : next));
   }, []);
+
   const color = useCallback(
     (picked: TaskSectionIconColor | undefined) => {
       const glyph = latest.current.opened?.glyph;
+
       if (glyph !== undefined) choose(glyphIcon(glyph, picked));
     },
     [choose],
   );
+
   const closeColors = useCallback((byKey: boolean) => {
     refocus.current = byKey;
     setOpened(undefined);
   }, []);
+
   // Enter, shifted or not, presses the first thing found: an emoji is chosen, a glyph's colors open.
   const chooseFirst = () => {
     if (grid.current !== null) gridChoices(grid.current)[0]?.click();
   };
+
   // Note that the search's own keys stop at Enter and Escape, so the arrow down into the grid is heard around it.
   const toGrid = (event: React.KeyboardEvent<HTMLElement>) => {
     if (event.key !== "ArrowDown" || !(event.target instanceof HTMLInputElement)) return;
     event.preventDefault();
+
     if (grid.current !== null) gridChoices(grid.current, 'button:not([tabindex="-1"])')[0]?.focus();
   };
+
   const searching = query.trim() !== "";
+
   const props: GridProps = {
     icon,
     opened,
@@ -998,6 +1048,7 @@ function SectionIconPicker({
     onColor: color,
     onCloseColors: closeColors,
   };
+
   return (
     <div className="section-icon-picker flex w-section-icon-picker flex-col">
       <ReplayUnmask>
@@ -1082,6 +1133,7 @@ export function SectionIconWell({
   size,
   variant,
   disabled,
+  title = "Section icon",
 }: {
   icon: TaskSectionIcon | undefined;
   open: boolean;
@@ -1091,14 +1143,17 @@ export function SectionIconWell({
   size?: ButtonSize | undefined;
   variant?: ButtonVariant | undefined;
   disabled?: boolean | undefined;
+  /** What the picker is called: a section's icon, or a run action's. */
+  title?: string | undefined;
 }): React.JSX.Element {
   const search = useRef<HTMLInputElement | null>(null);
   const label = icon === undefined ? "Add icon" : "Change icon";
+
   return (
     <PopoverIconButton
       icon={sectionGlyph(icon) ?? <SmilePlusIcon className="text-muted-foreground" />}
       label={label}
-      title="Section icon"
+      title={title}
       open={open}
       onOpenChange={onOpenChange}
       size={size ?? BUTTON_SIZE.CONTROL}

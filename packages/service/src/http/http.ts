@@ -52,6 +52,7 @@ export function bearerMatchesSecret(request: Request, secret: Redacted.Redacted)
   const offered = Buffer.from(authorization);
   // The secret is revealed here alone, into the bytes the constant-time compare reads.
   const wanted = Buffer.from(`${BEARER_PREFIX}${Redacted.value(secret).trim()}`);
+
   return (
     wanted.length > BEARER_PREFIX.length &&
     offered.length === wanted.length &&

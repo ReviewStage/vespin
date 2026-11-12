@@ -212,6 +212,7 @@ function withPropertiesOffered(
  */
 export function keptTasksDisplay(kept: KeptTasksDisplay, initial: TasksDisplay): TasksDisplay {
   const { offered, properties, ...rest } = kept;
+
   return {
     ...initial,
     ...rest,
@@ -282,6 +283,7 @@ export function listPropertiesFitting<Column extends ListColumn>(
 ): readonly Column[] {
   const needs = (shown: readonly Column[]) =>
     shown.reduce((room, property) => room + LIST_COLUMN_ROOM[property], LIST_ROW_ROOM);
+
   return LIST_FOLD_ORDER.reduce(
     (shown, folding) =>
       needs(shown) + LIST_NAME_ROOM <= width
@@ -434,6 +436,7 @@ export function toggledFilter<F extends TasksFilterField>(
 ): TasksFilter {
   const held = filterValues(filter, field);
   const next = held.includes(value) ? held.filter((each) => each !== value) : [...held, value];
+
   return withField(filter, field, next);
 }
 
@@ -444,6 +447,7 @@ function withField(
   values: readonly (string | null)[],
 ): TasksFilter {
   const { [field]: _dropped, ...rest } = filter;
+
   return values.length === 0 ? rest : { ...rest, [field]: values };
 }
 
@@ -458,10 +462,12 @@ export function valueCounts(
   field: TasksFilterField,
 ): ReadonlyMap<string | null, number> {
   const counts = new Map<string | null, number>();
+
   for (const task of tasks) {
     const value = fieldValue(task, field);
     counts.set(value, (counts.get(value) ?? 0) + 1);
   }
+
   return counts;
 }
 
@@ -510,9 +516,11 @@ function standingTasks(
 ): StandingTasks {
   const standing: TaskSummary[] = [];
   const older: TaskSummary[] = [];
+
   for (const task of tasks) {
     if (!inFilter(task, filter)) continue;
     const status = statusOf(task);
+
     if (
       !isTaskSettled(status) ||
       namedByFilter(filter, status) ||
@@ -523,6 +531,7 @@ function standingTasks(
       older.push(task);
     }
   }
+
   return { standing, older };
 }
 
@@ -535,6 +544,7 @@ function priorityRank(task: TaskSummary): number {
 function byOrder(order: TasksOrder): (a: TaskSummary, b: TaskSummary) => number {
   const latest = (a: TaskSummary, b: TaskSummary) =>
     taskTime(b, TASK_ORDER.UPDATED) - taskTime(a, TASK_ORDER.UPDATED);
+
   switch (order) {
     case TASKS_ORDER.PRIORITY:
       return (a, b) => priorityRank(a) - priorityRank(b) || latest(a, b);
@@ -566,6 +576,7 @@ function byPerson(
   personName: (userId: string) => string,
 ): (a: string | null, b: string | null) => number {
   const rank = (id: string | null) => (id === null ? 2 : id === readerId ? 0 : 1);
+
   return (a, b) =>
     rank(a) - rank(b) ||
     (a === null || b === null ? 0 : personName(a).localeCompare(personName(b)));
@@ -584,8 +595,10 @@ interface GroupingRule {
 /** What each grouping groups by, under a filter and a display, and the order its groups run in. */
 function groupingRule(grouping: TasksGrouping, context: GroupingContext): GroupingRule | undefined {
   const { filter, display, statusOrder, readerId, personName, members } = context;
+
   const ranked = (order: readonly (string | null)[]) => (a: string | null, b: string | null) =>
     order.indexOf(a) - order.indexOf(b);
+
   switch (grouping) {
     case TASKS_GROUPING.STATUS: {
       const statuses = finiteValues(
@@ -596,6 +609,7 @@ function groupingRule(grouping: TasksGrouping, context: GroupingContext): Groupi
           namedByFilter(filter, status) ||
           display.completed !== COMPLETED_WINDOW.NONE,
       );
+
       return {
         keyOf: statusOf,
         head: (value) => ({
@@ -606,6 +620,7 @@ function groupingRule(grouping: TasksGrouping, context: GroupingContext): Groupi
         compare: ranked(statusOrder),
       };
     }
+
     case TASKS_GROUPING.PRIORITY:
       return {
         keyOf: priorityOf,
@@ -635,6 +650,7 @@ function groupingRule(grouping: TasksGrouping, context: GroupingContext): Groupi
     case TASKS_GROUPING.ASSIGNEE: {
       const kept = filterValues(filter, TASKS_FILTER_FIELD.ASSIGNEE);
       const people = new Set([...(readerId === undefined ? [] : [readerId]), ...members]);
+
       return {
         keyOf: assigneeOf,
         head: (assigneeId) => ({ kind: TASKS_GROUP.ASSIGNEE, assigneeId }),
@@ -643,6 +659,7 @@ function groupingRule(grouping: TasksGrouping, context: GroupingContext): Groupi
         compare: byPerson(readerId, personName),
       };
     }
+
     case TASKS_GROUPING.CREATOR:
       return {
         keyOf: creatorOf,
@@ -673,7 +690,9 @@ function group(head: TasksGroupHead, tasks: readonly TaskSummary[], older = 0): 
 /** How many of the tasks hold each status. */
 function countByStatus(tasks: readonly TaskSummary[]): ReadonlyMap<string | null, number> {
   const counts = new Map<string | null, number>();
+
   for (const task of tasks) counts.set(statusOf(task), (counts.get(statusOf(task)) ?? 0) + 1);
+
   return counts;
 }
 
@@ -690,19 +709,27 @@ function groupedBy(
   const { display } = context;
   const ordered = tasks.toSorted(byOrder(display.order));
   const rule = groupingRule(display.grouping, context);
+
   if (rule === undefined)
     return ordered.length === 0 ? [] : [group({ kind: TASKS_GROUP.ALL }, ordered)];
+
   const olderBy =
     display.grouping === TASKS_GROUPING.STATUS ? countByStatus(older) : new Map<string, number>();
+
   const held = new Map<string | null, TaskSummary[]>();
+
   if (display.emptyGroups) for (const value of rule.standing) held.set(value, []);
+
   for (const value of olderBy.keys()) if (!held.has(value)) held.set(value, []);
+
   for (const task of ordered) {
     const value = rule.keyOf(task);
     const members = held.get(value);
+
     if (members === undefined) held.set(value, [task]);
     else members.push(task);
   }
+
   return [...held]
     .sort(([a], [b]) => rule.compare(a, b))
     .map(([value, members]) => group(rule.head(value), members, olderBy.get(value)));
@@ -747,23 +774,32 @@ export function tasksListGroups(
   const { standing, older } = standingTasks(tasks, filter, display, now);
   const groups: TasksGroup[] = [];
   const placed = new Set<string>();
+
   if (display.pinnedFirst) {
     const byId = new Map(standing.map((task) => [task.id, task]));
+
     const take = (ids: readonly string[]) =>
       ids.flatMap((id) => {
         const task = byId.get(id);
+
         if (task === undefined || placed.has(id)) return [];
         placed.add(id);
+
         return [task];
       });
+
     const pins = take(pinned);
+
     if (pins.length > 0) groups.push(group({ kind: TASKS_GROUP.PINNED }, pins));
+
     // Note that every section stands, empty ones too, so a row can be dragged into it, as the sidebar draws one.
     for (const { sectionId, taskIds } of sections) {
       groups.push(group({ kind: TASKS_GROUP.SECTION, sectionId }, take(taskIds)));
     }
   }
+
   const rest = standing.filter((task) => !placed.has(task.id));
+
   const context = {
     filter,
     display,
@@ -772,6 +808,7 @@ export function tasksListGroups(
     personName,
     members,
   };
+
   return [...groups, ...groupedBy({ standing: rest, older }, context)];
 }
 
@@ -804,6 +841,7 @@ export function tasksBoardColumns(
   },
 ): readonly TasksGroup[] {
   const grouping = boardGrouping(display.grouping);
+
   return groupedBy(standingTasks(tasks, filter, display, now), {
     filter,
     display: { ...display, grouping },

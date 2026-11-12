@@ -35,6 +35,7 @@ const ROWS: readonly ResourceRow[] = [
 function OpenResources(): React.JSX.Element {
   const [open, setOpen] = useState(true);
   const [sort, setSort] = useState<ResourceSort>(RESOURCE_SORT.MEMORY);
+
   return (
     <ResourcesPopover
       label="Resources"

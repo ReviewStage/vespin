@@ -18,14 +18,17 @@ export function WorkspaceCell({
   onOpen: (id: string) => void;
 }): React.JSX.Element {
   const href = useAdminDoorsIfAny()?.address.workspaceHref(workspace.id);
+
   const name = (
     <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.LABEL}>
       {workspace.name}
     </Text>
   );
+
   if (href === undefined) {
     return <TextButton onClick={() => onOpen(workspace.id)}>{name}</TextButton>;
   }
+
   return (
     <TextLink
       href={href}

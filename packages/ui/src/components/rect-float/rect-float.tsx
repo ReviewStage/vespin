@@ -90,6 +90,7 @@ function placeIn(
   const own = frame.getBoundingClientRect();
   const margin = getComputedStyle(drawn);
   const edge = place.side === POPOVER_SIDE.ABOVE ? anchor.top : anchor.bottom;
+
   return {
     side: place.side,
     left:
@@ -141,6 +142,7 @@ export function RectFloat({
   const [place, setPlace] = useState<FloatPlace | undefined>(undefined);
   const measure = useRef<() => void>(() => undefined);
   const { mounted, leaving, ref: held } = useDisclosure(open);
+
   const drawn = useCallback(
     (node: HTMLDivElement | null) => {
       layer.current = node;
@@ -148,24 +150,29 @@ export function RectFloat({
     },
     [held],
   );
+
   // Note that what it held open is what it draws as it fades, because its owner may have let go of it in the render that closed it.
   const last = useRef(children);
+
   if (open) last.current = children;
   usePressAway(layer, () => undefined, { onPressAway: open ? onPressAway : undefined, holds });
   measure.current = () => {
     const element = layer.current;
     const frame = element?.offsetParent;
     const box = anchor();
+
     if (element === null || !(frame instanceof HTMLElement) || box === undefined) return;
     const next = placeIn(element, frame, box, cutTo(visibleViewport(), clipsAround(element)), side);
     setPlace((was) => (samePlace(was, next) ? was : next));
   };
+
   // Note that it is measured on every draw while it stands, because what it stands by moves with its owner's state, words selected anew say, and nothing else tells it.
   useLayoutEffect(() => {
     if (open) measure.current();
   });
   useLayoutEffect(() => {
     const element = layer.current;
+
     if (!open || element === null) return;
     const again = () => measure.current();
     const observer = new ResizeObserver(again);
@@ -176,6 +183,7 @@ export function RectFloat({
     viewport?.addEventListener("scroll", again);
     // Note that a scroll is heard while it is captured, because a scroll does not bubble and the scroller may be any box around the layer.
     document.addEventListener("scroll", again, { capture: true, passive: true });
+
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", again);
@@ -199,6 +207,7 @@ export function RectFloat({
   // Note that reduced motion and a capture run take it away in the render
   // that closes it, rather than once its fade is found to run none.
   if (!mounted || (leaving && motionHeld())) return null;
+
   return (
     <div
       ref={drawn}

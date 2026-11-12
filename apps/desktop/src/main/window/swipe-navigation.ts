@@ -49,6 +49,7 @@ interface SwipedWindow {
 export function followSwipes(window: SwipedWindow): void {
   window.on("swipe", (_event, direction) => {
     const command = isSwipeDirection(direction) ? SWIPE_COMMANDS[direction] : undefined;
+
     if (command !== undefined) windowPushes.push(window.webContents, PUSH.MENU_COMMAND, command);
   });
 }

@@ -55,6 +55,7 @@ async function driverIn(directory: string): Promise<string> {
   await writeFile(path.join(sdk, "index.mjs"), FAKE_SDK);
   const driver = path.join(directory, "driver.mjs");
   await copyFile(DRIVER, driver);
+
   return driver;
 }
 
@@ -71,12 +72,17 @@ describe("the driver", () => {
     send(child, { type: "message", text: "run sleep 600" });
 
     const seen: string[] = [];
+
     for await (const line of createInterface({ input: child.stdout })) {
       const type = recordFromJsonLine(line)?.type;
+
       if (type === undefined || type === null) continue;
       seen.push(String(type));
+
       if (type === "assistant") send(child, { type: "stop" });
+
       if (type === "result") send(child, { type: "end" });
+
       if (type === "agent_probe_exit") break;
     }
 

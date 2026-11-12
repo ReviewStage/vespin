@@ -44,12 +44,15 @@ const openConversation = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   const [row] = yield* db
     .insert(conversations)
     .values({ userId, kind: CONVERSATION_KIND.AGENT })
     .returning({ id: conversations.id });
+
   assert.ok(row);
   const target: ConversationTarget = { userId, conversationId: row.id };
+
   return target;
 });
 
@@ -115,10 +118,12 @@ it.layer(getTestDB())("a conversation's pictures", (it) => {
     Effect.gen(function* () {
       const db = yield* Database;
       const agent = yield* openConversation;
+
       const worker: ConversationTarget = {
         userId: agent.userId,
         conversationId: childConversationId(agent.conversationId, "call-worker"),
       };
+
       yield* db.insert(conversations).values({
         id: worker.conversationId,
         userId: agent.userId,

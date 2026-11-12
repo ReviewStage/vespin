@@ -31,20 +31,25 @@ function settingStore(setting: Setting) {
   let on = false;
   let started = false;
   const listeners = new Set<() => void>();
+
   const set = (next: boolean) => {
     if (next === on) return;
     on = next;
+
     for (const listener of listeners) listener();
   };
+
   const start = () => {
     started = true;
     AccessibilityInfo.addEventListener(setting, set);
     FIRST_READ[setting]().then(set, () => set(false));
   };
+
   return {
     subscribe(listener: () => void) {
       if (!started) start();
       listeners.add(listener);
+
       return () => {
         listeners.delete(listener);
       };
@@ -61,6 +66,7 @@ const STORES = {
 
 function useSetting(setting: Setting): boolean {
   const store = STORES[setting];
+
   return useSyncExternalStore(store.subscribe, store.read);
 }
 
@@ -99,6 +105,7 @@ const SCALED_RANGE = { MIN: 1, MAX: 2 } as const;
  */
 export function useScaledSize(points: number): number {
   const { fontScale } = useWindowDimensions();
+
   return points * Math.min(SCALED_RANGE.MAX, Math.max(SCALED_RANGE.MIN, fontScale));
 }
 
@@ -120,6 +127,7 @@ export function useAnnounced(words: string | undefined, atFirst = false): void {
   useEffect(() => {
     if (words === said.current) return;
     said.current = words;
+
     if (words !== undefined) announce(words);
   }, [words]);
 }

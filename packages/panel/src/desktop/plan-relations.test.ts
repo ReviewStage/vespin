@@ -73,7 +73,7 @@ function summary(id: string, number: number, parentTaskId?: string): TaskSummary
     status: TASK_STATUS.TODO,
     priority: TASK_PRIORITY.NONE,
     number,
-    ...(parentTaskId === undefined ? {} : { parentTaskId }),
+    ...(parentTaskId !== undefined && { parentTaskId }),
   };
 }
 
@@ -94,23 +94,28 @@ function draw(
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_CHANGE_RELATION]: ({ relation }) => {
       sent.changes.push(relation);
+
       return Promise.resolve({ blockedBy: [], blocks: [], parentTaskId: null });
     },
     [ACT_KIND.TASKS_BLOCK]: ({ block }) => {
       sent.removed.push([block.relation, block.taskId]);
+
       return Promise.resolve({ blockedBy: [], blocks: [] });
     },
     [ACT_KIND.TASKS_START]: (start) => {
       sent.started?.push(start);
+
       return Promise.resolve({ planId: "t-9" });
     },
   });
+
   const tasks = tasksControl({
     tasks: [...listed],
     workspace: ACME,
     workspaces: [ACME],
     listRead: true,
   });
+
   const task = { ...DOCUMENT_TASK, ...blocks };
   act(() =>
     root?.render(
@@ -127,6 +132,7 @@ function draw(
       ),
     ),
   );
+
   return container;
 }
 
@@ -139,6 +145,7 @@ function rowIds(container: HTMLElement, list: string): (string | null)[] {
 
 test("a sub-task's own stand under it once its fold opens, and a task with no relations draws no Task relations group", () => {
   const sent = { changes: [], removed: [] };
+
   const container = draw(
     [summary("t-2", 2, DOCUMENT_TASK.id), summary("t-3", 3, "t-2"), summary("t-4", 4)],
     {},
@@ -155,7 +162,8 @@ test("a sub-task's own stand under it once its fold opens, and a task with no re
 });
 
 test("New sub-task's + on a folded group opens it on a draft, whose Return adds a sub-task of the open task and opens the next", async () => {
-  const sent = { changes: [], removed: [], started: [] as unknown[] };
+  const started: unknown[] = [];
+  const sent = { changes: [], removed: [], started };
   const container = draw([summary("t-2", 2, DOCUMENT_TASK.id)], {}, sent);
   const draft = () => container.querySelector<HTMLInputElement>("[data-quick-add] input");
   act(() => container.querySelector<HTMLButtonElement>("button[aria-expanded='true']")?.click());
@@ -182,11 +190,14 @@ test("New sub-task's + on a folded group opens it on a draft, whose Return adds 
   assert.equal(draft()?.value, "", "the next draft stands, empty");
 });
 
+type Sent = { changes: TaskRelationChangeRequest[]; removed: [TaskBlockRelation, string][] };
+
 test("a relation stands while the list does not hold its task, and picking another kind on its pill moves it in one call, and Remove relation takes the block away", async () => {
-  const sent: { changes: TaskRelationChangeRequest[]; removed: [TaskBlockRelation, string][] } = {
+  const sent: Sent = {
     changes: [],
     removed: [],
   };
+
   const container = draw([summary("t-5", 5)], { blockedBy: ["t-5"], blocks: ["t-9"] }, sent);
   assert.equal(container.querySelector("ul[aria-label='Sub-tasks']"), null);
   // Note that a task the list does not hold yet still stands, so a list still read hides no relation.
@@ -197,22 +208,27 @@ test("a relation stands while the list does not hold its task, and picking anoth
     null,
     "a task not listed yet offers no status to change",
   );
+
   const pill = () =>
     container.querySelector<HTMLButtonElement>("button[aria-label='Relation: Blocked by']");
 
   act(() => pill()?.click());
+
   const blocks = [...document.querySelectorAll<HTMLElement>("[role='option']")].find(
     (option) => option.textContent?.includes("Blocks") && !option.textContent.includes("Blocked"),
   );
+
   assert.ok(blocks, "the menu offers Blocks");
   await act(async () => blocks.click());
   assert.deepEqual(sent.changes, [{ taskId: "t-5", from: "blocked-by", to: "blocks" }]);
   assert.deepEqual(sent.removed, []);
 
   act(() => pill()?.click());
+
   const remove = [...document.querySelectorAll<HTMLElement>("button, [role='option']")].find(
     (each) => each.textContent?.trim() === "Remove relation",
   );
+
   assert.ok(remove, "the menu offers Remove relation");
   await act(async () => remove.click());
   assert.deepEqual(sent.removed, [["blocked-by", "t-5"]]);

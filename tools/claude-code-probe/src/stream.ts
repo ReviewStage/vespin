@@ -28,6 +28,7 @@ const InitSchema = Schema.Struct({
   claude_code_version: Schema.String,
   tools: Schema.Array(Schema.String),
 });
+
 export type SessionInit = typeof InitSchema.Type;
 
 /** The account the CLI is signed in as, which the driver asks for after the start; only the fields that say who pays. */
@@ -38,6 +39,7 @@ const AccountSchema = Schema.Struct({
   apiKeySource: Schema.optional(Schema.String),
   apiProvider: Schema.optional(Schema.String),
 });
+
 export type AccountReading = typeof AccountSchema.Type;
 
 const ToolUseSchema = Schema.Struct({
@@ -49,6 +51,7 @@ const ToolUseSchema = Schema.Struct({
     command: Schema.optional(Schema.String),
   }),
 });
+
 const TextBlockSchema = Schema.Struct({ type: Schema.Literal("text"), text: Schema.String });
 
 const AssistantSchema = Schema.Struct({
@@ -74,6 +77,7 @@ const ResultSchema = Schema.Struct({
   is_error: Schema.Boolean,
   session_id: Schema.String,
 });
+
 export type TurnResult = typeof ResultSchema.Type;
 
 /** What a leak check found, as its script prints it: counts and flags, never a value it read. */
@@ -81,15 +85,16 @@ const LeakReportSchema = Schema.Struct({
   user: Schema.String,
   sudo: Schema.Boolean,
   env_token: Schema.Boolean,
-  env_token_shaped: Schema.Boolean,
+  env_token_like: Schema.Boolean,
   proc_environ_with_token: Schema.Number,
-  proc_environ_token_shaped: Schema.Number,
-  files_with_token_shape: Schema.Number,
+  proc_environ_token_like: Schema.Number,
+  files_with_token_pattern: Schema.Number,
   agent_home_listable: Schema.Boolean,
   cap_eff: Schema.String,
   shadow_readable: Schema.Boolean,
   anthropic_http: Schema.String,
 });
+
 export type LeakReport = typeof LeakReportSchema.Type;
 
 /** A tool the agent called, by name, with the command a Bash call ran and whether it ran it in the background. */
@@ -109,6 +114,7 @@ const readUser = readEither(UserSchema, lenient);
 const readToolResult = readEither(ToolResultSchema, lenient);
 const readResult = readEither(ResultSchema, lenient);
 const readLeakReport = readEither(LeakReportSchema, lenient);
+
 /** A decode of one message or block: the value, or why it is another shape. */
 type Reader<Value> = (value: UnparsedWireValue) => Result.Result<Value, Error>;
 
@@ -116,6 +122,7 @@ type Reader<Value> = (value: UnparsedWireValue) => Result.Result<Value, Error>;
 function each<Value>(values: readonly WireValue[], read: Reader<Value>): readonly Value[] {
   return values.flatMap((value) => {
     const decoded = read(value);
+
     return Result.isSuccess(decoded) ? [decoded.success] : [];
   });
 }
@@ -154,7 +161,9 @@ export function turnResults(messages: readonly WireValue[]): readonly TurnResult
 export function toolResultTexts(messages: readonly WireValue[]): readonly string[] {
   return each(messages, readUser).flatMap((user) => {
     const content = user.message.content;
+
     if (isWireString(content)) return [];
+
     return each(content, readToolResult).map((result) =>
       isWireString(result.content)
         ? result.content
@@ -169,10 +178,13 @@ export function toolResultTexts(messages: readonly WireValue[]): readonly string
 export function leakReportIn(output: string): LeakReport | undefined {
   for (const line of output.split("\n")) {
     const at = line.indexOf(LEAK_CHECK_MARKER);
+
     if (at === -1) continue;
     const json = line.slice(at + LEAK_CHECK_MARKER.length).trim();
     const report = readLeakReport(valueFromJsonText(json));
+
     if (Result.isSuccess(report)) return report.success;
   }
+
   return undefined;
 }

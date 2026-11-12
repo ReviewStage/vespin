@@ -168,6 +168,7 @@ async function mountEveryTab(
       },
     }),
   });
+
   // The host holds the Pull request tab's parts, answered as a service that did not answer.
   const unanswered = () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED } as const);
   holdPullRequestParts(handHostReads({}).deliverParts, {
@@ -195,6 +196,7 @@ async function mountEveryTab(
     ),
   );
   await settle();
+
   return container;
 }
 
@@ -207,14 +209,17 @@ function openMenu(): HTMLElement | null {
 function readAndClose(): string[] {
   const menu = openMenu();
   assert.ok(menu, "a menu stands open");
+
   const items = [...menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].map(
     (item) =>
       `${item.querySelector(".ui-menu-item-label")?.textContent}${item.disabled ? " (off)" : ""}`,
   );
+
   act(() => {
     menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   });
   assert.equal(openMenu(), null, "Escape closed the menu");
+
   return items;
 }
 
@@ -227,6 +232,7 @@ function rightClickChosen(strip: HTMLElement): string[] {
       new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 40, clientY: 20 }),
     );
   });
+
   return readAndClose();
 }
 
@@ -243,6 +249,7 @@ function bars(container: HTMLElement): Bars {
   const main = container.querySelector<HTMLElement>(".task-tabs .ui-toolbar");
   const side = container.querySelector<HTMLElement>(".side-panel-bar");
   assert.ok(task && main && side, "the page draws its bars");
+
   return { task, main, side };
 }
 
@@ -287,9 +294,11 @@ test("no bar of the task's page draws a ⋯, over an agent's tab or the draft's:
   for (const main of [agentTab(AGENT.id), draftTab("draft-1")] as const) {
     const container = await mountEveryTab({ main, side: SUBAGENT });
     const { task, main: agentsBar, side } = bars(container);
+
     for (const bar of [task, agentsBar, side]) {
       assert.deepEqual(moreButtons(bar), [], `no ⋯ beside ${JSON.stringify(main)}`);
     }
+
     act(() => roots.pop()?.unmount());
     container.remove();
   }
@@ -298,8 +307,10 @@ test("no bar of the task's page draws a ⋯, over an agent's tab or the draft's:
 test("the task's name's right-click is the task's own document menu, which pins the task, leaves out Mark done and Cancel task, and keeps Change repository, on the task's details and an agent's tab alike, while an agent's tab's right-click stays the agent's", async () => {
   const taskMenu = (container: HTMLElement) => {
     openTaskMenu(container);
+
     return readAndClose();
   };
+
   const details = await mountEveryTab({ main: MAIN_TAB.OVERVIEW, side: SIDE_PANEL_TAB.INBOX });
   const fromDetails = taskMenu(details);
   assert.deepEqual(fromDetails, [
@@ -331,13 +342,16 @@ test("a tab with nothing to offer on what it shows still answers a right-click w
     { main: draftTab("draft-1"), side: fileTab("src/invite.ts") },
     { main: draftTab("draft-1"), side: CLOUD },
   ];
+
   for (const chosen of without) {
     const container = await mountEveryTab(chosen);
     const { main, side } = bars(container);
+
     for (const bar of [main, side]) {
       const label = bar.querySelector('[role="tab"][aria-selected="true"]')?.textContent;
       assert.ok(rightClickChosen(bar).length > 0, `the ${label} tab answers a right-click`);
     }
+
     assert.equal(container.querySelector(".ui-tab [aria-haspopup]"), null, "no tab wears a ⋯");
     act(() => roots.pop()?.unmount());
     container.remove();
@@ -366,10 +380,12 @@ test("the Pull request tab's right-click offers Copy link first, then Copy GitHu
     },
   });
   const published = new Map([[AGENT.id, PULL_REQUEST]]);
+
   const container = await mountEveryTab(
     { main: draftTab("draft-1"), side: changesTab(AGENT.id) },
     published,
   );
+
   const { side } = bars(container);
   // Note that the pull request's actions stand once its read reaches its query.
   await vi.waitFor(() =>
@@ -384,9 +400,11 @@ test("the Pull request tab's right-click offers Copy link first, then Copy GitHu
   act(() => {
     tab?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
   });
+
   const github = [
     ...(openMenu()?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []),
   ].find((each) => each.querySelector(".ui-menu-item-label")?.textContent === "Open on GitHub");
+
   assert.ok(github, "the right-click offers Open on GitHub");
   await act(async () => github.click());
   assert.deepEqual(opened, [PULL_REQUEST.url]);
@@ -409,6 +427,7 @@ test("the Pull request tab's right-click offers Copy link first, then Copy GitHu
 function installClipboard(): string[] {
   const copied: string[] = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied), pageFrameUrl });
+
   return copied;
 }
 
@@ -416,17 +435,21 @@ test("each tab whose thing has a link offers Copy link in its right-click and it
   const copied = installClipboard();
   const task = `https://vespin.dev/workspace-personal/task/${TASK.id}`;
   const agent = `https://vespin.dev/workspace-personal/agent/${AGENT.id}`;
+
   const cases: [{ main: MainTab; side: SidePanelTab }, keyof Bars, string][] = [
     [{ main: agentTab(AGENT.id), side: SIDE_PANEL_TAB.INBOX }, "main", agent],
     [{ main: draftTab("draft-1"), side: SUBAGENT }, "side", `${agent}/worker/call-1`],
     [{ main: draftTab("draft-1"), side: changesTab(AGENT.id) }, "side", `${agent}/changes`],
     [{ main: draftTab("draft-1"), side: pageTab(PAGE_ID) }, "side", `${task}/page/${PAGE_ID}`],
   ];
+
   for (const [chosen, column] of cases) {
     const container = await mountEveryTab(chosen);
+
     const tab = bars(container)[column].querySelector<HTMLElement>(
       '[role="tab"][aria-selected="true"]',
     );
+
     assert.ok(tab);
     act(() => {
       tab.dispatchEvent(
@@ -438,9 +461,11 @@ test("each tab whose thing has a link offers Copy link in its right-click and it
         }),
       );
     });
+
     const item = [
       ...(openMenu()?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? []),
     ].find((each) => each.textContent === "Copy link");
+
     assert.ok(item, `the ${tab.textContent} tab offers Copy link`);
     await act(async () => item.click());
     act(() => roots.pop()?.unmount());

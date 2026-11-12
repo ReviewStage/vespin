@@ -134,6 +134,7 @@ it.effect(
     Effect.gen(function* () {
       const { port, requests } = yield* hostActPort({ account: SIGNED_IN });
       const refused = [];
+
       for (const ask of ASKS) {
         refused.push(yield* port.perform(ask, OTHER_WINDOW));
         refused.push(yield* port.perform(ask, PANEL, { trusted: false }));
@@ -153,6 +154,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const { port, requests } = yield* hostActPort({ account: SIGNED_IN });
+
       const sent = [
         {
           kind: ACCOUNT_ASK_ACT_KIND.PROVIDER_KEYS_SAVE,
@@ -171,7 +173,9 @@ it.effect(
           payload: { provider: PROVIDER_KEY_PROVIDER.OPENAI },
         },
       ] as const;
+
       const refused = [];
+
       for (const ask of sent) refused.push(yield* port.perform(ask, PANEL));
 
       assert.deepEqual(
@@ -214,6 +218,7 @@ it.effect(
     Effect.gen(function* () {
       const clip = { audio: "GkXfow==", durationMs: 1200, keywords: ["Vespin"] };
       const transcribe = { kind: ACCOUNT_ASK_ACT_KIND.DICTATION_TRANSCRIBE, payload: clip };
+
       const portOver = (
         acts: Parameters<typeof declaredActProcedures>[0],
         answer: () => Effect.Effect<unknown, unknown>,
@@ -224,9 +229,12 @@ it.effect(
             DICTATION_TRANSCRIBE: answer as () => Effect.Effect<never>,
           }),
         );
+
         ports.push(port);
+
         return port;
       };
+
       // The same ask declared with no fallback of its own.
       const unfallen = declaredActs({
         DICTATION_TRANSCRIBE: hostAct({
@@ -237,6 +245,7 @@ it.effect(
           door: ACT.REMOTE_WORK,
         }),
       });
+
       const answers = [
         () => Effect.fail(new Error("refused")),
         () => Effect.die(new Error("secret detail")),
@@ -244,6 +253,7 @@ it.effect(
       ];
 
       const drawn = [];
+
       for (const answer of answers) {
         drawn.push(yield* portOver(ACCOUNT_ASK_ACTS, answer).perform(transcribe, PANEL));
         drawn.push(yield* portOver(unfallen, answer).perform(transcribe, PANEL));
@@ -269,6 +279,7 @@ it.effect(
           GITHUB_TOKEN_REMOVE: () => Effect.fail(new ActRefused({})),
         }),
       );
+
       ports.push(port);
 
       const removed = [

@@ -73,9 +73,11 @@ function agentLine(
   const starter = names.get(agent.userId);
   const standing = { createdAt: agent.createdAt, now, blank: startedBlank(agent) };
   const status = agentStatusOf(turn, standing);
+
   const at = WORKING_STATUSES.has(status)
     ? agentRunStartedAt(turn, standing)
     : turn?.settledAt?.getTime();
+
   return {
     line: {
       id: agent.id,
@@ -128,6 +130,7 @@ function summaryOf(read: readonly ReadAgent[]): NonNullable<HeldTaskSummary["age
   const working = newest.filter((agent) => WORKING_STATUSES.has(agent.line.status));
   const resting = newest.filter((agent) => !WORKING_STATUSES.has(agent.line.status));
   const pullRequests = new Map<string, TaskPullRequestLine>();
+
   for (const { pullRequests: opened, line } of newest) {
     for (const published of opened) {
       if (pullRequests.has(published.url)) continue;
@@ -146,6 +149,7 @@ function summaryOf(read: readonly ReadAgent[]): NonNullable<HeldTaskSummary["age
       });
     }
   }
+
   return {
     total: agents.length,
     working: working.length,
@@ -184,6 +188,7 @@ export function withTaskAgents(
       tasks.map((task) => task.id),
       { includeArchived: true },
     );
+
     const conversationIds = held.map(({ agent }) => agent.conversationId);
     // The agents were read through the tasks' gate, and each conversation is its starter's, a teammate's as often as the account's.
     const turns = yield* latestTurnsOfReached(conversationIds);
@@ -191,8 +196,10 @@ export function withTaskAgents(
     const names = yield* readAccountNames(held.map(({ agent }) => agent.userId));
     const now = yield* Clock.currentTimeMillis;
     const byTask = new Map<string, ReadAgent[]>();
+
     for (const agent of held) {
       const { conversationId, taskId } = agent.agent;
+
       const line = agentLine(
         agent,
         turns.get(conversationId),
@@ -200,10 +207,13 @@ export function withTaskAgents(
         now,
         names,
       );
+
       byTask.set(taskId, [...(byTask.get(taskId) ?? []), line]);
     }
+
     return tasks.map((task) => {
       const agents = byTask.get(task.id);
+
       return agents === undefined ? task : { ...task, agents: summaryOf(agents) };
     });
   });

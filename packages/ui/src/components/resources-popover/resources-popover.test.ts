@@ -42,6 +42,7 @@ afterEach(() => {
 function Owned(): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [sort, setSort] = useState<ResourceSort>(RESOURCE_SORT.MEMORY);
+
   return createElement(ResourcesPopover, {
     label: "Resources",
     open,
@@ -60,7 +61,9 @@ function heading(words: string): HTMLElement {
   const found = [...document.querySelectorAll("th")].find((cell) =>
     cell.textContent?.startsWith(words),
   );
+
   assert.ok(found, `no ${words} heading`);
+
   return found;
 }
 

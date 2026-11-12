@@ -55,6 +55,7 @@ function drawPhoneAgents(
       ),
     ),
   );
+
   return container;
 }
 
@@ -92,6 +93,7 @@ function drawArchived(onOpen: (agentId: string) => void = () => undefined): HTML
       },
     ],
   });
+
   return drawPhoneAgents(agents, onOpen);
 }
 
@@ -105,6 +107,7 @@ test("the archived agents fold under a group header that counts them folded and 
     turnId: null,
     archivedAt: 2,
   } as const;
+
   const container = drawPhoneAgents(
     agentsControl({
       archived: [
@@ -113,6 +116,7 @@ test("the archived agents fold under a group header that counts them folded and 
       ],
     }),
   );
+
   const fold = () => archivedFold(container) ?? assert.fail("Archived is drawn");
 
   assert.equal(fold().getAttribute("aria-expanded"), "false");
@@ -161,6 +165,7 @@ test("a press on an archived agent's row opens it, whose tab is gone", () => {
 function archivedCardNotes(me: string | undefined, archivedBy: AgentArchivedBy): string[] {
   // Note that each draw unfolds Archived afresh, so the fold the last one kept is let go.
   window.localStorage.clear();
+
   const agents = {
     ...agentsControl({
       archived: [
@@ -180,9 +185,11 @@ function archivedCardNotes(me: string | undefined, archivedBy: AgentArchivedBy):
     }),
     me,
   };
+
   const container = drawPhoneAgents(agents);
   act(() => archivedFold(container)?.click());
   restOn(archivedRow(container));
+
   return [
     ...document.querySelectorAll(".ui-tooltip-card [data-agent-card] .ui-hover-card-note"),
   ].map((note) => note.textContent ?? "");
@@ -190,12 +197,14 @@ function archivedCardNotes(me: string | undefined, archivedBy: AgentArchivedBy):
 
 test("an archived agent's card says who archived it, an agent or Vespin for a member, the reader as you, the reason given, and an archive made with its task", () => {
   const dean = { userId: "user-dean", name: "Dean Stratakos" };
+
   const byAgent = archivedCardNotes("user-sam", {
     by: AGENT_ARCHIVER.AGENT,
     member: dean,
     agent: { id: "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b", name: "Bill by seat" },
     reason: "Its pull request merged.",
   });
+
   act(() => {
     for (const root of roots.splice(0)) root.unmount();
   });
@@ -205,6 +214,7 @@ test("an archived agent's card says who archived it, an agent or Vespin for a me
     for (const root of roots.splice(0)) root.unmount();
   });
   document.body.innerHTML = "";
+
   const withTask = archivedCardNotes("user-sam", {
     by: AGENT_ARCHIVER.MEMBER,
     member: dean,

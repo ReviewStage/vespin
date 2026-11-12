@@ -79,6 +79,7 @@ function draftOf(
   const asked = into.standing ?? {};
   const assigneeId = asked.assigneeId ?? null;
   const name = assigneeId === null ? undefined : nameOf(assigneeId);
+
   return {
     ...(asked.status === undefined ? undefined : { status: asked.status }),
     ...(asked.priority === undefined ? undefined : { priority: asked.priority }),
@@ -103,8 +104,11 @@ const DRAFT_CELLS = [TASK_PROPERTY.PRIORITY, TASK_PROPERTY.STATUS, TASK_PROPERTY
 /** The draft's chip for a property, where it has one. */
 function draftChip(draft: DraftParts, property: TaskRowCell): ReactNode {
   if (property === TASK_PROPERTY.PRIORITY) return draft.priority;
+
   if (property === TASK_PROPERTY.STATUS) return draft.status;
+
   if (property === TASK_PROPERTY.ASSIGNEE) return draft.assignee;
+
   return null;
 }
 
@@ -138,6 +142,7 @@ export function useQuickAdd(tasks: TasksControl, into: QuickAddInto): QuickAdd {
   const [note, setNote] = useState<string | undefined>(undefined);
   const ids = useRef(0);
   useAnnounceShown(ANNOUNCE.ALERT, note ?? "");
+
   // Note that a press outside an empty draft lets it go, since the title no longer ends as the focus leaves it.
   const layer = useMemo(
     (): RefObject<HTMLElement | null> => ({
@@ -147,54 +152,70 @@ export function useQuickAdd(tasks: TasksControl, into: QuickAddInto): QuickAdd {
     }),
     [],
   );
+
   usePressAway(layer, () => undefined, {
     onPressAway: drafting
       ? () => {
           const field = layer.current?.querySelector("input");
+
           if ((field?.value.trim() ?? "") === "") setDrafting(false);
         }
       : undefined,
     holds: (target) => target instanceof Element && target.closest(CHIP_MENU) !== null,
   });
+
   const add = (name: string) => {
     ids.current += 1;
     const id = ids.current;
     setPending((out) => [...out, { id, name }]);
     setNote(undefined);
+
     const asked = {
       ...(into.repository === undefined ? undefined : { repository: into.repository }),
       ...(into.parentTaskId === undefined ? undefined : { parentTaskId: into.parentTaskId }),
       standing: askedOf(draft),
     };
+
     void quickAdd(name, asked).then((refused) => {
       setPending((out) => out.filter((each) => each.id !== id));
+
       if (refused !== undefined) setNote(refusedWords(name, refused));
     });
   };
+
   const end = ({ value, byKey }: InlineEditEnd) => {
     if (value !== undefined) add(value);
+
     // Note that Return on words opens the next draft, as Return on a description opens the next line.
     if (value !== undefined && byKey) setRound((was) => was + 1);
     else setDrafting(false);
   };
+
   const open = () => {
     setNote(undefined);
+
     if (!drafting) setDraft(draftOf(into, nameOf));
     setDrafting(true);
     setRound((was) => was + 1);
   };
+
   const onStanding = (standing: TaskStanding) =>
     setDraft((was) => {
       if (standing.status !== undefined) return { ...was, status: standing.status };
+
       if (standing.priority !== undefined) {
         return { ...was, priority: standing.priority };
       }
+
       const { assignee: _was, ...rest } = was;
       const id = standing.assigneeId ?? null;
       const name = id === null ? undefined : nameOf(id);
+
       return id === null || name === undefined ? rest : { ...rest, assignee: { userId: id, name } };
     });
+
   const shown = drafting || pending.length > 0 || note !== undefined;
+
   return { drafting, round, draft, pending, note, shown, open, end, onStanding };
 }
 
@@ -232,6 +253,7 @@ export function QuickAddLines({
   order?: QuickAddOrder | undefined;
 }): React.JSX.Element {
   const chip = { task: quick.draft, look: CHIP_LOOK.TOOLBAR, onStanding: quick.onStanding };
+
   const draft = quick.drafting ? (
     <Fragment key="draft">
       {line({
@@ -256,9 +278,11 @@ export function QuickAddLines({
       })}
     </Fragment>
   ) : null;
+
   const adds = quick.pending.map((each) => (
     <Fragment key={each.id}>{line({ pending: each.name })}</Fragment>
   ));
+
   return (
     <>
       {order === QUICK_ADD_ORDER.ADDS_FIRST ? adds : draft}
@@ -304,9 +328,11 @@ export function rowQuickAddLine(
           <ReplayMask>{draft?.title ?? pending}</ReplayMask>
           {draft === undefined
             ? null
-            : DRAFT_CELLS.filter((property) => !properties.includes(property)).map((property) => (
-                <Fragment key={property}>{draftChip(draft, property)}</Fragment>
-              ))}
+            : DRAFT_CELLS.flatMap((property) =>
+                properties.includes(property)
+                  ? []
+                  : [<Fragment key={property}>{draftChip(draft, property)}</Fragment>],
+              )}
         </>
       }
       note={refused === undefined ? undefined : <ReplayMask>{refused}</ReplayMask>}

@@ -42,6 +42,7 @@ beforeAll(() => readExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
 
 const TASK_ID = "4b1c2d3e-5f6a-4b7c-8d9e-0f1a2b3c4d5e";
 const KEPT_ID = "0b6f6b52-2c1e-4f8e-9a4d-7f1c2e9d5a01";
+
 const PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
@@ -53,10 +54,13 @@ const WEBM_BASE64 = "GkXfow==";
 
 /** The description's text as the service holds it. */
 let held = PAGE_TEXT;
+
 /** Every picture the description was sent to keep, as its `data:` URL. */
 let keeping: string[] = [];
+
 /** What a keep answers, a kept id unless a test says otherwise. */
 let keepAnswer: TasksPictureKeepAnswer = { id: "" };
+
 /** The kind of every act the description was sent, whichever side carried it, in order. */
 let sent: (AnyAct["kind"] | PortActKind)[] = [];
 const roots: Root[] = [];
@@ -71,6 +75,7 @@ beforeEach(() => {
     [ACT_KIND.TASKS_PICTURE_KEEP]: ({ picture }) => {
       sent.push(ACT_KIND.TASKS_PICTURE_KEEP);
       keeping.push(picture);
+
       return Promise.resolve(keepAnswer);
     },
     [ACT_KIND.TASKS_EDIT]: ({ edit }) => {
@@ -78,8 +83,10 @@ beforeEach(() => {
       // The one edit this page sends is the document's whole text.
       assert.ok("document" in edit);
       const { base, value } = edit.document;
+
       if (base !== held) return Promise.resolve({ conflict: { current: held } });
       held = value;
+
       return Promise.resolve({ saved: true });
     },
   });
@@ -87,6 +94,7 @@ beforeEach(() => {
 
 afterEach(() => {
   forgetUndo();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 });
@@ -136,12 +144,15 @@ const SHOWN: AgentTranscriptMessage = {
   ],
 };
 
+type RecordedResult = { shown: AgentTranscriptMessage; door: AgentPictureDoor };
+
 /** A recording the agent showed, which its door answers as the bytes given. */
-function recorded(base64: string): { shown: AgentTranscriptMessage; door: AgentPictureDoor } {
+function recorded(base64: string): RecordedResult {
   const door: AgentPictureDoor = {
     owner: `agent-add-video-${String(base64.length)}`,
     read: () => Promise.resolve({ contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64 }),
   };
+
   const shown: AgentTranscriptMessage = {
     id: "turn-video",
     role: MESSAGE_ROLE.ASSISTANT,
@@ -166,6 +177,7 @@ function recorded(base64: string): { shown: AgentTranscriptMessage; door: AgentP
       },
     ],
   };
+
   return { shown, door };
 }
 
@@ -181,6 +193,7 @@ async function drawn(
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const turn: ReactNode = createElement(
     AgentPicturesProvider,
     { value: door },
@@ -192,6 +205,7 @@ async function drawn(
       delegation: { models: [] },
     }),
   );
+
   await act(async () =>
     root.render(
       withQueryClient(
@@ -204,6 +218,7 @@ async function drawn(
       ),
     ),
   );
+
   return container;
 }
 
@@ -213,9 +228,17 @@ async function opened(container: HTMLElement) {
   const pressed = () =>
     container.querySelector<HTMLButtonElement>('.picture-block button[aria-label="Expand"]') ??
     container.querySelector<HTMLButtonElement>(".picture-block button");
+
+  const recording = () => container.querySelector(".picture-block video");
   await vi.waitFor(() =>
-    assert.equal(pressed() === null, false, "the picture is drawn, its bytes read"),
+    assert.equal(
+      pressed() === null && recording() === null,
+      false,
+      "the picture is drawn, its bytes read",
+    ),
   );
+  // A recording's bar stands once its size is read, as a browser reads it.
+  act(() => recording()?.dispatchEvent(new Event("loadedmetadata")));
   const picture = pressed();
   assert.ok(picture, "the picture is drawn, its bytes read");
   await act(async () => picture.click());
@@ -289,11 +312,13 @@ test("a transcript off a plan's page offers no Add to description", async () => 
   assert.ok(document.querySelector(".attachment-viewer"), "the viewer opened");
   assert.equal(viewerButton("Add to description"), undefined);
 });
+
 /** Runs the body with the window's `blob:` addresses stood in, which jsdom makes none of. */
 async function withBlobs(body: () => Promise<void>): Promise<void> {
   const own = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
   URL.createObjectURL = () => "blob:recording";
   URL.revokeObjectURL = () => undefined;
+
   try {
     await body();
   } finally {

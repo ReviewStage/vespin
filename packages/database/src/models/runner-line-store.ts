@@ -68,6 +68,7 @@ const LINE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 /** One line as a runner reads it: its place in the order, and the line itself. */
 const RunnerLineSchema = Schema.Struct({ seq: Schema.Number, text: Schema.String });
+
 export type RunnerLine = typeof RunnerLineSchema.Type;
 
 const RunnerLineFileSchema = Schema.Struct({
@@ -387,6 +388,7 @@ export function queueRunnerLine(
         const now = yield* DateTime.nowAsDate;
         const before = new Date(now.getTime() - Duration.toMillis(RUNNER_LINE_EXPIRY));
         yield* deleteExpired({ userId, agentId: line.agentId, before });
+
         const rows = yield* insertLine({
           userId,
           agentId: line.agentId,
@@ -397,6 +399,7 @@ export function queueRunnerLine(
           handed: line.handed ?? null,
           now,
         });
+
         return Option.map(Option.fromNullishOr(rows[0]), (row) => row.seq);
       }),
     ),
@@ -464,6 +467,7 @@ export function acceptRunnerLine(
   lineId: string,
 ): RunnerLineEffect<Option.Option<WireValue>> {
   if (!LINE_ID.test(lineId)) return Effect.succeed(Option.none());
+
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
     Effect.map(writeAccepted({ userId, agentId, lineId, now }), (rows) =>
       Option.fromNullishOr(rows[0]?.handed),
@@ -486,6 +490,7 @@ export function requeueRunnerLine(
   lineId: string,
 ): RunnerLineEffect<void> {
   if (!LINE_ID.test(lineId)) return Effect.void;
+
   return writeRequeued({ userId, agentId, lineId });
 }
 

@@ -17,6 +17,7 @@
     "./models/abandoned-turns": "./src/models/abandoned-turns.js",
     "./models/turn-state": "./src/models/turn-state.js",
     "./models/account-store": "./src/models/account-store.js",
+    "./models/account-allowed-commands": "./src/models/account-allowed-commands.js",
     "./models/account-sounds": "./src/models/account-sounds.js",
     "./models/agent-name": "./src/models/agent-name.js",
     "./models/claude-session-entries": "./src/models/claude-session-entries.js",
@@ -176,11 +177,11 @@
   "devDependencies": {
     "@effect/sql-pglite": "catalog:",
     "@effect/vitest": "catalog:",
-    "@electric-sql/pglite": "0.5.8",
+    "@electric-sql/pglite": "0.5.16",
     "@types/node": "catalog:",
-    "@types/pg": "8.21.0",
+    "@types/pg": "8.23.1",
     "drizzle-kit": "catalog:",
-    "pg": "8.23.0",
+    "pg": "8.23.1",
     "tsx": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

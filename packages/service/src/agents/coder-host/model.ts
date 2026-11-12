@@ -35,7 +35,9 @@ export function deploymentTitleModel(): Effect.Effect<
 > {
   return Effect.gen(function* () {
     const { titleAnthropicApiKey } = yield* HostedEnvironment;
+
     if (titleAnthropicApiKey === undefined) return undefined;
+
     // The key is revealed here alone, into the SDK client that puts it on its requests.
     return createAnthropic({ apiKey: Redacted.value(titleAnthropicApiKey) })(TITLE_MODEL_ID);
   });

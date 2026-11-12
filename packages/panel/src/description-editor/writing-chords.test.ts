@@ -37,6 +37,7 @@ afterEach(() => {
   act(() => {
     for (const root of roots.splice(0)) root.unmount();
   });
+
   for (const editor of mounted.splice(0)) editor.destroy();
   document.body.innerHTML = "";
 });
@@ -47,6 +48,7 @@ function KeyedWindow({ ran }: { ran: string[] }): ReactElement | null {
   useAppCommand(APP_COMMAND.TOGGLE_SIDEBAR, () => ran.push("toggle sidebar"));
   useAppCommand(APP_COMMAND.COPY_CONTENT, () => ran.push("copy description"));
   useAppCommand(APP_COMMAND.TOGGLE_FULL_SCREEN, () => ran.push("toggle full screen"));
+
   return null;
 }
 
@@ -57,6 +59,7 @@ function mount(markdown: string, format?: EditorFormatDoors) {
   roots.push(root);
   act(() => root.render(withQueryClient(createElement(KeyedWindow, { ran }))));
   const host = document.body.appendChild(document.createElement("div"));
+
   const handle = mountDescriptionEditor(host, {
     markdown,
     placement: undefined,
@@ -68,11 +71,15 @@ function mount(markdown: string, format?: EditorFormatDoors) {
     onLeaveUp: () => undefined,
     format,
   });
+
   mounted.push(handle);
+
   const element =
     host.querySelector<TiptapEditorHTMLElement>("[role=textbox]") ?? assert.fail("the editor");
+
   const editor = element.editor ?? assert.fail("the editor is running");
   editor.commands.setTextSelection({ from: 1, to: editor.state.doc.firstChild?.nodeSize ?? 1 });
+
   return { ran, handle, element, editor };
 }
 
@@ -121,23 +128,38 @@ test("⌘B in the description bolds its words and leaves the sidebar alone, and 
   assert.deepEqual(ran, ["toggle sidebar"]);
 });
 
-test("a divider selected whole holds no words, so the toolbar is told none and ⌘K opens no link field", () => {
-  const formats: EditorFormat[] = [];
-  const links = { count: 0 };
-  const { element, editor } = mount("Above the rule.\n\n---\n\nBelow the rule.\n", {
-    onFormat: (format) => formats.push(format),
-    onLink: () => {
-      links.count += 1;
-    },
-  });
-  act(() => {
-    editor.commands.setNodeSelection(editor.state.doc.child(0).nodeSize);
-  });
-  assert.equal(editor.state.selection.$from.nodeAfter?.type.name, "horizontalRule");
-  assert.equal(formats.at(-1)?.empty, true);
-  press(element, "k");
-  assert.equal(links.count, 0);
-});
+test.each([
+  { node: "horizontalRule", markdown: "Above the rule.\n\n---\n\nBelow the rule.\n" },
+  {
+    node: "image",
+    markdown: "Above the picture.\n\n![Screenshot](https://example.com/shot.png)\n\nBelow it.\n",
+  },
+])(
+  "a $node selected whole holds no words, so the toolbar is told none and ⌘K opens no link field",
+  ({ node, markdown }) => {
+    const formats: EditorFormat[] = [];
+    const links = { count: 0 };
+
+    const { element, editor } = mount(markdown, {
+      onFormat: (format) => formats.push(format),
+      onLink: () => {
+        links.count += 1;
+      },
+    });
+
+    let at: number | undefined;
+    editor.state.doc.descendants((each, pos) => {
+      if (each.type.name === node) at = pos;
+    });
+    act(() => {
+      editor.commands.setNodeSelection(at ?? assert.fail("the node is in the text"));
+    });
+    assert.equal(editor.state.selection.$from.nodeAfter?.type.name, node);
+    assert.equal(formats.at(-1)?.empty, true);
+    press(element, "k");
+    assert.equal(links.count, 0);
+  },
+);
 
 test("Enter on a divider selected whole opens an empty line under it, even where it is the text's first block", () => {
   const { element, editor, handle } = mount("---\n\nBelow the rule.\n");

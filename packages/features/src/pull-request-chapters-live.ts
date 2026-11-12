@@ -116,6 +116,7 @@ function sameRunsOn(a: ChaptersRunsOn | undefined, b: ChaptersRunsOn | undefined
 export function sameGenerator(a: ChaptersGenerator, b: ChaptersGenerator): boolean {
   const choices = a.runsOnChoices ?? [];
   const others = b.runsOnChoices ?? [];
+
   return (
     a.generatable === b.generatable &&
     sameRunsOn(a.runsOn, b.runsOn) &&
@@ -137,6 +138,7 @@ const UNAVAILABLE: PullRequestChaptersAnswerView = {
 function stateOf(row: ChaptersLiveRow | undefined): PullRequestChaptersState | undefined {
   if (row === undefined) return { status: PULL_REQUEST_CHAPTERS_STATE.NONE };
   const { headSha, baseSha } = row;
+
   switch (row.status) {
     case PULL_REQUEST_CHAPTERS_STATE.GENERATING:
       return { status: row.status, headSha, baseSha, startedAt: row.startedAt };
@@ -149,6 +151,7 @@ function stateOf(row: ChaptersLiveRow | undefined): PullRequestChaptersState | u
       };
     case PULL_REQUEST_CHAPTERS_STATE.READY:
       if (row.model === null || row.model === "" || row.chapters === null) return undefined;
+
       return { status: row.status, headSha, baseSha, model: row.model, chapters: row.chapters };
   }
 }
@@ -165,16 +168,19 @@ export function pullRequestChaptersOfLive(
   generator: ChaptersGenerator,
 ): PullRequestChaptersAnswerView {
   const read = readRows(rows);
+
   if (Option.isNone(read)) return UNAVAILABLE;
   const chapters = stateOf(read.value[0]);
+
   if (chapters === undefined) return UNAVAILABLE;
   const { generatable, runsOn, runsOnChoices } = generator;
+
   return {
     pullRequest: {
       number,
       generatable,
-      ...(runsOn === undefined ? {} : { runsOn }),
-      ...(runsOnChoices === undefined ? {} : { runsOnChoices }),
+      ...(runsOn !== undefined && { runsOn }),
+      ...(runsOnChoices !== undefined && { runsOnChoices }),
       chapters,
     },
   };

@@ -3,6 +3,7 @@ import { type ChildProcess, fork } from "node:child_process";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 import { it } from "@effect/vitest";
+import type { WireBoundaryInput } from "@repo/wire";
 import { Effect } from "effect";
 import { highlightSnippet } from "./task-code.js";
 import {
@@ -32,10 +33,13 @@ function forkChild(
 ): TaskCodeProcess {
   const child = fork(CHILD, { execArgv: ["--import", "tsx"], stdio: "inherit" });
   forked(child);
-  child.on("message", (message) => listeners.onMessage(message));
+  // SAFETY: the child sends structured-clone values, the wire boundary shape.
+  child.on("message", (message) => listeners.onMessage(message as WireBoundaryInput));
   child.on("exit", () => listeners.onExit());
+
   return {
     send: (message) => {
+      // SAFETY: the messages sent are the wire values the child reads, every one an object.
       child.send(message as object);
       afterSend(child);
     },
@@ -51,6 +55,7 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         const color = yield* taskCodeProcessColoring((listeners) => forkChild(listeners));
+
         // Note that each side colors every block once first: Shiki stops a line's coloring past its
         // time limit, and a grammar's first use compiles it, which a loaded runner can push past that.
         for (const { language, code } of BLOCKS) {
@@ -72,13 +77,16 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         let spawned = 0;
+
         const color = yield* taskCodeProcessColoring((listeners) => {
           spawned += 1;
+
           // The first process is killed the moment it is handed its block, as a crash would end it.
           return spawned === 1
             ? forkChild(listeners, (child) => child.kill("SIGKILL"))
             : forkChild(listeners);
         });
+
         const [block] = BLOCKS;
 
         assert.deepEqual(yield* color(block.language, block.code), plainCodeLines(block.code));
@@ -103,9 +111,11 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         const children: ChildProcess[] = [];
+
         const color = yield* taskCodeProcessColoring((listeners) =>
           forkChild(listeners, undefined, (child) => children.push(child)),
         );
+
         const [block] = BLOCKS;
         yield* color(block.language, block.code);
 

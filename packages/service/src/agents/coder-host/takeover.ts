@@ -24,7 +24,6 @@ import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
   AGENT_MACHINE,
-  type AgentAlsoRepository,
   type AgentAttachment,
   type AgentMachineKind,
   type AgentPullRequest,
@@ -133,7 +132,6 @@ export type TakeoverAsk = StartWhere & {
   readonly serverWords?: string | undefined;
   readonly title?: string | undefined;
   readonly startedBy?: Agent | undefined;
-  readonly alsoRepositories?: readonly AgentAlsoRepository[] | undefined;
   readonly summaryModel?: SummaryModelOf | undefined;
   readonly runsOn?: AgentRunsOnRequest | undefined;
 };
@@ -172,8 +170,6 @@ export interface TakeoverRules {
   readonly stopsSource: boolean;
   /** The branch the source was started on, which the new agent is cloned at where GitHub still holds it and the ask names none. */
   readonly branch: string | null;
-  /** Whether the new agent works in the repositories its source worked in beside its own: one from another agent whose ask names none. */
-  readonly carriesExtras: boolean;
   /** The Start as it is counted. */
   readonly startKind: ServerAgentStartKind;
   /** What the first line says it is where it names a source; none for a fresh Start's, which says its brief. */
@@ -227,26 +223,31 @@ const START_KIND_OF: Readonly<Record<Takeover, ServerAgentStartKind>> = {
  */
 function continuedTitle(source: string | null): string | undefined {
   const base = (source ?? "").replace(CONTINUED_SUFFIXES, "").trim();
+
   if (base === "") return undefined;
   const room = AGENT_BOUNDS.MAX_TITLE_CHARS - CONTINUED_SUFFIX.length;
   let kept = "";
+
   // Note that the title is cut by code point, so a cut never leaves half of a character.
   for (const char of base) {
     if (kept.length + char.length > room) break;
     kept += char;
   }
+
   return `${kept.trimEnd()}${CONTINUED_SUFFIX}`;
 }
 
 /** A prompt with the note after it, the words a Start from another agent reads mentions from; none where there is neither. */
 function wordsOf(prompt: string | undefined, note: string | undefined): string | undefined {
   const words = [prompt, note].filter((each) => each !== undefined);
+
   return words.length === 0 ? undefined : words.join("\n\n");
 }
 
 /** How many of the note's files are text files, which the harness is handed inlined, and how many images and PDFs. */
 function noteFilesOf(files: readonly AgentAttachment[]): NoteFiles {
   const text = files.filter((file) => file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT).length;
+
   return { text, other: files.length - text };
 }
 
@@ -260,6 +261,11 @@ export function placeOfAgent(agent: Pick<Agent, "taskId">): StartWhere {
   return { taskId: agent.taskId };
 }
 
+type InheritedPlace = {
+  readonly machine: AgentMachineKind;
+  readonly deviceId?: string | null | undefined;
+};
+
 /**
  * Where a Start from another agent runs where its ask names no place: where
  * its source runs, so a continue or a fork goes on where the work was, but
@@ -270,11 +276,13 @@ export function placeOfAgent(agent: Pick<Agent, "taskId">): StartWhere {
 export function inheritedPlaceOf(
   userId: string,
   source: Pick<Agent, "userId" | "machine" | "deviceId">,
-): { readonly machine: AgentMachineKind; readonly deviceId?: string | null | undefined } {
+): InheritedPlace {
   const machine = source.machine ?? AGENT_MACHINE.VERCEL;
+
   if (machine === AGENT_MACHINE.DEVICE && source.userId !== userId) {
     return { machine: AGENT_MACHINE.VERCEL };
   }
+
   return { machine, deviceId: source.deviceId };
 }
 
@@ -293,6 +301,7 @@ export function whereOf(place: StartWhere): StartWhere {
  */
 export function takeoverRules(from: StartFrom | undefined, ask: TakeoverAsk): TakeoverRules {
   const own = ask.attachments ?? [];
+
   if (from === undefined) {
     return {
       kind: TAKEOVER.FRESH,
@@ -304,21 +313,23 @@ export function takeoverRules(from: StartFrom | undefined, ask: TakeoverAsk): Ta
       title: ask.title,
       stopsSource: false,
       branch: null,
-      carriesExtras: false,
       startKind: START_KIND_OF[TAKEOVER.FRESH],
       startLine: undefined,
       mentionWords: (handed) => {
         const words = handed ?? ask.note;
+
         return { words, serverWords: ask.serverWords ?? words };
       },
     };
   }
+
   const { source } = from;
   const kind = takeoverKindOf(from);
   const continued = kind === TAKEOVER.CONTINUE;
   // Note that the replay is never read for mentions, because its words name what the source read, not what to hand on.
   const words = wordsOf(from.prompt, ask.note);
   const serverWords = ask.serverWords ?? wordsOf(from.serverWords ?? from.prompt, ask.note);
+
   return {
     kind,
     source,
@@ -329,7 +340,6 @@ export function takeoverRules(from: StartFrom | undefined, ask: TakeoverAsk): Ta
     title: ask.title ?? (continued ? continuedTitle(source.title) : undefined),
     stopsSource: continued,
     branch: source.startBranch,
-    carriesExtras: ask.alsoRepositories === undefined,
     startKind: START_KIND_OF[kind],
     startLine: {
       brief: continued ? START_LINE_BRIEF.CONTINUE : START_LINE_BRIEF.FORK,
@@ -346,6 +356,7 @@ const madeInPlace = Effect.fnUntraced(function* (
   place: StartWhere,
 ): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices> {
   if (made.taskId !== place.taskId) return false;
+
   return Option.isSome(yield* hostedStoreOrUnavailable(readTaskWorkspace(userId, place.taskId)));
 });
 
@@ -367,6 +378,7 @@ export const startedFromBefore = /* @__PURE__ */ Effect.fnUntraced(function* (
   const made = yield* hostedStoreOrUnavailable(readAgentByKey(userId, idempotencyKey));
   // Note that only the same Start is answered: the same source, forked at the same message or continued.
   const startedFrom = Option.isSome(made) ? made.value.startedFrom : null;
+
   if (
     Option.isNone(made) ||
     startedFrom?.agentId !== from.agentId ||
@@ -374,9 +386,11 @@ export const startedFromBefore = /* @__PURE__ */ Effect.fnUntraced(function* (
   ) {
     return Option.none();
   }
+
   if (!(yield* madeInPlace(userId, made.value, place ?? placeOfAgent(made.value)))) {
     return Option.none();
   }
+
   return made;
 });
 
@@ -435,6 +449,7 @@ const sourceWorkOf = (
     on: TAKEN_ON.COPY,
     copy: { copied: false, miss: SNAPSHOT_MISS.FAILED },
   };
+
   return Effect.gen(function* () {
     // A source on a Mac hands only the branch it pushed: nothing is read from the Mac, whoever starts from it.
     if (source.machine === AGENT_MACHINE.DEVICE) {
@@ -443,17 +458,22 @@ const sourceWorkOf = (
         copy: { copied: false, miss: SNAPSHOT_MISS.ON_DEVICE },
       } satisfies SourceWork;
     }
+
     const [session] =
       source.repository?.toLowerCase() === repository?.toLowerCase()
         ? yield* standingSessionsOf(source.userId, [source.conversationId])
         : [];
+
     if (session !== undefined) {
       const found = yield* agentSandboxOf(yield* Sandbox, session.sessionId);
+
       if (found?.status === SANDBOX_STATUS.STOPPED && found.snapshotId !== undefined) {
         return { on: TAKEN_ON.SNAPSHOT, sandbox: found.name } satisfies SourceWork;
       }
     }
+
     const copy = yield* copySourceWork(userId, source, repository, forked, idempotencyKey);
+
     return { on: TAKEN_ON.COPY, copy } satisfies SourceWork;
   }).pipe(
     Effect.catch((failure) =>
@@ -466,6 +486,7 @@ const sourceWorkOf = (
 const placeRepository = (userId: string, place: StartWhere) =>
   Effect.gen(function* () {
     const task = yield* hostedStoreOrUnavailable(readTaskHeader(userId, place.taskId));
+
     return Option.isSome(task) ? task.value.repository : null;
   });
 
@@ -486,22 +507,28 @@ export const startFromOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   idempotencyKey: string,
 ): Effect.fn.Return<StartFrom, HostedRefusal, DatabaseServices | SourceCopyServices> {
   const [found] = yield* hostedStoreOrUnavailable(listPublishedAgentsById(userId, [from.agentId]));
+
   if (found === undefined || found.agent.taskId !== place.taskId) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
+
   const { agent: source, published } = found;
+
   // An agent on its starter's own GitHub token is continued or forked by its starter alone, before its work is copied.
   if (!startsFromAgent(userId, source)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   const repository = yield* placeRepository(userId, place);
+
   const { lineage, carried } = yield* hostedStoreOrUnavailable(
     lineageOf(userId, source, repository),
   );
+
   const transcript = yield* sourceTranscriptOf(source, from, noteFiles);
   const forked = from.messageId !== undefined;
   const work = yield* sourceWorkOf(userId, source, repository, forked, idempotencyKey);
   const inPullRequest = !forked && (yield* goesOnInPullRequest(userId, source, published));
   const [, ...extras] = yield* hostedStoreOrUnavailable(readAgentRepositories(userId, source.id));
   const edited = yield* transcript.edited;
+
   return {
     source,
     lineage,
@@ -540,18 +567,25 @@ export const takeoverOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   ask: TakeoverAsk,
 ): Effect.fn.Return<TakeoverRead, HostedRefusal, DatabaseServices | SourceCopyServices> {
   const asked = ask.from;
+
   if (asked === undefined) {
     const made = yield* hostedStoreOrUnavailable(readAgentByKey(userId, ask.idempotencyKey));
+
     if (Option.isSome(made) && (yield* madeInPlace(userId, made.value, whereOf(ask)))) {
       return { made: made.value };
     }
+
     return { made: undefined, from: undefined };
   }
+
   const made = yield* startedFromBefore(userId, ask.idempotencyKey, asked, ask);
+
   if (Option.isSome(made)) return { made: made.value };
   // A key that already names the agent of another Start is refused, never answered with that agent.
   const other = yield* hostedStoreOrUnavailable(readAgentByKey(userId, ask.idempotencyKey));
+
   if (Option.isSome(other)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
   const from = yield* startFromOf(
     userId,
     whereOf(ask),
@@ -559,6 +593,7 @@ export const takeoverOf = /* @__PURE__ */ Effect.fnUntraced(function* (
     ask.attachments ?? [],
     ask.idempotencyKey,
   );
+
   return { made: undefined, from };
 });
 
@@ -573,10 +608,12 @@ const measuredStepOf = Effect.fnUntraced(function* (userId: string, lineage: rea
     const context = yield* readAgentContext(userId, agent.id).pipe(
       Effect.orElseSucceed(() => Option.none()),
     );
+
     if (Option.isSome(context) && context.value.lastStep !== null) {
       return { step: context.value.lastStep, compacted: context.value.compactedAt !== null };
     }
   }
+
   return undefined;
 });
 
@@ -600,31 +637,39 @@ const replayFitterOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<ReplayFitter, never, DatabaseServices | ModelCatalog> {
   const catalog = yield* ModelCatalog;
   const offered = yield* catalog.read.pipe(Effect.orElseSucceed(() => []));
+
   const windowTokens = contextWindowOf(
     offered,
     choice.model,
     choice.contextWindow ?? CONTEXT_WINDOW.LONG,
   );
+
   const lowest = offered.find((model) => model.id === choice.model)?.efforts[0] ?? choice.effort;
   const measured = yield* measuredStepOf(userId, from.lineage);
+
   // Note that a native harness's step estimates no instructions (`runner-events-app.ts`), since
   // the CLI composes its own, so it is told the fallback as a source that measured none is.
   const estimated =
     measured === undefined
       ? 0
       : measured.step.systemPromptTokens + measured.step.toolDefinitionTokens;
+
   const instructions =
     estimated === 0 ? REPLAY_FIT.INSTRUCTIONS_FALLBACK_TOKENS : fromEveEstimate(estimated);
+
   const bound = measuredBoundBytes(
     measured === undefined
       ? undefined
       : { inputTokens: measured.step.inputTokens, compacted: measured.compacted },
     stepsBytes(from.steps) + summaryBytes(from.carriedSummary),
   );
+
   const model =
     summaryModel === undefined ? undefined : yield* summaryModel(userId, choice, lowest);
+
   // Note that what a mention adds is written after the replay is fitted, so its bound is held back for it.
   const besideBytes = filesBytes(files) + MENTIONED_BOUNDS.PART_CHARS;
+
   return {
     prompt: from.prompt,
     fit: (firstMessage) =>
@@ -634,6 +679,7 @@ const replayFitterOf = /* @__PURE__ */ Effect.fnUntraced(function* (
           instructions,
           utf8Bytes(firstMessage(undefined)) + filesBytes(files),
         );
+
         const fitted = yield* fitReplay(
           from.steps,
           from.carriedSummary,
@@ -643,17 +689,21 @@ const replayFitterOf = /* @__PURE__ */ Effect.fnUntraced(function* (
               ? Effect.succeed(Option.none())
               : summarizeSteps(model, dropped, windowTokens, earlier),
         );
+
         const promptTokens = (steps: FittedSteps) =>
           instructions +
           replayTokens(
             utf8Bytes(firstMessage(replayOf(from, steps.kept, steps.summary).replay)) + besideBytes,
           );
+
         const held = withinWindow(fitted, promptTokens, windowTokens);
+
         if (held !== fitted) {
           yield* Effect.logWarning(
             `a replay was cut to fit the window: ${held.kept.length} of ${fitted.kept.length} steps kept, its summary ${held.summary === undefined ? "left out" : "kept"}`,
           );
         }
+
         return replayOf(from, held.kept, held.summary);
       }),
   };
@@ -685,7 +735,9 @@ const checkoutsOn = (
   deviceId: string | null | undefined,
 ): Effect.Effect<Option.Option<MachineCheckouts>, HostedRefusal, DatabaseServices> => {
   if (machine !== AGENT_MACHINE.DEVICE) return Effect.succeed(Option.some(SANDBOX_CHECKOUTS));
+
   if (deviceId === null || deviceId === undefined) return Effect.succeed(Option.none());
+
   return hostedStoreOrUnavailable(macCheckoutsOf(userId, deviceId));
 };
 
@@ -701,12 +753,16 @@ const checkoutsOn = (
 const sessionCutOf = Effect.fnUntraced(function* (from: StartFrom) {
   const { source, told } = from;
   const target = { userId: source.userId, conversationId: source.conversationId };
+
   if (told.messageId === undefined) {
     const rewind = yield* hostedStoreOrUnavailable(readNativeRewind(target));
+
     return Option.some(Option.getOrUndefined(rewind));
   }
+
   if (told.cut !== undefined) return Option.none();
   const cut = yield* hostedStoreOrUnavailable(readForkCut(target, told.messageId));
+
   return Result.isSuccess(cut) ? Option.some(cut.success) : Option.none();
 });
 
@@ -730,23 +786,31 @@ const carriedSessionOf = Effect.fnUntraced(function* (
   const { source } = from;
   const sourceMachine = source.machine ?? AGENT_MACHINE.VERCEL;
   const place = ask.runsOn ?? inheritedPlaceOf(userId, source);
+
   const [onto, off] = yield* Effect.all([
     checkoutsOn(userId, place.machine, "deviceId" in place ? place.deviceId : undefined),
     checkoutsOn(source.userId, sourceMachine, source.deviceId),
   ]);
+
   if (Option.isNone(onto) || !onto.value.transcriptsKept || Option.isNone(off)) return undefined;
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(source.userId, source.id));
   const read = Option.getOrUndefined(routing);
+
   if (read?.nativeSession == null) return undefined;
+
   if ((yield* runtime) !== read.runtime) return undefined;
+
   const held = yield* hostedStoreOrUnavailable(
     holdsSession(source.userId, source.conversationId, read.nativeSession),
   );
+
   if (!held) return undefined;
   const cut = yield* sessionCutOf(from);
+
   if (Option.isNone(cut)) return undefined;
   // Note that sandboxes alone share one checkout path, since every Mac agent's checkout is its own.
   const shared = place.machine === AGENT_MACHINE.VERCEL && sourceMachine === AGENT_MACHINE.VERCEL;
+
   return {
     session: read.nativeSession,
     cutBefore: cut.value,
@@ -771,38 +835,13 @@ function carryingTranscript(from: StartFrom, carried: CarriedSession): StartFrom
 }
 
 /**
- * The repositories the source of a start from another agent works in beside
- * its own (`readAgentRepositories`), each at the branch its checkout was
- * cloned at, and with no pull request, which stays the source's; none where
- * it works in one, or where the new agent works in no repository of its own
- * for them to stand beside. One that is the new agent's own is left out.
- */
-const carriedExtrasOf = Effect.fnUntraced(function* (
-  userId: string,
-  source: Agent,
-  own: string | null,
-): Effect.fn.Return<readonly AgentAlsoRepository[] | undefined, HostedRefusal, DatabaseServices> {
-  if (own === null) return undefined;
-  const [, ...extras] = yield* hostedStoreOrUnavailable(readAgentRepositories(userId, source.id));
-  const carried = extras
-    .filter((each) => each.repository.toLowerCase() !== own.toLowerCase())
-    .map((each) =>
-      each.baseBranch === null
-        ? { repository: each.repository }
-        : { repository: each.repository, branch: each.baseBranch },
-    );
-  return carried.length === 0 ? undefined : carried;
-});
-
-/**
  * A Start's accepted choice and its landing, with what it inherits fitted
  * to them: a fresh Start's landing does not wait on its choice, so the two
  * are read together; one from another agent is first held to its source's
  * plan's policy where it stops that source, then fits that agent's replay to the
  * choice's window, its transcript carried whole in place of its replayed
  * steps where the service keeps it on the harness `runtimeOf` decides, so
- * its landing waits on it, and once landed carries the repositories its
- * source worked in beside the landing's own where the ask names none.
+ * its landing waits on it.
  */
 export const landedInheriting = <
   A extends AcceptedRead,
@@ -822,27 +861,25 @@ export const landedInheriting = <
     noteFiles: NoteFiles | undefined,
   ) => Effect.Effect<L, E2, R2>,
 ): Effect.Effect<
-  {
-    readonly read: A;
-    readonly landing: L;
-    readonly carried: readonly AgentAlsoRepository[] | undefined;
-  },
+  { readonly read: A; readonly landing: L },
   E1 | E2 | HostedRefusal,
   R1 | R2 | DatabaseServices | ModelCatalog
 > => {
   const { from, rules } = inherited;
+
   if (from === undefined) {
     return Effect.map(bothInOrder(accepted, land(undefined, undefined)), ([read, landing]) => ({
       read,
       landing,
-      carried: undefined,
     }));
   }
+
   return Effect.gen(function* () {
     if (rules.checksPlanWriter) yield* admitsPlanWriter(userId, from.source);
     const read = yield* accepted;
     const session = yield* carriedSessionOf(userId, ask, from, runtimeOf(read.choice.model));
     const handedFrom = session === undefined ? from : carryingTranscript(from, session);
+
     const fitter = yield* replayFitterOf(
       userId,
       handedFrom,
@@ -850,12 +887,11 @@ export const landedInheriting = <
       ask.summaryModel,
       rules.attachments,
     );
+
     // The note's files go after the source's in each group the harness is handed, so the marker counts them by group.
     const landing = yield* land(fitter, noteFilesOf(ask.attachments ?? []));
-    const carried = rules.carriesExtras
-      ? yield* carriedExtrasOf(userId, from.source, landing.repository)
-      : undefined;
-    return { read, landing, carried };
+
+    return { read, landing };
   });
 };
 
@@ -912,17 +948,20 @@ export const openedTakingOver = <E, R>(
 ): Effect.Effect<void, E | HostedRefusal, R | DatabaseServices | HttpClient.HttpClient | Sandbox> =>
   Effect.gen(function* () {
     const { from, rules } = inherited;
+
     if (from !== undefined && agent.startedFrom?.session !== undefined) {
       const checkouts = yield* checkoutsOn(
         agent.userId,
         agent.machine ?? AGENT_MACHINE.VERCEL,
         agent.deviceId,
       );
+
       // Note that a Mac the account no longer holds standing launches nothing, so its copy is left unkeyed.
       const rekey = Option.map(checkouts, (each) => ({
         projectKey: claudeProjectKey(each.checkoutPathOf(agent.id)),
         keptProject: RUNNER_TRANSCRIPTS.CODEX_PROJECT,
       }));
+
       yield* hostedStoreOrUnavailable(
         copySessionEntries(
           { userId: from.source.userId, conversationId: from.source.conversationId },
@@ -931,7 +970,9 @@ export const openedTakingOver = <E, R>(
         ),
       );
     }
+
     yield* opening;
+
     if (from === undefined || !rules.stopsSource) return;
     yield* stoppedSource(agentSessions, from.source, startedBy?.id);
   });

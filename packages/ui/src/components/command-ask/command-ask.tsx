@@ -84,6 +84,7 @@ export function CommandAsk({
   const [scope, setScope] = useState<readonly AllowScope[]>([ALLOW_SCOPE.ALWAYS]);
   // Note that a pick taken back leaves no scope, which runs once rather than widening.
   const run = scope[0] === ALLOW_SCOPE.ALWAYS ? onAllowAlways : onAllowOnce;
+
   return (
     <Dialog
       open={open}

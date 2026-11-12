@@ -12,6 +12,7 @@ import { pageLeave } from "../src/app/page-leave";
 function holdsBack(page: EventTarget): boolean {
   const event = new Event("beforeunload", { cancelable: true });
   page.dispatchEvent(event);
+
   return event.defaultPrevented;
 }
 

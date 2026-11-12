@@ -75,8 +75,10 @@ const findDayActiveAccounts = SqlSchema.findAll({
   execute: (request) => {
     const rows = dailyCountRows(request.since, request.until);
     const actions = meaningfulActions(request.since, request.until);
+
     const counted = (kind: DayAccountCount): SQL<number> =>
       sql<number>`count(*) filter (where ${rows.tag} = ${kind})`;
+
     return Database.use((db) =>
       db
         .select({
@@ -115,6 +117,7 @@ const readDayActivity = /* @__PURE__ */ Effect.fn("web/readAdminDayActivity")(fu
   scope: AdminMetricsScope,
 ): Effect.fn.Return<AdminDayActivity, StoreFailure, DatabaseServices> {
   const request = { since, until: new Date(since.getTime() + DAY_MS), scope };
+
   const [dailyRows, accountRows] = yield* Effect.all(
     [findDailyCounts(request), findDayActiveAccounts(request)],
     { concurrency: "unbounded" },

@@ -50,6 +50,7 @@ function drawnTicks(axis: DailyAxis): string[] {
       }),
     ),
   );
+
   return [...container.querySelectorAll("text")].map((tick) => tick.textContent ?? "");
 }
 

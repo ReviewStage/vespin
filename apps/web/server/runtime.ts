@@ -50,6 +50,7 @@ function webRuntime(): ManagedRuntime.ManagedRuntime<WebServices, WebServicesErr
       Layer.mergeAll(sentryLayer(), afterResponseLayer, sandboxLayer),
     ),
   );
+
   return standing;
 }
 
@@ -89,5 +90,6 @@ export const webAgentSandboxDoor = agentSandboxDoors(runWeb, agentMachinesLayer(
 export function disposeWebRuntime(): Promise<void> {
   const ending = standing;
   standing = undefined;
+
   return ending === undefined ? Promise.resolve() : ending.dispose();
 }

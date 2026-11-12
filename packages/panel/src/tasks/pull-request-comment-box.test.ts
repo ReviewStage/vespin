@@ -39,6 +39,7 @@ afterEach(() => {
 /** The box over words its tab holds, with no change out. */
 function Tab({ start }: { start: string }): React.JSX.Element {
   const [body, setBody] = useState(start);
+
   const comment: PullRequestComment = {
     writes: {
       pending: undefined,
@@ -50,6 +51,7 @@ function Tab({ start }: { start: string }): React.JSX.Element {
     body,
     setBody,
   };
+
   return createElement(PullRequestCommentBox, { comment });
 }
 
@@ -62,9 +64,11 @@ test("Esc in the comment box lets go of it, keeps its words, and never reaches t
   const root = createRoot(holder);
   roots.push(root);
   act(() => root.render(withQueryClient(createElement(Tab, { start: "Looks right to me." }))));
+
   const element =
     holder.querySelector<TiptapEditorHTMLElement>('.ProseMirror[aria-label="Comment"]') ??
     assert.fail("the box's editor is mounted");
+
   const editor: Editor = element.editor ?? assert.fail("the box's editor is running");
   act(() => editor.view.focus());
   assert.equal(document.activeElement, element, "the caret is in the words");
@@ -86,16 +90,20 @@ test("Esc that closes the / menu keeps the caret in the box, and the next Esc le
   const root = createRoot(holder);
   roots.push(root);
   act(() => root.render(withQueryClient(createElement(Tab, { start: "Looks right" }))));
+
   const element =
     holder.querySelector<TiptapEditorHTMLElement>('.ProseMirror[aria-label="Comment"]') ??
     assert.fail("the box's editor is mounted");
+
   const editor: Editor = element.editor ?? assert.fail("the box's editor is running");
+
   const pressEscape = () =>
     act(() => {
       element.dispatchEvent(
         new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
       );
     });
+
   act(() => {
     editor.view.focus();
     editor.commands.setTextSelection(editor.state.doc.content.size - 1);

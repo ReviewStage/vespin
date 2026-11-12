@@ -40,16 +40,22 @@ function startsWith(bytes: Uint8Array, signature: readonly number[], at = 0): bo
  */
 function frameType(bytes: Uint8Array): AudioType | undefined {
   const [first, second] = bytes;
+
   if (first !== 0xff || second === undefined || (second & 0xe0) !== 0xe0) return undefined;
+
   return (second & 0x06) === 0 ? AUDIO_TYPE.AAC : AUDIO_TYPE.MP3;
 }
 
 /** The type the bytes' signature says they are, or nothing for bytes that are none of them. */
 export function sniffAudioType(bytes: Uint8Array): AudioType | undefined {
   if (startsWith(bytes, RIFF) && startsWith(bytes, WAVE, 8)) return AUDIO_TYPE.WAV;
+
   // Note that an ID3 tag opens most MP3s ahead of their first frame.
   if (startsWith(bytes, ID3)) return AUDIO_TYPE.MP3;
+
   if (startsWith(bytes, FTYP, 4)) return AUDIO_TYPE.M4A;
+
   if (startsWith(bytes, OGGS)) return AUDIO_TYPE.OGG;
+
   return frameType(bytes);
 }

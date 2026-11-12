@@ -3,6 +3,7 @@ import { keptImageOf, lineParts, receivedPartsOf } from "@repo/database/models/a
 import { COALESCED_LINE_SEPARATOR } from "@repo/database/models/message-reads";
 import { AGENT_ATTACHMENT_TYPE } from "@repo/features/agent-wire";
 import { PICTURE_OMISSION } from "@repo/features/conversation-picture-wire";
+import { Match } from "effect";
 import { test } from "vitest";
 import { type MessageReceivedPart, receivedMessage, turnContent } from "./attached-files.js";
 
@@ -36,15 +37,19 @@ test("the harness is handed the words, then the text files, then the images and 
     picture("note.png"),
     textFile("note.txt"),
   ]);
+
   assert.ok(Array.isArray(handed));
 
   assert.deepEqual(
     handed.map((part) =>
-      part.type === "text"
-        ? (/Attached file: (\S+)/u.exec(part.text)?.[1] ?? part.text)
-        : part.type === "file"
-          ? part.filename
-          : part.type,
+      Match.value(part).pipe(
+        Match.when(
+          { type: "text" },
+          (text) => /Attached file: (\S+)/u.exec(text.text)?.[1] ?? text.text,
+        ),
+        Match.when({ type: "file" }, (file) => file.filename),
+        Match.orElse((other) => other.type),
+      ),
     ),
     ["Match these.", "brief.txt", "note.txt", "brief.png", "note.png"],
   );
@@ -53,12 +58,16 @@ test("the harness is handed the words, then the text files, then the images and 
 /** What a session is handed, each part by what a reader tells it by: its words, a text file's name, or a file's. */
 function handedOrder(handed: ReturnType<typeof turnContent>): string[] {
   assert.ok(Array.isArray(handed));
+
   return handed.map((part) =>
-    part.type === "text"
-      ? (/Attached file: (\S+)/u.exec(part.text)?.[1] ?? part.text)
-      : part.type === "file"
-        ? (part.filename ?? part.mediaType)
-        : part.type,
+    Match.value(part).pipe(
+      Match.when(
+        { type: "text" },
+        (text) => /Attached file: (\S+)/u.exec(text.text)?.[1] ?? text.text,
+      ),
+      Match.when({ type: "file" }, (file) => file.filename ?? file.mediaType),
+      Match.orElse((other) => other.type),
+    ),
   );
 }
 
@@ -107,27 +116,32 @@ test.each([
         ? textFile(name)
         : picture(name),
   );
+
   assert.deepEqual(handedOrder(turnContent(words, attachments)), order);
 });
 
 /** A message as the retired runtime's receipt listed it: each text part as handed, and each file staged, by its name and type with no bytes. */
 function receiptOf(handed: ReturnType<typeof turnContent>): MessageReceivedPart[] {
   assert.ok(Array.isArray(handed));
+
   return handed.map((part): MessageReceivedPart => {
     if (part.type === "text") return { type: "text", text: part.text };
     assert.ok(part.type === "file");
     const name = part.filename === undefined ? undefined : { filename: part.filename };
+
     return { type: "file", mediaType: part.mediaType, ...name };
   });
 }
 
 test("each image is handed with the line naming what was kept of it, which the retired runtime's receipt is matched by as the journal keeps it, and which a receipt's own row reads back onto the image rather than into its words", () => {
   const id = "0b7c6a52-3f1d-4c8e-9a40-5d2e1f7b9c33";
+
   const attachments = [
     { ...picture("flow.png"), kept: { id } },
     { ...picture("huge.png"), kept: { omitted: PICTURE_OMISSION.LIMIT } },
     { name: "spec.pdf", mediaType: AGENT_ATTACHMENT_TYPE.PDF, data: PNG },
   ];
+
   const handed = turnContent("Match these.", attachments);
   const received = receivedMessage({ message: "", parts: receiptOf(handed) });
 
@@ -159,6 +173,7 @@ test("each image is handed with the line naming what was kept of it, which the r
 
 test("words spelled like the line are words where no image comes just before them", () => {
   const line = "Image flow.png is attachment 0b7c6a52-3f1d-4c8e-9a40-5d2e1f7b9c33";
+
   const received = receivedMessage({
     message: "",
     parts: [

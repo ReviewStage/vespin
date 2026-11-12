@@ -6,7 +6,7 @@ import {
   SCROLL_OVERSCROLL,
   SCROLL_SIZE,
   ScrollArea,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   TEXT_ELEMENT,
   TEXT_VARIANT,
@@ -50,6 +50,7 @@ function retentionCellStyle(share: number): React.CSSProperties {
     RETENTION_FILL_FLOOR_PERCENT,
     Math.round(share * RETENTION_FILL_CEILING_PERCENT),
   );
+
   return {
     ...RETENTION_CELL_BOX,
     backgroundColor: `color-mix(in oklab, var(--ui-color-chart-1) ${fill}%, transparent)`,
@@ -61,6 +62,7 @@ function RetentionCell({ cell }: { cell: AdminRetentionCell }): React.JSX.Elemen
   const provisional = cell.inProgress
     ? "border border-dashed border-(--ui-color-text-muted)/60"
     : "";
+
   if (cell.share === null) {
     return (
       <div
@@ -72,10 +74,13 @@ function RetentionCell({ cell }: { cell: AdminRetentionCell }): React.JSX.Elemen
       </div>
     );
   }
+
   const percent = formatPercent(cell.share);
+
   const title = `${formatCount(cell.activeAccounts)} ${
     cell.activeAccounts === 1 ? "account" : "accounts"
   } active${cell.inProgress ? " so far this week" : ""}`;
+
   if (cell.share === 0) {
     return (
       <div
@@ -87,6 +92,7 @@ function RetentionCell({ cell }: { cell: AdminRetentionCell }): React.JSX.Elemen
       </div>
     );
   }
+
   return (
     <div
       className={`flex items-center justify-center rounded-sm ${provisional}`}
@@ -123,6 +129,7 @@ export function RetentionGrid({
   retention: AdminMetrics["retention"];
 }): React.JSX.Element {
   const totalAccounts = retention.cohorts.reduce((total, cohort) => total + cohort.size, 0);
+
   if (totalAccounts === 0) {
     return (
       <ChartFrame>
@@ -132,6 +139,7 @@ export function RetentionGrid({
   }
 
   const offsets = Array.from({ length: retention.weeks }, (_, offset) => offset);
+
   return (
     <ChartFrame>
       {/* Note that the scroller bleeds across the card's inset, because cells
@@ -172,6 +180,7 @@ export function RetentionGrid({
                     </div>
                     {offsets.map((offset) => {
                       const cell = cohort.cells[offset];
+
                       return cell ? (
                         <RetentionCell key={offset} cell={cell} />
                       ) : (
@@ -200,7 +209,7 @@ export function RetentionGridSkeleton(): React.JSX.Element {
       <PlotBox
         height={`calc(var(--ui-type-caption-leading) + ${RETENTION_SKELETON_WEEKS} * (${RETENTION_ROW_HEIGHT} + ${RETENTION_GAP}))`}
       >
-        <Skeleton shape={SKELETON_SHAPE.BLOCK} />
+        <Skeleton kind={SKELETON_KIND.BLOCK} />
       </PlotBox>
     </ChartFrame>
   );

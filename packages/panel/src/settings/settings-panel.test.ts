@@ -88,6 +88,7 @@ test("the Account page lists none of the other pages, which the Settings sidebar
   act(() => root.render(withQueryClient(createElement(SettingsPanel, SETTINGS))));
 
   const pressed = [...container.querySelectorAll("button")].map((button) => button.textContent);
+
   for (const page of SETTINGS_PAGE_LIST.filter((each) => each !== SETTINGS_VIEW.ACCOUNT)) {
     assert.equal(
       pressed.some((words) => words?.includes(settingsPageOf(page).title)),
@@ -124,6 +125,7 @@ test("This Mac says under Ask every time where macOS refused Vespin's last notif
   const root = createRoot(container);
   roots.push(root);
   let opened = 0;
+
   const drawn = (status: (typeof NOTIFICATIONS_STATUS)[keyof typeof NOTIFICATIONS_STATUS]) => {
     act(() =>
       root.render(
@@ -137,15 +139,19 @@ test("This Mac says under Ask every time where macOS refused Vespin's last notif
         ),
       ),
     );
+
     return container.textContent ?? "";
   };
+
   const offLine = "macOS has notifications off for Vespin";
 
   assert.equal(drawn(NOTIFICATIONS_STATUS.ON).includes(offLine), false);
   assert.equal(drawn(NOTIFICATIONS_STATUS.OFF).includes(offLine), true);
+
   const open = [...container.querySelectorAll("button")].find(
     (button) => button.textContent === "Open System Settings",
   );
+
   act(() => open?.click());
   assert.equal(opened, 1);
 });
@@ -170,9 +176,11 @@ test("the web's Preferences page asks a browser never asked to show the notifica
       ),
     ),
   );
+
   const allow = [...container.querySelectorAll("button")].find(
     (button) => button.textContent === "Allow notifications",
   );
+
   act(() => allow?.click());
 
   assert.equal(asked, 1);

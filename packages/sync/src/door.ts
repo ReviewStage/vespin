@@ -54,6 +54,7 @@ export function declaredMethod<Params, Context, Input, Refusal, Row extends obje
 ): DeclaredHandler<(params: Params, context: Context) => Effect.Effect<Answer, Refusal>> {
   const handler = (params: Params, context: Context) =>
     Effect.flatMap(input(params, context), (read) => pool.write(declaration, read));
+
   // SAFETY: the brand is a type no value carries, and it is given only here and in `declaredWrite`, each to a handler built from a write declaration.
   return handler as DeclaredHandler<typeof handler>;
 }
@@ -84,15 +85,18 @@ export function declaredWrite<
   } = {},
 ): DeclaredHandler<(input: Input) => Effect.Effect<Output, ReadRefusal | AnswerRefusal>> {
   // SAFETY: with no `read`, `Input` is the write's own input, by its default.
-  const read = steps.read ?? ((input: Input) => Effect.succeed(input as unknown as WriteInput));
+  const read = steps.read ?? ((input: Input) => Effect.succeed(input as Input & WriteInput));
+
   // SAFETY: with no `answered`, `Output` is the write's own answer, by its default.
   const answered =
-    steps.answered ?? ((answer: Answer) => Effect.succeed(answer as unknown as Output));
+    steps.answered ?? ((answer: Answer) => Effect.succeed(answer as Answer & Output));
+
   const handler = (input: Input) =>
     read(input).pipe(
       Effect.flatMap((written) => pool.write(declaration, written)),
       Effect.flatMap(answered),
     );
+
   // SAFETY: the brand is a type no value carries, and it is given only here and in `declaredMethod`, each to a handler built from a write declaration.
   return handler as DeclaredHandler<typeof handler>;
 }

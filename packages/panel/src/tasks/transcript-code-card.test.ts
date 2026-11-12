@@ -42,6 +42,7 @@ async function drawn(element: ReactElement): Promise<HTMLElement> {
   await act(async () => {
     for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
   });
+
   return container;
 }
 
@@ -63,8 +64,11 @@ function buttonNamed(drawing: HTMLElement, name: string): HTMLButtonElement | un
 /** The lines the card shows now, less what it holds `hidden` and the newline that closes the last. */
 function shownLines(drawing: HTMLElement): string[] {
   const body = drawing.querySelector(".ui-code-card pre")?.cloneNode(true);
+
   if (!(body instanceof Element)) return assert.fail("No code card");
+
   for (const hidden of body.querySelectorAll("[hidden]")) hidden.remove();
+
   return (body.textContent ?? "").replace(/\n$/u, "").split("\n");
 }
 
@@ -99,6 +103,7 @@ test("Copy copies the whole fence, even while it is cut", async () => {
 
 test("an Inbox item's fence, drawn as a document, is the same card", async () => {
   const code = block(45);
+
   const drawing = await drawn(
     createElement(TranscriptWords, { text: fenced(code), asDocument: true }),
   );

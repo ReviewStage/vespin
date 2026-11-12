@@ -1,39 +1,32 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { type AgentNotice, NOTICE_KIND } from "@repo/host/agent-notices";
 import { NOTIFICATIONS_STATUS, type NotificationsStatus } from "@repo/settings/settings-controls";
-import { afterEach, test, vi } from "vitest";
+import { afterEach, test } from "vitest";
 import { electronNoticeDoors } from "./notice-doors";
 
 /**
  * A command ask's notification as macOS meets it: its answer from macOS says
  * whether notifications are on for the app, and its click brings the app forward.
  *
- * Note that Electron's module is replaced whole, because it is the operating
- * system's door and answers nothing outside an Electron process.
+ * Note that Electron's doors are stood in for, because they are the
+ * operating system's and answer nothing outside an Electron process.
  */
 
-const { posted, FakeNotification } = await vi.hoisted(async () => {
-  const { EventEmitter } = await import("node:events");
-  const posted: InstanceType<typeof FakeNotification>[] = [];
-  /** A notification as macOS holds it: shown once asked, and answering with Electron's events. */
-  class FakeNotification extends EventEmitter {
-    static isSupported = () => true;
-    shown = false;
-    constructor(readonly options: { title: string; body: string }) {
-      super();
-      posted.push(this);
-    }
-    show(): void {
-      this.shown = true;
-    }
-  }
-  return { posted, FakeNotification };
-});
+const posted: FakeNotification[] = [];
 
-vi.mock("electron", () => ({
-  app: { setBadgeCount: () => true },
-  Notification: FakeNotification,
-}));
+/** A notification as macOS holds it: shown once asked, and answering with Electron's events. */
+class FakeNotification extends EventEmitter {
+  static isSupported = () => true;
+  shown = false;
+  constructor(readonly options: { title: string; body: string }) {
+    super();
+    posted.push(this);
+  }
+  show(): void {
+    this.shown = true;
+  }
+}
 
 const ignore = () => undefined;
 
@@ -50,11 +43,14 @@ function askNotice(askId: string, onClick: () => void = ignore): AgentNotice {
 /** The doors, with every answer from macOS they hand on gathered. */
 function doors() {
   const answers: NotificationsStatus[] = [];
+
   const surface = electronNoticeDoors({
     onAnswered: (status) => answers.push(status),
     panels: { pushToOne: ignore },
     report: ignore,
+    system: { app: { setBadgeCount: () => true }, Notification: FakeNotification },
   });
+
   return { surface, answers };
 }
 

@@ -86,13 +86,16 @@ export function heldFetch<Slice extends SliceKeyed, Key>(options: {
 }): Effect.Effect<HeldFetch<Key, AppHostReads[Slice]>, never, Scope.Scope> {
   return Effect.gen(function* () {
     type Rows = AppHostReads[Slice];
+
     const loops = MutableHashMap.empty<Key, FetchLoop<Rows>>();
+
     /** `key`'s loop asked once more, after any ask out now lands; nothing where nothing follows it. */
     const askAgain = (key: Key) =>
       Option.match(MutableHashMap.get(loops, key), {
         onNone: () => Effect.void,
         onSome: (loop) => Effect.asVoid(Queue.offer(loop.again, undefined)),
       });
+
     /** `key` asked now and again on each cause after, until let go. */
     const follow = (key: Key, answers: HeldAnswers<Rows>): Effect.Effect<void> =>
       Effect.scoped(
@@ -104,6 +107,7 @@ export function heldFetch<Slice extends SliceKeyed, Key>(options: {
             asking: false,
             overtaken: false,
           };
+
           MutableHashMap.set(loops, key, loop);
           // Note that a Try again waiting on an ask this loop will never make is answered as it ends, so none waits for good.
           yield* Effect.addFinalizer(() =>
@@ -111,36 +115,43 @@ export function heldFetch<Slice extends SliceKeyed, Key>(options: {
               if (Option.getOrUndefined(MutableHashMap.get(loops, key)) === loop) {
                 MutableHashMap.remove(loops, key);
               }
+
               return landed(loop.waiting);
             }),
           );
+
           // Note that each Try again this ask took is answered however it ends, an interruption as the key is let go among them, so none waits for good.
           const ask = Effect.suspend(() => {
             const landing = loop.waiting;
             loop.waiting = [];
             loop.asking = true;
             loop.overtaken = false;
+
             return Effect.gen(function* () {
               const rows = yield* options.fetch(key, answers.rows());
               loop.asking = false;
+
               // Note that an answer asked before a write that answered the read whole is older than what that write laid.
               if (loop.overtaken) loop.overtaken = false;
               else if (Option.isSome(rows)) answers.answered(rows.value);
               else answers.unanswered();
             }).pipe(Effect.ensuring(landed(landing)));
           });
+
           const ticks: Stream.Stream<unknown> =
             options.every === undefined
               ? Stream.empty
               : Stream.fromSchedule(Schedule.spaced(options.every)).pipe(
                   Stream.filter(() => slice.held(key)),
                 );
+
           yield* Stream.make(undefined).pipe(
             Stream.concat(Stream.merge(Stream.fromQueue(loop.again), ticks)),
             Stream.runForEach(() => ask),
           );
         }),
       );
+
     const slice: HeldSlice<Key> = yield* heldSlice<Slice, Key>({
       empty: options.empty,
       path: options.path,
@@ -148,16 +159,21 @@ export function heldFetch<Slice extends SliceKeyed, Key>(options: {
       follow,
       tell: options.tell,
     });
+
     /** The keys a window holds that `named` picks. */
     const heldKeys = (named: (key: Key) => boolean) =>
       [...MutableHashMap.keys(loops)].filter((key) => slice.held(key) && named(key));
+
     const wake = (named: (key: Key) => boolean) =>
       Effect.suspend(() => Effect.forEach(heldKeys(named), askAgain, { discard: true }));
+
     /** `key` asked again, telling it unread meanwhile where it had failed, answering once that ask has landed. */
     const retry = (key: Key) =>
       Effect.suspend(() => {
         const loop = Option.getOrUndefined(MutableHashMap.get(loops, key));
+
         if (loop === undefined) return Effect.void;
+
         return Effect.gen(function* () {
           const asked = yield* Deferred.make<void>();
           loop.waiting.push(asked);
@@ -166,13 +182,16 @@ export function heldFetch<Slice extends SliceKeyed, Key>(options: {
           yield* Deferred.await(asked);
         });
       });
+
     yield* Effect.forkScoped(Stream.runForEach(yield* options.focus.heard, () => wake(() => true)));
+
     return {
       hold: (key) =>
         Effect.gen(function* () {
           // Note that a key let go lately stands with its last answer, which a window holding it again draws while it is asked again.
           const again = !slice.held(key) && MutableHashMap.has(loops, key);
           yield* slice.hold(key);
+
           if (again) yield* askAgain(key);
         }),
       retry,
@@ -184,8 +203,10 @@ export function heldFetch<Slice extends SliceKeyed, Key>(options: {
       answered: (key, rows) =>
         Effect.sync(() => {
           const loop = Option.getOrUndefined(MutableHashMap.get(loops, key));
+
           if (loop === undefined) return;
           loop.answers.answered(rows);
+
           if (loop.asking) loop.overtaken = true;
         }),
       open: slice.open,
@@ -218,31 +239,40 @@ export function accountHeld(
     let held = false;
     /** How many windows' scopes stand on the hold (`hold`). */
     let holders = 0;
+
     const take = Effect.suspend(() => {
       const userId = accountId();
+
       return userId === undefined
         ? FiberHandle.clear(hold)
         : FiberHandle.run(hold, Effect.scoped(Effect.andThen(read.hold(userId), Effect.never)));
     });
+
     /** The windows' hold, taken under the account signed in now; none while nobody is. */
     const follow = Effect.suspend(() => {
       held = true;
+
       return take;
     });
+
     /** The windows' hold let go. */
     const unfollow = Effect.suspend(() => {
       held = false;
+
       return FiberHandle.clear(hold);
     });
+
     return {
       hold: Effect.acquireRelease(
         Effect.suspend(() => {
           holders += 1;
+
           return holders === 1 ? follow : Effect.void;
         }),
         () =>
           Effect.suspend(() => {
             holders -= 1;
+
             return holders === 0 ? unfollow : Effect.void;
           }),
       ),

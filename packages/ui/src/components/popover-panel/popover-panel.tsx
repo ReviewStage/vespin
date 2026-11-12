@@ -61,6 +61,7 @@ const PANEL = [
   "ui-popover-panel flex flex-col rounded-menu border border-border-strong bg-popover text-popover-foreground shadow-menu animate-menu-in focus-visible:outline-none *:shrink-0 data-ending-style:pointer-events-none data-ending-style:animate-menu-leave",
   "data-[look=card]:max-h-popover-room data-[look=card]:gap-block-gap data-[look=card]:overflow-x-hidden data-[look=card]:overflow-y-auto data-[look=card]:overscroll-contain data-[look=card]:p-card-inset-snug data-[look=card]:text-caption",
 ].join(" ");
+
 const HEAD = "-mr-2 flex items-center justify-between gap-control-gap";
 const TITLE = "m-0 text-section font-section";
 const HEAD_ACTIONS = "flex flex-none items-center";
@@ -130,6 +131,7 @@ function CloseButton({
   onPress: () => void;
 }): React.JSX.Element {
   const button = <IconButton icon={<CloseIcon />} label={label} onClick={onPress} />;
+
   return <Hint label={label}>{button}</Hint>;
 }
 
@@ -190,6 +192,7 @@ export function PopoverPanel({
   const panel = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
   const { mounted, leaving, ref: held } = useDisclosure(open);
+
   const drawn = useCallback(
     (node: HTMLDivElement | null) => {
       panel.current = node;
@@ -222,8 +225,10 @@ export function PopoverPanel({
     if (event.key === "Escape" && !isComposingKey(event)) {
       event.stopPropagation();
       onDismiss();
+
       return;
     }
+
     onKeyDown?.(event);
   };
 
@@ -243,6 +248,7 @@ export function PopoverPanel({
       onBlur={(event) => {
         // A panel on its way out has closed already, so focus leaving it is no news.
         if (leaving) return;
+
         if (panel.current !== null && !inside(panel.current, event.relatedTarget)) {
           onLeave(event.relatedTarget);
         }

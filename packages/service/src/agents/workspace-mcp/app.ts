@@ -156,7 +156,9 @@ const MessageSchema = Schema.Struct({
   method: Schema.optionalKey(Schema.String),
   params: Schema.optionalKey(ParamsSchema),
 });
+
 type Message = typeof MessageSchema.Type;
+
 type RequestId = typeof IdSchema.Type;
 
 const InitializeParamsSchema = Schema.Struct({ protocolVersion: Schema.String });
@@ -190,6 +192,7 @@ function rpcResponse(
   const body = Result.isSuccess(answer)
     ? { jsonrpc: JSON_RPC_VERSION, id, result: answer.success }
     : { jsonrpc: JSON_RPC_VERSION, id, error: answer.failure };
+
   return HttpServerResponse.jsonUnsafe(body, {
     status:
       Result.isSuccess(answer) || id !== null
@@ -214,6 +217,7 @@ function negotiatedVersion(asked: string): string {
 /** Whether a request names a protocol version the server does not speak; one naming none is taken as the transport's default. */
 function unspokenVersion(request: Request): boolean {
   const named = request.headers.get(PROTOCOL_VERSION_HEADER);
+
   return named !== null && !WORKSPACE_MCP_PROTOCOL_VERSIONS.some((version) => version === named);
 }
 
@@ -311,24 +315,32 @@ function callWorkspaceTool(
   params: UnparsedWireValue,
 ): Effect.Effect<RpcAnswer, never, WorkspaceMcpServices> {
   const call = readEither(CallParamsSchema, DROPPING_EXCESS)(params);
+
   if (Result.isFailure(call)) {
     return Effect.succeed(rpcFailure(JSON_RPC_ERROR.INVALID_PARAMS, "Invalid tools/call params"));
   }
+
   const { name } = call.success;
   const renamed = RENAMED_TOOL.get(name);
+
   if (renamed !== undefined)
     return Effect.succeed(Result.succeed(renamedToolResult(name, renamed)));
+
   if (!isServedTool(name)) {
     return Effect.succeed(rpcFailure(JSON_RPC_ERROR.INVALID_PARAMS, `Unknown tool: ${name}`));
   }
+
   const input = fieldOf(params, "arguments") ?? {};
+
   return Effect.flatMap(workspaceMcpDoorSeams, (seams) => {
     const sandbox = doors.sandbox(admitted);
+
     const context = {
       sandbox: sandbox.files,
       callKey: workspaceMcpCallKey(admitted, name, input),
       seams,
     };
+
     return callTool(admitted, name, input, context);
   }).pipe(
     Effect.provide(Layer.merge(doors.browser, doors.agentSandbox)),
@@ -358,6 +370,7 @@ function listWorkspaceTools(
         ...listedTool(tool, standing),
         _meta: tool.alwaysLoad ? ALWAYS_LOADED_META : TOOL_META,
       }));
+
       return Result.succeed({ tools });
     }),
     Effect.catchCause((cause) =>
@@ -410,12 +423,15 @@ function integrationServer(connection: string): McpServer {
       ),
     callTool: (admitted, params) => {
       const call = readEither(CallParamsSchema, DROPPING_EXCESS)(params);
+
       if (Result.isFailure(call)) {
         return Effect.succeed(
           rpcFailure(JSON_RPC_ERROR.INVALID_PARAMS, "Invalid tools/call params"),
         );
       }
+
       const input = fieldOf(params, "arguments");
+
       return Effect.map(
         callConnectionTool(admitted, connection, call.success.name, isRecord(input) ? input : {}),
         (answered) =>
@@ -437,11 +453,13 @@ function answerRequest(
   switch (method) {
     case MCP_METHOD.INITIALIZE: {
       const asked = readEither(InitializeParamsSchema, DROPPING_EXCESS)(params);
+
       if (Result.isFailure(asked)) {
         return Effect.succeed(
           rpcFailure(JSON_RPC_ERROR.INVALID_PARAMS, "Invalid initialize params"),
         );
       }
+
       return Effect.map(server.instructions(admitted), (instructions) =>
         Result.succeed({
           protocolVersion: negotiatedVersion(asked.success.protocolVersion),
@@ -451,6 +469,7 @@ function answerRequest(
         }),
       );
     }
+
     case MCP_METHOD.PING:
       return Effect.succeed(Result.succeed({}));
     case MCP_METHOD.TOOLS_LIST:
@@ -472,9 +491,11 @@ function answerMessage(
   raw: UnparsedWireValue,
 ): Effect.Effect<HttpServerResponse.HttpServerResponse, never, WorkspaceMcpServices> {
   const { id, method } = message;
+
   if (id === undefined || method === undefined) {
     return Effect.succeed(HttpServerResponse.empty({ status: HOSTED_HTTP_STATUS.ACCEPTED }));
   }
+
   return Effect.map(
     answerRequest(server, admitted, method, fieldOf(raw, "params") ?? {}),
     (answer) => rpcResponse(id, answer),
@@ -493,9 +514,11 @@ function bearerRefused(): HttpServerResponse.HttpServerResponse {
 function integrationServerOf(request: Request): Option.Option<McpServer> {
   const prefix = `${WORKSPACE_INTEGRATION_MCP_PATH}/`;
   const { pathname } = new URL(request.url);
+
   if (!pathname.startsWith(prefix)) return Option.none();
   // Note that a connection's name is lower-case letters, digits, and hyphens alone, so its segment needs no decoding.
   const connection = pathname.slice(prefix.length);
+
   return integrationConnectionOf(connection) === undefined
     ? Option.none()
     : Option.some(integrationServer(connection));
@@ -510,44 +533,57 @@ const mcpEndpoint = /* @__PURE__ */ Effect.fn("web/workspaceMcpEndpoint")(functi
   HttpServerRequest.HttpServerRequest | WorkspaceMcpServices
 > {
   const incoming = yield* HttpServerRequest.HttpServerRequest;
+
   if (incoming.method !== HTTP_METHOD.POST) {
     return HttpServerResponse.empty({
       status: HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED,
       headers: { allow: HTTP_METHOD.POST },
     });
   }
+
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
   const bearer = presentedBearer(request);
+
   if (bearer === undefined) return bearerRefused();
   const admitted = yield* hostedStoreOrUnavailable(admitRunnerBearer(bearer));
+
   if (Option.isNone(admitted)) return bearerRefused();
   const server = serverOf(request);
+
   if (Option.isNone(server)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   if (unspokenVersion(request)) {
     return rpcResponse(
       null,
       rpcFailure(JSON_RPC_ERROR.INVALID_REQUEST, "Unsupported MCP-Protocol-Version"),
     );
   }
+
   const parsed = yield* Effect.result(
     Effect.flatMap(readBodyBytesEffect(MAX_BODY_BYTES), parseJsonBytes),
   );
+
   if (Result.isFailure(parsed)) {
     if (parsed.failure.error !== HOSTED_REFUSAL.INVALID_REQUEST.error) {
       return yield* Effect.fail(parsed.failure);
     }
+
     return rpcResponse(null, rpcFailure(JSON_RPC_ERROR.PARSE_ERROR, "Parse error"));
   }
+
   const message = readEither(MessageSchema, DROPPING_EXCESS)(parsed.success);
+
   if (Result.isFailure(message)) {
     return rpcResponse(null, rpcFailure(JSON_RPC_ERROR.INVALID_REQUEST, "Invalid Request"));
   }
+
   return yield* answerMessage(server.value, admitted.value, message.success, parsed.success);
 });
 
 /** The group: our server over the sandbox door and the browser the edge composes, each integration's server beside it, and the hosted vocabulary's own refusal for any other path. */
 export function workspaceMcpApp(doors: WorkspaceMcpDoors): WebRoutes<WorkspaceMcpServices> {
   const server = Option.some(workspaceServer(doors));
+
   return Layer.mergeAll(
     HttpRouter.add(ANY_METHOD, WORKSPACE_MCP_PATH, hostedRefusing(mcpEndpoint(() => server))),
     HttpRouter.add(

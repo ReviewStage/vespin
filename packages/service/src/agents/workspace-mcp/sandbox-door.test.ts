@@ -25,10 +25,12 @@ const SESSION = "claude-code-fixture";
 /** A temporary directory standing in for the sandbox's disk, holding the files given by their path under it. */
 function disk(files: Readonly<Record<string, Uint8Array>>): string {
   const root = mkdtempSync(join(tmpdir(), "sandbox-door-"));
+
   for (const [path, bytes] of Object.entries(files)) {
     mkdirSync(join(root, path, ".."), { recursive: true });
     writeFileSync(join(root, path), bytes);
   }
+
   return root;
 }
 
@@ -41,9 +43,11 @@ function standing(root: string) {
         encoding: "utf8",
         maxBuffer: 64 * 1024 * 1024,
       });
+
       return { exitCode: ran.status ?? 1, stdout: ran.stdout, stderr: ran.stderr };
     },
   });
+
   sandbox.stand({
     name: "sbx-stopped",
     tags: { sessionId: SESSION },
@@ -51,6 +55,7 @@ function standing(root: string) {
     createdAt: 0,
   });
   const up = sandbox.stand({ name: "sbx-up", tags: { sessionId: SESSION }, createdAt: 1 });
+
   return { sandbox, up };
 }
 
@@ -66,6 +71,7 @@ const doorsOver = (admitted: AdmittedConversation) =>
   Effect.map(Effect.context<Sandbox>(), (context) => {
     const run = <A, E>(effect: Effect.Effect<A, E, Sandbox>) =>
       Effect.runPromiseWith(context)(effect);
+
     return agentSandboxDoors(run, sandboxMachineLayer({ run }))(admitted);
   });
 
@@ -76,6 +82,7 @@ const doorOver = (admitted: AdmittedConversation) =>
 /** A stream read whole. */
 async function bytesOf(stream: ReadableStream<Uint8Array> | null): Promise<number[] | null> {
   if (stream === null) return null;
+
   return [...new Uint8Array(await new Response(stream).arrayBuffer())];
 }
 
@@ -88,8 +95,10 @@ it.effect(
       const door = yield* doorOver(ADMITTED).pipe(Effect.provide(memory.layer));
 
       const sandbox = yield* Effect.promise(() => door());
+
       const readOf = (path: string) =>
         Effect.promise(async () => bytesOf(await sandbox.readFile({ path })));
+
       const read = yield* readOf(join(root, "repository/shot.png"));
       const missing = yield* readOf(join(root, "repository/none.png"));
       const directory = yield* readOf(join(root, "repository"));
@@ -109,6 +118,7 @@ it.effect("a file past every tool's bound is read only one byte past it", () =>
     const door = yield* doorOver(ADMITTED).pipe(Effect.provide(memory.layer));
 
     const sandbox = yield* Effect.promise(() => door());
+
     const read = yield* Effect.promise(async () =>
       bytesOf(await sandbox.readFile({ path: join(root, "big.bin") })),
     );
@@ -120,6 +130,7 @@ it.effect("a file past every tool's bound is read only one byte past it", () =>
 it.effect("a conversation that records no session opens no door", () =>
   Effect.gen(function* () {
     const { sandbox: memory } = standing(tmpdir());
+
     const door = yield* doorOver({ ...ADMITTED, runtimeSessionId: undefined }).pipe(
       Effect.provide(memory.layer),
     );

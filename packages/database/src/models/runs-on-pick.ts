@@ -76,9 +76,11 @@ function pickOf(row: typeof PickRowSchema.Type): Option.Option<TaskRunsOnRequest
   if (row.machine === AGENT_MACHINE.VERCEL) {
     return Option.some({ machine: AGENT_MACHINE.VERCEL });
   }
+
   if (row.machine === AGENT_MACHINE.DEVICE && row.deviceId !== null) {
     return Option.some({ machine: AGENT_MACHINE.DEVICE, deviceId: row.deviceId });
   }
+
   return Option.none();
 }
 

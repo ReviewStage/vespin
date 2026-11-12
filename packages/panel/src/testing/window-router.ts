@@ -49,21 +49,27 @@ export function windowRouter(
       case "PUSH":
         entries = [...entries.slice(0, at + 1), location.href];
         at = entries.length - 1;
+
         return;
       case "REPLACE":
         entries = entries.with(at, location.href);
+
         return;
       case "BACK":
         at = clamp(at - 1);
+
         return;
       case "FORWARD":
         at = clamp(at + 1);
+
         return;
       case "GO":
         at = clamp(at + action.index);
+
         return;
     }
   });
+
   return {
     history,
     addresses: () => entries,
@@ -80,6 +86,7 @@ export function windowRouter(
 /** Fills the window's routed exits' leave with `leave`, as the window's root fills it from its history. */
 function LeavesBy({ leave }: { readonly leave: () => void }): null {
   useRoutedExits().leave = leave;
+
   return null;
 }
 
@@ -92,6 +99,7 @@ export function leavingBy(leave: () => void): ReactElement {
 function HoldsInboxChoice({ chosen }: { readonly chosen: InboxChoice }): null {
   const { inboxChoices } = useRoutedMemory();
   useState(() => inboxChoices.setState((held) => new Map(held).set(chosen.itemId, chosen)));
+
   return null;
 }
 

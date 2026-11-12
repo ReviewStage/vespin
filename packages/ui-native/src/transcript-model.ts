@@ -220,6 +220,7 @@ const ERROR_TITLE = "Error";
 /** A block's words cut to the lines its card draws. */
 function cutLines(text: string): string {
   const lines = text.trimEnd().split("\n");
+
   return lines.length <= BLOCK_LINES ? lines.join("\n") : lines.slice(0, BLOCK_LINES).join("\n");
 }
 
@@ -240,9 +241,11 @@ function callBody(
   errorText: string | undefined,
 ): readonly CallBodyBlock[] {
   const error = errorText === undefined ? [] : [{ title: ERROR_TITLE, text: errorText }];
+
   if (input.kind === TOOL_BLOCK.COMMAND) {
     const printed = output === undefined ? "" : readableBlock(output).text.trimEnd();
     const prompt = `${COMMAND_PROMPT}${input.text}`;
+
     return [
       {
         title: BLOCK_TITLE.TERMINAL,
@@ -251,8 +254,10 @@ function callBody(
       ...error,
     ];
   }
+
   const given = readableBlock(input).text;
   const shown = output === undefined ? undefined : shownOutput(output);
+
   const answer =
     errorText !== undefined || shown === undefined
       ? []
@@ -262,6 +267,7 @@ function callBody(
             text: shown.text.trim() === "" ? NO_OUTPUT : cutLines(shown.text),
           },
         ];
+
   return [
     ...(given === "" ? [] : [{ title: BLOCK_TITLE.INPUT, text: cutLines(given) }]),
     ...answer,
@@ -272,6 +278,7 @@ function callBody(
 /** Where a call stands by its state. */
 function standingOf(state: ToolState): CallStanding {
   if (state === TOOL_STATE.OUTPUT_ERROR) return CALL_STANDING.FAILED;
+
   return state === TOOL_STATE.OUTPUT_AVAILABLE ? CALL_STANDING.DONE : CALL_STANDING.RUNNING;
 }
 
@@ -297,6 +304,7 @@ function saidItem(
     line.sentBy === undefined || line.sentBy.userId === reading.readerId
       ? undefined
       : line.sentBy.name;
+
   return {
     ...base,
     kind: TRANSCRIPT_ITEM.SAID,
@@ -323,13 +331,18 @@ function callNaming(
   if (isMadeCallKind(view.kind)) {
     return { line: madeCallLine(view.kind), chip: view.subject === "" ? undefined : view.subject };
   }
+
   const file = calledFile(view.kind, view.files);
+
   const site =
     view.kind === CALL_KIND.WEB_PAGE && view.page !== undefined ? siteName(view.page) : undefined;
+
   const chip = file === undefined ? site : fileName(file);
+
   if (chip === undefined) {
     return { line: callLine(view.kind, view.subject, view.description), chip: undefined };
   }
+
   return { line: { ...callLine(view.kind, moreFiles(view.files), undefined), code: false }, chip };
 }
 
@@ -344,18 +357,24 @@ function openedPullRequest(
   pullRequests: readonly AgentPullRequest[],
 ): readonly TranscriptItem[] {
   const { input, output } = part;
+
   if (part.tool !== AGENT_TOOL.OPEN_PULL_REQUEST || !isRecord(output)) return [];
   const { number, url } = output;
+
   if (!isWireNumber(number) || !isWireString(url)) return [];
   const place = pieceOf(base.place, TRANSCRIPT_PIECE.PULL_REQUEST);
   const held = pullRequests.find((each) => each.number === number && each.url === url);
+
   if (held !== undefined) {
     const { title, state, additions, deletions } = held;
     const kind = TRANSCRIPT_ITEM.PULL_REQUEST;
+
     return [{ ...base, place, kind, number, title, url, state, additions, deletions }];
   }
+
   const title = isRecord(input) && isWireString(input.title) ? input.title : "";
   const draft = isRecord(input) && input.draft === true;
+
   return [
     {
       ...base,
@@ -380,6 +399,7 @@ function callItems(
   const { toggles } = reading;
   const shownSet = showedPictures(part);
   const pictures = shownSet ? shownPicturesOf(part.input, part.output) : [];
+
   const media: readonly ShownMedia[] = [
     ...pictures.flatMap(({ picture, caption, name }) =>
       picture === undefined
@@ -413,6 +433,7 @@ function callItems(
         : [],
     ),
   ];
+
   const mediaItem: readonly TranscriptItem[] =
     media.length === 0
       ? []
@@ -424,16 +445,20 @@ function callItems(
             media,
           },
         ];
+
   // Note that a set of pictures shown stands as its pictures alone, as the panel draws it.
   if (shownSet) return mediaItem;
   const view = toolCallView({ tool: part.tool, input: part.input, output: part.output });
+
   const shown = shownPageVersion({
     tool: part.tool,
     callId: part.callId,
     input: part.input,
     output: part.output,
   });
+
   const open = toggles.calls.has(part.callId);
+
   const call: TranscriptItem = {
     ...base,
     kind: TRANSCRIPT_ITEM.CALL,
@@ -445,6 +470,7 @@ function callItems(
     open,
     body: open ? callBody(view.input, view.output, part.errorText) : [],
   };
+
   const page: readonly TranscriptItem[] =
     shown === undefined
       ? []
@@ -458,6 +484,7 @@ function callItems(
             version: shown.version,
           },
         ];
+
   return [call, ...page, ...openedPullRequest(part, base, reading.pullRequests), ...mediaItem];
 }
 
@@ -493,8 +520,10 @@ function rowItems(
       place: { message, row: row.key, member: undefined, piece: TRANSCRIPT_PIECE.LINE },
       depth,
     };
+
     if (row.kind === TURN_ROW.BLOCK) return partItems(row.block, base, reading);
     const open = row.open !== foldTurned(reading.toggles, base.place);
+
     const line: TranscriptItem = {
       ...base,
       kind: TRANSCRIPT_ITEM.FOLD,
@@ -502,10 +531,13 @@ function rowItems(
       open,
       running: row.running,
     };
+
     if (!open) return [line];
+
     const held = row.blocks.flatMap((block, at) =>
       partItems(block, { place: { ...base.place, member: at }, depth: depth + 1 }, reading),
     );
+
     return [line, ...held];
   });
 }
@@ -521,12 +553,15 @@ export function transcriptItems(
   reading: TranscriptReading,
 ): readonly TranscriptItem[] {
   const placed = placedMessages(messages);
+
   const items = placed.flatMap(({ message, arrived }, at): readonly TranscriptItem[] => {
     if (message.role === MESSAGE_ROLE.USER) {
       return [saidItem(message, { place: linePlace(message.id, message.id), depth: 0 }, reading)];
     }
+
     const moving = reading.writing && at === placed.length - 1;
     const rows = agentRows(message, moving, { arrived });
+
     const turn = turnStretches(rows).flatMap((stretch) =>
       stretch.line === undefined
         ? rowItems(stretch.rows, message.id, 0, reading)
@@ -538,7 +573,9 @@ export function transcriptItems(
             ),
           ],
     );
+
     const { startedAt, finishedAt } = message;
+
     // Note that a turn that finished ends on how long it worked, as the panel's turn does.
     const foot: readonly TranscriptItem[] =
       moving || startedAt === undefined || finishedAt === undefined
@@ -551,10 +588,14 @@ export function transcriptItems(
               words: workedForText(startedAt, finishedAt, reading.now),
             },
           ];
+
     return [...turn, ...foot];
   });
+
   const last = placed.at(-1)?.message.id;
+
   if (!reading.writing || last === undefined) return items;
+
   return [
     ...items,
     {
@@ -570,12 +611,17 @@ export function transcriptItems(
 export function toggledAt(toggles: TranscriptToggles, item: TranscriptItem): TranscriptToggles {
   if (item.kind === TRANSCRIPT_ITEM.CALL) {
     const calls = new Set(toggles.calls);
+
     if (!calls.delete(item.callId)) calls.add(item.callId);
+
     return { ...toggles, calls };
   }
+
   const { message, row } = item.place;
   const held = new Set(toggles.folds.get(message));
+
   if (!held.delete(row)) held.add(row);
+
   return { ...toggles, folds: new Map(toggles.folds).set(message, held) };
 }
 

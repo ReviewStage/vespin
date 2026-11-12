@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+
+import type { WireRecord } from "@repo/wire";
+import { Predicate } from "effect";
 import { act } from "react";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
 
@@ -24,25 +27,6 @@ declare global {
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
-/** Every root the pages mount themselves on, to unmount once each test ends. */
-const mounted = vi.hoisted(() => ({ roots: [] as Array<{ unmount(): void }> }));
-
-// Note that a page mounts its own root as its module loads, so React's
-// `createRoot` is wrapped to keep each one, and nothing else about it
-// changes: a pressed button stays busy after the test ends, and its settle
-// would otherwise draw a moment later, after jsdom has gone.
-vi.mock("react-dom/client", async (importOriginal) => {
-  const client = await importOriginal<typeof import("react-dom/client")>();
-  return {
-    ...client,
-    createRoot: (...args: Parameters<typeof client.createRoot>) => {
-      const root = client.createRoot(...args);
-      mounted.roots.push(root);
-      return root;
-    },
-  };
-});
-
 const PATH = {
   SESSION: "/api/auth/get-session",
   PUBLIC_CLIENT: "/api/auth/oauth2/public-client",
@@ -51,6 +35,7 @@ const PATH = {
 } as const;
 
 const ACCOUNT = { id: "account-1", name: "Ada", email: "ada@example.com" };
+
 /** Where the server sends each answer: the client's redirect, with a code or with `access_denied`. */
 const ANSWERED = {
   ALLOWED: "http://127.0.0.1:4810/callback?code=code-for-the-client&state=client-state",
@@ -68,33 +53,40 @@ function signedAuthorization(): string {
     state: "client-state",
     exp: "4102444800",
   });
+
   for (const name of [...query.keys(), "ba_param"].sort()) query.append("ba_param", name);
   query.set("sig", "signature-from-the-server");
+
   return query.toString();
 }
 
 /** One request the page sent: its path and its JSON body. */
 interface Sent {
   readonly path: string;
-  readonly body: Record<string, unknown> | undefined;
+  readonly body: WireRecord | undefined;
 }
 
 let sent: Sent[] = [];
+
 /** How many times the page tried to leave. */
 let leaves = 0;
 
 /** Better Auth's answers, by path and body; every other request hangs. */
-function answer(path: string, body: Record<string, unknown> | undefined): Response | undefined {
+function answer(path: string, body: WireRecord | undefined): Response | undefined {
   if (path === PATH.SESSION) {
     return Response.json({ session: { id: "session-1", userId: ACCOUNT.id }, user: ACCOUNT });
   }
+
   if (path === PATH.PUBLIC_CLIENT) {
     return Response.json({ client_id: "acme-notes", client_name: "Acme Notes" });
   }
+
   if (path === PATH.CONSENT) {
     const url = body?.accept === true ? ANSWERED.ALLOWED : ANSWERED.DENIED;
+
     return Response.json({ redirect: true, url });
   }
+
   return undefined;
 }
 
@@ -104,18 +96,23 @@ async function openPage(page: "consent" | "sign-in", address: string): Promise<H
     const request = input instanceof Request ? input : undefined;
     const url = new URL(request?.url ?? String(input), window.location.href);
     const text = request === undefined ? init?.body : await request.text();
-    const body = typeof text === "string" ? JSON.parse(text) : undefined;
+    const body = Predicate.isString(text) ? JSON.parse(text) : undefined;
     sent.push({ path: url.pathname, body });
+
     return answer(url.pathname, body) ?? new Promise<Response>(() => undefined);
   });
   window.history.replaceState(null, "", address);
   const root = document.createElement("div");
   root.id = "root";
   document.body.replaceChildren(root);
+  // A busy ring shows at once, as a capture run has it, so a press's settle
+  // never arms a timer that would draw after jsdom has gone.
+  document.body.style.setProperty("--ui-settle-delay", "0ms");
   vi.resetModules();
   await act(async () => {
     await import(page === "consent" ? "../src/consent" : "../src/sign-in");
   });
+
   return root;
 }
 
@@ -123,7 +120,9 @@ function buttonNamed(page: HTMLElement, name: string): HTMLButtonElement {
   const button = Array.from(page.querySelectorAll("button")).find(
     (candidate) => candidate.textContent === name,
   );
+
   if (!button) throw new Error(`No button named ${name}`);
+
   return button;
 }
 
@@ -144,17 +143,18 @@ beforeAll(() => {
   });
 });
 
-afterEach(() => {
-  act(() => {
-    for (const root of mounted.roots.splice(0)) root.unmount();
-  });
+afterEach(async () => {
+  // Note that a page mounts its own root as its module loads and is never
+  // unmounted, so each test waits out its press's answer, and whatever it
+  // left to draw is flushed here, inside act, rather than once jsdom has gone.
+  await act(async () => {});
   vi.restoreAllMocks();
   document.body.replaceChildren();
   sent = [];
   leaves = 0;
 });
 
-test("a client that is not trusted is named with its account, scopes, and redirect, and Allow alone accepts", async () => {
+test("a client that is not trusted is named with its account, scopes, and redirect, and Allow alone accepts and follows the server", async () => {
   const page = await openPage("consent", `/consent.html?${signedAuthorization()}`);
 
   await titled(page, "Acme Notes wants to use your Vespin account");
@@ -171,7 +171,8 @@ test("a client that is not trusted is named with its account, scopes, and redire
 
   await act(async () => buttonNamed(page, "Allow").click());
 
-  await vi.waitFor(() => expect(postedTo(PATH.CONSENT)).toHaveLength(1));
+  await vi.waitFor(() => expect(leaves).toBe(1));
+  expect(postedTo(PATH.CONSENT)).toHaveLength(1);
   expect(postedTo(PATH.CONSENT)[0]?.body).toMatchObject({
     accept: true,
     oauth_query: expect.stringContaining("client_id=acme-notes"),

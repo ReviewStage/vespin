@@ -32,14 +32,17 @@ export function useInboxOpenSpan(rowCount: number): void {
  */
 export function useInboxItemOpenSpan(shownId: string | undefined, held: boolean) {
   const asked = useRef<string | undefined>(undefined);
+
   const timeOpen = useCallback(
     (itemId: string) => {
       asked.current = itemId === shownId ? undefined : itemId;
+
       if (asked.current === undefined) leavePanelSpan(PANEL_SPAN.INBOX_ITEM_OPEN);
       else beginPanelSpan(PANEL_SPAN.INBOX_ITEM_OPEN);
     },
     [shownId],
   );
+
   useEffect(() => {
     if (shownId === undefined || asked.current !== shownId) return;
     asked.current = undefined;
@@ -52,5 +55,6 @@ export function useInboxItemOpenSpan(shownId: string | undefined, held: boolean)
     },
     [],
   );
+
   return timeOpen;
 }

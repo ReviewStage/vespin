@@ -180,6 +180,7 @@ function useKeyed<Entry, Value>(
 ): ReadonlyMap<string, Value> {
   const latest = useRef(entryOf);
   latest.current = entryOf;
+
   // Note that the host keeps every part of a page that said nothing new, so a list read alike is the very list.
   return useMemo(() => new Map((list ?? []).map((entry) => latest.current(entry))), [list]);
 }
@@ -202,11 +203,13 @@ export function useAgentTranscript(input: {
   const older = input.older ?? windowTranscriptOlder;
   const latest = useRef({ onStatus, older });
   latest.current = { onStatus, older };
+
   // The older page asked for, as the mutation that asks it holds it: its transcript and where below.
   const olderRead = useMutation({
     mutationKey: olderKeyOf(transcript),
     mutationFn: (params: AgentTranscriptOlderParams) => latest.current.older(params),
   });
+
   const queryClient = useQueryClient();
   // The hold standing, as it is timed; none while the tab holds nothing.
   const timing = useRef<HoldTiming | undefined>(undefined);
@@ -217,6 +220,7 @@ export function useAgentTranscript(input: {
   useEffect(() => {
     if (!shown) return;
     const standing = heldNow.current;
+
     const timed: HoldTiming = {
       startedAt: Date.now(),
       pagesAtStart: standing?.pages ?? 0,
@@ -225,7 +229,9 @@ export function useAgentTranscript(input: {
       painted: false,
       caughtUp: false,
     };
+
     timing.current = timed;
+
     return () => {
       if (timing.current === timed) timing.current = undefined;
     };
@@ -236,13 +242,17 @@ export function useAgentTranscript(input: {
   // go before its first page landed.
   useEffect(() => {
     const timed = timing.current;
+
     if (timed === undefined || held === undefined || held.pages === 0) return;
+
     if (!timed.painted) {
       timed.painted = true;
       endHoldSpan(PANEL_SPAN.TRANSCRIPT_FIRST_PAINT, timed, held);
     }
+
     // Note that a transcript held before the hold is read past its cursor again, so only a page since says it caught up.
     const read = !timed.held || held.pages > timed.pagesAtStart;
+
     if (held.word?.caughtUp === true && read && !timed.caughtUp) {
       timed.caughtUp = true;
       endHoldSpan(PANEL_SPAN.TRANSCRIPT_CAUGHT_UP, timed, held);
@@ -257,30 +267,39 @@ export function useAgentTranscript(input: {
   const before = held?.before;
   // Note that only this transcript's ask, at the page the messages still begin at, stands for it: another tab's, or one a newer page passed, says nothing here.
   const asked = olderRead.variables;
+
   const askedHere =
     asked !== undefined && sameTranscript(asked, transcript) && asked.before === before;
+
   // Note that an older read that landed stays out until the page it laid arrives, so it is never asked for twice.
   const answer = olderRead.data;
   const failedAnswer = answer !== undefined && "failure" in answer;
+
   const loadingOlder =
     askedHere && (olderRead.isPending || (answer !== undefined && !failedAnswer && answer.landed));
+
   const olderFailed = askedHere && (olderRead.isError || failedAnswer);
   const { mutate: askOlder } = olderRead;
+
   // Note that an ask out is read off the mutation cache as well as off the drawn mutation, since a second press in the same tick comes before the mutation's notification has drawn it out.
   const loadOlder = useCallback(() => {
     if (before === undefined || loadingOlder) return;
+
     const out = queryClient.isMutating({
       mutationKey: olderKeyOf(transcript),
       exact: true,
       predicate: (mutation) => {
         const variables = mutation.state.variables;
+
         return isOlderParams(variables) && variables.before === before;
       },
     });
+
     if (out === 0) askOlder({ ...transcript, before });
   }, [askOlder, queryClient, transcript, before, loadingOlder]);
 
   const { agentId: retriedAgent, callId: retriedCall } = transcript;
+
   const onRetry = useCallback(() => {
     const kind = TRANSCRIPT_KIND.AGENT;
     retry(
@@ -294,16 +313,20 @@ export function useAgentTranscript(input: {
     word?.subagentTitles,
     (titled) => [titled.callId, titled.title] as const,
   );
+
   const delegations = useKeyed(
     word?.delegations,
     (started) => [started.callId, started.startedAt] as const,
   );
+
   const subagents = useKeyed(word?.subagents, (standing) => [standing.callId, standing] as const);
   const messages = held?.messages ?? NO_MESSAGES;
   const failed = held?.failure !== undefined;
+
   // Note that an agent whose first launch still holds its first message has no line yet, so its page read empty is no read still out.
   const writing =
     word === undefined || (agentStillWriting(word.status) && !bootHolds(word.boot?.phase));
+
   return {
     messages,
     failure: word?.failureReason,

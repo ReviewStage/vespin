@@ -200,6 +200,7 @@ const INTEGRATION_HOSTS = {
 /** The provider whose pages the host stands among; nothing for a host no provider's. */
 export function integrationOfHost(host: string): IntegrationProvider | undefined {
   const asked = host.toLowerCase();
+
   return INTEGRATION_PROVIDER_LIST.find((provider) =>
     INTEGRATION_HOSTS[provider].some((own) => asked === own || asked.endsWith(`.${own}`)),
   );
@@ -239,7 +240,9 @@ export function integrationConnectionOf(
 ): { readonly provider: IntegrationProvider; readonly place: number } | undefined {
   const match = CONNECTION_NAME_PATTERN.exec(name);
   const provider = integrationProviderFromWire(match?.[1] ?? null);
+
   if (match === null || provider === undefined) return undefined;
+
   return { provider, place: match[2] === undefined ? 1 : Number(match[2]) };
 }
 
@@ -256,7 +259,9 @@ export function mintIntegrationConnectionName(
   // Note that the grammar caps a place at three digits, far past any account count the routes allow.
   if (!taken.includes(provider)) return provider;
   let place = 2;
+
   while (taken.includes(`${provider}-${place}`)) place += 1;
+
   return `${provider}-${place}`;
 }
 
@@ -376,6 +381,7 @@ export function integrationAccountInput(
   target?: IntegrationAccountTarget,
 ) {
   const query = accountQuery(target);
+
   return { params: { provider }, ...(Object.keys(query).length > 0 ? { query } : undefined) };
 }
 
@@ -419,6 +425,7 @@ export function integrationAccountLabel(account: {
   readonly label?: string | undefined;
 }): string {
   if (account.label !== undefined && account.label.trim() !== "") return account.label;
+
   return `Account ${integrationConnectionOf(account.connection)?.place ?? 1}`;
 }
 
@@ -426,7 +433,9 @@ export function integrationAccountLabel(account: {
 function sharedNames(called: readonly (readonly [string, string])[]): ReadonlySet<string> {
   const seen = new Set<string>();
   const shared = new Set<string>();
+
   for (const [, name] of called) (seen.has(name) ? shared : seen).add(name);
+
   return shared;
 }
 
@@ -442,9 +451,11 @@ export function integrationAccountNames(
   accounts: readonly { readonly connection: string; readonly label?: string | undefined }[],
 ): ReadonlyMap<string, string> {
   const placeOf = (connection: string) => integrationConnectionOf(connection)?.place ?? 1;
+
   let called = accounts.map(
     (account) => [account.connection, integrationAccountLabel(account)] as const,
   );
+
   for (let shared = sharedNames(called); shared.size > 0; shared = sharedNames(called)) {
     const alike = shared;
     called = called.map(
@@ -452,6 +463,7 @@ export function integrationAccountNames(
         [connection, alike.has(name) ? `${name} (${placeOf(connection)})` : name] as const,
     );
   }
+
   return new Map(called);
 }
 
@@ -607,7 +619,9 @@ export function integrationLandingPath(
   status: IntegrationLandingStatus,
 ): string {
   const query = new URLSearchParams();
+
   if (provider !== undefined) query.set(INTEGRATION_LANDING.PROVIDER_PARAM, provider);
   query.set(INTEGRATION_LANDING.STATUS_PARAM, status);
+
   return `${INTEGRATION_LANDING.PATH}?${query}`;
 }

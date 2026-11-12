@@ -55,7 +55,7 @@ function actionRows(actions: readonly MenuAction[]): readonly MenuRow[] {
     icon: action.icon,
     detail: action.detail,
     // Note that the detail is matched too, as a person's email is beside their name.
-    ...(action.detail === undefined ? {} : { terms: [action.detail] }),
+    ...(action.detail !== undefined && { terms: [action.detail] }),
     card: action.card,
     replayMasked: action.replayMasked,
   }));
@@ -95,6 +95,7 @@ export function ActionSearchMenu({
 }): React.JSX.Element {
   const minted = useId();
   const { actions } = search;
+
   return (
     <SearchableMenu
       {...("embedded" in place
@@ -113,7 +114,9 @@ export function ActionSearchMenu({
       replayUnmasked={search.replayUnmasked}
       onPick={(picked) => {
         const action = actions[Number(picked)];
+
         if (action === undefined) return;
+
         if (action.stays !== true) onDone();
         action.onSelect();
       }}

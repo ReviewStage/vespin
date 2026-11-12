@@ -58,16 +58,21 @@ const mirrorTarget = (root: string, file: string) =>
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const segments = file.split("/");
+
     if (path.isAbsolute(file)) return Option.none<string>();
+
     if (segments.some((segment) => segment === ".." || segment.toLowerCase() === ".git")) {
       return Option.none<string>();
     }
+
     const target = path.join(root, file);
     const home = yield* fileSystem.realPath(root);
     // Note that the nearest folder that stands is resolved, because a link the checkout holds may lead out of the mirror.
     let folder = path.dirname(target);
+
     while (!(yield* fileSystem.exists(folder))) folder = path.dirname(folder);
     const reached = yield* fileSystem.realPath(folder);
+
     return reached === home || reached.startsWith(`${home}${path.sep}`)
       ? Option.some(target)
       : Option.none<string>();
@@ -79,6 +84,7 @@ export const mirrorWritten = (root: string, file: FileFrame) =>
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     const target = yield* mirrorTarget(root, file.path);
+
     if (Option.isNone(target)) return false;
     const folder = path.dirname(target.value);
     yield* fileSystem.makeDirectory(folder, { recursive: true });
@@ -89,12 +95,14 @@ export const mirrorWritten = (root: string, file: FileFrame) =>
           directory: folder,
           prefix: TEMPORARY_PREFIX,
         });
+
         const temporary = path.join(fresh, path.basename(target.value));
         yield* fileSystem.writeFile(temporary, file.bytes);
         yield* fileSystem.chmod(temporary, MODE_BITS[file.mode]);
         yield* fileSystem.rename(temporary, target.value);
       }),
     );
+
     return true;
   });
 
@@ -103,8 +111,10 @@ export const mirrorDeleted = (root: string, file: string) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const target = yield* mirrorTarget(root, file);
+
     if (Option.isNone(target)) return false;
     yield* fileSystem.remove(target.value, { force: true });
+
     return true;
   });
 
@@ -123,32 +133,41 @@ export const mirrorMatched = (
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+
     const sized = yield* Effect.forEach(
       listed,
       (file) =>
         Effect.gen(function* () {
           const at = path.join(root, file);
+
           if (Option.isSome(yield* Effect.option(fileSystem.readLink(at)))) return undefined;
           const info = yield* Effect.option(fileSystem.stat(at));
+
           if (Option.isNone(info) || info.value.type !== "File") return undefined;
+
           return [file, Number(info.value.size)] as const;
         }),
       { concurrency: READ_CONCURRENCY },
     );
+
     const own = new Map(sized.filter((entry) => entry !== undefined));
     const wanted = new Set(manifest.map((file) => file.path));
+
     for (const file of own.keys()) {
       if (!wanted.has(file)) yield* mirrorDeleted(root, file);
     }
+
     const differing = yield* Effect.forEach(
       manifest,
       (file) =>
         Effect.gen(function* () {
           if (own.get(file.path) !== file.size) return true;
           const bytes = yield* fileSystem.readFile(path.join(root, file.path));
+
           return (yield* hashOf(bytes)) !== file.hash;
         }),
       { concurrency: READ_CONCURRENCY },
     );
-    return manifest.filter((_, index) => differing[index]).map((file) => file.path);
+
+    return manifest.flatMap((file, index) => (differing[index] ? [file.path] : []));
   });

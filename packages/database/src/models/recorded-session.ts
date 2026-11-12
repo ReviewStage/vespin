@@ -217,6 +217,7 @@ export function standingSessionsOf(
   conversationIds?: readonly string[],
 ): Effect.Effect<readonly StandingSession[], StoreFailure, DatabaseServices> {
   if (conversationIds !== undefined && conversationIds.length === 0) return Effect.succeed([]);
+
   return findStandingSessions({
     userId,
     ...(conversationIds === undefined ? undefined : { conversationIds }),
@@ -232,6 +233,7 @@ export function standingSessionsNamed(
   conversationIds: readonly string[],
 ): Effect.Effect<readonly StandingSession[], StoreFailure, DatabaseServices> {
   if (conversationIds.length === 0) return Effect.succeed([]);
+
   return findStandingSessions({ userId: null, conversationIds });
 }
 
@@ -266,5 +268,6 @@ export const claimRuntimeSession = /* @__PURE__ */ Effect.fn("web/claimRuntimeSe
 ): Effect.fn.Return<boolean, StoreFailure, DatabaseServices> {
   yield* claimSession({ ...target, runtimeSessionId, now });
   const recorded = yield* findRecordedSession(target.conversationId);
+
   return Option.isSome(recorded) && recorded.value.runtimeSessionId === runtimeSessionId;
 });

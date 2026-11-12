@@ -29,6 +29,7 @@ const DISCLOSURE_MOTION = {
   OPENING: "opening",
   CLOSING: "closing",
 } as const;
+
 export type DisclosureMotion = (typeof DISCLOSURE_MOTION)[keyof typeof DISCLOSURE_MOTION];
 
 export interface Disclosure {
@@ -43,6 +44,7 @@ export interface Disclosure {
 /** The mark for the disclosure layer: closing while it leaves, opening while it stands open from an open that is to unroll. */
 export function disclosureMotion(opened: boolean, leaving: boolean): DisclosureMotion | undefined {
   if (leaving) return DISCLOSURE_MOTION.CLOSING;
+
   return opened ? DISCLOSURE_MOTION.OPENING : undefined;
 }
 
@@ -57,9 +59,11 @@ export function useDisclosure(open: boolean, onGone?: () => void): Disclosure {
   const held = useRef<HTMLElement | null>(null);
   const gone = useRef(onGone);
   gone.current = onGone;
+
   const ref = useCallback((element: HTMLElement | null) => {
     held.current = element;
   }, []);
+
   // Note that the change is taken in the render that sees it, because a
   // close noticed an effect later would draw one frame with nothing there.
   if (open !== was) {
@@ -70,28 +74,36 @@ export function useDisclosure(open: boolean, onGone?: () => void): Disclosure {
   useLayoutEffect(() => {
     if (!leaving) return undefined;
     const exits = held.current === null ? [] : runningMotions(held.current);
+
     // Note that the caller hears it go in the update that takes it out, so both land in one commit.
     const leave = () => {
       setLeaving(false);
       gone.current?.();
     };
+
     if (exits.length === 0) {
       leave();
+
       return undefined;
     }
+
     // Note that an exit canceled counts as done, since nothing is left to
     // wait for; an open again cancels it too, but leaves this effect behind
     // first, which `current` answers.
     let current = true;
     const left = new Set(exits);
+
     for (const exit of exits) {
       const ended = () => {
         left.delete(exit);
+
         if (current && left.size === 0) leave();
       };
+
       exit.addEventListener("finish", ended, { once: true });
       exit.addEventListener("cancel", ended, { once: true });
     }
+
     return () => {
       current = false;
     };

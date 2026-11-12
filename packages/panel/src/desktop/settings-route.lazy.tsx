@@ -13,6 +13,7 @@ import { SettingsFrame, useShellPlaces } from "./desktop-shell.js";
 /** Settings, its pages listed where the tasks were. */
 function SettingsPlace(): React.JSX.Element {
   const { sidebar, room, settingsStep, history, settings } = useShellPlaces();
+
   return (
     <SettingsFrame>
       {(exit) => (

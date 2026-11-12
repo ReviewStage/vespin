@@ -62,14 +62,18 @@ interface SentHop {
 const readOver = (href: string, web: ScriptedWeb) =>
   Effect.gen(function* () {
     const sent: SentHop[] = [];
+
     const connect = ({ url, headers, maxBytes }: HopRequest) =>
       Effect.promise(async (): Promise<HopAnswer | HopFailure> => {
         sent.push({ url: url.href, headers });
         const answer = web.answers[url.href];
+
         if (answer === undefined) return HOP_FAILURE.UNREAD;
+
         if (answer === REFUSED) return HOP_FAILURE.REFUSED;
         const response = answer();
         const bytes = new Uint8Array(await response.arrayBuffer());
+
         return {
           status: response.status,
           headers: Object.fromEntries(response.headers.entries()),
@@ -77,7 +81,9 @@ const readOver = (href: string, web: ScriptedWeb) =>
           cut: bytes.byteLength > maxBytes,
         };
       });
+
     const answer: LinkPreviewAnswer = yield* readLinkPreview(href, connect);
+
     return { answer, sent };
   });
 
@@ -202,6 +208,7 @@ it.effect(
           },
         },
       });
+
       for (const { headers } of sent) {
         assert.equal(headers.cookie, undefined);
         assert.equal(headers.authorization, undefined);

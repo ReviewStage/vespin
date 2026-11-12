@@ -101,6 +101,7 @@ export function logMemoryRecalls(
   source: MemorySource,
 ): MemoryStoreEffect<void> {
   if (memoryIds.length === 0) return Effect.void;
+
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
     insertRecalls({
       organizationId,
@@ -123,18 +124,23 @@ export function tallyMemoryRecalls(
 ): MemoryStoreEffect<ReadonlyMap<string, MemoryRecallTally>> {
   return Effect.gen(function* () {
     const tallies = new Map(memoryIds.map((id) => [id, NEVER_RECALLED] as const));
+
     if (memoryIds.length === 0) return tallies;
     const now = yield* DateTime.now;
+
     const since = DateTime.toDate(
       DateTime.subtractDuration(now, Duration.days(MEMORY_RECALL_WINDOW_DAYS)),
     );
+
     const rows = yield* findTallies({ organizationId, ids: memoryIds, since });
+
     for (const row of rows) {
       tallies.set(row.memoryId, {
         recalls30d: row.recalls,
         lastRecalledAt: row.lastRecalledAt.getTime(),
       });
     }
+
     return tallies;
   });
 }

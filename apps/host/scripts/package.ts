@@ -48,6 +48,7 @@ import {
 
 const APP = join(import.meta.dirname, "..");
 const REPOSITORY = join(APP, "..", "..");
+
 /** Where a checked pinned archive is kept between runs: the repository's own scratch, which git ignores. */
 const KEPT_PINS = join(REPOSITORY, ".build", "pins");
 const RELEASE = join(APP, "dist", "release");
@@ -85,19 +86,26 @@ function isPinned(pin: AgentToolPin, archive: Uint8Array): boolean {
  */
 async function pinnedArchive(pin: AgentToolPin): Promise<Uint8Array> {
   const kept = join(KEPT_PINS, `${pin.NAME}-${pin.SHA256}.tgz`);
+
   if (existsSync(kept)) {
     const archive = new Uint8Array(readFileSync(kept));
+
     if (isPinned(pin, archive)) return archive;
   }
+
   const response = await fetch(pin.ARCHIVE);
+
   if (!response.ok) throw new Error(`${pin.ARCHIVE} answered ${response.status}`);
   const archive = new Uint8Array(await response.arrayBuffer());
+
   if (archive.length !== pin.BYTES) {
     throw new Error(`${pin.ARCHIVE} is ${archive.length} bytes, not the pinned ${pin.BYTES}`);
   }
+
   if (!isPinned(pin, archive)) throw new Error(`${pin.ARCHIVE} is not the pinned build`);
   mkdirSync(KEPT_PINS, { recursive: true });
   writeFileSync(kept, archive);
+
   return archive;
 }
 
@@ -108,6 +116,7 @@ async function fetchPinned(pin: AgentToolPin, folder: string, scratch: string): 
   writeFileSync(saved, archive);
   const members = pin.MEMBERS.map((member) => `${pin.ROOT}/${member}`);
   execFileSync("tar", ["-xzf", saved, "-C", scratch, ...members]);
+
   for (const member of pin.MEMBERS) {
     mkdirSync(dirname(join(folder, member)), { recursive: true });
     copyFileSync(join(scratch, pin.ROOT, member), join(folder, member));
@@ -126,9 +135,11 @@ async function stage(root: string, node: AgentToolPin): Promise<void> {
 
 /** The target's tarball, on the Node given, and its `.sha256`, in `dist/release/`. */
 async function packageTarball(target: HostTarget, node: AgentToolPin): Promise<void> {
+  // SAFETY: this is the workspace's own package.json, which carries the version the tarball is named for.
   const { version } = JSON.parse(readFileSync(join(APP, "package.json"), "utf8")) as {
     version: string;
   };
+
   const name = hostTarballName(version, target);
   const staging = join(RELEASE, target);
   rmSync(staging, { recursive: true, force: true });
@@ -141,35 +152,46 @@ async function packageTarball(target: HostTarget, node: AgentToolPin): Promise<v
   process.stdout.write(`${name} ${digest}\n`);
 }
 
-/** The release target and the Node it runs on, as the options name them. */
-function releaseTarget(values: { os?: string; arch?: string }): {
+type ReleaseTargetResult = {
   target: HostTarget;
   node: AgentToolPin;
-} {
+};
+
+/** The release target and the Node it runs on, as the options name them. */
+function releaseTarget(values: { os?: string; arch?: string }): ReleaseTargetResult {
   // Note that a Mac release is Apple silicon's alone, since NODE_MAC_PIN is its Node.
   if (values.os === DEVICE_PLATFORM.DARWIN) {
     if (values.arch !== DEVICE_ARCH.ARM64) throw new Error(USAGE);
+
     return { target: HOST_TARGET.DARWIN_ARM64, node: NODE_MAC_PIN };
   }
+
   const arch = Object.values(DEVICE_ARCH).find((each): each is DeviceArch => each === values.arch);
+
   if (arch === undefined || (values.os !== undefined && values.os !== DEVICE_PLATFORM.LINUX)) {
     throw new Error(USAGE);
   }
+
   return { target: LINUX_TARGETS[arch], node: NODE_LINUX_PINS[arch] };
 }
 
 async function main(): Promise<void> {
   // Note that `pnpm <script> -- --arch x64`, as the release workflow runs it, hands the `--` on, which parseArgs would read as the end of the options.
   const given = process.argv.slice(2);
+
   const { values } = parseArgs({
     args: given[0] === "--" ? given.slice(1) : given,
     options: { arch: { type: "string" }, os: { type: "string" }, folder: { type: "string" } },
   });
+
   const { target, node } = releaseTarget(values);
+
   if (values.folder === undefined) {
     await packageTarball(target, node);
+
     return;
   }
+
   await stage(resolve(values.folder), node);
 }
 

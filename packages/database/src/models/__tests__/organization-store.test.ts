@@ -30,6 +30,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -63,14 +64,17 @@ const invite = (organizationId: string, inviterId: string) =>
 const rowsOf = (organizationId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const members = yield* db
       .select()
       .from(member)
       .where(eq(member.organizationId, organizationId));
+
     const invitations = yield* db
       .select()
       .from(invitation)
       .where(eq(invitation.organizationId, organizationId));
+
     return { members: members.length, invitations: invitations.length };
   });
 
@@ -91,6 +95,7 @@ it.layer(getTestDB())("the organization plugin's rows", (it) => {
 
         const byId = <A extends { userId: string }>(rows: readonly A[]) =>
           rows.toSorted((a, b) => a.userId.localeCompare(b.userId));
+
         assert.deepEqual(
           yield* membersOf(acme),
           byId([
@@ -107,6 +112,7 @@ it.layer(getTestDB())("the organization plugin's rows", (it) => {
       const ada = yield* openAccount;
       const acme = yield* openWorkspace(ada);
       const beta = yield* openWorkspace(ada);
+
       const read = (organizationId: string) =>
         Effect.map(
           Database.use((db) =>
@@ -117,6 +123,7 @@ it.layer(getTestDB())("the organization plugin's rows", (it) => {
           ),
           ([row]) => row,
         );
+
       const before = yield* read(beta);
 
       yield* renameWorkspace(acme, "Acme Labs");
@@ -146,6 +153,7 @@ it.layer(getTestDB())("the organization plugin's rows", (it) => {
         const organizations = yield* Database.use((db) =>
           db.select({ id: organization.id }).from(organization).where(eq(organization.id, acme)),
         );
+
         assert.deepEqual(organizations, []);
         assert.deepEqual(yield* rowsOf(acme), { members: 0, invitations: 0 });
         assert.deepEqual(yield* rowsOf(kept), { members: 1, invitations: 1 });

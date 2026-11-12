@@ -39,14 +39,18 @@ interface Answer {
 const openAccounts = Effect.gen(function* () {
   const db = yield* Database;
   const [owner, other] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
   for (const id of [owner, other]) {
     yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
   }
+
   const bearers = new Map([
     [`Bearer ${owner}`, owner],
     [`Bearer ${other}`, other],
   ]);
+
   const ask = (request: Request) => answer(bearers, request);
+
   return { owner, other, ask };
 });
 
@@ -57,6 +61,7 @@ const answer = (bearers: ReadonlyMap<string, string>, request: Request) =>
     const services = (yield* Effect.context<never>().pipe(
       Effect.provide(ANALYTICS.layer),
     )) as Context.Context<WebServices>;
+
     const handle = hostedFetch({
       repositoryPins: repositoryPinsProcedures({
         resolveUserId: (incoming) =>
@@ -65,9 +70,11 @@ const answer = (bearers: ReadonlyMap<string, string>, request: Request) =>
           ),
       }),
     });
+
     const response = yield* Effect.promise(() => handle(request, services));
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = (yield* Effect.promise(() => response.json())) as WireBoundaryInput;
+
     return { status: response.status, body } satisfies Answer;
   });
 
@@ -89,7 +96,9 @@ function request(
 function readAnswer(answered: Answer) {
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
   const read = readEither(repositoryPinsWrittenSchema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read)) return assert.fail(`not the wire's: ${read.failure.refusal}`);
+
   return read.success;
 }
 
@@ -109,6 +118,7 @@ it.layer(getTestDB())("the repository pins route", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, other, ask } = yield* openAccounts;
+
         const pin = (repository: string, pinned: boolean, userId = owner) =>
           ask(request(userId, { method: "PUT", body: { repository, pinned } }));
 
@@ -150,6 +160,7 @@ it.layer(getTestDB())("the repository pins route", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, ask } = yield* openAccounts;
+
         const pin = (pinned: boolean) =>
           ask(request(owner, { method: "PUT", body: { repository: "acme/relay", pinned } }));
 
@@ -177,12 +188,14 @@ it.layer(getTestDB())("the repository pins route", (it) => {
         const notARepository = yield* ask(
           request(owner, { method: "PUT", body: { repository: "not a repository", pinned: true } }),
         );
+
         const extraKey = yield* ask(
           request(owner, {
             method: "PUT",
             body: { repository: "acme/relay", pinned: true, userId: "someone-else" },
           }),
         );
+
         const unsigned = yield* ask(request(undefined));
         const deleted = yield* ask(request(owner, { method: "DELETE" }));
 

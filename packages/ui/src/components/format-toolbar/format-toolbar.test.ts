@@ -42,11 +42,13 @@ interface Told {
   comments: number;
 }
 
+type MountResult = { toolbar: HTMLElement; told: Told };
+
 /** The toolbar over a selection wearing `marks`, offering Turn into from `current` and Comment where asked. */
 function mount(
   marks: readonly WritingMark[],
   offer: { turnInto?: boolean; current?: WritingBlock; comment?: boolean } = {},
-): { toolbar: HTMLElement; told: Told } {
+): MountResult {
   const told: Told = { marks: [], turned: [], comments: 0 };
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -70,7 +72,9 @@ function mount(
     ),
   );
   const toolbar = container.querySelector<HTMLElement>('[role="toolbar"]');
+
   if (toolbar === null) throw new Error("the toolbar is drawn");
+
   return { toolbar, told };
 }
 
@@ -79,7 +83,9 @@ function press(toolbar: HTMLElement, name: string): HTMLButtonElement {
   const button = [...toolbar.querySelectorAll("button")].find(
     (each) => (each.getAttribute("aria-label") ?? each.textContent) === name,
   );
+
   if (button === undefined) throw new Error(`the toolbar holds ${name}`);
+
   return button;
 }
 
@@ -134,6 +140,7 @@ test("the description's toolbar leads with Turn into, naming the block, and ends
     current: WRITING_BLOCK.HEADING_2,
     comment: true,
   });
+
   expect(names(toolbar)).toEqual([
     "Turn into Heading 2",
     "Bold",
@@ -153,6 +160,7 @@ test("Turn into drops the blocks with the current one checked, and tells its own
   const turn = press(toolbar, "Turn into Text");
   act(() => turn.click());
   const menu = document.querySelector<HTMLElement>('[role="menu"]');
+
   if (menu === null) throw new Error("the menu opens");
   const rows = [...menu.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')];
   expect(rows.map((row) => row.querySelector(".ui-menu-item-label")?.textContent)).toEqual([
@@ -179,8 +187,10 @@ test("a selection over several kinds of block is offered Turn into by name alone
 
 test("the toolbar is one Tab stop the arrows, Home, and End move along", () => {
   const { toolbar } = mount([], { comment: true });
+
   const stops = () =>
     [...toolbar.querySelectorAll("button")].filter((button) => button.tabIndex !== -1);
+
   expect(stops().map((button) => button.getAttribute("aria-label"))).toEqual(["Bold"]);
   act(() => press(toolbar, "Bold").focus());
   key("ArrowRight");

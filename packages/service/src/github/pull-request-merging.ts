@@ -110,22 +110,29 @@ export const pullRequestMerging = /* @__PURE__ */ Effect.fn("web/pullRequestMerg
   number: number,
 ): Effect.fn.Return<Option.Option<PullRequestMerging>, GitHubUnavailable, HttpClient.HttpClient> {
   const [owner = "", name = ""] = fullName.split("/");
+
   const request = githubPost("/graphql", token, {
     query: MERGING_QUERY,
     variables: { owner, name, number },
   });
+
   const answer = yield* Effect.scoped(
     Effect.flatMap(send(request), (response) => readBody(response, MergingAnswerSchema)),
   );
+
   const repository = answer.data.repository;
   const pull = repository?.pullRequest;
+
   if (repository === null || pull === null || pull === undefined) return Option.none();
+
   const methods = [
     ...(repository.mergeCommitAllowed ? [MERGE_METHOD.MERGE] : []),
     ...(repository.squashMergeAllowed ? [MERGE_METHOD.SQUASH] : []),
     ...(repository.rebaseMergeAllowed ? [MERGE_METHOD.REBASE] : []),
   ];
+
   const rollup = pull.commits.nodes[0]?.commit.statusCheckRollup?.state;
+
   return Option.some({
     methods,
     autoMergeAllowed: repository.autoMergeAllowed,
@@ -181,12 +188,15 @@ export const pullRequestQueued = /* @__PURE__ */ Effect.fn("web/pullRequestQueue
   number: number,
 ): Effect.fn.Return<boolean, GitHubUnavailable, HttpClient.HttpClient> {
   const [owner = "", name = ""] = fullName.split("/");
+
   const request = githubPost("/graphql", token, {
     query: QUEUED_QUERY,
     variables: { owner, name, number },
   });
+
   const answer = yield* Effect.scoped(
     Effect.flatMap(send(request), (response) => readBody(response, QueuedAnswerSchema)),
   );
+
   return (answer.data.repository?.pullRequest?.mergeQueueEntry ?? null) !== null;
 });

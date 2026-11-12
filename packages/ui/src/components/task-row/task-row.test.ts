@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, createElement, useState } from "react";
+import { act, type ComponentProps, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { RELATED_TASK_CELLS, TASK_ROW_CELL, TaskRow, TaskRows } from "./task-row.js";
@@ -43,7 +43,8 @@ function drawList(opened: string[], chosen: ReadonlySet<string>[]): HTMLElement 
   function Rows(): React.JSX.Element {
     const [open, setOpen] = useState(true);
     const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
-    const row = (id: string, name: string, more: object = {}) =>
+
+    const row = (id: string, name: string, more: Partial<ComponentProps<typeof TaskRow>> = {}) =>
       createElement(TaskRow, {
         key: id,
         taskId: id,
@@ -53,6 +54,7 @@ function drawList(opened: string[], chosen: ReadonlySet<string>[]): HTMLElement 
         onOpen: () => opened.push(id),
         ...more,
       });
+
     return createElement(TaskRows, {
       label: "Related tasks",
       selection: {
@@ -71,11 +73,13 @@ function drawList(opened: string[], chosen: ReadonlySet<string>[]): HTMLElement 
       ],
     });
   }
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Rows)));
+
   return container;
 }
 
@@ -84,7 +88,9 @@ function pressOf(container: HTMLElement, name: string): HTMLButtonElement {
   const press = [...container.querySelectorAll<HTMLButtonElement>("[data-card-press]")].find(
     (each) => each.textContent?.includes(name),
   );
+
   if (press === undefined) throw new Error(`no press names ${name}`);
+
   return press;
 }
 
@@ -96,9 +102,11 @@ function namesOf(container: HTMLElement): readonly string[] {
 test("a row's chevron folds its nested rows beside its press, and → and ← on the press open and fold them", () => {
   const opened: string[] = [];
   const container = drawList(opened, []);
+
   const chevron = container.querySelector<HTMLButtonElement>(
     "button[aria-label='Child tasks of Ship the release']",
   );
+
   expect(chevron?.getAttribute("aria-expanded")).toBe("true");
   expect(chevron?.closest("[data-card-press]")).toBeNull();
   expect(namesOf(container)).toEqual(["Ship the release", "Write the notes", "Tag the build"]);

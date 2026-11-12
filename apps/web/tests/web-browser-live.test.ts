@@ -49,6 +49,7 @@ test("the socket opens on the page's own origin at the tab's path, sends what wa
     message: (text) => heard.push(`message:${text}`),
     closed: (code) => heard.push(`closed:${code}`),
   });
+
   socket.send('{"type":"viewport","width":640,"height":400}');
   const [opened] = StandInSocket.opened;
   assert.ok(opened);

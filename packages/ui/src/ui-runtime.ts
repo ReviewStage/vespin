@@ -26,5 +26,6 @@ export const effectServices = new Store<Context.Context<never>>(Context.empty())
  */
 export function forkEffect(effect: Effect.Effect<void>): () => void {
   const fiber = Effect.runForkWith(effectServices.state)(effect);
+
   return () => fiber.interruptUnsafe();
 }

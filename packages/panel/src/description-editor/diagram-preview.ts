@@ -23,9 +23,9 @@ const DIAGRAM_LANGUAGE = "mermaid";
 /** The node a fence opens as. */
 const CODE_BLOCK = "codeBlock";
 
-/** The classes the preview's element wears: the read view's figure, the preview's own place, and out of the screen recording, since a picture of words cannot be masked. */
+/** The classes the preview's element wears: the read view's figure and the preview's own place. */
 const PREVIEW_CLASS =
-  "description-diagram description-diagram-preview ph-no-capture mt-tight-gap mb-block-gap px-card-compact py-list-inset select-none";
+  "description-diagram description-diagram-preview mt-tight-gap mb-block-gap px-card-compact py-list-inset select-none";
 
 /** How the panel draws a block's diagram into an element, answering what takes it down. */
 type DiagramDrawer = (element: HTMLElement, diagram: EditorDiagram) => () => void;
@@ -55,18 +55,22 @@ function previewsOf(
   const widgets: Decoration[] = [];
   doc.descendants((node, pos) => {
     if (node.type.name !== CODE_BLOCK) return true;
+
     if (node.attrs.language !== DIAGRAM_LANGUAGE) return false;
     const end = pos + node.nodeSize;
     const code = node.textContent;
     const was = before.find(end, end, (spec) => codes.has(spec))[0];
     const previous = was === undefined ? undefined : codes.get(was.spec);
+
     const stand = () => {
       const element = document.createElement("div");
       element.className = PREVIEW_CLASS;
       element.setAttribute("contenteditable", "false");
       takedowns.set(element, draw(element, { code, previous }));
+
       return element;
     };
+
     const spec = {
       key: code,
       side: 1,
@@ -76,10 +80,13 @@ function previewsOf(
         takedowns.delete(element);
       },
     };
+
     codes.set(spec, code);
     widgets.push(Decoration.widget(end, stand, spec));
+
     return false;
   });
+
   return DecorationSet.create(doc, widgets);
 }
 
@@ -89,6 +96,7 @@ export function diagramPreview(draw: DiagramDrawer): Extension {
     name: "diagramPreview",
     addProseMirrorPlugins() {
       const memory: PreviewMemory = { takedowns: new WeakMap(), codes: new WeakMap() };
+
       return [
         new Plugin<DecorationSet>({
           key: PREVIEWS,

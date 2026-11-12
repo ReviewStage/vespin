@@ -89,9 +89,12 @@ export function readTaskFile(
 > {
   return Effect.gen(function* () {
     const stored = yield* readTaskHeader(userId, taskId);
+
     if (Option.isNone(stored)) return Option.none();
     const repository = stored.value.repository;
+
     if (repository === null) return Option.some(refused(TASK_FILE_REFUSAL.NO_REPOSITORY));
+
     return Option.some(
       yield* readRepositoryFileWindow(stored.value.workspaceId, repository, userId, request),
     );
@@ -113,6 +116,7 @@ export function readRepositoryFileWindow(
   request: TaskFileRequest,
 ): Effect.Effect<TaskFileAnswer, never, DatabaseServices | HttpClient.HttpClient | GitHubApp> {
   if (isSecretFile(request.path)) return Effect.succeed(refused(TASK_FILE_REFUSAL.SECRET));
+
   return readWindow(workspaceId, repository, member, request).pipe(
     Effect.catchTag("GitHubUnavailable", (failure) =>
       Effect.as(logGitHubReadFailure(failure), refused(TASK_FILE_REFUSAL.UNAVAILABLE)),
@@ -139,6 +143,7 @@ export const reachTaskRepository = /* @__PURE__ */ Effect.fn("web/reachTaskRepos
   member: string,
 ) {
   const app = yield* GitHubApp;
+
   return yield* app.repositoryReadToken(organizationId, repository, member).pipe(
     Effect.map((token) =>
       Option.isSome(token)
@@ -175,9 +180,11 @@ const readWindow = /* @__PURE__ */ Effect.fn("web/taskFileWindow")(function* (
   request: TaskFileRequest,
 ) {
   const reach = yield* reachTaskRepository(organizationId, repository, member);
+
   if ("refused" in reach) return reach.refused;
   const { token, repository: confirmed, access } = reach.reached;
   const branch = request.ref ?? confirmed.defaultBranch;
+
   // Note that a read of the default branch reads at the commit its head
   // stands at, and names it, so lines picked from the read are pinned to the
   // commit they were read at; a head GitHub did not name leaves the read on
@@ -187,36 +194,47 @@ const readWindow = /* @__PURE__ */ Effect.fn("web/taskFileWindow")(function* (
     (yield* readBranchHead(token, confirmed, confirmed.defaultBranch).pipe(
       Effect.catch(() => Effect.succeed(undefined)),
     ));
+
   const at = commit ?? branch;
+
   const file = yield* readRepositoryFile(token, confirmed, at, request.path).pipe(
     markRefusedToken(access),
   );
+
   const content = file.regular ? file.content : undefined;
+
   const refusal = shownFileRefusal({
     path: request.path,
     regular: file.regular,
     bytes: file.regular ? file.bytes : 0,
     binary: content === undefined || holdsNul(content),
   });
+
   // Note that a file GitHub found nothing at names the branch or the commit
   // it was looked for at, because the snippet's checkout may hold a file that
   // branch no longer does; a link or a directory there is missing on no branch.
   if (refusal === SHOWN_FILE_REFUSAL.MISSING && !file.regular && file.notFound) {
     return { refusal: TASK_FILE_REFUSAL.MISSING, branch } satisfies TaskFileAnswer;
   }
+
   if (refusal !== undefined) return refused(FILE_REFUSAL_OF[refusal]);
+
   // A regular file GitHub carried no bytes of is past the bound, which the rule refused above.
   // Note that a raw read carries the file as it is, its lines uncut, because
   // a copy or a download of it must not lose what the screen cuts.
   if (request.raw === true) {
     const raw = content === undefined ? undefined : rawText(content);
+
     if (raw === undefined) return refused(TASK_FILE_REFUSAL.NOT_TEXT);
+
     return {
       text: { path: request.path, repository, branch, text: raw },
     } satisfies TaskFileAnswer;
   }
+
   const all = fileLines(new TextDecoder().decode(content));
   const lines = all.slice(request.firstLine - 1, request.lastLine).map(shownLine);
+
   const window = {
     path: request.path,
     repository,
@@ -225,5 +243,6 @@ const readWindow = /* @__PURE__ */ Effect.fn("web/taskFileWindow")(function* (
     lineCount: all.length,
     lines,
   };
+
   return { file: commit === undefined ? window : { ...window, commit } } satisfies TaskFileAnswer;
 });

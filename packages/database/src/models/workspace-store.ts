@@ -33,8 +33,8 @@ import { type Cause, DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import {
   Database,
+  type DatabaseClient,
   type DatabaseServices,
-  type DatabaseShape,
   queryBuilder,
   type StoreFailure,
 } from "../core/query.js";
@@ -409,7 +409,7 @@ const findWorkspaceFace = SqlSchema.findOneOption({
 });
 
 /** The workspaces the account is a member of, or the one named among them, as rows, each with how many members it has, counted apart from the account's own row the read joins. */
-function workspaceRows(db: DatabaseShape, userId: string, organizationId?: string) {
+function workspaceRows(db: DatabaseClient, userId: string, organizationId?: string) {
   return db
     .select({
       id: organization.id,
@@ -448,7 +448,7 @@ function workspaceRows(db: DatabaseShape, userId: string, organizationId?: strin
  * read of its own rather than a join on the workspaces', because a
  * workspace holding several would otherwise be listed once for each.
  */
-function installationRows(db: DatabaseShape, userId: string, organizationId?: string) {
+function installationRows(db: DatabaseClient, userId: string, organizationId?: string) {
   return db
     .select({
       organizationId: githubInstallation.organizationId,
@@ -489,7 +489,7 @@ const findInstallations = SqlSchema.findAll({
  * name the service holds now. A read of its own, as the installations are,
  * since a workspace holds one row per experiment.
  */
-function experimentRows(db: DatabaseShape, userId: string, organizationId?: string) {
+function experimentRows(db: DatabaseClient, userId: string, organizationId?: string) {
   return db
     .select({
       organizationId: workspaceExperiment.organizationId,
@@ -531,11 +531,14 @@ function byWorkspace<Row extends { readonly organizationId: string }>(
   rows: readonly Row[],
 ): ReadonlyMap<string, readonly Row[]> {
   const grouped = new Map<string, Row[]>();
+
   for (const row of rows) {
     const listed = grouped.get(row.organizationId);
+
     if (listed === undefined) grouped.set(row.organizationId, [row]);
     else listed.push(row);
   }
+
   return grouped;
 }
 
@@ -580,9 +583,12 @@ function faceOfRow(
 ): Pick<Workspace, "photoVersion" | "pictureUrl"> {
   if (row.logo !== null && photoOfLogo(row.logo) !== undefined) {
     const digest = createHash("sha256").update(row.logo).digest("hex");
+
     return { photoVersion: digest.slice(0, PHOTO_VERSION_CHARS) };
   }
+
   const pictureUrl = row.personalOf === null ? undefined : pinnedPictureUrl(row.ownerImage);
+
   return pictureUrl === undefined ? {} : { pictureUrl };
 }
 
@@ -601,9 +607,11 @@ function workspaceOfRow(
     login: installation.login,
     active: installation.status === GITHUB_INSTALLATION_STATUS.ACTIVE,
   }));
+
   // Note that a desktop from before several reads one account alone, so it reads the first one
   // still active, because the first linked may have lapsed while another runs.
   const first = githubInstallations.find((one) => one.active) ?? githubInstallations[0];
+
   const workspace: Workspace = {
     id: row.id,
     name: row.name,
@@ -616,6 +624,7 @@ function workspaceOfRow(
     ...formerSlugsOf(row.formerSlugs),
     ...(experiments.length === 0 ? undefined : { experiments: experiments.map(experimentOfRow) }),
   };
+
   return row.personal ? { ...workspace, personal: true } : workspace;
 }
 
@@ -632,10 +641,13 @@ function spelledSlugOf(name: string): string {
     .replace(/^-+|-+$/gu, "")
     .slice(0, WORKSPACE_BOUNDS.MAX_SLUG_CHARS)
     .replace(/-+$/u, "");
+
   if (spelled === "") return "";
+
   // Note that no name takes the slug an account's first workspace falls back to, so an ensure finds its own there, nor a step of our own paths.
   const own =
     spelled.startsWith(PERSONAL_WORKSPACE_SLUG_PREFIX) || RESERVED_WORKSPACE_SLUGS.has(spelled);
+
   return own ? `workspace-${spelled}` : spelled;
 }
 
@@ -663,8 +675,10 @@ function personalSlugsOf(
   const fallback = `${PERSONAL_WORKSPACE_SLUG_PREFIX}${userId}`;
   const last = `${fallback}-${randomUUID()}`;
   const readable = spelledSlugOf(name) || spelledSlugOf(githubLogin ?? "");
+
   if (readable === "") return [fallback, last];
   const suffix = createHash("sha256").update(userId).digest("hex").slice(0, PERSONAL_SUFFIX_CHARS);
+
   return [readable, `${readable}-${suffix}`, fallback, last];
 }
 
@@ -686,6 +700,7 @@ function createLinkedOrganization(
 ): WorkspaceStoreEffect<string, Cause.UnknownError> {
   const [slug, ...rest] = slugs;
   const [next, ...after] = rest;
+
   // Note that a slug some workspace stood under before stays that workspace's, so none is made under it while another is left to try.
   if (next !== undefined) {
     return Effect.flatMap(formerSlugHeld(slug), (held) =>
@@ -694,6 +709,7 @@ function createLinkedOrganization(
         : madeOrAdopted(creation, slug, [next, ...after], linked, seams),
     );
   }
+
   return madeOrAdopted(creation, slug, [], linked, seams);
 }
 
@@ -711,10 +727,13 @@ function madeOrAdopted(
       Effect.flatMap(findOrganizationBySlug(slug), (standing) => {
         if (Option.isNone(standing)) return Effect.fail(refusal);
         const { organizationId } = standing.value;
+
         return Effect.flatMap(linked(organizationId), (adopted) => {
           if (adopted) return Effect.succeed(organizationId);
           const [next, ...after] = rest;
+
           if (next === undefined) return Effect.fail(refusal);
+
           return createLinkedOrganization(creation, [next, ...after], linked, seams);
         });
       }),
@@ -772,6 +791,7 @@ function seenThroughGitHub(userId: string, row: GitHubReachedColumns): SQL {
         ),
       ),
   );
+
   return sql`(${eq(row.access, GITHUB_ACCESS.APP)} or ${eq(row.owner, userId)} or ${readsRepository})`;
 }
 
@@ -813,6 +833,7 @@ export function agentVisibleTo(userId: string): SQL {
       .from(task)
       .where(and(eq(task.id, agentTable.taskId), taskReachableBy(userId))),
   );
+
   return sql`(${agentReachableBy(userId)} and ${taskReached})`;
 }
 
@@ -857,18 +878,23 @@ export function ensurePersonalWorkspace(
 ): WorkspaceStoreEffect<Option.Option<string>, Cause.UnknownError> {
   return Effect.gen(function* () {
     const standing = yield* personalWorkspaceOf(userId);
+
     if (Option.isSome(standing)) return standing;
     const account = yield* findAccountFace(userId);
+
     if (Option.isNone(account)) return Option.none();
     const { name, githubLogin } = account.value;
+
     const organizationId = yield* createLinkedOrganization(
       { name, userId, metadata: PERSONAL_WORKSPACE_METADATA },
       personalSlugsOf(userId, name, githubLogin),
       (candidate) => isOwnPersonalOrganization(userId, candidate),
       seams,
     );
+
     const now = yield* DateTime.nowAsDate;
     yield* insertPersonalWorkspace({ userId, organizationId, now });
+
     return yield* personalWorkspaceOf(userId);
   });
 }
@@ -910,7 +936,7 @@ export type WorkspaceAgentConversation = typeof WorkspaceAgentConversationSchema
  * account that ran it rather than the workspace, so a workspace's delete
  * reads these while its agents stand and, once they are gone, deletes the
  * conversations, as a task's delete does its own, the sessions' sandboxes,
- * the repositories' base drives, and the local agents' folders on their
+ * the workspace's drive, and the local agents' folders on their
  * devices.
  */
 export function workspaceAgentConversations(
@@ -931,6 +957,7 @@ export function listWorkspaces(userId: string): WorkspaceStoreEffect<readonly Wo
     const rows = yield* findWorkspaces(userId);
     const installations = byWorkspace(yield* findAllInstallations(userId));
     const experiments = byWorkspace(yield* findAllExperiments(userId));
+
     return [
       ...rows.filter((row) => row.personalOf !== null),
       ...rows.filter((row) => row.personalOf === null),
@@ -986,9 +1013,11 @@ export function workspaceOf(
 ): WorkspaceStoreEffect<Option.Option<Workspace>> {
   return Effect.gen(function* () {
     const row = yield* findWorkspace({ userId, organizationId });
+
     if (Option.isNone(row)) return Option.none();
     const installations = yield* findInstallations({ userId, organizationId });
     const experiments = yield* findExperiments({ userId, organizationId });
+
     return Option.some(workspaceOfRow(row.value, installations, experiments));
   });
 }
@@ -1005,6 +1034,7 @@ export function workspaceGitHubAccountId(
 ): WorkspaceStoreEffect<Option.Option<number>> {
   return Effect.map(findInstallations({ userId, organizationId }), (installations) => {
     const active = installations.find((one) => one.status === GITHUB_INSTALLATION_STATUS.ACTIVE);
+
     return Option.fromNullishOr((active ?? installations[0])?.accountId);
   });
 }
@@ -1045,6 +1075,7 @@ export function createWorkspace(
   seams: WorkspaceSeams,
 ): WorkspaceStoreEffect<string, Cause.UnknownError> {
   const slug = slugOf(name);
+
   return createLinkedOrganization(
     { name, userId, metadata: {} },
     [slug, `${slug}-${randomUUID().slice(0, 8)}`],
@@ -1062,7 +1093,9 @@ export function readAccountNames(
   ids: readonly string[],
 ): WorkspaceStoreEffect<ReadonlyMap<string, string>> {
   const asked = [...new Set(ids)];
+
   if (asked.length === 0) return Effect.succeed(new Map());
+
   return Effect.map(
     findAccountNames(asked),
     (rows) => new Map(rows.map((row) => [row.id, row.name])),

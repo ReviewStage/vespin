@@ -50,6 +50,7 @@ const openUser = Effect.gen(function* () {
   yield* (yield* Database)
     .insert(user)
     .values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -63,6 +64,7 @@ const phoneOf = (userId: string) =>
     yield* registerPushDevice(userId, { ...phone, bundleId: BUNDLE_ID });
     const startToken = token();
     yield* registerLiveActivityToken(userId, phone, LIVE_ACTIVITY_TOKEN.START, startToken);
+
     return { phone, startToken };
   });
 
@@ -71,6 +73,7 @@ const runningAgent = (userId: string, title: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
     const task = yield* startTask(userId, { name: title });
+
     const started = yield* createAgent(userId, {
       taskId: task.id,
       idempotencyKey: randomUUID(),
@@ -81,10 +84,12 @@ const runningAgent = (userId: string, title: string) =>
       prompt: null,
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
     });
+
     assert.ok(Option.isSome(started));
     const { agent } = started.value;
     yield* db.update(agentTable).set({ title }).where(eq(agentTable.id, agent.id));
     const now = yield* DateTime.nowAsDate;
+
     const [turn] = yield* db
       .insert(turns)
       .values({
@@ -96,11 +101,14 @@ const runningAgent = (userId: string, title: string) =>
         startedAt: now,
       })
       .returning({ id: turns.id });
+
     assert.ok(turn);
+
     const settle = db
       .update(turns)
       .set({ status: TURN_STATUS.SETTLED, settledAt: yield* DateTime.nowAsDate })
       .where(eq(turns.id, turn.id));
+
     return { agentId: agent.id, startedAt: now.getTime(), settle };
   });
 
@@ -113,6 +121,7 @@ const sentTo = (sent: readonly ApnsNotification[], ...tokens: string[]) =>
 
 const said = (notification: ApnsNotification | undefined) => {
   assert.ok(notification);
+
   return {
     token: notification.device.token,
     pushType: notification.pushType,
@@ -126,6 +135,7 @@ it.layer(getTestDB())("a member's live activity", (it) => {
     "the first running agent starts it, a second updates it, and none running ends it and forgets its token",
     () => {
       const sender = recordingApnsSender();
+
       return Effect.gen(function* () {
         const member = yield* openUser;
         const { phone, startToken } = yield* phoneOf(member);
@@ -212,6 +222,7 @@ it.layer(getTestDB())("a member's live activity", (it) => {
     "a routine change inside the throttle waits for the sweep, an ask goes at once, and an unchanged state goes nowhere",
     () => {
       const sender = recordingApnsSender();
+
       return Effect.gen(function* () {
         const member = yield* openUser;
         const { phone } = yield* phoneOf(member);
@@ -249,6 +260,7 @@ it.layer(getTestDB())("a member's live activity", (it) => {
 
   it.effect("a token Apple says is gone is forgotten", () => {
     const sender = recordingApnsSender(APNS_DELIVERY.TOKEN_GONE);
+
     return Effect.gen(function* () {
       const member = yield* openUser;
       const { phone } = yield* phoneOf(member);
@@ -271,6 +283,7 @@ it.layer(getTestDB())("a member's live activity", (it) => {
     const rotated = token();
     let phone: { token: string; environment: typeof PUSH_ENVIRONMENT.SANDBOX } | undefined;
     let member = "";
+
     // Note that the phone registers a new update token while the update to its old one is in flight, and Apple then says the old one is gone.
     const sender = recordingApnsSender((notification) =>
       notification.payload.aps.event === "update" && phone !== undefined
@@ -282,6 +295,7 @@ it.layer(getTestDB())("a member's live activity", (it) => {
           )
         : APNS_DELIVERY.DELIVERED,
     );
+
     return Effect.gen(function* () {
       member = yield* openUser;
       const registered = yield* phoneOf(member);
@@ -309,6 +323,7 @@ it.layer(getTestDB())("a member's live activity", (it) => {
     const sender = recordingApnsSender(() =>
       Effect.as(Effect.repeat(Effect.yieldNow, { times: 5 }), APNS_DELIVERY.DELIVERED),
     );
+
     return Effect.gen(function* () {
       const member = yield* openUser;
       yield* phoneOf(member);
@@ -328,6 +343,7 @@ it.layer(getTestDB())("a member's live activity", (it) => {
 
   it.effect("an end that crosses a new turn starts the activity again", () => {
     let member = "";
+
     // Note that a new turn begins while the end is in flight, after its own refresh read the activity standing.
     const sender = recordingApnsSender((notification) =>
       notification.payload.aps.event === "end"
@@ -337,6 +353,7 @@ it.layer(getTestDB())("a member's live activity", (it) => {
           )
         : APNS_DELIVERY.DELIVERED,
     );
+
     return Effect.gen(function* () {
       member = yield* openUser;
       const { phone } = yield* phoneOf(member);
@@ -353,9 +370,11 @@ it.layer(getTestDB())("a member's live activity", (it) => {
 
   it.effect("a start Apple did not take is tried again by the sweep", () => {
     let answers = 0;
+
     const sender = recordingApnsSender(() =>
       answers++ === 0 ? APNS_DELIVERY.FAILED : APNS_DELIVERY.DELIVERED,
     );
+
     return Effect.gen(function* () {
       const member = yield* openUser;
       const { startToken } = yield* phoneOf(member);
@@ -375,11 +394,13 @@ it.layer(getTestDB())("a member's live activity", (it) => {
     "an end Apple did not take is tried again by the sweep, kept by Apple for the activity's lifetime",
     () => {
       let endsTried = 0;
+
       const sender = recordingApnsSender((notification) =>
         notification.payload.aps.event === "end" && endsTried++ === 0
           ? APNS_DELIVERY.FAILED
           : APNS_DELIVERY.DELIVERED,
       );
+
       return Effect.gen(function* () {
         const member = yield* openUser;
         const { phone } = yield* phoneOf(member);
@@ -414,6 +435,7 @@ it.layer(getTestDB())("a member's live activity", (it) => {
 
   it.effect("a phone set to never take a push has its standing activity ended", () => {
     const sender = recordingApnsSender();
+
     return Effect.gen(function* () {
       const member = yield* openUser;
       const { phone } = yield* phoneOf(member);
@@ -440,11 +462,13 @@ it.layer(getTestDB())("a member's live activity", (it) => {
 
   it.effect("one member's refresh that dies leaves the sweep standing", () => {
     let doomed = "";
+
     const sender = recordingApnsSender((notification) =>
       notification.device.token === doomed
         ? Effect.die("a broken sender")
         : APNS_DELIVERY.DELIVERED,
     );
+
     return Effect.gen(function* () {
       const member = yield* openUser;
       const { phone, startToken } = yield* phoneOf(member);
@@ -462,6 +486,7 @@ it.layer(getTestDB())("a member's live activity", (it) => {
 
   it.effect("one member's refresh never pushes another's phone", () => {
     const sender = recordingApnsSender();
+
     return Effect.gen(function* () {
       const owner = yield* openUser;
       const other = yield* openUser;

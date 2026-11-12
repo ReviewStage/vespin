@@ -39,6 +39,7 @@ export type LiveTopics =
 function keyValues(row: SyncWindowRow, column: string): readonly string[] {
   return row.key.flatMap((key) => {
     const value = key[column];
+
     return value === undefined ? [] : [String(value)];
   });
 }
@@ -49,16 +50,19 @@ export function ownMovedKeys<Part extends string>(
   rows: readonly SyncWindowRow[],
 ): ReadonlyMap<Part, ReadonlySet<string>> {
   const moved = new Map<Part, ReadonlySet<string>>();
+
   for (const [part, read] of own) {
     const reached = rows.filter((row) => row.reached && row.table === read.table.name);
     moved.set(part, new Set(reached.flatMap((row) => keyValues(row, read.key))));
   }
+
   return moved;
 }
 
 /** What the window's rows moved, as a delta read narrows its statements to. */
 export function syncMovedOf(rows: readonly SyncWindowRow[]): SyncMoved {
   const of = (table: SyncTable) => rows.filter((row) => row.table === table.name);
+
   return {
     keys: (table, column) => [...new Set(of(table).flatMap((row) => keyValues(row, column.name)))],
     topics: (table, kind) => [

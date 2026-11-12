@@ -117,6 +117,7 @@ export function orListParts(
   count: number,
 ): readonly ({ readonly item: number } | { readonly words: string })[] {
   const keys = Array.from({ length: count }, (_, index) => String(index));
+
   return OR.formatToParts(keys).map((part) =>
     part.type === "element" ? { item: Number(part.value) } : { words: part.value },
   );
@@ -202,7 +203,9 @@ const NEW_INBOX_ITEM: Noun = {
  */
 export function inboxArrivalWords(said: readonly string[]): string {
   const [only] = said;
+
   if (said.length === 1 && only !== undefined) return `New in your inbox: ${only}`;
+
   return `${countWords(said.length, NEW_INBOX_ITEM)} in your inbox`;
 }
 

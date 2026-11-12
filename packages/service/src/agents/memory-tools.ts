@@ -275,8 +275,10 @@ export function runRemember(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   const asked = readRemember(input);
+
   if (Result.isFailure(asked)) return Effect.succeed(rejected(MEMORY_REFUSAL.UNREADABLE_REMEMBER));
   const { text, replaces } = asked.success;
+
   return orUnavailable(
     Effect.map(
       saveWorkspaceMemory(call.userId, call.workspaceId, text, replaces, call.source),
@@ -305,6 +307,7 @@ export function recordMemoryRecalls(
   source: MemorySource,
 ): Effect.Effect<void, never, DatabaseServices> {
   if (memoryIds.length === 0) return Effect.void;
+
   return Effect.catch(
     Effect.andThen(
       logMemoryRecalls(call.workspaceId, memoryIds, source),
@@ -324,7 +327,9 @@ export function runRecall(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   const asked = readRecall(input);
+
   if (Result.isFailure(asked)) return Effect.succeed(rejected(MEMORY_REFUSAL.UNREADABLE_RECALL));
+
   return orUnavailable(
     Effect.gen(function* () {
       const answer = yield* searchWorkspaceMemories(
@@ -332,7 +337,9 @@ export function runRecall(
         call.workspaceId,
         asked.success.query,
       );
+
       if (answer.kind === WORKSPACE_MEMORY.NOT_MEMBER) return rejected(MEMORY_REFUSAL.UNAVAILABLE);
+
       if (call.source !== undefined) {
         yield* recordMemoryRecalls(
           call,
@@ -340,6 +347,7 @@ export function runRecall(
           call.source,
         );
       }
+
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         memories: answer.memories.map(memoryRecord),
@@ -378,8 +386,10 @@ function runListMemoriesSince(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   const asked = readList(input);
+
   if (Result.isFailure(asked)) return Effect.succeed(rejected(MEMORY_REFUSAL.UNREADABLE_LIST));
   const { since, offset = 0 } = asked.success;
+
   return orUnavailable(
     Effect.map(
       listWorkspaceMemoriesSince(
@@ -391,6 +401,7 @@ function runListMemoriesSince(
       (answer): WireRecord => {
         if (answer.kind !== WORKSPACE_MEMORY.READ) return rejected(MEMORY_REFUSAL.UNAVAILABLE);
         const next = offset + answer.memories.length;
+
         return {
           status: ACTION_RESULT_STATUS.ACCEPTED,
           memories: answer.memories.map(listedRecord),
@@ -408,12 +419,15 @@ function runForget(
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, DatabaseServices> {
   const asked = readForget(input);
+
   if (Result.isFailure(asked)) return Effect.succeed(rejected(MEMORY_REFUSAL.UNREADABLE_FORGET));
   const { memoryId } = asked.success;
   const { userId, workspaceId } = call;
+
   return orUnavailable(
     Effect.gen(function* () {
       const answer = yield* forgetWorkspaceMemory(userId, workspaceId, memoryId);
+
       switch (answer.kind) {
         case WORKSPACE_MEMORY.NOT_MEMBER:
           return rejected(MEMORY_REFUSAL.UNAVAILABLE);
@@ -421,6 +435,7 @@ function runForget(
           return rejected(MEMORY_REFUSAL.NOT_FORGETTABLE);
         case WORKSPACE_MEMORY.READ:
           yield* recordServerEvent(SERVER_EVENT.MEMORY_FORGET, { userId, workspaceId }, {});
+
           return {
             status: ACTION_RESULT_STATUS.ACCEPTED,
             forgotten: memoryId,
@@ -450,13 +465,17 @@ function agentMemory(
       if (!(yield* experimentOnIn(callerWorkspaceId(call.caller), EXPERIMENT.MEMORY))) {
         return rejected(EXPERIMENT_OFF_REFUSAL);
       }
+
       const userId = callerUserId(call.caller);
       // Provenance reads the calling agent's turn; a member's call is their own words, and has none.
       const agent = callerAgent(call.caller);
       const read = agent === undefined ? undefined : yield* provenance(agent);
+
       if (read?.refusal !== undefined) return rejected(read.refusal);
       const workspace = yield* callerWorkspace(call.caller);
+
       if (Option.isNone(workspace)) return rejected(MEMORY_REFUSAL.UNAVAILABLE);
+
       return yield* run({
         workspaceId: workspace.value,
         userId,

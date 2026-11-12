@@ -92,6 +92,7 @@ export function pullRequestMoveOf(request: PullRequestActionRequest): PullReques
 /** One check, begun `ago` before the fixture landed and run for `ran`; one still running has run for none. */
 function check(name: string, state: CheckState, ago: number, ran: number): PullRequestCheck {
   const startedAt = LANDED - ago;
+
   return {
     name,
     app: "GitHub Actions",
@@ -107,7 +108,7 @@ function pullRequestOf(
   number: number,
   title: string,
   head: string,
-  shape: Pick<AgentOverviewPullRequest, "merge" | "merging" | "requested">,
+  standing: Pick<AgentOverviewPullRequest, "merge" | "merging" | "requested">,
 ): AgentOverviewPullRequest {
   return {
     number,
@@ -121,7 +122,7 @@ function pullRequestOf(
     mergedAt: null,
     author: ADA,
     labels: [],
-    ...shape,
+    ...standing,
   };
 }
 
@@ -228,6 +229,7 @@ function entry(
 ) {
   const url = `${REPOSITORY_URL}/pull/${number}#${state === undefined ? "issuecomment" : "pullrequestreview"}-${ago}`;
   const at = LANDED - ago;
+
   return state === undefined
     ? { kind: CONVERSATION_ENTRY.COMMENT, by, html: `<p>${body}</p>`, body, at, url }
     : { kind: CONVERSATION_ENTRY.REVIEW, by, state, html: `<p>${body}</p>`, body, at, url };
@@ -307,7 +309,9 @@ function moved(
   move: PullRequestMove | undefined,
 ): AgentOverviewPullRequest {
   const { merging } = pullRequest;
+
   if (move === undefined || merging === undefined) return pullRequest;
+
   switch (move) {
     case PULL_REQUEST_MOVE.MERGED:
       return { ...pullRequest, state: PULL_REQUEST_STATE.MERGED, mergedAt: LANDED };
@@ -341,13 +345,19 @@ function laid<Part>(
   parts: () => ReadonlyMap<number, Part>,
 ): AppPullRequestPart<Part> {
   const kept = cache.get(held);
-  // SAFETY: a read's entry is only ever written below, from that same read.
-  if (kept?.moves === moves) return kept.staged as AppPullRequestPart<Part>;
+
+  if (kept?.moves === moves) {
+    // SAFETY: a read's entry is only ever written below, from that same read.
+    return kept.staged as AppPullRequestPart<Part>;
+  }
+
   const rows = Object.fromEntries(
     [...parts()].map(([number, each]) => [String(number), { rows: each }]),
   );
+
   const staged = { ...held, [INVITES_AGENT]: { ...held[INVITES_AGENT], ...rows } };
   cache.set(held, { moves, staged });
+
   return staged;
 }
 
@@ -367,10 +377,12 @@ export function pullRequestPartsAppState(
         { pullRequest: moved(each, moves.get(each.number)) },
       ]),
     );
+
   const checks = () =>
     new Map<number, AgentOverviewChecksAnswerView>(
       [...CHECKS].map(([number, each]) => [number, { pullRequest: { checks: each } }]),
     );
+
   return {
     ...state,
     [LIVE_READ.PULL_REQUEST]: laid(

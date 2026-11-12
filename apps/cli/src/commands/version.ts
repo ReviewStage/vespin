@@ -11,6 +11,7 @@ export const VERSION = process.env.APP_CLI_VERSION ?? "0.0.0";
 
 export const versionCommand = Command.make("version", {}, () => {
   const install = installKind();
+
   return answer({
     json: { version: VERSION, install },
     lines: [`${VERSION} (${install} install)`],

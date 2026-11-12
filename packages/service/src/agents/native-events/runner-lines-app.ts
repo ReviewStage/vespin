@@ -73,11 +73,14 @@ const readQuery = Schema.decodeUnknownOption(ReadQuerySchema);
 function bounded(lines: readonly RunnerLine[]): readonly RunnerLine[] {
   let bytes = 0;
   const carried: RunnerLine[] = [];
+
   for (const line of lines) {
     bytes += Buffer.byteLength(line.text);
+
     if (carried.length > 0 && bytes > RUNNER_LINES_ANSWER.MAX_BYTES) break;
     carried.push(line);
   }
+
   return carried;
 }
 
@@ -89,28 +92,38 @@ const runnerLinesEndpoint = /* @__PURE__ */ Effect.fn("web/runnerLinesEndpoint")
     HttpServerRequest.HttpServerRequest | DatabaseServices
   > {
     const incoming = yield* HttpServerRequest.HttpServerRequest;
+
     if (incoming.method !== HTTP_METHOD.GET) {
       return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
     }
+
     const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
     const bearer = presentedBearer(request);
+
     if (bearer === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
     const query = readQuery(Object.fromEntries(new URL(request.url).searchParams));
+
     if (Option.isNone(query)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
     const admitted = yield* hostedStoreOrUnavailable(
       admitRunnerBearer(bearer, presentedLaunch(request)),
     );
+
     if (Option.isNone(admitted)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
     const { target } = admitted.value;
+
     const agent = yield* hostedStoreOrUnavailable(
       readAgentOfConversation(target.userId, target.conversationId),
     );
+
     if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_TOKEN);
+
     const read = runnerLinesPast(target.userId, agent.value.id, {
       launch: query.value[RUNNER_LINES.QUERY.LAUNCH],
       after: query.value[RUNNER_LINES.QUERY.AFTER],
       limit: RUNNER_LINES_ANSWER.LIMIT,
     });
+
     const held = yield* hostedStoreOrUnavailable(
       heldUntil(
         read,
@@ -120,8 +133,10 @@ const runnerLinesEndpoint = /* @__PURE__ */ Effect.fn("web/runnerLinesEndpoint")
         Duration.millis(RUNNER_LINES.HOLD_MS),
       ),
     );
+
     const lines = Option.match(held, { onNone: () => [], onSome: (moved) => bounded(moved.read) });
     const answer: RunnerLinesAnswer = { lines };
+
     return hostedJsonResponse(HOSTED_HTTP_STATUS.OK, answer);
   },
 );

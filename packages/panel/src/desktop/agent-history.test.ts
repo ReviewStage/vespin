@@ -54,12 +54,14 @@ async function mount(
   const chosen: MainTab[] = [];
   const opened: string[] = [];
   const base = tasksControl();
+
   const agents = agentsControl({
     agents: [OPEN, CLOSED],
     agentIds: [OPEN.id, CLOSED.id],
     archived: [ARCHIVED],
     onNewDraft: () => "draft-1",
   });
+
   const main = {
     ...base.mainTabs,
     tabs: openAgents.map((id) => agentTab(id)),
@@ -68,6 +70,7 @@ async function mount(
     onChoose: (tab: MainTab) => chosen.push(tab),
     newTabAsked: asked,
   };
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -94,6 +97,7 @@ async function mount(
       ),
     ),
   );
+
   return { chosen, opened };
 }
 
@@ -122,9 +126,11 @@ test("⌘T's ask opens a New agent as the + does, once the column has the keys",
 test("History lists the closed and the archived agents but not one whose tab is open, and a row's press opens its agent", async () => {
   const { opened } = await mount();
   await act(async () => button("Agent history").click());
+
   const panel =
     document.querySelector<HTMLElement>('[role="dialog"][aria-label="Agent history"]') ??
     assert.fail("History hangs its panel");
+
   const words = panel.textContent ?? "";
 
   assert.match(words, /Expiry job/u);
@@ -135,6 +141,7 @@ test("History lists the closed and the archived agents but not one whose tab is 
     [...panel.querySelectorAll<HTMLElement>("li button")].find((each) =>
       each.textContent?.includes(CLOSED.title ?? ""),
     ) ?? assert.fail("the closed agent's row");
+
   await act(async () => closedRow.click());
   assert.deepEqual(opened, [CLOSED.id]);
 });
@@ -148,9 +155,11 @@ test("History stands nowhere while every agent's tab is open", async () => {
 test("History leaves out an archived agent whose tab is open, as it does a live one's", async () => {
   await mount(false, [OPEN.id, ARCHIVED.id]);
   await act(async () => button("Agent history").click());
+
   const panel =
     document.querySelector<HTMLElement>('[role="dialog"][aria-label="Agent history"]') ??
     assert.fail("History hangs its panel");
+
   assert.match(panel.textContent ?? "", /Expiry job/u);
   assert.doesNotMatch(panel.textContent ?? "", /Old onboarding copy/u);
 });

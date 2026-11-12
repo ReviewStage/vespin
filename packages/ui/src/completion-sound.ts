@@ -45,20 +45,28 @@ import {
 
 /** A gain envelope cannot ramp from or to zero, so it rests here. */
 const SILENCE = 0.0001;
+
 /** How long a note takes to reach its peak, which keeps its start from clicking. */
 const ATTACK = 0.01;
+
 /** How long an oscillator runs past its envelope's end before it is stopped. */
 const TAIL = 0.02;
+
 /** The bandpass Q a filtered sweep is shaped by: wide enough that a sawtooth keeps most of its level through it. */
 const SWEEP_FILTER_Q = 1.5;
+
 /** How far apart, in cents, the two voices of a sine or triangle note sit. */
 const DETUNE_CENTS = 4;
+
 /** How long the room rings, in seconds. */
 const ROOM_LENGTH = 0.7;
+
 /** How steeply the room's ring dies away: higher is a smaller room. */
 const ROOM_DECAY = 3.2;
+
 /** How much of the room is mixed under the dry sound. */
 const ROOM_MIX = 0.22;
+
 /**
  * The bus's lift, about 5.5 dB, which brings the set closer to a system
  * alert's loudness while the loudest recipe's peak, Pop's, stays about 1 dB
@@ -67,6 +75,7 @@ const ROOM_MIX = 0.22;
  * than a long one and would undo the set's even loudness.
  */
 const MASTER_LEVEL = 1.9;
+
 /** How long a sound cut short takes to fade, which keeps the cut from clicking. */
 const CUT = 0.03;
 
@@ -118,6 +127,7 @@ function envelope(stage: Stage, when: number, length: number, gain: number): Gai
   amp.gain.setValueAtTime(SILENCE, at + when);
   amp.gain.exponentialRampToValueAtTime(gain, at + when + ATTACK);
   amp.gain.exponentialRampToValueAtTime(SILENCE, at + when + length);
+
   return amp;
 }
 
@@ -131,6 +141,7 @@ function tone(stage: Stage, { when, hz, length, gain, wave = "sine" }: Tone): vo
   const detunes = wave === "sine" || wave === "triangle" ? [-DETUNE_CENTS, DETUNE_CENTS] : [0];
   const amp = envelope(stage, when, length, gain / detunes.length);
   amp.connect(out);
+
   for (const cents of detunes) {
     const oscillator = context.createOscillator();
     oscillator.type = wave;
@@ -140,6 +151,7 @@ function tone(stage: Stage, { when, hz, length, gain, wave = "sine" }: Tone): vo
     oscillator.start(at + when);
     oscillator.stop(at + when + length + TAIL);
   }
+
   reach(stage, when + length + TAIL);
 }
 
@@ -154,6 +166,7 @@ function sweep(
   oscillator.frequency.exponentialRampToValueAtTime(toHz, at + when + length);
   const amp = envelope(stage, when, length, gain);
   oscillator.connect(amp);
+
   if (filterHz === undefined) {
     amp.connect(out);
   } else {
@@ -163,6 +176,7 @@ function sweep(
     filter.Q.value = SWEEP_FILTER_Q;
     amp.connect(filter).connect(out);
   }
+
   oscillator.start(at + when);
   oscillator.stop(at + when + length + TAIL);
   reach(stage, when + length + TAIL);
@@ -174,14 +188,17 @@ function burst(stage: Stage, { when, length, gain, filterHz, q }: Burst): void {
   const frames = Math.floor(context.sampleRate * length);
   const buffer = context.createBuffer(1, frames, context.sampleRate);
   const samples = buffer.getChannelData(0);
+
   for (let frame = 0; frame < frames; frame++) {
     samples[frame] = (Math.random() * 2 - 1) * (1 - frame / frames);
   }
+
   const source = context.createBufferSource();
   source.buffer = buffer;
   const filter = context.createBiquadFilter();
   filter.type = "bandpass";
   filter.frequency.value = filterHz;
+
   if (q !== undefined) filter.Q.value = q;
   const amp = context.createGain();
   amp.gain.value = gain;
@@ -326,8 +343,10 @@ interface Sounding {
 
 let shared: Player | undefined;
 let sounding: Sounding | undefined;
+
 /** Each of the account's clips as last handed in, decoded; none until one decodes. */
 const customClips = new Map<CustomCompletionSound, AudioBuffer>();
+
 /** How many clips have been handed in for each sound, so a slow decode of one handed in before the latest never lands. */
 const clipsHanded = new Map<CustomCompletionSound, number>();
 
@@ -335,14 +354,18 @@ const clipsHanded = new Map<CustomCompletionSound, number>();
 function roomOf(context: AudioContext): ConvolverNode {
   const frames = Math.floor(context.sampleRate * ROOM_LENGTH);
   const ring = context.createBuffer(2, frames, context.sampleRate);
+
   for (let channel = 0; channel < 2; channel++) {
     const samples = ring.getChannelData(channel);
+
     for (let frame = 0; frame < frames; frame++) {
       samples[frame] = (Math.random() * 2 - 1) * (1 - frame / frames) ** ROOM_DECAY;
     }
   }
+
   const room = context.createConvolver();
   room.buffer = ring;
+
   return room;
 }
 
@@ -356,6 +379,7 @@ function busOf(context: AudioContext): AudioNode {
   input.connect(master);
   input.connect(roomOf(context)).connect(wet).connect(master);
   master.connect(context.destination);
+
   return input;
 }
 
@@ -377,10 +401,13 @@ function sharedPlayer(): Player | undefined {
     shared = undefined;
     sounding = undefined;
   }
+
   if (shared !== undefined) return shared;
+
   if (typeof AudioContext === "undefined") return undefined;
   const context = new AudioContext();
   shared = { context, bus: busOf(context) };
+
   return shared;
 }
 
@@ -393,10 +420,13 @@ function cut(context: AudioContext, { out }: Sounding): void {
 /** The account's clip for `sound`, at the bus's own level, or the chime where none is decoded. */
 function clipOrChime(sound: CustomCompletionSound, stage: Stage): void {
   const customClip = customClips.get(sound);
+
   if (customClip === undefined) {
     RECIPES[COMPLETION_SOUND.CHIME](stage);
+
     return;
   }
+
   clip(stage, customClip);
 }
 
@@ -422,6 +452,7 @@ function perform(sound: CompletionSound, stage: Stage): void {
 async function decoded(bytes: Uint8Array): Promise<AudioBuffer | undefined> {
   try {
     const player = sharedPlayer();
+
     // Note that the bytes are copied, because a decode takes the buffer it is handed away.
     return await player?.context.decodeAudioData(bytes.slice().buffer);
   } catch {
@@ -442,7 +473,9 @@ export async function setCustomSoundClip(
   const handed = (clipsHanded.get(sound) ?? 0) + 1;
   clipsHanded.set(sound, handed);
   const clip = bytes === undefined ? undefined : await decoded(bytes);
+
   if (handed !== clipsHanded.get(sound)) return;
+
   if (clip === undefined) customClips.delete(sound);
   else customClips.set(sound, clip);
 }
@@ -471,6 +504,7 @@ export function playCompletionSound(sound: CompletionSound): void {
  */
 export async function playSoundClip(bytes: Uint8Array): Promise<void> {
   const buffer = await decoded(bytes);
+
   if (buffer !== undefined) sounded(undefined, (stage) => clip(stage, buffer));
 }
 
@@ -482,15 +516,20 @@ export async function playSoundClip(bytes: Uint8Array): Promise<void> {
 function sounded(sound: CompletionSound | undefined, draw: (stage: Stage) => void): void {
   try {
     const player = sharedPlayer();
+
     if (player === undefined) return;
     const { context, bus } = player;
     const now = context.currentTime;
     const still = sounding !== undefined && now < sounding.until ? sounding : undefined;
+
     if (sound !== undefined && still?.sound === sound) return;
+
     if (context.state !== "running") {
       resumeSoon(context);
+
       return;
     }
+
     if (still !== undefined) cut(context, still);
     const out = context.createGain();
     out.connect(bus);

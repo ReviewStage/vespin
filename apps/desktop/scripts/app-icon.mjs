@@ -13,24 +13,33 @@ export function buildAppIcon(appRoot) {
   const iconsetPath = path.join(appRoot, ".build", "app.iconset");
   const iconPath = path.join(appRoot, ".build", "Vespin.icns");
   const brandIconDirectory = path.join(BRAND_ASSETS_DIRECTORY, "icon");
+
   const sourcePaths = Object.values(ICONSET_SOURCES).map((sourceName) => {
     const sourcePath = path.join(brandIconDirectory, sourceName);
+
     if (!fs.existsSync(sourcePath)) {
       throw new Error(`Vespin brand icon source is missing: ${sourcePath}`);
     }
+
     return sourcePath;
   });
+
   if (fs.existsSync(iconPath)) {
     const builtAt = fs.statSync(iconPath).mtimeMs;
+
     if (sourcePaths.every((sourcePath) => fs.statSync(sourcePath).mtimeMs < builtAt)) {
       return iconPath;
     }
   }
+
   fs.rmSync(iconsetPath, { recursive: true, force: true });
   fs.mkdirSync(iconsetPath, { recursive: true });
+
   for (const [iconsetName, sourceName] of Object.entries(ICONSET_SOURCES)) {
     fs.copyFileSync(path.join(brandIconDirectory, sourceName), path.join(iconsetPath, iconsetName));
   }
+
   execFileSync("iconutil", iconutilArguments(iconsetPath, iconPath), { stdio: "inherit" });
+
   return iconPath;
 }

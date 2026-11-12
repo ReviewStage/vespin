@@ -29,5 +29,6 @@ export function logStoreFailure(failure: StoreFailure): Effect.Effect<void> {
     onNone: () => "",
     onSome: (said) => ` (${said})`,
   });
+
   return Effect.logWarning(`Hosted store unavailable: ${failureKind(failure)}${detail}`);
 }

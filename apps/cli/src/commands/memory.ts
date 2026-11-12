@@ -40,6 +40,7 @@ function memoryJson(memory: MemorySummary) {
 /** Memories as a person reads them: the id, who kept it, and its words. */
 function memoryLines(memories: readonly MemorySummary[]): string[] {
   if (memories.length === 0) return ["No memories."];
+
   return columns(
     memories.map((memory) => [memory.id, memory.keptBy?.name ?? "(gone)", memory.text]),
   );
@@ -49,9 +50,11 @@ const listCommand = Command.make("list", {}, () =>
   Effect.gen(function* () {
     const { workspace } = yield* resolveWorkspace;
     const { hosted } = yield* session;
+
     const { memories } = yield* askService(hosted.account.memories, {
       workspaceId: workspace.id,
     });
+
     yield* answer({
       json: { memories: memories.map(memoryJson) },
       lines: memoryLines(memories),
@@ -76,10 +79,12 @@ const searchCommand = Command.make(
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
       const query = words.join(" ").trim();
+
       const found = yield* askService(hosted.account.searchMemories, {
         workspaceId: workspace.id,
         ...(query === "" ? undefined : { query }),
       });
+
       yield* answer({
         json: { memories: found.memories.map(memoryJson), total: found.total },
         lines: memoryLines(found.memories),
@@ -120,20 +125,25 @@ const saveCommand = Command.make(
           message: "Give the memory as words or with -F, not both.",
         });
       }
+
       const text = (Option.isSome(input) ? yield* readInput(input.value) : words.join(" ")).trim();
+
       if (text === "") {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
           message: "Give the memory as words or with -F.",
         });
       }
+
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
+
       const saved = yield* askService(hosted.account.saveMemory, {
         workspaceId: workspace.id,
         text,
         ...(Option.isSome(replaces) ? { replaces: replaces.value } : undefined),
       });
+
       yield* answer({
         json: { outcome: saved.outcome, memory: memoryJson(saved.memory) },
         lines: [`${SAVED_WORDS[saved.outcome]} ${saved.memory.id}.`],
@@ -165,9 +175,11 @@ const forgetCommand = Command.make(
     Effect.gen(function* () {
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
+
       const left = yield* askService(hosted.account.forgetMemory, {
         query: { workspaceId: workspace.id, id: memory },
       });
+
       yield* answer({
         json: { forgotten: memory, total: left.memories.length },
         lines: [`Forgot ${memory}.`],

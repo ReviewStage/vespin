@@ -48,13 +48,16 @@ function mountAlert(element: ReactElement): HTMLElement {
   const alerts = container.querySelectorAll<HTMLElement>('[role="alert"]');
   expect(alerts).toHaveLength(1);
   const [alert] = alerts;
+
   if (alert === undefined) throw new Error("no alert");
+
   return alert;
 }
 
 for (const placement of [ERROR_STATE_PLACEMENT.INLINE, ERROR_STATE_PLACEMENT.CENTERED]) {
   test(`a ${placement} failure is one alert with its sentence and Retry, whose press tries again`, () => {
     const pressed: string[] = [];
+
     const alert = mountAlert(
       createElement(ErrorState, {
         placement,
@@ -63,6 +66,7 @@ for (const placement of [ERROR_STATE_PLACEMENT.INLINE, ERROR_STATE_PLACEMENT.CEN
         children: LINE,
       }),
     );
+
     const buttons = [...alert.querySelectorAll("button")];
     expect(
       buttons.map((button) => button.getAttribute("aria-label") ?? button.textContent),
@@ -79,6 +83,7 @@ test("Retry is a button the keyboard can stand on", () => {
   const alert = mountAlert(
     createElement(ErrorState, { onRetry: () => undefined, failure: FAILURE, children: LINE }),
   );
+
   const retry = alert.querySelector("button");
   expect(retry?.disabled).toBe(false);
   act(() => retry?.focus());
@@ -87,6 +92,7 @@ test("Retry is a button the keyboard can stand on", () => {
 
 test("a failure with no Retry, or given one where Retry is not offered, says its sentence alone, and offers Copy details alone", () => {
   const alone = mountAlert(createElement(ErrorState, { failure: FAILURE, children: LINE }));
+
   const unoffered = mountAlert(
     createElement(
       RetryOffered.Provider,
@@ -94,6 +100,7 @@ test("a failure with no Retry, or given one where Retry is not offered, says its
       createElement(ErrorState, { failure: FAILURE, onRetry: () => undefined, children: LINE }),
     ),
   );
+
   for (const alert of [alone, unoffered]) {
     expect(alert.textContent).toBe(LINE);
     expect([...alert.querySelectorAll("button")].map((button) => button.ariaLabel)).toEqual([
@@ -107,6 +114,7 @@ for (const placement of [ERROR_STATE_PLACEMENT.INLINE, ERROR_STATE_PLACEMENT.CEN
     const alert = mountAlert(
       createElement(ErrorState, { placement, failure: FAILURE, children: LINE }),
     );
+
     const glyphs = [...alert.querySelectorAll("svg")];
     expect(glyphs.length).toBeGreaterThan(0);
     expect(glyphs.every((glyph) => glyph.closest("[aria-hidden='true']") !== null)).toBe(true);
@@ -116,6 +124,7 @@ for (const placement of [ERROR_STATE_PLACEMENT.INLINE, ERROR_STATE_PLACEMENT.CEN
 
 test("a failure among rows offers its remedy, Retry, Copy details, Remove, and Dismiss in that order, each press doing its own", () => {
   const pressed: string[] = [];
+
   const alert = mountAlert(
     createElement(ErrorState, {
       remedy: { label: "Connect GitHub", onClick: () => pressed.push("remedy") },
@@ -126,6 +135,7 @@ test("a failure among rows offers its remedy, Retry, Copy details, Remove, and D
       children: LINE,
     }),
   );
+
   const buttons = [...alert.querySelectorAll("button")];
   expect(buttons.map((button) => button.getAttribute("aria-label") ?? button.textContent)).toEqual([
     "Connect GitHub",
@@ -135,12 +145,14 @@ test("a failure among rows offers its remedy, Retry, Copy details, Remove, and D
     "Dismiss",
   ]);
   expect(alert.textContent).toBe(`${LINE}Connect GitHubRetryRemove`);
+
   for (const button of buttons) act(() => button.click());
   expect(pressed).toEqual(["remedy", "retry", "remove", "dismiss"]);
 });
 
 test("a failure among rows offers only the presses it is given", () => {
   const pressed: string[] = [];
+
   const alert = mountAlert(
     createElement(ErrorState, {
       onDismiss: () => pressed.push("dismiss"),
@@ -148,6 +160,7 @@ test("a failure among rows offers only the presses it is given", () => {
       children: LINE,
     }),
   );
+
   const buttons = [...alert.querySelectorAll("button")];
   expect(buttons.map((button) => button.getAttribute("aria-label"))).toEqual([
     "Copy details",
@@ -161,6 +174,7 @@ test("a failure among rows offers only the presses it is given", () => {
 test("a row that is itself the retry says its failure as an alert, is named by it and Retry, and its press tries again", () => {
   const failure = "Could not read older versions.";
   const pressed: string[] = [];
+
   const alert = mountAlert(
     createElement(
       "button",
@@ -168,6 +182,7 @@ test("a row that is itself the retry says its failure as an alert, is named by i
       createElement(RetryRowLabel, { failure }),
     ),
   );
+
   expect(alert.textContent).toBe(failure);
   const row = alert.closest("button");
   expect(row?.textContent).toBe(`${failure} Retry`);
@@ -182,6 +197,7 @@ test("a row that is itself the retry says its failure as an alert, is named by i
 
 test("a failure on a toolbar is one alert with its sentence and presses, its whole sentence its hint", () => {
   const pressed: string[] = [];
+
   const alert = mountAlert(
     createElement(ErrorState, {
       placement: ERROR_STATE_PLACEMENT.TOOLBAR,
@@ -191,8 +207,10 @@ test("a failure on a toolbar is one alert with its sentence and presses, its who
       children: LINE,
     }),
   );
+
   expect(alert.textContent).toBe(`${LINE}Connect GitHubRetry`);
   expect(alert.querySelector(`[title="${LINE}"]`)?.textContent).toBe(LINE);
+
   for (const button of alert.querySelectorAll("button")) act(() => button.click());
   expect(pressed).toEqual(["remedy", "retry"]);
 });
@@ -200,6 +218,7 @@ test("a failure on a toolbar is one alert with its sentence and presses, its who
 /** The words of the hint the pointer resting on `target` raises, past the hint's wait, on a faked clock. */
 function hintOn(target: Element): string | undefined {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
   try {
     act(() => {
       target.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
@@ -207,6 +226,7 @@ function hintOn(target: Element): string | undefined {
     act(() => {
       vi.advanceTimersByTime(MOTION_DELAY_MS.HINT);
     });
+
     return document.querySelector('[role="tooltip"]')?.textContent ?? undefined;
   } finally {
     vi.useRealTimers();
@@ -217,6 +237,7 @@ test("a failure's dismiss says Dismiss in a hint on hover", () => {
   const alert = mountAlert(
     createElement(ErrorState, { onDismiss: () => undefined, failure: FAILURE, children: LINE }),
   );
+
   const dismiss = alert.querySelector('[aria-label="Dismiss"]') ?? expect.fail("no dismiss button");
   expect(hintOn(dismiss)).toBe(dismiss.getAttribute("aria-label"));
 });

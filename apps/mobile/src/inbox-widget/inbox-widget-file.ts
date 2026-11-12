@@ -30,6 +30,7 @@ function redraw(): void {
 /** Keeps `snapshot` for the widget and has it drawn, unless the file holds it already. */
 export function keepInboxWidget(snapshot: InboxWidgetSnapshot): void {
   const json = inboxWidgetSnapshotJson(snapshot);
+
   if (readAppGroupFile(APP_GROUP_FILE.INBOX_WIDGET) === json) return;
   writeAppGroupFile(APP_GROUP_FILE.INBOX_WIDGET, json);
   redraw();
@@ -45,6 +46,7 @@ export function forgetInboxWidget(): void {
 export function settleInboxWidget(itemId: string, badge: number | undefined): void {
   const kept = readAppGroupFile(APP_GROUP_FILE.INBOX_WIDGET);
   const snapshot = kept === undefined ? undefined : inboxWidgetSnapshotOf(kept);
+
   if (snapshot === undefined) return;
   keepInboxWidget(inboxWidgetAfterSettle(snapshot, itemId, badge));
 }

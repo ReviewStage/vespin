@@ -72,11 +72,13 @@ let version = 0;
 
 function changed(): void {
   version += 1;
+
   for (const listen of listeners) listen();
 }
 
 function subscribe(listen: () => void): () => void {
   listeners.add(listen);
+
   return () => {
     listeners.delete(listen);
   };
@@ -85,7 +87,9 @@ function subscribe(listen: () => void): () => void {
 /** Whether `target` is held on `subject`: the same thing, from anywhere where it names no place, or from that place. */
 function heldOn(target: Target, subject: ShortcutSubject): boolean {
   const held = target.subject;
+
   if (held.kind !== subject.kind || held.id !== subject.id) return false;
+
   return held.place === undefined || held.place === subject.place;
 }
 
@@ -104,6 +108,7 @@ export function shortcutActsOn(command: KeyedCommand, subject: ShortcutSubject):
   for (const target of targets) {
     if (target.commands.includes(command) && heldOn(target, subject)) return true;
   }
+
   return false;
 }
 
@@ -111,10 +116,13 @@ export function shortcutActsOn(command: KeyedCommand, subject: ShortcutSubject):
 function keysOn(subject: ShortcutSubject | undefined): string {
   if (subject === undefined) return "";
   const keys = new Set<KeyedCommand>();
+
   for (const target of targets) {
     if (!heldOn(target, subject)) continue;
+
     for (const command of target.commands) keys.add(command);
   }
+
   return [...keys].toSorted().join();
 }
 
@@ -136,6 +144,7 @@ export function useShortcutTarget(
     const target: Target = { subject: { kind, id, place }, commands };
     targets.add(target);
     changed();
+
     return () => {
       targets.delete(target);
       changed();
@@ -151,9 +160,11 @@ export function useShortcutTargetOn(subject: ShortcutSubject | undefined): void 
 /** What `command`'s key acts on now, in one string, so an unchanged set reads the same. */
 function subjectsOf(command: KeyedCommand): string {
   const held: string[] = [];
+
   for (const target of targets) {
     if (target.commands.includes(command)) held.push(target.subject.id);
   }
+
   return held.toSorted().join();
 }
 

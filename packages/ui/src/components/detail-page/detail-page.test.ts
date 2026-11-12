@@ -49,13 +49,16 @@ function draw({
       }),
     ),
   );
+
   return container;
 }
 
 /** The name a landmark is given, by its label or the element its label points at. */
 function nameOf(element: Element): string | null {
   const labelledBy = element.getAttribute("aria-labelledby");
+
   if (labelledBy !== null) return document.getElementById(labelledBy)?.textContent ?? null;
+
   return element.getAttribute("aria-label");
 }
 
@@ -64,7 +67,9 @@ function find(container: Element, selector: string, words = ""): HTMLElement {
   const found = [...container.querySelectorAll(selector)].find(
     (element) => element instanceof HTMLElement && (element.textContent ?? "").includes(words),
   );
+
   if (!(found instanceof HTMLElement)) throw new Error(`no ${selector} with "${words}"`);
+
   return found;
 }
 
@@ -157,8 +162,10 @@ class HeadingObserver {
 function scrollHeading(container: Element, away: boolean): void {
   const heading = find(container, "h1");
   const seen = headingsWatched.get(heading);
+
   if (seen === undefined) throw new Error("the heading is not watched");
   const top = 100;
+  // SAFETY: the column reads only the root's top and the heading's bottom.
   act(() =>
     seen([
       {
@@ -173,9 +180,11 @@ function scrollHeading(container: Element, away: boolean): void {
 /** The bar's copy of the page's name, as a reader is handed it: its words, or none where it is hidden from them or not drawn. */
 function barName(container: Element): string | undefined {
   const bar = find(container, "header.ui-toolbar");
+
   const copy = [...bar.querySelectorAll(".ui-toolbar-pick-up")].find(
     (element) => element.closest('[aria-hidden="true"]') === null,
   );
+
   return copy?.textContent ?? undefined;
 }
 

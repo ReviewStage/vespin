@@ -44,6 +44,7 @@ export interface AdminCaller {
 export function adminGateMiddleware(resolveViewer: AdminViewerResolver) {
   return middlewareGen<HostedContext, AdminCaller>(function* ({ context, next }) {
     context.resHeaders?.set(CACHE_CONTROL, NO_STORE);
+
     // A request the client dropped or the function's deadline ended is no
     // outage: an interruption passes through, logged and answered as nothing.
     const viewer = yield* catchAllButInterrupt(resolveViewer(context.request), (cause) =>
@@ -52,8 +53,11 @@ export function adminGateMiddleware(resolveViewer: AdminViewerResolver) {
         Effect.fail(ADMIN_REFUSAL.UNAVAILABLE),
       ),
     );
+
     if (!viewer) return yield* Effect.fail(ADMIN_REFUSAL.NOT_SIGNED_IN);
+
     if (!isAdminRole(viewer.role)) return yield* Effect.fail(ADMIN_REFUSAL.NOT_AUTHORIZED);
+
     return yield* next({ context: { viewer } });
   });
 }

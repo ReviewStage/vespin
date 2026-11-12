@@ -86,8 +86,10 @@ function remindedItem(
   change: Extract<InboxChange, { readonly kind: typeof INBOX_CHANGE.REMINDED }>,
 ): InboxItem | undefined {
   const until = change.until ?? undefined;
+
   if (item.remindAt === until) return undefined;
   const { remindAt: _was, ...rest } = item;
+
   return until === undefined ? rest : { ...rest, remindAt: until };
 }
 
@@ -157,15 +159,18 @@ export function inboxSent<Answer>(
 ): Written<InboxChange, Answer> | Refused<Answer, InboxChange> {
   const named: InboxChange | undefined =
     written.item === undefined ? undefined : { kind: INBOX_CHANGE.ANSWERED, item: written.item };
+
   if (!written.kept)
     return named === undefined ? { refused: answer } : { refused: answer, taken: named };
   const { txid } = written;
+
   return named === undefined ? { answer, txid } : { answer, txid, taken: named, standsAs: named };
 }
 
 /** Whether a change leaves the item no longer open: settled by the reader, or answered settled. */
 export function settles(change: InboxChange): boolean {
   if (change.kind === INBOX_CHANGE.SETTLED) return true;
+
   return change.kind === INBOX_CHANGE.ANSWERED && change.item.status !== INBOX_STATUS.OPEN;
 }
 
@@ -180,6 +185,7 @@ export interface AccountWideReads {
 /** The account's own reads, none standing yet. */
 export function accountWideReads(): AccountWideReads {
   const standing = new Set<() => TxWait | undefined>();
+
   return {
     stand: (wait) =>
       Effect.asVoid(

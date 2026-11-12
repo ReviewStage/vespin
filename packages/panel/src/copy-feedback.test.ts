@@ -32,6 +32,7 @@ afterEach(() => {
 /** Hands the test a menu's way of copying. */
 function Copier(): null {
   copy = useCopyToast();
+
   return null;
 }
 

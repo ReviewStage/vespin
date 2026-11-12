@@ -31,17 +31,20 @@ afterEach(() => {
 /** What a test's field told its owner, in order. */
 type Told = string[];
 
-/** The field over words linked to `href`, or none, and a way to hand the same field another link. */
-function mount(href?: string): {
+type MountResult = {
   popover: HTMLElement;
   field: HTMLInputElement;
   told: Told;
   relink: (href: string | undefined) => void;
-} {
+};
+
+/** The field over words linked to `href`, or none, and a way to hand the same field another link. */
+function mount(href?: string): MountResult {
   const told: Told = [];
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (linked: string | undefined) =>
     act(() =>
       root.render(
@@ -54,9 +57,12 @@ function mount(href?: string): {
         }),
       ),
     );
+
   draw(href);
   const field = container.querySelector("input");
+
   if (field === null) throw new Error("the field is drawn");
+
   return { popover: container, field, told, relink: draw };
 }
 
@@ -110,6 +116,7 @@ test("a link already there opens in the field, with Open and Remove beside it", 
   const { popover, field, told } = mount("https://example.com");
   expect(field.value).toBe("https://example.com");
   expect(buttons(popover)).toEqual(["Open link", "Remove link"]);
+
   for (const button of popover.querySelectorAll("button")) act(() => button.click());
   expect(told).toEqual(["open", "remove"]);
 });

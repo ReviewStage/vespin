@@ -103,6 +103,7 @@ test("a heading the description bears twice is handed by which of them the ancho
     ...TASK,
     document: { body: "## Notes\n\nfirst\n\n## Notes\n\nsecond", assumptions: [] },
   };
+
   const second = mentionMarkdown(
     { kind: MENTION_KIND.SECTION, taskId: TASK.id, anchor: "notes-1" },
     "Notes",
@@ -127,6 +128,7 @@ test("words that mention only files, folders, another plan, or nothing are hande
 test("another task a link names by its number, by itself or by a section, is handed its id once, and one the send did not find nothing", () => {
   const other = "3a9e1c7b-5d2f-4b8a-9e6c-1f0d2b3c4a5e";
   const reads = { ...READS, tasks: new Map([["acme", new Map([[7, other]])]]) };
+
   const words =
     "See [@Billing](https://vespin.dev/acme/task/7), its https://vespin.dev/acme/task/7#goal, and [@Gone](https://vespin.dev/acme/task/8).";
 
@@ -145,6 +147,7 @@ test("a section mentioned twice is handed once", () => {
 test("a long section is cut on a line, saying how much was left out, and a full part names what it left out", () => {
   const long = Array.from({ length: 400 }, (_, at) => `- step ${at}: ${"x".repeat(20)}`).join("\n");
   const headings = ["One", "Two", "Three", "Four", "Five", "Six", "Seven"];
+
   const task: Task = {
     ...TASK,
     document: {
@@ -165,6 +168,7 @@ test("a line carrying what it mentioned is matched by the retired runtime's rece
   const mentioned = mentionedContext(words, TASK);
   const handed = turnContent(words, [], mentioned);
   assert.ok(Array.isArray(handed));
+
   const receipt = receivedMessage({
     message: words,
     parts: handed.flatMap((part) =>
@@ -181,13 +185,16 @@ test("a line carrying what it mentioned is matched by the retired runtime's rece
 test("a member's line handed behind the label naming them is matched by the retired runtime's receipt of it, and reads back as its words alone", () => {
   const words = `Do what ${section("Rollout")} says.`;
   const mentioned = mentionedContext(words, TASK);
+
   const handed = turnContent(
     words,
     [],
     mentioned,
     senderLabel("[@Dean](https://vespin.dev/acme/person/user-1)"),
   );
+
   assert.ok(Array.isArray(handed));
+
   const receipt = receivedMessage({
     message: words,
     parts: handed.flatMap((part) =>
@@ -220,6 +227,7 @@ test("words that mention nothing of the plan go to the harness as the words alon
 test("however long the headings of what is left out, the part stays inside its bound", () => {
   const long = "x".repeat(3_900);
   const headings = Array.from({ length: 12 }, (_, at) => `${"Heading ".repeat(100)}${at}`);
+
   const task: Task = {
     ...TASK,
     document: {
@@ -235,6 +243,7 @@ test("however long the headings of what is left out, the part stays inside its b
 
 test("a description cut short names every section past the cut, one whose heading earlier words quote included", () => {
   const filler = Array.from({ length: 700 }, (_, at) => `- line ${at} of the context`).join("\n");
+
   const task: Task = {
     ...TASK,
     document: {
@@ -279,13 +288,16 @@ test("a section too long for the room left is passed over, and a shorter one aft
       assumptions: [],
     },
   };
+
   const many = Array.from({ length: 5 }, (_, at) => `## S${at}\n\n${"z".repeat(3_950)}`).join(
     "\n\n",
   );
+
   const crowded: Task = {
     ...task,
     document: { body: `${many}\n\n${task.document.body}`, assumptions: [] },
   };
+
   const words = [
     ...Array.from({ length: 5 }, (_, at) => section(`S${at}`)),
     section("Big"),
@@ -304,6 +316,7 @@ test("a cut description with many long headings past the cut is still handed, it
     { length: 60 },
     (_, at) => `## ${"Long heading ".repeat(70)}${at}\n\n${"w".repeat(400)}`,
   );
+
   const task: Task = { ...TASK, document: { body: sections.join("\n\n"), assumptions: [] } };
 
   const part =
@@ -336,12 +349,15 @@ test("a server or a tool the words mention is handed as one note naming its conn
   );
 
   const words = part ?? "";
+
   const server = words.indexOf(
     "The developer pointed you at the Linear MCP server (connection `linear`)",
   );
+
   const tool = words.indexOf(
     "The developer pointed you at the tool `list_issues` of the Linear MCP server (connection `linear`)",
   );
+
   const rollout = words.indexOf('The description\'s section "Rollout":');
   assert.ok(server > 0 && server < tool && tool < rollout, words);
   assert.equal(words.split("The developer pointed you at").length - 1, 2, words);
@@ -406,11 +422,13 @@ test("a GitHub page that is a file of the plan's repository brings in no server"
 
 test("a file's lines the words mention are handed as a note naming the lines and the commit they were read at, and a whole file as nothing", () => {
   const commit = "0123456789abcdef0123456789abcdef01234567";
+
   const lines = mentionMarkdown(
     { kind: MENTION_KIND.FILE, path: "src/app.ts", lines: { commit, startLine: 12, endLine: 20 } },
     "app.ts:12–20",
     PLACE,
   );
+
   const whole = mentionMarkdown({ kind: MENTION_KIND.FILE, path: "src/app.ts" }, "app.ts", PLACE);
 
   const part = mentionedContext(`Fix ${lines}, as ${lines} says.`, TASK) ?? "";
@@ -430,11 +448,13 @@ test("a server of an account past its provider's first is pointed at and brought
     "Notion · Personal",
     PLACE,
   );
+
   const acme = mentionMarkdown(
     { kind: MENTION_KIND.SERVER, provider: INTEGRATION_PROVIDER.NOTION },
     "Notion · Acme",
     PLACE,
   );
+
   const part = mentionedContext(`Move it from ${personal} to ${acme}.`, TASK) ?? "";
 
   assert.match(part, /the Notion MCP server \(connection `notion-2`\)/u);
@@ -505,7 +525,9 @@ test("an agent of the workspace on another task, or on one the sender cannot ope
     ...OTHER_AGENT,
     task: { id: "1c1c1c1c-0000-4000-8000-000000000000", name: "Billing" },
   };
+
   const unopened = { ...OTHER_AGENT, task: null, archived: true };
+
   const reads = (standing: MentionedAgent) => ({
     pages: new Map(),
     agents: new Map([[OTHER_AGENT_ID, standing]]),
@@ -532,6 +554,7 @@ test("an agent of the workspace on another task, or on one the sender cannot ope
 test("an agent of the plan that published nothing yet is handed its branch to fetch, and one with no branch as having nothing to read", () => {
   const pushed = { ...OTHER_AGENT, pullRequest: null };
   const fresh = { ...OTHER_AGENT, branch: null, pullRequest: null };
+
   const read = (standing: MentionedAgent) =>
     mentionedContext(`See ${agent("Store")}.`, TASK, {
       pages: new Map(),
@@ -553,6 +576,7 @@ test("a page the send did not find on the plan is named as gone, an agent it did
     TASK,
     READS,
   );
+
   const elsewhere = mentionedContext(
     `See ${mentionMarkdown({ kind: MENTION_KIND.PAGE, taskId: "1c1c1c1c-0000-4000-8000-000000000000", pageId: PAGE_ID }, "Chart", PLACE)}.`,
     TASK,
@@ -629,6 +653,7 @@ test("a gone section's bare address is named by its anchor, and a page's, an age
     { kind: MENTION_KIND.PAGE, taskId: TASK.id, pageId: PAGE_ID },
     PLACE,
   );
+
   const agentAddress = encodeMention({ kind: MENTION_KIND.AGENT, agentId: OTHER_AGENT_ID }, PLACE);
   const personAddress = encodeMention({ kind: MENTION_KIND.PERSON, userId: PERSON_ID }, PLACE);
   const words = `See ${bareSection("Old flow")}, ${pageAddress}, ${agentAddress} and ${personAddress}.`;

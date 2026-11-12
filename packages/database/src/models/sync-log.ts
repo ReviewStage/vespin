@@ -182,6 +182,7 @@ const deletePrunable = SqlSchema.findAll({
       const firstYoung = sql`(select ${syncLog.txid} from ${syncLog} where ${syncLog.at} > ${youngAfter.toISOString()}::timestamptz order by ${syncLog.txid} limit 1)`;
       const newest = sql`(select ${syncLog.txid} from ${syncLog} order by ${syncLog.txid} desc limit 1)`;
       const sweepEnd = sql`(select distinct ${syncLog.txid} from ${syncLog} order by ${syncLog.txid} offset ${transactions} limit 1)`;
+
       // Note that `least` passes over a null, so a log with no young row is cut below its newest transaction alone.
       return db
         .delete(syncLog)

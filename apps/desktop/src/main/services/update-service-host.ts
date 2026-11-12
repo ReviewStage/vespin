@@ -28,8 +28,14 @@ export interface UpdateServiceHost {
   openChangelog: () => void;
 }
 
+/** What the updater reads of the launch, and of its run mode whether it may reach the network. */
+type UpdaterConfig = Pick<
+  DesktopConfig,
+  "appVersion" | "packaged" | "stateRoot" | "report" | "showMenuBar" | "openExternal"
+> & { readonly runMode: Pick<DesktopConfig["runMode"], "sendsNetwork"> };
+
 interface UpdateServiceHostDependencies {
-  config: DesktopConfig;
+  config: UpdaterConfig;
   recordProductEvent: RecordProductEvent;
   /**
    * The installer this build carries, or none: an unpackaged build, a fixture
@@ -54,7 +60,7 @@ interface UpdateServiceHostDependencies {
    */
   askBeforeRestart: () => Promise<boolean>;
   /** Every state the row draws, written to the document the windows are told from. */
-  state: AppStateStore;
+  state: Pick<AppStateStore, "update">;
   /**
    * Brings the window forward on Settings, where a check's answer is drawn:
    * the menu bar's Check for Updates runs with no window of its own to say it.
@@ -90,6 +96,7 @@ export const createUpdateServiceHost = /* @__PURE__ */ Effect.fn("desktop/create
       fileName: "last-run-version.json",
       read: (record) => {
         const version = text(record.version);
+
         return version === undefined ? undefined : { version };
       },
       write: (state) => state,
@@ -99,8 +106,10 @@ export const createUpdateServiceHost = /* @__PURE__ */ Effect.fn("desktop/create
     // The menu bar is drawn again only when its item's act changes, not on
     // every download tick.
     let shownAct: UpdateMenuAct | undefined | null = null;
+
     const showMenu = (update: UpdateSnapshot) => {
       const act = updateMenuAct(update, config.packaged);
+
       if (act === shownAct) return;
       shownAct = act;
       config.showMenuBar({
@@ -120,6 +129,7 @@ export const createUpdateServiceHost = /* @__PURE__ */ Effect.fn("desktop/create
     };
 
     const engine = dependencies.engine;
+
     const service = yield* UpdateService.make({
       currentVersion: config.appVersion,
       onChange: (update) => {
@@ -156,6 +166,7 @@ export const createUpdateServiceHost = /* @__PURE__ */ Effect.fn("desktop/create
         recordProductEvent(PRODUCT_EVENT.UPDATE_ACTION, {
           update_action: PRODUCT_UPDATE_ACTION.CHECK,
         });
+
         return service.check({ asked: true });
       },
       // Note that the press is counted only once the developer says to
@@ -183,8 +194,10 @@ export const createUpdateServiceHost = /* @__PURE__ */ Effect.fn("desktop/create
         void config.openExternal(UPDATE_ENDPOINT.CHANGELOG_PAGE_URL);
       },
     };
+
     // A build whose updater never moves still shows where it stands.
     showMenu(service.snapshot());
+
     return host;
   },
 );

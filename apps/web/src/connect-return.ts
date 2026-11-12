@@ -89,6 +89,7 @@ const decodeLeft = Schema.decodeUnknownOption(Schema.fromJsonString(leftSchema))
 /** What a message on the channel says, where it says `kind`; nothing where it says anything else. */
 export function saying(event: MessageEvent, kind: ConnectSaid): Said | undefined {
   const data: unknown = event.data;
+
   return isSaid(data) && data.kind === kind ? data : undefined;
 }
 
@@ -96,6 +97,7 @@ export function saying(event: MessageEvent, kind: ConnectSaid): Said | undefined
 function ownPath(address: string): string | undefined {
   if (!address.startsWith("/") || address.startsWith("//")) return undefined;
   const url = new URL(address, location.origin);
+
   return url.origin === location.origin ? `${url.pathname}${url.search}${url.hash}` : undefined;
 }
 
@@ -115,7 +117,9 @@ function tabSession(): Storage | undefined {
 /** The address a same-tab connect left, where it is this origin's and its connect is not yet abandoned. */
 function leftAddress(): string | undefined {
   const left = decodeLeft(tabSession()?.getItem(RETURN_KEY) ?? "");
+
   if (Option.isNone(left) || Date.now() - left.value.at > CONNECT_BOUND_MS) return undefined;
+
   return ownPath(left.value.address);
 }
 
@@ -158,6 +162,7 @@ export function forgetReturn(): void {
 /** How this landing page goes back to the app before any tab has answered. */
 export function connectReturn(): ConnectReturn {
   const left = leftAddress();
+
   return left === undefined
     ? { kind: CONNECT_RETURN.ELSEWHERE }
     : { kind: CONNECT_RETURN.ADDRESS, href: left };
@@ -170,6 +175,7 @@ export function connectReturn(): ConnectReturn {
  */
 function closeToApp(event: MouseEvent<HTMLAnchorElement>): void {
   window.close();
+
   if (window.closed) event.preventDefault();
 }
 
@@ -197,9 +203,11 @@ function openApp(back: ConnectReturn, platform: LinkPlatform): AuthAction | unde
  */
 export function landingDescription(words: LandingWords, back: ConnectReturn): string | undefined {
   const closes = words.tone === LANDING_TONE.COMPLETE && back.kind !== CONNECT_RETURN.ADDRESS;
+
   const said = [words.line, closes ? LANDING_CLOSE_TAB : undefined].filter(
     (part): part is string => part !== undefined,
   );
+
   return said.length === 0 ? undefined : said.join(" ");
 }
 
@@ -235,6 +243,7 @@ export function useConnectReturn(state: {
     channel.onmessage = (event) => {
       if (saying(event, CONNECT_SAID.MINE)?.landing === LANDING) setAnswered(true);
     };
+
     if (!said.current) {
       said.current = true;
       // Note that the mark is read before it is let go of, because it names the one tab that answers.
@@ -243,12 +252,15 @@ export function useConnectReturn(state: {
       const landedSaying: Said = { kind: CONNECT_SAID.LANDED, landing: LANDING };
       channel.postMessage(handoff === undefined ? landedSaying : { ...landedSaying, handoff });
     }
+
     return () => channel.close();
   }, [landed]);
   useEffect(() => {
     if (answered && settled) window.close();
   }, [answered, settled]);
+
   if (!landed) return { back: { kind: CONNECT_RETURN.ELSEWHERE }, open: undefined };
   const back: ConnectReturn = answered ? { kind: CONNECT_RETURN.APP, href: PANEL_PATH } : read;
+
   return { back, open: openApp(back, browserLinkPlatform()) };
 }

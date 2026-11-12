@@ -1,5 +1,4 @@
 import { useCallback, useRef } from "react";
-import { REPLAY_LEFT_OUT } from "../../session-replay-marks.js";
 import { useMotionHeld } from "../../use-motion-held.js";
 import { useOnBeat } from "../time/time-clock.js";
 
@@ -18,10 +17,7 @@ import { useOnBeat } from "../time/time-clock.js";
  * the beat and is twice as dear again at 120Hz. Reduced motion and a capture
  * run hold it (`useMotionHeld`) on its resting frame, chosen to show the
  * chase mid-lap rather than its first, so a still mark always lights four
- * cells and reads as working. The screen
- * recording leaves it out (`REPLAY_LEFT_OUT`), because each step rewrites
- * four of its attributes, which the recorder would otherwise take down and
- * send twenty times a second for every mark on screen. The mark itself
+ * cells and reads as working. The mark itself
  * is decorative; the seat it stands in names it. Its side is 16px unless a
  * container sets `--ui-working-mark-size`.
  *
@@ -79,6 +75,7 @@ function cellAt(column: number, row: number): CellCorner {
 /** The `transform` that sets a pixel on the track cell at `index`, lapping past the last, from the first cell it is drawn on. */
 function cellTransform(index: number): string {
   const [column, row] = TRACK[index % TRACK.length] ?? TRACK[0];
+
   return `translate(${column * PITCH}px, ${row * PITCH}px)`;
 }
 
@@ -116,13 +113,17 @@ function WorkingDots({
 /** The moving pixels stepping on the shared beat, each beat writing their `transform`s itself. */
 function LappingDots(): React.JSX.Element {
   const dotRefs = useRef<(SVGRectElement | null)[]>([]);
+
   const step = useCallback((beat: number) => {
     WORKING_DOTS.forEach(({ restsOn }, index) => {
       const rect = dotRefs.current[index];
+
       if (rect) rect.style.transform = cellTransform(restsOn + beat);
     });
   }, []);
+
   useOnBeat(step);
+
   return <WorkingDots dotRefs={dotRefs} />;
 }
 
@@ -130,9 +131,10 @@ function LappingDots(): React.JSX.Element {
 export function WorkingMark(): React.JSX.Element {
   // Note that a held mark never reads the beat at all, and one already standing stops as the setting changes.
   const held = useMotionHeld();
+
   return (
     <svg
-      className={`ui-working-mark ${REPLAY_LEFT_OUT} [&[viewBox]]:block [&[viewBox]]:size-working-mark [&[viewBox]]:flex-none [&[viewBox]]:fill-current`}
+      className="ui-working-mark [&[viewBox]]:block [&[viewBox]]:size-working-mark [&[viewBox]]:flex-none [&[viewBox]]:fill-current"
       width={SIDE}
       height={SIDE}
       viewBox={`0 0 ${SIDE} ${SIDE}`}

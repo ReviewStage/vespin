@@ -150,6 +150,7 @@ export interface CardReading {
 
 function Corner({ corner }: { corner: CardCorner }): React.JSX.Element | null {
   const now = useMinute();
+
   switch (corner.kind) {
     case CARD_CORNER.WORKING:
       // Note that no word stands before the count, because the tile's working mark already says it.
@@ -172,6 +173,7 @@ function Corner({ corner }: { corner: CardCorner }): React.JSX.Element | null {
 /** Whether a corner says anything: a working one only where it has a start to count from. */
 function cornerSays(corner: CardCorner): boolean {
   if (corner.kind === CARD_CORNER.NONE) return false;
+
   return corner.kind !== CARD_CORNER.WORKING || corner.startedAt !== undefined;
 }
 
@@ -203,6 +205,7 @@ function StartedBy({
   const person = usePerson(by);
   const starter = useStartingAgent(agentId, models);
   const known = useAutomation(automationId);
+
   if (starter !== undefined) {
     return (
       <ProvenanceRow
@@ -214,6 +217,7 @@ function StartedBy({
       />
     );
   }
+
   if (known !== undefined) {
     return (
       <ProvenanceRow
@@ -226,6 +230,7 @@ function StartedBy({
       />
     );
   }
+
   if (automationId !== undefined || automationName !== undefined) {
     return (
       <ProvenanceRow
@@ -236,6 +241,7 @@ function StartedBy({
       />
     );
   }
+
   return by === undefined ? null : (
     <ProvenanceRow verb={PROVENANCE_VERB.STARTED} actor={person} at={at} now={now} />
   );
@@ -247,6 +253,7 @@ const FROM_SLACK_WORDS = "Started from Slack";
 /** The repository the agent works in, its owner's picture before it. */
 function RepositoryLine({ repository }: { repository: string }): React.JSX.Element {
   const pictures = useRepositoryPictures();
+
   return (
     <HoverCardRow
       look={HOVER_CARD_ROW_LOOK.DETAIL}
@@ -286,7 +293,9 @@ function ArchivedByNote({ archivedBy }: { archivedBy: ArchivedByReading }): Reac
 /** The one line of the latest step, faded at its end where it is cut short. */
 function ActivityLine({ transcript }: { transcript: CopiedTranscript }): React.JSX.Element | null {
   const activity = latestActivity(transcript);
+
   if (activity === undefined) return null;
+
   return (
     <HoverCardNote oneLine>
       {activity.kind === LATEST_ACTIVITY.WORDS ? (
@@ -316,7 +325,9 @@ export function cardCorner(input: {
   state: string | undefined;
 }): CardCorner {
   const { writing, startedAt, movedAt, state } = input;
+
   if (writing) return { kind: CARD_CORNER.WORKING, startedAt };
+
   return movedAt === undefined && state === undefined
     ? { kind: CARD_CORNER.NONE }
     : { kind: CARD_CORNER.ENDED, state, at: movedAt };
@@ -342,6 +353,7 @@ export function delegatedChoice(
   const call = messages
     ?.flatMap(agentParts)
     .find((part) => isDelegation(part) && part.callId === callId);
+
   return call === undefined || !isDelegation(call) ? undefined : delegationView(call, own).choice;
 }
 
@@ -359,7 +371,9 @@ export function heldLatest(
   chosen: boolean,
 ): readonly AgentTranscriptMessage[] | undefined {
   if (held === undefined || held.runStartedAt !== now.runStartedAt) return undefined;
+
   if (chosen) return held.messages;
+
   return !agentStillWriting(held.status) && !now.writing ? held.messages : undefined;
 }
 
@@ -412,6 +426,7 @@ export function AgentTabCard({
     repository,
     fromSlack,
   } = read();
+
   const head = (
     <HoverCardHead
       mark={tile === undefined ? undefined : <ActorMark actor={tile} size={ACTOR_SIZE.CARD} />}
@@ -421,6 +436,7 @@ export function AgentTabCard({
       corner={cornerSays(corner) ? <Corner corner={corner} /> : undefined}
     />
   );
+
   return (
     <HoverCard data-agent-card="">
       {head}

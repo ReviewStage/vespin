@@ -93,6 +93,7 @@ const TASK: TaskSummary = {
   updatedAt: 2,
   repository: REPOSITORY,
 };
+
 const OTHER_TASK = "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32";
 const OTHER: TaskSummary = { ...TASK, id: OTHER_TASK, name: "Invitation funnel study" };
 
@@ -215,9 +216,11 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
     case ACT_KIND.TASKS_FILE:
       if ("taskId" in request.payload)
         filesRead.push([request.payload.taskId, request.payload.path]);
+
       return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not in this test." });
     case ACT_KIND.AGENTS_INBOX_READ_STATE:
       readMarks.push(`${request.payload.unread ? "unread" : "read"}:${request.payload.itemId}`);
+
       return Promise.resolve({
         status: FAKE_ANSWER.DONE,
         value: { id: request.payload.itemId, unread: request.payload.unread },
@@ -261,12 +264,14 @@ async function inbox(
   });
   // The host lays the agent's transcript, which names a page of its task, once its tab holds it.
   pushedTranscripts(() => [TRANSCRIPT]);
+
   function Page() {
     // Note that the item stands chosen at its address, as a press on its row chooses it.
     const { chosen } = useInboxRoute();
     const panelFor = chosen !== undefined && "taskId" in chosen ? chosen.taskId : undefined;
     // The task's agents as the Inbox read them, which the window's own hook holds its panel to (`use-tasks-tab.ts`).
     const taskAgents = useInboxTaskAgents(panelFor);
+
     const sidePanel = useSidePanel(
       undefined,
       { id: panelFor, holds: {}, bare: true },
@@ -278,9 +283,11 @@ async function inbox(
       undefined,
       taskAgents.heldIds,
     );
+
     control = sidePanel;
     // The window's keymap, which hears a chord as the window's root mounts it.
     useAppKeymap(true);
+
     return createElement(
       OpenLinkProvider,
       { value: (link: ReadLink) => left.links.push(link) },
@@ -304,16 +311,20 @@ async function inbox(
       }),
     );
   }
+
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   const held = holdingInboxChoice({ taskId: TASK.id, itemId: ITEM.id });
   const page = createElement(Fragment, null, held, createElement(Page));
   act(() => root?.render(withQueryClient(underWindowRouter(page, `/acme/inbox/${ITEM.id}`))));
   await settle();
+
   const panel = () => {
     assert.ok(control);
+
     return control;
   };
+
   return { container, left, panel };
 }
 
@@ -334,6 +345,7 @@ async function pressChip(container: HTMLElement, name: string): Promise<void> {
       ].find((each) => each.querySelector(".ui-inline-ref-label")?.textContent?.includes(name)) ??
       assert.fail(`no chip says ${name}`),
   );
+
   act(() => chip.click());
   await settle();
 }
@@ -341,7 +353,9 @@ async function pressChip(container: HTMLElement, name: string): Promise<void> {
 /** The panel beside the Inbox as a reader hears it: each tab's label, `▸ ` before the one shown; nothing where no panel stands. */
 function panelTabs(container: HTMLElement): string[] | undefined {
   const panel = container.querySelector('aside[aria-label="Panel"]');
+
   if (panel === null) return undefined;
+
   return [...panel.querySelectorAll<HTMLElement>('[role="tab"]')].map(
     (tab) => `${tab.getAttribute("aria-selected") === "true" ? "▸ " : ""}${tab.textContent}`,
   );
@@ -366,9 +380,11 @@ test("a pull request, a page, and a file the item names each open a tab of their
   assert.equal(left.links.length + left.tasks.length, 0, "the Inbox still stands");
   const notice = container.querySelector('aside[aria-label="Panel"] .ui-tab-notice');
   assert.equal(notice?.querySelector("nav")?.textContent, OTHER.name, "the page's task named");
+
   const open = [...(notice?.querySelectorAll("button") ?? [])].find(
     (each) => each.textContent === "Open task",
   );
+
   assert.ok(open, "with Open task");
   act(() => open.click());
   // The task's chip opens it as Open task does.
@@ -410,6 +426,7 @@ test("an archived agent's Pull request tab stands beside the Inbox as any other,
   const close = container.querySelector<HTMLButtonElement>(
     'aside[aria-label="Panel"] button[aria-label="Close #42 Send invitations in batches"]',
   );
+
   assert.ok(close, "the tab offers its close");
   act(() => close.click());
   await settle();
@@ -442,11 +459,13 @@ test("an agent beside the Inbox, as an earlier version kept it, has the agent's 
   await settle();
   const aside = container.querySelector<HTMLElement>('aside[aria-label="Panel"]');
   assert.ok(aside, "the panel stands beside the Inbox");
+
   /** What the open menu offers, by each item's words, the menu left open. */
   const offered = () => {
     const menu = document.querySelector<HTMLElement>('[role="menu"]:not([data-leaving])');
     assert.ok(menu, "a menu stands open");
     const items = [...menu.querySelectorAll<HTMLElement>('[role="menuitem"]')];
+
     return { menu, items, words: items.map((item) => item.textContent ?? "") };
   };
 
@@ -455,6 +474,7 @@ test("an agent beside the Inbox, as an earlier version kept it, has the agent's 
     null,
     "the panel's bar draws no ⋯",
   );
+
   const agentMenu = [
     "Copy link",
     "Copy transcript",
@@ -508,6 +528,7 @@ test("a link to a page of the item's task, pressed in a transcript beside the In
       ].find((each) => each.textContent?.includes("Invite funnel")) ??
       assert.fail("the transcript names the page"),
   );
+
   act(() => chip.click());
   await settle();
 
@@ -528,11 +549,13 @@ test("an element of a page beside the Inbox opens its comment in the item's box'
   act(() => {
     frame.dispatchEvent(new Event("load"));
   });
+
   const comment = await vi.waitFor(
     () =>
       panel.querySelector<HTMLButtonElement>('button[aria-label="Comment on the page"]') ??
       assert.fail("the page offers Comment"),
   );
+
   await act(async () => comment.click());
   // The press in the frame is the developer's, which the window holds as the pick lands; the editor still reads the platform.
   const { platform, userAgent } = navigator;

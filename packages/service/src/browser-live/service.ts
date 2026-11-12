@@ -54,20 +54,27 @@ export function admitBrowserLiveUpgrade(
   ownOrigins: ReadonlySet<string>,
 ): BrowserLiveUpgrade {
   const address = new URL(url ?? "/", "http://localhost");
+
   if (address.pathname !== BROWSER_LIVE.PATH) return { status: RELAY_UPGRADE_STATUS.NOT_FOUND };
   const query = (name: string) => unparsedWire(address.searchParams.get(name) ?? "");
+
   // Note that a desktop built before the agent was named names the tab's task, which reaches it as it did.
   const named: Result.Result<BrowserTabsPlace, unknown> = address.searchParams.has(
     BROWSER_LIVE.QUERY.AGENT,
   )
     ? Result.map(readId(query(BROWSER_LIVE.QUERY.AGENT)), (agentId) => ({ agentId }))
     : Result.map(readId(query(BROWSER_LIVE.QUERY.TASK)), (taskId) => ({ taskId }));
+
   const tabId = readId(query(BROWSER_LIVE.QUERY.TAB));
+
   if (Result.isFailure(named) || Result.isFailure(tabId)) {
     return { status: RELAY_UPGRADE_STATUS.BAD_REQUEST };
   }
+
   const credential = relayCredential(headers, ownOrigins);
+
   if ("status" in credential) return credential;
+
   return { credential, ask: { place: named.success, tabId: tabId.success } };
 }
 
@@ -95,13 +102,18 @@ export function admitBrowserLiveAccount(
 > {
   return Effect.gen(function* () {
     const resolved = yield* Effect.result(admission.resolveUserId(decision.credential));
+
     if (Result.isFailure(resolved)) return { status: RELAY_UPGRADE_STATUS.SERVICE_UNAVAILABLE };
     const account = resolved.success;
+
     if (Option.isNone(account)) return { status: RELAY_UPGRADE_STATUS.UNAUTHORIZED };
     const ask = { ...decision.ask, userId: account.value };
     const found = yield* Effect.result(admission.readTab(ask.userId, ask.place, ask.tabId));
+
     if (Result.isFailure(found)) return { status: RELAY_UPGRADE_STATUS.SERVICE_UNAVAILABLE };
+
     if (Option.isNone(found.success)) return { status: RELAY_UPGRADE_STATUS.NOT_FOUND };
+
     return { ask, reached: found.success.value };
   });
 }
@@ -122,6 +134,7 @@ export function standBrowserLive(
     resolveUserId: options.resolveUserId,
     readTab: options.dependencies.readTab,
   };
+
   return standRelay({
     server: options.server,
     sockets: { maxPayload: MAXIMUM_FRAME_BYTES, perMessageDeflate: false },
@@ -129,6 +142,7 @@ export function standBrowserLive(
     accept: (decision) => admitBrowserLiveAccount(decision, admission),
     relay: (admitted, panel, webSocket) => {
       const viewer = { ...panel, buffered: Effect.sync(() => webSocket.bufferedAmount) };
+
       return relayBrowserTab(viewer, admitted.ask, admitted.reached, options.dependencies);
     },
   });

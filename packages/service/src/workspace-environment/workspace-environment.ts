@@ -35,6 +35,7 @@ const environmentAnswer = Effect.fn("web/workspaceEnvironmentAnswer")(function* 
   workspaceId: string,
 ): Effect.fn.Return<WorkspaceEnvironmentAnswer, HostedRefusal, DatabaseServices> {
   const listed = yield* hostedStoreOrUnavailable(listWorkspaceVariables(workspaceId));
+
   return {
     variables: listed.map((row) => ({ name: row.name, updatedAt: row.updatedAt.getTime() })),
   };
@@ -46,6 +47,7 @@ export const listWorkspaceEnvironment = Effect.fn("web/listWorkspaceEnvironment"
   workspaceId: string,
 ): Effect.fn.Return<WorkspaceEnvironmentAnswer, HostedRefusal, DatabaseServices> {
   const workspace = yield* answeredWorkspace(userId, workspaceId);
+
   return yield* environmentAnswer(workspace.id);
 });
 
@@ -61,6 +63,7 @@ export const putWorkspaceVariable = Effect.fn("web/putWorkspaceVariable")(functi
   const sealed = sealWorkspaceVariable(ring, owner, value);
   const now = yield* DateTime.nowAsDate;
   yield* hostedStoreOrUnavailable(setWorkspaceVariable(workspace.id, variable.name, sealed, now));
+
   return yield* environmentAnswer(workspace.id);
 });
 
@@ -71,5 +74,6 @@ export const deleteWorkspaceVariable = Effect.fn("web/deleteWorkspaceVariable")(
 ): Effect.fn.Return<WorkspaceEnvironmentAnswer, HostedRefusal, DatabaseServices> {
   const workspace = yield* managedWorkspace(userId, variable.workspaceId);
   yield* hostedStoreOrUnavailable(removeWorkspaceVariable(workspace.id, variable.name));
+
   return yield* environmentAnswer(workspace.id);
 });

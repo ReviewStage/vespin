@@ -470,6 +470,7 @@ export type AutomationRunReason =
 export const automationRunStatusSchema = EffectSchema.Literals(
   Object.values(AUTOMATION_RUN_STATUS),
 );
+
 export const automationRunReasonSchema = EffectSchema.Literals(
   Object.values(AUTOMATION_RUN_REASON),
 );

@@ -73,20 +73,24 @@ export function hostSecretHash(secret: string): string {
 /** A fresh secret of the prefix given (`HOST_WIRE.DEVICE_SECRET_PREFIX`, `HOST_WIRE.POLL_SECRET_PREFIX`), and its hash. */
 export function mintHostSecret(prefix: string): MintedSecret {
   const secret = `${prefix}${randomBytes(SECRET_BYTES).toString("base64url")}`;
+
   return { secret, hash: hostSecretHash(secret) };
 }
 
 /** A fresh user code: its eight letters, each drawn evenly from the alphabet, with no dash. */
 export function mintHostUserCode(): string {
   const { ALPHABET, LENGTH } = HOST_USER_CODE;
+
   return Array.from({ length: LENGTH }, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
 }
 
 /** The secret of the prefix given a request's bearer carries, or nothing where it carries another bearer or none. */
 function presentedBearer(request: Request, prefix: string): string | undefined {
   const authorization = request.headers.get(CREDENTIAL_HEADER.AUTHORIZATION)?.trim() ?? "";
+
   if (!authorization.startsWith(BEARER_PREFIX)) return undefined;
   const bearer = authorization.slice(BEARER_PREFIX.length).trim();
+
   return bearer.startsWith(prefix) ? bearer : undefined;
 }
 
@@ -103,6 +107,7 @@ export function presentedPollSecret(request: Request): string | undefined {
 /** The daemon version a request carries, trimmed, or nothing where it carries none. */
 export function presentedHostVersion(request: Request): string | undefined {
   const version = request.headers.get(HOST_WIRE.VERSION_HEADER)?.trim();
+
   return version === undefined || version.length === 0 ? undefined : version;
 }
 
@@ -117,6 +122,7 @@ export function admittedHostVersion(
   if (version !== undefined && hostVersionMeets(version, HOST_VERSION.FLOOR)) {
     return Effect.succeed(version);
   }
+
   return Effect.fail(hostUpgradeNeeded(HOST_VERSION.FLOOR));
 }
 
@@ -129,10 +135,13 @@ export const hostCallerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   request: Request,
 ): Effect.fn.Return<Option.Option<HostCaller>, HostedRefusal, DatabaseServices> {
   const secret = presentedDeviceSecret(request);
+
   if (secret === undefined) return Option.none();
   const host = yield* hostedStoreOrUnavailable(hostBySecret(hostSecretHash(secret)));
+
   if (Option.isNone(host)) return yield* Effect.fail(HOST_REMOVED_REFUSAL);
   const version = presentedHostVersion(request);
+
   // Note that only a version that reads is recorded, so a header of junk never lands on the Hosts row.
   if (
     version !== undefined &&
@@ -141,6 +150,8 @@ export const hostCallerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   ) {
     yield* hostedStoreOrUnavailable(recordHostVersion(host.value.deviceId, version));
   }
+
   yield* admittedHostVersion(version);
+
   return Option.some({ userId: host.value.userId, deviceId: host.value.deviceId });
 });

@@ -45,6 +45,7 @@ function mount(at: string, bound: string | undefined) {
   const held = windowRouter(createMemoryHistory({ initialEntries: [at] }));
   let bind: ((taskId: string | undefined) => void) | undefined;
   let arrivals: (() => number) | undefined;
+
   function Probe() {
     const [standing, setStanding] = useState(bound);
     bind = setStanding;
@@ -63,11 +64,14 @@ function mount(at: string, bound: string | undefined) {
       onToBound: () => moves.push("to the task"),
       onToUnbound: () => moves.push("to Home"),
     });
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   act(() => root.render(held.provide(withQueryClient(createElement(Probe)))));
+
   return {
     moves,
     /** How many arrivals of the developer's the binding counted. */
@@ -156,12 +160,15 @@ test("the binding's own move to the task the host bound is no arrival, while eac
 test("a task asked for from Home is let go once the host answers, so the host binding none again leaves it unbound", () => {
   let asking: TaskAsking | undefined;
   let bind: ((taskId: string | undefined) => void) | undefined;
+
   function Probe() {
     const [open, setOpen] = useState<string | undefined>(undefined);
     bind = setOpen;
     asking = useTaskAsk(open);
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   act(() => root.render(createElement(Probe)));

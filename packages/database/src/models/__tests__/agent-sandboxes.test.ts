@@ -46,6 +46,7 @@ const openAgent = Effect.gen(function* () {
     db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
   );
   const task = yield* startTask(userId, { name: "Invitations", repository: "acme/relay" });
+
   return yield* openTaskAgent(userId, task.workspaceId, task.id);
 });
 
@@ -61,10 +62,12 @@ const rowOf = (sandboxName: string) =>
 const turnWithSnapshot = (agentId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const [agent] = yield* db
       .select({ userId: agentTable.userId, conversationId: agentTable.conversationId })
       .from(agentTable)
       .where(eq(agentTable.id, agentId));
+
     assert.ok(agent !== undefined);
     const id = randomUUID();
     yield* db.insert(turns).values({
@@ -77,6 +80,7 @@ const turnWithSnapshot = (agentId: string) =>
       snapshotHead: "89abcdef0123456789abcdef0123456789abcdef",
       snapshotBranch: "main",
     });
+
     return id;
   });
 

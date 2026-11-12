@@ -73,12 +73,15 @@ function followChapters(
   const userId = dependencies.accountId();
   let rows: readonly unknown[] | undefined;
   let generator: ChaptersGenerator | undefined;
+
   const draw = () => {
     if (rows === undefined || generator === undefined) return;
     const drawn = pullRequestChaptersOfLive(rows, key.number, generator);
+
     if ("failure" in drawn) answers.unanswered();
     else answers.answered(drawn);
   };
+
   return pushLive({
     seal: (poll, after) =>
       dependencies.gate() && userId !== undefined
@@ -86,10 +89,12 @@ function followChapters(
             if ("failure" in sealed) {
               return { failure: sealed.failure, gone: goneAfter(sealed.failure) };
             }
+
             if (generator === undefined || !sameGenerator(sealed, generator)) {
               generator = sealed;
               draw();
             }
+
             return sealed;
           })
         : Effect.succeed({ ...LIVE_SIGNED_OUT, gone: true }),

@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import { useLayoutEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
 import { visibleViewport } from "../../visible-viewport.js";
@@ -104,6 +105,7 @@ function placeStyle(
   room?: number,
 ): React.CSSProperties {
   const edge = align === POPOVER_ALIGN.START ? { left: inset, width } : { right: inset, width };
+
   return room === undefined
     ? edge
     : { ...edge, ...cssCustomProperties({ "--ui-popover-room": `${room}px` }) };
@@ -125,19 +127,22 @@ export function roomAround(
 ): Box {
   const marked = markedRoom(element, bounds)?.getBoundingClientRect();
   const seen = visibleViewport();
+
   const room = {
     left: Math.max(marked?.left ?? seen.left, seen.left),
     top: Math.max(marked?.top ?? seen.top, seen.top),
     right: Math.min(marked?.right ?? seen.right, seen.right),
     bottom: Math.min(marked?.bottom ?? seen.bottom, seen.bottom),
   };
+
   return cutTo(room, clips);
 }
 
 /** The width asked for before it is measured: its pixels, or its token's. */
 export function askedStyleWidth(width: number | PopoverWidth): number | string {
   if (width === POPOVER_WIDTH.FIT) return "max-content";
-  return typeof width === "number" ? width : `var(${WIDTH_TOKEN[width]})`;
+
+  return Predicate.isNumber(width) ? width : `var(${WIDTH_TOKEN[width]})`;
 }
 
 /**
@@ -146,10 +151,12 @@ export function askedStyleWidth(width: number | PopoverWidth): number | string {
  * stylesheet, is read off the layer as it is laid out instead.
  */
 function askedWidth(layer: HTMLElement, width: number | PopoverWidth): number {
-  if (typeof width === "number") return width;
+  if (Predicate.isNumber(width)) return width;
+
   // Note that a fit popover is drawn at its content's width before it is measured, so its box is the width it asks for.
   if (width === POPOVER_WIDTH.FIT) return layer.getBoundingClientRect().width;
   const token = Number.parseFloat(getComputedStyle(layer).getPropertyValue(WIDTH_TOKEN[width]));
+
   return Number.isFinite(token) ? token : layer.getBoundingClientRect().width;
 }
 
@@ -191,8 +198,10 @@ export function AnchoredPopover({
     if (!open) return;
     const drawn = layer.current;
     const anchor = drawn?.parentElement;
+
     if (drawn === null || anchor === null || anchor === undefined) return;
     const clips = clipsAround(drawn);
+
     const measure = () => {
       const next = popoverPlace({
         anchor: anchor.getBoundingClientRect(),
@@ -202,8 +211,10 @@ export function AnchoredPopover({
         align,
         side,
       });
+
       setPlace((last) => (samePlace(last, next) ? last : next));
     };
+
     measure();
     // Note that the popover is placed again whenever it, its button, its
     // room, or a box clipping it resizes, because a menu grows as its rows
@@ -213,7 +224,9 @@ export function AnchoredPopover({
     observer.observe(drawn);
     observer.observe(anchor);
     const room = markedRoom(anchor, bounds);
+
     if (room !== null) observer.observe(room);
+
     for (const clip of clips) observer.observe(clip);
     window.addEventListener("resize", measure);
     // Note that the visual viewport is heard too, because a phone's keyboard
@@ -226,6 +239,7 @@ export function AnchoredPopover({
     // does not bubble and the scroller that moved the anchor may be any box
     // around it.
     document.addEventListener("scroll", measure, { capture: true, passive: true });
+
     return () => {
       observer.disconnect();
       window.removeEventListener("resize", measure);
@@ -240,7 +254,7 @@ export function AnchoredPopover({
       ref={layer}
       className={LAYER}
       data-side={place?.side ?? POPOVER_SIDE.ABOVE}
-      data-width={typeof width === "number" ? undefined : width}
+      data-width={Predicate.isNumber(width) ? undefined : width}
       style={
         place === undefined
           ? placeStyle(align, 0, askedStyleWidth(width))

@@ -44,6 +44,7 @@ function holdFrames(): void {
 function drawFrame(): void {
   const due = frames;
   frames = [];
+
   for (const heard of due) heard?.(0);
 }
 
@@ -59,6 +60,7 @@ function drawTab() {
     "<div data-code><div><span>const </span><span>seats</span> = 3;</div><div>const seats = 42;</div></div>";
   const tree = tab.querySelector("#tree") ?? assert.fail("the tree stands");
   tree.attachShadow({ mode: "open" }).innerHTML = "<div>seats.ts</div>";
+
   return { tab, shadow };
 }
 
@@ -93,6 +95,7 @@ test("a change inside a marked shadow root is a change of the tab's text", async
   holdFrames();
   const { tab, shadow } = drawTab();
   let changes = 0;
+
   const stop = watchText(tab, () => {
     changes += 1;
   });
@@ -111,6 +114,7 @@ test("words streamed in a few at a time are heard once in the frame after them, 
   const tab = document.body.appendChild(document.createElement("div"));
   const line = tab.appendChild(document.createElement("p"));
   let changes = 0;
+
   const stop = watchText(tab, () => {
     changes += 1;
   });
@@ -119,6 +123,7 @@ test("words streamed in a few at a time are heard once in the frame after them, 
     line.append(words);
     await Promise.resolve();
   }
+
   assert.equal(changes, 0);
   drawFrame();
   assert.equal(changes, 1);
@@ -169,8 +174,10 @@ test("a fold the find opened closes as it steps to a match outside it, unless th
     "<details id='three'><summary>Edited</summary><p>seats three</p></details>";
   // jsdom lays nothing out, so a match stands nowhere and nothing scrolls to it.
   Range.prototype.getBoundingClientRect = () => new DOMRect();
+
   const fold = (id: string) =>
     tab.querySelector<HTMLDetailsElement>(`#${id}`) ?? assert.fail(`fold ${id}`);
+
   const [one, two, three] = findRanges(tab, "seats");
   const folds = new Set<HTMLDetailsElement>();
 

@@ -47,6 +47,7 @@ import { fixedAccountSource } from "./testing/fixed-account-source.js";
 const ORIGIN = "https://app.example.test";
 const ACCOUNT_BASE_URL = `${ORIGIN}/api/auth`;
 const PROVIDER_CONSENT = "https://github.com/login/oauth/authorize?state=state-1";
+
 /** A hosted route the account reaches, which refuses a request with no session behind it. */
 const HOSTED_ROUTE = HOSTED_SERVICE_PATH.ACCOUNT_ACCESS;
 
@@ -87,8 +88,10 @@ function respond(
     case "/api/auth/get-session": {
       if (state.outages > 0) {
         state.outages -= 1;
+
         return new Response(null, { status: 503 });
       }
+
       const answer = jsonResponse(
         state.user
           ? {
@@ -97,35 +100,45 @@ function respond(
             }
           : null,
       );
+
       const held = state.heldRead;
       state.heldRead = undefined;
+
       return held === undefined ? answer : held.then(() => answer);
     }
+
     case "/api/auth/sign-in/social": {
       const answer = jsonResponse({ url: PROVIDER_CONSENT, redirect: true });
       const held = state.heldSignIn;
       state.heldSignIn = undefined;
+
       return held === undefined ? answer : held.then(() => answer);
     }
+
     case "/api/auth/link-social":
       return jsonResponse({ url: PROVIDER_CONSENT, redirect: true });
     case "/api/auth/sign-out":
       if (state.signOutDown) return new Response(null, { status: 503 });
       state.user = undefined;
+
       return jsonResponse({ success: true });
     case "/api/auth/delete-user":
       state.user = undefined;
+
       return jsonResponse({ success: true, message: "User deleted" });
     case HOSTED_SERVICE_PATH.ACCOUNT_PREFERENCES:
       if (request.method === HTTP_METHOD.PUT) {
         const body = JSON.parse(request.body ?? "{}");
         state.experiments = { ...state.experiments, ...body.experiments };
+
         if (body.preferences) {
           state.preferences = body.preferences;
           state.updatedAt = 2;
         }
+
         if (body.linkOpen) state.linkOpen = body.linkOpen;
       }
+
       return jsonResponse({
         preferences: state.preferences,
         experiments: state.experiments,
@@ -152,6 +165,7 @@ function scene(initial: Partial<ServiceState> = {}) {
     preferences: {},
     ...initial,
   };
+
   const service = recordingHttpClient((request) => respond(state, request));
   const navigated: string[] = [];
   const gate: string[] = [];
@@ -162,18 +176,23 @@ function scene(initial: Partial<ServiceState> = {}) {
   /** Held open where a test wants a departure's settings still being dropped. */
   let forgetting: Effect.Effect<void> = Effect.void;
   let revisitQueue: Queue.Queue<void> | undefined;
+
   const revisits = Effect.gen(function* () {
     revisitQueue ??= yield* Queue.unbounded<void>();
+
     return revisitQueue;
   });
+
   const door: CookieSessionDoor = {
     currentAddress: () => "/plan/task-1?tab=inbox",
     navigate: (url) => Effect.sync(() => void navigated.push(url)),
     returnedFromSignIn: Effect.succeed(false),
     revisits: Stream.unwrap(Effect.map(revisits, Stream.fromQueue)),
   };
+
   /** The person coming back to the tab. */
   const revisit = Effect.flatMap(revisits, (queue) => Queue.offer(queue, undefined));
+
   const host: AccountSourceHost = {
     // The cookie source keeps no account in the settings file, so it never reads one.
     store: {
@@ -185,6 +204,7 @@ function scene(initial: Partial<ServiceState> = {}) {
           Effect.andThen(
             Effect.sync(() => {
               gate.push("forget");
+
               return { status: ACCOUNT_STATUS.SIGNED_OUT } as const;
             }),
           ),
@@ -205,22 +225,29 @@ function scene(initial: Partial<ServiceState> = {}) {
       Effect.andThen(Effect.sync(() => void gate.push("close"))),
     ),
   };
+
   const open = Effect.gen(function* () {
     const source = yield* AccountSource;
     assert.equal(source.tokenCipher, undefined);
+
     return yield* source.open(host);
   }).pipe(Effect.provide(Layer.provide(cookieAccountSourceLayer(door), service.layer)));
+
   const sent = (pathname: string) =>
     service.requests.filter((request) => request.pathname === pathname);
+
   const holdOpening = (until: Effect.Effect<void>) => {
     opening = until;
   };
+
   const holdClosing = (until: Effect.Effect<void>) => {
     closing = until;
   };
+
   const holdForgetting = (until: Effect.Effect<void>) => {
     forgetting = until;
   };
+
   return {
     state,
     service,
@@ -248,9 +275,11 @@ const turns = (count: number) =>
 /** A promise the test settles by hand, for an answer the service holds. */
 function heldAnswer() {
   let release: () => void = () => undefined;
+
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
+
   return { held, release };
 }
 
@@ -261,6 +290,7 @@ const runOut = <A, E>(fiber: Fiber.Fiber<A, E>) =>
       yield* Effect.promise(() => nextTurn());
       yield* TestClock.adjust("1 second");
     }
+
     return yield* Fiber.join(fiber);
   });
 
@@ -370,6 +400,7 @@ describe("the cookie account source", () => {
       // Another tab signs in as someone else; this one hears of it on the person's return.
       state.user = { ...USER, id: "user-2", email: "other@example.com" };
       yield* revisit;
+
       while (gate.at(-1) !== "open") yield* Effect.promise(() => nextTurn());
 
       const account = session.snapshot();
@@ -387,6 +418,7 @@ describe("the cookie account source", () => {
 
       // The session ends elsewhere, such as a sign-out in another tab.
       state.user = undefined;
+
       const answer = yield* Effect.provide(
         call.send({ method: HTTP_METHOD.GET, path: HOSTED_ROUTE }),
         service.layer,
@@ -439,6 +471,7 @@ describe("the cookie account source", () => {
       const { open, state, service, sent } = scene({ user: undefined });
       const session = yield* open;
       yield* session.initialize;
+
       const sender = yield* ProductEventSender.make({
         serviceBaseUrl: ORIGIN,
         appVersion: "0.2.0",
@@ -450,6 +483,7 @@ describe("the cookie account source", () => {
         httpClient: service.layer,
         now: () => 0,
       });
+
       sender.arm();
       sender.record(PRODUCT_EVENT.APP_LAUNCH, { app_version: "0.2.0" });
       sender.record(PRODUCT_EVENT.ACCOUNT_SIGN_IN, {});
@@ -466,6 +500,7 @@ describe("the cookie account source", () => {
       const received = sent(HOSTED_SERVICE_PATH.EVENTS).flatMap(
         (batch): { name: string }[] => JSON.parse(batch.body ?? "{}").events,
       );
+
       assert.deepEqual(
         received.map((event) => event.name),
         [PRODUCT_EVENT.APP_LAUNCH, PRODUCT_EVENT.ACCOUNT_SIGN_IN],
@@ -535,21 +570,26 @@ describe("the cookie account source", () => {
     Effect.gen(function* () {
       // The service's own promise, which the test resolves; nothing is run outside the test's fiber.
       let resolveHeld: () => void = () => undefined;
+
       const heldRead = new Promise<void>((resolve) => {
         resolveHeld = resolve;
       });
+
       const { open, state, revisit, sent } = scene({ heldRead });
       const session = yield* open;
 
       // The launch's read is asked as the first person and held; meanwhile another tab signs in as someone else.
       const launched = yield* Effect.forkChild(session.initialize);
+
       while (sent("/api/auth/get-session").length === 0) yield* Effect.promise(() => nextTurn());
       state.user = { ...USER, id: "user-2", email: "other@example.com" };
       yield* revisit;
       yield* Effect.promise(() => nextTurn());
       yield* Effect.sync(() => resolveHeld());
       yield* Fiber.join(launched);
+
       while (sent("/api/auth/get-session").length < 2) yield* Effect.promise(() => nextTurn());
+
       while (signedInEmail(session.snapshot()) !== "other@example.com") {
         yield* Effect.promise(() => nextTurn());
       }
@@ -605,9 +645,11 @@ describe("the cookie account source", () => {
       const release = yield* Deferred.make<void>();
       holdOpening(Deferred.await(release));
       const reads = () => sent("/api/auth/get-session").length;
+
       const reread = Effect.gen(function* () {
         const before = reads();
         yield* session.token.refreshAccount();
+
         while (reads() === before) yield* Effect.promise(() => nextTurn());
         yield* turns(5);
       });
@@ -638,9 +680,11 @@ describe("the cookie account source", () => {
         const release = yield* Deferred.make<void>();
         holdOpening(Deferred.await(release));
         const reads = () => sent("/api/auth/get-session").length;
+
         const reread = Effect.gen(function* () {
           const before = reads();
           yield* session.token.refreshAccount();
+
           while (reads() === before) yield* Effect.promise(() => nextTurn());
           yield* turns(5);
         });
@@ -699,6 +743,7 @@ describe("the cookie account source", () => {
       state.heldRead = held;
       state.user = { ...USER, id: "user-2", email: "other@example.com" };
       const refreshed = yield* Effect.forkChild(session.refreshOnce());
+
       while (sent("/api/auth/get-session").length < 2) yield* Effect.promise(() => nextTurn());
       yield* Scope.close(sessionScope, Exit.void);
       yield* Effect.sync(release);
@@ -717,9 +762,11 @@ describe("the cookie account source", () => {
       const release = yield* Deferred.make<void>();
       holdOpening(Deferred.await(release));
       const reads = () => sent("/api/auth/get-session").length;
+
       const reread = Effect.gen(function* () {
         const before = reads();
         yield* session.token.refreshAccount();
+
         while (reads() === before) yield* Effect.promise(() => nextTurn());
         yield* turns(5);
       });
@@ -733,6 +780,7 @@ describe("the cookie account source", () => {
       yield* reread;
       holdOpening(Effect.void);
       yield* Deferred.succeed(release, undefined);
+
       while (gate.at(-1) !== "open" || !gate.includes("settle third@example.com")) {
         yield* Effect.promise(() => nextTurn());
       }
@@ -759,6 +807,7 @@ describe("the cookie account source", () => {
         yield* session.token.refreshAccount();
         yield* turns(5);
         const signedOut = yield* Effect.forkChild(session.signOut({ revokeRemote: true }));
+
         while (sent("/api/auth/sign-out").length === 0) yield* Effect.promise(() => nextTurn());
         yield* turns(5);
         yield* session.token.refreshAccount();
@@ -779,6 +828,7 @@ describe("the cookie account source", () => {
 
       // The launch's read is held; a refused call's re-read meanwhile finds the session.
       const launched = yield* Effect.forkChild(session.initialize);
+
       while (sent("/api/auth/get-session").length === 0) yield* Effect.promise(() => nextTurn());
       state.user = { ...USER };
       yield* session.token.refreshAccount();
@@ -800,6 +850,7 @@ describe("the cookie account source", () => {
 
         // The person signs out, and their settings are still being dropped when someone else's session is read.
         const signedOut = yield* Effect.forkChild(session.signOut({ revokeRemote: true }));
+
         while (sent("/api/auth/sign-out").length === 0) yield* Effect.promise(() => nextTurn());
         yield* turns(5);
         assert.deepEqual(session.snapshot(), { status: ACCOUNT_STATUS.SIGNED_OUT });
@@ -869,6 +920,7 @@ describe("the cookie account source", () => {
       const { open, state, revisit } = scene();
       const session = yield* open;
       yield* session.initialize;
+
       const shownAs = (email: string) =>
         Effect.gen(function* () {
           while (signedInEmail(session.snapshot()) !== email) {
@@ -906,10 +958,12 @@ describe("the cookie account source", () => {
       yield* revisit;
       yield* revisit;
       yield* revisit;
+
       for (let second = 0; second < 60; second += 1) {
         yield* turns(2);
         yield* TestClock.adjust("1 second");
       }
+
       yield* turns(2);
 
       // Nothing read again behind that return, and the outage was no sign-out.
@@ -917,6 +971,7 @@ describe("the cookie account source", () => {
 
       // A later return reads again, and settles on who the session names.
       yield* revisit;
+
       while (signedInEmail(session.snapshot()) !== "other@example.com") {
         yield* Effect.promise(() => nextTurn());
       }
@@ -934,6 +989,7 @@ describe("the cookie account source", () => {
       // A read is under way as the first person when the sign-out is pressed.
       state.heldRead = held;
       const refreshed = yield* Effect.forkChild(session.refreshOnce());
+
       while (sent("/api/auth/get-session").length < 2) yield* Effect.promise(() => nextTurn());
       yield* session.signOut({ revokeRemote: true });
       // Another tab then signs in as someone else, and a write asks who is signed in.
@@ -958,9 +1014,11 @@ describe("the cookie account source", () => {
         yield* session.initialize;
 
         const begun = yield* Effect.forkChild(session.beginSignIn(ACCOUNT_PROVIDER.GITHUB));
+
         while (sent("/api/auth/sign-in/social").length === 0) {
           yield* Effect.promise(() => nextTurn());
         }
+
         assert.deepEqual(session.snapshot(), { status: ACCOUNT_STATUS.SIGNING_IN });
         session.cancelSignIn();
         yield* Effect.sync(release);
@@ -979,10 +1037,13 @@ describe("the cookie account source", () => {
 
       // The tab is focused while the service is still asked for the provider's address.
       const begun = yield* Effect.forkChild(session.beginSignIn(ACCOUNT_PROVIDER.GITHUB));
+
       while (sent("/api/auth/sign-in/social").length === 0) {
         yield* Effect.promise(() => nextTurn());
       }
+
       yield* revisit;
+
       while (sent("/api/auth/get-session").length < 2) yield* Effect.promise(() => nextTurn());
       yield* turns(5);
       yield* Effect.sync(release);
@@ -1090,6 +1151,7 @@ const composedTab = (
       stateRoot,
       Layer.provide(cookieAccountSourceLayer(STILL_DOOR), FetchHttpClient.layer),
     );
+
     const settings = yield* Effect.provide(composeSettings(), machine);
     yield* prepare(settings);
     const account = yield* Effect.provide(composeAccount({ settings }), machine);
@@ -1104,6 +1166,7 @@ const composedTab = (
     });
     yield* account.lifetime;
     yield* settings.lifetime;
+
     return { settings, account };
   });
 
@@ -1117,20 +1180,25 @@ it.effect("keys the account's preferences sync and experiments on the cookie ses
     updatedAt: 1,
     linkOpen: LINK_OPEN.MAC_APP,
   };
+
   /** The same scripted service behind the platform fetch, which the settings' own clients ride. */
   const service: typeof globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
+
     return respond(state, {
       method: request.method,
       pathname: new URL(request.url).pathname,
       body: await request.text(),
     });
   };
+
   return Effect.gen(function* () {
     const stateRoot = yield* temporaryDirectoryScoped("cookie-settings-");
+
     const { settings, account } = yield* composedTab(stateRoot, (settings) =>
       Effect.orDie(settings.store.set("linkOpen", LINK_OPEN.BROWSER)),
     );
+
     assert.equal(account.signedIn(), true);
 
     // The preferences reconcile reads the service under the session's account.
@@ -1138,12 +1206,15 @@ it.effect("keys the account's preferences sync and experiments on the cookie ses
       Effect.orDie(settings.store.snapshot()),
       (snapshot) => snapshot.accountRead,
     );
+
     assert.equal(yield* accountRead, false);
     yield* settings.reconcileAccountPreferences();
+
     const experiments = Effect.map(
       Effect.orDie(settings.store.snapshot()),
       (snapshot) => snapshot.experiments,
     );
+
     const linkOpen = Effect.orDie(settings.store.get("linkOpen"));
     // The account reads as read only once its choices stand, so a window waiting on them never reads this device's in their place.
     yield* until(() => accountRead);
@@ -1181,16 +1252,20 @@ it.effect("sends no day one person marked under the cookie another tab signed in
   const state: ServiceState = { user: { ...USER }, outages: 0, experiments: {}, preferences: {} };
   /** Every batch of counts, by who the cookie named when it arrived and the events it carried. */
   const batches: { readonly user: string | undefined; readonly names: readonly string[] }[] = [];
+
   const service: typeof globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     const pathname = new URL(request.url).pathname;
     const body = await request.text();
+
     if (pathname === HOSTED_SERVICE_PATH.EVENTS) {
       const events: { name: string }[] = JSON.parse(body).events;
       batches.push({ user: state.user?.id, names: events.map((event) => event.name) });
     }
+
     return respond(state, { method: request.method, pathname, body });
   };
+
   return Effect.gen(function* () {
     const stateRoot = yield* temporaryDirectoryScoped("cookie-events-");
     // The launch counts itself and marks the day for the person signed in.
@@ -1198,6 +1273,7 @@ it.effect("sends no day one person marked under the cookie another tab signed in
 
     // Another tab signs in as someone else before the minute's flush.
     state.user = { ...USER, id: "user-2", email: "other@example.com" };
+
     while (batches.length < 1) {
       yield* Effect.promise(() => nextTurn());
       yield* TestClock.adjust("1 minute");
@@ -1213,6 +1289,7 @@ it.effect("sends no day one person marked under the cookie another tab signed in
       yield* Effect.promise(() => nextTurn());
       yield* TestClock.adjust("1 minute");
     }
+
     assert.equal(batches[1]?.user, "user-2");
     assert.ok(batches[1]?.names.includes(PRODUCT_EVENT.APP_DAY_ACTIVE));
   }).pipe(
@@ -1289,12 +1366,16 @@ it.effect(
     const ADA = "ada@example.com";
     const BOB = "bob@example.com";
     const written: string[] = [];
+
     /** Bob's service: no saved snapshot yet, and every write kept. */
     const service: typeof globalThis.fetch = async (input, init) => {
       const request = new Request(input, init);
+
       if (request.method === HTTP_METHOD.PUT) written.push(await request.text());
+
       return jsonResponse({ preferences: {}, experiments: {} });
     };
+
     return Effect.gen(function* () {
       const stateRoot = yield* temporaryDirectoryScoped("cookie-unsettled-");
       // The file as an earlier build left it for Ada: her link choice and her voice, which no

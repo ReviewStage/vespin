@@ -1,4 +1,4 @@
-// thread-page.tsx -- an Inbox thread: its path small in the bar, its title as the page's heading, then each message flat, its writer's face or tile, name and time in SwiftUI and its words, pictures, and videos in React Native views.
+// thread-page.tsx -- an Inbox thread: its path small in the bar, its title as the page's heading, then each message flat, its writer's face or tile, name and time in SwiftUI and its words, pictures, videos, and files in React Native views.
 
 import {
   HStack,
@@ -29,6 +29,7 @@ import { sinceHeard, sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
+import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
@@ -51,10 +52,11 @@ const styles = StyleSheet.create({
   words: { paddingLeft: WORDS_INSET, paddingRight: SPACE.EDGE, gap: SPACE.ROW },
 });
 
-/** What a message's file is drawn as after its words: a picture, or a video in the system's player. */
+/** What a message's file is drawn as after its words: a picture, a video in the system's player, or any other file, such as a PDF, as its chip. */
 export const THREAD_MEDIA = {
   PICTURE: "picture",
   VIDEO: "video",
+  FILE: "file",
 } as const;
 
 /** One file a message carried, drawn after its words; its source none while its bytes are on their way. */
@@ -72,6 +74,16 @@ export type ThreadMedia =
       readonly label: string;
       /** Opens the video where it plays, such as its thread in Safari, for one the system's player cannot read. */
       readonly onOpenElsewhere?: (() => void) | undefined;
+    }
+  | {
+      readonly kind: typeof THREAD_MEDIA.FILE;
+      readonly key: string;
+      /** The file's address under the app's caches, which its viewer opens. */
+      readonly source: string | undefined;
+      readonly name: string;
+      readonly mediaType: string;
+      /** Its size in words once its bytes are read. */
+      readonly size: string | undefined;
     };
 
 /** One message of a thread, as its comment draws it. */
@@ -124,6 +136,7 @@ type ThreadPageProps = {
 /** A thread's heading under its bar: its title in 20 pt semibold, and how it ended under it, 13 pt muted, once it is settled. */
 function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standing">) {
   const colors = useColors();
+
   return (
     <VStack
       alignment="leading"
@@ -160,6 +173,7 @@ function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standi
  */
 export function PathTitle({ path, status }: Pick<ThreadPageProps, "path" | "status">) {
   const colors = useColors();
+
   return (
     <HStack spacing={SPACE.TIGHT + 2}>
       {status === undefined ? null : <TaskStatusMark status={status} />}
@@ -178,11 +192,23 @@ export function PathTitle({ path, status }: Pick<ThreadPageProps, "path" | "stat
 
 /** A file after a message's words, as its kind draws it. */
 function MediaView({ media }: { readonly media: ThreadMedia }) {
-  return media.kind === THREAD_MEDIA.PICTURE ? (
-    <Picture source={media.source} alt={media.alt} />
-  ) : (
-    <Video source={media.source} label={media.label} onOpenElsewhere={media.onOpenElsewhere} />
-  );
+  switch (media.kind) {
+    case THREAD_MEDIA.PICTURE:
+      return <Picture source={media.source} alt={media.alt} />;
+    case THREAD_MEDIA.VIDEO:
+      return (
+        <Video source={media.source} label={media.label} onOpenElsewhere={media.onOpenElsewhere} />
+      );
+    case THREAD_MEDIA.FILE:
+      return (
+        <FileChip
+          name={media.name}
+          mediaType={media.mediaType}
+          source={media.source}
+          size={media.size}
+        />
+      );
+  }
 }
 
 /** What a sent answer's mark is heard as: it went ahead with what was asked, or held back. */
@@ -191,6 +217,7 @@ const STAMP_HEARD = { AHEAD: "Went ahead", HELD: "Held back" } as const;
 /** A sent answer's stamp under its writer's name, where its words start: its mark and its words, 13 pt. */
 function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["stamp"]> }) {
   const colors = useColors();
+
   return (
     <HStack
       spacing={SPACE.TIGHT + 2}
@@ -230,6 +257,7 @@ function MessageView({
   const large = useAccessibilitySize();
   const { writer } = message;
   const moment = now ?? Date.now();
+
   // Note that the writer's line is heard as one heading, who and when, so VoiceOver's Headings rotor steps from message to message.
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
@@ -303,6 +331,7 @@ export function ThreadPage(props: ThreadPageProps) {
   const { path, status, title, messages, ask, menu, foot, standing, ...drawing } = props;
   // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
   const footRoom = useDockRoom();
+
   return (
     <Toolbar>
       <VStack spacing={0}>

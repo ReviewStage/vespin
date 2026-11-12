@@ -63,6 +63,7 @@ const openUser = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -70,6 +71,7 @@ const openUser = Effect.gen(function* () {
 const openAgentIn = Effect.gen(function* () {
   const userId = yield* openUser;
   const task = yield* startTask(userId, { name: "Preview deploys" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -80,8 +82,10 @@ const openAgentIn = Effect.gen(function* () {
     prompt: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   assert.ok(Option.isSome(started));
   const agent = { userId, taskId: task.id, agentId: started.value.agent.id };
+
   return { agent, workspaceId: task.workspaceId };
 });
 
@@ -121,7 +125,9 @@ const SHOT = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1,
 function picturesIn(text: string | undefined) {
   return [...(text ?? "").matchAll(/!\[[^\]]*\]\(([^\s)]+)/gu)].flatMap(([, address = ""]) => {
     const picture = inboxAttachmentOf(address);
+
     if (picture === undefined) return [];
+
     return [{ ...picture, holder: new URL(address).pathname.split("/").slice(2, 4).join("/") }];
   });
 }
@@ -135,6 +141,7 @@ const attached = (name: string, bytes: Uint8Array): AgentAttachment => ({
 /** The item a post wrote, where it was written. */
 function posted(result: Result.Result<InboxItem, InboxPostRefusal>): InboxItem {
   assert.ok(Result.isSuccess(result));
+
   return result.success;
 }
 
@@ -152,7 +159,9 @@ function openAskOf(item: InboxItem): string {
   const asking = (item.thread ?? []).find(
     (message) => message.ask?.status === INBOX_ASK_STATUS.OPEN,
   );
+
   assert.ok(asking, "the item holds an ask open");
+
   return asking.id;
 }
 
@@ -180,6 +189,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         );
 
         yield* later;
+
         const approval = {
           type: INBOX_ASK.DECIDE,
           options: [
@@ -187,6 +197,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             { label: INBOX_APPROVAL_OPTION.DECLINE },
           ],
         } as const;
+
         const second = posted(
           yield* postInboxThread(agent, {
             key: REGION.key,
@@ -195,6 +206,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             ask: approval,
           }),
         );
+
         assert.deepEqual(asksOf(second), [
           [INBOX_MESSAGE_AUTHOR.AGENT, INBOX_ASK.DECIDE, INBOX_ASK_STATUS.REPLACED],
           [INBOX_MESSAGE_AUTHOR.AGENT, INBOX_ASK.DECIDE, INBOX_ASK_STATUS.OPEN],
@@ -217,11 +229,14 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         const agent = yield* openAgent;
         const item = posted(yield* postInboxThread(agent, SETTINGS));
         const { id } = item;
+
         const revision = Effect.map(
           readInboxItem(agent.userId, id),
           (read) => Option.getOrThrow(read).item.revision,
         );
+
         const answerKey = randomUUID();
+
         const writes = [
           replyInboxItem(agent, SETTINGS.key, "Still needed."),
           postInboxMessage(agent.userId, id, { text: "On it.", clientKey: randomUUID() }),
@@ -234,7 +249,9 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
           postInboxThread(agent, SETTINGS),
           closeInboxItem(agent, SETTINGS.key, "Done by hand."),
         ];
+
         const seen = [yield* revision];
+
         for (const write of writes) {
           yield* later;
           yield* write;
@@ -274,6 +291,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
           [INBOX_MESSAGE_AUTHOR.AGENT, INBOX_ASK.DECIDE, INBOX_ASK_STATUS.OPEN],
         ]);
         assert.deepEqual([reopened.status, reopened.closedBy], [INBOX_STATUS.OPEN, undefined]);
+
         const taken = Option.getOrThrow(
           yield* answerInboxAsk(teammate, id, {
             answers: {
@@ -285,6 +303,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             clientKey: randomUUID(),
           }),
         );
+
         assert.equal(taken.outcome, INBOX_ASK_ANSWER.TAKEN, "the ask opened again takes an answer");
 
         yield* later;
@@ -354,6 +373,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
           Option.isNone(yield* readInboxAttachment(teammate, id, file.attachmentId)),
           "the answer's files go with its message",
         );
+
         const again = Option.getOrThrow(
           yield* answerInboxAsk(teammate, id, {
             answers: { ask, reply: INBOX_REPLY.CHOSE, choices: ["iad1"] },
@@ -361,6 +381,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             clientKey: randomUUID(),
           }),
         );
+
         assert.equal(again.outcome, INBOX_ASK_ANSWER.TAKEN, "the ask taken back takes an answer");
       }),
   );
@@ -390,6 +411,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         const withdrawn = Option.getOrThrow(
           yield* withdrawInboxAnswer(agent.userId, id, answerKey),
         );
+
         assert.deepEqual(asksOf(withdrawn), [
           [INBOX_MESSAGE_AUTHOR.AGENT, INBOX_ASK.DECIDE, INBOX_ASK_STATUS.REPLACED],
         ]);
@@ -402,6 +424,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
+
         const asked = posted(
           yield* postInboxThread(agent, {
             key: "deploy-region",
@@ -410,8 +433,10 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             ask: DECIDE,
           }),
         );
+
         assert.equal(asked.status, INBOX_STATUS.OPEN);
         const ask = asked.thread?.[0]?.id ?? "";
+
         const answer = (choices: readonly string[], clientKey: string) =>
           Effect.map(
             answerInboxAsk(agent.userId, asked.id, {
@@ -458,6 +483,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         );
 
         yield* later;
+
         const askedAgain = posted(
           yield* postInboxThread(agent, {
             key: "deploy-region",
@@ -466,6 +492,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             ask: DECIDE,
           }),
         );
+
         assert.deepEqual(asksOf(askedAgain), [
           [INBOX_MESSAGE_AUTHOR.AGENT, INBOX_ASK.DECIDE, INBOX_ASK_STATUS.ANSWERED],
           [INBOX_MESSAGE_AUTHOR.MEMBER, undefined, undefined],
@@ -480,6 +507,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
+
         const asked = posted(
           yield* postInboxThread(agent, {
             key: "preview-limits",
@@ -494,7 +522,9 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             },
           }),
         );
+
         const ask = asked.thread?.[0]?.id ?? "";
+
         const submit = (values: readonly { label: string; value: number | string }[]) =>
           Effect.map(
             answerInboxAsk(agent.userId, asked.id, {
@@ -535,6 +565,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
+
         const asked = posted(
           yield* postInboxThread(agent, {
             key: "deploy-region",
@@ -543,6 +574,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             ask: DECIDE,
           }),
         );
+
         yield* later;
 
         const followed = posted(
@@ -552,6 +584,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             body: "Pinged the team too.",
           }),
         );
+
         assert.deepEqual(
           [followed.status, followed.revision, followed.title],
           [INBOX_STATUS.OPEN, asked.revision, asked.title],
@@ -570,6 +603,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             needsReply: true,
           }),
         );
+
         assert.deepEqual(
           [opened.status, opened.needsReply, opened.revision],
           [INBOX_STATUS.OPEN, false, 1],
@@ -588,12 +622,14 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
+
         const rule = {
           path: "shots/rule.png",
           name: "rule.png",
           contentType: INBOX_IMAGE_TYPE.PNG,
           bytes: SHOT,
         };
+
         const onTask = posted(
           yield* postInboxThread(
             agent,
@@ -604,6 +640,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             [rule],
           ),
         );
+
         const [posting] = onTask.thread ?? [];
         const [ruleFile] = posting?.files ?? [];
         assert.ok(ruleFile);
@@ -618,12 +655,14 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         assert.equal(ruleFile.name, "rule.png");
 
         const other = yield* openAgent;
+
         const picture = {
           path: "shots/before.png",
           name: "before.png",
           contentType: INBOX_IMAGE_TYPE.PNG,
           bytes: SHOT,
         };
+
         const asked = posted(
           yield* postInboxThread(
             other,
@@ -640,6 +679,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             [picture],
           ),
         );
+
         const [question] = asked.thread ?? [];
         const [kept] = question?.files ?? [];
         assert.ok(kept);
@@ -655,6 +695,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         assert.deepEqual(new Uint8Array(Option.getOrThrow(served).bytes), SHOT);
 
         yield* later;
+
         const followed = posted(
           yield* postInboxThread(
             other,
@@ -662,6 +703,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             [picture],
           ),
         );
+
         const said = followed.thread?.at(-1);
         assert.equal(said?.files?.length, 1);
         assert.deepEqual(picturesIn(said?.text), [
@@ -681,6 +723,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         const agent = yield* openAgent;
         const first = posted(yield* postInboxThread(agent, SETTINGS));
         const opening = first.thread?.[0]?.id;
+
         const notes = (from: number, count: number, at: Date) =>
           Database.use((db) =>
             db.insert(inboxMessage).values(
@@ -693,11 +736,14 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
               })),
             ),
           );
+
         yield* notes(0, 10, yield* DateTime.nowAsDate);
         yield* TestClock.adjust(Duration.minutes(1));
+
         const askedAgain = posted(
           yield* postInboxThread(agent, { ...SETTINGS, title: "Two reviews" }),
         );
+
         const open = askedAgain.thread?.at(-1)?.id;
         yield* notes(10, 55, yield* DateTime.nowAsDate);
 
@@ -767,6 +813,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             clientKey: key,
           }),
         );
+
         assert.equal(byAsk.outcome, INBOX_ASK_ANSWER.REFUSED);
         const read = Option.getOrThrow(yield* readInboxItem(agent.userId, asked.id)).item;
         assert.deepEqual(
@@ -781,6 +828,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
+
         const asked = posted(
           yield* postInboxThread(agent, {
             key: "deploy-region",
@@ -789,6 +837,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             ask: DECIDE,
           }),
         );
+
         const ask = asked.thread?.[0]?.id ?? "";
         const answers = { ask, reply: INBOX_REPLY.CHOSE, choices: ["iad1"] };
         yield* later;
@@ -802,6 +851,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         const followed = posted(
           yield* postInboxThread(agent, { key: "deploy-region", body: "Deployed to iad1." }),
         );
+
         assert.deepEqual(
           [followed.status, followed.title, followed.revision, followed.answeredBy],
           [INBOX_STATUS.OPEN, asked.title, asked.revision + 1, undefined],
@@ -811,15 +861,18 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
           [INBOX_MESSAGE_AUTHOR.MEMBER, undefined, undefined],
           [INBOX_MESSAGE_AUTHOR.AGENT, undefined, undefined],
         ]);
+
         const waiting = Effect.map(accountWaitingItems(agent.userId), (entries) =>
           entries.map((entry) => entry.id),
         );
+
         assert.deepEqual(yield* waiting, [asked.id]);
         yield* later;
 
         const nodded = Option.getOrThrow(
           yield* acknowledgeInboxItem(agent.userId, asked.id, followed.revision, randomUUID()),
         );
+
         assert.deepEqual(
           [nodded.status, nodded.answeredBy?.userId],
           [INBOX_STATUS.ANSWERED, agent.userId],
@@ -834,9 +887,11 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             body: "It deploys from main.",
           }),
         );
+
         const closed = Option.getOrThrow(
           yield* closeInboxItemAsMember(agent.userId, closing.id, closing.revision, randomUUID()),
         );
+
         assert.equal(closed.status, INBOX_STATUS.CLOSED);
         assert.deepEqual(yield* waiting, []);
       }),
@@ -871,6 +926,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
           }),
         );
         yield* later;
+
         // Posted again under its key, so the revision first shown is one the agent has moved on from.
         const notice = posted(
           yield* postInboxThread(agent, {
@@ -879,11 +935,14 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             body: "Redeployed from main.",
           }),
         );
+
         assert.equal(notice.revision, 2);
+
         const status = Effect.map(
           readInboxItem(agent.userId, notice.id),
           (read) => Option.getOrThrow(read).item.status,
         );
+
         yield* later;
 
         assert.ok(
@@ -908,9 +967,11 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         yield* later;
 
         const key = randomUUID();
+
         const nodded = Option.getOrThrow(
           yield* acknowledgeInboxItem(teammate, notice.id, notice.revision, key),
         );
+
         assert.deepEqual(
           [nodded.status, nodded.answeredBy?.userId, nodded.revision],
           [INBOX_STATUS.ANSWERED, teammate, notice.revision],
@@ -949,6 +1010,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
+
         const notice = posted(
           yield* postInboxThread(agent, {
             key: "preview-up",
@@ -956,6 +1018,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             body: "It deploys from main.",
           }),
         );
+
         assert.ok(Option.isNone(yield* closeInboxItem(agent, "preview-up", "No longer needed.")));
         yield* later;
 
@@ -966,18 +1029,21 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             revision: notice.revision - 1,
           }),
         );
+
         assert.equal(
           stale.item.status,
           INBOX_STATUS.OPEN,
           "a reply to what came before settles nothing",
         );
         yield* later;
+
         const plain = Option.getOrThrow(
           yield* postInboxMessage(agent.userId, notice.id, {
             text: "Hm.",
             clientKey: randomUUID(),
           }),
         );
+
         assert.equal(
           plain.item.status,
           INBOX_STATUS.OPEN,
@@ -986,6 +1052,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         yield* later;
 
         const clientKey = randomUUID();
+
         const written = Option.getOrThrow(
           yield* postInboxMessage(agent.userId, notice.id, {
             text: "Looks good.",
@@ -993,6 +1060,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
             revision: notice.revision,
           }),
         );
+
         assert.deepEqual(
           [written.item.status, written.item.answeredBy?.userId],
           [INBOX_STATUS.ANSWERED, agent.userId],
@@ -1026,11 +1094,13 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
 
         assert.ok(Option.isNone(yield* readInboxItem(outsider, item.id)));
         assert.deepEqual(yield* taskInboxItems(outsider, agent.taskId), []);
+
         const sent = {
           answers: { ask, reply: INBOX_REPLY.CHOSE, choices: ["iad1"] },
           text: "",
           clientKey: randomUUID(),
         };
+
         assert.ok(Option.isNone(yield* answerInboxAsk(outsider, item.id, sent)));
         assert.equal(
           Option.getOrThrow(yield* readInboxItem(agent.userId, item.id)).item.status,

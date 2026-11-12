@@ -1,5 +1,5 @@
 import { isRecord, isWireNumber, isWireString, type WireValue } from "@repo/wire";
-import { Option, Schema } from "effect";
+import { Option, Predicate, Schema } from "effect";
 import {
   AGENT_TOOL,
   type AgentTool,
@@ -14,6 +14,7 @@ import { fileRefText, shortCommit } from "./code-ref-words.js";
 import { descriptionAttachmentOf } from "./description-attachment-link.js";
 import type { DescriptionAgentEdit } from "./description-notes.js";
 import { askHeadWords } from "./inbox-ask-words.js";
+import { inboxAttachmentOf } from "./inbox-attachment-link.js";
 import {
   INBOX_ASK,
   INBOX_BLOCK,
@@ -132,20 +133,26 @@ export interface PatchFile {
  */
 export function patchFiles(patchText: string): readonly PatchFile[] {
   const files: { path: string; added: number; removed: number }[] = [];
+
   for (const raw of patchText.split("\n")) {
     const line = raw.trimEnd();
     const moved = PATCH_MOVE_HEADER.exec(line)?.[1];
     const last = files.at(-1);
+
     if (moved !== undefined && last !== undefined) last.path = moved;
     const named = PATCH_FILE_HEADER.exec(line)?.[1];
+
     if (named !== undefined) {
       files.push({ path: named, added: 0, removed: 0 });
       continue;
     }
+
     if (last === undefined || line.startsWith("***")) continue;
+
     if (line.startsWith("+")) last.added += 1;
     else if (line.startsWith("-")) last.removed += 1;
   }
+
   return files;
 }
 
@@ -170,7 +177,9 @@ function textBlock(text: string): ToolBlock {
 /** A subject with many files: the first, and how many more. */
 function pathsSubject(paths: readonly string[]): string {
   const [first, ...rest] = paths;
+
   if (first === undefined) return "";
+
   return rest.length === 0 ? first : `${first} +${rest.length}`;
 }
 
@@ -182,12 +191,14 @@ function stringAt(value: WireValue | undefined, key: string): string | undefined
 /** The one file a call's `filePath` names, as a list; none where it names none. */
 function filesAt(input: WireValue | undefined): readonly string[] {
   const path = stringAt(input, "filePath");
+
   return path === undefined || path === "" ? [] : [path];
 }
 
 /** The files a `show_image` call named, in order, as its row's subject. */
 function shownPaths(input: WireValue | undefined): string {
   const images = isRecord(input) && Array.isArray(input.images) ? input.images : [];
+
   return images
     .flatMap((image) => (isRecord(image) && isWireString(image.path) ? [image.path] : []))
     .join(", ");
@@ -201,11 +212,15 @@ function isWireArray(value: WireValue): value is readonly WireValue[] {
 function commandOutput(output: WireValue): ToolBlock {
   const stdout = stringAt(output, "stdout");
   const stderr = stringAt(output, "stderr");
+
   if (stdout === undefined || stderr === undefined || !isRecord(output)) return jsonBlock(output);
   const exitCode = isWireNumber(output.exitCode) ? output.exitCode : 0;
   const lines = [stdout.trimEnd(), stderr.trimEnd()].filter((text) => text.length > 0);
+
   if (exitCode !== 0) lines.push(`exit ${exitCode}`);
+
   if (output.truncated === true) lines.push(TRUNCATED_NOTE);
+
   return textBlock(stripAnsi(lines.join("\n")));
 }
 
@@ -224,8 +239,10 @@ const BROWSER_NOT_RUN = "not-run";
 /** The actions a browser call named, by name, in the order its input lists them. */
 function browserActions(input: WireValue | undefined): readonly string[] {
   const actions = isRecord(input) && Array.isArray(input.actions) ? input.actions : [];
+
   return actions.flatMap((action: WireValue) => {
     const name = stringAt(action, "action");
+
     return name === undefined ? [] : [name];
   });
 }
@@ -242,12 +259,16 @@ function browserTabName(
   const tabs = isRecord(output) && Array.isArray(output.tabs) ? output.tabs : [];
   const last: WireValue | undefined = tabs.at(-1);
   const title = stringAt(last, "title")?.trim();
+
   if (title !== undefined && title !== "") return title;
   const shown = stringAt(last, "url");
+
   if (shown !== undefined && shown !== "") return pageName(shown);
+
   if (output !== undefined) return undefined;
   const actions = isRecord(input) && Array.isArray(input.actions) ? input.actions : [];
   const opened = actions.flatMap((action: WireValue) => stringAt(action, "url") ?? []).at(-1);
+
   return opened === undefined ? undefined : pageName(opened);
 }
 
@@ -263,33 +284,44 @@ function macCommandOutput(output: WireValue): ToolBlock {
   if (stringAt(output, "status") === MAC_COMMAND_NOT_RUN) {
     return textBlock(stringAt(output, "reason") ?? "");
   }
+
   const shown = commandOutput(output);
   const timedOut = isRecord(output) && output.timedOut === true;
+
   if (!timedOut) return shown;
+
   return textBlock(shown.text === "" ? TIMED_OUT_NOTE : `${shown.text}\n${TIMED_OUT_NOTE}`);
 }
 
 /** A patch's answer: the files it changed, one a line, then every problem it reported. */
 function patchOutput(output: WireValue): ToolBlock {
   const files = isRecord(output) ? output.files : undefined;
+
   if (files === undefined || !isWireArray(files)) return jsonBlock(output);
+
   const lines = files.flatMap((file) => {
     const operation = stringAt(file, "operation");
     const path = stringAt(file, "path");
+
     return operation === undefined || path === undefined ? [] : [`${operation} ${path}`];
   });
+
   const diagnostics = isRecord(output) ? output.diagnostics : undefined;
+
   if (diagnostics !== undefined && isWireArray(diagnostics)) {
     for (const diagnostic of diagnostics) lines.push(asJson(diagnostic));
   }
+
   return textBlock(lines.join("\n"));
 }
 
 /** An answer that is words under one key, as they are, with a note where the tool cut them short; anything else as its JSON. */
 function wordsOutput(output: WireValue, key: string): ToolBlock {
   const words = stringAt(output, key);
+
   if (words === undefined) return jsonBlock(output);
   const truncated = isRecord(output) && output.truncated === true;
+
   return textBlock(truncated ? `${words.trimEnd()}\n${TRUNCATED_NOTE}` : words);
 }
 
@@ -301,6 +333,7 @@ function skillOutput(output: WireValue): ToolBlock {
 /** The name of the skill a skill load asked for; nothing while its input has not said it. */
 export function loadedSkill(input: WireValue | undefined): string | undefined {
   const name = stringAt(input, "skill");
+
   return name === "" ? undefined : name;
 }
 
@@ -321,18 +354,22 @@ const NOTE_VERB = {
 function noteKind(note: WireValue): string {
   const kind = stringAt(note, "kind") ?? "";
   const text = stringAt(note, "text");
+
   return kind === "replace" && text !== undefined && text.trim() === "" ? "remove" : kind;
 }
 
 /** The notes a description edit took, summed by what each did, and the pictures it added: "2 added, 1 corrected, 1 picture added". */
 function descriptionEditSummary(input: WireValue | undefined): string {
   const notes = isRecord(input) ? input.notes : undefined;
+
   if (notes === undefined || !isWireArray(notes)) return "";
   const pictured = isRecord(input) ? input.pictures : undefined;
   const pictures = pictured !== undefined && isWireArray(pictured) ? pictured.length : 0;
+
   return Object.entries(NOTE_VERB)
     .flatMap(([kind, verb]) => {
       const count = notes.filter((note) => noteKind(note) === kind).length;
+
       return count === 0 ? [] : [`${count} ${verb}`];
     })
     .concat(pictures === 0 ? [] : [`${pictures} ${pictures === 1 ? "picture" : "pictures"} added`])
@@ -346,15 +383,19 @@ export function todosView(input: WireValue | undefined): AgentTodos["todos"] | u
   return Option.getOrUndefined(readTodos(input))?.todos;
 }
 
+type TodosCountResult = { done: number; total: number };
+
 /** How many of a list's items are done, and how many it holds. */
-export function todosCount(todos: AgentTodos["todos"]): { done: number; total: number } {
+export function todosCount(todos: AgentTodos["todos"]): TodosCountResult {
   const done = todos.filter((todo) => todo.status === AGENT_TODO_STATUS.DONE).length;
+
   return { done, total: todos.length };
 }
 
 /** How far a list has got: "2 of 5 done". */
 export function todosSummary(todos: AgentTodos["todos"]): string {
   const { done, total } = todosCount(todos);
+
   return `${done} of ${total} done`;
 }
 
@@ -363,6 +404,7 @@ export function todoFocus(todos: AgentTodos["todos"]): string | undefined {
   const current =
     todos.find((todo) => todo.status === AGENT_TODO_STATUS.IN_PROGRESS) ??
     todos.find((todo) => todo.status === AGENT_TODO_STATUS.PENDING);
+
   return current?.content;
 }
 
@@ -391,6 +433,7 @@ export function todosListView(todos: AgentTodos["todos"]): ToolCallView {
 /** A to-do write's row: the list it carries, or its JSON where it does not read. */
 function todosToolView(input: WireValue | undefined): ToolCallView {
   const todos = todosView(input);
+
   if (todos === undefined) {
     return {
       kind: CALL_KIND.TODOS,
@@ -399,6 +442,7 @@ function todosToolView(input: WireValue | undefined): ToolCallView {
       output: undefined,
     };
   }
+
   return todosListView(todos);
 }
 
@@ -417,7 +461,9 @@ function askLines(response: InboxPost["response"]): readonly string[] {
         const recommended = recommendedLabels(response).includes(option.label)
           ? " (recommended)"
           : "";
+
         const detail = option.detail === undefined ? "" : ` -- ${option.detail}`;
+
         return `- ${option.label}${recommended}${detail}`;
       });
     case INBOX_RESPONSE.FORM:
@@ -430,7 +476,9 @@ function askLines(response: InboxPost["response"]): readonly string[] {
                 )
                 .join(", ")}`
             : "";
+
         const required = field.required === true ? ", required" : "";
+
         return `- ${field.label} (${field.type}${required})${options}`;
       });
     default:
@@ -455,6 +503,7 @@ function blockLine(block: InboxPostBlock): string {
 /** A post's context and what it asks as the row's body lists them: each block in turn, then the options or the fields. */
 function postLines(post: InboxPost): string {
   const blocks = (post.blocks ?? []).map(blockLine);
+
   return [...blocks, ...askLines(post.response)].filter((line) => line.trim() !== "").join("\n");
 }
 
@@ -477,6 +526,7 @@ function threadAskLines(ask: NonNullable<InboxThreadPostInput["ask"]>): readonly
       return ask.options.map((option) => {
         const recommended = recommendedLabels(ask).includes(option.label) ? " (recommended)" : "";
         const detail = option.detail === undefined ? "" : ` -- ${option.detail}`;
+
         return `- ${option.label}${recommended}${detail}`;
       });
     case INBOX_ASK.DO:
@@ -485,7 +535,9 @@ function threadAskLines(ask: NonNullable<InboxThreadPostInput["ask"]>): readonly
       return (ask.fields ?? []).map((field) => {
         const options =
           field.type === INBOX_FIELD.SELECT ? `: ${(field.options ?? []).join(", ")}` : "";
+
         const required = field.required === true ? ", required" : "";
+
         return `- ${field.label} (${field.type}${required})${options}`;
       });
   }
@@ -494,18 +546,23 @@ function threadAskLines(ask: NonNullable<InboxThreadPostInput["ask"]>): readonly
 /** A version 5 post as the row's body lists it: its message's first line, then what its ask asks, by its kind, and what it offers. */
 function threadPostLines(post: InboxThreadPostInput): string {
   const first = post.body.split("\n").find((line) => line.trim() !== "") ?? "";
+
   const ask =
     post.ask === undefined ? [] : [askHeadWords(post.ask, undefined), ...threadAskLines(post.ask)];
+
   return [first, ...ask].join("\n");
 }
 
 /** A reply's words, then each picture it showed by the path of its file, as the row's body lists them. */
 function replyLines(input: WireValue | undefined): string {
   const images = isRecord(input) && Array.isArray(input.images) ? input.images : [];
+
   const paths = images.flatMap((image) => {
     const path = stringAt(image, "path");
+
     return path === undefined ? [] : [`Image: ${path}`];
   });
+
   return [stringAt(input, "text") ?? "", ...paths].filter((line) => line.trim() !== "").join("\n");
 }
 
@@ -527,8 +584,10 @@ function inboxToolView(
   output: WireValue | undefined,
 ): ToolCallView {
   const refused = inboxRefusal(output);
+
   if (tool === AGENT_TOOL.POST_THREAD || tool === RETIRED_TOOL.POST_TO_INBOX) {
     const message = threadPostView(input);
+
     if (message !== undefined) {
       return {
         kind: CALL_KIND.INBOX_POST,
@@ -537,7 +596,9 @@ function inboxToolView(
         output: refused,
       };
     }
+
     const post = inboxPostView(input);
+
     return {
       kind: CALL_KIND.INBOX_POST,
       subject: post === undefined ? "" : cardTitle(post.title),
@@ -550,6 +611,7 @@ function inboxToolView(
       output: refused,
     };
   }
+
   if (tool === AGENT_TOOL.WITHDRAW_ASK) {
     return {
       kind: CALL_KIND.INBOX_WITHDRAW,
@@ -558,6 +620,7 @@ function inboxToolView(
       output: refused,
     };
   }
+
   if (tool === RETIRED_TOOL.REPLY_INBOX) {
     return {
       kind: CALL_KIND.INBOX_REPLY,
@@ -566,6 +629,7 @@ function inboxToolView(
       output: refused,
     };
   }
+
   if (tool === RETIRED_TOOL.CLOSE_INBOX_ITEM) {
     return {
       kind: CALL_KIND.INBOX_CLOSE,
@@ -574,6 +638,18 @@ function inboxToolView(
       output: refused,
     };
   }
+
+  if (tool === AGENT_TOOL.READ_THREAD) {
+    const thread = isRecord(output) ? output.thread : undefined;
+
+    return {
+      kind: CALL_KIND.INBOX_THREAD_READ,
+      subject: cardTitle(stringAt(thread, "title") ?? ""),
+      input: textBlock(""),
+      output: refused,
+    };
+  }
+
   return { kind: CALL_KIND.INBOX_READ, subject: "", input: textBlock(""), output: refused };
 }
 
@@ -583,6 +659,7 @@ const INBOX_CALL_REJECTED = "rejected";
 /** Why an inbox call did nothing, as the row's answer shows it; nothing where it did what it was asked, whose answer is the inbox the Inbox tab draws. */
 function inboxRefusal(output: WireValue | undefined): ToolBlock | undefined {
   if (stringAt(output, "status") !== INBOX_CALL_REJECTED) return undefined;
+
   return textBlock(stringAt(output, "reason") ?? "");
 }
 
@@ -596,10 +673,13 @@ const SPAN_UNITS = [
 /** A count of seconds as a row says it, in its largest whole unit or two: "45 seconds", "5 minutes", "1 hour 30 minutes". */
 function spanText(seconds: number): string {
   const rounded = Math.max(1, Math.round(seconds));
+
   const parts = SPAN_UNITS.flatMap(([span, word], index) => {
     const count = Math.floor((rounded % (SPAN_UNITS[index - 1]?.[0] ?? Infinity)) / span);
+
     return count === 0 ? [] : [`${count} ${word}${count === 1 ? "" : "s"}`];
   });
+
   return parts.slice(0, 2).join(" ");
 }
 
@@ -608,8 +688,10 @@ function sleepOutput(output: WireValue): ToolBlock {
   if (isRecord(output) && output.interrupted === true) {
     return textBlock("Stopped early: a message arrived.");
   }
+
   const waited =
     isRecord(output) && isWireNumber(output.waitedSeconds) ? output.waitedSeconds : undefined;
+
   return waited === undefined ? jsonBlock(output) : textBlock(`Waited ${spanText(waited)}.`);
 }
 
@@ -626,6 +708,7 @@ function subagentCallView(
 ): ToolCallView {
   const task = stringAt(input, "prompt") ?? "";
   const named = stringAt(input, "description")?.trim();
+
   return {
     kind: CALL_KIND.WORKER,
     subject: named === undefined || named === "" ? cardTitle(task) : named,
@@ -648,6 +731,7 @@ function pullRequestAnswer(
   reason: string | undefined,
 ): ToolBlock | undefined {
   if (output === undefined) return undefined;
+
   return reason === undefined ? jsonBlock(output) : textBlock(reason);
 }
 
@@ -665,6 +749,7 @@ function openedPullRequestView(
   const title = stringAt(input, "title") ?? "";
   const reason = stringAt(output, "reason");
   const number = isRecord(output) && isWireNumber(output.number) ? output.number : undefined;
+
   return {
     kind: CALL_KIND.OPEN_PULL_REQUEST,
     subject: number === undefined ? title : `#${number} ${title}`,
@@ -696,6 +781,7 @@ function answeredAgentCall(
   output: WireValue | undefined,
 ): ToolCallView {
   const agent = isRecord(output) ? output.agent : undefined;
+
   return { ...namedCall(kind, input, output, undefined), subject: stringAt(agent, "title") ?? "" };
 }
 
@@ -708,6 +794,7 @@ function answeredCall(
   field: string,
 ): ToolCallView {
   const named = isRecord(output) ? output[answered] : undefined;
+
   return { ...namedCall(kind, input, output, undefined), subject: stringAt(named, field) ?? "" };
 }
 
@@ -720,22 +807,28 @@ function issueCall(
   const issue = isRecord(output) ? output.issue : undefined;
   const identifier = stringAt(issue, "identifier");
   const title = stringAt(issue, "title");
+
   const answered =
     identifier === undefined || title === undefined ? undefined : `${identifier} ${title}`;
+
   const asked = stringAt(input, "issue") ?? stringAt(input, "title") ?? "";
+
   return { ...namedCall(kind, input, output, undefined), subject: answered ?? asked };
 }
 
 /** How a comment thread's change is said on its row: resolved, or reopened where `resolved` is false. */
 function commentUpdateKind(input: WireValue | undefined): CallKind {
   const resolved = isRecord(input) ? input.resolved : undefined;
+
   return resolved === false ? CALL_KIND.REOPEN_THREAD : CALL_KIND.RESOLVE_THREAD;
 }
 
 /** How an agent's change is said on its row: archived or unarchived where it named its archive, and changed otherwise. */
 function agentUpdateKind(input: WireValue | undefined): CallKind {
   const archived = isRecord(input) ? input.archived : undefined;
+
   if (archived === true) return CALL_KIND.ARCHIVE_AGENT;
+
   return archived === false ? CALL_KIND.UNARCHIVE_AGENT : CALL_KIND.UPDATE_AGENT;
 }
 
@@ -745,6 +838,7 @@ function agentUpdateKind(input: WireValue | undefined): CallKind {
  */
 function sharePortView(input: WireValue | undefined, output: WireValue | undefined): ToolCallView {
   const port = isRecord(input) && isWireNumber(input.port) ? input.port : undefined;
+
   return {
     ...namedCall(
       port === undefined ? CALL_KIND.UNSHARE_PORT : CALL_KIND.SHARE_PORT,
@@ -781,9 +875,12 @@ export function sentWords(tool: string, input: WireValue | undefined): SentWords
       : tool === AGENT_TOOL.START_AGENT || tool === RETIRED_TOOL.START_CODING_AGENT
         ? (stringAt(input, "prompt") ?? stringAt(input, "task"))
         : undefined;
+
   const isStart = tool === AGENT_TOOL.START_AGENT || tool === RETIRED_TOOL.START_CODING_AGENT;
   const note = isStart ? stringAt(input, "note") : undefined;
+
   if (words === undefined && note === undefined) return undefined;
+
   return { words, note };
 }
 
@@ -793,6 +890,7 @@ export type WorkerJobs = ReadonlyMap<string, string>;
 /** What a stop names: the job of the worker it stopped where it is known, and the task's id otherwise. */
 function stoppedTask(input: WireValue | undefined, jobs: WorkerJobs | undefined): string {
   const task = stringAt(input, "taskId");
+
   return (task === undefined ? undefined : jobs?.get(task)) ?? task ?? "";
 }
 
@@ -804,16 +902,20 @@ export function remoteCallOf(
   input: WireValue | undefined,
 ): { readonly provider: IntegrationProvider; readonly call: IntegrationRemoteCall } | undefined {
   const provider = integrationOfRemoteTool(tool);
+
   if (provider === undefined) return undefined;
   const call = readRemoteCall(input);
+
   return Option.isSome(call) ? { provider, call: call.value } : undefined;
 }
 
 /** The name a connection goes by on a row, as the server's card names it (`unreadRow`): its provider's name, and its place among that provider's accounts past the first; any other name as it is. */
 function connectionName(connection: string): string {
   const account = integrationConnectionOf(connection);
+
   if (account === undefined) return connection;
   const name = INTEGRATION_NAME[account.provider];
+
   return account.place === 1 ? name : `${name} ${account.place}`;
 }
 
@@ -824,7 +926,9 @@ function remoteToolView(
   output: WireValue | undefined,
 ): ToolCallView | undefined {
   const remote = remoteCallOf(tool, input);
+
   if (remote === undefined) return undefined;
+
   return {
     kind: CALL_KIND.MCP_TOOL,
     subject: remote.call.remoteTool,
@@ -848,6 +952,7 @@ function nativeMcpCall(
 ): { readonly server: string; readonly connection: string; readonly name: string } | undefined {
   const match = CLAUDE_CODE_MCP.exec(tool) ?? CODEX_MCP.exec(tool);
   const [, connection, name] = match ?? [];
+
   return connection === undefined || name === undefined
     ? undefined
     : { server: connectionName(connection), connection, name };
@@ -870,7 +975,9 @@ function nativeMcpView(
   output: WireValue | undefined,
 ): ToolCallView | undefined {
   const call = nativeMcpCall(tool);
+
   if (call === undefined) return undefined;
+
   return {
     kind: CALL_KIND.MCP_TOOL,
     subject: call.name,
@@ -889,6 +996,7 @@ function connectionCall(
   output: WireValue | undefined,
 ): ToolCallView {
   const connection = stringAt(input, "connection");
+
   return {
     ...namedCall(kind, input, output, field),
     ...(connection === undefined ? undefined : { server: connectionName(connection), connection }),
@@ -908,6 +1016,7 @@ type ToolReader = (call: ToolRead) => ToolCallView;
 /** A delegation to a worker as a call's row reads it: the job named by its few words or its task's first line, the task its input, and the worker's answer its output. A tab draws it as its own row (`DelegationRow`), so this reads where a copy or a replay does. */
 function delegateView({ input, output }: ToolRead): ToolCallView {
   const view = delegationView({ input, output }, undefined);
+
   return {
     kind: CALL_KIND.WORKER,
     subject: view.title ?? cardTitle(view.task),
@@ -947,7 +1056,9 @@ function memoryRefusal(output: WireValue | undefined): string | undefined {
 /** The words of each memory a search answered, in its order; nothing where it answered no list, as before it answers or once refused. */
 function recalledMemories(output: WireValue | undefined): readonly string[] | undefined {
   const memories = isRecord(output) ? output.memories : undefined;
+
   if (memories === undefined || !isWireArray(memories)) return undefined;
+
   return memories.flatMap((memory) => stringAt(memory, "text") ?? []);
 }
 
@@ -959,6 +1070,7 @@ function memoryItem(memory: string): string {
 /** How many memories a search answered and what it asked: "3 memories about “invitations”", or the count alone for a search with no query. */
 function recalledSubject(count: number, query: string): string {
   const memories = `${count} ${count === 1 ? "memory" : "memories"}`;
+
   return query === "" ? memories : `${memories} about “${query}”`;
 }
 
@@ -971,6 +1083,7 @@ function recalledSubject(count: number, query: string): string {
 const SAVE_MEMORY_CALL: ToolReader = ({ input, output }) => {
   const text = stringAt(input, "text") ?? "";
   const refused = memoryRefusal(output);
+
   return {
     kind: CALL_KIND.REMEMBER,
     subject: cardTitle(text),
@@ -990,6 +1103,7 @@ const SEARCH_MEMORY_CALL: ToolReader = ({ input, output }) => {
   const query = stringAt(input, "query") ?? "";
   const memories = recalledMemories(output);
   const refused = memoryRefusal(output);
+
   const answer =
     memories !== undefined
       ? markdownBlock(memories.map(memoryItem).join("\n"))
@@ -998,6 +1112,7 @@ const SEARCH_MEMORY_CALL: ToolReader = ({ input, output }) => {
         : output === undefined
           ? undefined
           : jsonBlock(output);
+
   return {
     kind: CALL_KIND.RECALL,
     subject: memories === undefined ? query : recalledSubject(memories.length, query),
@@ -1016,7 +1131,14 @@ const SEARCH_MEMORY_CALL: ToolReader = ({ input, output }) => {
  */
 const AGENT_TOOL_VIEWS = {
   [AGENT_TOOL.LOOK_AT_PICTURE]: ({ input, output }) =>
-    namedCall(CALL_KIND.LOOK_AT_PICTURE, input, output, undefined),
+    namedCall(
+      threadPictureOf(input) === undefined
+        ? CALL_KIND.LOOK_AT_PICTURE
+        : CALL_KIND.LOOK_AT_THREAD_PICTURE,
+      input,
+      output,
+      undefined,
+    ),
   [AGENT_TOOL.LIST_AGENTS]: ({ input, output }) =>
     namedCall(CALL_KIND.LIST_AGENTS, input, output, undefined),
   [AGENT_TOOL.READ_AGENT]: ({ input, output }) =>
@@ -1078,6 +1200,7 @@ const AGENT_TOOL_VIEWS = {
   [AGENT_TOOL.RUN_ON_MAC]: ({ input, output }) => {
     const command = stringAt(input, "command") ?? "";
     const description = commandDescription(stringAt(input, "description"));
+
     return {
       kind: CALL_KIND.MAC_COMMAND,
       subject: command,
@@ -1089,6 +1212,7 @@ const AGENT_TOOL_VIEWS = {
   [AGENT_TOOL.BROWSER]: ({ input, output }) => {
     const tab = browserTabName(input, output);
     const words = browserCallWords(browserActions(input), tab !== undefined);
+
     return {
       kind: CALL_KIND.BROWSER,
       subject: words === undefined ? "" : (tab ?? ""),
@@ -1103,6 +1227,7 @@ const AGENT_TOOL_VIEWS = {
   [AGENT_TOOL.BASH]: ({ input, output }) => {
     const command = stringAt(input, "command") ?? "";
     const description = commandDescription(stringAt(input, "description"));
+
     return {
       kind: CALL_KIND.COMMAND,
       subject: command,
@@ -1130,6 +1255,7 @@ const AGENT_TOOL_VIEWS = {
   [AGENT_TOOL.APPLY_PATCH]: ({ input, output }) => {
     const patchText = stringAt(input, "patchText") ?? "";
     const paths = patchPaths(patchText);
+
     return {
       kind: CALL_KIND.EDIT,
       subject: pathsSubject(paths),
@@ -1149,10 +1275,12 @@ const AGENT_TOOL_VIEWS = {
   [AGENT_TOOL.WRITE_TODOS]: ({ input }) => todosToolView(input),
   [AGENT_TOOL.POST_THREAD]: READ_INBOX_CALL,
   [AGENT_TOOL.WITHDRAW_ASK]: READ_INBOX_CALL,
-  [AGENT_TOOL.READ_THREADS]: READ_INBOX_CALL,
+  [AGENT_TOOL.LIST_THREADS]: READ_INBOX_CALL,
+  [AGENT_TOOL.READ_THREAD]: READ_INBOX_CALL,
   [AGENT_TOOL.OPEN_PULL_REQUEST]: ({ input, output }) => openedPullRequestView(input, output),
   [AGENT_TOOL.LOAD_SKILL]: ({ input, output }) => {
     const skillName = loadedSkill(input);
+
     return {
       kind: CALL_KIND.LOAD_SKILL,
       // A skill is named as the words that load it wherever it is drawn (`skill-ref.tsx`).
@@ -1190,6 +1318,7 @@ const AGENT_TOOL_VIEWS = {
   }),
   [AGENT_TOOL.SLEEP]: ({ input, output }) => {
     const seconds = isRecord(input) && isWireNumber(input.seconds) ? input.seconds : undefined;
+
     return {
       kind: CALL_KIND.SLEEP,
       subject: seconds === undefined ? "" : spanText(seconds),
@@ -1202,12 +1331,17 @@ const AGENT_TOOL_VIEWS = {
     if (isRecord(input) && input.stop === true) {
       return namedCall(CALL_KIND.CANCEL_WAKEUP, input, output, undefined);
     }
+
     const booked = isRecord(output) ? output.wakeup : undefined;
+
     const held =
       isRecord(booked) && isWireNumber(booked.delaySeconds) ? booked.delaySeconds : undefined;
+
     const asked =
       isRecord(input) && isWireNumber(input.delaySeconds) ? input.delaySeconds : undefined;
+
     const seconds = held ?? asked;
+
     return {
       kind: CALL_KIND.SCHEDULE_WAKEUP,
       subject: seconds === undefined ? "" : spanText(seconds),
@@ -1277,6 +1411,7 @@ const RETIRED_TOOL_VIEWS = {
   [RETIRED_TOOL.REPLY_INBOX]: READ_INBOX_CALL,
   [RETIRED_TOOL.POST_TO_INBOX]: READ_INBOX_CALL,
   [RETIRED_TOOL.READ_INBOX]: READ_INBOX_CALL,
+  [RETIRED_TOOL.READ_THREADS]: READ_INBOX_CALL,
   [RETIRED_TOOL.LIST_ISSUES]: ({ input, output }) =>
     namedCall(CALL_KIND.LIST_ISSUES, input, output, undefined),
   [RETIRED_TOOL.READ_ISSUE]: ({ input, output }) => issueCall(CALL_KIND.READ_ISSUE, input, output),
@@ -1293,7 +1428,7 @@ const RETIRED_TOOL_VIEWS = {
 } as const satisfies Record<RetiredTool, ToolReader>;
 
 /** The tools the retired runtime gave a session and a native harness's subagent, a message to one and a stop of what runs in Claude Code's background, which a transcript carries beside the agent's own, and the retired runtime's connection tools: a connection's search and its run, each naming the server its input does. */
-const OTHER_TOOL_VIEWS: Readonly<Record<string, ToolReader>> = {
+const OTHER_TOOL_VIEWS = {
   [CLAUDE_CODE_TOOL.AGENT]: ({ input, output }) => subagentCallView(input, output),
   [CODEX_TOOL.SUBAGENT]: ({ input, output }) => subagentCallView(input, output),
   [CLAUDE_CODE_TOOL.SEND_MESSAGE]: ({ input, output }) =>
@@ -1315,7 +1450,7 @@ const OTHER_TOOL_VIEWS: Readonly<Record<string, ToolReader>> = {
     connectionCall(CALL_KIND.SEARCH_TOOLS, "query", input, output),
   [CONNECTION_TOOL.EXECUTE]: ({ input, output }) =>
     connectionCall(CALL_KIND.MCP_TOOL, "tool", input, output),
-};
+} satisfies Readonly<Record<string, ToolReader>>;
 
 /** Every tool a row reads by its name alone, which `toolCallView` looks a call up in. */
 const TOOL_VIEWS: ReadonlyMap<string, ToolReader> = new Map(
@@ -1330,6 +1465,7 @@ export function toolCallView(input: {
   readonly jobs?: WorkerJobs | undefined;
 }): ToolCallView {
   const call = { ...input, jobs: input.jobs };
+
   return (
     TOOL_VIEWS.get(input.tool)?.(call) ??
     remoteToolView(input.tool, input.input, input.output) ??
@@ -1407,16 +1543,29 @@ interface TargetedCall {
 const TASK_TARGET: ToolTarget = { kind: TOOL_TARGET.DESCRIPTION };
 const INBOX_TARGET: ToolTarget = { kind: TOOL_TARGET.INBOX };
 
-/** The thread a call names by its key, a post's or a withdrawal's, whose item its row opens, by the id its answer lists the thread under; the whole Inbox where it names none. */
+/**
+ * The thread a call names by its key, a post's or a withdrawal's, whose item
+ * its row opens, by the id its answer names the thread by: the thread it
+ * answers with, or, in an answer from before posts answered with one thread,
+ * the one under its key among the whole inbox it answered; the whole Inbox
+ * where it names none.
+ */
 function namedThread(call: TargetedCall): ToolTarget {
   const key = stringAt(call.input, "key");
+
   if (key === undefined || key === "") return INBOX_TARGET;
+  const answered = isRecord(call.output) ? call.output.thread : undefined;
+
   const threads =
     isRecord(call.output) && Array.isArray(call.output.inbox) ? call.output.inbox : [];
+
   const item = stringAt(
-    threads.find((thread) => stringAt(thread, "key") === key),
+    stringAt(answered, "key") === key
+      ? answered
+      : threads.find((thread) => stringAt(thread, "key") === key),
     "id",
   );
+
   return item === undefined
     ? { kind: TOOL_TARGET.INBOX, key }
     : { kind: TOOL_TARGET.INBOX, key, item };
@@ -1425,7 +1574,9 @@ function namedThread(call: TargetedCall): ToolTarget {
 /** The agent a call names in its input, as a read of or a message to one does. */
 function namedAgent(call: TargetedCall): ToolTarget | undefined {
   const agent = stringAt(call.input, "agentId");
+
   if (agent === undefined || onAnotherTask(call)) return undefined;
+
   return { kind: TOOL_TARGET.AGENT, agent };
 }
 
@@ -1437,6 +1588,7 @@ function namedAgent(call: TargetedCall): ToolTarget | undefined {
  */
 function onAnotherTask(call: TargetedCall): boolean {
   const answer = isRecord(call.output) ? call.output.agent : undefined;
+
   return isRecord(answer) && answer.onYourTask === false;
 }
 
@@ -1444,7 +1596,9 @@ function onAnotherTask(call: TargetedCall): boolean {
 function startedAgent(call: TargetedCall): ToolTarget | undefined {
   const answer = isRecord(call.output) ? call.output.agent : undefined;
   const agent = stringAt(answer, "id");
+
   if (agent === undefined || onAnotherTask(call)) return undefined;
+
   return { kind: TOOL_TARGET.AGENT, agent };
 }
 
@@ -1465,16 +1619,26 @@ function namedDescription(call: TargetedCall): ToolTarget {
 
 /** The description a look's address names, which its row opens; the task's own description where the address names no picture. */
 function lookedDescription(call: TargetedCall): ToolTarget {
+  if (threadPictureOf(call.input) !== undefined) return INBOX_TARGET;
   const address = stringAt(call.input, "address");
+
   return planOf(
     address === undefined ? undefined : descriptionAttachmentOf(address.trim())?.taskId,
   );
+}
+
+/** The thread's picture a look's address names; nothing where it names a description's or none. */
+function threadPictureOf(input: WireValue | undefined) {
+  const address = stringAt(input, "address");
+
+  return address === undefined ? undefined : inboxAttachmentOf(address.trim());
 }
 
 /** The task a change answered, which its row opens as the sidebar opens it. */
 function answeredTask(call: TargetedCall): ToolTarget | undefined {
   const answer = isRecord(call.output) ? call.output.task : undefined;
   const task = stringAt(answer, "id");
+
   return task === undefined ? undefined : { kind: TOOL_TARGET.TASK, task };
 }
 
@@ -1482,6 +1646,7 @@ function answeredTask(call: TargetedCall): ToolTarget | undefined {
 function shownPage(call: TargetedCall): ToolTarget | undefined {
   const answer = isRecord(call.output) ? call.output.page : undefined;
   const page = stringAt(answer, "id");
+
   return page === undefined ? undefined : { kind: TOOL_TARGET.PAGE, page };
 }
 
@@ -1492,22 +1657,26 @@ export function shownPageVersion(
   if (call.tool !== AGENT_TOOL.SHOW_PAGE || call.output === undefined || refused(call.output)) {
     return undefined;
   }
+
   const answer = isRecord(call.output) ? call.output.page : undefined;
   const page = stringAt(answer, "id");
   const version = isRecord(answer) ? answer.version : undefined;
-  return page === undefined || typeof version !== "number" ? undefined : { page, version };
+
+  return page === undefined || !Predicate.isNumber(version) ? undefined : { page, version };
 }
 
 /** The page a read answered, which opens its tab where it is on the call's own task; one of another task opens nothing here. Note that `isYours` is read too, because a transcript from before keeps the answer it was given then. */
 function readPage(call: TargetedCall): ToolTarget | undefined {
   const answer = isRecord(call.output) ? call.output.page : undefined;
   const own = isRecord(answer) && (answer.isYourTask === true || answer.isYours === true);
+
   return own ? shownPage(call) : undefined;
 }
 
 /** The pull request an open answered, by the address it gave. */
 function openedPullRequest(call: TargetedCall): ToolTarget | undefined {
   const url = stringAt(call.output, "url");
+
   return url === undefined ? undefined : { kind: TOOL_TARGET.PULL_REQUEST, url };
 }
 
@@ -1553,7 +1722,9 @@ const TOOL_TARGETS: ReadonlyMap<string, (call: TargetedCall) => ToolTarget | und
   [RETIRED_TOOL.POST_TO_INBOX, namedThread],
   [AGENT_TOOL.WITHDRAW_ASK, namedThread],
   [RETIRED_TOOL.CLOSE_INBOX_ITEM, () => INBOX_TARGET],
-  [AGENT_TOOL.READ_THREADS, () => INBOX_TARGET],
+  [AGENT_TOOL.LIST_THREADS, () => INBOX_TARGET],
+  [AGENT_TOOL.READ_THREAD, () => INBOX_TARGET],
+  [RETIRED_TOOL.READ_THREADS, () => INBOX_TARGET],
   [RETIRED_TOOL.READ_INBOX, () => INBOX_TARGET],
   [RETIRED_TOOL.REPLY_INBOX, () => INBOX_TARGET],
 ]);
@@ -1577,6 +1748,7 @@ function refused(output: WireValue | undefined): boolean {
  */
 export function toolTarget(call: TargetedCall): ToolTarget | undefined {
   if (call.output === undefined || refused(call.output)) return undefined;
+
   return TOOL_TARGETS.get(call.tool)?.(call);
 }
 
@@ -1600,23 +1772,29 @@ export interface TargetPlace {
  */
 export function targetLink(target: ToolTarget, place: TargetPlace): string | undefined {
   if (target.kind === TOOL_TARGET.PULL_REQUEST) return target.url;
+
   if (place.workspace === "") return undefined;
   const linked = (at: LinkDestination) => linkOf(at, place.workspace);
+
   switch (target.kind) {
     case TOOL_TARGET.TASK:
       return linked({ kind: LINK_DESTINATION.TASK, planId: target.task });
     case TOOL_TARGET.DESCRIPTION: {
       const taskId = place.holder?.taskId;
+
       return taskId === undefined
         ? undefined
         : linked({ kind: LINK_DESTINATION.TASK, planId: taskId });
     }
+
     case TOOL_TARGET.PAGE: {
       const taskId = place.holder?.taskId;
+
       return taskId === undefined
         ? undefined
         : linked({ kind: LINK_DESTINATION.PAGE, planId: taskId, pageId: target.page });
     }
+
     case TOOL_TARGET.INBOX:
       return target.item === undefined || place.agentId === undefined
         ? undefined
@@ -1665,7 +1843,9 @@ export function calledAgent(call: Omit<TargetedCall, "callId">): CalledAgent | u
   const id = stringAt(answer, "id") ?? stringAt(call.input, "agentId");
   const title = stringAt(answer, "title");
   const model = stringAt(answer, "model");
+
   if (id === undefined && title === undefined) return undefined;
+
   return model === undefined ? { id, title } : { id, title, model };
 }
 
@@ -1709,13 +1889,17 @@ export function delegationView(
   const settled =
     stringAt(part.output, DELEGATION_FIELD.MODEL) !== undefined &&
     stringAt(part.output, DELEGATION_FIELD.EFFORT) !== undefined;
+
   const model = settled
     ? stringAt(part.output, DELEGATION_FIELD.MODEL)
     : (stringAt(part.input, DELEGATION_FIELD.MODEL) ?? own?.model);
+
   const effort = settled
     ? stringAt(part.output, DELEGATION_FIELD.EFFORT)
     : (stringAt(part.input, DELEGATION_FIELD.EFFORT) ?? own?.effort);
+
   const title = stringAt(part.input, DELEGATION_FIELD.DESCRIPTION)?.trim();
+
   return {
     task:
       stringAt(part.input, DELEGATION_FIELD.TASK) ??

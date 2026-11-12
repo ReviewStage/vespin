@@ -19,6 +19,7 @@ afterEach(() => {
 
 function Window({ fixtureMode, seen }: { fixtureMode: boolean; seen: boolean[] }): null {
   seen.push(useTasksFixtureLanded(fixtureMode));
+
   return null;
 }
 

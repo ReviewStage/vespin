@@ -393,15 +393,18 @@ export interface FoldedAgent {
 const folded = (userId: string, id: string) =>
   Effect.gen(function* () {
     const machine = yield* findMacMachine({ userId, id });
+
     if (Option.isNone(machine)) return [];
     const now = yield* DateTime.nowAsDate;
     const { machineId } = machine.value;
     const removed = yield* stampFolded({ userId, id, machineId, now });
+
     if (removed.length === 0) return [];
     const fold = { userId, from: removed.map((row) => row.id), to: id };
     const moved = yield* moveAgents(fold);
     yield* movePick(fold);
     yield* settleGoneDeviceAgentLaunches(userId, fold.from);
+
     // Note that the running turns are read before the fold commits, so a turn the device begins once it does is never among them.
     return yield* Effect.forEach(moved, ({ conversationId }) =>
       Effect.map(runningTurnIds(conversationId), (ids) => ({
@@ -423,6 +426,7 @@ function underJoinLock<A>(userId: string, work: HostEffect<A>): HostEffect<A> {
     client.withTransaction(
       Effect.gen(function* () {
         yield* client`select pg_advisory_xact_lock(hashtextextended(${userId}, 3))`;
+
         return yield* work;
       }),
     ),
@@ -464,6 +468,7 @@ export function enrollOwnDevice(
   enrollment: OwnEnrollment,
 ): HostEffect<Option.Option<readonly FoldedAgent[]>> {
   const { machine, ...key } = enrollment;
+
   return underJoinLock(
     userId,
     Effect.gen(function* () {
@@ -471,7 +476,9 @@ export function enrollOwnDevice(
         machine === undefined
           ? yield* keyOwnDevice({ userId, ...key })
           : yield* insertOwnDevice({ userId, ...key, ...machine, now: yield* DateTime.nowAsDate });
+
       if (kept.length === 0) return Option.none();
+
       return Option.some(yield* folded(userId, enrollment.id));
     }),
   );
@@ -497,7 +504,9 @@ export function registerHost(
     userId,
     Effect.gen(function* () {
       const joining = (yield* findUnregistered({ userId, id: registered.id })).length > 0;
+
       if (!(yield* registerDevice(userId, registered))) return Option.none();
+
       return Option.some(joining ? yield* folded(userId, registered.id) : []);
     }),
   );

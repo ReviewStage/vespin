@@ -61,6 +61,7 @@ export const integrationStatusesRead = bindLiveRead(INTEGRATION_STATUSES_READ, {
   beside: ({ params }) =>
     Effect.map(hostedStoreOrUnavailable(accountIntegrationConnect(params.userId)), (connect) => {
       const offered = INTEGRATION_PROVIDER_LIST.filter((provider) => connect[provider].configured);
+
       return {
         offered,
         multiple: offered.filter((provider) => connect[provider].multipleAccounts),

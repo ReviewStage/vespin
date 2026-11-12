@@ -56,6 +56,7 @@ export const printed = (
       const handle = yield* ChildProcess.make(command, [...args], {
         stdin: input === undefined ? "ignore" : Stream.make(new TextEncoder().encode(input)),
       });
+
       const [out, said] = yield* Effect.all(
         [
           Stream.mkString(Stream.decodeText(handle.stdout)),
@@ -63,7 +64,9 @@ export const printed = (
         ],
         { concurrency: "unbounded" },
       );
+
       const code = Number(yield* handle.exitCode);
+
       return code === 0
         ? Result.succeed(out)
         : Result.fail(said.trim() || `${command} ${args.join(" ")} exited ${code}`);
@@ -89,12 +92,14 @@ function lastWords(words: string): string {
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
+
   return (lines.at(-1) ?? words).replace(CROSS, "");
 }
 
 /** Whether a PATH, as the shell printed it after anything its profile printed, holds the folder. */
 function holds(printedPath: string, folder: string): boolean {
   const pathLine = printedPath.split("\n").at(-1) ?? "";
+
   return pathLine.split(":").some((entry) => path.resolve(entry) === folder);
 }
 
@@ -106,7 +111,9 @@ function holds(printedPath: string, folder: string): boolean {
  */
 function loginShell(): string {
   const named = process.env.SHELL;
+
   if (named !== undefined && named !== "") return named;
+
   try {
     return os.userInfo().shell || DEFAULT_SHELL;
   } catch {
@@ -128,6 +135,7 @@ export function installCli(serviceBaseUrl: string): Effect.Effect<CliInstallAnsw
   const link = path.join(folder, LINK_NAME);
   const shell = loginShell();
   const scriptUrl = new URL(HOST_WIRE.INSTALL_SCRIPT_PATH, serviceBaseUrl).href;
+
   return Effect.gen(function* () {
     // Note that a download that stalls is bounded too, so Install never waits on it for good.
     const script = yield* HttpClient.get(scriptUrl).pipe(
@@ -136,25 +144,31 @@ export function installCli(serviceBaseUrl: string): Effect.Effect<CliInstallAnsw
       Effect.timeout(ANSWER_WITHIN.COMMAND),
       Effect.option,
     );
+
     if (Option.isNone(script)) return failed(`Could not download ${scriptUrl}.`);
+
     const ran = yield* printed(
       "/bin/sh",
       ["-s", CLI_INSTALL_MODE],
       ANSWER_WITHIN.INSTALL,
       script.value,
     );
+
     if (Result.isFailure(ran)) return failed(lastWords(ran.failure));
     const said = yield* printed(link, ["version", "--json"], ANSWER_WITHIN.COMMAND);
     const version = Result.isSuccess(said) ? decodeVersion(said.success) : Option.none();
+
     if (Option.isNone(version)) {
       return failed(`${link} was installed but did not say its version.`);
     }
+
     // Note that the PATH is printed on a line of its own, after anything the profile prints.
     const shellPath = yield* printed(
       shell,
       ["-i", "-l", "-c", 'printf "\\n%s" "$PATH"'],
       ANSWER_WITHIN.COMMAND,
     );
+
     return {
       outcome: CLI_INSTALL_OUTCOME.INSTALLED,
       version: version.value.version,

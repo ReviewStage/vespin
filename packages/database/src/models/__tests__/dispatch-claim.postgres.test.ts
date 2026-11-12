@@ -47,6 +47,7 @@ const anotherConnection = Effect.gen(function* () {
   const url = new URL(process.env[STORE_TEST_DATABASE_ENVIRONMENT.URL] ?? "");
   url.pathname = `/${row?.name ?? ""}`;
   const layer = Layer.fresh(sqlClientOverUrl(url.toString()));
+
   return <A, E>(effect: Effect.Effect<A, E, DatabaseServices>) => Effect.provide(effect, layer);
 });
 
@@ -58,6 +59,7 @@ const openAgentConversation = Effect.gen(function* () {
   yield* db
     .insert(conversations)
     .values({ id: conversationId, userId, kind: CONVERSATION_KIND.AGENT });
+
   return { userId, conversationId } satisfies ConversationTarget;
 });
 
@@ -82,6 +84,7 @@ const startedTurn = (target: ConversationTarget) =>
         at: 0,
       },
     ]);
+
     return { turnId, turn };
   });
 
@@ -90,10 +93,12 @@ const heldDispatch = <A>(answer: A) =>
   Effect.gen(function* () {
     const began = yield* Deferred.make<void>();
     const release = yield* Deferred.make<void>();
+
     const dispatch = Effect.andThen(
       Deferred.succeed(began, undefined),
       Effect.as(Deferred.await(release), answer),
     );
+
     return { began, release, dispatch };
   });
 
@@ -119,19 +124,23 @@ const QUIET_LOOKS = 500;
  */
 const heldMeanwhile = Effect.gen(function* () {
   const client = yield* SqlClient.SqlClient;
+
   for (let look = 0; look < QUIET_LOOKS; look += 1) {
     const [busy] = yield* client<{
       readonly active: number;
     }>`select count(*)::int as active from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid() and state = 'active'`;
+
     if ((busy?.active ?? 0) === 0) break;
     yield* Effect.yieldNow;
   }
+
   const [row] = yield* client<{
     readonly idleInTransaction: number;
     readonly waiting: number;
   }>`select
       (select count(*)::int from pg_stat_activity where datname = current_database() and state like 'idle in transaction%') as "idleInTransaction",
       (select count(*)::int from pg_locks where not granted and pid in (select pid from pg_stat_activity where datname = current_database())) as waiting`;
+
   return { idleInTransaction: row?.idleInTransaction ?? -1, waiting: row?.waiting ?? -1 };
 });
 
@@ -157,13 +166,16 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
             ),
           ),
         );
+
         yield* untilBegan(held.began, sending);
         const meanwhile = yield* heldMeanwhile;
+
         const journal = yield* onAnother(
           writer.consumeAll(target, [
             { ...turn, kind: RUN_EVENT.STEP_STARTED, sequence: 2, step: 1 },
           ]),
         );
+
         const sendStillPending = sending.pollUnsafe() === undefined;
         yield* Deferred.succeed(held.release, undefined);
         const sent = yield* Fiber.join(sending);
@@ -195,12 +207,16 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
             ),
           ),
         );
+
         yield* untilBegan(held.began, sending);
+
         const taken = yield* onAnother(
           writer.takeAwaitingLine(target, { text: "Fix the tile.", turnId }),
         );
+
         yield* Deferred.succeed(held.release, undefined);
         const sent = yield* Fiber.join(sending);
+
         const row = yield* readMessageByClientId(
           target.userId,
           target.conversationId,
@@ -227,6 +243,7 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
         const writer = yield* storeWriter({ tools: {} });
         const heard = yield* Ref.make<readonly string[]>([]);
         const first = yield* heldDispatch(true);
+
         const send = (clientKey: string, dispatch: Effect.Effect<boolean>) =>
           onAnother(
             writer.writeAwaitingLine(
@@ -247,6 +264,7 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
         yield* Fiber.join(sendingFirst);
         yield* TestClock.adjust(Duration.seconds(1));
         const second = yield* Fiber.join(sendingSecond);
+
         const seqs = yield* Effect.forEach(["first", "second"], (key) =>
           Effect.map(
             readMessageByClientId(target.userId, target.conversationId, {}, sentLineId(key)),
@@ -273,10 +291,12 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
         const db = yield* Database;
         const workspace = yield* openWorkspace(target.userId);
         const agentId = randomUUID();
+
         const { id: taskId } = yield* createTask(target.userId, {
           organizationId: workspace,
           name: "Hand-over",
         });
+
         yield* db.insert(agentTable).values({
           id: agentId,
           organizationId: workspace,
@@ -288,12 +308,14 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
           repository: "acme/api",
           idempotencyKey: randomUUID(),
         });
+
         // Stopped where no line of the conversation awaits a turn, as `standsStopped` reads it.
         const stoppedUnlessAwaiting = () =>
           Effect.map(
             readMessageByClientId(target.userId, target.conversationId, {}, sentLineId("tests")),
             (read) => read.ok && read.value.length === 0,
           );
+
         const held = yield* heldDispatch(true);
 
         const sending = yield* Effect.forkChild(
@@ -305,7 +327,9 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
             ),
           ),
         );
+
         yield* untilBegan(held.began, sending);
+
         const deleted = yield* Effect.exit(
           onAnother(
             deleteAgent(target.userId, agentId, {
@@ -314,6 +338,7 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
             }),
           ),
         );
+
         yield* Deferred.succeed(held.release, undefined);
         yield* Fiber.join(sending);
 

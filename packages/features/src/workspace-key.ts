@@ -20,11 +20,14 @@ function workspacePrefix(workspaceName: string): string {
     .replaceAll(/['’]/gu, "")
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 0);
+
   if (words.length === 0) return TASK_FALLBACK_PREFIX;
+
   const prefix =
     words.length === 1
       ? Array.from(words[0] ?? "").slice(0, MAX_PREFIX_CHARS)
       : words.slice(0, MAX_PREFIX_CHARS).map((word) => Array.from(word)[0] ?? "");
+
   return prefix.join("").toLocaleUpperCase();
 }
 
@@ -74,6 +77,7 @@ export function keySpansIn<Known>(
 ): readonly KeySpan<Known>[] {
   return keyWordsIn(words).flatMap((span) => {
     const held = known.get(span.key);
+
     return held === undefined ? [] : [{ ...span, known: held }];
   });
 }

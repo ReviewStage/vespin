@@ -42,6 +42,7 @@ function mainProcess() {
   const pushes = new WindowPushes();
   // Note that these tests open the push stream alone, so the port serves its procedure and no act.
   const handler = actPortHandlerOf(pushProcedures(pushes));
+
   /** One page of a window standing as `actor`: its act port opened, and its push stream on it. */
   const page = (actor: ActSender) => {
     const { port1, port2 } = new MessageChannel();
@@ -52,8 +53,10 @@ function mainProcess() {
     port1.start();
     const stream = openPushStream(createORPCClient(new RPCLink({ port: port2 })));
     port2.start();
+
     return { ...stream, close: () => port2.close() };
   };
+
   return { pushes, page };
 }
 
@@ -61,14 +64,18 @@ function mainProcess() {
 function hearing<Heard>() {
   const heard: Heard[] = [];
   const waits: { count: number; resolve: () => void }[] = [];
+
   const hear = (value: Heard) => {
     heard.push(value);
+
     for (const wait of waits.filter((each) => heard.length >= each.count)) wait.resolve();
   };
+
   const until = (count: number) =>
     heard.length >= count
       ? Promise.resolve()
       : new Promise<void>((resolve) => waits.push({ count, resolve }));
+
   return { heard, hear, until };
 }
 
@@ -77,6 +84,7 @@ async function eventually(holds: () => boolean): Promise<void> {
   for (let turn = 0; turn < 1000 && !holds(); turn += 1) {
     await new Promise((resolve) => setImmediate(resolve));
   }
+
   assert.ok(holds());
 }
 
@@ -108,6 +116,7 @@ it("a link is never overtaken by the command sent after it, even behind a burst 
   for (let press = 0; press < 200; press += 1) {
     main.pushes.push(WINDOW, PUSH.MENU_COMMAND, APP_COMMAND.TOGGLE_SIDEBAR);
   }
+
   main.pushes.push(WINDOW, PUSH.SHOW_LINK, LINK);
   main.pushes.push(WINDOW, PUSH.MENU_COMMAND, APP_COMMAND.SETTINGS);
   await heard.until(202);
@@ -127,6 +136,7 @@ it("a document pushed the moment the stream opens is heard, and a burst of them 
   for (const version of [1, 2, 3]) {
     main.pushes.pushState(WINDOW, stateWith({}, { version }));
   }
+
   main.pushes.push(WINDOW, PUSH.SHOW_LINK, LINK);
   await shown.until(1);
 

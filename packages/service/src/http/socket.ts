@@ -78,7 +78,7 @@ export function voiceSocket(
     const platform = yield* Socket.fromWebSocket(
       Effect.acquireRelease(
         // SAFETY: `ws`'s socket is the WebSocket this reads; the DOM interface is the only name TypeScript has for it.
-        Effect.succeed(socket as unknown as globalThis.WebSocket),
+        Effect.succeed(socket as WebSocket & globalThis.WebSocket),
         (open) => Effect.sync(() => open.close()),
       ),
       // A socket handed over already gone never emits the `open` this would
@@ -88,23 +88,30 @@ export function voiceSocket(
       // error, which is why the reader is ignored rather than matched on.
       { openTimeout: 0 },
     );
+
     const inbound = yield* Queue.make<VoiceFrame, Cause.Done>();
     const writer = yield* platform.writer;
     const standing = yield* Deferred.make<void>();
     const overspent = yield* Deferred.make<void>();
     let reading = false;
     let spent = 0;
+
     const receive = (data: Uint8Array | string): void => {
       const frame = data instanceof Uint8Array ? { bytes: data } : { text: data };
+
       if (options.byteBudget !== undefined) {
         spent += frameBytes(frame);
+
         if (spent > options.byteBudget) {
           Deferred.doneUnsafe(overspent, Exit.void);
+
           return;
         }
       }
+
       Queue.offerUnsafe(inbound, frame);
     };
+
     yield* Effect.forkScoped(
       Effect.ensuring(
         Effect.ignore(
@@ -113,8 +120,10 @@ export function voiceSocket(
               const reader = yield* platform.reader;
               reading = true;
               Deferred.doneUnsafe(standing, Effect.void);
+
               while (true) {
                 const batch = yield* reader.pull;
+
                 for (const data of batch) {
                   receive(data);
                 }
@@ -132,14 +141,17 @@ export function voiceSocket(
       ),
     );
     yield* Deferred.await(standing);
+
     const write = (chunk: string | Uint8Array | Socket.CloseEvent): Effect.Effect<void> =>
       Effect.suspend(() => (reading ? Effect.ignore(writer.write(chunk)) : Effect.void));
+
     yield* Effect.forkScoped(
       Effect.andThen(
         Deferred.await(overspent),
         write(new Socket.CloseEvent(SOCKET_CLOSE_CODE.POLICY_VIOLATION, BUDGET_SPENT_REASON)),
       ),
     );
+
     return {
       next: Queue.take(inbound).pipe(
         Effect.map((frame): Option.Option<VoiceFrame> => Option.some(frame)),

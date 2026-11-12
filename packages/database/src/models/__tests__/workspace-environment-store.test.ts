@@ -31,6 +31,7 @@ const openOwnedWorkspace = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return yield* openWorkspace(userId);
 });
 
@@ -90,8 +91,10 @@ it.layer(getTestDB())("the workspace environment store", (it) => {
     Effect.gen(function* () {
       const mine = yield* openOwnedWorkspace;
       const theirs = yield* openOwnedWorkspace;
+
       const sealedFor = (organizationId: string, name: string) =>
         sealWorkspaceVariable(ring, { organizationId, name }, Redacted.make("moved"));
+
       yield* setWorkspaceVariable(mine, "FROM_THEIRS", sealedFor(theirs, "FROM_THEIRS"), AT);
       yield* setWorkspaceVariable(mine, "RENAMED", sealedFor(mine, "ORIGINAL"), AT);
       yield* set(mine, "KEPT", "kept", AT);

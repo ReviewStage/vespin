@@ -83,10 +83,12 @@ function threadsOf(entry: ConversationEntry): readonly ReviewThread[] {
 export function conversationHidden(conversation: readonly ConversationEntry[]): ConversationHidden {
   let bots = 0;
   let resolved = 0;
+
   for (const entry of conversation) {
     if (entry.by.bot) bots += 1;
     resolved += threadsOf(entry).filter((thread) => thread.resolved).length;
   }
+
   return { bots, resolved };
 }
 
@@ -106,14 +108,19 @@ export function filteredConversation(
   kept: ReadonlySet<string> = NONE_KEPT,
 ): readonly ConversationEntry[] {
   const keeps = (thread: ReviewThread) => thread.id !== undefined && kept.has(thread.id);
+
   return conversation.flatMap((entry): ConversationEntry[] => {
     const threads = threadsOf(entry);
     const keptEntry = kept.has(entry.url);
+
     if (filters.hideBots && entry.by.bot && !keptEntry && !threads.some(keeps)) return [];
+
     if (!filters.hideResolved || threads.length === 0) return [entry];
     const open = threads.filter((thread) => !thread.resolved || keeps(thread));
+
     // Note that a review whose every thread was resolved goes with them, as stage-cli drops one, unless it was brought into view.
     if (open.length === 0) return keptEntry ? [entry] : [];
+
     return open.length === threads.length ? [entry] : [{ ...entry, threads: open }];
   });
 }
@@ -126,10 +133,12 @@ export interface ConversationFiltersControl {
 
 export function useConversationFilters(): ConversationFiltersControl {
   const [filters, , changeChoices] = useKept<ConversationChoices>(KEPT.CHOICES, DEFAULT_CHOICES);
+
   // Note that a change is made over what is kept now, so every conversation's tab draws it at once, and a filter changed in one never undoes a section folded in another.
   const change = useCallback(
     (changed: Partial<ConversationChoices>) => changeChoices((held) => ({ ...held, ...changed })),
     [changeChoices],
   );
+
   return { filters, change };
 }

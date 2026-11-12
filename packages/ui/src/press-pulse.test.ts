@@ -14,12 +14,15 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
+type RowResult = { row: HTMLElement; seat: HTMLElement; words: HTMLElement };
+
 /** A row holding a seat drawn as `contents`, then its words. */
-function row(): { row: HTMLElement; seat: HTMLElement; words: HTMLElement } {
+function row(): RowResult {
   const row = document.body.appendChild(document.createElement("div"));
   const seat = row.appendChild(document.createElement("span"));
   seat.style.display = "contents";
   const words = row.appendChild(document.createElement("span"));
+
   return { row, seat, words };
 }
 

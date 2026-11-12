@@ -32,10 +32,12 @@ function shownOf(bar: HTMLElement, seat: TitleSeat): { shown: number; whole: num
   const room = bar.querySelector<HTMLElement>(seat.room);
   const all = room?.querySelectorAll<HTMLElement>(seat.words);
   const words = all?.[all.length - 1];
+
   if (room === null || room === undefined || words === undefined) return undefined;
   // Note that a crumb may hold its floor and be cut by the room rather than shrink, so what shows is the words within the room.
   const box = words.getBoundingClientRect();
   const shown = Math.max(0, Math.min(box.right, room.getBoundingClientRect().right) - box.left);
+
   return { shown, whole: words.scrollWidth };
 }
 
@@ -49,39 +51,51 @@ export function useWrapWhenCut(
   const needed = useRef(0);
   useLayoutEffect(() => {
     const bar = frame.current;
+
     if (!on || bar === null || typeof ResizeObserver === "undefined") return undefined;
+
     const measure = () => {
       const width = bar.clientWidth;
+
       if (wrapped) {
         if (width >= needed.current) setWrapped(false);
+
         return;
       }
+
       const title = shownOf(bar, seat);
+
       if (title === undefined || title.whole - title.shown <= 1) return;
       const floor = Number.parseFloat(getComputedStyle(bar).getPropertyValue(FLOOR_PROPERTY));
       const short = Math.min(title.whole, Number.isNaN(floor) ? 0 : floor) - title.shown;
+
       if (short <= 0) return;
       needed.current = width + short;
       setWrapped(true);
     };
+
     // Note that what answers the bar's width on its own observer settles a frame later, so the bar is read two frames on.
     let frameId = 0;
+
     const settled = () => {
       cancelAnimationFrame(frameId);
       frameId = requestAnimationFrame(() => {
         frameId = requestAnimationFrame(measure);
       });
     };
+
     settled();
     const observer = new ResizeObserver(settled);
     observer.observe(bar);
     // Note that a wrapped title stands on one row again to be read once the fonts load, because the width it needed was read in the font before.
     const stopFonts = onFontsSettled(() => (wrapped ? setWrapped(false) : settled()));
+
     return () => {
       cancelAnimationFrame(frameId);
       observer.disconnect();
       stopFonts();
     };
   });
+
   return on && wrapped;
 }

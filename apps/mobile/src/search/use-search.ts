@@ -46,14 +46,17 @@ export function useSearchFound(query: string): SearchFound {
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
   const workspace = listing.workspace;
   const waiting = useWaiting(workspace?.id);
+
   return useMemo(() => {
     const names = new Map((view?.tasks ?? []).map((task) => [task.id, task.name]));
+
     // Note that an archived agent is left out, as a task's page leaves it out of its Agents.
     const agents = (view?.taskAgents ?? []).filter(
       (agent) =>
         agent.archivedAt === undefined &&
         (workspace === undefined || agent.workspaceId === workspace.id),
     );
+
     return {
       tasks: rankedBySearch(listing.found, query, (task) =>
         taskSearchSubject(task, workspace?.name),

@@ -27,7 +27,7 @@ import {
 import { CLI_EXIT, type CliExit, cliExitOfFault, cliExitOfStatus } from "@repo/features/cli-exit";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { HTTP_METHOD } from "@repo/wire";
-import { Data, Effect, Schema, type Scope } from "effect";
+import { Data, Effect, Predicate, Result, Schema, type Scope } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
   ACCOUNT_FAILURE_ACTION,
@@ -116,21 +116,28 @@ function readOrNothing(store: CliAccountStore): Effect.Effect<CliAccount | undef
 function renewed(store: CliAccountStore, client: AccountClient) {
   return Effect.gen(function* () {
     const account = yield* readOrNothing(store);
+
     if (account === undefined) {
       return yield* new AccountRefreshFailed({ message: "Not signed in." });
     }
+
     const refreshed = yield* Effect.result(client.refresh(account.refreshToken));
-    if (refreshed._tag === "Success") {
+
+    if (Result.isSuccess(refreshed)) {
       return yield* Effect.mapError(
         store.write({ ...account, ...refreshed.success }),
         (failed) => new AccountRefreshFailed({ message: failed.message }),
       );
     }
+
     const now = yield* readOrNothing(store);
+
     if (now !== undefined && now.refreshToken !== account.refreshToken) return;
+
     if (accountFailureAction(refreshed.failure) === ACCOUNT_FAILURE_ACTION.SIGN_OUT) {
       yield* Effect.ignore(store.clear);
     }
+
     return yield* new AccountRefreshFailed({ message: refreshed.failure.message });
   });
 }
@@ -167,6 +174,7 @@ export const cliIdentity = Effect.fnUntraced(function* (
     method: HTTP_METHOD.GET,
     path: USERINFO_PATH,
   });
+
   if (!callAnswered(answer)) {
     return yield* new CliAccountFailed({
       exit: cliExitOfFault(answer.fault),
@@ -176,14 +184,18 @@ export const cliIdentity = Effect.fnUntraced(function* (
           : "Not signed in. Run vespin login to sign in.",
     });
   }
+
   const { response } = answer;
+
   if (!response.ok) {
     return yield* new CliAccountFailed({
       exit: cliExitOfStatus(response.status),
       message: `${PRODUCT_NAME} did not say who is signed in (${response.status}).`,
     });
   }
+
   const body = yield* Effect.promise(() => response.json().catch(() => undefined));
+
   const identity = yield* Effect.mapError(
     Schema.decodeUnknownEffect(cliIdentitySchema)(body),
     () =>
@@ -192,6 +204,7 @@ export const cliIdentity = Effect.fnUntraced(function* (
         message: `${PRODUCT_NAME} answered an identity this version cannot read.`,
       }),
   );
+
   return {
     ...(identity.sub === undefined ? undefined : { id: identity.sub }),
     email: identity.email,
@@ -201,9 +214,12 @@ export const cliIdentity = Effect.fnUntraced(function* (
 
 /** A failure on the account service, as the sign-in or sign-out says it. */
 function accountFailed(failed: AccountClientFailure | CliAccountFailed): CliAccountFailed {
-  if (failed._tag === "CliAccountFailed") return failed;
+  if (Predicate.isTagged(failed, "CliAccountFailed")) return failed;
+
   return new CliAccountFailed({
-    exit: failed._tag === "AccountTransportError" ? CLI_EXIT.UNAVAILABLE : CLI_EXIT.REFUSED,
+    exit: Predicate.isTagged(failed, "AccountTransportError")
+      ? CLI_EXIT.UNAVAILABLE
+      : CLI_EXIT.REFUSED,
     message: failed.message,
   });
 }
@@ -230,9 +246,11 @@ function storedSignIn(options: CliSignInOptions, tokens: AccountTokens) {
     const identity = yield* cliIdentity(options.accountBaseUrl, fixedBearer(tokens.accessToken));
     const replaced = yield* Effect.mapError(options.store.read, storeFailed);
     yield* Effect.mapError(options.store.write({ ...tokens, ...identity }), storeFailed);
+
     if (replaced !== undefined && replaced.refreshToken !== tokens.refreshToken) {
       yield* Effect.ignore(options.client.revoke(replaced.refreshToken));
     }
+
     return { ...tokens, ...identity } satisfies CliAccount;
   });
 }
@@ -246,9 +264,11 @@ export function cliSignIn(
   options: CliSignInOptions,
 ): Effect.Effect<CliIdentity, CliAccountFailed, Scope.Scope | HttpClient.HttpClient> {
   const { client } = options;
+
   return Effect.gen(function* () {
     // Note that the exchange runs inside the trip, so it is handed the caller's client here.
     const services = yield* Effect.context<HttpClient.HttpClient>();
+
     const consent = options.openConsent<CliAccount>({
       callbackPath: CALLBACK_PATH,
       pages: CLI_SIGN_IN_PAGES,
@@ -268,10 +288,13 @@ export function cliSignIn(
         ),
       openExternal: options.openExternal,
     });
+
     const outcome = yield* consent.signInEffect();
+
     if ("reason" in outcome) {
       return yield* new CliAccountFailed({ exit: CLI_EXIT.AUTH, message: outcome.reason });
     }
+
     return {
       ...(outcome.id === undefined ? undefined : { id: outcome.id }),
       email: outcome.email,
@@ -296,8 +319,10 @@ export const cliSignOut = Effect.fnUntraced(function* (
   client: AccountClient,
 ) {
   const account = yield* Effect.mapError(store.read, storeFailed);
+
   if (account === undefined) return { signedIn: false, revoked: false } satisfies CliSignOut;
   const revoked = yield* Effect.result(client.revoke(account.refreshToken));
   yield* Effect.mapError(store.clear, storeFailed);
-  return { signedIn: true, revoked: revoked._tag === "Success" } satisfies CliSignOut;
+
+  return { signedIn: true, revoked: Result.isSuccess(revoked) } satisfies CliSignOut;
 });

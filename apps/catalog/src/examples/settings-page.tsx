@@ -28,6 +28,7 @@ import { CatalogSection } from "../section";
 
 function HeldSwitch({ label, describedBy }: { label: string; describedBy: string | undefined }) {
   const [on, setOn] = useState(true);
+
   return <Switch checked={on} label={label} describedBy={describedBy} onChange={setOn} />;
 }
 

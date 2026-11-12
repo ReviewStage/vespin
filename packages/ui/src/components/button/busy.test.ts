@@ -50,6 +50,7 @@ const SAVING: BusyProps = { busy: true, busyLabel: "Saving" };
 /** Each kind of button, busy in the one shape, counting its presses into `presses`. */
 function kinds(presses: string[]): ReadonlyArray<readonly [string, ReactElement]> {
   const press = (kind: string) => () => presses.push(kind);
+
   return [
     ["Button", createElement(Button, { ...SAVING, onClick: press("Button"), children: "Save" })],
     [
@@ -107,13 +108,16 @@ function mount(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
 /** The busy button a kind draws, the one a reader is told is busy. */
 function busyButton(container: HTMLElement): HTMLButtonElement {
   const button = container.querySelector<HTMLButtonElement>('button[aria-busy="true"]');
+
   if (button === null) throw new Error("no busy button is drawn");
+
   return button;
 }
 
@@ -124,6 +128,7 @@ function ringIn(button: HTMLElement): boolean {
 
 test("every kind of button takes the one busy shape: named by its label and refusing its press at once, its ring shown only once the settle delay has passed", () => {
   const presses: string[] = [];
+
   for (const [kind, element] of kinds(presses)) {
     const button = busyButton(mount(element));
     act(() => button.click());
@@ -138,12 +143,14 @@ test("every kind of button takes the one busy shape: named by its label and refu
     act(() => vi.advanceTimersByTime(1));
     expect({ kind, ring: ringIn(button) }).toEqual({ kind, ring: true });
   }
+
   expect(presses).toEqual([]);
 });
 
 test("a press that lands before the settle delay never shows a ring", () => {
   const draw = (busy: boolean) =>
     createElement(Button, { busy, busyLabel: "Saving", children: "Save" });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);

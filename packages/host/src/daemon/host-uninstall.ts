@@ -41,6 +41,7 @@ export interface BundledHostUninstallInput {
 const removedIfEmpty = (folder: string) =>
   Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
+
     if ((yield* fileSystem.readDirectory(folder)).length > 0) return;
     yield* fileSystem.remove(folder);
   }).pipe(Effect.ignore);
@@ -52,15 +53,20 @@ export const uninstallBundledHost = Effect.fnUntraced(function* (input: BundledH
   const left = yield* leaveHostDevice({ stateRoot: input.stateRoot, version: input.version });
   const agents = deviceAgentsFolder(input.home);
   const folders = input.removeAgentFolders ? yield* ownedAgents(input.stateRoot) : [];
+
   const removals = yield* Effect.forEach(folders, (agentId) =>
     Effect.exit(fileSystem.remove(path.join(agents, agentId), { recursive: true, force: true })),
   );
+
   if (input.removeAgentFolders) {
     yield* removedIfEmpty(agents);
     yield* removedIfEmpty(path.dirname(agents));
   }
+
   yield* fileSystem.remove(input.stateRoot, { recursive: true, force: true });
   const stood = removals.find(Exit.isFailure);
+
   if (stood !== undefined) return yield* Effect.failCause(stood.cause);
+
   return left;
 });

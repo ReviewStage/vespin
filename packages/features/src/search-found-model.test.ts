@@ -33,10 +33,12 @@ test("a search ranks its tasks by what their rows say, best first", () => {
     task("Rounding errors in totals", 4, "acme/ledger"),
     task("Round two", 42, "acme/web"),
   ];
+
   const names = (query: string) =>
     rankedBySearch(tasks, query, (each) => taskSearchSubject(each, "Acme")).map(
       (each) => each.name,
     );
+
   expect(names("rounding")).toEqual([
     "Rounding errors in totals",
     "Fix ledger rounding",

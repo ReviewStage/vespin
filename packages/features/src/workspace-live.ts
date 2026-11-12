@@ -139,9 +139,12 @@ function workspaceOfLiveRow(
     WORKSPACES_READ.parts.installations,
     installations,
   ).map(({ installationId, login, active }) => ({ installationId, login, active }));
+
   const first = githubInstallations.find((one) => one.active) ?? githubInstallations[0];
+
   const pictureUrl =
     row.photoVersion === null && row.own ? pinnedPictureUrl(row.ownerImage) : undefined;
+
   return {
     id: row.id,
     name: row.name,
@@ -175,13 +178,17 @@ function workspaceOfLiveRow(
 /** The account's workspaces as the held read answers them: its own first one first, the rest by name, then by id. */
 export function workspacesOfLiveRows(rows: WorkspacesLiveRows): readonly Workspace[] {
   const installations = new Map<string, WorkspaceInstallationLiveRow[]>();
+
   for (const row of rows.installations) {
     installations.set(row.workspaceId, [...(installations.get(row.workspaceId) ?? []), row]);
   }
+
   const experiments = new Map<string, WorkspaceExperimentLiveRow[]>();
+
   for (const row of rows.experiments) {
     experiments.set(row.workspaceId, [...(experiments.get(row.workspaceId) ?? []), row]);
   }
+
   return orderedLiveRows(WORKSPACES_READ.parts.workspaces, rows.workspaces).map((row) =>
     workspaceOfLiveRow(row, installations.get(row.id) ?? [], experiments.get(row.id) ?? []),
   );
@@ -243,6 +250,7 @@ const ROLE_ORDER: readonly WorkspaceRole[] = [
 /** A picture the renderer may draw, under the key the wire carries it by; nothing for any other. */
 function pictureOf(image: string | null): { readonly pictureUrl?: string } {
   const pictureUrl = pinnedPictureUrl(image);
+
   return pictureUrl === undefined ? {} : { pictureUrl };
 }
 
@@ -257,9 +265,11 @@ export function workspaceMembersOfLiveRows(
   const members = orderedLiveRows(WORKSPACE_MEMBERS_READ.parts.members, rows.members).map(
     ({ image, role, ...member }) => ({ ...member, role: roleOf(role), ...pictureOf(image) }),
   );
+
   const former = orderedLiveRows(WORKSPACE_MEMBERS_READ.parts.former, rows.former).map(
     ({ image, ...person }) => ({ ...person, ...pictureOf(image) }),
   );
+
   return {
     members: ROLE_ORDER.flatMap((role) => members.filter((one) => one.role === role)),
     ...(former.length === 0 ? undefined : { former }),
@@ -316,7 +326,9 @@ export function workspaceInvitationsOfLiveRows(
     .filter((one) => one.expiresAt > now)
     .flatMap((one) => {
       const role = Object.values(INVITATION_ROLE).find((each) => each === one.role);
+
       if (role === undefined) return [];
+
       return [
         {
           id: one.id,
@@ -339,5 +351,6 @@ export function nextInvitationExpiry(
   now: number,
 ): number | undefined {
   const pending = rows.invitations.map((one) => one.expiresAt).filter((at) => at > now);
+
   return pending.length === 0 ? undefined : Math.min(...pending);
 }

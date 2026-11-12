@@ -27,6 +27,7 @@ export function hostStateRoot(): string {
 /** A `file://` address as a plain absolute path, without a trailing slash. */
 function plainPath(uri: string): string {
   const path = uri.startsWith(FILE_SCHEME) ? uri.slice(FILE_SCHEME.length) : uri;
+
   return path.endsWith("/") ? path.slice(0, -1) : path;
 }
 
@@ -42,6 +43,7 @@ function fileUri(path: string): string {
  */
 function missing(method: string, path: string) {
   return systemError({
+    // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- Effect's systemError takes its tag as data
     _tag: "NotFound",
     module: "FileSystem",
     method,
@@ -54,6 +56,7 @@ function missing(method: string, path: string) {
 /** A call the device's file system refused. */
 function refused(method: string, path: string, cause: unknown) {
   return systemError({
+    // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- Effect's systemError takes its tag as data
     _tag: "Unknown",
     module: "FileSystem",
     method,
@@ -72,11 +75,13 @@ export function expoFileSystem(): Layer.Layer<FileSystem.FileSystem> {
   const fileAt = (path: string) => new File(fileUri(path));
   const directoryAt = (path: string) => new Directory(fileUri(path));
   const exists = (path: string) => fileAt(path).exists || directoryAt(path).exists;
+
   return FileSystem.layerNoop({
     exists: (path) => attempt("exists", path, () => exists(path)),
     readFileString: (path) =>
       Effect.suspend(() => {
         const file = fileAt(path);
+
         return file.exists
           ? attempt("readFileString", path, () => file.textSync())
           : Effect.fail(missing("readFileString", path));
@@ -97,7 +102,9 @@ export function expoFileSystem(): Layer.Layer<FileSystem.FileSystem> {
     rename: (oldPath, newPath) =>
       Effect.suspend(() => {
         const from = fileAt(oldPath);
+
         if (!from.exists) return Effect.fail(missing("rename", oldPath));
+
         // Note that a rename lands over whatever stood at the new path in the one move, as Node's does: the settings store writes a file beside its own and renames it over, and a delete before the move would lose the file it keeps where the move then failed.
         return attempt("rename", newPath, () => {
           from.moveSync(fileAt(newPath), { overwrite: true });
@@ -107,14 +114,18 @@ export function expoFileSystem(): Layer.Layer<FileSystem.FileSystem> {
       Effect.suspend(() => {
         const file = fileAt(path);
         const directory = directoryAt(path);
+
         if (file.exists) return attempt("remove", path, () => file.delete());
+
         if (directory.exists) {
           // Note that a folder with files in it goes only where asked, as Node's `rm` asks.
           if (options?.recursive !== true && directory.list().length > 0) {
             return Effect.fail(refused("remove", path, new Error(`ENOTEMPTY: ${path}`)));
           }
+
           return attempt("remove", path, () => directory.delete());
         }
+
         return options?.force === true ? Effect.void : Effect.fail(missing("remove", path));
       }),
   });

@@ -51,6 +51,7 @@ function followOrigin(
 ): Effect.Effect<void> {
   // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
   const userId = dependencies.accountId();
+
   return pushLive({
     seal: (poll, after) =>
       dependencies.gate() && userId !== undefined
@@ -64,6 +65,7 @@ function followOrigin(
     publish: (rows) =>
       Effect.sync(() => {
         const origin = rows === undefined ? undefined : agentOriginOfLive(rows);
+
         if (origin === undefined) return answers.unanswered();
         answers.answered(origin);
       }),

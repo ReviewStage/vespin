@@ -39,29 +39,37 @@ test("a lazy route that landed and threw while drawing is drawn again in place o
   // Note that React says the failure its boundary caught on the console, as it would in the window.
   vi.spyOn(console, "error").mockImplementation(() => undefined);
   const broken = { now: true };
+
   const Page = () => {
     if (broken.now) throw new Error("The page could not draw.");
+
     return createElement("p", null, "Settings");
   };
+
   const rootRoute = createRootRoute({ component: Outlet });
   const page = createRoute({ getParentRoute: () => rootRoute, path: "/page", ...LAZY_ROUTE });
   page.update({ component: Page });
+
   const router = createRouter({
     routeTree: rootRoute.addChildren([page]),
     history: createMemoryHistory({ initialEntries: ["/page"] }),
   });
+
   await act(async () => {
     await router.load();
     root.render(createElement(RouterProvider, { router }));
   });
+
   const reload = [...host.querySelectorAll("button")].find(
     (button) => button.textContent === "Reload",
   );
+
   assert.ok(reload, "the route says it failed, with Reload");
 
   broken.now = false;
   await act(async () => {
     reload.click();
+
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   assert.equal(host.textContent, "Settings");

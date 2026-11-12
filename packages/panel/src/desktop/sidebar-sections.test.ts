@@ -70,16 +70,19 @@ function hearWrites(asked: Partial<Asked>): void {
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_WRITE_SECTION]: ({ writes }) => {
       asked.writes?.push(...writes);
+
       return Promise.resolve(true);
     },
     [ACT_KIND.TASKS_PIN]: ({ taskId, pinned, position }) => {
       if (position === undefined)
         asked.marks?.push([taskId, pinned ? TASK_MARK.PIN : TASK_MARK.UNPIN]);
       else asked.moves?.push({ agent: false, id: taskId, position });
+
       return Promise.resolve(true);
     },
     [ACT_KIND.AGENTS_PIN]: ({ agentId, position }) => {
       if (position !== undefined) asked.moves?.push({ agent: true, id: agentId, position });
+
       return Promise.resolve({ failure: AGENT_CALL_FAILURE.NOT_FOUND });
     },
   });
@@ -210,9 +213,11 @@ function dialogField(label: string): HTMLInputElement {
   const named = [...document.querySelectorAll<HTMLLabelElement>("label")].find(
     (candidate) => candidate.textContent === label,
   );
+
   const found =
     (named === undefined ? null : document.getElementById(named.htmlFor)) ??
     document.querySelector(`input[aria-label="${label}"]`);
+
   return found instanceof HTMLInputElement ? found : assert.fail(`no ${label} field`);
 }
 
@@ -224,12 +229,14 @@ function sidebarOver(
 ) {
   writeListedTasks({ taskSections: sections });
   hearWrites({ writes });
+
   const tasks = tasksControl({
     tasks: [INVITES, RETRIES],
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
     ...rest,
   });
+
   return drawnSidebar(sidebarProps(tasks));
 }
 
@@ -242,6 +249,7 @@ async function mountSidebarRedrawn(
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const draw = async (sections: TaskSections) => {
     act(() =>
       root.render(
@@ -257,7 +265,9 @@ async function mountSidebarRedrawn(
     );
     await settle();
   };
+
   await draw(sections);
+
   return { container, draw };
 }
 
@@ -274,6 +284,7 @@ async function mountSidebar(
 /** The first of a button's words a reader hears: a row's or a fold's name, before its count and its chord. */
 function heardName(button: Element): string {
   const heard = [...button.children].find((part) => part.getAttribute("aria-hidden") !== "true");
+
   return heard?.textContent ?? "";
 }
 
@@ -281,7 +292,9 @@ function sectionHeader(sidebar: HTMLElement, title: string): HTMLElement {
   const fold = [
     ...sidebar.querySelectorAll('nav[aria-label="Sections"] button[aria-expanded]'),
   ].find((each) => heardName(each) === title);
+
   const found = fold?.closest<HTMLElement>(".ui-group-header-head");
+
   return found ?? assert.fail(`no ${title} section`);
 }
 
@@ -290,6 +303,7 @@ function openMoveToSection(sidebar: HTMLElement, name: string, label = "Move to"
   const row = [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].find(
     (each) => each.textContent?.includes(name),
   );
+
   assert.ok(row);
   act(() => {
     row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }));
@@ -300,15 +314,18 @@ function openMoveToSection(sidebar: HTMLElement, name: string, label = "Move to"
 /** The dialog's button whose words are `label`, or else whose label is, failing where none is drawn; Lucide's Save glyph is no Save button. */
 function dialogButton(label: string): HTMLButtonElement {
   const buttons = [...document.querySelectorAll<HTMLButtonElement>("button")];
+
   const found =
     buttons.find((button) => button.textContent === label) ??
     buttons.find((button) => button.getAttribute("aria-label") === label);
+
   return found ?? assert.fail(`no ${label} button`);
 }
 
 /** The names of the tasks drawn under the region labeled `label`. */
 function namesIn(sidebar: HTMLElement, label: string): string[] {
   const region = sidebar.querySelector(`nav[aria-label="${label}"]`);
+
   return [...(region?.querySelectorAll(".ui-list-row-title") ?? [])].map(
     (name) => name.firstChild?.textContent ?? "",
   );
@@ -319,7 +336,9 @@ function item(label: string): HTMLElement {
   const name = [...document.querySelectorAll(".ui-menu-item-label")].find(
     (each) => each.textContent === label,
   );
+
   const found = name?.closest<HTMLElement>('[role="menuitem"], [role="menuitemcheckbox"]');
+
   return found ?? assert.fail(`no ${label} in the menu`);
 }
 
@@ -334,16 +353,20 @@ test("a section stands over its tasks, which Tasks leaves out", async () => {
 
 test("the column's task rows, a section's and Tasks', are one Tab stop that ↓ walks from one group into the next, wrapping", async () => {
   const sidebar = await mountSidebar([]);
+
   const row = (name: string) => {
     const found = [
       ...sidebar.querySelectorAll<HTMLButtonElement>(".sidebar-tasks > li > button"),
     ].find((each) => each.querySelector(".ui-list-row-title")?.firstChild?.textContent === name);
+
     return found ?? assert.fail(`no row for ${name}`);
   };
+
   const stops = () =>
     [...sidebar.querySelectorAll<HTMLButtonElement>(".sidebar-tasks > li > button")].filter(
       (each) => each.tabIndex === 0,
     );
+
   const down = () =>
     act(() => {
       document.activeElement?.dispatchEvent(
@@ -362,12 +385,14 @@ test("the column's task rows, a section's and Tasks', are one Tab stop that ↓ 
 
 test("a section folds on its title, aria-expanded following, counts its tasks folded, and keeps its ⋯ outside the fold", async () => {
   const sidebar = await mountSidebar([]);
+
   const launch = () =>
     [
       ...sidebar.querySelectorAll<HTMLButtonElement>(
         'nav[aria-label="Sections"] button[aria-expanded]',
       ),
     ].find((each) => heardName(each) === "Launch") ?? assert.fail("no Launch fold");
+
   assert.equal(launch().getAttribute("aria-expanded"), "true");
   assert.equal(launch().textContent, "🚀Launch");
   assert.deepEqual(namesIn(sidebar, "Sections"), ["Invite expiry"]);
@@ -394,6 +419,7 @@ test("a filter by person leaves out a section's task it would leave out of the l
       [WORKSPACE.id]: { grouping: "repository", order: "updated", assignedTo: "user-ada" },
     }),
   );
+
   const sidebar = await mountSidebar([], SECTIONS, {
     workspace: shared,
     workspaces: [shared],
@@ -436,9 +462,11 @@ test("a section whose only task is done still says Drag tasks here", async () =>
 test("a task's Move to puts it on top of the section chosen", async () => {
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes);
+
   const row = [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].find(
     (each) => each.textContent?.includes("Retry audit"),
   );
+
   assert.ok(row);
 
   await act(async () => {
@@ -481,6 +509,7 @@ function openRowMenu(sidebar: HTMLElement, name: string): void {
   const row = [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].find(
     (each) => each.textContent?.includes(name),
   );
+
   assert.ok(row);
   act(() => {
     row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 10, clientY: 10 }));
@@ -490,6 +519,7 @@ function openRowMenu(sidebar: HTMLElement, name: string): void {
 /** The sections' titles, in the order the sidebar draws them. */
 function sectionTitles(sidebar: HTMLElement): string[] {
   const heads = sidebar.querySelectorAll('nav[aria-label="Sections"] .ui-group-header-head');
+
   return [...heads].map((head) => heardName(head.querySelector("button[aria-expanded]") ?? head));
 }
 
@@ -597,21 +627,26 @@ test("a section holding no task offers only Rename, Add icon where it wears none
 test("⌘-clicking a section's task and one under Tasks chooses both, opening neither, and a right-click on either offers Status for both, which S on the focused one opens", async () => {
   const settled: [string, string | undefined][] = [];
   const opened: string[] = [];
+
   const sidebar = await mountSidebar([], SECTIONS, {
     onResume: (taskId) => opened.push(taskId),
   });
+
   // Each task's status leaves on the act port, which the service keeps.
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_SET_STANDING]: ({ taskId, status }) => {
       settled.push([taskId, status]);
+
       return Promise.resolve(true);
     },
   });
+
   const rowOf = (name: string) =>
     [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].find((each) =>
       each.textContent?.includes(name),
     ) ?? assert.fail(`no ${name} row`);
+
   for (const name of [INVITES.name, RETRIES.name]) {
     act(() => {
       rowOf(name).dispatchEvent(
@@ -619,6 +654,7 @@ test("⌘-clicking a section's task and one under Tasks chooses both, opening ne
       );
     });
   }
+
   assert.deepEqual(opened, []);
   assert.equal(rowOf(RETRIES.name).getAttribute("aria-description"), "Selected");
 
@@ -651,6 +687,7 @@ test("in a browser, a middle-click on a place or a task opens its address in a t
     fakeAppPlatform({ ...QUIET_PANEL, openInTab: (link: string) => tabbed.push(link) }),
   );
   const sidebar = await mountSidebar([], SECTIONS, { onResume: (taskId) => opened.push(taskId) });
+
   const press = (button: HTMLElement, init: MouseEventInit) =>
     act(() => {
       button.dispatchEvent(
@@ -664,10 +701,12 @@ test("in a browser, a middle-click on a place or a task opens its address in a t
         }),
       );
     });
+
   const inbox =
     [...sidebar.querySelectorAll<HTMLElement>("button")].find(
       (each) => heardName(each) === "Inbox",
     ) ?? assert.fail("no Inbox row");
+
   const retries =
     [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].find((each) =>
       each.textContent?.includes(RETRIES.name),
@@ -694,24 +733,29 @@ test("in a browser, a middle-click on a place or a task opens its address in a t
 test("a plain click on any row, with tasks chosen and no bar to let them go, opens it and chooses none", async () => {
   const opened: string[] = [];
   const sidebar = await mountSidebar([], SECTIONS, { onResume: (taskId) => opened.push(taskId) });
+
   const rowOf = (name: string) =>
     [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].find((each) =>
       each.textContent?.includes(name),
     ) ?? assert.fail(`no ${name} row`);
+
   const click = (name: string, keys: MouseEventInit = {}) =>
     act(() => {
       rowOf(name).dispatchEvent(
         new MouseEvent("click", { bubbles: true, cancelable: true, ...keys }),
       );
     });
+
   const chooseBoth = () => {
     click(INVITES.name, { metaKey: true });
     click(RETRIES.name, { metaKey: true });
     assert.equal(rowOf(INVITES.name).getAttribute("aria-description"), "Selected");
     assert.equal(rowOf(RETRIES.name).getAttribute("aria-description"), "Selected");
   };
+
   const noneChosen = () =>
     assert.ok(!sidebar.querySelector('[aria-description="Selected"]'), "no row is still chosen");
+
   chooseBoth();
   click(INVITES.name);
   assert.deepEqual(opened, [INVITES.id]);
@@ -719,10 +763,12 @@ test("a plain click on any row, with tasks chosen and no bar to let them go, ope
 
   // A place, a row that cannot be chosen, lets them go too.
   chooseBoth();
+
   const home =
     [...sidebar.querySelectorAll<HTMLElement>("button")].find((each) =>
       each.textContent?.trim().startsWith("Home"),
     ) ?? assert.fail("no Home row");
+
   await act(async () => home.click());
   noneChosen();
 });
@@ -733,12 +779,15 @@ test("a section's Mark all as read stands while a task in it is unread, and asks
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_MARK_READ]: ({ taskId, readMark }) => {
       marks.push(`${readMark}:${taskId}`);
+
       return Promise.resolve(true);
     },
   });
+
   const read = await mountSidebar([], BOTH_IN_LAUNCH, {
     tasks: [INVITES, RETRIES].map((each) => ({ ...each, readThrough: each.updatedAt })),
   });
+
   openSectionMenu(read, "Launch");
   assert.ok(!menuLabels().includes("Mark all as read"));
   await act(async () => {
@@ -754,6 +803,7 @@ test("a section's Mark all as read stands while a task in it is unread, and asks
       { ...RETRIES, readThrough: RETRIES.updatedAt },
     ],
   });
+
   openSectionMenu(sidebar, "Launch");
   await act(async () => item("Mark all as read").click());
   await settle();
@@ -786,6 +836,7 @@ test("two sections titled alike are two items in Move to section, on one task's 
     title: "Launch",
     createdAt: 4,
   };
+
   const sidebar = await mountSidebar([], { ...SECTIONS, sections: [...SECTIONS.sections, twin] });
 
   openMoveToSection(sidebar, RETRIES.name);
@@ -799,12 +850,14 @@ test("two sections titled alike are two items in Move to section, on one task's 
       [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].find((each) =>
         each.textContent?.includes(name),
       ) ?? assert.fail(`no ${name} row`);
+
     act(() => {
       row.dispatchEvent(
         new MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true }),
       );
     });
   }
+
   openRowMenu(sidebar, RETRIES.name);
   assert.equal(document.querySelector(".ui-menu-heading")?.textContent, "2 tasks");
   await act(async () => item("Move to section").click());
@@ -826,6 +879,7 @@ function newSectionButton(sidebar: HTMLElement): HTMLButtonElement {
 /** Presses the Tasks head's New section, which names a section in place. */
 function newSectionInPlace(sidebar: HTMLElement): HTMLInputElement {
   act(() => newSectionButton(sidebar).click());
+
   return sectionNameField();
 }
 
@@ -850,6 +904,7 @@ function sectionMenuChoose(sidebar: HTMLElement, title: string, label: string): 
   const actions =
     sidebar.querySelector<HTMLButtonElement>(`[aria-label="${title} actions"]`) ??
     assert.fail(`no ${title} actions`);
+
   act(() => actions.click());
   act(() => item(label).click());
 }
@@ -1013,19 +1068,23 @@ function layOutRows(): void {
   const slots = () => [
     ...document.querySelectorAll(".sidebar-tasks > li, .sidebar-section-slot, .ui-drop-slot"),
   ];
+
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
     const all = slots();
     const own = all.indexOf(this);
     const held = own >= 0 ? [own] : all.flatMap((slot, at) => (this.contains(slot) ? [at] : []));
     const first = held[0];
     const last = held.at(-1);
+
     if (first === undefined || last === undefined) return DOMRect.fromRect();
+
     return DOMRect.fromRect({
       y: first * ROW_HEIGHT,
       width: 200,
       height: (last - first + 1) * ROW_HEIGHT,
     });
   });
+
   // jsdom captures no pointer; a drag asks its list to, as the window's would.
   for (const list of document.querySelectorAll(".sidebar-tasks")) {
     Object.assign(list, { setPointerCapture: () => undefined });
@@ -1041,18 +1100,21 @@ async function mountDraggable(
 ): Promise<HTMLElement> {
   writeListedTasks({ taskSections: sections });
   hearWrites(asked);
+
   const tasks = tasksControl({
     tasks: [...summaries],
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
     ...rest,
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(withQueryClient(drawnSidebar(sidebarProps(tasks)))));
   await settle();
   layOutRows();
+
   return container;
 }
 
@@ -1065,6 +1127,7 @@ function lift(sidebar: HTMLElement, name: string, y: number): void {
   const label = [...sidebar.querySelectorAll<HTMLElement>(".ui-list-row-title")].find(
     (each) => each.firstChild?.textContent === name,
   );
+
   const row = label?.closest("li") ?? assert.fail(`no ${name} in the sidebar`);
   const top = row.getBoundingClientRect().top + ROW_HEIGHT / 2;
   act(() => {
@@ -1110,18 +1173,22 @@ test("Pinned's ⋯ stands while a pinned task is unread, and its Mark all as rea
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_MARK_READ]: ({ taskId, readMark }) => {
       marks.push(`${readMark}:${taskId}`);
+
       return Promise.resolve(true);
     },
   });
+
   const read = await mountSidebar([], SECTIONS, {
     tasks: [{ ...PINNED, readThrough: PINNED.updatedAt }],
   });
+
   assert.equal(read.querySelector('[aria-label="Pinned actions"]'), null);
   read.remove();
 
   const sidebar = await mountSidebar([], SECTIONS, {
     tasks: [{ ...PINNED, readThrough: PINNED.updatedAt - 1 }],
   });
+
   openSectionMenu(sidebar, "Pinned");
   await act(async () => item("Mark all as read").click());
   await settle();
@@ -1131,12 +1198,14 @@ test("Pinned's ⋯ stands while a pinned task is unread, and its Mark all as rea
 
 test("a task row in Pinned and in a section shows when its agents last did something, as a row in Tasks does", async () => {
   const active = { agents: { total: 1, working: 0, activityAt: 9_000, pullRequestTotal: 0 } };
+
   const sidebar = await mountSidebar([], SECTIONS, {
     tasks: [
       { ...PINNED, ...active },
       { ...INVITES, ...active },
     ],
   });
+
   const shown = (name: string) =>
     rowPress(sidebar, name).querySelector("time")?.getAttribute("dateTime");
 
@@ -1181,10 +1250,12 @@ test("a task dragged from a section onto the top of Pinned leaves the section an
 
 test("a pinned task dragged onto Tasks is unpinned and leaves the section it was kept in", async () => {
   const asked = noneAsked();
+
   const kept: TaskSections = {
     ...SECTIONS,
     entries: [...SECTIONS.entries, { taskId: PINNED.id, sectionId: LAUNCH, addedAt: 3 }],
   };
+
   const sidebar = await mountDraggable([PINNED, INVITES, RETRIES], kept, asked);
 
   drag(sidebar, "Pin audit", 3 * ROW_HEIGHT - 4);
@@ -1204,10 +1275,12 @@ test("a pinned task dragged into a section is unpinned and lands where it was le
   await settle();
 
   assert.deepEqual(asked.marks, [[PINNED.id, TASK_MARK.UNPIN]]);
+
   const after = asked.writes.reduce(
     (state, write) => applySectionWrite(state, write, AFTER_FIXTURES),
     SECTIONS,
   );
+
   assert.deepEqual(sectionTaskIds(after, LAUNCH), [INVITES.id, PINNED.id]);
 });
 
@@ -1251,16 +1324,19 @@ test("Pinned stands once a pin exists, folding and counting it, and once the las
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const draw = async (summaries: readonly TaskSummary[]) => {
     const tasks = tasksControl({
       tasks: [...summaries],
       workspaces: [WORKSPACE],
       workspace: WORKSPACE,
     });
+
     writeListedTasks({ taskSections: SECTIONS });
     act(() => root.render(withQueryClient(drawnSidebar(sidebarProps(tasks)))));
     await settle();
   };
+
   await draw([PINNED, INVITES, RETRIES]);
 
   const fold = pinnedGroup(container)?.querySelector("button[aria-expanded]");
@@ -1280,11 +1356,13 @@ test("Pinned stands once a pin exists, folding and counting it, and once the las
 
 test("a pin dragged below the next one reorders the pins", async () => {
   const asked = noneAsked();
+
   const second = {
     ...task("0a1b2c3d-0000-4000-8000-100000000004", "Pin review"),
     pinnedAt: 4,
     pinPosition: "a1",
   };
+
   // Down the column: Pin audit and Pin review under Pinned, then the section and Tasks.
   const sidebar = await mountDraggable([PINNED, second, INVITES, RETRIES], SECTIONS, asked);
 
@@ -1309,8 +1387,10 @@ test("a glyph found by searching asks its color over the grid, the text's own na
   typeInto(dialogField("Search icons and emoji"), "telescope");
   await settleLoaded();
   await act(async () => dialogButton("Telescope").click());
+
   const colors =
     document.querySelector(".section-icon-colors") ?? assert.fail("the glyph's colors are asked");
+
   assert.equal(document.activeElement, colors.querySelector('[aria-label="White"]'));
   await act(async () => dialogButton("Teal").click());
   assert.equal(
@@ -1390,21 +1470,27 @@ test("Icons and Emoji are tabs over the picker's panel, which the tab shown name
   const sidebar = await mountSidebar([]);
 
   await dialogPicker(sidebar);
+
   const kinds =
     document.querySelector<HTMLElement>('[role="tablist"][aria-label="Icon kind"]') ??
     assert.fail("the icon kinds are tabs");
+
   const tab = (label: string) =>
     [...kinds.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
       (each) => each.textContent === label,
     ) ?? assert.fail(`no ${label} tab`);
+
   const shown = (label: string) => {
     const panel =
       document.getElementById(tab(label).getAttribute("aria-controls") ?? "") ??
       assert.fail(`${label} controls no panel`);
+
     assert.equal(panel.getAttribute("role"), "tabpanel");
     assert.equal(panel.getAttribute("aria-labelledby"), tab(label).id);
+
     return panel;
   };
+
   assert.equal(tab("Icons").getAttribute("aria-selected"), "true");
   assert.ok(shown("Icons").querySelector('button[aria-label="Folder"]'));
   assert.equal(
@@ -1430,13 +1516,18 @@ test("Shift-Enter in the search presses the first glyph it found, as Enter does,
   await press(search, "Enter", true);
   const noColor = document.activeElement ?? assert.fail("nothing has the focus");
   assert.equal(noColor.getAttribute("aria-label"), "Black");
-  await press(noColor as HTMLElement, "ArrowRight");
-  assert.equal(document.activeElement?.getAttribute("aria-label"), "Red");
-  await press(document.activeElement as HTMLElement, "Escape");
+  assert.ok(noColor instanceof HTMLElement);
+  await press(noColor, "ArrowRight");
+  const red = document.activeElement;
+  assert.equal(red?.getAttribute("aria-label"), "Red");
+  assert.ok(red instanceof HTMLElement);
+  await press(red, "Escape");
   assert.equal(document.querySelector(".section-icon-colors"), null);
   assert.ok(dialogField("Search icons and emoji"), "Escape leaves the picker standing");
   await act(async () => dialogButton("Telescope").click());
-  await act(async () => (document.activeElement as HTMLButtonElement).click());
+  const focused = document.activeElement;
+  assert.ok(focused instanceof HTMLElement);
+  await act(async () => focused.click());
   typeInto(dialogField("Name"), "Stars");
   await act(async () => dialogButton("Create section").click());
 
@@ -1594,6 +1685,7 @@ const touch = (type: string) =>
 /** A finger held still on `target` well past a long press, then lifted. */
 function longPress(target: HTMLElement): void {
   vi.useFakeTimers();
+
   try {
     act(() => {
       target.dispatchEvent(touch("pointerdown"));
@@ -1604,6 +1696,7 @@ function longPress(target: HTMLElement): void {
   } finally {
     vi.useRealTimers();
   }
+
   act(() => {
     target.dispatchEvent(touch("pointerup"));
     target.dispatchEvent(new TouchEvent("touchend", { bubbles: true, cancelable: true }));
@@ -1622,6 +1715,7 @@ function rowPress(sidebar: HTMLElement, name: string): HTMLElement {
   const row = [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].find(
     (each) => each.textContent?.includes(name),
   );
+
   return row ?? assert.fail(`no ${name} row`);
 }
 
@@ -1683,6 +1777,7 @@ test("under a finger, a section's menu moves it up among the sections", async ()
     (state, write) => applySectionWrite(state, write, AFTER_FIXTURES),
     ICONLESS,
   );
+
   assert.deepEqual(
     workspaceSections(after, WORKSPACE.id).map((section) => section.title),
     [...drawn].reverse(),
@@ -1692,10 +1787,12 @@ test("under a finger, a section's menu moves it up among the sections", async ()
 test("under a finger, a task in a section draws no ⋯ and no Pin or Mark done, and held moves down within it by its menu", async () => {
   underAFinger();
   const asked = noneAsked();
+
   const both: TaskSections = {
     ...SECTIONS,
     entries: [...SECTIONS.entries, { taskId: RETRIES.id, sectionId: LAUNCH, addedAt: 3 }],
   };
+
   const sidebar = await mountDraggable([INVITES, RETRIES], both, asked);
   const first = sectionTaskIds(both, LAUNCH)[0] === INVITES.id ? INVITES : RETRIES;
   const second = first === INVITES ? RETRIES : INVITES;
@@ -1714,6 +1811,7 @@ test("under a finger, a task in a section draws no ⋯ and no Pin or Mark done, 
     (state, write) => applySectionWrite(state, write, AFTER_FIXTURES),
     both,
   );
+
   assert.deepEqual(sectionTaskIds(after, LAUNCH), [second.id, first.id]);
 });
 
@@ -1727,11 +1825,13 @@ function PinsThatMove(): React.JSX.Element {
     setPins((held) =>
       held.map((pin) => (pin.id === taskId ? { ...pin, pinPosition: position } : pin)),
     );
+
   const tasks = tasksControl({
     tasks: pins,
     workspaces: [WORKSPACE],
     workspace: WORKSPACE,
   });
+
   return drawnSidebar(sidebarProps(tasks));
 }
 
@@ -1741,6 +1841,7 @@ test("⇧⌘↓ moves the pin that has the keyboard below the next and leaves it
     ...fakeActPortCalls(),
     [ACT_KIND.TASKS_PIN]: ({ taskId, position }) => {
       if (position !== undefined) placePin(taskId, position);
+
       return Promise.resolve(true);
     },
   });
@@ -1770,18 +1871,22 @@ test("⇧⌘↓ moves the pin that has the keyboard below the next and leaves it
   assert.deepEqual(namesIn(container, "Pinned"), ["Pin audit", "Pin review"]);
   assert.equal(document.activeElement, rowPress(container, "Pin audit"));
 
-  await act(async () => (document.activeElement as HTMLElement).blur());
+  const pinned = document.activeElement;
+  assert.ok(pinned instanceof HTMLElement);
+  await act(async () => pinned.blur());
   assert.equal(appCommandOffered(APP_COMMAND.MOVE_ROW_DOWN), false, "the keyboard left the list");
 });
 
 test("⇧⌘↓ on a task in a section moves the task within it, and ⇧⌘↑ on the section's header moves the section", async () => {
   const asked = noneAsked();
   const sidebar = await mountDraggable([INVITES, RETRIES], BOTH_IN_LAUNCH, asked);
+
   const written = () =>
     asked.writes.reduce(
       (state, write) => applySectionWrite(state, write, AFTER_FIXTURES),
       BOTH_IN_LAUNCH,
     );
+
   const before = workspaceSections(BOTH_IN_LAUNCH, WORKSPACE.id).map((section) => section.title);
 
   await act(async () => rowPress(sidebar, "Invite expiry").focus());
@@ -1809,6 +1914,7 @@ test("⇧⌘↓ on a task in a section moves the task within it, and ⇧⌘↑ o
 test("in a shared workspace, your one task standing in a section leaves Tasks saying nothing of a view that matches none", async () => {
   const shared = { ...WORKSPACE, memberCount: 2 };
   const ada = { userId: "user-ada", name: "Ada Lovelace" };
+
   const sidebar = await mountSidebar([], SECTIONS, {
     tasks: [{ ...INVITES, assignee: ada }, RETRIES],
     workspace: shared,

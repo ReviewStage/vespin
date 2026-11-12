@@ -49,13 +49,16 @@ function draw(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(withQueryClient(element)));
+
   return container;
 }
 
 /** What a reader hears of a ref: its words, the tile being hidden from a screen reader. */
 function heard(node: Node): string {
   if (node instanceof Element && node.getAttribute("aria-hidden") === "true") return "";
+
   if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? "";
+
   return [...node.childNodes].map(heard).join("");
 }
 
@@ -66,8 +69,9 @@ test("a workspace is named by its letter and its name", () => {
       size: WORKSPACE_REF_SIZE.ROW,
     }),
   );
+
   const tile =
-    view.querySelector(".ui-avatar[data-shape='tile']") ?? assert.fail("the ref draws the tile");
+    view.querySelector(".ui-avatar[data-outline='tile']") ?? assert.fail("the ref draws the tile");
 
   assert.equal(tile.textContent, "S");
   assert.equal(heard(view), "Stage");
@@ -79,15 +83,18 @@ test("a workspace with a photo is named by the photo once it loads, and the name
       workspace: { id: "workspace-photo-ref", name: "Stage", photoVersion: "5a5a5a5a5a5a5a5a" },
     }),
   );
+
   await settle();
+
   // Note that the photo is asked for once the host's read of it reaches its query.
   const image = await vi.waitFor(
     () => view.querySelector("img") ?? assert.fail("the photo is asked for"),
   );
+
   act(() => image.dispatchEvent(new Event("load")));
 
   assert.equal(image.getAttribute("src"), PHOTO_URL);
-  assert.equal(view.querySelector(".ui-avatar[data-shape='tile']")?.textContent, "");
+  assert.equal(view.querySelector(".ui-avatar[data-outline='tile']")?.textContent, "");
   assert.equal(heard(view), "Stage");
 });
 
@@ -99,6 +106,7 @@ test("a row's line stands under the name, and a search's marked name stands in f
       line: "5 members",
     }),
   );
+
   const found = draw(
     createElement(WorkspaceRef, {
       workspace: { id: "workspace-acme", name: "Acme" },
@@ -120,6 +128,7 @@ test("a workspace's card names it with who shares it: its members counted, or Pe
       personal: false,
     }),
   );
+
   const own = draw(
     createElement(WorkspaceCard, {
       workspace: { id: "workspace-personal", name: "Dana Reyes", memberCount: 1 },

@@ -79,10 +79,13 @@ const everyAgentStopped = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   const listed = yield* hostedStoreOrUnavailable(listAgents(userId, taskId));
   const agents = listed.filter((agent) => agent.id !== caller);
+
   if (!(yield* everyStopsForGood(agents))) {
     return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
   }
+
   yield* everyStoppedForGood(STOPPER, userId, agents);
+
   return new Set(agents.map((agent) => agent.id));
 });
 
@@ -111,15 +114,20 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
   GitHubApp | HttpClient.HttpClient | DatabaseServices | Sandbox
 > {
   const header = yield* hostedStoreOrUnavailable(readTaskHeader(userId, taskId));
+
   if (Option.isNone(header)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const { ownerId, status: standing } = header.value;
   const organizationId = asked.workspaceId;
+
   if (organizationId !== undefined) {
     if (ownerId !== userId) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
     const member = yield* hostedStoreOrUnavailable(isWorkspaceMember(userId, organizationId));
+
     if (!member) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
+
   const workspaceId = organizationId ?? header.value.workspaceId;
+
   const reached =
     asked.repository === undefined
       ? undefined
@@ -133,28 +141,35 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
             ),
             (each) => ({ repository: each.repository.fullName, githubAccess: each.access }),
           );
+
   const { assigneeId } = asked;
+
   // Note that the assignee the task already names passes, since a member who left stays assigned until someone changes it.
   if (assigneeId !== undefined && assigneeId !== null && assigneeId !== header.value.assigneeId) {
     const member = yield* hostedStoreOrUnavailable(isWorkspaceMember(assigneeId, workspaceId));
+
     if (!member) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   // Note that the name GitHub resolved is asked, not the one typed, so a renamed repository's old name is the one held.
   if (reached !== undefined) {
     yield* checkTreeRepository(userId, taskId, reached.repository).pipe(
-      Effect.catch((failure) =>
-        failure._tag === "TaskTreeRepositoryLocked"
-          ? Effect.fail(HOSTED_REFUSAL.CHILD_REPOSITORY_LOCKED)
-          : hostedStoreOrUnavailable(Effect.fail(failure)),
+      Effect.catchTag(
+        "TaskTreeRepositoryLocked",
+        () => Effect.fail(HOSTED_REFUSAL.CHILD_REPOSITORY_LOCKED),
+        (failure) => hostedStoreOrUnavailable(Effect.fail(failure)),
       ),
     );
   }
+
   if (asked.archived === true) yield* everyAgentStopped(userId, taskId, caller);
+
   // Note that a settle asked again of a task already there stops nothing, because a turn begun since was never confirmed.
   const stopped: ReadonlySet<string> =
     isTaskSettled(asked.status) && asked.status !== standing && asked.stopAgents === true
       ? yield* everyAgentStopped(userId, taskId, caller)
       : new Set();
+
   // Note that the archive stamp is never written, because a task is archived no longer.
   const status =
     asked.status !== undefined || asked.archived === undefined
@@ -162,6 +177,7 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
       : yield* hostedStoreOrUnavailable(
           archiveAskedStatus(userId, taskId, standing, asked.archived),
         );
+
   return {
     changes: {
       ...(asked.name === undefined ? undefined : { name: asked.name }),
@@ -200,18 +216,14 @@ export const taskChangeWritten = (
     moveGuard,
     doneTaskArchive(archivedBy, stopped),
   ).pipe(
-    Effect.catch((failure) => {
-      switch (failure._tag) {
-        case "MoveRefused":
-          return Effect.fail(failure.refusal);
-        case "TaskAssigneeNotMember":
-          return Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-        case "TaskTreeRepositoryLocked":
-          return Effect.fail(HOSTED_REFUSAL.CHILD_REPOSITORY_LOCKED);
-        default:
-          return hostedStoreOrUnavailable(Effect.fail(failure));
-      }
-    }),
+    Effect.catchTags(
+      {
+        MoveRefused: (refused) => Effect.fail(refused.refusal),
+        TaskAssigneeNotMember: () => Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST),
+        TaskTreeRepositoryLocked: () => Effect.fail(HOSTED_REFUSAL.CHILD_REPOSITORY_LOCKED),
+      },
+      (failure) => hostedStoreOrUnavailable(Effect.fail(failure)),
+    ),
   );
 
 /** The change followed through once it commits: the agents its move to Done archived let go of as an archive by hand does, and a move to Done or Canceled counted. */
@@ -221,6 +233,7 @@ export const taskChangeSettled = /* @__PURE__ */ Effect.fnUntraced(function* (
   { task, archived, statusMoved }: TaskChanged,
 ) {
   yield* archivedWithTaskLetGo(reach, archived);
+
   if (statusMoved && isTaskSettled(task.status)) {
     yield* recordServerEvent(
       SERVER_EVENT.TASK_FINISH,

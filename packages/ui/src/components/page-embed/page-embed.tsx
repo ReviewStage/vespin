@@ -26,8 +26,7 @@ import type { PageThumbFrame } from "../page-thumb/page-thumb.js";
  * hidden over a quiet ground, because the blank document it loads through is
  * light only and would flash in a dark window. The frame loads only once it
  * nears the screen where the caller asks, so a long transcript loads the
- * pages it is read past, not every page it holds. What the page draws is the
- * task's, so the frame is left out of the screen recording.
+ * pages it is read past, not every page it holds.
  *
  * It draws no controls of its own. The row each caller draws above it opens
  * the page in its tab, and the tab fills the window from the panel's own
@@ -47,17 +46,20 @@ export type PageEmbedHeight =
   | { readonly kind: typeof PAGE_EMBED_HEIGHT.CONTENT; readonly height: number }
   | { readonly kind: typeof PAGE_EMBED_HEIGHT.FILL };
 
-/** The frame's class and style for how it stands. */
-function frameSize(height: PageEmbedHeight): {
+type FrameSizeResult = {
   className: string;
   style: React.CSSProperties | undefined;
-} {
+};
+
+/** The frame's class and style for how it stands. */
+function frameSize(height: PageEmbedHeight): FrameSizeResult {
   if (height.kind === PAGE_EMBED_HEIGHT.CONTENT) {
     return {
       className: "h-page-embed",
       style: cssCustomProperties({ "--page-embed-height": `${height.height}px` }),
     };
   }
+
   return {
     className:
       height.kind === PAGE_EMBED_HEIGHT.FILL ? "h-page-embed-fill" : "h-page-embed-stand-in",
@@ -65,9 +67,12 @@ function frameSize(height: PageEmbedHeight): {
   };
 }
 
+type UseLoadedResult = { loaded: boolean; onLoaded: () => void };
+
 /** Whether the frame has loaded the page it names now, and the load to hand it. */
-function useLoaded(src: string): { loaded: boolean; onLoaded: () => void } {
+function useLoaded(src: string): UseLoadedResult {
   const [loadedFrom, setLoadedFrom] = useState<string | undefined>(undefined);
+
   return { loaded: loadedFrom === src, onLoaded: () => setLoadedFrom(src) };
 }
 
@@ -123,9 +128,10 @@ export function PageEmbed({
 }): React.JSX.Element {
   const size = frameSize(height);
   const load = useLoaded(frame.src);
+
   return (
     <div
-      className="ui-page-embed ph-no-capture bg-muted data-[loaded=true]:bg-transparent"
+      className="ui-page-embed bg-muted data-[loaded=true]:bg-transparent"
       data-loaded={String(load.loaded)}
     >
       <LiveFrame

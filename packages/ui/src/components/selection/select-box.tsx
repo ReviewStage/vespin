@@ -80,8 +80,10 @@ export function SelectBox({
   place: SelectBoxPlace;
 }): React.JSX.Element | null {
   const selecting = useContext(ListSelectionContext);
+
   if (selecting === undefined) return null;
   const chosen = selecting.selected.has(selectKey);
+
   return (
     <ShadcnCheckbox
       className={cn(BOX, PLACED[place])}

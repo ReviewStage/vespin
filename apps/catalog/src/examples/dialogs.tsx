@@ -49,6 +49,7 @@ interface DialogBody {
 function RenameDialog({ open, onClose }: DialogBody): React.JSX.Element {
   const [name, setName] = useState("Launch checklist");
   const field = useRef<HTMLInputElement | null>(null);
+
   return (
     <Dialog
       open={open}
@@ -79,6 +80,7 @@ function RenameDialog({ open, onClose }: DialogBody): React.JSX.Element {
 function DeleteDialog({ open, onClose }: DialogBody): React.JSX.Element {
   const cancel = useRef<HTMLButtonElement | null>(null);
   const bodyId = useId();
+
   return (
     <Dialog
       open={open}
@@ -114,6 +116,7 @@ function NoteDialog({ open, onClose }: DialogBody): React.JSX.Element {
   const [note, setNote] = useState("");
   const [dropping, setDropping] = useState(false);
   const field = useRef<HTMLTextAreaElement | null>(null);
+
   return (
     <Dialog
       open={open}
@@ -165,6 +168,7 @@ function NoteDialog({ open, onClose }: DialogBody): React.JSX.Element {
 function ComposerDialog({ open, onClose }: DialogBody): React.JSX.Element {
   const [words, setWords] = useState("");
   const field = useRef<HTMLTextAreaElement | null>(null);
+
   return (
     <Dialog
       open={open}
@@ -196,6 +200,7 @@ function ComposerDialog({ open, onClose }: DialogBody): React.JSX.Element {
 /** A picture opened over the window, the card fitted to it under a bar naming it. */
 function PictureDialog({ open, onClose }: DialogBody): React.JSX.Element {
   const titleId = useId();
+
   return (
     <Dialog open={open} size={DIALOG_SIZE.MEDIA} labelledBy={titleId} onDismiss={onClose}>
       <div className="catalog-media-bar">
@@ -214,6 +219,7 @@ function PictureDialog({ open, onClose }: DialogBody): React.JSX.Element {
 /** A picture opened bare over the dimmed window, below its top bar, in a card of its own under a bar naming it. */
 function WindowPictureDialog({ open, onClose }: DialogBody): React.JSX.Element {
   const titleId = useId();
+
   return (
     <Dialog open={open} size={DIALOG_SIZE.WINDOW} labelledBy={titleId} onDismiss={onClose}>
       <DialogCard>
@@ -241,10 +247,12 @@ function Opener({
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [openings, setOpenings] = useState(0);
+
   const show = () => {
     setOpen(true);
     setOpenings((count) => count + 1);
   };
+
   return (
     <>
       <Button variant={BUTTON_VARIANT.OUTLINE} aria-haspopup="dialog" onClick={show}>

@@ -24,7 +24,8 @@ import { visibleViewport } from "@repo/ui/visible-viewport";
 import { type AnyExtension, type ChainedCommands, type Editor, Extension } from "@tiptap/core";
 import { keydownHandler } from "@tiptap/pm/keymap";
 import type { ResolvedPos } from "@tiptap/pm/model";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { NodeSelection, Plugin, PluginKey } from "@tiptap/pm/state";
+import { Predicate } from "effect";
 import type { EditorBox, EditorFormat, EditorFormatDoors, EditorFormatting } from "./contract.js";
 import { keymapName, selectionTouchesCell } from "./writing-keys.js";
 
@@ -78,12 +79,17 @@ const TURNS = {
 /** The block the text block at `$at` stands as: a heading or code by its own kind, a paragraph by what wraps it; none for a heading the vocabulary has no name for. */
 function blockAt($at: ResolvedPos): WritingBlock | undefined {
   const own = $at.parent;
+
   if (own.type.name === "heading") return HEADING_BLOCKS.get(Number(own.attrs.level));
+
   if (own.type.name === "codeBlock") return WRITING_BLOCK.CODE_BLOCK;
+
   for (let depth = $at.depth - 1; depth > 0; depth -= 1) {
     const wrapped = WRAPPING_BLOCKS.get($at.node(depth).type.name);
+
     if (wrapped !== undefined) return wrapped;
   }
+
   return own.type.name === "paragraph" ? WRITING_BLOCK.TEXT : undefined;
 }
 
@@ -94,31 +100,37 @@ function touchedBlocks(editor: Editor): ReadonlySet<WritingBlock | undefined> {
   doc.nodesBetween(selection.from, selection.to, (node, pos) => {
     if (!node.isTextblock) return true;
     blocks.add(blockAt(doc.resolve(pos + 1)));
+
     return false;
   });
+
   return blocks;
 }
 
 /**
- * The selection as a format toolbar reads it now. Note that a selection
- * touching no text block holds no words, as a divider selected whole holds
- * none, so no toolbar stands over it and ⌘K goes on to the window.
+ * The selection as a format toolbar reads it now. Note that a node selected
+ * whole holds no words, a picture in its paragraph as a divider, and nor
+ * does a selection touching no text block, so no toolbar stands over either
+ * and ⌘K goes on to the window; a node with tools of its own, a picture's,
+ * shows those alone.
  */
 function formatOf(editor: Editor): EditorFormat {
-  const { from, to, empty, $from } = editor.state.selection;
+  const { selection } = editor.state;
+  const { from, to, empty, $from } = selection;
   const touched = touchedBlocks(editor);
   const blocks = touched.size === 0 ? new Set([blockAt($from)]) : touched;
   const linked = editor.isActive(MARK_NAMES[WRITING_MARK.LINK]);
   const href: unknown = editor.getAttributes(MARK_NAMES[WRITING_MARK.LINK]).href;
+
   return {
     from,
     to,
-    empty: empty || touched.size === 0,
+    empty: empty || touched.size === 0 || selection instanceof NodeSelection,
     code: blocks.has(WRITING_BLOCK.CODE_BLOCK),
     cell: selectionTouchesCell(editor.state),
     marks: WRITING_MARKS.filter((mark) => editor.isActive(MARK_NAMES[mark])),
     block: blocks.size === 1 ? [...blocks][0] : undefined,
-    link: linked && typeof href === "string" ? href : undefined,
+    link: linked && Predicate.isString(href) ? href : undefined,
   };
 }
 
@@ -141,8 +153,10 @@ function shownBox(lines: readonly DOMRect[], seen: EditorBox): EditorBox | undef
   const shown = lines.some((line) => shows(seen, line))
     ? lines.filter((line) => shows(seen, line))
     : lines;
+
   if (shown.length === 0) return undefined;
   const held = (at: number, low: number, high: number) => Math.min(Math.max(at, low), high);
+
   return {
     left: held(Math.min(...shown.map((line) => line.left)), seen.left, seen.right),
     top: held(Math.min(...shown.map((line) => line.top)), seen.top, seen.bottom),
@@ -161,6 +175,7 @@ function shownBox(lines: readonly DOMRect[], seen: EditorBox): EditorBox | undef
  */
 function selectionBox(editor: Editor): EditorBox | undefined {
   const { view, state } = editor;
+
   try {
     const start = view.domAtPos(state.selection.from);
     const end = view.domAtPos(state.selection.to);
@@ -169,6 +184,7 @@ function selectionBox(editor: Editor): EditorBox | undefined {
     range.setEnd(end.node, end.offset);
     const seen = cutTo(visibleViewport(), [view.dom, ...clipsAround(view.dom)]);
     const lines = [...range.getClientRects()];
+
     // Note that a range a page lays out as no lines, a collapsed caret's say, is still measured whole.
     return shownBox(lines.length === 0 ? [range.getBoundingClientRect()] : lines, seen);
   } catch {
@@ -180,6 +196,7 @@ function selectionBox(editor: Editor): EditorBox | undefined {
 /** The blocks the selection stands in turned into `block`: a list into another list in place, anything else through plain paragraphs. */
 export function turnInto(editor: Editor, block: WritingBlock): void {
   const now = formatOf(editor).block;
+
   if (now === block) return;
   const chain = editor.chain();
   const between = now !== undefined && LIST_BLOCKS.has(now) && LIST_BLOCKS.has(block);
@@ -196,6 +213,7 @@ function setLink(editor: Editor, href: string | undefined): void {
   const chain = editor.state.selection.empty
     ? editor.chain().extendMarkRange(MARK_NAMES[WRITING_MARK.LINK])
     : editor.chain();
+
   (href === undefined ? chain.unsetLink() : chain.setLink({ href })).run();
 }
 
@@ -222,6 +240,7 @@ export function editorFormatting(editor: Editor): EditorFormatting {
  */
 export function formatReports(doors: EditorFormatDoors | undefined): AnyExtension[] {
   if (doors === undefined) return [];
+
   return [
     Extension.create({
       name: "formatReports",
@@ -233,14 +252,18 @@ export function formatReports(doors: EditorFormatDoors | undefined): AnyExtensio
       },
       addProseMirrorPlugins() {
         const editor = this.editor;
+
         const answer = keydownHandler({
           [keymapName({ key: SHORTCUT_KEY.K })]: () => {
             const format = formatOf(editor);
+
             if (format.code || (format.empty && format.link === undefined)) return false;
             doors.onLink();
+
             return true;
           },
         });
+
         return [
           new Plugin({
             key: new PluginKey("linkChord"),
@@ -248,6 +271,7 @@ export function formatReports(doors: EditorFormatDoors | undefined): AnyExtensio
               handleKeyDown: (view, event) => {
                 if (!answer(view, event)) return false;
                 event.stopPropagation();
+
                 return true;
               },
             },
