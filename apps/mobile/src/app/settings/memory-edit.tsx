@@ -189,7 +189,10 @@ function MemoryEditor({
           <EmptyState title={MEMORY_EDITOR_WORDS.GONE} symbol={MEMORY_SYMBOL} />
         ) : (
           <SettingsForm>
-            <ListSection footer={note ?? (tooLong ? MEMORY_EDITOR_WORDS.TOO_LONG : undefined)}>
+            <ListSection
+              // Note that the words' length is said over an earlier refusal, since it is what holds Save now.
+              footer={tooLong ? MEMORY_EDITOR_WORDS.TOO_LONG : note}
+            >
               <WordsField
                 placeholder={MEMORY_EDITOR_WORDS.PLACEHOLDER}
                 initialWords={saved}
