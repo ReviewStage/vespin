@@ -13,7 +13,8 @@
  * stands and read from its task's own inbox; the Tasks
  * tab: its tree, read from the same list, a task's status set, pin, read
  * mark, rename, and delete, a task moved into a section from its menu or
- * dragged into one on an iPad, its repository changed, and a task's
+ * dragged into one on an iPad, its repository changed, its parent, sub-tasks,
+ * and blocks added, changed, and taken away, and a task's
  * description, pages, and comment threads followed, with a reply on a
  * thread; an agent's page: a message sent or
  * queued, its queue steered, its turn stopped, its model, effort, Fast,
@@ -374,9 +375,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_REPOSITORIES_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_SET_REPOSITORY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_MOVE]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_BLOCK]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_SET_PARENT]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_CHANGE_RELATION]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_BLOCK]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_SET_PARENT]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_CHANGE_RELATION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_EDIT]: panel(IOS.TASKS),
   [PORT_ACT_KIND.GITHUB_OPEN]: panel(IOS.LINKS),
   [PORT_ACT_KIND.WEB_OPEN]: panel(IOS.LINKS),

@@ -36,7 +36,7 @@ import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
-import { RowFrame, RowHead, type RowSwipe, rowPlacement } from "./list-row.js";
+import { RowFrame, RowHead, type RowSubmenu, type RowSwipe, rowPlacement } from "./list-row.js";
 import { Markdown } from "./markdown.js";
 import {
   AgentTile,
@@ -290,18 +290,32 @@ type RelationRowProps = {
   readonly id: string;
   readonly name: string;
   readonly status: TaskStatus | undefined;
-  /** How the task stands to this one: "Sub-task", "Blocked by", "Blocks". */
+  /** How the task stands to this one: "Sub-task", "Blocked by", "Blocks"; or, in a picker, its key or why it cannot be picked. */
   readonly relation: string;
+  /** Whether it cannot be picked, which mutes its words, as a picker dims a task that cannot take the relation. */
+  readonly faded?: boolean | undefined;
+  /** What a swipe from the trailing edge reveals, such as Remove relation. */
+  readonly trailingActions?: readonly RowSwipe[] | undefined;
+  /** Menus its long press menu holds, such as Change relation. */
+  readonly menuSubmenus?: readonly RowSubmenu[] | undefined;
 };
 
-/** A task related to the one shown: its status ring and name, and at the line's end how it stands to this one. */
-export function RelationRow({ id, name, status, relation }: RelationRowProps) {
+/** A task related to the one shown, or one a picker offers: its status ring and name, and at the line's end how it stands to this one, its swipe and long press holding what changes that. */
+export function RelationRow({
+  id,
+  name,
+  status,
+  relation,
+  faded = false,
+  trailingActions,
+  menuSubmenus,
+}: RelationRowProps) {
   const colors = useColors();
 
   const row: ReactElement = (
     <RowHead
       unread={false}
-      faded={false}
+      faded={faded}
       lead={
         status === undefined ? (
           <ToneGlyph glyph="doc.text" tone={STATUS_TONE.NEUTRAL} textStyle={TYPE_ROLE.ROW_LINE} />
@@ -310,7 +324,7 @@ export function RelationRow({ id, name, status, relation }: RelationRowProps) {
         )
       }
       title={name}
-      ink={colors.TEXT_BODY}
+      ink={faded ? colors.TEXT_MUTED : colors.TEXT_BODY}
       end={<EndWords words={relation} />}
     />
   );
@@ -319,6 +333,8 @@ export function RelationRow({ id, name, status, relation }: RelationRowProps) {
     <RowFrame
       id={id}
       row={row}
+      trailingActions={trailingActions}
+      menuSubmenus={menuSubmenus}
       heard={{
         label: name,
         value: [status === undefined ? undefined : TASK_STATUS_WORDS[status], relation],

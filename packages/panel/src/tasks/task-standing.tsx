@@ -1,4 +1,5 @@
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
+import type { TaskRelationSubject } from "@repo/features/task-relation-model";
 import {
   NO_ASSIGNEE_WORDS,
   TASK_PRIORITY_WORDS,
@@ -46,11 +47,7 @@ import { Highlighted } from "../search-field.js";
 import { Picker } from "../settings/picker-row.js";
 import { useTaskCard } from "./chip-cards.js";
 import { type RepositoryChooser, useRepositoryMenu } from "./repository-chip.js";
-import {
-  TaskRelationAsked,
-  type TaskRelationSubject,
-  type TaskRelationsDoor,
-} from "./task-relation-menu.js";
+import { TaskRelationAsked, type TaskRelationsDoor } from "./task-relation-menu.js";
 
 /**
  * task-standing.tsx -- a task's head over its description: the path to it, then the chips that say and change where it stands, how much it matters, and who is on it.
