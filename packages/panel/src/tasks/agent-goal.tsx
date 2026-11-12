@@ -5,8 +5,10 @@
  * (`agent-published.tsx`): the goal's condition on one line, where it stands
  * at the row's end, the goal whole and how far it has run in the card its
  * hint hangs, a press bringing in its newest notice, and its ⋯ and
- * right-click offering Copy goal and Clear goal. A paused goal says so on
- * its own row, its Resume standing there. The notices are what the goal
+ * right-click offering Copy goal and Clear goal. A goal that wants the
+ * developer says so on its own row, in its tone (`goalTone`): paused or out
+ * of budget in the attention tone, a paused one's Resume standing on it, and
+ * one that can't be met in the danger tone. The notices are what the goal
  * did, where it did it: its setting and each verdict of the checker as a
  * card a check's line is drawn as (`line-cards.tsx`), the checker's reason
  * in its fold, and a pause or a resume as a trail across the transcript, as
@@ -22,6 +24,7 @@ import {
 } from "@repo/features/agent-goal-model";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
 import {
+  AttentionMark,
   BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
@@ -31,7 +34,6 @@ import {
   HoverCardHead,
   HoverCardNote,
   HoverCardRule,
-  LIST_ROW_ACTIONS,
   LIST_VARIANT,
   List,
   ListRow,
@@ -43,7 +45,7 @@ import {
   RowHint,
   RowHintOptions,
   STATUS_TONE,
-  StatusWords,
+  type StatusTone,
   TIME_LOOK,
   Time,
 } from "@repo/ui";
@@ -91,17 +93,21 @@ function spentWords(goal: AgentGoal): string {
     : `${TOKENS.format(goal.tokens)} of ${TOKENS.format(goal.tokenBudget)} tokens`;
 }
 
-/** The goal's mark: what it stands at once it settled or paused, its own glyph while it runs. */
-function GoalMark({ goal }: { goal: AgentGoal }): ReactNode {
+/**
+ * The tone of a goal that wants the developer: paused or out of budget,
+ * which only they can set going again, or one the checker found can't be
+ * met; none for a goal under way, stopped, or met, which wants nothing of
+ * them.
+ */
+function goalTone(goal: AgentGoal): StatusTone | undefined {
   switch (goal.state) {
-    case AGENT_GOAL_STATE.MET:
-      return <CircleCheckIcon />;
-    case AGENT_GOAL_STATE.IMPOSSIBLE:
-      return <CircleSlashIcon />;
     case AGENT_GOAL_STATE.PAUSED:
-      return <PauseIcon />;
+    case AGENT_GOAL_STATE.BUDGET_LIMITED:
+      return STATUS_TONE.ATTENTION;
+    case AGENT_GOAL_STATE.IMPOSSIBLE:
+      return STATUS_TONE.DANGER;
     default:
-      return <GLYPH.GOAL />;
+      return undefined;
   }
 }
 
@@ -109,13 +115,23 @@ function GoalMark({ goal }: { goal: AgentGoal }): ReactNode {
 function GoalStanding({ goal, working }: { goal: AgentGoal; working: boolean }): ReactNode {
   switch (goal.state) {
     case AGENT_GOAL_STATE.PAUSED:
-      return <StatusWords tone={STATUS_TONE.ATTENTION}>Paused</StatusWords>;
+      return (
+        <span className="inline-flex items-center gap-tight-gap font-label text-attention">
+          <AttentionMark />
+          Paused
+        </span>
+      );
     case AGENT_GOAL_STATE.MET:
       return <span className="text-muted-foreground">{`Met · ${goal.turns} turns`}</span>;
     case AGENT_GOAL_STATE.IMPOSSIBLE:
-      return <StatusWords tone={STATUS_TONE.DANGER}>Can't be met</StatusWords>;
+      return <span className="font-label text-danger">Can't be met</span>;
     case AGENT_GOAL_STATE.BUDGET_LIMITED:
-      return <span className="text-muted-foreground">Budget reached</span>;
+      return (
+        <span className="inline-flex items-center gap-tight-gap font-label text-attention">
+          <AttentionMark />
+          Budget reached
+        </span>
+      );
     default:
       // Note that a goal whose agent stopped working is still set, and the harness picks it up again on the next message.
       return working ? (
@@ -135,7 +151,7 @@ function GoalCard({ goal, working }: { goal: AgentGoal; working: boolean }): Rea
 
   return (
     <HoverCard>
-      <HoverCardHead glyph={<GoalMark goal={goal} />} name={goal.condition} sub={GOAL_THING} />
+      <HoverCardHead glyph={<GLYPH.GOAL />} name={goal.condition} sub={GOAL_THING} />
       {goal.reason === null ? null : <HoverCardNote>{goal.reason}</HoverCardNote>}
       {stopped ? (
         <HoverCardNote>
@@ -209,7 +225,7 @@ export function GoalDock({
     paused && onResume !== undefined ? (
       <Button
         size={BUTTON_SIZE.COMPACT}
-        variant={BUTTON_VARIANT.QUIET}
+        variant={BUTTON_VARIANT.OUTLINE}
         icon={<PlayIcon />}
         onClick={onResume}
       >
@@ -222,7 +238,7 @@ export function GoalDock({
       <List label={GOAL_THING} variant={LIST_VARIANT.CARD} fingerTall>
         <RowHintOptions card={<GoalCard goal={goal} working={working} />}>
           <ListRow
-            leading={<GoalMark goal={goal} />}
+            leading={<GLYPH.GOAL />}
             title={goal.condition}
             titleReplayMasked
             meta={<GoalStanding goal={goal} working={working} />}
@@ -230,11 +246,10 @@ export function GoalDock({
             onPress={() => onBringIn(goal.messageId)}
             menu={menu}
             more={!coarse}
-            muted={settled}
-            // Note that a paused goal holds its Resume on its row, standing, so the pause is said where the goal is.
-            {...(resume === undefined
-              ? undefined
-              : { actions: resume, actionsAt: LIST_ROW_ACTIONS.ALWAYS })}
+            muted={goal.state === AGENT_GOAL_STATE.MET}
+            tone={goalTone(goal)}
+            // Note that a paused goal holds its Resume on its row at rest, since the agent waits on the developer's press.
+            {...(resume === undefined ? undefined : { actions: resume })}
           />
         </RowHintOptions>
       </List>

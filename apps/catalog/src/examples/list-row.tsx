@@ -271,6 +271,35 @@ function ListRows(): React.JSX.Element {
           <Members />
         </div>
       </CatalogSection>
+      <CatalogSection
+        id="list-row-tone"
+        title="Rows that want a person, or can't go on, in their tone"
+      >
+        <div className="catalog-column">
+          <List label="Goals" variant={LIST_VARIANT.CARD}>
+            <ListRow
+              leading={<GLYPH.GOAL />}
+              title="Every billing test passes"
+              meta="Turn 3 · 12m"
+              onPress={() => undefined}
+            />
+            <ListRow
+              leading={<GLYPH.GOAL />}
+              title="CI on the release branch is green"
+              meta="Paused"
+              tone={STATUS_TONE.ATTENTION}
+              onPress={() => undefined}
+            />
+            <ListRow
+              leading={<GLYPH.GOAL />}
+              title="The suite passes against the live Stripe account"
+              meta="Can't be met"
+              tone={STATUS_TONE.DANGER}
+              onPress={() => undefined}
+            />
+          </List>
+        </div>
+      </CatalogSection>
       <CatalogSection id="list-row-unread" title="Unread rows beside read ones">
         <div className="catalog-column">
           <List label="Inbox items">

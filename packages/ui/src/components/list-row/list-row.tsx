@@ -23,6 +23,7 @@ import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import { said } from "../../said.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { Checkbox as ShadcnCheckbox } from "../../shadcn/checkbox.js";
+import type { StatusTone } from "../../status-tone.js";
 import { useClipped } from "../../use-clipped.js";
 import { BUTTON_SIZE } from "../button/button.js";
 import { motionKey, motionRows } from "../list-motion/list-motion.js";
@@ -393,6 +394,10 @@ const MAIN_BUTTON_CLASS = `${MAIN_CLASS} cursor-press disabled:cursor-default`;
 const LEADING_CLASS =
   "ui-list-row-leading col-[leading] me-icon-gap inline-flex text-muted-foreground [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon";
 
+/** The leading mark of a row in a tone (`tone`), in the tone's ink rather than muted. */
+const LEADING_TONED_CLASS =
+  "ui-list-row-leading col-[leading] me-icon-gap inline-flex text-tone-ink [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon";
+
 /** The row's end, its metadata and its chevron, at the end of its track, so it lines up with the acts that share it. */
 const END_CLASS =
   "ui-list-row-end col-[end] ms-icon-gap flex min-w-0 items-center justify-self-end gap-icon-gap";
@@ -646,6 +651,7 @@ export function ListRow({
   current,
   unread,
   muted,
+  tone,
   latent = false,
   hint,
   density,
@@ -714,6 +720,8 @@ export function ListRow({
   unread?: boolean | undefined;
   /** Whether what the row stands for is done with, so the row stands back, its words in quieter inks and its marks faded, its fill and acts as they are. */
   muted?: boolean | undefined;
+  /** Where what the row stands for stands, where it wants a person or can't go on (`STATUS_TONE.ATTENTION`, `STATUS_TONE.DANGER`): its ground in the tone's tint and its leading mark in its ink; none for a row at rest. Its words still say why. */
+  tone?: StatusTone | undefined;
   /**
    * Whether the row stands unseen until the pointer or the keyboard reaches
    * it, keeping a way back to something put away in the place it stood; a
@@ -948,7 +956,10 @@ export function ListRow({
   const face = (
     <>
       {said(mark) ? (
-        <span className={LEADING_CLASS} aria-hidden="true">
+        <span
+          className={tone === undefined ? LEADING_CLASS : LEADING_TONED_CLASS}
+          aria-hidden="true"
+        >
           {mark}
         </span>
       ) : null}
@@ -1123,6 +1134,7 @@ export function ListRow({
         }
         data-unread={unread === true ? "true" : undefined}
         data-muted={muted === true ? "true" : undefined}
+        data-tone={tone}
         data-latent={latent ? "true" : undefined}
         data-density={density}
         data-ink={ink}
