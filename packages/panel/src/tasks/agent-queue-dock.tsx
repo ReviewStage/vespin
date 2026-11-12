@@ -33,6 +33,7 @@ import { confirmFailure } from "../failure-report.js";
 import { type Directory, useMemberDirectory } from "../member-directory.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { KeptFileChips, WordFilesOf } from "./agent-pictures.js";
+import { filesBesideWords } from "./file-chips.js";
 import { SentWords } from "./skill-chip.js";
 
 /**
@@ -190,6 +191,9 @@ export function AgentQueueDock({
           {messages.map((message) => {
             const edited = message.id === editing || message.editing === true;
             const queuer = queuerOf(message, directory);
+            const files = queuedFileChips(message);
+            // Note that the files the words name stand in them, so a row whose words name every file draws no line of files over them.
+            const beside = filesBesideWords(files, message.text);
 
             return (
               <ListRow
@@ -204,19 +208,15 @@ export function AgentQueueDock({
                   </span>
                 }
                 title={
-                  <WordFilesOf files={queuedFileChips(message)} words={message.text}>
+                  <WordFilesOf files={files} words={message.text}>
                     <OneLine words={message.text}>
                       <SentWords text={message.text} line />
                     </OneLine>
                   </WordFilesOf>
                 }
                 attachments={
-                  message.files === undefined ? undefined : (
-                    // Note that the row holds the files the words do not name: one sent before markers, or named in code.
-                    <WordFilesOf files={queuedFileChips(message)} words={message.text}>
-                      <KeptFileChips files={queuedFileChips(message)} />
-                    </WordFilesOf>
-                  )
+                  // Note that the row holds the files the words do not name: one sent before markers, or named in code.
+                  beside.length === 0 ? undefined : <KeptFileChips files={beside} />
                 }
                 attachmentsOpen
                 meta={queuer === undefined ? undefined : <ActorRef actor={queuer} faceOnly />}
