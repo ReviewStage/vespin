@@ -13,7 +13,14 @@ import {
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
-import { subTasksOf, taskFinished } from "@repo/features/task-list-model";
+import {
+  CHANGE_REPOSITORY,
+  CHOOSE_REPOSITORY,
+  NO_REPOSITORY,
+  subTasksOf,
+  taskFinished,
+} from "@repo/features/task-list-model";
+import { MOVE_TO_SECTION, REMOVE_FROM_SECTION } from "@repo/features/task-sections-model";
 import {
   NO_ASSIGNEE_WORDS,
   TASK_PRIORITY_WORDS,
@@ -89,6 +96,7 @@ import {
   type StatusQuestion,
   type TaskAgentLine,
   type TaskOverview,
+  type TaskPlacing,
   type TasksListing,
   useDeleteAsk,
   useListingAsks,
@@ -202,9 +210,108 @@ function statusSubmenu(
   };
 }
 
+/**
+ * A task's Move to section as a menu, as the panel's offers it: the member's
+ * sections of its workspace, the one it stands in checked, a press putting it
+ * on top of another, and Remove from section under them while it stands in
+ * one; none where the member keeps no section and it stands in none.
+ */
+function sectionSubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | undefined {
+  const standing = placing.sectionOf(task.id);
+
+  if (placing.sections.length === 0 && standing === undefined) return undefined;
+
+  return {
+    label: MOVE_TO_SECTION,
+    symbol: "folder",
+    choices: placing.sections.map((section) => ({
+      label: section.title,
+      on: section.id === standing,
+      onPress: () => {
+        if (section.id !== standing) placing.moveToSection(task.id, section.id);
+      },
+    })),
+    actions:
+      standing === undefined
+        ? []
+        : [
+            {
+              label: REMOVE_FROM_SECTION,
+              symbol: "folder.badge.minus",
+              tone: ROW_ACTION_TONE.NEUTRAL,
+              onPress: () => placing.moveToSection(task.id, null),
+            },
+          ],
+  };
+}
+
+/**
+ * A task's repository as a menu, as the panel's Change repository offers it,
+ * named Choose a repository while it has none: the repositories its
+ * workspace's GitHub reaches, the one it works in checked, and No repository
+ * under them while it has one; none where there is nothing to pick.
+ */
+function repositorySubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | undefined {
+  const current = task.repository ?? null;
+
+  // Note that a repository the workspace no longer reaches still stands checked, so the menu says where the task works.
+  const listed =
+    current === null || placing.repositories.includes(current)
+      ? placing.repositories
+      : [current, ...placing.repositories];
+
+  if (listed.length === 0) return undefined;
+
+  return {
+    label: current === null ? CHOOSE_REPOSITORY : CHANGE_REPOSITORY,
+    symbol: "chevron.left.forwardslash.chevron.right",
+    choices: listed.map((repository) => ({
+      label: repository,
+      on: repository === current,
+      onPress: () => {
+        if (repository !== current) placing.setRepository(task.id, repository);
+      },
+    })),
+    actions:
+      current === null
+        ? []
+        : [
+            {
+              label: NO_REPOSITORY,
+              symbol: "xmark.circle",
+              tone: ROW_ACTION_TONE.NEUTRAL,
+              onPress: () => placing.setRepository(task.id, null),
+            },
+          ],
+  };
+}
+
+/** A task's menus where it is moved: Move to section and its repository, each where it offers something. */
+function placingSubmenus(task: TaskSummary, placing: TaskPlacing): readonly RowSubmenu[] {
+  return [sectionSubmenu(task, placing), repositorySubmenu(task, placing)].filter(
+    (submenu): submenu is RowSubmenu => submenu !== undefined,
+  );
+}
+
+/** A row's menu as a bar's ⋯ holds it, its acts' tones read as the bar reads them. */
+function barSubmenu(submenu: RowSubmenu): BarMenu {
+  return {
+    label: submenu.label,
+    symbol: submenu.symbol,
+    choices: submenu.choices,
+    actions: (submenu.actions ?? []).map((action) => ({
+      label: action.label,
+      symbol: action.symbol,
+      destructive: action.tone === ROW_ACTION_TONE.DESTRUCTIVE,
+      onPress: action.onPress,
+    })),
+  };
+}
+
 type RowActsResult = {
   readonly trailingActions: readonly RowSwipe[];
   readonly leadingActions: readonly RowSwipe[];
+  readonly menuSubmenus: readonly RowSubmenu[];
   readonly menuActions: readonly RowAction[];
 };
 
@@ -213,11 +320,11 @@ type RowActsResult = {
  * trailing swipe Mark done, offered on a task not yet done, which a full
  * swipe runs, and Status; behind its leading swipe Pin or Unpin, whichever
  * the task is not, which a full swipe runs; and in its long press menu,
- * after those, the panel's order: Copy link, which raises the share sheet,
- * Rename, in the system's name alert, Mark as read or unread, whichever the
- * task is not, Open in browser, and Permanently delete last, which asks
- * first. Move to section, priority, and assignee are left to the desktop
- * and the web.
+ * after those, Move to section and its repository (`placingSubmenus`), then
+ * the panel's order: Copy link, which raises the share sheet, Rename, in
+ * the system's name alert, Mark as read or unread, whichever the task is
+ * not, Open in browser, and Permanently delete last, which asks first.
+ * Priority and assignee are left to the desktop and the web.
  */
 function rowActs(task: TaskSummary, unread: boolean, listing: TasksListing): RowActsResult {
   const pinned = task.pinnedAt !== undefined;
@@ -244,6 +351,7 @@ function rowActs(task: TaskSummary, unread: boolean, listing: TasksListing): Row
         onPress: () => listing.pin(task.id, !pinned),
       },
     ],
+    menuSubmenus: placingSubmenus(task, listing.placing),
     menuActions: [
       {
         label: WORDS.COPY_LINK,
@@ -574,8 +682,9 @@ interface TaskMenuDoors {
 
 /**
  * What a task's ⋯ holds, in the panel's order: Copy link, Rename, New
- * sub-task, Open in browser, and Permanently delete, red and last, which asks
- * first; and its Status, each status checked where it stands.
+ * sub-task, Open in browser, and Permanently delete, red, which asks first;
+ * then its Status, each status checked where it stands, Move to section,
+ * and its repository.
  */
 function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
   const { task } = overview;
@@ -608,7 +717,10 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
         onPress: () => doors.askDelete(task),
       },
     ],
-    submenus: [{ ...statusSubmenu(task, overview.setStatus), actions: [] }],
+    submenus: [
+      { ...statusSubmenu(task, overview.setStatus), actions: [] },
+      ...placingSubmenus(task, overview.placing).map(barSubmenu),
+    ],
   };
 }
 
@@ -1202,6 +1314,16 @@ export function TaskScreen() {
                     onPress={choice.onPress}
                   >
                     {choice.label}
+                  </Stack.Toolbar.MenuAction>
+                ))}
+                {submenu.actions.map((action) => (
+                  <Stack.Toolbar.MenuAction
+                    key={action.label}
+                    icon={action.symbol}
+                    destructive={action.destructive === true}
+                    onPress={action.onPress}
+                  >
+                    {action.label}
                   </Stack.Toolbar.MenuAction>
                 ))}
               </Stack.Toolbar.Menu>
