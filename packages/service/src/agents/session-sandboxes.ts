@@ -28,10 +28,8 @@
  * Every outcome is a log line of its own, so a stuck or runaway release
  * shows.
  *
- * An agent's archive deletes nothing (`archivedInBackground`): where the
- * workspace keeps an archive script for the agent's repository, its sandbox
- * runs it (`archive-script.ts`), and a local agent's archive queues its
- * device a discard line (`device-discard.ts`). A deleted workspace's agents'
+ * An agent's archive deletes nothing (`archivedInBackground`): a local
+ * agent's archive queues its device a discard line (`device-discard.ts`). A deleted workspace's agents'
  * sandboxes are deleted at once (`deletedWithWorkspace`), from the
  * sessions its delete read while they stood, and so are its drives
  * (`workspace-drive.ts`), which no agent owns; a
@@ -49,11 +47,9 @@ import {
   releasableAgentSandboxes,
   settleAgentSandboxRelease,
 } from "@repo/database/models/agent-sandboxes";
-import { type Agent, readAgent } from "@repo/database/models/agent-store";
-import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
+import type { Agent } from "@repo/database/models/agent-store";
 import { hasOpenTurn } from "@repo/database/models/turn-state";
 import { AGENT_SANDBOX_STATE } from "@repo/database/schemas/agent-sandbox";
-import { CLOUD_SETUP_SCRIPT } from "@repo/features/workspace-sandbox-setup-wire";
 import { causeKind, failureKind } from "@repo/runtime/effect";
 import {
   deletedFilledDrive,
@@ -78,17 +74,9 @@ import { AUTH_DEPLOYMENT_ENVIRONMENT, DEPLOYMENT_ENVIRONMENT } from "../auth/aut
 import { afterResponse } from "../http/after-response.js";
 import { QUEUE_ACKNOWLEDGED, queueConsumer } from "../queues/queue-consumer.js";
 import { SESSION_TAG } from "./agent-sandbox-open.js";
-import {
-  ARCHIVE_SCRIPT,
-  type ArchiveScript,
-  type ArchiveScriptRan,
-  archiveScriptOf,
-  archiveScriptRun,
-} from "./archive-script.js";
-import { holdingRunner, holdingRunnerIfFree } from "./coder-host/runner-lease.js";
+import { holdingRunnerIfFree } from "./coder-host/runner-lease.js";
 import { discardedOrLogged } from "./device-discard.js";
 import { SANDBOX_RELEASE } from "./sandbox-release-bounds.js";
-import { scriptRanIn } from "./script-runs.js";
 
 const ARCHIVE_DELETE = {
   /**
@@ -100,16 +88,6 @@ const ARCHIVE_DELETE = {
    * deleted before the drive, is the same few calls and runs under the same.
    */
   TIMEOUT: Duration.seconds(15),
-  /**
-   * The most the archived agents' archive scripts run, all at once, each in
-   * its own sandbox: a stopped sandbox's resume and the script's own bound
-   * (`ARCHIVE_SCRIPT`), with room for the calls around them; past it every
-   * script still running is left.
-   */
-  SCRIPT_TIMEOUT: Duration.sum(
-    Duration.sum(ARCHIVE_SCRIPT.RESUME_TIMEOUT, ARCHIVE_SCRIPT.RUN_TIMEOUT),
-    Duration.seconds(15),
-  ),
   /** How many local agents of an archived task are let go of, or sandboxes and drives of a deleted workspace deleted, at once. */
   CONCURRENCY: 5,
 } as const;
@@ -120,16 +98,6 @@ export interface SessionSandboxesService {
    * owns (`Sandbox`'s `delete`); answers how many were deleted.
    */
   readonly deleteFor: (sessionId: string) => Effect.Effect<number, SandboxError>;
-  /**
-   * Runs the archive script in the session's newest sandbox, resumed first
-   * where it stopped, within its bounds (`archive-script.ts`), logging how it
-   * ended; answers when it started and how it exited, or nothing where it
-   * did not exit, and fails only where the sandbox refused a call.
-   */
-  readonly archiveFor: (
-    sessionId: string,
-    archive: ArchiveScript,
-  ) => Effect.Effect<ArchiveScriptRan | undefined, SandboxError>;
 }
 
 export class SessionSandboxes extends Context.Service<SessionSandboxes, SessionSandboxesService>()(
@@ -147,7 +115,6 @@ function sessionSandboxesOver(api: SandboxService): SessionSandboxesService {
 
         return sandboxes.length;
       }),
-    archiveFor: (sessionId, archive) => archiveScriptRun(api, sessionId, archive),
   };
 }
 
@@ -184,99 +151,22 @@ function describeDeleteFailure(failure: {
 }
 
 /**
- * One archived agent's repository's archive script run in its sandbox, where
- * its workspace keeps one and the agent is still archived, and recorded as
- * that script's last run where it ran (`script-runs.ts`); one that failed,
- * could not run, or ran past its bounds is logged. Note that the script runs
- * holding the agent's runner lease, because a release backs off from a lease
- * another call holds (`consumeSandboxRelease`), so a sandbox already unused
- * long enough to be released is not deleted while its teardown runs.
- */
-const archiveScriptRanWhileArchived = /* @__PURE__ */ Effect.fnUntraced(function* (
-  agent: Pick<Agent, "id" | "userId">,
-  sessionId: string,
-) {
-  const current = yield* readAgent(agent.userId, agent.id);
-
-  if (Option.isNone(current) || current.value.archivedAt === null) return;
-  const archive = yield* archiveScriptOf(current.value);
-
-  if (archive === undefined) return;
-  const sandboxes = yield* SessionSandboxes;
-  const ran = yield* holdingRunner(agent.id, sandboxes.archiveFor(sessionId, archive));
-
-  if (ran === undefined) return;
-  yield* scriptRanIn(current.value, CLOUD_SETUP_SCRIPT.ARCHIVE, ran.exitCode, ran.ranAt);
-});
-
-/**
  * What the agents just archived let go of, their sandboxes left standing for
- * their release (`releaseUnusedSandboxes`). Each agent's session is read
- * here, one keyed read that fails to nothing worse than a log line, and the
- * work is handed to the reach to keep the function awake for, so this
- * returns without waiting on it and the archive never fails on it: the
- * agents' archive scripts, all at once, each in its own sandbox, under the
- * scripts' one deadline, a script past it left; and beside them a local
- * agent among them let go of on its device, its runner stopped and its
- * folder removed (`device-discard.ts`).
+ * their release (`releaseUnusedSandboxes`): a local agent among them let go
+ * of on its device, its runner stopped and its folder removed
+ * (`device-discard.ts`). The work is handed to the reach to keep the
+ * function awake for, so this returns without waiting on it and the archive
+ * never fails on it.
  */
 export const archivedInBackground = /* @__PURE__ */ Effect.fnUntraced(function* (
   reach: SandboxDeleteReach,
-  agents: ReadonlyArray<Pick<Agent, "id" | "userId" | "conversationId">>,
+  agents: ReadonlyArray<Pick<Agent, "id" | "userId">>,
 ) {
-  const read = yield* Effect.forEach(agents, (agent) =>
-    recordedRuntimeSession(agent).pipe(
-      Effect.catch((failure) =>
-        Effect.as(
-          Effect.logWarning(
-            `an archived agent's sandbox was not found to run its archive script: ${describeDeleteFailure(failure)}`,
-          ),
-          undefined,
-        ),
-      ),
-    ),
-  );
-
-  // An agent that never opened a sandbox has no session, and no script to run.
-  const sessions = agents.flatMap((agent, at) => {
-    const sessionId = read[at];
-
-    return sessionId === undefined ? [] : [{ agent, sessionId }];
-  });
-
-  const scriptOne = ({ agent, sessionId }: (typeof sessions)[number]) =>
-    archiveScriptRanWhileArchived(agent, sessionId).pipe(
-      Effect.provide(reach.sessionSandboxes),
-      Effect.catch((failure) =>
-        Effect.logWarning(
-          `an archived agent's archive script did not run: ${describeDeleteFailure(failure)}`,
-        ),
-      ),
-    );
-
-  const scripts = Effect.forEach(sessions, scriptOne, {
-    concurrency: "unbounded",
-    discard: true,
-  }).pipe(
-    Effect.timeoutOption(ARCHIVE_DELETE.SCRIPT_TIMEOUT),
-    Effect.flatMap((finished) =>
-      Option.isSome(finished)
-        ? Effect.void
-        : Effect.logWarning("archived agents' archive scripts were left at the archive's deadline"),
-    ),
-  );
-
   yield* reach.keepAwake(
-    Effect.all(
-      [
-        scripts,
-        Effect.forEach(agents, discardedOrLogged, {
-          concurrency: ARCHIVE_DELETE.CONCURRENCY,
-          discard: true,
-        }),
-      ],
-      { concurrency: 2, discard: true },
-    ),
+    Effect.forEach(agents, discardedOrLogged, {
+      concurrency: ARCHIVE_DELETE.CONCURRENCY,
+      discard: true,
+    }),
   );
 });
 
@@ -338,7 +228,7 @@ export const deletedWithWorkspace = /* @__PURE__ */ Effect.fnUntraced(function* 
 export const SANDBOX_RELEASE_OUTCOME = {
   /** Deleted, with the drive it owns, and written RELEASED. */
   RELEASED: "released",
-  /** Opened, touched, or given a turn since it was found due, or a launch or an archive script under way holds its agent's runner, and written LIVE again. */
+  /** Opened, touched, or given a turn since it was found due, or a launch under way holds its agent's runner, and written LIVE again. */
   USED_SINCE: "used-since",
   /** The row no longer stands RELEASING: reopened, already released, or gone with its agent. */
   NOT_RELEASING: "not-releasing",
@@ -404,8 +294,7 @@ const releasedHolding = (sandboxName: string) =>
  * One release consumed. The release is decided again holding the agent's
  * runner lease (`releasedHolding`), which a launch holds while it opens the
  * sandbox, so no launch opens it between the last read and the delete; a
- * lease another call holds means a launch or an archive script is under
- * way, and the row is written LIVE again. A delete that fails fails the delivery, which comes
+ * lease another call holds means a launch is under way, and the row is written LIVE again. A delete that fails fails the delivery, which comes
  * again.
  */
 export const consumeSandboxRelease = /* @__PURE__ */ Effect.fn("web/consumeSandboxRelease")(

@@ -10,6 +10,10 @@ export * from "./components/anchored-popover/press-away.js";
 
 export * from "./components/announcer/announcer.js";
 
+export * from "./components/app-ask/app-ask.js";
+
+export * from "./components/app-icon/app-icon.js";
+
 export * from "./components/approval-actions/approval-actions.js";
 
 export * from "./components/arrival/arrival.js";
@@ -57,6 +61,10 @@ export * from "./components/breadcrumbs/crumb.js";
 export * from "./components/button/button.js";
 
 export * from "./components/calendar/calendar.js";
+
+export * from "./components/call/call-card.js";
+
+export * from "./components/call/call-controls.js";
 
 export * from "./components/caption-field/caption-field.js";
 
@@ -372,6 +380,8 @@ export * from "./components/steps/steps.js";
 
 export * from "./components/subject-line/subject-line.js";
 
+export * from "./components/suggestion/suggestion.js";
+
 export * from "./components/suggestion-card/suggestion-card.js";
 
 export * from "./components/swatch/swatch.js";
@@ -419,6 +429,8 @@ export * from "./components/turn-end/turn-end.js";
 export * from "./components/turn-into-menu/turn-into-menu.js";
 
 export * from "./components/unread-mark/unread-mark.js";
+
+export * from "./components/upload-cover/upload-cover.js";
 
 export * from "./components/usage-meters/usage-meters.js";
 

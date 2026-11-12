@@ -11,7 +11,7 @@ import {
   listTaskFollowers,
   setFollowerMachines,
 } from "../task-follower-store.js";
-import { createTask } from "../task-store.js";
+import { createTask, updateTask } from "../task-store.js";
 
 /**
  * The members following a task, read and written through the store's public
@@ -43,13 +43,20 @@ const openWorkspaces = Effect.gen(function* () {
   return { dean, charles, mallory, workspace, elsewhere, taskId };
 });
 
-/** Who follows the task, and whether each lends their machines, as the account reads it, which the test expects it to reach. */
+/**
+ * Who follows the task, each by their id to whether they lend their
+ * machines, as the account reads it, which the test expects it to reach.
+ * Note that it is no list, because the test clock stands still, so every
+ * follower follows at one instant and their order says nothing.
+ */
 const followersOf = (userId: string, taskId: string) =>
   Effect.map(listTaskFollowers(userId, taskId), (read) =>
-    Option.getOrElse(read, () => assert.fail("the task was not reached")).map((follower) => ({
-      userId: follower.userId,
-      machines: follower.machines,
-    })),
+    Object.fromEntries(
+      Option.getOrElse(read, () => assert.fail("the task was not reached")).map((follower) => [
+        follower.userId,
+        follower.machines,
+      ]),
+    ),
   );
 
 it.layer(getTestDB())("the members following a task", (it) => {
@@ -59,12 +66,25 @@ it.layer(getTestDB())("the members following a task", (it) => {
 
       yield* followTask(dean, { taskId, followerId: charles, machines: false });
       yield* followTask(dean, { taskId, followerId: charles, machines: true });
-      assert.deepEqual(yield* followersOf(dean, taskId), [{ userId: charles, machines: false }]);
+      assert.deepEqual(yield* followersOf(dean, taskId), { [dean]: true, [charles]: false });
 
       yield* setFollowerMachines(charles, taskId, true);
       yield* followTask(dean, { taskId, followerId: charles, machines: false });
-      assert.deepEqual(yield* followersOf(dean, taskId), [{ userId: charles, machines: true }]);
+      assert.deepEqual(yield* followersOf(dean, taskId), { [dean]: true, [charles]: true });
     }),
+  );
+
+  it.effect(
+    "reassigning a task keeps the previous assignee following with their machines off, and the new one follows with theirs on",
+    () =>
+      Effect.gen(function* () {
+        const { dean, charles, taskId } = yield* openWorkspaces;
+
+        yield* updateTask(dean, taskId, { assigneeId: dean });
+        yield* updateTask(dean, taskId, { assigneeId: charles });
+
+        assert.deepEqual(yield* followersOf(dean, taskId), { [dean]: false, [charles]: true });
+      }),
   );
 
   it.effect(
@@ -93,7 +113,7 @@ it.layer(getTestDB())("the members following a task", (it) => {
         assert.deepEqual(yield* listFollowedTasks(charles, workspace), [taskId]);
 
         yield* leaveWorkspace(workspace, charles);
-        assert.deepEqual(yield* followersOf(dean, taskId), []);
+        assert.deepEqual(yield* followersOf(dean, taskId), { [dean]: true });
         assert.deepEqual(yield* listFollowedTasks(charles, workspace), []);
       }),
   );

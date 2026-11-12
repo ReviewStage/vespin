@@ -313,6 +313,6 @@ test("each sound lists the account's own sounds by name, the one it plays chosen
   const ask = menuOf(page, "When something needs you: Knock");
   assert.ok(ask.includes("Glass"), "either sound may pick any of the account's own");
   assert.ok(ask.includes("Add a sound…"));
-  assert.equal(actsOf(page, "When an agent finishes: Glass"), "Rename…Remove…");
+  assert.equal(actsOf(page, "When an agent finishes: Glass"), "Rename…Delete");
   assert.ok(page.textContent?.includes("Your sounds"));
 });

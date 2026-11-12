@@ -15,6 +15,7 @@ import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import { type PinMove, TASK_MARK, type TaskMark } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -43,7 +44,8 @@ import { ToastHost } from "../toast.js";
  * section, pinned, unpinned, and moved where it is let go; and, under a finger, which drags nothing, a pin, a
  * section, and a section's task moved a place by its menu, which a long
  * press, a right-click, and the keyboard's ⇧⌘↑ and ⇧⌘↓ all reach, the row
- * kept focused. Synthetic throughout.
+ * kept focused; and a teammate's task the reader follows under Following,
+ * which it leaves once unfollowed. Synthetic throughout.
  */
 
 const WORKSPACE: Workspace = {
@@ -432,6 +434,46 @@ test("a filter by person leaves out a section's task it would leave out of the l
 
   assert.deepEqual(namesIn(sidebar, "Sections"), []);
   assert.deepEqual(namesIn(sidebar, "My tasks"), ["Retry audit"]);
+});
+
+test("a teammate's task the reader follows stands under Following, which it leaves once unfollowed", async () => {
+  const shared: Workspace = {
+    ...WORKSPACE,
+    memberCount: 2,
+    experiments: [{ experiment: EXPERIMENT.FOLLOWING, on: true, changedBy: null, changedAt: 0 }],
+  };
+
+  writeListedTasks({ workspaces: [shared] });
+  const grace = { userId: "user-grace", name: "Grace Hopper" };
+  const ada = { userId: "user-ada", name: "Ada Lovelace" };
+  const adaFollows = { userId: ada.userId, assignee: false, machines: false };
+  const graceFollows = { userId: grace.userId, assignee: true, machines: true };
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+
+  const draw = async (followers: NonNullable<TaskSummary["followers"]>) => {
+    const rest = {
+      workspace: shared,
+      workspaces: [shared],
+      me: ada.userId,
+      tasks: [
+        { ...INVITES, assignee: grace, followers },
+        { ...RETRIES, assignee: ada, followers: [{ ...adaFollows, assignee: true }] },
+      ],
+    };
+
+    act(() => root.render(withQueryClient(sidebarOver({ ...SECTIONS, entries: [] }, [], rest))));
+    await settle();
+  };
+
+  await draw([graceFollows, adaFollows]);
+  assert.deepEqual(namesIn(container, "Following"), ["Invite expiry"]);
+  assert.deepEqual(namesIn(container, "My tasks"), ["Retry audit"]);
+
+  await draw([graceFollows]);
+  assert.deepEqual(namesIn(container, "Following"), []);
+  assert.deepEqual(namesIn(container, "My tasks"), ["Retry audit"]);
 });
 
 test("the status filter leaves a section's backlog task out as it does the list's", async () => {

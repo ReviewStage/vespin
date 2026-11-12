@@ -64,15 +64,24 @@ internal enum HoverEffectKind: String, Enumerable {
 internal struct HoverEffectModifier: ViewModifier, Record {
   @Field var effect: HoverEffectKind = .automatic
 
-  // Note that each effect is named by its type, since iOS 18's custom hover effects name a highlight and a lift of their own.
+  // Note that the effect goes through iOS 13.4's `hoverEffect(_:)`, named by
+  // reference, because the iOS 27 SDK marks that overload disfavored: a plain
+  // `content.hoverEffect(HoverEffect.lift)` binds to the generic
+  // `hoverEffect(_: some CustomHoverEffect)` and so to `HoverEffect`'s
+  // conformance to `CustomHoverEffect`, which iOS 26's SwiftUI doesn't export.
+  // dyld then refuses to launch the app on iOS 26 before any code runs (every
+  // TestFlight build from 18 to 24 on iPadOS 26.7.1). No other overload is
+  // labeled `hoverEffect(_:)`, so the reference can't pick the generic one.
   func body(content: Content) -> some View {
+    let hover = Content.hoverEffect(_:)
+    return hover(content)(systemEffect)
+  }
+
+  private var systemEffect: HoverEffect {
     switch effect {
-    case .automatic:
-      content.hoverEffect(HoverEffect.automatic)
-    case .highlight:
-      content.hoverEffect(HoverEffect.highlight)
-    case .lift:
-      content.hoverEffect(HoverEffect.lift)
+    case .automatic: return .automatic
+    case .highlight: return .highlight
+    case .lift: return .lift
     }
   }
 }

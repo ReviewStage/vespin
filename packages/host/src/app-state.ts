@@ -74,7 +74,12 @@ import { readEither } from "@repo/wire/effect";
 import { Equal, Predicate, Result, Schema } from "effect";
 import type { MacCommandAsk } from "./mac-command-ask.js";
 
-export type { MacCommandAsk } from "./mac-command-ask.js";
+export {
+  isMacShellAsk,
+  type MacAppAsk,
+  type MacCommandAsk,
+  type MacShellAsk,
+} from "./mac-command-ask.js";
 
 /**
  * The launch profiles a window answers to. A fixture run stages the panel's

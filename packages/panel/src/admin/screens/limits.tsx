@@ -3,10 +3,11 @@
  *
  * Every figure is imported from the module that enforces it, never copied,
  * so the page ships in the same deploy as the service and says what that
- * deploy enforces. A limit only the service holds is not here: the page
- * reads nothing from the service, so it draws what a browser bundle may
- * import (`@repo/features`, and the runner's pins, whose module reaches no
- * Node API). The search narrows the rows by what a limit bounds, by its
+ * deploy enforces. What a browser bundle may import (`@repo/features`, and
+ * the runner's pins, whose module reaches no Node API) is imported here; a
+ * limit only the service holds comes from the admin catalog read, which
+ * measures it from the service's own constant and holds the page behind the
+ * admin gate as every admin read is. The search narrows the rows by what a limit bounds, by its
  * constant's name, which is what a reader greps for to change it, or by its
  * value as drawn.
  */
@@ -18,6 +19,13 @@ import {
   NODE_MAC_PIN,
   PLAYWRIGHT_PIN,
 } from "@repo/agent-runner/pins";
+import {
+  ADMIN_LIMIT_UNIT,
+  ADMIN_TURN_PIPELINE,
+  type AdminCatalog,
+  type AdminCatalogLimit,
+  type AdminTurnPipeline,
+} from "@repo/features/admin-catalog-wire";
 import { AGENT_QUEUE_BOUNDS } from "@repo/features/agent-queue-wire";
 import { STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
@@ -39,6 +47,7 @@ import { SANDBOX_SIZE } from "@repo/features/sandbox-size";
 import { TASK_BOUNDS } from "@repo/features/task-wire";
 import { workingTime } from "@repo/features/time-format";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
+import { readFailedWords } from "@repo/features/words";
 import { COLLECTION_STATE, SearchField, TEXT_FONT, TEXT_TONE, Text } from "@repo/ui";
 import {
   createDataTableColumnHelper,
@@ -46,12 +55,15 @@ import {
   DATA_TABLE_MIN_WIDTH,
   DataTable,
 } from "@repo/ui/data-table";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useAdminDoors } from "../admin-doors.js";
+import { adminCatalogQuery, useAdminSignOut } from "../admin-queries.js";
+import { adminReadView } from "../admin-read-view.js";
 import { AdminSection } from "../charts/stat-card.js";
 import { PageSections } from "../chrome/controls.js";
 import { PageNote } from "../chrome/notes.js";
-import { AdminCollectionPage } from "../chrome/page-header.js";
+import { AdminCollectionPage, AdminPage, type ViewerAccount } from "../chrome/page-header.js";
 
 /** One limit: what it bounds, its figure, and the constant that holds it. */
 interface Limit {
@@ -399,38 +411,83 @@ const LIMIT_COLUMNS = column.columns([
 
 /** What the page says it holds, once, over its groups. */
 const LIMITS_NOTE =
-  "The caps, deadlines, sizes, and pinned versions this deploy enforces, read from the constants that hold them. Limits only the service holds are not listed yet.";
+  "The caps, deadlines, sizes, and pinned versions this deploy enforces, read from the constants that hold them, the service's own among them.";
+
+const LIMITS_ERROR = readFailedWords("limits");
+
+const PIPELINE_LABEL = {
+  [ADMIN_TURN_PIPELINE.VERCEL_QUEUES]: "Vercel Queues",
+  [ADMIN_TURN_PIPELINE.IN_PROCESS]: "In process",
+} as const satisfies Record<AdminTurnPipeline, string>;
+
+/** A limit the service holds, its figure said as the page says every other. */
+function serviceLimit(each: AdminCatalogLimit): Limit {
+  const figure =
+    each.unit === ADMIN_LIMIT_UNIT.DURATION_MS ? span(each.value) : formatCount(each.value);
+
+  return limit(each.label, figure, each.constant);
+}
+
+/** The service's own limits by their groups, in the catalog's order, then the deployment's turn pipeline. */
+function serviceGroups(catalog: AdminCatalog): LimitGroup[] {
+  const groups = new Map<string, Limit[]>();
+
+  for (const each of catalog.limits) {
+    groups.set(each.group, [...(groups.get(each.group) ?? []), serviceLimit(each)]);
+  }
+
+  const deployment: LimitGroup = {
+    title: "This deployment",
+    limits: [limit("Turn pipeline", PIPELINE_LABEL[catalog.pipeline], "VERCEL_ENV")],
+  };
+
+  return [...[...groups].map(([title, limits]) => ({ title, limits })), deployment];
+}
 
 /** The groups whose limits a search finds, each keeping only the rows it finds; every group where the search is empty. */
-function foundGroups(query: string): readonly LimitGroup[] {
+function foundGroups(all: readonly LimitGroup[], query: string): readonly LimitGroup[] {
   const term = query.trim().toLowerCase();
 
-  if (term === "") return LIMIT_GROUPS;
+  if (term === "") return all;
 
   const found = (each: Limit) =>
     [each.label, each.constant, each.figure].some((words) => words.toLowerCase().includes(term));
 
-  return LIMIT_GROUPS.flatMap((group) => {
+  return all.flatMap((group) => {
     const limits = group.limits.filter(found);
 
     return limits.length === 0 ? [] : [{ ...group, limits }];
   });
 }
 
-export function LimitsScreen({
-  frame,
+/**
+ * The page as its read stands: the code's groups and the service's once the
+ * catalog is in, a loading collection until then, each table under the
+ * refresh `wrap` lays over it.
+ */
+function LimitsPage({
+  catalog,
+  wrap,
 }: {
-  /** Applied around the page, past the gate's own cards, which stand alone. */
-  frame: (content: React.JSX.Element) => React.JSX.Element;
+  catalog: AdminCatalog | undefined;
+  wrap: (sections: React.JSX.Element) => React.JSX.Element;
 }): React.JSX.Element {
-  const { gate } = useAdminDoors();
   const [query, setQuery] = useState("");
-  const groups = useMemo(() => foundGroups(query), [query]);
 
-  // Note that the page reads nothing, so the gate's own hold is all that keeps it from a reader who has not signed in here.
-  if (gate.heldAtGate()) return gate.signedOut();
+  const groups = useMemo(
+    () =>
+      catalog === undefined ? [] : foundGroups([...LIMIT_GROUPS, ...serviceGroups(catalog)], query),
+    [catalog, query],
+  );
 
-  return frame(
+  const state =
+    catalog === undefined
+      ? COLLECTION_STATE.LOADING
+      : groups.length === 0
+        ? COLLECTION_STATE.EMPTY
+        : COLLECTION_STATE.READY;
+
+  return (
     <AdminCollectionPage
       title="Limits"
       controls={null}
@@ -443,27 +500,63 @@ export function LimitsScreen({
           onClear={() => setQuery("")}
         />
       }
-      state={groups.length === 0 ? COLLECTION_STATE.EMPTY : COLLECTION_STATE.READY}
+      state={state}
       loadingLabel="Reading limits"
       empty="No limit matches that search."
     >
-      <PageSections>
-        <AdminSection>
-          <PageNote>{LIMITS_NOTE}</PageNote>
-        </AdminSection>
-        {groups.map((group) => (
-          <AdminSection key={group.title} title={group.title}>
-            <DataTable
-              label={group.title}
-              columns={LIMIT_COLUMNS}
-              rows={group.limits}
-              getRowId={(row) => row.label}
-              empty="No limits."
-              minWidth={DATA_TABLE_MIN_WIDTH.MEDIUM}
-            />
+      {wrap(
+        <PageSections>
+          <AdminSection>
+            <PageNote>{LIMITS_NOTE}</PageNote>
           </AdminSection>
-        ))}
-      </PageSections>
-    </AdminCollectionPage>,
+          {groups.map((group) => (
+            <AdminSection key={group.title} title={group.title}>
+              <DataTable
+                label={group.title}
+                columns={LIMIT_COLUMNS}
+                rows={group.limits}
+                getRowId={(row) => row.label}
+                empty="No limits."
+                minWidth={DATA_TABLE_MIN_WIDTH.MEDIUM}
+              />
+            </AdminSection>
+          ))}
+        </PageSections>,
+      )}
+    </AdminCollectionPage>
   );
+}
+
+const unwrapped = (sections: React.JSX.Element) => sections;
+
+export function LimitsScreen({
+  account,
+  onSignOut,
+  frame,
+}: {
+  account: ViewerAccount | undefined;
+  onSignOut: () => Promise<void>;
+  /** Applied around the page, past the gate's own cards, which stand alone. */
+  frame: (content: React.JSX.Element) => React.JSX.Element;
+}): React.JSX.Element {
+  const { reads, gate } = useAdminDoors();
+  // Note that the page reads the catalog for the service's own limits, which also holds it behind the admin gate as every admin read is.
+  const read = useQuery({ ...adminCatalogQuery(reads), enabled: !gate.heldAtGate() });
+  const withdraw = useAdminSignOut(onSignOut);
+
+  return adminReadView({
+    read,
+    gate,
+    email: account?.email,
+    onSignOut: () => withdraw.mutate(),
+    failure: LIMITS_ERROR,
+    loading: () => frame(<LimitsPage catalog={undefined} wrap={unwrapped} />),
+    failed: (error) =>
+      frame(
+        <AdminPage title="Limits" controls={null}>
+          {error}
+        </AdminPage>,
+      ),
+    ready: (catalog, refreshed) => frame(<LimitsPage catalog={catalog} wrap={refreshed} />),
+  });
 }

@@ -75,7 +75,10 @@ builds a control of its own.
   request an agent opened stands under its call as `PullRequestCard`, as the
   task list holds it now. A page an agent showed is `SealedPage`, the app's
   one web view, handed the page's HTML sealed by `@repo/features/sealed-page`. `Pressable`,
-  `TextInput`, and the rest of React Native's controls appear only here.
+  `TextInput`, and the rest of React Native's controls appear only here. SwiftUI standing inside those views, such as a message's long press
+  menu, a call's glyph, or a pull request card in a transcript, stands in
+  `InlineHost`, which ignores the window's safe area, so a row scrolled
+  under the bar or over the keyboard draws where the row is.
 - **Markdown** is drawn by `Markdown` in React Native views, and a page of
   it by `MarkdownPage`, which hosts them in SwiftUI's scroller through
   `RNHostView`. Its words are parsed by `@repo/features/markdown-tree`, the
@@ -84,7 +87,10 @@ builds a control of its own.
   (`linkMention`, `readLink`): a `vespin.dev` place goes to the screen's
   `onOpenPlace`, any other web address to Safari.
 - **This is the one workspace that imports `@expo/ui` or `expo-glass-effect`,
-  or builds a control from React Native's pieces.** When a screen needs a piece this package lacks, add
+  or builds a control from React Native's pieces.** Everywhere else
+  `vespin/no-raw-press-outside-ui-native` refuses them, and a press prop
+  on a React Native primitive, with no disable comment allowed (root
+  `AGENTS.md`'s Layout). When a screen needs a piece this package lacks, add
   the component or an `as const` variant here, named for what it does.
 - **Colors come from `@repo/brand`.** `src/tokens/brand-colors.ts` is written
   by `packages/brand/scripts/generate-surface-shared.mjs` from the brand's one
@@ -114,8 +120,8 @@ builds a control of its own.
 
 ## Vespin's look
 
-Denser and quieter than iOS's defaults, drawn from Linear, Cursor,
-Conductor, Claude and Codex (the developer, Nov 10, 2026), on iOS's own
+Denser and quieter than iOS's defaults, with a muted palette and plain rows
+(the developer, Nov 10, 2026), on iOS's own
 navigation, tab bar, swipes, menus, sheets and glass.
 
 - **Type scale** (`tokens/type.ts`'s `TYPE_ROLE`), each role a Dynamic Type
@@ -139,9 +145,13 @@ navigation, tab bar, swipes, menus, sheets and glass.
   button is the chevron alone. One button leads every tab's root bar, as
   Notion's does: the workspace switcher (`WorkspaceSwitcher`, the tile alone
   at the photo's size in the bar's round glass, `SWITCHER_LOOK.TILE`, so the
-  screen's title keeps its place beside it, as the App Store's photo does), whose menu holds the workspaces, the account by its
-  name opening Settings, New workspace, and Settings… in a section under the
-  chosen workspace's name; the account's
+  screen's title keeps its place beside it, as the App Store's photo does), whose list, as
+  Notion's, holds each workspace by its own tile or photo with the chosen one
+  checked in copper, the account by its photo and name opening Settings, New
+  workspace, and Settings… in a section under the chosen workspace's name, in
+  a popover over the button in a regular window and a sheet with the medium
+  and large detents in a compact one (`SWITCHER_PRESENTATION`), never the
+  system's menu, which draws a row's image as a one-ink template; the account's
   photo (`AccountButton`) only before the workspaces are read, opening
   Settings, which the system stands in the same round glass, the photo
   clipped to a circle inside. A landscape iPad's sidebar heads its

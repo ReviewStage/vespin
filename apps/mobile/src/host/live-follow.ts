@@ -1,6 +1,6 @@
 // live-follow.ts -- a live read held followed on the host for as long as a screen holds its key, as the panel holds one while its query is active.
 
-import { useEffect, useEffectEvent } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 
 /** A follow as the act port answers it: a stream that carries nothing until it is let go. */
 type OpenedFollow = AsyncIteratorObject<unknown, unknown, unknown>;
@@ -8,6 +8,36 @@ type OpenedFollow = AsyncIteratorObject<unknown, unknown, unknown>;
 /** Says on the console an act the host refused, which the next delivery of the document corrects. */
 function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not go.`, error);
+}
+
+/**
+ * Opens the follow `open` answers and holds it until the release it answers
+ * is called, which lets it go, whether it opened by then or opens after.
+ */
+function holdFollow(open: () => Promise<OpenedFollow>): () => void {
+  let held = true;
+  let stream: OpenedFollow | undefined;
+
+  const drain = async (opened: OpenedFollow) => {
+    stream = opened;
+
+    if (!held) {
+      await opened.return?.();
+
+      return;
+    }
+
+    for await (const _ of opened) {
+      if (!held) break;
+    }
+  };
+
+  open().then(drain).catch(refused("Following a live read"));
+
+  return () => {
+    held = false;
+    stream?.return?.().catch(refused("Letting a live read go"));
+  };
 }
 
 /**
@@ -24,28 +54,53 @@ export function useLiveFollow(
   const opening = useEffectEvent(open);
   useEffect(() => {
     if (key === undefined) return;
-    let held = true;
-    let stream: OpenedFollow | undefined;
 
-    const drain = async (opened: OpenedFollow) => {
-      stream = opened;
+    return holdFollow(() => opening(key));
+  }, [key]);
+}
 
-      if (!held) {
-        await opened.return?.();
+/**
+ * Holds a follow for each of `keys` for as long as the screen holds it, as
+ * the panel holds one query per server: a key that joins opens its follow,
+ * and one that leaves lets its follow go, the others held throughout. Every
+ * follow is let go as the screen leaves, and taken up anew once `scope`
+ * moves, such as the workspace a page's links are read through, since a
+ * follow opened under one scope reads nothing of another.
+ */
+export function useLiveFollows(
+  keys: readonly string[],
+  open: (key: string) => Promise<OpenedFollow>,
+  scope?: string,
+) {
+  const opening = useEffectEvent(open);
+  // The follows held, by their key, kept apart from the drawing so a draw that keeps the same keys moves none.
+  const held = useRef(new Map<string, () => void>());
+  const heldScope = useRef(scope);
+  useEffect(() => {
+    const now = held.current;
+    const moved = heldScope.current !== scope;
+    heldScope.current = scope;
 
-        return;
-      }
+    for (const [key, release] of now) {
+      if (!moved && keys.includes(key)) continue;
+      release();
+      now.delete(key);
+    }
 
-      for await (const _ of opened) {
-        if (!held) break;
-      }
-    };
-
-    opening(key).then(drain).catch(refused("Following a live read"));
+    for (const key of keys) {
+      if (!now.has(key))
+        now.set(
+          key,
+          holdFollow(() => opening(key)),
+        );
+    }
+  });
+  useEffect(() => {
+    const now = held.current;
 
     return () => {
-      held = false;
-      stream?.return?.().catch(refused("Letting a live read go"));
+      for (const release of now.values()) release();
+      now.clear();
     };
-  }, [key]);
+  }, []);
 }

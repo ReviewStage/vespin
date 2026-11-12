@@ -3,6 +3,7 @@ import { ACCOUNT_WORDS_EXAMPLE } from "./examples/account-words";
 import { ADDRESS_FIELDS_EXAMPLE } from "./examples/address-fields";
 import { ANCHORED_POPOVER_EXAMPLE } from "./examples/anchored-popover";
 import { ANNOUNCER_EXAMPLE } from "./examples/announcer";
+import { APP_ASK_EXAMPLE } from "./examples/app-ask";
 import { APPROVAL_ACTIONS_EXAMPLE } from "./examples/approval-actions";
 import { ARRIVALS_EXAMPLE } from "./examples/arrivals";
 import { ARTWORK_EXAMPLE } from "./examples/artwork";
@@ -18,6 +19,7 @@ import { BLOCK_MENU_EXAMPLE } from "./examples/block-menu";
 import { BREADCRUMBS_EXAMPLE } from "./examples/breadcrumbs";
 import { BUTTONS_EXAMPLE } from "./examples/buttons";
 import { CALENDAR_EXAMPLE } from "./examples/calendar";
+import { CALL_CONTROLS_EXAMPLE } from "./examples/call-controls";
 import { CAPTION_FIELDS_EXAMPLE } from "./examples/caption-fields";
 import { CARD_PRESSES_EXAMPLE } from "./examples/card-presses";
 import { CARDS_EXAMPLE } from "./examples/cards";
@@ -137,6 +139,7 @@ import { SPLIT_BARS_EXAMPLE } from "./examples/split-bars";
 import { SPLIT_BUTTONS_EXAMPLE } from "./examples/split-buttons";
 import { STEPS_EXAMPLE } from "./examples/steps";
 import { SUGGESTION_CARDS_EXAMPLE } from "./examples/suggestion-cards";
+import { SUGGESTIONS_EXAMPLE } from "./examples/suggestions";
 import { SWATCHES_EXAMPLE } from "./examples/swatches";
 import { SWITCHES_EXAMPLE } from "./examples/switches";
 import { TAB_NOTICES_EXAMPLE } from "./examples/tab-notices";
@@ -153,6 +156,7 @@ import { TOOLBARS_EXAMPLE } from "./examples/toolbars";
 import { TOOLTIPS_EXAMPLE } from "./examples/tooltips";
 import { TURN_ENDS_EXAMPLE } from "./examples/turn-ends";
 import { TYPOGRAPHY_EXAMPLE } from "./examples/typography";
+import { UPLOAD_COVERS_EXAMPLE } from "./examples/upload-covers";
 import { VIDEO_PLAYER_EXAMPLE } from "./examples/video-player";
 import { WRITING_GLYPHS_EXAMPLE } from "./examples/writing-glyphs";
 import { ZOOM_IMAGES_EXAMPLE } from "./examples/zoom-images";
@@ -175,7 +179,9 @@ export const EXAMPLES: readonly Example[] = [
   LAYOUT_EXAMPLE,
   WRITING_GLYPHS_EXAMPLE,
   ATTACHMENT_CHIPS_EXAMPLE,
+  UPLOAD_COVERS_EXAMPLE,
   AVATARS_EXAMPLE,
+  SUGGESTIONS_EXAMPLE,
   REPOSITORIES_EXAMPLE,
   TASK_MARKS_EXAMPLE,
   TASK_ROWS_EXAMPLE,
@@ -188,6 +194,7 @@ export const EXAMPLES: readonly Example[] = [
   BUTTONS_EXAMPLE,
   READABLE_CONTROLS_EXAMPLE,
   CALENDAR_EXAMPLE,
+  CALL_CONTROLS_EXAMPLE,
   LENGTH_COUNTERS_EXAMPLE,
   CARDS_EXAMPLE,
   SOCIAL_SIGN_IN_EXAMPLE,
@@ -207,6 +214,7 @@ export const EXAMPLES: readonly Example[] = [
   COPY_BUTTONS_EXAMPLE,
   CODE_CARDS_EXAMPLE,
   COMMAND_ASK_EXAMPLE,
+  APP_ASK_EXAMPLE,
   COMMAND_DIALOG_EXAMPLE,
   COMMENTS_EXAMPLE,
   COMPLETION_SOUNDS_EXAMPLE,

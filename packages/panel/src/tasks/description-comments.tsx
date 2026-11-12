@@ -18,6 +18,7 @@ import type { DescriptionSection } from "@repo/features/description-document";
 import { fileMarkers } from "@repo/features/file-marker";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { FrameBox, PagePicked } from "@repo/features/page-pick";
+import { MESSAGE_BLOCK, messageBlocks, messageText, replyOf } from "@repo/features/reply-quote";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { IRREVERSIBLE_WORDS } from "@repo/features/words";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -113,7 +114,6 @@ import {
   RotateCcwIcon,
 } from "@repo/ui/icons";
 import { QUOTE_CLASS } from "@repo/ui/quote-face";
-import { MESSAGE_BLOCK, messageBlocks, messageText, replyOf } from "@repo/ui/reply-quote";
 import { ReplayUnmask, writeWithheldSheet } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { VIRTUAL_ROWS_ANCHOR, VirtualRows, type VirtualRowsHandle } from "@repo/ui/virtual-rows";
@@ -3995,7 +3995,6 @@ export function PendingPageComment({
             {
               label: COMMENT_WORDS.DELETE,
               icon: <TrashIcon />,
-              danger: true,
               onSelect: () => review.remove(clientKey),
             },
           ],

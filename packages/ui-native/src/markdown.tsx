@@ -1,9 +1,11 @@
 // markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, drafts to send elsewhere, links, mention chips, and pictures that open full screen and zoom.
 
-import { Host, Image as SwiftUIImage } from "@expo/ui/swift-ui";
+import { Image as SwiftUIImage } from "@expo/ui/swift-ui";
 import { accessibilityHidden, frame } from "@expo/ui/swift-ui/modifiers";
 import { readerZone } from "@repo/features/date-mention";
-import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
+import { ENTITY_KIND, type EntityKind, entityWordHeard } from "@repo/features/entity-kind";
+import type { LinkStanding } from "@repo/features/link-standing-model";
+import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useMemo, useState } from "react";
 import {
@@ -23,6 +25,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DraftCard } from "./draft-card.js";
 import { type Glyph, isLucideSymbol } from "./glyph.js";
 import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
+import { ISSUE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+import { InlineHost } from "./inline-host.js";
 import { KEPT_KIND } from "./keep-model.js";
 import {
   COLUMN_ALIGN,
@@ -37,7 +41,7 @@ import {
   type MarkdownRun,
   markdownBlocks,
 } from "./markdown-model.js";
-import { type BrandColors, useColors } from "./tokens/colors.js";
+import { type BrandColors, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 import { SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, PROSE_SIZE, TEXT_SIZE } from "./tokens/type.js";
@@ -164,6 +168,64 @@ interface Drawing {
   readonly videoAt: (written: string) => MarkdownVideo | undefined;
   /** Whether a heading is heard as one, on a page of words alone, where VoiceOver's Headings rotor walks its sections. */
   readonly headings: boolean;
+  /** What GitHub holds of the pull request or issue a chip's page names, as the host read it; none while unread or unanswered. */
+  readonly linkStanding: (page: string) => LinkStanding | undefined;
+}
+
+/** A chip of a GitHub page as its standing draws it: its mark, its name, and its state's words after it. */
+type StandingLook = {
+  readonly glyph: Glyph;
+  readonly tone: StatusTone;
+  readonly name: string;
+  readonly state: string | undefined;
+  /** What VoiceOver hears: its kind, the name it now shows, and its state. */
+  readonly heard: string;
+};
+
+/** A GitHub chip's words as VoiceOver hears them once its standing is read, as the panel hears the label it shows: its kind and the name it shows, then its state. */
+function standingHeard(chip: MarkdownChip, name: string, state: string | undefined): string {
+  const word = entityWordHeard(chip.entity, name);
+  const named = word === undefined ? name : `${word} ${name}`;
+
+  return state === undefined ? named : `${named}, ${state}`;
+}
+
+/**
+ * How a chip of a GitHub page stands, as the panel's chip draws it: a pull
+ * request by its number alone, its title fading mid-word in a chip, with
+ * its state's mark and words; an issue by its number and title, with its
+ * state's mark and words; none where GitHub has answered nothing of it.
+ */
+function standingLook(chip: MarkdownChip, drawing: Drawing): StandingLook | undefined {
+  const standing = chip.github === undefined ? undefined : drawing.linkStanding(chip.github);
+
+  if (standing?.pullRequest !== undefined) {
+    const look = PULL_REQUEST_LOOK[pullRequestMarkState(standing.pullRequest)];
+    const name = `#${standing.pullRequest.number}`;
+
+    return {
+      ...look,
+      glyph: look.symbol,
+      name,
+      state: standing.state,
+      heard: standingHeard(chip, name, standing.state),
+    };
+  }
+
+  if (standing?.issue !== undefined) {
+    const look = ISSUE_LOOK[standing.issue.state];
+    const name = `#${standing.issue.number} ${standing.title}`;
+    const heard = standingHeard(chip, name, standing.state);
+
+    return { ...look, glyph: look.symbol, name, state: standing.state, heard };
+  }
+
+  return undefined;
+}
+
+/** A chip as VoiceOver hears it: as its standing shows it once GitHub has answered, else by its kind and written name. */
+function chipHeard(chip: MarkdownChip, drawing: Drawing): string {
+  return standingLook(chip, drawing)?.heard ?? chip.heard;
 }
 
 function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
@@ -196,14 +258,14 @@ function ChipGlyph({
   }
 
   return (
-    <Host style={{ width: size, height: size }}>
+    <InlineHost style={{ width: size, height: size }}>
       <SwiftUIImage
         assetName={glyph}
         size={size * CHIP_SYMBOL_SCALE}
         color={color}
         modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}
       />
-    </Host>
+    </InlineHost>
   );
 }
 
@@ -218,6 +280,8 @@ function MentionChip({
   const { colors, fontScale } = drawing;
   const onPress = open(chip.target, drawing);
   const size = TEXT_SIZE.FOOTNOTE;
+  const standing = standingLook(chip, drawing);
+  const heard = standing?.heard ?? chip.heard;
 
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
@@ -225,7 +289,7 @@ function MentionChip({
         onPress={onPress}
         disabled={onPress === undefined}
         accessibilityRole={onPress === undefined ? "text" : "link"}
-        accessibilityLabel={chip.heard}
+        accessibilityLabel={heard}
         style={[
           styles.chip,
           {
@@ -236,16 +300,21 @@ function MentionChip({
         ]}
       >
         <ChipGlyph
-          glyph={ENTITY_SYMBOL[chip.entity]}
+          glyph={standing?.glyph ?? ENTITY_SYMBOL[chip.entity]}
           size={size * fontScale}
-          color={colors.TEXT_MUTED}
+          color={standing === undefined ? colors.TEXT_MUTED : toneColor(colors, standing.tone)}
         />
         <Text
           numberOfLines={1}
           style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
         >
-          {chip.name}
+          {standing?.name ?? chip.name}
         </Text>
+        {standing?.state === undefined ? null : (
+          <Text numberOfLines={1} style={{ fontSize: size, color: colors.TEXT_MUTED }}>
+            {standing.state}
+          </Text>
+        )}
       </Pressable>
     </View>
   );
@@ -340,13 +409,14 @@ function collectOpenings(
       if (onOpen !== undefined) {
         openings.push({
           name: `open-${openings.length}`,
-          label: `${OPEN_WORD} ${run.chip.heard}`,
+          label: `${OPEN_WORD} ${chipHeard(run.chip, drawing)}`,
           onOpen,
         });
       }
     } else if (run.kind === MARKDOWN_RUN.LINK) {
       const onOpen = open(run.target, drawing);
-      const words = heardLine(run.runs) ?? runsText(run.runs);
+      const heard = heardLine(run.runs, (chip) => chipHeard(chip, drawing));
+      const words = heard ?? runsText(run.runs, drawing);
 
       if (onOpen !== undefined && words !== "") {
         openings.push({ name: `open-${openings.length}`, label: `${OPEN_WORD} ${words}`, onOpen });
@@ -358,15 +428,15 @@ function collectOpenings(
 }
 
 /** A run's plain words, as a link's text is heard. */
-function runText(run: MarkdownRun): string {
+function runText(run: MarkdownRun, drawing: Drawing): string {
   switch (run.kind) {
     case MARKDOWN_RUN.WORDS:
     case MARKDOWN_RUN.CODE:
       return run.text;
     case MARKDOWN_RUN.LINK:
-      return runsText(run.runs);
+      return runsText(run.runs, drawing);
     case MARKDOWN_RUN.CHIP:
-      return run.chip.heard;
+      return chipHeard(run.chip, drawing);
     case MARKDOWN_RUN.BREAK:
       return " ";
     default: {
@@ -377,8 +447,8 @@ function runText(run: MarkdownRun): string {
 }
 
 /** Runs' plain words, joined. */
-function runsText(runs: readonly MarkdownRun[]): string {
-  return runs.map(runText).join("");
+function runsText(runs: readonly MarkdownRun[], drawing: Drawing): string {
+  return runs.map((run) => runText(run, drawing)).join("");
 }
 
 /** A line of words: a paragraph's, a heading's, or a table cell's. */
@@ -407,7 +477,7 @@ function Line({
 
   return (
     <Text
-      accessibilityLabel={heardLine(runs)}
+      accessibilityLabel={heardLine(runs, (chip) => chipHeard(chip, drawing))}
       {...(heading === true ? { accessibilityRole: "header" as const } : {})}
       {...actions}
       style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}
@@ -840,6 +910,8 @@ type MarkdownProps = {
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
   /** Whether its headings are heard as headings, on a page of words alone; a message's are styled alone. */
   readonly headings?: boolean | undefined;
+  /** What GitHub holds of a pull request or issue a chip names, by its page (`markdownGithubPages`), which the chip says where it stands; every chip says what its link says where none is given. */
+  readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
 };
 
 /** A video the words name as a picture, played in its place: the file it plays from, none while it is on its way, its name, and where it opens where the player cannot read it. */
@@ -852,6 +924,11 @@ export interface MarkdownVideo {
 /** Each picture drawn from the address its words name it by. */
 function namedSource(written: string): string {
   return written;
+}
+
+/** No standing read for any page. */
+function noStanding(): undefined {
+  return undefined;
 }
 
 /** No address naming a video. */
@@ -874,6 +951,7 @@ export function Markdown({
   pictureSource = namedSource,
   videoAt = noVideo,
   headings = false,
+  linkStanding = noStanding,
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
@@ -891,6 +969,7 @@ export function Markdown({
     pictureSource,
     videoAt,
     headings,
+    linkStanding,
   };
 
   return (

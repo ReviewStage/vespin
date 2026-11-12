@@ -1,4 +1,4 @@
-// app-sidebar.tsx -- a wide window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned and the member's sections with their tasks, and Settings at its foot.
+// app-sidebar.tsx -- a wide window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned, Following, and the member's sections with their tasks, and Settings at its foot.
 
 import {
   AccountBarItem,
@@ -10,7 +10,7 @@ import {
   MARK_SIZE,
   RowList,
   SWITCHER_LOOK,
-  WorkspaceSwitcherMenu,
+  WorkspaceSwitcherItem,
 } from "@repo/ui-native";
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
@@ -57,7 +57,7 @@ const PLACES = [
 const NEW_TASK = { label: "New task", symbol: "plus" } as const;
 const SETTINGS = { label: "Settings", symbol: "gearshape" } as const;
 
-/** The member's tasks the sidebar lists under its places: Pinned and each of their sections, as the Tasks tab draws them. */
+/** The member's tasks the sidebar lists under its places: Pinned, Following, and each of their sections, as the Tasks tab draws them. */
 export type SidebarTasks = {
   /** The sections, each a `ListSection` of task rows. */
   readonly sections: ReactNode;
@@ -120,7 +120,7 @@ export function useAppSidebar(
   const switcher = useWorkspaceSwitcher();
   const threeColumns = useThreeColumns();
   const { shown, setShown } = useSidebarShown();
-  const header = switcher === undefined ? undefined : <WorkspaceSwitcherMenu {...switcher} />;
+  const header = switcher === undefined ? undefined : <WorkspaceSwitcherItem {...switcher} />;
   const selected = openTask !== undefined && tasks.ids.has(openTask) ? openTask : place;
 
   const pick = (id: string) => {
@@ -137,7 +137,7 @@ export function useAppSidebar(
       // Note that the photo leads only until the workspaces are read, as the compact bar's does, so Settings is never out of reach.
       const leading =
         switcher !== undefined ? (
-          <WorkspaceSwitcherMenu
+          <WorkspaceSwitcherItem
             {...switcher}
             look={SWITCHER_LOOK.TILE}
             tileSize={MARK_SIZE.COLUMN_BAR_FACE}

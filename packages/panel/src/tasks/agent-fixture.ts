@@ -69,6 +69,11 @@ import {
   PULL_REQUEST_WRITE_OUTCOME,
 } from "@repo/features/pull-request-write-wire";
 import {
+  REPLY_BUTTON_ACTION,
+  type ReplyButtonView,
+  replyButtonLinkOf,
+} from "@repo/features/reply-button-wire";
+import {
   TASK_FILE_REFUSAL,
   TASK_TREE_ENTRY,
   type TaskPullRequestLine,
@@ -112,6 +117,20 @@ const REPOSITORY = "ada/relay";
 
 /** The agent's id, its turn's, and its shell's. */
 export const FIXTURE_AGENT_ID = FIXTURE_IDS.AGENT;
+
+/** The buttons the agent's last reply ends on, by their ids, and the agents a press of each reaches. */
+const FIXTURE_BUTTON = {
+  EMAIL: "92f3b536-7e0a-4bc8-a3e0-fa0b1c2d3e4f",
+  DIGEST: "a304c647-8f1b-4cd9-b4f1-0b1c2d3e4f50",
+  STARTED: "b415d758-902c-4dea-85a2-1c2d3e4f5061",
+  DIGEST_AGENT: "c526e869-a13d-4efb-96b3-2d3e4f506172",
+} as const;
+
+/** A button's link as the agent wrote it, under the fixture's workspace. */
+function buttonLink(buttonId: string): string {
+  return replyButtonLinkOf({ workspace: "personal", agentId: FIXTURE_AGENT_ID, buttonId });
+}
+
 const TURN_ID = "5d9f3b7c-2e4a-4f6b-8c8d-3e5f7a9b1c2d";
 const SHELL_ID = "6e0a4c8d-3f5b-4a7c-9d9e-4f6a8b0c2d3e";
 
@@ -605,7 +624,10 @@ const LONG_MESSAGES: readonly AgentTranscriptMessage[] = [
       ),
       {
         type: "text",
-        text: `Pushed to #${PULL_REQUEST.number}. The expired page's button reads "Ask for a new invite".`,
+        text:
+          `Pushed to #${PULL_REQUEST.number}. The expired page's button reads "Ask for a new invite". Two things came up while I was in there:\n\n` +
+          `- The invite email is only written to the log, never sent. [Wire up the invite email](${buttonLink(FIXTURE_BUTTON.EMAIL)})\n` +
+          `- The digest still counts a pending invite as a member. [Tell the digest agent](${buttonLink(FIXTURE_BUTTON.DIGEST)})`,
       },
     ],
   }),
@@ -1077,6 +1099,66 @@ const STAGED_SHARE: StagedShare = {
   shared: null,
 };
 
+/** Each button as the service answers its read: what it does, the brief whole, and no press yet. */
+const FIXTURE_BUTTONS: ReadonlyMap<string, ReplyButtonView> = new Map([
+  [
+    FIXTURE_BUTTON.EMAIL,
+    {
+      id: FIXTURE_BUTTON.EMAIL,
+      agentId: FIXTURE_AGENT_ID,
+      label: "Wire up the invite email",
+      action: {
+        kind: REPLY_BUTTON_ACTION.START,
+        prompt:
+          "The invite email is only written to the log, never sent. Send it through the mail " +
+          "provider the app already uses for password resets, retry a bounce once, and add a " +
+          "test that an invitation sends exactly one email.",
+        model: "anthropic/claude-sonnet-5.5",
+        effort: "high",
+      },
+      repository: "ada/relay",
+      sendTo: null,
+      pressed: null,
+    },
+  ],
+  [
+    FIXTURE_BUTTON.DIGEST,
+    {
+      id: FIXTURE_BUTTON.DIGEST,
+      agentId: FIXTURE_AGENT_ID,
+      label: "Tell the digest agent",
+      action: {
+        kind: REPLY_BUTTON_ACTION.SEND,
+        agentId: FIXTURE_BUTTON.DIGEST_AGENT,
+        text: "Invitations now stand apart from members: count a pending invite as an invite, not a member.",
+      },
+      repository: "ada/relay",
+      sendTo: {
+        id: FIXTURE_BUTTON.DIGEST_AGENT,
+        taskId: FIXTURE_IDS.TASK,
+        title: "Send the weekly digest",
+      },
+      pressed: null,
+    },
+  ],
+]);
+
+/** The suggestions sent so far, which every later read answers as sent, as the service keeps a send. */
+const SENT_BUTTONS = new Map<string, ReplyButtonView>();
+
+/** A button pressed as the service answers one: run once by the account, reaching a new agent for a start and the digest's for a send. */
+function pressedButton(button: ReplyButtonView): ReplyButtonView {
+  const reached =
+    button.action.kind === REPLY_BUTTON_ACTION.START
+      ? { id: FIXTURE_BUTTON.STARTED, taskId: FIXTURE_IDS.TASK, title: button.label }
+      : button.sendTo;
+
+  return {
+    ...button,
+    pressed: { at: Date.now(), by: "Ada Lovelace", byReader: true, agent: reached },
+  };
+}
+
 /** One kind's answer, from its payload and the profile's stage. */
 type StagedAnswer<Kind extends PortActKind> = (
   payload: PortActPayload<Kind>,
@@ -1099,6 +1181,19 @@ const ANSWERS: StagedAnswers = {
     failure: AGENT_CALL_FAILURE.NOT_FOUND,
   }),
   [ACT_KIND.AGENTS_PICTURE]: () => longRunPicture(),
+  // The last reply's buttons; a press is taken as the service takes one, though nothing here moves, so a reload draws them unpressed again.
+  [ACT_KIND.AGENTS_REPLY_BUTTON]: ({ buttonId }) =>
+    SENT_BUTTONS.get(buttonId) ??
+    FIXTURE_BUTTONS.get(buttonId) ?? { failure: AGENT_CALL_FAILURE.NOT_FOUND },
+  [ACT_KIND.AGENTS_REPLY_BUTTON_PRESS]: ({ buttonId }) => {
+    const button = FIXTURE_BUTTONS.get(buttonId);
+
+    if (button === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    const sent = SENT_BUTTONS.get(buttonId) ?? pressedButton(button);
+    SENT_BUTTONS.set(buttonId, sent);
+
+    return sent;
+  },
   [ACT_KIND.AGENTS_CHANGES]: () => CHANGES,
   [ACT_KIND.AGENTS_TURN_CHANGES]: ({ messageId }) =>
     TURN_CHANGES.get(messageId) ?? { files: INVITE_CHANGES, truncated: false },

@@ -59,6 +59,8 @@ export const ADMIN_TAB = {
   COST: "cost",
   RELIABILITY: "reliability",
   AGENTS: "agents",
+  TOOLS: "tools",
+  PROMPTS: "prompts",
   WORKSPACES: "workspaces",
   USERS: "users",
   LIMITS: "limits",
@@ -342,6 +344,10 @@ export function adminLinkFields(view: AdminView): AdminLinkFieldsResult {
       return { section: ADMIN_LINK_SECTION.RELIABILITY };
     case ADMIN_TAB.AGENTS:
       return { section: ADMIN_LINK_SECTION.AGENTS };
+    case ADMIN_TAB.TOOLS:
+      return { section: ADMIN_LINK_SECTION.TOOLS };
+    case ADMIN_TAB.PROMPTS:
+      return { section: ADMIN_LINK_SECTION.PROMPTS };
     case ADMIN_TAB.WORKSPACES:
       return { section: ADMIN_LINK_SECTION.WORKSPACES };
     case ADMIN_TAB.USERS:

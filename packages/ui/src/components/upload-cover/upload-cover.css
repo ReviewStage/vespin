@@ -1,0 +1,40 @@
+/* upload-cover.css -- what an upload cover's utilities cannot say
+   (`upload-cover.tsx`, drawn in the shared Tailwind theme): the sweep an
+   upload's meter plays where no share is known, and the track it sweeps on
+   over a picture. */
+
+@layer components {
+  /* Where no share of an upload is known, a third of the track sweeps across
+     it from its middle, an endless loop with no end to wait for, so its
+     duration is a literal held still on --ui-loop-motion. */
+  .ui-upload-meter[data-indeterminate="true"] > .ui-upload-meter-fill {
+    width: 34%;
+    animation: ui-upload-meter-sweep 1200ms var(--ui-motion-pane) infinite;
+    animation-play-state: var(--ui-loop-motion);
+  }
+
+  /* Over a picture, the meter's track is the veil's ink, faint, so the fill
+     reads on any picture. */
+  .ui-upload-meter[data-place="block"] {
+    background-color: color-mix(in srgb, var(--ui-color-on-veil) 28%, transparent);
+  }
+
+  /* Note that the sweep starts with its segment in the track's middle
+     third and wraps round off its ends, because a loop held still holds its
+     first frame, and a segment held off the track would leave reduced motion
+     and a capture with no sign of the upload at all. */
+  @keyframes ui-upload-meter-sweep {
+    0% {
+      transform: translateX(100%);
+    }
+    50% {
+      transform: translateX(300%);
+    }
+    50.001% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
+}

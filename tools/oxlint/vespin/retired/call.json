@@ -1,0 +1,14 @@
+{
+  "instead": "Draw a call with @repo/ui's call controls and card (`components/call/`), whose classes are `ui-call-*`.",
+  "classes": [
+    { "class": "call-bar", "allow": [] },
+    { "class": "call-controls", "allow": [] },
+    { "class": "call-mutes", "allow": [] },
+    { "class": "call-status*", "allow": [] },
+    { "class": "call-backend*", "allow": [] },
+    { "class": "voice-notice", "allow": [] },
+    { "class": "voice-notice-row", "allow": [] },
+    { "class": "voice-notice-text", "allow": [] },
+    { "class": "agent-call-notice", "allow": [] }
+  ]
+}

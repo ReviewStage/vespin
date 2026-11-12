@@ -5,7 +5,14 @@ import {
   type AgentBrief,
   type AgentSummary,
 } from "@repo/features/agent-wire";
+import type { ModelChoice } from "@repo/features/models-wire";
 import { TERMINAL_ASK } from "@repo/features/terminal-entry";
+import {
+  agentTranscript,
+  readWholeTranscript,
+  TRANSCRIPT_COPY,
+  type TranscriptCopy,
+} from "@repo/features/transcript-copy";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { GLYPH } from "@repo/ui/icons";
@@ -14,6 +21,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { pressMutation } from "../act-mutations.js";
 import { appPlatform } from "../app-platform.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
+import type { DraftSuggestion } from "../composer-drafts.js";
 import { agentPlace, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { useThisMac } from "../machine-name.js";
 import { renameWrite } from "../rename-write.js";
@@ -24,17 +32,12 @@ import {
   useShortcutTargetOn,
 } from "../shortcut-target.js";
 import { useSteadyDoor } from "../steady-door.js";
+import type { SuggestDoor } from "../tasks/fork-action.js";
 import type { AgentFork } from "../tasks/fork-model.js";
 import { useMoveToEntry } from "../tasks/move-agent.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import type { HeldAction } from "../tasks/terminal-held.js";
 import { TERMINAL_KIND, type TerminalKind } from "../tasks/terminal-session.js";
-import {
-  agentTranscript,
-  readWholeTranscript,
-  TRANSCRIPT_COPY,
-  type TranscriptCopy,
-} from "../tasks/transcript-copy.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import { useOpenTerminalTab, useShowShellTab } from "../tasks/use-terminal-session.js";
@@ -316,6 +319,7 @@ export interface AgentDraftDoors {
   readonly onContinue:
     | ((agentId: string, words: string, attachments: readonly AgentAttachment[]) => void)
     | undefined;
+  readonly onSuggest: SuggestDoor | undefined;
 }
 
 /**
@@ -326,7 +330,7 @@ export interface AgentDraftDoors {
  * (`useSteadyDoor`), and none while what the agents stand under is archived.
  */
 export function useAgentDraftDoors(
-  agents: Pick<AgentsControl, "onForkDraft" | "onContinueDraft">,
+  agents: Pick<AgentsControl, "onForkDraft" | "onContinueDraft" | "onSuggestDraft">,
   archived: boolean,
   onOpenDraft: (draftId: string) => void,
 ): AgentDraftDoors {
@@ -341,7 +345,14 @@ export function useAgentDraftDoors(
           onOpenDraft(agents.onContinueDraft(agentId, words, attachments)),
   );
 
-  return { onFork, onContinue };
+  const onSuggest = useSteadyDoor(
+    archived
+      ? undefined
+      : (suggestion: DraftSuggestion, words: string, choice: ModelChoice | undefined) =>
+          onOpenDraft(agents.onSuggestDraft(suggestion, words, choice)),
+  );
+
+  return { onFork, onContinue, onSuggest };
 }
 
 /** One agent's actions, as every surface that draws it offers them. */

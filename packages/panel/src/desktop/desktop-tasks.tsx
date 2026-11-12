@@ -804,11 +804,11 @@ function DescriptionDocument({
     onPressTab({ kind: TAB_PRESS.PANEL, tab: turnChangesTab(agentId, messageId) });
   });
 
-  const { onFork: forkDoor, onContinue: continueDoor } = useAgentDraftDoors(
-    agents,
-    false,
-    (draft) => openColumnTab(draftTab(draft)),
-  );
+  const {
+    onFork: forkDoor,
+    onContinue: continueDoor,
+    onSuggest: suggestDoor,
+  } = useAgentDraftDoors(agents, false, (draft) => openColumnTab(draftTab(draft)));
 
   const showHistory = useSteadyDoor((save: number | undefined) => {
     if (opened !== undefined) tasks.onOpenHistory(opened.id, save);
@@ -1664,6 +1664,7 @@ function DescriptionDocument({
                                 cards={cards}
                                 onFork={forkDoor}
                                 onContinue={continueDoor}
+                                onSuggest={suggestDoor}
                                 threads={threads}
                                 hidden={agentThreadsView !== undefined}
                               />

@@ -111,6 +111,18 @@ function GuardedScreens() {
             options={{ presentation: sheetPresentation, title: "Task relation" }}
           />
           <Stack.Screen
+            name="move-task"
+            options={{ presentation: sheetPresentation, title: "Move to workspace" }}
+          />
+          <Stack.Screen
+            name="task-following"
+            options={{ presentation: sheetPresentation, title: "Followers" }}
+          />
+          <Stack.Screen
+            name="add-follower"
+            options={{ presentation: sheetPresentation, title: "Add a follower" }}
+          />
+          <Stack.Screen
             name="new-workspace"
             options={{ presentation: sheetPresentation, title: "New workspace" }}
           />

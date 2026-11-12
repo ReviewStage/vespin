@@ -25,6 +25,14 @@ or linking GitHub later, authorizes the Vespin GitHub App; we store its
 OAuth tokens encrypted on the Service and never send them to your Mac or
 browser.
 
+### Voice calls
+
+When you talk to an agent by voice, your audio goes from the app to OpenAI, on
+your own OpenAI API key, and nowhere else; the key never leaves the Service.
+What you say reaches the agent as its messages, as a typed line does, and is
+kept in its conversation like one. We keep nothing else of a call but its
+length, which counts toward your day and in our usage counts.
+
 ### Workspaces, tasks, and descriptions
 
 Every account gets a first workspace, and you can create or join others.
@@ -406,7 +414,7 @@ We do not use your code or conversations to train AI models.
 We do not sell your personal information or use it for advertising. We share
 data with:
 
-- **AI providers:** your agents, web search, dictation, and pull request
+- **AI providers:** your agents, web search, dictation, voice calls, and pull request
   chapters run on Anthropic or OpenAI, always on the API key or subscription
   you saved, never ours. Titles, of your agents, tasks, and the threads you
   start, are generated on Anthropic under Vespin's own API key, from excerpts
@@ -440,12 +448,14 @@ data with:
 
 Your data is stored on servers provided by our infrastructure partners: our
 database is hosted by Neon, and agents' checkouts and session files live in
-Vercel Sandboxes, in their snapshots, and on Vercel Drives: each agent's
+Vercel Sandboxes and on Vercel Drives: each agent's
 checkout on a drive of its own, and one drive per workspace holding the default
 branch of every repository it connects, member-token ones included, which each
 new cloud agent forks. A copy of a workspace repository's default branch, with
 its dependencies installed, may also remain on a drive of its own made before
-workspace drives, which nothing reads or writes any more.
+workspace drives, which nothing reads or writes any more. A sandbox's own
+disk is discarded when it stops, so only its drive outlives it; a sandbox made
+before that changed keeps a snapshot of its disk instead.
 We use encryption in transit (TLS), encrypt saved credentials as described
 above, and keep the tokens agents use outside their sandboxes, adding them at
 the sandbox's network firewall. Transcripts, descriptions, and other content are not
@@ -464,8 +474,9 @@ pages, inbox items, and pictures, and its agents' transcripts. Deleting an
 agent deletes its transcript at once. Deleting or archiving an agent asks
 Vercel to delete its sandbox and the drive holding its checkout; where that
 fails or does not finish in time, the delete or archive goes ahead anyway, and
-the drive may remain. A sandbox's snapshots otherwise expire and are removed
-seven days after they were last used. The workspace's drive of every
+the drive may remain. A sandbox keeps no snapshot; the snapshots of one made
+before that changed otherwise expire and are removed seven days after they
+were last used. The workspace's drive of every
 repository it connects is kept for the workspace's agents until the workspace
 is deleted. A repository's default-branch drive made before workspace drives
 is no longer read; deleting its workspace asks Vercel to delete it where one of
@@ -481,8 +492,9 @@ made before default-branch drives expires thirty days after its last use. When y
   but for the tasks in workspaces with other members (below), and we ask
   Vercel to delete your agents' sandboxes and the drives holding their
   checkouts; where that fails or does not finish in time, your account is
-  deleted anyway and a drive may remain. Their snapshots otherwise expire and
-  are removed seven days after they were last used.
+  deleted anyway and a drive may remain. The snapshots of a sandbox made
+  before sandboxes stopped keeping them otherwise expire and are removed seven
+  days after they were last used.
 - **Workspaces you own and are the only member of** are deleted at once with
   their tasks, transcripts, and automations, as a deleted task is, and we ask
   Vercel to delete every one of their agents' sandboxes and the drives holding

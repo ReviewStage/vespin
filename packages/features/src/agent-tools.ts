@@ -61,6 +61,8 @@ export const AGENT_TOOL = {
   // The ports a server listens on in a coding agent's own cloud sandbox, and the one it shares by link.
   LIST_PORTS: "list_ports",
   SHARE_PORT: "share_port",
+  // One app on the developer's own Mac, seen and used in the background, every role's.
+  COMPUTER: "computer",
   // The retired runtime's shell and file tools and the code extension's, started in a coding agent's checkout.
   BASH: "bash",
   READ_FILE: "read_file",

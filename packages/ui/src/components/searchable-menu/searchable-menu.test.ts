@@ -405,7 +405,7 @@ test("a listed row's ⋯ opens its acts beside it, and a press on the row still 
           thing: "Sound",
           rows: [
             { id: "rename", label: "Rename…" },
-            { id: "remove", label: "Remove…" },
+            { id: "delete", label: "Delete" },
           ],
           onPick: (id) => said.push(id),
         },
@@ -423,8 +423,8 @@ test("a listed row's ⋯ opens its acts beside it, and a press on the row still 
   press({ key: "Enter" });
   act(() => document.querySelector<HTMLElement>('[role="option"]')?.click());
 
-  assert.equal(acts, "Rename…Remove…");
-  assert.deepEqual(said, ["remove"]);
+  assert.equal(acts, "Rename…Delete");
+  assert.deepEqual(said, ["delete"]);
   assert.deepEqual(asked.said, ["pick glass"]);
 });
 

@@ -731,7 +731,6 @@ function sectionActionGroups(
     {
       label: "Delete section",
       icon: <TrashIcon />,
-      danger: true,
       onSelect: () => dialogs.askDelete(section, doors.opener.current),
     },
   ];

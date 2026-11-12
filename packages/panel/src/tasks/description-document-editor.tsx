@@ -30,6 +30,7 @@ import {
   type EditorAnchors,
   type PictureLanding,
   PLACEMENT_END,
+  type PlacedPicture,
   type PlacedWords,
 } from "../description-editor/contract.js";
 import { descriptionFiles, offersDescriptionFiles } from "../picture-files.js";
@@ -85,6 +86,9 @@ export const EDITOR_ROOM_CLASS = "description-document-editor";
 
 /** What the developer does that ends the editor keeping the words it opened on where they stood: a scroll, a press, or a key. */
 const KEEPING_ENDS = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+
+/** A picture drawn in the text, whose press opens the editor with it selected. */
+const PICTURE_SELECTOR = ".picture-block";
 
 /** How long the typing pauses before the document hears the text. */
 const DRAFT_PAUSE = Duration.millis(150);
@@ -183,6 +187,20 @@ function sectionWordsAt(
   return { section, text, occurrence, offset: range.startOffset, code, top: lineTop(range, words) };
 }
 
+/** The picture a press landed on in a section's drawn block, by how many the block draws before it (`PlacedPicture`); none off a picture, and none on a picture's caption, which is words. */
+function sectionPictureAt(
+  block: HTMLElement,
+  section: number,
+  target: Element,
+): PlacedPicture | undefined {
+  const picture = target.closest(PICTURE_SELECTOR);
+
+  if (picture === null || target.closest(".picture-caption") !== null) return undefined;
+  const occurrence = [...block.querySelectorAll(PICTURE_SELECTOR)].indexOf(picture);
+
+  return occurrence === -1 ? undefined : { section, occurrence };
+}
+
 /** Whether an element is a heading that opens a section, as the editor counts them (`SECTION_LEVELS`). */
 function opensSection(element: Element | null | undefined): element is HTMLHeadingElement {
   return (
@@ -236,7 +254,8 @@ export function documentWordsAt(root: HTMLElement, range: Range): PlacedWords | 
 
 /**
  * Where a click on drawn words opens their editor, each of its words found
- * by `place`: on the words the click landed on, or, where its press selected
+ * by `place`: on the picture the click landed on, found by `pictureOf`, which
+ * the editor opens selected, on the words it landed on, or, where its press selected
  * words, selecting them again from where the selection started to where it
  * ended, so the editor's format toolbar stands over them as over words
  * selected in the editor. None where it landed on no words to edit, or
@@ -248,8 +267,13 @@ export function clickPlacement(
   x: number,
   y: number,
   place: (range: Range) => PlacedWords | undefined,
+  pictureOf?: (target: Element) => PlacedPicture | undefined,
 ): DescriptionEditorPlacement | undefined {
   if (!pressesWords(target)) return undefined;
+  const picture = target instanceof Element ? pictureOf?.(target) : undefined;
+
+  // A press on a picture opens the editor with that picture selected, never on words beside it.
+  if (picture !== undefined) return { x, y, picture };
   const selection = window.getSelection();
 
   if (selection === null || selection.isCollapsed) {
@@ -836,8 +860,12 @@ export function DocumentBlock({
         editing.select(host);
       }}
       onPress={({ target, x, y, block: pressed }) => {
-        const placement = clickPlacement(target, x, y, (range) =>
-          sectionWordsAt(pressed, section, range),
+        const placement = clickPlacement(
+          target,
+          x,
+          y,
+          (range) => sectionWordsAt(pressed, section, range),
+          (at) => sectionPictureAt(pressed, section, at),
         );
 
         if (placement !== undefined) editing.open(placement);
@@ -1406,7 +1434,8 @@ export function DescriptionDocumentEditor({
     },
   });
   // Note that the words a click opened the editor on are kept where they
-  // stood, since the editor may draw what stands above them at another
+  // stood, and the change a step through the history opened it on is kept
+  // in view, since the editor may draw what stands above them at another
   // height than the text did, a picture, a table or a diagram's preview say,
   // and again each time the editor's height changes as what it draws later
   // lands, a diagram's preview or a chip, until the developer scrolls,
@@ -1416,15 +1445,27 @@ export function DescriptionDocumentEditor({
     // Note that a press on the room while the bundle loaded is where the editor opens, which keeps no words.
     const place = pending ?? editing.placement;
     const target = place !== undefined && "words" in place ? place.words?.top : undefined;
+    const stepped = editing.step !== undefined;
     const column = scroller?.current;
     const text = room.current;
 
-    if (target === undefined || column == null || text === null) return;
+    if ((target === undefined && !stepped) || column == null || text === null) return;
 
+    // Note that the change a step took back or put back is brought to the column's middle only where it stands out of view, since it most often stands where the developer just left it.
     const keep = () => {
       const top = handle.current?.wordsTop();
 
-      if (top !== undefined) column.scrollTop += top - target;
+      if (top === undefined) return;
+
+      if (target !== undefined) {
+        column.scrollTop += top - target;
+
+        return;
+      }
+
+      const box = column.getBoundingClientRect();
+
+      if (top < box.top || top > box.bottom) column.scrollTop += top - (box.top + box.height / 2);
     };
 
     keep();
@@ -1484,6 +1525,10 @@ export function DescriptionDocumentEditor({
       anchors={commentAnchors}
       onComment={onComment}
       diagrams
+      history={
+        editing.history === undefined ? undefined : { kept: editing.history, step: editing.step }
+      }
+      onClosed={editing.keepHistory}
     >
       <DocumentNote editor={editor} editing={editing} />
     </MarkdownEditor>

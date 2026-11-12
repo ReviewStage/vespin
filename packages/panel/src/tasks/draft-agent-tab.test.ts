@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import type { Failure } from "@repo/features/failure-remedy";
@@ -545,6 +546,73 @@ test("a fork's draft names its source and the message over the box, starts on th
   assert.deepEqual(tab.starts, [], "a fork is never started as a prompt");
 
   await tab.press("Drop the fork");
+  assert.equal(dropped, 1);
+});
+
+test("a suggestion's draft names the agent that suggested it over the box, sends its words and chips through the suggestion rather than as a Start, and its × lets the suggestion go", async () => {
+  const SOURCE = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
+
+  const suggestion = {
+    agentId: SOURCE,
+    buttonId: "92f3b536-7e0a-4bc8-a3e0-fa0b1c2d3e4f",
+    label: "Wire up the invite email",
+  };
+
+  const source: AgentSummary = {
+    id: SOURCE,
+    planId: TASK_ID,
+    model: "openai/gpt-6.1-sol",
+    effort: "xhigh",
+    title: "Add teammate invitations",
+    createdAt: 1,
+    status: AGENT_STATUS.COMPLETED,
+    turnId: null,
+  };
+
+  const sent: unknown[] = [];
+  let dropped = 0;
+
+  const tab = mount(
+    [],
+    {
+      ...DRAFT,
+      prompt: "Send the invite email, and retry a bounce once.",
+      suggestion,
+      disabledServers: [INTEGRATION_PROVIDER.LINEAR],
+      permissionMode: AGENT_PERMISSION_MODE.ASK,
+    },
+    {
+      agents: [source],
+      startSuggestion: (draftId, through, words, _choice, _attachments, servers, _runsOn, mode) => {
+        sent.push({ draftId, button: through.buttonId, words, servers, mode });
+
+        return Promise.resolve(undefined);
+      },
+      onDropFork: () => {
+        dropped += 1;
+      },
+    },
+  );
+
+  await settle();
+
+  assert.equal(
+    document.querySelector("[data-suggestion-chip]")?.textContent?.replace(/\s+/gu, " "),
+    "Suggested byAdd teammate invitations:“Wire up the invite email”",
+  );
+  await tab.send();
+  assert.deepEqual(sent, [
+    {
+      draftId: DRAFT.id,
+      button: suggestion.buttonId,
+      words: "Send the invite email, and retry a bounce once.",
+      servers: [INTEGRATION_PROVIDER.LINEAR],
+      mode: AGENT_PERMISSION_MODE.ASK,
+    },
+  ]);
+  assert.deepEqual(tab.starts, [], "a suggestion is never started as a prompt");
+
+  await tab.press("Drop the suggestion");
   assert.equal(dropped, 1);
 });
 

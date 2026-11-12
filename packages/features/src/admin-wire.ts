@@ -30,6 +30,7 @@ export const ADMIN_ROUTE_PATH = {
   WORKSPACES: "/api/admin/workspaces",
   WORKSPACE: "/api/admin/workspace",
   RELIABILITY: "/api/admin/reliability",
+  CATALOG: "/api/admin/catalog",
 } as const;
 
 export const ADMIN_ERROR = {
@@ -307,6 +308,7 @@ export function adminWorkspaceId(value: string | undefined): string | undefined 
  * app's host carries to the service for it, and where each is served.
  */
 export const ADMIN_READ = {
+  CATALOG: "catalog",
   COST: "cost",
   DAY: "day",
   METRICS: "metrics",
@@ -321,6 +323,7 @@ export type AdminReadProcedure = (typeof ADMIN_READ)[keyof typeof ADMIN_READ];
 
 /** Where each admin read is served. */
 export const ADMIN_READ_PATH = {
+  [ADMIN_READ.CATALOG]: ADMIN_ROUTE_PATH.CATALOG,
   [ADMIN_READ.COST]: ADMIN_ROUTE_PATH.COST,
   [ADMIN_READ.DAY]: ADMIN_ROUTE_PATH.DAY,
   [ADMIN_READ.METRICS]: ADMIN_ROUTE_PATH.METRICS,

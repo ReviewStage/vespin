@@ -72,6 +72,7 @@
   --spacing-attention-mark: 14px; /* off-scale: the attention disc, a row glyph's size */
   --spacing-find-field: 240px; /* off-scale: the find bar's field, one width whatever is typed */
   --radius-disc: 50%; /* off-scale: a circle, whose corner what it holds inherits */
+  --radius-held: inherit; /* a layer laid over a box, following the box's own corner (`UploadCover`) */
   --font-weight-ui-regular: var(--ui-weight-regular);
   --font-weight-ui-medium: var(--ui-weight-medium);
   --font-weight-ui-semibold: var(--ui-weight-semibold);
@@ -898,6 +899,8 @@
      where one fits, and say so where none does. */
   --spacing-page-thumb-row: 48px; /* off-scale: a row's media line */
   --spacing-icon-16: var(--ui-icon-16);
+  --spacing-icon-20: var(--ui-icon-20);
+  --spacing-icon-40: var(--ui-icon-40);
   --color-veil: var(--ui-color-veil);
   --color-on-veil: var(--ui-color-on-veil);
   /* A picture's own shape, which its tile sets where it is drawn
@@ -947,7 +950,13 @@
      shadow rather than ringed by a dark edge. */
   --shadow-composer:
     0 1px 2px var(--ui-color-shadow-soft), 0 12px 32px -16px var(--ui-color-shadow);
-  /* A caption's small glyph. */
+  /* A call's bar (`components/call/`), as tall as its two lines; and a
+     caption's small glyph. */
+  --spacing-call-row: calc(
+    var(--ui-type-section-leading) +
+    var(--ui-space-2) +
+    var(--ui-type-caption-leading)
+  );
   --spacing-icon-12: var(--ui-icon-12);
 
   /* The page patterns (`components/layout/`, `settings-*`,
@@ -1192,6 +1201,9 @@
      the app is marked by. */
   --spacing-picture-most: 520px; /* off-scale: a screenful's worth */
   --spacing-picture-stand-in: 480px; /* off-scale: a picture's width before its bytes are read */
+  /* A picture whose upload failed is at least this size, so its failure's card (`UploadCover`) fits on it however small the picture. */
+  --spacing-picture-failed-w: 240px; /* off-scale: the failure's card's words and presses */
+  --spacing-picture-failed-h: 136px; /* off-scale: its glyph, two lines of why, and its presses */
   --aspect-screenshot: 16 / 10;
   --text-picture-caption: 0.9em;
   --text-picture-caption--line-height: 1.45;

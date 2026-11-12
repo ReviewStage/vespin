@@ -13,7 +13,7 @@ import type { FileChip } from "@repo/features/attachment-model";
 import { isVideoType, type KeptPicture } from "@repo/features/conversation-picture-wire";
 import { formatBytes } from "@repo/features/number-format";
 import { ACT_KIND } from "@repo/host/acts";
-import { isVideoDataUrl, PICTURE_SET_SHOWN, PictureSet, PictureSetTile } from "@repo/ui";
+import { AppIcon, isVideoDataUrl, PICTURE_SET_SHOWN, PictureSet, PictureSetTile } from "@repo/ui";
 import {
   PICTURE_STATE,
   type PictureState,
@@ -451,6 +451,14 @@ function notKeptWords(byteCount: number): string {
  * model saw it all the same. The videos a browser call recorded stand
  * under them as a `show_image` call's would.
  */
+/** An app's icon a call kept beside the transcript, read through the transcript's door, in a call row's glyph seat; a screen's glyph stands there until it lands. */
+export function KeptAppIcon({ id }: { id: string }): ReactNode {
+  const door = useContext(AgentPicturesContext);
+  const state = usePicture(pictureQuery(door?.owner ?? "", id, door?.read), pictureUnread);
+
+  return <AppIcon src={state.kind === PICTURE_STATE.READY ? state.url : undefined} />;
+}
+
 export function CallPictures({
   tool,
   input,
@@ -619,19 +627,23 @@ function useKeptChips(files: readonly MessageFileChip[]): FileChip[] {
  * (`SentWords`), and to its files' row, which leaves those out; a press opens
  * a file over the window, walking the files in the order the words name
  * them. A line whose words name none of its files, as every line sent before
- * markers, draws as it did.
+ * markers, draws as it did. While the line is on its way, its files wear the
+ * upload's cover.
  */
 export function MessageFiles({
   message,
   words,
+  sending = false,
   children,
 }: {
   message: AgentTranscriptMessage;
   words: string;
+  /** Whether the line is still on its way, its row not yet read back. */
+  sending?: boolean;
   children: ReactNode;
 }): ReactNode {
   return (
-    <WordFilesOf files={messageFileChips(message)} words={words}>
+    <WordFilesOf files={messageFileChips(message)} words={words} sending={sending}>
       {children}
     </WordFilesOf>
   );
@@ -646,13 +658,16 @@ export function MessageFiles({
 export function WordFilesOf({
   files,
   words,
+  sending = false,
   children,
 }: {
   files: readonly MessageFileChip[];
   words: string;
+  /** Whether the line is still on its way, its files going up with it. */
+  sending?: boolean;
   children: ReactNode;
 }): ReactNode {
-  const shown = useWordFiles(useKeptChips(files), words);
+  const shown = useWordFiles(useKeptChips(files), words, sending);
 
   if (shown.named === undefined) return children;
 

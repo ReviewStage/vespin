@@ -16,6 +16,8 @@ export const EXPERIMENT = {
   SKILLS: "skills",
   /** Descriptions: a task's description its coding agents keep current as they work, its comments and version history, and the tools and instructions they write it and answer its comments with. */
   DESCRIPTIONS: "descriptions",
+  /** Computer use: agents see and use the apps a member allows on their own Mac, in the background, through the `computer` tool. */
+  COMPUTER_USE: "computer-use",
   /** Rewind restores files: a rewind or an edit of a message may put the agent's files back as they stood before it, from the checkout its runner records before each turn. */
   REWIND_FILES: "rewind-files",
   /** Done and follow-ups: an agent ends a turn with a short summary, and the bar over its box says what it needs from you, or that it is done, with what is still open and the follow-ups it offers. */
@@ -26,6 +28,10 @@ export const EXPERIMENT = {
   TURN_CHANGES: "turn-changes",
   /** Reply buttons: a button an agent puts in its reply, beside the line it is about, that starts a new agent on a brief it wrote, or sends one to a running agent, once a member presses it. */
   REPLY_BUTTONS: "reply-buttons",
+  /** Following: the members who follow each task, who starts, is assigned, or messages its agents, and each follower's switch letting the task's agents use their machines. */
+  FOLLOWING: "following",
+  /** Voice: talk to an agent out loud through GPT-Live on your own OpenAI API key: Talk in an agent's box, the call card, and Settings › Voice. */
+  VOICE: "voice",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -79,6 +85,24 @@ export interface ExperimentEntry {
  */
 export const EXPERIMENTS = [
   {
+    key: EXPERIMENT.VOICE,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
+    name: "Voice",
+    detail:
+      "Talk to an agent out loud through GPT-Live on your own OpenAI API key, from Talk in an agent's box.",
+    owner: "Dean",
+    since: "2026-11-12",
+  },
+  {
+    key: EXPERIMENT.FOLLOWING,
+    scope: EXPERIMENT_SCOPE.WORKSPACE,
+    name: "Following",
+    detail:
+      "Follow the tasks you care about, and choose on each whether its agents may use your machines.",
+    owner: "Dean",
+    since: "2026-11-12",
+  },
+  {
     key: EXPERIMENT.TURN_CHANGES,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
     name: "Turn changes",
@@ -124,6 +148,15 @@ export const EXPERIMENTS = [
       "and run one in a cloud agent's sandbox from the Run button over its tabs or ⌘K.",
     owner: "Dean",
     since: "2026-11-10",
+  },
+  {
+    key: EXPERIMENT.COMPUTER_USE,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
+    name: "Computer use",
+    detail:
+      "Let agents see and use the apps you allow on your Mac, in the background, while you keep working.",
+    owner: "Dean",
+    since: "2026-11-09",
   },
   {
     key: EXPERIMENT.DESCRIPTIONS,

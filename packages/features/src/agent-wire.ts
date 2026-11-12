@@ -1503,6 +1503,19 @@ export const listedAgentSchema = EffectSchema.Struct({
 
 export type ListedAgent = typeof listedAgentSchema.Type;
 
+/**
+ * One agent as its own page read it, in the shape the task list holds it:
+ * a surface that draws an agent the list doesn't hold, such as one a link
+ * names, draws it as it draws a listed one. Note that a page names no
+ * automation by null where the list leaves the key out, and carries the run
+ * that started it and its branch, which the list's row doesn't.
+ */
+export function listedAgentOfPage(page: AgentPage): ListedAgent {
+  const { automationId, origin: _origin, branch: _branch, ...agent } = page;
+
+  return automationId === null ? agent : { ...agent, automationId };
+}
+
 /** What became of one file: made, changed in place, removed, or moved, with or without changes. */
 export const CHANGED_FILE_STATUS = {
   ADDED: "added",

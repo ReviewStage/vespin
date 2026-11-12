@@ -6,6 +6,7 @@ import {
   MARKDOWN_BLOCK,
   MARKDOWN_RUN,
   markdownBlocks,
+  markdownGithubPages,
 } from "./markdown-model.js";
 
 const READING = {
@@ -40,6 +41,7 @@ describe("markdownBlocks", () => {
             name: "#42 Fix the refresh",
             heard: "pull request #42 Fix the refresh",
             target: { kind: LINK_TARGET.WEB, href: "https://github.com/acme/app/pull/42" },
+            github: "https://github.com/acme/app/pull/42",
           },
         },
         words(" on "),
@@ -167,6 +169,23 @@ describe("markdownBlocks", () => {
   it("draws words nested too deep to parse as one block of plain text", () => {
     const deep = `${">".repeat(8000)} **hi**`;
     expect(markdownBlocks(deep, READING)).toEqual([{ kind: MARKDOWN_BLOCK.CODE, text: deep }]);
+  });
+});
+
+describe("markdownGithubPages", () => {
+  // A chip whose page is never listed is never followed, so it never says where its pull request stands.
+  it("lists each GitHub pull request and issue a chip names once, through a definition too, and no other link", () => {
+    const pages = markdownGithubPages(
+      "[@#42 Fix](https://github.com/acme/app/pull/42), [@#7 Bug][bug], " +
+        "[again](https://github.com/acme/app/pull/42), [the docs](https://example.com/docs)\n\n" +
+        "[bug]: https://github.com/acme/app/issues/7",
+      READING,
+    );
+
+    expect(pages).toEqual([
+      "https://github.com/acme/app/pull/42",
+      "https://github.com/acme/app/issues/7",
+    ]);
   });
 });
 

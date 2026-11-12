@@ -17,6 +17,7 @@
  */
 
 import type { DraftCopy } from "@repo/features/draft-text";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   BUZZ,
   buzz,
@@ -45,8 +46,7 @@ const KEEP_FAILED = {
 } as const satisfies Record<KeepAct, string>;
 
 /** What a save says where Photos refused the app, which only the system's Settings allows again. */
-const PHOTOS_REFUSED =
-  "Vespin can't save to Photos. Allow it in Settings › Privacy & Security › Photos.";
+const PHOTOS_REFUSED = `${PRODUCT_NAME} can't save to Photos. Allow it in Settings › Privacy & Security › Photos.`;
 
 /** The folder prefix a picture written to be saved or shared stands under in the app's caches. */
 const KEPT_PREFIX = "kept";
