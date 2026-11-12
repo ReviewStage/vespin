@@ -18,6 +18,7 @@
  * none, since one not heard back may have started.
  */
 
+import { signedInAccountId } from "@repo/credentials/snapshot";
 import {
   RUN_ACTION_WORDS,
   repositoryRunActions,
@@ -72,13 +73,19 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
 
   const { data: experiment = false } = useQuery({ ...appStateQuery, select: experimentSelect });
 
+  // Note that the reads are kept under the account signed in, so another account's never draws from them.
+  const { data: accountId } = useQuery({
+    ...appStateQuery,
+    select: (state) => signedInAccountId(state.account),
+  });
+
   const asks =
     agent !== undefined &&
     workspaceId !== undefined &&
     runActionsAsked({ experiment, machine: agent.machine, repository: agent.repository });
 
   const { data: setup } = useQuery({
-    queryKey: [QUERY_ROOT.SETUP, workspaceId],
+    queryKey: [QUERY_ROOT.SETUP, accountId, workspaceId],
     enabled: asks,
     queryFn: () => acts[ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]({ workspaceId: workspaceId ?? "" }),
   });
@@ -92,7 +99,7 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
     : [];
 
   const offered = actions.length > 0;
-  const shellsKey = [QUERY_ROOT.SHELLS, agentId];
+  const shellsKey = [QUERY_ROOT.SHELLS, accountId, agentId];
   const pressing = useRef(new Set<string>());
 
   const { data: shellsRead } = useQuery({
@@ -129,11 +136,17 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
   const stop = (action: RunAction) =>
     write(
       () =>
-        acts[ACT_KIND.AGENTS_RUN_ACTION_STOP]({ agentId, actionId: action.id }).then((answer) => {
-          if ("terminals" in answer) queries.setQueryData(shellsKey, answer);
+        acts[ACT_KIND.AGENTS_RUN_ACTION_STOP]({ agentId, actionId: action.id }).then(
+          async (answer) => {
+            // Note that a read of the shells still out is let go first, so it never lands over the stop.
+            if ("terminals" in answer) {
+              await queries.cancelQueries({ queryKey: shellsKey });
+              queries.setQueryData(shellsKey, answer);
+            }
 
-          return answer;
-        }),
+            return answer;
+          },
+        ),
       {
         refused: (answer) => ("terminals" in answer ? undefined : RUN_ACTION_WORDS.NOT_STOPPED),
         unanswered: RUN_ACTION_WORDS.NOT_STOPPED,

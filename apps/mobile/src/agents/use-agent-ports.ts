@@ -12,6 +12,7 @@
  * Safari by its shared link alone.
  */
 
+import { signedInAccountId } from "@repo/credentials/snapshot";
 import {
   AGENT_PORTS_WORDS,
   hostedPorts,
@@ -25,7 +26,8 @@ import { ACT_KIND } from "@repo/host/acts";
 import { BUZZ, buzz } from "@repo/ui-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { setStringAsync } from "expo-clipboard";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
 import { useFollowedAgent } from "./use-agent.js";
@@ -67,10 +69,19 @@ export function useAgentPorts(agentId: string): AgentPorts {
   const write = useWrite();
   const queries = useQueryClient();
   const [note, setNote] = useState<string | undefined>(undefined);
-  const sharedKey = [QUERY_ROOT.SHARED, agentId];
+  // Note that a share or its close under way holds the next, so two never race to say which port is shared.
+  const sharing = useRef(false);
+
+  // Note that the reads are kept under the account signed in, so another account's never draws from them.
+  const { data: accountId } = useQuery({
+    ...appStateQuery,
+    select: (state) => signedInAccountId(state.account),
+  });
+
+  const sharedKey = [QUERY_ROOT.SHARED, accountId, agentId];
 
   const { data: listed } = useQuery({
-    queryKey: [QUERY_ROOT.PORTS, agentId],
+    queryKey: [QUERY_ROOT.PORTS, accountId, agentId],
     refetchInterval: PORTS_LOOK_EVERY_MS,
     retry: false,
     queryFn: () => acts[ACT_KIND.AGENTS_PORTS]({ agentId }),
@@ -92,7 +103,13 @@ export function useAgentPorts(agentId: string): AgentPorts {
       .then(() => queries.setQueryData(sharedKey, shared));
 
   const share = (port: number | null) => {
+    if (sharing.current) return;
+    sharing.current = true;
     setNote(undefined);
+
+    const settled = () => {
+      sharing.current = false;
+    };
 
     if (port === null) {
       void write(
@@ -108,7 +125,7 @@ export function useAgentPorts(agentId: string): AgentPorts {
           inPlace: setNote,
           went: BUZZ.SUCCESS,
         },
-      );
+      ).finally(settled);
 
       return;
     }
@@ -126,7 +143,7 @@ export function useAgentPorts(agentId: string): AgentPorts {
         inPlace: setNote,
         went: BUZZ.SUCCESS,
       },
-    );
+    ).finally(settled);
   };
 
   const copy = (url: string) => {
