@@ -34,12 +34,13 @@ import {
 } from "../../github/workspace-repository.js";
 import { extraCheckoutPaths, REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import {
+  claimWorkspaceCheckout,
   cloneExtraRepository,
   cloneRepository,
+  linkWorkspaceFolder,
   REPOSITORY_REFUSAL,
   type RepositoryRefusal,
   type RepositorySandbox,
-  refreshRepository,
   runInSandbox,
   setCheckoutIdentity,
 } from "../repository-shell.js";
@@ -58,10 +59,10 @@ import { CODER, CODER_REFUSAL, type CoderRefusal } from "./bounds.js";
  * first instead, to stand on past the checkout, which reaches GitHub
  * through it with no write of its own (`writeAgentCredential`).
  * The clone is whole, since a branch and a pull request are cut from the
- * history, or is no clone at all where its sandbox was created from its
- * workspace's repository's base drive, whose whole checkout is fetched
- * up to the branch instead (`refreshAgentCheckout`, `../base-drive.ts`),
- * or from the snapshot of the agent it was started from, whose checkout
+ * history, or is no clone at all where its sandbox was created on a fork of
+ * its workspace's drive, whose checkout of the repository is claimed and
+ * fetched up to the branch instead (`claimAgentCheckout`,
+ * `../workspace-drive.ts`), or from the snapshot of the agent it was started from, whose checkout
  * stands as that agent left it. The launch then finishes it (`finishCheckoutWith`): a
  * write token is minted, carrying contents and pull requests write, since
  * the agent pushes a branch and opens a pull request from it, and set at the
@@ -585,28 +586,40 @@ export const cloneAgentRepository = /* @__PURE__ */ Effect.fn("web/cloneAgentRep
 );
 
 /**
- * The checkout a fork of the repository's base drive holds brought up to
- * the repository's default branch, on the read the caller made of it, the token
- * at the firewall for the fetch alone where none stands there for it already
- * (`writeAgentCredential`), and recorded under the name the
- * agent's row holds; refused, in git's words, where the sandbox holds no
- * checkout of that repository or the fetch failed. As after a clone, no
- * identity and no credential is set (`finishCheckoutWith`).
+ * The agent's checkout made on a fresh fork of its workspace's drive, on
+ * the read the caller made of it: the repository's folder on the drive
+ * (`folder`) claimed as the checkout and brought up to the branch the agent
+ * was started on where its row names one and to the default branch
+ * otherwise (`claimWorkspaceCheckout`), or, where the fork holds no
+ * checkout there, the repository cloned whole as from the image alone
+ * (`cloneAgentRepository`) and linked at its folder, so it stands among the
+ * drive's other repositories either way. The token stands at the firewall
+ * for the fetch alone where none stands there for it already
+ * (`writeAgentCredential`), and the checkout is recorded under the name the
+ * agent's row holds. As after a clone, no identity and no credential is
+ * set (`finishCheckoutWith`).
  */
-export const refreshAgentCheckout = /* @__PURE__ */ Effect.fn("web/refreshAgentCheckout")(
-  function* (
-    agent: WithRepository<Agent>,
-    sandbox: RepositorySandbox,
-    read: AgentRepositoryRead,
-  ): Effect.fn.Return<void, CheckoutRefused> {
-    yield* refreshRepository(
-      sandbox,
-      { fullName: read.fullName, defaultBranch: read.defaultBranch, recordedAs: agent.repository },
-      read.token,
-      read.access,
-    ).pipe(Effect.mapError(refusedWith));
-  },
-);
+export const claimAgentCheckout = /* @__PURE__ */ Effect.fn("web/claimAgentCheckout")(function* (
+  agent: WithRepository<Agent>,
+  sandbox: RepositorySandbox,
+  read: AgentRepositoryRead,
+  folder: string,
+): Effect.fn.Return<void, CheckoutRefused> {
+  const claimed = yield* claimWorkspaceCheckout(
+    sandbox,
+    {
+      fullName: read.fullName,
+      defaultBranch: agent.startBranch ?? read.defaultBranch,
+      recordedAs: agent.repository,
+      folder,
+    },
+    read.token,
+    read.access,
+  ).pipe(Effect.mapError(refusedWith));
+  if (claimed) return;
+  yield* cloneAgentRepository(agent, sandbox, read);
+  yield* linkWorkspaceFolder(sandbox, folder).pipe(Effect.mapError(refusedWith));
+});
 
 const MAKE_WORKING_FOLDER = `mkdir -p ${CODER.CHECKOUT_PATH}`;
 

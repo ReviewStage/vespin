@@ -202,7 +202,7 @@ export type RunnerHarness = (typeof RUNNER_HARNESS)[keyof typeof RUNNER_HARNESS]
  */
 export const LAUNCH_PATH = {
   SOURCE_SNAPSHOT: "source_snapshot",
-  BASE_DRIVE: "base_drive",
+  WORKSPACE_DRIVE: "workspace_drive",
   IMAGE: "image",
   RESUMED: "resumed",
   RELAUNCHED: "relaunched",
