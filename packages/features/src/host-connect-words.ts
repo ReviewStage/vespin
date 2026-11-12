@@ -13,6 +13,7 @@
 import { DEVICE_PLATFORM_NAME } from "./device-platform.js";
 import { HOST_PAIRING_CALL_FAILURE, type HostPairingFailed } from "./host-pairing-view.js";
 import type { HostPairingAnswer } from "./host-wire.js";
+import { cleanMachineName } from "./machine-name.js";
 import { clockText, momentText } from "./time-format.js";
 import { readFailedWords, readingWords } from "./words.js";
 
@@ -37,20 +38,15 @@ export const HOST_CONNECT_WORDS = {
   UNANSWERED: "Could not connect. Check your internet connection and try again.",
 } as const;
 
-/** What no shown name may carry: control and format characters, a bidi override among them. */
-const UNSHOWN_CHARACTERS = /[\p{Cc}\p{Cf}]/gu;
-
-/** A run of white space, a line break among it. */
-const WHITE_RUN = /\s+/gu;
-
 /**
- * The name the box gave itself, as it is shown: on one line, with no
- * control or format character. Note that the box chooses its own name, so a
- * name holding a line break would draw a facts line of its own under it,
- * and a bidi override would turn its words around.
+ * The name the box gave itself, as it is shown: on one line, with no control
+ * or format character but an emoji's joiners, by the rule its name is kept by
+ * (`cleanMachineName`). Note that a name kept before that rule may still hold
+ * a line break or a bidi override, which would draw a facts line of its own
+ * under it or turn its words around.
  */
 export function hostShownName(box: HostPairingAnswer): string {
-  return box.name.replace(UNSHOWN_CHARACTERS, " ").replace(WHITE_RUN, " ").trim();
+  return cleanMachineName(box.name);
 }
 
 /** The question a pairing asks, by the name the box gave itself. */
