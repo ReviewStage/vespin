@@ -259,11 +259,11 @@ export interface InboxWhoseChoice {
   onWhose: (whose: InboxWhose) => void;
 }
 
-/** The Inbox's view choices, Open addressed to the reader, which is Needs you, in one run, until first changed, and kept as each is pressed. */
+/** The Inbox's view choices, Open addressed to the reader, which is Needs you, its pinned tasks' items first, until first changed, and kept as each is pressed. */
 export function useInboxViewChoices(): InboxViewChoices {
   const [show, onShow] = useKept(KEPT.INBOX_SHOW, INBOX_SHOW.OPEN);
   const [whose, onWhose] = useKept(KEPT.WHOSE, MINE);
-  const [pinnedFirst, onPinnedFirst] = useKept(KEPT.PINNED_FIRST, false);
+  const [pinnedFirst, onPinnedFirst] = useKept(KEPT.PINNED_FIRST, true);
 
   return { show, onShow, whose, onWhose, pinnedFirst, onPinnedFirst };
 }

@@ -1302,7 +1302,7 @@ test("a mark the service refuses is let go, and the dot stands as the reads hold
   assert.equal(unreadOf(page, "How is a failed email retried?"), false);
 });
 
-test("the view's menu offers Show and Addressed to alone, and ⌘K's Mark all as read marks every unread item of the listed workspace read and clears the dots alone, what needs you still saying so; with nothing unread ⌘K offers it no more", async () => {
+test("the view's menu offers Show, Addressed to, and Pinned tasks first alone, and ⌘K's Mark all as read marks every unread item of the listed workspace read and clears the dots alone, what needs you still saying so; with nothing unread ⌘K offers it no more", async () => {
   world.listedWorkspace = ACME;
   // Note that the unread answered item is a teammate's, so the item standing chosen is the one that needs you, and nothing is read before the mark.
   world.inboxes.set(BILLING.id, [THRESHOLD, { ...RETRY, unread: true, startedBy: TEAMMATE }]);
@@ -1312,7 +1312,16 @@ test("the view's menu offers Show and Addressed to alone, and ⌘K's Mark all as
   const options = page.querySelector<HTMLButtonElement>('button[aria-label="View options"]');
   assert.ok(options, "the head offers the view's menu");
   act(() => options.click());
-  assert.deepEqual(menuWords(), ["Questions", "Open", "All", "Reminders", "—", "Addressed to"]);
+  assert.deepEqual(menuWords(), [
+    "Questions",
+    "Open",
+    "All",
+    "Reminders",
+    "—",
+    "Addressed to",
+    "—",
+    "Pinned tasks first",
+  ]);
   act(() => options.click());
   act(() => {
     runAppCommand(APP_COMMAND.MARK_INBOX_READ);

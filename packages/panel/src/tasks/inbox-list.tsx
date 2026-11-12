@@ -43,7 +43,6 @@ import {
   type EmptyStateAction,
   ERROR_STATE_PLACEMENT,
   ErrorState,
-  GROUP_HEAD,
   GroupHeader,
   IconButton,
   INSET,
@@ -147,6 +146,7 @@ import {
   useAskedMenu,
   useMenuAsk,
 } from "../desktop/phone-head.js";
+import { sidebarHead } from "../desktop/sidebar-fold.js";
 import { type TabActionGroups, useTabActions } from "../desktop/strip-tabs.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
@@ -1578,9 +1578,9 @@ function InboxRows({
 
 /**
  * The list's rows: in one run, or, where the pinned tasks' items stand
- * first and one is listed (`inboxPinnedRuns`), those under Pinned, as
- * the sidebar heads its pinned tasks, and the rest under Everything else, each heading
- * sticking to the top of the list while its rows scroll under it.
+ * first and one is listed (`inboxPinnedRuns`), those under Pinned and the
+ * rest under Everything else, each headed as the sidebar heads its groups
+ * (`sidebarHead`).
  */
 function InboxRuns({
   view,
@@ -1595,11 +1595,11 @@ function InboxRuns({
   if (runs === undefined) return <InboxRows items={view.items} place={place} row={row} />;
   return (
     <>
-      <GroupHeader label={PINNED_RUN_WORDS.PINNED} head={GROUP_HEAD.STICKS}>
+      <GroupHeader {...sidebarHead(undefined)} label={PINNED_RUN_WORDS.PINNED}>
         <InboxRows items={runs.pinned} place={place} row={row} />
       </GroupHeader>
       {runs.rest.length === 0 ? null : (
-        <GroupHeader label={PINNED_RUN_WORDS.REST} head={GROUP_HEAD.STICKS}>
+        <GroupHeader {...sidebarHead(undefined)} label={PINNED_RUN_WORDS.REST}>
           <InboxRows items={runs.rest} place={place} row={row} />
         </GroupHeader>
       )}
