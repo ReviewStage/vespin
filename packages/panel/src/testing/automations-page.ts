@@ -26,6 +26,7 @@ import {
   type AutomationWorkspaceRun,
 } from "@repo/features/automation-wire";
 import { CHAPTERS_MODEL_DEFAULT } from "@repo/features/chapters-model-choice";
+import { readerZone } from "@repo/features/date-mention";
 import {
   INTEGRATION_PROVIDER,
   INTEGRATION_PROVIDER_LIST,
@@ -84,7 +85,7 @@ export function automation(n: number, patch: Partial<AutomationSummary> = {}): A
     name: `Automation ${n}`,
     enabled: true,
     pausedReason: null,
-    trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: "0 9 * * 1-5", timezone: "UTC" },
+    trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: "0 9 * * 1-5", timezone: readerZone() },
     action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Triage today's issues." },
     guards: AUTOMATION_DEFAULT_GUARDS,
     nextRunAt: null,

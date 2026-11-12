@@ -1,11 +1,11 @@
 import {
+  GROUP_HEADING,
+  GroupHeader,
   List,
   ListMotion,
   ListRow,
-  SETTINGS_SECTION_FRAME,
   SETTINGS_SKELETON_CONTROL,
   SettingsControlSkeleton,
-  SettingsSection,
   SKELETON_KIND,
   Skeleton,
   Toolbar,
@@ -102,16 +102,24 @@ export function AutomationGroupList({
     root.current = node;
   }, []);
 
+  const rows = (
+    <List label={name} moves>
+      {children}
+    </List>
+  );
+
   const list = (
     <ListMotion root={root}>
-      <SettingsSection
-        title={headed ? nameMasked ? <ReplayMask>{name}</ReplayMask> : name : undefined}
-        frame={SETTINGS_SECTION_FRAME.NONE}
-      >
-        <List label={name} moves>
-          {children}
-        </List>
-      </SettingsSection>
+      {headed ? (
+        <GroupHeader
+          heading={GROUP_HEADING.H2}
+          label={nameMasked ? <ReplayMask>{name}</ReplayMask> : name}
+        >
+          {rows}
+        </GroupHeader>
+      ) : (
+        rows
+      )}
     </ListMotion>
   );
 

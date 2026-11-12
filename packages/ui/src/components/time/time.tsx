@@ -4,6 +4,7 @@ import {
   dueText,
   momentText,
   provenanceText,
+  scheduledText,
   sinceText,
   untilText,
   workingTime,
@@ -43,6 +44,8 @@ export const TIME_LOOK = {
   DUE: "due",
   /** When a moment to come comes, counted down inside a day: "in 2h", then "Thu 9:00 AM", "Nov 20". */
   UNTIL: "until",
+  /** When a scheduled moment comes, always with its time: "Today 2:00 PM", "Tomorrow 9:00 AM", "Sun 2:00 AM", "Nov 20, 9:00 AM". */
+  SCHEDULED: "scheduled",
   /** The moment in full: "Oct 14, 2026, 3:42 PM". */
   MOMENT: "moment",
   /** How long a run has gone since `at`, counted each second: "1m 12s". */
@@ -79,6 +82,8 @@ function wordsOf(look: TimeLook, at: number, now: number): string {
       return dueText(at, now);
     case TIME_LOOK.UNTIL:
       return untilText(at, now);
+    case TIME_LOOK.SCHEDULED:
+      return scheduledText(at, now);
     case TIME_LOOK.MOMENT:
       return momentText(at);
     case TIME_LOOK.DURATION:
