@@ -113,7 +113,8 @@ function assignedToChoices(
   });
 
   // Note that a member is keyed by their id and Me and Anyone are not, so only a member's name is masked.
-  const followingChosen = chosen.kind === ASSIGNED_TO.FOLLOWING;
+  // A Following kept while the workspace has it off reads as Me, which stays checked, as the list draws the reader's own.
+  const followingChosen = following && chosen.kind === ASSIGNED_TO.FOLLOWING;
 
   const choices = people.map((item) => {
     const offered = followingChosen ? { ...item, checked: false } : item;
