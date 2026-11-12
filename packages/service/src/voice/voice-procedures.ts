@@ -4,7 +4,7 @@
  * `POST /api/voice/session` takes the panel's SDP offer, the agent the call
  * speaks for, and the voice (`@repo/features/voice-wire`). The caller must
  * reach the agent and be admitted to message it, as a typed message is
- * (`agents/agent-reach.ts`'s `admitsPlanWriter`), and the agent must still
+ * (`agents/agent-reach.ts`'s `controlsAgent` and `admitsPlanWriter`), and the agent must still
  * have a harness to answer it. The session is created on GPT-Live with the
  * caller's own OpenAI API key, as dictation's clip is
  * (`accounts/openai-key-middleware.ts`), never ours, and with the agent's
@@ -27,7 +27,7 @@ import { spendVoiceMeter } from "@repo/database/models/quota";
 import { readTaskHeader } from "@repo/database/models/task-store";
 import { Clock, Effect, Option } from "effect";
 import { openAiKeyMiddleware } from "../accounts/openai-key-middleware.js";
-import { admitsPlanWriter } from "../agents/agent-reach.js";
+import { admitsPlanWriter, controlsAgent } from "../agents/agent-reach.js";
 import { harnessOf } from "../agents/coder-host/native-runtime.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { recordServerEvent, SERVER_EVENT, voiceCallDurationOf } from "../events/server-events.js";
@@ -69,6 +69,12 @@ export function voiceProcedures(seams: VoiceProcedureSeams) {
 
       // Note that an agent whose session ended for good answers no message, so no call speaks for it.
       if (harness === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_RETIRED);
+
+      // An agent on its starter's own GitHub token, or on its starter's Mac, takes words from its starter alone, as a typed message does.
+      if (!controlsAgent(context.userId, agent)) {
+        return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+      }
+
       yield* admitsPlanWriter(context.userId, agent);
 
       // Note that the conversation is read under the member who started the agent, as its transcript is.

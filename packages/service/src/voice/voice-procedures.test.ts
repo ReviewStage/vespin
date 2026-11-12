@@ -15,6 +15,7 @@ import {
   openAgentOnOwnTask,
   openWorkspace,
 } from "@repo/database/testing";
+import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { PROVIDER_KEY_KIND, PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { LIVE_VOICE } from "@repo/features/voices";
 import type { WireBoundaryInput } from "@repo/wire";
@@ -37,9 +38,9 @@ import { voiceProcedures } from "./voice-procedures.js";
  * A voice call opened by the hosted oRPC router the way the web route
  * answers it, over a real dialect and OpenAI faked at its HTTP door: the
  * panel's offer goes to GPT-Live on the caller's own OpenAI key, never ours,
- * and only the SDP answer comes back. A caller with no key of their own, and
- * one outside the agent's workspace, are each refused before OpenAI is
- * called. A finished call's seconds
+ * and only the SDP answer comes back. A caller with no key of their own, one
+ * outside the agent's workspace, and a teammate on an agent only its starter
+ * drives are each refused before OpenAI is called. A finished call's seconds
  * land on the caller's day and are counted by length and harness alone.
  *
  * Synthetic accounts, bearers, offers, and keys throughout.
@@ -115,8 +116,8 @@ const openAccount = (options: { readonly key?: boolean } = {}) =>
     return userId;
   });
 
-/** An agent of the owner's on a task named "Flaky tests", running on Claude Code; its id. */
-const openAgent = (ownerId: string, workspaceId: string) =>
+/** An agent of the owner's on a task named "Flaky tests", running on Claude Code, in our sandbox or on the owner's own Mac; its id. */
+const openAgent = (ownerId: string, workspaceId: string, onMac = false) =>
   Effect.gen(function* () {
     const db = yield* Database;
     const agentId = yield* openAgentOnOwnTask(ownerId, workspaceId);
@@ -131,6 +132,13 @@ const openAgent = (ownerId: string, workspaceId: string) =>
       .update(conversations)
       .set({ runtime: CONVERSATION_RUNTIME.CLAUDE_CODE })
       .where(eq(conversations.id, row.conversationId));
+
+    if (onMac) {
+      yield* db
+        .update(agentTable)
+        .set({ machine: AGENT_MACHINE.DEVICE })
+        .where(eq(agentTable.id, agentId));
+    }
 
     return agentId;
   });
@@ -226,7 +234,7 @@ it.layer(getTestDB())("the voice routes", (it) => {
   );
 
   it.effect(
-    "a caller with no OpenAI key of their own is refused as missing one, and one outside the agent's workspace as not found, and OpenAI is never called",
+    "a caller with no OpenAI key of their own is refused as missing one, one outside the agent's workspace as not found, and a teammate on an agent that runs on its starter's Mac as not permitted, and OpenAI is never called",
     () =>
       Effect.gen(function* () {
         const ownerId = yield* openAccount();
@@ -235,6 +243,9 @@ it.layer(getTestDB())("the voice routes", (it) => {
         const keyless = yield* openAccount({ key: false });
         yield* joinWorkspace(workspaceId, keyless);
         const stranger = yield* openAccount();
+        const teammate = yield* openAccount();
+        yield* joinWorkspace(workspaceId, teammate);
+        const onMac = yield* openAgent(ownerId, workspaceId, true);
         const router = openRouter();
 
         assert.deepEqual(
@@ -244,6 +255,10 @@ it.layer(getTestDB())("the voice routes", (it) => {
         assert.deepEqual(
           yield* router.open(stranger, agentId),
           refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
+        );
+        assert.deepEqual(
+          yield* router.open(teammate, onMac),
+          refusal(HOSTED_HTTP_STATUS.FORBIDDEN, HOSTED_API_ERROR.NOT_PERMITTED),
         );
         assert.equal(router.calls.length, 0);
       }),
