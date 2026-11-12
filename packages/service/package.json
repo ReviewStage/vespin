@@ -64,7 +64,6 @@
     "./agents/coder-host/usage": "./src/agents/coder-host/usage.js",
     "./agents/host-install-script-app": "./src/agents/host-install-script-app.js",
     "./agents/workspace-drive": "./src/agents/workspace-drive.js",
-    "./agents/workspace-drive-fill-bounds": "./src/agents/workspace-drive-fill-bounds.js",
     "./agents/workspace-mcp/app": "./src/agents/workspace-mcp/app.js",
     "./agents/workspace-mcp/sandbox-door": "./src/agents/workspace-mcp/sandbox-door.js",
     "./agents/native-events/native-title": "./src/agents/native-events/native-title.js",
