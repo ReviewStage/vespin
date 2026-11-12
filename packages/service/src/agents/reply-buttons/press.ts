@@ -80,6 +80,7 @@ const viewOf = (userId: string, button: ReplyButton, made: Agent) =>
         : {
             at: button.pressedAt.getTime(),
             by: button.pressedBy === null ? null : (by.get(button.pressedBy) ?? null),
+            byReader: button.pressedBy === userId,
             agent: yield* namedAgent(userId, button.reachedAgentId),
           };
     const view: ReplyButtonView = {

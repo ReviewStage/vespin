@@ -93,8 +93,12 @@ it.layer(SUITE)("a button in an agent's reply", (it) => {
           noSummary,
         );
         assert.deepEqual(
-          { by: again.pressed?.by, agent: again.pressed?.agent?.id },
-          { by: "Ada Lovelace", agent: reached },
+          {
+            by: again.pressed?.by,
+            byReader: again.pressed?.byReader,
+            agent: again.pressed?.agent?.id,
+          },
+          { by: "Ada Lovelace", byReader: false, agent: reached },
         );
       }),
   );

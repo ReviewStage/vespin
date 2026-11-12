@@ -148,10 +148,11 @@ const namedAgentSchema = EffectSchema.Struct({
   title: EffectSchema.String,
 });
 
-/** A button's press as it stands: when it was claimed, by whom by name where their account stands, and the agent it reached once it landed. */
+/** A button's press as it stands: when it was claimed, by whom by name where their account stands, whether by the member reading it, and the agent it reached once it landed. */
 const replyButtonPressSchema = EffectSchema.Struct({
   at: EffectSchema.Number,
   by: EffectSchema.NullOr(EffectSchema.String),
+  byReader: EffectSchema.Boolean,
   agent: EffectSchema.NullOr(namedAgentSchema),
 });
 
