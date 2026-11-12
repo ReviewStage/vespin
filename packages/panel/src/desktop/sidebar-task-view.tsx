@@ -19,7 +19,7 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, type Actor, actorName, creatorActor, memberActor } from "@repo/ui/actor-model";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { ListChecksIcon, Rows3Icon, SlidersHorizontalIcon } from "lucide-react";
+import { BellIcon, ListChecksIcon, Rows3Icon, SlidersHorizontalIcon } from "lucide-react";
 import { useAppCommand } from "../app-commands.js";
 import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import { useMemberDirectory } from "../member-directory.js";
@@ -37,8 +37,9 @@ import { FILTERED } from "./tasks-page-options.js";
  * window's menu: Group by, a choice of Repository or None; Show completed
  * sub-tasks, a switch that stands each parent's completed sub-tasks back
  * under it, muted, as Linear's Always hide completed sub-issues turned off
- * does; and, in a shared workspace, Assigned to: Me, Anyone, or each member
- * by face. The head itself says whose tasks the list holds, "My tasks",
+ * does; and, in a shared workspace, Assigned to: Me, Following where the
+ * workspace has Following on, Anyone, or each member by face. The head
+ * itself says whose tasks the list holds, "My tasks", "Tasks I follow",
  * "Everyone's tasks", or one member's, and while it holds anything but the
  * reader's own the button wears a dot, so a list of someone else's never
  * passes for the reader's. The button waits for the pointer or the
@@ -64,6 +65,9 @@ const GROUPING_WORDS = {
 /** The switch that stands each parent's completed sub-tasks under it, or leaves them out, in the words the Tasks page's Show completed uses for the same Done and Canceled tasks. */
 const SHOW_COMPLETED_SUB_TASKS = "Show completed sub-tasks";
 
+/** What Assigned to's choice of the tasks the reader follows is called. */
+const FOLLOWING_CHOICE = "Following";
+
 /** Who the list is filtered to, as the window draws them: a member as read, else as a listed task names them, else someone. */
 function filteredActor(
   userId: string,
@@ -78,21 +82,23 @@ function filteredActor(
   return creatorActor(named ?? { ownerId: userId }, reader, undefined);
 }
 
-/** Assigned to's choices: Me, Anyone, then each other member, the one chosen checked. */
+/** Assigned to's choices: Me, Following where the workspace has it on, Anyone, then each other member, the one chosen checked. */
 function assignedToChoices(
   chosen: AssignedTo,
   onChoose: (assignedTo: AssignedTo) => void,
   reader: ReturnType<typeof useMemberDirectory>,
+  following: boolean,
 ): MenuAction[] {
   const people = peopleFilterActions({
     members: reader.members,
     readerId: reader.readerId,
+    // Note that Following is no person, so while it is chosen each person is offered unchecked.
     chosen:
       chosen.kind === ASSIGNED_TO.ANYONE
         ? { kind: PEOPLE_FILTER.ANYONE }
-        : chosen.kind === ASSIGNED_TO.ME
-          ? { kind: PEOPLE_FILTER.ME }
-          : { kind: PEOPLE_FILTER.PERSON, userId: chosen.userId },
+        : chosen.kind === ASSIGNED_TO.MEMBER
+          ? { kind: PEOPLE_FILTER.PERSON, userId: chosen.userId }
+          : { kind: PEOPLE_FILTER.ME },
     onChoose: (filter) =>
       onChoose(
         filter.kind === PEOPLE_FILTER.ANYONE
@@ -107,13 +113,27 @@ function assignedToChoices(
   });
 
   // Note that a member is keyed by their id and Me and Anyone are not, so only a member's name is masked.
-  return [
-    ...people.map((item) =>
-      item.key === undefined
-        ? item
-        : { ...item, replayMasked: true, icon: <ReplayMask>{item.icon}</ReplayMask> },
-    ),
-  ];
+  const followingChosen = chosen.kind === ASSIGNED_TO.FOLLOWING;
+
+  const choices = people.map((item) => {
+    const offered = followingChosen ? { ...item, checked: false } : item;
+
+    return item.key === undefined
+      ? offered
+      : { ...offered, replayMasked: true, icon: <ReplayMask>{item.icon}</ReplayMask> };
+  });
+
+  if (!following) return choices;
+
+  const followed: MenuAction = {
+    label: FOLLOWING_CHOICE,
+    icon: <BellIcon />,
+    checked: followingChosen,
+    onSelect: () => onChoose({ kind: ASSIGNED_TO.FOLLOWING }),
+  };
+
+  // Following stands after Me, which leads the choices.
+  return [...choices.slice(0, 1), followed, ...choices.slice(1)];
 }
 
 /** The menu's choices: how the list groups, whether it shows completed sub-tasks, and, where the workspace is shared, whose tasks it holds. */
@@ -121,6 +141,7 @@ function viewEntries(
   control: TaskListViewControl,
   shared: boolean,
   reader: ReturnType<typeof useMemberDirectory>,
+  following: boolean,
 ): MenuEntry[][] {
   const { view } = control;
 
@@ -151,7 +172,7 @@ function viewEntries(
           label: commandHead(PANEL_COMMAND.ASSIGNED_TO).label,
           placeholder: ASSIGNED_TO_PLACEHOLDER,
           noMatch: noMatchWords(TERM.MEMBER),
-          actions: assignedToChoices(view.assignedTo, control.onAssignedTo, reader),
+          actions: assignedToChoices(view.assignedTo, control.onAssignedTo, reader, following),
           note: memberReadNote(reader),
           replayUnmasked: true,
         }),
@@ -169,6 +190,7 @@ export function TaskViewOptions({
   shown,
   control,
   shared,
+  following,
   filtered,
 }: {
   /** Whether the sidebar is on screen, for the menu not to outlive it. */
@@ -176,6 +198,8 @@ export function TaskViewOptions({
   control: TaskListViewControl;
   /** Whether the workspace is shared, which alone filters by person. */
   shared: boolean;
+  /** Whether the workspace has Following on, which offers the tasks the reader follows among Assigned to's choices. */
+  following: boolean;
   /** Whether the list holds anything but the reader's own, which keeps the button standing and dotted. */
   filtered: boolean;
 }): React.JSX.Element {
@@ -198,7 +222,7 @@ export function TaskViewOptions({
           label={VIEW_OPTIONS}
           menu={menu.drawn}
           replayUnmasked
-          groups={viewEntries(control, shared, reader)}
+          groups={viewEntries(control, shared, reader, following)}
           onClose={menu.close}
         />
       )}

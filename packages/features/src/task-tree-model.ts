@@ -170,6 +170,7 @@ export function taskTree(input: TaskTreeInput): TaskTree {
   );
 
   const drawn = (at: number) => drawnTaskRows(homed[at] ?? [], ALL_OPEN, NONE_STANDING, every);
+
   // A repository group whose every task moved under a parent another list holds is left out, as the sidebar leaves it, and the headings read the groups left.
   const homedGroups = groups
     .map((group, at) => ({ ...group, tasks: homed[at + 2 + sections.length] ?? [] }))
