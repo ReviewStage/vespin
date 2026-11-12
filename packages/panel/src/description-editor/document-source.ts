@@ -242,9 +242,15 @@ function alertsUnescaped(markdown: string): string {
 
         return run === undefined ? line.replace(ESCAPED_ALERT, "$1[!$2]") : line;
       }
+
       // Note that a fence closes on a run as long or longer of its own mark, with nothing after it.
-      if (run?.[0] === fence[0] && run.length >= fence.length && rest.trim() === "")
-        fence = undefined;
+      const closes =
+        run !== undefined &&
+        run[0] === fence[0] &&
+        run.length >= fence.length &&
+        rest.trim() === "";
+
+      if (closes) fence = undefined;
 
       return line;
     })
