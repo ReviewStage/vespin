@@ -476,6 +476,9 @@ export interface AgentsControl {
     words: string,
     choice: ModelChoice | undefined,
     attachments: readonly AgentAttachment[],
+    disabledServers?: readonly string[],
+    runsOn?: AgentRunsOnRequest,
+    permissionMode?: AgentPermissionMode,
   ) => Promise<StartFailure | undefined>;
   /** Brings back the archived agent a surface draws alone, as its own page does; none from here, where every agent is a task's. */
   onUnarchive: (() => void | Promise<void>) | undefined;
@@ -1256,9 +1259,19 @@ export function useAgents(input: {
       return held;
     });
 
+  /** Lets the task's held draft go only while it is still the one under `draftId`, so a draft that took its place since keeps its chips. */
+  const dropHeld = (on: string, draftId: string) =>
+    setDrafts((was) => {
+      if (was.get(on)?.id !== draftId) return was;
+      const held = new Map(was);
+      held.delete(on);
+
+      return held;
+    });
+
   /** Lets a draft agent go by its key, its words and files with it. */
   const letGo = (draftId: string) => {
-    for (const [on, held] of drafts) if (held.id === draftId) withDraft(on, undefined);
+    for (const [on, held] of drafts) if (held.id === draftId) dropHeld(on, draftId);
     writer.drop((place) => place.kind === DRAFT_PLACE.NEW_AGENT && place.draftId === draftId);
   };
 
@@ -1370,8 +1383,10 @@ export function useAgents(input: {
   // a key of its own, the brief laid in after any words already written. A
   // draft that already holds the same suggestion is answered as it stands,
   // so pressing it again opens what was drafted rather than a second brief.
-  // The key starts nothing: the send goes through the suggestion, which the
-  // service keys by its button.
+  // A draft of another suggestion lends it no words, which would go out
+  // through this suggestion: it is closed as its tab's × closes it, with
+  // Undo, and this one opens on its brief alone. The key starts nothing: the
+  // send goes through the suggestion, which the service keys by its button.
   const onSuggestDraft = (
     suggestion: DraftSuggestion,
     words: string,
@@ -1381,7 +1396,18 @@ export function useAgents(input: {
     const id = mintKey();
 
     if (taskId === undefined) return id;
-    moveWords(taskId, id, undefined, { text: words.trim(), attachments: [] }, suggestion);
+    const brief = { text: words.trim(), attachments: [] };
+
+    if (draft?.suggestion === undefined) {
+      moveWords(taskId, id, undefined, brief, suggestion);
+    } else {
+      onDiscardDraft(draft.id);
+      writer.update(wordsPlace(taskId, id, undefined, suggestion), (kept) => ({
+        ...kept,
+        ...brief,
+      }));
+    }
+
     withDraft(taskId, { id, choice, disabledServers: [], suggestion });
 
     return id;
@@ -1432,6 +1458,8 @@ export function useAgents(input: {
       choice: draft.choice,
       disabledServers: draft.disabledServers,
       ...(draft.fork === undefined ? undefined : { fork: draft.fork }),
+      // Note that a chip changed keeps the suggestion the draft was opened from, so its send still goes through it.
+      ...suggestionOf(draft.suggestion),
       ...runsOnOf(draft.runsOn),
       ...pickedModeOf(draft.permissionMode),
       ...(draft.refused === undefined ? undefined : { refused: draft.refused }),
@@ -1511,8 +1539,16 @@ export function useAgents(input: {
     const id = keeps ? mintKey() : choices.id;
 
     if (keeps) {
-      moveWords(on, id, standing.fork, words, standing.suggestion);
-      withDraft(on, { ...choicesOf(standing), id });
+      // Note that the words joined go through a suggestion only where both drafts name the same one or the closed draft names none, never through another's.
+      const suggestion =
+        choices.suggestion === undefined ||
+        choices.suggestion.buttonId === standing.suggestion?.buttonId
+          ? standing.suggestion
+          : undefined;
+
+      const { suggestion: _standing, ...rest } = choicesOf(standing);
+      moveWords(on, id, standing.fork, words, suggestion);
+      withDraft(on, { ...rest, ...suggestionOf(suggestion), id });
     } else {
       if (standing !== undefined) letGo(standing.id);
       writer.update(wordsPlace(on, id, choices.fork, choices.suggestion), (was) => ({
@@ -1553,7 +1589,7 @@ export function useAgents(input: {
     });
 
     if ("failure" in answer) return { ...startFailureNote(answer, taskId), cause: answer };
-    withDraft(taskId, undefined);
+    dropHeld(taskId, draftId);
     writer.drop((place) => place.kind === DRAFT_PLACE.NEW_AGENT && place.draftId === draftId);
     landed(taskId, answer.agent);
 
@@ -1587,7 +1623,8 @@ export function useAgents(input: {
     const answer = await askStart(taskId, asked);
 
     if ("failure" in answer) return { ...startFailureNote(answer, taskId ?? null), cause: answer };
-    withDraft(taskId, undefined);
+    // Note that only this draft is let go, since another suggestion pressed while it went may stand in its place.
+    dropHeld(taskId, draftId);
     writer.drop((kept) => kept.kind === DRAFT_PLACE.NEW_AGENT && kept.draftId === draftId);
     landed(taskId, answer.agent);
 
@@ -1603,6 +1640,9 @@ export function useAgents(input: {
     words: string,
     choice: ModelChoice | undefined,
     attachments: readonly AgentAttachment[],
+    disabledServers: readonly string[] = [],
+    runsOn?: AgentRunsOnRequest,
+    permissionMode?: AgentPermissionMode,
   ): Promise<StartFailure | undefined> => {
     if (taskId === undefined) return { reason: FAILURE_REASON.OTHER, text: START_NEEDS_TASK };
 
@@ -1610,14 +1650,23 @@ export function useAgents(input: {
       {
         agentId: suggestion.agentId,
         buttonId: suggestion.buttonId,
-        sent: sentOf(suggestion, words, attachments, choice),
+        sent: sentOf(
+          suggestion,
+          words,
+          attachments,
+          choice,
+          disabledServers,
+          runsOn,
+          permissionMode,
+        ),
       },
       true,
       taskId,
     );
 
     if ("failure" in result) return result.failure;
-    withDraft(taskId, undefined);
+    // Note that only this draft is let go, since another suggestion pressed while it went may stand in its place.
+    dropHeld(taskId, draftId);
     writer.drop((kept) => kept.kind === DRAFT_PLACE.NEW_AGENT && kept.draftId === draftId);
     landed(taskId, { id: result.reached });
 

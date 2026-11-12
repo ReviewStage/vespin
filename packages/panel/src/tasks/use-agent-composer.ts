@@ -588,7 +588,7 @@ export function useAgentComposer(input: {
     if (!hasWordsOrFiles(text, attachments) || held.closed !== undefined) return;
 
     if (suggestion !== undefined) {
-      sendThroughSuggestion(suggestion, text, attachments);
+      sendThroughSuggestion(suggestion, text, attachments, lead !== undefined);
 
       return;
     }
@@ -603,40 +603,48 @@ export function useAgentComposer(input: {
   // line of the box's own, since the service sends them once, under the
   // suggestion's key, and the transcript reads them back as its line. The
   // box holds them until that send answers: a send refused, or one another
-  // member landed first, leaves them in the box, saying why in a toast.
+  // member landed first, leaves them in the box, saying why in a toast. It
+  // goes behind the box's lines still on their way, as every send to the
+  // agent does, so the agent takes them in the order they were sent.
   const [suggesting, setSuggesting] = useState(false);
 
   const sendThroughSuggestion = (
     suggestion: DraftSuggestion,
     text: string,
     attachments: readonly AgentAttachment[],
+    carriesLead: boolean,
   ) => {
     const sendSuggestion = latest.current.sendSuggestion;
 
     if (sendSuggestion === undefined || suggesting) return;
     setSuggesting(true);
-    void sendSuggestion(suggestion, text, attachments)
-      .then((result) => {
-        if ("reached" in result) {
-          update(() => EMPTY_DRAFT);
+    queue.after(agentId, () =>
+      sendSuggestion(suggestion, text, attachments)
+        .then((result) => {
+          if ("reached" in result) {
+            update(() => EMPTY_DRAFT);
 
-          return;
-        }
+            // Note that the follow-ups the send carried go once it lands, as a line's do, so no later send carries them again.
+            if (carriesLead) latest.current.onLeadSent?.();
 
-        toast({
-          replayUnmasked: true,
-          words: result.failure.text,
-          tone: STATUS_TONE.DANGER,
-          failure: {
-            surface: FAILURE_SURFACE.AGENT_SEND,
-            cause: result.failure.cause,
-            about: { agentId },
-          },
-        });
-      })
-      .finally(() => {
-        if (mounted.current) setSuggesting(false);
-      });
+            return;
+          }
+
+          toast({
+            replayUnmasked: true,
+            words: result.failure.text,
+            tone: STATUS_TONE.DANGER,
+            failure: {
+              surface: FAILURE_SURFACE.AGENT_SEND,
+              cause: result.failure.cause,
+              about: { agentId },
+            },
+          });
+        })
+        .finally(() => {
+          if (mounted.current) setSuggesting(false);
+        }),
+    );
   };
 
   /** Sends the words and files in place of the line named, the messages from it on hidden at once; the box is left as it is. */

@@ -3601,8 +3601,9 @@ function AgentTabView({
               closedRemedy={closedRemedy}
               sendsEmpty={sendsEmpty}
               onContinueInCloud={onMoveToCloud}
+              // Note that a box filled in from a suggestion queues nothing, because its words go once, through the suggestion.
               queueing={
-                agent.runtime === undefined || !controlsQueue
+                agent.runtime === undefined || !controlsQueue || composer.suggestion !== undefined
                   ? undefined
                   : {
                       working: standing.working,
