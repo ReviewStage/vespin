@@ -20,16 +20,17 @@ set -euo pipefail
 APP_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 USAGE="usage: $0 [--flows <name>,...] <path to Vespin.app> <output directory> <simulator name>..."
 
-# The flows under test, as paths under maestro/, and whether the
-# notification flow is among them: every flow, or those --flows names.
-flows=("$APP_DIRECTORY/maestro")
+# The flows under test, as their files under maestro/ are named, and whether
+# the notification flow is among them: every flow where --flows names none.
+all_flows=1
+flows=()
 notification=1
 if [[ "${1:-}" == "--flows" ]]; then
     (($# >= 2)) || {
         echo "$USAGE" >&2
         exit 2
     }
-    flows=()
+    all_flows=0
     notification=0
     while IFS= read -r name; do
         if [[ -z "$name" ]]; then
@@ -37,7 +38,7 @@ if [[ "${1:-}" == "--flows" ]]; then
         elif [[ "$name" == "notification" ]]; then
             notification=1
         elif [[ -f "$APP_DIRECTORY/maestro/$name.yaml" ]]; then
-            flows+=("$APP_DIRECTORY/maestro/$name.yaml")
+            flows+=("$name.yaml")
         else
             echo "error: no flow named \"$name\" under maestro/" >&2
             exit 2
@@ -150,14 +151,27 @@ run_maestro() {
 # Runs the flows under test on the booted simulator `$1`, its output under
 # `$2`. Note that a flow that fails is not run again: a second run passed a
 # flow that failed now and then, which hid the cause.
+#
+# Note that named flows run from the whole of maestro/, through a workspace
+# config listing them, rather than as files of their own, because Maestro
+# looks for a file a flow names, `new-task.yaml`'s picture among them, only
+# under the paths it was handed, and refuses the run where it is not there.
 run_suite() {
-    ((${#flows[@]} > 0)) || return 0
+    local config=()
+    if ((!all_flows)); then
+        ((${#flows[@]} > 0)) || return 0
+        mkdir -p "$2"
+        printf 'flows:\n' >"$2/flows.yaml"
+        printf '  - %s\n' "${flows[@]}" >>"$2/flows.yaml"
+        config=(--config "$2/flows.yaml")
+    fi
     maestro --udid "$1" test \
+        ${config[@]+"${config[@]}"} \
         --test-output-dir "$2" \
         --debug-output "$2/debug" \
         --flatten-debug-output \
         --format junit --output "$2/report.xml" \
-        "${flows[@]}"
+        "$APP_DIRECTORY/maestro"
 }
 
 # Runs the notification flow on the booted simulator `$1`, its output under
