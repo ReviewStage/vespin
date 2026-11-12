@@ -395,10 +395,12 @@ export function SuggestionChip({
   const { agentId } = suggestion;
   // A source the list does not hold is opened on its own page.
   const task = source === undefined ? undefined : { planId: source.planId };
+
   const open =
     openPlace === undefined
       ? undefined
       : () => openPlace({ kind: LINK_DESTINATION.AGENT, ...task, agentId });
+
   return (
     <DraftStarterCard marks={{ "data-suggestion-chip": "" }} drop={DROP_SUGGESTION} onDrop={onDrop}>
       <span className="draft-fork-lead">{SUGGESTION_LEAD}</span>

@@ -154,6 +154,7 @@ export function SuggestionLineHead({
   then?: string | undefined;
 }): React.JSX.Element {
   const doors = useMentionDoors();
+
   const href =
     doors.place.workspace === ""
       ? undefined
@@ -161,6 +162,7 @@ export function SuggestionLineHead({
           { kind: LINK_DESTINATION.AGENT, agentId: suggestedBy.agent_id },
           doors.place.workspace,
         );
+
   return (
     <SubjectLine lead={SUGGESTION_LEAD} fit={fit} data-suggestion-line="">
       <span className="inline-flex min-w-0 items-center">

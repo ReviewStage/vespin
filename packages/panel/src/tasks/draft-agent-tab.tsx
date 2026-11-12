@@ -135,6 +135,7 @@ export function DraftAgentTab({
   const { fork, suggestion } = draft;
   const listed = [...(control.agents ?? []), ...(control.archived ?? [])];
   const source = fork === undefined ? undefined : listed.find((agent) => agent.id === fork.agentId);
+
   const suggester =
     suggestion === undefined ? undefined : listed.find((agent) => agent.id === suggestion.agentId);
 
@@ -177,6 +178,7 @@ export function DraftAgentTab({
     if (unpaid !== undefined) return;
 
     if (fork === undefined && !hasWordsOrFiles(prompt, draft.attachments)) return;
+
     if (suggestion !== undefined) {
       void starting.run(() =>
         latest.current.startSuggestion(
@@ -187,8 +189,10 @@ export function DraftAgentTab({
           draft.attachments,
         ),
       );
+
       return;
     }
+
     void starting.run(() => {
       if (draft.refused !== undefined) latest.current.onDraftChange({ refused: undefined });
       const { id, choice, attachments, disabledServers, permissionMode } = draft;

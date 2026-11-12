@@ -1152,6 +1152,7 @@ function pressedButton(button: ReplyButtonView): ReplyButtonView {
     button.action.kind === REPLY_BUTTON_ACTION.START
       ? { id: FIXTURE_BUTTON.STARTED, taskId: FIXTURE_IDS.TASK, title: button.label }
       : button.sendTo;
+
   return {
     ...button,
     pressed: { at: Date.now(), by: "Ada Lovelace", byReader: true, agent: reached },
@@ -1186,9 +1187,11 @@ const ANSWERS: StagedAnswers = {
     FIXTURE_BUTTONS.get(buttonId) ?? { failure: AGENT_CALL_FAILURE.NOT_FOUND },
   [ACT_KIND.AGENTS_REPLY_BUTTON_PRESS]: ({ buttonId }) => {
     const button = FIXTURE_BUTTONS.get(buttonId);
+
     if (button === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     const sent = SENT_BUTTONS.get(buttonId) ?? pressedButton(button);
     SENT_BUTTONS.set(buttonId, sent);
+
     return sent;
   },
   [ACT_KIND.AGENTS_CHANGES]: () => CHANGES,

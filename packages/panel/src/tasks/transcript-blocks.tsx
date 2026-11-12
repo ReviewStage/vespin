@@ -381,10 +381,7 @@ function markMentions(node: MarkdownNode, definitions: ReadonlyMap<string, Markd
         ? definitions.get(node.identifier)?.url
         : undefined;
 
-  if (
-    target !== undefined &&
-    (mayNameChip(target) || readReplyButtonLink(target) !== undefined)
-  ) {
+  if (target !== undefined && (mayNameChip(target) || readReplyButtonLink(target) !== undefined)) {
     node.data = {
       hName: MENTION_ELEMENT.TAG,
       hProperties: { [MENTION_ELEMENT.TARGET]: target },
@@ -680,6 +677,7 @@ function MentionElement({
   const target = String(node?.properties[MENTION_ELEMENT.TARGET] ?? "");
   const words = node === undefined ? "" : wordsOf(node);
   const button = readReplyButtonLink(target);
+
   if (button !== undefined) {
     return (
       <ReplyButtonLink
@@ -693,6 +691,7 @@ function MentionElement({
       />
     );
   }
+
   const chip = node === undefined ? undefined : linkChip(target, words, doors);
 
   return (

@@ -60,8 +60,10 @@ function WhereRows({ view }: { view: ReplyButtonView }): ReactNode {
   const pictures = useRepositoryPictures();
   const models = useOfferedModels().data?.models ?? [];
   const { action } = view;
+
   if (action.kind !== REPLY_BUTTON_ACTION.START) return null;
   const provider = action.model === undefined ? undefined : providerOf(action.model);
+
   return (
     <>
       {view.repository === null ? null : (
@@ -122,12 +124,15 @@ export function ReplyButtonLink({
   const read = useQuery({ ...replyButtonQuery(agentId, buttonId), enabled: on });
   const agentHref = linkOf({ kind: LINK_DESTINATION.AGENT, agentId }, workspace);
   const view = read.data;
+
   if (!on || view === undefined || "failure" in view) return plain(agentHref);
   const { action } = view;
   const label = view.label || words;
   const reached = view.pressed?.agent;
+
   if (reached !== undefined && reached !== null) {
     const href = linkOf({ kind: LINK_DESTINATION.AGENT, agentId: reached.id }, workspace);
+
     const after = (
       <SuggestionSent
         kind={
@@ -135,8 +140,10 @@ export function ReplyButtonLink({
         }
       />
     );
+
     return linkChip(href, reached.title, doors, undefined, after) ?? plain(href);
   }
+
   const suggestion: DraftSuggestion = {
     agentId,
     buttonId,
@@ -148,21 +155,28 @@ export function ReplyButtonLink({
       ? { branch: action.branch }
       : undefined),
   };
+
   // Note that a press only fills a draft in and opens it, never sends: a new agent's in the task's draft, where this tab opens one, and a message's in its agent's own box.
   const open = () => {
     if (action.kind === REPLY_BUTTON_ACTION.START) {
       if (suggestDoor === undefined) {
         openPlace?.({ kind: LINK_DESTINATION.AGENT, agentId });
+
         return;
       }
+
       const choice =
         action.model === undefined || action.effort === undefined
           ? undefined
           : { model: action.model, effort: action.effort };
+
       suggestDoor(suggestion, action.prompt, choice);
+
       return;
     }
+
     const to = view.sendTo;
+
     if (to === null) return;
     writer.update({ kind: DRAFT_PLACE.AGENT, planId: to.taskId, agentId: to.id }, (was) =>
       was.suggestion?.buttonId === buttonId
@@ -171,6 +185,7 @@ export function ReplyButtonLink({
     );
     openPlace?.({ kind: LINK_DESTINATION.AGENT, planId: to.taskId, agentId: to.id });
   };
+
   const target =
     view.sendTo === null
       ? undefined
@@ -179,6 +194,7 @@ export function ReplyButtonLink({
           view.sendTo.title,
           doors,
         );
+
   return action.kind === REPLY_BUTTON_ACTION.START ? (
     <Suggestion
       label={label}

@@ -1012,6 +1012,7 @@ export function linkChip(
   after?: ReactNode,
 ): React.JSX.Element | undefined {
   const chip = chipOfLink(href, label, doors, at, after);
+
   // Note that a selection taking the chip reads it back as the link it was written as, which a reply quotes.
   return chip === undefined ? undefined : (
     <WrittenAs markdown={markdownLink(label, href)}>{chip}</WrittenAs>

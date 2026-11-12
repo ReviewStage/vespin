@@ -550,11 +550,13 @@ test("a fork's draft names its source and the message over the box, starts on th
 
 test("a suggestion's draft names the agent that suggested it over the box, sends its words through the suggestion rather than as a Start, and its × lets the suggestion go", async () => {
   const SOURCE = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
+
   const suggestion = {
     agentId: SOURCE,
     buttonId: "92f3b536-7e0a-4bc8-a3e0-fa0b1c2d3e4f",
     label: "Wire up the invite email",
   };
+
   const source: AgentSummary = {
     id: SOURCE,
     planId: TASK_ID,
@@ -565,8 +567,10 @@ test("a suggestion's draft names the agent that suggested it over the box, sends
     status: AGENT_STATUS.COMPLETED,
     turnId: null,
   };
+
   const sent: unknown[] = [];
   let dropped = 0;
+
   const tab = mount(
     [],
     { ...DRAFT, prompt: "Send the invite email, and retry a bounce once.", suggestion },
@@ -574,6 +578,7 @@ test("a suggestion's draft names the agent that suggested it over the box, sends
       agents: [source],
       startSuggestion: (draftId, through, words) => {
         sent.push({ draftId, button: through.buttonId, words });
+
         return Promise.resolve(undefined);
       },
       onDropFork: () => {
@@ -581,6 +586,7 @@ test("a suggestion's draft names the agent that suggested it over the box, sends
       },
     },
   );
+
   await settle();
 
   assert.equal(

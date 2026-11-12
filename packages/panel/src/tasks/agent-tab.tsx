@@ -1454,7 +1454,9 @@ function suggestionOrigin(
   starter: Actor | undefined,
 ): TranscriptOrigin | undefined {
   const suggestedBy = first === undefined ? undefined : suggestedByOf(first);
+
   if (first === undefined || suggestedBy === undefined) return undefined;
+
   return {
     lead: SUGGESTION_LEAD_CARD,
     sender: <SuggestionSender suggestedBy={suggestedBy} starter={starter} />,
@@ -1868,6 +1870,7 @@ export function AgentMessage({
 
     // A line sent from a suggestion is headed by the agent that suggested it, its words without the lead that names that agent to the agent reading them.
     const suggested = suggestedByOf(message);
+
     const shown =
       comment !== undefined
         ? commentLineWords(comment)
@@ -2826,6 +2829,7 @@ function AgentTranscriptView({
 
   if (!holding && messages.length > 0) {
     const { todos, first, opening, placed, open } = placing;
+
     // An agent a member started from a suggestion opens on the suggestion's card, which its first line alone says.
     const drawnOrigin =
       origin ??
@@ -2833,6 +2837,7 @@ function AgentTranscriptView({
         first,
         first === undefined ? undefined : messageSender(first, readerId, members, former),
       );
+
     // The description is the first of the developer's messages, unless the agent
     // was handed a prompt in its place, which is the developer's message as
     // any other is, but where something sent it, an automation, when it is
@@ -3779,6 +3784,7 @@ function AgentTabBody({
       : followUpsWords(turnEnding.followUps.filter((_, at) => ticked.includes(at)));
 
   const sendSuggestion = useSuggestionSender();
+
   const composer = useAgentComposer({
     lead,
     onLeadSent: () => setTicks(undefined),

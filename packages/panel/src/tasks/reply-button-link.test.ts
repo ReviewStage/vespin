@@ -84,10 +84,12 @@ beforeEach(() => {
   fakeActPort({
     [ACT_KIND.AGENTS_REPLY_BUTTON]: () => {
       asked.push("read");
+
       return Promise.resolve(answered);
     },
     [ACT_KIND.AGENTS_REPLY_BUTTON_PRESS]: () => {
       asked.push("sent");
+
       return Promise.resolve(answered);
     },
   });
@@ -127,6 +129,7 @@ async function drawn(on: boolean, onSuggest?: SuggestDoor): Promise<HTMLElement>
       ),
     );
   });
+
   return container;
 }
 
@@ -134,6 +137,7 @@ test("with Suggestions on the link is its suggestion; off, a plain link to its a
   const on = await drawn(true);
   await vi.waitFor(() => assert.ok(on.querySelector("button")));
   assert.match(on.querySelector("button")?.textContent ?? "", new RegExp(LABEL, "u"));
+
   for (const root of roots.splice(0)) act(() => root.unmount());
 
   asked.length = 0;
@@ -147,9 +151,11 @@ test("with Suggestions on the link is its suggestion; off, a plain link to its a
 
 test("a press opens the suggestion's draft filled in, on the model it names, and sends nothing", async () => {
   const opened: unknown[] = [];
+
   const reply = await drawn(true, (suggestion, words, choice) =>
     opened.push({ button: suggestion.buttonId, label: suggestion.label, words, choice }),
   );
+
   await vi.waitFor(() => assert.ok(reply.querySelector("button")));
   act(() => reply.querySelector("button")?.click());
   assert.deepEqual(opened, [

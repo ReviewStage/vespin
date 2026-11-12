@@ -344,6 +344,7 @@ export function useAgentDraftDoors(
       : (agentId: string, words: string, attachments: readonly AgentAttachment[]) =>
           onOpenDraft(agents.onContinueDraft(agentId, words, attachments)),
   );
+
   const onSuggest = useSteadyDoor(
     archived
       ? undefined

@@ -1379,9 +1379,11 @@ export function useAgents(input: {
   ): string => {
     if (draft?.suggestion?.buttonId === suggestion.buttonId) return draft.id;
     const id = mintKey();
+
     if (taskId === undefined) return id;
     moveWords(taskId, id, undefined, { text: words.trim(), attachments: [] }, suggestion);
     withDraft(taskId, { id, choice, disabledServers: [], suggestion });
+
     return id;
   };
 
@@ -1603,6 +1605,7 @@ export function useAgents(input: {
     attachments: readonly AgentAttachment[],
   ): Promise<StartFailure | undefined> => {
     if (taskId === undefined) return { reason: FAILURE_REASON.OTHER, text: START_NEEDS_TASK };
+
     const result = await sendSuggestion(
       {
         agentId: suggestion.agentId,
@@ -1612,10 +1615,12 @@ export function useAgents(input: {
       true,
       taskId,
     );
+
     if ("failure" in result) return result.failure;
     withDraft(taskId, undefined);
     writer.drop((kept) => kept.kind === DRAFT_PLACE.NEW_AGENT && kept.draftId === draftId);
     landed(taskId, { id: result.reached });
+
     return undefined;
   };
 

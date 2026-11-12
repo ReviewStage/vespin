@@ -43,6 +43,7 @@ const SEND_REFUSED = "The suggestion wasn't sent. Try again.";
 /** What a send says where another member's send of the suggestion stands first, by their name where their account stands. */
 function sentByOther(by: string | null, landed: boolean): string {
   const who = by ?? "a teammate";
+
   return landed
     ? `Already sent by ${who}. Your words are still here.`
     : `${who} is sending this suggestion now. Your words are still here.`;
@@ -77,22 +78,29 @@ export function suggestionSendResult(
 ): SuggestionSendResult {
   if ("failure" in answer) {
     const { failure } = answer;
+
     if (!isAgentCallFailure(failure)) {
       return { failure: { reason: FAILURE_REASON.OTHER, text: SEND_REFUSED, cause: answer } };
     }
+
     const note = starts
       ? startFailureNote({ ...answer, failure }, taskId)
       : { reason: FAILURE_REASON.OTHER, text: messageFailureWords(failure) };
+
     return { failure: { ...note, cause: answer } };
   }
+
   const { pressed } = answer;
+
   if (pressed?.byReader === true && pressed.agent !== null) {
     return { reached: pressed.agent.id };
   }
+
   const text =
     pressed === null || pressed.byReader
       ? SEND_REFUSED
       : sentByOther(pressed.by, pressed.agent !== null);
+
   return { failure: { reason: FAILURE_REASON.OTHER, text } };
 }
 
@@ -119,11 +127,14 @@ export function useSuggestionSender(): (
   taskId: string | null,
 ) => Promise<SuggestionSendResult> {
   const queries = useQueryClient();
+
   return async (params, starts, taskId) => {
     const answer = await askAct(ACT_KIND.AGENTS_REPLY_BUTTON_PRESS, params).catch(unanswered);
+
     if (!("failure" in answer)) {
       queries.setQueryData(replyButtonQuery(params.agentId, params.buttonId).queryKey, answer);
     }
+
     return suggestionSendResult(answer, starts, taskId);
   };
 }

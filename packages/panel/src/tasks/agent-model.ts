@@ -1678,7 +1678,9 @@ export function slackLineOf(message: AgentTranscriptMessage): SlackLineMetadata 
  */
 export function suggestedByOf(message: AgentTranscriptMessage): SuggestedBy | undefined {
   const read = userMetadataOf(message);
+
   if (read?.channel === MESSAGE_CHANNEL.SUGGESTION) return read.suggested_by;
+
   return read?.channel === MESSAGE_CHANNEL.START ? read.suggested_by : undefined;
 }
 

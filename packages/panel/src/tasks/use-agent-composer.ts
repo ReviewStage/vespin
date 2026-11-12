@@ -586,10 +586,13 @@ export function useAgentComposer(input: {
     const { attachments, suggestion } = kept.draft;
 
     if (!hasWordsOrFiles(text, attachments) || held.closed !== undefined) return;
+
     if (suggestion !== undefined) {
       sendThroughSuggestion(suggestion, text, attachments);
+
       return;
     }
+
     update(() => EMPTY_DRAFT);
     sendLine(text, attachments, clientKey);
 
@@ -602,20 +605,24 @@ export function useAgentComposer(input: {
   // box holds them until that send answers: a send refused, or one another
   // member landed first, leaves them in the box, saying why in a toast.
   const [suggesting, setSuggesting] = useState(false);
+
   const sendThroughSuggestion = (
     suggestion: DraftSuggestion,
     text: string,
     attachments: readonly AgentAttachment[],
   ) => {
     const sendSuggestion = latest.current.sendSuggestion;
+
     if (sendSuggestion === undefined || suggesting) return;
     setSuggesting(true);
     void sendSuggestion(suggestion, text, attachments)
       .then((result) => {
         if ("reached" in result) {
           update(() => EMPTY_DRAFT);
+
           return;
         }
+
         toast({
           replayUnmasked: true,
           words: result.failure.text,

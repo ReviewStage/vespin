@@ -40,7 +40,7 @@ afterEach(() => {
 });
 
 /** Draws a new agent's suggestion and answers the presses it made. */
-function drawn(): { readonly pressed: string[] } {
+function drawn() {
   const pressed: string[] = [];
   const container = document.createElement("div");
   document.body.append(container);
@@ -56,6 +56,7 @@ function drawn(): { readonly pressed: string[] } {
       }),
     ),
   );
+
   return { pressed };
 }
 
