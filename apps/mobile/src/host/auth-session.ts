@@ -30,6 +30,9 @@ export const webAuthSession: AuthSession = {
   },
 };
 
+/** How long a sign-in sheet is given to fail before it counts as shown: the native session refuses at once where another stands or no window can hold it. */
+const SHEET_SHOWN_MS = 500;
+
 /**
  * An integration's sign-in in the same authentication sheet, over the app
  * rather than in Safari, closed as it lands on `landing`, the service's page
@@ -37,11 +40,19 @@ export const webAuthSession: AuthSession = {
  * stands, not as it closes: the window hears how the sign-in went from the
  * account's integrations as they move, and offers Cancel while it waits, as
  * the panel's row does; a sheet the person closes leaves the sign-in to that
- * Cancel or to its wait running out.
+ * Cancel or to its wait running out. A sheet that refuses to open at once
+ * rejects, so the host answers the sign-in not opened.
  */
-export function openSignInSheet(url: string, landing: string): void {
-  openAuthSessionAsync(url, landing, {
+export function openSignInSheet(url: string, landing: string): Promise<void> {
+  const session = openAuthSessionAsync(url, landing, {
     preferEphemeralSession: false,
     preferUniversalLinks: true,
-  }).catch((cause: unknown) => console.error("The sign-in sheet did not open.", cause));
+  });
+
+  session.catch((cause: unknown) => console.error("The sign-in sheet did not open.", cause));
+
+  return Promise.race([
+    session.then(() => undefined),
+    new Promise<void>((shown) => setTimeout(shown, SHEET_SHOWN_MS)),
+  ]);
 }

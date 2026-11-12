@@ -43,7 +43,7 @@ export function deviceSeams(): DeviceSeams {
         return;
       }
 
-      openSignInSheet(url, landing);
+      await openSignInSheet(url, landing);
     },
     openSocket: openRelaySocket,
     onAppActiveChanged,

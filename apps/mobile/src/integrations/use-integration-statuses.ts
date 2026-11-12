@@ -54,6 +54,8 @@ export interface IntegrationStatuses {
   readonly statusOf: (server: string) => IntegrationStatus | undefined;
   readonly accountsOf: (provider: IntegrationProvider) => readonly IntegrationAccount[];
   readonly canAdd: (provider: IntegrationProvider) => boolean;
+  /** Whether the host's read lists this account, which a sign-in begun for it again needs the service to still hold. */
+  readonly listed: (server: string) => boolean;
   readonly signIns: SignIns;
   /** A sign-in begun: the server stands pending and the screen waits on it, unless a connection already stands. */
   readonly signInBegun: (server: string) => void;
@@ -134,6 +136,8 @@ export function useIntegrationStatuses(): IntegrationStatuses {
     accountsOf: (provider) =>
       serverAccounts(provider, answer?.accounts ?? NO_ACCOUNTS, signIns, statusOf),
     canAdd: (provider) => (answer?.addable ?? NO_PROVIDERS).includes(provider),
+    listed: (server) =>
+      (answer?.accounts ?? NO_ACCOUNTS).some((account) => account.connection === server),
     signIns,
     signInBegun: (server) => {
       if (told.current?.standing.get(server) === INTEGRATION_STATUS.CONNECTED) return;

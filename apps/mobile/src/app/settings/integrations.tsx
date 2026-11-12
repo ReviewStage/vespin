@@ -15,7 +15,7 @@ import {
   INTEGRATION_ROW_WORDS,
   INTEGRATIONS_PAGE_WORDS,
 } from "@repo/features/integration-settings-words";
-import { SIGN_IN_ACTION } from "@repo/features/integration-sign-in";
+import { SIGN_IN, SIGN_IN_ACTION } from "@repo/features/integration-sign-in";
 import { INTEGRATION_STATUS_WORDS } from "@repo/features/integration-status-words";
 import { INTEGRATION_CALL_FAILURE } from "@repo/features/integration-view";
 import {
@@ -24,6 +24,7 @@ import {
   INTEGRATION_PURPOSE,
   INTEGRATION_STATUS,
   type IntegrationProvider,
+  integrationConnectionOf,
 } from "@repo/features/integration-wire";
 import { readingWords, VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
@@ -198,57 +199,89 @@ function useIntegrationActs(statuses: IntegrationStatuses, onAsk: (row: ServerRo
       return next;
     });
 
+  // The rows whose act is out, which take no second press until it answers, as the panel holds a row busy.
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
+
+  /** Runs `act` for `server` unless one is out for it, holding the row busy until it settles. */
+  const held = (server: string, act: () => Promise<boolean>) => {
+    if (busy.has(server)) return;
+    setBusy((now) => new Set(now).add(server));
+    void act().finally(() =>
+      setBusy((now) => {
+        const next = new Set(now);
+        next.delete(server);
+
+        return next;
+      }),
+    );
+  };
+
   const connect = (row: ServerRow, add = false) => {
     const { provider, connection, name } = row;
+    const place = integrationConnectionOf(connection)?.place ?? 1;
+    // Note that an added account the service no longer holds, its first sign-in having ended, is signed in afresh as a new one, as the panel's grant begins it; one still waiting is reopened under its own name.
+    const ended = statuses.signIns.get(connection)?.kind !== SIGN_IN.WAITING;
+    const anew = add || (place > 1 && !statuses.listed(connection) && ended);
     said(connection, undefined);
-    void write(
-      () =>
-        acts[ACT_KIND.INTEGRATIONS_CONNECT]({
-          provider,
-          ...(add ? { add: true } : connection === provider ? undefined : { connection }),
-        }).then((answer) => {
-          if (!("failure" in answer)) statuses.signInBegun(answer.connection ?? connection);
+    held(connection, () =>
+      write(
+        () =>
+          acts[ACT_KIND.INTEGRATIONS_CONNECT]({
+            provider,
+            ...(anew ? { add: true } : connection === provider ? undefined : { connection }),
+          }).then((answer) => {
+            if (!("failure" in answer)) statuses.signInBegun(answer.connection ?? connection);
 
-          return answer;
-        }),
-      {
-        refused: (answer) =>
-          "failure" in answer
-            ? answer.failure === INTEGRATION_CALL_FAILURE.NOT_OPENED
-              ? INTEGRATION_ROW_WORDS.NOT_OPENED
-              : INTEGRATION_REFUSED.CONNECT(name)
-            : undefined,
-        inPlace: (words) => said(connection, words),
-      },
+            return answer;
+          }),
+        {
+          refused: (answer) =>
+            "failure" in answer
+              ? answer.failure === INTEGRATION_CALL_FAILURE.NOT_OPENED
+                ? INTEGRATION_ROW_WORDS.NOT_OPENED
+                : INTEGRATION_REFUSED.CONNECT(name)
+              : undefined,
+          inPlace: (words) => said(connection, words),
+        },
+      ),
     );
   };
 
   const cancel = (row: ServerRow) => {
     said(row.connection, undefined);
-    void statuses.cancelSignIn(row.connection).then((canceled) => {
-      if (!canceled) said(row.connection, INTEGRATION_REFUSED.CANCEL(row.name));
-    });
+    held(row.connection, () =>
+      statuses.cancelSignIn(row.connection).then((canceled) => {
+        if (!canceled) said(row.connection, INTEGRATION_REFUSED.CANCEL(row.name));
+
+        return canceled;
+      }),
+    );
   };
 
   const disconnect = (row: ServerRow) => {
     const { provider, connection, name } = row;
     said(connection, undefined);
-    void write(
-      () =>
-        acts[ACT_KIND.INTEGRATIONS_DISCONNECT]({
-          provider,
-          ...(connection === provider ? undefined : { connection }),
-        }),
-      {
-        refused: (answer) =>
-          "failure" in answer ? INTEGRATION_REFUSED.DISCONNECT(name) : undefined,
-        inPlace: (words) => said(connection, words),
-      },
+    held(connection, () =>
+      write(
+        () =>
+          acts[ACT_KIND.INTEGRATIONS_DISCONNECT]({
+            provider,
+            ...(connection === provider ? undefined : { connection }),
+          }),
+        {
+          refused: (answer) =>
+            "failure" in answer ? INTEGRATION_REFUSED.DISCONNECT(name) : undefined,
+          inPlace: (words) => said(connection, words),
+        },
+      ),
     );
   };
 
-  const actOf = (row: ServerRow): { label: string; onPress: () => void } | undefined => {
+  const actOf = (
+    row: ServerRow,
+  ): { label: string; disabled: boolean; onPress: () => void } | undefined => {
     if (bySignIn(row.provider)) return undefined;
+    const disabled = busy.has(row.connection);
 
     switch (row.kind) {
       case SERVER_ROW.CONNECT:
@@ -259,10 +292,11 @@ function useIntegrationActs(statuses: IntegrationStatuses, onAsk: (row: ServerRo
             statuses.statusOf(row.connection),
             statuses.signIns.get(row.connection),
           ),
+          disabled,
           onPress: () => connect(row),
         };
       case SERVER_ROW.SIGNING_IN:
-        return { label: SIGN_IN_ACTION.CANCEL, onPress: () => cancel(row) };
+        return { label: SIGN_IN_ACTION.CANCEL, disabled, onPress: () => cancel(row) };
       case SERVER_ROW.SWITCH:
       case SERVER_ROW.QUIET:
       case SERVER_ROW.RETRY:

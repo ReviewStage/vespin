@@ -687,7 +687,14 @@ type ConnectionRowProps = {
   /** Its lines under the name: where it stands, what it is for, or why it did not go. */
   readonly lines: readonly ConnectionLine[];
   /** The one act it offers at its end, such as Connect or Cancel, as a bordered button; none where it offers none there. */
-  readonly act?: { readonly label: string; readonly onPress: () => void } | undefined;
+  readonly act?:
+    | {
+        readonly label: string;
+        /** Whether it takes no press now, such as while the last one is out. */
+        readonly disabled?: boolean | undefined;
+        readonly onPress: () => void;
+      }
+    | undefined;
   /** The rest of what it offers, in the menu a long press opens, a destructive one also behind a swipe from the trailing edge. */
   readonly menu?: readonly MemberRowAct[] | undefined;
 };
@@ -725,7 +732,12 @@ export function ConnectionRow({ name, lines, act, menu = [] }: ConnectionRowProp
       </VStack>
       <Spacer />
       {act === undefined ? null : (
-        <Button label={act.label} look={BUTTON_LOOK.BORDERED} onPress={act.onPress} />
+        <Button
+          label={act.label}
+          look={BUTTON_LOOK.BORDERED}
+          disabled={act.disabled}
+          onPress={act.onPress}
+        />
       )}
     </HStack>
   );
