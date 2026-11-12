@@ -12,10 +12,9 @@ import { Tooltip } from "../tooltip/hint.js";
 import {
   UPLOAD_COVER_SIZE,
   UPLOAD_COVER_STATE,
-  UPLOAD_METER_PLACE,
   UploadCover,
-  UploadMeter,
 } from "../upload-cover/upload-cover.js";
+import { UPLOAD_METER_PLACE, UploadMeter } from "../upload-cover/upload-meter.js";
 
 /**
  * attachment-chip.tsx -- a file coming along with a message or a note, as a chip: its thumbnail, or its type's glyph, its name, and its size.
