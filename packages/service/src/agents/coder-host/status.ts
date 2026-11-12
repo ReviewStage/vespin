@@ -31,6 +31,7 @@ import {
   type AgentSummary,
   type AgentTurn,
   agentOwnerOf,
+  agentSourceOnWire,
   CONTEXT_WINDOW,
   type NativeAgentRuntime,
   turnStatusOfWord,
@@ -477,7 +478,7 @@ function summaryFields(
     ...(agent.startedByAgentId === null ? undefined : { startedByAgentId: agent.startedByAgentId }),
     ...(agent.automationId === null ? undefined : { automationId: agent.automationId }),
     ...(agent.automationName === null ? undefined : { automationName: agent.automationName }),
-    ...(agent.source == null ? undefined : { source: agent.source }),
+    ...agentSourceOnWire(agent.source),
     ...(owner === undefined ? undefined : { owner }),
     ...(agent.startedFrom === null ? undefined : { from: agent.startedFrom }),
     ...(continuedBy.length === 0

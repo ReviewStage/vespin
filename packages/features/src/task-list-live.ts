@@ -15,6 +15,7 @@ import {
   type AgentTurn,
   agentArchiverSchema,
   agentFailureSchema,
+  agentImportedSchema,
   agentOwnerOf,
   agentPullRequestSchema,
   agentSourceSchema,
@@ -172,6 +173,8 @@ const agentLiveRowSchema = EffectSchema.Struct({
   startedFrom: EffectSchema.NullOr(agentSummarySchema.fields.from.schema),
   /** What outside the app the agent was started from, as its summary's `source` says it; absent from a statement before it was carried. */
   source: EffectSchema.optionalKey(EffectSchema.NullOr(agentSourceSchema)),
+  /** Where the agent was imported from, as its summary's `imported` says it; absent from a statement before it was carried. Note that the statement sends an imported agent's source here alone, so a window built before it, which reads `source` as Slack's, never meets a word it does not know. */
+  imported: EffectSchema.optionalKey(EffectSchema.NullOr(agentImportedSchema)),
   pinnedAt: EffectSchema.NullOr(countedNumber),
   pinPosition: EffectSchema.NullOr(EffectSchema.String),
   /** The reader's read mark (`read-mark.ts`); absent from a service before read marks were kept. */
@@ -596,6 +599,7 @@ function agentSummaryOf(
     ...(row.automationId === null ? undefined : { automationId: row.automationId }),
     ...(row.automationName === null ? undefined : { automationName: row.automationName }),
     ...(row.source == null ? undefined : { source: row.source }),
+    ...(row.imported == null ? undefined : { imported: row.imported }),
     ...(owner === undefined ? undefined : { owner }),
     ...(row.startedFrom === null ? undefined : { from: row.startedFrom }),
     ...(continuedBy === undefined ? undefined : { continuedBy }),

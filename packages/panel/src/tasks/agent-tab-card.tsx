@@ -146,6 +146,8 @@ export interface CardReading {
   readonly repository?: string | undefined;
   /** Whether a member started the agent from Slack. */
   readonly fromSlack?: boolean | undefined;
+  /** Whether the agent was imported from a Conductor chat. */
+  readonly fromConductor?: boolean | undefined;
 }
 
 function Corner({ corner }: { corner: CardCorner }): React.JSX.Element | null {
@@ -249,6 +251,8 @@ function StartedBy({
 
 /** What the line of an agent started from Slack says. */
 const FROM_SLACK_WORDS = "Started from Slack";
+
+const FROM_CONDUCTOR_WORDS = "Imported from Conductor";
 
 /** The repository the agent works in, its owner's picture before it. */
 function RepositoryLine({ repository }: { repository: string }): React.JSX.Element {
@@ -425,6 +429,7 @@ export function AgentTabCard({
     archivedBy,
     repository,
     fromSlack,
+    fromConductor,
   } = read();
 
   const head = (
@@ -457,6 +462,13 @@ export function AgentTabCard({
           look={HOVER_CARD_ROW_LOOK.DETAIL}
           glyph={<ProviderMark provider={INTEGRATION_PROVIDER.SLACK} />}
           label={FROM_SLACK_WORDS}
+        />
+      ) : null}
+      {fromConductor === true ? (
+        <HoverCardRow
+          look={HOVER_CARD_ROW_LOOK.DETAIL}
+          glyph={<GLYPH.HISTORY />}
+          label={FROM_CONDUCTOR_WORDS}
         />
       ) : null}
       {repository === undefined ? null : <RepositoryLine repository={repository} />}

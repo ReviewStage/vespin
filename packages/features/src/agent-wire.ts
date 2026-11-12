@@ -240,26 +240,83 @@ export const AGENT_KIND = {
 export type AgentKind = (typeof AGENT_KIND)[keyof typeof AGENT_KIND];
 
 /**
- * What outside the app an agent was started from, which a list marks it by:
- * a member's message to the Slack bot. An agent started in the app, by an
- * automation, or by another agent has none.
+ * What outside the app an agent came from, which a list marks it by: a
+ * member's message to the Slack bot, or a chat imported from Conductor. An
+ * agent started in the app, by an automation, or by another agent has none.
  */
 export const AGENT_SOURCE = {
   SLACK: "slack",
+  CONDUCTOR: "conductor",
 } as const;
 
-/** The most an agent's source's link spells, far past what Slack mints. */
+/** The most an agent's source's link spells, far past what Slack or Conductor mints. */
 const AGENT_SOURCE_URL_CHARS = 2_048;
 
-/** An agent's source as its row keeps it and a list carries it: what it was, and the message's link where one was answered. */
+const sourceUrlSchema = EffectSchema.optionalKey(
+  EffectSchema.String.check(EffectSchema.isMaxLength(AGENT_SOURCE_URL_CHARS)),
+);
+
+/**
+ * An agent's source as a summary carries it to a window: the Slack message
+ * that started it, and its link where one was answered. Note that `kind`
+ * stays the one word every released window knows, because a window reads it
+ * as one of the words it was built with and would refuse the whole page over
+ * another; an imported agent rides in `imported` instead, a key an older
+ * build drops.
+ */
 export const agentSourceSchema = EffectSchema.Struct({
-  kind: EffectSchema.Literals(Object.values(AGENT_SOURCE)),
-  url: EffectSchema.optionalKey(
-    EffectSchema.String.check(EffectSchema.isMaxLength(AGENT_SOURCE_URL_CHARS)),
-  ),
+  kind: EffectSchema.Literal(AGENT_SOURCE.SLACK),
+  url: sourceUrlSchema,
 });
 
 export type AgentSource = typeof agentSourceSchema.Type;
+
+/** A Conductor chat an agent was imported from, as its row keeps it: the chat's and its workspace's ids on Conductor, and the workspace's link into Conductor where it answered one. */
+const conductorSourceSchema = EffectSchema.Struct({
+  kind: EffectSchema.Literal(AGENT_SOURCE.CONDUCTOR),
+  sessionId: EffectSchema.String,
+  workspaceId: EffectSchema.String,
+  url: sourceUrlSchema,
+});
+
+/** An agent's source as its row keeps it: a Slack message, or a Conductor chat it was imported from. */
+export const storedAgentSourceSchema = EffectSchema.Union([
+  agentSourceSchema,
+  conductorSourceSchema,
+]);
+
+export type StoredAgentSource = typeof storedAgentSourceSchema.Type;
+
+/** Where an imported agent came from, as a summary carries it: Conductor, and its link there where one was kept. */
+export const agentImportedSchema = EffectSchema.Struct({
+  from: EffectSchema.Literal(AGENT_SOURCE.CONDUCTOR),
+  url: sourceUrlSchema,
+});
+
+export type AgentImported = typeof agentImportedSchema.Type;
+
+/** A row's source as a summary's two keys carry it. */
+interface AgentSourceOnWire {
+  readonly source?: AgentSource;
+  readonly imported?: AgentImported;
+}
+
+/** A row's source as a summary carries it: a Slack one as `source`, an imported one as `imported`, and nothing for none. */
+export function agentSourceOnWire(stored: StoredAgentSource | null | undefined): AgentSourceOnWire {
+  switch (stored?.kind) {
+    case AGENT_SOURCE.SLACK:
+      return { source: stored };
+    case AGENT_SOURCE.CONDUCTOR:
+      return {
+        imported: {
+          from: AGENT_SOURCE.CONDUCTOR,
+          ...(stored.url === undefined ? undefined : { url: stored.url }),
+        },
+      };
+    default:
+      return {};
+  }
+}
 
 /**
  * Where an agent's runner and checkout live: a Vercel Sandbox, as every
@@ -1265,6 +1322,8 @@ export const agentSummarySchema = EffectSchema.Struct({
   automationName: EffectSchema.optionalKey(EffectSchema.String),
   /** What outside the app the agent was started from, a Slack message; absent for one started in the app, and from a service before it. */
   source: EffectSchema.optionalKey(agentSourceSchema),
+  /** Where the agent was imported from, a Conductor chat; absent for one started here, and from a service before imports. */
+  imported: EffectSchema.optionalKey(agentImportedSchema),
   /** What the agent belongs to; absent once its owner is gone, and from a service before it. */
   owner: EffectSchema.optionalKey(agentOwnerSchema),
   /**

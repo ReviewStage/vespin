@@ -50,6 +50,7 @@ import { STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
 import {
   AGENT_FAILURE,
   AGENT_MACHINE,
+  AGENT_SOURCE,
   AGENT_STATUS,
   type AgentSummary,
   CHECK_SUMMARY,
@@ -119,7 +120,13 @@ const openAgent = (
   started: Partial<
     Pick<
       NewAgent,
-      "runtime" | "machine" | "deviceId" | "startedFrom" | "automationRunId" | "startedByAgentId"
+      | "runtime"
+      | "machine"
+      | "deviceId"
+      | "startedFrom"
+      | "automationRunId"
+      | "startedByAgentId"
+      | "source"
     >
   > = {},
 ) =>
@@ -514,6 +521,16 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
           startedByAgentId: local.id,
         });
 
+        // One imported from a Conductor chat, whose source a released window, which knows Slack's alone, must never be sent.
+        const imported = yield* openAgent(owner, { taskId: runs.id }, 3 * 60_000, {
+          source: {
+            kind: AGENT_SOURCE.CONDUCTOR,
+            sessionId: "chat-1",
+            workspaceId: "workspace-1",
+            url: "https://conductor.test/workspace-1",
+          },
+        });
+
         // Tasks made for the owner by a coding agent, and by the notetaker on their call.
         const followUp = yield* startTask(owner, {
           name: "Invite emails",
@@ -566,6 +583,15 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         );
 
         assert.equal(helperRow?.startedByAgentId, local.id);
+
+        const importedRow = taskAgentsOfLiveRows(yield* liveRowsOf(owner), NOW).find(
+          (agent) => agent.id === imported.id,
+        );
+
+        assert.deepEqual(
+          [importedRow?.source, importedRow?.imported],
+          [undefined, { from: AGENT_SOURCE.CONDUCTOR, url: "https://conductor.test/workspace-1" }],
+        );
         const read = yield* liveListOf(owner, NOW);
         const originOf = (taskId: string) => read.plans.find((each) => each.id === taskId)?.origin;
         assert.deepEqual(

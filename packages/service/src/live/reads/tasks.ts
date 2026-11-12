@@ -46,7 +46,7 @@ import {
 } from "@repo/database/sync/tables";
 import type { BootPhase } from "@repo/features/agent-boot";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/agent-sandbox-wire";
-import { AGENT_BRIEF, type AgentFailure } from "@repo/features/agent-wire";
+import { AGENT_BRIEF, AGENT_SOURCE, type AgentFailure } from "@repo/features/agent-wire";
 import { NO_TASK_OWNER, TASK_LIST_READ } from "@repo/features/task-list-live";
 import { SANDBOX_IDLE } from "@repo/sandbox";
 import { and, eq, isNotNull, or, type SQL, sql } from "drizzle-orm";
@@ -56,6 +56,9 @@ import type { SyncMoved } from "../../sync/live-query.js";
 import { readerAndWorkspaceTopics } from "../../sync/reader-topics.js";
 import { failureWordOf, lastSettledAtIn, latestTurnOf, sessionEndedOf } from "../agent-standing.js";
 import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-binding.js";
+
+/** What an imported agent's `imported` opens with, beside the link its source keeps; built by `||` and `-` alone, which Postgres marks immutable as Realtime requires. */
+const IMPORTED_FROM_CONDUCTOR = JSON.stringify({ from: AGENT_SOURCE.CONDUCTOR });
 
 /**
  * tasks.ts -- the plan list bound (`TASK_LIST_READ`): the plans the account reaches, and every agent of them, with what the list reads each agent's status from, the tables they read, the topics that wake them, and what a reader past a sync id is answered.
@@ -213,7 +216,13 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
           AgentRow["pullRequests"]
         >`array(select ${agentPullRequest.pullRequest} from ${agentPullRequest} where ${agentPullRequest.agentId} = ${agentTable.id} order by ${agentPullRequest.createdAt} desc, ${agentPullRequest.number} desc)`,
         startedFrom: agentTable.startedFrom,
-        source: agentTable.source,
+        // Note that a released window reads `source` as Slack's alone, so an imported agent's rides in `imported`, a column it drops.
+        source: sql<
+          AgentRow["source"]
+        >`case when ${agentTable.source} ->> 'kind' = ${AGENT_SOURCE.SLACK} then ${agentTable.source} end`,
+        imported: sql<
+          AgentRow["imported"]
+        >`case when ${agentTable.source} ->> 'kind' = ${AGENT_SOURCE.CONDUCTOR} then ${IMPORTED_FROM_CONDUCTOR}::jsonb || (${agentTable.source} - 'kind' - 'sessionId' - 'workspaceId') end`,
         runtime: conversations.runtime,
         machine: sql<string | null>`${agentTable.machine}`,
         deviceId: agentTable.deviceId,
