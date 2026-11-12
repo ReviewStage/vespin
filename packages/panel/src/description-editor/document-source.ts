@@ -3,6 +3,7 @@ import { BulletList, TaskList } from "@tiptap/extension-list";
 import { MarkdownManager } from "@tiptap/markdown";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { diffArrays } from "diff";
+import type { NamesChip } from "./contract.js";
 import { withMentions } from "./mention-node.js";
 
 /**
@@ -47,8 +48,8 @@ const FOOTNOTE = /\[\^[^\]\s]+\]/u;
  */
 const ESCAPED_ALERT = /^([^\S\n]*>[^\S\n]*)\\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\\]/iu;
 
-/** A line opening or closing a code fence, past the quote and list markers holding it: its run of backticks or tildes, and what follows it. */
-const FENCE_LINE = /^[\s>]*(?:(?:[-*+]|\d{1,9}[.)])\s+)?[\s>]*(`{3,}|~{3,})(.*)$/u;
+/** A line opening or closing a code fence: the quote and list markers holding it, its run of backticks or tildes, and what follows it. */
+const FENCE_LINE = /^([\s>]*(?:(?:[-*+]|\d{1,9}[.)])\s+)?[\s>]*)(`{3,}|~{3,})(.*)$/u;
 
 /** What separates a re-printed block from the next. */
 const BLOCK_GAP = "\n\n";
@@ -64,18 +65,18 @@ export type BlankEnds = (typeof BLANK_ENDS)[keyof typeof BLANK_ENDS];
 /** The blocks a bullet list opens as, a run of plain items or of task items (`tokenSources`). */
 const LIST_BLOCKS = new Set([BulletList.name, TaskList.name]);
 
-/** The locked block a source the editor cannot draw faithfully opens as. */
+/** The locked block a source the editor cannot draw faithfully opens as, drawn as its words, as the read view draws them (`@repo/ui`'s note). */
 export const RawBlock = Node.create({
   name: "rawBlock",
   group: "block",
   atom: true,
   selectable: true,
   addAttributes: () => ({ source: { default: "" } }),
-  parseHTML: () => [{ tag: "pre[data-raw-block]" }],
+  parseHTML: () => [{ tag: "p[data-raw-block]" }, { tag: "pre[data-raw-block]" }],
   renderHTML: ({ node }) => [
-    "pre",
+    "p",
     { "data-raw-block": "", class: "description-raw-block", contenteditable: "false" },
-    node.attrs.source,
+    String(node.attrs.source).trimEnd(),
   ],
   renderMarkdown: (node: JSONContent) => String(node.attrs?.source ?? "").trimEnd(),
 });
@@ -160,7 +161,11 @@ export function documentManager(extensions: AnyExtension[]): MarkdownManager {
 }
 
 /** A whole document opened as top-level blocks, each with its exact source. */
-export function documentOpened(manager: MarkdownManager, markdown: string): OpenedDocument {
+export function documentOpened(
+  manager: MarkdownManager,
+  markdown: string,
+  namesChip?: NamesChip | undefined,
+): OpenedDocument {
   const blocks: JSONContent[] = [];
   const sources: string[] = [];
   let lead = "";
@@ -178,7 +183,7 @@ export function documentOpened(manager: MarkdownManager, markdown: string): Open
       const [block] = parsed;
       blocks.push(
         parsed.length === 1 && block !== undefined
-          ? withMentions(block)
+          ? withMentions(block, namesChip)
           : { type: RawBlock.name, attrs: { source } },
       );
       sources.push(source);
@@ -207,6 +212,11 @@ export function sourcesOf(doc: PmNode, opened: OpenedDocument): HeldSources {
   return { sources: map, lead: opened.lead, ending: opened.ending };
 }
 
+/** How many quotes deep a line's markers stand. */
+function quoteDepth(markers: string): number {
+  return markers.split(">").length - 1;
+}
+
 /** The trailing whitespace of a source. */
 function trailing(source: string): string {
   return /\s*$/u.exec(source)?.[0] ?? "";
@@ -230,24 +240,25 @@ function reprinted(manager: MarkdownManager, node: PmNode): string {
  * writes code raw, so a backslash there is the code's own.
  */
 function alertsUnescaped(markdown: string): string {
-  let fence: string | undefined;
+  let fence: { run: string; depth: number } | undefined;
 
   return markdown
     .split("\n")
     .map((line) => {
-      const [, run, rest = ""] = FENCE_LINE.exec(line) ?? [];
+      const [, markers = "", run, rest = ""] = FENCE_LINE.exec(line) ?? [];
 
       if (fence === undefined) {
-        fence = run;
+        fence = run === undefined ? undefined : { run, depth: quoteDepth(markers) };
 
         return run === undefined ? line.replace(ESCAPED_ALERT, "$1[!$2]") : line;
       }
 
-      // Note that a fence closes on a run as long or longer of its own mark, with nothing after it.
+      // Note that a fence closes on a run as long or longer of its own mark, as many quotes deep, with nothing after it.
       const closes =
         run !== undefined &&
-        run[0] === fence[0] &&
-        run.length >= fence.length &&
+        run[0] === fence.run[0] &&
+        run.length >= fence.run.length &&
+        quoteDepth(markers) === fence.depth &&
         rest.trim() === "";
 
       if (closes) fence = undefined;
@@ -401,10 +412,11 @@ export function documentTook(
   held: HeldSources,
   sent: string,
   merged: string,
+  namesChip?: NamesChip | undefined,
 ): TakenDocument {
-  const sentOpened = documentOpened(manager, sent);
+  const sentOpened = documentOpened(manager, sent, namesChip);
   const was = [...sentOpened.sources];
-  const now = documentOpened(manager, merged);
+  const now = documentOpened(manager, merged, namesChip);
   const current: string[] = [];
   // Note that a block holding a picture still being kept counts as changed since, because it writes as if the picture were not there, and a block put in its place would lose it.
   editor.state.doc.forEach((node) => {

@@ -12,6 +12,7 @@
  * editor's libraries.
  */
 
+import type { CodeLines } from "@repo/features/tasks-view";
 import type {
   WRITING_MARK,
   WritingBlock,
@@ -214,12 +215,12 @@ export interface DescriptionEditorProps {
   /** What the text's mentions are drawn and picked with; none where the text takes no mentions, as a template does not. */
   readonly mentions?: DescriptionEditorMentions | undefined;
   /**
-   * Draws a Mermaid code block's diagram into the element the editor stands
-   * under the block, as the panel draws it in the read view, so the panel's
-   * one copy of the diagram bundle serves both; answers what takes the
-   * drawing down. None where the text draws no diagrams.
+   * Draws a Mermaid code block as the read view's diagram card, into the
+   * element the block stands in, with the block's code card handed to stand
+   * in its code's place; drawn again as the block changes, and taken down at
+   * last. None where the text draws no diagrams.
    */
-  readonly drawDiagram?: ((element: HTMLElement, diagram: EditorDiagram) => () => void) | undefined;
+  readonly drawDiagram?: DiagramDrawer | undefined;
   /**
    * Draws a task item's box into the element the editor stands in its
    * item's gutter, as the read view draws it, the shared `Checkbox`, so the
@@ -229,6 +230,8 @@ export interface DescriptionEditorProps {
   readonly drawTaskBox?: TaskBoxDrawer | undefined;
   /** Draws each code block's header, as the drawn text's code card heads it, its language chosen there; a bare block where it draws none. */
   readonly drawCodeHeader?: CodeHeaderDrawer | undefined;
+  /** Colors each code block's lines as the drawn text's card colors them; lines left in the code's own ink where none colors them. */
+  readonly colorCode?: CodeColorer | undefined;
   /** What the text's pictures are drawn and taken in with; none where the text takes no pictures, as a template does not. */
   readonly pictures?: DescriptionEditorPictures | undefined;
   /** The open comment threads' words, in offsets of `markdown`, which the editor carries as its words move; none where the text has no comments. */
@@ -237,6 +240,39 @@ export interface DescriptionEditorProps {
   readonly format?: EditorFormatDoors | undefined;
   /** What the `/` menu over the text hears of its `/` word and its keys; none where no menu stands over it, which an empty line then does not offer. */
   readonly blocks?: DescriptionEditorBlocks | undefined;
+  /** An earlier editor's undo history on this text, which this one takes up, and the step it takes through it as it opens; none where it opens with a history of its own. */
+  readonly history?: OpenedHistory | undefined;
+}
+
+/**
+ * An editor's undo history as it was taken down, which an editor opened on
+ * the same text takes up: the text it ends on, and whether it holds a change
+ * to take back or one to put back. What it holds beside, the steps
+ * themselves, only the editor bundle reads.
+ */
+export interface EditorHistory {
+  readonly markdown: string;
+  readonly undoes: boolean;
+  readonly redoes: boolean;
+}
+
+/** A step through an editor's history: ⌘Z's, which takes the last change back, or ⇧⌘Z's, which puts it back. */
+export const HISTORY_STEP = {
+  UNDO: "undo",
+  REDO: "redo",
+} as const;
+
+export type HistoryStep = (typeof HISTORY_STEP)[keyof typeof HISTORY_STEP];
+
+/**
+ * The history an editor opens with: one an earlier editor left, taken up
+ * only where the text it opens on is the very document that history ends
+ * on, and dropped otherwise, so no step is taken against another text; and
+ * the step taken through it as it opens, where one is asked.
+ */
+export interface OpenedHistory {
+  readonly kept: EditorHistory;
+  readonly step?: HistoryStep | undefined;
 }
 
 /** The words one comment thread is on, as offsets into a description's Markdown. */
@@ -323,7 +359,12 @@ export interface DescriptionEditorPictures {
  */
 export interface EditorDiagram {
   readonly code: string;
-  readonly previous: string | undefined;
+  /** The block's code card, the lines the editor edits, which the card stands in its code's place. */
+  readonly source: HTMLElement;
+  /** Whether the card shows the code rather than the diagram. */
+  readonly showingCode: boolean;
+  /** Shows the code, or the diagram again, as the card's Show code and Show diagram do. */
+  readonly showCode: (showing: boolean) => void;
 }
 
 /** A task item's box as the editor asks it drawn: its item's words, which name it, whether it is ticked, and the door that ticks or clears it. */
@@ -354,6 +395,15 @@ export type CodeHeaderDrawer = (
   element: HTMLElement,
   block: EditorCodeBlock,
 ) => EditorDrawing<EditorCodeBlock>;
+
+/** Draws a Mermaid code block as its diagram's card, drawn again as the block changes so the card keeps its state. */
+export type DiagramDrawer = (
+  element: HTMLElement,
+  diagram: EditorDiagram,
+) => EditorDrawing<EditorDiagram>;
+
+/** Colors a code block's lines as the drawn text's card colors them, by the host's one highlighter: each line's runs, or none where nothing colors them. */
+export type CodeColorer = (language: string, code: string) => Promise<CodeLines | null>;
 
 /**
  * What the panel may do to a mention it draws: name it anew in place, the
@@ -386,6 +436,8 @@ interface ComposerMentions {
 export interface MentionNode {
   readonly name: string;
   readonly target: string;
+  /** The link's own words, where it was written as a plain link the read view draws as a chip rather than as `@name`; drawn as the read view draws them. */
+  readonly label?: string | undefined;
 }
 
 /**
@@ -417,9 +469,12 @@ export interface DescriptionEditorMentions {
   readonly retarget: (target: string, change: HeadingsChange) => MentionNode | undefined;
   /** The chip words pasted whole stand for, any link the read view draws as one; nothing for any other words, which paste as words. */
   readonly pasted: (words: string) => MentionNode | undefined;
-  /** Whether a link's target is one the read view draws as a chip, so the editor draws the link in a chip's light look. */
-  readonly namesChip: (target: string) => boolean;
+  /** Whether a link's target is one the read view draws as a chip, so the editor opens the link as that chip, and draws one laid in while editing in a chip's light look. */
+  readonly namesChip: NamesChip;
 }
+
+/** Whether a link's target is one the read view draws as a chip. */
+export type NamesChip = (target: string) => boolean;
 
 /** Words of the editor a thread is started on: where they stand in `text`, the Markdown the editor would hand over now, and the words themselves. */
 export interface EditorSpan {
@@ -463,7 +518,7 @@ export interface DescriptionEditorHandle extends EditorFormatting {
   readonly setAria: (aria: EditorAria) => void;
   /** The caret put where the placement says and the editor focused, as a press on the text's room does while it is open, and the files a drop carries laid in there as pictures. */
   readonly focusAt: (placement: DescriptionEditorPlacement) => void;
-  /** Where the line of the words a click opened the editor on stands in the window, down from its top; none where it opened elsewhere, the words not found, or the caret has since been put elsewhere, or where it cannot be measured. */
+  /** Where the line of the words a click opened the editor on, or of the change a step through its history took as it opened, stands in the window, down from its top; none where it opened elsewhere, the words not found, or the caret has since been put elsewhere, or where it cannot be measured. */
   readonly wordsTop: () => number | undefined;
   /** The words the caret stands in, as the drawn text finds them again, and where their line stands in the window; none off any words, or where nothing is laid out. The panel keeps them where they stood as the editor closes. */
   readonly caretWords: () => PlacedWords | undefined;
@@ -477,6 +532,8 @@ export interface DescriptionEditorHandle extends EditorFormatting {
   readonly selectionSpan: () => EditorSpan | undefined;
   /** The block `element` is drawn in, whole, as a thread started on it anchors it; nothing where it is no block of the text, a diagram's preview say. */
   readonly blockSpan: (element: Element) => EditorSpan | undefined;
+  /** The undo history as it stands, for an editor opened later on the same text to take up. */
+  readonly history: () => EditorHistory;
   readonly destroy: () => void;
 }
 

@@ -64,6 +64,8 @@ export const TurnHandedSchema = Schema.Struct({
       turnEndOn: Schema.optionalKey(Schema.Boolean),
       /** Absent for a session opened before Reply buttons was kept, which opened with it off. */
       replyButtonsOn: Schema.optionalKey(Schema.Boolean),
+      // Note that a session opened before Computer use was an experiment names none, having been offered no computer tool.
+      computerUseOn: Schema.optionalKey(Schema.Boolean),
     }),
   ),
 });

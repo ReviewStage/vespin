@@ -1,5 +1,6 @@
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
+  BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
   HarnessMark,
@@ -9,6 +10,7 @@ import {
   SETTINGS_ROW_STATE,
   SettingsOrderedRows,
   SettingsRow,
+  SettingsRowAction,
   SettingsRowMark,
   SettingsRowMeter,
   SettingsRowStateLine,
@@ -29,8 +31,9 @@ import { CatalogSection } from "../section";
  * so the header's mark and every row's stand in one column, a plan's usage
  * under its name as a meter for each of its windows (`SettingsRowUsage`), in
  * place of the words where it has room, or a thin meter full in the attention
- * ink at its limit where no window was heard (`SettingsRowMeter`); and a run
- * of one, which draws no grip.
+ * ink at its limit where no window was heard (`SettingsRowMeter`), with the
+ * one small press a plan at its limit offers under it (`SettingsRowAction`);
+ * and a run of one, which draws no grip.
  */
 
 interface Plan {
@@ -41,6 +44,8 @@ interface Plan {
   readonly limited?: boolean;
   readonly meter?: { readonly value: number; readonly tone: ProgressTone };
   readonly usage?: readonly UsageMeterRow[];
+  /** The press it offers under its meters, a plan at its limit's Use reset. */
+  readonly offer?: string;
 }
 
 const NOW = Date.now();
@@ -62,6 +67,7 @@ const PLANS: readonly Plan[] = [
     state: "At its limit · back at 3:40 PM",
     limited: true,
     meter: { value: 100, tone: PROGRESS_TONE.ATTENTION },
+    offer: "Use reset",
   },
   {
     id: "personal",
@@ -76,7 +82,7 @@ const PLANS: readonly Plan[] = [
 ];
 
 /** One plan's row, as Settings › Agents draws it. */
-function PlanRow({ name, state, limited = false, meter, usage }: Plan): React.JSX.Element {
+function PlanRow({ name, state, limited = false, meter, usage, offer }: Plan): React.JSX.Element {
   return (
     <SettingsRow
       leading={<SettingsRowMark>{CODEX}</SettingsRowMark>}
@@ -92,6 +98,13 @@ function PlanRow({ name, state, limited = false, meter, usage }: Plan): React.JS
           )}
           {usage === undefined ? null : <SettingsRowUsage rows={usage} />}
           {meter === undefined ? null : <SettingsRowMeter value={meter.value} tone={meter.tone} />}
+          {offer === undefined ? null : (
+            <SettingsRowAction>
+              <Button variant={BUTTON_VARIANT.OUTLINE} size={BUTTON_SIZE.COMPACT}>
+                {offer}
+              </Button>
+            </SettingsRowAction>
+          )}
         </>
       }
       end={() => <MoreButton thing={name} />}

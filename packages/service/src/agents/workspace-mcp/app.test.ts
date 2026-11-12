@@ -90,6 +90,7 @@ import { DESCRIPTION_EDIT_REFUSAL } from "../coder-host/description-edit.js";
 import { postToInbox } from "../coder-host/inbox.js";
 import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
+import { runComputerTool } from "../computer-tool.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import { AgentSandbox } from "../terminal/agent-sandbox.js";
 import {
@@ -452,6 +453,7 @@ const SERVED_TOOLS = [
   "reply_to_comment",
   "update_comment",
   "run_on_mac",
+  "computer",
   "browser",
   "list_ports",
   "share_port",
@@ -500,6 +502,7 @@ const DOOR_OF: Readonly<
   read_comments: commentTool("read_comments"),
   reply_to_comment: commentTool("reply_to_comment"),
   update_comment: commentTool("update_comment"),
+  computer: (admitted, input) => runComputerTool(admitted.target, input),
 };
 
 /** The tools a harness has its own of, as the retired runtime named them, which the server never serves. */
@@ -695,7 +698,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const agent = yield* agentWithBearer;
         yield* experimentInTestWorkspace(agent.userId, EXPERIMENT.MEMORY);
         yield* writeAccountPreferences(agent.userId, {
-          experiments: { [EXPERIMENT.TURN_END]: true },
+          experiments: { [EXPERIMENT.TURN_END]: true, [EXPERIMENT.COMPUTER_USE]: true },
         });
         yield* experimentInTestWorkspace(agent.userId, EXPERIMENT.REPLY_BUTTONS);
         yield* descriptionsOn(agent.userId);
@@ -717,6 +720,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
             memoryOn: true,
             turnEndOn: true,
             replyButtonsOn: true,
+            computerUseOn: true,
           },
         };
 
@@ -767,7 +771,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       withheld: ["browser", "run_on_mac", "list_ports", "share_port"],
     },
   ])(
-    "tools/list leaves out what the catalog's gates offer no agent $why, and the memory, the description's, the turn's end, and the reply buttons' tools where its starter has Memory, Task descriptions, Done and follow-ups, and Reply buttons off",
+    "tools/list leaves out what the catalog's gates offer no agent $why, and the memory, the description's, the turn's end, the reply buttons', and the computer tools where its starter has Memory, Task descriptions, Done and follow-ups, Reply buttons, and Computer use off",
     ({ agent: made, withheld }) =>
       Effect.gen(function* () {
         const fetch = yield* standing;
@@ -786,6 +790,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           "edit_description",
           "end_turn",
           "add_suggestion",
+          "computer",
         ];
 
         assert.deepEqual(
@@ -941,6 +946,9 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const agent = yield* agentWithBearer;
         // Every gate stands open, so each call reaches its door.
         yield* experimentInTestWorkspace(agent.userId, EXPERIMENT.MEMORY);
+        yield* writeAccountPreferences(agent.userId, {
+          experiments: { [EXPERIMENT.COMPUTER_USE]: true },
+        });
         yield* descriptionsOn(agent.userId);
         const admitted = Option.getOrThrow(yield* admitRunnerBearer(agent.bearer));
         const seams = yield* workspaceMcpDoorSeams.pipe(Effect.provide(yield* doorServices));

@@ -4,11 +4,14 @@ import { MAC_COMMAND_CALL_FAILURE, MAC_COMMAND_NOT_CLAIMED } from "@repo/feature
 import { LIVE_POLL_URL, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import type { MacCommandsLiveAnswer } from "@repo/features/mac-command-live";
 import {
+  COMPUTER_ACTION,
+  type ComputerApp,
   MAC_COMMAND_KIND,
   type MacCommand,
   type MacCommandKind,
   type MacCommandResult,
   macCommandKindsRead,
+  storedMacCommandText,
 } from "@repo/features/mac-command-wire";
 import { GATEWAY_EVENT, type GatewayEventKind } from "@repo/gateway";
 import { MAC_COMMAND_MODE, type MacCommandMode } from "@repo/settings";
@@ -16,7 +19,17 @@ import { isRecord, type WireValue } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
 import { ConfigProvider, Duration, Effect, Layer, Predicate, PubSub, Stream } from "effect";
 import { TestClock } from "effect/testing";
-import { composeMacCommands, type MacCommandClient } from "./compose-mac-commands.js";
+import {
+  composeMacCommands,
+  type MacCommandClient,
+  type MacCommandsDependencies,
+} from "./compose-mac-commands.js";
+import {
+  COMPUTER_HELPER_FAILURE,
+  COMPUTER_HELPER_OP,
+  type ComputerHelperRequest,
+  type ComputerUseHelperSeam,
+} from "./computer-use-helper.js";
 import { Environment, reporterLayer } from "./effect/seams.js";
 import { MAC_COMMAND_DECISION, type MacCommandDecision } from "./mac-command-ask.js";
 import { scriptedSpawner } from "./testing/scripted-spawner.js";
@@ -64,6 +77,48 @@ const LATER: MacCommand = {
   timeoutSeconds: 30,
 };
 
+const AGENT = "5b1e0c2d-3f4a-4b5c-9d6e-7f8a9b0c1d2e";
+const OTHER_AGENT = "9e8d7c6b-5a4f-4e3d-8c2b-1a0f9e8d7c6b";
+
+const SIMULATOR: ComputerApp = {
+  name: "Simulator",
+  bundleId: "com.apple.iphonesimulator",
+  iconPng: "iVBORw0KGgo=",
+  refused: false,
+};
+
+const TERMINAL: ComputerApp = { name: "Terminal", bundleId: "com.apple.Terminal", refused: true };
+
+/** An action an agent asks of an app, as the service queues it. */
+const computerCommand = (id: string, conversationId: string, app: string): MacCommand => ({
+  id,
+  kind: MAC_COMMAND_KIND.COMPUTER,
+  conversationId,
+  action: { op: COMPUTER_ACTION.CLICK, app, element_index: 3 },
+  timeoutSeconds: 60,
+});
+
+/** The helper as a script: the apps it names, every request it was asked, and each action answered done. */
+function scriptedHelper(apps: readonly ComputerApp[]) {
+  const asked: ComputerHelperRequest[] = [];
+
+  const helper: ComputerUseHelperSeam = {
+    ask: (request) =>
+      Effect.sync(() => {
+        asked.push(request);
+
+        if (request.op !== COMPUTER_HELPER_OP.DESCRIBE_APP) return { outcome: { done: "pressed" } };
+        const app = apps.find((each) => each.name === request.app);
+
+        return app === undefined
+          ? { failure: COMPUTER_HELPER_FAILURE.NOT_FOUND, message: "No such app." }
+          : { described: app };
+      }),
+  };
+
+  return { helper, asked };
+}
+
 /** How often the scripted service looks again while it holds a poll, as the service does. */
 const HOLD_LOOK = Duration.seconds(1);
 
@@ -101,7 +156,18 @@ function scriptedService(
         // A polled read is answered already expired, its expiry the service's now.
         expiresAt: NOW,
         digest: String(version),
-        ...(rows ? { rows: [...waiting] } : undefined),
+        // A row is what the queue keeps: what a command asks, as one text.
+        ...(rows
+          ? {
+              rows: waiting.map((command) => ({
+                id: command.id,
+                kind: command.kind,
+                command: storedMacCommandText(command),
+                timeoutSeconds: command.timeoutSeconds,
+                queuedAt: command.queuedAt,
+              })),
+            }
+          : undefined),
       },
     },
   });
@@ -198,6 +264,8 @@ interface Gate {
   account?: string;
   /** Whether the prompt's Allow all commands fails to keep the setting, as a file that cannot be written does. */
   saveFails?: boolean;
+  /** The computer-use helper this Mac ships, its switch, and the apps allowed without asking; none ships no helper. */
+  computer?: { helper: ComputerUseHelperSeam; enabled: boolean; allowed: string[] };
 }
 
 /**
@@ -212,7 +280,11 @@ const subject = (
   spawner: ReturnType<typeof scriptedSpawner>,
   gate: Gate,
 ) => {
-  const told: { readonly id: string; readonly command: string }[][] = [];
+  type ToldAsk =
+    | { readonly id: string; readonly command: string }
+    | { readonly id: string; readonly app: string };
+
+  const told: ToldAsk[][] = [];
   const written: MacCommandMode[] = [];
   const reported: string[] = [];
 
@@ -220,18 +292,22 @@ const subject = (
     if (kind !== GATEWAY_EVENT.MAC_COMMAND_ASKS_CHANGED || !isRecord(payload)) return;
     const asks = Array.isArray(payload.asks) ? payload.asks : [];
     told.push(
-      asks.flatMap((ask) =>
-        isRecord(ask) && Predicate.isString(ask.id) && Predicate.isString(ask.command)
-          ? [{ id: ask.id, command: ask.command }]
-          : [],
-      ),
+      asks.flatMap((ask): ToldAsk[] => {
+        if (!isRecord(ask) || !Predicate.isString(ask.id)) return [];
+
+        if (Predicate.isString(ask.command)) return [{ id: ask.id, command: ask.command }];
+
+        return isRecord(ask.app) && Predicate.isString(ask.app.name)
+          ? [{ id: ask.id, app: ask.app.name }]
+          : [];
+      }),
     );
   };
 
   return Effect.gen(function* () {
     const moves = yield* PubSub.unbounded<void>();
 
-    const composer = yield* composeMacCommands({
+    const dependencies: MacCommandsDependencies = {
       kernel: { runMode: { sendsNetwork: true }, now: () => NOW, emit },
       account: { capabilitiesActive: () => gate.signedIn },
       accountId: () => gate.account ?? ACCOUNT,
@@ -245,7 +321,25 @@ const subject = (
         return true;
       }),
       client: service.client,
-    }).pipe(Effect.provide(machine(spawner, reported)));
+    };
+
+    if (gate.computer !== undefined) {
+      dependencies.computer = {
+        helper: gate.computer.helper,
+        enabled: Effect.sync(() => gate.computer?.enabled === true),
+        allowedApps: Effect.sync(() => [...(gate.computer?.allowed ?? [])]),
+        allowApp: (app: string) =>
+          Effect.sync(() => {
+            gate.computer?.allowed.push(app);
+
+            return true;
+          }),
+      };
+    }
+
+    const composer = yield* composeMacCommands(dependencies).pipe(
+      Effect.provide(machine(spawner, reported)),
+    );
 
     return {
       composer,
@@ -736,5 +830,94 @@ it.effect(
       );
       assert.deepEqual(spawner.spawned, []);
       assert.equal(service.settledResults.has(COMMAND.id), false);
+    }),
+);
+
+it.effect(
+  "an action on an app not yet allowed is asked about by the app, Always allow adds the app and runs the action, and another agent's action on it then asks nothing; every read names computer too",
+  () =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR]);
+
+      const gate: Gate = {
+        // Note that shell commands' Always allow lets no app go unasked.
+        mode: MAC_COMMAND_MODE.ALWAYS,
+        signedIn: true,
+        computer: { helper: scripted.helper, enabled: true, allowed: [] },
+      };
+
+      const service = scriptedService();
+      const first = computerCommand(COMMAND.id, AGENT, "Simulator");
+      service.queue(first, NOW);
+
+      const { composer, asks, answer } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        gate,
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          assert.deepEqual(asks(), [{ id: first.id, app: "Simulator" }]);
+          assert.equal(
+            service.settledResults.has(first.id),
+            false,
+            "nothing runs before an answer",
+          );
+
+          yield* answer(first.id, MAC_COMMAND_DECISION.ALLOW_ALWAYS);
+          yield* settled;
+          assert.deepEqual(gate.computer?.allowed, ["com.apple.iphonesimulator"]);
+          assert.deepEqual(service.settledResults.get(first.id), { computer: { done: "pressed" } });
+
+          const second = computerCommand(SECOND.id, OTHER_AGENT, "Simulator");
+          service.queue(second, NOW);
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+          assert.deepEqual(asks(), []);
+          assert.deepEqual(service.settledResults.get(second.id), {
+            computer: { done: "pressed" },
+          });
+        }),
+      );
+
+      for (const read of service.reads) {
+        assert.deepEqual(read.kinds, [MAC_COMMAND_KIND.SHELL, MAC_COMMAND_KIND.COMPUTER]);
+      }
+    }),
+);
+
+it.effect(
+  "an app agents are never offered, or any app with the switch off, is answered not run without asking, and the helper acts on nothing",
+  () =>
+    Effect.gen(function* () {
+      for (const enabled of [true, false]) {
+        const scripted = scriptedHelper([TERMINAL]);
+        const service = scriptedService();
+        const command = computerCommand(COMMAND.id, AGENT, "Terminal");
+        service.queue(command, NOW);
+
+        const { composer, told } = yield* subject(
+          service,
+          scriptedSpawner(() => ({ exitCode: 0 })),
+          {
+            mode: MAC_COMMAND_MODE.ALWAYS,
+            signedIn: true,
+            computer: { helper: scripted.helper, enabled, allowed: [] },
+          },
+        );
+
+        yield* Effect.scoped(Effect.andThen(composer.lifetime, settled));
+
+        const result = service.settledResults.get(command.id);
+        assert.ok(result !== undefined && "refused" in result, `enabled: ${String(enabled)}`);
+        assert.deepEqual(told, [], "nothing was asked");
+        assert.ok(
+          scripted.asked.every((request) => request.op === COMPUTER_HELPER_OP.DESCRIBE_APP),
+          "no action reached the helper",
+        );
+      }
     }),
 );

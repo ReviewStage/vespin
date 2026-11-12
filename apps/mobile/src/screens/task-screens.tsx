@@ -13,6 +13,7 @@ import {
   linkOf,
   readLink,
   taskLinkStep,
+  taskNumberOf,
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
@@ -94,8 +95,8 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactElement, useMemo, useState } from "react";
-import { useAgentRowActs, useFollowedAgent, useHeldAgentStep } from "../agents/use-agent.js";
-import { archiveQuestion } from "../agents/use-agent-actions.js";
+import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
+import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
@@ -113,6 +114,7 @@ import {
   useTaskCommentsRetry,
 } from "../tasks/use-comments.js";
 import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
+import { useFoundTask } from "../tasks/use-found-task.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import {
   type StatusQuestion,
@@ -133,6 +135,7 @@ import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, type SidebarTasks, useAppSidebar } from "./app-sidebar.js";
+import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
 import { type OpenRelation, RELATION_KIND_SYMBOL, useOpenRelation } from "./relation-screens.js";
@@ -573,6 +576,7 @@ function droppedTask(tree: TaskTree, url: string): TaskSummary | undefined {
 
   const listed = [
     ...(tree.pinned === undefined ? [] : [tree.pinned]),
+    ...(tree.following === undefined ? [] : [tree.following]),
     ...tree.sections,
     ...tree.tasks,
   ]
@@ -610,9 +614,16 @@ function countDrop(taskId: string): (landed: boolean) => boolean {
  * repository group it leaves its section, each unpinning it once the move
  * is taken. A refused move leaves the task where it stood, and a drop's
  * pin or unpin is skipped where a newer drop of the same task has landed
- * first, while a refused newer one leaves the older to finish.
+ * first, while a refused newer one leaves the older to finish. Nothing is
+ * dropped onto Following, which holds what the reader follows rather than
+ * where they put it.
  */
-function placeIn(group: TaskTreeGroup, listing: TasksListing): (task: TaskSummary) => void {
+function placeIn(
+  group: TaskTreeGroup,
+  listing: TasksListing,
+): ((task: TaskSummary) => void) | undefined {
+  if (group.kind === TASK_TREE_GROUP.FOLLOWING) return undefined;
+
   if (group.kind === TASK_TREE_GROUP.PINNED) {
     return (task) => {
       const newest = countDrop(task.id);
@@ -640,9 +651,9 @@ function placeIn(group: TaskTreeGroup, listing: TasksListing): (task: TaskSummar
 }
 
 /**
- * One group of the tree as its section: Pinned, a section of the member's,
- * or a repository, folding under its header and count; My tasks heads a
- * repository group the tree draws no heading for. A task's row dragged onto
+ * One group of the tree as its section: Pinned, Following, a section of the
+ * member's, or a repository, folding under its header and count; My tasks
+ * heads a repository group the tree draws no heading for. A task's row dragged onto
  * its header, as an iPad drags, moves the task there (`placeIn`).
  */
 function GroupSection({
@@ -676,11 +687,15 @@ function GroupSection({
       title={group.title ?? listing.tree.tasksHead}
       count={group.rows.length}
       foldable
-      onDropLink={(url) => {
-        const task = droppedTask(listing.tree, url);
+      onDropLink={
+        place === undefined
+          ? undefined
+          : (url) => {
+              const task = droppedTask(listing.tree, url);
 
-        if (task !== undefined) place(task);
-      }}
+              if (task !== undefined) place(task);
+            }
+      }
     >
       <RowForEach data={rows} keyOf={(row) => row.task.id}>
         {(row) => (
@@ -704,6 +719,7 @@ function GroupSection({
 function treeEmpty(tree: TaskTree): boolean {
   return [
     ...(tree.pinned === undefined ? [] : [tree.pinned]),
+    ...(tree.following === undefined ? [] : [tree.following]),
     ...tree.sections,
     ...tree.tasks,
   ].every((group) => group.rows.length === 0);
@@ -720,9 +736,9 @@ type TasksTreeProps = {
 };
 
 /**
- * The Tasks list as the panel's phone Tasks draws it: Pinned, the member's
- * sections, and the repository groups, each folding under its header and
- * count, a task's sub-tasks folded under it; or, while a search is typed,
+ * The Tasks list as the panel's phone Tasks draws it: Pinned, Following,
+ * the member's sections, and the repository groups, each folding under its
+ * header and count, a task's sub-tasks folded under it; or, while a search is typed,
  * every task of the workspace it finds. A pull reads it again.
  */
 function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
@@ -748,6 +764,9 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
       {tree.pinned === undefined ? null : <GroupSection group={tree.pinned} listing={listing} />}
+      {tree.following === undefined ? null : (
+        <GroupSection group={tree.following} listing={listing} />
+      )}
       {tree.sections.map((group) => (
         <GroupSection key={group.key} group={group} listing={listing} />
       ))}
@@ -760,13 +779,18 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
 
 /**
  * The member's tasks a regular window's app sidebar lists under its places:
- * Pinned and each of their sections, each folding under its header and
- * count, every row acting as the Tasks tab's does.
+ * Pinned, Following, and each of their sections, each folding under its
+ * header and count, every row acting as the Tasks tab's does.
  */
 export function useSidebarTasks(): SidebarTasks {
   const { listing, status, deletion } = useListingAsks(useTasksListing(""));
   const { tree } = listing;
-  const groups = [...(tree.pinned === undefined ? [] : [tree.pinned]), ...tree.sections];
+
+  const groups = [
+    ...(tree.pinned === undefined ? [] : [tree.pinned]),
+    ...(tree.following === undefined ? [] : [tree.following]),
+    ...tree.sections,
+  ];
 
   return {
     sections: groups.map((group) => (
@@ -902,10 +926,11 @@ function agentState(status: AgentStatus): AgentRowState {
   return status === AGENT_STATUS.FAILED ? AGENT_ROW_STATE.FAILED : AGENT_ROW_STATE.REST;
 }
 
-/** The task's head: its name, its chips, and who created it and when. */
+/** The task's head: its name, its chips, who follows it, and who created it and when. */
 function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   const { task } = overview;
   const pictureOf = useMemberPictures();
+  const following = useFollowingChip(task.id);
 
   return (
     <TaskHead
@@ -921,6 +946,7 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
               nobody: false,
             }
       }
+      following={following}
       createdBy={
         task.createdBy === undefined
           ? undefined
@@ -1092,18 +1118,24 @@ type UseAgentArchiveAskResult = {
  * an agent, and `ask` is the system's alert that asks it, which the screen
  * stands beside its `<Screen>`, as every list's questions stand. Note that
  * the question reads where the agent stands now, as the agent page's menu
- * asks (`archiveQuestion`), because one that starts working while the alert
- * is up would otherwise be stopped and archived without a word of it.
+ * asks (`useArchiveAsk`), read afresh as it's raised and checked again as
+ * its act is pressed, because one that starts working while the alert is up
+ * would otherwise be stopped and archived without a word of it.
  */
 export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
   const acts = useAgentRowActs();
   const [asked, setAsked] = useState<{ readonly agentId: string; readonly presented: boolean }>();
-  const agent = useFollowedAgent(asked?.agentId ?? "");
-  const question = archiveQuestion(agent !== undefined && agentStillWriting(agent.status));
+  const { question, ask: readAfresh, answered } = useArchiveAsk(asked?.agentId ?? "");
   const letGo = () => setAsked((was) => (was === undefined ? was : { ...was, presented: false }));
 
   return {
-    archive: (agentId) => setAsked({ agentId, presented: true }),
+    archive: (agentId) => {
+      // Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
+      letGo();
+      void readAfresh(agentId).then((stands) => {
+        if (stands) setAsked({ agentId, presented: true });
+      });
+    },
     ask: (
       <ConfirmAsk
         title={question.title}
@@ -1113,8 +1145,12 @@ export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
         presented={asked?.presented === true}
         onAct={() => {
           if (asked === undefined || !asked.presented) return;
+          const { agentId } = asked;
           letGo();
-          acts.archive(asked.agentId);
+          answered(
+            () => acts.archive(agentId),
+            () => setAsked({ agentId, presented: true }),
+          );
         }}
         onDismiss={letGo}
       />
@@ -1535,6 +1571,7 @@ function TasksSplitScreen({
   const newSubTask = useNewSubTask();
   const openRelation = useOpenRelation();
   const moveDoor = useMoveTaskDoor();
+  const found = useFoundTask(selected, undefined);
   const held = useTaskOverview(selected);
   const overview = held === undefined ? undefined : { ...held, setStatus: listing.setStatus };
   const history = useHistoryDoor(overview?.task.workspaceId);
@@ -1573,10 +1610,12 @@ function TasksSplitScreen({
                 onRefresh={refreshTasks}
                 onArchiveAgent={archiveAsk.archive}
               />
-            ) : selected !== undefined && read ? (
+            ) : selected === undefined ? (
+              <EmptyState title={SELECT_A_TASK} symbol="checklist" />
+            ) : read && !found.seeking ? (
               <EmptyState title={TASK_NOT_FOUND} symbol="questionmark.folder" />
             ) : (
-              <EmptyState title={SELECT_A_TASK} symbol="checklist" />
+              <EmptyState title={READING_TASK} symbol="checklist" />
             )
           }
           detailBar={
@@ -1619,12 +1658,28 @@ export function TasksListScreen() {
   );
 }
 
-/** The Tasks tab's pushed screen: one task's Overview, named by the route's `id`, its path small in the bar and its ⋯ beside it, read as it opens; Task not found where the read list holds no such task, and the reading state while it is still read. */
+/** Whether a route names its task by number in the workspace its link names, which the task's screen finds before the split view is handed it. */
+function numberedIn(id: string, workspace: string | undefined): boolean {
+  return (
+    workspace !== undefined &&
+    taskNumberOf({ kind: LINK_DESTINATION.TASK, planId: id }) !== undefined
+  );
+}
+
+/**
+ * The Tasks tab's pushed screen: one task's Overview, named by the route's
+ * `id`, its path small in the bar and its ⋯ beside it, read as it opens. A
+ * number a link names in its `workspace` that the list doesn't hold is found
+ * on the service first, and a task the list doesn't hold opens from its own
+ * read (`useFoundTask`); Task not found once neither finds it, and the
+ * reading state while either is still read.
+ */
 export function TaskScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, workspace } = useLocalSearchParams<{ id: string; workspace?: string }>();
   const router = useRouter();
   const colors = useColors();
-  const held = useTaskOverview(id);
+  const found = useFoundTask(id, workspace);
+  const held = useTaskOverview(found.taskId);
 
   const { setStatus, question } = useStatusAsk(
     held ?? { setStatus: () => undefined, agentsWorking: () => false },
@@ -1653,7 +1708,9 @@ export function TaskScreen() {
           moveDoor,
         });
 
-  const handed = useHandToSplit(SPLIT_TAB.TASKS, id);
+  // Note that a number a link names in its workspace is handed to the split view only once found, as the task's id, since the split view's selection names no workspace; one not found stays here to say so.
+  const handing = numberedIn(id, workspace) ? found.taskId : id;
+  const handed = useHandToSplit(SPLIT_TAB.TASKS, handing) && handing !== undefined;
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);
   useTaskReadOnOpen(handed ? undefined : overview?.task.id);
 
@@ -1717,7 +1774,7 @@ export function TaskScreen() {
             onRefresh={refreshTasks}
             onArchiveAgent={archiveAsk.archive}
           />
-        ) : read ? (
+        ) : read && !found.seeking ? (
           <EmptyState title={TASK_NOT_FOUND} symbol="questionmark.folder" />
         ) : (
           <EmptyState title={READING_TASK} symbol="checklist" />

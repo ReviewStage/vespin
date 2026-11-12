@@ -101,7 +101,7 @@ Every token is a `--ui-*` custom property under `src/tokens/`.
   pressable component reads them (`cursor-press`, `cursor-link`); a control
   that takes no press is the plain arrow, a busy button keeps
   `cursor-progress`, text takes the I-beam, and a resize, drag, or zoom keeps
-  its own.
+  its own. The style guard's `pointer-cursor` holds it.
 
   The settings-row, card, dialog, and menu roles beside them (`--ui-settings-row-*`,
   `--ui-card-*`, `--ui-dialog-*`, `--ui-menu-*`) are set the same way, both profiles setting
@@ -173,7 +173,8 @@ an open menu by the edge of the button it hangs from as that button grows;
 it, `PopoverPanel`, the hover card's parts, `DrawerScrim`, and `PortalFence`
 are drawn in the theme's utilities. A popover or menu closes on a press outside
 it through `onPressAway` on its `AnchoredPopover` or `RectFloat` (`usePressAway`
-hears the window's presses once), never a listener on the document of its own.
+hears the window's presses once), never a listener on the document of its own
+(`vespin/no-document-press-listener`, from a baseline that only shrinks).
 
 The buttons and toggles: `Button`, `IconButton`, and `ButtonLink` stand on
 shadcn's button, which `SplitButton` and `FoldingButton` join and fold;
@@ -268,8 +269,12 @@ skeleton's boxes, whose classes name themselves a skeleton's.
 
 Every icon is imported through one door, `@repo/ui/icons`, built on Lucide
 (`src/icons/`): Lucide's glyphs by Lucide's own names, `GLYPH`, and
-`ICON_SIZE`. Nothing outside `@repo/ui` imports `lucide-react` directly; the
-files that still do move here as each screen is touched.
+`ICON_SIZE`. Nothing outside `@repo/ui` imports `lucide-react` directly:
+`vespin/no-lucide-outside-door` refuses it from a baseline,
+`tools/oxlint/vespin/lucide-baseline.json` (each file still importing it, with its
+count), which only shrinks. A file that holds fewer imports than its row fails
+until the row comes down, so the list is always what is still owed, and the
+rule takes no suppression.
 
 - **One glyph per meaning.** `GLYPH` (`glyph-registry.tsx`) names each concept
   the app draws (a task, an agent, a pull request, an issue, a repository, copy,
@@ -311,29 +316,36 @@ import { BUTTON_VARIANT, Button, GAP, Inline, TEXT_ELEMENT, TEXT_VARIANT, Text }
   derived from it (`BUTTON_VARIANT` / `ButtonVariant`, `GAP` / `Gap`); pass the
   constant, never a string.
 - **A press that waits is busy.** A button whose press starts an act or returns
-  a promise passes `busy` and `busyLabel`, the one busy shape every kind takes.
+  a promise passes `busy` and `busyLabel`, the one busy shape every kind takes
+  (`vespin/async-press-needs-busy` refuses one that does not, past
+  `tools/oxlint/vespin/busy-baseline.json`, which only shrinks).
 - **A page to open is a link.** Outside this package a button's press never
-  opens a page: draw a `ButtonLink`, a
+  opens a page (`vespin/no-open-page-from-button`): draw a `ButtonLink`, a
   `TextLink`, a `Chip` with `href`, or a toast action with `href`, so a
   right-click, ⌘-click and a reader's link list find it.
 - **A heading is `Text`.** Outside this package an intrinsic `h1`–`h6` is
-  never drawn: draw it with `Text`,
+  refused (`vespin/no-raw-heading-outside-ui`): draw it with `Text`,
   `as={TEXT_ELEMENT.H2}` for the outline and a type role (`TEXT_VARIANT.GROUP`,
   `SECTION`, `DIALOG`, `TITLE`) for the look, so no sheet sets a heading's font.
 - **Words read aloud go through `announce`.** Outside this package an
   intrinsic `role="status"`, `role="alert"`, `role="log"` or `aria-live` is
-  never drawn: say it with
+  refused (`vespin/no-hand-written-live-region`): say it with
   `announce(ANNOUNCE.POLITE | ANNOUNCE.ALERT, words)` and the one `Announcer`.
   The blocks that stand in the page keep their roles here: `ErrorState`,
   `FailureNote`, `EmptyState`, `NoteLine`, the toast stack and the announcer.
 - **A placeholder ends on its last word.** A placeholder that asks for
   something, an instruction or a search prompt, never ends in "…" ("Search
   workspaces", "Assign to"); one that shows a value's shape with its rest
-  elided keeps it (`ghp_…`).
+  elided keeps it (`ghp_…`). `vespin/no-placeholder-ellipsis` refuses a
+  `placeholder` attribute or property whose literal ends in "…" or "..." after
+  a letter, digit, or space.
 - **Lists and menus are stepped by `useRovingKeys` and `List`.** Outside this
   package a key read off an event and matched to `ArrowUp`, `ArrowDown`,
-  `ArrowLeft`, `ArrowRight`, `Home` or `End` is never written by hand. The
-  editors and the terminal, which need the raw keys, are the exception.
+  `ArrowLeft`, `ArrowRight`, `Home` or `End` is refused
+  (`vespin/no-hand-written-arrow-keys`). The editors and the terminal, which
+  need the raw keys, are exempt by name in `tools/oxlint/vespin/arrow-keys.json`
+  with a reason each; the files still stepping by hand sit on its baseline,
+  which only shrinks.
 - **No `className` or `style`.** A control owns its height, padding, type, and
   states. Where it stands, and the room around it, is its container's: a
   `Stack` or `Inline` with a `GAP` role, or a page pattern. A frame that is
@@ -381,9 +393,10 @@ composer's card), with only the words, marks, and controls swapped for
 `Skeleton` blocks, so it lands where the surface does and follows it when the
 surface changes. Its counts, order, and sizes come from what the surface
 reads: its section list, its schema, its width token. A class of the
-skeleton's own, laying its blocks out, names itself one (`…-skeleton…`); no
-other class goes on an intrinsic element inside a skeleton, and `Skeleton` or
-`SkeletonRegion` is never drawn outside one.
+skeleton's own, laying its blocks out, names itself one (`…-skeleton…`);
+`vespin/skeleton-through-components` refuses any other class on an
+intrinsic element inside a skeleton, and `Skeleton` or `SkeletonRegion` drawn
+outside one.
 
 ### Renaming a name
 
@@ -408,18 +421,19 @@ boxed look, so a settings row's name never stands in one; an `InlineEdit`
 drawn as a `SettingsRow`'s or a `MenuRow`'s name outside `@repo/ui` is
 refused in review, and drawn with `RenamableName` instead.
 
-### The style rules
+### The style guard
 
-No stylesheet or Tailwind class string (in `@apply`, and in the modules under
-`packages/ui/src/`, `packages/panel/src/`, and each app's `src/`, tests aside)
-writes a literal where a token goes; review holds this. The token sheets
+`pnpm lint` runs `tools/oxlint/vespin/style-guard.ts`, which reads every
+stylesheet and every Tailwind class string (in `@apply`, and in the modules
+under `packages/ui/src/`, `packages/panel/src/`, and each app's `src/`, tests
+aside) and refuses a literal where a token goes. The token sheets
 (`src/tokens/`, `src/tailwind/theme.css`) and any `:root` block, where a token
-is defined, are exempt. A Tailwind utility is fine where this theme maps its
+is defined, are not read. A Tailwind utility passes where this theme maps its
 name onto a token (`text-body`, `rounded-menu`, `ease-pane`, `bg-primary`) and
-is not where it reaches Tailwind's own scale (`text-sm`, `font-medium`,
+is refused where it reaches Tailwind's own scale (`text-sm`, `font-medium`,
 `rounded-md`, `bg-red-500`).
 
-| Rule | Never | How to fix one |
+| Rule | Refuses | How to fix one |
 | --- | --- | --- |
 | `literal-color` | A hex, `rgb()`, `hsl()`, `oklch()`, or `color()` color, or a palette utility | Read the palette role (`--ui-color-*`, `bg-primary`); a color the palette lacks is added to `palettes.css`. A provider mark's brand ink (`.integration-mark-*`), a mask's alpha, and a terminal's or code theme's ink (`--terminal-*`, `--code-*`, `--integration-ink-*`) pass |
 | `literal-type` | A literal `font-size`, `font-weight`, or `font`, or `text-sm`, `font-medium`, `text-[13px]` | Draw the words with `Text`, or read a type role (`--ui-type-*-size`, `--ui-weight-*`, `text-body`) |
@@ -434,6 +448,16 @@ is not where it reaches Tailwind's own scale (`text-sm`, `font-medium`,
 | `has-over-any` | A `:has()` on an ancestor or an earlier sibling of a subject that is any element (`> *`, `> :not(.a)`) | Say the state on the subject's parent, or by an attribute the component sets: a `:has()` over any element restyles the whole window for every element added under it |
 | `bar-corner` | A corner radius on a bar's own box (`.ui-pane-bar`, `.ui-toolbar`), in a stylesheet or as a `rounded-*` beside its class | Nothing: a bar standing at a sheet's top takes the sheet's radius from the one rule in `packages/panel/src/styles/shell.css` ("The sheet's top"). Where a bar there runs square, fix how that rule reads the sheet's top (a layout laying columns side by side joins its split list), never the page |
 | `grid-columns` | A block grid that places its items (`place-items-*`, `justify-items-*`, `place-items: center`) and names no columns | Name them, `grid-cols-1` (`minmax(0, 1fr)`), under the grid's own variants (`sm:grid-cols-1` leaves a phone's column `auto`, as `grid-cols-none` and `[auto]` do everywhere), so the column is the box's width: an `auto` column grows to its item's widest line, and a card or a sheet whose width is a share of it (`min(520px, 100%)`) then centers in a column wider than the screen and stands off its edge on a phone, as New task's Relation sheet did. A grid drawn inline (`inline-grid`) is sized by what it holds and passes |
+
+No comment silences it, and it refuses one that asks to
+(`style-guard-disable`). A rule that had places left when it landed starts
+from a baseline that may only shrink: `tools/oxlint/vespin/style-baselines/<rule>.json`
+counts each file's places, and the guard fails on a file holding more than its
+count and on a count above what the file still holds. So the change that fixes a
+place lowers its count; `node tools/oxlint/vespin/style-guard.ts --shrink` lowers
+every count to what the files hold and never raises one. A rule that started
+clean (`literal-duration`, `literal-picker-width`, `crumb-width`, `pointer-cursor`, `has-over-any`, `bar-corner`) takes no baseline at all, and a baseline is deleted
+from nothing: once every count is gone, its file is `{}`.
 
 ### Folding in a narrow container
 

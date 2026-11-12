@@ -36,6 +36,7 @@ import {
 import { markdownLink } from "@repo/features/link-grammar";
 import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BackButton,
@@ -54,6 +55,7 @@ import {
   INLINE_REF_LOOK,
   InlineRef,
   LAYOUT_ELEMENT,
+  MessageFailedMark,
   MoreButton,
   moreLabel,
   SidePanelIcon,
@@ -102,6 +104,7 @@ import {
   THREAD_TASK_KEYS,
 } from "../desktop/crumb-menus.js";
 import { PhoneHead, phoneFindGroups } from "../desktop/phone-head.js";
+import { failureShown } from "../failure-report.js";
 import { type Directory, useMemberDirectory, usePerson } from "../member-directory.js";
 import { useShortcutTarget } from "../shortcut-target.js";
 import { useSteadyDoor } from "../steady-door.js";
@@ -146,6 +149,7 @@ import {
 import { type InboxPager, InboxPagerControls } from "./inbox-pager.js";
 import type { InboxReminder } from "./inbox-remind.js";
 import { InboxStamp } from "./inbox-stamp.js";
+import { filesLost, UNHEARD_UNDELIVERED, type UndeliveredReply } from "./inbox-undelivered.js";
 import { REPLY_SCOPE, ReplyDoorProvider } from "./reply-to-selection.js";
 import { SentWords } from "./skill-chip.js";
 import { TAB_KIND, tabLook } from "./tab-look.js";
@@ -158,6 +162,7 @@ import {
   type PendingInboxReply,
   pendingRepliesOn,
   type TaskInboxControl,
+  undeliveredRepliesOn,
 } from "./use-task-inbox.js";
 import type { TasksControl } from "./use-tasks-tab.js";
 
@@ -388,19 +393,23 @@ function DraftReply({
 /** What a reply on its way says at its head's end. */
 const SENDING = "Sending";
 
-/** A reply on its way's files and words: each file its words name drawn in them as its chip under the upload's cover, and the rest going up over them. */
+/** A reply of the reader's not yet on the thread, on its way or not delivered: each file its words name drawn in them as its chip, and the rest over them, each under the upload's cover while it goes. */
 function SendingReplyWords({
   text,
   attachments,
+  uploading = true,
 }: {
   text: string;
   attachments: readonly AgentAttachment[];
+  uploading?: boolean;
 }): React.JSX.Element {
-  const shown = useWordFiles(attachmentChips(attachments), text, true);
+  const shown = useWordFiles(attachmentChips(attachments), text, uploading);
 
   return (
     <WordFilesContext.Provider value={shown.named}>
-      {shown.beside.length === 0 ? null : <AttachedFileChips files={shown.beside} uploading />}
+      {shown.beside.length === 0 ? null : (
+        <AttachedFileChips files={shown.beside} uploading={uploading} />
+      )}
       {text === "" ? null : (
         <div
           className="inbox-message-words m-0 leading-reading select-text"
@@ -449,6 +458,124 @@ function PendingReply({
       }
     >
       <SendingReplyWords text={reply.text} attachments={reply.attachments} />
+    </InboxComment>
+  );
+}
+
+/** What a reply that did not go says at its head's end, and its mark's acts. */
+/** What a reply's mark says where a relaunch took the files it went with. */
+const FILES_LOST = "Its files didn't survive a relaunch. Edit to attach them again, then send it.";
+
+const UNDELIVERED_WORDS = {
+  NOT_DELIVERED: "Not delivered",
+  RETRY: "Retry",
+  EDIT: "Edit",
+  DELETE: "Delete",
+  NEW_THREAD: "New thread",
+} as const;
+
+/** What a reply that did not go is pressed through: Retry, Edit, and Delete on it alone; no Retry for a thread's start where the page starts none. */
+interface UndeliveredDoors {
+  /** None where a relaunch took the reply's files, which Edit attaches again. */
+  readonly onRetry: (() => void) | undefined;
+  readonly onEdit: () => void;
+  readonly onDelete: () => void;
+}
+
+/**
+ * One of the reader's replies that did not go, standing at its thread's end
+ * in the order sent, as a chat app keeps a message that did not go, rather
+ * than back in the box: drawn as the reader's own message, its answer to the
+ * ask with it, "Not delivered" at its head's end, and the red alert whose
+ * menu says why and offers Retry, Edit, and Delete, until a read holds it
+ * under its key or the reader presses one.
+ */
+function UndeliveredReplyRow({
+  itemId,
+  readerId,
+  reply,
+  title,
+  thread,
+  now,
+  place,
+  doors,
+}: {
+  itemId: string;
+  readerId: string | undefined;
+  reply: UndeliveredReply;
+  /** The item's title, as `cardTitle` reads it. */
+  title: string;
+  thread: readonly InboxMessage[];
+  now: number;
+  place: VirtualRowPlace;
+  doors: UndeliveredDoors;
+}): React.JSX.Element {
+  const reader = useReader(readerId);
+  const { answers } = reply;
+  const answered = answers === undefined ? undefined : answeredAsk(thread, answers);
+
+  return (
+    <InboxComment
+      place={place}
+      kind={COMMENT.MESSAGE}
+      author={commentAuthor(reader)}
+      nameRef={<ActorRef actor={reader} nameOnly />}
+      at={reply.at}
+      now={now}
+      trailing={
+        <>
+          {reply.startsThread === true ? (
+            <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+              {UNDELIVERED_WORDS.NEW_THREAD}
+            </Text>
+          ) : null}
+          <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.DANGER}>
+            {UNDELIVERED_WORDS.NOT_DELIVERED}
+          </Text>
+          <MessageFailedMark
+            label={UNDELIVERED_WORDS.NOT_DELIVERED}
+            reason={filesLost(reply) ? FILES_LOST : reply.why}
+            replayUnmasked
+            groups={[
+              [
+                ...(doors.onRetry === undefined
+                  ? []
+                  : [
+                      {
+                        label: UNDELIVERED_WORDS.RETRY,
+                        icon: <GLYPH.RETRY />,
+                        onSelect: doors.onRetry,
+                      },
+                    ]),
+                { label: UNDELIVERED_WORDS.EDIT, icon: <GLYPH.RENAME />, onSelect: doors.onEdit },
+              ],
+              [
+                {
+                  label: UNDELIVERED_WORDS.DELETE,
+                  icon: <GLYPH.DELETE />,
+                  danger: true,
+                  onSelect: doors.onDelete,
+                },
+              ],
+            ]}
+            failure={failureShown({
+              surface: FAILURE_SURFACE.INBOX_ANSWER,
+              cause: FAILURE_CONDITION.NOT_KEPT,
+              about: { inboxItemId: itemId },
+            })}
+          />
+        </>
+      }
+    >
+      {answers === undefined ? null : answered !== undefined && knownAsk(answered) ? (
+        <AnsweredCard ask={answered} title={title} answers={answers} />
+      ) : (
+        <>
+          <InboxStamp stamp={sentStamp(answers, answered)} />
+          <AnswerValues values={answers.values ?? []} texts={NO_TEXT_LABELS} />
+        </>
+      )}
+      <SendingReplyWords text={reply.text} attachments={reply.attachments} uploading={false} />
     </InboxComment>
   );
 }
@@ -861,6 +988,7 @@ const THREAD_ROW = {
   MESSAGE: "message",
   EARLIER: "earlier",
   PENDING: "pending",
+  UNDELIVERED: "undelivered",
 } as const;
 
 type ThreadRow =
@@ -875,6 +1003,11 @@ type ThreadRow =
       readonly kind: typeof THREAD_ROW.PENDING;
       readonly key: string;
       readonly reply: PendingInboxReply;
+    }
+  | {
+      readonly kind: typeof THREAD_ROW.UNDELIVERED;
+      readonly key: string;
+      readonly reply: UndeliveredReply;
     };
 
 /** The height a row of the thread is taken to have before it is drawn, in pixels: a short message's. */
@@ -888,8 +1021,8 @@ const DRAFT_ROW_KEY = "draft-reply";
  * draws them (`ConversationRows`): the lines of what happened before its
  * first message, then each message, a close's note drawn under the close's
  * own line instead, with the lines that follow it, the line saying earlier
- * messages are cut after the first, which always stands, and the reader's
- * replies on their way; the draft reply stands after them as the run's last
+ * messages are cut after the first, which always stands, the reader's
+ * replies that did not go, and those on their way; the draft reply stands after them as the run's last
  * row (`DRAFT_ROW_KEY`). Note that the run names its rows by one string each (`VirtualRows`), and a line of what happened
  * is kept by the message it follows, so its row is that message's id with
  * the line's kind after it.
@@ -898,6 +1031,7 @@ function threadRows(
   thread: readonly InboxMessage[],
   events: ThreadEventsAfter,
   pending: readonly PendingInboxReply[],
+  undelivered: readonly UndeliveredReply[],
 ): readonly ThreadRow[] {
   const notes = closeNotes(events);
 
@@ -918,6 +1052,15 @@ function threadRows(
     }
 
     rows.push(...eventsAt(at));
+  }
+
+  // Note that a reply that did not go is keyed apart from a message, since the host draws an answer on its way under its key.
+  for (const reply of undelivered) {
+    rows.push({
+      kind: THREAD_ROW.UNDELIVERED,
+      key: `${THREAD_ROW.UNDELIVERED}/${reply.key}`,
+      reply,
+    });
   }
 
   for (const reply of pending) rows.push({ kind: THREAD_ROW.PENDING, key: reply.key, reply });
@@ -1492,10 +1635,39 @@ export interface InboxPaneDoors {
   readonly keys?: boolean | undefined;
 }
 
+/** Why a new thread did not start: the refusal's words, and whether no answer came back, which may have started it all the same. */
+export interface NewThreadRefused {
+  readonly words: string;
+  readonly unheard: boolean;
+}
+
 /** What starts a new thread from an item's box instead of a reply, where the page offers one. */
 export interface InboxNewThread {
   /** Starts a thread with the item's agent and opens it; answers why it did not start, or nothing once it did. */
-  readonly onStart: (item: InboxItem, start: NewThreadStart) => Promise<string | undefined>;
+  readonly onStart: (
+    item: InboxItem,
+    start: NewThreadStart,
+  ) => Promise<NewThreadRefused | undefined>;
+}
+
+/**
+ * Starts a thread from `item`'s box, one that did not go standing on the
+ * item's thread marked Not delivered, so its words are never lost nor put
+ * back: answers a refusal's words for the box to say, or nothing once it
+ * started or where no answer came back, which only its mark says.
+ */
+function startThread(
+  offer: InboxNewThread,
+  control: Pick<TaskInboxControl, "onUndeliveredStart">,
+  item: InboxItem,
+  start: NewThreadStart,
+): Promise<string | undefined> {
+  return offer.onStart(item, start).then((refused) => {
+    if (refused === undefined) return undefined;
+    control.onUndeliveredStart(item, start, refused.unheard ? UNHEARD_UNDELIVERED : refused.words);
+
+    return refused.unheard ? undefined : refused.words;
+  });
 }
 
 /**
@@ -1504,7 +1676,12 @@ export interface InboxNewThread {
  * agent, as a chip does elsewhere. Note that a chip is a button, so its
  * press opens it rather than ticking the checkbox whose words it stands in.
  */
-function answerNewThread(offer: InboxNewThread, item: InboxItem, by: ItemAgent): AnswerNewThread {
+function answerNewThread(
+  offer: InboxNewThread,
+  control: Pick<TaskInboxControl, "onUndeliveredStart">,
+  item: InboxItem,
+  by: ItemAgent,
+): AnswerNewThread {
   const { name, tile } = by.subject;
 
   return {
@@ -1518,7 +1695,7 @@ function answerNewThread(offer: InboxNewThread, item: InboxItem, by: ItemAgent):
         onPress={by.onOpen}
       />
     ),
-    onStart: (start) => offer.onStart(item, start),
+    onStart: (start) => startThread(offer, control, item, start),
   };
 }
 
@@ -1767,8 +1944,19 @@ export function InboxPane({
   const draft = control.draftOf(item);
   const thread = item.thread ?? NO_MESSAGES;
   const pending = pendingRepliesOn(control.pendingReplies, item);
+
+  const undelivered = useMemo(
+    () => undeliveredRepliesOn(control, item),
+    [control.undelivered, control.pendingReplies, item],
+  );
+
   const events = useMemo(() => threadEvents(item, thread), [item, thread]);
-  const rows = useMemo(() => threadRows(thread, events, pending), [thread, events, pending]);
+
+  const rows = useMemo(
+    () => threadRows(thread, events, pending, undelivered),
+    [thread, events, pending, undelivered],
+  );
+
   // The draft reply stands after the thread's rows as its last, under a key of its own that no row takes.
   const rowKeys = useMemo(() => [...rows.map((row) => row.key), DRAFT_ROW_KEY], [rows]);
 
@@ -1776,6 +1964,7 @@ export function InboxPane({
   const ownLast = rows.findLast(
     (row) =>
       row.kind === THREAD_ROW.PENDING ||
+      row.kind === THREAD_ROW.UNDELIVERED ||
       (row.kind === THREAD_ROW.MESSAGE &&
         row.message.author === INBOX_MESSAGE_AUTHOR.MEMBER &&
         readerId !== undefined &&
@@ -1815,6 +2004,23 @@ export function InboxPane({
       </DraftQuestion>
     );
 
+  // Note that a thread's start that did not go starts again under its key, so a start that landed unheard makes one thread; where the page starts none, it offers no Retry.
+  const retryOf = (reply: UndeliveredReply): (() => void) | undefined => {
+    const { key, text, attachments } = reply;
+
+    // Note that one a relaunch took the files from never goes without them; Edit attaches them again.
+    if (filesLost(reply)) return undefined;
+
+    if (reply.startsThread !== true) return () => control.onRetryUndelivered(item, key);
+
+    if (newThread === undefined) return undefined;
+
+    return () => {
+      control.onDropUndelivered(key);
+      void startThread(newThread, control, item, { text, attachments, clientKey: key });
+    };
+  };
+
   const draftReply = (place: VirtualRowPlace) => (
     <AnswerMentions value={mentions}>
       <DraftReply readerId={readerId} place={place}>
@@ -1832,7 +2038,9 @@ export function InboxPane({
           onQuoteDoor={onQuoteDoor}
           onQuoted={onQuoted}
           onUnarchiveAgent={() => agents.onArchive(item.agentId, false)}
-          newThread={newThread === undefined ? undefined : answerNewThread(newThread, item, by)}
+          newThread={
+            newThread === undefined ? undefined : answerNewThread(newThread, control, item, by)
+          }
         />
       </DraftReply>
     </AnswerMentions>
@@ -1980,6 +2188,27 @@ export function InboxPane({
                         );
                       case THREAD_ROW.EARLIER:
                         return <EarlierMessages by={by} place={place} />;
+                      case THREAD_ROW.UNDELIVERED: {
+                        const { key } = row.reply;
+
+                        return (
+                          <UndeliveredReplyRow
+                            itemId={item.id}
+                            readerId={readerId}
+                            reply={row.reply}
+                            title={cardTitle(item.title)}
+                            thread={thread}
+                            now={now}
+                            place={place}
+                            doors={{
+                              onRetry: retryOf(row.reply),
+                              onEdit: () => control.onEditUndelivered(item, key),
+                              onDelete: () => control.onDropUndelivered(key),
+                            }}
+                          />
+                        );
+                      }
+
                       case THREAD_ROW.PENDING:
                         return (
                           <PendingReply

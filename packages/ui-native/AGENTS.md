@@ -87,7 +87,10 @@ builds a control of its own.
   (`linkMention`, `readLink`): a `vespin.dev` place goes to the screen's
   `onOpenPlace`, any other web address to Safari.
 - **This is the one workspace that imports `@expo/ui` or `expo-glass-effect`,
-  or builds a control from React Native's pieces.** When a screen needs a piece this package lacks, add
+  or builds a control from React Native's pieces.** Everywhere else
+  `vespin/no-raw-press-outside-ui-native` refuses them, and a press prop
+  on a React Native primitive, with no disable comment allowed (root
+  `AGENTS.md`'s Layout). When a screen needs a piece this package lacks, add
   the component or an `as const` variant here, named for what it does.
 - **Colors come from `@repo/brand`.** `src/tokens/brand-colors.ts` is written
   by `packages/brand/scripts/generate-surface-shared.mjs` from the brand's one
@@ -142,9 +145,13 @@ navigation, tab bar, swipes, menus, sheets and glass.
   button is the chevron alone. One button leads every tab's root bar, as
   Notion's does: the workspace switcher (`WorkspaceSwitcher`, the tile alone
   at the photo's size in the bar's round glass, `SWITCHER_LOOK.TILE`, so the
-  screen's title keeps its place beside it, as the App Store's photo does), whose menu holds the workspaces, the account by its
-  name opening Settings, New workspace, and Settings… in a section under the
-  chosen workspace's name; the account's
+  screen's title keeps its place beside it, as the App Store's photo does), whose list, as
+  Notion's, holds each workspace by its own tile or photo with the chosen one
+  checked in copper, the account by its photo and name opening Settings, New
+  workspace, and Settings… in a section under the chosen workspace's name, in
+  a popover over the button in a regular window and a sheet with the medium
+  and large detents in a compact one (`SWITCHER_PRESENTATION`), never the
+  system's menu, which draws a row's image as a one-ink template; the account's
   photo (`AccountButton`) only before the workspaces are read, opening
   Settings, which the system stands in the same round glass, the photo
   clipped to a circle inside. A landscape iPad's sidebar heads its

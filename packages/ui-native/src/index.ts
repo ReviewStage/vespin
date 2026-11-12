@@ -25,6 +25,7 @@ export {
   type ButtonSize,
   Chip,
   FieldChip,
+  FollowingChip,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
@@ -117,7 +118,7 @@ export { monogramOf } from "./monogram.js";
 
 export { type HintOption, HintPickRows, RenameAsk, SwitchRow } from "./option-rows.js";
 
-export { PageHeader } from "./page-header.js";
+export { type PageFollowing, PageHeader } from "./page-header.js";
 
 export {
   PROVIDER_MARK_ASSET,
@@ -165,6 +166,7 @@ export {
   CodeRow,
   type ConnectionLine,
   ConnectionRow,
+  FollowerRow,
   MemberRow,
   type MemberRowAct,
   MenuRow,
@@ -246,6 +248,7 @@ export {
   type TranscriptToggles,
   toggledAt,
   transcriptItems,
+  transcriptOriginOf,
 } from "./transcript-model.js";
 
 export {
@@ -263,11 +266,13 @@ export { Video } from "./video.js";
 export {
   newWorkspaceAction,
   SWITCHER_LOOK,
+  SWITCHER_PRESENTATION,
   type SwitcherAccount,
   type SwitcherAction,
   type SwitcherLook,
-  type SwitcherWorkspace,
+  type SwitcherPresentation,
   WorkspaceSwitcher,
-  WorkspaceSwitcherMenu,
-  WorkspaceTile,
+  WorkspaceSwitcherItem,
 } from "./workspace-switcher.js";
+
+export { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";

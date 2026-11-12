@@ -61,6 +61,7 @@ import {
   type TranscriptToggles,
   toggledAt,
   transcriptItems,
+  transcriptOriginOf,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -72,6 +73,7 @@ import {
   useAgentTranscript,
   useFollowedAgent,
   useOlderPages,
+  useShownAgent,
   useTranscriptRetry,
   useWholeParts,
 } from "../agents/use-agent.js";
@@ -80,6 +82,7 @@ import { type AgentApprovals, useAgentApprovals } from "../agents/use-agent-appr
 import { type AgentComposer, useAgentComposer } from "../agents/use-agent-composer.js";
 import { type AgentMode, useAgentMode } from "../agents/use-agent-mode.js";
 import { type AgentModelPick, useAgentModelPick } from "../agents/use-agent-model.js";
+import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { useAgentServers } from "../agents/use-agent-servers.js";
@@ -164,6 +167,19 @@ function useAgentAddress(
       : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId };
 
   return step === undefined ? undefined : linkOf(place, step);
+}
+
+/** An automation's address on vespin.dev, under the agent's workspace, which opens in Safari, since the phone draws no Automations; none before the workspace is known. */
+function useAutomationAddress(
+  automationId: string | undefined,
+  workspaceId: string | undefined,
+): string | undefined {
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
+  const step = linkWorkspaceStep(workspaceId, workspaces);
+
+  if (step === undefined || automationId === undefined) return undefined;
+
+  return linkOf({ kind: LINK_DESTINATION.AUTOMATION, automationId }, step);
 }
 
 /** The change a card's Merge sends, by what the pull request offers: merged at once by the first method the repository allows, or queued once ready where it merges through a queue; none where it offers neither. */
@@ -367,6 +383,8 @@ export function AgentScreen() {
   const openLink = useOpenLink();
   const colors = useColors();
   const agent = useFollowedAgent(id);
+  // Note that an agent the list doesn't hold is named and placed from its own read, while what acts on it reads the list alone.
+  const shown = useShownAgent(id);
   const pullRequests = useAgentPullRequests(id);
 
   const open = useMemo(
@@ -383,12 +401,36 @@ export function AgentScreen() {
   const asked = merging === undefined ? undefined : offers.get(merging);
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const address = useAgentAddress(id, agent?.workspaceId, agent?.planId);
+  const address = useAgentAddress(id, shown?.workspaceId, shown?.planId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
   const transcript = held?.rows;
-  const status = agent?.status ?? transcript?.word?.status;
+  const status = agent?.status ?? transcript?.word?.status ?? shown?.status;
   const messages = transcript?.messages;
   const whole = useWholeParts(id);
+  const automated = agent?.automationId !== undefined || agent?.automationName !== undefined;
+  const run = useAgentOrigin(id, automated);
+  const automationAddress = useAutomationAddress(agent?.automationId, agent?.workspaceId);
+
+  // Note that the run's card stands on the transcript's first line, so it waits until no older page is left to read.
+  const origin = useMemo(
+    () =>
+      !automated || transcript?.before !== undefined
+        ? undefined
+        : transcriptOriginOf({
+            automationId: agent?.automationId,
+            automationName: agent?.automationName,
+            automationAddress,
+            run,
+          }),
+    [
+      automated,
+      transcript?.before,
+      agent?.automationId,
+      agent?.automationName,
+      automationAddress,
+      run,
+    ],
+  );
 
   const items = useMemo(
     () =>
@@ -399,8 +441,9 @@ export function AgentScreen() {
         now: Date.now(),
         pullRequests,
         wholePart: whole.read,
+        origin,
       }),
-    [messages, status, readerId, toggles, pullRequests, whole.read],
+    [messages, status, readerId, toggles, pullRequests, whole.read, origin],
   );
 
   // A call opened on an answer its page carried cut reads it whole.
@@ -415,18 +458,18 @@ export function AgentScreen() {
   const media = useAgentMedia(id, mediaIds);
 
   const title = cardTitle(
-    agent === undefined ? (transcript?.word?.title ?? UNLISTED_AGENT) : agentName(agent),
+    shown === undefined ? (transcript?.word?.title ?? UNLISTED_AGENT) : agentName(shown),
   );
 
   useScreenActivity((workspaces) =>
-    agent === undefined
+    shown === undefined
       ? undefined
       : agentActivity(
           {
             id,
             title,
-            workspaceId: agent.workspaceId,
-            taskId: agent.planId,
+            workspaceId: shown.workspaceId,
+            taskId: shown.planId,
           },
           workspaces,
         ),
@@ -531,7 +574,13 @@ export function AgentScreen() {
               <Stack.Toolbar.MenuAction
                 icon="archivebox"
                 destructive
-                onPress={() => setArchiving(true)}
+                onPress={() => {
+                  // Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
+                  setArchiving(false);
+                  void actions.archiveAsk.ask(id).then((stands) => {
+                    if (stands) setArchiving(true);
+                  });
+                }}
               >
                 {MENU_WORDS.ARCHIVE}
               </Stack.Toolbar.MenuAction>
@@ -610,14 +659,17 @@ export function AgentScreen() {
         onDismiss={() => setRenaming(false)}
       />
       <ConfirmAsk
-        title={actions.archiveQuestion.title}
-        message={actions.archiveQuestion.message}
-        act={actions.archiveQuestion.act}
+        title={actions.archiveAsk.question.title}
+        message={actions.archiveAsk.question.message}
+        act={actions.archiveAsk.question.act}
         destructive
         presented={archiving}
         onAct={() => {
           setArchiving(false);
-          actions.archive(leave);
+          actions.archiveAsk.answered(
+            () => actions.archive(leave),
+            () => setArchiving(true),
+          );
         }}
         onDismiss={() => setArchiving(false)}
       />

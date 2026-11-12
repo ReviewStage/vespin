@@ -191,6 +191,8 @@ export const FAILURE_SURFACE = {
   TASKS_READ: "tasks.read",
   TASKS_REFRESH: "tasks.refresh",
   TASK_BLOCK: "task.block",
+  /** The reader's own follow of a task, unfollow, or machines switch, from its Following chip (`following-chip.tsx`). */
+  TASK_FOLLOW: "task.follow",
   TASK_PARENT: "task.parent",
   TASK_RELATION: "task.relation",
   TASK_DELETE: "task.delete",

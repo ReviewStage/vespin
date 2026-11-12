@@ -334,6 +334,32 @@ test("View options offers Group by, Show completed sub-tasks, and Assigned to, A
   assert.equal(cardName(), "Charles Pan");
 });
 
+test("a list kept on Following while the workspace has Following off reads as My tasks, Me checked and no Following offered", async () => {
+  window.localStorage.setItem(
+    "app.sidebarTaskViews",
+    JSON.stringify({ [ACME.id]: { grouping: "repository", assignee: { kind: "following" } } }),
+  );
+
+  const sidebar = await mountRead(ACME, ASSIGNED);
+  assert.equal(headWords(sidebar), "My tasks");
+  act(() => viewOptions(sidebar).click());
+  act(() => menuItem("Assigned to").click());
+  await vi.waitFor(() =>
+    assert.deepEqual(
+      [...document.querySelectorAll<HTMLElement>('[role="option"]')].map((row) => [
+        itemLabel(row),
+        row.getAttribute("aria-current") === "true",
+      ]),
+      [
+        ["Me", true],
+        ["Anyone", false],
+        ["Charles Pan", false],
+        ["Maya Okafor", false],
+      ],
+    ),
+  );
+});
+
 test("the Tasks head says My tasks, then Everyone's tasks once Assigned to › Anyone lists everyone's, kept across launches, with a dot and no chip", async () => {
   const mine = await mountRead(ACME, ASSIGNED);
   assert.equal(headWords(mine), "My tasks");

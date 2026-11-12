@@ -5,8 +5,9 @@ import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/gl
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SymbolView } from "expo-symbols";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
+  type AccessibilityActionEvent,
   ActivityIndicator,
   FlatList,
   type NativeScrollEvent,
@@ -42,6 +43,7 @@ import { CALL_SYMBOL } from "./transcript-look.js";
 import {
   CALL_STANDING,
   type CallStanding,
+  type OriginPart,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptPlace,
@@ -116,6 +118,7 @@ const styles = StyleSheet.create({
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
   saidHeld: { alignSelf: "stretch", alignItems: "flex-end" },
+  originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
   said: {
     maxWidth: "82%",
     borderRadius: 18,
@@ -382,6 +385,103 @@ function CallRow({
   );
 }
 
+/** What a webhook call's body is called, folded under the prompt it rode in with, and its block's title, as the panel names them. */
+const WEBHOOK_BODY = { LABEL: "Webhook body", KIND: "body" } as const;
+
+/** What a part of an automation's sender line that opens somewhere is offered to VoiceOver as, and the name its action goes by before its place in the line. */
+const OPEN_WORD = "Open";
+const OPEN_ACTION = "open-";
+
+/**
+ * Who sent an automation's prompt, as the panel's sender line names it: the
+ * automation, then what its run was about and who asked for it, joined by
+ * " · ". A part with an address opens it in Safari, as an underlined word in
+ * the ink, and is offered to VoiceOver as one of the line's actions, since a
+ * word inside a line is never an element of its own on iOS.
+ */
+function OriginFrom({
+  parts,
+  onOpenAddress,
+}: {
+  readonly parts: readonly OriginPart[];
+  readonly onOpenAddress: (address: string) => void;
+}) {
+  const colors = useColors();
+
+  // Note that each part that opens somewhere is offered by its place in the line, since two parts may read alike.
+  const opening = parts.flatMap(({ words, address }, at) =>
+    address === undefined ? [] : [{ name: `${OPEN_ACTION}${at}`, words, address }],
+  );
+
+  const actions =
+    opening.length === 0
+      ? {}
+      : {
+          accessibilityActions: opening.map(({ name, words }) => ({
+            name,
+            label: `${OPEN_WORD} ${words}`,
+          })),
+          onAccessibilityAction: (event: AccessibilityActionEvent) => {
+            const address = opening.find(
+              ({ name }) => name === event.nativeEvent.actionName,
+            )?.address;
+
+            if (address !== undefined) onOpenAddress(address);
+          },
+        };
+
+  return (
+    <Text {...actions} style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+      {parts.map(({ words, address }, at) => (
+        <Fragment key={at}>
+          {at === 0 ? null : " · "}
+          <Text
+            onPress={address === undefined ? undefined : () => onOpenAddress(address)}
+            style={{
+              color: at === 0 || address !== undefined ? colors.TEXT : undefined,
+              fontWeight: at === 0 ? "600" : undefined,
+              textDecorationLine: address === undefined ? undefined : "underline",
+            }}
+          >
+            {words}
+          </Text>
+        </Fragment>
+      ))}
+    </Text>
+  );
+}
+
+/** A webhook call's body under the prompt it rode in with, folded under its own line, as the caller sent it. */
+function OriginBody({ body }: { readonly body: string }) {
+  const colors = useColors();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <View style={styles.originBody}>
+      <Pressable
+        onPress={() => setOpen((was) => !was)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={WEBHOOK_BODY.LABEL}
+        hitSlop={LINE_REACH}
+        style={styles.callLine}
+      >
+        <SymbolView
+          name={open ? "chevron.down" : "chevron.right"}
+          size={MARK_SIZE.GLYPH - 3}
+          tintColor={colors.TEXT_MUTED}
+          style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
+          accessibilityElementsHidden
+        />
+        <Text style={{ flex: 1, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+          {WEBHOOK_BODY.LABEL}
+        </Text>
+      </Pressable>
+      {open ? <BodyBlock title={WEBHOOK_BODY.KIND} text={body} colors={colors} /> : null}
+    </View>
+  );
+}
+
 /** A fold's or a group's line: what it holds, counted, with the disclosure chevron iOS opens a row by. */
 function FoldRow({
   item,
@@ -472,6 +572,9 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.SAID:
       return (
         <View style={[styles.row, styles.saidRow]}>
+          {item.from === undefined ? null : (
+            <OriginFrom parts={item.from} onOpenAddress={drawing.onOpenAddress} />
+          )}
           {item.sender === undefined ? null : (
             <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT }}>
               {item.sender}
@@ -489,6 +592,7 @@ function TranscriptRow({
               </View>
             </View>
           </CopyWordsMenu>
+          {item.body === undefined ? null : <OriginBody body={item.body} />}
           {item.sent === undefined ? null : (
             <Text style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}>
               {item.sent}

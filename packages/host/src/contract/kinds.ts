@@ -3,9 +3,9 @@
  *
  * Kept free of every import, oRPC and every schema among them, so `acts.ts`
  * can spell these kinds in `ACT_KIND` without resolving the contract behind
- * them, and so `PORT_ACT_USE` can be read from this file as it stands:
- * that is why each kind's use is declared here rather than on its
- * procedure, and why a
+ * them, and so the lint rule `vespin/no-follow-outside-host-read` can
+ * load this file as it stands to read `PORT_ACT_USE`: that is why each
+ * kind's use is declared here rather than on its procedure, and why a
  * declared act (`declared-act.ts`) reads its kind and use from here by its
  * name rather than restating them. A kind here is the key of its procedure
  * in `actContract`, so the panel's act door calls a kind by its own name.
@@ -920,7 +920,8 @@ export const PORT_ACT_KIND = {
 export type PortActKind = (typeof PORT_ACT_KIND)[keyof typeof PORT_ACT_KIND];
 
 /**
- * What an act kind does with what it answers: a READ answers data that
+ * What an act kind does with what it answers, which the panel's lint rule
+ * `vespin/no-follow-outside-host-read` reads: a READ answers data that
  * can change while a surface shows it, so a surface reads it only through
  * a live read's query, over what the host holds; a FETCH answers what cannot
  * change for what was asked, such as content read once, a lookup as a link
@@ -943,8 +944,8 @@ export type ActUse = (typeof ACT_USE)[keyof typeof ACT_USE];
  * a Terminal tab's or a live view's stream, whose bytes never reach app
  * state; `TASKS_REFRESH` is a WRITE, the task list's Try again, because the
  * host follows the list from the account gate opening and only a press asks
- * it again; `AGENTS_CHANGES`, `TASKS_TREE`, and `TERMINAL_LIST` are
- * FETCHes, though each answers what stands now, because each is asked again
+ * it again; `AGENTS_CHANGES`, `TASKS_TREE`, `TERMINAL_LIST`, and
+ * `MAC_SHELL_ACTIONS` are FETCHes, though each answers what stands now, because each is asked again
  * whenever it is shown and nothing keeps it, as is `AGENTS_MESSAGES`, Copy
  * transcript's read on its press; `AGENTS_TRANSCRIPT_OLDER` is a WRITE,
  * because it lays an older page on the held transcript and answers only
@@ -1118,7 +1119,7 @@ export const PORT_ACT_USE = {
   MAC_SHELL_CLOSE: ACT_USE.WRITE,
   MAC_SHELL_RUN_ACTION: ACT_USE.WRITE,
   MAC_SHELL_STOP_ACTION: ACT_USE.WRITE,
-  MAC_SHELL_ACTIONS: ACT_USE.READ,
+  MAC_SHELL_ACTIONS: ACT_USE.FETCH,
 
   MAC_TERMINAL_LOCAL_AGENT: ACT_USE.WRITE,
 

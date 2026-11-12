@@ -1360,7 +1360,8 @@ function NodeChip({
   doors: MentionDoors;
   edit: MentionNodeEdit | undefined;
 }): React.JSX.Element {
-  const written = `${MENTION_SIGIL}${mention.name}`;
+  // Note that a link written as plain words is drawn under its own words, as the read view draws it.
+  const written = mention.label ?? `${MENTION_SIGIL}${mention.name}`;
   const chip = linkChipOf(written, mention.target, doors.place.repository);
 
   // A date's chip held in an editor opens its picker, which names the node anew; every other chip is the one its link draws in words.

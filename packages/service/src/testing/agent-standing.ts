@@ -35,6 +35,7 @@ export function standingFor(
     [TOOL_GATE.DESCRIPTIONS]: descriptions,
     [TOOL_GATE.REPLY_BUTTONS]: replyButtons,
     [TOOL_GATE.TURN_END]: turnEnd,
+    [TOOL_GATE.COMPUTER_USE]: false,
   };
 
   const open = Object.values(TOOL_GATE).filter((gate) => opens[gate]);
@@ -47,6 +48,7 @@ export function standingFor(
       memoryOn: memory,
       turnEndOn: turnEnd,
       replyButtonsOn: replyButtons,
+      computerUseOn: false,
     },
   };
 }

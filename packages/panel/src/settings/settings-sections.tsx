@@ -145,6 +145,7 @@ export const SECTION = {
   PREFERENCES_AGENTS: "preferences-agents",
   PRIVACY: "privacy",
   NEW_AGENTS: "new-agents",
+  ALWAYS_ALLOWED: SETTINGS_SEARCH_ROW.ALWAYS_ALLOWED,
   STARTUP: "startup",
   DICTATION: "dictation",
   NOTIFICATIONS: "notifications",
@@ -232,6 +233,14 @@ const SETTINGS_SECTIONS = {
     found: SECTION_FOUND.ROWS,
     rows: SECTION_ROWS.SCHEMA,
     head: "New agents",
+  },
+  [SECTION.ALWAYS_ALLOWED]: {
+    found: SECTION_FOUND.HEAD,
+    page: SETTINGS_VIEW.AGENTS,
+    head: "Always allowed",
+    words:
+      "always allow allowlist allowed commands permissions approval ask run without asking shell bash claude code",
+    drawn: accountDrawn,
   },
   [SECTION.ADD_HOSTS]: {
     found: SECTION_FOUND.HEAD,

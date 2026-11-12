@@ -45,6 +45,8 @@ export const TOOL_GATE = {
   REPLY_BUTTONS: "reply-buttons",
   /** The agent's workspace has Done and follow-ups on. */
   TURN_END: "turn-end",
+  /** The member whose Mac the agent reaches has Computer use on, as their own experiment. */
+  COMPUTER_USE: "computer-use",
 } as const;
 
 export type ToolGate = (typeof TOOL_GATE)[keyof typeof TOOL_GATE];
@@ -89,6 +91,10 @@ export const GATES: Readonly<Record<ToolGate, Gate>> = {
   },
   [TOOL_GATE.TURN_END]: {
     opens: (_agent, experiments) => experiments.turnEndOn,
+    refusal: EXPERIMENT_OFF_REFUSAL,
+  },
+  [TOOL_GATE.COMPUTER_USE]: {
+    opens: (_agent, experiments) => experiments.computerUseOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
 };

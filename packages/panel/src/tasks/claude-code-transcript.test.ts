@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { newestTodos, taskTodos } from "@repo/features/agent-todos";
 import { AGENT_PAYER, type AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
@@ -13,7 +14,6 @@ import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { PayerValue } from "./agent-payer.js";
 import { AGENT_LEAD, AgentMessage } from "./agent-tab.js";
-import { newestTodos, taskTodos } from "./agent-todos.js";
 
 /**
  * claude-code-transcript.test.ts -- a coding agent on Claude Code stores its
