@@ -1,4 +1,4 @@
-// mcp.tsx -- Settings' MCP page: the apps the account allowed to use Vespin over MCP, each by its name, where it signs in from, and when it was allowed and last active, and Disconnect, asked first; an app is connected from the computer it runs on, so the phone offers no Connect.
+// mcp.tsx -- Settings' MCP page: the apps the account allowed to use the service over MCP, each by its name, where it signs in from, and when it was allowed and last active, and Disconnect, asked first; an app is connected from the computer it runs on, so the phone offers no Connect.
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";

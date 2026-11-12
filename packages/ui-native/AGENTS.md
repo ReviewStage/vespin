@@ -87,7 +87,10 @@ builds a control of its own.
   (`linkMention`, `readLink`): a `vespin.dev` place goes to the screen's
   `onOpenPlace`, any other web address to Safari.
 - **This is the one workspace that imports `@expo/ui` or `expo-glass-effect`,
-  or builds a control from React Native's pieces.** When a screen needs a piece this package lacks, add
+  or builds a control from React Native's pieces.** Everywhere else
+  `vespin/no-raw-press-outside-ui-native` refuses them, and a press prop
+  on a React Native primitive, with no disable comment allowed (root
+  `AGENTS.md`'s Layout). When a screen needs a piece this package lacks, add
   the component or an `as const` variant here, named for what it does.
 - **Colors come from `@repo/brand`.** `src/tokens/brand-colors.ts` is written
   by `packages/brand/scripts/generate-surface-shared.mjs` from the brand's one

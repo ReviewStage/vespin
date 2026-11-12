@@ -949,7 +949,10 @@ function ActionRow({
       aria-label={row}
       className="ui-menu-row flex h-menu-row w-full flex-none items-center gap-ui-2 ps-row-inset"
     >
-      <span className="ui-menu-row-name min-w-0 flex-1 truncate" aria-hidden="true">
+      <span
+        className="ui-menu-row-name min-w-0 flex-1 overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_left,transparent,#000_var(--ui-label-fade))]"
+        aria-hidden="true"
+      >
         <ItemWords>{row}</ItemWords>
       </span>
       {actions.map(item)}

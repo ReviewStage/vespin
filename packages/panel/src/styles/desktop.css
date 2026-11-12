@@ -317,7 +317,7 @@ body,
 /* The plans while the list is first read: each row a row's room around
    one block in the name's type, as far apart as the rows, so the rows land
    where the blocks stood. A skeleton's own boxes are its sheet's, never
-   utilities (`packages/ui/README.md`'s Skeletons). */
+   utilities (`vespin/skeleton-through-components`). */
 .sidebar-skeleton {
   display: flex;
   flex-direction: column;

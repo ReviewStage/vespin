@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
   - "tools/*"
+  - "tools/oxlint/vespin"
 
 catalog:
   typescript: 7.0.2

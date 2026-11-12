@@ -325,18 +325,6 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           haystack: ["Fast", "agent fast version speed quick model"],
         }
       : undefined,
-    // Agents' Always allowed, the commands the account's agents run without asking: drawn once an account is signed in.
-    input.accountDrawn
-      ? {
-          id: SETTINGS_SEARCH_ROW.ALWAYS_ALLOWED,
-          label: "Always allowed",
-          page: SETTINGS_VIEW.AGENTS,
-          haystack: [
-            "Always allowed",
-            "always allow allowlist allowed commands permissions approval ask run without asking shell bash claude code",
-          ],
-        }
-      : undefined,
     // The harnesses' rows, each holding the account's plan and API key for it on the service: drawn once an account is signed in.
     input.accountDrawn
       ? {
