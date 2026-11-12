@@ -2,11 +2,13 @@
 
 import assert from "node:assert/strict";
 import { afterEach, test, vi } from "vitest";
-import type {
-  DescriptionEditorHandle,
-  DescriptionEditorPictures,
-  DescriptionEditorPlacement,
-  PictureTaken,
+import {
+  type DescriptionEditorHandle,
+  type DescriptionEditorPictures,
+  type DescriptionEditorPlacement,
+  PICTURE_LEAVE,
+  type PictureNodeDoors,
+  type PictureTaken,
 } from "./contract.js";
 import { mountDescriptionEditor } from "./description-editor.js";
 
@@ -14,8 +16,9 @@ import { mountDescriptionEditor } from "./description-editor.js";
  * A description's pictures in its editor: a file pasted, chosen, or dropped on the drawn text is laid in as a
  * picture below the caret's line, or in place of an empty one, handed to the panel under its upload,
  * and writes nothing until the panel kept it, then its line; Remove takes
- * one still being kept out; and a picture of another description pasted in is kept
- * again on this one. Synthetic description and pictures.
+ * one still being kept out; a picture of another description pasted in is kept
+ * again on this one; and the caret leaving a picture's caption for what follows
+ * stands on a line after it. Synthetic description and pictures.
  */
 
 const TASK_ID = "5d8e2a61-7c3b-4f0e-9b1a-2c6d4e8f0a13";
@@ -38,9 +41,12 @@ function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { secti
   const taken: PictureTaken[] = [];
   // The pictures drawn now, each by the upload it waits on, "" once kept.
   const drawn = new Map<number, string>();
+  // Each picture's doors, in the order the pictures were drawn.
+  const doors: PictureNodeDoors[] = [];
 
   const pictures: DescriptionEditorPictures = {
-    draw: (_element, picture) => {
+    draw: (_element, picture, its) => {
+      doors.push(its);
       const key = drawn.size + taken.length + Math.random();
       drawn.set(key, picture.upload);
 
@@ -69,7 +75,7 @@ function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { secti
 
   handles.push(handle);
 
-  return { handle, taken, host, drawn };
+  return { handle, taken, host, drawn, doors };
 }
 
 /** ⌘Z, or ⇧⌘Z with `redo`, pressed in the editor, as Ctrl outside a Mac. */
@@ -300,4 +306,17 @@ test.each([
   handle.settlePicture(taken[0]?.upload ?? "", KEPT);
 
   assert.equal(handle.markdown(), landed);
+});
+
+test("leaving the caption of the text's last picture for what follows puts the caret on a line after it", () => {
+  const markdown = `## Approach\n\nThe invite email follows the mock.\n\n![members](${KEPT} "The invite")\n`;
+  const words = "The invite email follows the mock.";
+  const caret = { section: 0, text: words, occurrence: 0, offset: 2, code: false, top: 0 };
+  const { handle, taken, doors } = opened(markdown, { x: 0, y: 0, words: caret });
+
+  doors[0]?.leave(PICTURE_LEAVE.DOWN);
+  handle.insertPictures([PNG()]);
+  handle.settlePicture(taken[0]?.upload ?? "", OTHERS);
+
+  assert.equal(handle.markdown(), `${markdown}\n![members](${OTHERS})\n`);
 });

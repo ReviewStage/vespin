@@ -72,6 +72,173 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.33.0 — 2026-11-12
+
+### Bring your own machine
+
+Agents run on your own Macs and Linux machines as well as in Vespin's cloud,
+This Mac among them, set up in Settings › Machines. Vespin carries its host
+inside the app, and every machine says one status wherever it shows: Online,
+Offline, Setting up, or Failed.
+([#8507](https://github.com/ReviewStage/vespin/pull/8507),
+[#8345](https://github.com/ReviewStage/vespin/pull/8345),
+[#8474](https://github.com/ReviewStage/vespin/pull/8474),
+[#8469](https://github.com/ReviewStage/vespin/pull/8469),
+[#8498](https://github.com/ReviewStage/vespin/pull/8498),
+[#8503](https://github.com/ReviewStage/vespin/pull/8503),
+[#8520](https://github.com/ReviewStage/vespin/pull/8520),
+[#8511](https://github.com/ReviewStage/vespin/pull/8511),
+[#8615](https://github.com/ReviewStage/vespin/pull/8615))
+
+### Always allowed commands
+
+Always allow on a Claude Code agent's command offers the command's first
+words, such as `pnpm test *`, and keeps them past the session. Settings ›
+Agents › Always allowed lists the commands your agents run without asking, to
+add, edit, and remove in place.
+([#8525](https://github.com/ReviewStage/vespin/pull/8525),
+[#8527](https://github.com/ReviewStage/vespin/pull/8527),
+[#8543](https://github.com/ReviewStage/vespin/pull/8543),
+[#8662](https://github.com/ReviewStage/vespin/pull/8662),
+[#8559](https://github.com/ReviewStage/vespin/pull/8559))
+
+### PDFs and iPhone photos
+
+A PDF opens in the file viewer page by page, and a pasted PDF, or one shared
+in Slack, goes to the agent, which reads it on any machine. A HEIC photo turns
+into a JPEG on the way in.
+([#8552](https://github.com/ReviewStage/vespin/pull/8552),
+[#8642](https://github.com/ReviewStage/vespin/pull/8642),
+[#8528](https://github.com/ReviewStage/vespin/pull/8528),
+[#8530](https://github.com/ReviewStage/vespin/pull/8530),
+[#8534](https://github.com/ReviewStage/vespin/pull/8534))
+
+### Zoom a page
+
+A page an agent shows zooms in its tab with ⌘+, ⌘−, and ⌘0, a pinch, or the
+Zoom row in the tab's menu, and its bar says the size it stands at.
+([#8471](https://github.com/ReviewStage/vespin/pull/8471),
+[#8606](https://github.com/ReviewStage/vespin/pull/8606),
+[#8595](https://github.com/ReviewStage/vespin/pull/8595))
+
+### Handoff to your iPhone
+
+The thread, task, agent, or pull request your Mac shows can be picked up on
+your iPhone through Handoff.
+([#8643](https://github.com/ReviewStage/vespin/pull/8643),
+[#8650](https://github.com/ReviewStage/vespin/pull/8650))
+
+### Improvements
+
+- A cloud agent's sandbox holds every repository connected to its workspace
+  beside its own, and resumes from the current image with its own files
+  ([#8540](https://github.com/ReviewStage/vespin/pull/8540),
+  [#8547](https://github.com/ReviewStage/vespin/pull/8547),
+  [#8544](https://github.com/ReviewStage/vespin/pull/8544),
+  [#8645](https://github.com/ReviewStage/vespin/pull/8645),
+  [#8668](https://github.com/ReviewStage/vespin/pull/8668),
+  [#8693](https://github.com/ReviewStage/vespin/pull/8693))
+- Anyone who can message an agent can change its queue, and each queued
+  message names who queued it ([#8691](https://github.com/ReviewStage/vespin/pull/8691))
+- A new agent's model menu offers its permission mode ([#8447](https://github.com/ReviewStage/vespin/pull/8447))
+- ⌘F in a transcript can leave tool calls and thinking out ([#8457](https://github.com/ReviewStage/vespin/pull/8457))
+- A task's Overview lists its pages as rows like its agents', with a menu and
+  selection ([#8455](https://github.com/ReviewStage/vespin/pull/8455))
+- A name in a Settings row renames with a press on it ([#8558](https://github.com/ReviewStage/vespin/pull/8558))
+- The Automations list groups its rows, says each automation's filters, owner,
+  and next run in words, and suggests Triage a red main and Investigate Sentry
+  alerts
+  ([#8620](https://github.com/ReviewStage/vespin/pull/8620),
+  [#8674](https://github.com/ReviewStage/vespin/pull/8674),
+  [#8626](https://github.com/ReviewStage/vespin/pull/8626),
+  [#8505](https://github.com/ReviewStage/vespin/pull/8505))
+- A GitHub trigger can watch the repository's default branch, whatever it is
+  named ([#8656](https://github.com/ReviewStage/vespin/pull/8656))
+- Mintlify joins the integrations ([#8690](https://github.com/ReviewStage/vespin/pull/8690))
+- An attached picture is named by its file name ([#8646](https://github.com/ReviewStage/vespin/pull/8646))
+- The setup survey takes several answers to each question ([#8644](https://github.com/ReviewStage/vespin/pull/8644))
+- The web app lists its keyboard shortcuts, with a browser chord for each one
+  the browser keeps ([#8494](https://github.com/ReviewStage/vespin/pull/8494))
+- Vespin's MCP server and CLI edit cloud setup scripts ([#8565](https://github.com/ReviewStage/vespin/pull/8565))
+- Deleting your account revokes Vespin's sign-in at Google and GitHub, and its
+  GitHub App grant
+  ([#8517](https://github.com/ReviewStage/vespin/pull/8517),
+  [#8522](https://github.com/ReviewStage/vespin/pull/8522))
+
+### Fixes
+
+- Fixed `/` commands offering nothing in a workspace with no skills, and
+  `/model` missing from the new-task composer ([#8545](https://github.com/ReviewStage/vespin/pull/8545))
+- Fixed a pasted Vespin link staying plain text rather than becoming its chip
+  ([#8542](https://github.com/ReviewStage/vespin/pull/8542))
+- Fixed a pasted picture's chip landing late or away from the caret
+  ([#8508](https://github.com/ReviewStage/vespin/pull/8508),
+  [#8490](https://github.com/ReviewStage/vespin/pull/8490))
+- Fixed a file named by its absolute path in the checkout drawing as plain text
+  ([#8484](https://github.com/ReviewStage/vespin/pull/8484),
+  [#8489](https://github.com/ReviewStage/vespin/pull/8489))
+- Fixed a task's page staying open after the task was marked done or canceled,
+  or its agent archived
+  ([#8479](https://github.com/ReviewStage/vespin/pull/8479),
+  [#8470](https://github.com/ReviewStage/vespin/pull/8470))
+- Fixed New task from Settings landing on Home without its composer open ([#8438](https://github.com/ReviewStage/vespin/pull/8438))
+- Fixed an inline page's height jumping as its transcript row redrew ([#8333](https://github.com/ReviewStage/vespin/pull/8333))
+- Fixed a recording losing its place when opened in the viewer ([#8539](https://github.com/ReviewStage/vespin/pull/8539))
+- Fixed a loading video or picture losing its shape
+  ([#8500](https://github.com/ReviewStage/vespin/pull/8500),
+  [#8705](https://github.com/ReviewStage/vespin/pull/8705))
+- Fixed scrollbars fading away under a list's edge fade ([#8721](https://github.com/ReviewStage/vespin/pull/8721))
+- Fixed a new agent's Starting… timer counting from different moments ([#8548](https://github.com/ReviewStage/vespin/pull/8548))
+- Fixed queued messages standing shorter than the other rows over the box ([#8462](https://github.com/ReviewStage/vespin/pull/8462))
+- Fixed an Inbox row's preview leaving out a message's files, a page's row
+  missing its title, and a row's press not moving an Inbox opened at an
+  item's address
+  ([#8482](https://github.com/ReviewStage/vespin/pull/8482),
+  [#8497](https://github.com/ReviewStage/vespin/pull/8497),
+  [#8492](https://github.com/ReviewStage/vespin/pull/8492))
+- Fixed a page offered with every option of an Inbox decide drawing on one
+  option's card ([#8710](https://github.com/ReviewStage/vespin/pull/8710))
+- Fixed the status dot missing from a machine's place chip and the Cloud
+  popover's row
+  ([#8526](https://github.com/ReviewStage/vespin/pull/8526),
+  [#8502](https://github.com/ReviewStage/vespin/pull/8502))
+- Fixed a machine's name breaking across lines ([#8726](https://github.com/ReviewStage/vespin/pull/8726))
+- Fixed the settings search missing Cloud environment's sections ([#8440](https://github.com/ReviewStage/vespin/pull/8440))
+- Fixed a usage meter's reset time standing off its bar's center ([#8519](https://github.com/ReviewStage/vespin/pull/8519))
+- Fixed Codex agents wearing the ChatGPT mark ([#8594](https://github.com/ReviewStage/vespin/pull/8594))
+- Fixed a setup script's last run naming an agent to someone who cannot see it ([#8586](https://github.com/ReviewStage/vespin/pull/8586))
+- Fixed the Slack bot connecting for someone outside its Slack team ([#8588](https://github.com/ReviewStage/vespin/pull/8588))
+- Fixed Settings' While plugged in not saying it keeps an idle Mac awake ([#8480](https://github.com/ReviewStage/vespin/pull/8480))
+- Fixed the same act worded differently across the app, as Got it, Retry, and
+  Try again
+  ([#8451](https://github.com/ReviewStage/vespin/pull/8451),
+  [#8452](https://github.com/ReviewStage/vespin/pull/8452),
+  [#8425](https://github.com/ReviewStage/vespin/pull/8425),
+  [#8557](https://github.com/ReviewStage/vespin/pull/8557))
+
+### Misc
+
+- Updated agents to read another agent's or a task's threads, look at a
+  thread's pictures, attach a PDF to a thread message, ask before building
+  when a prompt names a goal but no spec, and leave their servers running at
+  a turn's end
+  ([#8477](https://github.com/ReviewStage/vespin/pull/8477),
+  [#8521](https://github.com/ReviewStage/vespin/pull/8521),
+  [#8524](https://github.com/ReviewStage/vespin/pull/8524),
+  [#8534](https://github.com/ReviewStage/vespin/pull/8534),
+  [#8488](https://github.com/ReviewStage/vespin/pull/8488),
+  [#8536](https://github.com/ReviewStage/vespin/pull/8536))
+- Updated Codex to 0.167.1 ([#8589](https://github.com/ReviewStage/vespin/pull/8589))
+- Updated Vespin's signature to accept a later update signed by either of its
+  signing teams ([#8683](https://github.com/ReviewStage/vespin/pull/8683))
+- Updated the landing page with its copper orb and dot fields, and a line
+  saying Y Combinator backs Vespin
+  ([#8483](https://github.com/ReviewStage/vespin/pull/8483),
+  [#8523](https://github.com/ReviewStage/vespin/pull/8523))
+- Updated Electron and other dependencies to close security advisories
+  ([#8619](https://github.com/ReviewStage/vespin/pull/8619),
+  [#8590](https://github.com/ReviewStage/vespin/pull/8590))
+
 ## 0.32.0 — 2026-11-11
 
 ### Permissions and approvals

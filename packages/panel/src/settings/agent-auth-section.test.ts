@@ -10,6 +10,7 @@ import {
   PROVIDER_KEY_STATUS,
   type ProviderKeySummary,
   type ProviderKeysAnswer,
+  RESET_CREDIT_OUTCOME,
   type SubscriptionKeySummary,
 } from "@repo/features/provider-key-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -239,6 +240,8 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
       deliverKeys({ rows: held });
 
       return Promise.resolve(done({ outcome: CHATGPT_DEVICE_LOGIN.CONNECTED, keys: held }));
+    case ACT_KIND.PROVIDER_KEYS_USE_RESET_CREDIT:
+      return Promise.resolve(done({ ...held, resetCredit: RESET_CREDIT_OUTCOME.RESET }));
     default:
       return Promise.resolve({ status: FAKE_ANSWER.UNKNOWN_ACT });
   }
@@ -508,7 +511,7 @@ test("each card opens on its harness and its Add; each credential says how it st
   assert.ok(button(credential(attention, "ana@work.test"), "Reconnect"));
   leave();
 
-  // A plan at its limit says until when, its bar full in the attention ink; only Codex's offers Manage usage, which opens ChatGPT's usage settings.
+  // A plan at its limit says until when, its bar full in the attention ink; only Codex's ⋯ offers Manage usage in ChatGPT, which opens ChatGPT's usage settings.
   held = {
     keys: [],
     subscriptions: [
@@ -527,17 +530,43 @@ test("each card opens on its harness and its Add; each credential says how it st
   assert.equal(meterOf(credential(limited, "Claude plan")), "attention");
   assert.match(
     lineOf(credential(limited, "ana@work.test"))?.words ?? "",
-    /^At its limit · back at /u,
+    /^At its limit, back at /u,
   );
 
-  const usage =
-    credential(limited, "ana@work.test").querySelector<HTMLAnchorElement>("a") ??
-    assert.fail("no Manage usage");
-
-  assert.equal(usage.textContent, "Manage usage");
-  act(() => usage.click());
-  await settle();
+  await choose(credential(limited, "ana@work.test"), "ana@work.test", "Manage usage in ChatGPT");
   assert.deepEqual(sentOf(ACT_KIND.WEB_OPEN), [{ url: "https://chatgpt.com/settings/usage" }]);
+});
+
+test("a Codex plan with room offers its resets as one press, whose question lists when each expires before it spends one", async () => {
+  held = {
+    keys: [],
+    subscriptions: [
+      {
+        ...CHATGPT_PLAN,
+        status: PROVIDER_KEY_STATUS.VERIFIED,
+        resetCredits: 2,
+        resetCreditExpiries: [Date.UTC(2026, 10, 30, 12), null],
+      },
+    ],
+  };
+  const page = await mount();
+  const plan = () => credential(page, "ana@work.test");
+
+  await vi.waitFor(() => button(plan(), "Use 1 of 2 resets on ana@work.test"));
+  await press(plan(), "Use 1 of 2 resets on ana@work.test");
+
+  const asked = question().textContent ?? "";
+  assert.match(asked, /Use 1 of 2 resets\?/u);
+  assert.match(asked, /Expires Nov 30/u);
+  assert.match(asked, /Used next/u);
+  assert.match(asked, /Doesn't expire/u);
+  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_USE_RESET_CREDIT), []);
+
+  await press(question(), "Use reset");
+  assert.match(
+    JSON.stringify(sentOf(ACT_KIND.PROVIDER_KEYS_USE_RESET_CREDIT)),
+    /^\[\{"subscriptionId":"chatgpt-1"/u,
+  );
 });
 
 test("each harness's card stands where a link to its section lands", async () => {

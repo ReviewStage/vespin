@@ -380,6 +380,9 @@ export interface RunnerLaunch<A, E, R, EL, RL, ES = never, RS = never> {
   readonly abandon: (ready: A) => Effect.Effect<void, { readonly _tag: string }, RL>;
 }
 
+/** How a file written for the agent under its attachments folder is kept: readable by every user, written by none but the machine's. */
+export const ATTACHMENT_FILE_MODE = 0o644;
+
 export interface AgentMachineService {
   /** Where the machine keeps the agent's things. */
   readonly layout: (
@@ -540,6 +543,18 @@ export interface AgentMachineService {
     path: string,
     bound: number,
   ) => Effect.Effect<Uint8Array | undefined, SandboxError>;
+  /**
+   * One file written into the session's place, under the folder a message's
+   * files are written under (`MachineLayout`'s `attachments`) at the
+   * relative path given, readable by the agent's own user, as a message's
+   * file is (`ATTACHMENT_FILE_MODE`); answers where it stands there once it
+   * does. Unavailable where the place is not up, and refused
+   * (`LaunchRefused`'s `deviceAway`) where it would go to a Mac that is away.
+   */
+  readonly writeFile: (
+    session: string,
+    file: { readonly name: string; readonly contents: Uint8Array },
+  ) => Effect.Effect<string, SandboxError | LaunchRefused>;
   /**
    * An H.264 MP4 of the WebM recording at the path, made on the session's
    * place as the agent's own user (`phone-video.ts`), for a player that

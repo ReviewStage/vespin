@@ -15,6 +15,7 @@
  * pages under a task are excluded before the task itself is claimed.
  */
 
+import { HOST_WIRE } from "./host-wire.js";
 import { IOS_OAUTH_CALLBACK_PATH } from "./ios-sign-in-wire.js";
 import {
   GITHUB_PAGE,
@@ -23,6 +24,7 @@ import {
   type LinkDestination,
   pullRequestAddressOf,
   readLink,
+  readShownLink,
   samePullRequest,
 } from "./link-grammar.js";
 
@@ -36,6 +38,10 @@ export interface AppLinkComponent {
 /** The paths the home host hands the app, in the order Apple reads them. */
 export const IOS_APP_LINK_COMPONENTS: readonly AppLinkComponent[] = [
   { "/": IOS_OAUTH_CALLBACK_PATH, comment: "The sign-in's return." },
+  {
+    "/": `${HOST_WIRE.CONNECT_PATH}/*`,
+    comment: "A machine's pairing, which Settings › Machines approves or denies.",
+  },
   { "/": "/*/task/*/inbox/*", comment: "A thread on a task's Inbox." },
   { "/": "/*/agent/*/inbox/*", comment: "A thread on an agent's Inbox." },
   {
@@ -109,6 +115,19 @@ export function iosAppRouteOf(place: LinkDestination): string | undefined {
     default:
       return undefined;
   }
+}
+
+/**
+ * The code a machine's pairing link names (`/connect/<code>`), which the app
+ * approves or denies on Settings › Machines rather than at a route a link
+ * reaches by itself; none for any other address. Note that the code is
+ * handed to the page, which reads the pairing and asks before anything is
+ * sent, as the panel's Connect dialog does.
+ */
+export function iosHostConnectCode(address: string): string | undefined {
+  const read = readShownLink(address);
+
+  return read === undefined || "workspace" in read ? undefined : read.place.code;
 }
 
 /** The app's route for an agent's page: its transcript and its composer. */

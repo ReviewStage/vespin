@@ -195,6 +195,8 @@ const followingDevice = (
         options.writingTakes !== undefined && path.startsWith(LAYOUT.folder)
           ? Effect.sleep(options.writingTakes)
           : Effect.void,
+      // Note that a files line's bytes land nowhere, since only whether the write was made is read.
+      writeFile: () => Effect.void,
       symlink: (target, path) => Effect.sync(() => void links.set(path, target)),
       readLink: (path) =>
         Effect.suspend(() => {
@@ -1152,6 +1154,46 @@ it.effect(
           settled.filter((each) => each.id === GONE_LINE_ID),
           [{ id: GONE_LINE_ID, exitCode: CHECKOUT_RESTORE_EXIT.MISSING }],
         );
+      }).pipe(Effect.provide(NODE)),
+    ),
+);
+
+it.effect(
+  "a files line is settled 0 where its file was written under the agent's own places, and 1 where its path names a place outside them",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const filesAt = (id: string, path: string): DeviceAgentLine => ({
+          id,
+          agentId: AGENT_ID,
+          seq: 1,
+          kind: DEVICE_AGENT_LINE_KIND.FILES,
+          payload: { files: [{ path, mode: 0o644, contents: "JVBERi0xLjc=" }] },
+        });
+
+        /** How a follower handed the one line given settles it. */
+        const settledOf = (line: DeviceAgentLine) =>
+          Effect.scoped(
+            Effect.gen(function* () {
+              const { settled } = yield* followingDevice(() => Effect.void, {
+                lines: [line],
+                claim: () => Effect.succeed({ line }),
+              });
+
+              yield* until(() => settled.length > 0);
+
+              return settled;
+            }),
+          );
+
+        const inside = yield* settledOf(
+          filesAt(LINE_ID, `${LAYOUT.attachments}/description/spec.pdf`),
+        );
+
+        const outside = yield* settledOf(filesAt(GONE_LINE_ID, "/etc/spec.pdf"));
+
+        assert.deepEqual(inside, [{ id: LINE_ID, exitCode: 0 }]);
+        assert.deepEqual(outside, [{ id: GONE_LINE_ID, exitCode: 1 }]);
       }).pipe(Effect.provide(NODE)),
     ),
 );

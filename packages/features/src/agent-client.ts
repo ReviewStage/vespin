@@ -85,6 +85,7 @@ import {
   type MemorySaveParams,
   type ProviderKeyForAgentsParams,
   type ProviderKeyRemoveParams,
+  type ProviderKeyResetCreditParams,
   type ProviderKeySaveParams,
   type ProviderKeysAnswerView,
   type PushDeviceDoneAnswerView,
@@ -196,6 +197,7 @@ import {
   chatGptDeviceLoginRequestSchema,
   PROVIDER_KEY_QUERY,
   providerKeyForAgentsRequestSchema,
+  providerKeyResetCreditRequestSchema,
   providerKeySaveRequestSchema,
   subscriptionLabelRequestSchema,
   subscriptionOrderRequestSchema,
@@ -746,6 +748,17 @@ export class HostedAgentClient {
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
 
     return hostedCall(this.#hosted.account.setProviderKeyForAgents, admitted);
+  }
+
+  /** One of a ChatGPT plan's reset credits spent under the press's key, answering the keys as they then stand and how the spend went. */
+  useResetCredit(
+    params: ProviderKeyResetCreditParams,
+  ): Effect.Effect<ProviderKeysAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(providerKeyResetCreditRequestSchema)(params));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(this.#hosted.account.useResetCredit, admitted);
   }
 
   /** One of the account's subscriptions named, or its name cleared, answering the keys as they then stand; a request the service would refuse by shape never travels. */

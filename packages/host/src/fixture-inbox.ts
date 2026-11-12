@@ -52,9 +52,11 @@ import {
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
-import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
+import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import type { HostLine } from "@repo/features/host-live";
+import { HOST_PAIRING_CALL_FAILURE } from "@repo/features/host-pairing-view";
+import type { HostPairingAnswer } from "@repo/features/host-wire";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
   INBOX_APPROVAL_OPTION,
@@ -1048,6 +1050,23 @@ const MEMORIES: readonly MemorySummary[] = [
   },
 ];
 
+/** The code of the one pairing waiting on the account, as a machine's link names it (`maestro/settings-machine-connect.yaml`). */
+const PENDING_PAIRING_CODE = "BCDFGHJK";
+
+/** The machine waiting on that code, as it named itself, and when its code lapses: ten minutes after the fixture landed. */
+const PENDING_PAIRING: HostPairingAnswer = {
+  name: "Ada's Mac mini",
+  platform: DEVICE_PLATFORM.DARWIN,
+  arch: DEVICE_ARCH.ARM64,
+  ip: "203.0.113.7",
+  expiresAt: LANDED + 10 * 60_000,
+};
+
+/** A pairing's read, approve, or deny, as the service answers it: the waiting machine for its code, and no pending pairing for any other. */
+function pairingAnswer<Answer>(code: string, answer: Answer) {
+  return code === PENDING_PAIRING_CODE ? answer : { failure: HOST_PAIRING_CALL_FAILURE.NOT_FOUND };
+}
+
 /** The account's machines, as Settings › Machines lists them: a Mac online and a Linux server the sweep marks away. */
 const HOSTS: readonly HostLine[] = [
   {
@@ -1785,6 +1804,20 @@ const INTEGRATIONS: IntegrationStatusesAnswer = {
   ],
 };
 
+/**
+ * What each connected server answered when asked for its tools: GitHub's,
+ * Linear's, and Relay's Notion list theirs, and the Personal Notion's read
+ * couldn't be answered, so Settings › Integrations says so with Try again.
+ */
+const INTEGRATION_TOOLS: AppStateSnapshot[typeof LIVE_READ.INTEGRATION_TOOLS] = {
+  github: {
+    rows: { tools: [{ name: "search_code", description: "Search code across repositories" }] },
+  },
+  linear: { rows: { tools: [{ name: "list_issues", description: "List the team's issues" }] } },
+  notion: { rows: { tools: [{ name: "search", description: "Search the workspace's pages" }] } },
+  "notion-2": { failed: true },
+};
+
 /** The skills the invitations task's repository keeps, as the service finds them. */
 const SKILLS = {
   repository: "ada/relay",
@@ -1860,6 +1893,7 @@ export function inboxAppState(
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
+    [LIVE_READ.INTEGRATION_TOOLS]: INTEGRATION_TOOLS,
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
     // Note that Relay, the team a flow switches to, holds no memories and none of its own skills, so its pages draw their empty states rather than reading for good; the account's own skills stand in every workspace.
     [LIVE_READ.MEMORIES]: {
@@ -2143,6 +2177,15 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
 const ANSWERS: StagedAnswers = {
+  // Note that a pairing is read, approved, and denied as the service would answer, though nothing here makes a machine.
+  [ACT_KIND.HOSTS_PAIRING_READ]: ({ code }) => pairingAnswer(code, PENDING_PAIRING),
+  [ACT_KIND.HOSTS_PAIRING_APPROVE]: ({ code }) =>
+    pairingAnswer(code, { deviceId: "00000000-0000-4000-8000-0000000000a1" }),
+  [ACT_KIND.HOSTS_PAIRING_DENY]: ({ code }) => pairingAnswer(code, { done: true as const }),
+  // Note that an account's rename is taken as the service takes one, the account answered under the label asked, though nothing here moves.
+  [ACT_KIND.INTEGRATIONS_RENAME]: ({ provider, connection, label }) => ({
+    account: { provider, connection, label, status: INTEGRATION_STATUS.CONNECTED },
+  }),
   // Note that Add skill's paste is read as the service reads one, though no repository is reached, and its install is taken and answered, though nothing here moves.
   [ACT_KIND.INSTALLED_SKILLS_PREVIEW]: ({ text }) => skillPreviewOf(text),
   [ACT_KIND.INSTALLED_SKILLS_INSTALL]: (request) => ({

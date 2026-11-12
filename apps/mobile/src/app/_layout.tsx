@@ -11,6 +11,7 @@ import { useEffect } from "react";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
+import { useHostConnectLink } from "../host-connect-link.js";
 import { useInboxWidget } from "../inbox-widget/use-inbox-widget.js";
 import { useKeeping } from "../keeping.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
@@ -44,7 +45,9 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
  * screen handed over from another device opens (`system-activity/`). The
  * iPad's menu bar acts on whatever stands in front, its account's commands
  * enabled while one is signed in (`menu-commands/`), and the share sheet's
- * snapshot is kept current and its draft opens New task (`share-sheet.ts`).
+ * snapshot is kept current and its draft opens New task (`share-sheet.ts`),
+ * and a machine's pairing link opens Settings › Machines on its code
+ * (`host-connect-link.ts`).
  * Over every screen stands the one notice of a write that did not go
  * (`use-write.ts`), which lets its offline word go once the service answers,
  * and every word with its Try again once the account it was said for is gone.
@@ -69,6 +72,7 @@ function GuardedScreens() {
   useOfflineNotice();
   useNoticeForAccount();
   useShareSheet(updateNeeded);
+  useHostConnectLink(signedIn && !updateNeeded);
 
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const sheetPresentation =
@@ -105,6 +109,10 @@ function GuardedScreens() {
           <Stack.Screen
             name="task-relation"
             options={{ presentation: sheetPresentation, title: "Task relation" }}
+          />
+          <Stack.Screen
+            name="move-task"
+            options={{ presentation: sheetPresentation, title: "Move to workspace" }}
           />
           <Stack.Screen
             name="new-workspace"

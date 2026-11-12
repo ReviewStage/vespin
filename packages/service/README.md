@@ -736,8 +736,7 @@ GitHub (`https://api.githubcopilot.com/mcp/x/all`, every toolset), Gmail
 (`https://calendarmcp.googleapis.com/mcp/v1`), Google Drive
 (`https://drivemcp.googleapis.com/mcp/v1`), Granola
 (`https://mcp.granola.ai/mcp`), Linear (`https://mcp.linear.app/mcp`), Mercury
-(`https://mcp.mercury.com/mcp`), Mintlify (`https://mcp.mintlify.com`, its admin
-server rather than a docs site's own search server), Neon (`https://mcp.neon.tech/mcp`), Notion
+(`https://mcp.mercury.com/mcp`), Neon (`https://mcp.neon.tech/mcp`), Notion
 (`https://mcp.notion.com/mcp`), PostHog (`https://mcp.posthog.com/mcp?mode=tools`, each tool by its own
 name rather than its default single `exec`), Resend (`https://mcp.resend.com/mcp`),
 Sentry (`https://mcp.sentry.dev/mcp`), Slack (`https://mcp.slack.com/mcp`),
@@ -969,7 +968,6 @@ vercel connect create mcp.sentry.dev --name sentry             # Sentry
 vercel connect create mcp.stripe.com --name stripe             # Stripe; asks for its scope below
 vercel connect create granola --name granola                   # Granola
 vercel connect create mcp.mercury.com --name vespin-mercury    # Mercury, whose clients' names may not begin with "Mercury"
-vercel connect create mcp.mintlify.com --name mintlify         # Mintlify; asks for its scopes below
 # Neon: an OAuth connector over a client registered by hand, below
 vercel connect create posthog --name posthog                   # PostHog
 vercel connect create mcp.resend.com --name vespin-resend      # Resend; asks for its scope below
@@ -990,20 +988,16 @@ target rather than by address. A connector created this way asks for no
 scopes, and the provider grants its own default, which is enough for
 Notion, Sentry, Granola, and Vercel. Mercury grants a write scope,
 and a refresh token (`offline_access`), only when asked; Y Combinator's
-server asks for `mcp:access` and Stripe's for `mcp`; and PostHog's,
-Supabase's, and Mintlify's granular scopes are better asked for in full
-than left to a default. Those six connectors
+server asks for `mcp:access` and Stripe's for `mcp`; and PostHog's and
+Supabase's granular scopes are better asked for in full than left to a
+default. Those five connectors
 ask for every scope their server publishes (`scopes_supported` in its
 `/.well-known/oauth-protected-resource`), set on the connector's
 `data.userAuthorization.scopes`, less the ones that administer the account
 rather than work in it: PostHog's `access_control:write`,
 `organization:write`, `account:write`, `user:write`, `integration:write`, and
-`llm_provider_key:read`, Supabase's `secrets:read`, which would hand an
-agent a project's API keys, its service role key among them, and Mintlify's
-`members:write`, `billing:read`, and `integrations:write`; Mintlify's
-connector asks for the rest of what it publishes (`docs:read`, `docs:write`,
-`nav:write`, `config:write`, `session:write`, `deployment:read`,
-`deployment:write`, `members:read`, `analytics:read`, and `offline_access`). A token keeps
+`llm_provider_key:read`, and Supabase's `secrets:read`, which would hand an
+agent a project's API keys, its service role key among them. A token keeps
 the scopes it was granted, so a narrowed connector reaches a member only
 when they connect again. Resend's resource publishes none, and its
 authorization server (`https://api.resend.com`) publishes `full_access`
@@ -1029,10 +1023,7 @@ A grant is then bounded by what the developer allows on the provider's
 consent page alone. Mercury's `transactions:request` and `transfers:request`
 scopes request a payment or transfer that an approver still confirms in
 Mercury. Y Combinator's server serves only accounts YC has enabled MCP
-access for. Mintlify's completes a sign-in only for the clients it
-knows or a redirect domain the organization allows (its dashboard's MCP ›
-Configure › Redirect URIs, https://www.mintlify.com/docs/ai/mintlify-mcp),
-so an organization may have to allow Connect's callback domain first. Stripe's consent page grants one or more live accounts and
+access for. Stripe's consent page grants one or more live accounts and
 sandboxes, each with its own permissions, and an administrator can turn MCP
 access off for the whole Stripe team; a refund or a movement of money
 answers the agent with a link for the developer to approve it in Stripe's
@@ -1199,7 +1190,7 @@ again straight through connects.
 
 Then set the provider's variable (`EXECUTOR_CONNECTOR_UID`, `GMAIL_CONNECTOR_UID`,
 `GOOGLE_CALENDAR_CONNECTOR_UID`, `GOOGLE_DRIVE_CONNECTOR_UID`, `GRANOLA_CONNECTOR_UID`,
-`LINEAR_CONNECTOR_UID`, `MERCURY_CONNECTOR_UID`, `MINTLIFY_CONNECTOR_UID`, `NEON_CONNECTOR_UID`,
+`LINEAR_CONNECTOR_UID`, `MERCURY_CONNECTOR_UID`, `NEON_CONNECTOR_UID`,
 `NOTION_CONNECTOR_UID`, `POSTHOG_CONNECTOR_UID`, `RESEND_CONNECTOR_UID`, `SENTRY_CONNECTOR_UID`,
 `SLACK_CONNECTOR_UID`, `STRIPE_CONNECTOR_UID`, `SUPABASE_CONNECTOR_UID`,
 `VERCEL_CONNECTOR_UID`, `YCOMBINATOR_CONNECTOR_UID`) to that UID in the `vespin` project for
@@ -1297,7 +1288,7 @@ its own workspace alone, so production offers Slack only to the accounts
 that workspace's people sign in with. Each provider has an optional
 allowlist variable beside its connector's (`<PROVIDER>_ALLOWED_ACCOUNTS`:
 `EXECUTOR_ALLOWED_ACCOUNTS`, `GRANOLA_ALLOWED_ACCOUNTS`, `LINEAR_ALLOWED_ACCOUNTS`,
-`MERCURY_ALLOWED_ACCOUNTS`, `MINTLIFY_ALLOWED_ACCOUNTS`, `NEON_ALLOWED_ACCOUNTS`,
+`MERCURY_ALLOWED_ACCOUNTS`, `NEON_ALLOWED_ACCOUNTS`,
 `NOTION_ALLOWED_ACCOUNTS`, `POSTHOG_ALLOWED_ACCOUNTS`, `RESEND_ALLOWED_ACCOUNTS`,
 `SENTRY_ALLOWED_ACCOUNTS`, `SLACK_ALLOWED_ACCOUNTS`,
 `STRIPE_ALLOWED_ACCOUNTS`, `SUPABASE_ALLOWED_ACCOUNTS`,

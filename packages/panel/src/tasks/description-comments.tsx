@@ -49,6 +49,7 @@ import {
   type CommentPinStands,
   CommentsIcon,
   ConfirmDialog,
+  CornerCount,
   cssCustomProperties,
   type DialogQuestion,
   DRAFT_WORD,
@@ -2917,16 +2918,19 @@ export function DescriptionCommentLayer({
 
         return (
           <span key={top} className="comment-count" style={{ top: middle ?? top }}>
-            <Button
-              icon={<MessageSquareIcon />}
+            {/* Note that its figures stand on its glyph, as a review's held comments do on its press (`CornerCount`), so every count's glyph stands where the block's button's does, however many figures it holds. */}
+            <IconButton
+              icon={
+                <CornerCount count={comments}>
+                  <MessageSquareIcon />
+                </CornerCount>
+              }
               label={`${comments} ${comments === 1 ? "comment" : "comments"}`}
               aria-expanded={threads.some((thread) => thread.id === active)}
               onClick={() =>
                 onActive(threads.some((thread) => thread.id === active) ? undefined : first?.id)
               }
-            >
-              {comments}
-            </Button>
+            />
           </span>
         );
       })}
