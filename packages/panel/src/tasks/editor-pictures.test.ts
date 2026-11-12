@@ -16,6 +16,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { appCommandOffered, runAppCommand } from "../app-commands.js";
 import { fakeActPort, fakeActPortCalls, fakeAppBridge } from "../testing/app-bridge.js";
+import { fakeAppPlatform } from "../testing/app-platform.js";
 import { readExperiments } from "../testing/app-state.js";
 import { editorBundleLanded, installEditorLayout } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
@@ -382,6 +383,32 @@ test("in a column too narrow for their names, a selected picture's tools are eac
     [...tools.querySelectorAll("button")].map((button) => button.textContent),
     ["Alt text", "Caption", "Enlarge", "Delete"],
   );
+});
+
+test("a picture selected alone and copied goes to the clipboard as the picture beside its words", async () => {
+  const written: { readonly png?: Promise<string> | undefined }[] = [];
+  fakeAppPlatform({
+    copyRich: (rich) => {
+      written.push(rich);
+
+      return Promise.resolve();
+    },
+  });
+  const container = await editing();
+  await pasteScreenshot(container);
+  await keepAsked();
+  await answerKeep({ id: KEPT_ID });
+  selectPicture(container);
+
+  const copy = new Event("copy", { bubbles: true, cancelable: true });
+  Object.defineProperty(copy, "clipboardData", {
+    value: { clearData: () => undefined, setData: () => undefined },
+  });
+  act(() => {
+    container.querySelector(".ProseMirror")?.dispatchEvent(copy);
+  });
+
+  assert.deepEqual(await Promise.all(written.map((each) => each.png)), ["iVBORw0KGgo="]);
 });
 
 test("Enlarge on a selected picture hands the focus back to the text, the picture selected, so the viewer closing leaves it there", async () => {

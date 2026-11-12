@@ -76,6 +76,7 @@ function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { secti
     },
     take: (each) => taken.push(...each),
     copies: (src) => src.includes(OTHER_TASK_ID),
+    copiedAlone: () => undefined,
   };
 
   const host = document.body.appendChild(document.createElement("div"));

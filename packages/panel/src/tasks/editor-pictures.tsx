@@ -39,6 +39,7 @@ import { type ReactNode, useCallback, useLayoutEffect, useRef, useState } from "
 import { createPortal } from "react-dom";
 import { actMutation } from "../act-mutations.js";
 import { useAppCommand } from "../app-commands.js";
+import { copyPictureWithWordsThroughShell } from "../copy-feedback.js";
 import {
   type DescriptionEditorHandle,
   type DescriptionEditorPictures,
@@ -607,6 +608,8 @@ export function useEditorPictures(
   // Note that the doors handed the editor once read the newest of these as they run.
   const beginning = useRef(begin);
   beginning.current = begin;
+  const reading = useRef(door?.read);
+  reading.current = door?.read;
 
   // A double-click opens a kept picture of this description over the window, as its Enlarge does.
   const enlarging = useRef<(picture: PictureNode) => void>(() => undefined);
@@ -644,6 +647,25 @@ export function useEditorPictures(
         const named = descriptionAttachmentOf(src);
 
         return named !== undefined && named.taskId !== taskId;
+      },
+      copiedAlone: (src, words) => {
+        const named = descriptionAttachmentOf(src);
+        const reader = reading.current;
+
+        if (named === undefined || reader === undefined) return;
+
+        // Note that the picture is read as it is drawn, from the window's copy where it holds one; a video, or a refused write, leaves the words the editor's own copy wrote standing.
+        const url = queryClient
+          .fetchQuery(pictureQuery(named.taskId, named.attachmentId, reader))
+          .then((read) => {
+            if (read.kind !== PICTURE_STATE.READY || !read.url.startsWith("data:image/")) {
+              throw new Error("The picture is not one the clipboard takes as a picture.");
+            }
+
+            return read.url;
+          });
+
+        copyPictureWithWordsThroughShell(words, url).catch(() => undefined);
       },
     };
   }

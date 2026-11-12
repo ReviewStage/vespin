@@ -33,6 +33,7 @@ import {
 } from "react";
 import { PromptInput, submitPromptInput } from "../ai-elements/prompt-input.js";
 import { useSideBundles } from "../bundle-loader.js";
+import { copyPictureWithWordsThroughShell } from "../copy-feedback.js";
 import {
   COMPOSER_INPUT,
   type ComposerEditorHandle,
@@ -57,6 +58,7 @@ import { ComposerField, type ComposerFieldFiles } from "./composer-field.js";
 import { type ComposerPickers, useComposerPickers } from "./composer-pickers.js";
 import { DictateButton, DictationStrip } from "./dictation-strip.js";
 import { useWordFiles } from "./file-chips.js";
+import { copiedFiles, linkedFiles } from "./pasted-files.js";
 import type { DictationControl } from "./use-dictation.js";
 
 /**
@@ -426,7 +428,24 @@ function useBoxFiles(takes: boolean, draft: string, files: AttachedFiles): BoxFi
   return {
     beside: attachments.filter((_, at) => shown.beside.some((chip) => chip === chips[at])),
     // Note that every file the box holds is chipped, so a marker undo brings back is its chip at once.
-    field: { names, chip: shown.chip, copies: { copied: files.known, pasted: files.adopt } },
+    field: {
+      names,
+      chip: shown.chip,
+      copies: {
+        copied: files.known,
+        pasted: (pasted) => files.adopt(copiedFiles(pasted)),
+        linked: (pictures) => files.adopt(linkedFiles(pictures)),
+        copiedAlone: (name, words) => {
+          const file = files.known(name);
+
+          // Note that a refused write leaves the words the editor's own copy wrote standing.
+          if (file === undefined || file.data === "" || !file.mediaType.startsWith("image/"))
+            return;
+          const url = Promise.resolve(`data:${file.mediaType};base64,${file.data}`);
+          copyPictureWithWordsThroughShell(words, url).catch(() => undefined);
+        },
+      },
+    },
     viewer: shown.viewer,
   };
 }

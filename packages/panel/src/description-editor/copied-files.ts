@@ -11,8 +11,9 @@ import type { CopiedFile } from "./contract.js";
  * back: nothing pasted is ever fetched.
  */
 
-/** A data address carrying base64 bytes: its type, and the bytes. */
-const DATA_ADDRESS = /^data:([^;,]+);base64,([A-Za-z0-9+/=]*)$/u;
+/** A data address carrying base64 bytes: its type, and the bytes, whole groups of four with their padding, as `atob` reads them. */
+const DATA_ADDRESS =
+  /^data:([^;,]+);base64,((?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?)$/u;
 
 /** The file written as a data address. */
 export function dataAddress(file: CopiedFile): string {

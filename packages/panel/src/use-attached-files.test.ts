@@ -3,7 +3,9 @@
 import assert from "node:assert/strict";
 import type { AgentAgentAnswer } from "@repo/features/agent-view";
 import { AGENT_ATTACHMENT_TYPE, AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { descriptionAttachmentAddress } from "@repo/features/description-attachment-link";
 import { FAILURE_SURFACE, type ShownFailureReport } from "@repo/features/shown-failure";
+import { ACT_KIND } from "@repo/host/acts";
 import { closeHistory } from "@tiptap/pm/history";
 import { Effect } from "effect";
 import { act, createElement, type ReactNode, useEffect, useRef, useState } from "react";
@@ -12,6 +14,7 @@ import { afterEach, beforeAll, beforeEach, test } from "vitest";
 import { installShownFailureReporter } from "./failure-report.js";
 import { AgentComposer } from "./tasks/agent-composer.js";
 import { useAgentComposer } from "./tasks/use-agent-composer.js";
+import { fakeActPort, fakeActPortCalls } from "./testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { attachmentChipName } from "./testing/attachment-chip.js";
 import {
@@ -365,6 +368,102 @@ test("a picture's chip copied out of one box and pasted into another comes with 
     pictures: ["Open Picture 1", "Open Picture 2"],
     note: null,
   });
+});
+
+test("a picture's chip copied alone goes to the clipboard as the picture too, and one copied among words does not", async () => {
+  const written: { readonly text: string; readonly png?: Promise<string> | undefined }[] = [];
+  fakeAppPlatform({
+    ...QUIET_PANEL,
+    copyRich: (rich) => {
+      written.push(rich);
+
+      return Promise.resolve();
+    },
+  });
+  const container = await mounted("agent");
+  await drop(container, [png("image.png")]);
+  const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
+
+  /** The box's words from one place to another copied, as a drag over them and ⌘C do. */
+  const copy = (from: number, to: number) => {
+    const event = new Event("copy", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", {
+      value: { clearData: () => undefined, setData: () => undefined },
+    });
+    act(() => {
+      editor.commands.setTextSelection({ from, to });
+      composerEditor(container).dispatchEvent(event);
+    });
+  };
+
+  // The document holds the chip at 1 and the space laid in after it.
+  copy(1, 2);
+  typeInComposer(container, "here");
+  copy(1, editor.state.doc.content.size - 1);
+
+  assert.deepEqual(await Promise.all(written.map(async (each) => [each.text, await each.png])), [
+    ["[Picture 1]", "iVBORw0KGgo="],
+  ]);
+});
+
+test("a copy naming one picture twice pasted into the agent's box attaches it once, both chips naming it", async () => {
+  const chip =
+    '<img data-chip="fileChip" alt="[Picture 4]" src="data:image/png;base64,iVBORw0KGgo=">';
+
+  const html = `<p>${chip} and ${chip}</p>`;
+  const container = await mounted("agent");
+
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", {
+    value: {
+      files: [],
+      types: ["text/html"],
+      getData: (type: string) => (type === "text/html" ? html : ""),
+    },
+  });
+  act(() => {
+    composerEditor(container).dispatchEvent(event);
+  });
+  await read();
+
+  const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
+  assert.equal(editor.getText(), "[Picture 1] and [Picture 1]");
+});
+
+test("a description's picture pasted into the agent's box is read and attached as the box's next picture, where it was pasted", async () => {
+  const address = descriptionAttachmentAddress(
+    {
+      taskId: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d",
+      attachmentId: "3c9e1a77-58b2-4d0f-8e6a-1b2c3d4e5f02",
+    },
+    "acme",
+  );
+
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_PICTURE_READ]: () =>
+      Promise.resolve({ contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: "iVBORw0KGgo=" }),
+  });
+
+  const container = await mounted("agent");
+  const html = `<p>Like <img src="${address}" alt="The mock"> here</p>`;
+
+  const event = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "clipboardData", {
+    value: {
+      files: [],
+      types: ["text/html"],
+      getData: (type: string) => (type === "text/html" ? html : ""),
+    },
+  });
+  act(() => {
+    composerEditor(container).dispatchEvent(event);
+  });
+  await read();
+
+  const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
+  assert.equal(editor.getText(), "Like [Picture 1] here");
+  assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
 });
 
 /** The chip a file was just laid in with taken out as two Backspaces would: the first the space laid in after it, which the browser deletes itself, the second the chip whole. */

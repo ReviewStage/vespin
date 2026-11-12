@@ -400,6 +400,25 @@ function chipAttribute(name: "src" | "alt") {
 }
 
 /**
+ * A picture selected alone, copied or cut, handed to the panel with the
+ * words the editor's own copy writes, so it puts the picture's image beside
+ * them; the editor's copy still writes the words first.
+ */
+function pictureCopies(pictures: DescriptionEditorPictures): Plugin {
+  const copied = (view: EditorView) => {
+    const picked = pictureSelected(view.state.selection);
+
+    if (picked === undefined) return false;
+    const { dom, text } = view.serializeForClipboard(picked.content());
+    pictures.copiedAlone(String(picked.node.attrs.src ?? ""), { html: dom.innerHTML, text });
+
+    return false;
+  };
+
+  return new Plugin({ props: { handleDOMEvents: { copy: copied, cut: copied } } });
+}
+
+/**
  * The picture node: TipTap's image, inline, with the upload it waits on;
  * drawn into its own element by the panel where it can draw one, and as an
  * image element where it cannot, as in a template.
@@ -424,7 +443,12 @@ export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
       return [...composerChipRules(), ...(this.parent?.() ?? [])];
     },
     addProseMirrorPlugins() {
-      return [...(this.parent?.() ?? []), settledPictures(), pictureCaret()];
+      return [
+        ...(this.parent?.() ?? []),
+        settledPictures(),
+        pictureCaret(),
+        pictureCopies(pictures),
+      ];
     },
     addNodeView() {
       return ({ node: held, getPos, editor }) => {

@@ -309,6 +309,8 @@ export function ComposerField({
           : {
               copied: (name) => latest.current.files?.copies.copied(name),
               pasted: (files) => latest.current.files?.copies.pasted(files),
+              linked: (pictures) => latest.current.files?.copies.linked(pictures),
+              copiedAlone: (name, words) => latest.current.files?.copies.copiedAlone(name, words),
             },
       mentions:
         now.mentions === undefined
