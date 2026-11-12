@@ -28,7 +28,10 @@
  * filed for later with no agent, with the models and the repositories they
  * pick among followed, and read again where they could not be;
  * Settings' Account page: Share usage data, support access, and the
- * account's deletion; Settings' Send feedback, its words and pictures
+ * account's deletion; Settings' Integrations page: each server connected,
+ * its sign-in waited on or canceled, a connected server's tools read to say
+ * whether it works and read again where they could not be, an account
+ * renamed, and Disconnect; Settings' Send feedback, its words and pictures
  * sent as the panel's form sends them; a workspace made from the switcher, which New
  * workspace names; Settings' Workspace page: the rename, the members read
  * and their roles changed or removed, the invitations read, sent, and
@@ -136,9 +139,6 @@ const IOS = {
   LINKS: byDesign("iOS opens a link through the system itself (openURL)"),
   HOSTS_STANDING: byDesign(
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
-  ),
-  INTEGRATION_EXTRAS: notYet(
-    "iOS's Integrations page connects, cancels, and disconnects; a server's tools and an account's rename aren't built there yet",
   ),
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   HANDOFF: byDesign("iOS advertises each screen's activity itself (use-system-activity.ts)"),
@@ -346,9 +346,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.INTEGRATIONS_CONNECT]: EVERYWHERE,
   [PORT_ACT_KIND.INTEGRATIONS_CANCEL]: EVERYWHERE,
   [PORT_ACT_KIND.INTEGRATIONS_DISCONNECT]: EVERYWHERE,
-  [PORT_ACT_KIND.INTEGRATIONS_TOOLS_FOLLOW]: panel(IOS.INTEGRATION_EXTRAS),
-  [PORT_ACT_KIND.INTEGRATIONS_TOOLS_RETRY]: panel(IOS.INTEGRATION_EXTRAS),
-  [PORT_ACT_KIND.INTEGRATIONS_RENAME]: panel(IOS.INTEGRATION_EXTRAS),
+  [PORT_ACT_KIND.INTEGRATIONS_TOOLS_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.INTEGRATIONS_TOOLS_RETRY]: EVERYWHERE,
+  [PORT_ACT_KIND.INTEGRATIONS_RENAME]: EVERYWHERE,
   [PORT_ACT_KIND.MCP_CLIENTS_FOLLOW]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.MCP_CLIENTS_RETRY]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.MCP_CLIENTS_REVOKE]: panel(IOS.SETTINGS),
