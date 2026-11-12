@@ -1325,12 +1325,6 @@ function OverviewDescription({
   );
 }
 
-/**
- * The description's comment threads that still stand open, as the panel's
- * comments list holds them, the oldest started first: each its first
- * comment's words and when it last moved, opening the thread with its reply
- * field; none where no thread stands open.
- */
 /** A read of the page's that failed, said in the panel's words, which a press reads again. */
 function ReadFailedRow({
   words,
@@ -1350,6 +1344,12 @@ function ReadFailedRow({
   );
 }
 
+/**
+ * The description's comment threads that still stand open, as the panel's
+ * comments list holds them, the oldest started first: each its first
+ * comment's words and when it last moved, opening the thread with its reply
+ * field; none where no thread stands open.
+ */
 function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
   const { task } = overview;
