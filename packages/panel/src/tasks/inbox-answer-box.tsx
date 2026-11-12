@@ -84,10 +84,12 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
  * order sent (`use-task-inbox.ts`), each standing on the thread meanwhile.
  * Only Got it and Start thread hold the box, Send busy, until they go,
  * since each settles or opens something: Got it waits behind the item's
- * replies on their way, then draws the notice settled, its Undo on a toast. Why a reply did not go is said
- * under the foot's bar over the box's own notes, its words and files back in
- * the box; one refused because the agent is archived says so, with
- * Unarchive after it, which brings the agent back and lets the note go.
+ * replies on their way, then draws the notice settled, its Undo on a toast. A
+ * reply that did not go never comes back into the box: it stands on the
+ * thread marked Not delivered (`use-task-inbox.ts`), and why a refused one
+ * did not go is said under the foot's bar over the box's own notes; one
+ * refused because the agent is archived says so, with Unarchive after it,
+ * which brings the agent back and lets the note go.
  * Once the item is settled, answered or taken back, the same box writes a
  * message on its thread, which reaches the agent and leaves the item where
  * it stands.
