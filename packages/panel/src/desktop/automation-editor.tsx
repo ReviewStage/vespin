@@ -207,8 +207,8 @@ import { PaneGlide } from "./pane-motion.js";
 import { PhoneHead, phoneFindGroups } from "./phone-head.js";
 import { useAutomationRuns } from "./use-automation-runs.js";
 import {
-  AUTOMATION_DELETE_MUTATION,
   type AutomationWriteAnswer,
+  useAutomationDeletion,
   WEBHOOK_SECRET_MUTATION,
 } from "./use-automations.js";
 import { type RunChoices, useRunChoices } from "./use-run-choices.js";
@@ -2958,26 +2958,8 @@ export function AutomationEditor({
       ? Promise.resolve<AutomationView>({ failure: AUTOMATION_CALL_FAILURE.NOT_FOUND })
       : writes.toggle(automation.id, enabled);
 
-  const removing = useMutation(AUTOMATION_DELETE_MUTATION);
-
-  const deletionAct = useConfirmAct(removing, {
-    send: () => {
-      if (automation === undefined) return Promise.resolve();
-
-      return removing.mutateAsync(automation.id).then((answer) => {
-        if (!("failure" in answer)) placeLeave.pass(() => onDeleted(automation.id));
-      });
-    },
-    answered: (answer): ActionResult =>
-      "failure" in answer
-        ? { status: ACTION_RESULT_STATUS.REJECTED, reason: SAVE_REFUSAL_WORDS[answer.failure] }
-        : ACCEPTED,
-  });
-
-  const deletion = useConfirmDialog(
-    { subject: automation !== undefined, surfaceOpen: true },
-    deletionAct,
-    confirmFailure(FAILURE_SURFACE.AUTOMATION_DELETE, { automationId: automation?.id }),
+  const deletion = useAutomationDeletion(automation?.id, (automationId) =>
+    placeLeave.pass(() => onDeleted(automationId)),
   );
 
   // A run with nothing of its own to open opens the setup, where whatever kept it from starting is mended:

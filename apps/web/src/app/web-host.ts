@@ -98,7 +98,14 @@ import {
   tabNotificationsStatus,
   webNoticeDoors,
 } from "./web-notices";
-import { copyPng, copyRichText, downloadText, openTab, webPlatform } from "./web-platform";
+import {
+  copyPng,
+  copyRichText,
+  copyText,
+  downloadText,
+  openTab,
+  webPlatform,
+} from "./web-platform";
 import { openTerminalSocketFromPage } from "./web-terminal-socket";
 
 /** Where the host in the tab keeps its files, inside the browser's storage (`local-storage-file-system.ts`). */
@@ -106,9 +113,6 @@ const STATE_ROOT = "/app";
 
 /** The platform a tab names in app state, where the desktop names Node's `process.platform`. */
 const RUN_PLATFORM = { WEB: "web" } as const;
-
-/** The path feedback is posted to on the tab's own origin, which takes no credential (`server/feedback.mjs`). */
-const FEEDBACK_PATH = "/api/feedback";
 
 /** The page every act is from: a tab holds one panel and nothing else. */
 type WebSender = Window;
@@ -314,7 +318,7 @@ function platformProcedures(
   { operator, fork }: PlatformHost,
 ): PlatformActProcedures<WebSender> {
   const port = actPortFor<WebSender>();
-  const feedback = feedbackDelivery({ url: new URL(FEEDBACK_PATH, location.origin).href });
+  const feedback = feedbackDelivery({ baseUrl: location.origin });
   const KIND = WINDOW_SURFACE_ACT_KIND;
 
   return {
@@ -326,7 +330,7 @@ function platformProcedures(
       fork,
     }),
     [KIND.WINDOW_COPY_TEXT]: port[KIND.WINDOW_COPY_TEXT].handler(({ input }) =>
-      navigator.clipboard.writeText(input.words),
+      copyText(input.words),
     ),
     [KIND.WINDOW_COPY_IMAGE]: port[KIND.WINDOW_COPY_IMAGE].handler(({ input }) =>
       copyPng(Promise.resolve(input.png)),

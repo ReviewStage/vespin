@@ -340,6 +340,8 @@ class AutomationsWorld {
   sentryInstalls: string[] = [];
   /** What a change answers: the automation as changed, or why not. */
   changeRefusal: (typeof AUTOMATION_CALL_FAILURE)[keyof typeof AUTOMATION_CALL_FAILURE] | undefined;
+  /** What a deletion answers: deleted, or why not. */
+  deleteRefusal: (typeof AUTOMATION_CALL_FAILURE)[keyof typeof AUTOMATION_CALL_FAILURE] | undefined;
   /** The automations a fresh webhook secret was asked for. */
   secretsAsked: string[] = [];
   /** What the window handed main's clipboard itself. */
@@ -409,6 +411,7 @@ beforeEach(() => {
   world.agentListRefused = false;
   world.agentSearchRefused = false;
   world.changeRefusal = undefined;
+  world.deleteRefusal = undefined;
   world.noRecent = false;
   world.integrationsHeld = false;
   world.integrationsRefusals = 0;
@@ -544,6 +547,13 @@ beforeEach(() => {
       }
 
       if (request.kind === ACT_KIND.AUTOMATIONS_DELETE) {
+        if (world.deleteRefusal !== undefined) {
+          return Promise.resolve({
+            status: FAKE_ANSWER.DONE,
+            value: { failure: world.deleteRefusal },
+          });
+        }
+
         world.deletes.push(request.payload.automationId);
         world.standing = world.standing.filter((each) => each.id !== request.payload.automationId);
         layStanding();
