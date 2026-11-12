@@ -92,6 +92,18 @@ simulator_udid() {
     printf '%s' "$udid"
 }
 
+# Prints `true` where the simulator of udid `$1` is an iPad, by its device
+# type rather than its name, which a person may have chosen, else `false`.
+simulator_is_ipad() {
+    xcrun simctl list devices --json |
+        node -e '
+          const udid = process.argv[1];
+          const { devices } = JSON.parse(require("fs").readFileSync(0, "utf8"));
+          const found = Object.values(devices).flat().find((device) => device.udid === udid);
+          process.stdout.write(String(/\.iPad/.test(found?.deviceTypeIdentifier ?? "")));
+        ' "$1"
+}
+
 # The simulator under test is shut down however the run ends, a failed boot
 # or install included, so no simulator is left running on a shared Mac.
 udid=""
@@ -213,8 +225,7 @@ for name in "$@"; do
     udid=$(simulator_udid "$name")
     # An iPad's tab bar floats at the window's top and carries no ids, so
     # its flows open a tab by name (`maestro/subflows/tab.yaml`).
-    floating_tabs=false
-    if [[ "$name" == iPad* ]]; then floating_tabs=true; fi
+    floating_tabs=$(simulator_is_ipad "$udid")
     device_output="$output/$slug"
     mkdir -p "$device_output"
     echo "==> $name ($udid)"
