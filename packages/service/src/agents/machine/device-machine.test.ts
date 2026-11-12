@@ -30,6 +30,7 @@ import { beatDevice, registerDevice } from "@repo/database/models/device-store";
 import { enrollOwnDevice, removeHost } from "@repo/database/models/host-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
+import { device } from "@repo/database/schemas/device";
 import { deviceAgentLine } from "@repo/database/schemas/device-agent";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
@@ -169,17 +170,24 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
   "a local agent's machine",
   (it) => {
     it.effect(
-      "an agent on a host its account removed is refused by name, and one on a Mac with no layout as before",
+      "an agent on a host its account removed is refused by name, one on a host from before the folders a launch lays out as away, and one on no Mac of the account's as before",
       () =>
         Effect.gen(function* () {
           const { userId, deviceId, agent } = yield* openLocalAgent();
+          const machine = yield* deviceMachine;
+          const db = yield* Database;
+          // The Mac stands as a host from before its temp and attachments folders registered it.
+          yield* db
+            .update(device)
+            .set({ tempFolder: null, attachmentsFolder: null })
+            .where(eq(device.id, deviceId));
+          const outdated = yield* Effect.flip(machine.layout(agent));
           // The Mac the agent is pinned to is enrolled and removed, as Settings › Hosts removes one.
           yield* enrollOwnDevice(userId, {
             id: deviceId,
             version: "0.1.0",
             secretHash: `secret-${randomUUID()}`,
           });
-          const machine = yield* deviceMachine;
 
           const unregistered = yield* Effect.flip(
             machine.layout({ ...agent, deviceId: randomUUID() }),
@@ -191,6 +199,8 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
 
           assert.ok(refused instanceof LaunchRefused);
           assert.equal(refused.deviceRemoved, true);
+          assert.ok(outdated instanceof LaunchRefused);
+          assert.equal(outdated.deviceAway, true, "a host from before its folders reads away");
           assert.ok(unregistered instanceof LaunchRefused);
           assert.equal(
             unregistered.deviceRemoved,

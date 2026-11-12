@@ -78,7 +78,7 @@ import {
   withdrawDeviceAgentRequest,
   withdrawUnclaimedDeviceAgentLine,
 } from "@repo/database/models/device-agent-store";
-import { deviceLayout, devicesSeenSince } from "@repo/database/models/device-store";
+import { deviceLayout, devicesNamed, devicesSeenSince } from "@repo/database/models/device-store";
 import { hostRemoved } from "@repo/database/models/host-store";
 import { parseKeyRing, sealMacLaunchSecrets } from "@repo/database/models/provider-key-seal";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
@@ -325,7 +325,7 @@ function deviceMachineOver(
   /** The local agent running in the session, where one does. */
   const pinOfSession = (session: string) => stored(deviceAgentOfSession(session));
 
-  /** Where the agent's things stand on its Mac, under the agents folder that Mac registered, or its home folder where it named none; refused where it is pinned to no Mac of its starter's. */
+  /** Where the agent's things stand on its Mac, under the agents folder that Mac registered, or its home folder where it named none; refused where it is pinned to no Mac of its starter's, and as away where that Mac's host has not registered its folders. */
   const layoutOf = (userId: string, agentId: string, deviceId: string | null | undefined) =>
     Effect.gen(function* () {
       if (deviceId === null || deviceId === undefined) {
@@ -336,8 +336,16 @@ function deviceMachineOver(
 
       if (Option.isNone(device)) {
         // Note that a removed host is refused by name, so the member is told it is gone rather than to try again.
-        return yield* (yield* stored(hostRemoved(userId, deviceId)))
-          ? new LaunchRefused({ reason: "host removed", deviceRemoved: true })
+        if (yield* stored(hostRemoved(userId, deviceId))) {
+          return yield* new LaunchRefused({ reason: "host removed", deviceRemoved: true });
+        }
+
+        // Note that a Mac of the account's whose host has not registered the folders a launch lays
+        // out, one from before them, is away until it registers them, as its presence read reads it.
+        const named = (yield* stored(devicesNamed([deviceId]))).get(deviceId);
+
+        return yield* named?.userId === userId
+          ? new LaunchRefused({ reason: "host unregistered", deviceAway: true })
           : new LaunchRefused({ reason: "no mac" });
       }
 
