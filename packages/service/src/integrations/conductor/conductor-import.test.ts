@@ -6,7 +6,10 @@ import { readTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
-import { CONDUCTOR_IMPORT_STATUS } from "@repo/features/conductor-import-wire";
+import {
+  CONDUCTOR_IMPORT_FAILURE,
+  CONDUCTOR_IMPORT_STATUS,
+} from "@repo/features/conductor-import-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import type { WireValue } from "@repo/wire";
@@ -15,10 +18,18 @@ import { eq } from "drizzle-orm";
 import { Effect, Layer, Option, Redacted } from "effect";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../../environment.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
-import { fakeGitHub } from "../../testing/github-app-fake.js";
+import {
+  connectWorkspaceGitHub,
+  fakeGitHub,
+  githubReaching,
+  type InstallationFixture,
+  memberRepositoryJson,
+  openGithubUser,
+} from "../../testing/github-app-fake.js";
 import {
   ConductorImportQueue,
   type ConductorImportQueueService,
+  checkConductorImport,
   conductorImportProgress,
   consumeImportMessage,
   runConductorImport,
@@ -29,7 +40,9 @@ import {
  * the first makes the archived workspace's task Done and writes its chat as
  * an agent, and the second, as a member running it again would, makes
  * nothing twice. Each publish is delivered by hand, in order, as the queue
- * would. Synthetic accounts, ids, key, and transcript throughout.
+ * would. A repository GitHub renamed since Conductor kept its remote is
+ * reached, and its task made, under its name now. Synthetic accounts, ids,
+ * key, and transcript throughout.
  */
 
 const KEY = Redacted.make("synthetic-conductor-key");
@@ -187,5 +200,67 @@ it.layer(Layer.merge(getTestDB(), SERVICES))("an import from Conductor", (it) =>
 
         assert.equal(after.length, 1);
       }),
+  );
+
+  it.effect(
+    "a repository GitHub renamed is reached under its name now, by the check and the run alike, and one GitHub never answers stays unreached",
+    () => {
+      const relay: InstallationFixture = {
+        id: 71,
+        login: "octo-org",
+        repositories: [{ owner: "octo-org", name: "relay" }],
+      };
+
+      const formerly = `octo-org/relay-before-${randomUUID().slice(0, 8)}`;
+
+      const renamed = {
+        ...WORKSPACE,
+        id: "cw-renamed",
+        state: "ready",
+        repoUrl: `git@github.com:${formerly}.git`,
+      };
+
+      const gone = { ...WORKSPACE, id: "cw-gone", repoUrl: "https://github.com/octo-org/gone" };
+
+      const listing = new Map<string, JsonValue>([
+        ["/v0/workspaces", { data: [renamed, gone], hasMore: false }],
+        ["/v0/workspaces/cw-renamed/sessions", { data: [], hasMore: false }],
+        ["/v0/workspaces/cw-gone/sessions", { data: [], hasMore: false }],
+      ]);
+
+      // Note that GitHub answers the old name with the repository under its name now, and the one gone not at all.
+      const fake = githubReaching([relay], undefined, undefined, ({ url }) => {
+        const { hostname, pathname } = new URL(url);
+
+        if (hostname === "api.conductor.build") return Response.json(listing.get(pathname));
+
+        return pathname === `/repos/${formerly}`
+          ? Response.json(memberRepositoryJson({ owner: "octo-org", name: "relay" }, false))
+          : undefined;
+      });
+
+      return Effect.gen(function* () {
+        const userId = yield* openGithubUser();
+        const workspaceId = yield* openWorkspace(userId);
+        yield* connectWorkspaceGitHub(workspaceId, relay);
+
+        const checked = yield* checkConductorImport(userId, workspaceId, KEY);
+        assert.deepEqual(checked, { workspaces: 2, unreachedRepositories: ["octo-org/gone"] });
+
+        yield* runDelivered(userId, workspaceId);
+        const run = (yield* conductorImportProgress(userId, workspaceId)).run;
+        const made = run?.items.find((item) => item.conductorId === "cw-renamed");
+
+        assert.equal(
+          run?.items.find((item) => item.conductorId === "cw-gone")?.failure,
+          CONDUCTOR_IMPORT_FAILURE.REPOSITORY_UNREACHED,
+        );
+        assert.ok(made?.taskId != null);
+        assert.equal(
+          Option.getOrThrow(yield* readTask(userId, made.taskId)).task.repository,
+          "octo-org/relay",
+        );
+      }).pipe(Effect.provide(fake.layer));
+    },
   );
 });

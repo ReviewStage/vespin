@@ -623,9 +623,11 @@ const keyWorkspaces = (key: Redacted.Redacted<string>) =>
 
 /**
  * The repositories named, each once whatever its case, that the
- * workspace's GitHub installations do not reach: read in one listing of
- * everything they reach, or, where GitHub did not answer it, one
- * repository at a time.
+ * workspace's GitHub installations do not reach. One listing of
+ * everything they reach settles most; a name it lacks, such as one GitHub
+ * renamed since Conductor kept it, or every name where GitHub did not
+ * answer the listing, is asked of GitHub one at a time, as a task's
+ * repository is reached, which follows a rename to the name it has now.
  */
 const unreachedOf = (organizationId: string, named: readonly string[], userId: string) =>
   Effect.gen(function* () {
@@ -633,16 +635,14 @@ const unreachedOf = (organizationId: string, named: readonly string[], userId: s
     const app = yield* GitHubApp;
     const listed = yield* Effect.option(app.workspaceRepositories(organizationId));
 
-    if (Option.isSome(listed)) {
-      const reached = new Set(
-        Option.getOrElse(listed.value, () => []).map((each) => each.fullName.toLowerCase()),
-      );
+    const reached = new Set(
+      Option.getOrElse(Option.flatten(listed), () => []).map((each) => each.fullName.toLowerCase()),
+    );
 
-      return named.filter((repository) => !reached.has(repository.toLowerCase()));
-    }
+    const missing = named.filter((repository) => !reached.has(repository.toLowerCase()));
 
     return yield* Effect.filter(
-      named,
+      missing,
       (repository) =>
         Effect.map(reachedRepository(organizationId, repository, userId), Option.isNone),
       { concurrency: CONDUCTOR_IMPORTS.READ_CONCURRENCY },
