@@ -80,7 +80,7 @@ import { accountModelChoices } from "../../agents/coder-host/start.js";
 import { AUTH_DEPLOYMENT_ENVIRONMENT, DEPLOYMENT_ENVIRONMENT } from "../../auth/auth-deployment.js";
 import type { HostedEnvironment } from "../../environment.js";
 import { SERVER_TASK_SOURCE } from "../../events/server-events.js";
-import type { GitHubApp } from "../../github/github-app.js";
+import { GitHubApp } from "../../github/github-app.js";
 import { workspaceRepository } from "../../github/workspace-repository.js";
 import { hostedStoreOrUnavailable } from "../../http/http-effect.js";
 import { hostedKeyRing } from "../../orpc/base.js";
@@ -622,9 +622,50 @@ const keyWorkspaces = (key: Redacted.Redacted<string>) =>
   );
 
 /**
+ * The repositories named, each once whatever its case, that the
+ * workspace's GitHub installations do not reach: read in one listing of
+ * everything they reach, or, where GitHub did not answer it, one
+ * repository at a time.
+ */
+const unreachedOf = (organizationId: string, named: readonly string[], userId: string) =>
+  Effect.gen(function* () {
+    if (named.length === 0) return [];
+    const app = yield* GitHubApp;
+    const listed = yield* Effect.option(app.workspaceRepositories(organizationId));
+
+    if (Option.isSome(listed)) {
+      const reached = new Set(
+        Option.getOrElse(listed.value, () => []).map((each) => each.fullName.toLowerCase()),
+      );
+
+      return named.filter((repository) => !reached.has(repository.toLowerCase()));
+    }
+
+    return yield* Effect.filter(
+      named,
+      (repository) =>
+        Effect.map(reachedRepository(organizationId, repository, userId), Option.isNone),
+      { concurrency: CONDUCTOR_IMPORTS.READ_CONCURRENCY },
+    );
+  });
+
+/** Each repository once, whatever case the remotes spelled it in, sorted. */
+function distinctRepositories(workspaces: readonly ConductorWorkspace[]): readonly string[] {
+  const byName = new Map<string, string>();
+
+  for (const repository of workspaces.flatMap((each) => repositoryOf(each) ?? [])) {
+    if (!byName.has(repository.toLowerCase())) byName.set(repository.toLowerCase(), repository);
+  }
+
+  return [...byName.values()].sort();
+}
+
+/**
  * A key checked for an import into the member's workspace: how many
  * workspaces it sees, and the repositories among theirs the workspace's
- * GitHub installation does not reach yet, each named once. Nothing is
+ * GitHub installation does not reach yet, each named once. Its reads are
+ * Conductor's workspace pages and one listing of what the installations
+ * reach, so a team of hundreds of workspaces answers in seconds. Nothing is
  * written.
  */
 export const checkConductorImport = Effect.fnUntraced(function* (
@@ -637,13 +678,7 @@ export const checkConductorImport = Effect.fnUntraced(function* (
 
   if (Result.isFailure(listed))
     return { refused: listed.failure } satisfies ConductorImportCheckAnswer;
-  const named = [...new Set(listed.success.flatMap((each) => repositoryOf(each) ?? []))].sort();
-
-  const unreached = yield* Effect.filter(
-    named,
-    (repository) => Effect.map(reachedRepository(workspace.id, repository, userId), Option.isNone),
-    { concurrency: CONDUCTOR_IMPORTS.READ_CONCURRENCY },
-  );
+  const unreached = yield* unreachedOf(workspace.id, distinctRepositories(listed.success), userId);
 
   return {
     workspaces: listed.success.length,
