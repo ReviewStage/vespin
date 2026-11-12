@@ -230,7 +230,7 @@ import { AgentBootLine, BOOT_LINE, type BootLine, bootLineOf } from "./agent-boo
 import { type AgentBox, useAgentBox } from "./agent-box.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { useForwardToast } from "./agent-forward.js";
-import { GoalDock, GoalNoticeView } from "./agent-goal.js";
+import { centerNewestGoalNotice, GoalDock, GoalNoticeView } from "./agent-goal.js";
 import {
   agentLines,
   agentName,
@@ -3633,7 +3633,7 @@ function AgentTabView({
           messages={kept}
           older={transcript.hasOlder}
           working={standing.working}
-          onBringIn={(messageId) => bringIn?.current?.(messageId, () => undefined)}
+          onBringIn={(messageId) => bringIn?.current?.(messageId, centerNewestGoalNotice)}
           onClear={controlsQueue && boxOpen ? () => composer.sendWords(GOAL_CLEAR_LINE) : undefined}
           // Note that only Codex's goal pauses; Claude Code's stops only as it is cleared.
           onResume={undefined}

@@ -78,15 +78,17 @@ describe("agentGoal", () => {
     expect(goal).toMatchObject({ condition, turns: 2, reason: "2 warnings." });
   });
 
-  it("takes a goal up from its newest notice where its setting is on an older page, unread", () => {
-    const newest = [turn("t9", [notice(GOAL_EVENT.NOT_MET, { reason: "1 test fails." })])];
-    expect(agentGoal(newest, true)).toMatchObject({
+  it("takes a goal up from a move its harness said where its setting is on an older page, unread, but never from a verdict alone", () => {
+    const met = [turn("t9", [notice(GOAL_EVENT.MET, { reason: "All pass.", turns: 4 })])];
+    expect(agentGoal(met, true)).toMatchObject({
       condition: CONDITION,
-      state: AGENT_GOAL_STATE.ACTIVE,
-      reason: "1 test fails.",
+      state: AGENT_GOAL_STATE.MET,
+      turns: 4,
     });
-    // A whole transcript that never set the goal holds a project's own Stop hook's word, which moves nothing.
-    expect(agentGoal(newest, false)).toBeUndefined();
+    // A verdict alone may be a project's own Stop hook's word, which moves nothing.
+    const verdict = [turn("t9", [notice(GOAL_EVENT.NOT_MET, { reason: "Run lint." })])];
+    expect(agentGoal(verdict, true)).toBeUndefined();
+    expect(agentGoal(met, false)).toBeUndefined();
   });
 
   it("stands settled until the developer writes again, and stands nowhere once cleared", () => {

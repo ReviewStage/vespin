@@ -6,8 +6,8 @@
  * read back from those moves in order rather than held anywhere of the
  * service's own. A verdict whose condition is no goal set is a project's own
  * blocking Stop hook, which Claude Code says in the same shape, and moves
- * nothing, but where older pages of the transcript stand unread, whose
- * setting of it may be on them. A goal that settled stands until the developer writes again, so
+ * nothing; where older pages of the transcript stand unread, which may hold a
+ * goal's setting, any other move of a goal stands for it. A goal that settled stands until the developer writes again, so
  * its end is seen and then makes way; a cleared one stands nowhere.
  * Nothing here draws.
  */
@@ -148,9 +148,15 @@ function afterStepOf(line: AgentTranscriptMessage): number {
   return line.arrivedIn?.afterStep ?? 0;
 }
 
-/** The goal a notice of it says stands, where the transcript read holds no setting of it: older pages, unread, hold that. */
+/**
+ * The goal a notice of it says stands, where the transcript read holds no
+ * setting of it: older pages, unread, hold that. Note that a verdict that the
+ * goal is not met yet takes none up, because a project's own blocking Stop
+ * hook says its feedback in the same shape; every other move is said by the
+ * harness's goal itself (Claude Code's transcript, Codex's thread goal).
+ */
 function takenUp(notice: GoalNotice, message: AgentTranscriptMessage): AgentGoal | undefined {
-  if (notice.event === GOAL_EVENT.CLEARED) return undefined;
+  if (notice.event === GOAL_EVENT.CLEARED || notice.event === GOAL_EVENT.NOT_MET) return undefined;
   const standing: AgentGoal = {
     condition: notice.condition,
     state: AGENT_GOAL_STATE.ACTIVE,
@@ -170,7 +176,8 @@ function takenUp(notice: GoalNotice, message: AgentTranscriptMessage): AgentGoal
  * steered into a turn under way is read where it arrived among the turn's
  * steps, as the transcript draws it, not after the turn it is stored behind.
  * `older` says whether older pages of the transcript stand unread: then a
- * notice of a goal whose setting is on them stands for it.
+ * move the harness's goal itself said, of a goal whose setting is on them,
+ * stands for it (`takenUp`).
  */
 export function agentGoal(
   messages: readonly AgentTranscriptMessage[],

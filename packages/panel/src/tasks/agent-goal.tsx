@@ -54,6 +54,7 @@ import { PLAN_BODY_LAYOUT, Plan, PlanContent, PlanHeader, PlanIcon } from "../ai
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { rowMenu } from "../desktop/action-menu.js";
+import { centerWithin } from "../scroll-within.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 
 /** The words the goal is named by where a menu or a list says what it acts on. */
@@ -233,6 +234,20 @@ export function GoalDock({
       </List>
     </div>
   );
+}
+
+/**
+ * Centers the newest goal notice the transcript draws, once the row of the
+ * turn that holds it was brought in: a long turn is drawn in pieces, and the
+ * one brought in by the turn's id is its first, while its newest notice may
+ * stand in a later one, drawn beside it.
+ */
+export function centerNewestGoalNotice(row: HTMLElement): void {
+  const log = row.closest('[role="log"]');
+  if (!(log instanceof HTMLElement)) return;
+  const notices = log.querySelectorAll("[data-goal-notice]");
+  const newest = notices.item(notices.length - 1);
+  if (newest instanceof HTMLElement) centerWithin(log, newest);
 }
 
 /** One move of the goal where it happened in the transcript: a trail for a move of its standing, a card for its setting and each verdict, the reason in its fold. */
