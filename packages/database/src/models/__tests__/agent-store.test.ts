@@ -87,6 +87,7 @@ import {
   readNativeRunStanding,
   readRunnerTokenConversation,
   readVisibleAgent,
+  readVisibleAgentWorkspace,
   recordAgentAuthor,
   recordAgentNativeSession,
   recordAgentPublishedRead,
@@ -747,6 +748,14 @@ it.layer(getTestDB())("the coding-agent store's agents read by id", (it) => {
           yield* listPublishedAgentsById(outsider, [first.agentId, second.agentId]),
           [],
           "another workspace's agents are none of an outsider's",
+        );
+        assert.deepEqual(
+          [
+            yield* readVisibleAgentWorkspace(teammate, first.agentId),
+            yield* readVisibleAgent(outsider, first.agentId),
+            yield* readVisibleAgentWorkspace(outsider, first.agentId),
+          ],
+          [Option.some(workspace), Option.none(), Option.none()],
         );
       }),
   );
