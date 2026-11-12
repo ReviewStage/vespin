@@ -81,7 +81,8 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * A row that keeps its controls beside its words at any width says so
  * (`SETTINGS_ROW_CONTROLS.BESIDE`): its words wrap rather than its controls
  * dropping, as a list whose rows each end in a short button and a ⋯ keeps
- * every row's end on one line; under 380px its name still keeps to one line.
+ * every row's end on one line; under 380px it drops them below its words as
+ * any card's row does, and its name keeps to one line.
  *
  * A row whose one control is set by a press, a switch, says so
  * (`labelsControl`): its label is then that control's `<label>`, so a press
@@ -135,7 +136,8 @@ const FACE_LEAD = "w-avatar-card justify-center";
  * Where a card's or a list's row stands its controls where they would leave
  * its words less than a legible stretch: dropped below the words, or kept
  * beside them, the words wrapping instead, as a row of a list whose every row
- * ends in a short button and a ⋯ keeps them all on one line.
+ * ends in a short button and a ⋯ keeps them all on one line, until the row
+ * is under 380px, where it drops them too.
  */
 export const SETTINGS_ROW_CONTROLS = {
   DROP: "drop",
