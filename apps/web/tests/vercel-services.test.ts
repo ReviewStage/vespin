@@ -714,7 +714,7 @@ function sourcesOf(directives: ReadonlyMap<string, readonly string[]>, name: str
 test("every HTML page the build emits is served at every address under one Content Security Policy that runs no inline script, framed by no other site, and never sniffed", () => {
   const answers = pageAnswers();
   assert.ok(answers.some(({ file }) => file.startsWith("changelog/page/")));
-  assert.ok(answers.some(({ file }) => file.startsWith("guides/")));
+  assert.ok(answers.some(({ file }) => file === "guides.html"));
 
   for (const { file, address, answer } of answers) {
     const { headers } = answer;
