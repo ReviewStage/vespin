@@ -366,11 +366,14 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
   } = props;
 
   const [presented, setPresented] = useState(false);
+  // Note that the popover's list is held only from its press until it has gone, since a closed popover's content stays mounted, every workspace's photo with it.
+  const [listed, setListed] = useState(false);
   const [after, setAfter] = useState<{ readonly act: () => void } | undefined>(undefined);
 
   // Note that the act is taken off as it runs, so a second dismissal never runs it again.
   const gone = () => {
     setAfter(undefined);
+    setListed(false);
     after?.act();
   };
 
@@ -386,7 +389,10 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
       chosen={chosen}
       look={look}
       tileSize={tileSize}
-      onPress={() => setPresented(true)}
+      onPress={() => {
+        setListed(true);
+        setPresented(true);
+      }}
     />
   );
 
@@ -420,7 +426,7 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
             onDisappear(gone),
           ]}
         >
-          <SwitcherList props={props} closed={closed} />
+          {listed ? <SwitcherList props={props} closed={closed} /> : null}
         </Group>
       </Popover.Content>
     </Popover>
