@@ -1,0 +1,7 @@
+{
+  "userId": "user-synthetic-1",
+  "organizationId": "org-synthetic",
+  "organizationName": "Synthetic Org",
+  "authMethod": "api-key",
+  "apiKey": "synthetic-conductor-key"
+}

@@ -127,6 +127,7 @@ import {
   hasRepository,
   lastSettledTurnsOfReached,
   latestTurnsOfReached,
+  NATIVE_SESSION,
   RUNNING_TURN_STATUSES,
   readAgent,
   readAgentOfConversation,
@@ -1634,7 +1635,9 @@ export const runnerSessions = <
           Option.flatMapNullishOr(routing, (read) => read.nativeSession),
         );
 
-        if (own !== undefined) yield* markSessionBroken(userId, agent.conversationId, own);
+        if (own !== undefined && own !== NATIVE_SESSION.REPLAY) {
+          yield* markSessionBroken(userId, agent.conversationId, own);
+        }
       });
 
     /** The files a message names written into the running place, before its line names them. */
@@ -1716,7 +1719,9 @@ export const runnerSessions = <
      * where the Start cut it.
      * Whether the place was made anew is read only where it decides the
      * session, so a launch prepared beside its place's resume waits on that
-     * resume only there.
+     * resume only there. A conversation marked as a transcript with no session
+     * behind it (`NATIVE_SESSION.REPLAY`) opens a fresh session handed its
+     * steps on every machine.
      */
     const resumedSessionWhen = <CE, CR>(
       agent: Agent,
@@ -1731,6 +1736,9 @@ export const runnerSessions = <
         );
 
         const { conversationId } = agent;
+
+        // Note that a transcript with no session behind it is replayed on every machine, since no disk holds one to resume.
+        if (own === NATIVE_SESSION.REPLAY) return { replay: true } satisfies ResumedSession;
 
         if (own !== undefined) {
           if (layout.transcriptsKept && (yield* holdsSession(userId, conversationId, own))) {

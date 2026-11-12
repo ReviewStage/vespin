@@ -1,0 +1,18 @@
+{
+  "data": [
+    {
+      "id": "workspace-three",
+      "name": "rename-button",
+      "number": 43,
+      "state": "ready",
+      "repoUrl": "https://github.com/synthetic/synthetic-app.git",
+      "creatorId": "user-synthetic-1",
+      "creatorName": "Sam Example",
+      "createdAt": "2026-10-05T09:00:00.000Z",
+      "lastActivityAt": "2026-10-06T09:00:00.000Z",
+      "deepLink": "conductor://workspace?id=workspace-three"
+    }
+  ],
+  "offset": 2,
+  "hasMore": false
+}

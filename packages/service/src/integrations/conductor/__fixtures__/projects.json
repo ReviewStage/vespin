@@ -1,0 +1,11 @@
+{
+  "data": [
+    {
+      "id": "project-synthetic",
+      "name": "synthetic-app",
+      "gitRemote": "https://github.com/synthetic/synthetic-app.git"
+    }
+  ],
+  "offset": 0,
+  "hasMore": false
+}
