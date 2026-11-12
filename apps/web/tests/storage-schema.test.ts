@@ -89,6 +89,7 @@ const DECLARED_TABLES = [
   "jwks",
   "live_activity",
   "mac_command",
+  "mac_command_device_listener",
   "mac_command_listener",
   "memory",
   "memory_recall",
