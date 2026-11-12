@@ -1,5 +1,13 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
-import { MCP_ACCESS_TOKEN_MINUTES, type McpClient } from "@repo/features/mcp-client-wire";
+import type { McpClient } from "@repo/features/mcp-client-wire";
+import {
+  listedMcpClients,
+  MCP_CLIENTS_WORDS,
+  mcpClientDestinations,
+  mcpClientName,
+  mcpClientRevokeQuestion,
+  mcpClientRevokeRefused,
+} from "@repo/features/mcp-clients-words";
 import {
   cursorInstallUrl,
   MCP_ADD_COMMAND,
@@ -8,8 +16,6 @@ import {
   shellLine,
 } from "@repo/features/mcp-connect";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
-import { FIRST_PARTY_OAUTH_CLIENT_ID } from "@repo/features/oauth-client-ids";
-import { ON_THIS_COMPUTER, oauthRedirectDestination } from "@repo/features/oauth-consent";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords } from "@repo/features/words";
@@ -103,22 +109,21 @@ import { SECTION as SECTION_HEAD, settingsSectionHead } from "./settings-section
  */
 
 const SECTION = {
-  CAPTION: `Use ${PRODUCT_NAME} from Claude Code, Cursor, ChatGPT, and other AI apps.`,
+  CAPTION: MCP_CLIENTS_WORDS.CAPTION,
 } as const;
 
 /** The name each agent knows the server by in a command that adds it. */
 const SERVER_NAME = MCP_SERVER_NAME;
 
 const PAGE_LINE = {
-  READ_FAILED: "The connected apps could not be read.",
-  NONE: "No apps connected yet.",
-  UNNAMED: "Unnamed app",
+  READ_FAILED: MCP_CLIENTS_WORDS.READ_FAILED,
+  NONE: MCP_CLIENTS_WORDS.NONE,
+  UNNAMED: MCP_CLIENTS_WORDS.UNNAMED,
   AGENT: "App",
   CONNECT: "Connect an app",
   SERVER: "Server URL",
-  DISCONNECT: "Disconnect",
-  REVOKED: `Disconnected. Its access ends within ${MCP_ACCESS_TOKEN_MINUTES} minutes.`,
-  THIS_COMPUTER: "This computer",
+  DISCONNECT: MCP_CLIENTS_WORDS.DISCONNECT,
+  REVOKED: MCP_CLIENTS_WORDS.REVOKED,
 } as const;
 
 /** The agents Connect an agent knows, in the order it offers them, any other last. */
@@ -249,29 +254,11 @@ const SECTIONS_SKELETON: readonly SettingsSectionSkeletonLayout[] = [
   },
 ];
 
-/** What an agent is called on its row: the name it registered under, or a plain one where it gave none. */
-function clientName(client: McpClient): string {
-  return client.name ?? PAGE_LINE.UNNAMED;
-}
-
-/**
- * Where an agent's sign-in returns to, each place once: the host the consent
- * page named, or This computer where it named an app on this computer, since
- * the row's line opens on it as a bare fact.
- */
-function destinations(client: McpClient): string {
-  const places = new Set(client.redirectUris.map(oauthRedirectDestination));
-
-  return [...places]
-    .map((place) => (place === ON_THIS_COMPUTER ? PAGE_LINE.THIS_COMPUTER : place))
-    .join(", ");
-}
-
 /** An agent's line: where it returns to, when it was allowed, and when it last refreshed its access, where it has. */
 function ClientLine({ client }: { client: McpClient }): React.JSX.Element {
   return (
     <>
-      <ReplayMask>{destinations(client)}</ReplayMask>
+      <ReplayMask>{mcpClientDestinations(client)}</ReplayMask>
       {client.allowedAt === null ? null : (
         <>
           {" · Allowed "}
@@ -359,11 +346,11 @@ function ClientRow({
   arrived: boolean;
   onRevoked: (client: McpClient) => void;
 }): React.JSX.Element {
-  const name = clientName(client);
+  const name = mcpClientName(client);
 
   const { rejection, confirm } = useMcpClientRevoke(
     client.clientId,
-    `Revoking ${name} didn't finish. Try again.`,
+    mcpClientRevokeRefused(name),
     () => onRevoked(client),
     revoked,
   );
@@ -398,10 +385,7 @@ function ClientRow({
         open
         confirm={confirm}
         question={{
-          title: `Disconnect ${name}?`,
-          body: `${name} can no longer use your ${PRODUCT_NAME} account. Access it already holds stops working within ${MCP_ACCESS_TOKEN_MINUTES} minutes.`,
-          verb: "Disconnect agent",
-          running: "Disconnecting",
+          ...mcpClientRevokeQuestion(name),
           loss: CONFIRM_LOSS.AFFECTS_OTHERS,
           replayUnmasked: true,
           titleReplayMasked: named,
@@ -417,10 +401,7 @@ function shownClients(
   listed: readonly McpClient[],
   revoked: ReadonlyMap<string, McpClient>,
 ): readonly McpClient[] {
-  const standing = listed.filter(
-    (client) =>
-      client.clientId !== FIRST_PARTY_OAUTH_CLIENT_ID.CLI && !revoked.has(client.clientId),
-  );
+  const standing = listedMcpClients(listed).filter((client) => !revoked.has(client.clientId));
 
   return [...standing, ...revoked.values()].toSorted(
     (one, other) => (other.allowedAt ?? 0) - (one.allowedAt ?? 0),
@@ -523,7 +504,7 @@ function ConnectRows({
       {arrived === undefined ? null : (
         <SettingsLine>
           <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
-            <ReplayWords masked={arrived.name !== null}>{clientName(arrived)}</ReplayWords> is
+            <ReplayWords masked={arrived.name !== null}>{mcpClientName(arrived)}</ReplayWords> is
             connected.
           </SettingsRowStateLine>
         </SettingsLine>
