@@ -2771,7 +2771,11 @@ export function DescriptionCommentLayer({
     // Note that folded, a line holding a count opens its threads there, a thread whose words were deleted counted at its section's top too, so its block shows no button over it.
     hovered === undefined ||
     (!wide && [...anchors.values()].some((top) => Math.abs(top - hovered.top) < 4)) ? null : (
-      <div className={BLOCK_BUTTON_CLASS} style={{ top: hovered.middle }}>
+      <div
+        className={BLOCK_BUTTON_CLASS}
+        data-beside-cards={wide ? "" : undefined}
+        style={{ top: hovered.middle }}
+      >
         <Tooltip label={COMMENT_WORDS.COMMENT} command={APP_COMMAND.COMMENT_ON_SELECTION}>
           {/* Note that the press takes no focus, so an open editor stays to measure the block through. */}
           <IconButton

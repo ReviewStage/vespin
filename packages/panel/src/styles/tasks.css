@@ -2654,17 +2654,24 @@ svg.lucide {
   pointer-events: none;
 }
 
-/* The button stands in the gutter past the column's end where a folded
-   line's count stands, its end on the counts' end, and centered on its
-   block's first line as a count is on its words' first line, which stands in
-   its place on a line holding threads. The gutter is as wide as the gap
-   before the margin's cards, so beside them it stands centered in that gap. */
+/* The button stands in the gutter at the column's end, its glyph over a
+   one-digit count's glyph (a count grows in toward the words as its figures
+   do, so a longer one's glyph stands further in), and centered on its block's
+   first line as a count is on its words' first line, which stands in its
+   place on a line holding threads. Beside the margin's cards, where no count
+   stands, it stands centered in the gap before them, which is as wide as the
+   gutter. */
 .comment-block-button {
   position: absolute;
-  right: calc(var(--ui-space-8) - var(--comment-gutter));
+  left: 100%;
   translate: 0 -50%;
   opacity: 0;
   transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
+}
+
+.comment-block-button[data-beside-cards] {
+  left: auto;
+  right: calc(var(--ui-space-8) - var(--comment-gutter));
 }
 
 .comment-block-button:focus-within {
