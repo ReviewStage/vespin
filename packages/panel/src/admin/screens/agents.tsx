@@ -135,12 +135,16 @@ const HARNESS_COLUMNS = column.columns([
     id: HARNESS_COLUMN.SPEND,
     header: "List-price cost",
     meta: { kind: DATA_TABLE_COLUMN_KIND.NUMERIC },
-    cell: ({ row: { original: row } }) =>
-      row.cost === undefined || row.cost.spendUsd === null ? (
+    // Note that a harness whose runs recorded no tokens has no Cost entry, which is no usage rather than usage the catalog left unpriced.
+    cell: ({ row: { original: row } }) => {
+      if (row.cost === undefined) return <QuietWords>No tokens</QuietWords>;
+
+      return row.cost.spendUsd === null ? (
         <QuietWords>Unpriced</QuietWords>
       ) : (
         formatUsd(row.cost.spendUsd)
-      ),
+      );
+    },
   }),
   column.display({
     id: HARNESS_COLUMN.PER_RUN,
