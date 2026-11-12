@@ -7,6 +7,7 @@ import {
   BAR_TITLE,
   Composer,
   EmptyState,
+  GLYPH,
   GlassDock,
   PATH_PART,
   Screen,
@@ -79,7 +80,7 @@ export function CommentThreadScreen() {
       />
       {thread === undefined ? (
         <Screen>
-          <EmptyState title={WORDS.NOT_FOUND} symbol="text.bubble" />
+          <EmptyState title={WORDS.NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         </Screen>
       ) : (
         <GlassDock

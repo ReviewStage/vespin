@@ -22,6 +22,7 @@ import {
 import {
   AccountRow,
   ActionRow,
+  GLYPH,
   ListSection,
   PickRows,
   PUSH_ROW_GOES,
@@ -182,26 +183,26 @@ export default function SettingsScreen() {
           <ListSection>
             <PushRow
               label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.AGENTS]}
-              symbol="sparkles"
+              symbol={GLYPH.AGENT}
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.AGENTS)}
             />
             <PushRow
               label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.INTEGRATIONS]}
-              symbol="puzzlepiece.extension"
+              symbol={GLYPH.PLUG}
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.INTEGRATIONS)}
             />
             <PushRow
               label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.HOSTS]}
-              symbol="desktopcomputer"
+              symbol={GLYPH.HOST}
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.MACHINES)}
             />
             {chosen === undefined ? null : (
               <PushRow
                 label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY]}
-                symbol="brain"
+                symbol={GLYPH.MEMORY}
                 goes={PUSH_ROW_GOES.PAGE}
                 onPress={() => router.push(SETTINGS_ROUTE.MEMORY)}
               />
@@ -209,7 +210,7 @@ export default function SettingsScreen() {
             {chosen === undefined ? null : (
               <PushRow
                 label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.SKILLS]}
-                symbol="book.closed"
+                symbol={GLYPH.SKILL}
                 goes={PUSH_ROW_GOES.PAGE}
                 onPress={() => router.push(SETTINGS_ROUTE.SKILLS)}
               />

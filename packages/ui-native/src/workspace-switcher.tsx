@@ -26,13 +26,14 @@ import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-pictu
 import { identityLetter, WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspace-tile";
 import { useState } from "react";
 import { PixelRatio, useColorScheme } from "react-native";
+import { GLYPH, type Glyph, glyphImage, tileGlyph } from "./glyph.js";
+import { actContent, GlyphImage } from "./glyph-label.js";
 import { AvatarPhoto, TILE_ROUNDING } from "./marks.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
 import { ON_IDENTITY } from "./tokens/identity-hues.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TEXT_SIZE } from "./tokens/type.js";
-import { tileHue, tileSymbol } from "./workspace-tile-model.js";
+import { tileHue } from "./workspace-tile-model.js";
 
 /** The share of a tile its letter stands at. */
 const LETTER_SCALE = 0.5;
@@ -82,13 +83,10 @@ const SETTINGS = "Settings";
 /** What opens the chosen workspace's settings, under its name: short, so a menu as narrow as the system's keeps it to one line, where the panel's "Workspace settings" wrapped. Note that it is heard as the panel's words, so VoiceOver, which may not read the section's name, never takes it for the account's Settings. */
 const WORKSPACE_SETTINGS = "Settings…";
 
-/** The account's row's image. Note that a menu draws its rows' images as templates in one ink, so a photo would stand as a flat silhouette; the system's person stands in its place. */
-const ACCOUNT_SYMBOL = "person.crop.circle";
-
 /** An act under the menu's workspaces, such as New workspace. */
 export type SwitcherAction = {
   readonly label: string;
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   readonly onPress: () => void;
 };
 
@@ -222,7 +220,7 @@ export function WorkspaceSwitcherMenu({
               {chosen.name}
             </Text>
             <Image
-              systemName="chevron.down"
+              {...glyphImage(GLYPH.UNFOLDED)}
               size={CHEVRON_SIZE}
               color={colors.TEXT_BODY}
               modifiers={[accessibilityHidden()]}
@@ -240,7 +238,7 @@ export function WorkspaceSwitcherMenu({
         >
           <Text>{workspace.name}</Text>
           {workspace.line === undefined ? null : <Text>{workspace.line}</Text>}
-          <Image systemName={tileSymbol(workspace.name)} />
+          <Image {...glyphImage(tileGlyph(workspace.name))} />
         </Toggle>
       ))}
       {account === undefined && actions.length === 0 ? null : <Divider />}
@@ -248,22 +246,20 @@ export function WorkspaceSwitcherMenu({
         <SwiftUIButton onPress={account.onPress}>
           <Text>{account.name}</Text>
           <Text>{SETTINGS}</Text>
-          <Image systemName={ACCOUNT_SYMBOL} />
+          <GlyphImage glyph={GLYPH.PERSON} />
         </SwiftUIButton>
       )}
       {actions.map((action) => (
         <SwiftUIButton
           key={action.label}
-          label={action.label}
-          systemImage={action.symbol}
+          {...actContent(action.label, action.symbol)}
           onPress={action.onPress}
         />
       ))}
       {onWorkspaceSettings === undefined ? null : (
         <Section title={chosen.name}>
           <SwiftUIButton
-            label={WORKSPACE_SETTINGS}
-            systemImage="building.2"
+            {...actContent(WORKSPACE_SETTINGS, GLYPH.SETTINGS)}
             onPress={onWorkspaceSettings}
             modifiers={[accessibilityLabel(WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS)]}
           />
@@ -294,5 +290,5 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
 
 /** The menu's act that makes a workspace, as the panel words it. */
 export function newWorkspaceAction(onPress: () => void): SwitcherAction {
-  return { label: WORKSPACE_SWITCHER_WORDS.NEW_WORKSPACE, symbol: "plus", onPress };
+  return { label: WORKSPACE_SWITCHER_WORDS.NEW_WORKSPACE, symbol: GLYPH.ADD, onPress };
 }

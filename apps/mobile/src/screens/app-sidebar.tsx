@@ -3,6 +3,7 @@
 import {
   AccountBarItem,
   type ColumnBar,
+  GLYPH,
   GroupRow,
   LIST_LOOK,
   type ListLook,
@@ -36,26 +37,32 @@ export type SidebarPlace = (typeof SIDEBAR_PLACE)[keyof typeof SIDEBAR_PLACE];
  * either window.
  */
 const PLACES = [
-  { id: SIDEBAR_PLACE.INBOX, title: "Inbox", symbol: "tray", route: "/inbox", testId: undefined },
+  {
+    id: SIDEBAR_PLACE.INBOX,
+    title: "Inbox",
+    symbol: GLYPH.INBOX,
+    route: "/inbox",
+    testId: undefined,
+  },
   {
     id: SIDEBAR_PLACE.TASKS,
     title: "Tasks",
-    symbol: "checklist",
+    symbol: GLYPH.TASK,
     route: "/tasks",
     testId: undefined,
   },
   {
     id: SIDEBAR_PLACE.SEARCH,
     title: "Search",
-    symbol: "magnifyingglass",
+    symbol: GLYPH.SEARCH,
     route: "/search",
     testId: "search-tab",
   },
 ] as const;
 
 /** The acts the sidebar's bar holds, as the tab bar's round + and the account's photo name them. */
-const NEW_TASK = { label: "New task", symbol: "plus" } as const;
-const SETTINGS = { label: "Settings", symbol: "gearshape" } as const;
+const NEW_TASK = { label: "New task", symbol: GLYPH.NEW_TASK } as const;
+const SETTINGS = { label: "Settings", symbol: GLYPH.SETTINGS } as const;
 
 /** The member's tasks the sidebar lists under its places: Pinned and each of their sections, as the Tasks tab draws them. */
 export type SidebarTasks = {

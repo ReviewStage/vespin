@@ -21,6 +21,7 @@ import {
   type SkillSuggestion,
   SkillSuggestions,
 } from "./composer-head.js";
+import { GLYPH, glyphImage } from "./glyph.js";
 import { dropPictures, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import type { PickOption } from "./settings-form.js";
 import { useColors } from "./tokens/colors.js";
@@ -166,7 +167,7 @@ export function AttachRow({ pictures, onAdd, onDetach, testId, onDropPictures }:
         ]}
       >
         <Image
-          systemName="plus"
+          {...glyphImage(GLYPH.ADD)}
           size={MARK_SIZE.LEAD + 2}
           color={colors.TEXT_MUTED}
           modifiers={

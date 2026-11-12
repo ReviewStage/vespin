@@ -171,17 +171,123 @@ const GOOGLE_MARK_LAYERS = [
 ];
 
 // ---------- Lucide symbols ----------
-// The panel's Lucide glyphs for the marks that are our own and that SF
-// Symbols has no drawing of, under the names the iOS app's asset catalog
-// holds them by: a pull request in each state, a branch, and a decide ask.
-// Every other glyph the app draws is an SF Symbol.
+// Every glyph the iOS app draws itself is the panel's own Lucide glyph for
+// the same place (the developer, Nov 12, 2026), written into the app's asset
+// catalog as a custom symbol under its Lucide name: the icons `@repo/ui-native`'s
+// `GLYPH` table names, by Lucide's own name for each. Only iOS's own chrome
+// (the back chevron, the share sheet, the search field) stays an SF Symbol.
+// An alias of Lucide's (`trash-2`) re-exports no drawing, so the table names
+// the icon it stands for (`trash`).
 const LUCIDE_SYMBOLS = {
-  GIT_PULL_REQUEST: "git-pull-request",
-  GIT_PULL_REQUEST_DRAFT: "git-pull-request-draft",
-  GIT_PULL_REQUEST_CLOSED: "git-pull-request-closed",
-  GIT_MERGE: "git-merge",
+  ALARM_CLOCK_CHECK: "alarm-clock-check",
+  ALARM_CLOCK_OFF: "alarm-clock-off",
+  APP_WINDOW: "app-window",
+  ARCHIVE: "archive",
+  ARCHIVE_RESTORE: "archive-restore",
+  ARROW_DOWN: "arrow-down",
+  ARROW_UP: "arrow-up",
+  BOOK_OPEN: "book-open",
+  BOOKMARK: "bookmark",
+  BOT: "bot",
+  BUILDING_COMPLEX: "building-complex",
+  CALENDAR: "calendar",
+  CALENDAR_CHECK: "calendar-check",
+  CALENDAR_CLOCK: "calendar-clock",
+  CALENDAR_COG: "calendar-cog",
+  CALENDAR_PLUS: "calendar-plus",
+  CALENDAR_X: "calendar-x",
+  CHECK: "check",
+  CHECK_CHECK: "check-check",
+  CHEVRON_DOWN: "chevron-down",
+  CHEVRON_RIGHT: "chevron-right",
+  CIRCLE_ALERT: "circle-alert",
+  CIRCLE_ARROW_UP: "circle-arrow-up",
+  CIRCLE_CHECK: "circle-check",
+  CIRCLE_DASHED: "circle-dashed",
+  CIRCLE_DOT: "circle-dot",
+  CIRCLE_PLUS: "circle-plus",
+  CIRCLE_SLASH: "circle-slash",
+  CIRCLE_STOP: "circle-stop",
+  CLOCK: "clock",
+  COPY: "copy",
+  CPU: "cpu",
+  DOWNLOAD: "download",
+  ELLIPSIS: "ellipsis",
+  EXTERNAL_LINK: "external-link",
+  FILE: "file",
+  FILE_DIFF: "file-diff",
+  FILE_PEN: "file-pen",
+  FILE_PLUS: "file-plus",
+  FILE_TEXT: "file-text",
+  FOLDER: "folder",
+  FOLDER_GIT: "folder-git",
+  FOLDER_INPUT: "folder-input",
+  FOLDER_MINUS: "folder-minus",
+  FOLDER_PLUS: "folder-plus",
+  FOLDER_X: "folder-x",
   GIT_BRANCH: "git-branch",
+  GIT_MERGE: "git-merge",
+  GIT_PULL_REQUEST: "git-pull-request",
+  GIT_PULL_REQUEST_CLOSED: "git-pull-request-closed",
+  GIT_PULL_REQUEST_DRAFT: "git-pull-request-draft",
+  GLOBE: "globe",
+  HAND: "hand",
+  HEADING: "heading",
+  HOURGLASS: "hourglass",
+  HOUSE: "house",
+  IMAGE: "image",
+  INBOX: "inbox",
+  LAPTOP: "laptop",
+  LAYOUT_LIST: "layout-list",
+  LIGHTBULB: "lightbulb",
+  LINK: "link",
+  LIST_CHECKS: "list-checks",
+  LIST_END: "list-end",
+  LIST_TODO: "list-todo",
+  LOG_OUT: "log-out",
+  MAIL: "mail",
+  MAIL_OPEN: "mail-open",
+  MESSAGE_SQUARE: "message-square",
+  MESSAGE_SQUARE_PLUS: "message-square-plus",
+  MESSAGES_SQUARE: "messages-square",
+  MIC: "mic",
+  PANEL_LEFT: "panel-left",
+  PAPERCLIP: "paperclip",
+  PEN_LINE: "pen-line",
+  PENCIL: "pencil",
+  PENCIL_LINE: "pencil-line",
+  PIN: "pin",
+  PIN_OFF: "pin-off",
+  PLAY: "play",
+  PLUG: "plug",
+  PLUS: "plus",
+  ROTATE_CCW: "rotate-ccw",
+  ROTATE_CCW_CLOCK: "rotate-ccw-clock",
+  ROTATE_CW: "rotate-cw",
+  SCROLL_TEXT: "scroll-text",
+  SEARCH: "search",
+  SEARCH_X: "search-x",
+  SEND: "send",
+  SERVER: "server",
+  SETTINGS: "settings",
+  SHIELD_ALERT: "shield-alert",
+  SHIELD_ELLIPSIS: "shield-ellipsis",
+  SHIELD_USER: "shield-user",
+  SLIDERS_HORIZONTAL: "sliders-horizontal",
   SPLIT: "split",
+  SQUARE_CHECK: "square-check",
+  SQUARE_PEN: "square-pen",
+  TERMINAL: "terminal",
+  TIMER: "timer",
+  TRASH: "trash",
+  UNDO_2: "undo-2",
+  UNLINK: "unlink",
+  USER: "user",
+  USER_PLUS: "user-plus",
+  WIFI_OFF: "wifi-off",
+  WRENCH: "wrench",
+  X: "x",
+  ZAP: "zap",
 };
 
 // Note that the drawings are read from the lucide-react @repo/ui resolves,
@@ -196,6 +302,12 @@ const lucideSymbols = await Promise.all(
   Object.entries(LUCIDE_SYMBOLS).map(async ([key, icon]) => {
     const module = lucideFrom.resolve(`lucide-react/dist/esm/icons/${icon}.mjs`);
     const { __iconData } = await import(pathToFileURL(module).href);
+
+    // Note that an alias of Lucide's (`trash-2`) re-exports the component alone, so the table names the icon it stands for (`trash`).
+    if (__iconData === undefined)
+      throw new Error(
+        `generate-surface-shared: "${icon}" is an alias of a Lucide icon; name the icon it re-exports`,
+      );
 
     return { key, name: assetName(icon), svg: symbolTemplate(__iconData.node) };
   }),

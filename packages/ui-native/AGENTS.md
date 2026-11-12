@@ -101,16 +101,25 @@ builds a control of its own.
   it asks, then the task's name), `TaskRow` a task on one line (its status
   ring, its name, and at its end a thread that needs you, a failed agent,
   one at work, or its pull request, then its key), and `AgentRow` an agent
-  on a task's page; an avatar stands only where the panel's row has one. A
-  glyph is the SF Symbol closest to the panel's Lucide glyph for the same
-  thing (`inbox-line-model.ts`, `status-mark-model.ts`), except a mark of ours that
-  SF Symbols has no drawing of (a pull request in each state, a branch, a
-  decide ask), which is Lucide's own (`glyph.ts`'s `Glyph`, drawn by
-  `ToneGlyph`): `@repo/brand`'s generator outlines it, at the `lucide-react`
-  `@repo/ui` pins, into a custom symbol template, and the app's config writes
-  it into the asset catalog as a symbol set, so it sizes with Dynamic Type
-  and weighs with its words as an SF Symbol does. Tabs, menus, swipe
-  actions, and every generic glyph stay SF Symbols.
+  on a task's page; an avatar stands only where the panel's row has one.
+- **Every glyph is the panel's own Lucide glyph for the same place** (the
+  developer, Nov 12, 2026), named once in `glyph.ts`'s `GLYPH`, by what it
+  marks: a tab, a row's and a status's mark, a menu's item, a toolbar's
+  button, and a composer's button alike. `@repo/brand`'s generator outlines
+  each, at the `lucide-react` `@repo/ui` pins, into a custom symbol template
+  the app's config writes into the asset catalog as a symbol set, so it
+  sizes with Dynamic Type and weighs with its words as an SF Symbol does. A
+  glyph is a branded `Glyph`, minted only in that table, so no component
+  takes a bare SF Symbol's name; `apps/mobile`'s tab icons and toolbar
+  items, which expo-router types as plain names, take `GLYPH.X` too
+  (`glyphSymbol` where a symbol's name is asked for). SF Symbols stay only
+  where iOS draws the thing its own way (Share) or where the panel draws a
+  mark of its own rather than a Lucide glyph (a task's status ring, a check
+  box, a letter tile, a face, an MCP server). A SwiftUI button or menu
+  holding a glyph takes it as its label's icon (`glyph-label.tsx`), since
+  `systemImage` reads an SF Symbol alone, and a React Native view through
+  `expo-symbols`' `SymbolView`, which the app's patch reads from the asset
+  catalog too, so a glyph costs no SwiftUI host of its own.
 
 ## Vespin's look
 
@@ -184,8 +193,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
   same model (`@repo/features/pull-request-model`): its state as a chip in
   GitHub's color, the merge queue's in the attention ink with its place
   ("Queued #2"), its branches, and GitHub's sentence of whether it merges;
-  its checks and reviewers as rows, each glyph the SF Symbol closest to the
-  panel's (`pull-request-look.ts`); and its acts in the bar, an act that
+  its checks and reviewers as rows, each glyph the panel's own
+  (`pull-request-look.ts`); and its acts in the bar, an act that
   asks first asking in `ConfirmAsk`, but for the merge's press in a regular
   window, whose bar folds it into More: it stands under the checks as a
   large button (`MergeActRow`), as GitHub's own app draws Merge.

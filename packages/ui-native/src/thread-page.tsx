@@ -31,6 +31,7 @@ import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
+import { GLYPH, glyphImage } from "./glyph.js";
 import { CopyWordsSwiftMenu } from "./held-menu.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
@@ -225,7 +226,7 @@ function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["sta
       modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}
     >
       <Image
-        systemName={stamp.ahead ? "checkmark" : "arrow.uturn.backward"}
+        {...glyphImage(stamp.ahead ? GLYPH.CHECK : GLYPH.UNDO)}
         size={MARK_SIZE.GLYPH - 2}
         color={stamp.ahead ? colors.COMPLETE : colors.TEXT_MUTED}
         modifiers={[accessibilityLabel(stamp.ahead ? STAMP_HEARD.AHEAD : STAMP_HEARD.HELD)]}

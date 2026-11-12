@@ -1,16 +1,27 @@
-// empty-state.tsx -- what a screen or a column says when it has nothing to show, as the system's own ContentUnavailableView, or the system's spinner over its words while what it shows is still read.
+// empty-state.tsx -- what a screen or a column says when it has nothing to show, laid out as the system's own ContentUnavailableView lays it out, or the system's spinner over its words while what it shows is still read.
 
-import { ContentUnavailableView, ProgressView, Text } from "@expo/ui/swift-ui";
-import { font, foregroundStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
+import { Image, ProgressView, Text, VStack } from "@expo/ui/swift-ui";
+import {
+  accessibilityHidden,
+  font,
+  foregroundStyle,
+  frame,
+  multilineTextAlignment,
+  padding,
+  tint,
+} from "@expo/ui/swift-ui/modifiers";
 import { Fragment } from "react";
 import { Button } from "./button.js";
-import type { SfSymbol } from "./sf-symbol.js";
+import { type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
+/** The room between the glyph, the title, the line, and the act, as the system's view stands them. */
+const EMPTY_SPACING = 12;
+
 export type EmptyStateProps = {
   readonly title: string;
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   readonly description?: string | undefined;
   /** The one act that fills the screen, such as Sign in. */
   readonly action?: { readonly label: string; readonly onPress: () => void } | undefined;
@@ -39,12 +50,14 @@ function LoadingState({ title }: { readonly title: string }) {
 }
 
 /**
- * An empty screen's symbol, title, line, and the act that fills it; or,
- * while it reads, the spinner and its title. Note that the system's view is
- * drawn anew whenever its title or line changes, keyed by each, because
- * `@expo/ui`'s native view keeps the words it first stood with when only its
- * props change, so Search went on saying what it finds after a query that
- * found nothing.
+ * An empty screen's glyph, title, line, and the act that fills it; or, while
+ * it reads, the spinner and its title. Note that it stacks them itself, as
+ * the system's ContentUnavailableView does (a large muted glyph, a bold
+ * title, a muted line), because that view takes only an SF Symbol and the
+ * glyph is the panel's own Lucide one. Note too that the stack is drawn anew
+ * whenever its title or line changes, keyed by both, because `@expo/ui`'s
+ * native text keeps the words it first stood with when only its props change,
+ * so Search went on saying what it finds after a query that found nothing.
  */
 export function EmptyState({
   title,
@@ -53,19 +66,48 @@ export function EmptyState({
   action,
   loading = false,
 }: EmptyStateProps) {
+  const colors = useColors();
+
   if (loading) return <LoadingState title={title} />;
+  const centered = multilineTextAlignment("center");
 
   return (
     <Fragment key={description ?? ""}>
-      <ContentUnavailableView
+      <VStack
         key={title}
-        title={title}
-        systemImage={symbol}
-        {...(description === undefined ? {} : { description })}
-        {...(action === undefined
-          ? {}
-          : { actions: <Button label={action.label} onPress={action.onPress} /> })}
-      />
+        spacing={EMPTY_SPACING}
+        modifiers={[
+          padding({ all: EMPTY_SPACING * 2 }),
+          frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+        ]}
+      >
+        <Image
+          {...glyphImage(symbol)}
+          color={colors.TEXT_MUTED}
+          modifiers={[font({ textStyle: "largeTitle", weight: "regular" }), accessibilityHidden()]}
+        />
+        <Text
+          modifiers={[
+            font({ textStyle: "title2", weight: "bold" }),
+            foregroundStyle(colors.TEXT),
+            centered,
+          ]}
+        >
+          {title}
+        </Text>
+        {description === undefined ? null : (
+          <Text
+            modifiers={[
+              font({ textStyle: "callout" }),
+              foregroundStyle(colors.TEXT_MUTED),
+              centered,
+            ]}
+          >
+            {description}
+          </Text>
+        )}
+        {action === undefined ? null : <Button label={action.label} onPress={action.onPress} />}
+      </VStack>
     </Fragment>
   );
 }

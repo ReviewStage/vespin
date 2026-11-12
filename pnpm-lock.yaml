@@ -135,8 +135,11 @@ patchedDependencies:
   drizzle-orm@1.0.0-rc.4:
     hash: 7eca027493ea68b0777e0306d382bf89cdd6217b8c3377c6d44e7911303f9f5b
     path: patches/drizzle-orm@1.0.0-rc.4.patch
+  expo-symbols@58.0.4:
+    hash: 3e021b5b48de4d77b2c561684810f503c93394e081747073961e42e036be882c
+    path: patches/expo-symbols@58.0.4.patch
   react-native-screens@4.30.1:
-    hash: eb413d113bd8ef6ee8b6564f3010cf9abb09472bdbf4f2cbb8e3a5f9399cd90b
+    hash: 713575c3a02c0180c74b066f1b7162fdd19c0c37b2872f9254fb41cde0dd2e32
     path: patches/react-native-screens@4.30.1.patch
 
 importers:
@@ -534,7 +537,7 @@ importers:
         version: 58.0.13(expo@58.0.23)(typescript@7.0.2)
       expo-symbols:
         specifier: 58.0.4
-        version: 58.0.4(expo-font@58.0.11)(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
+        version: 58.0.4(patch_hash=3e021b5b48de4d77b2c561684810f503c93394e081747073961e42e036be882c)(expo-font@58.0.11)(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
       expo-task-manager:
         specifier: 58.0.13
         version: 58.0.13(expo@58.0.23)(react-native@0.88.1)
@@ -555,7 +558,7 @@ importers:
         version: 5.11.1(react-native@0.88.1)(react@19.3.0)
       react-native-screens:
         specifier: 4.30.1
-        version: 4.30.1(patch_hash=eb413d113bd8ef6ee8b6564f3010cf9abb09472bdbf4f2cbb8e3a5f9399cd90b)(react-native@0.88.1)(react@19.3.0)
+        version: 4.30.1(patch_hash=713575c3a02c0180c74b066f1b7162fdd19c0c37b2872f9254fb41cde0dd2e32)(react-native@0.88.1)(react@19.3.0)
       react-native-webview:
         specifier: 14.0.1
         version: 14.0.1(react-native@0.88.1)(react@19.3.0)
@@ -1584,7 +1587,7 @@ importers:
         version: 58.0.7(expo@58.0.23)
       expo-symbols:
         specifier: 58.0.4
-        version: 58.0.4(expo-font@58.0.11)(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
+        version: 58.0.4(patch_hash=3e021b5b48de4d77b2c561684810f503c93394e081747073961e42e036be882c)(expo-font@58.0.11)(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
       expo-video:
         specifier: 58.0.13
         version: 58.0.13(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
@@ -1599,7 +1602,7 @@ importers:
         version: 5.11.1(react-native@0.88.1)(react@19.3.0)
       react-native-screens:
         specifier: 4.30.1
-        version: 4.30.1(patch_hash=eb413d113bd8ef6ee8b6564f3010cf9abb09472bdbf4f2cbb8e3a5f9399cd90b)(react-native@0.88.1)(react@19.3.0)
+        version: 4.30.1(patch_hash=713575c3a02c0180c74b066f1b7162fdd19c0c37b2872f9254fb41cde0dd2e32)(react-native@0.88.1)(react@19.3.0)
       react-native-webview:
         specifier: 14.0.1
         version: 14.0.1(react-native@0.88.1)(react@19.3.0)
@@ -15976,13 +15979,13 @@ snapshots:
       react-native: 0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.88.1)(@types/react@19.3.0)(react@19.3.0)
       react-native-drawer-layout: 4.2.12(react-native-gesture-handler@3.5.0)(react-native-reanimated@4.7.1)(react-native@0.88.1)(react@19.3.0)
       react-native-safe-area-context: 5.11.1(react-native@0.88.1)(react@19.3.0)
-      react-native-screens: 4.30.1(patch_hash=eb413d113bd8ef6ee8b6564f3010cf9abb09472bdbf4f2cbb8e3a5f9399cd90b)(react-native@0.88.1)(react@19.3.0)
+      react-native-screens: 4.30.1(patch_hash=713575c3a02c0180c74b066f1b7162fdd19c0c37b2872f9254fb41cde0dd2e32)(react-native@0.88.1)(react@19.3.0)
       server-only: 0.0.1
       sf-symbols-typescript: 2.2.0
       standard-navigation: 0.0.5
     optionalDependencies:
       '@expo/ui': 58.0.27(@babel/core@7.29.7)(expo@58.0.23)(react-dom@19.2.8)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
-      expo-symbols: 58.0.4(expo-font@58.0.11)(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
+      expo-symbols: 58.0.4(patch_hash=3e021b5b48de4d77b2c561684810f503c93394e081747073961e42e036be882c)(expo-font@58.0.11)(expo@58.0.23)(react-native@0.88.1)(react@19.3.0)
       react-dom: 19.2.8(react@19.3.0)
       react-native-gesture-handler: 3.5.0(react-native@0.88.1)(react@19.3.0)
       react-native-reanimated: 4.7.1(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)
@@ -16013,7 +16016,7 @@ snapshots:
       react: 19.3.0
       react-native: 0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.88.1)(@types/react@19.3.0)(react@19.3.0)
 
-  expo-symbols@58.0.4(expo-font@58.0.11)(expo@58.0.23)(react-native@0.88.1)(react@19.3.0):
+  expo-symbols@58.0.4(patch_hash=3e021b5b48de4d77b2c561684810f503c93394e081747073961e42e036be882c)(expo-font@58.0.11)(expo@58.0.23)(react-native@0.88.1)(react@19.3.0):
     dependencies:
       '@expo-google-fonts/material-symbols': 0.4.53
       expo: 58.0.23(@babel/core@7.29.7)(@expo/dom-webview@58.0.2)(@expo/metro-runtime@58.0.17)(expo-router@58.0.30)(react-dom@19.2.8)(react-native-webview@14.0.1)(react-native-worklets@0.13.1)(react-native@0.88.1)(react@19.3.0)(typescript@7.0.2)
@@ -18429,7 +18432,7 @@ snapshots:
       react: 19.3.0
       react-native: 0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.88.1)(@types/react@19.3.0)(react@19.3.0)
 
-  react-native-screens@4.30.1(patch_hash=eb413d113bd8ef6ee8b6564f3010cf9abb09472bdbf4f2cbb8e3a5f9399cd90b)(react-native@0.88.1)(react@19.3.0):
+  react-native-screens@4.30.1(patch_hash=713575c3a02c0180c74b066f1b7162fdd19c0c37b2872f9254fb41cde0dd2e32)(react-native@0.88.1)(react@19.3.0):
     dependencies:
       react: 19.3.0
       react-freeze: 1.0.4(react@19.3.0)

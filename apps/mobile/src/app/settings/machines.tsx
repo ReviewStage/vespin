@@ -22,11 +22,12 @@ import { selectAccount } from "@repo/host/app-state-reads";
 import {
   ConfirmAsk,
   EmptyState,
+  GLYPH,
+  type Glyph,
   ListSection,
   NoteRow,
   Screen,
   SettingsForm,
-  type SfSymbol,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
@@ -43,11 +44,11 @@ const READ_WORDS = {
   FAILED: readFailedWords("your machines"),
 } as const;
 
-/** The glyph a machine's row leads with, by its platform, as SF Symbols draws a Mac and a server. */
+/** The glyph a machine's row leads with, by its platform, as the panel draws a Mac and a server. */
 const PLATFORM_SYMBOL = {
-  [DEVICE_PLATFORM.DARWIN]: "laptopcomputer",
-  [DEVICE_PLATFORM.LINUX]: "server.rack",
-} as const satisfies Record<DevicePlatform, SfSymbol>;
+  [DEVICE_PLATFORM.DARWIN]: GLYPH.MAC,
+  [DEVICE_PLATFORM.LINUX]: GLYPH.HOST,
+} as const satisfies Record<DevicePlatform, Glyph>;
 
 /** A machine Remove was asked of: the host, what it is called, and whether it reads offline, which hears it only once it is online again. */
 interface RemoveAsked {
@@ -126,7 +127,7 @@ function MachinesPage({ accountId }: { readonly accountId: string }) {
       held?.failed === true ? (
         <EmptyState
           title={READ_WORDS.FAILED}
-          symbol="exclamationmark.triangle"
+          symbol={GLYPH.FAILED}
           action={{
             label: VERB.RETRY,
             onPress: () =>
@@ -136,10 +137,10 @@ function MachinesPage({ accountId }: { readonly accountId: string }) {
           }}
         />
       ) : (
-        <EmptyState title={READ_WORDS.READING} symbol="desktopcomputer" loading />
+        <EmptyState title={READ_WORDS.READING} symbol={GLYPH.HOST} loading />
       )
     ) : hosts.length === 0 ? (
-      <EmptyState title={MACHINES_WORDS.NONE} symbol="desktopcomputer" />
+      <EmptyState title={MACHINES_WORDS.NONE} symbol={GLYPH.HOST} />
     ) : (
       <SettingsForm>
         <ListSection title={MACHINES_WORDS.TITLE} count={hosts.length}>

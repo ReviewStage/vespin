@@ -39,7 +39,10 @@ import {
   Composer,
   type ComposerMenu,
   ConfirmAsk,
+  GLYPH,
   GlassDock,
+  type Glyph,
+  glyphSymbol,
   HeldCallBanner,
   HintPickRows,
   ListSection,
@@ -52,7 +55,6 @@ import {
   RenameAsk,
   Screen,
   SettingsForm,
-  type SfSymbol,
   SkillSuggestions,
   SwitchRow,
   shownMediaIds,
@@ -138,12 +140,12 @@ const OPTIONS_WORDS = {
   MORE_SERVERS: "Connect another in Settings.",
 } as const;
 
-/** The SF Symbol each permission mode wears, the closest to the panel's glyph: a hand, a shield round a check, a shield round a "!". */
+/** The glyph each permission mode wears, the panel's own: a hand, a shield round an ellipsis, a shield round a "!". */
 const MODE_SYMBOL = {
-  [AGENT_PERMISSION_MODE.ASK]: "hand.raised",
-  [AGENT_PERMISSION_MODE.AUTO]: "checkmark.shield",
-  [AGENT_PERMISSION_MODE.FULL_ACCESS]: "exclamationmark.shield",
-} as const satisfies Record<AgentPermissionMode, SfSymbol>;
+  [AGENT_PERMISSION_MODE.ASK]: GLYPH.ASK_FIRST,
+  [AGENT_PERMISSION_MODE.AUTO]: GLYPH.AUTO_APPROVE,
+  [AGENT_PERMISSION_MODE.FULL_ACCESS]: GLYPH.FULL_ACCESS,
+} as const satisfies Record<AgentPermissionMode, Glyph>;
 
 /** What a pull request's card offers beside Review where it may merge now, and what that asks first. */
 const MERGE_WORD = "Merge";
@@ -294,13 +296,13 @@ function agentAddMenu(
 ): ComposerMenu {
   return {
     actions: [
-      { label: ADD_WORDS.PHOTOS, symbol: "photo.on.rectangle", onPress: composer.attach },
+      { label: ADD_WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: composer.attach },
       ...(openOptions === undefined
         ? []
         : [
             {
               label: ADD_WORDS.OPTIONS,
-              symbol: "slider.horizontal.3" as const,
+              symbol: GLYPH.OPTIONS,
               onPress: openOptions,
             },
           ]),
@@ -476,24 +478,30 @@ export function AgentScreen() {
         }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel={MENU_WORDS.MORE}>
+        <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
           {address === undefined ? null : (
             <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction icon="link" onPress={actions.copyLink}>
+              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.LINK)} onPress={actions.copyLink}>
                 {MENU_WORDS.COPY_LINK}
               </Stack.Toolbar.MenuAction>
-              <Stack.Toolbar.MenuAction icon="safari" onPress={() => openInSafari(address)}>
+              <Stack.Toolbar.MenuAction
+                icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
+                onPress={() => openInSafari(address)}
+              >
                 {VERB.OPEN_IN_BROWSER}
               </Stack.Toolbar.MenuAction>
             </Stack.Toolbar.Menu>
           )}
           {agent === undefined ? null : (
             <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction icon="pencil" onPress={() => setRenaming(true)}>
+              <Stack.Toolbar.MenuAction
+                icon={glyphSymbol(GLYPH.RENAME)}
+                onPress={() => setRenaming(true)}
+              >
                 {MENU_WORDS.RENAME}
               </Stack.Toolbar.MenuAction>
               <Stack.Toolbar.MenuAction
-                icon={actions.pinned ? "pin.slash" : "pin"}
+                icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
                 onPress={actions.pin}
               >
                 {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
@@ -502,20 +510,20 @@ export function AgentScreen() {
           )}
           {openOptions === undefined ? null : (
             <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction icon="slider.horizontal.3" onPress={openOptions}>
+              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.OPTIONS)} onPress={openOptions}>
                 {ADD_WORDS.OPTIONS}
               </Stack.Toolbar.MenuAction>
               {hasPorts ? (
-                <Stack.Toolbar.MenuAction icon="network" onPress={openPorts}>
+                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.PLUG)} onPress={openPorts}>
                   {AGENT_PORTS_WORDS.PORTS}
                 </Stack.Toolbar.MenuAction>
               ) : null}
               {runActions.length === 0 ? null : (
-                <Stack.Toolbar.Menu icon="play" title={RUN_ACTION_WORDS.SUBMENU}>
+                <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.RUN)} title={RUN_ACTION_WORDS.SUBMENU}>
                   {runActions.map((offered) => (
                     <Stack.Toolbar.MenuAction
                       key={offered.action.id}
-                      icon={offered.runs ? "stop" : "play"}
+                      icon={glyphSymbol(offered.runs ? GLYPH.STOP : GLYPH.RUN)}
                       subtitle={offered.action.command}
                       onPress={offered.onPress}
                     >
@@ -529,7 +537,7 @@ export function AgentScreen() {
           {agent === undefined ? null : (
             <Stack.Toolbar.Menu inline>
               <Stack.Toolbar.MenuAction
-                icon="archivebox"
+                icon={glyphSymbol(GLYPH.ARCHIVE)}
                 destructive
                 onPress={() => setArchiving(true)}
               >
@@ -539,7 +547,11 @@ export function AgentScreen() {
           )}
           {agent === undefined ? null : (
             <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction icon="trash" destructive onPress={() => setDeleting(true)}>
+              <Stack.Toolbar.MenuAction
+                icon={glyphSymbol(GLYPH.DELETE)}
+                destructive
+                onPress={() => setDeleting(true)}
+              >
                 {MENU_WORDS.DELETE}
               </Stack.Toolbar.MenuAction>
             </Stack.Toolbar.Menu>
@@ -568,7 +580,7 @@ export function AgentScreen() {
           }
           empty={{
             title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
-            symbol: failed ? "exclamationmark.triangle" : "text.bubble",
+            symbol: failed ? GLYPH.FAILED : GLYPH.COMMENT,
             loading: !failed,
             action: failed ? { label: TRANSCRIPT_WORDS.RETRY, onPress: retry } : undefined,
           }}
@@ -769,11 +781,11 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
 
 /** The glyph each port's act wears in its menu, as the panel's plug wears it. */
 const PORT_ACT_SYMBOL = {
-  [PORT_ACT.SHARE]: "link",
-  [PORT_ACT.OPEN_LINK]: "safari",
-  [PORT_ACT.COPY_LINK]: "doc.on.doc",
-  [PORT_ACT.STOP_SHARING]: "xmark.circle",
-} as const satisfies Record<PortAct, SfSymbol>;
+  [PORT_ACT.SHARE]: GLYPH.LINK,
+  [PORT_ACT.OPEN_LINK]: GLYPH.LINK,
+  [PORT_ACT.COPY_LINK]: GLYPH.COPY,
+  [PORT_ACT.STOP_SHARING]: GLYPH.UNLINK,
+} as const satisfies Record<PortAct, Glyph>;
 
 /** Each port's act's words, in the panel's. */
 const PORT_ACT_WORDS = {
@@ -844,7 +856,7 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
               <MenuRow
                 key={row.port}
                 label={`:${row.port}`}
-                symbol={row.url === undefined ? "globe" : "link"}
+                symbol={row.url === undefined ? GLYPH.GLOBE : GLYPH.LINK}
                 detail={row.label}
                 value={row.url === undefined ? undefined : AGENT_PORTS_WORDS.SHARING}
                 acts={row.acts.map((act) => actOf(row, act))}

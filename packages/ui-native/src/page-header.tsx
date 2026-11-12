@@ -10,6 +10,7 @@ import {
 import type { TaskStatus } from "@repo/features/task-wire";
 import { useAccessibilitySize } from "./accessibility.js";
 import { FieldChip, StatusChip } from "./button.js";
+import { GLYPH } from "./glyph.js";
 import type { Face } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
@@ -44,7 +45,7 @@ export function PageHeader({ title, summary, status, priority, assignee }: PageH
       {status === undefined ? null : <StatusChip status={status} />}
       {priority === undefined ? null : <FieldChip label={priority} />}
       {assignee === undefined ? null : assignee.nobody ? (
-        <FieldChip label={assignee.name} symbol="person.crop.circle.dashed" />
+        <FieldChip label={assignee.name} symbol={GLYPH.UNASSIGNED} />
       ) : (
         <FieldChip label={assignee.name} face={assignee} />
       )}

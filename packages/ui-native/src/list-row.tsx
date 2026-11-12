@@ -43,6 +43,8 @@ import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
 import { type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { actContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dragLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import {
@@ -56,7 +58,6 @@ import {
   WorkingMark,
 } from "./marks.js";
 import { RowOpenContext, RowSelectedContext } from "./row-open.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -113,7 +114,7 @@ export type RowActionTone = (typeof ROW_ACTION_TONE)[keyof typeof ROW_ACTION_TON
 export type RowAction = {
   /** The act's name, as the panel's menu names it: Mark done, Mark unread. */
   readonly label: string;
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   readonly tone: RowActionTone;
   readonly onPress: () => void;
 };
@@ -121,7 +122,7 @@ export type RowAction = {
 /** A menu within a row's long press menu, such as a task's Status: its choices, each checked where it stands, as the system checks them, and the acts under them, such as a task's Remove from section. */
 export type RowSubmenu = {
   readonly label: string;
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   readonly choices: readonly {
     readonly label: string;
     readonly on: boolean;
@@ -210,8 +211,7 @@ function actionButton(action: RowAction, colors: BrandColors) {
   return (
     <Button
       key={action.label}
-      label={action.label}
-      systemImage={action.symbol}
+      {...actContent(action.label, action.symbol)}
       role={destructive ? "destructive" : "default"}
       onPress={action.onPress}
       modifiers={destructive ? [] : [tint(colors.TEXT_MUTED)]}
@@ -224,8 +224,7 @@ function rowSubmenu(submenu: RowSubmenu, colors: BrandColors, ink?: string) {
   return (
     <Menu
       key={submenu.label}
-      label={submenu.label}
-      systemImage={submenu.symbol}
+      label={menuLabel(submenu.label, submenu.symbol)}
       modifiers={ink === undefined ? [] : [tint(ink)]}
     >
       {submenu.choices.map((choice) => (
@@ -266,7 +265,7 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
   return (
     <HStack spacing={SPACE.TIGHT}>
       <Image
-        systemName="clock"
+        {...glyphImage(GLYPH.TIME)}
         size={MARK_SIZE.GLYPH - 4}
         color={colors.ACCENT_TEXT}
         modifiers={[accessibilityHidden(true)]}
@@ -379,7 +378,7 @@ export function RowFrame({
       : [
           {
             label: VERB.OPEN,
-            symbol: "arrow.up.forward.app",
+            symbol: GLYPH.OPEN_EXTERNALLY,
             tone: ROW_ACTION_TONE.NEUTRAL,
             onPress: () => open(id),
           },
@@ -683,7 +682,7 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
       ]}
     >
       <Image
-        systemName={open ? "chevron.down" : "chevron.right"}
+        {...glyphImage(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
         size={MARK_SIZE.GLYPH - 4}
         color={colors.TEXT_MUTED}
         modifiers={[frame({ width: MARK_SIZE.LEAD, height: MARK_SIZE.LEAD })]}
@@ -745,7 +744,7 @@ export function TaskRow(props: TaskRowProps) {
       : [
           {
             label: fold.open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS,
-            symbol: fold.open ? "chevron.down" : "chevron.right",
+            symbol: fold.open ? GLYPH.UNFOLDED : GLYPH.FOLDED,
             tone: ROW_ACTION_TONE.NEUTRAL,
             onPress: fold.onToggle,
           },

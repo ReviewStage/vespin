@@ -28,6 +28,7 @@ import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   ActionRow,
   ConfirmAsk,
+  GLYPH,
   ListSection,
   MemberRow,
   type MemberRowAct,
@@ -226,7 +227,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             >
               <ActionRow
                 label={INVITATION_WORDS.INVITE}
-                symbol="person.badge.plus"
+                symbol={GLYPH.INVITE}
                 onPress={() => setAsking({ kind: ASKING.INVITE })}
               />
               {(invitations ?? []).map((invitation) => (

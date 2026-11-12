@@ -42,6 +42,8 @@ import {
   CHECK_SUMMARY_LOOK,
   ConfirmAsk,
   EmptyState,
+  GLYPH,
+  glyphSymbol,
   LIST_LOOK,
   ListSection,
   MarkRow,
@@ -245,9 +247,12 @@ function PullRequestToolbar({
           {press.words}
         </Stack.Toolbar.Button>
       )}
-      <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel={MENU_WORDS.MORE}>
+      <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
         {url === undefined ? null : (
-          <Stack.Toolbar.MenuAction icon="safari" onPress={() => openInSafari(url)}>
+          <Stack.Toolbar.MenuAction
+            icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
+            onPress={() => openInSafari(url)}
+          >
             {MENU_WORDS.OPEN_ON_GITHUB}
           </Stack.Toolbar.MenuAction>
         )}
@@ -262,7 +267,7 @@ function PullRequestToolbar({
               </Stack.Toolbar.MenuAction>
             ))
           : null}
-        <Stack.Toolbar.MenuAction icon="arrow.clockwise" onPress={onRefresh}>
+        <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RETRY)} onPress={onRefresh}>
           {MENU_WORDS.REFRESH}
         </Stack.Toolbar.MenuAction>
       </Stack.Toolbar.Menu>
@@ -368,7 +373,7 @@ export function PullRequestScreen() {
         <Screen>
           <EmptyState
             title={failed ? PULL_REQUEST_READ_WORDS.FAILED : PULL_REQUEST_READ_WORDS.READING}
-            symbol={failed ? "exclamationmark.triangle" : "arrow.triangle.pull"}
+            symbol={failed ? GLYPH.FAILED : GLYPH.PULL_REQUEST}
             loading={!failed}
             action={
               failed ? { label: MENU_WORDS.TRY_AGAIN, onPress: () => void retry() } : undefined
@@ -496,7 +501,7 @@ export function PullRequestScreen() {
             ))}
             <MarkRow
               id={COMMENTS_ROW}
-              mark={{ symbol: "bubble.left", tone: STATUS_TONE.NEUTRAL }}
+              mark={{ symbol: GLYPH.THREAD, tone: STATUS_TONE.NEUTRAL }}
               title={
                 conversation === undefined
                   ? failedOf(parts.conversation)

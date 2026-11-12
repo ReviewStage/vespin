@@ -34,6 +34,7 @@ import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import { RowFrame, RowHead, type RowSwipe, rowPlacement } from "./list-row.js";
@@ -47,7 +48,6 @@ import {
   WorkingMark,
 } from "./marks.js";
 import { PageHeader } from "./page-header.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -92,9 +92,13 @@ function EndWords({ words, ink }: { readonly words: string; readonly ink?: strin
 }
 
 /** A row's lead glyph in an ink, at the title's size, so it grows with Dynamic Type beside it. */
-function LeadGlyph({ symbol, ink }: { readonly symbol: SfSymbol; readonly ink: string }) {
+function LeadGlyph({ symbol, ink }: { readonly symbol: Glyph; readonly ink: string }) {
   return (
-    <Image systemName={symbol} color={ink} modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE })]} />
+    <Image
+      {...glyphImage(symbol)}
+      color={ink}
+      modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE })]}
+    />
   );
 }
 
@@ -304,7 +308,7 @@ export function RelationRow({ id, name, status, relation }: RelationRowProps) {
       faded={false}
       lead={
         status === undefined ? (
-          <ToneGlyph glyph="doc.text" tone={STATUS_TONE.NEUTRAL} textStyle={TYPE_ROLE.ROW_LINE} />
+          <ToneGlyph glyph={GLYPH.TASK} tone={STATUS_TONE.NEUTRAL} textStyle={TYPE_ROLE.ROW_LINE} />
         ) : (
           <TaskStatusMark status={status} />
         )
@@ -328,7 +332,7 @@ export function RelationRow({ id, name, status, relation }: RelationRowProps) {
 }
 
 type LinkRowProps = {
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   readonly label: string;
   /** Words at the line's end in the muted ink, such as a page's age. */
   readonly detail?: string | undefined;
@@ -382,7 +386,7 @@ type GroupRowProps = {
   /** The row's id, which its list's `onSelect` is called with. */
   readonly id: string;
   readonly title: string;
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   /** How many it holds, such as the Inbox's threads waiting on you; no count where none is given. */
   readonly count?: number | undefined;
   /** What a flow finds the row by, such as the Search tab's id where the sidebar stands for the tab bar. */

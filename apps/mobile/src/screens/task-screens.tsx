@@ -57,6 +57,8 @@ import {
   type BarMenu,
   ConfirmAsk,
   EmptyState,
+  GLYPH,
+  glyphSymbol,
   LINK_ROW_TONE,
   LIST_LOOK,
   LinkRow,
@@ -144,7 +146,7 @@ const WORDS = {
   SUB_TASKS: "Sub-tasks",
   TASK_RELATIONS: "Task relations",
   STATUS: "Status",
-  MORE: { label: "More", symbol: "ellipsis" },
+  MORE: { label: "More", symbol: GLYPH.MORE },
   COPY_LINK: "Copy link",
   RENAME: "Rename",
   RENAME_TASK: "Rename task",
@@ -211,7 +213,7 @@ function statusSubmenu(
 ): RowSubmenu {
   return {
     label: WORDS.STATUS,
-    symbol: "circle.dashed",
+    symbol: GLYPH.STATUS,
     choices: STATUS_ORDER.map((status) => ({
       label: TASK_STATUS_WORDS[status],
       on: task.status === status,
@@ -233,7 +235,7 @@ function sectionSubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | u
 
   return {
     label: MOVE_TO_SECTION,
-    symbol: "folder",
+    symbol: GLYPH.MOVE,
     choices: placing.sections.map((section) => ({
       label: section.title,
       on: section.id === standing,
@@ -247,7 +249,7 @@ function sectionSubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | u
         : [
             {
               label: REMOVE_FROM_SECTION,
-              symbol: "folder.badge.minus",
+              symbol: GLYPH.REMOVE_FROM_SECTION,
               tone: ROW_ACTION_TONE.NEUTRAL,
               onPress: () => placing.moveToSection(task.id, null),
             },
@@ -274,7 +276,7 @@ function repositorySubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu 
 
   return {
     label: current === null ? CHOOSE_REPOSITORY : CHANGE_REPOSITORY,
-    symbol: "chevron.left.forwardslash.chevron.right",
+    symbol: GLYPH.REPOSITORY,
     choices: listed.map((repository) => ({
       label: repository,
       on: repository === current,
@@ -288,7 +290,7 @@ function repositorySubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu 
         : [
             {
               label: NO_REPOSITORY,
-              symbol: "xmark.circle",
+              symbol: GLYPH.NO_REPOSITORY,
               tone: ROW_ACTION_TONE.NEUTRAL,
               onPress: () => placing.setRepository(task.id, null),
             },
@@ -345,7 +347,7 @@ function rowActs(task: TaskSummary, unread: boolean, listing: TasksListing): Row
       : [
           {
             label: WORDS.MARK_DONE,
-            symbol: "checkmark.circle",
+            symbol: GLYPH.CHECK,
             tone: ROW_ACTION_TONE.NEUTRAL,
             onPress: () => listing.setStatus(task.id, TASK_STATUS.DONE),
           },
@@ -356,7 +358,7 @@ function rowActs(task: TaskSummary, unread: boolean, listing: TasksListing): Row
     leadingActions: [
       {
         label: pinned ? WORDS.UNPIN : WORDS.PIN,
-        symbol: pinned ? "pin.slash" : "pin",
+        symbol: pinned ? GLYPH.UNPIN : GLYPH.PIN,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => listing.pin(task.id, !pinned),
       },
@@ -365,32 +367,32 @@ function rowActs(task: TaskSummary, unread: boolean, listing: TasksListing): Row
     menuActions: [
       {
         label: WORDS.COPY_LINK,
-        symbol: "link",
+        symbol: GLYPH.LINK,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => shareTaskLink(task, listing.workspace),
       },
       {
         label: WORDS.RENAME,
-        symbol: "pencil",
+        symbol: GLYPH.RENAME,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => askRename(task, listing.rename),
       },
       {
         label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
-        symbol: unread ? "envelope.open" : "envelope.badge",
+        symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => listing.markRead(task.id, !unread),
       },
       {
         label: VERB.OPEN_IN_BROWSER,
-        symbol: "safari",
+        symbol: GLYPH.OPEN_EXTERNALLY,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () =>
           openOnWeb({ kind: LINK_DESTINATION.TASK, planId: task.id }, listing.workspace),
       },
       {
         label: WORDS.DELETE,
-        symbol: "trash",
+        symbol: GLYPH.DELETE,
         tone: ROW_ACTION_TONE.DESTRUCTIVE,
         onPress: () => listing.askDelete(task),
       },
@@ -670,7 +672,7 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
 
   if (search.trim() !== "") {
     if (found.length === 0) {
-      return <EmptyState title={noMatchWords(search.trim())} symbol="magnifyingglass" />;
+      return <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />;
     }
 
     return (
@@ -683,7 +685,7 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
   }
 
   // Note that an empty workspace draws the system's empty view, as the Inbox's does, rather than a bare list.
-  if (treeEmpty(tree)) return <EmptyState title={WORDS.NO_TASKS} symbol="checklist" />;
+  if (treeEmpty(tree)) return <EmptyState title={WORDS.NO_TASKS} symbol={GLYPH.TASK} />;
 
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
@@ -740,7 +742,7 @@ function historyActions(
   return [
     {
       label: VERSION_HISTORY_WORDS.TITLE,
-      symbol: "clock.arrow.circlepath",
+      symbol: GLYPH.HISTORY,
       onPress: () => open(task),
     },
   ];
@@ -762,25 +764,29 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
     actions: [
       {
         label: WORDS.COPY_LINK,
-        symbol: "link",
+        symbol: GLYPH.LINK,
         onPress: () => shareTaskLink(task, overview.workspace),
       },
-      { label: WORDS.RENAME, symbol: "pencil", onPress: () => askRename(task, overview.rename) },
+      {
+        label: WORDS.RENAME,
+        symbol: GLYPH.RENAME,
+        onPress: () => askRename(task, overview.rename),
+      },
       ...historyActions(task, doors.history),
       {
         label: WORDS.NEW_SUB_TASK,
-        symbol: "plus.square.on.square",
+        symbol: GLYPH.ADD,
         onPress: () => doors.newSubTask(task),
       },
       {
         label: VERB.OPEN_IN_BROWSER,
-        symbol: "safari",
+        symbol: GLYPH.OPEN_EXTERNALLY,
         onPress: () =>
           openOnWeb({ kind: LINK_DESTINATION.TASK, planId: task.id }, overview.workspace),
       },
       {
         label: WORDS.DELETE,
-        symbol: "trash",
+        symbol: GLYPH.DELETE,
         destructive: true,
         onPress: () => doors.askDelete(task),
       },
@@ -877,7 +883,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
             relation={TASK_RELATION_WORDS[TASK_RELATION_KIND.SUB_TASK]}
           />
         ))}
-        <LinkRow symbol="plus" label={WORDS.NEW_SUB_TASK} onPress={() => newSubTask(task)} />
+        <LinkRow symbol={GLYPH.ADD} label={WORDS.NEW_SUB_TASK} onPress={() => newSubTask(task)} />
       </ListSection>
       {!related ? null : (
         <ListSection
@@ -920,7 +926,7 @@ function agentSwipes(
     return [
       {
         label: WORDS.STOP,
-        symbol: "stop.circle",
+        symbol: GLYPH.STOP,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => acts.stop(agent.id),
       },
@@ -932,7 +938,7 @@ function agentSwipes(
   return [
     {
       label: WORDS.ARCHIVE,
-      symbol: "archivebox",
+      symbol: GLYPH.ARCHIVE,
       tone: ROW_ACTION_TONE.DESTRUCTIVE,
       onPress: () => onArchive(agent.id),
     },
@@ -1058,13 +1064,13 @@ function OverviewAgents({
         <TaskAgentRow key={line.agent.id} line={line} task={task} onArchive={onArchiveAgent} />
       ))}
       <LinkRow
-        symbol="plus"
+        symbol={GLYPH.ADD}
         label={WORDS.NEW_AGENT}
         onPress={() => router.push({ pathname: "/start-agent", params: { task: task.id } })}
       />
       {overview.waitingElsewhere === 0 ? null : (
         <LinkRow
-          symbol="tray"
+          symbol={GLYPH.INBOX}
           label={threadsWaitingWords(overview.waitingElsewhere)}
           tone={LINK_ROW_TONE.ATTENTION}
           onPress={() => router.navigate("/inbox")}
@@ -1086,7 +1092,7 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
       {pages.map((page) => (
         <LinkRow
           key={page.id}
-          symbol="doc.richtext"
+          symbol={GLYPH.PAGE}
           label={page.title}
           detail={provenanceText(page.at, Date.now())}
           onPress={() =>
@@ -1125,7 +1131,7 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
       {open.map((thread) => (
         <LinkRow
           key={thread.id}
-          symbol="text.bubble"
+          symbol={GLYPH.COMMENT}
           label={threadComments(thread)[0]?.words ?? thread.quote}
           detail={provenanceText(thread.updatedAt, Date.now())}
           onPress={() =>
@@ -1306,9 +1312,9 @@ function TasksSplitScreen({
                 onArchiveAgent={archiveAsk.archive}
               />
             ) : selected !== undefined && read ? (
-              <EmptyState title={TASK_NOT_FOUND} symbol="questionmark.folder" />
+              <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
             ) : (
-              <EmptyState title={SELECT_A_TASK} symbol="checklist" />
+              <EmptyState title={SELECT_A_TASK} symbol={GLYPH.TASK} />
             )
           }
           detailBar={
@@ -1395,9 +1401,13 @@ export function TaskScreen() {
       />
       {menu === undefined ? null : (
         <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Menu icon={menu.symbol} accessibilityLabel={menu.label}>
+          <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
             {(menu.submenus ?? []).map((submenu) => (
-              <Stack.Toolbar.Menu key={submenu.label} title={submenu.label} icon={submenu.symbol}>
+              <Stack.Toolbar.Menu
+                key={submenu.label}
+                title={submenu.label}
+                icon={glyphSymbol(submenu.symbol)}
+              >
                 {submenu.choices.map((choice) => (
                   <Stack.Toolbar.MenuAction
                     key={choice.label}
@@ -1410,7 +1420,7 @@ export function TaskScreen() {
                 {submenu.actions.map((action) => (
                   <Stack.Toolbar.MenuAction
                     key={action.label}
-                    icon={action.symbol}
+                    icon={glyphSymbol(action.symbol)}
                     destructive={action.destructive === true}
                     onPress={action.onPress}
                   >
@@ -1422,7 +1432,7 @@ export function TaskScreen() {
             {menu.actions.map((action) => (
               <Stack.Toolbar.MenuAction
                 key={action.label}
-                icon={action.symbol}
+                icon={glyphSymbol(action.symbol)}
                 destructive={action.destructive === true}
                 onPress={action.onPress}
               >
@@ -1440,9 +1450,9 @@ export function TaskScreen() {
             onArchiveAgent={archiveAsk.archive}
           />
         ) : read ? (
-          <EmptyState title={TASK_NOT_FOUND} symbol="questionmark.folder" />
+          <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         ) : (
-          <EmptyState title={READING_TASK} symbol="checklist" />
+          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
         )}
       </Screen>
       <StatusQuestionAsk question={question} />
