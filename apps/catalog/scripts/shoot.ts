@@ -99,14 +99,14 @@ interface ShotResult {
 
 // Playwright's surface this script touches, typed here because the package is not installed beside it.
 interface PlaywrightPage {
-  goto(url: string): Promise<unknown>;
-  waitForSelector(selector: string): Promise<unknown>;
-  waitForFunction(script: string, arg?: unknown, options?: { timeout: number }): Promise<unknown>;
+  goto(url: string): Promise<void>;
+  waitForSelector(selector: string): Promise<void>;
+  waitForFunction(script: string, arg?: unknown, options?: { timeout: number }): Promise<void>;
   waitForTimeout(ms: number): Promise<void>;
   evaluate<Result>(script: string): Promise<Result>;
   on(event: "pageerror", listener: (value: never) => void): void;
   locator(selector: string): {
-    screenshot(options: Record<string, unknown>): Promise<unknown>;
+    screenshot(options: Record<string, unknown>): Promise<Buffer>;
   };
   close(): Promise<void>;
 }

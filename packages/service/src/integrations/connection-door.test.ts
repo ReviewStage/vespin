@@ -15,7 +15,7 @@ import { getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_PAYER } from "@repo/features/agent-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { isRecord, type WireRecord } from "@repo/wire";
+import { isRecord, type UnparsedWireValue, type WireRecord } from "@repo/wire";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import {
   Clock,
@@ -208,7 +208,7 @@ const launch = (admitted: Parameters<typeof nativeAgentConnections>[0]) =>
 const SILENT_LINEAR = fakeHttpClientLayer(() => new Promise<Response>(() => {}));
 
 /** The text of a forwarded MCP result's first block. */
-function firstText(result: Result.Result<WireRecord, unknown>): unknown {
+function firstText(result: Result.Result<WireRecord, unknown>): UnparsedWireValue {
   if (Result.isFailure(result)) return undefined;
   const content = result.success.content;
 

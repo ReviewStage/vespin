@@ -14,6 +14,7 @@ import { accountCall, callAnswered } from "@repo/features";
 import { CLI_EXIT, cliExitOfFault, cliExitOfStatus } from "@repo/features/cli-exit";
 import { hostedRouteOf } from "@repo/features/hosted-routes";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { valueFromJsonText } from "@repo/wire";
 import { Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { answer, CommandFailed, readInput } from "../output.js";
@@ -32,15 +33,6 @@ function jsonBody(text: string, source: string): Effect.Effect<string, CommandFa
     return Effect.fail(
       new CommandFailed({ exit: CLI_EXIT.USAGE, message: `${source} is not JSON.` }),
     );
-  }
-}
-
-/** An answer's body as JSON where it is, else as its text. */
-function readable(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
   }
 }
 
@@ -95,7 +87,7 @@ export const apiCommand = Command.make(
       }
 
       const text = yield* Effect.promise(() => sent.response.text());
-      const found = readable(text);
+      const found = valueFromJsonText(text);
       yield* answer({ json: found, lines: [JSON.stringify(found, null, 2)] });
       const exit = cliExitOfStatus(sent.response.status);
 

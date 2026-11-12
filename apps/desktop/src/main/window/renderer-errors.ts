@@ -23,8 +23,8 @@ type WindowOpened = (event: Electron.Event, window: BrowserWindow) => void;
 
 /** Where windows are announced as they open: Electron's `app`, unless a test stands one in. */
 interface WindowsOpening {
-  on(event: "browser-window-created", listener: WindowOpened): unknown;
-  removeListener(event: "browser-window-created", listener: WindowOpened): unknown;
+  on(event: "browser-window-created", listener: WindowOpened): void;
+  removeListener(event: "browser-window-created", listener: WindowOpened): void;
 }
 
 /** The document a window's page is, by its file's name, such as `index.html`. */

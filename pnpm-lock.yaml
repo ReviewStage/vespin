@@ -221,6 +221,9 @@ importers:
       '@repo/features':
         specifier: workspace:*
         version: link:../../packages/features
+      '@repo/wire':
+        specifier: workspace:*
+        version: link:../../packages/wire
       effect:
         specifier: 'catalog:'
         version: 4.0.4

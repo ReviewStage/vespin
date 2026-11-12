@@ -1148,7 +1148,7 @@ const HOST_READ_SLICES = Object.keys(HOST_READ_SLICE) as HostReadSlice[];
  * its membership or order moved.
  */
 type KeyMoved =
-  | { readonly key: readonly string[]; readonly value: unknown }
+  | { readonly key: readonly string[]; readonly value: HeldValue }
   | {
       readonly key: readonly string[];
       readonly rows: readonly Keyed[];
@@ -1174,8 +1174,11 @@ export interface AppStateDelivery {
   readonly moved?: { readonly [Slice in HostReadSlice]?: readonly KeyMoved[] };
 }
 
+/** A value the document holds: a record or list, a primitive, or nothing. */
+type HeldValue = object | string | number | boolean | null | undefined;
+
 /** One level of a slice's keys: each id's or part's value, or, above the last level, each kind's record of ids. */
-type Keyed = Readonly<Record<string, unknown>>;
+type Keyed = Readonly<Record<string, HeldValue>>;
 
 /** Whether `value` is a level of keys or a record of fields that can be read by name, rather than a primitive or nothing. */
 function isKeyed(value: unknown): value is Keyed {
@@ -1183,7 +1186,7 @@ function isKeyed(value: unknown): value is Keyed {
 }
 
 /** The value `keyed` holds under `id` itself, never one it inherits. */
-function ownValue(keyed: Keyed, id: string): unknown {
+function ownValue(keyed: Keyed, id: string): HeldValue {
   return Object.hasOwn(keyed, id) ? keyed[id] : undefined;
 }
 
@@ -1264,8 +1267,8 @@ function idOf(rowId: string, row: Keyed): string {
 function keyMoved(
   entry: HostReadSliceEntry,
   key: readonly string[],
-  sent: unknown,
-  next: unknown,
+  sent: HeldValue,
+  next: HeldValue,
 ): KeyMoved {
   const rowId = rowIdOf(entry, key);
   const [before, after] = [rowsOf(entry, sent), rowsOf(entry, next)];
@@ -1334,7 +1337,7 @@ function keysMoved(entry: HostReadSliceEntry, before: Keyed, after: Keyed): KeyM
 }
 
 /** The value `held` stood at once `move` lands on it: laid in, keeping what of it did not move, or none where it is gone. */
-function valueLaid(entry: HostReadSliceEntry, held: unknown, move: KeyMoved): unknown {
+function valueLaid(entry: HostReadSliceEntry, held: HeldValue, move: KeyMoved): HeldValue {
   if ("value" in move) {
     if (move.value === null) return undefined;
 
@@ -1381,10 +1384,10 @@ function valueLaid(entry: HostReadSliceEntry, held: unknown, move: KeyMoved): un
  */
 function recordLaid(
   rowsAt: string,
-  held: unknown,
+  held: HeldValue,
   list: readonly Keyed[],
   beside: Keyed | undefined,
-): unknown {
+): HeldValue {
   // SAFETY: a read is a record of its fields, its rows among them, as `recordOf` reads it.
   const read = (typeof held === "object" && held !== null ? held : {}) as Keyed;
   const was = read.rows;
@@ -1416,7 +1419,7 @@ function withIdsMoved(
   held: Keyed | undefined,
   moves: readonly KeyMoved[],
 ): Keyed {
-  const next: Record<string, unknown> = { ...held };
+  const next: Record<string, HeldValue> = { ...held };
 
   for (const move of moves) {
     const id = move.key[move.key.length - 1] ?? "";
@@ -1435,7 +1438,7 @@ function withKindsMoved(
   held: Keyed | undefined,
   moves: readonly KeyMoved[],
 ): Keyed {
-  const next: Record<string, unknown> = { ...held };
+  const next: Record<string, HeldValue> = { ...held };
 
   for (const kind of new Set(moves.map((move) => move.key[0] ?? ""))) {
     // SAFETY: each kind of a slice keyed by two holds a record of its ids.

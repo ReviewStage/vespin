@@ -7,14 +7,14 @@ import type { PanelManager } from "./panel-manager";
 
 /** A notification as macOS holds it once posted: shown once asked, and answering with Electron's events. */
 interface PostedNotification {
-  on(event: "click" | "close" | "show", listener: () => void): unknown;
-  on(event: "failed", listener: (event: unknown, error: string) => void): unknown;
+  on(event: "click" | "close" | "show", listener: () => void): void;
+  on(event: "failed", listener: (event: unknown, error: string) => void): void;
   show(): void;
 }
 
 /** The system's doors a notice leaves through: Electron's, unless a test stands its own in. */
 interface NoticeSystem {
-  readonly app: { setBadgeCount(count: number): unknown };
+  readonly app: { setBadgeCount(count: number): void };
   readonly Notification: {
     isSupported(): boolean;
     new (options: { title: string; body: string; silent: boolean }): PostedNotification;

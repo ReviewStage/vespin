@@ -132,7 +132,7 @@ test("a finished turn's run of one call alone stands on its own row rather than 
 });
 
 /** A value read otherwise: words with more, a flag flipped, a list one item shorter, a record with a key more. */
-function changed(value: unknown): unknown {
+function changed(value: unknown): string | boolean | object {
   if (typeof value === "string") return `${value} again`;
 
   if (typeof value === "boolean") return !value;

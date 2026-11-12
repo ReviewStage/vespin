@@ -6,6 +6,7 @@ import { readPushDeviceStatus, registerPushDevice } from "@repo/database/models/
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB } from "@repo/database/testing";
 import { PUSH_ENVIRONMENT } from "@repo/features/push-device-wire";
+import type { WireValue } from "@repo/wire";
 import { ConfigProvider, Effect, Layer, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { recordingApnsTransport } from "../testing/apns-fake.js";
@@ -93,7 +94,7 @@ const send = (sent: ApnsNotification) =>
   });
 
 /** A JWT's segment as the JSON it carries. */
-function decodeSegment(segment: string): unknown {
+function decodeSegment(segment: string): WireValue {
   return JSON.parse(Buffer.from(segment, "base64url").toString("utf8"));
 }
 

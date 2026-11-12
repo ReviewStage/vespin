@@ -14,7 +14,7 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { STATUS_TONE } from "@repo/ui";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { firstRefusal, KEPT, type Kept, notKept, unreachedAs } from "../act.js";
+import { firstNotKept, KEPT, type Kept, notKept, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { afterPaint } from "../after-paint.js";
 import { useAppCommand } from "../app-commands.js";
@@ -176,7 +176,7 @@ export function useInboxReadMarks({
           const landed = taken.filter((each) => each.kept).length;
 
           if (landed === marking.length) return;
-          refused(markedNote(false, landed, marking.length - landed), firstRefusal(taken), {
+          refused(markedNote(false, landed, marking.length - landed), firstNotKept(taken)?.cause, {
             workspaceId,
           });
         },

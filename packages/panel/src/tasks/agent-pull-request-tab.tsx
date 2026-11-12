@@ -3569,7 +3569,7 @@ function PullRequestTabBody({
     const header = Promise.all([ask.pullRequest(), ask.conversation(), ask.checks()]);
     void publishedRead.ask();
 
-    return header;
+    return header.then(() => undefined);
   };
 
   const parts: OverviewParts = {

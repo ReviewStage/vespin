@@ -39,7 +39,7 @@ function account(token: string | undefined) {
 }
 
 /** An answer with the trace its cause names left out, since every call mints its own. */
-function untraced(answer: unknown): unknown {
+function untraced<Answer>(answer: Answer): Answer | object {
   if (typeof answer !== "object" || answer === null || !("cause" in answer)) return answer;
   const { cause } = answer;
 

@@ -225,9 +225,9 @@ export function useWrite(): Write {
  * with `@repo/ui-native`'s `useAsyncAction`: answers the words to say, the
  * host's own or the offline hint, or none once it went.
  */
-export function refusalOf(
+export function refusalOf<Answer>(
   write: Write,
-  act: () => PromiseLike<unknown>,
+  act: () => PromiseLike<Answer>,
 ): Promise<string | undefined> {
   const said: { words?: string } = {};
 

@@ -239,7 +239,7 @@ function outcomeOf(note: WriteNote | undefined): WriteOutcome {
 }
 
 /** What a change reads again once GitHub answered it: where it answers a promise, the change stays out until it settles. */
-export type ReadAgain = () => unknown;
+export type ReadAgain = () => PromiseLike<void> | void;
 
 /** The tab's changes: the one out, if any, what the last one left to say, and the presses. */
 export interface PullRequestWrites {

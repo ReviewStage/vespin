@@ -13,6 +13,7 @@
  */
 
 import type { SessionKey, SessionStore, SessionStoreEntry } from "@anthropic-ai/claude-agent-sdk";
+import type { WireValue } from "@repo/wire";
 import { Redacted, Schema } from "effect";
 import {
   RUNNER_TRANSCRIPTS,
@@ -39,7 +40,7 @@ export function transcriptStore(
   bearer: Redacted.Redacted,
   traceHeaders: Readonly<Record<string, string>>,
 ): Required<Pick<SessionStore, "append" | "load" | "listSessions" | "delete" | "listSubkeys">> {
-  const post = async (call: RunnerTranscriptCall): Promise<unknown> => {
+  const post = async (call: RunnerTranscriptCall): Promise<WireValue> => {
     const response = await fetch(url, {
       method: "POST",
       headers: {

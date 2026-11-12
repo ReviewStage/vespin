@@ -56,7 +56,7 @@ import {
   type ApprovalStatus,
   agentPendingApprovalSchema,
 } from "@repo/features/agent-approval-wire";
-import { CommandPrefixSchema, type WireValue } from "@repo/wire";
+import { CommandPrefixSchema, type WireBoundaryInput, type WireValue } from "@repo/wire";
 import { Effect, Option, Schema } from "effect";
 
 /** The runner's decisions as a member's answers name them, one for one. */
@@ -115,10 +115,11 @@ function cutText(text: string, max: number): string {
 }
 
 /** A value of a call's input cut as the runner cuts it, and no deeper than the bound. */
-function cutValue(value: unknown, depth: number): unknown {
+function cutValue(value: unknown, depth: number): WireBoundaryInput {
   if (typeof value === "string") return cutText(value, APPROVAL_INPUT.TEXT_MAX);
 
-  if (value === null || typeof value !== "object") return value;
+  // SAFETY: a call's input arrives as JSON, so what is no string and no record or list is a JSON scalar, which `readInput` checks.
+  if (value === null || typeof value !== "object") return value as WireBoundaryInput;
 
   if (depth >= MAX_INPUT_DEPTH) return null;
 

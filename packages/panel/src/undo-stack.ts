@@ -610,7 +610,7 @@ export interface UndoWrite<Rows, Asked, Change, Kind extends PortActKind, Answer
   /** What a refusal of it is about. */
   readonly about?: (change: Change) => FailureAbout;
   /** What a refusal reports as its cause, of the answer that refused it; the answer itself where none is named. */
-  readonly cause?: (answer: Answer) => unknown;
+  readonly cause?: (answer: Answer) => ShownFailure["cause"];
 }
 
 /** What a declared write's refusal reports: its surface, the answer that refused it, and what it is about. */

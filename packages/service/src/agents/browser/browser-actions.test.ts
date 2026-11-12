@@ -17,6 +17,7 @@ import {
   runBrowserActions,
 } from "@repo/features/browser-agent-cdp";
 import type { CdpEvent, PageTarget } from "@repo/features/browser-cdp";
+import type { WireValue } from "@repo/wire";
 import { Duration, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
 import {
@@ -1312,7 +1313,7 @@ class PageSelect extends EventTarget {
 }
 
 /** A function the browser is sent, as the page calls it on the select with its arguments' values. */
-type SelectFunction = (this: PageSelect, ...values: unknown[]) => unknown;
+type SelectFunction = (this: PageSelect, ...values: unknown[]) => WireValue;
 
 /** The page's answer to `Runtime.callFunctionOn`: the function the browser was sent, called on the select, its value returned by value. */
 function callOnSelect(select: PageSelect, params: FakeCdpCommand["params"]): FakeCdpAnswer {

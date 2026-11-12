@@ -102,7 +102,7 @@ export type ConfirmFailure = (refused: ActionResult) => ReportedFailure;
  * its own.
  */
 export interface ConfirmAct {
-  readonly run: () => Promise<unknown>;
+  readonly run: () => Promise<void>;
   readonly busy: boolean;
   readonly refused: ActionResult | undefined;
   readonly reset: () => void;
