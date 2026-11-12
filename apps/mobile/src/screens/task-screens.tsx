@@ -110,6 +110,7 @@ import {
   threadsOnBlocks,
   useTaskComments,
 } from "../tasks/use-comments.js";
+import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import {
   type StatusQuestion,
@@ -1260,6 +1261,7 @@ function OverviewDescription({
   const threads = useTaskComments(task.id);
   const blocks = useMemo(() => descriptionBlocks(body), [body]);
   const onBlocks = threadsOnBlocks(threads, blocks);
+  const { pictureSource, videoAt } = useDescriptionPictures(body);
 
   const openThread = (threadId: string) =>
     router.push({ pathname: "/tasks/comments/[id]", params: { id: threadId, task: task.id } });
@@ -1267,7 +1269,13 @@ function OverviewDescription({
   if (blocks.length === 0) {
     return (
       <ListSection title={WORDS.DESCRIPTION}>
-        <WordsRow words={body} repository={task.repository} onOpenLink={openLink} />
+        <WordsRow
+          words={body}
+          repository={task.repository}
+          onOpenLink={openLink}
+          pictureSource={pictureSource}
+          videoAt={videoAt}
+        />
       </ListSection>
     );
   }
@@ -1284,6 +1292,8 @@ function OverviewDescription({
             words={block.drawn}
             repository={task.repository}
             onOpenLink={openLink}
+            pictureSource={pictureSource}
+            videoAt={videoAt}
             last={index === blocks.length - 1}
             menuActions={
               block.quote === undefined
