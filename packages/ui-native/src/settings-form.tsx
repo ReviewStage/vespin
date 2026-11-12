@@ -580,8 +580,6 @@ type NoteRowProps = {
   readonly detail?: string | undefined;
   /** A quiet line under them, such as who kept it and when. */
   readonly line: string;
-  /** A word beside the line, such as New, in the muted ink. */
-  readonly badge?: string | undefined;
   /** Where a press goes, such as a skill's file, the chevron at its end; a row with none takes no press. */
   readonly onPress?: (() => void) | undefined;
   /** The act that takes it away, such as Delete, behind a swipe from the trailing edge and in the menu a long press opens; none where the reader may not. */
@@ -598,9 +596,8 @@ type NoteRowProps = {
  * runs it, since it asks first. VoiceOver hears the row as one element, its
  * words then its line, and offers the act among its actions.
  */
-export function NoteRow({ symbol, words, detail, line, badge, onPress, remove }: NoteRowProps) {
+export function NoteRow({ symbol, words, detail, line, onPress, remove }: NoteRowProps) {
   const colors = useColors();
-  const said = badge === undefined ? line : `${badge} · ${line}`;
 
   const lines = (
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
@@ -615,7 +612,7 @@ export function NoteRow({ symbol, words, detail, line, badge, onPress, remove }:
       <Text
         modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
       >
-        {said}
+        {line}
       </Text>
     </VStack>
   );
@@ -648,7 +645,7 @@ export function NoteRow({ symbol, words, detail, line, badge, onPress, remove }:
     listRowBackground(colors.SURFACE),
     accessibilityElement("combine"),
     accessibilityLabel(words),
-    accessibilityValue(detail === undefined ? said : `${detail}, ${said}`),
+    accessibilityValue(detail === undefined ? line : `${detail}, ${line}`),
   ];
 
   if (remove === undefined) return <HStack modifiers={placed}>{drawn}</HStack>;

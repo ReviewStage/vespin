@@ -1,7 +1,7 @@
 /* settings-page.css -- what a settings page's utilities (`settings-page.tsx`)
    cannot say: rows scrolled up dissolve into the page's top edge, on a scroll
-   timeline; an empty state that is the page's content fills the room under
-   the title; and the column's inset narrows under 480px of the page, which is
+   timeline; a wide page's measure; an empty state that is the page's
+   content fills the room under the title; and the column's inset narrows under 480px of the page, which is
    a container of its own (`@container/ui-settings-page`). The frame, the
    page's scroller, the room under the head, and the sections' gap are
    utilities; the sections' own heading and card are theirs
@@ -39,6 +39,12 @@
     animation: ui-settings-page-fade linear both;
     animation-timeline: scroll(self block);
     animation-range: 0 var(--ui-space-24);
+  }
+
+  /* A page of records compared across a table's columns stands at the wide
+     measure, which caps it so a row's words stay readable in a big window. */
+  .ui-settings-page[data-width="wide"] {
+    --ui-settings-page-measure: var(--ui-wide-measure);
   }
 
   /* Note that the column's box, measure, and inset stay here rather than in
