@@ -117,8 +117,10 @@ export type TabSubject =
     }
   | {
       readonly kind: typeof TAB_KIND.LOCAL;
-      /** The terminal's name ("Local 1"), which names the tab. */
+      /** The terminal's name ("Local 1"), or a local agent's run action's label, which names the tab. */
       readonly title: string;
+      /** Where the terminal is a local agent's run action's, whose icon the tab wears; none for a developer's own shell. */
+      readonly action?: RunTabLook | undefined;
     }
   | { readonly kind: typeof TAB_KIND.FILE; readonly path: string }
   | { readonly kind: typeof TAB_KIND.PAGE; readonly title: string }
@@ -233,6 +235,11 @@ export function agentEndMark(
   return stateEndMark(agentGlyphState(agent.status), hinted);
 }
 
+/** A terminal tab's glyph: the terminal's own, or a run action's icon. */
+function terminalGlyph(run: RunTabLook | undefined): React.JSX.Element {
+  return run === undefined ? <GLYPH.TERMINAL /> : runActionGlyph(run.action.icon);
+}
+
 /** How a tab of the kind looks, from what the place drawing it knows of what it shows. */
 export function tabLook(subject: TabSubject): KindLook {
   switch (subject.kind) {
@@ -285,19 +292,10 @@ export function tabLook(subject: TabSubject): KindLook {
       };
     // Note that a terminal wears the terminal's own still glyph rather than its agent's, which
     // moves while the agent works, and is named by its terminal; each place drawing it names the agent beside it.
-    // A run action's wears the action's icon, its tab's end saying while its process runs (`runEndMark`).
+    // A run action's, in the cloud or on this Mac, wears the action's icon, its tab's end saying while its process runs (`runEndMark`).
     case TAB_KIND.TERMINAL:
-      return {
-        icon:
-          subject.action === undefined ? (
-            <GLYPH.TERMINAL />
-          ) : (
-            runActionGlyph(subject.action.action.icon)
-          ),
-        label: subject.title,
-      };
     case TAB_KIND.LOCAL:
-      return { icon: <GLYPH.TERMINAL />, label: subject.title };
+      return { icon: terminalGlyph(subject.action), label: subject.title };
     case TAB_KIND.FILE: {
       // A file's tab is named as every place names a file (`file-ref.tsx`).
       const { icon, label } = fileLook(subject.path);

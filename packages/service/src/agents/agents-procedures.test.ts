@@ -7,7 +7,12 @@ import { recordRepositoryReads } from "@repo/database/models/github-repository-r
 import { readGitHubTokenRow } from "@repo/database/models/github-token-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { createTask } from "@repo/database/models/task-store";
-import { setRepositorySetup } from "@repo/database/models/workspace-sandbox-script-store";
+import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
+import {
+  readRunActions,
+  setRepositorySetup,
+  setRunActions,
+} from "@repo/database/models/workspace-sandbox-script-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace, startTask } from "@repo/database/testing";
 import { HOSTED_API_ERROR } from "@repo/features";
@@ -17,12 +22,17 @@ import {
   type SandboxState,
   type TerminalSummary,
 } from "@repo/features/terminal-wire";
-import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
+import {
+  REPOSITORY_SCRIPT_KIND,
+  RUN_ACTION_AVAILABILITY,
+} from "@repo/features/workspace-sandbox-setup-wire";
 import { SandboxUnavailable, SnapshotGone } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
+import { EXPERIMENT } from "@repo/settings";
 import { noNetwork } from "@repo/wire/testing";
 import { Clock, type Context, Effect, Layer, Option, Queue, Result } from "effect";
 import { SqlClient } from "effect/sql";
+import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import {
   recordingProductAnalytics,
   SERVER_AGENT_TOOL,
@@ -225,6 +235,20 @@ const toolsCounted = (userId: string) =>
     .filter((event) => event.userId === userId && event.name === SERVER_EVENT.AGENT_TOOL_OPEN)
     .map((event) => ({ workspaceId: event.workspaceId, ...event.properties }));
 
+/** The deployment's environment with no key of its own, so a run action runs with no workspace variables. */
+const NO_KEYS: HostedEnvironmentValues = {
+  posthogPersonalApiKey: undefined,
+  posthogProjectId: undefined,
+  posthogApiHost: undefined,
+  posthogProjectApiKey: undefined,
+  posthogIngestHost: undefined,
+  cronSecret: undefined,
+  githubWebhookSecret: undefined,
+  providerKeyEncryptionKeys: undefined,
+  titleAnthropicApiKey: undefined,
+  previewApiKeys: {},
+};
+
 /** The agents procedures over the test's store and the sandbox given, each bearer answering for the account it maps to. */
 const standing = (
   bearers: ReadonlyMap<string, string>,
@@ -243,6 +267,7 @@ const standing = (
           Layer.succeed(Database, yield* Database),
           ANALYTICS.layer,
           noNetwork,
+          Layer.succeed(HostedEnvironment, NO_KEYS),
         ),
       ),
     );
@@ -314,6 +339,9 @@ const terminalsOf = (agentId: string) => `/api/agents/${agentId}/terminals`;
 const resumeOf = (agentId: string) => `/api/agents/${agentId}/sandbox/resume`;
 const portsOf = (agentId: string) => `/api/agents/${agentId}/ports`;
 const terminalOf = (agentId: string, terminalId: string) => `${terminalsOf(agentId)}/${terminalId}`;
+
+const runActionOf = (agentId: string, actionId: string) =>
+  `${agentOf(agentId)}/run-actions/${actionId}`;
 
 it.layer(SUITE)("the agent terminals procedures", (it) => {
   it.effect(
@@ -418,6 +446,59 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
         assert.equal((yield* call(portsOf(agent.id), "Bearer tokenless")).status, 404);
         assert.equal(sandbox.asked.length, asked, "no refused call reaches the sandbox");
       }),
+  );
+
+  // Regression: a cloud route that ignores availability runs an action the workspace kept to its Macs in a sandbox.
+  it.effect("a run action runs in a cloud agent's sandbox only where it may run in the cloud", () =>
+    Effect.gen(function* () {
+      const { userId, agent } = yield* openAgent;
+      const workspaceId = agent.organizationId;
+
+      yield* setWorkspaceExperiment({
+        organizationId: workspaceId,
+        experiment: EXPERIMENT.RUN_ACTIONS,
+        on: true,
+        by: userId,
+      });
+
+      yield* setRunActions(
+        workspaceId,
+        "acme/relay",
+        [
+          { label: "Dev", command: "pnpm dev" },
+          { label: "Simulator", command: "pnpm ios", availableIn: RUN_ACTION_AVAILABILITY.LOCAL },
+        ],
+        new Date(yield* Clock.currentTimeMillis),
+      );
+
+      const [dev, simulator] = yield* readRunActions(workspaceId, "acme/relay");
+      const ran: string[] = [];
+      const scripted = scriptedSandbox(SANDBOX_STATE.RUNNING);
+
+      const sandbox = Layer.succeed(AgentSandbox, {
+        ...scripted.service,
+        run: (_sessionId, terminalId, run) =>
+          Effect.sync(() => {
+            ran.push(run.label);
+
+            return Result.succeed({ ...SHELL, id: terminalId, runAction: run.actionId });
+          }),
+      });
+
+      const call = yield* standing(new Map([["Bearer owner", userId]]), sandbox);
+
+      const local = yield* call(runActionOf(agent.id, simulator?.id ?? ""), "Bearer owner", {
+        method: "POST",
+      });
+
+      const cloud = yield* call(runActionOf(agent.id, dev?.id ?? ""), "Bearer owner", {
+        method: "POST",
+      });
+
+      assert.equal(local.status, 404);
+      assert.equal(cloud.status, 200);
+      assert.deepEqual(ran, ["Dev"]);
+    }),
   );
 
   it.effect("a shell starts in a running sandbox under an id the service mints", () =>

@@ -16,6 +16,8 @@ import {
 import {
   REPOSITORY_SCRIPT_KIND,
   type RepositoryScriptKind,
+  RUN_ACTION_AVAILABILITY,
+  type RunActionAvailability,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { and, asc, eq, type SQL, sql } from "drizzle-orm";
 import { Effect, type Option, Schema } from "effect";
@@ -187,19 +189,21 @@ const RunActionSchema = Schema.Struct({
   // Note that an icon is read loosely, its glyph's color as any text, so a color a newer deploy stored fails no older reader.
   icon: Schema.NullOr(looseTaskSectionIconSchema),
   isDefault: Schema.Boolean,
+  availableIn: Schema.Literals(Object.values(RUN_ACTION_AVAILABILITY)),
   updatedAt: InstantColumnSchema,
 });
 
 /** One of a repository's run actions as its list was last saved, with the repository as that save spelled it. */
 export type WorkspaceRunAction = typeof RunActionSchema.Type;
 
-/** One action as a save writes it: the id it keeps, where it keeps one, its label, its command, its icon where it wears one, and whether it is the default. Note that an icon is written as loosely as it is read, so an edit of another action keeps one a newer deploy stored as it stood. */
+/** One action as a save writes it: the id it keeps, where it keeps one, its label, its command, its icon where it wears one, whether it is the default, and where it may run, both where unsaid. Note that an icon is written as loosely as it is read, so an edit of another action keeps one a newer deploy stored as it stood. */
 export interface RunActionWrite {
   readonly id?: string | undefined;
   readonly label: string;
   readonly command: string;
   readonly icon?: LooseTaskSectionIcon | undefined;
   readonly isDefault?: boolean | undefined;
+  readonly availableIn?: RunActionAvailability | undefined;
 }
 
 const RUN_ACTION_COLUMNS = {
@@ -209,6 +213,7 @@ const RUN_ACTION_COLUMNS = {
   command: runAction.command,
   icon: runAction.icon,
   isDefault: runAction.isDefault,
+  availableIn: runAction.availableIn,
   updatedAt: runAction.updatedAt,
 };
 
@@ -267,6 +272,7 @@ const insertRunAction = SqlSchema.findAll({
     command: Schema.String,
     icon: Schema.NullOr(looseTaskSectionIconSchema),
     isDefault: Schema.Boolean,
+    availableIn: Schema.Literals(Object.values(RUN_ACTION_AVAILABILITY)),
     now: Schema.Date,
   }),
   execute: ({ now, ...row }) =>
@@ -411,6 +417,7 @@ export const editRunActions = <E, R>(
             icon: action.icon ?? null,
             // Note that only the first action named default is, so a list naming two still saves one.
             isDefault: action.isDefault === true && !defaulted,
+            availableIn: action.availableIn ?? RUN_ACTION_AVAILABILITY.BOTH,
             now: stamped,
             ...(keeps && action.id !== undefined && { id: action.id }),
           });

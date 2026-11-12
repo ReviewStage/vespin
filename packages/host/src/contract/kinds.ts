@@ -649,8 +649,10 @@ export const MAC_PHOTO_ACT_KIND = {
 /**
  * A shell on this Mac (`mac-shells.ts`): the developer's login shell opened
  * in a folder for the asking panel, attached, and closed, answered by the
- * desktop's main, which holds it. What it prints travels on the port an
- * attach posts to that panel, as a cloud shell's does, never on an act.
+ * desktop's main, which holds it; and a local agent's run action run in its
+ * worktree on this Mac as a process of its own, stopped, and listed. What
+ * either prints travels on the port an attach posts to that panel, as a
+ * cloud shell's does, never on an act.
  */
 export const MAC_SHELL_ACT_KIND = {
   /** The folder a cloud agent's Local shells open in: its mirror on this Mac, made where none stands. */
@@ -658,6 +660,12 @@ export const MAC_SHELL_ACT_KIND = {
   MAC_SHELL_OPEN: "macShell.open",
   MAC_SHELL_ATTACH: "macShell.attach",
   MAC_SHELL_CLOSE: "macShell.close",
+  /** A local agent's run action run in its worktree on this Mac, or the run of it that already goes. */
+  MAC_SHELL_RUN_ACTION: "macShell.runAction",
+  /** A local agent's run action stopped: TERM, then KILL where it outlives the grace. */
+  MAC_SHELL_STOP_ACTION: "macShell.stopAction",
+  /** A local agent's run actions on this Mac, and whether each runs. */
+  MAC_SHELL_ACTIONS: "macShell.actions",
 } as const;
 
 export type MacShellActKind = (typeof MAC_SHELL_ACT_KIND)[keyof typeof MAC_SHELL_ACT_KIND];
@@ -1085,6 +1093,9 @@ export const PORT_ACT_USE = {
   MAC_SHELL_OPEN: ACT_USE.WRITE,
   MAC_SHELL_ATTACH: ACT_USE.WRITE,
   MAC_SHELL_CLOSE: ACT_USE.WRITE,
+  MAC_SHELL_RUN_ACTION: ACT_USE.WRITE,
+  MAC_SHELL_STOP_ACTION: ACT_USE.WRITE,
+  MAC_SHELL_ACTIONS: ACT_USE.READ,
 
   MAC_TERMINAL_LOCAL_AGENT: ACT_USE.WRITE,
 

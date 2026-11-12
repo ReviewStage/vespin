@@ -332,6 +332,44 @@ function localLink(agentId: string): ShellLink {
   };
 }
 
+/**
+ * How a Local tab reaches a local agent's run action on this Mac: attached
+ * to the process the host holds for the action (`macShell.runAction`),
+ * read-only, never opening a shell of its own; one that went is said to
+ * have exited, and the tab's close ends it, as a cloud run action's does.
+ */
+function localRunLink(agentId: string): ShellLink {
+  return {
+    agentId,
+    readOnly: true,
+    attach: (terminalId, size) =>
+      askAct(ACT_KIND.MAC_SHELL_ATTACH, { agentId, terminalId, ...size }).then(
+        () => ({ asked: true }),
+        () => ({ state: { kind: TERMINAL_STATE.UNREACHABLE, why: TERMINAL_UNREACHED.SHELL } }),
+      ),
+    stateOf: (connection, code) =>
+      connection === TERMINAL_CONNECTION.EXITED
+        ? { kind: TERMINAL_STATE.EXITED, code }
+        : { kind: TERMINAL_STATE.ATTACHED },
+    ended: () => undefined,
+    close: (terminalId) => tellAct(ACT_KIND.MAC_SHELL_CLOSE, { agentId, terminalId }),
+  };
+}
+
+/** A Local tab's session: on a local agent's run action where the window holds the tab for one, or a shell of its own in the agent's mirror. */
+function localSession(
+  held: TerminalsHeld,
+  account: string | undefined,
+  agentId: string,
+  shell: string,
+): TerminalSession {
+  const found = held.of(account, TERMINAL_KIND.LOCAL, agentId).find((each) => each.shell === shell);
+
+  return found?.action !== undefined && found.terminal !== undefined
+    ? new TerminalSession(localRunLink(agentId), found.terminal)
+    : new TerminalSession(localLink(agentId), undefined);
+}
+
 /** A terminal tab of either kind. */
 export type ShellTab = TerminalStripTab | LocalStripTab;
 
@@ -415,7 +453,7 @@ export function useTerminalTabSession(
       sessions.session(account, kind, agentId, shell, () =>
         kind === TERMINAL_KIND.CLOUD
           ? cloudSession(held, account, agentId, shell, () => gone.current())
-          : new TerminalSession(localLink(agentId), undefined),
+          : localSession(held, account, agentId, shell),
       ),
     [held, sessions, account, kind, agentId, shell],
   );
@@ -498,7 +536,8 @@ export function useOpenTerminalTab(
  * the window holds one, or a new tab held on that shell, which attaches to
  * it rather than starting another, handing the panel the keys (`onShown`).
  * The tab holds the run action it runs, with the action's icon as last
- * pressed, so it wears both.
+ * pressed, so it wears both. A local agent's run action runs on this Mac,
+ * so its tab is a Local one (`kind`); every other shell's is a cloud one.
  */
 export function useShowShellTab(
   sidePanel: Pick<SidePanelControl, "onChoose">,
@@ -509,6 +548,7 @@ export function useShowShellTab(
     readonly id: string;
     readonly title: string;
     readonly action?: HeldAction | undefined;
+    readonly kind?: TerminalKind | undefined;
   },
 ) => void {
   const { held: kept } = useContext(TerminalsContext);
@@ -517,7 +557,8 @@ export function useShowShellTab(
 
   return useCallback(
     (agentId, terminal) => {
-      const shells = kept.of(account, TERMINAL_KIND.CLOUD, agentId);
+      const kind = terminal.kind ?? TERMINAL_KIND.CLOUD;
+      const shells = kept.of(account, kind, agentId);
       const found = shells.find((each) => each.terminal === terminal.id);
 
       const entry: HeldShell = {
@@ -530,13 +571,13 @@ export function useShowShellTab(
 
       kept.set(
         account,
-        TERMINAL_KIND.CLOUD,
+        kind,
         agentId,
         found === undefined
           ? [...shells, entry]
           : shells.map((each) => (each === found ? entry : each)),
       );
-      onChoose(tabOf(TERMINAL_KIND.CLOUD, agentId, entry));
+      onChoose(tabOf(kind, agentId, entry));
       onShown();
     },
     [kept, account, onChoose, onShown],
