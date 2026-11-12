@@ -30,9 +30,15 @@
  * installation, or adding repositories to it or removing them
  * (`github-webhook-app.ts`), and a member adding or removing a repository on
  * their token (`workspace-repositories.ts`). The daily refresh fills every
- * workspace's drive the same way (`base-drive-refresh.ts`), and the drive is
- * deleted with its workspace (`workspace-deletion.ts`). The fill's sandbox
+ * drive that is missing or unfinished (`base-drive-refresh.ts`), and the
+ * drive is deleted with its workspace (`workspace-deletion.ts`). The fill's sandbox
  * writes its firewall under the workspace's first owner.
+ *
+ * A drive that is not whole sends its workspace's agents to the image to
+ * clone, so every way one ends up so is reported to Sentry as
+ * a `WorkspaceDriveBroken` issue (`reportedBroken`), a repository whose fill
+ * failed, a fill that failed whole, and a start that found the drive gone or
+ * left unfinished, each naming the workspace.
  */
 
 import { createHash } from "node:crypto";
@@ -53,7 +59,17 @@ import {
   Sandbox,
   UP_STATUSES,
 } from "@repo/sandbox";
-import { Cause, Clock, Context, Duration, Effect, Layer, Option } from "effect";
+import {
+  Cause,
+  Clock,
+  Context,
+  Data,
+  Duration,
+  Effect,
+  ErrorReporter,
+  Layer,
+  Option,
+} from "effect";
 import { GitHubApp } from "../github/github-app.js";
 import { GitHubBackground } from "../github/github-rate-gate.js";
 import { afterResponse } from "../http/after-response.js";
@@ -106,6 +122,57 @@ export function workspaceDriveFillsLayer(
   return Layer.effect(
     WorkspaceDriveFills,
     Effect.map(AgentImage, (agentImage) => ({ run, image: agentImage.reference })),
+  );
+}
+
+/** How a workspace's drive was found not whole, which a `WorkspaceDriveBroken` report names. */
+export const DRIVE_BROKEN = {
+  /** A repository's checkout failed in a fill, which went on to the next. */
+  REPOSITORY_FAILED: "repository_failed",
+  /** A fill failed whole, before or past its repositories. */
+  FILL_FAILED: "fill_failed",
+  /** A start forked the drive and found none. */
+  GONE: "gone",
+  /** A start found a fill's sandbox left past its grace, so the drive is unfinished. */
+  UNFINISHED: "unfinished",
+} as const;
+
+type DriveBroken = (typeof DRIVE_BROKEN)[keyof typeof DRIVE_BROKEN];
+
+/**
+ * A workspace's drive found not whole, reported as one issue whatever the
+ * workspace, since the workspace and how it broke ride as attributes rather
+ * than in its message.
+ */
+class WorkspaceDriveBroken extends Data.TaggedError("WorkspaceDriveBroken")<{
+  readonly workspaceId: string;
+  readonly broken: DriveBroken;
+  readonly detail: string | undefined;
+}> {
+  override get message(): string {
+    return `a workspace's drive is not whole (${this.broken}), so its agents start from the image and clone`;
+  }
+
+  override get [ErrorReporter.attributes]() {
+    return {
+      workspaceId: this.workspaceId,
+      broken: this.broken,
+      ...(this.detail === undefined ? undefined : { detail: this.detail }),
+    };
+  }
+}
+
+/** A workspace's drive reported to Sentry as not whole, and logged as an error, with how it broke. */
+export function reportedBroken(
+  workspaceId: string,
+  broken: DriveBroken,
+  detail?: string,
+): Effect.Effect<void> {
+  return Effect.andThen(
+    Effect.logError(`a workspace's drive is not whole: ${broken}`).pipe(
+      Effect.annotateLogs({ workspaceId, broken }),
+    ),
+    ErrorReporter.report(Cause.fail(new WorkspaceDriveBroken({ workspaceId, broken, detail }))),
   );
 }
 
@@ -248,7 +315,11 @@ export const fillWorkspaceDrive = Effect.fn("web/fillWorkspaceDrive")(function* 
             Effect.catchCause((cause) =>
               Cause.hasInterruptsOnly(cause)
                 ? Effect.failCause(cause)
-                : Effect.logError(`a workspace drive's repository failed: ${causeKind(cause)}`),
+                : reportedBroken(
+                    workspace.workspaceId,
+                    DRIVE_BROKEN.REPOSITORY_FAILED,
+                    causeKind(cause),
+                  ),
             ),
           );
         }
@@ -275,6 +346,15 @@ const regeneratedFor = (workspace: Option.Option<BaseDriveWorkspace>) =>
       Effect.flatMap(image, (reference) =>
         fillWorkspaceDrive(run, reference, workspace.value),
       ).pipe(
+        Effect.tapCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.void
+            : reportedBroken(
+                workspace.value.workspaceId,
+                DRIVE_BROKEN.FILL_FAILED,
+                causeKind(cause),
+              ),
+        ),
         Effect.provideService(GitHubBackground, true),
         Effect.provideService(Sandbox, sandbox.value),
       ),
