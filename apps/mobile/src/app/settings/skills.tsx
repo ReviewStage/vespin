@@ -79,6 +79,11 @@ function SkillsPage({ workspace }: { readonly workspace: Workspace }) {
 
   const skills = held?.skills?.rows;
 
+  // Note that a question does not outlive its subject: a skill deleted elsewhere meanwhile lets its Delete go.
+  if (asked !== undefined && skills !== undefined && !skills.some((each) => each.id === asked.id)) {
+    setAsked(undefined);
+  }
+
   const question = removeSkillQuestion(
     asked ?? { name: "", scope: INSTALLED_SKILL_SCOPE.PERSONAL },
     workspace,
