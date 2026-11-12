@@ -63,6 +63,7 @@ import {
   PROVIDER_KEY_PROVIDER,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
+  providerKeyResetCreditRequestSchema,
   providerKeySaveRequestSchema,
   subscriptionIdSchema,
   subscriptionLabelRequestSchema,
@@ -130,6 +131,7 @@ const AGENT_ACCOUNT_CALLS = {
     providerKeys: accountContract.providerKeys,
     saveProviderKey: accountContract.saveProviderKey,
     setProviderKeyForAgents: accountContract.setProviderKeyForAgents,
+    useResetCredit: accountContract.useResetCredit,
     renameSubscription: accountContract.renameSubscription,
     reorderSubscriptions: accountContract.reorderSubscriptions,
     removeProviderKey: accountContract.removeProviderKey,
@@ -491,6 +493,11 @@ export type ProviderKeyRemoveParams = typeof providerKeyRemoveParamsSchema.Type;
 export const providerKeyForAgentsParamsSchema = providerKeyForAgentsRequestSchema;
 
 export type ProviderKeyForAgentsParams = typeof providerKeyForAgentsParamsSchema.Type;
+
+/** Spending one of a ChatGPT plan's reset credits, as the window asks it: the plan, and the press's key. */
+export const providerKeyResetCreditParamsSchema = providerKeyResetCreditRequestSchema;
+
+export type ProviderKeyResetCreditParams = typeof providerKeyResetCreditParamsSchema.Type;
 
 /** Naming a subscription, as the window asks it: which one, and its name or none for its default. */
 export const subscriptionLabelParamsSchema = subscriptionLabelRequestSchema;

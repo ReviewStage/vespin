@@ -278,6 +278,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     providerKeys: SECRET,
     saveProviderKey: SECRET,
     setProviderKeyForAgents: SECRET,
+    useResetCredit: SECRET,
     renameSubscription: SECRET,
     reorderSubscriptions: SECRET,
     removeProviderKey: SECRET,

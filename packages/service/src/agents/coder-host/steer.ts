@@ -20,7 +20,7 @@ import { readConversationPicture } from "@repo/database/models/conversation-pict
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { readTaskDescription } from "@repo/database/models/task-store";
-import { releaseWaitedTurns } from "@repo/database/models/turn-state";
+import { releaseWaitedTurns, type WaitedTurn } from "@repo/database/models/turn-state";
 import { readAccountNames } from "@repo/database/models/workspace-store";
 import {
   type AwaitingLineMetadata,
@@ -854,6 +854,21 @@ export const resumeWaitedTurns = /* @__PURE__ */ Effect.fn("web/resumeWaitedTurn
   now: number,
 ) {
   const released = yield* releaseWaitedTurns(new Date(now), WAITED_TURNS.RESUME_LIMIT);
+  yield* handWaitedTurnsOn(released);
+
+  return released.length;
+});
+
+/**
+ * Turns whose wait for a limit's reset was cleared handed on as its reset
+ * does: a queued turn published for its pickup, and a running one handed to
+ * a launch as a limited turn's retry (`turnRetried`), past the answer, since
+ * a launch may take most of a minute. Both the sweep, once a reset passes,
+ * and a reset credit spent before it (`chatgpt-reset-credits.ts`) hand theirs on so.
+ */
+export const handWaitedTurnsOn = /* @__PURE__ */ Effect.fnUntraced(function* (
+  released: readonly WaitedTurn[],
+) {
   const queue = yield* TurnQueue;
   yield* Effect.forEach(
     released,
@@ -876,8 +891,6 @@ export const resumeWaitedTurns = /* @__PURE__ */ Effect.fn("web/resumeWaitedTurn
           ),
     { discard: true },
   );
-
-  return released.length;
 });
 
 /**
