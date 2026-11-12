@@ -26,6 +26,7 @@ import {
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { RUN_ACTION_WORDS, runActionMenuLabel } from "@repo/features/run-actions-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
+import { TRANSCRIPT_COPY, type TranscriptCopy } from "@repo/features/transcript-copy";
 import { MCP_SERVER_LABEL, VERB } from "@repo/features/words";
 import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
 import { PERMISSION_MODE_WORDS } from "@repo/settings";
@@ -86,6 +87,7 @@ import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { useAgentServers } from "../agents/use-agent-servers.js";
+import { useTranscriptCopy } from "../agents/use-transcript-copy.js";
 import { useWarmAgent } from "../agents/use-warm-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
@@ -113,6 +115,14 @@ const MENU_WORDS = {
   UNPIN: "Unpin",
   ARCHIVE: "Archive",
   DELETE: "Permanently delete",
+} as const;
+
+/** What Copy transcript offers, in the panel's words: the transcript concise or whole, copied, and the same words handed to the share sheet. */
+const COPY_TRANSCRIPT_WORDS = {
+  COPY: "Copy transcript",
+  CONCISE: "Concise",
+  FULL: "Full",
+  SHARE: "Share…",
 } as const;
 
 /** What the + offers beside the options: the photo picker, and the sheet of every option. */
@@ -485,6 +495,19 @@ export function AgentScreen() {
   const mode = useAgentMode(id);
   const pick = useAgentModelPick(id);
   const actions = useAgentActions(id, address);
+  const transcriptCopy = useTranscriptCopy(id, title, shown?.brief);
+
+  // Note that a copy or share lets the menu's last note go, so an older Rename or Pin refusal never stands over what the copy says.
+  const copyTranscript = (way: TranscriptCopy) => {
+    actions.clearNote();
+    transcriptCopy.copy(way);
+  };
+
+  const shareTranscript = (way: TranscriptCopy) => {
+    actions.clearNote();
+    transcriptCopy.share(way);
+  };
+
   const runActions = useAgentRun(id);
   useWarmAgent(id);
   const hasPorts = useAgentHasPorts(id);
@@ -531,6 +554,22 @@ export function AgentScreen() {
               </Stack.Toolbar.MenuAction>
             </Stack.Toolbar.Menu>
           )}
+          <Stack.Toolbar.Menu inline>
+            <Stack.Toolbar.Menu icon="doc.on.doc" title={COPY_TRANSCRIPT_WORDS.COPY}>
+              <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.CONCISE)}>
+                {COPY_TRANSCRIPT_WORDS.CONCISE}
+              </Stack.Toolbar.MenuAction>
+              <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.FULL)}>
+                {COPY_TRANSCRIPT_WORDS.FULL}
+              </Stack.Toolbar.MenuAction>
+              <Stack.Toolbar.MenuAction
+                icon="square.and.arrow.up"
+                onPress={() => shareTranscript(TRANSCRIPT_COPY.FULL)}
+              >
+                {COPY_TRANSCRIPT_WORDS.SHARE}
+              </Stack.Toolbar.MenuAction>
+            </Stack.Toolbar.Menu>
+          </Stack.Toolbar.Menu>
           {agent === undefined ? null : (
             <Stack.Toolbar.Menu inline>
               <Stack.Toolbar.MenuAction icon="pencil" onPress={() => setRenaming(true)}>
@@ -603,7 +642,7 @@ export function AgentScreen() {
             composer={composer}
             banner={approvals.banner}
             addMenu={addMenu}
-            note={actions.note ?? mode?.note ?? pick.note}
+            note={actions.note ?? transcriptCopy.note ?? mode?.note ?? pick.note}
           />
         }
       >
