@@ -32,10 +32,15 @@
      ground the page stands on. It deepens over the first stretch of
      scrolling, so a page at rest at its top, or one with nothing to scroll,
      whose timeline never runs, is left whole. A scroll timeline is not
-     motion, so reduced motion leaves it be. */
+     motion, so reduced motion leaves it be. The scrollbar's strip stays
+     whole over it, so the bar never fades with the rows
+     (`../scroll-area/scroll-area.css`). */
   .ui-settings-page {
     --ui-settings-page-measure: var(--ui-settings-measure);
-    mask-image: linear-gradient(to bottom, transparent, #000 var(--ui-settings-page-fade));
+    scrollbar-width: thin;
+    mask:
+      linear-gradient(to bottom, transparent, #000 var(--ui-settings-page-fade)),
+      var(--ui-scrollbar-keep-vertical);
     animation: ui-settings-page-fade linear both;
     animation-timeline: scroll(self block);
     animation-range: 0 var(--ui-space-24);

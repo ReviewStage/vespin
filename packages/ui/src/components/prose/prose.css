@@ -245,13 +245,16 @@
     overscroll-behavior-x: contain;
     font-variant-numeric: tabular-nums;
     text-align: left;
-    mask-image: linear-gradient(
-      to right,
-      transparent,
-      #000 var(--ui-scroll-area-fade-start),
-      #000 calc(100% - var(--ui-scroll-area-fade-end)),
-      transparent
-    );
+    scrollbar-width: thin;
+    mask:
+      linear-gradient(
+        to right,
+        transparent,
+        #000 var(--ui-scroll-area-fade-start),
+        #000 calc(100% - var(--ui-scroll-area-fade-end)),
+        transparent
+      ),
+      var(--ui-scrollbar-keep-horizontal);
     animation-name: ui-scroll-area-fade-start, ui-scroll-area-fade-end;
     animation-timing-function: linear;
     animation-fill-mode: both;

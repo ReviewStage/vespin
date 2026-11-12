@@ -1858,15 +1858,17 @@ summary button[data-tool-agent-ref]:focus-visible {
 /* On a phone, whose scroll bars stay hidden until a swipe, a code block's
    lines cut at its edge fade as a table's columns do, on the window's one
    scroll fade (`@repo/ui`'s `ScrollArea`), so a line cut short reads as one
-   to scroll. */
+   to scroll, its scrollbar's strip kept whole over the fade. */
 :where(:root)[data-ui-room="narrow"] .desktop-shell :is(.ui-markdown pre, .ui-code-card-body) {
-  mask-image: linear-gradient(
-    to right,
-    transparent,
-    #000 var(--ui-scroll-area-fade-start),
-    #000 calc(100% - var(--ui-scroll-area-fade-end)),
-    transparent
-  );
+  mask:
+    linear-gradient(
+      to right,
+      transparent,
+      #000 var(--ui-scroll-area-fade-start),
+      #000 calc(100% - var(--ui-scroll-area-fade-end)),
+      transparent
+    ),
+    var(--ui-scrollbar-keep-horizontal);
   animation-name: ui-scroll-area-fade-start, ui-scroll-area-fade-end;
   animation-timing-function: linear;
   animation-fill-mode: both;
