@@ -138,7 +138,7 @@ component, or add the component or variant there.
   @Vespin mention or a DM), with the earlier messages of the Slack thread it
   stands in, may reach the agent it starts or is sent to: that agent's task,
   transcript and traces. And an automation webhook secret may be shown once, in the window that
-  minted it, at creation or rotation; never anywhere else. And an agent's cloud
+  minted it, at creation or rotation; never anywhere else. And a voice call's audio goes only between the caller's panel and the GPT-Live session the service opens on the caller's own OpenAI key, which never leaves the service; what was said reaches the agent it was said to as that agent's messages, transcript, and traces, as a typed line does, and nothing of a call is stored but its seconds on the member's day, a counted event carries only its length, and none of it goes into a fixture. And an agent's cloud
   browser, a
   Chromium in that agent's own Vercel Sandbox, shows its pages, their live-view
   frames, address, title, screenshots, and text snapshots to that agent and its
