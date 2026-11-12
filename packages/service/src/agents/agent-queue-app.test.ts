@@ -980,6 +980,7 @@ it.layer(SUITE)("an agent's queue", (it) => {
         const opened = yield* messagedAgent(fakeAgentSessions(), { running: true });
         yield* joinWorkspace(opened.task.workspaceId, opened.other);
         const { agent, ask, owner, other } = opened;
+
         /** One change as the teammate asks it from their browser, and how it was answered. */
         const teammateAsks = (change: WireBoundaryInput) =>
           ask(
@@ -990,14 +991,17 @@ it.layer(SUITE)("an agent's queue", (it) => {
               body: change,
             }),
           );
+
         const [starters] = (yield* queueChanged(ask, owner, agent.id, {
           change: QUEUE_CHANGE.ADD,
           text: "Open the pull request.",
           id: randomUUID(),
         })).messages;
+
         assert.ok(starters !== undefined);
 
         yield* teammateAsks({ change: QUEUE_CHANGE.ADD, text: "Also the docs.", id: randomUUID() });
+
         const edited = readAnswer(
           agentQueueAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -1017,10 +1021,12 @@ it.layer(SUITE)("an agent's queue", (it) => {
         );
         const sql = yield* SqlClient.SqlClient;
         yield* sql`update agent set machine = 'device' where id = ${agent.id}`;
+
         const refused = yield* teammateAsks({
           change: QUEUE_CHANGE.DELETE,
           messageId: starters.id,
         });
+
         assert.equal(refused.status, HOSTED_HTTP_STATUS.FORBIDDEN);
       }),
   );

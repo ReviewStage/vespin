@@ -84,11 +84,15 @@ const UNNAMED_QUEUER: Actor = { kind: ACTOR_KIND.SOMEONE, reason: SOMEONE_REASON
 function queuerOf(message: QueuedMessage, directory: Directory): Actor | undefined {
   const { queuedBy } = message;
   const { members, readerId, former } = directory;
+
   if (queuedBy === "" || message.from !== undefined || members === undefined) return undefined;
+
   if (readerId === undefined || queuedBy === readerId) return undefined;
+
   const known =
     members.find((each) => each.userId === queuedBy) ??
     former?.find((each) => each.userId === queuedBy);
+
   return known === undefined
     ? UNNAMED_QUEUER
     : personActor({ userId: queuedBy, name: known.name }, members, readerId, former);
@@ -186,6 +190,7 @@ export function AgentQueueDock({
           {messages.map((message) => {
             const edited = message.id === editing || message.editing === true;
             const queuer = queuerOf(message, directory);
+
             return (
               <ListRow
                 key={message.id}

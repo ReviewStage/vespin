@@ -3139,6 +3139,7 @@ function AgentTabView({
   // agent on its starter's Mac is theirs alone. Note that one on the starter's own GitHub token is theirs alone too, which the
   // window cannot see, so a teammate's change to its queue is refused and said in a toast, as a message of theirs is.
   const controlsQueue = startedByReader || agent.machine !== AGENT_MACHINE.DEVICE;
+
   // A rewind writes in the box, so it is offered only while the box takes words.
   const boxOpen =
     onUnarchive === undefined && continuedNote === undefined && composer.closed === undefined;

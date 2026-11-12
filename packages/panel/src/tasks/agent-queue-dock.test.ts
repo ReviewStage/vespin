@@ -189,6 +189,7 @@ test("a message a teammate queued names them by their face, and one the reader q
       ],
     },
   }));
+
   const dock = drawn(
     true,
     [
@@ -201,6 +202,7 @@ test("a message a teammate queued names them by their face, and one the reader q
         inner,
       ),
   );
+
   await act(peopleRead);
 
   assert.equal(dock.queuer(0), undefined);
