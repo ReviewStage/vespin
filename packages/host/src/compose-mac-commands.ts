@@ -41,6 +41,7 @@ import type { Composer } from "./composer.js";
 import {
   COMPUTER_HELPER_OP,
   type ComputerHelperAnswer,
+  type ComputerPermissions,
   type ComputerUseHelperSeam,
 } from "./computer-use-helper.js";
 import type { MAC_COMMAND_ACTS } from "./contract/index.js";
@@ -203,6 +204,9 @@ const UNANSWERED: MacCommandRefusal = {
 const ACCOUNT_CHANGED: MacCommandRefusal = {
   refused: "Not run: the account signed in on the developer's Mac changed before it was allowed.",
 };
+
+/** The grants as Settings shows them where there is no helper to read them. */
+const NO_PERMISSIONS: ComputerPermissions = { screenRecording: false, accessibility: false };
 
 /** What an action answers where Settings has agents use no apps on this Mac. */
 const APPS_SWITCHED_OFF: MacCommandRefusal = {
@@ -710,6 +714,33 @@ export function composeMacCommands(
       yield* Effect.forkScoped(Effect.forever(guarded));
     });
 
+    /** The Mac's two grants as the helper reads them, or after it asks macOS for them; neither where there is no helper or it could not say. */
+    const permissionsRead = (
+      op: typeof COMPUTER_HELPER_OP.PERMISSIONS | typeof COMPUTER_HELPER_OP.REQUEST_PERMISSIONS,
+    ): Effect.Effect<ComputerPermissions> => {
+      if (computer === undefined) return Effect.succeed(NO_PERMISSIONS);
+
+      return Effect.map(computer.helper.ask({ op }, DESCRIBE_WITHIN), (answer) =>
+        "permissions" in answer ? answer.permissions : NO_PERMISSIONS,
+      );
+    };
+
+    /** Each app allowed without asking, named and drawn by the helper; one it no longer finds by its bundle id alone. */
+    const allowedAppsNamed = (use: MacComputerUse) =>
+      Effect.flatMap(use.allowedApps, (allowed) =>
+        Effect.forEach(allowed, (bundleId) =>
+          Effect.map(
+            use.helper.ask({ op: COMPUTER_HELPER_OP.DESCRIBE_APP, app: bundleId }, DESCRIBE_WITHIN),
+            (named) => {
+              if (!("described" in named)) return { bundleId, name: bundleId };
+              const { name, iconPng } = named.described;
+
+              return { bundleId, name, ...(iconPng === undefined ? undefined : { iconPng }) };
+            },
+          ),
+        ),
+      );
+
     const methods: PlatformConcernMethods<typeof HOST_PLATFORM_CONCERN.MAC_COMMANDS> = {};
 
     const acts: HostActTable<typeof MAC_COMMAND_ACTS> = {
@@ -721,6 +752,14 @@ export function composeMacCommands(
           if (held === undefined) return;
           yield* Deferred.succeed(held.decided, decision);
         }),
+      /** Computer use as Settings shows it: the Mac's grants, and the apps agents use without asking. */
+      COMPUTER_USE_STATUS: () =>
+        Effect.all({
+          permissions: permissionsRead(COMPUTER_HELPER_OP.PERMISSIONS),
+          apps: computer === undefined ? Effect.succeed([]) : allowedAppsNamed(computer),
+        }),
+      /** macOS asked for the grants it lacks, by its own prompts, and the grants as they stand once it was asked. */
+      COMPUTER_USE_ASK_PERMISSIONS: () => permissionsRead(COMPUTER_HELPER_OP.REQUEST_PERMISSIONS),
     };
 
     return { methods, acts, lifetime } satisfies MacCommandsComposer;
