@@ -578,7 +578,10 @@ export function agentQueues(
       change: (input) => ({ agentId: input.agentId, step: drawnChange(input, input.sentAt) }),
       send: (input) =>
         Effect.map(
-          sends.queue(input.agentId, input.change),
+          // A change waiting behind another while its member signed out never goes under the next account's sign-in.
+          input.queuedBy === "" || input.queuedBy !== accountId()
+            ? Effect.succeed<AgentQueueAnswerView>({ failure: AGENT_CALL_FAILURE.UNANSWERED })
+            : sends.queue(input.agentId, input.change),
           (answer): Written<OutboxChange, AgentQueueAnswerView> | Refused<AgentQueueAnswerView> => {
             if (!("queue" in answer)) return { refused: answer };
             const { agentId, change } = input;
@@ -640,8 +643,14 @@ export function agentQueues(
 
           const line = sendingOf(input);
 
-          // A message waiting behind another while its sender signed out never goes under the next account's sign-in.
+          // A message waiting behind another while its sender signed out never goes under the next account's sign-in,
+          // and stands refused for its sender, who finds it where it went on signing in again.
           if (sender === undefined || sender !== accountId()) {
+            yield* refusedChanged(sender, agentId, (was) => [
+              ...without(line.id)(was),
+              { ...line, refused: { failure: AGENT_CALL_FAILURE.UNANSWERED } },
+            ]);
+
             return {
               refused: { failure: AGENT_CALL_FAILURE.UNANSWERED },
             } satisfies Refused<AgentAgentAnswer>;

@@ -165,11 +165,14 @@ export function useAgentComposer(
 
   // A message refused while no screen of the agent stood, or sent from one since left, waits in the host's record,
   // which the phone draws no line of: its words come back to the field as this screen opens, the refusal said, and
-  // the line is let go. Its pictures stay with the screen that attached them.
+  // the line is let go. Note that one carrying files is left in the record, where the desktop and the web draw it
+  // with Retry, Edit, and Delete, because the phone holds none of their bytes and would let them go.
   const sending = transcript?.sending;
   useEffect(() => {
     for (const message of sending ?? []) {
       if (message.refused === undefined || ownSends.current.has(message.id)) continue;
+
+      if ((message.files ?? []).length > 0) continue;
       ownSends.current.add(message.id);
       handBack(
         { id: message.clientKey, words: message.text, pictures: [] },
