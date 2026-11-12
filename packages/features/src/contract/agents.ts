@@ -48,7 +48,7 @@ import {
   MAXIMUM_START_BODY_BYTES,
 } from "../agent-wire.js";
 import { modelChoiceSchema } from "../models-wire.js";
-import { replyButtonViewSchema } from "../reply-button-wire.js";
+import { replyButtonSentSchema, replyButtonViewSchema } from "../reply-button-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
 import { HOSTED_API_ERROR, wireUuidSchema } from "../service-wire.js";
 import {
@@ -307,11 +307,11 @@ export const agentsContract = {
     .meta(openapi({ method: HTTP_METHOD.GET, path: `${AGENT_PATH}/buttons/{button}` }))
     .input(buttonParams)
     .output(EffectSchema.flip(replyButtonViewSchema)),
-  /** One button in the agent's reply pressed, as the member asking: run once, and answered as it then stands, the first press's answer to every press after it. */
+  /** One suggestion in the agent's reply sent from its draft, as the member asking: run once, and answered as it then stands, the first send's answer to every send after it. */
   pressButton: declaredProcedure
     .errors(refuses(...PRESS_REFUSALS))
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/buttons/{button}/press` }))
-    .input(buttonParams)
+    .input(exactBodyInput(buttonParams, replyButtonSentSchema))
     .output(EffectSchema.flip(replyButtonViewSchema)),
   /** One agent as its own page. */
   read: declaredProcedure

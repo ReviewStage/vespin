@@ -105,6 +105,7 @@ import {
   type ReplyButtonAnswerView,
   type ReplyButtonParams,
   type ReplyButtonPressAnswerView,
+  type ReplyButtonPressParams,
   type SubscriptionLabelParams,
   type SubscriptionOrderParams,
 } from "./agent-view.js";
@@ -1336,13 +1337,13 @@ export class HostedAgentClient {
     });
   }
 
-  /** One button in an agent's reply pressed as the member, run once: the button as its press then stands, or why the press was refused. */
+  /** One suggestion in an agent's reply sent from its draft as the member, run once: the button as its send then stands, or why the send was refused. */
   pressReplyButton(
-    params: ReplyButtonParams,
+    params: ReplyButtonPressParams,
   ): Effect.Effect<ReplyButtonPressAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(
       this.#hosted.agents.pressButton,
-      { id: params.agentId, button: params.buttonId },
+      { params: { id: params.agentId, button: params.buttonId }, body: params.sent },
       { deadline: HOSTED_DEADLINE.START },
     );
   }

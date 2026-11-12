@@ -260,7 +260,7 @@ export const AGENT_ACT_KIND = {
   AGENTS_WARM: "agents.warm",
   /** A button in an agent's reply as the transcript draws it, asked of the service as it is drawn (`reply-button-wire.ts`). */
   AGENTS_REPLY_BUTTON: "agents.replyButton",
-  /** A button in an agent's reply pressed by the member, which the service runs once. */
+  /** A suggestion in an agent's reply sent by the member from its draft, which the service runs once. */
   AGENTS_REPLY_BUTTON_PRESS: "agents.replyButtonPress",
   /** The ports listened on in an agent's cloud sandbox, asked of the service as the plug's menu stands open, on a host that forwards none. */
   AGENTS_PORTS: "agents.ports",

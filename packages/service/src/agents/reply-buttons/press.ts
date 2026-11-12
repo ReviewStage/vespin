@@ -27,9 +27,16 @@ import {
 } from "@repo/database/models/reply-buttons";
 import { readAccountNames } from "@repo/database/models/workspace-store";
 import type { StoreWriter } from "@repo/database/models/writer";
+import { MENTION_KIND } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
-import { REPLY_BUTTON_ACTION, type ReplyButtonView } from "@repo/features/reply-button-wire";
+import {
+  REPLY_BUTTON_ACTION,
+  type ReplyButtonSent,
+  type ReplyButtonView,
+  suggestionLine,
+} from "@repo/features/reply-button-wire";
 import { EXPERIMENT } from "@repo/settings";
+import { MESSAGE_CHANNEL, type SuggestedBy } from "@repo/wire";
 import { DateTime, Effect, Option } from "effect";
 import {
   HOSTED_REFUSAL,
@@ -44,6 +51,7 @@ import { type StartServices, startRequestedAgent } from "../coder-host/start.js"
 import { steerMemberWords } from "../coder-host/steer.js";
 import type { TypedTurn } from "../sessions/agent-sessions.js";
 import { experimentOnIn } from "../workspace-experiment-on.js";
+import { workspaceStepOf, writtenMention } from "../written-mentions.js";
 
 /** The agent named by id and title, where the member still reaches it; none where they do not. */
 const namedAgent = (userId: string, agentId: string | null) =>
@@ -111,60 +119,94 @@ export const readReplyButtonView = /* @__PURE__ */ Effect.fnUntraced(function* (
   return yield* viewOf(userId, button, agent);
 });
 
-/** The button's start or send run as the member: the agent it reached, or why it was refused. */
+/** Whether what the member sent fits what the suggestion sets off: a send names no title, branch, or model, and a model goes with its effort. */
+function sentFits(button: ReplyButton, sent: ReplyButtonSent): boolean {
+  const { title, branch, model, effort } = sent;
+  if (button.action.kind === REPLY_BUTTON_ACTION.SEND) {
+    return [title, branch, model, effort].every((each) => each === undefined);
+  }
+  return (model === undefined) === (effort === undefined);
+}
+
+/**
+ * The suggestion run as the member, with what they sent from its draft: the
+ * agent it reached, or why it was refused. The words, files, title, branch,
+ * and model are the draft's as the member left them, never the button's,
+ * which only filled the draft in. The words open with a link to the agent
+ * whose reply held the suggestion, and the line keeps which suggestion it
+ * was, so the agent they reach and its transcript both say who suggested
+ * them.
+ */
 const runPressed = (
   writer: Effect.Effect<StoreWriter>,
   userId: string,
   button: ReplyButton,
+  made: Agent,
+  sent: ReplyButtonSent,
   summaryModel: SummaryModelOf,
-): Effect.Effect<string, HostedRefusal, StartServices> => {
-  const { action } = button;
-  if (action.kind === REPLY_BUTTON_ACTION.SEND) {
-    return Effect.gen(function* () {
+): Effect.Effect<string, HostedRefusal, StartServices> =>
+  Effect.gen(function* () {
+    const { action } = button;
+    const step = yield* hostedStoreOrUnavailable(workspaceStepOf(userId, made.organizationId));
+    const name = agentName(made);
+    const mention = writtenMention({ kind: MENTION_KIND.AGENT, agentId: made.id }, name, step);
+    const words = suggestionLine(mention, sent.words);
+    const suggestedBy: SuggestedBy = { agent_id: made.id, name, button_id: button.id };
+    const files = sent.attachments === undefined ? undefined : { attachments: sent.attachments };
+    if (action.kind === REPLY_BUTTON_ACTION.SEND) {
       const { agent } = yield* reachedAgentById(userId, action.agentId);
-      yield* steerMemberWords(writer, userId, agent, { text: action.text, clientKey: button.id });
+      yield* steerMemberWords(writer, userId, agent, {
+        text: words,
+        clientKey: button.id,
+        ...files,
+        metadata: { channel: MESSAGE_CHANNEL.SUGGESTION, suggested_by: suggestedBy },
+      });
       return agent.id;
-    });
-  }
-  return Effect.map(
-    startRequestedAgent(
+    }
+    const started = yield* startRequestedAgent(
       routedSessions<TypedTurn>(userId),
       userId,
       { taskId: button.taskId },
       {
         idempotencyKey: button.id,
-        prompt: action.prompt,
-        ...(action.title === undefined ? undefined : { title: action.title }),
-        ...(action.branch === undefined ? undefined : { branch: action.branch }),
-        ...(action.model === undefined || action.effort === undefined
+        prompt: words,
+        ...files,
+        ...(sent.title === undefined ? undefined : { title: sent.title }),
+        ...(sent.branch === undefined ? undefined : { branch: sent.branch }),
+        ...(sent.model === undefined || sent.effort === undefined
           ? undefined
-          : { model: action.model, effort: action.effort }),
+          : { model: sent.model, effort: sent.effort }),
       },
       summaryModel,
-    ),
-    (started) => started.agent.id,
-  );
-};
+      undefined,
+      undefined,
+      suggestedBy,
+    );
+    return started.agent.id;
+  });
 
 /**
- * One press of a button in an agent's reply, as the member: run once, and
- * answered as the button then stands. A button another member's press holds
- * is answered as it stands, without running; one the member's own press
- * holds runs again under the same key. A press refused is released and its
- * refusal answered.
+ * One suggestion in an agent's reply sent from its draft, as the member: run
+ * once, and answered as the button then stands. A button another member's
+ * send holds is answered as it stands, without running; one the member's own
+ * send holds runs again under the same key. A send refused is released and
+ * its refusal answered, and one that does not fit the suggestion is refused
+ * before it claims anything.
  */
 export const pressReplyButton = /* @__PURE__ */ Effect.fnUntraced(function* (
   writer: Effect.Effect<StoreWriter>,
   userId: string,
   agentId: string,
   buttonId: string,
+  sent: ReplyButtonSent,
   summaryModel: SummaryModelOf,
 ) {
   const { button, agent } = yield* reachedButton(userId, agentId, buttonId);
+  if (!sentFits(button, sent)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   const now = yield* DateTime.nowAsDate;
   const claimed = yield* hostedStoreOrUnavailable(claimReplyButtonPress(button.id, userId, now));
   if (claimed !== undefined) {
-    const reached = yield* runPressed(writer, userId, button, summaryModel).pipe(
+    const reached = yield* runPressed(writer, userId, button, agent, sent, summaryModel).pipe(
       Effect.tapError(() =>
         hostedStoreOrUnavailable(releaseReplyButtonPress(button.id, claimed)).pipe(Effect.ignore),
       ),

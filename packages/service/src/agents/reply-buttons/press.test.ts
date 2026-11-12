@@ -84,11 +84,49 @@ it.layer(SUITE)("a button in an agent's reply", (it) => {
         yield* experimentInTestWorkspace(owner, EXPERIMENT.REPLY_BUTTONS);
         assert.ok((yield* claimReplyButtonPress(buttonId, owner, NOW)) !== undefined);
         yield* settleReplyButtonPress(buttonId, owner, reached, NOW);
-        const again = yield* pressReplyButton(writer, teammate, agentId, buttonId, noSummary);
+        const again = yield* pressReplyButton(
+          writer,
+          teammate,
+          agentId,
+          buttonId,
+          { words: "Send the invite email." },
+          noSummary,
+        );
         assert.deepEqual(
           { by: again.pressed?.by, agent: again.pressed?.agent?.id },
           { by: "Ada Lovelace", agent: reached },
         );
+      }),
+  );
+
+  it.effect(
+    "refuses a message suggestion sent with a new agent's title or model, and leaves it unsent",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openAccount;
+        const task = yield* startTask(owner, { name: "Digest", repository: "acme/relay" });
+        const agentId = yield* openTaskAgent(owner, task.workspaceId, task.id);
+        const target = yield* openTaskAgent(owner, task.workspaceId, task.id);
+        const buttonId = yield* makeReplyButton(
+          agentId,
+          "Tell the digest agent",
+          { kind: REPLY_BUTTON_ACTION.SEND, agentId: target, text: "Count invites apart." },
+          NOW,
+        );
+        yield* experimentInTestWorkspace(owner, EXPERIMENT.REPLY_BUTTONS);
+
+        const refused = yield* Effect.flip(
+          pressReplyButton(
+            writer,
+            owner,
+            agentId,
+            buttonId,
+            { words: "Count invites apart.", title: "Digest", model: "opus", effort: "high" },
+            noSummary,
+          ),
+        );
+        assert.equal(refused, HOSTED_REFUSAL.INVALID_REQUEST);
+        assert.equal((yield* readReplyButtonView(owner, agentId, buttonId)).pressed, null);
       }),
   );
 });

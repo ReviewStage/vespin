@@ -450,13 +450,14 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     readButton: signedIn.readButton.effect(function* ({ input, context }) {
       return yield* readReplyButtonView(context.userId, input.id, input.button);
     }),
-    /** One button in the agent's reply pressed as the member, run once (`reply-buttons/press.ts`). */
+    /** One suggestion in the agent's reply sent from its draft as the member, run once (`reply-buttons/press.ts`). */
     pressButton: signedIn.pressButton.effect(function* ({ input, context }) {
       return yield* pressReplyButton(
         writer,
         context.userId,
-        input.id,
-        input.button,
+        input.params.id,
+        input.params.button,
+        input.body,
         yield* summaryModelOf,
       );
     }),

@@ -70,6 +70,7 @@ import {
   replyButtonAnswerViewSchema,
   replyButtonParamsSchema,
   replyButtonPressAnswerViewSchema,
+  replyButtonPressParamsSchema,
   thisMacHostSetParamsSchema,
 } from "@repo/features/agent-view";
 import {
@@ -337,15 +338,15 @@ export const AGENT_ACTS = declaredActs({
   AGENTS_REPLY_BUTTON: hostAct({
     input: replyButtonParamsSchema,
     output: replyButtonAnswerViewSchema,
-    refusal: "Could not read the button on this system.",
+    refusal: "Could not read the suggestion on this system.",
     panelOnly: true,
     door: ACT.READ,
     unanswered: AGENT_UNANSWERED,
   }),
   AGENTS_REPLY_BUTTON_PRESS: hostAct({
-    input: replyButtonParamsSchema,
+    input: replyButtonPressParamsSchema,
     output: replyButtonPressAnswerViewSchema,
-    refusal: "Could not press the button on this system.",
+    refusal: "Could not send the suggestion on this system.",
     panelOnly: true,
     door: ACT.REMOTE_WORK,
     unanswered: AGENT_UNANSWERED,

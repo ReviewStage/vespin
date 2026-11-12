@@ -100,6 +100,8 @@ export {
   START_LINE_BRIEF,
   type StartLineMetadata,
   type StoredMessageMetadata,
+  type SuggestedBy,
+  type SuggestionLineMetadata,
   THREAD_LINE_EVENT,
   type ThreadLineMetadata,
   type TypedAskMetadata,

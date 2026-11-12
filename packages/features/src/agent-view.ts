@@ -75,6 +75,7 @@ import {
   pushDeviceRegisterRequestSchema,
   pushDeviceUnregisterRequestSchema,
 } from "./push-device-wire.js";
+import { replyButtonSentSchema } from "./reply-button-wire.js";
 import { repositoryUnreachedSchema } from "./repository-reach-wire.js";
 import { countedNumber, HOSTED_API_ERROR, wireUuidSchema } from "./service-wire.js";
 import {
@@ -780,6 +781,14 @@ export const replyButtonParamsSchema = EffectSchema.Struct({
 });
 
 export type ReplyButtonParams = typeof replyButtonParamsSchema.Type;
+
+/** A suggestion in an agent's reply sent from its draft: the button, and what the member sent. */
+export const replyButtonPressParamsSchema = EffectSchema.Struct({
+  ...replyButtonParamsSchema.fields,
+  sent: replyButtonSentSchema,
+});
+
+export type ReplyButtonPressParams = typeof replyButtonPressParamsSchema.Type;
 
 /** One agent's transcript past a cursor, as the window asks it: the agent, and where the window stands; or, naming the delegation call that started one, a worker's transcript under the agent. */
 export const agentMessagesParamsSchema = EffectSchema.Struct({
