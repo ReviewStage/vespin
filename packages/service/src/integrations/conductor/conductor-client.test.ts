@@ -46,19 +46,23 @@ function conductor(pages: Record<string, readonly JsonValue[]>) {
   });
 }
 
-it.effect("the key's identity is read without the key /me echoes back", () =>
-  Effect.gen(function* () {
-    const api = conductor({ "/me": [fixture("me")] });
-    const identity = yield* readConductorIdentity(KEY).pipe(Effect.provide(api.layer));
+it.effect(
+  "the key's identity is read without the key /me echoes back, under a client name of our own",
+  () =>
+    Effect.gen(function* () {
+      const api = conductor({ "/me": [fixture("me")] });
+      const identity = yield* readConductorIdentity(KEY).pipe(Effect.provide(api.layer));
 
-    assert.deepEqual(identity, {
-      userId: "user-synthetic-1",
-      organizationId: "org-synthetic",
-      organizationName: "Synthetic Org",
-      authMethod: "api-key",
-    });
-    assert.equal(api.requests[0]?.authorization, `Bearer ${KEY_TEXT}`);
-  }),
+      assert.deepEqual(identity, {
+        userId: "user-synthetic-1",
+        organizationId: "org-synthetic",
+        organizationName: "Synthetic Org",
+        authMethod: "api-key",
+      });
+      assert.equal(api.requests[0]?.authorization, `Bearer ${KEY_TEXT}`);
+      // Conductor's proxy refuses some clients' default signatures, so every request names its client.
+      assert.match(api.requests[0]?.headers.get("user-agent") ?? "", /^Vespin-Conductor-Import\//u);
+    }),
 );
 
 it.effect("projects are read with their remotes", () =>
@@ -117,16 +121,25 @@ it.effect("a workspace's chats are read, archived included, with when each was a
 );
 
 it.effect(
-  "a chat's messages are walked until a page comes back empty, whole, without kinds the import does not read",
+  "a chat's messages are walked after the last record read until a page comes back empty, whole, without kinds the import does not read",
   () =>
     Effect.gen(function* () {
       const path = "/v0/sessions/6c1f2f14-9a0b-4c2d-8e3f-0a1b2c3d4e50/messages";
-      const answers: JsonValue[] = [];
-      answers[0] = fixture("messages-page-1");
-      answers[3] = fixture("messages-page-2");
-      answers[4] = { data: [], offset: 4, hasMore: true };
+      // Pages keyed by the record each is asked after: the first by none.
+      const pages = new Map<string | null, JsonValue>([
+        [null, fixture("messages-page-1")],
+        ["2b0e0f00-0000-4000-8000-000000000003", fixture("messages-page-2")],
+        ["2b0e0f00-0000-4000-8000-000000000004", { data: [], hasMore: true }],
+      ]);
 
-      const api = conductor({ [path]: answers });
+      const api = recordingHttpClient((request: RecordedRequest) => {
+        const answer =
+          request.pathname === path ? pages.get(request.searchParams.get("after")) : undefined;
+
+        return answer === undefined
+          ? jsonResponse({ error: "not found" }, 404)
+          : jsonResponse(answer);
+      });
 
       const messages = yield* readConductorMessages(
         KEY,
@@ -154,7 +167,17 @@ it.effect(
           thread_id: "thread-synthetic",
         },
       });
-      assert.equal(api.requests.length, 3);
+      assert.deepEqual(
+        api.requests.map((request) => [
+          request.searchParams.get("after"),
+          request.searchParams.get("offset"),
+        ]),
+        [
+          [null, null],
+          ["2b0e0f00-0000-4000-8000-000000000003", null],
+          ["2b0e0f00-0000-4000-8000-000000000004", null],
+        ],
+      );
     }),
 );
 
