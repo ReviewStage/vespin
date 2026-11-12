@@ -556,19 +556,21 @@ export function NewTaskScreen({
           >
             {tree !== undefined ? (
               <ValueRow label={WORDS.REPOSITORY} value={tree.repository ?? NO_REPOSITORY} />
-            ) : repository.failed !== undefined ? (
+            ) : repository.options.length === 0 ? (
               <>
-                {/* Note that the repository a start still names, taken from the account's recent tasks, stands where the list could not be read, so it never starts in one the sheet did not show. */}
+                {/* Note that the repository a start still names, taken from the account's recent tasks, stands while the list is read or could not be, so it never starts in one the sheet did not show. */}
                 {repository.picked === undefined ? null : (
                   <ValueRow label={WORDS.REPOSITORY} value={repository.picked} />
                 )}
-                <ActionRow
-                  label={WORDS.TRY_AGAIN}
-                  symbol="arrow.clockwise"
-                  onPress={repository.retry}
-                />
+                {repository.failed === undefined ? null : (
+                  <ActionRow
+                    label={WORDS.TRY_AGAIN}
+                    symbol="arrow.clockwise"
+                    onPress={repository.retry}
+                  />
+                )}
               </>
-            ) : repository.options.length === 0 ? null : (
+            ) : (
               <MenuPickRow
                 label={WORDS.REPOSITORY}
                 options={repository.options}
