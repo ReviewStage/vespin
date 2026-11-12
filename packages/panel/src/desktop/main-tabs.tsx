@@ -84,7 +84,7 @@ import { WaitingCount } from "./task-row-parts.js";
 /**
  * main-tabs.tsx -- the task's topbar and its column's tabs: the topbar naming the task, its name opening its details, and the task's ⋯, each agent's tab and the draft agent's under it, the "+" that opens one, and what an agent's or the draft's tab shows in the column.
  *
- * A task opens on its agents, as Conductor opens a workspace on its chats:
+ * A task opens on its agents:
  * the topbar names the task across its page (`TaskTopbar`), and the column's
  * bar holds the agents' tabs (`MainTabBars`). Each part draws what
  * `use-main-tabs.ts` holds and hands every press back to it. The strip is

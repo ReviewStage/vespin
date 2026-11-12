@@ -94,7 +94,7 @@ import { SECTION, settingsSectionDrawn, settingsSectionHead } from "./settings-s
 /**
  * cloud-setup-sections.tsx -- Settings › Cloud environment's scripts: how the workspace's cloud agent sandboxes are set up and archived, its install script and each repository's setup and archive scripts, saved by its owners and admins.
  *
- * As Conductor Cloud's Cloud computer settings keep them. The install script
+ * Kept together in Settings. The install script
  * runs once per build of each of the workspace's repositories' base
  * snapshots, with `sudo`, so what it installs is in every new sandbox; a
  * repository's setup script runs once in each new agent sandbox of it, after
