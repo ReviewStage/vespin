@@ -263,6 +263,29 @@ test("an ask of the models that never lands is said as failed past its bound, on
   }
 });
 
+test("an ask of the models still out when its tab closes settles nothing, so its bound passing after the window is gone throws nothing", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+  try {
+    handHostReads({});
+    fakeActPort({
+      [ACT_KIND.AGENTS_MODELS_RETRY]: () => Promise.withResolvers<undefined>().promise,
+    });
+    const tab = mount({ taskId: undefined, repository: null });
+    await tab.mount();
+    act(() => tab.control().readModels());
+    await settle();
+
+    for (const root of roots.splice(0)) act(() => root.unmount());
+    // Note that a test file's window is gone once it ends, while a read it left out runs on in the worker; a state set then throws on the missing `window`.
+    vi.stubGlobal("window", undefined);
+    await vi.advanceTimersByTimeAsync(15_000);
+  } finally {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  }
+});
+
 test("the task's agents are the followed list's alone, the archived among them, with no read of them asked", async () => {
   const OTHER_TASK = "3c2d1e0f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
   const elsewhere = { ...STARTED, id: "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a", planId: OTHER_TASK };
