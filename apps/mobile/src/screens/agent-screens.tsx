@@ -426,6 +426,13 @@ export function AgentScreen() {
   const [archiving, setArchiving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const deleteQuestion = actions.deleteQuestion(title);
+
+  // An agent archived or deleted gives way to where it was opened from, or to the Inbox where it was opened first, as from a launch or a notification.
+  const leave = () => {
+    if (router.canGoBack()) router.back();
+    else router.replace("/inbox");
+  };
+
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
 
   const openPage = (item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>) =>
@@ -565,9 +572,7 @@ export function AgentScreen() {
         presented={archiving}
         onAct={() => {
           setArchiving(false);
-          actions.archive(() => {
-            if (router.canGoBack()) router.back();
-          });
+          actions.archive(leave);
         }}
         onDismiss={() => setArchiving(false)}
       />
@@ -579,9 +584,7 @@ export function AgentScreen() {
         presented={deleting}
         onAct={() => {
           setDeleting(false);
-          actions.remove(() => {
-            if (router.canGoBack()) router.back();
-          });
+          actions.remove(leave);
         }}
         onDismiss={() => setDeleting(false)}
       />

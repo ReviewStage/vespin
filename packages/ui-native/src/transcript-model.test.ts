@@ -123,18 +123,21 @@ describe("a call whose answer its page carried cut", () => {
     finishedAt: 1,
   } as const;
 
+  // Note that the whole answer runs past the 40 lines an ordinary call's card draws, which a whole read draws all of.
+  const EVERY_LINE = Array.from({ length: 45 }, (_, at) => `line ${at + 1}`).join("\n");
+
   const WHOLE = {
     type: "tool-lookup",
     toolCallId: "look",
     state: "output-available",
     input: { q: "x" },
-    output: "every line",
+    output: EVERY_LINE,
   };
 
   it.each([
     { read: undefined, output: "Reading the whole output…", asks: true },
     { read: { state: WHOLE_PART.READING }, output: "Reading the whole output…", asks: true },
-    { read: { state: WHOLE_PART.WHOLE, part: WHOLE }, output: "every line", asks: false },
+    { read: { state: WHOLE_PART.WHOLE, part: WHOLE }, output: EVERY_LINE, asks: false },
     {
       read: { state: WHOLE_PART.FAILED },
       output:
