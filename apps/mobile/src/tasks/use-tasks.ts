@@ -621,6 +621,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
 
     const listedWaiting = agents.reduce((sum, line) => sum + line.waiting, 0);
     const document = held?.document;
+
     // Note that a read that failed with a document still held keeps drawing it, as the panel does, so Try again stands only where nothing is.
     const documentRetry =
       held?.documentFailed === true && document === undefined
