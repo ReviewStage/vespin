@@ -24,7 +24,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { BUZZ } from "@repo/ui-native";
 import { useMemo } from "react";
 import { useHostActs } from "../host/host-provider.js";
-import { useWrite } from "../use-write.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** A relation write's answer: the relation as it then stands, or why it is unchanged. */
 type RelationAnswer = TasksBlockAnswer | TasksSetParentAnswer | TasksChangeRelationAnswer;
@@ -77,7 +77,11 @@ export function useTaskRelationWrites(): TaskRelationWrites {
     };
 
     const parent = (taskId: string, parentTaskId: string | null) => {
-      void write(() => acts[ACT_KIND.TASKS_SET_PARENT]({ taskId, parentTaskId }), saying);
+      // Note that the parent is one value per task, so a newer parent set makes an older one's Try again do nothing.
+      void write(() => acts[ACT_KIND.TASKS_SET_PARENT]({ taskId, parentTaskId }), {
+        ...saying,
+        subject: { kind: WRITE_SUBJECT.TASK_PARENT, id: taskId },
+      });
     };
 
     const sendRelation = (
