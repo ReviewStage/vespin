@@ -4504,6 +4504,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(mountedDrive(api, fresh), drive);
       }),
   );
+
   /** An agent continued from one that runs on a fork of its workspace's drive, its sandbox stopped, the drive it owns gone where `gone` says. */
   const continuedFromDrive = (gone: boolean) =>
     Effect.gen(function* () {
