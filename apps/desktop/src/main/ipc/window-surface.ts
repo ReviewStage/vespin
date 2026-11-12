@@ -8,6 +8,7 @@ import {
   type RecordProductEvent,
 } from "@repo/features/analytics";
 import type { FeedbackResult, FeedbackSubmission } from "@repo/features/feedback";
+import type { HandoffActivity } from "@repo/features/ios-system-activity";
 import { actPortFor, type PlatformActProcedures } from "@repo/host/act-port";
 import { CONTACT_MAILTO, WINDOW_SURFACE_ACT_KIND } from "@repo/host/contract";
 import {
@@ -61,6 +62,8 @@ interface WindowSurfaceDependencies {
   tellUnsavedWork: (sender: WebContents, holding: boolean) => void;
   /** Keeps which commands a panel offers now, which the menu bar dims the rest of while it is focused. */
   tellMenuOffers: (sender: WebContents, commands: readonly AppCommand[]) => void;
+  /** Keeps what a panel shows now, or none, which the Mac hands off to the member's iPhone while it is focused. */
+  tellHandoff: (sender: WebContents, activity: HandoffActivity | null) => void;
 }
 
 /** The part of a window a still is asked of, in its CSS pixels. */
@@ -187,6 +190,12 @@ export function windowSurfaceProcedures(
     ].handler(({ input, context, errors }) => {
       if (!context.actor.panel) throw errors.REFUSED();
       dependencies.tellMenuOffers(context.actor.sender, input.commands);
+    }),
+    [WINDOW_SURFACE_ACT_KIND.WINDOW_HANDOFF]: surfacePort[
+      WINDOW_SURFACE_ACT_KIND.WINDOW_HANDOFF
+    ].handler(({ input, context, errors }) => {
+      if (!context.actor.panel) throw errors.REFUSED();
+      dependencies.tellHandoff(context.actor.sender, input.activity);
     }),
     [WINDOW_SURFACE_ACT_KIND.FEEDBACK_SEND]: surfacePort[
       WINDOW_SURFACE_ACT_KIND.FEEDBACK_SEND

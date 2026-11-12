@@ -85,6 +85,9 @@ const WEB = {
   CLI: byDesign(
     "A tab cannot run the install script; the MCP & CLI page shows the command to paste",
   ),
+  HANDOFF: byDesign(
+    "A browser tab cannot advertise a Handoff activity; Safari hands off its own page",
+  ),
   LIVE_VIEW: byDesign(
     "The tab opens a Browser tab's live view socket itself (web-browser-live.ts)",
   ),
@@ -138,6 +141,7 @@ const IOS = {
     "iOS's Skills page reads and deletes skills; Add skill's paste isn't built there yet",
   ),
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
+  HANDOFF: byDesign("iOS advertises each screen's activity itself (use-system-activity.ts)"),
   MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
   MENU_BAR: byDesign("iOS has no menu bar to dim"),
   NOTIFICATIONS: byDesign("iOS's Settings screen opens the system's settings itself"),
@@ -445,6 +449,7 @@ export const CLIENT_PARITY = {
     notYet("iOS v1 has no editor to hold unsaved work"),
   ),
   [PORT_ACT_KIND.WINDOW_MENU_OFFERS]: desktopOnly(WEB.MENU_BAR, IOS.MENU_BAR),
+[PORT_ACT_KIND.WINDOW_HANDOFF]: desktopOnly(WEB.HANDOFF, IOS.HANDOFF),
   [PORT_ACT_KIND.FEEDBACK_SEND]: EVERYWHERE,
 
   [PORT_ACT_KIND.WORKSPACE_CREATE]: EVERYWHERE,
