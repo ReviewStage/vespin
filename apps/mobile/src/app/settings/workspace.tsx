@@ -422,11 +422,12 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
           );
         }}
       />
-      {/* Note that a photo's removal asks in the accent rather than red, as the panel's does, since another can be set. */}
+      {/* Note that deleting the photo asks in red, as the panel's irreversible acts do, since the photo itself is gone. */}
       <ConfirmAsk
         title={PHOTO_WORDS.DELETE_QUESTION(workspace.name)}
         message={PHOTO_WORDS.DELETE_BODY}
         act={PHOTO_WORDS.DELETE}
+        destructive
         presented={asking?.kind === ASKING.PHOTO_REMOVE}
         onDismiss={dismiss}
         onAct={() => {
