@@ -116,7 +116,7 @@ export const conductorImportRunAnswerSchema = EffectSchema.Union([
 
 export type ConductorImportRunAnswer = typeof conductorImportRunAnswerSchema.Type;
 
-/** One workspace or chat of a run as it stands: its Conductor id, the workspace a chat is of, its name, and why it failed where it did. */
+/** One workspace or chat of a run as it stands: its Conductor id, the workspace a chat is of, its name, why it failed where it did, and for a workspace imported, by this run or an earlier one, the task it became. */
 export const conductorImportItemSchema = EffectSchema.Struct({
   kind: EffectSchema.Literals(Object.values(CONDUCTOR_IMPORT_KIND)),
   conductorId: EffectSchema.String,
@@ -124,6 +124,8 @@ export const conductorImportItemSchema = EffectSchema.Struct({
   name: EffectSchema.NullOr(EffectSchema.String),
   status: EffectSchema.Literals(Object.values(CONDUCTOR_IMPORT_STATUS)),
   failure: EffectSchema.NullOr(EffectSchema.Literals(Object.values(CONDUCTOR_IMPORT_FAILURE))),
+  /** The task a workspace became; null for a chat, and for a workspace not imported. */
+  taskId: EffectSchema.NullOr(EffectSchema.String),
 });
 
 export type ConductorImportItem = typeof conductorImportItemSchema.Type;

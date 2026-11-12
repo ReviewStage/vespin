@@ -163,6 +163,10 @@ it.layer(Layer.merge(getTestDB(), SERVICES))("an import from Conductor", (it) =>
         const task = Option.getOrThrow(yield* readTask(userId, agent.taskId));
         assert.equal(task.task.status, TASK_STATUS.DONE);
         assert.equal(task.task.name, "Fix the flaky check");
+        assert.equal(
+          firstRun?.items.find((item) => item.conductorId === "cw-1")?.taskId,
+          agent.taskId,
+        );
 
         yield* runDelivered(userId, workspaceId);
         const second = (yield* conductorImportProgress(userId, workspaceId)).run;

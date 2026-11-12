@@ -63,6 +63,8 @@ const ItemSchema = Schema.Struct({
   name: Schema.NullOr(Schema.String),
   status: StatusSchema,
   failure: Schema.NullOr(FailureSchema),
+  /** The task a workspace became, where its workspace imported it, by this run or an earlier one; null for a chat. */
+  taskId: Schema.NullOr(Schema.String),
 });
 
 /** One workspace or chat of a run, where it stands. */
@@ -178,8 +180,17 @@ const findItems = SqlSchema.findAll({
           name: conductorImportItem.name,
           status: conductorImportItem.status,
           failure: conductorImportItem.failure,
+          taskId: conductorImport.taskId,
         })
         .from(conductorImportItem)
+        .innerJoin(conductorImportRun, eq(conductorImportRun.id, conductorImportItem.runId))
+        .leftJoin(
+          conductorImport,
+          and(
+            eq(conductorImport.organizationId, conductorImportRun.organizationId),
+            eq(conductorImport.conductorId, conductorImportItem.conductorId),
+          ),
+        )
         .where(eq(conductorImportItem.runId, runId))
         .orderBy(conductorImportItem.workspaceConductorId, conductorImportItem.kind),
     ),
