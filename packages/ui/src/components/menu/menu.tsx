@@ -633,6 +633,29 @@ function itemsOf(menu: HTMLElement): HTMLElement[] {
   );
 }
 
+/** The first of a menu's own items that applies now, which the keys can stand on. */
+function firstAvailable(menu: HTMLElement): HTMLElement | undefined {
+  return itemsOf(menu).find(
+    (item) => !item.matches(":disabled") && item.getAttribute("aria-disabled") !== "true",
+  );
+}
+
+/**
+ * Whether the keys stand where no key reaches a menu: on nothing, on an
+ * element gone, or on an item a choice that stays just dimmed, as Actual
+ * size dims itself once the page is at actual size. Note that a browser
+ * moves the focus off a button disabled under it to the body, where some
+ * leave it on the button, so both count as dropped.
+ */
+function keysDropped(now: Element | null): boolean {
+  return (
+    !(now instanceof HTMLElement) ||
+    now === document.body ||
+    !now.isConnected ||
+    now.matches(":disabled")
+  );
+}
+
 /** The action or submenu of `groups` whose shortcut a key pressed on `menu`'s own items is; nothing for a key pressed in a panel or submenu beside it. */
 function keyedEntryOf(
   groups: readonly (readonly MenuEntry[])[],
@@ -1778,6 +1801,27 @@ function FloatingMenu({
     (checked ?? items[0])?.focus();
   }, [popup, leaving, openOnChecked]);
 
+  // Note that a choice that stays may dim the item it was made on, which
+  // drops the keys out of the menu; they go to its first item that applies,
+  // or to the menu itself, as a sheet's do, so the arrows, Escape, and Tab
+  // still reach it. Keys standing anywhere else, as in a submenu or a
+  // panel, are left where they stand.
+  useEffect(() => {
+    const menu = element.current;
+    const now = document.activeElement;
+
+    if (menu === null || leaving || !keysDropped(now)) return;
+
+    if (
+      now instanceof HTMLElement &&
+      now.isConnected &&
+      now !== document.body &&
+      !menu.contains(now)
+    )
+      return;
+    (firstAvailable(menu) ?? menu).focus({ preventScroll: true });
+  });
+
   // Note that a press on the opener is left to the opener, because the
   // button's own press is what closes the menu it opened; that a press on
   // an item's card is the menu's own, the card its item's words to read and
@@ -2302,15 +2346,12 @@ function MenuSheet({
   }, [list, opened, leaving, openOnChecked]);
 
   // Note that a choice that stays may take its own row away (Retry turning
-  // to a dimmed Reading…), which drops focus on nothing; it goes back to the
-  // page's start, or to the sheet where no row applies now, so the keys still
-  // walk the rows.
+  // to a dimmed Reading…), or dim it, which drops the keys (`keysDropped`);
+  // they go back to the page's first row that applies, or to the sheet where
+  // none does, so the keys still walk the rows.
   useEffect(() => {
-    if (list === null || leaving) return;
-    const now = document.activeElement;
-
-    if (now instanceof HTMLElement && now !== document.body && now.isConnected) return;
-    (startOf(list, false) ?? list.closest<HTMLElement>(".ui-dialog"))?.focus({
+    if (list === null || leaving || !keysDropped(document.activeElement)) return;
+    (firstAvailable(list) ?? list.closest<HTMLElement>(".ui-dialog"))?.focus({
       preventScroll: true,
     });
   });

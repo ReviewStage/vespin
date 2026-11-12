@@ -852,7 +852,7 @@ test.each([
   { layout: "a floating menu", phone: false },
   { layout: "a phone's sheet", phone: true },
 ])(
-  "in $layout, actions naming one row stand in one group named by it, each an item named by its label that the arrows walk in turn, and one that stays leaves the menu standing",
+  "in $layout, actions naming one row stand in one group named by it, each an item named by its label that the arrows walk in turn, one that stays leaves the menu standing, and one that dims itself as it is chosen hands the keys to the menu's first item",
   ({ phone }) => {
     if (phone) {
       vi.stubGlobal("ResizeObserver", StandInResizeObserver);
@@ -861,21 +861,36 @@ test.each([
 
     const chosen: Chosen = [];
 
-    const step = (label: string, extra: { detail?: string } = {}) => ({
+    const step = (label: string, extra: { detail?: string; disabled?: boolean } = {}) => ({
       ...action(label, chosen),
       ...extra,
       row: "Zoom",
       stays: true,
     });
 
-    mount(
-      createElement(Harness, {
+    // A zoom at 125%, which Actual size draws at 100%, where it no longer applies.
+    function Zoomed(): React.JSX.Element {
+      const [actual, setActual] = useState(false);
+
+      return createElement(Harness, {
         groups: [
           [action("Rename", chosen)],
-          [step("Zoom out"), step("Actual size", { detail: "125%" }), step("Zoom in")],
+          [
+            step("Zoom out"),
+            {
+              ...step("Actual size", { detail: actual ? "100%" : "125%", disabled: actual }),
+              onSelect: () => {
+                chosen.push("Actual size");
+                setActual(true);
+              },
+            },
+            step("Zoom in"),
+          ],
         ],
-      }),
-    );
+      });
+    }
+
+    mount(createElement(Zoomed));
     press(button("More"));
 
     const row =
@@ -891,9 +906,10 @@ test.each([
     key("ArrowDown");
     expect(document.activeElement?.getAttribute("aria-label")).toBe("Actual size, 125%");
 
-    press(button("Zoom in"));
-    expect(chosen).toEqual(["Zoom in"]);
+    pressFocused();
+    expect(chosen).toEqual(["Actual size"]);
     expect(openMenu()).not.toBeNull();
+    expect(focused()).toBe("Rename");
   },
 );
 
