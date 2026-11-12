@@ -198,14 +198,15 @@ function cronNumber(field: string | undefined): number | undefined {
  * The zone a schedule's clock is read in, as the platform names it to a
  * person: "Eastern Time", "United Kingdom Time", "India Standard Time", and
  * UTC as itself, since its generic name is an offset. Note that the generic
- * name holds through summer time, as a schedule's zone does.
+ * name holds through summer time, as a schedule's zone does, and is read at
+ * the present, since a zone's name has changed over its history.
  */
 function zoneWords(timezone: string): string {
   if (timezone === "UTC" || timezone === "Etc/UTC") return "UTC";
 
   return (
     new Intl.DateTimeFormat("en-US", { timeZone: timezone, timeZoneName: "longGeneric" })
-      .formatToParts(0)
+      .formatToParts(Date.now())
       .find((part) => part.type === "timeZoneName")?.value ?? timezone
   );
 }

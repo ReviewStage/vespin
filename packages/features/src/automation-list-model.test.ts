@@ -103,6 +103,7 @@ test("a schedule the picker writes is said in words, naming its zone only where 
   assert.equal(said("0 9 1 * *"), "0 9 1 * *, Eastern Time");
   assert.equal(said("*/30 9-17 * * 1-5"), "*/30 9-17 * * 1-5, Eastern Time");
   assert.equal(said("0 9 * * 1-5", "America/New_York", "America/New_York"), "Weekdays at 9:00 AM");
+  assert.equal(said("0 9 * * 1-5", "Europe/Lisbon"), "Weekdays at 9:00 AM Western European Time");
 });
 
 test("a GitHub event is said as what happens, by whom, where, and the labels, branches, drafts, and forks it keeps to, and a webhook as its call", () => {
