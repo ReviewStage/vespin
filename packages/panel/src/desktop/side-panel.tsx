@@ -145,7 +145,7 @@ import { OpenFileTabProvider } from "../tasks/open-file-tab.js";
 import { PagePane } from "../tasks/page-pane.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
 import { ofPullRequestTab, pullRequestOfTab } from "../tasks/pull-request-number.js";
-import { type RunTabLook, useRunTabLooks } from "../tasks/run-action-shells.js";
+import { type RunTabLook, runEndMark, useRunTabLooks } from "../tasks/run-action-shells.js";
 import { stripTabTakesFind, stripTabTitle } from "../tasks/strip-tab-kinds.js";
 import {
   AgentGlyph,
@@ -1269,7 +1269,7 @@ function stripTabs(input: {
 
   // A cloud terminal tab is named by its terminal, wears the terminal glyph and its agent's name, and
   // hangs its agent's card, saying under a rule whose sandbox its shell runs in; a run action's wears
-  // the action's icon, a spinner while it runs.
+  // the action's icon, and a spinner at its end while it runs.
   const terminalTabs = terminals.map((tab) => {
     const subject = agentSubject(agentsOf(tab.terminal), tab.terminal, held, false);
     const run = input.runLookOf(tab);
@@ -1279,6 +1279,7 @@ function stripTabs(input: {
       look: look(tab, {
         ...tabLook({ kind: TAB_KIND.TERMINAL, title: tab.title, action: run }),
         detail: subject.name,
+        endMark: runEndMark(run),
         card: hungCard({ kind: TAB_KIND.TERMINAL, subject, models }),
       }),
       close: () => panel.onClose(tab),

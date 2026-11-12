@@ -12,6 +12,7 @@ import {
   INLINE_REF_LOOK,
   Inline,
   InlineRef,
+  PlayIcon,
   SplitButton,
   STATUS_TONE,
   useMenu,
@@ -323,7 +324,7 @@ function runItems(offer: RunOffer): MenuAction[][] {
 export function runSubmenu(offer: RunOffer | undefined): MenuSubmenu | undefined {
   if (offer === undefined) return undefined;
 
-  return { label: WORDS.SUBMENU, icon: <GLYPH.RUN_ACTION />, items: runItems(offer).flat() };
+  return { label: WORDS.SUBMENU, icon: <PlayIcon />, items: runItems(offer).flat() };
 }
 
 /** One action as ⌘K lists it: Run or Stop and its name, its command or that it runs, and ⌥⌘R on the primary where the key acts. */
@@ -376,7 +377,7 @@ export function RunActionsButton({
   return (
     <>
       <SplitButton
-        icon={first.runs ? <GLYPH.STOP /> : <GLYPH.RUN_ACTION />}
+        icon={actionGlyph(first)}
         label={WORDS.IN(said, agentName)}
         hintLabel={WORDS.IN(said, agentName)}
         busy={offer.busy}
