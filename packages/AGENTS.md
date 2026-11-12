@@ -39,8 +39,8 @@ with the layer it is really exercising.
 
 ## Package exports name `.js`
 
-`repository-checks.sh` enforces the `.js` suffix on relative imports. The same
-rule applies one level up, where it does not: every package's `exports` names
+Relative imports carry the `.js` suffix. The same
+rule applies one level up: every package's `exports` names
 `./src/index.js`, never `./src/index.ts`, because `exports` is what a runtime
 resolver follows and post-compile the `.js` target is literally the file. `types`
 is read by the compiler directly and stays `.ts`.
@@ -54,10 +54,10 @@ pnpm --filter @repo/web functions:rewrites
 ```
 
 That rewrites `apps/web/server/api-rewrites.json` and the root `vercel.json`
-built from it. `repository-checks.sh` checks both sides — the packages `apps/web` names
-must be declared in its `package.json`, and every `/api/` path a client spells
-must resolve to a rewrite or to a procedure of the hosted oRPC contract — so
-skipping this fails the build rather than the deploy. Nothing is committed under `apps/web/api/`; Vercel's zero-config pass
+built from it. `repository-checks.sh` checks both sides — the rewrites must match the routes,
+and every `/api/` path a client spells must resolve to a rewrite or to a
+procedure of the hosted oRPC contract — so skipping this fails the build
+rather than the deploy. Nothing is committed under `apps/web/api/`; Vercel's zero-config pass
 would build a file there beside the tree.
 
 ## A barrel is an all-or-nothing door
@@ -75,7 +75,7 @@ resolve:
   behind a type.
 
 Nothing is behind both doors — a door re-exports no name the barrel exports, so
-every symbol has exactly one way in. `repository-checks.sh` keeps that true and
+every symbol has exactly one way in. `repository-checks.sh`
 walks a door's own relative-import graph, so a later re-export cannot quietly
 carry a Node-reaching layer a few files deep.
 

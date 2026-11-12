@@ -275,7 +275,7 @@ pull request with UI shows its screenshots to the developer in a thread.
   since Expo links a native module from the app's own dependencies.
 - **The app is a shell.** A module whose imports name no Expo, React Native,
   or expo-router API is logic and belongs in a package. A relative import ends
-  in `.js`, as the packages' do (`scripts/repository-checks.sh` holds it), and
+  in `.js`, as the packages' do, and
   `metro.config.js` reads it as the `.ts` beside it, as it reads a workspace
   package's `exports`.
 - **Layout follows the window, never the device.** `useWindowSizeClass` reads

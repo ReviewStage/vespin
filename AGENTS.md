@@ -274,7 +274,7 @@ guide doesn't cover, search through the source code in `node_modules/effect/src`
 
 The model is Redis. Full rules with sources and examples in `docs/STYLE.md`.
 
-- `[check: scripts/repository-checks.sh]` Write American English: prose,
+- `[review]` Write American English: prose,
   comments, identifiers, user-facing words, and file names (`color`,
   `canceled`, `labeled`, `center`, `gray`, `-ize`). A value already stored or
   on the wire keeps the spelling it shipped with (`AGENT_STATUS.CANCELED` is
