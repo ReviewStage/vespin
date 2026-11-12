@@ -39,7 +39,9 @@ import { runShowPage, SHOW_PAGE_REFUSAL, showPageRejected } from "../../tasks/pa
 import {
   lookedTaskOf,
   lookedThreadPictureOf,
+  type PdfWrite,
   PICTURE_LOOK_REFUSAL,
+  PICTURE_LOOK_STATUS,
   type PictureLookResult,
   pictureNotLooked,
   runLookAtPicture,
@@ -165,11 +167,49 @@ function lookInThread(
   });
 }
 
-/** Runs one `look_at_picture` call: one of the pictures of the description its address names, in the agent's workspace, read as the member whose turn this is, or of a thread's message there, read as the agent reads the thread. */
+/** Where a description's PDF is written in the agent's machine, under its attachments folder: by its attachment's id, which is a UUID, so no two PDFs share a name and none names a path of its own. */
+function descriptionPdfName(attachmentId: string): string {
+  return `description/${attachmentId}.pdf`;
+}
+
+/**
+ * A description's PDF written into the agent's machine through the sandbox
+ * door given, answering where it stands; refused where the door writes
+ * nothing or the write failed, a Mac away among them, which the model may
+ * try again.
+ */
+function pdfWriteThrough(sandbox: InboxSandboxDoor): PdfWrite {
+  return ({ attachmentId, bytes }) =>
+    Effect.tryPromise(async () => {
+      const door = await sandbox();
+
+      if (door.writeFile === undefined) throw new Error("the sandbox door writes no file");
+
+      return door.writeFile({ name: descriptionPdfName(attachmentId), contents: bytes });
+    }).pipe(
+      Effect.map((path): PictureLookResult => ({ status: PICTURE_LOOK_STATUS.WRITTEN, path })),
+      Effect.catch(() => Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.PDF_UNWRITTEN))),
+    );
+}
+
+/** A PDF of another task's description, which no agent reads, refused before anything is written. */
+const pdfElsewhere: PdfWrite = () =>
+  Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.PDF_ELSEWHERE));
+
+/**
+ * Runs one `look_at_picture` call: one of the pictures of the description
+ * its address names, in the agent's workspace, read as the member whose turn
+ * this is, or of a thread's message there, read as the agent reads the
+ * thread. A PDF of the description is written into the agent's machine
+ * through the sandbox door given, and only one of its own task's: a picture
+ * of another task's description is something to look at, but its PDF is
+ * read whole by the agent's own tools, so it stays with its task.
+ */
 export function runAgentLookAtPicture(
   admitted: AdmittedConversation,
   input: UnparsedWireValue,
   descriptionsOn: boolean,
+  sandbox: InboxSandboxDoor,
 ): Effect.Effect<PictureLookResult, never, DatabaseServices> {
   return Effect.gen(function* () {
     const found = yield* agentOfConversation(admitted);
@@ -189,8 +229,10 @@ export function runAgentLookAtPicture(
       return pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE);
     }
 
+    const writePdf = taskId === found.success.taskId ? pdfWriteThrough(sandbox) : pdfElsewhere;
+
     // The description is read as the member whose turn this is, as `editDescription` writes it.
-    return yield* runLookAtPicture({ userId: admitted.caller, taskId }, input);
+    return yield* runLookAtPicture({ userId: admitted.caller, taskId }, input, writePdf);
   }).pipe(
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.UNAVAILABLE))),

@@ -46,6 +46,7 @@ import {
   DEVICE_LAUNCH_UNSTARTED,
   type DeviceLaunchStep,
   type DeviceLaunchUnstarted,
+  deviceAgentFilesPayloadSchema,
   deviceAgentLaunchPayloadSchema,
 } from "@repo/features/device-agent-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
@@ -471,6 +472,35 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           "nothing was asked of it",
         );
       }),
+    );
+
+    it.effect(
+      "a file written by session goes in a files line under the agent's attachments folder its Mac registered, and the write answers its path once the Mac settled the line",
+      () =>
+        Effect.gen(function* () {
+          const { userId, deviceId, agent, session } = yield* openLocalAgent();
+          const machine = yield* deviceMachine;
+          const contents = new TextEncoder().encode("%PDF-1.7 the spec");
+
+          const writing = yield* Effect.forkChild(
+            machine.writeFile(session, { name: "description/spec.pdf", contents }),
+          );
+
+          const line = yield* untilQueued(userId, deviceId);
+          yield* claimedDeviceAgentLine(userId, deviceId, line.id);
+          yield* TestClock.adjust("1 second");
+          const waiting = writing.pollUnsafe();
+          yield* settledDeviceAgentLine(userId, deviceId, line.id);
+          yield* TestClock.adjust("1 second");
+          const path = `${DEVICE_LAYOUT.attachmentsFolder}/${agent.id}/description/spec.pdf`;
+
+          assert.equal(waiting, undefined, "the write waits for the Mac to settle its line");
+          assert.equal(yield* Fiber.join(writing), path);
+          assert.equal(line.kind, DEVICE_AGENT_LINE_KIND.FILES);
+          assert.deepEqual(Schema.decodeUnknownSync(deviceAgentFilesPayloadSchema)(line.payload), {
+            files: [{ path, mode: 0o644, contents }],
+          });
+        }),
     );
 
     it.effect(

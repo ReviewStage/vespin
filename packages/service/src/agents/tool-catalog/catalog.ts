@@ -547,8 +547,8 @@ const CATALOG = [
   // Note that a look stands on no gate, because it shows a thread's pictures as much as a description's, and every workspace has threads.
   served(
     LOOK_AT_PICTURE_TOOL,
-    (admitted, input, { standing }) =>
-      runAgentLookAtPicture(admitted, input, standing.open.has(TOOL_GATE.DESCRIPTIONS)),
+    (admitted, input, { standing, sandbox }) =>
+      runAgentLookAtPicture(admitted, input, standing.open.has(TOOL_GATE.DESCRIPTIONS), sandbox),
     {
       reads: true,
       variant: lookAtPictureToolOf,

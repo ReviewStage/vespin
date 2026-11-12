@@ -15,7 +15,8 @@ import { agentSandboxDoors, SANDBOX_DOOR_MAX_BYTES } from "./sandbox-door.js";
  * The door to a native agent's sandbox, through `Sandbox` kept in memory:
  * the sandbox tagged with the agent's session is found, the file is read
  * from its run by a command, a path that is no file is no file, a file past
- * every tool's bound is read only one byte past it, and a conversation that
+ * every tool's bound is read only one byte past it, a file is written under
+ * its attachments folder, and a conversation that
  * records no session opens no door. The read's command runs in a real bash
  * over a temporary directory standing in for the sandbox's disk.
  */
@@ -125,6 +126,27 @@ it.effect("a file past every tool's bound is read only one byte past it", () =>
 
     assert.equal(read?.length, SANDBOX_DOOR_MAX_BYTES + 1);
   }),
+);
+
+it.effect(
+  "a file is written into the running sandbox tagged with the agent's session, under its attachments folder, readable by the agent, answering its path",
+  () =>
+    Effect.gen(function* () {
+      const { sandbox: memory, up } = standing(tmpdir());
+      const door = yield* doorOver(ADMITTED).pipe(Effect.provide(memory.layer));
+      const contents = new TextEncoder().encode("%PDF-1.7 the spec");
+
+      const sandbox = yield* Effect.promise(() => door());
+
+      const path = yield* Effect.promise(async () =>
+        sandbox.writeFile?.({ name: "description/spec.pdf", contents }),
+      );
+
+      assert.equal(path, "/tmp/agent-attachments/description/spec.pdf");
+      assert.deepEqual(memory.state.files, [
+        { name: up.name, running: up.running, file: { path, contents, mode: 0o644 } },
+      ]);
+    }),
 );
 
 it.effect("a conversation that records no session opens no door", () =>
