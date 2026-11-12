@@ -18,7 +18,7 @@ import {
 import type { WorkspaceTokenRepository } from "./github-repositories-wire.js";
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { spelledFailure } from "./hosted-failure.js";
-import { type HostedClient, hostedClient } from "./hosted-link.js";
+import { HOSTED_DEADLINE, type HostedClient, hostedClient } from "./hosted-link.js";
 import { type ImageBody, imageBodyOf, imageBodyUnread } from "./image-body.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import {
@@ -623,7 +623,12 @@ export class HostedWorkspaceClient {
 
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
 
-    return resultOf(hostedCall(this.#hosted.conductorImport.check, admitted), (answer) => answer);
+    return resultOf(
+      hostedCall(this.#hosted.conductorImport.check, admitted, {
+        deadline: HOSTED_DEADLINE.CONDUCTOR_IMPORT,
+      }),
+      (answer) => answer,
+    );
   }
 
   /** An import from Conductor begun in the workspace with that key, answering the run once its workspaces are queued, or why Conductor refused. */
@@ -637,7 +642,12 @@ export class HostedWorkspaceClient {
 
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
 
-    return resultOf(hostedCall(this.#hosted.conductorImport.run, admitted), (answer) => answer);
+    return resultOf(
+      hostedCall(this.#hosted.conductorImport.run, admitted, {
+        deadline: HOSTED_DEADLINE.CONDUCTOR_IMPORT,
+      }),
+      (answer) => answer,
+    );
   }
 
   /** The caller's newest import from Conductor in the workspace, with where each workspace and chat stands. */

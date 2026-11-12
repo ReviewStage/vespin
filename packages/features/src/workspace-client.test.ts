@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { fakeCloudApi, HTTP_STATUS, jsonResponse, recordingHttpClient } from "@repo/wire/testing";
-import { Effect } from "effect";
+import { Effect, Fiber } from "effect";
+import { TestClock } from "effect/testing";
 import { accountBearer } from "./account-call.js";
 import { HOSTED_API_ERROR } from "./service-wire.js";
 import { WORKSPACE_CALL_FAILURE } from "./workspace-call.js";
@@ -489,5 +490,55 @@ it.effect(
 
       assert.deepEqual(missing.photo, { ok: false, failure: WORKSPACE_CALL_FAILURE.NOT_FOUND });
       assert.deepEqual(otherType.photo, { ok: false, failure: WORKSPACE_CALL_FAILURE.UNANSWERED });
+    }),
+);
+
+it.effect("checks a Conductor key in its body, answering what Conductor saw or refused", () =>
+  Effect.gen(function* () {
+    const route = "POST /api/workspaces/conductor-import/check";
+    const seen = { workspaces: 3, unreachedRepositories: ["acme/search"] };
+    const api = fakeCloudApi({ [route]: { answer: () => seen } });
+
+    const answered = yield* Effect.provide(
+      client().checkConductorImport(ACME.id, "cdk_live_key"),
+      api.layer,
+    );
+
+    const refused = yield* Effect.provide(
+      client().checkConductorImport(ACME.id, "cdk_bad_key"),
+      fakeCloudApi({ [route]: { answer: () => ({ refused: "bad-key" }) } }).layer,
+    );
+
+    assert.deepEqual(answered, { ok: true, answer: seen });
+    assert.deepEqual(JSON.parse(api.requests()[0]?.body ?? "{}"), {
+      workspaceId: ACME.id,
+      apiKey: "cdk_live_key",
+    });
+    assert.deepEqual(refused, { ok: true, answer: { refused: "bad-key" } });
+  }),
+);
+
+it.effect(
+  "a Conductor key's check outlasts the usual deadline, since it lists every workspace the key sees and asks GitHub of each repository",
+  () =>
+    Effect.gen(function* () {
+      const seen = { workspaces: 170, unreachedRepositories: [] };
+      let answer: (response: Response) => void = () => undefined;
+
+      const slow = recordingHttpClient(
+        () =>
+          new Promise<Response>((resolve) => {
+            answer = resolve;
+          }),
+      );
+
+      const asked = yield* Effect.forkChild(
+        Effect.provide(client().checkConductorImport(ACME.id, "cdk_live_key"), slow.layer),
+      );
+
+      yield* TestClock.adjust("30 seconds");
+      answer(jsonResponse(seen));
+
+      assert.deepEqual(yield* Fiber.join(asked), { ok: true, answer: seen });
     }),
 );

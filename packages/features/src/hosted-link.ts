@@ -113,6 +113,8 @@ export const HOSTED_DEADLINE = {
   CHAPTERS: "chapters",
   BROWSER_OPEN: "browser-open",
   PRESENCE: "presence",
+  /** A Conductor key's check or an import's start, which lists every workspace the key sees from Conductor, page by page, and asks GitHub of each repository among them before it answers. */
+  CONDUCTOR_IMPORT: "conductor-import",
 } as const;
 
 export type HostedDeadline = (typeof HOSTED_DEADLINE)[keyof typeof HOSTED_DEADLINE];
@@ -129,7 +131,9 @@ export type HostedDeadline = (typeof HOSTED_DEADLINE)[keyof typeof HOSTED_DEADLI
  * (`@repo/service/chapters/chapters-function`'s 240 seconds), and a Browser
  * tab opened in an agent's browser outlasts its sandbox's resume (a minute)
  * and its bridge's bound (twenty seconds, `agent-browser.ts`), and a read
- * of the devices' beats is `MAC_PRESENCE.READ_TIMEOUT_MS`.
+ * of the devices' beats is `MAC_PRESENCE.READ_TIMEOUT_MS`, and a Conductor
+ * key's check or an import's start outlasts the listing of a team's every
+ * workspace and a GitHub read for each repository among them.
  */
 const LONG_DEADLINE_MS = {
   [HOSTED_DEADLINE.HELD]: 35_000,
@@ -140,6 +144,7 @@ const LONG_DEADLINE_MS = {
   [HOSTED_DEADLINE.CHAPTERS]: 250_000,
   [HOSTED_DEADLINE.BROWSER_OPEN]: 120_000,
   [HOSTED_DEADLINE.PRESENCE]: MAC_PRESENCE.READ_TIMEOUT_MS,
+  [HOSTED_DEADLINE.CONDUCTOR_IMPORT]: 120_000,
 } as const satisfies Record<Exclude<HostedDeadline, typeof HOSTED_DEADLINE.USUAL>, number>;
 
 /** The span a hosted ask runs under, whose trace every attempt it sends carries. */
