@@ -388,7 +388,7 @@ function DraftReply({
 /** What a reply on its way says at its head's end. */
 const SENDING = "Sending";
 
-/** A reply on its way's files and words: each file its words name drawn in them as its chip, and the rest going up over them. */
+/** A reply on its way's files and words: each file its words name drawn in them as its chip under the upload's cover, and the rest going up over them. */
 function SendingReplyWords({
   text,
   attachments,
@@ -396,7 +396,7 @@ function SendingReplyWords({
   text: string;
   attachments: readonly AgentAttachment[];
 }): React.JSX.Element {
-  const shown = useWordFiles(attachmentChips(attachments), text);
+  const shown = useWordFiles(attachmentChips(attachments), text, true);
 
   return (
     <WordFilesContext.Provider value={shown.named}>

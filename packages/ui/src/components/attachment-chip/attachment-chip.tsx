@@ -1,13 +1,21 @@
 import { type ReactNode, useState } from "react";
-import { cssCustomProperties } from "../../css.js";
-import { CheckIcon, RemoveIcon } from "../../icons/lucide-glyphs.js";
+import { AlertIcon, CheckIcon, RemoveIcon, RetryIcon } from "../../icons/lucide-glyphs.js";
 import { pulseOnPress } from "../../press-pulse.js";
+import { isReported, type ReportedFailure, type Unreported } from "../../reported-failure.js";
+import { useFailureDetails } from "../failure-copy/failure-copy.js";
 import { FILE_TEXT_EXTENT, FileText } from "../file-text/file-text.js";
 import { HoverCard, HoverCardHead } from "../hover-card/hover-card.js";
 import { motionKey as motionKeyAttribute } from "../list-motion/list-motion.js";
 import { ClippedLine, ONE_LINE_ELEMENT, ONE_LINE_END } from "../one-line/clipped-line.js";
-import { SPINNER_SIZE, Spinner } from "../spinner/spinner.js";
+import { SPINNER_SIZE, Spinner, SpinnerRing } from "../spinner/spinner.js";
 import { Tooltip } from "../tooltip/hint.js";
+import {
+  UPLOAD_COVER_SIZE,
+  UPLOAD_COVER_STATE,
+  UPLOAD_METER_PLACE,
+  UploadCover,
+  UploadMeter,
+} from "../upload-cover/upload-cover.js";
 
 /**
  * attachment-chip.tsx -- a file coming along with a message or a note, as a chip: its thumbnail, or its type's glyph, its name, and its size.
@@ -34,13 +42,22 @@ import { Tooltip } from "../tooltip/hint.js";
  * why in words where the caller says (`failure`, "Not kept") and what more
  * it says of it (its size). Neither opens anything.
  *
- * A file on its way up is drawn as it will stand, with a meter along its
- * foot: filling to `progress` where its caller can say how far the bytes
- * have gone, and sweeping where it cannot, as a send that carries its files
- * inside one request cannot. It opens nothing until it is up. One that goes
- * up while drawn takes a check that springs in on its corner and, after a
- * beat, fades, so a file seen going up is seen landing; one drawn up already
- * stands still.
+ * A file on its way up is drawn as it will stand, with the upload's cover
+ * on it (`UploadCover`): a picture under the veil with the spinner at its
+ * middle, any other file the spinner in its glyph's place, and the meter
+ * along its foot, filling to `progress` where its caller can say how far
+ * the bytes have gone, and sweeping where it cannot, as a send that carries
+ * its files inside one request cannot. It opens nothing until it is up. One
+ * that goes up while drawn takes a check that springs in on its corner and,
+ * after a beat, fades, so a file seen going up is seen landing; one drawn
+ * up already stands still.
+ *
+ * One whose upload failed and may go again (`onRetry`) is still drawn as
+ * it would stand, a picture under the veil with Retry's glyph on it, any
+ * other file the failure's glyph, its name, and "Retry": its face is then
+ * the press that sends it again, named "Retry <name>", and its way off on
+ * its corner takes it off, why it failed hanging as its hint. The failure is
+ * said shown as it stands, as every failure the app says in place is.
  *
  * A file that is here hangs its card while the pointer rests on the chip, unless
  * its caller asks for none (`ATTACHMENT_CHIP_HOVER.NONE`), as a PDF standing
@@ -58,6 +75,10 @@ import { Tooltip } from "../tooltip/hint.js";
  * chip is a thumbnail's frame holding two presses, its face and its way off.
  * `attachment-chip.css` keeps the motions it arrives, waits, and lands in.
  */
+
+const WORDS = {
+  RETRY: "Retry",
+} as const;
 
 /** Where a chip's file stands: here to open, still read, on its way up, or failed to come. */
 export const ATTACHMENT_CHIP_STATE = {
@@ -108,21 +129,6 @@ const FACE_PRESS = "group/attachment-face cursor-press hover:bg-fill-strong";
 const REMOVE =
   "ui-attachment-chip-remove absolute -top-attachment-chip-remove-out -right-attachment-chip-remove-out m-0 flex size-attachment-chip-remove items-center justify-center rounded-ui-full border-3 border-transparent bg-background bg-clip-padding p-0 text-muted-foreground shadow-attachment-chip-disc transition-[color] duration-(--ui-duration-hover) ease-motion-exit focus-visible:outline-offset-[calc(-1*var(--ui-focus-ring-width))] hover:not-disabled:text-foreground disabled:opacity-disabled [&_svg]:size-ui-8";
 
-/**
- * An upload's meter, a hairline along the chip's foot inside its edge in the
- * working ink: filled from its start to the share gone up on `transform`, so
- * the bar never changes size, and easing to each new share as a pane does
- * rather than springing past it; where no share is known, a third of the
- * track sweeps across it (`attachment-chip.css`).
- */
-const METER =
-  "ui-attachment-chip-meter pointer-events-none absolute right-ui-4 bottom-ui-2 left-ui-4 h-attachment-chip-meter overflow-hidden rounded-ui-full bg-fill-strong";
-
-const METER_FILL = "ui-attachment-chip-meter-fill block h-full rounded-ui-full bg-working";
-
-const METER_SHARE =
-  "origin-left [transform:scaleX(var(--ui-attachment-chip-share,0))] transition-transform duration-(--ui-duration-pane) ease-pane";
-
 /** A landed file's check on the chip's corner, in the done ink on the way off's disc. */
 const LANDED =
   "ui-attachment-chip-landed pointer-events-none absolute -right-ui-6 -bottom-ui-6 flex size-ui-16 items-center justify-center rounded-ui-full bg-background text-complete shadow-attachment-chip-disc [&_svg]:size-attachment-chip-check [&_svg]:text-inherit";
@@ -135,6 +141,7 @@ function ChipFace({
   icon,
   detail,
   failure,
+  retries,
 }: {
   state: AttachmentChipState;
   name: string;
@@ -142,20 +149,73 @@ function ChipFace({
   icon: ReactNode;
   detail: string | undefined;
   failure: string | undefined;
+  /** Whether a failed upload's face is its Retry. */
+  retries: boolean;
 }): React.JSX.Element {
   if (state === ATTACHMENT_CHIP_STATE.LOADING) {
     return <Spinner label={`Reading ${name}`} size={SPINNER_SIZE.INLINE} />;
   }
 
-  const drawn = state === ATTACHMENT_CHIP_STATE.READY || state === ATTACHMENT_CHIP_STATE.UPLOADING;
+  const uploading = state === ATTACHMENT_CHIP_STATE.UPLOADING;
+  const drawn = state === ATTACHMENT_CHIP_STATE.READY || uploading || retries;
 
   if (drawn && image !== undefined) {
-    return (
+    const picture = (
       <img
         className="block h-full w-auto min-w-attachment-chip-picture-min max-w-attachment-chip-picture-max rounded-attachment-chip-face object-cover transition-[filter] duration-(--ui-duration-hover) ease-motion-exit group-hover/attachment-face:brightness-112"
         src={image}
         alt={name}
       />
+    );
+
+    if (state === ATTACHMENT_CHIP_STATE.READY) return picture;
+
+    return (
+      <span className="relative block h-full rounded-attachment-chip-face">
+        {picture}
+        <UploadCover
+          size={UPLOAD_COVER_SIZE.CHIP}
+          state={uploading ? UPLOAD_COVER_STATE.UPLOADING : UPLOAD_COVER_STATE.FAILED}
+        />
+      </span>
+    );
+  }
+
+  // A file going up holds the spinner in its glyph's place, and one that failed and may go again the failure's glyph, its name, and Retry.
+  if (uploading || retries) {
+    return (
+      <>
+        {uploading ? (
+          <span className="inline-flex size-icon-16 flex-none" aria-hidden="true">
+            <SpinnerRing />
+          </span>
+        ) : (
+          <span
+            className="inline-flex flex-none text-danger [&>svg]:size-icon-16"
+            aria-hidden="true"
+          >
+            <AlertIcon />
+          </span>
+        )}
+        <ClippedLine
+          className="ui-attachment-chip-name overflow-hidden whitespace-nowrap text-foreground"
+          as={ONE_LINE_ELEMENT.SPAN}
+          end={ONE_LINE_END.ELLIPSIS}
+          words={name}
+        >
+          {name}
+        </ClippedLine>
+        {uploading ? (
+          detail === undefined ? null : (
+            <span className="ui-attachment-chip-detail flex-none">{detail}</span>
+          )
+        ) : (
+          <span className="ui-attachment-chip-retry inline-flex flex-none items-center gap-ui-4 font-emphasis text-foreground [&>svg]:size-ui-12">
+            <RetryIcon />
+            {WORDS.RETRY}
+          </span>
+        )}
+      </>
     );
   }
 
@@ -178,45 +238,6 @@ function ChipFace({
         <span className="ui-attachment-chip-detail flex-none">{detail}</span>
       )}
     </>
-  );
-}
-
-/** The share of an upload done, as a fraction held to 0–1, a value that is not a number read as none. */
-function fractionOf(progress: number): number {
-  if (!Number.isFinite(progress)) return 0;
-
-  return Math.min(100, Math.max(0, progress)) / 100;
-}
-
-/** The meter along an uploading chip's foot: filled to its share where one is known, else sweeping. */
-function UploadMeter({
-  name,
-  progress,
-}: {
-  name: string;
-  progress: number | undefined;
-}): React.JSX.Element {
-  const fraction = progress === undefined ? undefined : fractionOf(progress);
-
-  return (
-    <span
-      className={METER}
-      role="progressbar"
-      aria-label={`Uploading ${name}`}
-      aria-valuemin={fraction === undefined ? undefined : 0}
-      aria-valuemax={fraction === undefined ? undefined : 100}
-      aria-valuenow={fraction === undefined ? undefined : Math.round(fraction * 100)}
-      data-indeterminate={fraction === undefined ? "true" : undefined}
-    >
-      <span
-        className={fraction === undefined ? METER_FILL : `${METER_FILL} ${METER_SHARE}`}
-        style={
-          fraction === undefined
-            ? undefined
-            : cssCustomProperties({ "--ui-attachment-chip-share": fraction })
-        }
-      />
-    </span>
   );
 }
 
@@ -247,6 +268,9 @@ export function AttachmentChip({
   state = ATTACHMENT_CHIP_STATE.READY,
   progress,
   failure,
+  onRetry,
+  reported,
+  lands = true,
   motionKey,
   peek,
   hover = ATTACHMENT_CHIP_HOVER.CARD,
@@ -269,8 +293,14 @@ export function AttachmentChip({
   state?: AttachmentChipState;
   /** How far an upload has come, in percent, where its transport can say; an uploading chip without it sweeps. */
   progress?: number | undefined;
-  /** Why a failed file is not there, in words ("Not kept"); its glyph alone says so where none is given. */
+  /** Why a failed file is not there, in words ("Not kept"); its glyph alone says so where none is given. One that may go again hangs it as its hint. */
   failure?: string | undefined;
+  /** Sends a failed upload again, the chip's face its press; a failure with none is only said. */
+  onRetry?: (() => void) | undefined;
+  /** A failed upload's failure as the app reports it, said shown as the chip stands, as `ErrorState` takes it. */
+  reported?: ReportedFailure | Unreported | undefined;
+  /** Whether a file seen going up takes its check as it stands up; off where the request it goes up in may fail and leave it standing as it was. */
+  lands?: boolean | undefined;
   /** The key a `ListMotion` around its list follows it by, which plays its arrival and its exit. */
   motionKey?: string | undefined;
   /** The head of a text file's words, which its card shows under its name; none for a file with no words to show. */
@@ -280,7 +310,9 @@ export function AttachmentChip({
 }): React.JSX.Element {
   const ready = state === ATTACHMENT_CHIP_STATE.READY;
   const uploading = state === ATTACHMENT_CHIP_STATE.UPLOADING;
+  const retries = state === ATTACHMENT_CHIP_STATE.FAILED && onRetry !== undefined;
   const landed = useLanded(state);
+  useFailureDetails(retries && isReported(reported) ? reported : undefined);
 
   const face = (
     <ChipFace
@@ -290,16 +322,20 @@ export function AttachmentChip({
       icon={icon}
       detail={detail}
       failure={failure}
+      retries={retries}
     />
   );
 
   // A thumbnail's place: a picture, a wait, or a failure with no words.
-  const picture = (ready || uploading) && image !== undefined;
+  const picture = (ready || uploading || retries) && image !== undefined;
 
   const thumbnail =
     picture ||
     state === ATTACHMENT_CHIP_STATE.LOADING ||
-    (state === ATTACHMENT_CHIP_STATE.FAILED && failure === undefined && detail === undefined);
+    (state === ATTACHMENT_CHIP_STATE.FAILED &&
+      !retries &&
+      failure === undefined &&
+      detail === undefined);
 
   // The card wears what the chip does: the thumbnail of a picture, else the file's glyph.
   const glyph =
@@ -323,7 +359,16 @@ export function AttachmentChip({
       {...(motionKey === undefined ? {} : motionKeyAttribute(motionKey))}
       data-state={state}
     >
-      {onOpen === undefined || !ready ? (
+      {retries ? (
+        <button
+          type="button"
+          className={`${FACE} ${FACE_PRESS}`}
+          aria-label={`Retry ${name}`}
+          onClick={pulseOnPress(onRetry)}
+        >
+          {face}
+        </button>
+      ) : onOpen === undefined || !ready ? (
         <span className={FACE}>{face}</span>
       ) : (
         <button
@@ -335,8 +380,10 @@ export function AttachmentChip({
           {face}
         </button>
       )}
-      {uploading ? <UploadMeter name={name} progress={progress} /> : null}
-      {landed ? (
+      {uploading ? (
+        <UploadMeter name={name} progress={progress} place={UPLOAD_METER_PLACE.CHIP} />
+      ) : null}
+      {landed && lands ? (
         <span className={LANDED} aria-hidden="true">
           <CheckIcon />
         </span>
@@ -354,6 +401,9 @@ export function AttachmentChip({
       )}
     </li>
   );
+
+  // Note that a failure that may go again hangs why as its hint wherever it stands, since its face says Retry instead.
+  if (retries) return <Tooltip label={failure ?? name}>{chip}</Tooltip>;
 
   return hover === ATTACHMENT_CHIP_HOVER.NONE ? (
     chip

@@ -41,11 +41,14 @@ export function WordFileChip({
   name,
   file,
   onOpen,
+  uploading = false,
 }: {
   name: string;
   /** The file, where the message holds one of that name. */
   file: FileChip | undefined;
   onOpen?: ((name: string) => void) | undefined;
+  /** Whether the file is on its way up with its line, wearing the upload's cover until it is up. */
+  uploading?: boolean | undefined;
 }): React.JSX.Element {
   const here = file !== undefined && (chipBase64(file) !== "" || file.url !== "");
   const open = here && onOpen !== undefined ? () => onOpen(name) : undefined;
@@ -59,6 +62,7 @@ export function WordFileChip({
       glyph={picture ? undefined : <FileTypeIcon name={name} />}
       onOpen={open}
       hint={onOpen !== undefined}
+      uploading={uploading}
     />
   );
 }
@@ -131,9 +135,14 @@ export interface ShownWordFiles {
  * A message's files as its words draw them: each file its words name drawn
  * where its marker stands as its chip, opening over the window and walking
  * them in the order the words name them, and every other file left for the
- * row over the words.
+ * row over the words. Files on their way up with their line (`uploading`)
+ * wear the upload's cover until it lands.
  */
-export function useWordFiles(files: readonly FileChip[], words: string): ShownWordFiles {
+export function useWordFiles(
+  files: readonly FileChip[],
+  words: string,
+  uploading = false,
+): ShownWordFiles {
   const placed = filesInWords(files, words);
   const viewer = useWordFileViewer(placed.filter((file) => file.url !== ""));
 
@@ -142,6 +151,7 @@ export function useWordFiles(files: readonly FileChip[], words: string): ShownWo
       name={name}
       file={files.find((file) => namedBy(file, name))}
       onOpen={viewer.open}
+      uploading={uploading}
     />
   );
 

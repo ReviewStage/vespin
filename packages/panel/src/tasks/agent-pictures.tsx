@@ -619,19 +619,23 @@ function useKeptChips(files: readonly MessageFileChip[]): FileChip[] {
  * (`SentWords`), and to its files' row, which leaves those out; a press opens
  * a file over the window, walking the files in the order the words name
  * them. A line whose words name none of its files, as every line sent before
- * markers, draws as it did.
+ * markers, draws as it did. While the line is on its way, its files wear the
+ * upload's cover.
  */
 export function MessageFiles({
   message,
   words,
+  sending = false,
   children,
 }: {
   message: AgentTranscriptMessage;
   words: string;
+  /** Whether the line is still on its way, its row not yet read back. */
+  sending?: boolean;
   children: ReactNode;
 }): ReactNode {
   return (
-    <WordFilesOf files={messageFileChips(message)} words={words}>
+    <WordFilesOf files={messageFileChips(message)} words={words} sending={sending}>
       {children}
     </WordFilesOf>
   );
@@ -646,13 +650,16 @@ export function MessageFiles({
 export function WordFilesOf({
   files,
   words,
+  sending = false,
   children,
 }: {
   files: readonly MessageFileChip[];
   words: string;
+  /** Whether the line is still on its way, its files going up with it. */
+  sending?: boolean;
   children: ReactNode;
 }): ReactNode {
-  const shown = useWordFiles(useKeptChips(files), words);
+  const shown = useWordFiles(useKeptChips(files), words, sending);
 
   if (shown.named === undefined) return children;
 

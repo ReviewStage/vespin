@@ -420,6 +420,8 @@ export * from "./components/turn-into-menu/turn-into-menu.js";
 
 export * from "./components/unread-mark/unread-mark.js";
 
+export * from "./components/upload-cover/upload-cover.js";
+
 export * from "./components/usage-meters/usage-meters.js";
 
 export * from "./components/video-player/video-player.js";

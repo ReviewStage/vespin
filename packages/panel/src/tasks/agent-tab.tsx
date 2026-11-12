@@ -1867,7 +1867,7 @@ export function AgentMessage({
     );
 
     return (
-      <MessageFiles message={message} words={shown}>
+      <MessageFiles message={message} words={shown} sending={sending}>
         <Message
           from={received ? MESSAGE_ROLE.ASSISTANT : message.role}
           className={received ? RECEIVED_MESSAGE_CLASS : undefined}

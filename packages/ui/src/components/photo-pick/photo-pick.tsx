@@ -5,6 +5,11 @@ import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
 import type { FilePicker } from "../file-picker/file-picker.js";
 import { Menu, useMenu } from "../menu/menu.js";
 import { Tooltip } from "../tooltip/hint.js";
+import {
+  UPLOAD_COVER_SIZE,
+  UPLOAD_COVER_STATE,
+  UploadCover,
+} from "../upload-cover/upload-cover.js";
 
 /**
  * photo-pick.tsx -- a thing's photo as its own tile, the tile itself the press that picks one, beside the name it stands for.
@@ -19,7 +24,9 @@ import { Tooltip } from "../tooltip/hint.js";
  * the picker and the photo, since what a picked file becomes is the
  * caller's to decide, and the picker's hidden input is drawn here, beside
  * the tile. Note that the words it is named by are a hint on a rest, since
- * the tile says what it is by itself.
+ * the tile says what it is by itself. While a photo picked goes up
+ * (`uploading`), the tile wears the upload's cover (`UploadCover`) and takes
+ * no press; a refusal is its caller's to say.
  */
 
 /** What a press on the tile does, said as its name and its hint. */
@@ -52,6 +59,7 @@ export function PhotoPick({
   picker,
   onRemove,
   disabled = false,
+  uploading = false,
 }: {
   name: string;
   unnamed: string;
@@ -63,6 +71,8 @@ export function PhotoPick({
   /** Removes the photo set, given only while one is, offered beside Replace photo; without it a press picks. */
   onRemove?: (() => void) | undefined;
   disabled?: boolean | undefined;
+  /** Whether a photo picked is on its way up, the tile covered and taking no press until it lands. */
+  uploading?: boolean | undefined;
 }): React.JSX.Element {
   const named = name.trim();
   const blank = named === "" && photo === undefined;
@@ -79,7 +89,8 @@ export function PhotoPick({
           type="button"
           className={TILE}
           aria-label={label}
-          disabled={disabled}
+          aria-busy={uploading ? true : undefined}
+          disabled={disabled || uploading}
           data-blank={blank ? "true" : undefined}
           {...press}
         >
@@ -102,6 +113,9 @@ export function PhotoPick({
               </span>
             </>
           )}
+          {uploading ? (
+            <UploadCover size={UPLOAD_COVER_SIZE.CHIP} state={UPLOAD_COVER_STATE.UPLOADING} />
+          ) : null}
         </button>
       </Tooltip>
       {menu.drawn === undefined || onRemove === undefined ? null : (
