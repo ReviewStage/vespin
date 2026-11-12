@@ -22,7 +22,6 @@ import {
 } from "@repo/features/agent-goal-model";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
 import {
-  Badge,
   BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
@@ -44,6 +43,7 @@ import {
   RowHint,
   RowHintOptions,
   STATUS_TONE,
+  StatusWords,
   TIME_LOOK,
   Time,
 } from "@repo/ui";
@@ -107,11 +107,11 @@ function GoalMark({ goal }: { goal: AgentGoal }): ReactNode {
 function GoalStanding({ goal, working }: { goal: AgentGoal; working: boolean }): ReactNode {
   switch (goal.state) {
     case AGENT_GOAL_STATE.PAUSED:
-      return <Badge tone={STATUS_TONE.ATTENTION}>Paused</Badge>;
+      return <StatusWords tone={STATUS_TONE.ATTENTION}>Paused</StatusWords>;
     case AGENT_GOAL_STATE.MET:
       return <span className="text-muted-foreground">{`Met · ${goal.turns} turns`}</span>;
     case AGENT_GOAL_STATE.IMPOSSIBLE:
-      return <Badge tone={STATUS_TONE.DANGER}>Can't be met</Badge>;
+      return <StatusWords tone={STATUS_TONE.DANGER}>Can't be met</StatusWords>;
     case AGENT_GOAL_STATE.BUDGET_LIMITED:
       return <span className="text-muted-foreground">Budget reached</span>;
     default:
