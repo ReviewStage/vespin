@@ -6,8 +6,9 @@
  * deploy enforces. A limit only the service holds is not here: the page
  * reads nothing from the service, so it draws what a browser bundle may
  * import (`@repo/features`, and the runner's pins, whose module reaches no
- * Node API). The search narrows the rows by what a limit bounds or by its
- * constant's name, which is what a reader greps for to change it.
+ * Node API). The search narrows the rows by what a limit bounds, by its
+ * constant's name, which is what a reader greps for to change it, or by its
+ * value as drawn.
  */
 
 import {
@@ -410,7 +411,7 @@ function foundGroups(query: string): readonly LimitGroup[] {
   const term = query.trim().toLowerCase();
   if (term === "") return LIMIT_GROUPS;
   const found = (each: Limit) =>
-    each.label.toLowerCase().includes(term) || each.constant.toLowerCase().includes(term);
+    [each.label, each.constant, each.figure].some((words) => words.toLowerCase().includes(term));
   return LIMIT_GROUPS.map((group) => ({ ...group, limits: group.limits.filter(found) })).filter(
     (group) => group.limits.length > 0,
   );
@@ -433,7 +434,7 @@ export function LimitsScreen({
       controls={null}
       filters={
         <SearchField
-          label="Search limits by what they bound or their constant"
+          label="Search limits by what they bound, their constant, or their value"
           placeholder="Search limits"
           value={query}
           onChange={setQuery}
