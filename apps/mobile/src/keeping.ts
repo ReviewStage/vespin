@@ -57,6 +57,12 @@ const PICTURE_NAME = "Picture";
 /** The longest a picture's file name runs, taken from what it shows. */
 const NAME_MAX = 60;
 
+/** What a draft's HTML opens with: its encoding, which the system reads as Latin-1 where none is named. */
+const RICH_HEAD = '<meta charset="utf-8">';
+
+/** The face a draft's words paste in, the system's, where HTML with no face of its own pastes into Mail in Times. */
+const RICH_FACE = "font-family: -apple-system, sans-serif";
+
 /** Photos refused the app's add-only access. */
 class PhotosRefused extends Error {}
 
@@ -102,10 +108,14 @@ async function copied(kept: Kept): Promise<void> {
  * that the words are set in the system's face, since HTML read with no face
  * of its own pastes into Mail in Times; and that the plain words are the
  * system's reading of the HTML, each link by its label alone, since one
- * item cannot hold words of our own beside it without native code.
+ * item cannot hold words of our own beside it without native code. Note
+ * that the HTML names its encoding, since the system reads HTML that names
+ * none as Latin-1, which garbles a curly quote, a dash, or an emoji; and
+ * that an HTML the system could not read leaves the pasteboard empty
+ * though expo-clipboard answers it went, which no read here can tell.
  */
 async function copiedRich(copy: DraftCopy): Promise<void> {
-  await setStringAsync(`<span style="font-family: -apple-system, sans-serif">${copy.html}</span>`, {
+  await setStringAsync(`${RICH_HEAD}<span style="${RICH_FACE}">${copy.html}</span>`, {
     inputFormat: StringFormat.HTML,
   });
 }

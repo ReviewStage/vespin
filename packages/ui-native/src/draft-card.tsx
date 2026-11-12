@@ -160,9 +160,7 @@ export function DraftCard({
           tintColor={colors.TEXT_MUTED}
           accessibilityElementsHidden
         />
-        <Text style={[styles.barWords, quiet]} accessibilityRole="header">
-          {DRAFT_WORDS.TITLE[draft.kind]}
-        </Text>
+        <Text style={[styles.barWords, quiet]}>{DRAFT_WORDS.TITLE[draft.kind]}</Text>
         {keeping === undefined ? null : (
           <CopyPress
             what={DRAFT_WORDS.COPY_WHAT.BODY}
