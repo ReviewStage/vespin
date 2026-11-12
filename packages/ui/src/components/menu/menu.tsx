@@ -40,6 +40,7 @@ import {
 import { OneLine } from "../one-line/one-line.js";
 import { ROVING_STOP, rovingItem, useRovingKeys } from "../roving-keys/roving-keys.js";
 import { SCROLL_FADE, SCROLL_SIZE, ScrollArea } from "../scroll-area/scroll-area.js";
+import { SPINNER_SIZE, SpinnerRing } from "../spinner/spinner.js";
 import { SwitchMark } from "../switch/switch.js";
 import { hintedControlOf, Tooltip } from "../tooltip/hint.js";
 import type { ContextMenuProps } from "./context-menu.js";
@@ -208,6 +209,8 @@ export interface MenuAction {
   danger?: boolean;
   /** Printed muted at the item's end: the shortcut that takes the same action, as the app draws it. */
   hint?: React.ReactNode;
+  /** A wait the item stands for, such as a process it started still running: the ring a wait is drawn with at its end, after any hint, heard in these words after its label and detail. */
+  busy?: string | undefined;
   /** Whether a key press is the shortcut its hint prints, which chooses it while the menu stands. */
   pressedBy?: MenuKeyMatch | undefined;
   /** Drawn dimmed and not chosen: the action does not apply now. */
@@ -677,10 +680,22 @@ function endSlot(afterHint: boolean, setting: boolean): string {
   );
 }
 
-/** What an item prints at its end: its hint, and after it a setting's switch, the chevron of a list it opens, or a setting's check while it is on. */
+/** What an item prints at its end: its hint, and after it the ring of a wait it stands for, a setting's switch, the chevron of a list it opens, or a setting's check while it is on. */
 function ItemEnd({ action }: { action: MenuAction }): React.JSX.Element | null {
   const hint =
     action.hint === undefined ? null : <span className="ui-menu-item-hint">{action.hint}</span>;
+
+  // Note that the ring is drawn alone, its words heard in the item's own name (`heardOf`).
+  if (action.busy !== undefined) {
+    return (
+      <>
+        {hint}
+        <span className={endSlot(hint !== null, false)}>
+          <SpinnerRing size={SPINNER_SIZE.SMALL} />
+        </span>
+      </>
+    );
+  }
 
   if (action.mark === MENU_ITEM_MARK.SWITCH && action.checked !== undefined) {
     return (
@@ -717,6 +732,17 @@ function ItemEnd({ action }: { action: MenuAction }): React.JSX.Element | null {
   }
 
   return hint;
+}
+
+/**
+ * What a reader hears an item as, where its label alone does not say it all:
+ * its label, then its detail and the wait it stands for, each after a pause,
+ * because the spans would otherwise run together.
+ */
+function heardOf(action: MenuAction): string | undefined {
+  const after = [action.detail, action.busy].filter((words) => words !== undefined);
+
+  return after.length === 0 ? undefined : [action.label, ...after].join(", ");
 }
 
 /** Whether an item draws its detail as a second line under its label, which the item grows to hold. */
@@ -847,8 +873,7 @@ export function MenuItem({
   /** Where it stands among a field's pinned rows rather than in a menu. */
   steered?: SteeredMenuItem | undefined;
 }): React.JSX.Element {
-  // Note that a detail is heard after the label with a pause, because the two spans would otherwise run together.
-  const heard = action.detail === undefined ? undefined : `${action.label}, ${action.detail}`;
+  const heard = heardOf(action);
 
   if (steered !== undefined) {
     return (
@@ -1952,7 +1977,7 @@ function SheetItem({
   submenu?: string | undefined;
   onChoose: () => void;
 }): React.JSX.Element {
-  const heard = action.detail === undefined ? undefined : `${action.label}, ${action.detail}`;
+  const heard = heardOf(action);
 
   const shared = {
     type: "button",

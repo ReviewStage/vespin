@@ -305,8 +305,9 @@ function runItems(offer: RunOffer): MenuAction[][] {
     const item: MenuAction = {
       key: offered.action.id,
       label: actionLabel(offered),
-      // While it runs its row says so under "Stop" and its name, rather than its command.
-      detail: offered.runs ? WORDS.RUNNING : offered.action.command,
+      // While it runs its row keeps its command and wears a spinner at its end.
+      detail: offered.action.command,
+      busy: offered.runs ? WORDS.RUNNING : undefined,
       icon: actionGlyph(offered),
       replayMasked: true,
       onSelect: offered.onPress,
@@ -327,7 +328,7 @@ export function runSubmenu(offer: RunOffer | undefined): MenuSubmenu | undefined
   return { label: WORDS.SUBMENU, icon: <PlayIcon />, items: runItems(offer).flat() };
 }
 
-/** One action as ⌘K lists it: Run or Stop and its name, its command or that it runs, and ⌥⌘R on the primary where the key acts. */
+/** One action as ⌘K lists it: Run or Stop and its name, its command, and ⌥⌘R on the primary where the key acts. */
 export interface RunPaletteRow {
   readonly id: string;
   readonly label: string;
@@ -344,7 +345,7 @@ export function runPaletteRows(offer: RunOffer | undefined): readonly RunPalette
   return offer.actions.map((offered) => ({
     id: offered.action.id,
     label: offered.runs ? WORDS.STOP(offered.action.label) : WORDS.RUN(offered.action.label),
-    detail: offered.runs ? WORDS.RUNNING : offered.action.command,
+    detail: offered.action.command,
     icon: actionGlyph(offered),
     keyed: offered === offer.primary && offer.keyed,
     onPress: offered.onPress,
