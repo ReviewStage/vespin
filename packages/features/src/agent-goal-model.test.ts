@@ -10,6 +10,7 @@ import {
   agentGoal,
   GOAL_ASK_WAIT_MS,
   goalAsShown,
+  goalControlLine,
   readGoal,
 } from "./agent-goal-model.js";
 import { AGENT_SENDER, type AgentTranscriptMessage } from "./agent-wire.js";
@@ -180,5 +181,26 @@ describe("goalAsShown", () => {
     expect(goalAsShown(readGoal(running), [{ id: "s2", text: "/goal clear" }], true, 0)).toBe(
       undefined,
     );
+  });
+});
+
+describe("goalControlLine", () => {
+  it("takes the developer's pause, resume, and clear for no message, but not a goal set or another sender's line", () => {
+    const own = (text: string): AgentTranscriptMessage => ({
+      id: text,
+      role: MESSAGE_ROLE.USER,
+      parts: [{ type: "text", text }],
+    });
+
+    expect(
+      ["/goal pause", "/goal resume", "/goal clear"].map((text) => goalControlLine(own(text))),
+    ).toEqual([true, true, true]);
+    expect(goalControlLine(own(`/goal ${CONDITION}`))).toBe(false);
+    expect(
+      goalControlLine({
+        ...own("/goal clear"),
+        sentBy: { name: "Nightly", kind: AGENT_SENDER.AUTOMATION },
+      }),
+    ).toBe(false);
   });
 });

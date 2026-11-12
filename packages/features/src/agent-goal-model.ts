@@ -220,6 +220,29 @@ function lineText(message: AgentTranscriptMessage): string {
     .join("\n");
 }
 
+/** The asks that only move the goal standing, which its row's acts send and its own trail records, so the line that asks one is no message to draw. */
+const CONTROLS: ReadonlySet<GoalAsk["kind"]> = new Set([
+  GOAL_ASK.PAUSE,
+  GOAL_ASK.RESUME,
+  GOAL_ASK.CLEAR,
+]);
+
+/** Whether words are a `/goal` line that pauses, resumes, or clears the goal, rather than one that sets it or asks where it stands. */
+export function goalControlWords(text: string): boolean {
+  const ask = goalAskOf(text);
+
+  return ask !== undefined && CONTROLS.has(ask.kind);
+}
+
+/** Whether a line is the developer's own `/goal` pause, resume, or clear: the goal's trail says where it moved, so the transcript draws no message for it. */
+export function goalControlLine(message: AgentTranscriptMessage): boolean {
+  return (
+    message.role === MESSAGE_ROLE.USER &&
+    developersLine(message) &&
+    goalControlWords(lineText(message))
+  );
+}
+
 /** The goal as it reads once a line asks a move of it, ahead of the harness's word: none where it asks the goal cleared. */
 export function goalAsked(goal: AgentGoal | undefined, asked: GoalAsked): AgentGoal | undefined {
   const { ask } = asked;

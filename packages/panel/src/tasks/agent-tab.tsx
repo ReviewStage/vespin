@@ -1,5 +1,6 @@
 import { waitingOnYouWords } from "@repo/features/agent-approval-model";
 import { bootHolds } from "@repo/features/agent-boot";
+import { goalControlLine, goalControlWords } from "@repo/features/agent-goal-model";
 import {
   AGENT_PART,
   type AgentPart,
@@ -3262,7 +3263,22 @@ function AgentTabView({
     [transcript.messages, cut],
   );
 
-  const lines = useMemo(() => agentLines(kept, composer.sent), [kept, composer.sent]);
+  const goalsOn =
+    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.GOALS) }).data === true;
+
+  // Note that a goal's pause, resume, or clear is no message: the row moves at once and the goal's own trail says where.
+  const lines = useMemo(
+    () =>
+      goalsOn
+        ? agentLines(
+            kept.filter((message) => !goalControlLine(message)),
+            composer.sent.filter(
+              (line) => line.state !== SENT_LINE_STATE.PENDING || !goalControlWords(line.text),
+            ),
+          )
+        : agentLines(kept, composer.sent),
+    [kept, composer.sent, goalsOn],
+  );
 
   // Note that only a line still on its way is the reader's newest, since a refused one never reached the agent.
   const pendingWords = useMemo(
