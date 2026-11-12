@@ -98,8 +98,8 @@ mention by `message_agent`. You post nothing on a thing a worker's thread
 already holds; mention that thread where you need to. Your own threads are
 for what no one worker holds: a decision that spans PRs, a change to the plan
 itself, and the final report (Step 4). Nobody posts routine milestones
-(opened, fix pushed, CI green, merged); a merge-on-green PR gets no thread of
-its own, and the final report covers it. The service tells every agent
+(opened, fix pushed, CI green, merged); a merge-on-green PR that needs nothing
+of the user gets no thread of its own, and the final report covers it. The service tells every agent
 another agent starts the same: post its own threads, and send its starter
 their mentions.
 
@@ -301,7 +301,8 @@ unless another coding agent started you on it.
   of its PR, pictures included, and sends you the mention; you never post a
   second thread on something a worker's thread holds, and keep your own
   threads to what spans PRs and the final report. Nobody posts routine
-  milestones.
+  milestones, and a merge-on-green PR that needs nothing of the user gets no
+  thread.
 - Point the user at a worker or PR with a deep link or mention, not an id.
 - One PR per subtask and per worker. Do not reuse a worker or a subtask for
   a second PR; a continuation of a worker takes over its source's PR on its
