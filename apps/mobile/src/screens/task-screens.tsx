@@ -16,6 +16,7 @@ import {
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
+import { FOLLOWING_WORDS } from "@repo/features/task-followers-model";
 import {
   CHANGE_REPOSITORY,
   CHOOSE_REPOSITORY,
@@ -68,6 +69,7 @@ import {
   type BarMenu,
   ConfirmAsk,
   EmptyState,
+  FollowerRow,
   LINK_ROW_TONE,
   LIST_LOOK,
   LinkRow,
@@ -83,6 +85,7 @@ import {
   type RowSwipe,
   Screen,
   SplitView,
+  SwitchLinkRow,
   shareLink,
   type TaskFold,
   TaskHead,
@@ -113,6 +116,7 @@ import {
   useTaskCommentsRetry,
 } from "../tasks/use-comments.js";
 import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
+import { useTaskFollowers } from "../tasks/use-followers.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import {
   type StatusQuestion,
@@ -1220,6 +1224,65 @@ function OverviewAgents({
   );
 }
 
+/** The SF Symbols for the panel's eye, eye-off, and laptop on the reader's own follower rows. */
+const FOLLOWER_SYMBOL = {
+  FOLLOW: "eye",
+  UNFOLLOW: "eye.slash",
+  MACHINES: "laptopcomputer",
+} as const;
+
+/**
+ * The task's followers as the panel's Following chip lists them, while its
+ * workspace has Following on: the reader first as You, each with a muted
+ * Assignee on the assignee and a laptop where the task's agents may use
+ * their machines; then the reader's own switch and Unfollow, which the
+ * assignee may not press, or Follow alone where they do not follow.
+ */
+function OverviewFollowers({ task }: { readonly task: TaskSummary }) {
+  const followers = useTaskFollowers(task);
+
+  if (followers === undefined) return null;
+  const { lines, reader } = followers;
+
+  return (
+    <ListSection title={FOLLOWING_WORDS.CHIP} count={lines.length}>
+      {lines.map(({ follower, label, face }) => (
+        <FollowerRow
+          key={follower.userId}
+          id={follower.userId}
+          label={label}
+          face={face}
+          role={follower.assignee ? FOLLOWING_WORDS.ASSIGNEE : undefined}
+          machines={follower.machines ? FOLLOWING_WORDS.MACHINES_ON : undefined}
+        />
+      ))}
+      {reader === undefined ? (
+        <LinkRow
+          symbol={FOLLOWER_SYMBOL.FOLLOW}
+          label={FOLLOWING_WORDS.FOLLOW}
+          onPress={followers.follow}
+        />
+      ) : (
+        <>
+          <SwitchLinkRow
+            symbol={FOLLOWER_SYMBOL.MACHINES}
+            label={FOLLOWING_WORDS.MACHINES}
+            on={reader.machines}
+            onSwitch={followers.setMachines}
+          />
+          <LinkRow
+            symbol={FOLLOWER_SYMBOL.UNFOLLOW}
+            label={FOLLOWING_WORDS.UNFOLLOW}
+            detail={reader.assignee ? FOLLOWING_WORDS.ASSIGNEE_STAYS : undefined}
+            disabled={reader.assignee}
+            onPress={followers.unfollow}
+          />
+        </>
+      )}
+    </ListSection>
+  );
+}
+
 /** The pages the task's agents showed, each opened whole on the app's own page screen, at the version the list holds. */
 function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
@@ -1415,7 +1478,7 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
 /**
  * A task's Overview, as the panel's phone draws it: its head, its relations,
  * its agents with New agent and the line of its threads that need you, its
- * pages, and, where its workspace has Task descriptions on, its description
+ * followers where its workspace has Following on, its pages, and, where its workspace has Task descriptions on, its description
  * read-only and the comment threads that stand open on it. A pull reads the
  * task list again.
  */
@@ -1454,6 +1517,7 @@ function OverviewPage({
       </ListSection>
       <OverviewRelations overview={overview} />
       <OverviewAgents overview={overview} onArchiveAgent={onArchiveAgent} />
+      <OverviewFollowers task={task} />
       <OverviewPages overview={overview} />
       {!descriptions ? null : overview.documentRetry !== undefined ? (
         <ListSection title={WORDS.DESCRIPTION}>

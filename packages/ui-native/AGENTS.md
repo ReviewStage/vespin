@@ -14,8 +14,8 @@ builds a control of its own.
   (`ThreadPreview`, `TaskPreview`, `AgentPreview`) and leads with Open,
   and a row's link, which an iPad drags out of it (`interactions.ts`, the
   hover, drag, and drop modifiers the app's native module registers), a
-  task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
-  `WordsRow` for its description), `GroupRow` (a place a regular window's
+  task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `FollowerRow`,
+  `LinkRow`, `SwitchLinkRow`, and `WordsRow` for its description), `GroupRow` (a place a regular window's
   sidebar opens, such as the Inbox with its count), `SplitView` (the app's
   sidebar, the list, and the detail, or the list and the detail, each column
   under its own `ColumnBar`: its inline title, what leads it such as the

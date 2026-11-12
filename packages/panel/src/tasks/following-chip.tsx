@@ -4,6 +4,7 @@ import {
   FOLLOWING_FACES,
   FOLLOWING_WORDS,
   followerMachinesSentence,
+  followerName,
   followerRefusedNote,
   followerRoleWords,
   followersView,
@@ -69,12 +70,6 @@ type FollowerAnswer = TasksFollowersAnswer | Unreached<typeof TASK_CALL_FAILURE.
 /** A follower write that never answered, settled as unanswered with the error beneath. */
 const followerUnreached = unreachedAs(TASK_CALL_FAILURE.UNANSWERED);
 
-/** What a reader hears for a row's laptop. */
-const MACHINES_ON_HEARD = "Agents here may use their machines";
-
-/** What the chip names someone the members read does not, while it is unread or failed. */
-const UNNAMED = "Someone";
-
 /** The reader's follower writes on one task, each refusal said in a toast; a fixture run's go nowhere. */
 function useFollowerWrites(taskId: string) {
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
@@ -116,9 +111,7 @@ function useFollowerActors(
   const { members, readerId, former } = useMemberDirectory();
 
   return followers.map((follower) => {
-    const name =
-      members?.find((member) => member.userId === follower.userId)?.name ??
-      (assignee?.userId === follower.userId ? assignee.name : UNNAMED);
+    const name = followerName(follower.userId, members, assignee);
 
     return personActor({ userId: follower.userId, name }, members, readerId, former);
   });
@@ -177,7 +170,7 @@ function RowEnd({ follower }: { follower: TaskFollowerWire }): React.JSX.Element
       {follower.machines ? (
         <>
           <GLYPH.DESKTOP />
-          <VisuallyHidden>{MACHINES_ON_HEARD}</VisuallyHidden>
+          <VisuallyHidden>{FOLLOWING_WORDS.MACHINES_ON}</VisuallyHidden>
         </>
       ) : null}
     </>

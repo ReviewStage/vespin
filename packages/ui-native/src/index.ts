@@ -202,11 +202,13 @@ export {
   AGENT_ROW_STATE,
   AgentRow,
   type AgentRowState,
+  FollowerRow,
   GroupRow,
   LINK_ROW_TONE,
   LinkRow,
   type LinkRowTone,
   RelationRow,
+  SwitchLinkRow,
   TaskHead,
   WordsRow,
 } from "./task-rows.js";

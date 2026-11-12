@@ -15,7 +15,8 @@
  * task's status set, pin, read mark, rename, and delete, a task moved into a section from its menu or
  * dragged into one on an iPad, its repository changed, moved to another of
  * the account's workspaces by its owner, its parent, sub-tasks,
- * and blocks added, changed, and taken away, and a task's
+ * and blocks added, changed, and taken away, the task followed and
+ * unfollowed and the reader's machines switched for its agents, and a task's
  * description, pages, and comment threads followed, and read again where
  * they could not be, with a thread started
  * on one block of the description and a reply on a thread; an agent's page,
@@ -413,9 +414,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_SET_PARENT]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_CHANGE_RELATION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_EDIT]: panel(IOS.DESCRIPTION_EDIT),
-  [PORT_ACT_KIND.TASKS_FOLLOW]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_UNFOLLOW]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_SET_FOLLOWER_MACHINES]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_UNFOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_SET_FOLLOWER_MACHINES]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_ADD_FOLLOWER]: panel(IOS.TASKS),
   [PORT_ACT_KIND.GITHUB_OPEN]: panel(IOS.LINKS),
   [PORT_ACT_KIND.WEB_OPEN]: panel(IOS.LINKS),

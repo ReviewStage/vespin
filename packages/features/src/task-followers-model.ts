@@ -12,6 +12,7 @@
 
 import type { TaskFollowerWire } from "@repo/wire";
 import { FOLLOWER_CALL_FAILURE, type FollowerCallFailure } from "./tasks-view.js";
+import type { WorkspaceMember } from "./workspace-wire.js";
 
 /** How many faces the Following chip draws before a count of the rest, as every face pile does. */
 export const FOLLOWING_FACES = 4;
@@ -33,6 +34,10 @@ export const FOLLOWING_WORDS = {
   FOLLOWER: "Following",
   /** The reader's own switch. */
   MACHINES: "Let agents here use my machines",
+  /** What a reader hears for a row's laptop, where the task's agents may use that person's machines. */
+  MACHINES_ON: "Agents here may use their machines",
+  /** Whom a row names where the members read do not, while they are unread or failed. */
+  SOMEONE: "Someone",
   /** Why the assignee cannot unfollow. */
   ASSIGNEE_STAYS: "You're the assignee",
   /** A machine's state on a card. */
@@ -63,6 +68,23 @@ export function followersView(
     reader,
     chipWords: reader === undefined ? FOLLOWING_WORDS.FOLLOW : FOLLOWING_WORDS.FOLLOWING,
   };
+}
+
+/**
+ * A follower's name as the list says it: the member's, read against the
+ * workspace's members, the assignee's by the name the task carries while the
+ * members are unread, and Someone for anyone else.
+ */
+export function followerName(
+  userId: string,
+  members: readonly Pick<WorkspaceMember, "userId" | "name">[] | undefined,
+  assignee: { readonly userId: string; readonly name: string } | null | undefined,
+): string {
+  const member = members?.find((each) => each.userId === userId);
+
+  if (member !== undefined) return member.name;
+
+  return assignee?.userId === userId ? assignee.name : FOLLOWING_WORDS.SOMEONE;
 }
 
 /** A follower's role as their card says it: Assignee, or Following. */

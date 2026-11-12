@@ -1,4 +1,4 @@
-// task-rows.tsx -- the rows a task's page and the Tasks list draw beside the task rows: a task's head, an agent, a related task, a group, a row that opens somewhere, and a description's words.
+// task-rows.tsx -- the rows a task's page and the Tasks list draw beside the task rows: a task's head, an agent, a related task, a follower, a group, a row that opens somewhere or switches something, and a description's words.
 
 import {
   ContextMenu,
@@ -8,6 +8,7 @@ import {
   Spacer,
   Button as SwiftUIButton,
   Text,
+  Toggle,
   VStack,
 } from "@expo/ui/swift-ui";
 import {
@@ -26,6 +27,7 @@ import {
   listRowSeparator,
   monospacedDigit,
   padding,
+  tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
@@ -50,6 +52,7 @@ import {
 import { Markdown, type MarkdownVideo } from "./markdown.js";
 import {
   AgentTile,
+  Avatar,
   type Face,
   FailedMark,
   TaskStatusMark,
@@ -64,6 +67,9 @@ import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What parts the pieces of an agent's line. */
 const LINE_PART = "· ";
+
+/** The glyph at a follower's line's end where the task's agents may use their machines, the SF Symbol for the panel's laptop. */
+const MACHINES_SYMBOL = "laptopcomputer";
 
 /** What a pull request's number in an agent's line is heard to do. */
 const OPENS_PULL_REQUEST = "Opens the pull request";
@@ -401,6 +407,83 @@ export function LinkRow({
         end={detail === undefined ? null : <EndWords words={detail} />}
       />
     </SwiftUIButton>
+  );
+}
+
+type FollowerRowProps = {
+  /** The row's id, which its list's `onSelect` is called with: the follower's account id. */
+  readonly id: string;
+  /** What the row says: the person's name, or the reader's own word for themselves, such as You. */
+  readonly label: string;
+  /** Whose face leads the row, their photo or their letters. */
+  readonly face: Face;
+  /** Their role at the line's end in the muted ink, such as Assignee; none for none. */
+  readonly role?: string | undefined;
+  /** What the laptop at the line's end is heard as, where the task's agents may use their machines; no laptop where they may not. */
+  readonly machines?: string | undefined;
+};
+
+/**
+ * A person who follows a task, as the panel's Following list draws them:
+ * their face, their name, and at the line's end a muted Assignee on the
+ * assignee, then a laptop where the task's agents may use their machines,
+ * nothing where they may not.
+ */
+export function FollowerRow({ id, label, face, role, machines }: FollowerRowProps) {
+  const colors = useColors();
+
+  const row: ReactElement = (
+    <RowHead
+      unread={false}
+      faded={false}
+      lead={<Avatar name={face.name} picture={face.picture} size={MARK_SIZE.LEAD} />}
+      title={label}
+      ink={colors.TEXT_BODY}
+      end={
+        <HStack spacing={SPACE.TIGHT}>
+          {role === undefined ? null : <EndWords words={role} />}
+          {machines === undefined ? null : (
+            <LeadGlyph symbol={MACHINES_SYMBOL} ink={colors.TEXT_MUTED} />
+          )}
+        </HStack>
+      }
+    />
+  );
+
+  return <RowFrame id={id} row={row} heard={{ label, value: [role, machines] }} />;
+}
+
+type SwitchLinkRowProps = {
+  readonly symbol: SfSymbol;
+  readonly label: string;
+  readonly on: boolean;
+  readonly onSwitch: (on: boolean) => void;
+};
+
+/**
+ * A setting a task's page switches on or off, in a row's columns as
+ * `LinkRow` stands: its glyph, its words, and the system's switch at the
+ * line's end, copper while it is on, such as the reader's own Let agents
+ * here use my machines under a task's followers.
+ */
+export function SwitchLinkRow({ symbol, label, on, onSwitch }: SwitchLinkRowProps) {
+  const colors = useColors();
+
+  return (
+    <Toggle
+      isOn={on}
+      onIsOnChange={onSwitch}
+      modifiers={[tint(colors.ACCENT), ...rowPlacement(colors), accessibilityLabel(label)]}
+    >
+      <RowHead
+        unread={false}
+        faded={false}
+        lead={<LeadGlyph symbol={symbol} ink={colors.TEXT_BODY} />}
+        title={label}
+        ink={colors.TEXT_BODY}
+        end={null}
+      />
+    </Toggle>
   );
 }
 
