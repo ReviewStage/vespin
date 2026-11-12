@@ -304,7 +304,7 @@ function PlaceMenuChip({
       look={CHIP_LOOK.TOOLBAR}
       chevron
       menuWidth={POPOVER_WIDTH.REGULAR}
-      onPick={(id) => menu?.onPick(id)}
+      onPick={(id) => menu?.onPick?.(id)}
     />
   );
 }
