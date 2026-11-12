@@ -506,6 +506,12 @@ test.each([
     saved: "- Before you start now\n  > [!WARNING]\n  > Back up the database.\n",
   },
   {
+    block: "a code line written as an escaped alert keeps its backslashes",
+    text: "```md\n> \\[!NOTE\\]\nRun it\n```\n",
+    words: "> \\[!NOTE\\]\nRun it",
+    saved: "```md\n> \\[!NOTE\\]\nRun it now\n```\n",
+  },
+  {
     block: "a table gains no blank line over it",
     text: "The steps:\n\n| Step | Command    |\n| ---- | ---------- |\n| Run  | `pnpm dev` |\n",
     words: "Run",

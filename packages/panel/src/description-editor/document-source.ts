@@ -45,7 +45,10 @@ const FOOTNOTE = /\[\^[^\]\s]+\]/u;
  * no longer draws as an alert; on any line, since a quote in a list item is
  * re-printed indented.
  */
-const ESCAPED_ALERT = /^([^\S\n]*>[^\S\n]*)\\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\\]/gimu;
+const ESCAPED_ALERT = /^([^\S\n]*>[^\S\n]*)\\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\\]/iu;
+
+/** A line opening or closing a code fence, past the quote and list markers holding it: its run of backticks or tildes, and what follows it. */
+const FENCE_LINE = /^[\s>]*(?:(?:[-*+]|\d{1,9}[.)])\s+)?[\s>]*(`{3,}|~{3,})(.*)$/u;
 
 /** What separates a re-printed block from the next. */
 const BLOCK_GAP = "\n\n";
@@ -218,7 +221,34 @@ function trailing(source: string): string {
 function reprinted(manager: MarkdownManager, node: PmNode): string {
   const markdown = manager.serialize({ type: "doc", content: [node.toJSON()] });
 
-  return markdown.replace(/^\n+/u, "").trimEnd().replace(ESCAPED_ALERT, "$1[!$2]");
+  return alertsUnescaped(markdown.replace(/^\n+/u, "").trimEnd());
+}
+
+/**
+ * Re-printed Markdown with each alert's marker unescaped. Note that a line
+ * inside a code fence, at any depth, is left as written, because TipTap
+ * writes code raw, so a backslash there is the code's own.
+ */
+function alertsUnescaped(markdown: string): string {
+  let fence: string | undefined;
+
+  return markdown
+    .split("\n")
+    .map((line) => {
+      const [, run, rest = ""] = FENCE_LINE.exec(line) ?? [];
+
+      if (fence === undefined) {
+        fence = run;
+
+        return run === undefined ? line.replace(ESCAPED_ALERT, "$1[!$2]") : line;
+      }
+      // Note that a fence closes on a run as long or longer of its own mark, with nothing after it.
+      if (run?.[0] === fence[0] && run.length >= fence.length && rest.trim() === "")
+        fence = undefined;
+
+      return line;
+    })
+    .join("\n");
 }
 
 /** Whether a block holds a picture still waiting on its upload, at any depth. */
