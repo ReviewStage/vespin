@@ -1,12 +1,15 @@
 /**
- * run-actions.ts -- the run action a call names, as one of an agent's repository's, found only for a cloud agent with a repository in a workspace with the Run actions experiment on, and that action run or stopped in the agent's sandbox.
+ * run-actions.ts -- the run action a call names, as one of an agent's repository's, found only for a cloud agent with a repository in a workspace with the Run actions experiment on, where the action may run in the cloud, and that action run or stopped in the agent's sandbox.
  *
  * A repository's run actions are kept with its cloud setup
  * (`workspace-sandbox-setup-wire.ts`), and a member runs one in a cloud
  * agent's sandbox from the Run button over its tabs, ⌘K, or a phone's ⋯. With the
- * experiment off, an agent on a Mac, an agent with no repository, or an id
- * that is not one of the repository's actions, the action is not found, so
- * nothing is run that the workspace has not chosen and listed. The hosted
+ * experiment off, an agent on a Mac, an agent with no repository, an id
+ * that is not one of the repository's actions, or an action kept to local
+ * agents, the action is not found, so nothing is run that the workspace has
+ * not chosen and listed for the cloud. An agent on a Mac runs its actions
+ * there, through the host on that Mac (`@repo/host`'s
+ * `mac-shell-procedures.ts`), never through here. The hosted
  * procedures (`agents.runAction`, `agents.stopRunAction`) and the member MCP
  * tools (`run_action`, `stop_run_action`) run and stop one through here, as
  * the member, by the Terminal tab's rule (`terminal/sandbox-reach.ts`).
@@ -15,7 +18,12 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { readRunActions } from "@repo/database/models/workspace-sandbox-script-store";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
-import type { RunAction } from "@repo/features/workspace-sandbox-setup-wire";
+import {
+  RUN_ACTION_AVAILABILITY,
+  RUN_ACTION_PLACE,
+  type RunAction,
+  runActionRunsIn,
+} from "@repo/features/workspace-sandbox-setup-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { Effect, Result } from "effect";
 import {
@@ -64,7 +72,9 @@ const runActionOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   const actions = yield* hostedStoreOrUnavailable(readRunActions(agent.organizationId, repository));
   const action = actions.find((each) => each.id === actionId);
 
-  if (action === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  if (action === undefined || !runActionRunsIn(action, RUN_ACTION_PLACE.CLOUD)) {
+    return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  }
 
   return {
     id: action.id,
@@ -72,6 +82,9 @@ const runActionOf = /* @__PURE__ */ Effect.fnUntraced(function* (
     command: action.command,
     ...(action.icon === null ? undefined : { icon: action.icon }),
     ...(action.isDefault ? { isDefault: true } : undefined),
+    ...(action.availableIn === RUN_ACTION_AVAILABILITY.BOTH
+      ? undefined
+      : { availableIn: action.availableIn }),
   };
 });
 

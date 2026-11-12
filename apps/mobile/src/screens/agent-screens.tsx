@@ -1,4 +1,4 @@
-// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer's + and its ⋯ menu, a page it showed, opened whole, and the sheet of its options: its model, effort, Fast, permission mode, and MCP servers.
+// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer's + and its ⋯ menu, its Permanently delete among it, a page it showed, opened whole, and the sheet of its options: its model, effort, Fast, permission mode, and MCP servers.
 
 import { DENIES_WAITING } from "@repo/features/agent-approval-model";
 import {
@@ -8,7 +8,7 @@ import {
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentActivity } from "@repo/features/ios-system-activity";
-import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
 import { modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
@@ -38,6 +38,7 @@ import {
   ListSection,
   MenuPickRow,
   NO_TOGGLES,
+  openCuts,
   QueuedLines,
   RenameAsk,
   Screen,
@@ -55,7 +56,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   useAgentMedia,
   useAgentPullRequests,
@@ -63,6 +64,7 @@ import {
   useFollowedAgent,
   useOlderPages,
   useTranscriptRetry,
+  useWholeParts,
 } from "../agents/use-agent.js";
 import { useAgentActions } from "../agents/use-agent-actions.js";
 import { type AgentApprovals, useAgentApprovals } from "../agents/use-agent-approvals.js";
@@ -95,6 +97,7 @@ const MENU_WORDS = {
   PIN: "Pin",
   UNPIN: "Unpin",
   ARCHIVE: "Archive",
+  DELETE: "Permanently delete",
 } as const;
 
 /** What the + offers beside the options: the photo picker, and the sheet of every option. */
@@ -134,21 +137,21 @@ const MODE_SYMBOL = {
 const MERGE_WORD = "Merge";
 const MERGE_QUESTION = "Merge this pull request?";
 
-/** The agent's address on vespin.dev, under its workspace and its task, once the agent is read. */
+/** The agent's address on vespin.dev, under its workspace and its task, once the agent is read; none before its workspace is known. */
 function useAgentAddress(
   agentId: string,
   workspaceId: string | undefined,
   taskId: string | undefined,
-): string {
+): string | undefined {
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
-  const workspace = workspaces.find(({ id }) => id === workspaceId);
+  const step = linkWorkspaceStep(workspaceId, workspaces);
 
   const place =
     taskId === undefined
       ? { kind: LINK_DESTINATION.AGENT, agentId }
       : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId };
 
-  return linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
+  return step === undefined ? undefined : linkOf(place, step);
 }
 
 /** The change a card's Merge sends, by what the pull request offers: merged at once by the first method the repository allows, or queued once ready where it merges through a queue; none where it offers neither. */
@@ -317,8 +320,10 @@ function agentAddMenu(
  * Messages names a conversation, since the transcript opens at its newest
  * row and its head scrolls away, its back button leading to the task, with
  * a ⋯ menu, as the panel's agent menu offers it: Copy link and Open in
- * browser, Rename, typed in the system's alert, Pin or Unpin, Options, and
- * Archive, asked first, which goes back once the agent is archived. Under
+ * browser, Rename, typed in the system's alert, Pin or Unpin, Options,
+ * Archive, asked first, which goes back once the agent is archived, and
+ * Permanently delete, red and last, which always asks in the panel's words
+ * and goes back once the agent is deleted. Under
  * it, its transcript as one lazy list, its head where the agent stands and
  * the model it runs on, which opens the options sheet, as the menu's
  * Options and the composer's + do. The transcript
@@ -326,7 +331,8 @@ function agentAddMenu(
  * moves, and its older pages are read as the reader scrolls up to them; one
  * that could not be read offers Try again. Each call opens in place, and
  * one the agent holds for an answer says so under its line with Deny and
- * Allow; a fold opens on what it holds, a page the agent showed opens
+ * Allow, and one whose answer its page carried cut reads it whole as it
+ * opens; a fold opens on what it holds, a page the agent showed opens
  * whole, and a pull request it opened opens its own screen, its card
  * offering Review, which opens it on GitHub, and Merge where it may merge
  * now, which asks first. Its composer floats over the transcript's foot:
@@ -366,6 +372,7 @@ export function AgentScreen() {
   const transcript = held?.rows;
   const status = agent?.status ?? transcript?.word?.status;
   const messages = transcript?.messages;
+  const whole = useWholeParts(id);
 
   const items = useMemo(
     () =>
@@ -375,9 +382,14 @@ export function AgentScreen() {
         toggles,
         now: Date.now(),
         pullRequests,
+        wholePart: whole.read,
       }),
-    [messages, status, readerId, toggles, pullRequests],
+    [messages, status, readerId, toggles, pullRequests, whole.read],
   );
+
+  // A call opened on an answer its page carried cut reads it whole.
+  const cuts = useMemo(() => openCuts(items), [items]);
+  useEffect(() => whole.ask(cuts), [whole, cuts]);
 
   const mediaIds = useMemo(() => shownMediaIds(items), [items]);
   const approvals = useAgentApprovals(agent, id);
@@ -409,9 +421,11 @@ export function AgentScreen() {
   const mode = useAgentMode(id);
   const pick = useAgentModelPick(id);
   const actions = useAgentActions(id, address);
-  // Whether Rename's alert, or Archive's question, stands over the page.
+  // Whether Rename's alert, or Archive's or Permanently delete's question, stands over the page.
   const [renaming, setRenaming] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const deleteQuestion = actions.deleteQuestion(title);
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
 
   const openPage = (item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>) =>
@@ -430,14 +444,16 @@ export function AgentScreen() {
       />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel={MENU_WORDS.MORE}>
-          <Stack.Toolbar.Menu inline>
-            <Stack.Toolbar.MenuAction icon="link" onPress={actions.copyLink}>
-              {MENU_WORDS.COPY_LINK}
-            </Stack.Toolbar.MenuAction>
-            <Stack.Toolbar.MenuAction icon="safari" onPress={() => openInSafari(address)}>
-              {VERB.OPEN_IN_BROWSER}
-            </Stack.Toolbar.MenuAction>
-          </Stack.Toolbar.Menu>
+          {address === undefined ? null : (
+            <Stack.Toolbar.Menu inline>
+              <Stack.Toolbar.MenuAction icon="link" onPress={actions.copyLink}>
+                {MENU_WORDS.COPY_LINK}
+              </Stack.Toolbar.MenuAction>
+              <Stack.Toolbar.MenuAction icon="safari" onPress={() => openInSafari(address)}>
+                {VERB.OPEN_IN_BROWSER}
+              </Stack.Toolbar.MenuAction>
+            </Stack.Toolbar.Menu>
+          )}
           {agent === undefined ? null : (
             <Stack.Toolbar.Menu inline>
               <Stack.Toolbar.MenuAction icon="pencil" onPress={() => setRenaming(true)}>
@@ -466,6 +482,13 @@ export function AgentScreen() {
                 onPress={() => setArchiving(true)}
               >
                 {MENU_WORDS.ARCHIVE}
+              </Stack.Toolbar.MenuAction>
+            </Stack.Toolbar.Menu>
+          )}
+          {agent === undefined ? null : (
+            <Stack.Toolbar.Menu inline>
+              <Stack.Toolbar.MenuAction icon="trash" destructive onPress={() => setDeleting(true)}>
+                {MENU_WORDS.DELETE}
               </Stack.Toolbar.MenuAction>
             </Stack.Toolbar.Menu>
           )}
@@ -504,7 +527,7 @@ export function AgentScreen() {
           onToggle={(item) => setToggles((held) => toggledAt(held, item))}
           onOpenPage={openPage}
           mediaSource={(pictureId) => media.get(pictureId)}
-          onOpenElsewhere={() => openInSafari(address)}
+          onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
           onOpenAddress={openInSafari}
           onOpenPullRequest={(item) =>
             router.push({
@@ -547,6 +570,20 @@ export function AgentScreen() {
           });
         }}
         onDismiss={() => setArchiving(false)}
+      />
+      <ConfirmAsk
+        title={deleteQuestion.title}
+        message={deleteQuestion.body}
+        act={deleteQuestion.verb}
+        destructive
+        presented={deleting}
+        onAct={() => {
+          setDeleting(false);
+          actions.remove(() => {
+            if (router.canGoBack()) router.back();
+          });
+        }}
+        onDismiss={() => setDeleting(false)}
       />
     </>
   );

@@ -83,6 +83,8 @@ export const INBOX_BOX_WORDS = {
   NOTE_PLACEHOLDER: "Add a note",
   REPLY_PLACEHOLDER: "Reply",
   SEND: "Send",
+  /** What settles a notice that waits on the reader's nod without messaging its agent. */
+  GOT_IT: "Got it",
 } as const;
 
 /**

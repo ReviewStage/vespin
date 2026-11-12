@@ -45,7 +45,12 @@ export { browserLiveProcedures } from "./browser-live-procedures.js";
 
 export { declaredActProcedures } from "./declared-acts.js";
 
-export { type MacShell, macShellProcedures } from "./mac-shell-procedures.js";
+export {
+  MAC_SHELL_SIGNAL,
+  type MacShell,
+  type MacShellSignal,
+  macShellProcedures,
+} from "./mac-shell-procedures.js";
 
 export { pushProcedures, WindowPushes } from "./push-procedures.js";
 

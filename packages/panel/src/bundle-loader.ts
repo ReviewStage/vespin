@@ -4,14 +4,15 @@ import { createContext, useCallback, useContext } from "react";
 import type { DescriptionEditorModule } from "./description-editor/contract.js";
 import type { DiffViewModule } from "./diff-view/contract.js";
 import type { FileTreeModule } from "./file-tree/contract.js";
+import type { PdfModule } from "./pdf/contract.js";
 import type { TerminalModule } from "./terminal/contract.js";
 
 /**
  * bundle-loader.ts -- the bundles of the panel's own that are too large for the one every window parses, each imported the first time it is needed and kept for the window's life.
  *
  * The panel's editors (`description-editor/`), a File tab's tree (`file-tree/`), a
- * Terminal tab's screen (`terminal/`), a description's diagrams (`diagram/`), and a
- * Files changed diff (`diff-view/`) are each
+ * Terminal tab's screen (`terminal/`), a description's diagrams (`diagram/`), a
+ * Files changed diff (`diff-view/`), and a PDF's pages in the file viewer (`pdf/`) are each
  * reached through a dynamic `import()` of their entry, which the bundler splits off the bundle every window parses
  * and loads from wherever it put it, so nothing here names a file. Where a
  * bundle has a stylesheet, its entry imports it. A bundle that landed is
@@ -39,6 +40,7 @@ export interface SideBundleImporters {
   readonly terminal: BundleImporter<TerminalModule>;
   readonly diagram: BundleImporter<DiagramModule>;
   readonly diffView: BundleImporter<DiffViewModule>;
+  readonly pdf: BundleImporter<PdfModule>;
 }
 
 /** Each bundle of the panel's own. */
@@ -60,6 +62,9 @@ export const DIFF_LOAD_FAILED = "The diff could not be shown.";
 /** What a fence says over its code where the diagram bundle failed to load, as it says where Mermaid refused the code. */
 export const DIAGRAM_REFUSED_LINE = "This diagram could not be drawn.";
 
+/** What the file viewer says over a PDF's icon where its bundle failed to load, as it says where pdf.js could not open the file. */
+export const PDF_REFUSED_LINE = "This PDF could not be shown.";
+
 /** Why each bundle could not be had, where its import failed. */
 const LOAD_FAILED = {
   descriptionEditor: "The editor could not be loaded.",
@@ -67,6 +72,7 @@ const LOAD_FAILED = {
   terminal: TERMINAL_LOAD_FAILED,
   diagram: DIAGRAM_REFUSED_LINE,
   diffView: DIFF_LOAD_FAILED,
+  pdf: PDF_REFUSED_LINE,
 } as const satisfies { readonly [Bundle in keyof SideBundleImporters]: string };
 
 /** Each bundle's entry, imported where the bundler put it. */
@@ -77,6 +83,7 @@ const SIDE_BUNDLE_IMPORTERS: SideBundleImporters = {
   terminal: () => import("./terminal/index.js").then((entry) => entry.terminal),
   diagram: () => import("./diagram/index.js").then((entry) => entry.diagram),
   diffView: () => import("./diff-view/index.js").then((entry) => entry.diffView),
+  pdf: () => import("./pdf/index.js").then((entry) => entry.pdf),
 };
 
 /**
@@ -115,6 +122,7 @@ export function sideBundles(importers: Partial<SideBundleImporters> = {}): SideB
     terminal: bundleQuery("terminal", reach.terminal),
     diagram: bundleQuery("diagram", reach.diagram),
     diffView: bundleQuery("diffView", reach.diffView),
+    pdf: bundleQuery("pdf", reach.pdf),
   };
 }
 

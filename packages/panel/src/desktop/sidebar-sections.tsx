@@ -14,6 +14,7 @@ import {
   type DrawnSection,
   placeAllWrites,
   placeWrites,
+  REMOVE_FROM_SECTION,
   restoreWrites,
   sectionMoveWrites,
   sectionOfTask,
@@ -646,7 +647,7 @@ export function moveToSectionEntry(
       ? []
       : [
           {
-            label: "Remove from section",
+            label: REMOVE_FROM_SECTION,
             onSelect: () => dialogs.move([taskId], null, unplaceAllWrites([taskId])),
           },
         ];

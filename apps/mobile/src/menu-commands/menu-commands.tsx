@@ -9,7 +9,12 @@ import {
   type MenuFocus,
   menuFocusOf,
 } from "@repo/features/ios-menu-commands";
-import { LINK_DESTINATION, type LinkDestination, linkOf } from "@repo/features/link-grammar";
+import {
+  LINK_DESTINATION,
+  type LinkDestination,
+  linkOf,
+  linkWorkspaceStep,
+} from "@repo/features/link-grammar";
 import { LINK_PAGE } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { READ_MARK } from "@repo/features/read-mark";
@@ -128,10 +133,10 @@ function useSubject(signedIn: boolean): Subject {
     (agent === undefined ? undefined : view?.tasks?.find(({ id }) => id === agent.planId));
 
   const workspaceId = thread?.holder.task.workspaceId ?? task?.workspaceId;
-  const workspace = workspaces.find(({ id }) => id === workspaceId);
+  const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
 
   const linked = (place: LinkDestination) =>
-    linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
+    workspaceStep === undefined ? undefined : linkOf(place, workspaceStep);
 
   const enabled: MenuCommand[] = signedIn ? [...SIGNED_IN_COMMANDS, ...ALWAYS] : [...ALWAYS];
   const toggled: MenuCommand[] = [];

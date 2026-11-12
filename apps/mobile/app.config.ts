@@ -774,6 +774,11 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
         // `@repo/features/ios-system-activity`'s header, since this file
         // reaches no module that loads Effect.
         NSUserActivityTypes: ["dev.vespin.viewing"],
+        // Save to Photos on a picture's or a recording's menu asks for
+        // add-only access the first time (`src/keeping.ts`), which reads
+        // nothing of the library.
+        NSPhotoLibraryAddUsageDescription:
+          "Vespin saves the pictures and recordings you choose to your library.",
         [APP_GROUP_PLIST_KEY]: APP_GROUP,
         [SHARE_KEYCHAIN_GROUP_PLIST_KEY]: SHARE_KEYCHAIN_GROUP,
       },

@@ -62,6 +62,17 @@ describe("markdownBlocks", () => {
     });
   });
 
+  it("draws a link the panel would not open, one past 2,048 characters, as a link to nowhere", () => {
+    const [paragraph] = markdownBlocks(
+      `[the log](https://example.com/${"a".repeat(2_048)})`,
+      READING,
+    );
+
+    expect(paragraph).toMatchObject({
+      runs: [{ kind: MARKDOWN_RUN.LINK, target: { kind: LINK_TARGET.NONE } }],
+    });
+  });
+
   it("routes a task's chip to its place in the app", () => {
     const [paragraph] = markdownBlocks(
       "[@Teammate invitations](https://vespin.dev/acme/task/42)",
@@ -78,6 +89,19 @@ describe("markdownBlocks", () => {
             target: { kind: LINK_TARGET.PLACE, workspace: "acme" },
           },
         },
+      ],
+    });
+  });
+
+  it("calls a place it holds no name for by its kind, which a screen reader hears once", () => {
+    const [paragraph] = markdownBlocks(
+      "https://vespin.dev/acme/automation/5f6a7b8c-9d0e-4f1a-8b2c-3d4e5f6a7b83/run/1f6a7b8c-9d0e-4f1a-8b2c-3d4e5f6a7b83",
+      READING,
+    );
+
+    expect(paragraph).toMatchObject({
+      runs: [
+        { kind: MARKDOWN_RUN.CHIP, chip: { name: "Automation run", heard: "Automation run" } },
       ],
     });
   });

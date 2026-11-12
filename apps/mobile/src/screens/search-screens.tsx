@@ -23,11 +23,11 @@ import { useThreeColumns } from "../use-window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useAppSidebar } from "./app-sidebar.js";
 import { useRemindSheet } from "./inbox-remind.js";
-import { InboxRow } from "./inbox-screens.js";
+import { InboxItemRows } from "./inbox-screens.js";
 import {
   StatusQuestionAsk,
   TaskAgentRow,
-  TaskNodeRow,
+  TaskRows,
   useAgentArchiveAsk,
   useSidebarTasks,
 } from "./task-screens.js";
@@ -89,24 +89,19 @@ function FoundList({
     >
       {found.tasks.length === 0 ? null : (
         <ListSection title={SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.TASKS]} count={found.tasks.length}>
-          {found.tasks.map((task) => (
-            <TaskNodeRow key={task.id} node={{ task, children: [] }} listing={listing} />
-          ))}
+          <TaskRows tasks={found.tasks} listing={listing} />
         </ListSection>
       )}
       {found.inbox.length === 0 ? null : (
         <ListSection title={SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.INBOX]} count={found.inbox.length}>
-          {found.inbox.map((listed) => (
-            <InboxRow
-              key={listed.item.id}
-              listed={listed}
-              readerId={found.readerId}
-              pictureOf={pictureOf}
-              onMark={mark}
-              onRemind={onRemind}
-              onResolve={resolve}
-            />
-          ))}
+          <InboxItemRows
+            listed={found.inbox}
+            readerId={found.readerId}
+            pictureOf={pictureOf}
+            onMark={mark}
+            onRemind={onRemind}
+            onResolve={resolve}
+          />
         </ListSection>
       )}
       {found.agents.length === 0 ? null : (

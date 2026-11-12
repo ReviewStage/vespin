@@ -68,6 +68,7 @@ import type { WorkspaceVariable } from "@repo/features/workspace-environment-wir
 import {
   REPOSITORY_SCRIPT_KIND,
   type RepositoryScriptKind,
+  RUN_ACTION_AVAILABILITY,
   type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
 } from "@repo/features/workspace-sandbox-setup-wire";
@@ -818,6 +819,7 @@ let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
           id: "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a02",
           label: "Storybook",
           command: "cd packages/ui && pnpm storybook",
+          availableIn: RUN_ACTION_AVAILABILITY.LOCAL,
         },
       ],
       updatedAt: NOW - HOUR,
@@ -837,10 +839,11 @@ function runActionsAnswer(repository: string, actions: readonly RunActionPut[]) 
       .flatMap((each) => each.actions.map((action) => action.id)),
   );
 
-  const named = actions.map(({ id, label, command }) => ({
+  const named = actions.map(({ id, label, command, availableIn }) => ({
     id: id !== undefined && keepable.delete(id) ? id : crypto.randomUUID(),
     label,
     command,
+    ...(availableIn === undefined ? undefined : { availableIn }),
   }));
 
   const lists =

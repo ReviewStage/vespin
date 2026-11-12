@@ -1,3 +1,4 @@
+import type { AutomationPresetName } from "@repo/features/automation-presets";
 import {
   AUTOMATION_FIRING,
   AUTOMATION_RUN_STATUS,
@@ -89,6 +90,8 @@ const AutomationRowSchema = Schema.Struct({
   targetAgentId: Schema.NullOr(Schema.String),
   archiveSuccessful: Schema.Boolean,
   slackDelivery: Schema.Boolean,
+  // Note that a preset is read as any text, since a row may hold one this release does not know.
+  preset: Schema.NullOr(Schema.String),
   createdAt: InstantColumnSchema,
   updatedAt: InstantColumnSchema,
 });
@@ -112,6 +115,7 @@ export const AUTOMATION_COLUMNS = {
   targetAgentId: automation.targetAgentId,
   archiveSuccessful: automation.archiveSuccessful,
   slackDelivery: automation.slackDelivery,
+  preset: automation.preset,
   createdAt: automation.createdAt,
   updatedAt: automation.updatedAt,
 };
@@ -137,6 +141,8 @@ export interface NewAutomation {
   readonly targetAgentId?: string | null;
   readonly archiveSuccessful?: boolean;
   readonly slackDelivery?: boolean;
+  /** The suggestion it is made from; none where left out. No change names it again. */
+  readonly preset?: AutomationPresetName | null;
 }
 
 /**
@@ -335,6 +341,7 @@ const insertAutomation = SqlSchema.findAll({
     targetAgentId: Schema.NullOr(Schema.String),
     archiveSuccessful: Schema.Boolean,
     slackDelivery: Schema.Boolean,
+    preset: Schema.NullOr(Schema.String),
     now: Schema.Date,
   }),
   Result: WrittenSchema,
@@ -352,6 +359,7 @@ const insertAutomation = SqlSchema.findAll({
           targetAgentId: row.targetAgentId,
           archiveSuccessful: row.archiveSuccessful,
           slackDelivery: row.slackDelivery,
+          preset: row.preset,
           name: row.name,
           enabled: true,
           ...triggerColumns(row.trigger, row.nextRunAt, row.webhookSecretHash),
@@ -1084,6 +1092,7 @@ export function createAutomationCommitted(
       targetAgentId: made.targetAgentId ?? null,
       archiveSuccessful: made.archiveSuccessful ?? true,
       slackDelivery: made.slackDelivery ?? false,
+      preset: made.preset ?? null,
       now,
     });
 

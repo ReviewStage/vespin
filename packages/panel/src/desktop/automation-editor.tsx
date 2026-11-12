@@ -2795,7 +2795,7 @@ export function AutomationEditor({
   }));
 
   // A new automation starts in the repository the workspace's plans were about lately, as a new plan does,
-  // filled in from the preset of the suggestion it was opened from.
+  // filled in from the preset of the suggestion it was opened from, the workspace's own where it is shared.
   const [start] = useState(() => {
     if (automation !== undefined) return automationDraft(automation, defaults);
 
@@ -2804,7 +2804,7 @@ export function AutomationEditor({
       repository: repositories.recent[0] ?? null,
     };
 
-    return preset === undefined ? blank : presetDraft(blank, automationPreset(preset));
+    return preset === undefined ? blank : presetDraft(blank, automationPreset(preset), offersOwner);
   });
 
   const [draft, setDraft] = useState(start);
@@ -2903,7 +2903,11 @@ export function AutomationEditor({
     if (workspace === undefined || (automation !== undefined && change === undefined)) return;
     void saving.run(() =>
       (automation === undefined
-        ? writes.create(createRequestOf(draft, workspace.id))
+        ? writes.create({
+            ...createRequestOf(draft, workspace.id),
+            // Note that a new automation opened from a suggestion keeps its preset, so the list suggests it no more.
+            ...(preset === undefined ? undefined : { preset }),
+          })
         : writes.change({ automationId: automation.id, change: change ?? {} })
       ).then(landed),
     );

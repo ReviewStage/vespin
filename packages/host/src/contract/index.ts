@@ -124,6 +124,8 @@ export {
   type MacResources,
 } from "./mac-resources.js";
 
+export type { MacRunActionShell } from "./mac-shells.js";
+
 export { PORT_FORWARD_ACTS } from "./port-forwards.js";
 
 export {

@@ -6,9 +6,12 @@
  * focus, opened again as it breaks (`@repo/host/follow-stream`), and the
  * host lays each page it reads on the document, which the page reads with
  * `selectTranscript` as the panel reads it with `transcriptQuery`. A
- * transcript the host still holds, as one shown lately, draws at once.
+ * transcript the host still holds, as one shown lately, draws at once. A
+ * part its page carried cut is read whole as its call opens, as the panel's
+ * fold reads it (`ACT_KIND.AGENTS_PART`).
  */
 
+import { type AgentPartCut, WHOLE_PART, type WholePartRead } from "@repo/features/agent-parts";
 import { ARCHIVE_FAILED, STOP_FAILED } from "@repo/features/agent-refusal-words";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import type { AgentPullRequest, AgentStatus } from "@repo/features/agent-wire";
@@ -211,6 +214,99 @@ export function useAgentMedia(
   }, [acts, agentId, ids]);
 
   return sources;
+}
+
+/** A cut part's whole read as held: the size it was asked at, and how it stands. */
+interface HeldPart {
+  readonly bytes: number;
+  readonly read: WholePartRead;
+}
+
+/** The whole reads asked of one agent's parts, by message and then index. */
+type HeldParts = ReadonlyMap<string, ReadonlyMap<number, HeldPart>>;
+
+/** `held` with one part's read set. */
+function withPart(held: HeldParts, cut: AgentPartCut, read: WholePartRead): HeldParts {
+  const message = new Map(held.get(cut.messageId)).set(cut.index, { bytes: cut.bytes, read });
+
+  return new Map(held).set(cut.messageId, message);
+}
+
+/** What the page reads a transcript's cut parts whole through. */
+export interface WholeParts {
+  /** How a cut part's whole read stands; none where it was not asked at the size its page says. */
+  readonly read: (cut: AgentPartCut) => WholePartRead | undefined;
+  /** Asks for each part not asked yet at the size its page says. */
+  readonly ask: (cuts: readonly AgentPartCut[]) => void;
+}
+
+/**
+ * How each part its page carried cut stands read whole, read once through
+ * the host as its call opens, as the panel's fold reads it
+ * (`ACT_KIND.AGENTS_PART`). A read is held as of the size its page said, so
+ * a part that grew since is read again, and one that failed stays failed,
+ * its two ends drawn. A read that lands once another agent's page stands is
+ * let go.
+ */
+export function useWholeParts(agentId: string): WholeParts {
+  const acts = useHostActs();
+
+  // Note that the reads are held apart from what is drawn, so an ask made twice before the first is drawn is sent once.
+  const held = useRef<{ readonly agentId: string; parts: HeldParts }>({
+    agentId,
+    parts: new Map(),
+  });
+
+  const [drawn, setDrawn] = useState<{ readonly agentId: string; readonly parts: HeldParts }>({
+    agentId,
+    parts: new Map(),
+  });
+
+  const ask = useCallback(
+    (cuts: readonly AgentPartCut[]) => {
+      // Note that the reads of another agent's page are let go as this one's are first asked.
+      if (held.current.agentId !== agentId) held.current = { agentId, parts: new Map() };
+
+      const settle = (cut: AgentPartCut, read: WholePartRead) => {
+        if (held.current.agentId !== agentId) return;
+        held.current.parts = withPart(held.current.parts, cut, read);
+        setDrawn({ agentId, parts: held.current.parts });
+      };
+
+      for (const cut of cuts) {
+        if (held.current.parts.get(cut.messageId)?.get(cut.index)?.bytes === cut.bytes) continue;
+        settle(cut, { state: WHOLE_PART.READING });
+
+        acts[ACT_KIND.AGENTS_PART]({ agentId, messageId: cut.messageId, index: cut.index }).then(
+          (answer) =>
+            settle(
+              cut,
+              "part" in answer
+                ? { state: WHOLE_PART.WHOLE, part: answer.part }
+                : { state: WHOLE_PART.FAILED },
+            ),
+          (cause: unknown) => {
+            refused("A part of the transcript")(cause);
+            settle(cut, { state: WHOLE_PART.FAILED });
+          },
+        );
+      }
+    },
+    [acts, agentId],
+  );
+
+  const parts = drawn.agentId === agentId ? drawn.parts : undefined;
+
+  const read = useCallback(
+    (cut: AgentPartCut) => {
+      const part = parts?.get(cut.messageId)?.get(cut.index);
+
+      return part?.bytes === cut.bytes ? part.read : undefined;
+    },
+    [parts],
+  );
+
+  return useMemo(() => ({ read, ask }), [read, ask]);
 }
 
 /** How a page's read stands: on its way, read with its HTML, or not answered. */

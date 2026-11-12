@@ -610,6 +610,8 @@ export interface ComposerEditorHandle extends EditorFormatting {
   readonly setCommands: (commands: ReadonlySet<string>) => void;
   /** The files a marker names: each such marker is drawn as its chip from now on. */
   readonly setFiles: (files: ReadonlySet<string>) => void;
+  /** The chips of the files named taken out of the words, each with the space laid in after it, as files whose chips went in before they were read and that did not come; undo never brings them back. */
+  readonly removeFiles: (names: readonly string[]) => void;
   /** Whether the words take a change: off while a message is held, read-only while a dictation stands, which keeps the caret. */
   readonly setInput: (input: ComposerInput) => void;
   /** The attributes that tie the editor element to its list (`listAria`), which name it a combobox while the list stands (`rootAria`). */

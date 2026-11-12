@@ -27,6 +27,12 @@ import {
 import { entryFor } from "./task-section-writes.js";
 import type { TaskSummary } from "./task-wire.js";
 
+/** What a task's menu calls its move into one of the member's sections. */
+export const MOVE_TO_SECTION = "Move to section";
+
+/** What a task's Move to section calls taking it out of the section it stands in. */
+export const REMOVE_FROM_SECTION = "Remove from section";
+
 /** What a refused change to the sections says, the drag or the menu that asked having gone. */
 export const SECTION_WRITE_FAILED_NOTE = "Your sections could not be changed. Try again.";
 

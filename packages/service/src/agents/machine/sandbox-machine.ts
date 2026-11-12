@@ -114,7 +114,6 @@ import {
 } from "@repo/sandbox";
 import {
   Brand,
-  Clock,
   Context,
   DateTime,
   Duration,
@@ -1181,11 +1180,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       const driveRead =
         drive === undefined
           ? Option.none()
-          : yield* Effect.option(
-              Effect.all([api.get(drive), Clock.currentTimeMillis]).pipe(
-                Effect.map(([found, now]) => readOf(found, now)),
-              ),
-            );
+          : yield* Effect.option(Effect.map(api.get(drive), readOf));
 
       const driveReady = Option.exists(driveRead, (each) => each.state === DRIVE_STATE.READY);
 

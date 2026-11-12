@@ -215,6 +215,18 @@ function reprinted(manager: MarkdownManager, node: PmNode): string {
   return node.type.name === "blockquote" ? markdown.replace(ESCAPED_ALERT, "$1[!$2]") : markdown;
 }
 
+/** Whether a block holds a picture still waiting on its upload, at any depth. */
+function holdsUpload(node: PmNode): boolean {
+  let waiting = false;
+  node.descendants((child) => {
+    if (String(child.attrs.upload ?? "") !== "") waiting = true;
+
+    return !waiting;
+  });
+
+  return waiting;
+}
+
 /** Whether a block is a paragraph holding nothing: a line the developer left blank. */
 function blankLine(node: PmNode): boolean {
   return node.type.name === "paragraph" && node.childCount === 0;
@@ -327,8 +339,9 @@ export function documentTook(
   const was = [...sentOpened.sources];
   const now = documentOpened(manager, merged);
   const current: string[] = [];
+  // Note that a block holding a picture still being kept counts as changed since, because it writes as if the picture were not there, and a block put in its place would lose it.
   editor.state.doc.forEach((node) => {
-    current.push(blockMarkdown(manager, node, held));
+    current.push(holdsUpload(node) ? "" : blockMarkdown(manager, node, held));
   });
   // Where each block that was sent stands in the editor now, if the developer has not changed it since.
   const standing = new Map<number, number>();

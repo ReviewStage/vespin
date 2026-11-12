@@ -10,7 +10,11 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, joinWorkspace, openWorkspace, WORKSPACE_ROLE } from "@repo/database/testing";
-import type { WorkspaceSandboxSetupAnswer } from "@repo/features/workspace-sandbox-setup-wire";
+import {
+  RUN_ACTION_AVAILABILITY,
+  runActionAvailability,
+  type WorkspaceSandboxSetupAnswer,
+} from "@repo/features/workspace-sandbox-setup-wire";
 import { Effect, Result } from "effect";
 import { HOSTED_REFUSAL } from "../http/http-effect.js";
 import { editRunAction, readSandboxSetup, saveRunActions } from "./workspace-sandbox-setup.js";
@@ -65,7 +69,7 @@ const openWithActions = (labels: readonly string[]) =>
 
 it.layer(getTestDB())("an edit of one run action", (it) => {
   it.effect(
-    "changes the action it names in the list as it stands, keeping its id, its place, and every action saved since the editor read it",
+    "changes the action it names in the list as it stands, keeping its id, its place, and every action saved since the editor read it, each with where it may run",
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId, idAt } = yield* openWithActions(["Dev", "Test"]);
@@ -77,7 +81,7 @@ it.layer(getTestDB())("an edit of one run action", (it) => {
         yield* saveRunActions(owner, workspaceId, RELAY, [
           { id: idAt(0), label: "Dev", command: "pnpm dev" },
           { id: idAt(1), label: "Test", command: "pnpm test" },
-          { label: "Lint", command: "pnpm lint" },
+          { label: "Lint", command: "pnpm lint", availableIn: RUN_ACTION_AVAILABILITY.LOCAL },
         ]);
 
         const edited = yield* editRunAction(admin, workspaceId, {
@@ -95,6 +99,13 @@ it.layer(getTestDB())("an edit of one run action", (it) => {
             [false, "Lint"],
           ],
         );
+
+        // Regression: an edit of one action that rebuilds the list without where each may run sets a local-only action back to both.
+        assert.deepEqual((edited.runActions?.[0]?.actions ?? []).map(runActionAvailability), [
+          RUN_ACTION_AVAILABILITY.BOTH,
+          RUN_ACTION_AVAILABILITY.BOTH,
+          RUN_ACTION_AVAILABILITY.LOCAL,
+        ]);
       }),
   );
 

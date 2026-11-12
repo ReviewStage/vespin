@@ -22,8 +22,11 @@ import {
   type AutomationSummary,
 } from "@repo/features/automation-wire";
 import { GLYPH_STATE, glyphStateWords } from "@repo/features/glyph-state";
+import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { TRIGGER_PROVIDER, type TriggerProvider } from "@repo/features/trigger-catalog";
+import { managesWorkspace } from "@repo/features/workspace-role";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT, type Experiment, experimentOn } from "@repo/settings";
@@ -52,11 +55,13 @@ import {
   NotFound,
   OneLine,
   PAGE_FRAME,
+  ProviderMark,
   RowHint,
   RowHintOptions,
   STATUS_TONE,
   SuggestionCard,
   SuggestionCards,
+  type SuggestionNeeds,
   TIME_LOOK,
   Time,
   TOOLBAR_INSET,
@@ -152,7 +157,9 @@ import {
  * suggested automations: a press opens a new automation's page filled in
  * from the suggestion's preset (`@repo/features/automation-presets`), to
  * look over and Create. A suggestion behind an experiment, as Memory digest
- * stands behind the workspace's Memory, is offered only while it is on.
+ * stands behind the workspace's Memory, is offered only while it is on, and
+ * one the reader already made, or the workspace already holds, is offered
+ * no more.
  * Beside New automation, Create with an agent opens New task's own card for
  * the agent that makes one: what to automate in the member's own words, the
  * repository and the model, then Start agent, a new task's agent handed the
@@ -648,21 +655,38 @@ function AutomationsHead({
 
 /**
  * The presets the list suggests, in its order, each by the glyph of what it
- * does and the experiment it stands behind, where it stands behind one.
- * Note that one whose experiment is off where the window works is
- * suggested nowhere, and a new page its address names opens blank.
+ * does, the experiment it stands behind, where it stands behind one, and the
+ * integration whose events fire it, where one does. Note that one whose
+ * experiment is off where the window works is suggested nowhere, and a new
+ * page its address names opens blank.
  */
 const SUGGESTIONS: readonly {
   readonly preset: AutomationPresetName;
   readonly glyph: React.ReactNode;
   readonly experiment?: Experiment;
+  readonly integration?: TriggerProvider;
 }[] = [
   {
     preset: AUTOMATION_PRESET.MEMORY_DIGEST,
     glyph: <GLYPH.MEMORY />,
     experiment: EXPERIMENT.MEMORY,
   },
+  {
+    preset: AUTOMATION_PRESET.RED_MAIN_TRIAGE,
+    glyph: <GLYPH.CHECKS />,
+  },
+  {
+    preset: AUTOMATION_PRESET.SENTRY_ALERT_INVESTIGATION,
+    glyph: <ProviderMark provider={INTEGRATION_PROVIDER.SENTRY} />,
+    integration: TRIGGER_PROVIDER.SENTRY,
+  },
 ];
+
+/** What a Sentry suggestion's foot says while the workspace has no Sentry: the press that connects it, or, for a member, whom to ask. */
+const SENTRY_NEEDS = {
+  CONNECT: "Connect Sentry",
+  ASK: "Ask an owner or admin to connect Sentry",
+} as const;
 
 /** The presets suggested where the window works in `workspaceId`: each whose experiment is on there, or that has none. */
 function useOfferedPresets(workspaceId: string | undefined): readonly AutomationPresetName[] {
@@ -673,39 +697,101 @@ function useOfferedPresets(workspaceId: string | undefined): readonly Automation
   );
 }
 
+/** How a suggestion stands: what it needs first, where it needs something, and whether the reader can only ask for it, so the card takes no press. */
+interface SuggestionStanding {
+  readonly needs?: SuggestionNeeds;
+  readonly asks?: boolean;
+}
+
+/**
+ * How a suggestion fired by Sentry stands while the workspace has none:
+ * nothing to say once it has one, and none at all while the read is out or
+ * failed, or where the deployment holds no Sentry integration, since none
+ * could be connected. Otherwise its foot asks for one: Connect, which
+ * starts the install in the browser, for an owner or an admin, who alone
+ * install it; and for a member, whom to ask, the card taking no press.
+ */
+function sentryNeeds(
+  sentry: SentryOffer,
+  workspace: Workspace | undefined,
+): SuggestionStanding | undefined {
+  const read = sentry.read;
+
+  if (read === undefined || !read.configured) return undefined;
+
+  if (read.installations.length > 0) return {};
+  const manages = workspace !== undefined && managesWorkspace(workspace);
+  const mark = <ProviderMark provider={INTEGRATION_PROVIDER.SENTRY} />;
+
+  return manages
+    ? { needs: { mark, words: SENTRY_NEEDS.CONNECT } }
+    : { needs: { mark, words: SENTRY_NEEDS.ASK }, asks: true };
+}
+
 /**
  * The automations suggested under the list, or under the line saying there
  * is none yet, each a card whose press opens a new automation's page filled
  * in from its preset, to look over and Create; nothing where none is
- * offered.
+ * offered. A preset is taken by an automation made from it, whatever its
+ * name, that is the reader's own or the workspace's: a teammate's personal
+ * one runs for that teammate alone, so the reader is still offered their
+ * own, while one for the workspace serves everyone. One fired by Sentry
+ * while the workspace has none asks for it at its foot (`sentryNeeds`), and
+ * its press starts the install as well, so the page it opens turns into an
+ * ordinary one as the install lands.
  */
-function SuggestedAutomations({ tasks }: { tasks: TasksControl }): React.JSX.Element | null {
+function SuggestedAutomations({
+  tasks,
+  listed,
+}: {
+  tasks: TasksControl;
+  listed: readonly AutomationSummary[];
+}): React.JSX.Element | null {
   const door = useAutomationsDoor(tasks);
   const workspace = tasks.workspace;
   const offered = useOfferedPresets(workspace?.id);
+  const sentry = useWorkspaceSentry(workspace?.id);
 
-  if (offered.length === 0) return null;
+  const taken = new Set(
+    listed.flatMap((automation) =>
+      automation.mine === true || automation.scope === AUTOMATION_SCOPE.WORKSPACE
+        ? [automation.preset]
+        : [],
+    ),
+  );
+
+  const cards = SUGGESTIONS.flatMap(({ preset, glyph, integration }) => {
+    if (!offered.includes(preset) || taken.has(preset)) return [];
+
+    const standing: SuggestionStanding | undefined =
+      integration === undefined ? {} : sentryNeeds(sentry, workspace);
+
+    if (standing === undefined) return [];
+    const filled = automationPreset(preset);
+
+    const press = () => {
+      if (standing.needs !== undefined) sentry.onInstall();
+      door.open({ kind: AUTOMATIONS_PAGE.NEW, preset });
+    };
+
+    return [
+      <SuggestionCard
+        key={preset}
+        glyph={glyph}
+        name={filled.name}
+        detail={filled.description}
+        needs={standing.needs}
+        disabled={workspace === undefined || standing.asks === true}
+        onPress={press}
+      />,
+    ];
+  });
+
+  if (cards.length === 0) return null;
 
   return (
     <div className="automation-suggestions mt-page-section-gap">
-      <SuggestionCards title="Suggested">
-        {SUGGESTIONS.flatMap(({ preset, glyph }) => {
-          if (!offered.includes(preset)) return [];
-
-          const filled = automationPreset(preset);
-
-          return [
-            <SuggestionCard
-              key={preset}
-              glyph={glyph}
-              name={filled.name}
-              detail={filled.description}
-              disabled={workspace === undefined}
-              onPress={() => door.open({ kind: AUTOMATIONS_PAGE.NEW, preset })}
-            />,
-          ];
-        })}
-      </SuggestionCards>
+      <SuggestionCards title="Suggested">{cards}</SuggestionCards>
     </div>
   );
 }
@@ -726,9 +812,8 @@ function ListPage({
   const workspace = tasks.workspace;
   const workspacesRead = useWorkspacesRead();
   const { read, reload, toggle } = automations;
-
-  const groups =
-    read !== undefined && "automations" in read ? automationGroups(read.automations) : [];
+  const listed = read !== undefined && "automations" in read ? read.automations : [];
+  const groups = automationGroups(listed);
 
   const workspacesUnread = workspace === undefined && workspacesRead.failed;
 
@@ -769,7 +854,7 @@ function ListPage({
         {groups.length === 0 ? (
           <div className="automations-empty flex min-h-0 flex-1 flex-col before:flex-2 before:content-[''] after:flex-3 after:content-[''] [&>.ui-empty-state]:flex-none">
             <EmptyState icon={<ZapIcon />}>No automations yet.</EmptyState>
-            <SuggestedAutomations tasks={tasks} />
+            <SuggestedAutomations tasks={tasks} listed={listed} />
           </div>
         ) : (
           <>
@@ -784,7 +869,7 @@ function ListPage({
               onToggle={(automation, enabled) => toggle(automation.id, enabled)}
               onDelete={deletion.ask}
             />
-            <SuggestedAutomations tasks={tasks} />
+            <SuggestedAutomations tasks={tasks} listed={listed} />
           </>
         )}
         <ConfirmDialog
@@ -1074,24 +1159,29 @@ const SENTRY_UNREAD: SentryOffer = {
 };
 
 /**
- * A listed workspace's Sentry as its automations' editor offers it: held
- * by the host while the editor shows, followed live on the service, so an
- * install finished in the browser draws as it lands, and installed in the
- * browser, a refusal (only owners and admins install) said at its row.
+ * A listed workspace's Sentry as its automations' editor and the list's
+ * Sentry suggestion offer it: held by the host while either shows, followed
+ * live on the service, so an install finished in the browser draws as it
+ * lands, and installed in the browser, a refusal (only owners and admins
+ * install) said at the editor's row; unread, with nothing to install on,
+ * while no workspace is listed.
  */
-function useWorkspaceSentry(workspaceId: string): SentryOffer {
+function useWorkspaceSentry(workspaceId: string | undefined): SentryOffer {
   const installSentry = useMutation(actMutation(ACT_KIND.WORKSPACE_SENTRY_INSTALL));
   const integrations = useQuery(workspaceIntegrationsQuery(workspaceId));
   const { mutate: retryIntegrations } = useMutation(workspaceIntegrationsRetryMutation());
   // Note that a read that failed offers what one still out does, so a saved Sentry trigger stays editable; the editor says the failure above its rows.
   const read = integrations.data?.sentry;
   const failed = read === undefined && integrations.isError;
-  const retry = () => retryIntegrations({ workspaceId });
   const installing = installSentry.isPending;
   const refusal = installSentry.error?.message;
 
+  const retry = () => {
+    if (workspaceId !== undefined) retryIntegrations({ workspaceId });
+  };
+
   const onInstall = () => {
-    if (installing) return;
+    if (installing || workspaceId === undefined) return;
     installSentry.mutate({ workspaceId });
   };
 

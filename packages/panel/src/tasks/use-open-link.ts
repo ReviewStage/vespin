@@ -1,13 +1,14 @@
 import {
   LINK_DESTINATION,
   type LinkDestination,
+  openableLinkOf,
   type ReadLink,
   taskNumberOf,
   withTaskId,
 } from "@repo/features/link-grammar";
 import { type DescriptionMention, MENTION_KIND } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
-import { isGitHubAddress, isOpenableAddress } from "@repo/host/acts";
+import { isGitHubAddress } from "@repo/host/acts";
 import { listedPullRequestOf } from "@repo/ui/pull-request-link";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
@@ -392,6 +393,7 @@ function openAddress(
   } else if (routed.kind !== ROUTE.EXTERNAL) {
     return;
   } else if (isGitHubAddress(routed.href)) {
+    // Note that the act's own guard picks it, since `github.open` refuses a page of GitHub's written in http.
     appPlatform().openGitHub(routed.href);
   } else {
     appPlatform().openWeb(routed.href);
@@ -441,12 +443,12 @@ export function useOpenPlace(): ((place: LinkDestination) => void) | undefined {
 }
 
 /**
- * Whether a link is one the window opens. Note that it asks the two acts'
- * own schemas, because an address both refuse would be drawn as a press
- * that opens nothing; an app link is a web address, and both take it.
+ * Whether a link is one the window opens, as every client reads one
+ * (`openableLinkOf`), so a link the iPhone app opens is never drawn here as
+ * words; an app link is a web address, and it takes it.
  */
 export function opensAsLink(href: string): boolean {
-  return isGitHubAddress(href) || isOpenableAddress(href);
+  return openableLinkOf(href) !== undefined;
 }
 
 /** Opens a link {@link opensAsLink} admits: where the place it is pressed on opens it, else an app link in the window where it can be, a listed task's or a listed agent's on no task's pull request in its Pull request tab, anything else in the browser, over the capability it belongs to (`throughWindow`). */

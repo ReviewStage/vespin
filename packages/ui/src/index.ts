@@ -252,6 +252,8 @@ export * from "./components/pane-bar/pane-bar.js";
 
 export * from "./components/pane-pin/pane-pin.js";
 
+export * from "./components/pdf-pages/pdf-pages-skeleton.js";
+
 export * from "./components/photo-pick/photo-pick.js";
 
 export * from "./components/picture-set/picture-set.js";

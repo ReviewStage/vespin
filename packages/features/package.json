@@ -27,6 +27,7 @@
     "./device-platform": "./src/device-platform.js",
     "./host-live": "./src/host-live.js",
     "./memory-live": "./src/memory-live.js",
+    "./memory-settings-words": "./src/memory-settings-words.js",
     "./member-mcp-tool": "./src/member-mcp-tool.js",
     "./memory-wire": "./src/memory-wire.js",
     "./model-effort": "./src/model-effort.js",

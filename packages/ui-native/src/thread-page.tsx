@@ -31,6 +31,7 @@ import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
+import { CopyWordsSwiftMenu } from "./held-menu.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
@@ -258,62 +259,64 @@ function MessageView({
   const { writer } = message;
   const moment = now ?? Date.now();
 
-  // Note that the writer's line is heard as one heading, who and when, so VoiceOver's Headings rotor steps from message to message.
+  // Note that the writer's line is heard as one heading, who and when, so VoiceOver's Headings rotor steps from message to message, and that a long press on the message offers Copy message, a picture's, a recording's, or a file's own menu standing over it.
   return (
-    <VStack alignment="leading" spacing={SPACE.TIGHT}>
-      <HStack
-        spacing={WRITER_GAP}
-        modifiers={[
-          padding({ horizontal: SPACE.EDGE }),
-          accessibilityElement("ignore"),
-          accessibilityLabel(`${writer.name}, ${sinceHeard(message.at, moment)}`),
-          accessibilityAddTraits(["isHeader"]),
-        ]}
-      >
-        {writer.agent ? (
-          <AgentTile name={writer.name} harness={writer.harness} size={MARK_SIZE.WRITER} />
-        ) : (
-          <Avatar name={writer.name} picture={writer.picture} size={MARK_SIZE.WRITER} />
-        )}
-        <Text
+    <CopyWordsSwiftMenu words={message.words}>
+      <VStack alignment="leading" spacing={SPACE.TIGHT}>
+        <HStack
+          spacing={WRITER_GAP}
           modifiers={[
-            font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" }),
-            foregroundStyle(colors.TEXT),
-            lineLimit(large ? 2 : 1),
+            padding({ horizontal: SPACE.EDGE }),
+            accessibilityElement("ignore"),
+            accessibilityLabel(`${writer.name}, ${sinceHeard(message.at, moment)}`),
+            accessibilityAddTraits(["isHeader"]),
           ]}
         >
-          {writer.name}
-        </Text>
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.TIME }),
-            monospacedDigit(),
-            foregroundStyle(colors.TEXT_MUTED),
-          ]}
-        >
-          {sinceText(message.at, moment)}
-        </Text>
-        <Spacer />
-      </HStack>
-      {message.stamp === undefined ? null : <AnswerStamp stamp={message.stamp} />}
-      <RNHostView matchContents={{ vertical: true }}>
-        <View style={styles.words}>
-          {message.words.trim() === "" ? null : (
-            <Markdown
-              words={message.words}
-              repository={repository}
-              onOpenLink={onOpenLink}
-              typed={message.typed}
-              pictureSource={pictureSource}
-              videoAt={videoAt}
-            />
+          {writer.agent ? (
+            <AgentTile name={writer.name} harness={writer.harness} size={MARK_SIZE.WRITER} />
+          ) : (
+            <Avatar name={writer.name} picture={writer.picture} size={MARK_SIZE.WRITER} />
           )}
-          {message.media.map((media) => (
-            <MediaView key={media.key} media={media} />
-          ))}
-        </View>
-      </RNHostView>
-    </VStack>
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" }),
+              foregroundStyle(colors.TEXT),
+              lineLimit(large ? 2 : 1),
+            ]}
+          >
+            {writer.name}
+          </Text>
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.TIME }),
+              monospacedDigit(),
+              foregroundStyle(colors.TEXT_MUTED),
+            ]}
+          >
+            {sinceText(message.at, moment)}
+          </Text>
+          <Spacer />
+        </HStack>
+        {message.stamp === undefined ? null : <AnswerStamp stamp={message.stamp} />}
+        <RNHostView matchContents={{ vertical: true }}>
+          <View style={styles.words}>
+            {message.words.trim() === "" ? null : (
+              <Markdown
+                words={message.words}
+                repository={repository}
+                onOpenLink={onOpenLink}
+                typed={message.typed}
+                pictureSource={pictureSource}
+                videoAt={videoAt}
+              />
+            )}
+            {message.media.map((media) => (
+              <MediaView key={media.key} media={media} />
+            ))}
+          </View>
+        </RNHostView>
+      </VStack>
+    </CopyWordsSwiftMenu>
   );
 }
 

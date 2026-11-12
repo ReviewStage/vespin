@@ -34,8 +34,9 @@ import {
   type InboxItem,
   inboxWaitsOn,
 } from "@repo/features/inbox-wire";
+import { iosAppRouteOf } from "@repo/features/ios-app-links";
 import { threadActivity } from "@repo/features/ios-system-activity";
-import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
@@ -58,6 +59,7 @@ import {
   PATH_PART,
   previewMessages,
   ROW_ACTION_TONE,
+  RowForEach,
   RowList,
   SCOPE_LOOK,
   type Scope,
@@ -167,18 +169,43 @@ function InboxRows({
 
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
-      {listed.map((each) => (
-        <InboxRow
-          key={each.item.id}
-          listed={each}
-          readerId={readerId}
-          pictureOf={pictureOf}
-          onMark={onMark}
-          onRemind={onRemind}
-          onResolve={onResolve}
-        />
-      ))}
+      <InboxItemRows
+        listed={listed}
+        readerId={readerId}
+        pictureOf={pictureOf}
+        onMark={onMark}
+        onRemind={onRemind}
+        onResolve={onResolve}
+      />
     </RowList>
+  );
+}
+
+type InboxRowActs = {
+  readonly readerId: string | undefined;
+  /** Each member's picture by their id, read once by the list the row stands in. */
+  readonly pictureOf: PictureOf;
+  readonly onMark: (itemId: string, unread: boolean) => void;
+  /** Opens Remind me on the thread, which a swipe from the trailing edge offers. */
+  readonly onRemind: (item: InboxItem) => void;
+  /** Resolves the open thread, which a full swipe from the trailing edge runs. */
+  readonly onResolve: (item: InboxItem) => void;
+};
+
+/**
+ * A run of Inbox items, each on its own `InboxRow`, recycled as the list
+ * scrolls, so an Inbox of a thousand threads mounts only the rows near the
+ * screen: the one run every list of Inbox items draws, the Search tab's
+ * among them.
+ */
+export function InboxItemRows({
+  listed,
+  ...acts
+}: InboxRowActs & { readonly listed: readonly InboxListed[] }) {
+  return (
+    <RowForEach data={listed} keyOf={(each) => each.item.id}>
+      {(each) => <InboxRow listed={each} {...acts} />}
+    </RowForEach>
   );
 }
 
@@ -190,26 +217,15 @@ function InboxRows({
  * while it stands open, which a full swipe runs, or opens Remind me. A long
  * press lifts its preview, the thread's newest messages, over the same acts.
  * On an iPad it drags out as its vespin.dev link.
- * The one row every list of Inbox items draws, the Search tab's among them.
  */
-export function InboxRow({
+function InboxRow({
   listed,
   readerId,
   pictureOf,
   onMark,
   onRemind,
   onResolve,
-}: {
-  readonly listed: InboxListed;
-  readonly readerId: string | undefined;
-  /** Each member's picture by their id, read once by the list the row stands in. */
-  readonly pictureOf: PictureOf;
-  readonly onMark: (itemId: string, unread: boolean) => void;
-  /** Opens Remind me on the thread, which a swipe from the trailing edge offers. */
-  readonly onRemind: (item: InboxItem) => void;
-  /** Resolves the open thread, which a full swipe from the trailing edge runs. */
-  readonly onResolve: (item: InboxItem) => void;
-}) {
+}: InboxRowActs & { readonly listed: InboxListed }) {
   const { holder, item } = listed;
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
@@ -218,7 +234,7 @@ export function InboxRow({
   const harness = useAgentHarness(item.agentId);
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
-  const workspace = workspaces.find(({ id }) => id === holder.task.workspaceId);
+  const workspaceStep = linkWorkspaceStep(holder.task.workspaceId, workspaces);
 
   // Note that only the thread's tail is read for its preview, since the preview draws its newest few messages alone.
   const messages = useMemo(
@@ -280,7 +296,7 @@ export function InboxRow({
       ]}
       link={linkOf(
         { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
-        workspace?.slug ?? workspace?.id ?? holder.task.workspaceId ?? "",
+        workspaceStep,
       )}
       preview={
         <ThreadPreview
@@ -458,7 +474,7 @@ function ThreadDetail({
 
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const { workspaceId } = holder.task;
-  const workspace = workspaces.find(({ id }) => id === workspaceId);
+  const workspaceStep = linkWorkspaceStep(workspaceId, workspaces);
 
   // A video the system's player cannot read opens with its thread on vespin.dev in Safari, which plays it.
   const openOnWeb = () => {
@@ -468,8 +484,7 @@ function ThreadDetail({
       itemId: item.id,
     } as const;
 
-    const address = linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
-    openInSafari(address);
+    openInSafari(linkOf(place, workspaceStep));
   };
 
   const { sources, sizes } = useThreadMedia(item.id, media);
@@ -574,7 +589,7 @@ function ThreadDetail({
                     planId: page.place.taskId,
                     pageId: page.pageId,
                   },
-                  workspace?.slug ?? workspace?.id ?? workspaceId ?? "",
+                  workspaceStep,
                 ),
               ),
             openLink,
@@ -727,7 +742,9 @@ function InboxStackList(words: InboxSearch) {
               look={LIST_LOOK.PLAIN}
               listed={listing.listed}
               readerId={listing.readerId}
-              onSelect={(id) => router.push(`/inbox/${encodeURIComponent(id)}`)}
+              onSelect={(id) =>
+                router.push(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id }))
+              }
               onRefresh={acts.refresh}
               onMark={acts.mark}
               onRemind={remind.open}

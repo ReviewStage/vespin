@@ -22,6 +22,7 @@ import {
   spotlightChanges,
   spotlightItems,
 } from "@repo/features/ios-system-activity";
+import { OPENABLE_LINK, openableLinkOf } from "@repo/features/link-grammar";
 import type { Workspace } from "@repo/features/workspace-wire";
 import {
   selectInboxGroupsIn,
@@ -161,7 +162,7 @@ function useContinuedActivities(signedIn: boolean): void {
       const route = iosContinuedRouteOf(continued);
 
       if (route !== undefined) router.push(route);
-      else if (continued.link.startsWith("https://")) openInSafari(continued.link);
+      else if (openableLinkOf(continued.link) === OPENABLE_LINK.WEB) openInSafari(continued.link);
     }
   }, [signedIn, waiting, router]);
 }

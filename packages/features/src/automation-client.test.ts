@@ -87,6 +87,9 @@ it.effect(
 
 it.effect("each call goes to its own path, and the list names its workspace in the query", () =>
   Effect.gen(function* () {
+    // Note that it was made from a preset this release does not know, as a newer service may answer.
+    const retired = { ...SUMMARY, preset: "retired-preset" };
+
     const run = {
       id: "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
       firing: { kind: "manual" },
@@ -98,7 +101,7 @@ it.effect("each call goes to its own path, and the list names its workspace in t
     };
 
     const api = fakeCloudApi({
-      "GET /api/automations": { answer: () => ({ automations: [SUMMARY] }) },
+      "GET /api/automations": { answer: () => ({ automations: [retired] }) },
       [`PATCH /api/automations/${AUTOMATION_ID}`]: { answer: () => ({ automation: SUMMARY }) },
       [`DELETE /api/automations/${AUTOMATION_ID}`]: { answer: () => ({}) },
       [`POST /api/automations/${AUTOMATION_ID}/run`]: { answer: () => ({ run }) },
@@ -123,7 +126,7 @@ it.effect("each call goes to its own path, and the list names its workspace in t
     const runs = yield* Effect.provide(ask.runs(named), api.layer);
     const deleted = yield* Effect.provide(ask.remove(named), api.layer);
 
-    assert.deepEqual(listed, { automations: [SUMMARY] });
+    assert.deepEqual(listed, { automations: [retired] });
     assert.deepEqual(changed, { automation: SUMMARY });
     assert.deepEqual(ran, { run });
     assert.deepEqual(runs, { runs: [run] });

@@ -27,7 +27,7 @@ import { installScrollIntoView } from "./testing/scroll-into-view.js";
 
 /**
  * The agent's box takes files: a picture dropped on the card or pasted into
- * the field is held as "Picture 1", its chip written into the words where
+ * the field, as a PDF is, is held as "Picture 1", its chip written into the words where
  * the caret stood, and goes with its chip when one Backspace takes it out;
  * pictures past the bytes a message carries together are left out, the box saying why in its note while the
  * ones that fit still come; the note goes once the box's message goes,
@@ -196,8 +196,8 @@ async function drop(container: HTMLElement, files: readonly File[]): Promise<voi
   await read();
 }
 
-/** Files pasted into the box's editor, as the clipboard hands a screenshot over; answers whether the editor let the paste go by. */
-async function paste(container: HTMLElement, files: readonly File[]): Promise<boolean> {
+/** Files pasted into the box's editor, as the clipboard hands a screenshot over, before they are read; answers whether the editor let the paste go by. */
+function pasteUnread(container: HTMLElement, files: readonly File[]): boolean {
   const event = new Event("paste", { bubbles: true, cancelable: true });
   Object.defineProperty(event, "clipboardData", {
     value: { files, types: ["Files"], getData: () => "" },
@@ -205,9 +205,16 @@ async function paste(container: HTMLElement, files: readonly File[]): Promise<bo
   act(() => {
     composerEditor(container).dispatchEvent(event);
   });
-  await read();
 
   return !event.defaultPrevented;
+}
+
+/** Files pasted into the box's editor, and read off the disk before they land; answers whether the editor let the paste go by. */
+async function paste(container: HTMLElement, files: readonly File[]): Promise<boolean> {
+  const passed = pasteUnread(container, files);
+  await read();
+
+  return passed;
 }
 
 /** What the box shows of its files: its chips beside the words by name, the files its words hold by what their chips open, and its note. */
@@ -247,13 +254,31 @@ test("two files of one name, and one whose name holds brackets, each stand in th
   });
 });
 
-test("a picture pasted into the agent's box is held as its chip in the words, the paste writing no words of its own", async () => {
+test("a picture and a PDF pasted into the agent's box are held as their chips in the words, the paste writing no words of its own", async () => {
   // SAFETY: BOXES is a literal keyed by its boxes alone.
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
-    assert.equal(await paste(container, [png("pasted.png")]), false, `${box} takes the paste`);
-    assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null }, box);
+    assert.equal(
+      await paste(container, [png("pasted.png"), pdf("spec.pdf")]),
+      false,
+      `${box} takes the paste`,
+    );
+    assert.deepEqual(
+      held(container),
+      { chips: [], pictures: ["Open Picture 1", "Open spec.pdf"], note: null },
+      box,
+    );
   }
+});
+
+test("a picture pasted stands as its chip at once, before the words typed while it is read", async () => {
+  const container = await mounted("agent");
+  pasteUnread(container, [png("pasted.png")]);
+  typeInComposer(container, "here");
+  await read();
+  const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
+  assert.equal(editor.getText(), "[Picture 1] here");
+  assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
 });
 
 test("a word typed after a file laid in as its chip stands a space apart from it", async () => {

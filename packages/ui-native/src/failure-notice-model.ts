@@ -1,5 +1,5 @@
 /**
- * failure-notice-model.ts -- which failure notice stands: a write refused, in its own words and with a Try again where one is offered, or the one notice that says the phone is offline, said once however many writes fail under it.
+ * failure-notice-model.ts -- which notice stands: a write refused, in its own words and with a Try again where one is offered, a write that went with its Undo, or the one notice that says the phone is offline, said once however many writes fail under it.
  *
  * The app has one notice at a time, as iOS's own banners stand: the newest
  * refusal replaces the one before it, since the person pressed last for it.
@@ -10,10 +10,11 @@
  * holds the state this answers and lets each notice go.
  */
 
-/** What a notice says: a write that did not go, or that the phone is offline. */
+/** What a notice says: a write that did not go, that the phone is offline, or a write that went and can be undone, as the panel's Undo toast says it. */
 export const NOTICE_KIND = {
   REFUSED: "refused",
   OFFLINE: "offline",
+  DONE: "done",
 } as const;
 
 export type NoticeKind = (typeof NOTICE_KIND)[keyof typeof NOTICE_KIND];
@@ -21,10 +22,12 @@ export type NoticeKind = (typeof NOTICE_KIND)[keyof typeof NOTICE_KIND];
 /** A notice as a write asks for it. */
 export interface NoticeAsk {
   readonly kind: NoticeKind;
-  /** The refusal's own words, or the offline hint. */
+  /** The refusal's own words, the offline hint, or what the write that went did. */
   readonly words: string;
   /** Sends the write again; no Try again is drawn where none is given. */
   readonly retry?: (() => void) | undefined;
+  /** Takes back the write that went; no Undo is drawn where none is given, and Try again stands in its place where both are. */
+  readonly undo?: (() => void) | undefined;
 }
 
 /** A notice as it stands, counted so a new one is told from the one it replaces, even in the same words. */

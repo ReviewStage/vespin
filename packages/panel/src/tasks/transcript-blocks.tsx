@@ -1,3 +1,4 @@
+import { CUT_PART_WORDS, cutPartText, WHOLE_PART } from "@repo/features/agent-parts";
 import {
   AGENT_TODO_STATUS,
   type AgentTodoStatus,
@@ -7,9 +8,9 @@ import { descriptionAttachmentOf } from "@repo/features/description-attachment-l
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
+import { GITHUB_DEFAULT_BRANCH, GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
 import { mayNameChip } from "@repo/features/mention-link";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
-import { formatBytes } from "@repo/features/number-format";
 import { cardTitle } from "@repo/features/plain-words";
 import {
   blockSays,
@@ -197,7 +198,7 @@ import {
 } from "./transcript-markdown.js";
 import { useWordTargets } from "./use-known-names.js";
 import { opensAsLink, useOpenLink } from "./use-open-link.js";
-import { type CutBody, WHOLE_PART } from "./whole-parts.js";
+import type { CutBody } from "./whole-parts.js";
 import { WorkingTime } from "./working-time.js";
 
 /**
@@ -735,11 +736,11 @@ function PictureRowElement({ children }: MarkdownNodeProps & { children?: ReactN
 
 /** A file's address on GitHub, at its line, which its link carries for the reader's link menu; the press opens its File tab. */
 function fileAddress(repository: string, path: string, line: number | undefined): string {
-  const page = new URL(`https://github.com/${repository}/blob/HEAD/${path}`);
+  const file = { kind: GITHUB_PAGE.FILE, repository, ref: GITHUB_DEFAULT_BRANCH, path } as const;
 
-  if (line !== undefined) page.hash = `L${line}`;
-
-  return page.href;
+  return gitHubPageLink(
+    line === undefined ? file : { ...file, lines: { startLine: line, endLine: line } },
+  );
 }
 
 /**
@@ -1101,24 +1102,13 @@ export function TranscriptReasoning({
         <ReasoningContent text={text.replace(LEADING_BLANK_LINES, "").trimEnd()} />
       ) : (
         <FoldBody className={REASONING_BODY_CLASS}>
-          <CutWords cut={cut} waiting={CUT_WORDS.THOUGHT}>
-            <p className={REASONING_WORDS_CLASS}>{cutText(cut)}</p>
+          <CutWords cut={cut} waiting={CUT_PART_WORDS.THOUGHT}>
+            <p className={REASONING_WORDS_CLASS}>{cutPartText(cut)}</p>
           </CutWords>
         </FoldBody>
       )}
     </Reasoning>
   );
-}
-
-/** What a cut part's body says while its whole is read, and between its two ends where it could not be. */
-const CUT_WORDS = {
-  THOUGHT: "Reading the whole thought…",
-  OUTPUT: "Reading the whole output…",
-} as const;
-
-/** A cut part's two ends, the middle that could not be read said between them. */
-function cutText(cut: CutBody): string {
-  return `${cut.head}\n\n… ${formatBytes(cut.bytes)} in all; only its start and end could be read …\n\n${cut.tail}`;
 }
 
 /**
@@ -1489,10 +1479,10 @@ export function TranscriptTool({
           cut === undefined ? (
             <ToolTerminal input={input} block={output} errorText={errorText} />
           ) : (
-            <CutWords cut={cut} waiting={CUT_WORDS.OUTPUT}>
+            <CutWords cut={cut} waiting={CUT_PART_WORDS.OUTPUT}>
               <ToolTerminal
                 input={input}
-                block={{ kind: TOOL_BLOCK.TEXT, text: cutText(cut) }}
+                block={{ kind: TOOL_BLOCK.TEXT, text: cutPartText(cut) }}
                 errorText={undefined}
               />
             </CutWords>
@@ -1503,9 +1493,9 @@ export function TranscriptTool({
             {cut === undefined ? (
               <ToolOutput block={output} errorText={errorText} markdown={toolMarkdown} />
             ) : (
-              <CutWords cut={cut} waiting={CUT_WORDS.OUTPUT}>
+              <CutWords cut={cut} waiting={CUT_PART_WORDS.OUTPUT}>
                 <ToolOutput
-                  block={{ kind: TOOL_BLOCK.TEXT, text: cutText(cut) }}
+                  block={{ kind: TOOL_BLOCK.TEXT, text: cutPartText(cut) }}
                   errorText={undefined}
                   markdown={toolMarkdown}
                 />

@@ -1,0 +1,40 @@
+# settings-memory.yaml -- Settings › Memory on the Inbox fixture: the workspace's memories most recalled first, a search narrowing them, and a memory's Delete asked first and canceled.
+#
+# Launched on the host's Inbox fixture, whose workspace holds three memories
+# (`@repo/host/fixture-inbox`), so no server is reached. The fixture is
+# signed in as Ada Lovelace, the workspace's owner, who may delete each.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Memory"
+- tapOn: "Memory"
+- waitForAnimationToEnd
+# Note that a row is one element, heard as its words, so a memory is found by them.
+- assertVisible: "The web server's tests run on PGlite through `test:store`."
+- assertVisible: "Release dates are written in Eastern time, never UTC."
+- takeScreenshot: settings-memory
+# The search narrows the list by a memory's words or whose they are.
+- tapOn: "Search memories"
+- inputText: "Grace"
+- assertVisible: "Release dates are written in Eastern time, never UTC."
+- assertNotVisible: "The staging database is reset every Sunday night."
+- waitForAnimationToEnd
+- takeScreenshot: settings-memory-search
+- tapOn: "Cancel"
+# A long press offers Delete, which asks first.
+- longPressOn: "The staging database is reset every Sunday night."
+- tapOn: "Delete"
+- assertVisible: "Delete this memory?"
+- waitForAnimationToEnd
+- takeScreenshot: settings-memory-delete
+- tapOn: "Cancel"
+- assertVisible: "The staging database is reset every Sunday night."

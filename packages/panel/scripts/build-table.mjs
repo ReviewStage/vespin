@@ -5,6 +5,7 @@
 // table in a thin plugin of its own bundler's shape, so a redirect added here
 // reaches both builds and neither restates it. Nothing here imports a bundler.
 
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -127,12 +128,22 @@ export const HIGHLIGHT_WORKER_BUILD = {
   logLevel: "info",
 };
 
+// The worker pdf.js reads a PDF in (`src/pdf/index.ts`), handed to the PDF
+// bundle as text (`PDF_WORKER`) and started from a `blob:` as a module, as
+// the highlight worker is. pdf.js ships it bundled and minified already, so
+// it is read as it stands rather than built, from the pdf.js `@repo/ui`
+// pins, so it is always the worker of the library the bundle draws with.
+const PDF_WORKER_FILE = createRequire(
+  fileURLToPath(import.meta.resolve("@repo/ui/pdf-pages")),
+).resolve("pdfjs-dist/build/pdf.worker.min.mjs");
+
 /** The free identifiers the panel's code reads that a build replaces, given the highlight worker's text. */
 export function panelDefines(highlightWorkerText) {
   return {
     "process.env.NODE_ENV": '"production"',
     "process.env.IS_PREACT": '"false"',
     DIFF_HIGHLIGHT_WORKER: JSON.stringify(highlightWorkerText),
+    PDF_WORKER: JSON.stringify(readFileSync(PDF_WORKER_FILE, "utf8")),
   };
 }
 

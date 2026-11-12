@@ -287,6 +287,14 @@ export const CHECK_WORDS = {
   [CHECK_STATE.SKIPPED]: "skipped",
 } as const satisfies Record<CheckState, string>;
 
+/** How the checks went as one word, which the Checks tab's glyph, a pull request's card, and its mark each say to a reader. */
+export const CHECK_SUMMARY_WORDS = {
+  [CHECK_SUMMARY.FAILING]: "failing",
+  [CHECK_SUMMARY.PENDING]: "running",
+  [CHECK_SUMMARY.PASSING]: "passing",
+  [CHECK_SUMMARY.NONE]: "none",
+} as const satisfies Record<CheckSummary, string>;
+
 /** The checks as one word, as the pull request's mark wears it: a failure beats a wait beats a pass. */
 export function checksSummaryOf(checks: readonly PullRequestCheck[]): CheckSummary {
   if (checks.some((check) => check.state === CHECK_STATE.FAILED)) return CHECK_SUMMARY.FAILING;

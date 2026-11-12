@@ -3,17 +3,25 @@
 import { AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
-import { iosAgentRoute, iosPullRequestRoute } from "@repo/features/ios-app-links";
+import { iosAgentRoute, iosAppRouteOf, iosPullRequestRoute } from "@repo/features/ios-app-links";
 import { taskActivity } from "@repo/features/ios-system-activity";
 import {
   LINK_DESTINATION,
   type LinkDestination,
   linkOf,
   readLink,
+  taskLinkStep,
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
-import { subTasksOf, taskFinished } from "@repo/features/task-list-model";
+import {
+  CHANGE_REPOSITORY,
+  CHOOSE_REPOSITORY,
+  NO_REPOSITORY,
+  subTasksOf,
+  taskFinished,
+} from "@repo/features/task-list-model";
+import { MOVE_TO_SECTION, REMOVE_FROM_SECTION } from "@repo/features/task-sections-model";
 import {
   NO_ASSIGNEE_WORDS,
   TASK_PRIORITY_WORDS,
@@ -21,11 +29,10 @@ import {
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
 import {
+  foldedTaskRows,
   TASK_TREE_GROUP,
   type TaskTree,
   type TaskTreeGroup,
-  type TaskTreeNode,
-  taskTreeNodes,
 } from "@repo/features/task-tree-model";
 import {
   TASK_RELATION_KIND,
@@ -58,12 +65,14 @@ import {
   RelationRow,
   ROW_ACTION_TONE,
   type RowAction,
+  RowForEach,
   RowList,
   type RowSubmenu,
   type RowSwipe,
   Screen,
   SplitView,
   shareLink,
+  type TaskFold,
   TaskHead,
   TaskPreview,
   TaskRow,
@@ -72,7 +81,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { type ReactElement, useState } from "react";
+import { type ReactElement, useMemo, useState } from "react";
 import { useAgentRowActs, useFollowedAgent, useHeldAgentStep } from "../agents/use-agent.js";
 import { archiveQuestion } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -89,6 +98,7 @@ import {
   type StatusQuestion,
   type TaskAgentLine,
   type TaskOverview,
+  type TaskPlacing,
   type TasksListing,
   useDeleteAsk,
   useListingAsks,
@@ -157,6 +167,9 @@ const STATUS_ORDER: readonly TaskStatus[] = [
 /** What parts who created a task from when, on its page. */
 const LINE_PART = " · ";
 
+/** No parent's sub-tasks stand open, as a section opens. */
+const NONE_OPEN: ReadonlySet<string> = new Set();
+
 /** What the list's search says where it finds nothing. */
 function noMatchWords(search: string): string {
   return `No tasks match “${search}”.`;
@@ -172,7 +185,10 @@ function openOnWeb(destination: LinkDestination, workspace: Workspace | undefine
 function shareTaskLink(task: TaskSummary, workspace: Workspace | undefined): void {
   if (workspace === undefined) return;
   shareLink(
-    linkOf({ kind: LINK_DESTINATION.TASK, planId: task.id }, workspace.slug ?? workspace.id),
+    linkOf(
+      { kind: LINK_DESTINATION.TASK, planId: taskLinkStep(task) },
+      workspace.slug ?? workspace.id,
+    ),
   );
 }
 
@@ -202,9 +218,108 @@ function statusSubmenu(
   };
 }
 
+/**
+ * A task's Move to section as a menu, as the panel's offers it: the member's
+ * sections of its workspace, the one it stands in checked, a press putting it
+ * on top of another, and Remove from section under them while it stands in
+ * one; none where the member keeps no section and it stands in none.
+ */
+function sectionSubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | undefined {
+  const standing = placing.sectionOf(task.id);
+
+  if (placing.sections.length === 0 && standing === undefined) return undefined;
+
+  return {
+    label: MOVE_TO_SECTION,
+    symbol: "folder",
+    choices: placing.sections.map((section) => ({
+      label: section.title,
+      on: section.id === standing,
+      onPress: () => {
+        if (section.id !== standing) placing.moveToSection(task.id, section.id);
+      },
+    })),
+    actions:
+      standing === undefined
+        ? []
+        : [
+            {
+              label: REMOVE_FROM_SECTION,
+              symbol: "folder.badge.minus",
+              tone: ROW_ACTION_TONE.NEUTRAL,
+              onPress: () => placing.moveToSection(task.id, null),
+            },
+          ],
+  };
+}
+
+/**
+ * A task's repository as a menu, as the panel's Change repository offers it,
+ * named Choose a repository while it has none: the repositories its
+ * workspace's GitHub reaches, the one it works in checked, and No repository
+ * under them while it has one; none where there is nothing to pick.
+ */
+function repositorySubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | undefined {
+  const current = task.repository ?? null;
+
+  // Note that a repository the workspace no longer reaches still stands checked, so the menu says where the task works.
+  const listed =
+    current === null || placing.repositories.includes(current)
+      ? placing.repositories
+      : [current, ...placing.repositories];
+
+  if (listed.length === 0) return undefined;
+
+  return {
+    label: current === null ? CHOOSE_REPOSITORY : CHANGE_REPOSITORY,
+    symbol: "chevron.left.forwardslash.chevron.right",
+    choices: listed.map((repository) => ({
+      label: repository,
+      on: repository === current,
+      onPress: () => {
+        if (repository !== current) placing.setRepository(task.id, repository);
+      },
+    })),
+    actions:
+      current === null
+        ? []
+        : [
+            {
+              label: NO_REPOSITORY,
+              symbol: "xmark.circle",
+              tone: ROW_ACTION_TONE.NEUTRAL,
+              onPress: () => placing.setRepository(task.id, null),
+            },
+          ],
+  };
+}
+
+/** A task's menus where it is moved: Move to section and its repository, each where it offers something. */
+function placingSubmenus(task: TaskSummary, placing: TaskPlacing): readonly RowSubmenu[] {
+  return [sectionSubmenu(task, placing), repositorySubmenu(task, placing)].filter(
+    (submenu): submenu is RowSubmenu => submenu !== undefined,
+  );
+}
+
+/** A row's menu as a bar's ⋯ holds it, its acts' tones read as the bar reads them. */
+function barSubmenu(submenu: RowSubmenu): BarMenu {
+  return {
+    label: submenu.label,
+    symbol: submenu.symbol,
+    choices: submenu.choices,
+    actions: (submenu.actions ?? []).map((action) => ({
+      label: action.label,
+      symbol: action.symbol,
+      destructive: action.tone === ROW_ACTION_TONE.DESTRUCTIVE,
+      onPress: action.onPress,
+    })),
+  };
+}
+
 type RowActsResult = {
   readonly trailingActions: readonly RowSwipe[];
   readonly leadingActions: readonly RowSwipe[];
+  readonly menuSubmenus: readonly RowSubmenu[];
   readonly menuActions: readonly RowAction[];
 };
 
@@ -213,11 +328,11 @@ type RowActsResult = {
  * trailing swipe Mark done, offered on a task not yet done, which a full
  * swipe runs, and Status; behind its leading swipe Pin or Unpin, whichever
  * the task is not, which a full swipe runs; and in its long press menu,
- * after those, the panel's order: Copy link, which raises the share sheet,
- * Rename, in the system's name alert, Mark as read or unread, whichever the
- * task is not, Open in browser, and Permanently delete last, which asks
- * first. Move to section, priority, and assignee are left to the desktop
- * and the web.
+ * after those, Move to section and its repository (`placingSubmenus`), then
+ * the panel's order: Copy link, which raises the share sheet, Rename, in
+ * the system's name alert, Mark as read or unread, whichever the task is
+ * not, Open in browser, and Permanently delete last, which asks first.
+ * Priority and assignee are left to the desktop and the web.
  */
 function rowActs(task: TaskSummary, unread: boolean, listing: TasksListing): RowActsResult {
   const pinned = task.pinnedAt !== undefined;
@@ -244,6 +359,7 @@ function rowActs(task: TaskSummary, unread: boolean, listing: TasksListing): Row
         onPress: () => listing.pin(task.id, !pinned),
       },
     ],
+    menuSubmenus: placingSubmenus(task, listing.placing),
     menuActions: [
       {
         label: WORDS.COPY_LINK,
@@ -332,17 +448,18 @@ function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly
   );
 }
 
-/** One task's row and, folded under it, its sub-tasks' rows, each a level deeper, to any depth: the one row every list of tasks draws, the Search tab's among them. */
-export function TaskNodeRow({
-  node,
+/** One task's row, set in by how deep it stands and led by its sub-tasks' fold where it has any: the one row every list of tasks draws, the Search tab's among them. */
+export function TaskListRow({
+  task,
   listing,
   depth = 0,
+  fold,
 }: {
-  readonly node: TaskTreeNode;
+  readonly task: TaskSummary;
   readonly listing: TasksListing;
   readonly depth?: number;
+  readonly fold?: TaskFold | undefined;
 }) {
-  const { task, children } = node;
   const look = listing.lookOf(task);
 
   return (
@@ -366,14 +483,23 @@ export function TaskNodeRow({
               listing.workspace.slug ?? listing.workspace.id,
             )
       }
-      subRows={
-        children.length === 0
-          ? undefined
-          : children.map((child) => (
-              <TaskNodeRow key={child.task.id} node={child} listing={listing} depth={depth + 1} />
-            ))
-      }
+      fold={fold}
     />
+  );
+}
+
+/** A run of tasks on rows of their own, none nested, recycled as the list scrolls: what a search finds. */
+export function TaskRows({
+  tasks,
+  listing,
+}: {
+  readonly tasks: readonly TaskSummary[];
+  readonly listing: TasksListing;
+}) {
+  return (
+    <RowForEach data={tasks} keyOf={(task) => task.id}>
+      {(task) => <TaskListRow task={task} listing={listing} />}
+    </RowForEach>
   );
 }
 
@@ -466,6 +592,23 @@ function GroupSection({
 }) {
   const place = placeIn(group, listing);
 
+  // Note that the section holds which parents stand open, rather than each row, since a recycled row draws another task once scrolled past.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
+
+  const rows = useMemo(
+    () => foldedTaskRows(group.rows, (taskId) => opened.has(taskId)),
+    [group.rows, opened],
+  );
+
+  const toggle = (taskId: string) =>
+    setOpened((was) => {
+      const next = new Set(was);
+
+      if (!next.delete(taskId)) next.add(taskId);
+
+      return next;
+    });
+
   return (
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
@@ -477,9 +620,20 @@ function GroupSection({
         if (task !== undefined) place(task);
       }}
     >
-      {taskTreeNodes(group.rows).map((node) => (
-        <TaskNodeRow key={node.task.id} node={node} listing={listing} />
-      ))}
+      <RowForEach data={rows} keyOf={(row) => row.task.id}>
+        {(row) => (
+          <TaskListRow
+            task={row.task}
+            listing={listing}
+            depth={row.depth}
+            fold={
+              row.open === undefined
+                ? undefined
+                : { open: row.open, onToggle: () => toggle(row.task.id) }
+            }
+          />
+        )}
+      </RowForEach>
     </ListSection>
   );
 }
@@ -520,9 +674,7 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
     return (
       <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
         <ListSection>
-          {found.map((task) => (
-            <TaskNodeRow key={task.id} node={{ task, children: [] }} listing={listing} />
-          ))}
+          <TaskRows tasks={found} listing={listing} />
         </ListSection>
       </RowList>
     );
@@ -574,8 +726,9 @@ interface TaskMenuDoors {
 
 /**
  * What a task's ⋯ holds, in the panel's order: Copy link, Rename, New
- * sub-task, Open in browser, and Permanently delete, red and last, which asks
- * first; and its Status, each status checked where it stands.
+ * sub-task, Open in browser, and Permanently delete, red, which asks first;
+ * then its Status, each status checked where it stands, Move to section,
+ * and its repository.
  */
 function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
   const { task } = overview;
@@ -608,7 +761,10 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
         onPress: () => doors.askDelete(task),
       },
     ],
-    submenus: [{ ...statusSubmenu(task, overview.setStatus), actions: [] }],
+    submenus: [
+      { ...statusSubmenu(task, overview.setStatus), actions: [] },
+      ...placingSubmenus(task, overview.placing).map(barSubmenu),
+    ],
   };
 }
 
@@ -975,7 +1131,7 @@ function OverviewPage({
 
   // A related task opens on its own Overview, and an agent on its page, where its transcript and its composer stand.
   const open = (id: string) => {
-    if (related.has(id)) router.push(`/tasks/${encodeURIComponent(id)}`);
+    if (related.has(id)) router.push(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id }));
     else if (agents.has(id)) router.push(iosAgentRoute(id));
   };
 
@@ -1044,7 +1200,7 @@ function TasksStackList(words: TasksSearch) {
           listing={listing}
           look={LIST_LOOK.PLAIN}
           search={search}
-          onSelect={(id) => router.push(`/tasks/${encodeURIComponent(id)}`)}
+          onSelect={(id) => router.push(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id }))}
           onRefresh={refreshTasks}
         />
       </Screen>
@@ -1202,6 +1358,16 @@ export function TaskScreen() {
                     onPress={choice.onPress}
                   >
                     {choice.label}
+                  </Stack.Toolbar.MenuAction>
+                ))}
+                {submenu.actions.map((action) => (
+                  <Stack.Toolbar.MenuAction
+                    key={action.label}
+                    icon={action.symbol}
+                    destructive={action.destructive === true}
+                    onPress={action.onPress}
+                  >
+                    {action.label}
                   </Stack.Toolbar.MenuAction>
                 ))}
               </Stack.Toolbar.Menu>

@@ -26,6 +26,7 @@ import {
   markdownLink,
   pullRequestAddressOf,
   type ReadLink,
+  readGitHubPage,
   readLink,
   taskNumberOf,
   withTaskId,
@@ -49,8 +50,7 @@ import {
   sectionAnchors,
 } from "@repo/features/mention-link";
 import { placeChipLook } from "@repo/features/place-chip-model";
-import { UNTITLED_TASK_NAME } from "@repo/features/task-wire";
-import { isGitHubAddress, isWebAddress } from "@repo/host/acts";
+import { isWebAddress } from "@repo/host/acts";
 import {
   HoverCard,
   HoverCardHead,
@@ -303,7 +303,7 @@ function pressOf(
       }
 
       // Where no File tab opens it, a file or a folder written as its GitHub page opens there, as its link would.
-      return isGitHubAddress(target) ? () => openLink(target) : undefined;
+      return readGitHubPage(target) === undefined ? undefined : () => openLink(target);
     }
 
     case MENTION_KIND.SERVER:
@@ -553,9 +553,6 @@ function chipName(
 ): string {
   const entity = entityOfMention(mention);
   const { live, held } = entityName(entity, known, { heading, answered: standing, repository });
-
-  // Note that a plan the window still lists Untitled keeps the name it was written with, which says more.
-  if (entity.kind === ENTITY_KIND.PLAN && held === UNTITLED_TASK_NAME) return written;
 
   return (live || bare ? held : undefined) ?? written;
 }

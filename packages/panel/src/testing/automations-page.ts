@@ -229,8 +229,8 @@ function holdChoices(): void {
   }).deliverModels;
 }
 
-/** Lays a workspace's integrations as the host's read of them now stands: failed while refused, its Sentry as `sentryRead` says and no Slack bot otherwise. */
-function layIntegrations(workspaceId: string): void {
+/** Lays a workspace's integrations as the host's read of them now stands, as it does once the hold is taken and again as an install lands: failed while refused, its Sentry as `sentryRead` says and no Slack bot otherwise. */
+export function layIntegrations(workspaceId: string): void {
   const read =
     world.sentryRefusals > 0
       ? { failed: true as const }
