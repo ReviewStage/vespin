@@ -61,6 +61,10 @@ command = "pnpm desktop"
 
 [scripts.run.broken]
 command = 42
+
+[scripts.run.blank]
+command = "  "
+options = { cwd = "apps/api" }
 `;
 
 const CONDUCTOR_JSON = JSON.stringify({

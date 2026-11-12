@@ -19,17 +19,16 @@
  * workspace leaves unset, as `CONDUCTOR_PORT`, stay unset here too.
  *
  * Nothing a member saved is ever replaced: a setup or archive script is
- * written only where the repository has none of that kind, read and
- * written in one transaction, and the run actions only where the
- * repository has no list, decided under the list's own lock.
+ * written only where the repository has none of that kind, decided by the
+ * store's unique index as the row is written, and the run actions only
+ * where the repository has no list, decided under the list's own lock.
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   editRunActions,
+  fillRepositorySetup,
   type RunActionWrite,
-  readRepositorySetup,
-  setRepositorySetup,
 } from "@repo/database/models/workspace-sandbox-script-store";
 import { shellQuoted } from "@repo/features/shell-quote";
 import { TASK_SECTION_ICON_KIND, taskSectionIconSchema } from "@repo/features/task-section-wire";
@@ -40,7 +39,6 @@ import {
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { Data, Effect, Option, type Redacted, Schema } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
-import { SqlClient } from "effect/sql";
 import { parse as parseToml } from "smol-toml";
 import type { GitHubUnavailable } from "../github/github-app.js";
 import { readRepositoryFile } from "../github/repository-file.js";
@@ -201,7 +199,9 @@ function runActionsOf(run: Run | undefined): RunActionWrite[] {
   const actions: RunActionWrite[] = [];
 
   for (const [name, entry] of Object.entries(run)) {
-    if (entry === null || entry.hide === true || !inCloud(entry)) continue;
+    if (entry === null || entry.command.trim() === "" || entry.hide === true || !inCloud(entry)) {
+      continue;
+    }
 
     // Note that an icon is a Lucide glyph by its kebab-case name, as ours are; any other is dropped for the menu's own.
     const icon =
@@ -255,28 +255,18 @@ function conductorScriptsOf(
   };
 }
 
-/** The repository's script of the kind written where it has none, read and written in one transaction; whether it was. */
-const fillScript = Effect.fnUntraced(function* (
+/** The repository's script of the kind written where it has none, as the row is written; whether it was. */
+function fillScript(
   workspaceId: string,
   repository: string,
   kind: RepositoryScriptKind,
   script: string | undefined,
   now: Date,
-): Effect.fn.Return<boolean, StoreFailure, DatabaseServices> {
-  if (script === undefined) return false;
-  const client = yield* SqlClient.SqlClient;
-
-  return yield* client.withTransaction(
-    Effect.gen(function* () {
-      const standing = yield* readRepositorySetup(workspaceId, repository, kind);
-
-      if (Option.isSome(standing)) return false;
-      yield* setRepositorySetup(workspaceId, repository, kind, script, now);
-
-      return true;
-    }),
-  );
-});
+): Effect.Effect<boolean, StoreFailure, DatabaseServices> {
+  return script === undefined
+    ? Effect.succeed(false)
+    : fillRepositorySetup(workspaceId, repository, kind, script, now);
+}
 
 /**
  * The scripts written into the workspace for the repository wherever it has

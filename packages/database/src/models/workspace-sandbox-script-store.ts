@@ -167,6 +167,19 @@ const insertSetup = SqlSchema.void({
     ),
 });
 
+const insertSetupIfAbsent = SqlSchema.findAll({
+  Request: SetupWriteSchema,
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ organizationId, repository, kind, script, now }) =>
+    Database.use((db) =>
+      db
+        .insert(setup)
+        .values({ organizationId, repository, kind, script, createdAt: now, updatedAt: now })
+        .onConflictDoNothing()
+        .returning({ id: setup.id }),
+    ),
+});
+
 const deleteSetup = SqlSchema.findAll({
   Request: RepositoryKeySchema,
   Result: Schema.Struct({ id: Schema.String }),
@@ -335,6 +348,25 @@ export const setRepositorySetup = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (updated.length > 0) return;
   yield* insertSetup(write);
 });
+
+/**
+ * The repository's script of the kind set only where none of that kind
+ * stands under any casing of its name, answering whether it was. Note that
+ * the unique index on the lowered name decides it as the row is written, so
+ * a script saved since the caller last looked is never replaced.
+ */
+export function fillRepositorySetup(
+  organizationId: string,
+  repository: string,
+  kind: RepositoryScriptKind,
+  script: string,
+  now: Date,
+): ScriptEffect<boolean> {
+  return Effect.map(
+    insertSetupIfAbsent({ organizationId, repository, kind, script, now }),
+    (rows) => rows.length > 0,
+  );
+}
 
 /** The repository's script of the kind removed, answering whether one stood. */
 export function removeRepositorySetup(
