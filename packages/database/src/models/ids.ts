@@ -18,6 +18,7 @@ const ID_KIND = {
   ANSWER: "answer",
   REASONING: "reasoning",
   NATIVE_TURN: "native-turn",
+  IMPORTED_TURN: "imported-turn",
 } as const;
 
 /**
@@ -36,6 +37,16 @@ export function childConversationId(parentConversationId: string, callId: string
  */
 export function nativeTurnId(conversationId: string, openingSequence: number): string {
   return hostMintedId([ID_KIND.NATIVE_TURN, conversationId, String(openingSequence)]);
+}
+
+/**
+ * The store's id for one turn of a transcript imported from elsewhere, by the
+ * imported record that opened it, so an import run again lands on the turn
+ * the first run wrote, and two accounts importing one transcript never share
+ * a turn.
+ */
+export function importedTurnId(conversationId: string, openingRecordId: string): string {
+  return hostMintedId([ID_KIND.IMPORTED_TURN, conversationId, openingRecordId]);
 }
 
 /** The id a reasoning item stands under, since the runtime's stream carries none of the provider's. */

@@ -15,15 +15,15 @@ import {
   type AgentMachineKind,
   type AgentPayer,
   type AgentPullRequest,
-  type AgentSource,
   type AgentSubagentTitle,
   agentPayerSchema,
   agentPullRequestSchema,
-  agentSourceSchema,
   CONTEXT_WINDOW,
   type ContextWindow,
   contextWindowSchema,
   PULL_REQUEST_STATE,
+  type StoredAgentSource,
+  storedAgentSourceSchema,
 } from "@repo/features/agent-wire";
 import { automationFiringSchema } from "@repo/features/automation-wire";
 import { GITHUB_ACCESS, type GitHubAccess } from "@repo/features/github-repositories-wire";
@@ -186,8 +186,8 @@ export interface Agent {
   readonly automationRunId: string | null;
   /** The agent of the same plan this one was started from, with its replay's counts; null for one started afresh. */
   readonly startedFrom: StoredStartedFrom | null;
-  /** What outside the app the agent was started from, a Slack message; null for one started in the app, and absent where a caller built the agent without it. */
-  readonly source?: AgentSource | null;
+  /** What outside the app the agent came from, a Slack message or an imported chat; null for one started in the app, and absent where a caller built the agent without it. */
+  readonly source?: StoredAgentSource | null;
   /** The account's coding agent whose `start_agent` started this one; null for any other starter, and once that agent's row is gone. */
   readonly startedByAgentId: string | null;
   readonly conversationId: string;
@@ -292,8 +292,8 @@ export type NewAgent = AgentPlace & {
   readonly automationRunId?: string | undefined;
   /** The agent of the same plan this one is started from, with its replay's counts; none for one started afresh. */
   readonly startedFrom?: StoredStartedFrom | undefined;
-  /** What outside the app starts the agent, a Slack message; none for a Start in the app. */
-  readonly source?: AgentSource | undefined;
+  /** What outside the app the agent comes from, a Slack message or an imported chat; none for a Start in the app. */
+  readonly source?: StoredAgentSource | undefined;
   /** The coding agent whose `start_agent` starts this one; none for a Start by a member, the brain, or an automation. */
   readonly startedByAgentId?: string | undefined;
   /** The agent's title from the start, a run's fixed name; none where it is named later. */
@@ -524,7 +524,7 @@ const AgentRowSchema = Schema.Struct({
   automationOrigin: AutomationOriginColumnSchema,
   automationRunId: Schema.NullOr(Schema.String),
   startedFrom: StartedFromColumnSchema,
-  source: Schema.NullOr(agentSourceSchema),
+  source: Schema.NullOr(storedAgentSourceSchema),
   startedByAgentId: Schema.NullOr(Schema.String),
   conversationId: Schema.String,
   model: Schema.String,
@@ -690,7 +690,7 @@ const insertAgent = SqlSchema.findOne({
     automationOrigin: AutomationOriginColumnSchema,
     automationRunId: Schema.NullOr(Schema.String),
     startedFrom: StartedFromColumnSchema,
-    source: Schema.NullOr(agentSourceSchema),
+    source: Schema.NullOr(storedAgentSourceSchema),
     startedByAgentId: Schema.NullOr(Schema.String),
     title: Schema.NullOr(Schema.String),
     idempotencyKey: Schema.String,
@@ -995,6 +995,23 @@ const updateAgentTitle = SqlSchema.findOneOption({
       db
         .update(agentTable)
         .set({ title })
+        .where(reachableAgent(userId, agentId))
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
+    ),
+});
+
+const updateAgentSource = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    source: storedAgentSourceSchema,
+  }),
+  Result: CommittedAgentRowSchema,
+  execute: ({ userId, agentId, source }) =>
+    Database.use((db) =>
+      db
+        .update(agentTable)
+        .set({ source })
         .where(reachableAgent(userId, agentId))
         .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
     ),
@@ -3034,6 +3051,23 @@ export function renameAgent(
   title: string | null,
 ): AgentStoreEffect<Option.Option<Agent>> {
   return Effect.map(renameAgentCommitted(userId, agentId, title), Option.map(agentOf));
+}
+
+/**
+ * The agent's source recorded after it was made, as an import records where
+ * its transcript came from once the whole of it is written, so an agent
+ * with none is one an import left unfinished. Answers the agent as it then
+ * stands; none where the account reaches no such agent.
+ */
+export function recordAgentSource(
+  userId: string,
+  agentId: string,
+  source: StoredAgentSource,
+): AgentStoreEffect<Option.Option<Agent>> {
+  return Effect.map(
+    updateAgentSource({ userId, agentId, source }),
+    Option.map(({ txid: _txid, ...agent }): Agent => agent),
+  );
 }
 
 /** An agent as a write left it, and the transaction it committed in; none where it changed no row. */

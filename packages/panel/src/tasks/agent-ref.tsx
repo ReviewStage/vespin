@@ -126,6 +126,7 @@ export function agentCardReading(
           ? undefined
           : archivedByReading(agent.archivedBy, agents.me),
       fromSlack: agent.source?.kind === AGENT_SOURCE.SLACK,
+      fromConductor: agent.imported?.from === AGENT_SOURCE.CONDUCTOR,
     };
   };
 }
@@ -155,6 +156,7 @@ export function lineSubject(
     automationName: line.automationName,
     tile: agentActor(line, name),
     fromSlack: line.source?.kind === AGENT_SOURCE.SLACK,
+    fromConductor: line.imported?.from === AGENT_SOURCE.CONDUCTOR,
   };
 
   return { name, tile: agentActor(line, name), read: () => reading };

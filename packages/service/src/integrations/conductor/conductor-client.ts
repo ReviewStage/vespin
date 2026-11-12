@@ -20,6 +20,7 @@
  * that leaves that field out and is never kept whole.
  */
 
+import { WireValueSchema } from "@repo/wire";
 import { Data, Duration, Effect, flow, type Redacted, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
@@ -59,7 +60,7 @@ const QUERY = {
 } as const;
 
 /** The stored message kinds the import reads; a record of any other kind is left out. */
-const CONDUCTOR_MESSAGE_TYPE = {
+export const CONDUCTOR_MESSAGE_TYPE = {
   USER_MESSAGE: "userMessage",
   AGENT: "agent",
 } as const;
@@ -152,13 +153,23 @@ const ConductorAgentMessageSchema = Schema.Struct({
   id: Schema.String,
   type: Schema.Literal(CONDUCTOR_MESSAGE_TYPE.AGENT),
   receivedAt: Schema.String,
-  content: Schema.Struct({ rawPayload: Schema.Unknown }),
+  content: Schema.Struct({ rawPayload: WireValueSchema }),
 });
 
 const ConductorMessageSchema = Schema.Union([
   ConductorUserMessageSchema,
   ConductorAgentMessageSchema,
 ]);
+
+export type ConductorWorkspace = typeof ConductorWorkspaceSchema.Type;
+
+export type ConductorChat = typeof ConductorChatSchema.Type;
+
+export type ConductorUserMessage = typeof ConductorUserMessageSchema.Type;
+
+export type ConductorAgentMessage = typeof ConductorAgentMessageSchema.Type;
+
+export type ConductorMessage = typeof ConductorMessageSchema.Type;
 
 /** One stored record before its kind is known, so a kind this build does not read is left out rather than failing the chat. */
 const StoredRecordSchema = Schema.Struct({ type: Schema.String });
