@@ -198,8 +198,10 @@ export interface MenuAction {
   icon?: React.JSX.Element;
   /** A muted second line under the label, such as who shares a workspace, which a reader hears after it. */
   detail?: string | undefined;
-  /** A quiet mark right after the label, such as an experiment's Experimental tag; it names itself to a reader. */
+  /** A quiet mark right after the label, such as an experiment's Experimental tag or a default's Default, on the label's own line where a detail stands under it; it names itself to a reader, or is heard in `tagWords` where the item has a detail. */
   tag?: React.ReactNode;
+  /** The tag's words, heard after the label where the item is named by its label and detail together, which hides the tag's own words from a reader. */
+  tagWords?: string | undefined;
   /** Where the detail stands: under the label where none is said, or beside it. */
   detailPlace?: MenuDetailPlace | undefined;
   onSelect: () => void;
@@ -736,13 +738,17 @@ function ItemEnd({ action }: { action: MenuAction }): React.JSX.Element | null {
 
 /**
  * What a reader hears an item as, where its label alone does not say it all:
- * its label, then its detail and the wait it stands for, each after a pause,
- * because the spans would otherwise run together.
+ * its label, then its tag's words, its detail, and the wait it stands for,
+ * each after a pause, because the spans would otherwise run together.
  */
 function heardOf(action: MenuAction): string | undefined {
-  const after = [action.detail, action.busy].filter((words) => words !== undefined);
+  if (action.detail === undefined && action.busy === undefined) return undefined;
 
-  return after.length === 0 ? undefined : [action.label, ...after].join(", ");
+  const after = [action.tagWords, action.detail, action.busy].filter(
+    (words) => words !== undefined,
+  );
+
+  return [action.label, ...after].join(", ");
 }
 
 /** Whether an item draws its detail as a second line under its label, which the item grows to hold. */
@@ -816,12 +822,21 @@ function ItemBody({
         )}
         data-place={beside ? MENU_DETAIL.BESIDE : undefined}
       >
-        <OneLine
-          className={cn("ui-menu-item-label min-w-0", beside ? "flex-initial" : "flex-none")}
-          words={action.label}
-        >
-          <ItemWords masked={action.replayMasked}>{action.label}</ItemWords>
-        </OneLine>
+        {action.tag === undefined || beside ? (
+          <OneLine
+            className={cn("ui-menu-item-label min-w-0", beside ? "flex-initial" : "flex-none")}
+            words={action.label}
+          >
+            <ItemWords masked={action.replayMasked}>{action.label}</ItemWords>
+          </OneLine>
+        ) : (
+          <span className="ui-menu-item-tagged flex min-w-0 flex-none items-center gap-ui-8">
+            <OneLine className="ui-menu-item-label min-w-0" words={action.label}>
+              <ItemWords masked={action.replayMasked}>{action.label}</ItemWords>
+            </OneLine>
+            {action.tag}
+          </span>
+        )}
         {action.detailPlace === MENU_DETAIL.WRAPPED ? (
           <span className="ui-menu-item-detail whitespace-normal">
             <ItemWords masked={detailMasked}>{action.detail}</ItemWords>

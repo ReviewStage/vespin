@@ -769,11 +769,7 @@ export function MainTabBars({
       actions={
         <>
           {phone || run === undefined || chosen === undefined ? null : (
-            <RunActionsButton
-              offer={run}
-              agentGlyph={chosen.look.icon}
-              agentName={chosen.look.label}
-            />
+            <RunActionsButton offer={run} agentName={chosen.look.label} />
           )}
           <AgentHistory
             main={main}
