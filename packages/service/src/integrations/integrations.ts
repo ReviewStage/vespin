@@ -326,19 +326,6 @@ export const INTEGRATION = {
     DESCRIPTION:
       "Mercury, the developer's company banking, as their own account sees it: read accounts, balances, transactions, cards, recipients, invoices, and treasury, categorize and annotate transactions, and request payments and transfers, which an approver confirms in Mercury.",
   },
-  /*
-   * Mintlify's admin server, not a docs site's own search server at `/mcp`;
-   * one grant may reach several projects (`list_deployments`), so no one of
-   * them names the account
-   * (https://www.mintlify.com/docs/ai/mintlify-mcp).
-   */
-  [INTEGRATION_PROVIDER.MINTLIFY]: {
-    CONNECTOR_VARIABLE: "MINTLIFY_CONNECTOR_UID",
-    ALLOWED_ACCOUNTS_VARIABLE: "MINTLIFY_ALLOWED_ACCOUNTS",
-    MCP_URL: "https://mcp.mintlify.com",
-    DESCRIPTION:
-      "Mintlify, the developer's documentation sites, as their own account sees it: search and read pages, edit pages, navigation, and docs.json on a branch, review diffs, publish or open pull requests, check deployments, and manage comments, automations, and settings.",
-  },
   [INTEGRATION_PROVIDER.NEON]: {
     CONNECTOR_VARIABLE: "NEON_CONNECTOR_UID",
     ALLOWED_ACCOUNTS_VARIABLE: "NEON_ALLOWED_ACCOUNTS",
