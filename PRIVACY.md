@@ -25,6 +25,14 @@ or linking GitHub later, authorizes the Vespin GitHub App; we store its
 OAuth tokens encrypted on the Service and never send them to your Mac or
 browser.
 
+### Voice calls
+
+When you talk to an agent by voice, your audio goes from the app to OpenAI, on
+your own OpenAI API key, and nowhere else; the key never leaves the Service.
+What you say reaches the agent as its messages, as a typed line does, and is
+kept in its conversation like one. We keep nothing else of a call but its
+length, which counts toward your day and in our usage counts.
+
 ### Workspaces, tasks, and descriptions
 
 Every account gets a first workspace, and you can create or join others.
@@ -406,7 +414,7 @@ We do not use your code or conversations to train AI models.
 We do not sell your personal information or use it for advertising. We share
 data with:
 
-- **AI providers:** your agents, web search, dictation, and pull request
+- **AI providers:** your agents, web search, dictation, voice calls, and pull request
   chapters run on Anthropic or OpenAI, always on the API key or subscription
   you saved, never ours. Titles, of your agents, tasks, and the threads you
   start, are generated on Anthropic under Vespin's own API key, from excerpts

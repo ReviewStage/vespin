@@ -154,7 +154,7 @@ export const SETTINGS_SECTION = {
   GITHUB_REPOSITORIES: "workspace-github-repositories",
   /** Claude's row on Agents: the account's Claude plan and Anthropic key, anchored as its search result is. */
   CLAUDE: SETTINGS_SEARCH_ROW.API_KEY_ANTHROPIC,
-  /** Codex's row on Agents: the account's ChatGPT plan and OpenAI key, which dictation runs on too. */
+  /** Codex's row on Agents: the account's ChatGPT plan and OpenAI key, which dictation and voice run on too. */
   CODEX: SETTINGS_SEARCH_ROW.API_KEY_OPENAI,
   /** The account's GitHub personal access token row, where a member saves the token that adds repositories to a workspace. */
   GITHUB_TOKEN: SETTINGS_SEARCH_ROW.GITHUB_ACCESS,
