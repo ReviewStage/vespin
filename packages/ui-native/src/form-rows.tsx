@@ -37,6 +37,8 @@ type WordsFieldProps = {
   readonly testId?: string | undefined;
   /** What VoiceOver hears the field as, where its placeholder alone would not say what it holds once words are typed. */
   readonly label?: string | undefined;
+  /** Holds the words as they stand, such as while they are being sent. */
+  readonly disabled?: boolean | undefined;
 };
 
 /**
@@ -52,6 +54,7 @@ export function WordsField({
   autoFocus = false,
   testId,
   label,
+  disabled = false,
 }: WordsFieldProps) {
   const colors = useColors();
   const text = useNativeState(initialWords);
@@ -67,6 +70,7 @@ export function WordsField({
         font({ textStyle: TYPE_ROLE.ROW_TITLE }),
         lineLimit(WORDS_LINES),
         listRowBackground(colors.SURFACE),
+        SwiftModifiers.disabled(disabled),
         ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
         ...(label === undefined ? [] : [accessibilityLabel(label)]),
       ]}

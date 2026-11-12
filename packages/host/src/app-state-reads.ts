@@ -40,6 +40,7 @@ import type { ReadonlyRecord } from "effect/Record";
 import {
   type AppHistories,
   type AppHostRead,
+  type AppMemories,
   type AppStateDelivery,
   type AppStateSnapshot,
   type AppTranscript,
@@ -670,6 +671,13 @@ export function selectIntegrations(
   const accountId = signedInAccountId(state.account);
 
   return accountId === undefined ? undefined : state[LIVE_READ.INTEGRATIONS][accountId];
+}
+
+/** The memories the host holds for one workspace, with every save and delete drawn over them (`ACT_KIND.MEMORIES_FOLLOW`), as a `select`; none before they are read. */
+export function selectWorkspaceMemories(
+  workspaceId: string,
+): (state: AppStateSnapshot) => AppMemories[string] | undefined {
+  return (state) => state[LIVE_READ.MEMORIES][workspaceId];
 }
 
 /** Whether the reader pinned the agent, as the task list follows their pins, as a `select`. */

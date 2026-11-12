@@ -1,7 +1,7 @@
-// memory.tsx -- Settings' Memory page for the workspace the app works in: the facts and conventions its agents kept, most recalled first, searched from the bar, and deleted with a swipe, asked first, where the reader may.
+// memory.tsx -- Settings' Memory page for the workspace the app works in: the facts and conventions its agents kept, most recalled first, searched from the bar, added from the bar's +, and edited with a press or deleted with a swipe, asked first, where the reader may.
 
-import { LIVE_READ } from "@repo/features/live-wire";
 import {
+  ADD_MEMORY,
   forgetQuestion,
   MEMORY_ACT,
   MEMORY_PAGE_WORDS,
@@ -16,8 +16,7 @@ import { agoText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppStateSnapshot } from "@repo/host/app-state";
-import { selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectWorkspaceMemories, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   ConfirmAsk,
   EmptyState,
@@ -25,14 +24,16 @@ import {
   NoteRow,
   Screen,
   SettingsForm,
+  useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack } from "expo-router";
-import { useCallback, useState } from "react";
+import { Stack, useRouter } from "expo-router";
+import { useMemo, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
+import { SETTINGS_ROUTE } from "../../settings-button.js";
 import { useWrite } from "../../use-write.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
@@ -46,11 +47,6 @@ const FORMER_KEEPER = "Former member";
 /** Says on the console a read asked again that did not go; the page still says the read failed. */
 function retryLost(cause: unknown): void {
   console.error("Reading the memories again did not go.", cause);
-}
-
-/** The memories the host holds for one workspace, as a `select`; none until read. */
-function heldMemories(workspaceId: string) {
-  return (state: AppStateSnapshot) => state[LIVE_READ.MEMORIES][workspaceId];
 }
 
 /** Whose words a memory holds, as the search reads them. */
@@ -76,6 +72,8 @@ export default function MemoryScreen() {
 }
 
 function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
+  const colors = useColors();
+  const router = useRouter();
   const acts = useHostActs();
   const write = useWrite();
   const workspaceId = workspace.id;
@@ -85,7 +83,7 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
 
   const { data: held } = useQuery({
     ...appStateQuery,
-    select: useCallback(heldMemories(workspaceId), [workspaceId]),
+    select: useMemo(() => selectWorkspaceMemories(workspaceId), [workspaceId]),
   });
 
   const memories = held?.rows;
@@ -138,6 +136,18 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
               words={memory.text}
               line={memoryLine(memory, now)}
               badge={memoryUse(memory, now)}
+              edit={
+                memory.forgettable
+                  ? {
+                      label: MEMORY_ACT.EDIT,
+                      onPress: () =>
+                        router.push({
+                          pathname: SETTINGS_ROUTE.MEMORY_EDIT,
+                          params: { memory: memory.id },
+                        }),
+                    }
+                  : undefined
+              }
               remove={
                 memory.forgettable
                   ? { label: MEMORY_ACT.FORGET, onPress: () => setAsked(memory) }
@@ -158,6 +168,15 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
           onCancelButtonPress={() => setQuery("")}
         />
       </Stack.Screen>
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          icon="plus"
+          tintColor={colors.TEXT}
+          accessibilityLabel={ADD_MEMORY}
+          disabled={memories === undefined}
+          onPress={() => router.push(SETTINGS_ROUTE.MEMORY_EDIT)}
+        />
+      </Stack.Toolbar>
       <Screen>{body}</Screen>
       <ConfirmAsk
         title={question.title}
