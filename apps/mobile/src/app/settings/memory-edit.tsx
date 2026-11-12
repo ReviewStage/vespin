@@ -2,6 +2,7 @@
 
 import {
   MEMORY_EDITOR_WORDS,
+  MEMORY_PAGE_WORDS,
   MEMORY_SAVE_FAILED,
   memorySaveRefusal,
 } from "@repo/features/memory-settings-words";
@@ -13,9 +14,11 @@ import {
   ConfirmAsk,
   EmptyState,
   ListSection,
+  NOTICE_KIND,
   Screen,
   SettingsForm,
   useColors,
+  useFailureNotices,
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -24,6 +27,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
+import { useLiveFollow } from "../../host/live-follow.js";
 import { DISCARD_WORDS, useKeptWords } from "../../use-kept-words.js";
 import { useWrite } from "../../use-write.js";
 
@@ -68,6 +72,7 @@ function MemoryEditor({
   const router = useRouter();
   const acts = useHostActs();
   const write = useWrite();
+  const notices = useFailureNotices();
 
   const { data: held } = useQuery({
     ...appStateQuery,
@@ -76,32 +81,40 @@ function MemoryEditor({
 
   const rows = held?.rows;
   const live = memoryId === undefined ? undefined : rows?.find((each) => each.id === memoryId);
-  // Note that the memory is kept as the page opened on it, since a save is drawn over the list the moment it is sent, and the words it held must not change under the field.
-  const [memory] = useState(live);
+  // Note that the memory is kept as it was first read, since a save is drawn over the list the moment it is sent, and the words it held must not change under the field.
+  const [memory, setMemory] = useState(live);
+
+  if (memory === undefined && live !== undefined) setMemory(live);
   const [words, setWords] = useState<string | undefined>(undefined);
   const [note, setNote] = useState<string | undefined>(undefined);
   // Whether a save is out, or went and the page is leaving.
   const [saving, setSaving] = useState(false);
 
+  // An edit waits on the memories' read, which the page follows itself, since it may be opened before Memory read them.
+  const reading = memoryId !== undefined && rows === undefined;
+
   const gone =
     memoryId !== undefined &&
-    (memory === undefined || (!saving && rows !== undefined && live === undefined));
+    rows !== undefined &&
+    (memory === undefined || (!saving && live === undefined));
 
   // Whether a save is out, read at the press itself.
   const out = useRef(false);
   // Whether the page still stands, since a save that lands after it was left must not go back from the screen in front.
   const standing = useRef(true);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    standing.current = true;
+
+    return () => {
       standing.current = false;
-    },
-    [],
-  );
+    };
+  }, []);
+  useLiveFollow(workspaceId, (id) => acts[ACT_KIND.MEMORIES_FOLLOW]({ workspaceId: id }));
 
   const saved = memory?.text ?? "";
   const text = (words ?? saved).trim();
   const tooLong = text.length > MEMORY_BOUNDS.MAX_CHARS;
-  const changed = !gone && text !== saved.trim();
+  const changed = !reading && !gone && text !== saved.trim();
   const kept = useKeptWords(changed);
 
   const save = () => {
@@ -120,7 +133,11 @@ function MemoryEditor({
       {
         refused: memorySaveRefusal,
         unanswered: MEMORY_SAVE_FAILED,
-        inPlace: setNote,
+        // Note that a refusal landing after the page was left says why in the failure notice, since its words have nowhere else to stand.
+        inPlace: (refusal) => {
+          if (standing.current) setNote(refusal);
+          else notices.say({ kind: NOTICE_KIND.REFUSED, words: refusal });
+        },
         went: BUZZ.SUCCESS,
       },
     ).then((went) => {
@@ -166,7 +183,9 @@ function MemoryEditor({
         onDismiss={kept.stay}
       />
       <Screen>
-        {gone ? (
+        {reading ? (
+          <EmptyState title={MEMORY_PAGE_WORDS.READING} symbol={MEMORY_SYMBOL} loading />
+        ) : gone ? (
           <EmptyState title={MEMORY_EDITOR_WORDS.GONE} symbol={MEMORY_SYMBOL} />
         ) : (
           <SettingsForm>
@@ -178,6 +197,7 @@ function MemoryEditor({
                 onWords={setWords}
                 testId={WORDS_TEST_ID}
                 label={title}
+                disabled={saving}
               />
             </ListSection>
           </SettingsForm>

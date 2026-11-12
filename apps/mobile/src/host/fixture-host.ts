@@ -36,6 +36,8 @@ import {
   type PullRequestMove,
   pullRequestMoveOf,
   pullRequestPartsAppState,
+  type SavedMemoryWords,
+  savedMemoriesAppState,
 } from "@repo/host/fixture-inbox";
 import { FIXTURE_IDS } from "@repo/host/fixture-stage";
 import { Predicate } from "effect";
@@ -72,6 +74,12 @@ const REMINDERS = new WeakMap<object, InboxReminders>();
 
 /** No reminder set yet. */
 const NO_REMINDERS: InboxReminders = new Map();
+
+/** The words each run saved over the fixture's memories, by the store the run stages, each map replaced whole as one is saved. */
+const MEMORY_WORDS = new WeakMap<object, SavedMemoryWords>();
+
+/** No memory's words saved yet. */
+const NO_MEMORY_WORDS: SavedMemoryWords = new Map();
 
 /** What each run changed of the fixture's agents, by the store the run stages, each map replaced whole as one is changed. */
 const CHOICES = new WeakMap<object, AgentChoices>();
@@ -125,7 +133,10 @@ export function stageFixture(
     OLDER_ASKS.get(state) ?? 0,
   );
 
-  const reminded = inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS);
+  const reminded = savedMemoriesAppState(
+    inboxRemindersAppState(parts, REMINDERS.get(state) ?? NO_REMINDERS),
+    MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS,
+  );
 
   const staged = {
     ...reminded,
@@ -146,6 +157,21 @@ function keepReminder(
   // SAFETY: the payload is the kind's, which the guard above names.
   const { itemId, until } = payload as PortActPayload<typeof ACT_KIND.AGENTS_INBOX_REMIND>;
   REMINDERS.set(state, new Map(REMINDERS.get(state) ?? NO_REMINDERS).set(itemId, until));
+  stageFixture(state);
+}
+
+/** Keeps the words of a memory the fixture saved over one of its own, and lays them over the document at once, as the host draws a correction; nothing for a new memory, which the host draws only as a read carries it, or for any other act. */
+function keepMemory(
+  state: Pick<AppStateStore, "snapshot" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): void {
+  if (kind !== ACT_KIND.MEMORIES_SAVE) return;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const { text, replaces } = payload as PortActPayload<typeof ACT_KIND.MEMORIES_SAVE>;
+
+  if (replaces === undefined) return;
+  MEMORY_WORDS.set(state, new Map(MEMORY_WORDS.get(state) ?? NO_MEMORY_WORDS).set(replaces, text));
   stageFixture(state);
 }
 
@@ -273,6 +299,8 @@ export function fixtureActs(
         keepReminder(state, kind as PortActKind, payload);
         // SAFETY: as above.
         keepChoice(state, kind as PortActKind, payload);
+        // SAFETY: as above.
+        keepMemory(state, kind as PortActKind, payload);
 
         return Promise.resolve(staged.answer);
       };

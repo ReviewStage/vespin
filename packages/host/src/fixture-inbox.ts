@@ -1752,6 +1752,34 @@ export function inboxRemindersAppState(
   };
 }
 
+/** The words a fixture run saved over its memories, by the memory's id. */
+export type SavedMemoryWords = ReadonlyMap<string, string>;
+
+/** The fixture workspace's memories with the words a run saved over them, as the host draws a correction the moment it is sent; the document handed in where none was saved. */
+export function savedMemoriesAppState(
+  state: AppStateSnapshot,
+  words: SavedMemoryWords,
+): AppStateSnapshot {
+  const held = state[LIVE_READ.MEMORIES][FIXTURE_IDS.WORKSPACE];
+  const rows = held?.rows;
+
+  if (words.size === 0 || held === undefined || rows === undefined) return state;
+
+  const saved = rows.map((memory) => {
+    const text = words.get(memory.id);
+
+    return text === undefined ? memory : { ...memory, text, updatedAt: LANDED };
+  });
+
+  return {
+    ...state,
+    [LIVE_READ.MEMORIES]: {
+      ...state[LIVE_READ.MEMORIES],
+      [FIXTURE_IDS.WORKSPACE]: { ...held, rows: saved },
+    },
+  };
+}
+
 /**
  * What a fixture run changed of one of its agents: its model and effort, its
  * permission mode, the servers switched off, its name, and the reader's pin.

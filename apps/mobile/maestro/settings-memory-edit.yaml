@@ -2,9 +2,10 @@
 #
 # Launched on the host's Inbox fixture, whose act door keeps a memory's
 # words as the service would (`@repo/host/fixture-inbox`), so no server is
-# reached. The host draws a correction over its memory the moment it is
-# sent, and a new memory only as the next read carries it, which the
-# fixture never sends, so the new one is not looked for on the list.
+# reached. The fixture lays a correction over its memory the moment it is
+# sent, as the host draws one (`fixture-host.ts`), and a new memory only as
+# the next read carries it, which the fixture never sends, so the new one
+# is not looked for on the list.
 appId: dev.vespin.ios
 ---
 - launchApp:
