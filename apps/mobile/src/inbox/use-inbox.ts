@@ -270,12 +270,19 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
         ? INBOX_FEED.READING
         : home === HOME_READ.FAILED
           ? INBOX_FEED.FAILED
-          : homed.read;
+          : homed.read !== INBOX_FEED.ANSWERED
+            ? homed.read
+            : // Note that a task's inbox read before the task list holds its task waits on that list, as a thread of the feed does.
+              tasksRead === TASKS_READ.READY
+              ? answered
+              : tasksRead === TASKS_READ.FAILED
+                ? INBOX_FEED.FAILED
+                : INBOX_FEED.READING;
 
   // Try again reads anew what failed: where the thread stands, its task's own inbox, or the feed and the task list that hold it.
   const retry = () => {
     if (lookedFor && home === HOME_READ.FAILED) again();
-    else if (lookedFor && found !== undefined) homed.again();
+    else if (lookedFor && homed.read === INBOX_FEED.FAILED) homed.again();
     else {
       acts[ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]().catch(refused("Reading the inbox again"));
       acts[ACT_KIND.TASKS_REFRESH]().catch(refused("Reading the task list again"));
@@ -330,7 +337,7 @@ interface ItemHome {
 function useItemHome(id: string | undefined, asked: boolean): ItemHome {
   const acts = useHostActs();
 
-  const { data, refetch } = useQuery({
+  const { data, refetch, isFetching } = useQuery({
     queryKey: [ITEM_HOME_KEY, id],
     enabled: asked && id !== undefined,
     queryFn: (): Promise<HomeRead> =>
@@ -350,7 +357,8 @@ function useItemHome(id: string | undefined, asked: boolean): ItemHome {
   });
 
   return {
-    home: asked ? data : undefined,
+    // Note that a read asked again stands as still read, rather than as the failure it is read again for.
+    home: !asked || (isFetching && data === HOME_READ.FAILED) ? undefined : data,
     again: () =>
       void refetch().catch((cause: unknown) =>
         console.error("Where the thread stands was not read again.", cause),

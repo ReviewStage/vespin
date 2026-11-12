@@ -217,7 +217,9 @@ function AddMenu({ menu }: { readonly menu: ComposerMenu }) {
           onPress={action.onPress}
         />
       ))}
-      {submenus.length === 0 && switches.length === 0 ? null : <Divider />}
+      {menu.actions.length === 0 || (submenus.length === 0 && switches.length === 0) ? null : (
+        <Divider />
+      )}
       {submenus.map((submenu) => (
         <BarMenuButton key={submenu.label} menu={submenu} />
       ))}

@@ -385,6 +385,7 @@ export function useThreadAnswer(
     const key = randomUUID();
     const revision = awaitsNod(item) ? item.revision : undefined;
     hold(itemId, (was) => ({
+      ...was,
       draft: EMPTY_INBOX_DRAFT,
       note: undefined,
       sending: new Map(was.sending).set(key, {

@@ -75,7 +75,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useInboxActs,
@@ -497,9 +497,23 @@ function ThreadDetail({
   useScreenActivity((all) => threadActivity(listed, all));
   const router = useRouter();
 
-  // A thread the box started opens in this one's place, as the panel opens it.
-  const openStarted = (id: string) =>
-    place.inStack ? router.replace(`/inbox/${encodeURIComponent(id)}`) : place.onOpen(id);
+  // Whether this thread still stands, so a start that answers after the reader left it opens nothing over where they went.
+  const shown = useRef(false);
+  useEffect(() => {
+    shown.current = true;
+
+    return () => {
+      shown.current = false;
+    };
+  }, []);
+
+  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands.
+  const openStarted = (id: string) => {
+    if (!shown.current) return;
+
+    if (place.inStack) router.replace(`/inbox/${encodeURIComponent(id)}`);
+    else place.onOpen(id);
+  };
 
   const answer = useThreadAnswer(listed, openStarted);
   const remind = useRemindSheet();
