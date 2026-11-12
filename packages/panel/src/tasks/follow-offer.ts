@@ -22,7 +22,7 @@ import { MESSAGE_ROLE, type TaskFollowerWire } from "@repo/wire";
 export interface FollowOfferInput {
   /** The transcript's rows, oldest first, as read back. */
   readonly messages: readonly AgentTranscriptMessage[];
-  /** The words of the reader's lines sent from this tab and not yet read back, in the order they went. */
+  /** The words of the reader's lines sent from this tab still on their way, not yet read back, in the order they went; a refused line is none of them. */
   readonly pending: readonly string[];
   readonly readerId: string | undefined;
   /** The task's followers; none while they are unread or Following is off, which offers no one. */

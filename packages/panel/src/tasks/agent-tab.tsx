@@ -3121,7 +3121,16 @@ function AgentTabView({
   );
 
   const lines = useMemo(() => agentLines(kept, composer.sent), [kept, composer.sent]);
-  const pendingWords = useMemo(() => composer.sent.map((line) => line.text), [composer.sent]);
+
+  // Note that only a line still on its way is the reader's newest, since a refused one never reached the agent.
+  const pendingWords = useMemo(
+    () =>
+      composer.sent
+        .filter((line) => line.state === SENT_LINE_STATE.PENDING)
+        .map((line) => line.text),
+    [composer.sent],
+  );
+
   const queue = useAgentQueue(agent.id, transcript.queue);
   const pictures = useAgentPictureDoor(agent.id);
   const queueEditing = useQueueEditing(composer, queue, pictures);
