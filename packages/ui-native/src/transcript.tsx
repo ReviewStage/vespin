@@ -31,6 +31,7 @@ import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { useDockRoom } from "./glass-bar.js";
 import { isLucideSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
+import { CopyWordsMenu } from "./held-menu.js";
 import { Markdown, Picture } from "./markdown.js";
 import { ToneGlyph } from "./marks.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
@@ -113,6 +114,8 @@ const styles = StyleSheet.create({
   content: { paddingVertical: SPACE.ROW },
   row: { paddingHorizontal: SPACE.EDGE, paddingVertical: SPACE.TIGHT },
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
+  // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
+  saidHeld: { alignSelf: "stretch", alignItems: "flex-end" },
   said: {
     maxWidth: "82%",
     borderRadius: 18,
@@ -474,14 +477,18 @@ function TranscriptRow({
               {item.sender}
             </Text>
           )}
-          <View style={[styles.said, { backgroundColor: colors.SIDEBAR }]}>
-            <Markdown
-              words={item.words}
-              typed
-              repository={drawing.repository}
-              onOpenLink={drawing.onOpenLink}
-            />
-          </View>
+          <CopyWordsMenu words={item.words}>
+            <View style={styles.saidHeld}>
+              <View style={[styles.said, { backgroundColor: colors.SIDEBAR }]}>
+                <Markdown
+                  words={item.words}
+                  typed
+                  repository={drawing.repository}
+                  onOpenLink={drawing.onOpenLink}
+                />
+              </View>
+            </View>
+          </CopyWordsMenu>
           {item.sent === undefined ? null : (
             <Text style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}>
               {item.sent}
@@ -509,11 +516,15 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.WORDS:
       return (
         <View style={[styles.row, inset(item.depth), { paddingVertical: SPACE.TIGHT + 2 }]}>
-          <Markdown
-            words={item.words}
-            repository={drawing.repository}
-            onOpenLink={drawing.onOpenLink}
-          />
+          <CopyWordsMenu words={item.words}>
+            <View>
+              <Markdown
+                words={item.words}
+                repository={drawing.repository}
+                onOpenLink={drawing.onOpenLink}
+              />
+            </View>
+          </CopyWordsMenu>
         </View>
       );
     case TRANSCRIPT_ITEM.CALL:

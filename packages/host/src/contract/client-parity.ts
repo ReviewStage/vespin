@@ -104,8 +104,16 @@ const IOS = {
   COMPOSER: notYet(
     "iOS's New task and New agent sheets offer no Try again, skills, or warm-keeping yet",
   ),
-  COPY: notYet("iOS v1 has nothing to copy or save yet"),
+  COPY_PICTURE: byDesign(
+    "iOS copies a picture to the system's pasteboard itself (expo-clipboard), from its long press or the viewer's share button",
+  ),
+  COPY_RICH: notYet(
+    "iOS draws no draft card yet; a message's long press copies its Markdown as plain words",
+  ),
   PASTEBOARD: byDesign("iOS copies to the system's pasteboard itself (expo-clipboard)"),
+  SAVE_FILE: byDesign(
+    "iOS saves a file from its long press through the system's share sheet (Save to Files), and a picture or a recording to Photos",
+  ),
   DESKTOP_ONLY: byDesign("A desktop-only platform concern, refused by the iOS host"),
   DESK_TOOLS: byDesign("iOS v1 leaves the terminal and the live view to the desktop and the web"),
   DICTATION: byDesign("iOS uses the keyboard's own dictation"),
@@ -418,9 +426,9 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.CONTACT_EMAIL]: panel(IOS.CONTACT_MAIL),
   [PORT_ACT_KIND.WINDOW_FOCUS_PANEL]: panel(IOS.ONE_SCREEN),
   [PORT_ACT_KIND.WINDOW_COPY_TEXT]: panel(IOS.PASTEBOARD),
-  [PORT_ACT_KIND.WINDOW_COPY_IMAGE]: panel(IOS.COPY),
-  [PORT_ACT_KIND.WINDOW_COPY_RICH]: panel(IOS.COPY),
-  [PORT_ACT_KIND.WINDOW_SAVE_FILE]: panel(IOS.COPY),
+  [PORT_ACT_KIND.WINDOW_COPY_IMAGE]: panel(IOS.COPY_PICTURE),
+  [PORT_ACT_KIND.WINDOW_COPY_RICH]: panel(IOS.COPY_RICH),
+  [PORT_ACT_KIND.WINDOW_SAVE_FILE]: panel(IOS.SAVE_FILE),
   [PORT_ACT_KIND.WINDOW_CAPTURE]: desktopOnly(WEB.TAB_SWITCHER, IOS.ONE_SCREEN),
   [PORT_ACT_KIND.WINDOW_UNSAVED_WORK]: desktopOnly(
     WEB.UNSAVED_WORK,

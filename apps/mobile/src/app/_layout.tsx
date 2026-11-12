@@ -3,7 +3,7 @@
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { FailureNoticeProvider } from "@repo/ui-native";
+import { FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { hide as hideSplash } from "expo-splash-screen";
@@ -12,6 +12,7 @@ import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
 import { useInboxWidget } from "../inbox-widget/use-inbox-widget.js";
+import { useKeeping } from "../keeping.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
@@ -111,6 +112,15 @@ function GuardedScreens() {
   );
 }
 
+/** The screens, under what their pictures', recordings', files', and messages' menus do, which says its failures in the notice above them. */
+function KeptScreens() {
+  return (
+    <KeepingProvider keeping={useKeeping()}>
+      <GuardedScreens />
+    </KeepingProvider>
+  );
+}
+
 /**
  * The root, with the splash taken down once it first draws. Note that
  * expo-router takes the splash down once a launch, a frame after its
@@ -125,7 +135,7 @@ export default function RootLayout() {
   return (
     <HostProvider>
       <FailureNoticeProvider>
-        <GuardedScreens />
+        <KeptScreens />
       </FailureNoticeProvider>
     </HostProvider>
   );

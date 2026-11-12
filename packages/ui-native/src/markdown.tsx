@@ -21,6 +21,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type Glyph, isLucideSymbol } from "./glyph.js";
+import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
+import { KEPT_KIND } from "./keep-model.js";
 import {
   COLUMN_ALIGN,
   type ColumnAlign,
@@ -136,6 +138,7 @@ const styles = StyleSheet.create({
   pending: { alignItems: "center", justifyContent: "center" },
   viewer: { flex: 1, backgroundColor: "black", justifyContent: "center" },
   viewerClose: { position: "absolute", padding: SPACE.ROW },
+  viewerKeep: { position: "absolute", padding: SPACE.ROW },
 });
 
 /** What drawing a run needs beyond the run: the colors, the reader's text scale, and the doors a press opens. */
@@ -602,6 +605,10 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
   const [full, setFull] = useState(false);
   const heard = alt === "" ? "Picture" : alt;
 
+  const acts = useKeptActs(
+    source === undefined ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard },
+  );
+
   const well = [
     styles.picture,
     { aspectRatio: tileAspect ?? aspect ?? 16 / 9, backgroundColor: colors.WELL },
@@ -617,23 +624,25 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
 
   return (
     <>
-      <Pressable
-        onPress={() => setFull(true)}
-        accessibilityRole="imagebutton"
-        accessibilityLabel={heard}
-        accessibilityHint="Opens full screen"
-      >
-        <Image
-          source={{ uri: source }}
-          resizeMode="contain"
-          onLoad={(event) => {
-            const loaded = event.nativeEvent.source;
+      <HeldMenu acts={acts}>
+        <Pressable
+          onPress={() => setFull(true)}
+          accessibilityRole="imagebutton"
+          accessibilityLabel={heard}
+          accessibilityHint="Opens full screen"
+        >
+          <Image
+            source={{ uri: source }}
+            resizeMode="contain"
+            onLoad={(event) => {
+              const loaded = event.nativeEvent.source;
 
-            if (loaded.width > 0 && loaded.height > 0) setAspect(loaded.width / loaded.height);
-          }}
-          style={well}
-        />
-      </Pressable>
+              if (loaded.width > 0 && loaded.height > 0) setAspect(loaded.width / loaded.height);
+            }}
+            style={well}
+          />
+        </Pressable>
+      </HeldMenu>
       <Modal
         visible={full}
         animationType="fade"
@@ -668,6 +677,14 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
               Done
             </Text>
           </Pressable>
+          <View
+            style={[
+              styles.viewerKeep,
+              { bottom: insets.bottom + SPACE.ROW, left: insets.left + SPACE.ROW },
+            ]}
+          >
+            <HeldActsButton acts={acts} />
+          </View>
         </View>
       </Modal>
     </>

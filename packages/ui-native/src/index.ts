@@ -72,7 +72,19 @@ export {
   HeldCallBanner,
 } from "./held-call.js";
 
+export { type Keeping, KeepingProvider } from "./held-menu.js";
+
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+
+export {
+  type HeldPicture,
+  heldPicture,
+  KEEP_ACT,
+  KEPT_KIND,
+  type KeepAct,
+  type Kept,
+  type KeptKind,
+} from "./keep-model.js";
 
 export {
   ListRow,
