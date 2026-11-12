@@ -136,17 +136,21 @@ export function fakeGitHub(
   app: Layer.Layer<GitHubApp> = GITHUB_APP_LAYER,
 ): FakeGitHub {
   const sent: SentToGitHub[] = [];
+
   const respond = async (url: string, init: RequestInit) => {
     const request: SentToGitHub = {
       url,
       method: init.method ?? "GET",
       headers: new Headers(init.headers),
       body: init.body === undefined ? "" : await new Response(init.body).text(),
-      ...(init.signal ? { signal: init.signal } : {}),
+      ...(init.signal && { signal: init.signal }),
     };
+
     sent.push(request);
+
     return answer(request);
   };
+
   return { layer: Layer.mergeAll(fakeHttpClientLayer(respond), app), sent, respond };
 }
 
@@ -190,9 +194,11 @@ const FIXTURE_INSTALLATION_PERMISSIONS = {
  */
 export function repositoryIdOf(fixture: RepositoryFixture): number {
   let hash = 2_166_136_261;
+
   for (const char of `${fixture.owner}/${fixture.name}`.toLowerCase()) {
     hash = Math.imul(hash ^ (char.codePointAt(0) ?? 0), 16_777_619) >>> 0;
   }
+
   return 1_000 + (hash % 1_000_000_000);
 }
 
@@ -219,11 +225,13 @@ export function memberRepositoryJson(fixture: RepositoryFixture, push: boolean) 
 /** The page GitHub was asked for, as its query spells it; the first, and a hundred, when unsaid. */
 function pageOf(url: string) {
   const query = new URL(url).searchParams;
+
   return { page: Number(query.get("page") ?? 1), perPage: Number(query.get("per_page") ?? 100) };
 }
 
 function sliceOf<A>(items: readonly A[], url: string): readonly A[] {
   const { page, perPage } = pageOf(url);
+
   return items.slice((page - 1) * perPage, page * perPage);
 }
 
@@ -285,11 +293,14 @@ export function githubReaching(
 ): FakeGitHub {
   const bot = people.bot === undefined ? GITHUB_FIXTURE_BOT : people.bot;
   const notFound = () => Response.json({ message: "Not Found" }, { status: 404 });
+
   return fakeGitHub(async (sent) => {
     if (sent.url === TOKEN_ENDPOINT) {
       const asked = new URLSearchParams(sent.body);
+
       // Note that only the web flow's exchange is answered: a refresh finds GitHub unavailable.
       if (!asked.has("code")) return new Response(null, { status: 503 });
+
       return asked.get("code") === GITHUB_FIXTURE_REFUSED_CODE
         ? Response.json({ error: "bad_verification_code" })
         : Response.json({
@@ -301,44 +312,61 @@ export function githubReaching(
             scope: "",
           });
     }
+
     const { pathname } = new URL(sent.url);
     const scripted = await repository(sent);
+
     if (scripted !== undefined) return scripted;
+
     if (APP_TOKEN.test(pathname) && sent.method === "DELETE") {
       return new Response(null, { status: 204 });
     }
+
     const byLogin = USER_BY_LOGIN.exec(pathname);
+
     if (byLogin !== null) {
       return bot !== null && decodeURIComponent(byLogin[1] ?? "") === bot.login
         ? Response.json(userJson(bot))
         : notFound();
     }
+
     const named = INSTALLATION.exec(pathname);
+
     if (named !== null) {
       const installation = installations.find((candidate) => String(candidate.id) === named[1]);
+
       return installation === undefined
         ? notFound()
         : Response.json(installationJson(installation));
     }
+
     const minting = INSTALLATION_ACCESS_TOKENS.exec(pathname);
+
     if (minting !== null) {
       const installation = installations.find((candidate) => String(candidate.id) === minting[1]);
+
       if (installation === undefined) return notFound();
+
       if (installation.suspendedAt !== undefined) {
         return Response.json({ message: "This installation has been suspended" }, { status: 403 });
       }
+
       const asked: { repositories?: unknown; permissions?: Record<string, string> } = JSON.parse(
         sent.body,
       );
+
       // Note that GitHub refuses a mint naming a permission the installation never granted, at any level.
       const granted = installation.permissions ?? FIXTURE_INSTALLATION_PERMISSIONS;
+
       if (Object.keys(asked.permissions ?? {}).some((permission) => !(permission in granted))) {
         return Response.json(
           { message: "The permissions requested are not granted to this installation." },
           { status: 422 },
         );
       }
+
       const forRepositories = asked.repositories !== undefined;
+
       return Response.json(
         {
           token: forRepositories
@@ -350,6 +378,7 @@ export function githubReaching(
         { status: 201 },
       );
     }
+
     if (
       pathname === "/user" &&
       sent.headers.get("authorization") === `Bearer ${GITHUB_FIXTURE_AUTHORIZED_TOKEN}`
@@ -358,26 +387,32 @@ export function githubReaching(
         userJson({ id: Number(GITHUB_FIXTURE_MEMBER.ID), login: GITHUB_FIXTURE_MEMBER.LOGIN }),
       );
     }
+
     if (pathname === "/user/installations") {
       return Response.json({
         total_count: installations.length,
         installations: sliceOf(installations, sent.url).map(installationJson),
       });
     }
+
     if (pathname === "/installation/repositories") {
       const bearer = sent.headers.get("authorization");
+
       const installation = installations.find(
         (candidate) => bearer === `Bearer ${listingTokenOf(candidate.id)}`,
       );
+
       if (installation === undefined) {
         return Response.json({ message: "Bad credentials" }, { status: 401 });
       }
+
       return Response.json({
         total_count: installation.repositories.length,
         repository_selection: GITHUB_REPOSITORY_SELECTION.SELECTED,
         repositories: sliceOf(installation.repositories, sent.url).map(repositoryJson),
       });
     }
+
     return notFound();
   }, app);
 }
@@ -423,6 +458,7 @@ export const openGithubUser = (standing?: GitHubAccountRow) =>
     const userId = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
     yield* signInWithGitHub(userId, standing);
+
     return userId;
   });
 
@@ -454,6 +490,7 @@ export const openTokenMember = (options: { readonly token?: string } = {}) =>
   Effect.gen(function* () {
     const userId = yield* openGithubUser();
     const ring = parseKeyRing(GITHUB_FIXTURE_TOKEN_RING);
+
     if (Result.isFailure(ring)) return yield* Effect.die(ring.failure);
     const token = Redacted.make(options.token ?? GITHUB_FIXTURE_MEMBER.TOKEN);
     const now = yield* Clock.currentTimeMillis;
@@ -468,5 +505,6 @@ export const openTokenMember = (options: { readonly token?: string } = {}) =>
       },
       new Date(now),
     );
+
     return userId;
   });

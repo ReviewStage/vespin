@@ -37,9 +37,7 @@ and daily series).
   ground wears an `integration-mark-*` class, and each app that mounts it sets
   those inks for the grounds it draws.
 - This is the one workspace that builds controls from intrinsic elements.
-  Everywhere else `anti-slop/no-raw-press-outside-ui` refuses a raw control,
-  a pressable `role`, a press event, or a key event on a focusable element,
-  with no disable comment allowed (root `AGENTS.md`'s Layout). When an app
+  When an app
   needs a press this package has no home for, add a component or an `as
   const` variant here, named for what the press does, with a catalog example
   and a test.

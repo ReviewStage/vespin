@@ -116,6 +116,7 @@ function signedUploadOf(
     mode: "gfm",
     context: fullName,
   });
+
   return Effect.scoped(
     Effect.flatMap(send(request), (response) =>
       response.status !== 200
@@ -125,6 +126,7 @@ function signedUploadOf(
             (html) => {
               const spelled = RENDERED_SOURCE.exec(html)?.[1];
               const address = spelled?.replace(ENTITY, (entity) => ENTITIES.get(entity) ?? entity);
+
               return address !== undefined && isUploadOf(address, assetId)
                 ? Option.some(address)
                 : Option.none<string>();
@@ -143,9 +145,12 @@ function imageOf(
     Effect.flatMap(send(request), (response) => {
       const contentType = typeOf(response.headers["content-type"]);
       const length = Number(response.headers["content-length"] ?? "0");
+
       if (response.status !== 200 || contentType === undefined)
         return Effect.succeed(Option.none());
+
       if (length > GITHUB_IMAGE_BOUNDS.MAX_BYTES) return Effect.succeed(Option.none());
+
       return Effect.map(
         Effect.orElseSucceed(response.arrayBuffer, () => new ArrayBuffer(0)),
         (buffer): Option.Option<ReadImage> =>
@@ -164,6 +169,7 @@ function imageAt(
   const request = HttpClientRequest.get(address).pipe(
     HttpClientRequest.setHeader("user-agent", GITHUB_USER_AGENT),
   );
+
   return imageOf(request, imageTypeOf);
 }
 
@@ -182,15 +188,19 @@ function repositoryFile(
   if (file.repository.toLowerCase() !== fullName.toLowerCase()) {
     return Effect.succeed(Option.none());
   }
+
   const path = file.path.map(encodeURIComponent).join("/");
   const ref = new URLSearchParams({ ref: file.ref });
+
   const request = githubRead(`/repos/${fullName}/contents/${path}?${ref}`, token).pipe(
     HttpClientRequest.setHeader("accept", RAW_CONTENTS),
   );
+
   // Note that GitHub serves the raw bytes under its own type, so a JSON answer, a directory's listing, is no image.
   const read = imageOf(request, (header) =>
     mediaTypeOf(header) === RAW_CONTENTS ? file.contentType : undefined,
   );
+
   return Effect.map(
     read,
     Option.filter((image) => SIGNATURES.get(image.contentType)?.(image.bytes) === true),
@@ -210,10 +220,14 @@ export const githubImage = /* @__PURE__ */ Effect.fn("web/githubImage")(function
   image: GitHubImage,
 ): Effect.fn.Return<Option.Option<ReadImage>, GitHubUnavailable, HttpClient.HttpClient> {
   if (image.source === GITHUB_IMAGE_SOURCE.PUBLIC) return yield* imageAt(image.url);
+
   if (image.source === GITHUB_IMAGE_SOURCE.FILE) {
     return yield* repositoryFile(token, fullName, image);
   }
+
   const signed = yield* signedUploadOf(token, fullName, image.assetId);
+
   if (Option.isNone(signed)) return Option.none();
+
   return yield* imageAt(signed.value);
 });

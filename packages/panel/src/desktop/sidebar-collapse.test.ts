@@ -128,10 +128,12 @@ function mount(width: number, at: string = SHELL_AT.INBOX): HTMLElement {
   const container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
+
   function Window() {
     const stage = useStageRoom();
     const sidebar = useSidebarCollapse(false, stage.compact);
     const [tab, setTab] = useState<PanelTab>(PANEL_TAB.TASKS);
+
     const shell = createElement(DesktopShell, {
       gates: {
         accountRequired: false,
@@ -165,15 +167,19 @@ function mount(width: number, at: string = SHELL_AT.INBOX): HTMLElement {
       settingsStep: { listed: true, onList: ignore },
       settings: SETTINGS,
     });
+
     return createElement("div", { ref: stage.ref, className: "app-stage" }, shell);
   }
+
   act(() => root?.render(withQueryClient(underRouter(createElement(Window), at))));
+
   return container;
 }
 
 function sidebarOf(page: HTMLElement): HTMLElement {
   const aside = page.querySelector<HTMLElement>("aside.desktop-sidebar");
   assert.ok(aside, "the sidebar is drawn");
+
   return aside;
 }
 
@@ -185,7 +191,9 @@ function sidebarOf(page: HTMLElement): HTMLElement {
 function standing(page: HTMLElement): string {
   const aside = sidebarOf(page);
   const folded = page.querySelector(".desktop-shell")?.getAttribute("data-sidebar-collapsed");
+
   if (folded === "false") return "pinned";
+
   return aside.hasAttribute("inert") ? "away" : "floating";
 }
 
@@ -194,7 +202,9 @@ function toggle(page: HTMLElement): HTMLButtonElement {
   const button = page.querySelector<HTMLButtonElement>(
     ".title-bar-controls:not([data-edge]) button",
   );
+
   assert.ok(button, "the toggle stands");
+
   return button;
 }
 
@@ -339,11 +349,14 @@ test("the pointer at the window's left edge peeks the folded sidebar out, which 
   const page = mount(1000);
   const main = page.querySelector("main.desktop-main");
   assert.ok(main);
+
   const edge = () => {
     const strip = page.querySelector("[data-sidebar-peek-edge]");
     assert.ok(strip, "a folded sidebar's edge waits for the pointer");
+
     return strip;
   };
+
   pointerCross(main, edge());
   assert.equal(standing(page), "floating");
   assert.equal(toggle(page).getAttribute("aria-label"), "Show sidebar", "a peek is not yet open");

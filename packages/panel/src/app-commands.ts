@@ -73,6 +73,7 @@ function offersChanged(): void {
   queueMicrotask(() => {
     offersTellingDue = false;
     const commands = offeredCommands();
+
     for (const hear of offersHeard) hear(commands);
   });
 }
@@ -93,20 +94,24 @@ export function overlayHoldsKeyboard(): boolean {
 /** The commands the keymap answers: every one but those whose key is the window's layered Escape, and the tab switcher's ⌃Tab, which it holds itself. */
 const KEYED: readonly KeyedCommand[] = KEYED_COMMANDS.filter((command) => {
   const { chord } = APP_SHORTCUTS[command];
+
   return !shortcutLayered(chord) && !shortcutSwitching(chord);
 });
 
 /** Whether the platform offers what the command's feature stands on, by the document `client` holds: a chord of one it lacks is the browser's or the system's, never the window's. */
 function platformCarries(client: QueryClient, command: KeyedCommand): boolean {
   const { capability }: AppShortcut = APP_SHORTCUTS[command];
+
   if (capability === undefined) return true;
   const state = appStateIn(client);
+
   return state !== undefined && selectCapability(capability)(state);
 }
 
 /** Whether the press landed in something taking typing, which keeps the keys it edits with. */
 function typingInto(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
+
   return target.isContentEditable || target.matches("input, textarea, select");
 }
 
@@ -116,6 +121,7 @@ function typingInto(target: EventTarget | null): boolean {
  */
 function answeringOffer(command: AppCommand): CommandRun | undefined {
   const held = offers.get(command) ?? [];
+
   return (
     held.findLast((offer) => offer.over.current?.() === true) ??
     held.findLast((offer) => offer.over.current === undefined) ??
@@ -130,8 +136,10 @@ function answeringOffer(command: AppCommand): CommandRun | undefined {
  */
 export function runAppCommand(command: AppCommand): boolean {
   const offer = answeringOffer(command);
+
   if (offer === undefined) return false;
   offer.current();
+
   return true;
 }
 
@@ -167,6 +175,7 @@ export function useAppCommand(
     const offer: CommandRun = { current: () => latest.current?.(), over: latestOver };
     offers.set(command, [...(offers.get(command) ?? []), offer]);
     offersChanged();
+
     return () => {
       offers.set(
         command,
@@ -182,6 +191,7 @@ export function useOverlayHold(standing: boolean): void {
   useEffect(() => {
     if (!standing) return;
     overlaysStanding += 1;
+
     return () => {
       overlaysStanding -= 1;
     };
@@ -198,6 +208,7 @@ export function useAppKeymap(enabled: boolean): void {
   const queryClient = useQueryClient();
   useEffect(() => {
     if (!enabled) return;
+
     const handleKey = (event: KeyboardEvent) => {
       // Note that the command offered is read first, because commands share a key, as Escape, and only the one offered answers it.
       const command =
@@ -205,20 +216,27 @@ export function useAppKeymap(enabled: boolean): void {
           KEYED.filter((each) => (offers.get(each)?.length ?? 0) > 0),
           event,
         ) ?? commandForKey(KEYED, event);
+
       if (command === undefined) return;
+
       if (shortcutEditsText(APP_SHORTCUTS[command].chord) && typingInto(event.target)) return;
+
       // Note that a held chord's repeats stay the window's even once its
       // offer is gone, because a repeat falling through to the menu bar runs
       // what the press never asked for: a held ⌘W closing the tab, and then
       // the window behind it.
       // Note that a command the platform lacks has its repeats left alone, because the browser's own zoom keeps stepping while ⌘+ is held.
       if (!event.repeat && !offers.get(command)?.length) return;
+
       if (event.repeat && !offers.get(command)?.length && !platformCarries(queryClient, command))
         return;
       event.preventDefault();
+
       if (!event.repeat) runAppCommand(command);
     };
+
     window.addEventListener("keydown", handleKey);
+
     return () => window.removeEventListener("keydown", handleKey);
   }, [enabled, queryClient]);
 }
@@ -231,17 +249,22 @@ export function useAppKeymap(enabled: boolean): void {
 export function useMenuOffers(): void {
   useEffect(() => {
     const tell = appPlatform().menuOffers;
+
     if (tell === undefined) return;
     let told: string | undefined;
+
     const hear = (commands: readonly AppCommand[]) => {
       const joined = commands.join();
+
       if (joined === told) return;
       told = joined;
       tell(commands);
     };
+
     offersHeard.add(hear);
     // Note that the first telling waits on the commit as every later one does, since the controls beside this one offer theirs in the same commit.
     offersChanged();
+
     return () => {
       offersHeard.delete(hear);
     };
@@ -252,6 +275,7 @@ export function useMenuOffers(): void {
 export function useMenuCommands(enabled: boolean): void {
   useEffect(() => {
     if (!enabled) return;
+
     return appPlatform().onMenuCommand((command) => {
       if (HELD_UNDER_OVERLAY.has(command) && overlayHoldsKeyboard()) return;
       runAppCommand(command);

@@ -82,10 +82,12 @@ function answeringDeletes(place: string, deleted: unknown[]): void {
   fakeActPort({
     [WORKSPACE_ACT_KIND.WORKSPACE_DELETE]: (payload) => {
       deleted.push(payload);
+
       return Promise.resolve();
     },
     [SETTINGS_ACT_KIND.SETTING_UPDATE]: () => {
       const settings = appSettingsWire(settingsView({ setupPlace: place }));
+
       return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED, settings });
     },
   });
@@ -117,6 +119,7 @@ function setupDrawn(
       ),
     ),
   );
+
   return container;
 }
 
@@ -136,11 +139,13 @@ const GRACE_JOINED = {
   role: WORKSPACE_ROLE.MEMBER,
 };
 
+type FinishingWithResult = { count: number };
+
 /** Setup standing at its last step for the account alone, after Paperstar was made and left, with `joined` in it beside Dana. */
 function finishingWith(
   deleted: unknown[],
   joined: readonly (typeof GRACE_JOINED)[],
-): { count: number } {
+): FinishingWithResult {
   const place = JSON.stringify({ audience: "me", at: 4, team: PAPERSTAR.id });
   const members = { [PAPERSTAR.id]: { rows: { members: [DANA_OWNS, ...joined] } } };
   writeAppState(
@@ -155,6 +160,7 @@ function finishingWith(
   answeringDeletes(place, deleted);
   const finished = { count: 0 };
   setupDrawn([], finished);
+
   return finished;
 }
 
@@ -235,7 +241,7 @@ test("Keep it and finish finishes setup and leaves the team's workspace someone 
   assert.deepEqual(deleted, []);
 });
 
-test("the survey keeps its answers on the account, Other's words among them, and again after a refusal", async () => {
+test("the survey keeps every answer picked on the account, Other's words among them, again after a refusal, and none once every pick is taken back and the step skipped", async () => {
   // Setup stands at the survey, for the account alone, as the account keeps it.
   const place = JSON.stringify({ audience: "me", at: 1 });
   writeAppState(stateWith({}, { settings: appSettingsWire(settingsView({ setupPlace: place })) }));
@@ -244,10 +250,13 @@ test("the survey keeps its answers on the account, Other's words among them, and
     [SETTINGS_ACT_KIND.SETTING_UPDATE]: ({ field, value }) => {
       if (field === "onboardingSurvey") {
         kept.push(JSON.parse(String(value)));
+
         // The account refuses the first keep, as a write lost to an outage is.
         if (kept.length === 1) return Promise.reject(refusedOnPort("Not saved."));
       }
+
       const settings = appSettingsWire(settingsView({ setupPlace: place }));
+
       return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED, settings });
     },
   });
@@ -270,8 +279,19 @@ test("the survey keeps its answers on the account, Other's words among them, and
   act(() => buttonStarting(container, "Other").click());
   typeInto(container.querySelector<HTMLInputElement>('input[aria-label$="Other"]'), "  A meetup ");
   act(() => buttonStarting(container, "Founder").click());
+
+  // Note that answers are kept in the order the survey offers them, whatever order they were picked in.
+  act(() => buttonStarting(container, "Just exploring").click());
+  act(() => buttonStarting(container, "Cloud agents").click());
+
   // Note that the account's place comes back from no write here, so Continue leaves setup at the survey to be pressed again.
-  const answers = { referral: "other", referralOther: "A meetup", role: "founder" };
+  const answers = {
+    referral: ["other"],
+    referralOther: "A meetup",
+    role: ["founder"],
+    intent: ["cloud_agents", "exploring"],
+  };
+
   act(() => buttonStarting(container, "Continue").click());
   // Note that the write reaches the act port a tick after the press, and its refusal a tick after that, as a mutation's do.
   await vi.waitFor(() => assert.deepEqual(kept, [answers]));
@@ -283,4 +303,12 @@ test("the survey keeps its answers on the account, Other's words among them, and
   await act(() => Promise.resolve());
 
   assert.deepEqual(kept, [answers, answers], "answers kept are not kept again");
+
+  // Every pick taken back turns Continue into Skip, which keeps that, so the answers kept do not come back.
+  for (const pick of ["Other", "Founder", "Just exploring", "Cloud agents"]) {
+    act(() => buttonStarting(container, pick).click());
+  }
+
+  act(() => buttonStarting(container, "Skip").click());
+  await vi.waitFor(() => assert.deepEqual(kept, [answers, answers, {}]));
 });

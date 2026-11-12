@@ -141,13 +141,17 @@ export const openWorkspaceEnvironment = /* @__PURE__ */ Effect.fnUntraced(functi
 ): Effect.fn.Return<Record<string, string>, StoreFailure, DatabaseServices> {
   const rows = yield* findSealed(organizationId);
   const environment: Record<string, string> = {};
+
   for (const row of rows) {
     const opened = openWorkspaceVariable(ring, { organizationId, name: row.name }, row);
+
     if (Result.isFailure(opened)) {
       yield* Effect.logWarning(`The workspace variable ${row.name} cannot be opened.`);
       continue;
     }
+
     environment[row.name] = Redacted.value(opened.success);
   }
+
   return environment;
 });

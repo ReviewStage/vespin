@@ -44,6 +44,7 @@ function agent(
   at: number,
 ): ListedAgent {
   const working = status === AGENT_STATUS.RUNNING || status === AGENT_STATUS.STARTING;
+
   const listed: ListedAgent = {
     id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
     planId: on.id,
@@ -57,6 +58,7 @@ function agent(
     repository: on.repository,
     ...(working ? { runStartedAt: at } : { settledAt: at }),
   };
+
   return startedBy === undefined ? listed : { ...listed, startedBy };
 }
 
@@ -70,9 +72,11 @@ const STARTING = agent(2, CACHE, CHARLES, AGENT_STATUS.STARTING, 950);
 const DONE = agent(3, CACHE, CHARLES, AGENT_STATUS.COMPLETED, 400);
 const DANAS = agent(4, RETRIES, DANA, AGENT_STATUS.RUNNING, 990);
 const UNNAMED = agent(5, CACHE, undefined, AGENT_STATUS.RUNNING, 999);
+
 /** Charles's oldest agent on a task with four, which a row naming three left out. */
 const OLDER = agent(6, RETRIES, CHARLES, AGENT_STATUS.COMPLETED, 200);
 const DANAS_REVIEW = agent(7, RETRIES, DANA, AGENT_STATUS.COMPLETED, 600);
+
 /** Every agent the list follows live. */
 const AGENTS = [RUNNING, DANAS, DANAS_REVIEW, OLDER, STARTING, DONE, UNNAMED];
 

@@ -68,12 +68,10 @@ export interface CheckoutRestoreSnapshot {
 }
 
 /** The script's variables for the snapshot given. */
-export function checkoutRestoreEnv(
-  snapshot: CheckoutRestoreSnapshot,
-): Readonly<Record<string, string>> {
+export function checkoutRestoreEnv(snapshot: CheckoutRestoreSnapshot) {
   return {
     [COMMIT]: snapshot.commit,
     [HEAD]: snapshot.head ?? "",
     [BRANCH]: snapshot.branch ?? "",
-  };
+  } satisfies Readonly<Record<string, string>>;
 }

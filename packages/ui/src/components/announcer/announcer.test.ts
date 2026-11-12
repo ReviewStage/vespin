@@ -36,6 +36,7 @@ function mount(): Root {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Announcer)));
+
   return root;
 }
 
@@ -67,6 +68,7 @@ test("the same words announced twice are added to the region twice, so a reader 
     .takeRecords()
     .flatMap((record) => [...record.addedNodes])
     .filter((node) => node.textContent === "Copied");
+
   observer.disconnect();
   assert.equal(added.length, 2);
   assert.equal(status.textContent, "Copied");
@@ -111,13 +113,16 @@ test("words taken back leave their region, and words said since stay", () => {
 /** Says `words` politely as they change, as a component's state does. */
 function Saying({ words }: { words: string }): null {
   useAnnounce(ANNOUNCE.POLITE, words);
+
   return null;
 }
 
 test("words a component says leave the region once they are empty, or once it goes", () => {
   const root = mount();
+
   const draw = (saying: React.ReactNode) =>
     act(() => root.render(createElement(Fragment, null, createElement(Announcer), saying)));
+
   draw(createElement(Saying, { words: "" }));
   draw(createElement(Saying, { words: "3 of 12" }));
   assert.equal(region("status")?.textContent, "3 of 12");
@@ -163,6 +168,7 @@ test("the regions stay heard while a modal dialog hides the rest of the window",
     ),
   );
   assert.ok(document.querySelector('[role="dialog"]'), "the dialog opens");
+
   for (const role of ["status", "alert"] as const) {
     const live = region(role);
     assert.ok(live !== null);

@@ -55,9 +55,11 @@ function CatalogToast({
   manager: ToastStackManager<CatalogNotice>;
 }): ReactNode {
   const notice = toast.data;
+
   if (notice === undefined) return null;
   const { action, copy } = notice;
   const href = action?.href;
+
   return (
     <Toast
       toast={toast}
@@ -103,8 +105,10 @@ function CatalogStack({
   useEffect(() => {
     // Note that a manager only reaches a stack once the stack stands, so nothing is shown before its frame is.
     if (frame === null) return;
+
     for (const notice of shown) manager.add({ id: notice.id, ...standing(notice) });
   }, [frame, manager, shown]);
+
   return (
     <div className="catalog-toast-stage" ref={setFrame}>
       {frame === null ? null : (
@@ -179,6 +183,7 @@ const ACTING: readonly CatalogNotice[] = [
 
 function Toasts(): React.JSX.Element {
   const manager = useCatalogManager();
+
   return (
     <CatalogSection id="toast-stack" title="Stacked in the corner">
       <CatalogStack label="Notifications" shown={STACKED} manager={manager} />
@@ -188,6 +193,7 @@ function Toasts(): React.JSX.Element {
 
 function Acting(): React.JSX.Element {
   const manager = useCatalogManager();
+
   return (
     <CatalogSection id="toast-actions" title="Carrying an action">
       <CatalogStack label="Action notifications" shown={ACTING} manager={manager} />
@@ -231,6 +237,7 @@ const FAILED: readonly CatalogNotice[] = [
 
 function Failures(): React.JSX.Element {
   const manager = useCatalogManager();
+
   return (
     <CatalogSection id="toast-failure-copy" title="Failures copy their details">
       <CatalogStack label="Failure notifications" shown={FAILED} manager={manager} />
@@ -258,10 +265,12 @@ const WORK: readonly CatalogNotice[] = [
 /** A working toast, turned in place by a press into what came of its work. */
 function Working(): React.JSX.Element {
   const manager = useCatalogManager();
+
   const say = (tone: Outcome) => {
     const notice = { id: WORK_ID, tone, words: SAYING[tone] };
     manager.add({ id: WORK_ID, ...standing(notice) });
   };
+
   return (
     <CatalogSection id="toast-working" title="Working, then done in place">
       <Inline gap={GAP.CONTROL}>
@@ -284,6 +293,7 @@ function Working(): React.JSX.Element {
 function Swiped(): React.JSX.Element {
   const manager = useCatalogManager();
   const [shown] = useState<readonly CatalogNotice[]>(() => [swipeable()]);
+
   return (
     <CatalogSection id="toast-swipe" title="Swiped away">
       <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => manager.add(standing(swipeable()))}>

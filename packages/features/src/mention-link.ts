@@ -23,6 +23,7 @@ import {
   linkTarget,
   MENTION_SIGIL,
   mentionMarkdownLink,
+  type ReadLink,
   readGitHubPage,
   readLabel,
   readLink,
@@ -54,7 +55,7 @@ import { DESCRIPTION_SECTION_BOUNDS } from "./task-wire.js";
  *
  * Drawn, the `@` is not asked for: wherever the app draws words a person,
  * the app, or an agent wrote, any link whose target names a mention is drawn
- * as its chip (`linkMention`), a bare address among them, so an agent that
+ * as its chip (`linkChipOf`), a bare address among them, so an agent that
  * writes a file's GitHub page or a Linear issue's address is drawn as a
  * developer's mention of it is. The `@` still says which links a developer
  * placed, which a writer must keep (`mentionLinksIn`). An agent is handed
@@ -254,6 +255,7 @@ const pathSchema = EffectSchema.String.check(
       !path.includes("\\") &&
       ![...path].some((character) => {
         const code = character.codePointAt(0) ?? 0;
+
         return code < SPACE_CODE || code === DELETE_CODE;
       }) &&
       // Note that a separator or a dot still spelled percent-encoded once read is
@@ -415,6 +417,7 @@ const readMention = EffectSchema.decodeUnknownOption(mentionSchema);
 /** Steps of a path read back and joined, or nothing where one's encoding is broken. */
 function decodedSteps(steps: readonly string[]): string | undefined {
   const read = steps.map(decodedStep);
+
   return read.every((step) => step !== undefined) ? read.join("/") : undefined;
 }
 
@@ -436,7 +439,9 @@ function headingAnchor(heading: string): string {
  */
 function serverOfSegment(segment: string) {
   const account = integrationConnectionOf(segment);
+
   if (account === undefined) return { provider: segment };
+
   return account.place === 1
     ? { provider: account.provider }
     : { provider: account.provider, connection: segment };
@@ -451,25 +456,36 @@ function schemeFields({ host, steps, hash, search }: SchemeLink) {
       return { kind: MENTION_KIND.FOLDER, path: decodedPath(steps) };
     case SCHEME_LINK_HOST.MCP: {
       const [segment, tool, ...rest] = steps;
+
       if (rest.length > 0 || hash !== "" || search !== "") return undefined;
       const server = serverOfSegment(segment ?? "");
+
       if (tool === undefined) return { kind: MENTION_KIND.SERVER, ...server };
+
       return { kind: MENTION_KIND.TOOL, ...server, tool: decodedStep(tool) };
     }
+
     case SCHEME_LINK_HOST.DATE: {
       const [start, end, ...rest] = steps;
+
       if (rest.length > 0 || hash !== "" || search !== "") return undefined;
       const moments = { kind: MENTION_KIND.DATE, start: decodedStep(start ?? "") };
+
       return end === undefined ? moments : { ...moments, end: decodedStep(end) };
     }
+
     case SCHEME_LINK_HOST.PLAN: {
       const taskId = decodedStep(steps.join("/"));
+
       if (hash === "") return { kind: MENTION_KIND.TASK, taskId };
       // Note that a heading's words name the first section under them, as its anchor without a suffix does.
       const heading = decodedStep(hash.slice(1));
+
       if (heading === undefined || heading === "") return undefined;
+
       return { kind: MENTION_KIND.SECTION, taskId, anchor: headingAnchor(heading) };
     }
+
     default:
       return undefined;
   }
@@ -479,6 +495,7 @@ function schemeFields({ host, steps, hash, search }: SchemeLink) {
 function placeFields(place: LinkDestination, hash: string) {
   // A task named by its number is no mention, because a mention names it by its id alone, and the number is the workspace's; its link opens it once found by the slug.
   if (taskNumberOf(place) !== undefined) return undefined;
+
   // Note that only a task's address takes a fragment, its section's anchor; a fragment past any other's names nothing.
   if (
     hash !== "" &&
@@ -487,6 +504,7 @@ function placeFields(place: LinkDestination, hash: string) {
   ) {
     return undefined;
   }
+
   switch (place.kind) {
     // Note that a task's link naming a comment thread names the task, as it did before threads had links.
     case LINK_DESTINATION.TASK:
@@ -511,16 +529,20 @@ function placeFields(place: LinkDestination, hash: string) {
 /** The fields an address on our home spells as a mention: a place of our own, or the app on a task, its address with `/app` after it. */
 function appFields(url: URL) {
   const step = APP_STEPS.map((each) => `/${each}`).find((each) => url.pathname.endsWith(each));
+
   if (step !== undefined && url.hash === "") {
     const task = new URL(url.href);
     task.pathname = url.pathname.slice(0, -step.length);
     task.search = "";
     const place = readLink(task.href)?.place;
+
     return place?.kind === LINK_DESTINATION.TASK && taskNumberOf(place) === undefined
       ? { kind: MENTION_KIND.APP, taskId: place.planId }
       : undefined;
   }
+
   const place = readLink(url.href)?.place;
+
   return place === undefined ? undefined : placeFields(place, url.hash);
 }
 
@@ -534,16 +556,21 @@ function repositoryFields(target: string, repository: string | null) {
   // GitHub reads an owner and a name in any case, so a link spelled in another names the same repository.
   const own = (named: string) => named.toLowerCase() === repository?.toLowerCase();
   const page = readGitHubPage(target);
+
   if (page?.kind === GITHUB_PAGE.FOLDER && own(page.repository)) {
     return { kind: MENTION_KIND.FOLDER, path: page.path };
   }
+
   if (page?.kind === GITHUB_PAGE.FILE && own(page.repository)) {
     const file = { kind: MENTION_KIND.FILE, path: page.path };
+
     return page.lines === undefined
       ? file
       : { ...file, lines: { commit: page.ref, ...page.lines } };
   }
+
   const claimed = gitHubFilePageRepositoryOf(target);
+
   return claimed !== undefined && own(claimed) ? { kind: MENTION_KIND.FILE } : undefined;
 }
 
@@ -557,9 +584,11 @@ function withoutCredentials(url: URL): string {
   const kept = new URL(url.href);
   kept.username = "";
   kept.password = "";
+
   for (const name of [...kept.searchParams.keys()]) {
     if (SECRET_PARAM.test(name)) kept.searchParams.delete(name);
   }
+
   return kept.href;
 }
 
@@ -568,8 +597,10 @@ function linkFields(url: URL) {
   if (!WEB_PROTOCOLS.has(url.protocol)) return undefined;
   const address = linkTarget(withoutCredentials(url));
   const provider = integrationOfHost(url.hostname);
+
   if (provider !== undefined) return { kind: MENTION_KIND.LINK, provider, url: address };
   const site = linkSiteOf(url);
+
   return site === undefined ? undefined : { kind: MENTION_KIND.LINK, site, url: address };
 }
 
@@ -581,29 +612,39 @@ function linkFields(url: URL) {
  */
 function fieldsOf(target: string, repository: string | null) {
   const scheme = readSchemeLink(target);
+
   if (scheme !== undefined) return schemeFields(scheme);
   const url = parsedUrl(target);
+
   if (url === undefined) return undefined;
+
   if (isLinkHome(url)) return appFields(url);
+
   // Note that a page of an integration's is read last, so a GitHub page that is a file of the task stays one.
   return repositoryFields(target, repository) ?? linkFields(url);
 }
+
 /** Whether the line holding the index stands inside a fenced block, its fence lines included. */
 function insideFence(text: string, at: number): boolean {
   let open: string | undefined;
   let start = 0;
+
   for (const line of text.split("\n")) {
     const end = start + line.length;
     const fence = FENCE_LINE.exec(line)?.[1];
+
     if (at >= start && at <= end) return open !== undefined || fence !== undefined;
     // A fence closes on a bare run of its own character at least as long as the one that opened it.
     const closing = CLOSING_FENCE_LINE.exec(line)?.[1];
+
     if (open === undefined) open = fence;
     else if (closing !== undefined && closing[0] === open[0] && closing.length >= open.length) {
       open = undefined;
     }
+
     start = end + 1;
   }
+
   return false;
 }
 
@@ -626,6 +667,7 @@ function paragraphAt(text: string, at: number): TextStretch {
   let end = text.length;
   let lineStart = 0;
   let depth = 0;
+
   for (const line of text.split("\n")) {
     const lineEnd = lineStart + line.length;
     const markers = QUOTE_MARKERS.exec(line)?.[0] ?? "";
@@ -634,6 +676,7 @@ function paragraphAt(text: string, at: number): TextStretch {
     const blank = inner.trim() === "";
     const opens = BLOCK_START_LINE.test(inner) || lineDepth !== depth;
     depth = lineDepth;
+
     if (lineStart <= at) {
       if (blank) start = lineEnd + 1;
       else if (opens) start = lineStart;
@@ -641,8 +684,10 @@ function paragraphAt(text: string, at: number): TextStretch {
       end = lineStart - 1;
       break;
     }
+
     lineStart = lineEnd + 1;
   }
+
   return { start, end: Math.max(start, end) };
 }
 
@@ -650,21 +695,28 @@ function paragraphAt(text: string, at: number): TextStretch {
 function insideSpan(text: string, at: number): boolean {
   const paragraph = paragraphAt(text, at);
   const words = text.slice(paragraph.start, paragraph.end);
+
   const runs = [...words.matchAll(TICKS)].map((run) => ({
     start: run.index,
     end: run.index + run[0].length,
   }));
+
   const offset = at - paragraph.start;
+
   for (let index = 0; index < runs.length; index += 1) {
     const opening = runs[index];
+
     if (opening === undefined) continue;
     const length = opening.end - opening.start;
     const closing = runs.findIndex((run, later) => later > index && run.end - run.start === length);
+
     // A run no later run closes is backticks as words.
     if (closing === -1) continue;
+
     if (offset >= opening.end && offset < (runs[closing]?.start ?? 0)) return true;
     index = closing;
   }
+
   return false;
 }
 
@@ -680,17 +732,21 @@ function insideIndented(text: string, at: number): boolean {
   let start = 0;
   let open = true;
   let inList = false;
+
   for (const line of lines) {
     const end = start + line.length;
     const blank = line.trim() === "";
     const indented = !blank && INDENTED_LINE.test(line);
+
     if (!blank && !indented) inList = LIST_ITEM_LINE.test(line);
     const code: boolean = indented && !inList && open;
+
     if (at >= start && at <= end) return code;
     // A blank line or a code line lets the next indented line be code; any other line ends it.
     open = blank || code;
     start = end + 1;
   }
+
   return false;
 }
 
@@ -703,10 +759,12 @@ export function insideCode(text: string, at: number): boolean {
 function labelEnd(text: string, open: number): number | undefined {
   for (let at = open + 1; at < text.length; at += 1) {
     const character = text[at];
+
     if (character === "\\") at += 1;
     else if (character === "]") return at;
     else if (character === "\n") return undefined;
   }
+
   return undefined;
 }
 
@@ -718,16 +776,21 @@ function labelEnd(text: string, open: number): number | undefined {
  */
 export function sectionAnchors(headings: readonly string[]): readonly string[] {
   const taken = new Map<string, number>();
+
   return headings.map((heading) => {
     const spelled = headingAnchor(heading);
+
     if (spelled === "") return "";
     let anchor = spelled;
+
     while (taken.has(anchor)) {
       const count = (taken.get(spelled) ?? 0) + 1;
       taken.set(spelled, count);
       anchor = `${spelled}-${count}`;
     }
+
     taken.set(anchor, 0);
+
     return anchor;
   });
 }
@@ -741,9 +804,12 @@ function repositoryTarget(
 ): string {
   if (place.repository === null) {
     const host = kind === MENTION_KIND.FOLDER ? SCHEME_LINK_HOST.FOLDER : SCHEME_LINK_HOST.FILE;
+
     return schemeLinkOf(host, `${encodedPath(path)}${kind === MENTION_KIND.FOLDER ? "/" : ""}`);
   }
+
   const repository = place.repository;
+
   if (kind === MENTION_KIND.FOLDER) {
     return gitHubPageLink({
       kind: GITHUB_PAGE.FOLDER,
@@ -752,10 +818,13 @@ function repositoryTarget(
       path,
     });
   }
+
   if (lines === undefined) {
     return gitHubPageLink({ kind: GITHUB_PAGE.FILE, repository, ref: GITHUB_DEFAULT_BRANCH, path });
   }
+
   const { commit, startLine, endLine } = lines;
+
   return gitHubPageLink({
     kind: GITHUB_PAGE.FILE,
     repository,
@@ -768,6 +837,7 @@ function repositoryTarget(
 /** The target a mention is written with, in the task's workspace and of its repository. */
 export function encodeMention(mention: Mention, place: MentionPlace): string {
   const workspace = place.workspace;
+
   switch (mention.kind) {
     case MENTION_KIND.FILE:
       return repositoryTarget(mention.kind, mention.path, place, mention.lines);
@@ -824,6 +894,7 @@ export function encodeMention(mention: Mention, place: MentionPlace): string {
  */
 export function decodeMention(target: string, repository: string | null): Mention | undefined {
   if (target.length > MENTION_BOUNDS.MAX_TARGET_CHARS) return undefined;
+
   return Option.getOrUndefined(readMention(fieldsOf(target, repository)));
 }
 
@@ -835,7 +906,9 @@ export function decodeMention(target: string, repository: string | null): Mentio
  */
 export function pageRepositoryOf(target: string): string | undefined {
   const page = readGitHubPage(target);
+
   if (page?.kind !== GITHUB_PAGE.FILE && page?.kind !== GITHUB_PAGE.FOLDER) return undefined;
+
   return page.repository;
 }
 
@@ -844,6 +917,7 @@ function withoutControls(words: string): string {
   return [...words]
     .map((character) => {
       const code = character.codePointAt(0) ?? 0;
+
       return code < SPACE_CODE || code === DELETE_CODE ? " " : character;
     })
     .join("");
@@ -859,14 +933,17 @@ function withoutControls(words: string): string {
  */
 function readableLink(href: string): string {
   const url = new URL(href);
+
   const steps = url.pathname
     .split("/")
     .filter((step) => step !== "")
     .map((step) => withoutControls(decodedStep(step) ?? step));
+
   const kind = steps.length >= 3 && KIND_STEP.test(steps.at(-2) ?? "");
   const kept = steps.slice(kind ? -3 : -2);
   const name = kept.length === 0 ? url.hostname : kept.join("/");
   const bound = MENTION_BOUNDS.MAX_LINK_NAME_CHARS;
+
   return name.length <= bound ? name : `…${name.slice(-(bound - 1))}`;
 }
 
@@ -880,7 +957,7 @@ export function mentionName(label: string): string {
   return isMentionLabel(label) ? label.slice(MENTION_SIGIL.length) : label;
 }
 
-/** The kinds an address of our own names, which a bare address of one is read as the mention of, pasted or handed: a plan, one of its sections, a page on it, a coding agent, and a person. */
+/** The kinds an address of our own names, which a bare address of one is handed to an agent as the mention of: a plan, one of its sections, a page on it, a coding agent, and a person. */
 const OWN_KINDS: ReadonlySet<Mention["kind"]> = new Set([
   MENTION_KIND.TASK,
   MENTION_KIND.SECTION,
@@ -901,11 +978,14 @@ const BARE_NAME = {
 /** A file's lines as a chip names them, `app.ts:12–20`, as a mention of them picked from a File tab is named. */
 function linesName(path: string, lines: MentionLines | undefined): string {
   const name = path.split("/").at(-1) ?? path;
+
   if (lines === undefined) return name;
+
   const span =
     lines.startLine === lines.endLine
       ? String(lines.startLine)
       : `${lines.startLine}–${lines.endLine}`;
+
   return `${name}:${span}`;
 }
 
@@ -941,30 +1021,11 @@ function bareName(mention: Mention): string {
   }
 }
 
-/**
- * Words pasted whole that are one address of our own, a plan's, a
- * section's, a page's, an agent's, or a person's, or one page of an integration's or a well-known site's, as
- * the mention they become and the name its bare address says of it
- * (`bareName`), which a place holding the thing's own name may better;
- * nothing for any other words, a file of the plan's repository among them,
- * which `repository` names.
- */
-export function pastedLinkMention(
-  words: string,
-  repository: string | null,
-): { readonly mention: Mention; readonly name: string } | undefined {
-  const address = words.trim();
-  if (address === "" || /\s/u.test(address)) return undefined;
-  const mention = decodeMention(address, repository);
-  if (mention === undefined) return undefined;
-  if (mention.kind !== MENTION_KIND.LINK && !OWN_KINDS.has(mention.kind)) return undefined;
-  return { mention, name: bareName(mention) };
-}
-
 /** Whether a link's label is its target spelled out, as a bare address's is: the same address, however its characters are encoded. */
 function isBareLabel(label: string, target: string): boolean {
   if (label === "" || label === target) return true;
   const spelled = parsedUrl(label);
+
   return spelled !== undefined && spelled.href === parsedUrl(target)?.href;
 }
 
@@ -974,13 +1035,15 @@ export function isBareLink(label: string, target: string): boolean {
 }
 
 /**
- * Whether a link's target may name a mention for some task, so a reader
+ * Whether a link's target may be drawn as a chip for some task, so a reader
  * who does not yet know the task's repository knows to read it again when
- * it does: one that names a mention with no repository, or any page of
- * GitHub's, which may be a file or a folder of the task's.
+ * it does (`linkChipOf`): one that names a mention with no repository, any
+ * page of GitHub's, which may be a file or a folder of the task's, or any
+ * place of ours.
  */
-export function mayNameMention(target: string): boolean {
-  if (decodeMention(target, null) !== undefined) return true;
+export function mayNameChip(target: string): boolean {
+  if (decodeMention(target, null) !== undefined || readLink(target) !== undefined) return true;
+
   return parsedUrl(target)?.origin === GITHUB_ORIGIN;
 }
 
@@ -994,16 +1057,72 @@ export function mayNameMention(target: string): boolean {
  * address says of the thing. Nothing for a link whose target names none,
  * which stays a link.
  */
-export function linkMention(
+function linkMention(
   label: string,
   target: string,
   repository: string | null,
 ): { readonly mention: Mention; readonly name: string } | undefined {
   const mention = decodeMention(target, repository);
+
   if (mention === undefined) return undefined;
   const words = label.trim();
+
   if (isBareLabel(words, target)) return { mention, name: bareName(mention) };
+
   return { mention, name: mentionName(words) };
+}
+
+/** What a link in words is drawn as: the mention its target names, or the place of ours it opens where it names no mention. */
+export const LINK_CHIP = {
+  MENTION: "mention",
+  PLACE: "place",
+} as const;
+
+/** A link as its chip: its mention and name, or its place and the words it was labeled with, none where it was written bare. */
+export type LinkChip =
+  | {
+      readonly kind: typeof LINK_CHIP.MENTION;
+      readonly mention: Mention;
+      readonly name: string;
+    }
+  | {
+      readonly kind: typeof LINK_CHIP.PLACE;
+      readonly link: ReadLink;
+      readonly name: string | undefined;
+    };
+
+/**
+ * The one rule for which links are chips, which every surface that draws
+ * words (the panel's, the iOS app's) and every editor that lays a paste in
+ * reads, so a link drawn as a chip once sent is a chip while it is written:
+ * its mention where its target names one (`linkMention`), a GitHub page of
+ * a file or a folder read as of the page's own repository where the words
+ * name none, else the place of ours it opens (`readLink`), an Inbox thread
+ * or an automation among them; nothing for a link that stays a link.
+ */
+export function linkChipOf(
+  label: string,
+  target: string,
+  repository: string | null,
+): LinkChip | undefined {
+  const found = linkMention(label, target, repository ?? pageRepositoryOf(target) ?? null);
+
+  if (found !== undefined) return { kind: LINK_CHIP.MENTION, ...found };
+  const link = readLink(target);
+
+  if (link === undefined) return undefined;
+  const name = isBareLabel(label.trim(), target) ? undefined : mentionName(label.trim());
+
+  return { kind: LINK_CHIP.PLACE, link, name };
+}
+
+/** Words pasted whole that are one link drawn as a chip (`linkChipOf`), as that chip; nothing for any other words. */
+export function pastedLinkChip(words: string, repository: string | null): LinkChip | undefined {
+  const address = words.trim();
+
+  if (address === "" || /\s/u.test(address)) return undefined;
+
+  return linkChipOf(address, address, repository);
 }
 
 /** The mention written into markdown as a link: `[@label](target)`, its label's brackets and backslashes escaped. */
@@ -1019,14 +1138,18 @@ export function mentionMarkdown(mention: Mention, name: string, place: MentionPl
 /** Whether the character at `at` is escaped by an odd run of backslashes before it. */
 function escapedAt(text: string, at: number): boolean {
   let backslashes = 0;
+
   while (text[at - 1 - backslashes] === "\\") backslashes += 1;
+
   return backslashes % 2 === 1;
 }
 
 function opensPicture(text: string, at: number): boolean {
   if (text[at - 1] !== "!") return false;
   let backslashes = 0;
+
   while (text[at - 2 - backslashes] === "\\") backslashes += 1;
+
   return backslashes % 2 === 0;
 }
 
@@ -1039,13 +1162,17 @@ function opensPicture(text: string, at: number): boolean {
 export function mentionLinksIn(text: string): readonly MentionLink[] {
   const found: MentionLink[] = [];
   const opener = `[${MENTION_SIGIL}`;
+
   for (let at = text.indexOf(opener); at !== -1; at = text.indexOf(opener, at + 1)) {
     if (opensPicture(text, at)) continue;
     const close = labelEnd(text, at);
+
     if (close === undefined || text[close + 1] !== "(" || insideCode(text, at)) continue;
     const targetEnd = text.indexOf(")", close + 2);
+
     if (targetEnd === -1) continue;
     const written = text.slice(close + 2, targetEnd);
+
     if (/\s/u.test(written)) continue;
     // Note that a destination written between angle brackets is the address inside them, as markdown reads it.
     const angled = written.length > 2 && written.startsWith("<") && written.endsWith(">");
@@ -1054,6 +1181,7 @@ export function mentionLinksIn(text: string): readonly MentionLink[] {
     found.push({ start: at, end: targetEnd + 1, label, target });
     at = targetEnd;
   }
+
   return found;
 }
 
@@ -1070,6 +1198,7 @@ export function placeholderLinksIn(text: string): readonly string[] {
     .map((link) => link.target)
     .filter((target) => {
       const url = parsedUrl(target);
+
       return url !== undefined && isLinkHome(url) && PLACEHOLDER_MARKS.test(url.pathname);
     });
 }
@@ -1088,11 +1217,14 @@ export function mentionsIn(
   limit: number = MENTION_BOUNDS.MAX_MENTIONS,
 ): readonly MentionInWords[] {
   const found: MentionInWords[] = [];
+
   for (const link of mentionLinksIn(text)) {
     if (found.length === limit) break;
     const mention = decodeMention(link.target, repository);
+
     if (mention !== undefined) found.push({ ...link, mention });
   }
+
   return found;
 }
 
@@ -1104,6 +1236,7 @@ export function mentionsIn(
  */
 export function askedInWords(words: string): readonly string[] {
   const agentIds: string[] = [];
+
   // Note that every mention of the comment's bounded words is read, beyond the twenty a message hands an agent, so no one asked is missed.
   for (const { mention } of mentionsIn(words, null, Number.POSITIVE_INFINITY)) {
     if (
@@ -1113,6 +1246,7 @@ export function askedInWords(words: string): readonly string[] {
       agentIds.push(mention.agentId);
     }
   }
+
   return agentIds;
 }
 
@@ -1135,13 +1269,17 @@ const LINE_ENDS: ReadonlySet<string> = new Set(["\n", "\r"]);
 function angledDestination(words: string, open: number): DestinationRead {
   for (let at = open + 1; at < words.length; at += 1) {
     const character = words[at] ?? "";
+
     if (character === ">") return { target: words.slice(open + 1, at), at: at + 1 };
+
     if (character === "<" || LINE_ENDS.has(character)) break;
+
     if (character === "\\") {
       if (LINE_ENDS.has(words[at + 1] ?? "")) break;
       at += 1;
     }
   }
+
   return { stop: open + 1 };
 }
 
@@ -1149,13 +1287,16 @@ function angledDestination(words: string, open: number): DestinationRead {
 function bareDestination(words: string, open: number): DestinationRead {
   let depth = 0;
   let at = open;
+
   for (; at < words.length; at += 1) {
     const character = words[at] ?? "";
+
     if (character === "\\") at += 1;
     else if (character === "(") depth += 1;
     else if (character === ")" && depth > 0) depth -= 1;
     else if (character === ")" || /\s/u.test(character)) break;
   }
+
   return depth > 0 ? { stop: at } : { target: words.slice(open, at), at };
 }
 
@@ -1171,19 +1312,26 @@ function destinationEnd(
   open: number,
 ): { readonly target: string; readonly end: number } | { readonly stop: number } {
   const read = words[open] === "<" ? angledDestination(words, open) : bareDestination(words, open);
+
   if ("stop" in read) return read;
   const { target, at } = read;
+
   if (words[at] === ")") return { target, end: at };
   // A title in quotes may follow the destination, after a space, and before its `)`.
   let titleAt = at;
+
   while (words[titleAt] === " " || words[titleAt] === "\t") titleAt += 1;
   const quote = words[titleAt] ?? "";
+
   // A quote no later one closes opens no title, said without reading on to the end.
   if (titleAt === at || !TITLE_QUOTES.has(quote) || words.lastIndexOf(quote) <= titleAt) {
     return { stop: at };
   }
+
   const closing = words.indexOf(quote, titleAt + 1);
+
   if (words[closing + 1] !== ")") return { stop: at };
+
   return { target, end: closing + 1 };
 }
 
@@ -1191,18 +1339,23 @@ function destinationEnd(
 function bareAddressOf(spelled: string): string {
   let opens = 0;
   let closes = 0;
+
   for (const character of spelled) {
     if (character === "(") opens += 1;
     else if (character === ")") closes += 1;
   }
+
   // Note that the end is read back one character at a time, so a long run of punctuation costs one pass.
   let end = spelled.length;
+
   while (end > 0) {
     const last = spelled[end - 1] ?? "";
+
     if (last === ")" && closes > opens) closes -= 1;
     else if (!TRAILING_PUNCTUATION.has(last)) break;
     end -= 1;
   }
+
   return spelled.slice(0, end);
 }
 
@@ -1230,26 +1383,34 @@ export function linksIn(text: string): readonly MentionLink[] {
 function writtenLinksIn(text: string, labeled: boolean): readonly MentionLink[] {
   const found: MentionLink[] = [];
   const taken: TextStretch[] = [];
+
   for (let at = text.indexOf("["); at !== -1; at = text.indexOf("[", at + 1)) {
     // Note that a bracket an odd run of backslashes escapes opens no link.
     if (escapedAt(text, at)) continue;
     const close = labelEnd(text, at);
+
     if (close === undefined || text[close + 1] !== "(") continue;
     const link = destinationEnd(text, close + 2);
+
     if (!("end" in link)) continue;
     const picture = opensPicture(text, at);
     taken.push({ start: picture ? at - 1 : at, end: link.end + 1 });
     const label = readLabel(text.slice(at + 1, close));
+
     if (picture) continue;
+
     if (labeled) {
       found.push({ start: at, end: link.end + 1, label, target: link.target });
       continue;
     }
+
     if (isMentionLabel(label) || !isBareLink(label, link.target)) continue;
     found.push({ start: at, end: link.end + 1, label: link.target, target: link.target });
   }
+
   const isTaken = (start: number) =>
     taken.some((stretch) => start >= stretch.start && start < stretch.end);
+
   for (const autolink of text.matchAll(AUTOLINK)) {
     // A link's destination between angle brackets is that link's, and no autolink.
     if (isTaken(autolink.index)) continue;
@@ -1258,12 +1419,15 @@ function writtenLinksIn(text: string, labeled: boolean): readonly MentionLink[] 
     taken.push({ start: autolink.index, end });
     found.push({ start: autolink.index, end, label: target, target });
   }
+
   for (const spelled of text.matchAll(BARE_ADDRESS)) {
     const start = spelled.index;
+
     if (isTaken(start)) continue;
     const target = bareAddressOf(spelled[0]);
     found.push({ start, end: start + target.length, label: target, target });
   }
+
   return found.filter((link) => !insideCode(text, link.start));
 }
 
@@ -1286,6 +1450,7 @@ interface HandedMentionsOptions {
 function numberedTaskOf(target: string): NumberedTask | undefined {
   const read = readLink(target);
   const number = read === undefined ? undefined : taskNumberOf(read.place);
+
   return read === undefined || number === undefined
     ? undefined
     : { workspace: read.workspace, number };
@@ -1303,9 +1468,12 @@ function numberedMention(
 ): Mention | undefined {
   const read = readLink(target);
   const number = read === undefined ? undefined : taskNumberOf(read.place);
+
   if (read === undefined || number === undefined) return undefined;
   const taskId = taskIdOf({ workspace: read.workspace, number });
+
   if (taskId === undefined) return undefined;
+
   return decodeMention(linkOf(withTaskId(read.place, taskId), read.workspace), repository);
 }
 
@@ -1317,15 +1485,20 @@ function numberedMention(
  */
 export function numberedTasksIn(text: string): readonly NumberedTask[] {
   const found: NumberedTask[] = [];
+
   for (const link of [...mentionLinksIn(text), ...bareLinksIn(text)]) {
     if (found.length === MENTION_BOUNDS.MAX_MENTIONS) break;
     const task = numberedTaskOf(link.target);
+
     if (task === undefined) continue;
+
     const seen = found.some(
       (each) => each.workspace === task.workspace && each.number === task.number,
     );
+
     if (!seen) found.push(task);
   }
+
   return found;
 }
 
@@ -1347,15 +1520,21 @@ export function handedMentionsIn(
   const written = [...mentionLinksIn(text), ...bareLinksIn(text)].sort(
     (first, second) => first.start - second.start,
   );
+
   const found: MentionInWords[] = [];
+
   for (const link of written) {
     if (found.length === limit) break;
+
     const mention =
       decodeMention(link.target, repository) ??
       (taskIdOf === undefined ? undefined : numberedMention(link.target, repository, taskIdOf));
+
     if (mention === undefined) continue;
+
     if (isMentionLabel(link.label) || OWN_KINDS.has(mention.kind)) found.push({ ...link, mention });
   }
+
   return found;
 }
 
@@ -1379,6 +1558,7 @@ export function memberMentionOf(words: string): MemberMention | undefined {
   const [link] = mentionLinksIn(words);
   const whole = link !== undefined && link.start === 0 && link.end === words.length;
   const mention = decodeMention(whole ? link.target : words, null);
+
   return mention !== undefined && namesMember(mention) ? mention : undefined;
 }
 
@@ -1391,6 +1571,7 @@ export function memberMentionOf(words: string): MemberMention | undefined {
 export function withoutMemberLinks(text: string): string {
   let out = "";
   let at = 0;
+
   // Note that every link is read, past the cap a message's mentions are handed under, so none is left to be handed.
   for (const found of handedMentionsIn(text, null, { limit: text.length })) {
     if (!namesMember(found.mention)) continue;
@@ -1398,6 +1579,7 @@ export function withoutMemberLinks(text: string): string {
     out += `${text.slice(at, found.start)}@${name}`;
     at = found.end;
   }
+
   return out + text.slice(at);
 }
 
@@ -1406,7 +1588,9 @@ export function withoutMemberLinks(text: string): string {
  * plain words says it, a notification or a list's title: a link naming a
  * mention by the name its chip says (`linkMention`, read with no
  * repository, as a place off a task's page draws it), and any other link
- * by its label, never its address. A bare address is words, and stays as
+ * by its label, never its address, and a picture, `![alt](address)`, by
+ * its alt words as written, without the mark that makes it a picture; an
+ * escaped `\!` stays as written. A bare address is words, and stays as
  * written. The words are read once, front to back: a label is the words
  * since the last `[` on its line, so of nested brackets the inner link is
  * the link, as markdown reads them. Note that code is not told apart,
@@ -1416,24 +1600,34 @@ export function linkLabels(words: string): string {
   let said = "";
   let from = 0;
   let open: number | undefined;
+
   for (let at = 0; at < words.length; at += 1) {
     const character = words[at];
+
     if (character === "\\") at += 1;
     else if (character === "\n") open = undefined;
     else if (character === "[") open = at;
     else if (character === "]" && open !== undefined) {
       const link = words[at + 1] === "(" ? destinationEnd(words, at + 2) : undefined;
+
       if (link !== undefined && "end" in link) {
         const label = readLabel(words.slice(open + 1, at));
-        said += words.slice(from, open) + (linkMention(label, link.target, null)?.name ?? label);
+        // Note that a picture's mark is taken off with its link, so it is said by its alt words alone.
+        const mark = open - 1;
+        const picture = mark >= from && words[mark] === "!" && !escapedAt(words, mark);
+        // Note that a picture's alt words are said as written, since no mention is drawn as one.
+        const name = picture ? label : (linkMention(label, link.target, null)?.name ?? label);
+        said += words.slice(from, picture ? mark : open) + name;
         from = link.end + 1;
         at = link.end;
       } else if (link !== undefined) {
         // Note that the read goes on from where the destination's stopped, so no stretch of the words is read twice.
         at = link.stop - 1;
       }
+
       open = undefined;
     }
   }
+
   return said + words.slice(from);
 }

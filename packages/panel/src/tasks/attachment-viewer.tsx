@@ -23,6 +23,7 @@ import {
   type ImageOpening,
   type ImageZoom,
   OneLine,
+  PdfPagesSkeleton,
   TEXT_ELEMENT,
   TEXT_VARIANT,
   Text,
@@ -36,6 +37,7 @@ import {
   ZoomImage,
 } from "@repo/ui";
 import { DIAGRAM_DRAWING } from "@repo/ui/diagram-contract";
+import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
@@ -47,7 +49,7 @@ import {
   ZoomOutIcon,
 } from "lucide-react";
 import { useId, useRef, useState } from "react";
-import { DIAGRAM_REFUSED_LINE } from "../bundle-loader.js";
+import { DIAGRAM_REFUSED_LINE, PDF_REFUSED_LINE, useSideBundles } from "../bundle-loader.js";
 import {
   copyImageThroughShell,
   copyThroughShell,
@@ -64,7 +66,7 @@ import { linkPressOf } from "./use-open-link.js";
 import { WholeFile, type WholeFileNote } from "./whole-file.js";
 
 /**
- * attachment-viewer.tsx -- a file on a message opened over the window, as Quick Look opens one: an image fitted to the window, a video played there, a Mermaid file drawn as its diagram, a text file drawn as every code is, or any other file by its icon with a way to save it.
+ * attachment-viewer.tsx -- a file on a message opened over the window, as Quick Look opens one: an image fitted to the window, a video played there, a PDF's pages, a Mermaid file drawn as its diagram, a text file drawn as every code is, or any other file by its icon with a way to save it.
  *
  * A picture opens fitted to the window, or at its own pixels where the place
  * opening it asks, and zooms as Preview's does: a pinch, a trackpad's or two
@@ -80,7 +82,13 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * bundle a description's fences draw through (`../diagram-drawing.ts`), and then
  * shown, zoomed, and copied as a picture is; while it is drawn, or where
  * Mermaid refused it, its code stands as a text file's does, with Copy text,
- * a refusal saying so over it.
+ * a refusal saying so over it. A PDF's pages are drawn by pdf.js, in a bundle
+ * of their own loaded the first time a PDF is opened (`../pdf/`), down a
+ * column fitted to the card's width at a file's reading width, its words
+ * selectable (`@repo/ui`'s PdfPages); while it loads and opens it stands as
+ * a blank page, and one it cannot open, or that its bundle failed to load
+ * for, stands by its icon as any other file does, saying it could not be
+ * shown.
  *
  * The files of one message are walked in place with the arrows standing on
  * the dimmed window either side of the card, a press on a file's preview in
@@ -101,9 +109,8 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * by its address alone, as an account's photo on its provider's host, is
  * shown and zoomed all the same, but says no size and offers no Copy or
  * Download, since the window holds none of its bytes to count, copy, or
- * save. A message's files are its
- * developer's own, so everything the card holds is left out of the screen
- * recording (`ph-no-capture`) as a second line behind the masking.
+ * save. A PDF's pages draw on canvases, which the screen recording copies
+ * no pixels of, and their words are masked as every other word is.
  *
  * On a phone the header is a phone's (`phone-head.tsx`): Close alone at its
  * start, the file's name centered over its size and note, and one ⋯ at its
@@ -112,9 +119,6 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * viewer walks the files too, the file shown following it until it is let
  * go (`@repo/ui`'s `usePageSwipe`), unless the picture is zoomed, where the
  * finger moves the picture instead.
- *
- * Note that a PDF is shown by its icon rather than drawn, because the
- * window's policy refuses the frames and objects Chromium draws one in.
  */
 
 /** The file's name in the viewer's head, cut to its line. */
@@ -190,6 +194,7 @@ function ViewerLink({
   address: string | undefined;
 }): React.JSX.Element | null {
   if (address === undefined) return null;
+
   return (
     <ButtonLink icon={action.icon} href={address} onClick={linkPressOf(action.onOpen, address)}>
       {action.label}
@@ -301,6 +306,7 @@ function viewerGroups(input: {
 }): MenuAction[][] {
   const { file, at, count, walk, text, picture, held, media, zoom, action } = input;
   const place = `${String(at + 1)} of ${String(count)}`;
+
   const walking: MenuAction[] =
     count > 1
       ? [
@@ -318,6 +324,7 @@ function viewerGroups(input: {
           },
         ]
       : [];
+
   const looking: MenuAction[] = [
     ...(text === undefined
       ? []
@@ -352,6 +359,7 @@ function viewerGroups(input: {
         ]
       : []),
   ];
+
   const keeping: MenuAction[] = [
     ...(action === undefined || !media ? [] : actionItems(action, file)),
     ...(held
@@ -364,16 +372,20 @@ function viewerGroups(input: {
         ]
       : []),
   ];
+
   return [walking, looking, keeping].filter((group) => group.length > 0);
 }
 
 /** The place's own action as an item of a phone's ⋯: its press, or the page it opens, none for a file with no page. */
 function actionItems(action: ViewerAction, file: FileChip): MenuAction[] {
   const icon = <>{action.icon}</>;
+
   if (action.address === undefined) {
     return [{ label: action.label, icon, onSelect: () => action.onPress(file) }];
   }
+
   const address = action.address(file);
+
   return address === undefined
     ? []
     : [{ label: action.label, icon, onSelect: () => action.onOpen(address) }];
@@ -386,7 +398,7 @@ interface DiagramShown {
   readonly retry: (() => void) | undefined;
 }
 
-/** The file shown: the picture or the diagram, the video playing, its text drawn as every code is, or the icon, name, and size over Download. */
+/** The file shown: the picture or the diagram, the video playing, a PDF's pages, its text drawn as every code is, or the icon, name, and size over Download. */
 function AttachmentBody({
   file,
   base64,
@@ -401,6 +413,7 @@ function AttachmentBody({
   zoom: ImageZoom;
 }): React.JSX.Element {
   const image = attachmentView(file) === ATTACHMENT_VIEW.IMAGE;
+
   if (image || diagram.picture !== undefined) {
     return (
       // Two fingers anywhere on the frame pinch the picture (`@repo/ui`'s ZoomImage), never the page.
@@ -417,6 +430,7 @@ function AttachmentBody({
       </div>
     );
   }
+
   if (attachmentView(file) === ATTACHMENT_VIEW.VIDEO) {
     return (
       // A video plays on the veil, centered, as large as the card leaves it under its header at its own shape.
@@ -428,6 +442,7 @@ function AttachmentBody({
       </div>
     );
   }
+
   if (text !== undefined) {
     return (
       <div className="attachment-viewer-body min-h-0 flex-auto attachment-viewer-lines mx-auto flex w-viewer-text flex-col bg-card-code">
@@ -455,6 +470,29 @@ function AttachmentBody({
       </div>
     );
   }
+
+  if (attachmentView(file) === ATTACHMENT_VIEW.PDF) {
+    return (
+      <div className="attachment-viewer-body min-h-0 flex-auto flex flex-col">
+        <PdfBody file={file} base64={base64} />
+      </div>
+    );
+  }
+
+  return <FileCard file={file} base64={base64} refusal={undefined} />;
+}
+
+/** A file shown by its icon, name, and size over Download, saying why it is not drawn where it could not be. */
+function FileCard({
+  file,
+  base64,
+  refusal,
+}: {
+  file: FileChip;
+  base64: string;
+  /** Why the file is not drawn, where it is one the viewer draws; none for a file it never draws. */
+  refusal: string | undefined;
+}): React.JSX.Element {
   return (
     <div
       className="attachment-viewer-body min-h-0 flex-auto flex flex-col items-center justify-center gap-item-gap p-card text-center"
@@ -467,11 +505,32 @@ function AttachmentBody({
       <p className="mx-0 mt-0 mb-block-gap text-caption text-muted-foreground">
         {sizeLabel(base64)}
       </p>
+      {refusal === undefined ? null : <p className="mx-0 mt-0 mb-block-gap text-body">{refusal}</p>}
       <Button icon={<DownloadIcon aria-hidden="true" />} onClick={() => download(file)}>
         {VIEWER_LABEL.DOWNLOAD}
       </Button>
     </div>
   );
+}
+
+/**
+ * A PDF's pages, drawn by the PDF bundle once it has loaded: a blank page
+ * while it loads, and the file's card saying it could not be shown where the
+ * bundle failed to load, no worker could start, or pdf.js could not open it.
+ */
+function PdfBody({ file, base64 }: { file: FileChip; base64: string }): React.JSX.Element {
+  const bundle = useQuery(useSideBundles().pdf);
+  const refused = <FileCard file={file} base64={base64} refusal={PDF_REFUSED_LINE} />;
+
+  if (bundle.isError) return refused;
+
+  if (bundle.data === undefined) return <PdfPagesSkeleton label={file.name} />;
+  const { PdfPages, worker } = bundle.data;
+  const started = worker();
+
+  if (started === undefined) return refused;
+
+  return <PdfPages base64={base64} label={file.name} worker={started} refused={refused} />;
 }
 
 /**
@@ -508,16 +567,20 @@ export function AttachmentViewer({
   const file = files[at];
   const base64 = file === undefined ? "" : chipBase64(file);
   const view = file === undefined ? ATTACHMENT_VIEW.OTHER : attachmentView(file);
+
   const text =
     view === ATTACHMENT_VIEW.TEXT || view === ATTACHMENT_VIEW.DIAGRAM
       ? attachmentText(base64)
       : undefined;
+
   const drawn = useDrawing(view === ATTACHMENT_VIEW.DIAGRAM ? text : undefined, useAppearance());
+
   const diagram: DiagramShown = {
     picture: drawn.drawing?.kind === DIAGRAM_DRAWING.DRAWN ? drawn.drawing.url : undefined,
     refused: drawn.drawing?.kind === DIAGRAM_DRAWING.REFUSED,
     retry: drawn.retry,
   };
+
   // The picture shown, which is zoomed and copied: the file's own, or its diagram's once drawn.
   const picture = view === ATTACHMENT_VIEW.IMAGE ? file?.url : diagram.picture;
   const zoom = useImageZoom(file?.name ?? "", picture ?? file?.url ?? "", opening);
@@ -549,14 +612,18 @@ export function AttachmentViewer({
   // Note that a picture's card fills the room, because a picture is zoomed inside it,
   // and a card of its fitted shape would either show a zoomed tall picture through a slit or resize its header on every zoom.
   const hug = !phone && video;
+
   // The arrows walk the message's files, and a picture's zoom keys zoom it;
   // a key's own default, a copy of the lines selected among them, is left alone.
   const walkKey = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (image && zoom.keyDown(event)) {
       event.preventDefault();
+
       return;
     }
+
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+
     // Note that an arrow on a video or a field, such as a video's scrubber, moves it rather than walking away from it.
     if (event.target instanceof HTMLVideoElement || event.target instanceof HTMLInputElement)
       return;
@@ -580,7 +647,7 @@ export function AttachmentViewer({
     >
       <div
         ref={viewer}
-        className="attachment-viewer ph-no-capture flex size-full min-h-0 flex-col gap-ui-16"
+        className="attachment-viewer flex size-full min-h-0 flex-col gap-ui-16"
         data-view={view}
         data-opening={opening}
         data-hug={hug}
@@ -745,6 +812,7 @@ export function AttachmentViewer({
               items={files.map((each) => {
                 const view = attachmentView(each);
                 const drawn = view === ATTACHMENT_VIEW.IMAGE || view === ATTACHMENT_VIEW.VIDEO;
+
                 return {
                   name: each.name,
                   image: view === ATTACHMENT_VIEW.IMAGE ? each.url : undefined,

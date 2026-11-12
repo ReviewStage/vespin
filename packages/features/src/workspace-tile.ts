@@ -6,8 +6,9 @@
  * the id rather than the name, so a rename keeps the mark the members know
  * it by, and two workspaces of one name still read apart more often than
  * not; a person's letter disc reads its hue the same way. The hues themselves
- * are each client's own colors: `@repo/ui`'s `--ui-color-identity-*` and
- * `@repo/ui-native`'s `IDENTITY_HUE`.
+ * are each client's own colors, `@repo/ui`'s `--ui-color-identity-*` and
+ * `@repo/ui-native`'s `IDENTITY_HUE`, both generated from `@repo/brand`'s
+ * one table.
  */
 
 /** How many hues an identity's letter is drawn on. */
@@ -34,13 +35,16 @@ export const WORKSPACE_SWITCHER_WORDS = {
  */
 export function identityHue(id: string): number {
   let hash = 0;
+
   for (const character of id) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+
   return (hash % IDENTITY_HUE_COUNT) + 1;
 }
 
 /** A name's first character as a reader sees it, an emoji's whole, upper-cased; none for a blank name. */
 export function identityLetter(name: string): string {
   const [first] = CHARACTERS.segment(name.trim());
+
   return first === undefined ? "" : first.segment.toUpperCase();
 }
 
@@ -55,6 +59,8 @@ export function workspaceSharedWords(
   personal: boolean,
 ): string | undefined {
   if (count === undefined) return undefined;
+
   if (count <= 1) return personal ? WORKSPACE_SWITCHER_WORDS.PERSONAL : "1 member";
+
   return `${count} members`;
 }

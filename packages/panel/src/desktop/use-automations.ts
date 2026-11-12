@@ -70,11 +70,15 @@ export function useAutomations(workspaceId: string | undefined) {
   // Note that the read keeps one identity while its rows do, so a page memoized on it draws again only as they move.
   const rows = held.data;
   const failed = held.isError;
+
   const read = useMemo<AutomationsRead>(() => {
     if (workspaceId === undefined) return undefined;
+
     if (rows !== undefined) return { automations: rows };
+
     return failed ? UNANSWERED : undefined;
   }, [workspaceId, rows, failed]);
+
   // Note that a Try again the port refuses settles as one that landed, since the read's own failure is what the pages draw.
   const reload = useCallback(
     (): Promise<void> =>
@@ -86,20 +90,24 @@ export function useAutomations(workspaceId: string | undefined) {
           ),
     [retry, workspaceId],
   );
+
   const create = useCallback(
     (params: AutomationCreateParams): Promise<AutomationWriteAnswer> =>
       sendCreate(params).catch(unreached),
     [sendCreate],
   );
+
   const change = useCallback(
     (params: AutomationChangeParams): Promise<AutomationWriteAnswer> =>
       sendChange(params).catch(unreached),
     [sendChange],
   );
+
   /** One automation turned on or off, and why where the service refused it. */
   const toggle = useCallback(
     (automationId: string, enabled: boolean) => change({ automationId, change: { enabled } }),
     [change],
   );
+
   return { read, reload, create, change, toggle };
 }

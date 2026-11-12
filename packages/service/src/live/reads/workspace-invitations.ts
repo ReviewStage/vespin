@@ -80,7 +80,9 @@ export const workspaceInvitationsRead = bindLiveRead(WORKSPACE_INVITATIONS_READ,
   admit: ({ userId, workspaceId }) =>
     Effect.gen(function* () {
       const workspace = yield* hostedStoreOrUnavailable(workspaceOf(userId, workspaceId));
+
       if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       if (!MANAGING_ROLES.has(workspace.value.role)) {
         return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
       }

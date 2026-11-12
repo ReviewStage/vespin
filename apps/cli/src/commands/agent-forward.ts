@@ -41,6 +41,7 @@ const PORT_RANGE = `a port from ${FORWARD_PORT.MIN} to ${FORWARD_PORT.MAX}`;
 function stillRunning(agentId: string) {
   return Effect.gen(function* () {
     const { hosted } = yield* session;
+
     return yield* askService(hosted.agentPorts.list, { id: agentId }).pipe(
       Effect.map((read) => read.running),
       Effect.catch((failed) =>
@@ -58,6 +59,7 @@ function forwardingLines(
   return forwards.map((forward) => {
     const label = labels.get(forward.port);
     const served = label === undefined ? "" : ` (${label})`;
+
     return `Forwarding http://localhost:${forward.localPort} to the sandbox's ${forward.port}${served}`;
   });
 }
@@ -87,34 +89,42 @@ export const forwardCommand = Command.make(
           message: "--local serves one port: name exactly one with it.",
         });
       }
+
       const { origin, credential, hosted } = yield* session;
       const socketOrigin = webSocketOrigin(origin);
+
       if (socketOrigin === undefined) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
           message: `${origin} is no address a tunnel opens on.`,
         });
       }
+
       const listed = yield* askService(hosted.agentPorts.list, { id });
+
       if (!listed.running) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.REFUSED,
           message: "The agent's sandbox isn't running, so it has no ports to forward.",
         });
       }
+
       const wanted = ports.length > 0 ? [...new Set(ports)] : listed.ports;
+
       if (wanted.length === 0) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.REFUSED,
           message: `Nothing listens in the agent's sandbox yet. Name the port to forward: vespin agent forward ${id} 3000`,
         });
       }
+
       const dependencies = {
         socketOrigin,
         credential,
         openSocket: openTerminalSocketOverWs,
         listen: listenOnLoopbackOverNet,
       };
+
       const labels = new Map((listed.labels ?? []).map(({ port, label }) => [port, label]));
       yield* Effect.scoped(
         Effect.gen(function* () {
@@ -125,14 +135,18 @@ export const forwardCommand = Command.make(
               Effect.void,
             ),
           );
+
           const busy = forwards.find((forward) => forward.localPort === undefined);
+
           if (busy !== undefined) {
             const taken = Option.getOrElse(local, () => busy.port);
+
             return yield* new CommandFailed({
               exit: CLI_EXIT.REFUSED,
               message: `Could not listen on port ${taken} on this machine: another program may hold it, or it may not be yours to bind. Serve the sandbox's ${busy.port} on another: vespin agent forward ${id} ${busy.port} --local <port>`,
             });
           }
+
           yield* answer({
             json: {
               id,

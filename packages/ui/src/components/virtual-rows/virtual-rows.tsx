@@ -8,6 +8,7 @@ import {
   type VirtualItem,
   type Virtualizer,
 } from "@tanstack/react-virtual";
+import { Predicate } from "effect";
 import {
   type CSSProperties,
   type FocusEvent,
@@ -140,6 +141,7 @@ const RUNS = new WeakMap<Element, VirtualRowsHandle>();
 /** The handle of the run drawing `row`, an element anywhere inside one of its rows; none outside every run. */
 export function runHolding(row: Element): VirtualRowsHandle | undefined {
   const block = row.closest(".ui-virtual-rows");
+
   return block === null ? undefined : RUNS.get(block);
 }
 
@@ -231,7 +233,9 @@ function sameKeys(a: readonly string[], b: readonly string[]): boolean {
 /** The keys as last handed, kept while they name the same rows in the same order, so a caller handing them anew on each draw has the virtualizer read nothing again. */
 function useSteadyKeys(keys: readonly string[]): readonly string[] {
   const held = useRef(keys);
+
   if (held.current !== keys && !sameKeys(held.current, keys)) held.current = keys;
+
   return held.current;
 }
 
@@ -240,7 +244,8 @@ function rowClassOf(
   rowClassName: string | ((index: number) => string) | undefined,
   index: number,
 ): string {
-  const own = typeof rowClassName === "function" ? rowClassName(index) : rowClassName;
+  const own = Predicate.isFunction(rowClassName) ? rowClassName(index) : rowClassName;
+
   return own === undefined ? "ui-virtual-row" : `ui-virtual-row ${own}`;
 }
 
@@ -248,7 +253,9 @@ function rowClassOf(
 function rowHolding(block: HTMLElement | null, target: EventTarget): Element | undefined {
   if (block === null || !(target instanceof Element)) return undefined;
   let at: Element | null = target;
+
   while (at !== null && at.parentElement !== block) at = at.parentElement;
+
   return at ?? undefined;
 }
 
@@ -263,18 +270,25 @@ export function reachInRun(
 ): (from: HTMLElement | undefined, to: RovingReach) => boolean {
   return (from, to) => {
     const handle = run.current;
+
     if (handle === null) return false;
+
     const inHand = from
       ?.closest(`[${VIRTUAL_ROW_KEY_ATTRIBUTE}]`)
       ?.getAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE);
+
     const key = reachedKey(handle.keys(), inHand ?? undefined, to);
+
     if (key === undefined) return false;
     const drawn = handle.rowElement(key);
     const item = drawn === undefined ? undefined : rovingItemIn(drawn);
+
     if (item !== undefined) {
       item.focus();
+
       return true;
     }
+
     return handle.bringIn(key, (row) => rovingItemIn(row)?.focus());
   };
 }
@@ -283,9 +297,11 @@ export function reachInRun(
 export function useVirtualRuns(): VirtualRuns {
   const [runs] = useState((): VirtualRuns => {
     const held = new Set<RefObject<VirtualRowsHandle | null>>();
+
     return {
       hold: (run) => {
         held.add(run);
+
         return () => {
           held.delete(run);
         };
@@ -297,17 +313,21 @@ export function useVirtualRuns(): VirtualRuns {
           const handle = run.current;
           const first = handle?.drawnKeys()[0];
           const row = first === undefined ? undefined : handle?.rowElement(first);
+
           return handle === null || handle === undefined || row === undefined
             ? []
             : [{ handle, row }];
         });
+
         placed.sort((a, b) =>
           a.row.compareDocumentPosition(b.row) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
         );
+
         return placed.flatMap(({ handle }) => handle.keys());
       },
     };
   });
+
   return runs;
 }
 
@@ -390,13 +410,17 @@ export function VirtualRows({
   const fromEnd = anchor === VIRTUAL_ROWS_ANCHOR.END;
   // The row holding the keyboard, by its key, which is drawn wherever the run is scrolled.
   const focused = useRef<string | undefined>(undefined);
+
   const rangeExtractor = useCallback((range: Range) => {
     const drawn = defaultRangeExtractor(range);
     const key = focused.current;
     const at = key === undefined ? -1 : latestKeys.current.indexOf(key);
+
     if (at < 0 || drawn.includes(at)) return drawn;
+
     return [...drawn, at].sort((a, b) => a - b);
   }, []);
+
   // A row is measured as the docs' default does, but one not laid out answers what the virtualizer last measured of it (`useCachedMeasurements`), its layout read only where it measured nothing.
   const measured = useCallback(
     (
@@ -405,14 +429,18 @@ export function VirtualRows({
       instance: Virtualizer<HTMLElement, HTMLElement>,
     ): number => {
       const height = measureElement(element, entry, instance);
+
       if (height > 0 || element.getClientRects().length > 0) return height;
       const key = element.getAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE) ?? "";
+
       return instance.itemSizeCache.get(key) ?? estimate;
     },
     [estimate],
   );
+
   // What the run measured when last drawn, taken once, as the virtualizer reads it once.
   const [seed] = useState(() => [...measurements]);
+
   const virtualizer = useVirtualizer<HTMLElement, HTMLElement>({
     count: keys.length,
     getScrollElement: () => scroller.current,
@@ -436,6 +464,7 @@ export function VirtualRows({
     directDomUpdates: true,
     directDomUpdatesMode: "position",
   });
+
   // What the run measured is handed back as it is let go, the rows it measured alone (`takeSnapshot()`).
   const heard = useRef(onMeasurements);
   heard.current = onMeasurements;
@@ -443,14 +472,18 @@ export function VirtualRows({
   // A scroll the reader starts takes over from one the run is still bringing to its target, as the docs ask (`cancelScroll()`).
   useEffect(() => {
     const box = scroller.current;
+
     if (box === null) return;
     const cancel = () => virtualizer.cancelScroll();
+
     const keyed = (event: KeyboardEvent) => {
       if (SCROLL_KEYS.has(event.key)) cancel();
     };
+
     box.addEventListener("wheel", cancel, { passive: true });
     box.addEventListener("touchstart", cancel, { passive: true });
     box.addEventListener("keydown", keyed);
+
     return () => {
       box.removeEventListener("wheel", cancel);
       box.removeEventListener("touchstart", cancel);
@@ -462,10 +495,12 @@ export function VirtualRows({
   const opened = useRef(false);
   useLayoutEffect(() => {
     const box = virtualizer.scrollElement;
+
     if (!fromEnd || opened.current || box === null || box.clientHeight === 0) return;
     opened.current = true;
     virtualizer.scrollToEnd();
   });
+
   const holdBlock = useCallback(
     (element: HTMLElement | null) => {
       block.current = element;
@@ -473,22 +508,28 @@ export function VirtualRows({
     },
     [virtualizer],
   );
+
   const blockRef = wears?.ref;
+
   const heldBlock = useMemo(
     () => (blockRef === undefined ? holdBlock : joinRefs(holdBlock, blockRef)),
     [holdBlock, blockRef],
   );
+
   // How often the scroller, or the box that moves the run, has been sized anew, which can move what stands above the rows.
   const [sized, setSized] = useState(0);
   // Note that the run draws again as it first finds its scroller, because the scroller is the caller's, whose ref is set only after the run's own layout effects, and the virtualizer takes it as it draws.
   useEffect(() => {
     const box = scroller.current;
+
     if (box === null) return;
     setSized((count) => count + 1);
     const heard = new ResizeObserver(() => setSized((count) => count + 1));
     heard.observe(box);
     const shifting = shiftedBy?.current;
+
     if (shifting !== undefined && shifting !== null) heard.observe(shifting);
+
     return () => heard.disconnect();
   }, [scroller, shiftedBy]);
   // The rows' block stands below whatever the scroller draws above it, its padding among it (`scrollMargin`).
@@ -497,11 +538,13 @@ export function VirtualRows({
   useLayoutEffect(() => {
     const element = block.current;
     const box = scroller.current;
+
     if (element === null || box === null) return;
     const at = Math.round(offsetWithin(element, box));
     setMargin((was) => (was === at ? was : at));
   }, [keys, sized, scroller]);
   const bringing = useRef<Bringing | undefined>(undefined);
+
   const rowElement = useCallback(
     (key: string) =>
       block.current?.querySelector<HTMLElement>(
@@ -509,22 +552,27 @@ export function VirtualRows({
       ) ?? undefined,
     [],
   );
+
   const runHandle = useMemo(
     (): VirtualRowsHandle => ({
       bringIn: (key, then) => {
         const index = latestKeys.current.indexOf(key);
+
         if (index === -1) return false;
         virtualizer.scrollToIndex(index, { align: "center" });
         // Note that a row already drawn is handed on at once, since it may draw no more as the scroll moves it.
         const row = rowElement(key);
+
         if (row === undefined) bringing.current = { key, drawn: then };
         else then?.(row);
+
         return true;
       },
       rowElement,
       drawnKeys: () =>
         [...(block.current?.children ?? [])].flatMap((row) => {
           const key = row.getAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE);
+
           return key === null ? [] : [key];
         }),
       keys: () => latestKeys.current,
@@ -533,11 +581,14 @@ export function VirtualRows({
     }),
     [virtualizer, rowElement],
   );
+
   useImperativeHandle(handle, () => runHandle, [runHandle]);
   useLayoutEffect(() => {
     const element = block.current;
+
     if (element === null) return;
     RUNS.set(element, runHandle);
+
     return () => {
       RUNS.delete(element);
     };
@@ -545,16 +596,20 @@ export function VirtualRows({
   // A row brought in is handed on once it is drawn.
   useLayoutEffect(() => {
     const asked = bringing.current;
+
     if (asked === undefined) return;
     const row = rowElement(asked.key);
+
     if (row === undefined) return;
     bringing.current = undefined;
     asked.drawn?.(row);
   });
   // Each row's place, kept while it stands at the same index of a run as long, so a row drawn again as the run scrolls is handed the same one.
   const places = useRef(new Map<VirtualItem["key"], VirtualRowPlace>());
+
   const placeOf = (item: VirtualItem): VirtualRowPlace => {
     const held = places.current.get(item.key);
+
     if (
       held !== undefined &&
       held["data-index"] === item.index &&
@@ -562,6 +617,7 @@ export function VirtualRows({
     ) {
       return held;
     }
+
     const place: VirtualRowPlace = {
       ref: virtualizer.measureElement,
       style: ROW_STYLE,
@@ -570,15 +626,20 @@ export function VirtualRows({
       "aria-setsize": keys.length,
       "aria-posinset": item.index + 1,
     };
+
     places.current.set(item.key, place);
+
     return place;
   };
+
   useLayoutEffect(() => {
     const listed = new Set<VirtualItem["key"]>(keys);
+
     for (const key of places.current.keys()) if (!listed.has(key)) places.current.delete(key);
   }, [keys]);
   const items: VirtualItem[] = virtualizer.getVirtualItems();
   const own = listItems || options ? "ui-virtual-rows ui-virtual-items" : "ui-virtual-rows";
+
   const run = {
     ...wears,
     ref: heldBlock,
@@ -586,22 +647,21 @@ export function VirtualRows({
     "aria-label": label,
     onPointerDown,
     "data-row-drop-rows": dropRows,
-    ...(moves ? motionRows() : {}),
+    ...(moves && motionRows()),
     // Note that the row holding the keyboard is kept as it takes it and let go as it loses it, a row taking it from another being kept in its place.
-    ...(holdsFocus
-      ? {
-          onFocus: (event: FocusEvent<HTMLElement>) => {
-            focused.current =
-              rowHolding(block.current, event.target)?.getAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE) ??
-              undefined;
-            wears?.onFocus?.(event);
-          },
-          onBlur: () => {
-            focused.current = undefined;
-          },
-        }
-      : {}),
+    ...(holdsFocus && {
+      onFocus: (event: FocusEvent<HTMLElement>) => {
+        focused.current =
+          rowHolding(block.current, event.target)?.getAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE) ??
+          undefined;
+        wears?.onFocus?.(event);
+      },
+      onBlur: () => {
+        focused.current = undefined;
+      },
+    }),
   };
+
   if (listItems) {
     return (
       // biome-ignore lint/a11y/noRedundantRoles: Safari's VoiceOver stops reading a list drawn without its markers as a list unless it says so, as `Stack`'s lists say.
@@ -612,6 +672,7 @@ export function VirtualRows({
       </ul>
     );
   }
+
   if (options) {
     return (
       <div {...run}>
@@ -621,11 +682,13 @@ export function VirtualRows({
       </div>
     );
   }
+
   return (
     // biome-ignore lint/a11y/useSemanticElements: the block is a flow of the caller's own rows, which a <ul>'s list styling and a <li>'s marker would reach.
     <div {...run} role="list">
       {items.map((item) => {
         const place = placeOf(item);
+
         return (
           // biome-ignore lint/a11y/useSemanticElements: see the block above.
           <div

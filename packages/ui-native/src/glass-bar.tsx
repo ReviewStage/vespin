@@ -1,10 +1,16 @@
 // glass-bar.tsx -- the Liquid Glass bar a composer stands in at a screen's foot, and the dock that pins it there above the keyboard.
 
-import { Host, HStack, VStack } from "@expo/ui/swift-ui";
-import { type ModifierConfig, padding } from "@expo/ui/swift-ui/modifiers";
+import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
+import { frame, type ModifierConfig, onGeometryChange, padding } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
-import { Keyboard, type LayoutChangeEvent, StyleSheet, View } from "react-native";
+import {
+  Keyboard,
+  type LayoutChangeEvent,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useReduceTransparency } from "./accessibility.js";
 import { useColors } from "./tokens/colors.js";
@@ -40,6 +46,9 @@ export const BAR_HEAD_INSET = {
   top: SPACE.TIGHT + 2,
 } as const;
 
+/** The most of the window's height what heads a bar takes before it scrolls inside the bar, so the content under the bar stays in reach at the largest text sizes. */
+const HEAD_SHARE = 0.35;
+
 const styles = StyleSheet.create({
   // The bar's own gap above the tab bar, or the keyboard.
   gap: { paddingBottom: SPACE.ROW },
@@ -62,12 +71,15 @@ function useKeyboardHeight(): number {
     const rising = Keyboard.addListener("keyboardWillShow", ({ endCoordinates }) =>
       setHeight(endCoordinates.height),
     );
+
     const falling = Keyboard.addListener("keyboardWillHide", () => setHeight(0));
+
     return () => {
       rising.remove();
       falling.remove();
     };
   }, []);
+
   return height;
 }
 
@@ -77,6 +89,7 @@ function useKeyboardHeight(): number {
  */
 function SolidBar({ children }: { readonly children: ReactNode }) {
   const colors = useColors();
+
   return (
     <View
       style={[
@@ -90,6 +103,34 @@ function SolidBar({ children }: { readonly children: ReactNode }) {
     >
       {children}
     </View>
+  );
+}
+
+/**
+ * What heads a bar inside its glass, such as a composer's held call and
+ * queued messages, inset as the row's marks are. Note that it scrolls in
+ * place once it would stand taller than a share of the window
+ * (`HEAD_SHARE`), because at the largest text sizes a held call's words and
+ * its Deny and Allow alone grew the bar over the whole screen it docks on.
+ */
+export function BarHead({ children }: { readonly children: ReactNode }) {
+  const { height: window } = useWindowDimensions();
+  const [tall, setTall] = useState(0);
+  const most = Math.round(window * HEAD_SHARE);
+
+  const stack = (
+    <VStack
+      alignment="leading"
+      modifiers={[padding(BAR_HEAD_INSET), onGeometryChange(({ height }) => setTall(height))]}
+    >
+      {children}
+    </VStack>
+  );
+
+  return tall > most ? (
+    <ScrollView modifiers={[frame({ height: most })]}>{stack}</ScrollView>
+  ) : (
+    stack
   );
 }
 
@@ -119,25 +160,26 @@ export function GlassBar({
   const keyboard = useKeyboardHeight() > 0;
   const measure = useContext(DockMeasure);
   const solid = useReduceTransparency() || !isLiquidGlassAvailable();
+
   const row = (
     <HStack spacing={BAR_ROW_SPACING} modifiers={head === undefined ? [...modifiers] : []}>
       {children}
     </HStack>
   );
+
   const content = (
     <Host matchContents={{ vertical: true }} style={styles.content}>
       {head === undefined ? (
         row
       ) : (
         <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={[...modifiers]}>
-          <VStack alignment="leading" modifiers={[padding(BAR_HEAD_INSET)]}>
-            {head}
-          </VStack>
+          <BarHead>{head}</BarHead>
           {row}
         </VStack>
       )}
     </Host>
   );
+
   const bar = solid ? (
     <SolidBar>{content}</SolidBar>
   ) : (
@@ -145,11 +187,13 @@ export function GlassBar({
       {content}
     </GlassView>
   );
+
   // Note that a docked bar tells its dock how tall it stands, its gap with it, as its head grows and shrinks, so the content under it scrolls clear of all of it.
   const onLayout =
     measure === undefined
       ? undefined
       : (event: LayoutChangeEvent) => measure(event.nativeEvent.layout.height + SPACE.ROW);
+
   // Note that the bottom safe area is let go while the keyboard stands, since the keyboard covers the tab bar it holds room for; the sides are kept, so the bar stops short of a tab rail beside it, as the folded iPhone Duo stands one.
   return (
     <SafeAreaView
@@ -179,6 +223,7 @@ export function GlassDock({
   // Note that the bar is lifted by the keyboard's own height, read from the system, rather than by a view that pads for it, since the field that raised it stands in SwiftUI.
   const keyboard = useKeyboardHeight();
   const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
+
   return (
     <View style={styles.dock}>
       <DockRoom.Provider value={room}>{children}</DockRoom.Provider>

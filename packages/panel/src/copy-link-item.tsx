@@ -79,12 +79,15 @@ export function linkItems(
   link: string,
 ): MenuAction[] {
   const subject = shortcutSubject(SHORTCUT_SUBJECT.LINK, link);
+
   const copied = commandAction(
     PANEL_COMMAND.COPY_LINK,
     () => copy(link, LINK_COPY.COPIED),
     subject,
   );
+
   const open = openInTabOf(link);
+
   return open === undefined
     ? [copied]
     : [copied, commandAction(PANEL_COMMAND.OPEN_IN_NEW_TAB, open, subject)];
@@ -95,15 +98,17 @@ export function useCopyLink(): ((place: LinkDestination) => void) | undefined {
   const workspace = useContext(LinkWorkspaceContext);
   const copy = useCopyToast();
   const numbered = useNumberedPlace();
+
   return workspace === undefined
     ? undefined
     : (place) => copy(linkOf(numbered(place, workspace), workspace), LINK_COPY.COPIED);
 }
 
 /** A place's link under the workspace the surface hands down, by the task's number where the window lists one; none where it hands down none. */
-function usePlaceLink(): (place: LinkDestination) => string | undefined {
+export function usePlaceLink(): (place: LinkDestination) => string | undefined {
   const workspace = useContext(LinkWorkspaceContext);
   const numbered = useNumberedPlace();
+
   return (place) =>
     workspace === undefined ? undefined : linkOf(numbered(place, workspace), workspace);
 }
@@ -114,8 +119,10 @@ export function useLinkItems(): (place: LinkDestination) => MenuAction[] {
   const copy = useCopyToast();
   // Note that Copy link prints ⇧⌘C as the chord's link changes, so whoever draws it is drawn again as it does.
   useShortcutTargetsOf(APP_COMMAND.COPY_LINK);
+
   return (place) => {
     const link = linkOfPlace(place);
+
     return link === undefined ? [] : linkItems(copy, link);
   };
 }
@@ -123,8 +130,10 @@ export function useLinkItems(): (place: LinkDestination) => MenuAction[] {
 /** Opens a place in a tab of its own, under the workspace the surface hands down, which a middle-click on the row going to it takes; none where it hands down none or the window opens no tabs. */
 export function useOpenInTab(): (place: LinkDestination) => (() => void) | undefined {
   const linkOfPlace = usePlaceLink();
+
   return (place) => {
     const link = linkOfPlace(place);
+
     return link === undefined ? undefined : openInTabOf(link);
   };
 }

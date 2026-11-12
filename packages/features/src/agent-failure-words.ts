@@ -111,10 +111,12 @@ export function launchStoppedWords(
   unstarted?: DeviceLaunchUnstarted,
 ): string {
   if (unstarted !== undefined) return LAUNCH_UNSTARTED_WORDS[unstarted];
+
   const doing =
     step === DEVICE_LAUNCH_STEP.STARTING && runtime !== undefined
       ? `starting ${HARNESS_NAMES[runtime]}`
       : LAUNCH_STOPPED_WORDS[step];
+
   return `The machine couldn't start this agent: it failed while ${doing}. Send a message to try again.`;
 }
 
@@ -136,10 +138,13 @@ export function agentFailureWords(
   if (holder !== undefined && failure === AGENT_FAILURE.PROVIDER_KEY) {
     return `${holder}'s API key was refused or cannot be read`;
   }
+
   if (holder !== undefined && failure === AGENT_FAILURE.FAST_ON_OWN_KEY) {
     return `Fast isn't available on ${holder}'s own API key; choose the model with Fast off`;
   }
+
   const words = AGENT_FAILURE_WORDS[failure];
   const advises = !continuable && mendedByNewAgent(failure);
+
   return words === undefined || !advises ? words : `${words}; ${RESTART_ADVICE}`;
 }

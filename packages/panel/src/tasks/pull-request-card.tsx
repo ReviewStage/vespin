@@ -10,7 +10,7 @@ import {
 } from "@repo/features/agent-wire";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
-import { REVIEW_WORDS } from "@repo/features/pull-request-model";
+import { CHECK_SUMMARY_WORDS, REVIEW_WORDS } from "@repo/features/pull-request-model";
 import { countWords, TERM } from "@repo/features/words";
 import {
   ALIGN,
@@ -74,14 +74,6 @@ import {
  * known, are listed under a rule, each row a face and a name with where
  * they stand at its end, every one of them, scrolling past a few rows.
  */
-
-/** What a pull request's card says of its checks; nothing where it has none, or where the place knows nothing of them. */
-const CHECKS_WORDS = {
-  [CHECK_SUMMARY.PASSING]: "Checks passing",
-  [CHECK_SUMMARY.PENDING]: "Checks running",
-  [CHECK_SUMMARY.FAILING]: "Checks failing",
-  [CHECK_SUMMARY.NONE]: undefined,
-} as const satisfies Record<CheckSummary, string | undefined>;
 
 /** The moment a pull request's state names: merged once merged, closed once closed, and opened while open or a draft. */
 const MOMENT_OF_STATE = {
@@ -148,6 +140,7 @@ function cornerAge(
   when: StandingPullRequest["when"],
 ): React.JSX.Element | undefined {
   if (when === undefined || when.moment !== MOMENT_OF_STATE[pullRequest.state]) return undefined;
+
   return <Time at={when.at} look={TIME_LOOK.SINCE} hint={false} />;
 }
 
@@ -155,6 +148,7 @@ function cornerAge(
 function pullRequestKey(pullRequest: CardedPullRequest): string {
   const repository =
     pullRequest.url === undefined ? undefined : pullRequestAddressOf(pullRequest.url)?.repository;
+
   return `${repository ?? ""}${pullRequestNumberLabel(pullRequest)}`;
 }
 
@@ -173,6 +167,7 @@ function SizeNote({
   commits: number | undefined;
 }): React.JSX.Element | null {
   const filesWords = files === undefined ? undefined : countWords(files, TERM.FILE);
+
   const size =
     lines === undefined ? (
       filesWords
@@ -182,13 +177,18 @@ function SizeNote({
         {filesWords === undefined ? null : ` in ${filesWords}`}
       </>
     );
+
   const pieces: ReactNode[] = [
     size,
-    checks === undefined ? undefined : CHECKS_WORDS[checks],
+    checks === undefined || checks === CHECK_SUMMARY.NONE
+      ? undefined
+      : `Checks ${CHECK_SUMMARY_WORDS[checks]}`,
     comments === undefined ? undefined : countWords(comments, TERM.COMMENT),
     commits === undefined ? undefined : countWords(commits, TERM.COMMIT),
   ].filter((piece) => piece !== undefined);
+
   if (pieces.length === 0) return null;
+
   return (
     <HoverCardNote>
       {pieces.map((piece, index) => (
@@ -221,6 +221,7 @@ export function OpenedByRow({
 }): React.JSX.Element {
   const actor = useNamer()(opener);
   const now = useMinute();
+
   return (
     <ProvenanceRow
       verb={PROVENANCE_VERB.OPENED}
@@ -255,6 +256,7 @@ function ByAgentRow({ agent }: { agent: PullRequestAgent }): React.JSX.Element {
 /** One reviewer's row: their face, their name, which hangs their card, and where they stand at the row's end. */
 function ReviewerRow({ reviewer }: { reviewer: PullRequestReviewer }): React.JSX.Element {
   const actor = useNamer()(reviewer.by);
+
   return (
     <li>
       <HoverCardRow
@@ -314,6 +316,7 @@ export function PullRequestCard({
   const commits = given.commits ?? read?.commits;
   const opener = given.opener ?? standing?.opener;
   const marked = { ...pullRequest, checks: pullRequest.checks ?? CHECK_SUMMARY.NONE };
+
   return (
     <HoverCard data-pull-request-card="">
       <HoverCardHead

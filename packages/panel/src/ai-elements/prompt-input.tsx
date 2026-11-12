@@ -61,6 +61,7 @@ export function PromptInput({
     event.preventDefault();
     onSubmit();
   };
+
   return (
     <ComposerFrame
       as={COMPOSER_ELEMENT.FORM}
@@ -84,6 +85,7 @@ export function PromptInputCard({ children }: { children: ReactNode }): ReactNod
 export function submitPromptInput(field: Element): void {
   const form = field.closest("form");
   const submit = form?.querySelector<HTMLButtonElement>('button[type="submit"]');
+
   if (submit?.disabled) return;
   form?.requestSubmit();
 }

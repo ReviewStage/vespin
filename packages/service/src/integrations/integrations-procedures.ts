@@ -103,7 +103,8 @@ import {
   integrationProviderFromWire,
   mintIntegrationConnectionName,
 } from "@repo/features/integration-wire";
-import { Duration, Effect, Option, Redacted, Result } from "effect";
+import { type WireValue, WireValueSchema } from "@repo/wire";
+import { Duration, Effect, Option, Redacted, Result, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
@@ -190,6 +191,7 @@ function heldReadsSwept(
     for (const [connectionName, read] of reads) {
       if (now - read.at >= INTEGRATION_TOOLS_TTL_MS) reads.delete(connectionName);
     }
+
     if (reads.size === 0) cache.delete(userId);
   }
 }
@@ -201,6 +203,7 @@ function providerRows(
 ): readonly IntegrationConnectionRow[] {
   const placeOf = (row: IntegrationConnectionRow) =>
     integrationConnectionOf(row.connectionName)?.place ?? Number.POSITIVE_INFINITY;
+
   return rows
     .filter((row) => row.provider === provider)
     .toSorted((a, b) => placeOf(a) - placeOf(b));
@@ -248,12 +251,16 @@ export const requestedAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
   HostedRefusal
 > {
   const provider = integrationProviderFromWire(asked.params.provider);
+
   if (provider === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const named = asked.query?.connection;
+
   if (named === undefined) return { provider, connectionName: provider };
+
   if (integrationConnectionOf(named)?.provider !== provider) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
+
   return { provider, connectionName: named };
 });
 
@@ -292,6 +299,7 @@ const settledSignIn = /* @__PURE__ */ Effect.fnUntraced(function* (
   DatabaseServices
 > {
   const issued = yield* Effect.result(connector.token(row.connectSubject, { fresh: true }));
+
   if (Result.isFailure(issued)) {
     if (issued.failure.reason !== INTEGRATION_CONNECT_FAILURE.NOT_AUTHORIZED) {
       yield* Effect.logWarning(
@@ -299,12 +307,16 @@ const settledSignIn = /* @__PURE__ */ Effect.fnUntraced(function* (
         issued.failure.message,
       );
     }
+
     return { completed: false };
   }
+
   const { accountName } = issued.success;
+
   const completed = yield* hostedStoreOrUnavailable(
     seams.completeSignIn(row.userId, row.connectionName, state, accountName),
   );
+
   if (completed) {
     yield* recordServerEvent(
       SERVER_EVENT.INTEGRATION_CONNECTION_CREATE,
@@ -314,6 +326,7 @@ const settledSignIn = /* @__PURE__ */ Effect.fnUntraced(function* (
       },
     );
   }
+
   return { completed, ...(accountName !== undefined ? { accountName } : undefined) };
 });
 
@@ -342,20 +355,24 @@ const standingStatus = /* @__PURE__ */ Effect.fnUntraced(function* (
   row: IntegrationConnectionRow | undefined,
 ): Effect.fn.Return<Standing, HostedRefusal, DatabaseServices> {
   if (row === undefined) return { status: INTEGRATION_STATUS.DISCONNECTED };
+
   if (row.status === INTEGRATION_ROW_STATUS.CONNECTED)
     return { status: INTEGRATION_STATUS.CONNECTED };
   // The state of a sign-in still under way, which is the one a settlement may complete.
   const underWay = signInStands(seams, row.stateIssuedAt) ? row.state : undefined;
+
   // A first sign-in that ran out of time never connected anything.
   if (underWay === undefined) return { status: standingWithoutSignIn(row) };
   // Note that a sign-in under way stands pending even over an expired row, because the window waits on its end either way.
   const settled = yield* settledSignIn(seams, connector, row, underWay);
+
   if (settled.completed) {
     return {
       status: INTEGRATION_STATUS.CONNECTED,
       ...(settled.accountName !== undefined ? { accountName: settled.accountName } : undefined),
     };
   }
+
   return { status: INTEGRATION_STATUS.PENDING };
 });
 
@@ -369,8 +386,9 @@ const ACCOUNT_NAME_TOOL_TIMEOUT = Duration.seconds(4);
 const apiAccountAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   url: string,
   token: Redacted.Redacted,
-): Effect.fn.Return<unknown, unknown, HttpClient.HttpClient> {
+): Effect.fn.Return<WireValue, unknown, HttpClient.HttpClient> {
   const client = HttpClient.filterStatusOk(yield* HttpClient.HttpClient);
+
   return yield* client
     .execute(
       HttpClientRequest.get(url).pipe(
@@ -380,6 +398,7 @@ const apiAccountAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
     )
     .pipe(
       Effect.flatMap((response) => response.json),
+      Effect.flatMap(Schema.decodeUnknownEffect(WireValueSchema)),
       Effect.scoped,
       Effect.timeout(ACCOUNT_NAME_TIMEOUT),
     );
@@ -409,6 +428,7 @@ const providerAccountName = /* @__PURE__ */ Effect.fnUntraced(function* (
             ACCOUNT_NAME_TOOL_TIMEOUT,
           ),
         );
+
   return Option.getOrUndefined(Option.flatMapNullishOr(name, accountNameLine));
 });
 
@@ -440,29 +460,38 @@ const labeledRow = /* @__PURE__ */ Effect.fnUntraced(function* (
   DatabaseServices | HttpClient.HttpClient
 > {
   const { ACCOUNT_NAME }: IntegrationDefinition = INTEGRATION[row.provider];
+
   if (!integrationLabelUnread(row.provider, row.label) || status !== INTEGRATION_STATUS.CONNECTED)
     return row;
+
   // Note that a reconnect under way is left alone, because the grant it ends with names the account, not the one it replaces.
   if (row.state !== undefined && signInStands(seams, row.stateIssuedAt)) return row;
   const grant = row.connectedAt?.getTime();
   const held = unnamed.get(row.userId)?.get(row.connectionName);
+
   // Note that a hold stands only for the grant it was read under, because an account connected again since may answer.
   if (ACCOUNT_NAME !== undefined && held !== undefined && held.connectedAt === grant) return row;
   const issued = yield* Effect.result(connector.token(row.connectSubject, { fresh: false }));
+
   if (Result.isFailure(issued)) return row;
   const { accountName, token } = issued.success;
+
   const named =
     accountName !== undefined || ACCOUNT_NAME === undefined
       ? Result.succeed(undefined)
       : yield* Effect.result(providerAccountName(row.provider, ACCOUNT_NAME, token));
+
   const unanswered = Result.isFailure(named) || named.success === undefined;
+
   if (ACCOUNT_NAME !== undefined && accountName === undefined && unanswered) {
     const read: UnnamedRead = { at: seams.now(), connectedAt: grant };
     unnamed.set(row.userId, (unnamed.get(row.userId) ?? new Map()).set(row.connectionName, read));
   }
+
   if (Result.isFailure(named)) return row;
   const label = accountName ?? named.success ?? "";
   yield* hostedStoreOrUnavailable(seams.fillLabel(row, label));
+
   return { ...row, label };
 });
 
@@ -489,21 +518,26 @@ const providerStanding = /* @__PURE__ */ Effect.fnUntraced(function* (
   settles: boolean,
 ): Effect.fn.Return<ProviderStanding, HostedRefusal, DatabaseServices | HttpClient.HttpClient> {
   const held = providerRows(rows, provider);
+
   // Note that accounts are settled side by side, because each may wait on its provider's bound for its name.
   const settled = yield* Effect.forEach(
     held,
     (row) => {
       if (!settles) {
         const standing: Standing = { status: storedStanding(seams, row) };
+
         return Effect.succeed({ row, standing });
       }
+
       return Effect.gen(function* () {
         const standing = yield* standingStatus(seams, connector, row);
+
         // A sign-in this read settled stored its grant's name as the label; the row read before it does not carry it yet.
         const settled =
           standing.accountName !== undefined && (row.label === undefined || row.label === "")
             ? { ...row, label: standing.accountName }
             : row;
+
         return {
           row: yield* labeledRow(seams, unnamed, connector, settled, standing.status),
           standing,
@@ -512,7 +546,9 @@ const providerStanding = /* @__PURE__ */ Effect.fnUntraced(function* (
     },
     { concurrency: "unbounded" },
   );
+
   const first = settled.find(({ row }) => row.connectionName === provider);
+
   return {
     status: first?.standing.status ?? INTEGRATION_STATUS.DISCONNECTED,
     accounts: settled
@@ -544,10 +580,12 @@ export const statusesAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   // A deployment with no connector at all answers from its configuration alone, whatever the store.
   const anyConfigured = INTEGRATION_PROVIDER_LIST.some((provider) => connect[provider].configured);
   const rows = anyConfigured ? yield* hostedStoreOrUnavailable(seams.readConnections(userId)) : [];
+
   const unavailable: ProviderStanding = {
     status: INTEGRATION_STATUS.UNAVAILABLE,
     accounts: [],
   };
+
   const standings = yield* Effect.forEach(
     INTEGRATION_PROVIDER_LIST,
     (provider) =>
@@ -565,10 +603,13 @@ export const statusesAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
     // Note that providers are read side by side, so the read waits on the slowest provider's bound rather than their sum.
     { concurrency: "unbounded" },
   );
+
   const integrations = Object.fromEntries(
     standings.map(({ provider, status }) => [provider, status]),
   );
+
   const accounts = standings.flatMap((standing) => standing.accounts);
+
   // Note that the places are counted from what this read settled, so a sign-in it ended frees one at once.
   const addable = standings
     .filter(
@@ -578,6 +619,7 @@ export const statusesAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
         held.length < INTEGRATION_ACCOUNTS_MAX,
     )
     .map(({ provider }) => provider);
+
   return {
     integrations,
     ...(accounts.length > 0 ? { accounts } : undefined),
@@ -621,15 +663,20 @@ const standingGrant = /* @__PURE__ */ Effect.fnUntraced(function* (
 > {
   if (INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.GITHUB_SIGN_IN) {
     if (!(yield* githubOffered)) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+
     return undefined;
   }
+
   const connector = (yield* hostedStoreOrUnavailable(accountIntegrationConnect(userId)))[provider];
+
   if (!connector.configured) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   const rows = yield* hostedStoreOrUnavailable(seams.readConnections(userId));
   const row = rows.find((each) => each.connectionName === connectionName);
+
   if (row?.status !== INTEGRATION_ROW_STATUS.CONNECTED) {
     return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   }
+
   return row;
 });
 
@@ -651,27 +698,36 @@ const toolsToken = /* @__PURE__ */ Effect.fnUntraced(function* (
   DatabaseServices | IntegrationConnect | GitHubApp | HttpClient.HttpClient
 > {
   const name = INTEGRATION_NAME[provider];
+
   if (INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.GITHUB_SIGN_IN) {
     const grant = yield* githubSignInGrant(userId);
+
     if (Result.isSuccess(grant)) return Result.succeed(grant.success.token);
+
     if (grant.failure === GITHUB_GRANT_REFUSAL.SIGN_IN_REQUIRED) return Result.fail(GRANT_REFUSED);
     yield* Effect.logWarning(
       `the GitHub sign-in gave no ${name} token for its tools`,
       grant.failure,
     );
+
     return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   }
+
   if (row === undefined) return Result.fail(GRANT_REFUSED);
   const connector = (yield* hostedStoreOrUnavailable(accountIntegrationConnect(userId)))[provider];
   const issued = yield* Effect.result(connector.token(row.connectSubject, { fresh: false }));
+
   if (Result.isSuccess(issued)) return Result.succeed(issued.success.token);
+
   if (issued.failure.reason === INTEGRATION_CONNECT_FAILURE.NOT_AUTHORIZED) {
     return Result.fail(GRANT_REFUSED);
   }
+
   yield* Effect.logWarning(
     `Vercel Connect gave no ${name} token for its tools`,
     issued.failure.message,
   );
+
   return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
 });
 
@@ -679,6 +735,7 @@ const toolsToken = /* @__PURE__ */ Effect.fnUntraced(function* (
 function callbackUrl(requestUrl: string, state: string): string {
   const url = new URL(HOSTED_SERVICE_PATH.ACCOUNT_INTEGRATIONS_CONNECTED, requestUrl);
   url.searchParams.set(INTEGRATION_CALLBACK_QUERY.STATE, state);
+
   return url.toString();
 }
 
@@ -700,6 +757,7 @@ const signInAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<IntegrationAccountKey, HostedRefusal, DatabaseServices> {
   const { provider, connectionName } = asked;
   const rows = yield* hostedStoreOrUnavailable(seams.readConnections(userId));
+
   if (adding) {
     if (!connector.multipleAccounts) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     // Note that a sign-in left past its window is let go first, so its name is free again and no read takes it for an account.
@@ -714,30 +772,39 @@ const signInAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
             ),
       { discard: true },
     );
+
     // Note that the rows are read again, so a sign-in restarted, or an account added, while these were let go keeps its name and its place.
     const remaining =
       left.length === 0 ? rows : yield* hostedStoreOrUnavailable(seams.readConnections(userId));
+
     const held = providerRows(remaining, provider).filter((row) =>
       holdsAccountDestination(seams, row),
     );
+
     if (held.length >= INTEGRATION_ACCOUNTS_MAX) {
       return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     }
+
     const name = mintIntegrationConnectionName(
       provider,
       remaining.map((row) => row.connectionName),
     );
+
     return {
       provider,
       connectionName: name,
       connectSubject: name === provider ? userId : seams.mintSubject(),
     };
   }
+
   const standing = rows.find((row) => row.connectionName === connectionName);
+
   if (standing !== undefined) {
     return { provider, connectionName, connectSubject: standing.connectSubject };
   }
+
   if (connectionName !== provider) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return { provider, connectionName, connectSubject: userId };
 });
 
@@ -753,10 +820,13 @@ function storedStanding(
   row: IntegrationConnectionRow | undefined,
 ): IntegrationStatus {
   if (row?.status === INTEGRATION_ROW_STATUS.CONNECTED) return INTEGRATION_STATUS.CONNECTED;
+
   if (row?.state !== undefined && signInStands(seams, row.stateIssuedAt)) {
     return INTEGRATION_STATUS.PENDING;
   }
+
   if (row?.status === INTEGRATION_ROW_STATUS.EXPIRED) return INTEGRATION_STATUS.EXPIRED;
+
   return INTEGRATION_STATUS.DISCONNECTED;
 }
 
@@ -771,8 +841,11 @@ const accountAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
     yield* hostedStoreOrUnavailable(seams.readConnections(userId)),
     provider,
   );
+
   const row = held.find((each) => each.connectionName === connectionName);
+
   if (row === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return { account: accountOf(row, rowStatus(row)) };
 });
 
@@ -802,10 +875,12 @@ export const beginConnect = /* @__PURE__ */ Effect.fnUntraced(function* (
   const connector = (yield* hostedStoreOrUnavailable(accountIntegrationConnect(userId)))[
     asked.provider
   ];
+
   if (!connector.configured) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   const account = yield* signInAccount(seams, connector, userId, asked, adding);
   const state = seams.mintState();
   const prompt = adding ? connector.addAccountPrompt : undefined;
+
   const { url } = yield* connector
     .authorize(
       account.connectSubject,
@@ -821,9 +896,12 @@ export const beginConnect = /* @__PURE__ */ Effect.fnUntraced(function* (
       ),
       Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
     );
+
   const txid = yield* hostedStoreOrUnavailable(seams.beginSignIn(userId, account, state));
+
   // Another sign-in took the name meanwhile: this one would settle a grant no row names, so it is refused.
   if (txid === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+
   return { url, connection: account.connectionName, txid };
 });
 
@@ -849,10 +927,13 @@ export const disconnectAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.GITHUB_SIGN_IN) {
     return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   }
+
   const rows = yield* hostedStoreOrUnavailable(seams.readConnections(userId));
   const row = rows.find((each) => each.connectionName === connectionName);
+
   if (row === undefined) return { status: INTEGRATION_STATUS.DISCONNECTED };
   const txid = yield* hostedStoreOrUnavailable(seams.deleteAccount(row));
+
   if (txid !== undefined) {
     yield* revokeIntegrationGrant(row);
     yield* recordServerEvent(
@@ -862,12 +943,15 @@ export const disconnectAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
         provider: row.provider,
       },
     );
+
     return { status: INTEGRATION_STATUS.DISCONNECTED, txid };
   }
+
   // Note that only the row read is deleted and revoked, so an account added since under the same name stands, and is answered as it stands.
   const standing = (yield* hostedStoreOrUnavailable(seams.readConnections(userId))).find(
     (each) => each.connectionName === connectionName,
   );
+
   return {
     status: standing === undefined ? INTEGRATION_STATUS.DISCONNECTED : rowStatus(standing),
   };
@@ -887,7 +971,9 @@ export const renameAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
   const txid = yield* hostedStoreOrUnavailable(
     seams.renameConnection(userId, connectionName, label),
   );
+
   if (txid === undefined) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return { ...(yield* accountAnswer(seams, userId, provider, connectionName)), txid };
 });
 
@@ -911,6 +997,7 @@ export const toolsAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   // Note that GitHub's tools are never held, because its grant has no instant to tell a new one by.
   const holds = INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.CONNECT;
   const held = holds ? cache.get(userId)?.get(connectionName) : undefined;
+
   if (
     held !== undefined &&
     held.connectedAt === grant &&
@@ -918,31 +1005,40 @@ export const toolsAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   ) {
     return { tools: held.tools };
   }
+
   const name = INTEGRATION_NAME[provider];
   const issued = yield* toolsToken(provider, userId, row);
+
   // A grant no longer held is a refusal the developer mends by connecting again, not an outage.
   if (Result.isFailure(issued)) {
     return { problem: { reason: INTEGRATION_TOOLS_PROBLEM.REFUSED } };
   }
+
   const definition: IntegrationDefinition = INTEGRATION[provider];
+
   const listed = yield* Effect.result(
     listMcpTools(definition.MCP_URL, Redacted.value(issued.success)),
   );
+
   if (Result.isFailure(listed)) {
     const failure = listed.failure;
     yield* Effect.logWarning(
       `${name}'s MCP server listed no tools: ${failure.reason}`,
       failure.code ?? "no code",
     );
+
     return { problem: toolsProblem(failure) };
   }
+
   const tools = listed.success;
   heldReadsSwept(cache, seams.now());
+
   if (holds) {
     const accountReads = cache.get(userId) ?? new Map<string, ToolsRead>();
     accountReads.set(connectionName, { at: seams.now(), connectedAt: grant, tools });
     cache.set(userId, accountReads);
   }
+
   return { tools };
 });
 
@@ -956,6 +1052,7 @@ export function integrationsProcedures(seams: IntegrationsProcedureSeams) {
   const cache: ToolsCache = new Map();
   const unnamed: UnnamedHold = new Map();
   const integrations = hosted.integrations.use(accountMiddleware(seams.resolveUserId));
+
   return {
     /**
      * GET: where every one of the caller's connections stands, settling each
@@ -987,6 +1084,7 @@ export function integrationsProcedures(seams: IntegrationsProcedureSeams) {
     connect: integrations.connect.effect(function* ({ context, input }) {
       const asked = yield* requestedAccount(input);
       const adding = input.query?.add === INTEGRATION_ADD_ACCOUNT;
+
       return yield* beginConnect(seams, context.userId, asked, adding, context.request.url);
     }),
     /** GET: the tools one provider's server offers the caller's agents (`toolsAnswer`). */
@@ -995,6 +1093,7 @@ export function integrationsProcedures(seams: IntegrationsProcedureSeams) {
         params: { provider: input.provider },
         query: { connection: input.connection },
       });
+
       return yield* toolsAnswer(seams, cache, context.userId, asked);
     }),
     /**
@@ -1007,18 +1106,25 @@ export function integrationsProcedures(seams: IntegrationsProcedureSeams) {
     cancel: integrations.cancel.effect(function* ({ context, input }) {
       const { provider, connectionName } = yield* requestedAccount(input);
       const userId = context.userId;
+
       const connector = (yield* hostedStoreOrUnavailable(accountIntegrationConnect(userId)))[
         provider
       ];
+
       if (!connector.configured) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+
       const named = (rows: readonly IntegrationConnectionRow[]) =>
         rows.find((each) => each.connectionName === connectionName);
+
       const row = named(yield* hostedStoreOrUnavailable(seams.readConnections(userId)));
+
       const txid =
         row?.state === undefined
           ? undefined
           : yield* hostedStoreOrUnavailable(seams.endSignIn(userId, row.connectionName, row.state));
+
       const after = yield* hostedStoreOrUnavailable(seams.readConnections(userId));
+
       return {
         status: storedStanding(seams, named(after)),
         ...(txid === undefined ? undefined : { txid }),
@@ -1031,6 +1137,7 @@ export function integrationsProcedures(seams: IntegrationsProcedureSeams) {
     /** POST: names one account (`renameAccount`); any body but a label is an invalid request. */
     rename: integrations.rename.effect(function* ({ context, input }) {
       const asked = yield* requestedAccount(input);
+
       return yield* renameAccount(seams, context.userId, asked, input.body.label);
     }),
   };

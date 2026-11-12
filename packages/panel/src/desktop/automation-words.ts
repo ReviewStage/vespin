@@ -8,7 +8,7 @@ import {
   type AutomationScope,
   type AutomationSummary,
 } from "@repo/features/automation-wire";
-import { dayAndTimeText, momentText, weekdayAndTimeText } from "@repo/features/time-format";
+import { momentText, scheduledText } from "@repo/features/time-format";
 import { CONFIRM_LOSS, type DialogQuestion } from "@repo/ui";
 
 /** What the Automations list says to a reader while it is first read, on its page and in the frame standing while the page's code loads. */
@@ -27,19 +27,18 @@ export function automationDeleteQuestion(name: string | undefined): DialogQuesti
   };
 }
 
-/** How near a next run is still named by its weekday alone: under a week, so no weekday stands for two days. */
-const WEEKDAY_REACH_MS = 6 * 24 * 60 * 60 * 1000;
+/** What a next run is said after, so its day and time read as the one run to come, not the schedule. */
+const NEXT_LABEL = "Next: ";
 
-/** A run due at `at`, in a few words: within the week by its weekday, further off by its date. */
+/** A run due at `at`, in a few words, its day and time always said: "Next: Today 3:00 PM", "Next: Mon 1:00 PM". */
 function dueText(at: number, now: number): string {
-  return at - now < WEEKDAY_REACH_MS
-    ? `Next ${weekdayAndTimeText(at)}`
-    : `Next ${dayAndTimeText(at)}`;
+  return `${NEXT_LABEL}${scheduledText(at, now)}`;
 }
 
 /** When an automation runs next, in a few words; none for one an event fires, whose trigger already says when. */
 export function automationNextText(automation: AutomationSummary, now: number): string | undefined {
   const next = automationNext(automation);
+
   switch (next.kind) {
     case AUTOMATION_NEXT.OFF:
       return "Off";
@@ -59,6 +58,7 @@ export function automationOwnerName(
   mine: boolean,
 ): string {
   if (owner === AUTOMATION_SCOPE.WORKSPACE) return workspaceName ?? "Workspace";
+
   return mine ? "Only you" : "Personal";
 }
 
@@ -76,8 +76,10 @@ export function automationNarrowLine(
   now: number,
 ): string {
   const next = automationNext(automation);
+
   if (next.kind !== AUTOMATION_NEXT.AT) return trigger;
   const sameYear = new Date(next.at).getFullYear() === new Date(now).getFullYear();
-  const when = sameYear ? dueText(next.at, now) : `Next ${momentText(next.at)}`;
-  return `${when} · ${trigger}`;
+  const when = sameYear ? dueText(next.at, now) : `${NEXT_LABEL}${momentText(next.at)}`;
+
+  return `${when} (${trigger})`;
 }

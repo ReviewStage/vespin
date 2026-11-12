@@ -68,6 +68,7 @@ export function useWordsDatePicker(): ((opening: DatePickerOpening) => void) | u
 export function WordsDatePickerRoom({ children }: { children: ReactNode }): React.JSX.Element {
   const room = useRef<HTMLDivElement>(null);
   const picker = useDatePicker(room);
+
   return (
     <WordsDatePickerContext.Provider value={picker.open}>
       {children}
@@ -82,7 +83,9 @@ export function WordsDatePickerRoom({ children }: { children: ReactNode }): Reac
 function linkIn(words: string, at: MarkdownSpan, link: string): MarkdownSpan | undefined {
   if (words.slice(at.from, at.to) === link) return at;
   const from = words.indexOf(link);
+
   if (from === -1 || words.indexOf(link, from + 1) !== -1) return undefined;
+
   return { from, to: from + link.length };
 }
 
@@ -100,13 +103,17 @@ function wordsWithDate(
 ): string | undefined {
   const { date } = picked;
   const cleared = picked.how === DATE_PICKER_CLOSE.CLEAR;
+
   const moved =
     picked.changed &&
     date !== undefined &&
     (date.start !== written.date.start || date.end !== written.date.end || picked.zonePicked);
+
   if (!cleared && !moved) return undefined;
   const at = link === "" ? undefined : linkIn(words, written.at, link);
+
   if (at === undefined) return undefined;
+
   const named =
     cleared || date === undefined
       ? ""
@@ -115,6 +122,7 @@ function wordsWithDate(
           dateLabel(date, picked.zone),
           written.place,
         );
+
   return `${words.slice(0, at.from)}${named}${words.slice(at.to)}`;
 }
 
@@ -140,6 +148,7 @@ export function wordsDatesDoor(
           if (picked.how === DATE_PICKER_CLOSE.KEY && chip instanceof HTMLElement) chip.focus();
           const base = words();
           const next = base === undefined ? undefined : wordsWithDate(base, written, link, picked);
+
           if (base !== undefined && next !== undefined) write(next, base);
         },
       });

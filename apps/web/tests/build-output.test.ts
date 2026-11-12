@@ -61,12 +61,14 @@ async function emitFromTask(): Promise<{
   const profilerBinary = await profilerBinaryFiles(result.metafile, WEB);
   const contentsOf = new Map(result.outputFiles.map((file) => [file.path, file.contents] as const));
   const outputDirectory = mkdtempSync(join(tmpdir(), "build-output-"));
+
   const functions: EmittedFunction[] = [
     ...task.functions.map((definition) => {
       const bundle = join(WEB, "dist-functions", `${definition.file}.js`);
       const contents = contentsOf.get(bundle);
       assert.ok(contents, definition.file);
       const binary = profilerBinary.get(bundle);
+
       return {
         path: functionPublicPath(definition),
         contents,
@@ -83,7 +85,9 @@ async function emitFromTask(): Promise<{
       })),
     )),
   ];
+
   const paths = await emitBuildOutput({ outputDirectory, functions });
+
   return { outputDirectory, paths };
 }
 
@@ -96,6 +100,7 @@ test("every planned function and every rewrite lands on a .func, and a queue's c
     paths,
     [...functions.map(functionPublicPath), ...HAND_WRITTEN_FUNCTIONS.map((fn) => fn.path)].sort(),
   );
+
   for (const rewrite of apiRewrites(functions)) {
     const destination = new URL(rewrite.dest, "http://localhost");
     assert.equal(
@@ -104,12 +109,15 @@ test("every planned function and every rewrite lands on a .func, and a queue's c
       rewrite.dest,
     );
   }
+
   // A consumer deployed without its trigger is never invoked, and nothing else would say so.
   for (const consumer of functions.filter((definition) => definition.queueTopic !== undefined)) {
     const path = functionPublicPath(consumer);
+
     const config = JSON.parse(
       await readFile(join(functionDirectory(outputDirectory, path), ".vc-config.json"), "utf8"),
     );
+
     assert.deepEqual(
       config.experimentalTriggers?.map((trigger: { type: string; topic: string }) => [
         trigger.type,
@@ -123,8 +131,10 @@ test("every planned function and every rewrite lands on a .func, and a queue's c
 
 test("each .func loads with nothing above it available", { timeout: 180_000 }, async () => {
   const { outputDirectory, paths } = await emitFromTask();
+
   for (const path of paths) {
     const directory = functionDirectory(outputDirectory, path);
+
     const loaded = spawnSync(
       process.execPath,
       ["--input-type=module", "-e", LOAD_MODULE, functionEntryPath(outputDirectory, path)],
@@ -134,6 +144,7 @@ test("each .func loads with nothing above it available", { timeout: 180_000 }, a
         env: LOAD_ENVIRONMENT,
       },
     );
+
     assert.equal(loaded.status, 0, `${path}: ${loaded.stderr}`);
   }
 });
@@ -145,6 +156,7 @@ test("the default .func, loaded alone, lands the fallback's requests on the host
   const grouped = (await webFunctions(WEB)).find((definition) => definition.file === "default");
   assert.ok(grouped);
   const path = functionPublicPath(grouped);
+
   const answered = (query: string) => {
     const run = spawnSync(
       process.execPath,
@@ -161,9 +173,12 @@ test("the default .func, loaded alone, lands the fallback's requests on the host
         env: { ...LOAD_ENVIRONMENT, DATABASE_URL: PLACEHOLDER_DATABASE_URL },
       },
     );
+
     assert.equal(run.status, 0, run.stderr);
+
     return run.stdout.trim().split("\n").at(-1);
   };
+
   assert.equal(answered("route=orpc&route-path=models"), '401 {"error":"invalid-token"}');
   assert.equal(answered("route=orpc&route-path=nope"), '404 {"error":"not-found"}');
 });

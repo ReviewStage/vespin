@@ -72,7 +72,6 @@ const SENT_ON_MUTATIONS: readonly AnyKind[] = [
   ACT_KIND.AGENTS_MESSAGE,
   ACT_KIND.AGENTS_CHOOSE,
   ACT_KIND.AGENTS_SERVERS,
-  ACT_KIND.AGENTS_ADD_REPOSITORY,
   ACT_KIND.AGENTS_RENAME,
   ACT_KIND.AGENTS_ARCHIVE,
   ACT_KIND.AGENTS_DELETE,
@@ -106,6 +105,7 @@ async function settle(): Promise<void> {
 /** No one signed in to the window, whose drafts it reads, as the window's root holds them. */
 function NoOneSignedIn(): null {
   useDraftsOwner(undefined);
+
   return null;
 }
 
@@ -114,6 +114,7 @@ function relaunch(): void {
   act(() => {
     window.dispatchEvent(new Event("pagehide"));
   });
+
   for (const root of roots.splice(0)) act(() => root.unmount());
 }
 
@@ -126,27 +127,37 @@ function relaunch(): void {
 function mount(initial: Standing, keyPrefix = "key") {
   const asked: Asked[] = [];
   const started: string[] = [];
+
   /** An answer as a test queues it: at once, or a promise it settles when it chooses. */
   type Queued = WireBoundaryInput | Promise<WireBoundaryInput>;
+
   const answers = new Map<AnyKind, Queued[]>();
   let keys = 0;
   let control: AgentsControl | undefined;
   let restand: ((next: Standing) => void) | undefined;
+
   /** One ask answered from its kind's queue, and written down. */
-  const scripted = (kind: AnyKind, payload: unknown): Promise<WireBoundaryInput> => {
+  const scripted = <Payload>(kind: AnyKind, payload: Payload): Promise<WireBoundaryInput> => {
     asked.push({ kind, payload });
     const next = answers.get(kind)?.shift();
+
     if (next === undefined) return Promise.reject(new Error("Not answered in this test."));
+
     return Promise.resolve(next);
   };
+
   // Note that the writes the hook sends on its mutations reach the act port, which answers them from the same script.
   fakeActPort({
     ...fakeActPortCalls(),
     // SAFETY: the test scripts each kind's answer in that kind's own shape.
     ...(Object.fromEntries(
-      SENT_ON_MUTATIONS.map((kind) => [kind, (payload: unknown) => scripted(kind, payload)]),
+      SENT_ON_MUTATIONS.map((kind) => [
+        kind,
+        <Payload>(payload: Payload) => scripted(kind, payload),
+      ]),
     ) as Partial<FakeActPort>),
   });
+
   function Probe() {
     const [held, setHeld] = useState(initial);
     restand = setHeld;
@@ -159,15 +170,19 @@ function mount(initial: Standing, keyPrefix = "key") {
       onStarted: (agentId) => started.push(agentId),
       mintKey: () => {
         keys += 1;
+
         return `${keyPrefix}-${keys}`;
       },
     });
+
     return null;
   }
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   return {
     asked,
     started,
@@ -183,11 +198,13 @@ function mount(initial: Standing, keyPrefix = "key") {
         createElement(Probe),
         createElement(ToastHost),
       );
+
       act(() => root.render(withQueryClient(surface)));
       await settle();
     },
     control: () => {
       assert.ok(control);
+
       return control;
     },
     stand: async (next: Partial<Standing>) => {
@@ -202,6 +219,7 @@ function startPayloads(
   asked: readonly Asked[],
 ): readonly PortActPayload<typeof ACT_KIND.AGENTS_START>[] {
   const starts = asked.filter((each) => each.kind === ACT_KIND.AGENTS_START);
+
   // SAFETY: an ask recorded under the Start kind carries the payload the hook built for that kind.
   return starts.map((each) => each.payload as PortActPayload<typeof ACT_KIND.AGENTS_START>);
 }
@@ -212,6 +230,7 @@ function startPayloads(
 
 test("an ask of the models that never lands is said as failed past its bound, one that lands on models never read as failed, and one that lands on models read as read, no device as none", async () => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
   try {
     const { deliverModels } = handHostReads({});
     fakeActPort({
@@ -247,18 +266,22 @@ test("an ask of the models that never lands is said as failed past its bound, on
 test("the task's agents are the followed list's alone, the archived among them, with no read of them asked", async () => {
   const OTHER_TASK = "3c2d1e0f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
   const elsewhere = { ...STARTED, id: "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a", planId: OTHER_TASK };
+
   const archived = {
     ...STARTED,
     id: "9e8d7c6b-5a4f-4e3d-9c2b-1a0f9e8d7c6b",
     status: AGENT_STATUS.COMPLETED,
     archivedAt: 2,
   };
+
   const local = { ...STARTED, runtime: AGENT_RUNTIME.CLAUDE_CODE };
+
   const tab = mount({
     taskId: TASK,
     repository: "acme/relay",
     listedAgents: [elsewhere, local, archived],
   });
+
   await tab.mount();
 
   assert.deepEqual(
@@ -473,6 +496,7 @@ test("a draft of files alone waits while another plan is open, but no relaunch b
 
 test("a pull request's chapters are generated for the agent's own pull request or the one a tab names by its number, and an ask the port refused is heard as unanswered", async () => {
   const tab = mount({ taskId: TASK, repository: null });
+
   const generating = {
     pullRequest: {
       number: 41,
@@ -485,6 +509,7 @@ test("a pull request's chapters are generated for the agent's own pull request o
       },
     },
   };
+
   tab.answer(ACT_KIND.CHAPTERS_GENERATE, generating);
   await tab.mount();
 
@@ -506,6 +531,7 @@ test("a pull request a tab names by its number is the one the host holds under t
   const { deliverParts } = handHostReads({});
   const tab = mount({ taskId: TASK, repository: null });
   await tab.mount();
+
   const opened = (number: number, title: string, url: string) => ({
     number,
     title,
@@ -516,6 +542,7 @@ test("a pull request a tab names by its number is the one the host holds under t
     deletions: 2,
     changedFiles: 3,
   });
+
   const base = opened(41, "Lay the base", "https://github.com/acme/relay/pull/41");
 
   act(() =>
@@ -556,16 +583,19 @@ test("a fork joins the task's draft under a key of its own, its words kept and i
   const OTHER_TASK = "3c2d1e0f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
   const MESSAGE = "4f1e2d3c-5b6a-4978-8a1b-2c3d4e5f6a7b";
   const FORKED = "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32";
+
   const source: AgentSummary = {
     ...STARTED,
     status: AGENT_STATUS.COMPLETED,
     disabledServers: [INTEGRATION_PROVIDER.LINEAR],
   };
+
   const forked: AgentSummary = {
     ...STARTED,
     id: FORKED,
     from: { agentId: AGENT, messageId: MESSAGE, steps: 3, totalSteps: 5 },
   };
+
   const tab = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [source] });
   tab.answer(ACT_KIND.AGENTS_START, { failure: AGENT_CALL_FAILURE.UNANSWERED }, { agent: forked });
   await tab.mount();
@@ -586,6 +616,7 @@ test("a fork joins the task's draft under a key of its own, its words kept and i
     joined = tab.control().onForkDraft(fork);
   });
   assert.notEqual(joined, draft, "a Start the draft sent is never answered for the fork");
+
   const forkDraft = {
     id: joined,
     prompt: words,
@@ -594,6 +625,7 @@ test("a fork joins the task's draft under a key of its own, its words kept and i
     disabledServers: [INTEGRATION_PROVIDER.LINEAR],
     fork,
   };
+
   assert.deepEqual(tab.control().draft, forkDraft, "its chips start on the source's");
 
   // The fork stays with the draft while another task is open, and through a change of its chips.
@@ -698,16 +730,19 @@ test("a fork's draft with words outlasts a relaunch still a fork, under the same
 test("a continue opens the task's draft with the closed box's words and files after any it held, its chips on the source's servers, sends nothing, holds through a tab switch and a relaunch, and an empty send continues under the draft's key, asked again under the same one", async () => {
   const OTHER_TASK = "3c2d1e0f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
   const CONTINUED = "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32";
+
   const source: AgentSummary = {
     ...STARTED,
     status: AGENT_STATUS.FAILED,
     disabledServers: [INTEGRATION_PROVIDER.LINEAR],
   };
+
   const continued: AgentSummary = {
     ...STARTED,
     id: CONTINUED,
     from: { agentId: AGENT, steps: 3, totalSteps: 3 },
   };
+
   const notes = { name: "notes.md", mediaType: "text/plain", data: "IyBOb3Rlcw==" } as const;
   const before = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [source] });
   await before.mount();
@@ -760,12 +795,14 @@ test("a continue opens the task's draft with the closed box's words and files af
     failed = await after.control().startFork(draft, fork, "", undefined, [], []);
   });
   assert.equal(failed, undefined);
+
   const asked = {
     taskId: TASK,
     idempotencyKey: draft,
     from: { agentId: AGENT },
     disabledServers: [],
   };
+
   assert.deepEqual(startPayloads(after.asked), [asked, asked]);
   assert.deepEqual(after.started, [CONTINUED]);
   assert.equal(after.control().draft, undefined, "the started continue's draft is let go");
@@ -1082,10 +1119,12 @@ test("several agents archived at once say so in one toast, whose one Undo brings
   const resting = { ...STARTED, status: AGENT_STATUS.COMPLETED };
   const other = { ...resting, id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b22" };
   const tab = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [resting, other] });
+
   const archived = [
     { ...resting, archivedAt: 5 },
     { ...other, archivedAt: 5 },
   ];
+
   tab.answer(ACT_KIND.AGENTS_ARCHIVE, ...archived.map((agent) => ({ agent })));
   await tab.mount();
 

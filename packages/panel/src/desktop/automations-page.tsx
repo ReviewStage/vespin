@@ -22,9 +22,11 @@ import {
   type AutomationSummary,
 } from "@repo/features/automation-wire";
 import { GLYPH_STATE, glyphStateWords } from "@repo/features/glyph-state";
+import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { momentText } from "@repo/features/time-format";
+import { TRIGGER_PROVIDER, type TriggerProvider } from "@repo/features/trigger-catalog";
+import { managesWorkspace } from "@repo/features/workspace-role";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT, type Experiment, experimentOn } from "@repo/settings";
@@ -53,14 +55,15 @@ import {
   NotFound,
   OneLine,
   PAGE_FRAME,
+  ProviderMark,
   RowHint,
   RowHintOptions,
   STATUS_TONE,
   SuggestionCard,
   SuggestionCards,
-  TEXT_ELEMENT,
-  TEXT_VARIANT,
-  Text,
+  type SuggestionNeeds,
+  TIME_LOOK,
+  Time,
   TOOLBAR_INSET,
   Toolbar,
   type ToolbarProps,
@@ -154,7 +157,9 @@ import {
  * suggested automations: a press opens a new automation's page filled in
  * from the suggestion's preset (`@repo/features/automation-presets`), to
  * look over and Create. A suggestion behind an experiment, as Memory digest
- * stands behind the workspace's Memory, is offered only while it is on.
+ * stands behind the workspace's Memory, is offered only while it is on, and
+ * one the reader already made, or the workspace already holds, is offered
+ * no more.
  * Beside New automation, Create with an agent opens New task's own card for
  * the agent that makes one: what to automate in the member's own words, the
  * repository and the model, then Start agent, a new task's agent handed the
@@ -216,6 +221,7 @@ function OwnerCell({
   workspace: Workspace | undefined;
 }): React.JSX.Element {
   const name = automationOwnerName(owner, workspace?.name, mine);
+
   return (
     <Tooltip label={name}>
       <AutomationOwnerFrame
@@ -254,12 +260,16 @@ function MakerCell({
   const maker = useCreator(
     automation.creatorId === undefined ? {} : { ownerId: automation.creatorId },
   );
+
   const owner = automationOwner(automation);
   const mine = automation.mine === true;
+
   if (maker.kind === ACTOR_KIND.SOMEONE) {
     return <OwnerCell owner={owner} mine={mine} workspace={workspace} />;
   }
+
   const name = actorName(maker);
+
   return (
     <Tooltip label={`${name} · ${automationOwnerName(owner, workspace?.name, mine)}`}>
       <AutomationOwnerFrame
@@ -275,14 +285,17 @@ function MakerCell({
   );
 }
 
+type UseRunNowResult = { readonly running: boolean; readonly run: () => void };
+
 /**
  * Run now from a row of the list, dimmed while one is out: the run it makes
  * is pushed to the row as it lands, and a refusal is said in a toast, since
  * the row has no line of its own to say it in, as the editor does.
  */
-function useRunNow(automationId: string): { readonly running: boolean; readonly run: () => void } {
+function useRunNow(automationId: string): UseRunNowResult {
   const runAutomation = useMutation(actMutation(ACT_KIND.AUTOMATIONS_RUN));
   const toast = useToast();
+
   const run = () => {
     runAutomation
       .mutateAsync({ automationId, idempotencyKey: crypto.randomUUID() })
@@ -302,6 +315,7 @@ function useRunNow(automationId: string): { readonly running: boolean; readonly 
         }
       });
   };
+
   return { running: runAutomation.isPending, run };
 }
 
@@ -343,29 +357,26 @@ function AutomationRow({
   const next = automationNext(automation);
   const nextWords = automationNextText(automation, now);
   const links = useLinkItems()({ kind: LINK_DESTINATION.AUTOMATION, automationId: automation.id });
+
   const openInTab = useOpenInTab()({
     kind: LINK_DESTINATION.AUTOMATION,
     automationId: automation.id,
   });
+
   // Note that the glyph is the row's decoration, so its working word is said in the row's words instead.
   const working = state === GLYPH_STATE.WORKING ? glyphStateWords(state, false) : undefined;
   const trigger = automationTriggerText(automation.trigger, automation.repositories ?? []);
   const hiddenWorking = working === undefined ? null : <VisuallyHidden>{working}</VisuallyHidden>;
   const coarse = useCoarsePointer();
+
   return (
     <RowHintOptions
       card={<AutomationCard automation={automation} workspaceName={workspace?.name} />}
     >
       <ListRow
         leading={<ActorMark actor={automationActor(automation)} size={ACTOR_SIZE.ROW} />}
-        title={
-          <span
-            className="automation-row-name data-[enabled=false]:text-muted-foreground"
-            data-enabled={String(automation.enabled)}
-          >
-            {automation.name}
-          </span>
-        }
+        title={<span className="automation-row-name">{automation.name}</span>}
+        muted={!automation.enabled}
         titleReplayMasked
         description={
           narrow ? (
@@ -387,19 +398,16 @@ function AutomationRow({
               next={
                 <>
                   {stateEndMark(state, true)}
-                  {nextWords === undefined ? null : (
-                    <Tooltip
-                      label={next.kind === AUTOMATION_NEXT.AT ? momentText(next.at) : undefined}
-                    >
-                      <Text
-                        as={TEXT_ELEMENT.SPAN}
-                        variant={TEXT_VARIANT.INHERIT}
-                        truncate
-                        className="automation-row-when"
-                      >
-                        <ReplayUnmask>{nextWords}</ReplayUnmask>
-                      </Text>
-                    </Tooltip>
+                  {next.kind === AUTOMATION_NEXT.AT ? (
+                    <OneLine className="automation-row-when" words={nextWords}>
+                      <ReplayUnmask>
+                        Next: <Time at={next.at} now={now} look={TIME_LOOK.SCHEDULED} hint />
+                      </ReplayUnmask>
+                    </OneLine>
+                  ) : nextWords === undefined ? null : (
+                    <OneLine className="automation-row-when" words={nextWords}>
+                      <ReplayUnmask>{nextWords}</ReplayUnmask>
+                    </OneLine>
                   )}
                 </>
               }
@@ -451,6 +459,7 @@ function AutomationGroupRows({
   shown: AutomationRowsShown;
 }): React.JSX.Element {
   const drawn = useLeaving(automations, automationKey);
+
   return (
     <>
       {drawn.map(({ key, value: automation }) => (
@@ -490,6 +499,7 @@ function AutomationList({
           shown.workspace?.name,
           group.automations.every((automation) => automation.mine === true),
         );
+
         // A phone's lone owner's list is headed too, since its rows name no owner.
         return (
           <AutomationGroupList
@@ -512,7 +522,9 @@ function listState(
   read: ReturnType<typeof useAutomations>["read"],
 ): CollectionState {
   if (workspacesUnread) return COLLECTION_STATE.ERROR;
+
   if (read === undefined) return COLLECTION_STATE.LOADING;
+
   return "failure" in read ? COLLECTION_STATE.ERROR : COLLECTION_STATE.READY;
 }
 
@@ -528,14 +540,17 @@ function useRowDeletion(
 ) {
   const removing = useMutation(AUTOMATION_DELETE_MUTATION);
   const [asking, setAsking] = useState<AutomationSummary | undefined>(undefined);
+
   const asked =
     asking !== undefined &&
     groups.some((group) => group.automations.some((each) => each.id === asking.id))
       ? asking
       : undefined;
+
   const confirmAct = useConfirmAct(removing, {
     send: () => {
       if (asked === undefined) return Promise.resolve();
+
       return removing.mutateAsync(asked.id).then((answer) => {
         if (!("failure" in answer)) onDeleted(asked.id);
       });
@@ -545,12 +560,15 @@ function useRowDeletion(
         ? { status: ACTION_RESULT_STATUS.REJECTED, reason: DELETE_REFUSAL_WORDS[answer.failure] }
         : ACCEPTED,
   });
+
   const confirm = useConfirmDialog(
     { subject: asked !== undefined, surfaceOpen: true },
     confirmAct,
     confirmFailure(FAILURE_SURFACE.AUTOMATION_DELETE, { automationId: asked?.id }),
   );
+
   const { ask: askConfirm } = confirm;
+
   const ask = useCallback(
     (automation: AutomationSummary) => {
       setAsking(automation);
@@ -558,6 +576,7 @@ function useRowDeletion(
     },
     [askConfirm],
   );
+
   return { asked, confirm, ask };
 }
 
@@ -572,6 +591,7 @@ function AutomationsHead({
   const door = useAutomationsDoor(tasks);
   const workspace = tasks.workspace;
   const openNew = () => door.open({ kind: AUTOMATIONS_PAGE.NEW });
+
   return room === SHELL_ROOM.NARROW ? (
     // A phone heads the list as it heads every place (`phone-head.tsx`): New automation, the title centered, and a ⋯.
     <PhoneHead
@@ -635,58 +655,143 @@ function AutomationsHead({
 
 /**
  * The presets the list suggests, in its order, each by the glyph of what it
- * does and the experiment it stands behind, where it stands behind one.
- * Note that one whose experiment is off where the window works is
- * suggested nowhere, and a new page its address names opens blank.
+ * does, the experiment it stands behind, where it stands behind one, and the
+ * integration whose events fire it, where one does. Note that one whose
+ * experiment is off where the window works is suggested nowhere, and a new
+ * page its address names opens blank.
  */
 const SUGGESTIONS: readonly {
   readonly preset: AutomationPresetName;
   readonly glyph: React.ReactNode;
   readonly experiment?: Experiment;
+  readonly integration?: TriggerProvider;
 }[] = [
   {
     preset: AUTOMATION_PRESET.MEMORY_DIGEST,
     glyph: <GLYPH.MEMORY />,
     experiment: EXPERIMENT.MEMORY,
   },
+  {
+    preset: AUTOMATION_PRESET.RED_MAIN_TRIAGE,
+    glyph: <GLYPH.CHECKS />,
+  },
+  {
+    preset: AUTOMATION_PRESET.SENTRY_ALERT_INVESTIGATION,
+    glyph: <ProviderMark provider={INTEGRATION_PROVIDER.SENTRY} />,
+    integration: TRIGGER_PROVIDER.SENTRY,
+  },
 ];
+
+/** What a Sentry suggestion's foot says while the workspace has no Sentry: the press that connects it, or, for a member, whom to ask. */
+const SENTRY_NEEDS = {
+  CONNECT: "Connect Sentry",
+  ASK: "Ask an owner or admin to connect Sentry",
+} as const;
 
 /** The presets suggested where the window works in `workspaceId`: each whose experiment is on there, or that has none. */
 function useOfferedPresets(workspaceId: string | undefined): readonly AutomationPresetName[] {
   const experiments = useExperimentsIn(workspaceId);
-  return SUGGESTIONS.filter(
-    ({ experiment }) => experiment === undefined || experimentOn(experiments, experiment),
-  ).map(({ preset }) => preset);
+
+  return SUGGESTIONS.flatMap(({ experiment, preset }) =>
+    experiment === undefined || experimentOn(experiments, experiment) ? [preset] : [],
+  );
+}
+
+/** How a suggestion stands: what it needs first, where it needs something, and whether the reader can only ask for it, so the card takes no press. */
+interface SuggestionStanding {
+  readonly needs?: SuggestionNeeds;
+  readonly asks?: boolean;
+}
+
+/**
+ * How a suggestion fired by Sentry stands while the workspace has none:
+ * nothing to say once it has one, and none at all while the read is out or
+ * failed, or where the deployment holds no Sentry integration, since none
+ * could be connected. Otherwise its foot asks for one: Connect, which
+ * starts the install in the browser, for an owner or an admin, who alone
+ * install it; and for a member, whom to ask, the card taking no press.
+ */
+function sentryNeeds(
+  sentry: SentryOffer,
+  workspace: Workspace | undefined,
+): SuggestionStanding | undefined {
+  const read = sentry.read;
+
+  if (read === undefined || !read.configured) return undefined;
+
+  if (read.installations.length > 0) return {};
+  const manages = workspace !== undefined && managesWorkspace(workspace);
+  const mark = <ProviderMark provider={INTEGRATION_PROVIDER.SENTRY} />;
+
+  return manages
+    ? { needs: { mark, words: SENTRY_NEEDS.CONNECT } }
+    : { needs: { mark, words: SENTRY_NEEDS.ASK }, asks: true };
 }
 
 /**
  * The automations suggested under the list, or under the line saying there
  * is none yet, each a card whose press opens a new automation's page filled
  * in from its preset, to look over and Create; nothing where none is
- * offered.
+ * offered. A preset is taken by an automation made from it, whatever its
+ * name, that is the reader's own or the workspace's: a teammate's personal
+ * one runs for that teammate alone, so the reader is still offered their
+ * own, while one for the workspace serves everyone. One fired by Sentry
+ * while the workspace has none asks for it at its foot (`sentryNeeds`), and
+ * its press starts the install as well, so the page it opens turns into an
+ * ordinary one as the install lands.
  */
-function SuggestedAutomations({ tasks }: { tasks: TasksControl }): React.JSX.Element | null {
+function SuggestedAutomations({
+  tasks,
+  listed,
+}: {
+  tasks: TasksControl;
+  listed: readonly AutomationSummary[];
+}): React.JSX.Element | null {
   const door = useAutomationsDoor(tasks);
   const workspace = tasks.workspace;
   const offered = useOfferedPresets(workspace?.id);
-  if (offered.length === 0) return null;
+  const sentry = useWorkspaceSentry(workspace?.id);
+
+  const taken = new Set(
+    listed.flatMap((automation) =>
+      automation.mine === true || automation.scope === AUTOMATION_SCOPE.WORKSPACE
+        ? [automation.preset]
+        : [],
+    ),
+  );
+
+  const cards = SUGGESTIONS.flatMap(({ preset, glyph, integration }) => {
+    if (!offered.includes(preset) || taken.has(preset)) return [];
+
+    const standing: SuggestionStanding | undefined =
+      integration === undefined ? {} : sentryNeeds(sentry, workspace);
+
+    if (standing === undefined) return [];
+    const filled = automationPreset(preset);
+
+    const press = () => {
+      if (standing.needs !== undefined) sentry.onInstall();
+      door.open({ kind: AUTOMATIONS_PAGE.NEW, preset });
+    };
+
+    return [
+      <SuggestionCard
+        key={preset}
+        glyph={glyph}
+        name={filled.name}
+        detail={filled.description}
+        needs={standing.needs}
+        disabled={workspace === undefined || standing.asks === true}
+        onPress={press}
+      />,
+    ];
+  });
+
+  if (cards.length === 0) return null;
+
   return (
     <div className="automation-suggestions mt-page-section-gap">
-      <SuggestionCards title="Suggested">
-        {SUGGESTIONS.filter(({ preset }) => offered.includes(preset)).map(({ preset, glyph }) => {
-          const filled = automationPreset(preset);
-          return (
-            <SuggestionCard
-              key={preset}
-              glyph={glyph}
-              name={filled.name}
-              detail={filled.description}
-              disabled={workspace === undefined}
-              onPress={() => door.open({ kind: AUTOMATIONS_PAGE.NEW, preset })}
-            />
-          );
-        })}
-      </SuggestionCards>
+      <SuggestionCards title="Suggested">{cards}</SuggestionCards>
     </div>
   );
 }
@@ -707,12 +812,15 @@ function ListPage({
   const workspace = tasks.workspace;
   const workspacesRead = useWorkspacesRead();
   const { read, reload, toggle } = automations;
-  const groups =
-    read !== undefined && "automations" in read ? automationGroups(read.automations) : [];
+  const listed = read !== undefined && "automations" in read ? read.automations : [];
+  const groups = automationGroups(listed);
+
   const workspacesUnread = workspace === undefined && workspacesRead.failed;
+
   const deletion = useRowDeletion(groups, (automationId) =>
     door.open({ kind: AUTOMATIONS_PAGE.LIST, deleted: automationId }),
   );
+
   return (
     <ReplayUnmask>
       <CollectionPage
@@ -746,7 +854,7 @@ function ListPage({
         {groups.length === 0 ? (
           <div className="automations-empty flex min-h-0 flex-1 flex-col before:flex-2 before:content-[''] after:flex-3 after:content-[''] [&>.ui-empty-state]:flex-none">
             <EmptyState icon={<ZapIcon />}>No automations yet.</EmptyState>
-            <SuggestedAutomations tasks={tasks} />
+            <SuggestedAutomations tasks={tasks} listed={listed} />
           </div>
         ) : (
           <>
@@ -761,7 +869,7 @@ function ListPage({
               onToggle={(automation, enabled) => toggle(automation.id, enabled)}
               onDelete={deletion.ask}
             />
-            <SuggestedAutomations tasks={tasks} />
+            <SuggestedAutomations tasks={tasks} listed={listed} />
           </>
         )}
         <ConfirmDialog
@@ -791,8 +899,10 @@ function AutomationsTabs({
   const door = useAutomationsDoor(tasks);
   const standing = useAutomationsPlace();
   const { read } = useWorkspaceRuns(tasks.workspace?.id);
+
   const tab =
     standing.place.kind === AUTOMATIONS_PAGE.RUNS ? AUTOMATIONS_PAGE.RUNS : AUTOMATIONS_PAGE.LIST;
+
   const tabs = [
     { value: AUTOMATIONS_PAGE.LIST, label: AUTOMATIONS },
     {
@@ -801,6 +911,7 @@ function AutomationsTabs({
       count: runsCount(runningRuns(read), STATUS_TONE.WORKING),
     },
   ] as const;
+
   return (
     <Inline gap={GAP.SECTION}>
       <ChoiceBar<AutomationsTabKind>
@@ -818,7 +929,9 @@ function AutomationsTabs({
 /** What the Runs tab shows: the workspaces or the runs unread, the runs still being read, or the runs. */
 function runsState(workspacesUnread: boolean, read: WorkspaceRunsRead): CollectionState {
   if (workspacesUnread) return COLLECTION_STATE.ERROR;
+
   if (read === undefined) return COLLECTION_STATE.LOADING;
+
   return "failed" in read ? COLLECTION_STATE.ERROR : COLLECTION_STATE.READY;
 }
 
@@ -844,14 +957,18 @@ function RunsPage({
   const { read, reload } = useWorkspaceRuns(workspace?.id);
   const workspacesRead = useWorkspacesRead();
   const [shown, setShown] = useState<RunsShown>(RUNS_SHOWN.ALL);
+
   const listed =
     automations.read !== undefined && "automations" in automations.read
       ? automations.read.automations
       : [];
+
   // Note that an automation the list does not hold yet is taken for the reader's own, so no run names a creator it may not have.
   const mine = (automationId: string) =>
     listed.find((automation) => automation.id === automationId)?.mine !== false;
+
   const workspacesUnread = workspace === undefined && workspacesRead.failed;
+
   return (
     <ReplayUnmask>
       <CollectionPage
@@ -923,7 +1040,9 @@ function backBar(onBack: () => void, phone: boolean): ToolbarProps {
       onBack={onBack}
     />
   );
+
   if (phone) return phoneBar({ place: "automation", start: back, end: null });
+
   return { lead: back, start: TOOLBAR_INSET.COLUMN };
 }
 
@@ -939,6 +1058,7 @@ function AutomationAbsentPage({
   children: React.ReactNode;
 }): React.JSX.Element {
   useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, onBack);
+
   return (
     <ReplayUnmask>
       <DetailPage
@@ -981,6 +1101,7 @@ function UnreadPage({
 /** One automation's page that names an automation the list does not hold: it was deleted, or is of a workspace the reader is not in, as a link may name. */
 function GonePage({ onBack, phone }: { onBack: () => void; phone: boolean }): React.JSX.Element {
   useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, onBack);
+
   return (
     <ReplayUnmask>
       <NotFound replayUnmasked thing={NOT_FOUND_THING.AUTOMATION} bar={backBar(onBack, phone)} />
@@ -999,6 +1120,7 @@ function ReadingPage({
   offersOwner: boolean;
 }): React.JSX.Element {
   useAppCommand(APP_COMMAND.EXIT_AUTOMATIONS, onBack);
+
   return <AutomationPageSkeleton room={room} offersOwner={offersOwner} onBack={onBack} />;
 }
 
@@ -1037,25 +1159,32 @@ const SENTRY_UNREAD: SentryOffer = {
 };
 
 /**
- * A listed workspace's Sentry as its automations' editor offers it: held
- * by the host while the editor shows, followed live on the service, so an
- * install finished in the browser draws as it lands, and installed in the
- * browser, a refusal (only owners and admins install) said at its row.
+ * A listed workspace's Sentry as its automations' editor and the list's
+ * Sentry suggestion offer it: held by the host while either shows, followed
+ * live on the service, so an install finished in the browser draws as it
+ * lands, and installed in the browser, a refusal (only owners and admins
+ * install) said at the editor's row; unread, with nothing to install on,
+ * while no workspace is listed.
  */
-function useWorkspaceSentry(workspaceId: string): SentryOffer {
+function useWorkspaceSentry(workspaceId: string | undefined): SentryOffer {
   const installSentry = useMutation(actMutation(ACT_KIND.WORKSPACE_SENTRY_INSTALL));
   const integrations = useQuery(workspaceIntegrationsQuery(workspaceId));
   const { mutate: retryIntegrations } = useMutation(workspaceIntegrationsRetryMutation());
   // Note that a read that failed offers what one still out does, so a saved Sentry trigger stays editable; the editor says the failure above its rows.
   const read = integrations.data?.sentry;
   const failed = read === undefined && integrations.isError;
-  const retry = () => retryIntegrations({ workspaceId });
   const installing = installSentry.isPending;
   const refusal = installSentry.error?.message;
+
+  const retry = () => {
+    if (workspaceId !== undefined) retryIntegrations({ workspaceId });
+  };
+
   const onInstall = () => {
-    if (installing) return;
+    if (installing || workspaceId === undefined) return;
     installSentry.mutate({ workspaceId });
   };
+
   return { read, failed, onRetry: retry, installing, refusal, onInstall };
 }
 
@@ -1097,13 +1226,17 @@ function AutomationsPages({
   const [made, setMade] = useState<string | undefined>(undefined);
   const back = () => door.open({ kind: AUTOMATIONS_PAGE.LIST });
   const { place } = standing;
+
   if (place.kind === AUTOMATIONS_PAGE.LIST) {
     return <ListPage tasks={tasks} automations={automations} room={room} />;
   }
+
   if (place.kind === AUTOMATIONS_PAGE.RUNS) {
     return <RunsPage tasks={tasks} automations={automations} room={room} />;
   }
+
   const { read, reload } = automations;
+
   if (workspace === undefined && workspacesRead.failed) {
     return (
       <UnreadPage
@@ -1114,6 +1247,7 @@ function AutomationsPages({
       />
     );
   }
+
   if (read !== undefined && "failure" in read) {
     return (
       <UnreadPage
@@ -1124,13 +1258,17 @@ function AutomationsPages({
       />
     );
   }
+
   const listedAutomations = read === undefined ? [] : read.automations;
+
   const opened =
     place.kind === AUTOMATIONS_PAGE.EDIT
       ? listedAutomations.find((automation) => automation.id === place.automationId)
       : undefined;
+
   // Note that the account's first workspace is its personal one, where everything is its own.
   const offersOwner = workspace !== undefined && tasks.workspaces[0]?.id !== workspace.id;
+
   if (place.kind === AUTOMATIONS_PAGE.EDIT && opened === undefined) {
     return read === undefined ? (
       <ReadingPage onBack={back} room={room} offersOwner={offersOwner} />
@@ -1138,7 +1276,9 @@ function AutomationsPages({
       <GonePage onBack={back} phone={room === SHELL_ROOM.NARROW} />
     );
   }
+
   const editing = opened === undefined || opened.id === made ? AUTOMATIONS_PAGE.NEW : opened.id;
+
   // A new page is filled in from the suggestion its address names only while that suggestion is offered.
   const preset =
     place.kind === AUTOMATIONS_PAGE.NEW &&
@@ -1146,6 +1286,7 @@ function AutomationsPages({
     offered.includes(place.preset)
       ? place.preset
       : undefined;
+
   const editor = (sentry: SentryOffer, slackBot: boolean) => (
     <AutomationEditor
       key={editing}
@@ -1173,6 +1314,7 @@ function AutomationsPages({
       }}
     />
   );
+
   return (
     // Keyed by the workspace, then by what it edits, so another workspace's page or another automation's holds nothing of the last's draft.
     <Fragment key={workspace?.id}>

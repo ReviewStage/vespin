@@ -8,7 +8,6 @@ import {
   agentStatusSchema,
   agentSummarySchema,
   CHECK_SUMMARY,
-  extraRepositoryRefusalSchema,
   localAgentRefusalSchema,
   PULL_REQUEST_STATE,
   startBrief,
@@ -93,6 +92,7 @@ const PLACEHOLDER_BRACKETS = /^<(.*)>$/u;
 /** Whether a title names nothing: the untitled name, in any case, bare or in a placeholder's angle brackets. */
 export function titlesNothing(title: string): boolean {
   const bare = title.trim().replace(PLACEHOLDER_BRACKETS, "$1").trim();
+
   return bare.toLowerCase() === UNTITLED_TASK_NAME.toLowerCase();
 }
 
@@ -242,7 +242,7 @@ export type TaskRunsOnRequest = typeof taskRunsOnRequestSchema.Type;
  * (`agent-wire.ts`), its key, which a retry carries again, the choice,
  * a prompt and its files, the servers switched off, where it runs, the
  * repositories it works in beside the task's, the branch its checkout is
- * cloned at, and its title, held to the same
+ * cloned at, its title, and its permission mode, held to the same
  * words-or-files rule, but never `from` or a note, since a new task has no
  * agent to take over from. The prompt travels as `prompt`, the key the
  * desktop's own Start params name it by: the `task` an agent Start's body
@@ -257,9 +257,18 @@ const taskAgentStartSchema = EffectSchema.Struct({
   attachments: agentStartRequestFields.attachments,
   disabledServers: agentStartRequestFields.disabledServers,
   runsOn: agentStartRequestFields.runsOn,
-  alsoRepositories: agentStartRequestFields.alsoRepositories,
   branch: agentStartRequestFields.branch,
   title: agentStartRequestFields.title,
+  permissionMode: agentStartRequestFields.permissionMode,
+  /** The repositories beside the task's, which released desktop builds send and the service passes over, since every connected repository is on the workspace drive. */
+  alsoRepositories: EffectSchema.optionalKey(
+    EffectSchema.Array(
+      EffectSchema.Struct({
+        repository: EffectSchema.String,
+        branch: EffectSchema.optionalKey(EffectSchema.String),
+      }),
+    ),
+  ),
 }).check(startBrief);
 
 export type TaskAgentStart = typeof taskAgentStartSchema.Type;
@@ -308,6 +317,7 @@ export function startRelationsOf(request: {
   readonly relations?: readonly TaskCreateRelation[];
 }): readonly TaskCreateRelation[] {
   if (request.relations !== undefined) return request.relations;
+
   return request.relation === undefined ? [] : [request.relation];
 }
 
@@ -334,10 +344,13 @@ function relationsEachOnce(request: {
   relations?: readonly TaskCreateRelation[];
 }): boolean {
   const relations = startRelationsOf(request);
+
   const parents = relations.filter(
     (relation) => relation.kind === TASK_CREATE_RELATION_KIND.SUB_TASK_OF,
   );
+
   const named = new Set(relations.map((relation) => relation.taskId));
+
   return parents.length <= 1 && named.size === relations.length;
 }
 
@@ -1080,9 +1093,6 @@ const taskAgentRefusalSchema = EffectSchema.Struct({
   provider: EffectSchema.optionalKey(modelProviderSchema),
   /** Why the task's device would not take the agent, where that is why. */
   localAgentRefusal: EffectSchema.optionalKey(localAgentRefusalSchema),
-  /** Why the repositories named beside the agent's own were refused, where that is why, and the repository where one is. */
-  extraRepositoryRefusal: EffectSchema.optionalKey(extraRepositoryRefusalSchema),
-  refusedRepository: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 export type TaskAgentRefusal = typeof taskAgentRefusalSchema.Type;
@@ -1190,6 +1200,7 @@ function codeRangeIsReadable(ref: { startLine?: number; endLine?: number }): boo
   if (ref.startLine === undefined || ref.endLine === undefined) {
     return ref.startLine === ref.endLine;
   }
+
   return ref.endLine >= ref.startLine && ref.endLine - ref.startLine < CODE_REF_MAX_LINES;
 }
 

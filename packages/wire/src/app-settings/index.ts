@@ -3,6 +3,7 @@ export {
   type AppSettingId,
   isAppSettingId,
 } from "./app-settings.js";
+
 export {
   COMPLETION_SOUND,
   COMPLETION_SOUND_GROUP,
@@ -16,6 +17,7 @@ export {
   type CustomCompletionSound,
   isCustomCompletionSound,
 } from "./completion-sound.js";
+
 export {
   APP_PANEL_TAB,
   APP_SETTING_KIND,

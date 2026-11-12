@@ -21,6 +21,7 @@ export type EmptyStateProps = {
 /** The system's spinner over a read's words, centered in the space it is given, as Mail and Photos stand one while they read. */
 function LoadingState({ title }: { readonly title: string }) {
   const colors = useColors();
+
   return (
     <ProgressView
       modifiers={[
@@ -53,6 +54,7 @@ export function EmptyState({
   loading = false,
 }: EmptyStateProps) {
   if (loading) return <LoadingState title={title} />;
+
   return (
     <Fragment key={description ?? ""}>
       <ContentUnavailableView

@@ -145,6 +145,7 @@ test("a gap control's hint, once the pointer presses or leaves, is drawn through
       return this.hasAttribute("data-leaving") ? [motion] : [];
     },
   });
+
   try {
     const container = document.body.appendChild(document.createElement("div"));
     const root = createRoot(container);

@@ -51,11 +51,14 @@ const readJsonString = Schema.decodeUnknownOption(Schema.String);
 /** The lines under a key that continue its value: indented or blank, up to the next top-level key. */
 function continuationOf(lines: readonly string[], from: number): readonly string[] {
   const taken: string[] = [];
+
   for (let at = from; at < lines.length; at += 1) {
     const line = lines[at] ?? "";
+
     if (line.trim() !== "" && !/^[ \t]/u.test(line)) break;
     taken.push(line);
   }
+
   return taken;
 }
 
@@ -64,7 +67,9 @@ function blockScalar(style: string, lines: readonly string[]): string {
   const first = lines.find((line) => line.trim() !== "") ?? "";
   const indent = first.length - first.trimStart().length;
   const kept = lines.map((line) => line.slice(indent).trimEnd());
+
   if (style === "|") return kept.join("\n").trim();
+
   return kept
     .join("\n")
     .split(/\n{2,}/u)
@@ -85,18 +90,24 @@ function doubleQuoted(text: string): string {
 /** One key's value as text: the first line's rest, folded with the lines that continue it. */
 function scalarOf(rest: string, continuation: readonly string[]): string {
   const head = rest.trim();
+
   if (/^[|>][+-]?$/u.test(head)) return blockScalar(head.charAt(0), continuation);
+
   const folded = [head, ...continuation.map((line) => line.trim())]
     .filter((part) => part !== "")
     .join(" ");
+
   if (folded.startsWith('"') && folded.endsWith('"') && folded.length > 1) {
     return doubleQuoted(folded);
   }
+
   if (folded.startsWith("'") && folded.endsWith("'") && folded.length > 1) {
     return folded.slice(1, -1).replaceAll("''", "'");
   }
+
   // Note that a plain scalar ends at a comment, which YAML opens with a space and a hash.
   const comment = folded.search(/[ \t]#/u);
+
   return comment === -1 ? folded : folded.slice(0, comment).trimEnd();
 }
 
@@ -104,15 +115,19 @@ function scalarOf(rest: string, continuation: readonly string[]): string {
 export function readSkillFile(text: string): SkillFile | undefined {
   const unmarked = text.replace(/^\uFEFF/u, "");
   const fenced = SKILL_FRONTMATTER.exec(unmarked);
+
   if (fenced === null) return undefined;
   const lines = (fenced[1] ?? "").split(/\r?\n/u);
   const keys = new Map<string, string>();
+
   for (let at = 0; at < lines.length; at += 1) {
     const key = TOP_LEVEL_KEY.exec(lines[at] ?? "");
+
     if (key === null) continue;
     const continuation = continuationOf(lines, at + 1);
     keys.set(key[1] ?? "", scalarOf(key[2] ?? "", continuation));
     at += continuation.length;
   }
+
   return { keys, body: unmarked.slice(fenced[0].length).trim() };
 }

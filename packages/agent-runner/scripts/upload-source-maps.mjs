@@ -17,10 +17,12 @@ import { join } from "node:path";
 
 const ORG = "stage-review";
 const PROJECT = "vespin-web";
+
 /** Where the agent image runs the bundle from, as Sentry matches a frame's path. */
 const URL_PREFIX = "~/opt/agent/agent-runner";
 
 const release = process.env.VERCEL_GIT_COMMIT_SHA;
+
 const uploads =
   Boolean(process.env.SENTRY_AUTH_TOKEN) &&
   process.env.VERCEL_ENV === "production" &&
@@ -28,6 +30,7 @@ const uploads =
 
 if (uploads) {
   const dist = join(import.meta.dirname, "..", "dist");
+
   const result = spawnSync(
     "sentry-cli",
     [
@@ -45,6 +48,7 @@ if (uploads) {
     ],
     { stdio: "inherit" },
   );
+
   if (result.status !== 0) {
     console.warn(
       "warning: the runner's source-map upload to Sentry failed, so the build goes on without it",

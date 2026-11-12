@@ -13,13 +13,12 @@ import {
   useNativeState,
   VStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
-  accessibilityHidden,
   accessibilityIdentifier,
   accessibilityLabel,
   background,
   buttonStyle,
-  contentShape,
   font,
   foregroundStyle,
   frame,
@@ -27,13 +26,14 @@ import {
   labelsHidden,
   padding,
   pickerStyle,
-  shapes,
   strokeBorder,
   tag,
+  textFieldStyle,
   tint,
   toggleStyle,
 } from "@expo/ui/swift-ui/modifiers";
 import { FIELD_WORDS } from "@repo/features/words";
+import { Predicate } from "effect";
 import { Fragment, type ReactNode } from "react";
 import { useAnnounced } from "./accessibility.js";
 import { Chip } from "./button.js";
@@ -47,6 +47,9 @@ const HAIRLINE = 0.5;
 
 /** A row's inner margins, as a decide option's. */
 const ROW_PADDING = { horizontal: SPACE.EDGE - 2, vertical: SPACE.ROW + 1 } as const;
+
+/** How far a typed field's words stand inside its box, as the composer's field holds its own. */
+const FIELD_PADDING = { horizontal: SPACE.ROW, vertical: SPACE.TIGHT * 2 } as const;
 
 /** What a ticked step is heard as after its words. */
 const TICKED = "ticked";
@@ -86,15 +89,20 @@ export type AskAct = {
 /** The bordered card on the surface the rows stand in, a hairline between each. */
 function Card({ children }: { readonly children: readonly ReactNode[] }) {
   const colors = useColors();
+
   return (
     <VStack
       alignment="leading"
       spacing={0}
       modifiers={[
         frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-        background(colors.SURFACE, shapes.roundedRectangle({ cornerRadius: RADIUS.CARD })),
+        background(
+          colors.SURFACE,
+          SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.CARD }),
+        ),
         strokeBorder({
           content: colors.CHIP_EDGE,
+          // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
           shape: "roundedRectangle",
           cornerRadius: RADIUS.CARD,
           style: { lineWidth: HAIRLINE },
@@ -117,6 +125,7 @@ export function AskNote({ words }: { readonly words: string }) {
   const colors = useColors();
   // Note that a note stands because a send did not go, so VoiceOver is told it at once, rather than the reader finding it only by walking the screen.
   useAnnounced(words, true);
+
   return (
     <Text
       modifiers={[
@@ -157,6 +166,7 @@ function StepRow({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+
   return (
     <SwiftUIButton
       onPress={onPress}
@@ -165,10 +175,13 @@ function StepRow({
       <HStack
         spacing={SPACE.ROW}
         alignment="top"
-        modifiers={[padding(ROW_PADDING), contentShape(shapes.rectangle())]}
+        modifiers={[
+          padding(ROW_PADDING),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        ]}
       >
         <Image
-          systemName={ticked ? "checkmark.square.fill" : "square"}
+          systemName={ticked ? "checkmark.circle.fill" : "circle"}
           size={MARK_SIZE.LEAD}
           color={ticked ? colors.ACCENT : colors.TEXT_MUTED}
         />
@@ -229,6 +242,7 @@ function FieldWords({
   readonly ink: string;
 }) {
   const colors = useColors();
+
   return (
     <Text modifiers={[font({ textStyle, weight: "medium" }), foregroundStyle(ink)]}>
       <Text>{label}</Text>
@@ -243,7 +257,12 @@ function FieldWords({
   );
 }
 
-/** A text or number field: its label over the system's field, a number's with the decimal pad. */
+/**
+ * A text or number field: its label over the system's field, drawn as a
+ * field (a box on the ground inside the card's hairline, as the panel's
+ * answer box stands) rather than words with nothing round them, and heard
+ * by its label; a number's with the decimal pad.
+ */
 function TypedFieldRow({
   field,
   onChange,
@@ -252,7 +271,8 @@ function TypedFieldRow({
   readonly onChange: (value: string) => void;
 }) {
   const colors = useColors();
-  const text = useNativeState(typeof field.value === "string" ? field.value : "");
+  const text = useNativeState(Predicate.isString(field.value) ? field.value : "");
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
       <FieldWords
@@ -265,8 +285,23 @@ function TypedFieldRow({
         text={text}
         onTextChange={onChange}
         modifiers={[
+          textFieldStyle("plain"),
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
           foregroundStyle(colors.TEXT),
+          padding(FIELD_PADDING),
+          frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+          background(
+            colors.GROUND,
+            SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.TAG }),
+          ),
+          strokeBorder({
+            content: colors.CHIP_EDGE,
+            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+            shape: "roundedRectangle",
+            cornerRadius: RADIUS.TAG,
+            style: { lineWidth: HAIRLINE },
+          }),
+          accessibilityLabel(field.label),
           accessibilityIdentifier(`answer-field-${field.label}`),
           ...(field.kind === ANSWER_FIELD.NUMBER ? [keyboardType("decimal-pad")] : []),
         ]}
@@ -286,6 +321,7 @@ function SelectRow({
   readonly onChange: (value: string) => void;
 }) {
   const colors = useColors();
+
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
       <FieldWords
@@ -296,9 +332,9 @@ function SelectRow({
       />
       <Picker<string>
         label={field.label}
-        selection={typeof field.value === "string" ? field.value : ""}
+        selection={Predicate.isString(field.value) ? field.value : ""}
         onSelectionChange={onChange}
-        modifiers={[pickerStyle("menu"), labelsHidden(), tint(colors.ACCENT)]}
+        modifiers={[pickerStyle("menu"), labelsHidden(), tint(colors.TEXT)]}
       >
         <Text modifiers={[tag("")]}>{CHOOSE}</Text>
         {(field.options ?? []).map((option) => (
@@ -312,9 +348,9 @@ function SelectRow({
 }
 
 /**
- * A boolean: its label and the system's switch at the row's end. Note that
- * the label flips it too, since the switch alone takes a press on its knob;
- * the switch carries the label for VoiceOver, so the words are not heard twice.
+ * A boolean: the system's switch with its label, as Settings' rows stand,
+ * the system laying out the words and the switch at the row's end and
+ * hearing them as one control.
  */
 function BooleanRow({
   field,
@@ -324,28 +360,20 @@ function BooleanRow({
   readonly onChange: (value: boolean) => void;
 }) {
   const colors = useColors();
-  const on = field.value === true;
+
   return (
-    <HStack spacing={SPACE.ROW} modifiers={[padding(ROW_PADDING)]}>
-      <SwiftUIButton
-        onPress={() => onChange(!on)}
-        modifiers={[buttonStyle("plain"), accessibilityHidden(true)]}
-      >
-        <FieldWords
-          label={field.label}
-          required={field.required}
-          textStyle={TYPE_ROLE.ROW_TITLE}
-          ink={colors.TEXT}
-        />
-      </SwiftUIButton>
-      <Spacer />
-      <Toggle
+    <Toggle
+      isOn={field.value === true}
+      onIsOnChange={onChange}
+      modifiers={[toggleStyle("switch"), tint(colors.ACCENT), padding(ROW_PADDING)]}
+    >
+      <FieldWords
         label={field.label}
-        isOn={on}
-        onIsOnChange={onChange}
-        modifiers={[toggleStyle("switch"), labelsHidden(), tint(colors.ACCENT)]}
+        required={field.required}
+        textStyle={TYPE_ROLE.ROW_TITLE}
+        ink={colors.TEXT}
       />
-    </HStack>
+    </Toggle>
   );
 }
 
@@ -371,9 +399,11 @@ export function AnswerFields({
     <Card>
       {fields.map((field) => {
         const change = (value: string | boolean) => onChange(field.label, value);
+
         if (field.kind === ANSWER_FIELD.BOOLEAN) {
           return <BooleanRow key={field.label} field={field} onChange={change} />;
         }
+
         if (field.kind === ANSWER_FIELD.SELECT) {
           return (
             <SelectRow
@@ -384,6 +414,7 @@ export function AnswerFields({
             />
           );
         }
+
         return <TypedFieldRow key={field.label} field={field} onChange={change} />;
       })}
     </Card>

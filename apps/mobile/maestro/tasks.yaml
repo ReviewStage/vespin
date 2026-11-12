@@ -90,7 +90,14 @@ onFlowComplete:
       - takeScreenshot: tasks-swipe-leading
       - tapOn: "Tasks"
       - waitForAnimationToEnd
+# Note that the long press is pressed again where the menu did not open,
+# because a swipe left open takes the first press to close itself.
 - longPressOn: "Weekly digest email"
+- runFlow:
+    when:
+      notVisible: "Open"
+    commands:
+      - longPressOn: "Weekly digest email"
 - assertVisible: "Open"
 - assertVisible: "Status"
 - assertVisible: "Copy link"
@@ -119,13 +126,14 @@ onFlowComplete:
 - waitForAnimationToEnd
 - assertVisible: "Weekly digest email"
 # Copy link raises the system's share sheet on the task's address, whose
-# first row copies it; its close puts it away.
+# first row copies it; its close puts it away, which iOS 27.2 names
+# "dismiss popup" where earlier releases said "Close".
 - longPressOn: "Weekly digest email"
 - tapOn: "Copy link"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-copy-link
 - tapOn:
-    text: "Close"
+    text: "Close|dismiss popup"
     optional: true
 - waitForAnimationToEnd
 - longPressOn: "Weekly digest email"
@@ -171,20 +179,26 @@ onFlowComplete:
 - assertVisible: "Open"
 - waitForAnimationToEnd
 - takeScreenshot: task-agent-preview
+# Note that the tap lands on the dimmed screen above the preview, since one
+# on the status bar is taken by the system and leaves the menu open.
 - tapOn:
-    point: "50%, 5%"
+    point: "50%, 30%"
 - waitForAnimationToEnd
 - runFlow:
     when:
       notVisible: "Select a task"
     commands:
+      # Note that the swipe runs partway across the agent's row, where the
+      # Overview opened at its top stands it, as the leading swipe above
+      # does, because a swipe from the row's name either holds long enough
+      # to lift its preview or runs far enough to press Open; a tap on the
+      # page's plain line then closes it.
       - swipe:
-          from: "Build teammate invitations"
-          direction: LEFT
+          start: "85%, 66%"
+          end: "50%, 66%"
           duration: 900
       - takeScreenshot: task-agent-swipe
-      - tapOn:
-          point: "50%, 5%"
+      - tapOn: "Created by .*"
       - waitForAnimationToEnd
 - waitForAnimationToEnd
 - scrollUntilVisible:
@@ -248,7 +262,13 @@ onFlowComplete:
 - tapOn: "New sub-task"
 - assertVisible: "Describe the task"
 - assertVisible: "Relation, Sub-task of"
-- hideKeyboard
+# Note that the keyboard is lowered by a short drag up the form, which
+# lowers it on a drag (`SettingsForm`), since Maestro's hideKeyboard fails
+# on this sheet when no keyboard stands, as with nothing typed.
+- swipe:
+    start: "50%, 50%"
+    end: "50%, 40%"
+    duration: 400
 - waitForAnimationToEnd
 - takeScreenshot: new-sub-task
 - tapOn: "Cancel"
@@ -275,7 +295,15 @@ onFlowComplete:
 - waitForAnimationToEnd
 # Back on the list, a landscape window stands it as a split view: on an iPad
 # the app sidebar, the list, and the task side by side.
+# Note that the tab is pressed again where the list did not come back,
+# because the first press after the reply's keyboard lowers can be spent.
 - tapOn: "Tasks"
+- runFlow:
+    when:
+      notVisible: "Pinned"
+    commands:
+      - tapOn: "Tasks"
+      - waitForAnimationToEnd
 - setOrientation: LANDSCAPE_LEFT
 - waitForAnimationToEnd
 - takeScreenshot: tasks-wide

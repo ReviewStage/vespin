@@ -56,15 +56,20 @@ function routeKey(method: string, pathname: string): string {
  */
 export function fakeCloudApi(routes: Readonly<Record<string, FakeCloudRoute>>): FakeCloudApi {
   let failureStatus: number | undefined;
+
   const recording = recordingHttpClient((request) => {
     const key = routeKey(request.method, request.pathname);
     const route = routes[key];
+
     if (route === undefined) {
       throw new Error(`the fake cloud API has no route for ${key}`);
     }
+
     if (failureStatus !== undefined) return jsonResponse({}, failureStatus);
+
     return jsonResponse(route.answer(request), route.status ?? HTTP_STATUS.OK);
   });
+
   return {
     layer: recording.layer,
     requests: () => recording.requests,
@@ -93,7 +98,9 @@ export function recordedRoutes(requests: readonly RecordedRequest[]): readonly s
       .sort(([first], [second]) => first.localeCompare(second))
       .map(([name, value]) => `${name}=${value}`)
       .join("&");
+
     const route = routeKey(request.method, request.pathname);
+
     return query ? `${route}?${query}` : route;
   });
 }

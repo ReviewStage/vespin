@@ -45,6 +45,7 @@ const openAccount = (name: string, providers: readonly string[], role: string = 
     const db = yield* Database;
     const id = `user-${name}`;
     yield* db.insert(user).values({ id, name, email: `${id}@app.test`, role });
+
     for (const providerId of providers) {
       yield* db.insert(account).values({
         id: randomUUID(),
@@ -54,6 +55,7 @@ const openAccount = (name: string, providers: readonly string[], role: string = 
         updatedAt: new Date(NOW),
       });
     }
+
     return id;
   });
 
@@ -74,6 +76,7 @@ const createTask = (userId: string, organizationId: string, createdAt: string) =
       document: "",
       createdAt: new Date(createdAt),
     });
+
     return id;
   });
 
@@ -225,10 +228,12 @@ it.layer(getTestDB())("the Users read", (it) => {
       yield* db.insert(hostedUsage).values({ userId: neighbor, day: "2026-10-19", calls: 40 });
 
       const windowDays = ADMIN_METRICS_WINDOW.MONTH;
+
       const [source, support] = yield* Effect.all([
         readAdminUserSource({ userId: builder, now: NOW, windowDays }),
         readAdminAccountSource({ userId: builder, now: NOW, windowDays }),
       ]);
+
       if (source === undefined) throw new Error("the account was not read");
       const { actions, activity } = buildAdminUserDetail(source, support, NOW, windowDays);
 
@@ -269,6 +274,7 @@ it.layer(getTestDB())("the Users read", (it) => {
 
         const read = (userId: string) =>
           readAdminUserSource({ userId, now: NOW, windowDays: ADMIN_METRICS_WINDOW.MONTH });
+
         assert.equal((yield* read(granting))?.account.supportAccessUntil, until);
         assert.equal((yield* read(lapsed))?.account.supportAccessUntil, null);
       }),

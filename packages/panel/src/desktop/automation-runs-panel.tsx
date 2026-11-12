@@ -9,7 +9,6 @@ import { AUTOMATION_FIRING, type AutomationRunSummary } from "@repo/features/aut
 import { GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { momentText, sinceText } from "@repo/features/time-format";
 import { TRIGGER_CATALOG } from "@repo/features/trigger-catalog";
 import {
   BackButton,
@@ -28,13 +27,14 @@ import {
   ResizeEdge,
   SCROLL_FADE,
   ScrollArea,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   SkeletonRegion,
   TEXT_ELEMENT,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  Time,
   Tooltip,
   useMinute,
   useResizeEdge,
@@ -113,9 +113,11 @@ export const STANDING_GLYPH = {
 /** The subject an integration's run is about, as its provider's page and the words that open it; none for any other run, or one whose subject has no page. */
 function subjectLink(run: AutomationRunSummary): { url: string; label: string } | undefined {
   const { firing } = run;
+
   if (firing.kind !== AUTOMATION_FIRING.INTEGRATION || firing.subject.url === undefined) {
     return undefined;
   }
+
   return { url: firing.subject.url, label: `Open in ${TRIGGER_CATALOG[firing.provider].name}` };
 }
 
@@ -149,27 +151,34 @@ export function RunRow({
   const openLink = useOpenLink();
   const coarse = useCoarsePointer();
   const { agent } = run;
+
   // Note that every run offers its link, one that started no agent too, because a run's own link opens it.
   const runPlace: LinkDestination | undefined =
     automationId === undefined
       ? undefined
       : { kind: LINK_DESTINATION.AUTOMATION_RUN, automationId, runId: run.id };
+
   const links = runPlace === undefined ? [] : linkItemsOf(runPlace);
   const subject = subjectLink(run);
+
   const openSubject: MenuAction | undefined =
     subject === undefined
       ? undefined
       : { label: subject.label, icon: <ExternalLinkIcon />, onSelect: () => openLink(subject.url) };
+
   const groups = [links, openSubject === undefined ? [] : [openSubject]].filter(
     (group) => group.length > 0,
   );
+
   // A run a link named is brought into the middle of the box that scrolls it, once, as it is drawn.
   const row = useRef<HTMLElement | null>(null);
   useEffect(() => {
     const drawn = row.current;
     const scroller = drawn === null ? undefined : scrollerOf(drawn);
+
     if (linked && drawn !== null && scroller !== undefined) centerWithin(scroller, drawn);
   }, [linked]);
+
   return (
     <ListRow
       ref={(node) => {
@@ -201,11 +210,9 @@ export function RunRow({
       meta={
         <span className={AUTOMATION_ROW_META}>
           {stateEndMark(state, true)}
-          <Tooltip label={momentText(run.firedAt)}>
-            <span>
-              <ReplayUnmask>{sinceText(run.firedAt, now)}</ReplayUnmask>
-            </span>
-          </Tooltip>
+          <ReplayUnmask>
+            <Time at={run.firedAt} now={now} />
+          </ReplayUnmask>
         </span>
       }
       current={linked ? LIST_ROW_CURRENT.ITEM : undefined}
@@ -237,7 +244,7 @@ export function RunsSkeleton(): React.JSX.Element {
         {SKELETON_RUNS.map(({ title, line }) => (
           <ListRow
             key={title}
-            leading={<Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_GLYPH} />}
+            leading={<Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_GLYPH} />}
             title={<Skeleton width={title} />}
             description={<Skeleton width={line} />}
             meta={<Skeleton width={SKELETON_TIME} />}
@@ -286,6 +293,7 @@ function RunsBody({
 }: RunsShown & { headed: boolean }): React.JSX.Element {
   const now = useMinute();
   const body = useRef<HTMLDivElement | null>(null);
+
   return (
     <ScrollArea fade={SCROLL_FADE.START}>
       <div
@@ -363,8 +371,11 @@ export function AutomationRunsPanel({
     onResize: panel.onResize,
     onToggleCollapsed: panel.onToggle,
   });
+
   const slide = usePaneSlide(panel.open);
+
   if (!slide.drawn) return null;
+
   return (
     <div
       ref={(node) => {

@@ -40,6 +40,7 @@ export function useTaskWork(taskId: string): TaskWork {
     (state: AppStateSnapshot) => taskWorkOf(state.tasks, taskId),
     [taskId],
   );
+
   return useQuery({ ...appStateQuery, select }).data ?? NO_WORK;
 }
 
@@ -59,6 +60,7 @@ export function useTaskPullRequests(taskId: string): readonly TaskPullRequestLin
     (state: AppStateSnapshot) => pullRequestsOfTask(state.tasks.taskPullRequests, taskId),
     [taskId],
   );
+
   return useQuery({ ...appStateQuery, select }).data ?? NO_PULL_REQUESTS;
 }
 
@@ -71,6 +73,7 @@ export function useTaskAgent(agentId: string): ListedAgent | undefined {
       ),
     [agentId],
   );
+
   return useQuery({ ...appStateQuery, select }).data;
 }
 

@@ -59,9 +59,13 @@ function Fruit({ chosen, entered }: { chosen: string[]; entered: string[] }): Re
   const [value, setValue] = useState("");
   const [active, setActive] = useState(0);
   const [shut, setShut] = useState(false);
-  const options: ComboboxOption[] = FRUIT.filter(
-    (name) => value !== "" && name.toLowerCase().startsWith(value.toLowerCase()),
-  ).map((name) => ({ id: name, label: name }));
+
+  const options: ComboboxOption[] = FRUIT.flatMap((name) =>
+    value !== "" && name.toLowerCase().startsWith(value.toLowerCase())
+      ? [{ id: name, label: name }]
+      : [],
+  );
+
   return createElement(Combobox, {
     label: "Fruit",
     listLabel: "Fruit",
@@ -95,8 +99,10 @@ function mount() {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(createElement(Fruit, { chosen, entered })));
+
   const field = () =>
     container.querySelector<HTMLInputElement>('[role="combobox"]') ?? assert.fail("the field");
+
   return { container, field, chosen, entered, escapedPast };
 }
 
@@ -119,6 +125,7 @@ function press(field: HTMLElement, init: KeyboardEventInit): void {
 function announced(field: HTMLInputElement) {
   const id = field.getAttribute("aria-activedescendant");
   const option = id === null ? null : document.getElementById(id);
+
   return option === null
     ? undefined
     : { words: option.textContent, selected: option.getAttribute("aria-selected") };
@@ -134,6 +141,7 @@ test("the arrows, Home and End move the active option, wrapping, and Enter choos
       (option) => option.textContent,
     ),
   };
+
   press(field(), { key: "ArrowDown" });
   const second = announced(field())?.words;
   press(field(), { key: "ArrowDown" });
@@ -172,12 +180,14 @@ test("Escape shuts the list and is kept from what stands behind it; with the lis
   type(field(), "b");
 
   press(field(), { key: "Escape" });
+
   const shut = {
     list: document.querySelector('[role="listbox"]'),
     expanded: field().getAttribute("aria-expanded"),
     active: field().getAttribute("aria-activedescendant"),
     escapedPast: escapedPast.length,
   };
+
   press(field(), { key: "Escape" });
 
   assert.deepEqual(shut, { list: null, expanded: "false", active: null, escapedPast: 0 });
@@ -212,6 +222,7 @@ test("keys an input method is composing with never move, choose, or shut the lis
 test("a press on an option chooses it and keeps the caret in the field; the pointer makes an option active", () => {
   const { field, chosen } = mount();
   type(field(), "a");
+
   const apricot =
     [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (option) => option.textContent === "Apricot",
@@ -257,6 +268,7 @@ test("the list scrolls itself to keep the active option in view as the keys move
   // Note that each option is placed within its group's run, as the browser places it, and the run stands under the group's 28px heading.
   const group = list.querySelector<HTMLElement>('[role="group"]') ?? assert.fail("the group");
   layOut(group, { offsetParent: list, offsetTop: 0 });
+
   for (const [index, option] of [
     ...list.querySelectorAll<HTMLElement>('[role="option"]'),
   ].entries()) {
@@ -279,9 +291,11 @@ test("an option the pointer makes active is where the pointer is, so the list st
   const list = document.querySelector<HTMLElement>('[role="listbox"]') ?? assert.fail("the list");
   layOut(list, { clientHeight: 32 });
   const options = [...list.querySelectorAll<HTMLElement>('[role="option"]')];
+
   for (const [index, option] of options.entries()) {
     layOut(option, { offsetTop: index * 32, offsetHeight: 32 });
   }
+
   const below = options[1] ?? assert.fail("a second option");
 
   act(() => {
@@ -298,8 +312,10 @@ function mountList(options: readonly string[], headed: boolean) {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   function List(): React.JSX.Element {
     const [active, setActive] = useState(0);
+
     return createElement(ComboboxList, {
       label: "Fruit",
       groups: [
@@ -312,13 +328,16 @@ function mountList(options: readonly string[], headed: boolean) {
       empty: "Nothing matches",
     });
   }
+
   act(() => root.render(createElement(List)));
+
   return { container, chosen };
 }
 
 test("a list standing alone without headings still names its group, and a press chooses without taking the caret", () => {
   const { container, chosen } = mountList(["Apricot", "Cherry"], false);
   const group = container.querySelector('[role="listbox"] [role="group"]');
+
   const cherry =
     [...container.querySelectorAll<HTMLElement>('[role="option"]')].find(
       (option) => option.textContent === "Cherry",
@@ -358,6 +377,7 @@ test("the line a list says where nothing matches is read aloud once the options 
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const list = (options: readonly string[]) =>
     createElement(
       "div",
@@ -372,6 +392,7 @@ test("the line a list says where nothing matches is read aloud once the options 
         empty: "Nothing matches",
       }),
     );
+
   const status = () => container.querySelector('[role="status"]')?.textContent;
   act(() => root.render(list(["Apricot"])));
   assert.equal(status(), "");
@@ -393,11 +414,13 @@ test("a group's heading, drawn over its own options, says its name in the group 
 /** Fruit where Banana cannot be chosen now and Cherry is the one chosen, with no field: the list steers itself. */
 function Steered({ chosen }: { chosen: string[] }): React.JSX.Element {
   const [active, setActive] = useState(0);
+
   const options: ComboboxOption[] = [
     { id: "Apple", label: "Apple" },
     { id: "Banana", label: "Banana", hint: "Out of season", disabled: true },
     { id: "Cherry", label: "Cherry", current: true },
   ];
+
   const keys = useComboboxField({
     open: true,
     active,
@@ -408,6 +431,7 @@ function Steered({ chosen }: { chosen: string[] }): React.JSX.Element {
     onActiveChange: setActive,
     onChoose: (index) => chosen.push(options[index]?.id ?? ""),
   });
+
   return createElement(ComboboxList, {
     id: "fruit",
     label: "Fruit",
@@ -427,10 +451,12 @@ function mountSteered() {
   roots.push(root);
   act(() => root.render(createElement(Steered, { chosen })));
   const list = container.querySelector<HTMLElement>('[role="listbox"]') ?? assert.fail("the list");
+
   const option = (name: string) =>
     [...container.querySelectorAll<HTMLElement>('[role="option"]')].find((each) =>
       each.textContent?.startsWith(name),
     ) ?? assert.fail(name);
+
   return { list, option, chosen };
 }
 
@@ -592,6 +618,7 @@ test("an option with a card hangs it beside the option while the pointer rests o
   const option = container.querySelector('[role="option"]') ?? assert.fail("the option");
 
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
   try {
     act(() => {
       option.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
@@ -602,5 +629,6 @@ test("an option with a card hangs it beside the option while the pointer rests o
   } finally {
     vi.useRealTimers();
   }
+
   assert.equal(document.querySelector(".agent-card-words")?.textContent, "Maya's card");
 });

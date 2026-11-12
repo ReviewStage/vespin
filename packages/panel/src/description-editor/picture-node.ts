@@ -1,8 +1,11 @@
 import type { JSONContent } from "@tiptap/core";
 import Image from "@tiptap/extension-image";
-import { Fragment, type Node as PmNode, Slice } from "@tiptap/pm/model";
+import { Fragment, type NodeType, type Node as PmNode, Slice } from "@tiptap/pm/model";
+import { insertPoint } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
-import type { PictureNode, PictureTaken, DescriptionEditorPictures } from "./contract.js";
+import { imageFiles } from "../picture-files.js";
+import type { DescriptionEditorPictures, PictureNode, PictureTaken } from "./contract.js";
+import { inTableCell } from "./writing-keys.js";
 
 /**
  * picture-node.ts -- a picture in the description's text: TipTap's image held inline in its own paragraph, written back escaped, drawn by the panel, and laid in from a paste, a drop, or a file chosen.
@@ -36,6 +39,7 @@ function pictureMarkdown(attrs: JSONContent["attrs"]): string {
   const alt = escaped(String(attrs?.alt ?? ""), /[\\[\]]/gu);
   const src = escaped(String(attrs?.src ?? ""), /[\\()]/gu);
   const title = attrs?.title ? ` "${escaped(String(attrs.title), /[\\"]/gu)}"` : "";
+
   return `![${alt}](${src}${title})`;
 }
 
@@ -57,12 +61,8 @@ function uploadName(): string {
 /** What a picture laid in from a file is called: its name without its type, or "Screenshot" for a paste that has none worth keeping. */
 function altOf(file: File): string {
   const stem = file.name.replace(/\.[^.]*$/u, "").trim();
-  return stem === "" || stem === "image" ? PASTED_ALT : stem;
-}
 
-/** The image files among a paste's or a drop's, in their order. */
-function imageFiles(list: FileList | null | undefined): File[] {
-  return [...(list ?? [])].filter((file) => file.type.startsWith("image/"));
+  return stem === "" || stem === "image" ? PASTED_ALT : stem;
 }
 
 /**
@@ -77,7 +77,9 @@ export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
     },
     renderMarkdown: (held: JSONContent) => pictureMarkdown(held.attrs),
   }).configure({ inline: true });
+
   if (pictures === undefined) return node;
+
   return node.extend({
     addNodeView() {
       return ({ node: held, getPos, editor }) => {
@@ -86,9 +88,11 @@ export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
         dom.contentEditable = "false";
         let current = held;
         let selected = false;
+
         const drawing = pictures.draw(dom, pictureOf(held), {
           describe: (change) => {
             const pos = getPos();
+
             if (pos === undefined) return;
             editor.view.dispatch(
               editor.state.tr.setNodeMarkup(pos, undefined, { ...current.attrs, ...change }),
@@ -96,15 +100,18 @@ export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
           },
           remove: () => {
             const pos = getPos();
+
             if (pos !== undefined) removedAt(editor.view, pos);
           },
         });
+
         return {
           dom,
           update: (next) => {
             if (next.type !== current.type) return false;
             current = next;
             drawing.redraw(pictureOf(next), selected);
+
             return true;
           },
           selectNode: () => {
@@ -137,9 +144,34 @@ function removedAt(view: EditorView, pos: number): void {
 }
 
 /**
- * Pictures laid in, each in a paragraph of its own, after the top-level
- * block that `pos` stands in, or after the caret's where none is given; each
- * waits on a new upload, which is handed to the panel with its file.
+ * Where pictures laid in at `pos` stand, as the stretch they take the place
+ * of: the empty line `pos` stands on, else just below the line it stands on,
+ * which they never split, inside a list item where the line is one's, else
+ * after the top-level block `pos` stands in, as from a table's cell, whose
+ * Markdown holds no block.
+ */
+function pictureRoom(doc: PmNode, pos: number, paragraph: NodeType) {
+  const $at = doc.resolve(pos);
+  const top = $at.depth === 0 ? pos : $at.after(1);
+
+  if (inTableCell($at)) return { from: top, to: top };
+
+  const { parent } = $at;
+
+  if (parent.type === paragraph && parent.content.size === 0) {
+    return { from: $at.before(), to: $at.after() };
+  }
+
+  const below = insertPoint(doc, parent.isTextblock ? $at.after() : pos, paragraph) ?? top;
+
+  return { from: below, to: below };
+}
+
+/**
+ * Pictures laid in, each in a paragraph of its own, where `pos` stands, or
+ * where the caret does where none is given; each waits on a new upload,
+ * which is handed to the panel with its file. Note that the upload finds
+ * its picture by name when it settles, so words typed meanwhile never move it.
  */
 export function laidInPictures(
   view: EditorView,
@@ -147,18 +179,22 @@ export function laidInPictures(
   pictures: DescriptionEditorPictures,
   pos?: number,
 ): void {
-  if (files.length === 0) return;
   const { state } = view;
-  const $at = state.doc.resolve(pos ?? state.selection.from);
-  const after = $at.depth === 0 ? $at.pos : $at.after(1);
+  const paragraph = state.schema.nodes.paragraph;
+
+  if (files.length === 0 || paragraph === undefined) return;
   const taken: PictureTaken[] = [];
+
   const paragraphs = files.map((file) => {
     const upload = uploadName();
     taken.push({ upload, file });
     const picture = state.schema.node(PICTURE_NODE, { src: "", alt: altOf(file), upload });
-    return state.schema.node("paragraph", null, [picture]);
+
+    return paragraph.create(null, [picture]);
   });
-  view.dispatch(state.tr.insert(after, paragraphs).scrollIntoView());
+
+  const { from, to } = pictureRoom(state.doc, pos ?? state.selection.from, paragraph);
+  view.dispatch(state.tr.replaceWith(from, to, paragraphs).scrollIntoView());
   pictures.take(taken);
 }
 
@@ -170,6 +206,7 @@ function waitingAt(view: EditorView, upload: string): number | undefined {
       found = pos;
     }
   });
+
   return found;
 }
 
@@ -177,6 +214,7 @@ function waitingAt(view: EditorView, upload: string): number | undefined {
 export function settledPicture(view: EditorView, upload: string, src: string): void {
   const pos = waitingAt(view, upload);
   const node = pos === undefined ? undefined : view.state.doc.nodeAt(pos);
+
   if (pos === undefined || node === undefined || node === null) return;
   view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, src, upload: "" }));
 }
@@ -184,22 +222,25 @@ export function settledPicture(view: EditorView, upload: string, src: string): v
 /** The picture waiting on `upload` taken out of the text. */
 export function removedPicture(view: EditorView, upload: string): void {
   const pos = waitingAt(view, upload);
+
   if (pos !== undefined) removedAt(view, pos);
 }
 
-/** A paste of image files laid in as pictures after the caret's block; answers whether it was one. */
+/** A paste of image files laid in as pictures at the caret's line; answers whether it was one. */
 export function pastedPictures(
   view: EditorView,
   event: ClipboardEvent,
   pictures: DescriptionEditorPictures,
 ): boolean {
   const files = imageFiles(event.clipboardData?.files);
+
   if (files.length === 0) return false;
   laidInPictures(view, files, pictures);
+
   return true;
 }
 
-/** A drop of image files from outside the editor laid in as pictures after the block they landed on; answers whether it was one. */
+/** A drop of image files from outside the editor laid in as pictures at the line they landed on; answers whether it was one. */
 export function droppedPictures(
   view: EditorView,
   event: DragEvent,
@@ -207,9 +248,11 @@ export function droppedPictures(
   pictures: DescriptionEditorPictures,
 ): boolean {
   const files = imageFiles(event.dataTransfer?.files);
+
   if (moved || files.length === 0) return false;
   const landed = view.posAtCoords({ left: event.clientX, top: event.clientY });
   laidInPictures(view, files, pictures, landed?.pos);
+
   return true;
 }
 
@@ -220,6 +263,7 @@ function withPictures(fragment: Fragment, change: (picture: PmNode) => PmNode): 
     if (child.type.name === PICTURE_NODE) nodes.push(change(child));
     else nodes.push(child.isLeaf ? child : child.copy(withPictures(child.content, change)));
   });
+
   return Fragment.fromArray(nodes);
 }
 
@@ -230,14 +274,19 @@ function withPictures(fragment: Fragment, change: (picture: PmNode) => PmNode): 
  */
 export function copiedPictures(slice: Slice, pictures: DescriptionEditorPictures): Slice {
   const taken: PictureTaken[] = [];
+
   const content = withPictures(slice.content, (picture) => {
     const src = String(picture.attrs.src ?? "");
+
     if (!pictures.copies(src)) return picture;
     const upload = uploadName();
     taken.push({ upload, from: src });
+
     return picture.type.create({ ...picture.attrs, src: "", upload }, null, picture.marks);
   });
+
   if (taken.length === 0) return slice;
   pictures.take(taken);
+
   return new Slice(content, slice.openStart, slice.openEnd);
 }

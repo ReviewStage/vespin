@@ -32,6 +32,7 @@ function EditableDocument(): React.JSX.Element {
   useLayoutEffect(() => {
     if (title.current !== null) title.current.textContent = "Turn the lint guard on";
   }, []);
+
   return (
     <CatalogSection id="editable-document" title="Title and sections">
       <Stack>

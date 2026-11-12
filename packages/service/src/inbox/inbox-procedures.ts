@@ -121,8 +121,10 @@ const productionTitleModel: InboxTitleModelOf = () => deploymentTitleModel();
 const retitled = (seams: InboxTitleSeams, item: InboxItem, text: string) =>
   Effect.gen(function* () {
     const model = yield* (seams.titleModel ?? productionTitleModel)();
+
     if (model === undefined) return;
     const title = yield* titleInboxThread(model, text);
+
     if (Option.isNone(title)) return;
     yield* retitleInboxThread(item.id, item.title, title.value);
   });
@@ -173,12 +175,17 @@ const takenNod = /* @__PURE__ */ Effect.fnUntraced(function* (
   const { item, answerKey } = stored;
   // Taken by an earlier send, so this one wrote nothing to wait for.
   const standing: InboxItemWritten = item;
+
   if (answerKey === asked.clientKey) return standing;
+
   if (item.status !== INBOX_STATUS.OPEN || item.revision !== asked.revision) return undefined;
+
   if (holdsAsk(item)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
   const nodded = yield* hostedStoreOrUnavailable(
     acknowledgeInboxItem(userId, item.id, asked.revision, asked.clientKey),
   );
+
   return Option.getOrUndefined<InboxItemWritten>(nodded);
 });
 
@@ -223,8 +230,10 @@ const handedAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   chosen?: SlackChosen,
 ) {
   const { text, clientKey, attachments } = message;
+
   const handedOver = Effect.gen(function* () {
     const agent = yield* agentHearing(userId, agentId);
+
     if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_RETIRED);
     const agentSessions = yield* routedSessions<TypedTurn>(userId);
     yield* steerAgent(agentSessions, writer, userId, agent.value, {
@@ -235,6 +244,7 @@ const handedAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
       metadata: threadLine(THREAD_LINE_EVENT.ANSWER, itemId),
     });
   });
+
   yield* handedOver.pipe(
     Effect.catchIf(retiredRefusal, () => Effect.void),
     Effect.onError(() =>
@@ -272,8 +282,10 @@ export const acknowledgeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   asked: { readonly revision: number; readonly clientKey: string },
 ) {
   const stored = yield* hostedStoreOrUnavailable(readInboxItem(userId, itemId));
+
   if (Option.isNone(stored)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const { clientKey } = asked;
+
   // A nod sent again under the key it was taken under is the same nod, counted once.
   const counted =
     stored.value.answerKey === clientKey
@@ -284,20 +296,28 @@ export const acknowledgeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
           readVisibleAgentWorkspace(userId, stored.value.item.agentId),
           {},
         );
+
   const written = yield* takenNod(userId, stored.value, asked);
+
   if (written === undefined) {
     // Not taken: the item moved on, or another answer settled it; it is answered as it now stands.
     const now = yield* hostedStoreOrUnavailable(readInboxItem(userId, itemId));
+
     if (Option.isNone(now)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
     return { item: now.value.item, taken: now.value.answerKey === clientKey };
   }
+
   const { txid, ...taken } = written;
   const writtenIn = txid === undefined ? {} : { txid };
+
   if (!inboxAnswerHeard(taken, NOD)) {
     yield* counted;
     yield* settledForAgent(taken.agentId, itemId);
+
     return { item: taken, taken: true, ...writtenIn };
   }
+
   yield* handedAnswer(
     writer,
     userId,
@@ -306,6 +326,7 @@ export const acknowledgeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
     { text: inboxAnswerMessage(taken, NOD), clientKey, attachments: [] },
     counted,
   );
+
   return { item: taken, taken: true, ...writtenIn };
 });
 
@@ -348,19 +369,24 @@ export const answerAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   const { text, clientKey, attachments, answers } = sent;
   const stored = yield* hostedStoreOrUnavailable(readInboxItem(userId, itemId));
+
   if (Option.isNone(stored)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   // Note that the agent is brought back as every member's word on its thread brings it back, though an ask its archive withdrew stays withdrawn.
   yield* agentHearing(userId, stored.value.item.agentId);
+
   const answered = yield* hostedStoreOrUnavailable(
     answerInboxAsk(userId, itemId, { answers, text, clientKey, files: attachments }),
   );
+
   if (Option.isNone(answered)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const { item, outcome, refusal, txid } = answered.value;
   const writtenIn = txid === undefined ? {} : { txid };
+
   if (outcome === INBOX_ASK_ANSWER.NOT_OPEN || outcome === INBOX_ASK_ANSWER.REFUSED) {
     // Why a refused answer does not fit its ask, in the check's own words, for a caller that tells it.
     return { item, outcome, ...(refusal === undefined ? undefined : { refusal }), ...writtenIn };
   }
+
   // An answer sent again under the key it was taken under is the same answer, counted once.
   const counted =
     outcome === INBOX_ASK_ANSWER.TAKEN
@@ -379,17 +405,22 @@ export const answerAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
           ),
         )
       : Effect.void;
+
   const reply = inboxAnswersReply(answers, text);
+
   if (!inboxAnswerHeard(item, reply, attachments)) {
     yield* counted;
     yield* settledForAgent(item.agentId, itemId);
+
     return { item, outcome, ...writtenIn };
   }
+
   const message = inboxAnswerMessage(
     item,
     reply,
     inboxTodoTicks(item, answers, answered.value.ask),
   );
+
   yield* handedAnswer(
     writer,
     userId,
@@ -399,6 +430,7 @@ export const answerAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
     counted,
     chosen,
   );
+
   return { item, outcome, ...writtenIn };
 });
 
@@ -421,9 +453,11 @@ const answeredByReply = /* @__PURE__ */ Effect.fnUntraced(function* (
   },
 ) {
   const { item, outcome, ...writtenIn } = yield* answerAsMember(writer, userId, itemId, sent);
+
   if (outcome === INBOX_ASK_ANSWER.NOT_OPEN || outcome === INBOX_ASK_ANSWER.REFUSED) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   return { item, ...writtenIn };
 });
 
@@ -463,17 +497,20 @@ export const closeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   },
 ) {
   const stored = yield* hostedStoreOrUnavailable(readInboxItem(userId, itemId));
+
   if (Option.isNone(stored)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const { revision, clientKey } = asked;
   const note = { text: asked.text ?? "", files: asked.attachments ?? [] };
   const noted = note.text !== "" || note.files.length > 0;
   const { item, answerKey } = stored.value;
+
   // A close sent again is the one taken only while the item still stands as that close left it, never once its agent moved it on.
   const retried =
     answerKey === clientKey &&
     item.status === INBOX_STATUS.CLOSED &&
     item.closedReason === undefined &&
     item.revision === revision;
+
   // A close sent again wrote nothing this time, so there is no transaction to wait for.
   const written: InboxItemWritten | undefined = retried
     ? item
@@ -484,22 +521,30 @@ export const closeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
             closeInboxItemAsMember(userId, itemId, revision, clientKey, note),
           ),
         );
+
   if (written === undefined) {
     // Not taken: the item moved on, or an answer or a close settled it; it is answered as it now stands.
     const now = yield* hostedStoreOrUnavailable(readInboxItem(userId, itemId));
+
     if (Option.isNone(now)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
     return { item: now.value.item, taken: false };
   }
+
   const { txid, ...taken } = written;
   const writtenIn = txid === undefined ? {} : { txid };
   const dmSettled = afterResponse("a closed thread's Slack DM", settleThreadDms(itemId));
+
   if (!taken.needsReply && !noted) {
     yield* dmSettled;
     yield* settledForAgent(taken.agentId, itemId);
+
     return { item: taken, taken: true, ...writtenIn };
   }
+
   const handedOver = Effect.gen(function* () {
     const agent = yield* agentHearing(userId, taken.agentId);
+
     if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_RETIRED);
     const agentSessions = yield* routedSessions<TypedTurn>(userId);
     yield* steerAgent(agentSessions, writer, userId, agent.value, {
@@ -510,6 +555,7 @@ export const closeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
       metadata: threadLine(THREAD_LINE_EVENT.CLOSE, itemId),
     });
   });
+
   yield* handedOver.pipe(
     Effect.catchIf(retiredRefusal, () => Effect.void),
     Effect.onError(() =>
@@ -519,6 +565,7 @@ export const closeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
       ),
     ),
   );
+
   // Counted once the hand-off stands, as a message on the thread is, since a failed one takes the note back above.
   if (noted && !retried) {
     yield* recordServerEventIn(
@@ -528,8 +575,10 @@ export const closeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
       { answered_ask: false, has_media: note.files.length > 0 },
     );
   }
+
   yield* dmSettled;
   yield* settledForAgent(taken.agentId, itemId);
+
   return { item: taken, taken: true, ...writtenIn };
 });
 
@@ -550,26 +599,37 @@ const takeBackAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   clientKey: string,
 ) {
   const stored = yield* hostedStoreOrUnavailable(readInboxItem(userId, itemId));
+
   if (Option.isNone(stored)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const { item, answerKey } = stored.value;
   const settledBy = item.status === INBOX_STATUS.CLOSED ? item.closedBy : item.answeredBy;
+
   const standing =
     item.status !== INBOX_STATUS.OPEN && answerKey === clientKey && settledBy?.userId === userId;
+
   if (!standing) return { item, outcome: INBOX_TAKE_BACK.MOVED_ON };
+
   // Note that a message under the key, an answer's or a close's note, reached the agent as a notice waiting to hear back did.
   const told =
     item.needsReply || (item.thread ?? []).some((message) => message.clientKey === clientKey);
+
   if (told) return { item, outcome: INBOX_TAKE_BACK.TOLD };
+
   const withdrawn =
     item.status === INBOX_STATUS.CLOSED
       ? withdrawInboxClose(userId, itemId, clientKey)
       : withdrawInboxAnswer(userId, itemId, clientKey);
+
   const reopened = yield* hostedStoreOrUnavailable(withdrawn);
+
   if (Option.isNone(reopened)) {
     const now = yield* hostedStoreOrUnavailable(readInboxItem(userId, itemId));
+
     if (Option.isNone(now)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
     return { item: now.value.item, outcome: INBOX_TAKE_BACK.MOVED_ON };
   }
+
   return { item: reopened.value, outcome: INBOX_TAKE_BACK.TAKEN };
 });
 
@@ -616,6 +676,7 @@ export const messageAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   },
 ) {
   const { text, clientKey, attachments, answers, revision } = asked;
+
   if (answers !== undefined) {
     return yield* answeredByReply(writer, userId, itemId, {
       text,
@@ -624,21 +685,27 @@ export const messageAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
       answers,
     });
   }
+
   const posted = yield* hostedStoreOrUnavailable(
     postInboxMessage(userId, itemId, { text, clientKey, files: attachments, revision }),
   );
+
   if (Option.isNone(posted)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const { item, outcome } = posted.value;
+
   if (outcome === INBOX_MESSAGE_OUTCOME.KEY_REUSED) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   // Note that a repeat leaves the message standing on failure, because the write that wrote it decides whether it stays.
   const unheard =
     outcome === INBOX_MESSAGE_OUTCOME.WRITTEN
       ? withdrawInboxMessage(userId, itemId, clientKey)
       : Effect.void;
+
   const handedOver = Effect.gen(function* () {
     const agent = yield* agentHearing(userId, item.agentId);
+
     if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_RETIRED);
     const agentSessions = yield* routedSessions<TypedTurn>(userId);
     yield* steerAgent(agentSessions, writer, userId, agent.value, {
@@ -649,10 +716,12 @@ export const messageAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
       metadata: threadLine(THREAD_LINE_EVENT.MESSAGE, item.id),
     });
   });
+
   yield* handedOver.pipe(
     Effect.catchIf(retiredRefusal, () => Effect.void),
     Effect.onError(() => unheard.pipe(Effect.tapError(logStoreFailure), Effect.ignore)),
   );
+
   // Counted once the hand-off stands, since a failed one takes the message back above.
   if (outcome === INBOX_MESSAGE_OUTCOME.WRITTEN) {
     yield* recordServerEventIn(
@@ -662,10 +731,12 @@ export const messageAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
       { answered_ask: false, has_media: attachments.length > 0 },
     );
   }
+
   // A reply that settled the notice it was written on clears it from the phone, as the nod does.
   if (revision !== undefined && item.status !== INBOX_STATUS.OPEN) {
     yield* afterResponse("a settled thread's push", pushThreadSettled(item.id));
   }
+
   return { item };
 });
 
@@ -696,9 +767,12 @@ export const startAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   const { agentId, title, text, clientKey, attachments } = asked;
   const agent = yield* hostedStoreOrUnavailable(readVisibleAgent(userId, agentId));
+
   if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   if (!controlsAgent(userId, agent.value)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   const { userId: starterId, taskId } = agent.value;
+
   const written = yield* hostedStoreOrUnavailable(
     startInboxThread(
       userId,
@@ -706,20 +780,25 @@ export const startAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
       { title, text, clientKey, files: attachments },
     ),
   );
+
   if (Option.isNone(written)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const { item, outcome } = written.value;
+
   if (outcome === INBOX_MESSAGE_OUTCOME.KEY_REUSED) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   // Note that a repeat leaves the thread standing on failure, because the write that wrote it decides whether it stays.
   const unheard =
     outcome === INBOX_MESSAGE_OUTCOME.WRITTEN
       ? withdrawInboxThread(userId, item.id, clientKey)
       : Effect.void;
+
   const handedOver = Effect.gen(function* () {
     const hearing = yield* hostedStoreOrUnavailable(
       agentTakingMessage(userId, agentId, readVisibleAgent),
     );
+
     if (Option.isNone(hearing)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     const agentSessions = yield* routedSessions<TypedTurn>(userId);
     yield* steerAgent(agentSessions, writer, userId, hearing.value, {
@@ -730,9 +809,11 @@ export const startAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
       metadata: threadLine(THREAD_LINE_EVENT.MESSAGE, item.id),
     });
   });
+
   yield* handedOver.pipe(
     Effect.onError(() => unheard.pipe(Effect.tapError(logStoreFailure), Effect.ignore)),
   );
+
   // Counted once the hand-off stands, since a failed one takes the thread back above.
   if (outcome === INBOX_MESSAGE_OUTCOME.WRITTEN) {
     yield* recordServerEvent(
@@ -741,10 +822,12 @@ export const startAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
       { answered_ask: false, has_media: attachments.length > 0 },
     );
   }
+
   // Note that only the write that started the thread titles it, so a repeat asks no model again.
   if (!asked.titled && outcome === INBOX_MESSAGE_OUTCOME.WRITTEN) {
     yield* afterResponse("an inbox thread's title", retitled(seams, item, text));
   }
+
   return { item };
 });
 
@@ -757,7 +840,9 @@ export const markReadAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   const marked = yield* hostedStoreOrUnavailable(
     unread ? markInboxItemUnread(userId, itemId) : markInboxItemRead(userId, itemId),
   );
+
   if (marked === false) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return { id: itemId, unread, ...marked };
 });
 
@@ -770,7 +855,9 @@ export const remindAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   const marked = yield* hostedStoreOrUnavailable(
     remindInboxItem(userId, itemId, until === null ? null : new Date(until)),
   );
+
   if (marked === false) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return { id: itemId, ...marked };
 });
 
@@ -780,6 +867,7 @@ const remindOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   input: { readonly params: { readonly id: string }; readonly body: InboxRemindRequest },
 ) {
   const itemId = yield* pathUuid(input.params.id);
+
   return yield* remindAsMember(userId, itemId, input.body.until);
 });
 
@@ -801,29 +889,36 @@ const remindOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 export function inboxProcedures(seams: InboxProcedureSeams) {
   const writer = storeWriter({ tools: CODER_TOOL_SET });
   const signedIn = hosted.inbox.use(accountMiddleware(seams.resolveUserId));
+
   return {
     // Note that the query's `archived=include` and `repositoryless`, which an older build still sends, are taken and change nothing: no task is archived any more, and no agent stands on no task, the one whose repository the second asked about.
     account: signedIn.account.effect(function* ({ input, context }) {
       const after = input.after ?? INBOX_CURSOR_START;
+
       return yield* hostedStoreOrUnavailable(accountInboxPast(context.userId, after));
     }),
     task: signedIn.task.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);
       const workspace = yield* hostedStoreOrUnavailable(readTaskWorkspace(context.userId, taskId));
+
       if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const after = input.after ?? INBOX_CURSOR_START;
+
       return yield* hostedStoreOrUnavailable(taskInboxPast(context.userId, taskId, after));
     }),
     agent: signedIn.agent.effect(function* ({ input, context }) {
       const agentId = yield* pathUuid(input.id);
       const agent = yield* hostedStoreOrUnavailable(readVisibleAgent(context.userId, agentId));
+
       if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const after = input.after ?? INBOX_CURSOR_START;
+
       return yield* hostedStoreOrUnavailable(agentInboxPast(context.userId, agent.value.id, after));
     }),
     answer: signedIn.answer.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
       const itemId = yield* pathUuid(input.params.id);
       const { revision, clientKey } = input.body;
+
       return yield* acknowledgeAsMember(writer, context.userId, itemId, {
         revision,
         clientKey,
@@ -835,6 +930,7 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
     }) {
       const itemId = yield* pathUuid(input.params.id);
       const { text, clientKey, attachments = [], answers, revision } = input.body;
+
       return yield* messageAsMember(writer, context.userId, itemId, {
         text,
         clientKey,
@@ -849,6 +945,7 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
     }) {
       const agentId = yield* pathUuid(input.agentId);
       const { text, clientKey, attachments = [] } = input;
+
       return yield* startAsMember(seams, writer, context.userId, {
         agentId,
         title: inboxStartTitle(input),
@@ -860,17 +957,21 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
     }),
     close: signedIn.close.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
       const itemId = yield* pathUuid(input.params.id);
+
       return yield* closeAsMember(writer, context.userId, itemId, input.body);
     }),
     takeBack: signedIn.takeBack.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
       const itemId = yield* pathUuid(input.params.id);
+
       return yield* takeBackAsMember(context.userId, itemId, input.body.clientKey);
     }),
     // Note that an item the account may not read is answered as one that does not exist, so a link by its id says nothing of it.
     home: signedIn.home.effect(function* ({ input, context }) {
       const itemId = yield* pathUuid(input.id);
       const home = yield* hostedStoreOrUnavailable(readInboxItemHome(context.userId, itemId));
+
       if (Option.isNone(home)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
       return home.value;
     }),
     markItemRead: signedIn.markItemRead.use(writeReceiptMiddleware).effect(function* ({
@@ -878,6 +979,7 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
       context,
     }) {
       const itemId = yield* pathUuid(input.id);
+
       return yield* markReadAsMember(context.userId, itemId, false);
     }),
     markItemUnread: signedIn.markItemUnread.use(writeReceiptMiddleware).effect(function* ({
@@ -885,6 +987,7 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
       context,
     }) {
       const itemId = yield* pathUuid(input.id);
+
       return yield* markReadAsMember(context.userId, itemId, true);
     }),
     remindItem: signedIn.remindItem.use(writeReceiptMiddleware).effect(function* ({

@@ -116,6 +116,7 @@ function waiting(polled: HostPairingOutcome<HostPairingPollAnswer>): boolean {
       polled.failure === HOST_PAIRING_FAILURE.UNANSWERED
     );
   }
+
   return (
     polled.status === HOST_PAIRING_POLL_STATUS.PENDING ||
     polled.status === HOST_PAIRING_POLL_STATUS.SLOW_DOWN
@@ -137,14 +138,17 @@ function slowedDown(polled: HostPairingOutcome<HostPairingPollAnswer>): boolean 
 const settledPoll = (serviceOrigin: string, started: HostPairingStartAnswer) =>
   Effect.gen(function* () {
     const interval = yield* Ref.make(Duration.millis(started.intervalMs));
+
     const polled = pollHostPairing(serviceOrigin, started.pollSecret).pipe(
       Effect.tap((answer) =>
         slowedDown(answer) ? Ref.update(interval, Duration.sum(SLOW_DOWN_STEP)) : Effect.void,
       ),
     );
+
     const schedule = Schedule.spaced(Duration.millis(started.intervalMs)).pipe(
       Schedule.modifyDelay(() => Ref.get(interval)),
     );
+
     return yield* polled.pipe(
       Effect.repeat({ schedule, until: (answer) => !waiting(answer) }),
       Effect.delay(Duration.millis(started.intervalMs)),
@@ -155,25 +159,31 @@ const settledPoll = (serviceOrigin: string, started: HostPairingStartAnswer) =>
 /** The box connected with a code: its record written once a member approves, or how the connect ended otherwise. */
 const connected = Effect.fnUntraced(function* (input: HostConnectInput) {
   const kept = yield* readHostDevice(input.stateRoot);
+
   if (Option.isSome(kept) && kept.value.refused !== true) {
     return {
       outcome: HOST_CONNECT_OUTCOME.ALREADY_CONNECTED,
       serviceOrigin: kept.value.serviceOrigin,
     } satisfies HostConnectOutcome;
   }
+
   const started = yield* startHostPairing(input.serviceOrigin, {
     name: input.name,
     platform: input.platform,
     arch: input.arch,
     ...input.machine,
   });
+
   if ("failure" in started) return endedBy(started);
   const { userCode, url, expiresInMs, intervalMs } = started;
   yield* input.shown({ userCode, url, expiresInMs, intervalMs });
   const settled = yield* settledPoll(input.serviceOrigin, started);
+
   if (Option.isNone(settled)) return { outcome: HOST_CONNECT_OUTCOME.EXPIRED } as const;
   const answer = settled.value;
+
   if ("failure" in answer) return endedBy(answer);
+
   switch (answer.status) {
     case HOST_PAIRING_POLL_STATUS.APPROVED:
       // Note that the secret is answered this once, so its record is written whole even where the connect is interrupted meanwhile.
@@ -182,6 +192,7 @@ const connected = Effect.fnUntraced(function* (input: HostConnectInput) {
         deviceSecret: answer.deviceSecret,
         serviceOrigin: input.serviceOrigin,
       }).pipe(Effect.uninterruptible);
+
       return { outcome: HOST_CONNECT_OUTCOME.CONNECTED, deviceId: answer.deviceId } as const;
     case HOST_PAIRING_POLL_STATUS.DENIED:
       return { outcome: HOST_CONNECT_OUTCOME.DENIED } as const;

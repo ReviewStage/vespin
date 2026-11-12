@@ -25,10 +25,10 @@ const FULL_CAPABILITIES = "000001ffffffffff";
 const PRIVATE_REPORT = {
   sudo: false,
   env_token: false,
-  env_token_shaped: false,
+  env_token_like: false,
   proc_environ_with_token: 0,
-  proc_environ_token_shaped: 0,
-  files_with_token_shape: 0,
+  proc_environ_token_like: 0,
+  files_with_token_pattern: 0,
   shadow_readable: false,
   cap_eff: NO_CAPABILITIES,
 };
@@ -147,13 +147,13 @@ function observations(overrides: Partial<ProbeObservations> = {}): ProbeObservat
     terminalAsToday: TERMINAL_CAPS_DROPPED,
     terminalCapsDropped: TERMINAL_CAPS_DROPPED,
     placeholderOutside: "401",
-    rootFilesWithTokenShape: 0,
+    rootFilesWithTokenPattern: 0,
     ...overrides,
   };
 }
 
 function failing(conditions: readonly Condition[]): readonly string[] {
-  return conditions.filter((each) => !each.pass).map((each) => each.name);
+  return conditions.flatMap((each) => (each.pass ? [] : [each.name]));
 }
 
 describe("verdict", () => {
@@ -177,7 +177,7 @@ describe("verdict", () => {
     const conditions = verdict(
       observations({
         firstLaunch: firstLaunch({
-          agentReport: { ...AGENT_REPORT, env_token_shaped: true, proc_environ_token_shaped: 2 },
+          agentReport: { ...AGENT_REPORT, env_token_like: true, proc_environ_token_like: 2 },
         }),
         placeholderOutside: "400",
       }),
@@ -251,7 +251,7 @@ describe("verdict", () => {
         terminalAsToday: undefined,
         terminalCapsDropped: undefined,
         placeholderOutside: undefined,
-        rootFilesWithTokenShape: undefined,
+        rootFilesWithTokenPattern: undefined,
       }),
     );
 
@@ -276,6 +276,7 @@ describe("verdict", () => {
 
   it("fails the push when the workflow turn said its closing words but ended in an error", () => {
     const launch = firstLaunch();
+
     const closing = launch.findIndex((message) =>
       JSON.stringify(message).includes(TURN_DONE.FIRST),
     );

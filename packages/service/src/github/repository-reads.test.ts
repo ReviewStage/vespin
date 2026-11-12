@@ -32,6 +32,7 @@ const SIDE = { owner: "octo-member", name: "side" } as const;
 function answer(sent: SentToGitHub): Response {
   const reads = sent.headers.get("authorization") === `Bearer ${READER_TOKEN}`;
   const asked = new URL(sent.url).pathname === `/repos/${SIDE.owner}/${SIDE.name}`;
+
   return asked && reads
     ? Response.json(memberRepositoryJson(SIDE, false))
     : Response.json({ message: "Not Found" }, { status: 404 });
@@ -48,18 +49,23 @@ it.layer(getTestDB())("a teammate's task on their own GitHub token", (it) => {
         const refused = yield* openTokenMember({ token: REFUSED_TOKEN });
         const tokenless = yield* openGithubUser();
         const workspace = yield* openWorkspace(owner);
+
         for (const each of [reader, refused, tokenless]) yield* joinWorkspace(workspace, each);
+
         const side = yield* createTask(owner, {
           organizationId: workspace,
           repository: "octo-member/side",
           githubAccess: GITHUB_ACCESS.TOKEN,
         });
+
         const refresh = (userId: string) =>
           refreshRepositoryReads(userId).pipe(Effect.provide(github.layer));
+
         const sees = (userId: string) =>
           Effect.map(listTasks(userId), (tasks) => tasks.some((each) => each.id === side.id));
 
         assert.equal(yield* sees(reader), false, "nothing is seen before GitHub is asked");
+
         for (const each of [reader, refused, tokenless]) yield* refresh(each);
 
         assert.deepEqual(

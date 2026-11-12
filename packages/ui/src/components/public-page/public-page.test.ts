@@ -26,6 +26,7 @@ async function render(element: ReactElement): Promise<HTMLElement> {
   const root = createRoot(container);
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   await act(async () => root.render(element));
+
   return container;
 }
 
@@ -81,6 +82,7 @@ test("a section with no title is no named region and has no heading", async () =
   const container = await render(
     createElement(PublicPage, { children: createElement(PublicSection, { children: "Acts" }) }),
   );
+
   expect(container.querySelector("section")?.hasAttribute("aria-labelledby")).toBe(false);
   expect(container.querySelector("h1, h2")).toBeNull();
   expect(container.querySelector("main")?.textContent).toBe("Acts");
@@ -101,6 +103,7 @@ test("a lead with no title still opens the page, before content that brings its 
       children: createElement("h1", null, "About"),
     }),
   );
+
   expect(container.querySelector("main")?.textContent).toBe("Read how Vespin came to be.About");
 });
 
@@ -119,6 +122,7 @@ test("a page beneath another names its way back as a link before its title", asy
       children: createElement(PublicSection, { children: "Notes" }),
     }),
   );
+
   const back = container.querySelector("main a");
   const title = heading(container, 1, "Vespin 2.4.0");
   expect(back?.getAttribute("href")).toBe("/changelog");

@@ -74,6 +74,7 @@ const previousTurnStart = (target: ConversationTarget, turnId: string | undefine
     turnsBefore(target.userId, target.conversationId, PREVIOUS_TURN_READ, undefined),
     (page) => {
       const previous = page.turns.findLast((turn) => turn.id !== turnId);
+
       return previous === undefined
         ? undefined
         : (previous.startedAt ?? previous.queuedAt).getTime();
@@ -105,11 +106,14 @@ const taskOf = (
 ) =>
   Effect.gen(function* () {
     const { taskId } = agent;
+
     const descriptionsSince = yield* experimentOnSinceIn(
       agent.organizationId,
       EXPERIMENT.DESCRIPTIONS,
     );
+
     const descriptionsOn = Option.isSome(descriptionsSince);
+
     const [stored, comments, since] = yield* Effect.all(
       [
         readTask(admitted.caller, taskId),
@@ -121,8 +125,10 @@ const taskOf = (
       ],
       { concurrency: "unbounded" },
     );
+
     if (Option.isNone(stored)) return undefined;
     const opening = since === undefined;
+
     // Note that the line's words go ahead of the description, since a search matches only its first words, and the description only where it is handed.
     const words = [
       stored.value.task.name,
@@ -130,8 +136,10 @@ const taskOf = (
       stored.value.brief ?? "",
       descriptionsOn ? stored.value.text : "",
     ].join("\n");
+
     const threads = Option.getOrElse(comments, () => []);
     const key = taskKey(stored.value, threads, descriptionsOn);
+
     const saved =
       descriptionsOn &&
       since !== undefined &&
@@ -140,13 +148,17 @@ const taskOf = (
         since,
         agent.id,
       );
+
     // Note that Descriptions gone off leaves the words handed as they were but the description, so it hands nothing again, and keeps the key Descriptions going back on is told apart by.
     const unchanged =
       key === handed.task || (!descriptionsOn && taskKey(stored.value, threads) === handed.task);
+
     if (!saved && (opening || unchanged)) {
       return { key: opening ? handed.task : key, text: undefined, opening, words };
     }
+
     const clock = { now, timeZone: admitted.timeZone };
+
     const text = taskWithLead(
       standingContext(
         stored.value,
@@ -156,6 +168,7 @@ const taskOf = (
         Option.getOrUndefined(descriptionsSince),
       ),
     );
+
     return { key, text, opening, words };
   }).pipe(
     Effect.tapError(logStoreFailure),
@@ -176,12 +189,14 @@ const memoriesOf = (agent: Agent, words: string) =>
   Effect.gen(function* () {
     if (!(yield* experimentOnIn(agent.organizationId, EXPERIMENT.MEMORY))) return undefined;
     const found = yield* matchWorkspaceMemories(agent.userId, agent.organizationId, words);
+
     if (found.length === 0) return undefined;
     yield* recordMemoryRecalls(
       { workspaceId: agent.organizationId, userId: agent.userId },
       found.map((memory) => memory.id),
       yield* recallSource(agent),
     );
+
     return memoriesWithLead(found);
   }).pipe(
     Effect.tapError(logStoreFailure),
@@ -214,10 +229,13 @@ export function coderTurnMessage(
     const standing = task?.text ?? timeWithLead(standingContext(undefined, clock));
     const kind = turnKindWords(handed);
     const taskHanded = task === undefined ? handed.task : task.key;
+
     const next: TurnHanded = {
       ...(taskHanded === undefined ? undefined : { task: taskHanded }),
     };
+
     const parts = [kind, standing, memories].filter((part) => part !== undefined);
+
     return { text: parts.join("\n\n"), handed: next };
   });
 }
@@ -235,6 +253,7 @@ export function readNativeTurnHanded(
     Effect.map((kept) => {
       if (kept === null) return {};
       const read = readHanded(kept);
+
       return Result.isSuccess(read) ? read.success : {};
     }),
     Effect.tapError(logStoreFailure),
@@ -261,6 +280,7 @@ export function readPendingTurnHanded(
     Effect.map(
       Option.flatMap((kept) => {
         const read = readHanded(kept);
+
         return Result.isSuccess(read) ? Option.some(read.success) : Option.none();
       }),
     ),
@@ -270,6 +290,7 @@ export function readPendingTurnHanded(
 /** What a session has handed as its row keeps it (the JSON `native_handed` holds), for a line to carry until its runner takes it; none where the schema refuses it. */
 export function handedValue(handed: TurnHanded): Option.Option<WireValue> {
   const written = writeHanded(handed);
+
   return Result.isSuccess(written) ? Option.some(written.success) : Option.none();
 }
 
@@ -284,7 +305,9 @@ export function recordNativeTurnHanded(
   handed: TurnHanded,
 ): Effect.Effect<void, never, DatabaseServices> {
   const written = writeHanded(handed);
+
   if (Result.isFailure(written)) return Effect.void;
+
   return recordNativeHanded(target, written.success).pipe(
     Effect.tapError(logStoreFailure),
     Effect.orElseSucceed(() => undefined),

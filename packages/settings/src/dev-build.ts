@@ -39,15 +39,19 @@ export interface DevBuildBadge {
 function shortLabel(name: string): string {
   const distance = name.search(/[~^]/u);
   const bare = distance === -1 ? name : name.slice(0, distance);
+
   if (bare.length <= LABEL_LENGTH) return bare;
   const word = bare.slice(Math.max(bare.lastIndexOf("/"), bare.lastIndexOf("-")) + 1);
+
   return word.slice(0, LABEL_LENGTH);
 }
 
 /** A color from the palette, read off the name the same way every launch. */
 function colorFor(name: string): string {
   let hash = 0;
+
   for (const character of name) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+
   return DEV_BUILD_COLORS[hash % DEV_BUILD_COLORS.length] ?? DEV_BUILD_COLORS[0];
 }
 
@@ -59,6 +63,7 @@ export function commitLabel(commit: BuildCommit): string {
 /** Where a development build was cut from: the branch and commit, as far as the build knew. */
 export function devBuildDetail(commit: BuildCommit | undefined): string {
   if (!commit) return "Run from source.";
+
   return commit.branch ? `${commit.branch} @ ${commitLabel(commit)}` : commitLabel(commit);
 }
 
@@ -75,6 +80,7 @@ export function devBuildBadge({
   commit?: BuildCommit | undefined;
 }): DevBuildBadge {
   const name = instance ?? commit?.branch;
+
   return {
     label: (name === undefined ? "" : shortLabel(name)) || PLAIN_LABEL,
     color: colorFor(name ?? PLAIN_LABEL),

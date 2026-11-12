@@ -27,6 +27,7 @@ import type { SendTracer } from "@repo/panel/send-traces";
 
 /** Why a window drew nothing: its state could not be read, or its surface failed to render. */
 export const BLANK_WINDOW = { FIRST_READ: "first_read", RENDER: "render" } as const;
+
 export type BlankWindow = (typeof BLANK_WINDOW)[keyof typeof BLANK_WINDOW];
 
 /** What the window reports through once the SDK stands. */
@@ -67,9 +68,11 @@ const EARLY_REPORTS_KEPT = 20;
 async function loadedSentry(): Promise<DesktopSentry | undefined> {
   try {
     const { initDesktopSentry } = await import("./desktop-sentry-sdk");
+
     return initDesktopSentry(queryClient);
   } catch (error) {
     console.warn("Sentry's SDK could not load; this window reports nothing.", error);
+
     return undefined;
   }
 }
@@ -83,11 +86,15 @@ export function startDesktopSentry(): DesktopSentryReports {
   const asked = Promise.withResolvers<void>();
   // The SDK once it stands, which a send is traced through; a send pressed before then waits on nothing.
   let standing: DesktopSentry | undefined;
+
   const started = asked.promise.then(loadedSentry).then((sentry) => {
     standing = sentry;
+
     return sentry;
   });
+
   const { say, settled } = reportsOnceStarted(started, EARLY_REPORTS_KEPT);
+
   return {
     reportBlankWindow: (error, why) => {
       say((sentry) => sentry.reportBlankWindow(error, why));
@@ -104,6 +111,7 @@ export function startDesktopSentry(): DesktopSentryReports {
       say((sentry) => {
         sent = sentry.reportShownFailure(report);
       });
+
       return sent;
     },
     load: () => asked.resolve(),

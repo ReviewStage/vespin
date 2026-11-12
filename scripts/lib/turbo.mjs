@@ -11,7 +11,7 @@ const PLATFORM = `${process.platform}-${process.arch}-node${process.versions.nod
  * are never scoped, and their hash, which covers every tracked file, is what
  * decides whether they run.
  */
-export const ROOT_TASKS = ["lint", "discarded-effect"];
+export const ROOT_TASKS = ["lint"];
 
 /**
  * The checks that run once per workspace, in every workspace that declares
@@ -49,6 +49,7 @@ export function turboInvocation(args, env = process.env) {
   const { TURBO_TOKEN: token, ...rest } = env;
   const tokenArguments = token ? [`--token=${token}`] : [];
   const passThrough = args.includes("--") ? args.indexOf("--") : args.length;
+
   return {
     command: "pnpm",
     args: [

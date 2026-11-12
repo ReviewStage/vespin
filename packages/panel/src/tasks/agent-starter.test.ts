@@ -103,15 +103,18 @@ afterEach(() => {
 async function drawn(element: ReactElement, readerId: string | undefined): Promise<HTMLElement> {
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   const directory = createElement(MemberDirectory, {
     workspace: WORKSPACE,
     readerId,
     children: element,
   });
+
   act(() => root?.render(withQueryClient(directory)));
   await act(async () => {
     for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
   });
+
   return container;
 }
 
@@ -131,10 +134,12 @@ async function agentNamed(
   pullRequests: ReadonlyMap<string, AgentPullRequest> = new Map(),
 ) {
   const opened: string[] = [];
+
   const read = agentCardReading(AGENT, "Invite flow", NOTHING_HELD, false, {
     me: readerId,
     pullRequests,
   });
+
   const view = await drawn(
     createElement(AgentRef, {
       subject: { name: "Invite flow", tile: agentActor(AGENT, "Invite flow"), read },
@@ -145,10 +150,12 @@ async function agentNamed(
     }),
     readerId,
   );
+
   const ref = view.querySelector("[data-agent-ref]") ?? assert.fail("the agent is named");
   hover(ref);
   const card = cards()[0] ?? assert.fail("a card hangs");
   assert.ok(card.querySelector("[data-agent-card]"), "the agent's card hangs");
+
   return { card, opened };
 }
 
@@ -187,8 +194,10 @@ test("a teammate's agent's card says it was started by them, their disc and name
 
 test("the starter's name on an agent's card hangs their own card over it, read only, and the agent's card stays standing beneath", async () => {
   const { card } = await agentNamed(DEAN.userId);
+
   const starter =
     card.querySelector(".ui-hover-card-row [data-actor-ref]") ?? assert.fail("the starter");
+
   assert.equal(starter.tagName, "SPAN", "a person has no page to press through to");
 
   hover(starter);
@@ -228,8 +237,10 @@ async function stacked() {
   pass(PAST_ANY_WAIT);
   const control = document.querySelector("[data-agent-ref]") ?? assert.fail("the agent is named");
   move(control, card);
+
   const starter =
     card.querySelector(".ui-hover-card-row [data-actor-ref]") ?? assert.fail("the starter");
+
   move(card, starter);
   pass(PAST_ANY_WAIT);
   const theirs = cards()[1] ?? assert.fail("the starter's card hangs over the agent's");
@@ -237,6 +248,7 @@ async function stacked() {
   const gap = document.body.appendChild(document.createElement("div"));
   move(starter, gap);
   move(gap, theirs);
+
   return { card, theirs, gap };
 }
 
@@ -303,13 +315,17 @@ test("an agent's card wears its tile beside its name, its pull request on a row 
   const tile = card.querySelector<HTMLElement>(".ui-hover-card-lead > .actor-mark");
   assert.equal(tile?.dataset.kind, "agent");
   assert.equal(tile?.dataset.size, "card");
+
   const corner =
     card.querySelector(".ui-hover-card-corner") ?? assert.fail("the head has a corner");
+
   assert.equal(corner.querySelector("[data-pull-request-mark]"), null, "no pull request in it");
   assert.match(corner.textContent ?? "", /^Failed · /u);
+
   const pullRequest = [...card.querySelectorAll(".ui-hover-card-row")].find(
     (row) => row.querySelector("[data-pull-request-mark]") !== null,
   );
+
   assert.equal(pullRequest?.textContent, "#42 Expire invitations");
 
   const offers = [...card.querySelectorAll("button")].map((button) => button.textContent ?? "");
@@ -364,6 +380,7 @@ async function macPlace(
     output: { kind: TOOL_BLOCK.TEXT, text: "ok" },
     errorText: undefined,
   });
+
   const view = await drawn(
     createElement(MacOwnerProvider, {
       value: macOwnerOf(startedBy, MEMBERS, readerId),
@@ -371,8 +388,10 @@ async function macPlace(
     }),
     readerId,
   );
+
   const pill = view.querySelector<HTMLElement>(".tool-place");
   assert.ok(pill, "the row says where the command ran");
+
   return pill;
 }
 
@@ -397,6 +416,7 @@ test("a command an agent ran on a Mac says whose, by their disc and name: a team
 
 test("a starter or sender who left keeps their picture and their account's name now, from the read of who left", () => {
   const lee = { userId: "user-lee", name: "Lee Park" };
+
   const former = [
     {
       userId: "user-lee",
@@ -404,6 +424,7 @@ test("a starter or sender who left keeps their picture and their account's name 
       pictureUrl: "https://lh3.googleusercontent.com/a/photo-7",
     },
   ];
+
   const left = {
     kind: ACTOR_KIND.SOMEONE,
     reason: SOMEONE_REASON.FORMER,

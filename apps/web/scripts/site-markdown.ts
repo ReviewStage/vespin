@@ -20,6 +20,9 @@ import { createServer, type Plugin } from "vite";
 /** What `src/site-markdown.tsx` answers, as this plugin reads it. */
 type SiteMarkdown = typeof import("../src/site-markdown");
 
+/** What a document is drawn as: the value its module answers. */
+type SiteDrawing = ReturnType<SiteMarkdown["parseReleases"]> | ReturnType<SiteMarkdown["policyOf"]>;
+
 const resolveFile = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 const DRAWING_MODULE = resolveFile("../src/site-markdown.tsx");
@@ -27,7 +30,7 @@ const DRAWING_MODULE = resolveFile("../src/site-markdown.tsx");
 /** A document this answers: the file it is read from, and how it is drawn. */
 interface SiteDocument {
   readonly file: string;
-  readonly draw: (site: SiteMarkdown, words: string) => unknown;
+  readonly draw: (site: SiteMarkdown, words: string) => SiteDrawing;
 }
 
 /** Each module this answers, and its document. */
@@ -66,9 +69,11 @@ export async function drawnBySite<Drawn>(draw: (site: SiteMarkdown) => Drawn): P
     optimizeDeps: { noDiscovery: true, include: [] },
     esbuild: { jsx: "automatic" },
   });
+
   try {
     // SAFETY: the module is `src/site-markdown.tsx`, whose exports this file's type names.
     const site = (await server.ssrLoadModule(DRAWING_MODULE)) as SiteMarkdown;
+
     return draw(site);
   } finally {
     await server.close();
@@ -76,13 +81,14 @@ export async function drawnBySite<Drawn>(draw: (site: SiteMarkdown) => Drawn): P
 }
 
 /** One site document drawn through a server of its own. */
-async function drawnDocument(document: SiteDocument): Promise<unknown> {
+async function drawnDocument(document: SiteDocument): Promise<SiteDrawing> {
   const words = await readFile(document.file, "utf8");
+
   return drawnBySite((site) => document.draw(site, words));
 }
 
 /** Every site document drawn through one server, by the module that answers it. */
-async function drawnDocuments(): Promise<Map<string, unknown>> {
+async function drawnDocuments(): Promise<Map<string, SiteDrawing>> {
   const documents = await Promise.all(
     [...SITE_DOCUMENTS].map(async ([id, document]) => ({
       id,
@@ -90,6 +96,7 @@ async function drawnDocuments(): Promise<Map<string, unknown>> {
       words: await readFile(document.file, "utf8"),
     })),
   );
+
   return drawnBySite(
     (site) => new Map(documents.map(({ id, document, words }) => [id, document.draw(site, words)])),
   );
@@ -106,7 +113,8 @@ async function drawnDocuments(): Promise<Map<string, unknown>> {
  */
 export function siteMarkdown(): Plugin {
   let building = false;
-  let drawings: Map<string, unknown> | undefined;
+  let drawings: Map<string, SiteDrawing> | undefined;
+
   return {
     name: "site-markdown",
     configResolved(config) {
@@ -119,9 +127,11 @@ export function siteMarkdown(): Plugin {
     async load(id) {
       const name = id.startsWith(RESOLVED_PREFIX) ? id.slice(RESOLVED_PREFIX.length) : undefined;
       const document = name === undefined ? undefined : SITE_DOCUMENTS.get(name);
+
       if (name === undefined || document === undefined) return undefined;
       this.addWatchFile(document.file);
       const value = drawings?.has(name) ? drawings.get(name) : await drawnDocument(document);
+
       return `export default ${JSON.stringify(value)};`;
     },
   };

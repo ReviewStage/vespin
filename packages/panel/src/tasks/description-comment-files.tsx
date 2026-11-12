@@ -42,8 +42,10 @@ function useCommentFileReads(planId: string, files: readonly DescriptionCommentF
     queries: files.map((file) => pictureQuery(planId, file.attachmentId, readDescriptionFile)),
     combine: (results) => results.map((result) => result.data),
   });
+
   return files.map((_, index) => {
     const read = reads[index];
+
     return read?.kind === PICTURE_STATE.READY ? read.url : "";
   });
 }
@@ -54,6 +56,7 @@ export function useCommentFileChips(
   files: readonly DescriptionCommentFile[],
 ): FileChip[] {
   const urls = useCommentFileReads(planId, files);
+
   return files.map((file, index) => ({
     name: file.name,
     mediaType: file.mediaType,
@@ -64,12 +67,18 @@ export function useCommentFileChips(
 /** A comment's files over its words, as chips; none where it carries none or its words draw every one. */
 export function CommentFiles({ chips }: { chips: readonly FileChip[] }): React.ReactNode {
   if (chips.length === 0) return null;
+
   return (
     <div className="comment-files mx-0 mt-tight-gap mb-item-gap">
       <AttachedFileChips files={chips} />
     </div>
   );
 }
+
+type UseCommentFileEntriesResult = {
+  readonly entries: readonly AgentAttachment[];
+  readonly idOf: (entry: AgentAttachment) => string | undefined;
+};
 
 /**
  * A comment's files as its edit's box holds them, each read as the
@@ -84,23 +93,26 @@ export function CommentFiles({ chips }: { chips: readonly FileChip[] }): React.R
 export function useCommentFileEntries(
   planId: string,
   files: readonly DescriptionCommentFile[],
-): {
-  readonly entries: readonly AgentAttachment[];
-  readonly idOf: (entry: AgentAttachment) => string | undefined;
-} {
+): UseCommentFileEntriesResult {
   const urls = useCommentFileReads(planId, files);
   const known = useRef(new Map<string, AgentAttachment>());
+
   const entries = files.flatMap((file, index) => {
     const { mediaType } = file;
+
     if (!isAgentAttachmentType(mediaType)) return [];
     const data = chipBase64({ name: file.name, mediaType, url: urls[index] ?? "" });
     const was = known.current.get(file.attachmentId);
+
     if (was?.name === file.name && was.mediaType === mediaType && was.data === data) return [was];
     const entry: AgentAttachment = { name: file.name, mediaType, data };
     known.current.set(file.attachmentId, entry);
+
     return [entry];
   });
+
   const idOf = (entry: AgentAttachment) =>
     [...known.current].find(([, each]) => each === entry)?.[0];
+
   return { entries, idOf };
 }

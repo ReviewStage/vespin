@@ -85,6 +85,7 @@ export function runsShownChoices(
 ): readonly ChoiceItem<RunsShown>[] {
   return Object.values(RUNS_SHOWN).map((shown) => {
     const tone = SHOWN_TONE[shown];
+
     return {
       value: shown,
       label: SHOWN_LABEL[shown],
@@ -99,7 +100,9 @@ function shownRuns(
   shown: RunsShown,
 ): readonly AutomationWorkspaceRun[] {
   const standing = SHOWN_STANDING[shown];
+
   if (standing === undefined) return runs;
+
   return runs.filter((run) => automationRunStanding(run) === standing);
 }
 
@@ -128,7 +131,9 @@ export function WorkspaceRuns({
 }): React.JSX.Element {
   const body = useRef<HTMLDivElement | null>(null);
   const kept = shownRuns(runs, shown);
+
   if (kept.length === 0) return <EmptyState icon={<ClockIcon />}>{NONE_SHOWN[shown]}</EmptyState>;
+
   return (
     <div ref={body}>
       {/* Note that a run's row here names its automation in its lead, which the row measures as words and cannot mask itself, so the rows stay masked in a screen recording but for the words a row unmasks itself. */}

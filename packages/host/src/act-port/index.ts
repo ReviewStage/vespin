@@ -32,6 +32,7 @@ import {
  */
 
 export type { AgentProceduresDependencies } from "./agents-procedures.js";
+
 export {
   type ActPortContext,
   type ActSender,
@@ -39,15 +40,28 @@ export {
   type PlatformActProcedures,
   refuseUnlessPanel,
 } from "./base.js";
+
 export { browserLiveProcedures } from "./browser-live-procedures.js";
+
 export { declaredActProcedures } from "./declared-acts.js";
-export { type MacShell, macShellProcedures } from "./mac-shell-procedures.js";
+
+export { feedbackProcedures } from "./feedback-procedures.js";
+
+export {
+  MAC_SHELL_SIGNAL,
+  type MacShell,
+  type MacShellSignal,
+  macShellProcedures,
+} from "./mac-shell-procedures.js";
+
 export { pushProcedures, WindowPushes } from "./push-procedures.js";
+
 export {
   type ClientSettingSideEffects,
   clientSettingSideEffects,
   type SettingsProceduresDependencies,
 } from "./settings-procedures.js";
+
 export {
   type TerminalPortSeam,
   terminalProcedures,
@@ -64,6 +78,7 @@ export type ActPortHandler<Sender = unknown> = RPCHandler<ActPortContext<Sender>
 export function refusedPlatformProcedures<Sender>(): PlatformActProcedures<Sender> {
   const port = actPortFor<Sender>();
   const procedures: Partial<PlatformActProcedures<Sender>> = {};
+
   for (const kind of Object.values(PLATFORM_PORT_ACT_KIND)) {
     // Note that every kind is refused alike, whatever it takes and answers, so it is assigned rather than typed by the kind.
     Object.assign(procedures, {
@@ -72,6 +87,7 @@ export function refusedPlatformProcedures<Sender>(): PlatformActProcedures<Sende
       }),
     });
   }
+
   // SAFETY: the loop above gave every platform kind its procedure.
   return procedures as PlatformActProcedures<Sender>;
 }
@@ -118,6 +134,7 @@ export function createActPortHandler<Sender>(
     ...tasksProcedures(dependencies.tasks),
     ...workspaceProcedures(dependencies.workspaces, dependencies.acts),
   } satisfies ContractedRouter<typeof actContract, ActPortContext<Sender>>;
+
   return actPortHandlerOf({ ...router, ...pushProcedures(dependencies.pushes) });
 }
 
@@ -129,8 +146,10 @@ export function actPortHandlerOf<Sender>(
     interceptors: [
       ({ next, request, context, ...options }) => {
         const trace = sendTraceOf(request.headers);
+
         if (trace === undefined) return next();
         const services = Context.add(context["effect/context"], SentSendTrace, trace);
+
         return next({ ...options, request, context: { ...context, "effect/context": services } });
       },
       async ({ next, procedure }) => {

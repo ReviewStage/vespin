@@ -44,6 +44,7 @@ const VERSION_LIST: HistorySpot = { revision: undefined, opened: undefined, list
 /** The revision an address names, none where its step is no revision. */
 function revisionOf(step: string | undefined): number | undefined {
   const revision = Number(step);
+
   return Number.isSafeInteger(revision) ? revision : undefined;
 }
 
@@ -55,10 +56,14 @@ function spotOf(
   const page: VersionPage | undefined = Object.entries(VERSION_LEAF).find(
     ([id]) => id === leaf,
   )?.[1];
+
   if (page === undefined) return undefined;
+
   if (page === VERSION_PAGE.LIST) return VERSION_LIST;
   const revision = revisionOf(params.revision);
+
   if (revision === undefined) return VERSION_LIST;
+
   switch (page) {
     case VERSION_PAGE.VERSION:
       return { revision, opened: undefined, listed: false };
@@ -77,19 +82,23 @@ function addressOf(
   taskId: string,
 ): string {
   const { revision, opened } = spot;
+
   if (revision !== undefined && opened !== undefined) {
     const seq = String(opened.seq);
+
     if (opened.heading === undefined || spot.listed === true) {
       return router.buildLocation({
         to: "/$workspace/task/$taskId/version/$revision/sections",
         params: { workspace, taskId, revision: seq },
       }).href;
     }
+
     return router.buildLocation({
       to: "/$workspace/task/$taskId/version/$revision/section/$heading",
       params: { workspace, taskId, revision: seq, heading: opened.heading },
     }).href;
   }
+
   // Note that the list stands under no version, as the history opened on its newest does.
   if (revision === undefined || spot.listed === true) {
     return router.buildLocation({
@@ -97,6 +106,7 @@ function addressOf(
       params: { workspace, taskId },
     }).href;
   }
+
   return router.buildLocation({
     to: "/$workspace/task/$taskId/version/$revision",
     params: { workspace, taskId, revision: String(revision) },
@@ -133,7 +143,9 @@ function standingOf(
 ): { readonly workspace: string; readonly task: string; readonly spot: HistorySpot } | undefined {
   const spot = spotOf(leaf, params);
   const { workspace, taskId } = params;
+
   if (spot === undefined || workspace === undefined || taskId === undefined) return undefined;
+
   return { workspace, task: taskId, spot };
 }
 
@@ -144,40 +156,53 @@ export function useVersionHistoryRoute(input: { narrow: boolean }): VersionHisto
   const navigate = useNavigate();
   const here = useWindowPlace();
   const access = useRouteAccess();
+
   const standing =
     here.place === ROUTED_PLACE.VERSION_HISTORY ? standingOf(here.leaf, here.params) : undefined;
+
   // Note that the doors read where the history stands as they are pressed, since a door held from an earlier draw may be pressed after it moved.
   const standingNow = () => {
     const matches = router.matchRoutes(router.history.location.pathname);
+
     if (routedPlaceOf(matches, access) !== ROUTED_PLACE.VERSION_HISTORY) return undefined;
     const last = matches.at(-1);
+
     return standingOf(last?.routeId, last?.params ?? {});
   };
+
   const go = (href: string, replace: boolean) => {
     // Standing the history where it stands moves nothing, as pressing the place standing always has, and keeps it standing.
     if (href === router.history.location.href) {
       exits.stay();
+
       return;
     }
+
     void navigate({ href, replace });
   };
+
   const onOpen = (into: string, named: string, at: HistorySpot = VERSION_LIST) => {
     const now = standingNow();
     const same = now?.workspace === into && now.task === named;
     go(addressOf(router, at, into, named), same);
   };
+
   const onMove = (to: HistorySpot) => {
     const now = standingNow();
+
     if (now === undefined) return;
     const opensItem = input.narrow && now.spot.listed === true && to.listed !== true;
     go(addressOf(router, to, now.workspace, now.task), !opensItem);
   };
+
   const listAddress =
     standing === undefined || standing.spot.listed === true
       ? undefined
       : addressOf(router, { ...standing.spot, listed: true }, standing.workspace, standing.task);
+
   const onGiveWay = () => {
     const now = standingNow();
+
     if (now === undefined) return;
     void navigate({
       to: "/$workspace/task/$taskId",
@@ -185,6 +210,7 @@ export function useVersionHistoryRoute(input: { narrow: boolean }): VersionHisto
       replace: true,
     });
   };
+
   return {
     open: standing !== undefined,
     workspace: standing?.workspace,

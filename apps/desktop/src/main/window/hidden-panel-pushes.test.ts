@@ -1,13 +1,14 @@
 /** hidden-panel-pushes.test.ts -- what a panel no one can see is pushed, as its window hides and shows. */
 
+import { EventEmitter } from "node:events";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { RunMode } from "@repo/host";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { initialAppState } from "@repo/host/client";
 import { PUSH, type PushEvent } from "@repo/host/contract";
-import type { WebContents } from "electron";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { PanelManager } from "./panel-manager";
+import { afterEach, beforeEach, expect, test } from "vitest";
+import { PanelManager, type PanelSystem } from "./panel-manager";
+import { STAND_IN_DISPLAY } from "./stand-in-display";
 import { windowPushes } from "./window-pushes";
 
 /** An app link to a task, as the system hands one to the app. */
@@ -19,33 +20,49 @@ const LINK = { workspace: "workspace-1", place: { kind: LINK_DESTINATION.TASK, p
  * in view.
  */
 
-const { windows, FakeBrowserWindow } = await vi.hoisted(async () => {
-  const { EventEmitter } = await import("node:events");
-  const windows: InstanceType<typeof FakeBrowserWindow>[] = [];
-  class FakeWebContents extends EventEmitter {
-    setBackgroundThrottling(): void {}
-    setWindowOpenHandler(): void {}
-    send(): void {}
-  }
-  class FakeBrowserWindow extends EventEmitter {
-    readonly webContents = new FakeWebContents();
-    constructor() {
-      super();
-      windows.push(this);
-    }
-    isDestroyed = () => false;
-    loadFile = () => Promise.resolve();
-  }
-  return { windows, FakeBrowserWindow };
-});
+const windows: FakeBrowserWindow[] = [];
 
-const DISPLAY = { id: 1, workArea: { x: 0, y: 0, width: 1600, height: 1000 } };
+class FakeWebContents extends EventEmitter {
+  setBackgroundThrottling(): void {}
+  setWindowOpenHandler(): void {}
+  send(): void {}
+}
 
-vi.mock("electron", () => ({
-  BrowserWindow: FakeBrowserWindow,
-  app: {},
-  screen: { getPrimaryDisplay: () => DISPLAY, getAllDisplays: () => [DISPLAY] },
-}));
+class FakeBrowserWindow extends EventEmitter {
+  readonly webContents = new FakeWebContents();
+  constructor() {
+    super();
+    windows.push(this);
+  }
+  isDestroyed = () => false;
+  loadFile = () => Promise.resolve();
+}
+
+/**
+ * Electron's window class, stood in for by the fake above. Note that it is
+ * held as unknown, because the fake answers only the part of a
+ * `BrowserWindow` the panel calls, which no type short of Electron's own names.
+ */
+const STAND_IN_WINDOW: unknown = FakeBrowserWindow;
+
+/**
+ * Electron as the panel meets it, these windows on one display. Note that it
+ * is stood in for, because it is the operating system's door and answers
+ * nothing outside an Electron process.
+ */
+// SAFETY: the panel reaches only these members of Electron, each stood in for here.
+const SYSTEM: PanelSystem = {
+  BrowserWindow: STAND_IN_WINDOW as PanelSystem["BrowserWindow"],
+  app: {
+    focus: () => expect.unreachable("no pushed document focuses the app"),
+    quit: () => expect.unreachable("no pushed document quits the app"),
+  },
+  dialog: { showMessageBox: () => expect.unreachable("no pushed document asks a sheet") },
+  screen: {
+    getPrimaryDisplay: () => STAND_IN_DISPLAY,
+    getAllDisplays: () => [STAND_IN_DISPLAY],
+  },
+};
 
 const RUN_MODE: RunMode = {
   requiresAccount: false,
@@ -78,6 +95,7 @@ function documentAt(version: number): AppStateSnapshot {
 /** The panel's one window, shown, with its page's push stream open. */
 function shownPanel() {
   const panels = new PanelManager({
+    system: SYSTEM,
     runMode: RUN_MODE,
     preloadPath: "preload.js",
     rendererHtmlPath: "index.html",
@@ -86,20 +104,25 @@ function shownPanel() {
     placementPath: undefined,
     closing: () => false,
   });
+
   panels.reconcile();
   const [window] = windows;
   expect(window).toBeDefined();
-  // SAFETY: the window is the fake above, whose page stands for Electron's.
-  const page = window?.webContents as unknown as WebContents;
+  const [page] = panels.senders();
+
+  if (page === undefined) throw new Error("the panel's window has no page");
+
   window?.emit("show");
   const stop = new AbortController();
   stops.push(stop);
+
   return { panels, window, stream: windowPushes.stream(page, stop.signal), page };
 }
 
 /** What the next read of a stream carries once everything pending has run, a document by its version; nothing while it waits. */
 async function nextHeard(stream: AsyncIteratorObject<PushEvent>) {
   let heard: number | string | undefined;
+
   // Note that a read still waiting when its test ends is refused by the stream's abort, which ends nothing here.
   const read = stream.next().then(
     (result) => {
@@ -109,7 +132,9 @@ async function nextHeard(stream: AsyncIteratorObject<PushEvent>) {
     },
     () => undefined,
   );
+
   await new Promise((resolve) => setImmediate(resolve));
+
   return { heard: () => heard, read };
 }
 
@@ -124,6 +149,7 @@ afterEach(() => {
 test("three documents pushed while the panel is hidden are one delivery, the third, as it shows", async () => {
   const { window, stream, page } = shownPanel();
   window?.emit("hide");
+
   for (const version of [1, 2, 3]) windowPushes.pushState(page, documentAt(version));
 
   const pending = await nextHeard(stream);

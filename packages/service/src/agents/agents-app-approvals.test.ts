@@ -41,7 +41,8 @@ import { RUNNER_ANSWER, type RunnerAnswer } from "./coder-host/runtime-sessions.
  * reaches it from its next turn; an answer is written to the agent's runner
  * and settles its ask, by a member who controls the agent alone; and an ask
  * that no longer waits is refused with how it stands, writing nothing. A
- * new Claude Code agent starts on its starter's Default permissions.
+ * new Claude Code agent starts on the mode its Start names, else on its
+ * starter's Default permissions.
  * Synthetic accounts, agents, and calls throughout; the store is PGlite.
  */
 
@@ -64,11 +65,13 @@ const asked = (started: Effect.Success<ReturnType<typeof messagedAgent>>, reques
       title: "Run git push --force?",
       description: null,
       input: { command: "git push --force" },
+      commandPrefix: null,
       at: new Date(yield* Clock.currentTimeMillis),
     });
     const pending = yield* listPendingApprovals(started.owner, started.agent.id);
     const ask = pending.find((each) => each.requestId === requestId);
     assert.ok(ask !== undefined);
+
     return ask.id;
   });
 
@@ -85,6 +88,7 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
       Effect.gen(function* () {
         const started = yield* messagedAgent(fakeAgentSessions(), undefined);
         const { agent, ask, other, owner, task } = started;
+
         const changed = (as: string, permissionMode: string) =>
           ask(request(AGENT, as, { method: "PATCH", id: agent.id, body: { permissionMode } }));
 
@@ -93,6 +97,7 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* changed(owner, AGENT_PERMISSION_MODE.ASK),
         );
+
         yield* joinWorkspace(task.workspaceId, other);
         yield* keptToStarter(agent.id);
         const teammate = yield* changed(other, AGENT_PERMISSION_MODE.AUTO);
@@ -102,11 +107,13 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
             .set({ runtime: CONVERSATION_RUNTIME.CODEX })
             .where(eq(conversations.id, started.target.conversationId)),
         );
+
         const onCodex = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
           yield* changed(owner, AGENT_PERMISSION_MODE.AUTO),
         );
+
         const backToFull = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.OK,
@@ -127,21 +134,33 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
   );
 
   it.effect(
-    "a member's Default permissions is the mode their new Claude Code agent starts on",
+    "a new Claude Code agent starts on the mode its Start names, else on its member's Default permissions",
     () =>
       Effect.gen(function* () {
         const opened = yield* openTask({ agentSessions: fakeAgentSessions() });
-        const start = () =>
-          opened.ask(startAs(opened.owner, opened.task.id, { idempotencyKey: randomUUID() }));
+
+        const start = (body: { readonly permissionMode?: string } = {}) =>
+          opened.ask(
+            startAs(opened.owner, opened.task.id, { idempotencyKey: randomUUID(), ...body }),
+          );
+
         const before = readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, yield* start());
         yield* writeAccountPreferences(opened.owner, {
           agentPermissionMode: AGENT_PERMISSION_MODE.ASK,
         });
         const after = readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, yield* start());
 
+        const named = readAnswer(
+          agentAnswerSchema,
+          HOSTED_HTTP_STATUS.CREATED,
+          yield* start({ permissionMode: AGENT_PERMISSION_MODE.AUTO }),
+        );
+
         // Full access is the default, and is said by saying nothing.
         assert.equal(before.agent.permissionMode, undefined);
         assert.equal(after.agent.permissionMode, AGENT_PERMISSION_MODE.ASK);
+        // A mode the Start names wins over the default, which it leaves as it was.
+        assert.equal(named.agent.permissionMode, AGENT_PERMISSION_MODE.AUTO);
       }),
   );
 
@@ -154,6 +173,7 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
         const { agent, ask, owner } = started;
         const denied = yield* asked(started, "request-1");
         const left = yield* asked(started, "request-2");
+
         const answer = (approvalId: string) =>
           ask(
             request(approvalPath(approvalId), owner, {
@@ -168,6 +188,7 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
           HOSTED_HTTP_STATUS.OK,
           yield* answer(denied),
         );
+
         const again = yield* answer(denied);
         // The turn ends with the second ask still pending, which expires with it.
         yield* started.writer.consume(started.target, {
@@ -220,7 +241,9 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
             const started = yield* messagedAgent(fakeAgentSessions({ answers }), {
               running: true,
             });
+
             const approvalId = yield* asked(started, "request-1");
+
             const answered = yield* started.ask(
               request(approvalPath(approvalId), started.owner, {
                 method: "POST",
@@ -228,7 +251,9 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
                 body: { answer: APPROVAL_ANSWER.ALLOW },
               }),
             );
+
             const standing = yield* listPendingApprovals(started.owner, started.agent.id);
+
             return { answered, pending: standing.map((each) => each.decidedByUserId) };
           });
 
@@ -260,6 +285,7 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
         const started = yield* messagedAgent(agentSessions, { running: true });
         const { agent, ask, other, owner, task } = started;
         const approvalId = yield* asked(started, "request-1");
+
         const answer = () =>
           ask(
             request(approvalPath(approvalId), other, {

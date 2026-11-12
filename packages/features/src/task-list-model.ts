@@ -97,6 +97,7 @@ function creatorIdOf(task: TaskSummary): string | undefined {
  */
 export function taskTime(task: TaskSummary, order: TaskOrder): number {
   if (order === TASK_ORDER.CREATED) return task.createdAt;
+
   return Math.max(task.updatedAt, task.agents?.activityAt ?? 0);
 }
 
@@ -116,12 +117,15 @@ function grouped<K>(
   keyOf: (task: TaskSummary) => K,
 ): Map<K, TaskSummary[]> {
   const groups = new Map<K, TaskSummary[]>();
+
   for (const task of tasks) {
     const key = keyOf(task);
     const group = groups.get(key);
+
     if (group === undefined) groups.set(key, [task]);
     else group.push(task);
   }
+
   return groups;
 }
 
@@ -133,6 +137,12 @@ function latest(tasks: readonly TaskSummary[]): number {
 /** What every surface calls the state of naming no repository: a task's, a group's, a filter's, a pick's. */
 export const NO_REPOSITORY = "No repository";
 
+/** What a task's repository pick is called while it names none, which it still needs: its menu's item and its chip's words. */
+export const CHOOSE_REPOSITORY = "Choose a repository";
+
+/** What a task's repository pick is called once it names one. */
+export const CHANGE_REPOSITORY = "Change repository";
+
 /** A repository's two parts, `acme` and `relay` of `acme/relay`; a name with no owner is its name alone. */
 export interface RepositoryParts {
   readonly owner: string | undefined;
@@ -142,7 +152,9 @@ export interface RepositoryParts {
 /** A repository's owner and its name, split at the slash GitHub writes between them. */
 export function repositoryParts(repository: string): RepositoryParts {
   const slash = repository.indexOf("/");
+
   if (slash <= 0) return { owner: undefined, name: repository };
+
   return { owner: repository.slice(0, slash), name: repository.slice(slash + 1) };
 }
 
@@ -160,10 +172,12 @@ export function repositoryGroups(tasks: readonly TaskSummary[]): readonly Reposi
   const groups = [...grouped(orderTasks(tasks), (task) => task.repository)].map(
     ([repository, members]) => ({ repository, tasks: members }),
   );
+
   return groups.sort((a, b) => {
     if (a.repository === null || b.repository === null) {
       return Number(a.repository === null) - Number(b.repository === null);
     }
+
     return latest(b.tasks) - latest(a.tasks);
   });
 }
@@ -187,12 +201,14 @@ export function repositoryLabel(
   groups: readonly Pick<RepositoryGroup, "repository">[],
 ): string {
   const name = nameOf(repository);
+
   const shared = groups.some(
     (group) =>
       group.repository !== null &&
       group.repository !== repository &&
       nameOf(group.repository) === name,
   );
+
   return shared ? repository : name;
 }
 
@@ -222,8 +238,10 @@ export function tasksAssignedTo(
       return tasks.filter((task) => task.assignee?.userId === assignedTo.userId);
     case ASSIGNED_TO.ME:
       if (readerId === undefined) return tasks;
+
       return tasks.filter((task) => {
         const assignee = task.assignee?.userId;
+
         return assignee === undefined ? creatorIdOf(task) === readerId : assignee === readerId;
       });
   }
@@ -232,6 +250,7 @@ export function tasksAssignedTo(
 /** Whether the view draws a task: one of a status shown, or one with no status to leave it out by, a task from a service before statuses. */
 function taskInStatuses(task: TaskSummary, statuses: readonly TaskStatus[]): boolean {
   const status = task.status;
+
   return status === undefined || statuses.includes(status);
 }
 
@@ -255,6 +274,7 @@ export function taskInView(
   view: Pick<TaskListView, "finishedSubTasks">,
 ): boolean {
   if (taskInStatuses(task, SHOWN_STATUSES)) return true;
+
   return view.finishedSubTasks && task.parentTaskId !== undefined && taskFinished(task);
 }
 
@@ -297,11 +317,13 @@ function heldAncestor(
   if (task.pinnedAt !== undefined) return undefined;
   const walked = new Set([task.id]);
   let at = task.parentTaskId;
+
   while (at !== undefined && !walked.has(at)) {
     if (held(at)) return at;
     walked.add(at);
     at = every.get(at)?.parentTaskId;
   }
+
   return undefined;
 }
 
@@ -331,22 +353,30 @@ function taskNodes(tasks: readonly TaskSummary[], every: TasksById): TaskNode[] 
   const held = new Set(tasks.map((task) => task.id));
   const childrenOf = new Map<string, TaskSummary[]>();
   const tops: TaskSummary[] = [];
+
   for (const task of tasks) {
     const parent = parentIn(task, held, every);
+
     if (parent === undefined) tops.push(task);
     else childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), task]);
   }
+
   const reached = new Set<string>();
+
   const node = (task: TaskSummary): TaskNode => {
     reached.add(task.id);
     const children = childrenOf.get(task.id) ?? [];
+
     return {
       task,
       children: children.filter((child) => !reached.has(child.id)).map(node),
     };
   };
+
   const tree = tops.map(node);
+
   for (const task of tasks) if (!reached.has(task.id)) tree.push(node(task));
+
   return tree;
 }
 
@@ -375,15 +405,20 @@ export function drawnTaskRows(
   every: TasksById,
 ): DrawnTaskRow[] {
   const drawn: DrawnTaskRow[] = [];
+
   const draw = (node: TaskNode, depth: number) => {
     const { task, children } = node;
     const open = children.length === 0 ? undefined : opened(task.id);
     drawn.push({ task, depth, open });
+
     const under =
       open === false ? children.filter((child) => holdsStanding(child, standing)) : children;
+
     for (const child of under) draw(child, depth + 1);
   };
+
   for (const node of taskNodes(tasks, every)) draw(node, 0);
+
   return drawn;
 }
 
@@ -420,22 +455,28 @@ export function homedTaskRows(
   });
   const held = (taskId: string) => listOf.has(taskId);
   const putByHand = (taskId: string) => (listOf.get(taskId) ?? placed) < placed;
+
   const homeOf = (task: TaskSummary): number | undefined => {
     const walked = new Set([task.id]);
     let at = task;
     let above = heldAncestor(at, held, every);
+
     // Note that a loop of parents, which nothing writes, ends the walk where it closes, at the last task it reached, `above` still set.
     while (above !== undefined && !walked.has(above) && !putByHand(at.id)) {
       walked.add(above);
       at = byId.get(above) ?? at;
       above = heldAncestor(at, held, every);
     }
+
     // The walk ends at a task put in its list by hand, which every task under it follows.
     if (putByHand(at.id)) return listOf.get(at.id);
+
     // The top of the walk is drawn nowhere where it stands under a parent no list holds, so neither is anything under it.
     return above === undefined && underParent(at) ? undefined : listOf.get(at.id);
   };
+
   const homed = lists.map((tasks) => tasks.map((task) => ({ task, home: homeOf(task) })));
+
   return lists.map((_, list) => [
     ...(homed[list] ?? []).flatMap(({ task, home }) => (home === list ? [task] : [])),
     ...homed.flatMap((tasks, from) =>
@@ -481,8 +522,10 @@ export function childTaskCounts(
   tasks: readonly TaskSummary[],
 ): ReadonlyMap<string, ChildTaskCount> {
   const counts = new Map<string, ChildTaskCount>();
+
   for (const task of tasks) {
     const { id, parentTaskId } = task;
+
     if (parentTaskId === undefined || parentTaskId === id) continue;
     const was = counts.get(parentTaskId) ?? { finished: 0, total: 0 };
     counts.set(parentTaskId, {
@@ -490,6 +533,7 @@ export function childTaskCounts(
       total: was.total + 1,
     });
   }
+
   return counts;
 }
 
@@ -515,9 +559,12 @@ export function taskSections(
   if (grouping === TASK_GROUPING.NONE) {
     return { grouping, tasks: orderTasks(tasks) };
   }
+
   const grouped = repositoryGroups(tasks);
+
   const pinnedAt = (group: RepositoryGroup) =>
     group.repository === null ? -1 : pinnedRepositories.indexOf(group.repository);
+
   return {
     grouping,
     groups: [

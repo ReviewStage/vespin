@@ -17,6 +17,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 
 type TasksModule = typeof import("./tasks-fixture.js");
+
 type InboxModule = typeof import("@repo/host/fixture-inbox");
 
 /** The fixture a run draws: the tasks fixture's doors, the Inbox's laid over the three it stages, and the reader it signs in as. */
@@ -51,7 +52,9 @@ const followedLists = new WeakMap<AppStateSnapshot["tasks"], AppStateSnapshot["t
 function withFollowed(state: AppStateSnapshot, view: TasksView | undefined): AppStateSnapshot {
   if (view === undefined) return state;
   const held = followedLists.get(state.tasks);
+
   if (held !== undefined) return { ...state, tasks: held };
+
   const tasks = {
     ...state.tasks,
     ...(view.taskAgents === undefined ? undefined : { taskAgents: view.taskAgents }),
@@ -59,7 +62,9 @@ function withFollowed(state: AppStateSnapshot, view: TasksView | undefined): App
       ? undefined
       : { taskPullRequests: view.taskPullRequests }),
   };
+
   followedLists.set(state.tasks, tasks);
+
   return { ...state, tasks };
 }
 
@@ -67,8 +72,10 @@ function withFollowed(state: AppStateSnapshot, view: TasksView | undefined): App
 function laidOver(tasks: TasksModule, inbox: InboxModule): TasksFixture {
   const fixtureTasksView: TasksFixture["fixtureTasksView"] = (run) => {
     const view = tasks.fixtureTasksView(run);
+
     return view === undefined ? undefined : inbox.inboxTasksView(run.profile, view);
   };
+
   return {
     fixtureSidePanel: tasks.fixtureSidePanel,
     fixtureColumnTab: tasks.fixtureColumnTab,
@@ -94,6 +101,7 @@ export function loadTasksFixture(): Promise<void> {
     },
     () => undefined,
   );
+
   return loading;
 }
 
@@ -105,6 +113,7 @@ export function loadTasksFixture(): Promise<void> {
  */
 export function handFixtureClient(client: QueryClient): () => void {
   documentClient = client;
+
   return () => {
     if (documentClient === client) documentClient = undefined;
   };
@@ -129,9 +138,11 @@ export function useTasksFixtureLanded(fixtureMode: boolean): boolean {
     loadTasksFixture().then(() => {
       if (live) setSettled(true);
     });
+
     return () => {
       live = false;
     };
   }, [fixtureMode]);
+
   return !fixtureMode || settled;
 }

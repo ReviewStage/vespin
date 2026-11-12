@@ -1,0 +1,48 @@
+# keep.yaml -- what a long press offers on a thread's picture and its message, and the full-screen viewer's share button: the picture's Copy, Save to Photos, and Share…, and the message's Copy message.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as `inbox.yaml` is, so the thread and
+# its picture's bytes are the fixture's (`@repo/host/fixture-inbox`) and no
+# server is reached. Nothing here presses an act, so no pasteboard, Photos, or
+# share sheet is reached either; the menus are shot and closed.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- tapOn: "Recorded the invite flow"
+- assertVisible: ".*walked the invite flow.*"
+- waitForAnimationToEnd
+# The picture's menu, which the system opens over it lifted.
+- longPressOn: "The invite page"
+- assertVisible: "Save to Photos"
+- assertVisible: "Share…"
+- waitForAnimationToEnd
+- takeScreenshot: keep-picture-menu
+- tapOn:
+    point: "50%, 10%"
+- waitForAnimationToEnd
+# The message's own menu, opened on its words.
+- longPressOn: ".*walked the invite flow.*"
+- assertVisible: "Copy message"
+- waitForAnimationToEnd
+- takeScreenshot: keep-message-menu
+- tapOn:
+    point: "50%, 10%"
+- waitForAnimationToEnd
+# The viewer's share button holds the picture's same acts.
+- tapOn: "The invite page"
+- assertVisible:
+    id: "markdown-picture-done"
+- tapOn:
+    id: "viewer-share"
+- assertVisible: "Save to Photos"
+- waitForAnimationToEnd
+- takeScreenshot: keep-viewer-share
+- tapOn:
+    point: "50%, 50%"
+- tapOn:
+    id: "markdown-picture-done"

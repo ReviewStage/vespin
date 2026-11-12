@@ -119,6 +119,7 @@ function newestChangeOf(task: Pick<TaskSummary, "updatedAt" | "agents">): number
  */
 function readersOwn(edit: DescriptionSectionEdit, readerId: string | undefined): boolean {
   if (edit.actor !== DESCRIPTION_ACTOR.DEVELOPER) return false;
+
   return edit.by === undefined || readerId === undefined || edit.by.userId === readerId;
 }
 
@@ -137,6 +138,7 @@ function visited(
       opened: undefined,
       changed: NOTHING_CHANGED,
     };
+
   const changed =
     mark === undefined || opened === undefined
       ? NOTHING_CHANGED
@@ -145,6 +147,7 @@ function visited(
             .filter((edit) => !readersOwn(edit, readerId) && edit.at > mark && edit.at <= opened)
             .map((edit) => edit.section),
         );
+
   return { taskId: task.id, readerId, mark, opened, changed };
 }
 
@@ -156,8 +159,10 @@ function revisited(
   mark: number | undefined,
 ): Visit {
   if (task === undefined) return visited(undefined, readerId, undefined, undefined);
+
   if (held !== undefined && held.taskId === task.id)
     return visited(task, readerId, held.mark, held.opened);
+
   return visited(task, readerId, mark, newestSaveOf(task));
 }
 
@@ -178,14 +183,17 @@ export function useTaskLooks(
 ): TaskLooks {
   const [visit, setVisit] = useState(() => revisited(undefined, task, readerId, row?.readThrough));
   let current = visit;
+
   if (visit.taskId !== task?.id || visit.readerId !== readerId) {
     current = revisited(visit, task, readerId, row?.readThrough);
     setVisit(current);
   }
+
   const taskId = task?.id;
   const activityAt = row?.agents?.activityAt;
   // Note that a look is sent with `mutate` and no `onError`, quiet whatever comes back, since no person pressed for it.
   const { mutate: markTaskRead } = useMutation(actMutation(ACT_KIND.TASKS_MARK_READ));
+
   const lookAtTask = useCallback(
     (taskId: string, readMark: ReadMark) => markTaskRead({ taskId, readMark }),
     [markTaskRead],
@@ -195,6 +203,7 @@ export function useTaskLooks(
     if (taskId === undefined) return;
     watchedStore.setState(() => taskId);
     lookAtTask(taskId, READ_MARK.READ);
+
     return () => {
       watchedStore.setState(() => undefined);
       lookAtTask(taskId, READ_MARK.SEEN);
@@ -205,9 +214,11 @@ export function useTaskLooks(
   const seenActivity = useRef<{ taskId: string; activityAt: number | undefined } | undefined>(
     undefined,
   );
+
   useEffect(() => {
     const seen = seenActivity.current;
     seenActivity.current = taskId === undefined ? undefined : { taskId, activityAt };
+
     if (taskId === undefined || seen?.taskId !== taskId || seen.activityAt === activityAt) return;
     lookAtTask(taskId, READ_MARK.SEEN);
   }, [taskId, activityAt, lookAtTask]);
@@ -216,10 +227,13 @@ export function useTaskLooks(
     setVisit((held) =>
       held.taskId === taskId ? { ...held, mark: held.opened, changed: NOTHING_CHANGED } : held,
     );
+
     if (taskId !== undefined) lookAtTask(taskId, READ_MARK.SEEN);
   }, [taskId, lookAtTask]);
+
   // The same looks across draws while neither moves, so the plan they are handed to is not drawn again for new ones.
   const { changed } = current;
+
   return useMemo(() => ({ changed, dismiss }), [changed, dismiss]);
 }
 
@@ -231,9 +245,12 @@ export function useTaskLooks(
  */
 export function useUnreadTasks({ staged }: { staged: boolean }): (task: TaskSummary) => boolean {
   const watched = useSelector(watchedStore);
+
   return (task) => {
     if (staged) return false;
+
     if (task.markedUnread === true) return true;
+
     return task.id !== watched && readsUnread(task, newestChangeOf(task));
   };
 }
@@ -261,6 +278,7 @@ function readMarkOf(unread: boolean): ReadMark {
  */
 export function useReadMark(): ReadMarks["mark"] {
   const { mutate: markTaskRead } = useMutation(pressMutation(ACT_KIND.TASKS_MARK_READ));
+
   return useCallback(
     (task, unread) => markTaskRead({ taskId: task.id, readMark: readMarkOf(unread) }),
     [markTaskRead],
@@ -272,6 +290,7 @@ export function useReadMarks(): ReadMarks {
   const marked = useQuery({ ...appStateQuery, select: selectMarkedUnreadIds }).data ?? NONE_MARKED;
   const watched = useSelector(watchedStore);
   const mark = useReadMark();
+
   return { watched, markedUnread: (taskId) => marked.has(taskId), mark };
 }
 
@@ -281,5 +300,6 @@ export function useMarkedUnread(taskId: string): boolean {
     (state: AppStateSnapshot) => selectMarkedUnreadIds(state).has(taskId),
     [taskId],
   );
+
   return useQuery({ ...appStateQuery, select }).data === true;
 }

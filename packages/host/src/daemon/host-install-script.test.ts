@@ -91,6 +91,7 @@ const folders: string[] = [];
 const folder = () => {
   const made = mkdtempSync(join(tmpdir(), "vespin-host-install-"));
   folders.push(made);
+
   return made;
 };
 
@@ -109,9 +110,11 @@ const sh = (args: readonly string[], env: Readonly<Record<string, string>>) =>
 /** A folder holding a command for each body given, by its name, to put first on a PATH. */
 const bin = (commands: Readonly<Record<string, string>>) => {
   const made = folder();
+
   for (const [name, body] of Object.entries(commands)) {
     writeFileSync(join(made, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
   }
+
   return made;
 };
 
@@ -157,6 +160,7 @@ const accountName = () => spawnSync("id", ["-un"], { encoding: "utf8" }).stdout.
 function packedTarball(served: string, version: string, top: string, launcher: string) {
   const packed = folder();
   const root = join(packed, top);
+
   for (const each of ["bin", "node/bin", "lib"]) mkdirSync(join(root, each), { recursive: true });
   writeFileSync(join(root, "bin", top), readFileSync(launcher), { mode: 0o755 });
   writeFileSync(join(root, "node/bin/node"), FAKE_NODE, { mode: 0o755 });
@@ -164,6 +168,7 @@ function packedTarball(served: string, version: string, top: string, launcher: s
   const name = `${top}-${version}.tar.gz`;
   const tarball = join(served, name);
   execFileSync("tar", ["-czf", tarball, "-C", packed, top]);
+
   return {
     url: `https://releases.test/${name}`,
     sha256: createHash("sha256").update(readFileSync(tarball)).digest("hex"),
@@ -179,6 +184,7 @@ function servedScript(served: string, version: string): string {
   const host = packedTarball(served, version, "vespin-host", UNINSTALL_SCRIPT);
   const cli = packedTarball(served, version, "vespin", CLI_LAUNCHER);
   let script = readFileSync(SCRIPT, "utf8");
+
   for (const [placeholder, value] of Object.entries({
     "@@VERSION@@": version,
     "@@SHA256_X64@@": host.sha256,
@@ -198,8 +204,10 @@ function servedScript(served: string, version: string): string {
   })) {
     script = script.replaceAll(placeholder, value);
   }
+
   const file = join(folder(), "install.sh");
   writeFileSync(file, script);
+
   return file;
 }
 
@@ -229,7 +237,9 @@ const box = (
   const served = folder();
   const asked = join(root, "asked.log");
   writeFileSync(asked, "");
+
   if (options.lingers ?? true) writeFileSync(join(root, "lingering"), "");
+
   const fakes = bin({
     uname: uname(os, os === OS.LINUX ? "x86_64" : "arm64"),
     sysctl: "echo 1",
@@ -253,19 +263,21 @@ const box = (
       "esac",
     ].join("\n"),
     sudo: `printf 'sudo %s\\n' "$*" >>"$FAKE_ASKED"\n[ -z "$FAKE_SUDO_REFUSED" ] || exit 1\nFAKE_AS_ROOT=1 exec "$@"`,
-    ...(options.root
-      ? { id: 'if [ "$*" = -u ]; then echo 0; else exec /usr/bin/id "$@"; fi' }
-      : {}),
+    ...(options.root && { id: 'if [ "$*" = -u ]; then echo 0; else exec /usr/bin/id "$@"; fi' }),
     launchctl: [
       `printf 'launchctl %s\\n' "$*" >>"$FAKE_ASKED"`,
       'case "$1" in',
       '  bootstrap) touch "$FAKE_ROOT/loaded" ;;',
       '  bootout) rm -f "$FAKE_ROOT/loaded" ;;',
-      '  print) case "$2" in */*/*) [ -e "$FAKE_ROOT/loaded" ] ;; esac ;;',
+      '  print) case "$2" in',
+      '    */dev.vespin.host) [ -e "$FAKE_ROOT/app-loaded" ] ;;',
+      '    */*/*) [ -e "$FAKE_ROOT/loaded" ] ;;',
+      "  esac ;;",
       "esac",
     ].join("\n"),
   });
-  const env: Record<string, string> = {
+
+  const env = {
     PATH: `${fakes}:${join(home, ".local/bin")}:${process.env.PATH}`,
     HOME: home,
     APP_HOST_SYSTEMD_RUN_DIR: root,
@@ -273,13 +285,16 @@ const box = (
     FAKE_ROOT: root,
     FAKE_SERVED: served,
     FAKE_PAIRING: "paired",
-    ...(options.selfLinger ? { FAKE_SELF_LINGER: "1" } : {}),
-    ...(options.sudoRefused ? { FAKE_SUDO_REFUSED: "1" } : {}),
-  };
+    ...(options.selfLinger && { FAKE_SELF_LINGER: "1" }),
+    ...(options.sudoRefused && { FAKE_SUDO_REFUSED: "1" }),
+  } satisfies Record<string, string>;
+
   const run = (args: readonly string[], extra: Readonly<Record<string, string>> = {}) =>
     spawnSync("sh", [...args], { cwd: folder(), env: { ...env, ...extra }, encoding: "utf8" });
+
   return {
     home,
+    root,
     releases: join(home, ".local/share/vespin-host"),
     link: join(home, ".local/bin/vespin-host"),
     state: join(home, ".local/state/vespin-host"),
@@ -313,6 +328,7 @@ describe("the host's install script", () => {
         ["-c", `. "${SCRIPT}"; require_supported_os "${kernel}" "${machine}" "${procVersion}"`],
         { APP_HOST_INSTALL_LIBRARY: "1" },
       );
+
       expect(answer.status).toBe(1);
       expect(answer.stderr).toContain(words);
     });
@@ -326,10 +342,12 @@ describe("the host's install script", () => {
     it(`reads ${shell} as ${expected}`, () => {
       const machine = shell.startsWith("a native") ? "arm64" : "x86_64";
       const fakes = bin({ uname: uname(OS.DARWIN, machine), sysctl: `echo ${arm64}` });
+
       const answer = sh(["-c", `. "${SCRIPT}"; hardware_machine`], {
         APP_HOST_INSTALL_LIBRARY: "1",
         PATH: `${fakes}:${process.env.PATH}`,
       });
+
       expect(answer.status).toBe(0);
       expect(answer.stdout.trim()).toBe(expected);
     });
@@ -350,8 +368,10 @@ describe("the host's install script", () => {
       const answer = sh([SCRIPT, ...ORIGIN_ARGS], {
         PATH: `${macBin(machine, macos)}:${process.env.PATH}`,
       });
+
       expect(answer.status).toBe(1);
       expect(answer.stdout).toBe("");
+
       if (refusal === undefined) {
         expect(answer.stderr).toContain("This account has no home folder");
         expect(answer.stderr).not.toMatch(/Intel|macOS/u);
@@ -428,6 +448,7 @@ describe("the host's install script", () => {
         needsSudo,
       );
       expect(existsSync(computer.releases)).toBe(!sudoRefused);
+
       if (sudoRefused) expect(answer.stderr).toContain("so nothing was installed");
     },
   );
@@ -449,6 +470,7 @@ describe("the host's install script", () => {
       expect(readFileSync(join(computer.state, "device.json"), "utf8")).toBe("paired");
       const asked = computer.asked();
       const connected = asked.indexOf(`vespin-host connect --origin ${ORIGIN}`);
+
       const starts = asked.flatMap((line, at) =>
         line === "systemctl --user start vespin-host.service" ||
         line === "systemctl --user restart vespin-host.service" ||
@@ -456,12 +478,14 @@ describe("the host's install script", () => {
           ? [at]
           : [],
       );
+
       expect(connected).toBeGreaterThanOrEqual(0);
       expect(starts.some((at) => at < connected)).toBe(true);
       expect(starts.some((at) => at > connected)).toBe(true);
 
       const removed = computer.run([computer.link, "uninstall"]);
       expect(removed.status, removed.stderr).toBe(0);
+
       for (const place of [computer.releases, computer.state, computer.service, computer.link]) {
         expect(stands(place)).toBe(false);
       }
@@ -502,6 +526,18 @@ describe("the host's install script", () => {
     );
   });
 
+  it("installs nothing on a Mac where the app's host is loaded, and points to the app", () => {
+    const computer = box(OS.DARWIN);
+    writeFileSync(join(computer.root, "app-loaded"), "");
+
+    const answer = computer.install("0.3.0");
+
+    expect(answer.status, answer.stderr).toBe(0);
+    expect(answer.stdout).toContain("The Vespin app runs this Mac's host.");
+    expect(stands(computer.releases)).toBe(false);
+    expect(stands(computer.service)).toBe(false);
+  });
+
   it("refuses to swap a release for the same version's while its service will not stop, leaving the release it runs as it stands", () => {
     const computer = box(OS.LINUX);
     expect(computer.install("0.3.0").status).toBe(0);
@@ -516,12 +552,14 @@ describe("the host's install script", () => {
 
   it("writes a unit that runs the release through current with the user manager, again a minute after any exit, a clean one among them", () => {
     const home = folder();
+
     const answer = sh(["-c", `. "${SCRIPT}"; account_paths; write_unit; cat "$UNIT_FILE"`], {
       APP_HOST_INSTALL_LIBRARY: "1",
       HOME: home,
     });
 
     expect(answer.status).toBe(0);
+
     for (const line of [
       `ExecStart=${home}/.local/share/vespin-host/current/bin/vespin-host run`,
       "Restart=always",
@@ -536,13 +574,16 @@ describe("the host's install script", () => {
     const home = folder();
     const plist = join(folder(), "agent.plist");
     const log = join(home, "Library/Logs/Vespin Host/vespin-host.log");
+
     const answer = sh(
       ["-c", `. "${SCRIPT}"; account_paths; write_launch_agent "$1" "$2"`, "sh", plist, log],
       { APP_HOST_INSTALL_LIBRARY: "1", HOME: home },
     );
+
     expect(answer.status).toBe(0);
 
     const written = readFileSync(plist, "utf8").replace(/>\s+</gu, "><");
+
     for (const entry of [
       `<key>Label</key><string>${LABEL}</string>`,
       `<key>ProgramArguments</key><array><string>${home}/.local/share/vespin-host/current/bin/vespin-host</string><string>run</string></array>`,
@@ -582,6 +623,7 @@ describe("the host's install script", () => {
         `#!/bin/sh\nprintf '%s\\n' "$*" >>"${asked}"\n[ "$1" != print ] || exit ${session}\n[ "$1" != bootstrap ] || exit ${bootstrap}\n`,
         { mode: 0o755 },
       );
+
       const answer = sh(["-c", `. "${SCRIPT}"; start_launch_agent 501 /fixture/agent.plist`], {
         APP_HOST_INSTALL_LIBRARY: "1",
         PATH: `${fakes}:${process.env.PATH}`,
@@ -607,6 +649,7 @@ describe("the host's install script", () => {
       const fakes = folder();
       const home = folder();
       const asked = join(folder(), "asked.log");
+
       // Note that systemctl answers is-active as systemd does, launchctl print finds the agent while it is loaded, and loginctl says the account lingers.
       for (const [name, body] of Object.entries({
         uname: `echo ${os}`,
@@ -616,6 +659,7 @@ describe("the host's install script", () => {
       })) {
         writeFileSync(join(fakes, name), `#!/bin/sh\n${body}\n`, { mode: 0o755 });
       }
+
       const releases = join(home, ".local/share/vespin-host");
       const release = join(releases, "versions/0.7.0");
       mkdirSync(join(release, "bin"), { recursive: true });
@@ -639,17 +683,21 @@ describe("the host's install script", () => {
       mkdirSync(join(state, "owned-agents"), { recursive: true });
       writeFileSync(join(state, "owned-agents/one"), "");
       writeFileSync(join(state, "device.json"), "{}");
+
       // Note that agent one is this install's, by its daemon's record, and agent two another install's.
       for (const each of ["agents/one", "agents/two", "clones/acme"]) {
         mkdirSync(join(home, ".vespin", each), { recursive: true });
       }
+
       const service =
         os === "Linux"
           ? join(home, ".config/systemd/user/vespin-host.service")
           : join(home, "Library/LaunchAgents/dev.vespin.host.standalone.plist");
+
       mkdirSync(join(service, ".."), { recursive: true });
       writeFileSync(service, `<string>${releases}/current/bin/vespin-host</string>\n`);
       const log = join(home, "Library/Logs/Vespin Host");
+
       if (os === "Darwin") mkdirSync(log, { recursive: true });
 
       const answer = spawnSync(
@@ -691,6 +739,7 @@ describe("the host's install script", () => {
             ]
           : [],
       );
+
       for (const [place, kept] of [
         [service, !stops],
         [join(home, ".vespin/agents/one"), !stops || keepAgents],
@@ -732,6 +781,7 @@ describe("the host's install script", () => {
   it("refuses a download whose SHA-256 is not the one carried, and accepts the one that is", () => {
     const download = join(folder(), "download.tar.gz");
     writeFileSync(download, "abc");
+
     const check = (expected: string) =>
       sh(["-c", `. "${SCRIPT}"; check_sha256 "${download}" "${expected}"`], {
         APP_HOST_INSTALL_LIBRARY: "1",

@@ -60,6 +60,7 @@ const CRON_FIELDS = 5;
 function firesTooOften(cron: Cron.Cron, from: Date): boolean {
   let previous: Date | undefined;
   let taken = 0;
+
   for (const at of Cron.sequence(cron, from)) {
     if (
       previous !== undefined &&
@@ -67,10 +68,13 @@ function firesTooOften(cron: Cron.Cron, from: Date): boolean {
     ) {
       return true;
     }
+
     previous = at;
     taken += 1;
+
     if (taken >= AUTOMATION_SCHEDULE.INTERVAL_SAMPLE) return false;
   }
+
   return false;
 }
 
@@ -82,16 +86,22 @@ export function readSchedule(
   if (schedule.cron.trim().split(/\s+/u).length !== CRON_FIELDS) {
     return Result.fail(SCHEDULE_REFUSAL.CRON);
   }
+
   const zone = DateTime.zoneMakeNamed(schedule.timezone);
+
   if (Option.isNone(zone)) return Result.fail(SCHEDULE_REFUSAL.TIMEZONE);
   const parsed = Cron.parse(schedule.cron, zone.value);
+
   if (Result.isFailure(parsed)) return Result.fail(SCHEDULE_REFUSAL.CRON);
+
   if (firesTooOften(parsed.success, from)) return Result.fail(SCHEDULE_REFUSAL.TOO_FREQUENT);
+
   return Result.succeed(parsed.success);
 }
 
 /** The first instant strictly after `after` the schedule is due; nothing for a schedule that cannot be read. */
 export function nextScheduledRun(schedule: Schedule, after: Date): Date | undefined {
   const read = readSchedule(schedule, after);
+
   return Result.isSuccess(read) ? Cron.next(read.success, after) : undefined;
 }

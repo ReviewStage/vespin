@@ -20,6 +20,7 @@ import type {
   HookEvent,
   SDKMessage,
 } from "@anthropic-ai/claude-agent-sdk";
+import { Predicate } from "effect";
 import type { CodexNotification } from "./protocol.js";
 
 /** 128 and SIGKILL's 9: how a shell reports a command killed by the signal. */
@@ -62,11 +63,14 @@ const AGENT_ADVICE =
 /** The number on a file's `<key> <n>` line, its unit after it left aside (`MemTotal: 8605824 kB`); none where it holds no such line. */
 function countIn(text: string, key: string): number | undefined {
   const line = text.split("\n").find((entry) => entry.startsWith(`${key} `));
+
   const said = line
     ?.slice(key.length + 1)
     .trim()
     .split(/\s+/)[0];
+
   const count = said === undefined || said === "" ? Number.NaN : Number(said);
+
   return Number.isFinite(count) ? count : undefined;
 }
 
@@ -108,22 +112,27 @@ async function oomKills(): Promise<number | undefined> {
   for (const path of OOM_KILL_COUNTS) {
     const text = await readText(path);
     const count = text === undefined ? undefined : countIn(text, "oom_kill");
+
     if (count !== undefined) return count;
   }
+
   return undefined;
 }
 
 /** The sandbox's memory: its cgroup's limit where it sets one, the machine's otherwise. */
 async function sandboxMemoryBytes(): Promise<number | undefined> {
   const limit = Number((await readText(MEMORY_MAX))?.trim());
+
   if (Number.isFinite(limit) && limit > 0) return limit;
   const total = countIn((await readText(MEMINFO)) ?? "", "MemTotal:");
+
   return total === undefined ? undefined : total * KIB;
 }
 
 /** The exit code a Claude Code Bash failure opens with, none where it names none. */
 function claudeCodeExitCode(error: string): number | undefined {
   const match = CLAUDE_CODE_EXIT.exec(error);
+
   return match === null ? undefined : Number(match[1]);
 }
 
@@ -133,10 +142,13 @@ function claudeCodeExitCode(error: string): number | undefined {
  */
 function outOfMemoryLine(run: CommandMemoryRun): string | undefined {
   const { exitCode, killsBefore, killsAfter, memoryBytes } = run;
+
   if (exitCode !== SIGKILL_EXIT || killsBefore === undefined || killsAfter === undefined) {
     return undefined;
   }
+
   if (killsAfter <= killsBefore) return undefined;
+
   return memoryBytes === undefined
     ? "Killed: the sandbox ran out of memory"
     : `Killed: the sandbox ran out of memory (${Math.round(memoryBytes / GIB)} GB)`;
@@ -163,24 +175,31 @@ export function claudeCodeMemoryWatch(
 ): ClaudeCodeMemoryWatch {
   const began = new Map<string, number | undefined>();
   const lines = new Map<string, string>();
+
   const onBegin: HookCallback = async (hook) => {
     if (hook.hook_event_name === HOOK_EVENT.PRE_TOOL_USE)
       began.set(hook.tool_use_id, await readings.kills());
+
     return { continue: true };
   };
+
   const onEnd: HookCallback = async (hook) => {
     if (hook.hook_event_name === HOOK_EVENT.POST_TOOL_USE) began.delete(hook.tool_use_id);
+
     if (hook.hook_event_name !== HOOK_EVENT.POST_TOOL_USE_FAILURE) return { continue: true };
     const killsBefore = began.get(hook.tool_use_id);
     began.delete(hook.tool_use_id);
+
     const line = outOfMemoryLine({
       exitCode: claudeCodeExitCode(hook.error),
       killsBefore,
       killsAfter: killsBefore === undefined ? undefined : await readings.kills(),
       memoryBytes: await readings.memoryBytes(),
     });
+
     if (line === undefined) return { continue: true };
     lines.set(hook.tool_use_id, line);
+
     return {
       continue: true,
       hookSpecificOutput: {
@@ -189,28 +208,37 @@ export function claudeCodeMemoryWatch(
       },
     };
   };
+
   const annotate = (message: SDKMessage): SDKMessage => {
     if (message.type !== "user" || lines.size === 0) return message;
     const { content } = message.message;
-    if (typeof content === "string") return message;
+
+    if (Predicate.isString(content)) return message;
     let changed = false;
+
     const blocks = content.map((block) => {
       if (block.type !== "tool_result") return block;
       const line = lines.get(block.tool_use_id);
+
       if (line === undefined) return block;
       lines.delete(block.tool_use_id);
       changed = true;
       const said = block.content;
-      if (said === undefined || typeof said === "string") {
+
+      if (said === undefined || Predicate.isString(said)) {
         return { ...block, content: said === undefined ? line : `${said}\n${line}` };
       }
+
       return { ...block, content: [...said, { type: "text" as const, text: line }] };
     });
+
     return changed ? { ...message, message: { ...message.message, content: blocks } } : message;
   };
+
   const matching = (hook: HookCallback): HookCallbackMatcher[] => [
     { matcher: CLAUDE_CODE_BASH, hooks: [hook] },
   ];
+
   return {
     hooks: {
       PreToolUse: matching(onBegin),
@@ -232,28 +260,35 @@ export function codexMemoryWatch(
   readings: MemoryReadings = MACHINE_READINGS,
 ): (notification: CodexNotification) => Promise<CodexNotification> {
   const began = new Map<string, number | undefined>();
+
   return async (notification) => {
     if (
       notification.method === CODEX_COMMAND.STARTED &&
       notification.params.item.type === CODEX_COMMAND.ITEM
     ) {
       began.set(notification.params.item.id, await readings.kills());
+
       return notification;
     }
+
     if (notification.method !== CODEX_COMMAND.COMPLETED) return notification;
     const { item } = notification.params;
+
     if (item.type !== CODEX_COMMAND.ITEM || !began.has(item.id)) return notification;
     const killsBefore = began.get(item.id);
     began.delete(item.id);
+
     const line = outOfMemoryLine({
       exitCode: item.exitCode ?? undefined,
       killsBefore,
       killsAfter: killsBefore === undefined ? undefined : await readings.kills(),
       memoryBytes: await readings.memoryBytes(),
     });
+
     if (line === undefined) return notification;
     const said = item.aggregatedOutput ?? "";
     const aggregatedOutput = said === "" ? line : `${said.replace(/\n$/, "")}\n${line}`;
+
     return {
       ...notification,
       params: { ...notification.params, item: { ...item, aggregatedOutput } },

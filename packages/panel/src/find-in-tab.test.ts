@@ -60,6 +60,7 @@ function opened(): HTMLButtonElement {
     runAppCommand(APP_COMMAND.FIND);
   });
   assert.ok(document.querySelector(BAR), "⌘F opens the bar");
+
   return before;
 }
 

@@ -13,7 +13,7 @@ import {
 import { jsonResponse } from "@repo/wire/testing";
 import { generateText, type LanguageModel } from "ai";
 import { eq } from "drizzle-orm";
-import { Effect, Redacted, Result, Schema } from "effect";
+import { Effect, Predicate, Redacted, Result, Schema } from "effect";
 import { afterAll, test } from "vitest";
 import { USER_ROLE } from "../../admin/admin-access.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../../environment.js";
@@ -33,6 +33,7 @@ import { productionSummaryModel } from "./replay-summary.js";
  */
 
 const database = await openHostedStoreTestDatabase();
+
 afterAll(() => database.close());
 
 const RING = {
@@ -71,18 +72,21 @@ function provider(answers: readonly Response[]) {
   const keys: string[] = [];
   const asked: { readonly host: string; readonly model: string | undefined }[] = [];
   let next = 0;
+
   const fetch: typeof globalThis.fetch = async (input, init) => {
     const headers = new Headers(init?.headers);
     keys.push(
       headers.get("x-api-key") ?? headers.get("authorization")?.replace(/^Bearer /u, "") ?? "",
     );
     const url = new URL(input instanceof Request ? input.url : String(input));
-    const body = typeof init?.body === "string" ? readRequestModel(init.body) : {};
+    const body = Predicate.isString(init?.body) ? readRequestModel(init.body) : {};
     asked.push({ host: url.host, model: body.model });
     const answer = answers[Math.min(next, answers.length - 1)];
     next += 1;
+
     return answer?.clone() ?? jsonResponse({}, 500);
   };
+
   return { fetch, keys, asked };
 }
 
@@ -95,15 +99,19 @@ async function accountWithKeys(
     Database.use((db) => db.update(user).set({ role }).where(eq(user.id, userId))),
   );
   const ring = parseKeyRing(Redacted.make(RING.HELD));
+
   if (Result.isFailure(ring)) return assert.fail("not a ring");
+
   for (const [named, key] of Object.entries(saved)) {
     // SAFETY: the entries are the record's own, keyed by the providers above.
     const providerId = named as ProviderKeyProvider;
+
     const sealed = sealProviderKey(
       ring.success,
       { userId, provider: providerId, kind: PROVIDER_KEY_KIND.API_KEY },
       Redacted.make(key),
     );
+
     await database.run(
       saveProviderKey(
         userId,
@@ -116,6 +124,7 @@ async function accountWithKeys(
       ),
     );
   }
+
   return userId;
 }
 
@@ -129,12 +138,14 @@ async function ownKey(
   const previewApiKeys = Object.fromEntries(
     Object.entries(standIns).map(([provider, key]) => [provider, Redacted.make(key)]),
   );
+
   const own = await database.run(
     ownKeyOf(userId, preferred, {
       providerKeyEncryptionKeys: ring === null ? undefined : Redacted.make(ring),
       previewApiKeys,
     }),
   );
+
   return own === undefined ? undefined : { provider: own.provider, key: Redacted.value(own.key) };
 }
 
@@ -142,12 +153,15 @@ async function ownKey(
 async function accountWithSetupToken() {
   const userId = await database.createUser();
   const ring = parseKeyRing(Redacted.make(RING.HELD));
+
   if (Result.isFailure(ring)) return assert.fail("not a ring");
+
   const owner = {
     userId,
     provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
     kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
   };
+
   const token = "sk-ant-oat01-account-setup-token-1111";
   await database.run(
     saveProviderKey(
@@ -160,6 +174,7 @@ async function accountWithSetupToken() {
       new Date(0),
     ),
   );
+
   return userId;
 }
 
@@ -168,9 +183,11 @@ test("a call beside an account's agents, such as chapters or a replay's summary,
     [PROVIDER_KEY_PROVIDER.ANTHROPIC]: ACCOUNT_KEY.ANTHROPIC,
     [PROVIDER_KEY_PROVIDER.OPENAI]: ACCOUNT_KEY.OPENAI,
   });
+
   const openAiOnly = await accountWithKeys({
     [PROVIDER_KEY_PROVIDER.OPENAI]: ACCOUNT_KEY.OPENAI,
   });
+
   const none = await accountWithKeys({});
   const setupTokenOnly = await accountWithSetupToken();
 
@@ -200,12 +217,15 @@ test("on a Preview, a call beside an admin's agents spends the Preview's stand-i
     },
     USER_ROLE.ADMIN,
   );
+
   const openAiOnly = await accountWithKeys(
     { [PROVIDER_KEY_PROVIDER.OPENAI]: ACCOUNT_KEY.OPENAI },
     USER_ROLE.ADMIN,
   );
+
   const none = await accountWithKeys({}, USER_ROLE.ADMIN);
   const member = await accountWithKeys({});
+
   const standIns = {
     [PROVIDER_KEY_PROVIDER.ANTHROPIC]: "sk-ant-preview-stand-in-1111",
     [PROVIDER_KEY_PROVIDER.OPENAI]: "sk-proj-preview-stand-in-1111",
@@ -261,6 +281,7 @@ async function askOnce(
       maxRetries: 0,
       ...(providerOptions === undefined ? undefined : { providerOptions }),
     });
+
     return answer.text;
   } catch {
     return undefined;
@@ -280,6 +301,7 @@ test("a replay's summary is written on the account's own key, the new agent's ow
   const anthropicKeyed = await accountWithKeys({
     [PROVIDER_KEY_PROVIDER.ANTHROPIC]: ACCOUNT_KEY.ANTHROPIC,
   });
+
   const openAiOnly = await accountWithKeys({ [PROVIDER_KEY_PROVIDER.OPENAI]: ACCOUNT_KEY.OPENAI });
   const none = await accountWithKeys({});
   const anthropic = provider([jsonResponse(ANTHROPIC_MESSAGE, 200)]);

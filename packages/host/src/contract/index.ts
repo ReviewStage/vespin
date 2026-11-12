@@ -21,6 +21,7 @@ import {
 import { INTEGRATION_ACTS, INTEGRATION_FOLLOWS, integrationActsContract } from "./integrations.js";
 import type { PortActKind } from "./kinds.js";
 import { MAC_COMMAND_ACTS, macCommandActsContract } from "./mac-commands.js";
+import { macPhotoActsContract } from "./mac-photos.js";
 import { macResourcesActsContract } from "./mac-resources.js";
 import { macShellActsContract } from "./mac-shells.js";
 import { macTerminalActsContract } from "./mac-terminals.js";
@@ -48,14 +49,23 @@ export {
   type MacCommandAnswer,
   type MacCommandDecision,
 } from "../mac-command-ask.js";
+
 export { ACCOUNT_ACTS } from "./account.js";
+
 export { ACCOUNT_ASK_ACTS, ACCOUNT_ASK_FOLLOWS } from "./account-asks.js";
+
 export { AGENT_INBOX_ACTS, AGENT_INBOX_FOLLOWS } from "./agent-inbox.js";
+
 export { AGENT_ACTS, AGENT_FOLLOWS } from "./agents.js";
+
 export { AUTOMATION_ACTS, AUTOMATION_FOLLOWS } from "./automations.js";
+
 export { ACT_ERROR, actRefusalSentence } from "./base.js";
+
 export { CHAPTERS_ACTS, CHAPTERS_FOLLOWS } from "./chapters.js";
+
 export { CLI_INSTALL_OUTCOME, type CliInstallAnswer } from "./cli.js";
+
 export {
   type ActInput,
   type ActOutput,
@@ -65,8 +75,11 @@ export {
   hostAct,
   panelOnlyOf,
 } from "./declared-act.js";
+
 export { INSTALLED_SKILL_ACTS, INSTALLED_SKILL_FOLLOWS } from "./installed-skills.js";
+
 export { INTEGRATION_ACTS, INTEGRATION_FOLLOWS } from "./integrations.js";
+
 export {
   ACCOUNT_ACT_KIND,
   ACCOUNT_ASK_ACT_KIND,
@@ -78,6 +91,7 @@ export {
   CLI_ACT_KIND,
   INSTALLED_SKILL_ACT_KIND,
   INTEGRATION_ACT_KIND,
+  MAC_PHOTO_ACT_KIND,
   MAC_RESOURCES_ACT_KIND,
   MAC_SHELL_ACT_KIND,
   MAC_TERMINAL_ACT_KIND,
@@ -93,20 +107,27 @@ export {
   WINDOW_SURFACE_ACT_KIND,
   WORKSPACE_ACT_KIND,
 } from "./kinds.js";
+
 export {
   type AnyLiveFollow,
   type AnyLiveFollowDeclaration,
   type FollowKey,
   isLiveFollow,
 } from "./live-follow.js";
+
 export { MAC_COMMAND_ACTS } from "./mac-commands.js";
+
 export {
   MAC_PROCESS_KIND,
   type MacProcess,
   type MacProcessKind,
   type MacResources,
 } from "./mac-resources.js";
+
+export type { MacRunActionShell } from "./mac-shells.js";
+
 export { PORT_FORWARD_ACTS } from "./port-forwards.js";
+
 export {
   type EventPushName,
   PUSH,
@@ -117,9 +138,13 @@ export {
   type PushName,
   type PushPayload,
 } from "./pushes.js";
+
 export { SETTINGS_ACTS, type SettingUpdatePayload } from "./settings.js";
+
 export { TASKS_ACTS, TASKS_FOLLOWS } from "./tasks.js";
+
 export { CONTACT_MAILTO } from "./window-surface.js";
+
 export { WORKSPACE_ACTS, WORKSPACE_FOLLOWS } from "./workspaces.js";
 
 /** Every act declared once, plain (`declared-act.ts`) or a live follow (`live-follow.ts`), one domain's spread each, in alphabetical order: what the host's composers answer directly. */
@@ -161,6 +186,7 @@ export const actContract = {
   ...installedSkillActsContract,
   ...integrationActsContract,
   ...macCommandActsContract,
+  ...macPhotoActsContract,
   ...macResourcesActsContract,
   ...macShellActsContract,
   ...macTerminalActsContract,

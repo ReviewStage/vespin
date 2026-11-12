@@ -47,6 +47,7 @@ export const openTaskAgent = (userId: string, organizationId: string, taskId: st
       repository: "acme/api",
       idempotencyKey: randomUUID(),
     });
+
     return id;
   });
 
@@ -54,6 +55,7 @@ export const openTaskAgent = (userId: string, organizationId: string, taskId: st
 export const openAgentOnOwnTask = (userId: string, organizationId: string) =>
   Effect.gen(function* () {
     const { id: taskId } = yield* createTask(userId, { organizationId, name: "Flaky tests" });
+
     return yield* openTaskAgent(userId, organizationId, taskId);
   });
 
@@ -61,13 +63,16 @@ export const openAgentOnOwnTask = (userId: string, organizationId: string) =>
 export const openAgentConversation = (userId: string, organizationId: string) =>
   Effect.gen(function* () {
     const agentId = yield* openAgentOnOwnTask(userId, organizationId);
+
     const [row] = yield* Database.use((db) =>
       db
         .select({ conversationId: agentTable.conversationId })
         .from(agentTable)
         .where(eq(agentTable.id, agentId)),
     );
+
     if (row === undefined) return yield* Effect.die("the agent just written is gone");
+
     return row.conversationId;
   });
 
@@ -87,16 +92,19 @@ export const openInboxItem = (
     const sql = yield* SqlClient.SqlClient;
     yield* sql`insert into inbox_item (id, user_id, task_id, organization_id, agent_id, key, revision, version, title, needs_reply, status, posted_at, updated_at)
       values (${id}, ${userId}, ${taskId}, ${organizationId}, ${agentId}, ${randomUUID()}, 1, 5, 'Which base?', ${asking}, ${INBOX_STATUS.OPEN}, ${now}, ${now})`;
+
     const ask = {
       type: INBOX_ASK.DECIDE,
       options: [{ label: INBOX_APPROVAL_OPTION.APPROVE }, { label: INBOX_APPROVAL_OPTION.DECLINE }],
       status: INBOX_ASK_STATUS.OPEN,
     } as const;
+
     const [message] = yield* sql<{
       readonly id: string;
     }>`insert into inbox_message (item_id, author, text, ask, created_at)
       values (${id}, ${INBOX_MESSAGE_AUTHOR.AGENT}, 'Rebase onto main?', ${asking ? JSON.stringify(ask) : null}::jsonb, ${now})
       returning id`;
+
     // A notice's message asks nothing, so the item names no open ask.
     if (asking) {
       yield* db
@@ -104,5 +112,6 @@ export const openInboxItem = (
         .set({ openAskMessageId: message?.id ?? assert.fail("the message was not written") })
         .where(eq(inboxItem.id, id));
     }
+
     return id;
   });

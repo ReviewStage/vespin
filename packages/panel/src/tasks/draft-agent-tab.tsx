@@ -1,15 +1,13 @@
 import { AGENT_STATUS, hasWordsOrFiles } from "@repo/features/agent-wire";
 import { rejectedFailure } from "@repo/features/failure-remedy";
 import type { MacOffer } from "@repo/features/models-wire";
-import { EXPERIMENT } from "@repo/settings";
 import { useSecond } from "@repo/ui";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { useAsyncAction } from "@repo/ui/use-async-action";
-import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useAgentDefault } from "../account-choices.js";
 import { ConversationEmptyState } from "../ai-elements/conversation.js";
-import { appStateQuery, selectExperiment } from "../use-app-state.js";
+import { useNewAgentPermissionMode } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { agentName, unrunnableChoice } from "./agent-model.js";
 import type { TranscriptCards } from "./agent-tab.js";
@@ -37,7 +35,10 @@ import { WorkingLine } from "./working-time.js";
  * changed it and else on the account's default, in the task's repository;
  * the tab then gives way to the agent's own. The words and the choice are
  * the draft's, held by its owner, as are the files, so they wait while the
- * tab is away. A
+ * tab is away. The model chip's menu offers the Permissions row a running
+ * agent's does, on the member's Default permissions until a pick, which
+ * goes with the Start so the agent's first launch runs on it
+ * (`useNewAgentPermissionMode`), a fork's and a continue's alike. A
  * send that did not start it
  * leaves the words in the box with why under it and what mends it: Retry,
  * which asks again under the draft's own key, or, for a repository out of
@@ -62,15 +63,14 @@ import { WorkingLine } from "./working-time.js";
  * not land leaves the line for the note and Retry under the box, the words
  * kept.
  *
- * While the Bring your own host experiment is on, the box wears New task's
+ * The box wears New task's
  * Runs on chip after its "+" (`runs-on.tsx`), listing Cloud and the
  * member's devices, read as the tab opens where no read has listed them.
  * It starts on where a Start naming no place would run (`useStartRunsOn`):
  * a fork's or a continue's source's place, else the member's newest agent
  * on the task's, else their last pick; a send names a place only once one
  * is picked here, held by the draft as its other chips are, and the service
- * decides otherwise. While the experiment is off no chip stands and no send
- * names a place.
+ * decides otherwise.
  *
  * A draft New task handed over (`use-agents.ts`'s `onHandDraft`)
  * is a task whose agent the service refused as New task started them
@@ -100,6 +100,7 @@ function StartingLine({
   sentAt: number;
 }): React.JSX.Element {
   const now = useSecond();
+
   return (
     <WorkingLine
       startedAt={sentAt}
@@ -132,27 +133,36 @@ export function DraftAgentTab({
   latest.current = control;
 
   const { fork } = draft;
+
   const source =
     fork === undefined
       ? undefined
       : [...(control.agents ?? []), ...(control.archived ?? [])].find(
           (agent) => agent.id === fork.agentId,
         );
+
   // A fork runs on its source's model and effort until the developer picks another.
   const choice = draft.choice ?? (source === undefined ? fallback : forkChoice(source));
+
+  // The mode the agent starts in: the one picked on the chip's menu, else the member's Default permissions.
+  const mode = useNewAgentPermissionMode({
+    model: choice?.model,
+    picked: draft.permissionMode,
+    choose: (permissionMode) => control.onDraftChange({ permissionMode }),
+  });
+
   // Note that a model nothing of the account's pays for holds Send, with the press that connects one, rather than being refused once sent.
   const unpaid =
     control.models === undefined || choice === undefined
       ? undefined
       : unrunnableChoice(control.models, choice);
-  // Runs on stands only while Bring your own host is on, and reads the member's devices where no read has listed them.
-  const placesOn =
-    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.BRING_YOUR_OWN_HOST) })
-      .data === true;
+  // Runs on reads the member's devices where no read has listed them.
+
   useEffect(() => {
-    if (placesOn && latest.current.macs === undefined) latest.current.readModels();
-  }, [placesOn]);
-  const devices = (placesOn ? control.macs : undefined) ?? NO_DEVICES;
+    if (latest.current.macs === undefined) latest.current.readModels();
+  }, []);
+  const devices = control.macs ?? NO_DEVICES;
+
   const [device, choosePlace] = useStartRunsOn(
     devices,
     draft.runsOn,
@@ -163,18 +173,29 @@ export function DraftAgentTab({
     },
     (runsOn) => control.onDraftChange({ runsOn }),
   );
+
   const send = () => {
     const prompt = draft.prompt.trim();
+
     if (unpaid !== undefined) return;
+
     if (fork === undefined && !hasWordsOrFiles(prompt, draft.attachments)) return;
     void starting.run(() => {
       if (draft.refused !== undefined) latest.current.onDraftChange({ refused: undefined });
-      const { id, choice, attachments, disabledServers } = draft;
-      // Note that a place picked while the experiment was on is not sent once it is off.
-      const runsOn = placesOn ? draft.runsOn : undefined;
+      const { id, choice, attachments, disabledServers, permissionMode } = draft;
+      const runsOn = draft.runsOn;
+
       const started =
         fork === undefined
-          ? latest.current.startPrompt(id, prompt, choice, attachments, disabledServers, runsOn)
+          ? latest.current.startPrompt(
+              id,
+              prompt,
+              choice,
+              attachments,
+              disabledServers,
+              runsOn,
+              permissionMode,
+            )
           : latest.current.startFork(
               id,
               fork,
@@ -183,12 +204,16 @@ export function DraftAgentTab({
               attachments,
               disabledServers,
               runsOn,
+              permissionMode,
             );
+
       // Note that the working line stands only once the Start is out, and goes however it lands.
       if (fork !== undefined) setSentAt(Date.now());
+
       return started.finally(() => setSentAt(undefined));
     });
   };
+
   const composer: AgentComposerControl = {
     draft: draft.prompt,
     setDraft: (prompt) => control.onDraftChange({ prompt }),
@@ -249,6 +274,7 @@ export function DraftAgentTab({
           modelsFailed={control.modelsFailed}
           readModels={control.readModels}
           usage={undefined}
+          mode={mode}
           servers={{
             disabled: draft.disabledServers,
             onSwitch: (next) => control.onDraftChange({ disabledServers: next }),
@@ -258,19 +284,15 @@ export function DraftAgentTab({
           followsUp={false}
           keywords={control.keywords}
           skills={control.readSkills}
-          tools={
-            placesOn
-              ? (narrow) => (
-                  <NewTaskRunsOnChip
-                    devices={devices}
-                    device={device}
-                    disabled={sending}
-                    narrow={narrow}
-                    onChoose={choosePlace}
-                  />
-                )
-              : undefined
-          }
+          tools={(narrow) => (
+            <NewTaskRunsOnChip
+              devices={devices}
+              device={device}
+              disabled={sending}
+              narrow={narrow}
+              onChoose={choosePlace}
+            />
+          )}
         />
       </AgentTabFoot>
     </AgentTabFrame>

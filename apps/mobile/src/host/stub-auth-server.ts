@@ -24,6 +24,7 @@
 import { AUTH_SESSION_END, type AuthSession } from "@repo/credentials";
 import { HOSTED_SERVICE_PATH } from "@repo/features";
 import { LIVE_POLL, LIVE_POLL_URL } from "@repo/features/live-wire";
+import type { WireRecord } from "@repo/wire";
 
 /** The account the stub signs in, as its identity answers it. */
 export const STUB_ACCOUNT = {
@@ -72,7 +73,7 @@ const STUB_PATH = {
 /** The code the stub's authorization page grants, which its token endpoint takes. */
 const STUB_CODE = "stub-code";
 
-function json(body: unknown): Response {
+function json(body: WireRecord): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
     headers: { "content-type": "application/json" },
@@ -106,6 +107,7 @@ function workspacesAnswer(unchanged: boolean): Response {
 export const stubAuthFetch: typeof globalThis.fetch = (input, init) => {
   const request = new Request(input, init);
   const url = new URL(request.url);
+
   switch (url.pathname) {
     case STUB_PATH.TOKEN:
       return Promise.resolve(
@@ -128,6 +130,7 @@ export const stubAuthSession: AuthSession = {
     const callback = new URL(callbackUrl);
     callback.searchParams.set("code", STUB_CODE);
     callback.searchParams.set("state", new URL(page).searchParams.get("state") ?? "");
+
     return Promise.resolve({ end: AUTH_SESSION_END.REDIRECTED, url: callback.href });
   },
   dismiss: () => undefined,

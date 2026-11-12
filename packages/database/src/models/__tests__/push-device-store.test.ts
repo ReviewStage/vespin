@@ -34,9 +34,11 @@ const BUNDLE_ID = "dev.vespin.ios";
 const openAccounts = Effect.gen(function* () {
   const db = yield* Database;
   const [owner, other] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
   for (const id of [owner, other]) {
     yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
   }
+
   return { owner, other };
 });
 
@@ -49,11 +51,13 @@ it.layer(getTestDB())("the push device store", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, other } = yield* openAccounts;
+
         const phone = {
           token: token(),
           environment: PUSH_ENVIRONMENT.PRODUCTION,
           bundleId: BUNDLE_ID,
         };
+
         const registeredAt = yield* Clock.currentTimeMillis;
 
         yield* registerPushDevice(owner, phone);
@@ -87,11 +91,13 @@ it.layer(getTestDB())("the push device store", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, other } = yield* openAccounts;
+
         const phone = {
           token: token(),
           environment: PUSH_ENVIRONMENT.SANDBOX,
           bundleId: BUNDLE_ID,
         };
+
         yield* registerPushDevice(owner, phone);
 
         assert.deepEqual(yield* listPushDevices(other), []);
@@ -114,11 +120,13 @@ it.layer(getTestDB())("the push device store", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, other } = yield* openAccounts;
+
         const phone = {
           token: token(),
           environment: PUSH_ENVIRONMENT.PRODUCTION,
           bundleId: BUNDLE_ID,
         };
+
         yield* registerPushDevice(owner, phone);
         const start = yield* Clock.currentTimeMillis;
 

@@ -10,6 +10,7 @@ import {
   BUTTON_SIZE,
   GROUP_ACTIONS,
   GROUP_HEADING,
+  GROUP_LOOK,
   GroupAction,
   GroupHeader,
   IconButton,
@@ -19,7 +20,7 @@ import {
   ProgressCount,
   Tooltip,
 } from "@repo/ui";
-import { GLYPH, LinkIcon, NetworkIcon, PlusIcon } from "@repo/ui/icons";
+import { GLYPH, LinkIcon, PlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useRef, useState } from "react";
@@ -46,15 +47,15 @@ import { chipSubmenu } from "./standing-submenus.js";
  *
  * Two groups stand under the byline, ahead of the Agents, each the shape
  * every group of the head takes, a `GroupHeader` over a list
- * (`related-tasks.tsx`). Sub-tasks stands on every task, an empty head
+ * (`related-tasks.tsx`), its head a section's (`GROUP_LOOK.SECTION`), its
+ * words with no glyph and its chevron standing open or folded. Sub-tasks stands on every task, an empty head
  * where it has none, which folds nothing until it holds a row or a draft,
  * so its + is where a first sub-task starts as it is where every later one
- * does; Task relations stands only while it holds a row. Sub-tasks, by the list-tree
- * glyph, counts how many of the task's own sub-tasks are finished of all of
+ * does; Task relations stands only while it holds a row. Sub-tasks counts how many of the task's own sub-tasks are finished of all of
  * them in a badge, as a sub-task row with sub-tasks of its own and a Board
  * card count theirs, and nests theirs under each to any depth, folded until opened, as
  * the sidebar nests and folds them; it reads the task list's
- * `parentTaskId` and nothing more. Task relations, by the network glyph, holds a
+ * `parentTaskId` and nothing more. Task relations holds a
  * row for each task the task waits on and each that waits on it, led by its
  * kind as a compact pill by its icon, its words, and a chevron, so the row
  * reads as a sentence, Blocked by, the task's key, its status, its name: an
@@ -143,12 +144,15 @@ function relationDoors(
         case TASK_RELATION_KIND.BLOCKED_BY:
         case TASK_RELATION_KIND.BLOCKS:
           writes.onRemoveTaskBlock(task.id, kind, other.id);
+
           return;
         case TASK_RELATION_KIND.SUB_TASK:
           writes.onRemoveTaskParent(other.id);
+
           return;
         case TASK_RELATION_KIND.PARENT:
           writes.onRemoveTaskParent(task.id);
+
           return;
       }
     },
@@ -159,8 +163,10 @@ function relationDoors(
 function relationMenu(kind: TaskRelationKind, doors: RelationDoors): readonly MenuEntry[][] {
   const change = chipSubmenu(CHANGE_RELATION, KIND_ROWS, kind, (id) => {
     const picked = kindOf(id);
+
     if (picked !== undefined) doors.onChange(picked);
   });
+
   return [[change, { label: REMOVE_RELATION, icon: <GLYPH.CLOSE />, onSelect: doors.onRemove }]];
 }
 
@@ -188,10 +194,12 @@ function RelationAdd({
   const menuId = useId();
   const box = useRef<HTMLSpanElement>(null);
   const button = useRef<HTMLButtonElement>(null);
+
   const close = () => {
     setOpen(false);
     button.current?.focus();
   };
+
   return (
     <GroupAction>
       <span className="plan-relation-add relative inline-flex" ref={box}>
@@ -241,6 +249,7 @@ function subTaskRows(
 ): RelatedTaskRow[] {
   const rows: RelatedTaskRow[] = [];
   const walked = new Set([task.id]);
+
   const draw = (parentId: string, depth: number) => {
     for (const subTask of subTasksOf(tasks, parentId)) {
       if (walked.has(subTask.id)) continue;
@@ -252,23 +261,24 @@ function subTaskRows(
       rows.push({
         task: subTask,
         depth,
-        ...(under.length === 0
-          ? {}
-          : {
-              fold: {
-                open,
-                onOpenChange: (asked: boolean) => {
-                  if (asked !== open) onFold(subTask.id);
-                },
-                label: `${SUB_TASKS_OF} ${subTask.name}`,
-              },
-            }),
-        ...(menu === undefined ? {} : { menu }),
+        ...(under.length !== 0 && {
+          fold: {
+            open,
+            onOpenChange: (asked: boolean) => {
+              if (asked !== open) onFold(subTask.id);
+            },
+            label: `${SUB_TASKS_OF} ${subTask.name}`,
+          },
+        }),
+        ...(menu !== undefined && { menu }),
       });
+
       if (open) draw(subTask.id, depth + 1);
     }
   };
+
   draw(task.id, 0);
+
   return rows;
 }
 
@@ -293,7 +303,9 @@ function blockTasks(
 ): readonly BlockTask[] {
   return (ids ?? []).map((id) => {
     const listed = byId.get(id);
+
     if (listed !== undefined) return { task: listed, listed: true };
+
     const unlisted: TaskSummary = {
       id,
       workspaceId: task.workspaceId,
@@ -302,6 +314,7 @@ function blockTasks(
       createdAt: 0,
       updatedAt: 0,
     };
+
     return { task: unlisted, listed: false };
   });
 }
@@ -332,34 +345,45 @@ export function PlanRelations({
 }): React.JSX.Element {
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const [subTasksOpen, setSubTasksOpen] = useState(true);
+
   // Note that + opens a folded group before its draft, so a draft never stands where it cannot be seen.
   const newSubTask = () => {
     setSubTasksOpen(true);
     quick.open();
   };
+
   const fold = (taskId: string) =>
     setOpened((held) => {
       const next = new Set(held);
+
       if (!next.delete(taskId)) next.add(taskId);
+
       return next;
     });
+
   const writes = useTaskRelationWrites();
+
   const doorsOf = (other: TaskSummary, kind: TaskRelationKind) =>
     relationDoors(writes, task, other, kind);
+
   const subTasks = subTaskRows(tasks.tasks, task, opened, fold, (subTask) =>
     relationMenu(TASK_RELATION_KIND.SUB_TASK, doorsOf(subTask, TASK_RELATION_KIND.SUB_TASK)),
   );
+
   const count = subTaskCount(subTasksOf(tasks.tasks, task.id));
   const byId = new Map(tasks.tasks.map((each) => [each.id, each]));
+
   const sides = [
     { kind: TASK_RELATION_KIND.BLOCKED_BY, related: blockTasks(task, byId, task.blockedBy) },
     { kind: TASK_RELATION_KIND.BLOCKS, related: blockTasks(task, byId, task.blocks) },
   ] as const;
+
   const relations: RelatedTaskRow[] = sides.flatMap(({ kind, related }) =>
     related.map(({ task: other, listed }) => {
       const settled = listed && taskFinished(other);
       const blocker = kind === TASK_RELATION_KIND.BLOCKED_BY;
       const doors = doorsOf(other, kind);
+
       return {
         task: other,
         relationWords: TASK_RELATION_WORDS[kind],
@@ -381,8 +405,10 @@ export function PlanRelations({
       };
     }),
   );
+
   // Note that an empty Sub-tasks folds nothing, since a fold over no rows would hide nothing.
   const subTasksHeld = subTasks.length > 0 || quick.shown;
+
   return (
     // Note that the groups are pulled out by a row's inset on each side, so their marks stand on the title's edge, as the Agents group's do.
     <div className="plan-relations -mx-row-inset mb-block-gap flex flex-col gap-block-gap">
@@ -390,7 +416,7 @@ export function PlanRelations({
         <GroupHeader
           heading={GROUP_HEADING.NONE}
           label={GROUP_WORDS.SUB_TASKS}
-          glyph={<GLYPH.SUB_TASK />}
+          look={GROUP_LOOK.SECTION}
           mark={
             count.total === 0 ? undefined : (
               <ProgressCount
@@ -446,7 +472,7 @@ export function PlanRelations({
           <GroupHeader
             heading={GROUP_HEADING.NONE}
             label={GROUP_WORDS.RELATIONS}
-            glyph={<NetworkIcon />}
+            look={GROUP_LOOK.SECTION}
             count={{
               value: relations.length,
               noun: relations.length === 1 ? RELATIONS_NOUN.one : RELATIONS_NOUN.many,

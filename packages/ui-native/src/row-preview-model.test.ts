@@ -20,7 +20,7 @@ function message(id: string, words: string, stamp?: string) {
     typed: true,
     media: [],
     drawn: [],
-    ...(stamp === undefined ? {} : { stamp: { tone: ANSWER_TONE.AHEAD, words: stamp } }),
+    ...(stamp !== undefined && { stamp: { tone: ANSWER_TONE.AHEAD, words: stamp } }),
   };
 }
 
@@ -33,6 +33,7 @@ describe("previewMessages", () => {
       message("answer", "and say it in the docs", "Chose 7 days"),
       message("newest", "Merged."),
     ]);
+
     expect(said.map(({ id, words }) => [id, words])).toEqual([
       ["first", "The plan is ready."],
       ["answer", "Chose 7 days · and say it in the docs"],
@@ -57,6 +58,7 @@ describe("latestStep", () => {
         standing: CALL_STANDING.DONE,
         open: false,
         body: [],
+        cut: undefined,
       },
       {
         place: PLACE,
@@ -68,6 +70,7 @@ describe("latestStep", () => {
       },
       { place: PLACE, depth: 0, kind: TRANSCRIPT_ITEM.WORKING, words: "Working" },
     ];
+
     expect(latestStep(items)).toBe("Read list-row.tsx");
   });
 });

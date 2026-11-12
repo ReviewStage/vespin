@@ -4,8 +4,17 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
-import { BROWSER_LIVE_PORT_CHANNEL } from "@repo/features/browser-live-acts";
-import { TERMINAL_PORT_CHANNEL } from "@repo/features/terminal-acts";
+import {
+  BROWSER_LIVE_PORT_CHANNEL,
+  type BrowserLivePortOutbound,
+  type BrowserLivePortTicket,
+} from "@repo/features/browser-live-acts";
+import { deviceAgentCheckoutPath } from "@repo/features/device-agent-wire";
+import {
+  TERMINAL_PORT_CHANNEL,
+  type TerminalPortOutbound,
+  type TerminalPortTicket,
+} from "@repo/features/terminal-acts";
 import {
   browserLiveProcedures,
   clientSettingSideEffects,
@@ -17,6 +26,7 @@ import {
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { LEAVE } from "@repo/host/quit";
 import type { WireBoundaryInput } from "@repo/wire";
+import { Effect } from "effect";
 import {
   BrowserWindow,
   clipboard,
@@ -29,12 +39,14 @@ import {
 } from "electron";
 import { type ReportHandlers, registerBridgeHost } from "../bridge-host";
 import { installCli } from "../native/cli-install";
+import { photoAsJpeg } from "../native/mac-photo";
 import { readMacResources } from "../native/mac-resources";
 import { spawnMacShell } from "../native/mac-shell";
 import { nativeHelperPath } from "../native/native-helper";
 import type { DesktopServices } from "../services/compose-desktop";
 import { windowPushes } from "../window/window-pushes";
 import { cliProcedures } from "./cli-acts";
+import { macPhotoProcedures } from "./mac-photo-acts";
 import { macResourcesProcedures } from "./mac-resources-acts";
 import { macTerminalProcedures } from "./mac-terminal-acts";
 import { whenPageGone } from "./page-gone";
@@ -61,11 +73,14 @@ async function windowStill(
     { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
     { stayHidden: true, stayAwake: true },
   );
+
   if (image.isEmpty()) return null;
+
   const scaled =
     image.getSize().width > STILL_WIDTH
       ? image.resize({ width: STILL_WIDTH, quality: "good" })
       : image;
+
   return `data:image/jpeg;base64,${scaled.toJPEG(STILL_QUALITY).toString("base64")}`;
 }
 
@@ -73,13 +88,14 @@ async function windowStill(
  * Opens a fresh channel to a panel's page under `channel`: main keeps one end
  * and posts the other to the page with the ticket.
  */
-function portTo(channel: string) {
-  return (sender: WebContents, ticket: unknown) => {
+function portTo<Ticket, Outbound>(channel: string) {
+  return (sender: WebContents, ticket: Ticket) => {
     const { port1, port2 } = new MessageChannelMain();
     sender.postMessage(channel, ticket, [port2]);
     port1.start();
+
     return {
-      post: (message: unknown) => port1.postMessage(message),
+      post: (message: Outbound) => port1.postMessage(message),
       onMessage: (listener: (message: WireBoundaryInput) => void) =>
         port1.on("message", (event) => listener(event.data)),
       onClose: (then: () => void) => void port1.once("close", then),
@@ -112,6 +128,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
     run,
     services: effectServices,
   } = services;
+
   const { launch } = config;
   const { panels } = windows;
   const recordProductEvent = telemetry.recordProductEvent;
@@ -122,22 +139,30 @@ export function registerDesktopIpc(services: DesktopServices): void {
     ...browserLiveProcedures<WebContents>({
       host: operator.host,
       ports: {
-        open: portTo(BROWSER_LIVE_PORT_CHANNEL),
+        open: portTo<BrowserLivePortTicket, BrowserLivePortOutbound>(BROWSER_LIVE_PORT_CHANNEL),
         whenGone: whenPageGone,
       },
       createId: randomUUID,
       run,
     }),
     ...cliProcedures({ install: () => installCli(config.hostedServiceBaseUrl) }),
+    ...macPhotoProcedures({ toJpeg: photoAsJpeg }),
     ...macResourcesProcedures({ read: readMacResources }),
     ...macShellProcedures<WebContents>({
       mirror: (agentId) => operator.host.mirrorEnsure({ agentId }),
+      // A local agent's worktree, where the host has made it on this Mac (`mac-terminal-acts.ts` reads it the same way).
+      checkout: (agentId) => {
+        const folder = deviceAgentCheckoutPath(os.homedir(), agentId);
+
+        return fs.existsSync(folder) ? folder : undefined;
+      },
       spawn: spawnMacShell,
       ports: {
-        open: portTo(TERMINAL_PORT_CHANNEL),
+        open: portTo<TerminalPortTicket, TerminalPortOutbound>(TERMINAL_PORT_CHANNEL),
         whenGone: whenPageGone,
       },
       createId: randomUUID,
+      sleep: Effect.sleep,
     }),
     ...macTerminalProcedures({
       home: os.homedir(),
@@ -148,7 +173,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
     ...terminalProcedures<WebContents>({
       host: operator.host,
       ports: {
-        open: portTo(TERMINAL_PORT_CHANNEL),
+        open: portTo<TerminalPortTicket, TerminalPortOutbound>(TERMINAL_PORT_CHANNEL),
         whenGone: whenPageGone,
       },
       createId: randomUUID,
@@ -170,8 +195,10 @@ export function registerDesktopIpc(services: DesktopServices): void {
       copyRich: ({ html, text }) => clipboard.write({ html, text }),
       copyImage: (png) => {
         const image = nativeImage.createFromBuffer(Buffer.from(png, "base64"));
+
         if (image.isEmpty()) return false;
         clipboard.writeImage(image);
+
         return true;
       },
       captureStill: (sender, rect) => windowStill(sender, rect),
@@ -180,11 +207,14 @@ export function registerDesktopIpc(services: DesktopServices): void {
       saveFile: async (sender, name, text) => {
         const window = BrowserWindow.fromWebContents(sender);
         const options = { defaultPath: name };
+
         const chosen = await (window === null
           ? dialog.showSaveDialog(options)
           : dialog.showSaveDialog(window, options));
+
         if (chosen.canceled) return false;
         await fs.promises.writeFile(chosen.filePath, text, "utf8");
+
         return true;
       },
       deliverFeedback: (submission) => telemetry.deliverFeedback(submission),
@@ -196,14 +226,18 @@ export function registerDesktopIpc(services: DesktopServices): void {
     reportOnline: (_context, online) => services.tellOnline(online),
     notifyReady: async (context) => {
       windows.panelReady();
+
       if (!launch.captureOutput) return;
       const window = BrowserWindow.fromWebContents(context.sender);
+
       if (!window || window.isDestroyed()) return;
       await new Promise((resolve) => setTimeout(resolve, 350));
+
       const image = await window.webContents.capturePage(undefined, {
         stayHidden: true,
         stayAwake: true,
       });
+
       const destination = path.resolve(launch.captureOutput);
       fs.mkdirSync(path.dirname(destination), { recursive: true });
       fs.writeFileSync(destination, image.toPNG());
@@ -235,6 +269,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
           // this process's own is one the reporter is minted for.
           reporterOf: (actor) => {
             const contents = webContents.getAllWebContents().find((open) => open === actor.sender);
+
             return contents === undefined ? undefined : windows.reporterOf(contents);
           },
           lastSettings: () => operator.settings(),
@@ -262,6 +297,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
     snapshotFor: async (sender): Promise<AppStateSnapshot> => {
       await run(operator.readBootstrap());
       native.refreshMicrophoneStatus();
+
       return windows.appStateFor(sender);
     },
   });

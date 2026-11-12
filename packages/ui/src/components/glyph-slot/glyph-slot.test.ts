@@ -31,6 +31,7 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -49,6 +50,7 @@ test("a glyph that repeats its words is hidden from a reader, and one that says 
       "Send the invite",
     ),
   );
+
   const [quiet, named] = [...container.querySelectorAll("p > span")];
 
   assert.equal(quiet?.getAttribute("aria-hidden"), "true");

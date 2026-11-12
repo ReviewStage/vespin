@@ -19,6 +19,7 @@ const SECTION: ReadLink = {
   workspace: "acme",
   place: { kind: LINK_DESTINATION.SECTION, planId: TASK_ID, anchor: "rollout" },
 };
+
 const TASK: ReadLink = {
   workspace: "acme",
   place: { kind: LINK_DESTINATION.TASK, planId: TASK_ID },

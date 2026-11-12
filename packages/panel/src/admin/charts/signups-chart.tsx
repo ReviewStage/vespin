@@ -103,15 +103,19 @@ export function SignInMethodsChart({
   methods: AdminSignInMethods;
   totalAccounts: number;
 }): React.JSX.Element {
-  const rows = SIGN_IN_METHODS.map((entry) => ({
-    method: entry.method,
-    accounts: entry.accounts(methods),
-  }))
-    .filter((row) => row.accounts > 0)
-    .map((row) => ({
-      ...row,
-      label: `${formatCount(row.accounts)} · ${formatPercent(row.accounts / totalAccounts)} of accounts`,
-    }));
+  const rows = SIGN_IN_METHODS.flatMap((entry) => {
+    const accounts = entry.accounts(methods);
+
+    return accounts > 0
+      ? [
+          {
+            method: entry.method,
+            accounts,
+            label: `${formatCount(accounts)} · ${formatPercent(accounts / totalAccounts)} of accounts`,
+          },
+        ]
+      : [];
+  });
 
   if (rows.length === 0) {
     return (

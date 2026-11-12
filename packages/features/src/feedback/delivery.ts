@@ -105,6 +105,7 @@ export function feedbackDelivery(options: FeedbackDeliveryOptions = {}): Feedbac
     const request = HttpClientRequest.make(HTTP_METHOD.POST)(url, {
       body: HttpBody.raw(JSON.stringify(submission), { contentType: JSON_CONTENT_TYPE }),
     });
+
     return Effect.catch(HttpClient.execute(request), (error) =>
       Effect.fail(new FeedbackTransportError({ errorName: errorName(error.cause) })),
     );
@@ -122,10 +123,12 @@ export function feedbackDelivery(options: FeedbackDeliveryOptions = {}): Feedbac
         Effect.map((response): FeedbackResult => {
           if (answeredOk(response.status)) return { delivered: true };
           report(`Feedback delivery failed with status ${response.status}`);
+
           return { delivered: false, reason: FEEDBACK_REFUSAL.REFUSED };
         }),
         Effect.catch((failure) => {
           report(`Feedback delivery did not complete: ${failure.errorName ?? "unknown error"}`);
+
           return Effect.succeed<FeedbackResult>({
             delivered: false,
             reason: FEEDBACK_REFUSAL.UNREACHABLE,
@@ -159,13 +162,16 @@ export function feedbackDeliveryFromEnvironment(
   options: FeedbackDeliveryFetchOptions = {},
 ): AmbientFeedbackDelivery {
   const url = text(options.url) ?? text(process.env[FEEDBACK_ENVIRONMENT.URL]);
+
   const delivery = feedbackDelivery({
     ...(url === undefined ? undefined : { url }),
     ...(options.requestTimeoutMs === undefined
       ? undefined
       : { requestTimeoutMs: options.requestTimeoutMs }),
   });
+
   const client = options.httpClient ?? FetchHttpClient.layer;
+
   return {
     deliver: (submission) => Effect.provide(delivery.deliver(submission), client),
   };

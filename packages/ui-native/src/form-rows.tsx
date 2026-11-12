@@ -1,11 +1,13 @@
 // form-rows.tsx -- the rows a composing sheet's Form holds: the words to send, the pictures attached to them, and a choice among many in the system's menu picker.
 
 import { Button, HStack, Image, Picker, Text, TextField, useNativeState } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityIdentifier,
   accessibilityLabel,
   buttonStyle,
   font,
+  frame,
   lineLimit,
   listRowBackground,
   pickerStyle,
@@ -27,10 +29,14 @@ type WordsFieldProps = {
   readonly placeholder: string;
   /** Called with the words as they are typed. */
   readonly onWords: (words: string) => void;
+  /** The words it opens on, such as a draft kept elsewhere; none where it opens empty. */
+  readonly initialWords?: string | undefined;
   /** Whether the keyboard rises on it as the sheet opens. */
   readonly autoFocus?: boolean | undefined;
   /** The name a flow finds the field by. */
   readonly testId?: string | undefined;
+  /** What VoiceOver hears the field as, where its placeholder alone would not say what it holds once words are typed. */
+  readonly label?: string | undefined;
 };
 
 /**
@@ -39,9 +45,17 @@ type WordsFieldProps = {
  * words. The field keeps its own words, as a composer's does, and hands
  * each change to its holder.
  */
-export function WordsField({ placeholder, onWords, autoFocus = false, testId }: WordsFieldProps) {
+export function WordsField({
+  placeholder,
+  onWords,
+  initialWords = "",
+  autoFocus = false,
+  testId,
+  label,
+}: WordsFieldProps) {
   const colors = useColors();
-  const text = useNativeState("");
+  const text = useNativeState(initialWords);
+
   return (
     <TextField
       text={text}
@@ -54,6 +68,7 @@ export function WordsField({ placeholder, onWords, autoFocus = false, testId }: 
         lineLimit(WORDS_LINES),
         listRowBackground(colors.SURFACE),
         ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
+        ...(label === undefined ? [] : [accessibilityLabel(label)]),
       ]}
     />
   );
@@ -73,11 +88,14 @@ type AttachRowProps = {
 /**
  * The pictures a sheet sends with its words, as a row under them: the +, as
  * a composer's field leads with it, then each picture attached as the
- * composer's head draws it, a capsule taken off on a press. Pictures
- * dropped on the row, on an iPad, are attached as the + attaches them.
+ * composer's head draws it, a capsule taken off on a press. While nothing
+ * is attached, the + takes a tap across the whole row, since the row is
+ * heard as Add picture from edge to edge. Pictures dropped on the row, on
+ * an iPad, are attached as the + attaches them.
  */
 export function AttachRow({ pictures, onAdd, onDetach, testId, onDropPictures }: AttachRowProps) {
   const colors = useColors();
+
   return (
     <HStack
       spacing={SPACE.TIGHT * 2}
@@ -95,7 +113,19 @@ export function AttachRow({ pictures, onAdd, onDetach, testId, onDropPictures }:
           ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
         ]}
       >
-        <Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+        <Image
+          systemName="plus"
+          size={MARK_SIZE.LEAD + 2}
+          color={colors.TEXT_MUTED}
+          modifiers={
+            pictures.length === 0
+              ? [
+                  frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+                  SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+                ]
+              : []
+          }
+        />
       </Button>
       <AttachedPictures pictures={pictures} onDetach={onDetach} />
     </HStack>
@@ -117,6 +147,7 @@ type PickRowProps = {
  */
 export function MenuPickRow({ label, options, picked, onPick }: PickRowProps) {
   const colors = useColors();
+
   return (
     <Picker<string | null>
       label={label}

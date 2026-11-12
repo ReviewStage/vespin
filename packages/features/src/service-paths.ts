@@ -51,6 +51,12 @@ export const HOSTED_SERVICE_PATH = {
    * the body (POST). `memory-wire.ts` declares all three.
    */
   ACCOUNT_MEMORIES: "/api/account/memories",
+  /**
+   * The shell commands the account always allows its coding agents to run
+   * unasked, by their first words: read them (GET), add one by hand (POST),
+   * or remove one (DELETE ?id=). `allowed-command-wire.ts` declares every body.
+   */
+  ACCOUNT_ALLOWED_COMMANDS: "/api/account/allowed-commands",
   /** The workspace's memories a few words find, best first (GET); `memory-wire.ts` declares it. */
   ACCOUNT_MEMORIES_SEARCH: "/api/account/memories/search",
   /**
@@ -448,6 +454,8 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACE_SANDBOX_SETUP_REPOSITORY: "/api/workspaces/sandbox-setup/repository",
   /** A repository's run actions saved, its whole list in order, by an owner or admin, an empty list removing it (PUT) (`workspace-sandbox-setup-wire.ts`). */
   WORKSPACE_SANDBOX_SETUP_RUN_ACTIONS: "/api/workspaces/sandbox-setup/run-actions",
+  /** One of a repository's run actions added, changed, moved, or removed, to an owner or admin (PATCH). */
+  WORKSPACE_SANDBOX_SETUP_RUN_ACTION: "/api/workspaces/sandbox-setup/run-action",
   /** Whether the deployment holds our Slack bot, and the Slack team a workspace's bot is connected to, to a member (GET, `WORKSPACE_SLACK_BOT_QUERY`). */
   WORKSPACE_SLACK_BOT: "/api/workspaces/slack-bot",
   /** A workspace's Slack bot connected by an owner or admin to the team its token answers for (POST), answering the bot as it then stands (`slack-bot-wire.ts`). */
@@ -563,6 +571,7 @@ export function inboxAttachmentPath(itemId: string, attachmentId: string): strin
 export function agentPicturePath(agentId: string, pictureId: string, callId?: string): string {
   const agent = `/api/agents/${encodeURIComponent(agentId)}`;
   const owner = callId === undefined ? agent : `${agent}/subagents/${encodeURIComponent(callId)}`;
+
   return `${owner}/pictures/${encodeURIComponent(pictureId)}`;
 }
 

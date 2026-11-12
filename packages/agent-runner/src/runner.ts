@@ -55,6 +55,7 @@ import type {
   SDKUserMessage,
   SessionStore,
 } from "@anthropic-ai/claude-agent-sdk";
+import { CommandPrefixSchema } from "@repo/wire";
 import {
   Cause,
   Deferred,
@@ -73,16 +74,17 @@ import {
 } from "effect";
 import {
   type Approvals,
+  BASH_TOOL,
   canUseToolOf,
   denyForMessage,
   denyWaiting,
-  makeApprovals,
+  openApprovals,
   settleAsk,
 } from "./approvals.js";
 import { CheckoutSnapshots } from "./checkout-snapshot.js";
-import { ClaudeCode, type ClaudeCodeSession, type ClaudeCodeShape } from "./claude-code.js";
+import { ClaudeCode, type ClaudeCodeService, type ClaudeCodeSession } from "./claude-code.js";
 import { runCodex } from "./codex.js";
-import { type EventSink, makeEventSink } from "./events.js";
+import { type EventSink, openEventSink } from "./events.js";
 import {
   harnessEnvOf,
   installedSkillsPath,
@@ -151,8 +153,10 @@ const PROMPT_CACHE_TTL = {
   ALL: "ENABLE_PROMPT_CACHING_1H",
   FORCE_SHORT: "FORCE_PROMPT_CACHING_5M",
 } as const;
+
 /** The variable the CLI reads its API's base URL from, where a gateway stands in for the API. */
 const ANTHROPIC_BASE_URL = "ANTHROPIC_BASE_URL";
+
 /** The API's host where no base URL is set. */
 const ANTHROPIC_API_HOST = "api.anthropic.com";
 
@@ -176,6 +180,7 @@ function workerOf(config: ClaudeCodeConfig): AgentDefinition {
     config.workerDenied === undefined
       ? [`mcp__${MCP_SERVER}`]
       : config.workerDenied.map((tool) => `mcp__${MCP_SERVER}__${tool}`);
+
   return {
     description:
       "A read-only worker for one scoped job, such as a broad search, a comparison of approaches, or an investigation: it reads the checkout and the web and answers, and never edits, commits, or pushes.",
@@ -228,17 +233,22 @@ const CHAIN_UNREAD = "the session to cut could not be read from the service";
  * store alone, which would hand it the session whole, past the cut.
  */
 const resumePointOf = Effect.fn("agent-runner/resumePointOf")(function* (
-  claudeCode: ClaudeCodeShape,
+  claudeCode: ClaudeCodeService,
   config: ClaudeCodeConfig,
   store: SessionStore | undefined,
 ) {
   const { resume, rewindBefore } = config;
+
   if (resume === undefined) return {} satisfies ResumePoint;
+
   if (rewindBefore === undefined) return { resume } satisfies ResumePoint;
+
   const read = Effect.tryPromise(() => claudeCode.sessionChain(resume, config.cwd, store)).pipe(
     Effect.timeout(CHAIN_READ),
   );
+
   const unread: readonly string[] = [];
+
   const chain =
     store === undefined
       ? yield* read.pipe(
@@ -250,9 +260,12 @@ const resumePointOf = Effect.fn("agent-runner/resumePointOf")(function* (
           ),
         )
       : yield* read.pipe(Effect.mapError(() => CHAIN_UNREAD));
+
   const cut = chain.indexOf(rewindBefore);
+
   if (cut === 0) return {} satisfies ResumePoint;
   const at = cut > 0 ? chain[cut - 1] : undefined;
+
   return at === undefined ? ({ resume } satisfies ResumePoint) : { resume, at };
 });
 
@@ -262,18 +275,32 @@ type Permissions = Pick<
   "permissionMode" | "allowDangerouslySkipPermissions" | "allowedTools" | "canUseTool"
 >;
 
+const readPrefix = Schema.decodeUnknownOption(CommandPrefixSchema);
+
+/** Each always-allowed command as the CLI's Bash rule for it; one that is no plain prefix, which could widen the rule, is passed over. */
+function allowedCommandRules(allowedCommands: readonly (readonly string[])[]): string[] {
+  return allowedCommands.flatMap((prefix) =>
+    Option.isSome(readPrefix(prefix)) ? [`${BASH_TOOL}(${prefix.join(" ")} *)`] : [],
+  );
+}
+
 /**
  * How the CLI answers its tool calls in the launch's mode. Under full access
  * every call runs, as every launch ran before modes, and no callback is
  * handed, since `bypassPermissions` would never call it. A mode that asks
  * runs the reads and every MCP server the launch hands the CLI unasked
- * (`CLAUDE_CODE_UNASKED_TOOLS`), and asks the member the rest through
- * `canUseTool`, which `auto` calls only where its classifier cannot decide.
+ * (`CLAUDE_CODE_UNASKED_TOOLS`), and every command its starter always
+ * allows, as a Bash rule for this launch alone (`Bash(pnpm test *)`, which
+ * matches the bare command too), so the CLI's own reading of a compound
+ * command decides each part and nothing is written to a settings file; it
+ * asks the member the rest through `canUseTool`, which `auto` calls only
+ * where its classifier cannot decide.
  */
 function permissionsOf(
   mode: PermissionMode,
   servers: Readonly<Record<string, McpSdkServerConfigWithInstance>>,
   approvals: Approvals,
+  allowedCommands: readonly (readonly string[])[],
 ): Permissions {
   if (mode === PERMISSION_MODE.FULL_ACCESS) {
     return {
@@ -282,12 +309,14 @@ function permissionsOf(
       allowedTools: [...CLAUDE_CODE_TOOLS.ADDED],
     };
   }
+
   return {
     permissionMode: mode === PERMISSION_MODE.AUTO ? "auto" : "default",
     allowedTools: [
       ...CLAUDE_CODE_TOOLS.ADDED,
       ...CLAUDE_CODE_UNASKED_TOOLS,
       ...Object.keys(servers).map((server) => `mcp__${server}`),
+      ...allowedCommandRules(allowedCommands),
     ],
     canUseTool: canUseToolOf(approvals),
   };
@@ -314,13 +343,14 @@ function queryOptions(
   approvals: Approvals,
 ): Options {
   const mode = config.permissionMode ?? PERMISSION_MODE.FULL_ACCESS;
+
   const options: Options = {
     cwd: config.cwd,
     pathToClaudeCodeExecutable: config.executable,
     model: config.model,
     systemPrompt: { type: "preset", preset: "claude_code", append: config.append },
     settingSources: ["project"],
-    ...permissionsOf(mode, servers, approvals),
+    ...permissionsOf(mode, servers, approvals, config.allowedCommands ?? []),
     includePartialMessages: true,
     disallowedTools: [...CLAUDE_CODE_TOOLS.DENIED],
     agents: { [CLAUDE_CODE_WORKER]: workerOf(config) },
@@ -352,20 +382,28 @@ function queryOptions(
     sandbox: { enabled: false },
     hooks: { Stop: [{ hooks: [onStop] }], ...memoryWatch.hooks },
   };
+
   if (config.effort !== undefined) options.effort = config.effort;
+
   // Note that a headless CLI runs fast mode only where its flag settings opt in.
   if (config.fast === true) options.settings = { fastMode: true };
+
   if (from.resume !== undefined) options.resume = from.resume;
+
   if (from.at !== undefined) options.resumeSessionAt = from.at;
+
   if (config.fork === true) options.forkSession = true;
+
   // The SDK mirrors the transcript to the service as the CLI writes it, and loads it from there to resume.
   if (store !== undefined) options.sessionStore = store;
   // The member's installed skills load as a local plugin, which leaves the checkout and the
   // settings Claude Code reads (`project` alone) as they stand; we hold its MCP servers.
   const manifest = installedSkillsPath(config.installedSkills, INSTALLED_SKILLS.MANIFEST);
+
   if (manifest !== undefined && config.installedSkills !== undefined) {
     options.plugins = [{ type: "local", path: config.installedSkills, skipMcpDiscovery: true }];
   }
+
   return options;
 }
 
@@ -384,7 +422,9 @@ function userMessage(
     // Note that the CLI keeps its own session id, so a prompt names none.
     session_id: "",
   };
+
   if (turnRunning) message.priority = "next";
+
   return message;
 }
 
@@ -447,7 +487,7 @@ type MessageContent = Extract<InputLine, { type: "message" }>["content"];
  * `RUNNER_CONTROL.ANSWER_MS`. Note that one it never answers is let go, so
  * it holds up none of the service's later lines.
  */
-function control(step: string, call: () => Promise<unknown>) {
+function control<Answer>(step: string, call: () => Promise<Answer>) {
   return Effect.tryPromise(call).pipe(
     Effect.timeoutOption(Duration.millis(RUNNER_CONTROL.ANSWER_MS)),
     Effect.flatMap((answer) =>
@@ -483,11 +523,14 @@ const handToCli = Effect.fn("agent-runner/handToCli")(function* (
 /** One of the service's lines, acted on at once. */
 const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, text: string) {
   const line = decodeLine(text);
+
   if (Option.isNone(line)) {
     // Note that we never echo the line, because a message carries the user's words.
     return yield* Effect.logWarning("agent-runner: skipped a stdin line it could not read");
   }
+
   const value = line.value;
+
   switch (value.type) {
     case INPUT_LINE.MESSAGE: {
       const content = value.content;
@@ -495,6 +538,7 @@ const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, t
       const uuid = (value.uuid as UUID | undefined) ?? randomUUID();
       // A message resent to a session that holds it goes to the CLI under a uuid of its own, which the CLI would drop.
       const prompt = value.resent === true ? randomUUID() : uuid;
+
       return yield* launch.admission.withPermit(
         Effect.gen(function* () {
           yield* launch.trace.taken;
@@ -502,39 +546,52 @@ const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, t
           yield* denyForMessage(launch.approvals, content);
           // A message sent while the API's host is probed waits for it, and goes next once it answers.
           const reconnecting = yield* Ref.get(launch.reconnecting);
+
           if (reconnecting !== undefined) {
             reconnecting.held.push({ uuid, prompt, content });
+
             return;
           }
+
           yield* handToCli(launch, uuid, prompt, content);
         }),
       );
     }
+
     case INPUT_LINE.STOP: {
       // A stop for another launch's turn is not this launch's to take.
       if (value.launch !== undefined && value.launch !== launch.firstSequence) {
         return yield* Effect.logWarning("agent-runner: skipped a stop for another launch");
       }
+
       // A stop with no turn running has nothing to interrupt: the launch,
       // waiting or idle, ends here; so does one waiting on the API's host,
       // whose CLI is between turns.
       const reconnecting = yield* Ref.get(launch.reconnecting);
+
       if (reconnecting !== undefined) {
         yield* Fiber.interrupt(reconnecting.probe);
         yield* Deferred.succeed(launch.ended, RUNNER_END.STOPPED);
+
         return;
       }
+
       if (!(yield* Ref.get(launch.turnRunning))) {
         yield* Deferred.succeed(launch.ended, RUNNER_END.STOPPED);
+
         return;
       }
+
       yield* Ref.set(launch.stopping, true);
+
       // An interrupt the CLI never answers ends the launch, whose end closes the CLI.
       if (!(yield* control("interrupt", () => launch.session.interrupt()))) {
         yield* Deferred.succeed(launch.ended, RUNNER_END.STOPPED);
       }
+
       return;
     }
+
     case INPUT_LINE.RETIRE: {
       // Decided under the admission, so a message taken ahead of the line keeps the launch.
       return yield* launch.admission.withPermit(
@@ -542,33 +599,43 @@ const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, t
           if (!(yield* stillWarm(launch))) {
             return yield* Effect.logWarning("agent-runner: skipped a retire for a launch at work");
           }
+
           yield* Deferred.succeed(launch.ended, RUNNER_END.IDLED);
         }),
       );
     }
+
     case INPUT_LINE.WARM:
       return yield* rearmed(launch);
     case INPUT_LINE.MODEL: {
       const { model, effort, fast } = value;
+
       if (model !== undefined) yield* control("setModel", () => launch.session.setModel(model));
+
       if (effort !== undefined && !isClaudeEffort(effort)) {
         yield* Effect.logWarning("agent-runner: skipped an effort Claude Code does not take");
       }
+
       const settings = {
         ...(effort !== undefined && isClaudeEffort(effort) ? { effortLevel: effort } : undefined),
         ...(fast === undefined ? undefined : { fastMode: fast }),
       };
+
       if (Object.keys(settings).length > 0) {
         yield* control("applyFlagSettings", () => launch.session.applyFlagSettings(settings));
       }
+
       return;
     }
+
     case INPUT_LINE.APPROVAL: {
       const { requestId, decision, message } = value;
       const by = APPROVAL_BY.MEMBER;
+
       if (!(yield* settleAsk(launch.approvals, requestId, decision, by, message))) {
         yield* Effect.logWarning("agent-runner: skipped an approval for no waiting call");
       }
+
       return;
     }
   }
@@ -610,7 +677,9 @@ function promptsOf(result: SdkResult): readonly string[] | undefined {
  */
 function stillUnanswered(sent: ReadonlySet<string>, result: SdkResult): ReadonlySet<string> {
   const left = new Set(sent);
+
   for (const uuid of promptsOf(result) ?? []) left.delete(uuid);
+
   return left;
 }
 
@@ -629,37 +698,48 @@ const takeMessage = Effect.fn("agent-runner/takeMessage")(function* (
       ),
     );
   }
+
   yield* launch.sink.emit(launch.annotate(message));
+
   if (message.type !== SDK_MESSAGE.RESULT) return;
   const inFlight = MutableRef.getAndSet(launch.inFlight, undefined);
+
   if (yield* Ref.get(launch.stopping)) {
     return yield* Deferred.succeed(launch.ended, RUNNER_END.STOPPED);
   }
+
   // A message the service sent that the turn did not take runs as the CLI's next
   // turn, so the launch goes on until it is answered; bounded where the
   // `result` took none, since nothing then says the CLI will take it up.
   const left = stillUnanswered(yield* Ref.get(launch.unanswered), message);
   yield* Ref.set(launch.unanswered, left);
+
   // A turn the CLI gave up on for want of the API's host is carried on once the host answers, not ended.
   if (message.subtype === "success" && message.is_error && claudeCodeConnectionLost(message)) {
     return yield* connectionLost(launch);
   }
+
   if (left.size > 0) {
     if (promptsOf(message) === undefined) {
       yield* Effect.forkScoped(watchUnheard(launch, left, yield* Ref.get(launch.heard)));
     }
+
     return;
   }
+
   const waiting =
     inFlight !== undefined &&
     (inFlight.background_tasks.length > 0 || inFlight.session_crons.length > 0);
+
   // A `result` no Stop hook came before, such as an error's, ends the launch rather than trusting its CLI warm.
   if (inFlight === undefined) return yield* Deferred.succeed(launch.ended, RUNNER_END.TURN_ENDED);
+
   if (!waiting) {
     return launch.warmable
       ? yield* warmed(launch)
       : yield* Deferred.succeed(launch.ended, RUNNER_END.TURN_ENDED);
   }
+
   yield* Ref.set(launch.turnRunning, false);
   yield* launch.sink.emit({ type: RUNNER_EVENT.WAITING, ...inFlight });
 });
@@ -673,15 +753,18 @@ const takeMessage = Effect.fn("agent-runner/takeMessage")(function* (
  */
 const connectionLost = Effect.fn("agent-runner/connectionLost")(function* (launch: Launch) {
   const heard = yield* Ref.get(launch.heard);
+
   if ((yield* Ref.get(launch.carriedOnAt)) === heard) {
     yield* Effect.logWarning(
       "agent-runner: the connection was lost again before the model answered",
     );
+
     return yield* endFailed(
       launch,
       connectionLostFailure(launch.providerHost, CONNECTION_LOST_DETAIL.LOST_AGAIN),
     );
   }
+
   yield* Effect.logWarning(`agent-runner: lost the connection to ${launch.providerHost}`);
   // Under the admission, so no message is handed to the CLI between the loss and the hold,
   // and the probe, which decides under it too, finds the wait standing.
@@ -689,11 +772,13 @@ const connectionLost = Effect.fn("agent-runner/connectionLost")(function* (launc
     Effect.gen(function* () {
       yield* launch.sink.emit({ type: RUNNER_EVENT.CONNECTION_LOST, host: launch.providerHost });
       const held: Reconnecting["held"] = [];
+
       const probe = yield* Effect.forkScoped(
         Effect.flatMap(awaitProvider(launch.probeTarget), (answered) =>
           connectionProbed(launch, answered),
         ),
       );
+
       yield* Ref.set(launch.reconnecting, { probe, held });
     }),
   );
@@ -713,20 +798,26 @@ const connectionProbed = Effect.fn("agent-runner/connectionProbed")(function* (
   yield* launch.admission.withPermit(
     Effect.gen(function* () {
       const reconnecting = yield* Ref.getAndSet(launch.reconnecting, undefined);
+
       if (reconnecting === undefined || (yield* Deferred.isDone(launch.ended))) return;
+
       if (!answered) {
         yield* Effect.logWarning(
           `agent-runner: ${launch.providerHost} did not answer within the wait`,
         );
+
         return yield* endFailed(
           launch,
           connectionLostFailure(launch.providerHost, CONNECTION_LOST_DETAIL.GAVE_UP),
         );
       }
+
       yield* Ref.set(launch.carriedOnAt, yield* Ref.get(launch.heard));
+
       for (const { uuid, prompt, content } of reconnecting.held) {
         yield* handToCli(launch, uuid, prompt, content);
       }
+
       yield* launch.sink.emit({
         type: RUNNER_EVENT.CONNECTION_RESTORED,
         host: launch.providerHost,
@@ -761,10 +852,12 @@ const warmed = Effect.fn("agent-runner/warmed")(function* (launch: Launch) {
       yield* Ref.set(launch.turnRunning, false);
       yield* Ref.set(launch.warm, true);
       yield* launch.sink.emit({ type: RUNNER_EVENT.IDLE });
+
       // Counted, so the cap an earlier IDLE armed is dropped.
       return yield* Ref.updateAndGet(launch.waits, (count) => count + 1);
     }),
   );
+
   if (wait === undefined) return;
   yield* Effect.forkScoped(watchWarm(launch, wait));
 });
@@ -778,12 +871,14 @@ const warmed = Effect.fn("agent-runner/warmed")(function* (launch: Launch) {
  */
 const warmAtStart = Effect.fn("agent-runner/warmAtStart")(function* (launch: Launch) {
   if (!launch.warmable) return;
+
   const wait = yield* launch.admission.withPermit(
     Effect.andThen(
       Ref.set(launch.warm, true),
       Ref.updateAndGet(launch.waits, (count) => count + 1),
     ),
   );
+
   yield* Effect.forkScoped(watchWarm(launch, wait));
 });
 
@@ -792,9 +887,11 @@ const rearmed = Effect.fn("agent-runner/rearmed")(function* (launch: Launch) {
   const wait = yield* launch.admission.withPermit(
     Effect.gen(function* () {
       if (!(yield* stillWarm(launch))) return undefined;
+
       return yield* Ref.updateAndGet(launch.waits, (count) => count + 1);
     }),
   );
+
   if (wait === undefined) return;
   yield* Effect.forkScoped(watchWarm(launch, wait));
 });
@@ -841,6 +938,7 @@ const watchUnheard = Effect.fn("agent-runner/watchUnheard")(function* (
     Effect.gen(function* () {
       if ((yield* Ref.get(launch.heard)) !== heardAt) return;
       const unanswered = yield* Ref.get(launch.unanswered);
+
       if (![...held].some((uuid) => unanswered.has(uuid))) return;
       yield* Effect.logWarning(`agent-runner: ${UNHEARD_FAILURE}`);
       yield* endFailed(launch, UNHEARD_FAILURE);
@@ -859,6 +957,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   const snapshots = yield* CheckoutSnapshots;
   const { config, lines, sink, bearer, trace } = context;
   const inFlight = MutableRef.make<InFlight | undefined>(undefined);
+
   const onStop: HookCallback = async (hook) => {
     if (hook.hook_event_name === "Stop") {
       MutableRef.set(inFlight, {
@@ -866,37 +965,47 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
         session_crons: hook.session_crons ?? [],
       });
     }
+
     return { continue: true };
   };
+
   const servers = yield* trace.step(
     RUNNER_SPAN.MCP_RELAY,
     Effect.gen(function* () {
-      const opened: Record<string, McpSdkServerConfigWithInstance> = {
-        [MCP_SERVER]: yield* openMcpRelay(MCP_SERVER, config.mcpUrl, bearer),
-      };
+      const opened: Record<string, McpSdkServerConfigWithInstance> = {};
+      opened[MCP_SERVER] = yield* openMcpRelay(MCP_SERVER, config.mcpUrl, bearer);
+
       // Each integration the agent is handed is a server of its own, its tools named `mcp__<connection>__<tool>`.
       for (const integration of config.integrations ?? []) {
         if (integration.name === MCP_SERVER) continue;
         opened[integration.name] = yield* openMcpRelay(integration.name, integration.url, bearer);
       }
+
       return opened;
     }),
   );
+
   const prompts = yield* Queue.unbounded<SDKUserMessage, Cause.Done>();
+
   const store =
     config.transcriptsUrl === undefined
       ? undefined
       : transcriptStore(config.transcriptsUrl, bearer, trace.headers);
+
   const resumed = yield* resumePointOf(claudeCode, config, store).pipe(Effect.result);
+
   if (Result.isFailure(resumed)) {
     yield* Effect.logWarning(`agent-runner: ${resumed.failure}`);
+
     return { end: RUNNER_END.FAILED, failure: resumed.failure } satisfies LaunchOutcome;
   }
+
   const from = resumed.success;
-  const approvals = yield* makeApprovals(sink);
+  const approvals = yield* openApprovals(sink);
   // The CLI is spawned and initialized before the service's lines are taken, which wait in
   // their queue meanwhile, so its first message goes to a CLI ready for it.
   const memoryWatch = claudeCodeMemoryWatch();
+
   const options = queryOptions(
     config,
     context.env,
@@ -907,6 +1016,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     store,
     approvals,
   );
+
   const started = yield* trace
     .step(
       RUNNER_SPAN.CLI,
@@ -916,12 +1026,16 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
       }),
     )
     .pipe(Effect.result);
+
   if (Result.isFailure(started)) {
     yield* Effect.logWarning(`agent-runner: the CLI could not start: ${started.failure}`);
+
     return { end: RUNNER_END.FAILED, failure: started.failure } satisfies LaunchOutcome;
   }
+
   const session = started.success.query(Stream.toAsyncIterable(Stream.fromQueue(prompts)));
   const provider = providerTargetOf(context.env[ANTHROPIC_BASE_URL] ?? ANTHROPIC_API_HOST);
+
   const launch: Launch = {
     session,
     annotate: memoryWatch.annotate,
@@ -954,6 +1068,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
 
   // Warm before the first line is taken, so a message ahead of a retire takes it out of warm.
   yield* warmAtStart(launch);
+
   // The service closing stdin ends the prompt stream, and the CLI ends once it has
   // answered what it was given.
   const inputLoop = Effect.gen(function* () {
@@ -962,6 +1077,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     Effect.catchIf(Cause.isDone, () => Queue.end(prompts)),
     Effect.asVoid,
   );
+
   const outputLoop = Stream.fromAsyncIterable(session, (cause) => cause).pipe(
     Stream.runForEach((message) => takeMessage(launch, message)),
     Effect.matchEffect({
@@ -970,6 +1086,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
         endFailed(launch, cause instanceof Error ? cause.message : String(cause)),
     }),
   );
+
   const reading = [
     yield* Effect.forkScoped(inputLoop),
     yield* context.cutOff.pipe(
@@ -977,6 +1094,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
       Effect.forkScoped,
     ),
   ];
+
   const posting = yield* Effect.forkScoped(outputLoop);
 
   // The loops stop before the launch's last event is posted, so nothing the
@@ -994,6 +1112,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   session.close();
   yield* Fiber.interrupt(posting);
   const failure = yield* Ref.get(launch.failure);
+
   return { end, failure } satisfies LaunchOutcome;
 });
 
@@ -1003,16 +1122,21 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
  */
 export const runAgent = Effect.fn("agent-runner/runAgent")(function* (input: RunnerInput) {
   const bearerValue = input.env[RUNNER_ENV.BEARER];
+
   if (bearerValue === undefined || bearerValue === "") {
     return yield* new RunnerFailed({ detail: `${RUNNER_ENV.BEARER} is not set` });
   }
+
   const bearer = Redacted.make(bearerValue);
+
   const tokens = [RUNNER_ENV.CLAUDE_TOKEN, RUNNER_ENV.API_KEY, RUNNER_ENV.OPENAI_API_KEY].flatMap(
     (name) => {
       const value = input.env[name];
+
       return value === undefined || value === "" ? [] : [Redacted.make(value)];
     },
   );
+
   const secrets = [bearer, ...tokens];
 
   // Stdin is read in a loop of its own from the first line on, so nothing
@@ -1035,6 +1159,7 @@ export const runAgent = Effect.fn("agent-runner/runAgent")(function* (input: Run
     Effect.flatMap((reads) => (reads ? Effect.void : Queue.end(lines))),
     Effect.forkScoped,
   );
+
   // Note that a config that never comes ends the launch, because a runner waiting on it reads
   // no line and posts no event, so nothing would ever tell the service it stands deaf.
   const first = yield* Queue.take(lines).pipe(
@@ -1049,11 +1174,14 @@ export const runAgent = Effect.fn("agent-runner/runAgent")(function* (input: Run
         ),
     }),
   );
+
   const config = yield* decodeConfig(first).pipe(
     Effect.mapError(() => new RunnerFailed({ detail: "the config line is not a runner config" })),
   );
+
   yield* Deferred.succeed(readsLines, config.linesUrl !== undefined);
   const trace = yield* launchTrace(config.trace, config.harness ?? RUNNER_HARNESS.CLAUDE_CODE);
+
   return yield* runLaunch({ config, lines, bearer, secrets, trace, input }).pipe(trace.traced);
 });
 
@@ -1074,21 +1202,25 @@ interface ReadLaunch {
  */
 const runLaunch = Effect.fn("agent-runner/runLaunch")(function* (read: ReadLaunch) {
   const { config, lines, bearer, secrets, trace, input } = read;
-  const posted = yield* makeEventSink({
+
+  const posted = yield* openEventSink({
     url: config.eventsUrl,
     bearer,
     firstSequence: config.firstSequence,
     secrets,
   });
+
   // Each message is watched for the startup's milestones as it is posted (`trace.ts`).
   const sink: EventSink = {
     ...posted,
     emit: (message) => Effect.andThen(trace.observe(message), posted.emit(message)),
   };
+
   // A config that names the read has the service's later lines read from it, beside any
   // stdin still carries, into the same queue, so neither harness knows where a line came from.
   // A read the service refused for good cuts the launch off, as a post it refused does.
   const refused = yield* Deferred.make<string>();
+
   if (config.linesUrl !== undefined) {
     const read = { url: config.linesUrl, bearer, launch: config.firstSequence };
     yield* readLines(read, lines).pipe(
@@ -1098,23 +1230,30 @@ const runLaunch = Effect.fn("agent-runner/runLaunch")(function* (read: ReadLaunc
       Effect.forkScoped,
     );
   }
+
   const cutOff = Effect.race(
     Effect.map(sink.undelivered, (undelivered) => undelivered.detail),
     Deferred.await(refused),
   );
+
   const context = { lines, env: harnessEnvOf(input.env), bearer, sink, cutOff, trace };
+
   const outcome: LaunchOutcome =
     config.harness === RUNNER_HARNESS.CODEX
       ? yield* runCodex({ ...context, config })
       : yield* runClaudeCode({ ...context, config });
+
   const { end, failure } = outcome;
+
   const last: RunnerEndEvent = {
     type: RUNNER_EVENT.END,
     reason: end,
     ...(failure === "" ? undefined : { detail: failure }),
   };
+
   yield* sink.emit(last);
   // A stopped launch is our own doing, so it does not wait out an outage for its last events.
   yield* end === RUNNER_END.STOPPED ? sink.drainStopped : sink.drain;
+
   return end;
 });

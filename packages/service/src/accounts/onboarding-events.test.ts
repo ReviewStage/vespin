@@ -30,6 +30,7 @@ const openUser = (createdAt: Date) =>
     const userId = `user-${randomUUID()}`;
     const email = `${userId}@app.test`;
     yield* db.insert(user).values({ id: userId, name: "Test User", email, createdAt });
+
     return { userId, email };
   });
 

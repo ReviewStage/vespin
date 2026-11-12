@@ -36,6 +36,7 @@ interface GuardedVariables {
 
 function loopbackHost(host: string): boolean {
   const named = host.toLowerCase();
+
   return (
     LOOPBACK_NAMES.has(named) || (isIPv4(named) && named.split(".")[0] === LOOPBACK_IPV4_NETWORK)
   );
@@ -50,6 +51,7 @@ function loopbackHost(host: string): boolean {
 function databaseHosts(connectionString: string): readonly string[] | undefined {
   try {
     const url = new URL(connectionString);
+
     return [decodeURIComponent(url.hostname), ...url.searchParams.getAll("host")].filter(
       (host) => host !== "",
     );
@@ -61,6 +63,7 @@ function databaseHosts(connectionString: string): readonly string[] | undefined 
 /** Whether a connection string names a host and every host it names is this machine's loopback. */
 function onLoopback(connectionString: string): boolean {
   const hosts = databaseHosts(connectionString);
+
   return hosts !== undefined && hosts.length > 0 && hosts.every(loopbackHost);
 }
 
@@ -69,14 +72,18 @@ function refusalOf({ vercel, url, unpooled }: GuardedVariables): string | undefi
   if (vercel.length > 0) {
     return `${[...vercel].sort().join(", ")} set: the local server never runs beside a Vercel deployment's variables`;
   }
+
   const pooled = url?.trim();
+
   if (pooled === undefined || pooled === "") {
     return `${DATABASE_VARIABLE.URL} is not set: the local server serves a database on this machine`;
   }
+
   const remote = [
     { name: DATABASE_VARIABLE.URL, value: pooled },
     { name: DATABASE_VARIABLE.UNPOOLED_URL, value: unpooled?.trim() },
   ].filter(({ value }) => value !== undefined && value !== "" && !onLoopback(value));
+
   return remote.length === 0
     ? undefined
     : `${remote.map(({ name }) => name).join(", ")} names a host off this machine's loopback: the local server serves a database on this machine`;

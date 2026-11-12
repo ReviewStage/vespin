@@ -152,6 +152,7 @@ function Window({ onTask }: { onTask: boolean }): React.JSX.Element {
   const sidebar = useSidebarCollapse(false, stage.compact);
   const sidePanel = useSidePanel(undefined, OPEN_TASK, [AGENT], [], [], [AGENT], room);
   const [tab, setTab] = useState<PanelTab>(PANEL_TAB.TASKS);
+
   const shell = createElement(DesktopShell, {
     gates: { accountRequired: false, onBeginSignIn: ignore, onCancelSignIn: ignore },
     tab,
@@ -185,6 +186,7 @@ function Window({ onTask }: { onTask: boolean }): React.JSX.Element {
     settingsStep: { listed: true, onList: ignore },
     settings: SETTINGS,
   });
+
   return createElement("div", { ref: stage.ref, className: "app-stage" }, shell);
 }
 
@@ -208,6 +210,7 @@ function mount(width: number, onTask = true): HTMLElement {
       ),
     ),
   );
+
   return container;
 }
 
@@ -221,7 +224,9 @@ function sidebarToggle(page: HTMLElement): HTMLButtonElement {
   const button = page.querySelector<HTMLButtonElement>(
     ".title-bar-controls:not([data-edge]) button",
   );
+
   assert.ok(button, "the sidebar's toggle stands");
+
   return button;
 }
 
@@ -235,7 +240,9 @@ function panelToggle(page: HTMLElement): HTMLButtonElement {
   const button = page.querySelector<HTMLButtonElement>(
     '.title-bar-controls[data-edge="end"] button[aria-expanded]',
   );
+
   assert.ok(button, "the panel's toggle stands");
+
   return button;
 }
 
@@ -243,6 +250,7 @@ function panelToggle(page: HTMLElement): HTMLButtonElement {
 function panelOf(page: HTMLElement) {
   const aside = page.querySelector<HTMLElement>("aside.side-panel");
   assert.ok(aside, "the panel is drawn");
+
   return {
     fullScreen: aside.getAttribute("data-full-screen") === "true",
     resizable: aside.querySelector('[aria-label="Resize panel"]') !== null,
@@ -263,7 +271,9 @@ function sidebarOf(page: HTMLElement): HTMLElement {
 /** How the sidebar stands: `away` out of reach, `drawer` floating over the work, or `pinned` beside it. */
 function sidebarStanding(page: HTMLElement): string {
   const shell = page.querySelector(".desktop-shell");
+
   if (shell?.getAttribute("data-sidebar-collapsed") === "false") return "pinned";
+
   return shell?.getAttribute("data-sidebar-overlay") === "open" ? "drawer" : "away";
 }
 
@@ -331,6 +341,7 @@ for (const { zoom, width } of ZOOMED_LEAST_WINDOW) {
 function headBack(page: HTMLElement): HTMLButtonElement {
   const back = page.querySelector<HTMLButtonElement>(".task-head .ui-toolbar-lead button");
   assert.ok(back, "the task's header leads with its way back");
+
   return back;
 }
 
@@ -468,9 +479,11 @@ test("Escape puts a phone's drawer away and gives the keyboard back to the work 
     focus.call(this, options);
   });
   const page = mount(PHONE, false);
+
   const work =
     page.querySelector<HTMLElement>("main.desktop-main button:not([disabled])") ??
     assert.fail("the work holds a button");
+
   work.focus();
 
   openDrawer();

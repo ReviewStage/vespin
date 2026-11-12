@@ -86,6 +86,7 @@ import { CheckIcon, GLYPH } from "@repo/ui/icons";
 import { useMutation } from "@tanstack/react-query";
 import { type ReactNode, type RefObject, useMemo, useRef, useState } from "react";
 import { useAccountPreferences } from "../account-choices.js";
+import type { ActResult } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ActionMenu } from "../desktop/action-menu.js";
 import { PANE_EDGE, usePaneSlide } from "../desktop/pane-motion.js";
@@ -416,17 +417,21 @@ function NoChaptersYet({
   onGenerate: () => void;
 }): React.JSX.Element {
   const preferences = useAccountPreferences().data;
+
   const picked =
     preferences === undefined ? undefined : chaptersProviderOf(preferences.chaptersModel);
+
   const { mutate: pick, isPending: picking } = useMutation({
     ...actMutation(ACT_KIND.AGENTS_CHAPTERS_PROVIDER_WRITE),
-    onSettled: refusalToast((answer: object) =>
+    onSettled: refusalToast((answer: ActResult<typeof ACT_KIND.AGENTS_CHAPTERS_PROVIDER_WRITE>) =>
       "failure" in answer ? CHAPTERS_WORDS.PICK_FAILED : undefined,
     ),
   });
+
   const offered = choices !== undefined && choices.length > 1 ? choices : undefined;
   const menu = useMenu(offered !== undefined);
   const shown = pickedRunsOn(runsOn, offered, picked);
+
   if (offered === undefined || shown === undefined) {
     return (
       <EmptyState
@@ -441,6 +446,7 @@ function NoChaptersYet({
       </EmptyState>
     );
   }
+
   return (
     <>
       <EmptyState
@@ -514,6 +520,7 @@ function RiskChip({
         ))}
       </HoverCard>
     );
+
   return (
     <Tooltip label={card === undefined ? undefined : CHAPTERS_WORDS.RISK_REASONS} card={card}>
       <Chip look={CHIP_LOOK.PILL} size={CHIP_SIZE.COMPACT} tone={RISK_TONES[risk]}>
@@ -538,6 +545,7 @@ interface ChapterRow {
 /** What a rail row's last line starts with: the lines its chapter adds and removes, or its files where it counts no line. */
 function ChapterLines({ row }: { row: ChapterRow }): React.JSX.Element {
   const { additions, deletions, files } = row.counts;
+
   return (
     <CountParts
       parts={
@@ -563,6 +571,7 @@ function ChapterMarks({ row, viewed }: { row: ChapterRow; viewed: boolean }): Re
         ]),
     ...(viewed ? [{ text: "", glyph: <CheckIcon />, glyphLabel: CHAPTERS_WORDS.VIEWED }] : []),
   ];
+
   return <CountParts parts={parts} />;
 }
 
@@ -588,6 +597,7 @@ function RailToggle({
     box?: RefObject<HTMLSpanElement | null>,
   ) => {
     const label = open ? CHAPTERS_WORDS.HIDE_RAIL : CHAPTERS_WORDS.SHOW_RAIL;
+
     return (
       <span ref={box} className="chapter-rail-toggle" data-place={place}>
         <Tooltip label={label}>
@@ -601,6 +611,7 @@ function RailToggle({
       </span>
     );
   };
+
   return (
     <>
       {toggle("beside", beside, onBeside)}
@@ -639,6 +650,7 @@ function ChapterRail({
       {rows.map((row, index) => {
         const { title, risk } = row.chapter;
         const done = viewed(row.paths);
+
         return (
           <ListRow
             key={index}
@@ -666,6 +678,7 @@ function ChapterRail({
       })}
     </>
   );
+
   if (over === undefined) {
     return (
       <ChapterRailFrame pane={pane} leaving={leaving} foot={foot}>
@@ -673,6 +686,7 @@ function ChapterRail({
       </ChapterRailFrame>
     );
   }
+
   return (
     <OverPane
       open={over.open}
@@ -729,6 +743,7 @@ function KeyChangeItem({
   onReveal: ((ref: LineRef) => void) | undefined;
 }): React.JSX.Element {
   const first = firstLineRef(change.lineRefs, paths);
+
   return (
     <li className="flex flex-col items-start gap-tight-gap">
       <TranscriptWords text={change.content} />
@@ -800,11 +815,13 @@ function ChaptersReading({
   // The chapter's own tree starts hidden, the rail standing in its room; its width is the panel's for every tree.
   const [filesOpen, setFilesOpen] = useState(false);
   const [briefOpen, setBriefOpen] = useState(true);
+
   const filesTree: TreeShown = {
     open: filesOpen,
     onToggle: () => setFilesOpen((was) => !was),
     width: tree.width,
   };
+
   const [reveal, setReveal] = useState<FileReveal | undefined>(undefined);
   const asks = useRef(0);
   const [root, setRoot] = useState<HTMLElement | null>(null);
@@ -818,6 +835,7 @@ function ChaptersReading({
   // Note that the rail floats over the chapter wherever the stylesheet draws its over toggle, and then only.
   const narrow = useFloatsOver(root, OVER_TOGGLE, BESIDE_TOGGLE);
   const hunks = useMemo(() => chapterHunks(files), [files]);
+
   const rows = useMemo(
     () =>
       chapters.map(
@@ -830,13 +848,16 @@ function ChaptersReading({
       ),
     [chapters, files, hunks, threads.list],
   );
+
   const chapter = chapters[at];
   const row = rows[at];
+
   // Note that the chapter's files and threads are kept while it and the read stand, because the list draws itself anew for new ones.
   const chapterFiles = useMemo(
     () => (chapter === undefined ? [] : chapterPatches(chapter, files)),
     [chapter, files],
   );
+
   const chapterThreads = useMemo<ChangesThreads>(
     () =>
       chapter === undefined
@@ -847,51 +868,68 @@ function ChaptersReading({
           },
     [chapter, threads, hunks],
   );
+
   // Note that stale chapters name hunks of an older head, so they mark no file of this one viewed.
   const marks = stale ? undefined : changes.viewedFiles.marks;
+
   const viewed = (paths: readonly string[]) =>
     marks === undefined ? false : chapterViewed(paths, marks.viewed);
+
   const markChapter = () => {
     if (marks === undefined || row === undefined) return;
+
     for (const path of chapterMarks(row.paths, marks.viewed)) void marks.toggle(path);
   };
+
   const choose = (next: number) => {
     setChosen(next);
     setReveal(undefined);
     setOver(false);
   };
+
   const step = (by: number) => choose(steppedChapter(at, by, chapters.length));
+
   // Note that the rail is shown where it is seen: beside the chapter where it has room, else over it.
   const toggleRail = () =>
     drawnIn(root, BESIDE_TOGGLE) ? setBeside((was) => !was) : setOver((was) => !was);
+
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Escape" && over && !event.nativeEvent.isComposing) {
       // Note that the Escape is stopped here, because the window's own would leave the view.
       event.stopPropagation();
       setOver(false);
+
       return;
     }
+
     if (event.defaultPrevented || event.nativeEvent.isComposing || typingInto(event.target)) return;
     const key = chaptersKeyFor(event);
+
     if (key === undefined) return;
+
     const runs = {
       [CHAPTERS_KEY.PREVIOUS_CHAPTER]: () => step(-1),
       [CHAPTERS_KEY.NEXT_CHAPTER]: () => step(1),
       [CHAPTERS_KEY.MARK_CHAPTER_VIEWED]: marks === undefined ? undefined : markChapter,
     } satisfies Record<typeof key, (() => void) | undefined>;
+
     const run = runs[key];
+
     if (run === undefined) return;
     event.preventDefault();
     event.stopPropagation();
     run();
   };
+
   if (chapter === undefined || row === undefined) {
     return <EmptyState icon={<GLYPH.PULL_REQUEST_CHAPTERS />}>{CHAPTERS_WORDS.NOTHING}</EmptyState>;
   }
+
   const done = viewed(row.paths);
   const seen = marks === undefined ? 0 : row.paths.filter(marks.viewed).length;
   const previous = chapters[at - 1];
   const next = chapters[at + 1];
+
   return (
     // The view hears its chapter keys from whatever in it has the focus, past the list's own.
     <Fill
@@ -1173,12 +1211,15 @@ export function AgentChaptersTab({
     pullRequest: chapters.head,
     files: changes.pullRequest?.headSha,
   });
+
   if (state.kind !== CHAPTERS_SHOWN.READY) return <>{chaptersState(state, chapters, shown)}</>;
   // The chapters wait on the files as Files changed does: a failure gives way to the wait once asked again.
   const { answer, out, pullRequest } = changes;
+
   if (answer === undefined || (out && "failure" in answer)) {
     return <SpinnerRegion delay label={CHANGES_WORDS.READING} />;
   }
+
   if ("failure" in answer) {
     return (
       <ErrorState
@@ -1190,6 +1231,7 @@ export function AgentChaptersTab({
       </ErrorState>
     );
   }
+
   if (pullRequest === null) {
     return (
       <EmptyState icon={<GLYPH.PULL_REQUEST_CHAPTERS />}>
@@ -1197,6 +1239,7 @@ export function AgentChaptersTab({
       </EmptyState>
     );
   }
+
   return (
     <ChaptersReading
       agentId={agentId}

@@ -1,4 +1,4 @@
-// fixture-inbox-media.ts -- the bytes of the Inbox fixture's one recorded thread: a still of the invite page and a short recording of the flow, as its WebM and its MP4 copy, in base64, so a fixture run draws a picture and plays a video with no network.
+// fixture-inbox-media.ts -- the bytes of the Inbox fixture's one recorded thread: a still of the invite page, a short recording of the flow, as its WebM and its MP4 copy, and the test plan as a PDF, in base64, so a fixture run draws a picture, plays a video, and opens a PDF with no network.
 
 /** A still of the invite page, a PNG of the test card at 320 by 180. */
 export const FIXTURE_PICTURE_PNG =
@@ -355,3 +355,18 @@ export const FIXTURE_VIDEO_MP4 =
   "GlR4KcntthGBB/q4EX18EG1BgDCCA4LEJOF+DV3CTc2C4CMhrGT9xwNIOs4b/ObIsfw3KatSeQ8BSMktTQHsTs3ggrHZT3D1" +
   "cEOT9PwQQQT0AX8AWpy1PP1Bgt+tQXH62/RIxWEQYdJoSyTw4bE+KYCISifBXe4E1i1eq+EAxFMmCnkzgbsIhOXPef/MpSbD" +
   "7RjGbb7UnpX/1QHCgUsiIA==";
+
+/** The test plan the agent followed, a one-page PDF of its steps in Helvetica, as an agent attaches a document to a thread. */
+export const FIXTURE_PLAN_PDF =
+  "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUg" +
+  "L1BhZ2VzIC9LaWRzIFszIDAgUl0gL0NvdW50IDEgPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAg" +
+  "UiAvTWVkaWFCb3ggWzAgMCA2MTIgNzkyXSAvUmVzb3VyY2VzIDw8IC9Gb250IDw8IC9GMSA0IDAgUiA+PiA+PiAvQ29udGVudHMg" +
+  "NSAwIFIgPj4KZW5kb2JqCjQgMCBvYmoKPDwgL1R5cGUgL0ZvbnQgL1N1YnR5cGUgL1R5cGUxIC9CYXNlRm9udCAvSGVsdmV0aWNh" +
+  "ID4+CmVuZG9iago1IDAgb2JqCjw8IC9MZW5ndGggMzAwID4+CnN0cmVhbQpCVAovRjEgMjAgVGYKNTYgNzYwIFRkCihJbnZpdGUg" +
+  "ZmxvdyB0ZXN0IHBsYW4pIFRqCi9GMSAxMiBUZgowIC0yMiBUZAooKSBUagowIC0yMiBUZAooMS4gU2VuZCBhbiBpbnZpdGUgZnJv" +
+  "bSBUZWFtbWF0ZSBpbnZpdGF0aW9ucy4pIFRqCjAgLTIyIFRkCigyLiBPcGVuIHRoZSBsaW5rIGFzIHRoZSBpbnZpdGVlLikgVGoK" +
+  "MCAtMjIgVGQKKDMuIEFjY2VwdCwgYW5kIGxhbmQgb24gdGhlIGFjY2VwdGVkIHBhZ2UuKSBUagowIC0yMiBUZAooNC4gT3BlbiBh" +
+  "biBleHBpcmVkIGxpbms6IHRoZSBwbGFjZWhvbGRlciBwYWdlLikgVGoKRVQKZW5kc3RyZWFtCmVuZG9iagp4cmVmCjAgNgowMDAw" +
+  "MDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMDkgMDAwMDAgbiAKMDAwMDAwMDA1OCAwMDAwMCBuIAowMDAwMDAwMTE1IDAwMDAwIG4g" +
+  "CjAwMDAwMDAyNDEgMDAwMDAgbiAKMDAwMDAwMDMxMSAwMDAwMCBuIAp0cmFpbGVyCjw8IC9TaXplIDYgL1Jvb3QgMSAwIFIgPj4K" +
+  "c3RhcnR4cmVmCjY2MgolJUVPRgo=";

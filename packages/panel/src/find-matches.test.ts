@@ -2,7 +2,14 @@
 
 import assert from "node:assert/strict";
 import { afterEach, test, vi } from "vitest";
-import { FIND_SHADOW_ATTRIBUTE, findRanges, matchFrom, watchText } from "./find-matches.js";
+import {
+  FIND_SHADOW_ATTRIBUTE,
+  findRanges,
+  matchFrom,
+  releaseFolds,
+  reveal,
+  watchText,
+} from "./find-matches.js";
 
 /**
  * find-matches.test.ts -- a find reads the words a marked host's shadow
@@ -22,6 +29,7 @@ afterEach(() => {
   document.body.innerHTML = "";
   frames = [];
   vi.restoreAllMocks();
+  Reflect.deleteProperty(Range.prototype, "getBoundingClientRect");
 });
 
 /** Asks for frames into `frames` rather than the window's clock, so a test says when the next is drawn. */
@@ -36,6 +44,7 @@ function holdFrames(): void {
 function drawFrame(): void {
   const due = frames;
   frames = [];
+
   for (const heard of due) heard?.(0);
 }
 
@@ -51,6 +60,7 @@ function drawTab() {
     "<div data-code><div><span>const </span><span>seats</span> = 3;</div><div>const seats = 42;</div></div>";
   const tree = tab.querySelector("#tree") ?? assert.fail("the tree stands");
   tree.attachShadow({ mode: "open" }).innerHTML = "<div>seats.ts</div>";
+
   return { tab, shadow };
 }
 
@@ -85,6 +95,7 @@ test("a change inside a marked shadow root is a change of the tab's text", async
   holdFrames();
   const { tab, shadow } = drawTab();
   let changes = 0;
+
   const stop = watchText(tab, () => {
     changes += 1;
   });
@@ -103,6 +114,7 @@ test("words streamed in a few at a time are heard once in the frame after them, 
   const tab = document.body.appendChild(document.createElement("div"));
   const line = tab.appendChild(document.createElement("p"));
   let changes = 0;
+
   const stop = watchText(tab, () => {
     changes += 1;
   });
@@ -111,6 +123,7 @@ test("words streamed in a few at a time are heard once in the frame after them, 
     line.append(words);
     await Promise.resolve();
   }
+
   assert.equal(changes, 0);
   drawFrame();
   assert.equal(changes, 1);
@@ -151,4 +164,36 @@ test("a find kept at a match after a slotted comment keeps to it, and one at the
 
   assert.equal(matchFrom(ranges, ranges[2], tab), 2);
   assert.equal(matchFrom(ranges, ranges[1], tab), 1);
+});
+
+test("a fold the find opened closes as it steps to a match outside it, unless the reader pressed its line, and every one it holds closes on a query that matches nothing", () => {
+  const tab = document.body.appendChild(document.createElement("div"));
+  tab.innerHTML =
+    "<details id='one'><summary>Ran</summary><p>seats one</p></details>" +
+    "<details id='two'><summary>Read</summary><p>seats two</p></details>" +
+    "<details id='three'><summary>Edited</summary><p>seats three</p></details>";
+  // jsdom lays nothing out, so a match stands nowhere and nothing scrolls to it.
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+
+  const fold = (id: string) =>
+    tab.querySelector<HTMLDetailsElement>(`#${id}`) ?? assert.fail(`fold ${id}`);
+
+  const [one, two, three] = findRanges(tab, "seats");
+  const folds = new Set<HTMLDetailsElement>();
+
+  reveal(one ?? assert.fail("the first match"), tab, folds);
+  assert.equal(fold("one").open, true);
+  reveal(two ?? assert.fail("the second match"), tab, folds);
+  assert.deepEqual([fold("one").open, fold("two").open], [false, true]);
+
+  // The reader presses the second fold's line, so it is theirs to close.
+  fold("two")
+    .querySelector("summary")
+    ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  fold("two").open = true;
+  reveal(three ?? assert.fail("the third match"), tab, folds);
+  assert.deepEqual([fold("two").open, fold("three").open], [true, true]);
+
+  releaseFolds(folds);
+  assert.deepEqual([fold("two").open, fold("three").open], [true, false]);
 });

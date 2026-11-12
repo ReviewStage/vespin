@@ -62,6 +62,7 @@ afterEach(() => {
 /** The service, as the tab reads through it: the file's first line, then its whole text. */
 const read = (request: TaskFileRequest): Promise<TasksFileAnswer> => {
   const place = { path: PATH, repository: "acme/relay", branch: "main" };
+
   const answer: TasksFileAnswer =
     request.raw === true
       ? { text: { ...place, text: TEXT } }
@@ -74,6 +75,7 @@ const read = (request: TaskFileRequest): Promise<TasksFileAnswer> => {
             lines: ["const seats = 3;"],
           },
         };
+
   return Promise.resolve(answer);
 };
 
@@ -87,9 +89,11 @@ function reading(): boolean {
 test("a File tab says it is reading the file until its lines are drawn, never standing blank once the bundle lands", async () => {
   // Each state the page passes through as it changes: whether it says it is reading, and how many lines it draws.
   const states: { reading: boolean; lines: number }[] = [];
+
   const observer = new MutationObserver(() =>
     states.push({ reading: reading(), lines: wholeFileLines(document.body).length }),
   );
+
   observer.observe(document.body, { subtree: true, childList: true });
   fakeActPort(readingFiles(read));
   const container = document.body.appendChild(document.createElement("div"));

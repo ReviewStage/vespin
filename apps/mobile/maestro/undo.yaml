@@ -1,0 +1,74 @@
+# undo.yaml -- a notice settled with Got it, and a thread resolved, each said in the app's notice with Undo, which opens the thread again.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as `answer.yaml` is, so no server is
+# reached: the fixture takes each nod, resolve, and take-back as the service
+# would (`@repo/host/fixture-inbox`). Each thread is opened from a fresh
+# launch, so a compact window's pushed thread and a regular window's split
+# view are reached the same way.
+
+# Got it: a notice asking nothing offers it under the thread while the box is
+# empty; its press settles the notice, says so with Undo, and Undo has it
+# wait on the reader again, Got it offered anew.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- scrollUntilVisible:
+    element: "acceptInvite can add a member twice"
+    direction: DOWN
+    centerElement: true
+- waitForAnimationToEnd
+- tapOn: "acceptInvite can add a member twice"
+- assertVisible: "Got it"
+- waitForAnimationToEnd
+- takeScreenshot: got-it
+- tapOn: "Got it"
+- extendedWaitUntil:
+    visible:
+      id: "failure-notice-undo"
+    timeout: 5000
+- assertVisible: "Got it: “acceptInvite can add a member twice”"
+- takeScreenshot: got-it-undo
+- tapOn:
+    id: "failure-notice-undo"
+- extendedWaitUntil:
+    visible: "Got it"
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: got-it-undone
+
+# Resolve, from the thread's ⋯ menu: the thread settles, says so with Undo,
+# and Undo opens it again, the menu offering Resolve anew.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- scrollUntilVisible:
+    element: "What the expired invite page says"
+    direction: DOWN
+    centerElement: true
+- waitForAnimationToEnd
+- tapOn: "What the expired invite page says"
+- waitForAnimationToEnd
+- tapOn:
+    text: "More"
+    index: -1
+- tapOn: "Resolve"
+- extendedWaitUntil:
+    visible:
+      id: "failure-notice-undo"
+    timeout: 5000
+- assertVisible: "Resolved “What the expired invite page says”"
+- takeScreenshot: resolve-undo
+- tapOn:
+    id: "failure-notice-undo"
+- waitForAnimationToEnd
+- tapOn:
+    text: "More"
+    index: -1
+- assertVisible: "Resolve"
+- takeScreenshot: resolve-undone

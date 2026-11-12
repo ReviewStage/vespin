@@ -34,6 +34,7 @@ const MAIN = { projectKey: PROJECT, sessionId: SESSION };
 const SUBAGENT = { ...MAIN, subpath: "subagents/agent-1" };
 
 const entry = (uuid: string) => ({ type: "user", uuid, message: { role: "user", content: uuid } });
+
 /** A session's root: its first entry, the user's, with no parent. */
 const root = (uuid: string) => ({ ...entry(uuid), parentUuid: null });
 
@@ -46,6 +47,7 @@ const paged = (userId: string, conversationId: string, key: typeof MAIN) =>
   Effect.gen(function* () {
     const pages: Array<ReadonlyArray<unknown>> = [];
     let after: number | null = null;
+
     do {
       const page: SessionEntryPage = yield* loadSessionEntryPage(
         userId,
@@ -53,9 +55,11 @@ const paged = (userId: string, conversationId: string, key: typeof MAIN) =>
         key,
         after,
       );
+
       pages.push(page.entries);
       after = page.next;
     } while (after !== null);
+
     return pages;
   });
 
@@ -66,6 +70,7 @@ const openAgent = Effect.gen(function* () {
     db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
   );
   const task = yield* startTask(userId, { name: "Invitations" });
+
   const started = yield* createAgent(userId, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -76,6 +81,7 @@ const openAgent = Effect.gen(function* () {
     repository: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   return { userId, conversationId: Option.getOrThrow(started).agent.conversationId };
 });
 
@@ -164,11 +170,13 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
       Effect.gen(function* () {
         const owner = yield* openAgent;
         const other = yield* openAgent;
+
         // Note that each entry of three megabytes holds more than a page's bytes alone, though far fewer than its count.
         const large = ["a", "b", "c"].map((uuid) => ({
           ...entry(uuid),
           toolOutput: uuid.repeat(3 * 1024 * 1024),
         }));
+
         yield* appendSessionEntries(owner.userId, owner.conversationId, MAIN, large);
 
         const pages = yield* paged(owner.userId, owner.conversationId, MAIN);

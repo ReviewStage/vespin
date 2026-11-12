@@ -69,12 +69,15 @@ function ListPriceNote(): React.JSX.Element {
 /** The headline figure's comparison with the window before it, which says nothing where there was none. */
 function spendMove(cost: AdminCost): string {
   const { trend } = cost.totals;
+
   if (trend.prior === 0) return `nothing priced in the ${trend.days} days before`;
+
   return `${formatTrendMove(trend)} vs the ${trend.days} days before`;
 }
 
 function spendHint(cost: AdminCost): string {
   const unpriced = cost.totals.unpricedTokens;
+
   return unpriced === 0
     ? spendMove(cost)
     : `${spendMove(cost)} · plus ${formatCompact(unpriced)} unpriced tokens`;
@@ -196,6 +199,7 @@ function perMinute(usd: number): string {
 /** What the figures leave out and how the seconds are priced, under the tables. */
 function CostBasisNote({ cost }: { cost: AdminCost }): React.JSX.Element {
   const { prices } = cost;
+
   return (
     <Text tone={TEXT_TONE.MUTED}>
       Tokens are priced at AI Gateway's catalog as it stands now, every model token counted
@@ -223,6 +227,7 @@ function CostSections({
   onOpenAccount: (id: string) => void;
 }): React.JSX.Element {
   const accountTableColumns = useMemo(() => accountColumns(onOpenAccount), [onOpenAccount]);
+
   return (
     <>
       <AdminSection>
@@ -312,6 +317,7 @@ export function CostScreen({
   const read = useQuery({ ...adminCostQuery(reads, query), enabled: !gate.heldAtGate() });
   const withdraw = useAdminSignOut(onSignOut);
   const signOut = () => withdraw.mutate();
+
   const controls = (
     <AdminViewOptions
       windowDays={windowDays}

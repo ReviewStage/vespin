@@ -26,8 +26,10 @@ import { testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js"
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
 
 /**
- * The agent's box takes files: a picture dropped on the card or pasted into
- * the field is held as "Picture 1", its chip written into the words where
+ * The agent's box takes files: a picture dropped on the card is held under
+ * its own name, and a screenshot pasted into the field, which the clipboard
+ * calls "image.png", as "Picture 1", a pasted PDF under its own name, each
+ * one's chip written into the words where
  * the caret stood, and goes with its chip when one Backspace takes it out;
  * pictures past the bytes a message carries together are left out, the box saying why in its note while the
  * ones that fit still come; the note goes once the box's message goes,
@@ -44,6 +46,7 @@ function AgentBox(): ReactNode {
     messages: [],
     send: () => new Promise<AgentAgentAnswer>(ignore),
   });
+
   return createElement(AgentComposer, { ...QUIET_COMPOSER, composer, skills: undefined });
 }
 
@@ -55,10 +58,12 @@ function QueueingBox(): ReactNode {
     messages: [],
     send: () => new Promise<AgentAgentAnswer>(ignore),
   });
+
   const queued = () => {
     composer.setDraft("");
     composer.setAttachments(() => []);
   };
+
   return createElement(AgentComposer, {
     ...QUIET_COMPOSER,
     composer,
@@ -83,6 +88,7 @@ function RefusedEditBox(): ReactNode {
     messages: [],
     send: () => new Promise<AgentAgentAnswer>(ignore),
   });
+
   return createElement(AgentComposer, {
     ...QUIET_COMPOSER,
     composer,
@@ -107,6 +113,7 @@ function KeptDraftBox(): ReactNode {
     messages: [],
     send: () => new Promise<AgentAgentAnswer>(ignore),
   });
+
   const [kept, setKept] = useState(false);
   // Note that the draft is kept once, before the box first draws, since the control's doors are new on every render.
   const seeded = useRef(false);
@@ -119,6 +126,7 @@ function KeptDraftBox(): ReactNode {
     ]);
     setKept(true);
   });
+
   return kept
     ? createElement(AgentComposer, { ...QUIET_COMPOSER, composer, skills: undefined })
     : null;
@@ -133,6 +141,7 @@ const BOXES = {
 function png(name: string, size = 8): File {
   const bytes = new Uint8Array(size);
   bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
   return new File([bytes], name, { type: "image/png" });
 }
 
@@ -176,6 +185,7 @@ async function mounted(box: keyof typeof BOXES): Promise<HTMLElement> {
   roots.push(root);
   await act(async () => root.render(withQueryClient(BOXES[box]())));
   await settle();
+
   return container;
 }
 
@@ -188,8 +198,8 @@ async function drop(container: HTMLElement, files: readonly File[]): Promise<voi
   await read();
 }
 
-/** Files pasted into the box's editor, as the clipboard hands a screenshot over; answers whether the editor let the paste go by. */
-async function paste(container: HTMLElement, files: readonly File[]): Promise<boolean> {
+/** Files pasted into the box's editor, as the clipboard hands a screenshot over, before they are read; answers whether the editor let the paste go by. */
+function pasteUnread(container: HTMLElement, files: readonly File[]): boolean {
   const event = new Event("paste", { bubbles: true, cancelable: true });
   Object.defineProperty(event, "clipboardData", {
     value: { files, types: ["Files"], getData: () => "" },
@@ -197,8 +207,16 @@ async function paste(container: HTMLElement, files: readonly File[]): Promise<bo
   act(() => {
     composerEditor(container).dispatchEvent(event);
   });
-  await read();
+
   return !event.defaultPrevented;
+}
+
+/** Files pasted into the box's editor, and read off the disk before they land; answers whether the editor let the paste go by. */
+async function paste(container: HTMLElement, files: readonly File[]): Promise<boolean> {
+  const passed = pasteUnread(container, files);
+  await read();
+
+  return passed;
 }
 
 /** What the box shows of its files: its chips beside the words by name, the files its words hold by what their chips open, and its note. */
@@ -214,13 +232,14 @@ function held(container: HTMLElement) {
   };
 }
 
-test("a picture and a PDF dropped on the agent's box are held as their chips in the words, and say nothing", async () => {
+test("a picture and a PDF dropped on the agent's box are held as their chips in the words by their own names, and say nothing", async () => {
+  // SAFETY: BOXES is a literal keyed by its boxes alone.
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
-    await drop(container, [png("dropped.png"), pdf("spec.pdf")]);
+    await drop(container, [png("IMG_1234.png"), pdf("spec.pdf")]);
     assert.deepEqual(
       held(container),
-      { chips: [], pictures: ["Open Picture 1", "Open spec.pdf"], note: null },
+      { chips: [], pictures: ["Open IMG_1234.png", "Open spec.pdf"], note: null },
       box,
     );
   }
@@ -237,24 +256,43 @@ test("two files of one name, and one whose name holds brackets, each stand in th
   });
 });
 
-test("a picture pasted into the agent's box is held as its chip in the words, the paste writing no words of its own", async () => {
+test("a picture and a PDF pasted into the agent's box are held as their chips in the words, the paste writing no words of its own", async () => {
+  // SAFETY: BOXES is a literal keyed by its boxes alone.
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
-    assert.equal(await paste(container, [png("pasted.png")]), false, `${box} takes the paste`);
-    assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null }, box);
+    assert.equal(
+      await paste(container, [png("image.png"), pdf("spec.pdf")]),
+      false,
+      `${box} takes the paste`,
+    );
+    assert.deepEqual(
+      held(container),
+      { chips: [], pictures: ["Open Picture 1", "Open spec.pdf"], note: null },
+      box,
+    );
   }
+});
+
+test("a picture pasted stands as its chip at once, before the words typed while it is read", async () => {
+  const container = await mounted("agent");
+  pasteUnread(container, [png("image.png")]);
+  typeInComposer(container, "here");
+  await read();
+  const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
+  assert.equal(editor.getText(), "[Picture 1] here");
+  assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
 });
 
 test("a word typed after a file laid in as its chip stands a space apart from it", async () => {
   const container = await mounted("agent");
-  await drop(container, [png("one.png")]);
+  await drop(container, [png("image.png")]);
   typeInComposer(container, "here");
   const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
   assert.equal(editor.getText(), "[Picture 1] here");
 
   // The document holds the first chip at 1, then the space the caret now stands before.
   act(() => editor.commands.setTextSelection(2));
-  await drop(container, [png("two.png")]);
+  await drop(container, [png("image.png")]);
   typeInComposer(container, "and ");
   assert.equal(
     editor.getText(),
@@ -269,7 +307,7 @@ test("a file laid in as its chip before closing punctuation takes no space befor
   const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
   // The document holds "See" from 1, then the period the caret now stands before.
   act(() => editor.commands.setTextSelection(4));
-  await drop(container, [png("one.png")]);
+  await drop(container, [png("image.png")]);
   typeInComposer(container, ",");
   assert.equal(editor.getText(), "See [Picture 1],.");
 });
@@ -286,7 +324,7 @@ function takeOutLastChip(container: HTMLElement): void {
 
 test("one Backspace taking a picture's chip out of the words takes the picture off the message", async () => {
   const container = await mounted("agent");
-  await drop(container, [png("one.png"), png("two.png")]);
+  await drop(container, [png("image.png"), png("image.png")]);
   assert.deepEqual(held(container).pictures, ["Open Picture 1", "Open Picture 2"]);
 
   takeOutLastChip(container);
@@ -297,7 +335,7 @@ test("one Backspace taking a picture's chip out of the words takes the picture o
 
 test("undo bringing a deleted picture's chip back brings its picture back, though the words were emptied in between", async () => {
   const container = await mounted("agent");
-  await drop(container, [png("one.png")]);
+  await drop(container, [png("image.png")]);
   const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
 
   // Note that each step closes its own entry in the history, as a pause between them would.
@@ -328,7 +366,7 @@ test("a save that leaves the box's words standing still lets one Backspace take 
   roots.push(root);
   await act(async () => root.render(withQueryClient(createElement(RefusedEditBox))));
   await settle();
-  await drop(container, [png("one.png"), png("two.png")]);
+  await drop(container, [png("image.png"), png("image.png")]);
 
   act(() => pressInComposer(container, "Enter"));
   await settle();
@@ -355,14 +393,19 @@ test("one Backspace taking a chip the box opened on out of the words takes its p
 
 test("a file this machine cannot read says so in the agent's box and is reported with why", async () => {
   const reports: ShownFailureReport[] = [];
+
   const uninstall = installShownFailureReporter((report) => {
     reports.push(report);
+
     return undefined;
   }, testQueryClientNow());
+
   const unreadable = new DOMException("The file could not be read.", "NotReadableError");
+
   const file = Object.assign(new File(["notes"], "notes.txt", { type: "text/plain" }), {
     arrayBuffer: () => Promise.reject(unreadable),
   });
+
   const container = await mounted("agent");
 
   await drop(container, [file]);
@@ -383,6 +426,8 @@ test("pictures past the bytes a message carries together leave the last out of t
   // Note that each picture fits a message alone, kept as it is, and two of them fit together while three do not.
   const size = Math.floor(AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES / 2.5);
   assert.ok(size <= AGENT_BOUNDS.MAX_IMAGE_BYTES);
+
+  // SAFETY: BOXES is a literal keyed by its boxes alone.
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
     await drop(container, [png("one.png", size), png("two.png", size), png("three.png", size)]);
@@ -390,7 +435,7 @@ test("pictures past the bytes a message carries together leave the last out of t
       held(container),
       {
         chips: [],
-        pictures: ["Open Picture 1", "Open Picture 2"],
+        pictures: ["Open one.png", "Open two.png"],
         note: "These files are too large to send together.",
       },
       box,

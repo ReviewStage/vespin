@@ -36,7 +36,6 @@ import { HarnessMark } from "../harness-marks.js";
 import { OPEN_SETTINGS_LABEL } from "../open-settings.js";
 import {
   type AgentModeControl,
-  MODE_APPLIES,
   MODE_GLYPH,
   MODE_GROUP,
   MODE_QUESTION,
@@ -84,13 +83,14 @@ import { useRepositoryRemedy } from "./repository-remedy.js";
  * leaves the menu open, or, for a model with an Ultrafast version, Speed in
  * its place, naming the speed chosen now and opening a submenu of the
  * speeds the model offers, Standard, Fast, and Ultrafast, which closes the
- * menu on a pick as Effort does. Last, on a running Claude Code agent's
- * chip alone, Permissions names the agent's permission mode after its glyph
- * and opens a submenu of the three under the question they answer, each
- * with its hint under its name and a line under them saying a change
- * reaches the agent from its next turn (`agent-approvals.tsx`); it closes
- * the menu on a pick. A model whose provider no subscription or API key
- * of the account's pays for says "Connect Claude" or "Connect Codex" at its
+ * menu on a pick as Effort does. Last, on the chip of an agent whose
+ * harness takes a mode, running or about to start, Permissions names the
+ * agent's permission mode after its glyph and opens a submenu of the three
+ * under the question they answer, each with its hint under its name, and
+ * for a running agent a line under them saying a change reaches it from its
+ * next turn (`agent-approvals.tsx`); it closes the menu on a pick. A
+ * model whose provider no subscription or API key of the account's pays for
+ * says "Connect Claude" or "Connect Codex" at its
  * row's end, and its pick, or Fast's press where it is the choice, closes
  * the menu and lands on that harness's row in Settings › Agents rather
  * than choosing it. On an automation's
@@ -135,6 +135,7 @@ const FOOT_ROW = {
 function modelRows(models: readonly CatalogModel[], chosen: ModelChoice | undefined): MenuRow[] {
   const read = chosen === undefined ? undefined : readModelChoice(models, chosen.model);
   const unsearched = unsearchedModels(models, read?.base);
+
   return offeredModels(models).map(({ model }) => ({
     id: model.id,
     label: modelLabel(model.id, models),
@@ -162,6 +163,7 @@ export function settledChoice(
 ): ModelChoice | undefined {
   if (models === undefined || choice === undefined) return undefined;
   const effort = effortFor(effortsOf(models, choice.model), choice.effort);
+
   return effort === undefined
     ? undefined
     : choiceOn(models, { model: choice.model, effort }, choice.contextWindow);
@@ -196,7 +198,7 @@ export function ModelMenu(props: {
   lastLine?: MenuLastLine | undefined;
   /** Whether the choice is what a new agent would start on, on the reader's own credentials, so one nothing of theirs pays for says it cannot run: an automation's. */
   startsNew?: boolean | undefined;
-  /** The agent's permission mode and its change, pinned as the last row; none for an agent whose harness takes no mode, and on an automation's menu. */
+  /** The agent's permission mode and its change, pinned as the last row, a running agent's or a new one's; none for an agent whose harness takes no mode, and on an automation's menu. */
   permissions?: AgentModeControl | undefined;
   /** The menu is on its way out (`SearchableMenu`'s). */
   leaving?: boolean | undefined;
@@ -205,16 +207,20 @@ export function ModelMenu(props: {
 }): React.JSX.Element {
   const { models, chosen, onChoose, onClose } = props;
   const remedy = useRepositoryRemedy();
+
   const read =
     models !== undefined && chosen !== undefined
       ? readModelChoice(models, chosen.model)
       : undefined;
+
   const offered =
     models !== undefined && read !== undefined
       ? offeredModels(models).find((each) => each.model.id === read.base)
       : undefined;
+
   const efforts =
     models !== undefined && chosen !== undefined ? effortsOf(models, chosen.model) : [];
+
   const windows =
     models !== undefined && chosen !== undefined
       ? contextWindowsOf(models, chosen.model)
@@ -224,6 +230,7 @@ export function ModelMenu(props: {
   const choiceAt = (modelId: string, wanted: string | undefined): ModelChoice | undefined => {
     if (models === undefined) return undefined;
     const next = effortFor(effortsOf(models, modelId), wanted);
+
     return next === undefined
       ? undefined
       : choiceOn(models, { model: modelId, effort: next }, chosen?.contextWindow);
@@ -232,6 +239,7 @@ export function ModelMenu(props: {
   const contextRow = (choice: ModelChoice, offered: readonly CatalogModel[]): FootRow[] => {
     if (windows === undefined) return [];
     const standard = windowOf(offered, choice) === CONTEXT_WINDOW.STANDARD;
+
     return [
       {
         id: FOOT_ROW.CONTEXT,
@@ -259,11 +267,15 @@ export function ModelMenu(props: {
   const chooseSpeed = (speed: ModelSpeed, effort: string): void => {
     if (offered === undefined) return;
     const missing = modelConnectFailure(offered.model);
+
     if (missing !== undefined) {
       connect(missing);
+
       return;
     }
+
     const next = choiceAt(choiceModelId(offered, speed), effort);
+
     if (next !== undefined) onChoose(next);
   };
 
@@ -273,6 +285,7 @@ export function ModelMenu(props: {
    */
   const speedRow = (read: ModelChoiceRead, chosen: ModelChoice): FootRow[] => {
     if (props.offersFast === false || models === undefined) return [];
+
     if (offered?.ultrafast !== undefined) {
       return [
         {
@@ -285,6 +298,7 @@ export function ModelMenu(props: {
             value: read.speed,
             onPick: (picked) => {
               const speed = speedsOf(offered).find((each) => each === picked);
+
               if (speed === undefined) return;
               onClose();
               chooseSpeed(speed, chosen.effort);
@@ -293,7 +307,9 @@ export function ModelMenu(props: {
         },
       ];
     }
+
     const fast = read.speed === MODEL_SPEED.FAST;
+
     return [
       {
         id: FOOT_ROW.FAST,
@@ -311,8 +327,10 @@ export function ModelMenu(props: {
   /** The Permissions row, naming the agent's mode and opening the three, each with its hint. */
   const permissionsRow = (): FootRow[] => {
     const control = props.permissions;
+
     if (control === undefined) return [];
     const Glyph = MODE_GLYPH[control.mode];
+
     return [
       {
         id: FOOT_ROW.PERMISSIONS,
@@ -324,9 +342,10 @@ export function ModelMenu(props: {
           heading: MODE_QUESTION,
           rows: modeMenuRows(),
           value: control.mode,
-          note: MODE_APPLIES,
+          note: control.applies,
           onPick: (picked) => {
             const mode = MODES.find((each) => each === picked);
+
             if (mode === undefined) return;
             onClose();
             control.choose(mode);
@@ -350,6 +369,7 @@ export function ModelMenu(props: {
   /** The Connect row that heads the pinned rows where the choice standing cannot run. */
   const connectRow = (): FootRow[] => {
     if (unrunnable === undefined) return [];
+
     return [
       {
         id: FOOT_ROW.CONNECT,
@@ -415,14 +435,18 @@ export function ModelMenu(props: {
       onPick={(base) => {
         // The pick keeps the speed chosen where the model has a version at it, and drops to standard where it has none.
         const picked = offeredModels(models ?? []).find((each) => each.model.id === base);
+
         if (picked === undefined) return;
         // A model nothing pays for is never chosen: its pick goes to connect it.
         const missing = modelConnectFailure(picked.model);
+
         if (missing !== undefined) return connect(missing);
+
         const next = choiceAt(
           choiceModelId(picked, read?.speed ?? MODEL_SPEED.STANDARD),
           chosen?.effort,
         );
+
         if (next === undefined) return;
         onClose();
         onChoose(next);

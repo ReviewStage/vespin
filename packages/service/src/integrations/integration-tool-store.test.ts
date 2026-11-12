@@ -28,6 +28,7 @@ const connectedMember = Effect.gen(function* () {
   const userId = yield* openGithubUser();
   yield* beginIntegrationSignIn(userId, firstIntegrationAccount(userId, LINEAR), `s-${userId}`);
   yield* completeIntegrationSignIn(userId, LINEAR, `s-${userId}`);
+
   const grant: IntegrationGrantRef = {
     holder: INTEGRATION_GRANT_HOLDER.ACCOUNT,
     provider: LINEAR,
@@ -35,6 +36,7 @@ const connectedMember = Effect.gen(function* () {
     connectionName: LINEAR,
     connectSubject: userId,
   };
+
   return { userId, grant };
 });
 

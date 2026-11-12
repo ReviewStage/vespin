@@ -21,28 +21,40 @@
 
 /** A fence line of a code block: three or more ticks or tildes, with an optional language. */
 const CODE_FENCE = /^[ \t]*(?:`{3,}|~{3,})[^`]*$/u;
+
 /** A thematic break: a line of only dashes, stars, or underscores, three or more. */
 const THEMATIC_BREAK = /^[ \t]*([-*_])(?:[ \t]*\1){2,}[ \t]*$/u;
+
 /** Blockquote marks, each a `>` and the spacing after it. */
 const BLOCKQUOTE = /^[ \t]*(?:>[ \t]*)*/u;
+
 /** An ATX heading's opening hashes. */
 const HEADING_OPEN = /^#{1,6}[ \t]+/u;
+
 /** A bullet or numbered list marker, then a task box, if there is one. */
 const LIST_MARKER = /^(?:[-*+]|\d{1,9}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/u;
+
 /** An image or a link, inline or by reference: its text stands, its target goes. */
 const IMAGE_OR_LINK = /!?\[([^[\]]*)\](?:\([^()]*\)|\[[^[\]]*\])/gu;
+
 /** An autolink: the address stands without its angle brackets. */
 const AUTOLINK = /<((?:https?|mailto):[^<>\s]+)>/gu;
+
 /** Inline code: its content stands without the ticks around it. */
 const INLINE_CODE = /(?<!`)(`+)([^`]+)\1(?!`)/gu;
+
 /** Strong emphasis by stars, delimited on both sides by non-space. */
 const STAR_STRONG = /\*\*(?=\S)([^*]+?)(?<=\S)\*\*/gu;
+
 /** Strikethrough, delimited on both sides by non-space. */
 const STRIKETHROUGH = /~~(?=\S)([^~]+?)(?<=\S)~~/gu;
+
 /** Strong emphasis by underscores, never inside a word, as Markdown reads it. */
 const UNDERSCORE_STRONG = /(?<![\w_])__(?=\S)([^_]+?)(?<=\S)__(?![\w_])/gu;
+
 /** Emphasis by stars, never touching a word on its outside, so `2 * 3 * 4` stands. */
 const STAR_EMPHASIS = /(?<![\w*])\*(?=[^\s*])([^*]+?)(?<=\S)\*(?![\w*])/gu;
+
 /** Emphasis by underscores, never inside a word, so `snake_case_name` stands. */
 const UNDERSCORE_EMPHASIS = /(?<![\w_])_(?=[^\s_])([^_]+?)(?<=\S)_(?![\w_])/gu;
 
@@ -50,16 +62,22 @@ const UNDERSCORE_EMPHASIS = /(?<![\w_])_(?=[^\s_])([^_]+?)(?<=\S)_(?![\w_])/gu;
 function withoutClosingHashes(heading: string): string {
   const text = heading.trimEnd();
   let end = text.length;
+
   while (end > 0 && text[end - 1] === "#") end -= 1;
+
   if (end === text.length) return text;
+
   if (end === 0) return "";
+
   return /\s/u.test(text[end - 1] ?? "") ? text.slice(0, end).trimEnd() : text;
 }
 
 /** A line without its blockquote marks and its heading or list marker. */
 function blockText(line: string): string {
   const quoted = line.replace(BLOCKQUOTE, "");
+
   if (HEADING_OPEN.test(quoted)) return withoutClosingHashes(quoted.replace(HEADING_OPEN, ""));
+
   return quoted.replace(LIST_MARKER, "");
 }
 
@@ -70,6 +88,7 @@ function blockText(line: string): string {
  */
 function spokenLine(line: string): string {
   if (THEMATIC_BREAK.test(line)) return "";
+
   return blockText(line)
     .replace(IMAGE_OR_LINK, "$1")
     .replace(AUTOLINK, "$1")
@@ -90,12 +109,15 @@ function spokenLine(line: string): string {
 export function spokenProse(text: string): string {
   const lines: string[] = [];
   let fenced = false;
+
   for (const line of text.split("\n")) {
     if (CODE_FENCE.test(line)) {
       fenced = !fenced;
       continue;
     }
+
     lines.push(fenced ? line : spokenLine(line));
   }
+
   return lines.join("\n");
 }

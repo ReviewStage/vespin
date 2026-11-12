@@ -76,16 +76,15 @@ type Owner = (typeof OWNER)[keyof typeof OWNER];
 /** The words a ChatGPT-paid agent's chip hands the menu's last line. */
 const PLAN_NOTE = "Your Codex plan";
 
-/** The menu open on `chosen` under `owner`, recording where Settings opened, what it chose, and whether it asked to close. */
-function open(
-  chosen: ModelChoice,
-  owner: Owner = OWNER.START,
-): {
+type OpenResult = {
   menu: HTMLElement;
   opened: SettingsLink[];
   chose: ModelChoice[];
   closed: () => number;
-} {
+};
+
+/** The menu open on `chosen` under `owner`, recording where Settings opened, what it chose, and whether it asked to close. */
+function open(chosen: ModelChoice, owner: Owner = OWNER.START): OpenResult {
   const opened: SettingsLink[] = [];
   const chose: ModelChoice[] = [];
   let closes = 0;
@@ -117,6 +116,7 @@ function open(
   );
   const menu = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Model"]');
   assert.ok(menu, "the menu is open");
+
   return { menu, opened, chose, closed: () => closes };
 }
 
@@ -130,7 +130,9 @@ function row(menu: HTMLElement, name: string): HTMLElement {
   const found = [...menu.querySelectorAll<HTMLElement>('[role="option"]')].find((each) =>
     (each.textContent ?? "").startsWith(name),
   );
+
   assert.ok(found, `no row for ${name}`);
+
   return found;
 }
 
@@ -156,9 +158,11 @@ test("a choice nothing pays for says it cannot run under the pinned rows, and th
     lastLine(menu),
     "Opus 5.5 cannot run until you connect a Claude plan or an Anthropic API key.",
   );
+
   const connect = [...foot.querySelectorAll<HTMLElement>('[role="menuitem"], button')].find(
     (each) => each.textContent === "Connect Claude",
   );
+
   assert.ok(connect, "a Connect row heads the pinned rows");
   act(() => connect.click());
 

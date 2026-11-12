@@ -37,6 +37,7 @@
  */
 
 import { markdownTooDeep } from "@repo/features/markdown-nesting";
+import { Predicate } from "effect";
 import type { ElementContent, Root } from "hast";
 import type { Root as MarkdownRoot, PhrasingContent, RootContent } from "mdast";
 import { memo, type ReactNode, useMemo, useRef } from "react";
@@ -67,6 +68,7 @@ import {
 } from "./markdown-tasks.js";
 
 export type { MarkdownTaskBox, TaskBoxItem } from "./markdown-tasks.js";
+
 export { TaskBox } from "./markdown-tasks.js";
 
 /** How a place's words are drawn: as a note, a transcript, or a site's document. */
@@ -94,7 +96,9 @@ type MarkdownStep = MarkdownSteps[number];
 /** One of Streamdown's own steps over raw HTML, by its name, which the library always holds. */
 function streamdownStep(name: "raw" | "sanitize" | "harden"): MarkdownStep {
   const step = defaultRehypePlugins[name];
+
   if (step === undefined) throw new Error(`Streamdown holds no ${name} step`);
+
   return step;
 }
 
@@ -189,8 +193,10 @@ const INLINE_TAGS: ReadonlySet<string> = new Set([
 function inlineChildren(children: readonly ElementContent[]): ElementContent[] {
   return children.flatMap((child): ElementContent[] => {
     if (child.type !== "element") return [child];
+
     if (child.tagName === "input") return [];
     const kept = inlineChildren(child.children);
+
     return INLINE_TAGS.has(child.tagName) ? [{ ...child, children: kept }] : kept;
   });
 }
@@ -231,13 +237,18 @@ function spaced(parts: readonly RootContent[][]): RootContent[] {
 /** A node as a line draws it: a line break as a space, a rule as nothing, a fence as its code in a span, a link and a word's mark kept, and every other node as its words. */
 function lineContent(node: RootContent): RootContent[] {
   if (node.type === "break") return [LINE_SPACE];
+
   if (node.type === "thematicBreak") return [];
+
   if (node.type === "code") {
     return [{ type: "inlineCode", value: node.value.replaceAll("\n", " ") }];
   }
+
   if (!("children" in node) || node.type === "link" || node.type === "linkReference") return [node];
   const parts = node.children.map((child) => lineContent(child));
   const kept = BLOCK_HOLDERS.has(node.type) ? spaced(parts) : parts.flat();
+
+  // SAFETY: a word mark holds phrasing content, which is what `lineContent` answers, so the node keeps its own type.
   return WORD_MARKS.has(node.type) ? [{ ...node, children: kept } as RootContent] : kept;
 }
 
@@ -252,9 +263,11 @@ function lineContent(node: RootContent): RootContent[] {
 const runOnOneLine = () => (tree: MarkdownRoot) => {
   const defines = (node: RootContent) =>
     node.type === "definition" || node.type === "footnoteDefinition";
+
   const definitions = tree.children.filter(defines);
   const blocks = tree.children.filter((node) => !defines(node));
   // Note that the words stand in one paragraph, because the root sets a line break between its children, which would space a word from its own mark.
+  // SAFETY: `lineContent` answers each block's phrasing content, which is what a paragraph holds.
   const words = spaced(blocks.map(lineContent)) as PhrasingContent[];
   tree.children = [{ type: "paragraph", children: words }, ...definitions];
 };
@@ -263,17 +276,19 @@ const runOnOneLine = () => (tree: MarkdownRoot) => {
 const oneBlock = (markdown: string): string[] => [markdown];
 
 /** A serial for each value a step closes over, which Streamdown's processor cache cannot tell apart by itself. */
-const stepSerials = new WeakMap<object, number>();
+const stepSerials = new WeakMap<WeakKey, number>();
 let nextStepSerial = 0;
 
 /** A step's name as the processor cache reads it, standing for the step itself. */
 const keyedSteps = new WeakMap<object, MarkdownStep>();
 
-function serialOf(value: object): number {
+function serialOf(value: WeakKey): number {
   const held = stepSerials.get(value);
+
   if (held !== undefined) return held;
   nextStepSerial += 1;
   stepSerials.set(value, nextStepSerial);
+
   return nextStepSerial;
 }
 
@@ -287,25 +302,26 @@ function serialOf(value: object): number {
  * the step reads; a step's values are the same objects for as long as a
  * place memoises them, so the cache still serves a redraw.
  */
-export function markdownStep<Values extends readonly unknown[]>(
-  step: (...values: Values) => unknown,
+export function markdownStep<Values extends readonly unknown[], Tree>(
+  step: (...values: Values) => (tree: Tree) => void,
   ...values: Values
 ): MarkdownStep {
   let keyed = keyedSteps.get(step);
+
   if (keyed === undefined) {
-    const attach = (_serials: unknown, ...attached: Values) => step(...attached);
+    const attach = <Serials,>(_serials: Serials, ...attached: Values) => step(...attached);
     Object.defineProperty(attach, "name", { value: step.name });
     // SAFETY: a unified attacher takes its options and answers a transformer, which `step` does.
-    keyed = attach as unknown as MarkdownStep;
+    keyed = attach as MarkdownStep;
     keyedSteps.set(step, keyed);
   }
+
   const serials = values.map((value) =>
-    (typeof value === "object" && value !== null) || typeof value === "function"
-      ? serialOf(value)
-      : value,
+    Predicate.isObjectOrArray(value) || Predicate.isFunction(value) ? serialOf(value) : value,
   );
+
   // SAFETY: a step's tuple is the step, then the options it is attached with.
-  return [keyed, { serials }, ...values] as unknown as MarkdownStep;
+  return [keyed, { serials }, ...values] as MarkdownStep;
 }
 
 /** A serial for each address rewriter, which a note's whole parse is keyed by, since its memo reads its words and steps alone. */
@@ -314,9 +330,11 @@ const transformSerials = new WeakMap<UrlTransform, number>();
 function transformKey(transform: UrlTransform | undefined): number {
   if (transform === undefined) return 0;
   const held = transformSerials.get(transform);
+
   if (held !== undefined) return held;
   nextStepSerial += 1;
   transformSerials.set(transform, nextStepSerial);
+
   return nextStepSerial;
 }
 
@@ -364,6 +382,7 @@ function WholeWords({
   const drawer = useRef(taskBox);
   drawer.current = taskBox;
   const toggles = taskBox !== undefined;
+
   // Note that every box is named by its item, so one the reader cannot tick is placed too.
   const steps = useMemo(
     () => [
@@ -373,13 +392,17 @@ function WholeWords({
     ],
     [look, rehypePlugins],
   );
+
   const drawn = useMemo<Components>(() => {
     const own = look === MARKDOWN_LOOK.DOCUMENT ? {} : NOTE_COMPONENTS;
+
     const input = toggles
       ? taskInput((item) => (drawer.current ?? untickable)(item))
       : readTaskInput;
+
     return { ...own, input, ...components };
   }, [look, toggles, components]);
+
   // Note that the block is keyed by its rewriter, because its memo compares the words, the components, and the steps, never the rewriter.
   return (
     <Block
@@ -413,25 +436,30 @@ function ParsedMarkdown({
     urlTransform,
     normalizeHtmlIndentation,
   } = whole;
+
   // Note that a transcript's task boxes are drawn as a note's read-only ones, named by their items
   // where the place hands steps of its own, since Streamdown keeps its allowed tags only on its own.
   const transcriptSteps = useMemo(
     () => (rehypePlugins === undefined ? undefined : [...rehypePlugins, placeTaskItems]),
     [rehypePlugins],
   );
+
   const lineSteps = useMemo(
     () => [...(remarkPlugins ?? TRANSCRIPT_REMARK_STEPS), runOnOneLine],
     [remarkPlugins],
   );
+
   const transcriptComponents = useMemo<Components>(
     () => ({ ...FLOW_COMPONENTS, input: readTaskInput, ...components }),
     [components],
   );
+
   if (look === MARKDOWN_LOOK.TRANSCRIPT || look === MARKDOWN_LOOK.TRANSCRIPT_LINE) {
     const line = look === MARKDOWN_LOOK.TRANSCRIPT_LINE;
     const steps = line ? lineSteps : remarkPlugins;
     // Note that a line's root keeps its words from wrapping, over Streamdown's own root, which wraps them, and a whole transcript's flows as a note's does.
     const root = line ? cn(className, "whitespace-nowrap") : cn(MARKDOWN_CLASS.FLOW, className);
+
     return (
       <InlineRefFitScope fit={line ? INLINE_REF_FIT.LINE : INLINE_REF_FIT.FLOW}>
         <Streamdown
@@ -451,6 +479,7 @@ function ParsedMarkdown({
       </InlineRefFitScope>
     );
   }
+
   if (look === MARKDOWN_LOOK.DOCUMENT || look === MARKDOWN_LOOK.INLINE) {
     return (
       <InlineRefFitScope fit={INLINE_REF_FIT.FLOW}>
@@ -458,6 +487,7 @@ function ParsedMarkdown({
       </InlineRefFitScope>
     );
   }
+
   return (
     <InlineRefFitScope fit={INLINE_REF_FIT.FLOW}>
       <div className={markdownClass(className)}>
@@ -476,6 +506,7 @@ function PlainWords({ words, look, className }: MarkdownProps): React.JSX.Elemen
   if (look === MARKDOWN_LOOK.NOTE || look === MARKDOWN_LOOK.TRANSCRIPT) {
     return <FileText text={words} label="Message text" />;
   }
+
   return <span className={className}>{words}</span>;
 }
 
@@ -489,5 +520,6 @@ function PlainWords({ words, look, className }: MarkdownProps): React.JSX.Elemen
  */
 export const Markdown = memo(function Markdown(props: MarkdownProps): React.JSX.Element {
   const tooDeep = useMemo(() => markdownTooDeep(props.words), [props.words]);
+
   return tooDeep ? <PlainWords {...props} /> : <ParsedMarkdown {...props} />;
 });

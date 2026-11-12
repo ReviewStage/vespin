@@ -12,7 +12,8 @@
      between controls, list items, and sections, a page's inset and measure, a
      menu's rows, glyph, and shadow, the keyboard's ring, the floating layers,
      and the window's sidebar, well, and workspace hues are the desktop
-     profile's roles in `@repo/ui` (`tokens/profiles.css`, `palettes.css`),
+     profile's roles in `@repo/ui` (`tokens/profiles.css`, `palettes.css`,
+     `identity.css`),
      read here by their own names (`--ui-space-8`, `--ui-control-height`,
      `--ui-color-identity-1`, …). Every
      padding, margin, and gap in the window is one of those steps or a name
@@ -316,7 +317,7 @@ body,
 /* The plans while the list is first read: each row a row's room around
    one block in the name's type, as far apart as the rows, so the rows land
    where the blocks stood. A skeleton's own boxes are its sheet's, never
-   utilities (`anti-slop/skeleton-through-components`). */
+   utilities (`packages/ui/README.md`'s Skeletons). */
 .sidebar-skeleton {
   display: flex;
   flex-direction: column;
@@ -1330,16 +1331,31 @@ body,
    as a browser's find bar stands over the page. It answers its own width, so
    a column too narrow for the bar's own width spans the bar across it, inset
    alike at both sides, and the field takes what the buttons leave it. */
+/* The bar's controls stand on one line, and what it says of the matches a
+   transcript's details hold, while it leaves them out, wraps onto a line of
+   its own under them (`find-in-tab.tsx`). */
+.find-scope > .find-bar {
+  flex-wrap: wrap;
+}
+
+/* Note that the line takes no width of its own, so the bar stays as wide
+   as its controls and the line wraps within them. */
+.find-bar-left {
+  contain: inline-size;
+}
+
 /* off-scale: 400px, where the column is too narrow for the find bar's own width */
 @container find-scope (width < 400px) {
   .find-scope > .find-bar {
     left: var(--column-inset);
   }
 
+  /* Note that the field grows from nothing, because a field as wide as its
+     own content would wrap the buttons under it on the bar's lines. */
   .find-scope > .find-bar > .find-bar-field {
     width: auto;
     min-width: 0;
-    flex: 1 1 auto;
+    flex: 1 1 0;
   }
 }
 

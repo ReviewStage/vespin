@@ -21,7 +21,9 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 /** The idle callbacks the window armed, run by hand in the browser's place. */
 const idleCallbacks: (() => void)[] = [];
+
 vi.stubGlobal("requestIdleCallback", (callback: () => void) => idleCallbacks.push(callback));
+
 vi.stubGlobal("cancelIdleCallback", () => undefined);
 
 /** The envelopes the window handed main. */
@@ -60,7 +62,7 @@ interface SentSpan {
 }
 
 /** Every item of every envelope the window handed main, as JSON. */
-function sentItems(): { readonly items?: readonly SentSpan[]; readonly [key: string]: unknown }[] {
+function sentItems(): { readonly items?: readonly SentSpan[] }[] {
   return envelopes.flatMap((body) =>
     body.split("\n").flatMap((line) => {
       try {
@@ -119,6 +121,7 @@ test("a window whose surface has committed loads the SDK in its next idle moment
 
   sentry.reportBlankWindow(new Error("said while the window drew"), BLANK_WINDOW.FIRST_READ);
   await act(async () => draw(createElement("p", null, "drawn")));
+
   for (const idle of idleCallbacks.splice(0)) idle();
   await sentry.settled;
   await getClient()?.flush(1_000);
@@ -133,9 +136,11 @@ test("a surface that fails its first render is handed to main as a blank window,
   Object.assign(window, { __SENTRY_IPC__: SENTRY_IPC });
   const sentry = startDesktopSentry();
   const draw = createReportingRoot(document.createElement("div"), sentry);
+
   const Broken = () => {
     throw new Error("the surface fell over");
   };
+
   // Note that React logs what the root's handler is handed; the test reads what reached main.
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 
@@ -176,6 +181,7 @@ test("a span the panel timed before the SDK loads is sent once it has, with what
   const span = sentItems()
     .flatMap((item) => (Array.isArray(item.items) ? item.items : []))
     .find((each) => each.name === PANEL_SPAN.TRANSCRIPT_FIRST_PAINT);
+
   // Sentry reads span times in seconds: the span starts when the panel said, and lasts 1.2 s.
   assert.equal(span?.start_timestamp, startedAt / 1_000);
   assert.equal(span?.end_timestamp, (startedAt + 1_200) / 1_000);
@@ -200,6 +206,7 @@ test("a span the sample leaves out is never measured", async () => {
     endedAt: Date.now(),
     attributes: () => {
       measured = true;
+
       return { [PANEL_SPAN_ATTRIBUTE.DESCRIPTION_CHARS]: 4_000 };
     },
   });

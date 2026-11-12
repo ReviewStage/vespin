@@ -31,6 +31,7 @@ import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { useDockRoom } from "./glass-bar.js";
 import { isLucideSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
+import { CopyWordsMenu } from "./held-menu.js";
 import { Markdown, Picture } from "./markdown.js";
 import { ToneGlyph } from "./marks.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
@@ -113,6 +114,8 @@ const styles = StyleSheet.create({
   content: { paddingVertical: SPACE.ROW },
   row: { paddingHorizontal: SPACE.EDGE, paddingVertical: SPACE.TIGHT },
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
+  // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
+  saidHeld: { alignSelf: "stretch", alignItems: "flex-end" },
   said: {
     maxWidth: "82%",
     borderRadius: 18,
@@ -182,8 +185,10 @@ function itemKey(item: TranscriptItem): string {
   return JSON.stringify(item.place satisfies TranscriptPlace);
 }
 
+type InsetResult = { readonly paddingLeft: number };
+
 /** The step a row stands in by, for the folds that hold it. */
-function inset(depth: number): { readonly paddingLeft: number } {
+function inset(depth: number): InsetResult {
   return { paddingLeft: SPACE.PAGE + depth * DEPTH_INSET };
 }
 
@@ -197,9 +202,12 @@ function StandingMark({
 }) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
+
   if (running)
     return <ActivityIndicator size="small" color={colors.TEXT_MUTED} accessibilityElementsHidden />;
+
   if (!failed) return null;
+
   return (
     <SymbolView
       name="xmark.circle.fill"
@@ -250,6 +258,7 @@ function CallGlyph({ callKind }: { readonly callKind: CallKind }) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
   const glyph = CALL_SYMBOL[callKind];
+
   if (!isLucideSymbol(glyph)) {
     return (
       <SymbolView
@@ -260,6 +269,7 @@ function CallGlyph({ callKind }: { readonly callKind: CallKind }) {
       />
     );
   }
+
   return (
     <Host style={styles.callGlyph}>
       <ToneGlyph glyph={glyph} tone={STATUS_TONE.NEUTRAL} textStyle={TYPE_ROLE.ROW_LINE} hidden />
@@ -285,6 +295,7 @@ function CallRow({
   const { line, chip } = item;
   const subject = line.subject === undefined || line.subject === "" ? undefined : line.subject;
   const standing = held?.waiting === true ? HELD_HEARD : CALL_STANDING_HEARD[item.standing];
+
   return (
     <View style={[styles.row, inset(item.depth)]}>
       <Pressable
@@ -381,10 +392,12 @@ function FoldRow({
 }) {
   const colors = useColors();
   const large = useAccessibilitySize();
+
   const heard = [
     item.running ? CALL_STANDING_HEARD[CALL_STANDING.RUNNING] : undefined,
     item.open ? undefined : COLLAPSED_HEARD,
   ].filter((part) => part !== undefined);
+
   return (
     <View style={[styles.row, inset(item.depth)]}>
       <Pressable
@@ -454,6 +467,7 @@ function TranscriptRow({
 }) {
   const colors = useColors();
   const large = useAccessibilitySize();
+
   switch (item.kind) {
     case TRANSCRIPT_ITEM.SAID:
       return (
@@ -463,14 +477,18 @@ function TranscriptRow({
               {item.sender}
             </Text>
           )}
-          <View style={[styles.said, { backgroundColor: colors.SIDEBAR }]}>
-            <Markdown
-              words={item.words}
-              typed
-              repository={drawing.repository}
-              onOpenLink={drawing.onOpenLink}
-            />
-          </View>
+          <CopyWordsMenu words={item.words}>
+            <View style={styles.saidHeld}>
+              <View style={[styles.said, { backgroundColor: colors.SIDEBAR }]}>
+                <Markdown
+                  words={item.words}
+                  typed
+                  repository={drawing.repository}
+                  onOpenLink={drawing.onOpenLink}
+                />
+              </View>
+            </View>
+          </CopyWordsMenu>
           {item.sent === undefined ? null : (
             <Text style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}>
               {item.sent}
@@ -498,11 +516,15 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.WORDS:
       return (
         <View style={[styles.row, inset(item.depth), { paddingVertical: SPACE.TIGHT + 2 }]}>
-          <Markdown
-            words={item.words}
-            repository={drawing.repository}
-            onOpenLink={drawing.onOpenLink}
-          />
+          <CopyWordsMenu words={item.words}>
+            <View>
+              <Markdown
+                words={item.words}
+                repository={drawing.repository}
+                onOpenLink={drawing.onOpenLink}
+              />
+            </View>
+          </CopyWordsMenu>
         </View>
       );
     case TRANSCRIPT_ITEM.CALL:
@@ -627,13 +649,17 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
   const state = status === undefined ? undefined : agentGlyphState(status);
   const words = status === undefined ? undefined : agentStateWords(status);
   const pressed = onModel !== undefined && model !== undefined && model !== "";
+
   const said = [words, pressed ? undefined : model]
     .filter((each) => each !== undefined && each !== "")
     .join(" · ");
+
   // Note that a change of state is told to VoiceOver as it lands, such as Working turning to Finished or Failed, since the reader may stand anywhere in the transcript.
   useAnnounced(words);
+
   if (said === "" && !pressed) return null;
   const ink = { fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED };
+
   return (
     <View style={[styles.head, styles.headLine]}>
       {state === GLYPH_STATE.WORKING ? (
@@ -689,6 +715,7 @@ function JumpToLatest({
 }) {
   const colors = useColors();
   const solid = useReduceTransparency() || !isLiquidGlassAvailable();
+
   const arrow = (
     <SymbolView
       name="arrow.down"
@@ -698,6 +725,7 @@ function JumpToLatest({
       accessibilityElementsHidden
     />
   );
+
   return (
     <Pressable
       onPress={onPress}
@@ -745,6 +773,7 @@ export type OlderPages = {
  */
 function OlderRow({ older }: { readonly older: OlderPages }) {
   const colors = useColors();
+
   if (older.reading) {
     return (
       <View style={styles.older}>
@@ -756,7 +785,9 @@ function OlderRow({ older }: { readonly older: OlderPages }) {
       </View>
     );
   }
+
   if (!older.failed) return null;
+
   return (
     <View style={styles.older}>
       <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
@@ -811,30 +842,38 @@ export function AgentTranscript({
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
   // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript.
   const foot = bottom + TAB_BAR_ROOM + useDockRoom();
+
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
     anchored.current = false;
   }, []);
+
   // The older pages as they stand now, which the scroll reads without being made anew for each.
   const olderNow = useRef(older);
   useEffect(() => {
     olderNow.current = older;
   }, [older]);
+
   // Note that only the reader's own scroll up reads an older page, never the list's scroll as it opens, and a read that failed waits for Try again.
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     setAway(fromEnd(event.nativeEvent) > LATEST_REACH);
     const pages = olderNow.current;
+
     if (anchored.current || pages === undefined || pages.reading || pages.failed) return;
+
     if (event.nativeEvent.contentOffset.y < OLDER_REACH) pages.onRead();
   }, []);
+
   const onScrollSettled = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     anchored.current = fromEnd(event.nativeEvent) < ANCHOR_REACH;
   }, []);
+
   // Note that a row landing, or a fold opened, at the newest row keeps it in view, while one landing as the reader reads back leaves their place.
   const onContentSizeChange = useCallback(() => {
     // Note that the scroller itself is asked, since the list's own end is an estimate until every row has been measured.
     if (anchored.current) list.current?.getScrollResponder()?.scrollToEnd({ animated: false });
   }, []);
+
   return (
     <View
       style={[styles.list, { backgroundColor: colors.GROUND }]}

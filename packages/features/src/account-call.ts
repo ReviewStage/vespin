@@ -295,13 +295,16 @@ export function resolvedCredential(credential: CallCredential): Effect.Effect<Ca
 /** The call as effects over the ambient `HttpClient`. */
 export function accountCall(options: AccountCallOptions): AccountCallEffects {
   const baseUrl = text(options.baseUrl);
+
   if (!baseUrl) throw new Error("A call's base URL must not be empty");
   const address = withoutTrailingSlash(baseUrl);
   const credential = options.credential;
+
   const requestTimeoutMs = positiveInteger(
     options.requestTimeoutMs,
     ACCOUNT_CALL_DEFAULTS.REQUEST_TIMEOUT_MS,
   );
+
   const deadline = Duration.millis(requestTimeoutMs);
 
   function withinDeadline<Answer, Requirements>(
@@ -397,7 +400,9 @@ export function accountCall(options: AccountCallOptions): AccountCallEffects {
     Effect.gen(function* () {
       const holder = yield* readCredential(current.holder);
       const authorization = yield* readCredential(current.authorization);
+
       if (current.authorization && authorization === undefined) return undefined;
+
       return { holder, authorization };
     });
 
@@ -429,22 +434,30 @@ export function accountCall(options: AccountCallOptions): AccountCallEffects {
     return Effect.gen(function* () {
       const current = yield* resolvedCredential(credential);
       const identity = yield* identify(current);
+
       if (!identity) return { failure: { fault: CALL_FAULT.NO_CREDENTIAL } };
 
       const first = yield* settled(attemptDecidingRefusal(request, identity.authorization, read));
+
       if (!("read" in first)) return first;
+
       if (!("refusal" in first.read)) return first.read;
 
       yield* renew(current);
       const renewal = yield* identify(current);
+
       if (!renewal || renewal.authorization === identity.authorization) {
         const standing = yield* settled(withinDeadline(read(first.read.refusal)));
+
         return "read" in standing ? { answer: standing.read } : standing;
       }
+
       if (renewal.holder !== identity.holder) {
         return { failure: { fault: CALL_FAULT.HOLDER_CHANGED } };
       }
+
       const retried = yield* settled(attempt(request, renewal.authorization, read));
+
       return "read" in retried ? { answer: retried.read } : retried;
     });
   }
@@ -524,16 +537,21 @@ export function sendInSession(
 ): AccountCallEffects["send"] {
   const resolved = resolvedCredential(session);
   const holder = Effect.flatMap(resolved, (current) => readCredential(current.holder));
+
   const renew = Effect.ignore(
     Effect.flatMap(resolved, (current) => current.renew?.() ?? Effect.void),
   );
+
   return (request) =>
     Effect.gen(function* () {
       const asking = yield* holder;
       const first = yield* call.send(request);
+
       if (callAnswered(first) || first.fault !== CALL_FAULT.NO_CREDENTIAL) return first;
       yield* renew;
+
       if ((yield* holder) !== asking) return { fault: CALL_FAULT.HOLDER_CHANGED };
+
       return yield* call.send(request);
     });
 }
@@ -541,6 +559,7 @@ export function sendInSession(
 /** A credential the build or the developer fixed: one header, one attempt, nothing to renew. */
 export function fixedBearer(credential: string): CallCredential {
   const authorization = bearer(credential);
+
   return { authorization: () => Effect.succeed(authorization) };
 }
 

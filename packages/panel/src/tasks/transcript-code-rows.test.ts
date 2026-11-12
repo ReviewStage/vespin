@@ -51,6 +51,7 @@ async function drawn(element: ReactElement): Promise<HTMLElement> {
   await act(async () => {
     for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
   });
+
   return container;
 }
 

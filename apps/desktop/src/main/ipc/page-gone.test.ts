@@ -11,9 +11,11 @@ import { whenPageGone } from "./page-gone";
 
 it("a page is gone when its contents are destroyed, its renderer dies, or it navigates to a new document", () => {
   const ends: string[] = [];
+
   const watched = (name: string) => {
     const contents = new EventEmitter();
     whenPageGone(contents, () => ends.push(name));
+
     return contents;
   };
 

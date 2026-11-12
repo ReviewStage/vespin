@@ -30,6 +30,7 @@ function nativeDirectory(): string {
   resolvedNativeDirectory ??= app.isPackaged
     ? process.resourcesPath
     : path.join(app.getAppPath(), ".build", "native");
+
   return resolvedNativeDirectory;
 }
 
@@ -64,8 +65,10 @@ export class NativeHelper {
 
   start(): boolean {
     if (this.#child || this.#ended) return false;
+
     try {
       const child = this.#spawn();
+
       if (!child) return false;
       this.#child = child;
       child.stdout?.setEncoding("utf8");
@@ -73,20 +76,25 @@ export class NativeHelper {
       child.stdin?.on("error", () => this.#finish());
       child.on("error", () => this.#finish());
       child.on("exit", () => this.#finish());
+
       return true;
     } catch {
       this.#finish();
+
       return false;
     }
   }
 
   writeLine(line: string): boolean {
     if (!this.#child || this.#ended) return false;
+
     try {
       this.#child.stdin?.write(`${line}\n`);
+
       return this.#child.stdin !== undefined;
     } catch {
       this.#finish();
+
       return false;
     }
   }
@@ -94,6 +102,7 @@ export class NativeHelper {
   /** Closes stdin without killing; EOF is the media helper's restore command. */
   endInput(): void {
     const child = this.#detach();
+
     try {
       child?.stdin?.end();
     } catch {
@@ -110,11 +119,13 @@ export class NativeHelper {
     // The helpers are Mac binaries, so there is nothing to spawn anywhere
     // else.
     if (process.platform !== "darwin") return undefined;
+
     const stdio: StdioOptions = [
       this.#options.input ?? "ignore",
       this.#options.output === "lines" ? "pipe" : "inherit",
       "ignore",
     ];
+
     // SAFETY: spawn returns ChildProcess; this module alone narrows the stdio it configured.
     return spawn(nativeHelperPath(this.#options.binary), [], { stdio }) as NativeHelperProcess;
   }
@@ -124,8 +135,10 @@ export class NativeHelper {
     this.#buffer += chunk;
     const lines = this.#buffer.split("\n");
     this.#buffer = lines.pop() ?? "";
+
     for (const line of lines) {
       const trimmed = line.trim();
+
       for (const listener of this.#lineListeners) listener(trimmed);
     }
   }
@@ -136,6 +149,7 @@ export class NativeHelper {
     this.#buffer = "";
     this.#ended = true;
     this.#child = undefined;
+
     for (const listener of this.#exitListeners) listener();
   }
 
@@ -145,6 +159,7 @@ export class NativeHelper {
     const child = this.#child;
     this.#child = undefined;
     child?.removeAllListeners();
+
     return child;
   }
 }

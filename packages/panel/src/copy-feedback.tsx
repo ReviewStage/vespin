@@ -39,6 +39,7 @@ const PNG_DATA_URL = /^data:image\/png;base64,([^#]+)/u;
  */
 async function pngBase64Of(url: string): Promise<string> {
   const own = PNG_DATA_URL.exec(url)?.[1];
+
   if (own !== undefined) return own;
   const image = new Image();
   image.src = url;
@@ -47,8 +48,10 @@ async function pngBase64Of(url: string): Promise<string> {
   canvas.width = image.naturalWidth;
   canvas.height = image.naturalHeight;
   const context = canvas.getContext("2d");
+
   if (context === null) throw new Error("No canvas to draw the picture on.");
   context.drawImage(image, 0, 0);
+
   return canvas.toDataURL("image/png").replace(/^data:image\/png;base64,/u, "");
 }
 
@@ -77,18 +80,21 @@ export function copyImageThroughShell(url: string): Promise<void> {
  */
 export function useCopyToast(): (words: string, label: string) => void {
   const copied = useMenuCopy();
+
   return (words, label) => copied(() => copyThroughShell(words), label);
 }
 
 /** Copies a picture from a menu, as `useCopyToast` copies words: put on the clipboard as a copy button puts one, and said in a toast. */
 export function useImageCopyToast(): (url: string, label: string) => void {
   const copied = useMenuCopy();
+
   return (url, label) => copied(() => copyImageThroughShell(url), label);
 }
 
 /** A menu's copy, said in a toast reading `label` once the clipboard answers, or its failure; only the latest press's answer is said. */
 function useMenuCopy(): (copying: () => Promise<void>, label: string) => void {
   const show = useToast();
+
   return (copying, label) => {
     latestMenuCopy += 1;
     const press = latestMenuCopy;

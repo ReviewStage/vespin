@@ -207,20 +207,25 @@ function withinLink(place: LinkDestination, thing: LinkThing, workspace: string)
 /** A version history's links: the version chosen, as the step, then its task; the task alone as the step while no version is chosen or a narrow room's list stands alone. */
 function versionLinks({ tasks, at }: PlaceLinks): readonly LinkAtHand[] {
   const { region } = tasks;
+
   if (region.kind !== DOCUMENT_REGION.READY) return [];
   const { task: drawn } = region;
   const workspace = slugOf(tasks.workspaces, drawn.workspaceId);
   // Note that the task's links name it by its number, where it has one, as every link to it is written.
   const planId = taskLinkStep(drawn);
+
   const task: LinkAtHand = {
     link: { workspace, place: { kind: LINK_DESTINATION.TASK, planId } },
     thing: LINK_THING.TASK,
     name: drawn.name,
   };
+
   const revision = tasks.history.selected;
   // A narrow room's version list stands alone, and has no link of its own, so it is the task's step.
   const listedAlone = at.narrow === true && tasks.history.listed;
+
   if (revision === undefined || listedAlone) return [{ ...task, step: true }];
+
   return [
     stepLink({ kind: LINK_DESTINATION.VERSION, planId, revision }, LINK_THING.VERSION, workspace),
     task,
@@ -247,10 +252,13 @@ function taskSurfaces(step: TaskStep | undefined, columnKnown: boolean): readonl
   if (step === undefined) return [];
   const side = step.side ?? openPanelTab(step.panel);
   const sideSurface = side === undefined ? [] : [tabSurface(step.taskId, side, true)];
+
   if (step.panel?.open === true) return sideSurface;
+
   const column = columnKnown
     ? [tabSurface(step.taskId, step.column ?? MAIN_TAB.OVERVIEW, false)]
     : [];
+
   return [...column, ...sideSurface];
 }
 
@@ -276,11 +284,13 @@ export const ROUTED_PLACE = {
       if (at.settings === undefined) return under();
       const { view, workspace } = at.settings;
       const slug = workspace === undefined ? listed : slugOf(tasks.workspaces, workspace.id);
+
       // A narrow room's page list stands alone, so its link names no page.
       const place: LinkDestination =
         at.narrow === true && at.settings.listed === true
           ? { kind: LINK_DESTINATION.SETTINGS }
           : { kind: LINK_DESTINATION.SETTINGS, page: view };
+
       return [stepLink(place, LINK_THING.SETTINGS, slug)];
     },
     narrowBack: NARROW_BACK.NARROW_ROOM,
@@ -305,7 +315,9 @@ export const ROUTED_PLACE = {
       if (at.admin === undefined) return under();
       const root = { kind: LINK_DESTINATION.ADMIN } as const;
       const fields = adminLinkFields(at.admin);
+
       if (Object.keys(fields).length === 0) return [stepLink(root, LINK_THING.ADMIN, listed)];
+
       return [
         stepLink({ ...root, ...fields }, LINK_THING.ADMIN_PAGE, listed),
         withinLink(root, LINK_THING.ADMIN, listed),
@@ -353,9 +365,12 @@ export const ROUTED_PLACE = {
     // A person's page is theirs in the workspace it opened in, which their link names.
     links: ({ tasks, views, listed, under }) => {
       const { userId, workspace } = views.person;
+
       if (userId === undefined) return under();
+
       const home =
         workspace === undefined ? undefined : workspaceOfSlug(tasks.workspaces, workspace);
+
       return [
         stepLink(
           { kind: LINK_DESTINATION.PERSON, userId },
@@ -385,22 +400,27 @@ export const ROUTED_PLACE = {
     named: () => undefined,
     links: ({ views, listed, under }) => {
       const place = views.automations;
+
       if (place === undefined) return under();
       const list: LinkDestination = { kind: LINK_DESTINATION.AUTOMATIONS };
+
       if (place.kind === AUTOMATIONS_PAGE.EDIT) {
         const automation: LinkDestination = {
           kind: LINK_DESTINATION.AUTOMATION,
           automationId: place.automationId,
         };
+
         return [
           stepLink(automation, LINK_THING.AUTOMATION, listed),
           withinLink(list, LINK_THING.AUTOMATIONS, listed),
         ];
       }
+
       // A new automation's page is a step with no link of its own, so it offers the list it is in.
       if (place.kind === AUTOMATIONS_PAGE.NEW) {
         return [withinLink(list, LINK_THING.AUTOMATIONS, listed)];
       }
+
       return [stepLink(list, LINK_THING.AUTOMATIONS, listed)];
     },
     narrowBack: NARROW_BACK.NARROW_ROOM,
@@ -425,6 +445,7 @@ export const ROUTED_PLACE = {
     title: (tasks, under) => {
       if (tasks.boundFor === undefined) return under();
       const name = taskName(tasks, tasks.boundFor);
+
       return name === undefined ? undefined : { label: name, detail: VERSION_HISTORY_WORDS };
     },
     // A version history's step is listed by its task's name now.
@@ -460,6 +481,7 @@ export const ROUTED_PLACE = {
     named: () => undefined,
     links: ({ tasks, listed, under }) => {
       const { agentId } = tasks.agentView;
+
       return agentId === undefined ? under() : agentPageLinks(listed, agentId);
     },
     narrowBack: undefined,
@@ -488,6 +510,7 @@ export const ROUTED_PLACE = {
       if (taskStep === undefined) return undefined;
       // A narrow room keeps the side panel's tab in its pane of its own, named as a wide room's side is.
       const side = taskStep.side ?? openPanelTab(taskStep.panel);
+
       return { kind: NAMED_STEP.TASK, taskId: taskStep.taskId, column: taskStep.column, side };
     },
     links: ({ under }) => under(),
@@ -546,6 +569,7 @@ export const ROUTED_PLACE = {
     // Note that an Inbox narrowed to a task is passed over once the task is deleted, as the task's own step is.
     stillThere: (params, search, there) => {
       const narrowed = params.taskId ?? search.get("task") ?? undefined;
+
       return narrowed === undefined || there.taskStands(narrowed);
     },
     binding: PLACE_BINDING.KEPT,
@@ -558,25 +582,31 @@ export const ROUTED_PLACE = {
       const holder = chosen !== undefined && "taskId" in chosen ? chosen.taskId : undefined;
       // An Inbox narrowed to a task is named by the task, every item it shows being that task's.
       const detail = taskName(tasks, holder) ?? taskName(tasks, views.inbox.narrowed);
+
       return { label: INBOX_WORDS, detail };
     },
     // An Inbox step is named by its chosen item's task, else the one its list is narrowed to.
     named: (params, search, { itemTask }) => {
       const holder = params.itemId === undefined ? undefined : itemTask(params.itemId);
       const narrowed = params.taskId ?? search.get("task") ?? undefined;
+
       return { kind: NAMED_STEP.INBOX, taskId: holder ?? narrowed };
     },
     links: ({ tasks, views, at, listed, under }) => {
       if (!views.inbox.open) return under();
+
       // An Inbox narrowed to a task is linked by it, so a copied link or a reload opens it narrowed again.
       const inboxPlace: LinkDestination =
         at.inboxTask === undefined
           ? { kind: LINK_DESTINATION.INBOX }
           : { kind: LINK_DESTINATION.INBOX, planId: at.inboxTask };
+
       const inbox = stepLink(inboxPlace, LINK_THING.INBOX, listed);
       const chosen = listedInboxChoice(views.inbox.chosen, tasks);
+
       if (chosen === undefined) return [inbox];
       const item = inboxItemPlace(chosen);
+
       // An item standing alone, in a narrow room or an Inbox showing one column by its own width, is a step of its own.
       if (at.narrow === true || tasks.inboxView.single === true) {
         return [
@@ -584,6 +614,7 @@ export const ROUTED_PLACE = {
           withinLink(inboxPlace, LINK_THING.INBOX, listed),
         ];
       }
+
       return [withinLink(item, LINK_THING.INBOX_ITEM, listed), inbox];
     },
     narrowBack: NARROW_BACK.EVERY_ROOM,
@@ -609,12 +640,15 @@ export function routedPlaceOf(
   access: RouteAccess,
 ): RoutedPlace | undefined {
   const params = placeParamsOf(matches);
+
   for (const match of matches) {
     const place = PLACES.find(
       (each) => each.routes.some((id) => id === match.routeId) && each.claims(params, access),
     );
+
     if (place !== undefined) return place;
   }
+
   return undefined;
 }
 
@@ -636,11 +670,14 @@ export function sameDraftAt(
   access: RouteAccess,
 ): boolean {
   const place = routedPlaceOf(from, access);
+
   if (place === undefined || routedPlaceOf(to, access) !== place) return false;
   const was = placeParamsOf(from);
   const goes = placeParamsOf(to);
+
   if (workspaceAt(was.workspace, access) !== workspaceAt(goes.workspace, access)) return false;
   const draft = place.draft(was);
+
   return draft !== undefined && draft === place.draft(goes);
 }
 
@@ -672,15 +709,19 @@ export function routedStepStands(
   there: PlaceThere,
 ): boolean {
   const place = stepPlaceOf(matches, access, there.taskStep);
+
   if (place === undefined) return true;
   const params = placeParamsOf(matches);
+
   if (!place.gate(params, access) || !place.stillThere(params, search, there)) return false;
+
   return !place.listedOnly || params.workspace === undefined || there.listed(params.workspace);
 }
 
 /** The location the router's history stands on, redrawn as it moves. */
 function useHistoryLocation(): HistoryLocation {
   const { history } = useRouter();
+
   return useSyncExternalStore(history.subscribe, () => history.location);
 }
 
@@ -708,6 +749,7 @@ export function useWindowPlace(): WindowPlace {
   const access = useRouteAccess();
   const { pathname, href, search } = useHistoryLocation();
   const matches = useMemo(() => router.matchRoutes(pathname), [router, pathname]);
+
   return useMemo(
     () => ({
       place: routedPlaceOf(matches, access),

@@ -62,6 +62,7 @@ function fixture() {
   let notifying = false;
   /** Whether the badge door throws, as a platform that refuses one may. */
   let refusingBadges = false;
+
   const doors = Layer.succeed(AgentNoticeDoors, {
     post: (notice) => {
       posted.push(notice);
@@ -74,6 +75,7 @@ function fixture() {
       chimes.push(sound);
     },
   });
+
   /** How many times the account's inbox was followed. */
   let inboxFollows = 0;
   const waiting: (readonly AppInboxTask[])[] = [];
@@ -86,14 +88,17 @@ function fixture() {
   let accountChanged: ((signedInAs: string | undefined) => void) | undefined;
   let signedInAs: string | undefined = ACCOUNT;
   let accountId: string | undefined = ACCOUNT_ID;
+
   const notices = Effect.gen(function* () {
     inboxAnswers = yield* Queue.unbounded<AgentAccountInboxAnswerView>();
     accounts = yield* Queue.unbounded<string | undefined>();
     Queue.offerUnsafe(accounts, signedInAs);
+
     return yield* createAgentNotices({
       onUnseenChanged: (next) => unseen.push(next),
       onPanelFocusChanged: (listener) => {
         focus = listener;
+
         return () => {
           focus = undefined;
         };
@@ -102,6 +107,7 @@ function fixture() {
       accountId: () => accountId,
       onAccountChanged: (listener) => {
         accountChanged = listener;
+
         return () => {
           accountChanged = undefined;
         };
@@ -110,6 +116,7 @@ function fixture() {
         Stream.suspend(() => {
           inboxFollows += 1;
           assert.ok(inboxAnswers);
+
           return Stream.fromQueue(inboxAnswers);
         }),
       accounts: Stream.fromQueue(accounts),
@@ -129,6 +136,7 @@ function fixture() {
       report: () => undefined,
     });
   }).pipe(Effect.provide(doors));
+
   return {
     notices,
     posted,
@@ -174,6 +182,7 @@ function fixture() {
     },
   };
 }
+
 it.effect(
   "the account leaving takes its agents with it, so nothing of theirs is dotted for the next",
   () =>
@@ -183,9 +192,11 @@ it.effect(
       f.focus(false);
       notices.observeAgents([agent(AGENT_STATUS.RUNNING)]);
       notices.observeAgents([agent(AGENT_STATUS.COMPLETED)]);
+
       const other = agent(AGENT_STATUS.RUNNING, {
         id: "a1b2c3d4-0000-4000-8000-000000000002",
       });
+
       notices.observeAgents([other]);
 
       f.changeAccount(OTHER_ACCOUNT);
@@ -196,6 +207,7 @@ it.effect(
       assert.deepEqual(f.unseen.at(-1), []);
     }),
 );
+
 it.effect(
   "the plan list followed live feeds the ledger: an end it carries is dotted, and a plan it drops takes its agents' dots with it",
   () =>
@@ -329,6 +341,7 @@ const ITEM_C = "7a4f9e5c-3d6b-4a8c-8e1f-2b3c4d5e6f7a";
 const ITEM_D = "8b5a0f6d-4e7c-4b9d-9f2a-3c4d5e6f7a8b";
 
 const DAY = Duration.toMillis(Duration.days(1));
+
 it.effect(
   "another account ends the follow of the last and lets go of its items, its counts, and its badge, and its first answer is where it stands; nobody signed in follows nothing",
   () =>
@@ -365,6 +378,7 @@ it.effect(
       assert.equal(f.inboxFollows(), 2);
     }),
 );
+
 it.effect(
   "an answer telling why there is none moves nothing, and each answer told after it is observed at once, with no read of its own",
   () =>
@@ -393,6 +407,7 @@ it.effect(
       assert.equal(f.inboxFollows(), 1);
     }),
 );
+
 it.effect(
   "what waits carries each open item's agent, what it asks, and when it was posted, grouped by plan as the read answered them",
   () =>
@@ -448,11 +463,13 @@ it.effect(
       ]);
     }),
 );
+
 it.effect("a teammate's agent is dotted as its turn ends, as the account's own is", () =>
   Effect.gen(function* () {
     const f = fixture();
     const notices = yield* f.notices;
     f.focus(false);
+
     const theirs = agent(AGENT_STATUS.RUNNING, {
       startedBy: { userId: "user-sam", name: "Sam" },
     });
@@ -464,6 +481,7 @@ it.effect("a teammate's agent is dotted as its turn ends, as the account's own i
     assert.deepEqual(f.unseen.at(-1), [AGENT_ID]);
   }),
 );
+
 it.effect(
   "only the items of agents the account started wait on it: a teammate's agent's questions are neither counted nor badged, while its plan is still listed",
   () =>
@@ -522,6 +540,7 @@ it.effect(
       f.focus(false);
       const teammate = "user-charles";
       const teamTask = "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32";
+
       const answer = (reassigned: string, cursor: string) =>
         f.answerInbox({
           items: [
@@ -531,6 +550,7 @@ it.effect(
           cursor,
           readAt: READ_AT,
         });
+
       answer(teammate, "1");
       yield* settled;
       const before = { badge: f.badges.at(-1), waiting: f.waiting.at(-1) };
@@ -556,6 +576,7 @@ it.effect(
     Effect.gen(function* () {
       const f = fixture();
       yield* f.notices;
+
       const answer = (toDo: number) =>
         f.answerInbox({
           items: [waitingItem(ITEM_A, { startedBy: ACCOUNT_ID })],
@@ -563,6 +584,7 @@ it.effect(
           cursor: "1",
           readAt: READ_AT,
         });
+
       answer(2);
       yield* settled;
       answer(1);
@@ -584,6 +606,7 @@ it.effect(
       f.knowAccountId(undefined);
       yield* f.notices;
       const teammate = "user-charles";
+
       const answer = {
         items: [
           waitingItem(ITEM_A, { startedBy: ACCOUNT_ID }),
@@ -592,6 +615,7 @@ it.effect(
         cursor: "1",
         readAt: READ_AT,
       };
+
       f.answerInbox(answer);
       yield* settled;
       const before = f.badges.at(-1);
@@ -636,6 +660,7 @@ it.effect(
       assert.equal(f.badges.at(-1), 0);
     }),
 );
+
 it.effect("a failed run the first answer carries is written for the window", () =>
   Effect.gen(function* () {
     const f = fixture();
@@ -663,6 +688,7 @@ it.effect(
         notices.observeAgents([agent(AGENT_STATUS.RUNNING, { id: agentId })]);
         notices.observeAgents([agent(AGENT_STATUS.COMPLETED, { id: agentId })]);
       }
+
       f.focus(false);
       f.answerInbox({
         items: [waitingItem(ITEM_A, { updatedAt: READ_AT + 1 })],
@@ -695,18 +721,21 @@ it.effect(
       yield* f.notices;
       const teammate = "user-charles";
       const question = waitingItem(ITEM_A, { waitsOn: ACCOUNT_ID, asking: true });
+
       const snoozed = waitingItem(ITEM_D, {
         startedBy: teammate,
         waitsOn: ACCOUNT_ID,
         asking: true,
         remindAt: READ_AT + DAY,
       });
+
       const answer = (cursor: string, items: readonly AccountInboxEntry[]) =>
         f.answerInbox({
           items: [...items, snoozed, waitingItem(ITEM_C, { waitsOn: teammate, asking: true })],
           cursor,
           readAt: READ_AT,
         });
+
       answer("1", [
         question,
         waitingItem(ITEM_B, { waitsOn: ACCOUNT_ID, asking: false, unread: true }),
@@ -821,6 +850,7 @@ it.effect("ends inside one burst chime once, and an end after it chimes again", 
     const f = fixture();
     const notices = yield* f.notices;
     f.playSound(SOUND_WHEN.ALWAYS);
+
     const end = (id: string) => {
       notices.observeAgents([ownAgent(AGENT_STATUS.RUNNING, { id })]);
       notices.observeAgents([ownAgent(AGENT_STATUS.COMPLETED, { id })]);
@@ -924,6 +954,7 @@ it.effect("ends inside one burst post one notification counting them", () =>
     const notices = yield* f.notices;
     f.showNotifications(true);
     f.focus(false);
+
     for (const id of [
       "a1b2c3d4-0000-4000-8000-000000000021",
       "a1b2c3d4-0000-4000-8000-000000000022",
@@ -933,6 +964,7 @@ it.effect("ends inside one burst post one notification counting them", () =>
       notices.observeAgents([ownAgent(AGENT_STATUS.COMPLETED, { id })]);
       yield* TestClock.adjust(Duration.millis(400));
     }
+
     yield* TestClock.adjust(Duration.seconds(2));
 
     assert.deepEqual(

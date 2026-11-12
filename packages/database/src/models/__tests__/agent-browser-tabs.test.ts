@@ -53,6 +53,7 @@ const openAccount = Effect.gen(function* () {
   yield* Database.use((db) =>
     db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` }),
   );
+
   return id;
 });
 
@@ -79,12 +80,14 @@ const openTask = Effect.gen(function* () {
     yield* openAccount,
     yield* openAccount,
   ];
+
   const workspace = yield* openWorkspace(starter);
   yield* joinWorkspace(workspace, teammate);
   yield* openWorkspace(outsider);
   const started = yield* createTask(starter, { organizationId: workspace, name: "Checkout" });
   const agent = yield* startAgent(starter, started.id);
   const other = yield* startAgent(starter, started.id);
+
   return { starter, teammate, outsider, taskId: started.id, agent, other };
 });
 
@@ -103,10 +106,12 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
     () =>
       Effect.gen(function* () {
         const { agent, taskId, teammate } = yield* openTask;
+
         const first = yield* upsertBrowserTab({
           ...action(agent.conversationId, "target-1", "https://shop.test/"),
           openedBy: { kind: AGENT_BROWSER_TAB_OPENER.MEMBER, userId: teammate },
         });
+
         yield* TestClock.adjust("1 minute");
         const long = `https://shop.test/${"a".repeat(BROWSER_SHOWN_MAX_CHARS)}`;
         const moved = yield* upsertBrowserTab(action(agent.conversationId, "target-1", long));
@@ -131,10 +136,13 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
     () =>
       Effect.gen(function* () {
         const { starter, teammate, outsider, taskId, agent, other } = yield* openTask;
+
         const coders = yield* upsertBrowserTab(
           action(agent.conversationId, "target-1", "http://localhost:3000/"),
         );
+
         yield* TestClock.adjust("1 second");
+
         const others = yield* upsertBrowserTab(
           action(other.conversationId, "target-1", "https://docs.test/"),
         );
@@ -149,6 +157,7 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
             ],
           );
         }
+
         assert.ok(Option.isNone(yield* listBrowserTabs(outsider, { taskId })));
         assert.ok(Option.isNone(yield* readBrowserTab(outsider, { taskId }, coders.id)));
         assert.ok(Option.isNone(yield* listBrowserTabs(starter, { taskId: randomUUID() })));
@@ -169,9 +178,11 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
         yield* Database.use((db) =>
           db.update(task).set({ githubAccess: GITHUB_ACCESS.TOKEN }).where(eq(task.id, taskId)),
         );
+
         const tab = yield* upsertBrowserTab(
           action(agent.conversationId, "target-1", "https://shop.test/"),
         );
+
         const place = { agentId: agent.id };
 
         assert.deepEqual(
@@ -194,9 +205,11 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
             .set({ githubAccess: GITHUB_ACCESS.TOKEN })
             .where(eq(agentTable.id, agent.id)),
         );
+
         const coders = yield* upsertBrowserTab(
           action(agent.conversationId, "target-1", "https://shop.test/"),
         );
+
         const others = yield* upsertBrowserTab(
           action(other.conversationId, "target-1", "https://docs.test/"),
         );
@@ -205,6 +218,7 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
           Effect.map(listBrowserTabs(member, { taskId }), (listed) =>
             Option.getOrThrow(listed).map(({ tab }) => tab.id),
           );
+
         assert.deepEqual(new Set(yield* seen(starter)), new Set([coders.id, others.id]));
         assert.deepEqual(yield* seen(teammate), [others.id]);
         assert.ok(Option.isNone(yield* readBrowserTab(teammate, { taskId }, coders.id)));
@@ -216,14 +230,18 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
     () =>
       Effect.gen(function* () {
         const { starter, teammate, taskId, agent } = yield* openTask;
+
         const tab = yield* upsertBrowserTab(
           action(agent.conversationId, "target-1", "https://shop.test/"),
         );
+
         const instant = (minutes: number) =>
           Effect.map(DateTime.nowAsDate, (now) => new Date(now.getTime() + minutes * MINUTE_MS));
+
         const driverNow = Effect.gen(function* () {
           const now = yield* DateTime.nowAsDate;
           const read = Option.getOrThrow(yield* readBrowserTab(starter, { taskId }, tab.id));
+
           return browserTabDriver(read.tab, now)?.userId ?? null;
         });
 
@@ -275,10 +293,12 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
     () =>
       Effect.gen(function* () {
         const { agent, teammate } = yield* openTask;
+
         // The agent's `list` saw the new page in the moment before the member's open recorded it.
         const listed = yield* upsertBrowserTab(
           action(agent.conversationId, "target-new", "about:blank"),
         );
+
         const opened = yield* recordMemberOpenedBrowserTab({
           conversationId: agent.conversationId,
           targetId: "target-new",
@@ -286,12 +306,14 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
           title: "https://accounts.test/",
           userId: teammate,
         });
+
         const later = yield* upsertBrowserTab(
           action(agent.conversationId, "target-new", "https://accounts.test/home"),
         );
 
         assert.equal(opened.id, listed.id);
         assert.equal(opened.address, "https://accounts.test/");
+
         for (const row of [opened, later]) {
           assert.equal(row.openedBy, AGENT_BROWSER_TAB_OPENER.MEMBER);
           assert.equal(row.openedByUserId, teammate);
@@ -304,16 +326,20 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
     () =>
       Effect.gen(function* () {
         const { agent } = yield* openTask;
+
         const tab = yield* upsertBrowserTab(
           action(agent.conversationId, "target-1", "https://shop.test/login"),
         );
+
         yield* TestClock.adjust("1 minute");
 
         const noted = yield* noteBrowserTabPage(tab.id, "target-1", {
           address: "https://shop.test/dashboard",
           title: "Dashboard",
         });
+
         yield* retargetBrowserTab(agent.conversationId, tab.id, "target-1", "target-2");
+
         // A view still on the old target, as one a reopening moved the tab off, notes nothing.
         const stale = yield* noteBrowserTabPage(tab.id, "target-1", {
           address: "https://shop.test/stale",
@@ -334,9 +360,11 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
   it.effect("a member's earlier take landing after a later one never shortens their takeover", () =>
     Effect.gen(function* () {
       const { starter, teammate, taskId, agent } = yield* openTask;
+
       const tab = yield* upsertBrowserTab(
         action(agent.conversationId, "target-1", "https://shop.test/"),
       );
+
       const now = yield* DateTime.nowAsDate;
       const at = (minutes: number) => new Date(now.getTime() + minutes * MINUTE_MS);
 
@@ -356,9 +384,11 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
     Effect.gen(function* () {
       const { taskId, agent, starter } = yield* openTask;
       const elsewhere = yield* openTask;
+
       const own = yield* upsertBrowserTab(
         action(agent.conversationId, "target-1", "https://a.test/"),
       );
+
       const theirs = yield* upsertBrowserTab(
         action(elsewhere.agent.conversationId, "target-1", "https://b.test/"),
       );
@@ -376,11 +406,14 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
     () =>
       Effect.gen(function* () {
         const { agent, other } = yield* openTask;
+
         const tab = yield* upsertBrowserTab(
           action(agent.conversationId, "target-1", "https://shop.test/"),
         );
+
         yield* TestClock.adjust("1 minute");
         const at = (yield* DateTime.nowAsDate).getTime();
+
         const move = {
           tab: "target-1",
           x: 10.25,
@@ -431,6 +464,7 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
         yield* upsertBrowserTab(action(agent.conversationId, "target-1", "https://shop.test/"));
         yield* TestClock.adjust("1 minute");
         const later = (yield* DateTime.nowAsDate).getTime();
+
         const move = {
           tab: "target-1",
           kind: BROWSER_CURSOR_KIND.CLICK,
@@ -468,6 +502,7 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
   it.effect("a close deletes the tab from its own agent's browser alone", () =>
     Effect.gen(function* () {
       const { starter, taskId, agent, other } = yield* openTask;
+
       const tab = yield* upsertBrowserTab(
         action(agent.conversationId, "target-1", "https://shop.test/"),
       );
@@ -484,9 +519,11 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
     () =>
       Effect.gen(function* () {
         const { teammate, agent, other } = yield* openTask;
+
         const tab = yield* upsertBrowserTab(
           action(agent.conversationId, "target-1", "https://shop.test/"),
         );
+
         const now = yield* DateTime.nowAsDate;
         yield* takeOverBrowserTab(tab.id, teammate, new Date(now.getTime() + MINUTE_MS), now);
 
@@ -510,10 +547,12 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
         assert.equal(moved.targetId, "target-2");
         assert.equal(moved.address, "https://shop.test/");
         assert.equal(moved.driverUserId, teammate);
+
         // A later report from the browser names the new target and finds the same tab.
         const again = yield* upsertBrowserTab(
           action(agent.conversationId, "target-2", "https://shop.test/cart"),
         );
+
         assert.equal(again.id, tab.id);
       }),
   );

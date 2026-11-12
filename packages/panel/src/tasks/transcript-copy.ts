@@ -217,23 +217,29 @@ function rowBlocks<B>(rows: readonly TurnRow<B>[]): readonly B[] {
 /** One part of an agent's turn as a copy reads it: a delegation as the worker's call, the task its input and the worker's answer its output. */
 function agentBlock(part: AgentPart): CopiedBlock[] {
   if (part.kind === AGENT_PART.TEXT) return [{ kind: COPIED_BLOCK.WORDS, text: part.text }];
+
   if (part.kind === AGENT_PART.REASONING) {
     return [{ kind: COPIED_BLOCK.REASONING, text: part.text }];
   }
+
   if (part.kind !== AGENT_PART.TOOL) return [];
   const error = part.errorText;
+
   if (isDelegation(part)) {
     const view = delegationView(part, undefined);
     const output = view.result === undefined ? undefined : textBlock(view.result);
     const subject = cardTitle(view.task);
     const input = textBlock(view.task);
     const call = CALL_KIND.WORKER;
+
     return [
       { kind: COPIED_BLOCK.CALL, call, subject, description: undefined, input, output, error },
     ];
   }
+
   const view = toolCallView(part);
   const { input, output, subject, description, server } = view;
+
   return [
     {
       kind: COPIED_BLOCK.CALL,
@@ -258,32 +264,50 @@ function drawnWords(block: CopiedBlock): readonly string[] {
   if (block.kind !== COPIED_BLOCK.CALL) return [block.text];
   const { call, subject, description, server, input, output, error } = block;
   const line = callLine(call, subject, description);
+
   const said =
     input !== undefined &&
     ((isCommandKind(call) && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject));
+
   const lead = [line.verb, said ? undefined : line.subject, callPlace(call, server)];
+
   return [
     lead.filter((words) => words !== undefined).join(" "),
     ...bodyWords(input, output, error),
   ];
 }
 
+/** Which of a message's drawn words a find reads: what was said, or its details, the calls and thoughts its folds hold, which it may leave out. */
+export const DRAWN_WORDS = {
+  SAID: "said",
+  DETAILS: "details",
+} as const;
+
+export type DrawnWords = (typeof DRAWN_WORDS)[keyof typeof DRAWN_WORDS];
+
 /**
  * The words a message's rows draw, each line and body, as a find counts them
  * before the rows are drawn: the parts the rows are drawn from (`agentRows`),
- * each read as both copies read it (`agentBlock`). Note that a part its page
- * carried cut counts none of the words left out, because its fold draws
- * them only once read whole, and its ends are the stored JSON's, not the
- * answer as drawn.
+ * each read as both copies read it (`agentBlock`), of the kind `which`
+ * names. Note that a part its page carried cut counts none of the words
+ * left out, because its fold draws them only once read whole, and its ends
+ * are the stored JSON's, not the answer as drawn.
  */
-export function drawnMessageWords(message: AgentTranscriptMessage): string {
+export function drawnMessageWords(message: AgentTranscriptMessage, which: DrawnWords): string {
   const sent = sentLineWords(message);
-  return sent ?? drawnRowsWords(agentRows(message, false));
+
+  if (sent !== undefined) return which === DRAWN_WORDS.SAID ? sent : "";
+
+  return drawnRowsWords(agentRows(message, false), which);
 }
 
-/** The words a turn's rows draw, as `drawnMessageWords` reads a whole turn's: a piece of a long turn's (`turn-pieces.ts`). */
-export function drawnRowsWords(rows: readonly TurnRow<AgentPart>[]): string {
-  return rowBlocks(rows).flatMap(agentBlock).flatMap(drawnWords).join("\n");
+/** The words of the kind `which` names that a turn's rows draw, as `drawnMessageWords` reads a whole turn's: a piece of a long turn's (`turn-pieces.ts`). */
+export function drawnRowsWords(rows: readonly TurnRow<AgentPart>[], which: DrawnWords): string {
+  return rowBlocks(rows)
+    .flatMap(agentBlock)
+    .filter((block) => (block.kind === COPIED_BLOCK.WORDS) === (which === DRAWN_WORDS.SAID))
+    .flatMap(drawnWords)
+    .join("\n");
 }
 
 /**
@@ -295,11 +319,15 @@ export function drawnRowsWords(rows: readonly TurnRow<AgentPart>[]): string {
  */
 function developerTurn(message: AgentTranscriptMessage): CopiedTurn {
   const words = messageWords(message);
+
   if (agentMessageOf(message) !== undefined) {
     const blocks = [{ kind: COPIED_BLOCK.WORDS, text: agentMessageWords(words) ?? words }] as const;
+
     return { speaker: SPEAKER.MESSAGE, from: message.sentBy?.name, blocks };
   }
+
   const blocks = [{ kind: COPIED_BLOCK.WORDS, text: sentLineWords(message) ?? words }] as const;
+
   return { speaker: SPEAKER.DEVELOPER, blocks };
 }
 
@@ -318,17 +346,23 @@ const THREAD_WORDS = "the thread";
  */
 function sentLineWords(message: AgentTranscriptMessage): string | undefined {
   const github = githubLineOf(message);
+
   if (github !== undefined) return githubLineWords(github, messageWords(message));
   const comment = commentLineOf(message);
+
   if (comment !== undefined) {
     return `${COMMENT_LINE_LEAD.OWN} ${commentLineSubject(comment)}\n\n${commentLineWords(comment)}`;
   }
+
   const slack = slackLineOf(message);
+
   if (slack !== undefined) return `${SLACK_LINE_LEAD.OWN} ${SLACK_LINE_SUBJECT}\n\n${slack.words}`;
   const thread = threadLineOf(message);
+
   if (thread === undefined) return undefined;
   const words = messageWords(message);
   const title = threadLineTitle(words, thread.event) ?? THREAD_WORDS;
+
   return [`${THREAD_LINE_DID[thread.event].OWN} ${title}`, threadLineWords(words, thread.event)]
     .filter((part) => part !== "")
     .join("\n\n");
@@ -352,6 +386,7 @@ export function agentTranscript(input: {
 }): CopiedTranscript {
   const { title, brief, task } = input;
   const messages = task === undefined ? input.messages : workerLines(task, input.messages);
+
   // An agent started blank was handed nothing, so its first line is copied as a turn of the developer's.
   const first =
     brief === AGENT_BRIEF.BLANK && task === undefined
@@ -359,26 +394,32 @@ export function agentTranscript(input: {
       : messages.find(
           (message) => message.role === MESSAGE_ROLE.USER && agentMessageOf(message) === undefined,
         );
+
   const label =
     task !== undefined
       ? BRIEF_LABEL.SUBAGENT_TASK
       : brief === AGENT_BRIEF.PROMPT
         ? BRIEF_LABEL.PROMPT
         : BRIEF_LABEL.DESCRIPTION;
+
   const speaker = task === undefined ? SPEAKER.AGENT : SPEAKER.SUBAGENT;
   // An agent started from another opens on its brief, the replay, and the note, each copied apart.
   const opening = first === undefined || task !== undefined ? undefined : replayOpening(first);
   const note = opening?.note === undefined ? [] : [developerTurn(opening.note)];
+
   // A line that reached a turn while it ran is copied where the tab draws it, between the turn's work before and after it.
   const turns = placedMessages(messages).flatMap(({ message, arrived }): CopiedTurn[] => {
     if (message === first) return [];
+
     if (message.role === MESSAGE_ROLE.USER) return [developerTurn(message)];
+
     return turnStretches(agentRows(message, false, { arrived })).map((stretch) =>
       stretch.line === undefined
         ? { speaker, blocks: rowBlocks(stretch.rows).flatMap(agentBlock) }
         : developerTurn(stretch.line),
     );
   });
+
   return {
     title,
     brief: first === undefined ? undefined : { label, text: messageWords(opening?.brief ?? first) },
@@ -397,6 +438,7 @@ function longestTicks(text: string): number {
 function inlineCode(text: string): string {
   const ticks = "`".repeat(longestTicks(text) + 1);
   const pad = text.startsWith("`") || text.endsWith("`") ? " " : "";
+
   return `${ticks}${pad}${text}${pad}${ticks}`;
 }
 
@@ -415,6 +457,7 @@ function bounded(text: string): string {
 /** The text as one line, cut at the subject's bound. */
 function oneLine(text: string): string {
   const line = text.replace(/\s+/gu, " ").trim();
+
   return line.length <= SUBJECT_LIMIT ? line : `${line.slice(0, SUBJECT_LIMIT).trimEnd()}…`;
 }
 
@@ -429,6 +472,7 @@ function callParts(call: CopiedCall) {
   const place = callPlace(call.call, call.server);
   // Note that a server's name keeps its own capitals ("PostHog"), where the other places read as words in a sentence.
   const named = call.server === undefined ? place?.replace(/^./u, (c) => c.toLowerCase()) : place;
+
   return {
     verb: named === undefined ? said : `${said} (${named})`,
     subject: oneLine(call.subject),
@@ -445,7 +489,9 @@ function callParts(call: CopiedCall) {
  */
 function callSaid(call: CopiedCall, styled: (verb: string) => string) {
   const { verb, subject, joiner, code } = callParts(call);
+
   if (subject === "") return styled(verb).replace(/:$/u, "");
+
   return `${styled(verb)}${joiner}${code ? inlineCode(subject) : subject}`;
 }
 
@@ -454,28 +500,35 @@ function conciseTurn(turn: CopiedTurn): string[] {
   const last = turn.blocks.findLastIndex((block) => block.kind === COPIED_BLOCK.WORDS);
   const said: string[] = [];
   let calls: string[] = [];
+
   const flush = () => {
     if (calls.length > 0) said.push(calls.join("\n"));
     calls = [];
   };
+
   turn.blocks.forEach((block, index) => {
     if (block.kind === COPIED_BLOCK.CALL) {
       const failed = block.error === undefined ? "" : " (failed)";
       calls.push(`- ${callSaid(block, (verb) => verb)}${failed}`);
+
       return;
     }
+
     if (block.kind !== COPIED_BLOCK.WORDS) return;
+
     if (!handedIn(turn) && index !== last) return;
     flush();
     said.push(block.text.trim());
   });
   flush();
+
   return said.filter((each) => each.length > 0);
 }
 
 /** Whether a block is a step a preview can say: a call, or words that say something. */
 function previewed(block: CopiedBlock): boolean {
   if (block.kind === COPIED_BLOCK.CALL) return true;
+
   return block.kind === COPIED_BLOCK.WORDS && plainWords(block.text) !== "";
 }
 
@@ -489,18 +542,24 @@ function previewed(block: CopiedBlock): boolean {
 export function latestActivity(transcript: CopiedTranscript): LatestActivity | undefined {
   const turn = transcript.turns.findLast((each) => !handedIn(each) && each.blocks.some(previewed));
   const block = turn?.blocks.findLast(previewed);
+
   if (block === undefined || block.kind === COPIED_BLOCK.REASONING) return undefined;
+
   if (block.kind === COPIED_BLOCK.WORDS) {
     return { kind: LATEST_ACTIVITY.WORDS, text: plainWords(block.text) };
   }
+
   // A described command says its description, and where it ran where that is the Mac, as its row does.
   if (block.description !== undefined) {
     const { verb } = callParts(block);
+
     return { kind: LATEST_ACTIVITY.CALL, verb, subject: "", code: false };
   }
+
   // The verb and its joiner as the concise copy's line puts them, the subject drawn apart.
   const { verb, subject, joiner, code } = callParts(block);
   const lead = subject === "" ? verb.replace(/:$/u, "") : `${verb}${joiner.trimEnd()}`;
+
   return { kind: LATEST_ACTIVITY.CALL, verb: lead, subject, code };
 }
 
@@ -522,6 +581,7 @@ function reasoningSaid(text: string): string {
 function callBlockSaid(call: CopiedCall): string {
   const head = callSaid(call, (verb) => `**${verb}**`);
   const { input, output, error } = call;
+
   return [
     head,
     ...(input === undefined || input.text.trim() === ""
@@ -556,27 +616,36 @@ function replaySaid(replay: Replay, copy: TranscriptCopy): string[] {
   const count = replayCount(replay);
   const heading = `## ${replayVerb(replay)} ${REPLAY_SOURCE_WORDS}${count === undefined ? "" : ` · ${count}`}`;
   const left = leftOutLine(replay);
+
   const steps = replay.steps.map((step) => {
     const { who, line } = stepLine(step);
+
     if (copy === TRANSCRIPT_COPY.CONCISE) return `- **${who}:** ${oneLine(line)}`;
+
     return `**${who}:** ${line}\n\n${fenced(step.words, "")}`;
   });
+
   const listed = copy === TRANSCRIPT_COPY.CONCISE && steps.length > 0 ? [steps.join("\n")] : steps;
   const summary = summaryLine(replay);
+
   const summarized =
     summary === undefined || replay.summary === undefined
       ? []
       : [`**${summary}**`, quoted(replay.summary.text)];
+
   return [heading, ...summarized, ...(left === undefined ? [] : [`_${left}_`]), ...listed];
 }
 
 /** The transcript as the markdown the copy asked for puts on the clipboard: its name, its brief, the replay where there is one, then each turn under who said it. */
 export function transcriptMarkdown(transcript: CopiedTranscript, copy: TranscriptCopy): string {
   const { brief } = transcript;
+
   const turns = transcript.turns.flatMap((turn) => {
     const said = copy === TRANSCRIPT_COPY.CONCISE ? conciseTurn(turn) : fullTurn(turn);
+
     return said.length === 0 ? [] : [headingOf(turn), ...said];
   });
+
   return `${[
     `# ${transcript.title}`,
     ...(brief === undefined ? [] : [`## ${brief.label}`, brief.text.trim()]),
@@ -598,9 +667,12 @@ async function pagesFrom(
   held: readonly AgentTranscriptMessage[],
 ): Promise<readonly AgentTranscriptMessage[] | TranscriptUnread> {
   const answer = await read(params).catch(unreachedAs(AGENT_CALL_FAILURE.UNANSWERED));
+
   if ("failure" in answer) return { unread: answer };
   const messages = applyMessagesPage(held, answer.messages);
+
   if (answer.messages.length < AGENT_BOUNDS.MESSAGES_PAGE) return messages;
+
   return pagesFrom(read, { ...params, after: answer.cursor }, messages);
 }
 
@@ -618,5 +690,6 @@ export function readWholeTranscript(
 ): Promise<readonly AgentTranscriptMessage[] | TranscriptUnread> {
   const { agentId, callId } = of;
   const params = { agentId, after: AGENT_CURSOR_START };
+
   return pagesFrom(read, callId === undefined ? params : { ...params, callId }, []);
 }

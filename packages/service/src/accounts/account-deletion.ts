@@ -11,11 +11,14 @@
  * on; the analytics person is asked to be erased, since nothing after the
  * delete would still name it; and what the delete leaves to settle is read,
  * the integration grants among it, since an added account's subject is no id
- * the account still names after it, and its scheduled automations in every
- * workspace, since the automations cascade with the user row while their
- * schedules at Vercel would go on firing. After the delete, every grant is
- * revoked at Vercel Connect, as a Disconnect revokes one, a revoke that fails
- * logged by its word, each schedule is deleted at Vercel, a failure
+ * the account still names after it, its sign-in tokens, since the delete
+ * erases them here without telling Google or GitHub, and its scheduled
+ * automations in every workspace, since the automations cascade with the user
+ * row while their schedules at Vercel would go on firing. After the delete,
+ * every grant is revoked at Vercel Connect, as a Disconnect revokes one, a
+ * revoke that fails logged by its word, and beside them every sign-in token
+ * is revoked at the provider that issued it, each under a deadline and a
+ * failure logged (`auth/sign-in-revocation.ts`); then each schedule is deleted at Vercel, a failure
  * logged, and the onboarding contact Resend keeps under the account's
  * address is deleted (`onboarding-events.ts`). A sandbox left behind expires
  * with its snapshot (`@repo/sandbox`'s retention), and a deleted workspace's
@@ -28,6 +31,7 @@ import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { Effect, Redacted } from "effect";
 import type { HttpClient } from "effect/http";
 import { retireSessions, retiringReach } from "../agents/retire-sessions.js";
+import { type SignInGrant, SignInRevocation } from "../auth/sign-in-revocation.js";
 import { schedulesForgotten } from "../automations/automation-cadence.js";
 import { HostedEnvironment } from "../environment.js";
 import { revokeIntegrationGrants } from "../integrations/integration-connect.js";
@@ -44,6 +48,7 @@ const forgetAnalytics = /* @__PURE__ */ Effect.fn("web/forgetAnalytics")(functio
   userId: string,
 ): Effect.fn.Return<void, never, HostedEnvironment | HttpClient.HttpClient> {
   const environment = yield* HostedEnvironment;
+
   if (!environment.posthogPersonalApiKey || !environment.posthogProjectId) return;
   const personalApiKey = Redacted.value(environment.posthogPersonalApiKey);
   const projectId = environment.posthogProjectId;
@@ -64,6 +69,8 @@ const forgetAnalytics = /* @__PURE__ */ Effect.fn("web/forgetAnalytics")(functio
 /** What the deletion read before Better Auth deleted the account, which it settles after. */
 export interface AccountDeletionPending {
   readonly grants: readonly IntegrationConnectionRow[];
+  /** The account's sign-in tokens, opened, which the delete erases here and the deletion revokes at their providers. */
+  readonly signIns: readonly SignInGrant[];
   /** The account's scheduled automations in every workspace, named as their schedules are kept at Vercel. */
   readonly schedules: readonly { readonly id: string; readonly organizationId: string }[];
   /** The account's address, which its onboarding contact is deleted by; none where the row had none. */
@@ -77,17 +84,30 @@ export const beforeAccountDeletion = /* @__PURE__ */ Effect.fn("web/beforeAccoun
     yield* retireSessions(retiring, yield* standingSessionsOf(userId));
     yield* forgetAnalytics(userId);
     const grants = yield* readIntegrationConnections(userId);
+    const signIns = yield* (yield* SignInRevocation).grantsOf(userId);
     const schedules = yield* accountScheduledAutomations(userId);
     const email = (yield* readAccountPerson(userId))?.email;
-    return { grants, schedules, email } satisfies AccountDeletionPending;
+
+    return { grants, signIns, schedules, email } satisfies AccountDeletionPending;
   },
 );
 
-/** What the deletion settles once Better Auth has deleted the account. */
+/**
+ * What the deletion settles once Better Auth has deleted the account. Note
+ * that the sign-in tokens are revoked beside the Connect grants rather than
+ * after them, because Connect's revoke runs under no deadline of ours, and
+ * a slow one would otherwise hold back the providers' own until the
+ * function's time ran out with the tokens already gone from our rows.
+ */
 export const afterAccountDeletion = /* @__PURE__ */ Effect.fn("web/afterAccountDeletion")(
   function* (userId: string, pending: AccountDeletionPending) {
-    yield* revokeIntegrationGrants(userId, pending.grants);
+    const signIns = yield* SignInRevocation;
+    yield* Effect.all(
+      [revokeIntegrationGrants(userId, pending.grants), signIns.revoke(pending.signIns)],
+      { concurrency: "unbounded", discard: true },
+    );
     yield* schedulesForgotten(pending.schedules);
+
     if (pending.email !== undefined) yield* onboardingForgotten(pending.email);
   },
 );

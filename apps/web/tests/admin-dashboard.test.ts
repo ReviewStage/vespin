@@ -150,7 +150,9 @@ afterEach(() => {
 
 function answer(reply: Reply): Promise<Response> {
   if (reply === REPLY.HANGS) return new Promise(() => undefined);
+
   if (reply === REPLY.FAILS) return Promise.resolve(new Response(null, { status: 500 }));
+
   return Promise.resolve(
     new Response(JSON.stringify(reply), {
       status: 200,
@@ -170,10 +172,12 @@ async function render(replies: readonly Reply[], heard: string[] = []): Promise<
   vi.spyOn(globalThis, "fetch").mockImplementation(() => {
     reads += 1;
     const reply = queue.length > 1 ? queue.shift() : queue[0];
+
     return answer(reply ?? REPLY.HANGS);
   });
   const container = document.createElement("div");
   document.body.replaceChildren(container);
+
   for (const reply of replies) {
     act(() => root?.unmount());
     root = createRoot(container);
@@ -194,11 +198,13 @@ async function render(replies: readonly Reply[], heard: string[] = []): Promise<
         ),
       ),
     );
+
     // Note that a failure over a shown answer draws no skeleton to wait out, so it waits for the failure itself.
     if (reply === REPLY.FAILS) {
       await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull());
     } else if (reply !== REPLY.HANGS) await readLanded(container);
   }
+
   return container;
 }
 
@@ -211,6 +217,7 @@ function cardOf(page: HTMLElement, label: string): string {
   const name = Array.from(page.querySelectorAll("div")).find(
     (element) => element.children.length === 0 && element.textContent === label,
   );
+
   return name?.parentElement?.parentElement?.textContent ?? "";
 }
 
@@ -260,6 +267,7 @@ test("each headline tile reads its week's figure under its name, with its move a
 
 test("a quiet week's tiles state their figures without a share of nothing", async () => {
   const quiet = overview().headline;
+
   const page = await render([
     metrics({
       overview: overview({
@@ -285,6 +293,7 @@ test("a quiet week's tiles state their figures without a share of nothing", asyn
 /** Each row of the list named `label`, its words joined by a bar. */
 function listRows(page: HTMLElement, label: string): string[] {
   const list = page.querySelector(`ul[aria-label="${label}"]`);
+
   return Array.from(list?.querySelectorAll("li") ?? [], (row) =>
     Array.from(row.children, (cell) => cell.textContent)
       .filter((words) => words !== "")
@@ -353,7 +362,9 @@ function button(page: HTMLElement, words: string): HTMLButtonElement {
   const found = Array.from(page.querySelectorAll("button")).find(
     (candidate) => candidate.textContent === words,
   );
+
   if (found === undefined) throw new Error(`no button reading ${words}`);
+
   return found;
 }
 

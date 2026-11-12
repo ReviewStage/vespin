@@ -15,16 +15,25 @@
  * that showed them, a page it
  * showed as a card under its line, which opens it whole, and a pull request
  * it opened as the pull request's card, as it stands now where the task list
- * holds it.
+ * holds it. A call whose answer its page carried cut is read whole as it
+ * opens, as the panel's is (`AGENTS_PART`): its body says so while the read
+ * is under way, draws the call read whole once it lands, and its two ends
+ * where it could not be read.
  */
 
 import {
   AGENT_PART,
   type AgentPart,
+  type AgentPartCut,
   agentRows,
+  CUT_PART_WORDS,
+  cutPartText,
   messageWords,
   placedMessages,
   turnStretches,
+  WHOLE_PART,
+  type WholePartRead,
+  wholeCallOf,
 } from "@repo/features/agent-parts";
 import {
   calledPicturesOf,
@@ -160,6 +169,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly open: boolean;
       /** Its body's blocks while it stands open: what it was given and what it answered, or the error it ended in. */
       readonly body: readonly CallBodyBlock[];
+      /** Where it stands open with an answer its page carried cut whose whole read has not settled: the part to read whole. */
+      readonly cut: AgentPartCut | undefined;
     }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.FOLD;
@@ -209,6 +220,8 @@ export interface TranscriptReading {
   readonly now: number;
   /** The pull requests the agent opened as the task list holds them now, which a card opened by a call stands as. */
   readonly pullRequests: readonly AgentPullRequest[];
+  /** How the whole read of a part its page carried cut stands, where it was asked; none where it was not yet. */
+  readonly wholePart?: ((cut: AgentPartCut) => WholePartRead | undefined) | undefined;
 }
 
 /** How many lines of a call's block its card draws, as the panel's card cuts one. */
@@ -220,6 +233,7 @@ const ERROR_TITLE = "Error";
 /** A block's words cut to the lines its card draws. */
 function cutLines(text: string): string {
   const lines = text.trimEnd().split("\n");
+
   return lines.length <= BLOCK_LINES ? lines.join("\n") : lines.slice(0, BLOCK_LINES).join("\n");
 }
 
@@ -233,35 +247,48 @@ function pieceOf(place: TranscriptPlace, piece: TranscriptPiece): TranscriptPlac
   return { ...place, piece };
 }
 
-/** A call's body as its cards draw it: a command and what it printed as one terminal, or what it was given and what it answered; then the error it ended in. */
+/**
+ * A call's body as its cards draw it: a command and what it printed as one
+ * terminal, or what it was given and what it answered; then the error it
+ * ended in. What it answered is cut to the lines a card draws unless it is
+ * `whole`, as an answer its page carried cut is drawn once read whole, and
+ * its two ends where that read failed.
+ */
 function callBody(
   input: ToolBlock,
   output: ToolBlock | undefined,
   errorText: string | undefined,
+  whole = false,
 ): readonly CallBodyBlock[] {
+  const answered = whole ? (text: string) => text.trimEnd() : cutLines;
   const error = errorText === undefined ? [] : [{ title: ERROR_TITLE, text: errorText }];
+
   if (input.kind === TOOL_BLOCK.COMMAND) {
     const printed = output === undefined ? "" : readableBlock(output).text.trimEnd();
     const prompt = `${COMMAND_PROMPT}${input.text}`;
+
     return [
       {
         title: BLOCK_TITLE.TERMINAL,
-        text: cutLines(printed === "" ? prompt : `${prompt}\n${printed}`),
+        text: answered(printed === "" ? prompt : `${prompt}\n${printed}`),
       },
       ...error,
     ];
   }
+
   const given = readableBlock(input).text;
   const shown = output === undefined ? undefined : shownOutput(output);
+
   const answer =
     errorText !== undefined || shown === undefined
       ? []
       : [
           {
             title: BLOCK_TITLE.OUTPUT,
-            text: shown.text.trim() === "" ? NO_OUTPUT : cutLines(shown.text),
+            text: shown.text.trim() === "" ? NO_OUTPUT : answered(shown.text),
           },
         ];
+
   return [
     ...(given === "" ? [] : [{ title: BLOCK_TITLE.INPUT, text: cutLines(given) }]),
     ...answer,
@@ -272,6 +299,7 @@ function callBody(
 /** Where a call stands by its state. */
 function standingOf(state: ToolState): CallStanding {
   if (state === TOOL_STATE.OUTPUT_ERROR) return CALL_STANDING.FAILED;
+
   return state === TOOL_STATE.OUTPUT_AVAILABLE ? CALL_STANDING.DONE : CALL_STANDING.RUNNING;
 }
 
@@ -297,6 +325,7 @@ function saidItem(
     line.sentBy === undefined || line.sentBy.userId === reading.readerId
       ? undefined
       : line.sentBy.name;
+
   return {
     ...base,
     kind: TRANSCRIPT_ITEM.SAID,
@@ -323,13 +352,18 @@ function callNaming(
   if (isMadeCallKind(view.kind)) {
     return { line: madeCallLine(view.kind), chip: view.subject === "" ? undefined : view.subject };
   }
+
   const file = calledFile(view.kind, view.files);
+
   const site =
     view.kind === CALL_KIND.WEB_PAGE && view.page !== undefined ? siteName(view.page) : undefined;
+
   const chip = file === undefined ? site : fileName(file);
+
   if (chip === undefined) {
     return { line: callLine(view.kind, view.subject, view.description), chip: undefined };
   }
+
   return { line: { ...callLine(view.kind, moreFiles(view.files), undefined), code: false }, chip };
 }
 
@@ -344,18 +378,24 @@ function openedPullRequest(
   pullRequests: readonly AgentPullRequest[],
 ): readonly TranscriptItem[] {
   const { input, output } = part;
+
   if (part.tool !== AGENT_TOOL.OPEN_PULL_REQUEST || !isRecord(output)) return [];
   const { number, url } = output;
+
   if (!isWireNumber(number) || !isWireString(url)) return [];
   const place = pieceOf(base.place, TRANSCRIPT_PIECE.PULL_REQUEST);
   const held = pullRequests.find((each) => each.number === number && each.url === url);
+
   if (held !== undefined) {
     const { title, state, additions, deletions } = held;
     const kind = TRANSCRIPT_ITEM.PULL_REQUEST;
+
     return [{ ...base, place, kind, number, title, url, state, additions, deletions }];
   }
+
   const title = isRecord(input) && isWireString(input.title) ? input.title : "";
   const draft = isRecord(input) && input.draft === true;
+
   return [
     {
       ...base,
@@ -371,6 +411,35 @@ function openedPullRequest(
   ];
 }
 
+/**
+ * An open call's answer its page carried cut, as its body draws it: the call
+ * read whole once its read lands and answers the same call; until then the
+ * words saying it is read, and its two ends where the read failed or
+ * answered some other part.
+ */
+function wholeRead(
+  part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
+  cut: AgentPartCut,
+  reading: TranscriptReading,
+):
+  | {
+      readonly whole: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>;
+      readonly output?: never;
+      readonly reading?: never;
+    }
+  | { readonly whole?: never; readonly output: ToolBlock; readonly reading: boolean } {
+  const read = reading.wholePart?.(cut);
+  const whole = read?.state === WHOLE_PART.WHOLE ? wholeCallOf(read.part, part.callId) : undefined;
+
+  if (whole !== undefined) return { whole };
+  const failed = read?.state === WHOLE_PART.FAILED || read?.state === WHOLE_PART.WHOLE;
+
+  return {
+    output: { kind: TOOL_BLOCK.TEXT, text: failed ? cutPartText(cut) : CUT_PART_WORDS.OUTPUT },
+    reading: !failed,
+  };
+}
+
 /** One tool call as its items: its line, then what it showed. */
 function callItems(
   part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
@@ -380,6 +449,7 @@ function callItems(
   const { toggles } = reading;
   const shownSet = showedPictures(part);
   const pictures = shownSet ? shownPicturesOf(part.input, part.output) : [];
+
   const media: readonly ShownMedia[] = [
     ...pictures.flatMap(({ picture, caption, name }) =>
       picture === undefined
@@ -413,6 +483,7 @@ function callItems(
         : [],
     ),
   ];
+
   const mediaItem: readonly TranscriptItem[] =
     media.length === 0
       ? []
@@ -424,16 +495,21 @@ function callItems(
             media,
           },
         ];
+
   // Note that a set of pictures shown stands as its pictures alone, as the panel draws it.
   if (shownSet) return mediaItem;
-  const view = toolCallView({ tool: part.tool, input: part.input, output: part.output });
+  const open = toggles.calls.has(part.callId);
+  const read = open && part.cut !== undefined ? wholeRead(part, part.cut, reading) : undefined;
+  const drawn = read?.whole ?? part;
+  const view = toolCallView({ tool: drawn.tool, input: drawn.input, output: drawn.output });
+
   const shown = shownPageVersion({
     tool: part.tool,
     callId: part.callId,
     input: part.input,
     output: part.output,
   });
-  const open = toggles.calls.has(part.callId);
+
   const call: TranscriptItem = {
     ...base,
     kind: TRANSCRIPT_ITEM.CALL,
@@ -443,8 +519,12 @@ function callItems(
     runOn: callPlace(view.kind, view.server),
     standing: standingOf(part.state),
     open,
-    body: open ? callBody(view.input, view.output, part.errorText) : [],
+    body: open
+      ? callBody(view.input, read?.output ?? view.output, drawn.errorText, read !== undefined)
+      : [],
+    cut: read?.reading === true ? part.cut : undefined,
   };
+
   const page: readonly TranscriptItem[] =
     shown === undefined
       ? []
@@ -458,6 +538,7 @@ function callItems(
             version: shown.version,
           },
         ];
+
   return [call, ...page, ...openedPullRequest(part, base, reading.pullRequests), ...mediaItem];
 }
 
@@ -493,8 +574,10 @@ function rowItems(
       place: { message, row: row.key, member: undefined, piece: TRANSCRIPT_PIECE.LINE },
       depth,
     };
+
     if (row.kind === TURN_ROW.BLOCK) return partItems(row.block, base, reading);
     const open = row.open !== foldTurned(reading.toggles, base.place);
+
     const line: TranscriptItem = {
       ...base,
       kind: TRANSCRIPT_ITEM.FOLD,
@@ -502,10 +585,13 @@ function rowItems(
       open,
       running: row.running,
     };
+
     if (!open) return [line];
+
     const held = row.blocks.flatMap((block, at) =>
       partItems(block, { place: { ...base.place, member: at }, depth: depth + 1 }, reading),
     );
+
     return [line, ...held];
   });
 }
@@ -521,12 +607,15 @@ export function transcriptItems(
   reading: TranscriptReading,
 ): readonly TranscriptItem[] {
   const placed = placedMessages(messages);
+
   const items = placed.flatMap(({ message, arrived }, at): readonly TranscriptItem[] => {
     if (message.role === MESSAGE_ROLE.USER) {
       return [saidItem(message, { place: linePlace(message.id, message.id), depth: 0 }, reading)];
     }
+
     const moving = reading.writing && at === placed.length - 1;
     const rows = agentRows(message, moving, { arrived });
+
     const turn = turnStretches(rows).flatMap((stretch) =>
       stretch.line === undefined
         ? rowItems(stretch.rows, message.id, 0, reading)
@@ -538,7 +627,9 @@ export function transcriptItems(
             ),
           ],
     );
+
     const { startedAt, finishedAt } = message;
+
     // Note that a turn that finished ends on how long it worked, as the panel's turn does.
     const foot: readonly TranscriptItem[] =
       moving || startedAt === undefined || finishedAt === undefined
@@ -551,10 +642,14 @@ export function transcriptItems(
               words: workedForText(startedAt, finishedAt, reading.now),
             },
           ];
+
     return [...turn, ...foot];
   });
+
   const last = placed.at(-1)?.message.id;
+
   if (!reading.writing || last === undefined) return items;
+
   return [
     ...items,
     {
@@ -570,13 +665,25 @@ export function transcriptItems(
 export function toggledAt(toggles: TranscriptToggles, item: TranscriptItem): TranscriptToggles {
   if (item.kind === TRANSCRIPT_ITEM.CALL) {
     const calls = new Set(toggles.calls);
+
     if (!calls.delete(item.callId)) calls.add(item.callId);
+
     return { ...toggles, calls };
   }
+
   const { message, row } = item.place;
   const held = new Set(toggles.folds.get(message));
+
   if (!held.delete(row)) held.add(row);
+
   return { ...toggles, folds: new Map(toggles.folds).set(message, held) };
+}
+
+/** The parts of every open call whose answer its page carried cut and whose whole read has not settled, which the page reads whole. */
+export function openCuts(items: readonly TranscriptItem[]): readonly AgentPartCut[] {
+  return items.flatMap((item) =>
+    item.kind === TRANSCRIPT_ITEM.CALL && item.cut !== undefined ? [item.cut] : [],
+  );
 }
 
 /** The ids of every picture and recording the items show, which the list reads the bytes of. */

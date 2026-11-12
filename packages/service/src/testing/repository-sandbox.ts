@@ -69,12 +69,14 @@ export function sandboxDouble(
 ): SandboxDouble {
   const { PATH, VARIABLE } = REPOSITORY_SANDBOX_CONTRACT;
   let policy: NetworkPolicy = OPEN_INTERNET;
+
   /** The policy the sources compose, set and recorded. */
   const composed = (sources: FirewallSources) =>
     Effect.sync(() => {
       policy = composePolicy(sources, new Map());
       double.policies.push(policy);
     });
+
   const double: SandboxDouble = {
     runs: [],
     policies: [],
@@ -88,13 +90,17 @@ export function sandboxDouble(
     run: (run: SandboxRunOptions) => {
       const env = run.env;
       double.runs.push({ command: run.command, workingDirectory: run.workingDirectory, env });
+
       // The checkout probe: which repository the record names, and whether a checkout stands.
       if (env?.[VARIABLE.URL] === undefined && env?.[VARIABLE.REPOSITORY] !== undefined) {
         const standing = double.checkedOut === env[VARIABLE.REPOSITORY];
+
         return Promise.resolve(result(standing ? EXIT.OK : EXIT.FAILED));
       }
+
       // An extra repository's clone into its folder, recorded with the firewall that stood for it.
       const folder = env?.[VARIABLE.FOLDER];
+
       if (folder !== undefined) {
         double.policiesDuringClone.push(policy);
         double.extraClones.push({
@@ -102,10 +108,13 @@ export function sandboxDouble(
           branch: env?.[VARIABLE.BRANCH] ?? "",
           url: env?.[VARIABLE.URL] ?? "",
         });
+
         return Promise.resolve(result(EXIT.OK));
       }
+
       // The clone, answered as scripted, and recorded with the firewall that stood for it.
       const url = env?.[VARIABLE.URL];
+
       if (url !== undefined) {
         double.policiesDuringClone.push(policy);
         double.clones.push({
@@ -114,31 +123,44 @@ export function sandboxDouble(
           url,
         });
         const scripted = double.cloneAnswers.shift();
+
         if (scripted !== undefined && scripted.exitCode !== EXIT.OK) {
           return Promise.resolve(result(scripted.exitCode, "", scripted.stderr));
         }
+
         double.checkedOut = env?.[VARIABLE.REPOSITORY];
+
         return Promise.resolve(result(EXIT.OK));
       }
+
       if (run.workingDirectory === PATH.CHECKOUT && double.checkedOut === undefined) {
         return Promise.resolve(result(EXIT.FAILED, "", "no checkout stands"));
       }
+
       // The commit identity set in the standing checkout.
       const name = env?.[CHECKOUT_IDENTITY_VARIABLE.NAME];
+
       if (run.workingDirectory === PATH.CHECKOUT && name !== undefined) {
         const scripted = double.identityAnswers.shift();
+
         if (scripted !== undefined && scripted.exitCode !== EXIT.OK) {
           return Promise.resolve(result(scripted.exitCode, "", scripted.stderr));
         }
+
         double.identities.push({ name, email: env?.[CHECKOUT_IDENTITY_VARIABLE.EMAIL] ?? "" });
+
         return Promise.resolve(result(EXIT.OK));
       }
+
       // A command from the checkout root, from the table: the model's under its variable, or the host's own as given.
       const command = env?.[VARIABLE.COMMAND] ?? (env === undefined ? run.command : undefined);
+
       if (run.workingDirectory === PATH.CHECKOUT && command !== undefined) {
         const answer = commands(command);
+
         return Promise.resolve(answer ?? result(EXIT.NOT_FOUND, "", "command not found"));
       }
+
       return Promise.reject(new Error(`the sandbox double was handed a run it does not know`));
     },
     ...(options.firewall === false
@@ -147,5 +169,6 @@ export function sandboxDouble(
           firewall: { write: composed },
         }),
   };
+
   return double;
 }

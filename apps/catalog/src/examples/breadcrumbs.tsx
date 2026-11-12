@@ -30,11 +30,13 @@ const FILE = "accept-invite.ts";
 function FilePath(): React.JSX.Element {
   const [open, setOpen] = useState<number | undefined>(undefined);
   const press = (at: number) => () => setOpen(open === at ? undefined : at);
+
   const pressed = (at: number) => ({
     popup: BREADCRUMB_POPUP.DIALOG,
     expanded: open === at,
     onPress: press(at),
   });
+
   const crumbs: Crumb[] = [
     {
       label: "…",
@@ -54,6 +56,7 @@ function FilePath(): React.JSX.Element {
     { label: "src", shownAt: BREADCRUMB_SHOWN.WIDE_OR_NARROW, ...pressed(3) },
     { label: FILE, current: true, ...pressed(4) },
   ];
+
   return (
     <BreadcrumbBar>
       <Breadcrumbs label="Path" crumbs={crumbs} />

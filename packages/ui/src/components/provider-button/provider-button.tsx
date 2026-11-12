@@ -116,6 +116,7 @@ function GateButton({
   onPress: () => void;
 }): React.JSX.Element {
   const ringShown = useSettled(busy);
+
   return (
     <button
       type="button"
@@ -172,6 +173,7 @@ export function ProviderButton({
   const cancelable = size === PROVIDER_BUTTON_SIZE.GATE && busy && cancel !== undefined;
   const words = said ?? `Continue with ${name}`;
   const describedBy = lastUsed ? badge : undefined;
+
   return (
     <span className="ui-provider-button-slot relative flex flex-col">
       {size === PROVIDER_BUTTON_SIZE.GATE ? (

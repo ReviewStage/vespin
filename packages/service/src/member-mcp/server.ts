@@ -6,9 +6,8 @@
  * effect behind a tool is run here, on the services the request's own
  * fiber handed over with the admitted member provided, never on a runtime of
  * this file's own: the store and the clock a test provides are the ones the
- * tool runs under. This is the one promise door of the server, listed as a
- * permanent adaptor in `tools/anti-slop/effect-edges.json` and root
- * AGENTS.md; what would end it is an Effect-native MCP server that serves
+ * tool runs under. This is the one promise door of the server; what would
+ * end it is an Effect-native MCP server that serves
  * the 2026-07-28 revision without a session.
  *
  * A tool's result is answered as its JSON text, which is what an agent
@@ -84,6 +83,7 @@ const isRefusal = Schema.is(
 
 function toolResult(result: MemberMcpToolResult): CallToolResult {
   const content: CallToolResult["content"] = [{ type: "text", text: JSON.stringify(result) }];
+
   return isRefusal(result) ? { content, isError: true } : { content };
 }
 
@@ -113,8 +113,11 @@ async function throughDoor(
     Effect.provideService(WorkspacePlugin, workspaces),
     Effect.provideService(AdmittedMember, member),
   );
+
   const exit = await Effect.runPromiseExitWith(services)(answered);
+
   if (Exit.isFailure(exit)) throw Cause.squash(exit.cause);
+
   return exit.value;
 }
 
@@ -127,6 +130,7 @@ export function memberMcpServer(
   experimentsOn: ReadonlySet<WorkspaceExperiment>,
 ): McpServer {
   const server = new McpServer(SERVER_INFO, { instructions: SERVER_INSTRUCTIONS });
+
   for (const tool of MEMBER_MCP_TOOLS) {
     if (tool.experiment !== undefined && !experimentsOn.has(tool.experiment)) continue;
     server.registerTool(
@@ -136,5 +140,6 @@ export function memberMcpServer(
         throughDoor(services, agentSandbox, workspaces, member, tool.name, tool.run(input)),
     );
   }
+
   return server;
 }

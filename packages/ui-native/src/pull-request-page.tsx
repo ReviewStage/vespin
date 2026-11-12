@@ -59,6 +59,7 @@ type PullRequestHeadProps = {
 /** One branch, as the panel's header names it: Lucide's branch glyph, then its name in the monospaced face. */
 function Branch({ name }: { readonly name: string }) {
   const colors = useColors();
+
   return (
     <HStack spacing={SPACE.TIGHT}>
       <ToneGlyph
@@ -98,6 +99,7 @@ export function PullRequestHead({
 }: PullRequestHeadProps) {
   const colors = useColors();
   const look = pullRequestLook(state, queued);
+
   return (
     <VStack
       alignment="leading"
@@ -165,6 +167,7 @@ type MarkRowProps = {
  */
 export function MarkRow({ id, mark, title, detail }: MarkRowProps) {
   const colors = useColors();
+
   const row: ReactElement = (
     <RowHead
       unread={false}
@@ -188,6 +191,7 @@ export function MarkRow({ id, mark, title, detail }: MarkRowProps) {
       }
     />
   );
+
   return <RowFrame id={id} row={row} />;
 }
 
@@ -204,6 +208,7 @@ export function WriteNoteRow({
   readonly said?: string | undefined;
 }) {
   const colors = useColors();
+
   return (
     <HStack
       alignment="top"
@@ -264,13 +269,14 @@ export function MergeActRow({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+
   return (
     <SwiftUIButton
       onPress={onPress}
       modifiers={[
         buttonStyle(prominent ? "borderedProminent" : "bordered"),
         controlSize("large"),
-        tint(colors.ACCENT),
+        tint(prominent ? colors.ACCENT : colors.TEXT),
         disabled(dimmed),
         listRowBackground("clear"),
         listRowSeparator("hidden"),
@@ -285,7 +291,7 @@ export function MergeActRow({
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
-          foregroundStyle(prominent ? colors.ON_ACCENT : colors.ACCENT_TEXT),
+          foregroundStyle(prominent ? colors.ON_ACCENT : colors.TEXT),
           frame({ maxWidth: Number.POSITIVE_INFINITY }),
         ]}
       >
@@ -352,6 +358,7 @@ export function ConfirmAsk({
     setWords("");
   }, [presented, typed]);
   const shut = gate !== undefined && words !== gate;
+
   return (
     <Host matchContents style={{ position: "absolute" }}>
       <Alert
@@ -445,6 +452,7 @@ export function WordsAsk({
     setWords(initial);
   }, [presented, initial, typed]);
   const empty = words.trim().length === 0;
+
   const field =
     kind === WORDS_ASK_KIND.EMAIL
       ? [
@@ -453,6 +461,7 @@ export function WordsAsk({
           textInputAutocapitalization("never"),
         ]
       : [textInputAutocapitalization("words")];
+
   return (
     <Host matchContents style={{ position: "absolute" }}>
       <Alert

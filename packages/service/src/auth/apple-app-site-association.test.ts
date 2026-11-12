@@ -38,6 +38,7 @@ const decodeDocument = Schema.decodeUnknownSync(
       ),
     }),
     webcredentials: Schema.Struct({ apps: Schema.Array(Schema.String) }),
+    activitycontinuation: Schema.Struct({ apps: Schema.Array(Schema.String) }),
   }),
 );
 
@@ -49,7 +50,9 @@ const answered = Effect.fn(function* (variables: Record<string, string>) {
     ),
     { disableLogger: true },
   );
+
   yield* Effect.addFinalizer(() => Effect.promise(() => web.dispose()));
+
   return yield* Effect.promise(() =>
     web.handler(new Request(`${ORIGIN}${APPLE_APP_SITE_ASSOCIATION.ROUTE}`)),
   );
@@ -74,14 +77,17 @@ it.effect(
           ],
         },
         webcredentials: { apps: [appId] },
+        activitycontinuation: { apps: [appId] },
       });
 
       const named = yield* answered({
         [APPLE_APP_ENVIRONMENT.TEAM_ID]: TEAM_ID,
         [APPLE_APP_ENVIRONMENT.IOS_BUNDLE_ID]: "dev.vespin.ios.beta",
       });
+
       const renamed = decodeDocument(yield* Effect.promise(() => named.json()));
       assert.deepEqual(renamed.webcredentials.apps, [`${TEAM_ID}.dev.vespin.ios.beta`]);
+      assert.deepEqual(renamed.activitycontinuation.apps, [`${TEAM_ID}.dev.vespin.ios.beta`]);
     }),
 );
 

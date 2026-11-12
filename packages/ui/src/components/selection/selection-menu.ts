@@ -15,13 +15,16 @@ import type { SelectionAct } from "./selection-bar.js";
 /** One act as a row's menu draws it: an item, red where it cannot be taken back, or a submenu of its choices. */
 function selectionEntry(act: SelectionAct): MenuEntry {
   const head = act.icon === undefined ? { label: act.label } : { label: act.label, icon: act.icon };
+
   if (act.menu === undefined) {
     return act.danger === true
       ? { ...head, onSelect: act.onAct, danger: true }
       : { ...head, onSelect: act.onAct };
   }
+
   // Note that a submenu draws no rule between its items, so the act's groups run on as one list.
   const items: readonly MenuAction[] = act.menu.flat();
+
   return { ...head, items };
 }
 
@@ -32,7 +35,8 @@ function selectionEntry(act: SelectionAct): MenuEntry {
  * there is no act.
  */
 export function selectionMenu(acts: readonly SelectionAct[]): readonly (readonly MenuEntry[])[] {
-  const kept = acts.filter((act) => act.danger !== true).map(selectionEntry);
-  const lost = acts.filter((act) => act.danger === true).map(selectionEntry);
+  const kept = acts.flatMap((act) => (act.danger === true ? [] : [selectionEntry(act)]));
+  const lost = acts.flatMap((act) => (act.danger === true ? [selectionEntry(act)] : []));
+
   return [kept, lost].filter((group) => group.length > 0);
 }

@@ -29,6 +29,7 @@ function drawn(props: Parameters<typeof Comment>[0]): string {
 /** The words of an element of `markup` found by its class, its tags stripped. */
 function wordsOf(markup: string, className: string): string | undefined {
   const page = new DOMParser().parseFromString(markup, "text/html");
+
   return page.querySelector(`.${className}`)?.textContent ?? undefined;
 }
 
@@ -40,6 +41,7 @@ test("a comment names its writer, says how long ago, and holds its trailing slot
     trailing: createElement("span", { "data-testid": "status" }, "Resolved"),
     children: "Rerunning the spec on WebKit.",
   });
+
   assert.equal(wordsOf(markup, "ui-comment-name"), "Ada Lovelace");
   assert.equal(wordsOf(markup, "ui-comment-time"), "2h");
   assert.match(markup, new RegExp(`<time[^>]*dateTime="${new Date(AT).toISOString()}"`, "u"));
@@ -73,6 +75,7 @@ test("a name the caller draws as its own ref stands in the name's place", () => 
     at: AT,
     now: NOW,
   });
+
   assert.match(markup, /class="person-chip">Ada<\/span>/u);
   assert.equal(wordsOf(markup, "ui-comment-name"), "Ada");
 });
@@ -91,5 +94,6 @@ test("a state the comment stands in is read right after the name, before its age
     now: NOW,
     trailing: "Comment actions",
   });
+
   assert.equal(wordsOf(markup, "ui-comment-head"), "Ada LovelacePending2hComment actions");
 });

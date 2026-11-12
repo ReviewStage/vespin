@@ -79,6 +79,7 @@ function heldInFrame(view: ImageView, frame: ImageFrame): ImageView {
   if (view.scale <= 1 + FITTED_SLACK) return FITTED_VIEW;
   const width = slack(frame.fitted.width, frame.frame.width, view.scale);
   const height = slack(frame.fitted.height, frame.frame.height, view.scale);
+
   return { scale: view.scale, x: clamp(view.x, -width, width), y: clamp(view.y, -height, height) };
 }
 
@@ -91,6 +92,7 @@ export function zoomedTo(
 ): ImageView {
   const next = clamp(scale, 1, IMAGE_ZOOM.MOST);
   const ratio = next / view.scale;
+
   return heldInFrame(
     { scale: next, x: at.x - (at.x - view.x) * ratio, y: at.y - (at.y - view.y) * ratio },
     frame,
@@ -105,6 +107,7 @@ export function zoomedByWheel(
   at: FramePoint,
 ): ImageView {
   const counted = clamp(deltaY, -IMAGE_ZOOM.WHEEL_MOST_PIXELS, IMAGE_ZOOM.WHEEL_MOST_PIXELS);
+
   return zoomedTo(view, frame, view.scale * Math.exp(-counted * IMAGE_ZOOM.PER_WHEEL_PIXEL), at);
 }
 
@@ -132,5 +135,6 @@ export function pressedAt(
 ): ImageView {
   if (isZoomed(view)) return FITTED_VIEW;
   const own = frame.fitted.width > 0 ? natural.width / frame.fitted.width : 1;
+
   return zoomedTo(view, frame, Math.max(own, IMAGE_ZOOM.PRESS_LEAST), at);
 }

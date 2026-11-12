@@ -7,13 +7,20 @@ import { openURL } from "expo-linking";
 /** Where a launch with nothing to route opens: the Inbox, through the root's own redirect. */
 const HOME = "/";
 
+/** A web address, as a universal link or a page handed off from another device arrives; anything else is a route of the app's own. */
+const WEB_ADDRESS = /^https?:\/\//iu;
+
 /**
  * The route for `path`, which is the whole address that opened the app: a
  * vespin.dev link the app draws (`@repo/features/ios-app-links`) to its
- * route; one it leaves to the web opened in Safari, which the association
- * never hands back, and the app left where it was; anything else, such as a
- * `vespin://` route of the app's own, as it came. Note that nothing here may
- * throw, since expo-router reads a throw as the app's failure to launch.
+ * route; any other web address opened in Safari, and the app left where it
+ * was; anything else, such as a `vespin://` route of the app's own, as it
+ * came. Note that a universal link reaches the app only for a page it draws,
+ * but a page another device hands off reaches it for any page of the host,
+ * since the association's `activitycontinuation` claims the whole domain,
+ * so a page no link names goes to Safari too, never to expo-router, which
+ * would draw no screen for it. Nothing here may throw, since expo-router
+ * reads a throw as the app's failure to launch.
  */
 export function redirectSystemPath({
   path,
@@ -24,13 +31,17 @@ export function redirectSystemPath({
 }): string | null {
   try {
     const read = readShownLink(path);
-    if (read === undefined) return path;
-    const route = "workspace" in read ? iosAppRouteOf(read.place) : undefined;
+
+    if (read === undefined && !WEB_ADDRESS.test(path)) return path;
+    const route = read !== undefined && "workspace" in read ? iosAppRouteOf(read.place) : undefined;
+
     if (route !== undefined) return route;
-    openURL(path).catch((error: unknown) => console.error("The link did not open.", error));
+    openURL(path).catch((cause: unknown) => console.error("The link did not open.", cause));
+
     return initial ? HOME : null;
   } catch (error) {
     console.error("The link could not be read.", error);
+
     return initial ? HOME : null;
   }
 }

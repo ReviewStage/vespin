@@ -34,6 +34,7 @@ export function FileText({
   extent?: FileTextExtent;
 }): React.JSX.Element {
   const scrolls = extent !== FILE_TEXT_EXTENT.PEEK;
+
   return (
     <section
       className="ui-file-text"

@@ -5,13 +5,9 @@ import {
   DEVICE_STANDING,
   type DeviceStanding,
 } from "@repo/features/agent-wire";
-import {
-  DEVICE_PLATFORM,
-  DEVICE_SETUP,
-  type DevicePlatform,
-  type DeviceSetup,
-} from "@repo/features/device-agent-wire";
+import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
 import { devicePlatformOf } from "@repo/features/device-platform";
+import { machineName, type ThisMac } from "@repo/features/machine-name";
 import type { MacOffer } from "@repo/features/models-wire";
 import { agentRunsOnWords, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import type { TaskRunsOnRequest } from "@repo/features/task-wire";
@@ -34,7 +30,7 @@ import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { Schema } from "effect";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
-import { machineName, type ThisMac, useThisMac } from "../machine-name.js";
+import { useThisMac } from "../machine-name.js";
 import { Picker } from "../settings/picker-row.js";
 import { keptKey, useKept } from "../use-kept.js";
 
@@ -43,7 +39,7 @@ import { keptKey, useKept } from "../use-kept.js";
  *
  * Each agent runs where its Start put it, for its life (`agent-wire.ts`'s
  * `agentStartRequestFields`). New task's chip names it for the task and its
- * first agent, and while the Bring your own host experiment is on a draft
+ * first agent, and a draft
  * agent's box wears the same chip (`draft-agent-tab.tsx`), a fork's and a
  * continue's among them (`useStartRunsOn`). The chip, a toolbar chip ending
  * in its chevron as the model chip beside it is, drops a menu: Cloud first, then
@@ -67,18 +63,11 @@ import { keptKey, useKept } from "../use-kept.js";
  * still getting ready or not set up, stays picked and says so, so its start
  * is refused by name rather than sent quietly to the cloud. It stands on
  * every New task but an automation's or a child's, and lists Cloud alone
- * where the member has no device, or while the Bring your own host
- * experiment is off, which lists no device (`new-task-composer.tsx`). On
+ * where the member has no device (`new-task-composer.tsx`). On
  * the task, each agent's row in its plan's head says Cloud, or the device
  * that agent runs on, named the same way, or that the device was removed
  * (`plan-agents.tsx`).
  */
-
-/** What a device still setting itself up is called, which Runs on says of a device that takes no agent yet. */
-const DEVICE_SETUP_WORDS = {
-  [DEVICE_SETUP.PREPARING]: "Getting ready…",
-  [DEVICE_SETUP.FAILED]: "Couldn't set up",
-} as const satisfies Record<DeviceSetup, string>;
 
 /** The id the Cloud row is picked by, which no device's id is. */
 export const CLOUD_ROW = "cloud";
@@ -104,8 +93,10 @@ export function DeviceGlyph({
 
 /** Where a device offered stands now; one a service before beats said nothing of is online, as it listed only those, and one the presence read does not name, though it is the account's own, is gone. */
 function offerStanding(device: MacOffer, book: PresenceBook): DeviceStanding {
-  if (device.seenAt === undefined) return DEVICE_STANDING.ONLINE;
-  return presenceStanding(book, device.deviceId) ?? DEVICE_STANDING.OFFLINE;
+  return (
+    presenceStanding(book, device.deviceId) ??
+    (device.seenAt === undefined ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE)
+  );
 }
 
 /** What each standing is called. */
@@ -114,60 +105,59 @@ const STANDING_WORDS = {
   [DEVICE_STANDING.OFFLINE]: RUNS_ON_WORDS.OFFLINE,
   [DEVICE_STANDING.UNKNOWN]: RUNS_ON_WORDS.UNKNOWN,
   [DEVICE_STANDING.CHECKING]: RUNS_ON_WORDS.CHECKING,
-} as const;
+  [DEVICE_STANDING.SETTING_UP]: RUNS_ON_WORDS.SETTING_UP,
+  [DEVICE_STANDING.FAILED]: RUNS_ON_WORDS.FAILED,
+} as const satisfies Record<DeviceStanding, string>;
 
-/** The tone of each standing's dot: green online, gray away or still being checked, the attention tone where it cannot be checked. */
+/** The tone of each standing's dot: green online, working while setting up, danger where it failed, gray away or still being checked, the attention tone where it cannot be checked. */
 const STANDING_TONE = {
   [DEVICE_STANDING.ONLINE]: STATUS_TONE.COMPLETE,
   [DEVICE_STANDING.OFFLINE]: STATUS_TONE.NEUTRAL,
   [DEVICE_STANDING.UNKNOWN]: STATUS_TONE.ATTENTION,
   [DEVICE_STANDING.CHECKING]: STATUS_TONE.NEUTRAL,
-} as const;
+  [DEVICE_STANDING.SETTING_UP]: STATUS_TONE.WORKING,
+  [DEVICE_STANDING.FAILED]: STATUS_TONE.DANGER,
+} as const satisfies Record<DeviceStanding, StatusTone>;
 
-/** The tone of the dot of a device online but not ready: still getting ready is working, one that couldn't set up failed. */
-const SETUP_TONE = {
-  [DEVICE_SETUP.PREPARING]: STATUS_TONE.WORKING,
-  [DEVICE_SETUP.FAILED]: STATUS_TONE.DANGER,
-} as const;
+/** The standings that take no agent, which a list draws dimmed and unpicked; one whose standing cannot be told yet is not among them. */
+const TAKES_NO_AGENT: ReadonlySet<DeviceStanding> = new Set([
+  DEVICE_STANDING.OFFLINE,
+  DEVICE_STANDING.SETTING_UP,
+  DEVICE_STANDING.FAILED,
+]);
 
-/** Why a device offered takes no agent now, and its dot's tone: away, or still getting ready or not set up, whatever its standing; none for one that takes an agent, and none for one whose standing cannot be told yet, which is not called away. */
-function offerUnready(
-  device: MacOffer,
-  book: PresenceBook,
-): { readonly words: string; readonly tone: StatusTone } | undefined {
-  if (offerStanding(device, book) === DEVICE_STANDING.OFFLINE)
-    return { words: RUNS_ON_WORDS.OFFLINE, tone: STANDING_TONE[DEVICE_STANDING.OFFLINE] };
-  switch (device.setup) {
-    case DEVICE_SETUP.PREPARING:
-      return {
-        words: DEVICE_SETUP_WORDS[DEVICE_SETUP.PREPARING],
-        tone: SETUP_TONE[DEVICE_SETUP.PREPARING],
-      };
-    case DEVICE_SETUP.FAILED:
-      return {
-        words: DEVICE_SETUP_WORDS[DEVICE_SETUP.FAILED],
-        tone: SETUP_TONE[DEVICE_SETUP.FAILED],
-      };
-    case undefined:
-      return undefined;
-  }
+/** Why a device offered takes no agent now: away, setting up, or failed; none for one that takes an agent, and none for one whose standing cannot be told yet, which is not called away. */
+function offerUnready(device: MacOffer, book: PresenceBook): string | undefined {
+  const standing = offerStanding(device, book);
+
+  return TAKES_NO_AGENT.has(standing) ? STANDING_WORDS[standing] : undefined;
 }
 
-/** A device as a list of places draws it: its platform's glyph wearing one dot, its words on hover and to a reader, and why it takes no agent now, none where it does. */
-export function deviceMark(
-  device: MacOffer,
-  book: PresenceBook,
-): { readonly icon: React.JSX.Element; readonly unready: string | undefined } {
-  const unready = offerUnready(device, book);
-  const standing = offerStanding(device, book);
-  const tone = unready?.tone ?? STANDING_TONE[standing];
-  const words = unready?.words ?? STANDING_WORDS[standing];
-  const icon = (
-    <StatusGlyph tone={tone} label={words}>
+/** A device's platform glyph wearing its standing's dot, its words to a reader, and on a rest where `hinted`: as a list of places draws its row, and an agent's place chip the device it runs on (`agent-place.tsx`). */
+export function DeviceStandingGlyph({
+  device,
+  standing,
+  hinted = true,
+}: {
+  device: { readonly platform?: DevicePlatform } | undefined;
+  standing: DeviceStanding;
+  /** Whether a rest on the glyph shows its words; false where the control it stands in says them. */
+  hinted?: boolean;
+}): React.JSX.Element {
+  return (
+    <StatusGlyph tone={STANDING_TONE[standing]} label={STANDING_WORDS[standing]} hinted={hinted}>
       <DeviceGlyph device={device} />
     </StatusGlyph>
   );
-  return { icon, unready: unready?.words };
+}
+
+type DeviceMarkResult = { readonly icon: React.JSX.Element; readonly unready: string | undefined };
+
+/** A device as a list of places draws it: its platform's glyph wearing one dot, its words on hover and to a reader, and why it takes no agent now, none where it does. */
+export function deviceMark(device: MacOffer, book: PresenceBook): DeviceMarkResult {
+  const icon = <DeviceStandingGlyph device={device} standing={offerStanding(device, book)} />;
+
+  return { icon, unready: offerUnready(device, book) };
 }
 
 /** A device's row past its name, for every device alike (`deviceMark`); one that takes no agent is dimmed and unpicked too, its dot saying why. */
@@ -176,6 +166,7 @@ function offerMarks(
   book: PresenceBook,
 ): Pick<MenuRow, "icon" | "disabled" | "why"> {
   const { icon, unready } = deviceMark(device, book);
+
   return unready === undefined ? { icon } : { icon, disabled: unready, why: MENU_ROW_WHY.MARK };
 }
 
@@ -212,6 +203,7 @@ export function useNewTaskRunsOn(
 ): readonly [MacOffer | undefined, (deviceId: string | undefined) => void, boolean] {
   const [kept, keep] = useKept(KEPT.PICK, CLOUD_ROW);
   const picked = devices.find((each) => each.deviceId === kept);
+
   return [
     picked,
     (deviceId: string | undefined) => keep(deviceId ?? CLOUD_ROW),
@@ -261,24 +253,29 @@ export function useStartRunsOn(
   onPick: (runsOn: AgentRunsOnRequest) => void,
 ): readonly [MacOffer | undefined, (deviceId: string | undefined) => void] {
   const [kept, keep] = useKept(KEPT.PICK, CLOUD_ROW);
+
   const newest = seed.agents
     .filter((agent) => seed.me !== undefined && agent.startedBy?.userId === seed.me)
     .reduce<(typeof seed.agents)[number] | undefined>(
       (was, agent) => (was === undefined || agent.createdAt > was.createdAt ? agent : was),
       undefined,
     );
+
   const seeded = seed.source ?? newest;
+
   const row =
     picked === undefined
       ? ((seeded === undefined ? undefined : placeRow(seeded)) ?? kept)
       : picked.machine === AGENT_MACHINE.DEVICE
         ? picked.deviceId
         : CLOUD_ROW;
+
   // Note that the agent names its device by its name alone, so it stands as an offer of no model, its standing unread.
   const unlisted =
     picked === undefined && seeded?.mac?.deviceId !== undefined && seeded.mac.deviceId === row
       ? { deviceId: row, name: seeded.mac.name, providers: [] }
       : undefined;
+
   return [
     devices.find((each) => each.deviceId === row) ?? unlisted,
     (deviceId: string | undefined) => {
@@ -292,8 +289,10 @@ export function useStartRunsOn(
 /** What New task's chip says of the device picked, by what the list calls it: that alone while it takes an agent, and why it does not, or that its standing cannot be told, otherwise. */
 function offerStateWords(device: MacOffer, book: PresenceBook, name: string): string {
   const unready = offerUnready(device, book);
-  if (unready !== undefined) return `${name} · ${unready.words}`;
+
+  if (unready !== undefined) return `${name} · ${unready}`;
   const standing = offerStanding(device, book);
+
   return standing === DEVICE_STANDING.ONLINE ? name : `${name} · ${STANDING_WORDS[standing]}`;
 }
 
@@ -324,6 +323,7 @@ export function NewTaskRunsOnChip({
   // Note that a chip offering Cloud alone reads no beats, because it draws no device.
   const book = useDevicePresence(devices.length > 0);
   const thisMac = useThisMac();
+
   return (
     <Picker
       label={RUNS_ON_WORDS.LABEL}
@@ -366,13 +366,16 @@ export function RunsOnPlace({
   const thisMac = useThisMac();
   const { mac } = agent;
   const cloud = agent.machine !== AGENT_MACHINE.DEVICE;
+
   // Note that the agent names its device alone, so This Mac is told by its device and no name is twinned.
   const words = agentRunsOnWords(agent, (named) =>
     machineName({ deviceId: named.deviceId, name: named.name }, [], thisMac),
   );
+
   const device = devices?.find(
     (each) => mac?.deviceId !== undefined && each.deviceId === mac.deviceId,
   );
+
   return (
     <Inline gap={GAP.ICON} wrap={false}>
       <GlyphSlot size={ICON_SIZE.SMALL}>

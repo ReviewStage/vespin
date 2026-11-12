@@ -59,23 +59,28 @@ export function createNativeNode(dependencies: NativeNodeDependencies): NativeNo
     microphoneRoute?: MicrophoneRoute | undefined;
   }): void {
     const current = state.snapshot().audio;
+
     const microphoneRoute =
       "microphoneRoute" in patch ? patch.microphoneRoute : current.microphoneRoute;
+
     const audio: AppAudioSlice = {
       microphoneStatus: patch.microphoneStatus ?? current.microphoneStatus,
     };
+
     if (microphoneRoute !== undefined) audio.microphoneRoute = microphoneRoute;
     state.update({ audio });
   }
 
   function readMicrophoneStatus(): MicrophoneStatus {
     if (config.platform !== "darwin") return MICROPHONE_STATUS.GRANTED;
+
     return readMicrophoneStatusWord(systemPreferences.getMediaAccessStatus("microphone"));
   }
 
   function refreshMicrophoneStatus(): MicrophoneStatus {
     const status = readMicrophoneStatus();
     writeAudio({ microphoneStatus: status });
+
     return status;
   }
 
@@ -87,14 +92,17 @@ export function createNativeNode(dependencies: NativeNodeDependencies): NativeNo
     refreshMicrophoneStatus,
     requestMicrophone: async () => {
       if (config.platform !== "darwin") return MICROPHONE_STATUS.GRANTED;
+
       if (refreshMicrophoneStatus() === MICROPHONE_STATUS.NOT_DETERMINED) {
         await systemPreferences.askForMediaAccess("microphone");
       }
+
       return refreshMicrophoneStatus();
     },
     microphoneRouteWatcher: () => microphoneRouteWatcher,
     start: async () => {
       refreshMicrophoneStatus();
+
       if (!config.runMode.observesProviders) return;
       microphoneRouteWatcher = createMicrophoneRouteWatcher({
         onRoute: (route) => {
@@ -104,6 +112,7 @@ export function createNativeNode(dependencies: NativeNodeDependencies): NativeNo
           writeAudio({ microphoneRoute: undefined });
         },
       });
+
       if (!microphoneRouteWatcher.start()) microphoneRouteWatcher = undefined;
     },
     stop: async () => {

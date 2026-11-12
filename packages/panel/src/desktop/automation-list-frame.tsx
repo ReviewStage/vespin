@@ -1,12 +1,12 @@
 import {
+  GROUP_HEADING,
+  GroupHeader,
   List,
   ListMotion,
   ListRow,
-  SETTINGS_SECTION_FRAME,
   SETTINGS_SKELETON_CONTROL,
   SettingsControlSkeleton,
-  SettingsSection,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   Toolbar,
 } from "@repo/ui";
@@ -68,8 +68,8 @@ export function AutomationsToolbar({ children }: { children: ReactNode }): React
 export function AutomationsActsSkeleton(): React.JSX.Element {
   return (
     <>
-      <Skeleton shape={SKELETON_SHAPE.CONTROL} width={SKELETON_ACTS.AGENT} />
-      <Skeleton shape={SKELETON_SHAPE.CONTROL} width={SKELETON_ACTS.NEW} />
+      <Skeleton kind={SKELETON_KIND.CONTROL} width={SKELETON_ACTS.AGENT} />
+      <Skeleton kind={SKELETON_KIND.CONTROL} width={SKELETON_ACTS.NEW} />
     </>
   );
 }
@@ -96,22 +96,33 @@ export function AutomationGroupList({
   children: ReactNode;
 }): React.JSX.Element {
   const root = useRef<HTMLElement | null>(null);
+
   // Note that the group is a div or a section by whether it is headed, so the motion's root is held by a callback either takes.
   const hold = useCallback((node: HTMLElement | null) => {
     root.current = node;
   }, []);
+
+  const rows = (
+    <List label={name} moves>
+      {children}
+    </List>
+  );
+
   const list = (
     <ListMotion root={root}>
-      <SettingsSection
-        title={headed ? nameMasked ? <ReplayMask>{name}</ReplayMask> : name : undefined}
-        frame={SETTINGS_SECTION_FRAME.NONE}
-      >
-        <List label={name} moves>
-          {children}
-        </List>
-      </SettingsSection>
+      {headed ? (
+        <GroupHeader
+          heading={GROUP_HEADING.H2}
+          label={nameMasked ? <ReplayMask>{name}</ReplayMask> : name}
+        >
+          {rows}
+        </GroupHeader>
+      ) : (
+        rows
+      )}
     </ListMotion>
   );
+
   return headed ? (
     <div ref={hold} className={AUTOMATION_GROUP}>
       {list}
@@ -178,7 +189,7 @@ export function AutomationListSkeleton({ narrow }: { narrow: boolean }): React.J
       {SKELETON_ROWS.map(({ name, trigger }) => (
         <ListRow
           key={name}
-          leading={<Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_ROW_MARK} />}
+          leading={<Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_ROW_MARK} />}
           title={<Skeleton width={name} />}
           description={<Skeleton width={trigger} />}
           meta={
@@ -186,7 +197,7 @@ export function AutomationListSkeleton({ narrow }: { narrow: boolean }): React.J
               <AutomationRowMeta
                 owner={
                   <AutomationOwnerFrame
-                    mark={<Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_OWNER_MARK} />}
+                    mark={<Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_OWNER_MARK} />}
                     name={<Skeleton width={SKELETON_META.OWNER} />}
                   />
                 }

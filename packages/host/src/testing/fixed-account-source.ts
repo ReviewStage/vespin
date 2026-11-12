@@ -21,6 +21,7 @@ export function fixedAccountSource(
   const account = input.account ?? { status: ACCOUNT_STATUS.SIGNED_OUT };
   const credential = input.credential ?? NO_CREDENTIAL;
   const signedOut: AccountSnapshot = { status: ACCOUNT_STATUS.SIGNED_OUT };
+
   const session: AccountSession = {
     snapshot: () => account,
     changes: Effect.succeed(Stream.empty),
@@ -35,11 +36,13 @@ export function fixedAccountSource(
     credential,
     sessionCredential: credential,
   };
+
   return Layer.succeed(AccountSource, {
     tokenCipher: undefined,
     open: (host) =>
       Effect.sync(() => {
         input.opened?.(host);
+
         return session;
       }),
   });

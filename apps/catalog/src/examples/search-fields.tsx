@@ -36,6 +36,7 @@ function Held({
   look?: SearchFieldLook;
 }): React.JSX.Element {
   const [query, setQuery] = useState(start);
+
   return (
     <SearchField
       label={label}

@@ -36,7 +36,7 @@
  * answers every call as unavailable.
  */
 
-import { EXCESS_KEYS, unparsedWire, valueFromJsonText } from "@repo/wire";
+import { EXCESS_KEYS, unparsedWire, valueFromJsonText, valueKind } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { getVercelOidcToken } from "@vercel/oidc";
 import {
@@ -55,6 +55,7 @@ import {
   Effect,
   Layer,
   Option,
+  Predicate,
   Redacted,
   Result,
   Schema,
@@ -243,29 +244,38 @@ class Refused extends Data.TaggedError("Refused")<{
 function refusalDetail(refusal: Refused): string | undefined {
   if (refusal.status === undefined) return refusal.detail;
   const answered = `Vercel answered ${refusal.status}`;
+
   return refusal.detail === undefined ? answered : `${answered}: ${refusal.detail}`;
 }
 
 /** A refusal in the package's words: what was named gone, its name taken, its snapshot gone, its run ending, its image not ready, or the call unavailable. */
 function neutralOf(refusal: Refused): SandboxError {
   const { call, status, code } = refusal;
+
   if (status === NOT_FOUND_STATUS || code === DRIVE_CODE.NOT_INITIALIZED) {
     return new SandboxGone({ call });
   }
+
   if (status === NAME_TAKEN_STATUS && code !== DRIVE_CODE.ATTACHED) {
     return new SandboxNameTaken({ call });
   }
+
   if (status === SNAPSHOT_GONE.STATUS && SNAPSHOT_GONE.BODY.test(refusal.detail ?? "")) {
     return new SnapshotGone({ call });
   }
+
   if (status === SESSION_ENDING.STATUS && code !== undefined && SESSION_ENDING.CODES.has(code)) {
     return new SandboxEnding({ call });
   }
+
   if (code === IMAGE_NOT_READY_CODE) return new ImageNotReady({ call });
+
   const retryable =
     status !== undefined &&
     (status === AGAIN_STATUS.TOO_MANY_REQUESTS || status >= AGAIN_STATUS.SERVER_ERROR);
+
   const detail = refusalDetail(refusal);
+
   return new SandboxUnavailable({
     call,
     ...(retryable ? { retryable } : undefined),
@@ -312,8 +322,10 @@ const SANDBOX_SHELL_ADDRESS = {
 /** Whether a minted PTY address is one of Vercel's sandboxes, by its protocol and host alone, so the shell's token is never sent anywhere else. */
 function isSandboxShellAddress(address: string): boolean {
   const url = Result.try(() => new URL(address));
+
   if (Result.isFailure(url)) return false;
   const { protocol, hostname, username, password } = url.success;
+
   return (
     SANDBOX_SHELL_ADDRESS.PROTOCOLS.has(protocol) &&
     hostname.endsWith(SANDBOX_SHELL_ADDRESS.HOST_SUFFIX) &&
@@ -337,7 +349,7 @@ const UNREADABLE_DETAIL = "an answer that could not be read";
  * we sent all are, and Vercel's prose, codes, and a URL's slashed path
  * segments mostly are not.
  */
-const TOKEN_SHAPED = /[A-Za-z0-9._~+-]{20,}=*/gu;
+const TOKEN_LIKE = /[A-Za-z0-9._~+-]{20,}=*/gu;
 
 /** An error code as Vercel writes one: lowercase words joined by underscores. */
 const ERROR_CODE = /^[a-z]+(?:_[a-z]+){0,7}$/u;
@@ -352,7 +364,7 @@ const REDACTED_DETAIL = "[redacted]";
  * back, and a detail reaches the logs.
  */
 function capped(text: string): string {
-  return clipped(text.replace(TOKEN_SHAPED, REDACTED_DETAIL).replace(/\s+/gu, " ").trim());
+  return clipped(text.replace(TOKEN_LIKE, REDACTED_DETAIL).replace(/\s+/gu, " ").trim());
 }
 
 /** How much of a dead command's stderr a log keeps: its end, where the reason it died is written. */
@@ -363,7 +375,9 @@ function stderrTail(stderr: string, secrets: readonly string[]): string {
   const named = secrets
     .filter((secret) => secret.length > 0)
     .reduce((said, secret) => said.split(secret).join(REDACTED_DETAIL), stderr);
-  const said = named.replace(TOKEN_SHAPED, REDACTED_DETAIL).replace(/\s+/gu, " ").trim();
+
+  const said = named.replace(TOKEN_LIKE, REDACTED_DETAIL).replace(/\s+/gu, " ").trim();
+
   return said.length > STDERR_TAIL_CHARS ? `…${said.slice(-STDERR_TAIL_CHARS)}` : said;
 }
 
@@ -379,43 +393,52 @@ const CAUSE_DEPTH = 3;
 function causeDetail(cause: unknown): string {
   const said: string[] = [];
   let at: unknown = cause;
+
   while (at instanceof Error && said.length < CAUSE_DEPTH) {
     said.push(`${at.name}: ${at.message}`);
     at = at.cause;
   }
-  return capped(said.length === 0 ? typeof cause : said.join(" <- "));
+
+  return capped(said.length === 0 ? valueKind(cause) : said.join(" <- "));
 }
 
 /** Vercel's error code and message from a refusal's text, where it wrote them. */
 function errorDetail(text: string): string | undefined {
   const read = readErrorAnswer(unparsedWire(valueFromJsonText(text)));
+
   if (Result.isFailure(read)) return undefined;
   const { code, message } = read.success.error;
   // Note that a code shaped as Vercel's are is kept whole, because one such as
   // `unsupported_media_type` is token-shaped by length and names the refusal.
   const named = code !== undefined && ERROR_CODE.test(code) ? code : undefined;
+
   const said = [named === undefined ? code : undefined, message].filter(
     (each): each is string => each !== undefined && each.trim() !== "",
   );
+
   const rest = said.length === 0 ? undefined : capped(said.join(": "));
+
   if (named === undefined) return rest;
+
   return rest === undefined ? named : clipped(`${named}: ${rest}`);
 }
 
 /** Vercel's error code in an answer's body, where it names one shaped as Vercel's are. */
 function errorCode(text: string): string | undefined {
   const read = readErrorAnswer(unparsedWire(valueFromJsonText(text)));
+
   if (Result.isFailure(read)) return undefined;
   const { code } = read.success.error;
+
   return code !== undefined && ERROR_CODE.test(code) ? code : undefined;
 }
 
 /** Whether the SDK's failure is Vercel's answer that the snapshot it opens from is gone (`SNAPSHOT_GONE`). */
-function snapshotGoneFailure(failure: unknown): boolean {
+function snapshotGoneFailure(cause: unknown): boolean {
   return (
-    failure instanceof APIError &&
-    failure.response.status === SNAPSHOT_GONE.STATUS &&
-    SNAPSHOT_GONE.BODY.test(failure.text ?? "")
+    cause instanceof APIError &&
+    cause.response.status === SNAPSHOT_GONE.STATUS &&
+    SNAPSHOT_GONE.BODY.test(cause.text ?? "")
   );
 }
 
@@ -430,7 +453,9 @@ function refused(
 ): Refused {
   const detail =
     errorDetail(answered.text) ?? (succeeded(answered.status) ? UNREADABLE_DETAIL : undefined);
+
   const code = errorCode(answered.text);
+
   return new Refused({
     call,
     status: answered.status,
@@ -450,6 +475,7 @@ function sdkFailure(call: SandboxCall, cause: unknown): Refused {
   if (cause instanceof APIError) {
     return refused(call, { status: cause.response.status, text: cause.text ?? "" });
   }
+
   if (cause instanceof StreamError) {
     return new Refused({
       call,
@@ -457,6 +483,7 @@ function sdkFailure(call: SandboxCall, cause: unknown): Refused {
       detail: capped(cause.message),
     });
   }
+
   return new Refused({ call, detail: causeDetail(cause) });
 }
 
@@ -486,7 +513,9 @@ function sessionGone(refusal: Refused): boolean {
 /** The SDK's own name for a network policy, from the package's: the open internet by name, else every host open and each named host's rules as the SDK's matchers and transforms. */
 function sdkPolicyOf(policy: NetworkPolicy): SdkNetworkPolicy {
   const hosts = Object.entries(policy.hosts);
+
   if (hosts.length === 0) return "allow-all";
+
   return {
     allow: Object.fromEntries([
       // Note that the wildcard leaves every other host open, as the open internet is.
@@ -498,7 +527,9 @@ function sdkPolicyOf(policy: NetworkPolicy): SdkNetworkPolicy {
             key: { exact: key },
             value: { exact: value },
           }));
+
           const matched = rule.path !== undefined || headers.length > 0;
+
           return {
             ...(matched
               ? {
@@ -525,10 +556,13 @@ async function madeUser(
   const user = await sandbox.createUser(made.name, { signal });
   const { group } = await sandbox.getDefaultUser({ signal });
   await sandbox.addUserToGroup(made.name, group, { signal });
+
   for (const folder of made.homeFolders) {
     await user.mkDir(folder, { signal });
   }
+
   const closed = await user.runCommand("chmod", ["700", user.homeDir], { signal });
+
   if (closed.exitCode !== 0) throw new Error(`${user.homeDir} could not be closed`);
 }
 
@@ -553,9 +587,9 @@ interface MountedDrive {
 }
 
 /** Nothing where the SDK's failure was Vercel's not-found, else the failure thrown on. */
-function absentIfNotFound(failure: unknown): undefined {
-  if (failure instanceof APIError && failure.response.status === NOT_FOUND_STATUS) return undefined;
-  throw failure;
+function absentIfNotFound(cause: unknown): undefined {
+  if (cause instanceof APIError && cause.response.status === NOT_FOUND_STATUS) return undefined;
+  throw cause;
 }
 
 /**
@@ -575,17 +609,23 @@ async function driveFor(
 ): Promise<MountedDrive | undefined> {
   if ("fill" in asked) {
     const drive = await Drive.getOrCreate({ ...under, name: asked.fill, signal });
+
     return { drive, at: asked.at, forked: false };
   }
+
   const own = ownDriveName(name);
   const standing = await Drive.get({ ...under, name: own, signal }).catch(absentIfNotFound);
+
   if (standing !== undefined) return { drive: standing, at: asked.at, forked: false };
+
   if ("own" in asked) return undefined;
+
   const origin = await Drive.get({
     ...under,
     name: "base" in asked.fork ? asked.fork.base : ownDriveName(asked.fork.ownedBy),
     signal,
   });
+
   return { drive: await origin.fork({ name: own, signal }), at: asked.at, forked: true };
 }
 
@@ -604,7 +644,9 @@ async function openedWithDrive(
 ): Promise<SdkSandbox> {
   const mounted =
     ask.drive === undefined ? undefined : await driveFor(ask.name, ask.drive, under, signal);
+
   let stood = false;
+
   try {
     return await open(mounted, () => {
       stood = true;
@@ -613,14 +655,16 @@ async function openedWithDrive(
     if (mounted?.forked === true && !stood) {
       await mounted.drive.delete({ signal }).catch(() => undefined);
     }
+
     throw failure;
   }
 }
 
 /** Whether a resume's failure says no sandbox stands to resume: none under the name, or one whose snapshot is gone, which a create replaces. */
-function noneToResume(failure: unknown): boolean {
-  if (!(failure instanceof APIError)) return false;
-  return failure.response.status === NOT_FOUND_STATUS || snapshotGoneFailure(failure);
+function noneToResume(cause: unknown): boolean {
+  if (!(cause instanceof APIError)) return false;
+
+  return cause.response.status === NOT_FOUND_STATUS || snapshotGoneFailure(cause);
 }
 
 /**
@@ -634,8 +678,10 @@ async function clearedStale(name: string, under: Under, signal: AbortSignal): Pr
   const stale = await SdkSandbox.get({ ...under, name, resume: false, signal }).catch(
     absentIfNotFound,
   );
+
   if (stale === undefined) return false;
   await stale.delete({ signal }).catch(absentIfNotFound);
+
   return true;
 }
 
@@ -680,8 +726,10 @@ type ListedMetadata = Awaited<ReturnType<typeof SdkSandbox.list>>["sandboxes"][n
  */
 async function idleTimed(sandbox: SdkSandbox, signal: AbortSignal): Promise<SdkSandbox> {
   const idle = Duration.toMillis(SANDBOX_IDLE);
+
   if (sandbox.timeout === undefined || sandbox.timeout === idle) return sandbox;
   await sandbox.update({ timeout: idle }, { signal });
+
   return sandbox;
 }
 
@@ -704,11 +752,14 @@ function portsClosedOnResume(signal: AbortSignal) {
 function touchExtension(session: Session, now: number): number | undefined {
   const startedAt = (session.startedAt ?? session.createdAt).getTime();
   const endsAt = startedAt + session.timeout;
+
   const wanted = Math.min(
     now + Duration.toMillis(SANDBOX_IDLE),
     startedAt + Duration.toMillis(TOUCH.LONGEST_RUN),
   );
+
   const extension = wanted - endsAt;
+
   return extension > Duration.toMillis(TOUCH.LEAST) ? extension : undefined;
 }
 
@@ -735,6 +786,7 @@ function routesOf(sandbox: SdkSandbox): readonly SandboxRoute[] {
 /** A sandbox the SDK answered whole, as the package reads it: the session it holds is the run it is up in now, whatever the sandbox's own record lags. */
 function openedOf(sandbox: SdkSandbox): OpenedSandbox {
   const session = sandbox.currentSession();
+
   return {
     name: sandbox.name,
     status: STATUS_OF_VERCEL.get(session.status),
@@ -759,10 +811,13 @@ function claimsOf(
   token: string,
 ): { readonly projectId: string; readonly teamId: string } | undefined {
   const payload = token.split(".")[1];
+
   if (payload === undefined) return undefined;
   const decoded = Result.try(() => JSON.parse(Buffer.from(payload, "base64url").toString("utf8")));
+
   if (Result.isFailure(decoded)) return undefined;
   const claims = readClaims(unparsedWire(decoded.success));
+
   return Result.isSuccess(claims)
     ? { projectId: claims.success.project_id, teamId: claims.success.owner_id }
     : undefined;
@@ -795,10 +850,13 @@ function vercelSandbox(
         try: readToken,
         catch: (cause) => new Refused({ call, detail: causeDetail(cause) }),
       });
+
       const claims = claimsOf(token);
+
       if (claims === undefined) {
         return yield* new Refused({ call, detail: "a token naming no project" });
       }
+
       return { token, ...claims, fetch };
     });
 
@@ -820,12 +878,13 @@ function vercelSandbox(
    */
   const sessionOf = (call: SandboxCall, target: SandboxTarget) =>
     Effect.flatMap(
-      found(call, typeof target === "string" ? target : target.name).pipe(
+      found(call, Predicate.isString(target) ? target : target.name).pipe(
         Effect.catchIf(isGone, () => Effect.fail(sessionEnded(call))),
       ),
       (sandbox) => {
         const current = sandbox.currentSession();
-        return typeof target === "string" || current.sessionId === target.running
+
+        return Predicate.isString(target) || current.sessionId === target.running
           ? Effect.succeed({ sandbox, session: current })
           : Effect.fail(sessionEnded(call));
       },
@@ -911,9 +970,17 @@ function vercelSandbox(
       said(
         Effect.map(
           asked(SANDBOX_CALL.CREATE, (signal, under) =>
-            openedWithDrive(ask, under, signal, (mounted) =>
-              SdkSandbox.create({ ...under, ...createParams(ask, mounted), signal }),
-            ),
+            openedWithDrive(ask, under, signal, async (mounted) => {
+              const created = await SdkSandbox.create({
+                ...under,
+                ...createParams(ask, mounted),
+                signal,
+              });
+
+              if (ask.user !== undefined) await madeUser(created, ask.user, signal);
+
+              return created;
+            }),
           ),
           openedOf,
         ),
@@ -931,19 +998,23 @@ function vercelSandbox(
                 resume: true,
                 signal,
                 onResume: portsClosedOnResume(signal),
-              }).catch((failure: unknown) => {
-                if (noneToResume(failure)) return undefined;
-                throw failure;
+              }).catch((cause: unknown) => {
+                if (noneToResume(cause)) return undefined;
+                throw cause;
               });
+
               if (standing !== undefined) return await idleTimed(standing, signal);
             }
+
             return await openedWithDrive(ask, under, signal, async (mounted, stands) => {
               /** A sandbox this call created, set up as the ask says before it is handed back. */
               const setUp = async (created: SdkSandbox) => {
                 stands();
+
                 if (ask.user !== undefined) await madeUser(created, ask.user, signal);
                 await onCreate?.(openedOf(created));
               };
+
               const gotOrCreated = () =>
                 SdkSandbox.getOrCreate({
                   ...under,
@@ -953,14 +1024,19 @@ function vercelSandbox(
                   onCreate: setUp,
                   onResume: portsClosedOnResume(signal),
                 });
+
               try {
-                const opened = await gotOrCreated().catch(async (failure: unknown) => {
+                const opened = await gotOrCreated().catch(async (cause: unknown) => {
                   // A sandbox standing with its snapshot gone is replaced by a fresh one under its name.
-                  if (!snapshotGoneFailure(failure)) throw failure;
-                  if (!(await clearedStale(ask.name, under, signal))) throw failure;
+                  if (!snapshotGoneFailure(cause)) throw cause;
+
+                  if (!(await clearedStale(ask.name, under, signal))) throw cause;
+
                   return await gotOrCreated();
                 });
+
                 stands();
+
                 return await idleTimed(opened, signal);
               } catch (failure) {
                 // Note that the name is taken where the SDK tried again a create whose first answer was lost, so the sandbox holding it is the one this call created, which `onCreate` never saw; a drive still attached comes with the same status, and is the create's own refusal.
@@ -971,13 +1047,16 @@ function vercelSandbox(
                 ) {
                   throw failure;
                 }
+
                 const joined = await SdkSandbox.get({
                   ...under,
                   name: ask.name,
                   resume: true,
                   signal,
                 });
+
                 await setUp(joined);
+
                 return await idleTimed(joined, signal);
               }
             });
@@ -993,14 +1072,18 @@ function vercelSandbox(
             SdkSandbox.get({ ...under, name, resume: false, signal }).catch(absentIfNotFound),
             Drive.get({ ...under, name: ownDriveName(name), signal }).catch(absentIfNotFound),
           ]);
+
           if (own !== undefined) {
             // Vercel refuses to delete a drive mounted in a running sandbox, and a stop lets go of it at once.
             const session = sandbox?.currentSession();
+
             if (session !== undefined && UP_STATUSES.has(STATUS_OF_VERCEL.get(session.status))) {
               await session.stop({ signal });
             }
+
             await own.delete({ signal });
           }
+
           await sandbox?.delete({ deleteOrphanSnapshots: true, signal });
         }).pipe(Effect.catchIf(isGone, () => Effect.void)),
       ),
@@ -1031,6 +1114,7 @@ function vercelSandbox(
         asked(SANDBOX_CALL.PORTS, async (signal, under) => {
           const sandbox = await SdkSandbox.get({ ...under, name, resume: false, signal });
           await sandbox.update({ ports: [...ports] }, { signal });
+
           return routesOf(sandbox);
         }),
       ),
@@ -1042,6 +1126,7 @@ function vercelSandbox(
             ...(ask.env === undefined ? undefined : { env: { ...ask.env } }),
             signal,
           });
+
           return {
             exitCode: finished.exitCode,
             stdout: await finished.stdout(),
@@ -1070,6 +1155,7 @@ function vercelSandbox(
                   stdin: true,
                   signal,
                 });
+
           return command.cmdId;
         }),
       ),
@@ -1085,6 +1171,7 @@ function vercelSandbox(
         onCommand(SANDBOX_CALL.CMD, target, commandId, async (command, signal) => {
           // Note that the read waits for the exit, because Vercel records an exit only once such a read has seen it.
           const finished = await command.wait({ signal });
+
           return finished.exitCode;
         }).pipe(
           Effect.timeoutOption(within),
@@ -1132,10 +1219,13 @@ function vercelSandbox(
           const minted = yield* on(SANDBOX_CALL.INTERACTIVE, target, (session, signal) =>
             session.openInteractive({ signal }),
           );
+
           if (!isSandboxShellAddress(minted.url)) {
             yield* Effect.logWarning("a minted PTY address was not on Vercel's sandbox domain");
+
             return yield* new Refused({ call: SANDBOX_CALL.INTERACTIVE });
           }
+
           return { url: minted.url, token: Redacted.make(minted.token) };
         }),
       ),
@@ -1151,6 +1241,7 @@ function vercelSandbox(
         on(SANDBOX_CALL.SNAPSHOT, target, async (session, signal) => {
           // Vercel's create-a-snapshot takes 0 for a snapshot that never expires.
           const expiration = Duration.isFinite(expiresAfter) ? Duration.toMillis(expiresAfter) : 0;
+
           return (await session.snapshot({ expiration, signal })).snapshotId;
         }),
       ),
@@ -1161,10 +1252,13 @@ function vercelSandbox(
             Effect.map(Option.some),
             Effect.catchIf(isGone, () => Effect.succeed(Option.none<SdkSandbox>())),
           );
+
           if (Option.isNone(sandbox)) return;
           const session = sandbox.value.currentSession();
+
           if (STATUS_OF_VERCEL.get(session.status) !== SANDBOX_STATUS.RUNNING) return;
           const extension = touchExtension(session, yield* Clock.currentTimeMillis);
+
           if (extension === undefined) return;
           yield* sdkCall(SANDBOX_CALL.TOUCH, (signal) =>
             session.extendTimeout(extension, { signal }),

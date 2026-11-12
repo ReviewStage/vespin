@@ -3,7 +3,8 @@
  *
  * Its deletion, its preferences snapshot, its access, a beat that it is
  * active at a client (`presence-wire.ts`), its own sounds
- * (`sound-clip-wire.ts`), its own provider
+ * (`sound-clip-wire.ts`), the commands it always allows its coding agents
+ * to run (`allowed-command-wire.ts`), its own provider
  * keys, its workspace's memories, and its ChatGPT credentials, each on the path
  * and method it has always answered on; a memory kept in the member's words
  * and a search of them, the member MCP server's `save_memory` and
@@ -19,7 +20,8 @@
  * among them, but that a device-code login is braked as quota exhausted,
  * and its start refused as an upstream error where OpenAI gave no code; a
  * memories read or forget refuses a workspace the account is not in as not
- * found and a memory it may not forget as not permitted. A memory's keep
+ * found and a memory it may not forget as not permitted. An always-allowed
+ * command's add refuses one past the list's bound as full. A memory's keep
  * and search are refused as off while the member has Memory off, and a
  * workspace the account is not in as not found; a keep also refuses a
  * correction of a memory gone as not found, words that look like a
@@ -39,6 +41,12 @@ import {
   accountPreferencesAnswerSchema,
   accountPreferencesWriteSchema,
 } from "../account-wire.js";
+import {
+  ALLOWED_COMMAND_QUERY,
+  allowedCommandAddRequestSchema,
+  allowedCommandIdSchema,
+  allowedCommandsAnswerSchema,
+} from "../allowed-command-wire.js";
 import {
   MEMORY_QUERY,
   memoriesAnswerSchema,
@@ -96,6 +104,9 @@ const SOUND_BODY_BYTES = Math.ceil(SOUND_CLIP_BOUNDS.MAX_BYTES / 3) * 4 + 1_024;
 
 /** A rename or a choice is a sound's id and a name of at most 64 characters at JSON's widest escape, so a body past this is not one. */
 const SOUND_RENAME_BODY_BYTES = 1_024;
+
+/** An always-allowed command's add is at most eight tokens of at most 128 characters each at JSON's widest escape, so a body past this is not one. */
+const ALLOWED_COMMAND_BODY_BYTES = 8_192;
 
 /** A device-code login's poll or cancel is one login id of at most 64 characters, so a body past this is not one. */
 const CHATGPT_DEVICE_LOGIN_BODY_BYTES = 512;
@@ -204,6 +215,32 @@ export const accountContract = {
     .meta(openapi({ method: HTTP_METHOD.PUT, path: HOSTED_SERVICE_PATH.ACCOUNT_SOUND_CHOICE }))
     .input(exactInput(soundChoiceRequestSchema))
     .output(EffectSchema.flip(soundChoiceAnswerSchema)),
+  /** The commands the account always allows its coding agents to run unasked, the earliest added first. */
+  allowedCommands: declaredProcedure
+    .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.ACCOUNT_ALLOWED_COMMANDS }))
+    .output(EffectSchema.flip(allowedCommandsAnswerSchema)),
+  /** A command added by hand, naming no agent, answered with the list as it then stands; one already kept stands as it was. */
+  addAllowedCommand: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.ALLOWED_COMMANDS_FULL))
+    .meta(bodyCap(ALLOWED_COMMAND_BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.ACCOUNT_ALLOWED_COMMANDS }))
+    .input(exactInput(allowedCommandAddRequestSchema))
+    .output(EffectSchema.flip(allowedCommandsAnswerSchema)),
+  /** One of the account's commands removed, whether or not it kept it, answered with the list as it then stands; the command rides in the query, since a `DELETE` carries no body. */
+  removeAllowedCommand: declaredProcedure
+    .meta(
+      openapi({
+        method: HTTP_METHOD.DELETE,
+        path: HOSTED_SERVICE_PATH.ACCOUNT_ALLOWED_COMMANDS,
+        inputStructure: "detailed",
+      }),
+    )
+    .input(
+      EffectSchema.Struct({
+        query: EffectSchema.Struct({ [ALLOWED_COMMAND_QUERY.ID]: allowedCommandIdSchema }),
+      }),
+    )
+    .output(EffectSchema.flip(allowedCommandsAnswerSchema)),
   memories: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
     .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.ACCOUNT_MEMORIES }))

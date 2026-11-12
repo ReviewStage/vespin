@@ -2,7 +2,10 @@
 
 import assert from "node:assert/strict";
 import type { AgentBrowserTab } from "@repo/features/agent-browser-tab-wire";
-import { BROWSER_LIVE_SERVER } from "@repo/features/browser-live-wire";
+import {
+  BROWSER_LIVE_SERVER,
+  type BrowserLiveServerMessage,
+} from "@repo/features/browser-live-wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -13,8 +16,7 @@ import { CloudBrowserPane } from "./cloud-browser-pane.js";
 
 /**
  * The agent's pointer over a cloud Browser tab's live view: drawn at the
- * agent's point scaled onto the drawn page, out of the recording and the
- * pointer's way; hidden while a member drives the tab, faded once the agent
+ * agent's point scaled onto the drawn page, out of the pointer's way; hidden while a member drives the tab, faded once the agent
  * has stood idle, and held still where motion is reduced. A synthetic task
  * and tab throughout, the live view over a fake door, the clock pinned, and
  * the pane's body 640 by 600 pixels, which fits a 1280 by 800 page at half
@@ -72,13 +74,14 @@ async function settle(): Promise<void> {
 
 /** The pane of `tab`, its page painted at 1280 by 800, and a door to say more on its live view. */
 async function paneOf(tab: AgentBrowserTab): Promise<{
-  say: (message: object) => Promise<void>;
+  say: (message: BrowserLiveServerMessage) => Promise<void>;
   redraw: (next: AgentBrowserTab) => Promise<void>;
 }> {
   let listener: BrowserLiveListener | undefined;
   fakeAppPlatform({
     openBrowserLive: (_target, heard) => {
       listener = heard;
+
       return { send: () => undefined, close: () => undefined };
     },
   });
@@ -86,6 +89,7 @@ async function paneOf(tab: AgentBrowserTab): Promise<{
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const pane = (shown: AgentBrowserTab) =>
     withQueryClient(
       createElement(CloudBrowserPane, {
@@ -95,18 +99,22 @@ async function paneOf(tab: AgentBrowserTab): Promise<{
         memberName: () => undefined,
       }),
     );
+
   act(() => root.render(pane(tab)));
   await settle();
-  const say = async (message: object) => {
+
+  const say = async (message: BrowserLiveServerMessage) => {
     await act(async () => listener?.message(JSON.stringify(message)));
     await settle();
   };
+
   await say({
     type: BROWSER_LIVE_SERVER.FRAME,
     data: "/9j/AA==",
     pageWidth: 1280,
     pageHeight: 800,
   });
+
   return {
     say,
     redraw: async (next) => {
@@ -121,7 +129,7 @@ function pointer(): HTMLElement | null {
   return document.querySelector<HTMLElement>(".cloud-browser-cursor");
 }
 
-test("the agent's pointer stands at its point scaled onto the drawn page, out of the recording and the pointer's way, and moves with the agent", async () => {
+test("the agent's pointer stands at its point scaled onto the drawn page, out of the pointer's way, and moves with the agent", async () => {
   const { redraw } = await paneOf(CLICKED);
   const drawn = pointer();
   assert.ok(drawn, "the pointer is drawn over the page");
@@ -129,7 +137,6 @@ test("the agent's pointer stands at its point scaled onto the drawn page, out of
   assert.equal(drawn.style.getPropertyValue("--cloud-browser-cursor-y"), "150px");
   assert.ok(drawn.hasAttribute("data-shown"), "shown while the agent is active");
   assert.equal(drawn.hasAttribute("data-flip-x") || drawn.hasAttribute("data-flip-y"), false);
-  assert.ok(drawn.classList.contains("ph-no-capture"), "left out of the recording");
   assert.equal(drawn.getAttribute("aria-hidden"), "true");
   assert.equal(drawn.querySelector("canvas"), null, "never part of the frame");
   assert.ok(drawn.querySelector(".cloud-browser-cursor-ripple"), "a click ripples at its point");
@@ -177,6 +184,7 @@ test.each(["1ms", "0s"])(
   "where the motion tokens stand at %s the agent's pointer is held still: it neither rocks, glides, nor ripples",
   async (duration) => {
     document.documentElement.style.setProperty("--ui-duration-fast", duration);
+
     try {
       await paneOf(CLICKED);
       const drawn = pointer();

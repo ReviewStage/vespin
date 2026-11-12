@@ -39,6 +39,7 @@ const DANA: WorkspaceMember = {
   role: WORKSPACE_ROLE.OWNER,
   pictureUrl: "https://avatars.githubusercontent.com/u/3",
 };
+
 const SAM: WorkspaceMember = {
   userId: "user-sam",
   name: "Sam Okafor",
@@ -49,6 +50,7 @@ const SAM: WorkspaceMember = {
 test("an actor is named as the reader says them, in a sentence and as whose", () => {
   const you = personActor(DANA, [DANA, SAM], DANA.userId);
   const sam = personActor(SAM, [DANA, SAM], DANA.userId);
+
   const agent = {
     kind: ACTOR_KIND.AGENT,
     name: "Fix auth flow",
@@ -115,12 +117,14 @@ function said(activity: ActorActivity | undefined): string | undefined {
 
 test("a description's edit is named by who wrote it: a member as the members read them, Vespin, an agent by its name, and nobody before history", () => {
   const byApp = { actor: DESCRIPTION_ACTOR.NOTETAKER, by: DANA_REF, at: 0, duringCall: false };
+
   const byAgent = {
     actor: DESCRIPTION_ACTOR.AGENT,
     label: "Fix auth flow",
     at: 0,
     duringCall: false,
   };
+
   const byDana = { actor: DESCRIPTION_ACTOR.DEVELOPER, by: DANA_REF, at: 0, duringCall: false };
 
   assert.equal(editActor(byDana, SAM_READS)?.kind, ACTOR_KIND.PERSON);
@@ -149,12 +153,14 @@ test("what someone last did in a description is the sections whose last change i
     at,
     duringCall: false,
   });
+
   const edits = [
     edit("", 1),
     edit("Goal", 5),
     { section: "Approach", actor: DESCRIPTION_ACTOR.NOTETAKER, at: 9, duringCall: false },
     edit("Rollout", 3, { userId: SAM.userId, name: SAM.name }),
   ];
+
   const dana = personActor(DANA_REF, [DANA, SAM], SAM.userId);
   const danas = latestActivity(edits, dana);
 
@@ -197,6 +203,7 @@ test("two agents of one name each keep a face, told apart by their ids, and agen
     at: 0,
     duringCall: false,
   });
+
   const editors = (edits: ReturnType<typeof edit>[]) =>
     distinctActors(edits.flatMap((each) => editActor(each, SAM_READS) ?? []));
 
@@ -305,6 +312,7 @@ test("someone a pull request names on GitHub is a teammate where their GitHub ac
     { login: "octocat", bot: false, avatarUrl: "https://avatars.githubusercontent.com/u/1" },
     place,
   );
+
   assert.deepEqual(stranger, {
     kind: ACTOR_KIND.GITHUB,
     login: "octocat",
@@ -359,6 +367,7 @@ test("a linked GitHub login who left keeps their picture and their account's nam
       pictureUrl: "https://avatars.githubusercontent.com/u/7",
     },
   ];
+
   assert.deepEqual(
     githubActor(
       { login: "leepark", bot: false, userId: "user-lee" },
@@ -377,12 +386,14 @@ test("a linked GitHub login who left keeps their picture and their account's nam
 test("a task Vespin or an agent made names them, the automation whose run started the agent in its place, and an agent the window does not hold as an agent; a task made by hand names nobody", () => {
   assert.equal(originActor(undefined, undefined), undefined);
   assert.equal(originActor({ actor: DESCRIPTION_ACTOR.NOTETAKER }, undefined), APP_ACTOR);
+
   const held = {
     name: "Teammate invitations",
     provider: MODEL_PROVIDER.ANTHROPIC,
     state: ACTOR_STATE.WORKING,
     taskId: "task-invitations",
   };
+
   assert.deepEqual(originActor({ actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-1" }, held), {
     kind: ACTOR_KIND.AGENT,
     agentId: "agent-1",

@@ -37,14 +37,18 @@ const claimRunnerLease = (
     const holder = randomUUID();
     const hold = Duration.toMillis(CODER.RUNNER_LEASE.HOLD);
     const startedAt = yield* Clock.currentTimeMillis;
+
     while (true) {
       const now = yield* Clock.currentTimeMillis;
+
       if (yield* claimAgentRunnerLease(agentId, holder, new Date(now), new Date(now + hold))) {
         return holder;
       }
+
       if (now - startedAt >= Duration.toMillis(wait)) {
         return yield* new RunnerLeaseBusy();
       }
+
       yield* restore(Effect.sleep(CODER.RUNNER_LEASE.POLL));
     }
   });
@@ -76,6 +80,7 @@ export const holdingRunner = <A, E, R>(
       const holder = yield* claimRunnerLease(agentId, wait, restore).pipe(
         Effect.withSpan("web/claimRunnerLease"),
       );
+
       return yield* restore(body).pipe(Effect.ensuring(released(agentId, holder)));
     }),
   );
@@ -91,9 +96,11 @@ export const holdingRunnerIfFree = <A, E, R>(agentId: string, body: Effect.Effec
       const holder = randomUUID();
       const now = yield* Clock.currentTimeMillis;
       const until = now + Duration.toMillis(CODER.RUNNER_LEASE.HOLD);
+
       if (!(yield* claimAgentRunnerLease(agentId, holder, new Date(now), new Date(until)))) {
         return Option.none<A>();
       }
+
       return Option.some(yield* restore(body).pipe(Effect.ensuring(released(agentId, holder))));
     }),
   );

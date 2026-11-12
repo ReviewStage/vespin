@@ -49,6 +49,7 @@ async function settle(): Promise<void> {
     act(async () => {
       for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
     });
+
   await ticks();
   await settleQueries(ticks);
 }
@@ -69,6 +70,7 @@ test("a workspace the App reaches draws GitHub's row counting its repositories, 
     ...fakeActPortCalls(),
     [ACT_KIND.WORKSPACE_GITHUB_CONNECT]: (payload) => {
       connects.push(payload);
+
       return Promise.resolve(undefined);
     },
   });
@@ -117,6 +119,7 @@ test("a paste too short to be a token, entered, says GitHub's invalid words on t
     ...fakeActPortCalls(),
     [ACT_KIND.GITHUB_TOKEN_SAVE]: (payload) => {
       saved.push(payload);
+
       return Promise.resolve({ token: null });
     },
   });
@@ -131,21 +134,27 @@ test("a paste too short to be a token, entered, says GitHub's invalid words on t
     ),
   );
   await settle();
+
   const radio =
     [...container.querySelectorAll<HTMLElement>('[role="radio"]')].find((one) =>
       one.textContent?.includes("Personal access token"),
     ) ?? assert.fail("the step offers the token");
+
   act(() => radio.click());
   await settle();
+
   const control = [...container.querySelectorAll("label")].find(
     (each) => each.textContent === "Paste the token",
   )?.control;
+
   const field = control instanceof HTMLInputElement ? control : assert.fail("no token field");
+
   const type = (value: string) =>
     act(() => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(field, value);
       field.dispatchEvent(new Event("input", { bubbles: true }));
     });
+
   type("ghp_bad");
   act(() => field.form?.requestSubmit());
   await settle();
@@ -160,6 +169,7 @@ test("a paste too short to be a token, entered, says GitHub's invalid words on t
 /** A repository as the workspace's listing answers it, reached through `access`. */
 function reached(fullName: string, updatedAt: number, access: GitHubAccess): GitHubRepository {
   const [owner = "", name = ""] = fullName.split("/");
+
   return { owner, name, fullName, defaultBranch: "main", private: true, updatedAt, access };
 }
 
@@ -168,8 +178,10 @@ test("the token's picker adds several repositories in one open menu, stands as A
     reached("octo/tools", 2, GITHUB_ACCESS.TOKEN),
     reached("octo/notes", 1, GITHUB_ACCESS.TOKEN),
   ];
+
   let added: WorkspaceTokenRepository[] = [];
   const reads = handHostReads({ tokenRepositories: { [WORKSPACE]: { rows: [] } } });
+
   const lists = holdRepositoryLists(reads.deliverRepositoryLists, () => ({
     repositories: {
       installed: false,
@@ -178,6 +190,7 @@ test("the token's picker adds several repositories in one open menu, stands as A
       installationUrl: "https://github.com/apps/luke/installations/new",
     },
   }));
+
   holdGitHubToken(() => ({
     rows: {
       token: {
@@ -197,10 +210,12 @@ test("the token's picker adds several repositories in one open menu, stands as A
         ? [{ fullName: repository, addedBy: "user-octo", addedAt: 2, removable: true }, ...added]
         : added.filter((one) => one.fullName !== repository);
       reads.deliverTokenRepositories({ [WORKSPACE]: { rows: added } });
+
       return Promise.resolve(added);
     },
   });
   const container = document.body.appendChild(document.createElement("div"));
+
   const draw = () => {
     const root = createRoot(container);
     roots.push(root);
@@ -211,25 +226,33 @@ test("the token's picker adds several repositories in one open menu, stands as A
         ),
       ),
     );
+
     return root;
   };
+
   const first = draw();
   await settle();
+
   const radio = (words: string) =>
     [...container.querySelectorAll<HTMLElement>('[role="radio"]')].find((one) =>
       one.textContent?.includes(words),
     ) ?? assert.fail(`the step offers ${words}`);
+
   act(() => radio("Personal access token").click());
   await settle();
+
   const chip = () =>
     container.querySelector<HTMLButtonElement>(".ui-chip") ??
     assert.fail("the token's card draws its chip");
+
   act(() => chip().click());
   await settle();
+
   const option = (name: string) =>
     [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((one) =>
       one.textContent?.includes(name),
     ) ?? assert.fail(`the menu lists ${name}`);
+
   act(() => option("tools").click());
   await settle();
   act(() => option("notes").click());

@@ -98,7 +98,6 @@ const WHITESPACE = /\s/u;
 const PUNCTUATION = /[\p{P}\p{S}]/u;
 const ASCII_PUNCTUATION = /[!-/:-@[-`{-~]/u;
 const LEADING_SPACE = /^\s*/u;
-const TRAILING_SPACE = /\s*$/u;
 const TICK_RUNS = /`+/gu;
 
 /** A character words wearing a mark escape, which would otherwise close it, open another, or escape the delimiter after it. */
@@ -149,18 +148,23 @@ interface Reading {
 /** How long the run of `char` starting at `at` is. */
 function runLength(line: string, at: number, char: string): number {
   let end = at;
+
   while (line[end] === char) end += 1;
+
   return end - at;
 }
 
+type FlankingResult = { canOpen: boolean; canClose: boolean };
+
 /** Whether a delimiter run may open and may close, as CommonMark's flanking rules say. */
-function flanking(line: string, at: number, run: number): { canOpen: boolean; canClose: boolean } {
+function flanking(line: string, at: number, run: number): FlankingResult {
   const before = line[at - 1];
   const after = line[at + run];
   const beforeSpace = before === undefined || WHITESPACE.test(before);
   const afterSpace = after === undefined || WHITESPACE.test(after);
   const beforePunctuation = before !== undefined && PUNCTUATION.test(before);
   const afterPunctuation = after !== undefined && PUNCTUATION.test(after);
+
   return {
     canOpen: !afterSpace && (!afterPunctuation || beforeSpace || beforePunctuation),
     canClose: !beforeSpace && (!beforePunctuation || afterSpace || afterPunctuation),
@@ -175,6 +179,7 @@ function drop(reading: Reading, from: number, to: number): void {
 /** Whether an atom starts anywhere from `from` to `to`. */
 function atomWithin(reading: Reading, from: number, to: number): boolean {
   for (let at = from; at < to; at += 1) if (reading.atoms.has(at)) return true;
+
   return false;
 }
 
@@ -182,22 +187,29 @@ function atomWithin(reading: Reading, from: number, to: number): boolean {
 function ruleOfThree(opener: Delimiter, closer: Delimiter): boolean {
   if (!opener.canClose && !closer.canOpen) return false;
   const sum = opener.origin + closer.origin;
+
   return sum % 3 === 0 && !(opener.origin % 3 === 0 && closer.origin % 3 === 0);
 }
 
 /** The nearest opener under `closer` it closes, from `bottom` up; none where none does. */
 function openerFor(delimiters: readonly Delimiter[], bottom: number, closer: number): number {
   const closing = delimiters[closer];
+
   if (closing === undefined) return -1;
+
   for (let at = closer - 1; at >= bottom; at -= 1) {
     const opener = delimiters[at];
+
     if (opener === undefined || opener.char !== closing.char || !opener.canOpen) continue;
+
     if (closing.char === TILDE) {
       if (opener.length === STRIKE_RUN && closing.length === STRIKE_RUN) return at;
       continue;
     }
+
     if (!ruleOfThree(opener, closing)) return at;
   }
+
   return -1;
 }
 
@@ -208,24 +220,31 @@ function openerFor(delimiters: readonly Delimiter[], bottom: number, closer: num
  */
 function emphasis(reading: Reading, delimiters: Delimiter[], bottom: number): void {
   let closer = bottom;
+
   while (closer < delimiters.length) {
     const closing = delimiters[closer];
+
     if (closing === undefined) break;
     const found = closing.canClose ? openerFor(delimiters, bottom, closer) : -1;
+
     if (found < 0) {
       if (closing.canClose && !closing.canOpen) delimiters.splice(closer, 1);
       else closer += 1;
       continue;
     }
+
     const opener = delimiters[found];
+
     if (opener === undefined) break;
     const use = closing.char === TILDE || (opener.length >= 2 && closing.length >= 2) ? 2 : 1;
+
     const name =
       closing.char === TILDE
         ? INLINE_MARK.STRIKE
         : use === 2
           ? INLINE_MARK.BOLD
           : INLINE_MARK.ITALIC;
+
     const start = opener.at + opener.length;
     reading.ranges.push({ start, end: closing.at, mark: { name } });
     drop(reading, start - use, start);
@@ -235,28 +254,36 @@ function emphasis(reading: Reading, delimiters: Delimiter[], bottom: number): vo
     closing.length -= use;
     delimiters.splice(found + 1, closer - found - 1);
     closer = found + 1;
+
     if (opener.length === 0) {
       delimiters.splice(found, 1);
       closer = found;
     }
+
     if (closing.length === 0) delimiters.splice(closer, 1);
   }
+
   delimiters.length = bottom;
 }
 
 /** Where the run of `run` backticks closing a code span from `from` starts; none where no such run stands before an atom or the line's end. */
 function closingTicks(reading: Reading, from: number, run: number): number | undefined {
   let at = from;
+
   while (at < reading.line.length) {
     if (reading.atoms.has(at)) return undefined;
+
     if (reading.line[at] !== TICK) {
       at += 1;
       continue;
     }
+
     const length = runLength(reading.line, at, TICK);
+
     if (length === run) return at;
     at += length;
   }
+
   return undefined;
 }
 
@@ -264,16 +291,21 @@ function closingTicks(reading: Reading, from: number, run: number): number | und
 function codeSpan(reading: Reading, at: number): number {
   const run = runLength(reading.line, at, TICK);
   const close = closingTicks(reading, at + run, run);
+
   if (close === undefined) return at + run;
   const words = reading.line.slice(at + run, close);
   const padded = words.length >= 2 && words.startsWith(SPACE) && words.endsWith(SPACE);
   const pad = padded && words.trim() !== "" ? 1 : 0;
   const syntax: number[] = [];
+
   for (let each = at; each < at + run + pad; each += 1) syntax.push(each);
+
   for (let each = close - pad; each < close + run; each += 1) syntax.push(each);
   const range = { start: at + run + pad, end: close - pad, mark: { name: INLINE_MARK.CODE } };
   reading.codes.push({ range, syntax });
+
   for (const each of syntax) reading.dropped[each] = true;
+
   return close + run;
 }
 
@@ -285,10 +317,13 @@ function closedBracket(
   delimiters: Delimiter[],
 ): number {
   const opener = brackets.pop();
+
   if (opener === undefined || !opener.active || opener.at + 1 === at) return at + 1;
   const target = LINK_TARGET.exec(reading.line.slice(at + 1));
   const syntax = target?.[0].length ?? 0;
+
   if (target === null || atomWithin(reading, at + 1, at + 1 + syntax)) return at + 1;
+
   // A link whose words start with `@` is a mention's, which the box holds as its chip or as the words it is.
   if (reading.line[opener.at + 1] === MENTION_SIGIL) return at + 1;
   emphasis(reading, delimiters, opener.bottom);
@@ -299,8 +334,10 @@ function closedBracket(
   });
   drop(reading, opener.at, opener.at + 1);
   drop(reading, at, at + 1 + syntax);
+
   // A link holds no link, so every bracket opened before it opens none.
   for (const each of brackets) each.active = false;
+
   return at + 1 + syntax;
 }
 
@@ -310,9 +347,11 @@ function scanned(reading: Reading): void {
   const delimiters: Delimiter[] = [];
   const brackets: Bracket[] = [];
   let at = 0;
+
   while (at < line.length) {
     const atomEnd = reading.atoms.get(at);
     const char = line[at] ?? "";
+
     if (atomEnd !== undefined) at = atomEnd;
     else if (char === BACKSLASH && ASCII_PUNCTUATION.test(line[at + 1] ?? "")) {
       reading.escapes.push(at);
@@ -320,9 +359,11 @@ function scanned(reading: Reading): void {
     } else if (char === TICK) at = codeSpan(reading, at);
     else if (char === STAR || char === TILDE) {
       const run = runLength(line, at, char);
+
       if (char === STAR || run === STRIKE_RUN) {
         delimiters.push({ char, at, length: run, origin: run, ...flanking(line, at, run) });
       }
+
       at += run;
     } else if (char === OPEN_BRACKET && line[at - 1] !== BANG) {
       brackets.push({ at, bottom: delimiters.length, active: true });
@@ -330,6 +371,7 @@ function scanned(reading: Reading): void {
     } else if (char === CLOSE_BRACKET) at = closedBracket(reading, at, brackets, delimiters);
     else at += 1;
   }
+
   emphasis(reading, delimiters, 0);
 }
 
@@ -353,6 +395,7 @@ function settledEscapes(reading: Reading): void {
     const marked = reading.ranges.some(
       (range) => range.mark.name !== INLINE_MARK.CODE && at >= range.start && at < range.end,
     );
+
     if (marked) reading.dropped[at] = true;
   }
 }
@@ -378,40 +421,51 @@ export function readInline(line: string, atoms: readonly LineRange[]): InlineSpa
     codes: [],
     escapes: [],
   };
+
   scanned(reading);
   settledCodes(reading);
   settledEscapes(reading);
   const spans: InlineSpan[] = [];
   let words: { from: number; to: number; marks: readonly InlineMark[] } | undefined;
+
   const flush = () => {
     if (words !== undefined) spans.push({ kind: INLINE_SPAN.WORDS, ...words });
     words = undefined;
   };
+
   let at = 0;
+
   while (at < line.length) {
     const atomEnd = reading.atoms.get(at);
+
     if (atomEnd !== undefined) {
       flush();
       spans.push({ kind: INLINE_SPAN.ATOM, from: at, to: atomEnd });
       at = atomEnd;
       continue;
     }
+
     if (reading.dropped[at] === true) {
       flush();
       at += 1;
       continue;
     }
+
     const marks = reading.ranges
       .filter((range) => at >= range.start && at < range.end)
       .map((range) => range.mark);
+
     if (words !== undefined && sameMarks(words.marks, marks)) words.to = at + 1;
     else {
       flush();
       words = { from: at, to: at + 1, marks };
     }
+
     at += 1;
   }
+
   flush();
+
   return spans;
 }
 
@@ -431,22 +485,29 @@ function writtenAddress(href: string): string {
 /** What opens a mark. */
 function opening(mark: InlineMark): string {
   if (mark.name === INLINE_MARK.LINK) return OPEN_BRACKET;
+
   if (mark.name === INLINE_MARK.BOLD) return STAR.repeat(2);
+
   if (mark.name === INLINE_MARK.ITALIC) return STAR;
+
   return TILDE.repeat(STRIKE_RUN);
 }
 
 /** What closes a mark. */
 function closing(mark: InlineMark): string {
   if (mark.name !== INLINE_MARK.LINK) return opening(mark);
+
   return `${CLOSE_BRACKET}(${writtenAddress(mark.href ?? "")})`;
 }
 
+type CodeFencesResult = { fence: string; pad: string };
+
 /** Code's words between fences longer than any run of backticks in them, padded where they start or end in a backtick or stand between spaces. */
-function codeFences(words: string): { fence: string; pad: string } {
+function codeFences(words: string): CodeFencesResult {
   const longest = Math.max(0, ...(words.match(TICK_RUNS) ?? []).map((run) => run.length));
   const between = words.startsWith(SPACE) && words.endsWith(SPACE) && words.trim() !== "";
   const pad = words.startsWith(TICK) || words.endsWith(TICK) || between ? SPACE : "";
+
   return { fence: TICK.repeat(longest + 1), pad };
 }
 
@@ -455,8 +516,14 @@ function keptOpen(open: readonly InlineMark[], marks: readonly InlineMark[]): nu
   const kept = open.findIndex(
     (mark) => !marks.some((each) => each.name === mark.name && each.href === mark.href),
   );
+
   return kept === -1 ? open.length : kept;
 }
+
+type WriteInlineResult = {
+  readonly text: string;
+  readonly segments: readonly WrittenSegment[];
+};
 
 /**
  * One line written as Markdown: each piece's words wearing its marks, a
@@ -465,73 +532,91 @@ function keptOpen(open: readonly InlineMark[], marks: readonly InlineMark[]): nu
  * CommonMark needs them to. Answers the line, and where every stretch of
  * each piece's words landed in it.
  */
-export function writeInline(pieces: readonly InlinePiece[]): {
-  readonly text: string;
-  readonly segments: readonly WrittenSegment[];
-} {
+export function writeInline(pieces: readonly InlinePiece[]): WriteInlineResult {
   let text = "";
   const segments: WrittenSegment[] = [];
   const open: InlineMark[] = [];
   let trailing: { piece: number; from: number; words: string } | undefined;
+
   const write = (words: string, piece?: number, from = 0) => {
     if (piece !== undefined && words !== "") {
       segments.push({ piece, from, offset: text.length, length: words.length });
     }
+
     text += words;
   };
+
   // Each character a mark's words escape is written after its backslash, so every segment stays the piece's words in order.
   const writeMarked = (words: string, piece: number, from: number) => {
     let start = 0;
+
     for (let at = 0; at < words.length; at += 1) {
       if (!MARK_SPECIAL.test(words[at] ?? "")) continue;
       write(words.slice(start, at), piece, from + start);
       text += BACKSLASH;
       start = at;
     }
+
     write(words.slice(start), piece, from + start);
   };
+
   const closeTo = (keep: number) => {
     for (let mark = open.pop(); mark !== undefined; mark = open.pop()) {
       if (open.length < keep) {
         open.push(mark);
         break;
       }
+
       text += closing(mark);
     }
+
     if (trailing !== undefined) write(trailing.words, trailing.piece, trailing.from);
     trailing = undefined;
   };
+
   pieces.forEach((piece, index) => {
     const marks = piece.atom ? [] : ordered(piece.marks);
+
     if (marks.some((mark) => mark.name === INLINE_MARK.CODE)) {
       closeTo(0);
       const { fence, pad } = codeFences(piece.text);
       write(`${fence}${pad}`);
       write(piece.text, index);
       write(`${pad}${fence}`);
+
       return;
     }
+
     closeTo(keptOpen(open, marks));
     const lead = LEADING_SPACE.exec(piece.text)?.[0].length ?? 0;
+
     // Note that words of spaces alone open nothing, since a delimiter must stand against a word.
     if (piece.atom || lead === piece.text.length) {
       write(piece.text, piece.atom ? undefined : index);
+
       return;
     }
-    const trail = TRAILING_SPACE.exec(piece.text)?.[0].length ?? 0;
+
+    // Note that `trimEnd` drops what `\s` matches, read in one pass where a trailing `\s*$` would retry from every space.
+    const trail = piece.text.length - piece.text.trimEnd().length;
     write(piece.text.slice(0, lead), index);
+
     for (const mark of marks) {
       if (open.some((each) => each.name === mark.name && each.href === mark.href)) continue;
       text += opening(mark);
       open.push(mark);
     }
+
     const core = piece.text.slice(lead, piece.text.length - trail);
+
     if (marks.length === 0) write(core, index, lead);
     else writeMarked(core, index, lead);
+
     if (trail > 0) {
       trailing = { piece: index, from: piece.text.length - trail, words: piece.text.slice(-trail) };
     }
   });
   closeTo(0);
+
   return { text, segments };
 }

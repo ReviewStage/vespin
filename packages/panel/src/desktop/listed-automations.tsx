@@ -16,10 +16,13 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 /** Whether an agent the window lists names the automation that started it: a listed task's, followed live, or the open task's, as Home's rows name it. */
 function namesAutomation(tasks: TasksControl): boolean {
   const listed = new Set(tasks.tasks.map((task) => task.id));
+
   const lines = (tasks.liveAgents ?? []).filter(
     (agent) => agent.planId !== null && listed.has(agent.planId) && agent.archivedAt === undefined,
   );
+
   const agents = [...(tasks.agents.agents ?? []), ...(tasks.agents.archived ?? [])];
+
   return [...lines, ...agents].some((agent) => agent.automationId !== undefined);
 }
 
@@ -32,10 +35,12 @@ export function ListedAutomations({
   children: ReactNode;
 }): React.JSX.Element {
   const { open: onOpen } = useAutomationsDoor(tasks);
+
   const openAutomation = useCallback(
     (automationId: string) => onOpen({ kind: AUTOMATIONS_PAGE.EDIT, automationId }),
     [onOpen],
   );
+
   return (
     <AutomationDirectory
       workspace={tasks.workspace}

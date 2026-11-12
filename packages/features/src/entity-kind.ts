@@ -8,6 +8,7 @@ import {
 } from "./link-grammar.js";
 import { MENTION_KIND, type Mention } from "./mention-link.js";
 import { PRODUCT_NAME } from "./product-name.js";
+import { titlesNothing } from "./task-wire.js";
 import { TERM } from "./words.js";
 
 /**
@@ -150,6 +151,8 @@ interface EntityName<T> {
    */
   readonly live: boolean;
   readonly held: (entity: T, known: KnownNames, said: EntitySaid) => string | undefined;
+  /** Whether a name held is a placeholder that names nothing, which gives way to the words as a name not live does. */
+  readonly blank?: (held: string) => boolean;
 }
 
 /** The live names, one entry per kind. */
@@ -187,6 +190,7 @@ function numberedKey(address: NumberedAddress, repository: string | null): strin
   if (repository !== null && address.repository.toLowerCase() === repository.toLowerCase()) {
     return `#${address.number}`;
   }
+
   return `${address.repository.split("/")[1] ?? address.repository}#${address.number}`;
 }
 
@@ -204,6 +208,7 @@ function numberedName(
     held: ({ url }, _known, { answered, repository }) => {
       if (answered !== undefined) return `${answered.key} ${answered.title}`;
       const address = addressOf(url);
+
       return address === undefined ? undefined : numberedKey(address, repository);
     },
   };
@@ -212,17 +217,24 @@ function numberedName(
 /** An agent's name held, said with the words given before it: "Changes by Ada". */
 function byAgent(words: string, agentId: string, known: KnownNames): string | undefined {
   const agent = known.agents.get(agentId);
+
   return agent === undefined ? undefined : `${words} ${agent}`;
 }
 
 /** What each kind is called now. */
 const ENTITY_NAME: EntityNames = {
-  [ENTITY_KIND.PLAN]: { live: true, held: (plan, known) => known.tasks.get(plan.taskId) },
+  // Note that a plan the window still holds as Untitled gives way to the words it was written with, which say more.
+  [ENTITY_KIND.PLAN]: {
+    live: true,
+    blank: titlesNothing,
+    held: (plan, known) => known.tasks.get(plan.taskId),
+  },
   [ENTITY_KIND.SECTION]: { live: true, held: (_section, _known, { heading }) => heading },
   [ENTITY_KIND.VERSION]: {
     live: false,
     held: (version, known) => {
       const taskName = known.tasks.get(version.planId);
+
       return taskName === undefined ? undefined : `${taskName}, version ${version.revision}`;
     },
   },
@@ -287,7 +299,7 @@ const ENTITY_NAME: EntityNames = {
  * (`words.ts`'s `TERM`) where it has one. Read it through `entityWordHeard`,
  * which leaves it out where the name already says it.
  */
-export const ENTITY_WORD: { readonly [K in EntityKind]: string } = {
+export const ENTITY_WORD: Readonly<Record<EntityKind, string>> = {
   [ENTITY_KIND.PLAN]: TERM.TASK.one,
   [ENTITY_KIND.SECTION]: TERM.SECTION.one,
   [ENTITY_KIND.VERSION]: "version",
@@ -334,7 +346,19 @@ export function entityWordHeard(kind: EntityKind, name: string): string | undefi
   const said = lead.localeCompare(word, undefined, { sensitivity: "base" }) === 0;
   // Note that the word must end where a word does, so "Taskbar" still says it is a task.
   const whole = !/^[\p{L}\p{N}]/u.test(name.slice(word.length));
+
   return said && whole ? undefined : word;
+}
+
+/**
+ * What an entity is called where nothing names it, neither the window nor
+ * its words: its kind's word (`ENTITY_WORD`) as a name, "Automation run", so
+ * a screen reader hears its kind once (`entityWordHeard`).
+ */
+export function entityKindName(kind: EntityKind): string {
+  const word = ENTITY_WORD[kind];
+
+  return `${word.charAt(0).toUpperCase()}${word.slice(1)}`;
 }
 
 /** A destination the entity it names already is. */
@@ -342,10 +366,12 @@ function asEntity<P extends Entity>(place: P): Entity {
   return place;
 }
 
-/** The entity each kind of destination names. */
-const DESTINATION_ENTITY: {
+type DestinationEntities = {
   readonly [K in LinkDestinationKind]: (place: DestinationOf<K>) => Entity;
-} = {
+};
+
+/** The entity each kind of destination names. */
+const DESTINATION_ENTITY: DestinationEntities = {
   [LINK_DESTINATION.TASK]: (place) => ({ kind: ENTITY_KIND.PLAN, taskId: place.planId }),
   [LINK_DESTINATION.SECTION]: (place) => ({
     kind: ENTITY_KIND.SECTION,
@@ -391,19 +417,25 @@ function nameOf<K extends EntityKind>(
   known: KnownNames,
   said: EntitySaid,
 ): EntityNameHeld {
-  const { live, held } = ENTITY_NAME[kind];
-  return { live, held: held(entity, known, said) };
+  const { live, held, blank } = ENTITY_NAME[kind];
+  const name = held(entity, known, said);
+  const placeholder = name !== undefined && blank !== undefined && blank(name);
+
+  return { live: live && !placeholder, held: name };
 }
 
 /** The entity a mention names: a link to a pull request's or a GitHub issue's page that one, and any other mention the entity it is. */
 export function entityOfMention(mention: Mention): Entity {
   if (mention.kind !== MENTION_KIND.LINK) return mention;
+
   if (pullRequestAddressOf(mention.url) !== undefined) {
     return { kind: ENTITY_KIND.PULL_REQUEST, url: mention.url };
   }
+
   if (issueAddressOf(mention.url) !== undefined) {
     return { kind: ENTITY_KIND.ISSUE, url: mention.url };
   }
+
   return mention;
 }
 

@@ -1,7 +1,3 @@
-import { MOTION_DELAY_MS } from "@repo/brand";
-import { DIFF_LAYOUT } from "@repo/settings/diff-view";
-import { onDrawnThemeChange } from "@repo/ui/appearance";
-import { LANDED, LANDED_ANIMATION, LANDED_ATTRIBUTE, land } from "@repo/ui/landed";
 import {
   CodeView,
   type CodeViewDiffItem,
@@ -19,6 +15,10 @@ import {
   parsePatchFiles,
   type SelectedLineRange,
 } from "@pierre/diffs";
+import { MOTION_DELAY_MS } from "@repo/brand";
+import { DIFF_LAYOUT } from "@repo/settings/diff-view";
+import { onDrawnThemeChange } from "@repo/ui/appearance";
+import { LANDED, LANDED_ANIMATION, LANDED_ATTRIBUTE, land } from "@repo/ui/landed";
 import { FONT_STACK, LIGATURES, LINE_HEIGHT_RATIO } from "../code-type.js";
 import { FIND_SHADOW_ATTRIBUTE } from "../find-matches.js";
 import {
@@ -491,6 +491,7 @@ function lookSheets(): { look: CSSStyleSheet; fill: CSSStyleSheet; whole: CSSSty
   const whole = new CSSStyleSheet();
   whole.replaceSync(`${LOOK_CSS}${FLASH_CSS}`);
   sheets = { look, fill, whole };
+
   return sheets;
 }
 
@@ -534,16 +535,22 @@ function listHighlighting(drawn: DiffLook): Highlighting {
   if (kept !== undefined) {
     // A list drawn after the settings changed hands the kept pool its own look.
     void kept.follow(drawn);
+
     return kept;
   }
+
   const text = highlightWorkerText();
+
   const address =
     text === undefined
       ? undefined
       : URL.createObjectURL(new Blob([text], { type: "text/javascript" }));
+
   const startWorker =
     address === undefined ? undefined : () => new Worker(address, { name: "diff-highlight" });
+
   kept = startHighlighting(startWorker, drawn, MAX_LINE_DIFF_LENGTH);
+
   return kept;
 }
 
@@ -560,26 +567,29 @@ function readPatch(patch: string): FileDiffMetadata {
   patchesRead += 1;
   const files = parsePatchFiles(patch, String(patchesRead)).flatMap((each) => each.files);
   const [file] = files;
+
   if (file === undefined || files.length !== 1)
     throw new Error("A list's patch reads as one file.");
+
   return file;
 }
 
 /** Pierre's options for one patch: a whole file's, or an excerpt with nothing said of the lines around it. */
 function optionsOf(props: DiffViewProps): FileDiffOptions<string, undefined> {
   const { renderAnnotation } = props;
+
   return {
     ...sharedOptions(props.look),
     hunkSeparators: props.excerpt === true ? "simple" : "line-info-basic",
     disableFileHeader: true,
     // Each line drawn anew is marked with its indent, which a wrapped line's later rows hang by; lines that scroll sideways hang by none.
-    onPostRender: (node: HTMLElement, _instance: unknown, phase: PostRenderPhase) => {
+    onPostRender: (node: HTMLElement, _instance, phase: PostRenderPhase) => {
       if (phase !== "unmount" && node.shadowRoot !== null && props.look.wrap)
         markLineIndents(node.shadowRoot);
     },
-    ...(renderAnnotation === undefined
-      ? {}
-      : { renderAnnotation: (note: { metadata: string }) => renderAnnotation(note.metadata) }),
+    ...(renderAnnotation !== undefined && {
+      renderAnnotation: (note: { metadata: string }) => renderAnnotation(note.metadata),
+    }),
   };
 }
 
@@ -613,12 +623,14 @@ function mount(host: HTMLElement, props: DiffViewProps): DiffViewHandle {
     lineAnnotations: annotationsOf(props.annotations ?? NO_NOTES),
   });
   view.setSelectedLines(props.selected ?? null);
+
   return {
     update: (next) => {
       if (next.patch !== patch) {
         patch = next.patch;
         fileDiff = read(patch);
       }
+
       // A look the pool's workers do not hold yet is handed them first, since the pool's colors stand over the patch's own.
       if (highlighting !== undefined && !sameLook(next.look, look))
         void highlighting.follow(next.look);
@@ -661,6 +673,7 @@ const SCROLL_GLIDE = { TOKEN: "--ui-scroll-glide", AT_ONCE: "auto" } as const;
  */
 function glideOf(host: HTMLElement): "smooth-auto" | "instant" {
   const glide = getComputedStyle(host).getPropertyValue(SCROLL_GLIDE.TOKEN).trim();
+
   return glide === SCROLL_GLIDE.AT_ONCE ? "instant" : "smooth-auto";
 }
 
@@ -679,10 +692,12 @@ function leadPatchOf(path: string): FileDiffMetadata {
 /** A file's patch read, or, where it does not read as one, the file with no hunks, so one unreadable patch costs its own lines and not the list. */
 function patchOf(file: DiffListFile): FileDiffMetadata {
   if (file.lead) return leadPatchOf(file.path);
+
   try {
     return readPatch(file.patch);
   } catch {
     const path = file.path;
+
     return getSingularPatch(`diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n`);
   }
 }
@@ -711,15 +726,18 @@ const UNEXPANDED_KIND = "rename-pure";
 /** A read patch as the item draws it: as read where its gaps may be opened, and otherwise told it only moved, so none is offered. */
 function drawnAs(read: FileDiffMetadata, expandable: boolean): FileDiffMetadata {
   const offered = read.type === "change" || read.type === "rename-changed";
+
   if (expandable || !offered) return read;
   // Note that the copy keeps no cache key, because Pierre would hand it the drawing it keeps under the read's, its arrows with it.
   const { cacheKey: _drawnUnder, ...drawn } = read;
+
   return { ...drawn, type: UNEXPANDED_KIND };
 }
 
 /** A range Pierre picked, in the contract's words: a side Pierre leaves unsaid is the new file's. */
 function selectionOf(range: SelectedLineRange): DiffSelection {
   const side = range.side ?? DIFF_SELECTION_SIDE.ADDITIONS;
+
   return { start: range.start, side, end: range.end, endSide: range.endSide ?? side };
 }
 
@@ -736,12 +754,14 @@ function commentOptions(
   commentable: (path: string) => boolean,
 ): CodeViewOptions<string, undefined> {
   if (latest().onComment === undefined) return {};
+
   return {
     enableLineSelection: true,
     enableGutterUtility: true,
     lineHoverHighlight: "number",
     onGutterUtilityClick: (range: SelectedLineRange, context: { item: { id: string } }) => {
       const path = context.item.id;
+
       if (commentable(path)) latest().onComment?.({ path, selection: selectionOf(range) });
     },
   };
@@ -759,11 +779,14 @@ function expansionOptions(
   pathOf: (fileDiff: FileDiffMetadata) => string,
 ): CodeViewOptions<string, undefined> {
   if (latest().readTexts === undefined) return {};
+
   return {
     expansionLineCount: GAP_LINES,
     loadDiffFiles: async (fileDiff: FileDiffMetadata) => {
       const texts = await latest().readTexts?.(pathOf(fileDiff));
+
       if (texts === undefined) throw new Error("The file could not be read whole.");
+
       return {
         oldFile: { name: fileDiff.prevName ?? fileDiff.name, contents: texts.before },
         newFile: { name: fileDiff.name, contents: texts.after },
@@ -819,6 +842,7 @@ function listOptions(
       context: { item: { id: string } },
     ) => {
       dress(node, context.item.id, phase);
+
       if (phase !== "unmount" && instance instanceof PierreFileDiff) {
         drawnBy(context.item.id, instance);
       }
@@ -829,10 +853,12 @@ function listOptions(
 /** The selection's range inside one shadow root, as a live range; none where nothing is selected there. */
 function rangeIn(root: ShadowRoot): Range | undefined {
   const [composed] = document.getSelection()?.getComposedRanges({ shadowRoots: [root] }) ?? [];
+
   if (composed === undefined || composed.collapsed) return undefined;
   const range = document.createRange();
   range.setStart(composed.startContainer, composed.startOffset);
   range.setEnd(composed.endContainer, composed.endOffset);
+
   return range;
 }
 
@@ -852,15 +878,18 @@ function watchTextSelection(
 ): () => void {
   let origin: HTMLElement | undefined;
   let frame: number | undefined;
+
   const read = (element: HTMLElement) => {
     frame = undefined;
     const path = pathOf(element);
     const range = element.shadowRoot === null ? undefined : rangeIn(element.shadowRoot);
     const selection = range === undefined ? undefined : selectedLines(range);
     const rect = range === undefined ? undefined : selectionRect(range);
+
     if (path === undefined || selection === undefined || rect === undefined) return;
     tell({ picked: { path, selection }, rect });
   };
+
   const press = (event: PointerEvent) => {
     const path = event.composedPath();
     // Note that only a press on the code begins a drag over it; one on a
@@ -874,16 +903,21 @@ function watchTextSelection(
       : undefined;
     tell(undefined);
   };
+
   const letGo = () => {
     const element = origin;
     origin = undefined;
+
     if (element === undefined || !watched()) return;
+
     if (frame !== undefined) cancelAnimationFrame(frame);
     frame = requestAnimationFrame(() => read(element));
   };
+
   host.addEventListener("pointerdown", press);
   // Note that the drag may let go past the list, beyond the file it began in.
   document.addEventListener("pointerup", letGo, true);
+
   return () => {
     if (frame !== undefined) cancelAnimationFrame(frame);
     host.removeEventListener("pointerdown", press);
@@ -909,21 +943,27 @@ function mountList(host: HTMLElement, props: DiffListProps): DiffListHandle {
   let flash: DiffLineRange | undefined;
   // The moment's deadline, run on the host's own animation clock, since the bundle holds no runtime to wait on.
   let deadline: Animation | undefined;
+
   const lit = (element: HTMLElement) =>
     flash !== undefined && elementPaths.get(element) === flash.path;
+
   // Note that a file already lit keeps its light, which a mark set again would not start over.
   const markFlash = (element: HTMLElement) => {
     if (!lit(element)) return element.removeAttribute(LANDED_ATTRIBUTE);
+
     if (!element.hasAttribute(LANDED_ATTRIBUTE))
       element.setAttribute(LANDED_ATTRIBUTE, LANDED.HELD);
   };
+
   // Note that Pierre keeps a file's element for another file once the first
   // scrolls away, so each element's shadow root is dressed once, the first
   // time it is drawn, and whether it is drawn as notes alone, and lit a moment, every time.
   // Each drawn file's gaps watched for their controls (\`./gap-controls.ts\`), and let go as Pierre lets the file go, until its element draws a file again.
   const gapWatches = new Map<HTMLElement, () => void>();
+
   const watchGaps = (element: HTMLElement, phase: PostRenderPhase) => {
     const watching = gapWatches.get(element);
+
     if (phase === "unmount") {
       watching?.();
       gapWatches.delete(element);
@@ -931,18 +971,23 @@ function mountList(host: HTMLElement, props: DiffListProps): DiffListHandle {
       gapWatches.set(element, watchGapControls(element.shadowRoot));
     }
   };
+
   const dress = (element: HTMLElement, path: string, phase: PostRenderPhase) => {
     watchGaps(element, phase);
+
     // Each note drawn anew is marked with the band of the line it stands under, and each line with its indent where lines wrap, as Pierre draws its rows again.
     // Note that a file with no notes and lines that do not wrap is left unread, because Pierre draws again on every scroll that brings rows in, and a walk of every row then is what makes a long list stutter.
     if (phase !== "unmount" && element.shadowRoot !== null) {
       if ((drawnFiles.get(path)?.file.annotations.length ?? 0) > 0)
         markAnnotationBands(element.shadowRoot);
+
       if (latest.look.wrap) markLineIndents(element.shadowRoot);
     }
+
     element.toggleAttribute(LEAD_ATTRIBUTE, drawnFiles.get(path)?.file.lead === true);
     elementPaths.set(element, path);
     markFlash(element);
+
     if (dressed.has(element) || element.shadowRoot === null) return;
     dressed.add(element);
     element.setAttribute(FIND_SHADOW_ATTRIBUTE, FIND_SKIPPED);
@@ -952,16 +997,21 @@ function mountList(host: HTMLElement, props: DiffListProps): DiffListHandle {
       if (event.target === element && event.animationName === LANDED_ANIMATION) endFlash();
     });
   };
+
   // The hidden lines each file was last told to draw, told again only as they change.
   const drawn = drawnTeller((path, lines) => latest.onDrawn?.(path, lines));
   const tellDrawn = drawn.tell;
+
   const drawnBy = (path: string, instance: PierreFileDiff<string, undefined>) =>
     tellDrawn(path, drawnAmong(instance, drawnFiles.get(path)?.file.hidden ?? NO_LINES));
+
   // The files whose hidden lines changed while their item stood, read again once the list is drawn.
   const rehidden = new Set<string>();
+
   const itemsOf = (files: readonly DiffListFile[]) =>
     files.map((file) => {
       const held = drawnFiles.get(file.path);
+
       if (
         held !== undefined &&
         held.file.patch === file.patch &&
@@ -975,14 +1025,17 @@ function mountList(host: HTMLElement, props: DiffListProps): DiffListHandle {
           drawnFiles.set(file.path, { ...held, file });
           rehidden.add(file.path);
         }
+
         return held.item;
       }
+
       const read =
         held?.file.patch === file.patch &&
         held.file.lead === file.lead &&
         held.file.whole === undefined
           ? held.read
           : patchOf(file);
+
       const item: CodeViewDiffItem<string> = {
         id: file.path,
         type: "diff",
@@ -992,19 +1045,25 @@ function mountList(host: HTMLElement, props: DiffListProps): DiffListHandle {
         annotations: annotationsOf(file.annotations),
         version: (held?.item.version ?? 0) + 1,
       };
+
       drawnFiles.set(file.path, { file, item, read });
       paths.set(item.fileDiff, file.path);
+
       // Note that a patch drawn anew opens none of its gaps until Pierre draws it, so none of its hidden lines stands drawn.
       if (item.fileDiff !== held?.item.fileDiff) tellDrawn(file.path, NO_LINES);
       else rehidden.add(file.path);
+
       return item;
     });
+
   // Each file whose hidden lines changed read again: as Pierre draws it, or, out of view, where it stood, since nothing opens a gap there.
   const readRehidden = () => {
     const rendered = new Map(view.getRenderedItems().map((each) => [each.id, each]));
+
     for (const path of rehidden) {
       const hidden = drawnFiles.get(path)?.file.hidden ?? NO_LINES;
       const standing = rendered.get(path);
+
       if (standing?.type === "diff") drawnBy(path, standing.instance);
       else
         tellDrawn(
@@ -1012,14 +1071,18 @@ function mountList(host: HTMLElement, props: DiffListProps): DiffListHandle {
           drawn.told(path).filter((line) => hidden.includes(line)),
         );
     }
+
     rehidden.clear();
   };
+
   typeset(host, props.look);
   const commentable = (path: string) => drawnFiles.get(path)?.file.lead === false;
   // Note that a file's read patch names its file by path for Pierre's reading of it whole, since Pierre hands back the patch alone.
   const pathOf = (fileDiff: FileDiffMetadata) => paths.get(fileDiff) ?? fileDiff.name;
+
   const optionsFor = (next: DiffListProps) =>
     listOptions(next.look, () => latest, dress, drawnBy, commentable, pathOf);
+
   const highlighting = listHighlighting(props.look);
   const { pool } = highlighting;
   const view = new CodeView<string, undefined>(optionsFor(props), pool);
@@ -1028,52 +1091,66 @@ function mountList(host: HTMLElement, props: DiffListProps): DiffListHandle {
   view.render(true);
   // The file whose header stands at the top of the list, told when it changes.
   let top: string | undefined;
+
   const tellTop = (scrollTop: number) => {
     const standing = latest.files.findLast(
       (file) => (view.getTopForItem(file.path) ?? Number.POSITIVE_INFINITY) <= scrollTop + 1,
     );
+
     const path = standing?.path ?? latest.files[0]?.path;
+
     if (path === undefined || path === top) return;
     top = path;
     latest.onTopFile(path);
   };
+
   // Note that a selection's offer stands where the selection stood, so a
   // scroll lets it go; the view is told so once, not on every scroll.
   let offered = false;
+
   const tellText = (selected: DiffTextSelection | undefined) => {
     if (selected === undefined && !offered) return;
     offered = selected !== undefined;
     latest.onSelectText?.(selected);
   };
+
   const stopWatching = watchTextSelection(
     host,
     () => latest.onSelectText !== undefined,
     tellText,
     (element) => elementPaths.get(element),
   );
+
   const unsubscribe = view.subscribeToScroll((scrollTop) => {
     tellTop(scrollTop);
     tellText(undefined);
   });
+
   tellTop(0);
+
   // The lines being commented on, lit; Pierre's own pick stands while none is.
   const light = (selected: DiffListSelection | undefined) => {
     if (selected === undefined) return view.clearSelectedLines();
     const { start, side, end, endSide } = selected.selection;
     view.setSelectedLines({ id: selected.path, range: { start, side, end, endSide } });
   };
+
   if (props.selected !== undefined) light(props.selected);
   const drawnElements = () => host.querySelectorAll<HTMLElement>(`[${FIND_SHADOW_ATTRIBUTE}]`);
+
   // Note that the lines lit before stand again only where the moment's still stand, on the same side, since a press may have picked others meanwhile.
   const endFlash = () => {
     const standing = flash;
     deadline?.cancel();
     deadline = undefined;
+
     if (standing === undefined) return;
     flash = undefined;
+
     for (const element of drawnElements()) markFlash(element);
     const now = view.getSelectedLines();
     const picked = now === null ? undefined : selectionOf(now.range);
+
     if (
       now?.id === standing.path &&
       picked?.start === standing.startLine &&
@@ -1083,6 +1160,7 @@ function mountList(host: HTMLElement, props: DiffListProps): DiffListHandle {
     )
       light(latest.selected);
   };
+
   const revealLines = (range: DiffLineRange) => {
     const { path, side, startLine, endLine } = range;
     const lines = { start: startLine, side, end: endLine, endSide: side };
@@ -1091,11 +1169,13 @@ function mountList(host: HTMLElement, props: DiffListProps): DiffListHandle {
     deadline = host.animate([], { duration: FLASH_DEADLINE_MS });
     deadline.onfinish = endFlash;
     view.setSelectedLines({ id: path, range: lines });
+
     // Note that the file lit is landed on afresh, so lines lit again while still lit fade anew.
     for (const element of drawnElements()) {
       if (lit(element)) land(element, LANDED.HELD);
       else element.removeAttribute(LANDED_ATTRIBUTE);
     }
+
     view.scrollTo({
       type: "range",
       id: path,
@@ -1105,15 +1185,18 @@ function mountList(host: HTMLElement, props: DiffListProps): DiffListHandle {
       behavior: glideOf(host),
     });
   };
+
   return {
     update: (next) => {
       const was = latest;
       latest = next;
       typeset(host, next.look);
+
       if (!sameLook(next.look, was.look)) {
         // A look the pool's workers do not hold yet is handed them first, since the pool's colors stand over the list's own.
         void highlighting.follow(next.look);
       }
+
       if (
         !sameLook(next.look, was.look) ||
         (next.onComment === undefined) !== (was.onComment === undefined) ||
@@ -1127,6 +1210,7 @@ function mountList(host: HTMLElement, props: DiffListProps): DiffListHandle {
       drawn.forget(new Set(next.files.map((file) => file.path)));
       readRehidden();
       tellTop(host.scrollTop);
+
       // Lines lit for a comment take the place of a moment's, which lights them again as it fades.
       if (!sameListSelection(next.selected, was.selected)) {
         if (flash === undefined) light(next.selected);
@@ -1154,7 +1238,9 @@ function mountList(host: HTMLElement, props: DiffListProps): DiffListHandle {
       stopWatching();
       unsubscribe();
       view.cleanUp();
+
       for (const release of releases) release();
+
       for (const stop of gapWatches.values()) stop();
       gapWatches.clear();
       host.replaceChildren();
@@ -1203,6 +1289,7 @@ let wholeFilesRead = 0;
 function wholeFileKey(name: string, revision: string, text: string): string {
   const same = (each: WholeFileKey) => each.name === name && each.revision === revision;
   const held = wholeFileKeys.find(same);
+
   if (held?.text !== text) wholeFilesRead += 1;
   const key = held?.text === text ? held.key : `whole-${wholeFilesRead}`;
   // Note that the key read moves to the end, so the oldest is the one let go.
@@ -1210,6 +1297,7 @@ function wholeFileKey(name: string, revision: string, text: string): string {
     ...wholeFileKeys.filter((each) => !same(each)),
     { name, revision, text, key },
   ].slice(-WHOLE_FILE_KEYS_KEPT);
+
   return key;
 }
 
@@ -1276,8 +1364,7 @@ function wholeFileOptions(
     itemMetrics: { lineHeight: lineHeightOf(drawn) },
     layout: { paddingTop: WHOLE_FILE_EDGE, paddingBottom: WHOLE_FILE_EDGE, gap: 0 },
     renderAnnotation: (note: { metadata: string }) => latest().renderAnnotation(note.metadata),
-    onPostRender: (node: HTMLElement, _instance: unknown, phase: PostRenderPhase) =>
-      dress(node, phase),
+    onPostRender: (node: HTMLElement, _instance, phase: PostRenderPhase) => dress(node, phase),
   };
 }
 
@@ -1301,38 +1388,51 @@ function mountFile(host: HTMLElement, props: FileViewProps): FileViewHandle {
   let picked: FileLineRange | undefined;
   // The file's element, the one the selection is read in, once Pierre has drawn it.
   let drawnElement: HTMLElement | undefined;
+
   // Note that the box the file scrolls in takes the theme's ground, because Pierre grounds only the file's own lines, and a file shorter than its tab would otherwise stand as a block on the tab's ground. It is read again as the appearance turns, which Pierre follows in its styles alone, drawing nothing anew.
   const ground = () => {
     if (drawnElement !== undefined) {
       host.style.backgroundColor = getComputedStyle(drawnElement).backgroundColor;
     }
   };
+
   releases.push(onDrawnThemeChange(ground));
+
   const dress = (element: HTMLElement, phase: PostRenderPhase) => {
     if (phase === "unmount") {
       if (drawnElement === element) drawnElement = undefined;
+
       return;
     }
+
     drawnElement = element;
     quietGutter(element);
+
     // Each line drawn anew is marked with its indent, which a wrapped line's later rows hang by; lines that scroll sideways hang by none.
     if (element.shadowRoot !== null && latest.look.wrap) markLineIndents(element.shadowRoot);
+
     if (!dressed.has(element) && element.shadowRoot !== null) {
       dressed.add(element);
       element.setAttribute(FIND_SHADOW_ATTRIBUTE, FIND_SKIPPED);
       releases.push(adoptShadowStyles(element.shadowRoot, lookSheets().whole));
     }
+
     ground();
     latest.onDrawn?.();
   };
+
   const pick = (range: SelectedLineRange | null) => {
     picked = range === null ? undefined : fileLinesOf(range);
   };
+
   const optionsFor = (next: FileViewProps) =>
     wholeFileOptions(next.look, () => latest, dress, pick);
+
   let version = 0;
+
   const itemOf = (next: FileViewProps): CodeViewItem<string> => {
     version += 1;
+
     return {
       id: WHOLE_FILE_ITEM,
       type: "file",
@@ -1345,33 +1445,42 @@ function mountFile(host: HTMLElement, props: FileViewProps): FileViewHandle {
       version,
     };
   };
+
   const light = (lit: FileLineRange | undefined) => {
     picked = undefined;
+
     if (lit === undefined) view.clearSelectedLines({ notify: false });
     // Note that Pierre is told not to tell of the lines it is handed, which are no pick of the reader's.
     else view.setSelectedLines({ id: WHOLE_FILE_ITEM, range: litRange(lit) }, { notify: false });
   };
+
   typeset(host, props.look);
   const highlighting = listHighlighting(props.look);
   const view = new CodeView<string, undefined>(optionsFor(props), highlighting.pool);
   view.setup(host);
   view.setItems([itemOf(props)]);
   view.render(true);
+
   if (props.lit !== undefined) light(props.lit);
+
   return {
     update: (next) => {
       const was = latest;
       latest = next;
       typeset(host, next.look);
+
       if (!sameLook(next.look, was.look)) {
         // A look the pool's workers do not hold yet is handed them first, since the pool's colors stand over the file's own.
         void highlighting.follow(next.look);
         view.setOptions(optionsFor(next));
       }
+
       const another =
         next.name !== was.name || next.text !== was.text || next.revision !== was.revision;
+
       // Note that lines picked in a file are no pick in another.
       if (another) picked = undefined;
+
       if (
         another ||
         !sameLook(next.look, was.look) ||
@@ -1380,6 +1489,7 @@ function mountFile(host: HTMLElement, props: FileViewProps): FileViewHandle {
         view.setItems([itemOf(next)]);
         view.render();
       }
+
       if (!sameFileLines(next.lit, was.lit)) light(next.lit);
     },
     revealLines: (range) =>
@@ -1392,16 +1502,19 @@ function mountFile(host: HTMLElement, props: FileViewProps): FileViewHandle {
       }),
     pickedLines: () => {
       if (picked !== undefined) return picked;
+
       if (document.getSelection()?.isCollapsed !== false) return undefined;
       const root = drawnElement?.shadowRoot;
       const range = root === null || root === undefined ? undefined : rangeIn(root);
       const selection = range === undefined ? undefined : selectedLines(range);
+
       return selection === undefined
         ? undefined
         : fileLinesOf({ start: selection.start, end: selection.end });
     },
     unmount: () => {
       view.cleanUp();
+
       for (const release of releases) release();
       host.replaceChildren();
       host.style.removeProperty("background-color");

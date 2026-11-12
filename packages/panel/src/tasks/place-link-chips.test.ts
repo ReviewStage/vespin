@@ -82,6 +82,7 @@ const TASK: TaskSummary = {
 /** Main's document holding the task, its agent, its page, and an Inbox item waiting on it. */
 const STATE: AppStateSnapshot = (() => {
   const snapshot = signedInAs({ id: SAM, email: "sam@example.com", name: "Sam Okafor" });
+
   return {
     ...snapshot,
     tasks: {
@@ -163,11 +164,13 @@ async function drawn(
   handMembers(() => ({ rows: { members: MEMBERS } }));
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   const words = createElement(MemberDirectory, {
     workspace: ACME,
     readerId: SAM,
     children: createElement(TranscriptWords, { text }),
   });
+
   act(() =>
     root?.render(
       withQueryClient(
@@ -181,6 +184,7 @@ async function drawn(
   await act(async () => {
     for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
   });
+
   return container;
 }
 
@@ -245,7 +249,7 @@ test("a place the window holds no name for is called by its kind, or by its labe
 
   assert.deepEqual(chips(container), [
     ["agent", "Agent"],
-    ["place", "Run"],
+    ["place", "Automation run"],
     ["place", "Inbox"],
     ["page", "the old matrix"],
     ["page", "Unfurl matrix"],
@@ -254,6 +258,7 @@ test("a place the window holds no name for is called by its kind, or by its labe
 
 test("a press on a place's chip opens the place in the window", async () => {
   const opened: LinkDestination[] = [];
+
   const container = await drawn(
     `${HOME}/plan/${TASK_ID}/agent/${AGENT} then ${HOME}/person/${SAM}`,
     opened,
@@ -264,6 +269,7 @@ test("a press on a place's chip opens the place in the window", async () => {
   )) {
     act(() => chip.click());
   }
+
   assert.deepEqual(opened, [
     { kind: LINK_DESTINATION.AGENT, planId: TASK_ID, agentId: AGENT },
     { kind: LINK_DESTINATION.PERSON, userId: SAM },
@@ -288,6 +294,7 @@ function archivedAgent(id: string, planId: string, model: string) {
 test("an archived agent's chip, which no task's row names, wears the harness the task list carries for it, a link under its task as one under the agent alone", async () => {
   const underTask = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
   const alone = "6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c";
+
   const container = await drawn(
     `${HOME}/plan/${TASK_ID}/agent/${underTask} and ${HOME}/agent/${alone}`,
     [],
@@ -308,5 +315,6 @@ test("an archived agent's chip, which no task's row names, wears the harness the
   ].map((chip) =>
     chip.querySelector(".ui-inline-ref-glyph .ui-harness-mark")?.getAttribute("data-provider"),
   );
+
   assert.deepEqual(marks, [MODEL_PROVIDER.OPENAI, MODEL_PROVIDER.ANTHROPIC]);
 });

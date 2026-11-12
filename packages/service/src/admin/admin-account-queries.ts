@@ -217,6 +217,7 @@ const findMemberships = SqlSchema.findAll({
   }),
   execute: (userId) => {
     const personal = sql<boolean>`bool_or(${isNotNull(personalWorkspace.userId)})`;
+
     return Database.use((db) =>
       db
         .select({
@@ -351,6 +352,7 @@ const findFailedRuns = SqlSchema.findAll({
   }),
   execute: (request) => {
     const at = sql<Date>`coalesce(${automationRun.settledAt}, ${automationRun.firedAt})`;
+
     return Database.use((db) =>
       db
         .select({ at, reason: automationRun.reason })
@@ -379,7 +381,9 @@ const withStandings = Effect.fnUntraced(function* (
   const conversations = [
     ...new Set([...windowRows, ...recentRows].map((row) => row.conversationId)),
   ];
+
   const turns = yield* latestTurnsOfReached(conversations);
+
   const standing = (row: AgentRow): AdminAccountAgentSource => ({
     id: row.id,
     createdAt: row.createdAt,
@@ -390,6 +394,7 @@ const withStandings = Effect.fnUntraced(function* (
     pullRequestState: row.pullRequestState,
     turn: turns.get(row.conversationId),
   });
+
   return { windowAgents: windowRows.map(standing), recentAgents: recentRows.map(standing) };
 });
 
@@ -443,6 +448,7 @@ export function readAdminAccountSource(input: {
     const agents = yield* withStandings(windowRows, recentRows);
 
     const githubByWorkspace = new Map<string, (typeof installations)[number]["status"][]>();
+
     for (const installation of installations) {
       const statuses = githubByWorkspace.get(installation.organizationId) ?? [];
       statuses.push(installation.status);

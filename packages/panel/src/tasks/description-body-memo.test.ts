@@ -45,6 +45,7 @@ afterEach(() => {
   root = undefined;
   vi.useRealTimers();
   document.body.innerHTML = "";
+
   if (standingMatchMedia === undefined) Reflect.deleteProperty(window, "matchMedia");
   else Object.defineProperty(window, "matchMedia", standingMatchMedia);
 });
@@ -71,6 +72,7 @@ function draw(task: Task): void {
     document.body.append(container);
     root = createRoot(container);
   }
+
   const shown = root;
   act(() =>
     shown.render(
@@ -97,6 +99,7 @@ test("a minute passing moves each section's edit time", async () => {
   });
   vi.setSystemTime(1_800_000_000_000);
   const at = Date.now() - 5 * 60_000;
+
   const task: Task = {
     ...taskWith(`${GOAL}\n\n${APPROACH}`, DEAN, at),
     sectionEdits: [
@@ -104,12 +107,15 @@ test("a minute passing moves each section's edit time", async () => {
       { section: "Approach", actor: DESCRIPTION_ACTOR.DEVELOPER, by: DEAN, at, duringCall: false },
     ],
   };
+
   draw(task);
   await act(async () => {
     await vi.advanceTimersByTimeAsync(0);
   });
+
   const bylines = () =>
     [...document.querySelectorAll(".description-unit-byline")].map((line) => line.textContent);
+
   assert.match(bylines()[0] ?? "", /5m/u);
 
   await act(async () => {

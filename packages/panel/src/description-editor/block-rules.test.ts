@@ -34,9 +34,12 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
+type MountedResult = { editor: Editor; handle: DescriptionEditorHandle };
+
 /** The editor mounted on the text, and its handle. */
-function mounted(markdown: string): { editor: Editor; handle: DescriptionEditorHandle } {
+function mounted(markdown: string): MountedResult {
   const host = document.body.appendChild(document.createElement("div"));
+
   const handle = mountDescriptionEditor(host, {
     markdown,
     placement: undefined,
@@ -47,8 +50,10 @@ function mounted(markdown: string): { editor: Editor; handle: DescriptionEditorH
     onFinish: () => undefined,
     onLeaveUp: () => undefined,
   });
+
   editors.push(handle);
   const element = host.querySelector<TiptapEditorHTMLElement>(".description-document-text");
+
   return { editor: element?.editor ?? assert.fail("the editor is running"), handle };
 }
 
@@ -68,12 +73,15 @@ function caretBefore(editor: Editor, words: string): void {
 /** The words typed one key at a time, as the browser's text input hands each to the editor, so a Markdown rule a key completes runs. */
 function typeKeys(editor: Editor, text: string): void {
   const { view } = editor;
+
   for (const character of text) {
     const { from, to } = view.state.selection;
     const typed = () => view.state.tr.insertText(character, from, to);
+
     const ruled = view.someProp("handleTextInput", (handle) =>
       handle(view, from, to, character, typed),
     );
+
     if (ruled !== true) view.dispatch(typed());
   }
 }
@@ -101,6 +109,7 @@ test("each rule that makes a block does nothing in a table's cell, its words kep
       words: cell.textContent,
       blocks: [...cell.children].map((child) => child.tagName),
     }));
+
     assert.deepEqual(
       cells,
       [

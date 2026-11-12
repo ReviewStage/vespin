@@ -96,27 +96,33 @@ export function linearServer(
     if (url !== INTEGRATION[LINEAR].MCP_URL) {
       return new Response("not found", { status: 404 });
     }
+
     const authorization = new Headers(init.headers).get("authorization") ?? "";
     heard.bearers.push(authorization);
+
     if (authorization !== `Bearer ${bearer}`) {
       return Response.json(
         { jsonrpc: "2.0", id: null, error: { code: -32001, message: `bad ${authorization}` } },
         { status: 401 },
       );
     }
+
     const server = new Server(
       { name: "linear-fake", version: "1.0.0" },
       { capabilities: { tools: {} } },
     );
+
     server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [...tools] }));
     server.setRequestHandler(CallToolRequestSchema, (request): CallToolResult => {
       heard.calls.push({ name: request.params.name, arguments: request.params.arguments });
+
       switch (request.params.name) {
         case "list_issues":
           // A team the server refuses outright, as a JSON-RPC error rather than the tool's own.
           if (request.params.arguments?.team === REJECTED_TEAM) {
             throw new McpError(ErrorCode.InvalidParams, "Unknown team.");
           }
+
           return {
             content: [{ type: "text", text: JSON.stringify({ issues: [{ id: "LIN-1" }] }) }],
           };
@@ -157,6 +163,7 @@ export function linearServer(
     // No session id generator: the server keeps no session, as a stateless provider does.
     const transport = new WebStandardStreamableHTTPServerTransport({ enableJsonResponse: true });
     await server.connect(transport);
+
     return transport.handleRequest(new Request(url, init));
   });
 }

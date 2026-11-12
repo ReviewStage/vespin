@@ -26,6 +26,7 @@ const SETTLE_DELAY_TOKEN = "--ui-settle-delay";
  */
 function settleDelay(): number {
   const value = getComputedStyle(document.body).getPropertyValue(SETTLE_DELAY_TOKEN);
+
   return value.trim() === "" ? MOTION_DELAY_MS.SETTLE : milliseconds(value);
 }
 
@@ -35,19 +36,25 @@ export function useSettled(waiting: boolean): boolean {
   const [settled, setSettled] = useState(false);
   useEffect(() => {
     setSettled(false);
+
     if (!waiting) return undefined;
     const delay = settleDelay();
+
     if (delay <= 0) {
       setSettled(true);
+
       return undefined;
     }
+
     wait.start(
       Effect.andThen(
         Effect.sleep(Duration.millis(delay)),
         Effect.sync(() => setSettled(true)),
       ),
     );
+
     return wait.stop;
   }, [waiting, wait]);
+
   return waiting && settled;
 }

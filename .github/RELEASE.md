@@ -161,7 +161,7 @@ The run generates the native project with `expo prebuild` and archives it signed
 locally: an ad-hoc signature, which needs no certificate and never reaches the account,
 but keeps each target's entitlements for the export to read. It then exports the archive
 with `xcodebuild -exportArchive` and `apps/mobile/release/ExportOptions.plist` through an
-App Store Connect API key of its own, which signs the app and its two extensions with
+App Store Connect API key of its own, which signs the app and its three extensions with
 Apple's cloud-managed distribution certificate: once to a local `.ipa` it checks, then
 again to upload. The archive is never signed automatically, since a runner's keychain
 starts empty and automatic signing would create an Apple Development certificate on every
@@ -176,8 +176,9 @@ app and its extensions share (`group.dev.vespin.ios`, `APP_GROUP` in `app.config
 registered by hand, once, in the Apple Developer account under **Certificates,
 Identifiers & Profiles → Identifiers**: add it under **App Groups**, then turn on
 **App Groups** with that group ticked on every App ID whose target names it in
-`app.config.ts`: `dev.vespin.ios`, `dev.vespin.ios.NotificationService`, and
-`dev.vespin.ios.AgentsLiveActivity`, and each later extension that shares it. An App ID
+`app.config.ts`: `dev.vespin.ios`, `dev.vespin.ios.NotificationService`,
+`dev.vespin.ios.AgentsLiveActivity`, and `dev.vespin.ios.ShareExtension`, and each later
+extension that shares it. An App ID
 that lacks it fails the export with no profile matching its entitlements.
 
 It needs an App Store Connect API key apart from the Mac release's, whose role is

@@ -47,7 +47,7 @@ import { memorySandbox } from "@repo/sandbox/testing";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { eq } from "drizzle-orm";
-import { Clock, Duration, Effect, Layer, Option, Redacted, Result } from "effect";
+import { Clock, Duration, Effect, Layer, Match, Option, Redacted, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { sealCodexDeviceCredentials } from "../../accounts/chatgpt-credentials.js";
 import { RUN_EVENT, RUN_TURN_ORIGIN, TURN_ORIGIN, TURN_TRIGGER } from "../../core.js";
@@ -89,7 +89,6 @@ import {
   NativeAgentSessions,
   type NativeSessions,
   RUNNER_ANSWER,
-  RUNNER_CHECKOUT,
   RUNNER_CHOICE,
   routedSessions,
   runnerChoiceApplied,
@@ -103,6 +102,16 @@ import { stoppedTurn } from "./stop.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 import { consumeTurnDelivery } from "./turn-delivery.js";
 import { TURN_DELIVERY } from "./turn-delivery-bounds.js";
+
+type Answers = {
+  open: string;
+  status: number;
+  planRefusal?: PlanRefusal;
+  planResetsAt?: number;
+  halts: boolean;
+  keyRefusal?: KeyRefusal;
+  handover: TurnHandover;
+};
 
 /**
  * runtime-sessions.test.ts -- every way the service reaches a coding agent's session answers it by the runtime its conversation runs on.
@@ -131,35 +140,32 @@ function recording(sessionPrefix: string) {
   const calls: string[] = [];
   const messages: SessionMessage[] = [];
   const booted = new Set<string>();
-  const answers: {
-    open: string;
-    status: number;
-    planRefusal?: PlanRefusal;
-    planResetsAt?: number;
-    halts: boolean;
-    keyRefusal?: KeyRefusal;
-    handover: TurnHandover;
-  } = {
+
+  const answers: Answers = {
     open: SESSION_SEND_OUTCOME.ACCEPTED,
     status: 0,
     halts: true,
     handover: TURN_HANDOVER.HANDED,
   };
+
   const sessions: NativeSessions = {
     retune: (sessionId, conversationId) =>
       Effect.sync(() => {
         calls.push(`retune:${sessionId}:${conversationId}`);
+
         return RUNNER_CHOICE.WRITTEN;
       }),
     answer: () => Effect.succeed(RUNNER_ANSWER.NOT_LIVE),
     halt: (sessionId, conversationId) =>
       Effect.sync(() => {
         calls.push(`halt:${sessionId}:${conversationId}`);
+
         return answers.halts;
       }),
     deliverTurn: (sessionId, conversationId) =>
       Effect.sync(() => {
         calls.push(`deliver:${sessionId}:${conversationId}`);
+
         return answers.handover;
       }),
     warm: () => Effect.void,
@@ -168,15 +174,18 @@ function recording(sessionPrefix: string) {
     boot: (conversationId) =>
       Effect.sync(() => {
         calls.push(`open:${conversationId}`);
+
         if (answers.open !== SESSION_SEND_OUTCOME.ACCEPTED) {
           return {
             outcome: SESSION_SEND_OUTCOME.FAILED,
             status: answers.status,
-            ...(answers.planRefusal === undefined ? {} : { planRefusal: answers.planRefusal }),
+            ...(answers.planRefusal !== undefined && { planRefusal: answers.planRefusal }),
           } as const;
         }
+
         const sessionId = `${sessionPrefix}${randomUUID()}`;
         booted.add(sessionId);
+
         return {
           outcome: SESSION_SEND_OUTCOME.ACCEPTED,
           sessionId,
@@ -187,49 +196,56 @@ function recording(sessionPrefix: string) {
       Effect.sync(() => {
         calls.push(`retry:${sessionId}`);
         messages.push(message);
+
         return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId, deliveryId: randomUUID() };
       }),
-    checkOut: () => Effect.succeed(RUNNER_CHECKOUT.NOT_LIVE),
     open: (message) =>
       Effect.sync(() => {
         calls.push(`open:${message.conversationId}`);
         messages.push(message);
+
         return answers.open === SESSION_SEND_OUTCOME.ACCEPTED
           ? { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: `${sessionPrefix}${randomUUID()}` }
           : {
               outcome: SESSION_SEND_OUTCOME.FAILED,
               status: answers.status,
-              ...(answers.planRefusal === undefined ? {} : { planRefusal: answers.planRefusal }),
+              ...(answers.planRefusal !== undefined && { planRefusal: answers.planRefusal }),
             };
       }),
     send: (sessionId, message) =>
       Effect.sync(() => {
         messages.push(message);
+
         if (booted.delete(sessionId)) {
           return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId, deliveryId: randomUUID() };
         }
+
         calls.push(`send:${sessionId}`);
+
         return answers.planRefusal === undefined && answers.keyRefusal === undefined
           ? { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId, deliveryId: randomUUID() }
           : {
               outcome: SESSION_SEND_OUTCOME.FAILED,
               status: answers.status,
-              ...(answers.planRefusal === undefined ? {} : { planRefusal: answers.planRefusal }),
-              ...(answers.planResetsAt === undefined ? {} : { planResetsAt: answers.planResetsAt }),
-              ...(answers.keyRefusal === undefined ? {} : { keyRefusal: answers.keyRefusal }),
+              ...(answers.planRefusal !== undefined && { planRefusal: answers.planRefusal }),
+              ...(answers.planResetsAt !== undefined && { planResetsAt: answers.planResetsAt }),
+              ...(answers.keyRefusal !== undefined && { keyRefusal: answers.keyRefusal }),
             };
       }),
     cancel: (sessionId, turnId) =>
       Effect.sync(() => {
         calls.push(`cancel:${sessionId}:${turnId}`);
+
         return { outcome: SESSION_CANCEL_OUTCOME.ACCEPTED };
       }),
     reset: (sessionId) =>
       Effect.sync(() => {
         calls.push(`reset:${sessionId}`);
+
         return { outcome: SESSION_RESET_OUTCOME.RESET };
       }),
   };
+
   return { calls, messages, answers, sessions };
 }
 
@@ -241,27 +257,33 @@ function runtimes() {
   const claudeCode = recording(`${NATIVE_SESSION_PREFIX.claude_code}000000000001-`);
   const codex = recording(NATIVE_SESSION_PREFIX.codex);
   const actingFor: string[] = [];
+
   const native = Layer.succeed(NativeAgentSessions, {
     sessions: (runtime, account) => {
       actingFor.push(account);
+
       return Option.some(
         Effect.succeed(runtime === "codex" ? codex.sessions : claudeCode.sessions),
       );
     },
   });
+
   return { agentSessions, claudeCode, codex, actingFor, native };
 }
 
 const RELAY = { owner: "Acme", name: "Relay" } as const;
+
 /** Where a synthetic Mac keeps the Codex it checked. */
 const CODEX_EXECUTABLE =
   "/Users/fixture/Library/Application Support/Vespin/agent-tools/codex/bin/codex";
+
 const INSTALLATIONS: readonly InstallationFixture[] = Array.from({ length: 64 }, (_, index) => ({
   id: 9_100 + index,
   login: RELAY.owner,
   accountId: 91_000 + index,
   repositories: [RELAY],
 }));
+
 let installationsConnected = 0;
 
 /** GitHub, reaching the repository through each workspace's installation. */
@@ -286,6 +308,7 @@ function environment(): Layer.Layer<HostedEnvironment> {
     titleAnthropicApiKey: undefined,
     previewApiKeys: {},
   };
+
   return Layer.succeed(HostedEnvironment, values);
 }
 
@@ -299,6 +322,7 @@ const openTeam = Effect.gen(function* () {
   const workspaceId = yield* openWorkspace(owner);
   yield* joinWorkspace(workspaceId, teammate);
   const task = yield* createTask(owner, { organizationId: workspaceId, name: "Invitations" });
+
   return { owner, teammate, workspaceId, taskId: task.id };
 });
 
@@ -314,14 +338,15 @@ const agentOn = (owner: string, taskId: string, runtime: "eve" | "claude_code" |
       prompt: null,
       repository: null,
       runtime,
-      payer:
-        runtime === "claude_code"
-          ? AGENT_PAYER.CLAUDE_SUBSCRIPTION
-          : runtime === "codex"
-            ? AGENT_PAYER.CHATGPT_SUBSCRIPTION
-            : undefined,
+      payer: Match.value(runtime).pipe(
+        Match.when("claude_code", () => AGENT_PAYER.CLAUDE_SUBSCRIPTION),
+        Match.when("codex", () => AGENT_PAYER.CHATGPT_SUBSCRIPTION),
+        Match.orElse(() => undefined),
+      ),
     });
+
     assert.ok(Option.isSome(started));
+
     return started.value.agent;
   });
 
@@ -339,6 +364,7 @@ const everyCall = (sessions: AgentSessions, agent: Agent) =>
     yield* sessions.send(opened.sessionId, messageTo(agent, "And the emails."));
     yield* sessions.cancel(opened.sessionId, "turn-1");
     yield* sessions.reset(opened.sessionId);
+
     return opened.sessionId;
   });
 
@@ -375,9 +401,11 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           const onRetiredApplied = yield* runnerChoiceApplied(onRetired).pipe(
             Effect.provide(native),
           );
+
           const onClaudeCodeApplied = yield* runnerChoiceApplied(onClaudeCode).pipe(
             Effect.provide(native),
           );
+
           // Where this function reaches no harness, the next message carries the change instead.
           const unreached = yield* runnerChoiceApplied(onClaudeCode);
 
@@ -416,10 +444,12 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             },
             Effect.succeed(true),
           );
+
           const turn = {
             ...target,
             turnId: Option.getOrThrow(yield* queuedTurnOf(agent.conversationId)),
           };
+
           actingFor.length = 0;
 
           claudeCode.answers.handover = TURN_HANDOVER.BUSY;
@@ -449,6 +479,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           const onRetired = yield* agentOn(owner, taskId, "eve");
           const onClaudeCode = yield* agentOn(owner, taskId, "claude_code");
           const { agentSessions, claudeCode, actingFor, native } = runtimes();
+
           const retired = {
             outcome: SESSION_SEND_OUTCOME.FAILED,
             status: 409,
@@ -499,6 +530,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           );
           const writer = storeWriter({ tools: CODER_TOOL_SET });
           const sessions = yield* routedSessions(owner).pipe(Effect.provide(native));
+
           const line = (clientKey: string) => ({
             text: "Expire invitations after a week.",
             clientKey,
@@ -530,10 +562,12 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
         Effect.gen(function* () {
           const { owner, taskId } = yield* openTeam;
           const bare = yield* openGithubUser();
+
           const bareTask = yield* createTask(bare, {
             organizationId: yield* openWorkspace(bare),
             name: "Invitations",
           });
+
           const onRetiredAs = (
             starter: string,
             onTask: string,
@@ -554,9 +588,11 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               }),
               (started) => Option.getOrThrow(started).agent,
             );
+
           const appText = yield* onRetiredAs(owner, taskId, AGENT_PAYER.APP);
           const unrecorded = yield* onRetiredAs(bare, bareTask.id, undefined);
           const retiredKeyRemoved = yield* onRetiredAs(bare, bareTask.id, AGENT_PAYER.API_KEY);
+
           for (const [starter, agent] of [
             [owner, appText],
             [bare, unrecorded],
@@ -568,17 +604,21 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               new Date(0),
             );
           }
+
           const nativeKeyRemoved = yield* onRetiredAs(
             bare,
             bareTask.id,
             AGENT_PAYER.API_KEY,
             "claude_code",
           );
+
           const { agentSessions } = runtimes();
           const writer = storeWriter({ tools: CODER_TOOL_SET });
+
           const send = (starter: string, agent: Agent) =>
             Effect.gen(function* () {
               const sessions = yield* routedSessions(starter);
+
               return yield* Effect.result(
                 steerAgent(sessions, writer, starter, agent, {
                   text: "Expire invitations after a week.",
@@ -617,6 +657,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               name,
             );
           }
+
           assert.deepEqual(agentSessions.calls, []);
         }),
     );
@@ -632,6 +673,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           const { agentSessions, claudeCode, native } = runtimes();
           const nativeSession = `${NATIVE_SESSION_PREFIX.claude_code}000000000001-${randomUUID()}`;
           const lines = new Map<string, string>();
+
           for (const [agent, sessionId] of [
             [onRetired, "wrun_eve"],
             [onClaudeCode, nativeSession],
@@ -651,12 +693,15 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               placedAt: new Date(0),
             });
           }
+
           const rewind = (agent: Agent) =>
             rewoundAgent(owner, agent, lines.get(agent.id) ?? "").pipe(
               Effect.provide(native),
               Effect.result,
             );
+
           const db = yield* Database;
+
           const standing = (agent: Agent) =>
             Effect.map(
               db
@@ -671,6 +716,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             Effect.provide(native),
             Effect.result,
           );
+
           assert.deepEqual(missing, Result.fail(HOSTED_REFUSAL.NOT_FOUND));
           assert.deepEqual(claudeCode.calls, []);
 
@@ -714,6 +760,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             Effect.provide(native),
             Effect.result,
           );
+
           const cleared = yield* clearedAgent(writer, owner, onClaudeCode).pipe(
             Effect.provide(native),
             Effect.result,
@@ -726,10 +773,13 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           ]);
           const routing = yield* readAgentRouting(owner, onClaudeCode.id);
           assert.equal(Option.getOrUndefined(routing)?.nativeSession, null);
+
           const rows = yield* (yield* Database)
             .select({ parts: messages.parts })
             .from(messages)
             .where(eq(messages.conversationId, onClaudeCode.conversationId));
+
+          // SAFETY: a message's parts are stored as its UI parts, each naming its type.
           assert.deepEqual(
             rows.flatMap((row) => (row.parts as { type: string }[]).map((part) => part.type)),
             ["data-session-cleared"],
@@ -747,11 +797,14 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           const { agentSessions, claudeCode, native } = runtimes();
           const writer = storeWriter({ tools: CODER_TOOL_SET });
           const nativeSession = `${NATIVE_SESSION_PREFIX.claude_code}000000000001-${randomUUID()}`;
+
           const sessionOf = new Map([
             [onRetired.conversationId, "wrun_eve"],
             [onClaudeCode.conversationId, nativeSession],
           ]);
+
           const nativeTurn = randomUUID();
+
           for (const [agent, runtimeTurnId] of [
             [onRetired, "turn_3"],
             [onClaudeCode, nativeTurn],
@@ -769,6 +822,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               origin: TURN_ORIGIN.TYPED,
             });
           }
+
           yield* stoppedTurn(writer, owner, onRetired).pipe(Effect.provide(native));
           yield* stoppedTurn(writer, owner, onClaudeCode).pipe(Effect.provide(native));
 
@@ -792,6 +846,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             new Date(0),
           );
           const sessions = yield* routedSessions(teammate).pipe(Effect.provide(native));
+
           const line = {
             text: "Also the emails.",
             clientKey: "key-teammate",
@@ -816,12 +871,14 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             }),
             STEER_OUTCOME.SENT,
           );
+
           // The model reads a teammate's line behind the label naming them by their link, and the starter's as it is.
           const texts = claudeCode.messages.map((sent) =>
             Array.isArray(sent.message)
               ? sent.message.flatMap((part) => (part.type === "text" ? [part.text] : []))
               : [sent.message],
           );
+
           assert.match(
             texts[0]?.[0] ?? "",
             new RegExp(
@@ -831,11 +888,13 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           );
           assert.deepEqual(texts[0]?.slice(1), ["Also the emails."]);
           assert.equal(claudeCode.messages[1]?.message, "Also the emails.");
+
           // The row keeps the teammate's words as they typed them, its sender in its own column.
           const [kept] = yield* (yield* Database)
             .select({ parts: messages.parts })
             .from(messages)
             .where(eq(messages.clientId, sentLineId("key-teammate")));
+
           assert.deepEqual(
             kept?.parts.flatMap((part) => (part.type === "text" ? [part.text] : [])),
             ["Also the emails."],
@@ -932,6 +991,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             new Date(0),
           );
           const sessions = yield* routedSessions(owner).pipe(Effect.provide(native));
+
           const send = Effect.result(
             steerAgent(sessions, storeWriter({ tools: CODER_TOOL_SET }), owner, onCodex, {
               text: "Also the emails.",
@@ -939,7 +999,9 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               sender: { kind: MESSAGE_SENDER.MEMBER, userId: owner },
             }),
           );
+
           const refusals: string[] = [];
+
           for (const refusal of Object.values(PLAN_REFUSAL)) {
             codex.answers.planRefusal = refusal;
             codex.answers.status = refusal === PLAN_REFUSAL.UNREACHABLE ? 503 : 403;
@@ -973,6 +1035,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             new Date(0),
           );
           const sessions = yield* routedSessions(owner).pipe(Effect.provide(native));
+
           const send = Effect.result(
             steerAgent(sessions, storeWriter({ tools: CODER_TOOL_SET }), owner, onClaudeCode, {
               text: "Also the emails.",
@@ -1014,6 +1077,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             new Date(0),
           );
           const sessions = yield* routedSessions(owner).pipe(Effect.provide(native));
+
           const send = Effect.result(
             steerAgent(sessions, storeWriter({ tools: CODER_TOOL_SET }), owner, onClaudeCode, {
               text: "Also the emails.",
@@ -1142,14 +1206,17 @@ const openStarter = (setupToken: boolean, chatGpt: SignIn = "none") =>
     const installation = INSTALLATIONS[installationsConnected++];
     assert.ok(installation);
     yield* connectWorkspaceGitHub(workspaceId, installation);
+
     if (setupToken) {
       const ring = parseKeyRing(Redacted.make(RING));
       assert.ok(Result.isSuccess(ring));
+
       const kind = {
         userId: owner,
         provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
         kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
       };
+
       yield* saveProviderKey(
         owner,
         kind.provider,
@@ -1160,14 +1227,17 @@ const openStarter = (setupToken: boolean, chatGpt: SignIn = "none") =>
         new Date(0),
       );
     }
+
     if (chatGpt !== "none") {
       const ring = parseKeyRing(
         Redacted.make(
           chatGpt === "rotated_out" ? `2:${Buffer.alloc(32, 9).toString("base64")}` : RING,
         ),
       );
+
       assert.ok(Result.isSuccess(ring));
       const accessExpiresAt = new Date(3_600_000);
+
       const { sealed, hint } = sealCodexDeviceCredentials(ring.success, owner, {
         accessToken: "access-0",
         refreshToken: "refresh-0",
@@ -1176,6 +1246,7 @@ const openStarter = (setupToken: boolean, chatGpt: SignIn = "none") =>
         chatgptAccountId: undefined,
         accessExpiresAt,
       });
+
       yield* saveProviderKey(
         owner,
         PROVIDER_KEY_PROVIDER.OPENAI,
@@ -1186,6 +1257,7 @@ const openStarter = (setupToken: boolean, chatGpt: SignIn = "none") =>
         new Date(0),
         accessExpiresAt,
       );
+
       if (chatGpt === "signed_out") {
         const [row] = yield* listProviderKeyRows(owner, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
         assert.ok(row);
@@ -1198,6 +1270,7 @@ const openStarter = (setupToken: boolean, chatGpt: SignIn = "none") =>
         );
       }
     }
+
     return { owner, workspaceId };
   });
 
@@ -1288,16 +1361,20 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               on: "not_here",
             },
           ] as const;
+
           for (const each of cases) {
             const { owner, workspaceId } = yield* openStarter(each.token);
             const { agentSessions, claudeCode, native } = runtimes();
+
             const layers = Layer.mergeAll(
               githubReaching(INSTALLATIONS).layer,
               CATALOG,
               environment(),
               ...(each.native ? [native] : []),
             );
+
             const ask = yield* startIn(owner, workspaceId, each.model);
+
             const started = yield* Effect.result(
               startAgent(routedSessions(owner), owner, ask).pipe(Effect.provide(layers)),
             );
@@ -1308,14 +1385,18 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               } else {
                 assertCredentialMissing(started, each.on, each.name);
               }
+
               assert.ok(Option.isNone(yield* readAgentByKey(owner, ask.idempotencyKey)));
               assert.deepEqual([heard(agentSessions), heard(claudeCode)], [[], []], each.name);
               continue;
             }
+
             assert.ok(Result.isSuccess(started), each.name);
+
             const routing = Option.getOrThrow(
               yield* readAgentRouting(owner, started.success.agent.id),
             );
+
             assert.deepEqual(
               [routing.runtime, routing.payer],
               ["claude_code", AGENT_PAYER.CLAUDE_SUBSCRIPTION],
@@ -1380,9 +1461,11 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               refused: LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN,
             },
           ] as const;
+
           for (const each of cases) {
             const { owner, workspaceId } = yield* openStarter(false);
             const deviceId = randomUUID();
+
             if (each.mac) {
               yield* registerDevice(owner, {
                 id: deviceId,
@@ -1393,18 +1476,22 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
                 capabilities: "predatesOwnSignIn" in each ? [] : [DEVICE_CAPABILITY.GITHUB_SIGN_IN],
               });
             }
+
             const task = yield* createTask(owner, {
               organizationId: workspaceId,
               name: "Invitations",
               repository: `${RELAY.owner}/${RELAY.name}`,
             });
+
             if ("away" in each)
               yield* TestClock.adjust(Duration.sum(THIS_MAC.FRESH, Duration.seconds(1)));
             const { native } = runtimes();
+
             const ask = {
               ...startOn(task.id, each.model),
               runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId },
             };
+
             const started = yield* Effect.result(
               startAgent(routedSessions(owner), owner, ask).pipe(
                 Effect.provide(
@@ -1417,6 +1504,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
                 ),
               ),
             );
+
             const made = yield* readAgentByKey(owner, ask.idempotencyKey);
 
             if (each.refused !== undefined) {
@@ -1425,15 +1513,18 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               assert.ok(Option.isNone(made), each.name);
               continue;
             }
+
             assert.ok(Result.isSuccess(started), each.name);
             assert.deepEqual(
               Option.map(made, (agent) => [agent.machine, agent.deviceId]),
               Option.some([AGENT_MACHINE.DEVICE, deviceId]),
               each.name,
             );
+
             const routing = Option.getOrThrow(
               yield* readAgentRouting(owner, started.success.agent.id),
             );
+
             assert.deepEqual([routing.runtime, routing.payer], each.runs, each.name);
           }
         }),
@@ -1444,13 +1535,16 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
       () =>
         Effect.gen(function* () {
           const { owner, workspaceId } = yield* openStarter(true);
+
           const task = yield* createTask(owner, {
             organizationId: workspaceId,
             name: "Release notes",
             repository: null,
           });
+
           const { native } = runtimes();
           const words = startOn(task.id, "anthropic/claude-opus-5.5");
+
           const description = {
             ...startOn(task.id, "anthropic/claude-opus-5.5"),
             prompt: undefined,
@@ -1472,14 +1566,17 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               [task.id, null, AGENT_MACHINE.VERCEL],
             );
           }
+
           const onBranch = {
             ...startOn(task.id, "anthropic/claude-opus-5.5"),
             branch: "luke/stacked",
           };
+
           const branched = yield* startAgent(routedSessions(owner), owner, onBranch).pipe(
             Effect.provide(Layer.mergeAll(CATALOG, environment(), native)),
             Effect.result,
           );
+
           assert.deepEqual(branched, Result.fail(HOSTED_REFUSAL.NO_REPOSITORY));
           assert.ok(Option.isNone(yield* readAgentByKey(owner, onBranch.idempotencyKey)));
         }),
@@ -1496,22 +1593,27 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           yield* joinWorkspace(workspaceId, teammate);
           yield* saveApiKey(teammate, PROVIDER_KEY_PROVIDER.ANTHROPIC);
           const onDevice = { machine: AGENT_MACHINE.DEVICE, deviceId } as const;
+
           const task = yield* createTask(owner, {
             organizationId: workspaceId,
             name: "Invitations",
             repository: `${RELAY.owner}/${RELAY.name}`,
           });
+
           const { native } = runtimes();
+
           const layers = Layer.mergeAll(
             githubReaching(INSTALLATIONS).layer,
             CATALOG,
             environment(),
             native,
           );
+
           const start = (userId: string, ask: Parameters<typeof startAgent>[2]) =>
             Effect.result(
               startAgent(routedSessions(userId), userId, ask).pipe(Effect.provide(layers)),
             );
+
           const whereRuns = (
             started: { readonly agent: { readonly id: string } },
             userId: string,
@@ -1531,6 +1633,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
 
           // A continue runs where its source runs, though its starter's pick is the cloud now.
           yield* keepRunsOnPick(owner, { machine: AGENT_MACHINE.VERCEL });
+
           const continued = yield* start(owner, {
             taskId: task.id,
             prompt: undefined,
@@ -1538,6 +1641,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             choice: undefined,
             from: { agentId: owned.success.agent.id },
           });
+
           assert.ok(Result.isSuccess(continued));
           assert.deepEqual(
             yield* whereRuns(continued.success, owner),
@@ -1552,6 +1656,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             choice: undefined,
             from: { agentId: owned.success.agent.id },
           };
+
           const theirContinued = yield* start(teammate, theirContinue);
           assert.ok(Result.isSuccess(theirContinued), JSON.stringify(theirContinued));
           assert.deepEqual(
@@ -1579,6 +1684,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             secretHash: `secret-${randomUUID()}`,
           });
           assert.notEqual(yield* removeHost(owner, deviceId), undefined);
+
           const fromRemoved = {
             taskId: task.id,
             prompt: undefined,
@@ -1586,6 +1692,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             choice: undefined,
             from: { agentId: owned.success.agent.id },
           };
+
           const removed = yield* start(owner, fromRemoved);
           assert.ok(Result.isFailure(removed));
           assert.deepEqual(removed.failure, HOSTED_REFUSAL.DEVICE_REMOVED);
@@ -1607,30 +1714,37 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           yield* registerDevice(teammate, { id: den, name: "Den", ...HOST_LAYOUT });
           const onStudio = { machine: AGENT_MACHINE.DEVICE, deviceId: studio } as const;
           const inCloud = { machine: AGENT_MACHINE.VERCEL } as const;
+
           const taskIn = () =>
             createTask(owner, {
               organizationId: workspaceId,
               name: "Invitations",
               repository: `${RELAY.owner}/${RELAY.name}`,
             });
+
           const { native } = runtimes();
+
           const layers = Layer.mergeAll(
             githubReaching(INSTALLATIONS).layer,
             CATALOG,
             environment(),
             native,
           );
+
           const start = (userId: string, ask: Parameters<typeof startAgent>[2]) =>
             Effect.result(
               startAgent(routedSessions(userId), userId, ask).pipe(Effect.provide(layers)),
             );
+
           const runsAt = (userId: string, ask: Parameters<typeof startAgent>[2]) =>
             Effect.gen(function* () {
               const started = yield* start(userId, ask);
               assert.ok(Result.isSuccess(started), JSON.stringify(started));
               const { machine, deviceId } = started.success.agent;
+
               return [machine, deviceId ?? null];
             });
+
           const model = "anthropic/claude-opus-5.5";
           const task = yield* taskIn();
 
@@ -1651,6 +1765,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           // An automation's run runs in the cloud over the owner's pick, and is no agent of the owner's
           // there: on a task where only it stands, the pick decides.
           const other = yield* taskIn();
+
           const automated = {
             ...startOn(other.id, model),
             automationOrigin: {
@@ -1659,11 +1774,13 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               prompt: "Fix the flaky test.",
             },
           };
+
           assert.deepEqual(yield* runsAt(owner, automated), [AGENT_MACHINE.VERCEL, null]);
           assert.deepEqual(yield* runsAt(owner, startOn(other.id, model)), [
             AGENT_MACHINE.DEVICE,
             studio,
           ]);
+
           // A continue naming the cloud moves its source's work there, and the pick follows.
           const moved = {
             taskId: task.id,
@@ -1675,6 +1792,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             },
             runsOn: inCloud,
           };
+
           assert.deepEqual(yield* runsAt(owner, moved), [AGENT_MACHINE.VERCEL, null]);
           assert.deepEqual(yield* readRunsOnPick(owner), Option.some(inCloud));
 
@@ -1690,9 +1808,11 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               ...startOn(task.id, model),
               runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId },
             };
+
             assert.deepEqual(yield* start(owner, ask), Result.fail(refusal));
             assert.ok(Option.isNone(yield* readAgentByKey(owner, ask.idempotencyKey)));
           }
+
           assert.deepEqual(yield* readRunsOnPick(owner), Option.some(inCloud));
         }),
     );
@@ -1709,6 +1829,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               providers: [MODEL_PROVIDER.ANTHROPIC, MODEL_PROVIDER.OPENAI],
             },
           ] as const;
+
           for (const each of cases) {
             const { owner } = yield* openStarter(false);
             yield* registerDevice(owner, {
@@ -1717,9 +1838,11 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               ...DEVICE_LAYOUT,
               ...(each.codex ? { codexExecutable: CODEX_EXECUTABLE } : undefined),
             });
+
             const offers = yield* macOffers(owner).pipe(
               Effect.provide(Layer.mergeAll(environment(), runtimes().native)),
             );
+
             assert.deepEqual(
               offers.map((offer) => [offer.name, offer.providers]),
               [["Studio", each.providers]],
@@ -1735,10 +1858,12 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
         Effect.gen(function* () {
           const { owner } = yield* openStarter(true, "none");
           const id = randomUUID();
+
           const offered = Effect.map(
             macOffers(owner).pipe(Effect.provide(Layer.mergeAll(environment(), runtimes().native))),
             (offers) => offers.map((offer) => [offer.name, offer.setup, offer.setupFailure]),
           );
+
           const register = (setup: Partial<Pick<DeviceRegistration, "setup" | "setupFailure">>) =>
             registerDevice(owner, { id, name: "Studio", ...DEVICE_LAYOUT, ...setup });
 
@@ -1759,6 +1884,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
         Effect.gen(function* () {
           const layers = (native: ReturnType<typeof runtimes>["native"]) =>
             Layer.mergeAll(githubReaching(INSTALLATIONS).layer, CATALOG, environment(), native);
+
           const cases = [
             {
               name: "Claude Code",
@@ -1768,9 +1894,11 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             },
             { name: "Codex", token: false, chatGpt: "signed_in", model: "openai/gpt-5.5" },
           ] as const;
+
           for (const each of cases) {
             const { owner, workspaceId } = yield* openStarter(each.token, each.chatGpt);
             const { claudeCode, codex, native } = runtimes();
+
             const started = yield* startAgent(
               routedSessions(owner),
               owner,
@@ -1788,6 +1916,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           // An automation's run says its prompt as the automation, never as its creator.
           const automated = yield* openStarter(true);
           const byAutomation = runtimes();
+
           const run = yield* startAgent(routedSessions(automated.owner), automated.owner, {
             ...(yield* startIn(
               automated.owner,
@@ -1800,8 +1929,10 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               prompt: "Fix the flaky test.",
             },
           }).pipe(Effect.provide(layers(byAutomation.native)));
+
           const lineId = byAutomation.claudeCode.messages[0]?.lineId ?? "";
           const db = yield* Database;
+
           const [said] = yield* db
             .select({
               sender: messages.sender,
@@ -1810,6 +1941,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             })
             .from(messages)
             .where(eq(messages.clientId, lineId));
+
           assert.deepEqual(said, {
             sender: MESSAGE_SENDER.AUTOMATION,
             senderName: "Nightly checks",
@@ -1821,16 +1953,19 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           // A member's Start sends its prompt as the member; another agent's start_agent, as that agent.
           const byAgent = yield* openStarter(true);
           const agentRuns = runtimes();
+
           const starting = yield* startAgent(
             routedSessions(byAgent.owner),
             byAgent.owner,
             yield* startIn(byAgent.owner, byAgent.workspaceId, "anthropic/claude-opus-5.5"),
           ).pipe(Effect.provide(layers(agentRuns.native)));
+
           yield* startAgent(routedSessions(byAgent.owner), byAgent.owner, {
             ...(yield* startIn(byAgent.owner, byAgent.workspaceId, "anthropic/claude-opus-5.5")),
             startedBy: starting.agent,
           }).pipe(Effect.provide(layers(agentRuns.native)));
           const opened = [];
+
           for (const handed of agentRuns.claudeCode.messages) {
             const [row] = yield* db
               .select({
@@ -1840,8 +1975,10 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               })
               .from(messages)
               .where(eq(messages.clientId, handed.lineId ?? ""));
+
             opened.push(row);
           }
+
           const prompt = { channel: "start", brief: "prompt" };
           assert.deepEqual(opened, [
             { sender: MESSAGE_SENDER.MEMBER, senderAgentId: null, metadata: prompt },
@@ -1866,6 +2003,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
         Effect.gen(function* () {
           const layers = (native: ReturnType<typeof runtimes>["native"]) =>
             Layer.mergeAll(githubReaching(INSTALLATIONS).layer, CATALOG, environment(), native);
+
           const callIn = (owner: string, workspaceId: string) =>
             Effect.map(startIn(owner, workspaceId, "anthropic/claude-opus-5.5"), (ask) => ({
               ...ask,
@@ -1874,14 +2012,17 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
 
           const planned = yield* openStarter(true);
           const onPlan = runtimes();
+
           const started = yield* startAgent(
             routedSessions(planned.owner),
             planned.owner,
             yield* callIn(planned.owner, planned.workspaceId),
           ).pipe(Effect.provide(layers(onPlan.native)));
+
           const routing = Option.getOrThrow(
             yield* readAgentRouting(planned.owner, started.agent.id),
           );
+
           assert.deepEqual(
             [routing.runtime, routing.payer],
             ["claude_code", AGENT_PAYER.CLAUDE_SUBSCRIPTION],
@@ -1892,14 +2033,17 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           const keyed = yield* openStarter(false);
           yield* saveApiKey(keyed.owner, PROVIDER_KEY_PROVIDER.ANTHROPIC);
           const onKey = runtimes();
+
           const onRetired = yield* startAgent(
             routedSessions(keyed.owner),
             keyed.owner,
             yield* callIn(keyed.owner, keyed.workspaceId),
           ).pipe(Effect.provide(layers(onKey.native)));
+
           const retiredRouting = Option.getOrThrow(
             yield* readAgentRouting(keyed.owner, onRetired.agent.id),
           );
+
           // An API key pays a Claude model's agent on Claude Code too, as any Start on one does.
           assert.deepEqual(
             [retiredRouting.runtime, retiredRouting.payer],
@@ -1908,6 +2052,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
 
           const none = yield* openStarter(false);
           const refusedOn = runtimes();
+
           const refused = yield* Effect.result(
             startAgent(
               routedSessions(none.owner),
@@ -1915,6 +2060,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               yield* callIn(none.owner, none.workspaceId),
             ).pipe(Effect.provide(layers(refusedOn.native))),
           );
+
           assertCredentialMissing(refused, MODEL_PROVIDER.ANTHROPIC, "no credential");
         }),
     );
@@ -1935,22 +2081,27 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
                 blank: true,
               }),
             );
+
           const planned = yield* openStarter(true);
           const { agentSessions, claudeCode, native } = runtimes();
+
           const layers = Layer.mergeAll(
             githubReaching(INSTALLATIONS).layer,
             CATALOG,
             environment(),
             native,
           );
+
           const started = yield* startAgent(
             routedSessions(planned.owner),
             planned.owner,
             yield* blankIn(planned.owner, planned.workspaceId),
           ).pipe(Effect.provide(layers));
+
           const routing = Option.getOrThrow(
             yield* readAgentRouting(planned.owner, started.agent.id),
           );
+
           assert.deepEqual(
             [routing.runtime, routing.payer],
             ["claude_code", AGENT_PAYER.CLAUDE_SUBSCRIPTION],
@@ -1958,6 +2109,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           assert.deepEqual([heard(agentSessions), heard(claudeCode)], [[], []]);
 
           const none = yield* openStarter(false);
+
           const refused = yield* Effect.result(
             startAgent(
               routedSessions(none.owner),
@@ -1965,6 +2117,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               yield* blankIn(none.owner, none.workspaceId),
             ).pipe(Effect.provide(layers)),
           );
+
           assertCredentialMissing(refused, MODEL_PROVIDER.ANTHROPIC, "no credential");
         }),
     );
@@ -2017,16 +2170,20 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               on: MODEL_PROVIDER.ANTHROPIC,
             },
           ] as const;
+
           for (const each of cases) {
             const { owner, workspaceId } = yield* openStarter(false, each.chatGpt);
             const { agentSessions, claudeCode, codex, native } = runtimes();
+
             const layers = Layer.mergeAll(
               githubReaching(INSTALLATIONS).layer,
               CATALOG,
               environment(),
               ...(each.native ? [native] : []),
             );
+
             const ask = yield* startIn(owner, workspaceId, each.model);
+
             const started = yield* Effect.result(
               startAgent(routedSessions(owner), owner, ask).pipe(Effect.provide(layers)),
             );
@@ -2037,6 +2194,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               } else {
                 assertCredentialMissing(started, each.on, each.name);
               }
+
               assert.ok(Option.isNone(yield* readAgentByKey(owner, ask.idempotencyKey)));
               assert.deepEqual(
                 [heard(agentSessions), heard(codex), heard(claudeCode)],
@@ -2044,10 +2202,13 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               );
               continue;
             }
+
             assert.ok(Result.isSuccess(started), each.name);
+
             const routing = Option.getOrThrow(
               yield* readAgentRouting(owner, started.success.agent.id),
             );
+
             assert.deepEqual(
               [routing.runtime, routing.payer],
               ["codex", AGENT_PAYER.CHATGPT_SUBSCRIPTION],
@@ -2128,16 +2289,20 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               recorded: "refused",
             },
           ];
+
           for (const each of cases) {
             const { owner, workspaceId } = yield* openStarter(each.plan);
+
             if (each.apiKey) yield* saveApiKey(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC);
             const { agentSessions, claudeCode, native } = runtimes();
+
             const layers = Layer.mergeAll(
               githubReaching(INSTALLATIONS).layer,
               CATALOG,
               environment(),
               native,
             );
+
             const result = yield* Effect.result(
               startAgent(
                 routedSessions(owner),
@@ -2145,10 +2310,12 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
                 yield* startIn(owner, workspaceId, each.model),
               ).pipe(Effect.provide(layers)),
             );
+
             if (each.recorded === "refused") {
               assertCredentialMissing(result, providerOfCase(each.model), each.name);
               continue;
             }
+
             assert.ok(Result.isSuccess(result), each.name);
             const started = result.success;
 
@@ -2196,19 +2363,23 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               recorded: "refused",
             },
           ];
+
           for (const each of cases) {
             const { owner, workspaceId } = yield* openStarter(
               false,
               each.signedIn ? "signed_in" : "none",
             );
+
             if (each.apiKey !== undefined) yield* saveApiKey(owner, each.apiKey);
             const { agentSessions, codex, native } = runtimes();
+
             const layers = Layer.mergeAll(
               githubReaching(INSTALLATIONS).layer,
               CATALOG,
               environment(),
               native,
             );
+
             const result = yield* Effect.result(
               startAgent(
                 routedSessions(owner),
@@ -2216,10 +2387,12 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
                 yield* startIn(owner, workspaceId, each.model),
               ).pipe(Effect.provide(layers)),
             );
+
             if (each.recorded === "refused") {
               assertCredentialMissing(result, providerOfCase(each.model), each.name);
               continue;
             }
+
             assert.ok(Result.isSuccess(result), each.name);
             const started = result.success;
 
@@ -2244,17 +2417,21 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               false,
               signedIn ? "signed_in" : "none",
             );
+
             // Note that an account with no sign-in pays on its key, which a key saved is, now that ours never does.
             if (!signedIn) yield* saveApiKey(owner, PROVIDER_KEY_PROVIDER.OPENAI);
             const { agentSessions, codex, native } = runtimes();
+
             const layers = Layer.mergeAll(
               githubReaching(INSTALLATIONS).layer,
               PLAN_CATALOG,
               environment(),
               native,
             );
+
             const choices = yield* accountModelChoices(owner).pipe(Effect.provide(layers));
             const gpt = choices.offered.filter((model) => model.provider === MODEL_PROVIDER.OPENAI);
+
             const started = yield* Effect.result(
               startAgent(
                 routedSessions(owner),

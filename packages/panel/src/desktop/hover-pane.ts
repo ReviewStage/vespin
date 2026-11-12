@@ -88,31 +88,40 @@ export function useHoverPane(
   // The state as last drawn, which a focus moving after a press outside reads.
   const drawn = useRef(state);
   drawn.current = state;
+
   const close = useCallback(() => {
     drawn.current = PANE_FLOAT.CLOSED;
     onState(PANE_FLOAT.CLOSED);
   }, [onState]);
+
   // A peek opened by its toggle takes the keyboard as one opened from away does.
   const toggled = useRef(false);
+
   const open = useCallback(() => {
     toggled.current = true;
     onState(PANE_FLOAT.OPEN);
   }, [onState]);
+
   useEffect(() => {
     const from = was.current;
     was.current = state;
     const fromToggle = toggled.current;
     toggled.current = false;
+
     // Escape gives the keyboard back once the pane is put away and drawn so,
     // since the work under a modal drawer is inert until then and takes no focus.
     if (state === PANE_FLOAT.CLOSED && returning.current) {
       returning.current = false;
       handBack.current?.focus();
       handBack.current = null;
+
       return;
     }
+
     const held = ref.current;
+
     if (state !== PANE_FLOAT.OPEN || held === null) return;
+
     if (from !== PANE_FLOAT.CLOSED && !(from === PANE_FLOAT.PEEK && fromToggle)) return;
     handBack.current =
       document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -127,22 +136,30 @@ export function useHoverPane(
   // whose rows are no elements of the pane's own to count.
   useEffect(() => {
     const held = ref.current;
+
     if (state !== PANE_FLOAT.OPEN || held === null) return;
     let tabbing = false;
+
     const tab = (event: KeyboardEvent) => {
       tabbing = event.key === "Tab" && !event.defaultPrevented;
     };
+
     const hold = (event: FocusEvent) => {
       const walked = tabbing;
       tabbing = false;
       const to = event.target;
+
       if (!walked || drawn.current !== PANE_FLOAT.OPEN || !(to instanceof Element)) return;
+
       if (held.contains(to) || to.closest(KEY_LAYERS) !== null) return;
+
       if (floatsNow(held)) focusAt(held)?.focus();
       else close();
     };
+
     held.addEventListener("keydown", tab);
     document.addEventListener("focusin", hold);
+
     return () => {
       held.removeEventListener("keydown", tab);
       document.removeEventListener("focusin", hold);
@@ -155,24 +172,33 @@ export function useHoverPane(
   // that layer, which may have been raised from the pane.
   useEffect(() => {
     if (!floating) return;
+
     const putAway = (event: KeyboardEvent) => {
       const held = ref.current;
       const target = event.target instanceof Element ? event.target : null;
+
       if (event.key !== "Escape" || event.defaultPrevented) return;
+
       if (target !== null && (held?.contains(target) || target.closest(KEY_LAYERS) !== null)) {
         return;
       }
+
       // A pane docked again takes no Escape of the window's.
       if (held !== null && !floatsNow(held)) {
         close();
+
         return;
       }
+
       event.preventDefault();
       close();
     };
+
     window.addEventListener("keydown", putAway, true);
+
     return () => window.removeEventListener("keydown", putAway, true);
   }, [floating, floatsNow, close, ref]);
+
   return {
     ref,
     floating,
@@ -187,6 +213,7 @@ export function useHoverPane(
     onPointerLeave: (event) => {
       if (state !== PANE_FLOAT.PEEK) return;
       const to = event.relatedTarget;
+
       // A menu or a dialog the pane raised stands outside it, and is no way out either.
       if (to instanceof Element && (to.closest(stays) ?? to.closest(KEY_LAYERS)) !== null) return;
       onState(PANE_FLOAT.CLOSED);
@@ -216,13 +243,17 @@ export function useFloatDismiss(float: FloatState): () => void {
     if (!floating) return;
     // A press marked before the pane floated, its toggle's own, marks nothing now.
     within.current = false;
+
     const press = () => {
       if (!within.current) onState(PANE_FLOAT.CLOSED);
       within.current = false;
     };
+
     document.addEventListener("pointerdown", press);
+
     return () => document.removeEventListener("pointerdown", press);
   }, [floating, onState]);
+
   // The same handler across draws, so the panes handed it are not drawn again for a new one.
   return useCallback(() => {
     within.current = true;

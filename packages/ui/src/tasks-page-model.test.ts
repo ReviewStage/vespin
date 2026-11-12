@@ -185,6 +185,7 @@ test("a filter keeps the tasks holding one of each field's values, its fields an
     task("Dean's high", { priority: TASK_PRIORITY.HIGH, creator: DEAN }),
     task("Dean's unweighed, nowhere", { creator: DEAN, repository: null }),
   ];
+
   let filter = toggledFilter(NO_TASKS_FILTER, TASKS_FILTER_FIELD.CREATOR, DEAN);
   filter = toggledFilter(filter, TASKS_FILTER_FIELD.PRIORITY, TASK_PRIORITY.URGENT);
   filter = toggledFilter(filter, TASKS_FILTER_FIELD.PRIORITY, TASK_PRIORITY.NONE);
@@ -207,6 +208,7 @@ test("a filter keeps the tasks holding one of each field's values, its fields an
 
 test("a status filter narrows the status groups, and empty groups stand only for the values the filter lets in", () => {
   const tasks = [task("Under way", { status: TASK_STATUS.IN_PROGRESS })];
+
   const filter = toggledFilter(
     toggledFilter(NO_TASKS_FILTER, TASKS_FILTER_FIELD.STATUS, TASK_STATUS.IN_PROGRESS),
     TASKS_FILTER_FIELD.STATUS,
@@ -231,6 +233,7 @@ test("a settled status the filter names stands in full whatever the completed wi
     task("Shipped in spring", { status: TASK_STATUS.DONE, completedAt: NOW - 90 * DAY }),
     task("Dropped in spring", { status: TASK_STATUS.CANCELED, completedAt: NOW - 90 * DAY }),
   ];
+
   const done = toggledFilter(NO_TASKS_FILTER, TASKS_FILTER_FIELD.STATUS, TASK_STATUS.DONE);
 
   expect(listed(tasks, { order: TASKS_ORDER.NAME }, done)).toEqual([
@@ -239,6 +242,7 @@ test("a settled status the filter names stands in full whatever the completed wi
       ["Shipped in spring", "Shipped Monday"],
     ],
   ]);
+
   const board = tasksBoardColumns(tasks, {
     filter: done,
     display: { ...DEFAULT_BOARD_DISPLAY, order: TASKS_ORDER.NAME, emptyGroups: false },
@@ -247,6 +251,7 @@ test("a settled status the filter names stands in full whatever the completed wi
     members: [],
     now: NOW,
   }).map((column) => [headOf(column.head), column.tasks.map((each) => each.name), column.older]);
+
   expect(board).toEqual([[["status", "done"], ["Shipped in spring", "Shipped Monday"], undefined]]);
 });
 
@@ -280,6 +285,7 @@ test("each order runs a group's tasks its own way, a tie falling to the latest a
     task("Alpha", { priority: TASK_PRIORITY.HIGH, createdAt: 1, updatedAt: 9 }),
     task("Gamma", { createdAt: 5, updatedAt: 5 }),
   ];
+
   const run = (order: TasksDisplay["order"]) =>
     listed(tasks, { grouping: TASKS_GROUPING.NONE, order })[0]?.[1];
 
@@ -296,6 +302,7 @@ test("the List leads with the pins, then each section, one the view leaves empty
     task("Sectioned", { status: TASK_STATUS.TODO }),
     task("Loose", { status: TASK_STATUS.TODO }),
   ];
+
   const groups = (pinnedFirst: boolean) =>
     drawn(
       tasksListGroups(tasks, {
@@ -333,6 +340,7 @@ test("the Board stands a column for every status at first, empty ones too, the s
     task("Unweighed", { status: TASK_STATUS.TODO }),
     task("Dropped", { status: TASK_STATUS.CANCELED, completedAt: NOW - DAY }),
   ];
+
   const board = (display: Partial<TasksDisplay>) =>
     drawn(
       tasksBoardColumns(tasks, {
@@ -391,6 +399,7 @@ test("the completed window keeps the settled finished within it, by when each wa
     task("Older service, saved in spring", { status: TASK_STATUS.DONE, updatedAt: NOW - 90 * DAY }),
     task("Dropped", { status: TASK_STATUS.CANCELED, completedAt: NOW - 20 * DAY }),
   ];
+
   const settled = (completed: TasksDisplay["completed"]) =>
     tasksListGroups(tasks, {
       filter: NO_TASKS_FILTER,
@@ -441,7 +450,9 @@ test("the older count leaves out the tasks the filter does, and a Board column h
       completedAt: NOW - 40 * DAY,
     }),
   ];
+
   const filter = toggledFilter(NO_TASKS_FILTER, TASKS_FILTER_FIELD.REPOSITORY, "acme/relay");
+
   const done = tasksBoardColumns(tasks, {
     filter,
     display: DEFAULT_BOARD_DISPLAY,
@@ -470,12 +481,14 @@ test("a display kept reads over the view's own for whatever it holds, and as the
     completed: COMPLETED_WINDOW.ALL,
   });
 });
+
 test("Made by keeps the tasks a person made by hand, those a coding agent made, or those Vespin made on a call, a task from before origins as made by hand", () => {
   const tasks = [
     task("By hand"),
     { ...task("By an agent"), origin: { actor: DESCRIPTION_ACTOR.AGENT, agentId: "agent-1" } },
     { ...task("On a call"), origin: { actor: DESCRIPTION_ACTOR.NOTETAKER } },
   ];
+
   const byAgents = toggledFilter(NO_TASKS_FILTER, TASKS_FILTER_FIELD.MADE_BY, TASK_MAKER.AGENT);
   expect(listed(tasks, { grouping: TASKS_GROUPING.NONE }, byAgents)).toEqual([
     [["all"], ["By an agent"]],
@@ -497,6 +510,7 @@ test("an Assignee filter keeps the tasks assigned to the members chosen, No assi
     task("Dean's own", { creator: DEAN, assignee: DEAN }),
     task("Nobody's", { creator: MAYA }),
   ];
+
   const maya = toggledFilter(NO_TASKS_FILTER, TASKS_FILTER_FIELD.ASSIGNEE, MAYA);
 
   expect(listed(tasks, { grouping: TASKS_GROUPING.NONE }, maya)).toEqual([
@@ -523,6 +537,7 @@ test("grouped by assignee the reader's own run first, then teammates' by name, t
     task("Arlo's", { assignee: ARLO }),
     task("Dean's", { assignee: DEAN, creator: MAYA }),
   ];
+
   const grouped = (display: Partial<TasksDisplay>, filter: TasksFilter = NO_TASKS_FILTER) =>
     drawn(
       tasksListGroups(tasks, {
@@ -561,6 +576,7 @@ test("grouped by assignee the reader's own run first, then teammates' by name, t
 
 test("the Board stands a column for each assignee where asked, the reader's first and No assignee last, an empty one for each member where empty columns stand", () => {
   const tasks = [task("Maya's", { assignee: MAYA }), task("Nobody's")];
+
   const board = (emptyGroups: boolean) =>
     drawn(
       tasksBoardColumns(tasks, {
@@ -587,6 +603,7 @@ test("the Board stands a column for each assignee where asked, the reader's firs
 test("a display kept before rows offered the assignee draws it, and keeps its creator as it was kept, on or off", () => {
   const without = (left: readonly TaskProperty[], ...out: TaskProperty[]) =>
     left.filter((property) => !out.includes(property));
+
   const offered = without(TASK_PROPERTY_ORDER, TASK_PROPERTY.ASSIGNEE);
   const listKept = without(offered, TASK_PROPERTY.UPDATED);
 
@@ -594,10 +611,12 @@ test("a display kept before rows offered the assignee draws it, and keeps its cr
   expect(kept).toContain(TASK_PROPERTY.ASSIGNEE);
   expect(kept).toContain(TASK_PROPERTY.CREATOR);
   expect(kept).not.toContain(TASK_PROPERTY.UPDATED);
+
   const creatorOff = keptTasksDisplay(
     { properties: without(listKept, TASK_PROPERTY.CREATOR), offered },
     DEFAULT_LIST_DISPLAY,
   ).properties;
+
   expect(creatorOff).toContain(TASK_PROPERTY.ASSIGNEE);
   expect(creatorOff).not.toContain(TASK_PROPERTY.CREATOR);
 });
@@ -621,6 +640,7 @@ test("a List narrowing folds its columns away one by one, creator, agents, sub-t
   const every = Object.values(TASK_PROPERTY).flatMap((property) =>
     property === TASK_PROPERTY.UPDATED ? [LIST_COLUMN.SUB_TASKS, property] : [property],
   );
+
   const drawn = (width: number) => listPropertiesFitting(every, width);
   const { PRIORITY, KEY, STATUS, WAITING, REPOSITORY, ASSIGNEE, AGENTS, UPDATED } = TASK_PROPERTY;
   const { SUB_TASKS } = LIST_COLUMN;

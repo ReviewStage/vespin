@@ -10,24 +10,30 @@ import { dispatched } from "./support/platform-landing";
 
 function recording() {
   const requests: Request[] = [];
+
   const route: Route = {
     async fetch(request) {
       requests.push(request);
+
       return new Response(await request.text(), { status: 200 });
     },
   };
+
   return { route, requests };
 }
 
 test("the route key picks the member and the request is restored to the route's own path", async () => {
   const task = recording();
   const dispatcher = dispatchRoutes(new Map([["plans/plan", task.route]]));
+
   const response = await dispatcher.fetch(
-    new Request(
-      `https://app.test/api/default.js?${DISPATCH_QUERY.ROUTE}=plans/plan&id=t1&wait=1`,
-      { method: "POST", body: "hello", headers: { "content-type": "text/plain" } },
-    ),
+    new Request(`https://app.test/api/default.js?${DISPATCH_QUERY.ROUTE}=plans/plan&id=t1&wait=1`, {
+      method: "POST",
+      body: "hello",
+      headers: { "content-type": "text/plain" },
+    }),
   );
+
   assert.equal(response.status, 200);
   assert.equal(await response.text(), "hello");
   const seen = task.requests[0];
@@ -48,12 +54,14 @@ test("the route key picks the member and the request is restored to the route's 
 test("a request with no route key, the oRPC key, or a key the function does not hold is the oRPC route's, at the path it carried or its own", async () => {
   const orpc = recording();
   const exception = recording();
+
   const dispatcher = dispatchRoutes(
     new Map([
       ["github/webhook", exception.route],
       [ORPC_ROUTE_KEY, orpc.route],
     ]),
   );
+
   for (const query of [
     `${DISPATCH_QUERY.ROUTE}=${ORPC_ROUTE_KEY}&${DISPATCH_QUERY.PATH}=plans/p1/revisions&wait=1`,
     `${DISPATCH_QUERY.ROUTE}=plans/revisions&${DISPATCH_QUERY.PATH}=plans/p1/revisions&wait=1`,
@@ -61,6 +69,7 @@ test("a request with no route key, the oRPC key, or a key the function does not 
   ]) {
     await dispatcher.fetch(new Request(`https://app.test/api/default.js?${query}`));
   }
+
   await dispatcher.fetch(new Request("https://app.test/api/default.js?wait=1"));
   assert.deepEqual(
     orpc.requests.map((request) => request.url),
@@ -77,9 +86,11 @@ test("a request with no route key, the oRPC key, or a key the function does not 
 test("a function that holds no oRPC route answers a key it does not hold 404 with no body", async () => {
   const sweep = recording();
   const dispatcher = dispatchRoutes(new Map([["maintenance/sweep", sweep.route]]));
+
   const response = await dispatcher.fetch(
     new Request(`https://app.test/api/maintenance-sweep.js?${DISPATCH_QUERY.ROUTE}=nope`),
   );
+
   assert.equal(response.status, 404);
   assert.equal(await response.text(), "");
   assert.equal(sweep.requests.length, 0);
@@ -92,23 +103,27 @@ async function landingOnDefault() {
   const grouped = (await webFunctions(WEB)).find((definition) => definition.file === "default");
   assert.ok(grouped);
   const reached: { readonly key: string; readonly url: URL }[] = [];
+
   const routes = new Map(
     grouped.routes.map((key): [string, Route] => [
       key,
       {
         async fetch(request) {
           reached.push({ key, url: new URL(request.url) });
+
           return new Response(null, { status: 204 });
         },
       },
     ]),
   );
+
   return {
     async land(path: string) {
       reached.length = 0;
       await dispatched(new Request(`https://app.test${path}`), routes);
       const [only] = reached;
       assert.ok(only, path);
+
       return { key: only.key, path: only.url.pathname, query: [...only.url.searchParams] };
     },
   };
@@ -116,6 +131,7 @@ async function landingOnDefault() {
 
 test("every route that stays off the oRPC router is reached at its public URL by the committed table, the fallback shadowing none", async () => {
   const { land } = await landingOnDefault();
+
   const expected: readonly (readonly [string, string, string, readonly [string, string][]])[] = [
     [
       "/api/auth/callback/github?code=c1",
@@ -203,16 +219,21 @@ test("every route that stays off the oRPC router is reached at its public URL by
     ],
     ["/api/workspaces/w1/photo", "workspaces/photo", "/api/workspaces/photo", [["id", "w1"]]],
   ];
+
   for (const [path, key, restored, query] of expected) {
     assert.deepEqual(await land(path), { key, path: restored, query }, path);
   }
+
   const table = await readApiRewritesTable(WEB);
+
   const firstRule = (path: string) =>
     table.find((rule) => new RegExp(`^${rule.src}$`, "u").test(path));
+
   assert.deepEqual(firstRule("/api/maintenance/sweep"), {
     src: "/api/maintenance/sweep",
     dest: "/api/maintenance-sweep.js?route=maintenance/sweep",
   });
+
   // The functions that answer by their own name are rewritten onto themselves, which the filesystem then serves as before.
   for (const path of [
     "/api/terminal/sessions",
@@ -224,17 +245,22 @@ test("every route that stays off the oRPC router is reached at its public URL by
   ]) {
     assert.equal(firstRule(path)?.dest, path, path);
   }
+
   assert.equal(firstRule("/api/terminal/sessionsXjs")?.src, ORPC_FALLBACK_SRC);
 });
 
 test("a path of every hosted resource is landed on the oRPC route at its own public path, segments and query kept", async () => {
   const { land } = await landingOnDefault();
   const firstOfResource = new Map<string, ProcedureRoute>();
+
   for (const procedure of hostedProcedureRoutes()) {
     const [resource = ""] = procedure.key;
+
     if (!firstOfResource.has(resource)) firstOfResource.set(resource, procedure);
   }
+
   assert.ok(firstOfResource.size > 20);
+
   for (const procedure of firstOfResource.values()) {
     const path = procedure.path.replaceAll(/\{\+?[^{}]+\}/gu, "seg-1");
     assert.deepEqual(
@@ -243,5 +269,6 @@ test("a path of every hosted resource is landed on the oRPC route at its own pub
       procedure.key.join("."),
     );
   }
+
   assert.deepEqual(await land("/api/nope"), { key: ORPC_ROUTE_KEY, path: "/api/nope", query: [] });
 });

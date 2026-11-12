@@ -16,17 +16,21 @@ let barRadiusPixels: number | undefined;
 /** The corner of a bar that stands alone, in pixels. */
 export function barRadius(): number {
   if (barRadiusPixels !== undefined) return barRadiusPixels;
+
   const pixels = Number.parseFloat(
     getComputedStyle(document.documentElement).getPropertyValue(BAR_RADIUS_TOKEN),
   );
+
   // Held only once read, so a bar drawn before the stylesheet loads does not fix square corners.
   if (Number.isNaN(pixels)) return 0;
   barRadiusPixels = pixels;
+
   return pixels;
 }
 
 /** The corners of the top bar of a stack, or of a column: rounded above, square below. */
 export function barTopRadius(): [number, number, number, number] {
   const radius = barRadius();
+
   return [radius, radius, 0, 0];
 }

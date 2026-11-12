@@ -128,8 +128,10 @@ function heldDraft(agentId: string, number: number): HeldDraft | undefined {
 /** A refused draft kept for its description, or let go where `draft` is none. */
 function holdDraft(agentId: string, number: number, draft: HeldDraft | undefined): void {
   const kept = heldDrafts.get(agentId) ?? new Map<number, HeldDraft>();
+
   if (draft === undefined) kept.delete(number);
   else kept.set(number, draft);
+
   if (kept.size === 0) heldDrafts.delete(agentId);
   else heldDrafts.set(agentId, kept);
 }
@@ -162,7 +164,9 @@ function DescriptionNote({
 }): React.JSX.Element | null {
   const changed =
     note?.kind === WRITE_NOTE.WORDS && note.reason === PULL_REQUEST_REFUSAL.DESCRIPTION_CHANGED;
+
   useAnnounceShown(ANNOUNCE.ALERT, changed ? DESCRIPTION_WORDS.CHANGED : "");
+
   if (changed) {
     return (
       <div className={EDITOR_NOTE_CLASS}>
@@ -171,6 +175,7 @@ function DescriptionNote({
       </div>
     );
   }
+
   return (
     <PullRequestWriteNote
       writes={{ note, dismiss: onDismiss }}
@@ -207,6 +212,7 @@ export function PullRequestDescription({
   // A draft refused as the description last went opens the editor on it again, saying why.
   const [held] = useState(() => heldDraft(agentId, number));
   const [heldNote, setHeldNote] = useState(held?.note);
+
   const [editing, setEditing] = useState<Editing>(() =>
     held === undefined
       ? CLOSED
@@ -218,6 +224,7 @@ export function PullRequestDescription({
           generation: 0,
         },
   );
+
   useEffect(() => {
     if (held !== undefined) holdDraft(agentId, number, undefined);
   }, []);
@@ -228,10 +235,12 @@ export function PullRequestDescription({
   // The write still out, which a leaving waits on, since only one goes at a time.
   const out = useRef<WriteOut | undefined>(undefined);
   const note = writes.note ?? heldNote;
+
   const dismiss = () => {
     writes.dismiss();
     setHeldNote(undefined);
   };
+
   const open = (placement: DescriptionEditorPlacement | undefined) => {
     draft.current = undefined;
     setEditing((was) => ({
@@ -242,20 +251,26 @@ export function PullRequestDescription({
       generation: was.kind === EDITING.CLOSED ? 0 : was.generation + 1,
     }));
   };
+
   const close = () => {
     draft.current = undefined;
     dismiss();
     setEditing(CLOSED);
   };
+
   const finish = (byKeyboard: boolean) => {
     if (editing.kind !== EDITING.OPEN || writes.pending !== undefined) return;
     const words = draft.current ?? editing.opened;
     refocus.current = byKeyboard;
+
     if (sameWords(words, editing.base)) {
       close();
+
       return;
     }
+
     setHeldNote(undefined);
+
     const outcome = writes.write(
       { action: PULL_REQUEST_ACTION.EDIT_DESCRIPTION, body: words, expectedBody: editing.base },
       () =>
@@ -263,21 +278,27 @@ export function PullRequestDescription({
           was.kind === EDITING.OPEN ? { ...was, base: words, written: pullRequest } : was,
         ),
     );
+
     const sent: WriteOut = { body: words, base: editing.base, outcome };
     out.current = sent;
     void outcome.then(() => {
       if (out.current === sent) out.current = undefined;
     });
   };
+
   // Once the read after a write lands, the editor closes onto GitHub's rendering of it, unless words were typed since.
   useEffect(() => {
     if (editing.kind === EDITING.OPEN && editing.written !== undefined) {
       if (pullRequest === editing.written) return;
+
       if (sameWords(draft.current ?? editing.opened, editing.base)) close();
       else setEditing({ ...editing, written: undefined });
+
       return;
     }
+
     if (editing.kind !== EDITING.RELOADING) return;
+
     if (pullRequest === editing.read && !editing.landed) return;
     draft.current = undefined;
     setEditing({
@@ -302,13 +323,16 @@ export function PullRequestDescription({
   useEffect(
     () => () => {
       const { editing: was, write } = latest.current;
+
       if (was.kind !== EDITING.OPEN) return;
       const words = draft.current ?? was.opened;
       const sent = out.current;
+
       const base =
         sent === undefined
           ? Promise.resolve(was.base)
           : sent.outcome.then((outcome) => (outcome.done ? sent.body : sent.base));
+
       void base.then((expectedBody) => {
         if (sameWords(words, expectedBody)) return;
         void write({
@@ -323,8 +347,10 @@ export function PullRequestDescription({
     },
     [],
   );
+
   const changed =
     note?.kind === WRITE_NOTE.WORDS && note.reason === PULL_REQUEST_REFUSAL.DESCRIPTION_CHANGED;
+
   const reload = useConfirmDialog(
     { subject: changed, surfaceOpen: editing.kind === EDITING.OPEN },
     neverBusyAct(() => {
@@ -344,11 +370,13 @@ export function PullRequestDescription({
     }),
     confirmFailure(FAILURE_SURFACE.PULL_REQUEST_DESCRIPTION),
   );
+
   const read = drawn ?? (
     <p className="pull-request-words m-0 min-w-0 select-text text-body-size leading-reading text-muted-foreground">
       {DESCRIPTION_WORDS.PLACEHOLDER}
     </p>
   );
+
   if (editing.kind !== EDITING.OPEN) {
     return (
       <EditableBlock
@@ -360,10 +388,12 @@ export function PullRequestDescription({
         onFocus={prefetchEditorBundle}
         onPress={({ target, x, y, block: pressed }) => {
           if (editing.kind !== EDITING.CLOSED) return;
+
           // Note that the caret is placed by the words the click landed on, since the editor may draw what stands above them at another height, an alert say.
           const placement = clickPlacement(target, x, y, (range) =>
             documentWordsAt(pressed, range),
           );
+
           if (placement !== undefined) open(placement);
         }}
         onOpen={() => {
@@ -374,6 +404,7 @@ export function PullRequestDescription({
       </EditableBlock>
     );
   }
+
   return (
     <>
       <MarkdownEditor

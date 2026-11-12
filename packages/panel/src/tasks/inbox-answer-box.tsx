@@ -38,9 +38,10 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
  * its context ring, cost, and payer, does not stand here, since a thread
  * reads no transcript; nor Queue and Steer, since an item's replies go one
  * at a time in their own order (`use-task-inbox.ts`) rather than on the
- * agent's queue; nor the `/` list's commands (`/model`, `/clear`,
+ * agent's queue; nor the `/` list's session commands (`/clear`,
  * `/compact`), since a reply reaches the agent wrapped as a thread's
- * message, which the harness reads as words rather than a command. What stands docked over an
+ * message, which the harness reads as words rather than a command, though
+ * `/model` opens the model chip's menu as it does in the agent's box. What stands docked over an
  * agent's box, its to-do list, its pull request, its threads, and its queue,
  * does not stand here, because a thread is no transcript and need be about no
  * pull request, and the thread's crumbs already name the agent and its task.
@@ -115,9 +116,6 @@ const NEW_THREAD_PLACEHOLDER = "Start a new thread";
 
 /** What the checkbox under the card says before the agent's chip. */
 const SEND_AS_NEW = "Send as a new thread to";
-
-/** What Send reads on an empty notice that waits on the reader's nod, which settles it without messaging the agent. */
-const GOT_IT = "Got it";
 
 /** What the press after an archived agent's note says. */
 const UNARCHIVE = "Unarchive";
@@ -219,7 +217,6 @@ function AnswerCard({
   // Why the last thread start did not go, until the next send.
   const [refusal, setRefusal] = useState<string | undefined>(undefined);
   const draft = control.draftOf(item);
-  // Note that the checkbox unticks once its thread is started, and while ticked a question's controls step aside, the question left waiting.
   const [asNew, setAsNew] = useState(false);
   const [starting, setStarting] = useState(false);
   const attempt = useRef<{ readonly key: string; readonly words: string } | undefined>(undefined);
@@ -228,31 +225,38 @@ function AnswerCard({
   // Note that only a nod and a thread start hold the box; a reply leaves it at once and the next may follow.
   const sending = control.sending.has(item.id) || starting;
   const acknowledgeHeld = useInboxAcknowledger();
-  // Note that a notice opening acknowledges offers no Got it, since opening it was the nod (`useNodOnOpen`), save while its holder's held read has failed, when opening acknowledges nothing.
+  // Note that a failed held read still offers Got it, since opening then acknowledges nothing.
   const nodded = acknowledgedOnOpen(item, readerId) && !control.failed;
   const nod = awaitsNod(item) && emptyBox(draft) && !nodded && !starts;
+
   // Note that Send lights only where the box holds a reply the service takes: an answer to the open ask attached, or words or files, a notice's nod being Got it's.
   const sendable = starts
     ? !emptyBox(draft) && draft.note.trim().length <= INBOX_BOUNDS.MAX_MESSAGE_CHARS
     : nod || inboxThreadSend(thread, draft) !== undefined;
+
   // Note that what an unfinished answer lacks is said only once a send was refused, and goes once it is filled.
   const missing = starts || nod ? undefined : inboxMissing(thread, draft);
   const [wanting, setWanting] = useState(false);
+
   if (wanting && missing === undefined) setWanting(false);
   const box = useRef<HTMLDivElement>(null);
+
   const refuse = (lacks: InboxMissing) => {
     setWanting(true);
     focusMissing(box.current, lacks);
   };
+
   const placeholder = starts
     ? NEW_THREAD_PLACEHOLDER
     : asks
       ? INBOX_BOX_WORDS.NOTE_PLACEHOLDER
       : INBOX_BOX_WORDS.REPLY_PLACEHOLDER;
+
   // What the box reads off the item's agent, read as the agent's own tab reads it, so the two boxes stand alike.
   const agentBox = useAgentBox({ agentId: item.agentId, agent, agents });
   const kept = control.notes.get(item.id);
   const noted = kept === undefined ? undefined : inboxNoteReading(kept, agent, connected);
+
   // Note that the note is let go once the agent is back, since what it said no longer stands, and only that note, never one a later send left meanwhile.
   const unarchive = () =>
     void onUnarchiveAgent().then((result) => {
@@ -269,7 +273,9 @@ function AnswerCard({
         });
       } else if (kept !== undefined) control.onDropNote(item.id, kept);
     });
+
   const words = noted?.words ?? refusal;
+
   const note: ComposerNote | undefined =
     words === undefined
       ? undefined
@@ -283,14 +289,17 @@ function AnswerCard({
           }),
           remedy: noted?.unarchive === true ? { label: UNARCHIVE, onClick: unarchive } : undefined,
         };
+
   const message = () => {
     setRefusal(undefined);
     control.onMessage(item, draft);
   };
+
   const acknowledge = () => {
     setRefusal(undefined);
     control.onAcknowledge(item, acknowledgeHeld);
   };
+
   // Note that the same words and files sent again go under the key they went under, so a retry starts one thread.
   // The box lets go of what it sent at once, as a reply does, so words written while the start is out stay
   // there; a start refused puts what it sent back ahead of them (`refused-send.ts`), so neither is lost.
@@ -305,11 +314,14 @@ function AnswerCard({
     control.onDraft(item, { ...draft, note: "", attachments: [] });
     void offer.onStart({ text, attachments: sent.attachments, clientKey: key }).then((refused) => {
       setStarting(false);
+
       if (refused === undefined) {
         attempt.current = undefined;
         setAsNew(false);
+
         return;
       }
+
       setRefusal(refused);
       putBackRefused({
         went: { text: sent.note, attachments: sent.attachments },
@@ -318,6 +330,7 @@ function AnswerCard({
       });
     });
   };
+
   const composer: AgentComposerControl = {
     draft: draft.note,
     // Note that each change moves the card on from what it holds as the write lands, since a file's chip goes into the words the moment the file is held, before the box draws again.
@@ -336,29 +349,33 @@ function AnswerCard({
     retry: noRetry,
     sent: [],
   };
+
   // The door the box lays a quote in through, which Reply over the thread and the pages it draws use.
   const replyDoor = useRef<((words: string) => void) | undefined>(undefined);
   // Note that Reply stands only while no nod or start is out, since a press lets the selection go.
   const quotes = !sending;
-  // A quote laid in is heard, so the thread can bring the box in whole rather than its caret's line alone.
   const quoted = useRef(onQuoted);
   quoted.current = onQuoted;
+
   const layQuote = useCallback((quote: string) => {
     replyDoor.current?.(quote);
     quoted.current?.();
   }, []);
+
   useEffect(() => {
     if (onQuoteDoor === undefined || !quotes) return undefined;
     onQuoteDoor(layQuote);
+
     return () => onQuoteDoor(undefined);
   }, [onQuoteDoor, quotes, layQuote]);
+
   return (
     <div ref={box}>
       <AgentComposer
         {...agentBox}
         // Note that an empty box's Send stays Send, or reads Got it, and never Stop, because an empty Send here settles a notice or says what an answer lacks.
         stoppable={false}
-        // Note that the box runs none of the `/` list's commands, because a reply reaches the agent wrapped as a thread's message (`inboxThreadMessage`), so `/compact` would go as words, and a `/clear` would take Send from a new thread.
+        // Note that the box runs none of the `/` list's session commands, `/model` alone, because a reply reaches the agent wrapped as a thread's message (`inboxThreadMessage`), so `/compact` would go as words, and a `/clear` would take Send from a new thread.
         onClear={undefined}
         composer={composer}
         usage={undefined}
@@ -370,7 +387,7 @@ function AnswerCard({
         wording={{
           placeholder,
           label: placeholder,
-          send: nod ? GOT_IT : starts ? START_THREAD : INBOX_BOX_WORDS.SEND,
+          send: nod ? INBOX_BOX_WORDS.GOT_IT : starts ? START_THREAD : INBOX_BOX_WORDS.SEND,
         }}
         maxLength={INBOX_BOUNDS.MAX_MESSAGE_CHARS}
         takesFocus={false}

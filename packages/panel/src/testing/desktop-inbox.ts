@@ -59,6 +59,7 @@ import { DRAFT_WORD } from "@repo/ui";
 import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
+import { Predicate } from "effect";
 import { act, createElement, Fragment, useEffect, useMemo, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, assert, beforeEach, vi } from "vitest";
@@ -139,6 +140,7 @@ export const BILLING: TaskSummary = {
   // The sidebar's list counts the task's agent, as the service sums a task's agents up.
   agents: { total: 1, working: 1, pullRequestTotal: 0 },
 };
+
 export const INVITES: TaskSummary = {
   id: "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32",
   workspaceId: BILLING.workspaceId,
@@ -189,6 +191,7 @@ export function item(id: string, title: string, updatedAt: number): InboxItem {
 }
 
 export const THRESHOLD = item("a1b2c3d4-0000-4000-8000-000000000001", "Alert at 80%?", 3_000);
+
 /** The account reading the Inbox, who answered the retry question themselves. */
 export const READER = { userId: "user-reader", name: "Dana Reyes" };
 
@@ -202,6 +205,7 @@ export function answeredBy(
 ): InboxItem {
   const [asking] = asked.thread ?? [];
   assert.ok(asking?.ask !== undefined, "the item opens with its ask");
+
   return {
     ...asked,
     status: INBOX_STATUS.ANSWERED,
@@ -228,6 +232,7 @@ export const RETRY: InboxItem = answeredBy(
   "And page on-call if all three fail.",
   5_000,
 );
+
 export const EXPIRY = item("a1b2c3d4-0000-4000-8000-000000000003", "Expire after 7 days?", 4_000);
 
 /** The Billing item chosen, as a press on its row chooses it. */
@@ -241,6 +246,7 @@ export function noticeOf(asked: InboxItem): InboxItem {
   const [opening, ...rest] = asked.thread ?? [];
   assert.ok(opening !== undefined, "the item opens with the agent's message");
   const { ask: _ask, ...said } = opening;
+
   return { ...asked, thread: [said, ...rest] };
 }
 
@@ -248,6 +254,7 @@ export function noticeOf(asked: InboxItem): InboxItem {
 export function asking(asked: InboxItem, ask: InboxAsk): InboxItem {
   const [opening, ...rest] = asked.thread ?? [];
   assert.ok(opening !== undefined, "the item opens with the agent's message");
+
   return {
     ...asked,
     thread: [{ ...opening, ask: { ...ask, status: INBOX_ASK_STATUS.OPEN } }, ...rest],
@@ -258,6 +265,7 @@ export function asking(asked: InboxItem, ask: InboxAsk): InboxItem {
 export function saying(asked: InboxItem, text: string, files?: InboxMessage["files"]): InboxItem {
   const [opening, ...rest] = asked.thread ?? [];
   assert.ok(opening !== undefined, "the item opens with the agent's message");
+
   return {
     ...asked,
     thread: [{ ...opening, text, ...(files === undefined ? undefined : { files }) }, ...rest],
@@ -367,22 +375,29 @@ function heldInboxes() {
   /** Every hold the window asked for, in order, as `kind:id`. */
   const asked: string[] = [];
   const keyOf = (scope: AgentInboxScope) => `${scope.kind}:${scope.id}`;
+
   const set = (scope: AgentInboxScope, read: AppHolderInbox) => {
     held = { ...held, [scope.kind]: { ...held[scope.kind], [scope.id]: read } };
     world.deliverHolders(held);
   };
+
   const push = (scope: AgentInboxScope, pushed: Pushed) => {
     if ("items" in pushed) return set(scope, { rows: pushed.items });
+
     // Note that a read that stops answering keeps its rows, as the host keeps them.
     if (held[scope.kind][scope.id]?.rows === undefined) set(scope, { failed: true });
   };
+
   const isFollowed = (scope: AgentInboxScope) => open.includes(keyOf(scope));
   const isHeld = (scope: AgentInboxScope) => held[scope.kind][scope.id] !== undefined;
+
   /** Reads the holder, which the window holds by its task alone, as the knobs say, pushing what they answer now. */
   const read = (scope: AgentInboxScope) => {
     const pushed = answerTask(scope.id);
+
     if (pushed !== undefined) push(scope, pushed);
   };
+
   const procedures: Pick<
     FakeActPort,
     typeof AGENT_INBOX_ACT_KIND.AGENTS_INBOX_FOLLOW | typeof AGENT_INBOX_ACT_KIND.AGENTS_INBOX_RETRY
@@ -395,15 +410,19 @@ function heldInboxes() {
         if (isFollowed(scope) && !isHeld(scope)) read(scope);
       });
       const ended = Promise.withResolvers<IteratorReturnResult<undefined>>();
+
       const close = () => {
         const at = open.indexOf(keyOf(scope));
+
         if (at >= 0) open.splice(at, 1);
         ended.resolve({ done: true, value: undefined });
       };
+
       const stream: AsyncIteratorObject<never, undefined, unknown> = {
         next: () => ended.promise,
         return: async () => {
           close();
+
           return { done: true, value: undefined };
         },
         [Symbol.asyncIterator]: () => stream,
@@ -411,18 +430,21 @@ function heldInboxes() {
           close();
         },
       };
+
       // SAFETY: the window reads oRPC's stream as an async iterator alone, which this is.
       return Promise.resolve(
-        stream as unknown as PortActResult<typeof AGENT_INBOX_ACT_KIND.AGENTS_INBOX_FOLLOW>,
+        stream as PortActResult<typeof AGENT_INBOX_ACT_KIND.AGENTS_INBOX_FOLLOW>,
       );
     },
     [AGENT_INBOX_ACT_KIND.AGENTS_INBOX_RETRY]: (scope) => {
       // Note that the host tells nothing of a holder that had failed while it is read again.
       if (held[scope.kind][scope.id]?.failed === true) set(scope, UNREAD);
       read(scope);
+
       return Promise.resolve();
     },
   };
+
   return {
     asked,
     push,
@@ -443,10 +465,12 @@ function heldInboxes() {
 /** A task's inbox as main pushes it now: as `startRead` settles it, where it holds one, or as `inboxes` holds it. */
 function answerTask(taskId: string): Pushed | undefined {
   const held = world.startRead?.(taskId);
+
   if (held === undefined) return { items: world.inboxes.get(taskId) ?? [] };
   void held.then((outcome) =>
     world.main.push({ kind: INBOX_SCOPE_KIND.PLAN, id: taskId }, pushedOf(outcome.value)),
   );
+
   return undefined;
 }
 
@@ -462,8 +486,10 @@ function drawnByHost(drawn: (item: InboxItem) => InboxItem | undefined): void {
     const next = items.map((item) => drawn(item) ?? item);
     world.inboxes.set(id, next);
     const scope = { kind: INBOX_SCOPE_KIND.PLAN, id };
+
     if (world.main.isHeld(scope)) world.main.push(scope, { items: next });
   }
+
   deliverFeed();
 }
 
@@ -475,8 +501,10 @@ function marked(itemIds: ReadonlySet<string>, unread: boolean): void {
 /** Every held inbox, and the account's feed, pushed again as it now stands, as main pushes a change. */
 export function pushAgain(): void {
   deliverFeed();
+
   for (const scope of world.main.heldScopes()) {
     const inbox = answerTask(scope.id);
+
     if (inbox !== undefined) world.main.push(scope, inbox);
   }
 }
@@ -484,10 +512,13 @@ export function pushAgain(): void {
 /** The account's feed of every item as the host holds it for the session: every task's that holds one, or refused. */
 function feedNow(): AppHostRead<AppInboxItems> {
   if (world.feedUnread) return UNREAD;
+
   if (world.feedRefused) return { failed: true };
+
   const holding = Object.fromEntries(
     [...world.inboxes].filter(([id, items]) => items.length > 0 && !world.feedLeavesOut.has(id)),
   );
+
   return { rows: { [INBOX_SCOPE_KIND.PLAN]: holding } };
 }
 
@@ -533,14 +564,18 @@ beforeEach(() => {
     act: (request: AnyAct): Promise<FakeActAnswer> => {
       if (request.kind === ACT_KIND.AGENTS_INBOX_ITEMS_RETRY) {
         deliverFeed();
+
         return Promise.resolve({ status: FAKE_ANSWER.DONE, value: undefined });
       }
+
       const done = (value: AgentListAnswer) => Promise.resolve({ status: FAKE_ANSWER.DONE, value });
+
       if (request.kind === ACT_KIND.AGENTS_LIST) {
         return world.agentListHeld
           ? Promise.withResolvers<never>().promise
           : done({ agents: world.listedAgents });
       }
+
       if (request.kind === ACT_KIND.TASKS_TREE) {
         return Promise.resolve({
           status: FAKE_ANSWER.DONE,
@@ -555,13 +590,16 @@ beforeEach(() => {
           },
         });
       }
+
       if (request.kind === ACT_KIND.TASKS_FILE) {
         world.fileReads.push(request.payload);
         const { path, firstLine, lastLine } = request.payload;
+
         const lines = Array.from(
           { length: lastLine - firstLine + 1 },
           (_, at) => `line ${firstLine + at}`,
         );
+
         return Promise.resolve({
           status: FAKE_ANSWER.DONE,
           value: {
@@ -576,11 +614,14 @@ beforeEach(() => {
           },
         });
       }
+
       if (request.kind === ACT_KIND.AGENTS_INBOX_READ_STATE) {
         const { itemId, unread } = request.payload;
         world.readMarks.push(`${unread ? "unread" : "read"}:${itemId}`);
+
         // Note that the host draws a mark into every inbox it follows as it is asked, and takes it back where the service refused it.
         if (!world.readMarkRefused) marked(new Set([itemId]), unread);
+
         return Promise.resolve({
           status: FAKE_ANSWER.DONE,
           value: world.readMarkRefused
@@ -588,11 +629,14 @@ beforeEach(() => {
             : { id: itemId, unread },
         });
       }
+
       if (request.kind === ACT_KIND.AGENTS_INBOX_READ_ALL) {
         world.readMarks.push(`all:${request.payload.workspaceId ?? "every workspace"}`);
         marked(new Set(request.payload.itemIds), false);
+
         return Promise.resolve({ status: FAKE_ANSWER.DONE, value: { marked: 2 } });
       }
+
       if (request.kind === ACT_KIND.AGENTS_INBOX_ATTACHMENT) {
         const read = Promise.withResolvers<FakeActAnswer>();
         world.imageReads.push(() =>
@@ -601,8 +645,10 @@ beforeEach(() => {
             value: { contentType: INBOX_IMAGE_TYPE.PNG, base64: "iVBORw0KGgo=" },
           }),
         );
+
         return read.promise;
       }
+
       return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not in this test." });
     },
   });
@@ -652,6 +698,7 @@ export function mount({
   readerKnown = true,
   toasts = false,
   chosen: firstChosen,
+  byAddress = false,
   drawnWhileOpen = false,
   bundles,
 }: {
@@ -672,6 +719,8 @@ export function mount({
   toasts?: boolean;
   /** The item the Inbox opens on, as a row's press chose it before; none where nothing is chosen yet. */
   chosen?: InboxChoice;
+  /** Whether the item chosen stands at its address alone, held by no door, as a reloaded window opens it. */
+  byAddress?: boolean;
   /** Whether the Inbox is drawn only while open, as the shell draws it. */
   drawnWhileOpen?: boolean;
   /** The bundles the window's surfaces load, where the test hands importers of its own; the window's where none are handed. */
@@ -684,15 +733,18 @@ export function mount({
   // Note that the host's reads are laid over whatever document the test handed the window, its experiments among it.
   // Note that main's read of the inbox holds what waits on the tasks and the tasks holding items, as main lists them both from one read.
   let mainInbox: AppInboxSlice = { ...NO_INBOX, waiting, tasks: firstHolding };
+
   const reads = handHostReads({
     items: feedNow(),
     holders: world.main.now(),
     inbox: mainInbox,
   });
+
   const deliverInbox = (next: Partial<AppInboxSlice>) => {
     mainInbox = { ...mainInbox, ...next };
     reads.deliverInbox(mainInbox);
   };
+
   world.deliverFeed = reads.deliverItems;
   world.deliverHolders = reads.deliverHolders;
   // Note that a workspace's automations are laid on the document as the window holds them, as the host lays them.
@@ -703,6 +755,7 @@ export function mount({
   holdMembers(reads.deliverMembers, () => ({ rows: { members: world.members } }));
   // Note that a task's pages are laid on the document as the window holds them, as the host lays them.
   holdPages(reads.deliverPages, (place) => ({ rows: world.taskPages.get(place.taskId) ?? [] }));
+
   const asked: Asked = {
     shownTasks: [],
     shownAgents: [],
@@ -710,6 +763,7 @@ export function mount({
     closed: 0,
     newTasks: 0,
   };
+
   function Page({ sidePanel }: { sidePanel?: SidePanelControl | undefined }) {
     // The drafts are handed to the account signed in, none here, as the panel's root hands them.
     useDraftsOwner(undefined);
@@ -725,9 +779,11 @@ export function mount({
       deliverInbox({ tasks: next });
       pushAgain();
     };
+
     world.setTasks = setListed;
     // The agents the task list carries, each in Acme's workspace and repository.
     const { listedAgents } = world;
+
     const liveAgents = useMemo(
       () =>
         listedAgents.map((agent) =>
@@ -735,6 +791,7 @@ export function mount({
         ),
       [listedAgents],
     );
+
     // Note that the agents on a task are laid on the document too, over whatever else it holds of the list, as the host lays the list it follows, which an item's agent is read from (`useTaskAgent`).
     const onTasks = world.agentListHeld ? undefined : liveAgents;
     // Note that the list is laid only once the window read its own document, since the test's Query client may still hold an earlier test's.
@@ -747,6 +804,7 @@ export function mount({
     }, [heldList, onTasks]);
     // Note that the tasks stand in the workspace listed, where one is, as the window lists that workspace's tasks, and its Inbox their items alone.
     const { listedWorkspace } = world;
+
     const inListed = useMemo(
       () =>
         listedWorkspace === undefined
@@ -754,8 +812,9 @@ export function mount({
           : listed.map((task) => ({ ...task, workspaceId: listedWorkspace.id })),
       [listed, listedWorkspace],
     );
+
     const control = tasksControl({
-      ...(readerKnown ? { me: READER.userId } : {}),
+      ...(readerKnown && { me: READER.userId }),
       workspace: listedWorkspace,
       tasks: inListed,
       // The agents the task list followed live carries, none while it has carried none yet.
@@ -764,7 +823,7 @@ export function mount({
       sidePanel: sidePanel ?? {
         ...tasksControl().sidePanel,
         onOpen: (tab) => {
-          if (typeof tab !== "string" && tab.kind === STRIP_TAB_KIND.TRANSCRIPT) {
+          if (!Predicate.isString(tab) && tab.kind === STRIP_TAB_KIND.TRANSCRIPT) {
             asked.previewedAgents.push(tab.transcript);
           }
         },
@@ -782,14 +841,17 @@ export function mount({
       }),
       onShowAgent: (taskId, agentId) => asked.shownAgents.push([taskId, agentId]),
     });
+
     const inbox =
       drawnWhileOpen && !inboxOpen
         ? null
         : createElement(DesktopInbox, { tasks: control, room: room ?? SHELL_ROOM.WIDE });
+
     return withSidebar
       ? createElement(Fragment, null, createElement(DesktopSidebar, sidebarProps(control)), inbox)
       : inbox;
   }
+
   function Paneled({ at }: { at: ShellRoom }) {
     const sidePanel = useSidePanel(
       undefined,
@@ -800,16 +862,20 @@ export function mount({
       [],
       at,
     );
+
     return createElement(Page, { sidePanel });
   }
+
   const container = document.createElement("div");
   document.body.append(container);
   world.root = createRoot(container);
+
   // Note that a panel handed in stands as handed, in whatever room, so a test can stand one open where a bare panel cannot open.
   const inbox =
     room === undefined || panel !== undefined
       ? createElement(Page, { sidePanel: panel })
       : createElement(Paneled, { at: room });
+
   const shown = toasts ? createElement(Fragment, null, inbox, createElement(ToastHost)) : inbox;
   const page = bundles === undefined ? shown : onSideBundles(bundles, shown);
   const at = firstChosen === undefined ? INBOX_AT : `${INBOX_AT}/${firstChosen.itemId}`;
@@ -818,14 +884,18 @@ export function mount({
     if (open) router.history.back();
     else router.history.push(HOME_AT);
   };
+
   world.narrowTo = (taskId) =>
     router.history.push(taskId === undefined ? INBOX_AT : `${INBOX_AT}/task/${taskId}`);
+
   const leaves = leavingBy(() => {
     asked.closed += 1;
   });
-  const held = firstChosen === undefined ? null : holdingInboxChoice(firstChosen);
+
+  const held = firstChosen === undefined || byAddress ? null : holdingInboxChoice(firstChosen);
   const drawn = createElement(Fragment, null, leaves, held, page);
   act(() => world.root?.render(withQueryClient(router.provide(drawn))));
+
   return { page: container, asked, windowPath: () => router.history.location.pathname };
 }
 
@@ -862,8 +932,11 @@ export const ROW_TITLE = ".ui-list-row-title";
 /** A row's title as the eye reads it, the words it says to a reader alone ("Unread") left out. */
 export function titleOf(row: Element): string {
   const title = row.querySelector(ROW_TITLE)?.cloneNode(true);
+
   if (!(title instanceof Element)) return "";
+
   for (const hidden of title.querySelectorAll(".ui-visually-hidden")) hidden.remove();
+
   return title.textContent ?? "";
 }
 
@@ -880,6 +953,7 @@ export function heardOf(ids: string | null): string {
     .map((id) => {
       const named = document.getElementById(id);
       assert.ok(named !== null, `nothing is drawn as ${id}`);
+
       return heardWords(named);
     })
     .join(" ");
@@ -890,6 +964,7 @@ export function needsYouMark(row: HTMLElement): string {
   const said = [...row.querySelectorAll(".ui-list-row-meta .ui-visually-hidden")].some(
     (each) => each.textContent === "Needs you",
   );
+
   return said ? "*" : "";
 }
 
@@ -897,6 +972,7 @@ export function needsYouMark(row: HTMLElement): string {
 export function listed(page: HTMLElement): string[] {
   const list = page.querySelector(".inbox-tasks");
   assert.ok(list, "the list is drawn");
+
   return [...list.querySelectorAll<HTMLButtonElement>("li button.ui-list-row-main")].map(
     (node) =>
       `${node.getAttribute("aria-current") === "page" ? "▸ " : ""}${needsYouMark(node)}${titleOf(node)}`,
@@ -908,7 +984,9 @@ export function wordsOf(element: Element | null | undefined): string | null {
   if (element === null || element === undefined) return null;
   const copy = element.cloneNode(true);
   assert.ok(copy instanceof Element);
+
   for (const disc of copy.querySelectorAll(".actor-mark")) disc.remove();
+
   return copy.textContent;
 }
 
@@ -916,7 +994,9 @@ export function rowNamed(page: HTMLElement, title: string): HTMLButtonElement {
   const row = [
     ...page.querySelectorAll<HTMLButtonElement>(".inbox-tasks li button.ui-list-row-main"),
   ].find((each) => titleOf(each) === title);
+
   assert.ok(row, `no row for ${title}`);
+
   return row;
 }
 
@@ -955,7 +1035,9 @@ export function viewItem(label: string): HTMLElement {
   const item = [...document.querySelectorAll<HTMLElement>('[role^="menuitem"]')].findLast((each) =>
     (each.querySelector(".ui-menu-item-label") ?? each).textContent?.endsWith(label),
   );
+
   assert.ok(item, `the menu offers ${label}`);
+
   return item;
 }
 
@@ -964,6 +1046,7 @@ export function subjectOf(page: HTMLElement): string[] {
   const subject =
     page.querySelector(".inbox-view-items:not([hidden]) .inbox-subject") ??
     assert.fail("the thread leads with its subject");
+
   return [...subject.children].map((child) => child.textContent ?? "");
 }
 
@@ -992,23 +1075,28 @@ export function takenCloses(): ResolvesSent {
         sent.takenBack.push(itemId);
         const open = before.get(itemId) ?? THRESHOLD;
         drawnByHost((each) => (each.id === itemId ? open : undefined));
+
         return Promise.resolve({
           status: FAKE_ANSWER.DONE,
           value: { item: open, outcome: INBOX_TAKE_BACK.TAKEN },
         });
       }
+
       if (request.kind !== ACT_KIND.AGENTS_INBOX_CLOSE) return previous(request);
       const { itemId, revision } = request.payload;
       const asked = [...world.inboxes.values()].flat().find((each) => each.id === itemId);
+
       if (asked !== undefined) before.set(itemId, asked);
       // The close withdraws the ask it leaves open, with no reason, and reads the item, as the service closes it.
       const closed = closedNow(asked ?? THRESHOLD, READER, 6_000);
       // Note that the host lands the item as the service answered it in every inbox it follows before the close answers.
       drawnByHost((each) => (each.id === closed.id ? closed : undefined));
       sent.closes.push({ itemId, revision });
+
       return Promise.resolve({ status: FAKE_ANSWER.DONE, value: { item: closed, taken: true } });
     },
   });
+
   return sent;
 }
 
@@ -1039,6 +1127,7 @@ export function answerSend(pane: HTMLElement): HTMLButtonElement {
 /** Whether the open item's Send sends nothing as it stands: taking no press, or refusing it to say why (`aria-disabled`). */
 export function sendHeld(pane: HTMLElement): boolean {
   const send = answerSend(pane);
+
   return send.disabled || send.getAttribute("aria-disabled") === "true";
 }
 
@@ -1054,11 +1143,13 @@ export function footWords(pane: HTMLElement): string {
   const box = pane.querySelector("form.inbox-answer") ?? assert.fail("the box");
   const copy = box.cloneNode(true);
   assert.ok(copy instanceof Element);
+
   for (const part of copy.querySelectorAll(
     ":scope > :is([data-inbox-draft-ask], .agent-composer-field), .attached-files, .ui-composer-foot-note, .ui-composer-foot-tools, .message-box-actions",
   )) {
     part.remove();
   }
+
   return copy.textContent ?? "";
 }
 
@@ -1069,18 +1160,24 @@ export function footWords(pane: HTMLElement): string {
  */
 export function boxParts(pane: HTMLElement): string[] {
   const form = pane.querySelector("form.inbox-answer") ?? assert.fail("the box");
+
   return [...form.children].flatMap((part) => {
     if (part.matches("[data-inbox-draft-ask]")) return ["controls"];
+
     if (part.matches(".agent-composer-field")) {
       const line = part.querySelector(".composer-editor") ?? assert.fail("the line's editor");
+
       return [`line: ${line.getAttribute("aria-label")}`];
     }
+
     if (part.matches(".ui-composer-foot")) {
       const presses = [...part.querySelectorAll<HTMLElement>("button, .composer-editor")].map(
         (press) => press.getAttribute("aria-label") ?? press.textContent,
       );
+
       return [`row: ${presses.join(", ")}`];
     }
+
     return [];
   });
 }
@@ -1095,6 +1192,7 @@ export function keyOn(target: Element, key: string, init: KeyboardEventInit = {}
     const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init });
     target.dispatchEvent(event);
     const presses = key === "Enter" || key === " ";
+
     if (presses && !event.defaultPrevented && target instanceof HTMLButtonElement) target.click();
   });
 }
@@ -1104,9 +1202,12 @@ export function keyOn(target: Element, key: string, init: KeyboardEventInit = {}
 export function openings(card: string): string[] {
   const standing = document.querySelector(`.ui-tooltip-card ${card}`);
   assert.ok(standing, "a card is hung");
-  return [...standing.querySelectorAll("button")]
-    .map((button) => button.textContent ?? "")
-    .filter((words) => words.startsWith("Open"));
+
+  return [...standing.querySelectorAll("button")].flatMap((button) => {
+    const words = button.textContent ?? "";
+
+    return words.startsWith("Open") ? [words] : [];
+  });
 }
 
 /** Whether a reference wears an agent's tile, the solid rounded square every agent is drawn on. */
@@ -1131,6 +1232,7 @@ export function listEdge(page: HTMLElement): HTMLElement | null {
 export function columnsShown(page: HTMLElement): string[] {
   const list = page.querySelector(".inbox-tasks");
   const item = page.querySelector(".inbox-view-items");
+
   return [
     ...(list === null || list.hasAttribute("hidden") ? [] : ["list"]),
     ...(item === null || item.hasAttribute("hidden") ? [] : ["item"]),
@@ -1148,6 +1250,7 @@ export function wayBack(page: HTMLElement): HTMLButtonElement | undefined {
 export function backToList(page: HTMLElement): HTMLButtonElement {
   const back = wayBack(page);
   assert.ok(back, "the item standing alone has a way back");
+
   return back;
 }
 
@@ -1155,8 +1258,10 @@ export function backToList(page: HTMLElement): HTMLButtonElement {
 export function standKeymap(): Root {
   function Keymap() {
     useAppKeymap(true);
+
     return null;
   }
+
   const keys = createRoot(document.body.appendChild(document.createElement("div")));
   // Note that the keymap stands on the test's client beside the page's own tree, which already holds its one subscription.
   act(() =>
@@ -1164,6 +1269,7 @@ export function standKeymap(): Root {
       createElement(QueryClientProvider, { client: testQueryClientNow() }, createElement(Keymap)),
     ),
   );
+
   return keys;
 }
 
@@ -1183,6 +1289,7 @@ export function pagerOf(page: HTMLElement): string | null {
 export function arrowNamed(page: HTMLElement, name: string): HTMLButtonElement {
   const arrow = page.querySelector<HTMLButtonElement>(`.ui-pager button[aria-label="${name}"]`);
   assert.ok(arrow, `the pager offers ${name}`);
+
   return arrow;
 }
 
@@ -1209,9 +1316,11 @@ export function attachedNames(within: Element): (string | null)[] {
 
 /** The files the words name, by the name each one's chip there says, in the order the words name them. */
 function namedInWords(within: Element): (string | null)[] {
-  return [...within.querySelectorAll(".ui-inline-ref")]
-    .filter((chip) => FILE_KINDS.has(chip.querySelector(".ui-visually-hidden")?.textContent ?? ""))
-    .map((chip) => chip.querySelector(".ui-inline-ref-label")?.textContent ?? null);
+  return [...within.querySelectorAll(".ui-inline-ref")].flatMap((chip) =>
+    FILE_KINDS.has(chip.querySelector(".ui-visually-hidden")?.textContent ?? "")
+      ? [chip.querySelector(".ui-inline-ref-label")?.textContent ?? null]
+      : [],
+  );
 }
 
 /** Whether an item's row wears the Draft pencil. */
@@ -1222,9 +1331,11 @@ export function rowDrafted(page: HTMLElement, title: string): boolean {
 /** Hands `files` to the open item's box: picked in its hidden picker, or dropped on its card. */
 export async function handFiles(page: HTMLElement, files: readonly File[], how: "pick" | "drop") {
   const pane = itemPane(page);
+
   if (how === "pick") {
     const picker =
       pane.querySelector<HTMLInputElement>('input[type="file"]') ?? assert.fail("no file picker");
+
     Object.defineProperty(picker, "files", { configurable: true, value: files });
     act(() => picker.dispatchEvent(new Event("change", { bubbles: true })));
   } else {
@@ -1233,6 +1344,7 @@ export async function handFiles(page: HTMLElement, files: readonly File[], how: 
     Object.defineProperty(drop, "dataTransfer", { value: { types: ["Files"], files } });
     act(() => card.dispatchEvent(drop));
   }
+
   // Note that a file is read off the disk before it lands in the box.
   for (let round = 0; round < 4; round += 1) await settle();
 }
@@ -1252,24 +1364,30 @@ export function skillReads(): string[] {
           source: TASK_SKILL_SOURCE.REPOSITORY,
           path: ".agents/skills/release/SKILL.md",
         };
+
         return Promise.resolve({
           status: FAKE_ANSWER.DONE,
           value: { skills: { repository: "acme/relay", branch: "main", skills: [release] } },
         });
       }
+
       if (request.kind === ACT_KIND.GITHUB_OPEN) {
         opened.push(request.payload.url);
+
         return Promise.resolve({ status: FAKE_ANSWER.DONE, value: undefined });
       }
+
       return previous(request);
     },
   });
+
   return opened;
 }
 
 /** Hovers a control as a resting pointer does, and answers the words of the card it hangs, its discs left out. */
 export function hoveredCard(control: Element, card: string): string | null {
   restOn(control);
+
   return wordsOf(document.querySelector(`.ui-tooltip-card ${card}`));
 }
 
@@ -1296,8 +1414,10 @@ export function inOrder(on: InboxItem, messages: readonly InboxMessage[]): Inbox
 /** The kind of writer a comment's face draws, as its avatar's outline says it: a person's circle, or an agent's square. */
 export function faceKind(face: Element | null | undefined): string | undefined {
   const disc = face?.querySelector<HTMLElement>(".ui-avatar");
+
   if (disc === null || disc === undefined) return undefined;
-  return disc.dataset.shape === "square" ? "agent" : "person";
+
+  return disc.dataset.outline === "square" ? "agent" : "person";
 }
 
 /** Every message the pane sends, written down and answered by `answer`, the item as the service would hand it back by default. */
@@ -1313,12 +1433,15 @@ export function heldMessages(
       if (request.kind !== ACT_KIND.AGENTS_INBOX_MESSAGE) return previous(request);
       sent.push(request.payload);
       const value = answer(request.payload);
+
       // Note that the host lands the item as the service answered it in every inbox it follows before the message answers.
       if (!("failure" in value))
         drawnByHost((each) => (each.id === value.item.id ? value.item : undefined));
+
       return Promise.resolve({ status: FAKE_ANSWER.DONE, value });
     },
   });
+
   return sent;
 }
 
@@ -1351,10 +1474,12 @@ export function writtenOn(item: InboxItem, id: string) {
 export function rowLines(page: HTMLElement, title: string): [boolean, string | null | undefined] {
   const row = rowNamed(page, title);
   const head = row.querySelector(".ui-list-row-head");
+
   const titled =
     titleOf(row) === title &&
     head?.querySelector(ROW_TITLE) === null &&
     head.querySelector("time") !== null;
+
   return [titled, row.querySelector(".ui-list-row-description")?.textContent];
 }
 
@@ -1365,6 +1490,7 @@ export function rowMenu(page: HTMLElement, title: string): string[] {
       new MouseEvent("contextmenu", { bubbles: true, cancelable: true }),
     );
   });
+
   return menuWords();
 }
 
@@ -1372,6 +1498,7 @@ export function rowMenu(page: HTMLElement, title: string): string[] {
 export function menuWords(): string[] {
   const menu = [...document.querySelectorAll('[role="menu"]')].at(-1);
   assert.ok(menu, "a menu is open");
+
   return [...menu.querySelectorAll('[role^="menuitem"], .ui-menu-rule')].map((each) =>
     each.classList.contains("ui-menu-rule") ? "—" : (each.textContent ?? ""),
   );
@@ -1382,7 +1509,9 @@ export function menuItem(label: string): HTMLElement {
   const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find((each) =>
     each.textContent?.startsWith(label),
   );
+
   assert.ok(item, `the menu offers ${label}`);
+
   return item;
 }
 
@@ -1429,9 +1558,11 @@ export function gatedAnswers(): GatedAnswers {
         drawnByHost((each) => (each.id === itemId ? landed : undefined));
         reply.resolve({ status: FAKE_ANSWER.DONE, value });
       });
+
       return reply.promise;
     },
   });
+
   return { sent, answer: (view) => waiting.shift()?.(view) };
 }
 
@@ -1446,6 +1577,7 @@ export function answerWithNote(page: HTMLElement, note: string): void {
 
 /** The workspace the Whose tests list, shared with Charles, and its members as read. */
 export const SHARED_WORKSPACE: Workspace = { ...ACME, memberCount: 2 };
+
 export const SHARED_MEMBERS: readonly WorkspaceMember[] = [
   { ...READER, email: "dana@example.com", role: WORKSPACE_ROLE.OWNER },
   { ...TEAMMATE, email: "charles@example.com", role: WORKSPACE_ROLE.MEMBER },
@@ -1518,12 +1650,14 @@ export async function mountThread(shown: InboxItem): Promise<HTMLElement> {
   const row = await vi.waitFor(() => rowNamed(page, shown.title));
   act(() => row.click());
   await settle();
+
   return itemPane(page);
 }
 
 /** Everything the thread's subject draws, a part a child: its title alone. */
 export function subjectParts(pane: HTMLElement): (string | null)[] {
   const subject = pane.querySelector(".inbox-subject") ?? assert.fail("the subject is drawn");
+
   return [...subject.children].map((part) => part.textContent);
 }
 
@@ -1540,6 +1674,7 @@ export function sendWords(pane: HTMLElement): string | null {
   const button =
     pane.querySelector<HTMLButtonElement>('form.inbox-answer button[type="submit"]') ??
     assert.fail("the box has its button");
+
   return button.textContent === "" ? button.getAttribute("aria-label") : button.textContent;
 }
 
@@ -1557,15 +1692,18 @@ export function askMarker(pane: HTMLElement): string | null {
 export function draftReply(pane: HTMLElement): (string | null)[] {
   const draft =
     pane.querySelector<HTMLElement>(".inbox-thread > li:last-child") ?? assert.fail("no thread");
+
   assert.strictEqual(draft.dataset.inboxComment, "draft", "the draft reply ends the thread");
   const head = wordsOf(draft.querySelector(".ui-comment-head"));
   const question = draft.querySelector("form.inbox-answer > [data-inbox-draft-ask]");
+
   if (question === null) return [head];
   assert.notMatch(
     question.textContent ?? "",
     /Pick one|Pick any|to pick|Fill in|filled|Steps|done$/u,
     "no head stands over the controls",
   );
+
   return [head, "controls"];
 }
 
@@ -1574,7 +1712,9 @@ export function askPress(pane: HTMLElement, label: string): HTMLButtonElement {
   const found = [...pane.querySelectorAll<HTMLButtonElement>("[data-inbox-draft-ask] button")].find(
     (button) => button.querySelector(".ui-button-words")?.textContent === label,
   );
+
   assert.ok(found, `the ask offers ${label}`);
+
   return found;
 }
 
@@ -1582,15 +1722,18 @@ export function askPress(pane: HTMLElement, label: string): HTMLButtonElement {
 export function repliedOn(item: InboxItem, id: string) {
   return (params: AgentInboxMessageParams): AgentInboxMessagedView => {
     const { answers } = params;
+
     const thread = (item.thread ?? []).map((message) =>
       answers !== undefined && message.id === answers.ask && message.ask !== undefined
         ? { ...message, ask: { ...message.ask, status: INBOX_ASK_STATUS.ANSWERED } }
         : message,
     );
+
     const reply: InboxMessage = {
       ...threadMessage(id, { member: READER }, params.text, 9_000),
       ...(answers === undefined ? undefined : { answers }),
     };
+
     return {
       item: {
         ...item,

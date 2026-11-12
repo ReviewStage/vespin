@@ -62,6 +62,7 @@ async function mounted(element: ReactElement): Promise<HTMLElement> {
   await act(async () => {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
+
   return container;
 }
 
@@ -98,12 +99,14 @@ async function drawChangesTab(): Promise<HTMLElement> {
       }),
     ),
   });
+
   const control = agentsControl({
     agents: [AGENT],
     agentIds: [AGENT.id],
     models: [],
     pullRequests: new Map([[AGENT.id, PULL_REQUEST]]),
   });
+
   const tab = await mounted(
     createElement(ChangesTabReading, {
       agentId: AGENT.id,
@@ -113,8 +116,10 @@ async function drawChangesTab(): Promise<HTMLElement> {
       tree: { open: true, onToggle: () => undefined },
     }),
   );
+
   // Note that the changes land through a query, so the tab is read once its files are drawn.
   await vi.waitFor(() => assert.equal(drawnToggles(tab).length > 0, true));
+
   return tab;
 }
 
@@ -149,11 +154,14 @@ function drawnToggles(tab: HTMLElement): HTMLButtonElement[] {
 
 test("a Changes tab draws no tree beside the diff until the tree's toggle opens it over the diff for this tab alone", async () => {
   const tab = await drawChangesTab();
+
   // The tree, where it is drawn at all.
   const treeDrawn = () => {
     const tree = tab.querySelector('[aria-label="Changed files"]');
+
     return tree !== null && drawn(tree);
   };
+
   const toggles = () => drawnToggles(tab);
 
   assert.ok(!treeDrawn(), "the tree the panel holds open stands nowhere");
@@ -184,14 +192,19 @@ test("a Changes tab draws no tree beside the diff until the tree's toggle opens 
 test("Escape pressed on the tree's toggle takes down the tree it opened over the diff, and goes no further", async () => {
   const tab = await drawChangesTab();
   const toggle = () => drawnToggles(tab)[0] ?? assert.fail("a toggle is drawn");
+
   const treeDrawn = () => {
     const tree = tab.querySelector('[aria-label="Changed files"]');
+
     return tree !== null && drawn(tree);
   };
+
   let escaped = false;
+
   const heard = () => {
     escaped = true;
   };
+
   document.addEventListener("keydown", heard);
 
   await act(async () => toggle().click());
@@ -223,10 +236,13 @@ function changesParts(tab: HTMLElement) {
   const body = tab.querySelector(".file-view-body") ?? assert.fail("the diff's body is drawn");
   const diff = body.firstElementChild ?? assert.fail("the diff is drawn");
   const tree = () => tab.querySelector('[aria-label="Changed files"]');
+
   const treeDrawn = () => {
     const found = tree();
+
     return found !== null && drawn(found);
   };
+
   return { toggle, body, diff, tree, treeDrawn };
 }
 
@@ -266,6 +282,7 @@ test("a finger's arrival on the tree's toggle floats nothing, so iOS spends no t
 test("the pointer at the tab's right edge floats the tree, though not with a button held, as a drag on the scrollbar there holds one", async () => {
   const { body, diff, treeDrawn } = changesParts(await drawChangesTab());
   vi.spyOn(body, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 280, 400));
+
   const move = (clientX: number, buttons: number) =>
     act(() => {
       diff.dispatchEvent(new PointerEvent("pointermove", { bubbles: true, clientX, buttons }));

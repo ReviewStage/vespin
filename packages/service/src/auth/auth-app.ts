@@ -102,6 +102,7 @@ function workspaceOfSignUp(
   workspaces: WorkspaceSeams,
 ): Effect.Effect<void, never, DatabaseServices> {
   if (count.name !== SERVER_EVENT.ACCOUNT_SIGN_UP) return Effect.void;
+
   return catchAllButInterrupt(
     Effect.asVoid(ensurePersonalWorkspace(count.actor.userId, workspaces)),
     (cause) => Effect.logWarning(`Workspace not made at sign-up: ${causeKind(cause)}`),
@@ -116,12 +117,16 @@ function workspaceOfSignUp(
  */
 function welcomeOfSignUp(count: AuthCount): Effect.Effect<void, never, DatabaseServices> {
   if (count.name !== SERVER_EVENT.ACCOUNT_SIGN_UP) return Effect.void;
+
   return Effect.gen(function* () {
     const mail = yield* Effect.serviceOption(WelcomeMail);
+
     if (Option.isNone(mail)) return;
+
     const person = yield* catchAllButInterrupt(readAccountPerson(count.actor.userId), (cause) =>
       Effect.as(Effect.logWarning(`Welcome email not sent: ${causeKind(cause)}`), undefined),
     );
+
     if (person === undefined) return;
     yield* mail.value.send(person);
   });
@@ -172,9 +177,11 @@ const authPassthrough = /* @__PURE__ */ Effect.fn("web/authPassthrough")(functio
   const request = yield* Effect.orDie(HttpServerRequest.toWeb(incoming));
   // Note that the request's own services are handed to Better Auth's deletion hooks, which it awaits as promises (`deletion-hooks.ts`).
   const services = yield* Effect.context<DeletionServices>();
+
   const { answer, counts } = yield* Effect.promise(() =>
     withDeletionServices(services, () => withAuthCounts(() => handle(request))),
   );
+
   // Note that the counts run once Better Auth has answered, which is once what they count has committed.
   yield* Effect.forEach(counts, (count) => workspaceOfSignUp(count, workspaces), {
     discard: true,
@@ -182,6 +189,7 @@ const authPassthrough = /* @__PURE__ */ Effect.fn("web/authPassthrough")(functio
   yield* Effect.forEach(counts, welcomeOfSignUp, { discard: true });
   yield* Effect.forEach(counts, onboardingOfCount, { discard: true });
   yield* Effect.forEach(counts, recordAuthCount, { discard: true });
+
   return incoming.method === BODYLESS_METHOD.HEAD
     ? bodylessAnswer(answer)
     : HttpServerResponse.raw(answer);

@@ -69,6 +69,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -83,11 +84,14 @@ const openAutomationWorld = Effect.gen(function* () {
   yield* joinWorkspace(workspaceId, teammate);
   const agentId = yield* openAgentOnOwnTask(owner, workspaceId);
   const db = yield* Database;
+
   const [row] = yield* db
     .select({ conversationId: agentTable.conversationId, taskId: agentTable.taskId })
     .from(agentTable)
     .where(eq(agentTable.id, agentId));
+
   const { conversationId, taskId } = row ?? assert.fail("the agent has no conversation");
+
   return {
     owner,
     teammate,
@@ -128,6 +132,7 @@ type Followed = readonly [
 /** The three reads as the teammate follows them: the workspace's automations and runs, and the world's automation's runs. */
 const teammateReads = (world: AutomationWorld): readonly Followed[] => {
   const workspace = { userId: world.teammate, workspaceId: world.workspaceId };
+
   return [
     [automationsRead, workspace],
     [automationWorkspaceRunsRead, workspace],
@@ -143,6 +148,7 @@ const wakesTheTeammate = <A, E, R>(
 ) =>
   Effect.gen(function* () {
     const fired = yield* expectTopicsFire(write, topics);
+
     for (const [query, params] of teammateReads(world)) {
       const woken = query.topics(params);
       assert.ok(
@@ -150,6 +156,7 @@ const wakesTheTeammate = <A, E, R>(
         `${query.name} is woken by a topic the write notifies`,
       );
     }
+
     return fired;
   });
 
@@ -174,6 +181,7 @@ it.layer(getTestDB())("what moves a workspace's automations notifies", (it) => {
           owners,
           world,
         );
+
         const fired = yield* wakesTheTeammate(
           Effect.map(
             recordAutomationRun(made.value, {
@@ -186,6 +194,7 @@ it.layer(getTestDB())("what moves a workspace's automations notifies", (it) => {
           owners,
           world,
         );
+
         yield* wakesTheTeammate(attachRunAgent(fired.value.id, world.agentId), owners, world);
         yield* wakesTheTeammate(deleteAutomation(world.owner, world.automationId), owners, world);
       }),
@@ -197,6 +206,7 @@ it.layer(getTestDB())("what moves a workspace's automations notifies", (it) => {
       Effect.gen(function* () {
         const world = yield* openAutomationWorld;
         const made = yield* makeAutomation(world);
+
         const fired = Option.getOrThrow(
           yield* recordAutomationRun(made, {
             dedupeKey: randomUUID(),
@@ -204,16 +214,19 @@ it.layer(getTestDB())("what moves a workspace's automations notifies", (it) => {
             firedAt: yield* DateTime.nowAsDate,
           }),
         );
+
         yield* attachRunAgent(fired.id, world.agentId);
         const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
         const target = { userId: world.owner, conversationId: world.conversationId };
         const turnId = randomUUID();
         const run = { conversationId: sessionKey(world.conversationId), turnId };
+
         const agent: readonly SyncTopic[] = [
           [TOPIC.AGENT, world.agentId],
           [TOPIC.TASK, world.taskId],
           [TOPIC.WORKSPACE, world.workspaceId],
         ];
+
         const turn: readonly SyncTopic[] = [[TOPIC.CONVERSATION, world.conversationId], ...agent];
 
         yield* wakesTheTeammate(

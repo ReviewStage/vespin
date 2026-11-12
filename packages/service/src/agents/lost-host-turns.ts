@@ -32,9 +32,11 @@ export interface LostHostTurns {
 export const settleLostHostTurns = (lost: readonly LostHostTurns[]) =>
   Effect.gen(function* () {
     const running = lost.filter((agent) => agent.runningTurnIds.length > 0);
+
     if (running.length === 0) return;
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     const now = yield* Clock.currentTimeMillis;
+
     for (const { conversationId, runningTurnIds } of running) {
       yield* settleRunnerLostTurns(
         writer,

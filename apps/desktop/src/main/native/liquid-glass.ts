@@ -32,19 +32,23 @@ let addon: InstanceType<LiquidGlassAddon["LiquidGlassNative"]> | null | undefine
 /** The addon, loaded once; null where it cannot be. */
 function loadedAddon(): InstanceType<LiquidGlassAddon["LiquidGlassNative"]> | null {
   if (addon !== undefined) return addon;
+
   try {
     const loaded: LiquidGlassAddon = createRequire(__filename)(nativeHelperPath(ADDON_FILE));
     addon = new loaded.LiquidGlassNative();
   } catch {
     addon = null;
   }
+
   return addon;
 }
 
 /** Lays Liquid Glass behind `window`'s page; false where it could not be laid. */
 export function layLiquidGlass(window: BrowserWindow): boolean {
   const glass = loadedAddon();
+
   if (glass === null || window.isDestroyed()) return false;
+
   try {
     return glass.addView(window.getNativeWindowHandle(), {}) >= 0;
   } catch {

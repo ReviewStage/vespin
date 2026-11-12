@@ -22,6 +22,8 @@ import { INBOX_READ_MARK } from "@repo/features/inbox-list-model";
 
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { CHANGE_REPOSITORY } from "@repo/features/task-list-model";
+import { MOVE_TO_SECTION } from "@repo/features/task-sections-model";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import {
   APP_COMMAND,
@@ -78,7 +80,9 @@ const NOUN = {
 function keyed(command: KeyedCommand, icon: React.JSX.Element, noun?: string): PanelCommand {
   const label = appCommandLabel(command);
   const ending = noun === undefined ? "" : ` ${noun}`;
+
   if (!label.endsWith(ending)) throw new Error(`"${label}" does not end in its noun "${noun}"`);
+
   return { verb: label.slice(0, label.length - ending.length), noun, icon, command };
 }
 
@@ -140,12 +144,12 @@ export const PANEL_COMMAND = {
   ARCHIVE_AGENT: unkeyed("Archive", <GLYPH.ARCHIVE />, NOUN.AGENT),
   UNARCHIVE_AGENT: unkeyed("Unarchive", <GLYPH.UNARCHIVE />, NOUN.AGENT),
   DELETE_AGENT: keyedAs(APP_COMMAND.DELETE, "Permanently delete", <GLYPH.DELETE />, NOUN.AGENT),
-  MOVE_TO_SECTION: unkeyed("Move to section", <GLYPH.MOVE />),
+  MOVE_TO_SECTION: unkeyed(MOVE_TO_SECTION, <GLYPH.MOVE />),
   GROUP_BY: unkeyed("Group by", <ListIcon />),
   ORDER_BY: unkeyed("Order by", <ClockIcon />),
   ASSIGNED_TO: unkeyed("Assigned to", <UserCheckIcon />),
   CANCEL_TASK: unkeyed("Cancel task", <TaskStatusMark status={TASK_STATUS.CANCELED} />),
-  CHANGE_REPOSITORY: unkeyed("Change repository", <GLYPH.REPOSITORY />),
+  CHANGE_REPOSITORY: unkeyed(CHANGE_REPOSITORY, <GLYPH.REPOSITORY />),
   MOVE_TO_WORKSPACE: unkeyed("Move to workspace", <GLYPH.MOVE />),
   MOVE_AGENT: unkeyed("Move to", <GLYPH.MOVE />),
   NEW_CHILD_TASK: unkeyed("New sub-task", <GLYPH.ADD />),
@@ -178,11 +182,14 @@ export function panelCommandOf(command: AppCommand): PanelCommand | undefined {
 /** What a command says where it is offered: the verb on a row's menu, the verb and its noun in ⌘K. */
 export function commandWords(item: PanelCommand, place: CommandPlace): string {
   if (place === COMMAND_PLACE.MENU || item.noun === undefined) return item.verb;
+
   return `${item.verb} ${item.noun}`;
 }
 
+type CommandHeadResult = { label: string; icon: React.JSX.Element };
+
 /** The command's verb and glyph as a row's menu draws them, for a submenu or a row's mark, which hold or run it some way of their own. */
-export function commandHead(item: PanelCommand): { label: string; icon: React.JSX.Element } {
+export function commandHead(item: PanelCommand): CommandHeadResult {
   return { label: commandWords(item, COMMAND_PLACE.MENU), icon: item.icon };
 }
 
@@ -199,6 +206,7 @@ export function commandAction(
   subject: ShortcutSubject | undefined,
 ): MenuAction {
   const action: MenuAction = { ...commandHead(item), onSelect };
+
   return subject === undefined || item.command === undefined
     ? action
     : { ...action, command: item.command, subject };

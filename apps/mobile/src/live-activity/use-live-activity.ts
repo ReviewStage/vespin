@@ -71,18 +71,21 @@ function logRefusal(answer: { readonly failure: string } | { readonly done: true
 /** An activity that ended on the phone and is not yet told: its update token, or none where it never handed one. */
 type EndedActivity = { readonly token: string | undefined };
 
-/** The latest push-to-start token and activity token ActivityKit handed this launch, the activity's none once it ends, and the ends not yet told. */
-function useActivityTokens(): {
+type UseActivityTokensResult = {
   readonly start: string | undefined;
   readonly activity: string | undefined;
   readonly ends: readonly EndedActivity[];
   readonly told: (end: EndedActivity) => void;
-} {
+};
+
+/** The latest push-to-start token and activity token ActivityKit handed this launch, the activity's none once it ends, and the ends not yet told. */
+function useActivityTokens(): UseActivityTokensResult {
   const [start, setStart] = useState<string | undefined>(undefined);
   const [activity, setActivity] = useState<string | undefined>(undefined);
   const [ends, setEnds] = useState<readonly EndedActivity[]>([]);
   useEffect(() => {
     if (liveActivityModule === null) return undefined;
+
     const subscriptions = [
       liveActivityModule.addListener("onStartToken", ({ token }) => setStart(token)),
       liveActivityModule.addListener("onActivityToken", ({ token }) => setActivity(token)),
@@ -91,14 +94,17 @@ function useActivityTokens(): {
         setEnds((waiting) => [...waiting, { token: token ?? undefined }]);
       }),
     ];
+
     return () => {
       for (const subscription of subscriptions) subscription.remove();
     };
   }, []);
+
   const told = useCallback(
     (end: EndedActivity) => setEnds((waiting) => waiting.filter((each) => each !== end)),
     [],
   );
+
   return { start, activity, ends, told };
 }
 
@@ -121,8 +127,8 @@ export function useLiveActivity(signedIn: boolean): void {
           token: start,
         }),
       )
-      .then(logRefusal, (error: unknown) =>
-        console.error("The Live Activity's push-to-start token was not sent.", error),
+      .then(logRefusal, (cause: unknown) =>
+        console.error("The Live Activity's push-to-start token was not sent.", cause),
       );
   }, [acts, phone, start]);
   useEffect(() => {
@@ -135,8 +141,8 @@ export function useLiveActivity(signedIn: boolean): void {
           token: activity,
         }),
       )
-      .then(logRefusal, (error: unknown) =>
-        console.error("The Live Activity's token was not sent.", error),
+      .then(logRefusal, (cause: unknown) =>
+        console.error("The Live Activity's token was not sent.", cause),
       );
   }, [acts, phone, activity]);
   // The ends sent and not yet answered, so a render while one is out never sends it twice.
@@ -146,38 +152,43 @@ export function useLiveActivity(signedIn: boolean): void {
   const [retries, setRetries] = useState(0);
   useEffect(() => {
     if (phone === undefined) return;
+
     // Note that a failure retries only after a change it ran over, so a service that refuses never loops.
     const failed = () => {
       if (!missed.current) return;
       missed.current = false;
       setRetries((count) => count + 1);
     };
+
     for (const end of ends) {
       // Note that an end naming no token would clear whatever activity stands, so it is dropped while a newer one does.
       if (end.token === undefined && activity !== undefined) {
         told(end);
         continue;
       }
+
       if (telling.current.has(end)) {
         missed.current = true;
         continue;
       }
+
       telling.current.add(end);
       // Note that the end names its own token, so the service clears it alone, and a late one never clears a newer activity's.
       acts[ACT_KIND.LIVE_ACTIVITY_ENDED]({
         deviceToken: phone.token,
         environment: phone.environment,
-        ...(end.token === undefined ? {} : { activityToken: end.token }),
+        ...(end.token !== undefined && { activityToken: end.token }),
       }).then(
         (answer) => {
           logRefusal(answer);
           telling.current.delete(end);
+
           // An end the service did not take waits for the phone's next change.
           if ("failure" in answer) failed();
           else told(end);
         },
-        (error: unknown) => {
-          console.error("The Live Activity's end was not told.", error);
+        (cause: unknown) => {
+          console.error("The Live Activity's end was not told.", cause);
           telling.current.delete(end);
           failed();
         },
@@ -192,26 +203,30 @@ export function useLiveActivity(signedIn: boolean): void {
     if (wasSignedIn.current && !signedIn)
       liveActivityModule
         ?.endAll()
-        .catch((error: unknown) => console.error("The Live Activity was not ended.", error));
+        .catch((cause: unknown) => console.error("The Live Activity was not ended.", cause));
     wasSignedIn.current = signedIn;
   }, [signedIn]);
   useEffect(() => {
     if (liveActivityModule === null || !signedIn) return undefined;
     const module = liveActivityModule;
+
     const subscription = module.addListener("onStop", ({ request, agentId }) => {
       write(() => acts[ACT_KIND.AGENTS_STOP]({ agentId }), {
         refused: (answer) => {
           if (!("failure" in answer)) return undefined;
           console.error(`The stop was refused: ${answer.failure}.`);
+
           return STOP_FAILED;
         },
         unanswered: STOP_FAILED,
       }).finally(() => module.answerStop(request));
     });
+
     return () => subscription.remove();
   }, [acts, write, signedIn]);
   useEffect(() => {
     if (liveActivityModule === null || !fixture) return;
+
     // Note that the state is encoded through the service's own Schema, so the widget decodes the bytes a push would carry.
     const started = launchLiveActivity()
       ? liveActivityModule.startFixture(
@@ -220,8 +235,9 @@ export function useLiveActivity(signedIn: boolean): void {
           ),
         )
       : liveActivityModule.endAll();
-    started.catch((error: unknown) =>
-      console.error("The fixture's Live Activity was not started or ended.", error),
+
+    started.catch((cause: unknown) =>
+      console.error("The fixture's Live Activity was not started or ended.", cause),
     );
   }, [fixture]);
 }

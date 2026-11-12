@@ -25,6 +25,7 @@ const FUNCTION_EXTENSION = ".js";
  */
 async function routeKeys(routesDirectory: string): Promise<readonly string[]> {
   const listing = await readdir(routesDirectory, { recursive: true });
+
   return listing
     .filter((path) => path.endsWith(ROUTE_EXTENSION))
     .map((path) => path.split(sep).join(posix.sep).slice(0, -ROUTE_EXTENSION.length))

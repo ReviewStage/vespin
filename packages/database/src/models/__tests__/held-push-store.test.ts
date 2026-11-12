@@ -21,6 +21,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -32,18 +33,23 @@ it.layer(getTestDB())("the held push store", (it) => {
         const away = yield* openAccount;
         const present = yield* openAccount;
         const workspace = yield* openWorkspace(away);
+
         const { id: task } = yield* createTask(away, {
           organizationId: workspace,
           name: "Flaky tests",
         });
+
         const agentId = yield* openTaskAgent(away, workspace, task);
         const itemId = yield* openInboxItem(away, workspace, task, agentId, true);
         const otherWorkspace = yield* openWorkspace(present);
+
         const { id: otherTask } = yield* createTask(present, {
           organizationId: otherWorkspace,
           name: "Flaky tests",
         });
+
         const otherAgent = yield* openTaskAgent(present, otherWorkspace, otherTask);
+
         const otherItem = yield* openInboxItem(
           present,
           otherWorkspace,

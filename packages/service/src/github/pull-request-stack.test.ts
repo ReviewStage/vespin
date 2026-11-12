@@ -68,6 +68,7 @@ describe("stackOf", () => {
     const chain = Array.from({ length: OVERVIEW_BOUNDS.MAX_STACK + 5 }, (_, at) =>
       open(at + 1, `b${at + 1}`, at === 0 ? "main" : `b${at}`),
     );
+
     const current = chain[0];
     assert.ok(current !== undefined);
     assert.equal(stackOf(current, chain).length, OVERVIEW_BOUNDS.MAX_STACK);

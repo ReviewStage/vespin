@@ -99,6 +99,7 @@ const TASKS_NOT_READ = "Your tasks could not be read.";
 function greeting(name: string | undefined, fresh: boolean): React.JSX.Element {
   const first = name?.trim().split(/\s+/u)[0];
   const words = fresh ? "Welcome" : "Welcome back";
+
   return (
     <ReplayUnmask>
       {words}
@@ -130,7 +131,9 @@ function useArriving(tasks: TasksControl, read: WaitingItems, waiting: number): 
   const [opened] = useState(reading);
   const [heard, setHeard] = useState(false);
   const inboxOut = opened && !heard && waiting === 0 && read.reading && !tasks.listFailed;
+
   if (tasks.listRead && !inboxOut && !heard) setHeard(true);
+
   return reading || inboxOut;
 }
 
@@ -152,6 +155,7 @@ function HomeInbox({
 }): React.JSX.Element | null {
   // Note that nothing waiting draws nothing, while a read is still out or the list was refused too, because an empty section would only say what the page already shows; a refused list is Recent's to say.
   if (waiting.length === 0 && (tasks.listFailed || !read.failed)) return null;
+
   if (read.failed) {
     return (
       <div className="home-note my-tight-gap">
@@ -161,6 +165,7 @@ function HomeInbox({
       </div>
     );
   }
+
   return (
     <PersonSectionFrame
       label={TAB_WORDS.INBOX}
@@ -188,7 +193,9 @@ function HomeRecent({
   // A task's row is unread as its sidebar row is, so its weight and its menu's Mark as read agree with the sidebar's.
   const unread = useUnreadTasks({ staged });
   const recent = recentTasks(tasks.listed.tasks, room);
+
   if (recent.length === 0 && !tasks.listFailed) return null;
+
   const refused = tasks.listFailed ? (
     <div className="home-note my-tight-gap">
       <ErrorState
@@ -199,6 +206,7 @@ function HomeRecent({
       </ErrorState>
     </div>
   ) : null;
+
   // Note that a refused read stays under the head while Recent is folded too, so its Retry is never folded away.
   return (
     <PersonSectionFrame label={RECENT} title={RECENT} fold={PERSON_SECTION_FOLD} standing={refused}>
@@ -238,7 +246,9 @@ function HomeComposer({
   const box = useRef<HTMLDivElement>(null);
   useHomeNewTask(box, tasks.newTask.homeAsks);
   const refusal = tasks.newTask.homeRefused;
+
   if (!tasks.signedIn) return null;
+
   return (
     <div className="home-composer mb-page-section-gap" ref={box}>
       <NewTaskComposer
@@ -283,6 +293,7 @@ export function DesktopHome({
   const waiting = read.items.filter(({ item }) => waitsOnReaderNow(item, tasks.me, now));
   const arriving = useArriving(tasks, read, waiting.length);
   const fresh = welcomed(tasks);
+
   return (
     // Note that the rows' links are written under the listed workspace, so their menus offer Copy link.
     <LinkWorkspaceProvider value={tasks.workspace?.slug ?? tasks.workspace?.id}>

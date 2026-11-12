@@ -36,7 +36,8 @@ import { connectionToolEntries } from "../../integrations/connection-tools.js";
  * section since folded into `update_agent` and `update_task`, and the close
  * of and reply on an inbox item since folded into `withdraw_ask` and
  * `post_to_inbox`, that post and its read, since named `post_thread` and
- * `read_threads`, the four of the workspace's Chat, removed with it,
+ * `read_threads`, that read, since split into `list_threads` and
+ * `read_thread`, the four of the workspace's Chat, removed with it,
  * `create_channel`, `update_channel`, and `move_thread`, removed with the
  * channels they kept,
  * `show_code`, `draw_on_board`, and `look_at_board`, removed with the Code
@@ -56,6 +57,7 @@ export const RETIRED_CODER_TOOL = {
   REPLY_INBOX: RETIRED_TOOL.REPLY_INBOX,
   POST_TO_INBOX: RETIRED_TOOL.POST_TO_INBOX,
   READ_INBOX: RETIRED_TOOL.READ_INBOX,
+  READ_THREADS: RETIRED_TOOL.READ_THREADS,
   POST_CHAT: RETIRED_TOOL.POST_CHAT,
   READ_CHAT: RETIRED_TOOL.READ_CHAT,
   RESOLVE_ASK: RETIRED_TOOL.RESOLVE_ASK,

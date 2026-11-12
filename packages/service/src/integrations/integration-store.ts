@@ -84,6 +84,7 @@ function movesTo(to: IntegrationRowStatus) {
   const from = Object.values(INTEGRATION_ROW_STATUS).filter((status) =>
     INTEGRATION_ROW_MOVES[status].includes(to),
   );
+
   return inArray(integrationConnection.status, from);
 }
 
@@ -277,6 +278,7 @@ export function beginIntegrationSignIn(
 ): IntegrationStoreEffect<string | undefined> {
   return Effect.gen(function* () {
     const at = yield* DateTime.nowAsDate;
+
     const taken = yield* upsertSignIn({
       id: randomUUID(),
       userId,
@@ -286,6 +288,7 @@ export function beginIntegrationSignIn(
       state,
       at,
     });
+
     return taken[0]?.txid;
   });
 }
@@ -415,6 +418,7 @@ export function fillIntegrationLabel(
   label: string,
 ): IntegrationStoreEffect<void> {
   const { userId, connectionName, connectSubject } = account;
+
   return Effect.flatMap(DateTime.nowAsDate, (at) =>
     updateUnlabeled({ userId, connectionName, connectSubject, label, at }),
   );
@@ -492,6 +496,7 @@ export function deleteIntegrationAccount(
   account: Pick<IntegrationConnectionRow, "userId" | "connectionName" | "id">,
 ): IntegrationStoreEffect<string | undefined> {
   const { userId, connectionName, id } = account;
+
   return Effect.map(deleteHeld({ userId, connectionName, id }), (deleted) => deleted[0]?.txid);
 }
 
@@ -544,6 +549,7 @@ export function endIntegrationSignIn(
     const at = yield* DateTime.nowAsDate;
     const deleted = yield* deleteUnfinished({ userId, connectionName, state, at });
     const cleared = yield* clearState({ userId, connectionName, state, at });
+
     return (cleared[0] ?? deleted[0])?.txid;
   });
 }

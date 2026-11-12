@@ -47,6 +47,7 @@ export function childTitlesOf(
   childConversationIds: readonly string[],
 ): ChildTitleEffect<ReadonlyMap<string, string>> {
   if (childConversationIds.length === 0) return Effect.succeed(new Map());
+
   return Effect.map(
     findTitles({
       userId: parent.userId,

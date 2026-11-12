@@ -30,6 +30,7 @@ export const FIXTURE_TASK_NAME = "Teammate invitations";
 /** One version of the funnel page: the steps it counts, in a self-contained document. */
 function funnelPage(version: number, at: string, steps: readonly (readonly [string, number])[]) {
   const rows = steps.map(([step, invites]) => `<tr><td>${step}</td><td>${invites}</td></tr>`);
+
   return {
     id: FIXTURE_IDS.PAGE,
     title: "Invite funnel",
@@ -73,5 +74,6 @@ export function fixturePage(page: TasksPageParams): TasksPageAnswer {
   const version = FIXTURE_PAGE_VERSIONS.find(
     (each) => each.id === page.pageId && each.version === page.version,
   );
+
   return version === undefined ? { failure: TASK_CALL_FAILURE.UNANSWERED } : { page: version };
 }

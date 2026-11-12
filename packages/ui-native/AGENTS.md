@@ -18,11 +18,11 @@ builds a control of its own.
   `WordsRow` for its description), `GroupRow` (a place a regular window's
   sidebar opens, such as the Inbox with its count), `SplitView` (the app's
   sidebar, the list, and the detail, or the list and the detail, each column
-  under its own `ColumnBar`: its inline title, the account's photo, a header
-  such as the workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an
+  under its own `ColumnBar`: its inline title, what leads it such as the
+  workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
-  `ScopePills`, `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
+  `ScopePicker` (a list's scopes as the system's segmented control, or its menu picker in a split view's narrow list column), `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
   answer's fields, and `AskNote` for what a send that did not go said),
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
@@ -36,8 +36,9 @@ builds a control of its own.
   `AccountButton`, `FailureNoticeProvider` (the app's one notice that a
   write did not go: a banner of Liquid Glass sliding down from the top with
   the refusal's words and Try again, said aloud by VoiceOver, faded rather
-  than slid where the reader reduces motion, standing in a window of its own
-  over sheets, and said once for a stretch offline, `failure-notice-model.ts`),
+  than slid where the reader reduces motion, standing over the app's root
+  view (not a `FullWindowOverlay`, whose window never drew on iOS 27.2), and
+  said once for a stretch offline, `failure-notice-model.ts`),
   and the marks (`UnreadDot`, `NeedsYouDot`,
   `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
@@ -57,7 +58,11 @@ builds a control of its own.
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through
   `expo-video`, which says so in its place where the player cannot read the
-  file. An agent's transcript is `AgentTranscript`, the app's one React
+  file. A long press on a picture, a recording, a file's chip, or a message
+  opens SwiftUI's own menu over it (`HeldMenu`, hosting the views back inside
+  it): Copy, Save to Photos, and Share… as `keep-model.ts` offers each kind,
+  the picture viewer's share button holding the same, and Copy message on a
+  message's words; the app answers them through `KeepingProvider`. An agent's transcript is `AgentTranscript`, the app's one React
   Native list (a lazy `FlatList`, drawn newest last and anchored there, with
   Jump to latest once the reader scrolls back, and its older pages read as
   the reader scrolls up to its oldest row, which holds its place as they
@@ -79,10 +84,7 @@ builds a control of its own.
   (`linkMention`, `readLink`): a `vespin.dev` place goes to the screen's
   `onOpenPlace`, any other web address to Safari.
 - **This is the one workspace that imports `@expo/ui` or `expo-glass-effect`,
-  or builds a control from React Native's pieces.** Everywhere else
-  `anti-slop/no-raw-press-outside-ui-native` refuses them, and a press prop
-  on a React Native primitive, with no disable comment allowed (root
-  `AGENTS.md`'s Layout). When a screen needs a piece this package lacks, add
+  or builds a control from React Native's pieces.** When a screen needs a piece this package lacks, add
   the component or an `as const` variant here, named for what it does.
 - **Colors come from `@repo/brand`.** `src/tokens/brand-colors.ts` is written
   by `packages/brand/scripts/generate-surface-shared.mjs` from the brand's one
@@ -134,10 +136,17 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
-  button is the chevron alone. The account's photo leads each tab's root bar
-  and opens Settings (`AccountButton`, `SplitView`'s `sidebarBar`): the
-  system stands it in the same round glass, the photo clipped to a circle
-  inside. Nothing draws a copy of glass.
+  button is the chevron alone. One button leads every tab's root bar, as
+  Notion's does: the workspace switcher (`WorkspaceSwitcher`, the tile alone
+  at the photo's size in the bar's round glass, `SWITCHER_LOOK.TILE`, so the
+  screen's title keeps its place beside it, as the App Store's photo does), whose menu holds the workspaces, the account by its
+  name opening Settings, New workspace, and Settings… in a section under the
+  chosen workspace's name; the account's
+  photo (`AccountButton`) only before the workspaces are read, opening
+  Settings, which the system stands in the same round glass, the photo
+  clipped to a circle inside. A landscape iPad's sidebar heads its
+  list with the switcher, its tile and its name, and stands Settings at its foot. Nothing draws a
+  copy of glass.
 - **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
   unread dot in the margin, a 14 pt leading mark in an 18 pt column (the
   status ring, or the ask's glyph on an agent's own thread), the words from
@@ -146,15 +155,24 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Group headers** (`ListSection`) are small and muted with a count; a
   `foldable` one folds in place on a press, its chevron on the left.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
-  you: the unread dot, an ask's glyph and words, the selected tab and the
-  Inbox count, a picked option, and a primary `Button`. Status tones stand
-  on the status marks alone: a task's ring, and a pull request's state.
-- **Capsules.** `ScopePills` are a list's scopes in a row under its title,
-  the chosen one filled with the ink, and `Chip` one of them; `FieldChip`
-  and `StatusChip` read a task's status, priority and assignee. Each stands
+  you and what you chose, as the panel draws it: the unread dot, an ask's
+  glyph, a count of what needs you, a reminder's time, the selected tab and
+  the Inbox count, a picked option or a switch that is on, and a filled
+  `Button`. Everything else stands in the ink: an ask's words on a row,
+  links, bar buttons, swipe actions, a bordered or plain button, and a
+  row that acts, such as New agent. `Screen` tints in `TEXT`, so a piece
+  asks for copper by name. Status tones stand on the status marks alone: a
+  task's ring, and a pull request's state.
+- **Scopes and capsules.** A list's scopes are `ScopePicker`, the system's
+  segmented control under its title, as Mail and the App Store switch a
+  list's views; in a split view's 320 pt list column, which cuts the
+  segments' words short, the system's menu picker naming the scope chosen
+  (`SCOPE_LOOK.MENU`). `Chip` is a capsule an act or a choice stands in, such as a
+  pull request card's acts; `FieldChip` and `StatusChip` read a task's
+  status, priority and assignee. Each stands
   on `SURFACE` inside a hairline.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, radio
-  rows, a "Recommended" tag and a detail line; `StepList`, a toggle per step,
+  rows, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it; `AnswerFields`, a row per
   field: a text or number field under its label, a select's menu picker, a
   boolean's toggle, the rows a SwiftUI `Form` holds, drawn in a card because

@@ -30,12 +30,14 @@ export type DrawnTheme = Exclude<Theme, typeof THEME.SYSTEM>;
 /** The theme `theme` is drawn in now: itself where it is chosen, the machine's where it follows the machine. */
 function drawnTheme(theme: Theme): DrawnTheme {
   if (theme !== THEME.SYSTEM) return theme;
+
   return window.matchMedia(MACHINE_DARK).matches ? THEME.DARK : THEME.LIGHT;
 }
 
 /** The theme `root` wears, a root wearing none or one unknown following the machine. */
 function wornTheme(root: Element): Theme {
   const worn = root.getAttribute(THEME_ATTRIBUTE);
+
   return isTheme(worn) ? worn : THEME.SYSTEM;
 }
 
@@ -57,6 +59,7 @@ export function onDrawnThemeChange(
   machine.addEventListener("change", changed);
   const worn = new MutationObserver(changed);
   worn.observe(root, { attributes: true, attributeFilter: [THEME_ATTRIBUTE] });
+
   return () => {
     machine.removeEventListener("change", changed);
     worn.disconnect();
@@ -80,9 +83,12 @@ export function wearTheme(
     root.setAttribute(THEME_ATTRIBUTE, drawn);
     worn(drawn);
   };
+
   wear();
+
   if (theme !== THEME.SYSTEM) return () => undefined;
   const machine = window.matchMedia(MACHINE_DARK);
   machine.addEventListener("change", wear);
+
   return () => machine.removeEventListener("change", wear);
 }

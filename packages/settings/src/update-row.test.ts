@@ -86,6 +86,7 @@ test("each state says where the build stands in a few words and offers its one n
       false,
     ],
   ];
+
   for (const [update, detail, action, failed] of rows) {
     const row = updateRow(update, RELEASE);
     assert.deepEqual([row.detail, row.action, row.failed], [detail, action, failed]);
@@ -101,6 +102,7 @@ test("a download under way names its version and how far along it is, with nothi
     }),
     RELEASE,
   );
+
   assert.equal(row.detail, "Downloading 0.2.0… 42%");
   assert.equal(row.action, UPDATE_ROW_ACTION.DOWNLOADING);
   assert.equal(row.progress, 41.7);
@@ -109,6 +111,7 @@ test("a download under way names its version and how far along it is, with nothi
     supported({ status: UPDATE_STATUS.DOWNLOADING, latestVersion: "0.2.0" }),
     RELEASE,
   );
+
   assert.equal(begun.detail, "Downloading 0.2.0…");
   assert.equal(begun.progress, 0, "a download not yet counted draws an empty bar");
 });
@@ -135,6 +138,7 @@ test("a development build names its branch and commit and offers nothing to pres
     packaged: false,
     commit: { sha: "a1b2c3d", dirty: false, branch: "main" },
   });
+
   assert.equal(row.title, "Development build");
   assert.equal(row.detail, "main @ a1b2c3d");
   assert.equal(row.action, UPDATE_ROW_ACTION.NONE);
@@ -146,6 +150,7 @@ test("a development build cut from a dirty tree or a detached head says so, and 
     packaged: false,
     commit: { sha: "a1b2c3d", dirty: true },
   });
+
   assert.equal(dirty.detail, "a1b2c3d-dirty");
 
   const unstamped = updateRow(UNINSTALLABLE_IDLE, { packaged: false });
@@ -156,10 +161,12 @@ test("a development build cut from a dirty tree or a detached head says so, and 
 
 test("a release shows its version with its commit beside it, and its version alone when unstamped", () => {
   const live = supported({ status: UPDATE_STATUS.IDLE, upToDate: true });
+
   const stamped = updateRow(live, {
     packaged: true,
     commit: { sha: "a1b2c3d", dirty: false },
   });
+
   assert.equal(stamped.title, "Version 0.1.0 (a1b2c3d)");
   assert.equal(stamped.action, UPDATE_ROW_ACTION.CHECK);
 

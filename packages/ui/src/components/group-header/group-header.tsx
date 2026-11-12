@@ -1,3 +1,4 @@
+import { Predicate } from "effect";
 import {
   type ReactNode,
   type Ref,
@@ -54,7 +55,11 @@ import { Tooltip } from "../tooltip/hint.js";
  * pointer or the keyboard, in the glyph's place or in an empty glyph cell
  * where the group has no glyph of its own, which keeps its label over the
  * rows' names. Its caller counts a folded group at rest, so a fold still
- * reads as folded while no chevron stands.
+ * reads as folded while no chevron stands. A section's head on a page
+ * (`GROUP_LOOK.SECTION`) is a row's height, its chevron standing at rest
+ * whether the group is open or folded, in place of any glyph, and keeps the
+ * glyph's cell where it folds nothing, so every section's label stands on
+ * one edge.
  *
  * Note that the head is a heading holding a button, beside the group's
  * actions, rather than a `details` summary holding them, because a summary
@@ -113,13 +118,22 @@ export const GROUP_HEADING = {
   H4: "h4",
   NONE: "div",
 } as const;
+
 export type GroupHeading = (typeof GROUP_HEADING)[keyof typeof GROUP_HEADING];
 
-/** How a head reads: as a row among the rows, or as a heading set apart over them, the sidebar's, its chevron only brought. */
+/**
+ * How a head reads: as a row among the rows; as a heading set apart over
+ * them, the sidebar's, its chevron only brought; or as a section's head on a
+ * page, a task's Overview's, a row's height with its chevron standing at rest
+ * open or folded, its glyph's cell kept even empty so its label stands where
+ * every other section's does whether or not it folds.
+ */
 export const GROUP_LOOK = {
   ROW: "row",
   HEADING: "heading",
+  SECTION: "section",
 } as const;
+
 export type GroupLook = (typeof GROUP_LOOK)[keyof typeof GROUP_LOOK];
 
 /** Whether a group's actions wait for the pointer or the keyboard, or stand at rest. */
@@ -127,6 +141,7 @@ export const GROUP_ACTIONS = {
   ON_HOVER: "on-hover",
   AT_REST: "at-rest",
 } as const;
+
 export type GroupActions = (typeof GROUP_ACTIONS)[keyof typeof GROUP_ACTIONS];
 
 /** Whether one of a head's actions waits with the rest, or is on and stands at rest, wearing its dot. */
@@ -134,6 +149,7 @@ export const GROUP_ACTION_STATE = {
   IDLE: "idle",
   ACTIVE: "active",
 } as const;
+
 export type GroupActionState = (typeof GROUP_ACTION_STATE)[keyof typeof GROUP_ACTION_STATE];
 
 /** How wide the surface a group stands on is, which says where its count stands: always on a wide page, only folded or under the pointer in a narrow column. */
@@ -141,6 +157,7 @@ export const GROUP_SURFACE = {
   WIDE: "wide",
   NARROW: "narrow",
 } as const;
+
 export type GroupSurface = (typeof GROUP_SURFACE)[keyof typeof GROUP_SURFACE];
 
 /** Whether a head scrolls away with its rows or sticks to the top of its scroller while they scroll beneath it. */
@@ -148,6 +165,7 @@ export const GROUP_HEAD = {
   SCROLLS: "scrolls",
   STICKS: "sticks",
 } as const;
+
 export type GroupHead = (typeof GROUP_HEAD)[keyof typeof GROUP_HEAD];
 
 /** How a group's rows stand: stacked in a column of their own, or as a subgrid of the grid the group stands in, so their cells line up with every other group's. */
@@ -155,6 +173,7 @@ export const GROUP_ROWS = {
   STACKED: "stacked",
   SUBGRID: "subgrid",
 } as const;
+
 export type GroupRows = (typeof GROUP_ROWS)[keyof typeof GROUP_ROWS];
 
 /** How a group folds: open from the start or not, or as its holder keeps it. */
@@ -197,6 +216,7 @@ const PART = {
 const LEAD_HEIGHT = {
   [GROUP_LOOK.ROW]: "h-control",
   [GROUP_LOOK.HEADING]: "h-control-compact",
+  [GROUP_LOOK.SECTION]: "h-control",
 } as const satisfies Record<GroupLook, string>;
 
 /** An editing head's lead, laid out as a head's lead with nothing to press, and its field, bare in the group role's type in the label's place. */
@@ -245,6 +265,7 @@ function Count({ count }: { count: NavCount }): React.JSX.Element {
   const tone = count.tone ?? STATUS_TONE.NEUTRAL;
   // Note that a count of what waits on the reader is in its tone (`tokens/status-tone.css`).
   const ink = tone === STATUS_TONE.NEUTRAL ? "text-muted-foreground" : "text-tone-ink";
+
   return (
     <span
       className={`${PART.COUNT} ${ink} ${shown === NAV_COUNT_SHOWN.ON_HOVER ? BROUGHT : ""}`}
@@ -274,15 +295,18 @@ function Lead({
   count: NavCount | undefined;
 }): React.JSX.Element {
   const heading = look === GROUP_LOOK.HEADING;
-  // Note that with a glyph the chevron waits unseen in its cell, and without one it stands at rest, so a fold always says it folds, except over a heading's, whose chevron is only ever brought.
-  const swaps = said(glyph) && folds;
+  const section = look === GROUP_LOOK.SECTION;
+  // Note that with a glyph the chevron waits unseen in its cell, and without one it stands at rest, so a fold always says it folds, except over a heading's, whose chevron is only ever brought, and a section's, whose chevron stands at rest over its glyph.
+  const swaps = said(glyph) && folds && !section;
   const brought = swaps || (heading && folds);
-  // Note that a heading keeps its glyph's cell even empty, so its label stands over the rows' names whether or not it folds.
+  // Note that a heading and a section keep their glyph's cell even empty, so the label stands where every other's does whether or not it folds.
+  const keepsCell = heading || section;
+
   return (
     <>
-      {said(glyph) || folds || heading ? (
+      {said(glyph) || folds || keepsCell ? (
         <span className={PART.GLYPH} aria-hidden="true">
-          {said(glyph) ? (
+          {said(glyph) && !(section && folds) ? (
             <span className={`${PART.ICON} ${swaps ? GIVES_WAY : ""}`}>{glyph}</span>
           ) : null}
           {folds ? (
@@ -359,18 +383,22 @@ export function GroupHeaderEditor({
     field.current?.focus();
     field.current?.select();
   }, []);
+
   const end = (kept: boolean, byKey: boolean) => {
     if (ended.current) return;
     ended.current = true;
     onEnd({ kept, value: field.current?.value.trim() ?? "", byKey });
   };
+
   const inHead = (target: EventTarget | null) =>
     target instanceof Node && root.current?.contains(target) === true;
+
   useImperativeHandle(ref, () => ({
     leave: () => {
       if (!inHead(document.activeElement)) end(true, false);
     },
   }));
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: the head takes nothing itself; it hears the focus leave its field, its glyph's control, and the layer that control hangs in a portal, which only React carries back up to it.
     <div
@@ -378,6 +406,7 @@ export function GroupHeaderEditor({
       className={`ui-group-header-editor ${HEAD_BOX}`}
       onBlur={(event) => {
         const next = event.relatedTarget;
+
         if (held.current || inHead(next)) return;
         end(true, false);
       }}
@@ -398,8 +427,10 @@ export function GroupHeaderEditor({
             if (event.key === "Escape") {
               event.preventDefault();
               event.stopPropagation();
+
               if (!isComposingKey(event)) end(false, true);
             }
+
             if (event.key === "Enter" && !isComposingKey(event)) {
               event.preventDefault();
               end(true, true);
@@ -494,13 +525,16 @@ export function GroupHeader({
 }): React.JSX.Element {
   const rowsId = useId();
   const folds = fold !== undefined;
+
   const { state, details } = useDisclosureFold(
     fold !== undefined && "defaultOpen" in fold ? fold.defaultOpen : true,
     fold !== undefined && "open" in fold ? fold : undefined,
   );
+
   // Note that a group with no rows draws no body, so its fold names none.
   const rows = (!folds || state.drawn) && said(children);
   const Heading = heading;
+
   // Note that a narrow column counts an open group only under the pointer, because its head has no room to spare for a figure at rest.
   const counted =
     count === undefined
@@ -513,11 +547,14 @@ export function GroupHeader({
               ? NAV_COUNT_SHOWN.ON_HOVER
               : NAV_COUNT_SHOWN.ALWAYS),
         };
+
   const lead = (
     <Lead glyph={glyph} folds={folds} look={look} label={label} mark={mark} count={counted} />
   );
+
   const leadBox = `${PART.LEAD} ${LEAD_HEIGHT[look]}`;
-  const hint = tooltip ?? (card === undefined || typeof label !== "string" ? undefined : label);
+  const hint = tooltip ?? (card === undefined || !Predicate.isString(label) ? undefined : label);
+
   // Note that only a head with a hint or a card is wrapped, because the tooltip hands its control a click handler of its own, which a head that folds nothing must not hear.
   const control = folds ? (
     <button
@@ -532,7 +569,9 @@ export function GroupHeader({
   ) : (
     <span className={leadBox}>{lead}</span>
   );
+
   const subgrid = rowsStand === GROUP_ROWS.SUBGRID;
+
   const named = (
     <Heading className={PART.HEADING}>
       {hint === undefined ? (
@@ -544,6 +583,7 @@ export function GroupHeader({
       )}
     </Heading>
   );
+
   return (
     <DisclosureScope state={state}>
       <div

@@ -108,6 +108,7 @@ export function LineComment({
   const sending = writes.pending !== undefined;
   const blank = body.trim() === "" || overCommentBound(body);
   const holding = pending != null;
+
   const send = (mode: ReviewCommentMode) => {
     if (blank || sending || headSha === undefined) return;
     setSentAs(mode);
@@ -119,6 +120,7 @@ export function LineComment({
       },
     );
   };
+
   const first = holding ? REVIEW_COMMENT_MODE.REVIEW : REVIEW_COMMENT_MODE.SINGLE;
 
   return (

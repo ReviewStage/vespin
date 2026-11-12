@@ -29,6 +29,7 @@ export interface WorkspaceEnvironmentProcedureSeams {
 export function workspaceEnvironmentProcedures(seams: WorkspaceEnvironmentProcedureSeams) {
   const signedIn = hosted.workspaceEnvironment.use(accountMiddleware(seams.resolveUserId));
   const keyed = signedIn.use(keyRingMiddleware);
+
   return {
     list: signedIn.list.effect(function* ({ input, context: { userId } }) {
       return yield* listWorkspaceEnvironment(userId, input.workspaceId);

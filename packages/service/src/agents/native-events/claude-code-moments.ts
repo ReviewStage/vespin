@@ -61,16 +61,19 @@ import {
  */
 
 const TextBlockSchema = Schema.Struct({ type: Schema.Literal("text"), text: Schema.String });
+
 const ThinkingBlockSchema = Schema.Struct({
   type: Schema.Literal("thinking"),
   thinking: Schema.String,
 });
+
 const ToolUseBlockSchema = Schema.Struct({
   type: Schema.Literal("tool_use"),
   id: Schema.String,
   name: Schema.String,
   input: WireValueSchema,
 });
+
 const ToolResultBlockSchema = Schema.Struct({
   type: Schema.Literal("tool_result"),
   tool_use_id: Schema.String,
@@ -338,14 +341,15 @@ const WEEK_MINS = 7 * 24 * 60;
  * counts one (`seven_day_opus`), as its own window beside the week on every
  * model. A limit the SDK names that is no window (`overage`) has none.
  */
-const RATE_LIMIT_WINDOWS: Readonly<
-  Record<string, { readonly windowMins: number; readonly model?: string }>
-> = {
-  five_hour: { windowMins: 5 * 60 },
-  seven_day: { windowMins: WEEK_MINS },
-  seven_day_opus: { windowMins: WEEK_MINS, model: "Opus" },
-  seven_day_sonnet: { windowMins: WEEK_MINS, model: "Sonnet" },
-};
+const RATE_LIMIT_WINDOWS: ReadonlyMap<
+  string,
+  { readonly windowMins: number; readonly model?: string }
+> = new Map([
+  ["five_hour", { windowMins: 5 * 60 }],
+  ["seven_day", { windowMins: WEEK_MINS }],
+  ["seven_day_opus", { windowMins: WEEK_MINS, model: "Opus" }],
+  ["seven_day_sonnet", { windowMins: WEEK_MINS, model: "Sonnet" }],
+]);
 
 /**
  * The errors an answer carries that say the provider refused the plan's
@@ -379,6 +383,8 @@ const RATE_LIMITED = "rate_limit" satisfies NonNullable<
 const MCP_TOOL_PREFIX = "mcp__";
 const MCP_SERVER_SEPARATOR = "__";
 
+type StoredClaudeCodeCallResult = { readonly name: string; readonly input: UnparsedWireValue };
+
 /**
  * The name and input a call is stored under: our tool's own for a call
  * to our MCP server; for a call to an integration's own server, its
@@ -389,12 +395,15 @@ function storedClaudeCodeCall(
   callId: string,
   name: string,
   input: WireValue,
-): { readonly name: string; readonly input: UnparsedWireValue } {
+): StoredClaudeCodeCallResult {
   const workspaceTool = claudeCodeWorkspaceTool(name);
+
   if (workspaceTool !== undefined) return { name: workspaceTool, input };
+
   if (!name.startsWith(MCP_TOOL_PREFIX)) return { name, input };
   const named = name.slice(MCP_TOOL_PREFIX.length);
   const separator = named.indexOf(MCP_SERVER_SEPARATOR);
+
   const integration =
     separator < 0
       ? undefined
@@ -404,6 +413,7 @@ function storedClaudeCodeCall(
           input,
           callId,
         );
+
   return integration ?? { name, input };
 }
 
@@ -412,7 +422,9 @@ const CLI_TOOL_NAMES: ReadonlySet<string> = new Set(Object.values(CLAUDE_CODE_TO
 /** A tool's answer as the text the model read: its text blocks joined, a picture standing in for its bytes where `pictures` asks, and left out otherwise. */
 function answerText(content: string | readonly WireValue[] | undefined, pictures: boolean): string {
   if (content === undefined) return "";
+
   if (Predicate.isString(content)) return content;
+
   return content
     .flatMap((block) =>
       Option.match(readTextBlock(block), {
@@ -438,7 +450,9 @@ function settlementOf(
 ): ToolCallSettlement {
   const workspaceTool =
     !CLI_TOOL_NAMES.has(storedName) && integrationOfRemoteTool(storedName) === undefined;
+
   const text = answerText(content, !workspaceTool);
+
   return workspaceTool
     ? toolAnswerSettlement({ workspaceTool: true, text }, isError)
     : toolAnswerSettlement({ workspaceTool: false, text, output: text }, isError);
@@ -452,6 +466,7 @@ function settlementOf(
 function contextOf(usage: typeof MessageUsageSchema.Type): NativeContextUsage {
   const cachedInputTokens = counted(usage.cache_read_input_tokens);
   const cacheWriteTokens = counted(usage.cache_creation_input_tokens);
+
   return {
     inputTokens: counted(usage.input_tokens) + cachedInputTokens + cacheWriteTokens,
     outputTokens: counted(usage.output_tokens),
@@ -463,37 +478,51 @@ function contextOf(usage: typeof MessageUsageSchema.Type): NativeContextUsage {
 /** A model call's answer, or the one block of it the SDK streams as a message: a step, and its words, reasoning, and calls. */
 function assistantMoments(message: WireValue): readonly NativeMoment[] {
   const read = readAssistant(message);
+
   if (Option.isNone(read)) return [];
+
   // Note that the CLI's synthetic limit answer is no model message; the launch's end leaves the native notice only if every payer is spent.
   if (read.value.error === RATE_LIMITED) return [];
   const { id, content, usage } = read.value.message;
+
   const moments: NativeMoment[] = [
     id === undefined ? { kind: NATIVE_MOMENT.STEP } : { kind: NATIVE_MOMENT.STEP, key: id },
   ];
+
   if (usage !== undefined && usage !== null) {
     moments.push({ kind: NATIVE_MOMENT.CONTEXT, usage: contextOf(usage) });
   }
+
   const { error } = read.value;
+
   if (error !== undefined && CREDENTIAL_REFUSED.has(error)) {
     moments.push({ kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.INVALID });
   }
+
   if (error === BILLING_REFUSED) {
     moments.push({ kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.LIMIT_REACHED });
   }
+
   for (const block of content) {
     const text = readTextBlock(block);
+
     if (Option.isSome(text)) {
       moments.push({ kind: NATIVE_MOMENT.TEXT, text: text.value.text });
       continue;
     }
+
     const thinking = readThinkingBlock(block);
+
     if (Option.isSome(thinking)) {
       if (thinking.value.thinking.trim().length > 0) {
         moments.push({ kind: NATIVE_MOMENT.REASONING, text: thinking.value.thinking });
       }
+
       continue;
     }
+
     const call = readToolUseBlock(block);
+
     if (Option.isSome(call)) {
       const { id, name, input } = call.value;
       moments.push({
@@ -503,6 +532,7 @@ function assistantMoments(message: WireValue): readonly NativeMoment[] {
       });
     }
   }
+
   return moments;
 }
 
@@ -512,11 +542,13 @@ function assistantMoments(message: WireValue): readonly NativeMoment[] {
  * or the words the model reads in its place.
  */
 function backgrounded(
-  toolUseResult: unknown,
+  output: ReturnType<typeof readAgentOutputStatus>,
   content: string | readonly WireValue[] | undefined,
 ): boolean {
-  const status = Option.map(readAgentOutputStatus(toolUseResult), (output) => output.status);
+  const status = Option.map(output, (read) => read.status);
+
   if (Option.isSome(status)) return status.value === AGENT_ASYNC_LAUNCHED;
+
   return answerText(content, false).trimStart().startsWith(AGENT_LAUNCHED_WORDS);
 }
 
@@ -530,24 +562,31 @@ function backgrounded(
  */
 function userMoments(message: WireValue, held: NativeHeld): readonly NativeMoment[] {
   const read = readUser(message);
+
   if (Option.isNone(read)) return [];
   const { content } = read.value.message;
+
   if (Predicate.isString(content)) return [];
   const moments: NativeMoment[] = [];
+
   for (const block of content) {
     const answer = readToolResultBlock(block);
+
     if (Option.isNone(answer)) continue;
     const name = held.callName(answer.value.tool_use_id);
+
     if (name === undefined) continue;
+
     if (
       name === CLAUDE_CODE_TOOL.AGENT &&
       answer.value.is_error !== true &&
-      backgrounded(read.value.tool_use_result, answer.value.content)
+      backgrounded(readAgentOutputStatus(read.value.tool_use_result), answer.value.content)
     ) {
       const callId = answer.value.tool_use_id;
       moments.push({ kind: NATIVE_MOMENT.SUBAGENT_RUNNING, callId, key: callId });
       continue;
     }
+
     const failed = answer.value.is_error === true;
     moments.push({
       kind: NATIVE_MOMENT.TOOL_SETTLED,
@@ -558,20 +597,25 @@ function userMoments(message: WireValue, held: NativeHeld): readonly NativeMomen
           : settlementOf(name, answer.value.content, failed),
     });
   }
+
   return moments.length === 0 ? [] : [...moments, { kind: NATIVE_MOMENT.STEP_CLOSED }];
 }
 
 /** A token of the words while they stream: the step a model call opens, and the piece of its words. */
 function streamMoments(message: WireValue): readonly NativeMoment[] {
   const read = readStreamEvent(message);
+
   if (Option.isNone(read)) return [];
   const { type, message: started, delta } = read.value.event;
+
   if (type === "message_start" && started !== undefined) {
     return [{ kind: NATIVE_MOMENT.STEP, key: started.id }];
   }
+
   if (type === "content_block_delta" && delta?.type === "text_delta" && delta.text !== undefined) {
     return [{ kind: NATIVE_MOMENT.STEP }, { kind: NATIVE_MOMENT.TEXT_DELTA, text: delta.text }];
   }
+
   return [];
 }
 
@@ -589,10 +633,13 @@ function counted(value: number | null | undefined): number {
  */
 function failureOf(result: typeof ResultSchema.Type): string {
   const { subtype, api_error_status, errors, result: said } = result;
+
   const status =
     api_error_status === undefined || api_error_status === null ? [] : [String(api_error_status)];
+
   const words = [subtype, ...status, ...(errors ?? [])].join(" ");
   const failure = said === undefined || said.trim() === "" ? words : `${words}: ${said}`;
+
   return redactCredentials(failure).slice(0, FAILURE_CHARS);
 }
 
@@ -608,9 +655,11 @@ function withSessionLost(moments: readonly NativeMoment[]): readonly NativeMomen
       (moment.kind === NATIVE_MOMENT.RESULT && moment.failure?.includes(SESSION_NOT_FOUND)) ||
       (moment.kind === NATIVE_MOMENT.ENDED && moment.detail?.includes(SESSION_NOT_FOUND)),
   );
+
   if (!lost) return moments;
   const end = moments.findIndex((moment) => moment.kind === NATIVE_MOMENT.ENDED);
   const at = end === -1 ? moments.length : end;
+
   return [...moments.slice(0, at), { kind: NATIVE_MOMENT.SESSION_LOST }, ...moments.slice(at)];
 }
 
@@ -622,9 +671,11 @@ function withSessionLost(moments: readonly NativeMoment[]): readonly NativeMomen
  */
 function resultMoments(message: WireValue): readonly NativeMoment[] {
   const read = readResult(message);
+
   if (Option.isNone(read)) return [{ kind: NATIVE_MOMENT.RESULT }];
   const { is_error, usage } = read.value;
   const moments: NativeMoment[] = [];
+
   if (usage !== undefined) {
     const cachedInputTokens = counted(usage.cache_read_input_tokens);
     const cacheWriteTokens = counted(usage.cache_creation_input_tokens);
@@ -639,30 +690,37 @@ function resultMoments(message: WireValue): readonly NativeMoment[] {
       },
     });
   }
+
   const failed = is_error === true;
   moments.push(
     failed
       ? { kind: NATIVE_MOMENT.RESULT, failure: failureOf(read.value) }
       : { kind: NATIVE_MOMENT.RESULT },
   );
+
   // Note that a turn that ran is the plan's answer that it pays, which a limit reached earlier lifts on.
   if (!failed) moments.push({ kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.VERIFIED });
   moments.push({ kind: NATIVE_MOMENT.STEP_CLOSED });
+
   return moments;
 }
 
 /** The plan's limit as the CLI reports it: refused or not, and which limit and when it resets. */
 function rateLimitMoments(message: WireValue): readonly NativeMoment[] {
   const read = readRateLimit(message);
+
   if (Option.isNone(read)) return [];
   const { status, rateLimitType, resetsAt, utilization } = read.value.rate_limit_info;
   // Note that the SDK counts the reset in seconds since the epoch.
   const resetsAtMs = resetsAt === undefined ? undefined : resetsAt * 1000;
   const words = [`rate_limit_${status}`];
+
   if (rateLimitType !== undefined) words.push(rateLimitType);
+
   if (resetsAtMs !== undefined) words.push(`resets ${new Date(resetsAtMs).toISOString()}`);
   const refused = status === RATE_LIMIT_REFUSED;
-  const window = rateLimitType === undefined ? undefined : RATE_LIMIT_WINDOWS[rateLimitType];
+  const window = rateLimitType === undefined ? undefined : RATE_LIMIT_WINDOWS.get(rateLimitType);
+
   return [
     // Note that the SDK reports utilization as a share of one, which the plan's row keeps in percent.
     ...(utilization === undefined || window === undefined
@@ -672,7 +730,7 @@ function rateLimitMoments(message: WireValue): readonly NativeMoment[] {
             kind: NATIVE_MOMENT.PLAN_USAGE,
             usedPercent: utilization * 100,
             ...window,
-            ...(resetsAtMs === undefined ? {} : { resetsAt: resetsAtMs }),
+            ...(resetsAtMs !== undefined && { resetsAt: resetsAtMs }),
           } as const,
         ]),
     {
@@ -694,10 +752,12 @@ function rateLimitMoments(message: WireValue): readonly NativeMoment[] {
  */
 function taskNotificationMoments(message: WireValue, held: NativeHeld): readonly NativeMoment[] {
   const read = readTaskNotification(message);
+
   if (Option.isNone(read) || read.value.tool_use_id === undefined) return [];
   const { tool_use_id, status, summary } = read.value;
   const text = summary === undefined || summary.trim() === "" ? status : summary;
   const failed = status !== TASK_COMPLETED;
+
   return [
     {
       kind: NATIVE_MOMENT.SUBAGENT_ENDED,
@@ -713,6 +773,7 @@ function taskNotificationMoments(message: WireValue, held: NativeHeld): readonly
 /** Words the harness said, as the record keeps them: no credential, and no longer than a failure's. */
 function keptWords(words: readonly (string | null | undefined)[]): string {
   const said = words.filter((word) => word !== undefined && word !== null && word.trim() !== "");
+
   return redactCredentials(said.join(" ")).slice(0, FAILURE_CHARS);
 }
 
@@ -722,6 +783,7 @@ function refusalMoments(message: WireValue): readonly NativeMoment[] {
   const words = [SYSTEM_SUBTYPE.MODEL_REFUSAL_NO_FALLBACK, read?.api_refusal_category];
   const explanation = read?.api_refusal_explanation;
   const detail = keptWords(words);
+
   return [
     {
       kind: NATIVE_MOMENT.REFUSED,
@@ -736,7 +798,9 @@ function refusalMoments(message: WireValue): readonly NativeMoment[] {
 /** A status that says a compaction failed, which is why its model turn failed where it did; any other status is nothing. */
 function statusMoments(message: WireValue): readonly NativeMoment[] {
   const read = readCompactResult(message);
+
   if (Option.isNone(read) || read.value.compact_result !== COMPACT_FAILED) return [];
+
   return [
     {
       kind: NATIVE_MOMENT.COMPACTION_FAILED,
@@ -774,21 +838,27 @@ function failureNoticeMoments(
     case SYSTEM_SUBTYPE.HOOK_RESPONSE: {
       const read = Option.getOrUndefined(readOutcome(message));
       const outcome = read?.status ?? read?.outcome;
+
       return outcome !== undefined && OUTCOME_FAILED.has(outcome)
         ? noted(`${subtype}: ${outcome}`)
         : [];
     }
+
     case SYSTEM_SUBTYPE.INFORMATIONAL: {
       const read = Option.getOrUndefined(readInformational(message));
       const stopped = read?.prevent_continuation === true;
+
       return read?.level === INFORMATIONAL_WARNING || stopped
         ? noted(`${subtype}: ${read.level ?? "notice"}${stopped ? ", prevented continuation" : ""}`)
         : [];
     }
+
     case SYSTEM_SUBTYPE.FILES_PERSISTED: {
       const failed = Option.getOrUndefined(readFilesPersisted(message))?.failed.length ?? 0;
+
       return failed > 0 ? noted(`${subtype}: ${failed} failed`) : [];
     }
+
     case SYSTEM_SUBTYPE.SESSION_WRITES_LOST:
       return Option.match(readSessionWritesLost(message), {
         onSome: ({ error_code, lost }) => noted(`${subtype}: ${error_code}, ${lost.join(", ")}`),
@@ -818,8 +888,10 @@ function systemMoments(
     case SYSTEM_SUBTYPE.COMPACT_BOUNDARY: {
       const tokensBefore = Option.getOrUndefined(readCompactBoundary(message))?.compact_metadata
         ?.pre_tokens;
+
       return [{ kind: NATIVE_MOMENT.COMPACTED, notice: { tokensBefore: tokensBefore ?? null } }];
     }
+
     case SYSTEM_SUBTYPE.TASK_NOTIFICATION:
       return taskNotificationMoments(message, held);
     case SYSTEM_SUBTYPE.MIRROR_ERROR:
@@ -858,11 +930,15 @@ function systemMoments(
  */
 export function claudeCodeMoments(message: WireValue, held: NativeHeld): readonly NativeMoment[] {
   const own = runnerMoments(message);
+
   if (Option.isSome(own)) return withSessionLost(own.value);
   const envelope = readEnvelope(message);
+
   if (Option.isNone(envelope)) return [];
   const { type, subtype, parent_tool_use_id } = envelope.value;
+
   if (parent_tool_use_id !== undefined && parent_tool_use_id !== null) return [];
+
   switch (type) {
     case SDK_MESSAGE.SYSTEM:
       return systemMoments(subtype, message, held);

@@ -69,15 +69,18 @@ const decodeSidebarRows = Schema.decodeUnknownOption(SIDEBAR_READ.rows);
 /** An answer's rows decoded, every part's; none where it carries none inline, and failed where a row does not decode. */
 function sidebarRowsOf(read: SealedRead<SidebarPart>): Option.Option<SidebarRows> | "undecoded" {
   const { sections, entries, agentEntries, pins } = read.queries;
+
   if ([sections, entries, agentEntries, pins].some((part) => part.rows === undefined)) {
     return Option.none();
   }
+
   const rows = decodeSidebarRows({
     sections: sections.rows,
     entries: entries.rows,
     agentEntries: agentEntries.rows,
     pins: pins.rows,
   });
+
   return Option.isSome(rows) ? Option.some(sidebarRowsOfLive(rows.value)) : "undecoded";
 }
 
@@ -99,11 +102,15 @@ export function followSidebarRows(
   const taken = (read: SealedRead<SidebarPart>) =>
     Effect.suspend(() => {
       const rows = sidebarRowsOf(read);
+
       if (rows === "undecoded") return Effect.succeed(false);
+
       return Option.isSome(rows) ? Effect.as(take(rows.value), true) : Effect.succeed(true);
     });
+
   return Effect.gen(function* () {
     if (!(yield* taken(first))) return yield* new LiveBroken({ reason: "a row did not decode" });
+
     const poll = (after: string | undefined) =>
       Effect.flatMap(dependencies.poll(after), (read) =>
         "failure" in read
@@ -112,6 +119,7 @@ export function followSidebarRows(
               decoded ? read : { failure: "a row did not decode" },
             ),
       );
+
     const { onTxWait } = dependencies;
     yield* Stream.runDrain(
       liveRows({ poll, ...(onTxWait === undefined ? undefined : { onTxWait }) }, first),

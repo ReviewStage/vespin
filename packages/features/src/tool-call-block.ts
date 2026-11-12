@@ -1,3 +1,5 @@
+import { Predicate } from "effect";
+
 /**
  * tool-call-block.ts -- what a tool call's body holds and how its blocks read as words, for every surface that draws a call: its state, its blocks, and the words its cards say.
  *
@@ -9,6 +11,8 @@
  * (`tool-call-model.ts`); how a block of each kind is drawn is each
  * surface's own, the panel's `tool.tsx` and the iPhone's transcript.
  */
+
+import type { WireValue } from "@repo/wire";
 
 /** The states a tool part may stand in, as the AI SDK spells them. */
 export const TOOL_STATE = {
@@ -59,7 +63,7 @@ const ACKNOWLEDGMENTS: ReadonlySet<unknown> = new Set(["accepted", "Done.", "don
 const ACKNOWLEDGING_KEYS: ReadonlySet<string> = new Set(["ok", "success"]);
 
 /** A JSON block's value, or its text where it is no JSON, as a string answer is drawn as it is. */
-function blockValue(block: ToolBlock): unknown {
+function blockValue(block: ToolBlock): WireValue {
   try {
     return JSON.parse(block.text);
   } catch {
@@ -67,26 +71,31 @@ function blockValue(block: ToolBlock): unknown {
   }
 }
 
-function isContainer(value: unknown): value is object {
-  return value !== null && typeof value === "object";
+function isContainer<T>(value: T): value is T & object {
+  return Predicate.isObjectOrArray(value);
 }
 
 /** A value that stands on its key's line: a scalar, its later lines set in under the first, or an empty list or record as "(none)". */
-function leafWords(value: unknown, indent: string): string {
+function leafWords(value: WireValue, indent: string): string {
   if (isContainer(value)) return NONE;
+
   return String(value).replaceAll("\n", `\n${indent}  `);
 }
 
 /** A JSON value as indented `key: value` lines and `- item` lines, with no braces or quotes. */
-function readableLines(value: unknown, indent: string): string[] {
+function readableLines(value: WireValue, indent: string): string[] {
   if (Array.isArray(value) && value.length === 0) return [`${indent}${NONE}`];
+
   if (Array.isArray(value)) {
     return value.flatMap((item) => {
       const [first = "", ...rest] = readableLines(item, `${indent}  `);
+
       return [`${indent}- ${first.trimStart()}`, ...rest];
     });
   }
+
   if (!isContainer(value)) return [`${indent}${leafWords(value, indent)}`];
+
   return Object.entries(value).flatMap(([key, item]) =>
     isContainer(item) && Object.keys(item).length > 0
       ? [`${indent}${key}:`, ...readableLines(item, `${indent}  `)]
@@ -104,7 +113,9 @@ function readableLines(value: unknown, indent: string): string[] {
  */
 export function blockSays(block: ToolBlock, subject: string | undefined): boolean {
   if (subject === undefined || subject === "") return false;
+
   if (block.text === subject) return true;
+
   return block.kind === TOOL_BLOCK.JSON && block.text.includes(`: ${JSON.stringify(subject)}`);
 }
 
@@ -116,11 +127,14 @@ export function blockSays(block: ToolBlock, subject: string | undefined): boolea
 export function readableBlock(block: ToolBlock): ToolBlock {
   if (block.kind !== TOOL_BLOCK.JSON) return block;
   const value = blockValue(block);
+
   if (!isContainer(value)) return block;
   const [only, ...more] = Object.values(value);
-  if (!Array.isArray(value) && typeof only === "string" && more.length === 0) {
+
+  if (!Array.isArray(value) && Predicate.isString(only) && more.length === 0) {
     return { kind: TOOL_BLOCK.TEXT, text: only };
   }
+
   return { kind: TOOL_BLOCK.TEXT, text: readableLines(value, "").join("\n") };
 }
 
@@ -133,8 +147,10 @@ export function readableBlock(block: ToolBlock): ToolBlock {
 function acknowledges(block: ToolBlock): boolean {
   if (block.kind !== TOOL_BLOCK.JSON) return false;
   const value = blockValue(block);
+
   if (!isContainer(value) || Array.isArray(value)) return ACKNOWLEDGMENTS.has(value);
   const entries = Object.entries(value);
+
   return (
     entries.length > 0 &&
     entries.every(
@@ -162,10 +178,13 @@ export function bodyWords(
 ): readonly string[] {
   if (input?.kind === TOOL_BLOCK.COMMAND) {
     const printed = output === undefined ? "" : readableBlock(output).text;
+
     return [input.text, printed, errorText ?? ""].filter((words) => words !== "");
   }
+
   const shown = output === undefined ? undefined : shownOutput(output);
   const answer = shown === undefined || shown.text.trim() !== "" ? shown?.text : NO_OUTPUT;
   const inputWords = input === undefined ? "" : readableBlock(input).text;
+
   return [inputWords, errorText ?? answer ?? ""].filter((words) => words !== "");
 }

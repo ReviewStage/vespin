@@ -107,7 +107,13 @@ import {
   WORKSPACES_READ,
 } from "@repo/features/workspace-live";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
-import { MESSAGE_ROLE, TURN_ORIGIN, TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
+import {
+  MESSAGE_ROLE,
+  TURN_ORIGIN,
+  TURN_STATUS,
+  type WireBoundaryInput,
+  type WireRecord,
+} from "@repo/wire";
 import { eq, sql } from "drizzle-orm";
 import {
   Clock,
@@ -137,7 +143,7 @@ import {
   completeIntegrationSignIn,
 } from "../integrations/integration-store.js";
 import { SlackBot, slackBotOver } from "../slack/slack-bot.js";
-import { clockWatch, Sync, type SyncShape } from "../sync/watch.js";
+import { clockWatch, Sync, type SyncService } from "../sync/watch.js";
 import { AGENT_KEY_RING, connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
   connectWorkspaceGitHub,
@@ -183,7 +189,9 @@ const clipOf = (mark: number) => ({
 /** A live read's address, naming the account it is for where one is named (`LIVE_USER_QUERY`). */
 function readOf(path: string, forUser: string | undefined): URL {
   const url = new URL(path, ORIGIN);
+
   if (forUser !== undefined) url.searchParams.set(LIVE_USER_QUERY, forUser);
+
   return url;
 }
 
@@ -226,15 +234,18 @@ const ask = (options: {
       INTEGRATION_CONNECT,
       SENTRY_HELD_SLACK_NOT,
     );
+
     const procedures = liveProcedures({
       resolveUserId: (incoming) => {
         const bearer = incoming.headers.get("authorization") ?? "";
+
         return Effect.succeed(
           bearer.startsWith("Bearer ") ? Option.some(bearer.slice(7)) : Option.none(),
         );
       },
       workspaces: yield* fakeWorkspaceSeams,
     });
+
     const response = yield* hostedAnswer(
       { live: procedures },
       services,
@@ -243,9 +254,11 @@ const ask = (options: {
         headers: options.bearer === undefined ? {} : { authorization: `Bearer ${options.bearer}` },
       }),
     );
+
     const text = yield* Effect.promise(() => response.text());
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = JSON.parse(text) as WireBoundaryInput;
+
     return { status: response.status, body };
   });
 
@@ -253,10 +266,12 @@ const ask = (options: {
 const visibleIn = (txid: string, snapshot: string) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+
     const [read] = yield* sql.unsafe<{ readonly visible: boolean }>(
       "select pg_visible_in_snapshot($1::xid8, $2::pg_snapshot) as visible",
       [txid, snapshot],
     );
+
     return read?.visible === true;
   });
 
@@ -265,6 +280,7 @@ const openUser = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -288,12 +304,14 @@ it.layer(getTestDB())("the account's live reads", (it) => {
       Effect.gen(function* () {
         const db = yield* Database;
         const dana = yield* openUser;
+
         const shell = {
           id: randomUUID(),
           kind: MAC_COMMAND_KIND.SHELL,
           command: "git branch --show-current",
           timeoutSeconds: 60,
         };
+
         yield* queueMacCommand(dana, shell);
         // A row of a kind this service no longer queues, as an older build left one waiting.
         const queuedAt = new Date(yield* Clock.currentTimeMillis).toISOString();
@@ -306,6 +324,7 @@ it.layer(getTestDB())("the account's live reads", (it) => {
           bearer: dana,
           path: "/api/live/mac-commands?kinds=shell,browser",
         });
+
         assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
         const answer = Schema.decodeUnknownSync(MAC_COMMANDS_READ.answer)(answered.body);
         assert.equal(answer.url, LIVE_POLL_URL);
@@ -350,6 +369,7 @@ it.layer(getTestDB())("the account's live reads", (it) => {
         const answered = yield* ask({ bearer: dana, path: "/api/live/account-preferences" });
         assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
         const answer = Schema.decodeUnknownSync(ACCOUNT_PREFERENCES_READ.answer)(answered.body);
+
         const {
           preferences: rows,
           sounds,
@@ -359,6 +379,7 @@ it.layer(getTestDB())("the account's live reads", (it) => {
           sounds: answer.queries.sounds.rows,
           soundChoices: answer.queries.soundChoices.rows,
         });
+
         assert.equal(rows.length, 1, "one row, the account's own");
         assert.deepEqual(
           accountPreferencesOfLiveRows(rows, accountSoundsOfLiveRows(sounds, soundChoices)),
@@ -381,10 +402,12 @@ it.layer(getTestDB())("the account's live reads", (it) => {
       const dana = yield* openUser;
       // A task started in a workspace Dana is not in, so every part of hers stays empty.
       const eli = yield* openUser;
+
       const { txid } = yield* createTaskCommitted(eli, {
         organizationId: yield* openWorkspace(eli),
         name: "Teammate invitations",
       });
+
       assert.ok(txid !== undefined, "a task started answers the transaction it was written in");
       const polled = yield* ask({ bearer: dana });
       assert.equal(polled.status, HOSTED_HTTP_STATUS.OK);
@@ -398,6 +421,7 @@ it.layer(getTestDB())("the account's live reads", (it) => {
         "planless",
         "plans",
       ]);
+
       for (const [part, sealed] of Object.entries(answer.queries)) {
         assert.deepEqual(sealed.rows, [], `${part} holds nothing yet`);
         assert.ok(
@@ -420,11 +444,13 @@ it.layer(getTestDB())("the account's live reads", (it) => {
         const answer = Schema.decodeUnknownSync(TASK_LIST_READ.answer)(answered.body);
         assert.equal(answer.url, LIVE_POLL_URL);
         assert.deepEqual(Object.keys(answer.queries).toSorted(), ["agents", "issues", "plans"]);
+
         const rows = Schema.decodeUnknownSync(TASK_LIST_READ.rows)({
           plans: answer.queries.plans.rows,
           agents: answer.queries.agents.rows,
           issues: answer.queries.issues?.rows,
         });
+
         assert.deepEqual(
           rows.plans.map((plan) => plan.id),
           [started.id],
@@ -455,26 +481,35 @@ const askTask = (options: {
       // The test's own clock, so a held poll is moved by `TestClock` rather than waited out.
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
     );
+
     const procedures = liveProcedures({
       resolveUserId: () => Effect.succeed(Option.some(options.bearer)),
       workspaces: yield* fakeWorkspaceSeams,
     });
+
     const url = readOf(
       options.taskId === undefined ? LIVE_INBOX : (options.path ?? "/api/live/task-record"),
       options.forUser ?? options.bearer,
     );
+
     if (options.taskId !== undefined) url.searchParams.set("id", options.taskId);
+
     if (options.page !== undefined) url.searchParams.set("page", options.page);
+
     if (options.poll === true) url.searchParams.set(LIVE_POLL.QUERY, LIVE_POLL.ON);
+
     if (options.after !== undefined) url.searchParams.set(LIVE_POLL.AFTER, options.after);
+
     const response = yield* hostedAnswer(
       { live: procedures },
       services,
       new Request(url, { headers: { authorization: `Bearer ${options.bearer}` } }),
     );
+
     const text = yield* Effect.promise(() => response.text());
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = JSON.parse(text) as WireBoundaryInput;
+
     return { status: response.status, body };
   });
 
@@ -492,13 +527,16 @@ it.layer(getTestDB())("a task's live reads", (it) => {
         assert.equal(own.status, HOSTED_HTTP_STATUS.OK);
         const answer = Schema.decodeUnknownSync(TASK_RECORD_READ.answer)(own.body);
         assert.equal(answer.url, LIVE_POLL_URL);
+
         for (const query of [answer.queries.pages, answer.queries.calls]) {
           assert.deepEqual(query.rows, [], "the task holds no pages or calls yet");
         }
+
         const notFound = {
           status: HOSTED_HTTP_STATUS.NOT_FOUND,
           body: { error: HOSTED_API_ERROR.NOT_FOUND },
         };
+
         assert.deepEqual(yield* ask(eli), notFound);
         assert.deepEqual(yield* askTask({ bearer: dana, taskId: "not-a-task" }), notFound);
       }),
@@ -511,6 +549,7 @@ it.layer(getTestDB())("a task's live reads", (it) => {
         const dana = yield* openUser;
         const eli = yield* openUser;
         const started = yield* startTask(dana, { name: "Teammate invitations" });
+
         const shown = Option.getOrThrow(
           yield* writePage(
             dana,
@@ -519,6 +558,7 @@ it.layer(getTestDB())("a task's live reads", (it) => {
             { kind: PAGE_SHOWER.APP },
           ),
         );
+
         const path = "/api/live/task-pages";
 
         assert.deepEqual(
@@ -563,6 +603,7 @@ it.layer(getTestDB())("a task's live reads", (it) => {
         const dana = yield* openUser;
         const eli = yield* openUser;
         const started = yield* startTask(dana, { name: "Teammate invitations" });
+
         const coder = yield* createAgent(dana, {
           taskId: started.id,
           idempotencyKey: randomUUID(),
@@ -573,7 +614,9 @@ it.layer(getTestDB())("a task's live reads", (it) => {
           prompt: null,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         const { agent } = Option.getOrThrow(coder);
+
         const tab = yield* upsertBrowserTab({
           conversationId: agent.conversationId,
           targetId: "target-1",
@@ -581,6 +624,7 @@ it.layer(getTestDB())("a task's live reads", (it) => {
           title: "Invites",
           openedBy: { kind: AGENT_BROWSER_TAB_OPENER.AGENT },
         });
+
         const at = yield* Clock.currentTimeMillis;
         yield* pointBrowserTab(agent.conversationId, {
           tab: "target-1",
@@ -605,9 +649,11 @@ it.layer(getTestDB())("a task's live reads", (it) => {
         assert.equal(polled.status, HOSTED_HTTP_STATUS.OK);
         const rows = Schema.decodeUnknownSync(TASK_BROWSER_TABS_READ.answer)(polled.body);
         assert.equal(rows.url, LIVE_POLL_URL);
+
         const [line] = Schema.decodeUnknownSync(TASK_BROWSER_TABS_READ.rows)({
           tabs: rows.queries.tabs.rows,
         }).tabs;
+
         assert.deepEqual(
           line && [
             line.id,
@@ -656,10 +702,12 @@ it.layer(getTestDB())("a task's live reads", (it) => {
         const stranger = yield* openUser;
         const workspaceId = yield* openWorkspace(dana);
         yield* joinWorkspace(workspaceId, teammate);
+
         const { id: taskId } = yield* createTask(dana, {
           organizationId: workspaceId,
           name: "Triage",
         });
+
         const started = yield* createAgent(dana, {
           taskId,
           descriptionSnapshot: null,
@@ -675,6 +723,7 @@ it.layer(getTestDB())("a task's live reads", (it) => {
           },
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         const agentId = Option.getOrThrow(started).agent.id;
         const path = "/api/live/agent-origin";
 
@@ -690,9 +739,11 @@ it.layer(getTestDB())("a task's live reads", (it) => {
           status: HOSTED_HTTP_STATUS.NOT_FOUND,
           body: { error: HOSTED_API_ERROR.NOT_FOUND },
         });
+
         const statement = Option.getOrThrow(
           agentOriginRead.statements({ userId: stranger, id: agentId }),
         ).origin;
+
         const sql = yield* SqlClient.SqlClient;
         assert.deepEqual(yield* sql.unsafe(statement.sql, [...statement.params]), []);
       }),
@@ -705,6 +756,7 @@ it.layer(getTestDB())("a task's live reads", (it) => {
         const dana = yield* openUser;
         const eli = yield* openUser;
         const started = yield* startTask(dana, { name: "Teammate invitations" });
+
         const shown = Option.getOrThrow(
           yield* writePage(
             dana,
@@ -713,6 +765,7 @@ it.layer(getTestDB())("a task's live reads", (it) => {
             { kind: PAGE_SHOWER.APP },
           ),
         );
+
         yield* startDescriptionCommentThread(
           { actor: DESCRIPTION_COMMENT_ACTOR.MEMBER, userId: dana },
           started.id,
@@ -723,9 +776,11 @@ it.layer(getTestDB())("a task's live reads", (it) => {
           },
         );
         const path = "/api/live/task-comments";
-        const threadsOf = (body: unknown) => {
+
+        const threadsOf = <Body>(body: Body) => {
           const answer = Schema.decodeUnknownSync(TASK_COMMENTS_READ.answer)(body);
           assert.equal(answer.url, LIVE_POLL_URL);
+
           return answer.queries.threads.rows;
         };
 
@@ -747,7 +802,18 @@ it.layer(getTestDB())("a task's live reads", (it) => {
 });
 
 /** A row a statement answered, column by column. */
-type KeptRow = Readonly<Record<string, unknown>>;
+type KeptRow = WireRecord;
+
+/** A member of `members` by a key known only at run time, as the keeping client forwards each one it leaves alone. */
+function memberAt<Member>(
+  members: { readonly [key: PropertyKey]: Member },
+  key: PropertyKey,
+): Member | undefined {
+  return members[key];
+}
+
+/** The database client's members as their own types, which `memberAt` reads with each one unknown. */
+type TypedMembers = { readonly [Key in keyof SqlClient.SqlClient]: SqlClient.SqlClient[Key] };
 
 /**
  * The test's database client, keeping every row a statement run on it as
@@ -755,14 +821,16 @@ type KeptRow = Readonly<Record<string, unknown>>;
  * sees what left the database rather than how often it was asked.
  */
 function keepingRows(sql: SqlClient.SqlClient, kept: KeptRow[]): SqlClient.SqlClient {
+  const typed: TypedMembers = sql;
+
   return new Proxy(sql, {
-    get: (target, key, receiver) =>
+    get: (target, key) =>
       key === "unsafe"
         ? (text: string, params?: ReadonlyArray<unknown>) =>
             Effect.tap(target.unsafe<KeptRow>(text, params), (rows) =>
               Effect.sync(() => kept.push(...rows)),
             )
-        : Reflect.get(target, key, receiver),
+        : memberAt<unknown>(typed, key),
   });
 }
 
@@ -805,13 +873,17 @@ it.layer(getTestDB())("a held live read's looks", (it) => {
         assert.ok(digest !== undefined);
 
         const looked = kept.length;
+
         const unchanged = yield* Effect.forkChild(
           askTask({ bearer: dana, taskId: started.id, path, sql, poll: true, after: digest }),
         );
+
         yield* TestClock.adjust(Duration.seconds(25));
+
         const held = Schema.decodeUnknownSync(TASK_PAGES_READ.answer)(
           (yield* Fiber.join(unchanged)).body,
         );
+
         assert.equal(held.queries.pages.rows, undefined, "unchanged carries no rows");
         assert.equal(liveDigestOf(held.queries), digest);
         assert.ok(
@@ -830,21 +902,27 @@ it.layer(getTestDB())("a held live read's looks", (it) => {
       Effect.gen(function* () {
         const dana = yield* openUser;
         const started = yield* startTask(dana, { name: "Teammate invitations" });
+
         const poll = (after: string) =>
           askTask({ bearer: dana, taskId: started.id, path, poll: true, after });
+
         const first = yield* askTask({ bearer: dana, taskId: started.id, path });
+
         const digest = liveDigestOf(
           Schema.decodeUnknownSync(TASK_PAGES_READ.answer)(first.body).queries,
         );
+
         assert.ok(digest !== undefined);
 
         const moved = yield* Effect.forkChild(poll(digest));
         yield* TestClock.adjust(Duration.seconds(3));
         const shown = yield* showPage(dana, started.id);
         yield* TestClock.adjust(Duration.seconds(3));
+
         const answer = Schema.decodeUnknownSync(TASK_PAGES_READ.answer)(
           (yield* Fiber.join(moved)).body,
         );
+
         assert.deepEqual(
           Schema.decodeUnknownSync(TASK_PAGES_READ.rows)({
             pages: answer.queries.pages.rows,
@@ -856,9 +934,11 @@ it.layer(getTestDB())("a held live read's looks", (it) => {
 
         const again = yield* Effect.forkChild(poll(standing));
         yield* TestClock.adjust(Duration.seconds(25));
+
         const held = Schema.decodeUnknownSync(TASK_PAGES_READ.answer)(
           (yield* Fiber.join(again)).body,
         );
+
         assert.equal(held.queries.pages.rows, undefined, "the rows answered stand at their digest");
         assert.equal(liveDigestOf(held.queries), standing);
       }),
@@ -870,18 +950,22 @@ it.layer(getTestDB())("a held live read's looks", (it) => {
       Effect.gen(function* () {
         const dana = yield* openUser;
         const first = yield* askTask({ bearer: dana });
+
         const { agents: _, ...kept } = Schema.decodeUnknownSync(ACCOUNT_INBOX_READ.answer)(
           first.body,
         ).queries;
+
         // As v0.22.0 sends it: its schema keeps five parts and strips `agents`, which it never knew.
         const after = liveDigestOf(kept);
         assert.ok(after !== undefined);
 
         const unchanged = yield* Effect.forkChild(askTask({ bearer: dana, poll: true, after }));
         yield* TestClock.adjust(Duration.seconds(25));
+
         const held = Schema.decodeUnknownSync(ACCOUNT_INBOX_READ.answer)(
           (yield* Fiber.join(unchanged)).body,
         );
+
         assert.deepEqual(
           Object.values(held.queries).filter((query) => query.rows !== undefined),
           [],
@@ -898,6 +982,7 @@ it.layer(getTestDB())("the account's inbox items' live read", (it) => {
       Effect.gen(function* () {
         const dana = yield* openUser;
         const task = yield* startTask(dana, { name: "Teammate invitations" });
+
         const started = yield* createAgent(dana, {
           taskId: task.id,
           idempotencyKey: randomUUID(),
@@ -908,7 +993,9 @@ it.layer(getTestDB())("the account's inbox items' live read", (it) => {
           prompt: null,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         assert.ok(Option.isSome(started));
+
         const posted = yield* postInboxThread(
           { userId: dana, taskId: task.id, agentId: started.value.agent.id },
           {
@@ -918,6 +1005,7 @@ it.layer(getTestDB())("the account's inbox items' live read", (it) => {
             ask: { type: INBOX_ASK.DO, steps: [] },
           },
         );
+
         const itemsPath = (query: Readonly<Record<string, string>>) =>
           `/api/live/inbox-items?${new URLSearchParams(query)}`;
 
@@ -931,32 +1019,40 @@ it.layer(getTestDB())("the account's inbox items' live read", (it) => {
         // The reader holds every item now, so it asks only for those changed from here on.
         yield* TestClock.adjust(Duration.seconds(1));
         const since = String(yield* Clock.currentTimeMillis);
+
         const poll = yield* Effect.forkChild(
           ask({
             bearer: dana,
             path: itemsPath({ since, [LIVE_POLL.QUERY]: LIVE_POLL.ON, [LIVE_POLL.AFTER]: after }),
           }),
         );
+
         yield* TestClock.adjust(Duration.seconds(25));
+
         const held = Schema.decodeUnknownSync(INBOX_ITEMS_READ.answer)(
           (yield* Fiber.join(poll)).body,
         );
+
         assert.equal(held.queries.stamps.rows, undefined, "the poll was held to its end");
         assert.equal(liveDigestOn(held.queries, ACCOUNT_INBOX_ITEMS.HELD_ON), after);
 
         // A read mark changes nothing of the item but whether it is unread, which its stamp carries.
         const itemId = Result.getOrThrow(posted).id;
         assert.ok((yield* markInboxItemRead(dana, itemId)) !== false);
+
         const again = yield* Effect.forkChild(
           ask({
             bearer: dana,
             path: itemsPath({ since, [LIVE_POLL.QUERY]: LIVE_POLL.ON, [LIVE_POLL.AFTER]: after }),
           }),
         );
+
         yield* TestClock.adjust(Duration.seconds(25));
+
         const moved = Schema.decodeUnknownSync(INBOX_ITEMS_READ.answer)(
           (yield* Fiber.join(again)).body,
         );
+
         assert.deepEqual(
           moved.queries.stamps.rows === undefined
             ? undefined
@@ -992,27 +1088,37 @@ const askTranscript = (options: {
       // The test's own clock, so a held poll is moved by `TestClock` rather than waited out.
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
     );
+
     const procedures = liveProcedures({
       resolveUserId: () => Effect.succeed(Option.some(options.bearer)),
       workspaces: yield* fakeWorkspaceSeams,
     });
+
     const url = readOf(
       options.path ?? "/api/live/agent-transcript",
       options.forUser ?? options.bearer,
     );
+
     url.searchParams.set("id", options.agentId);
+
     if (options.call !== undefined) url.searchParams.set("call", options.call);
+
     if (options.poll === true) url.searchParams.set(LIVE_POLL.QUERY, LIVE_POLL.ON);
+
     if (options.after !== undefined) url.searchParams.set(LIVE_POLL.AFTER, options.after);
+
     if (options.cursor !== undefined) url.searchParams.set(LIVE_POLL.CURSOR, options.cursor);
+
     const response = yield* hostedAnswer(
       { live: procedures },
       services,
       new Request(url, { headers: { authorization: `Bearer ${options.bearer}` } }),
     );
+
     const text = yield* Effect.promise(() => response.text());
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = JSON.parse(text) as WireBoundaryInput;
+
     return { status: response.status, body };
   });
 
@@ -1024,6 +1130,7 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
         const owner = yield* openUser;
         const stranger = yield* openUser;
         const task = yield* startTask(owner, { name: "Teammate invitations" });
+
         const started = yield* createAgent(owner, {
           taskId: task.id,
           idempotencyKey: randomUUID(),
@@ -1034,6 +1141,7 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
           prompt: null,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         assert.ok(Option.isSome(started));
         const { agent } = started.value;
 
@@ -1053,10 +1161,12 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
           "windowParts",
           "workers",
         ]);
+
         const idsOf = (rows: readonly unknown[] | undefined) =>
           Schema.decodeUnknownSync(Schema.Array(Schema.Struct({ id: Schema.String })))(rows).map(
             ({ id }) => id,
           );
+
         assert.deepEqual(idsOf(answer.queries.conversation.rows), [agent.conversationId]);
         assert.deepEqual(idsOf(answer.queries.agent.rows), [agent.id]);
 
@@ -1064,6 +1174,7 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
         const worker = Schema.decodeUnknownSync(AGENT_TRANSCRIPT_READ.answer)(
           (yield* askTranscript({ bearer: owner, agentId: agent.id, call: "call-7" })).body,
         );
+
         assert.equal(worker.url, LIVE_POLL_URL);
         assert.deepEqual(idsOf(worker.queries.conversation.rows), []);
         assert.deepEqual(idsOf(worker.queries.agent.rows), [agent.id]);
@@ -1075,6 +1186,7 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
             { status: HOSTED_HTTP_STATUS.NOT_FOUND, body: { error: HOSTED_API_ERROR.NOT_FOUND } },
           );
         }
+
         assert.deepEqual(
           yield* askTranscript({
             bearer: owner,
@@ -1094,6 +1206,7 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
         const stranger = yield* openUser;
         const task = yield* startTask(owner, { name: "Teammate invitations" });
         yield* joinWorkspace(task.workspaceId, teammate);
+
         const started = yield* createAgent(owner, {
           taskId: task.id,
           idempotencyKey: randomUUID(),
@@ -1104,9 +1217,11 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
           prompt: null,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         const { agent } = Option.getOrThrow(started);
         yield* beginAgentBoot(agent.id, new Date(0), undefined);
         const sql = yield* SqlClient.SqlClient;
+
         // The boot's statement as Realtime runs it for `reader`, the agent's own transcript followed.
         const bootRowsFor = (reader: string) => {
           const statement = Option.getOrThrow(
@@ -1120,6 +1235,7 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
               agentId: agent.id,
             }),
           ).boot;
+
           return sql.unsafe(statement.sql, [...statement.params]);
         };
 
@@ -1134,6 +1250,7 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
       Effect.gen(function* () {
         const owner = yield* openUser;
         const task = yield* startTask(owner, { name: "Teammate invitations" });
+
         const started = yield* createAgent(owner, {
           taskId: task.id,
           idempotencyKey: randomUUID(),
@@ -1144,11 +1261,14 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
           prompt: null,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         assert.ok(Option.isSome(started));
         const agentId = started.value.agent.id;
+
         const first = Schema.decodeUnknownSync(AGENT_TRANSCRIPT_READ.answer)(
           (yield* askTranscript({ bearer: owner, agentId, cursor: AGENT_CURSOR_START })).body,
         );
+
         const cursor = first.queries.window.cursor?.next;
         assert.ok(cursor !== undefined);
         // As the host sends it (`transcript-follow.ts`'s `followedRead`): its read without the count of its messages.
@@ -1159,10 +1279,13 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
         const unchanged = yield* Effect.forkChild(
           askTranscript({ bearer: owner, agentId, poll: true, after, cursor }),
         );
+
         yield* TestClock.adjust(Duration.seconds(25));
+
         const held = Schema.decodeUnknownSync(AGENT_TRANSCRIPT_READ.answer)(
           (yield* Fiber.join(unchanged)).body,
         );
+
         assert.deepEqual(
           Object.entries(held.queries)
             .filter(([, query]) => query?.rows !== undefined)
@@ -1180,8 +1303,10 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
         const dana = yield* openUser;
         const started = yield* startTask(dana, { name: "Teammate invitations" });
         const path = "/api/live/task-pages";
+
         const poll = (after: string) =>
           askTask({ bearer: dana, taskId: started.id, path, poll: true, after });
+
         const first = yield* askTask({ bearer: dana, taskId: started.id, path });
         const seen = Schema.decodeUnknownSync(TASK_PAGES_READ.answer)(first.body);
         const digest = liveDigestOf(seen.queries);
@@ -1189,14 +1314,17 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
 
         const unchanged = yield* Effect.forkChild(poll(digest));
         yield* TestClock.adjust(Duration.seconds(25));
+
         const held = Schema.decodeUnknownSync(TASK_PAGES_READ.answer)(
           (yield* Fiber.join(unchanged)).body,
         );
+
         assert.equal(held.queries.pages.rows, undefined, "unchanged carries no rows");
         assert.equal(liveDigestOf(held.queries), digest);
 
         const moved = yield* Effect.forkChild(poll(digest));
         yield* TestClock.adjust(Duration.seconds(3));
+
         const shown = Option.getOrThrow(
           yield* writePage(
             dana,
@@ -1205,10 +1333,13 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
             { kind: PAGE_SHOWER.APP },
           ),
         );
+
         yield* TestClock.adjust(Duration.seconds(3));
+
         const answer = Schema.decodeUnknownSync(TASK_PAGES_READ.answer)(
           (yield* Fiber.join(moved)).body,
         );
+
         assert.deepEqual(
           Schema.decodeUnknownSync(TASK_PAGES_READ.rows)({
             pages: answer.queries.pages.rows,
@@ -1224,15 +1355,19 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
     () =>
       Effect.gen(function* () {
         const sealer = pollSealer(yield* SqlClient.SqlClient);
+
         const ascending = {
           sql: "select * from (values (1), (2)) as rows(n) order by n",
           params: [],
         };
+
         const one = yield* sealer.seal(ascending);
+
         const other = yield* sealer.seal({
           sql: "select * from (values (1), (2)) as rows(n) order by n desc",
           params: [],
         });
+
         assert.notDeepEqual(one.rows, other.rows);
         assert.equal(one.digest, other.digest);
         assert.equal((yield* sealer.digest(ascending)).digest, one.digest);
@@ -1250,10 +1385,12 @@ it.layer(getTestDB())("an agent transcript's live read", (it) => {
       Effect.gen(function* () {
         const dana = yield* openUser;
         const started = yield* startTask(dana, { name: "Teammate invitations" });
+
         const signedOut = {
           status: HOSTED_HTTP_STATUS.UNAUTHORIZED,
           body: { error: HOSTED_API_ERROR.INVALID_TOKEN },
         };
+
         for (const forUser of ["user-eli", ""]) {
           assert.deepEqual(
             yield* askTask({ bearer: dana, forUser, taskId: started.id }),
@@ -1278,21 +1415,26 @@ const askScope = (options: {
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
       Layer.succeed(Database, yield* Database),
     );
+
     const procedures = liveProcedures({
       resolveUserId: () => Effect.succeed(Option.some(options.bearer)),
       workspaces: yield* fakeWorkspaceSeams,
     });
+
     const url = new URL(options.path, ORIGIN);
     url.searchParams.set("id", options.id);
     url.searchParams.set(LIVE_USER_QUERY, options.userId ?? options.bearer);
+
     const response = yield* hostedAnswer(
       { live: procedures },
       services,
       new Request(url, { headers: { authorization: `Bearer ${options.bearer}` } }),
     );
+
     const text = yield* Effect.promise(() => response.text());
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = JSON.parse(text) as WireBoundaryInput;
+
     return { status: response.status, body };
   });
 
@@ -1304,6 +1446,7 @@ it.layer(getTestDB())("a plan's and an agent's inbox live reads", (it) => {
         const owner = yield* openUser;
         const stranger = yield* openUser;
         const task = yield* startTask(owner, { name: "Teammate invitations" });
+
         const started = yield* createAgent(owner, {
           taskId: task.id,
           idempotencyKey: randomUUID(),
@@ -1314,20 +1457,25 @@ it.layer(getTestDB())("a plan's and an agent's inbox live reads", (it) => {
           prompt: null,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         assert.ok(Option.isSome(started));
+
         const scopes = [
           { path: "/api/live/task-inbox", id: task.id },
           { path: "/api/live/agent-inbox", id: started.value.agent.id },
         ];
+
         for (const scope of scopes) {
           const polled = yield* askScope({ bearer: owner, ...scope });
           assert.equal(polled.status, HOSTED_HTTP_STATUS.OK, scope.path);
           const answer = Schema.decodeUnknownSync(TASK_INBOX_READ.answer)(polled.body);
           assert.equal(answer.url, LIVE_POLL_URL);
           assert.deepEqual(Object.keys(answer.queries).toSorted(), ["files", "items", "messages"]);
+
           for (const [part, query] of Object.entries(answer.queries)) {
             assert.deepEqual(query.rows, [], `${part} holds nothing yet`);
           }
+
           assert.deepEqual(yield* askScope({ bearer: stranger, ...scope }), {
             status: HOSTED_HTTP_STATUS.NOT_FOUND,
             body: { error: HOSTED_API_ERROR.NOT_FOUND },
@@ -1345,6 +1493,7 @@ it.layer(getTestDB())("a plan's and an agent's inbox live reads", (it) => {
             "a read naming another account is signed out",
           );
         }
+
         assert.deepEqual(
           yield* askScope({
             bearer: owner,
@@ -1399,14 +1548,17 @@ it.layer(getTestDB())("the account's workspaces' live read", (it) => {
     Effect.gen(function* () {
       const fay = yield* openUser;
       const path = "/api/live/workspaces";
+
       const workspaceIds = Effect.map(ask({ bearer: fay, path }), (polled) => {
         const answer = Schema.decodeUnknownSync(WORKSPACES_READ.answer)(polled.body);
+
         return Schema.decodeUnknownSync(WORKSPACES_READ.rows)({
           workspaces: answer.queries.workspaces.rows,
           installations: answer.queries.installations.rows,
           experiments: answer.queries.experiments.rows,
         }).workspaces.map(({ id }) => id);
       });
+
       const first = yield* workspaceIds;
       assert.equal(first.length, 1);
       assert.deepEqual(yield* workspaceIds, first, "a second read makes no second workspace");
@@ -1421,9 +1573,11 @@ it.layer(getTestDB())("a workspace's people's live read", (it) => {
       Effect.gen(function* () {
         const db = yield* Database;
         const [owner, outsider] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
         for (const id of [owner, outsider]) {
           yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
         }
+
         const workspaceId = yield* openWorkspace(owner);
         const path = `/api/live/workspace-members?workspaceId=${workspaceId}`;
 
@@ -1458,9 +1612,11 @@ it.layer(getTestDB())("a workspace's people's live read", (it) => {
         const owner = `user-${randomUUID()}`;
         const teammate = `user-${randomUUID()}`;
         const outsider = `user-${randomUUID()}`;
+
         for (const id of [owner, teammate, outsider]) {
           yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
         }
+
         const workspaceId = yield* openWorkspace(owner);
         yield* joinWorkspace(workspaceId, teammate);
         const path = `/api/live/workspace-invitations?workspaceId=${workspaceId}`;
@@ -1493,17 +1649,21 @@ it.layer(getTestDB())("a workspace's integrations live read", (it) => {
     () =>
       Effect.gen(function* () {
         const db = yield* Database;
+
         const [owner, teammate, outsider] = [
           `user-${randomUUID()}`,
           `user-${randomUUID()}`,
           `user-${randomUUID()}`,
         ];
+
         for (const id of [owner, teammate, outsider]) {
           yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
         }
+
         const workspaceId = yield* openWorkspace(owner);
         yield* joinWorkspace(workspaceId, teammate);
         const elsewhere = yield* openWorkspace(outsider);
+
         const sentry = (externalId: string, organizationId: string, userId: string) =>
           linkIntegrationInstallation({
             provider: TRIGGER_PROVIDER.SENTRY,
@@ -1512,6 +1672,7 @@ it.layer(getTestDB())("a workspace's integrations live read", (it) => {
             userId,
             accountLabel: "acme",
           });
+
         const [active, uninstalled, theirs] = [randomUUID(), randomUUID(), randomUUID()];
         yield* sentry(active, workspaceId, owner);
         yield* sentry(uninstalled, workspaceId, owner);
@@ -1533,21 +1694,27 @@ it.layer(getTestDB())("a workspace's integrations live read", (it) => {
         });
         yield* writeSlackChannelRepository(elsewhere, "C0001", "globex/web");
         const path = `/api/live/workspace-integrations?workspaceId=${workspaceId}`;
+
         const read = (bearer: string) =>
           Effect.gen(function* () {
             const polled = yield* ask({ bearer, path });
             assert.equal(polled.status, HOSTED_HTTP_STATUS.OK);
+
             const answer = Schema.decodeUnknownSync(WORKSPACE_INTEGRATIONS_READ.answer)(
               polled.body,
             );
+
             assert.equal(answer.url, LIVE_POLL_URL);
+
             const rows = Schema.decodeUnknownSync(WORKSPACE_INTEGRATIONS_READ.rows)({
               sentryInstallations: answer.queries.sentryInstallations.rows,
               slackInstallation: answer.queries.slackInstallation.rows,
               slackChannelRepositories: answer.queries.slackChannelRepositories.rows,
             });
+
             return workspaceIntegrationsOfLive(answer, rows);
           });
+
         const expected = {
           sentry: {
             configured: true,
@@ -1585,12 +1752,14 @@ it.layer(getTestDB())("a workspace's memories' live read", (it) => {
     () =>
       Effect.gen(function* () {
         const db = yield* Database;
+
         const [owner, keeper, teammate, outsider] = [
           `user-${randomUUID()}`,
           `user-${randomUUID()}`,
           `user-${randomUUID()}`,
           `user-${randomUUID()}`,
         ];
+
         for (const [id, name] of [
           [owner, "Olive Owner"],
           [keeper, "Kai Keeper"],
@@ -1599,24 +1768,29 @@ it.layer(getTestDB())("a workspace's memories' live read", (it) => {
         ] as const) {
           yield* db.insert(user).values({ id, name, email: `${id}@app.test` });
         }
+
         const workspaceId = yield* openWorkspace(owner);
         yield* joinWorkspace(workspaceId, keeper);
         yield* joinWorkspace(workspaceId, teammate);
         const elsewhere = yield* openWorkspace(outsider);
         yield* rememberMemory(workspaceId, keeper, "Deployments go out from main.", undefined);
         yield* rememberMemory(elsewhere, outsider, "Pricing lives in billing.", undefined);
+
         const read = (bearer: string, workspace: string) =>
           Effect.gen(function* () {
             const polled = yield* ask({
               bearer,
               path: `/api/live/workspace-memories?workspaceId=${workspace}`,
             });
+
             assert.equal(polled.status, HOSTED_HTTP_STATUS.OK);
             const answer = Schema.decodeUnknownSync(WORKSPACE_MEMORIES_READ.answer)(polled.body);
             assert.equal(answer.url, LIVE_POLL_URL);
+
             const { memories } = Schema.decodeUnknownSync(WORKSPACE_MEMORIES_READ.rows)({
               memories: answer.queries.memories.rows,
             });
+
             return memoriesOfLiveRows(memories).map((memory) => [
               memory.text,
               memory.keptBy?.name,
@@ -1652,17 +1826,22 @@ it.layer(getTestDB())("a workspace's memories' live read", (it) => {
       Effect.gen(function* () {
         const db = yield* Database;
         const [keeper, teammate] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
         for (const id of [keeper, teammate]) {
           yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
         }
+
         const workspaceId = yield* openWorkspace(keeper);
         yield* joinWorkspace(workspaceId, teammate);
+
         const { id: taskId } = yield* createTask(keeper, {
           organizationId: workspaceId,
           name: "Flaky tests",
         });
+
         const agentId = yield* openTaskAgent(keeper, workspaceId, taskId);
         const line = randomUUID();
+
         const kept = yield* rememberMemory(
           workspaceId,
           keeper,
@@ -1670,6 +1849,7 @@ it.layer(getTestDB())("a workspace's memories' live read", (it) => {
           undefined,
           { agentId, messageId: line },
         );
+
         assert.ok("memory" in kept);
         // Two recalls, one now and one past the window, on the clock the read serves its window from, moved on so neither falls before the epoch.
         yield* TestClock.adjust(Duration.days(60));
@@ -1681,17 +1861,21 @@ it.layer(getTestDB())("a workspace's memories' live read", (it) => {
             recalledAt: new Date(at),
           })),
         );
+
         const read = (bearer: string) =>
           Effect.gen(function* () {
             const polled = yield* ask({
               bearer,
               path: `/api/live/workspace-memories?workspaceId=${workspaceId}`,
             });
+
             assert.equal(polled.status, HOSTED_HTTP_STATUS.OK);
             const answer = Schema.decodeUnknownSync(WORKSPACE_MEMORIES_READ.answer)(polled.body);
+
             const { memories } = Schema.decodeUnknownSync(WORKSPACE_MEMORIES_READ.rows)({
               memories: answer.queries.memories.rows,
             });
+
             return memoriesOfLiveRows(memories).map((memory) => [
               memory.source,
               memory.recalls30d,
@@ -1721,11 +1905,14 @@ it.layer(getTestDB())("the account's hosts' live read", (it) => {
       Effect.gen(function* () {
         const db = yield* Database;
         const [owner, teammate] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
         for (const id of [owner, teammate]) {
           yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
         }
+
         const workspaceId = yield* openWorkspace(owner);
         yield* joinWorkspace(workspaceId, teammate);
+
         const enrolled = (userId: string, name: string) =>
           Effect.gen(function* () {
             const id = randomUUID();
@@ -1735,8 +1922,10 @@ it.layer(getTestDB())("the account's hosts' live read", (it) => {
               secretHash: `secret-${randomUUID()}`,
               machine: { name, platform: DEVICE_PLATFORM.LINUX, arch: DEVICE_ARCH.X64 },
             });
+
             return id;
           });
+
         yield* enrolled(owner, "fra-03");
         const removed = yield* enrolled(owner, "ams-01");
         yield* enrolled(teammate, "teammate-box");
@@ -1756,6 +1945,7 @@ it.layer(getTestDB())("the account's hosts' live read", (it) => {
         const polled = yield* ask({ bearer: owner, path: "/api/live/hosts" });
         assert.equal(polled.status, HOSTED_HTTP_STATUS.OK);
         const answer = Schema.decodeUnknownSync(HOSTS_READ.answer)(polled.body);
+
         const { hosts } = Schema.decodeUnknownSync(HOSTS_READ.rows)({
           hosts: answer.queries.hosts.rows,
         });
@@ -1785,6 +1975,7 @@ it.layer(getTestDB())("the installed skills' live read", (it) => {
     () =>
       Effect.gen(function* () {
         const db = yield* Database;
+
         const [owner, installer, admin, teammate, outsider] = [
           `user-${randomUUID()}`,
           `user-${randomUUID()}`,
@@ -1792,14 +1983,17 @@ it.layer(getTestDB())("the installed skills' live read", (it) => {
           `user-${randomUUID()}`,
           `user-${randomUUID()}`,
         ];
+
         for (const id of [owner, installer, admin, teammate, outsider]) {
           yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
         }
+
         const workspaceId = yield* openWorkspace(owner);
         yield* joinWorkspace(workspaceId, installer);
         yield* joinWorkspace(workspaceId, admin, WORKSPACE_ROLE.ADMIN);
         yield* joinWorkspace(workspaceId, teammate);
         yield* openWorkspace(outsider);
+
         const install = (userId: string, name: string, owned: InstalledSkillOwner) =>
           installSkill(userId, {
             owner: owned,
@@ -1814,27 +2008,32 @@ it.layer(getTestDB())("the installed skills' live read", (it) => {
               },
             ],
           });
+
         yield* install(installer, "release-notes", {
           scope: INSTALLED_SKILL_SCOPE.WORKSPACE,
           organizationId: workspaceId,
         });
         yield* install(teammate, "pr-style", { scope: INSTALLED_SKILL_SCOPE.PERSONAL });
         const path = `/api/live/installed-skills?workspaceId=${workspaceId}`;
+
         const read = (bearer: string) =>
           Effect.gen(function* () {
             const polled = yield* ask({ bearer, path });
             assert.equal(polled.status, HOSTED_HTTP_STATUS.OK);
             const answer = Schema.decodeUnknownSync(INSTALLED_SKILLS_READ.answer)(polled.body);
             assert.equal(answer.url, LIVE_POLL_URL);
+
             const { skills } = Schema.decodeUnknownSync(INSTALLED_SKILLS_READ.rows)({
               skills: answer.queries.skills.rows,
             });
+
             return installedSkillsOfLiveRows(skills).map((skill) => [
               skill.name,
               skill.scope,
               skill.manageable,
             ]);
           });
+
         const shared = ["release-notes", INSTALLED_SKILL_SCOPE.WORKSPACE] as const;
 
         assert.deepEqual(yield* read(installer), [[...shared, true]]);
@@ -1868,9 +2067,11 @@ it.layer(getTestDB())("the account's sidebar's live read", (it) => {
           "pins",
           "sections",
         ]);
+
         for (const [part, query] of Object.entries(answer.queries)) {
           assert.deepEqual(query.rows, [], `${part} holds nothing yet`);
         }
+
         assert.equal(
           (yield* ask({ bearer: dana, forUser: "user-erin", path })).status,
           HOSTED_HTTP_STATUS.UNAUTHORIZED,
@@ -1917,22 +2118,27 @@ const askChapters = (options: {
       Layer.succeed(HostedEnvironment, CHAPTERS_ENVIRONMENT),
       options.github.layer,
     );
+
     const procedures = liveProcedures({
       resolveUserId: () => Effect.succeed(Option.some(options.bearer)),
       workspaces: yield* fakeWorkspaceSeams,
     });
+
     const url = new URL("/api/live/pull-request-chapters", ORIGIN);
     url.searchParams.set("id", options.agentId);
     url.searchParams.set("number", String(options.number));
     url.searchParams.set(LIVE_USER_QUERY, options.bearer);
+
     const response = yield* hostedAnswer(
       { live: procedures },
       services,
       new Request(url, { headers: { authorization: `Bearer ${options.bearer}` } }),
     );
+
     const text = yield* Effect.promise(() => response.text());
     // SAFETY: the route answers JSON; the test compares it as the wire value it is.
     const body = JSON.parse(text) as WireBoundaryInput;
+
     return { status: response.status, body };
   });
 
@@ -1994,6 +2200,7 @@ it.layer(getTestDB())("an agent's pull request's chapters' live read", (it) => {
         yield* joinWorkspace(task.workspaceId, teammate);
         yield* connectAgentApiKeys(teammate);
         yield* connectWorkspaceGitHub(task.workspaceId, RELAY_INSTALLATION);
+
         const started = yield* createAgent(owner, {
           taskId: task.id,
           idempotencyKey: randomUUID(),
@@ -2004,8 +2211,10 @@ it.layer(getTestDB())("an agent's pull request's chapters' live read", (it) => {
           prompt: null,
           runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
         });
+
         assert.ok(Option.isSome(started));
         const agentId = started.value.agent.id;
+
         const claimed = (
           organizationId: string,
           requestedBy: string,
@@ -2021,6 +2230,7 @@ it.layer(getTestDB())("an agent's pull request's chapters' live read", (it) => {
             requestedBy,
             now: new Date(at),
           });
+
         yield* claimed(task.workspaceId, owner, "c0ffee1", 1_000);
         // The stranger's own workspace claims the same pull request later, which no read through the agent may answer.
         yield* claimed(yield* openWorkspace(stranger), stranger, "dec0de2", 2_000);
@@ -2056,7 +2266,7 @@ it.layer(getTestDB())("an agent's pull request's chapters' live read", (it) => {
 });
 
 /** A live read at `path` asked as `bearer`, polled, in delta mode past `sync` where it names one ("" for none yet), on the test's clock and on `hub` where one is named; its answer's body. */
-const askHeld = (bearer: string, path: string, sync?: string, hub?: SyncShape) =>
+const askHeld = (bearer: string, path: string, sync?: string, hub?: SyncService) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
       Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
@@ -2065,25 +2275,31 @@ const askHeld = (bearer: string, path: string, sync?: string, hub?: SyncShape) =
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
       hub === undefined ? Layer.empty : Layer.succeed(Sync, hub),
     );
+
     const procedures = liveProcedures({
       resolveUserId: () => Effect.succeed(Option.some(bearer)),
       workspaces: yield* fakeWorkspaceSeams,
     });
+
     const url = readOf(path, bearer);
     url.searchParams.set(LIVE_POLL.QUERY, LIVE_POLL.ON);
+
     if (sync !== undefined) url.searchParams.set(LIVE_POLL.SYNC, sync);
+
     const response = yield* hostedAnswer(
       { live: procedures },
       services,
       new Request(url, { headers: { authorization: `Bearer ${bearer}` } }),
     );
+
     assert.equal(response.status, HOSTED_HTTP_STATUS.OK);
     const body: unknown = JSON.parse(yield* Effect.promise(() => response.text()));
+
     return body;
   });
 
 /** The task list asked as `bearer`, in delta mode past `sync` where it names one, on `hub` where one is named, its parts decoded. */
-const askTasks = (bearer: string, sync?: string, hub?: SyncShape) =>
+const askTasks = (bearer: string, sync?: string, hub?: SyncService) =>
   Effect.map(
     askHeld(bearer, "/api/live/tasks", sync, hub),
     (body) => Schema.decodeUnknownSync(TASK_LIST_READ.answer)(body).queries,
@@ -2094,14 +2310,16 @@ const askTasks = (bearer: string, sync?: string, hub?: SyncShape) =>
  * each wait announced on `looking` once the clock holds it, so a test moves
  * the clock only once the look before it found nothing moved.
  */
-const lookingOn = (looking: Queue.Queue<void>): SyncShape => ({
+const lookingOn = (looking: Queue.Queue<void>): SyncService => ({
   watch: (_topics, fallback) => {
     const watch = clockWatch(fallback);
+
     return Effect.succeed({
       ...watch,
       next: Effect.gen(function* () {
         const waiting = yield* Effect.forkChild(watch.next, { startImmediately: true });
         yield* Queue.offer(looking, undefined);
+
         return yield* Fiber.join(waiting);
       }),
     });
@@ -2109,6 +2327,7 @@ const lookingOn = (looking: Queue.Queue<void>): SyncShape => ({
 });
 
 /** Each part's row ids, as a delta answers its rows. */
+// SAFETY: a part's rows are the read's own rows, each keyed by its `id`.
 const idsOf = (part: { readonly rows?: readonly unknown[] }) =>
   (part.rows ?? []).map((row) => (row as { readonly id: string }).id).toSorted();
 
@@ -2116,10 +2335,12 @@ const idsOf = (part: { readonly rows?: readonly unknown[] }) =>
 const conversationOf = (agentId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
+
     const [agent] = yield* db
       .select({ conversationId: agentTable.conversationId })
       .from(agentTable)
       .where(eq(agentTable.id, agentId));
+
     return agent?.conversationId ?? assert.fail("no such agent");
   });
 
@@ -2154,6 +2375,7 @@ const messageWritten = (userId: string, agentId: string) =>
   });
 
 /** The agent's row among a part's rows, as the task list reads it. */
+// SAFETY: a part's rows are the read's own rows, each keyed by its `id`, an agent's carrying its sandbox's state.
 const agentRowOf = (part: { readonly rows?: readonly unknown[] }, agentId: string) =>
   (part.rows ?? []).find((row) => (row as { readonly id: string }).id === agentId) as
     | { readonly sandboxOpen?: boolean; readonly sandboxState?: string | null }
@@ -2186,6 +2408,7 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         assert.deepEqual(idsOf(moved.agents), [agentId]);
         assert.equal(moved.plans.sync?.past, past);
         const erins = new Set([erinsGone.id, erinsAdded.id]);
+
         for (const part of Object.values(moved)) {
           assert.ok(![...idsOf(part), ...(part.gone ?? [])].some((id) => erins.has(id)));
         }
@@ -2273,17 +2496,21 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
         const past = (yield* askTasks(dana, "")).plans.sync?.next;
         assert.ok(past !== undefined);
         const looking = yield* Queue.unbounded<void>();
+
         const asked = yield* Effect.forkChild(askTasks(dana, past, lookingOn(looking)), {
           startImmediately: true,
         });
+
         yield* Queue.take(looking);
 
         yield* messageWritten(erin, erinsAgent);
         yield* TestClock.adjust(Duration.seconds(1));
+
         const answered = yield* Effect.raceFirst(
           Effect.as(Fiber.await(asked), true),
           Effect.as(Queue.take(looking), false),
         );
+
         assert.ok(!answered, "the poll holds past another account's message");
 
         const added = yield* startTask(dana, { name: "Onboarding" });
@@ -2305,6 +2532,7 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
       const started = yield* startTask(dana, { name: "Teammate invitations" });
       const past = (yield* askTasks(dana, "")).plans.sync?.next;
       assert.ok(past !== undefined);
+
       if (joins) yield* joinWorkspace(yield* openWorkspace(yield* openUser), dana);
 
       const answered = yield* askTasks(dana, joins ? past : "1");
@@ -2328,6 +2556,7 @@ const openItem = (userId: string) =>
   Effect.gen(function* () {
     const task = yield* startTask(userId, { name: "Teammate invitations" });
     const agentId = yield* openTaskAgent(userId, task.workspaceId, task.id);
+
     const posted = yield* postInboxThread(
       { userId, taskId: task.id, agentId },
       {
@@ -2337,10 +2566,12 @@ const openItem = (userId: string) =>
         ask: { type: INBOX_ASK.DO, steps: [] },
       },
     );
+
     return Result.getOrThrow(posted).id;
   });
 
 /** The client keys of a messages part's rows, as the reader's own messages carry them. */
+// SAFETY: a messages part's rows are the read's own rows, each carrying its client key.
 const clientKeysOf = (part: { readonly rows?: readonly unknown[] }) =>
   (part.rows ?? []).map((row) => (row as { readonly clientKey: string | null }).clientKey);
 

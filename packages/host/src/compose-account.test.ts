@@ -34,6 +34,7 @@ import { recordingReporter } from "./testing/recording-reporter.js";
  */
 
 const ACCOUNT_BASE_URL = "https://account.example.test/api/auth";
+
 /** The hosted service's origin, which the kernel derives from the account's address. */
 const SERVICE_BASE_URL = "https://account.example.test";
 
@@ -53,10 +54,13 @@ const grantingConsent: OpenConsent = (options) => ({
 /** The account service, answered: the deletion, then the second sign-in's exchange and identity. */
 const accountService: typeof globalThis.fetch = async (input, init) => {
   const request = new Request(input, init);
+
   if (request.url === `${ACCOUNT_BASE_URL}/delete-user`)
     return jsonResponse({ success: true, message: "User deleted" });
+
   if (request.url === `${ACCOUNT_BASE_URL}/oauth2/token`)
     return jsonResponse({ access_token: "access-2", refresh_token: "refresh-2" });
+
   if (request.url === `${ACCOUNT_BASE_URL}/oauth2/userinfo`)
     return jsonResponse({ sub: "user-2", email: "dev@example.com" });
   throw new Error(`this test reaches no network: ${request.url}`);
@@ -115,8 +119,10 @@ const desktopAccount = (input: {
       NodeFileSystem.layer,
       NodePath.layer,
     );
+
     // Settings' lifetime is not run, so its counted events stay disarmed and send nothing.
     const settings = yield* Effect.provide(composeSettings(), machine);
+
     if (input.signedIn) {
       yield* Effect.orDie(
         settings.store.setAccount({
@@ -130,6 +136,7 @@ const desktopAccount = (input: {
         }),
       );
     }
+
     const account = yield* Effect.provide(composeAccount({ settings }), machine);
     yield* account.link({
       startCapabilities: Effect.void,
@@ -137,6 +144,7 @@ const desktopAccount = (input: {
       ...input.capabilities,
     });
     yield* account.lifetime;
+
     return account;
   });
 
@@ -145,16 +153,21 @@ it.effect(
   () => {
     /** Who the account service's identity read names. */
     let named = { sub: "user-1", email: "dana@example.com" };
+
     const identity: typeof globalThis.fetch = async (input, init) => {
       const request = new Request(input, init);
+
       if (request.url === `${ACCOUNT_BASE_URL}/oauth2/userinfo`) return jsonResponse(named);
+
       return accountService(input, init);
     };
+
     return Effect.gen(function* () {
       // Note that the identity read runs on a flight of its own, outside this test's services, so it reaches the platform's fetch.
       vi.spyOn(globalThis, "fetch").mockImplementation(identity);
       const stateRoot = yield* temporaryDirectoryScoped("account-switch-");
       const gate: string[] = [];
+
       const kernel = hostKernelOver({
         stateRoot,
         runMode: runModeFor({ capture: false, fixture: false }),
@@ -164,6 +177,7 @@ it.effect(
         report: () => undefined,
         emit: () => undefined,
       });
+
       const account = yield* desktopAccount({
         kernel,
         machine: Layer.succeed(AppIdentity, {
@@ -178,8 +192,10 @@ it.effect(
           stopCapabilities: Effect.sync(() => void gate.push("stop")),
         },
       });
+
       const emailNow = () => {
         const now = account.session.snapshot();
+
         return now.status === ACCOUNT_STATUS.SIGNED_IN ? now.email : undefined;
       };
 
@@ -207,6 +223,7 @@ it.effect("a sign-in after a deletion in the same run lets session replay record
   Effect.gen(function* () {
     const stateRoot = yield* temporaryDirectoryScoped("account-replay-");
     const events: { kind: GatewayEventKind; payload: WireValue }[] = [];
+
     const kernel = hostKernelOver({
       stateRoot,
       runMode: runModeFor({ capture: false, fixture: false }),
@@ -218,10 +235,13 @@ it.effect("a sign-in after a deletion in the same run lets session replay record
         events.push({ kind, payload });
       },
     });
+
     const lastReplay = () =>
       events.findLast((event) => event.kind === GATEWAY_EVENT.SESSION_REPLAY_CHANGED)?.payload;
+
     const lastPermitted = () => {
       const replay = lastReplay();
+
       return isRecord(replay) ? replay.permitted : undefined;
     };
 
@@ -233,6 +253,7 @@ it.effect("a sign-in after a deletion in the same run lets session replay record
         platform: PRODUCT_PLATFORM.DESKTOP,
       }),
     });
+
     assert.deepEqual(yield* account.sessionReplayState, {
       permitted: true,
       accountId: "user-1",
@@ -271,6 +292,7 @@ it.effect(
     Effect.gen(function* () {
       const stateRoot = yield* temporaryDirectoryScoped("account-failure-");
       const reported: string[] = [];
+
       const kernel = hostKernelOver({
         stateRoot,
         runMode: runModeFor({ capture: false, fixture: false }),
@@ -282,8 +304,10 @@ it.effect(
         },
         emit: () => undefined,
       });
+
       // A reason a provider's answer could have shaped, which must stay in the host's log.
       const reason = "callback carried code=secret-code";
+
       for (const failure of Object.values(SIGN_IN_FAILURE)) {
         const account = yield* desktopAccount({
           kernel,
@@ -299,6 +323,7 @@ it.effect(
           }),
           signedIn: false,
         });
+
         const answer = yield* Effect.orDie(
           account.acts.ACCOUNT_BEGIN_SIGN_IN({ provider: ACCOUNT_PROVIDER.GOOGLE }),
         );
@@ -306,6 +331,7 @@ it.effect(
         assert.deepEqual(answer, { failure }, failure);
         assert.equal(account.signedIn(), false, failure);
       }
+
       assert.ok(
         reported.some((line) => line.includes(reason)),
         "the reason is kept in the log",
@@ -320,6 +346,7 @@ it.effect("an admin's access reaches the windows once read, and a sign-out takes
   Effect.gen(function* () {
     const stateRoot = yield* temporaryDirectoryScoped("account-access-");
     const events: { kind: GatewayEventKind; payload: WireValue }[] = [];
+
     const kernel = hostKernelOver({
       stateRoot,
       runMode: runModeFor({ capture: false, fixture: false }),
@@ -331,10 +358,13 @@ it.effect("an admin's access reaches the windows once read, and a sign-out takes
         events.push({ kind, payload });
       },
     });
+
     const lastAccess = () =>
       events.findLast((event) => event.kind === GATEWAY_EVENT.ACCOUNT_ACCESS_CHANGED)?.payload;
+
     const lastAdmin = () => {
       const access = lastAccess();
+
       return isRecord(access) ? access.admin : undefined;
     };
 
@@ -346,6 +376,7 @@ it.effect("an admin's access reaches the windows once read, and a sign-out takes
         platform: PRODUCT_PLATFORM.DESKTOP,
       }),
     });
+
     // Nothing is read until the gate opening asks, so nothing is an admin before it, and the read is owed.
     assert.deepEqual(yield* account.accessState, { admin: false, pending: true });
 
@@ -361,8 +392,10 @@ it.effect("an admin's access reaches the windows once read, and a sign-out takes
   }).pipe(
     Effect.provideService(FetchHttpClient.Fetch, async (input, init) => {
       const request = new Request(input, init);
+
       if (request.url === `${SERVICE_BASE_URL}${HOSTED_SERVICE_PATH.ACCOUNT_ACCESS}`)
         return jsonResponse({ admin: true });
+
       if (request.url.startsWith(`${ACCOUNT_BASE_URL}/`)) return jsonResponse({});
       throw new Error(`this test reaches no network: ${request.url}`);
     }),
@@ -373,6 +406,7 @@ it.effect("an admin's access reaches the windows once read, and a sign-out takes
 /** The browser tab's service, on the tab's own origin, as Better Auth and our routes answer it. */
 const TAB_ORIGIN = "https://app.example.test";
 const PROVIDER_CONSENT = "https://github.com/login/oauth/authorize?state=state-1";
+
 const SESSION_USER = {
   id: "user-1",
   email: "dev@example.com",
@@ -410,8 +444,10 @@ const tabFetch =
     const request = new Request(input, init);
     const path = new URL(request.url).pathname;
     service.sent.push(path);
+
     if (service.stepsDown && ACCOUNT_STEPS.includes(path))
       return new Response("upstream detail", { status: 503 });
+
     switch (path) {
       case "/api/auth/delete-user":
         return service.sessionStale === true
@@ -420,16 +456,20 @@ const tabFetch =
       case "/api/auth/get-session": {
         const held = service.heldRead;
         service.heldRead = undefined;
+
         if (held) await held;
+
         return jsonResponse(
           service.signedIn ? { session: { id: "session-1" }, user: SESSION_USER } : null,
         );
       }
+
       case "/api/auth/sign-in/social":
       case "/api/auth/link-social":
         return jsonResponse({ url: PROVIDER_CONSENT, redirect: true });
       case HOSTED_SERVICE_PATH.EVENTS:
         service.counts.push(await request.text());
+
         return new Response(null, { status: 204 });
       default:
         return new Response(null, { status: 204 });
@@ -447,6 +487,7 @@ const browserAccount = (service: TabService) =>
     const events: { kind: GatewayEventKind; payload: WireValue }[] = [];
     /** The counts' batches already sent each time the tab left, by the address it left for. */
     const departures: { url: string; countsSent: string[] }[] = [];
+
     const door: CookieSessionDoor = {
       currentAddress: () => "/",
       navigate: (url, signingIn) =>
@@ -457,10 +498,12 @@ const browserAccount = (service: TabService) =>
       returnedFromSignIn: Effect.sync(() => {
         const left = service.signInLeft;
         service.signInLeft = false;
+
         return left;
       }),
       revisits: Stream.never,
     };
+
     const machine = Layer.mergeAll(
       Layer.succeed(
         HostKernelTag,
@@ -487,6 +530,7 @@ const browserAccount = (service: TabService) =>
       NodeFileSystem.layer,
       NodePath.layer,
     );
+
     const settings = yield* Effect.provide(composeSettings(), machine);
     const account = yield* Effect.provide(composeAccount({ settings }), machine);
     yield* settings.link({
@@ -500,6 +544,7 @@ const browserAccount = (service: TabService) =>
     });
     const launched = yield* Effect.forkScoped(account.lifetime);
     yield* settings.lifetime;
+
     return { account, settings, events, departures, launched };
   });
 
@@ -528,6 +573,7 @@ it.effect(
   () => {
     const sentry = recordingReporter();
     const service = tabService({ signedIn: true, stepsDown: true });
+
     return Effect.gen(function* () {
       const { account, launched } = yield* browserAccount(service);
       yield* Fiber.join(launched);
@@ -542,12 +588,14 @@ it.effect(
         ],
         ["deletion", account.acts.ACCOUNT_DELETE(undefined)],
       ];
+
       for (const [step, asked] of steps) {
         const answer = yield* Effect.flip(asked);
         assert.ok(answer instanceof RefusedRefusal, step);
         assert.ok(!answer.message.includes("upstream"), step);
         assert.deepEqual(account.snapshot(), standing, step);
       }
+
       assert.deepEqual(sentry.reported, []);
     }).pipe(Effect.provide(sentry.layer), (body) => inTab(service, body));
   },
@@ -557,6 +605,7 @@ it.effect(
   "in a browser, a deletion refused because the session is too old is refused as that, in its own sentence, and leaves the account standing",
   () => {
     const service = tabService({ signedIn: true, sessionStale: true });
+
     return Effect.gen(function* () {
       const { account, launched } = yield* browserAccount(service);
       yield* Fiber.join(launched);
@@ -576,6 +625,7 @@ it.effect(
   () => {
     const sentry = recordingReporter();
     const service = tabService({ signedIn: false, stepsDown: true });
+
     return Effect.gen(function* () {
       const { account, launched, departures } = yield* browserAccount(service);
       yield* Fiber.join(launched);
@@ -584,11 +634,14 @@ it.effect(
       const begun = yield* account.acts.ACCOUNT_BEGIN_SIGN_IN({
         provider: ACCOUNT_PROVIDER.GITHUB,
       });
+
       assert.deepEqual(begun, { failure: SIGN_IN_FAILURE.UNFINISHED });
       assert.deepEqual(account.snapshot(), { status: ACCOUNT_STATUS.SIGNED_OUT });
+
       const again = yield* Effect.flip(
         account.acts.ACCOUNT_SIGN_IN_AGAIN({ provider: ACCOUNT_PROVIDER.GITHUB }),
       );
+
       assert.ok(again instanceof RefusedRefusal);
       assert.deepEqual(account.snapshot(), { status: ACCOUNT_STATUS.SIGNED_OUT });
       assert.deepEqual(departures, []);
@@ -601,12 +654,14 @@ it.effect(
   "in a browser, a session that lands while the launch reads reaches the panel as an account change",
   () => {
     let release: () => void = () => undefined;
+
     const service = tabService({
       signedIn: false,
       heldRead: new Promise<void>((resolve) => {
         release = resolve;
       }),
     });
+
     return Effect.gen(function* () {
       const { account, settings, events, launched } = yield* browserAccount(service);
       yield* until(() => service.sent.includes("/api/auth/get-session"));
@@ -623,6 +678,7 @@ it.effect(
             event.kind === GATEWAY_EVENT.ACCOUNT_CHANGED &&
             signedInEmail(event.payload) === SESSION_USER.email,
         );
+
       yield* until(changed);
       assert.equal(changed(), true);
       // The session is the launch's own account, so, as for a launch that read it itself, no sign-in is counted.
@@ -637,6 +693,7 @@ it.effect(
   "in a browser, a sign-in again's count is sent before the tab leaves for the provider",
   () => {
     const service = tabService({ signedIn: true });
+
     return Effect.gen(function* () {
       const { account, launched, departures } = yield* browserAccount(service);
       yield* Fiber.join(launched);
@@ -659,9 +716,11 @@ it.effect(
   "in a browser, a sign-in that left the tab is counted once, its start with it, on the page it comes back to",
   () => {
     const service = tabService({ signedIn: false });
+
     /** How many of the counts sent so far are `name`, as a batch's body spells it. */
     const sentCounts = (name: string) =>
       service.counts.join("\n").split(JSON.stringify(name)).length - 1;
+
     /** One page of the tab, launched and its counts sent, closed as the tab leaves it. */
     const page = <A>(
       body: (tab: Effect.Success<ReturnType<typeof browserAccount>>) => Effect.Effect<A>,
@@ -672,9 +731,11 @@ it.effect(
           yield* Fiber.join(tab.launched);
           const answer = yield* body(tab);
           yield* tab.settings.flushProductEvents;
+
           return answer;
         }),
       );
+
     return Effect.gen(function* () {
       yield* page(({ account }) =>
         Effect.orDie(account.acts.ACCOUNT_BEGIN_SIGN_IN({ provider: ACCOUNT_PROVIDER.GITHUB })),

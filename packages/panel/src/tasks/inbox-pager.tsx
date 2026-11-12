@@ -40,7 +40,7 @@ export interface InboxPagerPlace {
   readonly shown: boolean;
 }
 
-/** The chosen item's place among the rows drawn and the steps either side of it, which keep it in its place where it has no row, K and J offered while the Inbox is on screen and each has somewhere to go, the last row and the first while nothing is chosen; none where the steps do not hold the chosen item. */
+/** The chosen item's place among the rows drawn and the steps either side of it; none where the steps do not hold the chosen item. */
 export function useInboxPager(
   steps: InboxListView,
   rows: InboxListView,
@@ -58,7 +58,9 @@ export function useInboxPager(
   const onNext = next === undefined ? undefined : () => onChoose(next);
   useAppCommand(APP_COMMAND.PREVIOUS_INBOX_ITEM, place.shown ? onPrevious : undefined);
   useAppCommand(APP_COMMAND.NEXT_INBOX_ITEM, place.shown ? onNext : undefined);
+
   if (at === undefined) return undefined;
+
   return {
     count: row === undefined ? undefined : { at: row.at, total: row.total },
     onPrevious,
@@ -66,19 +68,18 @@ export function useInboxPager(
   };
 }
 
-/** The pager at the end of an item's bar: "2 of 8" where the item has a row, then the arrows up and down the list, each naming its key, stepped back where there is nowhere to go. */
 export function InboxPagerControls({ pager }: { pager: InboxPager }): React.JSX.Element {
   return (
     <Pager
       axis={PAGER_AXIS.VERTICAL}
       place={pager.count}
       previous={{
-        label: "Previous item",
+        label: APP_SHORTCUTS[APP_COMMAND.PREVIOUS_INBOX_ITEM].label,
         chord: APP_SHORTCUTS[APP_COMMAND.PREVIOUS_INBOX_ITEM].chord,
         onStep: pager.onPrevious,
       }}
       next={{
-        label: "Next item",
+        label: APP_SHORTCUTS[APP_COMMAND.NEXT_INBOX_ITEM].label,
         chord: APP_SHORTCUTS[APP_COMMAND.NEXT_INBOX_ITEM].chord,
         onStep: pager.onNext,
       }}

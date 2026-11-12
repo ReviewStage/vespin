@@ -91,6 +91,7 @@ function drawn(text: string, opened: ReadLink[]): HTMLElement {
       ),
     ),
   );
+
   return container;
 }
 
@@ -137,6 +138,7 @@ test("a page's chip on the open plan hangs the page's tab's card, previewing its
       },
     },
   );
+
   fakeAppBridge({
     onAppState: () => () => undefined,
     requestAppState: () => Promise.resolve(state),

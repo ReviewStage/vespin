@@ -61,6 +61,7 @@ export function accountBaseUrlFor(input: {
   readonly serviceOrigin: string | undefined;
 }): string {
   if (input.serviceOrigin !== undefined) return `${input.serviceOrigin}/api/auth`;
+
   return (input.packaged ? undefined : input.override) ?? ACCOUNT_BASE_URL;
 }
 
@@ -107,6 +108,7 @@ export function hostKernelOver(parts: HostKernelParts): HostKernel {
       const result = await Effect.runPromise(
         nodes.invoke(HOST_NODE_CAPABILITY.OPEN_EXTERNAL, { url }),
       );
+
       if (result.status === NODE_CAPABILITY_STATUS.OK) return;
       throw new Error(result.reason);
     },

@@ -2,8 +2,10 @@ import { VIRTUAL_ROW_KEY_ATTRIBUTE, type VirtualRowsHandle } from "@repo/ui/virt
 import { type RefObject, useEffect, useState } from "react";
 import { type FindSource, type FindStep, type FindTally, useFindSource } from "./find-in-tab.js";
 import {
+  FIND_DETAILS_LEFT_OUT,
   findRanges,
   NO_PAINTING,
+  releaseFolds,
   repaint,
   reveal,
   selectedWords,
@@ -29,13 +31,19 @@ import {
  * stands above its conversation and its comment box below. A step to a
  * match in a row not drawn scrolls the run to that row (`VirtualRowsHandle`),
  * and the match is painted and centered once the row is drawn, any fold
- * around it opened, as the DOM's find opens one.
+ * around it opened, as the DOM's find opens one, and closed again as the
+ * find moves off it. A transcript's rows hold their calls' and thoughts'
+ * words apart (`FindRow`'s `details`), which a find over the conversation
+ * alone neither counts nor reads where drawn, telling the bar how many
+ * matches they hold instead.
  */
 
 /** A row as the find reads it before it is drawn: its key, and the words it holds. */
 export interface FindRow {
   readonly key: string;
   readonly words: string;
+  /** The words its details hold, a transcript's calls and thoughts, which a find may leave out (`useFindDetails`). */
+  readonly details?: string | undefined;
 }
 
 /** Where a match stands outside the rows: before the run's first row drawn, or after them. */
@@ -75,7 +83,9 @@ const PATTERN_SYNTAX = /[.*+?^${}()|[\]\\/]/g;
 function countIn(words: string, query: string): number {
   const pattern = new RegExp(query.replace(PATTERN_SYNTAX, "\\$&"), "giu");
   let count = 0;
+
   for (const _match of words.matchAll(pattern)) count += 1;
+
   return count;
 }
 
@@ -83,12 +93,14 @@ function countIn(words: string, query: string): number {
 function parentAcross(node: Node): Element | null {
   if (node.parentElement !== null) return node.parentElement;
   const root = node.getRootNode();
+
   return root instanceof ShadowRoot ? root.host : null;
 }
 
 /** The row a drawn range stands in, across any shadow root between; none outside every row. */
 function rowOf(range: Range): Element | undefined {
   const start = range.startContainer;
+
   for (
     let at: Element | null = start instanceof Element ? start : parentAcross(start);
     at !== null;
@@ -96,23 +108,28 @@ function rowOf(range: Range): Element | undefined {
   ) {
     if (at.hasAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE)) return at;
   }
+
   return undefined;
 }
 
 /** The element of the document `range` stands in, out of any shadow root, which its place among the rows is read by. */
 function lightOf(range: Range): Node {
   let at: Node = range.startContainer;
+
   for (let root = at.getRootNode(); root instanceof ShadowRoot; root = at.getRootNode()) {
     at = root.host;
   }
+
   return at;
 }
 
 /** The drawn ranges grouped by the row each stands in, or by whether it stands before `first`, the run's first row drawn, or after the rows. */
 function byRow(ranges: readonly Range[], first: HTMLElement | undefined): Grouped {
   const grouped = noRanges();
+
   for (const range of ranges) {
     const row = rowOf(range)?.getAttribute(VIRTUAL_ROW_KEY_ATTRIBUTE);
+
     if (row !== undefined && row !== null) {
       grouped.rows.set(row, [...(grouped.rows.get(row) ?? []), range]);
     } else if (
@@ -124,12 +141,14 @@ function byRow(ranges: readonly Range[], first: HTMLElement | undefined): Groupe
       grouped.after.push(range);
     }
   }
+
   return grouped;
 }
 
 /** The ranges drawn for one match's place. */
 function rangesOf(grouped: Grouped, match: RowMatch): readonly Range[] | undefined {
   if (!match.outside) return grouped.rows.get(match.row);
+
   return match.row === OUTSIDE.BEFORE ? grouped.before : grouped.after;
 }
 
@@ -153,38 +172,62 @@ export function useVirtualFind(input: {
   rows: readonly FindRow[];
   handle: RefObject<VirtualRowsHandle | null>;
   findable: boolean;
+  /** Whether the find searches the rows' details; so where it is not said. */
+  details?: boolean | undefined;
 }): void {
   const { root, handle } = input;
   const [latestRows] = useState(() => ({ current: input.rows }));
   latestRows.current = input.rows;
+
   const [find] = useState(() => {
+    const matches: RowMatch[] = [];
+
     const state = {
       query: "",
-      matches: [] as RowMatch[],
+      matches,
       at: -1,
+      // Whether the details are searched, and how many matches they hold where they are not.
+      details: true,
+      left: 0,
+      // The folds the find opened for its matches, closed again as it moves off them.
+      folds: new Set<HTMLDetailsElement>(),
       painting: NO_PAINTING,
       // Whether the match the find is at still waits to be brought into view, once drawn.
       pending: false,
       // Each row's count as it was last drawn under the query.
       drawn: new Map<string, number>(),
       listeners: new Set<(tally: FindTally) => void>(),
+      // SAFETY: nothing is watched before the first search, which keeps the stop it is handed here.
       unwatch: undefined as (() => void) | undefined,
     };
+
     const tell = () => {
-      const tally = { count: state.matches.length, at: state.at };
+      const tally = { count: state.matches.length, at: state.at, left: state.left };
+
       for (const listener of state.listeners) listener(tally);
     };
+
     /** Every match: what stands before the rows, each row's from what it last drew where it was drawn under the query, else from its words, then what stands after the rows. */
     const readMatches = (grouped: Grouped): RowMatch[] => {
       for (const [row, ranges] of grouped.rows) state.drawn.set(row, ranges.length);
       const matches = matchesAt(OUTSIDE.BEFORE, true, grouped.before.length);
+      let left = 0;
+
       for (const row of latestRows.current) {
-        const count = state.drawn.get(row.key) ?? countIn(row.words, state.query);
+        const details = row.details === undefined ? 0 : countIn(row.details, state.query);
+
+        if (!state.details) left += details;
+        const words = countIn(row.words, state.query) + (state.details ? details : 0);
+        const count = state.drawn.get(row.key) ?? words;
         matches.push(...matchesAt(row.key, false, count));
       }
+
+      state.left = left;
       matches.push(...matchesAt(OUTSIDE.AFTER, true, grouped.after.length));
+
       return matches;
     };
+
     /** Paints the drawn matches, the one the find is at brought into view where it waits to be. */
     const paint = (grouped: Grouped) => {
       const box = root.current;
@@ -194,33 +237,46 @@ export function useVirtualFind(input: {
       const next = { ranges, at: current === undefined ? -1 : ranges.indexOf(current) };
       repaint(state.painting, next);
       state.painting = next;
+
+      // Note that a query matching nothing closes what the find opened for the one before it.
+      if (state.matches.length === 0) releaseFolds(state.folds);
+
       if (state.pending && current !== undefined && box !== null) {
         state.pending = false;
-        reveal(current, box);
+        reveal(current, box, state.folds);
       }
     };
+
     const drawnRanges = (): Grouped => {
       const box = root.current;
+
       if (box === null || state.query.length === 0) return noRanges();
       const run = handle.current;
       const first = run?.rowElement(run.drawnKeys()[0] ?? "");
-      return byRow(findRanges(box, state.query), first);
+      const leftOut = state.details ? undefined : FIND_DETAILS_LEFT_OUT;
+
+      return byRow(findRanges(box, state.query, leftOut), first);
     };
+
     /** Takes the find to the match it is at: its row scrolled into view where it is not drawn, and painted once it is. */
     const go = () => {
       tell();
       const match = state.matches[state.at];
       state.pending = match !== undefined;
       const grouped = drawnRanges();
+
       if (match !== undefined && !match.outside && !grouped.rows.has(match.row)) {
         handle.current?.bringIn(match.row);
       }
+
       paint(grouped);
     };
+
     /** The match a new query starts at: the first drawn at or below the view's top, else the first in or after the rows drawn. */
     const startAt = (grouped: Grouped): number => {
       if (state.matches.length === 0) return -1;
       const top = root.current?.getBoundingClientRect().top ?? 0;
+
       const places: [RowMatch["row"], boolean, readonly Range[]][] = [
         [OUTSIDE.BEFORE, true, grouped.before],
         ...[...grouped.rows].map(([row, ranges]): [string, boolean, Range[]] => [
@@ -230,31 +286,41 @@ export function useVirtualFind(input: {
         ]),
         [OUTSIDE.AFTER, true, grouped.after],
       ];
+
       for (const [row, outside, ranges] of places) {
         const nth = ranges.findIndex((range) => range.getBoundingClientRect().bottom >= top);
+
         if (nth === -1) continue;
         const at = state.matches.findIndex((match) => sameMatch(match, { row, outside, nth }));
+
         if (at !== -1) return at;
       }
+
       const keys = latestRows.current.map((row) => row.key);
       const from = keys.indexOf(handle.current?.drawnKeys()[0] ?? "");
+
       const after = state.matches.findIndex((match) =>
         match.outside ? match.row === OUTSIDE.AFTER : keys.indexOf(match.row) >= from,
       );
+
       return Math.max(0, after);
     };
+
     /** Reads the matches again as rows are drawn, grow, or land, keeping to the match the find is at. */
     const refresh = () => {
       if (state.query.length === 0) return;
       const was = state.matches[state.at];
       const grouped = drawnRanges();
       state.matches = readMatches(grouped);
+
       const kept =
         was === undefined ? -1 : state.matches.findIndex((match) => sameMatch(was, match));
+
       // Note that a row counted from its words and found to draw fewer keeps the find on its last.
       const fallback = state.matches.findLastIndex(
         (match) => match.row === was?.row && match.outside === was.outside,
       );
+
       state.at =
         kept !== -1
           ? kept
@@ -264,6 +330,7 @@ export function useVirtualFind(input: {
       tell();
       paint(grouped);
     };
+
     const search = (query: string) => {
       state.query = query;
       state.drawn.clear();
@@ -275,11 +342,13 @@ export function useVirtualFind(input: {
       state.at = startAt(grouped);
       go();
     };
+
     const source: FindSource = {
       search,
       step: (query: string, step: FindStep) => {
         if (query !== state.query) return search(query);
         const count = state.matches.length;
+
         if (count === 0) return tell();
         state.at = (state.at + step + count) % count;
         go();
@@ -290,23 +359,38 @@ export function useVirtualFind(input: {
         state.query = "";
         state.matches = [];
         state.at = -1;
+        state.left = 0;
         state.pending = false;
         state.drawn.clear();
         state.unwatch?.();
         state.unwatch = undefined;
+
         for (const listener of state.listeners) listener(NO_TALLY);
       },
       onTally: (listener) => {
         state.listeners.add(listener);
+
         return () => state.listeners.delete(listener);
       },
       selection: () => (root.current === null ? undefined : selectedWords(root.current)),
     };
-    return { source, refresh };
+
+    /** Searches the details or leaves them out, the query found again either way. */
+    const scope = (details: boolean) => {
+      if (state.details === details) return;
+      state.details = details;
+
+      if (state.query.length > 0) search(state.query);
+    };
+
+    return { source, refresh, scope };
   });
+
   useFindSource(input.findable ? find.source : undefined);
   // Note that the tints are taken away with the run, since they name ranges of its rows.
   useEffect(() => find.source.clear, [find]);
   // New rows may hold matches no row has drawn.
   useEffect(() => find.refresh(), [find, input.rows]);
+  const details = input.details ?? true;
+  useEffect(() => find.scope(details), [find, details]);
 }

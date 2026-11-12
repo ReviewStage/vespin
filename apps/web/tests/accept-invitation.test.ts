@@ -39,8 +39,10 @@ async function openPage(answers: ReadonlyMap<string, () => Answer>): Promise<HTM
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
     const answer = answers.get(url.pathname);
+
     if (!answer) return new Promise(() => undefined);
     const { status, body } = answer();
+
     return Promise.resolve(
       new Response(body === undefined ? null : JSON.stringify(body), {
         status,
@@ -60,6 +62,7 @@ async function openPage(answers: ReadonlyMap<string, () => Answer>): Promise<HTM
   await act(async () => {
     await import("../src/accept-invitation");
   });
+
   return root;
 }
 
@@ -112,7 +115,9 @@ function buttonNamed(page: HTMLElement, name: string): HTMLButtonElement {
   const button = Array.from(page.querySelectorAll("button")).find(
     (candidate) => (candidate.getAttribute("aria-label") ?? candidate.textContent) === name,
   );
+
   if (!button) throw new Error(`No button named ${name}`);
+
   return button;
 }
 
@@ -130,12 +135,14 @@ afterEach(() => {
 test("a valid invitation names its workspace and inviter and is accepted from its button", async () => {
   let settleAccept: (answer: Answer) => void = () => undefined;
   let offer = VALID;
+
   const page = await openPage(
     new Map([
       ["/api/auth/get-session", () => SIGNED_IN],
       [HOSTED_SERVICE_PATH.WORKSPACES_INVITATION_OFFER, () => offer],
     ]),
   );
+
   await titled(page, "Join Atlas");
   expect(page.textContent).toContain("Grace invited you to work in Atlas on Vespin.");
   expect(buttonNames(page)).toEqual(["Accept invitation"]);
@@ -202,6 +209,7 @@ test("a signed-out visitor is offered the providers, and a sign-in that cannot s
       ["/api/auth/sign-in/social", () => ({ status: 500, body: { message: "unavailable" } })],
     ]),
   );
+
   await titled(page, "Sign in to accept your invitation");
   expect(page.textContent).toContain(`Use the Google or GitHub account at ${INVITED}.`);
 
@@ -217,6 +225,7 @@ test("a signed-out visitor is offered the providers, and a sign-in that cannot s
 
 test("a sign-in asked for again, after a session came and went, carries no earlier failure", async () => {
   let session = SIGNED_OUT;
+
   const page = await openPage(
     new Map([
       ["/api/auth/get-session", () => session],
@@ -224,6 +233,7 @@ test("a sign-in asked for again, after a session came and went, carries no earli
       [HOSTED_SERVICE_PATH.WORKSPACES_INVITATION_OFFER, () => VALID],
     ]),
   );
+
   await titled(page, "Sign in to accept your invitation");
   await act(async () => buttonNamed(page, "Continue with GitHub").click());
   await vi.waitFor(() => expect(page.querySelector('[role="alert"]')?.textContent).not.toBe(""));
@@ -235,6 +245,7 @@ test("a sign-in asked for again, after a session came and went, carries no earli
     vi.setSystemTime(Date.now() + 60_000);
     await act(async () => document.dispatchEvent(new Event("visibilitychange")));
   };
+
   await refocus(SIGNED_IN);
   await titled(page, "Join Atlas");
   await refocus(SIGNED_OUT);
@@ -247,12 +258,14 @@ test("a sign-in asked for again, after a session came and went, carries no earli
 test("an address verified while the page stood open makes the invitation acceptable", async () => {
   let session = SIGNED_IN_UNVERIFIED;
   let offer = offerRead({ refused: INVITATION_OFFER_REFUSAL.UNVERIFIED });
+
   const page = await openPage(
     new Map([
       ["/api/auth/get-session", () => session],
       [HOSTED_SERVICE_PATH.WORKSPACES_INVITATION_OFFER, () => offer],
     ]),
   );
+
   await titled(page, "Your address isn't verified");
 
   // Note that Better Auth refetches on visibility only after the prior session read has aged out.

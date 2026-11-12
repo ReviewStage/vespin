@@ -1,6 +1,6 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
-  AVATAR_SHAPE,
+  AVATAR_OUTLINE,
   AVATAR_SIZE,
   Avatar,
   GAP,
@@ -63,28 +63,28 @@ function Avatars(): React.JSX.Element {
         <Stack gap={GAP.CONTROL}>
           {Object.values(AVATAR_SIZE).map((size) => (
             <Inline key={size} gap={GAP.CONTROL}>
-              <Avatar name="Vercel" src={PICTURE} shape={AVATAR_SHAPE.SQUARE} size={size} />
+              <Avatar name="Vercel" src={PICTURE} outline={AVATAR_OUTLINE.SQUARE} size={size} />
               <Avatar
                 name="Agent"
                 glyph={<TerminalIcon />}
-                shape={AVATAR_SHAPE.SQUARE}
+                outline={AVATAR_OUTLINE.SQUARE}
                 size={size}
               />
               <Avatar
                 name={PRODUCT_NAME}
                 glyph={<ProductMark />}
-                shape={AVATAR_SHAPE.SQUARE}
+                outline={AVATAR_OUTLINE.SQUARE}
                 size={size}
                 tiled
               />
               <Avatar
                 name={PRODUCT_NAME}
                 glyph={<ProductMark small />}
-                shape={AVATAR_SHAPE.SQUARE}
+                outline={AVATAR_OUTLINE.SQUARE}
                 size={size}
                 branded
               />
-              <Avatar name="Vercel" shape={AVATAR_SHAPE.SQUARE} size={size} />
+              <Avatar name="Vercel" outline={AVATAR_OUTLINE.SQUARE} size={size} />
             </Inline>
           ))}
         </Stack>
@@ -96,11 +96,11 @@ function Avatars(): React.JSX.Element {
         <Stack gap={GAP.CONTROL}>
           {Object.values(AVATAR_SIZE).map((size) => (
             <Inline key={size} gap={GAP.CONTROL}>
-              <Avatar name="Acme" src={PICTURE} shape={AVATAR_SHAPE.TILE} size={size} />
-              <Avatar name="Acme" shape={AVATAR_SHAPE.TILE} size={size} />
-              <Avatar name="Acme" src={BROKEN} shape={AVATAR_SHAPE.TILE} size={size} />
-              <Avatar name="" src={PICTURE} shape={AVATAR_SHAPE.TILE} size={size} edged blank />
-              <Avatar name="" shape={AVATAR_SHAPE.TILE} size={size} edged blank />
+              <Avatar name="Acme" src={PICTURE} outline={AVATAR_OUTLINE.TILE} size={size} />
+              <Avatar name="Acme" outline={AVATAR_OUTLINE.TILE} size={size} />
+              <Avatar name="Acme" src={BROKEN} outline={AVATAR_OUTLINE.TILE} size={size} />
+              <Avatar name="" src={PICTURE} outline={AVATAR_OUTLINE.TILE} size={size} edged blank />
+              <Avatar name="" outline={AVATAR_OUTLINE.TILE} size={size} edged blank />
             </Inline>
           ))}
         </Stack>

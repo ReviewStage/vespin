@@ -11,7 +11,7 @@ import {
 import { and, asc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
-import { Database, type DatabaseServices, type DatabaseShape } from "../core/query.js";
+import { Database, type DatabaseClient, type DatabaseServices } from "../core/query.js";
 import { accountProviderKey, type StoredUsageWindow } from "../schemas/account-provider-key.js";
 import { InstantColumnSchema } from "./columns.js";
 import type { SealedProviderKey } from "./provider-key-seal.js";
@@ -132,7 +132,7 @@ const ofKind = (key: typeof KindKeySchema.Type) =>
   );
 
 /** Where a statement finds the one row a target names, the first of its kind's order where it names no id. */
-const targetRow = (db: DatabaseShape, target: typeof TargetSchema.Type) =>
+const targetRow = (db: DatabaseClient, target: typeof TargetSchema.Type) =>
   and(
     ofKind(target),
     target.subscriptionId === undefined
@@ -451,11 +451,13 @@ const mergePlanUsage = SqlSchema.void({
     Database.use((db) => {
       const length = write.window.windowMins ?? null;
       const model = write.window.model ?? null;
+
       const others = sql`coalesce((
         select jsonb_agg(kept) from jsonb_array_elements(${accountProviderKey.usageWindows}) as kept
         where (kept->>'windowMins')::int is distinct from ${length}::int
           or (kept->>'model') is distinct from ${model}::text
       ), '[]'::jsonb)`;
+
       return db
         .update(accountProviderKey)
         .set({
@@ -666,10 +668,13 @@ function landingOf(
   const signedInAs = rows.find(
     (row) => placement.accountEmail !== undefined && row.accountEmail === placement.accountEmail,
   );
+
   if (signedInAs !== undefined) return signedInAs.id;
+
   if (placement.subscriptionId !== undefined) {
     return rows.find((row) => row.id === placement.subscriptionId)?.id;
   }
+
   return placement.add === true ? undefined : rows[0]?.id;
 }
 
@@ -696,23 +701,29 @@ export function saveProviderKey(
   placement: SubscriptionPlacement = {},
 ): TaskStoreEffect<string> {
   const write = { userId, provider, kind, ...sealed, hint, fastAccess, accessExpiresAt, now };
+
   const placed = {
     ...write,
     accountEmail: placement.accountEmail ?? null,
     ...(placement.label === undefined ? undefined : { label: placement.label }),
   };
+
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
         const rows = yield* lockProviderRows({ userId, provider });
+
         const id = landingOf(
           rows.filter((row) => row.kind === kind),
           kind === PROVIDER_KEY_KIND.API_KEY ? { ...placement, add: true } : placement,
         );
+
         if (id !== undefined) {
           yield* overwriteSubscription({ ...placed, id });
+
           return id;
         }
+
         // An insert that returned no row is the database breaking its own contract, not an outcome.
         return (yield* insertSubscription({ ...placed, position: bottomOf(rows) }).pipe(
           Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
@@ -740,8 +751,9 @@ export function withProviderKeyLocked<A, E, R>(
     userId,
     provider,
     kind,
-    ...(subscriptionId === undefined ? {} : { subscriptionId }),
+    ...(subscriptionId !== undefined && { subscriptionId }),
   };
+
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.flatMap(lockRow(target), (rows) => body(Option.fromNullishOr(rows[0]))),
@@ -783,7 +795,7 @@ export function removeProviderKey(
     userId,
     provider,
     kind,
-    ...(subscriptionId === undefined ? {} : { subscriptionId }),
+    ...(subscriptionId !== undefined && { subscriptionId }),
   });
 }
 
@@ -806,7 +818,7 @@ export function setProviderKeyForAgents(
       provider,
       kind,
       forAgents,
-      ...(subscriptionId === undefined ? {} : { subscriptionId }),
+      ...(subscriptionId !== undefined && { subscriptionId }),
     }),
     (rows) => rows.length > 0,
   );
@@ -847,6 +859,7 @@ export function reorderSubscriptions(
         const named = ids.filter((id) => held.has(id));
         const left = rows.map((row) => row.id).filter((id) => !named.includes(id));
         const ordered = [...named, ...left];
+
         for (const [position, id] of ordered.entries()) {
           if (rows.find((row) => row.id === id)?.position === position) continue;
           yield* updatePosition({ userId, id, position });
@@ -896,7 +909,7 @@ export function setPlanStatus(
     userId,
     provider,
     kind,
-    ...(subscriptionId === undefined ? {} : { subscriptionId }),
+    ...(subscriptionId !== undefined && { subscriptionId }),
     status,
     limitResetsAt: status === PROVIDER_KEY_STATUS.LIMIT_REACHED ? (limitResetsAt ?? null) : null,
     savedBy,
@@ -924,7 +937,7 @@ export function setPlanUsage(
     userId,
     provider,
     kind,
-    ...(subscriptionId === undefined ? {} : { subscriptionId }),
+    ...(subscriptionId !== undefined && { subscriptionId }),
     window,
     heardAt,
     savedBy,

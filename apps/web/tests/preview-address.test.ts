@@ -4,29 +4,36 @@ import { chmodSync, copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { temporaryDirectory } from "@repo/runtime/testing";
+import type { WireValue } from "@repo/wire";
 import { type TestContext, test } from "vitest";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
+
 const SCRIPTS = [
   "scripts/preview-address.sh",
   "scripts/vercel-ignore.sh",
   "scripts/vercel-deployed-paths.mjs",
 ];
+
 /** The least workspace the ignore step reads its deployed tree from: one service, the web app. */
 const WORKSPACE = {
   "pnpm-workspace.yaml": 'packages:\n  - "apps/*"\n',
   "vercel.json": `${JSON.stringify({ services: { web: { root: "apps/web" } } })}\n`,
   "apps/web/package.json": `${JSON.stringify({ name: "@repo/web" })}\n`,
 } as const;
+
 const REPOSITORY = "acme/web";
 const BRANCH = "agent/rebased";
 
 /** The script's own exit for a commit no build serves the deployed tree of. */
 const EXIT_NOT_AFFECTED = 3;
+
 /** The script's own exit for a commit whose record never settled within the wait. */
 const EXIT_NOT_READY = 6;
+
 /** The script's own exit for a read of GitHub that failed. */
 const EXIT_UNREADABLE = 7;
+
 /** The script's own exit for an agent's branch no preview was asked for. */
 const EXIT_NOT_REQUESTED = 8;
 
@@ -67,7 +74,9 @@ function git(root: string, ...args: string[]): string {
       env: { PATH: process.env.PATH, HOME: root, GIT_CONFIG_NOSYSTEM: "1" },
     },
   );
+
   assert.equal(ran.status, 0, ran.stderr);
+
   return ran.stdout.trim();
 }
 
@@ -76,13 +85,14 @@ function commit(root: string, path: string, content: string): string {
   writeFileSync(join(root, path), content);
   git(root, "add", "--all");
   git(root, "commit", "-q", "-m", `change ${path}`);
+
   return git(root, "rev-parse", "HEAD");
 }
 
 /** What the fake `gh` answers for a request GitHub refuses. */
 const REFUSED = Symbol("refused");
 
-function answer(answers: string, path: string, body: unknown): void {
+function answer(answers: string, path: string, body: WireValue | typeof REFUSED): void {
   writeFileSync(
     join(answers, path.replace(/[^A-Za-z0-9]/g, "_")),
     body === REFUSED ? "REFUSED\n" : JSON.stringify(body),
@@ -115,6 +125,7 @@ function deployed(answers: string, sha: string, builds: readonly Build[]): void 
     `repos/${REPOSITORY}/deployments?sha=${sha}&environment=Preview&per_page=10`,
     builds.map((build) => ({ id: build.id, created_at: build.at })),
   );
+
   for (const build of builds) {
     answer(answers, `repos/${REPOSITORY}/deployments/${build.id}/statuses?per_page=10`, [
       {
@@ -170,14 +181,17 @@ async function rebasedBranch(t: TestContext, webBeforeRebase: string): Promise<F
   const origin = await temporaryDirectory(t, "preview-address-origin-");
   git(origin, "init", "-q", "-b", "main");
   git(origin, "config", "uploadpack.allowAnySHA1InWant", "true");
+
   for (const script of SCRIPTS) {
     mkdirSync(join(origin, "scripts"), { recursive: true });
     copyFileSync(join(ROOT, script), join(origin, script));
   }
+
   for (const [path, content] of Object.entries(WORKSPACE)) {
     mkdirSync(dirname(join(origin, path)), { recursive: true });
     writeFileSync(join(origin, path), content);
   }
+
   commit(origin, "README.md", "base\n");
   git(origin, "checkout", "-q", "-b", BRANCH);
   const earlier = commit(origin, "apps/web/src/main.tsx", webBeforeRebase);
@@ -200,13 +214,13 @@ async function rebasedBranch(t: TestContext, webBeforeRebase: string): Promise<F
   writeFileSync(join(bin, "curl"), FAKE_CURL);
   chmodSync(join(bin, "gh"), 0o755);
   chmodSync(join(bin, "curl"), 0o755);
+
   return { checkout, answers, bin, earlier, between, head };
 }
 
-function previewAddress(
-  fixture: Fixture,
-  attempts = 1,
-): { status: number | null; address: string } {
+type PreviewAddressResult = { status: number | null; address: string };
+
+function previewAddress(fixture: Fixture, attempts = 1): PreviewAddressResult {
   const ran = spawnSync("bash", ["scripts/preview-address.sh", "--repo", REPOSITORY], {
     cwd: fixture.checkout,
     encoding: "utf8",
@@ -220,6 +234,7 @@ function previewAddress(
       PREVIEW_ADDRESS_QUIET_ATTEMPTS: "2",
     },
   });
+
   return { status: ran.status, address: ran.stdout.trim() };
 }
 

@@ -134,6 +134,7 @@ export function TextButton({
   children: ReactNode;
 }): React.JSX.Element {
   const linkAddress = useLinkAddress(linkHref);
+
   return (
     <ButtonPrimitive
       type="button"

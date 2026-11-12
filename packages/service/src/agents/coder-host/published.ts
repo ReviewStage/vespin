@@ -27,7 +27,17 @@ import {
   pullRequestAuthorOf,
 } from "@repo/features/agent-wire";
 import { failureKind } from "@repo/runtime/effect";
-import { Cache, Clock, Data, Duration, Effect, Exit, Option, type Redacted } from "effect";
+import {
+  Cache,
+  Clock,
+  Data,
+  Duration,
+  Effect,
+  Exit,
+  Option,
+  Predicate,
+  type Redacted,
+} from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { reconsiderRunArchive } from "../../automations/run-archive.js";
 import { recordServerEvent, SERVER_EVENT } from "../../events/server-events.js";
@@ -168,6 +178,7 @@ function queuedOf(
 ): Effect.Effect<boolean, never, HttpClient.HttpClient> {
   if (found.state !== PULL_REQUEST_STATE.OPEN) return Effect.succeed(false);
   const keptQueued = kept !== null && kept.number === found.number && kept.queued === true;
+
   return pullRequestQueued(token, repository, found.number).pipe(
     Effect.catch(() => Effect.succeed(keptQueued)),
   );
@@ -184,13 +195,16 @@ function withChecks(
     checkSummaryOf(token, repository, found.headSha),
     queuedOf(token, repository, found, kept),
   ]);
+
   return Effect.map(read, ([checks, queued]) => {
     const pullRequest = wirePullRequestOf(found, checks, queued);
+
     const stored: StoredPullRequest = {
       ...pullRequest,
       headSha: found.headSha,
       ...(found.mergedAt === undefined ? undefined : { mergedAt: found.mergedAt }),
     };
+
     return {
       answer: { repository, branch: found.headRef, pullRequest },
       stored,
@@ -207,7 +221,9 @@ function firstSeenEnd(
   if (found.state !== PULL_REQUEST_STATE.MERGED && found.state !== PULL_REQUEST_STATE.CLOSED) {
     return undefined;
   }
+
   const seen = kept !== null && kept.number === found.number && kept.state === found.state;
+
   return seen ? undefined : found.state;
 }
 
@@ -233,12 +249,15 @@ export const agentPullRequestReach = /* @__PURE__ */ Effect.fnUntraced(function*
 ): Effect.fn.Return<GitHubRepositoryToken, PublishedReadFailure, PublishedServices> {
   const workspace = yield* agentWorkspace(userId, agent);
   const app = yield* GitHubApp;
+
   const reached = Option.isNone(workspace)
     ? Option.none()
     : yield* app.repositoryPullRequestToken(workspace.value, repository, agentMember(agent));
+
   if (Option.isNone(reached)) {
     return yield* new RepositoryNotReachable({ repository });
   }
+
   return reached.value;
 });
 
@@ -253,17 +272,23 @@ const publishedOnGitHub = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<Published, PublishedReadFailure, PublishedServices> {
   // No branch on the row, no publication: no turn has ended in the sandbox, or its checkout stood detached.
   if (agent.branch === null) return nothing(agent);
+
   if (!hasRepository(agent)) return nothing(agent);
   const reached = yield* agentPullRequestReach(userId, agent);
+
   // The default branch is the checkout's own, not a branch the agent cut: nothing published from it.
   if (agent.branch === reached.repository.defaultBranch) return nothing(agent);
   const { token } = reached;
   const ofBranch = yield* pullRequestOfBranch(token, agent.repository, agent.branch);
+
   if (Option.isSome(ofBranch)) {
     const kept = yield* readAgentPublished(userId, agent.id);
+
     return yield* withChecks(token, agent.repository, ofBranch.value, kept);
   }
+
   const pushed = yield* branchStands(token, agent.repository, agent.branch);
+
   return pushed
     ? {
         answer: { repository: agent.repository, branch: agent.branch, pullRequest: null },
@@ -287,7 +312,9 @@ interface LinkedRead {
  */
 function readAgain(row: AgentPullRequestRow, delivered: readonly string[]): boolean {
   const { state } = row.pullRequest;
+
   if (state === PULL_REQUEST_STATE.MERGED) return false;
+
   return state !== PULL_REQUEST_STATE.CLOSED || delivered.includes(row.headBranch);
 }
 
@@ -307,34 +334,41 @@ const linkedOnGitHub = (
 ): Effect.Effect<readonly LinkedRead[], never, PublishedServices> =>
   Effect.gen(function* () {
     const asked = rows.filter((row) => readAgain(row, delivered));
+
     if (asked.length === 0) return [];
     const { token } = yield* agentPullRequestReach(userId, agent, repository);
+
     const read = yield* Effect.forEach(
       asked,
       (row) =>
         Effect.gen(function* () {
           const found = yield* pullRequestByNumber(token, repository, row.pullRequest.number);
+
           if (Option.isNone(found)) return [];
+
           const { stored, ended } = yield* withChecks(
             token,
             repository,
             found.value,
             row.pullRequest,
           );
+
           if (stored === null) return [];
+
           return [{ read: { repository, headBranch: row.headBranch, pullRequest: stored }, ended }];
         }).pipe(Effect.catch(linkedUnread)),
       // Note that an agent opens few pull requests, so they are read together.
       { concurrency: "unbounded" },
     );
+
     return read.flat();
   }).pipe(Effect.catch(linkedUnread));
 
 /** A read of the pull requests an agent linked before that failed, logged by its kind alone. */
-function linkedUnread(failure: unknown): Effect.Effect<readonly LinkedRead[]> {
+function linkedUnread(cause: unknown): Effect.Effect<readonly LinkedRead[]> {
   return Effect.as(
     Effect.logWarning(
-      `an agent's linked pull requests could not be read again: ${failureKind(failure)}`,
+      `an agent's linked pull requests could not be read again: ${failureKind(cause)}`,
     ),
     [],
   );
@@ -356,19 +390,24 @@ const recordRepository = (
   Effect.gen(function* () {
     const lowered = repository.toLowerCase();
     const current = found.stored?.number;
+
     const rows = (yield* readAgentPullRequests(userId, agent.id)).filter(
       (row) => row.repository.toLowerCase() === lowered && row.pullRequest.number !== current,
     );
+
     const linked = yield* linkedOnGitHub(userId, agent, repository, rows, delivered);
     const { stored, answer } = found;
+
     const newest =
       stored === null || answer.branch === null
         ? []
         : [{ repository, headBranch: answer.branch, pullRequest: stored }];
+
     const firstMerged = yield* recordAgentPullRequests(userId, agent.id, [
       ...newest,
       ...linked.map((each) => each.read),
     ]);
+
     yield* afterRecorded(agent, firstMerged, [found.ended, ...linked.map((each) => each.ended)]);
   });
 
@@ -389,11 +428,13 @@ export const agentPublished = /* @__PURE__ */ Effect.fn("web/agentPublished")(fu
   const found = yield* publishedOnGitHub(userId, agent);
   const at = yield* Clock.currentTimeMillis;
   const read = { at, branch: agent.branch, pushed: found.answer.branch !== null };
+
   // Note that the read is written last, because an ended agent's read answers from the pull request it
   // linked once it says merged: a write of the pull requests, or what it leaves to do, that fails reads again.
   if (hasRepository(agent))
     yield* recordRepository(userId, agent, agent.repository, found, delivered);
   yield* recordAgentPublishedRead(userId, agent.id, read);
+
   return found.answer;
 });
 
@@ -417,6 +458,7 @@ const afterRecorded = (
     );
     // Note that a pull request ending wakes no agent, so no settle of its turn would archive its run.
     const endedAny = firstMerged > 0 || ended.some((each) => each !== undefined);
+
     if (endedAny && agent.automationRunId !== null) yield* reconsiderRunArchive(agent.id);
   });
 
@@ -436,10 +478,14 @@ const extraPublishedOnGitHub = /* @__PURE__ */ Effect.fnUntraced(function* (
     stored: null,
     ended: undefined,
   };
+
   const reached = yield* agentPullRequestReach(userId, agent, extra.repository);
+
   if (extra.headBranch === reached.repository.defaultBranch) return none;
   const ofBranch = yield* pullRequestOfBranch(reached.token, extra.repository, extra.headBranch);
+
   if (Option.isNone(ofBranch)) return none;
+
   return yield* withChecks(reached.token, extra.repository, ofBranch.value, extra.pullRequest);
 });
 
@@ -460,7 +506,9 @@ const extrasPublished = (userId: string, agent: Agent, delivered: readonly strin
       extras,
       (extra) => {
         const { headBranch } = extra;
+
         if (headBranch === null) return Effect.void;
+
         return Effect.gen(function* () {
           const found = yield* extraPublishedOnGitHub(userId, agent, { ...extra, headBranch });
           yield* recordRepository(userId, agent, extra.repository, found, delivered);
@@ -472,9 +520,9 @@ const extrasPublished = (userId: string, agent: Agent, delivered: readonly strin
   }).pipe(Effect.catch(extraUnread));
 
 /** A read of an extra repository's pull request that failed, logged by its kind alone. */
-function extraUnread(failure: unknown): Effect.Effect<void> {
+function extraUnread(cause: unknown): Effect.Effect<void> {
   return Effect.logWarning(
-    `an extra repository's pull request could not be read again: ${failureKind(failure)}`,
+    `an extra repository's pull request could not be read again: ${failureKind(cause)}`,
   );
 }
 
@@ -494,9 +542,11 @@ export const pullRequestOfNumber = /* @__PURE__ */ Effect.fnUntraced(function* (
   HttpClient.HttpClient
 > {
   const found = yield* pullRequestByNumber(token, repository, number);
+
   if (Option.isNone(found)) return Option.none();
   const checks = yield* checkSummaryOf(token, repository, found.value.headSha);
   const queued = yield* queuedOf(token, repository, found.value, null);
+
   return Option.some({
     branch: found.value.headRef,
     pullRequest: wirePullRequestOf(found.value, checks, queued),
@@ -520,7 +570,9 @@ export const agentPullRequestOfNumber = /* @__PURE__ */ Effect.fn("web/agentPull
     if (!hasRepository(agent)) return nothing(agent).answer;
     const { token } = yield* agentPullRequestReach(userId, agent);
     const found = yield* pullRequestOfNumber(token, agent.repository, number);
+
     if (Option.isNone(found)) return nothing(agent).answer;
+
     return { repository: agent.repository, ...found.value };
   },
 );
@@ -550,9 +602,12 @@ const KEPT_AGENTS = 1_024;
 function keptAnswer(agent: Agent, kept: KeptPublished): AgentPullRequestAnswer {
   if (kept.published === null) {
     const branch = kept.read.pushed ? kept.read.branch : null;
+
     return { repository: agent.repository, branch, pullRequest: null };
   }
+
   const { headSha: _headSha, mergedAt: _mergedAt, ...pullRequest } = kept.published;
+
   return { repository: agent.repository, branch: kept.read.branch, pullRequest };
 }
 
@@ -561,16 +616,20 @@ function keptStands(agent: Agent, ended: boolean, kept: KeptPublished, now: numb
   if (agent.archivedAt !== null) return true;
   const state = kept.published?.state;
   const age = now - kept.read.at;
+
   if (ended && state === PULL_REQUEST_STATE.MERGED) return true;
+
   if (ended && state === PULL_REQUEST_STATE.CLOSED) {
     return age < Duration.toMillis(CODER.PUBLISHED_CLOSED_FRESH);
   }
+
   return age < Duration.toMillis(CODER.PUBLISHED_ROW_FRESH);
 }
 
 /** Whether GitHub refused the read for its rate limit: a 429, the instance's own held answer among them, or a 403 it may answer one with. */
 function rateLimited(failure: PublishedReadFailure): boolean {
-  if (failure._tag !== "GitHubUnavailable") return false;
+  if (!Predicate.isTagged(failure, "GitHubUnavailable")) return false;
+
   return (
     failure.status === GITHUB_HTTP_STATUS.TOO_MANY_REQUESTS ||
     failure.status === GITHUB_HTTP_STATUS.FORBIDDEN
@@ -588,12 +647,15 @@ const lookupPublished = (
 ): Effect.Effect<AgentPullRequestAnswer, PublishedReadFailure | NoSuchAgent, PublishedServices> =>
   Effect.gen(function* () {
     const found = yield* readAgent(key.userId, key.agentId);
+
     if (Option.isNone(found)) return yield* new NoSuchAgent({ agentId: key.agentId });
     const agent = found.value;
     const row = yield* readAgentKeptPublished(key.userId, agent.id);
     const kept = row !== null && row.read.branch === agent.branch ? row : null;
     const now = yield* Clock.currentTimeMillis;
+
     if (kept !== null && keptStands(agent, key.ended, kept, now)) return keptAnswer(agent, kept);
+
     return yield* agentPublished(key.userId, agent).pipe(
       Effect.catch((failure) =>
         kept !== null && rateLimited(failure)
@@ -621,6 +683,7 @@ const publishedCache: Effect.Effect<PublishedCache> = Cache.makeWith(lookupPubli
  */
 export function instancePublishedCache(): Effect.Effect<PublishedCache> {
   let kept: PublishedCache | undefined;
+
   return Effect.suspend(() =>
     kept === undefined
       ? Effect.map(publishedCache, (made) => (kept ??= made))

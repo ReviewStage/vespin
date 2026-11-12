@@ -1,5 +1,5 @@
 /**
- * workspace-sandbox-script-store.ts -- a workspace's sandbox scripts: read them, set or remove its install script, set or remove a repository's setup or archive script, and set a repository's run actions.
+ * workspace-sandbox-script-store.ts -- a workspace's sandbox scripts: read them, set or remove its install script, set or remove a repository's setup or archive script, and set or edit a repository's run actions.
  *
  * Every function is an effect over the ambient `SqlClient`, keyed by the
  * workspace, so no workspace reads, replaces, or removes another's scripts;
@@ -10,8 +10,14 @@
  */
 
 import {
+  type LooseTaskSectionIcon,
+  looseTaskSectionIconSchema,
+} from "@repo/features/task-section-wire";
+import {
   REPOSITORY_SCRIPT_KIND,
   type RepositoryScriptKind,
+  RUN_ACTION_AVAILABILITY,
+  type RunActionAvailability,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { and, asc, eq, type SQL, sql } from "drizzle-orm";
 import { Effect, type Option, Schema } from "effect";
@@ -180,17 +186,24 @@ const RunActionSchema = Schema.Struct({
   repository: Schema.String,
   label: Schema.String,
   command: Schema.String,
+  // Note that an icon is read loosely, its glyph's color as any text, so a color a newer deploy stored fails no older reader.
+  icon: Schema.NullOr(looseTaskSectionIconSchema),
+  isDefault: Schema.Boolean,
+  availableIn: Schema.Literals(Object.values(RUN_ACTION_AVAILABILITY)),
   updatedAt: InstantColumnSchema,
 });
 
 /** One of a repository's run actions as its list was last saved, with the repository as that save spelled it. */
 export type WorkspaceRunAction = typeof RunActionSchema.Type;
 
-/** One action as a save writes it: the id it keeps, where it keeps one, its label, and its command. */
+/** One action as a save writes it: the id it keeps, where it keeps one, its label, its command, its icon where it wears one, whether it is the default, and where it may run, both where unsaid. Note that an icon is written as loosely as it is read, so an edit of another action keeps one a newer deploy stored as it stood. */
 export interface RunActionWrite {
   readonly id?: string | undefined;
   readonly label: string;
   readonly command: string;
+  readonly icon?: LooseTaskSectionIcon | undefined;
+  readonly isDefault?: boolean | undefined;
+  readonly availableIn?: RunActionAvailability | undefined;
 }
 
 const RUN_ACTION_COLUMNS = {
@@ -198,6 +211,9 @@ const RUN_ACTION_COLUMNS = {
   repository: runAction.repository,
   label: runAction.label,
   command: runAction.command,
+  icon: runAction.icon,
+  isDefault: runAction.isDefault,
+  availableIn: runAction.availableIn,
   updatedAt: runAction.updatedAt,
 };
 
@@ -246,17 +262,26 @@ const deleteRunActions = SqlSchema.void({
     Database.use((db) => db.delete(runAction).where(namedRunActions(organizationId, repository))),
 });
 
-const insertRunAction = SqlSchema.void({
+const insertRunAction = SqlSchema.findAll({
+  Result: Schema.Struct({ id: Schema.String }),
   Request: Schema.Struct({
     ...RunActionsKeySchema.fields,
     id: Schema.optionalKey(Schema.String),
     position: Schema.Number,
     label: Schema.String,
     command: Schema.String,
+    icon: Schema.NullOr(looseTaskSectionIconSchema),
+    isDefault: Schema.Boolean,
+    availableIn: Schema.Literals(Object.values(RUN_ACTION_AVAILABILITY)),
     now: Schema.Date,
   }),
   execute: ({ now, ...row }) =>
-    Database.use((db) => db.insert(runAction).values({ ...row, createdAt: now, updatedAt: now })),
+    Database.use((db) =>
+      db
+        .insert(runAction)
+        .values({ ...row, createdAt: now, updatedAt: now })
+        .returning({ id: runAction.id }),
+    ),
 });
 
 /** The workspace's install script, where one is saved. */
@@ -312,6 +337,7 @@ export const setRepositorySetup = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<void, StoreFailure, DatabaseServices> {
   const write = { organizationId, repository, kind, script, now };
   const updated = yield* updateSetup(write);
+
   if (updated.length > 0) return;
   yield* insertSetup(write);
 });
@@ -341,44 +367,78 @@ export function readRunActions(
 }
 
 /**
- * The repository's run actions set, the whole list in its order, replacing
- * the one that stood under any casing of its name; an empty list removes it.
- * An action keeps the id it is given only where that id is one of the
- * repository's actions already, and only at its first place in the list, so
- * a run going on is still known as its action; any other is named afresh, so
- * no save reaches another repository's or workspace's action. Note that the
- * old list is read, deleted, and the new one written in one transaction, so
- * a reader sees one list or the other, never a mix; and that it is held under
- * the repository's lock, so two saves of one repository land one after the
- * other, the later reading and replacing what the earlier wrote.
+ * The repository's run actions set to what `edit` makes of the list as it
+ * stands, in its order, replacing the one that stood under any casing of its
+ * name; an empty list removes it. An action keeps the id it is given only
+ * where that id is one of the repository's actions already, and only at its
+ * first place in the list, so a run going on is still known as its action;
+ * any other is named afresh, so no save reaches another repository's or
+ * workspace's action. Note that the old list is read, edited, deleted, and
+ * the new one written in one transaction, so a reader sees one list or the
+ * other, never a mix; and that it is held under the repository's lock, so
+ * two edits of one repository land one after the other, the later editing
+ * what the earlier wrote and stamped later than it. Answers each action's
+ * id in the list's order, a new one's as the store named it; where `edit`
+ * fails, nothing is written.
  */
+export const editRunActions = <E, R>(
+  organizationId: string,
+  repository: string,
+  edit: (standing: readonly WorkspaceRunAction[]) => Effect.Effect<readonly RunActionWrite[], E, R>,
+  now: Date,
+): Effect.Effect<readonly string[], StoreFailure | E, DatabaseServices | R> =>
+  Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        // The repository's lock, its name however cased, so a save waiting on another reads the list that one wrote.
+        yield* client`select pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(lower(${repository})))`;
+        const standing = yield* findRepositoryRunActions({ organizationId, repository });
+        const actions = yield* edit(standing);
+
+        // Note that the list is stamped later than the one it replaces, even in the same millisecond or from a clock read before the lock, because a client keeps the list with the latest stamp.
+        const stamped = new Date(
+          Math.max(now.getTime(), ...standing.map((row) => row.updatedAt.getTime() + 1)),
+        );
+
+        const keepable = new Set(standing.map((row) => row.id));
+        yield* deleteRunActions({ organizationId, repository });
+        let defaulted = false;
+        const ids: string[] = [];
+
+        for (const [position, action] of actions.entries()) {
+          const keeps = action.id !== undefined && keepable.delete(action.id);
+
+          const inserted = yield* insertRunAction({
+            organizationId,
+            repository,
+            position,
+            label: action.label,
+            command: action.command,
+            icon: action.icon ?? null,
+            // Note that only the first action named default is, so a list naming two still saves one.
+            isDefault: action.isDefault === true && !defaulted,
+            availableIn: action.availableIn ?? RUN_ACTION_AVAILABILITY.BOTH,
+            now: stamped,
+            ...(keeps && action.id !== undefined && { id: action.id }),
+          });
+
+          ids.push(...inserted.map((row) => row.id));
+          defaulted ||= action.isDefault === true;
+        }
+
+        return ids;
+      }),
+    ),
+  );
+
+/** The repository's run actions set, the whole list in its order, as `editRunActions` writes one; an empty list removes it. */
 export function setRunActions(
   organizationId: string,
   repository: string,
   actions: readonly RunActionWrite[],
   now: Date,
 ): ScriptEffect<void> {
-  return Effect.flatMap(SqlClient.SqlClient, (client) =>
-    client.withTransaction(
-      Effect.gen(function* () {
-        // The repository's lock, its name however cased, so a save waiting on another reads the list that one wrote.
-        yield* client`select pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(lower(${repository})))`;
-        const standing = yield* findRepositoryRunActions({ organizationId, repository });
-        const keepable = new Set(standing.map((row) => row.id));
-        yield* deleteRunActions({ organizationId, repository });
-        for (const [position, action] of actions.entries()) {
-          const keeps = action.id !== undefined && keepable.delete(action.id);
-          yield* insertRunAction({
-            organizationId,
-            repository,
-            position,
-            label: action.label,
-            command: action.command,
-            now,
-            ...(keeps && action.id !== undefined ? { id: action.id } : {}),
-          });
-        }
-      }),
-    ),
+  return Effect.asVoid(
+    editRunActions(organizationId, repository, () => Effect.succeed(actions), now),
   );
 }

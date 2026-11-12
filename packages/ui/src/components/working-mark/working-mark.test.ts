@@ -29,6 +29,7 @@ function render(element: React.ReactElement): HTMLElement {
   act(() => root.render(element));
   // Note that the root leaves with its test, so a mark's beat stops with the clock it ran on.
   onTestFinished(() => act(() => root.unmount()));
+
   return container;
 }
 
@@ -41,6 +42,7 @@ test("a still working mark lights at least three cells, not one stacked dot", ()
   const dots = render(createElement(WorkingMark)).querySelectorAll<SVGElement>(
     ".ui-working-mark-dot",
   );
+
   // A capture that drops the animation leaves each dot on its resting transform.
   const cells = new Set([...dots].map((dot) => dot.style.transform));
   assert.ok(cells.size >= 3, `the still mark lights ${cells.size} cells`);
@@ -50,10 +52,12 @@ it.effect("each pixel steps one cell on along the lap on each beat", () =>
   Effect.gen(function* () {
     serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
     const mark = render(createElement(WorkingMark));
+
     const cells = () =>
       [...mark.querySelectorAll<SVGElement>(".ui-working-mark-dot")].map(
         (dot) => dot.style.transform,
       );
+
     // The lead, its tail, the trail, and its tail, resting on cells 1, 0, 5, and 4 of the lap.
     assert.deepEqual(cells(), [
       "translate(5px, 0px)",
@@ -75,10 +79,12 @@ it.effect("each pixel steps one cell on along the lap on each beat", () =>
 it.effect("a mark committed under a capture stage holds its resting frame on the beat", () =>
   Effect.gen(function* () {
     serveEffectsOn(Context.make(Clock.Clock, yield* Clock.Clock));
+
     // The stage zeroes the motion tokens as it is committed, after the mark's render has read them.
     const stage = (element: HTMLElement | null) => {
       if (element !== null) document.body.style.setProperty("--ui-duration-fast", "0s");
     };
+
     const mark = render(createElement("div", { ref: stage }, createElement(WorkingMark)));
     yield* TestClock.adjust("200 millis");
     yield* Effect.promise(() => act(() => Promise.resolve()));

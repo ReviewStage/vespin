@@ -83,7 +83,9 @@ export function curlLink(): string {
 /** The real path of the bundle this process runs, or none where it cannot be read. */
 function bundlePath(): string | undefined {
   const entry = process.argv[1];
+
   if (entry === undefined) return undefined;
+
   try {
     return realpathSync(entry);
   } catch {
@@ -94,8 +96,12 @@ function bundlePath(): string | undefined {
 /** How this `vespin` was installed, by where its bundle really stands. */
 export function installKind(): InstallKind {
   const path = bundlePath();
+
   if (path === undefined) return INSTALL_KIND.SOURCE;
+
   if (path.startsWith(curlReleases())) return INSTALL_KIND.CURL;
+
   if (!path.includes(PACKAGE_FOLDER)) return INSTALL_KIND.SOURCE;
+
   return PACKAGE_MANAGER_MARKS.find((each) => path.includes(each.mark))?.kind ?? INSTALL_KIND.NPM;
 }

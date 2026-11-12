@@ -215,6 +215,7 @@ function RowLabel({
       </span>
     );
   }
+
   return (
     <label className={LABEL_CLASS[density]} id={id} htmlFor={control}>
       {children}
@@ -274,22 +275,27 @@ export function SettingsRow({
   const failed = error !== undefined && said(error.words);
   const described = said(description);
   const led = said(leading);
+
   const describedBy = [described ? descriptionId : undefined, failed ? errorId : undefined]
     .filter((part) => part !== undefined)
     .join(" ");
+
   const control: SettingsRowControl = {
     labelId,
     controlId,
     "aria-describedby": describedBy === "" ? undefined : describedBy,
     "aria-invalid": failed ? true : undefined,
   };
+
   const name = (
     <RowLabel id={labelId} control={labelsControl ? controlId : undefined} density={density}>
       {label}
     </RowLabel>
   );
+
   // Note that a compact row's controls wrap below its words only where they cannot fit at all, so its line wraps as plainly as it can.
   const wraps = density === SETTINGS_ROW_DENSITY.COMPACT;
+
   const words = (
     <>
       <div className="ui-settings-row-subject flex min-w-0 items-center gap-ui-12">
@@ -313,6 +319,7 @@ export function SettingsRow({
       <ItemActions>{children?.(control)}</ItemActions>
     </>
   );
+
   return (
     <div
       className="ui-settings-row @container/ui-settings-row min-w-0 data-[indent=mark]:ms-settings-row-indent"
@@ -445,7 +452,8 @@ export function SettingsRowStateLine({
       className={cn(
         "ui-settings-row-state items-center gap-ui-6",
         // Note that an inline line stands at the top of its own line box, because on the baseline a connected line takes its baseline from the dot, a flex item with none of its own, and sits a pixel low, growing the row as its words land.
-        block ? "flex w-fit" : "inline-flex align-top",
+        // Note that a block line stands no wider than its row's words, so a part that cannot wrap, an actor's chip, shrinks to its ellipsis rather than running under the row's controls.
+        block ? "flex w-fit max-w-full" : "inline-flex align-top",
         // Note that the parts of a wrapping line are spaced by the spaces written between them, kept by `pre`: a flex gap beside the space a part ends in, trimmed at its end, would leave a wider gap after a separator than before it. The state's dot keeps its own.
         wrap && "flex-wrap gap-x-0 whitespace-pre",
         // Note that only the connected line draws a dot, so only its dot keeps its step off the words; another line's empty marker would push its words in.

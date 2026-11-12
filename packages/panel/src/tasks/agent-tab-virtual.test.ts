@@ -71,6 +71,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   Reflect.deleteProperty(HTMLElement.prototype, "scrollTo");
+  // The find's choice of searching calls and thoughts is the window's, kept across draws.
+  window.localStorage.clear();
 });
 
 const AGENT_ID = "4b0f6d3e-2c1a-4f5e-9d8c-7a6b5c4d3e2f";
@@ -113,7 +115,7 @@ function page(
     cursor: "1:1",
     status: AGENT_STATUS.COMPLETED,
     title: null,
-    ...(before === undefined ? {} : { before }),
+    ...(before !== undefined && { before }),
   };
 }
 
@@ -124,6 +126,7 @@ const TRANSCRIPT: AgentTranscriptKey = { kind: TRANSCRIPT_KIND.AGENT, agentId: A
 function following(first: AgentMessagesAnswerView) {
   const telling = tellingTranscripts();
   telling.tell(TRANSCRIPT, first);
+
   return {
     telling,
     async push(next: AgentMessagesAnswerView) {
@@ -171,6 +174,7 @@ function layLogsOut(): void {
   ) {
     if (!isLog(this)) return;
     logWrites.get(this)?.push(to);
+
     if (to === (logTops.get(this) ?? 0)) return;
     logTops.set(this, to);
     this.dispatchEvent(new Event("scroll"));
@@ -184,10 +188,13 @@ function layLogsOut(): void {
   });
 }
 
+type LayOutResult = { readonly writes: number[] };
+
 /** Every scroll written to the log's box from now on. */
-function layOut(box: HTMLElement): { readonly writes: number[] } {
+function layOut(box: HTMLElement): LayOutResult {
   const writes: number[] = [];
   logWrites.set(box, writes);
+
   return { writes };
 }
 
@@ -208,16 +215,19 @@ async function drawTab(
 ) {
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
+
   const tab = createElement(AgentTab, {
     agent: AGENT,
     control,
     shown: true,
     onOpenSubagent: () => undefined,
     onHeld: () => undefined,
-    ...(cards === undefined ? {} : { cards }),
+    ...(cards !== undefined && { cards }),
   });
+
   act(() => root?.render(withQueryClient(wrap(tab))));
   await act(settled);
+
   return {
     container,
     get box(): HTMLElement {
@@ -259,13 +269,27 @@ function findTally(): string | null | undefined {
     ?.textContent;
 }
 
+/** Presses the find bar's button named `label`. */
+function pressInBar(label: string): void {
+  const bar = document.querySelector('[role="search"][aria-label="Find"]');
+
+  const button =
+    [...(bar?.querySelectorAll("button") ?? [])].find(
+      (each) => each.getAttribute("aria-label") === label || each.textContent === label,
+    ) ?? assert.fail(`the find bar's ${label}`);
+
+  act(() => button.click());
+}
+
 test("⌘F finds words in a row the log has not drawn, scrolls the log to it, and lights the match there", async () => {
   const held = messages(0, 400);
   held[7] = message(7, "The lantern is lit in the seventh reply.");
   following(page(held));
+
   const { container, box } = await drawTab(agentsControl({ agents: [AGENT] }), (tab) =>
     createElement(FindScope, { active: true, subject: { agent: AGENT_ID } }, tab),
   );
+
   const { writes } = layOut(box);
   assert.ok(!drawnRows(container).includes("m-7"), "the seventh reply's row is not drawn");
 
@@ -278,6 +302,7 @@ test("⌘F finds words in a row the log has not drawn, scrolls the log to it, an
   assert.equal(findTally(), "1 of 1");
   assert.ok(writes.length > 0, "the log is scrolled");
   assert.ok(drawnRows(container).includes("m-7"), "the seventh reply's row is drawn");
+  // SAFETY: the find lights live Ranges over the drawn text, never static ones.
   const lit = [...(CSS.highlights.get("find-current") ?? [])] as Range[];
   assert.equal(lit.length, 1, "one match is lit as the one the find is at");
   const litRange = lit[0] ?? assert.fail("the lit match");
@@ -300,16 +325,19 @@ test("a running turn of a thousand parts draws only the pieces near its view, an
     ]).flat(),
     startedAt: 1_000,
   };
+
   following({
     ...page([message(0), turn]),
     status: AGENT_STATUS.RUNNING,
   });
+
   const { container, box } = await drawTab(
     agentsControl({
       agents: [{ ...AGENT, status: AGENT_STATUS.RUNNING }],
     }),
     (tab) => createElement(FindScope, { active: true, subject: { agent: AGENT_ID } }, tab),
   );
+
   const { writes } = layOut(box);
   const log = () => box.textContent ?? "";
   assert.match(log(), /Step 499 of the run\./u, "the turn's newest words are drawn");
@@ -324,6 +352,7 @@ test("a running turn of a thousand parts draws only the pieces near its view, an
 
   assert.equal(findTally(), "1 of 1");
   assert.ok(writes.length > 0, "the log is scrolled");
+  // SAFETY: the find lights live Ranges over the drawn text, never static ones.
   const lit = [...(CSS.highlights.get("find-current") ?? [])] as Range[];
   assert.equal(lit.length, 1, "one match is lit as the one the find is at");
   const litRange = lit[0] ?? assert.fail("the lit match");
@@ -342,6 +371,7 @@ test("⌘F counts a line the voice said over a long turn's first piece after tha
     startedAt: 1_000,
     finishedAt: 1_500,
   };
+
   const reached = Array.from(
     { length: 40 },
     (_, step): AgentTranscriptMessage => ({
@@ -351,6 +381,7 @@ test("⌘F counts a line the voice said over a long turn's first piece after tha
       arrivedIn: { journalId: "turn", afterStep: step + 1 },
     }),
   );
+
   // A line the voice said on a call, reading the turn aloud, which the log draws ahead of it.
   const said = (id: string, text: string): AgentTranscriptMessage => ({
     id,
@@ -359,12 +390,15 @@ test("⌘F counts a line the voice said over a long turn's first piece after tha
     metadata: { author: "voice_model", channel: "voice", read_from: "turn" },
     sentAt: 2_000,
   });
+
   const { push } = following(
     page([message(0), turn, ...reached, said("said-1", "The run is done.")]),
   );
+
   const { container } = await drawTab(agentsControl({ agents: [AGENT] }), (tab) =>
     createElement(FindScope, { active: true, subject: { agent: AGENT_ID } }, tab),
   );
+
   assert.ok(
     drawnRows(container).some((key) => key.startsWith("turn/")),
     "the turn is cut",
@@ -383,7 +417,7 @@ test("⌘F counts a line the voice said over a long turn's first piece after tha
   assert.equal(findTally(), "1 of 1");
 });
 
-test("⌘F counts a match in a closed call's answer far up the log, steps to it, and opens the fold on it", async () => {
+test("⌘F leaves a closed call's answer far up the log out until asked, then counts the match there, steps to it, and opens the fold on it", async () => {
   const held = messages(0, 400);
   held[7] = {
     id: "m-7",
@@ -404,9 +438,11 @@ test("⌘F counts a match in a closed call's answer far up the log, steps to it,
     finishedAt: 7_500,
   };
   following(page(held));
+
   const { container, box } = await drawTab(agentsControl({ agents: [AGENT] }), (tab) =>
     createElement(FindScope, { active: true, subject: { agent: AGENT_ID } }, tab),
   );
+
   layOut(box);
   assert.ok(!drawnRows(container).includes("m-7"), "the seventh reply's row is not drawn");
 
@@ -415,16 +451,26 @@ test("⌘F counts a match in a closed call's answer far up the log, steps to it,
   });
   typeFind("lantern");
   await act(settled);
+  assert.equal(findTally(), "No results", "the calls are left out at first");
+  assert.ok(
+    document.querySelector(".find-bar")?.textContent?.includes("1 more in tool calls and thinking"),
+    "the bar says the calls hold a match",
+  );
 
+  pressInBar("Include");
+  await act(settled);
   assert.equal(findTally(), "1 of 1");
   assert.ok(drawnRows(container).includes("m-7"), "the seventh reply's row is drawn");
+  // SAFETY: the find lights live Ranges over the drawn text, never static ones.
   const lit = [...(CSS.highlights.get("find-current") ?? [])] as Range[];
   assert.equal(lit.length, 1, "one match is lit as the one the find is at");
   const litRange = lit[0] ?? assert.fail("the lit match");
   assert.equal(litRange.toString(), "lantern");
+
   const output =
     litRange.startContainer.parentElement?.closest("[data-tool-output]") ??
     assert.fail("the match is in the call's answer");
+
   assert.equal(output.closest("[hidden]"), null, "the fold around the answer stands open");
 });
 
@@ -444,16 +490,20 @@ async function farTally(far: AgentTranscriptMessage, query: string) {
   const held = messages(0, 400);
   held[7] = far;
   following(page(held));
+
   const { container, box } = await drawTab(agentsControl({ agents: [AGENT] }), (tab) =>
     createElement(FindScope, { active: true, subject: { agent: AGENT_ID } }, tab),
   );
+
   layOut(box);
   assert.ok(!drawnRows(container).includes("m-7"), "the eighth message's row is not drawn");
   act(() => {
     runAppCommand(APP_COMMAND.FIND);
   });
+  pressInBar("Search tool calls and thinking");
   typeFind(query);
   await act(settled);
+
   return findTally();
 }
 
@@ -465,6 +515,7 @@ test("⌘F counts a far call's JSON input as its card reads it, in words rather 
     input: { team: "LUKE", state: "open" },
     output: { issues: [] },
   };
+
   assert.equal(await farTally(farReply([listed]), "team: LUKE"), "1 of 1");
 });
 
@@ -476,6 +527,7 @@ test("⌘F finds a phrase across a far call's verb and subject, as its line read
     input: { title: "Pricing explorer", path: "/tmp/pricing.html" },
     output: { status: "accepted" },
   };
+
   assert.equal(await farTally(farReply([shown]), "page: Pricing"), "1 of 1");
 });
 
@@ -492,6 +544,7 @@ test("⌘F counts nothing in a far integration call's connection_execute, which 
     },
     output: { issues: [] },
   };
+
   const remote = {
     type: "tool-linear_remote",
     toolCallId: "call-linear_remote",
@@ -503,6 +556,7 @@ test("⌘F counts nothing in a far integration call's connection_execute, which 
     },
     output: { issues: [] },
   };
+
   assert.equal(await farTally(farReply([wrapper, remote]), "quartermaster"), "No results");
 });
 
@@ -510,14 +564,19 @@ test("⌘F finds a word on a long fence's 55th line, past its cut, and opens the
   const fence = Array.from({ length: 60 }, (_, at) =>
     at === 54 ? "const lantern = 55;" : `const line${at + 1} = ${at + 1};`,
   ).join("\n");
+
   following(page([message(0), message(1, `The block:\n\n\`\`\`ts\n${fence}\n\`\`\`\n`)]));
+
   const { container, box } = await drawTab(agentsControl({ agents: [AGENT] }), (tab) =>
     createElement(FindScope, { active: true, subject: { agent: AGENT_ID } }, tab),
   );
+
   layOut(box);
   const card = container.querySelector(".ui-code-card") ?? assert.fail("the fence's card");
+
   const pressNamed = (name: string) =>
     [...card.querySelectorAll("button")].some((button) => button.textContent === name);
+
   assert.ok(pressNamed("Show all"), "the fence is cut");
 
   act(() => {
@@ -527,6 +586,7 @@ test("⌘F finds a word on a long fence's 55th line, past its cut, and opens the
   await act(settled);
 
   assert.equal(findTally(), "1 of 1");
+  // SAFETY: the find lights live Ranges over the drawn text, never static ones.
   const lit = [...(CSS.highlights.get("find-current") ?? [])] as Range[];
   assert.equal(lit.length, 1, "one match is lit as the one the find is at");
   const litRange = lit[0] ?? assert.fail("the lit match");
@@ -539,15 +599,18 @@ test("⌘F finds a word on a long fence's 55th line, past its cut, and opens the
 test("older messages put before the first under a long log leave the row the reader was on where it stood", async () => {
   // The older page lands once the test hands it, after the reader has scrolled.
   let release: () => void = () => undefined;
+
   const handed = new Promise<void>((resolve) => {
     release = resolve;
   });
+
   let telling: ReturnType<typeof tellingTranscripts> | undefined;
   fakeActs({
     act: (request) =>
       request.kind === ACT_KIND.AGENTS_TRANSCRIPT_OLDER
         ? handed.then(() => {
             telling?.layOlder(TRANSCRIPT, { messages: messages(90, 100) });
+
             return { status: FAKE_ANSWER.DONE, value: { landed: true } };
           })
         : Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not here." }),
@@ -569,15 +632,19 @@ test("older messages put before the first under a long log leave the row the rea
   assert.ok(drawnRows(container).includes("m-101"), "the row the reader was on is still drawn");
 });
 
-/** A read the test answers when it hands the answer. */
-function handed<T>(): {
+type Handed<T> = {
   readonly read: () => Promise<T>;
   readonly hand: (answer: T) => Promise<void>;
-} {
+};
+
+/** A read the test answers when it hands the answer. */
+function handed<T>(): Handed<T> {
   let answer: (value: T) => void = () => undefined;
+
   const pending = new Promise<T>((resolve) => {
     answer = resolve;
   });
+
   return {
     read: () => pending,
     hand: async (value) => {
@@ -591,6 +658,7 @@ function handed<T>(): {
 
 test("the log draws while the agent's pull request is still read, and its dock lands over the box once the read answers", async () => {
   following(page(messages(0, 6)));
+
   const published = handed<{
     repository: string | null;
     branch: string | null;
@@ -605,6 +673,7 @@ test("the log draws while the agent's pull request is still read, and its dock l
       changedFiles: number;
     } | null;
   }>();
+
   // The host holds what the agent published, its answer landing once the test hands it.
   holdPullRequestParts(handHostReads({}).deliverParts, {
     [PULL_REQUEST_PART.PUBLISHED]: published.read,

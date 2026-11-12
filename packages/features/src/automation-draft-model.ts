@@ -193,6 +193,7 @@ const SCHEDULE_REFUSAL_WORDS = {
 function cronNumber(field: string | undefined, most: number): number | undefined {
   if (field === undefined || !/^\d+$/u.test(field)) return undefined;
   const value = Number(field);
+
   return value <= most ? value : undefined;
 }
 
@@ -200,12 +201,14 @@ function cronNumber(field: string | undefined, most: number): number | undefined
 export function draftRepositories(draft: AutomationDraft): readonly string[] {
   if (draft.repository === null) return [];
   const first = draft.repository;
+
   return [first, ...draft.alsoRepositories.filter((repository) => repository !== first)];
 }
 
 /** Whether two model choices are one: the same model, effort, and context window, or both the account's default. */
 function sameChoice(one: ModelChoice | null, other: ModelChoice | null): boolean {
   if (one === null || other === null) return one === other;
+
   return (
     one.model === other.model &&
     one.effort === other.effort &&
@@ -301,7 +304,9 @@ function cooldownOf(guards: AutomationGuards | null): number {
 /** The guards a draft writes: its own, with its subject cooldown where an integration fires it; none where it keeps the service's. */
 function guardsOf(draft: AutomationDraft): AutomationGuards | null {
   if (draft.triggerKind !== AUTOMATION_TRIGGER.INTEGRATION) return draft.guards;
+
   if (!cooldownAdmitted(draft.subjectCooldownHours)) return draft.guards;
+
   return {
     ...(draft.guards ?? AUTOMATION_DEFAULT_GUARDS),
     subjectCooldownHours: draft.subjectCooldownHours,
@@ -334,6 +339,7 @@ export function draftTrigger(draft: AutomationDraft): AutomationTrigger {
       const { senders, moments, drafts, forks } = draft.githubSettings;
       // The moments speak to an update alone, so no other event carries them.
       const updated = draft.githubEvent === GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED;
+
       return {
         kind: AUTOMATION_TRIGGER.GITHUB,
         event: draft.githubEvent,
@@ -344,6 +350,7 @@ export function draftTrigger(draft: AutomationDraft): AutomationTrigger {
         forks,
       };
     }
+
     case AUTOMATION_TRIGGER.WEBHOOK:
       return { kind: AUTOMATION_TRIGGER.WEBHOOK };
     case AUTOMATION_TRIGGER.INTEGRATION:
@@ -354,7 +361,9 @@ export function draftTrigger(draft: AutomationDraft): AutomationTrigger {
 /** A trimmed text past its bound, or empty, as its field says it; nothing while it reads. */
 function textProblem(text: string, most: number, empty: string, long: string): string | undefined {
   const trimmed = text.trim();
+
   if (trimmed === "") return empty;
+
   return trimmed.length > most ? long : undefined;
 }
 
@@ -364,16 +373,23 @@ export function scheduleDraftOf(cron: string): ScheduleDraft {
   const custom = { ...NEW_SCHEDULE, kind: SCHEDULE_KIND.CUSTOM, cron: spelled };
   const [minuteField, hourField, dayOfMonth, month, dayOfWeek, ...rest] = spelled.split(/\s+/u);
   const minute = cronNumber(minuteField, 59);
+
   if (rest.length > 0 || minute === undefined || dayOfMonth !== "*" || month !== "*") return custom;
+
   if (hourField === "*" && dayOfWeek === "*") {
     return { ...NEW_SCHEDULE, kind: SCHEDULE_KIND.HOURLY, minute, cron: spelled };
   }
+
   const hour = cronNumber(hourField, 23);
+
   if (hour === undefined) return custom;
   const at = { ...NEW_SCHEDULE, hour, minute, cron: spelled };
+
   if (dayOfWeek === "*") return { ...at, kind: SCHEDULE_KIND.DAILY };
+
   if (dayOfWeek === "1-5") return { ...at, kind: SCHEDULE_KIND.WEEKDAYS };
   const weekday = cronNumber(dayOfWeek, 7);
+
   return weekday === undefined
     ? custom
     : { ...at, kind: SCHEDULE_KIND.WEEKLY, weekday: weekday % 7 };
@@ -382,6 +398,7 @@ export function scheduleDraftOf(cron: string): ScheduleDraft {
 /** The cron a schedule draft spells. */
 export function cronOf(schedule: ScheduleDraft): string {
   const { minute, hour } = schedule;
+
   switch (schedule.kind) {
     case SCHEDULE_KIND.HOURLY:
       return `${minute} * * * *`;
@@ -429,9 +446,11 @@ export function automationDraft(
       subjectCooldownHours: AUTOMATION_DEFAULT_SUBJECT_COOLDOWN_HOURS,
     };
   }
+
   const { trigger } = automation;
   const scheduled = trigger.kind === AUTOMATION_TRIGGER.SCHEDULE;
   const github = trigger.kind === AUTOMATION_TRIGGER.GITHUB;
+
   return {
     name: automation.name,
     schedule: scheduled ? scheduleDraftOf(trigger.cron) : NEW_SCHEDULE,
@@ -482,51 +501,69 @@ export function draftProblems(draft: AutomationDraft, held: boolean, now: Date):
     "Name the automation.",
     `Keep the name under ${AUTOMATION_BOUNDS.MAX_NAME_CHARS} characters.`,
   );
+
   const prompt = textProblem(
     draft.prompt,
     AUTOMATION_BOUNDS.MAX_PROMPT_CHARS,
     "Tell the agent what to do.",
     `Keep the prompt under ${formatCount(AUTOMATION_BOUNDS.MAX_PROMPT_CHARS)} characters.`,
   );
+
   const read = readSchedule({ cron: cronOf(draft.schedule), timezone: draft.timezone }, now);
+
   const schedule =
     draft.triggerKind === AUTOMATION_TRIGGER.SCHEDULE && Result.isFailure(read)
       ? SCHEDULE_REFUSAL_WORDS[read.failure]
       : draft.triggerKind === AUTOMATION_TRIGGER.GITHUB
         ? githubSettingsProblem(draft)
         : undefined;
+
   const integration = draft.triggerKind === AUTOMATION_TRIGGER.INTEGRATION;
+
   const filters =
     integration && !filtersAdmitted(draft.integrationTrigger.filters)
       ? `Keep each filter to ${AUTOMATION_BOUNDS.MAX_FILTER_VALUES} values of up to ${AUTOMATION_BOUNDS.MAX_FILTER_VALUE_CHARS} characters.`
       : undefined;
+
   const cooldown =
     integration && !cooldownAdmitted(draft.subjectCooldownHours)
       ? `Wait a whole number of hours, from 1 to ${AUTOMATION_BOUNDS.MAX_SUBJECT_COOLDOWN_HOURS}.`
       : undefined;
+
   const repository =
     !held && draft.repository === null && draft.triggerKind === AUTOMATION_TRIGGER.GITHUB
       ? "Choose the repository whose events start it."
       : undefined;
+
   const problems: { [Field in DraftField]?: string } = {};
+
   if (name !== undefined) problems[DRAFT_FIELD.NAME] = name;
+
   if (schedule !== undefined) problems[DRAFT_FIELD.SCHEDULE] = schedule;
+
   if (prompt !== undefined) problems[DRAFT_FIELD.PROMPT] = prompt;
+
   if (repository !== undefined) problems[DRAFT_FIELD.REPOSITORY] = repository;
+
   if (filters !== undefined) problems[DRAFT_FIELD.FILTERS] = filters;
+
   if (cooldown !== undefined) problems[DRAFT_FIELD.COOLDOWN] = cooldown;
+
   return problems;
 }
 
 /** What stops a GitHub trigger's settings saving: no one whose events fire it, or an update at no moment. */
 function githubSettingsProblem(draft: AutomationDraft): string | undefined {
   const { senders, moments } = draft.githubSettings;
+
   if (draft.githubEvent !== GITHUB_TRIGGER_EVENT.CHECK_FAILED && senders.length === 0) {
     return "Choose whose events start it.";
   }
+
   if (draft.githubEvent === GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED && moments.length === 0) {
     return "Choose when it starts.";
   }
+
   return undefined;
 }
 
@@ -536,12 +573,15 @@ export function draftNextRuns(draft: AutomationDraft, now: Date, count: number):
   const schedule = { cron: cronOf(draft.schedule), timezone: draft.timezone };
   const runs: number[] = [];
   let after = now;
+
   while (runs.length < count) {
     const next = nextScheduledRun(schedule, after);
+
     if (next === undefined) break;
     runs.push(next.getTime());
     after = next;
   }
+
   return runs;
 }
 
@@ -551,6 +591,7 @@ export function createRequestOf(
   workspaceId: string,
 ): AutomationCreateParams {
   const guards = guardsOf(draft);
+
   const made = {
     workspaceId,
     name: draft.name.trim(),
@@ -562,6 +603,7 @@ export function createRequestOf(
     slackDelivery: draft.slackDelivery,
     ...(guards === null ? undefined : { guards }),
   } as const;
+
   return { ...made, repositories: draftRepositories(draft) };
 }
 
@@ -610,46 +652,63 @@ export function changeOf(
   defaults: DraftDefaults,
 ): AutomationChangeParams["change"] | undefined {
   const was = automationDraft(automation, defaults);
+
   const scheduleMoved =
     draft.triggerKind === AUTOMATION_TRIGGER.SCHEDULE &&
     (cronOf(draft.schedule) !== cronOf(was.schedule) || draft.timezone !== was.timezone);
+
   // Note that filters let go of on the way to another event and back are a change, because the editor then shows none.
   const eventMoved =
     draft.triggerKind === AUTOMATION_TRIGGER.GITHUB &&
     (draft.githubEvent !== was.githubEvent ||
       !sameFilters(draft.githubFilters, was.githubFilters) ||
       !sameSettings(draft.githubSettings, was.githubSettings));
+
   const integrationMoved =
     draft.triggerKind === AUTOMATION_TRIGGER.INTEGRATION &&
     !sameIntegrationTrigger(draft.integrationTrigger, was.integrationTrigger);
+
   const triggerMoved =
     draft.triggerKind !== was.triggerKind || scheduleMoved || eventMoved || integrationMoved;
+
   // Note that a cooldown is sent over the guards as saved, because a change's guards replace them whole.
   const cooldownMoved =
     draft.triggerKind === AUTOMATION_TRIGGER.INTEGRATION &&
     cooldownAdmitted(draft.subjectCooldownHours) &&
     draft.subjectCooldownHours !== was.subjectCooldownHours;
+
   const actionMoved =
     draft.prompt.trim() !== was.prompt ||
     !sameChoice(draft.choice, was.choice) ||
     !sameSet(draft.disabledServers, was.disabledServers);
+
   const targetMoved = draft.target !== was.target || landingAgent(draft) !== landingAgent(was);
   const repositoryMoved = automation.planId === null && draft.repository !== was.repository;
   const change: ChangeDraft = {};
+
   if (draft.name.trim() !== was.name) change.name = draft.name.trim();
+
   if (triggerMoved) change.trigger = draftTrigger(draft);
+
   if (cooldownMoved) {
     change.guards = { ...automation.guards, subjectCooldownHours: draft.subjectCooldownHours };
   }
+
   // Note that a change names its servers even where none are off, because a change that names none keeps the saved ones.
   if (actionMoved) change.action = { ...actionOf(draft), disabledServers: draft.disabledServers };
+
   if (targetMoved) change.target = targetOf(draft);
+
   if (draft.archiveSuccessful !== was.archiveSuccessful) {
     change.archiveSuccessful = draft.archiveSuccessful;
   }
+
   if (draft.slackDelivery !== was.slackDelivery) change.slackDelivery = draft.slackDelivery;
+
   if (repositoryMoved) change.repositories = draftRepositories(draft);
+
   if (draft.owner !== was.owner) change.scope = draft.owner;
+
   return Object.keys(change).length === 0 ? undefined : change;
 }
 
@@ -665,27 +724,50 @@ export function withGithubEvent(
   event: GitHubTriggerEvent,
 ): AutomationDraft {
   if (event === draft.githubEvent) return draft;
+
   return { ...draft, githubEvent: event, githubFilters: {} };
 }
 
 /**
- * A new draft filled in from a preset: its name, schedule, task, and
- * archiving, its runs each on a new agent, where it runs and who owns it
- * kept as they were chosen, and its zone the member's own. One whose runs
- * need no repository starts with none chosen.
+ * A new draft filled in from a preset: its name, trigger, task, where its
+ * runs land, and archiving, its zone the member's own. One whose runs need
+ * no repository starts with none chosen, and one that needs one keeps the
+ * one chosen. One for the workspace is the workspace's only where `shared`
+ * says the workspace is, since everything in the account's own workspace is
+ * its own; who owns any other stays as it was chosen. A GitHub event keeps
+ * to the preset's branches under the settings a new trigger has.
  */
-export function presetDraft(draft: AutomationDraft, preset: AutomationPreset): AutomationDraft {
-  return {
+export function presetDraft(
+  draft: AutomationDraft,
+  preset: AutomationPreset,
+  shared: boolean,
+): AutomationDraft {
+  const { trigger } = preset;
+
+  const filled: AutomationDraft = {
     ...draft,
     name: preset.name,
     prompt: preset.prompt,
-    triggerKind: AUTOMATION_TRIGGER.SCHEDULE,
-    schedule: scheduleDraftOf(preset.cron),
-    target: AUTOMATION_TARGET.NEW_AGENT,
+    triggerKind: trigger.kind,
+    target: preset.target,
     agentId: null,
     archiveSuccessful: preset.archiveSuccessful,
     ...(preset.inRepository ? undefined : { repository: null, alsoRepositories: [] }),
+    ...(preset.forWorkspace && shared ? { owner: AUTOMATION_SCOPE.WORKSPACE } : undefined),
   };
+
+  switch (trigger.kind) {
+    case AUTOMATION_TRIGGER.SCHEDULE:
+      return { ...filled, schedule: scheduleDraftOf(trigger.cron) };
+    case AUTOMATION_TRIGGER.GITHUB:
+      return {
+        ...filled,
+        githubEvent: trigger.event,
+        githubFilters: { branches: trigger.branches },
+      };
+    case AUTOMATION_TRIGGER.INTEGRATION:
+      return { ...filled, integrationTrigger: trigger };
+  }
 }
 
 /**
@@ -710,22 +792,29 @@ export function withIntegrationFilters(
 ): AutomationDraft {
   const { filters: had, ...trigger } = draft.integrationTrigger;
   const merged = { ...had, ...filters };
+
   const kept: {
     -readonly [Key in keyof IntegrationTriggerFilters]: IntegrationTriggerFilters[Key];
   } = {};
+
   if (merged.project !== undefined && merged.project.length > 0) kept.project = merged.project;
+
   if (merged.environment !== undefined && merged.environment.length > 0) {
     kept.environment = merged.environment;
   }
+
   if (merged.level !== undefined && merged.level.length > 0) kept.level = merged.level;
+
   const integrationTrigger =
     Object.keys(kept).length === 0 ? trigger : { ...trigger, filters: kept };
+
   return { ...draft, integrationTrigger };
 }
 
 /** The values a filter's field spells, comma-separated, each trimmed, empty ones and repeats left out. */
 export function filterValuesOf(text: string): readonly string[] {
   const values = text.split(",").map((value) => value.trim());
+
   return values.filter((value, at) => value !== "" && values.indexOf(value) === at);
 }
 
@@ -737,5 +826,6 @@ export function filterValuesOf(text: string): readonly string[] {
  */
 export function withRepository(draft: AutomationDraft, repository: string | null): AutomationDraft {
   if (repository === draft.repository) return draft;
+
   return { ...draft, repository, agentId: null };
 }

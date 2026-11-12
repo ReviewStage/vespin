@@ -49,14 +49,19 @@ export function MessageFrame({
   className?: string | undefined;
 }): React.JSX.Element {
   const [actionsShown, setActionsShown] = useState(false);
+
   const tap = (event: React.MouseEvent<HTMLDivElement>) => {
     // A tap spent on something of the turn's own, a control or a hint it opened, shows nothing more.
     if (event.defaultPrevented) return;
+
     if (event.target instanceof Element && event.target.closest(OWN_CONTROL) !== null) return;
+
     if (window.getSelection()?.isCollapsed === false) return;
+
     if (!window.matchMedia(NO_HOVER).matches) return;
     setActionsShown((shown) => !shown);
   };
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: a tap stands in for the hover a finger lacks; the keyboard reaches the actions themselves, which show while they hold it.
     // biome-ignore lint/a11y/useKeyWithClickEvents: as above, the keyboard needs no key here, since focusing an action shows the bar.

@@ -71,7 +71,9 @@ it.layer(getTestDB())("the integration accounts migration", (it) => {
         yield* db
           .insert(user)
           .values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
         for (const statement of BEFORE) yield* sql.unsafe(statement);
+
         for (const provider of ["linear", "notion"]) {
           yield* sql`
             INSERT INTO integration_connection (user_id, provider, status, updated_at)
@@ -80,7 +82,9 @@ it.layer(getTestDB())("the integration accounts migration", (it) => {
         }
 
         const migration = yield* statements;
+
         for (const statement of migration) yield* sql.unsafe(statement);
+
         const read = sql<{
           readonly id: string;
           readonly provider: string;
@@ -90,6 +94,7 @@ it.layer(getTestDB())("the integration accounts migration", (it) => {
           SELECT id, provider, connect_subject, connection_name
           FROM integration_connection WHERE user_id = ${userId} ORDER BY provider
         `;
+
         const migrated = yield* read;
         assert.deepEqual(
           migrated.map((row) => [row.provider, row.connect_subject, row.connection_name]),

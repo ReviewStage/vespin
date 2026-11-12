@@ -36,6 +36,7 @@ import type { TaskLooks } from "./use-task-looks.js";
 
 // Note that the description, its comments, and its history stand only while the account has Descriptions on.
 beforeAll(() => readExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
+
 // Note that each case starts with the document handing Descriptions on, whatever an earlier case handed.
 beforeEach(() => handState(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
 
@@ -53,6 +54,7 @@ const TASK: Task = {
 const DEAN = { userId: "user-dean", name: "Dean Stratakos" };
 const CHARLES = { userId: "user-charles", name: "Charles Pan" };
 const LEE = { userId: "user-lee", name: "Lee Park" };
+
 /** Who the workspace's work names but left, as the read of who left answers. */
 const LEE_PICTURE = "https://lh3.googleusercontent.com/a/photo-7";
 const FORMER = [{ ...LEE, pictureUrl: LEE_PICTURE }];
@@ -103,6 +105,7 @@ afterEach(() => {
 function mountRoot(container: HTMLElement): Root {
   const root = createRoot(container);
   roots.push(root);
+
   return root;
 }
 
@@ -134,6 +137,7 @@ async function draw(task: Task, drawn: Drawn = {}): Promise<HTMLElement> {
   fakeActPort({});
   const experiments = drawn.experiments ?? experimentsOn(EXPERIMENT.DESCRIPTIONS);
   const since = drawn.descriptionsOnSince;
+
   const listed =
     since === undefined
       ? {}
@@ -158,13 +162,15 @@ async function draw(task: Task, drawn: Drawn = {}): Promise<HTMLElement> {
             ],
           },
         };
+
   handState(experiments, {
     ...listed,
-    ...(drawn.account === undefined ? {} : { account: signedInAs(drawn.account).account }),
+    ...(drawn.account !== undefined && { account: signedInAs(drawn.account).account }),
   });
   handMembers(() => ({ rows: { members: MEMBERS, former: FORMER } }));
   const container = document.body.appendChild(document.createElement("div"));
   const root = mountRoot(container);
+
   const {
     readerId,
     account: _account,
@@ -172,11 +178,13 @@ async function draw(task: Task, drawn: Drawn = {}): Promise<HTMLElement> {
     descriptionsOnSince: _since,
     ...rest
   } = drawn;
+
   const body = createElement(DescriptionBody, {
     task,
     reader: { readerId },
     ...rest,
   });
+
   writeExperiments(experiments, listed);
   act(() =>
     root.render(
@@ -186,6 +194,7 @@ async function draw(task: Task, drawn: Drawn = {}): Promise<HTMLElement> {
     ),
   );
   await settle();
+
   return container;
 }
 
@@ -205,9 +214,12 @@ function editedLines(view: HTMLElement): (string | undefined)[] {
 /** The words a line shows, what only a screen reader hears left out. */
 function shownWords(line: Element | null): string | undefined {
   const copy = line?.cloneNode(true);
+
   if (!(copy instanceof Element)) return undefined;
+
   for (const hidden of copy.querySelectorAll(".ui-visually-hidden, .ui-visually-hidden"))
     hidden.remove();
+
   return lineWords(copy);
 }
 
@@ -219,6 +231,7 @@ function cardOf(
 ): HTMLElement {
   const anchor = view.querySelector(`${line} ${selector}`) ?? assert.fail("the ref stands");
   restOn(anchor);
+
   return document.querySelector<HTMLElement>(".ui-tooltip-card") ?? assert.fail("the card hangs");
 }
 
@@ -231,16 +244,49 @@ test("the saved body is drawn as Markdown", () => {
   assert.match(markup, /Invite a teammate by email\./u);
 });
 
+test("a description kept hidden behind another tab draws its title and none of its sections until first shown, and keeps them once hidden again", async () => {
+  // Note that this catches the sections being parsed while hidden, in the commit that opens an agent's tab over them.
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = mountRoot(container);
+
+  const drawShown = (shown: boolean, task: Task = TASK) =>
+    act(() => root.render(withQueryClient(createElement(DescriptionBody, { task, shown }))));
+
+  const section = () => container.textContent?.includes("Invite a teammate by email.") === true;
+
+  drawShown(false);
+  await settle();
+  const hidden = [container.querySelector("h1")?.textContent, section()];
+  drawShown(true);
+  await settle();
+  const opened = section();
+  const unit = container.querySelector(".description-unit");
+  drawShown(false);
+  await settle();
+  const kept = section() && container.querySelector(".description-unit") === unit;
+  drawShown(false, { ...TASK, id: "task-other" });
+  await settle();
+  drawShown(false);
+  await settle();
+
+  assert.deepEqual(hidden, [TASK.name, false], "the title stands and no section is drawn");
+  assert.equal(opened, true, "the sections are drawn once shown");
+  assert.equal(kept, true, "the sections stay mounted once hidden again");
+  assert.equal(section(), false, "a task come back to while hidden, after another, draws none");
+});
+
 test("under its title the description says who created the task and when, then when it was last edited, and a description nobody edited says only who created it", async () => {
   // Note that only the date is fixed, so the description's minute reads `now` and nothing waits on a timer.
   const now = Date.UTC(2026, 9, 14, 12);
   vi.useFakeTimers({ now, toFake: ["Date"] });
   const day = 24 * 60 * 60 * 1000;
   const started = { ...TASK, createdAt: now - 3 * day, createdBy: CHARLES };
+
   const edited = {
     ...started,
     lastEdit: { actor: DESCRIPTION_ACTOR.DEVELOPER, duringCall: false, by: DEAN, at: now },
   };
+
   // A reader the members read does not list, signed in on this Mac, whose task the service names by its owner's id alone.
   const GRACE = { id: "user-grace", email: "grace@example.com", name: "Grace Hopper" };
   const { createdBy: _named, ...byOwnerAlone } = { ...started, ownerId: GRACE.id };
@@ -274,6 +320,7 @@ test("while Descriptions is off the task's title stands with who created it and 
   const day = 24 * 60 * 60 * 1000;
   const now = Date.now();
   const edit = { actor: DESCRIPTION_ACTOR.DEVELOPER, duringCall: false, by: DEAN, at: now };
+
   const edited: Task = {
     ...TASK,
     createdAt: now - 3 * day,
@@ -281,6 +328,7 @@ test("while Descriptions is off the task's title stands with who created it and 
     lastEdit: edit,
     sectionEdits: [{ section: "Goal", ...edit }],
   };
+
   const looks: TaskLooks = { changed: new Set(["Goal"]), dismiss: () => undefined };
 
   const view = await draw(edited, { readerId: DEAN.userId, looks, experiments: {} });
@@ -347,10 +395,12 @@ test("an edit the service names no member for, or read without an account id, is
 test("the time opens the version history, on the description as it stands or on the section's last save, and the writer opens nothing", async () => {
   const shown: (number | undefined)[] = [];
   const at = Date.now() - 2 * 60 * 60 * 1000;
+
   const view = await draw(
     editedAs({ actor: DESCRIPTION_ACTOR.DEVELOPER, duringCall: false, by: CHARLES }, at),
     { readerId: DEAN.userId, onShowHistory: (save) => shown.push(save) },
   );
+
   const times = [
     ...view.querySelectorAll<HTMLButtonElement>('button[aria-label$="Show version history"]'),
   ];
@@ -363,6 +413,7 @@ test("the time opens the version history, on the description as it stands or on 
     ],
   );
   assert.equal(view.querySelector(".description-unit-byline [data-actor-ref]")?.tagName, "SPAN");
+
   for (const time of times) act(() => time.click());
   assert.deepEqual(shown, [undefined, at]);
 });
@@ -390,6 +441,7 @@ test("a section's byline shows only the writer's face and a few letters of time,
 
 test("a teammate's card says who they are and what they last changed in the description", async () => {
   const at = Date.now();
+
   const task: Task = {
     ...TASK,
     lastEdit: { actor: DESCRIPTION_ACTOR.DEVELOPER, by: CHARLES, at, duringCall: false },
@@ -399,6 +451,7 @@ test("a teammate's card says who they are and what they last changed in the desc
       { section: "Risks", actor: DESCRIPTION_ACTOR.DEVELOPER, by: CHARLES, at, duringCall: false },
     ],
   };
+
   const card = cardOf(await draw(task, { readerId: DEAN.userId }));
 
   assert.ok(card.querySelector('[data-actor-card="person"]'), "a person's card hangs");
@@ -411,6 +464,7 @@ test("a teammate's card says who they are and what they last changed in the desc
 test("Vespin's card says when it wrote, and what it wrote", async () => {
   const at = Date.now();
   const byApp = { actor: DESCRIPTION_ACTOR.NOTETAKER, by: CHARLES, at, duringCall: false };
+
   const task: Task = {
     ...TASK,
     lastEdit: byApp,
@@ -419,6 +473,7 @@ test("Vespin's card says when it wrote, and what it wrote", async () => {
       { section: "Risks", ...byApp },
     ],
   };
+
   const card = cardOf(await draw(task, { readerId: DEAN.userId }));
 
   assert.ok(card.querySelector('[data-actor-card="app"]'), "Vespin's card hangs");
@@ -427,16 +482,19 @@ test("Vespin's card says when it wrote, and what it wrote", async () => {
 
 test("an agent the plan's list holds wears its harness, hangs its tab's card, and opens its tab; one it does not hold is named alone", async () => {
   const opened: string[] = [];
+
   const byAgent = editedAs({
     actor: DESCRIPTION_ACTOR.AGENT,
     label: "Fix auth flow",
     agentId: AGENT.id,
     duringCall: false,
   });
+
   const agents: EditAgents = {
     control: agentsControl({ agents: [AGENT] }),
     onOpen: (agentId) => opened.push(agentId),
   };
+
   const view = await draw(byAgent, { readerId: DEAN.userId, agents });
   const ref = view.querySelector<HTMLElement>(".description-unit-byline [data-actor-ref]");
 
@@ -453,6 +511,7 @@ test("an agent the plan's list holds wears its harness, hangs its tab's card, an
     readerId: DEAN.userId,
     agents: { ...agents, control: agentsControl() },
   });
+
   assert.equal(
     unlisted.querySelector(".description-unit-byline [data-actor-ref]")?.tagName,
     "SPAN",
@@ -461,6 +520,7 @@ test("an agent the plan's list holds wears its harness, hangs its tab's card, an
 
 test("the sections changed since the last look are counted beside a face for each who changed them", async () => {
   const at = Date.now();
+
   const task: Task = {
     ...TASK,
     sectionEdits: [
@@ -475,11 +535,14 @@ test("the sections changed since the last look are counted beside a face for eac
       { section: "Risks", actor: DESCRIPTION_ACTOR.DEVELOPER, by: CHARLES, at, duringCall: false },
     ],
   };
+
   let dismissed = 0;
+
   const looks: TaskLooks = {
     changed: new Set(["Goal", "Rollout", "Risks"]),
     dismiss: () => (dismissed += 1),
   };
+
   const view = await draw(task, { readerId: DEAN.userId, looks });
   const line = view.querySelector(".description-changed-note") ?? assert.fail("the line stands");
 
@@ -531,6 +594,7 @@ test("a save that writes a section above the one the keyboard stands on leaves T
       assumptions: [],
     },
   };
+
   const saved: Task = {
     ...opened,
     document: {
@@ -538,6 +602,7 @@ test("a save that writes a section above the one the keyboard stands on leaves T
       body: `## Context\nIt came up in support.\n\n${opened.document.body}`,
     },
   };
+
   fakeAppBridge({});
   fakeActPort({});
   handState(experimentsOn(EXPERIMENT.DESCRIPTIONS));
@@ -545,6 +610,7 @@ test("a save that writes a section above the one the keyboard stands on leaves T
   const container = document.body.appendChild(document.createElement("div"));
   const root = mountRoot(container);
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
+
   const drawDescription = (task: Task) =>
     act(() =>
       root.render(
@@ -562,10 +628,12 @@ test("a save that writes a section above the one the keyboard stands on leaves T
         ),
       ),
     );
+
   const entered = () =>
-    [...container.querySelectorAll<HTMLElement>("[role='group'][aria-label]")]
-      .filter((block) => block.tabIndex === 0)
-      .map((block) => block.getAttribute("aria-label"));
+    [...container.querySelectorAll<HTMLElement>("[role='group'][aria-label]")].flatMap((block) =>
+      block.tabIndex === 0 ? [block.getAttribute("aria-label")] : [],
+    );
+
   drawDescription(opened);
   await settle();
   const approach = container.querySelector<HTMLElement>("[aria-label='Approach']");

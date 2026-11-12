@@ -22,6 +22,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const sent: Row[] = [];
+
       const makes: WriteDeclaration<Row, FieldChange<Row>, Row, { readonly kept: string }> = {
         kind: ROW,
         keys: (row) => [row.id],
@@ -29,9 +30,11 @@ it.effect(
         send: (row) =>
           Effect.sync(() => {
             sent.push(row);
+
             return { answer: { kept: row.id }, txid: undefined };
           }),
       };
+
       const handler = declaredWrite(yield* entityPool(), makes, {
         read: (input: { readonly name: string }) =>
           Effect.succeed({ id: "row-1", name: input.name }),

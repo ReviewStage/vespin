@@ -34,6 +34,7 @@ const PAYLOAD_COMMAND = [
 function Asking({ label, command }: { label: string; command: string }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+
   return (
     <>
       <Button variant={BUTTON_VARIANT.OUTLINE} aria-haspopup="dialog" onClick={() => setOpen(true)}>

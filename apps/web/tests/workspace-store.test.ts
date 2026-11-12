@@ -64,6 +64,7 @@ const openUser = (name: string) =>
     yield* Database.use((db) =>
       db.insert(user).values({ id: userId, name, email: `${userId}@app.test` }),
     );
+
     return userId;
   });
 
@@ -77,7 +78,9 @@ const openSharedWorkspace = (
   Effect.gen(function* () {
     const slug = `${name.toLowerCase()}-${randomUUID()}`;
     const { id } = yield* seams.createOrganization({ name, slug, userId: owner, metadata: {} });
+
     for (const teammate of teammates) yield* joinWorkspace(id, teammate, WORKSPACE_ROLE.MEMBER);
+
     return { id, slug };
   });
 
@@ -101,11 +104,13 @@ const liveWorkspacesOf = (userId: string) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const statements = Option.getOrThrow(workspacesRead.statements({ userId }));
+
     const rows = yield* Effect.all({
       workspaces: sql.unsafe(statements.workspaces.sql, [...statements.workspaces.params]),
       installations: sql.unsafe(statements.installations.sql, [...statements.installations.params]),
       experiments: sql.unsafe(statements.experiments.sql, [...statements.experiments.params]),
     });
+
     return workspacesOfLiveRows(yield* Schema.decodeUnknownEffect(WORKSPACES_READ.rows)(rows));
   });
 
@@ -136,6 +141,7 @@ const faceIn = (
 ) => {
   const found = listed.find((workspace) => workspace.id === id);
   assert.ok(found, `${id} is listed`);
+
   return { photoVersion: found.photoVersion, pictureUrl: found.pictureUrl };
 };
 
@@ -153,6 +159,7 @@ it.layer(getTestDB())("an account's workspaces over effect/unstable/sql", (it) =
         yield* keepLogo(acme.id, photoUrl(WORKSPACE_PHOTO_TYPE.JPEG, JPEG_BYTES));
         const second = yield* listWorkspaces(owner);
         const others = [];
+
         for (const logo of [
           "https://example.test/acme.png",
           photoUrl("image/svg+xml", "PHN2Zz48L3N2Zz4="),
@@ -205,20 +212,24 @@ it.layer(getTestDB())("an account's workspaces over effect/unstable/sql", (it) =
         const personal = yield* ensurePersonalWorkspace(owner, seams);
         assert.ok(Option.isSome(personal));
         const acme = yield* openSharedWorkspace(seams, "Acme", owner, [teammate]);
+
         const faces = (image: string) =>
           Effect.gen(function* () {
             yield* keepImage(owner, image);
+
             return faceIn(yield* listWorkspaces(owner), personal.value).pictureUrl;
           });
 
         const google = "https://lh3.googleusercontent.com/a/owner";
         const github = "https://avatars.githubusercontent.com/u/1";
         const pinned = [yield* faces(google), yield* faces(github)];
+
         const unpinned = [
           yield* faces("http://lh3.googleusercontent.com/a/owner"),
           yield* faces("https://avatars.example.test/u/1"),
           yield* faces("https://googleusercontent.com.example.test/a/owner"),
         ];
+
         yield* keepImage(owner, google);
         const shared = faceIn(yield* listWorkspaces(owner), acme.id);
         const teammates = faceIn(yield* listWorkspaces(teammate), acme.id);
@@ -269,6 +280,7 @@ it.layer(getTestDB())("an account's workspaces over effect/unstable/sql", (it) =
         for (const reader of [owner, teammate, outsider]) {
           assert.deepEqual(yield* liveWorkspacesOf(reader), yield* listWorkspaces(reader));
         }
+
         const theirs = (yield* liveWorkspacesOf(outsider)).map((workspace) => workspace.id);
         assert.ok(!theirs.includes(acme.id) && !theirs.includes(beta.id));
         const acmeListed = (yield* liveWorkspacesOf(teammate)).find((one) => one.id === acme.id);
@@ -289,6 +301,7 @@ it.layer(getTestDB())("an account's workspaces over effect/unstable/sql", (it) =
 
         // A logo the held read refuses as a photo lists none live either, so the owner's own first workspace keeps the sign-in picture.
         const own = Option.getOrThrow(yield* personalWorkspaceOf(owner));
+
         for (const logo of [
           photoUrl(WORKSPACE_PHOTO_TYPE.PNG, JPEG_BYTES),
           "data:image/png;base64,not base64!",
@@ -349,6 +362,7 @@ it.layer(getTestDB())("an account's workspaces over effect/unstable/sql", (it) =
         assert.ok(Option.isSome(personal));
         yield* joinWorkspace(personal.value, teammate, WORKSPACE_ROLE.MEMBER);
         const acme = yield* openSharedWorkspace(seams, "Acme", owner, [teammate]);
+
         const namesOf = (userId: string) =>
           Effect.map(listWorkspaces(userId), (listed) =>
             listed.map((workspace) => [workspace.id, workspace.name]),
@@ -408,6 +422,7 @@ it.layer(getTestDB())("an account's workspaces over effect/unstable/sql", (it) =
       const database = yield* Database;
       const userId = yield* openUser("Grace Hopper");
       const raced: string[] = [];
+
       // The racing ensure makes the workspace and names it the account's while this one asks the plugin, which then refuses the slug.
       const racing: WorkspaceSeams = {
         createOrganization: (creation) =>
@@ -418,6 +433,7 @@ it.layer(getTestDB())("an account's workspaces over effect/unstable/sql", (it) =
               Effect.provideService(Database, database),
             );
             raced.push(id);
+
             return yield* Effect.fail(new Cause.UnknownError(undefined, "Organization exists"));
           }),
       };
@@ -447,12 +463,14 @@ it.layer(getTestDB())("an account's workspaces over effect/unstable/sql", (it) =
         const plugin = yield* fakeWorkspaceSeams;
         const userId = yield* openUser("Katherine Johnson");
         const raced: string[] = [];
+
         // The racing ensure has made the workspace, the account its owner, and not yet written the row naming it.
         const racing: WorkspaceSeams = {
           createOrganization: (creation) =>
             Effect.gen(function* () {
               const { id } = yield* plugin.createOrganization(creation);
               raced.push(id);
+
               return yield* Effect.fail(new Cause.UnknownError(undefined, "Organization exists"));
             }),
         };
@@ -568,12 +586,14 @@ it.effect(
       yield* Effect.gen(function* () {
         const ada = yield* openUser("Ada Lovelace");
         const grace = yield* openUser("Grace Hopper");
+
         const squatted = yield* seams.createOrganization({
           name: "Grace Hopper",
           slug: "grace-hopper",
           userId: ada,
           metadata: { personal: true },
         });
+
         const adasTeam = yield* seams.createOrganization({
           name: "Ada Lovelace",
           slug: "ada-lovelace",
@@ -588,9 +608,11 @@ it.effect(
         assert.ok(Option.isSome(graces));
         assert.notEqual(adas.value, adasTeam.id);
         assert.notEqual(graces.value, squatted.id);
+
         const [adasSlug] = yield* Database.use((db) =>
           db.select(PERSONAL_COLUMNS).from(organization).where(eq(organization.id, adas.value)),
         );
+
         assert.ok(adasSlug?.slug.startsWith("ada-lovelace-"));
         assert.equal(adasSlug?.metadata, '{"personal":true}');
         assert.deepEqual(
@@ -602,12 +624,14 @@ it.effect(
           ),
           [{ userId: ada, role: WORKSPACE_ROLE.OWNER }],
         );
+
         const [gracesSlug] = yield* Database.use((db) =>
           db
             .select({ slug: organization.slug })
             .from(organization)
             .where(eq(organization.id, graces.value)),
         );
+
         assert.ok(gracesSlug?.slug.startsWith("grace-hopper-"));
         assert.deepEqual(yield* listWorkspaces(grace), [
           {

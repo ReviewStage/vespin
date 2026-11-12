@@ -20,13 +20,14 @@ import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useThreeColumns } from "../use-window-size-class.js";
+import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useAppSidebar } from "./app-sidebar.js";
 import { useRemindSheet } from "./inbox-remind.js";
-import { InboxRow } from "./inbox-screens.js";
+import { InboxItemRows } from "./inbox-screens.js";
 import {
   StatusQuestionAsk,
   TaskAgentRow,
-  TaskNodeRow,
+  TaskRows,
   useAgentArchiveAsk,
   useSidebarTasks,
 } from "./task-screens.js";
@@ -77,6 +78,7 @@ function FoundList({
 }) {
   const { mark, resolve, refresh, refreshTasks } = useInboxActs();
   const pictureOf = useMemberPictures();
+
   return (
     <RowList
       look={LIST_LOOK.PLAIN}
@@ -87,24 +89,19 @@ function FoundList({
     >
       {found.tasks.length === 0 ? null : (
         <ListSection title={SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.TASKS]} count={found.tasks.length}>
-          {found.tasks.map((task) => (
-            <TaskNodeRow key={task.id} node={{ task, children: [] }} listing={listing} />
-          ))}
+          <TaskRows tasks={found.tasks} listing={listing} />
         </ListSection>
       )}
       {found.inbox.length === 0 ? null : (
         <ListSection title={SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.INBOX]} count={found.inbox.length}>
-          {found.inbox.map((listed) => (
-            <InboxRow
-              key={listed.item.id}
-              listed={listed}
-              readerId={found.readerId}
-              pictureOf={pictureOf}
-              onMark={mark}
-              onRemind={onRemind}
-              onResolve={resolve}
-            />
-          ))}
+          <InboxItemRows
+            listed={found.inbox}
+            readerId={found.readerId}
+            pictureOf={pictureOf}
+            onMark={mark}
+            onRemind={onRemind}
+            onResolve={resolve}
+          />
         </ListSection>
       )}
       {found.agents.length === 0 ? null : (
@@ -136,11 +133,15 @@ function useSearchScreen({ query, setQuery }: SearchWords) {
   const remind = useRemindSheet();
   const archiveAsk = useAgentArchiveAsk();
   const routes = foundRoutes(found);
+
   const open = (id: string) => {
     const route = routes.get(id);
+
     if (route !== undefined) router.push(route);
   };
+
   const none = found.tasks.length + found.inbox.length + found.agents.length === 0;
+
   const results =
     query.trim() === "" ? (
       <EmptyState title={SEARCH_TITLE} symbol="magnifyingglass" description={SEARCH_FINDS} />
@@ -155,6 +156,7 @@ function useSearchScreen({ query, setQuery }: SearchWords) {
         onArchiveAgent={archiveAsk.archive}
       />
     );
+
   return { query, setQuery, results, status, deletion, remind, archiveAsk };
 }
 
@@ -169,6 +171,7 @@ function useSearchScreen({ query, setQuery }: SearchWords) {
 function SearchStackScreen(words: SearchWords) {
   const { query, setQuery, results, status, deletion, remind, archiveAsk } = useSearchScreen(words);
   const field = useRefilledSearchField(query);
+  const switcher = useWorkspaceSwitcher();
   // Note that what is typed is read through a ref the commit writes, so the focus effect runs only as the tab opens, never on a key or on Cancel clearing the field.
   const typed = useRef(query);
   useEffect(() => {
@@ -179,6 +182,7 @@ function SearchStackScreen(words: SearchWords) {
       if (typed.current === "") field.current?.focus();
     }, []),
   );
+
   return (
     <>
       <Stack.Screen options={{ title: SEARCH_TITLE }}>
@@ -189,7 +193,7 @@ function SearchStackScreen(words: SearchWords) {
           onCancelButtonPress={() => setQuery("")}
         />
       </Stack.Screen>
-      <SettingsBarButton />
+      <SettingsBarButton switcher={switcher} />
       <Screen>{results}</Screen>
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
@@ -207,6 +211,7 @@ function SearchStackScreen(words: SearchWords) {
 function SearchSplitScreen(words: SearchWords) {
   const { query, setQuery, results, status, deletion, remind, archiveAsk } = useSearchScreen(words);
   const sidebar = useAppSidebar(SIDEBAR_PLACE.SEARCH, useSidebarTasks());
+
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -232,6 +237,7 @@ function SearchSplitScreen(words: SearchWords) {
 /** The Search tab's root screen: beside the app sidebar in a window wide enough for three columns, under the Stack's bar otherwise, the query held here so a rotation across the line keeps it. */
 export function SearchScreen() {
   const [query, setQuery] = useState("");
+
   return useThreeColumns() ? (
     <SearchSplitScreen query={query} setQuery={setQuery} />
   ) : (

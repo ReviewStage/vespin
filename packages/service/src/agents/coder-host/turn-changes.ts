@@ -54,20 +54,27 @@ export const turnChangesOf = /* @__PURE__ */ Effect.fn("web/turnChangesOf")(func
   if (!(yield* experimentOnIn(agent.organizationId, EXPERIMENT.REWIND_FILES))) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
+
   const target = { userId: agent.userId, conversationId: agent.conversationId };
   const range = yield* hostedStoreOrUnavailable(readTurnCheckoutRange(target, messageId));
+
   if (Option.isNone(range)) return yield* Effect.fail(HOSTED_REFUSAL.CHECKOUT_SNAPSHOT_MISSING);
   const sessionId = yield* hostedStoreOrUnavailable(recordedRuntimeSession(target));
+
   if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.CHECKOUT_SNAPSHOT_MISSING);
   const machines = yield* deploymentLifecycle;
+
   const diffed = yield* machines
     .diffCheckout(sessionId, range.value)
     .pipe(Effect.mapError(refusedByMachine));
+
   if (diffed.outcome === CHECKOUT_DIFF_OUTCOME.MISSING) {
     return yield* Effect.fail(HOSTED_REFUSAL.CHECKOUT_SNAPSHOT_MISSING);
   }
+
   if (diffed.outcome !== CHECKOUT_DIFF_OUTCOME.DIFFED) {
     return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   }
+
   return checkoutDiffFiles(diffed.diff);
 });

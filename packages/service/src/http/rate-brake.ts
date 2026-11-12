@@ -42,20 +42,24 @@ interface TrackedWindow {
  * the events a batch carries — so a single oversized batch is braked on
  * arrival rather than on the one after it.
  */
-export function makeRateBrake(config: RateBrakeConfig): RateBrake {
+export function createRateBrake(config: RateBrakeConfig): RateBrake {
   const tracked = new Map<string, TrackedWindow>();
 
   return {
     check: (userId, weight = 1) =>
       Effect.map(Clock.currentTimeMillis, (now) => {
         const held = tracked.get(userId);
+
         if (!held || now - held.windowStart >= config.windowMs) {
           if (tracked.size >= config.maxTrackedUsers) tracked.clear();
           tracked.set(userId, { windowStart: now, count: weight });
+
           return weight <= config.maxRequestsPerWindow;
         }
+
         const count = held.count + weight;
         tracked.set(userId, { windowStart: held.windowStart, count });
+
         return count <= config.maxRequestsPerWindow;
       }),
   };

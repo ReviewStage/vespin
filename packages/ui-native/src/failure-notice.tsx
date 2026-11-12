@@ -1,7 +1,8 @@
-// failure-notice.tsx -- the app's one notice that an action did not go: a banner of Liquid Glass that slides down from the top with the refusal's words and a Try again, or says once that the phone is offline, read aloud by VoiceOver and let go on its own.
+// failure-notice.tsx -- the app's one notice: a banner of Liquid Glass that slides down from the top with a refusal's words and a Try again, a write that went with its Undo, or says once that the phone is offline, read aloud by VoiceOver and let go on its own.
 
 import { Host, HStack, Image, Spacer, Button as SwiftUIButton, Text } from "@expo/ui/swift-ui";
 import {
+  accessibilityElement,
   accessibilityIdentifier,
   buttonStyle,
   fixedSize,
@@ -24,13 +25,13 @@ import {
 } from "react";
 import { AccessibilityInfo, Animated, PanResponder, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { FullWindowOverlay } from "react-native-screens";
 import { useReduceMotion } from "./accessibility.js";
 import {
   NO_NOTICE,
   NOTICE_KIND,
   type NoticeAsk,
   noticeAsked,
+  noticeCleared,
   noticeGone,
   noticeOnline,
   type ShownNotice,
@@ -42,13 +43,14 @@ import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
-/** What the banner's one button says, as the panel's refusals offer it. */
+/** What the banner's one button says, as the panel's refusals and its Undo toast offer it. */
 const TRY_AGAIN = "Try again";
+const UNDO = "Undo";
 
-/** How long a notice stands before it goes on its own, in milliseconds: long enough to read a sentence, longer where it offers a press, and longest while VoiceOver reads it, so its Try again can still be reached. */
+/** How long a notice stands before it goes on its own, in milliseconds: long enough to read a sentence, longer where it offers a press, and longest while VoiceOver reads it, so its Try again or Undo can still be reached. */
 const STANDS_FOR = {
   WORDS: 4_000,
-  WITH_RETRY: 6_000,
+  WITH_PRESS: 6_000,
   SCREEN_READER: 10_000,
 } as const;
 
@@ -65,6 +67,7 @@ const SWIPE_AWAY = 24;
 const NOTICE_SYMBOL = {
   [NOTICE_KIND.REFUSED]: "exclamationmark.triangle.fill",
   [NOTICE_KIND.OFFLINE]: "wifi.slash",
+  [NOTICE_KIND.DONE]: "checkmark.circle.fill",
 } as const satisfies Record<ShownNotice["kind"], SfSymbol>;
 
 const styles = StyleSheet.create({
@@ -80,6 +83,8 @@ export interface FailureNotices {
   readonly say: (asked: NoticeAsk) => void;
   /** Says the phone is online again: the offline notice goes, and the next time it is offline is said anew. */
   readonly online: () => void;
+  /** Lets every notice go, its Try again or Undo with it, as the account it was said for is signed out or changed. */
+  readonly clear: () => void;
 }
 
 const Notices = createContext<FailureNotices | undefined>(undefined);
@@ -87,20 +92,37 @@ const Notices = createContext<FailureNotices | undefined>(undefined);
 /** The notice of the app drawn under `FailureNoticeProvider`. */
 export function useFailureNotices(): FailureNotices {
   const notices = useContext(Notices);
+
   if (notices === undefined) throw new Error("A screen asked for a notice outside its provider.");
+
   return notices;
 }
 
-/** The banner's words, its glyph, and Try again, in the system's glass. */
+/** The banner's one button: Try again where the notice offers it, else Undo where it offers that, else none. */
+function noticePress(
+  notice: ShownNotice,
+): { readonly label: string; readonly identifier: string; readonly act: () => void } | undefined {
+  if (notice.retry !== undefined) {
+    return { label: TRY_AGAIN, identifier: "failure-notice-retry", act: notice.retry };
+  }
+
+  return notice.undo === undefined
+    ? undefined
+    : { label: UNDO, identifier: "failure-notice-undo", act: notice.undo };
+}
+
+/** The banner's words, its glyph, and Try again or Undo, in the system's glass. */
 function NoticeBody({
   notice,
-  onRetry,
+  onPress,
 }: {
   readonly notice: ShownNotice;
-  readonly onRetry: () => void;
+  readonly onPress: () => void;
 }) {
   const colors = useColors();
   const ink = notice.kind === NOTICE_KIND.REFUSED ? colors.DANGER : colors.TEXT_MUTED;
+  const press = noticePress(notice);
+
   return (
     <Host matchContents={{ vertical: true }} style={styles.banner}>
       <HStack
@@ -109,9 +131,12 @@ function NoticeBody({
           padding({ leading: SPACE.EDGE, trailing: SPACE.ROW, vertical: SPACE.ROW + 2 }),
           glassEffect({
             glass: { variant: "regular", interactive: true },
+            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
             shape: "roundedRectangle",
             cornerRadius: BAR_RADIUS,
           }),
+          // Note that the banner contains its pieces as elements of their own, because an identifier on a plain stack passes down to them and stood over Try again's own.
+          accessibilityElement("contain"),
           accessibilityIdentifier("failure-notice"),
         ]}
       >
@@ -127,16 +152,16 @@ function NoticeBody({
           {notice.words}
         </Text>
         <Spacer />
-        {notice.retry === undefined ? null : (
+        {press === undefined ? null : (
           <SwiftUIButton
-            label={TRY_AGAIN}
-            onPress={onRetry}
+            label={press.label}
+            onPress={onPress}
             modifiers={[
               buttonStyle("borderless"),
-              tint(colors.ACCENT),
+              tint(colors.TEXT),
               font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
               fixedSize(),
-              accessibilityIdentifier("failure-notice-retry"),
+              accessibilityIdentifier(press.identifier),
             ]}
           />
         )}
@@ -148,10 +173,11 @@ function NoticeBody({
 /**
  * The banner: slides down under the status bar as a notice arrives, or
  * fades in where the reader reduces motion, stands until its time is up,
- * a swipe up, or Try again, and slides away. Note that it stands in a
- * window of its own (`FullWindowOverlay`), so it draws over a sheet as
- * well as the tabs, as the system's banners do, and passes every touch
- * outside it through to the screen under it.
+ * a swipe up, or its Try again or Undo, and slides away. Note that it stands over the
+ * app's root view, above the tabs, and passes every touch outside it
+ * through to the screen under it; it does not stand in a window of its own
+ * (`FullWindowOverlay`), because on iOS 27.2 that window never drew, so no
+ * notice showed at all. A sheet open over the root covers it.
  */
 function NoticeBanner({
   notice,
@@ -163,6 +189,7 @@ function NoticeBanner({
   const reduceMotion = useReduceMotion();
   const [place] = useState(() => new Animated.Value(0));
   const [drawn, setDrawn] = useState<ShownNotice | undefined>(notice);
+
   const leave = useCallback(
     (serial: number) => {
       place.stopAnimation();
@@ -176,25 +203,31 @@ function NoticeBanner({
     },
     [place, onGone],
   );
+
   // A new notice arrives over whatever stood, said aloud once, and goes on its own once its time is up; one let go while it stands slides away.
   useEffect(() => {
     if (notice === undefined) {
       Animated.timing(place, { toValue: 0, duration: SLIDE_MS, useNativeDriver: true }).start(
         ({ finished }) => finished && setDrawn(undefined),
       );
+
       return;
     }
+
     setDrawn(notice);
     place.setValue(0);
     AccessibilityInfo.announceForAccessibility(notice.words);
     let live = true;
+
     const arrive = (reading: boolean) => {
       if (!live) return;
+
       const stands = reading
         ? STANDS_FOR.SCREEN_READER
-        : notice.retry === undefined
+        : noticePress(notice) === undefined
           ? STANDS_FOR.WORDS
-          : STANDS_FOR.WITH_RETRY;
+          : STANDS_FOR.WITH_PRESS;
+
       // Note that the notice's stay is a pause between its slide in and its slide out, so a swipe or a newer notice stops all three as one.
       Animated.sequence([
         Animated.timing(place, { toValue: 1, duration: SLIDE_MS, useNativeDriver: true }),
@@ -204,12 +237,15 @@ function NoticeBanner({
         if (finished) onGone(notice.serial);
       });
     };
+
     AccessibilityInfo.isScreenReaderEnabled().then(arrive, () => arrive(false));
+
     return () => {
       live = false;
       place.stopAnimation();
     };
   }, [notice, place, onGone]);
+
   const swipe = useMemo(
     () =>
       PanResponder.create({
@@ -220,12 +256,15 @@ function NoticeBanner({
       }),
     [drawn, leave],
   );
+
   if (drawn === undefined) return null;
-  const retry = () => {
+
+  const press = () => {
     leave(drawn.serial);
     buzz(BUZZ.SELECTION);
-    drawn.retry?.();
+    noticePress(drawn)?.act();
   };
+
   const arriving = reduceMotion
     ? { opacity: place }
     : {
@@ -234,38 +273,42 @@ function NoticeBanner({
           { translateY: place.interpolate({ inputRange: [0, 1], outputRange: [-ARRIVAL, 0] }) },
         ],
       };
+
   return (
-    <FullWindowOverlay>
-      <SafeAreaView edges={["top"]} pointerEvents="box-none" style={styles.edge}>
-        <Animated.View
-          style={[styles.lane, arriving]}
-          pointerEvents="box-none"
-          accessibilityLiveRegion="polite"
-          {...swipe.panHandlers}
-        >
-          <NoticeBody notice={drawn} onRetry={retry} />
-        </Animated.View>
-      </SafeAreaView>
-    </FullWindowOverlay>
+    <SafeAreaView edges={["top"]} pointerEvents="box-none" style={styles.edge}>
+      <Animated.View
+        style={[styles.lane, arriving]}
+        pointerEvents="box-none"
+        accessibilityLiveRegion="polite"
+        {...swipe.panHandlers}
+      >
+        <NoticeBody notice={drawn} onPress={press} />
+      </Animated.View>
+    </SafeAreaView>
   );
 }
 
 /**
- * Holds the app's one failure notice over everything under it, and hands
- * `useFailureNotices` to the screens: a refusal stands in place of any
- * notice standing, and the offline notice once a stretch offline
+ * Holds the app's one notice over everything under it, and hands
+ * `useFailureNotices` to the screens: a refusal, or a write that went with
+ * its Undo, stands in place of any notice standing, and the offline notice
+ * once a stretch offline
  * (`failure-notice-model.ts`).
  */
 export function FailureNoticeProvider({ children }: { readonly children: ReactNode }) {
   const [state, setState] = useState(NO_NOTICE);
+
   const notices = useMemo<FailureNotices>(
     () => ({
       say: (asked) => setState((was) => noticeAsked(was, asked)),
       online: () => setState(noticeOnline),
+      clear: () => setState(noticeCleared),
     }),
     [],
   );
+
   const gone = useCallback((serial: number) => setState((was) => noticeGone(was, serial)), []);
+
   return (
     <Notices.Provider value={notices}>
       {children}

@@ -105,6 +105,7 @@ export function PublicSection({
 }): React.JSX.Element {
   const titleId = `${useId()}title`;
   const titled = said(title);
+
   return (
     <section className="ui-public-section" aria-labelledby={titled ? titleId : undefined}>
       {titled ? (
@@ -167,6 +168,7 @@ export function PublicPage({
   children?: ReactNode;
 }): React.JSX.Element {
   const intro = back !== undefined || said(title) || said(lead);
+
   return (
     <SiteFrame bar={banner} barCall={bannerCall} footer={footer}>
       <div className="ui-public-page @container flex grow flex-col min-w-0 text-foreground font-ui">

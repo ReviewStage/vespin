@@ -17,7 +17,6 @@ import {
   ACTION,
   credentialMissingWords,
   deviceAwayWords,
-  extraRepositoryRefusalWords,
   HOST_REMOVED,
   keyUnreadableWords,
   localAgentRefusalWords,
@@ -134,7 +133,6 @@ import {
   USER_MESSAGE_METADATA,
   type UserMessageMetadata,
 } from "@repo/wire";
-import { sentLineId } from "@repo/wire/host-ids";
 import { USAGE_LIMIT_AGENT, type UsageLimitNotice } from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
 
@@ -193,6 +191,7 @@ export function payerPlanOf(
 ): SubscriptionKeySummary | undefined {
   if (teammate || !planPayer(payer) || subscriptions === undefined) return undefined;
   const kind = PLAN_PAYER_KIND[payer];
+
   return subscriptionId !== undefined
     ? subscriptions.find((one) => one.id === subscriptionId && one.kind === kind)
     : next
@@ -274,22 +273,27 @@ export function agentPayerParts(
   planName?: string | undefined,
 ): PayerParts | undefined {
   if (payer === undefined) return undefined;
+
   const plan =
     payer === AGENT_PAYER.API_KEY
       ? provider === undefined
         ? ANY_API_KEY
         : API_KEY_WORDS[provider]
       : PAYER_WORDS[payer];
+
   const named = planPayer(payer) && planName !== undefined ? `${plan} (${planName})` : plan;
+
   const words =
     PRICED_PAYERS.has(payer) && costUsd !== undefined
       ? `${named}${LINE_SEPARATOR}${formatUsd(costUsd)} so far`
       : named;
+
   const mark = planPayer(payer)
     ? PAYER_MARK.PLAN
     : payer === AGENT_PAYER.MAC_SIGN_IN
       ? PAYER_MARK.MAC
       : PAYER_MARK.KEY;
+
   return { mark, owned: payer !== AGENT_PAYER.APP, words, masked: named !== plan };
 }
 
@@ -316,6 +320,7 @@ export function teammateRef(
   if (startedBy === undefined || readerId === undefined || startedBy.userId === readerId) {
     return undefined;
   }
+
   return startedBy;
 }
 
@@ -332,6 +337,7 @@ export function macOwnerOf(
   former?: readonly FormerMember[] | undefined,
 ): Actor | undefined {
   if (startedBy === undefined || readerId === undefined) return undefined;
+
   return personActor(startedBy, members, readerId, former);
 }
 
@@ -364,14 +370,18 @@ export function archivedByReading(
 ): ArchivedByReading {
   const member =
     by.member === undefined ? undefined : by.member.userId === readerId ? "you" : by.member.name;
+
   const forMember = member === undefined ? "" : ` for ${member}`;
+
   const archiver =
     by.by === AGENT_ARCHIVER.MEMBER
       ? member
       : by.by === AGENT_ARCHIVER.APP
         ? `${PRODUCT_NAME}${forMember}`
         : `${by.agent?.name || UNNAMED_ARCHIVER}${forMember}`;
+
   const archived = by.withTask === true ? "Archived with its task" : "Archived";
+
   return {
     words: archiver === undefined ? archived : `${archived} by ${archiver}`,
     reason: by.reason,
@@ -441,9 +451,11 @@ export function lineSender(
   former?: readonly FormerMember[] | undefined,
 ): Actor | undefined {
   if (sentBy === undefined) return undefined;
+
   if (sentBy.userId !== undefined && (readerId === undefined || sentBy.userId === readerId)) {
     return undefined;
   }
+
   if (sentBy.agent === true) {
     return {
       kind: ACTOR_KIND.AGENT,
@@ -453,6 +465,7 @@ export function lineSender(
       state: ACTOR_STATE.REST,
     };
   }
+
   switch (sentBy.kind) {
     case AGENT_SENDER.APP:
       return APP_ACTOR;
@@ -488,6 +501,7 @@ export function messageSender(
 ): Actor | undefined {
   const sender = lineSender(message.sentBy, readerId, members, former);
   const avatarUrl = githubLineOf(message)?.by_avatar;
+
   return sender?.kind === ACTOR_KIND.GITHUB && avatarUrl !== undefined
     ? { ...sender, avatarUrl }
     : sender;
@@ -538,23 +552,29 @@ export function endLineParts(
     case AGENT_STATUS.FAILED: {
       if (hostLost !== undefined)
         return { words: hostLostWords(hostLost.host), failed: true, failure };
+
       if (launchStopped !== undefined) {
         const words = launchStoppedWords(
           launchStopped.step,
           launchStopped.runtime,
           launchStopped.unstarted,
         );
+
         const { unstarted } = launchStopped;
-        return { words, failed: true, failure, ...(unstarted === undefined ? {} : { unstarted }) };
+
+        return { words, failed: true, failure, ...(unstarted !== undefined && { unstarted }) };
       }
+
       const words =
         failure === undefined ? undefined : agentFailureWords(failure, starter, continuable);
+
       return {
         words: `Failed: ${words ?? "the run ended without saying why"}`,
         failed: true,
         failure,
       };
     }
+
     case AGENT_STATUS.STARTING:
     case AGENT_STATUS.RUNNING:
     case AGENT_STATUS.COMPLETED:
@@ -568,10 +588,10 @@ export function usageLimitAgentOf(provider: ModelProvider | undefined): UsageLim
 }
 
 /** Whether a refusal a note keeps is the plan's usage limit's (`AGENT_PLAN_LIMIT_REACHED`). */
-export function refusedAtLimit(refusal: unknown): boolean {
+export function refusedAtLimit(cause: unknown): boolean {
   return (
-    Predicate.hasProperty(refusal, "failure") &&
-    refusal.failure === AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED
+    Predicate.hasProperty(cause, "failure") &&
+    cause.failure === AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED
   );
 }
 
@@ -658,7 +678,9 @@ export function continuedByIds(
   const named = (agent.continuedBy ?? [])
     .filter((each) => !each.forked && each.messageId === undefined)
     .map((each) => each.agentId);
+
   const listed = continuationsOf(agent.id, agents, archived).map((each) => each.id);
+
   return [...new Set([...named, ...listed])];
 }
 
@@ -667,6 +689,7 @@ export function continuedByTitles(agent: AgentSummary): ReadonlyMap<string, stri
   const titled = (agent.continuedBy ?? []).flatMap((each) =>
     each.title === null ? [] : [[each.agentId, each.title] as const],
   );
+
   return new Map(titled);
 }
 
@@ -695,7 +718,9 @@ export function endLineOffersContinue(input: {
   readonly boxClosed: boolean;
 }): boolean {
   if (!endLineContinues(input.status, input.endReason)) return false;
+
   if (input.continued) return true;
+
   return !input.boxClosed && mendedByNewAgent(input.failure);
 }
 
@@ -726,6 +751,7 @@ export function endLineOffersOtherModel(input: {
   readonly boxClosed: boolean;
 }): boolean {
   if (!endLineContinues(input.status, input.endReason)) return false;
+
   return !input.continued && !input.boxClosed && input.failure === AGENT_FAILURE.REFUSAL;
 }
 
@@ -747,8 +773,11 @@ export function endLineOffersTryAgain(input: {
   readonly boxClosed: boolean;
 }): boolean {
   if (!endLineContinues(input.status, input.endReason)) return false;
+
   if (input.continued || input.boxClosed) return false;
+
   if (input.failure === undefined) return true;
+
   return !mendedByNewAgent(input.failure) && !MENDED_BY_CHOICE.has(input.failure);
 }
 
@@ -776,14 +805,6 @@ const UNARCHIVED_WORDS = {
   refused: "The agent could not be unarchived. Try again.",
 } as const;
 
-/** What a refused archive says of an agent still starting, or with a message awaiting its turn, which has no turn to stop yet. */
-export const ARCHIVE_NOT_READY = "The agent is still starting its turn. Try again in a moment.";
-
-/** What an agent's delete says refused; one that landed says nothing, since the agent leaving its list says it. */
-export const DELETE_WORDS = {
-  refused: "The agent could not be deleted. Try again.",
-} as const;
-
 /** What the toast says once an agent's archive, or its undoing, landed or was refused, by which way it was asked. */
 export function archiveWords(archived: boolean): {
   readonly done: string;
@@ -795,6 +816,7 @@ export function archiveWords(archived: boolean): {
 /** What the toast says once `count` agents' archive, or its undoing, landed: one agent's words for one, else how many. */
 export function archivedManyWords(count: number, archived: boolean): string {
   if (count === 1) return archiveWords(archived).done;
+
   return `${countWords(count, TERM.AGENT)} ${archived ? "archived" : "unarchived"}`;
 }
 
@@ -819,6 +841,7 @@ const CONNECT_CREDENTIALS = {
  */
 export function modelConnectFailure(model: CatalogModel): ConnectFailure | undefined {
   if (model.credentialMissing !== true) return undefined;
+
   return {
     reason: FAILURE_REASON.CONNECT_AGENTS,
     text: `${modelLabel(model.id, [model])} cannot run until you connect ${CONNECT_CREDENTIALS[model.provider]}.`,
@@ -829,6 +852,7 @@ export function modelConnectFailure(model: CatalogModel): ConnectFailure | undef
 /** What a model's row says at its end where nothing pays for it: the press that connects its harness, which its pick is. */
 export function modelConnectWords(model: CatalogModel): string | undefined {
   const connect = modelConnectFailure(model);
+
   return connect === undefined ? undefined : remedyLabel(connect);
 }
 
@@ -846,6 +870,7 @@ export function unrunnableChoice(
 ): ConnectFailure | undefined {
   const { base } = readModelChoice(models, choice.model);
   const model = models.find((each) => each.id === base);
+
   return model === undefined ? undefined : modelConnectFailure(model);
 }
 
@@ -920,7 +945,9 @@ export function paidByOf(
 
 export function planPayerOf(runtime: AgentRuntime | undefined): AgentPayer | undefined {
   if (runtime === AGENT_RUNTIME.CLAUDE_CODE) return AGENT_PAYER.CLAUDE_SUBSCRIPTION;
+
   if (runtime === AGENT_RUNTIME.CODEX) return AGENT_PAYER.CHATGPT_SUBSCRIPTION;
+
   return undefined;
 }
 
@@ -944,12 +971,14 @@ function planRefusalWords(refused: RefusedCall, payer: AgentPayer | undefined): 
   if (refused.failure === AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED) {
     return refused.resetsAt === undefined ? undefined : limitResetsWords(refused.resetsAt);
   }
+
   if (
     refused.failure === AGENT_CALL_FAILURE.AGENT_PLAN_SIGNED_OUT &&
     payer === AGENT_PAYER.CLAUDE_SUBSCRIPTION
   ) {
     return CLAUDE_PLAN_REFUSAL.SIGNED_OUT;
   }
+
   return undefined;
 }
 
@@ -962,16 +991,13 @@ export function startFailureNote(
   if (refused.failure === AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE) {
     return unreachedFailure(refused.unreached, taskId);
   }
+
   if (refused.failure === AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED) {
     return callFailure(
       localAgentRefusalWords(refused.localAgentRefusal, refused.refusedDevice ?? device),
     );
   }
-  if (refused.failure === AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED) {
-    return callFailure(
-      extraRepositoryRefusalWords(refused.extraRepositoryRefusal, refused.refusedRepository),
-    );
-  }
+
   return (
     settingsFailure(refused, ACTION.START) ??
     callFailure(planRefusalWords(refused, undefined) ?? startFailureWords(refused.failure))
@@ -984,6 +1010,7 @@ export function startFailureNote(
  */
 export function continueFailureNote(refused: RefusedCall, taskId: string | null): Failure {
   const note = startFailureNote(refused, taskId);
+
   switch (refused.failure) {
     case AGENT_CALL_FAILURE.AGENT_API_KEY_UNREADABLE:
       return { ...note, text: keyUnreadableWords(ACTION.START) };
@@ -1023,12 +1050,15 @@ function unreachedFailure(
       settingsUrl: unreached.settingsUrl,
     };
   }
+
   // A token's remedy is the member's own, in Settings or on GitHub, so it needs no task.
   if (unreached?.reason === REPOSITORY_UNREACHED.TOKEN_INVALID) {
     return { reason: FAILURE_REASON.GITHUB_TOKEN, text: "Your GitHub token was refused." };
   }
+
   if (unreached?.reason === REPOSITORY_UNREACHED.TOKEN_SSO) {
     const [organization = unreached.repository] = unreached.repository.split("/");
+
     return {
       reason: FAILURE_REASON.AUTHORIZE_TOKEN,
       text: `Your GitHub token isn't authorized for ${organization}'s SAML SSO.`,
@@ -1036,6 +1066,7 @@ function unreachedFailure(
       authorizeUrl: unreached.authorizeUrl,
     };
   }
+
   // The member's token is theirs to replace in Settings, so each of its cases carries that remedy and needs no task. NO_TOKEN is a saved token the deployment cannot open; a member with none saved never reaches it.
   if (unreached?.reason === REPOSITORY_UNREACHED.NO_TOKEN) {
     return {
@@ -1043,22 +1074,27 @@ function unreachedFailure(
       text: "Your saved GitHub token could not be opened.",
     };
   }
+
   if (unreached?.reason === REPOSITORY_UNREACHED.TOKEN_NO_ACCESS) {
     return {
       reason: FAILURE_REASON.GITHUB_TOKEN,
       text: `Your GitHub token cannot access ${unreached.repository}. Check the repository still exists under that name, or ask its owner to give your GitHub account access.`,
     };
   }
+
   if (unreached?.reason === REPOSITORY_UNREACHED.TOKEN_CANNOT_PUSH) {
     return {
       reason: FAILURE_REASON.GITHUB_TOKEN,
       text: `Your GitHub token cannot push to ${unreached.repository}. Ask its owner to give your GitHub account write access.`,
     };
   }
+
   if (unreached === undefined || taskId === null) {
     return callFailure(SHARED_FAILURE_NOTE[AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE]);
   }
+
   const { repository } = unreached;
+
   switch (unreached.reason) {
     case REPOSITORY_UNREACHED.NOT_CONNECTED:
       return {
@@ -1102,9 +1138,11 @@ function starterKeyWords(failure: AgentCallFailure, starter: string): string | u
   if (failure === AGENT_CALL_FAILURE.AGENT_API_KEY_UNREADABLE) {
     return `${starter}'s saved API key can't be read. They save it again in Settings to unblock this agent.`;
   }
+
   if (failure === AGENT_CALL_FAILURE.AGENT_CREDENTIAL_MISSING) {
     return `${starter} has no plan or API key connected for this agent. They connect one in Settings to unblock it.`;
   }
+
   return undefined;
 }
 
@@ -1124,18 +1162,25 @@ export function messageFailureNote(
   if (refused.failure === AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE) {
     return unreachedFailure(refused.unreached, taskId);
   }
+
   // Note that the box's note stands beside Continue in new agent, so it tells no one to continue.
   if (refused.failure === AGENT_CALL_FAILURE.AGENT_RETIRED) return callFailure(BOX_RETIRED);
+
   if (refused.failure === AGENT_CALL_FAILURE.DEVICE_REMOVED) return callFailure(HOST_REMOVED);
+
   // Note that a device that refuses a message for another reason says it in the words it refuses a Start in.
   if (refused.failure === AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED) {
     const refusal = refused.localAgentRefusal ?? LOCAL_AGENT_REFUSAL.MAC_AWAY;
+
     return refusal === LOCAL_AGENT_REFUSAL.MAC_AWAY
       ? { reason: FAILURE_REASON.CONTINUE_IN_CLOUD, text: deviceAwayWords(refused.refusedDevice) }
       : callFailure(localAgentRefusalWords(refusal, refused.refusedDevice));
   }
+
   const theirs = starter === undefined ? undefined : starterKeyWords(refused.failure, starter);
+
   if (theirs !== undefined) return callFailure(theirs);
+
   return (
     settingsFailure(refused, ACTION.MESSAGE) ??
     callFailure(planRefusalWords(refused, payer) ?? messageNoteWords(refused.failure))
@@ -1154,8 +1199,10 @@ export function noteWhileOffline<Note extends Failure & { readonly cause?: unkno
 ): Note | undefined {
   if (connected || note === undefined) return note;
   const { cause } = note;
+
   const unheard =
     Predicate.hasProperty(cause, "failure") && cause.failure === AGENT_CALL_FAILURE.UNANSWERED;
+
   return unheard ? { ...note, text: UNHEARD_OFFLINE.BESIDE_RETRY } : note;
 }
 
@@ -1201,12 +1248,14 @@ const NAME_WORD_SEPARATOR = "-";
 /** A model's own name, past its provider: `claude-opus-5.5` of `anthropic/claude-opus-5.5`. */
 function ownName(modelId: string): string {
   const separator = modelId.indexOf(CATALOG_ID_SEPARATOR);
+
   return separator === -1 ? modelId : modelId.slice(separator + 1);
 }
 
 /** The version's numbers, most significant first; none for a name that carries no version. */
 function modelVersion(modelId: string): number[] {
   const found = MODEL_VERSION.exec(ownName(modelId))?.[0];
+
   return found === undefined ? [] : found.split(".").map(Number);
 }
 
@@ -1214,8 +1263,10 @@ function modelVersion(modelId: string): number[] {
 function compareVersions(a: readonly number[], b: readonly number[]): number {
   for (let part = 0; part < Math.max(a.length, b.length); part += 1) {
     const difference = (a[part] ?? 0) - (b[part] ?? 0);
+
     if (difference !== 0) return difference;
   }
+
   return 0;
 }
 
@@ -1249,6 +1300,7 @@ function familyRank(modelId: string): number {
   const name = ownName(baseIdOf(modelId) ?? modelId);
   const words = name.split(NAME_WORD_SEPARATOR).filter((word) => !VERSION_WORD.test(word));
   const rank = LEAD_FAMILIES.indexOf(words.at(-1) ?? "");
+
   return rank === -1 ? LEAD_FAMILIES.length : rank;
 }
 
@@ -1314,13 +1366,16 @@ function baseIdOf(id: string): string | undefined {
 export function offeredModels(models: readonly CatalogModel[]): readonly OfferedModel[] {
   const ids = new Set(models.map((model) => model.id));
   const versionsOf = new Map<string, Map<ModelSpeed, CatalogModel>>();
+
   for (const model of models) {
     const base = baseIdOf(model.id);
+
     if (base === undefined || !ids.has(base)) continue;
     const versions = versionsOf.get(base) ?? new Map<ModelSpeed, CatalogModel>();
     versions.set(modelSpeedOf(model.id), model);
     versionsOf.set(base, versions);
   }
+
   return orderedModels(models)
     .filter((model) => !isSpeedVersion(model.id, ids))
     .map((model) => ({
@@ -1342,11 +1397,15 @@ export function unsearchedModels(
 ): ReadonlySet<string> {
   const offered = offeredModels(models).map((each) => each.model.id);
   const leads = new Map<number, string>();
+
   for (const id of offered) {
     const family = familyRank(id);
+
     if (family < LEAD_FAMILIES.length && !leads.has(family)) leads.set(family, id);
   }
+
   if (leads.size === 0) return new Set(offered);
+
   return new Set([...leads.values(), ...(chosen === undefined ? [] : [chosen])]);
 }
 
@@ -1357,20 +1416,25 @@ export function fastRestingNote(
   models: readonly CatalogModel[],
 ): string | undefined {
   if (offered?.fast !== undefined) return undefined;
+
   if (offered?.model.fastNotEnabled === true) return FAST_NOT_ENABLED_NOTE;
+
   return `No fast version of ${modelLabel(baseId, models)}`;
 }
 
 /** Whether the id is the fast or Ultrafast version of a model the catalog offers. */
 function isSpeedVersion(id: string, ids: ReadonlySet<string>): boolean {
   const base = baseIdOf(id);
+
   return base !== undefined && ids.has(base);
 }
 
 /** The model's version at the speed given, where the catalog lists one beside it: the base itself at standard speed. */
 function versionAt(offered: OfferedModel, speed: ModelSpeed): CatalogModel | undefined {
   if (speed === MODEL_SPEED.FAST) return offered.fast;
+
   if (speed === MODEL_SPEED.ULTRAFAST) return offered.ultrafast;
+
   return offered.model;
 }
 
@@ -1390,8 +1454,10 @@ export function readModelChoice(models: readonly CatalogModel[], modelId: string
     (each) =>
       each.model.id === modelId || each.fast?.id === modelId || each.ultrafast?.id === modelId,
   );
+
   if (offered === undefined) return { base: modelId, speed: MODEL_SPEED.STANDARD };
   const speed = modelId === offered.model.id ? MODEL_SPEED.STANDARD : modelSpeedOf(modelId);
+
   return { base: offered.model.id, speed };
 }
 
@@ -1408,8 +1474,11 @@ export function choiceModelId(offered: OfferedModel, speed: ModelSpeed): string 
  */
 function choiceDetail(effort: string, speed: ModelSpeed, standardTokens?: number): string {
   const words = [effortLabel(effort)];
+
   if (speed !== MODEL_SPEED.STANDARD) words.push(SPEED_WORD[speed]);
+
   if (standardTokens !== undefined) words.push(windowLabel(standardTokens));
+
   return words.join(CHOICE_WORD_SEPARATOR);
 }
 
@@ -1422,6 +1491,7 @@ const WINDOW_CUT = { THOUSAND: 1_000, TENTH_OF_A_MILLION: 100_000, MILLION: 1_00
 /** A window's size as a choice says it, cut to the thousand or the tenth of a million below, not rounded: 272K, 1M for 1,050,000. */
 export function windowLabel(tokens: number): string {
   const step = tokens >= WINDOW_CUT.MILLION ? WINDOW_CUT.TENTH_OF_A_MILLION : WINDOW_CUT.THOUSAND;
+
   return formatCompact(Math.floor(tokens / step) * step);
 }
 
@@ -1447,10 +1517,13 @@ function factorLabel(factor: number): string {
 export function longWindowNote(windows: ContextWindows): string {
   const past = `On ${windowLabel(windows.longTokens)}, prompts over ${windowLabel(windows.standardTokens)} tokens cost`;
   const parts: string[] = [];
+
   if (windows.longInputPriceFactor !== undefined)
     parts.push(`${factorLabel(windows.longInputPriceFactor)} for input`);
+
   if (windows.longOutputPriceFactor !== undefined)
     parts.push(`${factorLabel(windows.longOutputPriceFactor)} for output`);
+
   return parts.length === 0 ? `${past} more.` : `${past} ${andList(parts)}.`;
 }
 
@@ -1462,10 +1535,12 @@ export interface ChoiceWords {
 
 export function choiceWords(choice: ModelChoice, models: readonly CatalogModel[]): ChoiceWords {
   const read = readModelChoice(models, choice.model);
+
   const standard =
     windowOf(models, choice) === CONTEXT_WINDOW.STANDARD
       ? contextWindowsOf(models, choice.model)?.standardTokens
       : undefined;
+
   return {
     model: modelLabel(read.base, models),
     detail: choiceDetail(choice.effort, read.speed, standard),
@@ -1475,6 +1550,7 @@ export function choiceWords(choice: ModelChoice, models: readonly CatalogModel[]
 /** A choice as one line, for a hint that holds no markup: "Opus 5.5 High Fast", "GPT-5.5 High 272K". */
 export function choiceLabel(choice: ModelChoice, models: readonly CatalogModel[]): string {
   const words = choiceWords(choice, models);
+
   return `${words.model}${CHOICE_WORD_SEPARATOR}${words.detail}`;
 }
 
@@ -1492,6 +1568,7 @@ const readUserMetadata = Schema.decodeUnknownOption(USER_MESSAGE_METADATA);
  */
 export function agentMessageOf(message: AgentTranscriptMessage): AgentMessageMetadata | undefined {
   const read = userMetadataOf(message);
+
   return read?.channel === MESSAGE_CHANNEL.AGENT_MESSAGE ? read : undefined;
 }
 
@@ -1508,6 +1585,7 @@ export function isWakeupLine(message: AgentTranscriptMessage): boolean {
 /** What the carry-on line the service sent after a cut-off turn says of why, where a line is one; nothing for any other line, or a row this build cannot read. */
 export function carryOnLineOf(message: AgentTranscriptMessage): CarryOnLineMetadata | undefined {
   const read = userMetadataOf(message);
+
   return read?.channel === MESSAGE_CHANNEL.CARRY_ON ? read : undefined;
 }
 
@@ -1523,7 +1601,9 @@ const WAKEUP_TOOLS: ReadonlySet<string> = new Set([
 /** Whether a wakeup call booked one: not a cancel, and not a call of ours the service refused, which left the booking before it standing. */
 function booksWakeup(part: AgentPart): boolean {
   if (part.kind !== AGENT_PART.TOOL || !WAKEUP_TOOLS.has(part.tool)) return false;
+
   if (isRecord(part.input) && part.input.stop === true) return false;
+
   return !(isRecord(part.output) && part.output.status === ACTION_RESULT_STATUS.REJECTED);
 }
 
@@ -1535,21 +1615,27 @@ function booksWakeup(part: AgentPart): boolean {
 export function wakeupDelayOf(turn: AgentTranscriptMessage | undefined): number | undefined {
   if (turn === undefined) return undefined;
   const call = agentParts(turn).findLast(booksWakeup);
+
   if (call?.kind !== AGENT_PART.TOOL) return undefined;
   const booked = isRecord(call.output) ? call.output.wakeup : undefined;
+
   const held =
     isRecord(booked) && isWireNumber(booked.delaySeconds) ? booked.delaySeconds : undefined;
+
   const asked =
     isRecord(call.input) && isWireNumber(call.input.delaySeconds)
       ? call.input.delaySeconds
       : undefined;
+
   const seconds = held ?? asked;
+
   return seconds === undefined ? undefined : seconds * SECOND_MS;
 }
 
 /** What a member did on a thread that a line steered into the agent carries, and the item it is on; nothing for any other line. */
 export function threadLineOf(message: AgentTranscriptMessage): ThreadLineMetadata | undefined {
   const read = userMetadataOf(message);
+
   return read?.channel === MESSAGE_CHANNEL.THREAD ? read : undefined;
 }
 
@@ -1561,13 +1647,16 @@ export function threadLineOf(message: AgentTranscriptMessage): ThreadLineMetadat
  */
 export function commentLineOf(message: AgentTranscriptMessage): CommentLineMetadata | undefined {
   const read = userMetadataOf(message);
+
   return read?.channel === MESSAGE_CHANNEL.COMMENT && read.words !== undefined ? read : undefined;
 }
 
 /** A comment line's words as a transcript draws them: what its thread is on, quoted, over the member's own words. */
 export function commentLineWords(line: CommentLineMetadata): string {
   const words = line.words ?? "";
+
   if (line.quote === undefined || line.quote === "") return words;
+
   return messageText([
     { kind: MESSAGE_BLOCK.QUOTE, words: line.quote },
     { kind: MESSAGE_BLOCK.WORDS, lines: words.split("\n") },
@@ -1577,12 +1666,14 @@ export function commentLineWords(line: CommentLineMetadata): string {
 /** What a member's message to the Slack bot carries for a window to draw it by, their own words and the message's link; nothing for any other line. */
 export function slackLineOf(message: AgentTranscriptMessage): SlackLineMetadata | undefined {
   const read = userMetadataOf(message);
+
   return read?.channel === MESSAGE_CHANNEL.SLACK ? read : undefined;
 }
 
 /** What GitHub said on the agent's pull request that a line steered into the agent carries; nothing for any other line. */
 export function githubLineOf(message: AgentTranscriptMessage): GitHubLineMetadata | undefined {
   const read = userMetadataOf(message);
+
   return read?.channel === MESSAGE_CHANNEL.GITHUB ? read : undefined;
 }
 
@@ -1632,12 +1723,14 @@ export interface GitHubLineHead {
 /** Whether a check line says a check failed: a failed check always does, every check finished by its `failing`, or, on a line kept before it said so, by the words that told the agent. */
 export function githubChecksFailed(line: GitHubLineMetadata, words: string): boolean {
   if (line.event === GITHUB_LINE_EVENT.CHECK_FAILED) return true;
+
   return line.failing ?? SOME_FAILED_WORDS.test(words);
 }
 
 /** The checks a check line names, those that failed first, each kind in the order the line lists them; none on a line that names none. */
 export function githubLineChecks(line: GitHubLineMetadata): readonly GitHubLineCheck[] {
   const checks = line.checks ?? [];
+
   return [
     ...checks.filter((check) => isFailingConclusion(check.conclusion)),
     ...checks.filter((check) => !isFailingConclusion(check.conclusion)),
@@ -1647,6 +1740,7 @@ export function githubLineChecks(line: GitHubLineMetadata): readonly GitHubLineC
 /** Whether every check a check line names passed: none failed, and each it names succeeded rather than was skipped, neutral, or stale. */
 export function githubChecksPassed(line: GitHubLineMetadata, words: string): boolean {
   if (githubChecksFailed(line, words)) return false;
+
   return (line.checks ?? []).every((check) => check.conclusion === GITHUB_CHECK_CONCLUSION.SUCCESS);
 }
 
@@ -1665,15 +1759,23 @@ function checksDid(line: GitHubLineMetadata, words: string): string {
   const checks = line.checks ?? [];
   const failed = checks.filter((check) => isFailingConclusion(check.conclusion)).length;
   const noun = checks.length === 1 ? "check" : "checks";
+
   if (failed > 0) return `${failed} of ${checks.length} ${noun} failed on`;
+
   if (line.event === GITHUB_LINE_EVENT.CHECK_FAILED) return "a check failed on";
+
   if (githubChecksFailed(line, words)) return "some checks failed on";
+
   if (checks.length === 0) return "every check passed on";
+
   const passed = checks.filter(
     (check) => check.conclusion === GITHUB_CHECK_CONCLUSION.SUCCESS,
   ).length;
+
   const skipped = checks.length - passed;
+
   if (skipped === 0) return `${allChecks(passed)} passed on`;
+
   return passed === 0
     ? `${allChecks(skipped)} skipped on`
     : `${passed} passed, ${skipped} skipped on`;
@@ -1690,18 +1792,23 @@ function checksDid(line: GitHubLineMetadata, words: string): string {
  */
 export function githubLineHead(line: GitHubLineMetadata, words: string): GitHubLineHead {
   const target = line.number === undefined ? "its checks" : `#${line.number}`;
+
   switch (line.event) {
     case GITHUB_LINE_EVENT.REVIEW: {
       const does = VERDICT_WORDS.get(line.verdict ?? "") ?? REVIEWED;
+
       return { event: `@${line.by} ${does}`, does, target };
     }
+
     case GITHUB_LINE_EVENT.COMMENT:
       return { event: `@${line.by} ${COMMENTED}`, does: COMMENTED, target };
     case GITHUB_LINE_EVENT.CHECK_FAILED:
     case GITHUB_LINE_EVENT.CHECKS_COMPLETED: {
       const does = checksDid(line, words);
+
       return { event: `${does.charAt(0).toUpperCase()}${does.slice(1)}`, does, target };
     }
+
     case GITHUB_LINE_EVENT.DEQUEUED:
       return { event: `@${line.by} ${DEQUEUED}`, does: DEQUEUED, target };
   }
@@ -1715,15 +1822,19 @@ export function githubLineHead(line: GitHubLineMetadata, words: string): GitHubL
  */
 export function githubLineWords(line: GitHubLineMetadata, words: string): string {
   const head = githubLineHead(line, words);
+
   const comments = (line.comments ?? []).map((comment) => {
     const where = comment.line === undefined ? comment.path : `${comment.path} L${comment.line}`;
+
     return comment.body === "" ? where : `${where}\n\n${comment.body}`;
   });
+
   const checks = githubChecksPassed(line, words)
     ? ""
     : githubLineChecks(line)
         .map((check) => `${check.name}: ${CONCLUSION_WORDS[check.conclusion]}`)
         .join("\n");
+
   return [`${head.event} ${head.target}`, line.words ?? "", ...comments, checks]
     .filter((part) => part !== "")
     .join("\n\n");
@@ -1735,6 +1846,7 @@ function userMetadataOf(
 ): Extract<UserMessageMetadata, { readonly channel: unknown }> | undefined {
   if (message.role !== MESSAGE_ROLE.USER || message.metadata === undefined) return undefined;
   const read = Option.getOrUndefined(readUserMetadata(message.metadata));
+
   return read === undefined || !("channel" in read) ? undefined : read;
 }
 
@@ -1777,6 +1889,7 @@ export function workingLineWords(
 ): string {
   if (phase !== WORKING_PHASE.WAITING || waitsUntil === undefined)
     return WORKING_PHASE_WORDS[phase];
+
   return `Waiting for your usage limit to reset at ${dueText(waitsUntil, now)}`;
 }
 
@@ -1821,10 +1934,12 @@ export interface TabSends {
 export function tabTurnOf(agent: Pick<AgentSummary, "status" | "turn">, sends: TabSends): TabTurn {
   const turn = newerTurn(agent.turn, sends.turn);
   const open = turn === undefined ? agentStillWriting(agent.status) : turnOpen(turn);
+
   const status =
     turn === undefined
       ? agent.status
       : turnAgentStatus({ status: turn.status, cancelRequested: turn.stopAsked === true });
+
   return {
     turnId: turn?.id,
     working: open || sends.unanswered || sends.rewinding,
@@ -1847,9 +1962,13 @@ function workingPhaseOf(
   rewinding: boolean,
 ): WorkingPhase {
   if (rewinding) return WORKING_PHASE.REWINDING;
+
   if (turn === undefined || !open) return WORKING_PHASE.STARTING;
+
   if (turn.stopAsked === true) return WORKING_PHASE.STOPPING;
+
   if (turn.waitsUntil !== undefined) return WORKING_PHASE.WAITING;
+
   return turn.status === TURN_STATUS.QUEUED ? WORKING_PHASE.STARTING : WORKING_PHASE.WORKING;
 }
 
@@ -1870,14 +1989,18 @@ export function workerWorkingPhase(status: AgentStatus): WorkingPhase {
 export function agentWorkingSince(lines: readonly AgentTranscriptMessage[]): number | undefined {
   const at = lines.findLastIndex((line) => line.role === MESSAGE_ROLE.ASSISTANT);
   const journal = lines[at];
+
   const opens = (line: AgentTranscriptMessage) =>
     line.role === MESSAGE_ROLE.USER && line.arrivedIn === undefined && line.sentAt !== undefined;
+
   // A closed journal, or none, is followed by the line that opens the next turn, where one was sent.
   if (journal === undefined || journal.finishedAt !== undefined) {
     return lines.slice(at + 1).find(opens)?.sentAt;
   }
+
   // An open journal was opened by the first line after the journal before it.
   const before = lines.slice(0, at).findLastIndex((line) => line.role === MESSAGE_ROLE.ASSISTANT);
+
   return lines.slice(before + 1, at).find(opens)?.sentAt ?? journal.startedAt;
 }
 
@@ -1902,6 +2025,7 @@ export function workerToolState(status: AgentStatus): ToolState {
 /** Where a worker stands, read from its delegation's part: running until the call answers, then completed, or failed where the call ended in an error. */
 export function workerStatusOf(state: ToolState): AgentStatus {
   if (state === TOOL_STATE.OUTPUT_AVAILABLE) return AGENT_STATUS.COMPLETED;
+
   return state === TOOL_STATE.OUTPUT_ERROR ? AGENT_STATUS.FAILED : AGENT_STATUS.RUNNING;
 }
 
@@ -1924,6 +2048,7 @@ export function workerLines(
   // A worker opened by its link carries no task's words, so the service's own first row's are the task.
   const first = messages.find((message) => message.role === MESSAGE_ROLE.USER);
   const words = task === "" && first !== undefined ? messageWords(first) : task;
+
   return [
     { id: TASK_ROW_ID, role: MESSAGE_ROLE.USER, parts: [{ type: AGENT_PART.TEXT, text: words }] },
     ...messages.filter((message) => message.role !== MESSAGE_ROLE.USER),
@@ -1948,6 +2073,7 @@ export function finishedReplyLead(
   messages: readonly AgentTranscriptMessage[],
 ): { readonly messageId: string; readonly lead: string } | undefined {
   const reply = messages.findLast((message) => message.role === MESSAGE_ROLE.ASSISTANT);
+
   if (reply === undefined) return undefined;
   // Note that only words after the turn's last call are its reply, because words before it were the turn under way.
   const parts = agentParts(reply);
@@ -1956,12 +2082,15 @@ export function finishedReplyLead(
   // Note that a turn ended with `end_turn` replied in its summary, whatever it wrote around the call.
   const said = endTurnSummary(parts) ?? (last?.kind === AGENT_PART.TEXT ? last.text : "");
   const words = plainWords(said);
+
   if (words === "") return undefined;
   const end = SENTENCE_END.exec(words);
   const sentence = end === null ? words : words.slice(0, end.index + 1);
   const cut = sentence.split(/\s+/u);
+
   const lead =
     cut.length <= REPLY_LEAD_WORDS ? sentence : `${cut.slice(0, REPLY_LEAD_WORDS).join(" ")}…`;
+
   return { messageId: reply.id, lead };
 }
 
@@ -1976,8 +2105,10 @@ export function lastTurnEnding(
 ): { readonly messageId: string; readonly followUps: readonly string[] } | undefined {
   // Note that a line a turn took in under way may stand after its journal, and only a line no turn took waits on the next.
   const last = messages.findLast((message) => message.arrivedIn === undefined);
+
   if (last?.role !== MESSAGE_ROLE.ASSISTANT) return undefined;
   const ending = endTurnOf(agentParts(last));
+
   return ending === undefined ? undefined : { messageId: last.id, followUps: ending.followUps };
 }
 
@@ -2048,6 +2179,7 @@ export function unreadSentLines(
   messages: readonly AgentTranscriptMessage[],
 ): readonly SentLine[] {
   const landed = landedLines(messages);
+
   return sent.filter((line) => line.state === SENT_LINE_STATE.UNDELIVERED || !landed.has(line.id));
 }
 
@@ -2064,6 +2196,7 @@ export function heldSentLines(
   messages: readonly AgentTranscriptMessage[],
 ): readonly SentLine[] {
   const landed = landedLines(messages);
+
   return sent.filter((line) => line.taken !== true || !landed.has(line.id));
 }
 
@@ -2084,34 +2217,12 @@ function sentLineMessage(line: SentLine): AgentTranscriptMessage {
     filename: file.name,
     url: `data:${file.mediaType};base64,${file.data}`,
   }));
+
   return {
     id: line.id,
     role: MESSAGE_ROLE.USER,
     parts: [{ type: AGENT_PART.TEXT, text: line.text }, ...files],
     sentAt: line.sentAt,
-  };
-}
-
-/**
- * The words an agent New task started on, as its tab draws them before the
- * service has made it: the developer's words as they went, under the id
- * their start's key names, which that tab draws as its queue's row.
- */
-export function openingLineOf(words: {
-  readonly key: string;
-  readonly prompt: string;
-  readonly attachments: readonly AgentAttachment[];
-  /** When Start was pressed; now where unsaid. */
-  readonly sentAt?: number | undefined;
-}): SentLine {
-  return {
-    id: sentLineId(words.key),
-    clientKey: words.key,
-    text: words.prompt.trim(),
-    attachments: words.attachments,
-    steers: false,
-    sentAt: words.sentAt ?? Date.now(),
-    state: SENT_LINE_STATE.PENDING,
   };
 }
 
@@ -2134,6 +2245,7 @@ function shellWord(word: string): string {
 /** The command that brings the agent's branch onto a developer's machine, as Copy checkout command puts it on the clipboard; the branch quoted where a shell would read into it. */
 export function checkoutCommand(branch: string): string {
   const name = shellWord(branch);
+
   return `git fetch origin ${name} && git switch ${name}`;
 }
 
@@ -2163,15 +2275,20 @@ export function dockedPullRequests(
   agentId: string,
 ): readonly DockedPullRequest[] {
   const current = published?.pullRequest ?? null;
+
   const own: DockedPullRequest[] =
     current === null || published === undefined
       ? []
       : [{ pullRequest: current, branch: published.branch, current: true }];
+
   const others = lines.flatMap((line): DockedPullRequest[] => {
     const { url } = line;
+
     if (line.agentId !== agentId || url === undefined || url === current?.url) return [];
+
     return [{ pullRequest: { ...line, url }, branch: null, current: false }];
   });
+
   return inPullRequestOrder([...own, ...others], (each) => each.pullRequest);
 }
 
@@ -2185,7 +2302,9 @@ export function pullRequestStateWord(
   pullRequest: Pick<AgentPullRequest, "state" | "queued">,
 ): string | undefined {
   const { state } = pullRequest;
+
   if (state !== PULL_REQUEST_STATE.OPEN) return PULL_REQUEST_STATE_LABEL[state];
+
   return pullRequest.queued === true ? QUEUED_LABEL : undefined;
 }
 

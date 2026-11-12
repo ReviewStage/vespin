@@ -19,6 +19,7 @@ import { AccountScreen } from "@repo/panel/admin/screens/account";
 import { CostScreen } from "@repo/panel/admin/screens/cost";
 import { DashboardScreen } from "@repo/panel/admin/screens/dashboard";
 import { DayScreen } from "@repo/panel/admin/screens/day";
+import { LimitsScreen } from "@repo/panel/admin/screens/limits";
 import { ReliabilityScreen } from "@repo/panel/admin/screens/reliability";
 import { UsersScreen } from "@repo/panel/admin/screens/users";
 import { WorkspaceScreen } from "@repo/panel/admin/screens/workspace";
@@ -44,10 +45,12 @@ function AdminDashboardPage(): React.JSX.Element {
   // include them, remembered across visits. The scope is the server's filter —
   // aggregates cannot be unpicked client-side — so flipping it refetches.
   const [hideAdmins, setHideAdmins] = useState(ADMINS_HIDDEN.read);
+
   const changeHideAdmins = (hide: boolean) => {
     ADMINS_HIDDEN.write(hide);
     setHideAdmins(hide);
   };
+
   const session = authClient.useSession();
   const account = session.data?.user;
 
@@ -61,37 +64,47 @@ function AdminDashboardPage(): React.JSX.Element {
       setView(viewFromLocation());
       setWindowDays(windowFromLocation());
     };
+
     window.addEventListener("popstate", onPopState);
+
     return () => window.removeEventListener("popstate", onPopState);
   }, []);
+
   const openAccount = useCallback((id: string) => {
     window.history.pushState(null, "", accountHref(id));
     setView({ kind: ADMIN_PAGE.ACCOUNT, id });
   }, []);
+
   const openWorkspace = useCallback((id: string) => {
     window.history.pushState(null, "", workspaceHref(id));
     setView({ kind: ADMIN_PAGE.WORKSPACE, id });
   }, []);
+
   const openDay = useCallback((day: string) => {
     window.history.pushState(null, "", dayHref(day));
     setView({ kind: ADMIN_PAGE.DAY, day });
   }, []);
+
   const navigate = useCallback((tab: AdminTab) => {
     window.history.pushState(null, "", tabHref(tab));
     setView({ kind: tab });
   }, []);
+
   const changeWindow = useCallback((next: AdminMetricsWindow) => {
     setWindowDays((current) => {
       if (next === current) return current;
       window.history.pushState(null, "", windowHref(next));
+
       return next;
     });
   }, []);
 
   const [sidebarHidden, setSidebarHidden] = useState(SIDEBAR_HIDDEN.read);
+
   const toggleSidebar = () => {
     setSidebarHidden((current) => {
       SIDEBAR_HIDDEN.write(!current);
+
       return !current;
     });
   };
@@ -102,9 +115,11 @@ function AdminDashboardPage(): React.JSX.Element {
   // around it (`useAdminSignOut`).
   const signOut = useCallback(async () => {
     const { error } = await authClient.signOut();
+
     if (error) throw new Error("The sign-out was refused.");
     SIGN_IN_CHOSEN.write(false);
   }, []);
+
   const withdraw = useAdminSignOut(signOut);
 
   // Sign out in the sidebar's foot leaves whichever view stood for the sign-in
@@ -113,6 +128,7 @@ function AdminDashboardPage(): React.JSX.Element {
   // put the page back up behind the sign-out.
   const [loggedOut, setLoggedOut] = useState(false);
   const withdrawSession = withdraw.mutateAsync;
+
   const signOutAndLeave = useCallback(async () => {
     await withdrawSession();
     setLoggedOut(true);
@@ -227,6 +243,10 @@ function AdminDashboardPage(): React.JSX.Element {
         frame={(content) => shell(ADMIN_TAB.WORKSPACES, content)}
       />
     );
+  }
+
+  if (view.kind === ADMIN_TAB.LIMITS) {
+    return <LimitsScreen frame={(content) => shell(ADMIN_TAB.LIMITS, content)} />;
   }
 
   if (view.kind === ADMIN_TAB.USERS) {

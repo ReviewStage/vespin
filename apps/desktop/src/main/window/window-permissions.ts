@@ -26,18 +26,24 @@ export function grantWindowPermissions(
 ): void {
   session.setPermissionCheckHandler((webContents, permission, _origin, details) => {
     if (webContents === null || !ownWindow(webContents)) return false;
+
     if (permission === GRANTED.FULLSCREEN) return true;
+
     return permission === GRANTED.MEDIA && details.mediaType === AUDIO;
   });
   session.setPermissionRequestHandler((webContents, permission, callback, details) => {
     if (!ownWindow(webContents)) {
       callback(false);
+
       return;
     }
+
     if (permission === GRANTED.FULLSCREEN) {
       callback(true);
+
       return;
     }
+
     const mediaTypes = "mediaTypes" in details ? (details.mediaTypes ?? []) : [];
     callback(
       permission === GRANTED.MEDIA &&

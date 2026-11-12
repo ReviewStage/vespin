@@ -84,6 +84,8 @@ PRODUCT="Vespin host"
 UNIT="vespin-host.service"
 # A Mac's LaunchAgent, by its label.
 MAC_LABEL="dev.vespin.host.standalone"
+# The LaunchAgent of the Vespin app, which runs the host itself where it is loaded.
+APP_LABEL="dev.vespin.host"
 # The oldest macOS it installs on: the release's Node (24) needs macOS 13.5,
 # the command's as the host's.
 MAC_MIN_VERSION="13.5"
@@ -155,6 +157,13 @@ require_supported_os() {
       fail "Vespin host needs WSL2, and this is WSL1, which has no Linux kernel. Upgrade it with: wsl --set-version <distro> 2"
       ;;
   esac
+}
+
+# Answers whether the Vespin app's LaunchAgent is loaded for the user whose
+# uid is $1. Note that an agent still awaiting approval in System Settings is
+# not loaded, so a Mac in that state installs as before.
+app_runs_host() {
+  launchctl print "gui/$1/$APP_LABEL" >/dev/null 2>&1
 }
 
 # Refuses a macOS older than MAC_MIN_VERSION, $1 as `sw_vers -productVersion`
@@ -422,6 +431,24 @@ connect_box() {
   exit "$code"
 }
 
+# Waits on the host's setup, printing each step it reaches (the tools its
+# agents run on fetched, then ready), so the script ends once the box can take
+# an agent; ends the script where setup failed, with why. A setup still going
+# after the host's own wait is left to finish, and says how to check on it.
+wait_for_setup() {
+  printf '\n'
+  code=0
+  "$LINK" status --wait || code=$?
+  case "$code" in
+    0) return 0 ;;
+    1)
+      printf '%s Setup failed, and Vespin host keeps trying. To check on it: %s status\n' "$CROSS" "$TYPED_LINK" >&2
+      exit 1
+      ;;
+    *) SETUP_PENDING=true ;;
+  esac
+}
+
 # Enables and starts the systemd user service before the box is connected, so
 # a box connected later by hand is followed too. Note that one already running
 # is left on its release until restart_unit.
@@ -436,7 +463,17 @@ enable_unit() {
 
 # Restarts the systemd user service on the release just installed, once the
 # box is connected, so it follows the box at once.
+# Clears where the host's setup stood, between stopping the host and starting
+# it, so the host started says where its setup stands afresh and no status an
+# earlier run left, or the one it stopped, is read as this run's. Note that
+# the launcher keeps the state root here on Linux and on a Mac alike.
+clear_setup_status() {
+  rm -f "$HOME/.local/state/vespin-host/setup-status.json"
+}
+
 restart_unit() {
+  stop_unit "$UNIT"
+  clear_setup_status
   systemctl --user restart "$UNIT" ||
     fail "Could not start $UNIT. See journalctl --user -u $UNIT"
   ok "Started $UNIT on Vespin host $VERSION"
@@ -465,6 +502,7 @@ load_mac_agent() {
 restart_mac_agent() {
   uid="$(id -u)"
   stop_launch_agent "$uid"
+  clear_setup_status
   start_launch_agent "$uid" "$PLIST" || true
   printf 'It runs while %s is logged in, so on a Mac nobody sits at, turn on automatic login for %s.\n' "$(id -un)" "$(id -un)"
   # Note that the Energy pane's id is unconfirmed; the Battery pane's opened on a MacBook Pro on macOS 27.
@@ -645,6 +683,10 @@ main() {
   if [ "$kernel" = "Darwin" ]; then
     require_macos_version "$(sw_vers -productVersion 2>/dev/null || true)"
   fi
+  if [ "$kernel" = "Darwin" ] && app_runs_host "$(id -u)"; then
+    printf 'The Vespin app runs this Mac'"'"'s host. Manage it in Vespin › Settings › Machines.\n'
+    return 0
+  fi
   require_own_account
   account_paths
   [ "$kernel" = "Darwin" ] || require_user_manager
@@ -675,10 +717,15 @@ main() {
     restart_unit
   fi
   remove_other_releases
+  wait_for_setup
 
   # Note that nothing says how to upgrade, because the host updates itself to each release.
   printf '\n'
-  ok "Ready. Pick it under a task's Runs on in Vespin."
+  if [ "${SETUP_PENDING:-false}" = true ]; then
+    ok "Installed and connected. It reads Online under a task's Runs on in Vespin once setup finishes."
+  else
+    ok "Ready. Pick it under a task's Runs on in Vespin."
+  fi
   printf 'To remove it: %s uninstall\n' "$TYPED_LINK"
   # Note that a systemd service does not keep a WSL distro up: WSL stops it about
   # 15 seconds after its last window closes, unless instanceIdleTimeout is -1.

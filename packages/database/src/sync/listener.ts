@@ -47,7 +47,7 @@ export interface SyncListening {
   readonly notify: (payload: string) => Effect.Effect<number, SqlError | Schema.SchemaError>;
 }
 
-export interface SyncListenerShape {
+export interface SyncListenerService {
   /**
    * Listens on Sync's channel, answering once Postgres has acknowledged the
    * `LISTEN`, so a write committed after it is answered is heard; closing
@@ -56,7 +56,7 @@ export interface SyncListenerShape {
   readonly listen: Effect.Effect<SyncListening, SqlError, Scope.Scope>;
 }
 
-export class SyncListener extends Context.Service<SyncListener, SyncListenerShape>()(
+export class SyncListener extends Context.Service<SyncListener, SyncListenerService>()(
   "@repo/database/SyncListener",
 ) {}
 
@@ -98,12 +98,15 @@ export const syncListenerOverUrl = ({
     listen: Effect.gen(function* () {
       const connection = yield* PgConnection.make({ url, connectTimeout });
       const session = yield* connection.pin;
+
       if (idleSessionTimeout !== undefined) {
         yield* session.query("select set_config('idle_session_timeout', $1, false)", [
           `${Duration.toMillis(idleSessionTimeout)}ms`,
         ]);
       }
+
       const notifications = yield* session.listen(SYNC_CHANNEL);
+
       return {
         payloads: Stream.map(
           Stream.fromQueue(notifications),

@@ -81,6 +81,7 @@ const openUser = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -94,6 +95,7 @@ function savedDocument(result: DescriptionSaveResult): DescriptionDocument {
   if (result.status !== DESCRIPTION_SAVE_STATUS.SAVED) {
     return assert.fail(`expected a save, got: ${JSON.stringify(result)}`);
   }
+
   return result.document;
 }
 
@@ -109,6 +111,7 @@ const resumedDocument = (userId: string, taskId: string) =>
 /** One section of a text as it stands, its heading line among its lines, failing the test where the text has none under that heading. */
 function sectionText(text: string, heading: string): string {
   const section = descriptionSections(text).find((each) => each.heading === heading);
+
   return section?.text ?? assert.fail(`the text holds no section under ${heading}`);
 }
 
@@ -256,9 +259,11 @@ it.layer(getTestDB())("named plans and the notes that write them", (it) => {
           Option.map(renamed, (task) => task.name),
           Option.some("Shared invitations"),
         );
+
         const saved = savedDocument(
           yield* saveNotes(bound(teammate, started.id), INVITATIONS_NOTES),
         );
+
         assert.deepEqual(yield* resumedDocument(starter, started.id), saved);
         const edited = `${saved.body}\n## Rollout\n\nBehind a flag first.\n`;
         assert.equal(Option.isNone(yield* saveDescriptionText(stranger, started.id, edited)), true);
@@ -333,9 +338,12 @@ it.layer(getTestDB())("named plans and the notes that write them", (it) => {
 
         const refused = yield* updateTask(userId, started.id, { organizationId: team }, (named) => {
           seen.push(named);
+
           return Effect.fail("not reached" as const);
         }).pipe(Effect.flip);
+
         const stood = Option.getOrThrow(yield* readTask(userId, started.id)).task.workspaceId;
+
         const moved = yield* updateTask(userId, started.id, { organizationId: team }, (named) =>
           Effect.sync(() => seen.push(named)),
         );

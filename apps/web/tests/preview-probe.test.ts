@@ -29,12 +29,15 @@ it.effect(
       const [unknown] = planProbes(PROBE_DOOR.BYPASS_SECRET, PATHS).filter(
         (request) => request.path === "/api/nope",
       );
+
       assert.ok(unknown);
+
       const judged = (response: () => Response) =>
         probeDeployment({ address: ADDRESS, bypassSecret: Option.none() }, [unknown]).pipe(
           Effect.provide(fakeHttpClientLayer(() => response())),
           Effect.map((results) => results.map((result) => result.verdict)),
         );
+
       assert.deepEqual(
         yield* judged(() => Response.json({ error: "not-found" }, { status: 404 })),
         [VERDICT.OK],
@@ -52,6 +55,7 @@ it.effect(
       assert.deepEqual(yield* judged(() => new Response(null, { status: 404 })), [
         VERDICT.UNEXPECTED_BODY,
       ]);
+
       const report = {
         door: PROBE_DOOR.BYPASS_SECRET,
         address: ADDRESS,
@@ -59,6 +63,7 @@ it.effect(
           unknown,
         ]).pipe(Effect.provide(fakeHttpClientLayer(() => new Response("{}", { status: 404 })))),
       };
+
       assert.equal(probeFailures(report).length, 1);
     }),
 );

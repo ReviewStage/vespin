@@ -26,10 +26,13 @@ const liveCommandsOf = (userId: string, kinds: readonly MacCommandKind[]) =>
     const statements = Option.getOrThrow(
       macCommandsRead.statements({ userId, kinds: macCommandKindsQuery(kinds) }),
     );
+
     const sqlClient = yield* SqlClient.SqlClient;
+
     const commands = yield* sqlClient.unsafe(statements.commands.sql, [
       ...statements.commands.params,
     ]);
+
     return macCommandsOfLiveRows(
       yield* Schema.decodeUnknownEffect(MAC_COMMANDS_READ.rows)({ commands }),
     );
@@ -38,9 +41,11 @@ const liveCommandsOf = (userId: string, kinds: readonly MacCommandKind[]) =>
 const openAccounts = Effect.gen(function* () {
   const db = yield* Database;
   const [owner, other] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
   for (const id of [owner, other]) {
     yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
   }
+
   return { owner, other };
 });
 
@@ -64,6 +69,7 @@ const queueOtherKind = (userId: string) =>
       sql`INSERT INTO mac_command (id, user_id, kind, timeout_seconds, queued_at)
           VALUES (${id}, ${userId}, 'browser', 30, ${queuedAt})`,
     );
+
     return id;
   });
 

@@ -33,11 +33,14 @@ const openAgent = () =>
     const db = yield* Database;
     const userId = `user-${randomUUID()}`;
     yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
     const [row] = yield* db
       .insert(conversations)
       .values({ userId, kind: CONVERSATION_KIND.AGENT, runtimeSessionId: `wrun_${randomUUID()}` })
       .returning({ id: conversations.id });
+
     assert.ok(row);
+
     return { userId, conversationId: row.id };
   });
 
@@ -76,6 +79,7 @@ it.layer(getTestDB())("the sandbox terminal credential claim", (it) => {
         yield* releaseCredentialRenewal(conversationId, "sbs_1", at(0));
         const retried = yield* claimCredentialRenewal(conversationId, "sbs_1", at(5), at(-45));
         yield* releaseCredentialRenewal(conversationId, "sbs_1", at(0));
+
         const stillClaimed = yield* claimCredentialRenewal(
           conversationId,
           "sbs_1",
@@ -94,18 +98,21 @@ it.layer(getTestDB())("the sandbox terminal credential claim", (it) => {
       Effect.gen(function* () {
         const { conversationId } = yield* openAgent();
         yield* claimCredentialRenewal(conversationId, "sbs_before_stop", at(0), at(-50));
+
         const sameSession = yield* claimCredentialRenewal(
           conversationId,
           "sbs_before_stop",
           at(10),
           at(-40),
         );
+
         const resumed = yield* claimCredentialRenewal(
           conversationId,
           "sbs_resumed",
           at(10),
           at(-40),
         );
+
         const resumedAgain = yield* claimCredentialRenewal(
           conversationId,
           "sbs_resumed",
@@ -122,6 +129,7 @@ it.layer(getTestDB())("the sandbox terminal credential claim", (it) => {
       const { conversationId } = yield* openAgent();
       yield* claimCredentialRenewal(conversationId, "sbs_resumed", at(0), at(-50));
       yield* releaseCredentialRenewal(conversationId, "sbs_before_stop", at(0));
+
       const claimedAgain = yield* claimCredentialRenewal(
         conversationId,
         "sbs_resumed",

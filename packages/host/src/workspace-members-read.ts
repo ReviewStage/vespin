@@ -119,6 +119,7 @@ export interface WorkspaceMembersReads {
 /** Whether `members` carry what `move` says of its member. */
 function carries(members: readonly MemberRow[], move: MemberMoved): boolean {
   const row = members.find((each) => each.userId === move.userId);
+
   return "gone" in move ? row === undefined : row !== undefined && roleOf(row.role) === move.role;
 }
 
@@ -132,7 +133,9 @@ function movedPeople(moves: readonly MemberMoved[]): FieldChange<PeopleRow> {
   return (row) => ({
     members: row.members.flatMap((member) => {
       const move = moves.find((each) => each.userId === member.userId);
+
       if (move === undefined || carries([member], move)) return [member];
+
       return "gone" in move ? [] : [{ ...member, role: move.role }];
     }),
   });
@@ -159,41 +162,52 @@ function followPeople(
       let answered = false;
       let open = true;
       let told: WorkspaceMembersAnswer | undefined;
+
       const drawn = Effect.sync(() => {
         if (!answered || !open) return;
+
         const shown = workspaceMembersOfLiveRows(
           people.row(workspaceId) ?? { members: [], former: [] },
         );
+
         if (told !== undefined && Equal.equals(told, shown)) return;
         told = shown;
         answers.answered(shown);
       });
+
       const people: HeldRows<PeopleRow> = yield* dependencies.pool.stand(WORKSPACE_PEOPLE, {
         redraw: () => drawn,
         // Note that no member write answers a transaction, so the read hands no wait and each write waits on its rows (`carried`).
         confirmation: () => undefined,
       });
+
       const waits = yield* carriedWaits(() => people.synced());
       yield* dependencies.stand(waits);
       // Note that the people kept on disk are drawn as the service last answered them, until the read answers anew.
       const kept = dependencies.entities()?.storedIn(KEPT_READ.MEMBERS, workspaceId);
+
       if (kept !== undefined) {
         yield* people.answer([{ workspaceId, ...kept }]);
         answered = true;
         yield* drawn;
       }
+
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => {
           open = false;
         }),
       );
       const seal = dependencies.seal(workspaceId);
+
       const attempt = Effect.gen(function* () {
         const first = yield* seal(false);
+
         if ("failure" in first) {
           answers.unanswered();
+
           return first.gone !== true;
         }
+
         yield* followTakingRows(
           { poll: (after) => seal(true, after) },
           first,
@@ -208,8 +222,10 @@ function followPeople(
               yield* drawn;
             }),
         ).pipe(Effect.ignore);
+
         return true;
       });
+
       yield* restarting(attempt);
     }),
   );
@@ -225,6 +241,7 @@ export function workspaceMembersReads(
   return Effect.gen(function* () {
     /** Each held workspace's waits on what its read carries, while its follow stands. */
     const standing = MutableHashMap.empty<string, CarriedWaits<PeopleRow>>();
+
     const stand = (workspaceId: string) => (waits: CarriedWaits<PeopleRow>) =>
       Effect.acquireRelease(
         Effect.sync(() => MutableHashMap.set(standing, workspaceId, waits)),
@@ -235,6 +252,7 @@ export function workspaceMembersReads(
             }
           }),
       );
+
     const held = yield* heldSlice<typeof LIVE_READ.WORKSPACE_MEMBERS, string>({
       empty: NO_KEYS_HELD,
       path: (workspaceId) => [workspaceId],
@@ -248,13 +266,17 @@ export function workspaceMembersReads(
           stand: stand(workspaceId),
         }),
     });
+
     /** Waits until the workspace's read carries every one of `moves`, at once where no read stands for it. */
     const carried = (workspaceId: string, moves: readonly MemberMoved[]) =>
       Effect.suspend(() => {
         const waits = Option.getOrUndefined(MutableHashMap.get(standing, workspaceId));
+
         if (waits === undefined) return Effect.void;
+
         return waits.carried(([row]) => moves.every((move) => carries(row?.members ?? [], move)));
       });
+
     const write = <Input, Answer>(
       declared: MemberWrite<Input, Answer>,
     ): WriteDeclaration<PeopleRow, FieldChange<PeopleRow>, Input, Answer> => ({
@@ -275,6 +297,7 @@ export function workspaceMembersReads(
                 },
         ),
     });
+
     const moved = (workspaceId: string, moves: readonly MemberMoved[]) =>
       dependencies.pool.write(
         write<undefined, undefined>({
@@ -284,6 +307,7 @@ export function workspaceMembersReads(
         }),
         undefined,
       );
+
     return { held, write, moved };
   });
 }

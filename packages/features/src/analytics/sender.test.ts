@@ -24,12 +24,14 @@ function senderWith(
   respond: (request: RecordedRequest) => Response = () => new Response("{}"),
 ) {
   const { layer, requests } = recordingHttpClient(respond);
+
   const {
     readAccessToken = () => Effect.succeed("token-1"),
     refreshAccount = () => Effect.void,
     readAccountKey,
     ...options
   } = overrides;
+
   return Effect.map(
     Effect.andThen(
       TestClock.setTime(NOON),
@@ -65,6 +67,7 @@ it.effect("a batch queued under one account is never posted under another's bear
   Effect.gen(function* () {
     let account = "ada@app.test";
     let token = "stale";
+
     const { sender, requests } = yield* sharingSender(
       {
         readAccessToken: () => Effect.succeed(token),
@@ -79,6 +82,7 @@ it.effect("a batch queued under one account is never posted under another's bear
       },
       () => new Response("{}", { status: HTTP_STATUS.UNAUTHORIZED }),
     );
+
     sender.record(PRODUCT_EVENT.APP_LAUNCH, { app_version: APP_VERSION });
     yield* sender.flush;
 
@@ -99,6 +103,7 @@ const NEXT_NOON = Date.parse("2026-08-20T12:00:00.000Z");
 /** The host's settings file as the sender sees it: kept across launches by event, discriminator, and account. */
 function keptDays(): RecordedDayStore {
   const days = new Map<string, Map<string, Map<string, string>>>();
+
   return {
     lastRecordedDay: (name, discriminator, account) =>
       Effect.sync(() => days.get(name)?.get(discriminator)?.get(account)),
@@ -133,6 +138,7 @@ function launch(options: SenderOverrides, respond?: (request: RecordedRequest) =
       yield* sender.flush;
       yield* sender.markDayActive();
       yield* sender.flush;
+
       return dayMarkers(requests);
     }),
   );
@@ -141,6 +147,7 @@ function launch(options: SenderOverrides, respond?: (request: RecordedRequest) =
 it.effect("the day is counted once across launches, and again on the next UTC day", () =>
   Effect.gen(function* () {
     let now = NOON;
+
     const options = {
       recordedDays: keptDays(),
       readAccountKey: () => Effect.succeed("ada@app.test"),
@@ -159,6 +166,7 @@ it.effect("the day is counted once across launches, and again on the next UTC da
 it.effect("another account signing in the same day has its own day counted, once", () =>
   Effect.gen(function* () {
     let account = "ada@app.test";
+
     const options = {
       recordedDays: keptDays(),
       readAccountKey: () => Effect.succeed(account),
@@ -175,10 +183,12 @@ it.effect("another account signing in the same day has its own day counted, once
 it.effect("a day marked while nobody is signed in is marked once an account signs in", () =>
   Effect.gen(function* () {
     let account: string | undefined;
+
     const { sender, requests } = yield* sharingSender({
       recordedDays: keptDays(),
       readAccountKey: () => Effect.succeed(account),
     });
+
     yield* sender.markDayActive();
     yield* sender.flush;
     assert.equal(dayMarkers(requests), 0);
@@ -207,10 +217,12 @@ it.effect("a day whose batch never reached the service is counted on the next la
 it.effect("a day marked for one account is never sent under the next account's bearer", () =>
   Effect.gen(function* () {
     let account = "ada@app.test";
+
     const options = {
       recordedDays: keptDays(),
       readAccountKey: () => Effect.succeed(account),
     };
+
     const { sender, requests } = yield* sharingSender(options);
     yield* sender.markDayActive();
     // Ada signs out and Grace signs in before the minute's flush.
@@ -232,6 +244,7 @@ it.effect("a day marked for one account is never sent under the next account's b
 it.effect("a clock that was wrong hides no real day, and costs one count at most", () =>
   Effect.gen(function* () {
     let now = Date.parse("2027-08-20T12:00:00.000Z");
+
     const options = {
       recordedDays: keptDays(),
       readAccountKey: () => Effect.succeed("ada@app.test"),

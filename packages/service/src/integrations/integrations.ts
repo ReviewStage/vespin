@@ -37,7 +37,7 @@ import { toolResultJson, toolResultTexts } from "./mcp-tools.js";
 interface AccountNameApiRead {
   readonly URL: string;
   /** The account's name in the provider's answer (an email, a workspace's, a team's), where it holds one. */
-  readonly NAME: (answer: unknown) => Option.Option<string>;
+  readonly NAME: (answer: WireValue) => Option.Option<string>;
 }
 
 /**
@@ -127,7 +127,7 @@ const decodeDriveAbout = Schema.decodeUnknownOption(
  * and `name` finds one in, where any does.
  */
 const toolAnswerName =
-  <A>(decode: (answer: unknown) => Option.Option<A>, name: (read: A) => string | undefined) =>
+  <A>(decode: (answer: WireValue) => Option.Option<A>, name: (read: A) => string | undefined) =>
   (result: WireValue): Option.Option<string> =>
     Option.fromUndefinedOr(
       toolResultJson(result)
@@ -152,13 +152,18 @@ const decodeQuotedName = Schema.decodeUnknownOption(Schema.fromJsonString(Schema
  */
 function toonOrJsonName(result: WireValue): Option.Option<string> {
   const fromJson = toolAnswerName(decodeNamed, (read) => read.name)(result);
+
   if (Option.isSome(fromJson)) return fromJson;
+
   for (const text of toolResultTexts(result)) {
     const line = text.split(/\r?\n/).find((each) => each.startsWith("name: "));
+
     if (line === undefined) continue;
     const value = line.slice("name: ".length).trim();
+
     return value.startsWith('"') ? decodeQuotedName(value) : Option.some(value);
   }
+
   return Option.none();
 }
 
@@ -249,7 +254,7 @@ export const INTEGRATION = {
     ADD_ACCOUNT_PROMPT: "select_account",
     ACCOUNT_NAME: {
       URL: "https://gmail.googleapis.com/gmail/v1/users/me/profile",
-      NAME: (answer: unknown) =>
+      NAME: (answer: WireValue) =>
         Option.map(decodeGmailProfile(answer), (read) => read.emailAddress),
     },
     MCP_URL: "https://gmailmcp.googleapis.com/mcp/v1",
@@ -263,7 +268,7 @@ export const INTEGRATION = {
     ADD_ACCOUNT_PROMPT: "select_account",
     ACCOUNT_NAME: {
       URL: "https://www.googleapis.com/calendar/v3/users/me/calendarList/primary",
-      NAME: (answer: unknown) => Option.map(decodeCalendarListEntry(answer), (read) => read.id),
+      NAME: (answer: WireValue) => Option.map(decodeCalendarListEntry(answer), (read) => read.id),
     },
     MCP_URL: "https://calendarmcp.googleapis.com/mcp/v1",
     DESCRIPTION:
@@ -276,7 +281,7 @@ export const INTEGRATION = {
     ADD_ACCOUNT_PROMPT: "select_account",
     ACCOUNT_NAME: {
       URL: "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)",
-      NAME: (answer: unknown) =>
+      NAME: (answer: WireValue) =>
         Option.map(decodeDriveAbout(answer), (read) => read.user.emailAddress),
     },
     MCP_URL: "https://drivemcp.googleapis.com/mcp/v1",

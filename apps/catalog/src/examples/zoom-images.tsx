@@ -13,6 +13,7 @@ const DIAGRAM = `data:image/svg+xml,${encodeURIComponent(
 
 function ZoomImages(): React.JSX.Element {
   const zoom = useImageZoom("diagram.svg", DIAGRAM);
+
   return (
     <CatalogSection id="zoom-image-frame" title="A picture in its frame">
       <Stack>

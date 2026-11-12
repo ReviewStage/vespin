@@ -1,4 +1,4 @@
-import { Duration, Effect, type Redacted, Schedule, Schema } from "effect";
+import { Duration, Effect, Predicate, type Redacted, Schedule, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import type * as HttpClientError from "effect/http/HttpClientError";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
@@ -25,14 +25,17 @@ import { TRANSPORT_RETRY } from "./preview-probe.js";
  */
 
 const GITHUB_API = "https://api.github.com";
+
 const GITHUB_HEADERS = {
   accept: "application/vnd.github+json",
   "x-github-api-version": "2022-11-28",
   "user-agent": "preview-probe",
 } as const;
+
 /** The environment Vercel's GitHub app writes on a preview's deployment record. */
 const VERCEL_PREVIEW_ENVIRONMENT = "Preview";
 const DEPLOYMENT_PAGE = "10";
+
 /** Vercel's own words on the status it writes for a build its `ignoreCommand` skipped, compared whole. */
 const VERCEL_SKIPPED_DESCRIPTION = "Skipped - Not affected";
 
@@ -45,6 +48,7 @@ const DEPLOYMENT_STATE = {
   PENDING: "pending",
   SUCCESS: "success",
 } as const;
+
 type DeploymentState = (typeof DEPLOYMENT_STATE)[keyof typeof DEPLOYMENT_STATE];
 
 const DeploymentRecord = Schema.Struct({
@@ -53,7 +57,9 @@ const DeploymentRecord = Schema.Struct({
   environment: Schema.String,
   created_at: Schema.String,
 });
+
 type DeploymentRecord = typeof DeploymentRecord.Type;
+
 const DeploymentRecords = Schema.Array(DeploymentRecord);
 
 const DeploymentStatus = Schema.Struct({
@@ -63,7 +69,9 @@ const DeploymentStatus = Schema.Struct({
   target_url: Schema.optional(Schema.NullOr(Schema.String)),
   created_at: Schema.String,
 });
+
 type DeploymentStatus = typeof DeploymentStatus.Type;
+
 const DeploymentStatuses = Schema.Array(DeploymentStatus);
 
 export const PREVIEW_STATE = {
@@ -100,10 +108,13 @@ function decidePreview(
   const record = newestFirst(
     records.filter((candidate) => candidate.environment === VERCEL_PREVIEW_ENVIRONMENT),
   )[0];
+
   if (record === undefined) return { kind: PREVIEW_STATE.WAITING };
   const status = newestFirst(statusesOf(record))[0];
+
   if (status === undefined) return { kind: PREVIEW_STATE.WAITING };
   const description = status.description ?? "";
+
   switch (status.state) {
     case DEPLOYMENT_STATE.PENDING:
     case DEPLOYMENT_STATE.QUEUED:
@@ -111,10 +122,12 @@ function decidePreview(
       return { kind: PREVIEW_STATE.WAITING };
     case DEPLOYMENT_STATE.SUCCESS: {
       const address = status.environment_url ?? status.target_url;
+
       return address
         ? { kind: PREVIEW_STATE.READY, id: record.id, address }
         : { kind: PREVIEW_STATE.NOT_BUILT, id: record.id, state: status.state, description };
     }
+
     case DEPLOYMENT_STATE.INACTIVE:
       return description === VERCEL_SKIPPED_DESCRIPTION
         ? { kind: PREVIEW_STATE.NOT_AFFECTED, id: record.id }
@@ -155,6 +168,7 @@ const readPreview = /* @__PURE__ */ Effect.fn("web/readPreview")(
     HttpClient.HttpClient
   > {
     const client = HttpClient.filterStatusOk(yield* HttpClient.HttpClient);
+
     const records = yield* client
       .execute(
         githubRead(source, `/repos/${source.repository}/deployments`, {
@@ -164,8 +178,11 @@ const readPreview = /* @__PURE__ */ Effect.fn("web/readPreview")(
         }),
       )
       .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(DeploymentRecords)), Effect.scoped);
+
     const newest = newestFirst(records)[0];
+
     if (newest === undefined) return decidePreview([], () => []);
+
     const statuses = yield* client
       .execute(
         githubRead(source, `/repos/${source.repository}/deployments/${newest.id}/statuses`, {
@@ -173,6 +190,7 @@ const readPreview = /* @__PURE__ */ Effect.fn("web/readPreview")(
         }),
       )
       .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(DeploymentStatuses)), Effect.scoped);
+
     return decidePreview([newest], () => statuses);
   },
   Effect.retry({
@@ -181,7 +199,7 @@ const readPreview = /* @__PURE__ */ Effect.fn("web/readPreview")(
     // turned down is one `HttpClientError` in v4, whichever reason it
     // carries; a body that failed to decode is not retried, since a second
     // read of the same records would decode no better.
-    while: (error) => error._tag === "HttpClientError",
+    while: (error) => Predicate.isTagged(error, "HttpClientError"),
   }),
 );
 
@@ -214,6 +232,7 @@ export function waitForPreview(
   HttpClient.HttpClient
 > {
   const onReading = options.onReading ?? (() => Effect.void);
+
   return Effect.gen(function* () {
     const reading = yield* Effect.repeat(readPreview(source).pipe(Effect.tap(onReading)), {
       schedule: Schedule.spaced(Duration.millis(PREVIEW_WAIT.intervalMs)).pipe(
@@ -224,12 +243,14 @@ export function waitForPreview(
       // a refinement would have read out of the type.
       until: (reading: PreviewReading): boolean => reading.kind !== PREVIEW_STATE.WAITING,
     });
+
     if (reading.kind === PREVIEW_STATE.WAITING) {
       return yield* new PreviewNotReady({
         sha: source.sha,
         waitedMs: PREVIEW_WAIT.intervalMs * PREVIEW_WAIT.attempts,
       });
     }
+
     return reading;
   });
 }

@@ -58,10 +58,12 @@ export function useAgentServers(agentId: string): AgentServers {
   /** How many switches have been sent, so an answer to an earlier one is told apart from the latest. */
   const writes = useRef(0);
   const disabled = agent?.disabledServers ?? NONE_OFF;
+
   const servers = useMemo(
     () => (answer === undefined ? [] : handedServers(answer, disabled)),
     [answer, disabled],
   );
+
   return {
     servers,
     read: answer !== undefined,

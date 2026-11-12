@@ -63,7 +63,7 @@ interface Gate {
  * which names none (`EXPERIMENT_OFF_REFUSAL`); a tool whose door answered
  * otherwise words its own (`CatalogTool`'s `refused`).
  */
-export const GATES: { readonly [G in ToolGate]: Gate } = {
+export const GATES: Readonly<Record<ToolGate, Gate>> = {
   [TOOL_GATE.REPOSITORY]: {
     opens: (agent) => hasRepository(agent),
     refusal: CODER_REFUSAL.NO_REPOSITORY,
@@ -101,6 +101,7 @@ export function standingOfAgent(
   if (Option.isNone(agent)) {
     return Effect.succeed({ agent, open: new Set(), experiments: NO_EXPERIMENT_ON });
   }
+
   return Effect.map(experimentsOnIn(agent.value.organizationId), (experiments) => ({
     agent,
     open: new Set(
@@ -113,5 +114,6 @@ export function standingOfAgent(
 /** The standing of the agent whose conversation the call was admitted to. */
 export function standingOf(admitted: AdmittedConversation): AgentStoreEffect<AgentStanding> {
   const { userId, conversationId } = admitted.target;
+
   return Effect.flatMap(readAgentOfConversation(userId, conversationId), standingOfAgent);
 }

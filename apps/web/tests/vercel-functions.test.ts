@@ -31,6 +31,7 @@ function bundledFunctions() {
     task,
     metafile: (await build({ ...task.options, write: false })).metafile,
   }));
+
   return bundled;
 }
 
@@ -49,6 +50,7 @@ test("every function bundle loads exactly the externals the record expects", {
   const actual = externalsByBundle(metafile, WEB);
   assert.deepEqual(Object.keys(actual).sort(), task.functions.map((f) => `${f.file}.js`).sort());
   assert.deepEqual(externalsDrift(await expectedExternals(WEB), actual), []);
+
   // Inline-first leaves outside a bundle only Node's own modules, the named exceptions, and the profiler's binary; anything else is a dependency that stopped inlining.
   const permitted = new Set<string>([
     ...builtinModules,
@@ -56,6 +58,7 @@ test("every function bundle loads exactly the externals the record expects", {
     ...Object.values(INLINE_EXCEPTION),
     PROFILER_BINARY,
   ]);
+
   for (const externals of Object.values(actual)) {
     assert.deepEqual(
       externals.filter((specifier) => !permitted.has(specifier)),
@@ -82,6 +85,7 @@ test("a module esbuild injects is bundled, not an undeclared dependency", async 
   writeFileSync(join(root, "entry.js"), 'import pad from "left-pad";\nexport default pad;\n');
   // A virtual module handed to `inject`, as Sentry's esbuild plugin hands its release stub.
   const stub = join(root, "_injected-stub");
+
   const injecting: Plugin = {
     name: "injecting",
     setup(builder) {
@@ -91,6 +95,7 @@ test("a module esbuild injects is bundled, not an undeclared dependency", async 
       }));
     },
   };
+
   const result = await build({
     absWorkingDir: root,
     entryPoints: [join(root, "entry.js")],
@@ -104,5 +109,6 @@ test("a module esbuild injects is bundled, not an undeclared dependency", async 
     plugins: [injecting],
     logLevel: "silent",
   });
+
   assert.deepEqual(undeclaredImports(result.metafile, root, new Set()), ["left-pad"]);
 });

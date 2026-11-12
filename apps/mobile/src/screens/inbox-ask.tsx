@@ -1,6 +1,6 @@
-// inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, the composer that sends them with a note or replies, and Remind me and Resolve.
+// inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, a notice's Got it, the composer that sends them with a note or replies, and Remind me and Resolve.
 
-import { ASK_PRESS, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
+import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import {
   fieldValueOf,
   picksNone,
@@ -33,6 +33,7 @@ import {
   type AnswerField,
   type AnswerFieldKind,
   AnswerFields,
+  AskActs,
   AskNote,
   type BarMenu,
   CHOICE_MEDIA,
@@ -43,6 +44,7 @@ import {
   ComposerFoot,
   StepList,
 } from "@repo/ui-native";
+import { Predicate } from "effect";
 import type { ReactNode } from "react";
 import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
 import { REMIND_ME } from "./inbox-remind.js";
@@ -70,10 +72,13 @@ function typedValue(
   kind: AnswerFieldKind,
   typed: string | boolean,
 ): string | number | boolean | undefined {
-  if (typeof typed === "boolean") return typed;
+  if (Predicate.isBoolean(typed)) return typed;
+
   if (typed.trim() === "") return undefined;
+
   if (kind !== ANSWER_FIELD.NUMBER) return typed;
   const number = Number(typed.trim().replace(",", "."));
+
   return Number.isFinite(number) ? number : typed;
 }
 
@@ -94,6 +99,7 @@ function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedi
   switch (piece.type) {
     case INBOX_OPTION_MEDIA.FILE: {
       const recording = piece.mediaType === INBOX_FILE_TYPE.WEBM;
+
       return {
         kind: recording ? CHOICE_MEDIA.VIDEO : CHOICE_MEDIA.PICTURE,
         title: piece.caption ?? (recording ? RECORDING_WORD : PICTURE_WORD),
@@ -101,6 +107,7 @@ function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedi
         onOpen: recording ? doors.openVideoElsewhere : undefined,
       };
     }
+
     case INBOX_OPTION_MEDIA.PAGE:
       return {
         kind: CHOICE_MEDIA.PAGE,
@@ -119,13 +126,16 @@ function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedi
 /** An option as the card draws it: its label, its detail, and its media. */
 function cardChoice(option: InboxOption, doors: OptionMediaDoors): Choice {
   const media = knownOptionMedia(option).map((piece) => cardMedia(piece, doors));
+
   return { label: option.label, detail: option.detail, media };
 }
 
 /** The files an open ask's options carry, by attachment and kind, which the thread reads beside its messages' own. */
 export function openAskFiles(item: InboxItem) {
   const ask = openAsk(item);
+
   if (ask?.type !== INBOX_ASK.DECIDE) return [];
+
   return ask.options.flatMap((option) =>
     knownOptionMedia(option).flatMap((piece) =>
       piece.type === INBOX_OPTION_MEDIA.FILE ? [piece] : [],
@@ -137,12 +147,14 @@ export function openAskFiles(item: InboxItem) {
 function openAsk(item: InboxItem) {
   if (item.status !== INBOX_STATUS.OPEN) return undefined;
   const asking = openAskOf(item.thread ?? []);
+
   return asking === undefined || !knownAsk(asking.ask) ? undefined : asking.ask;
 }
 
 /** Whether the open ask's controls stand over the box, which are its answer, the box's words going beside them as a note: any ask but one of words alone. */
 function controlsStand(item: InboxItem): boolean {
   const ask = openAsk(item);
+
   return ask !== undefined && (ask.type !== INBOX_ASK.ANSWER || ask.fields !== undefined);
 }
 
@@ -150,8 +162,10 @@ function controlsStand(item: InboxItem): boolean {
  * The open ask's card under the thread, as the panel's box draws its
  * controls: a decide's options to pick, the recommended tagged; a do's steps
  * to tick, with Mark done and Couldn't do it, each sending at once with the
- * note typed; an answer's fields to fill. What the last send said where it did
- * not go stands under it. None where nothing is asked and nothing was said.
+ * note typed; an answer's fields to fill. A notice asking nothing offers Got
+ * it while the box is empty, as the panel's Send reads then, which settles it
+ * without messaging its agent. What the last send said where it did not go
+ * stands under it. None where nothing is asked and nothing was said.
  */
 export function OpenAskCard({
   item,
@@ -162,12 +176,26 @@ export function OpenAskCard({
   readonly answer: ThreadAnswer;
   readonly doors: OptionMediaDoors;
 }): ReactNode {
-  const { draft, onDraft, note, send } = answer;
+  const { draft, onDraft, note, send, nods, acknowledge } = answer;
   const ask = openAsk(item);
   const said = note === undefined ? null : <AskNote words={note} />;
+
+  if (ask === undefined && nods) {
+    return (
+      <>
+        <AskActs
+          acts={[{ label: INBOX_BOX_WORDS.GOT_IT, symbol: "checkmark", onPress: acknowledge }]}
+        />
+        {said}
+      </>
+    );
+  }
+
   if (ask === undefined) return said;
+
   if (ask.type === INBOX_ASK.DECIDE) {
     const cards = optionsCarryMedia(ask);
+
     return (
       <>
         <ChoiceList
@@ -175,6 +203,8 @@ export function OpenAskCard({
           recommended={recommendedLabels(ask)}
           picked={draft.choices}
           multiple={ask.multiple === true}
+          // Note that a pick of several says so over its card, in the panel's words, since its round marks read as a pick of one until something is picked.
+          title={ask.multiple === true ? askHeadWords(ask, undefined) : undefined}
           onChange={(choices) => onDraft(withPicks(draft, choices))}
           none={
             cards
@@ -190,11 +220,14 @@ export function OpenAskCard({
       </>
     );
   }
+
   if (ask.type === INBOX_ASK.DO) {
     // A press sends at once, with the steps ticked and the note typed, as the panel's press and Send do together.
     const press = (reply: typeof INBOX_REPLY.DONE | typeof INBOX_REPLY.NOT_DONE) =>
       send({ ...draft, press: reply });
+
     const ticked = shownTicks(ask, draft);
+
     return (
       <>
         <StepList
@@ -214,19 +247,23 @@ export function OpenAskCard({
       </>
     );
   }
+
   if (ask.fields === undefined) return said;
+
   const fields: readonly AnswerField[] = ask.fields.map((field) => {
     const kind = FIELD_KIND[field.type];
     const value = fieldValueOf(draft, field.label);
+
     return {
       kind,
       label: field.label,
       required: field.required === true,
-      value: typeof value === "boolean" ? value : value === undefined ? "" : String(value),
+      value: Predicate.isBoolean(value) ? value : value === undefined ? "" : String(value),
       options: field.options,
       recommended: field.recommended,
     };
   });
+
   return (
     <>
       <AnswerFields
@@ -258,6 +295,7 @@ export function ThreadComposer({
   readonly inColumn?: boolean;
 }) {
   const { draft, onDraft, answerReady, send } = answer;
+
   const props = {
     placeholder: controlsStand(item)
       ? INBOX_BOX_WORDS.NOTE_PLACEHOLDER
@@ -267,6 +305,7 @@ export function ThreadComposer({
     sendable: answerReady,
     onSend: () => send(),
   };
+
   return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
 }
 
@@ -276,6 +315,7 @@ export function threadMenu(item: InboxItem, answer: ThreadAnswer, onRemind: () =
     item.status === INBOX_STATUS.OPEN
       ? [{ label: RESOLVE, symbol: "checkmark.circle", onPress: answer.resolve } as const]
       : [];
+
   return {
     ...THREAD_MORE,
     choices: [],

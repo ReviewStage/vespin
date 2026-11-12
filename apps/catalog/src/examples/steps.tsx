@@ -32,6 +32,7 @@ const openNowhere = (): void => undefined;
 function PasteExample(): React.JSX.Element {
   const [value, setValue] = useState("");
   const [refused, setRefused] = useState(false);
+
   return (
     <PasteSteps
       first={{

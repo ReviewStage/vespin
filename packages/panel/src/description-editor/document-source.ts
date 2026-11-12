@@ -90,22 +90,28 @@ function tokenSources(token: LexedToken): string[] {
   if (token.type !== "list" || token.ordered === true || !("items" in token)) return [token.raw];
   const runs: string[] = [];
   let task: boolean | undefined;
+
   for (const item of token.items) {
     if (runs.length > 0 && item.task === task) runs[runs.length - 1] += item.raw;
     else runs.push(item.raw);
     task = item.task;
   }
+
   const joined = runs.join("");
+
   if (runs.length < 2 || !token.raw.startsWith(joined)) return [token.raw];
   runs[runs.length - 1] += token.raw.slice(joined.length);
+
   return runs;
 }
 
 /** Whether a token's source would not survive TipTap's Markdown, so it stays raw. */
 function keptRaw(token: LexedToken): boolean {
   if (token.type === "html" || token.type === "def") return true;
+
   if (token.type !== "paragraph") return false;
   const inline = "tokens" in token ? (token.tokens ?? []) : [];
+
   return FOOTNOTE.test(token.raw) || inline.some((child) => child.type === "html");
 }
 
@@ -154,12 +160,14 @@ export function documentOpened(manager: MarkdownManager, markdown: string): Open
   const blocks: JSONContent[] = [];
   const sources: string[] = [];
   let lead = "";
+
   for (const token of manager.instance.lexer(markdown)) {
     if (token.type === "space") {
       if (sources.length === 0) lead += token.raw;
       else sources[sources.length - 1] += token.raw;
       continue;
     }
+
     for (const source of tokenSources(token)) {
       const parsed = keptRaw(token) ? [] : (manager.parse(source.trimEnd()).content ?? []);
       // Note that a source read as anything but one block stays raw, so every block has exactly one source.
@@ -172,7 +180,9 @@ export function documentOpened(manager: MarkdownManager, markdown: string): Open
       sources.push(source);
     }
   }
+
   const content = blocks.length === 0 ? [{ type: "paragraph" }] : blocks;
+
   return {
     content: { type: "doc", content },
     sources,
@@ -186,8 +196,10 @@ export function sourcesOf(doc: PmNode, opened: OpenedDocument): HeldSources {
   const map = new Map<PmNode, string>();
   doc.forEach((node, _offset, index) => {
     const source = opened.sources[index];
+
     if (source !== undefined) map.set(node, source);
   });
+
   return { sources: map, lead: opened.lead, ending: opened.ending };
 }
 
@@ -199,7 +211,20 @@ function trailing(source: string): string {
 /** A block re-printed, a quote opening on a GitHub alert's marker keeping it unescaped, so it stays an alert. */
 function reprinted(manager: MarkdownManager, node: PmNode): string {
   const markdown = manager.serialize({ type: "doc", content: [node.toJSON()] }).trimEnd();
+
   return node.type.name === "blockquote" ? markdown.replace(ESCAPED_ALERT, "$1[!$2]") : markdown;
+}
+
+/** Whether a block holds a picture still waiting on its upload, at any depth. */
+function holdsUpload(node: PmNode): boolean {
+  let waiting = false;
+  node.descendants((child) => {
+    if (String(child.attrs.upload ?? "") !== "") waiting = true;
+
+    return !waiting;
+  });
+
+  return waiting;
 }
 
 /** Whether a block is a paragraph holding nothing: a line the developer left blank. */
@@ -219,6 +244,7 @@ function leftBlank(node: PmNode, held: HeldSources): boolean {
  */
 function blockMarkdown(manager: MarkdownManager, node: PmNode, held: HeldSources): string {
   if (leftBlank(node, held)) return BLANK_LINE + BLOCK_GAP;
+
   return held.sources.get(node) ?? reprinted(manager, node) + BLOCK_GAP;
 }
 
@@ -240,10 +266,12 @@ export function documentMarkdown(
 ): string {
   const left = doc.children.map((node) => leftBlank(node, held));
   const blocks = doc.children.map((node) => blockMarkdown(manager, node, held));
+
   // Note that a new block that writes nothing, a picture still being kept, writes no blank line either.
   const worded = doc.children.map(
     (node, index) => held.sources.has(node) || (!left[index] && blocks[index]?.trim() !== ""),
   );
+
   const writes = worded.map((words, index) => words || left[index] === true);
   const bounds = ends === BLANK_ENDS.KEPT ? writes : worded;
   const first = bounds.indexOf(true);
@@ -251,21 +279,28 @@ export function documentMarkdown(
   let out = held.lead;
   blocks.forEach((block, index) => {
     const node = doc.child(index);
+
     if (index < first || index > last || !writes[index]) return;
+
     if (index === last) {
       out += block.trimEnd() + held.ending;
+
       return;
     }
+
     // Note that a run of a list goes on into the next run with no blank line
     // laid between them, so a tight list stays tight; a kept run keeps its own,
     // and one kept from the text's end gains the line break it lacks.
     if (LIST_BLOCKS.has(node.type.name) && LIST_BLOCKS.has(doc.child(index + 1).type.name)) {
       out += held.sources.has(node) && block.endsWith("\n") ? block : `${block.trimEnd()}\n`;
+
       return;
     }
+
     // Note that the text's last block kept its source without the blank line after it, which a block laid in after it needs.
     out += /\n[^\S\n]*\n$/u.test(block) ? block : block.trimEnd() + BLOCK_GAP;
   });
+
   return out;
 }
 
@@ -304,24 +339,30 @@ export function documentTook(
   const was = [...sentOpened.sources];
   const now = documentOpened(manager, merged);
   const current: string[] = [];
+  // Note that a block holding a picture still being kept counts as changed since, because it writes as if the picture were not there, and a block put in its place would lose it.
   editor.state.doc.forEach((node) => {
-    current.push(blockMarkdown(manager, node, held));
+    current.push(holdsUpload(node) ? "" : blockMarkdown(manager, node, held));
   });
   // Where each block that was sent stands in the editor now, if the developer has not changed it since.
   const standing = new Map<number, number>();
   let sentAt = 0;
   let currentAt = 0;
+
   for (const part of diffArrays(was, current)) {
     for (let index = 0; index < part.count; index += 1) {
       if (!part.added && !part.removed) standing.set(sentAt, currentAt);
+
       if (!part.added) sentAt += 1;
+
       if (!part.removed) currentAt += 1;
     }
   }
+
   const taken: Taken[] = [];
   const base: string[] = [sentOpened.lead];
   sentAt = 0;
   let mergedAt = 0;
+
   for (const part of diffArrays(was, [...now.sources])) {
     if (!part.added && !part.removed) {
       base.push(...was.slice(sentAt, sentAt + part.count));
@@ -329,11 +370,13 @@ export function documentTook(
       mergedAt += part.count;
       continue;
     }
+
     const changed = part.removed ? part.count : 0;
     const added = part.added ? part.count : 0;
     const anchors = Array.from({ length: changed }, (_, index) => standing.get(sentAt + index));
     const before = sentAt === 0 ? -1 : standing.get(sentAt - 1);
     const from = changed > 0 ? anchors[0] : before === undefined ? undefined : before + 1;
+
     // Note that a change over blocks the developer has changed since is left to the next save to merge.
     if (from !== undefined && anchors.every((at, index) => at === from + index)) {
       const blocks = (now.content.content ?? []).slice(mergedAt, mergedAt + added);
@@ -347,9 +390,11 @@ export function documentTook(
     } else {
       base.push(...was.slice(sentAt, sentAt + changed));
     }
+
     sentAt += changed;
     mergedAt += added;
   }
+
   return { held: laidIn(editor, held, taken, now), base: base.join("") };
 }
 
@@ -368,6 +413,7 @@ function laidIn(
   offsets.push(state.doc.content.size);
   const tr = state.tr.setMeta("addToHistory", false);
   const placed = new Map<PmNode, string>();
+
   for (const stretch of [...taken].reverse()) {
     const nodes = stretch.blocks.map((block) => state.schema.nodeFromJSON(block));
     nodes.forEach((node, index) => {
@@ -379,11 +425,14 @@ function laidIn(
       nodes,
     );
   }
+
   editor.view.dispatch(tr);
   const sources = new Map<PmNode, string>();
   editor.state.doc.forEach((node) => {
     const source = held.sources.get(node) ?? placed.get(node);
+
     if (source !== undefined) sources.set(node, source);
   });
+
   return { sources, lead: now.lead, ending: now.ending };
 }

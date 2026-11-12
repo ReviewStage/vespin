@@ -133,14 +133,18 @@ async function open(screen: Screen, status: number | undefined): Promise<HTMLEle
   document.body.replaceChildren(page);
   root = createRoot(page);
   await act(async () => root?.render(underWebAdminDoors(screen.element())));
+
   if (status !== undefined) await readLanded(page);
+
   return page;
 }
 
 /** The toolbar heading the page, inside the page's own landmark. */
 function toolbar(page: HTMLElement): HTMLElement {
   const found = page.querySelector<HTMLElement>("main header.ui-toolbar");
+
   if (found === null) throw new Error("no toolbar heads the page");
+
   return found;
 }
 
@@ -152,9 +156,11 @@ function heading(page: HTMLElement): string {
 /** The toolbar's controls at its end: their words, and the names of those drawn as a glyph alone. */
 function controls(page: HTMLElement): string {
   const actions = toolbar(page).querySelector(".ui-toolbar-actions");
+
   const named = [...(actions?.querySelectorAll("[aria-label]") ?? [])].map(
     (each) => each.getAttribute("aria-label") ?? "",
   );
+
   return [actions?.textContent ?? "", ...named].join(" ");
 }
 
@@ -164,6 +170,7 @@ test.each(SCREENS)(
     const page = await open(screen, undefined);
 
     expect(heading(page)).toBe(screen.heading);
+
     for (const words of screen.controls) expect(controls(page)).toContain(words);
   },
 );
@@ -174,6 +181,7 @@ test.each(SCREENS)(
     const page = await open(screen, 500);
 
     expect(heading(page)).toBe(screen.heading);
+
     for (const words of screen.controls) expect(controls(page)).toContain(words);
     const alert = page.querySelector("main [role=alert]");
     expect(alert).not.toBeNull();
@@ -188,6 +196,7 @@ test.each(SCREENS)(
 
 test("an id no account carries says it was not found under the page's toolbar, its way back still there", async () => {
   const backs: number[] = [];
+
   const account: Screen = {
     name: "a missing account",
     element: () =>
@@ -199,6 +208,7 @@ test("an id no account carries says it was not found under the page's toolbar, i
     heading: `UsersAccount${RANGE}`,
     controls: [VIEW_OPTIONS],
   };
+
   const page = await open(account, 404);
 
   expect(heading(page)).toBe(`UsersAccount${RANGE}`);
@@ -206,9 +216,11 @@ test("an id no account carries says it was not found under the page's toolbar, i
   expect(page.querySelector("main")?.textContent).toContain(
     "Not foundThis account doesn't exist, or you don't have access to it.",
   );
+
   const back = Array.from(toolbar(page).querySelectorAll("button")).find(
     (button) => button.textContent === "Users",
   );
+
   act(() => back?.click());
   expect(backs).toHaveLength(1);
 });

@@ -113,6 +113,7 @@ export function asPlan(
 /** Whether the plan's reading and its last ask are old enough, or absent, that ChatGPT may be asked. */
 function due(row: ProviderKeyRow, since: Date): boolean {
   if (!ASKED_STATUSES.has(row.status)) return false;
+
   return [row.usageHeardAt, row.usageAskedAt].every(
     (at) => at === null || at.getTime() <= since.getTime(),
   );
@@ -139,6 +140,7 @@ const askUsage = /* @__PURE__ */ Effect.fnUntraced(function* (
     Effect.timeout(OPENAI_CALL_TIMEOUT),
     Effect.orElseSucceed(() => Option.none()),
   );
+
   return Option.flatMap(answered, (body) =>
     Option.map(
       Schema.decodeUnknownOption(UsageAnswerSchema)(body),

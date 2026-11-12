@@ -72,11 +72,11 @@ export interface PosthogPerson {
 /** A group's key under each group type (`$groups`), or the properties a `$groupidentify` sets on one (`$group_set`). */
 export type PosthogGroupFields = Readonly<Record<string, string>>;
 
-/** One question of a survey response (`$survey_questions`), as PostHog's survey SDKs list it: its id, its words, and what was answered, or null where it was left. */
+/** One question of a survey response (`$survey_questions`), as PostHog's survey SDKs list it: its id, its words, and what was answered (a multiple-choice question's list of answers), or null where it was left. */
 interface PosthogSurveyQuestion {
   readonly id: string;
   readonly question: string;
-  readonly response: string | null;
+  readonly response: string | readonly string[] | null;
 }
 
 /** Every kind of value one of this build's event properties may hold. */
@@ -86,6 +86,7 @@ type PosthogPropertyValue =
   | boolean
   | PosthogPerson
   | PosthogGroupFields
+  | readonly string[]
   | readonly PosthogSurveyQuestion[];
 
 /** One item of the documented batch document, as this build builds it. */
@@ -131,6 +132,7 @@ export function postBatchEffect(
     credential: NO_CREDENTIAL,
     requestTimeoutMs: options.timeoutMs ?? POSTHOG_DEFAULTS.REQUEST_TIMEOUT_MS,
   });
+
   return Effect.map(
     call.send({
       method: HTTP_METHOD.POST,
@@ -182,11 +184,13 @@ export function forgetPosthogPersonEffect(
   options: PosthogForgetOptions,
 ): Effect.Effect<void, PosthogForgetError, HttpClient.HttpClient> {
   const requestTimeoutMs = positiveInteger(options.timeoutMs, POSTHOG_DEFAULTS.REQUEST_TIMEOUT_MS);
+
   const call = accountCall({
     baseUrl: resolvePosthogApiHost(options.host),
     credential: fixedBearer(options.personalApiKey),
     requestTimeoutMs,
   });
+
   // Note that the deadline spans the body's read too, because the call's own
   // deadline ends with the headers and a body that never ends would hold the
   // account's deletion behind it.
@@ -200,25 +204,33 @@ export function forgetPosthogPersonEffect(
         delete_recordings: true,
       }),
     });
+
     if (!callAnswered(answer)) {
       return yield* new PosthogForgetError({
         message: `network fault: ${answer.errorName ?? "unknown"}`,
       });
     }
+
     const status = answer.response.status;
+
     // The status alone diagnoses the refusal; the body could name the key.
     if (!answer.response.ok) {
       return yield* new PosthogForgetError({ message: `refused with status ${status}` });
     }
+
     const payload = yield* Effect.orElseSucceed(
       Effect.tryPromise(() => answer.response.json()),
       () => undefined,
     );
+
     const read = readBulkDeleteAnswer(payload);
+
     if (Result.isFailure(read)) {
       return yield* new PosthogForgetError({ message: `unreadable answer with status ${status}` });
     }
+
     const errors = read.success.deletion_errors.length;
+
     if (errors > 0) {
       return yield* new PosthogForgetError({
         message: `answered status ${status} with ${errors} deletion error(s)`,

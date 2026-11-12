@@ -78,11 +78,13 @@ function drawn(input: {
   const forks: AgentFork[] = [];
   const opened: ToolTarget[] = [];
   const agent = input.agent ?? summary(SOURCE);
+
   const control = agentsControl({
     agents: input.listed ?? [agent],
     archived: input.archivedAgents ?? [],
     onUnarchive: input.taskArchived === true ? () => undefined : undefined,
   });
+
   const message = createElement(AgentMessage, {
     message: input.message ?? SETTLED,
     description: false,
@@ -90,6 +92,7 @@ function drawn(input: {
     moving: input.moving ?? false,
     delegation: { models: [] },
   });
+
   const doors = agentForkDoors({
     agent,
     control,
@@ -97,6 +100,7 @@ function drawn(input: {
     cards: undefined,
     onOpenTarget: (target) => opened.push(target),
   });
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -109,15 +113,18 @@ function drawn(input: {
     ),
   );
   const fork = container.querySelector<HTMLButtonElement>(`button[aria-label="${FORK_LABEL}"]`);
+
   return { container, fork, forks, opened };
 }
 
 test("an agent's own settled message offers Fork to new agent after Copy, and its press forks at that message, quoting its opening words", () => {
   const view = drawn({});
   assert.ok(view.fork, "the action is drawn");
+
   const labels = [...view.container.querySelectorAll("button[aria-label]")].map((each) =>
     each.getAttribute("aria-label"),
   );
+
   assert.deepEqual(labels.slice(-2), ["Copy message", FORK_LABEL], "it stands after Copy");
   act(() => view.fork?.click());
   assert.deepEqual(view.forks, [
@@ -139,6 +146,7 @@ test("a settled turn of no words, its calls alone or failed before it said anyth
       },
     ],
   };
+
   const view = drawn({ message: callsOnly });
   assert.ok(view.fork, "the action is drawn");
   assert.equal(view.container.querySelector('button[aria-label="Copy message"]'), null, "no Copy");
@@ -152,15 +160,18 @@ test("no fork is offered on the developer's message, a task archived, a place th
     role: MESSAGE_ROLE.USER,
     parts: [{ type: "text", text: "Use the queue." }],
   };
+
   const cases = {
     "the developer's message": drawn({ message: developers }),
     "a task archived": drawn({ taskArchived: true }),
     "a place that opens no draft": drawn({ opensDraft: false }),
     "a worker's tab": drawn({ provided: false }),
   };
+
   for (const [name, view] of Object.entries(cases)) {
     assert.equal(view.fork, null, `${name} offers no fork`);
   }
+
   assert.ok(
     cases["the developer's message"].container.querySelector('button[aria-label="Copy message"]'),
     "the developer's message keeps its Copy",
@@ -169,6 +180,7 @@ test("no fork is offered on the developer's message, a task archived, a place th
 
 test("under a message, Forked to names the agents of the task forked at it in the order started, each opening its tab, an archived one's among them", () => {
   const from = { agentId: SOURCE, messageId: TURN, steps: 2, totalSteps: 3 };
+
   const listed = [
     summary(SOURCE),
     summary("fork-b", { title: "Try the cron", createdAt: 30, from }),
@@ -178,9 +190,11 @@ test("under a message, Forked to names the agents of the task forked at it in th
       from: { agentId: SOURCE, steps: 3, totalSteps: 3 },
     }),
   ];
+
   const archived = [
     summary("fork-a", { title: "Try the queue", createdAt: 20, from, archivedAt: 50 }),
   ];
+
   const view = drawn({ listed, archivedAgents: archived, taskArchived: true });
 
   const line = view.container.querySelector("[data-forked-to]");
@@ -227,10 +241,13 @@ async function forkedAtInTab(
   fakeAppBridge({});
   const agent = summary(SOURCE, { status, brief: AGENT_BRIEF.PROMPT });
   pushedTranscripts(() => [{ messages: [...messages], cursor: "2:0", status, title: null }]);
+
   const control = agentsControl({
     agents: [agent],
   });
+
   const forks: AgentFork[] = [];
+
   const doors = agentForkDoors({
     agent,
     control,
@@ -238,6 +255,7 @@ async function forkedAtInTab(
     cards: undefined,
     onOpenTarget: undefined,
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -262,16 +280,19 @@ async function forkedAtInTab(
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await settleQueries();
+
   for (const button of container.querySelectorAll<HTMLButtonElement>(
     `button[aria-label="${FORK_LABEL}"]`,
   )) {
     act(() => button.click());
   }
+
   return forks.map(({ agentId: _agent, opening: _opening, ...at }) => at);
 }
 
 test("while an agent works, the newest of its replies, which the running turn may still be writing, forks as far as it has been written, by its steps and the words and calls of the last, and every earlier one whole; once it settles, every reply forks whole", async () => {
   const LATEST = "6b3a4f5e-7d8c-4b9a-8c3d-4e5f6a7b8c9d";
+
   const writing = {
     ...reply(LATEST, "Adding the retry"),
     parts: [
@@ -302,6 +323,7 @@ test("while an agent works, the newest of its replies, which the running turn ma
       `${working}: the newest reply is cut where it stands`,
     );
   }
+
   assert.deepEqual(await forkedAtInTab(AGENT_STATUS.COMPLETED, settled), [
     { messageId: TURN },
     { messageId: LATEST },

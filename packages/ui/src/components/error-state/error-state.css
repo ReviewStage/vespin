@@ -5,9 +5,8 @@
    is itself the retry (`RetryRowLabel`), which the row may size. */
 
 @layer components {
-  /* Note that the ellipsis stays here rather than in a utility, a place the
-     style guard's baseline holds for this sheet until the line takes the
-     fade; the utilities hold the sentence to one clipped line. */
+  /* Note that the ellipsis stays here rather than in a utility until the
+     line takes the fade; the utilities hold the sentence to one clipped line. */
   .ui-error-state[data-placement="toolbar"] > .ui-error-state-words {
     text-overflow: ellipsis;
   }

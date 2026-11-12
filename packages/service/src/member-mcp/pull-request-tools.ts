@@ -235,6 +235,7 @@ function unreachedWords(not: string, by: Reached["by"], refusal: HostedRefusal):
 /** Words cut on a line to a bound, with how many were left out where any were. */
 function cutWords(text: string, maximumChars: number) {
   const cut = cutOnLine(text, maximumChars);
+
   return cut.leftOutChars === 0
     ? { body: cut.text }
     : { body: cut.text, leftOutChars: cut.leftOutChars };
@@ -244,18 +245,21 @@ function cutWords(text: string, maximumChars: number) {
 function hunkTail(hunk: string): string {
   if (hunk.length <= HUNK_CHARS) return hunk;
   const from = hunk.indexOf("\n", hunk.length - HUNK_CHARS);
+
   return hunk.slice(from < 0 ? hunk.length - HUNK_CHARS : from + 1);
 }
 
 /** The overview as a model reads it: its description as written, cut to a bound, and none of GitHub's rendering. */
 function overviewWords(overview: AgentOverviewPullRequest) {
   const { html: _html, body, ...rest } = overview;
+
   if (body === undefined) return rest;
   const { body: kept, leftOutChars } = cutWords(body, WORDS_CHARS);
+
   return {
     ...rest,
     body: kept,
-    ...(leftOutChars === undefined ? {} : { bodyLeftOutChars: leftOutChars }),
+    ...(leftOutChars !== undefined && { bodyLeftOutChars: leftOutChars }),
   };
 }
 
@@ -282,7 +286,7 @@ function entryWords({
   return {
     ...entry,
     ...cutWords(body, WORDS_CHARS),
-    ...(threads === undefined ? {} : { threads: threads.map(threadWords) }),
+    ...(threads !== undefined && { threads: threads.map(threadWords) }),
   };
 }
 
@@ -295,23 +299,28 @@ function conversationPage(conversation: AgentOverviewConversation, offset: numbe
   const newestFirst = conversation.conversation.toReversed();
   const entries: ReturnType<typeof entryWords>[] = [];
   let chars = 0;
+
   for (const entry of newestFirst.slice(offset, offset + ENTRIES_PAGE)) {
     const words = entryWords(entry);
     const size = JSON.stringify(words).length;
+
     if (entries.length > 0 && chars + size > READ_PAGE_CHARS) break;
     entries.push(words);
     chars += size;
   }
+
   const next = offset + entries.length;
+
   return {
     reviewers: conversation.reviewers,
     entries,
-    ...(next < newestFirst.length ? { nextOffset: next } : {}),
+    ...(next < newestFirst.length && { nextOffset: next }),
     // Note that GitHub holds entries older than the read carries, which no page reaches.
     earlier: conversation.earlier,
-    ...(conversation.pendingReview === undefined || conversation.pendingReview === null
-      ? {}
-      : { pendingReviewComments: conversation.pendingReview.comments }),
+    ...(conversation.pendingReview !== undefined &&
+      conversation.pendingReview !== null && {
+        pendingReviewComments: conversation.pendingReview.comments,
+      }),
   };
 }
 
@@ -342,53 +351,58 @@ const viewedOfReached = (reached: Reached, userId: string) =>
 const changesPart = (reached: Reached, userId: string, asked: ReadPullRequestInput) =>
   Effect.gen(function* () {
     const { pullRequest: changes } = yield* changesOfReached(reached, userId);
+
     // An agent with no repository names no pull request to list the files of.
     if (changes === null) {
       return agentToolRejected(PULL_REQUEST_TOOL_REFUSAL.NO_PULL_REQUEST("Not read"));
     }
+
     // Note that the files are answered even where the marks could not be read, since they were read already.
     const viewed = yield* viewedOfReached(reached, userId).pipe(
       Effect.orElseSucceed(() => ({ outcome: VIEWED_UNREAD.UNANSWERED })),
     );
+
     const marks =
       "files" in viewed ? new Map(viewed.files.map((file) => [file.path, file.state])) : undefined;
+
     const offset = asked.offset ?? 0;
+
     const files = changes.files.slice(offset, offset + FILES_PAGE).map((file) => ({
       path: file.path,
       previousPath: file.previousPath,
       status: file.status,
       additions: file.additions,
       deletions: file.deletions,
-      ...(marks === undefined
-        ? {}
-        : { viewed: marks.get(file.path) ?? FILE_VIEWED_STATE.UNVIEWED }),
+      ...(marks !== undefined && { viewed: marks.get(file.path) ?? FILE_VIEWED_STATE.UNVIEWED }),
     }));
+
     const named =
       asked.path === undefined ? undefined : changes.files.find((file) => file.path === asked.path);
+
     if (asked.path !== undefined && named === undefined) {
       return agentToolRejected(PULL_REQUEST_TOOL_REFUSAL.NO_FILE);
     }
+
     const patch = named?.patch == null ? undefined : cutOnLine(named.patch, READ_PAGE_CHARS);
     const next = offset + files.length;
+
     return {
       status: ACTION_RESULT_STATUS.ACCEPTED,
-      ...(changes.headSha === undefined ? {} : { headSha: changes.headSha }),
+      ...(changes.headSha !== undefined && { headSha: changes.headSha }),
       files,
-      ...(next < changes.files.length ? { nextOffset: next } : {}),
+      ...(next < changes.files.length && { nextOffset: next }),
       truncated: changes.truncated,
-      ...(marks === undefined ? { viewedUnread: viewed.outcome } : {}),
-      ...(changes.reviewers === undefined ? {} : { reviewers: changes.reviewers }),
-      ...(changes.comments === undefined ? {} : { reviews: changes.comments }),
-      ...(named === undefined
-        ? {}
-        : {
-            file: {
-              path: named.path,
-              patch: patch?.text ?? null,
-              omitted: named.omitted,
-              leftOutChars: patch?.leftOutChars ?? 0,
-            },
-          }),
+      ...(marks === undefined && { viewedUnread: viewed.outcome }),
+      ...(changes.reviewers !== undefined && { reviewers: changes.reviewers }),
+      ...(changes.comments !== undefined && { reviews: changes.comments }),
+      ...(named !== undefined && {
+        file: {
+          path: named.path,
+          patch: patch?.text ?? null,
+          omitted: named.omitted,
+          leftOutChars: patch?.leftOutChars ?? 0,
+        },
+      }),
     };
   });
 
@@ -400,6 +414,7 @@ const partOf = (
   asked: ReadPullRequestInput,
 ) => {
   const accepted = { status: ACTION_RESULT_STATUS.ACCEPTED };
+
   switch (part) {
     case PULL_REQUEST_PART.OVERVIEW:
       return Effect.map(
@@ -445,6 +460,7 @@ const reachedByAgent = (
 ) =>
   Effect.flatMap(askedOfAgent(published, userId, agent, number), (answer) => {
     const { pullRequest } = answer;
+
     return pullRequest === null
       ? Effect.fail(HOSTED_REFUSAL.NOT_FOUND)
       : Effect.succeed<Reached>({
@@ -463,6 +479,7 @@ const readReached = <E extends HostedRefusal, R>(
 ) =>
   Effect.gen(function* () {
     const reached = yield* reach;
+
     return yield* partOf(asked.part ?? PULL_REQUEST_PART.OVERVIEW, reached, userId, asked);
   }).pipe(
     Effect.catch((refusal) =>
@@ -499,6 +516,7 @@ function unmarkedWords(answer: PullRequestWriteAnswer, done: readonly string[]) 
     answer.outcome === PULL_REQUEST_WRITE_OUTCOME.REFUSED
       ? PULL_REQUEST_TOOL_REFUSAL.REFUSED(answer.words)
       : PULL_REQUEST_TOOL_REFUSAL.SIGN_IN;
+
   return done.length === 0 ? words : `${words} Marked before it: ${done.join(", ")}.`;
 }
 
@@ -511,15 +529,20 @@ const markEach = <E extends HostedRefusal, R>(
   const action = asked.viewed
     ? PULL_REQUEST_ACTION.MARK_FILE_VIEWED
     : PULL_REQUEST_ACTION.UNMARK_FILE_VIEWED;
+
   return Effect.gen(function* () {
     const done: string[] = [];
+
     for (const path of asked.paths) {
       const written = yield* change({ action, path });
+
       if (written.outcome !== PULL_REQUEST_WRITE_OUTCOME.DONE) {
         return agentToolRejected(unmarkedWords(written, done));
       }
+
       done.push(path);
     }
+
     return { status: ACTION_RESULT_STATUS.ACCEPTED, paths: done, viewed: asked.viewed };
   }).pipe(
     Effect.catch((refusal) =>
@@ -536,6 +559,7 @@ export const runMarkFilesViewed = (
   asked: MarkFilesViewedInput,
 ) => {
   const query: PullRequestQuery = { workspaceId, ...named };
+
   return markEach(REACHED_BY.REPOSITORY, asked, (request) => actionOn(userId, query, request));
 };
 

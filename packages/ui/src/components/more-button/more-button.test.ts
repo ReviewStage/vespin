@@ -29,6 +29,7 @@ afterEach(() => {
 /** An automation's header ⋯ and the menu it drops. */
 function Header({ disabled = false }: { disabled?: boolean }): React.JSX.Element {
   const menu = useMenu(true);
+
   return createElement(
     "div",
     null,
@@ -53,7 +54,9 @@ function draw(element: React.ReactElement): void {
 
 function more(): HTMLButtonElement {
   const found = document.querySelector<HTMLButtonElement>("button");
+
   if (found === null) throw new Error("No ⋯");
+
   return found;
 }
 

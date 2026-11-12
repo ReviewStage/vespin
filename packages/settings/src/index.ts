@@ -5,7 +5,9 @@ export {
   type AgentEnter,
   isAgentEnter,
 } from "./agent-enter.js";
+
 export { HOST_CAPABILITY, type HostCapability } from "./capabilities.js";
+
 export {
   appAuthors,
   COMMIT_AUTHOR,
@@ -15,11 +17,13 @@ export {
   coAuthorCredited,
   isCommitAuthor,
 } from "./commit-author.js";
+
 export {
   EXPERIMENT_COUNTED_AS,
   EXPERIMENT_SCOPE_COUNTED_AS,
   SETTINGS_VIEW_COUNTED_AS,
 } from "./counted.js";
+
 export {
   type AccountExperiment,
   type AccountExperimentChoices,
@@ -44,6 +48,7 @@ export {
   type WorkspaceExperimentChoices,
   workspaceExperimentChoicesFrom,
 } from "./experiments.js";
+
 export {
   isKeepAwake,
   KEEP_AWAKE,
@@ -52,6 +57,7 @@ export {
   KEEP_AWAKE_LIST,
   type KeepAwake,
 } from "./keep-awake.js";
+
 export {
   isMacCommandMode,
   MAC_COMMAND_MODE,
@@ -60,10 +66,13 @@ export {
   MAC_COMMANDS_LABEL,
   type MacCommandMode,
 } from "./mac-commands.js";
+
 export {
+  isOlderOnboardingSurveyJson,
   isOnboardingSurveyJson,
   type OnboardingSurvey,
   onboardingSurveyFrom,
+  onboardingSurveyHasAnswer,
   onboardingSurveyStored,
   SURVEY_INTENT,
   SURVEY_INTENT_LABEL,
@@ -78,6 +87,7 @@ export {
   type SurveyReferral,
   type SurveyRole,
 } from "./onboarding-survey.js";
+
 export {
   isPermissionMode,
   PERMISSION_MODE_HINT,
@@ -85,6 +95,7 @@ export {
   PERMISSION_MODE_LIST,
   PERMISSION_MODE_WORDS,
 } from "./permission-mode.js";
+
 export {
   isPullRequestOpen,
   PULL_REQUEST_OPEN,
@@ -93,6 +104,7 @@ export {
   PULL_REQUEST_OPEN_LIST,
   type PullRequestOpen,
 } from "./pull-request-open.js";
+
 export {
   APP_SETTING_ID,
   APP_SETTING_SCHEMA,
@@ -108,6 +120,7 @@ export {
   type SettingsPage,
   type SettingsResetScope,
 } from "./schema.js";
+
 export {
   ACCOUNT_PREFERENCE_FIELDS,
   type AccountPreferenceField,
@@ -138,6 +151,7 @@ export {
   settingVisible,
   snapshotAccountPreferences,
 } from "./schema-access.js";
+
 export {
   isSetupPlaceJson,
   SETUP_AUDIENCE,
@@ -146,6 +160,7 @@ export {
   setupPlaceFrom,
   setupPlaceStored,
 } from "./setup-place.js";
+
 export {
   isSoundWhen,
   SOUND_WHEN,
@@ -153,7 +168,9 @@ export {
   SOUND_WHEN_LIST,
   type SoundWhen,
 } from "./sound-when.js";
+
 export { isTheme, THEME, THEME_LIST, type Theme } from "./theme.js";
+
 export {
   isZoomPercent,
   ZOOM_ACTUAL_SIZE,

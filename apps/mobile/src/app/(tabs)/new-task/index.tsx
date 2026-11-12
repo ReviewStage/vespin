@@ -3,15 +3,18 @@
 import { EmptyState, Screen } from "@repo/ui-native";
 import { Stack, useRouter } from "expo-router";
 import { SettingsBarButton } from "../../../settings-button.js";
+import { useWorkspaceSwitcher } from "../../../workspace-switcher.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../../screen-boundary.js";
 
 export default function NewTaskScreen() {
   const router = useRouter();
+  const switcher = useWorkspaceSwitcher();
+
   return (
     <>
       <Stack.Screen options={{ title: "New task" }} />
-      <SettingsBarButton />
+      <SettingsBarButton switcher={switcher} />
       <Screen>
         <EmptyState
           title="New task"

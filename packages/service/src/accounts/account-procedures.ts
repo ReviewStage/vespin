@@ -31,8 +31,9 @@
  * says nothing of any other account and authorizes nothing: the dashboard's
  * own gate (`admin/gate.ts`) decides every admin read on its own.
  *
- * The provider keys are `provider-keys-procedures.ts`'s, and the account's
- * own sounds `sounds-procedures.ts`'s.
+ * The provider keys are `provider-keys-procedures.ts`'s, the account's
+ * own sounds `sounds-procedures.ts`'s, and the commands it always allows its
+ * coding agents to run `allowed-commands-procedures.ts`'s.
  */
 
 import type { AccountAccessRow, AccountSeamEffect } from "@repo/database/models/account-store";
@@ -48,6 +49,7 @@ import {
   readOwnPreferences,
   writeOwnPreferences,
 } from "./account-preferences.js";
+import { allowedCommandsProcedures } from "./allowed-commands-procedures.js";
 import { memoriesProcedures } from "./memories-procedures.js";
 import { providerKeysProcedures } from "./provider-keys-procedures.js";
 import { soundsProcedures } from "./sounds-procedures.js";
@@ -64,6 +66,7 @@ const PRESENCE_DONE: PresenceDoneAnswer = { done: true };
 /** The account resource: every procedure but the provider keys' own, which are `provider-keys-procedures.ts`'s. */
 export function accountProcedures(seams: AccountProcedureSeams) {
   const signedIn = hosted.account.use(accountMiddleware(seams.resolveUserId));
+
   return {
     /** The caller's own stored snapshot, or the defaults for a user with none stored, the coding agents' the one its credentials pay for. */
     preferences: signedIn.preferences.effect(function* ({ context }) {
@@ -78,6 +81,7 @@ export function accountProcedures(seams: AccountProcedureSeams) {
     access: signedIn.access.effect(function* ({ context }) {
       const access = yield* hostedStoreOrUnavailable(seams.readAccess(context.userId));
       const now = yield* Clock.currentTimeMillis;
+
       return {
         admin: isAdminRole(access.role),
         supportAccessUntil: standingSupportAccess(access.supportAccessUntil, now),
@@ -87,6 +91,7 @@ export function accountProcedures(seams: AccountProcedureSeams) {
     /** The caller stamped active now, as their desktop or web client's beat says, which holds their phone's pushes (`../push/inbox-pushes.ts`). */
     active: signedIn.active.effect(function* ({ context }) {
       yield* hostedStoreOrUnavailable(stampPresence(context.userId));
+
       return PRESENCE_DONE;
     }),
 
@@ -98,5 +103,6 @@ export function accountProcedures(seams: AccountProcedureSeams) {
     ...providerKeysProcedures(seams),
     ...memoriesProcedures(seams),
     ...soundsProcedures(seams),
+    ...allowedCommandsProcedures(seams),
   };
 }

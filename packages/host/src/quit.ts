@@ -86,7 +86,9 @@ export function desktopQuit(): DesktopQuit {
     held: () => {
       if (stage !== QUIT_STAGE.STANDING) return false;
       let held = false;
+
       for (const hold of holds) if (hold()) held = true;
+
       return held;
     },
     closesThrough: (next) => {
@@ -95,10 +97,12 @@ export function desktopQuit(): DesktopQuit {
     teardown: () => {
       if (tearingDown) return tearingDown;
       stage = QUIT_STAGE.TEARING_DOWN;
+
       for (const step of preamble) step();
       tearingDown = (close?.() ?? Promise.resolve()).finally(() => {
         stage = QUIT_STAGE.TORN_DOWN;
       });
+
       return tearingDown;
     },
   };
@@ -131,12 +135,16 @@ export function confirmingHold(options: {
 }): () => boolean {
   const { standing, confirm, again } = options;
   let confirming: Confirming = CONFIRMING.RESTING;
+
   return () => {
     if (confirming === CONFIRMING.AGREED) {
       confirming = CONFIRMING.RESTING;
+
       return false;
     }
+
     if (!standing()) return false;
+
     if (confirming === CONFIRMING.ASKING) return true;
     confirming = CONFIRMING.ASKING;
     // A question that could not be asked is a no: nothing is lost without one.
@@ -144,8 +152,10 @@ export function confirmingHold(options: {
       (yes) => {
         if (!yes) {
           confirming = CONFIRMING.RESTING;
+
           return;
         }
+
         confirming = CONFIRMING.AGREED;
         again();
       },
@@ -153,6 +163,7 @@ export function confirmingHold(options: {
         confirming = CONFIRMING.RESTING;
       },
     );
+
     return true;
   };
 }
@@ -210,7 +221,9 @@ const STAKE_WORDS = {
 export function leaveQuestion(leave: Leave, atStake: AtStake): LeaveQuestion | undefined {
   const words = LEAVE_WORDS[leave];
   const lost = atStake.unsavedWork ? [STAKE_WORDS.UNSAVED_WORK] : [];
+
   if (lost.length === 0) return undefined;
+
   return {
     message: words.message,
     detail: lost.join(" "),
@@ -231,10 +244,13 @@ function askingOneAtATime<Subject>(
   ask: (subject: Subject, question: LeaveQuestion) => Promise<boolean>,
 ): (subject: Subject, question: LeaveQuestion | undefined) => Promise<boolean> {
   let asking = false;
+
   return async (subject, question) => {
     if (question === undefined) return true;
+
     if (asking) return false;
     asking = true;
+
     try {
       return await ask(subject, question);
     } catch {
@@ -252,6 +268,7 @@ export function leaveGate(options: {
 }): (leave: Leave) => Promise<boolean> {
   const { atStake, ask } = options;
   const asked = askingOneAtATime<Leave>((_leave, question) => ask(question));
+
   return (leave) => asked(leave, leaveQuestion(leave, atStake()));
 }
 
@@ -265,6 +282,7 @@ export function reloadGate<Page>(options: {
 }): (page: Page) => Promise<boolean> {
   const { holds, ask } = options;
   const asked = askingOneAtATime(ask);
+
   return (page) => asked(page, leaveQuestion(LEAVE.RELOAD, { unsavedWork: holds(page) }));
 }
 
@@ -287,6 +305,7 @@ export function unsavedWorkHolders<Sender>(
   gone: (sender: Sender) => boolean,
 ): UnsavedWorkHolders<Sender> {
   const holders = new Set<Sender>();
+
   return {
     tell: (sender, holding) => {
       if (holding) holders.add(sender);
@@ -294,6 +313,7 @@ export function unsavedWorkHolders<Sender>(
     },
     holding: () => {
       for (const sender of holders) if (gone(sender)) holders.delete(sender);
+
       return holders.size > 0;
     },
     holds: (sender) => holders.has(sender) && !gone(sender),

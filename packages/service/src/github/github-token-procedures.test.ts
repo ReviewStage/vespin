@@ -44,6 +44,7 @@ const GITHUB_ID = 4242;
 const EXPIRES = "2026-12-01 12:00:00 UTC";
 
 const classic = (tail: string) => `ghp_${"0".repeat(32)}${tail}`;
+
 const TOKEN = {
   GOOD: classic("good"),
   REFUSED: classic("rfsd"),
@@ -75,6 +76,7 @@ function github(token: string): Response {
         "github-authentication-token-expiration": EXPIRES,
       },
     });
+
   switch (token) {
     case TOKEN.GOOD:
       return user(GITHUB_ID, "repo, workflow");
@@ -107,9 +109,11 @@ function tokenRequest(
 const openMembers = Effect.gen(function* () {
   const db = yield* Database;
   const owner = `user-${randomUUID()}`;
+
   for (const id of [owner]) {
     yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
   }
+
   yield* db.insert(account).values({
     id: randomUUID(),
     accountId: String(GITHUB_ID),
@@ -117,9 +121,11 @@ const openMembers = Effect.gen(function* () {
     userId: owner,
     updatedAt: new Date(0),
   });
+
   const fake = recordingHttpClient((request) =>
     github(request.authorization?.replace(/^Bearer /u, "") ?? ""),
   );
+
   const procedures = githubTokenProcedures({
     resolveUserId: (incoming) =>
       Effect.succeed(
@@ -128,11 +134,14 @@ const openMembers = Effect.gen(function* () {
         ),
       ),
   });
+
   const logged: string[] = [];
+
   // Every line the procedures log is kept, so a test can read what they say.
   const recorder = Logger.make(({ message, cause }) => {
     logged.push(`${JSON.stringify(message)} ${Cause.pretty(cause)}`);
   });
+
   const send = (request: Request, environment: HostedEnvironmentValues = ENVIRONMENT) =>
     Effect.gen(function* () {
       // The procedures run on oRPC's own fiber, so they are handed the test's clock and services.
@@ -145,8 +154,10 @@ const openMembers = Effect.gen(function* () {
         ANALYTICS.layer,
         Logger.layer([recorder]),
       );
+
       const response = yield* hostedAnswer({ githubToken: procedures }, services, request);
       const text = yield* Effect.promise(() => response.text());
+
       // SAFETY: the route answers JSON; the test compares it as the wire value it is.
       return {
         status: response.status,
@@ -156,8 +167,10 @@ const openMembers = Effect.gen(function* () {
         cacheControl: response.headers.get("cache-control"),
       };
     });
+
   const ask = (userId: string | undefined, method = "GET", body?: WireBoundaryInput) =>
     send(tokenRequest(userId, method, body));
+
   return { owner, ask, send, checks: fake.requests, logged };
 });
 
@@ -170,7 +183,9 @@ const countedFor = (userId: string) =>
 function answerOf(answered: { status: number; body: WireBoundaryInput }): GitHubTokenAnswer {
   assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
   const read = readEither(githubTokenAnswerSchema)(unparsedWire(answered.body));
+
   if (Result.isFailure(read)) return assert.fail(`not the wire's: ${read.failure.refusal}`);
+
   return read.success;
 }
 
@@ -189,9 +204,11 @@ it.layer(getTestDB())("the GitHub token procedures", (it) => {
           [{ name: SERVER_EVENT.GITHUB_TOKEN_SAVE, userId: owner, properties: {} }],
           "a save is counted once, a read none",
         );
+
         const opened = yield* memberGitHubToken(owner).pipe(
           Effect.provideService(HostedEnvironment, ENVIRONMENT),
         );
+
         const rows = yield* db
           .select()
           .from(githubPersonalToken)
@@ -232,23 +249,29 @@ it.layer(getTestDB())("the GitHub token procedures", (it) => {
           ],
           "the save asks GitHub once, the documented way",
         );
+
         for (const text of [saved.text, read.text, JSON.stringify(rows)]) {
           assert.ok(!text.includes(TOKEN.GOOD), "no answer or column holds the token");
         }
+
         if (Result.isFailure(opened)) return assert.fail(`not opened: ${opened.failure}`);
         assert.equal(Redacted.value(opened.success.token), TOKEN.GOOD);
 
         yield* opened.success.markInvalid;
+
         const afterUse = yield* memberGitHubToken(owner).pipe(
           Effect.provideService(HostedEnvironment, ENVIRONMENT),
         );
+
         assert.deepEqual(afterUse, Result.fail(GITHUB_TOKEN_ABSENCE.INVALID));
         assert.equal(answerOf(yield* ask(owner)).token?.status, GITHUB_TOKEN_STATUS.INVALID);
 
         assert.deepEqual(answerOf(yield* ask(owner, "DELETE")), { token: null });
+
         const removed = yield* memberGitHubToken(owner).pipe(
           Effect.provideService(HostedEnvironment, ENVIRONMENT),
         );
+
         assert.deepEqual(removed, Result.fail(GITHUB_TOKEN_ABSENCE.NONE));
       }),
   );
@@ -260,6 +283,7 @@ it.layer(getTestDB())("the GitHub token procedures", (it) => {
         const { owner, ask, checks } = yield* openMembers;
 
         const answers = [];
+
         for (const token of [TOKEN.FINE_GRAINED, TOKEN.REFUSED, TOKEN.NO_REPO]) {
           answers.push(answerOf(yield* ask(owner, "PUT", { token })));
         }
@@ -297,10 +321,12 @@ it.layer(getTestDB())("the GitHub token procedures", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, ask, checks } = yield* openMembers;
+
         const ofAnswer = (answered: { status: number; body: WireBoundaryInput }) => ({
           status: answered.status,
           body: answered.body,
         });
+
         const unsigned = {
           status: HOSTED_HTTP_STATUS.UNAUTHORIZED,
           body: { error: HOSTED_API_ERROR.INVALID_TOKEN },
@@ -325,9 +351,11 @@ it.layer(getTestDB())("the GitHub token procedures", (it) => {
         const { owner, ask, checks } = yield* openMembers;
 
         const answers = [];
+
         for (let attempt = 0; attempt < 10; attempt += 1) {
           answers.push(answerOf(yield* ask(owner, "PUT", { token: TOKEN.REFUSED })));
         }
+
         const braked = yield* ask(owner, "PUT", { token: TOKEN.GOOD });
 
         assert.ok(answers.every((answer) => answer.rejected === GITHUB_TOKEN_REJECTION.INVALID));
@@ -353,6 +381,7 @@ it.layer(getTestDB())("the GitHub token procedures", (it) => {
         const padded = JSON.stringify({ token: `${TOKEN.GOOD}${" ".repeat(1_100)}` });
         const refusal = (status: number, error: string) => ({ status, body: { error } });
         const invalid = refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST);
+
         const unavailable = refusal(
           HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
           HOSTED_API_ERROR.UNAVAILABLE,
@@ -395,10 +424,12 @@ it.layer(getTestDB())("the GitHub token procedures", (it) => {
 
         for (const [answered, expected] of refusals) {
           assert.deepEqual({ status: answered.status, body: answered.body }, expected);
+
           for (const token of [TOKEN.GOOD, tooLong]) {
             assert.ok(!answered.text.includes(token), "no refusal's body carries the token");
           }
         }
+
         assert.ok(logged.length > 0, "the unreadable ring is logged");
         assert.ok(
           logged.every((line) => !line.includes(TOKEN.GOOD) && !line.includes("not-a-key")),
@@ -412,6 +443,7 @@ it.layer(getTestDB())("the GitHub token procedures", (it) => {
       Effect.gen(function* () {
         // Note that the old group read any body as JSON; oRPC reads one only under a JSON content type.
         const { owner, ask, send, checks } = yield* openMembers;
+
         const untyped = new Request(new URL(TOKEN_PATH, ORIGIN), {
           method: "PUT",
           headers: { authorization: `Bearer ${owner}`, "content-type": "text/plain" },

@@ -42,7 +42,9 @@ export type TrendDirection = (typeof TREND_DIRECTION)[keyof typeof TREND_DIRECTI
 
 export function trendDirection(trend: Trend): TrendDirection {
   if (trend.recent > trend.prior) return TREND_DIRECTION.UP;
+
   if (trend.recent < trend.prior) return TREND_DIRECTION.DOWN;
+
   return TREND_DIRECTION.FLAT;
 }
 
@@ -54,15 +56,20 @@ export function trendDirection(trend: Trend): TrendDirection {
  */
 export function formatTrendMove(trend: Trend): string {
   const delta = trend.recent - trend.prior;
+
   if (delta === 0) return "flat";
   const sign = delta > 0 ? "+" : "−";
+
   if (trend.prior === 0) return `${sign}${formatCount(Math.abs(delta))}`;
+
   return `${sign}${formatPercent(Math.abs(delta / trend.prior))}`;
 }
 
 /** A linked provider's row value drawn as its label where the page knows one. */
 export function signInMethodLabel(providerId: string): string {
   if (providerId === SOCIAL_PROVIDER.GITHUB) return SOCIAL_PROVIDER_LABEL[SOCIAL_PROVIDER.GITHUB];
+
   if (providerId === SOCIAL_PROVIDER.GOOGLE) return SOCIAL_PROVIDER_LABEL[SOCIAL_PROVIDER.GOOGLE];
+
   return providerId;
 }

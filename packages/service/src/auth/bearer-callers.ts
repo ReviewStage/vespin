@@ -85,10 +85,12 @@ export const bearerCallersLayer = Layer.effect(
           Exit.isSuccess(exit) && Option.isSome(exit.value) ? BEARER_CALLER_TTL : Duration.zero,
       },
     );
+
     const asking = yield* Cache.makeWith(
       (_digest: string) =>
         Effect.gen(function* () {
           const { input, ask } = yield* AskingBearer;
+
           return yield* ask(input);
         }),
       {
@@ -97,21 +99,28 @@ export const bearerCallersLayer = Layer.effect(
         timeToLive: () => Duration.zero,
       },
     );
+
     const through =
       (ask: UserInfoEndpoint): UserInfoEndpoint =>
       (input) =>
         Effect.gen(function* () {
           const authorization = input.headers.get(CREDENTIAL_HEADER.AUTHORIZATION);
+
           if (authorization === null) return yield* ask(input);
           const digest = bearerDigest(authorization);
           const standing = Option.flatten(yield* Cache.getSuccess(kept, digest));
+
           if (Option.isSome(standing)) return standing.value;
+
           const answer = yield* Cache.get(asking, digest).pipe(
             Effect.provideService(AskingBearer, { input, ask }),
           );
+
           if (answer?.sub) yield* Cache.set(kept, digest, Option.some(answer));
+
           return answer;
         });
+
     return { through };
   }),
 );

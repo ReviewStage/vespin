@@ -84,6 +84,7 @@ import {
   FiberHandle,
   FiberMap,
   Option,
+  Predicate,
   Scope,
   Stream,
 } from "effect";
@@ -286,6 +287,7 @@ type WorkspaceSealed<Answer> = (
 /** A workspace act refused for `failure`: in words that say why where the failure says it, and in the act's own sentence otherwise. */
 function workspaceRefused(failure: WorkspaceCallFailure): Effect.Effect<never, ActRefused> {
   const sentence = WORKSPACE_REFUSAL[failure];
+
   return Effect.fail(new ActRefused(sentence === undefined ? {} : { sentence }));
 }
 
@@ -293,7 +295,7 @@ function workspaceRefused(failure: WorkspaceCallFailure): Effect.Effect<never, A
 function isFailed<Answer>(
   sealed: Answer | { readonly failure: string },
 ): sealed is { readonly failure: string } {
-  return typeof sealed === "object" && sealed !== null && "failure" in sealed;
+  return Predicate.isObjectOrArray(sealed) && "failure" in sealed;
 }
 
 /**
@@ -330,6 +332,7 @@ function membersMoved(
   return userIds.flatMap((userId) => {
     if (userId === undefined) return [];
     const member = answered.find((each) => each.userId === userId);
+
     return [member === undefined ? { userId, gone: true } : { userId, role: member.role }];
   });
 }
@@ -350,10 +353,12 @@ function workspaceSeal<Answer>(
   ) => Effect.Effect<Answer | { readonly failure: string }, never, HttpClient.HttpClient>,
 ): WorkspaceSealed<Answer> {
   const userId = dependencies.accountId();
+
   return (poll, after) =>
     gate() && userId !== undefined
       ? Effect.map(served(seal(userId, poll, after)), (sealed) => {
           if (!isFailed(sealed)) return sealed;
+
           return {
             failure: sealed.failure,
             gone:
@@ -382,49 +387,62 @@ function workspacePhotos({ dependencies, served, gate }: WorkspacesReach) {
     const photoFetches = yield* FiberMap.make<string>();
     /** The version each photo fetch out asks for, by the workspace. */
     const photosAsked = new Map<string, string>();
+
     const tellPhotos = (next: AppWorkspacePhotos) => {
       photos = next;
       kernel.emit(GATEWAY_EVENT.WORKSPACE_PHOTOS_CHANGED, carried(photos));
     };
+
     /** `workspaceId`'s photo at `version` fetched and laid; nothing is laid where it did not land. */
     const photoFetched = (workspaceId: string, version: string) =>
       Effect.gen(function* () {
         const photo = yield* served(client.workspaces.photo(workspaceId));
+
         if (photosAsked.get(workspaceId) === version) photosAsked.delete(workspaceId);
+
         if (!photo.ok) return;
         const url = `data:${photo.answer.contentType};base64,${photo.answer.base64}`;
         tellPhotos({ ...photos, [workspaceId]: { rows: { version, url } } });
       });
+
     /** The photos of the workspaces the view lists now: each version neither held nor asked for fetched, and each no workspace lists at its version let go. */
     const photosListed = Effect.suspend(() => {
       if (!gate()) return Effect.void;
       const listed = new Map<string, string>();
+
       for (const each of tasks.view().workspaces) {
         if (each.photoVersion !== undefined) listed.set(each.id, each.photoVersion);
       }
+
       const held = Object.entries(photos).filter(
         ([workspaceId, read]) => listed.get(workspaceId) === read.rows?.version,
       );
+
       if (held.length !== Object.keys(photos).length) tellPhotos(Object.fromEntries(held));
+
       return Effect.gen(function* () {
         for (const workspaceId of [...photosAsked.keys()]) {
           if (listed.has(workspaceId)) continue;
           photosAsked.delete(workspaceId);
           yield* FiberMap.remove(photoFetches, workspaceId);
         }
+
         for (const [workspaceId, version] of listed) {
           if (photos[workspaceId]?.rows?.version === version) continue;
+
           if (photosAsked.get(workspaceId) === version) continue;
           photosAsked.set(workspaceId, version);
           yield* FiberMap.run(photoFetches, workspaceId, photoFetched(workspaceId, version));
         }
       });
     });
+
     const reset = Effect.gen(function* () {
       yield* FiberMap.clear(photoFetches);
       photosAsked.clear();
       tellPhotos(NO_KEYS_HELD);
     });
+
     return { photosListed, reset };
   });
 }
@@ -442,37 +460,49 @@ function workspacesAnswered(
 ) {
   return Effect.gen(function* () {
     const { tasks, kept } = dependencies;
+
     // Note that a list of none is said before anything is drawn or let go, so the last good list and its kept content stay.
     if (workspaces.length === 0) {
       tasks.draw({ workspacesStatus: TASKS_READ.FAILED });
+
       return yield* new LiveBroken({ reason: "the account holds no workspace" });
     }
+
     const view = tasks.view();
     const drawn = new Set(view.workspaces.map((each) => each.id));
+
     const installed = new Map(
       view.workspaces.map((each) => [each.id, JSON.stringify(each.githubInstallations ?? [])]),
     );
+
     // Note that a workspace whose GitHub installations moved reaches other repositories now, so its list is asked again.
     const reinstalled = new Set(
-      workspaces
-        .filter((each) => {
-          const was = installed.get(each.id);
-          return was !== undefined && was !== JSON.stringify(each.githubInstallations ?? []);
-        })
-        .map((each) => each.id),
+      workspaces.flatMap((each) => {
+        const was = installed.get(each.id);
+
+        return was !== undefined && was !== JSON.stringify(each.githubInstallations ?? [])
+          ? [each.id]
+          : [];
+      }),
     );
+
     const listed = new Set(workspaces.map((each) => each.id));
     const gone = new Set([...drawn].filter((id) => !listed.has(id)));
+
     // Note that a workspace leaving the list lets go of all content kept, since what was read in it is no longer the account's to read.
     if (gone.size > 0) yield* kept.clear;
     // A workspace another member deleted, or left the account out of, closes its task open here, as the act that leaves it does.
     const open = tasks.openTaskLeaving();
+
     if (open.workspaceId !== undefined && gone.has(open.workspaceId)) yield* open.close;
     yield* rows.answer(workspaces);
+
     if (tasks.view().workspacesStatus !== TASKS_READ.READY) {
       tasks.draw({ workspacesStatus: TASKS_READ.READY });
     }
+
     yield* dependencies.entities()?.keep(KEPT_READ.WORKSPACES, workspaces) ?? Effect.void;
+
     if (reinstalled.size > 0) yield* tasks.repositoriesMovedIn(reinstalled);
   });
 }
@@ -495,25 +525,32 @@ function workspacesFollowed(
 ) {
   const { dependencies, served, gate } = reach;
   const { client, tasks } = dependencies;
+
   return Effect.gen(function* () {
     // Note that a list that answered none is sealed again at once on Retry, rather than after the backoff.
     const failed = tasks.view().workspacesStatus === TASKS_READ.FAILED;
+
     if (tasks.view().workspacesStatus !== TASKS_READ.READY) {
       tasks.draw({ workspacesStatus: TASKS_READ.READING });
     }
+
     // The account the follow starts for, which every seal names, so one under another's session is refused as signed out.
     const userId = dependencies.accountId();
+
     const seal = (poll: boolean, after?: string) =>
       userId === undefined
         ? Effect.succeed(LIVE_SIGNED_OUT)
         : served(
             client.workspaces.liveRead(WORKSPACES_READ, { userId }, poll ? { after } : undefined),
           );
+
     /** One seal followed until it stops, which fails it so the backoff seals it again. */
     const attempt = Effect.gen(function* () {
       const sealed = yield* seal(false);
+
       if ("failure" in sealed) return yield* Effect.fail(sealed.failure);
       const moves = workspacesMoves({ poll: (after) => seal(true, after) }, sealed);
+
       // A follow gone mid-way was refused as signed out by a poll, which no read mends either.
       const gone = yield* Stream.runForEach(moves, (workspaces) =>
         workspacesAnswered(reach, rows(), workspaces),
@@ -521,8 +558,10 @@ function workspacesFollowed(
         Effect.as(false),
         Effect.catch((broken) => Effect.succeed(broken.reason === LIVE_GONE)),
       );
+
       return yield* Effect.fail(gone ? LIVE_SIGNED_OUT.failure : WORKSPACE_CALL_FAILURE.UNANSWERED);
     });
+
     // A session that is no longer the account's is signed out, which no seal mends.
     const retried = attempt.pipe(
       Effect.retry({
@@ -531,6 +570,7 @@ function workspacesFollowed(
       }),
       Effect.ignore,
     );
+
     yield* FiberHandle.run(workspacesFollow, retried, { onlyIfMissing: !failed });
   });
 }
@@ -549,8 +589,10 @@ function workspaceList(reach: WorkspacesReach) {
     const photos = yield* workspacePhotos(reach);
     /** The one follow of the account's workspaces, from the account gate opening, at a launch or a sign-in, until a sign-out. */
     const workspacesFollow = yield* FiberHandle.make<void>();
+
     const openWorkspaces = Effect.gen(function* () {
       const scope = yield* Scope.make();
+
       const rows = yield* Scope.provide(scope)(
         workspaceRows({
           pool: dependencies.pool,
@@ -561,8 +603,10 @@ function workspaceList(reach: WorkspacesReach) {
             ),
         }),
       );
+
       return { scope, rows };
     });
+
     let list = yield* openWorkspaces;
     yield* Effect.addFinalizer(() => Scope.close(list.scope, Exit.void));
 
@@ -571,6 +615,7 @@ function workspaceList(reach: WorkspacesReach) {
     /** The workspaces as the entity store kept them, drawn as the service last answered them, only where nothing has answered them since. */
     const drawnFromDisk = Effect.gen(function* () {
       const workspaces = dependencies.entities()?.stored(KEPT_READ.WORKSPACES);
+
       // Note that a list of none, as a build before #6753 could keep, is no list: the follow's first answer draws one.
       if (
         workspaces !== undefined &&
@@ -614,6 +659,7 @@ function workspacePeople(reach: WorkspacesReach) {
   return Effect.gen(function* () {
     const { dependencies, gate } = reach;
     const { kernel, client } = dependencies;
+
     const membersReads = yield* workspaceMembersReads({
       gate,
       seal: (workspaceId) =>
@@ -628,6 +674,7 @@ function workspacePeople(reach: WorkspacesReach) {
       pool: dependencies.pool,
       entities: dependencies.entities,
     });
+
     const invitationsReads = yield* workspaceInvitationsReads({
       gate,
       seal: (workspaceId) =>
@@ -642,6 +689,7 @@ function workspacePeople(reach: WorkspacesReach) {
       pool: dependencies.pool,
       entities: dependencies.entities,
     });
+
     return { membersReads, invitationsReads };
   });
 }
@@ -658,12 +706,15 @@ function workspaceTokenRepositories({ dependencies, served, gate }: WorkspacesRe
     const { kernel, client, tasks } = dependencies;
     /** The token repositories as the fetch last told them, which every addition or removal standing is drawn over as they are told. */
     let tokenRepositoriesFetched: AppTokenRepositories = NO_KEYS_HELD;
+
     const toldTokenRepositories = liveTold(
       kernel.emit,
       WORKSPACE_FOLLOWS.WORKSPACE_TOKEN_REPOSITORIES_FOLLOW,
     );
+
     const tellTokenRepositories = (): void =>
       toldTokenRepositories(tokenRepositoryWritten.drawn(tokenRepositoriesFetched));
+
     const tokenRepositories = yield* heldFetch<typeof LIVE_READ.TOKEN_REPOSITORIES, string>({
       empty: NO_KEYS_HELD,
       path: (workspaceId) => [workspaceId],
@@ -678,6 +729,7 @@ function workspaceTokenRepositories({ dependencies, served, gate }: WorkspacesRe
         tellTokenRepositories();
       },
     });
+
     /**
      * Each token repository added or removed, drawn over its workspace's
      * list at once and kept until the service answers the list
@@ -694,6 +746,7 @@ function workspaceTokenRepositories({ dependencies, served, gate }: WorkspacesRe
           tasks.repositoriesMovedIn(new Set([workspaceId])),
         ),
     });
+
     /** A token repository added or removed, sent where the gate stands open. */
     const tokenRepositorySet = tokenRepositoryWritten.set<TasksWorkspaceTokenRepositoriesAnswer>(
       ({ workspaceId, repository, added }) =>
@@ -702,6 +755,7 @@ function workspaceTokenRepositories({ dependencies, served, gate }: WorkspacesRe
               const changed = yield* served(
                 client.workspaces.setTokenRepository(workspaceId, repository, added),
               );
+
               if (!changed.ok) {
                 return {
                   refused: {
@@ -709,6 +763,7 @@ function workspaceTokenRepositories({ dependencies, served, gate }: WorkspacesRe
                   },
                 };
               }
+
               return {
                 answer: {
                   repositories: changed.answer,
@@ -721,6 +776,7 @@ function workspaceTokenRepositories({ dependencies, served, gate }: WorkspacesRe
             }),
       WORKSPACE_UNANSWERED,
     );
+
     return { tokenRepositories, tokenRepositoryWritten, tokenRepositorySet };
   });
 }
@@ -747,6 +803,7 @@ function workspaceTokenRepositories({ dependencies, served, gate }: WorkspacesRe
 function workspaceIntegrations({ dependencies, served, gate }: WorkspacesReach) {
   return Effect.gen(function* () {
     const { kernel, client } = dependencies;
+
     const slackChannels = yield* heldFetch<typeof LIVE_READ.SLACK_CHANNELS, string>({
       empty: NO_KEYS_HELD,
       path: (workspaceId) => [workspaceId],
@@ -756,8 +813,10 @@ function workspaceIntegrations({ dependencies, served, gate }: WorkspacesReach) 
         gate()
           ? Effect.map(served(client.workspaces.slackBot(workspaceId)), (read) => {
               if (!read.ok) return Option.none();
+
               // Note that a bot not connected is in no channel, and one whose channels Slack did not list keeps those it last listed.
               if (read.answer.team === undefined) return Option.some([]);
+
               return Option.fromNullishOr(read.answer.channels).pipe(
                 Option.map((channels) => channels.map(listedChannel)),
               );
@@ -765,6 +824,7 @@ function workspaceIntegrations({ dependencies, served, gate }: WorkspacesReach) 
           : Effect.succeed(Option.none()),
       tell: liveTold(kernel.emit, WORKSPACE_FOLLOWS.WORKSPACE_SLACK_CHANNELS_FOLLOW),
     });
+
     const integrations = yield* heldWorkspaceIntegrations({
       seal: (workspaceId, userId, poll, after) =>
         gate()
@@ -778,6 +838,7 @@ function workspaceIntegrations({ dependencies, served, gate }: WorkspacesReach) 
               ),
               (sealed) => {
                 if (!isFailed(sealed)) return sealed;
+
                 return {
                   failure: sealed.failure,
                   gone:
@@ -793,6 +854,7 @@ function workspaceIntegrations({ dependencies, served, gate }: WorkspacesReach) 
       slackMoved: (workspaceId) => slackChannels.wake((held) => held === workspaceId),
       tell: liveTold(kernel.emit, WORKSPACE_FOLLOWS.WORKSPACE_INTEGRATIONS_FOLLOW),
     });
+
     return { slackChannels, integrations };
   });
 }
@@ -809,23 +871,30 @@ function githubStanding({ dependencies, served, gate }: WorkspacesReach) {
     const { client, tasks } = dependencies;
     let githubAskedAt: number | undefined;
     let githubRead = 0;
+
     /** Reads whether the account's GitHub is connected; a failed read keeps what it last read. */
     const readGithub = Effect.gen(function* () {
       githubRead += 1;
       const read = githubRead;
       githubAskedAt = yield* Clock.currentTimeMillis;
       const status = yield* served(client.github.status());
+
       if (read === githubRead && !("failure" in status)) tasks.draw({ github: status });
     });
+
     /** Reads the connection where none was asked for since a sign-out, or the last ask is older than its bound. */
     const readGithubWhenStale = Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
+
       const fresh =
         githubAskedAt !== undefined && now - githubAskedAt < Duration.toMillis(GITHUB_READ_EVERY);
+
       if (!fresh) yield* readGithub;
     });
+
     /** The read of GitHub's connection the gate opening starts beside the follows, so a sign-in waits on none of it. */
     const githubOpened = yield* FiberHandle.make<void>();
+
     const acts: Pick<HostActTable<typeof TASKS_ACTS>, "GITHUB_CONNECT" | "GITHUB_DISCONNECT"> = {
       // The browser connects or disconnects GitHub, so the panel coming
       // forward again reads the connection whatever the bound says.
@@ -834,6 +903,7 @@ function githubStanding({ dependencies, served, gate }: WorkspacesReach) {
           if (!gate()) return GITHUB_PAGE_UNANSWERED;
           const page = yield* served(client.github.connect());
           githubAskedAt = undefined;
+
           return "failure" in page ? GITHUB_PAGE_UNANSWERED : { url: page.url };
         }),
       // The view takes the connection the service answers at once, so Settings
@@ -846,6 +916,7 @@ function githubStanding({ dependencies, served, gate }: WorkspacesReach) {
           githubAskedAt = undefined;
           // Note that GitHub's standing as an integration is asked again before the answer, so the window draws it from the held read as the answer lands.
           yield* dependencies.githubMoved;
+
           if ("failure" in disconnected) {
             return yield* new ActRefused(
               disconnected.failure === GITHUB_DISCONNECT_FAILURE.NOT_PERMITTED
@@ -853,12 +924,14 @@ function githubStanding({ dependencies, served, gate }: WorkspacesReach) {
                 : {},
             );
           }
+
           // Note that a read started before the answer is made stale, because
           // the status it read may predate the unlink.
           githubRead += 1;
           tasks.draw({ github: disconnected });
         }),
     };
+
     return {
       readGithubWhenStale,
       acts,
@@ -882,6 +955,7 @@ function adminActs({
   gate,
 }: WorkspacesReach): Pick<HostActTable<typeof TASKS_ACTS>, "ADMIN_READ" | "ADMIN_FAVORITE"> {
   const { client } = dependencies;
+
   return {
     // An admin read is answered to the caller as the service answered it and
     // held nowhere, since it is other accounts' data, which no view keeps.
@@ -911,6 +985,7 @@ function workspaceWritten(
   if (!gate()) {
     return Effect.succeed({ refused: WORKSPACE_UNANSWERED });
   }
+
   return Effect.map(served(call), (written) =>
     written.ok
       ? {
@@ -940,6 +1015,7 @@ function memberWritten(
       refused: WORKSPACE_UNANSWERED,
     });
   }
+
   return Effect.map(served(call), (written) =>
     written.ok
       ? {
@@ -973,6 +1049,7 @@ function workspaceRowActs(
 > {
   const { dependencies, served, gate } = reach;
   const { client } = dependencies;
+
   /** A workspace renamed, its name drawn at once and kept until the follow moves it. */
   const workspaceRenamed = workspaceWrite<
     TasksWorkspaceRenameParams & AskedOver,
@@ -986,6 +1063,7 @@ function workspaceRowActs(
       workspaceWritten(reach, client.workspaces.rename(workspaceId, name)),
     unsent: WORKSPACE_UNANSWERED,
   });
+
   /** A workspace's slug changed, drawn at once and kept until the follow moves it; a slug another workspace holds is refused and taken back. */
   const workspaceSlugSet = workspaceWrite<
     TasksWorkspaceSlugSetParams & AskedOver,
@@ -999,6 +1077,7 @@ function workspaceRowActs(
       workspaceWritten(reach, client.workspaces.setSlug(workspaceId, slug)),
     unsent: WORKSPACE_UNANSWERED,
   });
+
   /**
    * One experiment turned on or off for everyone in a workspace, drawn at once
    * as the member's own change, now, and kept until the follow moves the
@@ -1018,6 +1097,7 @@ function workspaceRowActs(
         const changedBy = member === undefined ? null : { id: member.userId, name: member.name };
         const chosen = { experiment, on, changedBy, changedAt: dependencies.kernel.now() };
         const others = (row.experiments ?? []).filter((each) => each.experiment !== experiment);
+
         return {
           ...row,
           experiments: [...others, chosen].toSorted((a, b) =>
@@ -1040,11 +1120,13 @@ function workspaceRowActs(
       ),
     unsent: WORKSPACE_UNANSWERED,
   });
+
   return {
     WORKSPACE_CREATE: ({ name }) =>
       Effect.gen(function* () {
         if (!gate()) return yield* workspaceRefused(WORKSPACE_UNANSWERED.failure);
         const made = yield* served(client.workspaces.create(name));
+
         return yield* workspaceAnswered("workspace")(
           made.ok ? { workspace: made.answer } : { failure: made.failure },
         );
@@ -1078,8 +1160,10 @@ function workspaceRowActs(
       Effect.gen(function* () {
         if (!gate()) return yield* workspaceRefused(WORKSPACE_UNANSWERED.failure);
         const written = yield* served(client.workspaces.setPhoto(workspaceId, photo));
+
         if (!written.ok) return yield* workspaceRefused(written.failure);
         yield* list.rows().answered(written.answer);
+
         return written.answer;
       }),
     // Note that a handover changes the account's own role in the workspace,
@@ -1091,11 +1175,13 @@ function workspaceRowActs(
       Effect.gen(function* () {
         if (!gate()) return yield* workspaceRefused(WORKSPACE_UNANSWERED.failure);
         const handedOver = yield* served(client.workspaces.transfer(workspaceId, userId));
+
         if (!handedOver.ok) return yield* workspaceRefused(handedOver.failure);
         yield* people.membersReads.moved(
           workspaceId,
           membersMoved(handedOver.answer, [userId, dependencies.accountId()]),
         );
+
         return handedOver.answer;
       }),
     // Note that a leave closes the open task where it is that workspace's, as
@@ -1107,12 +1193,16 @@ function workspaceRowActs(
       Effect.gen(function* () {
         if (!gate()) return yield* workspaceRefused(WORKSPACE_UNANSWERED.failure);
         const open = dependencies.tasks.openTaskLeaving();
+
         const leave = Effect.tap(client.workspaces.leave(workspaceId), (answer) =>
           answer.ok && open.workspaceId === workspaceId ? open.close : Effect.void,
         );
+
         const left = yield* served(leave);
+
         if (!left.ok) return yield* workspaceRefused(left.failure);
         const readerId = dependencies.accountId();
+
         if (readerId !== undefined) {
           yield* people.membersReads.moved(workspaceId, [{ userId: readerId, gone: true }]);
         }
@@ -1125,10 +1215,13 @@ function workspaceRowActs(
       Effect.gen(function* () {
         if (!gate()) return yield* workspaceRefused(WORKSPACE_UNANSWERED.failure);
         const open = dependencies.tasks.openTaskLeaving();
+
         const remove = Effect.tap(client.workspaces.delete(workspaceId, ifAlone), (answer) =>
           answer.ok && open.workspaceId === workspaceId ? open.close : Effect.void,
         );
+
         const deleted = yield* served(remove);
+
         if (!deleted.ok) return yield* workspaceRefused(deleted.failure);
       }),
   };
@@ -1148,6 +1241,7 @@ function workspacePeopleActs(
   const { dependencies, served, gate } = reach;
   const { client } = dependencies;
   const { membersReads, invitationsReads } = people;
+
   /** A member's role changed, drawn on their row at once, kept until the people's read carries it. */
   const memberRoleChanged = membersReads.write<
     TasksWorkspaceMemberRoleParams,
@@ -1158,6 +1252,7 @@ function workspacePeopleActs(
     send: ({ workspaceId, userId, role }) =>
       memberWritten(reach, client.workspaces.changeRole(workspaceId, userId, role), [userId]),
   });
+
   /** A member removed, drawn gone at once, kept until the people's read no longer carries them. */
   const memberRemoved = membersReads.write<
     TasksWorkspaceMemberRemoveParams,
@@ -1168,6 +1263,7 @@ function workspacePeopleActs(
     send: ({ workspaceId, userId }) =>
       memberWritten(reach, client.workspaces.removeMember(workspaceId, userId), [userId]),
   });
+
   /**
    * An invitation canceled, drawn gone at once, kept until the invitations'
    * read no longer carries it. Note that the list it answers is never laid
@@ -1187,6 +1283,7 @@ function workspacePeopleActs(
           )
         : Effect.succeed({ refused: WORKSPACE_UNANSWERED }),
   );
+
   return {
     WORKSPACE_MEMBER_REMOVE: declaredWrite(dependencies.pool, memberRemoved, {
       answered: workspaceAnswered("members"),
@@ -1203,8 +1300,10 @@ function workspacePeopleActs(
       Effect.gen(function* () {
         if (!gate()) return yield* workspaceRefused(WORKSPACE_UNANSWERED.failure);
         const made = yield* served(client.workspaces.invite(workspaceId, email, role));
+
         if (!made.ok) return yield* workspaceRefused(made.failure);
         yield* invitationsReads.made(workspaceId, made.answer);
+
         return made.answer;
       }),
     WORKSPACE_INVITATION_CANCEL: declaredWrite(dependencies.pool, invitationCanceled, {
@@ -1227,6 +1326,7 @@ function workspaceConnectionActs(
   | "WORKSPACE_SLACK_BOT_DISCONNECT"
 > {
   const { client } = dependencies;
+
   return {
     // The install address is answered to the procedure that opens it and
     // held nowhere: the connection lands in the browser, and the follow
@@ -1235,13 +1335,16 @@ function workspaceConnectionActs(
       Effect.gen(function* () {
         if (!gate()) return yield* workspaceRefused(WORKSPACE_UNANSWERED.failure);
         const begun = yield* served(client.workspaces.githubConnect(workspaceId));
+
         if (!begun.ok) return yield* workspaceRefused(begun.failure);
+
         return begun.answer;
       }),
     WORKSPACE_GITHUB_DISCONNECT: ({ workspaceId }) =>
       Effect.gen(function* () {
         if (!gate()) return yield* workspaceRefused(WORKSPACE_UNANSWERED.failure);
         const disconnected = yield* served(client.workspaces.githubDisconnect(workspaceId));
+
         if (!disconnected.ok) return yield* workspaceRefused(disconnected.failure);
       }),
     // Sentry's install address is answered to the procedure that opens it
@@ -1250,7 +1353,9 @@ function workspaceConnectionActs(
       Effect.gen(function* () {
         if (!gate()) return yield* workspaceRefused(WORKSPACE_UNANSWERED.failure);
         const begun = yield* served(client.workspaces.sentryInstall(workspaceId));
+
         if (!begun.ok) return yield* workspaceRefused(begun.failure);
+
         return begun.answer;
       }),
     WORKSPACE_SENTRY_DISCONNECT: declaredWrite(
@@ -1270,9 +1375,11 @@ function workspaceConnectionActs(
       Effect.gen(function* () {
         if (!gate()) return yield* workspaceRefused(WORKSPACE_UNANSWERED.failure);
         const connected = yield* served(client.workspaces.slackBotConnect(workspaceId));
+
         // Note that the bot's row is known only once Slack named its team, so the answer waits for the held read to carry it, and the window draws the team as the answer lands.
         if (connected.ok)
           yield* integrated.integrations.confirmed(workspaceId, connected.answer.txid);
+
         return yield* workspaceAnswered("slackBot")(slackBotAnswered(slackBotOf(connected)));
       }),
     WORKSPACE_SLACK_BOT_DISCONNECT: declaredWrite(
@@ -1300,6 +1407,7 @@ function workspaceSettingActs(
 > {
   const { client } = dependencies;
   const { slackChannels } = integrated;
+
   return {
     // Note that the switch lives on the account's preferences row, so it is drawn over that row at once, whichever workspace's Settings turned it.
     WORKSPACE_SLACK_BOT_NOTIFICATIONS: declaredWrite(
@@ -1338,6 +1446,7 @@ function workspaceSettingActs(
         ({ workspaceId }, answer) => {
           if (!("slackBot" in answer)) return Effect.void;
           const { channels } = answer.slackBot;
+
           return channels === undefined
             ? slackChannels.wake((held) => held === workspaceId)
             : slackChannels.answered(workspaceId, channels.map(listedChannel));
@@ -1368,7 +1477,9 @@ function workspaceAsked<Answer>(
   return Effect.gen(function* () {
     if (!gate()) return yield* workspaceRefused(WORKSPACE_UNANSWERED.failure);
     const asked = yield* served(call);
+
     if (!asked.ok) return yield* workspaceRefused(asked.failure);
+
     return asked.answer;
   });
 }
@@ -1381,6 +1492,7 @@ function workspaceEnvironmentActs(
   "WORKSPACE_ENVIRONMENT_LIST" | "WORKSPACE_ENVIRONMENT_PUT" | "WORKSPACE_ENVIRONMENT_DELETE"
 > {
   const { client } = reach.dependencies;
+
   // Note that the environment is asked of the service on each act and held
   // nowhere here, because no answer carries a value and Settings reads the
   // names again after each write.
@@ -1405,6 +1517,7 @@ function workspaceSandboxSetupActs(
   | "WORKSPACE_RUN_ACTIONS_PUT"
 > {
   const { client } = reach.dependencies;
+
   // Note that the setup is asked of the service on each act and held nowhere
   // here, because Settings reads it as it opens and lays each save's answer.
   return {
@@ -1431,6 +1544,7 @@ function workspaceFollowActs({
   const { membersReads, invitationsReads } = people;
   const { integrations, slackChannels } = integrated;
   const { tokenRepositories } = tokens;
+
   return {
     // A workspace's people.
     WORKSPACE_MEMBERS_FOLLOW: {
@@ -1472,11 +1586,13 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
 ): Effect.fn.Return<WorkspacesComposer, never, Scope.Scope | HttpClient.HttpClient> {
   const { kernel, account } = dependencies;
   const http = yield* HttpClient.HttpClient;
+
   const reach: WorkspacesReach = {
     dependencies,
     served: (call) => Effect.provideService(call, HttpClient.HttpClient, http),
     gate: () => kernel.runMode.sendsNetwork && account.capabilitiesActive(),
   };
+
   const { gate } = reach;
   const list = yield* workspaceList(reach);
   const people = yield* workspacePeople(reach);
@@ -1494,7 +1610,9 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
     [GATEWAY_METHOD.WORKSPACES_REFRESH]: () =>
       Effect.gen(function* () {
         yield* dependencies.focus.raise;
+
         if (gate()) yield* github.readGithubWhenStale;
+
         return {};
       }),
   };
@@ -1521,6 +1639,7 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
       yield* tokens.tokenRepositories.open;
       yield* integrated.integrations.open;
       yield* integrated.slackChannels.open;
+
       if (!gate()) return;
       yield* list.drawnFromDisk;
       yield* list.followed;

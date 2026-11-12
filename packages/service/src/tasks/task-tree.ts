@@ -69,9 +69,12 @@ export function readTaskTree(
 > {
   return Effect.gen(function* () {
     const stored = yield* readTaskHeader(userId, taskId);
+
     if (Option.isNone(stored)) return Option.none();
     const repository = stored.value.repository;
+
     if (repository === null) return Option.some(refused(TASK_FILE_REFUSAL.NO_REPOSITORY));
+
     return Option.some(
       yield* readRepositoryTree(stored.value.workspaceId, repository, userId, request),
     );
@@ -92,6 +95,7 @@ export function readRepositoryTree(
   request: TaskTreeRequest,
 ): Effect.Effect<TaskTreeAnswer, never, DatabaseServices | HttpClient.HttpClient | GitHubApp> {
   if (withinSecret(request.path)) return Effect.succeed(refused(TASK_FILE_REFUSAL.SECRET));
+
   return readFolder(workspaceId, repository, member, request).pipe(
     Effect.catchTag("GitHubUnavailable", (failure) =>
       Effect.as(logGitHubReadFailure(failure), refused(TASK_FILE_REFUSAL.UNAVAILABLE)),
@@ -107,27 +111,35 @@ const readFolder = /* @__PURE__ */ Effect.fn("web/taskTreeFolder")(function* (
   request: TaskTreeRequest,
 ) {
   const reach = yield* reachTaskRepository(organizationId, repository, member);
+
   if ("refused" in reach) return reach.refused;
   const { token, repository: confirmed, access } = reach.reached;
   const recursive = request.recursive === true;
+
   const folder = yield* readRepositoryFolder(token, confirmed, request.path, recursive).pipe(
     markRefusedToken(access),
   );
+
   if (!folder.found) {
     return {
       refusal: TASK_FILE_REFUSAL.MISSING,
       branch: confirmed.defaultBranch,
     } satisfies TaskTreeAnswer;
   }
+
   const bound = recursive ? TASK_TREE_BOUNDS.MAX_RECURSIVE_ENTRIES : TASK_TREE_BOUNDS.MAX_ENTRIES;
+
   const shown = recursive
     ? folder.entries.filter((entry) => !insideSecret(entry.name))
     : folder.entries;
+
   const listed = shown.filter((entry) => entry.name.length <= CODE_PATH_MAX_CHARS);
+
   const entries = listed.slice(0, bound).map((entry) => ({
     name: entry.name,
     kind: entry.type === GIT_ENTRY.TREE ? TASK_TREE_ENTRY.FOLDER : TASK_TREE_ENTRY.FILE,
   }));
+
   return {
     folder: {
       path: request.path,

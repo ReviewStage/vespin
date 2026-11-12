@@ -3,13 +3,15 @@
 import assert from "node:assert/strict";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, test } from "vitest";
+import { afterEach, test, vi } from "vitest";
 import { STATUS_TONE } from "../../status-tone.js";
 import { BANNER_LOOK, Banner } from "./banner.js";
+import { UsageLimitNotice } from "./usage-limit-notice.js";
 
 /**
  * banner.test.ts -- a banner is a region named by its own words, its glyph
- * is not read, and its presses answer it in reading order.
+ * is not read, and its presses answer it in reading order; a usage limit
+ * says when it resumes as any time to come is said.
  */
 
 declare global {
@@ -21,6 +23,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const roots: Root[] = [];
 
 afterEach(() => {
+  vi.useRealTimers();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
 });
@@ -30,6 +34,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -41,6 +46,7 @@ test("a banner is named by its words, and its glyph is not read", () => {
       children: "This task is archived",
     }),
   );
+
   const region = view.querySelector("section") ?? assert.fail("a banner");
   const named = document.getElementById(region.getAttribute("aria-labelledby") ?? "");
   assert.equal(named?.textContent, "This task is archived");
@@ -50,6 +56,7 @@ test("a banner is named by its words, and its glyph is not read", () => {
 
 test("a banner's presses answer it, in reading order after its words", () => {
   const pressed: string[] = [];
+
   const view = render(
     createElement(Banner, {
       look: BANNER_LOOK.STRIP,
@@ -70,7 +77,17 @@ test("a banner's presses answer it, in reading order after its words", () => {
       children: "This repository belongs to Acme",
     }),
   );
+
   assert.equal(view.textContent, "This repository belongs to AcmeStopMove");
+
   for (const button of view.querySelectorAll("button")) act(() => button.click());
   assert.deepEqual(pressed, ["stop", "move"]);
+});
+
+test("a usage limit that resets days from now says the day it resumes", () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 10, 10, 9));
+  const resetsAt = new Date(2026, 10, 14, 9).getTime();
+  const view = render(createElement(UsageLimitNotice, { notice: { agent: "Claude", resetsAt } }));
+  assert.match(view.textContent ?? "", /Resumes at Sat 9:00 AM$/u);
 });

@@ -59,6 +59,7 @@ import { useInlineRename } from "@repo/ui/use-inline-rename";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
+  memo,
   type RefObject,
   useCallback,
   useContext,
@@ -115,7 +116,7 @@ import {
   type TaskRelationSubject,
   taskRelationMenuPanel,
 } from "../tasks/task-relation-menu.js";
-import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
+import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
 import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import { NO_ASSIGNEE, PRIORITY_ROWS, useAssigneeRows } from "../tasks/task-standing.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
@@ -222,13 +223,16 @@ const tasksById = new WeakMap<readonly TaskSummary[], ReadonlyMap<string, TaskSu
 /** `list`'s task of `taskId`, from its index, built the first time the list is asked. */
 function listedTask(list: readonly TaskSummary[], taskId: string): TaskSummary | undefined {
   let index = tasksById.get(list);
+
   if (index === undefined) {
     const built = new Map<string, TaskSummary>();
+
     // Note that the first of an id wins, as a walk of the list finds it.
     for (const task of list) if (!built.has(task.id)) built.set(task.id, task);
     index = built;
     tasksById.set(list, index);
   }
+
   return index.get(taskId);
 }
 
@@ -290,6 +294,7 @@ export function taskRowTab(
  */
 export function useTaskRowTab(tasks: TasksControl): TaskRowTab {
   const tasksNow = useSteadyDoor(() => tasks.tasks);
+
   return useSteadyDoors(taskRowTab(tasks, tasksNow));
 }
 
@@ -308,6 +313,7 @@ export function openedTaskOf(
   tasks: Pick<TasksControl, "region" | "agents">,
 ): OpenedTask | undefined {
   const { region } = tasks;
+
   return region.kind === DOCUMENT_REGION.READY
     ? { task: region.task, agents: tasks.agents }
     : undefined;
@@ -342,6 +348,7 @@ interface PlaceMark {
 /** Pin, offered as whichever way the task is not yet: the reader's own pin of the task, which the Plan tab's menu offers as the tab's. */
 function pinMark(pins: Pick<PinWrites, "onMarkTask">, task: TaskSummary): PlaceMark {
   const marking = (mark: TaskMark) => () => pins.onMarkTask(task.id, mark);
+
   return task.pinnedAt === undefined
     ? { key: TASK_MARK.PIN, item: PANEL_COMMAND.PIN_TASK, onSelect: marking(TASK_MARK.PIN) }
     : { key: TASK_MARK.UNPIN, item: PANEL_COMMAND.UNPIN_TASK, onSelect: marking(TASK_MARK.UNPIN) };
@@ -354,11 +361,13 @@ function placeMarks(
   task: TaskSummary,
 ): PlaceMark[] {
   const pin = pinMark(pins, task);
+
   const done: PlaceMark = {
     key: SETTLED_STATUS.DONE,
     item: PANEL_COMMAND.MARK_TASK_DONE,
     onSelect: () => standing.onSettleTasks([task.id], SETTLED_STATUS.DONE),
   };
+
   return settleOffered(task, SETTLED_STATUS.DONE) ? [pin, done] : [pin];
 }
 
@@ -370,6 +379,7 @@ function pinAction(
 ): MenuAction[] {
   if (task === undefined) return [];
   const { item, onSelect } = pinMark(pins, task);
+
   return [commandAction(item, onSelect, subject)];
 }
 
@@ -435,15 +445,18 @@ function useFocusWithin(element: RefObject<HTMLElement | null>): boolean {
   const [focused, setFocused] = useState(false);
   useEffect(() => {
     const box = element.current;
+
     if (box === null) return;
     const follow = () => setFocused(box.contains(document.activeElement));
     box.addEventListener("focusin", follow);
     box.addEventListener("focusout", follow);
+
     return () => {
       box.removeEventListener("focusin", follow);
       box.removeEventListener("focusout", follow);
     };
   }, [element]);
+
   return focused;
 }
 
@@ -471,6 +484,7 @@ export function useFocusedRowKeys(
   useShortcutTarget(row, SIDEBAR_ROW_KEYS);
   // Note that the row builds its menu on its draw, so it is drawn again once its own keys stand.
   useShortcutTargetOn(row);
+
   return row;
 }
 
@@ -495,6 +509,7 @@ function SidebarTaskMarks({
   const subject = shortcutSubject(SHORTCUT_SUBJECT.TASK, task.id);
   const pins = usePinWrites(tasks.drawnTasks);
   const standing = useStandingWrites(tasks.drawnTasks);
+
   const marks = placeMarks(standing, pins, task).map(
     ({ key, item, onSelect }): RowMark => ({
       key,
@@ -504,6 +519,7 @@ function SidebarTaskMarks({
       command: actingCommand({ command: item.command, subject }),
     }),
   );
+
   return (
     <>
       <RowMarks marks={marks} disabled={disabled} />
@@ -536,19 +552,25 @@ function standingSubmenus(
   chips: StandingChips | undefined,
 ): MenuSubmenu[] {
   const { status, priority } = task;
+
   if (status === undefined || priority === undefined) return [];
+
   const pickPriority = (id: string) => {
     const picked = TASK_PRIORITY_ORDER.find((each) => each === id);
+
     if (picked !== undefined) setStanding(task, { priority: picked });
   };
+
   const pickAssignee = (id: string) =>
     setStanding(task, { assigneeId: id === NO_ASSIGNEE ? null : id });
+
   const assigned = chipSubmenu(
     STANDING_WORDS.ASSIGNEE,
     assignees,
     task.assignee?.userId ?? NO_ASSIGNEE,
     pickAssignee,
   );
+
   return [
     ...(chips?.status === true ? [] : [keyedStatusSubmenu(standing, task.id, status, subject)]),
     ...(chips?.priority === true
@@ -561,9 +583,7 @@ function standingSubmenus(
           {
             ...assigned,
             // Note that a member's face draws their initial as words, so the glyph is masked with the name.
-            ...(assigned.icon === undefined
-              ? {}
-              : { icon: <ReplayMask>{assigned.icon}</ReplayMask> }),
+            ...(assigned.icon !== undefined && { icon: <ReplayMask>{assigned.icon}</ReplayMask> }),
             items: assigned.items.map((item, at) =>
               assignees[at]?.id === NO_ASSIGNEE
                 ? item
@@ -615,6 +635,7 @@ function TaskRepositoryPanel({
 }): React.JSX.Element {
   const chooser = useRepositoryChooser(task.workspaceId);
   const toast = useToast();
+
   const choose = (repository: string) => {
     if (repository === task.repository) return;
     void writes.onSetRepository(task.id, repository).then((note) => {
@@ -631,6 +652,7 @@ function TaskRepositoryPanel({
       });
     });
   };
+
   return (
     <RepositoryMenuPanel
       value={task.repository}
@@ -665,12 +687,15 @@ function moveToEntries(
       askMove === undefined
         ? []
         : [commandAction(PANEL_COMMAND.MOVE_TO_WORKSPACE, askMove, subject)];
+
     return [...(section === undefined ? [] : [section]), ...lone];
   }
+
   const another: MenuAction[] =
     askMove === undefined
       ? []
       : [{ label: ANOTHER_WORKSPACE, icon: <GLYPH.MOVE />, onSelect: askMove }];
+
   return [{ ...section, label: MOVE_TO, items: [...section.items, ...another] }];
 }
 
@@ -717,19 +742,23 @@ function taskActionGroups(
   },
 ): MenuEntry[][] {
   const { opened, descriptions, subject } = doors;
+
   // Note that Copy description copies the description drawn, so only the open task offers it.
   const copy: MenuAction[] =
     opened !== undefined && descriptions
       ? [commandAction(PANEL_COMMAND.COPY_DESCRIPTION, tasks.onCopyDescription, subject)]
       : [];
+
   const link: MenuAction[] =
     task === undefined
       ? []
       : taskLinkItems(doors.copy, task, taskLinkDestination(tasks.workspaces, task));
+
   const read: MenuAction[] = task === undefined ? [] : [markReadItem(doors.read, subject)];
   const rename = renameTaskItem(doors.rename);
   // Note that the open task relates as the document holds it, whose blocks the list's row does not carry.
   const related: TaskRelationSubject | undefined = opened?.task ?? task;
+
   const relate: MenuEntry[] =
     related === undefined
       ? []
@@ -738,6 +767,7 @@ function taskActionGroups(
             relationDoor(tasks, writes, related),
           ),
         ];
+
   const unparent: MenuAction[] =
     task?.parentTaskId === undefined
       ? []
@@ -748,14 +778,17 @@ function taskActionGroups(
             subject,
           ),
         ];
+
   const versions: MenuAction[] = descriptions
     ? [versionHistoryItem(() => tasks.onOpenHistory(taskId), subject)]
     : [];
+
   const change = commandAction(
     PANEL_COMMAND.CHANGE_REPOSITORY,
     () => tasks.onChangeRepository(taskId),
     subject,
   );
+
   // Note that a task the list holds picks its repository in a submenu, where it stands, and that both menus name the pick a task with no repository still needs, as the plan's path does.
   const repository: MenuEntry =
     task === undefined
@@ -767,11 +800,14 @@ function taskActionGroups(
             <TaskRepositoryPanel task={task} writes={writes} onBack={back} onClose={close} />
           ),
         };
+
   const move = moveToEntries(doors.section, doors.askMove, subject);
+
   const remove: MenuAction = {
     ...commandAction(PANEL_COMMAND.DELETE_TASK, doors.askDelete, subject),
     danger: true,
   };
+
   const groups: MenuEntry[][] = [
     [...copy, ...link],
     [rename, ...versions, ...read],
@@ -781,6 +817,7 @@ function taskActionGroups(
     [repository],
     [remove],
   ];
+
   return groups.filter((group) => group.length > 0);
 }
 
@@ -812,12 +849,15 @@ function TaskMenuFooter({
   // Note that the open task's last editor is its description's, so while its workspace has Descriptions off it is said only by when the task last changed, as another task is.
   const descriptions = useWorkspaceExperiment(task.workspaceId, EXPERIMENT.DESCRIPTIONS);
   const edit = opened === undefined || !descriptions ? undefined : lastEditOf(opened.task);
+
   const place: EditPlace = {
     reader,
     sections: opened?.task.sectionEdits ?? [],
     agents: opened === undefined ? undefined : { control: opened.agents, onOpen: undefined },
   };
+
   const named = edit !== undefined && edit.actor !== DESCRIPTION_ACTOR.EARLIER;
+
   return (
     <>
       <p className="task-menu-note actor-line m-0 flex-wrap overflow-clip [overflow-clip-margin:var(--ui-focus-ring-room)]">
@@ -906,26 +946,32 @@ export function useTaskMenuItems(
   const task = rowTaskOf(tasks.tasksNow(), opened, taskId);
   const markRead = useReadMark();
   const standingWrites = useStandingWrites(tasks.drawnTasks);
+
   // Note that a delete asked is drawn at once, which may take the row the question stands on with it.
   const heard = useRefusalHeard(task !== undefined && tasks.shown, {
     surface: FAILURE_SURFACE.TASK_DELETE,
     about: { taskId },
   });
+
   const deleting = useMutation(useTaskDelete());
+
   const deletionAct = useConfirmAct(deleting, {
     send: () => deleting.mutateAsync(taskId).then(heard),
     answered: sameAnswer,
   });
+
   const deletion = useConfirmDialog(
     { subject: task !== undefined, surfaceOpen: tasks.shown },
     deletionAct,
     confirmFailure(FAILURE_SURFACE.TASK_DELETE, { taskId }),
   );
+
   // Mark done as the chord runs it: on a task not already done, and nothing otherwise.
   const markDone =
     task !== undefined && settleOffered(task, SETTLED_STATUS.DONE)
       ? () => standingWrites.onSettleTasks([taskId], SETTLED_STATUS.DONE)
       : undefined;
+
   const moving = useMoveTaskDialog(tasks, task);
   const copy = useCopyToast();
   const subject = doors.row ?? shortcutSubject(SHORTCUT_SUBJECT.TASK, taskId);
@@ -934,18 +980,22 @@ export function useTaskMenuItems(
   // The place the row stands in a list that reorders, which the menu moves it from under a finger; none for the toolbar's ⋯.
   const place = useRowPlace();
   const sections = useSectionDialogs(tasks, tasks.shown && doors.drawn);
+
   const section =
     task !== undefined ? moveToSectionEntry(task.id, task.workspaceId, sections, name) : undefined;
+
   const standingDoor = useStandingDoor(tasks);
   const pins = usePinWrites(tasks.drawnTasks);
   const relationId = useId();
   const writes = useTaskRelationWrites();
   const descriptions = useWorkspaceExperiment(task?.workspaceId, EXPERIMENT.DESCRIPTIONS);
   const assignees = useAssigneeRows(task?.assignee);
+
   const standing =
     task !== undefined
       ? standingSubmenus(standingWrites, task, assignees, standingDoor.set, subject, doors.chips)
       : [];
+
   const groups = (): readonly (readonly MenuEntry[])[] => [
     ...withRowMoves(
       taskActionGroups(tasks, writes, task, taskId, {
@@ -970,8 +1020,10 @@ export function useTaskMenuItems(
       place,
     ),
   ];
+
   const footer =
     task === undefined ? undefined : <TaskMenuFooter tasks={tasks} task={task} opened={opened} />;
+
   const menuSubject =
     task === undefined
       ? undefined
@@ -980,6 +1032,7 @@ export function useTaskMenuItems(
           task.repository === null ? undefined : repositoryLabel(task.repository, []),
           undefined,
         );
+
   const dialog = (
     <>
       <ConfirmDialog
@@ -994,6 +1047,7 @@ export function useTaskMenuItems(
       {standingDoor.dialog}
     </>
   );
+
   return { deletion, markDone, groups, footer, subject: menuSubject, keysOn: subject, dialog };
 }
 
@@ -1034,6 +1088,7 @@ export function TaskActions({
     unread: useReadMarks().markedUnread(task.id),
     opened: openedTaskOf(tasks),
   });
+
   hand.current = actions;
   const { deletion } = actions;
   const asking = confirmAsked(deletion.stage);
@@ -1047,6 +1102,7 @@ export function TaskActions({
       ? () => tasks.onOpenHistory(task.id)
       : undefined,
   );
+
   return actions.dialog;
 }
 
@@ -1126,23 +1182,12 @@ function SidebarTaskCard({
  * hands focus back to the row.
  *
  */
-export function SidebarTask({
-  tasks,
-  task,
-  current,
-  open = current,
-  unread,
-  now,
-  at = task.updatedAt,
-  repository,
-  faces = EVERY_FACE,
-  depth,
-  nest,
-  place,
-  fold,
-  childCount,
-  onOpen,
-}: {
+export function SidebarTask({ tasks, ...rest }: SidebarTaskProps): React.JSX.Element {
+  return <SidebarTaskRow tasks={tasks} {...useSteadyDoors(rest)} />;
+}
+
+/** What a sidebar task row is handed (`SidebarTask`). */
+interface SidebarTaskProps {
   tasks: TasksControl;
   task: TaskSummary;
   /** Whether this is the task the work column is showing. */
@@ -1170,10 +1215,35 @@ export function SidebarTask({
   /** How many of the task's child tasks are finished, of all of them, said before its time; none where it has none. */
   childCount?: ChildTaskCount | undefined;
   onOpen: () => void;
-}): React.JSX.Element {
+}
+
+/**
+ * The row `SidebarTask` draws, drawn again only when what it is handed
+ * changed. Note that it holds, because the sidebar draws every row anew
+ * whenever anything in it changes, a group folded or the pointer coming
+ * over it, and each row's menu and marks cost enough that a list of a
+ * hundred tasks drawn whole drops the frames a fold's motion plays in.
+ */
+const SidebarTaskRow = memo(function SidebarTaskRow({
+  tasks,
+  task,
+  current,
+  open = current,
+  unread,
+  now,
+  at = task.updatedAt,
+  repository,
+  faces = EVERY_FACE,
+  depth,
+  nest,
+  place,
+  fold,
+  childCount,
+  onOpen,
+}: SidebarTaskProps): React.JSX.Element {
   const renaming = useMutation(useTaskRename(tasks.drawnTasks));
   const pins = usePinWrites(tasks.drawnTasks);
-  const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_SHAPE));
+  const rename = useInlineRename(task.id, renameWrite(renaming, TASK_RENAME_TERMS));
   useAnnounceShown(ANNOUNCE.ALERT, rename.refused ? RENAME_FAILED_NOTE : "");
   const reads = useReadMarks();
   const coarse = useCoarsePointer();
@@ -1183,18 +1253,23 @@ export function SidebarTask({
   const sendFailed = useTaskSendFailed(task.id) && !open;
   const row = useRef<HTMLElement | null>(null);
   const item = useRef<HTMLElement | null>(null);
+
   // Note that the row's item is its press's parent, whose keys it hears while focused.
   const hold = useCallback((press: HTMLElement | null) => {
     row.current = press;
     item.current = press?.parentElement ?? null;
   }, []);
+
   const endedByKey = useRefocusAfterEdit(rename.editing, row);
   // S opens the row's menu on its Status, each press counted so it opens it again.
   const [statusAsks, setStatusAsks] = useState(0);
+
   // Note that a row chosen among several opens the selection's Status, which every chosen task has.
   const statusDrawn =
     chosen !== undefined || (task.status !== undefined && task.priority !== undefined);
+
   const statusAsked = { count: statusAsks, submenu: STANDING_WORDS.STATUS };
+
   const rowSubject = useFocusedRowKeys(
     item,
     shortcutSubject(SHORTCUT_SUBJECT.TASK, task.id),
@@ -1202,6 +1277,7 @@ export function SidebarTask({
     () => pins.onMarkTask(task.id, task.pinnedAt === undefined ? TASK_MARK.PIN : TASK_MARK.UNPIN),
     statusDrawn ? () => setStatusAsks((asks) => asks + 1) : undefined,
   );
+
   const actions = useTaskMenuItems(taskRowTab(tasks), task.id, task.name, {
     rename: rename.begin,
     drawn: true,
@@ -1209,10 +1285,12 @@ export function SidebarTask({
     row: rowSubject,
     opened: openedTaskOf(tasks),
   });
+
   const card = useMemo(
     () => <SidebarTaskCard tasks={tasks} task={task} now={now} />,
     [tasks, task, now],
   );
+
   return (
     <>
       <RowHintOptions card={card}>
@@ -1282,6 +1360,8 @@ export function SidebarTask({
           disabled={actions.deletion.busy}
           hint={rename.editing ? undefined : { Hint: RowHint, label: task.name }}
           onPress={rename.editing ? undefined : onOpen}
+          // Note that the open task's row reads nothing ahead, but still calls off a rest begun on another row.
+          onPoint={(over) => tasks.onPointTask(over && !current ? task.id : undefined)}
           onOpenInTab={openTaskInTab(tasks.workspaces, task)}
           selectKey={task.id}
           menu={
@@ -1311,4 +1391,4 @@ export function SidebarTask({
       {actions.dialog}
     </>
   );
-}
+});

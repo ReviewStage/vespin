@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { it } from "@effect/vitest";
 import { Duration, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
-import { afterEach, vi } from "vitest";
+import type { ProcessMetric } from "electron";
+import { afterEach } from "vitest";
 import {
+  AppProcesses,
   type CpuSummary,
   followResponsiveness,
   sampleProcessCpu,
@@ -20,70 +23,74 @@ import {
  * it stays under it or above it; and each kind of process's CPU is summed
  * up every five minutes from its CPU time, never more often.
  *
- * Note that Electron's module is replaced whole, because it is the operating
- * system's door (its windows and its process metrics) and answers nothing
- * outside an Electron process.
+ * Note that the system's word on the app's processes and windows is stood
+ * in for, because it is Electron's and answers nothing outside an Electron
+ * process.
  */
 
-const { FakeWindow, cpu, metrics, windows } = await vi.hoisted(async () => {
-  const { EventEmitter } = await import("node:events");
-  /** The working set of each process, in kilobytes, as the system would measure it. */
-  const metrics = new Map<number, number>();
-  /** Each process's type and the CPU seconds it has spent since it started, as the system would count them. */
-  const cpu = new Map<number, { type: string; seconds: number }>();
-  /** A window as Electron opens it: its own events, and the page behind it in a process of its own. */
-  class FakeWindow extends EventEmitter {
-    static #nextId = 1;
-    readonly webContents: {
-      readonly id: number;
-      getOSProcessId(): number;
-      getURL(): string;
-    };
-    constructor(pid: number, document: string) {
-      super();
-      const id = FakeWindow.#nextId++;
-      this.webContents = {
-        id,
-        getOSProcessId: () => pid,
-        getURL: () => `file:///Applications/Vespin.app/Contents/Resources/renderer/${document}`,
-      };
-    }
-    focused = false;
-    isDestroyed(): boolean {
-      return false;
-    }
-    isFocused(): boolean {
-      return this.focused;
-    }
-    isVisible(): boolean {
-      return true;
-    }
-    isMinimized(): boolean {
-      return false;
-    }
-  }
-  return { FakeWindow, cpu, metrics, windows: [] as InstanceType<typeof FakeWindow>[] };
-});
+/** The working set of each process, in kilobytes, as the system would measure it. */
+const metrics = new Map<number, number>();
 
-vi.mock("electron", () => ({
-  app: {
-    getAppMetrics: () => [
-      ...[...metrics].map(([pid, workingSetSize]) => ({
-        pid,
-        type: "Tab",
-        memory: { workingSetSize },
-        cpu: {},
-      })),
-      ...[...cpu].map(([pid, { type, seconds }]) => ({
-        pid,
-        type,
-        memory: { workingSetSize: 0 },
-        cpu: { cumulativeCPUUsage: seconds },
-      })),
-    ],
-  },
-  BrowserWindow: { getAllWindows: () => windows },
-}));
+/** Each process's type and the CPU seconds it has spent since it started, as the system would count them. */
+const cpu = new Map<number, { type: string; seconds: number }>();
+
+/** A window as Electron opens it: its own events, and the page behind it in a process of its own. */
+class FakeWindow extends EventEmitter {
+  static #nextId = 1;
+  readonly webContents: {
+    readonly id: number;
+    getOSProcessId(): number;
+    getURL(): string;
+  };
+  constructor(pid: number, document: string) {
+    super();
+    const id = FakeWindow.#nextId++;
+    this.webContents = {
+      id,
+      getOSProcessId: () => pid,
+      getURL: () => `file:///Applications/Vespin.app/Contents/Resources/renderer/${document}`,
+    };
+  }
+  focused = false;
+  isDestroyed(): boolean {
+    return false;
+  }
+  isFocused(): boolean {
+    return this.focused;
+  }
+  isVisible(): boolean {
+    return true;
+  }
+  isMinimized(): boolean {
+    return false;
+  }
+}
+
+const windows: FakeWindow[] = [];
+
+/** The system's word on the app's processes, read off `metrics` and `cpu`, and its windows. */
+const PROCESSES = {
+  metrics: () => [
+    ...[...metrics].map(([pid, workingSetSize]) => ({
+      pid,
+      type: "Tab" as const,
+      memory: { workingSetSize },
+      cpu: {},
+    })),
+    ...[...cpu].map(([pid, { type, seconds }]) => ({
+      pid,
+      // SAFETY: each type is one of Electron's own names for a process, or one it never names, which is left out alike.
+      type: type as ProcessMetric["type"],
+      memory: { workingSetSize: 0 },
+      cpu: { cumulativeCPUUsage: seconds },
+    })),
+  ],
+  windows: () => windows,
+};
+
+/** Forks `effect` under the system above. */
+const forkOnProcesses = <A>(effect: Effect.Effect<A>) =>
+  Effect.forkChild(Effect.provideService(effect, AppProcesses, PROCESSES));
 
 afterEach(() => {
   metrics.clear();
@@ -103,9 +110,11 @@ it.effect("a panel that stops answering is reported once per stretch, as it answ
     const panel = new FakeWindow(4101, "index.html");
     metrics.set(4101, 0.9 * KILOBYTES_PER_GIGABYTE);
     const reported: UnresponsiveEpisode[] = [];
-    const following = yield* Effect.forkChild(
+
+    const following = yield* forkOnProcesses(
       followResponsiveness(panel, (episode) => Effect.sync(() => reported.push(episode))),
     );
+
     yield* settle;
 
     panel.emit("unresponsive");
@@ -151,9 +160,11 @@ it.effect("a panel that closes while it still does not answer is reported as not
   Effect.gen(function* () {
     const panel = new FakeWindow(4102, "index.html");
     const reported: UnresponsiveEpisode[] = [];
-    const following = yield* Effect.forkChild(
+
+    const following = yield* forkOnProcesses(
       followResponsiveness(panel, (episode) => Effect.sync(() => reported.push(episode))),
     );
+
     yield* settle;
 
     panel.emit("unresponsive");
@@ -179,11 +190,13 @@ it.effect("a window's working set is noted once as it crosses its bound, and nev
     metrics.set(4201, 1.2 * KILOBYTES_PER_GIGABYTE);
     metrics.set(4202, 0.3 * KILOBYTES_PER_GIGABYTE);
     const noted: WorkingSetCrossing[] = [];
-    const sampling = yield* Effect.forkChild(
+
+    const sampling = yield* forkOnProcesses(
       sampleWindowMemory((crossing) => {
         noted.push(crossing);
       }),
     );
+
     yield* settle;
     assert.equal(noted.length, 0, "nothing under the bound is noted");
 
@@ -221,12 +234,16 @@ it.effect("each kind of process's CPU is summed up every five minutes, from its 
     cpu.set(4301, { type: "Tab", seconds: 0 });
     cpu.set(4302, { type: "Tab", seconds: 0 });
     cpu.set(4303, { type: "Zygote", seconds: 0 });
+
     const spend = (pid: number, seconds: number) => {
       const process = cpu.get(pid);
+
       if (process !== undefined) process.seconds += seconds;
     };
+
     const summaries: CpuSummary[] = [];
-    const sampling = yield* Effect.forkChild(
+
+    const sampling = yield* forkOnProcesses(
       sampleProcessCpu(
         () => 3,
         (summary) => {
@@ -234,6 +251,7 @@ it.effect("each kind of process's CPU is summed up every five minutes, from its 
         },
       ),
     );
+
     yield* settle;
 
     // Twenty fifteen-second spans: main spends a tenth of a core but for one
@@ -243,6 +261,7 @@ it.effect("each kind of process's CPU is summed up every five minutes, from its 
       spend(4301, 3);
       spend(4302, 1.5);
       spend(4303, 15);
+
       if (span === 20)
         assert.equal(summaries.length, 0, "nothing is summed up before five minutes");
       yield* TestClock.adjust(Duration.seconds(15));

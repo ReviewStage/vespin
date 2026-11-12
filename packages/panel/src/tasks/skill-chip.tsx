@@ -92,12 +92,14 @@ function useKnownSkills(wanted: boolean): ReadonlyMap<string, SkillOption> | und
   useEffect(() => {
     if (wanted) ask?.();
   }, [wanted, ask]);
+
   return doors?.skills;
 }
 
 /** A skill's chip, written in as its element, the `/name` it stands for its content. */
 function skillChip(text: string, token: TextRange): WordChip {
   const name = text.slice(token.start + 1, token.end);
+
   return {
     ...token,
     element: `<${SKILL_ELEMENT.TAG} ${SKILL_ELEMENT.NAME}="${name}">${skillWord(name)}</${SKILL_ELEMENT.TAG}>`,
@@ -107,6 +109,7 @@ function skillChip(text: string, token: TextRange): WordChip {
 /** The leading command's chip, written in as its element, the `/name` it stands for its content. */
 function commandChip(text: string, token: TextRange): WordChip {
   const name = text.slice(token.start + 1, token.end);
+
   return {
     ...token,
     element: `<${COMMAND_ELEMENT.TAG} ${COMMAND_ELEMENT.NAME}="${name}">${skillWord(name)}</${COMMAND_ELEMENT.TAG}>`,
@@ -125,6 +128,7 @@ function escapedHtml(text: string): string {
 /** A file's chip, written in as its element, its marker its content. Note that a file's name is the developer's, so it is escaped, as a picture's never needed. */
 function fileChip(start: number, end: number, name: string): WordChip {
   const written = escapedHtml(name);
+
   return {
     start,
     end,
@@ -136,10 +140,12 @@ function fileChip(start: number, end: number, name: string): WordChip {
 function withChips(text: string, chips: readonly WordChip[]): string {
   let written = "";
   let at = 0;
+
   for (const chip of chips) {
     written += `${text.slice(at, chip.start)}${chip.element}`;
     at = chip.end;
   }
+
   return written + text.slice(at);
 }
 
@@ -152,9 +158,11 @@ function SkillElement({ node }: MarkdownNodeProps): ReactNode {
   const doors = useContext(SkillFileContext);
   const name = String(node?.properties[SKILL_ELEMENT.NAME] ?? "");
   const skill = doors?.skills?.get(name);
+
   if (doors === undefined || skill === undefined) return skillWord(name);
   // Note that an installed skill names no file of the repository's, so its chip is no button, and takes the focus for its card alone.
   const onOpen = opensFile(skill) ? () => doors.onOpen(skill) : undefined;
+
   return <SkillRef name={name} skill={skill} onOpen={onOpen} />;
 }
 
@@ -162,13 +170,16 @@ function SkillElement({ node }: MarkdownNodeProps): ReactNode {
 function FileElement({ node }: MarkdownNodeProps): ReactNode {
   const files = useContext(WordFilesContext);
   const name = String(node?.properties[FILE_ELEMENT.NAME] ?? "");
+
   if (files === undefined || !files.names.has(name)) return fileMarker(name);
+
   return files.chip(name);
 }
 
 /** The element the leading command was written in as: its chip, or its `/name` as words where it names no command. */
 function CommandElement({ node }: MarkdownNodeProps): ReactNode {
   const name = String(node?.properties[COMMAND_ELEMENT.NAME] ?? "");
+
   return isSlashCommand(name) ? <CommandRef name={name} /> : skillWord(name);
 }
 
@@ -178,6 +189,7 @@ const CHIP_COMPONENTS: MarkdownComponents = {
   [COMMAND_ELEMENT.TAG]: CommandElement,
   [FILE_ELEMENT.TAG]: FileElement,
 };
+
 const CHIP_TAGS = {
   [SKILL_ELEMENT.TAG]: [SKILL_ELEMENT.NAME],
   [COMMAND_ELEMENT.TAG]: [COMMAND_ELEMENT.NAME],
@@ -199,11 +211,14 @@ export function SkillFiles({
   // does not draw every transcript under it again.
   const latest = useRef(onOpen);
   latest.current = onOpen;
+
   const [read, setRead] = useState<
     { source: SkillSource; skills: ReadonlyMap<string, SkillOption> } | undefined
   >(undefined);
+
   const asked = useRef<SkillSource | undefined>(undefined);
   const skills = read !== undefined && read.source === source ? read.skills : undefined;
+
   // Note that the skills are read once for every reader that asks, and a
   // read that did not land is asked again by the next reader that asks.
   // Note that the read goes once the frame that asked has painted, so it never holds up the words being drawn.
@@ -215,6 +230,7 @@ export function SkillFiles({
       source().then((answer) => {
         // A read for a task or repository left since is no answer for this one.
         if (asked.current !== source) return;
+
         if ("skills" in answer) {
           setRead({ source, skills: new Map(answer.skills.map((skill) => [skill.name, skill])) });
         } else {
@@ -223,6 +239,7 @@ export function SkillFiles({
       });
     });
   }, [source]);
+
   const doors = useMemo(
     () => ({
       skills,
@@ -232,6 +249,7 @@ export function SkillFiles({
     }),
     [skills, ask],
   );
+
   return <SkillFileContext.Provider value={doors}>{children}</SkillFileContext.Provider>;
 }
 
@@ -239,7 +257,9 @@ export function SkillFiles({
 export function useSkill(name: string | undefined): SkillSubject | undefined {
   const onOpen = useContext(SkillFileContext)?.onOpen;
   const skill = useKnownSkills(name !== undefined && name !== "")?.get(name ?? "");
+
   if (skill === undefined || onOpen === undefined) return undefined;
+
   return { skill, onOpen: () => onOpen(skill) };
 }
 
@@ -262,6 +282,7 @@ export function SentWords({
   const files = useContext(WordFilesContext);
   // Note that the command a message opens with is its chip even where a skill shares its name, since the command is what ran.
   const leading = leadingCommandToken(text, SENT_COMMANDS);
+
   const chips = [
     ...(leading === undefined ? [] : [commandChip(text, leading)]),
     ...(skills === undefined ? [] : skillTokens(text, new Set(skills.keys())))
@@ -271,14 +292,17 @@ export function SentWords({
       .filter((marker) => files?.names.has(marker.name) === true)
       .map((marker) => fileChip(marker.start, marker.end, marker.name)),
   ].sort((first, second) => first.start - second.start);
+
   if (chips.length === 0) {
     return <TranscriptWords text={text} typed asDocument={asDocument} line={line} />;
   }
+
   const element: TranscriptElement = {
     markdown: withChips(text, chips),
     tags: CHIP_TAGS,
     components: CHIP_COMPONENTS,
   };
+
   return (
     <TranscriptWords text={text} element={element} typed asDocument={asDocument} line={line} />
   );

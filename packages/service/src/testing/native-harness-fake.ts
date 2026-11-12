@@ -21,9 +21,7 @@ import {
   type NativeAgentSessionsService,
   type NativeSessions,
   RUNNER_ANSWER,
-  RUNNER_CHECKOUT,
   RUNNER_CHOICE,
-  type RunnerCheckout,
   TURN_HANDOVER,
 } from "../agents/coder-host/runtime-sessions.js";
 import {
@@ -61,12 +59,14 @@ export function openedOnBoot<Turn extends SessionTurn>(
   sessions: Omit<AgentSessions<Turn>, "boot">,
 ): AgentSessions<Turn> {
   const booted = BOOTED;
+
   return {
     ...sessions,
     boot: () =>
       Effect.sync(() => {
         const sessionId = `${NATIVE_SESSION_PREFIX.claude_code}${randomUUID()}`;
         booted.add(sessionId);
+
         return {
           outcome: SESSION_SEND_OUTCOME.ACCEPTED,
           sessionId,
@@ -89,23 +89,26 @@ export function harnessFor(account: string): string {
   return `harness for ${account}`;
 }
 
-/** The native harnesses, every one answered by the script acting for the account each is asked for, as above, an added repository's checkout answered as `checkout` says, not live unless named. */
+/** The native harnesses, every one answered by the script acting for the account each is asked for, as above. */
 export function scriptedHarness(
   script: (account: string) => ScriptedSessions,
-  checkout: RunnerCheckout = RUNNER_CHECKOUT.NOT_LIVE,
 ): NativeAgentSessionsService {
   // Note that a script with no boot of its own takes a first launch's first message by its open (`openedOnBoot`),
   // whichever of the harness's sessions the boot and the queue's hand-off each reached.
   const booted = BOOTED;
+
   const bootedScript = (account: string): ScriptedSessions => {
     const scripted = script(account);
+
     if (scripted.boot !== undefined) return scripted;
+
     return {
       ...scripted,
       boot: () =>
         Effect.sync(() => {
           const sessionId = `${NATIVE_SESSION_PREFIX.claude_code}${randomUUID()}`;
           booted.add(sessionId);
+
           return {
             outcome: SESSION_SEND_OUTCOME.ACCEPTED,
             sessionId,
@@ -122,17 +125,18 @@ export function scriptedHarness(
           : scripted.send(sessionId, message),
     };
   };
+
   return {
     sessions: (_runtime, account) => {
       // Note that one script stands for the lookup, so its boot and its sends read the same state.
       const scripted = bootedScript(account);
+
       return Option.some(
         Effect.succeed({
           answer: () => Effect.succeed(RUNNER_ANSWER.NOT_LIVE),
           ...scripted,
           retry: (sessionId, message) => scripted.send(sessionId, message),
           retune: () => Effect.succeed(RUNNER_CHOICE.NOT_LIVE),
-          checkOut: () => Effect.succeed(checkout),
           halt: () => Effect.succeed(true),
           deliverTurn: () => Effect.succeed(TURN_HANDOVER.HANDED),
           warm: () => Effect.void,
@@ -159,10 +163,12 @@ interface HeardCall {
 /** The native harnesses taking every launch and message, each written down with the account it acted for. */
 export function recordingHarness() {
   const heard: HeardCall[] = [];
+
   const layer = scriptedHarnessLayer((account) => ({
     open: () =>
       Effect.sync(() => {
         heard.push({ call: "open", account });
+
         return {
           outcome: SESSION_SEND_OUTCOME.ACCEPTED,
           sessionId: `${NATIVE_SESSION_PREFIX.claude_code}${randomUUID()}`,
@@ -171,6 +177,7 @@ export function recordingHarness() {
     send: (sessionId) =>
       Effect.sync(() => {
         heard.push({ call: "send", account });
+
         return {
           outcome: SESSION_SEND_OUTCOME.ACCEPTED,
           sessionId,
@@ -180,5 +187,6 @@ export function recordingHarness() {
     cancel: () => Effect.succeed({ outcome: SESSION_CANCEL_OUTCOME.ACCEPTED }),
     reset: () => Effect.succeed({ outcome: SESSION_RESET_OUTCOME.RESET }),
   }));
+
   return { heard, layer };
 }

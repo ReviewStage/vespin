@@ -73,6 +73,7 @@ const OpenFenceTail = createContext<string | undefined>(undefined);
 /** Whether `line` closes a fence opened with `marker`: the opening's character at least as long, alone but for the quote marks of a block inside a quote. */
 function closesFence(line: string, marker: string): boolean {
   const bare = line.replace(QUOTE_MARKS, "").trim();
+
   return bare.length >= marker.length && [...bare].every((character) => character === marker[0]);
 }
 
@@ -85,6 +86,7 @@ function closesFence(line: string, marker: string): boolean {
 function openFenceTail(markdown: string): string | undefined {
   let marker: string | undefined;
   let last: string | undefined;
+
   for (const line of markdown.trimEnd().split("\n")) {
     if (marker === undefined) {
       marker = FENCE_OPENING.exec(line.replace(QUOTE_MARKS, ""))?.[1];
@@ -95,6 +97,7 @@ function openFenceTail(markdown: string): string | undefined {
       last = line;
     }
   }
+
   return marker === undefined ? undefined : last;
 }
 
@@ -110,6 +113,7 @@ function blockText(node: MarkdownNodeProps["node"]): string {
 function useColoredLines(language: string, code: string, whole: boolean): CodeLines | undefined {
   const asking = whole && colorable(language, code);
   const coloring = useQuery({ ...coloringQueryOptions(language, code), enabled: asking });
+
   return asking ? (coloring.data ?? undefined) : undefined;
 }
 
@@ -123,16 +127,20 @@ function useColoredLines(language: string, code: string, whole: boolean): CodeLi
  */
 function rowsOf(language: string, code: string): readonly Row[] | undefined {
   const lines = code.split("\n");
+
   if (language === SUGGESTION_LANGUAGE) {
     return lines.map((text) => ({ kind: CODE_ROW.ADDED, text }));
   }
+
   if (language === SUGGESTED_CHANGE_LANGUAGE) {
     return lines.map((line) => ({
       kind: line.startsWith("-") ? CODE_ROW.REMOVED : CODE_ROW.ADDED,
       text: line.slice(1),
     }));
   }
+
   if (language !== DIFF_LANGUAGE) return undefined;
+
   return lines.map((text) => ({
     kind: DIFF_HEADER.test(text)
       ? CODE_ROW.CONTEXT
@@ -147,10 +155,7 @@ function rowsOf(language: string, code: string): readonly Row[] | undefined {
 
 /** The words of the rows added, which is what a suggestion copies. */
 function addedText(rows: readonly Row[]): string {
-  return rows
-    .filter((row) => row.kind === CODE_ROW.ADDED)
-    .map((row) => row.text)
-    .join("\n");
+  return rows.flatMap((row) => (row.kind === CODE_ROW.ADDED ? [row.text] : [])).join("\n");
 }
 
 /**
@@ -173,6 +178,7 @@ function CodeFence({ language, code }: { language: string; code: string }): Reac
   const lines = useColoredLines(language, code, whole && !suggesting);
   const rows = rowsOf(language, code);
   const heading = fenceHeading(language);
+
   return (
     <CodeCard
       glyph={heading.glyph}
@@ -194,6 +200,7 @@ function draftLink(url: string, children: ReactNode): ReactNode {
 
 function DraftLink({ url, children }: { url: string; children: ReactNode }): ReactNode {
   const openLink = useOpenLink();
+
   return (
     <TextLink href={url} words={undefined} onOpen={openLink}>
       {children}
@@ -216,7 +223,9 @@ export function DraftFence({
   code: string;
 }): ReactNode {
   const draft = draftKindOf(language ?? "");
+
   if (draft === undefined) return null;
+
   return (
     <DraftCard
       kind={draft}
@@ -235,7 +244,9 @@ export function TranscriptCodeBlock({
 }: ComponentProps<"code"> & MarkdownNodeProps): ReactNode {
   const language = LANGUAGE_CLASS.exec(className ?? "")?.[1] ?? "";
   const code = blockText(node).replace(/\n$/u, "");
+
   if (draftKindOf(language) === undefined) return <CodeFence language={language} code={code} />;
+
   return <DraftFence language={language} code={code} />;
 }
 
@@ -252,7 +263,9 @@ function TranscriptFence(props: ComponentProps<"code"> & MarkdownNodeProps): Rea
   const code = blockText(props.node).replace(/\n$/u, "");
   const source = <TranscriptCodeBlock {...props} />;
   const streaming = openTail !== undefined && openTail.endsWith(code.split("\n").at(-1) ?? "");
+
   if (language !== MERMAID_LANGUAGE || streaming) return source;
+
   return <DescriptionDiagram code={code} source={source} />;
 }
 
@@ -284,5 +297,6 @@ export function TranscriptMarkdownSource({
   children: ReactNode;
 }): ReactNode {
   const openTail = useMemo(() => openFenceTail(markdown), [markdown]);
+
   return <OpenFenceTail.Provider value={openTail}>{children}</OpenFenceTail.Provider>;
 }

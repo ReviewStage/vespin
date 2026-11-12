@@ -5,6 +5,7 @@ import { TERMINAL_RELAY } from "@repo/features/terminal-wire";
 import { AGENT_WAKEUP } from "@repo/service/agents/coder-host/agent-wakeup-bounds";
 import { TURN_DELIVERY } from "@repo/service/agents/coder-host/turn-delivery-bounds";
 import { SANDBOX_RELEASE } from "@repo/service/agents/sandbox-release-bounds";
+import { WORKSPACE_DRIVE_FILL } from "@repo/service/agents/workspace-drive-fill-bounds";
 import { WORKSPACE_MCP_FUNCTION, WORKSPACE_MCP_PATH } from "@repo/service/agents/workspace-mcp/app";
 import { AUTOMATION_RUNS } from "@repo/service/automations/automation-run-bounds";
 import {
@@ -62,6 +63,7 @@ const FUNCTION_GROUP = {
   PREVIEW_PROXY: "preview-proxy",
   PULL_REQUEST_CHAPTERS: "pull-request-chapters",
 } as const;
+
 type FunctionGroup = (typeof FUNCTION_GROUP)[keyof typeof FUNCTION_GROUP];
 
 export interface FunctionDefinition {
@@ -99,7 +101,7 @@ const GROUPS: readonly GroupDefinition[] = [
     maxDuration: MAINTENANCE_SWEEP.MAX_DURATION_SECONDS,
     routes: [routeKeyOf(MAINTENANCE_SWEEP_PATH)],
   },
-  // The daily refresh refills every base drive in the one call, one after another, past the platform's default duration.
+  // The daily refresh fills every workspace's drive in the one call, one after another, past the platform's default duration.
   {
     file: FUNCTION_GROUP.BASE_DRIVE_REFRESH,
     maxDuration: BASE_DRIVE_REFRESH.MAX_DURATION_SECONDS,
@@ -141,8 +143,9 @@ const STANDALONE_ROUTES: readonly string[] = [
  * The queue consumers, each a function of its own, since a function the
  * queue invokes is reached by nothing else: the automation-runs consumer and
  * the agent-turns consumer, and the agent-wakeups consumer, each under the
- * Fluid default a Start's function runs under, and the sandbox-releases
- * consumer, under its own short bound.
+ * Fluid default a Start's function runs under, the sandbox-releases
+ * consumer, under its own short bound, and the workspace-drive-fills
+ * consumer, under the platform's longest.
  */
 const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
   {
@@ -173,6 +176,13 @@ const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
     dispatches: false,
     queueTopic: SANDBOX_RELEASE.TOPIC,
   },
+  {
+    file: routeKeyOf(WORKSPACE_DRIVE_FILL.PATH),
+    maxDuration: WORKSPACE_DRIVE_FILL.MAX_DURATION_SECONDS,
+    routes: [routeKeyOf(WORKSPACE_DRIVE_FILL.PATH)],
+    dispatches: false,
+    queueTopic: WORKSPACE_DRIVE_FILL.TOPIC,
+  },
 ];
 
 /**
@@ -187,12 +197,15 @@ export function functionDefinitions(routeKeys: readonly string[]): readonly Func
   if (routeKeys.includes(ORPC_ROUTE_KEY)) {
     throw new Error(`the route key ${ORPC_ROUTE_KEY} is the hosted oRPC route's, not a file's`);
   }
+
   const claimed = new Set([
     ...GROUPS.flatMap((group) => group.routes),
     ...STANDALONE_ROUTES,
     ...QUEUE_CONSUMERS.flatMap((consumer) => consumer.routes),
   ]);
+
   const unclaimed = routeKeys.filter((key) => !claimed.has(key));
+
   const definitions: FunctionDefinition[] = [
     { file: FUNCTION_GROUP.DEFAULT, routes: [...unclaimed, ORPC_ROUTE_KEY], dispatches: true },
     ...GROUPS.map((group) => ({ ...group, dispatches: true })),
@@ -204,5 +217,6 @@ export function functionDefinitions(routeKeys: readonly string[]): readonly Func
     })),
     ...QUEUE_CONSUMERS,
   ];
+
   return definitions.sort((left, right) => left.file.localeCompare(right.file));
 }

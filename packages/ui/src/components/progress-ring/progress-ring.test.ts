@@ -29,6 +29,7 @@ function render(element: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -36,6 +37,7 @@ function render(element: ReactElement): HTMLElement {
 function filledShare(view: HTMLElement): number {
   const fill = view.querySelectorAll("circle")[1] ?? assert.fail("a fill");
   const dash = Number.parseFloat(fill.getAttribute("stroke-dasharray") ?? "");
+
   return dash / (2 * Math.PI * 6);
 }
 
@@ -43,6 +45,7 @@ test("a count draws its figures and a ring filled to their share, and a reader h
   const view = render(
     createElement(ProgressCount, { done: 4, total: 6, label: "4 of 6 sub-tasks finished" }),
   );
+
   assert.ok(Math.abs(filledShare(view) - 4 / 6) < 1e-9);
   assert.equal(view.querySelector("svg")?.getAttribute("aria-hidden"), "true");
   assert.equal(view.querySelector('[aria-hidden="true"]:not(svg)')?.textContent, "4/6");

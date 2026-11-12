@@ -86,8 +86,10 @@ const ConversationContext = createContext<ConversationScroll | undefined>(undefi
 
 function useConversation(): ConversationScroll {
   const context = useContext(ConversationContext);
+
   if (context === undefined)
     throw new Error("Conversation components must be used within Conversation");
+
   return context;
 }
 
@@ -115,35 +117,45 @@ export function Conversation({
   const [isAtBottom, setAtBottom] = useState(true);
   // The log's run of lines, while one stands.
   const rows = useRef<RefObject<VirtualRowsHandle | null> | undefined>(undefined);
+
   const hold = useCallback((run: RefObject<VirtualRowsHandle | null>) => {
     rows.current = run;
+
     return () => {
       if (rows.current === run) rows.current = undefined;
     };
   }, []);
+
   // Where the log last stood, so a scroll is read as up or down from there.
   const lastTop = useRef(0);
   const nearTop = useRef(onNearTop);
   nearTop.current = onNearTop;
+
   const askOlder = useCallback(() => {
     const element = list.current;
+
     if (element === null) return;
     // Note that a scroll past the top, as Safari's bounce reports, is no place the reader stands, as the docs' example says.
     const top = element.scrollTop;
+
     if (top >= 0 && top <= element.clientHeight * NEAR_TOP_SCREENS) nearTop.current?.();
   }, [list]);
+
   const scrollToBottom = useCallback(() => {
     rows.current?.current?.scrollToEnd();
   }, []);
+
   const onScroll = useCallback(
     (event: UIEvent<HTMLDivElement>) => {
       const element = event.currentTarget;
       const up = element.scrollTop < lastTop.current;
       lastTop.current = element.scrollTop;
+
       if (up) askOlder();
     },
     [askOlder],
   );
+
   const scroll = useMemo<ConversationScroll>(
     () => ({
       isAtBottom,
@@ -157,6 +169,7 @@ export function Conversation({
     }),
     [isAtBottom, list, hold, askOlder, scrollToBottom, onScroll],
   );
+
   return (
     <ConversationContext.Provider value={scroll}>
       <Fill className={cn("conversation relative", className)} {...props}>
@@ -191,6 +204,7 @@ export function ConversationContent({
   children,
 }: ConversationContentProps): ReactNode {
   const { list, log, onScroll } = useConversation();
+
   return (
     <ScrollArea
       ref={list}
@@ -253,6 +267,7 @@ export function ConversationRows({
   useLayoutEffect(() => {
     const was = drawn.current;
     drawn.current = keys;
+
     if (isAtBottom && keys.length > was.length && keys.at(-1) === was.at(-1)) {
       run.current?.scrollToEnd();
     }
@@ -261,6 +276,7 @@ export function ConversationRows({
   const [end, setEnd] = useState(0);
   useLayoutEffect(() => {
     const element = log.current;
+
     if (element === null) return;
     const said = Number.parseFloat(getComputedStyle(element).getPropertyValue(LOG_END_PROPERTY));
     const room = Number.isFinite(said) ? said : 0;
@@ -271,10 +287,12 @@ export function ConversationRows({
   useLayoutEffect(() => {
     const was = sent.current;
     sent.current = ownLast;
+
     if (ownLast !== undefined && was !== undefined && ownLast !== was) run.current?.scrollToEnd();
   }, [ownLast]);
   useImperativeHandle(handle, () => {
     const now = () => run.current;
+
     return {
       bringIn: (key, then) => now()?.bringIn(key, then) ?? false,
       rowElement: (key) => now()?.rowElement(key),
@@ -288,6 +306,7 @@ export function ConversationRows({
   useLayoutEffect(() => {
     askOlder();
   }, [keys, askOlder]);
+
   return (
     <VirtualRows
       scroller={list}
@@ -347,7 +366,9 @@ const SCROLL_LABEL = "Scroll to the newest line";
  */
 export function ConversationScrollButton(): ReactNode {
   const { isAtBottom, scrollToBottom } = useConversation();
+
   if (isAtBottom) return null;
+
   return (
     // Its ground is the button's own (`--ui-button-ground`), which the button's lit fill is laid over as a title bar's is.
     <div

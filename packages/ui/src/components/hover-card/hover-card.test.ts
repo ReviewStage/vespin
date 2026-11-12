@@ -47,6 +47,7 @@ function drawn(card: ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(card));
+
   return container;
 }
 
@@ -67,6 +68,7 @@ test("a card reads its name, the line under it, its corner, and then its notes",
       ],
     }),
   );
+
   assert.equal(
     card.textContent,
     "Teammate invitationsacme/relay3hExpire an invitation after a week.",
@@ -79,6 +81,7 @@ test("a head with no line under its name and no corner says its name alone", () 
       children: createElement(HoverCardHead, { name: "/release" }),
     }),
   );
+
   assert.equal(card.textContent, "/release");
 });
 
@@ -92,6 +95,7 @@ test("the rule before what a card lists is a separator to a reader", () => {
       ],
     }),
   );
+
   const separator = card.querySelector("hr");
   assert.ok(separator, "the rule is drawn");
   assert.equal(separator.nextElementSibling?.textContent, "Open Invite flow");
@@ -99,6 +103,7 @@ test("the rule before what a card lists is a separator to a reader", () => {
 
 test("a row with a press opens what it names, and one without is text a reader reads", () => {
   let opened = 0;
+
   const card = drawn(
     createElement(HoverCard, {
       children: [
@@ -118,6 +123,7 @@ test("a row with a press opens what it names, and one without is text a reader r
       ],
     }),
   );
+
   const buttons = [...card.querySelectorAll("button")];
   assert.deepEqual(
     buttons.map((each) => each.textContent),
@@ -141,6 +147,7 @@ test("a list is named, reads every row and its end, and counts nothing it would 
       ),
     }),
   );
+
   const list = card.querySelector("ul") ?? assert.fail("the list");
   assert.equal(list.getAttribute("aria-label"), "Pull requests");
   assert.deepEqual(

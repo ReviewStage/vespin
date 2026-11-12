@@ -14,8 +14,9 @@ import {
 /**
  * editable-block.test.ts -- a document's blocks are one Tab stop the arrows
  * step across, Return opens the block the keyboard selected, and a press on
- * a block's own words opens it where it landed, while a press portaled out
- * of it and a key from inside it are not the block's.
+ * a block's own words opens it where it landed, as files dropped on it are
+ * handed it there, while a press portaled out of it and a key from inside it
+ * are not the block's.
  */
 
 declare global {
@@ -38,6 +39,7 @@ function drawDocument(heard: string[], portaled?: HTMLElement): HTMLElement {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const block = (
     label: string,
     kind: (typeof EDITABLE_BLOCK_KIND)[keyof typeof EDITABLE_BLOCK_KIND],
@@ -50,6 +52,10 @@ function drawDocument(heard: string[], portaled?: HTMLElement): HTMLElement {
       entry,
       onOpen: () => heard.push(`${label} opened`),
       onPress: ({ x, y }) => heard.push(`${label} pressed at ${String(x)},${String(y)}`),
+      onDropFiles: ({ files, x, y }) =>
+        heard.push(
+          `${label} took ${files.map((file) => file.name).join()} at ${String(x)},${String(y)}`,
+        ),
       children: [
         createElement("p", { key: "words" }, `${label} words`),
         createElement("pre", { key: "code" }, "code"),
@@ -58,6 +64,7 @@ function drawDocument(heard: string[], portaled?: HTMLElement): HTMLElement {
           : null,
       ],
     });
+
   act(() =>
     root.render(
       createElement(
@@ -69,12 +76,15 @@ function drawDocument(heard: string[], portaled?: HTMLElement): HTMLElement {
       ),
     ),
   );
+
   return container;
 }
 
 function blockNamed(label: string): HTMLElement {
   const found = document.querySelector<HTMLElement>(`[role='group'][aria-label='${label}']`);
+
   if (found === null) throw new Error(`the ${label} block is drawn`);
+
   return found;
 }
 
@@ -91,6 +101,7 @@ test("the document is one Tab stop, at its entry, and no code inside a block is 
   expect(blockNamed("First").tabIndex).toBe(0);
   expect(blockNamed("Title").tabIndex).toBe(-1);
   expect(blockNamed("Second").tabIndex).toBe(-1);
+
   for (const code of document.querySelectorAll<HTMLElement>("pre")) expect(code.tabIndex).toBe(-1);
 });
 
@@ -111,6 +122,7 @@ test("a key from inside a block is the words', never the block's", () => {
   const heard: string[] = [];
   drawDocument(heard);
   const words = blockNamed("First").querySelector("p");
+
   if (words === null) throw new Error("the words are drawn");
   key(words, "Enter");
   key(words, "ArrowDown");
@@ -123,12 +135,39 @@ test("a press on a block's words opens it where it landed, and a portaled press 
   drawDocument(heard, elsewhere);
   const words = blockNamed("Second").querySelector("p");
   const menu = elsewhere.querySelector("button");
+
   if (words === null || menu === null) throw new Error("the words and the menu are drawn");
   act(() => {
     words.dispatchEvent(new MouseEvent("click", { bubbles: true, clientX: 12, clientY: 34 }));
     menu.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
   expect(heard).toEqual(["Second pressed at 12,34"]);
+});
+
+/** A drag event of `type` carrying `files`, as a drag from the system's files does; jsdom has no DragEvent. */
+function fileDrag(type: string, files: readonly File[], at = { clientX: 0, clientY: 0 }): Event {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, ...at });
+  Object.defineProperty(event, "dataTransfer", {
+    value: { types: ["Files"], files, dropEffect: "none" },
+  });
+
+  return event;
+}
+
+test("files dragged over a block are its own, so the window never opens them, and a drop hands them to it where it landed", () => {
+  const heard: string[] = [];
+  drawDocument(heard);
+  const words = blockNamed("Second").querySelector("p");
+
+  if (words === null) throw new Error("the words are drawn");
+  const shot = new File(["png"], "shot.png", { type: "image/png" });
+  const over = fileDrag("dragover", [shot]);
+  act(() => {
+    words.dispatchEvent(over);
+    words.dispatchEvent(fileDrag("drop", [shot], { clientX: 12, clientY: 34 }));
+  });
+  expect(over.defaultPrevented).toBe(true);
+  expect(heard).toEqual(["Second took shot.png at 12,34"]);
 });
 
 test("the text's blocks are found apart from the title's", () => {

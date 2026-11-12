@@ -41,8 +41,7 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * and Retry where the spinner stood (`PictureStandIn`, which a picture
  * standing alone draws too). A gone or
  * failed tile opens nothing, so it is no press, and a failed one's Retry is
- * its press instead; nor is one whose place drawing it gives no `onOpen`. The set is left out of the screen recording, because a
- * picture can hold words and the recording carries none, and it is a list
+ * its press instead; nor is one whose place drawing it gives no `onOpen`. The set is a list
  * its caller names (`label`).
  *
  * It is drawn in Tailwind utilities over the theme, each tile's frame a
@@ -157,8 +156,10 @@ function FailedStandIn({
 }): React.JSX.Element {
   useLayoutEffect(() => {
     failure.shown();
+
     return () => failure.hidden();
   }, [failure]);
+
   return (
     <span className={FAILED_STAND_IN} role="alert">
       <VisuallyHidden>{failedWords(words)}</VisuallyHidden>
@@ -213,10 +214,13 @@ export function PictureStandIn(
   ),
 ): React.JSX.Element {
   const { state, words } = props;
+
   if (state === PICTURE_STATE.READING) return <Spinner delay label={READING_LABEL} />;
+
   if (props.state === PICTURE_STATE.FAILED) {
     return <FailedStandIn words={words} onRetry={props.onRetry} failure={props.failure} />;
   }
+
   return (
     <span className={STAND_IN}>
       <ImageOffIcon aria-hidden="true" />
@@ -245,9 +249,11 @@ function TileFace({
       />
     );
   }
+
   if (state.kind !== PICTURE_STATE.READY) {
     return <PictureStandIn state={state.kind} words={words} why={why} />;
   }
+
   return (
     <img
       className="ui-picture-set-image block size-full"
@@ -290,6 +296,7 @@ export function PictureSetTile({
   const ratio = width === undefined || height === undefined ? WAITING_RATIO : width / height;
   const gone = state.kind === PICTURE_STATE.MISSING;
   const failed = state.kind === PICTURE_STATE.FAILED;
+
   const frame = (
     <Card
       as={CARD_ELEMENT.SPAN}
@@ -312,12 +319,14 @@ export function PictureSetTile({
       ) : null}
     </Card>
   );
+
   const said =
     many || caption === "" ? null : (
       <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} truncate>
         {caption}
       </Text>
     );
+
   return (
     <li
       className={`${TILE} ${many ? TILE_MANY : TILE_FEW}`}
@@ -361,8 +370,9 @@ export function PictureSet({
 }): React.JSX.Element {
   const many = thumbnails || count > SET_FEW;
   const tiles = Children.toArray(children);
+
   return (
-    <figure className="ui-picture-set ph-no-capture m-0 max-w-full" data-many={many}>
+    <figure className="ui-picture-set m-0 max-w-full" data-many={many}>
       <ul
         className="ui-picture-set-tiles m-0 flex list-none flex-wrap gap-item-gap p-0"
         aria-label={label}

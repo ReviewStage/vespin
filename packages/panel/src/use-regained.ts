@@ -19,6 +19,7 @@ export function useRegained(regained: () => void): void {
   useEffect(() => {
     const before = was.current;
     was.current = connected;
+
     if (connected && !before) latest.current();
   }, [connected]);
 }

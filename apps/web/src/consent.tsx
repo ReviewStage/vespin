@@ -68,15 +68,19 @@ function consentRequestQuery(authorization: URLSearchParams) {
   const clientId = authorization.get(AUTHORIZATION.CLIENT_ID);
   const redirectUri = authorization.get(AUTHORIZATION.REDIRECT_URI);
   const scope = authorization.get(AUTHORIZATION.SCOPE) ?? "";
+
   return queryOptions({
     queryKey: [QUERY_ROOT.CONSENT_REQUEST, clientId, redirectUri, scope],
     queryFn: async (): Promise<ConsentRequest | null> => {
       if (clientId === null || redirectUri === null) return null;
+
       const [session, client] = await Promise.all([
         signedIn,
         authClient.oauth2.publicClient({ query: { client_id: clientId } }),
       ]);
+
       if (!session || !client.data) return null;
+
       return {
         client: client.data.client_name ?? UNNAMED_CLIENT,
         account: session.user.email,
@@ -98,8 +102,10 @@ function consentRequestQuery(authorization: URLSearchParams) {
  */
 async function sendAnswer(given: ConsentAnswer): Promise<void> {
   const accept = given === CONSENT_ANSWER.ALLOW;
+
   if (accept) await completeSiteSignIn(signedIn);
   const result = await authClient.oauth2.consent({ accept });
+
   if (result.error) throw new Error("The consent answer was refused.");
 }
 
@@ -124,6 +130,7 @@ function Consent(): React.JSX.Element {
   const [authorization] = useState(() => new URLSearchParams(window.location.search));
   const request = useQuery(consentRequestQuery(authorization));
   const answering = useMutation({ mutationFn: sendAnswer });
+
   const state: ConsentState =
     request.isError || request.data === null || answering.isError
       ? { step: CONSENT_STEP.FAILED }
@@ -145,7 +152,9 @@ function Consent(): React.JSX.Element {
       />
     );
   }
+
   const failed = state.step === CONSENT_STEP.FAILED;
+
   return (
     <AuthPage
       mark={<AuthMark mcpClient tone={failed ? LANDING_TONE.DANGER : undefined} />}

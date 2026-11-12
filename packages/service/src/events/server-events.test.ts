@@ -48,16 +48,20 @@ interface Posted {
 /** The deployment's analytics over a processor that records what reached it and answers `status`. */
 function analytics(environment: Partial<HostedEnvironmentValues>, status = 200) {
   const posted: Posted[] = [];
+
   const http = fakeHttpClientLayer((url, init) => {
     // SAFETY: the body is the batch document the capture just serialized.
     posted.push({ url, body: JSON.parse(String(init.body)) as PosthogBatch });
+
     return new Response("{}", { status });
   });
+
   const layer = productAnalyticsFromEnvironment.pipe(
     Layer.provide(
       Layer.merge(http, Layer.succeed(HostedEnvironment, { ...NO_ENVIRONMENT, ...environment })),
     ),
   );
+
   return { layer, posted };
 }
 
@@ -66,6 +70,7 @@ const openUser = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
   return userId;
 });
 
@@ -98,6 +103,7 @@ const openWorkspaceNamed = (id: string, name: string) =>
     yield* db
       .insert(organization)
       .values({ id, name, slug: `workspace-${id}`, createdAt: new Date(CREATED) });
+
     return id;
   });
 
@@ -111,10 +117,12 @@ it.layer(getTestDB())("server events", (it) => {
     () => {
       // The layer reads the deployment's name as it is built, so it is named before.
       vi.stubEnv(DEPLOYMENT_VARIABLE, "preview");
+
       const processor = analytics({
         posthogProjectApiKey: Redacted.make("phc_project"),
         posthogIngestHost: "https://eu.i.posthog.com",
       });
+
       return Effect.gen(function* () {
         yield* TestClock.setTime(NOW);
         const userId = yield* openUser;
@@ -159,6 +167,7 @@ it.layer(getTestDB())("server events", (it) => {
     () => {
       vi.stubEnv(DEPLOYMENT_VARIABLE, "production");
       const processor = analytics({ posthogProjectApiKey: Redacted.make("phc_project") });
+
       return Effect.gen(function* () {
         yield* TestClock.setTime(NOW);
         const userId = yield* openUser;
@@ -209,6 +218,7 @@ it.layer(getTestDB())("server events", (it) => {
 
   it.effect("files an account's own event under no workspace", () => {
     const processor = analytics({ posthogProjectApiKey: Redacted.make("phc_project") });
+
     return Effect.gen(function* () {
       yield* recordServerEvent(
         SERVER_EVENT.ACCOUNT_SIGN_UP,
@@ -225,6 +235,7 @@ it.layer(getTestDB())("server events", (it) => {
     "names a workspace's group by its name and creation alone, beside its first event and again on a rename",
     () => {
       const processor = analytics({ posthogProjectApiKey: Redacted.make("phc_project") });
+
       const named = () =>
         itemsOf(processor.posted)
           .filter((item) => item.event === "$groupidentify")
@@ -233,6 +244,7 @@ it.layer(getTestDB())("server events", (it) => {
             key: item.properties["$group_key"],
             set: item.properties["$group_set"],
           }));
+
       return Effect.gen(function* () {
         const userId = yield* openUser;
         const workspaceId = yield* openWorkspaceNamed("workspace-acme", "Acme");
@@ -255,6 +267,7 @@ it.layer(getTestDB())("server events", (it) => {
 
   it.effect("records nothing on a deployment without a project key", () => {
     const processor = analytics({});
+
     return Effect.gen(function* () {
       yield* agentStart(yield* openUser);
       expect(processor.posted).toEqual([]);
@@ -263,6 +276,7 @@ it.layer(getTestDB())("server events", (it) => {
 
   it.effect("a refusing processor costs the count, never the caller", () => {
     const processor = analytics({ posthogProjectApiKey: Redacted.make("phc_project") }, 500);
+
     return Effect.gen(function* () {
       const settled = yield* Effect.exit(agentStart(yield* openUser));
       expect(settled._tag).toBe("Success");
@@ -272,6 +286,7 @@ it.layer(getTestDB())("server events", (it) => {
 
   it.effect("posts nothing for an account deleted before its event is captured", () => {
     const processor = analytics({ posthogProjectApiKey: Redacted.make("phc_project") });
+
     return Effect.gen(function* () {
       const userId = yield* openUser;
       yield* Database.use((db) => db.delete(user).where(eq(user.id, userId)));

@@ -61,6 +61,7 @@ function mounted(text: string, overrides: Partial<ComposerEditorProps> = {}) {
   const sends = { count: 0 };
   const host = document.createElement("div");
   document.body.append(host);
+
   const handle = mountComposer(host, {
     text,
     skills: SKILLS,
@@ -75,19 +76,23 @@ function mounted(text: string, overrides: Partial<ComposerEditorProps> = {}) {
     },
     onPasteFiles: (files) => {
       pasted.push(files);
+
       return files.some((file) => file.type.startsWith("image/"));
     },
     onTrigger: (trigger) => triggers.push(trigger),
     drawChip: (element, chip) => {
       element.textContent = `/${chip.name}`;
       chips.add(element);
+
       return () => chips.delete(element);
     },
     ...overrides,
   });
+
   boxes.push({ host, handle });
   const editor = composerEditor(host).editor;
   assert.ok(editor, "the editor is running");
+
   return {
     host,
     handle,
@@ -109,12 +114,15 @@ function mounted(text: string, overrides: Partial<ComposerEditorProps> = {}) {
 /** The words typed one key at a time, as the browser's text input hands each to the editor, so a Markdown rule a key completes runs. */
 function typeKeys(host: HTMLElement, text: string): void {
   const view = composerEditor(host).editor?.view ?? assert.fail("the editor is running");
+
   for (const character of text) {
     const { from, to } = view.state.selection;
     const typed = () => view.state.tr.insertText(character, from, to);
+
     const ruled = view.someProp("handleTextInput", (handle) =>
       handle(view, from, to, character, typed),
     );
+
     if (ruled !== true) view.dispatch(typed());
   }
 }
@@ -122,9 +130,11 @@ function typeKeys(host: HTMLElement, text: string): void {
 /** A chord pressed in the box, ⌘ with the letter, Shift where asked, as a Mac keyboard spells it; answers whether anything outside the editor heard it. */
 function chord(host: HTMLElement, letter: string, shift = false): boolean {
   let heard = false;
+
   const hear = () => {
     heard = true;
   };
+
   window.addEventListener("keydown", hear);
   const upper = letter.toUpperCase();
   pressInComposer(host, shift ? upper : letter, {
@@ -134,16 +144,20 @@ function chord(host: HTMLElement, letter: string, shift = false): boolean {
     shiftKey: shift,
   });
   window.removeEventListener("keydown", hear);
+
   return heard;
 }
 
 /** What the box's words hold in each mark's element, by the element's tag. */
-function marked(host: HTMLElement): Record<string, string[]> {
+function marked(host: HTMLElement) {
   const found: Record<string, string[]> = {};
+
   for (const tag of ["strong", "em", "s", "code", "a"]) {
     const words = [...composerEditor(host).querySelectorAll(tag)].map((each) => each.textContent);
+
     if (words.length > 0) found[tag] = words;
   }
+
   return found;
 }
 
@@ -156,6 +170,7 @@ function paste(host: HTMLElement, text: string, files: readonly File[] = [], htm
       types: [...(text === "" ? [] : ["text/plain"]), ...(html === "" ? [] : ["text/html"])],
       getData: (type: string) => {
         if (type === "text/plain") return text;
+
         return type === "text/html" ? html : "";
       },
     },
@@ -281,6 +296,7 @@ test("the bound refuses a keystroke past it, and a paste past it is cut to the r
 
 test("the owner is told of a paste that was cut, a paste with no room left included, and of none that went in whole", () => {
   let cuts = 0;
+
   const box = mounted("12345678", {
     maxLength: 10,
     onPasteCut: () => {
@@ -351,6 +367,7 @@ test("a dictation's words a full box has no room for are not put in", () => {
 
 test("one Backspace takes a chip out whole, and no attribute in the box carries a skill's name", () => {
   const box = mounted("Use /release");
+
   for (const element of composerEditor(box.host).querySelectorAll("*")) {
     for (const attribute of element.attributes) {
       assert.doesNotMatch(attribute.value, /release/u, `${element.tagName} ${attribute.name}`);
@@ -423,18 +440,21 @@ test("the list's word is reported again as the words scroll under it", () => {
 function mountedWithMentions(text: string) {
   const reported: (ComposerTrigger | undefined)[] = [];
   const drawn: string[] = [];
+
   const box = mounted(text, {
     mentions: {
       onTrigger: (trigger) => reported.push(trigger),
       drawMention: (element, mention) => {
         element.textContent = `@${mention.name}`;
         drawn.push(`${mention.name} ${mention.target}`);
+
         return () => undefined;
       },
       // The panel reads the one page of an integration's this box is pasted.
       pasted: (words) => (words.trim() === ISSUE_URL ? ISSUE : undefined),
     },
   });
+
   return { ...box, reported, drawn };
 }
 
@@ -574,10 +594,12 @@ test("a page's address pasted on the line after a closing fence is laid in as it
 
 test("a mention laid in from elsewhere stands where the caret is, spaced from the words either side, and none is laid in past the box's bound", () => {
   const box = mountedWithMentions("Fixfirst");
+
   const lines = {
     name: "invite.ts:2–3",
     target: "https://github.com/acme/relay/blob/HEAD/src/invite.ts#L2-L3",
   };
+
   const full = mounted("12345678", { maxLength: 10 });
 
   box.caretAt(1 + "Fix".length);
@@ -651,10 +673,12 @@ test("a quote is typed with `> `, edited like any words, Backspace at its start 
 test("words copied from inside a quote are copied as words, and a quote copied whole as a quote", () => {
   const box = mounted("> Option A ships today.\n\nWhy?");
   const view = composerEditor(box.host).editor?.view ?? assert.fail("the editor is running");
+
   const copied = () =>
     view.someProp("clipboardTextSerializer", (serialize) =>
       serialize(view.state.selection.content(), view),
     );
+
   // The quote's line starts past the quote's and the line's openings.
   box.select(2 + "Option ".length, 2 + "Option A ships".length);
   assert.equal(copied(), "A ships");
@@ -673,12 +697,14 @@ test("a quote is cut from its end to the room the bound leaves, and none is laid
 
 test("each mark's chord lays it on the words selected and takes it off again, the words read out as its Markdown, and the window never hears the chord", () => {
   const box = mounted("Ship it now");
+
   const chords = [
     { key: "b", shiftKey: false, written: "Ship **it** now" },
     { key: "i", shiftKey: false, written: "Ship *it* now" },
     { key: "x", shiftKey: true, written: "Ship ~~it~~ now" },
     { key: "e", shiftKey: false, written: "Ship `it` now" },
   ];
+
   for (const { key, shiftKey, written } of chords) {
     box.select(1 + "Ship ".length, 1 + "Ship it".length);
     const heard = chord(box.host, key, shiftKey);
@@ -707,6 +733,7 @@ test("a mark's Markdown typed becomes the mark, its delimiters gone from the wor
 
 test("a message that comes back reads its Markdown back into marks, and reads out as it came", () => {
   const box = mounted("");
+
   const message =
     "Go **now**, *gently*, ~~not~~ `make it` per [the guide](https://example.com/guide) ***both*** ways";
 
@@ -787,6 +814,7 @@ test("Enter still sends words that wear marks, and Shift+Enter is still a new li
 test("⌘K over words selected opens the owner's link field and links them, and with none selected it is the window's", () => {
   const formats: EditorFormat[] = [];
   const links = { count: 0 };
+
   const box = mounted("Read the guide", {
     format: {
       onFormat: (format) => formats.push(format),
@@ -821,8 +849,9 @@ test("words selected past the box's scroller are measured by the lines it shows,
   vi.spyOn(field, "getBoundingClientRect").mockReturnValue(new DOMRect(100, 600, 500, 200));
   const hidden = new DOMRect(20, 400, 300, 20);
   const shown = new DOMRect(120, 700, 200, 20);
+  // SAFETY: the editor reads the rects by index and length alone, as an array has them.
   vi.spyOn(Range.prototype, "getClientRects").mockReturnValue(
-    Object.assign([hidden, shown], { item: () => null }) as unknown as DOMRectList,
+    Object.assign([hidden, shown], { item: () => null }) as DOMRectList,
   );
   vi.spyOn(Range.prototype, "getBoundingClientRect").mockReturnValue(
     new DOMRect(20, 400, 300, 320),

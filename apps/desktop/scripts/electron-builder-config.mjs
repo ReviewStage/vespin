@@ -35,11 +35,13 @@ const desktopPackage = JSON.parse(fs.readFileSync(path.join(appRoot, "package.js
 const packageAssets = packageAssetPaths({ appRoot });
 const productName = desktopPackage.productName;
 const electronBuilderMetadataName = "desktop";
+
 export const ELECTRON_BUILDER_UPDATE_PUBLISH_CONFIG = {
   provider: "generic",
   url: APP_UPDATE_FEED_URL,
   updaterCacheDirName: APP_UPDATE_CACHE_DIR_NAME,
 };
+
 export const ELECTRON_BUILDER_GITHUB_PUBLISH_CONFIG = {
   provider: "github",
   owner: "ReviewStage",

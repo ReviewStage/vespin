@@ -1,9 +1,15 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
-import { DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import type { HostLine } from "@repo/features/host-live";
 import { HOST_UNINSTALL_COMMAND, hostInstallCommand } from "@repo/features/host-wire";
+import { isThisMac, type ListedMachine, machineName, THIS_MAC } from "@repo/features/machine-name";
+import {
+  MACHINE_STANDING_WORDS,
+  MACHINES_WORDS,
+  removeMachineQuestion,
+} from "@repo/features/machines-settings-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
@@ -33,7 +39,7 @@ import {
   SettingsLine,
   SettingsRow,
   SettingsRowMark,
-  type SettingsRowSkeletonShape,
+  type SettingsRowSkeletonLayout,
   type SettingsRowState,
   SettingsRowStateLine,
   SettingsRowsSkeleton,
@@ -60,13 +66,7 @@ import { copyThroughShell } from "../copy-feedback.js";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
 import { confirmFailure } from "../failure-report.js";
 import { hostsQuery, hostsRetryMutation } from "../live-reads.js";
-import {
-  isThisMac,
-  type ListedMachine,
-  machineName,
-  THIS_MAC,
-  useThisMac,
-} from "../machine-name.js";
+import { useThisMac } from "../machine-name.js";
 import { DeviceGlyph } from "../tasks/runs-on.js";
 import { showToast } from "../toast.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
@@ -108,8 +108,9 @@ import { MenuRow } from "./menu-row.js";
  * off removes, after asking, since that takes the host and its agents'
  * folders off this Mac. While on it says the host's standing, and offline
  * until the service lists it. A Mac removed from anywhere else reads off,
- * since nothing enrolls it again unasked. A browser tab has no This Mac, so
- * it draws none.
+ * since nothing enrolls it again unasked. A Mac whose host is another
+ * account's says so where turning it on or off is refused. A browser tab has no This
+ * Mac, so it draws none.
  *
  * The list is the host's (`LIVE_READ.HOSTS`): followed live while the page
  * stands and a while after, so a host joining, leaving, renamed, or moving
@@ -124,22 +125,16 @@ import { MenuRow } from "./menu-row.js";
  * approved, since the service lists no box before its approve. A pairing's
  * link opened in this window stands its dialog over the page
  * (`host-connect-dialog.tsx`), and once Connect makes the host the list
- * carries it. The page stands only while the Bring your own host
- * experiment is on (`settings-rows.ts`'s `PAGE_EXPERIMENT`), so while it is
- * off nothing here is drawn, read, or turned on.
+ * carries it.
  */
 
 const SECTION_TITLE = {
-  HOSTS: "Your machines",
+  HOSTS: MACHINES_WORDS.TITLE,
   ADD: "Add a machine",
 } as const;
 
 const WORDS = {
-  NONE: "No machines yet.",
-  ONLINE: "Online",
-  OFFLINE: "Offline",
-  SETTING_UP: "Setting up…",
-  UPDATING: "Updating…",
+  NONE: MACHINES_WORDS.NONE,
   INSTALL_LABEL: "Run this on a Mac or Linux server",
   APPROVE: "Open the link it prints, and approve its code",
   LOGGED_IN: "A Mac runs your agents only while its user is logged in.",
@@ -149,21 +144,32 @@ const WORDS = {
 } as const;
 
 /** The row that stands while the machines are read: a machine with its ⋯. */
-const HOSTS_SKELETON: readonly SettingsRowSkeletonShape[] = [
+const HOSTS_SKELETON: readonly SettingsRowSkeletonLayout[] = [
   { described: true, controls: [], end: [SETTINGS_SKELETON_CONTROL.MORE] },
 ];
 
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
+
 /** A call that got no answer, said in the dialog that asked. */
 const UNREACHED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
   reason: ACT_UNREACHED_WORDS,
 };
+
 /** A remove the service answered with a refusal, said in the dialog that asked. */
 const REMOVE_REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
-  reason: "Could not remove this machine. Try again.",
+  reason: MACHINES_WORDS.REMOVE_FAILED,
 };
+
+/** Turning This Mac on or off where its host is another account's, which only that account, or an uninstall on this Mac, removes. */
+const ANOTHER_ACCOUNTS_WORDS = `This Mac's host belongs to another ${PRODUCT_NAME} account. Remove it from that account, or run vespin-host uninstall --keep-agents.`;
+
+const ANOTHER_ACCOUNTS: ActionResult = {
+  status: ACTION_RESULT_STATUS.REJECTED,
+  reason: ANOTHER_ACCOUNTS_WORDS,
+};
+
 /** Turning This Mac off, refused by the service, said in the dialog that asked. */
 const TURN_OFF_REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
@@ -175,31 +181,44 @@ function machineOf(host: HostLine): ListedMachine {
   return { deviceId: host.id, name: host.name, machineId: host.machineId, model: host.model };
 }
 
+/** What each standing a host's line says leads with, and its tint: online after the finished session's dot, setting up plain, offline and failed tinted. */
+const STANDING_LINE = {
+  [DEVICE_STANDING.ONLINE]: {
+    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.ONLINE],
+    state: SETTINGS_ROW_STATE.CONNECTED,
+  },
+  [DEVICE_STANDING.OFFLINE]: {
+    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.OFFLINE],
+    state: SETTINGS_ROW_STATE.ATTENTION,
+  },
+  [DEVICE_STANDING.SETTING_UP]: {
+    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.SETTING_UP],
+    state: SETTINGS_ROW_STATE.PLAIN,
+  },
+  [DEVICE_STANDING.FAILED]: {
+    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.FAILED],
+    state: SETTINGS_ROW_STATE.ATTENTION,
+  },
+} as const;
+
 /**
- * What a host's line leads with, and its tint: updating plain while the host
- * says it is, whatever its beat, because it restarts on purpose to update and
- * is quiet meanwhile; online after the finished session's dot; setting up
- * plain for a host that just joined and has not beaten yet; offline tinted;
- * and none while its standing cannot be told.
+ * What a host's line leads with, and its tint, as every surface reads the
+ * host (`presenceStanding`): setting up for a host that just joined and is
+ * not read yet, offline for one the read does not name, though it is the
+ * account's own, and none while its standing cannot be told.
  */
 function standingOf(
   host: HostLine,
   book: PresenceBook,
   joined: boolean,
 ): { readonly words: string; readonly state: SettingsRowState } | undefined {
-  if (host.update === HOST_UPDATE.UPDATING) {
-    return { words: WORDS.UPDATING, state: SETTINGS_ROW_STATE.PLAIN };
-  }
-  const beat = presenceStanding(book, host.id);
-  if (beat === undefined && joined)
-    return { words: WORDS.SETTING_UP, state: SETTINGS_ROW_STATE.PLAIN };
-  // Note that a host the read does not name, though it is the account's own, is gone.
-  const standing = beat ?? DEVICE_STANDING.OFFLINE;
-  if (standing === DEVICE_STANDING.OFFLINE) {
-    return { words: WORDS.OFFLINE, state: SETTINGS_ROW_STATE.ATTENTION };
-  }
-  if (standing !== DEVICE_STANDING.ONLINE) return undefined;
-  return { words: WORDS.ONLINE, state: SETTINGS_ROW_STATE.CONNECTED };
+  const standing =
+    presenceStanding(book, host.id) ??
+    (joined ? DEVICE_STANDING.SETTING_UP : DEVICE_STANDING.OFFLINE);
+
+  return standing === DEVICE_STANDING.UNKNOWN || standing === DEVICE_STANDING.CHECKING
+    ? undefined
+    : STANDING_LINE[standing];
 }
 
 /**
@@ -221,11 +240,15 @@ function StandingLine({
   // Note that a service older than platforms listed only Linux servers.
   const kind = DEVICE_PLATFORM_NAME[host.platform ?? DEVICE_PLATFORM.LINUX];
   const standing = standingOf(host, book, joined);
+
   if (standing === undefined) return <>{kind}</>;
+
   if (standing.state === SETTINGS_ROW_STATE.CONNECTED) {
     const line = `${standing.words} · ${kind}`;
+
     return <SettingsRowStateLine state={standing.state}>{line}</SettingsRowStateLine>;
   }
+
   return (
     <>
       <SettingsRowStateLine state={standing.state}>{standing.words}</SettingsRowStateLine>
@@ -262,20 +285,15 @@ const THIS_MAC_OFF = {
   running: "Turning off",
 } as const;
 
+type DeleteFoldersWordsResult = { readonly label: string; readonly detail: string };
+
 /** The choice turning This Mac off offers where its host made agents' folders: delete them, or keep them in `~/.vespin/agents`. */
-function deleteFoldersWords(count: number): { readonly label: string; readonly detail: string } {
+function deleteFoldersWords(count: number): DeleteFoldersWordsResult {
   return {
     label: `Delete its agents' ${count === 1 ? "folder" : `${count} folders`} in ~/.vespin/agents`,
     detail: "Work in them that wasn't pushed goes with them.",
   };
 }
-
-/** What Remove says goes, whatever the machine: the host removes itself from the machine as it hears so (`apps/host`'s `removeItself`). */
-const REMOVED = `It stops taking agents now, and ${PRODUCT_NAME} removes itself from the machine, keeping its agents' folders in ~/.vespin/agents. Their tasks and transcripts stay in ${PRODUCT_NAME}.`;
-
-/** What Remove adds for a host that reads offline, which hears it was removed only once it is online again, and the command for one that never is. */
-const REMOVED_OFFLINE =
-  "It's offline, so it does that the next time it's online. If it won't be, run this on it:";
 
 /** One machine's row: its mark, what it is called, whether it is online and what it is, and its ⋯ holding Remove. */
 function HostRow({
@@ -302,7 +320,7 @@ function HostRow({
       thing={label}
       actions={[
         {
-          label: "Remove",
+          label: MACHINES_WORDS.REMOVE,
           icon: <GLYPH.REMOVE />,
           danger: true,
           disabled: locked,
@@ -321,8 +339,9 @@ function HostRow({
 
 /**
  * This Mac's row in the desktop app: Run agents on this Mac, on while its
- * host stands, what its host says while on, offline until the service lists
- * it, and what it does while off. Note that the row's words are This Mac,
+ * host stands, what its host says while on, setting up until the service
+ * lists it, failed while the app cannot start its host, and what it does
+ * while off. Note that the row's words are This Mac,
  * as every list of machines calls it, and the switch's own name says what
  * it sets.
  */
@@ -331,6 +350,7 @@ function ThisMacRow({
   book,
   on,
   needsApproval,
+  setupFailed,
   onChange,
 }: {
   /** This Mac as the service lists it; none before it does. */
@@ -339,18 +359,31 @@ function ThisMacRow({
   on: boolean;
   /** Whether macOS holds its host until the member allows the app in Login Items. */
   needsApproval: boolean;
+  /** Whether the app could not start its host, and is trying again. */
+  setupFailed: boolean;
   onChange: (next: boolean) => void;
 }): React.JSX.Element {
   const { mutate: openLoginItems } = useMutation(pressMutation(ACT_KIND.LOGIN_ITEMS_OPEN_SETTINGS));
+  // Note that a reader is told at once where this Mac's host could not be started, as the row turns to Failed.
+  useAnnounce(
+    ANNOUNCE.ALERT,
+    on && setupFailed ? `${THIS_MAC} ${MACHINE_STANDING_WORDS[DEVICE_STANDING.FAILED]}` : "",
+  );
+
   const description = !on ? (
     THIS_MAC_WORDS.OFF
-  ) : host === undefined ? (
+  ) : setupFailed ? (
     <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
-      {WORDS.OFFLINE}
+      {MACHINE_STANDING_WORDS[DEVICE_STANDING.FAILED]}
+    </SettingsRowStateLine>
+  ) : host === undefined ? (
+    <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN}>
+      {MACHINE_STANDING_WORDS[DEVICE_STANDING.SETTING_UP]}
     </SettingsRowStateLine>
   ) : (
-    <StandingLine host={host} book={book} joined={false} />
+    <StandingLine host={host} book={book} joined={true} />
   );
+
   return (
     <>
       <SettingsRow
@@ -415,10 +448,7 @@ function RemoveHostDialog({
       open
       confirm={confirm}
       question={{
-        title: `Remove ${asked?.label ?? ""}?`,
-        body: REMOVED,
-        verb: "Remove",
-        running: "Removing",
+        ...removeMachineQuestion(asked?.label ?? ""),
         loss: CONFIRM_LOSS.IRREVERSIBLE,
         replayUnmasked: true,
         titleReplayMasked: true,
@@ -426,9 +456,9 @@ function RemoveHostDialog({
     >
       {asked?.offline === true ? (
         <>
-          <Text tone={TEXT_TONE.MUTED}>{REMOVED_OFFLINE}</Text>
+          <Text tone={TEXT_TONE.MUTED}>{MACHINES_WORDS.REMOVED_OFFLINE}</Text>
           <CopyField
-            label="Uninstall command"
+            label={MACHINES_WORDS.UNINSTALL_FIELD}
             value={HOST_UNINSTALL_COMMAND}
             what="command"
             copy={copyThroughShell}
@@ -455,6 +485,7 @@ function AddHostSection({
   joined: string | undefined;
 }): React.JSX.Element {
   useAnnounce(ANNOUNCE.POLITE, joined === undefined ? "" : `${joined} ${WORDS.CONNECTED}`);
+
   return (
     <SettingsSection title={SECTION_TITLE.ADD} anchor={SETTINGS_SEARCH_ROW.ADD_HOSTS}>
       <SettingsBlock>
@@ -492,6 +523,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   const { mutateAsync: sendHostsRemove, ...hostRemoving } = useMutation(
     actMutation(ACT_KIND.HOSTS_REMOVE),
   );
+
   // Note that the clock only redraws the rows as a beat ages, since each standing is read off the book's own monotonic clock.
   useSecond();
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
@@ -501,15 +533,19 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   const installScriptUrl = read.data?.installScriptUrl;
   // Note that each host's beat is the window's shared presence, read often enough that a host that keeps beating never reads offline.
   const book = useDevicePresence(signedIn);
+
   // The ids of the hosts the first read for the account listed, so one that joins while the page stands is told apart as just connected.
   const [known, setKnown] = useState<
     { readonly accountId: string | undefined; readonly ids: ReadonlySet<string> } | undefined
   >(undefined);
+
   if (hosts !== undefined && (known === undefined || known.accountId !== accountId)) {
     setKnown({ accountId, ids: new Set(hosts.map((host) => host.id)) });
   }
+
   const joinedNow = (host: HostLine) =>
     known !== undefined && known.accountId === accountId && !known.ids.has(host.id);
+
   const thisMac = useThisMac();
   const [connecting, closeConnect] = useHostConnect();
   // A pairing's question does not outlive the page it was asked over.
@@ -517,46 +553,60 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
 
   // Note that Remove asks over the section rather than its row, because the host draws a removal gone on the list the moment it is asked, so the row is gone before a refusal comes back to be said.
   const [asked, setAsked] = useState<RemoveAsked | undefined>(undefined);
+
   const removingAct = useConfirmAct(hostRemoving, {
     send: () => (asked === undefined ? Promise.resolve() : sendHostsRemove({ id: asked.host.id })),
     answered: (answer) => ("failure" in answer ? REMOVE_REFUSED : ACCEPTED),
     failed: () => UNREACHED,
     refusedFirst: () => (asked === undefined ? REMOVE_REFUSED : undefined),
   });
+
   const removing = useConfirmDialog(
     { subject: asked !== undefined && asked.accountId === accountId, surfaceOpen: true },
     removingAct,
     confirmFailure(FAILURE_SURFACE.HOST_REMOVE),
   );
+
   const askRemove = (host: HostLine, label: string) => {
-    const offline = standingOf(host, book, joinedNow(host))?.words === WORDS.OFFLINE;
+    // Note that a host the sweep marked away hears of its removal only once it is back, whatever its setup says.
+    const offline =
+      host.away === true ||
+      standingOf(host, book, joinedNow(host))?.words ===
+        MACHINE_STANDING_WORDS[DEVICE_STANDING.OFFLINE];
+
     setAsked({ accountId, host, label, offline });
     removing.ask();
   };
 
   // Note that This Mac reads as turned on while its enroll is out, and as its host stands once it answers.
   const turningOn = useMutation(actMutation(ACT_KIND.HOSTS_THIS_MAC_SET));
+
   const { mutateAsync: turnThisMacOff, ...offWriting } = useMutation(
     actMutation(ACT_KIND.HOSTS_THIS_MAC_SET),
   );
+
   const thisMacOn = turningOn.isPending || thisMac?.enrolled === true;
+
   const turnThisMacOn = () => {
     turningOn
       .mutateAsync({ on: true })
       .catch(() => undefined)
       .then((answer) => {
         if (answer !== undefined && !("failure" in answer)) return;
+        const anotherAccounts = answer !== undefined && answer.anotherAccount === true;
         showToast({
-          words: THIS_MAC_WORDS.TURN_ON_FAILED,
+          words: anotherAccounts ? ANOTHER_ACCOUNTS_WORDS : THIS_MAC_WORDS.TURN_ON_FAILED,
           replayUnmasked: true,
           tone: STATUS_TONE.DANGER,
           failure: { surface: FAILURE_SURFACE.THIS_MAC_SET, cause: answer },
         });
       });
   };
+
   // Note that turning This Mac off asks first, since it takes the host off this Mac, and its agents' folders unless the member keeps them.
   const [deleteFolders, setDeleteFolders] = useState(true);
   const agentFolders = thisMac?.agentFolders ?? 0;
+
   const turningOffAct = useConfirmAct(offWriting, {
     send: () =>
       turnThisMacOff({
@@ -564,7 +614,10 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
         deleteFolders: deleteFolders || agentFolders === 0,
       }),
     answered: (answer) => {
-      if ("failure" in answer) return TURN_OFF_REFUSED;
+      if ("failure" in answer) {
+        return answer.anotherAccount === true ? ANOTHER_ACCOUNTS : TURN_OFF_REFUSED;
+      }
+
       // Note that the host's state is gone either way, so what of its removal did not land is said beside the turn off rather than refusing it.
       if (answer.stillListed === true) {
         showToast({
@@ -573,6 +626,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
           tone: STATUS_TONE.ATTENTION,
         });
       }
+
       if (answer.folderLeft !== undefined) {
         showToast({
           words: THIS_MAC_WORDS.FOLDER_LEFT,
@@ -581,15 +635,18 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
           failure: { surface: FAILURE_SURFACE.THIS_MAC_SET, cause: answer },
         });
       }
+
       return ACCEPTED;
     },
     failed: () => UNREACHED,
   });
+
   const turningOff = useConfirmDialog(
     { subject: thisMac?.enrolled === true, surfaceOpen: true },
     turningOffAct,
     confirmFailure(FAILURE_SURFACE.THIS_MAC_SET),
   );
+
   const switchThisMac = (next: boolean) => {
     if (next) return turnThisMacOn();
     setDeleteFolders(true);
@@ -599,6 +656,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   const listed = hosts?.map(machineOf) ?? [];
   // Note that This Mac's host stands on its switch's row only while it is on; one the service still lists while it is off, as an uninstall that could not reach the service leaves it, stands as any host does, by its own name, with its Remove.
   const naming = thisMac?.enrolled === true ? thisMac : undefined;
+
   // Note that the record's device names This Mac's host where it has one, since an old host of the same machine may still be listed beside it.
   const listedMac =
     naming === undefined
@@ -608,10 +666,12 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
             ? isThisMac(machineOf(host), naming)
             : host.id === naming.deviceId,
         );
+
   const loaded = signedIn && hosts !== undefined && installScriptUrl !== undefined;
   const others = hosts?.filter((host) => host !== listedMac) ?? [];
   const lastJoined = others.findLast(joinedNow);
   const empty = others.length === 0 && thisMac === undefined;
+
   const list = (
     <SettingsSection
       title={SECTION_TITLE.HOSTS}
@@ -629,11 +689,13 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
               book={book}
               on={thisMacOn}
               needsApproval={thisMac.needsApproval === true}
+              setupFailed={thisMac.setupFailed === true}
               onChange={switchThisMac}
             />
           )}
           {others.map((host) => {
             const label = machineName(machineOf(host), listed, naming);
+
             return (
               <HostRow
                 key={host.id}
@@ -658,6 +720,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
       )}
     </SettingsSection>
   );
+
   // Note that signed out the add step is not drawn, so the list holds its search anchor instead.
   const add = loaded ? (
     <AddHostSection
@@ -667,6 +730,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
       }
     />
   ) : null;
+
   return (
     <>
       {/* Note that an account with no host yet is led to add one, rather than to an empty list. */}

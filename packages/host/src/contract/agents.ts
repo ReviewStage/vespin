@@ -18,7 +18,6 @@
 
 import {
   AGENT_CALL_FAILURE,
-  agentAddRepositoryParamsSchema,
   agentAgentAnswerSchema,
   agentApprovalAnswerParamsSchema,
   agentApprovalAnswerViewSchema,
@@ -280,15 +279,6 @@ export const AGENT_ACTS = declaredActs({
     panelOnly: true,
     door: ACT.REMOTE_WORK,
     unanswered: AGENT_UNANSWERED,
-  }),
-  AGENTS_ADD_REPOSITORY: hostAct({
-    input: agentAddRepositoryParamsSchema,
-    output: agentAgentAnswerSchema,
-    refusal: "Could not add a repository to the agent on this system.",
-    panelOnly: true,
-    door: ACT.REMOTE_WORK,
-    unanswered: AGENT_UNANSWERED,
-    byHand: true,
   }),
   AGENTS_QUEUE: hostAct({
     input: agentQueueParamsSchema,

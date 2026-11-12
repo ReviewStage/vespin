@@ -291,6 +291,7 @@ export const PRODUCT_EXPERIMENT = {
   /** Removed with Pilot, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   PILOT: "pilot",
   SKILLS: "skills",
+  /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   BRING_YOUR_OWN_HOST: "bring-your-own-host",
   /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   SEVERAL_REPOSITORIES: "several-repositories",
@@ -346,6 +347,7 @@ const PRODUCT_SESSION_COUNT_LADDER: readonly ProductSessionCountBucket[] = Objec
 /** The highest rung a count reaches; anything below the first rung is none. */
 export function productSessionCountBucket(count: number): ProductSessionCountBucket {
   if (!Number.isFinite(count)) return PRODUCT_SESSION_COUNT_BUCKET.NONE;
+
   return (
     PRODUCT_SESSION_COUNT_LADDER.find((rung) => count >= rung) ?? PRODUCT_SESSION_COUNT_BUCKET.NONE
   );
@@ -379,7 +381,9 @@ const PRODUCT_ELAPSED_LADDER: readonly ProductElapsedSeconds[] = Object.values(
 /** The highest rung a wait in milliseconds reaches; anything below the first rung is none. */
 export function productElapsedSeconds(milliseconds: number): ProductElapsedSeconds {
   const seconds = milliseconds / 1000;
+
   if (!Number.isFinite(seconds)) return PRODUCT_ELAPSED_SECONDS.NONE;
+
   return PRODUCT_ELAPSED_LADDER.find((rung) => seconds >= rung) ?? PRODUCT_ELAPSED_SECONDS.NONE;
 }
 
@@ -558,6 +562,7 @@ type PropertyReader = {
 
 function memberReader(values: readonly string[]): (value: UnparsedWireValue) => string | undefined {
   const members: ReadonlySet<string> = new Set(values);
+
   return (value: UnparsedWireValue) =>
     isWireString(value) && members.has(value) ? value : undefined;
 }
@@ -578,6 +583,7 @@ const isProductExperimentScope = Schema.is(
  */
 function experimentScopeReader(value: UnparsedWireValue): ProductExperimentScope | undefined {
   if (value === undefined) return PRODUCT_EXPERIMENT_SCOPE.ACCOUNT;
+
   return isProductExperimentScope(value) ? value : undefined;
 }
 
@@ -637,15 +643,19 @@ function isProductEventName(value: UnparsedWireValue): value is ProductEventName
 export function productEventFromWire(value: UnparsedWireValue): ProductEvent | undefined {
   if (!isRecord(value) || !isProductEventName(value.name)) return undefined;
   const at = value.at;
+
   if (!isWireNumber(at) || !Number.isFinite(at) || at < 0) return undefined;
   const source = isRecord(value.properties) ? value.properties : undefined;
   const allowed: readonly ProductEventProperty[] = PRODUCT_EVENT_PROPERTIES[value.name];
   const properties: Record<string, string | number> = {};
+
   for (const property of allowed) {
     const read = PRODUCT_EVENT_PROPERTY_READER[property](source?.[property]);
+
     if (read === undefined) return undefined;
     properties[property] = read;
   }
+
   // SAFETY: every key came from this event's allowlist and every value from
   // that property's own reader, which is exactly the declared shape.
   return { name: value.name, at, properties };
@@ -660,16 +670,21 @@ export function productEventFromWire(value: UnparsedWireValue): ProductEvent | u
  */
 export function productEventBatchFromWire(value: UnparsedWireValue): ProductEventBatch | undefined {
   if (!isRecord(value) || !Array.isArray(value.events)) return undefined;
+
   if (value.events.length === 0 || value.events.length > PRODUCT_EVENT_BATCH_LIMIT) {
     return undefined;
   }
+
   const events: ProductEvent[] = [];
+
   for (const candidate of value.events) {
     if (isRetiredProductEvent(candidate)) continue;
     const event = productEventFromWire(candidate);
+
     if (!event) return undefined;
     events.push(event);
   }
+
   return events;
 }
 
@@ -734,6 +749,7 @@ const decodeProductEventBuild = Schema.decodeUnknownOption(ProductEventBuildSche
  */
 export function productEventBuildFromWire(value: UnparsedWireValue): ProductEventBuild {
   if (!isRecord(value)) return {};
+
   return Option.getOrElse(decodeProductEventBuild(value.build), () => ({}));
 }
 

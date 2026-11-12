@@ -13,8 +13,9 @@
  * authentication session and its cipher the Keychain's.
  *
  * The screens' acts reach the host's own procedures on the act port in this
- * process, over a channel of two ends (`in-process-channel.ts`); every
- * platform kind, a copy, a download, the Mac's own terminal, is refused in
+ * process, over a channel of two ends (`in-process-channel.ts`); of the
+ * platform kinds the app answers a note's send to the feedback endpoint,
+ * and every other, a copy, a download, the Mac's own terminal, is refused in
  * its own words, so the table stays total. The composition is a `Layer`,
  * built by the app's one runtime edge (`mobile-runtime.ts`), whose close is
  * the host's drain; `fork` is that runtime's, handed in so no count runs
@@ -36,6 +37,8 @@ import {
   type AgentProceduresDependencies,
   clientSettingSideEffects,
   createActPortHandler,
+  feedbackProcedures,
+  type PlatformActProcedures,
   refusedPlatformProcedures,
   WindowPushes,
 } from "@repo/host/act-port";
@@ -67,6 +70,8 @@ import {
   hostKernelLayer,
   hostStandingLayer,
   IdSource,
+  issuedTokenAccountSourceLayer,
+  type KeepIssuedToken,
   OAUTH_ACCOUNT_CLIENT,
   oauthAccountSourceLayerFor,
   RunMode,
@@ -82,19 +87,27 @@ import { effectServiceLayer } from "@repo/host/service-layer";
 import { plainCodeLines } from "@repo/host/task-code-remote";
 import { Cause, ConfigProvider, Context, Effect, Layer, Path, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
-import type * as HttpClient from "effect/http/HttpClient";
+import * as HttpClient from "effect/http/HttpClient";
 import { fixtureActs, stageFixture } from "./fixture-host.js";
 import { inProcessChannel } from "./in-process-channel.js";
+
+/**
+ * How long the share sheet sends a token after it is issued: ten minutes
+ * short of the hour the service's access tokens last (`accessTokenExpiresIn`
+ * in `packages/service/src/auth/auth.ts`), so one nearly lapsed is not sent.
+ */
+const SHARE_TOKEN_LIFETIME_MS = 50 * 60 * 1000;
 
 /**
  * The service the app talks to: production's, or the Preview a build names
  * in `EXPO_PUBLIC_SERVICE_ORIGIN`, which Expo writes into the bundle as it
  * is built, so a production build carries only the origin itself.
  */
-const SERVICE_ORIGIN = process.env.EXPO_PUBLIC_SERVICE_ORIGIN ?? LINK_ORIGIN;
+export const SERVICE_ORIGIN = process.env.EXPO_PUBLIC_SERVICE_ORIGIN ?? LINK_ORIGIN;
 
 /** The one place every act is from: the app's screens, which stand as the host's one panel. */
 const APP_SCREENS = Symbol("app screens");
+
 type MobileSender = typeof APP_SCREENS;
 
 /** What the app's root reads of the host once it stands: the bridge the screens read state through, and the client their acts go out on. */
@@ -124,6 +137,8 @@ export interface DeviceSeams {
   readonly cipher: SecretCipherSeam;
   /** Where a sign-in's authorization page is shown and its redirect caught. */
   readonly authSession: AuthSession;
+  /** Keeps each access token the account is issued where the share sheet reads it, or removes it, answering whether the Keychain took it (`share-token-module.ts`). */
+  readonly keepShareToken: KeepIssuedToken;
 }
 
 /** What the app hands the composition. */
@@ -181,6 +196,7 @@ function accountSeams(device: DeviceSeams) {
 /** Every seam the host's kernel and assembly stand on, as the app answers it. */
 function seamLayers(options: MobileHostOptions) {
   const { stateRoot, appVersion, fixture, device } = options;
+
   return Layer.mergeAll(
     Layer.succeed(StateRoot, stateRoot),
     Layer.succeed(RunMode, runModeFor({ capture: false, fixture: fixture !== undefined })),
@@ -210,6 +226,7 @@ function portDependencies(
 ): ActPortDependencies {
   const host = operator.host;
   const { openExternal } = device;
+
   return {
     account: {
       host,
@@ -241,6 +258,21 @@ function portDependencies(
   };
 }
 
+/** Where a note to the people who make the app goes: the service's own feedback endpoint, a Preview's where one is built in. */
+const FEEDBACK_PATH = "/api/feedback";
+
+/**
+ * The platform kinds the app answers itself: a note to the people who make
+ * the app, carried to the service's feedback endpoint over the host's own
+ * HTTP client (`feedbackProcedures`). Every other platform kind is refused
+ * in its own words: a copy or a save the app does through the system's own
+ * pasteboard, Photos, and share sheet, and what only the Mac has.
+ */
+const platformProcedures = (http: HttpClient.HttpClient): PlatformActProcedures<MobileSender> => ({
+  ...refusedPlatformProcedures<MobileSender>(),
+  ...feedbackProcedures<MobileSender>(http, new URL(FEEDBACK_PATH, SERVICE_ORIGIN).href),
+});
+
 /**
  * The act port as the app opens it: a channel in the process, the host's end
  * upgraded with the act port's handler and the screens' end linked to the
@@ -249,23 +281,25 @@ function portDependencies(
  * every call is the panel's and trusted; the procedures' effects run on the
  * app's runtime. Both ends close with the host's scope.
  */
-const servedActPort = (dependencies: ActPortDependencies, services: Context.Context<never>) =>
+const servedActPort = (
+  dependencies: ActPortDependencies,
+  services: Context.Context<never>,
+  http: HttpClient.HttpClient,
+) =>
   Effect.acquireRelease(
     Effect.sync(() => {
       const channel = inProcessChannel();
-      createActPortHandler(dependencies, refusedPlatformProcedures<MobileSender>()).upgrade(
-        channel.port2,
-        {
-          context: () => ({
-            actor: { sender: APP_SCREENS, panel: true },
-            trusted: true,
-            "effect/context": services,
-          }),
-        },
-      );
+      createActPortHandler(dependencies, platformProcedures(http)).upgrade(channel.port2, {
+        context: () => ({
+          actor: { sender: APP_SCREENS, panel: true },
+          trusted: true,
+          "effect/context": services,
+        }),
+      });
       channel.port2.start();
       const link = new RPCLink({ port: channel.port1 });
       channel.port1.start();
+
       return { channel, acts: createORPCClient<ActPortClient>(link) };
     }),
     ({ channel }) =>
@@ -304,6 +338,7 @@ const composedMobile = (options: MobileHostOptions) =>
       const assembly = yield* HostAssemblyTag;
       const services: Context.Context<never> = yield* Effect.context();
       const runMode = runModeFor({ capture: false, fixture: fixture !== undefined });
+
       const state = new AppStateStore(
         initialAppState(
           {
@@ -322,6 +357,7 @@ const composedMobile = (options: MobileHostOptions) =>
         ),
         services,
       );
+
       const operator = yield* createOperatorClient({
         report,
         gateway: assembly.gateway,
@@ -330,6 +366,7 @@ const composedMobile = (options: MobileHostOptions) =>
         node: { openExternal: device.openExternal },
         state,
       });
+
       // Note that the device is taken as online: what it can reach is what the service's reach says (`serviceReachLayer`), which the watch follows.
       yield* linkNetworkWatch({
         state,
@@ -337,6 +374,7 @@ const composedMobile = (options: MobileHostOptions) =>
         regained: operator.host.tasksRegained(),
         report,
       });
+
       // No notification, badge, or chime leaves the app yet: those come with the screens that draw the Inbox.
       const notices = yield* linkClientNotices({
         state,
@@ -351,6 +389,7 @@ const composedMobile = (options: MobileHostOptions) =>
           chime: () => undefined,
         }),
       );
+
       const count: AppBridge["recordSurfaceEvent"] = (name, properties) => {
         // A count that fails is said on the console, never left as a rejection nobody hears.
         fork(
@@ -359,16 +398,20 @@ const composedMobile = (options: MobileHostOptions) =>
           ),
         );
       };
+
       const made = yield* createInProcessBridge({
         state,
         windowFacts: () => ({ fullScreen: false }),
         reports: { notifyReady: () => undefined, recordSurfaceEvent: count },
         report,
       });
+
       const acts = yield* servedActPort(
         portDependencies(operator, notices, device.createId(), device),
         services,
+        yield* HttpClient.HttpClient,
       );
+
       return { bridge: made.bridge, acts, operator, state };
     }),
   );
@@ -386,6 +429,7 @@ export function composeMobile(
   options: MobileHostOptions,
 ): Layer.Layer<MobileHostTag | HostTag, DuplicateGatewayMethod | DuplicateHostAct> {
   const { httpClient, device } = options;
+
   // Every call the host makes to the service tells the service's reach beside it, which the network watch follows.
   const assembly = Layer.provide(
     hostAssemblyLayer([HOST_PLATFORM_CONCERN.TERMINALS]),
@@ -394,9 +438,16 @@ export function composeMobile(
       device.fileSystem,
       Path.layer,
       httpClient,
-      Layer.provide(oauthAccountSourceLayerFor(OAUTH_ACCOUNT_CLIENT.IOS), accountSeams(device)),
+      Layer.provide(
+        issuedTokenAccountSourceLayer(oauthAccountSourceLayerFor(OAUTH_ACCOUNT_CLIENT.IOS), {
+          keep: device.keepShareToken,
+          lifetimeMs: SHARE_TOKEN_LIFETIME_MS,
+        }),
+        accountSeams(device),
+      ),
     ),
   ).pipe(Layer.provideMerge(serviceReachLayer));
+
   const launched = Layer.unwrap(
     Effect.map(ComposedMobileTag, (mobile) => {
       const standing = Layer.mergeAll(
@@ -414,13 +465,16 @@ export function composeMobile(
         }),
         effectServiceLayer(mobile.operator, report),
       ).pipe(Layer.provideMerge(hostStandingLayer));
+
       const staged =
         options.fixture === undefined
           ? Layer.empty
           : stagedFixture(mobile.state, options.fixtureUpdateNeeded === true);
+
       return Layer.provideMerge(staged, standing);
     }),
   );
+
   return launched.pipe(
     Layer.provideMerge(composedMobile(options)),
     Layer.provideMerge(assembly),

@@ -131,7 +131,9 @@ export function FileTreeStage({
       <SpinnerRegion delay label={TREE_WORDS.READING} />
     );
   }
+
   const drawn = standing.kind === TREE_STANDING.DRAWN;
+
   return (
     <>
       {standing.kind === TREE_STANDING.READING ? (
@@ -178,6 +180,7 @@ function TreeSearch({
     query.length === 0 && floating
       ? undefined
       : () => (query.length > 0 ? onQuery("") : field.current?.blur());
+
   return (
     <SearchField
       ref={field}
@@ -248,20 +251,25 @@ function FileTreeBody({
 
   useEffect(() => {
     const element = host.current;
+
     if (module === undefined || element === null) return undefined;
+
     const mounted = module.mount(element, {
       readFolder: (path) => latest.current.listFolder(path),
       onStanding: setStanding,
       onOpen: (path, newTab) => latest.current.onOpen(path, newTab),
       onViewed: (path) => latest.current.onViewed?.(path),
     });
+
     handle.current = mounted;
+
     if (everything.current !== undefined) mounted.within(everything.current);
     mounted.search(latest.current.query);
     mounted.only(latest.current.only);
     mounted.mark(latest.current.marks ?? []);
     revealed.current = latest.current.file;
     mounted.reveal(latest.current.file, { focus: false });
+
     return () => {
       handle.current = undefined;
       mounted.unmount();
@@ -287,13 +295,16 @@ function FileTreeBody({
   useEffect(() => {
     if (query.trim() === "") {
       if (scope === SEARCH_SCOPE.MISSED) setScope(SEARCH_SCOPE.UNREAD);
+
       return;
     }
+
     if (scope !== SEARCH_SCOPE.UNREAD || readWhole === undefined) return;
     setScope(SEARCH_SCOPE.READING);
     readWhole().then(
       (answer) => {
         if (!("folder" in answer)) return setScope(SEARCH_SCOPE.MISSED);
+
         if (answer.folder.truncated) return setScope(SEARCH_SCOPE.OPENED);
         everything.current = entriesOf(answer.folder.entries);
         handle.current?.within(everything.current);
@@ -375,6 +386,7 @@ export function FileTreePane({
 }): React.JSX.Element {
   const field = useRef<HTMLInputElement>(null);
   const phone = usePhoneRoom();
+
   if (over !== undefined) {
     return (
       <OverPane
@@ -393,6 +405,7 @@ export function FileTreePane({
       </OverPane>
     );
   }
+
   return (
     <PanePin
       ref={pane}

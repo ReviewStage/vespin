@@ -12,7 +12,6 @@ import {
   ConfirmDialog,
   type DialogQuestion,
   IconButton,
-  LIST_DENSITY,
   LIST_ROW_ACTIONS,
   LIST_VARIANT,
   List,
@@ -107,6 +106,7 @@ export function AgentQueueDock({
   const [doomed, setDoomed] = useState<QueuedMessage>();
   // The question goes with its message, which a hand-off may send while it is asked.
   const asked = doomed !== undefined && messages.some((message) => message.id === doomed.id);
+
   const confirm = useConfirmDialog(
     { subject: asked, surfaceOpen: true },
     neverBusyAct(() => {
@@ -114,9 +114,11 @@ export function AgentQueueDock({
     }),
     confirmFailure(FAILURE_SURFACE.AGENT_QUEUE_DELETE),
   );
+
   if (messages.length === 0) return null;
   // Note that a lone message has nowhere to move, so it offers no handle.
   const movable = controls && messages.length > 1;
+
   return (
     <div className={`agent-queue-dock ${COMPOSER_DOCK_CLASS}`}>
       {/* Note that a first launch's failed boot is said in the empty transcript, whose Retry lifts the pause. */}
@@ -145,12 +147,13 @@ export function AgentQueueDock({
         <List
           label={QUEUE_WORDS.LIST}
           variant={LIST_VARIANT.CARD}
-          density={LIST_DENSITY.DENSE}
+          fingerTall
           moves
           onPointerDown={drag}
         >
           {messages.map((message) => {
             const edited = message.id === editing || message.editing === true;
+
             return (
               <ListRow
                 key={message.id}

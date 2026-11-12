@@ -1,5 +1,10 @@
 import { ENTITY_KIND } from "@repo/features/entity-kind";
-import { decideButtons, inboxLineKind, inboxPreview } from "@repo/features/inbox-list-model";
+import {
+  decideButtons,
+  inboxLineKind,
+  inboxPreview,
+  NEEDS_YOU,
+} from "@repo/features/inbox-list-model";
 import { INBOX_ASK, type InboxItem, knownAsk, openAskOf } from "@repo/features/inbox-wire";
 import {
   BUTTON_SIZE,
@@ -75,14 +80,11 @@ export interface TurnDone {
   readonly archive: { readonly onSelect: () => void; readonly busy: boolean } | undefined;
 }
 
-/** What the bar says while asks of the agent's wait on the developer. */
-const NEEDS_YOU_WORDS = "Needs you";
-
 /** What the bar's Done says. */
 const DONE_WORDS = {
   DONE: "Done",
   ARCHIVE: "Archive agent",
-  ARCHIVING: "Archiving…",
+  ARCHIVING: "Archiving",
   FOLLOW_UPS: "Follow-ups",
   OTHER_AGENT: "Another agent on this task",
 } as const;
@@ -98,16 +100,21 @@ const NEEDS_YOU_ROWS = 3;
  */
 function NeedsYouRow({ item, threads }: { item: InboxItem; threads: AgentThreads }): ReactNode {
   const directory = useMemberDirectory();
+
   const nameOf = (member: Parameters<typeof personActor>[0]) =>
     actorName(personActor(member, directory.members, directory.readerId, directory.former));
+
   const open = openAskOf(item.thread ?? []);
   const ask = open === undefined ? undefined : knownAsk(open.ask);
   const options = ask?.type === INBOX_ASK.DECIDE && decideButtons(ask) ? ask.options : undefined;
   const { onChoose } = threads;
+
   // Note that the buttons and the row's own press are one choice, so both read this alone.
   const choice =
     options === undefined || onChoose === undefined ? undefined : { options, onChoose };
+
   const sending = threads.sending?.has(item.id) === true;
+
   return (
     <ListRow
       leading={inboxLineGlyph(inboxLineKind(item))}
@@ -146,6 +153,7 @@ function NeedsYouRow({ item, threads }: { item: InboxItem; threads: AgentThreads
 function DoneBar({ threads, done }: { threads: AgentThreads; done: TurnDone }): ReactNode {
   const { archive, onTick, ticked } = done;
   const { onOpenAgent } = threads;
+
   return (
     <Stack gap={GAP.TIGHT}>
       <List label={DONE_WORDS.DONE} variant={LIST_VARIANT.CARD} fingerTall>
@@ -203,10 +211,10 @@ function DoneBar({ threads, done }: { threads: AgentThreads; done: TurnDone }): 
 /** The bar's Needs you: its head as the dock's row, counting what waits, then the oldest asks on rows of their own. */
 function NeedsYouBar({ threads, next }: { threads: AgentThreads; next: InboxItem }): ReactNode {
   return (
-    <List label={NEEDS_YOU_WORDS} variant={LIST_VARIANT.CARD} fingerTall>
+    <List label={NEEDS_YOU.LABEL} variant={LIST_VARIANT.CARD} fingerTall>
       <ListRow
         leading={<InboxIcon aria-hidden="true" />}
-        title={NEEDS_YOU_WORDS}
+        title={NEEDS_YOU.LABEL}
         meta={<WaitingCount count={threads.waiting.length} />}
         onPress={() => threads.onOpen(next)}
       />
@@ -220,6 +228,7 @@ function NeedsYouBar({ threads, next }: { threads: AgentThreads; next: InboxItem
 /** The agent's threads as one row over its box: what waits, else quiet, how many; nothing while it posted none. */
 export function ThreadsDock({ threads }: { threads: AgentThreads | undefined }): ReactNode {
   const next = threads?.waiting[0];
+
   if (threads?.turnEnd === true && next !== undefined) {
     return (
       <div className={`agent-threads-dock ${COMPOSER_DOCK_CLASS}`}>
@@ -227,6 +236,7 @@ export function ThreadsDock({ threads }: { threads: AgentThreads | undefined }):
       </div>
     );
   }
+
   if (threads?.turnEnd === true && threads.done !== undefined) {
     return (
       <div className={`agent-threads-dock ${COMPOSER_DOCK_CLASS}`}>
@@ -234,8 +244,11 @@ export function ThreadsDock({ threads }: { threads: AgentThreads | undefined }):
       </div>
     );
   }
+
   const latest = threads?.posted[0];
+
   if (threads === undefined || latest === undefined) return null;
+
   const row =
     next === undefined ? (
       <ListRow
@@ -252,6 +265,7 @@ export function ThreadsDock({ threads }: { threads: AgentThreads | undefined }):
         onPress={() => threads.onOpen(next)}
       />
     );
+
   return (
     <div className={`agent-threads-dock ${COMPOSER_DOCK_CLASS}`}>
       <List label={TAB_WORDS.INBOX} variant={LIST_VARIANT.CARD} fingerTall>

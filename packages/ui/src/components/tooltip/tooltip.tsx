@@ -139,6 +139,7 @@ export function TooltipCard({
     latestAt.current = at;
   });
   const boxed = at !== undefined;
+
   const hung = useMemo(
     () =>
       !boxed
@@ -147,6 +148,7 @@ export function TooltipCard({
             contextElement: anchor,
             getBoundingClientRect: () => {
               const box = latestAt.current?.();
+
               return box === undefined
                 ? anchor.getBoundingClientRect()
                 : new DOMRect(box.left, box.top, box.right - box.left, box.bottom - box.top);
@@ -154,11 +156,13 @@ export function TooltipCard({
           },
     [anchor, boxed],
   );
+
   const hover = (over: boolean, event: PointerEvent<HTMLElement>) => {
     if (event.pointerType === "touch" || event.nativeEvent === told.current) return;
     told.current = event.nativeEvent;
     onHover?.(over);
   };
+
   return (
     <HoverCard open>
       <HoverCardContent
@@ -175,6 +179,7 @@ export function TooltipCard({
         }}
         onClick={(event) => {
           event.stopPropagation();
+
           if (event.target instanceof Element && event.target.closest(CARD_CHOICE) !== null) {
             onChoice?.();
           }

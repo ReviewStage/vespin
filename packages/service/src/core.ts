@@ -6,10 +6,13 @@
  */
 
 export * from "@repo/features";
+
 export * from "@repo/features/analytics";
+
 // The task vocabulary stands behind doors of its own, which the barrel
 // above re-exports nothing of.
 export * from "@repo/features/task-wire";
+
 // The brain is named rather than starred: what is listed is what the server
 // imports through this door and nothing more.
 export {
@@ -33,7 +36,11 @@ export {
   userMessage,
   userMetadataOf,
 } from "@repo/features/turn-run";
+
 export { wireValidatedTool } from "@repo/features/turn-run/tool-set";
+
 export * from "@repo/runtime/vocabulary";
+
 export * from "@repo/wire";
+
 export * from "@repo/wire/ui-messages";

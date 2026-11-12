@@ -6,13 +6,16 @@ import {
 } from "@repo/features/agent-view";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { RETRY } from "@repo/features/inbox-list-model";
+import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import {
-  INBOX_STATUS,
-  INBOX_TAKE_BACK,
-  type InboxItem,
-  type InboxStatus,
-} from "@repo/features/inbox-wire";
-import { cardTitle } from "@repo/features/plain-words";
+  NOT_RESOLVED,
+  RESOLVE_UNTAKEN,
+  resolvedWords,
+  TOOK_BACK,
+  type TookBack,
+  type UntakenWords,
+  untakenSaid,
+} from "@repo/features/inbox-write-words";
 import { FAILURE_SURFACE, type FailureSurface } from "@repo/features/shown-failure";
 import { countWords, TERM } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
@@ -49,36 +52,6 @@ import { pressTakeBack, type TakeBackUndoRefusal, type TakeBackWrite } from "../
 /** What a close the act channel refused hears, as the service not answering, with the error beneath. */
 const unreached = unreachedAs(AGENT_CALL_FAILURE.UNANSWERED);
 
-/** What a toast says of a close the service did not take, by what had become of the item: still open, the agent having changed it; answered; or resolved. */
-const NOT_TAKEN = {
-  [INBOX_STATUS.OPEN]: "The agent changed this item before you resolved it.",
-  [INBOX_STATUS.ANSWERED]: "This item was already answered.",
-  [INBOX_STATUS.CLOSED]: "This item was already resolved.",
-} as const satisfies Record<InboxStatus, string>;
-
-/** What a toast says of a resolve's Undo the service did not take, by why. */
-const RESOLVE_UNTAKEN = {
-  unreached: "Could not undo resolving.",
-  told: "Can't undo: the agent was already told.",
-  movedOn: "Can't undo: it changed since you resolved it.",
-} as const;
-
-/** How one take-back answered: taken back, refused as told to its agent or as moved on, or not reached, so it may be asked again. */
-const TOOK_BACK = {
-  ...INBOX_TAKE_BACK,
-  UNREACHED: "unreached",
-} as const;
-
-export type TookBack = (typeof TOOK_BACK)[keyof typeof TOOK_BACK];
-
-/** What the Undo toast says: the one item by its title, or how many. */
-function resolvedNote(items: readonly InboxItem[]): string {
-  const [only] = items;
-  return items.length === 1 && only !== undefined
-    ? `Resolved “${cardTitle(only.title)}”`
-    : `${countWords(items.length, TERM.INBOX_ITEM)} resolved`;
-}
-
 /** What one toast says of a resolve of several items the service refused some of: how many it took, and how many not. */
 function closedNote(landed: number, refused: number): string {
   return landed === 0
@@ -91,7 +64,8 @@ function refusalWords(
   answer: AgentInboxAnsweredView | { readonly failure: AgentCallFailure },
 ): string | undefined {
   if ("failure" in answer) return messageFailureWords(answer.failure);
-  return answer.taken ? undefined : NOT_TAKEN[answer.item.status];
+
+  return answer.taken ? undefined : NOT_RESOLVED[answer.item.status];
 }
 
 /** Resolves the open items given without an answer, at once, with Undo; one already on its way, or no longer open, is passed over. */
@@ -135,13 +109,6 @@ export function tookBack(
   );
 }
 
-/** What a settle's Undo says where the service did not take it back, in its own words: not reached, told to its agent, or moved on. */
-export interface UntakenWords {
-  readonly unreached: string;
-  readonly told: string;
-  readonly movedOn: string;
-}
-
 /**
  * What an Undo of settles says where it did not take each back: the Undo
  * not reached, asked again for those alone; one whose agent was told; or one
@@ -153,7 +120,8 @@ export function untakenSettles(
   words: UntakenWords,
   surface: FailureSurface,
 ): TakeBackUndoRefusal<Settles> | undefined {
-  const missed = (_: unknown, at: number) => answers[at] === TOOK_BACK.UNREACHED;
+  const missed = <Item,>(_: Item, at: number) => answers[at] === TOOK_BACK.UNREACHED;
+
   if (answers.some((answer) => answer === TOOK_BACK.UNREACHED)) {
     return {
       words: words.unreached,
@@ -164,11 +132,9 @@ export function untakenSettles(
       },
     };
   }
-  const said = answers.includes(TOOK_BACK.TOLD)
-    ? words.told
-    : answers.includes(TOOK_BACK.MOVED_ON)
-      ? words.movedOn
-      : undefined;
+
+  const said = untakenSaid(answers, words);
+
   return said === undefined
     ? undefined
     : { words: said, failure: { surface, cause: said, refused: true } };
@@ -181,7 +147,7 @@ export function untakenSettles(
  * those alone.
  */
 const RESOLVE_WRITE = {
-  words: ({ items }) => resolvedNote(items),
+  words: ({ items }) => resolvedWords(items),
   glyph: () => <GLYPH.RESOLVED />,
   // Note that one item's toast quotes its title, which a screen recording masks.
   unmasked: ({ items }) => items.length > 1,
@@ -200,10 +166,14 @@ const RESOLVE_WRITE = {
     const refused = answers.flatMap((answer, at) => {
       const words = refusalWords(answer);
       const item = items[at];
+
       return words === undefined || item === undefined ? [] : [{ words, answer, item }];
     });
+
     const [first] = refused;
+
     if (first === undefined) return undefined;
+
     return {
       // Note that a close the service never answered may have landed, so only a refusal of every one is whole.
       whole: answers.every((answer) => !("failure" in answer) && !answer.taken),
@@ -227,12 +197,15 @@ export function useInboxResolver(): InboxResolver {
   const { mutateAsync: close } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_CLOSE));
   const { mutateAsync: takeBack } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_TAKE_BACK));
   const out = useRef(new Set<string>());
+
   return useCallback(
     (items: readonly InboxItem[]) => {
       const open = items.filter(
         (item) => item.status === INBOX_STATUS.OPEN && !out.current.has(item.id),
       );
+
       if (open.length === 0) return;
+
       for (const item of open) out.current.add(item.id);
       const resolving = { items: open, keys: open.map(() => crypto.randomUUID()) };
       void pressTakeBack(RESOLVE_WRITE, { close, takeBack }, resolving).then(() => {

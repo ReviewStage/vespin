@@ -63,10 +63,13 @@ function layOut(
   vi.spyOn(window, "innerHeight", "get").mockReturnValue(height);
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
     if (this.classList.contains("tab-add-anchor")) return plus;
+
     if (this.classList.contains("ui-anchored-popover")) {
       return box(0, 0, MENU_WIDTH, MENU_HEIGHT);
     }
+
     if (panel !== undefined && this.hasAttribute("data-popover-room")) return panel;
+
     return box(0, 0, 0, 0);
   });
 }
@@ -74,13 +77,16 @@ function layOut(
 /** A strip's "+" drawn into the document, inside a side panel where `inPanel` says, offering a few tabs. */
 async function drawn(inPanel: boolean): Promise<HTMLElement> {
   const container = document.body.appendChild(document.createElement("div"));
+
   if (inPanel) container.setAttribute("data-popover-room", "");
   const root = createRoot(container);
   roots.push(root);
+
   const entries = ["Plan", "Inbox", "Board", "Code", "Comments"].map((name) => ({
     row: { id: name.toLowerCase(), label: name },
     onPick: ignore,
   }));
+
   await act(async () =>
     root.render(
       withQueryClient(
@@ -97,6 +103,7 @@ async function drawn(inPanel: boolean): Promise<HTMLElement> {
       ),
     ),
   );
+
   return container;
 }
 
@@ -105,19 +112,24 @@ async function opened(container: HTMLElement, plus: DOMRect): Promise<[number, n
   const button =
     container.querySelector<HTMLButtonElement>('button[aria-label="Open a tab"]') ??
     assert.fail("the + stands");
+
   await act(async () => button.click());
   assert.ok(
     container.querySelector(".ui-searchable-menu [role='option']"),
     "the menu offers its tabs",
   );
+
   const layer =
     container.querySelector<HTMLElement>(".ui-anchored-popover") ??
     assert.fail("the menu hangs from the +");
+
   const width = Number.parseFloat(layer.style.width);
+
   const left =
     layer.style.left === ""
       ? plus.right - Number.parseFloat(layer.style.right) - width
       : plus.left + Number.parseFloat(layer.style.left);
+
   return [left, left + width];
 }
 
@@ -150,6 +162,7 @@ function resolved(element: Element, length: string): string {
     (_, name: string, fallback) =>
       getComputedStyle(element).getPropertyValue(name).trim() || (fallback ?? ""),
   );
+
   return once === length ? once : resolved(element, once);
 }
 

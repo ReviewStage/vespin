@@ -39,7 +39,14 @@ import type {
   ComposerTrigger,
 } from "../description-editor/contract.js";
 import { SettingsPageLink } from "../open-settings.js";
-import { COMMAND_NAMES, CommandRef, commandOption, matchingCommands } from "./command-ref.js";
+import {
+  COMMAND_NAMES,
+  type CommandReach,
+  CommandRef,
+  commandOption,
+  matchingCommands,
+  runsCommand,
+} from "./command-ref.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide, wordBox } from "./mention-picker.js";
 import { opensFile, SkillRef, type SkillWithFile, skillOption } from "./skill-ref.js";
 
@@ -72,10 +79,11 @@ import { opensFile, SkillRef, type SkillWithFile, skillOption } from "./skill-re
  *
  * Where the box runs commands (`ComposerCommands`), a `/` that opens the
  * message lists the box's own commands first, under Commands, then the
- * skills under Skills: `/model`, which opens the model chip's menu,
- * `/compact`, written into the words for any the harness should keep, and
- * `/clear` (or `/new`), which starts the agent's harness on a fresh
- * session. A command chosen runs, or for `/compact` is written, in place of
+ * skills under Skills, whether or not there are any: `/model`, which opens
+ * the model chip's menu, wherever the box has one, New task's on Home
+ * among them; and, where its agent has a session, `/compact`, written into
+ * the words for any the harness should keep, and `/clear` (or `/new`),
+ * which starts the agent's harness on a fresh session. A command chosen runs, or for `/compact` is written, in place of
  * the `/` word, a command the message opens with drawn as its chip
  * (`command-ref.tsx`) as a skill's is; a skill named like one of them is left out there, since the
  * command is what its name runs as the message's first word. A `/` later in
@@ -85,8 +93,9 @@ import { opensFile, SkillRef, type SkillWithFile, skillOption } from "./skill-re
 /** Reads the task's repository's skills; asked the first time a `/` is typed. */
 export type SkillSource = () => Promise<SkillsRead>;
 
-/** The box's own commands, where it runs them: what choosing one from the list does. */
+/** The box's own commands, where it runs them: which it reaches, and what choosing one from the list does. */
 export interface ComposerCommands {
+  readonly reach: CommandReach;
   readonly onRun: (name: SlashCommand) => void;
 }
 
@@ -155,14 +164,18 @@ export interface SkillPicker {
 /** The rows the list offers for the word under the caret; none while the skills are not read, or could not be. */
 function offered(read: SkillsRead | undefined, trigger: ComposerTrigger | undefined) {
   if (read === undefined || "unread" in read || trigger === undefined) return [];
+
   return matchingSkills(read.skills, trigger.query);
 }
 
 /** What the list says where it offers no row. */
 function MenuNote({ read }: { read: SkillsRead | undefined }): React.ReactNode {
   if (read === undefined) return SKILL_MENU_NOTE.READING;
+
   if ("unread" in read) return read.unread;
+
   if (read.skills.length > 0) return SKILL_MENU_NOTE.NO_MATCH;
+
   return (
     <Stack gap={GAP.TIGHT} align={ALIGN.CENTER}>
       <Text as={TEXT_ELEMENT.SPAN} tone={TEXT_TONE.MUTED}>
@@ -194,9 +207,11 @@ function SkillMenu({
   const commands = entries.flatMap((entry) =>
     entry.kind === ENTRY_KIND.COMMAND ? [commandOption(entry.name)] : [],
   );
+
   const skills = entries.flatMap((entry) =>
     entry.kind === ENTRY_KIND.SKILL ? [skillOption(entry.skill)] : [],
   );
+
   // Note that the skills stand under a heading only where commands stand over them.
   const groups =
     commands.length === 0
@@ -205,6 +220,7 @@ function SkillMenu({
           { label: GROUP_LABEL.COMMANDS, replayUnmasked: true, options: commands },
           ...(skills.length === 0 ? [] : [{ label: GROUP_LABEL.SKILLS, options: skills }]),
         ];
+
   return (
     <MenuSurface className="skill-menu" inset={MENU_SURFACE_INSET.NONE}>
       <ComboboxList
@@ -215,6 +231,7 @@ function SkillMenu({
         onActiveChange={onHover}
         onChoose={(index) => {
           const entry = entries[index];
+
           if (entry !== undefined) onChoose(entry);
         }}
         note={entries.length === 0 ? <MenuNote read={read} /> : undefined}
@@ -239,6 +256,7 @@ function BoxChip({
 }): React.JSX.Element {
   // Note that an installed skill names no file of the repository's, so its chip opens nothing, and that the chip stands in the words being written, so it wraps as they do.
   const file = skill !== undefined && opensFile(skill) ? skill : undefined;
+
   return (
     <InlineRefFitScope fit={INLINE_REF_FIT.FLOW}>
       <SkillRef
@@ -276,9 +294,11 @@ export function useSkillPicker({
 }): SkillPicker {
   const listId = useId();
   const [trigger, setTrigger] = useState<ComposerTrigger | undefined>(undefined);
+
   const [read, setRead] = useState<
     { source: SkillSource; read: SkillsRead; start: number | undefined; asked: number } | undefined
   >();
+
   const [highlight, setHighlight] = useState<Highlight | undefined>(undefined);
   const [closedAt, setClosedAt] = useState<number | undefined>(undefined);
   // Each opening of an `@` list that asks for the skills, counted, so a read that failed is asked again by the next.
@@ -286,21 +306,28 @@ export function useSkillPicker({
   const ask = useCallback(() => setAsked((count) => count + 1), []);
 
   const skills = source !== undefined && read?.source === source ? read.read : undefined;
+
   // Note that the box's commands are offered for the message's first word alone, which is where they run.
   const leads =
     commands !== undefined && trigger !== undefined && draft.slice(0, trigger.start).trim() === "";
-  const leading = leads ? matchingCommands(trigger.query) : [];
+
+  const leading = leads ? matchingCommands(trigger.query, commands.reach) : [];
   // Note that a box with no skills to offer opens the list only on a command the word finds.
   const mention = source === undefined && leading.length === 0 ? undefined : trigger;
   const open = mention !== undefined && closedAt !== mention.start;
   const offeredCommands = open ? leading : [];
+
   const rows: readonly Entry[] = [
     ...offeredCommands.map((name) => ({ kind: ENTRY_KIND.COMMAND, name })),
     ...(open ? offered(skills, mention) : [])
-      // A skill named as a command is left out where the command is what its name runs.
-      .filter((skill) => !(leads && isSlashCommand(skill.name)))
+      // A skill named as a command is left out where the box runs that command, which is what its name runs.
+      .filter(
+        (skill) =>
+          !(leads && isSlashCommand(skill.name) && runsCommand(skill.name, commands.reach)),
+      )
       .map((skill) => ({ kind: ENTRY_KIND.SKILL, skill })),
   ];
+
   const held =
     highlight !== undefined &&
     mention !== undefined &&
@@ -308,13 +335,16 @@ export function useSkillPicker({
     highlight.query === mention.query
       ? highlight.at
       : 0;
+
   const at = Math.min(held, Math.max(rows.length - 1, 0));
   const known = skills !== undefined && "skills" in skills ? skills.skills : undefined;
   const unread = skills !== undefined && "unread" in skills;
+
   const names = useMemo(
     () => (known === undefined ? NO_NAMES : new Set(known.map((each) => each.name))),
     [known],
   );
+
   // Note that a message already naming a skill reads them too, so its chips are drawn.
   const wantsSkills = source !== undefined && (asked > 0 || holdsSlashWord(draft));
 
@@ -332,6 +362,7 @@ export function useSkillPicker({
   // another `/` word opens it, the skills last read drawn meanwhile, so a
   // skill added on GitHub is offered the next time the list opens.
   const start = open ? mention.start : undefined;
+
   // Note that a read waits for a `/` word other than the one it was read
   // for to open the list, or, while none is open, for another opening of an
   // `@` list where it failed, never for a list to close or the caret to move.
@@ -339,12 +370,14 @@ export function useSkillPicker({
     read !== undefined &&
     read.source === source &&
     (start !== undefined ? read.start === start : "skills" in read.read || read.asked === asked);
+
   useEffect(() => {
     if (source === undefined || (!open && !wantsSkills) || settled) return;
     let live = true;
     source().then((answer) => {
       if (live) setRead({ source, read: answer, start, asked });
     });
+
     return () => {
       live = false;
     };
@@ -354,30 +387,41 @@ export function useSkillPicker({
   const choose = (entry: Entry) => {
     if (entry.kind === ENTRY_KIND.SKILL) {
       editor.current?.chooseSkill(entry.skill.name);
+
       return;
     }
+
     if (mention !== undefined) setClosedAt(mention.start);
     commands?.onRun(entry.name);
   };
 
   const onKey = (event: KeyboardEvent): boolean => {
     if (!open) return false;
+
     if (event.key === "Escape") {
       event.stopPropagation();
       setClosedAt(mention.start);
+
       return true;
     }
+
     const row = rows[at];
+
     if (row === undefined) return false;
+
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       const step = event.key === "ArrowDown" ? 1 : rows.length - 1;
       setHighlight({ start: mention.start, query: mention.query, at: (at + step) % rows.length });
+
       return true;
     }
+
     if ((event.key === "Enter" && !event.shiftKey) || event.key === "Tab") {
       choose(row);
+
       return true;
     }
+
     return false;
   };
 
@@ -418,7 +462,8 @@ export function useSkillPicker({
         !open || rows.length === 0 ? undefined : comboboxOptionId(listId, at),
     },
     names,
-    commands: commands === undefined ? NO_NAMES : COMMAND_NAMES,
+    // Note that only the commands acting on a session stand as chips, so a box with none sends `/compact` as the words it is.
+    commands: commands?.reach.session === true ? COMMAND_NAMES : NO_NAMES,
     onTrigger: setTrigger,
     onKey,
     known,

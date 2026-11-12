@@ -119,11 +119,11 @@ export const SentSendTrace = Context.Reference<SendTrace | undefined>(
 );
 
 /** A send's trace as headers carry it, Sentry's own names. */
-export function sendTraceHeaders(trace: SendTrace): Readonly<Record<string, string>> {
+export function sendTraceHeaders(trace: SendTrace) {
   return {
     [SENTRY_TRACE_HEADER.TRACE]: trace.sentryTrace,
     ...(trace.baggage === undefined ? undefined : { [SENTRY_TRACE_HEADER.BAGGAGE]: trace.baggage }),
-  };
+  } satisfies Readonly<Record<string, string>>;
 }
 
 /** A send's trace read back off the headers that carried it; none where they carry no `sentry-trace`. */
@@ -132,6 +132,8 @@ export function sendTraceOf(
 ): SendTrace | undefined {
   const sentryTrace = headers[SENTRY_TRACE_HEADER.TRACE];
   const baggage = headers[SENTRY_TRACE_HEADER.BAGGAGE];
+
   if (!Predicate.isString(sentryTrace)) return undefined;
+
   return { sentryTrace, ...(Predicate.isString(baggage) ? { baggage } : undefined) };
 }

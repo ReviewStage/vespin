@@ -82,15 +82,19 @@ const sweep = (
       reached,
       Layer.succeed(HostedEnvironment, environment(cronSecret)),
     );
+
     const { handler, dispose } = HttpRouter.toWebHandler(
       maintenanceApp().pipe(HttpRouter.provideRequest(services)),
       { disableLogger: true },
     );
+
     const request = new Request(`https://app.test${MAINTENANCE_SWEEP_PATH}`, {
       headers: { authorization: `Bearer ${bearer}` },
     });
+
     const response = yield* Effect.promise(() => handler(request));
     yield* Effect.promise(() => dispose());
+
     return response.status;
   });
 
@@ -119,9 +123,11 @@ it.layer(SUITE)("a sweep that runs", (it) => {
     Effect.gen(function* () {
       const sentry = recordingSentry();
       const database = yield* testDatabase;
+
       const status = yield* sweep(CRON_SECRET, CRON_SECRET, database).pipe(
         Effect.provide(sentry.layer),
       );
+
       const [started] = sentOfType(sentry.sent, "check_in");
       assert.equal(status, 200);
       assert.deepEqual(checkIns(sentry.sent), [

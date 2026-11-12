@@ -45,7 +45,7 @@ export interface BridgeHostDependencies {
   snapshotFor: (sender: WebContents) => Promise<AppStateSnapshot>;
 }
 
-type ErasedHandler = (context: BridgeContext, ...args: never[]) => unknown;
+type ErasedHandler = (context: BridgeContext, ...args: never[]) => void;
 
 /**
  * Every channel the sandboxed renderers reach this process through, attached
@@ -66,6 +66,7 @@ export function registerBridgeHost(dependencies: BridgeHostDependencies): void {
   // own words instead of a port that never answers.
   ipcMain.on(ACT_PORT.CHANNEL, (event) => {
     const [port] = event.ports;
+
     // Note that we take a top frame's port alone, because a child frame can load a trusted page.
     if (port === undefined || event.senderFrame?.parent !== null) return;
     actPort.upgrade(port, {
@@ -80,6 +81,7 @@ export function registerBridgeHost(dependencies: BridgeHostDependencies): void {
 
   ipcMain.handle(BRIDGE.requestAppState.channel, async (event) => {
     if (!trustedSender(event)) throw new Error("Invalid bridge request");
+
     return snapshotFor(event.sender);
   });
 

@@ -63,6 +63,7 @@ function Shown({
 }): React.JSX.Element {
   const [month, setMonth] = useState(from);
   heard.show = setMonth;
+
   return createElement(Calendar, {
     month,
     today: TODAY,
@@ -71,6 +72,7 @@ function Shown({
     onPick: (day) => heard.picks.push(day),
     onShowMonth: (next) => {
       heard.months.push(next);
+
       if (!slow) setMonth(next);
     },
   });
@@ -87,13 +89,16 @@ function draw(
   roots.push(root);
   const heard: Heard = { picks: [], months: [] };
   act(() => root.render(createElement(Shown, { from, ...selection, heard })));
+
   return { container, heard };
 }
 
 /** The day named `name`. */
 function day(container: HTMLElement, name: string): HTMLElement {
   const found = container.querySelector<HTMLElement>(`[role="grid"] button[aria-label="${name}"]`);
+
   if (found === null) throw new Error(`no day named ${name}`);
+
   return found;
 }
 
@@ -108,17 +113,20 @@ function selected(container: HTMLElement): string[] {
 function gridName(container: HTMLElement): string {
   const grid = container.querySelector('[role="grid"]');
   const label = grid?.getAttribute("aria-labelledby");
+
   return label ? (document.getElementById(label)?.textContent ?? "") : "";
 }
 
 /** Presses `key` on whatever has the focus, and answers whether the page's own response to it was refused. */
 function press(key: string, init: KeyboardEventInit = {}): boolean {
   const target = document.activeElement;
+
   if (target === null) throw new Error("nothing has the focus");
   const event = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...init });
   act(() => {
     target.dispatchEvent(event);
   });
+
   return event.defaultPrevented;
 }
 
@@ -247,6 +255,7 @@ test("Enter and Space pick the day the keyboard is on", () => {
 
 test("the steps above the grid ask for the month either side", () => {
   const { container, heard } = draw("2026-01");
+
   const step = (name: string) =>
     container.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
 
@@ -283,8 +292,10 @@ test("a step into a month the caller shows later takes the keyboard there once i
 
 test("the calendar pages no further than the four-digit years", () => {
   const { container, heard } = draw("9999-12", { start: "9999-12-31" });
+
   const step = (name: string) =>
     container.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
+
   enterGrid(container);
 
   expect(press("ArrowRight")).toBe(true);
@@ -314,6 +325,7 @@ test("a step still waiting on its month is dropped once the keyboard leaves the 
 /** The words of the hint the pointer resting on `target` raises, past the hint's wait, on a faked clock. */
 function hintOn(target: Element): string | undefined {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
   try {
     act(() => {
       target.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
@@ -321,6 +333,7 @@ function hintOn(target: Element): string | undefined {
     act(() => {
       vi.advanceTimersByTime(MOTION_DELAY_MS.HINT);
     });
+
     return document.querySelector('[role="tooltip"]')?.textContent ?? undefined;
   } finally {
     vi.useRealTimers();
@@ -329,8 +342,10 @@ function hintOn(target: Element): string | undefined {
 
 test("each month step says its name in a hint on hover", () => {
   const { container } = draw("2026-10");
+
   const step = (name: string) =>
     container.querySelector(`button[aria-label="${name}"]`) ?? expect.fail(`no ${name} step`);
+
   expect(hintOn(step("Previous month"))).toBe("Previous month");
   act(() => step("Previous month").dispatchEvent(new MouseEvent("pointerout", { bubbles: true })));
   expect(hintOn(step("Next month"))).toBe("Next month");

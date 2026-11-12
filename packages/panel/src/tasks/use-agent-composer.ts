@@ -183,6 +183,7 @@ function cutFrom(
   messageId: string,
 ): ReadonlySet<string> | undefined {
   const at = messages.findIndex((message) => message.id === messageId);
+
   return at === -1 ? undefined : new Set(messages.slice(at).map((message) => message.id));
 }
 
@@ -193,6 +194,7 @@ function cutFrom(
  */
 function carried(sent: readonly SentLine[], behind: Draft): Draft {
   const lines = sent.filter((line) => line.state !== SENT_LINE_STATE.PENDING);
+
   return {
     ...EMPTY_DRAFT,
     text: [...lines.map((line) => line.text), behind.text]
@@ -304,6 +306,7 @@ export function useAgentComposer(input: {
   const failedLines = useSelector(failedLinesHeld.store);
   const keepFailed = failedLinesHeld.set;
   const [held, setHeld] = useState<Held>(() => fresh(agentId, failedLinesOf(failedLines, agentId)));
+
   if (held.agentId !== agentId) setHeld(fresh(agentId, failedLinesOf(failedLines, agentId)));
   // The lines as last drawn, which an answer landing later reads.
   const heldNow = useRef(held);
@@ -320,6 +323,7 @@ export function useAgentComposer(input: {
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
+
     return () => {
       mounted.current = false;
     };
@@ -345,6 +349,7 @@ export function useAgentComposer(input: {
     setHeld((was) => (was.agentId === agentId ? change(was) : was));
 
   const { update } = kept;
+
   /** The agent taken back to just before the line named, answered as unanswered where the box was handed no rewind. */
   const rewindTo = (
     agentId: string,
@@ -352,47 +357,62 @@ export function useAgentComposer(input: {
     restoreFiles: boolean,
   ): Promise<AgentActAnswer> =>
     latest.current.rewind?.(agentId, messageId, restoreFiles) ?? Promise.resolve(UNANSWERED);
+
   /** Sends one line once every line before it has answered, and takes its answer. */
   const deliver = (line: SentLine) => {
     // Note that the task is read as the line goes, because the tab may show another agent by the time it answers.
     const { taskId } = latest.current;
     queue.after(agentId, async () => {
       const now = heldNow.current;
+
       // A line behind one refused for good is refused with it, as the service would refuse it.
       if (now.agentId === agentId && now.closed !== undefined) {
         const sent = marked(now.sent, line.id, SENT_LINE_STATE.UNDELIVERED);
         update(() => carried(sent, now.behind));
         ours((was) => ({ ...was, sent: marked(was.sent, line.id, SENT_LINE_STATE.UNDELIVERED) }));
+
         return;
       }
+
       // A line written in place of another takes the agent back to just before that one first, once.
       const rewinds = line.rewound === true ? undefined : line.rewinds;
+
       if (rewinds !== undefined) ours((was) => ({ ...was, reverting: rewinds }));
+
       const rewound =
         rewinds === undefined
           ? undefined
           : await rewindTo(agentId, rewinds, line.restoresFiles === true);
+
       if (rewinds !== undefined) ours((was) => ({ ...was, reverting: undefined }));
+
       const answer =
         rewound !== undefined && "failure" in rewound
           ? rewound
           : await latest.current.send(agentId, line.text, line.clientKey, line.attachments);
+
       // A refusal for now is kept past the tab before anything else, so the line stands wherever its tab is drawn next.
       if ("failure" in answer && !closesComposer(answer.failure)) {
         keepFailedLine(line, answer, rewound !== undefined && !("failure" in rewound), taskId);
       }
+
       // Either refusal is said in a toast where the tab is not on screen as it lands.
       if ("failure" in answer) sayWhereAway(answer);
+
       // An answer to another agent's tab, or to a tab since remounted, is nobody's.
       if (latest.current.agentId !== agentId) return;
+
       // A rewind that did not go drops nothing, so the messages it would have dropped are drawn again.
       if (rewound !== undefined && "failure" in rewound)
         ours((was) => ({ ...was, cut: undefined }));
+
       // A line the agent's first launch holds went into its queue, which draws it, so the box lets it go.
       if (!("failure" in answer) && answer.queued === true) {
         ours((was) => ({ ...was, sent: was.sent.filter((each) => each.id !== line.id) }));
+
         return;
       }
+
       if (!("failure" in answer)) {
         ours((was) => ({
           ...was,
@@ -402,11 +422,15 @@ export function useAgentComposer(input: {
             latest.current.messages,
           ),
         }));
+
         return;
       }
+
       if (!closesComposer(answer.failure)) return;
+
       // A line the tab no longer holds, its agent's tab drawn afresh meanwhile, is nobody's to mark.
       if (!heldNow.current.sent.some((each) => each.id === line.id)) return;
+
       const note: ComposerNote = {
         ...messageFailureNote(
           answer,
@@ -416,6 +440,7 @@ export function useAgentComposer(input: {
         ),
         cause: answer,
       };
+
       // A refusal for good closes the box, and the line stays where it went, marked as not
       // delivered, its words kept in the agent's draft for Continue with every other line that
       // did not go, ahead of what the box holds, which is newer. Every line refused for now
@@ -427,6 +452,7 @@ export function useAgentComposer(input: {
       let behind: Draft = EMPTY_DRAFT;
       update((draft) => {
         behind = draft;
+
         return carried(sent, draft);
       });
       keepFailed((all) => all.filter((failed) => failed.agentId !== agentId));
@@ -452,17 +478,20 @@ export function useAgentComposer(input: {
     taskId: string | null,
   ) => {
     const at = latest.current;
+
     const note: ComposerNote = {
       ...messageFailureNote(answer, taskId, at.payer, at.starter),
       cause: answer,
     };
+
     // Note that an edit whose rewind went is marked so, because the line it stood in place of is
     // gone, so its Retry only sends; a rewind to that line again would find no line.
     const failed: SentLine = {
       ...line,
       state: SENT_LINE_STATE.FAILED,
-      ...(rewoundNow ? { rewound: true } : {}),
+      ...(rewoundNow && { rewound: true }),
     };
+
     keepFailed((all) => [
       ...all.filter((each) => each.line.id !== line.id),
       { agentId, taskId, line: failed, note },
@@ -481,6 +510,7 @@ export function useAgentComposer(input: {
   /** Says a message to the agent was not delivered in a toast, where its tab is not on screen, which offers to open it. */
   const sayWhereAway = (answer: RefusedCall) => {
     const at = latest.current;
+
     if (mounted.current && at.agentId === agentId && at.shown !== false) return;
     const { onOpen } = at;
     toast({
@@ -488,9 +518,9 @@ export function useAgentComposer(input: {
       words: NOT_DELIVERED_TOAST,
       tone: STATUS_TONE.DANGER,
       failure: { surface: FAILURE_SURFACE.AGENT_SEND, cause: answer, about: { agentId } },
-      ...(onOpen === undefined
-        ? {}
-        : { action: { label: OPEN_WORD, onPress: onOpen, replayUnmasked: true } }),
+      ...(onOpen !== undefined && {
+        action: { label: OPEN_WORD, onPress: onOpen, replayUnmasked: true },
+      }),
     });
   };
 
@@ -505,19 +535,24 @@ export function useAgentComposer(input: {
       sentAt: Date.now(),
       state: SENT_LINE_STATE.PENDING,
     };
+
     setHeld((was) => ({ ...was, sent: [...was.sent, line] }));
     deliver(line);
   };
 
   const sendDraft = (clientKey: string = crypto.randomUUID()) => {
     const { lead, onLeadSent } = latest.current;
+
     const text = [kept.draft.text.trim(), lead?.trim() ?? ""]
       .filter((each) => each !== "")
       .join("\n\n");
+
     const { attachments } = kept.draft;
+
     if (!hasWordsOrFiles(text, attachments) || held.closed !== undefined) return;
     update(() => EMPTY_DRAFT);
     sendLine(text, attachments, clientKey);
+
     if (lead !== undefined) onLeadSent?.();
   };
 
@@ -529,9 +564,11 @@ export function useAgentComposer(input: {
     restoreFiles = false,
   ) => {
     const text = words.trim();
+
     if (!hasWordsOrFiles(text, attachments) || held.closed !== undefined) return;
     const clientKey = crypto.randomUUID();
     const rewoundAt = Date.now();
+
     const line: SentLine = {
       id: sentLineId(clientKey),
       clientKey,
@@ -544,6 +581,7 @@ export function useAgentComposer(input: {
       rewinds: messageId,
       ...(restoreFiles ? { restoresFiles: true } : undefined),
     };
+
     setHeld((was) => ({
       ...was,
       revertFailed: undefined,
@@ -568,15 +606,20 @@ export function useAgentComposer(input: {
     }));
     queue.after(agentId, async () => {
       const answer = await rewindTo(agentId, messageId, restoreFiles);
+
       if (latest.current.agentId !== agentId) return;
+
       if (!("failure" in answer)) {
         ours((was) => ({ ...was, reverting: undefined }));
+
         return;
       }
+
       const note: ComposerNote = {
         ...messageFailureNote(answer, latest.current.taskId, latest.current.payer),
         cause: answer,
       };
+
       ours((was) => ({
         ...was,
         cut: undefined,
@@ -589,9 +632,11 @@ export function useAgentComposer(input: {
   /** The line not delivered by `id`, which is let go past the tab as the developer acts on it; none where it is no such line or the box is closed. */
   const takeFailed = (id: string): SentLine | undefined => {
     const line = held.sent.find((each) => each.id === id);
+
     if (line?.state !== SENT_LINE_STATE.FAILED || held.closed !== undefined) return undefined;
     keepFailed((all) => all.filter((failed) => failed.line.id !== id));
     setHeld((was) => (was.remedied?.lineId === id ? { ...was, remedied: undefined } : was));
+
     return line;
   };
 
@@ -602,6 +647,7 @@ export function useAgentComposer(input: {
    */
   const resend = (id: string) => {
     const line = takeFailed(id);
+
     if (line === undefined) return;
     // Note that a Retry is a send of its own, so the line is stamped again and the working line counts from it.
     const again = { ...line, sentAt: Date.now(), state: SENT_LINE_STATE.PENDING };
@@ -623,6 +669,7 @@ export function useAgentComposer(input: {
   /** Takes a line not delivered back into the box to be written again, ahead of what the box holds, which is newer. */
   const takeBackLine = (id: string) => {
     const line = takeFailed(id);
+
     if (line === undefined) return;
     setHeld((was) => ({ ...was, sent: was.sent.filter((each) => each.id !== id) }));
     kept.update((draft) => ({
@@ -635,6 +682,7 @@ export function useAgentComposer(input: {
   // Note that a closed box draws none of its words, because they stand in the transcript as the
   // line not delivered, and the draft keeps them for Continue, which carries them (`unsent`).
   const shown = held.closed === undefined ? kept.draft : EMPTY_DRAFT;
+
   return {
     draft: shown.text,
     setDraft: (text) => kept.update((was) => ({ ...was, text })),
@@ -644,6 +692,7 @@ export function useAgentComposer(input: {
     updateHeld: (next) =>
       kept.update((was) => {
         const moved = next(was);
+
         return moved === undefined ? was : { ...was, ...moved };
       }),
     sending: false,
@@ -652,9 +701,11 @@ export function useAgentComposer(input: {
     send: () => sendDraft(),
     retry: () => {
       const { revertFailed, remedied } = held;
+
       if (revertFailed !== undefined) {
         return revert(revertFailed.messageId, revertFailed.restoreFiles);
       }
+
       if (remedied !== undefined) resend(remedied.lineId);
     },
     notedLine:

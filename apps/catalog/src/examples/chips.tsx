@@ -44,6 +44,7 @@ const FILTERS = ["All", "Tasks", "Agents", "Files"] as const;
 /** A row of filter chips, the pressed one moving to whichever is pressed. */
 function FilterRow(): React.JSX.Element {
   const [chosen, setChosen] = useState<string>(FILTERS[0]);
+
   return (
     <Inline gap={GAP.TIGHT}>
       {FILTERS.map((each) => (
@@ -64,6 +65,7 @@ function FilterRow(): React.JSX.Element {
 function CountedFilters(): React.JSX.Element {
   const [resolved, setResolved] = useState(true);
   const [bots, setBots] = useState(false);
+
   return (
     <Inline gap={GAP.TIGHT}>
       <Chip
@@ -110,6 +112,7 @@ function RemovableRow(): React.JSX.Element {
   const [standing, setStanding] = useState<readonly string[]>(FILTER_NAMES.slice(0, 2));
   const shown = standing.length === 0 ? FILTER_NAMES.slice(0, 2) : standing;
   const next = FILTER_NAMES.find((name) => !shown.includes(name));
+
   return (
     <Inline gap={GAP.TIGHT}>
       <Button

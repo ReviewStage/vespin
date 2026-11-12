@@ -32,6 +32,7 @@ function radiosOf(group: HTMLElement): HTMLButtonElement[] {
 export function readSegmented(group: HTMLElement): SegmentedReading {
   const radios = radiosOf(group);
   const words = (each: HTMLElement) => each.textContent ?? "";
+
   return {
     options: radios.map(words),
     checked: radios.filter((each) => each.getAttribute("aria-checked") === "true").map(words),
@@ -56,5 +57,6 @@ export function pressKeyIn(group: HTMLElement, key: string): void {
 /** The words of the option holding the keyboard. */
 export function focusedSegment(): string | undefined {
   const focused = document.activeElement;
+
   return focused?.getAttribute("role") === "radio" ? (focused.textContent ?? "") : undefined;
 }

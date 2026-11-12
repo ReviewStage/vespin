@@ -87,6 +87,9 @@ it.effect(
 
 it.effect("each call goes to its own path, and the list names its workspace in the query", () =>
   Effect.gen(function* () {
+    // Note that it was made from a preset this release does not know, as a newer service may answer.
+    const retired = { ...SUMMARY, preset: "retired-preset" };
+
     const run = {
       id: "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
       firing: { kind: "manual" },
@@ -96,29 +99,34 @@ it.effect("each call goes to its own path, and the list names its workspace in t
       firedAt: 2,
       settledAt: 3,
     };
+
     const api = fakeCloudApi({
-      "GET /api/automations": { answer: () => ({ automations: [SUMMARY] }) },
+      "GET /api/automations": { answer: () => ({ automations: [retired] }) },
       [`PATCH /api/automations/${AUTOMATION_ID}`]: { answer: () => ({ automation: SUMMARY }) },
       [`DELETE /api/automations/${AUTOMATION_ID}`]: { answer: () => ({}) },
       [`POST /api/automations/${AUTOMATION_ID}/run`]: { answer: () => ({ run }) },
       [`GET /api/automations/${AUTOMATION_ID}/runs`]: { answer: () => ({ runs: [run] }) },
     });
+
     const ask = client();
     const named = { automationId: AUTOMATION_ID };
 
     const listed = yield* Effect.provide(ask.list({ workspaceId: WORKSPACE_ID }), api.layer);
+
     const changed = yield* Effect.provide(
       ask.change({ ...named, change: { enabled: false } }),
       api.layer,
     );
+
     const ran = yield* Effect.provide(
       ask.runNow({ ...named, idempotencyKey: "4d5e6f70-8192-4a3b-9c4d-5e6f708192a3" }),
       api.layer,
     );
+
     const runs = yield* Effect.provide(ask.runs(named), api.layer);
     const deleted = yield* Effect.provide(ask.remove(named), api.layer);
 
-    assert.deepEqual(listed, { automations: [SUMMARY] });
+    assert.deepEqual(listed, { automations: [retired] });
     assert.deepEqual(changed, { automation: SUMMARY });
     assert.deepEqual(ran, { run });
     assert.deepEqual(runs, { runs: [run] });
@@ -134,6 +142,7 @@ it.effect("a write the service would refuse by shape is refused as invalid and n
     const ask = client();
 
     const unnamed = yield* Effect.provide(ask.create({ ...MADE, name: "" }), api.layer);
+
     const unspelled = yield* Effect.provide(
       ask.change({ automationId: AUTOMATION_ID, change: { repositories: ["not a repository"] } }),
       api.layer,
@@ -165,6 +174,7 @@ it.effect(
         }),
         api.layer,
       );
+
       const toWebhook = yield* Effect.provide(
         client().change({
           automationId: AUTOMATION_ID,
@@ -192,6 +202,7 @@ it.effect(
         id: "5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d",
         trigger: { kind: AUTOMATION_TRIGGER.WEBHOOK },
       };
+
       const api = fakeCloudApi({
         "GET /api/automations": { answer: () => ({ automations: [SUMMARY, hooked] }) },
       });

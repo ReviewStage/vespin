@@ -19,6 +19,7 @@ const engineFixture = () => {
   const failChecks: Array<(error: Error) => void> = [];
   const quits: string[] = [];
   let heard: UpdaterEngineEvents | undefined;
+
   const engine: UpdaterEngine = {
     wire: (events) => {
       heard = events;
@@ -32,10 +33,13 @@ const engineFixture = () => {
     },
     clearCachedUpdate: async () => undefined,
   };
+
   const events = () => {
     assert.ok(heard, "the service wires the engine as it is made");
+
     return heard;
   };
+
   return {
     engine,
     events,
@@ -50,12 +54,14 @@ const serviceFixture = () =>
   Effect.gen(function* () {
     const fixture = engineFixture();
     const told: UpdateSnapshot[] = [];
+
     const service = yield* UpdateService.make({
       currentVersion: "1.0.0",
       onChange: (update) => told.push(update),
       engine: fixture.engine,
       report: () => undefined,
     });
+
     return { ...fixture, service, told };
   });
 

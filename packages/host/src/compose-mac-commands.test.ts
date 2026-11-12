@@ -14,7 +14,7 @@ import { GATEWAY_EVENT, type GatewayEventKind } from "@repo/gateway";
 import { MAC_COMMAND_MODE, type MacCommandMode } from "@repo/settings";
 import { isRecord, type WireValue } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
-import { ConfigProvider, Duration, Effect, Layer, PubSub, Stream } from "effect";
+import { ConfigProvider, Duration, Effect, Layer, Predicate, PubSub, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { composeMacCommands, type MacCommandClient } from "./compose-mac-commands.js";
 import { Environment, reporterLayer } from "./effect/seams.js";
@@ -91,6 +91,7 @@ function scriptedService(
   const claims: string[] = [];
   const beats: (readonly MacCommandKind[])[] = [];
   const settledResults = new Map<string, MacCommandResult>();
+
   const answer = (rows: boolean): MacCommandsLiveAnswer => ({
     url: LIVE_POLL_URL,
     queries: {
@@ -104,20 +105,24 @@ function scriptedService(
       },
     },
   });
+
   const client: MacCommandClient = {
     // SAFETY: the Mac's commands are the one live read the client is asked for, answering the script's rows.
-    liveRead: ((
-      _read: unknown,
+    liveRead: (<Read>(
+      _read: Read,
       { userId, kinds }: { readonly userId: string; readonly kinds?: string },
       poll?: { readonly after?: string | undefined },
     ) =>
       Effect.gen(function* () {
         const after = poll?.after;
         reads.push({ userId, kinds: macCommandKindsRead(kinds) });
+
         if (options.signedOut === true) return LIVE_SIGNED_OUT;
+
         for (let held = 0; after === String(version) && held < 25; held += 1) {
           yield* Effect.sleep(HOLD_LOOK);
         }
+
         return answer(after !== String(version));
       })) as MacCommandClient["liveRead"],
     claim: (id) =>
@@ -125,31 +130,40 @@ function scriptedService(
         options.duringClaim ?? Effect.void,
         Effect.sync(() => {
           claims.push(id);
+
           // A claim lost on its way, as a network fault loses one, reaches nothing.
           if (unanswered > 0) {
             unanswered -= 1;
+
             return { failure: MAC_COMMAND_CALL_FAILURE.UNANSWERED };
           }
+
           const at = waiting.findIndex((command) => command.id === id);
+
           if (at < 0) return MAC_COMMAND_NOT_CLAIMED;
           const [claimed] = waiting.splice(at, 1);
           version += 1;
+
           if (claimed === undefined) return MAC_COMMAND_NOT_CLAIMED;
           const { queuedAt: _queuedAt, ...command } = claimed;
+
           return { command };
         }),
       ),
     listening: (kinds) =>
       Effect.sync(() => {
         beats.push(kinds);
+
         return { listening: true } as const;
       }),
     settle: (id, result) =>
       Effect.sync(() => {
         settledResults.set(id, result);
+
         return { settled: true } as const;
       }),
   };
+
   return {
     client,
     reads,
@@ -201,19 +215,22 @@ const subject = (
   const told: { readonly id: string; readonly command: string }[][] = [];
   const written: MacCommandMode[] = [];
   const reported: string[] = [];
+
   const emit = (kind: GatewayEventKind, payload: WireValue) => {
     if (kind !== GATEWAY_EVENT.MAC_COMMAND_ASKS_CHANGED || !isRecord(payload)) return;
     const asks = Array.isArray(payload.asks) ? payload.asks : [];
     told.push(
       asks.flatMap((ask) =>
-        isRecord(ask) && typeof ask.id === "string" && typeof ask.command === "string"
+        isRecord(ask) && Predicate.isString(ask.id) && Predicate.isString(ask.command)
           ? [{ id: ask.id, command: ask.command }]
           : [],
       ),
     );
   };
+
   return Effect.gen(function* () {
     const moves = yield* PubSub.unbounded<void>();
+
     const composer = yield* composeMacCommands({
       kernel: { runMode: { sendsNetwork: true }, now: () => NOW, emit },
       account: { capabilitiesActive: () => gate.signedIn },
@@ -224,10 +241,12 @@ const subject = (
         if (gate.saveFails === true) return false;
         written.push(MAC_COMMAND_MODE.ALWAYS);
         gate.mode = MAC_COMMAND_MODE.ALWAYS;
+
         return true;
       }),
       client: service.client,
     }).pipe(Effect.provide(machine(spawner, reported)));
+
     return {
       composer,
       told,
@@ -270,6 +289,7 @@ it.effect(
       const service = scriptedService();
       service.queue(SECOND, NOW - 1_000);
       service.queue(COMMAND, NOW - 2_000);
+
       const { composer } = yield* subject(service, spawner, {
         mode: MAC_COMMAND_MODE.ALWAYS,
         signedIn: true,
@@ -289,9 +309,11 @@ it.effect(
       );
 
       assert.ok(service.reads.length > 0);
+
       for (const read of service.reads) {
         assert.deepEqual(read, { userId: ACCOUNT, kinds: [MAC_COMMAND_KIND.SHELL] });
       }
+
       assert.deepEqual(service.settledResults.get(COMMAND.id), {
         exitCode: 0,
         stdout: "v24.0.0\n",
@@ -321,6 +343,7 @@ it.effect(
           yield* TestClock.adjust("45 seconds");
           yield* settled;
           assert.equal(service.beats.length, 4);
+
           for (const kinds of service.beats) assert.deepEqual(kinds, [MAC_COMMAND_KIND.SHELL]);
 
           gate.mode = MAC_COMMAND_MODE.NEVER;
@@ -341,6 +364,7 @@ it.effect("a read the service signs out follows nothing, and is asked again afte
     const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
     const service = scriptedService({ signedOut: true });
     service.queue(COMMAND, NOW);
+
     const { composer } = yield* subject(service, spawner, {
       mode: MAC_COMMAND_MODE.ALWAYS,
       signedIn: true,
@@ -367,6 +391,7 @@ it.effect("a claim the service never heard is asked again, and the command runs"
     const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
     const service = scriptedService({ unansweredClaims: 2 });
     service.queue(COMMAND, NOW);
+
     const { composer } = yield* subject(service, spawner, {
       mode: MAC_COMMAND_MODE.ALWAYS,
       signedIn: true,
@@ -392,6 +417,7 @@ it.effect(
     Effect.gen(function* () {
       const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
       const gate: Gate = { mode: MAC_COMMAND_MODE.ALWAYS, signedIn: true };
+
       const service = scriptedService({
         // The setting goes off as the claim leaves, and the service is slow to grant it, so a beat sees the gate shut first.
         duringClaim: Effect.andThen(
@@ -401,6 +427,7 @@ it.effect(
           Effect.sleep("20 seconds"),
         ),
       });
+
       service.queue(COMMAND, NOW);
       const { composer } = yield* subject(service, spawner, gate);
 
@@ -496,6 +523,7 @@ const askedFor = (
     const built = yield* subject(service, spawner, gate);
     yield* built.composer.lifetime;
     yield* settled;
+
     return built;
   });
 
@@ -675,6 +703,7 @@ it.effect(
             signedIn: true,
             saveFails: true,
           });
+
           yield* built.answer(COMMAND.id, MAC_COMMAND_DECISION.ALLOW_ALWAYS);
           yield* settled;
           assert.deepEqual(built.written, []);

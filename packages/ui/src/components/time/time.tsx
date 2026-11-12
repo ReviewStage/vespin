@@ -4,6 +4,7 @@ import {
   dueText,
   momentText,
   provenanceText,
+  scheduledText,
   sinceText,
   untilText,
   workingTime,
@@ -43,6 +44,8 @@ export const TIME_LOOK = {
   DUE: "due",
   /** When a moment to come comes, counted down inside a day: "in 2h", then "Thu 9:00 AM", "Nov 20". */
   UNTIL: "until",
+  /** When a scheduled moment comes, always with its time: "Today 2:00 PM", "Tomorrow 9:00 AM", "Sun 2:00 AM", "Nov 20, 9:00 AM". */
+  SCHEDULED: "scheduled",
   /** The moment in full: "Oct 14, 2026, 3:42 PM". */
   MOMENT: "moment",
   /** How long a run has gone since `at`, counted each second: "1m 12s". */
@@ -79,6 +82,8 @@ function wordsOf(look: TimeLook, at: number, now: number): string {
       return dueText(at, now);
     case TIME_LOOK.UNTIL:
       return untilText(at, now);
+    case TIME_LOOK.SCHEDULED:
+      return scheduledText(at, now);
     case TIME_LOOK.MOMENT:
       return momentText(at);
     case TIME_LOOK.DURATION:
@@ -89,7 +94,9 @@ function wordsOf(look: TimeLook, at: number, now: number): string {
 /** A time: a `<time>` in `look`'s words, its full moment on hover where the look hints it. */
 export function Time(props: TimeProps): React.JSX.Element {
   const { now, look = TIME_LOOK.SINCE } = props;
+
   if (now !== undefined) return <TimeAt {...props} look={look} now={now} />;
+
   return look === TIME_LOOK.DURATION ? (
     <SecondTime {...props} look={look} />
   ) : (
@@ -111,6 +118,7 @@ type TimeAtProps = TimeProps & { look: TimeLook; now: number };
 
 function TimeAt({ at, look, now, className, hint }: TimeAtProps): React.JSX.Element {
   const duration = look === TIME_LOOK.DURATION;
+
   // Note that a count is a timer to a reader rather than a live region, because a count announced each second drowns everything else.
   const time = (
     <time
@@ -122,6 +130,7 @@ function TimeAt({ at, look, now, className, hint }: TimeAtProps): React.JSX.Elem
       {wordsOf(look, at, now)}
     </time>
   );
+
   // Note that a time raising no pill is drawn bare, because a sidebar row draws several, and a tooltip saying nothing still costs each its own.
   return (hint ?? HINTED_LOOKS.includes(look)) ? (
     <Tooltip label={momentText(at)}>{time}</Tooltip>

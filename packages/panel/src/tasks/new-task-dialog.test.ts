@@ -28,7 +28,7 @@ import {
   type SettingsLink,
 } from "@repo/settings/settings-views";
 import { experimentsOn } from "@repo/settings/testing";
-import { Effect } from "effect";
+import { Effect, Predicate } from "effect";
 import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
@@ -155,24 +155,29 @@ async function mount(
   } = {},
 ) {
   const { list, ...chose } = chooser;
+
   if (list !== undefined) holdRepositoryLists(handHostReads({}).deliverRepositoryLists, list);
   await writeHandedAppState();
   const starts: [string, string | null][] = [];
   const agents: (NewTaskAgent | undefined)[] = [];
   const startedIn: (string | undefined)[] = [];
   const control = tasksControl();
+
   let repositories: RepositoryChooser = {
     ...NO_REPOSITORIES,
     recent: ["acme/web", "acme/api"],
     ...chose,
   };
+
   const links: SettingsLink[] = [];
   let listed = control.newTask.workspaceId;
   let openAgain = (): void => undefined;
+
   function Owner() {
     const [open, setOpen] = useState(true);
     const [reopened, setReopened] = useState<NewTaskPreset | undefined>(undefined);
     openAgain = () => setOpen(true);
+
     const dialog = createElement(NewTaskDialog, {
       newTask: {
         ...control.newTask,
@@ -190,13 +195,17 @@ async function mount(
           starts.push([name, repository]);
           agents.push(from?.handed);
           startedIn.push(workspaceId);
+
           const refused = Promise.resolve(answer).then((said) =>
-            typeof said === "string" ? { reason: FAILURE_REASON.OTHER, text: said } : said,
+            Predicate.isString(said) ? { reason: FAILURE_REASON.OTHER, text: said } : said,
           );
+
           const card = from?.card;
+
           if (from?.handed === undefined || card === undefined) return refused;
           // An agent's start puts the card away as it is pressed, and a refusal opens it again on what it held, as the tab does.
           setOpen(false);
+
           return refused.then((note) => {
             if (note !== undefined) {
               setReopened({
@@ -205,18 +214,21 @@ async function mount(
               });
               setOpen(true);
             }
+
             return note;
           });
         },
         onClose: () => setOpen(false),
       },
     });
+
     return createElement(
       OpenSettingsProvider,
       { value: (link: SettingsLink) => links.push(link) },
       dialog,
     );
   }
+
   const opener = document.createElement("button");
   document.body.append(opener);
   opener.focus();
@@ -228,19 +240,24 @@ async function mount(
   await settle();
   const dialog = () => document.querySelector<HTMLElement>('[role="dialog"][aria-modal="true"]');
   const field = (): HTMLElement => composerEditor(document);
+
   const button = (label: string) => {
     const found = [...document.querySelectorAll<HTMLButtonElement>("button")].find(
       (each) => each.getAttribute("aria-label") === label || each.textContent?.startsWith(label),
     );
+
     assert.ok(found, `${label} is drawn`);
+
     return found;
   };
+
   const press = async (key: string, on: HTMLElement, held: KeyboardEventInit = {}) => {
     act(() => {
       on.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, ...held }));
     });
     await settle();
   };
+
   return {
     starts,
     /** The workspace each start asked for. */
@@ -298,9 +315,11 @@ async function mount(
       assert.fail("the round Start agent button stands"),
     /** The card's buttons in order, as a reader meets them. */
     controls: () =>
-      [...(dialog()?.querySelectorAll("button") ?? [])]
-        .filter((each) => getComputedStyle(each).display !== "none")
-        .map((each) => each.getAttribute("aria-label") ?? each.textContent),
+      [...(dialog()?.querySelectorAll("button") ?? [])].flatMap((each) =>
+        getComputedStyle(each).display === "none"
+          ? []
+          : [each.getAttribute("aria-label") ?? each.textContent],
+      ),
   };
 }
 
@@ -313,9 +332,11 @@ test("the card, named New task, holds the composer with its words focused, the r
   assert.equal(document.activeElement === card.field(), true);
   assert.equal(card.placeholder(), "Describe the task");
   assert.equal(controls.includes("Plan with Vespin first"), false, "no Plan toggle stands");
+
   for (const each of ["Add files and more", "acme/web", "Start a task with no agent"]) {
     assert.ok(controls.includes(each), `${each} stands in the card`);
   }
+
   const name = card.dialog()?.getAttribute("aria-labelledby") ?? assert.fail("the card is named");
   assert.equal(document.getElementById(name)?.textContent, "New task");
   assert.equal(head?.querySelector(".repository-chip")?.textContent, "acme/web");
@@ -357,13 +378,17 @@ test("Return starts the task without planning, Untitled, on the repository last 
 
 test("a model picked on the chip runs this agent alone, and the account's default is not written", async () => {
   const card = await mount();
+
   const chip =
     document.querySelector<HTMLButtonElement>(".agent-model-chip button") ??
     assert.fail("the model chip stands");
+
   act(() => chip.click());
+
   const fast =
     document.querySelector<HTMLButtonElement>('[role="switch"]') ??
     assert.fail("the menu offers Fast");
+
   act(() => fast.click());
   await settle();
   card.type("Speed up the build");
@@ -375,13 +400,17 @@ test("a model picked on the chip runs this agent alone, and the account's defaul
 test("Fast on a model nothing pays for lands on its harness's row in Settings, as picking it does, and the chip stays off Fast", async () => {
   models = MODELS.map((model) => ({ ...model, credentialMissing: true }));
   const card = await mount();
+
   const chip =
     document.querySelector<HTMLButtonElement>(".agent-model-chip button") ??
     assert.fail("the model chip stands");
+
   act(() => chip.click());
+
   const fast =
     document.querySelector<HTMLButtonElement>('[role="switch"]') ??
     assert.fail("the menu offers Fast");
+
   act(() => fast.click());
   await settle();
 
@@ -399,6 +428,7 @@ test("a server switched off from the + menu's MCP servers is handed to the agent
     },
   }));
   const card = await mount("The service is down.");
+
   const slackSwitch = async () => {
     act(() => card.button("Add files and more").click());
     const rows = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')];
@@ -408,12 +438,14 @@ test("a server switched off from the + menu's MCP servers is handed to the agent
     );
     act(() => rows[1]?.click());
     await settle();
+
     return (
       document.querySelector<HTMLButtonElement>(
         '[role="switch"][aria-label="Slack for this agent"]',
       ) ?? assert.fail("the servers popover offers Slack's switch")
     );
   };
+
   const slack = await slackSwitch();
   assert.equal(
     slack.getAttribute("aria-checked"),
@@ -421,8 +453,12 @@ test("a server switched off from the + menu's MCP servers is handed to the agent
     "every server stands on as the card opens",
   );
   act(() => slack.click());
-  await card.press("Escape", document.activeElement as HTMLElement);
-  await card.press("Escape", document.activeElement as HTMLElement);
+  const field = document.activeElement;
+  assert.ok(field instanceof HTMLElement);
+  await card.press("Escape", field);
+  const next = document.activeElement;
+  assert.ok(next instanceof HTMLElement);
+  await card.press("Escape", next);
   card.type("Post the release notes");
   await card.key("Enter");
   await settle();
@@ -446,9 +482,11 @@ test("a refused start related to a task of another workspace opens again there, 
     updatedAt: 1,
     repository: "acme/web",
   };
+
   const card = await mount("The service is down.", {
     relation: { kind: TASK_CREATE_RELATION_KIND.BLOCKS, task: other },
   });
+
   card.type("Post the release notes");
   await card.key("Enter");
   await card.key("Enter");
@@ -458,9 +496,11 @@ test("a refused start related to a task of another workspace opens again there, 
 
 test("Command-Return while a file is still being read starts no bare task", async () => {
   const card = await mount();
+
   const picker =
     card.dialog()?.querySelector<HTMLInputElement>('input[type="file"]') ??
     assert.fail("the + has its file picker");
+
   const file = new File(["# Notes"], "notes.md", { type: "text/markdown" });
   Object.defineProperty(picker, "files", { configurable: true, value: [file] });
   act(() => {
@@ -490,6 +530,7 @@ test("once a repository is chosen, an @ offers its files, read through the works
   fakeActs({
     act: (request: AnyAct): Promise<FakeActAnswer> => {
       told.push(request);
+
       return Promise.resolve(
         request.kind === ACT_KIND.TASKS_TREE
           ? {
@@ -514,6 +555,7 @@ test("once a repository is chosen, an @ offers its files, read through the works
   const root = createRoot(container);
   roots.push(root);
   const control = tasksControl();
+
   const draw = (recent: readonly string[]) =>
     act(() =>
       root.render(
@@ -526,6 +568,7 @@ test("once a repository is chosen, an @ offers its files, read through the works
               repositoriesIn: () => ({ ...NO_REPOSITORIES, recent }),
               start: (...asked) => {
                 started.push(asked[3]?.handed);
+
                 return Promise.resolve(undefined);
               },
             },
@@ -533,6 +576,7 @@ test("once a repository is chosen, an @ offers its files, read through the works
         ),
       ),
     );
+
   // The card opens with no repository, and the words are begun before one is chosen.
   draw([]);
   await settle();
@@ -542,10 +586,12 @@ test("once a repository is chosen, an @ offers its files, read through the works
   const focused = document.activeElement === composerEditor(document);
 
   typeInComposer(document, "@roll");
+
   const optionLabels = () =>
     [...document.querySelectorAll(".mention-menu .ui-combobox-option-label")].map(
       (row) => row.textContent,
     );
+
   await vi.waitFor(() => assert.deepEqual(optionLabels(), ["rollout-store.ts"]));
   const offered = optionLabels();
   pressInComposer(document, "Enter");
@@ -557,7 +603,7 @@ test("once a repository is chosen, an @ offers its files, read through the works
   assert.ok(focused, "the words keep the caret as the repository is chosen");
   assert.deepEqual(offered, ["rollout-store.ts"]);
   assert.deepEqual(
-    told.filter((each) => each.kind === ACT_KIND.TASKS_TREE).map((each) => each.payload),
+    told.flatMap((each) => (each.kind === ACT_KIND.TASKS_TREE ? [each.payload] : [])),
     [{ workspaceId: "workspace-acme", repository: "acme/web", path: "", recursive: true }],
   );
   assert.deepEqual(
@@ -578,6 +624,7 @@ test("a skill chosen from the / list is its chip, which opens its SKILL.md in th
   fakeActPort({
     [ACT_KIND.GITHUB_OPEN]: ({ url }) => {
       onGitHub.push(url);
+
       return Promise.resolve();
     },
     [ACT_KIND.TASKS_SKILLS]: () =>
@@ -621,9 +668,11 @@ test("a skill chosen from the / list is its chip, which opens its SKILL.md in th
   await settle();
   pressInComposer(document, "Enter");
   await settle();
+
   const chip =
     composerEditor(document).querySelector<HTMLElement>("[data-skill-ref]") ??
     assert.fail("the skill is a chip that opens");
+
   act(() => chip.click());
 
   assert.deepEqual(onGitHub, [
@@ -633,15 +682,19 @@ test("a skill chosen from the / list is its chip, which opens its SKILL.md in th
 
 test("No repository picked on the chip starts the task and its agent in none", async () => {
   const card = await mount();
+
   const chip =
     document.querySelector<HTMLButtonElement>(".repository-chip button") ??
     assert.fail("the repository chip stands");
+
   act(() => chip.click());
   await settle();
+
   const none =
     [...document.querySelectorAll<HTMLElement>("[role='option'], button")].find(
       (each) => each.textContent === "No repository",
     ) ?? assert.fail("the menu offers No repository");
+
   act(() => none.click());
   await settle();
   card.type("Write the migration");
@@ -710,11 +763,13 @@ test("words left in a card put away come back as New task opens again and after 
 
 test("an agent's start still out lets its words go, so New task opened before it answers opens empty, and a refusal opens the card again on its words, saying why", async () => {
   let answer: (refused: Failure | undefined) => void = () => undefined;
+
   const card = await mount(
     new Promise<Failure | undefined>((resolve) => {
       answer = resolve;
     }),
   );
+
   card.type("Dark mode");
   await card.key("Enter");
 
@@ -731,11 +786,13 @@ test("an agent's start still out lets its words go, so New task opened before it
 
 test("a refusal opens the card again on its words ahead of those written in New task while the start was out", async () => {
   let answer: (refused: Failure | undefined) => void = () => undefined;
+
   const card = await mount(
     new Promise<Failure | undefined>((resolve) => {
       answer = resolve;
     }),
   );
+
   card.type("Dark mode");
   await card.key("Enter");
   await card.reopen();
@@ -772,9 +829,11 @@ test("Escape in the repository menu closes the menu and leaves the dialog standi
   const card = await mount();
   act(() => card.button("acme/web").click());
   await settle();
+
   const search = document.querySelector<HTMLInputElement>(
     'input[aria-label="Search repositories"]',
   );
+
   assert.ok(search, "the chip's menu opens");
   await card.press("Escape", search);
   assert.equal(document.querySelector('input[aria-label="Search repositories"]') === null, true);
@@ -799,6 +858,7 @@ test("a start refused for a missing credential says which harness to connect, an
     text: "Connect Claude in Settings to start an agent.",
     provider: MODEL_PROVIDER.ANTHROPIC,
   });
+
   card.type("Dark mode toggle");
   await card.key("Enter");
 
@@ -833,6 +893,7 @@ test("a workspace switch lets the pick go for the new workspace's recent reposit
       recent: ["alice/notes"],
     },
   );
+
   dialog.type("Dark mode");
 
   await dialog.rechoose({ scope: "workspace-acme", recent: ["acme/relay"] });
@@ -850,6 +911,7 @@ test("the workspace first resolving keeps a repository picked before the workspa
       recent: ["alice/notes"],
     },
   );
+
   dialog.type("Dark mode");
 
   await dialog.rechoose({ scope: "workspace-personal" });
@@ -868,6 +930,7 @@ function pressWay(buttons: readonly HTMLButtonElement[], words: string): void {
   const press =
     buttons.find((button) => button.textContent === words) ??
     assert.fail(`the menu offers ${words}`);
+
   act(() => press.click());
 }
 
@@ -876,8 +939,10 @@ async function openChip(): Promise<HTMLButtonElement[]> {
   const chip =
     document.querySelector<HTMLButtonElement>(".ui-chip") ??
     assert.fail("the dialog draws the repository chip");
+
   act(() => chip.click());
   await settle();
+
   return [...document.querySelectorAll<HTMLButtonElement>("button")];
 }
 
@@ -1003,10 +1068,12 @@ test("an owner's repository list ends in Configure repositories in Settings, ope
   });
 
   await openChip();
+
   const configure =
     [...document.querySelectorAll<HTMLElement>("[role='option'], button")].find(
       (each) => each.textContent === "Configure repositories in Settings",
     ) ?? assert.fail("the menu offers Configure repositories in Settings");
+
   act(() => configure.click());
 
   assert.deepEqual(dialog.links, [WORKSPACE_GITHUB]);
@@ -1041,6 +1108,7 @@ async function lapsedWay(manages: boolean) {
     list: NOWHERE_INSTALLED,
   });
   await openChip();
+
   return githubWay();
 }
 
@@ -1061,9 +1129,11 @@ test("in a workspace with no GitHub connected, a repository its plans still name
 
   const buttons = await openChip();
   const offered = buttons.map((button) => button.textContent);
+
   const search =
     document.querySelector<HTMLInputElement>('input[aria-label="Search repositories"]') ??
     assert.fail("the chip's menu opens");
+
   await dialog.press("Escape", search);
   await dialog.key("Enter", { metaKey: true });
 
@@ -1094,12 +1164,14 @@ test("a recent default the workspace's GitHub turns out not to list gives way to
         installationUrl: "https://github.com/apps/luke/installations/new",
       },
     });
+
   const unlisted = await mount(undefined, undefined, { list: listing });
   // Note that we wait for the listing to reach the chip, because it lands on Query's timing.
   await vi.waitFor(() =>
     assert.equal(document.querySelector(".repository-chip")?.textContent, "acme/api"),
   );
   await unlisted.key("Enter", { metaKey: true });
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 
@@ -1113,6 +1185,7 @@ test("a recent default the workspace's GitHub turns out not to list gives way to
 
 test("the repository menu names each repository first and its owner after it, so two that share an owner tell apart, and finds one by its owner/name", async () => {
   const owner = "northwind-platform";
+
   const reached = (name: string) => ({
     owner,
     name,
@@ -1121,6 +1194,7 @@ test("the repository menu names each repository first and its owner after it, so
     private: true,
     updatedAt: 1,
   });
+
   const dialog = await mount(undefined, undefined, {
     recent: [],
     list: () =>
@@ -1135,7 +1209,9 @@ test("the repository menu names each repository first and its owner after it, so
         },
       }),
   });
+
   await openChip();
+
   const rows = () =>
     [...document.querySelectorAll('[role="option"]')].map((row) => [
       row.querySelector(".ui-combobox-option-label")?.textContent,
@@ -1146,9 +1222,11 @@ test("the repository menu names each repository first and its owner after it, so
     ["customer-identity-and-access-management-service", owner],
     ["billing-ledger-and-invoicing-pipeline", owner],
   ]);
+
   const search =
     document.querySelector<HTMLInputElement>('input[aria-label="Search repositories"]') ??
     assert.fail("the chip's menu opens");
+
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
   act(() => {
     setValue?.call(search, `${owner}/billing`);
@@ -1193,6 +1271,7 @@ test("an automation's words are a draft of their own, so New task opens without 
   const automation = await mount(undefined, { purpose: NEW_TASK_PURPOSE.AUTOMATION });
   automation.type("Post a weekly digest.");
   await settle();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 
@@ -1202,14 +1281,17 @@ test("an automation's words are a draft of their own, so New task opens without 
 
 test("for an automation's agent files alone hold Start, since the words are the request", async () => {
   const card = await mount(undefined, { purpose: NEW_TASK_PURPOSE.AUTOMATION });
+
   const picker =
     card.dialog()?.querySelector<HTMLInputElement>('input[type="file"]') ??
     assert.fail("the + has its file picker");
+
   const file = new File(["# Notes"], "notes.md", { type: "text/markdown" });
   Object.defineProperty(picker, "files", { configurable: true, value: [file] });
   act(() => {
     picker.dispatchEvent(new Event("change", { bubbles: true }));
   });
+
   for (let read = 0; read < 4; read += 1) await settle();
   assert.ok(card.dialog()?.textContent?.includes("notes.md"), "the file is attached");
   assert.equal(card.startButton().disabled, true, "Start is held");

@@ -8,17 +8,25 @@
  * `launchFingerprint`). Claude Code and Codex each ask in their own terms
  * (`@repo/agent-runner`'s `PERMISSION_MODE`); an agent on neither has no
  * runner to ask, so a mode that asks is refused for it. A new agent starts
- * on its starter's Default permissions where its harness takes that mode
+ * on the mode its Start names, as a new-agent menu picked it, else on its
+ * starter's Default permissions, where its harness takes that mode
  * (`startingPermissionMode`).
+ *
+ * A Claude Code launch in a mode that asks is also handed the commands its starter
+ * always allows (`launchAllowedCommands`), read as it launches, so a
+ * command added or removed since reaches the agent from its next launch.
  */
 
 import { PERMISSION_MODE, type PermissionMode } from "@repo/agent-runner/protocol";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { listAllowedCommands } from "@repo/database/models/account-allowed-commands";
 import type { Agent } from "@repo/database/models/agent-store";
 import { CONVERSATION_RUNTIME, type ConversationRuntime } from "@repo/database/storage-vocabulary";
 import {
   AGENT_PERMISSION_MODE,
   type AgentPermissionMode,
 } from "@repo/features/agent-approval-wire";
+import { Effect } from "effect";
 
 /** The agent's modes as a runner's config names them, one for one. */
 const RUNNER_MODE_OF = {
@@ -40,15 +48,36 @@ export function launchPermissionMode(
   agent: Pick<Agent, "permissionMode">,
 ): { readonly permissionMode: PermissionMode } | undefined {
   const mode = permissionModeOf(agent);
+
   return mode === AGENT_PERMISSION_MODE.FULL_ACCESS
     ? undefined
     : { permissionMode: RUNNER_MODE_OF[mode] };
 }
 
 /**
- * The mode a new agent starts on: its starter's default where its harness
- * takes that mode, full access otherwise, and on an automation's agent,
- * whose turns no member watches to answer an ask.
+ * The commands a launch in a mode that asks runs unasked: its starter's
+ * list as it stands, none where it is empty or the launch asks nothing.
+ */
+export function launchAllowedCommands(
+  agent: Pick<Agent, "userId">,
+  mode: { readonly permissionMode: PermissionMode } | undefined,
+): Effect.Effect<
+  { readonly allowedCommands: readonly (readonly string[])[] } | undefined,
+  StoreFailure,
+  DatabaseServices
+> {
+  if (mode === undefined) return Effect.succeed(undefined);
+
+  return Effect.map(listAllowedCommands(agent.userId), (rows) =>
+    rows.length === 0 ? undefined : { allowedCommands: rows.map((row) => row.prefix) },
+  );
+}
+
+/**
+ * The mode a new agent starts on: the one its Start names, else its
+ * starter's default, where its harness takes that mode; full access
+ * otherwise, and on an automation's agent, whose turns no member watches
+ * to answer an ask.
  */
 export function startingPermissionMode(
   runtime: ConversationRuntime,
@@ -56,6 +85,7 @@ export function startingPermissionMode(
   automated: boolean,
 ): AgentPermissionMode {
   const mode = automated ? undefined : chosen;
+
   return mode !== undefined && harnessTakesMode(runtime, mode)
     ? mode
     : AGENT_PERMISSION_MODE.FULL_ACCESS;

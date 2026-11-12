@@ -48,7 +48,9 @@ const urlFile = Effect.try({
   try: () => {
     const { values } = parseArgs({ options: { "url-file": { type: "string" } } });
     const file = values["url-file"];
+
     if (file === undefined || file.length === 0) throw new Error("--url-file <path> is required");
+
     return file;
   },
   catch: (cause) => new StepFailed({ step: "reading the arguments", printed: String(cause) }),
@@ -73,10 +75,12 @@ function urlWritten(file: string, url: Redacted.Redacted<string>) {
   return Effect.gen(function* () {
     const fileSystem = yield* FileSystem.FileSystem;
     const partial = `${file}.partial`;
+
     const written = Effect.andThen(
       fileSystem.writeFileString(partial, `${Redacted.value(url)}\n`, { mode: 0o600 }),
       fileSystem.rename(partial, file),
     );
+
     yield* Effect.acquireRelease(written, () =>
       Effect.ignore(fileSystem.remove(file, { force: true })),
     );
@@ -87,9 +91,11 @@ function urlWritten(file: string, url: Redacted.Redacted<string>) {
 const demoPostgres = Effect.gen(function* () {
   const file = yield* urlFile;
   const cluster = yield* ephemeralCluster;
+
   for (const script of WEB_SCRIPTS) yield* webScript(script, cluster.url);
   yield* urlWritten(file, cluster.url);
   yield* Console.log(`Postgres 18 on port ${cluster.port}, in ${cluster.folder}`);
+
   return yield* Effect.never;
 }).pipe(Effect.scoped, Effect.provide(NodeServices.layer));
 

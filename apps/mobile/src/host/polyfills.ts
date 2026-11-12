@@ -21,6 +21,7 @@
 // host's words make them at module load (`@repo/features/words.ts`), so a
 // bundle without them cannot even evaluate. They stand on `Intl.Locale` and
 // `Intl.getCanonicalLocales`.
+import { Predicate } from "effect";
 import "@formatjs/intl-getcanonicallocales/polyfill.js";
 import "@formatjs/intl-locale/polyfill.js";
 import "@formatjs/intl-pluralrules/polyfill.js";
@@ -44,6 +45,7 @@ import "@formatjs/intl-listformat/locale-data/en.js";
 // from a word by its graphemes (`@repo/features/task-section-wire.ts`).
 import "@formatjs/intl-segmenter/polyfill.js";
 import type { DateTimeFormatConstructor as FormatJsDateTimeFormat } from "@formatjs/intl-datetimeformat";
+import type { WireValue } from "@repo/wire";
 import { fetch as streamingFetch } from "expo/fetch";
 import { CryptoDigestAlgorithm, digest, getRandomValues, randomUUID } from "expo-crypto";
 import { getCalendars } from "expo-localization";
@@ -53,28 +55,31 @@ import { getCalendars } from "expo-localization";
 // that a zone it cannot place, such as `GMT`, the name iOS gives a clock set
 // to UTC, leaves it in UTC, which is the same clock.
 const deviceZone = getCalendars()[0]?.timeZone;
+
 if (deviceZone && "polyfilled" in Intl.DateTimeFormat) {
   try {
     // SAFETY: a polyfilled `Intl.DateTimeFormat` is FormatJS's, which adds `__setDefaultTimeZone`.
-    (Intl.DateTimeFormat as unknown as FormatJsDateTimeFormat).__setDefaultTimeZone(deviceZone);
+    (Intl.DateTimeFormat as FormatJsDateTimeFormat).__setDefaultTimeZone(deviceZone);
   } catch {
     // The zone is one FormatJS cannot place, and UTC stands.
   }
 }
 
 /** The digests the web's `crypto.subtle.digest` names, as `expo-crypto` names them. */
-const DIGEST_ALGORITHM: Readonly<Record<string, CryptoDigestAlgorithm>> = {
-  "SHA-1": CryptoDigestAlgorithm.SHA1,
-  "SHA-256": CryptoDigestAlgorithm.SHA256,
-  "SHA-384": CryptoDigestAlgorithm.SHA384,
-  "SHA-512": CryptoDigestAlgorithm.SHA512,
-};
+const DIGEST_ALGORITHM: ReadonlyMap<string, CryptoDigestAlgorithm> = new Map([
+  ["SHA-1", CryptoDigestAlgorithm.SHA1],
+  ["SHA-256", CryptoDigestAlgorithm.SHA256],
+  ["SHA-384", CryptoDigestAlgorithm.SHA384],
+  ["SHA-512", CryptoDigestAlgorithm.SHA512],
+]);
 
 /** The algorithm a `digest` call names, by the name alone or as `{ name }`. */
 function algorithmNamed(algorithm: AlgorithmIdentifier): CryptoDigestAlgorithm {
-  const name = typeof algorithm === "string" ? algorithm : algorithm.name;
-  const named = DIGEST_ALGORITHM[name.toUpperCase()];
+  const name = Predicate.isString(algorithm) ? algorithm : algorithm.name;
+  const named = DIGEST_ALGORITHM.get(name.toUpperCase());
+
   if (named === undefined) throw new Error(`Unrecognized digest algorithm: ${name}`);
+
   return named;
 }
 
@@ -88,13 +93,15 @@ if (globalThis.crypto === undefined) {
   const subtle: Pick<SubtleCrypto, "digest"> = {
     digest: (algorithm, data) => digest(algorithmNamed(algorithm), data),
   };
+
   // SAFETY: the host calls `getRandomValues`, `randomUUID`, and `subtle.digest` alone of `Crypto`.
-  globalThis.crypto = { getRandomValues, randomUUID, subtle } as unknown as Crypto;
+  globalThis.crypto = { getRandomValues, randomUUID, subtle } as Crypto;
 }
 
 /** The index `with` names, counted from the end where negative, or none where it names no element. */
 function indexWithin(length: number, index: number): number | undefined {
   const at = index < 0 ? length + index : index;
+
   return at >= 0 && at < length ? at : undefined;
 }
 
@@ -102,9 +109,9 @@ function indexWithin(length: number, index: number): number | undefined {
 // Hermes has none of the four, and the host and its features sort and
 // reverse by copy throughout (`inbox-live.ts`, `task-list-live.ts`,
 // `sidebar-collections.ts`, among many).
-if (typeof Array.prototype.toSorted !== "function") {
-  const copying: Record<string, (this: readonly unknown[], ...args: never[]) => unknown[]> = {
-    toSorted(compare?: (a: unknown, b: unknown) => number) {
+if (!Predicate.isFunction(Array.prototype.toSorted)) {
+  const copying = {
+    toSorted<Item>(this: readonly Item[], compare?: (a: Item, b: Item) => number) {
       return [...this].sort(compare);
     },
     toReversed() {
@@ -112,18 +119,23 @@ if (typeof Array.prototype.toSorted !== "function") {
     },
     toSpliced(start: number, deleteCount?: number, ...items: unknown[]) {
       const copy = [...this];
+
       if (deleteCount === undefined) copy.splice(start);
       else copy.splice(start, deleteCount, ...items);
+
       return copy;
     },
-    with(index: number, value: unknown) {
+    with<Item>(this: readonly Item[], index: number, value: Item) {
       const at = indexWithin(this.length, index);
+
       if (at === undefined) throw new RangeError(`Invalid index : ${index}`);
       const copy = [...this];
       copy[at] = value;
+
       return copy;
     },
-  };
+  } satisfies Record<string, (this: readonly unknown[], ...args: never[]) => unknown[]>;
+
   for (const [name, method] of Object.entries(copying)) {
     Object.defineProperty(Array.prototype, name, {
       value: method,
@@ -138,23 +150,29 @@ if (typeof Array.prototype.toSorted !== "function") {
 // keys, which would otherwise all be the one key `"undefined"`. Registered
 // symbols, as Expo registers `Symbol.asyncIterator`.
 // SAFETY: the two are read-only in the lib's declaration and absent in the runtime; this writes them once.
-const symbols = Symbol as unknown as Record<"dispose" | "asyncDispose", symbol | undefined>;
+const symbols = Symbol as Record<"dispose" | "asyncDispose", symbol | undefined>;
+
 symbols.dispose ??= Symbol.for("Symbol.dispose");
+
 symbols.asyncDispose ??= Symbol.for("Symbol.asyncDispose");
 
 /** A stream's chunks read to its end, as one run of bytes. */
-async function readWhole(stream: ReadableStream<Uint8Array>): Promise<Uint8Array> {
+async function readWhole(stream: ReadableStream<Uint8Array>): Promise<Uint8Array<ArrayBuffer>> {
   const chunks: Uint8Array[] = [];
   const reader = stream.getReader();
+
   for (let read = await reader.read(); !read.done; read = await reader.read()) {
     chunks.push(read.value);
   }
+
   const whole = new Uint8Array(chunks.reduce((length, chunk) => length + chunk.length, 0));
   let at = 0;
+
   for (const chunk of chunks) {
     whole.set(chunk, at);
     at += chunk.length;
   }
+
   return whole;
 }
 
@@ -169,28 +187,33 @@ async function readWhole(stream: ReadableStream<Uint8Array>): Promise<Uint8Array
 // chunk, words encoded here rather than through whatwg-fetch's
 // `arrayBuffer`, whose `FileReader.readAsArrayBuffer` React Native lacks.
 const PlatformResponse = globalThis.Response;
+
 class StreamingResponse extends PlatformResponse {
   readonly #stream: ReadableStream<Uint8Array<ArrayBuffer>> | undefined;
   /** A body handed as words, which whatwg-fetch reads back as bytes only through `FileReader.readAsArrayBuffer`, which React Native lacks. */
   readonly #words: string | undefined;
 
   constructor(body?: BodyInit | null, init?: ResponseInit) {
+    // SAFETY: whatwg-fetch and React Native hand a stream of bytes, each chunk a Uint8Array over an ArrayBuffer.
     const stream =
       body instanceof ReadableStream
         ? (body as ReadableStream<Uint8Array<ArrayBuffer>>)
         : undefined;
+
     super(stream === undefined ? body : null, init);
     this.#stream = stream;
-    this.#words = typeof body === "string" ? body : undefined;
+    this.#words = Predicate.isString(body) ? body : undefined;
   }
 
   override get body(): ReadableStream<Uint8Array<ArrayBuffer>> | null {
     if (this.#stream !== undefined) return this.#stream;
     const words = this.#words;
+
     const whole = () =>
       words === undefined
         ? super.arrayBuffer().then((bytes) => new Uint8Array(bytes))
         : Promise.resolve(new TextEncoder().encode(words));
+
     return new ReadableStream<Uint8Array<ArrayBuffer>>({
       start: async (controller) => {
         controller.enqueue(await whole());
@@ -202,24 +225,27 @@ class StreamingResponse extends PlatformResponse {
   override async arrayBuffer(): Promise<ArrayBuffer> {
     if (this.#stream === undefined) return super.arrayBuffer();
     const whole = await readWhole(this.#stream);
-    return whole.buffer.slice(whole.byteOffset, whole.byteOffset + whole.byteLength) as ArrayBuffer;
+
+    return whole.buffer.slice(whole.byteOffset, whole.byteOffset + whole.byteLength);
   }
 
   override async text(): Promise<string> {
     if (this.#stream === undefined) return super.text();
+
     return new TextDecoder().decode(await readWhole(this.#stream));
   }
 
-  override async json(): Promise<unknown> {
+  override async json(): Promise<WireValue> {
     return JSON.parse(await this.text());
   }
 }
+
 // SAFETY: the subclass answers every member of `Response` the host and Effect read, and its constructor takes the platform's arguments.
-globalThis.Response = StreamingResponse as unknown as typeof Response;
+globalThis.Response = StreamingResponse as typeof Response;
 
 // `fetch` whose answers carry their body as a stream: React Native's builds
 // its `Response` from its own copy of whatwg-fetch's, which no global above
 // reaches, so the host's calls go out on Expo's WinterCG `fetch`, which
 // streams.
 // SAFETY: Expo's `fetch` takes the web's arguments and answers a `Response`; its declaration names its own narrower input and answer types.
-globalThis.fetch = streamingFetch as unknown as typeof globalThis.fetch;
+globalThis.fetch = streamingFetch as typeof globalThis.fetch;

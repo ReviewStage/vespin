@@ -101,10 +101,13 @@ appId: dev.vespin.ios
 # At the top, the page older than the transcript's first is read; the
 # fixture's first read is not heard back, so it offers Try again, and the
 # next lays the older turn before the first.
+# Note that the list scrolls to the notice's words rather than to Try again
+# under them, because a scroll that stops once Try again shows leaves the
+# words under the bar.
 - scrollUntilVisible:
-    element: "Try again"
+    element: "Earlier messages could not be read."
     direction: UP
-- assertVisible: "Earlier messages could not be read."
+- assertVisible: "Try again"
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-older-failed
@@ -169,10 +172,14 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-options-servers
+# Note that the Model row is centered as the form scrolls back, because one
+# left at the top stands under the sheet's bar, and its menu is opened from
+# its value, since the system's menu picker opens from its value alone.
 - scrollUntilVisible:
     element: "Model.*"
     direction: UP
-- tapOn: "Model.*"
+    centerElement: true
+- tapOn: "Opus 5.5"
 - assertVisible: ".*Sonnet 5.5"
 - waitForAnimationToEnd:
     timeout: 5000

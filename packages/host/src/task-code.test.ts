@@ -12,9 +12,11 @@ it.effect(
     Effect.gen(function* () {
       // A chunk that fails to download once, then arrives, as a flaky network serves it.
       let downloads = 0;
+
       const { highlightSnippet: color } = taskCodeColoring(
         Effect.suspend(() => {
           downloads += 1;
+
           return downloads === 1
             ? Effect.fail(new Error("the chunk did not download"))
             : Effect.map(
@@ -23,6 +25,7 @@ it.effect(
               );
         }),
       );
+
       const plain = [[{ text: LINE }]];
 
       assert.deepEqual(yield* color("ts", LINE), plain);

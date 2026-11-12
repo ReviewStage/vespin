@@ -21,6 +21,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type Glyph, isLucideSymbol } from "./glyph.js";
+import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
+import { KEPT_KIND } from "./keep-model.js";
 import {
   COLUMN_ALIGN,
   type ColumnAlign,
@@ -46,7 +48,7 @@ import { Video } from "./video.js";
  * own, as the panel's chip draws it before GitHub has said where the pull
  * request stands, and the rest the SF Symbol closest to the panel's.
  */
-const ENTITY_SYMBOL: { readonly [K in EntityKind]: Glyph } = {
+const ENTITY_SYMBOL: Readonly<Record<EntityKind, Glyph>> = {
   [ENTITY_KIND.PLAN]: "checklist",
   [ENTITY_KIND.SECTION]: "number",
   [ENTITY_KIND.VERSION]: "clock.arrow.circlepath",
@@ -90,7 +92,7 @@ const ENTITY_SYMBOL: { readonly [K in EntityKind]: Glyph } = {
 const CHIP_SYMBOL_SCALE = 0.85;
 
 /** Each heading level's size and weight, a step above the 15 pt words as the denser scale reads, never past a page's own heading. */
-const HEADING_LOOK: { readonly [Level in 1 | 2 | 3 | 4 | 5 | 6]: TextStyle } = {
+const HEADING_LOOK: Readonly<Record<1 | 2 | 3 | 4 | 5 | 6, TextStyle>> = {
   1: { fontSize: TEXT_SIZE.TITLE_3, fontWeight: "600" },
   2: { fontSize: TEXT_SIZE.HEADLINE, fontWeight: "600" },
   3: { fontSize: PROSE_SIZE, fontWeight: "600" },
@@ -99,7 +101,7 @@ const HEADING_LOOK: { readonly [Level in 1 | 2 | 3 | 4 | 5 | 6]: TextStyle } = {
   6: { fontSize: PROSE_SIZE, fontWeight: "600" },
 };
 
-const TEXT_ALIGN: { readonly [A in ColumnAlign]: TextStyle["textAlign"] } = {
+const TEXT_ALIGN: Readonly<Record<ColumnAlign, TextStyle["textAlign"]>> = {
   [COLUMN_ALIGN.START]: "left",
   [COLUMN_ALIGN.CENTER]: "center",
   [COLUMN_ALIGN.END]: "right",
@@ -114,12 +116,21 @@ const CHIP_DROP = 0.22;
 /** How wide a list's marker column stands, in body sizes. */
 const MARKER_WIDTH = 1.4;
 
+/**
+ * A bullet's dot, in body sizes: its width, how far below the line's top its
+ * middle stands, which is the middle of the first line's lowercase letters,
+ * as the panel's disc sits, and how far it stands in from the marker column's
+ * edge, where an ordered list's number ends.
+ */
+const BULLET = { SIZE: 0.34, MIDDLE: 0.69, INSET: 0.2 } as const;
+
 const styles = StyleSheet.create({
   flow: { gap: SPACE.ROW },
   itemBody: { gap: SPACE.TIGHT },
   marker: { position: "absolute", left: 0, top: 0 },
   quote: { borderLeftWidth: 3, paddingLeft: SPACE.ROW, gap: SPACE.ROW },
   well: { borderRadius: 8, padding: SPACE.ROW },
+  tableBox: { alignSelf: "stretch", overflow: "hidden" },
   table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
   row: { flexDirection: "row" },
   cell: { paddingHorizontal: SPACE.ROW, paddingVertical: 6 },
@@ -136,6 +147,7 @@ const styles = StyleSheet.create({
   pending: { alignItems: "center", justifyContent: "center" },
   viewer: { flex: 1, backgroundColor: "black", justifyContent: "center" },
   viewerClose: { position: "absolute", padding: SPACE.ROW },
+  viewerKeep: { position: "absolute", padding: SPACE.ROW },
 });
 
 /** What drawing a run needs beyond the run: the colors, the reader's text scale, and the doors a press opens. */
@@ -181,6 +193,7 @@ function ChipGlyph({
   if (!isLucideSymbol(glyph)) {
     return <SymbolView name={glyph} size={size} tintColor={color} accessibilityElementsHidden />;
   }
+
   return (
     <Host style={{ width: size, height: size }}>
       <SwiftUIImage
@@ -204,6 +217,7 @@ function MentionChip({
   const { colors, fontScale } = drawing;
   const onPress = open(chip.target, drawing);
   const size = TEXT_SIZE.FOOTNOTE;
+
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
       <Pressable
@@ -238,9 +252,9 @@ function MentionChip({
 
 function wordStyle(run: Extract<MarkdownRun, { kind: typeof MARKDOWN_RUN.WORDS }>): TextStyle {
   return {
-    ...(run.strong ? { fontWeight: "600" } : {}),
-    ...(run.emphasis ? { fontStyle: "italic" } : {}),
-    ...(run.struck ? { textDecorationLine: "line-through" } : {}),
+    ...(run.strong && { fontWeight: "600" }),
+    ...(run.emphasis && { fontStyle: "italic" }),
+    ...(run.struck && { textDecorationLine: "line-through" }),
   };
 }
 
@@ -256,6 +270,7 @@ function Runs({
 
 function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing: Drawing }) {
   const { colors } = drawing;
+
   switch (run.kind) {
     case MARKDOWN_RUN.WORDS:
       return <Text style={wordStyle(run)}>{run.text}</Text>;
@@ -273,16 +288,18 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
       );
     case MARKDOWN_RUN.LINK: {
       const onPress = open(run.target, drawing);
+
       return (
         <Text
           onPress={onPress}
           accessibilityRole={onPress === undefined ? "text" : "link"}
-          style={{ color: colors.ACCENT_TEXT, textDecorationLine: "underline" }}
+          style={{ color: colors.TEXT_BODY, textDecorationLine: "underline" }}
         >
           <Runs runs={run.runs} drawing={drawing} />
         </Text>
       );
     }
+
     case MARKDOWN_RUN.CHIP:
       return <MentionChip chip={run.chip} drawing={drawing} />;
     case MARKDOWN_RUN.BREAK:
@@ -305,6 +322,7 @@ const OPEN_WORD = "Open";
 function lineOpenings(runs: readonly MarkdownRun[], drawing: Drawing): readonly LineOpening[] {
   const openings: LineOpening[] = [];
   collectOpenings(runs, drawing, openings);
+
   return openings;
 }
 
@@ -317,6 +335,7 @@ function collectOpenings(
   for (const run of runs) {
     if (run.kind === MARKDOWN_RUN.CHIP) {
       const onOpen = open(run.chip.target, drawing);
+
       if (onOpen !== undefined) {
         openings.push({
           name: `open-${openings.length}`,
@@ -327,9 +346,11 @@ function collectOpenings(
     } else if (run.kind === MARKDOWN_RUN.LINK) {
       const onOpen = open(run.target, drawing);
       const words = heardLine(run.runs) ?? runsText(run.runs);
+
       if (onOpen !== undefined && words !== "") {
         openings.push({ name: `open-${openings.length}`, label: `${OPEN_WORD} ${words}`, onOpen });
       }
+
       collectOpenings(run.runs, drawing, openings);
     }
   }
@@ -373,6 +394,7 @@ function Line({
   readonly heading?: boolean | undefined;
 }) {
   const openings = lineOpenings(runs, drawing);
+
   const actions =
     openings.length === 0
       ? {}
@@ -381,6 +403,7 @@ function Line({
           onAccessibilityAction: (event: AccessibilityActionEvent) =>
             openings.find((opening) => opening.name === event.nativeEvent.actionName)?.onOpen(),
         };
+
   return (
     <Text
       accessibilityLabel={heardLine(runs)}
@@ -408,6 +431,7 @@ function Marker({
 }) {
   const { colors, fontScale } = drawing;
   const width = PROSE_SIZE * MARKER_WIDTH * fontScale;
+
   if (checked !== undefined) {
     return (
       <View
@@ -425,13 +449,38 @@ function Marker({
       </View>
     );
   }
-  // Note that a bullet is never heard, while an ordered list's number is, since its order is part of what it says.
+
+  // Note that a bullet is a dot drawn at the panel's disc's size on the first line's lowercase letters, since the bullet character stands small and high in the system face; it is never heard, while an ordered list's number is, since its order is part of what it says.
+  if (number === undefined) {
+    const size = PROSE_SIZE * fontScale;
+    const dot = size * BULLET.SIZE;
+
+    return (
+      <View
+        style={{
+          width,
+          alignItems: "flex-end",
+          paddingTop: size * BULLET.MIDDLE - dot / 2,
+          paddingRight: size * BULLET.INSET,
+        }}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <View
+          style={{
+            width: dot,
+            height: dot,
+            borderRadius: dot / 2,
+            backgroundColor: colors.TEXT_MUTED,
+          }}
+        />
+      </View>
+    );
+  }
+
   return (
-    <Text
-      style={{ width, fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "right" }}
-      accessibilityElementsHidden={number === undefined}
-    >
-      {number === undefined ? "•" : `${number}.`}
+    <Text style={{ width, fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "right" }}>
+      {`${number}.`}
     </Text>
   );
 }
@@ -452,6 +501,7 @@ function ListView({
   readonly drawing: Drawing;
 }) {
   const indent = PROSE_SIZE * MARKER_WIDTH * drawing.fontScale + SPACE.TIGHT;
+
   return (
     <View style={styles.flow}>
       {block.items.map((item, at) => (
@@ -472,7 +522,9 @@ function ListView({
 }
 
 /**
- * A table, scrolling sideways inside its own box. Note that React Native has
+ * A table, scrolling sideways inside its own box, which stands at the
+ * words' width as a code block's well does, so a table wider than the page
+ * scrolls within the page's inset rather than running past its edge. Note that React Native has
  * no table layout, so every cell is first drawn at its own width, held
  * between the column's bounds, and each column then stands at its widest
  * cell's; the table is laid out afresh when the reader's text size changes.
@@ -486,60 +538,66 @@ function TableView({
 }) {
   const { colors, fontScale } = drawing;
   const [widths, setWidths] = useState<readonly number[]>([]);
+
   const measured = (column: number, width: number) =>
     setWidths((held) => {
       if ((held[column] ?? 0) >= width) return held;
       const wider = [...held];
       wider[column] = width;
+
       return wider;
     });
+
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View style={[styles.table, { borderColor: colors.CHIP_EDGE }]}>
-        {block.rows.map((row, rowAt) => (
-          <View
-            key={rowAt}
-            style={[
-              styles.row,
-              rowAt === 0
-                ? { backgroundColor: colors.WELL }
-                : { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.CHIP_EDGE },
-            ]}
-          >
-            {row.map((cell, columnAt) => (
-              <View
-                key={columnAt}
-                onLayout={(event) => measured(columnAt, event.nativeEvent.layout.width)}
-                style={[
-                  styles.cell,
-                  {
-                    minWidth: COLUMN_WIDTH.MIN * fontScale,
-                    maxWidth: COLUMN_WIDTH.MAX * fontScale,
-                  },
-                  (widths[columnAt] ?? 0) > 0 ? { width: widths[columnAt] } : {},
-                ]}
-              >
-                <Line
-                  runs={cell}
-                  drawing={drawing}
-                  style={{
-                    fontSize: TEXT_SIZE.FOOTNOTE,
-                    textAlign: TEXT_ALIGN[block.align[columnAt] ?? COLUMN_ALIGN.START],
-                    ...(rowAt === 0 ? { fontWeight: "600", color: colors.TEXT } : {}),
-                  }}
-                />
-              </View>
-            ))}
-          </View>
-        ))}
-      </View>
-    </ScrollView>
+    <View style={styles.tableBox}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={[styles.table, { borderColor: colors.CHIP_EDGE }]}>
+          {block.rows.map((row, rowAt) => (
+            <View
+              key={rowAt}
+              style={[
+                styles.row,
+                rowAt === 0
+                  ? { backgroundColor: colors.WELL }
+                  : { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.CHIP_EDGE },
+              ]}
+            >
+              {row.map((cell, columnAt) => (
+                <View
+                  key={columnAt}
+                  onLayout={(event) => measured(columnAt, event.nativeEvent.layout.width)}
+                  style={[
+                    styles.cell,
+                    {
+                      minWidth: COLUMN_WIDTH.MIN * fontScale,
+                      maxWidth: COLUMN_WIDTH.MAX * fontScale,
+                    },
+                    (widths[columnAt] ?? 0) > 0 ? { width: widths[columnAt] } : {},
+                  ]}
+                >
+                  <Line
+                    runs={cell}
+                    drawing={drawing}
+                    style={{
+                      fontSize: TEXT_SIZE.FOOTNOTE,
+                      textAlign: TEXT_ALIGN[block.align[columnAt] ?? COLUMN_ALIGN.START],
+                      ...(rowAt === 0 && { fontWeight: "600", color: colors.TEXT }),
+                    }}
+                  />
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 /** A block of code, in the monospaced face on a well, scrolling sideways rather than wrapping its lines. */
 function CodeView({ text, drawing }: { readonly text: string; readonly drawing: Drawing }) {
   const { colors } = drawing;
+
   return (
     <View style={[styles.well, { backgroundColor: colors.WELL }]}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -563,7 +621,7 @@ type PictureProps = {
   /** What the picture shows, heard in its place. */
   readonly alt: string;
   /** A tile's fixed shape, width over height, the picture standing whole inside it; the picture's own shape where none is given. */
-  readonly shape?: number | undefined;
+  readonly tileAspect?: number | undefined;
 };
 
 /**
@@ -576,17 +634,23 @@ type PictureProps = {
  * is, the system's spinner in it as Photos stands one, so the words under
  * it do not jump twice and it never reads as an empty box.
  */
-export function Picture({ source, alt, shape }: PictureProps) {
+export function Picture({ source, alt, tileAspect }: PictureProps) {
   const colors = useColors();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [aspect, setAspect] = useState<number | undefined>(undefined);
   const [full, setFull] = useState(false);
   const heard = alt === "" ? "Picture" : alt;
+
+  const acts = useKeptActs(
+    source === undefined ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard },
+  );
+
   const well = [
     styles.picture,
-    { aspectRatio: shape ?? aspect ?? 16 / 9, backgroundColor: colors.WELL },
+    { aspectRatio: tileAspect ?? aspect ?? 16 / 9, backgroundColor: colors.WELL },
   ];
+
   if (source === undefined) {
     return (
       <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
@@ -594,24 +658,28 @@ export function Picture({ source, alt, shape }: PictureProps) {
       </View>
     );
   }
+
   return (
     <>
-      <Pressable
-        onPress={() => setFull(true)}
-        accessibilityRole="imagebutton"
-        accessibilityLabel={heard}
-        accessibilityHint="Opens full screen"
-      >
-        <Image
-          source={{ uri: source }}
-          resizeMode="contain"
-          onLoad={(event) => {
-            const loaded = event.nativeEvent.source;
-            if (loaded.width > 0 && loaded.height > 0) setAspect(loaded.width / loaded.height);
-          }}
-          style={well}
-        />
-      </Pressable>
+      <HeldMenu acts={acts}>
+        <Pressable
+          onPress={() => setFull(true)}
+          accessibilityRole="imagebutton"
+          accessibilityLabel={heard}
+          accessibilityHint="Opens full screen"
+        >
+          <Image
+            source={{ uri: source }}
+            resizeMode="contain"
+            onLoad={(event) => {
+              const loaded = event.nativeEvent.source;
+
+              if (loaded.width > 0 && loaded.height > 0) setAspect(loaded.width / loaded.height);
+            }}
+            style={well}
+          />
+        </Pressable>
+      </HeldMenu>
       <Modal
         visible={full}
         animationType="fade"
@@ -646,6 +714,14 @@ export function Picture({ source, alt, shape }: PictureProps) {
               Done
             </Text>
           </Pressable>
+          <View
+            style={[
+              styles.viewerKeep,
+              { bottom: insets.bottom + SPACE.ROW, left: insets.left + SPACE.ROW },
+            ]}
+          >
+            <HeldActsButton acts={acts} />
+          </View>
         </View>
       </Modal>
     </>
@@ -663,7 +739,9 @@ function PictureBlock({
   readonly drawing: Drawing;
 }) {
   const video = drawing.videoAt(source);
+
   if (video === undefined) return <Picture source={drawing.pictureSource(source)} alt={alt} />;
+
   return (
     <Video
       source={video.source}
@@ -681,6 +759,7 @@ function BlockView({
   readonly drawing: Drawing;
 }) {
   const { colors } = drawing;
+
   switch (block.kind) {
     case MARKDOWN_BLOCK.HEADING:
       // Note that a message's heading is styled, never announced as one, as the panel's are: a reader walking the screen's headings meets the screen's, not a message's. A page of words alone, such as a task's description opened whole, announces its own.
@@ -777,10 +856,12 @@ export function Markdown({
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
+
   const blocks = useMemo(
     () => markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed }),
     [words, repository, typed],
   );
+
   const drawing: Drawing = {
     colors,
     fontScale,
@@ -790,6 +871,7 @@ export function Markdown({
     videoAt,
     headings,
   };
+
   return (
     <View style={styles.flow}>
       <Blocks blocks={blocks} drawing={drawing} />

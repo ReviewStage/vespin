@@ -102,22 +102,27 @@ function readFolder(
 const tableExists = (schema: string | undefined, table: string) =>
   Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+
     const rows = yield* sql`
       select 1 from information_schema.tables
       where table_schema = ${schema ?? sql.literal("current_schema()")} and table_name = ${table}
     `;
+
     return rows.length > 0;
   });
 
 /** The names Drizzle's table holds, none before the table exists. */
 const recordedNames = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+
   if (!(yield* tableExists(DRIZZLE_MIGRATIONS.SCHEMA, DRIZZLE_MIGRATIONS.TABLE))) {
     return new Set<string>();
   }
+
   const rows = yield* sql<RecordedRow>`
     select name from ${sql(DRIZZLE_MIGRATIONS.SCHEMA)}.${sql(DRIZZLE_MIGRATIONS.TABLE)}
   `;
+
   return new Set(rows.flatMap((row) => (row.name === null ? [] : [row.name])));
 });
 
@@ -133,23 +138,30 @@ const recordedNames = Effect.gen(function* () {
 const transferHistory = Effect.fn("web/transferHistory")(
   function* (local: ReadonlyArray<MigrationMeta>) {
     const sql = yield* SqlClient.SqlClient;
+
     if (yield* tableExists(DRIZZLE_MIGRATIONS.SCHEMA, DRIZZLE_MIGRATIONS.TABLE)) return;
+
     if (!(yield* tableExists(undefined, EFFECT_MIGRATIONS_TABLE))) return;
     const byFolder = new Map(local.map((migration) => [migration.name, migration]));
+
     const recorded = yield* sql<{ readonly name: string }>`
       select name from ${sql(EFFECT_MIGRATIONS_TABLE)} order by migration_id
     `;
+
     const transfers = recorded.map(({ name: tag }) => ({
       tag,
       migration: byFolder.get(FOLDER_OF_TAG.get(tag) ?? ""),
     }));
+
     const unmapped = transfers.flatMap(({ tag, migration }) => (migration ? [] : [tag]));
+
     if (unmapped.length > 0) {
       return yield* new MigrationHistoryUnmapped({
         tags: unmapped,
         message: `${EFFECT_MIGRATIONS_TABLE} records migrations with no folder in this build: ${unmapped.join(", ")}`,
       });
     }
+
     const table = sql`${sql(DRIZZLE_MIGRATIONS.SCHEMA)}.${sql(DRIZZLE_MIGRATIONS.TABLE)}`;
     yield* sql`create schema if not exists ${sql(DRIZZLE_MIGRATIONS.SCHEMA)}`;
     yield* sql`
@@ -194,6 +206,7 @@ export const runWebMigrations = /* @__PURE__ */ Effect.fn("web/runWebMigrations"
     migrationsTable: DRIZZLE_MIGRATIONS.TABLE,
   });
   const after = yield* recordedNames;
+
   return local
     .map((migration) => migration.name)
     .filter((name) => after.has(name) && !before.has(name));

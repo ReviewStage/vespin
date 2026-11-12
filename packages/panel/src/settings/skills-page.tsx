@@ -30,11 +30,11 @@ import {
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
   SettingsRowMark,
-  type SettingsRowSkeletonShape,
+  type SettingsRowSkeletonLayout,
   SettingsRowStateLine,
   SettingsRowsSkeleton,
   SettingsSection,
-  type SettingsSectionSkeletonShape,
+  type SettingsSectionSkeletonLayout,
   SettingsSectionsSkeleton,
   SpinnerRegion,
   Stack,
@@ -106,7 +106,7 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
  */
 
 /** An installed skill's row while the skills are read: its book, its words over its source, and its ⋯. */
-const SKILL_ROW_SKELETON: SettingsRowSkeletonShape = {
+const SKILL_ROW_SKELETON: SettingsRowSkeletonLayout = {
   described: true,
   controls: [],
   end: [SETTINGS_SKELETON_CONTROL.MORE],
@@ -114,7 +114,7 @@ const SKILL_ROW_SKELETON: SettingsRowSkeletonShape = {
 };
 
 /** A group of skills while it is read, one row standing for however many land. */
-const SKILL_GROUP_SKELETON: SettingsSectionSkeletonShape = {
+const SKILL_GROUP_SKELETON: SettingsSectionSkeletonLayout = {
   headed: true,
   rows: [SKILL_ROW_SKELETON],
 };
@@ -124,7 +124,7 @@ const SKILL_GROUP_SKELETON: SettingsSectionSkeletonShape = {
  * reader's own, since whether the workspace is a personal one, which draws
  * no group of its own, is not yet known.
  */
-const SKILLS_SKELETON: readonly SettingsSectionSkeletonShape[] = [
+const SKILLS_SKELETON: readonly SettingsSectionSkeletonLayout[] = [
   SKILL_GROUP_SKELETON,
   SKILL_GROUP_SKELETON,
 ];
@@ -189,8 +189,11 @@ function contentRead(
   if (content.isPending || (content.isFetching && (content.isError || "failure" in content.data))) {
     return READING;
   }
+
   if (content.isError) return { kind: LIST.FAILED, line: SKILLS_LINE.VIEW_FAILED };
+
   if ("failure" in content.data) return { kind: LIST.FAILED, line: failureLine(content.data) };
+
   return { kind: LIST.READ, content: content.data };
 }
 
@@ -235,7 +238,7 @@ function SkillFileDialog({
       ) : (
         <Stack gap={GAP.FIELD}>
           <ReplayMask>
-            <MarkdownMessage words={fencedSkillFile(read.content.skillFile)} />
+            <MarkdownMessage words={fencedSkillFile(read.content.skillFile)} link={null} />
           </ReplayMask>
           <Stack gap={GAP.ITEM}>
             <Text variant={TEXT_VARIANT.SECTION} as={TEXT_ELEMENT.H3}>
@@ -279,13 +282,16 @@ function SkillRowView({
   const { mutateAsync: sendInstalledSkillsRemove, ...removing } = useMutation(
     actMutation(ACT_KIND.INSTALLED_SKILLS_REMOVE),
   );
+
   const { skill } = row;
+
   // Note that an installed skill names no file of a repository's, so its card says where it comes from and what it is for alone.
   const cardSkill: SkillOption = {
     name: skill.name,
     description: skill.description,
     source: row.source,
   };
+
   const [viewing, setViewing] = useState(false);
   // Note that the card reads the skill while it is drawn, from its opening until its fade has run, so each View reads afresh.
   const viewed = useDrawnThroughExit(viewing);
@@ -296,6 +302,7 @@ function SkillRowView({
       "failure" in answer ? rejected(failureLine(answer)) : ACCEPTED,
     failed: () => rejected(UNANSWERED_LINE),
   });
+
   const removal = useConfirmDialog(
     { subject: true, surfaceOpen: true },
     removalAct,
@@ -306,6 +313,7 @@ function SkillRowView({
     [SKILL_ACTION.VIEW]: () => setViewing(true),
     [SKILL_ACTION.REMOVE]: removal.ask,
   } as const satisfies Record<SkillAction, () => void>;
+
   const actions = skillActions(row).map((group) =>
     group.map((each) => ({
       label: ACTION_LABEL[each],
@@ -387,12 +395,14 @@ function ShownSkills({
   const members = useQuery(workspaceMembersQuery(workspace.id)).data?.members;
 
   const skills = held.data;
+
   // Note that an install lights only its own rows, each once, which say what it made; the host draws them.
   const installed = useCallback((made: readonly InstalledSkillSummary[]) => {
     setLanded(new Set(made.map((each) => each.id)));
   }, []);
 
   const groups = skills === undefined ? undefined : skillGroups(skills, readerId, members);
+
   // A group still being read stands its placeholder row in the card the rows will.
   const rows = (shown: readonly SkillRow[] | undefined, none: string = SKILLS_LINE.NONE) =>
     shown === undefined ? (
@@ -423,7 +433,9 @@ function ShownSkills({
       {SKILLS_LINE.ADD_SKILL}
     </Button>
   );
+
   const workspaceTitle = <ReplayMask>{workspaceGroupTitle(workspace)}</ReplayMask>;
+
   // Note that the first group's heading is where a search for Add skill lands, and where a failed read stands under its Add.
   const first =
     workspace.personal === true
@@ -494,6 +506,7 @@ export function SkillsPage({
 }): React.JSX.Element | null {
   if (control === undefined) return null;
   const workspace = shownWorkspace(control);
+
   if (workspace === undefined) {
     return control.listFailed ? (
       <SettingsSection>
@@ -507,6 +520,7 @@ export function SkillsPage({
       <SettingsSectionsSkeleton label={readingWords("your skills")} sections={SKILLS_SKELETON} />
     );
   }
+
   // Keyed to the workspace, so another one listed reads its own skills and asks nothing left over.
   return <ShownSkills key={workspace.id} workspace={workspace} readerId={readerId} pause={pause} />;
 }

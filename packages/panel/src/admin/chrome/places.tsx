@@ -7,6 +7,7 @@ import {
   ActivityIcon,
   Building2Icon,
   CircleDollarSignIcon,
+  GaugeIcon,
   LayoutDashboardIcon,
   UsersIcon,
 } from "@repo/ui/icons";
@@ -26,6 +27,7 @@ const PLACE_BY_TAB = {
   [ADMIN_TAB.RELIABILITY]: { label: "Reliability", icon: <ActivityIcon /> },
   [ADMIN_TAB.WORKSPACES]: { label: "Workspaces", icon: <Building2Icon /> },
   [ADMIN_TAB.USERS]: { label: "Users", icon: <UsersIcon /> },
+  [ADMIN_TAB.LIMITS]: { label: "Limits", icon: <GaugeIcon /> },
 } satisfies { readonly [Tab in AdminTab]: Omit<AdminPlace, "tab"> };
 
 /** The sidebar's places, in the order it lists them. */

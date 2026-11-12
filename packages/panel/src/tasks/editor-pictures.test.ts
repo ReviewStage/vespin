@@ -116,6 +116,7 @@ function drawn(node: ReactNode): HTMLElement {
   act(() =>
     root.render(withQueryClient(createElement(TaskMentions, { value: PAGE, children: node }))),
   );
+
   return container;
 }
 
@@ -126,21 +127,25 @@ async function editing(): Promise<HTMLElement> {
       task: TASK,
       edit: descriptionEditMutation(TASK.id, (request) => {
         saved.push(request.document.value);
+
         return Promise.resolve({ saved: true });
       }),
       sectionLinks: SECTION_LINKS,
     }),
   );
+
   const section = container.querySelector<HTMLElement>('[role="group"][aria-label="Approach"]');
   assert.ok(section !== null);
   act(() => section.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
   await settle();
+
   return container;
 }
 
 /** A screenshot pasted into the editor. */
 async function pasteScreenshot(container: HTMLElement): Promise<void> {
   const editable = container.querySelector(".ProseMirror") ?? assert.fail("the editor stands");
+
   const screenshot = new File(
     [new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])],
     "image.png",
@@ -148,6 +153,7 @@ async function pasteScreenshot(container: HTMLElement): Promise<void> {
       type: "image/png",
     },
   );
+
   const paste = new Event("paste", { bubbles: true, cancelable: true });
   Object.defineProperty(paste, "clipboardData", {
     value: { files: [screenshot], types: ["Files"], getData: () => "" },
@@ -228,6 +234,7 @@ test("a video of another description pasted in is kept on this description as it
       ),
     [ACT_KIND.TASKS_PICTURE_KEEP]: ({ picture }) => {
       kept.push(picture);
+
       return new Promise((resolve) => {
         keeping = { resolve };
       });
@@ -235,10 +242,12 @@ test("a video of another description pasted in is kept on this description as it
   });
   const container = await editing();
   const editable = container.querySelector(".ProseMirror") ?? assert.fail("the editor stands");
+
   const address = descriptionAttachmentAddress(
     { taskId: OTHER_TASK, attachmentId: "9a1b3c5d-7e9f-4a2b-8c4d-6e8f0a2b4c6d" },
     "acme",
   );
+
   const html = `<img src="${address}" alt="Inviting a member">`;
   const paste = new Event("paste", { bubbles: true, cancelable: true });
   Object.defineProperty(paste, "clipboardData", {
@@ -264,6 +273,7 @@ test("Insert image is offered while the description's text is edited, and lays i
   const reading = drawn(
     createElement(DescriptionBody, { task: TASK, sectionLinks: SECTION_LINKS }),
   );
+
   assert.equal(appCommandOffered(APP_COMMAND.INSERT_PICTURE), false);
   act(() => roots.pop()?.unmount());
   reading.remove();
@@ -325,6 +335,7 @@ function selectPicture(container: HTMLElement): HTMLElement {
   const editable =
     container.querySelector<TiptapEditorHTMLElement>(".ProseMirror") ??
     assert.fail("the editor stands");
+
   const editor = editable.editor ?? assert.fail("the editor runs");
   let at: number | undefined;
   editor.state.doc.descendants((node, pos) => {
@@ -333,6 +344,7 @@ function selectPicture(container: HTMLElement): HTMLElement {
   act(() => {
     editor.commands.setNodeSelection(at ?? assert.fail("the picture is in the text"));
   });
+
   return (
     container.querySelector<HTMLElement>(".editor-picture [role='toolbar']") ??
     assert.fail("the selected picture offers its tools")
@@ -346,8 +358,10 @@ function selectPicture(container: HTMLElement): HTMLElement {
 function layOutColumn(container: HTMLElement, width: number): void {
   const column =
     container.querySelector<HTMLElement>(".editor-picture") ?? assert.fail("the picture stands");
+
   const frame =
     column.querySelector<HTMLElement>(".picture-frame") ?? assert.fail("the picture is framed");
+
   column.getBoundingClientRect = () => new DOMRect(0, 200, width, 600);
   frame.getBoundingClientRect = () => new DOMRect(0, 200, width / 2, 600);
   act(() => relayout());

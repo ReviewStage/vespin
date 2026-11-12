@@ -154,6 +154,7 @@ export const ADMIN_LINK_SECTION = {
   RELIABILITY: "reliability",
   WORKSPACES: "workspaces",
   USERS: "users",
+  LIMITS: "limits",
 } as const;
 
 export type AdminLinkSection = (typeof ADMIN_LINK_SECTION)[keyof typeof ADMIN_LINK_SECTION];
@@ -214,6 +215,7 @@ const TASK_STEPS: ReadonlySet<string> = new Set([STEP.PLAN, STEP.TASK]);
  */
 export function currentTaskPath(path: string): string {
   const [, workspace, step, rest] = /^\/([^/?#]+)\/([^/?#]+)(.*)$/su.exec(path) ?? [];
+
   return workspace !== undefined && step === STEP.PLAN
     ? `/${workspace}/${STEP.TASK}${rest ?? ""}`
     : path;
@@ -325,6 +327,15 @@ const GITHUB_STEP = {
 
 /** The schemes a page on the web is read by. */
 const WEB_PROTOCOLS: ReadonlySet<string> = new Set(["https:", "http:"]);
+
+/** The longest link a client opens, as the window's `web.open` takes one. */
+const OPENABLE_LINK_MAX_CHARS = 2_048;
+
+/** The schemes an openable link is written in, as the window's `web.open` reads them: the web's, followed by its slashes, and mail's. */
+const OPENABLE_SCHEME = {
+  WEB: /^https?:\/\//iu,
+  MAIL: /^mailto:/iu,
+} as const;
 
 /** A commit as a link pins one: seven to forty hexadecimal digits. */
 const COMMIT = /^[0-9a-f]{7,40}$/u;
@@ -551,6 +562,7 @@ function boundedStep(step: string): string | undefined {
 /** Whether the steps after an Inbox item's id name one of its pictures, `files/<picture>`, which opens the item. */
 function namesItemPicture(more: readonly string[]): boolean {
   const [step, id, ...after] = more;
+
   return step === STEP.FILES && id !== undefined && PICTURE_ID.test(id) && after.length === 0;
 }
 
@@ -562,12 +574,16 @@ function taskStepOf(step: string): string {
 /** The steps after a task's id: a version, a page, an agent's, or an Inbox item; a turn of ours or a worker of ours read as the task, since each is drawn nowhere now. */
 function taskFields(taskId: string, rest: readonly string[]) {
   const [step, id, ...more] = rest;
+
   if (step === STEP.AGENT && id !== undefined) return agentFields(taskId, id, more);
+
   // A picture in an item's words opens the item, and nothing of the picture.
   if (step === STEP.INBOX && id !== undefined && namesItemPicture(more)) {
     return { kind: LINK_DESTINATION.INBOX_ITEM, planId: taskId, itemId: id };
   }
+
   if (id === undefined || more.length > 0) return undefined;
+
   switch (step) {
     case STEP.VERSION:
       return WHOLE.test(id)
@@ -593,22 +609,32 @@ function taskFields(taskId: string, rest: readonly string[]) {
 function agentFields(taskId: string | undefined, agentId: string, rest: readonly string[]) {
   const [step, id, ...more] = rest;
   const task = taskId === undefined ? {} : { planId: taskId };
+
   if (step === undefined) return { kind: LINK_DESTINATION.AGENT, ...task, agentId };
+
   if (step === STEP.CHANGES && id === undefined)
     return { kind: LINK_DESTINATION.CHANGES, ...task, agentId };
+
   if (step === STEP.CHANGES) return threadFields(task, agentId, rest);
+
   if (step === STEP.INBOX && taskId === undefined && id !== undefined && namesItemPicture(more)) {
     return { kind: LINK_DESTINATION.INBOX_ITEM, agentId, itemId: id };
   }
+
   if (id === undefined || more.length > 0) return undefined;
+
   if (step === STEP.MESSAGE)
     return { kind: LINK_DESTINATION.MESSAGE, ...task, agentId, messageId: id };
+
   if (step === STEP.PAGE && taskId === undefined)
     return { kind: LINK_DESTINATION.PAGE, agentId, pageId: id };
+
   if (step === STEP.INBOX && taskId === undefined) {
     return { kind: LINK_DESTINATION.INBOX_ITEM, agentId, itemId: id };
   }
+
   if (step === STEP.WORKER) return { kind: LINK_DESTINATION.WORKER, ...task, agentId, callId: id };
+
   return undefined;
 }
 
@@ -619,17 +645,22 @@ function threadFields(
   rest: readonly string[],
 ) {
   const [, view, step, threadId, ...more] = rest;
+
   if (view === undefined || !THREAD_VIEWS.has(view) || step !== STEP.THREAD) return undefined;
+
   if (threadId === undefined || more.length > 0) return undefined;
+
   return { kind: LINK_DESTINATION.PULL_REQUEST_THREAD, ...task, agentId, threadId, view };
 }
 
 /** The fields a link's steps after its workspace spell, for the schema to read; nothing where they name no place. */
 function placeFields(steps: readonly string[]) {
   const [step, id, ...rest] = steps;
+
   if (step !== undefined && TASK_STEPS.has(step)) {
     return id === undefined ? undefined : taskFields(id, rest);
   }
+
   switch (step) {
     case undefined:
       return { kind: LINK_DESTINATION.HOME };
@@ -645,7 +676,9 @@ function placeFields(steps: readonly string[]) {
       return id === undefined ? { kind: LINK_DESTINATION.AUTOMATIONS } : undefined;
     case STEP.AUTOMATION:
       if (id === undefined) return undefined;
+
       if (rest.length === 0) return { kind: LINK_DESTINATION.AUTOMATION, automationId: id };
+
       return rest.length === 2 && rest[0] === STEP.RUN
         ? { kind: LINK_DESTINATION.AUTOMATION_RUN, automationId: id, runId: rest[1] }
         : undefined;
@@ -655,6 +688,7 @@ function placeFields(steps: readonly string[]) {
         : { kind: LINK_DESTINATION.PERSON, userId: id };
     case STEP.SETTINGS:
       if (rest.length > 0) return undefined;
+
       return id === undefined
         ? { kind: LINK_DESTINATION.SETTINGS }
         : { kind: LINK_DESTINATION.SETTINGS, page: id };
@@ -668,12 +702,15 @@ function placeFields(steps: readonly string[]) {
 /** The Inbox's fields past its step: the Inbox itself, the Inbox narrowed to one task, `task/<taskId>`, or an item by its id alone, a picture in its words opening the item. */
 function inboxFields(step: string | undefined, rest: readonly string[]) {
   if (step === undefined) return { kind: LINK_DESTINATION.INBOX };
+
   if (TASK_STEPS.has(step)) {
     const [taskId, ...more] = rest;
+
     return taskId === undefined || more.length > 0
       ? undefined
       : { kind: LINK_DESTINATION.INBOX, planId: taskStepOf(taskId) };
   }
+
   return rest.length === 0 || namesItemPicture(rest)
     ? { kind: LINK_DESTINATION.INBOX_ITEM, itemId: step }
     : undefined;
@@ -683,13 +720,18 @@ function inboxFields(step: string | undefined, rest: readonly string[]) {
 function adminFields(step: string | undefined, rest: readonly string[]) {
   if (step === undefined) return { kind: LINK_DESTINATION.ADMIN };
   const [id, ...more] = rest;
+
   if (more.length > 0) return undefined;
+
   if (step === STEP.USER)
     return id === undefined ? undefined : { kind: LINK_DESTINATION.ADMIN, userId: id };
+
   if (step === STEP.WORKSPACE)
     return id === undefined ? undefined : { kind: LINK_DESTINATION.ADMIN, workspaceId: id };
+
   if (step === STEP.DAY)
     return id === undefined ? undefined : { kind: LINK_DESTINATION.ADMIN, day: id };
+
   return id === undefined && ADMIN_LINK_SECTIONS.has(step)
     ? { kind: LINK_DESTINATION.ADMIN, section: step }
     : undefined;
@@ -705,7 +747,9 @@ function taskLink(taskId: string, hash: string): LinkDestination | undefined {
   if (hash === "" || hash === "#") {
     return Option.getOrUndefined(readPlace({ kind: LINK_DESTINATION.TASK, planId: taskId }));
   }
+
   const anchor = decodedStep(hash.slice(1))?.toLowerCase();
+
   return Option.getOrUndefined(
     readPlace({ kind: LINK_DESTINATION.SECTION, planId: taskId, anchor }),
   );
@@ -748,6 +792,7 @@ function placePath(place: LinkDestination): readonly string[] {
       return place.planId === undefined ? [STEP.INBOX] : [STEP.INBOX, STEP.TASK, place.planId];
     case LINK_DESTINATION.INBOX_ITEM:
       if ("planId" in place) return [STEP.TASK, place.planId, STEP.INBOX, place.itemId];
+
       return "agentId" in place
         ? [STEP.AGENT, place.agentId, STEP.INBOX, place.itemId]
         : [STEP.INBOX, place.itemId];
@@ -763,8 +808,11 @@ function placePath(place: LinkDestination): readonly string[] {
       return place.page === undefined ? [STEP.SETTINGS] : [STEP.SETTINGS, place.page];
     case LINK_DESTINATION.ADMIN:
       if (place.userId !== undefined) return [STEP.ADMIN, STEP.USER, place.userId];
+
       if (place.workspaceId !== undefined) return [STEP.ADMIN, STEP.WORKSPACE, place.workspaceId];
+
       if (place.day !== undefined) return [STEP.ADMIN, STEP.DAY, place.day];
+
       return place.section === undefined ? [STEP.ADMIN] : [STEP.ADMIN, place.section];
   }
 }
@@ -784,12 +832,15 @@ export function linkOf(place: LinkDestination, workspace: string): string {
   const link = [LINK_ORIGIN, workspace, ...placePath(place)]
     .map((step, index) => (index === 0 ? step : encodedStep(step)))
     .join("/");
+
   if (place.kind === LINK_DESTINATION.SECTION && place.anchor !== "") {
     return `${link}#${encodedStep(place.anchor)}`;
   }
+
   if (place.kind === LINK_DESTINATION.COMMENT) {
     return `${link}?${new URLSearchParams({ [COMMENT_QUERY]: place.threadId })}`;
   }
+
   return link;
 }
 
@@ -801,12 +852,16 @@ export function linkOf(place: LinkDestination, workspace: string): string {
 export function readLink(target: string): ReadLink | undefined {
   if (target.length > LINK_BOUNDS.MAX_LINK_CHARS) return undefined;
   const url = parsedUrl(target);
+
   if (url === undefined || !isLinkHome(url)) return undefined;
   const [first, ...encoded] = url.pathname.replace(/\/$/u, "").split("/");
   const steps = encoded.map(boundedStep);
   const [workspace, ...after] = steps;
+
   if (first !== "" || workspace === undefined || workspace === "") return undefined;
+
   if (workspace.length > LINK_BOUNDS.MAX_STEP_CHARS) return undefined;
+
   if (!after.every((step): step is string => step !== undefined && step !== "")) return undefined;
   // A task's own link, or a section's, is read by the codec that writes a mention of either.
   const [step, written, ...rest] = after;
@@ -816,6 +871,7 @@ export function readLink(target: string): ReadLink | undefined {
   const placeSteps = taskStep && taskId !== undefined ? [step, taskId, ...rest] : after;
   // Note that a task's link naming one of its comment threads opens the thread; any other query is the address's own, which the place has no use for.
   const thread = url.searchParams.getAll(COMMENT_QUERY);
+
   const place =
     taskOwn && thread.length === 1
       ? Option.getOrUndefined(
@@ -824,9 +880,12 @@ export function readLink(target: string): ReadLink | undefined {
       : taskOwn
         ? taskLink(taskId, url.hash)
         : Option.getOrUndefined(readPlace(placeFields(placeSteps)));
+
   if (place === undefined) return undefined;
+
   // Note that the workspace's own address, and its Board's, are a page of ours or a file's but for the workspace's step.
   if (WORKSPACE_PLACES.has(place.kind) && !workspaceStep(workspace)) return undefined;
+
   return { workspace, place };
 }
 
@@ -850,6 +909,34 @@ export function taskLinkStep(task: {
   readonly number?: number | undefined;
 }): string {
   return task.number === undefined ? task.id : String(task.number);
+}
+
+/** A workspace as its links are written under it: its id, and its slug where the service sent one. */
+interface LinkWorkspace {
+  readonly id: string;
+  readonly slug?: string | undefined;
+}
+
+/**
+ * The step a workspace's links are written under: its slug, else its id,
+ * else the id itself before the workspaces are read; nothing where no
+ * workspace is known yet, so no link is written under an empty step.
+ */
+export function linkWorkspaceStep(
+  workspaceId: string,
+  workspaces: readonly LinkWorkspace[],
+): string;
+export function linkWorkspaceStep(
+  workspaceId: string | undefined,
+  workspaces: readonly LinkWorkspace[],
+): string | undefined;
+export function linkWorkspaceStep(
+  workspaceId: string | undefined,
+  workspaces: readonly LinkWorkspace[],
+): string | undefined {
+  const workspace = workspaces.find(({ id }) => id === workspaceId);
+
+  return workspace?.slug ?? workspace?.id ?? workspaceId;
 }
 
 /** The places of the account's own, which no workspace holds, so their links name none. */
@@ -893,11 +980,14 @@ const CONNECT_PREFIX = `${HOST_WIRE.CONNECT_PATH}/`;
 function readAccountLink(target: string): AccountLink | undefined {
   if (target.length > LINK_BOUNDS.MAX_LINK_CHARS) return undefined;
   const url = parsedUrl(target);
+
   if (url === undefined || !isLinkHome(url)) return undefined;
   const path = url.pathname.replace(/\/$/u, "");
+
   if (!path.startsWith(CONNECT_PREFIX)) return undefined;
   const typed = boundedStep(path.slice(CONNECT_PREFIX.length));
   const code = typed === undefined ? undefined : hostUserCodeOf(typed);
+
   return code === undefined ? undefined : { place: { kind: ACCOUNT_DESTINATION.CONNECT, code } };
 }
 
@@ -918,7 +1008,9 @@ export function readShownLink(target: string): ShownLink | undefined {
  */
 export function appLinkOf(target: string): string | undefined {
   const read = readShownLink(target);
+
   if (read === undefined) return undefined;
+
   return inAppScheme(
     "workspace" in read ? linkOf(read.place, read.workspace) : accountLinkOf(read.place),
   );
@@ -959,6 +1051,7 @@ export type GitHubPage =
 /** Whether words are a repository's `owner/name` as GitHub spells one, within its bounds. */
 function isGitHubRepository(words: string): boolean {
   const { MAX_OWNER_CHARS, MAX_NAME_CHARS } = GITHUB_REPOSITORY_BOUNDS;
+
   return (
     words.length <= MAX_OWNER_CHARS + 1 + MAX_NAME_CHARS && GITHUB_REPOSITORY_PATTERN.test(words)
   );
@@ -967,18 +1060,22 @@ function isGitHubRepository(words: string): boolean {
 /** A repository's path read back from its steps, or nothing where a step's encoding is broken, a step is empty, or it climbs. */
 function repositoryPath(encoded: readonly string[]): string | undefined {
   const steps = encoded.map(decodedStep);
+
   const whole = steps.every(
     (step): step is string => step !== undefined && step !== "" && step !== "." && step !== "..",
   );
+
   return whole && steps.length > 0 ? steps.join("/") : undefined;
 }
 
 /** The lines a file's fragment names at a commit; none where it names none or the ref is no commit, and `false` where it names lines no file has. */
 function fragmentLines(ref: string, hash: string): GitHubLines | false | undefined {
   const lines = LINES_FRAGMENT.exec(hash);
+
   if (lines === null || !COMMIT.test(ref)) return undefined;
   const startLine = Number(lines[1]);
   const endLine = lines[2] === undefined ? startLine : Number(lines[2]);
+
   return startLine >= 1 && startLine <= endLine ? { startLine, endLine } : false;
 }
 
@@ -990,32 +1087,42 @@ function repositoryPageOf(
   hash: string,
 ): GitHubPage | undefined {
   if (ref === undefined) return undefined;
+
   if (step === GITHUB_STEP[GITHUB_PAGE.FOLDER]) {
     const path = repositoryPath(encoded.at(-1) === "" ? encoded.slice(0, -1) : encoded);
+
     return path === undefined ? undefined : { kind: GITHUB_PAGE.FOLDER, repository, ref, path };
   }
+
   const path = repositoryPath(encoded);
   const lines = fragmentLines(ref, hash);
+
   if (path === undefined || lines === false) return undefined;
   const file = { kind: GITHUB_PAGE.FILE, repository, ref, path } as const;
+
   return lines === undefined ? file : { ...file, lines };
 }
 
 /** The steps of a page of GitHub's past its repository, and the repository, `owner/name`; nothing for any other address. */
 function gitHubStepsOf(target: string) {
   const url = parsedUrl(target);
+
   if (url === undefined || url.hostname !== GITHUB_HOST || !WEB_PROTOCOLS.has(url.protocol)) {
     return undefined;
   }
+
   const [first, owner, name, step, ...rest] = url.pathname.split("/");
   const repository = `${owner}/${name}`;
+
   if (first !== "" || step === undefined || !isGitHubRepository(repository)) return undefined;
+
   return { repository, step, rest, hash: url.hash };
 }
 
 /** Whether a page's steps name a file or a folder at a ref a reader reads one at, `HEAD` or a commit. */
 function namesRepositoryPage(step: string, ref: string | undefined): boolean {
   const kind = step === GITHUB_STEP[GITHUB_PAGE.FILE] || step === GITHUB_STEP[GITHUB_PAGE.FOLDER];
+
   return kind && ref !== undefined && (ref === GITHUB_DEFAULT_BRANCH || COMMIT.test(ref));
 }
 
@@ -1027,16 +1134,23 @@ function namesRepositoryPage(step: string, ref: string | undefined): boolean {
  */
 export function readGitHubPage(target: string): GitHubPage | undefined {
   const page = gitHubStepsOf(target);
+
   if (page === undefined) return undefined;
   const { repository, step, rest, hash } = page;
+
   if (step === GITHUB_STEP[GITHUB_PAGE.PULL_REQUEST] || step === GITHUB_STEP[GITHUB_PAGE.ISSUE]) {
     const number = rest[0];
+
     if (number === undefined || !PAGE_NUMBER.test(number)) return undefined;
+
     const kind =
       step === GITHUB_STEP[GITHUB_PAGE.ISSUE] ? GITHUB_PAGE.ISSUE : GITHUB_PAGE.PULL_REQUEST;
+
     return { kind, repository, number: Number(number) };
   }
+
   if (!namesRepositoryPage(step, rest[0])) return undefined;
+
   return repositoryPageOf(repository, step, rest, hash);
 }
 
@@ -1048,6 +1162,7 @@ export function readGitHubPage(target: string): GitHubPage | undefined {
  */
 export function gitHubFilePageRepositoryOf(target: string): string | undefined {
   const page = gitHubStepsOf(target);
+
   return page !== undefined && namesRepositoryPage(page.step, page.rest[0])
     ? page.repository
     : undefined;
@@ -1056,12 +1171,16 @@ export function gitHubFilePageRepositoryOf(target: string): string | undefined {
 /** The address a page of GitHub's is written by: each step percent-encoded, a ref's slashes kept, and a file's lines as its fragment. */
 export function gitHubPageLink(page: GitHubPage): string {
   const repository = `${GITHUB_ORIGIN}/${encodedPath(page.repository)}/${GITHUB_STEP[page.kind]}`;
+
   if (page.kind === GITHUB_PAGE.PULL_REQUEST || page.kind === GITHUB_PAGE.ISSUE) {
     return `${repository}/${page.number}`;
   }
+
   const at = `${repository}/${encodedPath(page.ref)}/${encodedPath(page.path)}`;
+
   if (page.kind === GITHUB_PAGE.FOLDER || page.lines === undefined) return at;
   const { startLine, endLine } = page.lines;
+
   return startLine === endLine ? `${at}#L${startLine}` : `${at}#L${startLine}-L${endLine}`;
 }
 
@@ -1072,9 +1191,27 @@ export function gitHubPageLink(page: GitHubPage): string {
  */
 export function pullRequestAddressOf(target: string): NumberedAddress | undefined {
   const page = readGitHubPage(target);
+
   return page?.kind === GITHUB_PAGE.PULL_REQUEST
     ? { repository: page.repository, number: page.number }
     : undefined;
+}
+
+/**
+ * Whether two links name one pull request on GitHub, a page under it among
+ * them: the same number in the same repository, whatever the case its owner
+ * and name are spelled in, as GitHub reads them.
+ */
+export function samePullRequest(one: string, other: string): boolean {
+  const first = pullRequestAddressOf(one);
+  const second = pullRequestAddressOf(other);
+
+  return (
+    first !== undefined &&
+    second !== undefined &&
+    first.number === second.number &&
+    first.repository.toLowerCase() === second.repository.toLowerCase()
+  );
 }
 
 /**
@@ -1084,6 +1221,7 @@ export function pullRequestAddressOf(target: string): NumberedAddress | undefine
  */
 export function issueAddressOf(target: string): NumberedAddress | undefined {
   const page = readGitHubPage(target);
+
   return page?.kind === GITHUB_PAGE.ISSUE
     ? { repository: page.repository, number: page.number }
     : undefined;
@@ -1096,11 +1234,37 @@ export function issueAddressOf(target: string): NumberedAddress | undefined {
  */
 export function readLinearIssue(target: string): string | undefined {
   const url = parsedUrl(target);
+
   if (url === undefined || url.hostname !== LINEAR_HOST) return undefined;
   const [first, , step, identifier] = url.pathname.split("/");
+
   if (first !== "" || step !== LINEAR_ISSUE_STEP || identifier === undefined) return undefined;
   const upper = identifier.toUpperCase();
+
   return LINEAR_IDENTIFIER.test(upper) ? upper : undefined;
+}
+
+/** What a link opens as outside the app: a page on the web, in the browser, or a mail address, as a draft in the mail app. */
+export const OPENABLE_LINK = {
+  WEB: "web",
+  MAIL: "mail",
+} as const;
+
+/** What a link opens as outside the app, as `openableLinkOf` reads it. */
+export type OpenableLink = (typeof OPENABLE_LINK)[keyof typeof OPENABLE_LINK];
+
+/**
+ * What a link opens as outside the app, as the window's `web.open` takes
+ * it: an http or https address, or a `mailto:` one, of at most 2,048
+ * characters that the URL parser reads; nothing for any other, which every
+ * client draws as words rather than a press that opens nothing.
+ */
+export function openableLinkOf(href: string): OpenableLink | undefined {
+  if (href.length > OPENABLE_LINK_MAX_CHARS || parsedUrl(href) === undefined) return undefined;
+
+  if (OPENABLE_SCHEME.WEB.test(href)) return OPENABLE_LINK.WEB;
+
+  return OPENABLE_SCHEME.MAIL.test(href) ? OPENABLE_LINK.MAIL : undefined;
 }
 
 /** A `mention://` or `luke://` address read: its host, its path's steps still percent-encoded, and its fragment and query as written. */
@@ -1114,8 +1278,10 @@ export interface SchemeLink {
 /** The parts of an address in the app's own form, `mention://` or the `luke://` written before it; nothing for any other address. */
 export function readSchemeLink(target: string): SchemeLink | undefined {
   const url = parsedUrl(target);
+
   if (url === undefined || !SCHEME_PROTOCOLS.has(url.protocol)) return undefined;
   const steps = url.pathname.replace(/^\//u, "").split("/");
+
   return { host: url.host, steps, hash: url.hash, search: url.search };
 }
 
@@ -1129,9 +1295,11 @@ function escapedLabel(words: string): string {
   const oneLine = [...words]
     .map((character) => {
       const code = character.codePointAt(0) ?? 0;
+
       return code < SPACE_CODE || code === DELETE_CODE ? " " : character;
     })
     .join("");
+
   return oneLine.replace(LABEL_SPECIAL, (special) => `\\${special}`);
 }
 
@@ -1144,7 +1312,9 @@ export function readLabel(written: string): string {
 export function linkTarget(address: string): string {
   return address.replace(TARGET_BREAKING, (special) => {
     if (special === "(") return "%28";
+
     if (special === ")") return "%29";
+
     return encodeURIComponent(special);
   });
 }

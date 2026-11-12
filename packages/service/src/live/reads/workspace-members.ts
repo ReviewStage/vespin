@@ -48,6 +48,7 @@ export const workspaceMembersRead = bindLiveRead(WORKSPACE_MEMBERS_READ, {
   topics: ({ workspaceId }) => [[TOPIC.WORKSPACE, workspaceId]],
   statements: ({ userId, workspaceId }) => {
     const reached = workspaceReachableBy(userId, workspaceId);
+
     return {
       members: liveRowsStatement(
         WORKSPACE_MEMBERS_READ.parts.members,

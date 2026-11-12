@@ -28,15 +28,20 @@ afterEach(() => {
 /** Mounts a surface holding one action, answering the action as it was last drawn. */
 function mount(): () => AsyncAction<string> {
   let action: AsyncAction<string> | undefined;
+
   function Surface() {
     action = useAsyncAction(rejectionWords);
+
     return null;
   }
+
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
   act(() => root.render(createElement(Surface)));
+
   return () => {
     assert.ok(action);
+
     return action;
   };
 }
@@ -44,10 +49,12 @@ function mount(): () => AsyncAction<string> {
 /** An act the test answers by hand. */
 function held() {
   let answer: (refusal: string | undefined) => void = () => undefined;
+
   const act = () =>
     new Promise<string | undefined>((resolve) => {
       answer = resolve;
     });
+
   return { act, answer: (refusal: string | undefined) => answer(refusal) };
 }
 
@@ -55,10 +62,13 @@ test("a second press before the first settles starts nothing", async () => {
   const action = mount();
   const sent = held();
   let sends = 0;
+
   const press = () => {
     sends += 1;
+
     return sent.act();
   };
+
   // Both presses read the action as one draw left it, as two presses in one frame do.
   const drawn = action();
   let first: Promise<boolean> | undefined;
@@ -92,10 +102,12 @@ test("a refusal stands until the next press lets it go", async () => {
 test("an act that rejects ends refused, not left running", async () => {
   const action = mount();
   let reject: (why: Error) => void = () => undefined;
+
   const rejecting = () =>
     new Promise<undefined>((_, fail) => {
       reject = fail;
     });
+
   let ran: Promise<boolean> | undefined;
   act(() => {
     ran = action().run(rejecting);

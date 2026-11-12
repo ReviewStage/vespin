@@ -72,6 +72,7 @@ export function withValue(
   value: InboxFieldValue | undefined,
 ): InboxDraft {
   const others = draft.values.filter((each) => each.label !== label);
+
   return { ...draft, values: value === undefined ? others : [...others, { label, value }] };
 }
 
@@ -87,14 +88,19 @@ function replyKindOf(
   press: InboxReplyKind | undefined,
 ): InboxReplyKind | undefined {
   if (press !== undefined) return press;
+
   if (response.type === INBOX_RESPONSE.APPROVAL || response.type === INBOX_RESPONSE.TODO) {
     return decidedOf(response, draft);
   }
+
   if (response.type === INBOX_RESPONSE.NONE) return INBOX_REPLY.ACKNOWLEDGED;
+
   if (response.type === INBOX_RESPONSE.CHOICE && draft.choices.length > 0) return INBOX_REPLY.CHOSE;
+
   if (response.type === INBOX_RESPONSE.FORM) {
     return formSendable(response, draft) ? INBOX_REPLY.SUBMITTED : undefined;
   }
+
   return draft.note.trim() === "" && draft.attachments.length === 0
     ? undefined
     : INBOX_REPLY.ANSWERED;
@@ -104,10 +110,13 @@ function replyKindOf(
 function sentValues(form: Pick<InboxForm, "fields">, draft: InboxDraft): readonly InboxFormValue[] {
   return form.fields.flatMap((field) => {
     const held = fieldValueOf(draft, field.label);
+
     const value =
       held === undefined ? (field.type === INBOX_FIELD.BOOLEAN ? false : undefined) : held;
+
     if (value === undefined) return [];
     const sent = isWireString(value) ? value.trim() : value;
+
     return sent === "" ? [] : [{ label: field.label, value: sent }];
   });
 }
@@ -118,6 +127,7 @@ function sentValues(form: Pick<InboxForm, "fields">, draft: InboxDraft): readonl
  */
 function formFilledIn(form: Pick<InboxForm, "fields">, draft: InboxDraft): boolean {
   const held = new Set(draft.values.map((value) => value.label));
+
   return sentValues(form, draft).some((value) => held.has(value.label));
 }
 
@@ -128,8 +138,11 @@ function formFilledIn(form: Pick<InboxForm, "fields">, draft: InboxDraft): boole
  */
 function formSendable(form: Pick<InboxForm, "fields">, draft: InboxDraft): boolean {
   const sent = new Set(sentValues(form, draft).map((value) => value.label));
+
   if (form.fields.every((field) => field.required !== true || sent.has(field.label))) return true;
+
   if (draft.note.trim() !== "" || draft.attachments.length > 0) return true;
+
   return formFilledIn(form, draft);
 }
 
@@ -149,10 +162,13 @@ export function inboxReply(
   press?: InboxReplyKind,
 ): InboxReply | undefined {
   const reply = replyKindOf(response, draft, press);
+
   if (reply === undefined) return undefined;
   const note = draft.note.trim();
+
   // A note past the wire's bound is no answer the service would take, so the card offers no send for it.
   if (note.length > INBOX_BOUNDS.MAX_NOTE_CHARS) return undefined;
+
   const answer: InboxReply = {
     reply,
     ...(reply === INBOX_REPLY.CHOSE ? { choices: draft.choices } : undefined),
@@ -161,6 +177,7 @@ export function inboxReply(
       : undefined),
     ...(note === "" ? undefined : { note }),
   };
+
   return inboxReplyRefusal(response, answer, draft.attachments) === undefined ? answer : undefined;
 }
 
@@ -179,10 +196,13 @@ export function inboxMissing(
   draft: InboxDraft,
 ): InboxMissing | undefined {
   if (inboxThreadSend(thread, draft) !== undefined) return undefined;
+
   if (draft.note.trim() !== "" || draft.attachments.length > 0) return undefined;
   const asking = openAskOf(thread);
+
   if (asking === undefined || !knownAsk(asking.ask)) return undefined;
   const { ask } = asking;
+
   switch (ask.type) {
     case INBOX_ASK.DECIDE:
     case INBOX_ASK.DO:
@@ -193,6 +213,7 @@ export function inboxMissing(
       const sent = new Set(sentValues({ fields: ask.fields }, draft).map((value) => value.label));
       const empty = ask.fields.filter((field) => !sent.has(field.label));
       const first = empty.find((field) => field.required === true) ?? empty[0];
+
       return first === undefined ? undefined : { kind: INBOX_MISSING.FIELD, label: first.label };
     }
   }
@@ -209,6 +230,7 @@ function decisionsOf(
   response: InboxDecided,
 ): readonly { readonly reply: InboxReplyKind; readonly label: string }[] {
   const { ahead, back } = INBOX_PRESSES[response.type];
+
   return [ahead, back];
 }
 
@@ -219,6 +241,7 @@ function decisionsOf(
  */
 function decidedOf(response: InboxDecided, draft: InboxDraft): InboxReplyKind | undefined {
   const held = draft.choices[0];
+
   return decisionsOf(response).find((decision) => decision.reply === held)?.reply;
 }
 
@@ -234,10 +257,13 @@ export function withChoice(
   label: string,
 ): InboxDraft {
   const picking = picksNone(draft) ? { ...draft, press: undefined } : draft;
+
   if (choice.multiple !== true) return { ...picking, choices: [label] };
+
   const choices = picking.choices.includes(label)
     ? picking.choices.filter((each) => each !== label)
     : [...picking.choices, label];
+
   return { ...picking, choices };
 }
 
@@ -275,6 +301,11 @@ interface StepFence {
   readonly lang: string | undefined;
 }
 
+type StepPartsResult = {
+  readonly say: string;
+  readonly fences: readonly StepFence[];
+};
+
 /**
  * A to-do's step as its box draws it: its words, the box's label, and the
  * fenced blocks standing at its top level, each drawn under the words as a
@@ -282,13 +313,11 @@ interface StepFence {
  * the label's one line. Note that a fence inside a list or a quote stays in
  * the words, as a part of the block holding it.
  */
-export function stepParts(step: string): {
-  readonly say: string;
-  readonly fences: readonly StepFence[];
-} {
+export function stepParts(step: string): StepPartsResult {
   const fences = markdownTree(step).children.filter(
     (node): node is Extract<typeof node, { type: "code" }> => node.type === "code",
   );
+
   // Note that the words are what stands between the fences, each run apart from the next as a paragraph.
   const ends = [
     0,
@@ -298,9 +327,11 @@ export function stepParts(step: string): {
     ]),
     step.length,
   ];
+
   const runs = Array.from({ length: ends.length / 2 }, (_, at) =>
     step.slice(ends[2 * at], ends[2 * at + 1]).trim(),
   );
+
   return {
     say: runs.filter((run) => run !== "").join("\n\n"),
     fences: fences.map((fence) => ({ code: fence.value, lang: fence.lang ?? undefined })),
@@ -323,6 +354,7 @@ function everyStepTicked(
   draft: Pick<InboxDraft, "steps">,
 ): boolean {
   const ticked = new Set(tickedSteps(draft));
+
   return everyStep(ask).every((at) => ticked.has(at));
 }
 
@@ -337,6 +369,7 @@ export function doDecision(
   draft: Pick<InboxDraft, "steps" | "press">,
 ): InboxReplyKind | undefined {
   if (draft.press === INBOX_REPLY.DONE || draft.press === INBOX_REPLY.NOT_DONE) return draft.press;
+
   return everyStepTicked(ask, draft) ? INBOX_REPLY.DONE : undefined;
 }
 
@@ -363,8 +396,10 @@ export function withStep(
   at: number,
 ): InboxDraft {
   const ticked = shownTicks(ask, draft);
+
   if (!ticked.includes(at)) return { ...draft, steps: [...ticked, at] };
   const steps = ticked.filter((each) => each !== at);
+
   return draft.press === INBOX_REPLY.DONE
     ? { ...draft, steps, press: undefined }
     : { ...draft, steps };
@@ -383,6 +418,7 @@ export function withDoPress(
 ): InboxDraft {
   if (doDecision(ask, draft) !== reply) return { ...draft, press: reply };
   const released = { ...draft, press: undefined };
+
   return reply === INBOX_REPLY.DONE && everyStepTicked(ask, released)
     ? { ...released, steps: [] }
     : released;
@@ -400,13 +436,16 @@ export function withDoPress(
  */
 function attachedAnswers(asking: InboxAsking, draft: InboxDraft): InboxAnswers | undefined {
   const { ask } = asking;
+
   if (!knownAsk(ask)) return undefined;
   const id = asking.message.id;
+
   switch (ask.type) {
     case INBOX_ASK.DECIDE:
       if (draft.choices.length > 0) {
         return { ask: id, reply: INBOX_REPLY.CHOSE, choices: draft.choices };
       }
+
       // None of these is a pick of no option, which only a choice of cards offers.
       return picksNone(draft) && optionsCarryMedia(ask)
         ? { ask: id, reply: INBOX_REPLY.CHOSE, choices: [] }
@@ -414,16 +453,21 @@ function attachedAnswers(asking: InboxAsking, draft: InboxDraft): InboxAnswers |
     case INBOX_ASK.DO: {
       const decision = doDecision(ask, draft);
       const named = (steps: readonly number[]) => steps.filter((at) => at < ask.steps.length);
+
       if (decision === INBOX_REPLY.DONE) {
         return { ask: id, reply: decision, steps: named(everyStep(ask)) };
       }
+
       const ticked = named(tickedSteps(draft));
+
       if (decision === INBOX_REPLY.NOT_DONE) return { ask: id, reply: decision, steps: ticked };
+
       // Steps ticked with no press go as they stand, an answer that decides nothing.
       return ticked.length === 0
         ? undefined
         : { ask: id, reply: INBOX_REPLY.ANSWERED, steps: ticked };
     }
+
     case INBOX_ASK.ANSWER:
       // A form's fields attach as they are filled, with no press, any filled in part sending what was filled.
       if (ask.fields !== undefined) {
@@ -435,6 +479,7 @@ function attachedAnswers(asking: InboxAsking, draft: InboxDraft): InboxAnswers |
             }
           : undefined;
       }
+
       // An ask of words alone is answered by the reply's own words or files, which the box holds as its one field.
       return draft.note.trim() === "" && draft.attachments.length === 0
         ? undefined
@@ -452,6 +497,7 @@ function attachedAnswers(asking: InboxAsking, draft: InboxDraft): InboxAnswers |
 export function answeredDraft(ask: InboxAsk, answers: InboxAnswers): InboxDraft {
   const titleStep = ask.type === INBOX_ASK.DO && ask.steps.length === 0;
   const done = answers.reply === INBOX_REPLY.DONE;
+
   return {
     ...EMPTY_INBOX_DRAFT,
     choices: answers.choices ?? [],
@@ -473,6 +519,7 @@ export function askNumberedPick(
 ): InboxDraft | undefined {
   if (!knownAsk(ask) || ask.type !== INBOX_ASK.DECIDE) return undefined;
   const option = ask.options[number - 1];
+
   return option === undefined ? undefined : withChoice(ask, draft, option.label);
 }
 
@@ -494,14 +541,18 @@ export function inboxThreadSend(
   draft: InboxDraft,
 ): InboxThreadSend | undefined {
   const text = draft.note.trim();
+
   if (text.length > INBOX_BOUNDS.MAX_MESSAGE_CHARS) return undefined;
   const { attachments } = draft;
   const asking = openAskOf(thread);
   const answers = asking === undefined ? undefined : attachedAnswers(asking, draft);
+
   if (asking === undefined || answers === undefined || !knownAsk(asking.ask)) {
     return text === "" && attachments.length === 0 ? undefined : { text, attachments };
   }
+
   const refusal = inboxAnswersRefusal(asking.ask, answers, text, attachments);
+
   return refusal === undefined ? { text, attachments, answers } : undefined;
 }
 
@@ -539,6 +590,8 @@ export function inboxShownTicks(
 ): readonly number[] {
   if (draft === undefined) return [];
   const ask = inboxLineAsk(item);
+
   if (ask === undefined || ask.type !== INBOX_ASK.DO) return draft.steps ?? [];
+
   return shownTicks(ask, draft);
 }

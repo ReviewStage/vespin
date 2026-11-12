@@ -36,13 +36,17 @@ export interface HostLeaveInput {
 /** The box removed from its account on its record's secret, its daemon's version on the call; how it went. */
 export const leaveHostDevice = Effect.fnUntraced(function* (input: HostLeaveInput) {
   const record = yield* readHostDevice(input.stateRoot);
+
   if (Option.isNone(record)) return HOST_LEAVE_OUTCOME.NOT_CONNECTED;
   const device = record.value;
+
   if (device.refused === true) return HOST_LEAVE_OUTCOME.LEFT;
+
   const client = new HostedDeviceAgentClient({
     serviceBaseUrl: device.serviceOrigin,
     credential: { authorization: () => Effect.succeed(`Bearer ${device.deviceSecret}`) },
   });
+
   const left = yield* client
     .leave(device.deviceId)
     .pipe(
@@ -51,5 +55,6 @@ export const leaveHostDevice = Effect.fnUntraced(function* (input: HostLeaveInpu
         HttpClient.mapRequest(HttpClientRequest.setHeader(HOST_WIRE.VERSION_HEADER, input.version)),
       ),
     );
+
   return left ? HOST_LEAVE_OUTCOME.LEFT : HOST_LEAVE_OUTCOME.UNANSWERED;
 });

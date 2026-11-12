@@ -46,12 +46,15 @@ function stack(): (shown: Shown, id?: string) => void {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (toast: StandingToast<Shown>) => {
     const shown = toast.data;
+
     return shown === undefined
       ? null
       : createElement(Toast, { key: toast.id, toast, ...shown, actions: shown.actions ?? null });
   };
+
   act(() =>
     root.render(
       createElement(ToastStack<Shown>, {
@@ -62,6 +65,7 @@ function stack(): (shown: Shown, id?: string) => void {
       }),
     ),
   );
+
   return (shown, id) => act(() => void manager.add({ id, timeout: 0, data: shown }));
 }
 
@@ -145,6 +149,7 @@ test("a toast whose tone turns changes its words in place", () => {
 /** The words of the hint the pointer resting on `target` raises, past the hint's wait, on a faked clock. */
 function hintOn(target: Element): string | undefined {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
   try {
     act(() => {
       target.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
@@ -152,6 +157,7 @@ function hintOn(target: Element): string | undefined {
     act(() => {
       vi.advanceTimersByTime(MOTION_DELAY_MS.HINT);
     });
+
     return document.querySelector('[role="tooltip"]')?.textContent ?? undefined;
   } finally {
     vi.useRealTimers();

@@ -48,6 +48,7 @@ const SIGNED_IN = {
 async function openAdmin(address = "/admin"): Promise<HTMLElement> {
   vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
     const url = new URL(input instanceof Request ? input.url : String(input), window.location.href);
+
     const answer = (body: WireValue, status = 200) =>
       Promise.resolve(
         new Response(JSON.stringify(body), {
@@ -55,12 +56,15 @@ async function openAdmin(address = "/admin"): Promise<HTMLElement> {
           headers: { "content-type": "application/json" },
         }),
       );
+
     if (url.pathname === SESSION_PATH) return answer(SIGNED_IN);
+
     if (url.pathname === SIGN_OUT_PATH) {
       return signOutStatus === 200
         ? answer({ success: true })
         : answer({ message: "Sign-out failed" }, signOutStatus);
     }
+
     return new Promise(() => undefined);
   });
   window.localStorage.setItem("app-admin-sign-in-chosen", "true");
@@ -76,6 +80,7 @@ async function openAdmin(address = "/admin"): Promise<HTMLElement> {
   await act(async () => {
     root?.render(createElement(StrictMode, null, withQueryClient(createElement(AdminDashboard))));
   });
+
   return container;
 }
 
@@ -91,7 +96,9 @@ function sectionLink(page: HTMLElement, name: string): HTMLAnchorElement {
   const link = Array.from(page.querySelectorAll<HTMLAnchorElement>("nav a")).find(
     (candidate) => candidate.textContent === name,
   );
+
   if (link === undefined) throw new Error(`No ${name} link`);
+
   return link;
 }
 
@@ -110,7 +117,9 @@ function unreachable(element: Element): boolean {
 /** The view beside the sidebar, the page's own `main`. */
 function view(page: HTMLElement): HTMLElement {
   const main = page.querySelector("main");
+
   if (!(main instanceof HTMLElement)) throw new Error("No view");
+
   return main;
 }
 
@@ -174,8 +183,16 @@ test("one sidebar lists the measures", async () => {
   const navigations = page.querySelectorAll('nav[aria-label="Admin sections"]');
   expect(navigations).toHaveLength(1);
   const [sidebar] = Array.from(navigations);
+
   if (sidebar === undefined) throw new Error("No navigation");
-  expect(sectionNames(sidebar)).toEqual(["Overview", "Cost", "Reliability", "Workspaces", "Users"]);
+  expect(sectionNames(sidebar)).toEqual([
+    "Overview",
+    "Cost",
+    "Reliability",
+    "Workspaces",
+    "Users",
+    "Limits",
+  ]);
 });
 
 test("the toggle at the sidebar's top hides it and shows it again, remembered across visits", async () => {
@@ -210,6 +227,7 @@ test("in a phone's narrow room the sidebar is a drawer the toggle opens over the
   const page = await openAdmin();
   await vi.waitFor(() => expect(page.querySelector("main h1")?.textContent).toBe("Overview"));
   const toggle = button("Show sidebar");
+
   if (toggle === undefined) throw new Error("No sidebar toggle");
   expect(unreachable(sectionLink(page, "Users"))).toBe(true);
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
@@ -250,7 +268,9 @@ async function accountButton(page: HTMLElement): Promise<HTMLButtonElement> {
     const found = Array.from(page.querySelectorAll<HTMLButtonElement>("aside button")).find(
       (candidate) => candidate.textContent?.includes("Ada Lovelace") === true,
     );
+
     if (found === undefined) throw new Error("No account in the sidebar yet");
+
     return found;
   });
 }
@@ -300,12 +320,14 @@ test("Sign out signs out on the press, with no question, and leaves for the sign
   expect(document.querySelector('[role="alertdialog"]')).toBeNull();
 
   await vi.waitFor(() => expect(page.querySelector("nav")).toBeNull());
+
   const asked = vi
     .mocked(globalThis.fetch)
     .mock.calls.map(
       ([input]) =>
         new URL(input instanceof Request ? input.url : String(input), window.location.href),
     );
+
   expect(asked.some((url) => url.pathname === SIGN_OUT_PATH)).toBe(true);
   expect(window.localStorage.getItem("app-admin-sign-in-chosen")).toBeNull();
 });
@@ -321,6 +343,7 @@ test("a quarter's address opens Reliability on the month, the longest window it 
         new URL(input instanceof Request ? input.url : String(input), window.location.href),
     )
     .filter((url) => url.pathname === "/api/admin/reliability");
+
   expect(asked.map((url) => url.search)).toContain("");
   openViewOptions(page);
   choose("Time range");

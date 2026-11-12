@@ -49,6 +49,7 @@ export interface RefusedSend {
 /** Whether files fit one message: no more than its count, and their bytes together no more than its bound. */
 function filesFit(files: readonly AgentAttachment[]): boolean {
   const bytes = files.reduce((sum, file) => sum + base64Bytes(file.data), 0);
+
   return (
     files.length <= AGENT_BOUNDS.MAX_ATTACHMENTS && bytes <= AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES
   );
@@ -65,6 +66,7 @@ export function joinedAhead(went: BoxHeld, after: BoxHeld): BoxHeld {
 /** The words and files that went ahead of those the box holds now; none where together they would not fit it. */
 function heldAhead(went: BoxHeld, now: BoxHeld, most: number): BoxHeld | undefined {
   const joined = joinedAhead(went, now);
+
   return joined.text.length <= most && filesFit(joined.attachments) ? joined : undefined;
 }
 
@@ -80,8 +82,10 @@ export function putBackRefused(refused: RefusedSend): void {
   refused.update((now) => {
     const joined = heldAhead(refused.went, now, refused.most);
     laid = joined !== undefined;
+
     return joined;
   });
+
   if (laid) return;
   let pressed = false;
   showToast({

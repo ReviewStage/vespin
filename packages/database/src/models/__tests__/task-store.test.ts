@@ -12,7 +12,7 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { eq, inArray } from "drizzle-orm";
-import { Clock, Effect, Option, Result } from "effect";
+import { Clock, Effect, Option, Predicate, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { agentTable } from "../../schemas/agent.js";
@@ -61,6 +61,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -71,6 +72,7 @@ const openSharedTask = Effect.gen(function* () {
   const workspace = yield* openWorkspace(dean);
   yield* joinWorkspace(workspace, charles);
   const { id: taskId } = yield* createTask(dean, { ...SHARED_TASK, organizationId: workspace });
+
   return { dean, charles, taskId, workspace };
 });
 
@@ -89,6 +91,7 @@ const pinReadBy = (userId: string, taskId: string) =>
     const opened = yield* readTask(userId, taskId);
     assert.equal(Option.isSome(opened), true);
     assert.equal(Option.getOrUndefined(opened)?.task.pinnedAt, listed);
+
     return listed;
   });
 
@@ -103,6 +106,7 @@ const markReadBy = (userId: string, taskId: string) =>
     const { readThrough, markedUnread } = yield* listedTask(userId, taskId);
     const opened = Option.getOrUndefined(yield* readTask(userId, taskId))?.task;
     assert.deepEqual([opened?.readThrough, opened?.markedUnread], [readThrough, markedUnread]);
+
     return { readThrough, markedUnread };
   });
 
@@ -271,17 +275,22 @@ it.layer(getTestDB())("a plan's pin", (it) => {
     Effect.gen(function* () {
       const { dean, taskId, workspace } = yield* openSharedTask;
       const other = yield* createTask(dean, { ...SHARED_TASK, organizationId: workspace });
+
       const agents = [
         yield* openTaskAgent(dean, workspace, taskId),
         yield* openTaskAgent(dean, workspace, other.id),
       ];
+
       const db = yield* Database;
+
       const owned = yield* db
         .select({ id: agentTable.id, conversationId: agentTable.conversationId })
         .from(agentTable)
         .where(inArray(agentTable.id, agents));
+
       const conversationOf = (agentId: string | undefined) =>
         owned.find(({ id }) => id === agentId)?.conversationId ?? assert.fail("no agent row");
+
       const deleted = conversationOf(agents[0]);
       const kept = conversationOf(agents[1]);
 
@@ -327,8 +336,10 @@ it.layer(getTestDB())("a task made under an id its maker chose", (it) => {
         const owner = yield* openAccount;
         const organizationId = yield* openWorkspace(owner);
         const id = randomUUID();
+
         const make = (name: string) =>
           createTaskOnce(owner, { id, organizationId, name, text: "## Goal\n\nBulk invites." });
+
         const [first, second] = yield* Effect.all([make("Bulk invites"), make("Again")], {
           concurrency: "unbounded",
         });
@@ -347,17 +358,19 @@ it.layer(getTestDB())("a task made under an id its maker chose", (it) => {
         const owner = yield* openAccount;
         const organizationId = yield* openWorkspace(owner);
         const id = randomUUID();
+
         const start = (name: string) =>
           createTaskCommittedOnce(owner, { id, organizationId, name });
 
         const answers = yield* Effect.all([start("Bulk invites"), start("Again")], {
           concurrency: "unbounded",
         });
+
         const made = answers.filter((answer) => answer.made);
         const found = answers.filter((answer) => !answer.made);
 
         assert.deepEqual([made.length, found.length], [1, 1], "one start made the task");
-        assert.equal(typeof made[0]?.txid, "string");
+        assert.ok(Predicate.isString(made[0]?.txid));
         assert.equal(found[0]?.txid, undefined);
         assert.deepEqual(
           answers.map((answer) => answer.task.task.id),
@@ -449,6 +462,7 @@ it.layer(getTestDB())("who made a task", (it) => {
         const owner = yield* openAccount;
         const organizationId = yield* openWorkspace(owner);
         const byHand = yield* createTask(owner, { organizationId });
+
         const onCall = yield* createTask(owner, {
           organizationId,
           origin: { actor: DESCRIPTION_ACTOR.NOTETAKER },
@@ -471,15 +485,18 @@ it.layer(getTestDB())("a plan's brief", (it) => {
       Effect.gen(function* () {
         const owner = yield* openAccount;
         const organizationId = yield* openWorkspace(owner);
+
         const briefed = yield* createTask(owner, {
           organizationId,
           brief: "  Let any member invite a teammate, not only admins.\n",
         });
+
         const unbriefed = yield* createTask(owner, { organizationId });
         const blank = yield* createTask(owner, { organizationId, brief: "   " });
 
         const briefOf = (taskId: string) =>
           Effect.map(readTask(owner, taskId), (read) => Option.getOrUndefined(read)?.brief);
+
         assert.equal(
           yield* briefOf(briefed.id),
           "Let any member invite a teammate, not only admins.",
@@ -518,6 +535,7 @@ it.layer(getTestDB())("a plan's workspace", (it) => {
         const { dean, charles, taskId } = yield* openSharedTask;
         const stranger = yield* openAccount;
         const workspace = Option.getOrThrow(yield* readTaskWorkspace(dean, taskId));
+
         const started = {
           workspaceId: workspace,
           ownerId: dean,
@@ -569,6 +587,7 @@ it.layer(getTestDB())("a plan's workspace", (it) => {
           const whole = Option.getOrThrow(yield* readTask(member, taskId));
           assert.deepEqual(yield* readTaskDescription(member, taskId), Option.some(whole.task));
         }
+
         assert.notEqual(
           Option.getOrThrow(yield* readTaskDescription(charles, taskId)).pinnedAt,
           undefined,
@@ -585,6 +604,7 @@ const standingOf = (userId: string, taskId: string) =>
     const { number, status, priority } = Option.getOrElse(read, () =>
       assert.fail("the task is not read"),
     ).task;
+
     return { number, status, priority };
   });
 
@@ -626,12 +646,14 @@ it.layer(getTestDB())("a task's parent", (it) => {
         const { dean, charles, workspace } = yield* openSharedTask;
         const tree = { organizationId: workspace, repository: "dean/side" };
         const { id: top } = yield* createTask(dean, { ...tree, name: "Top" });
+
         // Dean's own token reached this repository, which Charles's never read.
         const { id: hidden } = yield* createTask(dean, {
           ...tree,
           name: "Hidden",
           githubAccess: GITHUB_ACCESS.TOKEN,
         });
+
         const { id: leaf } = yield* createTask(dean, { ...tree, name: "Leaf" });
         yield* setTaskParent(dean, hidden, top);
         yield* setTaskParent(dean, leaf, hidden);
@@ -650,15 +672,18 @@ it.layer(getTestDB())("a task's parent", (it) => {
     () =>
       Effect.gen(function* () {
         const { dean, workspace } = yield* openSharedTask;
+
         const { id: parent } = yield* createTask(dean, {
           name: "Parent",
           organizationId: workspace,
           repository: "Acme/App",
         });
+
         const { id: unplaced } = yield* createTask(dean, {
           name: "None",
           organizationId: workspace,
         });
+
         const { id: sibling } = yield* createTask(dean, {
           name: "Sibling",
           organizationId: workspace,
@@ -683,6 +708,7 @@ it.layer(getTestDB())("a task's parent", (it) => {
         const outsider = yield* openAccount;
         const elsewhere = yield* openWorkspace(dean);
         const { id: other } = yield* createTask(dean, { name: "Other", organizationId: elsewhere });
+
         // Dean's own token reached this repository, which Charles's never read.
         const { id: hidden } = yield* createTask(dean, {
           name: "Hidden",
@@ -716,6 +742,7 @@ it.layer(getTestDB())("a task's number", (it) => {
       const first = yield* createTask(dean, { organizationId: acme });
       const second = yield* createTask(dean, { organizationId: acme });
       const elsewhere = yield* createTask(dean, { organizationId: initech });
+
       const third = yield* createTaskOnce(dean, {
         organizationId: acme,
         id: randomUUID(),
@@ -758,6 +785,7 @@ it.layer(getTestDB())("a task's status and priority", (it) => {
       const organizationId = yield* openWorkspace(dean);
 
       const plain = yield* createTask(dean, { organizationId });
+
       const filed = yield* createTask(dean, {
         organizationId,
         status: TASK_STATUS.BACKLOG,
@@ -778,6 +806,7 @@ it.layer(getTestDB())("a task's status and priority", (it) => {
         status: TASK_STATUS.DONE,
         priority: TASK_PRIORITY.URGENT,
       });
+
       assert.deepEqual(
         [Option.getOrUndefined(changed)?.status, Option.getOrUndefined(changed)?.priority],
         [TASK_STATUS.DONE, TASK_PRIORITY.URGENT],
@@ -801,6 +830,7 @@ const assigneeReadBy = (userId: string, taskId: string) =>
     const listed = (yield* listedTask(userId, taskId)).assignee?.userId;
     const opened = yield* readTask(userId, taskId);
     assert.equal(Option.getOrUndefined(opened)?.task.assignee?.userId, listed);
+
     return listed;
   });
 
@@ -811,6 +841,7 @@ it.layer(getTestDB())("a task's assignee", (it) => {
 
       const plain = yield* createTask(dean, { organizationId });
       const assigned = yield* createTask(dean, { organizationId, assigneeId: charles });
+
       const once = yield* createTaskOnce(dean, {
         organizationId,
         id: randomUUID(),
@@ -834,6 +865,7 @@ it.layer(getTestDB())("a task's assignee", (it) => {
       const refused = yield* Effect.result(
         createTask(dean, { organizationId, name: "Refused", assigneeId: outsider }),
       );
+
       const refusedOnce = yield* Effect.result(
         createTaskOnce(dean, { organizationId, id: randomUUID(), text: "", assigneeId: outsider }),
       );
@@ -881,9 +913,11 @@ it.layer(getTestDB())("a task's assignee", (it) => {
 
       assert.equal(yield* assigneeReadBy(dean, staying.id), dean);
       assert.equal(yield* assigneeReadBy(dean, taskId), undefined);
+
       const refused = yield* Effect.result(
         updateTask(dean, staying.id, { organizationId: initech, assigneeId: charles }),
       );
+
       assert.ok(Result.isFailure(refused) && refused.failure instanceof TaskAssigneeNotMember);
     }),
   );
@@ -994,7 +1028,7 @@ it.layer(getTestDB())("a task's work beginning", (it) => {
 const idleBut =
   (busy: string) =>
   (agents: readonly TaskStandingAgent[]): Effect.Effect<ReadonlySet<string>> =>
-    Effect.succeed(new Set(agents.map(({ id }) => id).filter((id) => id !== busy)));
+    Effect.succeed(new Set(agents.flatMap(({ id }) => (id === busy ? [] : [id]))));
 
 /** Who archived the agent, as Dean reads it: none while it stands unarchived. */
 const archiveOf = (dean: string, agentId: string) =>
@@ -1022,6 +1056,7 @@ it.layer(getTestDB())("a task's move to Done or Canceled", (it) => {
           archivedBy: asDean,
           idle: idleBut(running),
         });
+
         assert.equal(Option.getOrUndefined(moved)?.status, settled);
         assert.deepEqual(yield* archiveOf(dean, idle), { ...asDean, withTask: true });
         assert.equal(yield* archiveOf(dean, running), undefined);
@@ -1082,6 +1117,7 @@ const completedReadBy = (userId: string, taskId: string) =>
     const listed = (yield* listedTask(userId, taskId)).completedAt;
     const opened = yield* readTask(userId, taskId);
     assert.equal(Option.getOrUndefined(opened)?.task.completedAt, listed);
+
     return listed;
   });
 
@@ -1157,16 +1193,19 @@ it.layer(getTestDB())("a task's GitHub access", (it) => {
         const db = yield* Database;
         const owner = yield* openAccount;
         const workspace = yield* openWorkspace(owner);
+
         const accessOf = (taskId: string) =>
           Effect.map(
             db.select({ access: task.githubAccess }).from(task).where(eq(task.id, taskId)),
             ([row]) => row?.access,
           );
+
         const { id: taskId } = yield* createTask(owner, {
           organizationId: workspace,
           repository: "octo-member/side",
           githubAccess: GITHUB_ACCESS.TOKEN,
         });
+
         const named = yield* accessOf(taskId);
         yield* updateTask(owner, taskId, { repository: "acme/relay" });
         const renamed = yield* accessOf(taskId);

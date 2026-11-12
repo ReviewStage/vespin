@@ -1,3 +1,4 @@
+import type { AutomationPresetName } from "@repo/features/automation-presets";
 import {
   AUTOMATION_FIRING,
   AUTOMATION_RUN_STATUS,
@@ -89,6 +90,8 @@ const AutomationRowSchema = Schema.Struct({
   targetAgentId: Schema.NullOr(Schema.String),
   archiveSuccessful: Schema.Boolean,
   slackDelivery: Schema.Boolean,
+  // Note that a preset is read as any text, since a row may hold one this release does not know.
+  preset: Schema.NullOr(Schema.String),
   createdAt: InstantColumnSchema,
   updatedAt: InstantColumnSchema,
 });
@@ -112,6 +115,7 @@ export const AUTOMATION_COLUMNS = {
   targetAgentId: automation.targetAgentId,
   archiveSuccessful: automation.archiveSuccessful,
   slackDelivery: automation.slackDelivery,
+  preset: automation.preset,
   createdAt: automation.createdAt,
   updatedAt: automation.updatedAt,
 };
@@ -137,6 +141,8 @@ export interface NewAutomation {
   readonly targetAgentId?: string | null;
   readonly archiveSuccessful?: boolean;
   readonly slackDelivery?: boolean;
+  /** The suggestion it is made from; none where left out. No change names it again. */
+  readonly preset?: AutomationPresetName | null;
 }
 
 /**
@@ -268,10 +274,12 @@ export function memberOfAutomationWorkspace(
 function allowedTo(userId: string, access: AutomationAccess, id?: string): SQL | undefined {
   const mine = eq(automation.userId, userId);
   const shared = eq(automation.scope, AUTOMATION_SCOPE.WORKSPACE);
+
   const managing = memberOfAutomationWorkspace(userId, [
     WORKSPACE_ROLE.OWNER,
     WORKSPACE_ROLE.ADMIN,
   ]);
+
   const rule = (() => {
     switch (access) {
       case AUTOMATION_ACCESS.READ:
@@ -285,6 +293,7 @@ function allowedTo(userId: string, access: AutomationAccess, id?: string): SQL |
         return or(mine, managing);
     }
   })();
+
   return and(
     id === undefined ? undefined : eq(automation.id, id),
     memberOfAutomationWorkspace(userId),
@@ -332,6 +341,7 @@ const insertAutomation = SqlSchema.findAll({
     targetAgentId: Schema.NullOr(Schema.String),
     archiveSuccessful: Schema.Boolean,
     slackDelivery: Schema.Boolean,
+    preset: Schema.NullOr(Schema.String),
     now: Schema.Date,
   }),
   Result: WrittenSchema,
@@ -349,6 +359,7 @@ const insertAutomation = SqlSchema.findAll({
           targetAgentId: row.targetAgentId,
           archiveSuccessful: row.archiveSuccessful,
           slackDelivery: row.slackDelivery,
+          preset: row.preset,
           name: row.name,
           enabled: true,
           ...triggerColumns(row.trigger, row.nextRunAt, row.webhookSecretHash),
@@ -1071,6 +1082,7 @@ export function createAutomationCommitted(
   return Effect.gen(function* () {
     if (!(yield* isWorkspaceMember(userId, made.organizationId))) return Option.none();
     const now = yield* DateTime.nowAsDate;
+
     const [row] = yield* insertAutomation({
       ...made,
       userId,
@@ -1080,10 +1092,13 @@ export function createAutomationCommitted(
       targetAgentId: made.targetAgentId ?? null,
       archiveSuccessful: made.archiveSuccessful ?? true,
       slackDelivery: made.slackDelivery ?? false,
+      preset: made.preset ?? null,
       now,
     });
+
     if (row === undefined) return Option.none();
     const { txid } = row;
+
     return Option.map(yield* readWritten(userId, row.id), (written) => ({
       automation: written,
       txid,
@@ -1147,8 +1162,10 @@ export function updateAutomationCommitted(
   return Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
     const [written] = yield* writeAutomation({ ...changes, userId, id, access, now });
+
     if (written === undefined) return Option.none();
     const { txid } = written;
+
     return Option.map(yield* readWritten(userId, id), (automation) => ({ automation, txid }));
   });
 }
@@ -1181,6 +1198,7 @@ export function recordAutomationRun(
     automationId: owner.id,
     userId: owner.userId,
   };
+
   return Effect.map(insertRun(row), (rows) => Option.fromUndefinedOr(rows[0]));
 }
 
@@ -1191,6 +1209,7 @@ export function settleAutomationRun(
 ): TaskStoreEffect<boolean> {
   return Effect.gen(function* () {
     const now = yield* DateTime.nowAsDate;
+
     const written = yield* writeRunOutcome({
       id: runId,
       status: outcome.status,
@@ -1198,6 +1217,7 @@ export function settleAutomationRun(
       agentId: outcome.status === AUTOMATION_RUN_STATUS.STARTED ? outcome.agentId : null,
       now,
     });
+
     return written.length > 0;
   });
 }
@@ -1367,9 +1387,11 @@ export function claimRunSlackDelivery(
 ): TaskStoreEffect<Option.Option<RunSlackDelivery>> {
   return Effect.gen(function* () {
     const found = yield* findUndeliveredRun({ agentId });
+
     if (Option.isNone(found)) return found;
     const now = yield* DateTime.nowAsDate;
     const claimed = yield* writeSlackDelivered({ runId: found.value.runId, now });
+
     return claimed.length === 0 ? Option.none() : found;
   });
 }

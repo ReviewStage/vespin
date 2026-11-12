@@ -96,7 +96,7 @@ export interface PlacedWords {
   readonly top: number;
 }
 
-/** Where the caret goes as the editor opens: where a click landed, on the words it landed on where they are known, selecting from the words its press started on where it selected some, the end of a section, or the end of the text; the start of the text without any. */
+/** Where the caret goes as the editor opens: where a click or a drop of pictures landed, on the words it landed on where they are known, selecting from the words its press started on where it selected some, the end of a section, or the end of the text; the start of the text without any. */
 export type DescriptionEditorPlacement =
   | {
       readonly x: number;
@@ -104,6 +104,8 @@ export type DescriptionEditorPlacement =
       readonly words?: PlacedWords | undefined;
       /** Where the words the press selected start, which the editor selects from to `words`; none where it selected nothing. */
       readonly from?: PlacedWords | undefined;
+      /** Image files dropped on the drawn text, laid in as pictures at the caret as the editor opens there; none for a click. */
+      readonly pictures?: readonly File[] | undefined;
     }
   | { readonly section: number }
   | typeof PLACEMENT_END;
@@ -340,7 +342,7 @@ export type MentionDrawer = (
 interface ComposerMentions {
   readonly onTrigger: (trigger: ComposerTrigger | undefined) => void;
   readonly drawMention: MentionDrawer;
-  /** The mention words pasted whole stand for, an address of our own or a page of an integration's; nothing for any other words, which paste as words. */
+  /** The chip words pasted whole stand for, any link the read view draws as one; nothing for any other words, which paste as words. */
   readonly pasted: (words: string) => MentionNode | undefined;
 }
 
@@ -377,10 +379,10 @@ export interface DescriptionEditorMentions {
   readonly onKey: (event: KeyboardEvent) => boolean;
   readonly drawMention: MentionDrawer;
   readonly retarget: (target: string, change: HeadingsChange) => MentionNode | undefined;
-  /** The mention words pasted whole stand for, an address of our own or a page of an integration's; nothing for any other words, which paste as words. */
+  /** The chip words pasted whole stand for, any link the read view draws as one; nothing for any other words, which paste as words. */
   readonly pasted: (words: string) => MentionNode | undefined;
-  /** Whether a link's target names a mention, which the read view draws as its chip, so the editor draws the link in a chip's light look. */
-  readonly namesMention: (target: string) => boolean;
+  /** Whether a link's target is one the read view draws as a chip, so the editor draws the link in a chip's light look. */
+  readonly namesChip: (target: string) => boolean;
 }
 
 /** Words of the editor a thread is started on: where they stand in `text`, the Markdown the editor would hand over now, and the words themselves. */
@@ -456,6 +458,7 @@ export function sameTrigger(
   b: ComposerTrigger | undefined,
 ): boolean {
   if (a === undefined || b === undefined) return a === b;
+
   return (
     a.start === b.start &&
     a.query === b.query &&
@@ -472,18 +475,19 @@ export const EDITOR_ROOT_SELECTOR = ".ProseMirror";
 export type EditorAria = Readonly<Record<string, string | undefined>>;
 
 /** The names a list's field carries (`useComboboxField`'s), as the editor root that steers the list takes them; the root's role is the editor's own (`rootAria`). */
-export function listAria(field: ComboboxFieldProps): EditorAria {
+export function listAria(field: ComboboxFieldProps) {
   return {
     "aria-expanded": String(field["aria-expanded"]),
     "aria-controls": field["aria-controls"],
     "aria-autocomplete": field["aria-autocomplete"],
     "aria-activedescendant": field["aria-activedescendant"],
-  };
+  } satisfies EditorAria;
 }
 
 /** Whether two sets of attributes say the same, so an editor handed what it holds already is not updated again. */
 export function sameAria(a: EditorAria, b: EditorAria): boolean {
   const names = new Set([...Object.keys(a), ...Object.keys(b)]);
+
   return [...names].every((name) => a[name] === b[name]);
 }
 
@@ -497,6 +501,7 @@ export function sameAria(a: EditorAria, b: EditorAria): boolean {
  */
 export function rootAria(aria: EditorAria): Readonly<Record<string, string>> {
   const open = aria["aria-expanded"] === "true";
+
   const named: EditorAria = open
     ? { ...aria, role: "combobox" }
     : {
@@ -507,6 +512,7 @@ export function rootAria(aria: EditorAria): Readonly<Record<string, string>> {
         "aria-controls": undefined,
         "aria-activedescendant": undefined,
       };
+
   return Object.fromEntries(
     Object.entries(named).filter((entry): entry is [string, string] => entry[1] !== undefined),
   );
@@ -606,6 +612,8 @@ export interface ComposerEditorHandle extends EditorFormatting {
   readonly setCommands: (commands: ReadonlySet<string>) => void;
   /** The files a marker names: each such marker is drawn as its chip from now on. */
   readonly setFiles: (files: ReadonlySet<string>) => void;
+  /** The chips of the files named taken out of the words, each with the space laid in after it, as files whose chips went in before they were read and that did not come; undo never brings them back. */
+  readonly removeFiles: (names: readonly string[]) => void;
   /** Whether the words take a change: off while a message is held, read-only while a dictation stands, which keeps the caret. */
   readonly setInput: (input: ComposerInput) => void;
   /** The attributes that tie the editor element to its list (`listAria`), which name it a combobox while the list stands (`rootAria`). */

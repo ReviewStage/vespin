@@ -304,8 +304,9 @@ export type ThisMacAgentStatus = (typeof THIS_MAC_AGENT_STATUS)[keyof typeof THI
 /**
  * This Mac's host as the desktop keeps it (`compose-this-mac-host.ts`): the
  * host daemon the app carries in its bundle, run by the bundle's LaunchAgent,
- * which `SMAppService` registers, unregisters, and reads. Its state stays
- * under the member's own home. Each act answers, never fails: what it
+ * which `SMAppService` registers, unregisters, and reads, or, in a build not
+ * signed for release, the account install the install script puts under the
+ * home. Its state stays under the member's own home. Each act answers, never fails: what it
  * answered, or the words it could not with. Only the This Mac host concern
  * asks for it.
  */
@@ -314,9 +315,11 @@ export interface ThisMacHostSeam {
   readonly stateRoot: string;
   /** The home the host runs with, under which its agents' folders stand. */
   readonly home: string;
+  /** The launcher inside this app (`Contents/MacOS/vespin-host`), by its absolute path, which `~/.local/bin/vespin-host` is linked to once the agent is registered. */
+  readonly launcher: string;
   /** Whether this Mac can run the host: Apple silicon. */
   readonly runsHost: boolean;
-  /** Whether this build registers and unregisters the agent: a build signed for release alone; any other reads its status and leaves it as it stands. */
+  /** Whether this build registers and unregisters the agent: a build signed for release alone. Any other leaves the agent as it stands and keeps the account install instead (`loaded`, `install`, `uninstall`). */
   readonly registers: boolean;
   /** The Mac as its host registers it, which its enroll names so the service creates the device where it never saw this Mac, and which machine it is where it was read. */
   readonly machine: Effect.Effect<
@@ -342,6 +345,16 @@ export interface ThisMacHostSeam {
     never,
     ChildProcessSpawner.ChildProcessSpawner
   >;
+  /** Whether launchd holds the account install's job, `dev.vespin.host.standalone`, which a build that does not register keeps running instead of the agent. */
+  readonly loaded: Effect.Effect<boolean, never, ChildProcessSpawner.ChildProcessSpawner>;
+  /** The install script given run, its job enabled first: the release installed or upgraded and the account install's host started. */
+  readonly install: (
+    script: string,
+  ) => Effect.Effect<Result.Result<void, string>, never, ChildProcessSpawner.ChildProcessSpawner>;
+  /** The account install's own `vespin-host uninstall` run, with `--keep-agents` where its agents' folders are kept: the host taken out of the account and off this Mac. Nothing where its command stands nowhere. */
+  readonly uninstall: (
+    keepAgents: boolean,
+  ) => Effect.Effect<Result.Result<void, string>, never, ChildProcessSpawner.ChildProcessSpawner>;
 }
 
 export class ThisMacHost extends Context.Service<ThisMacHost, ThisMacHostSeam>()(

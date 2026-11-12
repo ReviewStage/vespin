@@ -33,7 +33,7 @@ import {
   type UsageLimitNotice,
   UsageLimitNoticeSchema,
 } from "@repo/wire/ui-messages";
-import { Option, Schema } from "effect";
+import { Option, Predicate, Schema } from "effect";
 import { recordedVideosOf } from "./agent-pictures-model.js";
 import {
   AGENT_TOOL,
@@ -49,6 +49,7 @@ import {
   type PartCut,
 } from "./agent-wire.js";
 import { drawnCall } from "./native-tool-calls.js";
+import { formatBytes } from "./number-format.js";
 import { TOOL_STATE, type ToolState } from "./tool-call-block.js";
 import { remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-model.js";
 import { ROW_PART, type RowReading, TURN_ROW, type TurnRow, turnRows } from "./turn-rows.js";
@@ -78,6 +79,32 @@ const TOOL_STATES: ReadonlySet<string> = new Set(Object.values(TOOL_STATE));
 
 /** A part its page carried cut (`cutParts`): its two ends and its whole size, and the message and index it is fetched whole by. */
 export type AgentPartCut = Omit<PartCut, "field"> & { readonly messageId: string };
+
+/** Where a cut part's whole read (`AGENTS_PART`) stands: not asked, under way, read, or failed, which leaves it at its ends. */
+export const WHOLE_PART = {
+  CUT: "cut",
+  READING: "reading",
+  WHOLE: "whole",
+  FAILED: "failed",
+} as const;
+
+export type WholePartState = (typeof WHOLE_PART)[keyof typeof WHOLE_PART];
+
+/** A cut part's whole read as a client holds it once asked: under way, failed, or read whole. */
+export type WholePartRead =
+  | { readonly state: typeof WHOLE_PART.READING | typeof WHOLE_PART.FAILED }
+  | { readonly state: typeof WHOLE_PART.WHOLE; readonly part: WireValue };
+
+/** What a cut part's body says while its whole is read, by what it is. */
+export const CUT_PART_WORDS = {
+  THOUGHT: "Reading the whole thought…",
+  OUTPUT: "Reading the whole output…",
+} as const;
+
+/** A cut part's two ends, the middle that could not be read said between them, as a part whose whole read failed draws. */
+export function cutPartText(cut: Pick<AgentPartCut, "head" | "tail" | "bytes">): string {
+  return `${cut.head}\n\n… ${formatBytes(cut.bytes)} in all; only its start and end could be read …\n\n${cut.tail}`;
+}
 
 /** One part of a stored message as the tab draws it. */
 export type AgentPart =
@@ -123,31 +150,41 @@ function toolState(value: WireValue | undefined): ToolState {
  */
 export function agentPart(part: WireValue): AgentPart {
   if (!isRecord(part) || !isWireString(part.type)) return { kind: AGENT_PART.OTHER };
+
   if (part.type === AGENT_PART.TEXT || part.type === AGENT_PART.REASONING) {
     return isWireString(part.text)
       ? { kind: part.type, text: part.text }
       : { kind: AGENT_PART.OTHER };
   }
+
   if (part.type === AGENT_PART.USAGE_LIMIT) {
     const notice = Schema.decodeUnknownOption(UsageLimitNoticeSchema)(part.data);
+
     return Option.isSome(notice)
       ? { kind: AGENT_PART.USAGE_LIMIT, notice: notice.value }
       : { kind: AGENT_PART.OTHER };
   }
+
   if (part.type === AGENT_PART.CONNECTION_LOST) {
     const notice = Schema.decodeUnknownOption(ConnectionLostNoticeSchema)(part.data);
+
     return Option.isSome(notice)
       ? { kind: AGENT_PART.CONNECTION_LOST, notice: notice.value }
       : { kind: AGENT_PART.OTHER };
   }
+
   if (part.type === AGENT_PART.COMPACTED) {
     const notice = Schema.decodeUnknownOption(CompactedNoticeSchema)(part.data);
+
     return Option.isSome(notice)
       ? { kind: AGENT_PART.COMPACTED, notice: notice.value }
       : { kind: AGENT_PART.OTHER };
   }
+
   if (part.type === AGENT_PART.SESSION_CLEARED) return { kind: AGENT_PART.SESSION_CLEARED };
+
   if (part.type === AGENT_PART.STEP_START) return { kind: AGENT_PART.STEP_START };
+
   if (part.type.startsWith(TOOL_PART_TYPE_PREFIX)) {
     // A native harness's call is read as the call of the same kind, which draws it (`native-tool-calls.ts`).
     const call = drawnCall({
@@ -155,6 +192,7 @@ export function agentPart(part: WireValue): AgentPart {
       input: part.input,
       output: part.output,
     });
+
     return {
       kind: AGENT_PART.TOOL,
       ...call,
@@ -163,6 +201,7 @@ export function agentPart(part: WireValue): AgentPart {
       errorText: isWireString(part.errorText) ? part.errorText : undefined,
     };
   }
+
   return { kind: AGENT_PART.OTHER };
 }
 
@@ -174,23 +213,45 @@ export function agentPart(part: WireValue): AgentPart {
 function cutAgentPart(part: WireValue, cut: PartCut, messageId: string): AgentPart {
   const { field: _field, ...ends } = cut;
   const marked = { ...ends, messageId };
+
   if (cut.field === PART_CUT_FIELD.TEXT) {
     return { kind: AGENT_PART.REASONING, text: "", cut: marked };
   }
+
   const read = agentPart(part);
+
   return read.kind === AGENT_PART.TOOL ? { ...read, cut: marked } : read;
+}
+
+/**
+ * The call a cut call's whole read answered, read for drawing, where it is
+ * the call that was cut (`callId`); none where the read answers another
+ * part, as an index read across a deploy that retired a tool would.
+ */
+export function wholeCallOf(
+  read: WireValue,
+  callId: string,
+): Extract<AgentPart, { readonly kind: typeof AGENT_PART.TOOL }> | undefined {
+  const whole = agentPart(read);
+
+  return whole.kind === AGENT_PART.TOOL && whole.callId === callId ? whole : undefined;
 }
 
 /** The parts of a message as the tab draws them, in the row's order, each its page carried cut marked so. */
 export function agentParts(message: AgentTranscriptMessage): readonly AgentPart[] {
   const read = partsRead.get(message);
+
   if (read !== undefined) return read;
   const cuts = new Map((message.cutParts ?? []).map((cut) => [cut.index, cut]));
+
   const parts = message.parts.map((part, index) => {
     const cut = cuts.get(index);
+
     return cut === undefined ? storedPartRead(part) : cutAgentPart(part, cut, message.id);
   });
+
   partsRead.set(message, parts);
+
   return parts;
 }
 
@@ -204,11 +265,13 @@ const partRead = new WeakMap<object, AgentPart>();
 
 /** A stored part read for drawing, once per part. */
 function storedPartRead(part: WireValue): AgentPart {
-  if (typeof part !== "object" || part === null) return agentPart(part);
+  if (!Predicate.isObjectOrArray(part)) return agentPart(part);
   const read = partRead.get(part);
+
   if (read !== undefined) return read;
   const fresh = agentPart(part);
   partRead.set(part, fresh);
+
   return fresh;
 }
 
@@ -231,7 +294,9 @@ export function startedAgentOf(part: AgentPart): string | undefined {
   ) {
     return undefined;
   }
+
   const target = toolTarget(part);
+
   return target?.kind === TOOL_TARGET.AGENT ? target.agent : undefined;
 }
 
@@ -260,6 +325,7 @@ export function callUsageLimit(
   part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
 ): UsageLimitNotice | undefined {
   const answer = Schema.decodeUnknownOption(UsageLimitAnswerSchema)(part.output);
+
   return Option.isSome(answer) ? answer.value.usageLimit : undefined;
 }
 
@@ -296,6 +362,7 @@ export function isTodos(
 const AGENT_READING: RowReading<AgentPart> = {
   key: (part, index) => {
     if (part.kind === AGENT_PART.TOOL) return part.callId;
+
     return part.kind === AGENT_PART.ARRIVED ? part.line.id : String(index);
   },
   part: (part) => {
@@ -307,11 +374,17 @@ const AGENT_READING: RowReading<AgentPart> = {
     ) {
       return ROW_PART.NOTICE;
     }
+
     if (part.kind === AGENT_PART.TEXT) return ROW_PART.WORDS;
+
     if (part.kind === AGENT_PART.ARRIVED) return ROW_PART.ARRIVED;
+
     if (part.kind !== AGENT_PART.TOOL) return ROW_PART.NOTE;
+
     if (isDelegation(part)) return ROW_PART.SUBAGENT;
+
     if (startedAgentOf(part) !== undefined) return ROW_PART.AGENT;
+
     // Note that what the agent showed is never grouped, because a group folds closed once the agent moves on and would fold the pictures with it.
     return isTodos(part) || isShownSet(part) || isShownPage(part) || keptRecording(part)
       ? ROW_PART.LONE_CALL
@@ -339,6 +412,7 @@ function runConnectionCalls(parts: readonly AgentPart[]): ReadonlySet<string> {
     parts.flatMap((part) => {
       const remote =
         part.kind === AGENT_PART.TOOL ? remoteCallOf(part.tool, part.input) : undefined;
+
       return remote === undefined ? [] : [remote.call.parentCallId];
     }),
   );
@@ -380,16 +454,20 @@ function keptRecording(part: AgentPart): boolean {
  */
 function refusedSet(part: AgentPart): ToolPart | undefined {
   if (part.kind !== AGENT_PART.TOOL || part.tool !== AGENT_TOOL.SHOW_IMAGE) return undefined;
+
   if (part.state !== TOOL_STATE.OUTPUT_AVAILABLE || !isRecord(part.output)) return undefined;
   const reason = part.output.reason;
+
   if (part.output.status !== ACTION_RESULT_STATUS.REJECTED || !isWireString(reason))
     return undefined;
+
   return { ...part, state: TOOL_STATE.OUTPUT_ERROR, errorText: reason };
 }
 
 function listOf(value: UnparsedWireValue, key: string): readonly WireValue[] {
   if (!isRecord(value)) return [];
   const list = value[key];
+
   return Array.isArray(list) ? list : [];
 }
 
@@ -426,19 +504,24 @@ function drawnParts(
   const drawn: AgentPart[] = [];
   const waiting = arrived.toSorted((a, b) => afterStepOf(a) - afterStepOf(b));
   let begun = 0;
+
   const arrive = (steps: number) => {
     while (waiting[0] !== undefined && afterStepOf(waiting[0]) <= steps) {
       const line = waiting.shift();
+
       if (line !== undefined) drawn.push({ kind: AGENT_PART.ARRIVED, line });
     }
   };
+
   for (const part of parts) {
     if (part.kind === AGENT_PART.STEP_START) {
       arrive(begun);
       begun += 1;
       continue;
     }
+
     if (part.kind === AGENT_PART.OTHER) continue;
+
     if (
       part.kind === AGENT_PART.TOOL &&
       part.tool === CONNECTION_TOOL.EXECUTE &&
@@ -447,19 +530,24 @@ function drawnParts(
     ) {
       continue;
     }
+
     const last = drawn.at(-1);
     const refusal = refusedSet(part);
+
     if (refusal !== undefined) {
       drawn.push(refusal);
       continue;
     }
+
     if (last !== undefined && isShownSet(last) && isShownSet(part)) {
       drawn[drawn.length - 1] = joinedSets(last, part);
     } else {
       drawn.push(part);
     }
   }
+
   arrive(Number.POSITIVE_INFINITY);
+
   return drawn;
 }
 
@@ -485,6 +573,7 @@ export function endTurnOf(parts: readonly AgentPart[]): TurnEnding | undefined {
   const ended = parts.findLast(
     (part) => part.kind === AGENT_PART.TOOL && part.tool === AGENT_TOOL.END_TURN,
   );
+
   if (
     ended?.kind !== AGENT_PART.TOOL ||
     ended.state !== TOOL_STATE.OUTPUT_AVAILABLE ||
@@ -495,11 +584,15 @@ export function endTurnOf(parts: readonly AgentPart[]): TurnEnding | undefined {
   ) {
     return undefined;
   }
+
   const { summary, followUps } = ended.input;
+
   if (!isWireString(summary) || summary.trim() === "") return undefined;
+
   const offered = Array.isArray(followUps)
     ? followUps.flatMap((each) => (isWireString(each) && each.trim() !== "" ? [each.trim()] : []))
     : [];
+
   // Note that the tool takes a follow-up twice, and one offered twice is one to tick.
   return { summary: summary.trim(), followUps: [...new Set(offered)] };
 }
@@ -539,9 +632,12 @@ export function agentRows(
   const drawn = drawnParts(message, arrived);
   // Note that a turn that ended with `end_turn` reads its summary as its reply, and the words it wrote on the way as notes, which fold away with its work.
   const summary = moving ? undefined : endTurnSummary(drawn);
+
   const reply: AgentPart | undefined =
     summary === undefined ? undefined : { kind: AGENT_PART.TEXT, text: summary };
+
   const parts = reply === undefined ? drawn : [...drawn, reply];
+
   const reading: RowReading<AgentPart> = {
     ...AGENT_READING,
     part: (part) =>
@@ -552,6 +648,7 @@ export function agentRows(
       AGENT_READING.running(part) ||
       (part.kind === AGENT_PART.TOOL && workers.get(part.callId) === TOOL_STATE.INPUT_AVAILABLE),
   };
+
   return turnRows(parts, reading, { moving });
 }
 
@@ -577,9 +674,11 @@ function steeringPlaced(
 ): readonly AgentTranscriptMessage[] {
   const at = messages.findLastIndex((message) => message.role === MESSAGE_ROLE.ASSISTANT);
   const journal = messages[at];
+
   if (journal === undefined || journal.finishedAt !== undefined) return messages;
   const begun = agentParts(journal).filter((part) => part.kind === AGENT_PART.STEP_START).length;
   const arrivedIn = { journalId: journal.id, afterStep: begun };
+
   return messages.map((message, index) =>
     index > at &&
     message.role === MESSAGE_ROLE.USER &&
@@ -602,18 +701,25 @@ export function placedMessages(
   unsent: (id: string) => boolean = () => false,
 ): readonly PlacedMessage[] {
   const shown = steeringPlaced(messages, unsent);
+
   const journals = new Set(
     shown.filter((message) => message.role === MESSAGE_ROLE.ASSISTANT).map((each) => each.id),
   );
+
   const arrived = new Map<string, AgentTranscriptMessage[]>();
+
   for (const message of shown) {
     const journal = message.arrivedIn?.journalId;
+
     if (journal === undefined || !journals.has(journal)) continue;
     arrived.set(journal, [...(arrived.get(journal) ?? []), message]);
   }
+
   return shown.flatMap((message) => {
     const journal = message.arrivedIn?.journalId;
+
     if (journal !== undefined && journals.has(journal)) return [];
+
     return [{ message, arrived: arrived.get(message.id) ?? [] }];
   });
 }
@@ -627,22 +733,27 @@ export type TurnStretch =
 export function turnStretches(rows: readonly TurnRow<AgentPart>[]): readonly TurnStretch[] {
   const stretches: TurnStretch[] = [];
   let run: TurnRow<AgentPart>[] = [];
+
   for (const row of rows) {
     if (row.kind !== TURN_ROW.BLOCK || row.block.kind !== AGENT_PART.ARRIVED) {
       run.push(row);
       continue;
     }
+
     if (run.length > 0) stretches.push({ rows: run });
     run = [];
     stretches.push({ line: row.block.line });
   }
+
   if (run.length > 0 || stretches.length === 0) stretches.push({ rows: run });
+
   return stretches;
 }
 
 /** A message's words: the summary of the turn's `end_turn` where it ended with one, which is its reply, or else its text parts, one paragraph each; what a copy of a turn carries and what the developer's line reads as. */
 export function messageWords(message: AgentTranscriptMessage): string {
   const parts = agentParts(message);
+
   return (
     endTurnSummary(parts) ??
     parts.flatMap((part) => (part.kind === AGENT_PART.TEXT ? [part.text] : [])).join("\n\n")

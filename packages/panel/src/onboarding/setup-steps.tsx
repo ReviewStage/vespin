@@ -96,7 +96,9 @@ const INVITED_START: SetupPlace = { audience: SETUP_AUDIENCE.INVITED, at: 0 };
 /** Whether the account belongs to a team's workspace; nothing before its workspaces are read, and none where that read failed. */
 function invitedOf(tasks: TasksControl, workspacesFailed: boolean): boolean | undefined {
   const { workspaces } = tasks.newTask;
+
   if (workspaces.length === 0) return workspacesFailed ? false : undefined;
+
   return workspaces.some((workspace) => workspace.personal !== true);
 }
 
@@ -114,17 +116,22 @@ export function useSetupGate(
   const [finishedOnDevice] = useKept(SETUP_FINISHED, []);
   const [startedHere, setStartedHere] = useState<string>();
   const settings = useQuery({ ...appStateQuery, select: selectAppSettingsView }).data;
+
   const workspacesFailed =
     useQuery({ ...appStateQuery, select: selectWorkspacesFailed }).data === true;
+
   const finishedOnAccount = settings?.setupFinished === true;
+
   // Note that this device's own record stands beside the account's, because the account's arrives only once its preferences are read, and a device clears them at every sign-out.
   const finished =
     finishedHere ||
     finishedOnAccount ||
     (accountId !== undefined && finishedOnDevice.includes(accountId));
+
   // Note that the models are the ones the host holds for the account, so nothing here asks for them.
   const { models, modelsFailed } = tasks.newTask;
   const fresh = welcomed(tasks);
+
   // Note that a read that failed is taken as an agent standing, so a hitch never stands setup before an account that has worked.
   const agent =
     models !== undefined
@@ -132,6 +139,7 @@ export function useSetupGate(
       : modelsFailed
         ? true
         : undefined;
+
   const gate = setupGate({
     id: accountId,
     fresh,
@@ -144,10 +152,12 @@ export function useSetupGate(
     invited: invitedOf(tasks, workspacesFailed),
     agent,
   });
+
   // Setup once standing in this window stays until finished, whatever it connects meanwhile, though the account keeps its place only from its first move.
   useEffect(() => {
     if (gate === SETUP_GATE.OWED && accountId !== undefined) setStartedHere(accountId);
   }, [gate, accountId]);
+
   return gate;
 }
 
@@ -181,19 +191,24 @@ interface SetupStepsProps {
 function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.Element {
   const { mutate: updateSetting } = useMutation(actMutation(ACT_KIND.SETTING_UPDATE));
   const { mutateAsync: signOut } = useMutation(actMutation(ACT_KIND.ACCOUNT_SIGN_OUT));
+
   // Note that a refused or failed delete is logged on the mutation rather than the call, because Finish has let the app in and setup is gone by the time it answers.
   const { mutate: deleteWorkspace } = useMutation({
     ...actMutation(ACT_KIND.WORKSPACE_DELETE),
     onError: (error) => console.warn("Setup's team workspace was left standing.", error),
   });
+
   const { mutateAsync: sendTeamDelete, ...deletingTeam } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_DELETE),
   );
+
   const [, , keepFinished] = useKept(SETUP_FINISHED, []);
   const stored = useQuery({ ...appStateQuery, select: selectAppSettingsView }).data?.setupPlace;
   const kept = setupPlaceFrom(stored);
+
   const workspacesFailed =
     useQuery({ ...appStateQuery, select: selectWorkspacesFailed }).data === true;
+
   // Note that where setup starts is decided as it first stands, so a team's workspace made midway keeps the steps it was making.
   const start = invitedOf(tasks, workspacesFailed) === true ? INVITED_START : SETUP_START;
   const place = kept ?? start;
@@ -204,6 +219,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
   useEffect(() => {
     written.current = setupPlaceFrom(stored);
   }, [stored]);
+
   const keep = useCallback(
     (next: SetupPlace) => {
       written.current = next;
@@ -211,14 +227,18 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
     },
     [updateSetting],
   );
+
   // Note that the place is first kept on the first move rather than as setup opens, because a preferences read that failed lets setup open without the account's place, and nothing written unasked may then put back another machine's.
   const move = (change: Partial<SetupPlace>) => keep({ ...(written.current ?? place), ...change });
+
   // A team's workspace made stands listed only while setup is for the team, so Just me goes back to the account's own.
   const setAudience = (chosen: SetupAudience) => {
     move({ audience: chosen });
     const listed = chosen === SETUP_AUDIENCE.TEAM ? team : personal;
+
     if (team !== undefined && listed !== undefined) tasks.onChooseWorkspace(listed);
   };
+
   const setAt = (step: number) => move({ at: step });
   const [agent, setAgent] = useState(false);
   const [reached, setReached] = useState(false);
@@ -232,13 +252,16 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
   const last = at === steps.length - 1;
   // The team's workspace setup made and then left for Just me, which Finish deletes or asks about; none otherwise.
   const leftTeam = audience === SETUP_AUDIENCE.ME ? team : undefined;
+
   const leftRead = useQuery({
     ...workspaceMembersQuery(leftTeam),
     enabled: leftTeam !== undefined && last,
   });
+
   const leftMembers = leftRead.data;
   // Note that Finish waits on the members, because a read still under way would skip the question; a read that failed lets it go on to the delete the service refuses where anyone else is in it, so setup is never stood still.
   const leftUnread = leftTeam !== undefined && leftMembers === undefined && !leftRead.isError;
+
   // Note that whoever left it is named too, because their agents and tasks may still stand in it.
   const joined =
     leftMembers === undefined
@@ -247,6 +270,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
           ...leftMembers.members.filter((member) => member.userId !== accountId),
           ...(leftMembers.former ?? []),
         ].map((member) => member.name);
+
   const teamDeleteAct = useConfirmAct(deletingTeam, {
     send: () =>
       leftTeam === undefined
@@ -255,18 +279,22 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
     answered: () => ANSWER_ACCEPTED,
     failed: refusedWith,
   });
+
   const teamDelete = useConfirmDialog(
     { subject: leftTeam !== undefined, surfaceOpen: last },
     teamDeleteAct,
     confirmFailure(FAILURE_SURFACE.WORKSPACE_DELETE),
   );
+
   // Note that a team's workspace made and then left for Just me is deleted only at Finish, where Just me is final. One nobody else joined goes without a word, while the service still finds nobody else in it and no agent, rather than this window's list, and stays as made where it is refused or fails; one anyone joined asks first, in red, and may be kept.
   const finish = () => {
     if (leftTeam === undefined) return finishNow();
+
     if (joined.length > 0) return teamDelete.ask();
     deleteWorkspace({ workspaceId: leftTeam, ifAlone: true });
     finishNow();
   };
+
   function finishNow(): void {
     // Note that the account's place stands once finished, since finished is read ahead of it on every machine.
     // Note that nothing waits on the write: the window lets the app in at once, and a write lost asks for setup again next time.
@@ -274,11 +302,14 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
     keepFinished((finished) => [...finished, accountId]);
     onFinish();
   }
+
   const forward = () => (last ? finish() : setAt(at + 1));
   const back = at === 0 ? undefined : () => setAt(at - 1);
+
   // A team's workspace made and then left for Just me is not the one GitHub is installed on.
   const workspaceId =
     (audience === SETUP_AUDIENCE.TEAM ? team : personal) ?? tasks.newTask.workspaceId;
+
   // Note that a skippable step offers Skip until done and Continue after it; the team's draws its own foot.
   const foot = (done: boolean, label = "Continue", skippable = false) => (
     <AuthStepFoot
@@ -289,6 +320,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
       next={done || !skippable ? { label, onPress: forward, disabled: !done } : undefined}
     />
   );
+
   const exit = {
     label: "Sign out",
     onPress: () =>
@@ -296,6 +328,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
         await signOut();
       }),
   };
+
   const teamForm = useTeamForm({
     made:
       team === undefined
@@ -330,6 +363,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
       </AuthPage>
     );
   }
+
   if (step === SETUP_STEP.SURVEY) {
     return (
       <AuthPage
@@ -341,7 +375,15 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
             at={at + 1}
             total={steps.length}
             onBack={back}
-            onSkip={survey.answered ? undefined : forward}
+            onSkip={
+              survey.answered
+                ? undefined
+                : () => {
+                    // Skipping after taking every pick back keeps that, so the account's earlier answers do not come back.
+                    survey.keep();
+                    forward();
+                  }
+            }
             next={
               survey.answered
                 ? {
@@ -360,6 +402,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
       </AuthPage>
     );
   }
+
   if (step === SETUP_STEP.TEAM) {
     // Note that the press makes the workspace until it stands, then saves what was changed in it, or goes on.
     return (
@@ -386,6 +429,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
       </AuthPage>
     );
   }
+
   if (step === SETUP_STEP.AGENT) {
     return (
       <AuthPage
@@ -399,6 +443,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
       </AuthPage>
     );
   }
+
   if (step === SETUP_STEP.GITHUB) {
     return (
       <AuthPage
@@ -414,8 +459,10 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
       </AuthPage>
     );
   }
+
   const teamName =
     tasks.newTask.workspaces.find((one) => one.id === leftTeam)?.name ?? TEAM_DELETE_WORDS.UNNAMED;
+
   return (
     <>
       <AuthPage

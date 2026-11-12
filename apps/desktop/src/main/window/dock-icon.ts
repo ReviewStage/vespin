@@ -48,6 +48,7 @@ function escapeMarkup(text: string): string {
  */
 function bandedTilePage(tile: NativeImage, badge: DevBuildBadge): string {
   const { CANVAS, TILE_EDGE, TILE_SIDE, TILE_RADIUS, TOP, BASELINE, FONT_SIZE, PIXELS } = BAND;
+
   const svg = [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${CANVAS} ${CANVAS}" width="${PIXELS}" height="${PIXELS}" style="display:block">`,
     `<defs><clipPath id="tile"><rect x="${TILE_EDGE}" y="${TILE_EDGE}" width="${TILE_SIDE}" height="${TILE_SIDE}" rx="${TILE_RADIUS}"/></clipPath></defs>`,
@@ -56,7 +57,9 @@ function bandedTilePage(tile: NativeImage, badge: DevBuildBadge): string {
     `<text x="${CANVAS / 2}" y="${BASELINE}" text-anchor="middle" font-family="-apple-system, system-ui, sans-serif" font-weight="700" font-size="${FONT_SIZE}" fill="#ffffff">${escapeMarkup(badge.label)}</text></g>`,
     "</svg>",
   ].join("");
+
   const page = `<!doctype html><html><body style="margin:0;background:transparent">${svg}</body></html>`;
+
   return `data:text/html;charset=utf-8,${encodeURIComponent(page)}`;
 }
 
@@ -78,16 +81,21 @@ async function paintOffscreen(page: string): Promise<NativeImage> {
     transparent: true,
     webPreferences: { offscreen: true, javascript: false, sandbox: true },
   });
+
   try {
     const frames = on(window.webContents, "paint");
     await window.loadURL(page);
     window.webContents.invalidate();
     let painted = 0;
+
+    // SAFETY: Electron emits `paint` with the event, the dirty rectangle, and the frame's image.
     for await (const [, , image] of frames as AsyncIterable<[unknown, unknown, NativeImage]>) {
       if (!image.isEmpty()) return image;
       painted += 1;
+
       if (painted >= PAINT_FRAMES) break;
     }
+
     throw new Error(`no frame held the band after ${PAINT_FRAMES} paints`);
   } finally {
     window.destroy();
@@ -97,6 +105,7 @@ async function paintOffscreen(page: string): Promise<NativeImage> {
 /** The theme's plain tile, empty where the build carries no artwork. */
 function plainTile(iconDirectory: string): NativeImage {
   const file = nativeTheme.shouldUseDarkColors ? DOCK_ICON_FILES.DARK : DOCK_ICON_FILES.LIGHT;
+
   return nativeImage.createFromPath(path.join(iconDirectory, file));
 }
 
@@ -116,11 +125,15 @@ async function drawDockIcon(
 ): Promise<void> {
   if (!app.dock) return;
   const tile = plainTile(iconDirectory);
+
   if (tile.isEmpty()) return;
   app.dock.setIcon(tile);
+
   if (badge === undefined) return;
+
   try {
     const banded = await paintOffscreen(bandedTilePage(tile, badge));
+
     // Note that a draw a later theme change overtook keeps its band to itself.
     if (latest()) app.dock.setIcon(banded);
   } catch (error) {
@@ -145,13 +158,16 @@ export function followDockIcon(
 ): (badge: DevBuildBadge | undefined) => void {
   let band = badge;
   let draws = 0;
+
   const draw = (): void => {
     draws += 1;
     const mine = draws;
     void drawDockIcon(iconDirectory, band, report, () => mine === draws);
   };
+
   draw();
   nativeTheme.on("updated", draw);
+
   return (next) => {
     band = next;
     draw();

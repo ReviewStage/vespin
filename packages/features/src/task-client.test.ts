@@ -68,18 +68,22 @@ it.effect(
       const saved = { ...TASK, updatedAt: 1_800_000_400_000 };
       const conflict = { conflict: { current: "- Vespin's words." } };
       let sent = 0;
+
       const api = fakeCloudApi({
         [`POST /api/plans/${TASK_ID}/description`]: {
           answer: () => {
             sent += 1;
+
             return sent === 1 ? { plan: saved } : conflict;
           },
         },
       });
+
       const edit = { document: { base: "## Goal\n", value: "## Goal\n\n - Mine. \n" } };
 
       const first = yield* Effect.provide(client().edit(TASK_ID, edit), api.layer);
       const second = yield* Effect.provide(client().edit(TASK_ID, edit), api.layer);
+
       const blank = yield* Effect.provide(
         client().edit(TASK_ID, {
           document: { base: "", value: "x".repeat(TASK_BOUNDS.MAX_BODY_CHARS + 1) },
@@ -104,6 +108,7 @@ it.effect("the repositories of one workspace are asked by its id, and every one 
       repositories: [],
       installationUrl: "https://github.com/apps/luke/installations/new",
     };
+
     const api = fakeCloudApi({ "GET /api/github/repositories": { answer: () => listed } });
 
     yield* Effect.provide(client().repositories("workspace-acme"), api.layer);
@@ -121,6 +126,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const task = { ...TASK, repository: "acme/relay", document: { body: "", assumptions: [] } };
+
       const agent = {
         id: "3c9e1d2a-6b7f-4e8a-9c0d-1e2f3a4b5c6d",
         planId: TASK_ID,
@@ -131,13 +137,17 @@ it.effect(
         status: AGENT_STATUS.STARTING,
         turnId: null,
       };
+
       const resetsAt = Date.UTC(2026, 9, 21, 15, 40);
       let sent = 0;
+
       const api = fakeCloudApi({
         "POST /api/plans": {
           answer: () => {
             sent += 1;
+
             if (sent === 1) return { plan: task, agent };
+
             return sent === 2
               ? { plan: task, agentRefusal: { error: HOSTED_API_ERROR.INVALID_REQUEST } }
               : {
@@ -147,6 +157,7 @@ it.effect(
           },
         },
       });
+
       const request = {
         repository: "acme/relay",
         agent: { idempotencyKey: "start-1", prompt: " Expire invitations. " },
@@ -155,6 +166,7 @@ it.effect(
       const started = yield* Effect.provide(client().create(request), api.layer);
       const refused = yield* Effect.provide(client().create(request), api.layer);
       const limited = yield* Effect.provide(client().create(request), api.layer);
+
       const planned = yield* Effect.provide(
         client().create({ ...request, planning: true }),
         api.layer,
@@ -231,6 +243,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const thread = "0f9b5f6e-6a8e-4c51-9a0e-2c1f2f0b7a11";
+
       const api = fakeCloudApi({
         [`POST /api/plans/${TASK_ID}/comments/${thread}`]: {
           answer: () => ({ refused: "not-yours" }),
@@ -240,16 +253,19 @@ it.effect(
           answer: () => ({ error: HOSTED_API_ERROR.NOT_FOUND }),
         },
       });
+
       const action = { action: "edit", entry: thread, words: "Mine now" } as const;
 
       const refused = yield* Effect.provide(
         client().actOnComment(TASK_ID, thread, action),
         api.layer,
       );
+
       const elsewhere = yield* Effect.provide(
         client().actOnComment(OTHER_TASK, thread, action),
         api.layer,
       );
+
       const blank = yield* Effect.provide(
         client().actOnComment(TASK_ID, thread, { action: "reply", clientKey: "k", words: " " }),
         api.layer,
@@ -279,10 +295,12 @@ it.effect(
         client().rename(TASK_ID, { name: "Invitation expiry" }, "key-1"),
         api.layer,
       );
+
       const written = yield* Effect.provide(
         client().rename(OTHER_TASK, { name: "Invitation expiry" }, "key-2"),
         api.layer,
       );
+
       const started = yield* Effect.provide(
         client().create({ id: TASK_ID, name: "Invitation expiry" }, "key-3"),
         api.layer,
@@ -314,6 +332,7 @@ it.effect(
         repository: "acme/relay",
         connectedTo: "someone-else",
       };
+
       const api = fakeCloudApi({
         [`PATCH /api/plans/${TASK_ID}`]: {
           status: 403,
@@ -333,11 +352,14 @@ it.effect(
         client().setRepository(TASK_ID, "acme/relay"),
         api.layer,
       );
+
       const moved = yield* Effect.provide(client().move(OTHER_TASK, "workspace-acme"), api.layer);
+
       const renamed = yield* Effect.provide(
         client().rename(OTHER_TASK, { name: "Invitation expiry" }),
         api.layer,
       );
+
       const deleted = yield* Effect.provide(client().delete(OTHER_TASK), api.layer);
 
       assert.deepEqual(repository, {
@@ -397,18 +419,21 @@ it.effect(
           lines: ["two"],
         },
       };
+
       const api = fakeCloudApi({
         [`GET /api/plans/${TASK_ID}/file`]: { answer: () => file },
         [`GET /api/plans/${TASK_ID}/tree`]: {
           answer: () => ({ refusal: TASK_FILE_REFUSAL.NO_REPOSITORY }),
         },
       });
+
       const sha = "0123456789abcdef0123456789abcdef01234567";
 
       const read = yield* Effect.provide(
         client().readFile(TASK_ID, { path: "src/a b+c.ts", firstLine: 2, lastLine: 3 }),
         api.layer,
       );
+
       yield* Effect.provide(
         client().readFile(TASK_ID, {
           path: "src/a b+c.ts",
@@ -419,11 +444,14 @@ it.effect(
         }),
         api.layer,
       );
+
       const folder = yield* Effect.provide(
         client().readTree(TASK_ID, { path: "", recursive: true }),
         api.layer,
       );
+
       api.fail();
+
       const failed = yield* Effect.provide(
         client().readFile(TASK_ID, { path: "src/a b+c.ts", firstLine: 2, lastLine: 3 }),
         api.layer,
@@ -447,11 +475,13 @@ it.effect(
     Effect.gen(function* () {
       const picture = "data:image/png;base64,iVBORw0KGgo=";
       const keptId = "3c1f0e2a-7b6d-4e5f-9a8b-0c1d2e3f4a5b";
+
       const keep = (status: number, answer: () => JsonValue) =>
         Effect.provide(
           client().keepPicture(TASK_ID, picture),
           fakeCloudApi({ [`POST /api/plans/${TASK_ID}/attachments`]: { answer, status } }).layer,
         );
+
       const api = fakeCloudApi({
         [`POST /api/plans/${TASK_ID}/attachments`]: { answer: () => ({ id: keptId }), status: 201 },
       });

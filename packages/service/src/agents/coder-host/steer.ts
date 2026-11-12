@@ -251,7 +251,9 @@ const teammateLabel = (agent: Agent, sender: LineSender) => {
   if (sender.kind !== MESSAGE_SENDER.MEMBER || sender.userId === agent.userId) {
     return Effect.succeed(undefined);
   }
+
   const { userId } = sender;
+
   return Effect.map(
     Effect.all([readAccountNames([userId]), workspaceStepOf(agent.userId, agent.organizationId)], {
       concurrency: "unbounded",
@@ -273,6 +275,7 @@ const runningTurnOf = (agent: Agent) =>
     hostedStoreOrUnavailable(latestTurnsOfReached([agent.conversationId])),
     (turns): AgentLatestTurn | undefined => {
       const turn = turns.get(agent.conversationId);
+
       return turn !== undefined && RUNNING_TURN_STATUSES.has(turn.status) ? turn : undefined;
     },
   );
@@ -322,12 +325,16 @@ const admittedRuntime = /* @__PURE__ */ Effect.fnUntraced(function* (
     repository: agent.repository,
     harness: runtime,
   });
+
   if (!writesToAgent(userId, agent, payer)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+
   const missing =
     harnessOf(runtime) === undefined
       ? undefined
       : yield* hostedStoreOrUnavailable(messageCredentialMissing(agent, { payer }));
+
   if (missing !== undefined) return yield* Effect.fail(credentialMissing(missing));
+
   return runtime;
 });
 
@@ -356,27 +363,37 @@ const handedToHarness = (
       const sent = yield* agentSessions
         .send(sessionId, message)
         .pipe(Effect.catchTag("SessionUnreachable", unreached));
+
       if (sent.outcome === SESSION_SEND_OUTCOME.ACCEPTED) return true;
+
       if (sent.outcome === SESSION_SEND_OUTCOME.FAILED) {
         outcome.refused = failedCallRefusal(sent);
+
         return false;
       }
+
       if (sent.outcome !== SESSION_SEND_OUTCOME.RETIRED) {
         outcome.refused = REFUSAL_OF_SEND_OUTCOME[sent.outcome];
+
         return false;
       }
+
       outcome.ended = true;
     }
+
     const opened = yield* agentSessions
       .open(message)
       .pipe(Effect.catchTag("SessionUnreachable", unreached));
+
     // Note that the open claims the fresh session's record before it answers accepted, still under the
     // conversation's dispatch claim (`runner-sessions.ts`), because a message sent in between would read
     // the ended session, open a second fresh one, and the newer claim would refuse the first, words and all.
     if (opened.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) {
       outcome.refused = failedCallRefusal(opened);
+
       return false;
     }
+
     return true;
   });
 
@@ -387,8 +404,10 @@ const handedToHarness = (
  */
 const refusalNow = /* @__PURE__ */ Effect.fnUntraced(function* (userId: string, agent: Agent) {
   const tasks = yield* taskNamesOf(userId, [agent.taskId]);
+
   if (!tasks.has(agent.taskId)) return HOSTED_REFUSAL.NOT_FOUND;
   const now = yield* readAgent(userId, agent.id);
+
   return Option.isNone(now) || now.value.archivedAt !== null ? HOSTED_REFUSAL.NOT_FOUND : undefined;
 });
 
@@ -425,9 +444,12 @@ const heldWhileBooting = Effect.fnUntraced(function* (
       },
     }),
   );
+
   if (Option.isNone(queued)) return undefined;
+
   if (queued.value === QUEUE_OUTCOME.FULL)
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
   return { outcome: STEER_OUTCOME.QUEUED } satisfies SteerWritten;
 });
 
@@ -470,6 +492,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   // A turn past its deadline is reaped first, so the words open a turn of their own rather than
   // joining one nothing runs (`reconcile.ts`).
   yield* reconciledBeforeWrite(agent);
+
   // Note that the reads a refusal is decided by are made at once beside each other, since none waits on
   // another, and then judged one by one in the order below, so a send refused for two reasons is
   // refused for the same one it always was; a repeat reads them all for nothing, which is rare.
@@ -491,31 +514,42 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
     },
     { concurrency: "unbounded" },
   );
+
   const runtime = yield* admittedRuntime(userId, agent, yield* Effect.fromResult(read.routing));
+
   if (yield* Effect.fromResult(read.repeated)) return { outcome: STEER_OUTCOME.REPEATED };
   const held = yield* Effect.fromResult(read.task);
+
   if (Option.isNone(held)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const task = held.value;
+
   // An archived agent names nothing.
   if (agent.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const workspace = yield* Effect.fromResult(read.workspace);
+
   if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   if (delivery === STEER_DELIVERY.HELD_WHILE_BOOTING) {
     const queued = yield* heldWhileBooting(userId, agent, line);
+
     if (queued !== undefined) return queued;
   }
+
   // What the words mention goes with them: of the task this send read as its sender, and of the agent's workspace.
   // Note that GitHub's line carries a reviewer's words, which mention nothing on the developer's behalf, so it hands no note of what they mention;
   // and another agent's message links its sender to name who said it, so only what else it mentions is noted.
   const reviewers = line.sender.kind === MESSAGE_SENDER.GITHUB;
+
   const pointed =
     line.mentionWords ??
     (line.metadata?.channel === MESSAGE_CHANNEL.AGENT_MESSAGE
       ? withoutMemberLinks(line.text)
       : line.text);
+
   // GitHub is asked beside the mentions' read, each judged in turn as above. Note that a Start's own first line is
   // never asked of GitHub again as its queue hands it on, since its Start reached the repository as it made the agent.
   const started = line.metadata?.channel === MESSAGE_CHANNEL.START;
+
   const reached = yield* Effect.all(
     {
       repository: Effect.result(
@@ -541,6 +575,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
     },
     { concurrency: "unbounded" },
   );
+
   // Note that a GitHub that did not answer, or that holds our calls for its rate limit, lets the words through,
   // because the agent's checkout already stands and only GitHub's definite no is a reason to keep them from it.
   yield* Effect.fromResult(reached.repository).pipe(
@@ -548,15 +583,19 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
       refusal.error === HOSTED_REFUSAL.GITHUB_UNANSWERED.error ? Effect.void : Effect.fail(refusal),
     ),
   );
+
   // Note that a session found unclaimed is read again now that GitHub has answered, because a Start's session
   // may have claimed its record meanwhile, and the stale read would refuse a send it now takes.
   const sessionId =
     (yield* Effect.fromResult(read.sessionId)) ??
     (yield* hostedStoreOrUnavailable(recordedRuntimeSession(target)));
+
   if (sessionId === undefined && !(yield* opensUnclaimed(agent))) {
     return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
   }
+
   const reads = yield* Effect.fromResult(reached.reads);
+
   const mentioned = reviewers
     ? undefined
     : mentionedContext(
@@ -565,16 +604,20 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
         reads,
         yield* experimentOnIn(agent.organizationId, EXPERIMENT.DESCRIPTIONS),
       );
+
   const running = yield* Effect.fromResult(read.running);
   const label = yield* Effect.fromResult(read.label);
+
   // Each image is kept beside the agent's conversation before the harness is handed it, so the harness is told its id and the
   // row names it; a repeat under the key was answered above, and the same bytes again keep nothing twice.
   const attachments = yield* hostedStoreOrUnavailable(
     keptHandedImages(target, line.attachments ?? []),
   );
+
   // The harness's refusal is kept beside the dispatch, since the write answers only whether a row landed,
   // and so is whether the session the record named had ended, whose running turn nothing else ends.
   const outcome: HandOverOutcome = { refused: undefined, ended: false };
+
   const message = {
     conversationId: agent.conversationId,
     turn: SESSION_TURN.TYPED,
@@ -582,19 +625,24 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
     // The line's own id, which a native harness's runner names back as it takes the message.
     lineId: sentLineId(line.clientKey),
   };
+
   const send = handedToHarness(agentSessions, sessionId, message, outcome);
+
   // Note that the archive is read again here, under the conversation's dispatch claim, because a plan's
   // archive takes the conversation's row lock the claim was taken under, and reads the line the claim
   // wrote as work under way, so the two never cross.
   const handOver = Effect.flatMap(refusalNow(userId, agent), (refusal) => {
     if (refusal === undefined) return send;
     outcome.refused = refusal;
+
     return Effect.succeed(false);
   });
+
   // The servers the words mention stand for the agent's next turn from just before the harness hears them, and
   // only where the harness took them; a store failure on the way is read as the harness hearing nothing, which writes
   // nothing and is answered as an outage, since what failed may have been before the hand-over.
   const services = yield* Effect.context<DatabaseServices>();
+
   // Note that another coding agent's line, or GitHub's carrying a reviewer's words, hands no server, and an automation's
   // run hands only what its own prompt mentions, because which servers an agent is handed is its developer's to switch,
   // never another agent's, a reviewer's, or a webhook caller's.
@@ -602,6 +650,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
     line.sender.kind === MESSAGE_SENDER.AGENT || reviewers
       ? []
       : mentionedServers(line.serverWords ?? line.text, task?.repository ?? null);
+
   // Note that a native agent's are written before its harness hears the words too, so the turn its runner
   // opens on them takes them: the hand-over runs in no transaction, so the agent's row a launch writes
   // on its own connection is held by nothing meanwhile.
@@ -616,29 +665,36 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
     ),
     Effect.provide(services),
   );
+
   const written = yield* hostedStoreOrUnavailable(
     Effect.flatMap(writer, (write) =>
       write.writeAwaitingLine(target, { ...line, attachments, mentioned }, dispatch),
     ),
   );
+
   if (Result.isFailure(written))
     return yield* Effect.fail(REFUSAL_OF_UNWRITTEN_LINE[written.failure.refusal]);
+
   // The turn the ended session was running is settled whether or not the fresh session took the words.
   if (outcome.ended && running !== undefined) yield* settledEnded(writer, agent, running);
+
   if (Option.isNone(written.success))
     return yield* Effect.fail(outcome.refused ?? HOSTED_REFUSAL.UNAVAILABLE);
   const { txid, effect, id } = written.success.value;
+
   // The words the fresh session took joined the ended session's turn as they were written, and await a turn of their own now.
   if (outcome.ended && running !== undefined) {
     yield* hostedStoreOrUnavailable(
       Effect.flatMap(writer, (write) => write.requeueLine(target, id)),
     );
   }
+
   // A send that raced another under its key found the line standing under the lock, so it sent nothing new.
   const sent =
     effect === STORE_WRITE_EFFECT.WRITTEN
       ? { sent: { runtime, turnRunning: running?.status === TURN_STATUS.RUNNING } }
       : undefined;
+
   return txid === undefined
     ? { outcome: STEER_OUTCOME.SENT, ...sent }
     : { outcome: STEER_OUTCOME.SENT, txid, ...sent };
@@ -662,8 +718,10 @@ export const agentTakingMessage = /* @__PURE__ */ Effect.fnUntraced(function* (
   read: (userId: string, agentId: string) => AgentStoreEffect<Option.Option<Agent>>,
 ) {
   const agent = yield* read(userId, agentId);
+
   if (Option.isNone(agent) || agent.value.archivedAt === null) return agent;
   yield* unarchiveAgentFrom(userId, agentId, agent.value.archivedAt);
+
   return yield* read(userId, agentId);
 });
 
@@ -675,9 +733,12 @@ export const agentTakingMessage = /* @__PURE__ */ Effect.fnUntraced(function* (
 const handedFileOf = (conversationId: string, file: LineFileRead) =>
   Effect.gen(function* () {
     const { name, mediaType, kept } = file;
+
     if (file.data !== undefined) return [{ name, mediaType, data: file.data, kept }];
+
     if (kept === undefined || !("id" in kept)) return [];
     const picture = yield* readConversationPicture(conversationId, kept.id);
+
     return Option.isNone(picture)
       ? []
       : [{ name, mediaType, data: Buffer.from(picture.value.bytes).toString("base64"), kept }];
@@ -692,19 +753,23 @@ const handedFileOf = (conversationId: string, file: LineFileRead) =>
 const lostLineMessage = (target: ConversationTarget, agent: Agent, line: LostLine) =>
   Effect.gen(function* () {
     const read = lineRead(line.parts);
+
     const files = yield* Effect.forEach(read.files, (file) =>
       handedFileOf(target.conversationId, file),
     );
+
     const label =
       line.sender === MESSAGE_SENDER.MEMBER && line.senderUserId !== null
         ? yield* teammateLabel(agent, { kind: MESSAGE_SENDER.MEMBER, userId: line.senderUserId })
         : undefined;
+
     const message: SessionMessage<TypedTurn> = {
       conversationId: target.conversationId,
       turn: SESSION_TURN.TYPED,
       message: turnContent(read.text, files.flat(), read.mentioned, label),
       lineId: line.clientId,
     };
+
     return message;
   });
 
@@ -737,28 +802,37 @@ export const turnRetried = /* @__PURE__ */ Effect.fn("web/turnRetried")(function
 ) {
   const target = { userId: turn.userId, conversationId: turn.conversationId };
   const agent = yield* readAgentOfConversation(turn.userId, turn.conversationId);
+
   if (Option.isNone(agent)) return false;
   const routing = yield* readAgentRouting(turn.userId, agent.value.id);
   const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
+
   if (runtime === undefined) return false;
   const native = yield* Effect.serviceOption(NativeAgentSessions);
+
   const reached = Option.flatMap(native, (service) =>
     service.sessions(runtime, agent.value.userId),
   );
+
   if (Option.isNone(reached)) return false;
   const sessionId = yield* recordedRuntimeSession(target);
+
   if (sessionId === undefined || nativeRuntimeOfSession(sessionId) === undefined) return false;
   const line = yield* turnOpeningLine(target, turn.turnId);
+
   if (Option.isNone(line)) return false;
   const message = yield* lostLineMessage(target, agent.value, line.value);
   const sessions = yield* reached.value;
   const sent = yield* sessions.retry(sessionId, message, replayed);
+
   if (sent.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) return false;
   // Note that a line queued for a runner that reads its lines is the relaunch's already, and sent again under its id is the same row.
   const waiting = yield* turnWaitingLines(target, turn.turnId);
+
   for (const each of waiting) {
     yield* sessions.send(sessionId, yield* lostLineMessage(target, agent.value, each));
   }
+
   return true;
 });
 
@@ -841,23 +915,29 @@ const resendLostLines = /* @__PURE__ */ Effect.fn("web/resendLostLines")(functio
   const target = { userId: agent.userId, conversationId: agent.conversationId };
   const outcome: HandOverOutcome = { refused: undefined, ended: false };
   const services = yield* Effect.context<DatabaseServices>();
+
   const dispatch = (line: LostLine) =>
     Effect.gen(function* () {
       const routing = yield* hostedStoreOrUnavailable(readAgentRouting(userId, agent.id));
       yield* admittedRuntime(userId, agent, routing);
       const refusal = yield* hostedStoreOrUnavailable(refusalNow(userId, agent));
+
       if (refusal !== undefined) return yield* Effect.fail(refusal);
       // Read for each line, because the first line's hand-over may open the session the next is sent to.
       const sessionId = yield* hostedStoreOrUnavailable(recordedRuntimeSession(target));
+
       if (sessionId === undefined && !(yield* opensUnclaimed(agent))) {
         return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
       }
+
       const message = yield* hostedStoreOrUnavailable(lostLineMessage(target, agent, line));
+
       return yield* handedToHarness(agentSessions, sessionId, message, outcome);
     }).pipe(
       Effect.catch((refusal: HostedRefusal) =>
         Effect.sync(() => {
           outcome.refused = refusal;
+
           return false;
         }),
       ),
@@ -869,17 +949,21 @@ const resendLostLines = /* @__PURE__ */ Effect.fn("web/resendLostLines")(functio
       ),
       Effect.provide(services),
     );
+
   const resent = yield* hostedStoreOrUnavailable(
     Effect.flatMap(writer, (write) => write.resendLostLines(target, dispatch)),
   );
+
   if (Result.isFailure(resent)) {
     return yield* Effect.fail(REFUSAL_OF_UNWRITTEN_LINE[resent.failure.refusal]);
   }
+
   // Note that a resend stopped with no refusal said, as a hand-over past its deadline, is an outage,
   // because words sent after it would reach the agent ahead of the line it still lost.
   if (resent.success.stopped) {
     return yield* Effect.fail(outcome.refused ?? HOSTED_REFUSAL.UNAVAILABLE);
   }
+
   return resent.success.taken.length;
 });
 
@@ -904,14 +988,18 @@ export const steerMemberWords = /* @__PURE__ */ Effect.fn("web/steerMemberWords"
 ) {
   const agentSessions = yield* routedSessions<TypedTurn>(userId);
   const resent = yield* resendLostLines(agentSessions, writer, userId, agent);
+
   if (retry && resent > 0) {
     const sent: SteerWritten = { outcome: STEER_OUTCOME.SENT };
+
     return sent;
   }
+
   const written = yield* steerAgentWritten(agentSessions, writer, userId, agent, {
     ...line,
     sender: { kind: MESSAGE_SENDER.MEMBER, userId },
   });
+
   if (written.sent !== undefined) {
     yield* recordServerEvent(
       SERVER_EVENT.MESSAGE_SEND,
@@ -925,5 +1013,6 @@ export const steerMemberWords = /* @__PURE__ */ Effect.fn("web/steerMemberWords"
       },
     );
   }
+
   return written;
 });

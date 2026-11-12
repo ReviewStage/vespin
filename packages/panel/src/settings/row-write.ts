@@ -46,7 +46,7 @@ export interface RowWrite<Value> {
  * and read back from what it asked, for a row that draws a write ahead of
  * its answer; none for a row that rests until it answers.
  */
-interface RowWriteShape<Value, Answer, Variables> {
+interface RowWriteTerms<Value, Answer, Variables> {
   readonly ask: (value: Value) => Variables;
   readonly refused: (answer: Answer) => string | undefined;
   readonly drawn?: ((variables: Variables) => Value) | undefined;
@@ -65,20 +65,22 @@ function refusalOf<Answer>(
 ): SettingRefusal | undefined {
   if (error !== null) return { words: actFailureWords(error), cause: error };
   const words = answer === undefined ? undefined : refused(answer);
+
   return words === undefined ? undefined : { words, cause: answer };
 }
 
-/** The row write `mutation` stands as, its values asked and read through `shape`. */
+/** The row write `mutation` stands as, its values asked and read through `terms`. */
 export function rowWrite<Value, Answer, Variables>(
   mutation: UseMutationResult<Answer, Error, Variables>,
-  shape: RowWriteShape<Value, Answer, Variables>,
+  terms: RowWriteTerms<Value, Answer, Variables>,
 ): RowWrite<Value> {
   const { mutate, reset, variables, data, error, isPending, isSuccess, submittedAt } = mutation;
-  const refusal = isPending ? undefined : refusalOf(data, error, shape.refused);
-  const { drawn } = shape;
+  const refusal = isPending ? undefined : refusalOf(data, error, terms.refused);
+  const { drawn } = terms;
   const ahead = variables !== undefined && refusal === undefined && drawn !== undefined;
+
   return {
-    run: (value) => mutate(shape.ask(value)),
+    run: (value) => mutate(terms.ask(value)),
     ahead: ahead ? { value: drawn(variables) } : undefined,
     busy: isPending,
     refusal,
@@ -127,6 +129,7 @@ export function useSettingRowWrite<Value>(
     ...settingMutation(),
     ...(toasts ? { onSettled: refusalToast(actionRefused) } : undefined),
   });
+
   return settingRowWrite(mutation, field, stored, drawn);
 }
 
@@ -140,6 +143,7 @@ export function refusalToast<Answer>(
 ): (answer: Answer | undefined, error: Error | null) => void {
   return (answer, error) => {
     const refusal = refusalOf(answer, error, refused);
+
     if (refusal === undefined) return;
     showToast({
       words: refusal.words,

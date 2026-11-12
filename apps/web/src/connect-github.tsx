@@ -87,6 +87,7 @@ function asSentence(words: string): string {
 /** How the connect ended, in every landing's words, its line given in place of the outcome's where `line` is. */
 function said(outcome: LandingOutcome, line?: string): View {
   const words = landingWords(outcome, GITHUB);
+
   return { kind: VIEW.SAID, words: line === undefined ? words : { ...words, line } };
 }
 
@@ -108,27 +109,34 @@ async function claimIntent(intent: string): Promise<GitHubConnectClaim | ClaimUn
 /** Carries out a connect: claims the intent, then hands the browser to Better Auth's link. */
 async function connect(intent: string): Promise<View> {
   const claim = await claimIntent(intent);
+
   if (claim === CLAIM_UNSETTLED.SIGNED_OUT)
     return signIn("Sign in to connect GitHub", SIGN_IN_BODY);
+
   if (claim === GITHUB_CONNECT_CLAIM.OTHER_ACCOUNT) {
     return signIn(
       "Sign in as the account you're connecting",
       `This browser is signed in to a different ${PRODUCT_NAME} account than the one that asked to connect GitHub.`,
     );
   }
+
   if (claim === GITHUB_CONNECT_CLAIM.EXPIRED) return said(LANDING_OUTCOME.EXPIRED);
+
   if (claim === CLAIM_UNSETTLED.UNANSWERED) return said(LANDING_OUTCOME.SERVICE_UNREACHABLE);
+
   const linked = await authClient.linkSocial({
     provider: SOCIAL_PROVIDER.GITHUB,
     callbackURL: `${GITHUB_CONNECT_PAGE.PATH}?${GITHUB_CONNECT_PAGE.DONE_PARAM}=${GITHUB_CONNECT_PAGE.FLAG}`,
     errorCallbackURL: failedLinkAddress(intent),
   });
+
   if (linked.error) {
     return said(
       LANDING_OUTCOME.NOT_COMPLETED,
       `${asSentence(linkErrorWords(LINK_FAILED.CONNECT, linked.error.code, linked.error.message))} ${RELOAD}`,
     );
   }
+
   // Better Auth's client is sending the browser on to GitHub.
   return WORKING;
 }
@@ -136,10 +144,13 @@ async function connect(intent: string): Promise<View> {
 /** What the page shows before it knows whether the browser is signed in, or with no work to do. */
 function settledView(step: ConnectStep): View | undefined {
   if (step.kind === CONNECT_STEP.DONE) return said(LANDING_OUTCOME.CONNECTED);
+
   if (step.kind === CONNECT_STEP.FAILED) {
     return said(LANDING_OUTCOME.NOT_COMPLETED, linkErrorWords(LINK_FAILED.CONNECT, step.code));
   }
+
   if (step.kind === CONNECT_STEP.NOTHING) return said(LANDING_OUTCOME.NOTHING_TO_CONNECT);
+
   return undefined;
 }
 
@@ -153,9 +164,13 @@ function viewOf(
   connecting: { readonly isIdle: boolean; readonly data: View | undefined },
 ): View {
   const settled = settledView(step);
+
   if (settled !== undefined) return settled;
+
   if (!connecting.isIdle) return connecting.data ?? WORKING;
+
   if (!sessionStands) return signIn("Sign in to connect GitHub", SIGN_IN_BODY);
+
   return WORKING;
 }
 
@@ -175,6 +190,7 @@ function ConnectGitHub(): React.JSX.Element {
   const signInChoices = useSocialSignIn(authClient);
   const view = viewOf(step, session.isPending || Boolean(session.data), connecting);
   const ended = view.kind === VIEW.SAID ? view.words : undefined;
+
   const { back, open } = useConnectReturn({
     landed: ended !== undefined,
     settled: ended?.tone === LANDING_TONE.COMPLETE,
@@ -182,6 +198,7 @@ function ConnectGitHub(): React.JSX.Element {
 
   useEffect(() => {
     if (step.kind !== CONNECT_STEP.CONNECT || session.isPending || !session.data) return;
+
     if (started.current) return;
     // Note that the work runs once per load: a reload claims the intent again and retries.
     started.current = true;
@@ -189,12 +206,14 @@ function ConnectGitHub(): React.JSX.Element {
   }, [step, session.isPending, session.data, connecting.mutate]);
 
   const retry = step.kind === CONNECT_STEP.FAILED ? step.retry : undefined;
+
   const body =
     view.kind === VIEW.SIGN_IN
       ? view.body
       : ended === undefined
         ? undefined
         : landingDescription(ended, back);
+
   return (
     <AuthPage
       mark={<AuthMark provider={MARK_PROVIDER.GITHUB} tone={ended?.tone} />}

@@ -41,6 +41,7 @@ Raw <b>HTML</b> stays as the words it is.`;
 /** A task item's box whose tick is always saved, as a description the developer can edit answers one. */
 function SavedTaskBox({ label, checked }: TaskBoxItem): React.JSX.Element {
   const [asked, setAsked] = useState<boolean | undefined>(undefined);
+
   return <TaskBox label={label} checked={checked} write={{ run: setAsked, asked }} />;
 }
 

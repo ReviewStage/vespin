@@ -14,6 +14,7 @@ interface Seen {
 /** A panel that keeps what it was told, with traffic lights as on a Mac or none as elsewhere. */
 function panel(withLights: boolean) {
   const seen: Seen = {};
+
   const window: ZoomedWindow = {
     webContents: {
       setZoomFactor: (factor) => {
@@ -26,6 +27,7 @@ function panel(withLights: boolean) {
       },
     }),
   };
+
   return { window, seen };
 }
 
@@ -48,10 +50,12 @@ describe("applying the stored zoom to the panels", () => {
     Effect.gen(function* () {
       const mac = panel(true);
       const steer = zoomSteer();
+
       const apply = (preference: Parameters<typeof steer>[0]) =>
         steer(preference).pipe(
           Effect.provideService(PanelWindows, { standing: () => [mac.window] }),
         );
+
       yield* apply(125);
       assert.equal(mac.seen.zoom, 1.25);
       // A push that leaves the size where it was tells no panel anything.

@@ -76,6 +76,7 @@ export type QueueSessions = (
 function from(line: QueuedLine | undefined): { readonly name: string } | undefined {
   if (line?.sender.kind === MESSAGE_SENDER.APP) return { name: PRODUCT_NAME };
   const name = senderNameOf(line?.sender);
+
   return name === null ? undefined : { name };
 }
 
@@ -87,9 +88,11 @@ function from(line: QueuedLine | undefined): { readonly name: string } | undefin
  */
 export function wireQueue(read: AgentQueueRead, now: Date): AgentQueue {
   const queued = read.messages.filter((message) => !claimedAt(message, now));
+
   return {
     messages: queued.map((message) => {
       const sentAs = from(message.line);
+
       return {
         id: message.id,
         text: message.text,
@@ -124,6 +127,7 @@ export function wireQueue(read: AgentQueueRead, now: Date): AgentQueue {
 export function queueOnPage(agentId: string) {
   return Effect.gen(function* () {
     const read = yield* agentQueueNow(agentId);
+
     return wireQueue(read, yield* DateTime.nowAsDate);
   });
 }
@@ -137,12 +141,14 @@ export function queueOnPage(agentId: string) {
 const atWork = Effect.fn("web/queueAtWork")(function* (agent: Agent) {
   const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(agent.conversationId);
   const boot = Option.getOrUndefined(yield* agentBootOf(agent.id))?.phase;
+
   const status = agentStatusOf(turn, {
     createdAt: agent.createdAt,
     now: yield* Clock.currentTimeMillis,
     blank: startedBlank(agent),
     boot,
   });
+
   return status === AGENT_STATUS.RUNNING || (status === AGENT_STATUS.STARTING && !bootHolds(boot));
 });
 
@@ -163,6 +169,7 @@ export const sendQueued = Effect.fn("web/sendQueued")(function* (
   message: QueuedMessageRow,
 ) {
   const agentSessions = yield* sessionsFor(message.userId);
+
   const { sent } = yield* steerAgentWritten(
     agentSessions,
     storeWriter({ tools: CODER_TOOL_SET }),
@@ -192,6 +199,7 @@ export const sendQueued = Effect.fn("web/sendQueued")(function* (
     },
     STEER_DELIVERY.NOW,
   );
+
   const handedOff = yield* agentBootHandedOff(agent.id, yield* DateTime.nowAsDate).pipe(
     Effect.as(true),
     Effect.catchCause((cause) =>
@@ -201,11 +209,13 @@ export const sendQueued = Effect.fn("web/sendQueued")(function* (
       ),
     ),
   );
+
   // Note that only a member's own message counts as one sent, never a Start's first, which its Start counted.
   const members =
     message.line === undefined ||
     (message.line.sender.kind === MESSAGE_SENDER.MEMBER &&
       message.line.metadata?.channel !== MESSAGE_CHANNEL.START);
+
   if (sent !== undefined && members) {
     yield* recordServerEvent(
       SERVER_EVENT.MESSAGE_SEND,
@@ -219,6 +229,7 @@ export const sendQueued = Effect.fn("web/sendQueued")(function* (
       },
     );
   }
+
   // Note that a first launch's hand-off that was not recorded keeps the message's claim to lapse, as a failed drop
   // does, so the next hand-off sends it again under its key, answered as a repeat, and records the hand-off then;
   // dropped now, the boot would stand handing off over an empty queue that nothing hands on again.
@@ -241,8 +252,10 @@ export const sendQueued = Effect.fn("web/sendQueued")(function* (
 export const claimNext = Effect.fn("web/claimNextQueued")(function* (agent: Agent) {
   const step = Effect.gen(function* () {
     if (yield* hostedStoreOrUnavailable(atWork(agent))) return Option.none<QueuedMessageRow>();
+
     return yield* hostedStoreOrUnavailable(claimQueueHead(agent.id));
   });
+
   return yield* step.pipe(
     Effect.catchCause((cause) =>
       Effect.as(
@@ -278,6 +291,7 @@ const handOnQueue = Effect.fn("web/handOnQueue")(function* (
   agent: Agent,
 ) {
   const claimed = yield* claimNext(agent);
+
   if (Option.isSome(claimed)) yield* sendClaimed(sessionsFor, agent, claimed.value);
 });
 
@@ -300,10 +314,13 @@ export const queueAtTouch = Effect.fn("web/queueAtTouch")(function* (
       Effect.as(Effect.logWarning("agent-queue: a queue read failed", cause), undefined),
     ),
   );
+
   if (queue === undefined || queue.paused !== undefined) return;
   const [head] = queue.messages;
+
   if (head === undefined || head.editing) return;
   const now = yield* DateTime.nowAsDate;
+
   if (queue.messages.some((message) => claimedAt(message, now))) return;
   yield* handOnQueue(sessionsFor, agent);
 });
@@ -328,13 +345,16 @@ export const queueAtTurnEnd = Effect.fn("web/queueAtTurnEnd")(function* (
       Effect.logWarning("agent-queue: a first launch's boot was not ended", cause),
     ),
   );
+
   const turns = yield* latestTurnsOfReached([agent.conversationId]).pipe(
     Effect.catchCause((cause) =>
       Effect.as(Effect.logWarning("agent-queue: a turn read failed", cause), undefined),
     ),
   );
+
   const turn = turns?.get(agent.conversationId);
   const because = PAUSE_OF_TURN.get(turn?.status ?? "");
+
   if (because !== undefined) {
     // A turn cut off by its runner going away is carried on by itself, or by the message queued behind it (`carry-on.ts`).
     const decided = yield* decidedCarryOn(agent, turn).pipe(
@@ -342,19 +362,24 @@ export const queueAtTurnEnd = Effect.fn("web/queueAtTurnEnd")(function* (
         Effect.as(Effect.logWarning("agent-queue: a carry-on was not decided", cause), undefined),
       ),
     );
+
     // A carry-on that did not go leaves the turn failed as it was, so the queue pauses as for any failed turn.
     if (decided?.outcome === CARRY_ON_OUTCOME.RESUME && turn !== undefined) {
       if (yield* carriedOn(sessionsFor, agent, turn.id, decided.reason)) return;
     }
+
     if (decided?.outcome === CARRY_ON_OUTCOME.QUEUE_NEXT) {
       return yield* handOnQueue(sessionsFor, agent);
     }
+
     // A Mac away refuses every line, so its turn waits unpaused for the Mac's first beat back (`carryOnHostReturned`).
     if (decided?.outcome === CARRY_ON_OUTCOME.AWAIT_HOST) return;
+
     return yield* Effect.asVoid(pauseAgentQueue(agent.id, because)).pipe(
       Effect.catchCause((cause) => Effect.logWarning("agent-queue: a pause failed", cause)),
     );
   }
+
   yield* handOnQueue(sessionsFor, agent);
 });
 
@@ -382,5 +407,6 @@ export const queueAfterSettle = Effect.fn("web/queueAfterSettle")(function* (
       Effect.as(Effect.logWarning("agent-queue: an agent read failed", cause), Option.none()),
     ),
   );
+
   if (Option.isSome(agent)) yield* queueAtTurnEnd(routedSessions, agent.value);
 });

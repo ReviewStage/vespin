@@ -69,10 +69,13 @@ function keepDismissed(version: string): void {
  */
 function selectReadyVersion(state: AppStateSnapshot): string | undefined {
   const { run, update } = state;
+
   if (run.fixtureMode === true || !run.capabilities.includes(HOST_CAPABILITY.UPDATES)) {
     return undefined;
   }
+
   if (!update.installSupported || update.status !== UPDATE_STATUS.READY) return undefined;
+
   return update.latestVersion;
 }
 
@@ -136,6 +139,7 @@ export function useReadyToast(): void {
     });
     // Note that it stands from here, after the one it replaces, if any, was told it is gone.
     readyStanding.setState(() => true);
+
     return () => withdraw(READY_SUBJECT);
   }, [toast, withdraw, install, version]);
 }

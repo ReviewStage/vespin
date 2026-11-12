@@ -74,6 +74,7 @@ function SchemaToggleRow({
     (value) => value === true,
     true,
   );
+
   const write =
     onTurned === undefined
       ? stored
@@ -84,6 +85,7 @@ function SchemaToggleRow({
             stored.run(enabled);
           },
         };
+
   return (
     <SwitchRow
       {...(isAppSettingId(id) ? { anchor: id } : undefined)}
@@ -136,9 +138,11 @@ function SchemaChoiceRow({
 }): React.JSX.Element {
   const write = useSettingRowWrite(field, (token: string) => settingFromOption(field, token, view));
   const own = menu?.own;
+
   // Note that an own option stands for its token in the setting, so the menu draws the own option chosen where the token is stored.
   const shown =
     own !== undefined && value === own.token && own.chosen !== undefined ? own.chosen : value;
+
   const listed = [
     ...(own?.options.map((option) => ({
       ...option,
@@ -154,6 +158,7 @@ function SchemaChoiceRow({
         section: menu?.section?.(option.value),
       })),
   ];
+
   return (
     <SelectRow
       label={label}
@@ -167,8 +172,10 @@ function SchemaChoiceRow({
       }
       pickOther={(token) => {
         if (own === undefined || token === shown) return false;
+
         if (!own.options.some((option) => option.value === token)) return false;
         own.pick(token);
+
         return true;
       }}
       placeholder={search}
@@ -221,6 +228,7 @@ export function SchemaSettingRows({
 }): React.JSX.Element {
   const rows = settingRowsForPage(page, section, view).flatMap((row) => {
     const { field, entry, control } = row;
+
     if (entry.kind === APP_SETTING_KIND.TOGGLE) {
       return [
         <SchemaToggleRow
@@ -234,7 +242,9 @@ export function SchemaSettingRows({
         />,
       ];
     }
+
     if (entry.kind !== APP_SETTING_KIND.CHOICE || !control) return [];
+
     return [
       <SchemaChoiceRow
         key={entry.id}
@@ -253,5 +263,6 @@ export function SchemaSettingRows({
       />,
     ];
   });
+
   return <>{rows}</>;
 }

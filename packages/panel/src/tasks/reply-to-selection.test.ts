@@ -49,9 +49,11 @@ import { type HeldComposer, type MessageSender, useAgentComposer } from "./use-a
  */
 
 const AGENT_WORDS = "Option A ships today. Option B waits for review.";
+
 /** The agent's words with marks, a code span, and a mention, which draws as its chip. */
 const MARKED_WORDS =
   "**The invite form** ([@Teammate invitations](https://vespin.dev/acme/task/42)) keeps its *draft* in `localStorage`.";
+
 const AGENT_THOUGHT = "Weighing the release calendar.";
 const DEVELOPER_WORDS = "Which one is safer?";
 
@@ -119,13 +121,16 @@ function Tab({ sender }: { sender: MessageSender }): ReactNode {
   useAppKeymap(true);
   const tab = useRef<HTMLElement>(null);
   const replyDoor = useRef<((words: string) => void) | undefined>(undefined);
+
   const composer = useAgentComposer({
     agentId: "agent-1",
     taskId: "plan-1",
     messages: [],
     send: sender,
   });
+
   drawnComposer = composer;
+
   return createElement(
     "section",
     { ref: tab },
@@ -148,16 +153,20 @@ function Tab({ sender }: { sender: MessageSender }): ReactNode {
 /** The tab mounted, every message its box sends written down and answered by `answer`. */
 async function mounted(answer: () => Promise<AgentAgentAnswer> = () => new Promise(ignore)) {
   const sent: string[] = [];
+
   const sender: MessageSender = (_agentId, text) => {
     sent.push(text);
+
     return answer();
   };
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
   await act(async () => root.render(withQueryClient(createElement(Tab, { sender }))));
   await settle();
+
   return {
     container,
     sent,
@@ -165,6 +174,7 @@ async function mounted(answer: () => Promise<AgentAgentAnswer> = () => new Promi
     select: (words: string, from: string, to: string, released = true) => {
       const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
       let text: Node | null = walker.nextNode();
+
       while (text !== null && !(text.textContent ?? "").includes(words)) text = walker.nextNode();
       assert.ok(text instanceof Text, `${words} is drawn`);
       const range = document.createRange();
@@ -177,6 +187,7 @@ async function mounted(answer: () => Promise<AgentAgentAnswer> = () => new Promi
         selection.addRange(range);
         document.dispatchEvent(new Event("selectionchange"));
       });
+
       if (!released) return;
       act(() => {
         text.parentElement?.dispatchEvent(new Event("pointerup", { bubbles: true }));
@@ -197,6 +208,7 @@ async function mounted(answer: () => Promise<AgentAgentAnswer> = () => new Promi
       const reply = [
         ...document.body.querySelectorAll<HTMLButtonElement>(".reply-to-selection button"),
       ].find((each) => each.textContent === "Reply");
+
       assert.ok(reply, "Reply stands over the selection");
       act(() => reply.click());
       await settle();
@@ -235,9 +247,11 @@ test("Reply lays the selected words in where the caret stands, a line under each
 
 test("words selected over marks, a code span, and a chip are quoted and sent as the Markdown they were written in", async () => {
   const tab = await mounted();
+
   const words = [...tab.container.querySelectorAll("p")].find((each) =>
     each.textContent?.includes("keeps its"),
   );
+
   assert.ok(words, "the marked words are drawn");
   const range = document.createRange();
   range.selectNodeContents(words);
@@ -255,6 +269,7 @@ test("words selected over marks, a code span, and a chip are quoted and sent as 
 test("R replies to the words selected as Reply does, and does nothing while no Reply stands", async () => {
   const tab = await mounted();
   composerEditor(tab.container).blur();
+
   const pressR = () =>
     act(() => {
       document.body.dispatchEvent(
@@ -307,12 +322,15 @@ test("a selection outside the agent's words, in its thought or the developer's w
 
 test("words selected by a triple-click, which runs on to the start of the next block, are offered Reply over the words alone", async () => {
   const tab = await mounted();
+
   const words = [...tab.container.querySelectorAll("p")].find(
     (each) => each.textContent === AGENT_WORDS,
   );
+
   const next = [...tab.container.querySelectorAll("p")].find(
     (each) => each.textContent === DEVELOPER_WORDS,
   );
+
   assert.ok(words && next);
   const range = document.createRange();
   range.setStart(words, 0);
@@ -328,18 +346,22 @@ test("words selected by a triple-click, which runs on to the start of the next b
 
 test("a triple-click's selection is offered Reply past words no selection takes, as the next comment's avatar letter, and none once it takes the next block's words", async () => {
   const tab = await mounted();
+
   const words = [...tab.container.querySelectorAll("p")].find(
     (each) => each.textContent === AGENT_WORDS,
   );
+
   const next = [...tab.container.querySelectorAll("p")].find(
     (each) => each.textContent === DEVELOPER_WORDS,
   );
+
   assert.ok(words && next?.firstChild);
   // The developer's words led by a letter drawn as an Inbox comment's avatar draws it.
   const letter = document.createElement("span");
   letter.style.userSelect = "none";
   letter.textContent = "D";
   next.before(letter);
+
   const selectTo = (end: Node, offset: number) => {
     const range = document.createRange();
     range.setStart(words, 0);
@@ -350,6 +372,7 @@ test("a triple-click's selection is offered Reply past words no selection takes,
       words.dispatchEvent(new Event("pointerup", { bubbles: true }));
     });
   };
+
   selectTo(next, 0);
   assert.equal(tab.reply() === undefined, false, "Reply stands past the letter");
   selectTo(next.firstChild, "Which".length);
@@ -410,12 +433,14 @@ test("on a touch screen Reply stands under a selection once it rests, though no 
 test("on a touch screen Reply stands under the selection, clear of the system's menu over it, or over it where the window ends first", async () => {
   answerPointer(true);
   const tab = await mounted();
+
   /** Where Reply stands once the words are selected at `top` to `bottom`. */
   const pressAt = (top: number, bottom: number) => {
     Range.prototype.getBoundingClientRect = () => new DOMRect(40, top, 120, bottom - top);
     tab.select(AGENT_WORDS, "Option B", "review.");
     const press = document.body.querySelector<HTMLElement>(".reply-to-selection");
     assert.ok(press, "Reply stands");
+
     return Number.parseFloat(press.style.top);
   };
 
@@ -479,15 +504,18 @@ test("on the agent's tab, Reply quotes its words into the tab's own box, and sta
     },
     { messages: [], cursor: "2:0", status: AGENT.status, title: null },
   ]);
+
   const control = agentsControl({
     agents: [AGENT],
     // The transcript ends on a page with nothing on it, as an ended agent's does.
     // The message never answers, so it stays out.
     onMessage: (_agentId, text) => {
       sent.push(text);
+
       return new Promise(ignore);
     },
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -505,12 +533,15 @@ test("on the agent's tab, Reply quotes its words into the tab's own box, and sta
     ),
   );
   await settle();
+
   const select = (from: string, to: string) => {
     const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
     let text: Node | null = walker.nextNode();
+
     while (text !== null && !(text.textContent ?? "").includes(AGENT_WORDS)) {
       text = walker.nextNode();
     }
+
     assert.ok(text instanceof Text, "the agent's words are drawn");
     const range = document.createRange();
     range.setStart(text, text.data.indexOf(from));
@@ -521,6 +552,7 @@ test("on the agent's tab, Reply quotes its words into the tab's own box, and sta
       text.parentElement?.dispatchEvent(new Event("pointerup", { bubbles: true }));
     });
   };
+
   const reply = () =>
     [...document.body.querySelectorAll<HTMLButtonElement>(".reply-to-selection button")].find(
       (each) => each.textContent === "Reply",

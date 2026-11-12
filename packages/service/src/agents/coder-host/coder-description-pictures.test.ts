@@ -61,11 +61,14 @@ function sandboxWith(files: Readonly<Record<string, Uint8Array>>): InboxSandboxD
   const byPath = new Map(
     Object.entries(files).map(([path, bytes]) => [posix.resolve(CODER.CHECKOUT_PATH, path), bytes]),
   );
+
   return () =>
     Promise.resolve({
       readFile: ({ path }: { path: string }) => {
         const bytes = byPath.get(path);
+
         if (bytes === undefined) return Promise.resolve(null);
+
         return Promise.resolve(
           new ReadableStream<Uint8Array>({
             start(controller) {
@@ -82,6 +85,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -93,6 +97,7 @@ const openAgentTask = Effect.gen(function* () {
   const workspace = yield* openWorkspace(owner);
   yield* joinWorkspace(workspace, teammate);
   const task = yield* createTask(owner, { organizationId: workspace, name: "Invites" });
+
   const started = yield* createAgent(owner, {
     taskId: task.id,
     idempotencyKey: randomUUID(),
@@ -103,7 +108,9 @@ const openAgentTask = Effect.gen(function* () {
     prompt: null,
     runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
   });
+
   const agentId = Option.getOrThrow(started).agent.id;
+
   return { owner, teammate, outsider, taskId: task.id, agentId };
 });
 
@@ -129,6 +136,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
       Effect.gen(function* () {
         const { owner, teammate, outsider, taskId, agentId } = yield* openAgentTask;
         const sandbox = sandboxWith({ "shots/members.png": SCREENSHOT });
+
         const input = {
           pictures: pictureCall("shots/members.png").pictures,
           notes: [{ kind: "add", section: "Approach", text: "- The members page lists invites." }],
@@ -145,25 +153,32 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
         assert.deepEqual(answer, { status: ACTION_RESULT_STATUS.ACCEPTED, taken: 2 });
         assert.equal(JSON.stringify(answer).includes(Base64.encode(SCREENSHOT)), false);
         const stored = Option.getOrThrow(yield* readTask(owner, taskId));
+
         const approach = descriptionSections(stored.text).find(
           ({ heading }) => heading === "Approach",
         );
+
         const line = approach?.text.split("\n").at(-1) ?? "";
+
         const [, address] =
           /^!\[Members page with two pending invites\]\((\S+) "Pending invites sit in the list"\)$/u.exec(
             line,
           ) ?? [];
+
         assert.ok(address, line);
         assert.ok(approach?.text.includes("- The members page lists invites.\n\n![Members page"));
         const named = descriptionAttachmentOf(address);
         assert.equal(named?.taskId, taskId);
+
         if (named === undefined) return;
+
         for (const member of [owner, teammate]) {
           const read: Option.Option<Picture> = yield* readDescriptionAttachment(
             member,
             taskId,
             named.attachmentId,
           );
+
           assert.deepEqual(
             Option.map(read, ({ contentType }) => contentType),
             Option.some(PICTURE_TYPE.PNG),
@@ -173,6 +188,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
             Option.some([...SCREENSHOT]),
           );
         }
+
         assert.ok(
           Option.isNone(yield* readDescriptionAttachment(outsider, taskId, named.attachmentId)),
         );
@@ -192,18 +208,22 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
         const full = yield* openAgentTask;
         const tooLarge = new Uint8Array(1_500_001);
         tooLarge.set(SCREENSHOT);
+
         const sandbox = sandboxWith({
           "notes.txt": new TextEncoder().encode("Not a picture at all."),
           "huge.png": tooLarge,
           "shots/members.png": SCREENSHOT,
         });
+
         // One place left, which a call adding two takes with its first before its second is refused.
         for (let kept = 1; kept < DESCRIPTION_ATTACHMENT_BOUNDS.MAX_PER_DESCRIPTION; kept += 1) {
           const picture = { contentType: PICTURE_TYPE.PNG, bytes: SCREENSHOT };
           const answer = yield* keepDescriptionAttachment(full.owner, full.taskId, picture);
           assert.equal(answer.status, DESCRIPTION_ATTACHMENT_KEEP.KEPT);
         }
+
         const before = Option.getOrThrow(yield* readTask(owner, taskId)).text;
+
         const edit = (at: { owner: string; taskId: string; agentId: string }, ...paths: string[]) =>
           recordDescriptionEdit(
             { userId: at.owner, taskId: at.taskId },
@@ -215,6 +235,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
             0,
             sandbox,
           );
+
         const own = { owner, taskId, agentId };
 
         const answers = [
@@ -223,6 +244,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
           yield* edit(own, "huge.png"),
           yield* edit(full, "shots/members.png", "shots/members.png"),
         ];
+
         const lastPlace = yield* edit(full, "shots/members.png");
 
         assert.deepEqual(answers, [
@@ -233,6 +255,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
         ]);
         // A link written before the tool that answers its id has answered holds a placeholder, which leads nowhere.
         const placeholder = "https://vespin.dev/acme/agent/{AGENT}";
+
         const unread = yield* recordDescriptionEdit(
           { userId: owner, taskId },
           { agentId },
@@ -245,6 +268,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
           0,
           sandbox,
         );
+
         assert.ok(
           unread.status === ACTION_RESULT_STATUS.REJECTED && unread.reason.includes(placeholder),
           JSON.stringify(unread),
@@ -266,11 +290,13 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
         const { owner, teammate, taskId, agentId } = yield* openAgentTask;
         const full = yield* openAgentTask;
         const recording = paddedTo(webmBytes(1280, 800), PICTURE_BOUNDS.MAX_VIDEO_BYTES);
+
         const sandbox = sandboxWith({
           "videos/invite.webm": recording,
           "videos/long.webm": paddedTo(recording, PICTURE_BOUNDS.MAX_VIDEO_BYTES + 1),
           "videos/sizeless.webm": paddedTo(webmBytes(1280, 800).subarray(0, 24), 64),
         });
+
         for (
           let kept = 0;
           kept < DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION;
@@ -280,6 +306,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
           const answer = yield* keepDescriptionAttachment(full.owner, full.taskId, video);
           assert.equal(answer.status, DESCRIPTION_ATTACHMENT_KEEP.KEPT);
         }
+
         const edit = (at: { owner: string; taskId: string; agentId: string }, path: string) =>
           recordDescriptionEdit(
             { userId: at.owner, taskId: at.taskId },
@@ -288,6 +315,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
             0,
             sandbox,
           );
+
         const own = { owner, taskId, agentId };
 
         const answers = [

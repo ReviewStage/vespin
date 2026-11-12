@@ -1,11 +1,19 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { CLOUD_SETUP_SCRIPT } from "@repo/features/workspace-sandbox-setup-wire";
 import { Effect } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
-import { getTestDB, openAgentOnOwnTask, openWorkspace } from "../../testing/index.js";
+import {
+  getTestDB,
+  joinWorkspace,
+  openAgentOnOwnTask,
+  openTaskAgent,
+  openWorkspace,
+} from "../../testing/index.js";
+import { createTask } from "../task-store.js";
 import { listScriptRuns, recordScriptRun } from "../workspace-sandbox-script-run-store.js";
 
 /**
@@ -20,13 +28,20 @@ const LATER = new Date("2026-11-08T12:05:00Z");
 
 const { INSTALL, SETUP, ARCHIVE } = CLOUD_SETUP_SCRIPT;
 
-const openOwnedWorkspace = Effect.gen(function* () {
+const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
+
+  return userId;
+});
+
+const openOwnedWorkspace = Effect.gen(function* () {
+  const userId = yield* openAccount;
   const workspace = yield* openWorkspace(userId);
   const agentId = yield* openAgentOnOwnTask(userId, workspace);
-  return { workspace, agentId };
+
+  return { userId, workspace, agentId };
 });
 
 it.layer(getTestDB())("the workspace sandbox script run store", (it) => {
@@ -34,7 +49,7 @@ it.layer(getTestDB())("the workspace sandbox script run store", (it) => {
     "a run replaces its script's last however its repository is cased unless it started earlier, and each script keeps its own",
     () =>
       Effect.gen(function* () {
-        const { workspace, agentId } = yield* openOwnedWorkspace;
+        const { userId, workspace, agentId } = yield* openOwnedWorkspace;
         const ran = { organizationId: workspace, agentId };
         yield* recordScriptRun({
           ...ran,
@@ -81,7 +96,7 @@ it.layer(getTestDB())("the workspace sandbox script run store", (it) => {
           ranAt: LATER,
         });
 
-        const runs = yield* listScriptRuns(workspace);
+        const runs = yield* listScriptRuns(workspace, userId);
         assert.deepEqual(
           runs
             .map((row) => [
@@ -114,7 +129,41 @@ it.layer(getTestDB())("the workspace sandbox script run store", (it) => {
         ranAt: AT,
       });
 
-      assert.deepEqual(yield* listScriptRuns(mine.workspace), []);
+      assert.deepEqual(yield* listScriptRuns(mine.workspace, mine.userId), []);
+    }),
+  );
+
+  it.effect("a member reads no run of an agent on a task they do not see", () =>
+    Effect.gen(function* () {
+      const starter = yield* openAccount;
+      const teammate = yield* openAccount;
+      const workspace = yield* openWorkspace(starter);
+      yield* joinWorkspace(workspace, teammate);
+
+      const task = yield* createTask(starter, {
+        organizationId: workspace,
+        name: "Billing",
+        repository: "acme/relay",
+        githubAccess: GITHUB_ACCESS.TOKEN,
+      });
+
+      const agentId = yield* openTaskAgent(starter, workspace, task.id);
+      yield* recordScriptRun({
+        organizationId: workspace,
+        agentId,
+        script: INSTALL,
+        repository: null,
+        exitCode: 0,
+        ranAt: AT,
+      });
+
+      assert.deepEqual(
+        [
+          (yield* listScriptRuns(workspace, starter)).map((row) => row.agent.id),
+          yield* listScriptRuns(workspace, teammate),
+        ],
+        [[agentId], []],
+      );
     }),
   );
 });

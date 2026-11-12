@@ -23,10 +23,13 @@ export function askHeadWords(
       return ask.multiple === true ? "Pick any" : "Pick one";
     case INBOX_ASK.DO: {
       const shown = Math.max(ask.steps.length, 1);
+
       if (ticked === undefined || shown === 1) return "Steps";
       const count = new Set(ticked.filter((at) => at < shown)).size;
+
       return `Steps${PART}${count} of ${shown}`;
     }
+
     case INBOX_ASK.ANSWER:
       return ask.fields === undefined ? "Your answer" : "Fill in";
   }
@@ -80,6 +83,8 @@ export const INBOX_BOX_WORDS = {
   NOTE_PLACEHOLDER: "Add a note",
   REPLY_PLACEHOLDER: "Reply",
   SEND: "Send",
+  /** What settles a notice that waits on the reader's nod without messaging its agent. */
+  GOT_IT: "Got it",
 } as const;
 
 /**

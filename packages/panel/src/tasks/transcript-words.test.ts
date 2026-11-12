@@ -91,17 +91,22 @@ async function drawnInto(text: string): Promise<HTMLElement> {
   await act(async () => {
     for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
   });
+
   return container;
 }
 
 test("a transcript draws every sample of its markdown exactly as recorded", async () => {
   const drawings: Record<string, string> = {};
+
   for (const [name, text] of Object.entries(SAMPLES)) drawings[name] = await drawn(text);
   const recorded = `${JSON.stringify(drawings, undefined, 2)}\n`;
+
   if (UPDATE_FIXTURES) {
     await fs.writeFile(GOLDEN, recorded);
+
     return;
   }
+
   assert.equal(recorded, await fs.readFile(GOLDEN, "utf8"));
 });
 
@@ -109,6 +114,7 @@ test("a message's headings join no outline: each is a paragraph at its level, dr
   const box = await drawnInto(
     "# One\n\n## Two\n\n### Three\n\n#### Four\n\n##### Five\n\n###### Six",
   );
+
   const headings = [...box.querySelectorAll(".ui-markdown-heading")].map((heading) => [
     heading.tagName.toLowerCase(),
     heading.getAttribute("data-level"),

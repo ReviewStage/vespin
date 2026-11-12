@@ -74,6 +74,7 @@ export const AggregateColumnSchema = Schema.Union([
   Schema.NumberFromString,
   NumberFromBigIntColumn,
 ]);
+
 export const NullableAggregateColumnSchema = Schema.NullOr(AggregateColumnSchema);
 
 /** The `role` column as the auth plugin writes it: one of the roles this build knows, or none yet. */
@@ -191,6 +192,7 @@ const readUserMetrics = /* @__PURE__ */ Effect.fn("web/readUserMetrics")(functio
   );
 
   const signupsByDay = new Map<string, number>();
+
   for (const row of signups) signupsByDay.set(row.day, row.value);
 
   return { total: countOf(total), signupsByDay };
@@ -289,6 +291,7 @@ export function readAdminMetricsSource(input: {
   return Effect.gen(function* () {
     const fetchStartDay =
       lastNDayKeys(input.now, windowFetchDays(input.windowDays))[0] ?? utcDayKey(input.now);
+
     const fetchStart = dayStart(fetchStartDay);
 
     const [users, retention] = yield* Effect.all(
@@ -382,6 +385,7 @@ const findActionsByDay = SqlSchema.findAll({
   execute: (request) => {
     const actions = meaningfulActions(request.since);
     const day = utcDay(actions.at);
+
     return Database.use((db) =>
       db
         .select({ day, kind: actions.kind, value: count() })
@@ -441,6 +445,7 @@ const findDayTotals = SqlSchema.findOneOption({
  */
 function keptBySearch(search: string | null) {
   if (search === null) return undefined;
+
   return and(
     ...searchLikePatterns(search).map((pattern) =>
       or(ilike(user.name, pattern), ilike(user.email, pattern)),
@@ -506,6 +511,7 @@ const RosterRowSchema = Schema.Struct({
 function rosterActivity(lookbackStart: Date, windowStart: Date) {
   const actions = meaningfulActions(lookbackStart);
   const inWindow = sql`${actions.at} >= ${windowStart.toISOString()}::timestamptz`;
+
   return queryBuilder
     .select({
       userId: actions.userId,
@@ -534,6 +540,7 @@ const findRosterRows = SqlSchema.findAll({
     // a descending null first by default and an account with no action inside
     // the lookback belongs at the tail. The builder has no spelling for it.
     const mostRecentlyActiveFirst = sql`${activity.lastActionAt} desc nulls last`;
+
     return Database.use((db) =>
       db
         .select({
@@ -608,6 +615,7 @@ export function readAdminUserSource(input: {
     // The daily rows read from the wider bound so the builder's trends hold both runs.
     const fetchStartDay =
       lastNDayKeys(input.now, windowFetchDays(input.windowDays))[0] ?? utcDayKey(input.now);
+
     // The calendar keeps a trailing-year bound of its own, apart from the
     // window, so switching windows never redraws the year.
     const calendarStartDay = calendarDayKeys(input.now)[0] ?? utcDayKey(input.now);
@@ -629,6 +637,7 @@ export function readAdminUserSource(input: {
     const row = account.value;
 
     const actionsByDay = new Map<string, Map<MeaningfulAction, number>>();
+
     for (const action of actionRows) {
       const kinds = actionsByDay.get(action.day) ?? new Map<MeaningfulAction, number>();
       kinds.set(action.kind, action.value);
@@ -636,9 +645,11 @@ export function readAdminUserSource(input: {
     }
 
     const byDay = new Map<string, number>();
+
     for (const usageRow of windowRows) byDay.set(usageRow.day, usageRow.calls);
 
     const calendarByDay = new Map<string, number>();
+
     for (const usageRow of calendarRows) calendarByDay.set(usageRow.day, usageRow.calls);
 
     return {
@@ -745,9 +756,11 @@ export function readAdminUsersSource(input: {
     const windowStart = dayStart(
       lastNDayKeys(input.now, input.windowDays)[0] ?? utcDayKey(input.now),
     );
+
     const lookbackStart = dayStart(
       lastNDayKeys(input.now, ADMIN_USERS_LAST_ACTIVE_DAYS)[0] ?? utcDayKey(input.now),
     );
+
     const kept = { scope: input.scope, search: nullableSearch(input.search) };
 
     const [total, sessionSeenRows, rows, accounts, links] = yield* Effect.all(
@@ -762,6 +775,7 @@ export function readAdminUsersSource(input: {
     );
 
     const sessionSeenByUser = new Map<string, number>();
+
     for (const seen of sessionSeenRows) {
       if (seen.seenAt) sessionSeenByUser.set(seen.userId, seen.seenAt.getTime());
     }
@@ -798,8 +812,10 @@ export function writeAdminFavorite(input: {
 }): Effect.Effect<boolean, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const target = yield* findFavoriteTarget(input.userId);
+
     if (Option.isNone(target)) return false;
     yield* input.favorite ? insertFavorite(input) : deleteFavorite(input);
+
     return true;
   });
 }

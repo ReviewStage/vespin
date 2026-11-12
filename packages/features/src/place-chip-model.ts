@@ -1,6 +1,11 @@
-import { entityName, entityOfDestination, type KnownNames, NOTHING_SAID } from "./entity-kind.js";
+import {
+  entityKindName,
+  entityName,
+  entityOfDestination,
+  type KnownNames,
+  NOTHING_SAID,
+} from "./entity-kind.js";
 import { LINK_DESTINATION, type LinkDestination } from "./link-grammar.js";
-import { UNTITLED_TASK_NAME } from "./task-wire.js";
 
 /**
  * place-chip-model.ts -- a link of ours drawn in words as its chip says it: the name of the place it opens, as the window already knows it, and the task it stands under.
@@ -28,34 +33,11 @@ export interface PlaceChipLook {
   readonly under: string | undefined;
 }
 
-/** What a place is called where the window holds no name for it. */
-const KIND_NAME = {
-  [LINK_DESTINATION.TASK]: "Task",
-  [LINK_DESTINATION.SECTION]: "Section",
-  [LINK_DESTINATION.COMMENT]: "Comment",
-  [LINK_DESTINATION.HOME]: "Home",
-  [LINK_DESTINATION.BOARD]: "Tasks",
-  [LINK_DESTINATION.VERSION]: "Version",
-  [LINK_DESTINATION.PAGE]: "Page",
-  [LINK_DESTINATION.AGENT]: "Agent",
-  [LINK_DESTINATION.WORKER]: "Worker",
-  [LINK_DESTINATION.CHANGES]: "Changes",
-  [LINK_DESTINATION.PULL_REQUEST_THREAD]: "Review comment",
-  [LINK_DESTINATION.MESSAGE]: "Message",
-  [LINK_DESTINATION.INBOX]: "Inbox",
-  [LINK_DESTINATION.INBOX_ITEM]: "Inbox item",
-  [LINK_DESTINATION.AUTOMATIONS]: "Automations",
-  [LINK_DESTINATION.AUTOMATION]: "Automation",
-  [LINK_DESTINATION.AUTOMATION_RUN]: "Run",
-  [LINK_DESTINATION.SETTINGS]: "Settings",
-  [LINK_DESTINATION.PERSON]: "Profile",
-  [LINK_DESTINATION.ADMIN]: "Admin",
-} as const satisfies Record<LinkDestination["kind"], string>;
-
 /** The task a place stands under, by its id, where it stands under one and is not the task itself. */
 function taskOf(place: LinkDestination): string | undefined {
   if (place.kind === LINK_DESTINATION.TASK || place.kind === LINK_DESTINATION.VERSION)
     return undefined;
+
   return "planId" in place ? place.planId : undefined;
 }
 
@@ -72,10 +54,9 @@ export function placeChipLook(
 ): PlaceChipLook {
   const taskId = taskOf(place);
   const under = taskId === undefined ? undefined : known.tasks.get(taskId);
-  const named = entityName(entityOfDestination(place), known, NOTHING_SAID);
-  const held = named.held;
-  const untitled = place.kind === LINK_DESTINATION.TASK && held === UNTITLED_TASK_NAME;
-  const live = named.live && !untitled;
-  const name = (live ? (held ?? label) : (label ?? held)) ?? KIND_NAME[place.kind];
+  const entity = entityOfDestination(place);
+  const { live, held } = entityName(entity, known, NOTHING_SAID);
+  const name = (live ? (held ?? label) : (label ?? held)) ?? entityKindName(entity.kind);
+
   return { name, under };
 }

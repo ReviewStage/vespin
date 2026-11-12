@@ -68,7 +68,9 @@
  * the developer who started it (`agents/coder-host/checkout.ts`,
  * `agents/coder-host/pull-request.ts`), and for a member's change to a pull
  * request (`agents/pull-request-write.ts`). No read of what a workspace
- * reaches takes it.
+ * reaches takes it. An account's deletion reads it once more and revokes the
+ * whole authorization it names at GitHub once the row is gone
+ * (`auth/sign-in-revocation.ts`).
  *
  * Nothing here holds a client: the GitHub reads run on the ambient
  * `HttpClient` and the rows are read on the ambient `SqlClient`, so a test
@@ -148,8 +150,10 @@ const GITHUB_TOKEN_ENDPOINT = "https://github.com/login/oauth/access_token";
 const GITHUB_AUTHORIZE_ENDPOINT = "https://github.com/login/oauth/authorize";
 const GITHUB_APPS = "https://github.com/apps";
 const GITHUB_WEB = "https://github.com";
+
 /** The client this service names itself to GitHub as. */
 export const GITHUB_USER_AGENT = `${PRODUCT_NAME.toLowerCase()}-github-app`;
+
 const GITHUB_HEADERS = {
   accept: "application/vnd.github+json",
   "x-github-api-version": "2022-11-28",
@@ -246,6 +250,7 @@ const KEPT = {
 
 /** Whether a repository token is kept for the instance's later asks, or minted afresh for each, as a write token leaving for a sandbox's whole run is. */
 const TOKEN_KEEPING = { KEPT: "kept", FRESH: "fresh" } as const;
+
 type TokenKeeping = (typeof TOKEN_KEEPING)[keyof typeof TOKEN_KEEPING];
 
 /** The mint as GitHub takes it: the repositories by name, none for every one, and the permissions the token is cut to. */
@@ -265,6 +270,16 @@ export const GITHUB_HTTP_STATUS = {
   /** GitHub's primary or secondary rate limit, which it may answer as 403 instead. */
   TOO_MANY_REQUESTS: 429,
 } as const;
+
+/**
+ * What GitHub revokes of a user's authorization of the App, as the path of
+ * its endpoint names it
+ * (https://docs.github.com/en/rest/apps/oauth-applications): one access
+ * token, or the whole grant with every token the App holds for the user.
+ */
+const USER_AUTHORIZATION_PART = { TOKEN: "token", GRANT: "grant" } as const;
+
+type UserAuthorizationPart = (typeof USER_AUTHORIZATION_PART)[keyof typeof USER_AUTHORIZATION_PART];
 
 /** The domain of the address GitHub links to an account while keeping the account's own private. */
 const GITHUB_NOREPLY_DOMAIN = "users.noreply.github.com";
@@ -355,6 +370,7 @@ export const GITHUB_FAILURE = {
   /** GitHub was still answering full pages of a listing at the bound, so the listing did not end. */
   UNBOUNDED: "unbounded",
 } as const;
+
 type GitHubFailure = (typeof GITHUB_FAILURE)[keyof typeof GITHUB_FAILURE];
 
 export class GitHubUnavailable extends Data.TaggedError("GitHubUnavailable")<{
@@ -381,6 +397,7 @@ const SIGN_IN_REQUIRED = {
   /** The sealed token would not open under this deployment's secret. */
   UNREADABLE_TOKEN: "unreadable-token",
 } as const;
+
 type SignInRequiredReason = (typeof SIGN_IN_REQUIRED)[keyof typeof SIGN_IN_REQUIRED];
 
 class GitHubSignInRequired extends Data.TaggedError("GitHubSignInRequired")<{
@@ -393,8 +410,10 @@ class GitHubSignInRequired extends Data.TaggedError("GitHubSignInRequired")<{
 
 /** What a read of GitHub can fail with, apart from the store. */
 export type GitHubReadFailure = GitHubAppNotConfigured | GitHubUnavailable;
+
 /** What a read of a workspace's installation can fail with: GitHub, or the store that names the installation. */
 export type GitHubWorkspaceReadFailure = GitHubReadFailure | StoreFailure;
+
 /** What a read on the user's own token can fail with. */
 export type GitHubUserReadFailure = GitHubReadFailure | GitHubSignInRequired | StoreFailure;
 
@@ -436,6 +455,7 @@ function ssoAuthorizeUrl(header: string | undefined): string | undefined {
     .map((part) => part.trim())
     .find((part) => part.startsWith("url="))
     ?.slice("url=".length);
+
   return url !== undefined && GITHUB_SSO_URL_PATTERN.test(url) ? url : undefined;
 }
 
@@ -775,6 +795,18 @@ export interface GitHubAppService {
     HttpClient.HttpClient | DatabaseServices
   >;
   /**
+   * The user's whole authorization of the App revoked at GitHub under the
+   * App's client credentials, named by a live access token of theirs
+   * (`DELETE /applications/{client_id}/grant`), which GitHub answers by
+   * deleting every token the App holds for the user, the refresh token
+   * among them: what an account's deletion asks of its GitHub sign-in
+   * (`auth/sign-in-revocation.ts`). A connect's installer token it does not
+   * keep is revoked alone, since the user's other tokens are still theirs.
+   */
+  readonly revokeUserGrant: (
+    token: Redacted.Redacted,
+  ) => Effect.Effect<void, GitHubReadFailure, HttpClient.HttpClient>;
+  /**
    * The user's own GitHub account, with their token, where that token may
    * push to the repository: read on the token (`GET /user`, then `GET
    * /repos/{owner}/{name}` for its `permissions.push`), which reaches a
@@ -833,6 +865,7 @@ const InstallationSchema = Schema.Struct({
   /** When the account suspended it; null or absent while it runs. */
   suspended_at: Schema.optional(Schema.NullOr(Schema.String)),
 });
+
 type InstallationRecord = typeof InstallationSchema.Type;
 
 const UserInstallationsSchema = Schema.Struct({ installations: Schema.Array(InstallationSchema) });
@@ -847,6 +880,7 @@ const RepositorySchema = Schema.Struct({
   default_branch: Schema.String,
   updated_at: Schema.NullOr(Schema.DateFromString),
 });
+
 type RepositoryRecord = typeof RepositorySchema.Type;
 
 const InstallationRepositoriesSchema = Schema.Struct({
@@ -860,6 +894,7 @@ const RefreshedTokensSchema = Schema.Struct({
   refresh_token: Schema.String,
   refresh_token_expires_in: Schema.Number,
 });
+
 const TokenRefusalSchema = Schema.Struct({ error: Schema.String });
 const RefreshAnswerSchema = Schema.Union([RefreshedTokensSchema, TokenRefusalSchema]);
 
@@ -869,6 +904,7 @@ const RefreshAnswerSchema = Schema.Union([RefreshedTokensSchema, TokenRefusalSch
  * arrives with status 200 too.
  */
 const ExchangedTokenSchema = Schema.Struct({ access_token: Schema.String });
+
 const ExchangeAnswerSchema = Schema.Union([
   RefreshedTokensSchema,
   ExchangedTokenSchema,
@@ -887,6 +923,7 @@ const UserSchema = Schema.Struct({
   login: Schema.String,
   name: Schema.optional(Schema.NullOr(Schema.String)),
 });
+
 type UserRecord = typeof UserSchema.Type;
 
 /** A repository as a user's token reads it, for whether the token may push; absent where GitHub says nothing of it. */
@@ -920,6 +957,7 @@ const AccountTokenRowSchema = Schema.Struct({
   accessTokenExpiresAt: Schema.NullOr(InstantColumnSchema),
   refreshTokenExpiresAt: Schema.NullOr(InstantColumnSchema),
 });
+
 type AccountTokenRow = typeof AccountTokenRowSchema.Type;
 
 /** The user's GitHub row, locked for the transaction around it; the newest where a user has two. */
@@ -1052,6 +1090,7 @@ function base64url(value: string): string {
 function signAppJwt(settings: ReadySettings, nowMs: number): string {
   const issuedAt = Math.floor(nowMs / 1000) - APP_JWT.ISSUED_BACK_SECONDS;
   const header = base64url(JSON.stringify({ alg: APP_JWT.ALGORITHM, typ: "JWT" }));
+
   const payload = base64url(
     JSON.stringify({
       iat: issuedAt,
@@ -1059,10 +1098,12 @@ function signAppJwt(settings: ReadySettings, nowMs: number): string {
       iss: settings.appId,
     }),
   );
+
   const signature = createSign(APP_JWT.SIGNATURE)
     .update(`${header}.${payload}`)
     .end()
     .sign(settings.signingKey, "base64url");
+
   return `${header}.${payload}.${signature}`;
 }
 
@@ -1078,6 +1119,7 @@ function privateKeyOf(pem: Redacted.Redacted): KeyObject | undefined {
 /** A permission is granted at read where the installation names it at any level: write grants read. */
 function installationOf(record: InstallationRecord): GitHubInstallation {
   const granted = record.permissions ?? {};
+
   return {
     id: record.id,
     accountLogin: record.account?.login,
@@ -1160,10 +1202,13 @@ function byMostRecentlyUpdated(left: GitHubRepository, right: GitHubRepository):
  */
 function combinedRepositories(repositories: readonly GitHubRepository[]): GitHubRepository[] {
   const seen = new Set<string>();
+
   return [...repositories].sort(byMostRecentlyUpdated).filter((repository) => {
     const folded = repository.fullName.toLowerCase();
+
     if (seen.has(folded)) return false;
     seen.add(folded);
+
     return true;
   });
 }
@@ -1176,6 +1221,7 @@ function sameName(left: string, right: string): boolean {
 /** The API path of one repository by `owner/name`, each part encoded. */
 export function repositoryPath(fullName: string): string {
   const [owner = "", name = ""] = fullName.split("/");
+
   return `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
 }
 
@@ -1184,7 +1230,9 @@ function retryAfterOf(
   response: HttpClientResponse.HttpClientResponse,
 ): Duration.Duration | undefined {
   const spelled = Option.getOrUndefined(Headers.get(response.headers, "retry-after"));
+
   if (spelled === undefined || !/^\d+$/u.test(spelled.trim())) return undefined;
+
   return Duration.seconds(Number(spelled.trim()));
 }
 
@@ -1192,6 +1240,7 @@ function retryAfterOf(
 function unavailable(error: HttpClientError.HttpClientError): GitHubUnavailable {
   const response = error.response;
   const retryAfter = response === undefined ? undefined : retryAfterOf(response);
+
   return new GitHubUnavailable({
     reason: response === undefined ? GITHUB_FAILURE.TRANSPORT : GITHUB_FAILURE.STATUS,
     status: response?.status,
@@ -1216,6 +1265,7 @@ export function githubRead(
   const request = HttpClientRequest.get(`${GITHUB_API}${path}`).pipe(
     HttpClientRequest.setHeaders(GITHUB_HEADERS),
   );
+
   return bearer === null ? request : HttpClientRequest.bearerToken(request, bearer);
 }
 
@@ -1243,6 +1293,7 @@ export function githubSendRequest<Body extends object>(
     HttpClientRequest.bearerToken(bearer),
     HttpClientRequest.setHeaders(GITHUB_HEADERS),
   );
+
   return body === undefined ? request : HttpClientRequest.bodyJsonUnsafe(request, body);
 }
 
@@ -1289,14 +1340,18 @@ function readPages<A>(
 ): Effect.Effect<readonly A[], GitHubUnavailable, HttpClient.HttpClient> {
   return Effect.gen(function* () {
     const items: A[] = [];
+
     for (let page = 1; page <= PAGING.MAX_PAGES; page += 1) {
       const request = githubRead(path, token).pipe(
         HttpClientRequest.setUrlParams({ per_page: String(PAGING.PER_PAGE), page: String(page) }),
       );
+
       const read = yield* Effect.scoped(Effect.flatMap(send(request), readPage));
       items.push(...read);
+
       if (read.length < PAGING.PER_PAGE || enough(items)) return items;
     }
+
     return yield* new GitHubUnavailable({ reason: GITHUB_FAILURE.UNBOUNDED, status: undefined });
   });
 }
@@ -1397,12 +1452,15 @@ const refreshTokens = /* @__PURE__ */ Effect.fn("web/githubRefreshTokens")(funct
       refresh_token: Redacted.value(refreshToken),
     }),
   );
+
   const answer = yield* Effect.scoped(
     Effect.flatMap(send(request), (response) => readBody(response, RefreshAnswerSchema)),
   );
+
   if ("error" in answer) {
     return yield* new GitHubSignInRequired({ reason: SIGN_IN_REQUIRED.REFRESH_REFUSED });
   }
+
   return answer;
 });
 
@@ -1422,17 +1480,22 @@ const tokenOfRow = /* @__PURE__ */ Effect.fn("web/githubTokenOfRow")(function* (
   if (row.accessToken === null) {
     return yield* new GitHubSignInRequired({ reason: SIGN_IN_REQUIRED.NO_GITHUB_ACCOUNT });
   }
+
   // A row without a refresh token is the OAuth App's from before the GitHub App.
   if (row.refreshToken === null || row.accessTokenExpiresAt === null) {
     return yield* new GitHubSignInRequired({ reason: SIGN_IN_REQUIRED.BEFORE_THE_APP });
   }
+
   const now = yield* Clock.currentTimeMillis;
+
   if (row.accessTokenExpiresAt.getTime() - now > USER_TOKEN_REFRESH_MARGIN_MS) {
     return yield* unseal(row.accessToken, settings.sessionSecret);
   }
+
   if (row.refreshTokenExpiresAt !== null && row.refreshTokenExpiresAt.getTime() <= now) {
     return yield* new GitHubSignInRequired({ reason: SIGN_IN_REQUIRED.REFRESH_REFUSED });
   }
+
   const refreshToken = yield* unseal(row.refreshToken, settings.sessionSecret);
   const fresh = yield* refreshTokens(settings, refreshToken);
   const written = yield* Clock.currentTimeMillis;
@@ -1444,6 +1507,7 @@ const tokenOfRow = /* @__PURE__ */ Effect.fn("web/githubTokenOfRow")(function* (
     refreshTokenExpiresAt: new Date(written + fresh.refresh_token_expires_in * 1000),
     updatedAt: new Date(written),
   });
+
   return Redacted.make(fresh.access_token);
 });
 
@@ -1470,8 +1534,10 @@ const keepInstallerTokens = /* @__PURE__ */ Effect.fn("web/githubKeepInstallerTo
       readBody(response, UserSchema),
     ),
   );
+
   const githubUserId = String(githubUser.id);
   const now = yield* Clock.currentTimeMillis;
+
   const sealed = {
     accessToken: yield* seal(tokens.access_token, settings.sessionSecret),
     refreshToken: yield* seal(tokens.refresh_token, settings.sessionSecret),
@@ -1479,18 +1545,23 @@ const keepInstallerTokens = /* @__PURE__ */ Effect.fn("web/githubKeepInstallerTo
     refreshTokenExpiresAt: new Date(now + tokens.refresh_token_expires_in * 1000),
     updatedAt: new Date(now),
   };
+
   const client = yield* SqlClient.SqlClient;
+
   return yield* client.withTransaction(
     Effect.gen(function* () {
       const holders = yield* lockGithubHolders(githubUserId);
+
       if (holders.some((holder) => holder.userId !== userId)) return false;
       const [own] = holders;
+
       if (own === undefined) {
         const id = generateRandomString(ACCOUNT_ID_LENGTH, "a-z", "A-Z", "0-9");
         yield* insertGithubAccount({ id, userId, githubUserId, ...sealed });
       } else {
         yield* writeSealedTokens({ id: own.id, ...sealed });
       }
+
       return true;
     }),
   );
@@ -1502,6 +1573,7 @@ function githubAppService(
   tokenKeys: Redacted.Redacted | undefined,
 ): Effect.Effect<GitHubAppService> {
   const signingKey = settings === undefined ? undefined : privateKeyOf(settings.privateKey);
+
   const ready: Effect.Effect<ReadySettings, GitHubAppNotConfigured> =
     settings === undefined || signingKey === undefined
       ? Effect.fail(
@@ -1517,6 +1589,7 @@ function githubAppService(
   const appJwt = Effect.gen(function* () {
     const app = yield* ready;
     const now = yield* Clock.currentTimeMillis;
+
     return Redacted.make(signAppJwt(app, now));
   });
 
@@ -1527,12 +1600,15 @@ function githubAppService(
     Effect.gen(function* () {
       const app = yield* ready;
       const client = yield* SqlClient.SqlClient;
+
       return yield* client.withTransaction(
         Effect.gen(function* () {
           const row = yield* lockGithubAccount(userId);
+
           if (Option.isNone(row)) {
             return yield* new GitHubSignInRequired({ reason: SIGN_IN_REQUIRED.NO_GITHUB_ACCOUNT });
           }
+
           return yield* tokenOfRow(app, row.value);
         }),
       );
@@ -1542,8 +1618,10 @@ function githubAppService(
     Effect.gen(function* () {
       const jwt = yield* appJwt;
       const response = yield* send(githubRead(`/app/installations/${installationId}`, jwt));
+
       if (response.status === GITHUB_HTTP_STATUS.NOT_FOUND) return Option.none();
       const record = yield* readBody(response, InstallationSchema);
+
       return Option.some(installationOf(record));
     }).pipe(Effect.scoped);
 
@@ -1551,12 +1629,14 @@ function githubAppService(
   const mint = (installationId: number, request: InstallationTokenRequest) =>
     Effect.gen(function* () {
       const jwt = yield* appJwt;
+
       const minted = yield* Effect.scoped(
         Effect.flatMap(
           send(githubMintAsApp(`/app/installations/${installationId}/access_tokens`, jwt, request)),
           (response) => readBody(response, InstallationTokenSchema),
         ),
       );
+
       return { token: Redacted.make(minted.token), expiresAt: minted.expires_at.getTime() };
     });
 
@@ -1572,12 +1652,15 @@ function githubAppService(
   const connectedInstallation = (connected: WorkspaceInstallation) =>
     Effect.gen(function* () {
       const reached = yield* installation(connected.installationId);
+
       const status: GitHubInstallationStatus = Option.match(reached, {
         onNone: () => GITHUB_INSTALLATION_STATUS.DELETED,
         onSome: (on) =>
           on.suspended ? GITHUB_INSTALLATION_STATUS.SUSPENDED : GITHUB_INSTALLATION_STATUS.ACTIVE,
       });
+
       if (status !== connected.status) yield* mendInstallationStatus(connected, status);
+
       return reached;
     });
 
@@ -1592,6 +1675,7 @@ function githubAppService(
     Effect.gen(function* () {
       const connected = yield* installationsOfWorkspace(organizationId);
       const read = yield* Effect.forEach(connected, connectedInstallation);
+
       return read.flatMap((one) => (Option.isSome(one) && !one.value.suspended ? [one.value] : []));
     });
 
@@ -1609,18 +1693,24 @@ function githubAppService(
       const others = connected.filter((one) => !sameName(one.accountLogin, owner));
       const running: GitHubInstallation[] = [];
       let lapsedOnOwner = false;
+
       for (const one of [...named, ...others]) {
         const read = yield* connectedInstallation(one);
+
         if (Option.isNone(read) || read.value.suspended) {
           lapsedOnOwner ||= sameName(one.accountLogin, owner);
           continue;
         }
+
         const login = read.value.accountLogin;
+
         if (login !== undefined && sameName(login, owner)) {
           return { onOwner: Option.some(read.value), running, lapsedOnOwner };
         }
+
         running.push(read.value);
       }
+
       return { onOwner: Option.none<GitHubInstallation>(), running, lapsedOnOwner };
     });
 
@@ -1638,13 +1728,15 @@ function githubAppService(
   const workspaceListing = (organizationId: string) =>
     Effect.gen(function* () {
       const live = yield* liveWorkspaceInstallations(organizationId);
+
       if (live.length === 0) return Option.none<WorkspaceListing>();
       const listed = yield* Effect.forEach(live, (one) => repositoriesOf(one));
+
       return Option.some<WorkspaceListing>({
         repositories: combinedRepositories(listed.flat()),
         installations: live.map((one) => ({
           installationId: one.id,
-          ...(one.accountLogin === undefined ? {} : { login: one.accountLogin }),
+          ...(one.accountLogin !== undefined && { login: one.accountLogin }),
           repositorySelection: one.repositorySelection,
         })),
       });
@@ -1666,15 +1758,19 @@ function githubAppService(
     Effect.gen(function* () {
       const minted = yield* mint(reached.id, { permissions: INSTALLATION_TOKEN_PERMISSIONS.LIST });
       const response = yield* send(githubRead(repositoryPath(fullName), minted.token));
+
       if (
         response.status === GITHUB_HTTP_STATUS.NOT_FOUND ||
         response.status === GITHUB_HTTP_STATUS.FORBIDDEN
       ) {
         return Option.none<GitHubRepository>();
       }
+
       const record = yield* readBody(response, RepositorySchema);
+
       if (record.full_name === fullName) return Option.none<GitHubRepository>();
       yield* noteGitHubRepository({ ...sightingOf(record), formerly: fullName });
+
       return Option.some(repositoryOf(record));
     }).pipe(Effect.scoped);
 
@@ -1688,15 +1784,18 @@ function githubAppService(
     Effect.gen(function* () {
       for (const installation of installations) {
         const moved = yield* movedOnInstallation(installation, fullName);
+
         if (Option.isSome(moved)) {
           const reachedMoved: ReachResult = Result.succeed({
             access: GITHUB_ACCESS.APP,
             installation,
             repository: moved.value,
           });
+
           return Option.some(reachedMoved);
         }
       }
+
       return Option.none<ReachResult>();
     });
 
@@ -1714,10 +1813,13 @@ function githubAppService(
       const [owner = ""] = fullName.split("/");
       const unreached = (failure: GitHubRepositoryUnreached): ReachResult => Result.fail(failure);
       const connected = yield* installationsOfWorkspace(organizationId);
+
       if (connected.length === 0) {
         return unreached({ reason: REPOSITORY_UNREACHED.NOT_CONNECTED, repository: fullName });
       }
+
       const found = yield* installationOnOwner(connected, owner);
+
       if (Option.isNone(found.onOwner)) {
         if (found.lapsedOnOwner || found.running.length === 0) {
           return unreached({
@@ -1725,20 +1827,25 @@ function githubAppService(
             repository: fullName,
           });
         }
+
         const transferred = yield* reachMoved(found.running, fullName);
+
         if (Option.isSome(transferred)) return transferred.value;
         const [only] = found.running;
         const connectedTo = found.running.length === 1 ? only?.accountLogin : undefined;
+
         return unreached({
           reason: REPOSITORY_UNREACHED.OTHER_OWNER,
           repository: fullName,
           ...(connectedTo === undefined ? undefined : { connectedTo }),
         });
       }
+
       const onOwner = found.onOwner.value;
       const isNamed = (repository: GitHubRepository) => sameName(repository.fullName, fullName);
       const repositories = yield* repositoriesOf(onOwner, (read) => read.some(isNamed));
       const repository = repositories.find(isNamed);
+
       if (repository !== undefined) {
         // Note that the id is recorded under the name it is reached by, so a rename GitHub reports later relabels it.
         if (repository.id !== undefined) {
@@ -1748,20 +1855,28 @@ function githubAppService(
             updatedAt: new Date(repository.updatedAt),
           });
         }
+
         const reachedThrough: ReachResult = Result.succeed({
           access: GITHUB_ACCESS.APP,
           installation: onOwner,
           repository,
         });
+
         return reachedThrough;
       }
+
       const renamed = yield* reachMoved([onOwner], fullName);
+
       if (Option.isSome(renamed)) return renamed.value;
+
       const others = (yield* liveWorkspaceInstallations(organizationId)).filter(
         (one) => one.id !== onOwner.id,
       );
+
       const transferred = yield* reachMoved(others, fullName);
+
       if (Option.isSome(transferred)) return transferred.value;
+
       // Note that an installation given only some repositories cannot tell one it was never given from one deleted, so it asks for the one GitHub can mend.
       return unreached(
         onOwner.repositorySelection === GITHUB_REPOSITORY_SELECTION.SELECTED
@@ -1792,50 +1907,64 @@ function githubAppService(
     Effect.gen(function* () {
       const unreached = (reason: TokenUnreached): ReachResult =>
         Result.fail({ reason, repository: fullName });
+
       const held = yield* memberToken(member);
+
       if (Result.isFailure(held)) {
         if (held.failure === GITHUB_TOKEN_ABSENCE.NONE) return throughApp;
+
         return unreached(
           held.failure === GITHUB_TOKEN_ABSENCE.INVALID
             ? REPOSITORY_UNREACHED.TOKEN_INVALID
             : REPOSITORY_UNREACHED.NO_TOKEN,
         );
       }
+
       const response = yield* send(githubRead(repositoryPath(fullName), held.success.token));
+
       if (response.status === GITHUB_HTTP_STATUS.UNAUTHORIZED) {
         yield* held.success.markInvalid;
+
         return unreached(REPOSITORY_UNREACHED.TOKEN_INVALID);
       }
+
       if (response.status === GITHUB_HTTP_STATUS.FORBIDDEN) {
         const authorizeUrl = ssoAuthorizeUrl(response.headers[GITHUB_SSO_HEADER]);
+
         if (authorizeUrl !== undefined) {
           const unauthorized: ReachResult = Result.fail({
             reason: REPOSITORY_UNREACHED.TOKEN_SSO,
             repository: fullName,
             authorizeUrl,
           });
+
           return unauthorized;
         }
       }
+
       if (
         response.status === GITHUB_HTTP_STATUS.NOT_FOUND ||
         response.status === GITHUB_HTTP_STATUS.FORBIDDEN
       ) {
         return unreached(REPOSITORY_UNREACHED.TOKEN_NO_ACCESS);
       }
+
       const record = yield* readBody(response, TokenRepositorySchema);
       // Note that GitHub answers a name it renamed or transferred away under the name now, which the store's names move to.
       yield* noteGitHubRepository({
         ...sightingOf(record),
         formerly: record.full_name === fullName ? undefined : fullName,
       });
+
       if (record.permissions?.push !== true)
         return unreached(REPOSITORY_UNREACHED.TOKEN_CANNOT_PUSH);
+
       const reachedOn: ReachResult = Result.succeed({
         access: GITHUB_ACCESS.TOKEN,
         member,
         repository: repositoryOf(record),
       });
+
       return reachedOn;
     }).pipe(Effect.scoped);
 
@@ -1847,7 +1976,9 @@ function githubAppService(
   const reach = (organizationId: string, fullName: string, member: string | undefined) =>
     Effect.gen(function* () {
       const throughApp = yield* installationReach(organizationId, fullName);
+
       if (Result.isSuccess(throughApp) || member === undefined) return throughApp;
+
       return yield* tokenReach(member, fullName, throughApp);
     });
 
@@ -1864,10 +1995,12 @@ function githubAppService(
         ...(key.repository === undefined ? undefined : { repositories: [key.repository] }),
         permissions: key.permissions,
       });
+
       const now = yield* Clock.currentTimeMillis;
       const lasts = Math.min(minted.expiresAt - now, Duration.toMillis(KEPT.TOKEN_LIFETIME));
       const keepFor = Duration.millis(Math.max(lasts - Duration.toMillis(KEPT.TOKEN_MARGIN), 0));
       const kept: KeptToken = { token: minted.token, keepFor };
+
       return kept;
     });
 
@@ -1888,18 +2021,24 @@ function githubAppService(
           code_verifier: returned.codeVerifier,
         }),
       );
+
       const answer = yield* Effect.scoped(
         Effect.flatMap(send(request), (response) => readBody(response, ExchangeAnswerSchema)),
       );
+
       return "error" in answer ? Option.none() : Option.some(answer);
     });
 
-  /** The user access token revoked, under the App's client credentials. */
-  const revokeToken = (app: ReadySettings, token: Redacted.Redacted) =>
+  /** The user access token alone, or the whole authorization it names, revoked under the App's client credentials. */
+  const revokeAuthorization = (
+    app: ReadySettings,
+    token: Redacted.Redacted,
+    revoked: UserAuthorizationPart,
+  ) =>
     Effect.scoped(
       Effect.flatMap(
         send(
-          HttpClientRequest.delete(`${GITHUB_API}/applications/${app.clientId}/token`).pipe(
+          HttpClientRequest.delete(`${GITHUB_API}/applications/${app.clientId}/${revoked}`).pipe(
             HttpClientRequest.basicAuth(app.clientId, Redacted.value(app.clientSecret)),
             HttpClientRequest.setHeaders(GITHUB_HEADERS),
             HttpClientRequest.bodyJsonUnsafe({ access_token: Redacted.value(token) }),
@@ -1924,6 +2063,7 @@ function githubAppService(
           Exit.isSuccess(exit) && Result.isSuccess(exit.value) ? KEPT.REACH_TTL : Duration.zero,
       },
     );
+
     const tokens = yield* Cache.makeWith(repositoryTokenOf, {
       capacity: KEPT.CAPACITY,
       requireServicesAt: "lookup",
@@ -1944,18 +2084,22 @@ function githubAppService(
     const standingReach = (key: ReachKey) =>
       Effect.gen(function* () {
         const kept = yield* Cache.get(reaches, key);
+
         if (Result.isFailure(kept)) return kept;
         // Note that the links are read after the reach, because a reach afresh mends a stale status first.
         const linked = yield* installationsOfWorkspace(key.organizationId);
         const running = linked.filter((one) => one.status === GITHUB_INSTALLATION_STATUS.ACTIVE);
         const [owner = ""] = key.fullName.split("/");
         const reached = kept.success;
+
         const stands =
           reached.access === GITHUB_ACCESS.TOKEN
             ? !running.some((one) => sameName(one.accountLogin, owner))
             : running.some((one) => one.installationId === reached.installation.id);
+
         if (stands) return kept;
         yield* Cache.invalidate(reaches, key);
+
         return yield* Cache.get(reaches, key);
       });
 
@@ -1999,13 +2143,18 @@ function githubAppService(
     ) =>
       Effect.gen(function* () {
         const reached = yield* standingReach(new ReachKey({ organizationId, fullName, member }));
+
         if (Result.isFailure(reached)) return Option.none<GitHubRepositoryToken>();
+
         if (reached.success.access === GITHUB_ACCESS.TOKEN) {
           return yield* memberRepositoryToken(reached.success);
         }
+
         const { installation: on, repository } = reached.success;
         const permissions = permissionsOn(on);
+
         if (permissions === undefined) return Option.none<GitHubRepositoryToken>();
+
         const key = new TokenKey({
           organizationId,
           member,
@@ -2013,10 +2162,12 @@ function githubAppService(
           repository: repository.name,
           permissions,
         });
+
         const { token } =
           keeping === TOKEN_KEEPING.KEPT
             ? yield* Cache.get(tokens, key)
             : yield* repositoryTokenOf(key);
+
         return Option.some<GitHubRepositoryToken>({
           repository,
           token,
@@ -2035,35 +2186,47 @@ function githubAppService(
     ) =>
       Effect.gen(function* () {
         type SetReach = Result.Result<readonly ReachedThroughApp[], RepositorySetUnreached>;
+
         const reached: ReachedThroughApp[] = [];
+
         for (const fullName of fullNames) {
           const one = yield* reachOf(fullName);
+
           if (Result.isFailure(one)) {
             const unreached: SetReach = Result.fail({
               why: REPOSITORY_SET_UNREACHED.UNREACHED,
               unreached: one.failure,
             });
+
             return unreached;
           }
+
           const onApp = one.success;
           const [first] = reached;
+
           if (onApp.access === GITHUB_ACCESS.TOKEN) {
             const onToken: SetReach = Result.fail({
               why: REPOSITORY_SET_UNREACHED.TOKEN,
               repository: fullName,
             });
+
             return onToken;
           }
+
           if (first !== undefined && first.installation.id !== onApp.installation.id) {
             const elsewhere: SetReach = Result.fail({
               why: REPOSITORY_SET_UNREACHED.OTHER_INSTALLATION,
               repository: fullName,
             });
+
             return elsewhere;
           }
+
           reached.push(onApp);
         }
+
         const together: SetReach = Result.succeed(reached);
+
         return together;
       });
 
@@ -2075,31 +2238,38 @@ function githubAppService(
       authorizeUrl: (request) =>
         Effect.gen(function* () {
           const app = yield* ready;
+
           const challenge = yield* Effect.promise(() =>
             generateCodeChallenge(request.codeVerifier),
           );
+
           const url = new URL(GITHUB_AUTHORIZE_ENDPOINT);
           url.searchParams.set("client_id", app.clientId);
           url.searchParams.set("redirect_uri", request.redirectUri);
           url.searchParams.set("state", request.state);
           url.searchParams.set("code_challenge", challenge);
           url.searchParams.set("code_challenge_method", PKCE_METHOD);
+
           return url.toString();
         }),
       authorizedInstallations: (returned, installer) =>
         Effect.gen(function* () {
           const app = yield* ready;
           const exchanged = yield* exchangeCode(app, returned);
+
           if (Option.isNone(exchanged)) return Option.none();
           const tokens = exchanged.value;
           const token = Redacted.make(tokens.access_token);
           const installations = yield* installationsOnToken(token);
+
           // Note that a token without a refresh token is never kept, because no read of the row takes one (`tokenOfRow`).
           const kept =
             Option.isSome(installer) && "refresh_token" in tokens
               ? yield* keepInstallerTokens(app, installer.value, tokens)
               : false;
-          if (!kept) yield* revokeToken(app, token);
+
+          if (!kept) yield* revokeAuthorization(app, token, USER_AUTHORIZATION_PART.TOKEN);
+
           return Option.some(installations);
         }),
       workspaceRepositories: (organizationId) =>
@@ -2111,33 +2281,45 @@ function githubAppService(
       memberRepositories: (member) =>
         Effect.gen(function* () {
           const held = yield* memberToken(member);
+
           if (Result.isFailure(held)) return Option.none();
+
           const response = yield* send(
             githubRead("/user/repos", held.success.token).pipe(
               HttpClientRequest.setUrlParams(MEMBER_REPOSITORIES_QUERY),
             ),
           );
+
           if (response.status === GITHUB_HTTP_STATUS.UNAUTHORIZED) {
             yield* held.success.markInvalid;
+
             return Option.none();
           }
+
           const listed = yield* readBody(response, Schema.Array(TokenRepositorySchema));
           const pushed = listed.filter((one) => one.permissions?.push === true);
+
           return Option.some(pushed.map(repositoryOf));
         }).pipe(Effect.scoped),
       memberRepositoryReadable: (member, fullName) =>
         Effect.gen(function* () {
           const held = yield* memberToken(member);
+
           if (Result.isFailure(held)) return Option.none<boolean>();
           const response = yield* send(githubRead(repositoryPath(fullName), held.success.token));
+
           if (response.status === GITHUB_HTTP_STATUS.UNAUTHORIZED) {
             yield* held.success.markInvalid;
+
             return Option.none<boolean>();
           }
+
           if (response.status >= 200 && response.status < 300) return Option.some(true);
+
           const refused =
             response.status === GITHUB_HTTP_STATUS.FORBIDDEN ||
             response.status === GITHUB_HTTP_STATUS.NOT_FOUND;
+
           return refused ? Option.some(false) : Option.none<boolean>();
         }).pipe(Effect.scoped),
       repositoryReach: (organizationId, fullName, member) =>
@@ -2183,32 +2365,39 @@ function githubAppService(
           const reached = yield* setReach(fullNames, (fullName) =>
             standingReach(new ReachKey({ organizationId, fullName, member })),
           );
+
           if (Result.isFailure(reached)) return Result.fail(reached.failure);
           const [first] = reached.success;
+
           // Note that a set names its first repository, so an empty one is a caller's bug.
           if (first === undefined) return yield* Effect.die("a set of repositories names none");
           const on = first.installation;
+
           const minted = yield* mint(on.id, {
             repositories: reached.success.map((one) => one.repository.name),
             permissions: on.ciReadable
               ? INSTALLATION_TOKEN_PERMISSIONS.WRITE_READING_CI
               : INSTALLATION_TOKEN_PERMISSIONS.WRITE,
           });
+
           const token: GitHubRepositoriesToken = {
             repositories: reached.success.map((one) => one.repository),
             token: minted.token,
             access: { kind: GITHUB_ACCESS.APP },
           };
+
           return Result.succeed(token);
         }),
       userPusher: (userId, fullName) =>
         Effect.gen(function* () {
           const token = yield* userToken(userId);
+
           const account = yield* Effect.scoped(
             Effect.flatMap(send(githubRead("/user", token)), (response) =>
               readBody(response, UserSchema),
             ),
           );
+
           const repository = yield* Effect.scoped(
             Effect.flatMap(send(githubRead(repositoryPath(fullName), token)), (response) =>
               response.status === GITHUB_HTTP_STATUS.NOT_FOUND
@@ -2216,28 +2405,38 @@ function githubAppService(
                 : Effect.map(readBody(response, RepositoryPermissionsSchema), Option.some),
             ),
           );
+
           const pushes = Option.isSome(repository) && repository.value.permissions?.push === true;
+
           return pushes ? Option.some({ user: userOf(account), token }) : Option.none();
         }),
       appBot: (token) =>
         Effect.gen(function* () {
           const app = yield* ready;
           const response = yield* send(githubRead(`/users/${app.slug}${BOT_LOGIN_SUFFIX}`, token));
+
           return userOf(yield* readBody(response, UserSchema));
         }).pipe(Effect.scoped),
       tokenUser: (token) =>
         Effect.gen(function* () {
           const response = yield* send(githubRead("/user", token));
+
           return userOf(yield* readBody(response, UserSchema));
         }).pipe(Effect.scoped),
       userToken,
+      revokeUserGrant: (token) =>
+        Effect.flatMap(ready, (app) =>
+          revokeAuthorization(app, token, USER_AUTHORIZATION_PART.GRANT),
+        ),
     };
+
     return service;
   });
 }
 
 function presentRedacted(value: Option.Option<Redacted.Redacted>): Redacted.Redacted | undefined {
   const named = text(Option.getOrUndefined(Option.map(value, Redacted.value)));
+
   return named === undefined ? undefined : Redacted.make(named);
 }
 
@@ -2274,6 +2473,7 @@ export const githubAppFromEnvironment: Layer.Layer<
         privateKey: presentRedacted(read.privateKey),
         sessionSecret: presentRedacted(read.sessionSecret),
       };
+
       const missing = [
         [GITHUB_APP_ENVIRONMENT.APP_ID, values.appId],
         [GITHUB_APP_ENVIRONMENT.SLUG, values.slug],
@@ -2281,9 +2481,8 @@ export const githubAppFromEnvironment: Layer.Layer<
         [GITHUB_APP_ENVIRONMENT.CLIENT_SECRET, values.clientSecret],
         [GITHUB_APP_ENVIRONMENT.PRIVATE_KEY, values.privateKey],
         [AUTH_SECRET_ENVIRONMENT.SESSION_SECRET, values.sessionSecret],
-      ]
-        .filter(([, value]) => value === undefined)
-        .map(([name]) => String(name));
+      ].flatMap(([name, value]) => (value === undefined ? [String(name)] : []));
+
       const settings =
         values.appId !== undefined &&
         values.slug !== undefined &&
@@ -2300,6 +2499,7 @@ export const githubAppFromEnvironment: Layer.Layer<
               sessionSecret: values.sessionSecret,
             }
           : undefined;
+
       return Effect.flatMap(HostedEnvironment, (environment) =>
         githubAppService(settings, missing, environment.providerKeyEncryptionKeys),
       );

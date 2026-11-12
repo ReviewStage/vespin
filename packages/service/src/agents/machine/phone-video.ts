@@ -68,7 +68,7 @@ const PHONE_VIDEO_SCRIPT = [
 ].join("\n");
 
 /** Makes an MP4 of the WebM at the absolute path, as the sandbox's default user; read its run with `phoneVideoOf`. */
-export function makePhoneVideo(path: string): CommandAsk {
+export function phoneVideoAsk(path: string): CommandAsk {
   return {
     command: "bash",
     args: [
@@ -85,6 +85,8 @@ export function makePhoneVideo(path: string): CommandAsk {
 export function phoneVideoOf(run: Pick<CommandRun, "exitCode" | "stdout">): Uint8Array | undefined {
   if (run.exitCode !== 0) return undefined;
   const bytes = new Uint8Array(Buffer.from(run.stdout.trim(), "base64"));
+
   if (bytes.byteLength > PHONE_VIDEO_BOUNDS.MAX_BYTES || !streamableMp4(bytes)) return undefined;
+
   return bytes;
 }

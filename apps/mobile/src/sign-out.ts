@@ -27,28 +27,32 @@ export function useSignOut(): (saying?: SignOutSaying) => Promise<boolean> {
   const write = useWrite();
   const fixture = useFixtureRun();
   const signingOut = useRef(false);
+
   return (saying = {}) => {
     if (signingOut.current) return Promise.resolve(false);
+
     // Note that every attempt, Try again's among them, holds the guard while it runs, so two never overlap.
     const signOut = () => {
       if (signingOut.current) return Promise.resolve();
       signingOut.current = true;
+
       return unregisterPushDevice(acts, fixture)
         .then(() => acts[ACT_KIND.ACCOUNT_SIGN_OUT]())
         .then(
           () =>
-            clearAccountNotifications().catch((error: unknown) =>
-              console.error("The account's notifications were not cleared.", error),
+            clearAccountNotifications().catch((cause: unknown) =>
+              console.error("The account's notifications were not cleared.", cause),
             ),
-          (refused: unknown) => {
+          (cause: unknown) => {
             reregisterPushDevice(acts, fixture).catch(() => undefined);
-            throw refused;
+            throw cause;
           },
         )
         .finally(() => {
           signingOut.current = false;
         });
     };
+
     return write(signOut, { inPlace: saying.inPlace, retry: saying.inPlace === undefined });
   };
 }

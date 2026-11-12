@@ -50,6 +50,7 @@ const openGrants = Effect.gen(function* () {
     .insert(oauthClient)
     .values({ id: DESKTOP, clientId: DESKTOP, name: "Desktop", redirectUris: [] })
     .onConflictDoNothing();
+
   return { owner, other, claude, codex };
 });
 
@@ -106,8 +107,10 @@ const held = (userId: string, clientId: string) =>
     const refresh = yield* db.select().from(oauthRefreshToken);
     const access = yield* db.select().from(oauthAccessToken);
     const consents = yield* db.select().from(oauthConsent);
+
     const theirs = (row: { userId: string | null; clientId: string }) =>
       row.userId === userId && row.clientId === clientId;
+
     return {
       refresh: refresh.filter(theirs).length,
       access: access.filter(theirs).length,
@@ -142,6 +145,7 @@ it.layer(getTestDB())("a member's OAuth grants", (it) => {
             lastRefreshedAt: REFRESHED_AT,
           },
         ]);
+
         const codexGrant = {
           clientId: codex,
           name: null,
@@ -149,6 +153,7 @@ it.layer(getTestDB())("a member's OAuth grants", (it) => {
           allowedAt: ALLOWED_AT,
           lastRefreshedAt: null,
         };
+
         assert.deepEqual(yield* listOAuthGrants(other, listed), [
           {
             clientId: claude,

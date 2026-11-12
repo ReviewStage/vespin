@@ -149,6 +149,7 @@ async function mount(onOpen: (link: ReadLink) => void): Promise<HTMLElement> {
   pushedTranscripts(() => [
     { messages: [POSTED], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
   ]);
+
   const control = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
     activeTaskId: TASK.id,
@@ -171,6 +172,7 @@ async function mount(onOpen: (link: ReadLink) => void): Promise<HTMLElement> {
       agentIds: [AGENT.id, OTHER_AGENT],
     }),
   });
+
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -193,6 +195,7 @@ async function mount(onOpen: (link: ReadLink) => void): Promise<HTMLElement> {
     for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
   });
   await settleQueries();
+
   return container;
 }
 
@@ -203,6 +206,7 @@ test("a post's chip opens the item the agent posted under its key, not another a
   const chip =
     container.querySelector<HTMLElement>('[data-call-id="call-post"] summary [data-mention-ref]') ??
     assert.fail("the post's row names the thread by its chip");
+
   act(() => chip.click());
 
   assert.deepEqual(opened, [

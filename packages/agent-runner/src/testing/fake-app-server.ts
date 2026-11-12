@@ -32,6 +32,7 @@ const RecordedMessageSchema = Schema.Struct({
   error: Schema.optionalKey(Schema.Json),
   emittedAtMs: Schema.optionalKey(Schema.Number),
 });
+
 export type RecordedMessage = typeof RecordedMessageSchema.Type;
 
 /** One line of P16's recording: which phase of the probe, which way it went, and what it said. */
@@ -40,8 +41,10 @@ const RecordedLineSchema = Schema.Struct({
   direction: Schema.Literals(["client", "server"]),
   message: RecordedMessageSchema,
 });
+
 const decodeRecordedLine = Schema.decodeUnknownSync(Schema.fromJsonString(RecordedLineSchema));
 const decodeReceived = Schema.decodeUnknownOption(Schema.fromJsonString(RecordedMessageSchema));
+
 const decodeClientId = Schema.decodeUnknownOption(
   Schema.Struct({ clientUserMessageId: Schema.String }),
 );
@@ -92,14 +95,17 @@ const RECORDING = new URL("./app-server.jsonl", import.meta.url);
 export function recordedExchanges(phase: string): readonly Exchange[] {
   const exchanges: { method: string; reply: RecordedMessage[] }[] = [];
   const lines = readFileSync(RECORDING, "utf8").split("\n");
+
   for (const line of lines.filter((text) => text !== "").map((text) => decodeRecordedLine(text))) {
     if (line.phase !== phase) continue;
+
     if (line.direction === "client") {
       exchanges.push({ method: line.message.method ?? "", reply: [] });
     } else {
       exchanges.at(-1)?.reply.push(line.message);
     }
   }
+
   return exchanges;
 }
 
@@ -124,13 +130,17 @@ function replyLines(
 ): { readonly line: string; readonly isAnswer: boolean }[] {
   const recordedId = reply.find((message) => message.method === undefined)?.id;
   const clientId = Option.flatMap(Option.fromNullishOr(answering.params), decodeClientId);
+
   return reply.map((message) => {
     const answered =
       message.method === undefined && message.id === recordedId && answering.id !== undefined
         ? { ...message, id: answering.id }
         : message;
+
     const line = JSON.stringify(answered);
+
     if (message.method === undefined) return { line, isAnswer: true };
+
     // Note that only a `userMessage` item carries a `clientId` in the protocol.
     return {
       line: Option.isSome(clientId)
@@ -149,13 +159,17 @@ const encoder = new TextEncoder();
 /** A spawner that plays `scripts[n]` for the n-th process spawned; one past the scripts fails to start. */
 export function fakeAppServer(scripts: readonly Script[]) {
   const spawned: Spawned[] = [];
+
   const spawn = (command: ChildProcess.Command) =>
     Effect.gen(function* () {
-      if (command._tag !== "StandardCommand") return yield* Effect.die("a pipeline was spawned");
+      if (!Predicate.isTagged(command, "StandardCommand"))
+        return yield* Effect.die("a pipeline was spawned");
       const script = scripts[spawned.length];
+
       if (script === undefined) {
         return yield* Effect.fail(
           PlatformError.systemError({
+            // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- Effect's systemError takes its tag as data
             _tag: "NotFound",
             module: "ChildProcess",
             method: "spawn",
@@ -163,6 +177,7 @@ export function fakeAppServer(scripts: readonly Script[]) {
           }),
         );
       }
+
       const record: Spawned = {
         program: command.command,
         args: command.args,
@@ -173,6 +188,7 @@ export function fakeAppServer(scripts: readonly Script[]) {
         answers: yield* Queue.unbounded<RecordedMessage>(),
         ended: false,
       };
+
       spawned.push(record);
       const stdout = yield* Queue.unbounded<Uint8Array, PlatformError.PlatformError | Cause.Done>();
       const stderr = yield* Queue.unbounded<Uint8Array, PlatformError.PlatformError | Cause.Done>();
@@ -182,41 +198,53 @@ export function fakeAppServer(scripts: readonly Script[]) {
         }).pipe(Effect.andThen(Queue.end(stdout)), Effect.andThen(Queue.end(stderr))),
       );
       let next = 0;
+
       const take = (message: RecordedMessage) =>
         Effect.gen(function* () {
           record.received.push(message);
           const exchange = script.exchanges[next];
+
           if (exchange === undefined || exchange.method !== message.method) {
             record.unexpected.push(message.method ?? "");
+
             return;
           }
+
           next += 1;
+
           if (exchange.beforeReply !== undefined) yield* exchange.beforeReply(record);
           const lines = replyLines(exchange.reply, message);
           const held = exchange.holdAnswer;
           const first = held === undefined ? lines : lines.filter(({ isAnswer }) => !isAnswer);
+
           for (const { line } of first) yield* Queue.offer(stdout, encoder.encode(`${line}\n`));
+
           if (held !== undefined) {
             yield* held;
+
             for (const { line } of lines.filter(({ isAnswer }) => isAnswer)) {
               yield* Queue.offer(stdout, encoder.encode(`${line}\n`));
             }
           }
+
           if (next === script.exchanges.length && script.exitWith !== undefined) {
             yield* Queue.offer(stderr, encoder.encode(script.exitWith));
             yield* Queue.end(stderr);
             yield* Queue.end(stdout);
           }
         });
+
       if (script.exchanges.length === 0 && script.exitWith !== undefined) {
         yield* Queue.offer(stderr, encoder.encode(script.exitWith));
         yield* Queue.end(stderr);
         yield* Queue.end(stdout);
       }
+
       // Note that the runner's requests are played in a fiber of their own, so an answer it writes is read while an exchange waits.
       const requests = yield* Queue.unbounded<RecordedMessage>();
       yield* Stream.fromQueue(requests).pipe(Stream.runForEach(take), Effect.forkScoped);
       const input = command.options.stdin;
+
       if (Predicate.hasProperty(input, "stream") && Stream.isStream(input.stream)) {
         yield* input.stream.pipe(
           Stream.decodeText(),
@@ -234,6 +262,7 @@ export function fakeAppServer(scripts: readonly Script[]) {
           Effect.forkScoped,
         );
       }
+
       return ChildProcessSpawner.makeHandle({
         pid: ChildProcessSpawner.ProcessId(spawned.length),
         exitCode: Effect.never,
@@ -248,6 +277,7 @@ export function fakeAppServer(scripts: readonly Script[]) {
         unref: Effect.succeed(Effect.void),
       });
     });
+
   return {
     layer: Layer.succeed(ChildProcessSpawner.ChildProcessSpawner, ChildProcessSpawner.make(spawn)),
     spawned,

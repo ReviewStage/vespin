@@ -61,6 +61,7 @@ const YOUR = "Your";
 /** Manage usage, opening ChatGPT's usage settings. */
 function ManageUsageLink(): React.JSX.Element {
   const openLink = useOpenLink();
+
   return (
     <OutsideLink href={CHATGPT_USAGE_URL} open={openLink}>
       {MANAGE_USAGE}
@@ -78,7 +79,9 @@ function PayerGlyph({
 }): React.JSX.Element {
   if (mark === PAYER_MARK.PLAN && provider !== undefined)
     return <HarnessMark provider={provider} />;
+
   if (mark === PAYER_MARK.MAC) return <LaptopIcon />;
+
   return <KeyRoundIcon />;
 }
 
@@ -91,7 +94,9 @@ function PayerWords({
   owner: Actor | undefined;
 }): React.JSX.Element {
   if (!parts.owned) return <>{parts.words}</>;
+
   if (owner === undefined) return <>{`${YOUR} ${parts.words}`}</>;
+
   return (
     <ActorLine>
       <ReplayMask>
@@ -117,6 +122,7 @@ export function usePayerPlan(
   // Note that a plan is read from the reader's own keys, so a teammate's agent reads none of its starter's, nor its usage.
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
   const keys = useQuery(providerKeysQuery(accountId)).data;
+
   return payerPlanOf(payer, keys?.subscriptions, subscriptionId, next, owner !== undefined);
 }
 
@@ -135,8 +141,10 @@ export function payerLastLine(
   plan?: SubscriptionKeySummary | undefined,
 ): MenuLastLine | undefined {
   const parts = agentPayerParts(payer, provider, usage?.costUsd, planNameOf(plan));
+
   if (parts === undefined) return undefined;
   const meters = plan === undefined ? undefined : planUsageMeters(plan, Date.now());
+
   const line = {
     glyph: <PayerGlyph mark={parts.mark} provider={provider} />,
     words: <PayerWords parts={parts} owner={owner} />,
@@ -150,6 +158,7 @@ export function payerLastLine(
           ),
         }),
   };
+
   return payer === AGENT_PAYER.CHATGPT_SUBSCRIPTION && owner === undefined
     ? { ...line, end: <ManageUsageLink /> }
     : line;
@@ -171,8 +180,10 @@ export function PayerValue({
   planName?: string | undefined;
 }): React.JSX.Element | null {
   const parts = agentPayerParts(payer, provider, usage?.costUsd, planName);
+
   if (parts === undefined) return null;
   const words = <PayerWords parts={parts} owner={owner} />;
+
   return (
     <span className="inline-flex min-w-0 items-center gap-icon-gap">
       <GlyphSlot ink={GLYPH_INK.INHERIT} size={ICON_SIZE.SMALL}>

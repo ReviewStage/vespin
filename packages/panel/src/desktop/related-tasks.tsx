@@ -112,6 +112,7 @@ function drawnCells(
     ),
     [TASK_ROW_CELL.SUB_TASKS]: rows.some(({ task }) => subTasks.has(task.id)),
   };
+
   return RELATED_TASK_CELLS.filter((cell) => filled[cell] ?? true);
 }
 
@@ -145,13 +146,16 @@ export function RelatedTasks({
   const [list, setList] = useState<HTMLDivElement | null>(null);
   const pullRequests = useListedTaskPullRequests();
   const filled = drawnCells(rows, subTasks, pullRequests);
+
   const fitted = useFittedColumns(list, filled.filter(isListColumn), {
     reserved: ownRoom(filled),
   });
+
   const cells = filled.filter((cell) => !isListColumn(cell) || fitted.includes(cell));
   const more = !useCoarsePointer();
   const nests = nestsOf(rows.map(({ depth = 0 }) => ({ depth })));
   const keys = useMemo(() => rows.map(({ task }) => task.id), [rows]);
+
   // What every row says in the columns before its name whose words differ row to row, which those columns stand as wide as, since each row lays them out itself (`taskRowFit`).
   const fit = useMemo(
     () =>
@@ -163,8 +167,10 @@ export function RelatedTasks({
       ),
     [rows, workspaceName],
   );
+
   // Note that the rows are drawn only near the view, and every row while a find bar stands open over the plan.
   const finding = useFindOpen();
+
   return (
     // Note that the list is measured from a box of its own, the width its rows stand in, so its columns fold for the room it has.
     <div ref={setList} className="related-tasks min-w-0">
@@ -196,8 +202,10 @@ export function RelatedTasks({
       >
         {(index, place) => {
           const row = rows[index];
+
           if (row === undefined) return null;
           const { task, relation, depth, fold, menu, unlisted } = row;
+
           return (
             <TaskListRow
               key={task.id}

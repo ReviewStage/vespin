@@ -77,20 +77,26 @@ export function hostedPageFramePath(page: FramedPage): string {
 /** The version a frame's address spells, read only as `pageFrameUrl` spells it, so `02` or `2e0` names nothing. */
 function versionOf(spelled: string | undefined): number | undefined {
   const number = Number(spelled);
+
   return String(number) === spelled && number >= 1 ? number : undefined;
 }
 
 /** The page an address names, where it names exactly one in the shape `pageFrameUrl` writes; nothing for any other. */
 export function framedPageOf(url: string): FramedPage | undefined {
   const parsed = URL.parse(url);
+
   if (parsed === null || parsed.protocol !== `${PAGE_SCHEME}:` || parsed.host !== PAGE_HOST) {
     return undefined;
   }
+
   if (parsed.search !== "" || parsed.hash !== "") return undefined;
   const steps = parsed.pathname.slice(1).split("/");
+
   if (steps.some((step) => step === "")) return undefined;
   const [taskId, pageId, spelled, ...rest] = steps;
   const version = versionOf(spelled);
+
   if (taskId === undefined || pageId === undefined || version === undefined) return undefined;
+
   return rest.length > 0 ? undefined : { taskId, pageId, version };
 }

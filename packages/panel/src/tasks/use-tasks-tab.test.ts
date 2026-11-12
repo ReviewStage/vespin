@@ -21,7 +21,12 @@ import { APP_HOME_LINK, LINK_ORIGIN } from "@repo/features/link-home";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import { PAGE_OWNER } from "@repo/features/page-wire";
-import { DESCRIPTION_ACTOR, TASK_CREATE_RELATION_KIND, type Task } from "@repo/features/task-wire";
+import {
+  DESCRIPTION_ACTOR,
+  TASK_CREATE_RELATION_KIND,
+  TASK_STATUS,
+  type Task,
+} from "@repo/features/task-wire";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import {
   IDLE_TASKS_VIEW,
@@ -54,17 +59,19 @@ import {
 } from "@repo/ui/tab-strip-model";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import { createMemoryHistory } from "@tanstack/react-router";
-import { Clock, Context, Duration, Effect, Option, Schema } from "effect";
+import { Clock, Context, Duration, Effect, Option, Predicate, Schema } from "effect";
 import { TestClock } from "effect/testing";
-import { act, createElement, Fragment, useState } from "react";
+import { act, createElement, Fragment, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { useAdminView } from "../admin/admin-route.js";
 import { ADMIN_PAGE, ADMIN_TAB, type AdminView } from "../admin/routing.js";
 import { useAgentRoute } from "../agent-route.js";
 import { type AutomationsRoute, useAutomationsRoute } from "../automations-route.js";
+import { useHomeNewTask } from "../desktop/desktop-welcome.js";
 import { type InboxRoute, type InboxView, useInboxRoute, useInboxView } from "../inbox-route.js";
 import { useCopyLink } from "../links-at-hand.js";
+import { descriptionDocumentQuery } from "../live-reads.js";
 import {
   installPanelSpanRecorder,
   PANEL_SPAN,
@@ -146,6 +153,7 @@ import { type TasksControl, useTasksTab } from "./use-tasks-tab.js";
 
 // Note that the description, its comments, and its history stand only while the account has Descriptions on.
 beforeAll(() => readExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
+
 // Note that each case starts with the document handing Descriptions on, whatever an earlier case handed.
 beforeEach(() => handState(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
 
@@ -197,6 +205,7 @@ function handDescriptions(descriptions: AppDescriptionDocuments): void {
     }),
   });
 }
+
 /** The shown act's payload, read back as the act's own schema admits it. */
 const readShown = Schema.decodeUnknownOption(
   Schema.Struct({
@@ -228,6 +237,20 @@ interface Standing {
   admin?: boolean;
   /** The address the window's page was loaded at, holding no step; `/app` where none is named. */
   loadedAt?: string;
+  /** Whether Home's own composer is drawn while Home stands, its words heeding New task as Home's do (`useHomeNewTask`). */
+  homeComposer?: boolean;
+}
+
+/** Home's own composer as New task reaches it: words that take the caret at each press while it stands. */
+function HomeComposerWords({ asks }: { asks: number }): React.JSX.Element {
+  const box = useRef<HTMLDivElement>(null);
+  useHomeNewTask(box, asks);
+
+  return createElement(
+    "div",
+    { ref: box },
+    createElement("div", { className: "ProseMirror home-words", tabIndex: -1 }),
+  );
 }
 
 /**
@@ -246,7 +269,6 @@ const SENT_ON_MUTATIONS: readonly PortActKind[] = [
   ACT_KIND.AGENTS_MESSAGE,
   ACT_KIND.AGENTS_CHOOSE,
   ACT_KIND.AGENTS_SERVERS,
-  ACT_KIND.AGENTS_ADD_REPOSITORY,
   ACT_KIND.AGENTS_RENAME,
   ACT_KIND.AGENTS_ARCHIVE,
   ACT_KIND.AGENTS_DELETE,
@@ -284,22 +306,31 @@ const SENT_ON_MUTATIONS: readonly PortActKind[] = [
 
 /** The Board's doors in the window last mounted, as a surface holds them. */
 let boardDoor: BoardDoor | undefined;
+
 /** A person's page's doors in the window last mounted, as a surface holds them. */
 let personDoor: PersonDoor | undefined;
+
 /** Admin's doors in the window last mounted, as a surface holds them. */
 let adminDoor: AdminDoor | undefined;
+
 /** The Automations pages' doors in the window last mounted, as a surface holds them. */
 let automationsDoor: AutomationsDoor | undefined;
+
 /** The Board, a person's page, and the Automations pages as the router of the window last mounted stands them. */
 let views: RoutedViews | undefined;
+
 /** Admin's view as the router of the window last mounted stands it, none while it does not stand. */
 let adminStanding: AdminView | undefined;
+
 /** The Inbox's doors in the window last mounted, as a surface holds them. */
 let inboxDoor: InboxDoor | undefined;
+
 /** The Inbox as a surface of the window last mounted reads it. */
 let inboxStanding: InboxView | undefined;
+
 /** The listed workspace's share of main's inbox read, as a surface of the window last mounted reads it. */
 let listedInbox: ReturnType<typeof useListedInbox> | undefined;
+
 /** The Inbox's route in the window last mounted, whose close only the window's own leave calls now. */
 let inboxRoute: InboxRoute | undefined;
 
@@ -326,12 +357,15 @@ function mount(
   /** Each asked act's payload, unread until a test reads it as the act's schema would. */
   const payloads: { readonly kind: PortActKind; readonly payload: unknown }[] = [];
   const links: SettingsLink[] = [];
+
   const record = (kind: PortActKind) => {
     if (!kind.startsWith("agents.")) told.push(kind);
     else agentActs.push(kind);
   };
+
   let control: TasksControl | undefined;
   let restand: ((next: Standing) => void) | undefined;
+
   let standing: Standing = {
     shown: false,
     tasks: IDLE_TASKS_VIEW,
@@ -347,11 +381,14 @@ function mount(
     descriptions: HELD_DESCRIPTIONS,
     ...initial,
   };
+
   handDescriptions(standing.descriptions);
   let windowHistory: (WindowHistory & TaskVisits & HistoryBehind) | undefined;
+
   if (standing.history) {
     fakeAppPlatform(QUIET_PANEL);
   }
+
   /** The window's history over the tab, as the panel's root keeps it, on the room the tab stands in. */
   function WindowHistoryProbe({
     tasks,
@@ -382,8 +419,10 @@ function mount(
     });
     // The ways back read the history, as the window's root hands it its routed exits.
     useRoutedExits().behind = windowHistory.behind;
+
     return null;
   }
+
   /** An act-port kind's answer as the test gives it, recorded, or a rejection where it gives none. */
   function portAnswer<Kind extends PortActKind>(
     kind: Kind,
@@ -392,25 +431,34 @@ function mount(
     record(kind);
     payloads.push({ kind, payload: args[0] });
     const answer = answers[kind];
+
     if (answer !== undefined) return answer(...args);
+
     return Promise.reject(new Error("Not answered in this test."));
   }
+
   // Note that the writes sent on mutations reach the act port, which answers them as the test's `acts` would.
   fakeActPort({
     ...fakeActPortCalls(),
     // SAFETY: each kind is answered by its own procedure's answer, the dispatch on the kind the one erasure.
     ...(Object.fromEntries(
-      SENT_ON_MUTATIONS.map((kind) => [kind, (payload: unknown) => portAnswer(kind, payload)]),
+      SENT_ON_MUTATIONS.map((kind) => [
+        kind,
+        <Payload>(payload: Payload) => portAnswer(kind, payload),
+      ]),
     ) as Partial<FakeActPort>),
     // The one told payload the tests read, parsed as the boundary would, and answered as an asked one is.
     [ACT_KIND.AGENTS_SHOWN]: (payload) => {
       const shown = Option.getOrUndefined(readShown(payload));
+
       if (shown !== undefined) shownAgents.push(shown.agentId);
+
       return portAnswer(ACT_KIND.AGENTS_SHOWN, payload);
     },
   });
   /** Opens a link the router landed on, through the tab as it stands. */
   const openLanded = (link: ReadLink) => control?.onOpenLink(link);
+
   function Probe() {
     const [held, setHeld] = useState(standing);
     // The window's routed exits leave by the tab's own door and stay through the leave guard, as the window's root's do.
@@ -422,10 +470,12 @@ function mount(
     const versionHistoryView = useVersionHistoryRoute({ narrow: held.room === SHELL_ROOM.NARROW });
     const inboxView = useInboxRoute();
     inboxRoute = inboxView;
+
     // Home is the listed workspace's, as the window's root opens it.
     const homeView = useHomeRoute({
       listed: () => control?.workspace?.slug ?? control?.workspace?.id,
     });
+
     restand = setHeld;
     const here = useWindowPlace();
     const taskView = useTaskRoute();
@@ -479,28 +529,39 @@ function mount(
       onToBound: () => placeLeave.pass(tasks.onLeaveRouted),
       onToUnbound: homeView.onOpen,
     });
-    return held.history
-      ? createElement(WindowHistoryProbe, {
-          tasks: control,
-          room: held.room,
-          automations: automationsView,
-          versionHistory: versionHistoryView,
-          inbox: inboxView,
-        })
-      : null;
+
+    return createElement(
+      Fragment,
+      null,
+      held.history
+        ? createElement(WindowHistoryProbe, {
+            tasks: control,
+            room: held.room,
+            automations: automationsView,
+            versionHistory: versionHistoryView,
+            inbox: inboxView,
+          })
+        : null,
+      held.homeComposer === true && control.atHome
+        ? createElement(HomeComposerWords, { asks: control.newTask.homeAsks })
+        : null,
+    );
   }
+
   const container = document.createElement("div");
   document.body.append(container);
   // The window's toast stands beside the tab, as the app draws it.
   const surface = createElement(Fragment, null, createElement(Probe), createElement(ToastHost));
   const root = createRoot(container);
   roots.push(root);
+
   // Note that Admin standing is the router's, which stands at its address rather than Home's.
   const held = windowRouter(
     createMemoryHistory({
       initialEntries: [standing.loadedAt ?? (standing.admin === true ? "/acme/admin" : "/app")],
     }),
   );
+
   // Every address the router's history stood at, in order, each write and move among them.
   const passed: string[] = [];
   held.history.subscribe(({ location }) => passed.push(location.href));
@@ -511,6 +572,7 @@ function mount(
     });
     root.render(held.provide(withQueryClient(surface)));
   });
+
   return {
     /** Where the router's history stands. */
     at: () => held.history.location.pathname,
@@ -526,6 +588,7 @@ function mount(
     links,
     control: () => {
       assert.ok(control);
+
       return control;
     },
     /** The router arriving at `address`, as a browser's own move lands it. */
@@ -582,6 +645,7 @@ function _undoButton(): HTMLButtonElement {
   const undo = newestToastAction();
   assert.ok(undo, "no Undo on the toast");
   assert.equal(undo.textContent, "Undo");
+
   return undo;
 }
 
@@ -660,9 +724,11 @@ function namedIn(
   payloads: readonly { readonly kind: PortActKind; readonly payload: unknown }[],
   kind: PortActKind,
 ): (string | undefined)[] {
-  return payloads
-    .filter((asked) => asked.kind === kind)
-    .map((asked) => Option.getOrUndefined(readWorkspaceNamed(asked.payload))?.workspaceId);
+  return payloads.flatMap((asked) =>
+    asked.kind === kind
+      ? [Option.getOrUndefined(readWorkspaceNamed(asked.payload))?.workspaceId]
+      : [],
+  );
 }
 
 /** The workspace each start the tab asked for named. */
@@ -686,7 +752,9 @@ test("New plan opens its dialog over the open plan, which stays open; a second p
     { failure: TASK_CALL_FAILURE.REPOSITORY_NOT_REACHABLE },
     { planId: OTHER_TASK_ID },
   ] as const;
+
   let start = 0;
+
   const tab = mount(
     { shown: true, tasks: OPEN },
     { [ACT_KIND.TASKS_START]: () => Promise.resolve(answers[start++] ?? answers[1]) },
@@ -735,6 +803,7 @@ test("New task on Home opens no dialog over Home's own composer, asking it for t
     shown: true,
     tasks: { ...listRead([]), workspaces: TWO_WORKSPACES.workspaces },
   });
+
   act(() => home.control().newTask.onOpen());
   assert.equal(home.control().newTask.open, false, "no dialog over Home");
   assert.equal(home.control().newTask.homeAsks, 1, "Home's composer is asked for the caret");
@@ -745,6 +814,30 @@ test("New task on Home opens no dialog over Home's own composer, asking it for t
   assert.equal(home.control().newTask.homeAsks, 1);
 });
 
+test("New task pressed on Settings, which it leaves for Home, asks Home's own composer for the caret rather than opening the dialog over it", () => {
+  const settings = mount({
+    shown: false,
+    loadedAt: "/app/settings",
+    tasks: { ...listRead([]), workspaces: TWO_WORKSPACES.workspaces },
+    homeComposer: true,
+  });
+
+  // Note that the chord brings the Tasks tab forward, which lands on Home, and then presses New task as Settings drew it.
+  const { onOpen } = settings.control().newTask;
+  act(() => {
+    settings.arrive("/app");
+    settings.stand({ shown: true });
+    onOpen();
+  });
+  assert.equal(settings.control().newTask.open, false, "no dialog over Home");
+  // Note that Home's composer is first drawn by the press itself, and its first draw takes no caret on a phone.
+  assert.equal(
+    document.activeElement,
+    document.querySelector(".home-words"),
+    "Home's composer takes the caret",
+  );
+});
+
 test("an agent's start pressed on Home's own composer and refused opens no dialog over Home, handing the composer the card it pressed with and why, which a page opened since lets go", async () => {
   const tab = mount(
     { shown: true, tasks: { ...listRead([]), workspaces: TWO_WORKSPACES.workspaces } },
@@ -753,6 +846,7 @@ test("an agent's start pressed on Home's own composer and refused opens no dialo
         Promise.resolve({ failure: TASK_CALL_FAILURE.REPOSITORY_NOT_REACHABLE }),
     },
   );
+
   const { idempotencyKey: key, ...agent } = handedStart();
   const ask = { repository: "acme/api", workspaceId: undefined, relations: [], agent };
   const card = { relations: [], repository: "acme/api", choice: undefined, words: agent.prompt };
@@ -763,12 +857,14 @@ test("an agent's start pressed on Home's own composer and refused opens no dialo
     });
   });
   const refused = tab.control().newTask.homeRefused?.refused;
+
   const refusedOnHome = {
     dialog: tab.control().newTask.open,
     words: refused?.card.words,
     repository: refused?.card.repository,
     says: refused?.note.text.length !== 0,
   };
+
   // A start from the dialog over Home, refused in turn, lets its page go to the refusal it stood over.
   act(() => tab.control().newTask.onOpenIn("acme/web"));
   const second = handedStart();
@@ -815,6 +911,7 @@ test("with Open a task once it starts off, New task starts the task and its agen
     },
   );
   const agent = { ...RUNNING_AGENT, planId: OTHER_TASK_ID };
+
   const tab = mount(
     { shown: true, tasks: OPEN, room: SHELL_ROOM.NARROW },
     {
@@ -823,6 +920,7 @@ test("with Open a task once it starts off, New task starts the task and its agen
       [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true),
     },
   );
+
   await settle();
 
   act(() => tab.control().newTask.onOpen());
@@ -837,6 +935,7 @@ test("with Open a task once it starts off, New task starts the task and its agen
       },
     });
   });
+
   const started = {
     quiet: tab.payloads
       .filter((asked) => asked.kind === ACT_KIND.TASKS_START)
@@ -844,6 +943,7 @@ test("with Open a task once it starts off, New task starts the task and its agen
     dialog: tab.control().newTask.open,
     says: newestToastSays(),
   };
+
   const asked: (() => void)[] = [];
   act(() => {
     tab.control().placeLeave.stand((leave) => asked.push(leave));
@@ -875,6 +975,7 @@ const FILE = fileTab(FILE_REF.path);
 /** The panel as the developer sees it: shown or not, and on which tab. */
 function panelOf(tab: ReturnType<typeof mount>) {
   const { open, tab: shown } = tab.control().sidePanel;
+
   return { open, tab: shown };
 }
 
@@ -900,6 +1001,7 @@ async function settle(): Promise<void> {
     act(async () => {
       for (let tick = 0; tick < 8; tick += 1) await Promise.resolve();
     });
+
   await ticks();
   await settleQueries(ticks);
 }
@@ -1023,10 +1125,12 @@ test("a task last viewed on an agent's tab shows nothing until its agents are re
 
 test("a column whose last agent is archived opens a new agent's draft in its place", async () => {
   const archived = { ...RUNNING_AGENT, archivedAt: 5 };
+
   const tab = mount(
     { shown: true, tasks: withAgents([RUNNING_AGENT]) },
     { [ACT_KIND.AGENTS_ARCHIVE]: () => Promise.resolve({ agent: archived }) },
   );
+
   await settle();
   const column = () => tab.control().mainTabs;
   act(() => column().onChoose(agentTab(AGENT_ID)));
@@ -1038,10 +1142,42 @@ test("a column whose last agent is archived opens a new agent's draft in its pla
   await settle();
   const shown = column().tab;
   assert.ok(
-    shown !== undefined && typeof shown !== "string" && shown.kind === STRIP_TAB_KIND.DRAFT,
+    shown !== undefined && !Predicate.isString(shown) && shown.kind === STRIP_TAB_KIND.DRAFT,
     "a draft, as a task with no agent opens on",
   );
   assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, shown]);
+});
+
+test("the open task marked done leaves for Home, on any of its tabs, and one opened already done is read where it stands", async () => {
+  const done = { ...listed(), status: TASK_STATUS.DONE };
+
+  const settled = mount(
+    { shown: true, tasks: { ...OPEN, tasks: [done] } },
+    { [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve() },
+  );
+
+  await settle();
+  assert.ok(!settled.told.includes(ACT_KIND.TASKS_CLOSE), "a task opened done stays open");
+
+  const unread = mount(
+    { shown: true, tasks: { ...OPEN, listStatus: TASKS_READ.READING } },
+    { [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve() },
+  );
+
+  await settle();
+  unread.stand({ tasks: { ...OPEN, tasks: [done] } });
+  await settle();
+  assert.ok(!unread.told.includes(ACT_KIND.TASKS_CLOSE), "nor one first read done");
+
+  const tab = mount(
+    { shown: true, tasks: { ...OPEN, tasks: [listed()] } },
+    { [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve() },
+  );
+
+  await settle();
+  act(() => tab.control().mainTabs.onChoose(MAIN_TAB.OVERVIEW));
+  tab.stand({ tasks: { ...OPEN, tasks: [done] } });
+  await vi.waitFor(() => assert.ok(tab.told.includes(ACT_KIND.TASKS_CLOSE), "the task is left"));
 });
 
 test("a tab closed on another plan opens that plan again, and the tab on it once the host has it open", async () => {
@@ -1049,6 +1185,7 @@ test("a tab closed on another plan opens that plan again, and the tab on it once
     { shown: true, tasks: OPEN },
     { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true) },
   );
+
   act(() => tab.control().sidePanel.onOpenFile(FILE_REF));
   act(() => tab.control().sidePanel.onClose(FILE));
   tab.stand({ tasks: { ...OPEN, activeTaskId: OTHER_TASK_ID } });
@@ -1062,18 +1199,67 @@ test("a tab closed on another plan opens that plan again, and the tab on it once
   assert.deepEqual(panelOf(tab), { open: true, tab: FILE });
 });
 
+it.effect(
+  "a task's description is read once the pointer rests on its row, never for a row it only crosses, and from its press, before the host opens it",
+  () =>
+    Effect.gen(function* () {
+      const clock = yield* Clock.Clock;
+      serveClock(clock);
+
+      const tab = mount(
+        { shown: true, tasks: LISTING },
+        { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true) },
+      );
+
+      yield* landed;
+
+      // Whether the window holds the task's description, which the host reads for as long as it is held.
+      const held = (taskId: string) =>
+        testQueryClientNow()
+          .getQueryCache()
+          .find({ queryKey: descriptionDocumentQuery(taskId).queryKey })
+          ?.isActive() === true;
+
+      const crossed = "7e2f3a4b-5c6d-4e7f-8a9b-0c1d2e3f4a5b";
+      const rested = "5d1e2f3a-4b5c-4d6e-8f7a-9b0c1d2e3f4a";
+
+      act(() => tab.control().onPointTask(crossed));
+      yield* passing("50 millis");
+      act(() => tab.control().onPointTask(undefined));
+      yield* passing("200 millis");
+      assert.equal(held(crossed), false, "a row the pointer left before resting is never read");
+      act(() => tab.control().onPointTask(crossed));
+      yield* passing("50 millis");
+      act(() => tab.control().onPointTask(rested));
+      yield* passing("50 millis");
+      assert.equal(held(rested), false, "nothing is read before the pointer rests");
+      yield* passing("100 millis");
+      assert.equal(held(crossed), false, "a row the pointer only crossed is never read");
+      assert.equal(held(rested), true, "the task the pointer rests on is read ahead of a press");
+
+      // Note that the host is never made to open it, so only the press holds it.
+      act(() => tab.control().onSelect(OTHER_TASK_ID));
+      yield* landed;
+      assert.equal(tab.control().activeTaskId, TASK.id);
+      assert.equal(held(OTHER_TASK_ID), true, "the task pressed is read before the host opens it");
+    }),
+);
+
 test("in a narrow room a task opened from a list lands on its plan, its Overview with the side panel shut over it whichever tab it last showed, and on the desktop's width it stands shut once a plan with no tab was passed through", () => {
   for (const room of [SHELL_ROOM.NARROW, SHELL_ROOM.WIDE]) {
     window.localStorage.clear();
+
     const tab = mount(
       { shown: true, tasks: OPEN, room },
       { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true) },
     );
+
     act(() => tab.control().sidePanel.onChoose(PULLS));
     tab.stand({ tasks: { ...OPEN, activeTaskId: OTHER_TASK_ID } });
 
     act(() => tab.control().onSelect(TASK.id));
     tab.stand({ tasks: OPEN });
+
     if (room === SHELL_ROOM.NARROW) {
       assert.equal(tab.control().sidePanel.open, false, "narrow shuts the panel");
       assert.equal(tab.control().mainTabs.tab, MAIN_TAB.OVERVIEW, "over the task's Overview");
@@ -1091,6 +1277,7 @@ test("a task opened from a list, gone back to from the sidebar, or named by a ch
   const WAITING = "1b2c3d4e-5f60-4718-8293-a4b5c6d7e8f9";
   // One agent at work and one resting, the resting one's thread waiting on the developer, as the list followed live holds them.
   const waitingRow = { ...row(TASK.id, 1), agents: { total: 2, working: 1, pullRequestTotal: 0 } };
+
   const followed = [
     { id: AGENT_ID, status: AGENT_STATUS.RUNNING, createdAt: 2 },
     { id: WAITING, status: AGENT_STATUS.COMPLETED, createdAt: 1 },
@@ -1104,12 +1291,14 @@ test("a task opened from a list, gone back to from the sidebar, or named by a ch
       turnId: null,
     }),
   );
+
   const elsewhere = (tasks: TasksView["tasks"]) => ({
     ...OPEN,
     tasks,
     taskAgents: followed,
     activeTaskId: OTHER_TASK_ID,
   });
+
   const tab = mount(
     {
       shown: true,
@@ -1148,6 +1337,7 @@ test("in a narrow room Back to a task opens it as it stood, its panel open on th
     { shown: true, tasks: LISTING, room: SHELL_ROOM.NARROW, history: true },
     { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true) },
   );
+
   const panel = () => tab.control().sidePanel;
   act(() => panel().onOpenFile(FILE_REF));
   assert.deepEqual(panel().strip, [FILE]);
@@ -1175,6 +1365,7 @@ test("in a narrow room whose panel shows a worker of the open task, a door to th
     },
     { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true) },
   );
+
   await settle();
   act(() =>
     tab.control().sidePanel.onShow(TASK.id, subagentTab("toolu_1", { agent: AGENT_ID, task: "" })),
@@ -1197,6 +1388,7 @@ test("in a narrow room a task with no page behind it leaves for Home, not the Bo
       [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve(undefined),
     },
   );
+
   await settle();
   const away = tab.history().away;
 
@@ -1205,10 +1397,12 @@ test("in a narrow room a task with no page behind it leaves for Home, not the Bo
   await settle();
   tab.stand({ tasks: listRead([listed()]) });
   await settle();
+
   const left = {
     closed: tab.told.includes(ACT_KIND.TASKS_CLOSE),
     board: views?.board,
   };
+
   act(() => tab.history().onBack());
 
   assert.equal(away, undefined, "no page stands behind the task");
@@ -1223,6 +1417,7 @@ test("in a narrow room a Vespin link to another task's panel item opens that ite
       [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true),
     },
   );
+
   act(() =>
     tab
       .control()
@@ -1269,6 +1464,7 @@ test("a Vespin link naming a task by its number opens the task the service finds
   const tab = mount(
     { shown: true, tasks: OPEN },
     {
+      // SAFETY: a find's payload names the number it finds.
       [ACT_KIND.TASKS_FIND]: (payload) =>
         Promise.resolve(
           (payload as { number: number }).number === 42
@@ -1278,6 +1474,7 @@ test("a Vespin link naming a task by its number opens the task the service finds
       [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true),
     },
   );
+
   const open = (planId: string) =>
     act(() =>
       tab
@@ -1309,12 +1506,14 @@ const LISTED_STEP = TASK.workspaceId;
 function linkAt(href: string): ReadLink {
   const address = addressOf(href, undefined);
   assert.equal(address.kind, ADDRESS.PLACE, href);
+
   return address.link;
 }
 
 /** What a link place opened: the section and the comment thread the task's page is asked for, the side panel, and the agent's page standing. */
 function linkOpened(tab: ReturnType<typeof mount>) {
   const control = tab.control();
+
   return {
     section: control.sectionReveal?.reveal.anchor,
     comment: control.commentReveal?.thread,
@@ -1337,14 +1536,17 @@ function holdPageOne(): void {
 async function openedBy(href: string, pages: boolean) {
   if (pages) holdPageOne();
   const numbered = { ...TASK, number: 7 };
+
   const tab = mount({
     shown: true,
     tasks: { ...withAgents([RUNNING_AGENT]), tasks: [numbered], workspaces: LISTING.workspaces },
     descriptions: { [TASK.id]: { rows: { task: numbered } } },
   });
+
   await settle();
   act(() => tab.control().onOpenLink(linkAt(href)));
   await settle();
+
   return linkOpened(tab);
 }
 
@@ -1418,6 +1620,7 @@ test("a link to another task's section opens that task and asks its page to show
     { shown: true, tasks: LISTING, history: true },
     { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true) },
   );
+
   await settle();
   const link = linkAt(`${LINK_ORIGIN}/${LISTED_STEP}/task/${OTHER_TASK_ID}#rollout`);
 
@@ -1437,6 +1640,7 @@ test("a link to another task's section opens that task and asks its page to show
 test("a link to a comment thread asks its task's page for the thread, each ask its own, let go once taken, so a later visit opens nothing", async () => {
   const tab = mount({ shown: true, tasks: LISTING, history: true });
   await settle();
+
   const link = (threadId: string) =>
     linkAt(`${LINK_ORIGIN}/${LISTED_STEP}/task/${TASK.id}?comment=${threadId}`);
 
@@ -1457,10 +1661,12 @@ test("a link to a comment thread asks its task's page for the thread, each ask i
 
 test("in a narrow room a link to another task's page goes straight to the page's address, and no other address stands as the task opens", async () => {
   holdPageOne();
+
   const tab = mount(
     { shown: true, tasks: LISTING, room: SHELL_ROOM.NARROW, history: true },
     { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true) },
   );
+
   await settle();
   const from = tab.passed.length;
   const address = `/${LISTED_STEP}/task/${OTHER_TASK_ID}/page/page-1`;
@@ -1497,7 +1703,8 @@ test("a Vespin link keyed by the agent alone opens on the agent's task, and on t
   const SLOW = "1a9b8c7d-6e5f-4a3b-9c2d-1e0f9a8b7c6d";
   const LISTED = "3f2e1d0c-9b8a-4f7e-8d6c-5b4a39281706";
   let answerSlow: () => void = () => undefined;
-  const read = (agentId: unknown) => ({
+
+  const read = (agentId: string) => ({
     agent: {
       ...RUNNING_AGENT,
       id: String(agentId),
@@ -1507,6 +1714,7 @@ test("a Vespin link keyed by the agent alone opens on the agent's task, and on t
       repository: null,
     },
   });
+
   const tab = mount(
     {
       shown: true,
@@ -1518,14 +1726,18 @@ test("a Vespin link keyed by the agent alone opens on the agent's task, and on t
     },
     {
       [ACT_KIND.AGENTS_PAGE]: (payload) => {
+        // SAFETY: a page read's payload names the agent it reads.
         const { agentId } = payload as { agentId: string };
+
         // Note that the service never answers for the agent the list followed live carries, which opens without it.
         if (agentId === LISTED) return new Promise(() => undefined);
+
         if (agentId === SLOW) {
           return new Promise((resolve) => {
             answerSlow = () => resolve(read(ELSEWHERE));
           });
         }
+
         return agentId === UNREAD
           ? Promise.reject(new Error("Unread."))
           : Promise.resolve(read(agentId));
@@ -1533,7 +1745,9 @@ test("a Vespin link keyed by the agent alone opens on the agent's task, and on t
       [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true),
     },
   );
+
   await settle();
+
   const open = (path: string) =>
     act(() => tab.control().onOpenLink(linkAt(`${LINK_ORIGIN}/acme${path}`)));
 
@@ -1601,6 +1815,7 @@ test("a Vespin link to an agent's worker opens the worker's own tab in the task'
 
 test("a link to an agent's Pull request tab, on a pull request another of the task's agents shares whose tab is open, opens that tab rather than a second, unless that agent was archived", async () => {
   const EARLIER = { ...RUNNING_AGENT, id: "5e3b6f1d-2a10-4c7a-9a55-7b0f5f3e2c1d", createdAt: 2 };
+
   const shared = {
     number: 41,
     title: "Teammate invitations",
@@ -1611,7 +1826,9 @@ test("a link to an agent's Pull request tab, on a pull request another of the ta
     deletions: 3,
     changedFiles: 2,
   };
+
   const archived = { ...EARLIER, archivedAt: 5 };
+
   // Both agents' rows keep the pull request they share, which the list carries beside them.
   const sharing = (agents: readonly AgentSummary[]): TasksView => ({
     ...withAgents(agents),
@@ -1621,11 +1838,14 @@ test("a link to an agent's Pull request tab, on a pull request another of the ta
       pullRequest: shared,
     })),
   });
+
   const tab = mount(
     { shown: true, tasks: sharing([EARLIER, RUNNING_AGENT]) },
     { [ACT_KIND.AGENTS_ARCHIVE]: () => Promise.resolve({ agent: archived }) },
   );
+
   await settle();
+
   const open = (agentId: string) =>
     act(() =>
       tab
@@ -1665,6 +1885,7 @@ test("a Vespin link to an agent's message opens the agent and asks its tab to br
 test("a Vespin link to a review thread opens its agent's Pull request tab on the view it names and asks the tab to bring the thread into view, each ask its own, let go once taken", async () => {
   const tab = mount({ shown: true, tasks: withAgents([RUNNING_AGENT]) });
   await settle();
+
   const link = (view: PullRequestThreadView) =>
     linkAt(`${LINK_ORIGIN}/acme/task/${TASK.id}/agent/${AGENT_ID}/changes/${view}/thread/PRRT_1`);
 
@@ -1673,10 +1894,12 @@ test("a Vespin link to a review thread opens its agent's Pull request tab on the
   const files = ofPullRequestTab(tab.control().sidePanel.pullRequestViews, changesTab(AGENT_ID));
   act(() => tab.control().onOpenLink(link(PULL_REQUEST_THREAD_VIEW.CONVERSATION)));
   const second = tab.control().threadReveal;
+
   const conversation = ofPullRequestTab(
     tab.control().sidePanel.pullRequestViews,
     changesTab(AGENT_ID),
   );
+
   act(() => tab.control().onThreadRevealed(1));
   const stale = tab.control().threadReveal;
   act(() => tab.control().onThreadRevealed(2));
@@ -1698,15 +1921,18 @@ test("a Vespin link to a review thread opens its agent's Pull request tab on the
 /** What an agent's link place opened on the open task: the column's tab, the side panel, and the message and review thread its tabs are asked for; and whether the Inbox stands. */
 async function agentOpenedBy(href: string) {
   const numbered = { ...TASK, number: 7 };
+
   const tab = mount({
     shown: true,
     tasks: { ...withAgents([RUNNING_AGENT]), tasks: [numbered], workspaces: LISTING.workspaces },
     descriptions: { [TASK.id]: { rows: { task: numbered } } },
   });
+
   await settle();
   act(() => tab.control().onOpenLink(linkAt(href)));
   await settle();
   const control = tab.control();
+
   return {
     column: control.mainTabs.tab,
     panel: panelOf(tab),
@@ -1721,10 +1947,12 @@ const ON_TASK = `${LINK_ORIGIN}/${LISTED_STEP}/task/${TASK.id}/agent/${AGENT_ID}
 const ON_PLAN = `${LINK_ORIGIN}/${LISTED_STEP}/plan/${TASK.id}/agent/${AGENT_ID}`;
 const BY_KEY = `${LINK_ORIGIN}/${LISTED_STEP}/task/VSP-7/agent/${AGENT_ID}`;
 const AGENT_COLUMN = { column: agentTab(AGENT_ID), message: undefined, inbox: false };
+
 const WORKER_PANEL = {
   column: agentTab(AGENT_ID),
   panel: { open: true, tab: subagentTab("toolu_1", { agent: AGENT_ID, task: "" }) },
 };
+
 const CHANGES_PANEL = { panel: { open: true, tab: changesTab(AGENT_ID) }, thread: undefined };
 const THREAD_PANEL = { panel: { open: true, tab: changesTab(AGENT_ID) }, thread: "PRRT_1" };
 
@@ -1766,9 +1994,12 @@ test.each([
   "%s opens what it names, matched on the route tree",
   async (_spelling, href, expected) => {
     const opened = await agentOpenedBy(href);
+
+    // SAFETY: each expected key is one of the opened place's own, a missing one reading undefined.
     const read = Object.fromEntries(
       Object.keys(expected).map((key) => [key, opened[key as keyof typeof opened]]),
     );
+
     assert.deepEqual(read, expected);
   },
 );
@@ -1797,10 +2028,12 @@ async function placeOpenedBy(href: string) {
         }),
     },
   );
+
   await settle();
   act(() => tab.control().onOpenLink(linkAt(href)));
   await settle();
   const control = tab.control();
+
   return {
     at: tab.at(),
     listed: control.workspace?.slug,
@@ -1817,15 +2050,18 @@ async function placeOpenedBy(href: string) {
 }
 
 const ACME_AT = `${LINK_ORIGIN}/acme`;
+
 const BY_ID = {
   inbox: {
     chosen: { taskId: "alerts", itemAgentId: AGENT_ID, itemId: ITEM_ID, opened: true },
     narrowed: undefined,
   },
 };
+
 const UNDER_TASK = {
   inbox: { chosen: { taskId: "alerts", itemId: ITEM_ID, opened: true }, narrowed: undefined },
 };
+
 const INBOX = { inbox: { chosen: undefined, narrowed: undefined } };
 const NARROWED = { inbox: { chosen: undefined, narrowed: "alerts" } };
 const EDIT = { kind: AUTOMATIONS_PAGE.EDIT, automationId: "a1" };
@@ -1925,21 +2161,26 @@ test.each([
   "%s opens what it names, matched on the route tree",
   async (_spelling, href, expected) => {
     const opened = await placeOpenedBy(href);
+
+    // SAFETY: each expected key is one of the opened place's own, a missing one reading undefined.
     const read = Object.fromEntries(
       Object.keys(expected).map((key) => [key, opened[key as keyof typeof opened]]),
     );
+
     assert.deepEqual(read, expected);
   },
 );
 
 test("a page loaded at an agent's Changes under its task lands on its route, which opens their tab, and its step then takes the task's address in place", async () => {
   const task = `/${LISTED_STEP}/task/${TASK.id}`;
+
   const tab = mount({
     shown: true,
     tasks: withAgents([RUNNING_AGENT]),
     history: true,
     loadedAt: `${task}/agent/${AGENT_ID}/changes`,
   });
+
   const entries = tab.entries();
   await settle();
 
@@ -1953,6 +2194,7 @@ test("a Vespin link to an Inbox item opens it in the window's Inbox as it stands
   const itemId = "5d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6";
   const agentItemId = "7f3a4b5c-6d7e-4f80-9a12-a3b4c5d6e7f8";
   const automationId = "6e2f3a4b-5c6d-4e7f-8a91-92a3b4c5d6e7";
+
   const tab = mount(
     { shown: true, tasks: { ...TWO_WORKSPACES, activeTaskId: "notes" } },
     {
@@ -1969,6 +2211,7 @@ test("a Vespin link to an Inbox item opens it in the window's Inbox as it stands
         }),
     },
   );
+
   const opened = () => ({
     open: inboxNow().open,
     chosen: inboxNow().chosen,
@@ -2025,13 +2268,16 @@ test("a Vespin link to an Inbox item by its id alone opens it where the service 
   const alerts = "alerts";
   const itemId = "5d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6";
   const unknownId = "7f3a4b5c-6d7e-4f80-9a12-a3b4c5d6e7f8";
+
   // The service finds the first item, then not the second, and then finds the second once asked again.
   const homes = [
     { agentId: AGENT_ID, planId: alerts, workspaceId: ACME.id },
     { failure: AGENT_CALL_FAILURE.NOT_FOUND },
     { agentId: AGENT_ID, planId: alerts, workspaceId: ACME.id },
   ] as const;
+
   let asked = 0;
+
   const tab = mount(
     { shown: true, tasks: { ...TWO_WORKSPACES, activeTaskId: "notes" } },
     {
@@ -2109,6 +2355,7 @@ test.each([
   "a link to %s whose read lands after an Inbox row was chosen leaves the row chosen",
   async (_read, kind, answer, place: LinkDestination) => {
     const answers: Array<() => void> = [];
+
     const tab = mount(
       { shown: true, tasks: TWO_WORKSPACES },
       {
@@ -2116,6 +2363,7 @@ test.each([
         [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true),
       },
     );
+
     await settle();
     act(() => inboxDoorNow().open());
     act(() => tab.control().onOpenLink({ workspace: "acme", place }));
@@ -2158,6 +2406,7 @@ test.each([
   "a link to %s whose read lands after the window replaced its step with another page leaves that page standing",
   async (_read, kind, answer, href) => {
     const answers: Array<() => void> = [];
+
     const tab = mount(
       { shown: true, tasks: TWO_WORKSPACES },
       {
@@ -2165,6 +2414,7 @@ test.each([
         [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true),
       },
     );
+
     await settle();
     act(() => inboxDoorNow().open());
     act(() => tab.control().onOpenLink(linkAt(href)));
@@ -2184,6 +2434,7 @@ test.each([
 test("a task's Inbox door and its link narrow the Inbox to the task, an agent's waiting thread choosing that thread there, and the Inbox's own row lists everything", async () => {
   const tab = mount({ shown: true, tasks: TWO_WORKSPACES }, {});
   await settle();
+
   const narrowedTo = () => ({
     open: inboxNow().open,
     chosen: inboxNow().chosen,
@@ -2261,6 +2512,7 @@ test("a Vespin link to a task's version opens its version history on that versio
     { shown: true, tasks: OPEN },
     { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true) },
   );
+
   await settle();
 
   act(() =>
@@ -2297,6 +2549,7 @@ test("a Vespin link to a version of a task the service will not hand the reader 
     },
     { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true) },
   );
+
   await settle();
 
   act(() =>
@@ -2351,6 +2604,7 @@ test("a section shown is let go, so the plan opened again later opens where it w
     { shown: true, tasks: LISTING },
     { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true) },
   );
+
   const section = { kind: MENTION_KIND.SECTION, taskId: OTHER_TASK_ID, anchor: "rollout" } as const;
 
   act(() => tab.control().onShowMention(section));
@@ -2372,17 +2626,20 @@ test("the closed tabs kept are the latest twenty, the oldest let go past them", 
   act(() => panel().onClose(SIDE_PANEL_TAB.DESCRIPTION));
   // Note that each close is of a file of its own, since a tab standing open again is passed over.
   const files = Array.from({ length: 20 }, (_, at) => ({ ...FILE_REF, path: `src/file-${at}.ts` }));
+
   for (const ref of files) {
     act(() => panel().onOpenFile(ref));
     act(() => panel().onClose(fileTab(ref.path)));
   }
 
   const reopened: unknown[] = [];
+
   for (let reopen = tab.control().onReopenClosedTab; reopen !== undefined; ) {
     act(() => reopen?.());
     reopened.push(panel().tab);
     reopen = tab.control().onReopenClosedTab;
   }
+
   assert.deepEqual(
     reopened,
     files.toReversed().map((ref) => fileTab(ref.path)),
@@ -2395,6 +2652,7 @@ test("a file's tab opens again on the record it closed with, though another plan
     { shown: true, tasks: OPEN },
     { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true) },
   );
+
   const panel = () => tab.control().sidePanel;
   act(() => panel().onOpenFile(FILE_REF));
   act(() => panel().onClose(fileTab(FILE_REF.path)));
@@ -2416,6 +2674,7 @@ test("a press while a reopen waits on its plan takes no tab of another plan, whi
     { shown: true, tasks: OPEN },
     { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true) },
   );
+
   const panel = () => tab.control().sidePanel;
   act(() => panel().onChoose(PULLS));
   act(() => panel().onClose(PULLS));
@@ -2447,6 +2706,7 @@ test("a tab its strip no longer draws, its page gone since, is passed over for t
     version: 1,
     at: 1,
   };
+
   fakeActs({
     act: () => Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not in this test." }),
   });
@@ -2476,10 +2736,13 @@ test("a tab its strip no longer draws, its page gone since, is passed over for t
 
 test("a render that hands the same plans keeps the lists the tab hands out, and a new list of plans hands out new ones", () => {
   const tab = mount({ shown: true, tasks: TWO_WORKSPACES });
+
   const lists = () => {
     const control = tab.control();
+
     return [control.tasks, control.listed.tasks, control.newTask.tasks];
   };
+
   const before = lists();
 
   tab.stand({ unseenAgents: ["agent-1"] });
@@ -2502,6 +2765,7 @@ test("the sidebar lists the first workspace's plans first, a workspace chosen li
     workspace: tab.control().workspace?.id,
     tasks: tab.control().listed.tasks.map((task) => task.id),
   };
+
   await tab.control().newTask.start("Invites", null, tab.control().newTask.workspaceId);
   act(() => tab.control().onChooseWorkspace(ACME.id));
   await tab.control().newTask.start("Usage", "acme/relay", tab.control().newTask.workspaceId);
@@ -2525,6 +2789,7 @@ test("the sidebar lists the first workspace's plans first, a workspace chosen li
 
 test("opening a plan of another workspace lists that workspace once it opened, one of the workspace listed changes nothing, and one that would not open changes nothing", async () => {
   let opens = true;
+
   const tab = mount(
     { shown: true, tasks: TWO_WORKSPACES },
     { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(opens) },
@@ -2576,8 +2841,10 @@ test("the Inbox lists the chosen workspace's share of what waits, and a plan the
       { taskId: "unread", items: 3, updatedAt: 1 },
     ],
   });
+
   const share = () => {
     assert.ok(listedInbox, "a surface reads the listed share");
+
     return {
       inbox: listedInbox.inbox.map((task) => task.taskId),
       inboxTasks: listedInbox.inboxTasks.map((holding) => holding.taskId),
@@ -2609,6 +2876,7 @@ test("the Inbox opens on nothing chosen, from its row and from a link, whatever 
     { shown: true, tasks: { ...OPEN, tasks: [listed()] } },
     { [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve() },
   );
+
   const choose = () => {
     act(() => inboxDoorNow().openItem({ taskId: TASK.id, itemId: "item-1" }));
     act(() => boardDoor?.open());
@@ -2629,11 +2897,14 @@ test("the Inbox opens on nothing chosen, from its row and from a link, whatever 
 
 test("a start refused after another agent's page was opened leaves that page standing rather than the one the start was pressed on", async () => {
   const answers: Array<(answer: PortActResult<typeof ACT_KIND.TASKS_START>) => void> = [];
+
   const tab = mount(
     { shown: true, tasks: TWO_WORKSPACES },
     { [ACT_KIND.TASKS_START]: () => new Promise((resolve) => answers.push(resolve)) },
   );
+
   act(() => tab.control().agentView.onOpen("agent-a"));
+
   const handed = {
     idempotencyKey: AGENT_KEY,
     prompt: "Sweep the tests.",
@@ -2641,6 +2912,7 @@ test("a start refused after another agent's page was opened leaves that page sta
     choice: undefined,
     disabledServers: [],
   };
+
   let note: Promise<Failure | undefined> = Promise.resolve(undefined);
   act(() => {
     note = tab.control().newTask.start("", "acme/web", undefined, { handed });
@@ -2658,14 +2930,17 @@ test("a start refused after another agent's page was opened leaves that page sta
 test("a start refused that was pressed on the page saying a workspace is not there stands that page again", async () => {
   handState(experimentsOn(EXPERIMENT.DESCRIPTIONS), { tasks: TWO_WORKSPACES });
   const answers: Array<(answer: PortActResult<typeof ACT_KIND.TASKS_START>) => void> = [];
+
   const tab = mount(
     { shown: true, tasks: TWO_WORKSPACES },
     { [ACT_KIND.TASKS_START]: () => new Promise((resolve) => answers.push(resolve)) },
   );
+
   await settleQueries();
   act(() =>
     tab.control().onOpenLink({ workspace: "ghost", place: { kind: LINK_DESTINATION.HOME } }),
   );
+
   const handed = {
     idempotencyKey: AGENT_KEY,
     prompt: "Sweep the tests.",
@@ -2673,6 +2948,7 @@ test("a start refused that was pressed on the page saying a workspace is not the
     choice: undefined,
     disabledServers: [],
   };
+
   let note: Promise<Failure | undefined> = Promise.resolve(undefined);
   act(() => {
     note = tab.control().newTask.start("", "acme/web", undefined, { handed });
@@ -2688,11 +2964,14 @@ test("a start refused that was pressed on the page saying a workspace is not the
 
 test("a start refused after the Board was opened leaves the Board standing rather than the agent's page the start was pressed on", async () => {
   const answers: Array<(answer: PortActResult<typeof ACT_KIND.TASKS_START>) => void> = [];
+
   const tab = mount(
     { shown: true, tasks: TWO_WORKSPACES },
     { [ACT_KIND.TASKS_START]: () => new Promise((resolve) => answers.push(resolve)) },
   );
+
   act(() => tab.control().agentView.onOpen("agent-a"));
+
   const handed = {
     idempotencyKey: AGENT_KEY,
     prompt: "Sweep the tests.",
@@ -2700,6 +2979,7 @@ test("a start refused after the Board was opened leaves the Board standing rathe
     choice: undefined,
     disabledServers: [],
   };
+
   let note: Promise<Failure | undefined> = Promise.resolve(undefined);
   act(() => {
     note = tab.control().newTask.start("", "acme/web", undefined, { handed });
@@ -2742,6 +3022,7 @@ test.each([
   "%s pressed on the Inbox and refused after the Board was opened leaves the Board standing rather than the Inbox",
   async (_door, kind, press) => {
     const refusals: Array<() => void> = [];
+
     const tab = mount(
       { shown: true, tasks: TWO_WORKSPACES },
       {
@@ -2749,6 +3030,7 @@ test.each([
           new Promise((_resolve, reject) => refusals.push(() => reject(new Error("Refused.")))),
       },
     );
+
     act(() => inboxDoorNow().open());
     act(() => press(tab));
     act(() => boardDoor?.open());
@@ -2769,6 +3051,7 @@ test("a start refused while the Inbox item it was pressed over was still being f
   const itemId = "5d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6";
   const homes: Array<() => void> = [];
   const refusals: Array<() => void> = [];
+
   const tab = mount(
     { shown: true, tasks: TWO_WORKSPACES },
     {
@@ -2782,6 +3065,7 @@ test("a start refused while the Inbox item it was pressed over was still being f
         new Promise((_resolve, reject) => refusals.push(() => reject(new Error("Refused.")))),
     },
   );
+
   tab.arrive(`/personal/inbox/${itemId}`);
   await vi.waitFor(() => assert.ok(homes.length > 0));
   act(() => {
@@ -2834,6 +3118,7 @@ test("a person's page opened in another workspace lists it without reopening its
     },
     OPENS,
   );
+
   tab.stand({
     tasks: { ...TWO_WORKSPACES, workspaces: [PERSONAL, ACME, PLATFORM], activeTaskId: "notes" },
   });
@@ -2851,9 +3136,11 @@ test("a person's page opened in another workspace lists it without reopening its
 function opensAsked(
   payloads: readonly { readonly kind: PortActKind; readonly payload: unknown }[],
 ) {
-  return payloads
-    .filter((asked) => asked.kind === ACT_KIND.TASKS_SELECT)
-    .map((asked) => Option.getOrUndefined(readOpened(asked.payload))?.taskId);
+  return payloads.flatMap((asked) =>
+    asked.kind === ACT_KIND.TASKS_SELECT
+      ? [Option.getOrUndefined(readOpened(asked.payload))?.taskId]
+      : [],
+  );
 }
 
 const readOpened = Schema.decodeUnknownOption(Schema.Struct({ taskId: Schema.String }));
@@ -2866,6 +3153,7 @@ const OPENS = {
 
 test("a person's page opened while a plan's open is still out stands when the open answers late, listing nothing over it", async () => {
   let answer: (opened: boolean) => void = () => undefined;
+
   const tab = mount(
     { shown: true, tasks: { ...TWO_WORKSPACES, activeTaskId: "notes" } },
     {
@@ -2928,6 +3216,7 @@ test("a workspace chosen while a plan is open opens the plan last open there, or
     },
     OPENS,
   );
+
   tab.stand({
     tasks: { ...TWO_WORKSPACES, workspaces: [PERSONAL, ACME, PLATFORM], activeTaskId: "notes" },
   });
@@ -2948,6 +3237,7 @@ test("a workspace chosen while a plan is open opens the plan last open there, or
 
 test("a remembered plan that moved to another workspace since, or would not open, gives way to the home page of the workspace chosen", async () => {
   const three = [PERSONAL, ACME, PLATFORM];
+
   const moved = {
     ...TWO_WORKSPACES,
     workspaces: three,
@@ -2955,10 +3245,12 @@ test("a remembered plan that moved to another workspace since, or would not open
       task.id === "alerts" ? { ...task, workspaceId: PLATFORM.id } : task,
     ),
   };
+
   const tab = mount(
     { shown: true, tasks: { ...TWO_WORKSPACES, workspaces: three, activeTaskId: "alerts" } },
     OPENS,
   );
+
   tab.stand({ tasks: { ...moved, activeTaskId: "notes" } });
   act(() => tab.control().onChooseWorkspace(ACME.id));
   await settle();
@@ -2968,10 +3260,12 @@ test("a remembered plan that moved to another workspace since, or would not open
   assert.equal(tab.control().workspace?.id, ACME.id);
 
   window.localStorage.clear();
+
   const refused = mount(
     { shown: true, tasks: { ...TWO_WORKSPACES, workspaces: three, activeTaskId: "alerts" } },
     { ...OPENS, [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(false) },
   );
+
   refused.stand({ tasks: { ...TWO_WORKSPACES, workspaces: three, activeTaskId: "notes" } });
   act(() => refused.control().onChooseWorkspace(ACME.id));
   await settle();
@@ -2986,10 +3280,12 @@ test("a workspace chosen is listed at once, and a reopen answered after another 
   // The first reopen waits on main until the test answers it.
   const answers: ((opened: boolean) => void)[] = [];
   const held = new Promise<boolean>((answer) => answers.push(answer));
+
   const tab = mount(
     { shown: true, tasks: { ...TWO_WORKSPACES, workspaces: three, activeTaskId: "alerts" } },
     { ...OPENS, [ACT_KIND.TASKS_SELECT]: () => held },
   );
+
   tab.stand({ tasks: { ...TWO_WORKSPACES, workspaces: three, activeTaskId: "notes" } });
 
   act(() => tab.control().onChooseWorkspace(ACME.id));
@@ -2997,6 +3293,7 @@ test("a workspace chosen is listed at once, and a reopen answered after another 
   act(() => tab.control().onChooseWorkspace(PLATFORM.id));
   await settle();
   const leaves = tab.told.filter((kind) => kind === ACT_KIND.TASKS_CLOSE).length;
+
   for (const answer of answers) answer(false);
   await settle();
 
@@ -3011,10 +3308,12 @@ test("a workspace chosen is listed at once, and a reopen answered after another 
 
 test("a switch toast's Back does nothing once the window has moved on from the switch it reports", async () => {
   const three = [PERSONAL, ACME, PLATFORM];
+
   const tab = mount(
     { shown: true, tasks: { ...TWO_WORKSPACES, workspaces: three, activeTaskId: "notes" } },
     OPENS,
   );
+
   act(() => tab.control().onSelect("alerts"));
   await settle();
   tab.stand({ tasks: { ...TWO_WORKSPACES, workspaces: three, activeTaskId: "alerts" } });
@@ -3035,6 +3334,7 @@ test("a workspace chosen from the home page lists it and opens nothing", async (
     { shown: true, tasks: { ...TWO_WORKSPACES, workspaces: [PERSONAL, ACME, PLATFORM] } },
     OPENS,
   );
+
   act(() => home.control().onChooseWorkspace(ACME.id));
   await settle();
 
@@ -3092,8 +3392,10 @@ test("the repository chip's list for a workspace with GitHub connected is its re
       installationUrl: "https://github.com/apps/luke/installations/new",
     },
   };
+
   // Note that the tab and the chip stand on the test's one Query client, so the document each writes into it is the same one.
   holdRepositoryLists(handHostReads({}).deliverRepositoryLists, () => listed);
+
   const tab = mount(
     {
       shown: true,
@@ -3104,6 +3406,7 @@ test("the repository chip's list for a workspace with GitHub connected is its re
     },
     {},
   );
+
   installScrollIntoView();
   const chip = document.body.appendChild(document.createElement("div"));
   const chipRoot = createRoot(chip);
@@ -3145,6 +3448,7 @@ test("the repository chip's list for a workspace with GitHub connected is its re
 
 test("a plan moved lists the workspace it moved to while it is still open, and a move answered after another plan opened leaves the sidebar where it is", async () => {
   const answers: ((answer: { workspaceId: string }) => void)[] = [];
+
   const tab = mount(
     { shown: true, tasks: { ...TWO_WORKSPACES, activeTaskId: "billing" } },
     { [ACT_KIND.TASKS_MOVE]: () => new Promise((resolve) => answers.push(resolve)) },
@@ -3192,6 +3496,7 @@ test("a refused move says so in a toast, unless its caller says it itself", asyn
 
 test("a move pressed before the workspaces were read still lists the workspace it moved to once they land", async () => {
   const answers: ((answer: { workspaceId: string }) => void)[] = [];
+
   const tab = mount(
     { shown: true, tasks: { ...TWO_WORKSPACES, workspaces: [], activeTaskId: "billing" } },
     { [ACT_KIND.TASKS_MOVE]: () => new Promise((resolve) => answers.push(resolve)) },
@@ -3209,6 +3514,7 @@ test("a move pressed before the workspaces were read still lists the workspace i
 
 test("a workspace chosen while a move is out, even the first chosen after the workspaces land, stays listed when the move lands", async () => {
   const answers: ((answer: { workspaceId: string }) => void)[] = [];
+
   const tab = mount(
     { shown: true, tasks: { ...TWO_WORKSPACES, workspaces: [], activeTaskId: "billing" } },
     { [ACT_KIND.TASKS_MOVE]: () => new Promise((resolve) => answers.push(resolve)) },
@@ -3228,10 +3534,12 @@ test("a workspace chosen while a move is out, even the first chosen after the wo
 
 test("a workspace left lists the account's own workspace, whichever was listed, and turns to the home page", async () => {
   const own = { ...PERSONAL, personal: true as const };
+
   const tab = mount({
     shown: true,
     tasks: { ...TWO_WORKSPACES, workspaces: [ACME, own], activeTaskId: "billing" },
   });
+
   act(() => tab.control().onChooseWorkspace(ACME.id));
   const chosen = tab.control().workspace?.id;
 
@@ -3304,6 +3612,7 @@ test("an agent profile opens its task on the agent it stages, beside the agent's
 /** The task as the list names it. */
 function listed(): TasksView["tasks"][number] {
   const { document: _document, ...summary } = TASK;
+
   return summary;
 }
 
@@ -3369,15 +3678,18 @@ async function onInbox(
       [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve(),
     },
   );
+
   await settle();
   act(() => away(tab.control()));
   await settle();
+
   return tab;
 }
 
 /** What a press leaves the window on: its address and steps, the task bound and asked for, the place standing, the tab shown, and the section asked into view. */
 function windowOf(tab: Awaited<ReturnType<typeof onInbox>>) {
   const control = tab.control();
+
   return {
     at: tab.at(),
     entries: tab.entries(),
@@ -3601,6 +3913,7 @@ test.each(WORKSPACE_DOORS)(
 
 /** A link to each family of places, opened in the Tasks tab as the window hands it one, each naming the task the doors above go to. */
 const ON_BILLING = `${LINK_ORIGIN}/personal/task/${BILLING.id}`;
+
 const LINK_DOORS: [string, string][] = [
   ["a comment thread's link", `${ON_BILLING}?comment=thread-1`],
   ["a section's link", `${ON_BILLING}#rollout`],
@@ -3638,6 +3951,7 @@ test("a link to a task number the service finds none for, over an automation hol
       [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(false),
     },
   );
+
   await settle();
   act(() => automationsDoor?.open(EDIT));
   await settle();
@@ -3692,6 +4006,7 @@ test.each<[string, (control: TasksControl) => void, string]>([
       },
       { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(false) },
     );
+
     await settle();
     act(() => away(tab.control()));
     await settle();
@@ -3770,6 +4085,7 @@ test("Home from an open plan leaves it, and from Home only puts the page in its 
     { shown: true, tasks: { ...OPEN, tasks: [listed()] } },
     { [ACT_KIND.TASKS_CLOSE]: () => Promise.resolve() },
   );
+
   act(() => tab.control().onGoHome());
   await vi.waitFor(() => assert.equal(tab.told.at(-1), ACT_KIND.TASKS_CLOSE));
   assert.equal(tab.control().boundFor, undefined);
@@ -3791,6 +4107,7 @@ const readTaskPin = Schema.decodeUnknownOption(
 
 test("a Plan tab an earlier version pinned to the sidebar becomes the task's own pin once the list names the task, and leaves this Mac's pins once that pin landed; a task already pinned only lets the tab's pin go, and a refused pin keeps the tab's for the next launch", async () => {
   const pin = (task: string, at: number) => ({ task, tab: "plan", label: "Plan", at });
+
   const kept = () =>
     window.localStorage.setItem(
       "app.sidePanel",
@@ -3801,27 +4118,33 @@ test("a Plan tab an earlier version pinned to the sidebar becomes the task's own
         pins: [pin(TASK.id, 1), pin(OTHER_TASK_ID, 2)],
       }),
     );
+
   const pinnedAlready = { ...listed(), id: OTHER_TASK_ID, pinnedAt: 5 };
+
   const asked = (tab: ReturnType<typeof mount>) =>
     tab.payloads
       .filter((each) => each.kind === ACT_KIND.TASKS_PIN)
       .map((each) => Option.getOrUndefined(readTaskPin(each.payload)));
 
   kept();
+
   const landed = mount(
     { shown: true, tasks: listRead([listed(), pinnedAlready]) },
     { [ACT_KIND.TASKS_PIN]: () => Promise.resolve(true) },
   );
+
   await act(async () => undefined);
   assert.deepEqual(asked(landed), [{ taskId: TASK.id, pinned: true }]);
   assert.deepEqual(landed.control().sidePanel.pins, [], "neither tab stays pinned on this Mac");
   closeWindow();
 
   kept();
+
   const refused = mount(
     { shown: true, tasks: listRead([listed(), pinnedAlready]) },
     { [ACT_KIND.TASKS_PIN]: () => Promise.resolve(false) },
   );
+
   await act(async () => undefined);
   // The list read again asks no second time: the tab's pin waits for the next launch.
   refused.stand({ tasks: listRead([{ ...listed(), updatedAt: 9 }, pinnedAlready]) });
@@ -3876,9 +4199,11 @@ async function startAgentTask(tab: ReturnType<typeof mount>) {
   });
   tab.stand({ tasks: AGENT_TASK });
   await settle();
+
   const starts = tab.payloads
     .filter(({ kind }) => kind === ACT_KIND.TASKS_START)
     .map(({ payload }) => Option.getOrUndefined(readAgentNamed(payload)));
+
   return { choice, prompt, note, starts };
 }
 
@@ -3897,6 +4222,7 @@ test("New sub-task on the open task the list has not read opens New task as a su
 
 test("New task's Agent mode sends one start carrying the agent, its words and model, and opens the task on the agent it started", async () => {
   const started = { ...RUNNING_AGENT, planId: OTHER_TASK_ID };
+
   const tab = mount(
     { shown: true, tasks: withAgents([started]), descriptions: AGENT_DESCRIPTIONS },
     {
@@ -3904,6 +4230,7 @@ test("New task's Agent mode sends one start carrying the agent, its words and mo
         Promise.resolve({ planId: OTHER_TASK_ID, agentStart: { agent: started } }),
     },
   );
+
   const { choice, prompt, note, starts } = await startAgentTask(tab);
 
   assert.equal(note, undefined);
@@ -3928,12 +4255,14 @@ test("New task's Agent mode sends one start carrying the agent, its words and mo
 
 test("archiving a task's last agent takes its tab at once, and a refused archive brings it back", async () => {
   const archived = Promise.withResolvers<PortActResult<typeof ACT_KIND.AGENTS_ARCHIVE>>();
+
   const tab = mount(
     { shown: true, tasks: withAgents([RUNNING_AGENT]) },
     {
       [ACT_KIND.AGENTS_ARCHIVE]: () => archived.promise,
     },
   );
+
   await settle();
   act(() => tab.control().mainTabs.onChoose(agentTab(AGENT_ID)));
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID));
@@ -3947,7 +4276,9 @@ test("archiving a task's last agent takes its tab at once, and a refused archive
   assert.ok(
     !tab
       .control()
-      .mainTabs.tabs.some((each) => typeof each !== "string" && each.kind === STRIP_TAB_KIND.AGENT),
+      .mainTabs.tabs.some(
+        (each) => !Predicate.isString(each) && each.kind === STRIP_TAB_KIND.AGENT,
+      ),
     "the agent leaves at once",
   );
 
@@ -3961,12 +4292,14 @@ test("an archived agent opens in a tab of its task's column, which stays once it
   const archived = { ...RUNNING_AGENT, archivedAt: 5 };
   const tab = mount({ shown: true, tasks: withAgents([archived]) });
   await settle();
+
   const agentTabs = () =>
     tab
       .control()
       .mainTabs.tabs.filter(
-        (each) => typeof each !== "string" && each.kind === STRIP_TAB_KIND.AGENT,
+        (each) => !Predicate.isString(each) && each.kind === STRIP_TAB_KIND.AGENT,
       );
+
   assert.deepEqual(agentTabs(), [], "an archived agent's tab stands only once opened");
 
   act(() => tab.control().onShowAgent(TASK.id, AGENT_ID));
@@ -3984,6 +4317,7 @@ test("an archived agent opens in a tab of its task's column, which stays once it
 
 test("a task started, with an agent or without, leaves a hidden side panel hidden", async () => {
   const started = { ...RUNNING_AGENT, planId: OTHER_TASK_ID };
+
   const tab = mount(
     { shown: true, tasks: withAgents([started]), descriptions: AGENT_DESCRIPTIONS },
     {
@@ -3991,6 +4325,7 @@ test("a task started, with an agent or without, leaves a hidden side panel hidde
         Promise.resolve({ planId: OTHER_TASK_ID, agentStart: { agent: started } }),
     },
   );
+
   act(() => tab.control().sidePanel.onSetOpen(false));
   assert.equal(tab.control().sidePanel.open, false);
 
@@ -4006,6 +4341,7 @@ test("a task started, with an agent or without, leaves a hidden side panel hidde
 
 test("New task's agent opens alone, no plan beside it, and the task left draws no panel until asked, since a tab standing opens none", async () => {
   const started = { ...RUNNING_AGENT, planId: OTHER_TASK_ID };
+
   const tab = mount(
     { shown: true, tasks: withAgents([started]), descriptions: AGENT_DESCRIPTIONS },
     {
@@ -4013,6 +4349,7 @@ test("New task's agent opens alone, no plan beside it, and the task left draws n
         Promise.resolve({ planId: OTHER_TASK_ID, agentStart: { agent: started } }),
     },
   );
+
   act(() => tab.control().sidePanel.onOpenFile(FILE_REF));
   assert.deepEqual(panelOf(tab), { open: true, tab: FILE });
 
@@ -4027,6 +4364,7 @@ test("New task's agent opens alone, no plan beside it, and the task left draws n
 
 test("New task's agent stands on its task before the task's agents or its transcript are read", async () => {
   const started = { ...RUNNING_AGENT, planId: OTHER_TASK_ID };
+
   const tab = mount(
     { shown: true, tasks: OPEN, descriptions: AGENT_DESCRIPTIONS },
     {
@@ -4034,6 +4372,7 @@ test("New task's agent stands on its task before the task's agents or its transc
         Promise.resolve({ planId: OTHER_TASK_ID, agentStart: { agent: started } }),
     },
   );
+
   await startAgentTask(tab);
 
   const agents = tab.control().agents;
@@ -4045,15 +4384,17 @@ test("New task's agent stands on its task before the task's agents or its transc
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID), "the task opens on its tab");
 });
 
-test("New task's agent start opens its page at once on the words as its agent's first line, before the service answers, which opens the agent's own tab in its place", async () => {
+test("New task's agent start opens its page at once, before the service answers, which opens the agent's own tab in its place", async () => {
   const started = { ...RUNNING_AGENT, planId: OTHER_TASK_ID };
   const answers: Array<(answer: PortActResult<typeof ACT_KIND.TASKS_START>) => void> = [];
+
   const tab = mount(
     { shown: true, tasks: withAgents([started]), descriptions: AGENT_DESCRIPTIONS },
     {
       [ACT_KIND.TASKS_START]: () => new Promise((resolve) => answers.push(resolve)),
     },
   );
+
   const prompt = "Make the sidebar keep its folds.";
   const choice = { model: "anthropic/claude-opus-5.5", effort: "high" };
   act(() => tab.control().newTask.onOpen());
@@ -4071,12 +4412,7 @@ test("New task's agent start opens its page at once on the words as its agent's 
   });
 
   assert.equal(tab.control().newTask.open, false, "the dialog closes as Start is pressed");
-  assert.equal(
-    tab.control().newTask.starting?.line.text,
-    prompt,
-    "the page stands on the words at once",
-  );
-  assert.deepEqual(tab.control().newTask.starting?.choice, choice, "and on the model picked");
+  assert.equal(tab.control().newTask.starting, true, "the page stands at once");
 
   await act(async () => {
     await vi.waitFor(() => assert.ok(answers.length > 0));
@@ -4085,17 +4421,19 @@ test("New task's agent start opens its page at once on the words as its agent's 
   });
   tab.stand({ tasks: AGENT_TASK });
   await settle();
-  assert.equal(tab.control().newTask.starting, undefined, "the task's own page takes its place");
+  assert.equal(tab.control().newTask.starting, false, "the task's own page takes its place");
   assert.deepEqual(tab.control().mainTabs.tab, agentTab(AGENT_ID));
 });
 
 test("what the developer opened while New task's agent start was out, a page and New task again, still stands as the start lands", async () => {
   const started = { ...RUNNING_AGENT, planId: OTHER_TASK_ID };
   const answers: Array<(answer: PortActResult<typeof ACT_KIND.TASKS_START>) => void> = [];
+
   const tab = mount(
     { shown: true, tasks: { ...OPEN, workspaces: [ACME] } },
     { [ACT_KIND.TASKS_START]: () => new Promise((resolve) => answers.push(resolve)) },
   );
+
   act(() => tab.control().newTask.onOpen());
   let note: Promise<Failure | undefined> = Promise.resolve(undefined);
   act(() => {
@@ -4119,11 +4457,12 @@ test("what the developer opened while New task's agent start was out, a page and
   });
   assert.equal(views?.automations !== undefined, true, "the page stands");
   assert.equal(tab.control().newTask.open, true, "New task stands");
-  assert.equal(tab.control().newTask.starting, undefined);
+  assert.equal(tab.control().newTask.starting, false);
 });
 
 test("New task's agent start refused after its page opened opens the card again on the repository, model, and press it held, saying why, over the version history it was asked from", async () => {
   const answers: Array<(answer: PortActResult<typeof ACT_KIND.TASKS_START>) => void> = [];
+
   const tab = mount(
     { shown: true, tasks: OPEN },
     {
@@ -4131,6 +4470,7 @@ test("New task's agent start refused after its page opened opens the card again 
       [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true),
     },
   );
+
   act(() =>
     tab.control().onOpenLink({
       workspace: "acme",
@@ -4138,6 +4478,7 @@ test("New task's agent start refused after its page opened opens the card again 
     }),
   );
   assert.equal(tab.control().history.open, true);
+
   const handed = {
     idempotencyKey: AGENT_KEY,
     prompt: "Make the sidebar keep its folds.",
@@ -4145,6 +4486,7 @@ test("New task's agent start refused after its page opened opens the card again 
     choice: undefined,
     disabledServers: [],
   };
+
   const card = {
     repository: "acme/web",
     choice: { model: "anthropic/claude-opus-5.5", effort: "high" },
@@ -4155,6 +4497,7 @@ test("New task's agent start refused after its page opened opens the card again 
     relations: [],
     words: handed.prompt,
   };
+
   act(() => tab.control().newTask.onOpen());
   let note: Promise<Failure | undefined> = Promise.resolve(undefined);
   act(() => {
@@ -4169,7 +4512,7 @@ test("New task's agent start refused after its page opened opens the card again 
     refused = await note;
   });
   assert.ok(refused !== undefined);
-  assert.equal(tab.control().newTask.starting, undefined, "the page gives way");
+  assert.equal(tab.control().newTask.starting, false, "the page gives way");
   assert.equal(tab.control().newTask.open, true, "the card opens again");
   assert.deepEqual(tab.control().newTask.preset?.refused, { card, note: refused });
   assert.equal(tab.control().history.open, true, "the version history stands behind it again");
@@ -4177,10 +4520,12 @@ test("New task's agent start refused after its page opened opens the card again 
 
 test("Create with an agent opens New task's card for an automation's agent over the Automations page, and a start refused after it closed opens the same card again, the page behind it", async () => {
   const answers: Array<(answer: PortActResult<typeof ACT_KIND.TASKS_START>) => void> = [];
+
   const tab = mount(
     { shown: true, tasks: { ...OPEN, workspaces: [ACME] } },
     { [ACT_KIND.TASKS_START]: () => new Promise((resolve) => answers.push(resolve)) },
   );
+
   act(() => automationsDoor?.open());
   act(() => tab.control().newTask.onOpenForAutomation());
   assert.equal(tab.control().newTask.open, true);
@@ -4194,6 +4539,7 @@ test("Create with an agent opens New task's card for an automation's agent over 
     choice: undefined,
     disabledServers: [],
   };
+
   const card = {
     purpose: NEW_TASK_PURPOSE.AUTOMATION,
     repository: "acme/web",
@@ -4205,6 +4551,7 @@ test("Create with an agent opens New task's card for an automation's agent over 
     relations: [],
     words: handed.prompt,
   };
+
   let note: Promise<Failure | undefined> = Promise.resolve(undefined);
   act(() => {
     note = tab.control().newTask.start("", "acme/web", undefined, { handed, card });
@@ -4226,6 +4573,7 @@ test("Create with an agent opens New task's card for an automation's agent over 
 
 test("an agent refused as New task's Agent mode started its task opens the task on a draft holding the words, model, and why, whose Retry starts the agent on that task under the start's key", async () => {
   const started = { ...RUNNING_AGENT, planId: OTHER_TASK_ID };
+
   const tab = mount(
     { shown: true, tasks: OPEN, descriptions: AGENT_DESCRIPTIONS },
     {
@@ -4243,10 +4591,12 @@ test("an agent refused as New task's Agent mode started its task opens the task 
             taskAgents: [listedAgent(started)],
           },
         });
+
         return Promise.resolve({ agent: started });
       },
     },
   );
+
   const { choice, prompt, note, starts } = await startAgentTask(tab);
   const draft = tab.control().agents.draft;
 
@@ -4300,6 +4650,7 @@ function openDraft(tab: ReturnType<typeof mount>) {
     const control = tab.control();
     control.mainTabs.onChoose(draftTab(control.agents.onNewDraft()));
   });
+
   return tab.control().agents.draft ?? assert.fail("no draft opened");
 }
 
@@ -4433,6 +4784,7 @@ test("a task opened is timed from the press to its document drawn ready, and one
   const spans: PanelSpan[] = [];
   const uninstall = installPanelSpanRecorder((span) => spans.push(span));
   let opens = true;
+
   const tab = mount(
     {
       shown: true,
@@ -4444,6 +4796,7 @@ test("a task opened is timed from the press to its document drawn ready, and one
     },
     { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(opens) },
   );
+
   await settle();
 
   act(() => tab.control().onSelect(TASK.id));
@@ -4549,10 +4902,12 @@ it.effect(
   () =>
     Effect.gen(function* () {
       serveClock(yield* Clock.Clock);
+
       const tab = mount(
         { shown: true, tasks: withAgents(IDLE_AGENTS), unseenAgents: [UNSEEN_ID] },
         {},
       );
+
       yield* landed;
       const column = () => tab.control().mainTabs;
       const running = agentTab(AGENT_ID);
@@ -4628,10 +4983,12 @@ it.effect(
         }),
       );
       serveClock(yield* Clock.Clock);
+
       const tab = mount(
         { shown: true, tasks: withAgents(IDLE_AGENTS), unseenAgents: [UNSEEN_ID] },
         {},
       );
+
       yield* landed;
       const column = () => tab.control().mainTabs;
       const running = agentTab(AGENT_ID);
@@ -4658,10 +5015,12 @@ it.effect(
   () =>
     Effect.gen(function* () {
       serveClock(yield* Clock.Clock);
+
       const tab = mount(
         { shown: true, tasks: withAgents(IDLE_AGENTS), unseenAgents: [UNSEEN_ID] },
         {},
       );
+
       yield* landed;
       const column = () => tab.control().mainTabs;
       act(() => column().onChoose(agentTab(FINISHED_ID)));
@@ -4680,10 +5039,12 @@ it.effect(
   () =>
     Effect.gen(function* () {
       serveClock(yield* Clock.Clock);
+
       const tab = mount(
         { shown: true, tasks: withAgents(IDLE_AGENTS), unseenAgents: [UNSEEN_ID] },
         { [ACT_KIND.TASKS_SELECT]: () => Promise.resolve(true) },
       );
+
       yield* landed;
       const column = () => tab.control().mainTabs;
       act(() => column().onChoose(agentTab(FINISHED_ID)));
@@ -4709,6 +5070,7 @@ it.effect(
       assert.deepEqual(column().tabs, [MAIN_TAB.OVERVIEW, agentTab(AGENT_ID), agentTab(UNSEEN_ID)]);
     }),
 );
+
 test("a pinned tab of one agent's opened while the column shows another shows its agent's column, whose strip alone draws it", async () => {
   const tab = mount({ shown: true, tasks: withAgents(IDLE_AGENTS) });
   await settle();

@@ -47,25 +47,33 @@ export function useIntegrationTools(connected: readonly string[]): IntegrationTo
 export function useIntegrationToolReads(connected: readonly string[]): IntegrationToolReads {
   // Note that a server's read stands under its connection's name, its provider's for the provider's first account.
   const names = connected.filter((name) => integrationServerOf(name) !== undefined);
+
   const reads = useQueries({
     queries: names.map((name) => integrationToolsQuery(name)),
     combine: (results) =>
       Object.fromEntries(
         results.flatMap((result, at): [string, IntegrationToolsView][] => {
           const name = names[at];
+
           if (name === undefined) return [];
+
           if (result.data !== undefined) return [[name, result.data]];
+
           return result.isError ? [[name, UNANSWERED]] : [];
         }),
       ),
   });
+
   const { mutate } = useMutation(integrationToolsRetryMutation());
+
   const retry = useCallback(
     (name: string) => {
       const server = integrationServerOf(name);
+
       if (server !== undefined) mutate(server);
     },
     [mutate],
   );
+
   return { reads, retry };
 }

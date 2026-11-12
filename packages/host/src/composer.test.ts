@@ -18,6 +18,7 @@ describe("the composers' tables folded into the host's", () => {
       { INSTALLED_SKILLS_READ: answered, INSTALLED_SKILLS_REMOVE: answered },
       { INSTALLED_SKILLS_READ: answered },
     ]);
+
     assert.deepEqual(
       Result.isFailure(folded) && folded.failure,
       new DuplicateHostAct({ act: "INSTALLED_SKILLS_READ" }),
@@ -29,6 +30,7 @@ describe("the composers' tables folded into the host's", () => {
       { [GATEWAY_METHOD.SHUTDOWN]: answered },
       { [GATEWAY_METHOD.CLIENT_BOOTSTRAP]: answered, [GATEWAY_METHOD.SHUTDOWN]: answered },
     ]);
+
     assert.deepEqual(
       Result.isFailure(folded) && folded.failure,
       new DuplicateGatewayMethod({ method: GATEWAY_METHOD.SHUTDOWN }),

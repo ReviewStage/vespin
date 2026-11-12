@@ -36,10 +36,13 @@ export const browserLiveDependencies: Effect.Effect<
   BrowserLiveServices
 > = Effect.gen(function* () {
   const context = yield* Effect.context<BrowserLiveServices>();
+
   const run = <A, E>(effect: Effect.Effect<A, E, BrowserLiveServices>) =>
     Effect.provideContext(effect, context);
+
   const sandbox = yield* Sandbox;
   const browser = agentBrowserOver(sandbox, sandboxPtyOf(sandbox), yield* AgentImage);
+
   return {
     readTab: (userId, place, tabId) => run(readBrowserTab(userId, place, tabId)),
     // Note that the tab was read under the member's reach first, so its agent's conversation is read whoever started it.

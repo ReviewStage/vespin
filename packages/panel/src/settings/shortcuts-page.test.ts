@@ -43,10 +43,13 @@ function groupRows(title: string, capabilities = DESKTOP_CAPABILITIES): string[]
       createElement(WindowShortcutSections, { experiments: NO_EXPERIMENTS, capabilities }),
     ),
   );
+
   const section = [...document.querySelectorAll("section")].find(
     (each) => each.querySelector("h2")?.textContent === title,
   );
+
   if (section === undefined) return [];
+
   return [...section.querySelectorAll("[data-search-anchor]")].map((row) =>
     [...row.querySelectorAll(".ui-settings-row-label, .ui-text, .ui-shortcut-glyph")]
       .map((part) => part.textContent)
@@ -72,6 +75,7 @@ test("Writing lists each mark and block with the Markdown typed for it and its c
 
 test("the window's Escape is one row, under General, however many layers it steps back from", () => {
   const general = groupRows("General");
+
   // Note that Files changed's own Escape, which lets go of the file stood on, is the view's to list, as its sheet does.
   const escapes = [...document.querySelectorAll("section")]
     .filter((section) => section.querySelector("h2")?.textContent !== "Files changed")

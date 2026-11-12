@@ -12,6 +12,7 @@ import {
   type ReviewThread,
 } from "@repo/features/agent-wire";
 import { imageTypeOfPath } from "@repo/features/github-image";
+import { pullRequestAddressOf } from "@repo/features/link-grammar";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TASK_FILE_REFUSAL, type TaskFileRefusal } from "@repo/features/task-wire";
 import { REFRESH_FAILED_WORDS } from "@repo/features/words";
@@ -259,13 +260,16 @@ function useChangesMenu({
 }): PaneBarMenu | undefined {
   const copyWithToast = useCopyToast();
   const saveText = useSaveText();
+
   if (pullRequest === null) return undefined;
   const patch = pullRequest.truncated ? undefined : pullRequestPatch(treeOrder(pullRequest.files));
+
   const why = pullRequest.truncated
     ? CHANGES_MENU_WORDS.TRUNCATED
     : patch === undefined
       ? CHANGES_MENU_WORDS.NO_PATCH
       : undefined;
+
   return {
     thing: "Files changed",
     groups: [
@@ -411,6 +415,7 @@ function ThreadLines({
   children: ReactNode;
 }): React.JSX.Element {
   if (hover === undefined) return <>{children}</>;
+
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions: the pointer resting on a thread, or the keyboard in it, only lights the lines it is on; nothing is pressed.
     <div
@@ -422,7 +427,9 @@ function ThreadLines({
         // and only the threads nearest the focus, since a minimized chip's threads stand inside the chip's own.
         const nearest =
           event.target instanceof Element ? event.target.closest(".diff-thread-lines") : null;
+
         if (nearest !== event.currentTarget) return;
+
         if (document.documentElement.dataset.keyboard === "true")
           hover(hoverKey, group, lines, true);
       }}
@@ -460,10 +467,12 @@ function minimizedNotes(
   hover: ThreadHover | undefined,
 ): DiffNote[] {
   const lines = new Map<DiffSelection["side"], Map<number, typeof placed>>();
+
   for (const each of placed) {
     const side = lines.get(each.side) ?? new Map<number, typeof placed>();
     lines.set(each.side, side.set(each.line, [...(side.get(each.line) ?? []), each]));
   }
+
   return [...lines].flatMap(([side, onSide]) =>
     [...onSide].flatMap(([line, threads]) => {
       const drawn = threads.map((each) => (
@@ -476,10 +485,13 @@ function minimizedNotes(
           {draw?.(each.thread, THREAD_PLACE.ON_LINE)}
         </ThreadLines>
       ));
+
       const [first] = threads;
+
       if (first === undefined) return [];
       // A line a comment is being written on shows its threads as they are, the comment among them.
       const writing = comments.some((comment) => comment.side === side && comment.line === line);
+
       return writing
         ? threads.map((each, at) => ({ key: each.key, side, line, content: drawn[at] }))
         : [
@@ -553,6 +565,7 @@ function entryOf(
   // A file drawn whole draws every one of its lines, so its threads are placed on them.
   const drawnWhole = pictured === undefined && !emptyWhole(whole.texts) ? whole.texts : undefined;
   const { placed, above } = threadsOn(threads, drawnAs, drawnWhole, opened);
+
   const notes: DiffNote[] =
     minimized === undefined
       ? placed.map((each) => ({
@@ -566,10 +579,13 @@ function entryOf(
           ),
         }))
       : minimizedNotes(file, placed, draw, minimized, comments, hover);
+
   // The threads above the diff, as one list, or minimized to a chip of their own.
   const aboveOf = (unplaced: typeof above, side: DiffSelection["side"]) => {
     const list = <AboveThreads above={unplaced} draw={draw} />;
+
     if (minimized === undefined) return list;
+
     return (
       <MinimizedThreads
         threads={unplaced.map((each) => each.thread)}
@@ -581,9 +597,11 @@ function entryOf(
       </MinimizedThreads>
     );
   };
+
   // A pictured image, or a file with no hunks, stands as what is drawn in the place of its lines.
   // A file that only moved, drawn whole, shows its lines rather than saying it only moved.
   const notice = drawnWhole === undefined ? fileNotice(file) : undefined;
+
   // A file that only moved offers its lines, and one too large to diff its diff, from what it says, its read waiting for the press.
   const offer =
     !whole.offered || whole.texts !== undefined
@@ -593,6 +611,7 @@ function entryOf(
         : file.omitted === PATCH_OMITTED.TOO_LARGE
           ? LIST_WORDS.LOAD_DIFF
           : undefined;
+
   const shown =
     offer === undefined ? null : (
       <>
@@ -602,11 +621,13 @@ function entryOf(
         </TextButton>
       </>
     );
+
   // Note that a file too large to diff whose texts could not be read says why after its notice, since it draws no hunk to say it above.
   const loadRefused =
     file.omitted === PATCH_OMITTED.TOO_LARGE && gaps.refused !== undefined
       ? ` ${DIFF_LOAD_REFUSED_WORDS[gaps.refused]}`
       : null;
+
   const lead =
     pictured !== undefined ? (
       <ImageDiff file={file} sides={pictured} />
@@ -617,6 +638,7 @@ function entryOf(
         {shown}
       </p>
     );
+
   if (lead !== undefined) {
     notes.unshift({
       key: LEAD_KEY,
@@ -630,8 +652,10 @@ function entryOf(
       ),
     });
   }
+
   for (const side of lead === undefined ? Object.values(DIFF_SELECTION_SIDE) : []) {
     const unplaced = above.filter((each) => each.side === side);
+
     if (unplaced.length === 0) continue;
     notes.unshift({
       key: ABOVE_KEY[side],
@@ -640,6 +664,7 @@ function entryOf(
       content: aboveOf(unplaced, side),
     });
   }
+
   if (lead === undefined && gaps.refused !== undefined) {
     notes.unshift({
       key: REFUSED_KEY,
@@ -652,8 +677,10 @@ function entryOf(
       ),
     });
   }
+
   notes.push(...comments);
   const collapsed = list.collapsed(path);
+
   return {
     path,
     patch: pictured === undefined ? listPatch(file) : headerPatch(file),
@@ -703,6 +730,7 @@ function entryInputs(
   comments: readonly DiffNote[],
 ): readonly unknown[] {
   const path = file.path;
+
   return [
     file,
     list.collapsed(path),
@@ -748,6 +776,7 @@ function useEntries(
 ): readonly DiffListEntry[] {
   const kept = useRef(new Map<string, { inputs: readonly unknown[]; entry: DiffListEntry }>());
   const next = new Map<string, { inputs: readonly unknown[]; entry: DiffListEntry }>();
+
   const entries = list.kept.map((file) => {
     const own = threads?.list.filter((thread) => thread.path === file.path) ?? [];
     const comments = commenting?.notes.get(file.path) ?? NO_NOTES;
@@ -755,6 +784,7 @@ function useEntries(
     const minimized = minimizedOf(file.path);
     const whole = wholeOf(file);
     const opened = own.length === 0 ? undefined : openedOf(file.path);
+
     const inputs = [
       ...entryInputs(file, list, own, threads?.draw, images, comments),
       gaps.open,
@@ -766,7 +796,9 @@ function useEntries(
       whole.toggle,
       opened,
     ];
+
     const was = kept.current.get(file.path);
+
     const entry =
       was !== undefined && sameInputs(was.inputs, inputs)
         ? was.entry
@@ -783,10 +815,14 @@ function useEntries(
             whole,
             opened,
           );
+
     next.set(file.path, { inputs, entry });
+
     return entry;
   });
+
   kept.current = next;
+
   return entries;
 }
 
@@ -815,22 +851,28 @@ const NONE_WHOLE: ReadonlyMap<string, DiffFileTexts> = new Map();
  */
 function useWholeFiles(texts: FileTexts): (file: AgentChangedFile) => FileWhole {
   const { read, refused, whole, wholeable } = texts;
+
   const [held, setHeld] = useState<{
     readonly of: unknown;
     readonly files: ReadonlyMap<string, DiffFileTexts>;
   }>({ of: read, files: NONE_WHOLE });
+
   const files = held.of === read ? held.files : NONE_WHOLE;
   const latest = useRef({ read, files });
   latest.current = { read, files };
+
   const toggle = useCallback((path: string) => {
     const { read, files } = latest.current;
     const held = (next: ReadonlyMap<string, DiffFileTexts>) => setHeld({ of: read, files: next });
+
     if (files.has(path)) {
       const next = new Map(files);
       next.delete(path);
       held(next);
+
       return;
     }
+
     read?.(path).then(
       (whole) => {
         // Note that a read of an earlier answer is dropped, which would draw that answer's files over this one's.
@@ -841,10 +883,13 @@ function useWholeFiles(texts: FileTexts): (file: AgentChangedFile) => FileWhole 
       () => undefined,
     );
   }, []);
+
   const doors = useRef(new Map<string, () => void>());
+
   return (file) => {
     const door = doors.current.get(file.path) ?? (() => toggle(file.path));
     doors.current.set(file.path, door);
+
     return {
       texts: files.get(file.path),
       offered: read !== undefined && whole(file) && wholeable(file) && !refused.has(file.path),
@@ -875,14 +920,18 @@ interface ListOpened {
  */
 function useOpenedLines(): ListOpened {
   const [opened, setOpened] = useState<OpenedLines>(NONE_OPENED);
+
   const onDrawn = useCallback((path: string, lines: readonly number[]) => {
     setOpened((was) => {
       const next = new Map(was);
+
       if (lines.length === 0) next.delete(path);
       else next.set(path, new Set(lines));
+
       return next;
     });
   }, []);
+
   return { openedOf: (path) => opened.get(path), onDrawn };
 }
 
@@ -904,35 +953,45 @@ function useMinimizedLines(minimize: boolean): (path: string) => FileMinimized |
     of: minimize,
     lines: NONE_SHOWN,
   });
+
   const lines = shown.of === minimize ? shown.lines : NONE_SHOWN;
+
   const toggle = useCallback(
     (path: string, side: DiffSelection["side"], line: number, open: boolean) =>
       setShown((was) => {
         const all = was.of === minimize ? was.lines : NONE_SHOWN;
         const sides = all.get(path) ?? new Map<DiffSelection["side"], ReadonlySet<number>>();
         const onSide = new Set(sides.get(side));
+
         if (open) onSide.add(line);
         else onSide.delete(line);
+
         return { of: minimize, lines: new Map(all).set(path, new Map(sides).set(side, onSide)) };
       }),
     [minimize],
   );
+
   const kept = useRef(
     new Map<
       string,
       { readonly of: unknown; readonly toggle: unknown; readonly answer: FileMinimized }
     >(),
   );
+
   return (path) => {
     if (!minimize) return undefined;
     const own = lines.get(path);
     const held = kept.current.get(path);
+
     if (held !== undefined && held.of === own && held.toggle === toggle) return held.answer;
+
     const answer: FileMinimized = {
       shown: (side, line) => own?.get(side)?.has(line) === true,
       show: (side, line, open) => toggle(path, side, line, open),
     };
+
     kept.current.set(path, { of: own, toggle, answer });
+
     return answer;
   };
 }
@@ -963,8 +1022,10 @@ function threadLines(
     // Note that an undrawn first line precedes drawn rows, because the threads share a drawn end.
     const place = rowPlace(file, side, start) ?? Number.NEGATIVE_INFINITY;
     const selection = { start, side, end: thread.line, endSide: COMMENT_SIDE[thread.side] };
+
     return [{ place, lines: { path: thread.path, selection } }];
   });
+
   return ranges.toSorted(
     (a, b) => a.place - b.place || a.lines.selection.start - b.lines.selection.start,
   )[0]?.lines;
@@ -1003,6 +1064,7 @@ function DraftedLineComment({
 }): React.JSX.Element {
   const number = usePullRequestNumber();
   const { draft: kept, update } = useDraft(lineCommentPlace(comment.agentId, number, draft));
+
   return (
     <LineComment
       {...comment}
@@ -1031,16 +1093,20 @@ function useListCommenting(
   const [drafts, setDrafts] = useState<CommentDrafts>(NO_DRAFTS);
   // Each comment's own key, counted, which its note stands under.
   const opened = useRef(0);
+
   const linesOf = useCallback(
     (picked: DiffListSelection) => {
       const file = files.find((each) => each.path === picked.path);
+
       return file === undefined ? undefined : commentLines(file, picked.selection);
     },
     [files],
   );
+
   const open = useCallback(
     (picked: DiffListSelection) => {
       const lines = linesOf(picked);
+
       if (lines === undefined) return;
       opened.current += 1;
       const id = String(opened.current);
@@ -1048,21 +1114,27 @@ function useListCommenting(
     },
     [linesOf],
   );
+
   const commentOn = useCallback(
     (picked: DiffListSelection) => {
       const lines = linesOf(picked);
+
       return lines === undefined ? undefined : commentLinesLabel(lines);
     },
     [linesOf],
   );
+
   if (comments === undefined) return undefined;
   const notes = new Map<string, DiffNote[]>();
   let lit: DiffListSelection | undefined;
+
   for (const draft of drafts.open) {
     const { path } = draft.picked;
     const file = files.find((each) => each.path === path);
     const lines = file === undefined ? undefined : commentLines(file, draft.picked.selection);
+
     if (file === undefined || lines === undefined) continue;
+
     if (draft.id === drafts.lit) lit = draft.picked;
     notes.set(path, [
       ...(notes.get(path) ?? []),
@@ -1088,6 +1160,7 @@ function useListCommenting(
       },
     ]);
   }
+
   return { open, commentOn, notes, lit };
 }
 
@@ -1109,13 +1182,17 @@ function useThreadHover(): RestingThread {
   const [resting, setResting] = useState<
     readonly { key: string; group: boolean; lines: DiffListSelection }[]
   >([]);
+
   const hover = useCallback<ThreadHover>((key, group, lines, on) => {
     setResting((was) => {
       const others = was.filter((each) => each.key !== key || each.group !== group);
+
       if (on && lines !== undefined) return [...others, { key, group, lines }];
+
       return others.length === was.length ? was : others;
     });
   }, []);
+
   return { lines: resting.at(-1)?.lines, hover };
 }
 
@@ -1134,14 +1211,18 @@ function revealedPlace(
   opened: ReadonlySet<number> | undefined,
 ): RevealedPlace {
   const fileWide = { side: DIFF_SELECTION_SIDE.ADDITIONS, line: FILE_NOTE_LINE };
+
   if (lead) return { at: undefined, chip: fileWide };
   const drawnWhole = emptyWhole(whole) ? undefined : whole;
   const { placed, above } = threadsOn([thread], file, drawnWhole, opened);
   const [onLine] = placed;
+
   if (onLine !== undefined) {
     const at = { side: onLine.side, line: onLine.line };
+
     return { at, chip: at };
   }
+
   return { at: undefined, chip: { side: above[0]?.side ?? fileWide.side, line: FILE_NOTE_LINE } };
 }
 
@@ -1173,6 +1254,7 @@ function standsIn(box: HTMLElement | null, card: HTMLElement): boolean {
   if (box === null || !landable(card)) return false;
   const area = box.getBoundingClientRect();
   const { top } = card.getBoundingClientRect();
+
   return top >= area.top && top < area.bottom;
 }
 
@@ -1200,13 +1282,16 @@ function useListLanding(
   useEffect(() => {
     const { reveal, list } = latest.current;
     const threadId = reveal?.thread.id;
+
     if (reveal === undefined || threadId === undefined) return;
     list.expand(reveal.file.path);
     setLanding({ ask: reveal.ask, threadId, thread: reveal.thread, file: reveal.file });
   }, [ask]);
+
   // Note that the thread is placed by its file's entry as drawn, a picture's threads above it, as `entryOf` places them.
   const entry =
     landing === undefined ? undefined : entries.find((each) => each.path === landing.file.path);
+
   const place =
     landing === undefined || entry === undefined
       ? undefined
@@ -1217,6 +1302,7 @@ function useListLanding(
           wholeOf(landing.file).texts,
           openedOf(landing.file.path),
         );
+
   // A minimized line's chip is shown once the thread is placed, each ask once.
   const chipShown = useRef<number | undefined>(undefined);
   const latestPlace = useRef({ landing, place, minimizedOf });
@@ -1224,11 +1310,13 @@ function useListLanding(
   const placed = place !== undefined;
   useEffect(() => {
     const { landing, place, minimizedOf } = latestPlace.current;
+
     if (landing === undefined || place === undefined || chipShown.current === landing.ask) return;
     chipShown.current = landing.ask;
     minimizedOf(landing.file.path)?.show(place.chip.side, place.chip.line, true);
   }, [landing?.ask, placed]);
   const onLanded = reveal?.onLanded;
+
   const provided =
     landing === undefined || onLanded === undefined
       ? undefined
@@ -1240,6 +1328,7 @@ function useListLanding(
           onLanded,
           onFaded: (faded: number) => setLanding((was) => (was?.ask === faded ? undefined : was)),
         };
+
   return {
     reveal:
       landing === undefined || place === undefined
@@ -1284,6 +1373,7 @@ function WholeToggle({
   onToggle: () => void;
 }): React.JSX.Element {
   const label = whole ? LIST_WORDS.COLLAPSE_TO_CHANGES : LIST_WORDS.EXPAND_WHOLE;
+
   return (
     <Tooltip label={label}>
       <IconButton
@@ -1306,6 +1396,7 @@ function SourceToggle({
   onToggle: () => void;
 }): React.JSX.Element {
   const label = source ? LIST_WORDS.SHOW_IMAGE : LIST_WORDS.SHOW_SOURCE;
+
   return (
     <Tooltip label={label}>
       <IconButton
@@ -1328,25 +1419,17 @@ function imagesOf(
   pullRequest: { readonly url: string; readonly headSha?: string; readonly baseSha?: string },
   read: number,
 ): ImageSides | undefined {
-  const [owner, name] = URL.canParse(pullRequest.url)
-    ? new URL(pullRequest.url).pathname.split("/").filter((segment) => segment !== "")
-    : [];
-  if (owner === undefined || name === undefined) return undefined;
+  const repository = pullRequestAddressOf(pullRequest.url)?.repository;
+
+  if (repository === undefined) return undefined;
+
   return {
     agentId,
-    repository: `${owner}/${name}`,
+    repository,
     headSha: pullRequest.headSha,
     baseSha: pullRequest.baseSha,
     read,
   };
-}
-
-/** The repository a pull request's page on GitHub names, as `owner/name`; none where it names none. */
-function repositoryOf(url: string): string | undefined {
-  const [owner, name] = URL.canParse(url)
-    ? new URL(url).pathname.split("/").filter((segment) => segment !== "")
-    : [];
-  return owner === undefined || name === undefined ? undefined : `${owner}/${name}`;
 }
 
 /** What a refusal of the service's read says of a file's gaps: not text, and anything else that it could not be read just now. */
@@ -1402,13 +1485,16 @@ function useFileTexts(
   files: readonly AgentChangedFile[],
 ): FileTexts {
   const queryClient = useQueryClient();
+
   const [refusals, setRefusals] = useState<{
     readonly of: unknown;
     readonly refused: ReadonlyMap<string, ExpansionRefusal>;
   }>({ of: pullRequest, refused: new Map() });
+
   // Note that a new answer offers every gap again, since a push may have mended what was refused.
   const refused = refusals.of === pullRequest ? refusals.refused : NONE_REFUSED;
   const baseSha = pullRequest?.baseSha;
+
   // Note that a file too large to diff that stood before is drawn only where the merge base it stood at was named.
   const drawable = useCallback(
     (file: AgentChangedFile) =>
@@ -1417,19 +1503,26 @@ function useFileTexts(
         (file.status === CHANGED_FILE_STATUS.ADDED || baseSha !== undefined)),
     [baseSha],
   );
+
   const read = useMemo(() => {
     const headSha = pullRequest?.headSha;
-    const own = pullRequest === null ? undefined : repositoryOf(pullRequest.url);
+
+    const own =
+      pullRequest === null ? undefined : pullRequestAddressOf(pullRequest.url)?.repository;
+
     if (taskId === null || headSha === undefined || repository === null || own === undefined) {
       return undefined;
     }
+
     if (repository.toLowerCase() !== own.toLowerCase()) return undefined;
     const kept = new Map<string, Promise<DiffFileTexts | undefined>>();
+
     const refuse = (path: string, why: ExpansionRefusal) =>
       setRefusals((was) => ({
         of: pullRequest,
         refused: new Map(was.of === pullRequest ? was.refused : NONE_REFUSED).set(path, why),
       }));
+
     const rawAt = (ref: string, path: string): Promise<RawRead> =>
       queryClient
         .fetchQuery(
@@ -1440,8 +1533,9 @@ function useFileTexts(
             "text" in answer
               ? { text: answer.text.text }
               : { refused: EXPANSION_REFUSAL.UNAVAILABLE },
-          (error: unknown) => {
-            const refused = refusedAnswer(error);
+          (cause: unknown) => {
+            const refused = refusedAnswer(cause);
+
             return {
               refused:
                 "refusal" in refused
@@ -1450,14 +1544,19 @@ function useFileTexts(
             };
           },
         );
+
     const textsAt = async (file: AgentChangedFile): Promise<TextsRead> => {
       if (!tooLargeToDiff(file)) {
         const after = await rawAt(headSha, file.path);
+
         if ("refused" in after) return after;
         const texts = await checkedTextsOf(file, after.text);
+
         return texts === undefined ? { refused: EXPANSION_REFUSAL.CHANGED } : { texts };
       }
+
       const nothing: RawRead = { text: "" };
+
       const [before, after] = await Promise.all([
         file.status === CHANGED_FILE_STATUS.ADDED
           ? nothing
@@ -1466,35 +1565,49 @@ function useFileTexts(
             : rawAt(baseSha, file.previousPath ?? file.path),
         file.status === CHANGED_FILE_STATUS.DELETED ? nothing : rawAt(headSha, file.path),
       ]);
+
       if ("refused" in before) return before;
+
       if ("refused" in after) return after;
+
       if (file.blobSha !== undefined && (await blobShaOf(after.text)) !== file.blobSha) {
         return { refused: EXPANSION_REFUSAL.CHANGED };
       }
+
       return { texts: { before: before.text, after: after.text } };
     };
+
     return (path: string) => {
       const file = files.find((each) => each.path === path);
+
       if (file === undefined || !drawable(file)) return Promise.resolve(undefined);
       const held = kept.get(path);
+
       if (held !== undefined) return held;
+
       const reading = textsAt(file).then((read) => {
         if ("texts" in read) return read.texts;
         refuse(path, read.refused);
+
         return undefined;
       });
+
       kept.set(path, reading);
+
       return reading;
     };
   }, [queryClient, taskId, repository, pullRequest, files, baseSha, drawable]);
+
   // Note that a file a chapter cut down to some of its hunks is not the answer's own, and offers no gap, because its text before cannot be turned back from the hunks it kept.
   const own = useMemo(() => new Set(pullRequest?.files), [pullRequest]);
   const whole = useCallback((file: AgentChangedFile) => own.has(file), [own]);
+
   const offered = useCallback(
     (file: AgentChangedFile) =>
       read !== undefined && whole(file) && expandable(file) && !refused.has(file.path),
     [read, whole, refused],
   );
+
   return { expandable: offered, wholeable: drawable, read, refused, whole };
 }
 
@@ -1510,6 +1623,7 @@ async function checkedTextsOf(
   after: string,
 ): Promise<DiffFileTexts | undefined> {
   if (file.blobSha !== undefined && (await blobShaOf(after)) !== file.blobSha) return undefined;
+
   return textsOf(file, after);
 }
 
@@ -1519,6 +1633,7 @@ const NONE_REFUSED: ReadonlyMap<string, ExpansionRefusal> = new Map();
 /** Collapse all or Expand all, for the files the filter keeps, in the bar. */
 function FoldAllButton({ list }: { list: ChangesList }): React.JSX.Element {
   const label = list.allCollapsed ? LIST_WORDS.EXPAND_ALL : LIST_WORDS.COLLAPSE_ALL;
+
   return (
     <Tooltip label={label} chord={FOLD_CHORD.ALL}>
       <IconButton
@@ -1580,6 +1695,7 @@ function FilesList({
 }): React.JSX.Element {
   const look = useDiffLook(roomy);
   const box = useRef<HTMLDivElement | null>(null);
+
   const holdBox = useCallback(
     (element: HTMLDivElement | null) => {
       box.current = element;
@@ -1587,11 +1703,13 @@ function FilesList({
     },
     [boxRef],
   );
+
   const { settings } = useFileViewSettings();
   const minimizedOf = useMinimizedLines(settings.diffMinimizeComments);
   const wholeOf = useWholeFiles(texts);
   const resting = useThreadHover();
   const opened = useOpenedLines();
+
   const entries = useEntries(
     list,
     threads,
@@ -1603,8 +1721,10 @@ function FilesList({
     wholeOf,
     opened.openedOf,
   );
+
   const landing = useListLanding(reveal, list, entries, minimizedOf, wholeOf, opened.openedOf, box);
   const query = list.query.trim();
+
   return (
     <Fill
       as={FILL_ELEMENT.SECTION}
@@ -1685,19 +1805,24 @@ export function useChangesReads(
   const changes = useQuery({ ...agentChangesQueryOptions(agentId, source.number), enabled: false });
   const { refetch, isFetching: out, data: good, error } = changes;
   const ask = useCallback(() => void refetch(), [refetch]);
+
   // The agent's standing the last read on its own was asked for, none before the tab first showed.
   const readFor = useRef<{ readonly agentId: string; readonly ended: boolean } | undefined>(
     undefined,
   );
+
   useEffect(() => {
     if (!shown) return;
+
     if (readFor.current?.agentId === agentId && readFor.current.ended === source.ended) return;
     readFor.current = { agentId, ended: source.ended };
     ask();
   }, [shown, agentId, source.ended, ask]);
+
   // A read that failed, or is still out and may have been sent while the connection was gone, is asked again.
   const failure =
     error instanceof ChangesFailed ? error.answer : error === null ? undefined : UNANSWERED;
+
   useRegained(() => {
     if (shown && (out || failure !== undefined)) ask();
   });
@@ -1705,17 +1830,21 @@ export function useChangesReads(
   // read that fails again must not take the files drawn away; the count follows what is drawn.
   const answer: AgentChangesAnswerView | undefined = good ?? failure;
   const refreshFailed = good !== undefined && failure !== undefined;
+
   const reads = useRef<{ readonly of: unknown; readonly count: number }>({
     of: undefined,
     count: 0,
   });
+
   if (reads.current.of !== answer) reads.current = { of: answer, count: reads.current.count + 1 };
   const pullRequest = answer !== undefined && "pullRequest" in answer ? answer.pullRequest : null;
+
   const viewedFiles = useViewedFiles(
     agentId,
     source,
     pullRequest === null ? undefined : reads.current.count,
   );
+
   return { answer, refreshFailed, out, ask, count: reads.current.count, pullRequest, viewedFiles };
 }
 
@@ -1789,27 +1918,36 @@ export function AgentChangesTab({
   const edge = useTreeEdge(tree);
   const [diffBox, setDiffBox] = useState<HTMLDivElement | null>(null);
   const roomy = useSplitRoom(diffBox);
+
   // Note that the lists are kept while the answer and the files given are the same, because
   // fresh ones would have the tree draw itself anew.
   const changed = useMemo(() => {
     const drawn = files ?? pullRequest?.files ?? [];
     const paths = drawn.map((file) => file.path);
+
     return { files: drawn, paths, ordered: treeOrder(drawn), folders: changedFolders(paths) };
   }, [pullRequest, files]);
+
   const viewSettings = useFileViewSettings();
+
   const minimize = () =>
     viewSettings.change("diffMinimizeComments", !viewSettings.settings.diffMinimizeComments);
+
   const list = useChangesList(changed.files, viewedFiles.marks, minimize, room.toggle);
+
   const marks = useMemo(
     () => changeMarks(changed.files, { threads: threads?.list, viewed: list.viewed }),
     [changed.files, threads?.list, list.viewed],
   );
+
   const answered = reads.count;
+
   // Note that the images are named afresh only with an answer, because every changed image's entry is drawn from them.
   const images = useMemo(
     () => (pullRequest === null ? undefined : imagesOf(agentId, pullRequest, answered)),
     [agentId, pullRequest, answered],
   );
+
   const { closeOver } = room;
   const { hideKeys } = list;
   // The sheet of the view's keys goes with the view: a Dialog stands over the
@@ -1820,6 +1958,7 @@ export function AgentChangesTab({
   }, [shown, hideKeys]);
   const { go, expand } = list;
   const openTab = useOpenFileTab();
+
   // A file chosen with ⌘ or Ctrl opens in a File tab of its own, as a File tab's tree opens one,
   // where the panel offers one; a file chosen in the tree floating over the list takes the tree down, to show the file.
   const choose = useCallback(
@@ -1830,25 +1969,32 @@ export function AgentChangesTab({
     },
     [closeOver, go, openTab],
   );
+
   // A file asked for is opened and scrolled to, each ask once; one asked for at its lines is stood on, and the list scrolls to them once it draws the file open.
   const latestFileReveal = useRef({ fileReveal, expand, go, stand: list.stand });
   latestFileReveal.current = { fileReveal, expand, go, stand: list.stand };
   useEffect(() => {
     const { fileReveal, expand, go, stand } = latestFileReveal.current;
+
     if (fileReveal === undefined) return;
     expand(fileReveal.path);
+
     if (fileReveal.lines === undefined) go(fileReveal.path);
     else stand(fileReveal.path);
   }, [fileReveal?.ask]);
+
   const flash =
     fileReveal?.lines === undefined
       ? undefined
       : { ask: fileReveal.ask, range: { path: fileReveal.path, ...fileReveal.lines } };
+
   const shownFile = shownFileOf(changed.files, list.current);
+
   const refresh = () => {
     ask();
     threads?.refresh?.();
   };
+
   const changesMenu = useChangesMenu({ pullRequest });
   const settings = useViewSettingsSheet({ kind: VIEW_SETTINGS_SCOPE.DIFF, roomy });
   // A phone draws no bar over the diffs: the task's header's ⋯ offers every control of it while the view is shown;
@@ -1868,6 +2014,7 @@ export function AgentChangesTab({
       : undefined,
   );
   const texts = useFileTexts(source.place.taskId, repository, pullRequest, changed.files);
+
   const commenting = useListCommenting(
     agentId,
     changed.files,
@@ -1875,6 +2022,7 @@ export function AgentChangesTab({
     lineComments,
     refresh,
   );
+
   // A thread on a file the changes no longer hold is said gone once they are read; one on a file they hold is landed on in the list.
   const revealAsk = reveal?.ask;
   const revealPath = reveal?.thread.path;
@@ -1884,14 +2032,18 @@ export function AgentChangesTab({
   latestReveal.current = reveal;
   useEffect(() => {
     const standing = latestReveal.current;
+
     if (revealGone && standing !== undefined) standing.onGone(standing.ask);
   }, [revealGone, revealAsk]);
+
   // A failure with nothing drawn gives way to the wait as soon as it is asked again; files drawn stand until the answer lands, and a failure after them is a line over them.
   if (answer === undefined || (out && "failure" in answer)) {
     return <SpinnerRegion delay label={CHANGES_WORDS.READING} />;
   }
+
   // Where the good answer drew no files (no pull request, none changed), a refresh that failed has nothing to keep drawn and stands as the failure.
   const unkept = refreshFailed && !out && (pullRequest === null || shownFile === undefined);
+
   if ("failure" in answer || unkept) {
     return (
       <ErrorState
@@ -1906,14 +2058,17 @@ export function AgentChangesTab({
       </ErrorState>
     );
   }
+
   if (pullRequest === null) {
     return (
       <EmptyState icon={<GLYPH.PULL_REQUEST_CHANGES />}>{CHANGES_WORDS.NO_PULL_REQUEST}</EmptyState>
     );
   }
+
   if (shownFile === undefined) {
     return <EmptyState icon={<GLYPH.PULL_REQUEST_CHANGES />}>{CHANGES_WORDS.EMPTY}</EmptyState>;
   }
+
   return (
     // The view hears stage-cli's keys from whatever in it has the focus, the list's own scroller among them.
     <Fill
@@ -2056,22 +2211,29 @@ export function TurnChangesTab({
   fileReveal?: TurnFileReveal | undefined;
 }): React.JSX.Element {
   const changes = useQuery({ ...agentTurnChangesQueryOptions(agentId, messageId), enabled: shown });
+
   // A read the act never answered is a failure the tab says as one, asked again on Retry.
   const answer: AgentTurnChangesAnswerView | undefined =
     changes.data ?? (changes.error === null ? undefined : UNANSWERED_TURN_CHANGES);
+
   const retry = () => void changes.refetch();
   const files = answer !== undefined && "files" in answer ? answer.files : NO_TURN_FILES;
+
   const changed = useMemo(() => {
     const paths = files.map((file) => file.path);
+
     return { paths, ordered: treeOrder(files), folders: changedFolders(paths) };
   }, [files]);
+
   const room = usePaneRoom(tree);
   const edge = useTreeEdge(tree);
   const [diffBox, setDiffBox] = useState<HTMLDivElement | null>(null);
   const roomy = useSplitRoom(diffBox);
   const viewSettings = useFileViewSettings();
+
   const minimize = () =>
     viewSettings.change("diffMinimizeComments", !viewSettings.settings.diffMinimizeComments);
+
   const list = useChangesList(files, undefined, minimize, room.toggle);
   const marks = useMemo(() => changeMarks(files, { viewed: list.viewed }), [files, list.viewed]);
   const { hideKeys, go, expand } = list;
@@ -2080,6 +2242,7 @@ export function TurnChangesTab({
   }, [shown, hideKeys]);
   const openTab = useOpenFileTab();
   const { closeOver } = room;
+
   const choose = useCallback(
     (path: string, newTab: boolean) => {
       if (newTab && openTab !== undefined) return openTab(path);
@@ -2088,11 +2251,13 @@ export function TurnChangesTab({
     },
     [closeOver, go, openTab],
   );
+
   // The file a press asked for is opened and stood on, each ask once, as the pull request's reveal is.
   const latestReveal = useRef({ fileReveal, expand, go });
   latestReveal.current = { fileReveal, expand, go };
   useEffect(() => {
     const { fileReveal, expand, go } = latestReveal.current;
+
     if (fileReveal === undefined) return;
     expand(fileReveal.path);
     go(fileReveal.path);
@@ -2106,7 +2271,9 @@ export function TurnChangesTab({
       ? [[paneToggleAction(room), settings.action, foldAllAction(list)]]
       : undefined,
   );
+
   if (answer === undefined) return <SpinnerRegion delay label={TURN_CHANGES_WORDS.READING} />;
+
   if ("failure" in answer) {
     if (answer.failure === AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING) {
       return (
@@ -2115,6 +2282,7 @@ export function TurnChangesTab({
         </EmptyState>
       );
     }
+
     return (
       <ErrorState
         failure={failureShown({ surface: FAILURE_SURFACE.AGENT_TURN_CHANGES_READ, cause: answer })}
@@ -2127,11 +2295,13 @@ export function TurnChangesTab({
       </ErrorState>
     );
   }
+
   if (shownFile === undefined) {
     return (
       <EmptyState icon={<GLYPH.PULL_REQUEST_CHANGES />}>{TURN_CHANGES_WORDS.EMPTY}</EmptyState>
     );
   }
+
   return (
     <Fill
       className="file-view"
@@ -2216,6 +2386,7 @@ export function TurnChangesPane({
   tree: TreeShown;
 }): React.JSX.Element {
   const fileReveal = useTurnFileReveal(agentId, messageId);
+
   return (
     <TurnChangesTab
       agentId={agentId}

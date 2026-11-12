@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import type { TerminalSocketArrival } from "@repo/features/relay-socket";
-import { Effect, Exit, Fiber, Scope, Stream } from "effect";
+import { Effect, Exit, Fiber, Predicate, Scope, Stream } from "effect";
 import { afterEach, vi } from "vitest";
 import { openTerminalSocketFromPage } from "../src/app/web-terminal-socket";
 
@@ -64,6 +64,7 @@ class StandInSocket extends EventTarget {
 function standIn(): StandInSocket {
   const [socket] = StandInSocket.opened;
   assert.ok(socket, "the seam opened no socket");
+
   return socket;
 }
 
@@ -74,9 +75,12 @@ const frame = (text: string) => new TextEncoder().encode(text).buffer;
 type Readable = { readonly bytes: string } | { readonly text: string } | { readonly close: number };
 
 function readable(sent: TerminalSocketArrival | string | Uint8Array): Readable {
-  if (typeof sent === "string") return { text: sent };
+  if (Predicate.isString(sent)) return { text: sent };
+
   if (ArrayBuffer.isView(sent)) return { bytes: new TextDecoder().decode(sent) };
+
   if ("bytes" in sent) return { bytes: new TextDecoder().decode(sent.bytes) };
+
   return sent;
 }
 
@@ -91,9 +95,11 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         vi.stubGlobal("WebSocket", StandInSocket);
+
         const opening = yield* Effect.forkChild(
           openTerminalSocketFromPage(ADDRESS, { authorization: "Bearer never-sent" }),
         );
+
         yield* Effect.yieldNow;
         const socket = standIn();
         assert.equal(socket.url, ADDRESS);
@@ -123,9 +129,11 @@ it.effect(
     Effect.gen(function* () {
       vi.stubGlobal("WebSocket", StandInSocket);
       const scope = yield* Scope.make();
+
       const opening = yield* Effect.forkChild(
         Scope.provide(openTerminalSocketFromPage(ADDRESS, {}), scope),
       );
+
       yield* Effect.yieldNow;
       const socket = standIn();
 
@@ -149,9 +157,11 @@ it.effect(
     Effect.gen(function* () {
       vi.stubGlobal("WebSocket", StandInSocket);
       const scope = yield* Scope.make();
+
       const opening = yield* Effect.forkChild(
         Scope.provide(openTerminalSocketFromPage(ADDRESS, {}), scope),
       );
+
       yield* Effect.yieldNow;
       const socket = standIn();
       socket.accept();
@@ -191,10 +201,12 @@ it.effect("a pause holds what arrived in the page until the resume, in the order
       yield* opened.socket.pause;
       socket.receive(frame("one"));
       socket.receive(frame("two"));
+
       for (let turn = 0; turn < 20; turn += 1) yield* Effect.yieldNow;
       const whilePaused = heard.length;
       yield* opened.socket.resume;
       socket.end(4003);
+
       for (let turn = 0; turn < 20; turn += 1) yield* Effect.yieldNow;
 
       assert.equal(whilePaused, 0, "nothing is handed up while paused");

@@ -36,6 +36,8 @@ const WORDS = {
 /** What a flow finds the name field by. */
 const NAME_FIELD_ID = "new-workspace-name";
 
+type Said = { words?: string };
+
 /**
  * New workspace: the team's name, then Create in the bar, lit once a name is
  * typed and while no create is out. The workspace is made by the host's own
@@ -67,10 +69,12 @@ export function NewWorkspaceScreen() {
     if (listed) router.back();
   }, [listed, router]);
   const waiting = create.running || made !== undefined;
+
   const make = () => {
     // Note that a refusal says why in the sheet, under the name, in the host's own words rather than the error's.
     void create.run(() => {
-      const said: { words?: string } = {};
+      const said: Said = {};
+
       return write(
         () =>
           acts[ACT_KIND.WORKSPACE_CREATE]({ name: name.trim() }).then((workspace) => {
@@ -85,6 +89,7 @@ export function NewWorkspaceScreen() {
       ).then(() => said.words);
     });
   };
+
   return (
     <>
       {/* Note that the bar has no ground of its own, so the system draws its buttons in glass over the sheet's. */}
@@ -92,7 +97,7 @@ export function NewWorkspaceScreen() {
         options={{
           headerShown: true,
           title: WORKSPACE_SWITCHER_WORDS.NEW_WORKSPACE,
-          headerTintColor: colors.ACCENT,
+          headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.SIDEBAR },

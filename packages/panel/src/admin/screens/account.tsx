@@ -14,7 +14,7 @@ import {
   MARK_PROVIDER,
   PICTURE_TILE_FACE,
   PictureTile,
-  SKELETON_SHAPE,
+  SKELETON_KIND,
   Skeleton,
   STATUS_TONE,
   Stack,
@@ -85,6 +85,7 @@ const ACTIVITY_TITLE = "Activity";
  */
 function streakWords(days: number, capped: boolean): string {
   const streak = capped ? `${formatCount(days)}+` : formatCount(days);
+
   return `${streak} ${days === 1 ? "day" : "days"}`;
 }
 
@@ -95,10 +96,13 @@ function streakWords(days: number, capped: boolean): string {
  */
 function firstActiveWords(detail: AdminUserDetail): string {
   const { firstActiveDay, calendarDaily } = detail.actions;
+
   if (firstActiveDay === null) return "none in the past year";
   const yearStart = calendarDaily[0]?.day;
+
   const joinedInYear =
     yearStart !== undefined && detail.account.createdAt >= Date.parse(`${yearStart}T00:00:00Z`);
+
   return `${joinedInYear ? "first active" : "earliest in the past year"} ${formatDayTick(firstActiveDay)}`;
 }
 
@@ -222,17 +226,21 @@ function MastheadFrame({
 function MastheadAvatar({ account }: { account: ViewerAccount }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [failed, setFailed] = useState(false);
+
   const avatar = (
     <AccountAvatar account={account} size={AVATAR_SIZE.MASTHEAD} onFail={() => setFailed(true)} />
   );
+
   // Note that a photo that failed stands as the letter, which has nothing to enlarge.
   if (account.image === undefined || failed) return avatar;
   const label = accountLabel(account);
+
   const photo = {
     name: label,
     mediaType: PHOTO_MEDIA_TYPE,
     url: accountPictureAt(account.image, ENLARGED_PHOTO_PIXELS),
   };
+
   return (
     <>
       <PictureTile name={label} face={PICTURE_TILE_FACE.ROUND} onOpen={() => setOpen(true)}>
@@ -256,12 +264,14 @@ function MastheadAvatar({ account }: { account: ViewerAccount }): React.JSX.Elem
  */
 function supportAccessLive(detail: AdminUserDetail): boolean {
   const until = detail.account.supportAccessUntil;
+
   return until !== null && until > detail.generatedAt;
 }
 
 /** What the masthead says of the member's grant of support access. */
 function supportAccessWords(detail: AdminUserDetail): string {
   const until = detail.account.supportAccessUntil;
+
   return until !== null && supportAccessLive(detail)
     ? `support access until ${formatInstant(until)}`
     : "no support access";
@@ -285,6 +295,7 @@ function ImpersonateControl({
   const signingIn = useAsyncAction(() => IMPERSONATE_FAILED);
   const refusal = signingIn.refusal;
   const press = () => void signingIn.run(() => impersonate(userId));
+
   return (
     <Inline>
       {refusal === undefined ? null : (
@@ -316,6 +327,7 @@ function offersImpersonate(detail: AdminUserDetail): boolean {
 /** Who the account is: its avatar, its email with an admin's badge, and when it joined, was last seen, signs in with, and grants support access until. */
 function Masthead({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
   const subject = detail.account;
+
   return (
     <MastheadFrame
       avatar={
@@ -366,7 +378,7 @@ function Masthead({ detail }: { detail: AdminUserDetail }): React.JSX.Element {
 function MastheadSkeleton(): React.JSX.Element {
   return (
     <MastheadFrame
-      avatar={<Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_AVATAR_WIDTH} />}
+      avatar={<Skeleton kind={SKELETON_KIND.CIRCLE} width={SKELETON_AVATAR_WIDTH} />}
       email={
         <Text as={TEXT_ELEMENT.DIV}>
           <Skeleton width={SKELETON_EMAIL_WIDTH} />
@@ -485,9 +497,11 @@ export function AccountScreen({
   const withdraw = useAdminSignOut(onSignOut);
   const signOut = () => withdraw.mutate();
   const back: AdminWayBack = { tab: ADMIN_TAB.USERS, onBack };
+
   const controls = (
     <AdminViewOptions windowDays={windowDays} onWindowDaysChange={onWindowDaysChange} />
   );
+
   const note = windowWords(windowDays);
 
   return adminReadView({

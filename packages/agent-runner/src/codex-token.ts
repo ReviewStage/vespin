@@ -32,6 +32,7 @@ export const askPlanTokens = Effect.fn("agent-runner/askPlanTokens")(function* (
   bearer: Redacted.Redacted,
 ) {
   const client = yield* HttpClient.HttpClient;
+
   const response = yield* client
     .execute(
       HttpClientRequest.post(url).pipe(HttpClientRequest.bearerToken(Redacted.value(bearer))),
@@ -41,17 +42,22 @@ export const askPlanTokens = Effect.fn("agent-runner/askPlanTokens")(function* (
       // Note that the client's error is not kept, because the request it describes carries the bearer.
       Effect.mapError(() => new CodexTokenFailed({ detail: "The service did not answer" })),
     );
+
   if (response.status !== HTTP_OK) {
     return yield* new CodexTokenFailed({
       detail: `The service refused the token: ${response.status}`,
     });
   }
+
   const body = yield* response.json.pipe(
     Effect.mapError(() => new CodexTokenFailed({ detail: "The service's answer is not JSON" })),
   );
+
   const answer = decodeAnswer(body);
+
   if (Option.isNone(answer) || answer.value.accessToken === "") {
     return yield* new CodexTokenFailed({ detail: "The service's answer holds no token" });
   }
+
   return answer.value satisfies RunnerTokenAnswer;
 });

@@ -38,14 +38,18 @@ export type PhotoRead = { readonly photo: string } | { readonly refusal: string 
  */
 export async function photoOfFile(file: File): Promise<PhotoRead> {
   if (!PHOTO_TYPES.has(file.type)) return { refusal: PHOTO_REFUSAL.KIND(file.name) };
-  const image = await encodeImage(file, Number.POSITIVE_INFINITY, PHOTO_EDGE);
-  if (image === undefined) return { refusal: PHOTO_REFUSAL.UNREADABLE(file.name) };
-  const photo = `data:${image.mediaType};base64,${image.base64}`;
+  const read = await encodeImage(file, Number.POSITIVE_INFINITY, PHOTO_EDGE);
+
+  if ("unreadable" in read) return { refusal: PHOTO_REFUSAL.UNREADABLE(file.name) };
+  const photo = `data:${read.image.mediaType};base64,${read.image.base64}`;
   const bytes = workspacePhotoOfDataUrl(photo)?.bytes.length;
+
   if (bytes === undefined) return { refusal: PHOTO_REFUSAL.UNREADABLE(file.name) };
+
   if (bytes > WORKSPACE_PHOTO_BOUNDS.MAX_BYTES) {
     return { refusal: PHOTO_REFUSAL.TOO_LARGE(file.name) };
   }
+
   return { photo };
 }
 
@@ -71,6 +75,7 @@ export function useWorkspacePhotoPick(
   const [photo, setPhoto] = useState<string | undefined>(undefined);
   const [reading, setReading] = useState(false);
   const picks = useRef(0);
+
   const picker = useFilePicker({
     accept: PHOTO_ACCEPT,
     onFiles: ([picked]) => {
@@ -81,6 +86,7 @@ export function useWorkspacePhotoPick(
       photoOfFile(picked).then((read) => {
         if (picks.current !== asked) return;
         setReading(false);
+
         if ("refusal" in read) onRefusal(read.refusal);
         else {
           onRefusal(undefined);
@@ -89,6 +95,7 @@ export function useWorkspacePhotoPick(
       });
     },
   });
+
   return {
     photo,
     reading,

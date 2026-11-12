@@ -47,40 +47,53 @@ export const clearedAgent = /* @__PURE__ */ Effect.fn("web/clearedAgent")(functi
   // An agent on its starter's own GitHub token takes words from its starter alone, and so is cleared by them alone.
   if (!controlsAgent(account, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* admitsPlanWriter(account, agent);
+
   if (agent.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const target = { userId: agent.userId, conversationId: agent.conversationId };
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(agent.userId, agent.id));
   const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
+
   if (runtime === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
   // Note that the clear holds the conversation's dispatch claim throughout, so no message reaches the
   // harness between the read that finds no turn under way and the session let go.
   const cleared = Effect.gen(function* () {
     const latest = yield* hostedStoreOrUnavailable(
       latestTurnsOf(agent.userId, [agent.conversationId]),
     );
+
     if (latest.get(agent.conversationId)?.settledAt === null) {
       return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
     }
+
     const sessionId = yield* hostedStoreOrUnavailable(recordedRuntimeSession(target));
+
     if (sessionId !== undefined && !(yield* runnerHalted(agent, runtime, sessionId))) {
       return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     }
+
     // Note that the session is let go, its wakeup with it, and the mark written in one transaction, so a
     // failed write leaves the session as it stood rather than a fresh one with no mark where it began.
     const store = yield* writer;
+
     const letGo = Effect.gen(function* () {
       yield* cancelAgentWakeup(agent.id);
       yield* recordAgentNativeSession(agent.userId, agent.id, null);
+
       return yield* store.markSessionCleared(target);
     });
+
     const client = yield* SqlClient.SqlClient;
     const marked = yield* hostedStoreOrUnavailable(client.withTransaction(letGo));
+
     if (Result.isFailure(marked)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   });
+
   // Note that messages that kept the claim past a send's own wait read as an agent at work.
   yield* underDispatchClaim(agent.conversationId, cleared).pipe(
     Effect.mapError((failure) => {
       if (failure instanceof DispatchClaimHeld) return HOSTED_REFUSAL.AGENT_NOT_READY;
+
       return "_tag" in failure ? HOSTED_REFUSAL.UNAVAILABLE : failure;
     }),
   );

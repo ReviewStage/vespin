@@ -20,6 +20,7 @@ function client(
     refreshAccount: () => Effect.void,
     readAccountKey: () => Effect.succeed("ada@example.com"),
   };
+
   return new HostedGitHubConnectionClient({
     serviceBaseUrl: "https://vespin.dev",
     credential: accountBearer(token),
@@ -62,7 +63,9 @@ it.effect(
       const api = fakeCloudApi({
         "POST /api/github/disconnect": { answer: () => ({ connected: false, login: null }) },
       });
+
       let session: string | undefined;
+
       const handedOff = client({
         readSessionToken: () => Effect.sync(() => session),
         obtainSession: () =>

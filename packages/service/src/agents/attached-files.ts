@@ -80,15 +80,20 @@ function keptImage(
 ): Effect.Effect<KeptImage, TaskStoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const bytes = new Uint8Array(Buffer.from(file.data, "base64"));
+
     if (bytes.byteLength > CONVERSATION_PICTURE_BOUNDS.MAX_BYTES) {
       return { omitted: PICTURE_OMISSION.TOO_LARGE };
     }
+
     const contentType = sniffImageType(bytes);
     const dimensions = contentType === undefined ? undefined : imageDimensions(bytes, contentType);
+
     if (contentType === undefined || dimensions === undefined) {
       return { omitted: PICTURE_OMISSION.UNSUPPORTED };
     }
+
     const kept = yield* keepConversationPicture(target, { bytes, contentType, ...dimensions });
+
     return Option.isSome(kept) ? { id: kept.value.id } : { omitted: PICTURE_OMISSION.LIMIT };
   });
 }
@@ -135,6 +140,7 @@ function isSenderLabel(text: string): boolean {
   // Note that only a person's mention link written whole between the two counts, as `senderLabel` writes it,
   // because a developer's own words of a label's shape, sent with a file, are words.
   const link = text.slice(SENDER_LABEL_LEAD.length, -SENDER_LABEL_TAIL.length);
+
   return link.startsWith("[@") && memberMentionOf(link)?.kind === MENTION_KIND.PERSON;
 }
 
@@ -180,7 +186,9 @@ function placedContent(
     }
   | undefined {
   const placed = placedFiles(text, attachments, (file) => file.name);
+
   if (placed === undefined) return undefined;
+
   return {
     lead: placed.unplaced
       .filter((file) => IMAGE_TYPES.has(file.mediaType))
@@ -218,6 +226,7 @@ export function turnContent(
   const rest = placed?.rest ?? attachments;
   const texts = rest.filter((file) => file.mediaType === AGENT_ATTACHMENT_TYPE.TEXT);
   const others = rest.filter((file) => file.mediaType !== AGENT_ATTACHMENT_TYPE.TEXT);
+
   return [
     ...(sender === undefined ? [] : [{ type: "text" as const, text: sender }]),
     ...(placed?.lead ?? []),
@@ -238,8 +247,10 @@ export interface ReceivedMessage {
 /** One text part of a receipt, read back as the text file it inlines, or nothing where it inlines none. */
 function inlinedFileOf(text: string): FileUIPart | undefined {
   const inlined = INLINED_FILE.exec(text);
+
   if (inlined === null) return undefined;
   const [, name = "", , file = ""] = inlined;
+
   return {
     type: "file",
     mediaType: AGENT_ATTACHMENT_TYPE.TEXT,
@@ -255,8 +266,10 @@ function inlinedFileOf(text: string): FileUIPart | undefined {
  */
 function keptOnto(image: FileUIPart, text: string): FileUIPart | undefined {
   const kept = keptImageOfLine(image.filename ?? "", text);
+
   if (kept === undefined) return undefined;
   const url = "id" in kept ? "" : image.url;
+
   return { ...image, url, providerMetadata: keptImageMetadata(kept) };
 }
 
@@ -290,9 +303,11 @@ export function receivedMessage(received: {
   if (received.parts === undefined) {
     return { text: received.message, words: received.message, files: [] };
   }
+
   const texts: string[] = [];
   const words: string[] = [];
   const files: FileUIPart[] = [];
+
   for (const [index, part] of received.parts.entries()) {
     if (part.type === "text") {
       // The sender label leads what a member sent, and is neither the words nor a part the row keeps.
@@ -302,19 +317,23 @@ export function receivedMessage(received: {
       // The line naming what was kept of the image just before it is that image's, and no words.
       const image = received.parts[index - 1]?.type === "file" ? files.at(-1) : undefined;
       const kept = image === undefined ? undefined : keptOnto(image, part.text);
+
       if (kept !== undefined) {
         files[files.length - 1] = kept;
         continue;
       }
+
       // The part a line's mentions were handed in matches the line, and is no
       // words of its own. Note that it always follows the words that named
       // them, so a first part spelled like it is the developer's words still.
       if (index > 0 && isMentionedText(part.text)) continue;
       const inlined = inlinedFileOf(part.text);
+
       if (inlined === undefined) words.push(part.text);
       else files.push(inlined);
       continue;
     }
+
     texts.push(fileMark(part.filename, part.mediaType));
     files.push({
       type: "file",
@@ -323,6 +342,7 @@ export function receivedMessage(received: {
       url: part.url ?? "",
     });
   }
+
   return {
     text: texts.join(COALESCED_LINE_SEPARATOR),
     words: words.join(COALESCED_LINE_SEPARATOR),

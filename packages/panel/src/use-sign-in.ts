@@ -25,6 +25,7 @@ export function useSignIn(): SignIn {
   const { mutateAsync: beginAccountSignIn } = useMutation(
     actMutation(ACT_KIND.ACCOUNT_BEGIN_SIGN_IN),
   );
+
   const { mutate: cancelAccountSignIn } = useMutation(
     pressMutation(ACT_KIND.ACCOUNT_CANCEL_SIGN_IN),
   );
@@ -37,6 +38,7 @@ export function useSignIn(): SignIn {
   const [signInWait, setSignInWait, signInWaitNow] = useStateWithRef<AccountProvider | undefined>(
     undefined,
   );
+
   /**
    * Which attempt any reply answers. Cancel advances it, so the outcome of a
    * sign-in already withdrawn is spent rather than reported.
@@ -57,6 +59,7 @@ export function useSignIn(): SignIn {
         (answer) => {
           if (signInAttempt.current !== attempt) return;
           setSignInWait(undefined);
+
           if ("failure" in answer) setSignInFailure(answer.failure);
           // The browser has the focus the sign-in finished in, and signing in
           // is an arrival at the tasks it just unlocked.

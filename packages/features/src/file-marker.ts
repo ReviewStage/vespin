@@ -1,14 +1,16 @@
 import { insideCode } from "./mention-link.js";
 
 /**
- * file-marker.ts -- a file written into a message's words where it stands: its name, and its marker, `[Picture 1]` for a picture and `[File: report.pdf]` for any other file, which names the attached file of that name.
+ * file-marker.ts -- a file written into a message's words where it stands: its name, and its marker, `[Picture 1]` for a picture with no name of its own and `[File: report.pdf]` for any other file, which names the attached file of that name.
  *
  * A file pasted, dropped, or picked into a message box is attached under a
  * name of its own, and its marker is written into the words where the caret
  * stood, so "this [Picture 1] next to [File: spec.pdf]" says which is which.
- * A picture is named "Picture" and the next number the box has not used; any
- * other file keeps its own name, made one a marker can spell (`writableName`)
- * and one no other file of the message holds (`unusedName`). The box and
+ * A file keeps its own name, a picture picked or dropped from disk among
+ * them, made one a marker can spell (`writableName`) and one no other file of
+ * the message holds (`unusedName`); a picture with no name worth keeping, a
+ * pasted screenshot the clipboard calls "image.png", is named "Picture" and
+ * the next number the box has not used (`attachedPictureName`). The box and
  * every surface that draws a sent message draw a marker as the file's chip;
  * the iOS app and an agent reading the words, which draw no such chip, read
  * it as the words it is, which say what stands there. The words and the files
@@ -51,6 +53,9 @@ const BLANK_NAME = "File";
 /** A name and the extension after it, so a numbered name keeps its type: "notes.txt" as "notes" and ".txt". */
 const EXTENSION = /^(.+?)(\.[^.\s]{1,16})?$/u;
 
+/** The stem the clipboard gives a picture pasted with no file of its own, "image.png", which says nothing of it. */
+const CLIPBOARD_STEM = "image";
+
 /** A marker found in the words: where it starts and ends, and the file it names. */
 export interface FileMarkerToken {
   readonly start: number;
@@ -90,10 +95,13 @@ export function writableName(name: string): string {
   const written = name
     .replace(UNWRITABLE, (character) => {
       if (character === "[") return "(";
+
       if (character === "]") return ")";
+
       return " ";
     })
     .trim();
+
   return written === "" ? BLANK_NAME : written;
 }
 
@@ -105,12 +113,31 @@ export function writableName(name: string): string {
  */
 export function unusedName(name: string, used: ReadonlySet<string>): string {
   const free = (each: string) => !used.has(each) && !isPictureName(each);
+
   if (free(name)) return name;
   const [, stem = name, extension = ""] = EXTENSION.exec(name) ?? [];
+
   for (let number = 2; ; number += 1) {
     const numbered = `${stem} ${String(number)}${extension}`;
+
     if (free(numbered)) return numbered;
   }
+}
+
+/**
+ * The name a picture is attached under: its own, as any other file's
+ * (`writableName`, `unusedName`), where it has one, and the next picture's
+ * among `used` where it has none worth keeping, as a pasted screenshot,
+ * which the clipboard calls "image.png". Note that a picture re-encoded on
+ * the way in keeps the name it was handed under, which its chip says.
+ */
+export function attachedPictureName(name: string, used: ReadonlySet<string>): string {
+  // Note that the stem is cut by hand rather than by a pattern, so no name, however long, reads slowly.
+  const dot = name.lastIndexOf(".");
+  const stem = (dot === -1 ? name : name.slice(0, dot)).trim().toLowerCase();
+  const unnamed = stem === "" || stem === CLIPBOARD_STEM;
+
+  return unnamed ? nextPictureName(used) : unusedName(writableName(name), used);
 }
 
 /** Every marker written in the words, in order, code's among them: what the words hold of each file, which undo may bring back. */
@@ -137,20 +164,43 @@ export function fileMarkers(text: string): readonly FileMarkerToken[] {
 export function wordsWithoutMarkers(text: string): string {
   let words = "";
   let at = 0;
+
   for (const marker of fileMarkers(text)) {
     words += text.slice(at, marker.start);
     at = marker.end;
   }
+
+  return words + text.slice(at);
+}
+
+/**
+ * The words with every marker outside code written as the name of the file
+ * it names, "this Picture 1 next to spec.pdf": what a place that draws plain
+ * words, and no chip, says of each file where the message named it, as a
+ * search's snippet, a reader's ears, or a title read from the words.
+ */
+export function markersAsNames(text: string): string {
+  let words = "";
+  let at = 0;
+
+  for (const marker of fileMarkers(text)) {
+    words += text.slice(at, marker.start) + marker.name;
+    at = marker.end;
+  }
+
   return words + text.slice(at);
 }
 
 /** The next picture's name: one past the highest picture's number among the names, so a picture taken off frees no number a later one reuses beside its neighbor's marker. */
 export function nextPictureName(names: Iterable<string>): string {
   let highest = 0;
+
   for (const name of names) {
     const number = PICTURE_NAME.exec(name)?.[1];
+
     if (number !== undefined) highest = Math.max(highest, Number(number));
   }
+
   return pictureName(highest + 1);
 }
 
@@ -171,14 +221,18 @@ export function placedFiles<T>(
   const unplaced = [...files];
   const runs: FileRun<T>[] = [];
   let at = 0;
+
   for (const marker of fileMarkers(text)) {
     const index = unplaced.findIndex((file) => nameOf(file) === marker.name);
+
     if (index === -1) continue;
     const [file] = unplaced.splice(index, 1);
     runs.push({ words: text.slice(at, marker.end), file });
     at = marker.end;
   }
+
   if (runs.length === 0) return undefined;
   runs.push({ words: text.slice(at), file: undefined });
+
   return { unplaced, runs };
 }

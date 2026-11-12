@@ -13,6 +13,7 @@ import { wholeOf } from "./whole-diff.js";
 /** A patch as the list reads it, of one file named as given. */
 function read(patch: string) {
   const file = parsePatchFiles(patch)[0]?.files[0];
+
   return file ?? assert.fail("the patch reads");
 }
 
@@ -21,6 +22,7 @@ test("a changed file drawn whole is one hunk of every line, its change among the
     read("diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -2,1 +2,1 @@\n-b\n+B\n"),
     { before: "a\nb\nc\n", after: "a\nB\nc\n" },
   );
+
   assert.equal(drawn.hunks.length, 1);
   assert.equal(drawn.hunks[0]?.additionStart, 1);
   assert.equal(drawn.hunks[0]?.additionCount, 3);
@@ -30,6 +32,7 @@ test("a file that only moved, drawn whole, is every one of its lines as context,
   const moved = read(
     "diff --git a/old.ts b/new.ts\nsimilarity index 100%\nrename from old.ts\nrename to new.ts\n",
   );
+
   const texts = { before: "a\nb\nc\n", after: "a\nb\nc\n" };
   const drawn = wholeOf(moved, texts);
 
@@ -51,5 +54,6 @@ test("a file of no line that only moved stays without a hunk", () => {
   const moved = read(
     "diff --git a/old.ts b/new.ts\nsimilarity index 100%\nrename from old.ts\nrename to new.ts\n",
   );
+
   assert.equal(wholeOf(moved, { before: "", after: "" }).hunks.length, 0);
 });

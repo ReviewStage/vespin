@@ -13,25 +13,31 @@ export {
   type ServiceReachState,
   sessionBearer,
 } from "./account-call.js";
+
 export {
   AccountRefreshFailed,
   type AccountSessionToken,
   type AccountToken,
 } from "./account-token.js";
+
 export { HostedAdminClient } from "./admin-client.js";
+
 export {
   HostedAgentClient,
   type HostedAgentClientOptions,
 } from "./agent-client.js";
+
 export {
   HostedAgentPortsClient,
   type HostedAgentPortsClientOptions,
   portForwardAddress,
 } from "./agent-ports-client.js";
+
 export {
   HostedAutomationClient,
   type HostedAutomationClientOptions,
 } from "./automation-client.js";
+
 export {
   DEVICE_AGENT_NOT_CLAIMED,
   type DeviceAgentBeat,
@@ -48,6 +54,7 @@ export {
   pollHostPairing,
   startHostPairing,
 } from "./device-agent-client.js";
+
 export {
   GITHUB_CONNECTION_CALL_FAILURE,
   type GitHubConnectionCallFailure,
@@ -55,6 +62,7 @@ export {
   HostedGitHubConnectionClient,
   type HostedGitHubConnectionClientOptions,
 } from "./github-connection-client.js";
+
 export {
   GITHUB_INSTALL_LANDING,
   GITHUB_INSTALL_STATUS,
@@ -62,6 +70,7 @@ export {
   githubInstallLandingPath,
   githubInstallStatusFromWire,
 } from "./github-install-wire.js";
+
 export {
   GITHUB_REPOSITORIES_QUERY,
   type GitHubIssueSummary,
@@ -79,10 +88,12 @@ export {
   githubRepositoryPullRequestAnswerSchema,
   githubRepositorySchema,
 } from "./github-repositories-wire.js";
+
 export {
   HostedIntegrationsClient,
   type HostedIntegrationsClientOptions,
 } from "./integration-client.js";
+
 export {
   HostedMacCommandClient,
   type HostedMacCommandClientOptions,
@@ -90,16 +101,19 @@ export {
   MAC_COMMAND_NOT_CLAIMED,
   type MacCommandCallFailure,
 } from "./mac-command-client.js";
+
 export {
   HostedMcpClientsClient,
   type HostedMcpClientsClientOptions,
 } from "./mcp-clients-client.js";
+
 export {
   automationPath,
   automationWebhookPath,
   HOSTED_SERVICE_PATH,
   installedSkillPath,
 } from "./service-paths.js";
+
 export {
   HOSTED_API_ERROR,
   type HostedApiError,
@@ -112,7 +126,9 @@ export {
   WIRE_UUID_LENGTH,
   wireUuidSchema,
 } from "./service-wire.js";
+
 export { webSocketOrigin } from "./socket-origin.js";
+
 export {
   HostedTaskClient,
   type HostedTaskClientOptions,
@@ -121,17 +137,20 @@ export {
   type TaskStarted,
   type TaskWritten,
 } from "./task-client.js";
+
 export {
   HostedTerminalClient,
   type HostedTerminalClientOptions,
   type TerminalRelayAsk,
   terminalRelayAddress,
 } from "./terminal-client.js";
+
 export {
   WORKSPACE_CALL_FAILURE,
   type WorkspaceCallFailure,
   type WorkspaceCallResult,
 } from "./workspace-call.js";
+
 export {
   HostedWorkspaceClient,
   type HostedWorkspaceClientOptions,

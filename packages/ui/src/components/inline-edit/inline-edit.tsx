@@ -35,15 +35,14 @@ import { ShadcnInput } from "../../shadcn/input.js";
 
 /**
  * How the field is drawn: bare in the words' own type across the line they
- * stood on, as a list's row renames, the caret and the selection alone
- * marking it, so the name being typed stands where it is drawn; in a
- * settings input's box, as a settings row's label renames; or bare in the
- * type around it at its own width, where what it stands in is a well, as a
- * tab's is.
+ * stood on, as a list's row renames and a name pressed to rename it
+ * (`RenamableName`) does, the caret and the selection alone marking it, so
+ * the name being typed stands where it is drawn; or bare in the type around
+ * it at its own width, where what it stands in is a well, as a tab's is.
+ * There is no boxed look: a settings row's name is renamed by pressing it.
  */
 export const INLINE_EDIT_LOOK = {
   FIELD: "field",
-  INPUT: "input",
   WELL: "well",
 } as const;
 
@@ -51,19 +50,14 @@ export type InlineEditLook = (typeof INLINE_EDIT_LOOK)[keyof typeof INLINE_EDIT_
 
 /**
  * The field's looks, each keyed on its `data-look`. As a field, bare in the
- * type around it, as wide as the line it stands on; as an input, a
- * settings input's box a label's line and 3px to spare each side tall, in
- * the label's own type, overhanging the label by those 3px and by its own
- * inset and edge at the start, so its words stand where the label's stood
- * and the row keeps its height; in a well, bare in the type around it, wearing
- * no ring, as no field does. How wide a field or a well
+ * type around it, as wide as the line it stands on; in a well, bare in the
+ * type around it, wearing no ring, as no field does. How wide a field or a well
  * stands is its container's to say. A group head's editor
  * (`GroupHeaderEditor`) draws its field in the well look too.
  */
 export const INLINE_EDIT_FIELD =
   "ui-inline-edit pointer-coarse:data-[look]:text-touch " +
   "data-[look=field]:block data-[look=field]:h-auto data-[look=field]:w-full data-[look=field]:rounded-none data-[look=field]:border-0 data-[look=field]:bg-transparent data-[look=field]:focus:bg-transparent data-[look=field]:p-0 data-[look=field]:text-inherit data-[look=field]:outline-none data-[look=field]:[font:inherit] " +
-  "data-[look=input]:-my-inline-edit-lift data-[look=input]:ms-inline-edit-reach data-[look=input]:h-ui-24 data-[look=input]:border-border data-[look=input]:px-ui-8 data-[look=input]:tracking-normal data-[look=input]:[font:inherit] " +
   "data-[look=well]:inline-block data-[look=well]:h-auto data-[look=well]:w-auto data-[look=well]:rounded-none data-[look=well]:border-0 data-[look=well]:bg-transparent data-[look=well]:focus:bg-transparent data-[look=well]:p-0 data-[look=well]:text-inherit data-[look=well]:outline-none data-[look=well]:[font:inherit]";
 
 /** How an edit ended: the words to keep, if any changed, and whether a key ended it. */
@@ -120,8 +114,10 @@ function InlineEditField({
         if (event.key === "Escape") {
           event.preventDefault();
           event.stopPropagation();
+
           if (!isComposingKey(event)) end(false, true);
         }
+
         if (event.key === "Enter" && !isComposingKey(event)) {
           event.preventDefault();
           end(true, true);
@@ -159,6 +155,7 @@ export function InlineEdit({
   children?: ReactNode;
 }): React.JSX.Element {
   if (!editing) return <>{children ?? value}</>;
+
   return (
     <InlineEditField
       value={value}

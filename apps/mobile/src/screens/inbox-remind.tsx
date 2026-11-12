@@ -15,6 +15,11 @@ import { useInboxActs } from "../inbox/use-inbox.js";
 /** What Remind me is called and drawn with, wherever it stands: a row's swipe and long press, and a thread's ⋯ menu. */
 export const REMIND_ME = { label: REMIND_WORDS.REMIND_ME, symbol: "clock" } as const;
 
+type UseRemindSheetResult = {
+  readonly open: (item: InboxItem) => void;
+  readonly sheet: ReactNode;
+};
+
 /**
  * The Remind me sheet a screen draws beside its rows, and the opening of it
  * on a thread: the panel's times (`@repo/features/inbox-remind-times`),
@@ -23,18 +28,18 @@ export const REMIND_ME = { label: REMIND_WORDS.REMIND_ME, symbol: "clock" } as c
  * reminder on a thread that holds one, as the panel's Remind me submenu
  * offers them. Each choice sends the panel's act and closes the sheet.
  */
-export function useRemindSheet(): {
-  readonly open: (item: InboxItem) => void;
-  readonly sheet: ReactNode;
-} {
+export function useRemindSheet(): UseRemindSheetResult {
   const { remind } = useInboxActs();
   const [held, setHeld] = useState<{ readonly item: InboxItem; readonly at: number }>();
   const close = () => setHeld(undefined);
+
   const set = (until: number | null) => {
     if (held !== undefined) remind(held.item.id, until);
     close();
   };
+
   const openedAt = held?.at ?? Date.now();
+
   const sheet = (
     <RemindSheet
       presented={held !== undefined}
@@ -49,5 +54,6 @@ export function useRemindSheet(): {
       onDismiss={close}
     />
   );
+
   return { open: (item) => setHeld({ item, at: Date.now() }), sheet };
 }

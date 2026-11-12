@@ -271,6 +271,7 @@ export type TaskListLiveAnswer = LiveReadAnswer<typeof TASK_LIST_READ>;
 export type TaskListLiveRows = typeof TASK_LIST_READ.rows.Type;
 
 type TaskLiveRow = typeof taskLiveRowSchema.Type;
+
 type AgentLiveRow = typeof agentLiveRowSchema.Type;
 
 /** The statuses under which an agent is at work. */
@@ -293,6 +294,7 @@ function newestFirst<Row extends { readonly id: string; readonly createdAt: numb
   b: Row,
 ): number {
   if (a.createdAt !== b.createdAt) return b.createdAt - a.createdAt;
+
   return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
 }
 
@@ -307,6 +309,7 @@ function turnOf(row: AgentLiveRow): StatusTurn | undefined {
 function agentTurnOf(row: AgentLiveRow): AgentTurn | undefined {
   if (row.turnId === null || row.turnStatus === null || row.queuedAt === null) return undefined;
   const failure = row.turnFailure ?? undefined;
+
   return {
     id: row.turnId,
     queuedAt: row.queuedAt,
@@ -344,12 +347,14 @@ function activityAt(row: AgentLiveRow): number {
 /** Newest started first, and the first started among those of one instant, as the held read sums a plan's agents. */
 function newestStarted(a: AgentLiveRow, b: AgentLiveRow): number {
   if (a.createdAt !== b.createdAt) return b.createdAt - a.createdAt;
+
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
 /** Every pull request the agent's row carries, newest first, or its one `published` from a statement before they were carried. */
 function pullRequestsOfRow(row: AgentLiveRow): readonly AgentPullRequest[] {
   if (row.pullRequests !== undefined) return row.pullRequests;
+
   return row.published === null ? [] : [row.published];
 }
 
@@ -365,6 +370,7 @@ function markedOfRow(row: AgentLiveRow): AgentPullRequest | null {
  */
 function pullRequestLinesOf(rows: readonly AgentLiveRow[]): readonly TaskPullRequestLine[] {
   const pullRequests = new Map<string, TaskPullRequestLine>();
+
   for (const row of rows.filter((each) => each.archivedAt === null).toSorted(newestStarted)) {
     for (const published of pullRequestsOfRow(row)) {
       if (pullRequests.has(published.url)) continue;
@@ -383,6 +389,7 @@ function pullRequestLinesOf(rows: readonly AgentLiveRow[]): readonly TaskPullReq
       });
     }
   }
+
   return [...pullRequests.values()].toSorted(
     (a, b) => PULL_REQUEST_RANK[a.state] - PULL_REQUEST_RANK[b.state],
   );
@@ -404,6 +411,7 @@ interface AgentGroup {
  */
 function agentsSummaryOf(group: AgentGroup, now: number): TaskAgentsSummary {
   const { agents: rows, pullRequests } = group;
+
   const standing = rows
     .filter((row) => row.archivedAt === null)
     .map((row) => ({
@@ -412,6 +420,7 @@ function agentsSummaryOf(group: AgentGroup, now: number): TaskAgentsSummary {
       at: turnOf(row) === undefined ? undefined : (row.settledAt ?? undefined),
       failure: row.turnFailure ?? undefined,
     }));
+
   return {
     total: standing.length,
     working: standing.filter(({ status }) => WORKING_STATUSES.has(status)).length,
@@ -421,11 +430,15 @@ function agentsSummaryOf(group: AgentGroup, now: number): TaskAgentsSummary {
   };
 }
 
+type Origin = { readonly origin?: TaskOrigin };
+
 /** Who made a task for its owner, as the summary names them: nothing for a task made by hand. */
-function originOf(row: TaskLiveRow): { readonly origin?: TaskOrigin } {
+function originOf(row: TaskLiveRow): Origin {
   const actor = row.creatorActor;
+
   if (actor === undefined || actor === DESCRIPTION_ACTOR.DEVELOPER) return {};
   const agentId = row.creatorAgentId;
+
   return {
     origin: { actor, ...(agentId === undefined || agentId === null ? undefined : { agentId }) },
   };
@@ -473,7 +486,9 @@ function taskSummaryOf(row: TaskLiveRow, agents: AgentGroup | undefined, now: nu
 /** Who archived an agent as its banner says it: the member where their account stands, the agent acting for them, and why. */
 function archivedByOf(row: AgentLiveRow): AgentArchivedBy | undefined {
   const archive = row.archivedBy;
+
   if (row.archivedAt === null || archive === null) return undefined;
+
   return {
     by: archive.by,
     ...(row.archiverName === null
@@ -500,16 +515,20 @@ function continuationOf(row: AgentLiveRow, messageId: string | undefined): Conti
 /** The Mac a local agent runs on as its summary names it, with no beat; none for one in a sandbox, or whose Mac is gone. */
 function macOf(row: AgentLiveRow): AgentSummary["mac"] {
   const { deviceId, deviceName } = row;
+
   if (row.machine !== AGENT_MACHINE.DEVICE || deviceId == null || deviceName == null) {
     return undefined;
   }
+
   return { name: deviceName, deviceId };
 }
 
 /** Where the agent's sandbox stands as its summary says it; none where no open was recorded, or the statement carries none. */
 function sandboxOf(row: AgentLiveRow): Pick<AgentSummary, "sandbox"> | undefined {
   const { sandboxState, sandboxStateAt } = row;
+
   if (sandboxState == null || sandboxStateAt == null) return undefined;
+
   return {
     sandbox: {
       state: sandboxState,
@@ -528,21 +547,26 @@ function agentSummaryOf(
   const servers = (row.disabledServers ?? []).filter(
     (name) => integrationConnectionOf(name) !== undefined,
   );
+
   const archivedBy = archivedByOf(row);
   const started = runStartedAt(row);
   const turn = agentTurnOf(row);
   const status = statusOf(row, now);
   const stoppable = status !== AGENT_STATUS.RUNNING || turnStoppable(turnOf(row));
   const runtime = NATIVE_AGENT_RUNTIMES.find((each) => each === row.runtime);
+
   const permissionMode = Object.values(AGENT_PERMISSION_MODE).find(
     (each) => each === row.permissionMode,
   );
+
   const mac = macOf(row);
+
   const owner = agentOwnerOf({
     taskId: row.planId,
     runId: row.runId ?? null,
     runAutomationId: row.runAutomationId ?? null,
   });
+
   return {
     id: row.id,
     planId: row.planId,
@@ -595,6 +619,7 @@ function listedAgentOf(
   continuedBy: ContinuedBy | undefined,
 ): ListedAgent {
   const settledAt = turnOf(row) === undefined ? null : row.settledAt;
+
   return {
     ...agentSummaryOf(row, now, continuedBy),
     workspaceId: row.workspaceId,
@@ -606,6 +631,7 @@ function listedAgentOf(
 /** First started first, and by id among those started at one instant, as a plan's agents are listed. */
 function firstStarted(a: AgentLiveRow, b: AgentLiveRow): number {
   if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }
 
@@ -617,20 +643,24 @@ function clockEdgeOf(row: AgentLiveRow, now: number): number | undefined {
 /** The earlier of two edges, none standing for never. */
 function earlierEdge(a: number | undefined, b: number | undefined): number | undefined {
   if (a === undefined) return b;
+
   return b === undefined ? a : Math.min(a, b);
 }
 
 /** The reader's pin of an agent; none for one unpinned or archived, since an archived agent stands in no list a pin is drawn in. */
 function agentPinOf(row: AgentLiveRow): TaskAgentPin | undefined {
   const { planId, pinnedAt, pinPosition } = row;
+
   if (pinnedAt === null || row.archivedAt !== null) return undefined;
   const at = { agentId: row.id, taskId: planId, pinnedAt };
+
   return pinPosition === null ? at : { ...at, pinPosition };
 }
 
 /** The pull request an agent's row names of every one it opened (`agentMarkedPullRequest`), as the service last read it on GitHub; none where it opened none. */
 function agentPullRequestOf(row: AgentLiveRow): ListedPullRequest | undefined {
   const marked = markedOfRow(row);
+
   return marked === null ? undefined : { agentId: row.id, taskId: row.planId, pullRequest: marked };
 }
 
@@ -659,10 +689,10 @@ interface Built<Row, Value> {
 }
 
 /** `held` where it was built from `row` and `beside` and still holds at `now`, else what `build` builds now. */
-function rebuilt<Row, Value>(
+function rebuilt<Row, Value, Beside>(
   held: Built<Row, Value> | undefined,
   row: Row,
-  beside: unknown,
+  beside: Beside,
   now: number,
   build: () => { readonly value: Value; readonly until: number | undefined },
 ): Built<Row, Value> {
@@ -672,6 +702,7 @@ function rebuilt<Row, Value>(
     held.beside === beside &&
     now >= held.from &&
     (held.until === undefined || now < held.until);
+
   return holds ? held : { row, beside, from: now, ...build() };
 }
 
@@ -720,32 +751,41 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
   let listed = new Map<string, Built<AgentLiveRow, ListedAgent>>();
   let summaries = new Map<string, Built<TaskLiveRow, TaskSummary>>();
   let drawn: TaskListDrawing | undefined;
+
   /** What an agent's row alone builds, its pin and its pull request, built once for as long as the row stands. */
   const ofRow = new WeakMap<
     AgentLiveRow,
     { readonly pin: TaskAgentPin | undefined; readonly pullRequest: ListedPullRequest | undefined }
   >();
+
   const partsOf = (row: AgentLiveRow) => {
     const held = ofRow.get(row);
+
     if (held !== undefined) return held;
     const parts = { pin: agentPinOf(row), pullRequest: agentPullRequestOf(row) };
     ofRow.set(row, parts);
+
     return parts;
   };
 
   return (rows, now) => {
     // The agents started from each agent, built again only where their rows moved.
     const startedFrom = new Map<string, AgentLiveRow[]>();
+
     for (const row of rows.agents
       .filter((each) => each.startedFrom !== null)
       .toSorted(firstStarted)) {
       const source = row.startedFrom?.agentId;
+
       if (source === undefined) continue;
       const from = startedFrom.get(source);
+
       if (from === undefined) startedFrom.set(source, [row]);
       else from.push(row);
     }
+
     const nextContinued = new Map<string, Continued>();
+
     for (const [source, from] of startedFrom) {
       const held = continued.get(source);
       nextContinued.set(
@@ -758,18 +798,24 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
 
     // Each plan's agents in the order the rows name them, and their pull requests, built again only where their rows moved.
     const byTask = new Map<string, AgentLiveRow[]>();
+
     for (const row of rows.agents) {
       const group = byTask.get(row.planId);
+
       if (group === undefined) byTask.set(row.planId, [row]);
       else group.push(row);
     }
+
     const nextGroups = new Map<string, DrawnGroup>();
+
     for (const [taskId, agents] of byTask) {
       const held = groups.get(taskId);
+
       if (held !== undefined && sameItems(held.agents, agents)) {
         nextGroups.set(taskId, held);
         continue;
       }
+
       const lines = pullRequestLinesOf(agents);
       nextGroups.set(taskId, {
         agents,
@@ -781,20 +827,25 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
     // Each agent as the tabs draw it, built again where its row or those started from it moved, or the clock moved its status.
     const nextListed = new Map<string, Built<AgentLiveRow, ListedAgent>>();
     let edge: number | undefined;
+
     for (const row of rows.agents) {
       const continuedBy = nextContinued.get(row.id)?.by;
+
       const built = rebuilt(listed.get(row.id), row, continuedBy, now, () => ({
         value: listedAgentOf(row, now, continuedBy),
         until: clockEdgeOf(row, now),
       }));
+
       nextListed.set(row.id, built);
       edge = earlierEdge(edge, built.until);
     }
 
     // Each plan as the list's row says it, built again where its row or its agents moved, or the clock moved one of their statuses.
     const nextSummaries = new Map<string, Built<TaskLiveRow, TaskSummary>>();
+
     const plans = rows.plans.toSorted(newestFirst).map((row) => {
       const group = nextGroups.get(row.id);
+
       const built = rebuilt(summaries.get(row.id), row, group, now, () => ({
         value: taskSummaryOf(row, group, now),
         until: (group?.agents ?? []).reduce<number | undefined>(
@@ -802,7 +853,9 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
           undefined,
         ),
       }));
+
       nextSummaries.set(row.id, built);
+
       return built.value;
     });
 
@@ -830,6 +883,7 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
         held?.agentPullRequests,
         rows.agents.flatMap((row) => {
           const { pullRequest } = partsOf(row);
+
           return pullRequest === undefined ? [] : [pullRequest];
         }),
       ),
@@ -837,11 +891,13 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
         held?.taskAgentPins,
         rows.agents.flatMap((row) => {
           const { pin } = partsOf(row);
+
           return pin === undefined ? [] : [pin];
         }),
       ),
       edge,
     };
+
     return drawn;
   };
 }
@@ -866,6 +922,7 @@ export function taskAgentsOfLiveRows(rows: TaskListLiveRows, now: number): reado
 export function taskAgentPinsOfLiveRows(rows: TaskListLiveRows): readonly TaskAgentPin[] {
   return rows.agents.flatMap((row) => {
     const pin = agentPinOf(row);
+
     return pin === undefined ? [] : [pin];
   });
 }
@@ -877,11 +934,14 @@ export function taskAgentPinsOfLiveRows(rows: TaskListLiveRows): readonly TaskAg
  */
 export function taskPullRequestsOfLiveRows(rows: TaskListLiveRows): readonly TaskPullRequests[] {
   const byTask = new Map<string, AgentLiveRow[]>();
+
   for (const row of rows.agents) {
     byTask.set(row.planId, [...(byTask.get(row.planId) ?? []), row]);
   }
+
   return [...byTask].flatMap(([taskId, agents]) => {
     const pullRequests = pullRequestLinesOf(agents);
+
     return pullRequests.length === 0 ? [] : [{ taskId, pullRequests }];
   });
 }
@@ -894,6 +954,7 @@ export function taskPullRequestsOfLiveRows(rows: TaskListLiveRows): readonly Tas
 export function agentPullRequestsOfLiveRows(rows: TaskListLiveRows): readonly ListedPullRequest[] {
   return rows.agents.flatMap((row) => {
     const pullRequest = agentPullRequestOf(row);
+
     return pullRequest === undefined ? [] : [pullRequest];
   });
 }

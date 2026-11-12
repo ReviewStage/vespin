@@ -43,7 +43,9 @@ function drawHeading(left: EditableHeadingLeave[]): HTMLElement {
     ),
   );
   const heading = container.querySelector<HTMLElement>("[role='textbox']");
+
   if (heading === null) throw new Error("the heading is drawn");
+
   return heading;
 }
 
@@ -55,9 +57,11 @@ function key(target: HTMLElement, name: string, init: KeyboardEventInit = {}): b
     key: name,
     ...init,
   });
+
   act(() => {
     target.dispatchEvent(event);
   });
+
   return !event.defaultPrevented;
 }
 

@@ -24,12 +24,14 @@ export function cliProcedures(
   dependencies: CliActsDependencies,
 ): Pick<PlatformActProcedures<WebContents>, CliActKind> {
   const { install } = dependencies;
+
   return {
     [CLI_ACT_KIND.CLI_INSTALL]: cliPort[CLI_ACT_KIND.CLI_INSTALL].effect(function* ({
       context,
       errors,
     }) {
       yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
+
       return yield* install();
     }),
   };

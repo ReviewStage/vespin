@@ -10,7 +10,12 @@
  * which is what lets `ASWebAuthenticationSession`'s HTTPS callback catch the
  * authorization's redirect before any page loads, and for the links the app
  * draws a screen for (`@repo/features/ios-app-links`), and under
- * `webcredentials`, which that callback requires of its host besides. The web service rewrites the
+ * `webcredentials`, which that callback requires of its host besides, and
+ * under `activitycontinuation`, which lets the app take any page of the host
+ * another device hands off as its browser would, such as the Mac app's,
+ * whose activity type the app can't take across their two teams; Apple scopes
+ * this section by no path, and the app sends a page it doesn't draw on to
+ * Safari. The web service rewrites the
  * well-known path onto this group's route (`apps/web/server/function-rewrites.ts`).
  *
  * The Team ID is the deployment's to configure, and the bundle ID is the
@@ -68,6 +73,7 @@ interface AppleAppSiteAssociation {
     }[];
   };
   readonly webcredentials: { readonly apps: readonly string[] };
+  readonly activitycontinuation: { readonly apps: readonly string[] };
 }
 
 /** The app's id in the document: its Team ID, a dot, and its bundle ID. */
@@ -75,9 +81,10 @@ function appId(app: AssociatedApp): string {
   return `${app.teamId}.${app.bundleId}`;
 }
 
-/** The document naming the app: the sign-in's callback and the links the app draws as its universal links, and the app as the one the host's credentials go to. */
+/** The document naming the app: the sign-in's callback and the links the app draws as its universal links, the app as the one the host's credentials go to, and the app as the one a handed-off page of the host continues in. */
 function appleAppSiteAssociation(app: AssociatedApp): AppleAppSiteAssociation {
   const id = appId(app);
+
   return {
     applinks: {
       details: [
@@ -88,6 +95,7 @@ function appleAppSiteAssociation(app: AssociatedApp): AppleAppSiteAssociation {
       ],
     },
     webcredentials: { apps: [id] },
+    activitycontinuation: { apps: [id] },
   };
 }
 
@@ -99,7 +107,9 @@ const associatedApp: Effect.Effect<Option.Option<AssociatedApp>> = Config.all({
   Effect.orElseSucceed(() => ({ teamId: Option.none<string>(), bundleId: Option.none<string>() })),
   Effect.map(({ teamId, bundleId }) => {
     const team = text(Option.getOrUndefined(teamId));
+
     if (team === undefined) return Option.none();
+
     return Option.some({
       teamId: team,
       bundleId: text(Option.getOrUndefined(bundleId)) ?? IOS_BUNDLE_ID_DEFAULT,
@@ -110,11 +120,15 @@ const associatedApp: Effect.Effect<Option.Option<AssociatedApp>> = Config.all({
 /** GET: the document naming the deployment's app, or not found where it names none. */
 const associationEndpoint = Effect.gen(function* () {
   const incoming = yield* HttpServerRequest.HttpServerRequest;
+
   if (incoming.method !== HTTP_METHOD.GET) {
     return yield* Effect.fail(HOSTED_REFUSAL.METHOD_NOT_ALLOWED);
   }
+
   const app = yield* associatedApp;
+
   if (Option.isNone(app)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return HttpServerResponse.text(JSON.stringify(appleAppSiteAssociation(app.value)), {
     contentType: ASSOCIATION_CONTENT_TYPE,
     headers: ASSOCIATION_HEADERS,

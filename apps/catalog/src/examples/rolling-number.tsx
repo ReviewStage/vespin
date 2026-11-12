@@ -22,6 +22,7 @@ const TOTAL = 12;
 
 function RollingNumbers(): React.JSX.Element {
   const [done, setDone] = useState(8);
+
   return (
     <CatalogSection id="rolling-number-count" title="A count that ticks">
       <Inline gap={GAP.CONTROL}>

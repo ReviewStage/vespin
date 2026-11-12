@@ -17,10 +17,9 @@
     "check": "node scripts/check.mjs",
     "check:affected": "./scripts/check.sh --affected",
     "db:generate": "pnpm --filter @repo/database db:generate",
-    "discarded-effect": "node --max-old-space-size=3072 scripts/discarded-effect.mjs",
     "format": "biome format --write .",
     "knip": "knip --no-config-hints",
-    "lint": "biome lint . && pnpm oxlint && node tools/anti-slop/press-guard-check.ts && node tools/anti-slop/style-guard.ts",
+    "lint": "biome lint . && pnpm oxlint",
     "lint:fix": "biome check --write .",
     "oxlint": "./scripts/oxlint.sh",
     "package": "pnpm --filter @repo/desktop package",
@@ -37,14 +36,14 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.8",
+    "@oxlint/plugins": "1.79.0",
     "effect": "catalog:",
     "husky": "9.1.7",
-    "knip": "6.35.1",
-    "lint-staged": "17.3.0",
+    "knip": "6.45.1",
+    "lint-staged": "17.6.0",
     "oxlint": "1.79.0",
     "tsx": "catalog:",
-    "turbo": "2.11.8",
-    "typescript": "catalog:web",
+    "turbo": "2.11.11",
     "vitest": "catalog:"
   }
 }

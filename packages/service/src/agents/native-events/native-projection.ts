@@ -75,6 +75,7 @@ const DraftSchema = Schema.Struct({
   forming: Schema.String,
   told: Schema.Number,
 });
+
 type Draft = typeof DraftSchema.Type;
 
 const EMPTY_DRAFT: Draft = { completed: "", forming: "", told: 0 };
@@ -88,6 +89,7 @@ const StepSchema = Schema.Struct({
   /** How many reasoning summaries the step told, which numbers the next one's id. */
   reasoning: Schema.Number,
 });
+
 type Step = typeof StepSchema.Type;
 
 const UsageSchema = Schema.Struct({
@@ -152,6 +154,7 @@ const TurnSchema = Schema.Struct({
   /** The MCP servers mentioned to the agent that this turn took as it started, which its calls are handed whatever the switches say. */
   servers: Schema.optionalKey(Schema.Array(Schema.String)),
 });
+
 type Turn = typeof TurnSchema.Type;
 
 /** What the projection keeps between batches. */
@@ -170,6 +173,7 @@ const NativeProjectionSchema = Schema.Struct({
   /** Whether the launch went warm at its turn's IDLE with no turn since, so a failure it ends on is no turn's. */
   warm: Schema.optionalKey(Schema.Boolean),
 });
+
 export type NativeProjection = typeof NativeProjectionSchema.Type;
 
 const EMPTY_PROJECTION: NativeProjection = {};
@@ -188,7 +192,9 @@ export function withTurnServers(
   servers: readonly string[],
 ): NativeProjection {
   const turn = state.turn;
+
   if (turn === undefined || turn.id !== turnId || servers.length === 0) return state;
+
   return { ...state, turn: { ...turn, servers: [...servers] } };
 }
 
@@ -332,29 +338,33 @@ function tellable(draft: Draft): string {
 /** The turn with every subagent its call waited on marked settled, as the call is. */
 function withSettledSubagents(turn: Turn, callId: string): Turn {
   const held = turn.subagents;
+
   if (held === undefined) return turn;
+
   const subagents = Object.fromEntries(
     Object.entries(held).map(([key, subagent]) => [
       key,
       subagent.callId === callId ? { ...subagent, settled: true } : subagent,
     ]),
   );
+
   return { ...turn, subagents };
 }
 
 /** The turn with the call answered: no longer running, and any background subagent under it settled. */
 function withSettledCall(turn: Turn, callId: string): Turn {
   const settled = withSettledSubagents(turn, callId);
+
   if (settled.running === undefined) return settled;
   const { [callId]: _answered, ...running } = settled.running;
+
   return { ...settled, running };
 }
 
+type UnknownCallResult = { readonly name: string; readonly input: WireValue };
+
 /** A call to a tool no transcript registers, as it is stored: under `UNKNOWN_TOOL`, the name it called and its input kept in its input. */
-function unknownCall(
-  called: string,
-  input: UnparsedWireValue,
-): { readonly name: string; readonly input: WireValue } {
+function unknownCall(called: string, input: UnparsedWireValue): UnknownCallResult {
   return {
     name: UNKNOWN_TOOL,
     input: input === undefined ? { name: called } : { name: called, input },
@@ -389,6 +399,7 @@ class Fold {
         sequence: told,
       },
     });
+
     return { ...turn, told };
   }
 
@@ -400,14 +411,18 @@ class Fold {
    */
   turn(): Turn {
     const held = this.state.turn;
+
     if (held !== undefined) return held;
     const { warm: _warm, ...cold } = this.state;
     this.state = cold;
+
     const id =
       this.#context.queuedTurnId ??
       nativeTurnId(this.#context.conversationId, this.#context.sequence);
+
     this.writes.push({ kind: NATIVE_WRITE.ENQUEUE, turnId: id });
     const { origin, trigger } = SESSION_TURN_KIND[SESSION_TURN.TYPED];
+
     const opened = this.#tell(
       { id, told: 0, steps: 0, calls: {}, running: {}, openedAt: this.#context.now },
       {
@@ -418,29 +433,37 @@ class Fold {
         attempt: this.#context.attempt,
       },
     );
+
     this.#setTurn(opened);
+
     return opened;
   }
 
   /** The step's words through what may be told now, or whole where `whole`, where the writer was told less. */
   #drafted(turn: Turn, step: Step, whole: boolean): Turn {
     const { completed, forming } = step.draft;
+
     const text =
       whole && forming.length > 0 ? joinedWords(completed, forming) : tellable(step.draft);
+
     if (text.length <= step.draft.told) return { ...turn, step };
+
     const told = this.#tell(turn, {
       kind: RUN_EVENT.TEXT_DRAFTED,
       step: turn.steps,
       text,
     });
+
     return { ...told, step: { ...step, draft: { ...step.draft, told: text.length } } };
   }
 
   /** The step's words told whole, and the step closed. */
   #closed(turn: Turn): Turn {
     const step = turn.step;
+
     if (step === undefined) return turn;
     const told = this.#drafted(turn, step, true);
+
     return { ...told, step: { ...(told.step ?? step), open: false } };
   }
 
@@ -448,12 +471,15 @@ class Fold {
   #step(key: string | undefined): Turn {
     const turn = this.turn();
     const step = turn.step;
+
     if (step?.open === true && (key === undefined || step.key === undefined || step.key === key)) {
       if (key === undefined || step.key !== undefined) return turn;
       const keyed = { ...turn, step: { ...step, key } };
       this.#setTurn(keyed);
+
       return keyed;
     }
+
     // A step opened is the harness at work again, so whatever it waited on is behind it.
     const { waiting: _waiting, ...closed } = this.#closed(turn);
     const steps = closed.steps + 1;
@@ -461,6 +487,7 @@ class Fold {
     const fresh = { open: true, draft: EMPTY_DRAFT, reasoning: 0 };
     const next: Turn = { ...opened, step: key === undefined ? fresh : { ...fresh, key } };
     this.#setTurn(next);
+
     return next;
   }
 
@@ -468,6 +495,7 @@ class Fold {
   #words(grow: (draft: Draft) => Draft): void {
     const turn = this.#step(undefined);
     const step = turn.step;
+
     if (step === undefined) return;
     this.#setTurn(this.#drafted(turn, { ...step, draft: grow(step.draft) }, false));
   }
@@ -475,13 +503,16 @@ class Fold {
   #reasoning(text: string): void {
     const turn = this.#step(undefined);
     const step = turn.step;
+
     if (step === undefined) return;
     const id = reasoningItemId(this.#context.conversationId, turn.id, turn.steps, step.reasoning);
+
     const told = this.#tell(turn, {
       kind: RUN_EVENT.REASONING_COMPLETED,
       summary: text,
       item: { id, summary: text },
     });
+
     this.#setTurn({ ...told, step: { ...step, reasoning: step.reasoning + 1 } });
   }
 
@@ -495,16 +526,21 @@ class Fold {
    */
   #toolStarted(moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.TOOL_STARTED }>): void {
     if (UNRECORDED_TOOLS.has(moment.name)) return;
+
     const { name, input }: { readonly name: string; readonly input: UnparsedWireValue } =
       this.#context.registered(moment.name) ? moment : unknownCall(moment.name, moment.input);
+
     const turn = this.#step(undefined);
+
     if (turn.calls[moment.callId] !== undefined) return;
+
     const told = this.#tell(turn, {
       kind: RUN_EVENT.TOOL_CALL_STARTED,
       callId: moment.callId,
       name,
       input,
     });
+
     const held = { ...told, calls: { ...told.calls, [moment.callId]: name } };
     // Note that a turn kept from before its open calls were recorded stays unknown, since a call it opened then is not in them.
     this.#setTurn(
@@ -517,6 +553,7 @@ class Fold {
   #toolSettled(moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.TOOL_SETTLED }>): void {
     const turn = this.state.turn;
     const name = turn?.calls[moment.callId];
+
     if (turn === undefined || name === undefined) return;
     this.#setTurn(
       this.#tell(withSettledCall(turn, moment.callId), {
@@ -537,7 +574,9 @@ class Fold {
     moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.SUBAGENT_RUNNING }>,
   ): void {
     const turn = this.state.turn;
+
     if (turn?.calls[moment.callId] === undefined) return;
+
     if (turn.subagents?.[moment.key]?.settled === true) return;
     const { callId, input } = moment;
     const subagent = input === undefined ? { callId } : { callId, input };
@@ -550,6 +589,7 @@ class Fold {
   ): void {
     const turn = this.state.turn;
     const subagent = turn?.subagents?.[moment.key];
+
     if (turn === undefined || subagent === undefined || subagent.settled === true) return;
     const { callId, input } = subagent;
     this.#toolSettled({
@@ -574,12 +614,17 @@ class Fold {
     moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.ENDED }>,
   ): { readonly turn: Turn; readonly openedForEnd: boolean } | undefined {
     const held = this.state.turn;
+
     if (held !== undefined) return { turn: held, openedForEnd: false };
+
     if (moment.launchFailed !== true || this.state.warm === true) return undefined;
+
     if (this.#context.queuedTurnId === undefined) {
       this.#context.report(`A launch with no turn under way ended: ${moment.detail ?? "failed"}`);
+
       return undefined;
     }
+
     return { turn: this.turn(), openedForEnd: true };
   }
 
@@ -595,17 +640,23 @@ class Fold {
     // the next launch is refused again or it is not.
     const { warm: _warm, rateLimit, rateLimitResetsAt, ...cold } = this.state;
     this.state = moment.warm === true ? { ...cold, warm: true } : cold;
+
     if (ended === undefined) return;
     let turn = this.#closed(ended.turn);
+
     if (this.#replayed(turn, ended.openedForEnd, moment.ending)) return;
+
     if (this.#retried(turn, ended.openedForEnd, moment.ending, rateLimitResetsAt)) return;
+
     if (turn.limited === true && moment.ending !== NATIVE_ENDING.STOPPED) {
       turn = this.#limitNotice(turn, null);
     }
+
     // Note that a refusal its launch ended on before the model turn's result still fails the turn.
     const status = statusOf(moment.ending, turn.failure ?? turn.refusing);
     const failed = status === RUN_STATUS.FAILED;
     const refusal = turn.refusal === true || turn.refusing !== undefined;
+
     // A turn its plan's limit cut short with no payer left failed for that limit, which its user expects.
     const failure = ended.openedForEnd
       ? TURN_FAILURE.RUNNER_LOST
@@ -614,6 +665,7 @@ class Fold {
         : refusal
           ? TURN_FAILURE.REFUSAL
           : TURN_FAILURE.MODEL;
+
     // Note that a refusal of the starter's own key, or of a local agent's machine's own login, leads with the coder's word for it,
     // so the window reads the failure as a key to replace, or a machine to sign in on, rather than a model call failed.
     const credentialRefused =
@@ -624,6 +676,7 @@ class Fold {
           : this.#context.machineLogin === true
             ? CODER_REFUSAL.MACHINE_SIGNED_OUT
             : undefined;
+
     const detail = [
       credentialRefused,
       moment.detail,
@@ -634,6 +687,7 @@ class Fold {
     ]
       .filter((word) => word !== undefined)
       .join("; ");
+
     const model = this.#context.model;
     this.#tell(turn, {
       kind: RUN_EVENT.TURN_ENDED,
@@ -648,6 +702,7 @@ class Fold {
       at: this.#context.now,
       attempt: this.#context.attempt,
     });
+
     if (failed) {
       this.writes.push({
         kind: NATIVE_WRITE.FAILED,
@@ -663,6 +718,7 @@ class Fold {
         refused: turn.refused === true,
       });
     }
+
     this.#setTurn(undefined);
   }
 
@@ -672,6 +728,7 @@ class Fold {
       this.#context.model === undefined
         ? undefined
         : providerModelOf(this.#context.model)?.provider;
+
     return provider === MODEL_PROVIDER.OPENAI
       ? CONNECTION_LOST_PROVIDER.OPENAI
       : CONNECTION_LOST_PROVIDER.ANTHROPIC;
@@ -714,8 +771,10 @@ class Fold {
     const moved = this.#context.movedAfterLimit;
     const resets = [resetsAt, this.#context.resetsBeside].filter((at) => at !== undefined);
     const until = moved !== undefined || resets.length === 0 ? undefined : Math.min(...resets);
+
     if (moved === undefined && until === undefined) return false;
     turn = this.#limitNotice(turn, until ?? null, moved);
+
     const {
       failure: _failure,
       refusal: _refusal,
@@ -725,12 +784,14 @@ class Fold {
       waiting: _waiting,
       ...kept
     } = turn;
+
     this.#setTurn({ ...kept, retrying: true });
     this.writes.push(
       until === undefined
         ? { kind: NATIVE_WRITE.RETRY, turnId: turn.id }
         : { kind: NATIVE_WRITE.WAIT, turnId: turn.id, until },
     );
+
     return true;
   }
 
@@ -749,7 +810,9 @@ class Fold {
     ending: (typeof NATIVE_ENDING)[keyof typeof NATIVE_ENDING],
   ): boolean {
     if (turn.sessionLost !== true || turn.replayed === true) return false;
+
     if (openedForEnd || ending === NATIVE_ENDING.STOPPED) return false;
+
     const {
       failure: _failure,
       refusal: _refusal,
@@ -760,8 +823,10 @@ class Fold {
       waiting: _waiting,
       ...kept
     } = turn;
+
     this.#setTurn({ ...kept, retrying: true, replayed: true });
     this.writes.push({ kind: NATIVE_WRITE.RETRY, turnId: turn.id, replay: true });
+
     return true;
   }
 
@@ -775,6 +840,7 @@ class Fold {
     const grown = usageGrowth(this.state.metered, total);
     this.state = { ...this.state, metered: total };
     const turn = this.state.turn;
+
     if (turn === undefined || grown === undefined) return;
     this.#setTurn({ ...turn, usage: addModelUsage(turn.usage, grown) });
   }
@@ -788,6 +854,7 @@ class Fold {
       case NATIVE_MOMENT.LINE_ACCEPTED: {
         // Note that a turn kept open on its plan's limit is under way again once a launch takes its line.
         const { retrying, ...turn } = this.turn();
+
         if (retrying !== undefined) this.#setTurn(turn);
         this.writes.push({
           kind: NATIVE_WRITE.TAKE_LINE,
@@ -795,34 +862,47 @@ class Fold {
           clientId: moment.clientId,
           ...(moment.snapshot === undefined ? undefined : { snapshot: moment.snapshot }),
         });
+
         return;
       }
+
       case NATIVE_MOMENT.SESSION:
         if (this.state.session === moment.sessionId) return;
         this.state = { ...this.state, session: moment.sessionId };
         this.writes.push({ kind: NATIVE_WRITE.SESSION, sessionId: moment.sessionId });
+
         return;
       case NATIVE_MOMENT.TRANSCRIPT_BROKEN:
         this.writes.push({ kind: NATIVE_WRITE.TRANSCRIPT_BROKEN, sessionId: moment.sessionId });
+
         return;
       case NATIVE_MOMENT.SESSION_LOST: {
         const turn = this.state.turn;
+
         if (turn !== undefined) this.#setTurn({ ...turn, sessionLost: true });
+
         return;
       }
+
       case NATIVE_MOMENT.ACTIVE:
         this.turn();
+
         return;
       case NATIVE_MOMENT.STEP:
         this.#step(moment.key);
+
         return;
       case NATIVE_MOMENT.STEP_CLOSED: {
         const turn = this.state.turn;
+
         if (turn !== undefined) this.#setTurn(this.#closed(turn));
+
         return;
       }
+
       case NATIVE_MOMENT.TEXT_DELTA:
         this.#words((draft) => ({ ...draft, forming: draft.forming + moment.text }));
+
         return;
       case NATIVE_MOMENT.TEXT:
         this.#words((draft) => ({
@@ -830,58 +910,76 @@ class Fold {
           completed: joinedWords(draft.completed, moment.text),
           forming: "",
         }));
+
         return;
       case NATIVE_MOMENT.REASONING:
         this.#reasoning(moment.text);
+
         return;
       case NATIVE_MOMENT.TOOL_STARTED:
         this.#toolStarted(moment);
+
         return;
       case NATIVE_MOMENT.TOOL_SETTLED:
         this.#toolSettled(moment);
+
         return;
       case NATIVE_MOMENT.SUBAGENT_RUNNING:
         this.#subagentRunning(moment);
+
         return;
       case NATIVE_MOMENT.SUBAGENT_ENDED:
         this.#subagentEnded(moment);
+
         return;
       case NATIVE_MOMENT.USAGE:
         this.#usage(moment.usage);
+
         return;
       case NATIVE_MOMENT.USAGE_TOTAL:
         this.#usageTotal(moment.total);
+
         return;
       case NATIVE_MOMENT.CONTEXT:
         // Note that a call that read nothing, as an error the CLI makes up does, leaves the last one standing.
         if (moment.usage.inputTokens > 0) {
           this.writes.push({ kind: NATIVE_WRITE.CONTEXT, usage: moment.usage });
         }
+
         return;
       case NATIVE_MOMENT.RESULT:
         this.#result(moment.failure);
+
         return;
       case NATIVE_MOMENT.REFUSED: {
         const turn = this.turn();
         this.#setTurn({ ...turn, refusing: moment.detail });
+
         return;
       }
+
       case NATIVE_MOMENT.COMPACTED:
         this.writes.push({ kind: NATIVE_WRITE.COMPACTED });
+
         if (moment.notice !== undefined) {
           this.#setTurn(
             this.#tell(this.turn(), { kind: RUN_EVENT.COMPACTED, notice: moment.notice }),
           );
         }
+
         return;
       case NATIVE_MOMENT.COMPACTION_FAILED: {
         this.#context.report(moment.detail);
         const turn = this.state.turn;
+
         if (turn !== undefined) this.#setTurn({ ...turn, compactionFailed: moment.detail });
+
         return;
       }
+
       case NATIVE_MOMENT.NOTED:
         this.#context.report(moment.said);
+
         return;
       case NATIVE_MOMENT.RATE_LIMIT: {
         const { rateLimit: _held, rateLimitResetsAt: _resets, ...rest } = this.state;
@@ -896,12 +994,15 @@ class Fold {
           : rest;
         // A limit the harness says lifted no longer cut the turn short, so a failure after it is its own.
         const turn = this.state.turn;
+
         if (!moment.refused && turn?.limited === true) {
           const { limited: _limited, ...lifted } = turn;
           this.#setTurn(lifted);
         }
+
         return;
       }
+
       case NATIVE_MOMENT.PLAN_USAGE: {
         const { kind: _kind, ...usage } = moment;
         const turnOpenedAt = this.state.turn?.openedAt;
@@ -910,14 +1011,18 @@ class Fold {
           ...usage,
           ...(turnOpenedAt !== undefined ? { turnOpenedAt } : undefined),
         });
+
         return;
       }
+
       case NATIVE_MOMENT.PLAN: {
         // Note that a reached limit resets when the limit the harness last reported says.
         const resetsAt =
           moment.status === PLAN_STATUS.LIMIT_REACHED ? this.state.rateLimitResetsAt : undefined;
+
         const turnOpenedAt = this.state.turn?.openedAt;
         const turn = this.state.turn;
+
         if (turn !== undefined && moment.status === PLAN_STATUS.LIMIT_REACHED) {
           this.#setTurn({ ...turn, limited: true });
         } else if (turn !== undefined && moment.status === PLAN_STATUS.VERIFIED) {
@@ -926,44 +1031,59 @@ class Fold {
         } else if (turn !== undefined && REFUSED_STATUSES.has(moment.status)) {
           this.#setTurn({ ...turn, refused: true });
         }
+
         this.writes.push({
           kind: NATIVE_WRITE.PLAN_STATUS,
           status: moment.status,
           ...(resetsAt !== undefined ? { resetsAt } : undefined),
           ...(turnOpenedAt !== undefined ? { turnOpenedAt } : undefined),
         });
+
         return;
       }
+
       case NATIVE_MOMENT.WAITING: {
         // Note that a waiting turn is still under way: its words are told whole and nothing ends.
         const turn = this.state.turn;
+
         if (turn !== undefined) this.#setTurn({ ...this.#closed(turn), waiting: true });
+
         return;
       }
+
       case NATIVE_MOMENT.CONNECTION_LOST: {
         // The turn waits for the provider's host, still under way, and the transcript says so where it happened;
         // what the model turn failed with is let go, since the loss is no failure of the turn's unless the wait is.
         // A loss told again while the wait stands keeps the first notice, which the restore settles.
         const turn = this.state.turn;
+
         if (turn === undefined || turn.reconnecting !== undefined) return;
         const { failure: _failure, ...kept } = this.#closed(turn);
+
         const told = this.#tell(kept, {
           kind: RUN_EVENT.CONNECTION_LOST,
           notice: { provider: this.#provider(), restoredAt: null },
         });
+
         this.#setTurn({ ...told, reconnecting: told.told });
+
         return;
       }
+
       case NATIVE_MOMENT.CONNECTION_RESTORED: {
         const turn = this.state.turn;
+
         if (turn === undefined || turn.reconnecting === undefined) return;
         const { reconnecting, ...kept } = turn;
+
         const told = this.#tell(kept, {
           kind: RUN_EVENT.CONNECTION_RESTORED,
           lostSequence: reconnecting,
           restoredAt: this.#context.now,
         });
+
         this.#setTurn(told);
+
         if (moment.carryOn) {
           this.writes.push({
             kind: NATIVE_WRITE.CARRY_ON,
@@ -971,10 +1091,13 @@ class Fold {
             lostSequence: reconnecting,
           });
         }
+
         return;
       }
+
       case NATIVE_MOMENT.ENDED:
         this.#ended(moment);
+
         return;
     }
   }
@@ -995,8 +1118,11 @@ function usageGrowth(before: Usage | undefined, total: Usage): RunUsage | undefi
     reasoningTokens: total.reasoningTokens - (before?.reasoningTokens ?? 0),
     cacheWriteTokens: (total.cacheWriteTokens ?? 0) - (before?.cacheWriteTokens ?? 0),
   };
+
   const counts = Object.values(grown);
+
   if (counts.some((count) => count < 0)) return total;
+
   return counts.some((count) => count > 0) ? grown : undefined;
 }
 
@@ -1009,8 +1135,10 @@ function usageGrowth(before: Usage | undefined, total: Usage): RunUsage | undefi
  */
 function settledModelTurn(turn: Turn, failure: string | undefined): Turn {
   const { failure: _held, refusal: _was, refusing, compactionFailed, ...rest } = turn;
+
   if (refusing === undefined && failure === undefined) return rest;
   const words = [compactionFailed, refusing, failure].filter((word) => word !== undefined);
+
   return {
     ...rest,
     failure: words.join("; "),
@@ -1051,10 +1179,13 @@ function statusOf(
 export function turnProgressed(applied: number, state: NativeProjection): boolean {
   if (applied > 0) return true;
   const turn = state.turn;
+
   if (turn === undefined) return false;
+
   if (turn.running === undefined || turn.waiting === true || turn.reconnecting !== undefined) {
     return true;
   }
+
   return Object.keys(turn.running).length > 0;
 }
 
@@ -1065,6 +1196,8 @@ export function projectMoments(
   context: NativeProjectionContext,
 ): Projected {
   const fold = new Fold(state, context);
+
   for (const moment of moments) fold.fold(moment);
+
   return { state: fold.state, writes: fold.writes };
 }

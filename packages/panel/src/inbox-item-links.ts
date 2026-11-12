@@ -47,15 +47,17 @@ function holdsAgent(
  * declaration its route matched (`LINK_ROUTED_PLACE`); every other place is
  * the window's.
  */
-const ITEM_BESIDE: { readonly [Name in LinkDestinationName]?: ItemPlaceBeside } = {
+const ITEM_BESIDE: Readonly<Partial<Record<LinkDestinationName, ItemPlaceBeside>>> = {
   PAGE: (at, _workspace, here) => {
     // A page under a task named by a number no one found the task for is the window's, which finds it on the service.
     if (at.kind !== LINK_DESTINATION.PAGE || taskNumberOf(at) !== undefined) return NOTHING;
+
     // A page of the item's own task opens beside the item; another task's opens there too, read on its own place,
     // so the reader stays on the item. An older link's page an agent showed on itself is the window's, which finds its task.
     if (!("planId" in at)) return NOTHING;
     const own = at.planId === here.taskId;
     const place: PagePlace = { taskId: at.planId };
+
     return beside(
       own
         ? { kind: THING.PAGE, pageId: at.pageId }
@@ -79,12 +81,15 @@ const ITEM_BESIDE: { readonly [Name in LinkDestinationName]?: ItemPlaceBeside } 
   INBOX_ITEM: (at, _workspace, here) => {
     if (at.kind !== LINK_DESTINATION.INBOX_ITEM) return NOTHING;
     const { itemId } = at;
+
     if ("planId" in at) {
       return beside({ kind: THING.INBOX_ITEM, itemId, taskId: at.planId, agentId: undefined });
     }
+
     // An item named by its id alone is the window's to find, by asking the service whose it is.
     if (!("agentId" in at)) return NOTHING;
     const { agentId } = at;
+
     return here.taskId !== undefined && (here.heldIds ?? here.agentIds)?.includes(agentId) === true
       ? beside({ kind: THING.INBOX_ITEM, itemId, taskId: here.taskId, agentId })
       : NOTHING;
@@ -93,9 +98,11 @@ const ITEM_BESIDE: { readonly [Name in LinkDestinationName]?: ItemPlaceBeside } 
   // beside the item, so a transcript reads in one place; another task's is the window's to open.
   AGENT: (at, workspace, here) => {
     if (at.kind !== LINK_DESTINATION.AGENT) return NOTHING;
+
     if (here.taskId === undefined || !holdsAgent(at, here.taskId, here.heldIds ?? here.agentIds)) {
       return NOTHING;
     }
+
     return go({
       workspace,
       place: { kind: LINK_DESTINATION.AGENT, planId: here.taskId, agentId: at.agentId },
@@ -109,11 +116,13 @@ function fileBeside(
   here: Holding,
 ): Route {
   const { path, lines, repository } = address;
+
   if (repository === undefined) {
     return here.repository !== null && here.repository !== undefined
       ? beside({ kind: THING.FILE, path, lines })
       : NOTHING;
   }
+
   return ofRepository(repository, here.repository)
     ? beside({ kind: THING.FILE, path, lines })
     : beside({ kind: THING.FILE, path, lines, repository });
@@ -122,14 +131,17 @@ function fileBeside(
 /** A place in the app pressed on an Inbox item, by the declaration its route matched; one matching none is the window's. */
 function itemPlace(address: PlaceAddress, here: InboxItemHere): Route {
   const { routed } = address;
+
   if (routed === undefined) return NOTHING;
   const { place, workspace } = routed.link;
+
   return ITEM_BESIDE[routed.name]?.(place, workspace, here) ?? NOTHING;
 }
 
 /** What an address pressed on an Inbox item opens: nothing before an item is chosen, since its panel stands for what holds the item. */
 export function besideItem(address: Address, here: InboxItemHere): Route {
   if (here.taskId === undefined) return NOTHING;
+
   switch (address.kind) {
     case ADDRESS.PLACE:
       return itemPlace(address, here);

@@ -131,11 +131,13 @@ test("the same first message answers the same opening each time it is read, so a
 test("a first message with no replay, or one whose markers do not add up, has no opening of its own", () => {
   assert.equal(replayOpening(first("# Invite flow")), undefined);
   const text = firstMessageText("# Invite flow", replay(), undefined);
+
   // A step's length one short no longer adds up.
   const broken = text.replace(
     /chars=(\d+) -->\nRead/u,
     (_, chars) => `chars=${Number(chars) - 1} -->\nRead`,
   );
+
   assert.notEqual(broken, text);
   assert.equal(replayOpening(first(broken)), undefined);
 });
@@ -186,15 +188,18 @@ test("an agent continued from an automation's run, at any remove, is drawn from 
     automationId: "22222222-2222-4222-8222-222222222222",
     automationName: "Nightly triage",
   });
+
   const continued = summary({
     id: "33333333-3333-4333-8333-333333333333",
     brief: AGENT_BRIEF.PROMPT,
     from: { agentId: run.id, steps: 3, totalSteps: 3 },
   });
+
   const again = summary({
     id: "44444444-4444-4444-8444-444444444444",
     from: { agentId: continued.id, messageId: FORKED_AT, steps: 2, totalSteps: 2 },
   });
+
   const drawn = briefAgent(again, [run, continued, again]);
   assert.equal(drawn.id, again.id);
   assert.equal(drawn.automationId, run.automationId);
@@ -209,6 +214,7 @@ test("an agent continued from an automation's run, at any remove, is drawn from 
 test("a call's step is drawn as the row its call wears in a transcript: its kind by its verb, its subject, its input and result, failed or running as its words say", () => {
   const call = (summary: string, words: string) =>
     stepView({ kind: REPLAY_STEP_KIND.TOOL, summary, words });
+
   assert.deepEqual(
     call("Read: src/invite.ts", 'Input: {"filePath":"src/invite.ts"}\nResult: 42 lines'),
     {
@@ -239,17 +245,21 @@ test("a call's step is drawn as the row its call wears in a transcript: its kind
       agent: undefined,
     },
   );
+
   const running = call(
     "Searched: invite (running)",
     "Input: {}\nResult: (no result: the call was still under way)",
   );
+
   assert.equal(running.kind === STEP_VIEW.CALL && running.state, TOOL_STATE.INPUT_AVAILABLE);
   assert.equal(running.kind === STEP_VIEW.CALL && running.view.subject, "invite");
+
   // A finished call whose subject ends in the mark's words keeps them, and its result.
   const placeholderLike = call(
     "Read: report (running)",
     "Input: {}\nResult: (no result found in archive)",
   );
+
   assert.deepEqual(placeholderLike.kind === STEP_VIEW.CALL && placeholderLike.view.output, {
     kind: TOOL_BLOCK.TEXT,
     text: "(no result found in archive)",
@@ -261,11 +271,13 @@ test("a call's step is drawn as the row its call wears in a transcript: its kind
     kind: TOOL_BLOCK.TEXT,
     text: "3 lines",
   });
+
   // An input is its JSON, so a result lead inside one of its strings is no boundary.
   const quoted = call(
     "Ran: printf",
     'Input: {"command":"printf \'x\\nResult: fake\'"}\nResult: done',
   );
+
   assert.deepEqual(quoted.kind === STEP_VIEW.CALL && quoted.view.output, {
     kind: TOOL_BLOCK.TEXT,
     text: "done",
@@ -302,6 +314,7 @@ test("Claude Code's task calls among a replay's steps are drawn as the to-do lis
       output: "Updated task #1 status",
     }),
   ];
+
   const todos = replayTaskTodos(steps);
   assert.deepEqual([...todos.keys()], [0, 2]);
   const update = stepView(steps[2] ?? assert.fail("the update step"), todos.get(2));
@@ -321,10 +334,12 @@ test("a call's step whose marker names its tool is drawn as the live transcript 
       output: "ok",
     }),
   );
+
   assert.ok(command.kind === STEP_VIEW.CALL);
   assert.equal(command.view.kind, CALL_KIND.COMMAND);
   assert.equal(command.view.description, "Run the tests");
   assert.deepEqual(command.view.input, { kind: TOOL_BLOCK.COMMAND, text: "pnpm test" });
+
   // A patch's body is drawn as a patch, which wears its colors.
   const patch = stepView(
     toolStep({
@@ -334,10 +349,12 @@ test("a call's step whose marker names its tool is drawn as the live transcript 
       input: JSON.stringify({ patchText: "*** Update File: src/a.ts\n-a\n+b" }),
     }),
   );
+
   assert.ok(patch.kind === STEP_VIEW.CALL);
   assert.equal(patch.view.kind, CALL_KIND.EDIT);
   assert.equal(patch.view.input.kind, TOOL_BLOCK.PATCH);
   assert.equal(patch.state, TOOL_STATE.INPUT_AVAILABLE);
+
   // A call about an agent names that agent, which its row draws as the agent's chip.
   const read = stepView(
     toolStep({
@@ -348,9 +365,11 @@ test("a call's step whose marker names its tool is drawn as the live transcript 
       output: '{"agent":{"id":"agent-ada","title":"Fix the tile"}}',
     }),
   );
+
   assert.ok(read.kind === STEP_VIEW.CALL);
   assert.equal(read.view.kind, CALL_KIND.READ_AGENT);
   assert.deepEqual(read.agent, { id: "agent-ada", title: "Fix the tile" });
+
   // A failed call keeps its error apart from its result.
   const failed = stepView(
     toolStep({
@@ -361,6 +380,7 @@ test("a call's step whose marker names its tool is drawn as the live transcript 
       output: "exit 1",
     }),
   );
+
   assert.ok(failed.kind === STEP_VIEW.CALL);
   assert.equal(failed.state, TOOL_STATE.OUTPUT_ERROR);
   assert.equal(failed.errorText, "exit 1");
@@ -379,6 +399,7 @@ test("a native harness's call in a replay is drawn as the call of the same kind,
       outputForm: REPLAY_VALUE_FORM.TEXT,
     }),
   );
+
   assert.ok(read.kind === STEP_VIEW.CALL);
   assert.equal(read.view.kind, CALL_KIND.READ_FILE);
   assert.equal(read.view.subject, "src/a.ts");
@@ -397,6 +418,7 @@ test("a call's text that only looks like JSON stays the text it was, and a value
         outputForm,
       }),
     );
+
   const text = read(REPLAY_VALUE_FORM.TEXT);
   assert.ok(text.kind === STEP_VIEW.CALL);
   assert.match(text.view.output?.text ?? "", /"content"/u);
@@ -414,6 +436,7 @@ test("a replay calls a server where one of its calls, as the transcript draws it
       input: "{}",
       inputForm: REPLAY_VALUE_FORM.JSON,
     });
+
   assert.equal(replayCallsServer([call("bash")]), false);
   assert.equal(replayCallsServer([call("bash"), call("mcp__notion__search")]), true);
   // A step from before its marker named its tool names no server.
@@ -425,6 +448,7 @@ test("a replay calls a server where one of its calls, as the transcript draws it
 
 test("a line's step whose marker names when it was sent carries that moment", () => {
   const at = Date.UTC(2026, 9, 14, 15, 42);
+
   const line = stepView({
     kind: REPLAY_STEP_KIND.LINE,
     summary: "Charles Pan: Go.",
@@ -432,6 +456,7 @@ test("a line's step whose marker names when it was sent carries that moment", ()
     sender: { kind: REPLAY_SENDER.MEMBER, memberId: "user-charles" },
     at,
   });
+
   assert.equal(line.kind === STEP_VIEW.LINE && line.at, at);
 });
 
@@ -456,6 +481,7 @@ test("the card's Copy copies the replay as the agent was handed it: Vespin's sum
     ],
     totalSteps: 7,
   });
+
   assert.equal(
     words,
     [
@@ -473,6 +499,7 @@ test("an opened pull request's step is drawn as the pull request's row, as the s
     summary: "Opened pull request: feat(billing): export invoices",
     words: 'Input: {"title":"feat(billing): export invoices"}\nResult: {"number":4951}',
   });
+
   assert.equal(opened.kind === STEP_VIEW.CALL && opened.view.kind, CALL_KIND.OPEN_PULL_REQUEST);
   assert.equal(
     opened.kind === STEP_VIEW.CALL && opened.view.subject,
@@ -515,6 +542,7 @@ test("a call's step read from its marker is drawn as its marker says, whatever i
       output: "Failed: 0 tests\nResult: all green",
     }),
   );
+
   assert.deepEqual(done, {
     kind: STEP_VIEW.CALL,
     state: TOOL_STATE.OUTPUT_AVAILABLE,
@@ -527,6 +555,7 @@ test("a call's step read from its marker is drawn as its marker says, whatever i
     errorText: undefined,
     agent: undefined,
   });
+
   const failed = stepView(
     toolStep({
       summary: "Ran: pnpm test",
@@ -535,11 +564,14 @@ test("a call's step read from its marker is drawn as its marker says, whatever i
       output: "exit 1",
     }),
   );
+
   assert.equal(failed.kind === STEP_VIEW.CALL && failed.state, TOOL_STATE.OUTPUT_ERROR);
   assert.equal(failed.kind === STEP_VIEW.CALL && failed.errorText, "exit 1");
+
   const running = stepView(
     toolStep({ summary: "Ran: pnpm dev (running)", state: REPLAY_TOOL_STATE.RUNNING, input: "{}" }),
   );
+
   assert.equal(running.kind === STEP_VIEW.CALL && running.state, TOOL_STATE.INPUT_AVAILABLE);
   assert.equal(running.kind === STEP_VIEW.CALL && running.view.subject, "pnpm dev");
   assert.equal(running.kind === STEP_VIEW.CALL && running.view.output, undefined);
@@ -566,6 +598,7 @@ test("the note's own files go with the note and the brief's stay with the brief,
     filename: name,
     url: "data:,",
   });
+
   const text = firstMessageText(
     "Fix it.",
     replay(),
@@ -576,6 +609,7 @@ test("the note's own files go with the note and the brief's stay with the brief,
       other: 1,
     },
   );
+
   const message: AgentTranscriptMessage = {
     id: "first",
     role: MESSAGE_ROLE.USER,
@@ -587,6 +621,7 @@ test("the note's own files go with the note and the brief's stay with the brief,
       file("new-design.png", "image/png"),
     ],
   };
+
   const opening = replayOpening(message);
   assert.ok(opening?.note !== undefined);
   assert.deepEqual(
@@ -602,6 +637,7 @@ test("the note's own files go with the note and the brief's stay with the brief,
 test("a line whose marker names its sender is named as a transcript's line is: a member by their account, the developer as the reader's own", () => {
   const view = (sender: NonNullable<ReplayStep["sender"]>, summary: string) =>
     stepView({ kind: REPLAY_STEP_KIND.LINE, summary, words: "Go.", sender });
+
   const member = view({ kind: REPLAY_SENDER.MEMBER, memberId: "user-charles" }, "Charles Pan: Go.");
   assert.deepEqual(member.kind === STEP_VIEW.LINE && member.sentBy, {
     kind: AGENT_SENDER.MEMBER,

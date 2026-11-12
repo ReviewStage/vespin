@@ -1,4 +1,4 @@
-import { base64Bytes } from "./agent-wire.js";
+import { AGENT_ATTACHMENT_TYPE, base64Bytes } from "./agent-wire.js";
 import { formatBytes } from "./number-format.js";
 import { countWords } from "./words.js";
 
@@ -20,10 +20,11 @@ export interface FileChip {
   readonly url: string;
 }
 
-/** How the viewer shows a file: as a picture, played as a video, drawn as its Mermaid diagram, as its lines, or by its icon and name with a way to save it. */
+/** How the viewer shows a file: as a picture, played as a video, as a PDF's pages, drawn as its Mermaid diagram, as its lines, or by its icon and name with a way to save it. */
 export const ATTACHMENT_VIEW = {
   IMAGE: "image",
   VIDEO: "video",
+  PDF: "pdf",
   DIAGRAM: "diagram",
   TEXT: "text",
   OTHER: "other",
@@ -51,20 +52,27 @@ export function sizeLabel(base64: string): string {
 /** How the viewer shows a file that carries bytes. */
 export function attachmentView(file: FileChip): AttachmentView {
   if (file.mediaType.startsWith("image/")) return ATTACHMENT_VIEW.IMAGE;
+
   if (PLAYED_VIDEO_TYPES.has(file.mediaType)) return ATTACHMENT_VIEW.VIDEO;
+
+  if (file.mediaType === AGENT_ATTACHMENT_TYPE.PDF) return ATTACHMENT_VIEW.PDF;
+
   if (!file.mediaType.startsWith("text/")) return ATTACHMENT_VIEW.OTHER;
+
   return DIAGRAM_EXTENSION.test(file.name) ? ATTACHMENT_VIEW.DIAGRAM : ATTACHMENT_VIEW.TEXT;
 }
 
 /** A text file's words, read from its base64 as UTF-8, which is all a text attachment may spell. */
 export function attachmentText(base64: string): string {
   const bytes = Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+
   return new TextDecoder().decode(bytes);
 }
 
 /** What a chip says of a text file: how many lines it runs to, a last line's newline closing it rather than opening another. */
 export function linesLabel(text: string): string {
   const breaks = text.split("\n").length - (text.endsWith("\n") ? 1 : 0);
+
   return countWords(Math.max(1, breaks), { one: "line", many: "lines" });
 }
 

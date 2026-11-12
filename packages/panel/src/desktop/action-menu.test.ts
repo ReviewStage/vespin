@@ -37,6 +37,7 @@ function mount(element: React.ReactElement): HTMLElement {
   const root = createRoot(container);
   roots.push(root);
   act(() => root.render(element));
+
   return container;
 }
 
@@ -68,9 +69,11 @@ async function hungAt(): Promise<{ left: string; top: string } | undefined> {
   await act(async () => {
     for (let tick = 0; tick < 10; tick += 1) await Promise.resolve();
   });
+
   const at = /translate\((-?[\d.]+px), (-?[\d.]+px)\)/u.exec(
     openMenu()?.parentElement?.style.transform ?? "",
   );
+
   return at === null ? undefined : { left: at[1] ?? "", top: at[2] ?? "" };
 }
 
@@ -89,6 +92,7 @@ test("a Settings row's ⋯ and a file bar's ⋯ each open their menu on a press 
       createElement(PaneBar, { menu: { thing: "File", groups: [ACTIONS] } }),
     ),
   );
+
   for (const name of ["Linear actions", "File actions"]) {
     const ellipsis = container.querySelector<HTMLElement>(`button[aria-label="${name}"]`);
     assert.ok(ellipsis, `the ${name} ⋯ is drawn`);
@@ -109,6 +113,7 @@ test("a right-click opens the row's menu at the pointer, and the menu key's unde
   const container = mount(
     createElement(MenuRow, { thing: "Linear", actions: ACTIONS, children: "Linear" }),
   );
+
   const row = container.querySelector<HTMLElement>(".settings-row");
   assert.ok(row, "the row is drawn");
 
@@ -140,8 +145,10 @@ test("the menu key and ⇧F10 on a Settings row open the same menu under the row
   const container = mount(
     createElement(MenuRow, { thing: "Linear", actions: ACTIONS, children: "Linear" }),
   );
+
   const row = container.querySelector<HTMLElement>(".settings-row") ?? assert.fail("no row");
   placeAt(row, { left: 40, top: 60, bottom: 100 });
+
   for (const key of [{ key: "ContextMenu" }, { key: "F10", shiftKey: true }]) {
     act(() => {
       row.dispatchEvent(new KeyboardEvent("keydown", { ...key, bubbles: true, cancelable: true }));
@@ -159,9 +166,11 @@ test("Escape from a menu the menu key opened on a Settings row's ⋯ hands focus
   const container = mount(
     createElement(MenuRow, { thing: "Linear", actions: ACTIONS, children: "Linear" }),
   );
+
   const ellipsis =
     container.querySelector<HTMLButtonElement>('button[aria-label="Linear actions"]') ??
     assert.fail("no ⋯");
+
   act(() => ellipsis.focus());
   act(() => {
     ellipsis.dispatchEvent(
@@ -183,11 +192,14 @@ test("a Settings row's ⋯ opens its acts in groups ruled apart, and Escape, Tab
       children: "GitHub",
     }),
   );
+
   const row = container.querySelector<HTMLElement>(".settings-row");
   assert.ok(row, "the row is drawn");
+
   const ellipsis =
     row.querySelector<HTMLButtonElement>('button[aria-label="GitHub actions"]') ??
     assert.fail("no ⋯");
+
   assert.equal(ellipsis.getAttribute("aria-haspopup"), "menu");
 
   press(ellipsis);
@@ -227,6 +239,7 @@ test("a Settings row keeps its ⋯, named for its menu, and says so on the point
   const container = mount(
     createElement(MenuRow, { thing: "Linear", actions: ACTIONS, children: "Linear" }),
   );
+
   const ellipsis =
     container.querySelector<HTMLButtonElement>('button[aria-label="Linear actions"]') ??
     assert.fail("no ⋯");

@@ -43,6 +43,7 @@ function draw(element: ReactElement): HTMLElement {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   root = createRoot(container);
   act(() => root?.render(element));
+
   return container;
 }
 
@@ -84,9 +85,11 @@ test("a card's presses stop at the card, and only a press on one of its buttons 
   );
   const card = document.getElementById("hint");
   const note = card?.querySelector("p");
+
   const open = [...(card?.querySelectorAll("button") ?? [])].find(
     (button) => button.textContent === "Open archive",
   );
+
   assert.ok(note && open);
   act(() => {
     note.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }));

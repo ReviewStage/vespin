@@ -6,7 +6,7 @@ import {
   type AppSettingKind,
   appToggleText,
 } from "@repo/wire/app-settings";
-import { Schema } from "effect";
+import { Predicate, Schema } from "effect";
 import {
   type AppSettingReader,
   type AppSettingSchemaEntry,
@@ -31,11 +31,13 @@ export function optional<Value extends UnparsedWireValue>(
   guard: (candidate: UnparsedWireValue) => candidate is Value,
 ): SettingGuardResult<Value | undefined> {
   if (value === undefined) return valid(undefined);
+
   return guard(value) ? valid(value) : invalid(undefined);
 }
 
 function boolean(defaultValue: boolean) {
   const isBoolean = Schema.is(Schema.Boolean);
+
   return (value: UnparsedWireValue): SettingGuardResult<boolean> =>
     isBoolean(value) ? valid(value) : invalid(defaultValue);
 }
@@ -71,7 +73,8 @@ function detailOf(
   detail: RowSpec<string, AppSettingId>["detail"],
   settings: AppSettingReader,
 ): { detail: string } | undefined {
-  const worded = typeof detail === "function" ? detail(settings) : detail;
+  const worded = Predicate.isFunction(detail) ? detail(settings) : detail;
+
   return worded === undefined ? undefined : { detail: worded };
 }
 
@@ -155,6 +158,7 @@ export function buildToggleSetting<Field extends string, Id extends AppSettingId
   readonly unpackagedDefault: boolean;
 } {
   const isBoolean = Schema.is(Schema.Boolean);
+
   return {
     ...toggleEntry(spec),
     guard: (value: UnparsedWireValue) => optional(value, isBoolean),
@@ -172,6 +176,7 @@ export function accountToggleSetting<Field extends string, Id extends AppSetting
   spec: ToggleSpec<Field, Id>,
 ): AppSettingSchemaEntry<Field, boolean | undefined, Id, boolean> {
   const isBoolean = Schema.is(Schema.Boolean);
+
   return { ...toggleEntry(spec), guard: (value: UnparsedWireValue) => optional(value, isBoolean) };
 }
 
@@ -248,23 +253,31 @@ export function choiceSetting<
   },
 ): AppSettingSchemaEntry<Field, Value | undefined, Id, Default> {
   const optionLabel = spec.optionLabel ?? spec.token;
+
   const byToken: Map<string, Value> = new Map(
     spec.values.map((value) => [spec.token(value), value] as const),
   );
+
   const storedValue = (read: AppSettingReader): Value | undefined => {
     const value = read(spec.field);
+
     if (value === undefined) return undefined;
+
     // SAFETY: The field's own guard is what put this value in the store.
     return value as Value;
   };
+
   // A choice with a default says the default where nothing is stored; one with
   // no default needs a word for nothing, and `schema.test.ts` refuses an entry
   // that would read as blank rather than letting it draw one.
   const tokenOf = (value: Value | undefined): string => {
     if (value !== undefined) return spec.token(value);
+
     if (spec.absent !== undefined) return spec.absent;
+
     return spec.default === undefined ? "" : spec.token(spec.default);
   };
+
   const control: SettingControl<Value | undefined> = spec.control ?? {
     value: (stored) => tokenOf(stored),
     search: spec.search,
@@ -276,6 +289,7 @@ export function choiceSetting<
       })),
     stored: (token) => byToken.get(token),
   };
+
   return {
     ...rowEntry(spec, APP_SETTING_KIND.CHOICE, (settings) => tokenOf(storedValue(settings))),
     default: spec.default,

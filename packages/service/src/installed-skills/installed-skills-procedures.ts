@@ -25,6 +25,7 @@ export interface InstalledSkillsProcedureSeams {
 /** The installed skills resource: every procedure to a signed-in caller. */
 export function installedSkillsProcedures(seams: InstalledSkillsProcedureSeams) {
   const skills = hosted.installedSkills.use(accountMiddleware(seams.resolveUserId));
+
   return {
     /** The skills the account sees in the workspace: the workspace's, then its own. */
     list: skills.list.effect(function* ({ input, context: { userId } }) {

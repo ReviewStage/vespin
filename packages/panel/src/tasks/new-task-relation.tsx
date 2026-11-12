@@ -152,12 +152,15 @@ function relationWhyNot(
 ): string | undefined {
   if (!treeKind(kind)) return undefined;
   const judged = place.held || place.repository !== null;
+
   if (judged && !sameRepository(place.repository, other.repository)) {
     return WORDS.OTHER_REPOSITORY;
   }
+
   if (kind === TASK_CREATE_RELATION_KIND.PARENT_OF && other.parentTaskId !== undefined) {
     return WORDS.HAS_PARENT;
   }
+
   return undefined;
 }
 
@@ -180,14 +183,19 @@ function withRelation(
   next: NewTaskRelation,
 ): readonly NewTaskRelation[] {
   const sameTask = relations.findIndex((each) => each.task.id === next.task.id);
+
   const at =
     sameTask === -1 ? relations.findIndex((each) => takesParentOf(each, next.kind)) : sameTask;
+
   if (at === -1) {
     return relations.length < TASK_BOUNDS.MAX_START_RELATIONS ? [...relations, next] : relations;
   }
+
   return relations.flatMap((each, index) => {
     if (index === at) return [next];
+
     if (each.task.id === next.task.id || takesParentOf(each, next.kind)) return [];
+
     return [each];
   });
 }
@@ -199,6 +207,7 @@ function withKind(
   kind: TaskCreateRelationKind,
 ): readonly NewTaskRelation[] {
   const moved = relations[at];
+
   return moved === undefined ? relations : withRelation(relations, { kind, task: moved.task });
 }
 
@@ -210,6 +219,7 @@ function withTask(
 ): readonly NewTaskRelation[] {
   return relations.flatMap((each, index) => {
     if (index === at) return [{ kind: each.kind, task }];
+
     return each.task.id === task.id ? [] : [each];
   });
 }
@@ -232,20 +242,23 @@ function relationRows(
   // Note that a Sub-task of beside the card's parent takes its place rather than adding one, so the card's most never holds it.
   const replacesParent = relations.some((each) => takesParentOf(each, kind));
   const full = adds && !replacesParent && relations.length >= TASK_BOUNDS.MAX_START_RELATIONS;
+
   return tasks.map((each) => {
     const key = each.number === undefined ? undefined : taskKey(workspaceName, each.number);
     const standing = related.get(each.id);
     const detail = standing === undefined ? key : KIND_WORDS[standing];
+
     const disabled =
       full && standing === undefined ? WORDS.FULL : relationWhyNot(each, kind, place);
+
     return {
       id: each.id,
       label: each.name,
       replayMasked: true,
-      ...(each.status === undefined ? {} : { icon: <TaskStatusMark status={each.status} /> }),
-      ...(detail === undefined ? {} : { detail }),
-      ...(key === undefined ? {} : { terms: [key] }),
-      ...(disabled === undefined ? {} : { disabled }),
+      ...(each.status !== undefined && { icon: <TaskStatusMark status={each.status} /> }),
+      ...(detail !== undefined && { detail }),
+      ...(key !== undefined && { terms: [key] }),
+      ...(disabled !== undefined && { disabled }),
     };
   });
 }
@@ -280,6 +293,7 @@ function placeOf(control: NewTaskRelations): RelationPlace {
  */
 function swapPlaceOf(control: NewTaskRelations, at: number): RelationPlace {
   const left = treeRelationOf(control.relations.filter((_, index) => index !== at));
+
   return left === undefined
     ? { repository: null, held: false }
     : { repository: left.task.repository, held: true };
@@ -299,6 +313,7 @@ export function relationMenuPanel(
 ): MenuPanel {
   const place = placeOf(control);
   const byId = new Map(control.tasks.map((each) => [each.id, each]));
+
   const foot: readonly FootRow[] = [
     {
       id: KIND_ROW_ID,
@@ -318,6 +333,7 @@ export function relationMenuPanel(
       },
     },
   ];
+
   return {
     label: WORDS.MENU,
     icon: <NetworkIcon />,
@@ -342,6 +358,7 @@ export function relationMenuPanel(
         onPick={(id) => {
           const task = byId.get(id);
           close();
+
           if (task !== undefined) control.onChange(withRelation(control.relations, { kind, task }));
         }}
         onClose={back}
@@ -369,10 +386,11 @@ function RelationRow({
   const place = placeOf(control);
   const byId = new Map(control.tasks.map((each) => [each.id, each]));
   const key = task.number === undefined ? undefined : taskKey(workspaceName, task.number);
+
   const spoken = [key, task.status === undefined ? undefined : TASK_STATUS_WORDS[task.status]]
-    .filter((each) => each !== undefined)
-    .map((each) => `, ${each}`)
+    .flatMap((each) => (each === undefined ? [] : [`, ${each}`]))
     .join("");
+
   return (
     <TaskRow
       taskId={task.id}
@@ -433,6 +451,7 @@ function RelationRow({
           onPick={(id) => {
             const picked = byId.get(id);
             setOpen(false);
+
             if (picked !== undefined && picked.id !== task.id) {
               onChange(withTask(relations, at, picked));
             }
@@ -440,6 +459,7 @@ function RelationRow({
           onClose={() => setOpen(false)}
           onLeave={(left) => {
             const row = left instanceof Element ? left.closest("[data-task-id]") : null;
+
             if (row?.getAttribute("data-task-id") !== task.id) setOpen(false);
           }}
         />
@@ -455,6 +475,7 @@ export function NewTaskRelationRows({
   control: NewTaskRelations;
 }): React.JSX.Element | null {
   if (control.relations.length === 0) return null;
+
   return (
     <TaskRows label={WORDS.ROWS} cells={ROW_CELLS} more={false} edges={TASK_ROW_EDGES.BARE}>
       {control.relations.map((relation, at) => (

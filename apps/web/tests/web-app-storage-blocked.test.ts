@@ -25,6 +25,7 @@ test("with the site's storage blocked, the tab still draws the sign-in", async (
   const blocked = () => {
     throw new DOMException("The operation is insecure.", "SecurityError");
   };
+
   vi.spyOn(window, "localStorage", "get").mockImplementation(blocked);
   vi.spyOn(window, "sessionStorage", "get").mockImplementation(blocked);
   vi.spyOn(console, "warn").mockImplementation(() => undefined);

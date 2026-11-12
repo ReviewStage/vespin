@@ -89,18 +89,21 @@ test("the workspace's automations come before the personal ones, and an owner wi
   assert.deepEqual(automationGroups([]), []);
 });
 
-test("a schedule the picker writes is said in words in its zone's city, and any other as its cron", () => {
-  const said = (cron: string, timezone = "America/New_York") =>
-    automationTriggerText({ kind: AUTOMATION_TRIGGER.SCHEDULE, cron, timezone });
+test("a schedule the picker writes is said in words, naming its zone only where it is not the reader's, and any other as its cron", () => {
+  const said = (cron: string, timezone = "America/New_York", reader = "Europe/Paris") =>
+    automationTriggerText({ kind: AUTOMATION_TRIGGER.SCHEDULE, cron, timezone }, [], reader);
 
-  assert.equal(said("0 9 * * 1-5"), "Weekdays at 9:00 AM · New York");
-  assert.equal(said("30 7 * * *", "Europe/London"), "Every day at 7:30 AM · London");
-  assert.equal(said("0 9 * * 1"), "Mondays at 9:00 AM · New York");
-  assert.equal(said("0 9 * * 0"), "Sundays at 9:00 AM · New York");
-  assert.equal(said("0 * * * *", "UTC"), "Every hour · UTC");
-  assert.equal(said("5 14 * * *"), "Every day at 2:05 PM · New York");
-  assert.equal(said("0 9 1 * *"), "0 9 1 * * · New York");
-  assert.equal(said("*/30 9-17 * * 1-5"), "*/30 9-17 * * 1-5 · New York");
+  assert.equal(said("0 9 * * 1-5"), "Weekdays at 9:00 AM Eastern Time");
+  assert.equal(said("30 7 * * *", "Europe/London"), "Every day at 7:30 AM United Kingdom Time");
+  assert.equal(said("0 9 * * 1"), "Mondays at 9:00 AM Eastern Time");
+  assert.equal(said("0 9 * * 0"), "Sundays at 9:00 AM Eastern Time");
+  assert.equal(said("0 * * * *", "UTC"), "Every hour");
+  assert.equal(said("0 9 * * 1-5", "UTC"), "Weekdays at 9:00 AM UTC");
+  assert.equal(said("5 14 * * *"), "Every day at 2:05 PM Eastern Time");
+  assert.equal(said("0 9 1 * *"), "0 9 1 * *, Eastern Time");
+  assert.equal(said("*/30 9-17 * * 1-5"), "*/30 9-17 * * 1-5, Eastern Time");
+  assert.equal(said("0 9 * * 1-5", "America/New_York", "America/New_York"), "Weekdays at 9:00 AM");
+  assert.equal(said("0 9 * * 1-5", "Europe/Lisbon"), "Weekdays at 9:00 AM Western European Time");
 });
 
 test("a GitHub event is said as what happens, by whom, where, and the labels, branches, drafts, and forks it keeps to, and a webhook as its call", () => {
@@ -210,6 +213,7 @@ test("an automation fired by an event has no next run to name, a schedule with n
     trigger: { kind: AUTOMATION_TRIGGER.WEBHOOK },
     nextRunAt: null,
   });
+
   assert.deepEqual(automationNext(webhook), { kind: AUTOMATION_NEXT.EVENT });
   assert.deepEqual(automationNext({ ...webhook, enabled: false }), { kind: AUTOMATION_NEXT.OFF });
 });
@@ -242,11 +246,13 @@ test("a run is titled by its agent where the agent has a title, else by what fir
     automationRunTitle(run({ firing: { kind: "schedule", dueAt: 1 } })),
     "Scheduled run",
   );
+
   const sentry = {
     kind: AUTOMATION_TRIGGER.INTEGRATION,
     provider: TRIGGER_PROVIDER.SENTRY,
     event: SENTRY_TRIGGER_EVENT.ISSUE_CREATED,
   } as const;
+
   assert.equal(
     automationRunTitle(
       run({ agent: null, firing: { ...sentry, subject: { id: "4001", title: "TypeError" } } }),
@@ -257,12 +263,14 @@ test("a run is titled by its agent where the agent has a title, else by what fir
     automationRunTitle(run({ agent: null, firing: { ...sentry, subject: { id: "4001" } } })),
     "Sentry event",
   );
+
   const github = {
     kind: AUTOMATION_TRIGGER.GITHUB,
     event: GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED,
     repository: "acme/app",
     number: 42,
   } as const;
+
   assert.equal(
     automationRunTitle(run({ agent: null, firing: { ...github, title: "Fix the refresh" } })),
     "Fix the refresh",
@@ -273,6 +281,7 @@ test("a run is titled by its agent where the agent has a title, else by what fir
 test("an agent's run is placed among the runs that started an agent, each agent once, counted from the oldest", () => {
   const started = (id: string, agentId: string) =>
     run({ id, agent: { id: agentId, title: null, status: AGENT_STATUS.COMPLETED } });
+
   // Newest first, as the runs are read: a skipped run, and an agent handed two runs.
   const runs = [
     started("r5", "agent-c"),
@@ -351,12 +360,14 @@ test("a run's line says why it did not start, else where its agent stands, or th
     ),
     "Failed: the sandbox or checkout failed",
   );
+
   const keyRefused = run({
     agent: {
       ...agent(AGENT_STATUS.FAILED),
       failureReason: AGENT_FAILURE.PROVIDER_KEY,
     },
   });
+
   assert.equal(
     automationRunLine(keyRefused, "its creator"),
     "Failed: its creator's API key was refused or cannot be read",
@@ -367,6 +378,7 @@ test("a run's line says why it did not start, else where its agent stands, or th
     "Failed: your API key was refused or cannot be read",
     "the reader's own key names no path to a Settings page",
   );
+
   const onTeammatesAgent = run({
     agent: {
       ...agent(AGENT_STATUS.FAILED),
@@ -374,6 +386,7 @@ test("a run's line says why it did not start, else where its agent stands, or th
       ownKey: false,
     },
   });
+
   assert.equal(
     automationRunLine(onTeammatesAgent),
     "Failed: its owner's API key was refused or cannot be read",
@@ -442,6 +455,7 @@ test("an integration's skipped run is titled by its subject, and a same-subject 
       url: "https://acme.sentry.io/issues/4711/",
     },
   } as const;
+
   const skipped = run({
     firing,
     status: AUTOMATION_RUN_STATUS.SKIPPED,

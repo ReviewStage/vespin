@@ -13,8 +13,10 @@
  * Nothing here draws.
  */
 
+import { Predicate } from "effect";
 import { ATTACHMENT_VIEW, attachmentView } from "./attachment-model.js";
 import { CONVERSATION_MEDIA_TYPE } from "./conversation-picture-wire.js";
+import { fileMarker, fileMarkers, isPictureName, markersAsNames } from "./file-marker.js";
 import { fillInWords, WRITE_AN_ANSWER } from "./inbox-ask-words.js";
 import {
   INBOX_PICTURE_IN_WORDS,
@@ -146,17 +148,22 @@ function buttonPick(
   ask: InboxReadAsk | undefined,
 ): { readonly label: string; readonly tone: AnswerTone } | undefined {
   if (ask === undefined || !knownAsk(ask) || ask.type !== INBOX_ASK.DECIDE) return undefined;
+
   if (!decideButtons(ask) || answers.reply !== INBOX_REPLY.CHOSE) return undefined;
   const label = answers.choices?.[0];
   const at = ask.options.findIndex((option) => option.label === label);
+
   if (label === undefined || at < 0) return undefined;
+
   return { label, tone: at === 0 ? ANSWER_TONE.AHEAD : ANSWER_TONE.BACK };
 }
 
 /** The steps a `do` answer ticked of those its ask shows, "2/3"; nothing where the ask named none. */
 function stepCount(answers: InboxAnswers, ask: InboxReadAsk | undefined): string | undefined {
   if (ask === undefined || !knownAsk(ask) || ask.type !== INBOX_ASK.DO) return undefined;
+
   if (ask.steps.length === 0) return undefined;
+
   return `${(answers.steps ?? []).length}/${ask.steps.length}`;
 }
 
@@ -168,7 +175,9 @@ function counting(words: string, count: string | undefined): string {
 /** Whether an answer holds back: Couldn't do it, or the second of two buttons. */
 function toneOf(answers: InboxAnswers, ask: InboxReadAsk | undefined): AnswerTone {
   const pick = buttonPick(answers, ask);
+
   if (pick !== undefined) return pick.tone;
+
   return answers.reply === INBOX_REPLY.NOT_DONE || answers.reply === INBOX_REPLY.DECLINED
     ? ANSWER_TONE.BACK
     : ANSWER_TONE.AHEAD;
@@ -197,6 +206,7 @@ export function sentStamp(answers: InboxAnswers, ask: InboxReadAsk | undefined):
   const tone = toneOf(answers, ask);
   const pick = buttonPick(answers, ask);
   const chose = `Chose ${(answers.choices ?? []).join(", ")}`;
+
   const words = (() => {
     switch (answers.reply) {
       case INBOX_REPLY.CHOSE:
@@ -208,12 +218,15 @@ export function sentStamp(answers: InboxAnswers, ask: InboxReadAsk | undefined):
       case INBOX_REPLY.ANSWERED: {
         // A to-do's steps ticked with no press decided nothing, so they say what was ticked.
         const count = answers.steps === undefined ? undefined : stepCount(answers, ask);
+
         return count === undefined ? sentenceCased(SENT_WORDS[answers.reply]) : `Ticked ${count}`;
       }
+
       default:
         return sentenceCased(SENT_WORDS[answers.reply]);
     }
   })();
+
   return { tone, words };
 }
 
@@ -238,7 +251,9 @@ const PREVIEW_PART = " · ";
 /** What files alone say where a message or an answer carried no words. */
 function filesWords(files: readonly unknown[] | undefined): string | undefined {
   const count = files?.length ?? 0;
+
   if (count === 0) return undefined;
+
   return count === 1 ? "Sent a file" : `Sent ${count} files`;
 }
 
@@ -265,6 +280,7 @@ export function inboxPreview(
   ticked?: readonly number[],
 ): string {
   const line = itemLine(item);
+
   return previewOf(line, nameOf, ticked, line.words);
 }
 
@@ -280,6 +296,7 @@ export function inboxPreviewHeard(
   ticked?: readonly number[],
 ): string {
   const line = itemLine(item);
+
   return previewOf(line, nameOf, ticked, line.heard);
 }
 
@@ -320,15 +337,20 @@ export function inboxSettledStanding(
   if (item.status === INBOX_STATUS.ANSWERED) {
     // A thread a member started stands settled on their own nod until its agent writes on it.
     const thread = item.thread ?? [];
+
     const sent =
       thread.length > 0 &&
       thread.every((message) => message.author === INBOX_MESSAGE_AUTHOR.MEMBER);
+
     return sent ? INBOX_SETTLED_STANDING.STARTED : INBOX_SETTLED_STANDING.ANSWERED;
   }
+
   if (item.closedBy !== undefined) return INBOX_SETTLED_STANDING.RESOLVED;
+
   const withdrawn = (item.thread ?? []).some(
     (each) => each.ask?.status === INBOX_ASK_STATUS.WITHDRAWN,
   );
+
   return !withdrawn && closedByMember(item)
     ? INBOX_SETTLED_STANDING.RESOLVED
     : INBOX_SETTLED_STANDING.WITHDRAWN;
@@ -347,13 +369,17 @@ function askLine(ask: InboxKnownAsk, ticked: readonly number[]): string {
         .join(" / ");
     case INBOX_ASK.DO: {
       const steps = ask.steps.map((step) => plainWords(step));
+
       if (steps.length === 0) return "Mark done";
       const done = new Set(ticked.filter((at) => at < steps.length));
       const next = steps.find((_, at) => !done.has(at));
+
       if (next === undefined) return "Every step ticked · Mark done";
       const left = steps.length - done.size;
+
       return `${left} ${left === 1 ? "step" : "steps"} left${PREVIEW_PART}${next}`;
     }
+
     case INBOX_ASK.ANSWER:
       return ask.fields === undefined
         ? WRITE_AN_ANSWER
@@ -381,7 +407,21 @@ interface ItemLine {
   readonly byAgent: boolean;
   /** The member who said the latest message, where the agent did not. */
   readonly member: InboxMember | undefined;
+  /** The same words with each file a member's message names by its marker outside code placed where it stands, for the row to draw as its chip. */
+  readonly pieces: readonly InboxLinePiece[];
 }
+
+/** A run of a row's second line: words, or a file its words name where its marker stood. */
+export type InboxLinePiece = string | InboxMessageFile;
+
+/** What stands around a file's place in a line's words while they are read as plain words: characters of Unicode's private use, which no message's words keep (`chipMarked`). */
+const CHIP_PLACE = { OPEN: "\uE000", CLOSE: "\uE001" } as const;
+
+/** A file's place in a line's words, by its index among the message's files. */
+const CHIP_PLACED = /\uE000(\d+)\uE001/gu;
+
+/** The characters a place is written in, taken out of a message's own words first. */
+const CHIP_PLACE_CHARACTERS = /[\uE000\uE001]/gu;
 
 /** Each item's line as `itemLine` last read it, kept for as long as the item stands. */
 const itemLines = new WeakMap<InboxItem, ItemLine>();
@@ -399,14 +439,17 @@ const itemLines = new WeakMap<InboxItem, ItemLine>();
  */
 function itemLine(item: InboxItem): ItemLine {
   const held = itemLines.get(item);
+
   if (held !== undefined) return held;
   const thread = item.thread ?? [];
   const asking = openAskOf(thread);
   const last = thread.at(-1);
+
   // Note that a member's resolve says so in its own word, rather than the agent's last words, which would read as still waiting.
   const resolved =
     item.status === INBOX_STATUS.CLOSED &&
     inboxSettledStanding(item) === INBOX_SETTLED_STANDING.RESOLVED;
+
   const line: ItemLine = resolved
     ? {
         kind: INBOX_LINE.RESOLVED,
@@ -415,6 +458,7 @@ function itemLine(item: InboxItem): ItemLine {
         heard: INBOX_SETTLED_STANDING.RESOLVED,
         byAgent: true,
         member: undefined,
+        pieces: [INBOX_SETTLED_STANDING.RESOLVED],
       }
     : asking !== undefined && knownAsk(asking.ask)
       ? {
@@ -424,22 +468,117 @@ function itemLine(item: InboxItem): ItemLine {
           heard: askLine(asking.ask, []),
           byAgent: true,
           member: undefined,
+          pieces: [askLine(asking.ask, [])],
         }
       : {
           kind: last?.answers === undefined ? INBOX_LINE.SAID : INBOX_LINE.SETTLED,
           ask: undefined,
-          words: last === undefined ? "" : lastWords(thread, last, plainWords),
-          heard: last === undefined ? "" : lastWords(thread, last, firstWords),
+          ...(last === undefined ? { words: "", pieces: [""] } : placedLine(thread, last)),
+          // Note that a reader hears each file the words name by its name, where the eye sees its chip.
+          heard: last === undefined ? "" : lastWords(thread, last, heardWords),
           byAgent: last === undefined || last.author === INBOX_MESSAGE_AUTHOR.AGENT,
           member: last?.member,
         };
+
   itemLines.set(item, line);
+
   return line;
 }
 
 /** The open ask an item's row says, where one waits that this build knows; none for a thread its line reads as said, settled, or resolved. */
 export function inboxLineAsk(item: InboxItem): InboxKnownAsk | undefined {
   return itemLine(item).ask;
+}
+
+/**
+ * An item's row's second line as `inboxPreview` says it, with each file a
+ * member's message names by its marker outside code placed where the marker
+ * stands, so the row draws it as the file's chip, as the thread does: none
+ * where the line says an ask or a resolve, or the agent's words, which write
+ * no markers. Note that a marker in code stays words, though the same file
+ * is named outside it, since plain words keep no code to tell it apart by.
+ */
+export function inboxPreviewPieces(
+  item: InboxItem,
+  nameOf: (member: InboxMember | undefined) => string,
+  ticked?: readonly number[],
+): readonly InboxLinePiece[] {
+  const line = itemLine(item);
+
+  if (line.ask !== undefined) return [previewOf(line, nameOf, ticked, line.words)];
+
+  return line.byAgent ? line.pieces : [`${nameOf(line.member)}: `, ...line.pieces];
+}
+
+/** The files an item's row's second line places (`inboxPreviewPieces`), each once. */
+export function inboxLineFiles(item: InboxItem): readonly InboxMessageFile[] {
+  const files = itemLine(item).pieces.filter(
+    (piece): piece is InboxMessageFile => !Predicate.isString(piece),
+  );
+
+  return [...new Set(files)];
+}
+
+type PlacedLineResult = { readonly words: string; readonly pieces: readonly InboxLinePiece[] };
+
+/**
+ * The latest message's words as its row says them, as plain words and as
+ * pieces with each file a member's marker names outside code in its place.
+ * Note that the place is written into the words before they are read as
+ * plain words, because reading them drops the code a marker stood in.
+ */
+function placedLine(thread: readonly InboxMessage[], last: InboxMessage): PlacedLineResult {
+  const files = last.author === INBOX_MESSAGE_AUTHOR.AGENT ? [] : (last.files ?? []);
+
+  if (files.length === 0) {
+    const words = lastWords(thread, last, plainWords);
+
+    return { words, pieces: [words] };
+  }
+
+  const placed = lastWords(thread, last, (text) => plainWords(chipMarked(text, files)));
+  const pieces: InboxLinePiece[] = [];
+  let at = 0;
+
+  for (const match of placed.matchAll(CHIP_PLACED)) {
+    const file = files[Number(match[1])];
+
+    if (file === undefined) continue;
+    const before = placed.slice(at, match.index);
+    pieces.push(...(before === "" ? [] : [before]), file);
+    at = match.index + match[0].length;
+  }
+
+  const after = placed.slice(at);
+
+  if (after !== "" || pieces.length === 0) pieces.push(after);
+
+  const words = pieces
+    .map((piece) => (Predicate.isString(piece) ? piece : fileMarker(piece.name)))
+    .join("");
+
+  return { words, pieces };
+}
+
+/** A message's words with each marker outside code that names one of `files` written as its place, a marker naming a picture only where the file is one, as the thread reads it (`file-chips.tsx`). */
+function chipMarked(text: string, files: readonly InboxMessageFile[]): string {
+  const words = text.replace(CHIP_PLACE_CHARACTERS, "");
+  let marked = "";
+  let at = 0;
+
+  for (const marker of fileMarkers(words)) {
+    const index = files.findIndex(
+      (file) =>
+        file.name === marker.name &&
+        (!isPictureName(file.name) || file.mediaType.startsWith("image/")),
+    );
+
+    if (index === -1) continue;
+    marked += `${words.slice(at, marker.start)}${CHIP_PLACE.OPEN}${String(index)}${CHIP_PLACE.CLOSE}`;
+    at = marker.end;
+  }
+
+  return marked + words.slice(at);
 }
 
 /** An item's second line from its line's `words`: the ask, as the draft ticks it, or the message's words after who said them where the agent did not. */
@@ -452,7 +591,13 @@ function previewOf(
   if (line.ask !== undefined) {
     return ticked === undefined || ticked.length === 0 ? line.words : askLine(line.ask, ticked);
   }
+
   return line.byAgent ? words : `${nameOf(line.member)}: ${words}`;
+}
+
+/** A message's first line that says anything, each file it names by its name (`markersAsNames`), as a reader hears it. */
+function heardWords(text: string): string {
+  return firstWords(markersAsNames(text));
 }
 
 /** A message's first line that says anything, as plain words (`plainWords`): a fence's line is passed over, and nothing under the first is kept. */
@@ -477,8 +622,10 @@ function lastWords(
 ): string {
   const words = read(last.text);
   const answers = last.answers;
+
   if (answers === undefined) return words === "" ? (filesWords(last.files) ?? "") : words;
   const stamp = sentStamp(answers, thread.find((each) => each.id === answers.ask)?.ask).words;
+
   return words === "" ? stamp : `${stamp}${PREVIEW_PART}${words}`;
 }
 
@@ -502,9 +649,11 @@ const keptHolders = new WeakMap<TaskSummary, InboxHolder>();
 /** A task as the holder of its items, kept (`keptHolders`). */
 export function taskHolder(task: TaskSummary): InboxHolder {
   const kept = keptHolders.get(task);
+
   if (kept !== undefined) return kept;
   const holder: InboxHolder = { task };
   keptHolders.set(task, holder);
+
   return holder;
 }
 
@@ -526,8 +675,11 @@ function valueWords(values: readonly InboxFormValue[] | undefined): readonly str
 /** The words an ask offers: a decision's options, a to-do's steps, and an answer's fields; none of an ask this build does not know. */
 function askWords(ask: InboxReadAsk | undefined): readonly string[] {
   if (ask === undefined || !knownAsk(ask)) return [];
+
   if (ask.type === INBOX_ASK.DECIDE) return optionWords(ask.options);
+
   if (ask.type === INBOX_ASK.DO) return ask.steps.map(plainWords);
+
   return fieldWords(ask.fields ?? []);
 }
 
@@ -545,15 +697,20 @@ const itemWords = new WeakMap<InboxItem, readonly string[]>();
  */
 export function inboxItemWords(item: InboxItem): readonly string[] {
   const kept = itemWords.get(item);
+
   if (kept !== undefined) return kept;
+
+  // Note that each file a message names reads as its name, so a search finds it by name and a snippet of it reads no marker.
   const said = (item.thread ?? []).flatMap((message) => [
-    plainWords(message.text),
+    plainWords(markersAsNames(message.text)),
     ...askWords(message.ask),
     ...(message.answers?.choices ?? []),
     ...valueWords(message.answers?.values),
   ]);
+
   const words = [item.title, ...said].filter((each) => each.length > 0);
   itemWords.set(item, words);
+
   return words;
 }
 
@@ -582,9 +739,12 @@ export function inboxGroups(
   },
 ): readonly InboxGroup[] {
   const listed = new Map(holders.listed.map((task) => [task.id, task]));
+
   return holders.tasks.flatMap(({ taskId }) => {
     const task = listed.get(taskId);
+
     if (task === undefined) return [];
+
     return [inboxGroup(taskHolder(task), read.get(taskId) ?? NO_ITEMS)];
   });
 }
@@ -662,9 +822,11 @@ const keptGroups = new WeakMap<InboxHolder, InboxGroup>();
  */
 export function inboxGroup(holder: InboxHolder, items: readonly InboxItem[]): InboxGroup {
   const kept = keptGroups.get(holder);
+
   if (kept?.items === items) return kept;
   const group = { holder, items };
   keptGroups.set(holder, group);
+
   return group;
 }
 
@@ -679,9 +841,11 @@ const keptListed = new WeakMap<InboxItem, InboxListed>();
  */
 function inboxListed(holder: InboxHolder, item: InboxItem): InboxListed {
   const kept = keptListed.get(item);
+
   if (kept?.holder === holder) return kept;
   const listed = { holder, item };
   keptListed.set(item, listed);
+
   return listed;
 }
 
@@ -702,6 +866,7 @@ export interface InboxListView {
  */
 export function readersItem(item: InboxItem, readerId: string | undefined): boolean {
   const waitsOn = inboxWaitsOn(item)?.userId;
+
   return waitsOn === undefined || readerId === undefined || waitsOn === readerId;
 }
 
@@ -849,6 +1014,7 @@ export function inboxList(
 ): InboxListView {
   const { readerId, whose = EVERYONES, search = NO_SEARCH, places = NO_PLACES } = view;
   const at = (item: InboxItem): number => places.get(item.id)?.at ?? item.updatedAt;
+
   const items = tasks
     .flatMap(({ holder, items }) =>
       items
@@ -860,6 +1026,7 @@ export function inboxList(
         .map((item) => inboxListed(holder, item)),
     )
     .toSorted((a, b) => at(b.item) - at(a.item));
+
   return { items, readerId };
 }
 
@@ -903,7 +1070,9 @@ function remindsLater(item: Pick<InboxItem, "remindAt">, now: number): boolean {
  */
 function itemAtNow(item: InboxItem, now: number): InboxItem {
   const { remindAt, ...rest } = item;
+
   if (remindAt === undefined || remindAt > now) return item;
+
   return { ...rest, updatedAt: Math.max(item.updatedAt, remindAt) };
 }
 
@@ -911,6 +1080,7 @@ function itemAtNow(item: InboxItem, now: number): InboxItem {
 export function inboxAtNow(groups: readonly InboxGroup[], now: number): readonly InboxGroup[] {
   return groups.map((group) => {
     const items = group.items.map((item) => itemAtNow(item, now));
+
     return items.every((item, index) => item === group.items[index]) ? group : { ...group, items };
   });
 }
@@ -924,6 +1094,7 @@ export function inboxAtNow(groups: readonly InboxGroup[], now: number): readonly
  */
 function closedQuietly(item: InboxItem): boolean {
   if (item.status !== INBOX_STATUS.CLOSED || item.markedUnread === true) return false;
+
   return item.updatedAt <= (item.settledAt ?? item.updatedAt);
 }
 
@@ -973,8 +1144,10 @@ export function inboxCounts(
   const items = tasks.flatMap(({ holder, items }) =>
     items.map((item) => inboxListed(holder, item)),
   );
+
   const count = (show: InboxShow) =>
     items.filter(({ item }) => scopedItem(show, whose, item, readerId)).length;
+
   return {
     [INBOX_SHOW.NEEDS_ME]: count(INBOX_SHOW.NEEDS_ME),
     [INBOX_SHOW.OPEN]: count(INBOX_SHOW.OPEN),
@@ -1014,7 +1187,9 @@ export function inboxSteps(
 ): InboxSteps | undefined {
   const rowed = view.items;
   const at = rowed.findIndex(({ item }) => item.id === chosen);
+
   if (at < 0) return undefined;
+
   return { at: at + 1, total: rowed.length, previous: rowed[at - 1], next: rowed[at + 1] };
 }
 
@@ -1024,6 +1199,7 @@ export function inboxEnds(
 ): { readonly first: InboxListed; readonly last: InboxListed } | undefined {
   const first = view.items[0];
   const last = view.items.at(-1);
+
   return first === undefined || last === undefined ? undefined : { first, last };
 }
 
@@ -1102,10 +1278,13 @@ export function inboxCommentFiles(
   const picture = (file: InboxMessageFile) =>
     attachmentView({ name: file.name, mediaType: file.mediaType, url: "" }) ===
       ATTACHMENT_VIEW.IMAGE || file.mediaType === CONVERSATION_MEDIA_TYPE.WEBM;
+
   const drawn = new Set(
     words === undefined ? [] : picturesDrawn(words, itemId).map((each) => each.attachmentId),
   );
+
   const after = files.filter((file) => !(picture(file) && drawn.has(file.attachmentId)));
+
   return {
     pictures: after.filter(picture),
     others: after.filter((file) => !picture(file)),
@@ -1125,6 +1304,7 @@ function picturesDrawn(
   return [...text.matchAll(INBOX_PICTURE_IN_WORDS)].flatMap((match) => {
     if (insideCode(text, match.index)) return [];
     const named = inboxAttachmentOf(inboxPictureDestination(match[2] ?? ""));
+
     return named?.itemId === itemId ? [{ at: match.index, attachmentId: named.attachmentId }] : [];
   });
 }
@@ -1141,13 +1321,15 @@ export function inboxMemberName(
   readerId: string | undefined,
 ): string {
   if (member === undefined) return MEMBER_WORDS.FORMER;
+
   return readerId !== undefined && member.userId === readerId ? MEMBER_WORDS.YOU : member.name;
 }
 
-/** How a file after a message's words is drawn: a picture, or a video in a player. */
+/** How a file after a message's words is drawn: a picture, a video in a player, or any other file, such as a PDF, as its chip that opens it. */
 export const INBOX_MEDIA = {
   PICTURE: "picture",
   VIDEO: "video",
+  FILE: "file",
 } as const;
 
 type InboxMediaKind = (typeof INBOX_MEDIA)[keyof typeof INBOX_MEDIA];
@@ -1182,28 +1364,33 @@ export interface InboxThreadMessage {
 
 /** One of the item's own files a message's words draw in place, and how: a picture, or a video it carried, played where the words name it. */
 export interface InboxDrawnMedia {
-  readonly kind: InboxMediaKind;
+  readonly kind: typeof INBOX_MEDIA.PICTURE | typeof INBOX_MEDIA.VIDEO;
   readonly attachmentId: string;
 }
 
-/** A file's kind as a thread draws it after its words, where it draws it: a picture, a video, or none for a file of another kind. */
-function mediaKindOf(file: InboxMessageFile): InboxMediaKind | undefined {
+/** A file's kind as a thread draws it after its words: a picture, a video, or a file of any other kind, such as a PDF, as its chip. */
+function mediaKindOf(file: InboxMessageFile): InboxMediaKind {
   const view = attachmentView({ name: file.name, mediaType: file.mediaType, url: "" });
+
   if (view === ATTACHMENT_VIEW.IMAGE) return INBOX_MEDIA.PICTURE;
+
   if (view === ATTACHMENT_VIEW.VIDEO) return INBOX_MEDIA.VIDEO;
-  return undefined;
+
+  return INBOX_MEDIA.FILE;
 }
 
 /**
  * Each message of an item's thread, in its order, as a client draws it
  * without the panel's member directory: the agent's under `agentName`, a
  * member's under their name (`inboxMemberName`), and after its words its
- * pictures and videos, a picture its words draw already left out
- * (`inboxCommentFiles`), each named in `drawn` instead with what it is: a
- * video the message carried, a WebM an agent recorded among them, is played
- * where its words name it, as the panel plays one, and anything else they
- * name is a picture. Note that a WebM stands as the video it is, though the
- * panel draws it where its pictures stand, since a player is what plays it.
+ * pictures, videos, and other files, a picture its words draw already left
+ * out (`inboxCommentFiles`), each named in `drawn` instead with what it is:
+ * a video the message carried, a WebM an agent recorded among them, is
+ * played where its words name it, as the panel plays one, and anything else
+ * they name is a picture. Note that a WebM stands as the video it is, though
+ * the panel draws it where its pictures stand, since a player is what plays
+ * it; and that a file of another kind, such as a PDF, stands after the words
+ * as its chip whether or not they name it, as the panel's chips stand.
  */
 export function inboxThreadMessages(
   item: InboxItem,
@@ -1213,27 +1400,38 @@ export function inboxThreadMessages(
   return (item.thread ?? []).map((message) => {
     const agent = message.author === INBOX_MESSAGE_AUTHOR.AGENT;
     const carried = new Map((message.files ?? []).map((file) => [file.attachmentId, file]));
+
     const drawn = picturesDrawn(message.text, item.id).map(({ attachmentId }) => {
       const file = carried.get(attachmentId);
-      const kind =
-        file === undefined ? INBOX_MEDIA.PICTURE : (mediaKindOf(file) ?? INBOX_MEDIA.PICTURE);
-      return { kind, attachmentId };
+
+      const kind = file === undefined ? INBOX_MEDIA.PICTURE : mediaKindOf(file);
+
+      return { kind: kind === INBOX_MEDIA.VIDEO ? kind : INBOX_MEDIA.PICTURE, attachmentId };
     });
-    // Note that a file the words draw stands where they draw it alone, an MP4 among them, which the panel's file split keeps after the words.
+
+    // Note that a picture or video the words draw stands where they draw it alone, an MP4 among them, which the panel's file split keeps after the words.
     const drawnIds = new Set(drawn.map(({ attachmentId }) => attachmentId));
+
     // An open ask's options stand on its card with their files, which the message draws nowhere else.
     const onCard =
       message.ask?.status === INBOX_ASK_STATUS.OPEN ? optionFileIds(message.ask) : new Set();
+
     const files = inboxCommentFiles(message.files ?? [], message.text, item.id);
+
     const media = [...files.pictures, ...files.others].flatMap((file): InboxMessageMedia[] => {
       const kind = mediaKindOf(file);
-      return kind === undefined || drawnIds.has(file.attachmentId) || onCard.has(file.attachmentId)
+      const drawnInPlace = kind !== INBOX_MEDIA.FILE && drawnIds.has(file.attachmentId);
+
+      return drawnInPlace || onCard.has(file.attachmentId)
         ? []
         : [{ kind, attachmentId: file.attachmentId, name: file.name, mediaType: file.mediaType }];
     });
+
     const { answers } = message;
+
     const asked =
       answers === undefined ? undefined : item.thread?.find(({ id }) => id === answers.ask);
+
     return {
       id: message.id,
       writer: {
@@ -1284,7 +1482,9 @@ export function waitingByAgent(
   waiting: readonly InboxItem[],
 ): ReadonlyMap<string, readonly InboxItem[]> {
   const byAgent = new Map<string, InboxItem[]>();
+
   for (const item of waiting)
     byAgent.set(item.agentId, [...(byAgent.get(item.agentId) ?? []), item]);
+
   return byAgent;
 }

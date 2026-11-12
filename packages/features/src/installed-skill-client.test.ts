@@ -60,6 +60,7 @@ it.effect("each call goes to its own path under the account's bearer", () =>
       [`DELETE /api/installed-skills/${SKILL_ID}`]: { answer: () => ({ id: SKILL_ID }) },
       [`GET /api/installed-skills/${SKILL_ID}`]: { answer: () => CONTENT },
     });
+
     const ask = client();
 
     const installed = yield* Effect.provide(
@@ -70,6 +71,7 @@ it.effect("each call goes to its own path under the account's bearer", () =>
       }),
       api.layer,
     );
+
     const removed = yield* Effect.provide(ask.remove(SKILL_ID), api.layer);
     const read = yield* Effect.provide(ask.read(SKILL_ID), api.layer);
 
@@ -98,6 +100,7 @@ it.effect(
           status: HTTP_STATUS.CONFLICT,
         },
       });
+
       const ask = client();
 
       const refused = yield* Effect.provide(
@@ -108,6 +111,7 @@ it.effect(
         }),
         api.layer,
       );
+
       const unnamed = yield* Effect.provide(ask.preview(WORKSPACE_ID, "anything"), api.layer);
 
       assert.deepEqual(refused, {

@@ -13,6 +13,7 @@ test("a GitHub avatar is kept only where GitHub's avatar host serves it over htt
     githubAvatarUrl("https://avatars.githubusercontent.com/u/1001?v=4"),
     "https://avatars.githubusercontent.com/u/1001?v=4",
   );
+
   for (const refused of [
     "http://avatars.githubusercontent.com/u/1001?v=4",
     "https://lh3.googleusercontent.com/a/photo",

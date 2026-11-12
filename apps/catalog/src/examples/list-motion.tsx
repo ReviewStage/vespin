@@ -59,6 +59,7 @@ function Rows({
   onArchive: (task: Sample) => void;
 }): React.JSX.Element {
   const drawn = useLeaving(tasks, taskKey);
+
   return (
     <Stack gap={GAP.TIGHT}>
       <Text variant={TEXT_VARIANT.SECTION}>{label}</Text>
@@ -96,28 +97,34 @@ function Lists(): React.JSX.Element {
   const [rest, setRest] = useState<readonly Sample[]>(FIRST);
   const [added, setAdded] = useState(0);
   const [archived, setArchived] = useState<Sample | undefined>(undefined);
+
   const add = () => {
     const name = ADDED[added % ADDED.length] ?? "New task";
     setRest((now) => [{ id: `added-${added}`, name }, ...now]);
     setAdded(added + 1);
   };
+
   const pin = (task: Sample) => {
     setRest((now) => now.filter((each) => each.id !== task.id));
     setPinned((now) => [task, ...now]);
   };
+
   const unpin = (task: Sample) => {
     setPinned((now) => now.filter((each) => each.id !== task.id));
     setRest((now) => [task, ...now]);
   };
+
   const archive = (task: Sample) => {
     setPinned((now) => now.filter((each) => each.id !== task.id));
     setRest((now) => now.filter((each) => each.id !== task.id));
     setArchived(task);
   };
+
   const undo = () => {
     if (archived !== undefined) setRest((now) => [archived, ...now]);
     setArchived(undefined);
   };
+
   return (
     <Stack>
       <Inline gap={GAP.TIGHT}>

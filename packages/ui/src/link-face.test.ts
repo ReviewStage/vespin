@@ -9,10 +9,12 @@ import { linkFace } from "./link-face.js";
 
 test("a link whose words are its address says it whole, without its scheme or trailing slash, however the words spell it", () => {
   const href = "https://www.example.com/account/ABC123/resources/devices/add?tab=ios#form";
+
   const face = {
     words: "www.example.com/account/ABC123/resources/devices/add?tab=ios#form",
     bare: true,
   };
+
   assert.deepEqual(linkFace(href, href), face);
   assert.deepEqual(linkFace(href, href.replace("https://", "")), face);
   assert.deepEqual(linkFace("https://example.com/", "https://example.com"), {

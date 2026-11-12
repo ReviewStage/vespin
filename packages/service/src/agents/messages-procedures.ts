@@ -106,11 +106,14 @@ export interface MessagesProcedureSeams {
 const reachedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (userId: string, id: string) {
   const agentId = yield* pathUuid(id);
   const agent = yield* hostedStoreOrUnavailable(readVisibleAgent(userId, agentId));
+
   if (Option.isNone(agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   const target: ConversationTarget = {
     userId: agent.value.userId,
     conversationId: agent.value.conversationId,
   };
+
   return { agent: agent.value, target };
 });
 
@@ -119,7 +122,9 @@ const callNamed = /* @__PURE__ */ Effect.fnUntraced(function* (
   call: string,
 ): Effect.fn.Return<string, HostedRefusal> {
   const read = readEither(agentCallIdSchema)(unparsedWire(call));
+
   if (Result.isFailure(read)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return read.success;
 });
 
@@ -129,7 +134,9 @@ const cursorNamed = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<string | undefined, HostedRefusal> {
   if (after === undefined) return undefined;
   const read = readEither(agentCursorSchema)(unparsedWire(after));
+
   if (Result.isFailure(read)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
   return read.success;
 });
 
@@ -140,7 +147,9 @@ const beforeNamed = /* @__PURE__ */ Effect.fnUntraced(function* (
   if (before === undefined) return undefined;
   const read = readEither(agentBeforeSchema)(unparsedWire(before));
   const seq = Result.isFailure(read) ? Number.NaN : Number(read.success);
+
   if (!Number.isSafeInteger(seq)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
   return seq;
 });
 
@@ -179,6 +188,7 @@ function wireMessages(
 ): AgentMessagesAnswer["messages"] {
   // SAFETY: every part and metadata is the JSON its row stored (`storedObjectSchema`), which the SDK's part types only name more narrowly.
   const stored = messages as AgentMessagesAnswer["messages"];
+
   return cut ? stored.map(cutMessage) : stored;
 }
 
@@ -192,6 +202,7 @@ const indexNamed = /* @__PURE__ */ Effect.fnUntraced(function* (
   index: string,
 ): Effect.fn.Return<number, HostedRefusal> {
   if (!/^\d{1,6}$/u.test(index)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return Number(index);
 });
 
@@ -204,10 +215,13 @@ const partAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   const messageId = yield* pathUuid(message);
   const at = yield* indexNamed(index);
   const part = yield* hostedStoreOrUnavailable(wholePartOf(target, CODER_TOOL_SET, messageId, at));
+
   if (Option.isNone(part) || !isRecord(part.value)) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
+
   const answer: AgentPartAnswer = { part: part.value };
+
   return answer;
 });
 
@@ -304,6 +318,7 @@ const tooLongMiddleware = middlewareGen<HostedContext>(function* ({ next }, inpu
 export function messagesProcedures(seams: MessagesProcedureSeams) {
   const signedIn = hosted.messages.use(accountMiddleware(seams.resolveUserId));
   const writer = storeWriter({ tools: CODER_TOOL_SET });
+
   return {
     agent: signedIn.agent.effect(function* ({ input, context }) {
       const after = (yield* cursorNamed(input.after)) ?? AGENT_CURSOR_START;
@@ -314,6 +329,7 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
       // Note that a cursor read before the transcript's last rewind is answered at once, never held, since its reader reads afresh.
       const rewound = yield* hostedStoreOrUnavailable(readRewoundRevision(target));
       const stale = rewound !== undefined && cursor.revision < rewound;
+
       const { page, holds, wakeIn } =
         readsNow(input.wait) || stale
           ? yield* hostedStoreOrUnavailable(
@@ -342,8 +358,10 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
               holds: undefined,
               wakeIn: undefined,
             };
+
       // The title is read after the page, since it lands after a turn ends, which a held read may span.
       const titled = yield* hostedStoreOrUnavailable(readAgent(context.userId, agent.id));
+
       return {
         ...transcriptAnswer(
           page,
@@ -365,6 +383,7 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
       .send.effect(function* ({ input, context }) {
         const { agent } = yield* reachedAgent(context.userId, input.params.id);
         const { retry, ...line } = input.body;
+
         const { txid, outcome } = yield* steerMemberWords(
           writer,
           context.userId,
@@ -372,11 +391,14 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
           line,
           retry === true,
         );
+
         const summary = yield* summaryOf(context.userId, agent);
+
         // A message the agent's first launch holds waits in its queue, which the host draws it in at once.
         if (outcome === STEER_OUTCOME.QUEUED) {
           return { agent: summary, queued: yield* hostedStoreOrUnavailable(queueOnPage(agent.id)) };
         }
+
         // The transaction that wrote the line, which the host waits to see live before it confirms the send.
         return txid === undefined ? { agent: summary } : { agent: summary, txid };
       }),
@@ -386,6 +408,7 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
       context,
     }) {
       const { agent } = yield* reachedAgent(context.userId, input.params.id);
+
       return { queue: yield* changeAgentQueue(context.userId, agent, input.body) };
     }),
 
@@ -395,11 +418,14 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
       const now = readsNow(input.wait);
       const { agent, target } = yield* reachedAgent(context.userId, input.id);
       const conversationId = childConversationId(agent.conversationId, callId);
+
       const read = yield* hostedStoreOrUnavailable(
         (now ? delegationNow : delegationPast)(target, conversationId, agent),
       );
+
       if (read.delegation === undefined) {
         if (!read.agentRuns) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
         return transcriptAnswer(
           { messages: [], cursor: cursorOfWire(after), status: AGENT_STATUS.STARTING },
           null,
@@ -407,10 +433,12 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
           now ? true : undefined,
         );
       }
+
       const titleAwaited = titleAwaitedOf(target, conversationId);
       const worker = { userId: agent.userId, conversationId };
       const cursor = cursorOfWire(after);
       const started = { createdAt: read.delegation.createdAt };
+
       const { page, holds, wakeIn } = now
         ? yield* hostedStoreOrUnavailable(
             transcriptNow(
@@ -438,8 +466,10 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
             holds: undefined,
             wakeIn: undefined,
           };
+
       // The title is read after the page, since it lands beside the worker's start, which a held read may span.
       const titles = yield* hostedStoreOrUnavailable(childTitlesOf(target, [conversationId]));
+
       return transcriptAnswer(
         page,
         titles.get(conversationId) ?? null,
@@ -451,36 +481,44 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
 
     agentPart: signedIn.agentPart.effect(function* ({ input, context }) {
       const { target } = yield* reachedAgent(context.userId, input.id);
+
       return yield* partAnswer(target, input.message, input.index);
     }),
 
     agentWorkerPart: signedIn.agentWorkerPart.effect(function* ({ input, context }) {
       const callId = yield* callNamed(input.call);
       const { agent } = yield* reachedAgent(context.userId, input.id);
+
       const worker = {
         userId: agent.userId,
         conversationId: childConversationId(agent.conversationId, callId),
       };
+
       return yield* partAnswer(worker, input.message, input.index);
     }),
 
     agentNewest: signedIn.agentNewest.effect(function* ({ input, context }) {
       const before = yield* beforeNamed(input.before);
       const { agent, target } = yield* reachedAgent(context.userId, input.id);
+
       if (before !== undefined) {
         return olderAnswer(
           yield* hostedStoreOrUnavailable(transcriptBefore(target, CODER_TOOL_SET, before)),
           readsCut(input.parts),
         );
       }
+
       const standing = { createdAt: agent.createdAt, blank: startedBlank(agent) };
       // The rewind is read before the page, so a page read after a rewind never carries the one before it.
       const rewound = yield* hostedStoreOrUnavailable(readRewoundRevision(target));
+
       const newest = yield* hostedStoreOrUnavailable(
         transcriptNewest(target, CODER_TOOL_SET, standing, agent),
       );
+
       // The title is read after the page, as the forward read's is, so one that landed while the page was read is told rather than lost to a follow that starts after it.
       const titled = yield* hostedStoreOrUnavailable(readAgent(context.userId, agent.id));
+
       return {
         ...newestAnswer(
           newest,
@@ -497,10 +535,13 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
       const { agent, target } = yield* reachedAgent(context.userId, input.id);
       const conversationId = childConversationId(agent.conversationId, callId);
       const read = yield* hostedStoreOrUnavailable(delegationNow(target, conversationId, agent));
+
       if (read.delegation === undefined) {
         if (!read.agentRuns) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
         // The call's record has not landed yet, so its worker has written nothing.
         if (before !== undefined) return olderAnswer({ messages: [] }, false);
+
         return newestAnswer(
           {
             page: {
@@ -513,19 +554,25 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
           false,
         );
       }
+
       const worker = { userId: agent.userId, conversationId };
+
       if (before !== undefined) {
         return olderAnswer(
           yield* hostedStoreOrUnavailable(transcriptBefore(worker, CODER_TOOL_SET, before)),
           readsCut(input.parts),
         );
       }
+
       const started = { createdAt: read.delegation.createdAt };
+
       const newest = yield* hostedStoreOrUnavailable(
         transcriptNewest(worker, CODER_TOOL_SET, started),
       );
+
       // The title is read after the page, since it lands beside the worker's start, which the page's reads may span.
       const titles = yield* hostedStoreOrUnavailable(childTitlesOf(target, [conversationId]));
+
       return newestAnswer(newest, titles.get(conversationId) ?? null, readsCut(input.parts));
     }),
   };

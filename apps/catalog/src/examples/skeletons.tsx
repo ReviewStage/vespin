@@ -1,7 +1,8 @@
 import {
   GAP,
   Inline,
-  SKELETON_SHAPE,
+  PdfPagesSkeleton,
+  SKELETON_KIND,
   Skeleton,
   SkeletonRegion,
   Stack,
@@ -14,26 +15,28 @@ import { CatalogSection } from "../section";
 
 /**
  * skeletons.tsx -- each shape, lines set in a heading's and the body's type
- * so they stand where those lines will, and a list's rows while it is read,
- * each drawn by a `*Skeleton` component, as every skeleton is.
+ * so they stand where those lines will, a list's rows while it is read, and
+ * a PDF while pdf.js opens it in the file viewer, one blank page in the
+ * column its pages scroll in, each drawn by a `*Skeleton` component, as
+ * every skeleton is.
  */
 
 /** How wide each placeholder member's name stands. */
 const MEMBER_WIDTHS = ["70%", "45%", "60%"] as const;
 
 /** Each shape, its box the catalog's own size for it. */
-function ShapesSkeleton(): React.JSX.Element {
+function KindsSkeleton(): React.JSX.Element {
   return (
     <Inline gap={GAP.FIELD}>
       <span className="catalog-skeleton-line">
         <Skeleton width="160px" />
       </span>
       <span className="catalog-skeleton-control">
-        <Skeleton shape={SKELETON_SHAPE.CONTROL} />
+        <Skeleton kind={SKELETON_KIND.CONTROL} />
       </span>
-      <Skeleton shape={SKELETON_SHAPE.CIRCLE} />
+      <Skeleton kind={SKELETON_KIND.CIRCLE} />
       <span className="catalog-skeleton-block">
-        <Skeleton shape={SKELETON_SHAPE.BLOCK} />
+        <Skeleton kind={SKELETON_KIND.BLOCK} />
       </span>
     </Inline>
   );
@@ -65,7 +68,7 @@ function MembersSkeleton(): React.JSX.Element {
       <Stack gap={GAP.CONTROL}>
         {MEMBER_WIDTHS.map((width) => (
           <Inline key={width} gap={GAP.ICON} wrap={false}>
-            <Skeleton shape={SKELETON_SHAPE.CIRCLE} width="20px" />
+            <Skeleton kind={SKELETON_KIND.CIRCLE} width="20px" />
             <div className="catalog-skeleton-grow">
               <Text as={TEXT_ELEMENT.DIV}>
                 <Skeleton width={width} />
@@ -82,7 +85,7 @@ function Skeletons(): React.JSX.Element {
   return (
     <>
       <CatalogSection id="skeleton-shapes" title="Shapes">
-        <ShapesSkeleton />
+        <KindsSkeleton />
       </CatalogSection>
       <CatalogSection id="skeleton-type" title="Lines in their type">
         <div className="catalog-column">
@@ -92,6 +95,11 @@ function Skeletons(): React.JSX.Element {
       <CatalogSection id="skeleton-rows" title="A list's rows">
         <div className="catalog-narrow">
           <MembersSkeleton />
+        </div>
+      </CatalogSection>
+      <CatalogSection id="skeleton-pdf" title="A PDF opening">
+        <div className="catalog-pdf-room">
+          <PdfPagesSkeleton label="plan.pdf" />
         </div>
       </CatalogSection>
     </>

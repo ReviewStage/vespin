@@ -28,8 +28,10 @@ import {
 const NOW = Date.UTC(2026, 9, 17, 12);
 const TODAY = "2026-10-17";
 const YESTERDAY = "2026-10-16";
+
 /** Inside the 7-day window before this one. */
 const LAST_WEEK = "2026-10-08";
+
 /** Before even that. */
 const LONG_AGO = "2026-09-01";
 
@@ -91,6 +93,7 @@ function account(id: string): AdminCostAccountInfo {
 
 function built(usage: Partial<AdminCostUsage>, accounts: readonly string[] = []) {
   const whole: AdminCostUsage = { tokens: [], seconds: [], merged: [], ...usage };
+
   return buildAdminCost({
     priced: priceCostUsage(whole, OFFERED),
     merged: whole.merged,
@@ -137,6 +140,7 @@ test("a catalog that could not be read leaves every model token unpriced, and se
     seconds: [{ day: TODAY, source: COST_SOURCE.DICTATION, userId: "a", seconds: 600 }],
     merged: [],
   };
+
   const cost = buildAdminCost({
     priced: priceCostUsage(usage, []),
     merged: [],
@@ -228,6 +232,7 @@ test("the most expensive accounts come most first, cut at the bound, each with i
     { length: ADMIN_COST_TOP_ACCOUNTS_LIMIT + 2 },
     (_, index) => `user-${index}`,
   );
+
   const cost = built(
     {
       tokens: ids.map((userId, index) =>

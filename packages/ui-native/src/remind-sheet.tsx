@@ -58,6 +58,7 @@ type RemindSheetProps = {
 /** A time's row: its words, and at its end when it comes due in the muted ink, the whole row pressed. */
 function TimeRow({ time }: { readonly time: RemindChoice }) {
   const colors = useColors();
+
   return (
     <SwiftUIButton onPress={time.onPress} modifiers={[listRowBackground(colors.SURFACE)]}>
       <HStack>
@@ -87,6 +88,7 @@ function PickFace({
 }) {
   const colors = useColors();
   const [picked, setPicked] = useState(() => new Date(pick.opensAt));
+
   return (
     <Section title={REMIND_WORDS.PICK}>
       <DatePicker
@@ -94,13 +96,17 @@ function PickFace({
         range={{ start: new Date(pick.earliest) }}
         displayedComponents={["date", "hourAndMinute"]}
         onDateChange={setPicked}
-        modifiers={[datePickerStyle("graphical"), listRowBackground(colors.SURFACE)]}
+        modifiers={[
+          datePickerStyle("graphical"),
+          tint(colors.ACCENT),
+          listRowBackground(colors.SURFACE),
+        ]}
       />
       <SwiftUIButton
         label={REMIND_WORDS.REMIND_ME}
         systemImage="clock"
         onPress={() => onPick(picked.getTime())}
-        modifiers={[listRowBackground(colors.SURFACE)]}
+        modifiers={[tint(colors.ACCENT), listRowBackground(colors.SURFACE)]}
       />
     </Section>
   );
@@ -127,6 +133,7 @@ export function RemindSheet({
 }: RemindSheetProps) {
   const colors = useColors();
   const [stage, setStage] = useState<RemindStage>(REMIND_STAGE.TIMES);
+
   return (
     <Host matchContents style={{ position: "absolute" }}>
       <BottomSheet
@@ -146,7 +153,7 @@ export function RemindSheet({
             modifiers={[
               scrollContentBackground("hidden"),
               background(colors.SIDEBAR),
-              tint(colors.ACCENT),
+              tint(colors.TEXT),
               font({ textStyle: TYPE_ROLE.ROW_TITLE }),
             ]}
           >

@@ -1,6 +1,8 @@
 // start-screens.tsx -- the two sheets that start work, each a SwiftUI Form: New agent on a task, its words and pictures, model, and effort; and New task, Home's composer: the task described and its pictures, its relation to another task, its repository, its model and effort, and where its agent runs, or File for later, which files it with no agent.
 
 import { hasWordsOrFiles } from "@repo/features/agent-wire";
+import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
 import { TASK_CREATE_RELATION_WORDS } from "@repo/features/task-standing-words";
 import {
@@ -28,7 +30,7 @@ import {
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, usePreventRemove, useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -45,6 +47,7 @@ import {
   useStartTask,
 } from "../tasks/use-start.js";
 import { type AttachedPictures, useAttachedPictures } from "../use-attached-pictures.js";
+import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
 import { useWrite } from "../use-write.js";
 
 /** The panel's words for the sheets, their fields, and their acts. */
@@ -60,13 +63,10 @@ const WORDS = {
   RUNS_ON: "Runs on",
   START: "Start",
   FILE_FOR_LATER: "File for later",
-  TASK_RELATION: "Task relation",
   RELATION: "Relation",
   TASK: "Task",
   NO_RELATION: "None",
   CANCEL: "Cancel",
-  DISCARD_QUESTION: "Discard draft?",
-  DISCARD: "Discard draft",
   NO_REPOSITORIES: "The workspace's GitHub reaches no repository yet.",
 } as const;
 
@@ -77,43 +77,6 @@ const TEST_IDS = {
 } as const;
 
 type SheetTestIds = (typeof TEST_IDS)[keyof typeof TEST_IDS];
-
-/** What keeps a sheet's draft, its words typed and pictures attached: whether it asks before they go, and its answers. */
-interface KeptWords {
-  /** Whether the sheet asks whether to discard its draft, after a Cancel or a swipe down. */
-  readonly asking: boolean;
-  /** Lets the sheet go, its draft with it, as the ask's Discard draft does. */
-  readonly discard: () => void;
-  /** Keeps the sheet and its draft, as the ask's Cancel does. */
-  readonly stay: () => void;
-  /** Lets the sheet go without asking, as a start taken does. */
-  readonly release: () => void;
-}
-
-/**
- * Keeps a sheet's draft while it holds one, words typed or a picture
- * attached, as Mail keeps a draft: the swipe down is held, and Cancel or a
- * swipe asks first whether to discard it. Note that a swipe the system held
- * comes back as a removal the stack prevented, so one ask answers both.
- */
-function useKeptWords(drafted: boolean): KeptWords {
-  const [letGo, setLetGo] = useState(false);
-  const [leave, setLeave] = useState<(() => void) | undefined>(undefined);
-  const disable = usePreventRemove(drafted && !letGo, ({ repeat }) => setLeave(() => repeat));
-  return {
-    asking: leave !== undefined,
-    discard: () => {
-      setLetGo(true);
-      setLeave(undefined);
-      leave?.();
-    },
-    stay: () => setLeave(undefined),
-    release: () => {
-      setLetGo(true);
-      disable();
-    },
-  };
-}
 
 /** File for later, as New task's bar offers it before Start: whether it is lit, and its press. */
 interface FileForLater {
@@ -137,6 +100,7 @@ function SheetBar({
 }) {
   const colors = useColors();
   const router = useRouter();
+
   return (
     <>
       {/* Note that the bar has no ground of its own, so the system draws its buttons in glass over the sheet's. */}
@@ -144,7 +108,7 @@ function SheetBar({
         options={{
           headerShown: true,
           title,
-          headerTintColor: colors.ACCENT,
+          headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.SIDEBAR },
@@ -172,8 +136,8 @@ function SheetBar({
         />
       </Stack.Toolbar>
       <ConfirmAsk
-        title={WORDS.DISCARD_QUESTION}
-        act={WORDS.DISCARD}
+        title={DISCARD_WORDS.QUESTION}
+        act={DISCARD_WORDS.DISCARD}
         destructive
         presented={kept.asking}
         onAct={kept.discard}
@@ -225,12 +189,14 @@ function AgentSection({
 function DraftSection({
   placeholder,
   onWords,
+  initialWords,
   pictures,
   note,
   testIds,
 }: {
   readonly placeholder: string;
   readonly onWords: (words: string) => void;
+  readonly initialWords?: string | undefined;
   readonly pictures: AttachedPictures;
   readonly note: string | undefined;
   /** The names a flow finds the field and the + by. */
@@ -238,7 +204,13 @@ function DraftSection({
 }) {
   return (
     <ListSection footer={note}>
-      <WordsField placeholder={placeholder} onWords={onWords} autoFocus testId={testIds.WORDS} />
+      <WordsField
+        placeholder={placeholder}
+        onWords={onWords}
+        initialWords={initialWords}
+        autoFocus
+        testId={testIds.WORDS}
+      />
       <AttachRow
         pictures={pictures.attached}
         onAdd={pictures.attach}
@@ -249,6 +221,13 @@ function DraftSection({
     </ListSection>
   );
 }
+
+type UseSheetStartResult = {
+  readonly starting: boolean;
+  readonly go: (start: () => Promise<StartAnswer>, refusal?: string | undefined) => void;
+};
+
+type Started = { answer?: StartAnswer };
 
 /**
  * Sends a start once, while none is out: on an agent started, the sheet
@@ -261,28 +240,30 @@ function DraftSection({
 function useSheetStart(
   kept: KeptWords,
   setNote: (note: string | undefined) => void,
-): {
-  readonly starting: boolean;
-  readonly go: (start: () => Promise<StartAnswer>, refusal?: string | undefined) => void;
-} {
+): UseSheetStartResult {
   const router = useRouter();
   const write = useWrite();
   const [starting, setStarting] = useState(false);
+
   const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
     if (starting) return;
+
     if (refusal !== undefined) {
       setNote(refusal);
       buzz(BUZZ.WARNING);
+
       return;
     }
+
     setStarting(true);
     setNote(undefined);
-    const started: { answer?: StartAnswer } = {};
+    const started: Started = {};
     // Note that a start refused says why in the sheet, under its words, rather than in the notice.
     write(
       () =>
         start().then((answer) => {
           started.answer = answer;
+
           return answer;
         }),
       {
@@ -293,16 +274,17 @@ function useSheetStart(
     )
       .then((went) => {
         const answer = started.answer;
+
         if (!went || answer === undefined || "refused" in answer) return;
         kept.release();
         router.dismiss();
-        router.navigate(`/tasks/${encodeURIComponent(answer.taskId)}`);
-        if (answer.agentId !== undefined) {
-          router.push(`/tasks/agent/${encodeURIComponent(answer.agentId)}`);
-        }
+        router.navigate(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: answer.taskId }));
+
+        if (answer.agentId !== undefined) router.push(iosAgentRoute(answer.agentId));
       })
       .finally(() => setStarting(false));
   };
+
   return { starting, go };
 }
 
@@ -321,6 +303,7 @@ export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
+
   const start = () =>
     go(
       () =>
@@ -332,6 +315,7 @@ export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
         }),
       pictures.refusal,
     );
+
   return (
     <>
       <SheetBar title={WORDS.NEW_AGENT} ready={drafted && !starting} onStart={start} kept={kept} />
@@ -349,6 +333,16 @@ export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
       </Screen>
     </>
   );
+}
+
+/** What New task opens on in place of an empty sheet: a draft the share sheet kept. */
+export interface NewTaskDraft {
+  readonly prompt: string;
+  /** The workspace it was kept for, where one was picked; the phone's own otherwise. */
+  readonly workspaceId?: string | undefined;
+  readonly repository?: string | undefined;
+  /** The addresses of the JPEGs its pictures were kept in, in the App Group, which New task reads and deletes. */
+  readonly pictures?: readonly string[] | undefined;
 }
 
 /** No task list read yet. */
@@ -400,7 +394,9 @@ function useRelationPick(
   const [kind, setKind] = useState<string>(
     parent === undefined ? NO_RELATION : TASK_CREATE_RELATION_KIND.SUB_TASK_OF,
   );
+
   const [picked, setPicked] = useState<string | undefined>(parent);
+
   const tasks = useMemo(
     () =>
       listed.filter(
@@ -410,7 +406,9 @@ function useRelationPick(
       ),
     [listed, workspaceId, parent],
   );
+
   const taskId = picked ?? tasks[0]?.id;
+
   return {
     relation: isRelationKind(kind) && taskId !== undefined ? { kind, taskId } : undefined,
     kind,
@@ -424,7 +422,8 @@ function useRelationPick(
 /** New task's relation: its kind, and the task it names once a kind is picked. */
 function RelationSection({ pick }: { readonly pick: RelationPick }) {
   return (
-    <ListSection title={WORDS.TASK_RELATION}>
+    // Note that the section has no header, since its first row already names it, as a system form's single-purpose group stands.
+    <ListSection>
       <MenuPickRow
         label={WORDS.RELATION}
         options={RELATION_OPTIONS}
@@ -450,44 +449,55 @@ function RelationSection({ pick }: { readonly pick: RelationPick }) {
  * until another is picked, or its parent's in another's tree, its agent's
  * model and effort, and where its agent runs. Start makes the task and
  * starts its agent in one act, as Home does, in the workspace the app works
- * in; File for later before it files the task in the Backlog under its
+ * in, or the one a share draft it opens on was kept for; File for later
+ * before it files the task in the Backlog under its
  * words with no agent, offered on words alone, since pictures go only with
  * an agent's start. A task's New sub-task opens it as a sub-task of
  * `parent`, in the parent's workspace, which a task opened by a link may
  * hold apart from the one the app works in, since a tree stands in one.
  */
-export function NewTaskScreen({ parent }: { readonly parent?: string | undefined }) {
-  const [prompt, setPrompt] = useState("");
+export function NewTaskScreen({
+  parent,
+  draft,
+}: {
+  readonly parent?: string | undefined;
+  readonly draft?: NewTaskDraft | undefined;
+}) {
+  const [prompt, setPrompt] = useState(draft?.prompt ?? "");
   const [runsOn, setRunsOn] = useState(CLOUD);
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
   const listed = view?.tasks ?? NO_TASKS;
   const chosen = useChosenWorkspace(workspaces).chosen;
+  const own = workspaces.find(({ id }) => id === draft?.workspaceId) ?? chosen;
   // Note that a sub-task starts in its parent's workspace by the id its row holds, read before the workspace list may be, and holds its start until that row is read.
   const parentIn = listed.find((task) => task.id === parent)?.workspaceId;
-  const workspaceId = parent === undefined ? chosen?.id : parentIn;
+  const workspaceId = parent === undefined ? own?.id : parentIn;
   const placed = workspaceId !== undefined || parent === undefined;
   // Note that a sub-task's repositories are its parent's workspace's alone, never the chosen one's, so none is offered until that workspace is read.
-  const workspace =
-    parent === undefined ? chosen : workspaces.find((each) => each.id === workspaceId);
-  const repository = useRepositoryPick(workspace);
+  const workspace = parent === undefined ? own : workspaces.find((each) => each.id === workspaceId);
+  const repository = useRepositoryPick(workspace, draft?.repository);
   const relation = useRelationPick(listed, workspaceId, parent);
   const pick = useModelPick();
   const startTask = useStartTask(workspaceId);
   const fileTask = useFileTask(workspaceId);
   const [note, setNote] = useState<string | undefined>(undefined);
-  const pictures = useAttachedPictures(setNote);
-  const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
-  const filed = pictures.files === undefined ? filedTaskOf(prompt) : undefined;
+  const pictures = useAttachedPictures(setNote, draft?.pictures);
+  // Note that a share draft's pictures are read as the sheet opens, and nothing starts or files until they are in, so its words never go without them.
+  const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
+  const filed = pictures.files === undefined && !pictures.opening ? filedTaskOf(prompt) : undefined;
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
   const place = { repository: repository.picked, relation: relation.relation };
   // Note that a relation picked holds the start until it names a task, so the task never starts unrelated.
   const relationReady = relation.kind === NO_RELATION || relation.relation !== undefined;
+
   const tree = inTree(relation.relation)
     ? relation.tasks.find((task) => task.id === relation.taskId)
     : undefined;
-  const start = () =>
+
+  const start = () => {
+    if (!drafted) return;
     go(
       () =>
         startTask({
@@ -499,9 +509,12 @@ export function NewTaskScreen({ parent }: { readonly parent?: string | undefined
         }),
       pictures.refusal,
     );
+  };
+
   const file = () => {
     if (filed !== undefined) go(() => fileTask({ filed, ...place }));
   };
+
   return (
     <>
       <SheetBar
@@ -519,13 +532,14 @@ export function NewTaskScreen({ parent }: { readonly parent?: string | undefined
           <DraftSection
             placeholder={WORDS.TASK_PLACEHOLDER}
             onWords={setPrompt}
+            initialWords={draft?.prompt}
             pictures={pictures}
             note={note}
             testIds={TEST_IDS.NEW_TASK}
           />
           <RelationSection pick={relation} />
+          {/* Note that the section has no header, since its one row already names it, as a system form's single-row group stands. */}
           <ListSection
-            title={WORDS.REPOSITORY}
             footer={
               tree === undefined && repository.options.length === 0
                 ? WORDS.NO_REPOSITORIES

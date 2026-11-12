@@ -25,12 +25,14 @@ const CALLBACK = "https://app.example.test/ios/oauth/callback";
 function trip(caught: (authorization: LoopbackAuthorization) => AuthSessionAnswer) {
   let authorization: LoopbackAuthorization | undefined;
   const exchanges: { code: string; redirectUri: string }[] = [];
+
   const consent = authSessionConsent({
     callbackUrl: CALLBACK,
     session: {
       open: (_url, callbackUrl) => {
         assert.equal(callbackUrl, CALLBACK);
         assert.ok(authorization !== undefined);
+
         return Promise.resolve(caught(authorization));
       },
       dismiss: () => undefined,
@@ -39,15 +41,18 @@ function trip(caught: (authorization: LoopbackAuthorization) => AuthSessionAnswe
     flow({
       authorizationUrl: (input) => {
         authorization = input;
+
         return "https://example.test/authorize";
       },
       exchange: (input) =>
         Effect.sync(() => {
           exchanges.push(input);
+
           return { token: "granted" };
         }),
     }),
   );
+
   return { outcome: Effect.scoped(consent.signInEffect()), exchanges };
 }
 
@@ -109,6 +114,7 @@ it.effect("exchanges the code the trip's own redirect carried, on the registered
     const { outcome, exchanges } = trip((at) =>
       redirected(`${at.redirectUri}?code=the-code&state=${encodeURIComponent(at.state)}`),
     );
+
     assert.deepEqual(yield* outcome, { token: "granted" });
     assert.deepEqual(
       exchanges.map(({ code, redirectUri }) => ({ code, redirectUri })),
@@ -125,6 +131,7 @@ it.effect("shows one sheet for two trips started together, and a cancel closes i
     const secondOpened = yield* Deferred.make<void>();
     const showing: (() => void)[] = [];
     let opens = 0;
+
     const open = authSessionConsent({
       callbackUrl: CALLBACK,
       session: {
@@ -132,8 +139,10 @@ it.effect("shows one sheet for two trips started together, and a cancel closes i
           const sheet = new Promise<AuthSessionAnswer>((resolve) => {
             showing.push(() => resolve({ end: AUTH_SESSION_END.CLOSED }));
           });
+
           opens += 1;
           Deferred.doneUnsafe(opens === 1 ? firstOpened : secondOpened, Effect.void);
+
           return sheet;
         },
         dismiss: () => {
@@ -141,6 +150,7 @@ it.effect("shows one sheet for two trips started together, and a cancel closes i
         },
       },
     });
+
     const started = () =>
       open(
         flow({
@@ -148,6 +158,7 @@ it.effect("shows one sheet for two trips started together, and a cancel closes i
           exchange: () => Effect.succeed({ token: "granted" }),
         }),
       );
+
     const first = started();
     const second = started();
     const firstFiber = yield* Effect.forkChild(Effect.scoped(first.signInEffect()));
@@ -158,9 +169,11 @@ it.effect("shows one sheet for two trips started together, and a cancel closes i
     assert.equal(opens, 1);
     first.cancel();
     second.cancel();
+
     const ends = yield* Effect.forEach([firstFiber, secondFiber], (fiber) =>
       Effect.map(Fiber.join(fiber), (end) => "reason" in end && end.reason),
     );
+
     assert.deepEqual(
       ends.toSorted(),
       [AUTH_SESSION_REASON.ALREADY_WAITING, LOOPBACK_CONSENT_CANCELED].toSorted(),

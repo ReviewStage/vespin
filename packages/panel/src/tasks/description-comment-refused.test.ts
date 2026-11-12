@@ -115,6 +115,7 @@ const DEAN = { id: "u-dean", email: "dean@example.com" } as const;
 /** The account signed in to the window, as the panel's root hands it what the window keeps for it. */
 function SignedIn({ account }: { account: Identity }): null {
   useDraftsOwner(account);
+
   return null;
 }
 
@@ -144,13 +145,16 @@ function drawn(
     start: async () => ({ note: "not in this test" }),
     act: async (_thread, action) => {
       asked.push(action);
+
       return landing();
     },
   };
+
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
+
   const draw = (reader: Identity) => {
     // Note that the thread is drawn whole, its reply field open, in the description's comments list.
     const tab = createElement(DescriptionBody, {
@@ -158,19 +162,23 @@ function drawn(
       reader: { readerId: reader.id },
       sectionLinks: { workspace: "acme", onOpen: () => undefined, reveal: undefined },
     });
+
     const tree = createElement(
       DescriptionCommentsProvider,
       { value: control },
       createElement(CommentFocusScope, { reveal: undefined, children: tab }),
     );
+
     // Note that the surface is built before the reader signs in, because building it stands up the test's window, no one signed in.
     const surface = withQueryClient(tree);
     signIn(reader);
     act(() => root.render(surface));
   };
+
   draw(account);
   act(() => container.querySelector<HTMLButtonElement>(".comments-toggle button")?.click());
   redrawAs = draw;
+
   return (
     container.querySelector<HTMLElement>(`.comment-card[data-thread="${THREAD_ID}"]`) ??
     assert.fail("no card")
@@ -185,6 +193,7 @@ async function attachFile(card: HTMLElement, name: string): Promise<void> {
   const picker =
     card.querySelector<HTMLInputElement>('.comment-field input[type="file"]') ??
     assert.fail("no file picker");
+
   Object.defineProperty(picker, "files", {
     configurable: true,
     value: [new File([`${name}\n`], name, { type: "text/plain" })],
@@ -192,6 +201,7 @@ async function attachFile(card: HTMLElement, name: string): Promise<void> {
   act(() => {
     picker.dispatchEvent(new Event("change", { bubbles: true }));
   });
+
   // Note that a file is read off the disk before it lands in the field.
   for (let round = 0; round < 4; round += 1) await act(() => Promise.resolve());
 }
@@ -202,6 +212,7 @@ function heldFiles(card: HTMLElement): (string | null)[] {
   const row = [...field.querySelectorAll('[aria-label="Attached files"] > li')];
   // Note that a file the words name stands there as its chip, which opens it by its name.
   const inWords = [...field.querySelectorAll('[data-chip="fileChip"] [aria-label^="Open "]')];
+
   return [
     ...row.map(attachmentChipName),
     ...inWords.map((chip) => chip.getAttribute("aria-label")?.slice("Open ".length) ?? null),
@@ -252,6 +263,7 @@ async function refusedBesideNewer(refused: string, newer: string, account: Ident
   pressInComposer(field, "Enter");
   writeInComposer(field, newer);
   await act(async () => answer.resolve(false));
+
   return {
     card,
     field,
@@ -287,6 +299,7 @@ test("a refused reply too long to go back beside the newer words stands apart as
     true,
     "another reader in the window sees none",
   );
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   const card = drawnFirst.redraw();
   const line = card.querySelector("[data-unsent]") ?? assert.fail("no line marked as not sent");
@@ -309,16 +322,20 @@ test("a refused reply too long to go back beside the newer words stands apart as
 test("words written again after a not-sent reply is discarded go under a new key", async () => {
   const { card, field, asked } = await refusedBesideNewer(TOO_LONG.REFUSED, TOO_LONG.NEWER);
   const line = card.querySelector("[data-unsent]") ?? assert.fail("no line marked as not sent");
+
   const discard = [...line.querySelectorAll("button")].find(
     (each) => each.textContent === "Discard",
   );
+
   assert.ok(discard, "the line offers Discard");
   act(() => discard.click());
+
   const confirm = [
     ...document.querySelectorAll('[role="alertdialog"] button, [role="dialog"] button'),
   ]
     .filter((each): each is HTMLButtonElement => each instanceof HTMLButtonElement)
     .find((each) => each.textContent === "Discard comment");
+
   assert.ok(confirm, "Discard asks first");
   await act(async () => confirm.click());
   assert.equal(card.querySelector("[data-unsent]") === null, true, "the line goes once discarded");
@@ -336,9 +353,11 @@ test("a reply refused while only the reader's address was known stands with its 
   const asked: DescriptionCommentActionRequest[] = [];
   const landing = () => (asked.length === 1 ? answer.promise : Promise.resolve(true));
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
+
   const card = drawn(landing, asked, {
     email: DEAN.email,
   });
+
   const field = composerEditor(card);
   writeInComposer(field, TOO_LONG.REFUSED);
   await attachFile(card, "invite.txt");

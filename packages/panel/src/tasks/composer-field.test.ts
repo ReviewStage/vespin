@@ -54,6 +54,7 @@ function Box(): ReactNode {
     messages: [],
     send: () => new Promise(() => undefined),
   });
+
   return createElement(AgentComposer, { ...QUIET_COMPOSER, composer });
 }
 
@@ -64,12 +65,15 @@ test("a box drawn before the editor bundle lands is inert with its placeholder, 
   roots.push(root);
   const landing = Promise.withResolvers<DescriptionEditorModule>();
   let asked = false;
+
   const bundles = standInBundles({
     descriptionEditor: () => {
       asked = true;
+
       return landing.promise;
     },
   });
+
   await act(async () => root.render(withQueryClient(onSideBundles(bundles, createElement(Box)))));
 
   const field = container.querySelector<HTMLElement>(".agent-composer-input");

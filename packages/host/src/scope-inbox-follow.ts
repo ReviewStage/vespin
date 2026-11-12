@@ -87,21 +87,27 @@ export function scopeInboxes(
       Effect.gen(function* () {
         // The account the follow starts for, which every renewal and poll names, so one under another's session is refused as signed out.
         const userId = dependencies.accountId();
+
         const seal = (poll: boolean, after?: string) =>
           userId === undefined
             ? Effect.succeed(LIVE_SIGNED_OUT)
             : dependencies.seal(scope, poll, userId, after);
+
         const first = yield* seal(false);
+
         if ("failure" in first) {
           const failure =
             first.failure === AGENT_CALL_FAILURE.NOT_FOUND
               ? AGENT_CALL_FAILURE.NOT_FOUND
               : AGENT_CALL_FAILURE.UNANSWERED;
+
           return { kind: LIVE_STATE.REFUSED, failure } as const;
         }
+
         const inbox = yield* SubscriptionRef.make<ScopeInboxState>({ kind: LIVE_STATE.WAITING });
         let wait: TxWait | undefined;
         let answered = false;
+
         // Note that nothing is told before the read first answers, since a write drawn on no items shows nothing of the scope.
         const drawn: Effect.Effect<void> = Effect.suspend(() =>
           answered
@@ -111,13 +117,16 @@ export function scopeInboxes(
               })
             : Effect.void,
         );
+
         const items: HeldRows<InboxItem, InboxChange> = yield* dependencies.pool.stand(INBOX_ITEM, {
           redraw: () => drawn,
           confirmation: () => {
             const handed = wait;
+
             return handed === undefined ? undefined : (txid) => confirmWrite(handed, txid);
           },
         });
+
         const taken = followTakingRows(
           {
             poll: (after) => seal(true, after),
@@ -132,13 +141,16 @@ export function scopeInboxes(
               items.answer(inboxOfLiveRows(rows)),
               Effect.suspend(() => {
                 answered = true;
+
                 return drawn;
               }),
             ),
         );
+
         yield* Effect.forkScoped(
           taken.pipe(Effect.catch(() => SubscriptionRef.set(inbox, { kind: LIVE_STATE.BROKEN }))),
         );
+
         return { kind: LIVE_STATE.LIVE, inbox } as const;
       }),
   });
@@ -162,10 +174,13 @@ function followInbox(
   const attempt: Effect.Effect<boolean> = Effect.scoped(
     Effect.gen(function* () {
       const standing = yield* RcMap.get(inboxes, scope);
+
       if (standing.kind === LIVE_STATE.REFUSED) {
         yield* tell({ failure: standing.failure });
+
         return standing.failure === AGENT_CALL_FAILURE.NOT_FOUND;
       }
+
       // Note that a delivery that moved nothing is told nobody, every item compared whole, its thread's messages and files among it.
       yield* SubscriptionRef.changes(standing.inbox).pipe(
         Stream.takeWhile((state) => state.kind !== LIVE_STATE.BROKEN),
@@ -174,9 +189,11 @@ function followInbox(
         Stream.changesWith((one, other) => Equal.equals(one.items, other.items)),
         Stream.runForEach((inbox) => tell({ items: inbox.items })),
       );
+
       return false;
     }),
   );
+
   // Note that a follow that goes on is let go before the wait, so the next run reads it afresh.
   return restarting(
     Effect.flatMap(attempt, (ended) =>

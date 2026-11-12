@@ -61,6 +61,7 @@ export interface BarStanding {
 export function useBarStanding(tasks: Pick<TasksControl, "tasks" | "workspace">): BarStanding {
   const { place } = useWindowPlace();
   const automations = useAutomationsPlace();
+
   return {
     place,
     inbox: useInboxView(tasks),
@@ -79,13 +80,19 @@ export function mobileBarShown(
   if (room !== SHELL_ROOM.NARROW || !tasks.signedIn) return false;
   const { agentView } = tasks;
   const { place, inbox, automations } = standing;
+
   if (inbox.open) return inbox.chosen === undefined;
+
   if (agentView.agentId !== undefined || place === ROUTED_PLACE.PERSON) return false;
+
   if (place === ROUTED_PLACE.BOARD) return true;
+
   // Note that an automation's editor and its runs keep the whole screen, as an item does; only the list and the Runs tab stand over the bar.
   if (automations !== undefined) return automationsTab(automations);
+
   // So does Admin: a section stands over the bar, an account's or a day's page under one keeps the whole screen.
   if (place === ROUTED_PLACE.ADMIN) return adminSection(standing.admin);
+
   return tasks.atHome;
 }
 
@@ -106,11 +113,13 @@ export function MobileBar({
   const inInbox = among && place === ROUTED_PLACE.INBOX;
   const inTasks = among && !inInbox && boardOpen;
   const waiting = useInboxWaiting(tasks);
+
   // Note that a press leaves what stands over the places first, so the place it opens is the one on screen.
   const go = (open: () => void) => () => {
     leave?.();
     open();
   };
+
   return (
     <nav
       className="mobile-bar flex items-center gap-ui-12 bg-ground px-ui-12 py-ui-8"

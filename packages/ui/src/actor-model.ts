@@ -175,6 +175,7 @@ function isBotLogin(login: string): boolean {
 export function githubLoginActor(login: string): GitHubActor {
   const bot = isBotLogin(login);
   const actor: GitHubActor = { kind: ACTOR_KIND.GITHUB, login, bot };
+
   return bot ? actor : { ...actor, avatarUrl: githubUserAvatarUrl({ login }) };
 }
 
@@ -204,6 +205,7 @@ export function actorName(
   if (actor.kind === ACTOR_KIND.PERSON && actor.you) {
     return inSentence(possessive ? "Your" : "You", sentence);
   }
+
   const name = (() => {
     switch (actor.kind) {
       case ACTOR_KIND.PERSON:
@@ -221,6 +223,7 @@ export function actorName(
         return githubName(actor);
     }
   })();
+
   return possessive ? `${name}’s` : name;
 }
 
@@ -240,19 +243,25 @@ export function personActor(
   if (ref === undefined) return { kind: ACTOR_KIND.SOMEONE, reason: SOMEONE_REASON.UNNAMED };
   const you = readerId !== undefined && ref.userId === readerId;
   const member = members?.find((each) => each.userId === ref.userId);
+
   if (members !== undefined && member === undefined && !you) {
     // Note that the read of who left names them as their account does now, so a name changed since the work stood is the new one.
     const named = former?.find((each) => each.userId === ref.userId);
+
     const left = {
       kind: ACTOR_KIND.SOMEONE,
       reason: SOMEONE_REASON.FORMER,
       name: named?.name ?? ref.name,
       userId: ref.userId,
     } as const;
+
     const pictureUrl = named?.pictureUrl;
+
     return pictureUrl === undefined ? left : { ...left, pictureUrl };
   }
+
   const person: PersonActor = { kind: ACTOR_KIND.PERSON, userId: ref.userId, name: ref.name, you };
+
   return member === undefined ? person : memberActor(member, readerId);
 }
 
@@ -266,6 +275,7 @@ export function memberActor(member: WorkspaceMember, readerId: string | undefine
     role: member.role,
     you: readerId !== undefined && member.userId === readerId,
   };
+
   return member.pictureUrl === undefined ? person : { ...person, pictureUrl: member.pictureUrl };
 }
 
@@ -287,7 +297,9 @@ export function accountActor(account: {
     email: account.email,
     you: true,
   };
+
   const { pictureUrl } = account;
+
   return pictureUrl === undefined ? person : { ...person, pictureUrl };
 }
 
@@ -309,13 +321,19 @@ export function creatorActor(
   account: PersonActor | undefined,
 ): Actor {
   const { createdBy, ownerId } = task;
+
   if (createdBy === undefined && ownerId === undefined) return DELETED_ACCOUNT_ACTOR;
+
   if (createdBy !== undefined) {
     return personActor(createdBy, reader.members, reader.readerId, reader.former);
   }
+
   const member = reader.members?.find((each) => each.userId === ownerId);
+
   if (member !== undefined) return memberActor(member, reader.readerId);
+
   if (ownerId === reader.readerId && account !== undefined) return account;
+
   return { kind: ACTOR_KIND.SOMEONE, reason: SOMEONE_REASON.UNNAMED };
 }
 
@@ -338,9 +356,11 @@ export function teammateCreator(
 ): Actor | undefined {
   const creatorId = task.createdBy?.userId ?? task.ownerId;
   const { readerId } = reader;
+
   if (creatorId === undefined || readerId === undefined || creatorId === readerId) {
     return undefined;
   }
+
   return creatorActor(task, reader, undefined);
 }
 
@@ -373,8 +393,11 @@ export function assigneeFace(
   reader: EditReader,
 ): AssigneeFace | undefined {
   const { assignee } = task;
+
   if (assignee === undefined) return soleMember(reader) ? undefined : { assignee: undefined };
+
   if (assignee.userId === reader.readerId) return undefined;
+
   return { assignee: personActor(assignee, reader.members, reader.readerId, reader.former) };
 }
 
@@ -401,10 +424,13 @@ export function originActor(
   agent: OriginAgent | undefined,
 ): Actor | undefined {
   if (origin === undefined) return undefined;
+
   if (origin.actor === DESCRIPTION_ACTOR.NOTETAKER) return APP_ACTOR;
+
   if (agent?.automationName !== undefined) {
     return { kind: ACTOR_KIND.AUTOMATION, name: agent.automationName, state: ACTOR_STATE.REST };
   }
+
   return {
     kind: ACTOR_KIND.AGENT,
     ...(origin.agentId === undefined ? undefined : { agentId: origin.agentId }),
@@ -502,7 +528,9 @@ export function latestActivity(
   actor: Actor,
 ): ActorActivity | undefined {
   const theirs = edits.filter((edit) => changedBy(edit, actor));
+
   if (theirs.length === 0) return undefined;
+
   return {
     sections: theirs.map((edit) => (edit.section === "" ? OPENING_SECTION : edit.section)),
     at: Math.max(...theirs.map((edit) => edit.at)),
@@ -528,6 +556,7 @@ function sameAgent(
   if (one.agentId === undefined || other.agentId === undefined) {
     return one.agentId === other.agentId && one.name === other.name;
   }
+
   return one.agentId === other.agentId;
 }
 
@@ -585,8 +614,11 @@ export function githubActor(person: GitHubPerson, place: GitHubPlace): Actor {
   if (person.userId !== undefined) {
     const member = place.members?.find((each) => each.userId === person.userId);
     const ref = { userId: person.userId, name: member?.name ?? person.login };
+
     return personActor(ref, place.members, place.readerId, place.former);
   }
+
   const actor: GitHubActor = { kind: ACTOR_KIND.GITHUB, login: person.login, bot: person.bot };
+
   return person.avatarUrl === undefined ? actor : { ...actor, avatarUrl: person.avatarUrl };
 }

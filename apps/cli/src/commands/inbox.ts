@@ -72,7 +72,9 @@ function threadsOf(
   return read.items
     .flatMap((entry) => {
       const task = tasks.get(entry.planId);
+
       if (task === undefined) return [];
+
       return [
         {
           id: entry.id,
@@ -96,15 +98,18 @@ const threadRead = Effect.fnUntraced(function* (thread: string) {
   const home = yield* askService(hosted.inbox.home, { id: thread });
   const { items } = yield* askService(hosted.inbox.agent, { id: home.agentId });
   const item = items.find((each) => each.id === thread);
+
   if (item === undefined) {
     return yield* new CommandFailed({ exit: CLI_EXIT.REFUSED, message: `No thread ${thread}.` });
   }
+
   return item;
 });
 
 /** Who wrote a message, as a line names them. */
 function authorOf(message: InboxMessage): string {
   if (message.author === INBOX_MESSAGE_AUTHOR.AGENT) return "Agent";
+
   return message.member?.name ?? "Member";
 }
 
@@ -122,8 +127,10 @@ function mediaLine(piece: InboxOptionMedia, at: number): string {
     case INBOX_OPTION_MEDIA.FILE: {
       const word =
         piece.mediaType === INBOX_FILE_TYPE.WEBM ? MEDIA_WORD.RECORDING : MEDIA_WORD.PICTURE;
+
       return `      ${word}: ${piece.caption ?? `${at + 1}`}`;
     }
+
     case INBOX_OPTION_MEDIA.PAGE:
       return `      ${MEDIA_WORD.PAGE}: ${piece.title} (page ${piece.pageId})`;
     case INBOX_OPTION_MEDIA.LINK:
@@ -139,10 +146,13 @@ function mediaLines(option: InboxOption): readonly string[] {
 /** An ask's lines: what it takes, and how to answer it with `inbox answer`. */
 function askLines(read: InboxReadAsk, thread: string): readonly string[] {
   const ask = knownAsk(read);
+
   if (ask === undefined) return ["An ask this version cannot show. Update vespin."];
+
   switch (ask.type) {
     case INBOX_ASK.DECIDE: {
       const recommended = new Set(recommendedLabels(ask));
+
       return [
         `Decide${ask.multiple === true ? " (pick one or more)" : ""}:`,
         ...ask.options.flatMap((option) => [
@@ -156,6 +166,7 @@ function askLines(read: InboxReadAsk, thread: string): readonly string[] {
         `Answer: vespin inbox answer ${thread} "<option>"`,
       ];
     }
+
     case INBOX_ASK.DO:
       return [
         "To do:",
@@ -166,6 +177,7 @@ function askLines(read: InboxReadAsk, thread: string): readonly string[] {
       if (ask.fields === undefined) {
         return ["Answer in your own words:", `Answer: vespin inbox answer ${thread} "<words>"`];
       }
+
       return [
         "Fill in:",
         ...ask.fields.map((field) =>
@@ -184,6 +196,7 @@ function askLines(read: InboxReadAsk, thread: string): readonly string[] {
 /** A thread's lines: its title and where it stands, its messages, and its open ask. */
 function threadLines(item: InboxItem): readonly string[] {
   const asking = openAskOf(item.thread ?? []);
+
   return [
     `${item.title}  [${item.status}]`,
     "",
@@ -233,11 +246,13 @@ const listCommand = Command.make(
       const { hosted } = yield* session;
       const read = yield* askService(hosted.inbox.account, {});
       const { plans } = yield* askService(hosted.plans.list, {});
+
       const tasks = new Map(
         plans
           .filter((plan) => plan.workspaceId === workspace.id)
           .map((plan) => [plan.id, plan.name]),
       );
+
       const threads = threadsOf(read, tasks).filter((thread) => !unread || thread.unread);
       yield* answer({
         json: { workspace: { id: workspace.id, slug: workspace.slug }, threads },
@@ -300,9 +315,11 @@ const answerCommand = Command.make(
   ({ thread, words, input }) =>
     Effect.gen(function* () {
       const item = yield* threadRead(thread);
+
       if (item.status !== INBOX_STATUS.OPEN) return yield* settled(item);
       const { hosted } = yield* session;
       const asking = openAskOf(item.thread ?? []);
+
       // Note that a thread that asks nothing is answered as the app's Got it does.
       if (asking === undefined && words.length === 0 && Option.isNone(input)) {
         const nodded = yield* askService(hosted.inbox.answer, {
@@ -313,18 +330,24 @@ const answerCommand = Command.make(
             clientKey: clientKey(),
           },
         });
+
         if (!nodded.taken) return yield* changedFirst(thread);
+
         return yield* written(nodded.item, "Acknowledged.");
       }
+
       const given = Option.isSome(input) ? yield* readInput(input.value) : undefined;
       const made = cliInboxAnswer(asking, { words, input: given });
+
       if ("refusal" in made) {
         return yield* new CommandFailed({ exit: CLI_EXIT.USAGE, message: made.refusal });
       }
+
       const sent = yield* askService(hosted.inbox.message, {
         params: { id: thread },
         body: { text: made.text, answers: made.answers, clientKey: clientKey() },
       });
+
       yield* written(sent.item, "Answered.");
     }),
 ).pipe(
@@ -354,14 +377,18 @@ const replyCommand = Command.make(
   ({ thread, input }) =>
     Effect.gen(function* () {
       const text = (yield* readInput(input)).trim();
+
       if (text === "") {
         return yield* new CommandFailed({ exit: CLI_EXIT.USAGE, message: "The message is empty." });
       }
+
       const { hosted } = yield* session;
+
       const sent = yield* askService(hosted.inbox.message, {
         params: { id: thread },
         body: { text, clientKey: clientKey() },
       });
+
       yield* written(sent.item, "Sent.");
     }),
 ).pipe(
@@ -387,9 +414,11 @@ const closeCommand = Command.make(
   ({ thread, input }) =>
     Effect.gen(function* () {
       const item = yield* threadRead(thread);
+
       if (item.status !== INBOX_STATUS.OPEN) return yield* settled(item);
       const note = Option.isSome(input) ? (yield* readInput(input.value)).trim() : "";
       const { hosted } = yield* session;
+
       const closed = yield* askService(hosted.inbox.close, {
         params: { id: thread },
         body: {
@@ -398,6 +427,7 @@ const closeCommand = Command.make(
           ...(note === "" ? undefined : { text: note }),
         },
       });
+
       if (!closed.taken) return yield* changedFirst(thread);
       yield* written(closed.item, "Closed.");
     }),
@@ -475,20 +505,26 @@ const remindCommand = Command.make(
           message: "Name when it comes back, or --clear to end its reminder.",
         });
       }
+
       const now = yield* Clock.currentTimeMillis;
       const remind = clear ? { at: null } : cliRemindAt(when.join(" "), now, readerZone());
+
       if ("refusal" in remind) {
         return yield* new CommandFailed({ exit: CLI_EXIT.USAGE, message: remind.refusal });
       }
+
       const { hosted } = yield* session;
+
       const marked = yield* askService(hosted.inbox.remindItem, {
         params: { id: thread },
         body: { until: remind.at },
       });
+
       const line =
         remind.at === null
           ? "Reminder ended."
           : `Out of your inbox until ${new Date(remind.at).toLocaleString()}.`;
+
       yield* answer({
         json: { ...marked, remindAt: remind.at },
         lines: [line],
@@ -522,11 +558,14 @@ const startCommand = Command.make(
   ({ agent, title, input }) =>
     Effect.gen(function* () {
       const text = (yield* readInput(input)).trim();
+
       if (text === "") {
         return yield* new CommandFailed({ exit: CLI_EXIT.USAGE, message: "The message is empty." });
       }
+
       const { hosted } = yield* session;
       const subject = Option.getOrUndefined(title)?.trim();
+
       const sent = yield* askService(
         hosted.inbox.start,
         {
@@ -537,6 +576,7 @@ const startCommand = Command.make(
         },
         HOSTED_DEADLINE.STEER,
       );
+
       yield* written(sent.item, `Started ${sent.item.id}.`);
     }),
 ).pipe(

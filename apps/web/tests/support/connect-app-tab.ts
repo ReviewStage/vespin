@@ -39,10 +39,12 @@ function emptyTab(storage: Map<string, string>): ConnectTab {
 /** The app's tab, having handed `connects` connects off to tabs of their own. */
 export async function appTab(connects: number): Promise<AppTab> {
   const storages: Map<string, string>[] = [];
+
   const browser: ConnectBrowser = {
     openEmptyTab: () => {
       const storage = new Map<string, string>();
       storages.push(storage);
+
       return emptyTab(storage);
     },
     navigate: () => undefined,
@@ -50,23 +52,31 @@ export async function appTab(connects: number): Promise<AppTab> {
     address: () => PANEL_PATH,
     openLink: () => undefined,
   };
+
   const tabs = connectTabs(browser);
+
   // Only the account's GitHub connect is answered here.
   const host: Partial<ActPortClient> = {
     [ACT_KIND.GITHUB_CONNECT]: async () => {
       tabs.open("https://provider.example/oauth/authorize");
     },
   };
+
   // SAFETY: the connect wraps the procedures it names and hands every other one through untouched, so only the one called need be answered.
   const port = tabs.portClient(host as ActPortClient);
+
   for (let connect = 0; connect < connects; connect += 1) {
     await port[ACT_KIND.GITHUB_CONNECT]();
   }
+
   listening.add(tabs.listen());
+
   return {
     landIn: (connect) => {
       const storage = storages[connect];
+
       if (storage === undefined) throw new Error(`No connect ${connect} was handed off.`);
+
       for (const [key, value] of storage) sessionStorage.setItem(key, value);
     },
   };

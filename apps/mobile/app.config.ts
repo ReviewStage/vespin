@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
 import { CLAWD_PATH, GITHUB_PATH, GOOGLE_MARK_LAYERS } from "@repo/brand/provider-marks";
+import { Predicate } from "effect";
 import type { ConfigContext, ExpoConfig } from "expo/config";
 import { IOSConfig, withDangerousMod, withXcodeProject } from "expo/config-plugins";
 
@@ -30,6 +31,19 @@ const APP_GROUP_PLIST_KEY = "VespinAppGroup";
 const APP_GROUPS_ENTITLEMENT = "com.apple.security.application-groups";
 const APP_GROUP_ENTITLEMENTS = { [APP_GROUPS_ENTITLEMENT]: [APP_GROUP] } as const;
 
+/**
+ * The Keychain group the app and its share extension alone share, which
+ * holds one item: the account's current access token, which the share sheet
+ * starts a task with (`modules/share-token/`). Each target names it in its
+ * Info.plist under its own key, so Swift reads it rather than spelling it
+ * again, the team's prefix filled in as it is signed. The app lists its own
+ * group first, so every other item it keeps stays where it was, out of the
+ * extension's reach.
+ */
+const SHARE_KEYCHAIN_GROUP = `$(AppIdentifierPrefix)${BUNDLE_IDENTIFIER}.share`;
+const SHARE_KEYCHAIN_GROUP_PLIST_KEY = "VespinShareKeychainGroup";
+const KEYCHAIN_GROUPS_ENTITLEMENT = "keychain-access-groups";
+
 const ACCENT_COLOR_NAME = "AccentColor";
 
 // The app's icon: the Icon Composer bundle iOS 26 and later draw, and the
@@ -41,6 +55,7 @@ const ICON = {
   MARKETING: "../../packages/brand/assets/icon/icon-ios-1024.png",
   SIDE: 1024,
 };
+
 // A PNG's IHDR color type for 8-bit RGB with no alpha channel, the one App
 // Store Connect takes for an app icon (ITMS-90717).
 const PNG_COLOR_TYPE_RGB = 2;
@@ -100,6 +115,11 @@ const PICTURE_SETS = [
   },
 ] as const;
 
+/** One build configuration of the Xcode project, as its section holds it: its settings by name. */
+interface XcodeBuildConfiguration {
+  buildSettings?: Record<string, string>;
+}
+
 /**
  * A Swift file an app extension builds, copied into its folder beside the
  * app's from the app's directory, under a name of its own (`AS`) where
@@ -123,10 +143,11 @@ type PlistValue =
 /**
  * An app extension the app embeds: its target, the bundle id automatic
  * signing registers beside the app's, its Swift (the app's native code),
- * its extension point and, where the point names one, its principal class,
- * the brand's colors its asset catalog holds, by the name its Swift reads
- * each by, Lucide's glyphs it holds as symbols, and the entitlements it is
- * signed with.
+ * its extension point and, where the point names them, its principal class
+ * and attributes, the brand's colors its asset catalog holds, by the name
+ * its Swift reads each by, Lucide's glyphs it holds as symbols, the
+ * entitlements it is signed with, and any other keys its Info.plist carries
+ * over the rest.
  */
 type AppExtension = {
   readonly TARGET: string;
@@ -134,21 +155,25 @@ type AppExtension = {
   readonly SOURCES: readonly ExtensionFile[];
   readonly EXTENSION_POINT: string;
   readonly PRINCIPAL_CLASS?: string;
+  readonly ATTRIBUTES?: Readonly<Record<string, PlistValue>>;
   readonly COLORS?: Readonly<Record<string, keyof typeof BRAND_PALETTE.LIGHT>>;
   readonly SYMBOLS?: readonly string[];
   readonly ENTITLEMENTS?: Readonly<Record<string, PlistValue>>;
+  readonly INFO?: Readonly<Record<string, PlistValue>>;
 };
 
-const EXTENSION_ASSET_CATALOG = "Assets.xcassets";
 const EXTENSION_SWIFT_VERSION = "5.0";
+
 // What an asset catalog's own Contents.json says, as Xcode writes it.
 const ASSET_CATALOG_INFO = { info: { author: "xcode", version: 1 } };
 
-// Note that each extension's Info.plist is named for its target, because the
-// xcode library's addPbxGroup reuses a file reference of the same path, so a
-// second extension's `Info.plist` would join the first's reference.
+// Note that each extension's Info.plist, entitlements, and asset catalog are
+// named for its target, because the xcode library's addPbxGroup reuses a
+// file reference of the same path, so a second extension's `Info.plist` or
+// `Assets.xcassets` would join the first's reference.
 const extensionPlistName = (extension: AppExtension) => `${extension.TARGET}-Info.plist`;
 const extensionEntitlementsName = (extension: AppExtension) => `${extension.TARGET}.entitlements`;
+const extensionCatalogName = (extension: AppExtension) => `${extension.TARGET}.xcassets`;
 
 // The Inbox widget's snapshot as the app keeps it in the App Group: the
 // widget reads it, and the Notification Service Extension moves it on a push.
@@ -203,6 +228,39 @@ const LIVE_ACTIVITY: AppExtension = {
   ENTITLEMENTS: APP_GROUP_ENTITLEMENTS,
 };
 
+// The share extension: the system's share sheet offers the app for text and
+// a web link, and its sheet keeps what was shared as New task's draft
+// (`share-extension/`), named in the share sheet as the app is.
+const SHARE_EXTENSION: AppExtension = {
+  TARGET: "ShareExtension",
+  BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.ShareExtension`,
+  SOURCES: [
+    { FROM: "share-extension", NAME: "ShareViewController.swift" },
+    { FROM: "share-extension", NAME: "ShareSheet.swift" },
+    { FROM: "share-extension", NAME: "SharedItems.swift" },
+    { FROM: "share-extension", NAME: "AppGroupFiles.swift" },
+    { FROM: "share-extension", NAME: "ShareStart.swift" },
+    { FROM: "share-extension", NAME: "ShareNotice.swift" },
+    { FROM: "modules/share-token/ios", NAME: "ShareToken.swift" },
+  ],
+  EXTENSION_POINT: "com.apple.share-services",
+  PRINCIPAL_CLASS: "ShareViewController",
+  ATTRIBUTES: {
+    NSExtensionActivationRule: {
+      NSExtensionActivationSupportsText: true,
+      NSExtensionActivationSupportsWebURLWithMaxCount: 1,
+      // Note that this is the share sheet's picture count, one per draft picture file (`SHARE_DRAFT_PICTURE_FILES`).
+      NSExtensionActivationSupportsImageWithMaxCount: 4,
+    },
+  },
+  COLORS: { AccentColor: "ACCENT" },
+  ENTITLEMENTS: {
+    ...APP_GROUP_ENTITLEMENTS,
+    [KEYCHAIN_GROUPS_ENTITLEMENT]: [SHARE_KEYCHAIN_GROUP],
+  },
+  INFO: { CFBundleDisplayName: "Vespin", [SHARE_KEYCHAIN_GROUP_PLIST_KEY]: SHARE_KEYCHAIN_GROUP },
+};
+
 // The build number TestFlight orders uploads by: release-ios.yml names its
 // run in it, and a local build, which never uploads, is build 1.
 const BUILD_NUMBER = process.env.VESPIN_IOS_BUILD_NUMBER ?? "1";
@@ -232,6 +290,7 @@ const SPLASH = {
 // `iosColor` in generate-brand-assets.mjs is the same conversion in its own format.
 const channel = (hex: string, at: number) =>
   (Number.parseInt(hex.slice(at, at + 2), 16) / 255).toFixed(4);
+
 const colorComponents = (hex: string) => ({
   red: channel(hex, 1),
   green: channel(hex, 3),
@@ -242,10 +301,11 @@ const colorComponents = (hex: string) => ({
 // An asset catalog's color set of one of the brand's colors, light and dark.
 const colorSet = (role: keyof typeof BRAND_PALETTE.LIGHT) => {
   const entry = (hex: string, dark: boolean) => ({
-    ...(dark ? { appearances: [{ appearance: "luminosity", value: "dark" }] } : {}),
+    ...(dark && { appearances: [{ appearance: "luminosity", value: "dark" }] }),
     color: { "color-space": "srgb", components: colorComponents(hex) },
     idiom: "universal",
   });
+
   return {
     colors: [entry(BRAND_PALETTE.LIGHT[role], false), entry(BRAND_PALETTE.DARK[role], true)],
     info: { author: "xcode", version: 1 },
@@ -264,22 +324,32 @@ const withAccentColor = (config: ExpoConfig): ExpoConfig => {
         "Images.xcassets",
         `${ACCENT_COLOR_NAME}.colorset`,
       );
+
       mkdirSync(catalog, { recursive: true });
       writeFileSync(
         join(catalog, "Contents.json"),
         `${JSON.stringify(colorSet("ACCENT"), null, 2)}\n`,
       );
+
       return modConfig;
     },
   ]);
+
   return withXcodeProject(written, (modConfig) => {
+    // SAFETY: the Xcode project's build configuration section is an object keyed by configuration id.
     for (const settings of Object.values(
-      modConfig.modResults.pbxXCBuildConfigurationSection() as Record<string, unknown>,
+      modConfig.modResults.pbxXCBuildConfigurationSection() as Record<
+        string,
+        XcodeBuildConfiguration | string
+      >,
     )) {
-      const build = (settings as { buildSettings?: Record<string, string> }).buildSettings;
+      // Note that a section's comment entries are strings, which carry no build settings.
+      const build = Predicate.isString(settings) ? undefined : settings.buildSettings;
+
       if (build?.PRODUCT_NAME)
         build.ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = ACCENT_COLOR_NAME;
     }
+
     return modConfig;
   });
 };
@@ -295,18 +365,22 @@ const withMarketingIcon = (config: ExpoConfig): ExpoConfig =>
       const { projectRoot } = modConfig.modRequest;
       const png = readFileSync(join(projectRoot, ICON.MARKETING));
       const [width, height, colorType] = [png.readUInt32BE(16), png.readUInt32BE(20), png[25]];
+
       if (width !== ICON.SIDE || height !== ICON.SIDE || colorType !== PNG_COLOR_TYPE_RGB)
         throw new Error(
           `${ICON.MARKETING} must be a ${ICON.SIDE}x${ICON.SIDE} RGB PNG with no alpha; it is ${width}x${height}, color type ${colorType}`,
         );
+
       const iconSet = join(
         IOSConfig.Paths.getSourceRoot(projectRoot),
         "Images.xcassets",
         `${basename(ICON.BUNDLE, ".icon")}.appiconset`,
       );
+
       mkdirSync(iconSet, { recursive: true });
       const file = basename(ICON.MARKETING);
       writeFileSync(join(iconSet, file), png);
+
       const contents = {
         images: [
           {
@@ -318,7 +392,9 @@ const withMarketingIcon = (config: ExpoConfig): ExpoConfig =>
         ],
         info: { author: "xcode", version: 1 },
       };
+
       writeFileSync(join(iconSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
+
       return modConfig;
     },
   ]);
@@ -329,10 +405,12 @@ const writeSymbolSet = (catalog: string, name: string, svg: string) => {
   const symbolSet = join(catalog, `${name}.symbolset`);
   mkdirSync(symbolSet, { recursive: true });
   writeFileSync(join(symbolSet, `${name}.svg`), svg);
+
   const contents = {
     info: { author: "xcode", version: 1 },
     symbols: [{ filename: `${name}.svg`, idiom: "universal" }],
   };
+
   writeFileSync(join(symbolSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
 };
 
@@ -343,11 +421,17 @@ const plistText = (text: string) =>
 // A plist value as XML, indented by `depth` tabs.
 const plistXml = (value: PlistValue, depth: number): string => {
   const indent = "\t".repeat(depth);
-  if (typeof value === "string") return `${indent}<string>${plistText(value)}</string>`;
-  if (typeof value === "boolean") return `${indent}<${value}/>`;
-  if (typeof value === "number") return `${indent}<integer>${value}</integer>`;
+
+  if (Predicate.isString(value)) return `${indent}<string>${plistText(value)}</string>`;
+
+  if (Predicate.isBoolean(value)) return `${indent}<${value}/>`;
+
+  if (Predicate.isNumber(value)) return `${indent}<integer>${value}</integer>`;
+
   if (Array.isArray(value))
     return `${indent}<array>\n${value.map((item) => plistXml(item, depth + 1)).join("\n")}\n${indent}</array>`;
+
+  // SAFETY: the branches above take every PlistValue but a dictionary.
   return `${indent}<dict>\n${plistEntries(value as Record<string, PlistValue>, depth + 1)}\n${indent}</dict>`;
 };
 
@@ -369,9 +453,10 @@ ${plistXml(entries, 0)}
 </plist>
 `;
 
-// An extension's Info.plist: its extension point and, where it has one, its
-// principal class, the app's version and build, which App Store Connect
-// refuses an extension to differ from, and the App Group where it shares it.
+// An extension's Info.plist: its extension point and, where it has them, its
+// principal class and attributes, the app's version and build, which App
+// Store Connect refuses an extension to differ from, the App Group where it
+// shares it, and its own keys over the rest.
 const extensionPlist = (extension: AppExtension, version: string, build: string) =>
   plistDocument({
     CFBundleDevelopmentRegion: "$(DEVELOPMENT_LANGUAGE)",
@@ -388,10 +473,14 @@ const extensionPlist = (extension: AppExtension, version: string, build: string)
       ...(extension.PRINCIPAL_CLASS === undefined
         ? undefined
         : { NSExtensionPrincipalClass: `$(PRODUCT_MODULE_NAME).${extension.PRINCIPAL_CLASS}` }),
+      ...(extension.ATTRIBUTES === undefined
+        ? undefined
+        : { NSExtensionAttributes: extension.ATTRIBUTES }),
     },
     ...(extension.ENTITLEMENTS?.[APP_GROUPS_ENTITLEMENT] === undefined
       ? undefined
       : { [APP_GROUP_PLIST_KEY]: APP_GROUP }),
+    ...extension.INFO,
   });
 
 // Note that Expo has no setting for an app extension, so each extension's
@@ -405,68 +494,83 @@ const extensionPlist = (extension: AppExtension, version: string, build: string)
 // reaches it.
 const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConfig => {
   const colors = Object.entries(extension.COLORS ?? {});
+
   const symbols = LUCIDE_SYMBOL_TEMPLATES.filter(({ name }) =>
     (extension.SYMBOLS ?? []).includes(name),
   );
+
   const catalogued = colors.length > 0 || symbols.length > 0;
+
   const written = withDangerousMod(config, [
     "ios",
     (modConfig) => {
       const { projectRoot, platformProjectRoot } = modConfig.modRequest;
       const folder = join(platformProjectRoot, extension.TARGET);
       mkdirSync(folder, { recursive: true });
+
       for (const file of extension.SOURCES)
         copyFileSync(join(projectRoot, file.FROM, file.NAME), join(folder, copiedName(file)));
       writeFileSync(
         join(folder, extensionPlistName(extension)),
         extensionPlist(extension, modConfig.version ?? "1.0", modConfig.ios?.buildNumber ?? "1"),
       );
+
       if (extension.ENTITLEMENTS !== undefined)
         writeFileSync(
           join(folder, extensionEntitlementsName(extension)),
           plistDocument(extension.ENTITLEMENTS),
         );
+
       if (catalogued) {
-        const catalog = join(folder, EXTENSION_ASSET_CATALOG);
+        const catalog = join(folder, extensionCatalogName(extension));
         mkdirSync(catalog, { recursive: true });
         writeFileSync(
           join(catalog, "Contents.json"),
           `${JSON.stringify(ASSET_CATALOG_INFO, null, 2)}\n`,
         );
       }
+
       for (const [name, role] of colors) {
-        const set = join(folder, EXTENSION_ASSET_CATALOG, `${name}.colorset`);
+        const set = join(folder, extensionCatalogName(extension), `${name}.colorset`);
         mkdirSync(set, { recursive: true });
         writeFileSync(join(set, "Contents.json"), `${JSON.stringify(colorSet(role), null, 2)}\n`);
       }
+
       for (const { name, svg } of symbols)
-        writeSymbolSet(join(folder, EXTENSION_ASSET_CATALOG), name, svg);
+        writeSymbolSet(join(folder, extensionCatalogName(extension)), name, svg);
+
       return modConfig;
     },
   ]);
+
   return withXcodeProject(written, (modConfig) => {
     const project = modConfig.modResults;
     const sources = extension.SOURCES.map(copiedName);
-    const resources = catalogued ? [EXTENSION_ASSET_CATALOG] : [];
+    const resources = catalogued ? [extensionCatalogName(extension)] : [];
+
     const entitlements =
       extension.ENTITLEMENTS === undefined ? [] : [extensionEntitlementsName(extension)];
+
     if (!project.pbxTargetByName(extension.TARGET)) {
       const group = project.addPbxGroup(
         [...sources, ...resources, extensionPlistName(extension), ...entitlements],
         extension.TARGET,
         extension.TARGET,
       );
+
       project.addToPbxGroup(group.uuid, project.getFirstProject().firstProject.mainGroup);
       // Note that the xcode library's addTarget writes into these sections without making them, and a fresh Expo project has neither.
       const objects = project.hash.project.objects;
       objects.PBXTargetDependency ??= {};
       objects.PBXContainerItemProxy ??= {};
+
       const target = project.addTarget(
         extension.TARGET,
         "app_extension",
         extension.TARGET,
         extension.BUNDLE_IDENTIFIER,
       );
+
       project.addBuildPhase(sources, "PBXSourcesBuildPhase", "Sources", target.uuid);
       project.addBuildPhase(resources, "PBXResourcesBuildPhase", "Resources", target.uuid);
       project.addBuildPhase([], "PBXFrameworksBuildPhase", "Frameworks", target.uuid);
@@ -474,13 +578,18 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
       // A target made before a source joined it builds that source too, in its group as a new target's are.
       const target = project.findTargetKey(extension.TARGET);
       const group = project.findPBXGroupKey({ name: extension.TARGET });
+
       for (const source of sources)
         if (!project.hasFile(source)) project.addSourceFile(source, { target }, group);
     }
+
+    // SAFETY: the Xcode project's build configuration section is an object keyed by configuration id.
     for (const settings of Object.values(
-      project.pbxXCBuildConfigurationSection() as Record<string, unknown>,
+      project.pbxXCBuildConfigurationSection() as Record<string, XcodeBuildConfiguration | string>,
     )) {
-      const build = (settings as { buildSettings?: Record<string, string> }).buildSettings;
+      // Note that a section's comment entries are strings, which carry no build settings.
+      const build = Predicate.isString(settings) ? undefined : settings.buildSettings;
+
       if (build?.PRODUCT_NAME !== `"${extension.TARGET}"`) continue;
       Object.assign(build, {
         CODE_SIGN_STYLE: "Automatic",
@@ -498,6 +607,7 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
           : { CODE_SIGN_ENTITLEMENTS: `${extension.TARGET}/${entitlements[0]}` }),
       });
     }
+
     return modConfig;
   });
 };
@@ -514,9 +624,11 @@ const withStopAgentIntent = (config: ExpoConfig): ExpoConfig => {
         join(projectRoot, STOP_AGENT_INTENT.FROM, STOP_AGENT_INTENT.NAME),
         join(IOSConfig.Paths.getSourceRoot(projectRoot), STOP_AGENT_INTENT.NAME),
       );
+
       return modConfig;
     },
   ]);
+
   return withXcodeProject(written, (modConfig) => {
     const project = modConfig.modResults;
     const projectName = IOSConfig.XcodeUtils.getProjectName(modConfig.modRequest.projectRoot);
@@ -527,6 +639,7 @@ const withStopAgentIntent = (config: ExpoConfig): ExpoConfig => {
       project,
       targetUuid: app.uuid,
     });
+
     return modConfig;
   });
 };
@@ -546,22 +659,27 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
     (modConfig) => {
       const { projectRoot } = modConfig.modRequest;
       const catalog = join(IOSConfig.Paths.getSourceRoot(projectRoot), "Images.xcassets");
+
       const svgOf = (source: ImageSource) =>
         "FILE" in source ? readFileSync(join(projectRoot, source.FILE), "utf8") : source.SVG;
+
       for (const set of IMAGE_SETS) {
         const imageSet = join(catalog, `${set.NAME}.imageset`);
         mkdirSync(imageSet, { recursive: true });
+
         const appearances = [
           { file: `${set.NAME}.svg`, source: set.LIGHT, dark: false },
           ...("DARK" in set
             ? [{ file: `${set.NAME}-dark.svg`, source: set.DARK, dark: true }]
             : []),
         ];
+
         for (const { file, source } of appearances)
           writeFileSync(join(imageSet, file), svgOf(source));
+
         const contents = {
           images: appearances.map(({ file, dark }) => ({
-            ...(dark ? { appearances: [{ appearance: "luminosity", value: "dark" }] } : {}),
+            ...(dark && { appearances: [{ appearance: "luminosity", value: "dark" }] }),
             filename: file,
             idiom: "universal",
           })),
@@ -571,13 +689,17 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
             "template-rendering-intent": set.TEMPLATE ? "template" : "original",
           },
         };
+
         writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
       }
+
       for (const set of PICTURE_SETS) {
         const imageSet = join(catalog, `${set.NAME}.imageset`);
         mkdirSync(imageSet, { recursive: true });
+
         for (const { FILE } of set.SCALES)
           copyFileSync(join(projectRoot, FILE), join(imageSet, basename(FILE)));
+
         const contents = {
           images: set.SCALES.map(({ FILE, SCALE }) => ({
             filename: basename(FILE),
@@ -587,9 +709,12 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
           info: { author: "xcode", version: 1 },
           properties: { "template-rendering-intent": "original" },
         };
+
         writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
       }
+
       for (const { name, svg } of LUCIDE_SYMBOL_TEMPLATES) writeSymbolSet(catalog, name, svg);
+
       return modConfig;
     },
   ]);
@@ -614,15 +739,29 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       deploymentTarget: "26.0",
       supportsTablet: true,
       icon: ICON.BUNDLE,
-      // The app's universal links, and the sign-in's HTTPS callback, which
+      // The app's universal links, the sign-in's HTTPS callback, which
       // `ASWebAuthenticationSession` catches only on a host the app shares
-      // web credentials with.
-      associatedDomains: [`applinks:${ASSOCIATED_DOMAIN}`, `webcredentials:${ASSOCIATED_DOMAIN}`],
+      // web credentials with, and a page of the host another device hands
+      // off as its browser would, such as the Mac app's, which another team
+      // signs and so can't hand off the app's own activity type.
+      associatedDomains: [
+        `applinks:${ASSOCIATED_DOMAIN}`,
+        `webcredentials:${ASSOCIATED_DOMAIN}`,
+        `activitycontinuation:${ASSOCIATED_DOMAIN}`,
+      ],
       // The TestFlight build takes its pushes from production APNs, which
       // the distribution profile release-ios.yml exports it with allows; a
       // simulator build is unsigned and carries no entitlement at all.
-      // The App Group it shares files with its extensions through.
-      entitlements: { "aps-environment": "production", ...APP_GROUP_ENTITLEMENTS },
+      // The App Group it shares files with its extensions through, and the
+      // Keychain group it shares the share sheet's token through, after its own.
+      entitlements: {
+        "aps-environment": "production",
+        ...APP_GROUP_ENTITLEMENTS,
+        [KEYCHAIN_GROUPS_ENTITLEMENT]: [
+          `$(AppIdentifierPrefix)${BUNDLE_IDENTIFIER}`,
+          SHARE_KEYCHAIN_GROUP,
+        ],
+      },
       // Declared exempt from US export rules, so App Store Connect stops
       // asking on every build: the app's one cipher of its own (the host's
       // sealed files, `keychain-cipher.ts`) protects only its own data at
@@ -641,7 +780,13 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
         // `@repo/features/ios-system-activity`'s header, since this file
         // reaches no module that loads Effect.
         NSUserActivityTypes: ["dev.vespin.viewing"],
+        // Save to Photos on a picture's or a recording's menu asks for
+        // add-only access the first time (`src/keeping.ts`), which reads
+        // nothing of the library.
+        NSPhotoLibraryAddUsageDescription:
+          "Vespin saves the pictures and recordings you choose to your library.",
         [APP_GROUP_PLIST_KEY]: APP_GROUP,
+        [SHARE_KEYCHAIN_GROUP_PLIST_KEY]: SHARE_KEYCHAIN_GROUP,
       },
     },
     plugins: [
@@ -688,11 +833,11 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
   });
 
 // The images the screens draw and the flat app icon, written into the asset
-// catalog over the rest, and the Notification Service Extension and the Live
-// Activity's widget extension beside the app, with the Stop intent the
-// widget draws built into the app as well.
+// catalog over the rest, and the Notification Service Extension, the Live
+// Activity's widget extension, and the share extension beside the app, with
+// the Stop intent the widget draws built into the app as well.
 const config = (context?: ConfigContext): ExpoConfig =>
-  [NOTIFICATION_SERVICE, LIVE_ACTIVITY].reduce(
+  [NOTIFICATION_SERVICE, LIVE_ACTIVITY, SHARE_EXTENSION].reduce(
     withAppExtension,
     withStopAgentIntent(withMarketingIcon(withImageSets(baseConfig(context)))),
   );

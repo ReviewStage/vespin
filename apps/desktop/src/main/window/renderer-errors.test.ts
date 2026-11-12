@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { afterEach, test, vi } from "vitest";
+import { EventEmitter } from "node:events";
+import { afterEach, test } from "vitest";
 import { reportRendererErrors } from "./renderer-errors";
 
 /**
@@ -9,31 +10,28 @@ import { reportRendererErrors } from "./renderer-errors";
  * withheld but for the fact of it, and once the reporting stops no
  * window says anything, whether it was open before or opened after.
  *
- * Note that Electron's module is replaced whole, because it is the operating
- * system's door and answers nothing outside an Electron process.
+ * Note that windows are announced by a stand-in for Electron's `app`, because
+ * it is the operating system's door and answers nothing outside an Electron
+ * process.
  */
 
-const { electronApp, FakeWindow } = await vi.hoisted(async () => {
-  const { EventEmitter } = await import("node:events");
-  /** A window as Electron opens it: a page at an address, whose console speaks through its contents' events. */
-  class FakeWindow {
-    readonly webContents: InstanceType<typeof EventEmitter> & { getURL: () => string };
-    constructor(url: string) {
-      this.webContents = Object.assign(new EventEmitter(), { getURL: () => url });
-    }
-    log(level: string, message: string): void {
-      this.webContents.emit("console-message", {
-        level,
-        message,
-        lineNumber: 12,
-        sourceId: "file:///Applications/Vespin.app/renderer/index.js",
-      });
-    }
+/** A window as Electron opens it: a page at an address, whose console speaks through its contents' events. */
+class FakeWindow {
+  readonly webContents: InstanceType<typeof EventEmitter> & { getURL: () => string };
+  constructor(url: string) {
+    this.webContents = Object.assign(new EventEmitter(), { getURL: () => url });
   }
-  return { electronApp: new EventEmitter(), FakeWindow };
-});
+  log(level: string, message: string): void {
+    this.webContents.emit("console-message", {
+      level,
+      message,
+      lineNumber: 12,
+      sourceId: "file:///Applications/Vespin.app/renderer/index.js",
+    });
+  }
+}
 
-vi.mock("electron", () => ({ app: electronApp }));
+const electronApp = new EventEmitter();
 
 afterEach(() => {
   electronApp.removeAllListeners();
@@ -43,12 +41,13 @@ afterEach(() => {
 function open(document: string): InstanceType<typeof FakeWindow> {
   const window = new FakeWindow(`file:///Applications/Vespin.app/renderer/${document}`);
   electronApp.emit("browser-window-created", {}, window);
+
   return window;
 }
 
 test("each error a window logs is one line naming its document, and a warning is none", () => {
   const lines: string[] = [];
-  reportRendererErrors((line) => lines.push(line));
+  reportRendererErrors((line) => lines.push(line), electronApp);
 
   const panel = open("index.html");
   panel.log("warning", "the microphone is slow to answer");
@@ -61,7 +60,7 @@ test("each error a window logs is one line naming its document, and a warning is
 
 test("an error naming an access token says only that one happened, and none of its words", () => {
   const lines: string[] = [];
-  reportRendererErrors((line) => lines.push(line));
+  reportRendererErrors((line) => lines.push(line), electronApp);
 
   open("index.html").log(
     "error",
@@ -75,7 +74,7 @@ test("an error naming an access token says only that one happened, and none of i
 
 test("once the reporting stops, no window says anything, open before or opened after", () => {
   const lines: string[] = [];
-  const stop = reportRendererErrors((line) => lines.push(line));
+  const stop = reportRendererErrors((line) => lines.push(line), electronApp);
   const panel = open("index.html");
   stop();
 

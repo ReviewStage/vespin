@@ -40,6 +40,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const HEAD = "0123456789abcdef0123456789abcdef01234567";
 const PINNED = "89abcdef0123456789abcdef0123456789abcdef";
 const PATH = "src/seats.ts";
+
 const TEXT = [
   "const seats = 3;",
   "const invited = 0;",
@@ -82,6 +83,7 @@ type ReadFileWindow = (request: TaskFileRequest) => Promise<TasksFileAnswer>;
 function service(asked: TaskFileRequest[]): ReadFileWindow {
   return (request) => {
     asked.push(request);
+
     const answer: TasksFileAnswer =
       request.raw === true
         ? { text: { path: PATH, repository: "acme/relay", branch: "main", text: TEXT } }
@@ -96,6 +98,7 @@ function service(asked: TaskFileRequest[]): ReadFileWindow {
               lines: ["const seats = 3;"],
             },
           };
+
     return Promise.resolve(answer);
   };
 }
@@ -117,6 +120,7 @@ function drawTab(file: OpenFile, read: ReadFileWindow): HTMLElement {
       ),
     ),
   );
+
   return container;
 }
 
@@ -124,6 +128,7 @@ function drawTab(file: OpenFile, read: ReadFileWindow): HTMLElement {
 async function tab(file: OpenFile, read: ReadFileWindow): Promise<HTMLElement> {
   const container = drawTab(file, read);
   await wholeFileDrawn(container);
+
   return container;
 }
 
@@ -167,13 +172,17 @@ test("a File tab whose first read the service refused reads no whole text, and R
   const asked: TaskFileRequest[] = [];
   const read = service(asked);
   let refusing = true;
+
   const container = drawTab({ path: PATH, range: undefined, opened: 1 }, (request) => {
     if (!refusing) return read(request);
     asked.push(request);
+
     return Promise.resolve({ refusal: TASK_FILE_REFUSAL.UNAVAILABLE, branch: "main" });
   });
+
   const retry = () =>
     [...container.querySelectorAll("button")].find((button) => button.textContent === "Retry");
+
   await vi.waitFor(() => assert.equal(retry() === undefined, false));
 
   assert.deepEqual(asked, [{ path: PATH, firstLine: 1, lastLine: 1 }]);
@@ -193,17 +202,22 @@ test("a File tab opened again whose head read then fails asks for the head again
   const read = service(asked);
   const file = { path: PATH, range: undefined, opened: 1 };
   await tab(file, read);
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
 
   let failing = true;
+
   const container = drawTab(file, (request) => {
     if (!failing || request.raw === true) return read(request);
     asked.push(request);
+
     return Promise.reject(new Error("the host went away"));
   });
+
   const retry = () =>
     [...container.querySelectorAll("button")].find((button) => button.textContent === "Retry");
+
   await vi.waitFor(() => assert.equal(retry() === undefined, false));
   failing = false;
   act(() => retry()?.click());
@@ -217,10 +231,13 @@ test("a File tab pinned to a commit whose read the service refused reads it agai
   const asked: TaskFileRequest[] = [];
   const read = service(asked);
   const file = { path: PATH, range: undefined, opened: 1, commit: PINNED };
+
   const refusing = (request: TaskFileRequest) => {
     asked.push(request);
+
     return Promise.resolve({ refusal: TASK_FILE_REFUSAL.UNAVAILABLE, branch: "main" });
   };
+
   const first = drawTab(file, (request) => refusing({ ...request, ref: PINNED }));
   await vi.waitFor(() =>
     assert.equal(
@@ -228,6 +245,7 @@ test("a File tab pinned to a commit whose read the service refused reads it agai
       true,
     ),
   );
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.replaceChildren();
 

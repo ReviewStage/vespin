@@ -20,6 +20,7 @@
  * source on its whole transcript, its chip naming the source alone.
  */
 
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import { AGENT_PART } from "@repo/features/agent-parts";
 import type {
   AgentAttachment,
@@ -113,8 +114,11 @@ export function messageOpening(words: string): string {
     .split(/\s+/)
     .filter((word) => word !== "")
     .join(" ");
+
   let quote = whole.split(" ").slice(0, OPENING.WORDS).join(" ");
+
   if (quote.length > OPENING.CHARS) quote = quote.slice(0, OPENING.CHARS).trimEnd();
+
   return quote.length < whole.length ? `${quote}${ELLIPSIS}` : quote;
 }
 
@@ -130,9 +134,12 @@ export function forkChoice(source: AgentSummary): ModelChoice {
 /** Where a fork starts from: its source at its message, cut where it was seen to end while it was still being written, or on its whole transcript for a continue. */
 function forkFrom(fork: AgentFork): NonNullable<ForkStart["from"]> {
   const { agentId, messageId, messageSteps, messageStepParts } = fork;
+
   if (messageId === undefined) return { agentId };
+
   // Note that a settled message names no cut, so a service before the count still takes its fork.
   if (messageSteps === undefined) return { agentId, messageId };
+
   return messageStepParts === undefined
     ? { agentId, messageId, messageSteps }
     : { agentId, messageId, messageSteps, messageStepParts };
@@ -142,8 +149,9 @@ function forkFrom(fork: AgentFork): NonNullable<ForkStart["from"]> {
  * The Start a forked draft sends under its own key: from the source at its
  * message, a note where the box holds anything, its words and the files
  * with them, the servers the draft switched off, none among them as well,
- * and the choice only where one was made, since a fork otherwise runs on
- * the source's.
+ * the choice only where one was made, since a fork otherwise runs on
+ * the source's, and the permission mode only where one was picked, since a
+ * Start naming none starts on the member's Default permissions.
  */
 export function forkStart(input: {
   readonly draftId: string;
@@ -154,9 +162,12 @@ export function forkStart(input: {
   readonly disabledServers: readonly string[];
   /** Where the new agent runs, where one was picked; none for where its source runs. */
   readonly runsOn?: AgentRunsOnRequest | undefined;
+  /** The mode the new agent starts in, where one was picked; none for the member's Default permissions. */
+  readonly permissionMode?: AgentPermissionMode | undefined;
 }): ForkStart {
   const note = input.words.trim();
-  const { attachments, choice, disabledServers, runsOn } = input;
+  const { attachments, choice, disabledServers, runsOn, permissionMode } = input;
+
   return {
     idempotencyKey: input.draftId,
     from: forkFrom(input.fork),
@@ -166,6 +177,7 @@ export function forkStart(input: {
     disabledServers,
     ...(choice === undefined ? undefined : choiceRequest(choice)),
     ...(runsOn === undefined ? undefined : { runsOn }),
+    ...(permissionMode === undefined ? undefined : { permissionMode }),
   };
 }
 
@@ -199,6 +211,7 @@ export function openReply(
 /** Whether a part is a step's words or a call, which a fork's cut within a step counts as the service does. */
 function isCutPart(part: AgentTranscriptMessage["parts"][number]): boolean {
   if (!isRecord(part) || !isWireString(part.type)) return false;
+
   return part.type === AGENT_PART.TEXT || part.type.startsWith(TOOL_PART_TYPE_PREFIX);
 }
 
@@ -217,6 +230,7 @@ export function forkCutOf(
   if (message.id !== open) return undefined;
   const { parts } = message;
   const last = parts.findLastIndex((part) => isRecord(part) && part.type === AGENT_PART.STEP_START);
+
   return {
     messageSteps: parts.filter((part) => isRecord(part) && part.type === AGENT_PART.STEP_START)
       .length,
@@ -236,12 +250,16 @@ export function forksOf(
 ): ReadonlyMap<string, readonly string[]> {
   const forks = new Map<string, string[]>();
   const started = [...agents].sort((a, b) => a.createdAt - b.createdAt);
+
   for (const agent of started) {
     const messageId = agent.from?.agentId === sourceId ? agent.from.messageId : undefined;
+
     if (messageId === undefined) continue;
     const held = forks.get(messageId);
+
     if (held === undefined) forks.set(messageId, [agent.id]);
     else held.push(agent.id);
   }
+
   return forks;
 }

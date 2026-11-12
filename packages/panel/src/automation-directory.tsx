@@ -64,10 +64,12 @@ export function AutomationDirectory({
   const automations = read !== undefined && "automations" in read ? read.automations : undefined;
   const settled = read !== undefined;
   const workspaceName = workspace?.name;
+
   const shelf = useMemo(
     () => ({ automations, workspaceId, workspaceName, reading, settled, onOpen }),
     [automations, workspaceId, workspaceName, reading, settled, onOpen],
   );
+
   return <ShelfContext.Provider value={shelf}>{children}</ShelfContext.Provider>;
 }
 
@@ -86,9 +88,11 @@ export function AutomationsWanted({
   children: ReactNode;
 }): ReactNode {
   const outer = useContext(ShelfContext);
+
   if (!wanted || outer === undefined || outer.reading || outer.workspaceId === undefined) {
     return children;
   }
+
   return (
     <AutomationDirectory
       workspace={{ id: outer.workspaceId, name: outer.workspaceName ?? "" }}
@@ -103,9 +107,12 @@ export function AutomationsWanted({
 /** The automation `automationId` names, as the directory standing around the caller knows it; none while the list is unread, or it lists no such automation. */
 export function useAutomation(automationId: string | undefined): KnownAutomation | undefined {
   const shelf = useContext(ShelfContext);
+
   if (shelf === undefined || automationId === undefined) return undefined;
   const automation = shelf.automations?.find((each) => each.id === automationId);
+
   if (automation === undefined) return undefined;
+
   return {
     automation,
     workspaceName: shelf.workspaceName,
@@ -116,5 +123,6 @@ export function useAutomation(automationId: string | undefined): KnownAutomation
 /** Whether the automations the directory around the caller reads have answered, or no read of them stands, so a card no longer waits on them. */
 export function useAutomationsLanded(): boolean {
   const shelf = useContext(ShelfContext);
+
   return shelf === undefined || !shelf.reading || shelf.settled;
 }

@@ -27,6 +27,7 @@ export const linkSessionReload = /* @__PURE__ */ Effect.fn("client/linkSessionRe
   dependencies: SessionReloadDependencies,
 ): Effect.fn.Return<void, never, Scope.Scope> {
   let loadedFor: string | undefined;
+
   const left = Stream.filter(
     Stream.map(dependencies.state.changes, ({ account }) =>
       account.status === ACCOUNT_STATUS.SIGNED_IN ? account.id : undefined,
@@ -34,11 +35,14 @@ export const linkSessionReload = /* @__PURE__ */ Effect.fn("client/linkSessionRe
     (signedIn) => {
       if (loadedFor === undefined) {
         loadedFor = signedIn;
+
         return false;
       }
+
       return signedIn !== loadedFor;
     },
   );
+
   yield* Effect.forkScoped(
     Effect.flatMap(Stream.runHead(left), () => Effect.sync(dependencies.reload)),
   );

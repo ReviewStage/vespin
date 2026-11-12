@@ -19,6 +19,7 @@ const DAILY: AdminDailyCount[] = Array.from({ length: 21 }, (_, index) => ({
   day: new Date(Date.UTC(2026, 8, 27 + index)).toISOString().slice(0, 10),
   count: index % 7 === 0 ? 0 : index,
 }));
+
 const GENERATED_AT = Date.UTC(2026, 9, 17, 12);
 
 /** The weekday column (28px) and whole 15px week columns: room for `weeks` of them. */
@@ -28,6 +29,7 @@ function widthFor(weeks: number): number {
 
 /** jsdom's stand-in for the browser's ResizeObserver, which it lacks: a resize is fired by hand. */
 let resize: (() => void) | undefined;
+
 class HandResizeObserver {
   constructor(callback: () => void) {
     resize = callback;
@@ -66,6 +68,7 @@ function render(): HTMLElement {
       }),
     ),
   );
+
   return container;
 }
 
@@ -101,6 +104,7 @@ test("a card that holds every week names the trailing year and labels its weekda
   const page = render();
 
   expect(heading(page)).toBe("This account's meaningful actions, trailing year, week by week");
+
   for (const label of ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sep", "Oct"]) {
     expect(page.textContent).toContain(label);
   }
@@ -127,6 +131,7 @@ test("a narrower card shows its newest weeks and says how many", () => {
 test("hovering a day shows its count in the tooltip, and leaving the grid hides it", () => {
   const page = render();
   const cell = page.querySelector<HTMLElement>("[role='img'][aria-label^='Oct 10']");
+
   if (cell === null) throw new Error("the calendar drew no Oct 10");
 
   act(() => {

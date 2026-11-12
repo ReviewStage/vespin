@@ -45,6 +45,7 @@ const openAccount = Effect.gen(function* () {
   yield* Database.use((db) =>
     db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` }),
   );
+
   return id;
 });
 
@@ -57,19 +58,24 @@ const previewRoute = Effect.gen(function* () {
     Layer.succeed(PageLinks, { sandbox: SANDBOX }),
     memorySandbox().layer,
   );
+
   // SAFETY: an archived agent is refused before its sandbox is asked anything, so no call of it is ever made.
   const sandbox = Layer.succeed(AgentSandbox, {} as AgentSandboxService);
+
   const route = HttpRouter.toWebHandler(
     previewProxyApp({ sandbox }).pipe(HttpRouter.provideRequest(services)),
     { disableLogger: true },
   );
+
   yield* Effect.addFinalizer(() => Effect.promise(() => route.dispose()));
+
   return (request: Request) => Effect.promise(() => route.handler(request));
 });
 
 /** A member's visit of the agent's preview, at its agent-id host and as a page load unless said. */
 const standing = Effect.gen(function* () {
   const route = yield* previewRoute;
+
   return (
     userId: string,
     agentId: string,
@@ -82,12 +88,14 @@ const standing = Effect.gen(function* () {
         { userId, agentId },
         yield* Clock.currentTimeMillis,
       );
+
       const address = `${previewOrigin(SANDBOX, name)}${PREVIEW_LINK.PROXY_PATH}/app`;
+
       return yield* route(
         new Request(address, {
           headers: {
             cookie: `${PREVIEW_LINK.COOKIE}=${cookie}`,
-            ...(pageLoad ? { "sec-fetch-mode": "navigate" } : {}),
+            ...(pageLoad && { "sec-fetch-mode": "navigate" }),
           },
         }),
       );
@@ -128,10 +136,12 @@ it.layer(getTestDB())("a shared port's preview host", (it) => {
         const agentId = yield* openTaskAgent(member, task.workspaceId, task.id);
         const other = yield* openTaskAgent(member, task.workspaceId, task.id);
         yield* archiveAgent(member, agentId, true);
+
         const [workspace] = yield* (yield* Database)
           .select({ slug: organization.slug })
           .from(organization)
           .where(eq(organization.id, task.workspaceId));
+
         const name = previewNameOf(workspace?.slug ?? "", task.number ?? 0, agentId);
         assert.equal(name.kind, PREVIEW_NAME_KIND.TASK);
 
@@ -152,15 +162,18 @@ it.layer(getTestDB())("a shared port's preview host", (it) => {
     () =>
       Effect.gen(function* () {
         const route = yield* previewRoute;
+
         const name: PreviewName = {
           kind: PREVIEW_NAME_KIND.TASK,
           slug: "acme",
           number: 42,
           agentHead: "abcdef",
         };
+
         const address = `${previewOrigin(SANDBOX, name)}${PREVIEW_LINK.PROXY_PATH}/`;
 
         const unfurled = yield* route(new Request(address));
+
         const fetched = yield* route(
           new Request(address, { headers: { "sec-fetch-mode": "cors" } }),
         );
@@ -173,9 +186,11 @@ it.layer(getTestDB())("a shared port's preview host", (it) => {
         assert.ok(html.includes('<meta name="twitter:card" content="summary_large_image">'));
         // The card's tags name nothing of the task; only its sign-in link names the host the reader holds.
         assert.ok(!(html.match(/<meta[^>]*>/gu) ?? []).some((tag) => tag.includes("acme")));
+
         const signIn = new URL(
           /<a href="([^"]*)"/u.exec(html)?.[1]?.replaceAll("&amp;", "&") ?? "",
         );
+
         assert.equal(
           `${signIn.origin}${signIn.pathname}`,
           `https://tryluke.dev${PREVIEW_LINK.SIGN_IN_PATH}`,

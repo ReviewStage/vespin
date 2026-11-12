@@ -1,7 +1,8 @@
-// index.tsx -- Settings' main list, as iOS's own Settings stands: the account at its head pushing to Account, the workspace the app works in pushing to Workspace, notifications and when this phone takes them, Agents, About, and the pages still kept on vespin.dev.
+// index.tsx -- Settings' main list, as iOS's own Settings stands: the account at its head pushing to Account, the workspace the app works in pushing to Workspace, notifications and when this phone takes them, Agents, Machines and the workspace's Memory, About with Send feedback, and the pages still kept on vespin.dev.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { FEEDBACK_WORDS } from "@repo/features/feedback";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LINK_HOME, LINK_ORIGIN, LINK_PAGE } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -54,6 +55,9 @@ import { useSurfaceOpen } from "../../surface-open.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
+/** What the row that writes the team a mail is called, as the panel's Help menu names it. */
+const CONTACT_WORDS = { EMAIL: "Email" } as const;
+
 /** What Notifications reads once the phone lets the app notify, until the service says how its pushes fare. */
 const NOTIFICATIONS_ON = "On";
 
@@ -72,8 +76,6 @@ const NOTIFICATION_STEP = {
  */
 const WEB_PAGES = [
   SETTINGS_VIEW.ENVIRONMENT,
-  SETTINGS_VIEW.MEMORY,
-  SETTINGS_VIEW.HOSTS,
   SETTINGS_VIEW.INTEGRATIONS,
   SETTINGS_VIEW.MCP,
   SETTINGS_VIEW.SKILLS,
@@ -84,13 +86,14 @@ const WEB_PAGES = [
 function buildWords(): string {
   const version = Constants.expoConfig?.version ?? "";
   const build = Constants.expoConfig?.ios?.buildNumber;
+
   return build === undefined ? version : `${version} (${build})`;
 }
 
 /** Opens one of our public pages, the changelog or the docs, in the app's own Safari sheet, tinted copper, so the member stays in Settings. */
 function openInSheet(address: string, tint: string): void {
-  openBrowserAsync(address, { controlsColor: tint }).catch((error: unknown) =>
-    console.error("The page did not open.", error),
+  openBrowserAsync(address, { controlsColor: tint }).catch((cause: unknown) =>
+    console.error("The page did not open.", cause),
   );
 }
 
@@ -106,6 +109,7 @@ export default function SettingsScreen() {
   const push = usePushDeviceStanding(device);
   const fixture = useFixtureRun();
   const allowed = notificationsAllowed(fixture, notifications.standing);
+
   // A page kept on the web, under the chosen workspace, opens in Safari, where the member is signed in.
   const onWeb = (page: SettingsView) =>
     openInSafari(
@@ -113,6 +117,7 @@ export default function SettingsScreen() {
         ? LINK_ORIGIN
         : linkOf({ kind: LINK_DESTINATION.SETTINGS, page }, chosen.slug ?? chosen.id),
     );
+
   return (
     <>
       <Stack.Toolbar placement="right">
@@ -168,7 +173,6 @@ export default function SettingsScreen() {
           {!allowed || push.standing === undefined ? null : (
             <ListSection title="Notify me" footer={PUSH_NOTIFY_FOOTER}>
               <PickRows
-                label="Notify me"
                 options={PUSH_NOTIFY_CHOICES}
                 picked={push.standing.notify}
                 onPick={(id) => {
@@ -184,21 +188,40 @@ export default function SettingsScreen() {
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.AGENTS)}
             />
+            <PushRow
+              label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.HOSTS]}
+              symbol="desktopcomputer"
+              goes={PUSH_ROW_GOES.PAGE}
+              onPress={() => router.push(SETTINGS_ROUTE.MACHINES)}
+            />
+            {chosen === undefined ? null : (
+              <PushRow
+                label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY]}
+                symbol="brain"
+                goes={PUSH_ROW_GOES.PAGE}
+                onPress={() => router.push(SETTINGS_ROUTE.MEMORY)}
+              />
+            )}
           </ListSection>
           <ListSection title="About">
             <ValueRow label="Version" value={buildWords()} />
             <PushRow
               label="What's new"
               goes={PUSH_ROW_GOES.OUT}
-              onPress={() => openInSheet(LINK_PAGE.CHANGELOG, colors.ACCENT)}
+              onPress={() => openInSheet(LINK_PAGE.CHANGELOG, colors.TEXT)}
             />
             <PushRow
               label="Help"
               goes={PUSH_ROW_GOES.OUT}
-              onPress={() => openInSheet(LINK_PAGE.DOCS, colors.ACCENT)}
+              onPress={() => openInSheet(LINK_PAGE.DOCS, colors.TEXT)}
             />
             <PushRow
-              label="Send feedback"
+              label={FEEDBACK_WORDS.TITLE}
+              goes={PUSH_ROW_GOES.PAGE}
+              onPress={() => router.push(SETTINGS_ROUTE.FEEDBACK)}
+            />
+            <PushRow
+              label={CONTACT_WORDS.EMAIL}
               goes={PUSH_ROW_GOES.OUT}
               onPress={() => openInSafari(CONTACT_MAILTO)}
             />

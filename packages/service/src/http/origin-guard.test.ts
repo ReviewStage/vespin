@@ -67,7 +67,9 @@ function cookiePost(path: string, headers: Record<string, string> = {}): Request
 /** What the guard answered: nothing where the request goes on to its route, the refusal's status and body otherwise. */
 async function verdict(guard: CookieOriginGuard, sent: Request) {
   const refusal = guard(sent);
+
   if (refusal === undefined) return undefined;
+
   return { status: refusal.status, body: await refusal.json() };
 }
 
@@ -99,6 +101,7 @@ test("a cookie POST from a foreign origin, or one spelled other than a browser s
   ]) {
     assert.deepEqual(await verdict(guard, cookiePost(COOKIE_ROUTE, { origin })), REFUSED, origin);
   }
+
   assert.deepEqual(
     await verdict(
       guard,
@@ -116,12 +119,14 @@ test("a cookie POST, PUT, DELETE, or PATCH from the deployment's own origin goes
       method,
       headers: { cookie: SESSION_COOKIE, origin: PRODUCTION_ORIGIN },
     });
+
     assert.equal(await verdict(guard, sent), undefined, method);
   }
 });
 
 test("a cookie PUT from the host links were once written on, which production still serves the app at, goes on to its route", async () => {
   const guard = cookieOriginGuard(PRODUCTION);
+
   const sent = request(COOKIE_ROUTE, {
     method: "PUT",
     headers: { cookie: SESSION_COOKIE, origin: "https://tryluke.dev" },
@@ -177,6 +182,7 @@ test("a GET, HEAD, or OPTIONS goes on to its route from any page, a provider's r
         method,
         headers: { cookie: SESSION_COOKIE, origin: FOREIGN_ORIGIN },
       });
+
       assert.equal(await verdict(guard, sent), undefined, `${method} ${path}`);
     }
   }
@@ -190,6 +196,7 @@ test("a lowercase or unknown method is guarded as a state-changing one", async (
       method,
       headers: { cookie: SESSION_COOKIE, origin: FOREIGN_ORIGIN },
     });
+
     assert.deepEqual(await verdict(guard, sent), REFUSED, method);
   }
 });
@@ -240,6 +247,7 @@ test("a preview's own origins are both its hostnames, and production's is foreig
   for (const origin of [PREVIEW_ORIGIN, PREVIEW_BRANCH_ORIGIN]) {
     assert.equal(await verdict(guard, cookiePost(COOKIE_ROUTE, { origin })), undefined, origin);
   }
+
   assert.deepEqual(
     await verdict(guard, cookiePost(COOKIE_ROUTE, { origin: PRODUCTION_ORIGIN })),
     REFUSED,

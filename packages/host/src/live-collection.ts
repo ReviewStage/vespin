@@ -42,6 +42,7 @@ import {
   FiberMap,
   MutableHashMap,
   Option,
+  Predicate,
   Queue,
   type Scope,
   Stream,
@@ -57,12 +58,13 @@ import {
   UNREAD,
 } from "./app-state.js";
 import { TX_WAIT_TIMEOUT } from "./live-follow.js";
+import type { ReadonlyRecord } from "effect/Record";
 
 /** Every row a collection, or a live query, shows now, what a standing write drew among them. */
 export function rowsOf<Row extends object>(collection: {
   readonly toArray: readonly Row[];
 }): WithoutVirtualProps<Row>[] {
-  return collection.toArray.map((stored) => rowOf<WithoutVirtualProps<Row>>(stored));
+  return collection.toArray.map((stored) => rowOf<WithoutVirtualProps<Row>, Row>(stored));
 }
 
 /**
@@ -77,9 +79,11 @@ export function drawnAtEdges(
 ): Effect.Effect<Effect.Effect<void>, never, Scope.Scope> {
   return Effect.gen(function* () {
     const edges = yield* Queue.sliding<number | undefined>(1);
+
     const drawn = Effect.flatMap(Clock.currentTimeMillis, (at) =>
       Effect.asVoid(Queue.offer(edges, draw(at))),
     );
+
     yield* Effect.forkScoped(
       Stream.fromQueue(edges).pipe(
         Stream.switchMap((edge) =>
@@ -94,6 +98,7 @@ export function drawnAtEdges(
         Stream.runForEach(() => drawn),
       ),
     );
+
     return drawn;
   });
 }
@@ -124,12 +129,14 @@ export function answeredCollection<Row extends object, Key extends string>(optio
   return Effect.gen(function* () {
     const synced = yield* syncedCollection(options.getKey);
     const { collection, held, take } = synced;
+
     return {
       collection,
       answer: (rows: readonly Row[]) =>
         take(new Map(rows.map((row) => [options.getKey(row), row]))),
       confirmRow: (key: Key, fields: (row: Row) => Partial<Row>) => {
         const row = held().get(key);
+
         if (row !== undefined) take(new Map(held()).set(key, { ...row, ...fields(row) }));
       },
       confirmGone: (key: Key) => {
@@ -166,26 +173,31 @@ export function carriedWaits<Row>(
     /** Each wait standing, by what it waits for. */
     const waits = new Map<Deferred.Deferred<void>, (rows: readonly Row[]) => boolean>();
     let open = true;
+
     /** Settles every wait the rows now satisfy, or every one where `all` says the scope closed. */
     const settle = (all: boolean) => {
       const rows = answered();
+
       for (const [settled, until] of waits) {
         if (!all && !until(rows)) continue;
         waits.delete(settled);
         Deferred.doneUnsafe(settled, Effect.void);
       }
     };
+
     yield* Effect.addFinalizer(() =>
       Effect.sync(() => {
         open = false;
         settle(true);
       }),
     );
+
     const carried = (until: (rows: readonly Row[]) => boolean) =>
       Effect.suspend(() => {
         if (!open || until(answered())) return Effect.void;
         const settled = Deferred.makeUnsafe<void>();
         waits.set(settled, until);
+
         return Deferred.await(settled).pipe(
           Effect.timeoutOption(TX_WAIT_TIMEOUT),
           Effect.flatMap((arrived) =>
@@ -196,6 +208,7 @@ export function carriedWaits<Row>(
           Effect.ensuring(Effect.sync(() => waits.delete(settled))),
         );
       });
+
     return { answered: Effect.sync(() => settle(false)), carried };
   });
 }
@@ -251,6 +264,7 @@ export function rowWriteOn<Row extends object>(
           Effect.map(written, (result) => {
             if ("refused" in result) return result;
             const { answer, txid, fields } = result;
+
             return {
               answer,
               txid,
@@ -292,20 +306,26 @@ export function accountReads<Name extends string>(
   return Effect.map(FiberMap.make<Name>(), (reads) => {
     /** The account every standing read is for; none while none stands. */
     let session: string | undefined;
+
     const end = Effect.suspend(() => {
       if (session === undefined) return Effect.void;
       session = undefined;
+
       return Effect.andThen(FiberMap.clear(reads), ended);
     });
+
     const run = (name: Name, read: AccountRead, onlyIfMissing: boolean) =>
       Effect.gen(function* () {
         const userId = accountId();
+
         // Note that another account's reads are closed before this one's opens, so nothing it drew reaches the next.
         if (userId !== session) yield* end;
+
         if (userId === undefined) return;
         session = userId;
         yield* FiberMap.run(reads, name, read(userId), { onlyIfMissing });
       });
+
     return {
       open: (name, read) => run(name, read, true),
       reopen: (name, read) => run(name, read, false),
@@ -368,23 +388,31 @@ function heldReads<Key>(
     const holdersOf = (key: Key) => Option.getOrElse(MutableHashMap.get(holders, key), () => 0);
     const notRecent = (key: Key) => recent.filter((other) => !Equal.equals(other, key));
     const close = (key: Key) => Effect.andThen(FiberMap.remove(fibers, key), closed(key));
+
     const release = (key: Key) =>
       Effect.gen(function* () {
         const left = holdersOf(key) - 1;
+
         if (left > 0) {
           MutableHashMap.set(holders, key, left);
+
           return;
         }
+
         MutableHashMap.remove(holders, key);
         recent = [...notRecent(key), key];
+
         if (letGo.pause) yield* FiberMap.remove(fibers, key);
         // Note that a read let go is closed only once later ones push it out, so a window stepping back a few draws from where it stands.
         const kept = letGo.kept(recent);
+
         for (const gone of recent) {
           if (!kept.some((other) => Equal.equals(other, gone))) yield* close(gone);
         }
+
         recent = [...kept];
       });
+
     return {
       hold: (key) =>
         Effect.gen(function* () {
@@ -411,10 +439,12 @@ function heldReads<Key>(
         Effect.suspend(() => {
           const gone = recent.filter(which);
           recent = recent.filter((key) => !which(key));
+
           return Effect.forEach(gone, close, { discard: true });
         }),
       end: Effect.suspend(() => {
         recent = [];
+
         return Effect.andThen(FiberMap.clear(fibers), ended);
       }),
     };
@@ -479,27 +509,48 @@ export interface HeldRows<Key, Rows> {
 }
 
 /** `keyed` with `read` laid at `path`, or the key there dropped where it is none, every other key and level the very one held. */
-function withKeyLaid(keyed: object, path: readonly string[], read: object | undefined): object {
+function withKeyLaid<Read extends object>(
+  keyed: SliceLevel,
+  path: readonly string[],
+  read: Read | undefined,
+) {
   const [id, ...below] = path;
+
   if (id === undefined) return keyed;
-  const next: Record<string, unknown> = { ...keyed };
+
   if (below.length > 0) {
-    const level: unknown = Object.hasOwn(keyed, id) ? Reflect.get(keyed, id) : undefined;
-    next[id] = withKeyLaid(typeof level === "object" && level !== null ? level : {}, below, read);
-  } else if (read === undefined) Reflect.deleteProperty(next, id);
-  else next[id] = read;
-  return next;
+    const level = Object.hasOwn(keyed, id) ? keyed[id] : undefined;
+
+    const laid: SliceLevel = withKeyLaid(isSliceLevel(level) ? level : {}, below, read);
+
+    return { ...keyed, [id]: laid };
+  }
+
+  // Note that a key dropped leaves every other key where it stood, as deleting it from a copy would.
+  return read === undefined
+    ? Object.fromEntries(Object.entries(keyed).filter(([key]) => key !== id))
+    : { ...keyed, [id]: read };
+}
+
+/** A level of a held slice: its keys by id, each holding a level below or a key's read, as Effect's record reads it. */
+type SliceLevel = ReadonlyRecord<string, unknown>;
+
+/** Whether `value` is a level whose keys can be read by id, rather than a primitive or nothing. */
+function isSliceLevel(value: unknown): value is SliceLevel {
+  return Predicate.isObjectOrArray(value);
 }
 
 /** The read `keyed` holds at `path`; none where it holds none. */
-function readAt(keyed: object, path: readonly string[]): AppHostRead<unknown> | undefined {
+function readAt<Level extends object>(
+  keyed: Level,
+  path: readonly string[],
+): AppHostRead<unknown> | undefined {
   let level: unknown = keyed;
+
   for (const id of path) {
-    level =
-      typeof level === "object" && level !== null && Object.hasOwn(level, id)
-        ? Reflect.get(level, id)
-        : undefined;
+    level = isSliceLevel(level) && Object.hasOwn(level, id) ? level[id] : undefined;
   }
+
   // SAFETY: what a held slice holds at a key's whole path is that key's read (`HostReadKeyPath`).
   return level as AppHostRead<unknown> | undefined;
 }
@@ -536,12 +587,15 @@ export function heldSlice<Slice extends SliceKeyed, Key>(options: {
     let held = options.empty;
     /** How many bytes of JSON each key let go came to as it was let go. */
     const sizes = MutableHashMap.empty<Key, number>();
+
     const lay = (key: Key, read: AppHostRead<AppHostReads[Slice]> | undefined) => {
       // SAFETY: a read laid at a key's path keeps the slice's own shape, which that path is declared by.
       held = withKeyLaid(held, options.path(key), read) as AppState[Slice];
       options.tell(held);
     };
+
     const readOf = (key: Key) => readAt(held, options.path(key));
+
     const answers = (key: Key): HeldAnswers<AppHostReads[Slice]> => ({
       answered: (rows) => lay(key, { rows }),
       // Note that a read that stops answering keeps its rows, since its next answer brings them up to date.
@@ -554,27 +608,36 @@ export function heldSlice<Slice extends SliceKeyed, Key>(options: {
       // SAFETY: what a key's path holds is that key's read (`HostReadKeyPath`), whose rows are its slice's.
       rows: () => readOf(key)?.rows as AppHostReads[Slice] | undefined,
     });
+
     const sizeOf = (key: Key) =>
       Option.getOrElse(MutableHashMap.get(sizes, key), () => {
         const size = encoder.encode(JSON.stringify(readOf(key) ?? null)).byteLength;
         MutableHashMap.set(sizes, key, size);
+
         return size;
       });
+
     const budget = options.budget;
+
     /** The keys let go lately the budget keeps, the latest first in: each past `bytesEach` closed, and every one from the first past the count or the bytes on. */
     const kept = (recent: readonly Key[]): readonly Key[] => {
       if (budget === undefined) return recent.slice(-RECENT_READS);
       const keeping: Key[] = [];
       let bytes = 0;
+
       for (const key of recent.toReversed()) {
         const size = sizeOf(key);
+
         if (size > budget.bytesEach) continue;
+
         if (keeping.length >= budget.reads || bytes + size > budget.bytes) break;
         keeping.push(key);
         bytes += size;
       }
+
       return keeping.toReversed();
     };
+
     const reads = yield* heldReads<Key>(
       (key) =>
         Effect.suspend(() => (options.gate() ? options.follow(key, answers(key)) : Effect.void)),
@@ -590,6 +653,7 @@ export function heldSlice<Slice extends SliceKeyed, Key>(options: {
       }),
       { pause: options.pause === true, kept },
     );
+
     return {
       // Note that a key held again moves once more, so it is measured anew as it is next let go.
       hold: (key) =>

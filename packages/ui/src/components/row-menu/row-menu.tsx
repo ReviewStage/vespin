@@ -86,13 +86,16 @@ export function useRowMenu(
   const { disabled = false, opener, more = true } = options;
   const state = useMenu(menu?.shown ?? true);
   const moreElement = useRef<HTMLButtonElement | null>(null);
+
   // Note that a row unavailable, or whose thing offers no acts now, opens no menu by any door.
   const live =
     menu !== undefined && !disabled && menu.groups.some((group) => group.length > 0)
       ? menu
       : undefined;
+
   const offered = live !== undefined;
   const moreDrawn = offered && (more || opener === undefined);
+
   // The menu key, on the row's press or any of its acts, hangs the menu
   // under the row from its start, and hands focus back to what held it.
   const onKeyDown = (event: KeyboardEvent<HTMLElement>) => {
@@ -101,8 +104,10 @@ export function useRowMenu(
     const held = event.target instanceof HTMLElement ? event.target : event.currentTarget;
     state.show(dropBelowStart(event.currentTarget), held);
   };
+
   // Each ask from elsewhere hangs the menu under the row as the menu key does, on the submenu it names.
   const [openOn, setOpenOn] = useState<string | undefined>(undefined);
+
   // Note that a menu closed by any door forgets the submenu it was asked to open on, so the next door opens it on its own items.
   if (state.open === undefined && openOn !== undefined) setOpenOn(undefined);
   // Note that only an ask newer than the last answered opens it, so one made while the row offered no menu, or another, never replays.
@@ -112,12 +117,14 @@ export function useRowMenu(
     if (asked === undefined || asked.count <= answered.current) return;
     answered.current = asked.count;
     const from = opener?.current ?? moreElement.current;
+
     if (from === null) return;
     setOpenOn(asked.submenu);
     state.show(dropBelowStart(from), from);
   }, [asked?.count]);
   const doors = offered ? state.contextMenu(opener ?? moreElement) : undefined;
   const open = state.open !== undefined;
+
   // Note that a row's ⋯ lights its glyph alone at any size, because the row is already lit and, while its menu stands, ringed.
   const button = ({ size, describedBy }: RowMoreOptions = {}): ReactNode =>
     live !== undefined && moreDrawn ? (
@@ -130,6 +137,7 @@ export function useRowMenu(
         {...state.trigger()}
       />
     ) : null;
+
   const popup: ReactNode =
     live !== undefined && state.drawn !== undefined ? (
       <Menu
@@ -144,6 +152,7 @@ export function useRowMenu(
         replayUnmasked={live.replayUnmasked}
       />
     ) : null;
+
   return {
     /** Whether the row offers its menu now. */
     offered,

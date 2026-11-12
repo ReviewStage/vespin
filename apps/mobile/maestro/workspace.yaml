@@ -1,4 +1,4 @@
-# workspace.yaml -- the workspace switcher: the chosen workspace named in the Inbox's bar, its menu open with every workspace, New workspace, and Workspace settings, another chosen and the Inbox and Tasks following it, and New workspace's sheet.
+# workspace.yaml -- the workspace switcher: the chosen workspace named in the Inbox's bar as its one leading button, its menu open with every workspace, the account opening Settings, New workspace, and the workspace's Settings… under its name, another chosen and the Inbox and Tasks following it, and New workspace's sheet.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -13,8 +13,9 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
 - assertVisible: "Recorded the invite flow"
-# The switcher stands as the bar's title in a compact window and heads the
-# sidebar in a regular one, heard as the workspace and who shares it.
+# The switcher leads the bar alone in a compact window and a portrait
+# regular one, with no photo beside it, and heads the sidebar in a landscape
+# iPad's, heard as the workspace and who shares it.
 - assertVisible:
     id: "workspace-switcher"
 - waitForAnimationToEnd
@@ -24,8 +25,11 @@ appId: dev.vespin.ios
 # Note that a menu row is heard as its name and who shares it together, so a
 # workspace is found by both.
 - assertVisible: "Relay, 6 members"
+- assertVisible: "Ada Lovelace, Settings"
 - assertVisible: "New workspace"
-- assertVisible: "Workspace settings"
+# The workspace's Settings… is heard as "Workspace settings", the words
+# Maestro reads where the menu keeps its label, so either is found.
+- assertVisible: "Workspace settings|Settings…"
 - waitForAnimationToEnd
 - takeScreenshot: workspace-menu
 # Relay holds no threads, so the Inbox empties once it is chosen, and Tasks

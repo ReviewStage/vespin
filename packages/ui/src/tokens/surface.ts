@@ -66,5 +66,6 @@ export function surfaceAttributes<P extends Profile>(
   density?: DensityOf<P>,
 ): SurfaceAttributes {
   const surface = { "data-ui-profile": profile, "data-ui-theme": theme };
+
   return density === undefined ? surface : { ...surface, "data-ui-density": density };
 }

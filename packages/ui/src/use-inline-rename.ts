@@ -34,20 +34,27 @@ export interface RenameWrite {
  */
 export function useInlineRename(subjectId: string | undefined, write: RenameWrite) {
   const [editing, setEditing] = useState<string | undefined>(undefined);
+
   const begin = () => {
     write.reset();
     setEditing(subjectId);
   };
+
   const end = (name: string | undefined) => {
     setEditing(undefined);
+
     if (subjectId === undefined || name === undefined) {
       write.reset();
+
       return;
     }
+
     write.run(subjectId, name);
   };
+
   const shown = subjectId !== undefined;
   const refused = shown && write.refused && write.asked?.subjectId === subjectId;
+
   return {
     editing: shown && (editing === subjectId || refused),
     begin,

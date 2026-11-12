@@ -4,16 +4,14 @@ import {
   type AgentRunsOnRequest,
   type AgentSummary,
 } from "@repo/features/agent-wire";
+import { machineName } from "@repo/features/machine-name";
 import type { MacOffer } from "@repo/features/models-wire";
 import { agentStillWriting, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
-import { EXPERIMENT } from "@repo/settings";
 import { GLYPH } from "@repo/ui/icons";
-import { useQuery } from "@tanstack/react-query";
 import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import type { MenuAction, MenuSubmenu } from "../desktop/action-menu.js";
 import { useDevicePresence } from "../device-presence.js";
-import { machineName, useThisMac } from "../machine-name.js";
-import { appStateQuery, selectExperiment } from "../use-app-state.js";
+import { useThisMac } from "../machine-name.js";
 import { deviceMark } from "./runs-on.js";
 import type { AgentsControl } from "./use-agents.js";
 
@@ -32,7 +30,7 @@ import type { AgentsControl } from "./use-agents.js";
  * wearing its standing's dot (`runs-on.tsx`), less the place the agent runs
  * now, or the cloud alone for an agent on a device the service did not name;
  * a device that takes no agent now is listed dimmed, saying why. It
- * stands only while Bring your own host is on, and only where a Continue is
+ * stands only where a Continue is
  * offered: where a Start from the agent could run (`continueAgent`), under
  * nothing archived, on an agent not archived. On an agent still writing, a
  * move stops it first as Stop does, and continues it only once the Stop took,
@@ -78,8 +76,6 @@ type MoveDoors = Pick<
 /** Whether the agent offers a move at all, on the terms the header says, the continue that carries it aside. */
 function useMoveOffered(agent: MovedAgent | undefined, agents: MoveDoors): boolean {
   return (
-    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.BRING_YOUR_OWN_HOST) })
-      .data === true &&
     agent !== undefined &&
     agents.onUnarchive === undefined &&
     agents.agents?.some((each) => each.id === agent.id) === true &&
@@ -90,7 +86,9 @@ function useMoveOffered(agent: MovedAgent | undefined, agents: MoveDoors): boole
 /** What each place says under its name: that the agent is stopped first while it writes, and that only pushed work comes along from a device; none where neither holds. */
 function placeDetail(agent: MovedAgent): string | undefined {
   const pushedOnly = agent.machine === AGENT_MACHINE.DEVICE;
+
   if (!agentStillWriting(agent.status)) return pushedOnly ? MOVE_WORDS.PUSHED_ONLY : undefined;
+
   return pushedOnly ? MOVE_WORDS.STOPS_FIRST_PUSHED_ONLY : MOVE_WORDS.STOPS_FIRST;
 }
 
@@ -109,9 +107,11 @@ function movedBy(
   }: Pick<MoveDoors, "onStop"> & { continueAgent: NonNullable<MoveDoors["continueAgent"]> },
 ): (runsOn: AgentRunsOnRequest, carry?: MoveCarry) => Promise<void> {
   const writing = agentStillWriting(agent.status);
+
   return async (runsOn, carry) => {
     if (MOVING.has(agent.id)) return;
     MOVING.add(agent.id);
+
     try {
       if (writing && !(await onStop(agent.id))) return;
       await continueAgent(agent.id, carry?.words, carry?.attachments ?? [], runsOn);
@@ -134,9 +134,11 @@ export function useMoveToCloud(
 ): ((carry?: MoveCarry) => void) | undefined {
   const offered = useMoveOffered(agent, agents);
   const { continueAgent } = agents;
+
   if (!offered || continueAgent === undefined || agent.machine !== AGENT_MACHINE.DEVICE)
     return undefined;
   const move = movedBy(agent, { continueAgent, onStop: agents.onStop });
+
   return (carry) => void move(TO_THE_CLOUD, carry);
 }
 
@@ -164,8 +166,10 @@ export function useMovePlace(
 ): PlaceMove | undefined {
   const { continueAgent } = agents;
   const offered = useMoveOffered(agent, agents);
+
   if (agent === undefined || !offered || continueAgent === undefined) return undefined;
   const move = movedBy(agent, { continueAgent, onStop: agents.onStop });
+
   return {
     devices: agents.macs ?? NO_DEVICES,
     moveTo: (runsOn) => void move(runsOn),
@@ -182,11 +186,13 @@ export function useMoveToEntry(agent: MovedAgent, agents: MoveDoors): MenuSubmen
   // Note that the beats are read only while a device is listed, so a member with none reads nothing.
   const book = useDevicePresence(devices.length > 0);
   const thisMac = useThisMac();
+
   if (!offered || continueAgent === undefined) return undefined;
   const local = agent.machine === AGENT_MACHINE.DEVICE;
   const said = placeDetail(agent);
   const move = movedBy(agent, { continueAgent, onStop: agents.onStop });
   const moveTo = (runsOn: AgentRunsOnRequest) => () => void move(runsOn);
+
   const cloud: MenuAction[] = local
     ? [
         {
@@ -197,15 +203,19 @@ export function useMoveToEntry(agent: MovedAgent, agents: MoveDoors): MenuSubmen
         },
       ]
     : [];
+
   // Note that a local agent whose device the service did not name is offered the cloud alone, because
   // any of the devices listed may be the one it runs on.
   const here = local ? agent.mac?.deviceId : undefined;
+
   const elsewhere =
     local && here === undefined ? NO_DEVICES : devices.filter((each) => each.deviceId !== here);
+
   const items = [
     ...cloud,
     ...elsewhere.map((device): MenuAction => {
       const { icon, unready } = deviceMark(device, book);
+
       return {
         label: machineName(device, devices, thisMac),
         key: device.deviceId,
@@ -216,5 +226,6 @@ export function useMoveToEntry(agent: MovedAgent, agents: MoveDoors): MenuSubmen
       };
     }),
   ];
+
   return items.length === 0 ? undefined : { ...commandHead(PANEL_COMMAND.MOVE_AGENT), items };
 }

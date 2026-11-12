@@ -50,20 +50,27 @@ function Issues({ start }: { start: string }): React.JSX.Element {
   const [active, setActive] = useState(0);
   const [shut, setShut] = useState(false);
   const words = value.trim().toLowerCase();
-  const issues: ComboboxOption[] = ISSUES.filter(
-    (issue) => words !== "" && issue.title.toLowerCase().includes(words),
-  ).map((issue) => ({
-    id: issue.id,
-    label: issue.title,
-    icon: <ProviderMark provider={MARK_PROVIDER.LINEAR} />,
-    detail: `${issue.key} · ${issue.state}`,
-  }));
+
+  const issues: ComboboxOption[] = ISSUES.flatMap((issue) =>
+    words === "" || !issue.title.toLowerCase().includes(words)
+      ? []
+      : [
+          {
+            id: issue.id,
+            label: issue.title,
+            icon: <ProviderMark provider={MARK_PROVIDER.LINEAR} />,
+            detail: `${issue.key} · ${issue.state}`,
+          },
+        ],
+  );
+
   const typed: ComboboxOption = {
     id: "typed",
     label: `Create task “${value.trim()}”`,
     icon: <ComposeIcon />,
     hint: "⌘⏎",
   };
+
   return (
     <Combobox
       label="Task name"
@@ -95,6 +102,7 @@ const MENTIONS: readonly ComboboxOption[] = [
 /** A list standing alone over `options`, holding its own active option as an editor's caller would. */
 function Mentions({ options }: { options: readonly ComboboxOption[] }): React.JSX.Element {
   const [active, setActive] = useState(0);
+
   return (
     <div className="catalog-popover catalog-column">
       <ComboboxList
@@ -119,6 +127,7 @@ const MODELS: readonly ComboboxOption[] = [
 /** A list with no field, steering itself as a picker too short to search does. */
 function Models(): React.JSX.Element {
   const [active, setActive] = useState(0);
+
   const keys = useComboboxField({
     open: true,
     active,
@@ -129,6 +138,7 @@ function Models(): React.JSX.Element {
     onActiveChange: setActive,
     onChoose: setActive,
   });
+
   return (
     <div className="catalog-popover catalog-column">
       <ComboboxList

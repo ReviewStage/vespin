@@ -1,4 +1,4 @@
-import { HTTP_METHOD, type UnparsedWireValue, unparsedWire } from "@repo/wire";
+import { type CommandPrefix, HTTP_METHOD, type UnparsedWireValue, unparsedWire } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
@@ -18,7 +18,6 @@ import {
   approvalAnswerRequestSchema,
 } from "./agent-approval-wire.js";
 import {
-  AGENT_ADD_REPOSITORY_RENAMES,
   AGENT_ARCHIVE_RENAMES,
   AGENT_CALL_FAILURE,
   AGENT_CHOOSE_RENAMES,
@@ -61,6 +60,8 @@ import {
   type AgentWarmAnswerView,
   type AgentWorkspaceListParams,
   type AgentWorkspaceToolsAnswerView,
+  type AllowedCommandsAnswerView,
+  type AllowedCommandsWriteAnswerView,
   type ChaptersProviderAnswer,
   type ChatGptDeviceLoginParams,
   type ChatGptDevicePollAnswerView,
@@ -80,6 +81,8 @@ import {
   type LiveActivityTokenParams,
   type MemoriesAnswerView,
   type MemoryForgetParams,
+  type MemorySaveAnswerView,
+  type MemorySaveParams,
   type ProviderKeyForAgentsParams,
   type ProviderKeyRemoveParams,
   type ProviderKeyResetCreditParams,
@@ -106,7 +109,6 @@ import {
   AGENT_LIST_ARCHIVED,
   AGENT_LIST_QUERY,
   AGENT_WORKSPACE_QUERY,
-  type AgentAddRepositoryRequest,
   type AgentArchiveRequest,
   type AgentMessageRequest,
   type AgentNewestAnswer,
@@ -116,17 +118,16 @@ import {
   type AgentRenameRequest,
   type AgentServersRequest,
   type AgentStartRequest,
-  agentAddRepositoryRequestSchema,
   agentMessageRequestSchema,
   agentQueueChangeSchema,
   agentRenameRequestSchema,
   agentServersRequestSchema,
   agentStartRequestOnWire,
-  type ExtraRepositoryRefusal,
   type LocalAgentRefusal,
   type RefusedDevice,
   TRANSCRIPT_PARTS_QUERY,
 } from "./agent-wire.js";
+import { ALLOWED_COMMAND_QUERY, allowedCommandAddRequestSchema } from "./allowed-command-wire.js";
 import {
   CHAPTERS_MODEL,
   CHAPTERS_PICK_LIST,
@@ -261,13 +262,12 @@ type Failed = {
   readonly provider?: ModelProvider;
   readonly localAgentRefusal?: LocalAgentRefusal;
   readonly refusedDevice?: RefusedDevice;
-  readonly extraRepositoryRefusal?: ExtraRepositoryRefusal;
-  readonly refusedRepository?: string;
 };
 
 /** A served file's refusal: not found where the service said so; unanswered for anything else. */
 function servedRefusal(payload: UnparsedWireValue): Failed {
   const refusal = Result.getOrUndefined(readServiceAnswer(hostedErrorSchema)(payload));
+
   return refusal === HOSTED_API_ERROR.NOT_FOUND
     ? { failure: AGENT_CALL_FAILURE.NOT_FOUND }
     : UNANSWERED;
@@ -278,10 +278,9 @@ const START_DECLARED: ReadonlySet<string> = new Set(
   Object.keys(agentsContract.start["~orpc"].errorMap),
 );
 
-/** The field without which the others a refusal carries say nothing: why a device or a repository refused, before which device or repository. */
+/** The field without which the others a refusal carries say nothing: why a device refused, before which device. */
 const LEADING_FIELD: Readonly<Partial<Record<HostedApiError, string>>> = {
   [HOSTED_API_ERROR.LOCAL_AGENT_REFUSED]: "localAgentRefusal",
-  [HOSTED_API_ERROR.EXTRA_REPOSITORY_REFUSED]: "extraRepositoryRefusal",
 };
 
 /**
@@ -294,14 +293,19 @@ const LEADING_FIELD: Readonly<Partial<Record<HostedApiError, string>>> = {
 export function startRefusedAs(refusal: TaskAgentRefusal): Failed {
   const payload = unparsedWire(refusal);
   const slug = Result.getOrUndefined(readServiceAnswer(hostedErrorSchema)(payload));
+
   if (slug === undefined || !START_DECLARED.has(slug)) return UNANSWERED;
   // SAFETY: a Start's refusals spelled as it spells them are among the agent rows' failures (`AGENT_ROW_CALLS`).
   const failure = spelledFailure(slug, { as: AGENT_START_RENAMES }) as AgentCallFailure | undefined;
+
   if (failure === undefined) return UNANSWERED;
+
   if (failure === AGENT_CALL_FAILURE.UNANSWERED || !refusalCarriesData(slug)) return { failure };
   const data = Result.getOrUndefined(readServiceAnswer(HOSTED_REFUSAL_DATA[slug])(payload));
   const leading = LEADING_FIELD[slug];
+
   if (data === undefined || (leading !== undefined && !(leading in data))) return { failure };
+
   return { failure, ...data };
 }
 
@@ -315,20 +319,9 @@ export function startRefusedAs(refusal: TaskAgentRefusal): Failed {
 function unansweredBare<Answer extends object>(answer: Answer): Answer {
   if (!("failure" in answer) || answer.failure !== AGENT_CALL_FAILURE.UNANSWERED) return answer;
   const bare = "cause" in answer ? { ...UNANSWERED, cause: answer.cause } : UNANSWERED;
+
   // SAFETY: a bare unanswered failure is a member of every answer a call here reads its refusals into.
   return bare as Answer;
-}
-
-/**
- * A Start's or a repository added's failure without why the repositories
- * named beside the agent's own were refused, which these calls have never
- * handed the window (the table they read before read no such field), so it draws
- * that they were refused and not why.
- */
-function extraRepositoryWhyLeftOut(answer: AgentAgentAnswer): AgentAgentAnswer {
-  if (!("failure" in answer)) return answer;
-  const { extraRepositoryRefusal: _why, refusedRepository: _repository, ...failed } = answer;
-  return failed;
 }
 
 /**
@@ -338,10 +331,12 @@ function extraRepositoryWhyLeftOut(answer: AgentAgentAnswer): AgentAgentAnswer {
  */
 function unansweredCall(answer: Exclude<CallAnswer, { readonly response: Response }>): Failed {
   const { fault, errorName } = answer;
+
   const unanswered = new HostedUnanswered({
     fault,
     ...(errorName === undefined ? undefined : { errorName }),
   });
+
   return { ...UNANSWERED, cause: hostedFailureFacts(unanswered) };
 }
 
@@ -350,6 +345,7 @@ function imageAnswerOf<Type extends string>(
   read: ImageBody<Type> | ImageBodyUnread | undefined,
 ): ImageBody<Type> | Failed {
   if (read === undefined) return UNANSWERED;
+
   return imageBodyUnread(read) ? unansweredCall(read) : read;
 }
 
@@ -384,6 +380,7 @@ function writtenAlreadyKept<Answer extends object>(
   if ("failure" in answer && answer.failure === HOSTED_API_ERROR.ALREADY_WRITTEN) {
     return WRITTEN_ALREADY;
   }
+
   // SAFETY: an answer that is no key already written under is one of the others.
   return answer as Exclude<Answer, { readonly failure: typeof HOSTED_API_ERROR.ALREADY_WRITTEN }>;
 }
@@ -402,6 +399,7 @@ function rowWritten<Answer extends object>(answer: Answer) {
 function reachUnsaid(answer: PullRequestChaptersAnswerView): PullRequestChaptersAnswerView {
   if (!("failure" in answer)) return answer;
   const { unreached: _why, ...failed } = answer;
+
   return failed;
 }
 
@@ -423,6 +421,7 @@ function readNow(
   answer: (AgentMessagesAnswerView & { readonly holds?: boolean }) | Failed,
 ): TranscriptNowAnswer | Failed {
   if ("failure" in answer) return answer;
+
   return answer.holds === undefined ? UNANSWERED : { ...answer, holds: answer.holds };
 }
 
@@ -437,7 +436,9 @@ function wireRequestOf<Request, Encoded>(
   request: UnparsedWireValue,
 ): Encoded | undefined {
   const admitted = Result.getOrUndefined(readEither(schema)(request));
+
   if (admitted === undefined) return undefined;
+
   return Option.getOrUndefined(Schema.encodeOption(schema)(admitted));
 }
 
@@ -457,7 +458,9 @@ function defaultOf(
 ): AgentDefaultAnswer {
   if ("failure" in read) return read;
   const choice = Option.getOrUndefined(Schema.decodeUnknownOption(modelChoiceSchema)(read.agent));
+
   if (choice === undefined) return UNANSWERED;
+
   return read.txid === undefined ? { choice } : { choice, txid: read.txid };
 }
 
@@ -469,8 +472,10 @@ function chaptersProviderAnswer(
 ): ChaptersProviderAnswer {
   if ("failure" in read) return read;
   const kept = Option.getOrUndefined(readChaptersPick(read.chaptersModel));
+
   if (kept === undefined) return UNANSWERED;
   const provider = chaptersProviderOf(kept);
+
   return read.txid === undefined ? { provider } : { provider, txid: read.txid };
 }
 
@@ -550,7 +555,9 @@ export class HostedAgentClient {
     choice: ModelChoice,
   ): Effect.Effect<AgentDefaultAnswer, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(agentDefaultWriteSchema)({ agent: choice }));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return Effect.map(
       hostedCall(this.#hosted.account.writePreferences, admitted, { as: AGENT_RENAMES }),
       defaultOf,
@@ -581,6 +588,39 @@ export class HostedAgentClient {
     });
   }
 
+  /** A memory kept in the member's own words, or corrected in place where it names the memory it replaces, answering what the keep came to. */
+  saveMemory(
+    params: MemorySaveParams,
+  ): Effect.Effect<MemorySaveAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.account.saveMemory, params);
+  }
+
+  /** The commands the account always allows its coding agents to run unasked, the earliest added first. */
+  readAllowedCommands(): Effect.Effect<AllowedCommandsAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.account.allowedCommands, undefined);
+  }
+
+  /** A command's first words added by hand to the account's always-allowed commands, answering the list as it then stands; a prefix the service would refuse by shape is refused here without traveling at all. */
+  addAllowedCommand(
+    prefix: CommandPrefix,
+  ): Effect.Effect<AllowedCommandsWriteAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(allowedCommandAddRequestSchema)({ prefix }));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(this.#hosted.account.addAllowedCommand, admitted);
+  }
+
+  /** One of the account's always-allowed commands removed by its id, answering the list as it then stands. */
+  removeAllowedCommand(
+    id: string,
+  ): Effect.Effect<AllowedCommandsWriteAnswerView, never, HttpClient.HttpClient> {
+    // The command rides in the query, since a DELETE carries no body.
+    return hostedCall(this.#hosted.account.removeAllowedCommand, {
+      query: { [ALLOWED_COMMAND_QUERY.ID]: id },
+    });
+  }
+
   /** One of the account's own sounds' clips, its bytes in base64, or null where it keeps no such sound. */
   readSound(
     params: SoundIdParams,
@@ -593,7 +633,9 @@ export class HostedAgentClient {
     params: SoundAddParams,
   ): Effect.Effect<SoundAddAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(soundAddRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.account.addSound, admitted);
   }
 
@@ -602,7 +644,9 @@ export class HostedAgentClient {
     params: SoundRenameParams,
   ): Effect.Effect<SoundStateView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(soundRenameRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.account.renameSound, admitted);
   }
 
@@ -634,7 +678,9 @@ export class HostedAgentClient {
     params: ProviderKeySaveParams,
   ): Effect.Effect<ProviderKeysAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(providerKeySaveRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.account.saveProviderKey, admitted);
   }
 
@@ -654,7 +700,9 @@ export class HostedAgentClient {
     params: ChatGptDeviceLoginParams,
   ): Effect.Effect<ChatGptDevicePollAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(chatGptDeviceLoginRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.account.pollChatGptDeviceLogin, admitted);
   }
 
@@ -663,7 +711,9 @@ export class HostedAgentClient {
     params: ChatGptDeviceLoginParams,
   ): Effect.Effect<ChatGptDevicePollAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(chatGptDeviceLoginRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.account.cancelChatGptDeviceLogin, admitted);
   }
 
@@ -676,7 +726,9 @@ export class HostedAgentClient {
     params: ProviderKeyForAgentsParams,
   ): Effect.Effect<ProviderKeysAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(providerKeyForAgentsRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.account.setProviderKeyForAgents, admitted);
   }
 
@@ -694,7 +746,9 @@ export class HostedAgentClient {
     params: SubscriptionLabelParams,
   ): Effect.Effect<ProviderKeysAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(subscriptionLabelRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.account.renameSubscription, admitted);
   }
 
@@ -703,7 +757,9 @@ export class HostedAgentClient {
     params: SubscriptionOrderParams,
   ): Effect.Effect<ProviderKeysAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(subscriptionOrderRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.account.reorderSubscriptions, admitted);
   }
 
@@ -728,7 +784,9 @@ export class HostedAgentClient {
     params: PushDeviceRegisterParams,
   ): Effect.Effect<PushDeviceDoneAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(pushDeviceRegisterRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.pushDevices.register, admitted);
   }
 
@@ -737,7 +795,9 @@ export class HostedAgentClient {
     params: PushDeviceKeyParams,
   ): Effect.Effect<PushDeviceDoneAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(pushDeviceUnregisterRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.pushDevices.unregister, admitted);
   }
 
@@ -746,7 +806,9 @@ export class HostedAgentClient {
     params: PushDeviceKeyParams,
   ): Effect.Effect<PushDeviceStatusAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(pushDeviceStatusRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.pushDevices.status, admitted);
   }
 
@@ -755,7 +817,9 @@ export class HostedAgentClient {
     params: PushDeviceNotifyParams,
   ): Effect.Effect<PushDeviceNotifyAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(pushDeviceNotifyRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.pushDevices.notify, admitted);
   }
 
@@ -764,7 +828,9 @@ export class HostedAgentClient {
     params: LiveActivityTokenParams,
   ): Effect.Effect<LiveActivityTokenAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(liveActivityTokenRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.liveActivities.startToken, admitted);
   }
 
@@ -773,7 +839,9 @@ export class HostedAgentClient {
     params: LiveActivityTokenParams,
   ): Effect.Effect<LiveActivityTokenAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(liveActivityTokenRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.liveActivities.activityToken, admitted);
   }
 
@@ -782,7 +850,9 @@ export class HostedAgentClient {
     params: LiveActivityEndedParams,
   ): Effect.Effect<LiveActivityEndedAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(liveActivityEndedRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.liveActivities.ended, admitted);
   }
 
@@ -800,7 +870,9 @@ export class HostedAgentClient {
     params: DictationTranscribeParams,
   ): Effect.Effect<DictationTranscribeAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(dictationRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.dictation.transcribe, admitted, {
       deadline: HOSTED_DEADLINE.HELD,
     });
@@ -820,7 +892,9 @@ export class HostedAgentClient {
     params: GitHubTokenSaveParams,
   ): Effect.Effect<GitHubTokenAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(githubTokenSaveRequestSchema)(params));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.githubToken.save, admitted);
   }
 
@@ -868,14 +942,16 @@ export class HostedAgentClient {
     request: AgentStartRequest,
   ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(agentStartRequestOnWire(request));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return Effect.map(
       hostedCall(
         this.#hosted.agents.start,
         { params: { id: taskId }, body: admitted },
         { as: AGENT_START_RENAMES, deadline: HOSTED_DEADLINE.START },
       ),
-      (started) => ("failure" in started ? extraRepositoryWhyLeftOut(started) : started.body),
+      (started) => ("failure" in started ? started : started.body),
     );
   }
 
@@ -890,14 +966,16 @@ export class HostedAgentClient {
   ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
     const sourceId = request.from?.agentId;
     const admitted = Result.getOrUndefined(agentStartRequestOnWire(request));
+
     if (sourceId === undefined || admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return Effect.map(
       hostedCall(
         this.#hosted.agents.startFrom,
         { params: { id: sourceId }, body: admitted },
         { as: AGENT_START_RENAMES, deadline: HOSTED_DEADLINE.START },
       ),
-      (started) => ("failure" in started ? extraRepositoryWhyLeftOut(started) : started.body),
+      (started) => ("failure" in started ? started : started.body),
     );
   }
 
@@ -919,10 +997,12 @@ export class HostedAgentClient {
       wait: TRANSCRIPT_NOW_QUERY.NONE,
       ...(cut ? { parts: TRANSCRIPT_PARTS_QUERY.CUT } : undefined),
     };
+
     const asked =
       callId === undefined
         ? hostedCall(this.#hosted.messages.agent, { id: agentId, ...query })
         : hostedCall(this.#hosted.messages.agentWorker, { id: agentId, call: callId, ...query });
+
     return Effect.map(asked, readNow);
   }
 
@@ -976,6 +1056,7 @@ export class HostedAgentClient {
       ...(before === undefined ? undefined : { before }),
       ...(cut ? { parts: TRANSCRIPT_PARTS_QUERY.CUT } : undefined),
     };
+
     return callId === undefined
       ? hostedCall(this.#hosted.messages.agentNewest, { id: agentId, ...page })
       : hostedCall(this.#hosted.messages.agentWorkerNewest, { id: agentId, call: callId, ...page });
@@ -994,6 +1075,7 @@ export class HostedAgentClient {
     callId?: string,
   ): Effect.Effect<AgentPartView, never, HttpClient.HttpClient> {
     const part = { id: agentId, message: messageId, index: String(index) };
+
     return callId === undefined
       ? hostedCall(this.#hosted.messages.agentPart, part)
       : hostedCall(this.#hosted.messages.agentWorkerPart, { ...part, call: callId });
@@ -1010,7 +1092,9 @@ export class HostedAgentClient {
     request: AgentMessageRequest,
   ): Effect.Effect<AgentMessageAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(agentMessageRequestSchema)(request));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(
       this.#hosted.messages.send,
       { params: { id: agentId }, body: admitted },
@@ -1024,7 +1108,9 @@ export class HostedAgentClient {
     change: AgentQueueChange,
   ): Effect.Effect<AgentQueueAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(agentQueueChangeSchema)(change));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(
       this.#hosted.messages.queue,
       { params: { id: agentId }, body: admitted },
@@ -1038,7 +1124,9 @@ export class HostedAgentClient {
     choice: ModelChoice,
   ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(modelChoiceSchema)(choice));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return Effect.map(
       hostedCall(
         this.#hosted.agents.change,
@@ -1056,7 +1144,9 @@ export class HostedAgentClient {
     key?: string,
   ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(agentRenameRequestSchema)(request));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return Effect.map(
       hostedCall(
         this.#hosted.agents.change,
@@ -1073,7 +1163,9 @@ export class HostedAgentClient {
     request: AgentServersRequest,
   ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(agentServersRequestSchema)(request));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return Effect.map(
       hostedCall(
         this.#hosted.agents.change,
@@ -1090,7 +1182,9 @@ export class HostedAgentClient {
     request: AgentPermissionModeRequest,
   ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(agentPermissionModeRequestSchema)(request));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return Effect.map(
       hostedCall(
         this.#hosted.agents.change,
@@ -1108,30 +1202,15 @@ export class HostedAgentClient {
     request: ApprovalAnswerRequest,
   ): Effect.Effect<AgentApprovalAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(approvalAnswerRequestSchema)(request));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
     return Effect.map(
       hostedCall(this.#hosted.agents.answerApproval, {
         params: { id: agentId, approval: approvalId },
         body: admitted,
       }),
       unansweredBare,
-    );
-  }
-
-  /** Adds a repository to one agent beside the ones it works in, answering it as it then stands; a repository refused by shape is refused here without traveling. */
-  addRepository(
-    agentId: string,
-    request: AgentAddRepositoryRequest,
-  ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
-    const admitted = Result.getOrUndefined(readEither(agentAddRepositoryRequestSchema)(request));
-    if (admitted === undefined) return Effect.succeed(UNANSWERED);
-    return Effect.map(
-      hostedCall(
-        this.#hosted.agents.change,
-        { params: { id: agentId }, body: admitted },
-        { as: AGENT_ADD_REPOSITORY_RENAMES },
-      ),
-      (answer) => extraRepositoryWhyLeftOut(unansweredBare(answer)),
     );
   }
 
@@ -1160,6 +1239,7 @@ export class HostedAgentClient {
       request.position === undefined
         ? { pinned: request.pinned }
         : { pinned: request.pinned, position: request.position };
+
     return Effect.map(
       hostedCall(
         this.#hosted.agents.change,
@@ -1393,9 +1473,11 @@ export class HostedAgentClient {
       }),
       (answer): Effect.Effect<AgentInboxAttachmentView> => {
         if (!callAnswered(answer)) return Effect.succeed(unansweredCall(answer));
+
         if (!answer.response.ok) {
           return Effect.map(jsonOf(answer.response), (body) => servedRefusal(unparsedWire(body)));
         }
+
         return readInboxFile(answer.response);
       },
     );
@@ -1412,8 +1494,10 @@ export class HostedAgentClient {
     number?: number,
   ): Effect.Effect<AgentPullRequestWriteAnswerView, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(pullRequestActionRequestSchema)(request));
+
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     const read = pullRequestRead(agentId, number);
+
     return Effect.map(
       hostedCall(
         this.#hosted.agentPullRequests.action,
@@ -1455,9 +1539,11 @@ export class HostedAgentClient {
       this.#call.send({ method: HTTP_METHOD.GET, path: agentGitHubImagePath(agentId, src) }),
       (answer): Effect.Effect<AgentGitHubImageView> => {
         if (!callAnswered(answer)) return Effect.succeed(unansweredCall(answer));
+
         if (!answer.response.ok) {
           return Effect.map(jsonOf(answer.response), (body) => servedRefusal(unparsedWire(body)));
         }
+
         return Effect.map(imageBodyOf(answer.response, githubImageTypeSchema), imageAnswerOf);
       },
     );
@@ -1484,9 +1570,11 @@ export class HostedAgentClient {
       }),
       (answer): Effect.Effect<AgentInboxAttachmentView> => {
         if (!callAnswered(answer)) return Effect.succeed(unansweredCall(answer));
+
         if (!answer.response.ok) {
           return Effect.map(jsonOf(answer.response), (body) => servedRefusal(unparsedWire(body)));
         }
+
         return readInboxFile(answer.response);
       },
     );
@@ -1506,7 +1594,9 @@ export class HostedAgentClient {
     key?: string,
   ): Effect.Effect<AgentInboxAnsweredView, never, HttpClient.HttpClient> {
     const body = wireRequestOf(inboxAcknowledgeRequestSchema, request);
+
     if (body === undefined) return Effect.succeed(UNANSWERED);
+
     return Effect.map(
       hostedCall(
         this.#hosted.inbox.answer,
@@ -1530,7 +1620,9 @@ export class HostedAgentClient {
     key?: string,
   ): Effect.Effect<AgentInboxAnsweredView, never, HttpClient.HttpClient> {
     const body = wireRequestOf(inboxCloseRequestSchema, request);
+
     if (body === undefined) return Effect.succeed(UNANSWERED);
+
     return Effect.map(
       hostedCall(
         this.#hosted.inbox.close,
@@ -1553,7 +1645,9 @@ export class HostedAgentClient {
     key?: string,
   ): Effect.Effect<AgentInboxTakenBackView, never, HttpClient.HttpClient> {
     const body = wireRequestOf(inboxTakeBackRequestSchema, request);
+
     if (body === undefined) return Effect.succeed(UNANSWERED);
+
     return Effect.map(
       hostedCall(
         this.#hosted.inbox.takeBack,
@@ -1575,7 +1669,9 @@ export class HostedAgentClient {
     request: InboxMessageRequest,
   ): Effect.Effect<AgentInboxMessagedView, never, HttpClient.HttpClient> {
     const body = wireRequestOf(inboxMessageRequestSchema, request);
+
     if (body === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(
       this.#hosted.inbox.message,
       { params: { id: itemId }, body },
@@ -1593,7 +1689,9 @@ export class HostedAgentClient {
     request: InboxStartRequest,
   ): Effect.Effect<AgentInboxMessagedView, never, HttpClient.HttpClient> {
     const body = wireRequestOf(inboxStartRequestSchema, request);
+
     if (body === undefined) return Effect.succeed(UNANSWERED);
+
     return hostedCall(this.#hosted.inbox.start, body, { deadline: HOSTED_DEADLINE.STEER });
   }
 
@@ -1668,7 +1766,9 @@ export class HostedAgentClient {
     key?: string,
   ): Effect.Effect<AgentInboxReadAllView, never, HttpClient.HttpClient> {
     const body = wireRequestOf(inboxReadAllRequestSchema, request);
+
     if (body === undefined) return Effect.succeed(UNANSWERED);
+
     return Effect.map(
       hostedCall(this.#hosted.inbox.markAllRead, body, inboxWrite(HOSTED_DEADLINE.USUAL, key)),
       writtenAlreadyKept,

@@ -26,7 +26,6 @@ import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
-  AccountRow,
   ActionRow,
   ConfirmAsk,
   ListSection,
@@ -37,6 +36,7 @@ import {
   useAsyncAction,
   WORDS_ASK_KIND,
   WordsAsk,
+  WorkspaceRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
@@ -46,6 +46,7 @@ import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
 import { refusalOf, useWrite } from "../../use-write.js";
+import { selectPhotos, switcherWorkspace } from "../../workspace-switcher.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
@@ -84,6 +85,7 @@ function heldPeople(workspaceId: string) {
 /** The line under an invited address: its role, and when its link stops working. */
 function invitationLine(invitation: WorkspaceInvitation): string {
   const role = INVITATION_WORDS.INVITED_AS(WORKSPACE_ROLE_WORDS[invitation.role]);
+
   return `${role} · Expires ${dayAndTimeText(Date.parse(invitation.expiresAt))}`;
 }
 
@@ -101,7 +103,9 @@ function leaveMessage(workspace: Workspace): string {
 export default function WorkspaceScreen() {
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
+
   if (chosen === undefined) return null;
+
   return <WorkspacePage key={chosen.id} workspace={chosen} />;
 }
 
@@ -113,15 +117,18 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
   const personal = workspace.personal === true;
   const owner = workspace.role === WORKSPACE_ROLE.OWNER;
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
+  const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
   const readerId = account === undefined ? undefined : signedInAccountId(account);
   useLiveFollow(workspaceId, (id) => acts[ACT_KIND.WORKSPACE_MEMBERS_FOLLOW]({ workspaceId: id }));
   useLiveFollow(manages ? workspaceId : undefined, (id) =>
     acts[ACT_KIND.WORKSPACE_INVITATIONS_FOLLOW]({ workspaceId: id }),
   );
+
   const { data: held } = useQuery({
     ...appStateQuery,
     select: useCallback(heldPeople(workspaceId), [workspaceId]),
   });
+
   const members = held?.members?.rows?.members;
   const invitations = held?.invitations?.rows;
   const [asking, setAsking] = useState<Asking | undefined>(undefined);
@@ -136,6 +143,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
 
   const actsOn = (member: WorkspaceMember): readonly MemberRowAct[] => {
     const may = memberActs(workspace, member, member.userId === readerId);
+
     const role = (next: typeof ASSIGNABLE_ROLE.ADMIN | typeof ASSIGNABLE_ROLE.MEMBER) => () =>
       void people.run(() =>
         refusalOf(write, () =>
@@ -146,6 +154,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
           }),
         ),
       );
+
     return [
       ...(may.promote
         ? [{ label: MEMBER_WORDS.MAKE_ADMIN, onPress: role(ASSIGNABLE_ROLE.ADMIN) }]
@@ -177,10 +186,9 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
       <Screen>
         <SettingsForm>
           <ListSection footer={rename.refusal}>
-            <AccountRow
-              name={workspace.name}
-              email={WORKSPACE_ROLE_WORDS[workspace.role]}
-              picture={workspace.photoVersion === undefined ? workspace.pictureUrl : undefined}
+            <WorkspaceRow
+              workspace={switcherWorkspace(workspace, false, photos)}
+              role={WORKSPACE_ROLE_WORDS[workspace.role]}
             />
             {manages && !personal ? (
               <ActionRow
@@ -264,6 +272,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             label: RENAME_WORDS.ROW,
             onAct: (name) => {
               dismiss();
+
               if (name === workspace.name) return;
               void rename.run(() =>
                 refusalOf(write, () => acts[ACT_KIND.WORKSPACE_RENAME]({ workspaceId, name })),

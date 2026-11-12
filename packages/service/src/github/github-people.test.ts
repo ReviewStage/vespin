@@ -48,9 +48,11 @@ type GitHubRecord = ReturnType<typeof githubUser>;
 const CHARLES = githubUser(1001, "charlespan");
 const PRIYA = githubUser(1002, "priyan");
 const STRANGER = githubUser(1003, "octostranger", "https://evil.example.com/a.png");
+
 /** An App's bot GitHub draws by its App's logo, at its App's address. */
 const DEVIN_AVATAR = "https://avatars.githubusercontent.com/in/811515?v=4";
 const DEVIN = githubUser(1004, "devin-ai-integration[bot]", DEVIN_AVATAR);
+
 /** Our own App's bot, whose logo GitHub serves at the fixture App's id. */
 const LUKE_AVATAR = `https://avatars.githubusercontent.com/in/${GITHUB_FIXTURE.APP_ID}?v=4`;
 const LUKE = githubUser(GITHUB_FIXTURE_BOT.id, GITHUB_FIXTURE_BOT.login, LUKE_AVATAR);
@@ -67,10 +69,13 @@ function repository(answers: {
 }): RepositoryScript {
   return (sent) => {
     const { pathname } = new URL(sent.url);
+
     if (pathname === PULL && answers.pull !== undefined) return Response.json(answers.pull);
+
     if (pathname === `${PULL}/reviews` && answers.reviews !== undefined) {
       return answers.reviews instanceof Response ? answers.reviews : Response.json(answers.reviews);
     }
+
     return undefined;
   };
 }
@@ -88,6 +93,7 @@ const linkedAccount = (githubId: number) =>
       userId,
       updatedAt: new Date(0),
     });
+
     return userId;
   });
 
@@ -128,12 +134,14 @@ it.layer(getTestDB())("who a pull request names", (it) => {
           bot: true,
           avatarUrl: LUKE.avatar_url,
         };
+
         const asCharles = {
           login: CHARLES.login,
           bot: false,
           avatarUrl: CHARLES.avatar_url,
           userId: charles,
         };
+
         const asPriya = { login: PRIYA.login, bot: false, avatarUrl: PRIYA.avatar_url };
         // Note that a bot reviewer stands by its App's logo, the address GitHub gives it.
         const devin = { login: DEVIN.login, bot: true, avatarUrl: DEVIN_AVATAR };
@@ -166,10 +174,12 @@ it.layer(getTestDB())("who a pull request names", (it) => {
 
         // Priya joins the workspace, and is named by her user account from then on.
         yield* joinWorkspace(workspace, priya);
+
         const joined = yield* peopleOf(
           workspace,
           repository({ pull: { user: PRIYA, requested_reviewers: [] }, reviews: [] }),
         );
+
         assert.equal(joined.author?.userId, priya);
       }),
   );
@@ -179,14 +189,19 @@ it.layer(getTestDB())("who a pull request names", (it) => {
     () =>
       Effect.gen(function* () {
         const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
+
         const early = Array.from({ length: 100 }, (_, at) =>
           review(DEVIN, "COMMENTED", `Note ${at}.`, "2026-10-15T09:00:00Z"),
         );
+
         early[0] = review(CHARLES, "CHANGES_REQUESTED", "Rename the flag.", "2026-10-15T08:00:00Z");
         const pages = (url: string) => Number(new URL(url).searchParams.get("page") ?? 1);
+
         const people = yield* peopleOf(workspace, (sent) => {
           const { pathname } = new URL(sent.url);
+
           if (pathname === PULL) return Response.json({ user: LUKE });
+
           if (pathname === `${PULL}/reviews`) {
             return Response.json(
               pages(sent.url) === 1
@@ -194,6 +209,7 @@ it.layer(getTestDB())("who a pull request names", (it) => {
                 : [review(CHARLES, "APPROVED", "Ship it.", "2026-10-15T10:00:00Z")],
             );
           }
+
           return undefined;
         });
 
@@ -212,21 +228,28 @@ it.layer(getTestDB())("who a pull request names", (it) => {
       Effect.gen(function* () {
         const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
         const NEWEST_PAGE = 7;
+
         const people = yield* peopleOf(workspace, (sent) => {
           const { pathname, searchParams } = new URL(sent.url);
           const page = Number(searchParams.get("page") ?? 1);
+
           if (pathname === PULL) return Response.json({ user: LUKE });
+
           if (pathname !== `${PULL}/reviews`) return undefined;
+
           if (page === NEWEST_PAGE) {
             return Response.json([
               review(CHARLES, "CHANGES_REQUESTED", "Not yet.", "2026-10-16T09:00:00Z"),
             ]);
           }
+
           const notes = Array.from({ length: 100 }, (_, at) =>
             review(DEVIN, "COMMENTED", `Note ${page}.${at}.`, "2026-10-15T09:00:00Z"),
           );
+
           if (page === 1)
             notes[0] = review(CHARLES, "APPROVED", "Ship it.", "2026-10-15T08:00:00Z");
+
           return Response.json(notes);
         });
 
@@ -243,6 +266,7 @@ it.layer(getTestDB())("who a pull request names", (it) => {
     () =>
       Effect.gen(function* () {
         const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
+
         const people = yield* peopleOf(
           workspace,
           repository({
@@ -261,6 +285,7 @@ it.layer(getTestDB())("who a pull request names", (it) => {
     () =>
       Effect.gen(function* () {
         const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
+
         const unanswered = yield* peopleOf(
           workspace,
           repository({
@@ -268,6 +293,7 @@ it.layer(getTestDB())("who a pull request names", (it) => {
             reviews: Response.json({ message: "Service Unavailable" }, { status: 503 }),
           }),
         );
+
         assert.deepEqual(unanswered, {});
 
         const gone = yield* peopleOf(workspace, repository({}));

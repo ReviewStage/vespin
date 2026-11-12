@@ -50,13 +50,16 @@ const registered = Effect.fnUntraced(function* (
       input.token.toLowerCase(),
     ),
   );
+
   if (!held) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
   return DONE;
 });
 
 /** The live activities resource: every procedure to a signed-in caller. */
 export function liveActivitiesProcedures(seams: LiveActivitiesProcedureSeams) {
   const signedIn = hosted.liveActivities.use(accountMiddleware(seams.resolveUserId));
+
   return {
     startToken: signedIn.startToken.effect(function* ({ input, context: { userId } }) {
       return yield* registered(userId, input, LIVE_ACTIVITY_TOKEN.START);
@@ -74,6 +77,7 @@ export function liveActivitiesProcedures(seams: LiveActivitiesProcedureSeams) {
           input.activityToken?.toLowerCase(),
         ),
       );
+
       return DONE;
     }),
   };

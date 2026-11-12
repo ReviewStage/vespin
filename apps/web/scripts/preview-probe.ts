@@ -52,10 +52,12 @@ const ENV = {
 } as const;
 
 const doorConfig = Config.Literals(ProbeDoorSchema.literals, ENV.DOOR);
+
 /** A workflow hands an absent secret over as the empty string, which is no secret. */
 const bypassSecretConfig = Config.option(Config.Redacted(ENV.BYPASS_SECRET)).pipe(
   Config.map(Option.filter((secret) => Redacted.value(secret).length > 0)),
 );
+
 const stepSummaryConfig = Config.option(Config.String(ENV.STEP_SUMMARY));
 
 class BypassSecretMissing extends Schema.TaggedError<BypassSecretMissing>()(
@@ -77,7 +79,7 @@ class PreviewNotBuilt extends Schema.TaggedError<PreviewNotBuilt>()("PreviewNotB
   }
 }
 
-class ShapeMismatch extends Schema.TaggedError<ShapeMismatch>()("ShapeMismatch", {
+class ReportMismatch extends Schema.TaggedError<ReportMismatch>()("ReportMismatch", {
   failures: Schema.Number,
   total: Schema.Number,
 }) {
@@ -88,6 +90,7 @@ class ShapeMismatch extends Schema.TaggedError<ShapeMismatch>()("ShapeMismatch",
 
 function addressArgument(argv: readonly string[]): string | undefined {
   const flag = argv.indexOf(URL_FLAG);
+
   return flag === -1 ? undefined : argv[flag + 1];
 }
 
@@ -100,17 +103,21 @@ function expectedColumn(request: PlannedRequest): string {
 function renderReport(report: ProbeReport): string {
   const lines = report.results.map((result) => {
     const error = result.vercelError === undefined ? "" : ` ${result.vercelError}`;
+
     return `${result.verdict === VERDICT.OK ? "ok  " : "FAIL"} ${result.method} ${result.path} -> ${result.status}${error}${expectedColumn(result)} [${result.verdict}]`;
   });
+
   return `${report.address} through the ${report.door} door\n${lines.join("\n")}\n`;
 }
 
 function renderSummary(report: ProbeReport): string {
   const failures = probeFailures(report);
+
   const rows = report.results.map(
     (result) =>
       `| ${result.verdict === VERDICT.OK ? "✅" : "❌"} | \`${result.method}\` | \`${result.path}\` | ${result.status}${result.vercelError === undefined ? "" : ` \`${result.vercelError}\``} | ${result.expected ?? ""} | ${result.verdict} |`,
   );
+
   return [
     `### Deployed shape: ${report.address}`,
     "",
@@ -129,6 +136,7 @@ function renderNotAffected(reading: PreviewReading & { readonly kind: "not-affec
 
 const appendStepSummary = /* @__PURE__ */ Effect.fnUntraced(function* (text: string) {
   const path = yield* stepSummaryConfig;
+
   if (Option.isNone(path)) return;
   const fs = yield* FileSystem.FileSystem;
   yield* fs.writeFileString(path.value, text, { flag: "a" });
@@ -142,13 +150,17 @@ const resolveTarget = /* @__PURE__ */ Effect.fn("web/resolveTarget")(function* (
   bypassSecret: ProbeTarget["bypassSecret"],
 ) {
   const given = addressArgument(process.argv.slice(2));
+
   if (given !== undefined) return { address: given, bypassSecret };
+
   const source = {
     repository: yield* Config.String(ENV.REPOSITORY),
     sha: yield* Config.String(ENV.SHA),
     token: yield* Config.Redacted(ENV.TOKEN),
   };
+
   const reading = yield* waitForPreview(source, { onReading: describeReading });
+
   switch (reading.kind) {
     case PREVIEW_STATE.READY:
       return { address: reading.address, bypassSecret };
@@ -161,8 +173,10 @@ const resolveTarget = /* @__PURE__ */ Effect.fn("web/resolveTarget")(function* (
 
 const program = Effect.gen(function* () {
   const door = yield* doorConfig;
+
   const bypassSecret =
     door === PROBE_DOOR.BYPASS_SECRET ? yield* bypassSecretConfig : Option.none();
+
   if (
     door === PROBE_DOOR.BYPASS_SECRET &&
     Option.isNone(bypassSecret) &&
@@ -170,27 +184,33 @@ const program = Effect.gen(function* () {
   ) {
     return yield* new BypassSecretMissing();
   }
+
   const path = yield* Path.Path;
   const web = path.join(import.meta.dirname, "..");
   const repoRoot = path.join(web, "..", "..");
   const task = planProbes(door, yield* readProbePaths({ repoRoot, web }));
   const target = yield* resolveTarget(bypassSecret);
+
   if ("kind" in target) {
     const notice = renderNotAffected(target);
     yield* write(notice);
     yield* appendStepSummary(`### Deployed shape\n\n${notice}`);
+
     return;
   }
+
   const report: ProbeReport = {
     door,
     address: target.address,
     results: yield* probeDeployment(target, task),
   };
+
   yield* write(renderReport(report));
   yield* appendStepSummary(renderSummary(report));
   const failures = probeFailures(report);
+
   if (failures.length > 0) {
-    return yield* new ShapeMismatch({ failures: failures.length, total: report.results.length });
+    return yield* new ReportMismatch({ failures: failures.length, total: report.results.length });
   }
 });
 

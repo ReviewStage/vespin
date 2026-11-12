@@ -69,5 +69,6 @@ export function withUndrawnPassed(
   const kept = was.findLastIndex(
     (closed) => drawsAnywhere(closed) && (closed.task !== task || draws(closed)),
   );
+
   return kept === was.length - 1 ? was : was.slice(0, kept + 1);
 }

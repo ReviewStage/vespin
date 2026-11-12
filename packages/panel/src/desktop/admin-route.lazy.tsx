@@ -17,7 +17,9 @@ function AdminRoutePlace(): React.JSX.Element {
   const { tasks, room, adminAccess } = useShellPlaces();
   const view = useAdminView();
   const admin = useAdminDoor(tasks);
+
   if (!adminAccess) return <AdminRouteLoading />;
+
   return (
     <DesktopAdmin
       room={room}

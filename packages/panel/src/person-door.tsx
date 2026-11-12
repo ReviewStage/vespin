@@ -1,3 +1,4 @@
+import { GITHUB_ORIGIN } from "@repo/features/link-grammar";
 import { ACTOR_KIND, type Actor, SOMEONE_REASON } from "@repo/ui/actor-model";
 import { createContext, useContext, useEffect } from "react";
 import { appPlatform } from "./app-platform.js";
@@ -48,9 +49,6 @@ export function usePreloadedPerson(userId: string): void {
   useEffect(() => preload?.(userId, workspaceId), [preload, userId, workspaceId]);
 }
 
-/** GitHub's own address, which a GitHub account's page stands under. */
-const GITHUB_ORIGIN = "https://github.com";
-
 /** What an App's bot's login ends with, which its App's slug comes before. */
 const BOT_SUFFIX = "[bot]";
 
@@ -58,6 +56,7 @@ const BOT_SUFFIX = "[bot]";
 function githubPageOf(login: string, bot: boolean): string {
   const app = bot && login.endsWith(BOT_SUFFIX);
   const path = app ? `apps/${login.slice(0, -BOT_SUFFIX.length)}` : login;
+
   return new URL(path, `${GITHUB_ORIGIN}/`).href;
 }
 
@@ -66,22 +65,31 @@ export function useActorDoor(actor: Actor): (() => void) | undefined {
   const openPerson = useContext(OpenPersonContext);
   // Note that a person is opened in the workspace the place naming them reads its members of, an agent's own where its page stands in another.
   const { workspaceId } = useMemberDirectory();
+
   if (openPerson === undefined) return undefined;
+
   switch (actor.kind) {
     case ACTOR_KIND.PERSON: {
       const { userId } = actor;
+
       return () => openPerson(userId, undefined, workspaceId);
     }
+
     case ACTOR_KIND.SOMEONE: {
       // Note that someone who left is opened with the name the place knows them by, because their page may find them nowhere else.
       const { userId, name } = actor;
+
       if (actor.reason !== SOMEONE_REASON.FORMER || userId === undefined) return undefined;
+
       return () => openPerson(userId, name, workspaceId);
     }
+
     case ACTOR_KIND.GITHUB: {
       const url = githubPageOf(actor.login, actor.bot);
+
       return () => appPlatform().openGitHub(url);
     }
+
     default:
       return undefined;
   }

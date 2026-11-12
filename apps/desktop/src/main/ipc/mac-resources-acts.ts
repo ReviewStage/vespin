@@ -24,11 +24,13 @@ export function macResourcesProcedures(
   dependencies: MacResourcesActsDependencies,
 ): Pick<PlatformActProcedures<WebContents>, MacResourcesActKind> {
   const { read } = dependencies;
+
   return {
     [MAC_RESOURCES_ACT_KIND.MAC_RESOURCES_READ]: macResourcesPort[
       MAC_RESOURCES_ACT_KIND.MAC_RESOURCES_READ
     ].effect(function* ({ context, errors }) {
       yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
+
       return yield* read;
     }),
   };

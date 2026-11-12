@@ -21,6 +21,7 @@ const ARCHIVED_NOTE_COPY = {
 
 /** The two presses the note waits on, of which one is out at a time. */
 const ARCHIVED_PRESS = { STOP: "stop", UNARCHIVE: "unarchive" } as const;
+
 type ArchivedPress = (typeof ARCHIVED_PRESS)[keyof typeof ARCHIVED_PRESS];
 
 /**
@@ -40,12 +41,15 @@ export function ArchivedComposerNote({
   stop?: (() => Promise<boolean>) | undefined;
 }): React.JSX.Element {
   const [out, setOut] = useState<ArchivedPress | undefined>(undefined);
+
   // Note that a Stop the service took reads Stopping until the agent offers none, because the task
   // list carries the stop a moment after the answer.
   if (out === ARCHIVED_PRESS.STOP && stop === undefined) setOut(undefined);
-  const press = (which: ArchivedPress, run: () => unknown) => {
+
+  const press = (which: ArchivedPress, run: () => void | Promise<void> | Promise<boolean>) => {
     if (out !== undefined) return;
     const settles = run();
+
     // Note that a press that answers at once, as one that asks first does, has nothing to wait on.
     if (!(settles instanceof Promise)) return;
     setOut(which);
@@ -56,6 +60,7 @@ export function ArchivedComposerNote({
       () => setOut(undefined),
     );
   };
+
   return (
     <div className={COMPOSER_ROOM_CLASS}>
       <Banner

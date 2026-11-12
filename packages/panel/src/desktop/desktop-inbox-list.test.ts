@@ -117,14 +117,19 @@ function rowStatus(page: HTMLElement, title: string): string | undefined {
  */
 function scopes(page: HTMLElement): string[] {
   openViewOptions(page);
+
   const offered = [...document.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]')].filter(
     (each) => SCOPE_NAMES.some((name) => each.textContent === name),
   );
+
   const shown = offered.find((each) => each.getAttribute("aria-checked") === "true");
+
   const words = offered.map((each) =>
     each === shown ? `[${each.textContent}]` : (each.textContent ?? ""),
   );
+
   act(() => shown?.click());
+
   return [headTitle(page) ?? "", ...words];
 }
 
@@ -149,9 +154,11 @@ function commandClick(page: HTMLElement, title: string): void {
 
 /** The titles of the rows the list holds chosen, in the order drawn. */
 function picked(page: HTMLElement): string[] {
-  return [...page.querySelectorAll<HTMLButtonElement>(".inbox-tasks li button.ui-list-row-main")]
-    .filter((row) => heardOf(row.getAttribute("aria-describedby")).startsWith("Selected, "))
-    .map(titleOf);
+  return [
+    ...page.querySelectorAll<HTMLButtonElement>(".inbox-tasks li button.ui-list-row-main"),
+  ].flatMap((row) =>
+    heardOf(row.getAttribute("aria-describedby")).startsWith("Selected, ") ? [titleOf(row)] : [],
+  );
 }
 
 /** The selection's acts in the list's head, named by how many are chosen, or none while nothing is. */
@@ -166,7 +173,9 @@ function barButton(page: HTMLElement, name: string): HTMLButtonElement {
       "button",
     ),
   ].find((each) => (each.getAttribute("aria-label") ?? each.textContent?.trim()) === name);
+
   assert.ok(button, `the bar offers ${name}`);
+
   return button;
 }
 
@@ -237,8 +246,10 @@ test("an Undo the service does not hear says so, and its Retry takes the resolve
     act: (request: AnyAct): Promise<FakeActAnswer> => {
       if (request.kind === ACT_KIND.AGENTS_INBOX_TAKE_BACK && !dropped) {
         dropped = true;
+
         return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "The act port closed." });
       }
+
       return previous(request);
     },
   });
@@ -349,6 +360,7 @@ test("the head's box lets a selection go at a press, and the menu beside it choo
   const { page } = mount();
   await settle();
   const expiry = "Expire after 7 days?";
+
   const box = () =>
     page.querySelector<HTMLElement>('.inbox-tasks .ui-selection-picker [role="checkbox"]') ??
     assert.fail("the head's box stands");
@@ -364,9 +376,11 @@ test("the head's box lets a selection go at a press, and the menu beside it choo
   );
 
   commandClick(page, expiry);
+
   const select = page.querySelector<HTMLButtonElement>(
     '.inbox-tasks .ui-selection-picker button[aria-label="Select"]',
   );
+
   act(() => select?.click());
   act(() => menuItem("All").click());
   assert.deepEqual(picked(page), ["How is a failed email retried?", expiry, "Alert at 80%?"]);
@@ -448,7 +462,9 @@ function sidebarInboxCount(page: HTMLElement): number | undefined {
     [...page.querySelectorAll<HTMLElement>(".sidebar-places .ui-nav-item")].find(
       (each) => each.querySelector(".ui-nav-item-name")?.textContent === "Inbox",
     ) ?? assert.fail("the sidebar draws its Inbox row");
+
   const count = row.textContent?.match(/\d+/u)?.[0];
+
   return count === undefined ? undefined : Number(count);
 }
 
@@ -460,11 +476,13 @@ function toDoRows(page: HTMLElement): number {
 test("the sidebar's Inbox counts the questions and the update waiting on you, never a settled thread however unread, which Open lists until it is read, nor a teammate's question", async () => {
   window.localStorage.setItem(SHOW_KEY, JSON.stringify("to-do"));
   window.localStorage.removeItem(WHOSE_KEY);
+
   const NOTE: InboxItem = {
     ...noticeOf(item("a1b2c3d4-0000-4000-8000-000000000011", "Preview is up", 3_500)),
     needsReply: false,
     unread: true,
   };
+
   const SEEN: InboxItem = {
     ...RETRY,
     id: "a1b2c3d4-0000-4000-8000-000000000012",
@@ -473,23 +491,28 @@ test("the sidebar's Inbox counts the questions and the update waiting on you, ne
     updatedAt: 4_500,
     unread: false,
   };
+
   const THEIRS: InboxItem = {
     ...item("a1b2c3d4-0000-4000-8000-000000000013", "Rotate the key?", 3_800),
     startedBy: TEAMMATE,
   };
+
   const followed: InboxItem = { ...RETRY, updatedAt: 2_500, unread: true };
   world.inboxes.set(BILLING.id, [{ ...THRESHOLD, unread: true }, followed, SEEN]);
   world.inboxes.set(INVITES.id, [{ ...EXPIRY, unread: true }, NOTE, THEIRS]);
+
   // Note that main counts each task's one open ask, never the notice, which the sidebar counts from main's open items.
   const holding: readonly AppInboxTaskHolding[] = [
     { taskId: BILLING.id, items: 3, toDo: 1, updatedAt: 4_500 },
     { taskId: INVITES.id, items: 3, toDo: 1, updatedAt: 4_000 },
   ];
+
   // Main lists the open items that wait on the reader, the notice among them, as the service's read does.
   const waiting: readonly AppInboxTask[] = [
     { taskId: BILLING.id, items: [waitingOf(THRESHOLD)] },
     { taskId: INVITES.id, items: [waitingOf(EXPIRY), { ...waitingOf(NOTE), asking: false }] },
   ];
+
   const { page } = mount({ holding, waiting, withSidebar: true });
   await settle();
   assert.equal(toDoRows(page), 4, "the two questions, the update, and the settled thread unread");
@@ -528,21 +551,25 @@ test("a fresh profile opens the Inbox on Open addressed to Me, its head naming t
 
 test("a task done or canceled keeps its items listed and counted as any other's, each row wearing its task's status, its card's task chip wearing it too; no scope offers an archive", async () => {
   window.localStorage.clear();
+
   const { page } = mount({
     standing: [
       { ...BILLING, status: TASK_STATUS.DONE },
       { ...INVITES, status: TASK_STATUS.CANCELED },
     ],
   });
+
   await settle();
   assert.deepEqual(scopes(page), ["Inbox", "Questions", "[Open]", "All"]);
   const rows = listed(page);
+
   for (const row of ["Alert at 80%?", "Expire after 7 days?"]) {
     assert.ok(
       rows.some((each) => each.replace(/^(▸ )?\*?/u, "") === row),
       `Open lists ${row}: ${rows.join(" | ")}`,
     );
   }
+
   assert.equal(rowStatus(page, "Alert at 80%?"), "Done");
   assert.equal(rowStatus(page, "Expire after 7 days?"), "Canceled");
 
@@ -570,10 +597,12 @@ test("each row names its task on its first line with its time at that line's end
   world.inboxes.set(BILLING.id, [{ ...THRESHOLD, startedBy: TEAMMATE }, RETRY]);
   const { page } = mount();
   await settle();
+
   const lines = () =>
     ["Alert at 80%?", "Expire after 7 days?"].map((title) => {
       const row = rowNamed(page, title);
       const head = row.querySelector(".ui-list-row-head");
+
       return {
         task: head?.querySelector('.ui-list-row-lead[data-at="above"]')?.textContent,
         time: head?.querySelector(".home-row-meta time") !== null,
@@ -581,6 +610,7 @@ test("each row names its task on its first line with its time at that line's end
         preview: row.querySelector(".ui-list-row-description")?.textContent,
       };
     });
+
   const expected = [
     {
       task: "Billing usage alerts",
@@ -595,23 +625,29 @@ test("each row names its task on its first line with its time at that line's end
       preview: "Retry 3 times over an hour (recommended) / Retry once",
     },
   ];
+
   assert.deepEqual(lines(), expected);
 });
 
 test("the list is resized from its edge between its bounds, and keeps its width across a relaunch", async () => {
   let { page } = mount();
   await settle();
+
   const edge = () => {
     const separator = listEdge(page);
     assert.ok(separator, "the list has an edge to resize it by");
+
     return separator;
   };
+
   const width = () => Number(edge().getAttribute("aria-valuenow"));
+
   const press = (key: string) => {
     act(() => {
       edge().dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
     });
   };
+
   assert.equal(width(), 320, "a mail app's list, narrower than the item it reads");
   press("ArrowRight");
   assert.equal(width(), 336);
@@ -640,6 +676,7 @@ function emptyStateIn(page: HTMLElement, column: string): string | null {
   const shown = page.querySelector(column);
   assert.ok(shown, "the column is drawn");
   const empty = shown.querySelector(".ui-empty-state-words");
+
   return empty === null || shown.hasAttribute("hidden") ? null : (empty.textContent ?? "");
 }
 
@@ -691,6 +728,7 @@ test("while the account's feed is first read, the list stands placeholder rows i
     [BILLING.id, pending()],
     [INVITES.id, pending()],
   ]);
+
   world.startRead = (taskId) => reads.get(taskId)?.promise;
   world.feedUnread = true;
   const { page } = mount({ chosen: ON_THRESHOLD });
@@ -755,7 +793,9 @@ test("an Inbox opened before the account's task list is read stands placeholder 
 /** The list's empty state as a reader meets it: its heading, its line, and its one press; none where the list stands none. */
 function listEmpty(page: HTMLElement): readonly (string | null | undefined)[] | null {
   const empty = page.querySelector(".inbox-tasks:not([hidden]) .ui-empty-state");
+
   if (empty === null) return null;
+
   return [
     empty.querySelector("h3")?.textContent,
     empty.querySelector("p")?.textContent,
@@ -813,8 +853,8 @@ test("one column wide, an answered item that Needs you draws no row for shows no
   layOut(page, 800);
   assert.equal(readTitle(page), "How is a failed email retried?");
   assert.equal(pagerOf(page), null, "no row, so no count");
-  assert.equal(arrowNamed(page, "Previous item").getAttribute("aria-disabled"), "true");
-  act(() => arrowNamed(page, "Next item").click());
+  assert.equal(arrowNamed(page, "Previous inbox item").getAttribute("aria-disabled"), "true");
+  act(() => arrowNamed(page, "Next inbox item").click());
   assert.deepEqual([readTitle(page), pagerOf(page)], ["Expire after 7 days?", "1 of 2"]);
 });
 
@@ -845,14 +885,18 @@ test("on a phone, a focused row whose item is answered elsewhere leaves the keyb
   window.localStorage.removeItem(WHOSE_KEY);
   const { page } = mount({ chosen: ON_THRESHOLD, room: SHELL_ROOM.NARROW });
   await settle();
+
   // Open is chosen as a phone chooses it: the ⋯'s View options opens the list's own menu where the ⋯ stood.
   const more = () =>
     page.querySelector<HTMLButtonElement>('.inbox-head button[aria-label="Inbox actions"]') ??
     assert.fail("the ⋯ stands");
+
   act(() => more().click());
+
   const options = [
     ...document.querySelectorAll<HTMLElement>('[role="menu"] [role="menuitem"]'),
   ].find((each) => each.querySelector(".ui-menu-item-label")?.textContent === "View options");
+
   act(() => options?.click());
   act(() => viewItem("Open").click());
   rowNamed(page, "Expire after 7 days?").focus();
@@ -874,6 +918,7 @@ test("on a phone, a focused row whose item is answered elsewhere leaves the keyb
 function playListMotions() {
   const motions = playMotions();
   const root = document.documentElement.style;
+
   const tokens = {
     "--ui-duration-exit": "90ms",
     "--ui-motion-exit": "ease",
@@ -881,11 +926,14 @@ function playListMotions() {
     "--ui-spring": "ease-out",
     "--ui-list-travel": "16px",
   };
+
   for (const [name, value] of Object.entries(tokens)) root.setProperty(name, value);
   onTestFinished(() => {
     motions.remove();
+
     for (const name of Object.keys(tokens)) root.removeProperty(name);
   });
+
   return motions.played;
 }
 
@@ -924,7 +972,7 @@ test("on Needs you, an item answered on another Mac slides out from where its ro
     leaving.every((each) => each.hasAttribute("inert")),
     "each is drawn on out of reach",
   );
-  const fades = played.filter((each) => leaving.includes(each.element as HTMLElement));
+  const fades = played.filter((each) => leaving.some((leaver) => leaver === each.element));
   assert.deepEqual(
     fades.map((each) => each.keyframes.at(-1)),
     [
@@ -949,9 +997,11 @@ interface PendingRead {
 /** A read held until the test settles it. */
 function pending(): PendingRead {
   let settle: PendingRead["settle"] = () => undefined;
+
   const promise = new Promise<ReadOutcome>((resolve) => {
     settle = (value) => resolve({ status: FAKE_ANSWER.DONE, value });
   });
+
   return { promise, settle };
 }
 
@@ -960,9 +1010,11 @@ test("an item's row reads as its task line and time, then its title, over the la
     item("a1b2c3d4-0000-4000-8000-000000000004", "Page on-call at night?", 2_000),
     { type: INBOX_ASK.DO, steps: ["Add the **rota** to PagerDuty."] },
   );
+
   const sevAsked = noticeOf(
     item("a1b2c3d4-0000-4000-8000-000000000005", "Which incidents page?", 1_500),
   );
+
   const SEV: InboxItem = {
     ...sevAsked,
     startedBy: TEAMMATE,
@@ -976,6 +1028,7 @@ test("an item's row reads as its task line and time, then its title, over the la
       ),
     ]),
   };
+
   const [expiryAsking] = EXPIRY.thread ?? [];
   assert.ok(expiryAsking?.ask !== undefined, "the item opens with its ask");
   world.inboxes.set(BILLING.id, [THRESHOLD, RETRY, NIGHT, SEV]);
@@ -1024,9 +1077,11 @@ test("the reader's own open item says to a reader before its time that it needs 
   world.inboxes.set(BILLING.id, [{ ...THRESHOLD, startedBy: TEAMMATE }, RETRY]);
   const { page } = mount({ chosen: ON_EXPIRY });
   await settle();
+
   const ends = (title: string) => {
     const row = rowNamed(page, title);
     const meta = row.querySelector(".ui-list-row-meta");
+
     return {
       face: meta?.querySelector<HTMLElement>(".actor-mark")?.dataset.kind,
       said: meta?.querySelector(".ui-visually-hidden")?.textContent,
@@ -1034,6 +1089,7 @@ test("the reader's own open item says to a reader before its time that it needs 
       unread: row.closest("li")?.dataset.unread === "true",
     };
   };
+
   assert.deepEqual(ends("Expire after 7 days?"), {
     face: undefined,
     said: "Needs you",
@@ -1062,6 +1118,7 @@ test("the reader's own open item says to a reader before its time that it needs 
 /** Whether a row reads as unread: its blue dot, its title in the unread weight, and "Unread" said to a reader, each `?` where only some stand. */
 function unreadOf(page: HTMLElement, title: string): boolean | "?" {
   const row = rowNamed(page, title);
+
   const marks = [
     row.querySelector(".ui-unread-gutter .ui-unread-dot") !== null,
     row.closest("li")?.dataset.unread === "true",
@@ -1069,7 +1126,9 @@ function unreadOf(page: HTMLElement, title: string): boolean | "?" {
       (each) => each.textContent === "Unread",
     ),
   ];
+
   if (marks.every(Boolean)) return true;
+
   return marks.some(Boolean) ? "?" : false;
 }
 
@@ -1077,6 +1136,7 @@ function unreadOf(page: HTMLElement, title: string): boolean | "?" {
 /** The row of the item so titled as a reader hears it: its name, then its description. */
 function heardRow(page: HTMLElement, title: string): [string, string] {
   const row = rowNamed(page, title);
+
   return [
     heardOf(row.getAttribute("aria-labelledby")),
     heardOf(row.getAttribute("aria-describedby")),
@@ -1274,8 +1334,10 @@ test("Mark all as read sends one write and asks no task again, since each follow
   const taskReads: string[] = [];
   world.startRead = (taskId) => {
     taskReads.push(taskId);
+
     return undefined;
   };
+
   world.inboxes.set(BILLING.id, [THRESHOLD, { ...RETRY, unread: true }]);
   mount();
   await settle();
@@ -1294,7 +1356,9 @@ test("Mark all as read sends one write and asks no task again, since each follow
 /** The chip over the list saying whose items it holds, as a reader meets it: its words and its ×'s name; none where none stands. */
 function whoseChip(page: HTMLElement): readonly (string | null | undefined)[] | null {
   const chip = page.querySelector(".inbox-tasks-chips .ui-chip");
+
   if (chip === null) return null;
+
   return [
     chip.querySelector(".ui-chip-name")?.textContent,
     chip.querySelector("button")?.getAttribute("aria-label"),
@@ -1365,12 +1429,14 @@ test("the Addressed to chip scales in as a teammate is chosen and out as its × 
   const { page } = mount();
   await settle();
   const line = () => page.querySelector<HTMLElement>(".inbox-tasks-chips")?.parentElement;
+
   const scaledIn = (element: Element | null | undefined) =>
     played.some(
       (each) =>
         each.element === element &&
         each.keyframes.some((frame) => String(frame.transform).includes("scale")),
     );
+
   assert.equal(line()?.hidden, true, "the line stands ready, hidden");
 
   chooseView(page, "Addressed to", "Charles Pan");
@@ -1425,12 +1491,14 @@ test("a teammate chosen in Addressed to with nothing in the scope shown says so,
 test("Me chosen in Addressed to with nothing of the reader's in the scope shown says so in the reader's words, and offers anyone's", async () => {
   world.listedWorkspace = SHARED_WORKSPACE;
   world.members = SHARED_MEMBERS;
+
   for (const [holder, items] of world.inboxes) {
     world.inboxes.set(
       holder,
       items.map((item) => ({ ...item, startedBy: TEAMMATE })),
     );
   }
+
   const { page } = mount();
   await settle();
   chooseView(page, "Addressed to", "Me");
@@ -1492,6 +1560,7 @@ test("a thread's row says the ask itself while one is open, led by its kind's gl
       steps: ["Open the settings", "Add the secret", "Redeploy"],
     }),
   ]);
+
   const FIELDS: InboxItem = {
     ...threadItem([
       askingMessage(
@@ -1503,7 +1572,9 @@ test("a thread's row says the ask itself while one is open, led by its kind's gl
     title: "Which SMTP host?",
     startedBy: TEAMMATE,
   };
+
   const asked = askingMessage(EXPIRY_ASK, { status: INBOX_ASK_STATUS.ANSWERED });
+
   const CHOSEN: InboxItem = {
     ...threadItem([
       asked,
@@ -1522,6 +1593,7 @@ test("a thread's row says the ask itself while one is open, led by its kind's gl
     status: INBOX_STATUS.ANSWERED,
     answeredBy: READER,
   };
+
   world.inboxes = new Map([
     [BILLING.id, [STEPS, FIELDS, CHOSEN]],
     [INVITES.id, [{ ...EXPIRY, thread: [askingMessage({ type: INBOX_ASK.ANSWER })] }]],
@@ -1535,8 +1607,10 @@ test("a thread's row says the ask itself while one is open, led by its kind's gl
     true,
     "You: Chose 7 days · and say so in the docs",
   ]);
+
   const glyphOf = (title: string) =>
     rowNamed(page, title).querySelector(".inbox-row-line")?.getAttribute("data-line");
+
   assert.deepEqual([STEPS.title, FIELDS.title, CHOSEN.title].map(glyphOf), [
     "do",
     "answer",
@@ -1574,6 +1648,7 @@ function searchList(page: HTMLElement, words: string): void {
   const input = page.querySelector<HTMLInputElement>(
     '.inbox-tasks input[aria-label="Search inbox"]',
   );
+
   assert.ok(input, "the search stands open");
   // Note that the value goes in through the prototype's setter, because React tracks the field's own.
   const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
@@ -1592,10 +1667,12 @@ test("the Inbox's head is one row in the list, its search beside its buttons and
   const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const row = page.querySelector<HTMLElement>(".inbox-head-row") ?? assert.fail("the row stands");
+
   const buttons = () =>
-    [...row.querySelectorAll("button")]
-      .filter((each) => each.closest("search") === null)
-      .map((each) => each.getAttribute("aria-label"));
+    [...row.querySelectorAll("button")].flatMap((each) =>
+      each.closest("search") === null ? [each.getAttribute("aria-label")] : [],
+    );
+
   assert.deepEqual(buttons(), ["Mark all as read", "View options"]);
   assert.equal(
     page.querySelector(".inbox-tasks > .ui-toolbar")?.querySelector("button, h1"),

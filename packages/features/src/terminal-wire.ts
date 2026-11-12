@@ -50,7 +50,17 @@ const terminalSummarySchema = EffectSchema.Struct({
   running: EffectSchema.Boolean,
   /** The run action the shell was started for (`workspace-sandbox-setup-wire.ts`), by its id; none for a shell a developer opened. */
   runAction: EffectSchema.optionalKey(EffectSchema.String),
+  /** How a run action's process ended, its pane kept to show it: the status it exited with, or the signal that ended it; none while it runs, and none for a shell a developer opened. */
+  exited: EffectSchema.optionalKey(
+    EffectSchema.Union([
+      EffectSchema.Struct({ code: EffectSchema.Int }),
+      EffectSchema.Struct({ signal: EffectSchema.Int }),
+    ]),
+  ),
 });
+
+/** How a run action's process ended (`TerminalSummary.exited`). */
+export type ShellExit = NonNullable<(typeof terminalSummarySchema.Type)["exited"]>;
 
 export type TerminalSummary = typeof terminalSummarySchema.Type;
 
@@ -183,7 +193,10 @@ export function socketEnding(
   attached: boolean,
 ): RelaySocketEnd {
   const said = closeCode === undefined ? undefined : END_BY_CLOSE.get(closeCode);
+
   if (said === RELAY_SOCKET_END.EXITED) return { kind: said, code: exitCode };
+
   if (said !== undefined) return { kind: said };
+
   return { kind: attached ? RELAY_SOCKET_END.DROPPED : RELAY_SOCKET_END.UNATTACHED };
 }
