@@ -397,6 +397,19 @@ function title(container: HTMLElement): HTMLElement {
   return text;
 }
 
+/** A mouse, rather than a finger, works the window: it answers every media query but a finger's. */
+function pointerIsMouse(): void {
+  const ignore = () => undefined;
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    value: (query: string) => ({
+      matches: !query.includes("pointer: coarse"),
+      addEventListener: ignore,
+      removeEventListener: ignore,
+    }),
+  });
+}
+
 test("a click into a section opens the whole text in place, the caret where the click landed", () => {
   const { container } = mount();
   const goal = block(container, "Goal");
@@ -410,19 +423,20 @@ test("a click into a section opens the whole text in place, the caret where the 
   assert.equal(title(container).textContent, DOCUMENT_NAME, "the title stays over the text");
 });
 
-test("the editor's preview of a Mermaid block is the picture the diagram bundle answered, drawn by the panel until the editor takes it down", async () => {
+test("the editor's card for a Mermaid block is the picture the diagram bundle answered, drawn by the panel until the editor takes it down", async () => {
   const { container } = mount();
   act(() => block(container, "Goal").click());
   const draw = open().drawDiagram;
   assert.ok(draw, "the document hands the editor its diagrams");
-  // The element the editor stands under the block, inside its own host.
+  // The element the editor stands the block in, inside its own host.
   const under = document.createElement("div");
   container.querySelector(".description-document-editor")?.append(under);
   const code = "flowchart LR\n  Invite --> Join";
 
   let takeDown: () => void = () => undefined;
   act(() => {
-    takeDown = draw(under, { code, previous: undefined });
+    const source = document.createElement("pre");
+    takeDown = draw(under, { code, source, showingCode: false, showCode: () => undefined }).undraw;
   });
   await settle();
 
@@ -460,16 +474,7 @@ test("a mouse's press on a diagram in a wide room, which enlarges nothing, opens
     },
   });
   await settle();
-  // A mouse: the window answers every query but a finger's.
-  const ignore = () => undefined;
-  Object.defineProperty(window, "matchMedia", {
-    configurable: true,
-    value: (query: string) => ({
-      matches: !query.includes("pointer: coarse"),
-      addEventListener: ignore,
-      removeEventListener: ignore,
-    }),
-  });
+  pointerIsMouse();
   const picture = container.querySelector<HTMLElement>(".description-diagram-picture");
   assert.ok(picture, "the diagram is drawn");
 
@@ -483,6 +488,73 @@ test("a mouse's press on a diagram in a wide room, which enlarges nothing, opens
     "nothing opened over the window",
   );
   assert.ok(container.querySelector(".description-document-editor") !== null, "the editor opened");
+});
+
+test("a mouse's press on a picture in the text opens the editor at the picture, and nothing over the window", async () => {
+  fakeAppBridge({});
+  fakeActPort({
+    [ACT_KIND.TASKS_PICTURE_READ]: () =>
+      Promise.resolve({ contentType: "image/png", base64: "iVBORw0KGgo=" }),
+  });
+
+  const address = descriptionAttachmentAddress(
+    { taskId: DOCUMENT_TASK.id, attachmentId: "3a5c7e9b-2d4f-4a6c-8e0b-1c3d5e7f9a2b" },
+    "acme",
+  );
+
+  pointerIsMouse();
+
+  const { container } = mount([], {
+    ...DOCUMENT_TASK,
+    document: { body: `## Flow\n\n![The invite](${address})\n`, assumptions: [] },
+  });
+
+  await vi.waitFor(() =>
+    assert.equal(container.querySelector(".picture-block .picture-image") === null, false),
+  );
+  const picture = container.querySelector<HTMLElement>(".picture-block .picture-image");
+
+  act(() => {
+    picture?.dispatchEvent(
+      new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+        detail: 1,
+        clientX: 60,
+        clientY: 90,
+      }),
+    );
+  });
+
+  // Note that the checks are booleans, because a failing comparison would print the whole window's DOM.
+  assert.ok(
+    document.querySelector(".attachment-viewer") === null,
+    "nothing opened over the window",
+  );
+  assert.ok(container.querySelector(".description-document-editor") !== null, "the editor opened");
+  assert.deepEqual(open().placement, { x: 60, y: 90, picture: { section: 0, occurrence: 0 } });
+});
+
+test("the focus moving from the open text into a dialog over the window, as a picture enlarged from it, leaves the text open beneath it", () => {
+  const { container } = mount();
+  act(() => {
+    block(container, "Goal").dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  const room = container.querySelector(".description-document-editor") ?? assert.fail("open");
+  const dialog = document.body.appendChild(document.createElement("div"));
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+
+  act(() => {
+    room.firstElementChild?.dispatchEvent(
+      new FocusEvent("focusout", { bubbles: true, relatedTarget: dialog }),
+    );
+  });
+
+  const stillOpen = container.querySelector(".description-document-editor") !== null;
+  dialog.remove();
+
+  assert.ok(stillOpen, "the text is open");
 });
 
 test("a press on a video in a section, on its frame, its scrubber, Play, Full screen, or Expand, opens no editor, while a press on its caption still does", async () => {

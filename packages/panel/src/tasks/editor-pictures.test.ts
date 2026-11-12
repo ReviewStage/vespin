@@ -384,6 +384,31 @@ test("in a column too narrow for their names, a selected picture's tools are eac
   );
 });
 
+test("Enlarge on a selected picture hands the focus back to the text, the picture selected, so the viewer closing leaves it there", async () => {
+  const container = await editing();
+  await pasteScreenshot(container);
+  await keepAsked();
+  await answerKeep({ id: KEPT_ID });
+  const tools = selectPicture(container);
+
+  const enlarge =
+    [...tools.querySelectorAll("button")].find((button) => button.textContent === "Enlarge") ??
+    assert.fail("Enlarge is offered");
+
+  // A press focuses the button it lands on, as the Mac's does.
+  act(() => {
+    enlarge.focus();
+    enlarge.click();
+  });
+
+  const text = container.querySelector(".ProseMirror");
+  assert.ok(document.activeElement === text, "the text holds the focus");
+  assert.equal(
+    container.querySelector(".editor-picture-drawn")?.getAttribute("data-selected"),
+    "true",
+  );
+});
+
 test("a drag over the text of files it keeps none of is refused, and one carrying a picture among them is taken", () => {
   // Note that jsdom lays nothing out, so each block stands in one box, which the drag lands on.
   vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 400, 20));

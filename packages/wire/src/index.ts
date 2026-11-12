@@ -56,6 +56,8 @@ export {
   type SchemaRefusal,
 } from "./schema-vocabulary.js";
 
+export { type TaskFollowerWire, taskFollowerSchema } from "./task-follower.js";
+
 export {
   TURN_OPEN,
   TURN_ORIGIN,
@@ -100,6 +102,8 @@ export {
   START_LINE_BRIEF,
   type StartLineMetadata,
   type StoredMessageMetadata,
+  type SuggestedBy,
+  type SuggestionLineMetadata,
   THREAD_LINE_EVENT,
   type ThreadLineMetadata,
   type TypedAskMetadata,

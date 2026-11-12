@@ -47,6 +47,7 @@ import { agentPullRequestProcedures } from "../agents/agent-pull-request-procedu
 import { agentsApp } from "../agents/agents-app.js";
 import { agentsProcedures } from "../agents/agents-procedures.js";
 import type { MessageReceivedPart } from "../agents/attached-files.js";
+import { AgentImage } from "../agents/coder-host/agent-image.js";
 import { CODER } from "../agents/coder-host/bounds.js";
 import { NATIVE_SESSION_PREFIX } from "../agents/coder-host/native-runtime.js";
 import { instancePublishedCache } from "../agents/coder-host/published.js";
@@ -67,7 +68,7 @@ import {
   SESSION_SEND_OUTCOME,
   type SessionMessage,
 } from "../agents/sessions/agent-sessions.js";
-import { AgentSandbox } from "../agents/terminal/agent-sandbox.js";
+import { agentSandboxLayer } from "../agents/terminal/agent-sandbox.js";
 import { requestUserId } from "../auth/bearer.js";
 import {
   isRecord,
@@ -162,6 +163,9 @@ const TRANSCRIPT_PART_PATH =
 
 /** An ask of an agent's a member answers, at its public path on the hosted oRPC router. */
 const AGENT_APPROVAL_PATH = /^\/api\/agents\/[^/]+\/approvals\/[^/]+$/u;
+
+/** A suggestion in an agent's reply, read or sent, at its public path on the hosted oRPC router. */
+const AGENT_BUTTON_PATH = /^\/api\/agents\/[^/]+\/buttons\/[^/]+(?:\/press)?$/u;
 
 export const RELAY = { owner: "Acme", name: "Relay" } as const;
 export const RELAY_FULL_NAME = `${RELAY.owner}/${RELAY.name}`;
@@ -563,7 +567,15 @@ export const standing = (
       agentPullRequests: agentPullRequestProcedures(shared),
       agents: agentsProcedures({
         ...shared,
-        sandbox: Layer.effect(AgentSandbox, Effect.die("the agents routes reach no sandbox")),
+        // The Terminal's wake over the suite's sandboxes, on a fixture image, which a rewind that puts files back asks of a stopped one.
+        sandbox: agentSandboxLayer.pipe(
+          Layer.provide(
+            Layer.succeed(AgentImage, {
+              reference: Effect.succeed("agent-image:fixture"),
+              runner: Effect.succeed([]),
+            }),
+          ),
+        ),
       }),
       inbox: inboxProcedures(seams),
       messages: messagesProcedures(seams),
@@ -619,7 +631,8 @@ export const standing = (
         if (
           pathname === WORKSPACE_AGENTS ||
           TRANSCRIPT_PART_PATH.test(pathname) ||
-          AGENT_APPROVAL_PATH.test(pathname)
+          AGENT_APPROVAL_PATH.test(pathname) ||
+          AGENT_BUTTON_PATH.test(pathname)
         ) {
           return routed(request, webServices);
         }

@@ -505,7 +505,7 @@ function MenuExample(): React.JSX.Element {
               Describe
             </Button>
             <Button variant={BUTTON_VARIANT.DANGER} icon={<TrashIcon />} onClick={ignore}>
-              Remove
+              Delete
             </Button>
           </MenuSurface>
           <MenuSurface flow={MENU_SURFACE_FLOW.TOOLBAR}>

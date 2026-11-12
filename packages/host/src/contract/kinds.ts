@@ -258,6 +258,10 @@ export const AGENT_ACT_KIND = {
   AGENTS_BOOT: "agents.boot",
   /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
+  /** A button in an agent's reply as the transcript draws it, asked of the service as it is drawn (`reply-button-wire.ts`). */
+  AGENTS_REPLY_BUTTON: "agents.replyButton",
+  /** A suggestion in an agent's reply sent by the member from its draft, which the service runs once. */
+  AGENTS_REPLY_BUTTON_PRESS: "agents.replyButtonPress",
   /** The ports listened on in an agent's cloud sandbox, asked of the service as the plug's menu stands open, on a host that forwards none. */
   AGENTS_PORTS: "agents.ports",
   /** The agent's port shared by public link now, asked of the service beside its ports. */
@@ -507,6 +511,14 @@ export const TASKS_ACT_KIND = {
   TASKS_SET_PARENT: "tasks.setParent",
   /** One relation of a task moved to another kind on the service, in one call; answers the task's relations as they then stand, or why they are unchanged. */
   TASKS_CHANGE_RELATION: "tasks.changeRelation",
+  /** The account follows a task on the service, its machines off; answers the task's followers as they then stand, or why they are unchanged. */
+  TASKS_FOLLOW: "tasks.follow",
+  /** The account stops following a task on the service, which its assignee may not; answers as a follow does. */
+  TASKS_UNFOLLOW: "tasks.unfollow",
+  /** The account's own switch on a task it follows, whether the task's agents may use its machines, set on the service; answers as a follow does. */
+  TASKS_SET_FOLLOWER_MACHINES: "tasks.setFollowerMachines",
+  /** Another member of the task's workspace added as a follower on the service, their machines off; answers as a follow does. */
+  TASKS_ADD_FOLLOWER: "tasks.addFollower",
   /** The developer's edit of the open task's document, saved on the service; answers saved, a conflict with the text as it stands now, or why nothing was saved. */
   TASKS_EDIT: "tasks.edit",
   /** A page of GitHub's opened in the browser: a repository, or where our GitHub App is installed. No other address opens through it. */
@@ -1019,6 +1031,8 @@ export const PORT_ACT_USE = {
   AGENTS_CLEAR: ACT_USE.WRITE,
   AGENTS_BOOT: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
+  AGENTS_REPLY_BUTTON: ACT_USE.FETCH,
+  AGENTS_REPLY_BUTTON_PRESS: ACT_USE.WRITE,
   AGENTS_PORTS: ACT_USE.FETCH,
   AGENTS_PORT_SHARED: ACT_USE.FETCH,
   AGENTS_PORT_SHARE: ACT_USE.WRITE,
@@ -1134,6 +1148,10 @@ export const PORT_ACT_USE = {
   TASKS_BLOCK: ACT_USE.WRITE,
   TASKS_SET_PARENT: ACT_USE.WRITE,
   TASKS_CHANGE_RELATION: ACT_USE.WRITE,
+  TASKS_FOLLOW: ACT_USE.WRITE,
+  TASKS_UNFOLLOW: ACT_USE.WRITE,
+  TASKS_SET_FOLLOWER_MACHINES: ACT_USE.WRITE,
+  TASKS_ADD_FOLLOWER: ACT_USE.WRITE,
   TASKS_EDIT: ACT_USE.WRITE,
   GITHUB_OPEN: ACT_USE.WRITE,
   WEB_OPEN: ACT_USE.WRITE,

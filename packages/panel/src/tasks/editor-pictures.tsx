@@ -443,7 +443,11 @@ function KeptPicture({
           {
             label: TOOL.ENLARGE,
             icon: <Maximize2Icon aria-hidden="true" />,
-            run: () => door.open(named.attachmentId),
+            run: () => {
+              // Note that the text takes the focus back, the picture selected, before the viewer opens, so the viewer hands it back there as it closes and one Escape then leaves the text, where the tool's own button would hold it.
+              doors.leave(PICTURE_LEAVE.UP);
+              door.open(named.attachmentId);
+            },
           },
         ]
       : []),
@@ -603,6 +607,15 @@ export function useEditorPictures(
   // Note that the doors handed the editor once read the newest of these as they run.
   const beginning = useRef(begin);
   beginning.current = begin;
+
+  // A double-click opens a kept picture of this description over the window, as its Enlarge does.
+  const enlarging = useRef<(picture: PictureNode) => void>(() => undefined);
+  enlarging.current = (picture) => {
+    const named = descriptionAttachmentOf(picture.src);
+
+    if (door !== undefined && named?.taskId === door.taskId) door.open(named.attachmentId);
+  };
+
   const pictures = useRef<DescriptionEditorPictures | undefined>(undefined);
 
   if (pictures.current === undefined && workspace !== undefined) {
@@ -610,13 +623,17 @@ export function useEditorPictures(
       draw: (element, picture, doors) => {
         counted.current += 1;
         const key = counted.current;
+        let shown = picture;
         setDrawn((was) => [...was, { key, element, picture, doors, selected: false }]);
 
         return {
-          redraw: (next, selected) =>
+          redraw: (next, selected) => {
+            shown = next;
             setDrawn((was) =>
               was.map((each) => (each.key === key ? { ...each, picture: next, selected } : each)),
-            ),
+            );
+          },
+          enlarge: () => enlarging.current(shown),
           undraw: () => setDrawn((was) => was.filter((each) => each.key !== key)),
         };
       },

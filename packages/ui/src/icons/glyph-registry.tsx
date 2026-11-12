@@ -11,7 +11,6 @@ import {
   CircleDashed,
   CircleDot,
   CircleDotDashed,
-  CircleMinus,
   ClipboardCheck,
   Clock,
   Cloud,
@@ -199,6 +198,8 @@ export const GLYPH = {
   QUEUED: lucideGlyph(ListEnd),
 
   // States.
+  // The link to the service lost, as the banner saying so wears it; never an act's.
+  CONNECTION_LOST: lucideGlyph(Unplug),
   DONE: MarkDoneIcon,
   // A thing resolved, a comment thread or an Inbox item, and the Resolve that does it: one mark for the act and the state it leaves, never Close's ×.
   RESOLVED: CircleCheckIcon,
@@ -212,9 +213,8 @@ export const GLYPH = {
   MORE: EllipsisIcon,
   SEARCH: SearchIcon,
   RENAME: PencilIcon,
+  /** What goes and is gone: Delete, Permanently delete, and Discard. Remove and Disconnect wear no glyph, their red words alone, since no glyph says "off this list" or "unlinked" as the trash says "gone". */
   DELETE: TrashIcon,
-  /** Taking a thing off a list here, which still stands elsewhere: a host, a channel, a repository, a member; never Delete's, which destroys. */
-  REMOVE: lucideGlyph(CircleMinus),
   COPY: CopyIcon,
   LINK: LinkIcon,
   STOP: StopIcon,
@@ -233,8 +233,6 @@ export const GLYPH = {
   ARCHIVE: ArchiveIcon,
   UNARCHIVE: UnarchiveIcon,
   MOVE: lucideGlyph(FolderInput),
-  // Ending a connection to a service, which deletes nothing of it.
-  DISCONNECT: lucideGlyph(Unplug),
   // A queued message sent into the turn under way now, rather than waiting for it to end.
   STEER: lucideGlyph(CornerDownRight),
   // The model an agent runs on, which `/model` changes.

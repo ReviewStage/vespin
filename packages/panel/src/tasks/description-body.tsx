@@ -1765,6 +1765,7 @@ export const DescriptionBody = memo(function DescriptionBody({
       taskId={task.id}
       text={task.document.body}
       sectionNote={(heading) => pictureNoteOf(marks, heading)}
+      editable={editable}
     >
       {column}
     </DescriptionPictures>

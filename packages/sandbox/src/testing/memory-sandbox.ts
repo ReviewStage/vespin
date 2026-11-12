@@ -2,7 +2,8 @@
  * memory-sandbox.ts -- `Sandbox` kept in memory, for a suite to provide on its tag: the second implementation of the package's interface, its state open to the suite's assertions, and the hooks a suite answers its commands and its failures through.
  *
  * It keeps what a provider would: sandboxes by name, each up in a run of its
- * own or stopped holding a snapshot, the drives they opened with, the
+ * own or stopped, holding a snapshot only where it is persistent, as one
+ * created before sandboxes were made otherwise, or took one; the drives they opened with, the
  * commands each run started, the files written, the policies set, and the
  * snapshots taken. A call fenced to
  * a run the sandbox is no longer up in answers as gone, as the interface
@@ -47,6 +48,8 @@ export interface MemorySandboxRecord {
   running: string;
   tags: Readonly<Record<string, string>>;
   snapshotId: string | undefined;
+  /** Whether a stop keeps its disk for a resume: true only for one a suite stood as created persistent before. */
+  readonly persistent: boolean;
   readonly createdAt: number;
   readonly from: SandboxSource;
   /** The drive it opened with and where it is mounted: a base drive it fills, or its own. */
@@ -136,7 +139,7 @@ export interface MemorySandbox {
   readonly layer: Layer.Layer<Sandbox>;
   readonly state: MemorySandboxState;
   readonly service: SandboxService;
-  /** A sandbox put in place as a create would open it, for a suite that starts from one standing. */
+  /** A sandbox put in place as a create would open it, persistent unless the suite says otherwise, for a suite that starts from one standing. */
   readonly stand: (
     sandbox: Partial<MemorySandboxRecord> & { readonly name: string },
   ) => MemorySandboxRecord;
@@ -281,6 +284,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         running: nextRun(),
         tags: { ...ask.tags },
         snapshotId: undefined,
+        persistent: false,
         createdAt: yield* Clock.currentTimeMillis,
         from: ask.from,
         drive,
@@ -300,9 +304,13 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
     Effect.suspend(() => {
       if (record.status === SANDBOX_STATUS.RUNNING) return Effect.succeed(record);
 
-      if (record.snapshotId !== undefined && state.goneSnapshots.has(record.snapshotId)) {
-        return Effect.fail(new SnapshotGone({ call: SANDBOX_CALL.GET }));
-      }
+      // Note that a stopped sandbox that is not persistent kept no disk to resume, unless a snapshot was taken of it.
+      const kept =
+        record.snapshotId === undefined
+          ? record.persistent
+          : !state.goneSnapshots.has(record.snapshotId);
+
+      if (!kept) return Effect.fail(new SnapshotGone({ call: SANDBOX_CALL.GET }));
 
       record.status = SANDBOX_STATUS.RUNNING;
       record.running = nextRun();
@@ -656,6 +664,7 @@ export function memorySandbox(hooks: MemorySandboxHooks = {}): MemorySandbox {
         running: nextRun(),
         tags: {},
         snapshotId: undefined,
+        persistent: true,
         createdAt: 0,
         from: { image: "memory-image" },
         drive: undefined,

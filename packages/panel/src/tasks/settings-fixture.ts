@@ -66,8 +66,6 @@ import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import type { TasksView } from "@repo/features/tasks-view";
 import type { WorkspaceVariable } from "@repo/features/workspace-environment-wire";
 import {
-  REPOSITORY_SCRIPT_KIND,
-  type RepositoryScriptKind,
   RUN_ACTION_AVAILABILITY,
   type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
@@ -775,10 +773,9 @@ const SETUP_RUN_AGENT = {
 
 /**
  * Acme's sandbox setup, as a save leaves it: an install script, setup
- * scripts for two of its repositories, an archive script for one, and run
- * actions for one, each script with how it last ran: the install script
- * and the archive script cleanly, `acme/api`'s setup script failing, and
- * `acme/relay`'s saved since its run.
+ * scripts for two of its repositories, and run actions for one, each script
+ * with how it last ran: the install script cleanly, `acme/api`'s setup
+ * script failing, and `acme/relay`'s saved since its run.
  */
 let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
   install: {
@@ -804,14 +801,7 @@ let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
       lastRun: { ranAt: NOW - 3 * DAY, exitCode: 0, agent: SETUP_RUN_AGENT.RELAY },
     },
   ],
-  archives: [
-    {
-      repository: "acme/relay",
-      script: "docker compose down --volumes\n./scripts/drop-preview-database.sh",
-      updatedAt: NOW - DAY,
-      lastRun: { ranAt: NOW - HOUR, exitCode: 0, agent: SETUP_RUN_AGENT.RELAY },
-    },
-  ],
+  archives: [],
   runActions: [
     {
       repository: "acme/relay",
@@ -862,11 +852,7 @@ function runActionsAnswer(repository: string, actions: readonly RunActionPut[]) 
 }
 
 /** The setup a save leaves, an empty script removing it, its repositories in name order as the service answers them. */
-function sandboxSetupAnswer(
-  repository: string | undefined,
-  script: string,
-  kind: RepositoryScriptKind = REPOSITORY_SCRIPT_KIND.SETUP,
-) {
+function sandboxSetupAnswer(repository: string | undefined, script: string) {
   const removes = script.trim() === "";
 
   if (repository === undefined) {
@@ -878,14 +864,12 @@ function sandboxSetupAnswer(
     return acmeSandboxSetup;
   }
 
-  const list = kind === REPOSITORY_SCRIPT_KIND.ARCHIVE ? "archives" : "setups";
-
   const named = (each: { readonly repository: string }) =>
     each.repository.toLowerCase() === repository.toLowerCase();
 
-  const others = acmeSandboxSetup[list].filter((each) => !named(each));
+  const others = acmeSandboxSetup.setups.filter((each) => !named(each));
   // A save keeps the script's last run, which ran before it.
-  const lastRun = acmeSandboxSetup[list].find(named)?.lastRun;
+  const lastRun = acmeSandboxSetup.setups.find(named)?.lastRun;
 
   const saved = {
     repository,
@@ -897,7 +881,7 @@ function sandboxSetupAnswer(
   const scripts = removes ? others : [...others, saved];
   acmeSandboxSetup = {
     ...acmeSandboxSetup,
-    [list]: scripts.sort((one, other) =>
+    setups: scripts.sort((one, other) =>
       one.repository.toLowerCase().localeCompare(other.repository.toLowerCase()),
     ),
   };
@@ -962,8 +946,8 @@ const ANSWERS: StagedAnswers = {
     variablesAnswer(acmeVariables.filter((variable) => variable.name !== name)),
   [ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: () => acmeSandboxSetup,
   [ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: ({ script }) => sandboxSetupAnswer(undefined, script),
-  [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script, kind }) =>
-    sandboxSetupAnswer(repository, script, kind),
+  [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script }) =>
+    sandboxSetupAnswer(repository, script),
   [ACT_KIND.WORKSPACE_RUN_ACTIONS_PUT]: ({ repository, actions }) =>
     runActionsAnswer(repository, actions),
   [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId: id }) =>

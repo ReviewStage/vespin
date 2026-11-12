@@ -344,7 +344,7 @@ function CommandRow({
         edit === undefined
           ? [
               { label: SECTION.EDIT, icon: <GLYPH.RENAME />, onSelect: onEdit },
-              { label: SECTION.REMOVE, icon: <GLYPH.REMOVE />, onSelect: onRemove },
+              { label: SECTION.REMOVE, onSelect: onRemove },
             ]
           : []
       }

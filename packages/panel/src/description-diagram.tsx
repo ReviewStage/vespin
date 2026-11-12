@@ -11,17 +11,18 @@ import {
   PortalFence,
 } from "@repo/ui";
 import { DIAGRAM_DRAWING } from "@repo/ui/diagram-contract";
-import { type ReactNode, useContext, useState } from "react";
+import { type ReactNode, useContext, useLayoutEffect, useRef, useState } from "react";
 import { DIAGRAM_REFUSED_LINE } from "./bundle-loader.js";
 import { coarsePointerNow, useCoarsePointer } from "./coarse-pointer.js";
-import { diagramAlt, heldDrawing, useAppearance, useDrawing } from "./diagram-drawing.js";
+import type { EditorDiagram } from "./description-editor/contract.js";
+import { diagramAlt, useAppearance, useDrawing } from "./diagram-drawing.js";
 import { failureShown } from "./failure-report.js";
 import { SHELL_ROOM } from "./shell-room.js";
 import { ShellRoomContext } from "./stage-room.js";
 import { AttachmentViewer } from "./tasks/attachment-viewer.js";
 
 /**
- * description-diagram.tsx -- a description's ```` ```mermaid ```` fence drawn as its diagram, in the figure the read view and the editor's preview draw it in.
+ * description-diagram.tsx -- a description's ```` ```mermaid ```` fence drawn as its diagram, in the one card the read view and the editor draw it in.
  *
  * Mermaid is the diagram bundle's (`diagram/`), loaded once per window the
  * first time a fence is drawn, so the bundle every window parses carries
@@ -101,29 +102,41 @@ function OpenDiagram({ url, onClose }: { url: string; onClose: () => void }): Re
   );
 }
 
+/** Whether a diagram's card shows its code, and the door that shows it or the diagram again. */
+interface CodeShown {
+  readonly showingCode: boolean;
+  readonly onShowCode: (showing: boolean) => void;
+}
+
 /**
- * A fence drawn as its diagram in the read view: its picture under a head
- * whose Show code puts the code in the picture's place. While the picture is
- * drawn the code stands where it will, as it stands on every surface without
- * diagrams; a fence Mermaid refused says so over its code.
+ * A fence drawn as its diagram: its picture under a head whose Show code
+ * puts the code in the picture's place. While the picture is drawn the code
+ * stands where it will, as it stands on every surface without diagrams; a
+ * fence Mermaid refused says so over its code. In the editor (`kept`), the
+ * code stays laid out, hidden, while the picture shows, since it is the
+ * text the editor holds, and the head and picture are no part of that text.
  */
-export function DescriptionDiagram({
+function DiagramCard({
   code,
   source,
+  shown,
+  kept,
 }: {
   code: string;
   source: ReactNode;
+  shown: CodeShown;
+  kept: boolean;
 }): React.JSX.Element {
   const { drawing: drawingNow, retry } = useDrawing(code, useAppearance());
-  const [showingCode, setShowingCode] = useState(false);
   const [fullScreen, setFullScreen] = useState(false);
   const picture = drawingNow?.kind === DIAGRAM_DRAWING.DRAWN ? drawingNow.url : undefined;
   const alt = diagramAlt(code);
-  const pictureShown = picture !== undefined && !showingCode;
+  const pictureShown = picture !== undefined && !shown.showingCode;
   // Note that this draws what a press would do, where `opensFullScreen` asks again as the press lands.
   const coarse = useCoarsePointer();
   const room = useContext(ShellRoomContext);
   const pointerOpens = coarse || room === SHELL_ROOM.NARROW;
+  const outsideText = kept ? false : undefined;
 
   return (
     <Card
@@ -133,12 +146,12 @@ export function DescriptionDiagram({
       className="description-diagram my-block-gap px-card-compact py-list-inset"
       aria-busy={drawingNow === undefined}
     >
-      <div className={HEAD_CLASS}>
+      <div className={HEAD_CLASS} contentEditable={outsideText}>
         <span>Diagram</span>
         {picture === undefined ? null : (
           <span className="flex items-center gap-tight-gap">
-            <Button onClick={() => setShowingCode((was) => !was)}>
-              {showingCode ? "Show diagram" : "Show code"}
+            <Button onClick={() => shown.onShowCode(!shown.showingCode)}>
+              {shown.showingCode ? "Show diagram" : "Show code"}
             </Button>
             {pictureShown ? (
               <span className="hidden pointer-coarse:flex shell-narrow:flex">
@@ -150,7 +163,7 @@ export function DescriptionDiagram({
       </div>
       {drawingNow?.kind === DIAGRAM_DRAWING.REFUSED ? <RefusedLine onRetry={retry} /> : null}
       {pictureShown ? (
-        <div className="flex min-w-0 justify-center">
+        <div className="flex min-w-0 justify-center" contentEditable={outsideText}>
           <PictureTile
             name={alt}
             pointerOpens={pointerOpens}
@@ -168,9 +181,8 @@ export function DescriptionDiagram({
             <DiagramPicture url={picture} alt={alt} />
           </PictureTile>
         </div>
-      ) : (
-        source
-      )}
+      ) : null}
+      {kept ? <div hidden={pictureShown}>{source}</div> : pictureShown ? null : source}
       {fullScreen && picture !== undefined ? (
         <OpenDiagram url={picture} onClose={() => setFullScreen(false)} />
       ) : null}
@@ -178,37 +190,48 @@ export function DescriptionDiagram({
   );
 }
 
-/**
- * A code block's diagram under it in the editor, drawn into the element the
- * editor stands there. While a changed code is drawn, the picture of the
- * code it was changed from stays, so typing in a diagram does not make the
- * page jump at every key.
- */
-export function DiagramPreview({
+/** A fence drawn as its diagram in the read view, its Show code its own. */
+export function DescriptionDiagram({
   code,
-  previous,
+  source,
 }: {
   code: string;
-  previous: string | undefined;
+  source: ReactNode;
 }): React.JSX.Element {
-  const appearance = useAppearance();
-  const { drawing: drawingNow, retry } = useDrawing(code, appearance);
-
-  const shown =
-    drawingNow ?? (previous === undefined ? undefined : heldDrawing(appearance, previous));
+  const [showingCode, setShowingCode] = useState(false);
 
   return (
-    <>
-      <div className={HEAD_CLASS}>
-        <span>Preview</span>
-      </div>
-      {shown?.kind === DIAGRAM_DRAWING.DRAWN ? (
-        <DiagramPicture
-          url={shown.url}
-          alt={diagramAlt(drawingNow === undefined ? (previous ?? code) : code)}
-        />
-      ) : null}
-      {shown?.kind === DIAGRAM_DRAWING.REFUSED ? <RefusedLine onRetry={retry} /> : null}
-    </>
+    <DiagramCard
+      code={code}
+      source={source}
+      shown={{ showingCode, onShowCode: setShowingCode }}
+      kept={false}
+    />
+  );
+}
+
+/** An element the editor made, laid into what React draws, where it stays until the drawing goes. */
+function LaidElement({ element }: { element: HTMLElement }): React.JSX.Element {
+  const slot = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    slot.current?.append(element);
+  }, [element]);
+
+  return <div ref={slot} />;
+}
+
+/**
+ * A Mermaid block open in the editor, drawn as the read view draws it: the
+ * same card, its code the block's own code card, the lines the editor edits,
+ * shown in the picture's place as the editor says (`description-editor/diagram-card.ts`).
+ */
+export function EditorDiagramCard({ diagram }: { diagram: EditorDiagram }): React.JSX.Element {
+  return (
+    <DiagramCard
+      code={diagram.code}
+      source={<LaidElement element={diagram.source} />}
+      shown={{ showingCode: diagram.showingCode, onShowCode: diagram.showCode }}
+      kept
+    />
   );
 }

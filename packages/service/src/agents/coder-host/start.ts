@@ -56,7 +56,12 @@ import type { Task } from "@repo/features/task-wire";
 import { bothInOrder, causeKind, failureKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
-import { MESSAGE_CHANNEL, type SlackLineMetadata, START_LINE_BRIEF } from "@repo/wire";
+import {
+  MESSAGE_CHANNEL,
+  type SlackLineMetadata,
+  START_LINE_BRIEF,
+  type SuggestedBy,
+} from "@repo/wire";
 import { Cause, Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
@@ -251,6 +256,8 @@ export type StartAsk = StartPlace & {
   readonly runsOn?: AgentRunsOnRequest | undefined;
   /** The mode the agent starts in, as a new-agent menu picked it; none for the starter's Default permissions. */
   readonly permissionMode?: AgentPermissionMode | undefined;
+  /** The suggestion in another agent's reply the brief was sent from, which the first line keeps (`reply-buttons/press.ts`); none for every other Start. */
+  readonly suggestedBy?: SuggestedBy | undefined;
 };
 
 /** A repository as a task's start reached it: the full name its row keeps, and how it was reached. */
@@ -639,12 +646,15 @@ type Opening = { readonly sender: LineSender; readonly metadata: AwaitingLineMet
  */
 function openingOf(
   agent: Agent,
-  ask: Pick<StartAsk, "automationId" | "automationOrigin" | "startedBy" | "carried">,
+  ask: Pick<
+    StartAsk,
+    "automationId" | "automationOrigin" | "startedBy" | "carried" | "suggestedBy"
+  >,
   brief: { readonly prompt: string | null },
   /** What the line says of the agent it takes over from, continued or forked; none for a fresh Start. */
   taken: TakeoverRules["startLine"],
 ): Opening {
-  const { automationId, automationOrigin, startedBy, carried } = ask;
+  const { automationId, automationOrigin, startedBy, carried, suggestedBy } = ask;
 
   if (automationOrigin !== undefined) {
     return {
@@ -667,6 +677,7 @@ function openingOf(
       ? {
           channel: MESSAGE_CHANNEL.START,
           brief: brief.prompt === null ? START_LINE_BRIEF.DESCRIPTION : START_LINE_BRIEF.PROMPT,
+          ...(suggestedBy === undefined ? undefined : { suggested_by: suggestedBy }),
         }
       : {
           channel: MESSAGE_CHANNEL.START,
@@ -1137,6 +1148,8 @@ export const startRequestedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   summaryModel?: SummaryModelOf,
   reached?: StartReach,
   landed?: StoredTask,
+  /** The suggestion the request was sent from, which no request names itself, so no client can claim one (`reply-buttons/press.ts`). */
+  suggestedBy?: SuggestedBy,
 ): Effect.fn.Return<RequestedStart, HostedRefusal, StartServices> {
   const { note } = request;
   const choice = yield* requestedChoice(request);
@@ -1159,6 +1172,7 @@ export const startRequestedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
     summaryModel,
     reached,
     landed,
+    suggestedBy,
   }).pipe(Effect.catchTag("ModelChoiceRefused", () => Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST)));
 
   const summary = yield* summaryOf(userId, agent);

@@ -1506,7 +1506,7 @@ function workspaceEnvironmentActs(
   };
 }
 
-/** A workspace's cloud sandbox setup's acts: read, and its install script, a repository's setup or archive script, or a repository's run actions saved. */
+/** A workspace's cloud sandbox setup's acts: read, and its install script, a repository's setup script, or a repository's run actions saved. */
 function workspaceSandboxSetupActs(
   reach: WorkspacesReach,
 ): Pick<
@@ -1525,11 +1525,8 @@ function workspaceSandboxSetupActs(
       workspaceAsked(reach, client.workspaces.sandboxSetup(workspaceId)),
     WORKSPACE_INSTALL_SCRIPT_PUT: ({ workspaceId, script }) =>
       workspaceAsked(reach, client.workspaces.putInstallScript(workspaceId, script)),
-    WORKSPACE_REPOSITORY_SETUP_PUT: ({ workspaceId, repository, script, kind }) =>
-      workspaceAsked(
-        reach,
-        client.workspaces.putRepositorySetup(workspaceId, repository, script, kind),
-      ),
+    WORKSPACE_REPOSITORY_SETUP_PUT: ({ workspaceId, repository, script }) =>
+      workspaceAsked(reach, client.workspaces.putRepositorySetup(workspaceId, repository, script)),
     WORKSPACE_RUN_ACTIONS_PUT: ({ workspaceId, repository, actions }) =>
       workspaceAsked(reach, client.workspaces.putRunActions(workspaceId, repository, actions)),
   };

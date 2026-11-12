@@ -27,7 +27,7 @@ export const QUERY_ROOT = {
   HOST_PAIRING: "host-pairing",
   /** Settings › Cloud environment's Variables: a workspace's variables by name (`settings/environment-variables-section.tsx`). */
   WORKSPACE_ENVIRONMENT: "workspace-environment",
-  /** Settings › Cloud environment's scripts: a workspace's install script and each repository's setup and archive scripts (`settings/cloud-setup-sections.tsx`). */
+  /** Settings › Cloud environment's scripts: a workspace's install script and each repository's setup script (`settings/cloud-setup-sections.tsx`). */
   WORKSPACE_SANDBOX_SETUP: "workspace-sandbox-setup",
   INSTALLED_SKILL: "installed-skill",
   INSTALLED_SKILL_PREVIEW: "installed-skill-preview",

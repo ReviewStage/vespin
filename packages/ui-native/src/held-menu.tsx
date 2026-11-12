@@ -5,6 +5,7 @@ import { accessibilityIdentifier, accessibilityLabel } from "@expo/ui/swift-ui/m
 import type { DraftCopy } from "@repo/features/draft-text";
 import { createContext, type ReactElement, type ReactNode, useContext } from "react";
 import { StyleSheet } from "react-native";
+import { InlineHost } from "./inline-host.js";
 import {
   KEEP_ACT,
   KEEP_SYMBOL,
@@ -140,11 +141,11 @@ export function HeldMenu({
   if (acts.length === 0) return children;
 
   return (
-    <Host matchContents={{ vertical: true }} style={styles.host}>
+    <InlineHost matchContents={{ vertical: true }} style={styles.host}>
       <HeldSwiftMenu acts={acts}>
         <RNHostView matchContents={{ vertical: true }}>{children}</RNHostView>
       </HeldSwiftMenu>
-    </Host>
+    </InlineHost>
   );
 }
 

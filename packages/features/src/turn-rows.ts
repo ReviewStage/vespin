@@ -40,6 +40,8 @@ export const CALL_KIND = {
   LOOK_AT_PICTURE: "look-at-picture",
   /** A look at a picture a thread's message carries (`look_at_picture` on a thread's address). */
   LOOK_AT_THREAD_PICTURE: "look-at-thread-picture",
+  /** A PDF in the description written into the agent's machine (`look_at_picture` answering `written`), its row naming the PDF. */
+  READ_DESCRIPTION_PDF: "read-description-pdf",
   EDIT_DESCRIPTION: "edit-description",
   TODOS: "todos",
   INBOX_POST: "inbox-post",
@@ -159,6 +161,7 @@ export const CALL_WORDS = {
   [CALL_KIND.LOAD_SKILL]: { verb: "Loaded skill", code: true },
   [CALL_KIND.LOOK_AT_PICTURE]: { verb: "Looked at a picture in the description", code: false },
   [CALL_KIND.LOOK_AT_THREAD_PICTURE]: { verb: "Looked at a picture in a thread", code: false },
+  [CALL_KIND.READ_DESCRIPTION_PDF]: { verb: "Read a PDF in the description:", code: false },
   [CALL_KIND.EDIT_DESCRIPTION]: { verb: "Updated the description:", code: false },
   [CALL_KIND.TODOS]: { verb: "Updated the to-dos:", code: false },
   [CALL_KIND.INBOX_POST]: { verb: "Posted a thread:", code: false },

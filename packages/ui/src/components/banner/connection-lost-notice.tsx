@@ -19,7 +19,7 @@ export function ConnectionLostNotice({ notice }: { notice: Notice }): React.JSX.
     <Banner
       look={BANNER_LOOK.CARD}
       tone={notice.restoredAt === null ? STATUS_TONE.WORKING : STATUS_TONE.NEUTRAL}
-      glyph={<GLYPH.DISCONNECT />}
+      glyph={<GLYPH.CONNECTION_LOST />}
       glyphLook={BANNER_GLYPH.MARK}
     >
       <Text as={TEXT_ELEMENT.P} variant={TEXT_VARIANT.LABEL}>

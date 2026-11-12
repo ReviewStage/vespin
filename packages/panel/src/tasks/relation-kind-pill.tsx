@@ -10,7 +10,6 @@ import {
   SearchableMenu,
   STATUS_TONE,
 } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useRef, useState } from "react";
@@ -92,7 +91,6 @@ export function RelationKindPill<Kind extends string>({
     {
       id: REMOVE_ROW_ID,
       label: WORDS.REMOVE,
-      icon: <GLYPH.CLOSE />,
       onPress: () => {
         close();
         onRemove();
