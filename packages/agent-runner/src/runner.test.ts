@@ -79,6 +79,7 @@ import {
   WARM_TURNS,
   WORKFLOW_TURN,
 } from "./testing/recorded-stream.js";
+import { ProfilerImport } from "./trace.js";
 
 const BEARER = "runner-bearer-for-tests";
 /**
@@ -770,11 +771,6 @@ it.effect(
 
 it.effect("takes its line from the read on a traced launch whose profiler cannot load", () =>
   Effect.gen(function* () {
-    // A sandbox whose disk predates the profiler's binary cannot load its module.
-    vi.doMock("@sentry/profiling-node", () => {
-      throw new Error("Cannot find module './sentry_cpu_profiler-linux-x64-glibc-137.node'");
-    });
-    yield* Effect.addFinalizer(() => Effect.sync(() => vi.doUnmock("@sentry/profiling-node")));
     const service = fakeService();
     const linesUrl = "https://app.test/runner/lines";
     const uuid = "00000000-0000-4000-8000-0000000000ab";
@@ -792,9 +788,15 @@ it.effect("takes its line from the read on a traced launch whose profiler cannot
         lines: [{ seq: 12, text: JSON.stringify({ ...FIRST_MESSAGE, uuid }) }],
       });
     };
+    // A sandbox whose disk predates the profiler's binary cannot load its module.
+    const unloadable = Layer.succeed(ProfilerImport, () =>
+      Promise.reject(
+        new Error("Cannot find module './sentry_cpu_profiler-linux-x64-glibc-137.node'"),
+      ),
+    );
     const { cli, write, run, closeStdin } = yield* launch(SHORT_TURN, {
       ...service,
-      layer: fakeHttpClientLayer(respond),
+      layer: Layer.merge(fakeHttpClientLayer(respond), unloadable),
     });
     // Note that the trace names no DSN, so Sentry sends nothing from the test.
     const trace = {
@@ -1041,6 +1043,8 @@ it.effect.each([
         toolUseId: "toolu_Bash",
         toolName: "Bash",
         title: BASH_ASK.title,
+        // The CLI's suggested rule names a prefix, which the member's Always allow keeps past the launch.
+        commandPrefix: ["cat"],
       });
       // The ask carries the start of a long command, while the CLI is handed it whole.
       const command = String(input.command);
@@ -1119,11 +1123,16 @@ it.effect.each([
   { mode: PERMISSION_MODE.ASK, cliMode: "default", asking: true },
   { mode: PERMISSION_MODE.AUTO, cliMode: "auto", asking: true },
 ])(
-  "starts the CLI in $cliMode for $mode, asking the member only where the mode does, and never of a read or an MCP tool",
+  "starts the CLI in $cliMode for $mode, asking the member only where the mode does, and never of a read, an MCP tool, or an always-allowed command",
   ({ mode, cliMode, asking }) =>
     Effect.gen(function* () {
       const { cli, write, run } = yield* launch(SHORT_TURN, fakeService());
-      yield* write({ ...CONFIG, permissionMode: mode });
+      // The starter's always-allowed commands, one no plain prefix, which would widen its rule.
+      const allowedCommands = [
+        ["pnpm", "test"],
+        ["git", "log;rm"],
+      ];
+      yield* write({ ...CONFIG, permissionMode: mode, allowedCommands });
       yield* write(FIRST_MESSAGE);
       yield* Fiber.join(run);
 
@@ -1138,6 +1147,10 @@ it.effect.each([
       for (const asked of ["Bash", "Edit", "Write", "NotebookEdit"]) {
         assert.ok(!options.allowedTools?.includes(asked), asked);
       }
+      assert.deepEqual(
+        options.allowedTools?.filter((rule) => rule.startsWith("Bash(")),
+        asking ? ["Bash(pnpm test *)"] : [],
+      );
     }),
 );
 

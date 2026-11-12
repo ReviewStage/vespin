@@ -19,8 +19,7 @@ import { lineRuns } from "./code-card.js";
  * The colors are handed in, and may be for words a few keystrokes old: a
  * line is drawn in them only where they spell that line exactly, and plain
  * in the code's own ink otherwise, so a stale coloring never lands on the
- * wrong characters. The colored layer is left out of the screen recording
- * (`ph-no-capture`), as a code card's lines are.
+ * wrong characters.
  *
  * A numbered editor (`lineNumbers`) draws each line's number in a gutter
  * before it, as a code editor's gutter does: the colored layer draws each
@@ -55,8 +54,7 @@ const LAYER_START = {
 } as const;
 
 /** The colored words beneath, which take no pointer. */
-const SHOWN =
-  "ui-code-editor-lines ph-no-capture pointer-events-none text-code [&_span]:text-code-run";
+const SHOWN = "ui-code-editor-lines pointer-events-none text-code [&_span]:text-code-run";
 
 /** The text area over them, its words transparent and its caret in the text's ink. */
 const TYPED =

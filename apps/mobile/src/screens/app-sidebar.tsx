@@ -7,6 +7,7 @@ import {
   LIST_LOOK,
   type ListLook,
   ListSection,
+  MARK_SIZE,
   RowList,
   SWITCHER_LOOK,
   WorkspaceSwitcherMenu,
@@ -130,7 +131,11 @@ export function useAppSidebar(
       // Note that the photo leads only until the workspaces are read, as the compact bar's does, so Settings is never out of reach.
       const leading =
         switcher !== undefined ? (
-          <WorkspaceSwitcherMenu {...switcher} look={SWITCHER_LOOK.TILE} />
+          <WorkspaceSwitcherMenu
+            {...switcher}
+            look={SWITCHER_LOOK.TILE}
+            tileSize={MARK_SIZE.COLUMN_BAR_FACE}
+          />
         ) : account === undefined ? undefined : (
           <AccountBarItem {...account} />
         );

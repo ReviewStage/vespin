@@ -453,11 +453,16 @@ type ListAnswer = Exclude<
 /** Each part of the task list's rows by id as they stood at each sync id answered, so a read past one is answered what moved since. */
 type ListAt = Map<string, ReadonlyMap<"plans" | "agents", ReadonlyMap<string, string>>>;
 
+/** A row's id; none where it is no object carrying one. */
+function rowIdOf(row: unknown): unknown {
+  return typeof row === "object" && row !== null && "id" in row ? row.id : undefined;
+}
+
 /** A part's rows by id, each as JSON, to tell which moved. */
 function rowsById(rows: readonly unknown[] | undefined): ReadonlyMap<string, string> {
   return new Map(
     (rows ?? []).flatMap((row) => {
-      const id = typeof row === "object" && row !== null ? Reflect.get(row, "id") : undefined;
+      const id = rowIdOf(row);
       return typeof id === "string" ? [[id, JSON.stringify(row)] as const] : [];
     }),
   );
@@ -484,7 +489,7 @@ function listBySyncId(answer: ListAnswer, past: string | undefined, listAt: List
     const ids = now.get(name) ?? new Map<string, string>();
     if (was === undefined || query.rows === undefined) return { ...query, sync };
     const rows = query.rows.filter((row) => {
-      const id = typeof row === "object" && row !== null ? Reflect.get(row, "id") : undefined;
+      const id = rowIdOf(row);
       return typeof id === "string" && was.get(id) !== ids.get(id);
     });
     const gone = [...was.keys()].filter((id) => !ids.has(id));

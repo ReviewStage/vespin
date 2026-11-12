@@ -65,8 +65,7 @@ import { useNumberedTaskIdOf } from "./use-link-standing.js";
  * rows of its own blocks in the `/` menu, with rows that do not apply to it
  * dropped. The `/` menu stands aside while the `@` list stands, as the
  * toolbar stands aside for either. The editor stands in a room of its own
- * that the toolbar and the menus float in, its text left out of the
- * recording (`ph-no-capture`); focus leaving the room for anywhere
+ * that the toolbar and the menus float in; focus leaving the room for anywhere
  * but its own toolbar and menus is the document's to hear (`onLeave`). A
  * finish or a leaving waits for a picture still being kept, since only the
  * open editor can lay in its address; it goes once none is.
@@ -319,8 +318,7 @@ export function MarkdownEditor({
     focus,
     label,
     placeholder,
-    // Note that the text itself is left out of the recording, because its masked words would still record the rhythm of the typing.
-    className: `${className} ph-no-capture`,
+    className,
     onDraft,
     onFinish: (section, how) => once(() => onFinish(section, how)),
     sendsOnEnter,

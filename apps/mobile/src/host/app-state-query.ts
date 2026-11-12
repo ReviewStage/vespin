@@ -17,6 +17,7 @@ import {
   type AppStateBridgeReads,
   type FollowedAppState,
   followAppStateOver,
+  shareAppState,
 } from "@repo/host/app-state-reads";
 import { type QueryClient, queryOptions } from "@tanstack/react-query";
 
@@ -32,6 +33,7 @@ export const appStateQuery = queryOptions({
       : Promise.resolve(held);
   },
   staleTime: Infinity,
+  structuralSharing: shareAppState,
   retry: false,
 });
 

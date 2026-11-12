@@ -25,7 +25,7 @@ import {
   type DescriptionCommentsControl,
   DescriptionCommentsProvider,
 } from "@repo/ui/description-comments";
-import { Effect } from "effect";
+import { Effect, Match } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
@@ -1125,7 +1125,11 @@ test("a comment's field offers no Vespin among the agents, since no task has one
 test("a reply's field empties as it is sent and takes the next at once, each sent as it is written, and a refused reply comes back into the field, sent again under its key", async () => {
   const answer = Promise.withResolvers<boolean>();
   const { container, asked } = drawn("page", THREADS, () =>
-    asked.length === 1 ? false : asked.length === 2 ? answer.promise : true,
+    Match.value(asked.length).pipe(
+      Match.when(1, () => false),
+      Match.when(2, () => answer.promise),
+      Match.orElse(() => true),
+    ),
   );
   act(() =>
     container

@@ -36,6 +36,7 @@ import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
+import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-switcher.js";
 
 /** An account's face in its row, larger than a list's. */
 const ACCOUNT_FACE_SIZE = 36;
@@ -132,30 +133,27 @@ export function SettingsForm({ children }: { readonly children: ReactNode }) {
   );
 }
 
-type AccountRowProps = {
+type HeadRowProps = {
+  /** What leads the row: a person's face or a workspace's tile, at the head's size. */
+  readonly face: ReactNode;
   readonly name: string;
-  readonly email: string;
-  /** The account's sign-in picture, drawn in place of its letters where it has one. */
-  readonly picture?: string | undefined;
-  /** A quiet line under the address, such as how the account signed in. */
+  /** The line under the name, such as an account's address or a workspace's role. */
+  readonly line: string;
+  /** A quiet line under that, such as how the account signed in. */
   readonly detail?: string | undefined;
-  /** Where a press goes, such as the Account page from Settings' head; a row with none takes no press. */
+  /** Where a press goes; a row with none takes no press. */
   readonly onPress?: (() => void) | undefined;
 };
 
-/**
- * Who is signed in: their photo or monogram, their name, their address, and
- * how they signed in. Pressed, it goes to its page, the chevron at its end,
- * as the account heads iOS's own Settings.
- */
-export function AccountRow({ name, email, picture, detail, onPress }: AccountRowProps) {
+/** A page's head: its face, its name, its lines, and the chevron where a press goes on, as the account heads iOS's own Settings. */
+function HeadRow({ face, name, line, detail, onPress }: HeadRowProps) {
   const colors = useColors();
-  const face = (
+  const drawn = (
     <HStack
       spacing={SPACE.ROW + 2}
       modifiers={[listRowBackground(colors.SURFACE), contentShape(shapes.rectangle())]}
     >
-      <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE} />
+      {face}
       <VStack alignment="leading" spacing={2}>
         <Text
           modifiers={[
@@ -168,7 +166,7 @@ export function AccountRow({ name, email, picture, detail, onPress }: AccountRow
         <Text
           modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_BODY)]}
         >
-          {email}
+          {line}
         </Text>
         {detail === undefined ? null : (
           <Text
@@ -187,11 +185,62 @@ export function AccountRow({ name, email, picture, detail, onPress }: AccountRow
     </HStack>
   );
   return onPress === undefined ? (
-    face
+    drawn
   ) : (
-    <PressedRow label={name} value={[email, detail]} onPress={onPress}>
-      {face}
+    <PressedRow label={name} value={[line, detail]} onPress={onPress}>
+      {drawn}
     </PressedRow>
+  );
+}
+
+type AccountRowProps = {
+  readonly name: string;
+  readonly email: string;
+  /** The account's sign-in picture, drawn in place of its letters where it has one. */
+  readonly picture?: string | undefined;
+  /** A quiet line under the address, such as how the account signed in. */
+  readonly detail?: string | undefined;
+  /** Where a press goes, such as the Account page from Settings' head; a row with none takes no press. */
+  readonly onPress?: (() => void) | undefined;
+};
+
+/**
+ * Who is signed in: their photo or monogram, their name, their address, and
+ * how they signed in. Pressed, it goes to its page, the chevron at its end,
+ * as the account heads iOS's own Settings.
+ */
+export function AccountRow({ name, email, picture, detail, onPress }: AccountRowProps) {
+  return (
+    <HeadRow
+      face={<Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE} />}
+      name={name}
+      line={email}
+      detail={detail}
+      onPress={onPress}
+    />
+  );
+}
+
+/**
+ * A workspace heading its own page: its tile, as the switcher draws it (its
+ * photo, its owner's picture, or its letter on its hue, on a softened square,
+ * since a square says a team as a circle says a person), its name, and what
+ * the reader is in it.
+ */
+export function WorkspaceRow({
+  workspace,
+  role,
+}: {
+  readonly workspace: SwitcherWorkspace;
+  /** The reader's role in it, in the panel's words. */
+  readonly role: string;
+}) {
+  return (
+    <HeadRow
+      face={<WorkspaceTile workspace={workspace} size={ACCOUNT_FACE_SIZE} />}
+      name={workspace.name}
+      line={role}
+    />
   );
 }
 

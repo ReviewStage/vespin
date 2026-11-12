@@ -88,6 +88,7 @@ export const HOSTED_REFUSAL_STATUS = {
   [HOSTED_API_ERROR.MEMORY_FULL]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.APPROVAL_SETTLED]: HOSTED_HTTP_STATUS.CONFLICT,
   [HOSTED_API_ERROR.PERMISSION_MODE_REFUSED]: HOSTED_HTTP_STATUS.CONFLICT,
+  [HOSTED_API_ERROR.ALLOWED_COMMANDS_FULL]: HOSTED_HTTP_STATUS.CONFLICT,
 } as const;
 
 type HostedRefusalSlug = keyof typeof HOSTED_REFUSAL_STATUS;
@@ -224,6 +225,8 @@ export const HOSTED_REFUSAL = {
   APPROVAL_SETTLED: { error: HOSTED_API_ERROR.APPROVAL_SETTLED },
   /** A mode that asks named for an agent whose harness never asks; nothing was written. */
   PERMISSION_MODE_REFUSED: { error: HOSTED_API_ERROR.PERMISSION_MODE_REFUSED },
+  /** The member always allows as many commands as they may; nothing was written. */
+  ALLOWED_COMMANDS_FULL: { error: HOSTED_API_ERROR.ALLOWED_COMMANDS_FULL },
 } as const satisfies Record<string, HostedRefusal>;
 
 /** A plan's usage limit reached, with when it resets in epoch milliseconds where the provider said, so the words can name it. */

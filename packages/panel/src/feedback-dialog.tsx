@@ -25,11 +25,7 @@
  * title names one (opened from that experiment's row in Settings ›
  * Experimental), and — only while "Include my name and email" is
  * ticked — the signed-in account's name and address, the line under the
- * box reads out. Nothing else rides along, a credential least of all. The
- * screenshots are left out of the screen recording (`ph-no-capture`),
- * because a screenshot is a picture of the person's screen and could carry
- * another app's words, and so is the note's field, whose masked value would
- * still record the rhythm of the typing.
+ * box reads out. Nothing else rides along, a credential least of all.
  */
 
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
@@ -77,7 +73,8 @@ import { type RefObject, useEffect, useId, useLayoutEffect, useRef, useState } f
 import { actMutation } from "./act-mutations.js";
 import { enterKeyHint, enterSubmitKey } from "./enter-sends.js";
 import { failureShown } from "./failure-report.js";
-import { encodeImage, imageFiles } from "./feedback-images.js";
+import { encodeImage } from "./feedback-images.js";
+import { imageFiles } from "./picture-files.js";
 import { AttachFilesButton } from "./tasks/attach-files-button.js";
 import { DROP_LEAVE, useFileDrop } from "./use-file-drop.js";
 
@@ -116,8 +113,15 @@ const IMAGE_REFUSAL = {
   FULL: `You can attach up to ${FEEDBACK_LIMITS.MAX_IMAGES} screenshots.`,
 } as const;
 
-/** The refusals of pictures handed to a note, which are the person's input checked rather than a failure of the app's. */
-const IMAGE_REFUSALS: ReadonlySet<string> = new Set(Object.values(IMAGE_REFUSAL));
+/**
+ * Why the last attachment or send did not go: its words, and whether they
+ * are the person's input checked, a picture refused, rather than a failure
+ * of the app's.
+ */
+interface Rejection {
+  readonly words: string;
+  readonly input: boolean;
+}
 
 const SEND_REFUSAL = "Could not send that. Try again.";
 
@@ -223,7 +227,7 @@ function FeedbackImageRow({
       gap={GAP.CONTROL}
       align={ALIGN.STRETCH}
       ref={row}
-      className="feedback-dialog-images ph-no-capture"
+      className="feedback-dialog-images"
       aria-label="Screenshots"
       moves
     >
@@ -269,13 +273,13 @@ async function takenImages(
   room: number,
 ): Promise<{ images: FeedbackImage[]; refusal?: string }> {
   const images: FeedbackImage[] = [];
-  let unreadable = false;
+  let unreadable: string | undefined;
   for (const file of files.slice(0, Math.max(0, room))) {
-    const image = await encodeImage(file);
-    if (image) images.push(image);
-    else unreadable = true;
+    const read = await encodeImage(file);
+    if ("image" in read) images.push(read.image);
+    else unreadable ??= read.unreadable ?? IMAGE_REFUSAL.UNREADABLE;
   }
-  if (unreadable) return { images, refusal: IMAGE_REFUSAL.UNREADABLE };
+  if (unreadable !== undefined) return { images, refusal: unreadable };
   if (files.length > room) return { images, refusal: IMAGE_REFUSAL.FULL };
   return { images };
 }
@@ -285,11 +289,11 @@ async function takenImages(
  * did not go, a screenshot refused being the person's input checked and a
  * send refused the app's failure; else a paste cut to the room left.
  */
-function composerNote(rejection: string | undefined, cut: boolean): ComposerNote | undefined {
+function composerNote(rejection: Rejection | undefined, cut: boolean): ComposerNote | undefined {
   if (rejection !== undefined) {
     return {
-      words: rejection,
-      failure: IMAGE_REFUSALS.has(rejection)
+      words: rejection.words,
+      failure: rejection.input
         ? UNREPORTED.INPUT
         : failureShown({
             surface: FAILURE_SURFACE.FEEDBACK_SEND,
@@ -338,7 +342,7 @@ export function FeedbackDialog({
   const shownKind = useRef(kind);
   shownKind.current = kind;
   const [busy, setBusy, latestBusy] = useStateWithRef(false);
-  const [rejection, setRejection] = useState<string>();
+  const [rejection, setRejection] = useState<Rejection>();
   // The words a paste past the cap left once it was cut to fit; the note stands while they do.
   const [cutWords, setCutWords] = useState<string>();
   const fileDrop = useFileDrop((files) => void attach(imageFiles(files)), {
@@ -426,7 +430,9 @@ export function FeedbackDialog({
       ...current,
       images: [...current.images, ...taken.images].slice(0, FEEDBACK_LIMITS.MAX_IMAGES),
     });
-    if (shownKind.current === of) setRejection(taken.refusal);
+    if (shownKind.current === of) {
+      setRejection(taken.refusal === undefined ? undefined : { words: taken.refusal, input: true });
+    }
   };
 
   const send = async () => {
@@ -443,7 +449,7 @@ export function FeedbackDialog({
     );
     setBusy(false);
     if (refusal !== undefined) {
-      setRejection(refusal);
+      setRejection({ words: refusal, input: false });
       return;
     }
     discardDraft(kind);
@@ -506,7 +512,7 @@ export function FeedbackDialog({
             }
           >
             {/* Note that the bare field stands at the card's inset, as the files over it and the foot under it do. */}
-            <div className="feedback-dialog-field ph-no-capture px-ui-12 pt-ui-12">
+            <div className="feedback-dialog-field px-ui-12 pt-ui-12">
               <TextArea
                 ref={field}
                 label={FEEDBACK_COPY[shown.kind].field}

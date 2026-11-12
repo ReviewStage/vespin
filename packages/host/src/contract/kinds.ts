@@ -3,9 +3,9 @@
  *
  * Kept free of every import, oRPC and every schema among them, so `acts.ts`
  * can spell these kinds in `ACT_KIND` without resolving the contract behind
- * them, and so the lint rule `anti-slop/no-follow-outside-host-read` can
- * load this file as it stands to read `PORT_ACT_USE`: that is why each
- * kind's use is declared here rather than on its procedure, and why a
+ * them, and so `PORT_ACT_USE` can be read from this file as it stands:
+ * that is why each kind's use is declared here rather than on its
+ * procedure, and why a
  * declared act (`declared-act.ts`) reads its kind and use from here by its
  * name rather than restating them. A kind here is the key of its procedure
  * in `actContract`, so the panel's act door calls a kind by its own name.
@@ -70,6 +70,18 @@ export const ACCOUNT_ASK_ACT_KIND = {
   GITHUB_TOKEN_RETRY: "githubToken.retry",
   GITHUB_TOKEN_SAVE: "githubToken.save",
   GITHUB_TOKEN_REMOVE: "githubToken.remove",
+  /**
+   * Settings › Agents › Always allowed: the shell commands the account
+   * always allows its coding agents to run unasked, by their first words,
+   * held for the window while it holds the stream open, asked again at
+   * once, and one added by hand or removed. The hold's stream carries
+   * nothing: the list reaches the panel on app state
+   * (`LIVE_READ.ALLOWED_COMMANDS`), where each write's own answer is laid
+   * too.
+   */
+  ALLOWED_COMMANDS_FOLLOW: "allowedCommands.follow",
+  ALLOWED_COMMANDS_RETRY: "allowedCommands.retry",
+  ALLOWED_COMMANDS_WRITE: "allowedCommands.write",
   /**
    * Settings › Memory: the facts and conventions the coding agents kept in
    * the workspace Settings shows, shared by its members, held for the
@@ -628,6 +640,15 @@ export const MAC_RESOURCES_ACT_KIND = {
 } as const;
 
 /**
+ * A photo Chromium cannot decode, HEIC off an iPhone, written again as a
+ * JPEG by the desktop's main with macOS's own `sips` (`mac-photos.ts`),
+ * which a panel asks before it decodes a picked or pasted HEIC.
+ */
+export const MAC_PHOTO_ACT_KIND = {
+  MAC_PHOTO_TO_JPEG: "macPhoto.toJpeg",
+} as const;
+
+/**
  * A shell on this Mac (`mac-shells.ts`): the developer's login shell opened
  * in a folder for the asking panel, attached, and closed, answered by the
  * desktop's main, which holds it. What it prints travels on the port an
@@ -857,6 +878,7 @@ export const PORT_ACT_KIND = {
   ...INSTALLED_SKILL_ACT_KIND,
   ...INTEGRATION_ACT_KIND,
   ...MAC_COMMAND_ACT_KIND,
+  ...MAC_PHOTO_ACT_KIND,
   ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,
@@ -872,8 +894,7 @@ export const PORT_ACT_KIND = {
 export type PortActKind = (typeof PORT_ACT_KIND)[keyof typeof PORT_ACT_KIND];
 
 /**
- * What an act kind does with what it answers, which the panel's lint rule
- * `anti-slop/no-follow-outside-host-read` reads: a READ answers data that
+ * What an act kind does with what it answers: a READ answers data that
  * can change while a surface shows it, so a surface reads it only through
  * a live read's query, over what the host holds; a FETCH answers what cannot
  * change for what was asked, such as content read once, a lookup as a link
@@ -926,6 +947,9 @@ export const PORT_ACT_USE = {
   GITHUB_TOKEN_RETRY: ACT_USE.READ,
   GITHUB_TOKEN_SAVE: ACT_USE.WRITE,
   GITHUB_TOKEN_REMOVE: ACT_USE.WRITE,
+  ALLOWED_COMMANDS_FOLLOW: ACT_USE.READ,
+  ALLOWED_COMMANDS_RETRY: ACT_USE.READ,
+  ALLOWED_COMMANDS_WRITE: ACT_USE.WRITE,
   MEMORIES_FOLLOW: ACT_USE.READ,
   MEMORIES_RETRY: ACT_USE.READ,
   MEMORIES_FORGET: ACT_USE.WRITE,
@@ -1055,6 +1079,8 @@ export const PORT_ACT_USE = {
   MCP_CLIENTS_REVOKE: ACT_USE.WRITE,
 
   MAC_COMMAND_ANSWER: ACT_USE.WRITE,
+
+  MAC_PHOTO_TO_JPEG: ACT_USE.FETCH,
 
   MAC_RESOURCES_READ: ACT_USE.FETCH,
 
@@ -1203,6 +1229,7 @@ export const PORT_ACT_USE = {
 export const PLATFORM_PORT_ACT_KIND = {
   ...BROWSER_LIVE_ACT_KIND,
   ...CLI_ACT_KIND,
+  ...MAC_PHOTO_ACT_KIND,
   ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,

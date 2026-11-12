@@ -2,6 +2,7 @@ import { Schema as EffectSchema, Result } from "effect";
 import { Base64 } from "effect/encoding";
 import { INBOX_BOUNDS, INBOX_IMAGE_TYPE, type InboxImageType } from "./inbox-wire.js";
 import { sniffMediaType } from "./media-signature.js";
+import { MAX_REQUEST_DATA_URL_BYTES } from "./request-body-limit.js";
 import { WEBM_TYPE, webmDimensions } from "./video-signature.js";
 
 /**
@@ -55,11 +56,11 @@ export const PICTURE_BOUNDS = {
   /**
    * The most bytes one video sent as a `data:` URL may hold, decoded. Note
    * that this is under `MAX_VIDEO_BYTES`, because base64 spells three bytes
-   * in four characters and the request carrying it must stay under the 4.5
-   * MB a Vercel function may be sent; a video read on the service, as an
+   * in four characters and the request carrying it must stay under the body
+   * limit a Vercel function may be sent (`request-body-limit.ts`); a video read on the service, as an
    * agent's from its sandbox, is held to `MAX_VIDEO_BYTES` alone.
    */
-  MAX_SENT_VIDEO_BYTES: 3_300_000,
+  MAX_SENT_VIDEO_BYTES: MAX_REQUEST_DATA_URL_BYTES,
 } as const;
 
 /** A picture as a `data:` URL spells it: its media type, then its bytes in base64. */

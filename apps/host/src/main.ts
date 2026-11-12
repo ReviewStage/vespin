@@ -73,7 +73,7 @@
  */
 
 import { spawn } from "node:child_process";
-import { realpathSync } from "node:fs";
+import { appendFileSync, mkdirSync, realpathSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -111,9 +111,13 @@ import {
   LINUX_HOST,
   leaveHostDevice,
   readHostDevice,
+  readSetupStatus,
+  SETUP_STEP,
+  type SetupStatus,
 } from "@repo/host/daemon";
 import { Environment, reporterLayer } from "@repo/host/effect";
 import { armedWatchLayer, reportToStderr } from "@repo/host/node";
+import * as Sentry from "@sentry/node";
 import { ConfigProvider, Duration, Effect, Exit, Layer, Option } from "effect";
 import * as FileSystem from "effect/FileSystem";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
@@ -121,6 +125,22 @@ import { ChildProcess } from "effect/process";
 
 /** The daemon's version, which the release's build writes in; a development run is below every floor. */
 const VERSION = process.env.APP_HOST_VERSION ?? "0.0.0";
+
+/** Where the daemon reports to Sentry, which the release's build writes in; none for a development run, which reports nowhere. */
+const SENTRY_DSN = process.env.APP_HOST_SENTRY_DSN ?? "";
+
+/**
+ * The log file a bundled daemon keeps, where the account install's plist
+ * sends its own output (`install.sh`'s log), since the app's LaunchAgent
+ * names none; none for any other run, whose output its service keeps.
+ */
+const LOG_FILE =
+  process.platform === "darwin" && process.argv.includes("--bundled")
+    ? path.join(os.homedir(), "Library", "Logs", `${PRODUCT_NAME} Host`, "vespin-host.log")
+    : undefined;
+
+/** Whether a reported line says something failed, which Sentry is told as an error rather than a log line. */
+const FAILING = /could not|couldn't|failed|refused/i;
 
 /** The service a box connects to where its install script names none. */
 const DEFAULT_SERVICE_ORIGIN = LINK_ORIGIN;
@@ -164,7 +184,29 @@ const UNINSTALL_KEEPING_AGENTS = ["uninstall", "--keep-agents"] as const;
 /** The transient systemd unit a removed box's uninstall runs in, apart from the daemon's own unit, which it stops. */
 const UNINSTALL_UNIT = "vespin-host-uninstall";
 
-const COMMAND = { RUN: "run", CONNECT: "connect", LEAVE: "leave", VERSION: "version" } as const;
+const COMMAND = {
+  RUN: "run",
+  CONNECT: "connect",
+  LEAVE: "leave",
+  VERSION: "version",
+  STATUS: "status",
+} as const;
+
+/** How long `status --wait` waits for setup to end, so an install on a slow connection says so rather than hanging. */
+const STATUS_WAIT = Duration.minutes(10);
+
+/** How often `status --wait` reads where setup stands. */
+const STATUS_READ_EVERY = Duration.seconds(2);
+
+/** What `status` says of each step, and the exit code each ends `--wait` with. */
+const STATUS_WORDS = {
+  [SETUP_STEP.SETTING_UP]: "Setting up: fetching Claude Code, Codex, and GitHub's CLI…",
+  [SETUP_STEP.FAILED]: "Failed",
+  [SETUP_STEP.READY]: "Ready: this machine takes agents.",
+} as const;
+
+/** What `status` says before the host has kept any step. */
+const NOT_STARTED_WORDS = "Not set up yet: the host has not started setting up.";
 
 /** The release's own folder, the app's `Contents/Resources/host` for a bundled one: this bundle stands in its `lib/`, whichever way its Node was started. */
 const installFolder = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -221,6 +263,40 @@ const runtime: HostRuntime | undefined =
     ? runtimeOfOs
     : { ...runtimeOfOs, stateRoot: process.env.APP_HOST_STATE_ROOT };
 
+// Note that the daemon reports only its own lines: no default integration, so no request, local variable, or console output of a runner leaves with them.
+if (SENTRY_DSN !== "") {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    release: `vespin-host@${VERSION}`,
+    environment: "production",
+    defaultIntegrations: false,
+    sendClientReports: false,
+    initialScope: { tags: { component: "host", bundled: LOG_FILE !== undefined } },
+  });
+}
+
+/** Writes a line to the bundled daemon's log file, where it keeps one; a line it cannot write is left to stderr alone. */
+function logToFile(message: string): void {
+  if (LOG_FILE === undefined) return;
+  try {
+    mkdirSync(path.dirname(LOG_FILE), { recursive: true });
+    appendFileSync(LOG_FILE, `${new Date().toISOString()} ${message}\n`);
+  } catch {
+    // Note that a log the disk refuses never stops the daemon.
+  }
+}
+
+/** A line the daemon reports: to stderr, to its log file where it keeps one, and to Sentry, as an error where it says something failed. */
+function reportEverywhere(message: string): void {
+  reportToStderr(message);
+  logToFile(message);
+  if (SENTRY_DSN === "") return;
+  // Note that a line is sent up to what its step said of itself, so an error's or a tool's words after it stay in the log.
+  const ours = message.split(": ").slice(0, 2).join(": ");
+  if (FAILING.test(ours)) Sentry.captureMessage(ours, "error");
+  else Sentry.logger.info(ours);
+}
+
 const nodeServices = Layer.mergeAll(
   NodeChildProcessSpawner.layer.pipe(
     Layer.provideMerge(
@@ -228,7 +304,7 @@ const nodeServices = Layer.mergeAll(
     ),
   ),
   FetchHttpClient.layer,
-  reporterLayer(reportToStderr),
+  reporterLayer(reportEverywhere),
   Layer.succeed(Environment, ConfigProvider.fromEnv()),
 );
 
@@ -529,6 +605,53 @@ const connect = (runtime: HostRuntime, name: string, origin: string) =>
     ),
   );
 
+/** The line `status` prints for where setup stands. */
+function statusLine(status: Option.Option<SetupStatus>): string {
+  if (Option.isNone(status)) return NOT_STARTED_WORDS;
+  const { step, failure } = status.value;
+  return step === SETUP_STEP.FAILED && failure !== undefined
+    ? `${STATUS_WORDS[step]}: ${failure}.`
+    : STATUS_WORDS[step];
+}
+
+/**
+ * Prints where this machine's setup stands. With `wait`, prints each change
+ * until setup is ready (exit 0), failed (exit 1), or `STATUS_WAIT` passes
+ * (exit 2), which the install script runs once the host is started.
+ */
+const status = (runtime: HostRuntime, wait: boolean) =>
+  Effect.gen(function* () {
+    const read = readSetupStatus(runtime.stateRoot);
+    let printed: string | undefined;
+    const print = (line: string) =>
+      Effect.sync(() => {
+        if (line !== printed) process.stdout.write(`${line}\n`);
+        printed = line;
+      });
+    const settled = Effect.gen(function* () {
+      for (;;) {
+        const now = yield* read;
+        yield* print(statusLine(now));
+        if (!wait) return 0;
+        if (Option.isSome(now) && now.value.step === SETUP_STEP.READY) return 0;
+        if (Option.isSome(now) && now.value.step === SETUP_STEP.FAILED) return 1;
+        yield* Effect.sleep(STATUS_READ_EVERY);
+      }
+    });
+    return yield* settled.pipe(
+      Effect.timeoutOrElse({
+        duration: STATUS_WAIT,
+        orElse: () =>
+          Effect.as(
+            print(
+              `Still setting up after ${Duration.format(STATUS_WAIT)}. Run vespin-host status later to check.`,
+            ),
+            2,
+          ),
+      }),
+    );
+  });
+
 /** The services every command runs on, which `nodeServices` provides. */
 type HostServices = Layer.Success<typeof nodeServices>;
 
@@ -554,6 +677,10 @@ function main(argv: readonly string[]): Effect.Effect<number, unknown, HostServi
     return run(runtime, values.bundled === true);
   }
   if (command === COMMAND.LEAVE) return leave(runtime);
+  if (command === COMMAND.STATUS) {
+    const { values } = parseArgs({ args: [...rest], options: { wait: { type: "boolean" } } });
+    return status(runtime, values.wait === true);
+  }
   if (command === COMMAND.CONNECT) {
     const { values } = parseArgs({
       args: [...rest],
@@ -569,7 +696,7 @@ function main(argv: readonly string[]): Effect.Effect<number, unknown, HostServi
   }
   return Effect.sync(() =>
     process.stderr.write(
-      "usage: vespin-host run [--bundled] | connect [--origin <url>] [--name <name>] | version | uninstall [--keep-agents]\n",
+      "usage: vespin-host run [--bundled] | connect [--origin <url>] [--name <name>] | status [--wait] | version | uninstall [--keep-agents]\n",
     ),
   ).pipe(Effect.as(CONNECT_EXIT.USAGE));
 }

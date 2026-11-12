@@ -66,17 +66,12 @@ const SIGN_IN_REQUIRED = { outcome: PULL_REQUEST_WRITE_OUTCOME.SIGN_IN_REQUIRED 
 const reached = (userId: string, agent: WithRepository<Agent>) =>
   agentPullRequestReach(userId, agent).pipe(
     Effect.asVoid,
-    Effect.catch((failure): Effect.Effect<never, HostedRefusal> => {
-      switch (failure._tag) {
-        case "RepositoryNotReachable":
-          return Effect.fail(HOSTED_REFUSAL.REPOSITORY_NOT_REACHABLE);
-        default:
-          return Effect.andThen(
-            logWorkspaceReadFailure(failure),
-            Effect.fail(HOSTED_REFUSAL.UNAVAILABLE),
-          );
-      }
-    }),
+    Effect.catchTag(
+      "RepositoryNotReachable",
+      () => Effect.fail(HOSTED_REFUSAL.REPOSITORY_NOT_REACHABLE),
+      (failure) =>
+        Effect.andThen(logWorkspaceReadFailure(failure), Effect.fail(HOSTED_REFUSAL.UNAVAILABLE)),
+    ),
   );
 
 /** The member's own token, or none where they must sign in with GitHub again; our own failure to read it is unavailable. */
@@ -86,23 +81,14 @@ const memberToken = (userId: string) =>
     return yield* app.userToken(userId);
   }).pipe(
     Effect.map((token): Redacted.Redacted | undefined => token),
-    Effect.catch((failure): Effect.Effect<undefined, HostedRefusal> => {
-      switch (failure._tag) {
-        case "GitHubSignInRequired":
-          return Effect.succeed(undefined);
-        case "GitHubAppNotConfigured":
-        case "GitHubUnavailable":
-          return Effect.andThen(
-            logGitHubReadFailure(failure),
-            Effect.fail(HOSTED_REFUSAL.UNAVAILABLE),
-          );
-        default:
-          return Effect.andThen(
-            logWorkspaceReadFailure(failure),
-            Effect.fail(HOSTED_REFUSAL.UNAVAILABLE),
-          );
-      }
-    }),
+    Effect.catchTag("GitHubSignInRequired", () => Effect.succeed(undefined)),
+    Effect.catchTag(
+      ["GitHubAppNotConfigured", "GitHubUnavailable"],
+      (failure) =>
+        Effect.andThen(logGitHubReadFailure(failure), Effect.fail(HOSTED_REFUSAL.UNAVAILABLE)),
+      (failure) =>
+        Effect.andThen(logWorkspaceReadFailure(failure), Effect.fail(HOSTED_REFUSAL.UNAVAILABLE)),
+    ),
   );
 
 /**

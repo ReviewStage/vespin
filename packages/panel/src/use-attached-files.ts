@@ -13,7 +13,8 @@ import {
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { useRef, useState } from "react";
 import { reportShownFailure } from "./failure-report.js";
-import { encodeImage, imageFiles } from "./feedback-images.js";
+import { encodeImage } from "./feedback-images.js";
+import { imageFiles, isPictureFile } from "./picture-files.js";
 import { base64Of } from "./tasks/attached-files.js";
 import { type FileDrop, useFileDrop } from "./use-file-drop.js";
 
@@ -114,11 +115,11 @@ type FileRead = { readonly attachment: AgentAttachment } | { readonly refusal: s
 async function attachmentOf(file: File): Promise<FileRead> {
   // Note that the name needs no bound of its own here, because macOS bounds a file's name inside the wire's.
   const { name } = file;
-  if (file.type.startsWith("image/")) {
-    const image = await encodeImage(file, AGENT_BOUNDS.MAX_IMAGE_BYTES);
+  if (isPictureFile(file)) {
+    const read = await encodeImage(file, AGENT_BOUNDS.MAX_IMAGE_BYTES);
     // Note that a re-encoded image keeps the name it was picked under, which is the one its chip says.
-    if (image === undefined) return { refusal: REFUSAL.UNREADABLE(name) };
-    return { attachment: { name, mediaType: image.mediaType, data: image.base64 } };
+    if ("unreadable" in read) return { refusal: read.unreadable ?? REFUSAL.UNREADABLE(name) };
+    return { attachment: { name, mediaType: read.image.mediaType, data: read.image.base64 } };
   }
   const pdf = file.type === AGENT_ATTACHMENT_TYPE.PDF || name.toLowerCase().endsWith(".pdf");
   const bound = pdf ? AGENT_BOUNDS.MAX_PDF_BYTES : AGENT_BOUNDS.MAX_TEXT_BYTES;

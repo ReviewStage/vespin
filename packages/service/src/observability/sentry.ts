@@ -228,7 +228,9 @@ const DB_QUERY_TEXT = "db.query.text";
  * every search see one query; the text is already among the attributes sent.
  */
 function namedForStatement<Span extends { name: string; attributes?: object }>(span: Span): Span {
-  const text: unknown = span.attributes && Reflect.get(span.attributes, DB_QUERY_TEXT);
+  const attributes = span.attributes;
+  const text =
+    attributes !== undefined && DB_QUERY_TEXT in attributes ? attributes[DB_QUERY_TEXT] : undefined;
   return typeof text === "string" && text.length > 0 ? { ...span, name: text } : span;
 }
 

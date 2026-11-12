@@ -1,3 +1,4 @@
+import { Match } from "effect";
 import {
   createContext,
   type KeyboardEvent,
@@ -323,7 +324,11 @@ export function useListSelection(
         toggle(row.key);
         return true;
       }
-      const step = event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
+      const step = Match.value(event.key).pipe(
+        Match.when("ArrowDown", () => 1),
+        Match.when("ArrowUp", () => -1),
+        Match.orElse(() => 0),
+      );
       if (step === 0 || !event.shiftKey || command(event) || event.altKey) return false;
       const all = choosableOf(list);
       const inHand = all.find((row) => row.press === event.target);

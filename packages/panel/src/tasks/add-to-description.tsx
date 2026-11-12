@@ -96,9 +96,9 @@ async function keptUrlOf(chip: FileChip): Promise<{ url: string } | { refused: s
       ? { refused: ADD_WORDS.VIDEO_TOO_LARGE }
       : { url: chip.url };
   }
-  const encoded = await encodeImage(fileOf(chip), PICTURE_BOUNDS.MAX_BYTES);
-  if (encoded === undefined) return { refused: ADD_WORDS.NOT_A_PICTURE };
-  return { url: `data:${encoded.mediaType};base64,${encoded.base64}` };
+  const read = await encodeImage(fileOf(chip), PICTURE_BOUNDS.MAX_BYTES);
+  if ("unreadable" in read) return { refused: read.unreadable ?? ADD_WORDS.NOT_A_PICTURE };
+  return { url: `data:${read.image.mediaType};base64,${read.image.base64}` };
 }
 
 /** A picture's words: the name the viewer saves it by, without its extension. */

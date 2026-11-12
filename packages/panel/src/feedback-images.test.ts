@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { ACT_KIND } from "@repo/host/acts";
 import { afterEach, test, vi } from "vitest";
 import { encodeImage } from "./feedback-images.js";
+import { fakeActPort, refusedOnPort } from "./testing/app-bridge.js";
 
 /**
  * A picked image's re-encode as its pixels come out: a workspace photo drawn
@@ -102,8 +104,47 @@ test("a workspace photo drawn square keeps its transparent pixels transparent an
   stubPlatform({ width: 2, height: 2, pixels: [CLEAR, STRIPE, STRIPE, CLEAR] });
   const file = new File([new Uint8Array([1, 2, 3])], "logo.png", { type: "image/png" });
 
-  const image = await encodeImage(file, Number.POSITIVE_INFINITY, 2);
+  const read = await encodeImage(file, Number.POSITIVE_INFINITY, 2);
 
-  assert.equal(image?.mediaType, "image/webp");
-  assert.deepEqual(pixelsOf(image?.base64 ?? ""), [CLEAR, STRIPE, STRIPE, CLEAR]);
+  assert.ok("image" in read);
+  assert.equal(read.image.mediaType, "image/webp");
+  assert.deepEqual(pixelsOf(read.image.base64), [CLEAR, STRIPE, STRIPE, CLEAR]);
+});
+
+/** A decoder that, as Chromium's, has no HEIC: it refuses every file. */
+function stubNoHeicDecoder(): void {
+  vi.stubGlobal("createImageBitmap", () => Promise.reject(new DOMException("unreadable")));
+}
+
+test("a HEIC photo comes as the JPEG the Mac wrote of it, never handed to a decoder that cannot read it", async () => {
+  stubNoHeicDecoder();
+  const asked: string[] = [];
+  fakeActPort({
+    [ACT_KIND.MAC_PHOTO_TO_JPEG]: ({ base64 }) => {
+      asked.push(base64);
+      return Promise.resolve({ base64: "/9j/2wBD" });
+    },
+  });
+  const file = new File([new Uint8Array([1, 2, 3])], "IMG_0001.HEIC", { type: "image/heic" });
+
+  const read = await encodeImage(file);
+
+  assert.deepEqual(asked, ["AQID"]);
+  assert.deepEqual(read, {
+    image: { name: "IMG_0001.jpg", mediaType: "image/jpeg", base64: "/9j/2wBD" },
+  });
+});
+
+test("a HEIC photo neither the shell nor the browser can read is said as one to export as JPEG", async () => {
+  stubNoHeicDecoder();
+  fakeActPort({
+    [ACT_KIND.MAC_PHOTO_TO_JPEG]: () => Promise.reject(refusedOnPort("Not here.")),
+  });
+  // Note that a system may give a HEIC no type, so it is known by its name.
+  const file = new File([new Uint8Array([1, 2, 3])], "IMG_0001.heic", { type: "" });
+
+  assert.deepEqual(await encodeImage(file), {
+    unreadable:
+      "IMG_0001.heic is a HEIC photo, which this browser can't read. Export it as JPEG and attach that.",
+  });
 });

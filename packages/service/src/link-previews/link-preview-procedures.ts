@@ -22,7 +22,7 @@
 import { LINK_PREVIEW_REFUSAL, type LinkPreviewAnswer } from "@repo/features/link-preview-wire";
 import { Cache, Duration, Effect, type Exit, Option, Semaphore } from "effect";
 import { HOSTED_REFUSAL, type UserIdResolver } from "../http/http-effect.js";
-import { makeRateBrake } from "../http/rate-brake.js";
+import { createRateBrake } from "../http/rate-brake.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
 import { webPageAddressOf } from "./link-address.js";
 import { type HopTransport, readLinkPreview } from "./link-preview-read.js";
@@ -95,7 +95,7 @@ function instanceLinkPreviewCache(connect: HopTransport): Effect.Effect<LinkPrev
 /** The link previews resource: one page's preview, read for a signed-in account. */
 export function linkPreviewsProcedures(seams: LinkPreviewsProcedureSeams) {
   const previews = instanceLinkPreviewCache(seams.linkReach);
-  const brake = makeRateBrake(ASK_BRAKE);
+  const brake = createRateBrake(ASK_BRAKE);
   const signedIn = hosted.linkPreviews.use(accountMiddleware(seams.resolveUserId));
   return {
     read: signedIn.read.effect(function* ({ input, context }) {

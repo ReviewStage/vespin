@@ -126,15 +126,28 @@ const TAKES_NO_AGENT: ReadonlySet<DeviceStanding> = new Set([
   DEVICE_STANDING.FAILED,
 ]);
 
-/** Why a device offered takes no agent now, and its dot's tone: away, setting up, or failed; none for one that takes an agent, and none for one whose standing cannot be told yet, which is not called away. */
-function offerUnready(
-  device: MacOffer,
-  book: PresenceBook,
-): { readonly words: string; readonly tone: StatusTone } | undefined {
+/** Why a device offered takes no agent now: away, setting up, or failed; none for one that takes an agent, and none for one whose standing cannot be told yet, which is not called away. */
+function offerUnready(device: MacOffer, book: PresenceBook): string | undefined {
   const standing = offerStanding(device, book);
-  return TAKES_NO_AGENT.has(standing)
-    ? { words: STANDING_WORDS[standing], tone: STANDING_TONE[standing] }
-    : undefined;
+  return TAKES_NO_AGENT.has(standing) ? STANDING_WORDS[standing] : undefined;
+}
+
+/** A device's platform glyph wearing its standing's dot, its words to a reader, and on a rest where `hinted`: as a list of places draws its row, and an agent's place chip the device it runs on (`agent-place.tsx`). */
+export function DeviceStandingGlyph({
+  device,
+  standing,
+  hinted = true,
+}: {
+  device: { readonly platform?: DevicePlatform } | undefined;
+  standing: DeviceStanding;
+  /** Whether a rest on the glyph shows its words; false where the control it stands in says them. */
+  hinted?: boolean;
+}): React.JSX.Element {
+  return (
+    <StatusGlyph tone={STANDING_TONE[standing]} label={STANDING_WORDS[standing]} hinted={hinted}>
+      <DeviceGlyph device={device} />
+    </StatusGlyph>
+  );
 }
 
 /** A device as a list of places draws it: its platform's glyph wearing one dot, its words on hover and to a reader, and why it takes no agent now, none where it does. */
@@ -142,16 +155,8 @@ export function deviceMark(
   device: MacOffer,
   book: PresenceBook,
 ): { readonly icon: React.JSX.Element; readonly unready: string | undefined } {
-  const unready = offerUnready(device, book);
-  const standing = offerStanding(device, book);
-  const tone = unready?.tone ?? STANDING_TONE[standing];
-  const words = unready?.words ?? STANDING_WORDS[standing];
-  const icon = (
-    <StatusGlyph tone={tone} label={words}>
-      <DeviceGlyph device={device} />
-    </StatusGlyph>
-  );
-  return { icon, unready: unready?.words };
+  const icon = <DeviceStandingGlyph device={device} standing={offerStanding(device, book)} />;
+  return { icon, unready: offerUnready(device, book) };
 }
 
 /** A device's row past its name, for every device alike (`deviceMark`); one that takes no agent is dimmed and unpicked too, its dot saying why. */
@@ -276,7 +281,7 @@ export function useStartRunsOn(
 /** What New task's chip says of the device picked, by what the list calls it: that alone while it takes an agent, and why it does not, or that its standing cannot be told, otherwise. */
 function offerStateWords(device: MacOffer, book: PresenceBook, name: string): string {
   const unready = offerUnready(device, book);
-  if (unready !== undefined) return `${name} · ${unready.words}`;
+  if (unready !== undefined) return `${name} · ${unready}`;
   const standing = offerStanding(device, book);
   return standing === DEVICE_STANDING.ONLINE ? name : `${name} · ${STANDING_WORDS[standing]}`;
 }

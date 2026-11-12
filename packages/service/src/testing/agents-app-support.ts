@@ -66,7 +66,6 @@ import {
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
   type SessionMessage,
-  SessionUnreachable,
 } from "../agents/sessions/agent-sessions.js";
 import { AgentSandbox } from "../agents/terminal/agent-sandbox.js";
 import { requestUserId } from "../auth/bearer.js";
@@ -117,6 +116,7 @@ import {
   type ScriptedSessions,
   scriptedHarnessLayer,
 } from "../testing/native-harness-fake.js";
+import { refusedSession } from "../testing/recording-sessions.js";
 import { keepAwakeDetached } from "../testing/session-sandboxes-fake.js";
 import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-config.js";
 
@@ -304,16 +304,7 @@ export function fakeAgentSessions(
     boot: () =>
       Effect.suspend(() => {
         if (options.reachable === false) {
-          return Effect.fail(
-            new SessionUnreachable({
-              // SAFETY: the client's own error shape, built by the fake at the transport it stands for.
-              cause: {
-                _tag: "RequestError",
-                reason: { _tag: "TransportError" },
-                message: "refused",
-              } as never,
-            }),
-          );
+          return Effect.fail(refusedSession());
         }
         sessions += 1;
         const sessionId = `${NATIVE_SESSION_PREFIX.claude_code}${String(sessions).padStart(22, "0")}`;
@@ -333,16 +324,7 @@ export function fakeAgentSessions(
     open: (message) =>
       Effect.suspend(() => {
         if (options.reachable === false) {
-          return Effect.fail(
-            new SessionUnreachable({
-              // SAFETY: the client's own error shape, built by the fake at the transport it stands for.
-              cause: {
-                _tag: "RequestError",
-                reason: { _tag: "TransportError" },
-                message: "refused",
-              } as never,
-            }),
-          );
+          return Effect.fail(refusedSession());
         }
         sessions += 1;
         // A Claude Code session's id, as every agent here runs on its harness, so a Stop or a retire reaches the harness too.

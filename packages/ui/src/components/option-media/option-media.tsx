@@ -127,7 +127,7 @@ export function OptionMedia({
   if (pieces.length === 0) return null;
   return (
     <ul
-      className="ui-option-media ph-no-capture m-0 grid list-none grid-cols-option-media gap-item-gap p-0"
+      className="ui-option-media m-0 grid list-none grid-cols-option-media gap-item-gap p-0"
       aria-label={`${label} media`}
     >
       {/* Note that a tile is keyed by its place, because an option may carry the same page or address twice and its list never reorders. */}

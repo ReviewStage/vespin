@@ -1,4 +1,5 @@
 import { type JSX, useRef } from "react";
+import { REPLAY_LEFT_OUT } from "../../session-replay-marks.js";
 
 /**
  * file-picker.tsx -- the system's file picker, opened from a `Button` or `IconButton` the caller draws.
@@ -9,7 +10,7 @@ import { type JSX, useRef } from "react";
  * file can be picked again once it was taken off; `onFiles` hears the files
  * in the order the picker handed them, at most one where `multiple` is off.
  *
- * The input is left out of the screen recording whole (`ph-no-capture`),
+ * The input is left out of the screen recording whole (`REPLAY_LEFT_OUT`),
  * because the recorder masks what is typed into a field but reports a file
  * input's value, the picked file's name, in clear as it changes, before the
  * input is cleared.
@@ -43,7 +44,7 @@ export function useFilePicker({
       <input
         ref={element}
         type="file"
-        className="ph-no-capture"
+        className={REPLAY_LEFT_OUT}
         accept={accept}
         multiple={multiple}
         hidden

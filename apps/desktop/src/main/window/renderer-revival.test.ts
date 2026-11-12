@@ -1,62 +1,62 @@
 /** renderer-revival.test.ts -- a panel renderer that dies is stood back up after a pause, a bounded number of times before a load succeeds. */
+import { EventEmitter } from "node:events";
 import type { RunMode } from "@repo/host";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { PanelManager } from "./panel-manager";
+import { PanelManager, type PanelSystem } from "./panel-manager";
 
 /**
  * What a window does once its renderer dies or its page fails to load: the
  * panel loads its page again after a pause, and past the bound with no load
  * finished between, it asks whether to reload once more.
  *
- * Note that Electron's module is replaced whole, because it is the operating
- * system's door (its windows, its renderers, its sheets) and answers nothing
- * outside an Electron process, and that the pause is waited out on a fake
- * timer, since it is a plain `setTimeout`.
+ * Note that Electron's doors are stood in for, because they are the
+ * operating system's (its windows, its renderers, its sheets) and answer
+ * nothing outside an Electron process, and that the pause is waited out on a
+ * fake timer, since it is a plain `setTimeout`.
  */
 
-const { windows, sheets, quit, FakeBrowserWindow } = await vi.hoisted(async () => {
-  const { EventEmitter } = await import("node:events");
-  const windows: InstanceType<typeof FakeBrowserWindow>[] = [];
-  /** The answers the next sheets give, by button, and the windows each was shown on. */
-  const sheets = { answers: [] as number[], shownOn: [] as unknown[] };
-  /** Whether a quit asked for tears the launch down, or a live call holds it; and whether it was asked. */
-  const quit = { goes: true, asked: false, tearingDown: false };
-  class FakeWebContents extends EventEmitter {
-    setBackgroundThrottling(): void {}
-    setWindowOpenHandler(): void {}
-    send(): void {}
+const windows: FakeBrowserWindow[] = [];
+/** The answers the next sheets give, by button, and the windows each was shown on. */
+const sheets = { answers: [] as number[], shownOn: [] as unknown[] };
+/** Whether a quit asked for tears the launch down, or a live call holds it; and whether it was asked. */
+const quit = { goes: true, asked: false, tearingDown: false };
+
+class FakeWebContents extends EventEmitter {
+  setBackgroundThrottling(): void {}
+  setWindowOpenHandler(): void {}
+  send(): void {}
+}
+
+class FakeBrowserWindow extends EventEmitter {
+  readonly webContents = new FakeWebContents();
+  /** How many times a page was loaded into the window. */
+  loads = 0;
+  shown = false;
+  destroyed = false;
+  constructor() {
+    super();
+    windows.push(this);
   }
-  class FakeBrowserWindow extends EventEmitter {
-    readonly webContents = new FakeWebContents();
-    /** How many times a page was loaded into the window. */
-    loads = 0;
-    shown = false;
-    destroyed = false;
-    constructor() {
-      super();
-      windows.push(this);
-    }
-    isDestroyed = () => this.destroyed;
-    loadFile = () => {
-      this.loads += 1;
-      return Promise.resolve();
-    };
-    show = () => {
-      this.shown = true;
-    };
-    showInactive = () => {
-      this.shown = true;
-    };
-    destroy = () => {
-      this.destroyed = true;
-    };
-  }
-  return { windows, sheets, quit, FakeBrowserWindow };
-});
+  isDestroyed = () => this.destroyed;
+  loadFile = () => {
+    this.loads += 1;
+    return Promise.resolve();
+  };
+  show = () => {
+    this.shown = true;
+  };
+  showInactive = () => {
+    this.shown = true;
+  };
+  destroy = () => {
+    this.destroyed = true;
+  };
+}
 
 const DISPLAY = { id: 1, workArea: { x: 0, y: 0, width: 1600, height: 1000 } };
 
-vi.mock("electron", () => ({
+/** Electron as the panel meets it: these windows, one display, a quit, and sheets answered from `sheets`. */
+const SYSTEM = {
   BrowserWindow: FakeBrowserWindow,
   app: {
     focus: () => undefined,
@@ -72,7 +72,7 @@ vi.mock("electron", () => ({
     },
   },
   screen: { getPrimaryDisplay: () => DISPLAY, getAllDisplays: () => [DISPLAY] },
-}));
+} as unknown as PanelSystem;
 
 const RUN_MODE: RunMode = {
   requiresAccount: false,
@@ -89,6 +89,7 @@ const PAST_THE_PAUSE_MS = 5_000;
 function drawnPanel() {
   const gone: string[] = [];
   const panels = new PanelManager({
+    system: SYSTEM,
     runMode: RUN_MODE,
     preloadPath: "preload.js",
     rendererHtmlPath: "index.html",
@@ -106,7 +107,7 @@ function drawnPanel() {
 }
 
 /** The renderer behind `window` crashes. */
-function crash(window: InstanceType<typeof FakeBrowserWindow>): void {
+function crash(window: FakeBrowserWindow): void {
   window.webContents.emit("render-process-gone", {}, { reason: "crashed", exitCode: 1 });
 }
 
@@ -171,7 +172,7 @@ test("past the bound the panel stops reloading and asks, and Reload loads it onc
 });
 
 /** Crashes the panel's renderer past the bound and lets the sheet answer `answer`. */
-async function crashPastTheBound(window: InstanceType<typeof FakeBrowserWindow>, answer: number) {
+async function crashPastTheBound(window: FakeBrowserWindow, answer: number) {
   sheets.answers.push(answer);
   for (let death = 0; death < 4; death += 1) {
     crash(window);

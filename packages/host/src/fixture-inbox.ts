@@ -732,6 +732,8 @@ const INVITES_HELD: AgentPendingApproval = {
   description: "Run the members tests",
   input: { command: "pnpm test src/members", description: "Run the members tests" },
   askedAt: INVITES_STARTED + 72 * MINUTE,
+  // Note that the harness proposed the command's first words, so Always allow names them and keeps them for every agent.
+  commandPrefix: ["pnpm", "test"],
 };
 
 const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
@@ -955,10 +957,10 @@ const INVITATIONS: readonly WorkspaceInvitation[] = [
   },
 ];
 
-/** Relay's photo, as the host holds a workspace's photo once fetched: a small teal tile with a band across it, so a drawn photo reads apart from a letter on its hue. */
+/** Relay's photo, as the host holds a workspace's photo once fetched: a teal disc with a band across it on transparent pixels, so a drawn photo reads apart from a letter on its hue, and a tile that drew its letter under the photo would show it in the corners. */
 const TEAM_PHOTO = {
-  version: "relay-photo-1",
-  url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAIAAADYYG7QAAAA+UlEQVR42s3YawrCMBBG0bsT9+cfl+Dm3IA7UhBE1CaTeXwTSGkeEziUNp2E6/32t5wu55bCEajLNAK1mCYgvWkOEptMIKXJCpKZFkAaE89rKxOv2z4m3rVNTHw2djDx1W438dvVa+Jvb6OJo4EuE4OxFhPjYb2JaYTYhCVIacIYJzNhD9WYWIoWmFidUG3CMafUhO/B1plwv31FJiKfaIWJ4DqWbiK+2OeaSPkjJprIShuyTCTmVikmchPQuIn0LD1oomIrEzFRtN9zm6jbFPtMlJ4cOExUH6+smspBqyYFaMkkAtlNOpDRJAVZTGrQ1NQAGpt6QAPTA4OnmUbTnrGMAAAAAElFTkSuQmCC",
+  version: "relay-photo-2",
+  url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAiUlEQVR42u3ZyQ2AMBBD0RRBxZzpOXSAFGa3viXuficUz1qEENdcz72/vnGF24KsxUsh3uXTEFHFUyBZ5UMQ2eVdEVXl3RCjAdXlTYgu5X8jRgO6lT9GAABgAOzmAQAAAAAAsQD+xAAA8CLjXSy1TDBsjZ8WJcZdiXld4sAhc2KSOPLJnFkJGZ4XDifVZR4EdxUAAAAASUVORK5CYII=",
 } as const;
 
 /**
@@ -1622,11 +1624,21 @@ function changedAgent<A extends AgentSummary>(agent: A, change: AgentChange): A 
   return { ...agent, ...fields };
 }
 
+/** The fields of an agent a fixture run's change may set: each of `AgentChange`'s but the reader's pin. */
+const CHANGED_FIELDS = [
+  "model",
+  "effort",
+  "permissionMode",
+  "disabledServers",
+  "title",
+] as const satisfies readonly Exclude<keyof AgentChange, "pinned">[];
+
 /** Whether every field of the change already stands on the agent. */
 function standsOn(agent: AgentSummary, change: AgentChange): boolean {
-  const { pinned: _pinned, ...fields } = change;
-  return Object.entries(fields).every(([key, value]) => {
-    const held: unknown = Reflect.get(agent, key);
+  return CHANGED_FIELDS.every((key) => {
+    const value = change[key];
+    const held = agent[key];
+    if (value === undefined) return true;
     return Array.isArray(value) && Array.isArray(held)
       ? value.length === held.length && value.every((each, at) => each === held[at])
       : held === value;

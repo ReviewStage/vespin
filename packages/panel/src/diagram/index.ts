@@ -4,7 +4,7 @@ import {
   type DiagramDrawing,
   type DiagramModule,
 } from "@repo/ui/diagram-contract";
-import { writeWithheldSheet } from "@repo/ui/session-replay-marks";
+import { REPLAY_LEFT_OUT, writeWithheldSheet } from "@repo/ui/session-replay-marks";
 import mermaid, { type MermaidConfig } from "mermaid";
 import { diagramThemeVariables } from "./diagram-theme.js";
 
@@ -30,7 +30,7 @@ import { diagramThemeVariables } from "./diagram-theme.js";
  * appearance must not land between a draw's two layouts.
  *
  * Neither layout reaches the screen recording. Each is drawn in a box of
- * its own under the recorder's `ph-no-capture`, in the page, where
+ * its own under the recorder's block (`REPLAY_LEFT_OUT`), in the page, where
  * Mermaid's renderers look their drawing up, rather than loose in its
  * body: the drawing names the diagram's participants, nodes, and links in
  * its attributes, and its `<style>`, which the recording copies unmasked,
@@ -122,7 +122,7 @@ async function drawnNow(code: string, appearance: DiagramAppearance): Promise<Di
   if ((await mermaid.parse(code, { suppressErrors: true })) === false) return REFUSED;
   laidOut += 1;
   const scratch = document.createElement("div");
-  scratch.className = "ph-no-capture";
+  scratch.className = REPLAY_LEFT_OUT;
   document.body.append(scratch);
   try {
     return await laidOutIn(scratch, `description-diagram-${laidOut}`, code);

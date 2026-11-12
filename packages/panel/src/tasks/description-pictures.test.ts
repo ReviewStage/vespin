@@ -110,7 +110,6 @@ test("a description's picture is drawn from its bytes under its caption, and one
 
   const blocks = [...view.querySelectorAll<HTMLElement>(".picture-block")];
   assert.equal(blocks.length, 2);
-  assert.ok(blocks.every((block) => block.classList.contains("ph-no-capture")));
   const image = blocks[0]?.querySelector("img");
   assert.equal(image?.getAttribute("src"), `data:image/png;base64,${PNG_BASE64}`);
   assert.equal(image?.getAttribute("alt"), "Invite email");

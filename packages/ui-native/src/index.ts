@@ -124,6 +124,7 @@ export {
   SettingsForm,
   ToggleRow,
   ValueRow,
+  WorkspaceRow,
 } from "./settings-form.js";
 export type { SfSymbol } from "./sf-symbol.js";
 export {

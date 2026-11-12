@@ -80,10 +80,7 @@ builds a control of its own.
   (`linkMention`, `readLink`): a `vespin.dev` place goes to the screen's
   `onOpenPlace`, any other web address to Safari.
 - **This is the one workspace that imports `@expo/ui` or `expo-glass-effect`,
-  or builds a control from React Native's pieces.** Everywhere else
-  `anti-slop/no-raw-press-outside-ui-native` refuses them, and a press prop
-  on a React Native primitive, with no disable comment allowed (root
-  `AGENTS.md`'s Layout). When a screen needs a piece this package lacks, add
+  or builds a control from React Native's pieces.** When a screen needs a piece this package lacks, add
   the component or an `as const` variant here, named for what it does.
 - **Colors come from `@repo/brand`.** `src/tokens/brand-colors.ts` is written
   by `packages/brand/scripts/generate-surface-shared.mjs` from the brand's one
@@ -136,9 +133,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
   button is the chevron alone. One button leads every tab's root bar, as
-  Notion's does: the workspace switcher (`WorkspaceSwitcher`, the tile and ⌄
-  alone, `SWITCHER_LOOK.TILE`, so the screen's title keeps its place beside
-  it, as Linear's does), whose menu holds the workspaces, the account by its
+  Notion's does: the workspace switcher (`WorkspaceSwitcher`, the tile alone
+  at the photo's size in the bar's round glass, `SWITCHER_LOOK.TILE`, so the
+  screen's title keeps its place beside it, as the App Store's photo does), whose menu holds the workspaces, the account by its
   name opening Settings, New workspace and Workspace settings; the account's
   photo (`AccountButton`) only before the workspaces are read, opening
   Settings, which the system stands in the same round glass, the photo

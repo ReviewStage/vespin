@@ -20,7 +20,7 @@ import type { AppStateStore } from "@repo/host/client";
 import type { EffectDesktopService } from "@repo/host/desktop-service";
 import type { SentryEnvironment } from "@repo/host/sentry-environment";
 import * as Sentry from "@sentry/electron/main";
-import { Effect, Exit, type Layer, Option, Scope, Stream, Tracer } from "effect";
+import { Data, Effect, Exit, type Layer, Option, Scope, Stream, Tracer } from "effect";
 import {
   type CpuSummary,
   sampleProcessCpu,
@@ -32,6 +32,9 @@ import type { DesktopConfig } from "./desktop-config";
 
 /** How long the quit waits for a queued crash report to leave; a flush must not hold a quit. */
 const CRASH_REPORT_FLUSH_MS = 2_000;
+
+/** A span's status, made as Effect's tracer makes its own. */
+const SpanStatus = Data.taggedEnum<Tracer.SpanStatus>();
 
 declare const PACKAGED_SENTRY_DSN: string;
 /**
@@ -77,6 +80,31 @@ export function initializeCrashReporting(runMode: RunMode, environment: SentryEn
   });
 }
 
+/** What every line This Mac's host setup reports opens with (`compose-this-mac-host.ts`). */
+const THIS_MAC_LINE = "this Mac's host";
+
+/** Whether a reported line says something failed, which Sentry is told as an error rather than a log line. */
+const FAILING = /could not|couldn't|failed|refused/i;
+
+/**
+ * A line main reports, told to Sentry where it is about This Mac's host
+ * setup, up to what its step said of itself: as an error where it says
+ * something failed, as a log line otherwise. Note that only those lines
+ * leave, and only our own words of them, so a command's output and every
+ * other line main reports stay on stderr.
+ */
+export function reportThisMacToSentry(message: string): void {
+  if (!message.startsWith(THIS_MAC_LINE)) return;
+  const ours = ownWords(message);
+  if (FAILING.test(ours)) Sentry.captureMessage(ours, "error");
+  else Sentry.logger.info(ours);
+}
+
+/** A reported line up to what a step said of itself, so a command's output after it stays on stderr: `this Mac's host: could not install it` of `…: <stderr>`. */
+function ownWords(message: string): string {
+  return message.split(": ").slice(0, 2).join(": ");
+}
+
 /** Sentry's status code for a span that ended in error, as its SDK writes it. */
 const SPAN_STATUS_ERROR = 2;
 
@@ -113,7 +141,7 @@ class MainSentrySpan implements Tracer.Span {
     this.links = options.links;
     this.kind = options.kind;
     this.sampled = sentry.isRecording();
-    this.status = { _tag: "Started", startTime: options.startTime };
+    this.status = SpanStatus.Started({ startTime: options.startTime });
   }
 
   get spanId(): string {
@@ -127,7 +155,7 @@ class MainSentrySpan implements Tracer.Span {
   end(endTime: bigint, exit: Exit.Exit<unknown, unknown>): void {
     if (Exit.isFailure(exit)) this.sentry.setStatus({ code: SPAN_STATUS_ERROR });
     this.sentry.end(Number(endTime / 1_000_000n));
-    this.status = { _tag: "Ended", startTime: this.status.startTime, endTime, exit };
+    this.status = SpanStatus.Ended({ startTime: this.status.startTime, endTime, exit });
   }
 
   attribute(key: string, value: unknown): void {

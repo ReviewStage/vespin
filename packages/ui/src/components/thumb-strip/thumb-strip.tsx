@@ -17,9 +17,7 @@ import { PAGE_THUMB_SIZE, PageThumb } from "../page-thumb/page-thumb.js";
  * walk of many files costs Tab one press; the arrow keys walk the files
  * through the viewer that holds it, and where the focus stood on the strip
  * it follows the file shown. Each thumb is named for its file and says
- * which one is shown (`aria-current`). Its pictures are left out of the
- * screen recording, since a picture can hold words and the recording
- * carries none.
+ * which one is shown (`aria-current`).
  *
  * It is drawn in Tailwind utilities over the theme, with no shadcn/ui base:
  * shadcn has no strip of previews, and each press is a bare button around
@@ -79,7 +77,7 @@ export function ThumbStrip({
   return (
     <ul
       ref={list}
-      className="ui-thumb-strip ph-no-capture m-0 flex max-w-full list-none gap-ui-8 overflow-x-auto p-ui-4 [scrollbar-width:none]"
+      className="ui-thumb-strip m-0 flex max-w-full list-none gap-ui-8 overflow-x-auto p-ui-4 [scrollbar-width:none]"
       aria-label={label}
     >
       {items.map((item, index) => (

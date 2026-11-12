@@ -24,6 +24,7 @@ import type {
   AgentOrigin,
   AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
+import type { AllowedCommand } from "@repo/features/allowed-command-wire";
 import type {
   AutomationRunSummary,
   AutomationSummary,
@@ -98,6 +99,8 @@ export const RUN_PROFILE = {
   PERSON: "person",
   /** The same task on its coding agent, its Pull request tab beside it: checks, reviews, and a merge queued. */
   AGENT_PULL_REQUEST: "agent-pull-request",
+  /** The same agent and Pull request tab, the agent in an asking mode holding a call on the member's answer, whose command's first words Always allow names. */
+  AGENT_APPROVAL: "agent-approval",
   /** The same agent and Pull request tab, the agent's turn long enough that its transcript scrolls. */
   AGENT_TRANSCRIPT: "agent-transcript",
   /** The same agent as an orchestrator days into its run, its transcript thousands of entries long and written to while it is open. */
@@ -468,7 +471,7 @@ export interface AppDevicePresence {
 export type AppDevicePresences = Readonly<Record<string, AppHostRead<AppDevicePresence>>>;
 
 /** The account's hosts as Settings › Hosts draws them, by name, with each removal still out drawn gone, and the install script's address its commands name. */
-interface AppHostsHeld {
+export interface AppHostsHeld {
   hosts: readonly HostLine[];
   installScriptUrl: string;
 }
@@ -602,6 +605,14 @@ export interface AppGitHubToken {
 /** The account's GitHub token the windows hold, by the account, as the host's read of it stands. */
 export type AppGitHubTokens = Readonly<Record<string, AppHostRead<AppGitHubToken>>>;
 
+/** The commands the account always allows its coding agents to run, as the service last answered them, a read's or a write's: the list, the earliest added first. */
+export interface AppAllowedCommandList {
+  commands: readonly AllowedCommand[];
+}
+
+/** The account's always-allowed commands the windows hold, by the account, as the host's read of them stands. */
+export type AppAllowedCommands = Readonly<Record<string, AppHostRead<AppAllowedCommandList>>>;
+
 /** Each workspace's token repositories the windows hold, by the workspace, as the host's read of them stands. */
 export type AppTokenRepositories = Readonly<
   Record<string, AppHostRead<readonly WorkspaceTokenRepository[]>>
@@ -692,6 +703,7 @@ export interface AppHostReads {
   [LIVE_READ.PULL_REQUEST]: AgentOverviewPullRequestAnswerView;
   [LIVE_READ.REPOSITORY_LISTS]: GitHubRepositoriesAnswer;
   [LIVE_READ.GITHUB_TOKEN]: AppGitHubToken;
+  [LIVE_READ.ALLOWED_COMMANDS]: AppAllowedCommandList;
   [LIVE_READ.PULL_REQUEST_CHAPTERS]: PullRequestChaptersAnswer;
   [LIVE_READ.BROWSER_TABS]: readonly AgentBrowserTab[];
   [LIVE_READ.PULL_REQUEST_CHECKS]: AgentOverviewChecksAnswerView;
@@ -849,6 +861,8 @@ export interface AppState {
   [LIVE_READ.REPOSITORY_LISTS]: AppRepositoryLists;
   /** The account's own GitHub token, held while a window draws it and a while after: what Settings › Account, a workspace's Add repository, and onboarding's GitHub step read. Never written to disk. */
   [LIVE_READ.GITHUB_TOKEN]: AppGitHubTokens;
+  /** The account's always-allowed commands, held while a window draws them and a while after: what Settings › Agents' Always allowed reads. */
+  [LIVE_READ.ALLOWED_COMMANDS]: AppAllowedCommands;
   /** Each agent's pull request's chapters the windows chose, held while a Pull request tab holds them and a while after: what its Chapters tab draws. */
   [LIVE_READ.PULL_REQUEST_CHAPTERS]: AppChapters;
   /** Each task's or agent's cloud Browser tabs the windows' side panels list, held while one lists them and a while after: what the side panel's Browser tabs draw. Never written to disk. */
@@ -1043,6 +1057,7 @@ export const HOST_READ_SLICE = {
   [LIVE_READ.LINK_STANDINGS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
   [LIVE_READ.REPOSITORY_LISTS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.GITHUB_TOKEN]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
+  [LIVE_READ.ALLOWED_COMMANDS]: { keys: READ_KEYS.ONE, on: KEYS_ON.SLICE },
   [LIVE_READ.PULL_REQUEST_CHAPTERS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
   [LIVE_READ.PULL_REQUEST]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
   [LIVE_READ.PULL_REQUEST_CHECKS]: { keys: READ_KEYS.TWO, on: KEYS_ON.SLICE },
@@ -1160,6 +1175,11 @@ export interface AppStateDelivery {
 /** One level of a slice's keys: each id's or part's value, or, above the last level, each kind's record of ids. */
 type Keyed = Readonly<Record<string, unknown>>;
 
+/** Whether `value` is a level of keys or a record of fields that can be read by name, rather than a primitive or nothing. */
+function isKeyed(value: unknown): value is Keyed {
+  return typeof value === "object" && value !== null;
+}
+
 /** The value `keyed` holds under `id` itself, never one it inherits. */
 function ownValue(keyed: Keyed, id: string): unknown {
   return Object.hasOwn(keyed, id) ? keyed[id] : undefined;
@@ -1189,10 +1209,8 @@ function rowsAreValue(entry: HostReadSliceEntry): boolean {
 
 /** The record a key's read's rows are, where its slice names the field its list stands under (`rowsAt`); none otherwise. */
 function recordOf(entry: HostReadSliceEntry, value: unknown): Keyed | undefined {
-  if (entry.rowsAt === undefined || typeof value !== "object" || value === null) return undefined;
-  const rows: unknown = Reflect.get(value, "rows");
-  // SAFETY: a read whose slice names `rowsAt` holds its rows as a record of fields.
-  return typeof rows === "object" && rows !== null ? (rows as Keyed) : undefined;
+  if (entry.rowsAt === undefined || !isKeyed(value)) return undefined;
+  return isKeyed(value.rows) ? value.rows : undefined;
 }
 
 /**
@@ -1202,12 +1220,12 @@ function recordOf(entry: HostReadSliceEntry, value: unknown): Keyed | undefined 
  * (`AppHostRead`), so its rows are all of it that can move.
  */
 function rowsOf(entry: HostReadSliceEntry, value: unknown): readonly object[] | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
+  if (!isKeyed(value)) return undefined;
   const rows: unknown =
     entry.rowsAt === undefined
       ? rowsAreValue(entry)
         ? value
-        : Reflect.get(value, "rows")
+        : value.rows
       : recordOf(entry, value)?.[entry.rowsAt];
   return Array.isArray(rows) ? rows : undefined;
 }
@@ -1222,7 +1240,7 @@ function besideOf(entry: HostReadSliceEntry, value: unknown): Keyed | undefined 
 /** A row's id, under the field its slice names. */
 function idOf(rowId: string, row: object): string {
   // SAFETY: a row-keyed slice's rows each carry their id as a string under `rowId` (`HOST_READ_SLICE`).
-  return Reflect.get(row, rowId) as string;
+  return (isKeyed(row) ? row[rowId] : undefined) as string;
 }
 
 /**

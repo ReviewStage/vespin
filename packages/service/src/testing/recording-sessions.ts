@@ -10,6 +10,8 @@
 
 import { randomUUID } from "node:crypto";
 import { Effect } from "effect";
+import * as HttpClientError from "effect/http/HttpClientError";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import {
   type AgentSessions,
   SESSION_CANCEL_OUTCOME,
@@ -20,6 +22,18 @@ import {
 } from "../agents/sessions/agent-sessions.js";
 import { bootedAtOnce } from "./native-harness-fake.js";
 
+/** A session the transport could not reach, as the client fails a call refused before it answered. */
+export function refusedSession(): SessionUnreachable {
+  return new SessionUnreachable({
+    cause: new HttpClientError.HttpClientError({
+      reason: new HttpClientError.TransportError({
+        request: HttpClientRequest.post("https://sessions.test"),
+        description: "refused",
+      }),
+    }),
+  });
+}
+
 /** An account's agent sessions, writing down every message sent, by session, or refusing every send. */
 export function recordingSessions(refusing = false) {
   const sent: { readonly sessionId: string; readonly message: SessionMessage }[] = [];
@@ -29,16 +43,7 @@ export function recordingSessions(refusing = false) {
       Effect.succeed({ outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: `wrun_${randomUUID()}` }),
     send: (sessionId, message) =>
       refusing
-        ? Effect.fail(
-            new SessionUnreachable({
-              // SAFETY: the client's own error shape, built by the fake at the transport it stands for.
-              cause: {
-                _tag: "RequestError",
-                reason: { _tag: "TransportError" },
-                message: "refused",
-              } as never,
-            }),
-          )
+        ? Effect.fail(refusedSession())
         : Effect.sync(() => {
             sent.push({ sessionId, message });
             return {

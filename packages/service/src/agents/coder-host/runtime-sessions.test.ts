@@ -47,7 +47,7 @@ import { memorySandbox } from "@repo/sandbox/testing";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { eq } from "drizzle-orm";
-import { Clock, Duration, Effect, Layer, Option, Redacted, Result } from "effect";
+import { Clock, Duration, Effect, Layer, Match, Option, Redacted, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { sealCodexDeviceCredentials } from "../../accounts/chatgpt-credentials.js";
 import { RUN_EVENT, RUN_TURN_ORIGIN, TURN_ORIGIN, TURN_TRIGGER } from "../../core.js";
@@ -314,12 +314,11 @@ const agentOn = (owner: string, taskId: string, runtime: "eve" | "claude_code" |
       prompt: null,
       repository: null,
       runtime,
-      payer:
-        runtime === "claude_code"
-          ? AGENT_PAYER.CLAUDE_SUBSCRIPTION
-          : runtime === "codex"
-            ? AGENT_PAYER.CHATGPT_SUBSCRIPTION
-            : undefined,
+      payer: Match.value(runtime).pipe(
+        Match.when("claude_code", () => AGENT_PAYER.CLAUDE_SUBSCRIPTION),
+        Match.when("codex", () => AGENT_PAYER.CHATGPT_SUBSCRIPTION),
+        Match.orElse(() => undefined),
+      ),
     });
     assert.ok(Option.isSome(started));
     return started.value.agent;

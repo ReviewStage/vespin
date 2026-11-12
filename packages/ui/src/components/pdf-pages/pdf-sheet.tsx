@@ -1,6 +1,5 @@
 import type { ReactNode, Ref } from "react";
 import { cssCustomProperties } from "../../css.js";
-import { REPLAY_LEFT_OUT } from "../../session-replay-marks.js";
 
 /**
  * pdf-sheet.tsx -- a PDF's pages as the file viewer stands them, before pdf.js is loaded: the column they scroll in and one page's sheet, which the placeholder a PDF stands as while it opens draws through too (`./pdf-pages-skeleton.tsx`).
@@ -15,8 +14,9 @@ import { REPLAY_LEFT_OUT } from "../../session-replay-marks.js";
  * holds its page's shape before the page is drawn, so the column never
  * moves under the reader as pages come in.
  *
- * A PDF's pages are a person's own, so the column is left out of the screen
- * recording whole (`REPLAY_LEFT_OUT`), its canvases and its words with it.
+ * A PDF's pages are a person's own: the screen recording copies no pixels
+ * of a canvas, and the words over each page are masked as every other word
+ * is, so the column is recorded as the empty sheets it stands.
  */
 
 /** The shape a page stands in before its own is read, width over height: a US Letter page's. */
@@ -35,7 +35,7 @@ export function PdfColumn({
     <div
       role="document"
       aria-label={label}
-      className={`ui-pdf-column ${REPLAY_LEFT_OUT} min-h-0 flex-auto overflow-y-auto bg-well`}
+      className={`ui-pdf-column min-h-0 flex-auto overflow-y-auto bg-well`}
     >
       <div className="mx-auto flex w-viewer-text flex-col gap-block-gap p-card">{children}</div>
     </div>

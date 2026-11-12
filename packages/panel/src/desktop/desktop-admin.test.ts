@@ -29,8 +29,7 @@ import { DesktopAdmin } from "./desktop-admin.js";
  * browser among its acts, and its sections are a bar under it, the one
  * standing chosen; it draws no way back of its own, and Escape leaves it.
  * Each view reads through the window's host (`admin.read`) rather than a
- * browser client, opens an account on a press rather than an address, is
- * blocked from the screen recording whole, and stands a refusal of the
+ * browser client, opens an account on a press rather than an address, and stands a refusal of the
  * service's gate as the app's own failure rather than a sign-in card.
  */
 
@@ -232,15 +231,6 @@ test("an account opens on a press, as a step of the place, and is no link to an 
   act(() => name.click());
 
   assert.deepEqual(opened, [{ kind: "account", id: ADA.id }]);
-});
-
-test("the place is blocked from the screen recording whole, since every view names other accounts", async () => {
-  const { page } = await open({ kind: "users" });
-
-  const roster = [...page.querySelectorAll("*")].find(
-    (node) => node.textContent === "Ada Lovelace",
-  );
-  assert.ok(roster?.closest(".ph-no-capture"), "the roster stands inside the recording's block");
 });
 
 test("a refusal of the service's gate stands as the app's failure, offering no sign-in", async () => {

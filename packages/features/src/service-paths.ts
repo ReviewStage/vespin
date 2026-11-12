@@ -49,6 +49,12 @@ export const HOSTED_SERVICE_PATH = {
    * the body (POST). `memory-wire.ts` declares all three.
    */
   ACCOUNT_MEMORIES: "/api/account/memories",
+  /**
+   * The shell commands the account always allows its coding agents to run
+   * unasked, by their first words: read them (GET), add one by hand (POST),
+   * or remove one (DELETE ?id=). `allowed-command-wire.ts` declares every body.
+   */
+  ACCOUNT_ALLOWED_COMMANDS: "/api/account/allowed-commands",
   /** The workspace's memories a few words find, best first (GET); `memory-wire.ts` declares it. */
   ACCOUNT_MEMORIES_SEARCH: "/api/account/memories/search",
   /**

@@ -21,6 +21,7 @@ import {
 import { INTEGRATION_ACTS, INTEGRATION_FOLLOWS, integrationActsContract } from "./integrations.js";
 import type { PortActKind } from "./kinds.js";
 import { MAC_COMMAND_ACTS, macCommandActsContract } from "./mac-commands.js";
+import { macPhotoActsContract } from "./mac-photos.js";
 import { macResourcesActsContract } from "./mac-resources.js";
 import { macShellActsContract } from "./mac-shells.js";
 import { macTerminalActsContract } from "./mac-terminals.js";
@@ -78,6 +79,7 @@ export {
   CLI_ACT_KIND,
   INSTALLED_SKILL_ACT_KIND,
   INTEGRATION_ACT_KIND,
+  MAC_PHOTO_ACT_KIND,
   MAC_RESOURCES_ACT_KIND,
   MAC_SHELL_ACT_KIND,
   MAC_TERMINAL_ACT_KIND,
@@ -161,6 +163,7 @@ export const actContract = {
   ...installedSkillActsContract,
   ...integrationActsContract,
   ...macCommandActsContract,
+  ...macPhotoActsContract,
   ...macResourcesActsContract,
   ...macShellActsContract,
   ...macTerminalActsContract,

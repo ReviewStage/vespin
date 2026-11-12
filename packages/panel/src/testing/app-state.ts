@@ -18,6 +18,7 @@ import {
   type PullRequestPart,
   type PullRequestPartParams,
 } from "@repo/features/agent-view";
+import { MAC_PRESENCE } from "@repo/features/agent-wire";
 import { AUTOMATION_FOLLOW, type AutomationFollow } from "@repo/features/automation-view";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import type { HostLine } from "@repo/features/host-live";
@@ -30,16 +31,17 @@ import { PAGE_OWNER, type PagePlace } from "@repo/features/page-wire";
 import { IDLE_TASKS_VIEW, type TASK_CALL_FAILURE, type TasksView } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import {
+  type AppAllowedCommandList,
   type AppAutomationReads,
   type AppBrowserTabs,
   type AppChapters,
   type AppDescriptionComments,
-  type AppDevicePresence,
   type AppGitHubToken,
   type AppHolderInboxes,
   type AppHolderPages,
   type AppHostRead,
   type AppHostReads,
+  type AppHostsHeld,
   type AppInboxItems,
   type AppInboxSlice,
   type AppIntegrationTools,
@@ -209,6 +211,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.PULL_REQUEST]: NO_KEYS_HELD,
     [LIVE_READ.REPOSITORY_LISTS]: NO_KEYS_HELD,
     [LIVE_READ.GITHUB_TOKEN]: NO_KEYS_HELD,
+    [LIVE_READ.ALLOWED_COMMANDS]: NO_KEYS_HELD,
     [LIVE_READ.PULL_REQUEST_CHAPTERS]: NO_CHAPTERS,
     [LIVE_READ.BROWSER_TABS]: NO_BROWSER_TABS,
     [LIVE_READ.PULL_REQUEST_CHECKS]: NO_KEYS_HELD,
@@ -474,6 +477,7 @@ export function handHostReads(first: {
   readonly chapters?: AppChapters;
   readonly tools?: AppIntegrationTools;
   readonly keys?: AppHostRead<AppProviderKeyList>;
+  readonly allowedCommands?: AppHostRead<AppAllowedCommandList>;
   readonly preferences?: AppHostRead<AccountPreferencesLive>;
   readonly models?: AppHostRead<ModelsAnswer>;
   readonly members?: AppWorkspaceMembers;
@@ -510,6 +514,9 @@ export function handHostReads(first: {
         ...(first.keys === undefined
           ? undefined
           : { [LIVE_READ.PROVIDER_KEYS]: { [account]: first.keys } }),
+        ...(first.allowedCommands === undefined
+          ? undefined
+          : { [LIVE_READ.ALLOWED_COMMANDS]: { [account]: first.allowedCommands } }),
         ...(first.preferences === undefined
           ? undefined
           : { [LIVE_READ.ACCOUNT_PREFERENCES]: { [account]: first.preferences } }),
@@ -1011,42 +1018,26 @@ export function handInboxItems(
 const BEATING_ACCOUNT_ID = "user-beating";
 
 /**
- * Lays the signed-in account's beats as the host holds them over whatever
- * document the window was handed: each device named having beat `ageMs` ago
- * on the window's clock, by a read that landed `askedAgoMs` ago (now where
- * not given), the latest ask failed after it as `stale` says, or, where none
- * are given, the read failed before it ever answered. The account
- * is given an id where the document names none, since the beats are held by
- * it.
+ * Lays the signed-in account's hosts as the host holds them over whatever
+ * document the window was handed: each device named having beat `ageMs`
+ * ago, marked away where that is past fresh, as the scheduled sweep marks
+ * it, beside the hosts given, which stand over them, or, where no ages are
+ * given, the read failed before it ever answered. The account is given an
+ * id where the document names none, since the hosts are held by it.
  */
 export function handBeats(
   ages: Readonly<Record<string, number>> | undefined,
-  {
-    askedAgoMs = 0,
-    hosts,
-    ...options
-  }: {
-    readonly stale?: true;
-    readonly askedAgoMs?: number;
-    /** The account's hosts the hosts read answers beside the beats, where given. */
-    readonly hosts?: readonly HostLine[];
-  } = {},
+  { hosts = [] }: { readonly hosts?: readonly HostLine[] } = {},
 ): void {
   const handed = fakeAppBridgeCalls().requestAppState;
-  const now = Date.now();
-  const read: AppHostRead<AppDevicePresence> =
+  const given = new Set(hosts.map((host) => host.id));
+  const beating = Object.entries(ages ?? {}).flatMap(([id, ageMs]): HostLine[] =>
+    given.has(id) ? [] : [{ id, name: id, away: ageMs > MAC_PRESENCE.FRESH_MS }],
+  );
+  const read: AppHostRead<AppHostsHeld> =
     ages === undefined
       ? { failed: true }
-      : {
-          rows: {
-            beats: Object.entries(ages).map(([deviceId, ageMs]) => ({
-              deviceId,
-              beatAt: now - ageMs,
-            })),
-            askedAt: now - askedAgoMs,
-            ...options,
-          },
-        };
+      : { rows: { hosts: [...beating, ...hosts], installScriptUrl: "" } };
   fakeAppBridge({
     ...fakeAppBridgeCalls(),
     onAppState: fakeAppBridgeCalls().onAppState ?? (() => () => undefined),
@@ -1055,14 +1046,7 @@ export function handBeats(
       const { account } = snapshot;
       if (account.status !== ACCOUNT_STATUS.SIGNED_IN) return snapshot;
       const id = account.id ?? BEATING_ACCOUNT_ID;
-      return {
-        ...snapshot,
-        account: { ...account, id },
-        [LIVE_READ.DEVICE_PRESENCE]: { [id]: read },
-        ...(hosts === undefined
-          ? undefined
-          : { [LIVE_READ.HOSTS]: { [id]: { rows: { hosts, installScriptUrl: "" } } } }),
-      };
+      return { ...snapshot, account: { ...account, id }, [LIVE_READ.HOSTS]: { [id]: read } };
     },
   });
 }

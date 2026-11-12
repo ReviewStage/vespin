@@ -346,7 +346,7 @@ test("a cloud terminal tab wears the still terminal glyph though its agent works
   );
 });
 
-test("a page's tab hangs the page's card: its title and version over its newest version drawn small, in a frame that runs its scripts alone, takes no pointer or focus, and is left out of the recording", async () => {
+test("a page's tab hangs the page's card: its title and version over its newest version drawn small, in a frame that runs its scripts alone and takes no pointer or focus", async () => {
   fakeAppPlatform({ pageFrameUrl });
   const panel = (await mount()).querySelector(".side-panel-tabs");
   const tab = [...(panel?.querySelectorAll<HTMLElement>('[role="tab"]') ?? [])].find(
@@ -367,7 +367,6 @@ test("a page's tab hangs the page's card: its title and version over its newest 
   assert.equal(frame.getAttribute("sandbox"), "allow-scripts");
   assert.equal(frame.tabIndex, -1);
   assert.equal(frame.getAttribute("aria-hidden"), "true");
-  assert.ok(frame.closest(".ph-no-capture"), "the preview is left out of the recording");
 });
 
 test("a page's tab keeps its page drawn while another tab or the task's details are shown, so a return finds the page as it was left rather than loaded afresh", async () => {

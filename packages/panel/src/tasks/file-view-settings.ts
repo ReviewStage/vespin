@@ -112,10 +112,10 @@ function withWrites(
   stored: FileViewSettings,
   out: readonly (SettingWrite | undefined)[],
 ): FileViewSettings {
-  let settings = stored;
+  const settings = { ...stored };
   for (const write of out) {
     if (write !== undefined && isFileViewField(write.field)) {
-      settings = { ...settings, [write.field]: write.value };
+      Object.assign(settings, { [write.field]: write.value });
     }
   }
   return settings;

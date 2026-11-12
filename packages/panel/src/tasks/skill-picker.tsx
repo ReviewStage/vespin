@@ -39,7 +39,14 @@ import type {
   ComposerTrigger,
 } from "../description-editor/contract.js";
 import { SettingsPageLink } from "../open-settings.js";
-import { COMMAND_NAMES, CommandRef, commandOption, matchingCommands } from "./command-ref.js";
+import {
+  COMMAND_NAMES,
+  type CommandReach,
+  CommandRef,
+  commandOption,
+  matchingCommands,
+  runsCommand,
+} from "./command-ref.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide, wordBox } from "./mention-picker.js";
 import { opensFile, SkillRef, type SkillWithFile, skillOption } from "./skill-ref.js";
 
@@ -72,10 +79,11 @@ import { opensFile, SkillRef, type SkillWithFile, skillOption } from "./skill-re
  *
  * Where the box runs commands (`ComposerCommands`), a `/` that opens the
  * message lists the box's own commands first, under Commands, then the
- * skills under Skills: `/model`, which opens the model chip's menu,
- * `/compact`, written into the words for any the harness should keep, and
- * `/clear` (or `/new`), which starts the agent's harness on a fresh
- * session. A command chosen runs, or for `/compact` is written, in place of
+ * skills under Skills, whether or not there are any: `/model`, which opens
+ * the model chip's menu, wherever the box has one, New task's on Home
+ * among them; and, where its agent has a session, `/compact`, written into
+ * the words for any the harness should keep, and `/clear` (or `/new`),
+ * which starts the agent's harness on a fresh session. A command chosen runs, or for `/compact` is written, in place of
  * the `/` word, a command the message opens with drawn as its chip
  * (`command-ref.tsx`) as a skill's is; a skill named like one of them is left out there, since the
  * command is what its name runs as the message's first word. A `/` later in
@@ -85,8 +93,9 @@ import { opensFile, SkillRef, type SkillWithFile, skillOption } from "./skill-re
 /** Reads the task's repository's skills; asked the first time a `/` is typed. */
 export type SkillSource = () => Promise<SkillsRead>;
 
-/** The box's own commands, where it runs them: what choosing one from the list does. */
+/** The box's own commands, where it runs them: which it reaches, and what choosing one from the list does. */
 export interface ComposerCommands {
+  readonly reach: CommandReach;
   readonly onRun: (name: SlashCommand) => void;
 }
 
@@ -289,7 +298,7 @@ export function useSkillPicker({
   // Note that the box's commands are offered for the message's first word alone, which is where they run.
   const leads =
     commands !== undefined && trigger !== undefined && draft.slice(0, trigger.start).trim() === "";
-  const leading = leads ? matchingCommands(trigger.query) : [];
+  const leading = leads ? matchingCommands(trigger.query, commands.reach) : [];
   // Note that a box with no skills to offer opens the list only on a command the word finds.
   const mention = source === undefined && leading.length === 0 ? undefined : trigger;
   const open = mention !== undefined && closedAt !== mention.start;
@@ -297,8 +306,11 @@ export function useSkillPicker({
   const rows: readonly Entry[] = [
     ...offeredCommands.map((name) => ({ kind: ENTRY_KIND.COMMAND, name })),
     ...(open ? offered(skills, mention) : [])
-      // A skill named as a command is left out where the command is what its name runs.
-      .filter((skill) => !(leads && isSlashCommand(skill.name)))
+      // A skill named as a command is left out where the box runs that command, which is what its name runs.
+      .filter(
+        (skill) =>
+          !(leads && isSlashCommand(skill.name) && runsCommand(skill.name, commands.reach)),
+      )
       .map((skill) => ({ kind: ENTRY_KIND.SKILL, skill })),
   ];
   const held =
@@ -418,7 +430,8 @@ export function useSkillPicker({
         !open || rows.length === 0 ? undefined : comboboxOptionId(listId, at),
     },
     names,
-    commands: commands === undefined ? NO_NAMES : COMMAND_NAMES,
+    // Note that only the commands acting on a session stand as chips, so a box with none sends `/compact` as the words it is.
+    commands: commands?.reach.session === true ? COMMAND_NAMES : NO_NAMES,
     onTrigger: setTrigger,
     onKey,
     known,

@@ -6,6 +6,7 @@ export {
   UNKNOWN_ACTION_STATUS,
   type UnknownActionResult,
 } from "./action-result.js";
+export { COMMAND_PREFIX, type CommandPrefix, CommandPrefixSchema } from "./command-prefix.js";
 export {
   HTTP_METHOD,
   HTTP_STATUS,

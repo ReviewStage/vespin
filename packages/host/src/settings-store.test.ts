@@ -691,6 +691,7 @@ function flakyReads(failing: { reads: boolean }): FileSystem.FileSystem {
       failing.reads
         ? Effect.fail(
             systemError({
+              // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- Effect's systemError takes its tag as data
               _tag: "Unknown",
               module: "FileSystem",
               method: "readFileString",

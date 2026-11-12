@@ -29,12 +29,14 @@ import {
 } from "electron";
 import { type ReportHandlers, registerBridgeHost } from "../bridge-host";
 import { installCli } from "../native/cli-install";
+import { photoAsJpeg } from "../native/mac-photo";
 import { readMacResources } from "../native/mac-resources";
 import { spawnMacShell } from "../native/mac-shell";
 import { nativeHelperPath } from "../native/native-helper";
 import type { DesktopServices } from "../services/compose-desktop";
 import { windowPushes } from "../window/window-pushes";
 import { cliProcedures } from "./cli-acts";
+import { macPhotoProcedures } from "./mac-photo-acts";
 import { macResourcesProcedures } from "./mac-resources-acts";
 import { macTerminalProcedures } from "./mac-terminal-acts";
 import { whenPageGone } from "./page-gone";
@@ -129,6 +131,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
       run,
     }),
     ...cliProcedures({ install: () => installCli(config.hostedServiceBaseUrl) }),
+    ...macPhotoProcedures({ toJpeg: photoAsJpeg }),
     ...macResourcesProcedures({ read: readMacResources }),
     ...macShellProcedures<WebContents>({
       mirror: (agentId) => operator.host.mirrorEnsure({ agentId }),

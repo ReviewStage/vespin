@@ -12,6 +12,7 @@ import { markdownTooDeep } from "@repo/features/markdown-nesting";
 import { markdownTree } from "@repo/features/markdown-tree";
 import { isBareLink, linkMention, MENTION_KIND, mentionName } from "@repo/features/mention-link";
 import { placeChipLook } from "@repo/features/place-chip-model";
+import { Match } from "effect";
 import type {
   Definition,
   ImageReference,
@@ -313,12 +314,11 @@ function runsOf(node: PhrasingContent, marks: WordMarks, reader: Reader): Markdo
 
 /** A picture's source, where it is one the app draws; nothing for any other. */
 function pictureSource(node: PhrasingContent, reader: Reader): string | undefined {
-  const url =
-    node.type === "image"
-      ? node.url
-      : node.type === "imageReference"
-        ? referenced(node, reader)?.url
-        : undefined;
+  const url = Match.value(node).pipe(
+    Match.when({ type: "image" }, (image) => image.url),
+    Match.when({ type: "imageReference" }, (reference) => referenced(reference, reader)?.url),
+    Match.orElse(() => undefined),
+  );
   return url !== undefined && PICTURE_SOURCE.test(url) ? url : undefined;
 }
 

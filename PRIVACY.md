@@ -75,6 +75,10 @@ forked from its repository's default-branch drive or from the drive of the agent
 it was continued from, and in the sandbox otherwise; an agent on your own
 machine keeps its work there. A workspace
 repository's default branch may be kept on a drive cloud agents start from.
+Each workspace also keeps one drive holding the default branch of every
+repository it connects, kept for its cloud agents to start from: those its
+installation grants and those a member added on their own token alike, the
+latter cloned with that member's token.
 Sections 6 and 7 say how long those checkouts, drives, and snapshots are kept.
 Apart from them, we generally do not keep copies of repository content beyond
 what lands in an agent's transcript, except a pull request's number, title,
@@ -200,6 +204,16 @@ it was started, and durations, never your messages, the agent's work, or its
 environment; it sends no error reports. An agent running on your own machine
 sends Sentry nothing.
 
+A machine you run Vespin's host on, This Mac or one you installed it on,
+sends Sentry the host's own lines about its setup and running: that it
+connected, fetched the tools its agents run on, became ready, or could not,
+in Vespin's own words, with the host's version and operating system. A line
+saying something failed is sent as an error report. These never carry your
+agents' messages, their work, what a tool or a terminal printed, or a
+credential. The Mac app sends the same of setting up This Mac's host. The
+host on This Mac also keeps these lines in `~/Library/Logs/Vespin Host/` on
+your Mac.
+
 The Vespin iOS app sends Sentry error reports, crash reports (a crash is sent
 the next time you open the app), and reports of a screen that could not be
 drawn. It uses Sentry's default data collection, so reports may include error
@@ -288,7 +302,11 @@ was issued, is rewritten each time the token is renewed, and is deleted when
 you sign out. When you share text or a link to Vespin from another app and press
 Start, the share sheet sends **the words you shared and edited**, with the
 workspace and repository you picked, to the Service under that token, exactly
-as the app's New task does, and the task starts there. Where the task
+as the app's New task does, and the task starts there. Where you allow
+Vespin's notifications, the share sheet then posts one on the phone itself,
+never through Apple's push service, which says "Task started" and nothing
+of the task, and carries the ids of the task and its agent for the app to
+open when you tap it. Where the task
 doesn't start, because the token has expired, the Service refuses it, or the
 Service doesn't answer, the share sheet keeps those words and picks as a
 draft in the same folder instead, which the app opens New task on the next
@@ -421,7 +439,9 @@ database is hosted by Neon, and agents' checkouts and session files live in
 Vercel Sandboxes, in their snapshots, and on Vercel Drives: each agent's
 checkout on a drive of its own, and a copy of each workspace repository's
 default branch, with its dependencies installed, on a drive its agents start
-from.
+from, and one drive per workspace holding the default branch of every
+repository it connects, member-token ones included, kept for its cloud agents
+to start from.
 We use encryption in transit (TLS), encrypt saved credentials as described
 above, and keep the tokens agents use outside their sandboxes, adding them at
 the sandbox's network firewall. Transcripts, descriptions, and other content are not
@@ -441,8 +461,9 @@ agent deletes its transcript at once. Deleting or archiving an agent asks
 Vercel to delete its sandbox and the drive holding its checkout; where that
 fails or does not finish in time, the delete or archive goes ahead anyway, and
 the drive may remain. A sandbox's snapshots otherwise expire and are removed
-seven days after they were last used. A repository's default-branch drive is
-kept for the workspace's agents until the workspace is deleted, and a
+seven days after they were last used. A repository's default-branch drive, and
+the workspace's drive of every repository it connects, are kept for the
+workspace's agents until the workspace is deleted, and a
 repository snapshot made before default-branch drives expires thirty days after
 its last use. When you delete your account:
 
@@ -476,11 +497,14 @@ its last use. When you delete your account:
   ends, since Sentry offers no way to erase one account's reports.
 - **Integrations:** we ask Vercel Connect to revoke your grants; anything your
   agents already did at those services stays there.
-- **Google and GitHub sign-in:** we ask Google and GitHub to revoke the tokens
-  your sign-in left with us, so our GitHub App can no longer act as you; if
-  one cannot be reached in a few seconds, your account is deleted anyway and
-  that token stays valid until it expires (about eight hours for GitHub's, an
-  hour for Google's).
+- **Google and GitHub sign-in:** we ask GitHub to revoke your authorization
+  of our GitHub App, which ends every token it gave us for you: the access
+  token, good for about eight hours, and the refresh token that renews it,
+  good for about six months. We ask Google to revoke the token your Google
+  sign-in left, an access token good for about an hour; we never ask Google
+  for one that renews itself. If either cannot be reached in a few seconds,
+  your account is deleted anyway, we keep no copy of its tokens, and they
+  stay valid at the provider until they expire.
 
 ## 8\. Your rights and choices
 

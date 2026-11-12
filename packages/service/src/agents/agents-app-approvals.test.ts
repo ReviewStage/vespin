@@ -65,6 +65,7 @@ const asked = (started: Effect.Success<ReturnType<typeof messagedAgent>>, reques
       title: "Run git push --force?",
       description: null,
       input: { command: "git push --force" },
+      commandPrefix: null,
       at: new Date(yield* Clock.currentTimeMillis),
     });
     const pending = yield* listPendingApprovals(started.owner, started.agent.id);

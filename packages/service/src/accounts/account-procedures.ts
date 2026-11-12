@@ -31,8 +31,9 @@
  * says nothing of any other account and authorizes nothing: the dashboard's
  * own gate (`admin/gate.ts`) decides every admin read on its own.
  *
- * The provider keys are `provider-keys-procedures.ts`'s, and the account's
- * own sounds `sounds-procedures.ts`'s.
+ * The provider keys are `provider-keys-procedures.ts`'s, the account's
+ * own sounds `sounds-procedures.ts`'s, and the commands it always allows its
+ * coding agents to run `allowed-commands-procedures.ts`'s.
  */
 
 import type { AccountAccessRow, AccountSeamEffect } from "@repo/database/models/account-store";
@@ -48,6 +49,7 @@ import {
   readOwnPreferences,
   writeOwnPreferences,
 } from "./account-preferences.js";
+import { allowedCommandsProcedures } from "./allowed-commands-procedures.js";
 import { memoriesProcedures } from "./memories-procedures.js";
 import { providerKeysProcedures } from "./provider-keys-procedures.js";
 import { soundsProcedures } from "./sounds-procedures.js";
@@ -98,5 +100,6 @@ export function accountProcedures(seams: AccountProcedureSeams) {
     ...providerKeysProcedures(seams),
     ...memoriesProcedures(seams),
     ...soundsProcedures(seams),
+    ...allowedCommandsProcedures(seams),
   };
 }

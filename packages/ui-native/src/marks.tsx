@@ -136,12 +136,15 @@ export function AvatarPhoto({
   address,
   size,
   corner = size / 2,
+  onLoad,
   onFail,
 }: {
   readonly address: string;
   readonly size: number;
   /** How round its corners stand, in points; a circle's where none is given. */
   readonly corner?: number | undefined;
+  /** Told once the photo has drawn, so the mark behind it can step aside. */
+  readonly onLoad: () => void;
   readonly onFail: () => void;
 }) {
   const round = { width: size, height: size, borderRadius: corner, overflow: "hidden" } as const;
@@ -152,7 +155,7 @@ export function AvatarPhoto({
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
       >
-        <Photo source={{ uri: address }} onError={onFail} style={round} />
+        <Photo source={{ uri: address }} onLoad={onLoad} onError={onFail} style={round} />
       </View>
     </RNHostView>
   );
@@ -162,8 +165,9 @@ export function AvatarPhoto({
  * A person's face on the brand's avatar tile: their photo where a picture is
  * given, from a host `@repo/features/account-picture` lets a picture load
  * from and asked for at the size it is drawn, and their letters otherwise.
- * Note that the letters stand under the photo, so they show while it loads
- * and stay once it fails, which takes the photo away.
+ * Note that the letters stand only until the photo has drawn, so they show
+ * while it loads and once it fails, which takes the photo away, but never
+ * through a photo's transparent pixels.
  */
 export function Avatar({
   name,
@@ -176,22 +180,29 @@ export function Avatar({
   const colors = useColors();
   const pinned = pinnedPictureUrl(picture);
   const [failed, setFailed] = useState<string | undefined>(undefined);
+  const [drawn, setDrawn] = useState<string | undefined>(undefined);
+  const photoDrawn = pinned !== undefined && pinned === drawn && pinned !== failed;
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityLabel(name)]}>
-      <Circle modifiers={[foregroundStyle(colors.AVATAR_TILE)]} />
-      <Text
-        modifiers={[
-          font({ size: size * MONOGRAM_SCALE, weight: "semibold", design: "rounded" }),
-          foregroundStyle(colors.AVATAR_INK),
-          accessibilityHidden(),
-        ]}
-      >
-        {monogramOf(name)}
-      </Text>
+      {photoDrawn ? null : (
+        <>
+          <Circle modifiers={[foregroundStyle(colors.AVATAR_TILE)]} />
+          <Text
+            modifiers={[
+              font({ size: size * MONOGRAM_SCALE, weight: "semibold", design: "rounded" }),
+              foregroundStyle(colors.AVATAR_INK),
+              accessibilityHidden(),
+            ]}
+          >
+            {monogramOf(name)}
+          </Text>
+        </>
+      )}
       {pinned === undefined || pinned === failed ? null : (
         <AvatarPhoto
           address={accountPictureAt(pinned, size * PixelRatio.get())}
           size={size}
+          onLoad={() => setDrawn(pinned)}
           onFail={() => setFailed(pinned)}
         />
       )}

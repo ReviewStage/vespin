@@ -41,8 +41,7 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * and Retry where the spinner stood (`PictureStandIn`, which a picture
  * standing alone draws too). A gone or
  * failed tile opens nothing, so it is no press, and a failed one's Retry is
- * its press instead; nor is one whose place drawing it gives no `onOpen`. The set is left out of the screen recording, because a
- * picture can hold words and the recording carries none, and it is a list
+ * its press instead; nor is one whose place drawing it gives no `onOpen`. The set is a list
  * its caller names (`label`).
  *
  * It is drawn in Tailwind utilities over the theme, each tile's frame a
@@ -362,7 +361,7 @@ export function PictureSet({
   const many = thumbnails || count > SET_FEW;
   const tiles = Children.toArray(children);
   return (
-    <figure className="ui-picture-set ph-no-capture m-0 max-w-full" data-many={many}>
+    <figure className="ui-picture-set m-0 max-w-full" data-many={many}>
       <ul
         className="ui-picture-set-tiles m-0 flex list-none flex-wrap gap-item-gap p-0"
         aria-label={label}

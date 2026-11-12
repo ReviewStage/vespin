@@ -57,12 +57,8 @@ import { MenuRow } from "./menu-row.js";
  * owner or admin adds one from the first section, and replaces or deletes
  * one from its row's ⋯, a delete asking first; a member sees the names
  * alone. Each write answers the names as they then stand, which the section
- * draws at once. A value is typed into a `SecretField`, kept out of the
- * screen recording as GitHub's token is.
+ * draws at once. A value is typed into a `SecretField`.
  */
-
-/** Keeps what a secret field holds out of the screen recording. */
-const NO_CAPTURE = "ph-no-capture";
 
 /** A variable's row while the names are read. */
 export const VARIABLE_ROW_SKELETON: SettingsRowSkeletonShape = {
@@ -175,17 +171,15 @@ function useVariableDialog(workspaceId: string, name?: string) {
             )}
           </FormField>
         ) : null}
-        <div className={NO_CAPTURE}>
-          <SecretField
-            label="Value"
-            saved={name !== undefined}
-            error={replayMaskedError(form.refusal)}
-            disabled={form.settling}
-            value={value}
-            onChange={setValue}
-            onEnter={form.submit}
-          />
-        </div>
+        <SecretField
+          label="Value"
+          saved={name !== undefined}
+          error={replayMaskedError(form.refusal)}
+          disabled={form.settling}
+          value={value}
+          onChange={setValue}
+          onEnter={form.submit}
+        />
       </Stack>
     </Dialog>
   );

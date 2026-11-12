@@ -156,6 +156,7 @@ export function fakeAppServer(scripts: readonly Script[]) {
       if (script === undefined) {
         return yield* Effect.fail(
           PlatformError.systemError({
+            // oxlint-disable-next-line anti-slop-effect/no-manual-tagged-construction -- Effect's systemError takes its tag as data
             _tag: "NotFound",
             module: "ChildProcess",
             method: "spawn",

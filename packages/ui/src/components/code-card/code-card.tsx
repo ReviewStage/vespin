@@ -39,9 +39,7 @@ import {
  * browser's own and the window's alike (`find-matches.ts`), and the card
  * opens whole when a match lands there (`beforematch`), as a closed
  * `<details>` opens. Copy copies the whole block
- * whichever way it stands. Its lines are left out of the screen recording
- * (`ph-no-capture`), a second line behind the recording's text masking,
- * since their colors draw the code's shape.
+ * whichever way it stands.
  *
  * It is drawn in the Tailwind theme's utilities: the header on the hover
  * fill over a hairline, a glyph before its title where it wears one, its title holding to one line and fading where the
@@ -277,7 +275,7 @@ export function CodeCard({
       look={CARD_LOOK.CODE}
       corner={CARD_CORNER.CONTROL}
       padding={CARD_PADDING.FLUSH}
-      className="ui-code-card ph-no-capture m-0"
+      className="ui-code-card m-0"
       aria-label={label}
       {...data}
     >

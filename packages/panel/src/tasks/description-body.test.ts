@@ -231,6 +231,35 @@ test("the saved body is drawn as Markdown", () => {
   assert.match(markup, /Invite a teammate by email\./u);
 });
 
+test("a description kept hidden behind another tab draws its title and none of its sections until first shown, and keeps them once hidden again", async () => {
+  // Note that this catches the sections being parsed while hidden, in the commit that opens an agent's tab over them.
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = mountRoot(container);
+  const drawShown = (shown: boolean, task: Task = TASK) =>
+    act(() => root.render(withQueryClient(createElement(DescriptionBody, { task, shown }))));
+  const section = () => container.textContent?.includes("Invite a teammate by email.") === true;
+
+  drawShown(false);
+  await settle();
+  const hidden = [container.querySelector("h1")?.textContent, section()];
+  drawShown(true);
+  await settle();
+  const opened = section();
+  const unit = container.querySelector(".description-unit");
+  drawShown(false);
+  await settle();
+  const kept = section() && container.querySelector(".description-unit") === unit;
+  drawShown(false, { ...TASK, id: "task-other" });
+  await settle();
+  drawShown(false);
+  await settle();
+
+  assert.deepEqual(hidden, [TASK.name, false], "the title stands and no section is drawn");
+  assert.equal(opened, true, "the sections are drawn once shown");
+  assert.equal(kept, true, "the sections stay mounted once hidden again");
+  assert.equal(section(), false, "a task come back to while hidden, after another, draws none");
+});
+
 test("under its title the description says who created the task and when, then when it was last edited, and a description nobody edited says only who created it", async () => {
   // Note that only the date is fixed, so the description's minute reads `now` and nothing waits on a timer.
   const now = Date.UTC(2026, 9, 14, 12);

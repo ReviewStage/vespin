@@ -238,6 +238,7 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
           title: "Run pnpm test?",
           description: null,
           input: { command: "pnpm test" },
+          commandPrefix: null,
           at: new Date(1_000),
         });
 

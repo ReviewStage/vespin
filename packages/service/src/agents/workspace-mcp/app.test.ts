@@ -118,7 +118,7 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  * Our MCP server, answered by its group the way a function answers it,
  * over a real dialect, and driven by the MCP SDK's own client, the one a
  * harness speaks: a runner's bearer admits its agent's conversation, the
- * server lists `read_threads` and runs it through the coder host's inbox door
+ * server lists `list_threads` and runs it through the coder host's inbox door
  * as the agent's starter, the door the tool catalog names for it, and a wrong bearer, a missing one, and a retired
  * one are each refused before anything is read. Synthetic accounts and
  * words throughout.
@@ -410,7 +410,8 @@ const AGENT_TOOLS = [
 /** The tools a native agent is served: every tool of our catalog that its harness has no equal of. */
 const SERVED_TOOLS = [
   "post_thread",
-  "read_threads",
+  "list_threads",
+  "read_thread",
   "withdraw_ask",
   "open_pull_request",
   "edit_description",
@@ -459,7 +460,8 @@ const DOOR_OF: Readonly<
 > = {
   post_thread: (admitted, input) =>
     runAgentInbox(admitted, { tool: INBOX_TOOL.POST, input, sandbox: NO_SANDBOX }),
-  read_threads: (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.READ, input }),
+  list_threads: (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.LIST, input }),
+  read_thread: (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.READ, input }),
   withdraw_ask: (admitted, input) => runAgentInbox(admitted, { tool: INBOX_TOOL.WITHDRAW, input }),
   open_pull_request: (admitted, input) => runAgentOpenPullRequest(admitted, input),
   edit_description: (admitted, input) => runAgentEditDescription(admitted, input, 0, NO_SANDBOX),
@@ -505,7 +507,7 @@ const initialize = (protocolVersion: string) => ({
 
 it.layer(SUITE)("Vespin's MCP server", (it) => {
   it.effect(
-    "an SDK client under the runner's bearer lists read_threads and reads its agent's threads through the inbox door",
+    "an SDK client under the runner's bearer lists list_threads and lists its agent's threads through the inbox door",
     () =>
       Effect.gen(function* () {
         const fetch = yield* standing;
@@ -523,18 +525,18 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
         const listed = yield* Effect.promise(() => client.listTools());
         const called = yield* Effect.promise(() =>
-          client.callTool({ name: INBOX_TOOL.READ, arguments: {} }),
+          client.callTool({ name: INBOX_TOOL.LIST, arguments: {} }),
         );
         yield* Effect.promise(() => client.close());
 
-        assert.ok(listed.tools.some((tool) => tool.name === INBOX_TOOL.READ));
+        assert.ok(listed.tools.some((tool) => tool.name === INBOX_TOOL.LIST));
         assert.equal(called.isError, false);
         // SAFETY: the server answers every tool call with text blocks alone (`app.ts`'s `toolResult`).
         const [content] = called.content as readonly { type: string; text: string }[];
         const result = JSON.parse(content?.text ?? "null");
         assert.equal(result.status, "accepted");
         assert.deepEqual(
-          result.inbox.map((line: { key: string; title: string }) => [line.key, line.title]),
+          result.threads.map((line: { key: string; title: string }) => [line.key, line.title]),
           [["invite-queue", "Which queue sends the invitation emails?"]],
         );
       }),
@@ -567,7 +569,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         jsonrpc: "2.0",
         id: 2,
         method: "tools/call",
-        params: { name: INBOX_TOOL.READ, arguments: {} },
+        params: { name: INBOX_TOOL.LIST, arguments: {} },
       });
 
       yield* recordAgentRunnerToken(agent.userId, agent.agentId, null);
@@ -575,7 +577,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         jsonrpc: "2.0",
         id: 3,
         method: "tools/call",
-        params: { name: INBOX_TOOL.READ, arguments: {} },
+        params: { name: INBOX_TOOL.LIST, arguments: {} },
       });
 
       assert.equal(before.status, HOSTED_HTTP_STATUS.OK);

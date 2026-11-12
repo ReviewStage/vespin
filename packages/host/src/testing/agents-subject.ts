@@ -191,6 +191,9 @@ const OVERVIEW = {
 
 /** A synthetic key, as Settings carries it once; nothing below may answer it back. */
 export const PROVIDER_KEY = "sk-ant-api03-synthetic-0000000000000000wxyz";
+/** The id the service gives a command added by hand. */
+const ADDED_COMMAND_ID = "4d2e6f8a-1b3c-4d5e-8f7a-9b0c1d2e3f4a";
+
 export const GITHUB_TOKEN = "synthetic-classic-token-0000000000wxyz";
 
 /** What the service answers of a saved token: never the token, and a made-up hint. */
@@ -339,6 +342,8 @@ function fakeService() {
   let removeAnswer: HostDoneAnswerView = { failure: AGENT_CALL_FAILURE.UNANSWERED };
   /** What a host's removal waits on before the service answers it; nothing from the start. */
   let removeGate: Effect.Effect<void> = Effect.void;
+  /** What an always-allowed command's add waits on before the service answers it; nothing from the start. */
+  let commandAddGate: Effect.Effect<void> = Effect.void;
   /** How long ago the account's devices beat, as the service answers it; unanswered until a test says, and never where it hangs. */
   let presence: Effect.Effect<DevicePresenceAnswerView> = Effect.succeed({
     failure: AGENT_CALL_FAILURE.UNANSWERED,
@@ -734,6 +739,15 @@ function fakeService() {
         asked.push("remove-token");
         return { token: null };
       }),
+    readAllowedCommands: () => Effect.succeed({ commands: [] }),
+    addAllowedCommand: (prefix) =>
+      Effect.andThen(
+        Effect.sync(() => asked.push(`add-command:${prefix.join(" ")}`)),
+        Effect.as(commandAddGate, {
+          commands: [{ id: ADDED_COMMAND_ID, prefix, agentId: null, addedAt: NOW }],
+        }),
+      ),
+    removeAllowedCommand: () => Effect.succeed({ commands: [] }),
 
     forgetMemory: (forget) =>
       Effect.andThen(
@@ -987,6 +1001,10 @@ function fakeService() {
       saveAnswer = answer;
       saveGate = gate;
     },
+    /** What each always-allowed command's add waits on before the service answers it, from now on. */
+    holdCommandAdds: (gate: Effect.Effect<void>) => {
+      commandAddGate = gate;
+    },
     /** How long ago the account's devices beat, as the service answers from now on. */
     answerPresence: (next: DevicePresenceAnswerView) => {
       presence = Effect.succeed(next);
@@ -1050,9 +1068,17 @@ type ItemsAnswer = Exclude<
   { failure: string }
 >;
 
+/** A row of a read as the fake holds it: its fields by name, each still to be read. */
+type RowFields = Readonly<Record<string, unknown>>;
+
+/** Whether `row` is a row whose fields can be read by name, rather than a primitive or nothing. */
+function isRow(row: unknown): row is RowFields {
+  return typeof row === "object" && row !== null;
+}
+
 /** A row's text field `name`; none where it carries none. */
 function textOf(row: unknown, name: string): string | undefined {
-  const value = typeof row === "object" && row !== null ? Reflect.get(row, name) : undefined;
+  const value = isRow(row) ? row[name] : undefined;
   return typeof value === "string" ? value : undefined;
 }
 
@@ -1091,8 +1117,7 @@ function bySyncId(
       const id = itemIdOf(stamp);
       const row = id === undefined ? undefined : items.rows.get(id);
       if (id === undefined || typeof row !== "object" || row === null) return [];
-      const unread =
-        typeof stamp === "object" && stamp !== null ? Reflect.get(stamp, "unread") : undefined;
+      const unread = isRow(stamp) ? stamp.unread : undefined;
       return [[id, { stamp, row: { ...row, unread } }] as const];
     }),
   );
@@ -1266,6 +1291,7 @@ export function subject(
       answerForgets: service.answerForgets,
       answerSaves: service.answerSaves,
       answerPresence: service.answerPresence,
+      holdCommandAdds: service.holdCommandAdds,
       answerKeys: service.answerKeys,
       markKeys: service.markKeys,
       answerMarks: service.answerMarks,
@@ -1308,6 +1334,8 @@ export function subject(
       hosts: () => toldLive(LIVE_READ.HOSTS),
       /** Every telling of the GitHub token the host holds for the windows, whole, in order. */
       githubToken: () => toldLive(LIVE_READ.GITHUB_TOKEN),
+      /** Every telling of the always-allowed commands the host holds for the windows, whole, in order. */
+      allowedCommands: () => toldLive(LIVE_READ.ALLOWED_COMMANDS),
       /** Every telling of the memories the host holds for the windows, whole, in order. */
       memories: () => toldLive(LIVE_READ.MEMORIES),
       /** Every telling of the beats the host holds for the windows, whole, in order. */

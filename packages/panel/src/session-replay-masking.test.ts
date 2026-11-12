@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
+import type { PostHog } from "posthog-js/dist/module.no-external";
 import { afterEach, expect, test, vi } from "vitest";
 import { sessionReplay } from "./session-replay.js";
 
@@ -11,15 +12,13 @@ import { sessionReplay } from "./session-replay.js";
 
 type Mask = (name: string, value: string, element?: Element) => string;
 
-const client = vi.hoisted(() => ({
+const client = {
   init: vi.fn(),
   opt_in_capturing: vi.fn(),
   register: vi.fn(),
   identify: vi.fn(),
   startSessionRecording: vi.fn(),
-}));
-
-vi.mock("posthog-js/dist/module.no-external", () => ({ default: client }));
+};
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -36,6 +35,7 @@ async function mask(): Promise<Mask> {
     address: "app://desktop/panel",
     namesOwnAddress: () => false,
     importRecorder: () => Promise.resolve(undefined),
+    importClient: () => Promise.resolve(client as unknown as PostHog),
   })({ permitted: true, appVersion: "0.0.0", packaged: true, accountId: "user-1" });
   await vi.waitFor(() => expect(client.init).toHaveBeenCalledOnce());
   const options = client.init.mock.calls[0]?.[1] as {
@@ -70,6 +70,9 @@ test("a recording asterisks every attribute it does not lay out by, those that c
   ]) {
     assert.equal(masked(name, "acme/launch", row), "***********", name);
   }
+  // A picture's `data:` address is megabytes, which leaves as no more asterisks than a short value.
+  const address = `data:image/png;base64,${"A".repeat(100_000)}`;
+  assert.equal(masked("src", address, document.createElement("img")), "****************");
 });
 
 test("a recording leaves the attributes it lays out by, a link's address only where it is an icon's or a stylesheet's, and an id only where an icon draws through it", async () => {
@@ -85,7 +88,7 @@ test("a recording leaves the attributes it lays out by, a link's address only wh
   assert.equal(masked("_cssText", ".row { margin: 0; }"), ".row { margin: 0; }");
   assert.equal(
     masked("href", "https://x.test/?t=1", document.createElement("a")),
-    "*******************",
+    "****************",
   );
   assert.equal(masked("href", "#glyph", svg("use")), "#glyph");
   assert.equal(masked("id", "glyph", svg("symbol")), "glyph");

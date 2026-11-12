@@ -91,9 +91,10 @@ function labelWhile(ages: Readonly<Record<string, number>> | undefined): Promise
   );
 }
 
-test("a device the presence read finds beating reads online though the agent's own read is old", async () => {
+test("a device the presence read finds beating reads online though the agent's own read is old, its glyph's dot saying so as its row's does", async () => {
   const label = await labelWhile({ [DEVICE]: 5_000 });
   assert.equal(label, "Runs on: Charles's MacBook Air");
+  assert.equal(document.querySelector('[role="img"]')?.getAttribute("aria-label"), "Online");
 });
 
 test("a device the presence read finds silent reads offline", async () => {

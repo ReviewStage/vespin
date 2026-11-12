@@ -48,8 +48,7 @@
  *   holds nothing, or `getQueryData` in a callback.
  *
  * A read added here is its factory, its Try again, and its follow below,
- * and nothing else. This module is the only one that opens a follow
- * (`anti-slop/no-follow-outside-host-read`).
+ * and nothing else. This module is the only one that opens a follow.
  */
 
 import {
@@ -192,6 +191,7 @@ const LIVE_FOLLOWS: { readonly [Read in LiveReadName]?: LiveFollow } = {
   [LIVE_READ.MODELS]: () => askAct(ACT_KIND.AGENTS_MODELS_FOLLOW),
   [LIVE_READ.PROVIDER_KEYS]: () => askAct(ACT_KIND.PROVIDER_KEYS_FOLLOW),
   [LIVE_READ.GITHUB_TOKEN]: () => askAct(ACT_KIND.GITHUB_TOKEN_FOLLOW),
+  [LIVE_READ.ALLOWED_COMMANDS]: () => askAct(ACT_KIND.ALLOWED_COMMANDS_FOLLOW),
   [LIVE_READ.DEVICE_PRESENCE]: () => askAct(ACT_KIND.HOSTS_PRESENCE_FOLLOW),
   [LIVE_READ.HOSTS]: () => askAct(ACT_KIND.HOSTS_FOLLOW),
   [LIVE_READ.AGENT_ORIGINS]: ([agentId = ""]) =>
@@ -291,6 +291,7 @@ const LIVE_QUERY_READS = [
   LIVE_READ.MODELS,
   LIVE_READ.PROVIDER_KEYS,
   LIVE_READ.GITHUB_TOKEN,
+  LIVE_READ.ALLOWED_COMMANDS,
   LIVE_READ.DEVICE_PRESENCE,
   LIVE_READ.HOSTS,
   LIVE_READ.THIS_MAC_HOST,
@@ -360,14 +361,19 @@ function isLiveReadId(id: unknown): id is LiveReadId {
   return typeof id === "string" || typeof id === "number";
 }
 
+/** A record of a read's document: its fields by name, each a record below or a value. */
+type DocumentRecord = Readonly<Record<string, unknown>>;
+
+/** Whether `value` is a record whose fields can be read by name, rather than a primitive or nothing. */
+function isDocumentRecord(value: unknown): value is DocumentRecord {
+  return typeof value === "object" && value !== null;
+}
+
 /** What `value` holds at `path`, record by record; none where it holds none. */
 function valueAt(value: unknown, path: readonly string[]): unknown {
   let at = value;
   for (const segment of path) {
-    at =
-      typeof at === "object" && at !== null && Object.hasOwn(at, segment)
-        ? Reflect.get(at, segment)
-        : undefined;
+    at = isDocumentRecord(at) && Object.hasOwn(at, segment) ? at[segment] : undefined;
   }
   return at;
 }
@@ -426,8 +432,9 @@ function firstAnswer<Read extends LiveReadName>(
     };
     settle();
     if (answered) return;
+    // Note that only a write of the document is heard, because every observer of it reports each write again (`observerResultsUpdated`), a thousand times a push in a long transcript.
     stop = client.getQueryCache().subscribe((event) => {
-      if (isAppState(event.query)) settle();
+      if (isAppState(event.query) && event.type === "updated") settle();
     });
     return Effect.sync(() => stop());
   });
@@ -483,9 +490,9 @@ export const providerKeysQuery = (accountId: string | undefined) =>
 export const githubTokenQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.GITHUB_TOKEN, accountIds(accountId));
 
-/** The account's devices' beats, by the account. */
-export const devicePresenceQuery = (accountId: string | undefined) =>
-  liveReadQuery(LIVE_READ.DEVICE_PRESENCE, accountIds(accountId));
+/** The commands the account always allows its coding agents to run, by the account. */
+export const allowedCommandsQuery = (accountId: string | undefined) =>
+  liveReadQuery(LIVE_READ.ALLOWED_COMMANDS, accountIds(accountId));
 
 /** The account's hosts, by the account. */
 export const hostsQuery = (accountId: string | undefined) =>
@@ -679,8 +686,8 @@ export const providerKeysRetryMutation = () => actMutation(ACT_KIND.PROVIDER_KEY
 /** Try again on the GitHub token. */
 export const githubTokenRetryMutation = () => actMutation(ACT_KIND.GITHUB_TOKEN_RETRY);
 
-/** Ask the beats again, which the window does as it comes back online (`device-presence.ts`), never on a press. */
-export const devicePresenceRefreshMutation = () => actMutation(ACT_KIND.HOSTS_PRESENCE_REFRESH);
+/** Try again on the always-allowed commands. */
+export const allowedCommandsRetryMutation = () => actMutation(ACT_KIND.ALLOWED_COMMANDS_RETRY);
 
 /** Try again on the hosts. */
 export const hostsRetryMutation = () => actMutation(ACT_KIND.HOSTS_RETRY);

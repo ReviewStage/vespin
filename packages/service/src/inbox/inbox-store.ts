@@ -1107,12 +1107,22 @@ const ScopeSchema = Schema.Struct({
   userId: Schema.String,
   scope: Schema.Literals(Object.values(INBOX_SCOPE)),
   id: Schema.String,
+  /** The one workspace the read keeps to, where a coding agent reads beyond its own threads; none for a member's read, which `itemVisibleTo` bounds. */
+  workspaceId: Schema.optionalKey(Schema.String),
 });
 
 type InboxScope = typeof ScopeSchema.Type;
 
-/** The rows a scope names: the task's, the agent's, or the workspace's where the account may read them (`itemVisibleTo`), or the agent's own under the account that started it, which its tools read as it acts as itself. */
+/** The rows a scope names, kept to its workspace where it names one. */
 function inScope(scope: InboxScope) {
+  const named = scopeRows(scope);
+  return scope.workspaceId === undefined
+    ? named
+    : and(named, eq(inboxItem.organizationId, scope.workspaceId));
+}
+
+/** The rows a scope names: the task's, the agent's, or the workspace's where the account may read them (`itemVisibleTo`), or the agent's own under the account that started it, which its tools read as it acts as itself. */
+function scopeRows(scope: InboxScope) {
   switch (scope.scope) {
     case INBOX_SCOPE.TASK:
       return and(eq(inboxItem.taskId, scope.id), itemVisibleTo(scope.userId));
@@ -1142,16 +1152,30 @@ const findOpenItems = SqlSchema.findAll({
     ),
 });
 
-/** The scope's settled items, the latest changed first, as many as the read carries. */
+/** Where a settled item stands, as a read that keeps to one names it. */
+const SettledStatusSchema = Schema.Literals([INBOX_STATUS.ANSWERED, INBOX_STATUS.CLOSED]);
+
+/** The scope's settled items, the latest changed first, as many as the read carries: those standing where `status` names, or every settled one where it names none. */
 const findSettledItems = SqlSchema.findAll({
-  Request: Schema.Struct({ ...ScopeSchema.fields, limit: Schema.Number }),
+  Request: Schema.Struct({
+    ...ScopeSchema.fields,
+    limit: Schema.Number,
+    status: Schema.optionalKey(SettledStatusSchema),
+  }),
   Result: InboxRowSchema,
-  execute: ({ limit, ...scope }) =>
+  execute: ({ limit, status, ...scope }) =>
     Database.use((db) =>
       db
         .select(inboxColumns(scope.userId))
         .from(inboxItem)
-        .where(and(inScope(scope), ne(inboxItem.status, INBOX_STATUS.OPEN)))
+        .where(
+          and(
+            inScope(scope),
+            status === undefined
+              ? ne(inboxItem.status, INBOX_STATUS.OPEN)
+              : eq(inboxItem.status, status),
+          ),
+        )
         .orderBy(...LATEST_FIRST)
         .limit(limit),
     ),
@@ -1779,12 +1803,23 @@ function scopeItems(
   scope: InboxScope,
   settledLimit: number,
   keysFor?: string,
+  standing?: InboxStatus,
 ): InboxStoreEffect<readonly InboxItem[]> {
+  // Note that a read keeping to one standing filters before the settled bound, so the latest of that standing are read however many of another changed since.
+  const open = standing === undefined || standing === INBOX_STATUS.OPEN;
+  const settled =
+    standing === undefined ? {} : standing === INBOX_STATUS.OPEN ? undefined : { status: standing };
   return Effect.map(
-    Effect.all([findOpenItems(scope), findSettledItems({ ...scope, limit: settledLimit })], {
-      concurrency: 2,
-    }),
-    ([open, settled]) => [...open, ...settled].map((row) => storedItem(row, keysFor).item),
+    Effect.all(
+      [
+        open ? findOpenItems(scope) : Effect.succeed([]),
+        settled === undefined
+          ? Effect.succeed([])
+          : findSettledItems({ ...scope, limit: settledLimit, ...settled }),
+      ],
+      { concurrency: 2 },
+    ),
+    ([opened, kept]) => [...opened, ...kept].map((row) => storedItem(row, keysFor).item),
   );
 }
 
@@ -2241,8 +2276,23 @@ export interface PostPicture extends InboxNamedImage {
   readonly id: string;
 }
 
-/** One picture the agent's words name by its path in the agent's sandbox, as the caller read it there: the path as written, its file's own name, its type, and its bytes. */
-export interface InboxBodyPicture extends InboxNamedImage {
+/** One file a post keeps as a file of its message, a picture or a PDF: the id it is kept under, its file's own name, its type, its bytes, and a recording's MP4 copy. */
+interface PostFile {
+  readonly id: string;
+  readonly name: string;
+  readonly contentType: InboxFileType;
+  readonly bytes: Uint8Array;
+  readonly mp4Bytes?: Uint8Array | undefined;
+}
+
+/**
+ * One file the agent's words name by its path in the agent's sandbox, as
+ * the caller read it there: the path as written, its file's own name, its
+ * type, and its bytes. A picture is drawn where the words name it; a PDF
+ * the caller has cut out of the words, so its path names nothing there,
+ * and it is kept as a file of the message alone.
+ */
+export interface InboxBodyPicture extends Omit<PostFile, "id"> {
   readonly path: string;
 }
 
@@ -2253,8 +2303,8 @@ interface PostWrite {
   /** The message's words, its pictures written by the addresses the item gives them. */
   readonly body: (addressOf: PictureAddress) => string;
   readonly ask: InboxAsk | undefined;
-  /** The message's files: the pictures its words name, then those its ask's options carry. */
-  readonly pictures: readonly PostPicture[];
+  /** The message's files: the files its words name, then those its ask's options carry. */
+  readonly pictures: readonly PostFile[];
   readonly addresseeId: string | null;
 }
 
@@ -2281,7 +2331,7 @@ function pictureAddressOf(
 
 /** Pictures handed in by the paths the agent's words name them by, as a post keeps them: each under an id minted for it, and the id of the first each path names. */
 interface PicturesByPath {
-  readonly kept: readonly PostPicture[];
+  readonly kept: readonly PostFile[];
   readonly idOf: (path: string) => string | undefined;
 }
 
@@ -2580,11 +2630,14 @@ export function closeInboxItem(
  */
 export function agentInboxItems(
   agent: Pick<InboxAgent, "userId" | "agentId">,
+  standing?: InboxStatus,
 ): InboxStoreEffect<readonly InboxItem[]> {
   // Note that the agent's own read names no member, so it is handed no member's key.
   return scopeItems(
     { userId: agent.userId, scope: INBOX_SCOPE.AGENT, id: agent.agentId },
     INBOX_BOUNDS.MAX_SETTLED_TOLD,
+    undefined,
+    standing,
   );
 }
 
@@ -2614,6 +2667,30 @@ export function memberAgentInboxItems(
     { userId, scope: INBOX_SCOPE.AGENT_OF_WORKSPACE, id: agentId },
     INBOX_BOUNDS.MAX_ITEMS_READ,
     userId,
+  );
+}
+
+/**
+ * The threads a coding agent reads beyond its own: one other agent's, or
+ * one task's, of the agent's own workspace alone, as the member it acts for
+ * may read them (`itemVisibleTo`), every open one and then the latest
+ * settled as many as its own read is told (`MAX_SETTLED_TOLD`). Note that
+ * it is handed no member's key, since the reader is no window that sent one.
+ */
+export function agentReachedInboxItems(
+  reader: { readonly userId: string; readonly workspaceId: string },
+  of: { readonly agentId: string } | { readonly taskId: string },
+  standing?: InboxStatus,
+): InboxStoreEffect<readonly InboxItem[]> {
+  const named =
+    "agentId" in of
+      ? { scope: INBOX_SCOPE.AGENT_OF_WORKSPACE, id: of.agentId }
+      : { scope: INBOX_SCOPE.TASK, id: of.taskId };
+  return scopeItems(
+    { userId: reader.userId, workspaceId: reader.workspaceId, ...named },
+    INBOX_BOUNDS.MAX_SETTLED_TOLD,
+    undefined,
+    standing,
   );
 }
 
@@ -2675,6 +2752,83 @@ export function readInboxItem(
   return Effect.map(
     findItem({ userId, itemId }),
     Option.map((row) => storedItem(row, userId)),
+  );
+}
+
+/**
+ * The messages one page of a thread's read takes: the latest written before
+ * the message `before` names, or before none, as many as a read carries and
+ * one more, which tells that an earlier page stands; none where `before`
+ * names a message of another thread. Note that the cursor is read under its
+ * own name, because the page's rows go by the table's name.
+ */
+function pageMessages(before: string | null): SQL {
+  const cursor = sql.identifier("cursor");
+  const column = (name: string) => sql`${cursor}.${sql.identifier(name)}`;
+  const older =
+    before === null
+      ? sql``
+      : sql` and (${inboxMessage.createdAt}, ${inboxMessage.id}) < (select ${column(inboxMessage.createdAt.name)}, ${column(inboxMessage.id.name)} from ${inboxMessage} as ${cursor} where ${column(inboxMessage.id.name)} = ${before} and ${column(inboxMessage.itemId.name)} = ${ITEM_ID})`;
+  return messagesAs(
+    sql`select * from ${inboxMessage} where ${inboxMessage.itemId} = ${ITEM_ID}${older} order by ${inboxMessage.createdAt} desc, ${inboxMessage.id} desc limit ${sql.raw(String(INBOX_BOUNDS.MAX_MESSAGES_READ + 1))}`,
+  );
+}
+
+const ThreadPageRowSchema = Schema.Struct({
+  status: Schema.Literals(Object.values(INBOX_STATUS)),
+  openAskMessageId: Schema.NullOr(Schema.String),
+  closedReason: Schema.NullOr(Schema.String),
+  messages: Schema.Array(MessageRowSchema),
+});
+
+/** One page of the item's messages, with where its asks stand, where the account may read the item. */
+const findThreadPage = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    itemId: Schema.String,
+    before: Schema.NullOr(Schema.String),
+  }),
+  Result: ThreadPageRowSchema,
+  execute: ({ userId, itemId, before }) =>
+    Database.use((db) =>
+      db
+        .select({
+          status: inboxItem.status,
+          openAskMessageId: inboxItem.openAskMessageId,
+          closedReason: inboxItem.closedReason,
+          messages: messagesOf(pageMessages(before)),
+        })
+        .from(inboxItem)
+        .where(and(eq(inboxItem.id, itemId), itemVisibleTo(userId))),
+    ),
+});
+
+/** One page of a thread's messages, oldest first, and whether an earlier page stands before it. */
+export interface InboxThreadPage {
+  readonly messages: readonly InboxMessage[];
+  readonly older: boolean;
+}
+
+/**
+ * One page of a thread's messages as the account may read them, oldest
+ * first, each ask as it stands on the item: the latest as many as a read
+ * carries, written before the message `before` names, or the thread's
+ * latest where it names none; nothing for an item the account may not read.
+ * Note that it is handed no member's key, since the reader is no window
+ * that sent one.
+ */
+export function inboxThreadPage(
+  userId: string,
+  itemId: string,
+  before: string | undefined,
+): InboxStoreEffect<Option.Option<InboxThreadPage>> {
+  return Effect.map(
+    findThreadPage({ userId, itemId, before: before ?? null }),
+    Option.map((row) => {
+      const older = row.messages.length > INBOX_BOUNDS.MAX_MESSAGES_READ;
+      const kept = older ? row.messages.slice(1) : row.messages;
+      return { messages: kept.map((each) => storedMessage(each, row, undefined)), older };
+    }),
   );
 }
 

@@ -194,16 +194,19 @@ export const INBOX_BOUNDS = {
  * carry in its transcript. Note that `close_inbox_item` and `reply_inbox`,
  * which a transcript before version 5 names, are retired, and so are
  * `post_to_inbox` and `read_inbox`, since named for the threads they post
- * and read (`agent-tools.ts`'s `RETIRED_TOOL`): a post that asks nothing
- * is a reply, and a withdrawn ask is a close.
+ * and read, and `read_threads`, since split into a list and a read of one
+ * thread as an agent's are (`agent-tools.ts`'s `RETIRED_TOOL`): a post that
+ * asks nothing is a reply, and a withdrawn ask is a close.
  */
 export const INBOX_TOOL = {
   /** Adds the agent's message to the thread under its key, opening one under a new key, its ask replacing the open one. */
   POST: "post_thread",
   /** Withdraws the thread's open ask, with why. */
   WITHDRAW: "withdraw_ask",
-  /** Reads the agent's threads as they stand, answers and all. */
-  READ: "read_threads",
+  /** Lists threads one line each: the agent's own, or another agent's or a task's of its workspace. */
+  LIST: "list_threads",
+  /** Reads one thread whole, a page of its messages at a time. */
+  READ: "read_thread",
 } as const;
 
 /** The blocks an item's context is made of. */
@@ -755,8 +758,27 @@ export const inboxPostInputSchema = EffectSchema.Struct({
 
 export type InboxPost = typeof inboxPostInputSchema.Type;
 
-/** What a read's tool part carries as its input: nothing, since an agent reads its own items alone. */
-export const inboxReadInputSchema = EffectSchema.Struct({});
+/**
+ * What a list's tool part carries as its input: nothing for the agent's own
+ * threads, or one other agent of its workspace by `agentId`, or one task of
+ * it by `taskId`, whose threads it reads and never writes; and where the
+ * threads listed stand, every one where it names none.
+ */
+export const inboxListInputSchema = EffectSchema.Struct({
+  agentId: EffectSchema.optionalKey(wireUuidSchema),
+  taskId: EffectSchema.optionalKey(wireUuidSchema),
+  status: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(INBOX_STATUS))),
+});
+
+/**
+ * What a read of one thread's tool part carries as its input: the thread by
+ * its id, as a list answered it, and, for an earlier page of its messages,
+ * the oldest message the page after it read, as that page answered it.
+ */
+export const inboxReadThreadInputSchema = EffectSchema.Struct({
+  threadId: wireUuidSchema,
+  before: EffectSchema.optionalKey(wireUuidSchema),
+});
 
 /** What a form's field holds once filled: words, a number, an option, or yes or no, by the field's type. */
 const inboxFieldValueSchema = EffectSchema.Union([

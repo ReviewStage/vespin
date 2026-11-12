@@ -1100,14 +1100,32 @@ test("a post from version 5 is a row naming its thread's title, or its key where
   });
 });
 
-test("a post to the inbox opens the Inbox on the item it posted, by its thread's key, and a read opens the whole Inbox", () => {
+test("a post to the inbox opens the Inbox on the item it posted, by the thread it answers with, a read of one thread is a row naming its title, and a list opens the whole Inbox", () => {
   const target = (tool: string, input: Record<string, string>) =>
     toolTarget({ tool, callId: "call", input, output: { status: "accepted", inbox: [] } });
   assert.deepEqual(target("post_to_inbox", { key: "invite-ttl", body: "7 days or 14?" }), {
     kind: TOOL_TARGET.INBOX,
     key: "invite-ttl",
   });
+  assert.deepEqual(
+    toolTarget({
+      tool: "post_thread",
+      callId: "call",
+      input: { key: "invite-ttl", body: "7 days or 14?" },
+      output: { status: "accepted", thread: { key: "invite-ttl", id: "item-1" }, open: [] },
+    }),
+    { kind: TOOL_TARGET.INBOX, key: "invite-ttl", item: "item-1" },
+  );
   assert.deepEqual(target("read_inbox", {}), { kind: TOOL_TARGET.INBOX });
+  assert.deepEqual(target("list_threads", {}), { kind: TOOL_TARGET.INBOX });
+
+  const read = toolCallView({
+    tool: "read_thread",
+    input: { threadId: "item-1" },
+    output: { status: "accepted", thread: { id: "item-1", title: "Invite expiry" } },
+  });
+  assert.equal(read.kind, CALL_KIND.INBOX_THREAD_READ);
+  assert.equal(read.subject, "Invite expiry");
 });
 
 test("withdraw_ask is a row naming the thread's key and saying why, opening the Inbox on its item, and the retired reply_inbox and close_inbox_item still draw as they did", () => {

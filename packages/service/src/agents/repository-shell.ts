@@ -134,6 +134,51 @@ const EXTRA_CHECKOUT_SCRIPT = [
 ].join("\n");
 
 /**
+ * One repository a workspace drive holds (`workspace-drive.ts`) brought to
+ * its default branch as GitHub has it now, in its own folder under the
+ * workspace: a checkout standing there is fetched and checked out at what
+ * was fetched, and a folder with none is cloned whole, as an extra
+ * repository's checkout is (`EXTRA_CHECKOUT_SCRIPT`), the owner's folder
+ * made first. Note that the empty checkout of a repository with no commits
+ * yet, whose remote still names no HEAD, is already as GitHub has it.
+ */
+const WORKSPACE_SYNC_SCRIPT = [
+  "set -e",
+  GROUP_WRITES,
+  `folder="$${SANDBOX_VARIABLE.FOLDER}"`,
+  'if [ -d "$folder/.git" ]; then',
+  '  cd "$folder"',
+  `  if git fetch --quiet origin "$${SANDBOX_VARIABLE.BRANCH}"; then`,
+  `    git checkout --quiet -B "$${SANDBOX_VARIABLE.BRANCH}" FETCH_HEAD`,
+  "    exit 0",
+  "  fi",
+  "  if git rev-parse --quiet --verify HEAD >/dev/null; then exit 1; fi",
+  '  head="$(git ls-remote origin HEAD)"',
+  '  test -z "$head"',
+  "  exit 0",
+  "fi",
+  'mkdir -p "$(dirname "$folder")"',
+  // The clone itself, as an extra repository's, past its own setup and its keep-what-stands guard.
+  ...EXTRA_CHECKOUT_SCRIPT.split("\n").slice(4),
+].join("\n");
+
+/**
+ * The folders a workspace drive holds that it no longer keeps deleted: each
+ * `owner/name` checkout under the workspace not among the lines of the keep
+ * variable, so a repository disconnected from the workspace leaves the drive.
+ */
+const WORKSPACE_PRUNE_SCRIPT = [
+  "set -e",
+  `keep="$${SANDBOX_VARIABLE.KEEP}"`,
+  // A repository's name may lead with a dot (`owner/.github`), which `*` never matches.
+  "for git in */*/.git */.[!.]*/.git; do",
+  '  [ -d "$git" ] || continue',
+  '  folder="$(dirname "$git")"',
+  '  if ! printf "%s\\n" "$keep" | grep -qxF "$folder"; then rm -rf "$folder"; fi',
+  "done",
+].join("\n");
+
+/**
  * A whole checkout a base drive holds (`base-drive.ts`) brought
  * up to its branch as GitHub has it now: the branch fetched through
  * the credential the caller set at the firewall and checked out at what was
@@ -350,6 +395,56 @@ export const cloneExtraRepository = /* @__PURE__ */ Effect.fn("web/cloneExtraRep
       REPOSITORY_REFUSAL.CHECKOUT_FAILED,
     );
     yield* underCloneCredential(sandbox, confirmed.fullName, token, access, clone);
+  },
+);
+
+/**
+ * One repository of a workspace drive brought to its default branch in its
+ * folder (`WORKSPACE_SYNC_SCRIPT`), fetched where it stands and cloned where
+ * it does not, with the token at the firewall for the run alone
+ * (`underCloneCredential`), or the refusal that stopped it.
+ */
+export const syncWorkspaceRepository = /* @__PURE__ */ Effect.fn("web/syncWorkspaceRepository")(
+  function* (
+    sandbox: RepositorySandbox,
+    confirmed: { readonly fullName: string; readonly branch: string; readonly folder: string },
+    token: Redacted.Redacted,
+    access: GitHubTokenAccess,
+  ): Effect.fn.Return<void, RepositoryRefusal> {
+    const sync = runInSandbox(
+      sandbox,
+      {
+        command: WORKSPACE_SYNC_SCRIPT,
+        workingDirectory: SANDBOX_PATH.WORKSPACE,
+        env: {
+          ...COMMAND_ENVIRONMENT,
+          [SANDBOX_VARIABLE.FOLDER]: confirmed.folder,
+          [SANDBOX_VARIABLE.BRANCH]: confirmed.branch,
+          [SANDBOX_VARIABLE.URL]: cloneUrl(confirmed.fullName),
+        },
+      },
+      REPOSITORY_REFUSAL.CHECKOUT_FAILED,
+    );
+    yield* underCloneCredential(sandbox, confirmed.fullName, token, access, sync);
+  },
+);
+
+/** Every repository folder of a workspace drive deleted but the ones named (`WORKSPACE_PRUNE_SCRIPT`), or the refusal that stopped it. */
+export const prunedWorkspaceFolders = /* @__PURE__ */ Effect.fn("web/pruneWorkspaceFolders")(
+  function* (
+    sandbox: RepositorySandbox,
+    keep: readonly string[],
+  ): Effect.fn.Return<void, RepositoryRefusal> {
+    const pruned = yield* runInSandbox(
+      sandbox,
+      {
+        command: WORKSPACE_PRUNE_SCRIPT,
+        workingDirectory: SANDBOX_PATH.WORKSPACE,
+        env: { ...COMMAND_ENVIRONMENT, [SANDBOX_VARIABLE.KEEP]: keep.join("\n") },
+      },
+      REPOSITORY_REFUSAL.CHECKOUT_FAILED,
+    );
+    if (pruned.exitCode !== 0) return yield* gitRefusal(pruned);
   },
 );
 

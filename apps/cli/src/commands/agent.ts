@@ -184,13 +184,15 @@ function wholeTranscript(agentId: string, worker?: string) {
         : askService(hosted.messages.agentWorkerNewest, { id: agentId, call: worker, ...below });
     };
     const newest = yield* page(undefined);
-    let messages = newest.messages;
+    // Note that the pages are gathered newest first and laid oldest first once, rather than each prepended.
+    const pages = [newest.messages];
     let before = newest.before;
     while (before !== undefined) {
       const older = yield* page(before);
-      messages = [...older.messages, ...messages];
+      pages.push(older.messages);
       before = older.before;
     }
+    const messages = pages.toReversed().flat();
     const cursor = "cursor" in newest ? newest.cursor : AGENT_CURSOR_START;
     const status = "status" in newest ? newest.status : undefined;
     return { messages, cursor, status };
