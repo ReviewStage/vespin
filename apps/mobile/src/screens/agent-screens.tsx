@@ -55,7 +55,7 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   useAgentMedia,
@@ -348,6 +348,7 @@ export function AgentScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
   useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
   const router = useRouter();
+  const navigation = useNavigation();
   const openLink = useOpenLink();
   const colors = useColors();
   const agent = useFollowedAgent(id);
@@ -427,10 +428,12 @@ export function AgentScreen() {
   const [deleting, setDeleting] = useState(false);
   const deleteQuestion = actions.deleteQuestion(title);
 
-  // An agent archived or deleted gives way to where it was opened from, or to the Inbox where it was opened first, as from a launch or a notification.
+  // An agent archived or deleted gives way to where its own stack opened it from, or to the Tasks list it stands in where it was opened first, as from a launch or a notification; nothing moves once the reader has left its page.
   const leave = () => {
-    if (router.canGoBack()) router.back();
-    else router.replace("/inbox");
+    if (!navigation.isFocused()) return;
+
+    if (router.canDismiss()) router.back();
+    else router.replace("/tasks");
   };
 
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
