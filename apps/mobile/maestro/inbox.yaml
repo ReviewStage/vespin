@@ -81,19 +81,8 @@ appId: dev.vespin.ios
       - takeScreenshot: inbox-swipe-trailing
       - tapOn: "Inbox"
       - waitForAnimationToEnd
-- scrollUntilVisible:
-    element: "acceptInvite can add a member twice"
-    direction: DOWN
-- waitForAnimationToEnd
-# A long press lifts the thread's preview, its newest messages under its
-# task and title, over the row's menu, which leads with Open, since a tap on
-# the preview only closes it.
-- longPressOn: "acceptInvite can add a member twice"
-- assertVisible: "Open"
-- assertVisible: "Mark as read"
-- waitForAnimationToEnd
-- takeScreenshot: inbox-preview
-- tapOn: "Mark as read"
+# The thread comes before the row's long press, so its files, the PDF among
+# them, are shot whatever the press below does.
 # Note that the list is scrolled back to its first row, rather than to the
 # first point this row shows, because the folded Duo then stands it against the
 # top edge, where a tap a point or two higher no longer opens it. Neither row
@@ -169,11 +158,34 @@ appId: dev.vespin.ios
     point: "50%, 5%"
 - waitForAnimationToEnd
 - assertNotVisible: "Pick a date and time…"
-# Back on the list, the search, a round glass button in the bar, narrows it to
-# the threads whose words hold every word typed. It comes last, since its
-# keyboard stands over the rows.
+# Back on the list, from the thread.
 - tapOn: "Inbox"
 - waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "acceptInvite can add a member twice"
+    direction: DOWN
+- waitForAnimationToEnd
+# A long press lifts the thread's preview, its newest messages under its
+# task and title, over the row's menu, which leads with Open, since a tap on
+# the preview only closes it.
+- longPressOn: "acceptInvite can add a member twice"
+- assertVisible: "Open"
+- assertVisible: "Mark as read"
+- waitForAnimationToEnd
+- takeScreenshot: inbox-preview
+- tapOn: "Mark as read"
+# Note that the list is scrolled back to its first row, rather than to the
+# first point this row shows, because the folded Duo then stands it against the
+# top edge, where a tap a point or two higher no longer opens it. Neither row
+# can be scrolled to the middle, since a list at its top scrolls no further,
+# and a window that shows the row already scrolls not at all.
+- runFlow:
+    when:
+      notVisible: "Recorded the invite flow"
+    commands:
+      - scrollUntilVisible:
+          element: "Who can withdraw an invite\\?"
+          direction: UP
 # Remind me, which a row's trailing swipe and its long press both open, offers
 # the panel's times in a sheet, each saying when it comes due; In 1 hour puts
 # the thread away, out of Open and under Reminders, its time in the row's
@@ -204,6 +216,9 @@ appId: dev.vespin.ios
       - tapOn: "Reminders"
 - tapOn: "Open.*"
 - waitForAnimationToEnd
+# The search, a round glass button in the bar, narrows the list to
+# the threads whose words hold every word typed. It comes last, since its
+# keyboard stands over the rows.
 # A compact window's search is the bar's round button, named as the Search
 # tab is, so the one above the tab bar is pressed; a split view's sidebar
 # holds the field itself.
