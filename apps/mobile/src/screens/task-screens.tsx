@@ -1579,10 +1579,12 @@ function TasksSplitScreen({
                 onRefresh={refreshTasks}
                 onArchiveAgent={archiveAsk.archive}
               />
-            ) : selected !== undefined && read && !found.seeking ? (
+            ) : selected === undefined ? (
+              <EmptyState title={SELECT_A_TASK} symbol="checklist" />
+            ) : read && !found.seeking ? (
               <EmptyState title={TASK_NOT_FOUND} symbol="questionmark.folder" />
             ) : (
-              <EmptyState title={SELECT_A_TASK} symbol="checklist" />
+              <EmptyState title={READING_TASK} symbol="checklist" />
             )
           }
           detailBar={
