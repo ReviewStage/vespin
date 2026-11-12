@@ -1109,7 +1109,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           `An agent's sandbox was not created from its ${attempt.from}${attempt.drive === undefined ? "" : " with a forked drive"}, which was gone`,
         );
 
-        // A workspace's drive gone sends every start of its workspace to the image until a fill makes it.
+        // A workspace's drive gone is broken until someone fills it, since nothing refills it on a timer.
         if (attempt.from === CREATED_FROM.WORKSPACE && checkout !== undefined) {
           yield* reportedBroken(checkout.read.workspaceId, DRIVE_BROKEN.GONE);
         }

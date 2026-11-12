@@ -115,10 +115,6 @@
     "dest": "/api/workspace-mcp.js?route=agents/mcp&route-path=agents/mcp/integrations/$1"
   },
   {
-    "src": "/api/maintenance/base-drives",
-    "dest": "/api/base-drive-refresh.js?route=maintenance/base-drives"
-  },
-  {
     "src": "/api/account/integrations/connected",
     "dest": "/api/default.js?route=account/integrations/connected"
   },
