@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { readAgentRouting } from "@repo/database/models/agent-store";
+import { createAgent, readAgentRouting } from "@repo/database/models/agent-store";
 import { user } from "@repo/database/schemas/auth";
 import { messages, turns } from "@repo/database/schemas/storage";
+import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_SOURCE } from "@repo/features/agent-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
@@ -282,6 +283,51 @@ it.layer(getTestDB())("a Conductor chat imported", (it) => {
         assert.notEqual(agent.archivedAt, null);
         assert.equal(agent.source?.kind, AGENT_SOURCE.CONDUCTOR);
         assert.equal(Option.getOrThrow(routing).nativeSession, "transcript-replay");
+      }),
+  );
+
+  it.effect(
+    "a rerun writes again an import a run left unfinished, and leaves a finished one as it stands",
+    () =>
+      Effect.gen(function* () {
+        const { userId, taskId } = yield* member;
+        const chat = chatOf({});
+
+        // A run that died partway: the agent made under the chat's key, its source never recorded.
+        const partial = Option.getOrThrow(
+          yield* createAgent(userId, {
+            taskId,
+            descriptionSnapshot: null,
+            prompt: null,
+            idempotencyKey: chat.id,
+            model: FALLBACK.model,
+            effort: FALLBACK.effort,
+            repository: null,
+            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+          }),
+        ).agent;
+
+        const toImport = {
+          userId,
+          taskId,
+          repository: null,
+          workspace: { id: "ws-3" },
+          chat,
+          messages: CODEX_CHAT,
+          offered: OFFERED,
+          fallback: FALLBACK,
+        };
+
+        const redone = yield* importConductorChat(toImport);
+        const again = yield* importConductorChat(toImport);
+        const { rows } = yield* transcriptOf(redone.agent.conversationId);
+
+        assert.ok(Option.isNone(yield* readAgentRouting(userId, partial.id)));
+        assert.notEqual(redone.agent.id, partial.id);
+        assert.equal(redone.created, true);
+        assert.equal(redone.agent.source?.kind, AGENT_SOURCE.CONDUCTOR);
+        assert.deepEqual([again.agent.id, again.created], [redone.agent.id, false]);
+        assert.equal(rows.length, 2);
       }),
   );
 

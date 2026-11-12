@@ -1000,6 +1000,23 @@ const updateAgentTitle = SqlSchema.findOneOption({
     ),
 });
 
+const updateAgentSource = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    source: storedAgentSourceSchema,
+  }),
+  Result: CommittedAgentRowSchema,
+  execute: ({ userId, agentId, source }) =>
+    Database.use((db) =>
+      db
+        .update(agentTable)
+        .set({ source })
+        .where(reachableAgent(userId, agentId))
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
+    ),
+});
+
 /**
  * The agent archived where it stands unarchived and its conversation's
  * lines have run no further than `seenSeq`, so an agent a message woke
@@ -3034,6 +3051,23 @@ export function renameAgent(
   title: string | null,
 ): AgentStoreEffect<Option.Option<Agent>> {
   return Effect.map(renameAgentCommitted(userId, agentId, title), Option.map(agentOf));
+}
+
+/**
+ * The agent's source recorded after it was made, as an import records where
+ * its transcript came from once the whole of it is written, so an agent
+ * with none is one an import left unfinished. Answers the agent as it then
+ * stands; none where the account reaches no such agent.
+ */
+export function recordAgentSource(
+  userId: string,
+  agentId: string,
+  source: StoredAgentSource,
+): AgentStoreEffect<Option.Option<Agent>> {
+  return Effect.map(
+    updateAgentSource({ userId, agentId, source }),
+    Option.map(({ txid: _txid, ...agent }): Agent => agent),
+  );
 }
 
 /** An agent as a write left it, and the transaction it committed in; none where it changed no row. */

@@ -21,18 +21,21 @@
  * stand-in a live run keeps.
  *
  * No model is called. The agent is made under the chat's id as its Start's
- * key, so an import run again answers the agent the first made and writes
- * nothing. Its conversation is marked as a transcript with no session
- * behind it (`NATIVE_SESSION.REPLAY`), so its first launch hands the model
- * its steps afresh.
+ * key, and its source is recorded only once its whole transcript is
+ * written: an import run again answers a finished agent as it stands, and
+ * discards and writes again one a run left unfinished. Its conversation is
+ * marked as a transcript with no session behind it
+ * (`NATIVE_SESSION.REPLAY`), so its first launch hands the model its steps
+ * afresh.
  */
 
 import {
-  type Agent,
   archiveAgent,
   createAgent,
+  discardAgent,
   NATIVE_SESSION,
   recordAgentNativeSession,
+  recordAgentSource,
 } from "@repo/database/models/agent-store";
 import type { HandedFile } from "@repo/database/models/attached-file-parts";
 import { importedTurnId } from "@repo/database/models/ids";
@@ -48,6 +51,7 @@ import {
   AGENT_SOURCE,
   type AgentAttachment,
   MESSAGE_SENDER,
+  type StoredAgentSource,
 } from "@repo/features/agent-wire";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { type WireValue, WireValueSchema } from "@repo/wire";
@@ -546,18 +550,28 @@ function runtimeOf(userId: string, model: string) {
   );
 }
 
+/** Where the agent's transcript came from, as its row keeps it once the import finished. */
+function sourceOf(chat: ConductorChatToImport): StoredAgentSource {
+  return {
+    kind: AGENT_SOURCE.CONDUCTOR,
+    sessionId: chat.chat.id,
+    workspaceId: chat.workspace.id,
+    ...(chat.workspace.deepLink == null ? undefined : { url: chat.workspace.deepLink }),
+  };
+}
+
 /**
- * Writes one Conductor chat as a finished agent on the task given, its
- * whole transcript in turns as the chat ran them, archived where the chat
- * was, and answers it with whether this import made it. A chat this
- * account imported before answers the agent that import made and writes
- * nothing.
+ * The agent the chat is written into, made under the chat's id as its
+ * Start's key: a fresh one, or the one an earlier import finished, which is
+ * answered as it stands. One an earlier import left unfinished, which has
+ * no source yet, is discarded with whatever of its transcript was written,
+ * and made afresh.
  */
-export const importConductorChat = Effect.fnUntraced(function* (chat: ConductorChatToImport) {
+const startedAgent = Effect.fnUntraced(function* (chat: ConductorChatToImport) {
   const choice = choiceOf(chat.chat, chat.offered, chat.fallback);
   const { runtime, payer } = yield* runtimeOf(chat.userId, choice.model);
 
-  const started = yield* createAgent(chat.userId, {
+  const start = createAgent(chat.userId, {
     taskId: chat.taskId,
     descriptionSnapshot: null,
     prompt: null,
@@ -569,19 +583,40 @@ export const importConductorChat = Effect.fnUntraced(function* (chat: ConductorC
     runtime,
     payer,
     machine: AGENT_MACHINE.VERCEL,
-    source: {
-      kind: AGENT_SOURCE.CONDUCTOR,
-      sessionId: chat.chat.id,
-      workspaceId: chat.workspace.id,
-      ...(chat.workspace.deepLink == null ? undefined : { url: chat.workspace.deepLink }),
-    },
   });
+
+  const first = yield* start;
+  const unfinished = Option.filter(first, ({ agent, created }) => !created && agent.source == null);
+
+  if (Option.isSome(unfinished)) {
+    const { agent } = unfinished.value;
+    yield* discardAgent(agent.userId, agent.id);
+  }
+
+  const started = Option.isSome(unfinished) ? yield* start : first;
 
   if (Option.isNone(started)) {
     return yield* Effect.fail(new ConductorChatNotImported({ step: "agent" }));
   }
 
-  const { agent, created } = started.value;
+  return { ...started.value, choice };
+});
+
+/**
+ * Writes one Conductor chat as a finished agent on the task given, its
+ * whole transcript in turns as the chat ran them, archived where the chat
+ * was, and answers it with whether this import wrote it. The import is all
+ * or nothing as a later run sees it: the agent's source is recorded last,
+ * so a run that died partway leaves an agent with none, which the next run
+ * discards and writes again, and a chat this account imported whole
+ * answers the agent that import made and writes nothing. Note that the
+ * writes are not one transaction, because a line is written under its
+ * conversation's dispatch claim, which runs with no transaction open
+ * (`dispatch-claim.ts`). The records are handed in already read, from the
+ * API or an export alike.
+ */
+export const importConductorChat = Effect.fnUntraced(function* (chat: ConductorChatToImport) {
+  const { agent, created, choice } = yield* startedAgent(chat);
 
   if (!created) return { agent, created };
   const target: ConversationTarget = { userId: agent.userId, conversationId: agent.conversationId };
@@ -594,8 +629,12 @@ export const importConductorChat = Effect.fnUntraced(function* (chat: ConductorC
 
   yield* recordAgentNativeSession(agent.userId, agent.id, NATIVE_SESSION.REPLAY);
 
-  if (chat.chat.archivedAt == null) return { agent, created };
-  const archived = yield* archiveAgent(agent.userId, agent.id, true);
+  if (chat.chat.archivedAt != null) yield* archiveAgent(agent.userId, agent.id, true);
+  const finished = yield* recordAgentSource(agent.userId, agent.id, sourceOf(chat));
 
-  return { agent: Option.getOrElse(archived, (): Agent => agent), created };
+  if (Option.isNone(finished)) {
+    return yield* Effect.fail(new ConductorChatNotImported({ step: "source" }));
+  }
+
+  return { agent: finished.value, created };
 });
