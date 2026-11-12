@@ -201,6 +201,7 @@ export const readWorkspaceMergeQueue = /* @__PURE__ */ Effect.fnUntraced(functio
 
   // Note that the queues keep the order the repositories were named in, the most recently changed first.
   const order = new Map(named.map((fullName, index) => [fullName.toLowerCase(), index]));
+
   const repositories = queues
     .flat()
     .sort(

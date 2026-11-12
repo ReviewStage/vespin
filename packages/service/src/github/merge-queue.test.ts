@@ -89,11 +89,13 @@ const openQueuedWorkspace = Effect.fnUntraced(function* (installationId: number)
   });
 
   yield* writeAccountPreferences(member, { experiments: { [EXPERIMENT.MERGE_QUEUE]: true } });
+
   const task = yield* createTask(member, {
     organizationId: workspace,
     name: "Batch invitations",
     repository: RELAY,
   });
+
   const agent = yield* openTaskAgent(member, workspace, task.id);
   yield* openedPullRequest(
     member,
