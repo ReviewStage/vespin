@@ -26,7 +26,7 @@ import {
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { RUN_ACTION_WORDS, runActionMenuLabel } from "@repo/features/run-actions-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
-import { TRANSCRIPT_COPY } from "@repo/features/transcript-copy";
+import { TRANSCRIPT_COPY, type TranscriptCopy } from "@repo/features/transcript-copy";
 import { MCP_SERVER_LABEL, VERB } from "@repo/features/words";
 import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
 import { PERMISSION_MODE_WORDS } from "@repo/settings";
@@ -494,7 +494,19 @@ export function AgentScreen() {
   const mode = useAgentMode(id);
   const pick = useAgentModelPick(id);
   const actions = useAgentActions(id, address);
-  const transcriptCopy = useTranscriptCopy(id, title, agent?.brief);
+  const transcriptCopy = useTranscriptCopy(id, title, shown?.brief);
+
+  // Note that a copy or share lets the menu's last note go, so an older Rename or Pin refusal never stands over what the copy says.
+  const copyTranscript = (way: TranscriptCopy) => {
+    actions.clearNote();
+    transcriptCopy.copy(way);
+  };
+
+  const shareTranscript = (way: TranscriptCopy) => {
+    actions.clearNote();
+    transcriptCopy.share(way);
+  };
+
   const runActions = useAgentRun(id);
   useWarmAgent(id);
   const hasPorts = useAgentHasPorts(id);
@@ -543,17 +555,15 @@ export function AgentScreen() {
           )}
           <Stack.Toolbar.Menu inline>
             <Stack.Toolbar.Menu icon="doc.on.doc" title={COPY_TRANSCRIPT_WORDS.COPY}>
-              <Stack.Toolbar.MenuAction
-                onPress={() => transcriptCopy.copy(TRANSCRIPT_COPY.CONCISE)}
-              >
+              <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.CONCISE)}>
                 {COPY_TRANSCRIPT_WORDS.CONCISE}
               </Stack.Toolbar.MenuAction>
-              <Stack.Toolbar.MenuAction onPress={() => transcriptCopy.copy(TRANSCRIPT_COPY.FULL)}>
+              <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.FULL)}>
                 {COPY_TRANSCRIPT_WORDS.FULL}
               </Stack.Toolbar.MenuAction>
               <Stack.Toolbar.MenuAction
                 icon="square.and.arrow.up"
-                onPress={() => transcriptCopy.share(TRANSCRIPT_COPY.FULL)}
+                onPress={() => shareTranscript(TRANSCRIPT_COPY.FULL)}
               >
                 {COPY_TRANSCRIPT_WORDS.SHARE}
               </Stack.Toolbar.MenuAction>
