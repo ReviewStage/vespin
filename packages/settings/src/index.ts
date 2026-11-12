@@ -22,6 +22,7 @@ export {
   COMPUTER_USE_DETAIL,
   COMPUTER_USE_LABEL,
   computerUseAppsOf,
+  computerUseAppsStored,
   computerUseAppsWith,
   computerUseAppsWithout,
   isComputerUseAppsJson,
