@@ -87,6 +87,7 @@ it.effect(
 
       const renamed = decodeDocument(yield* Effect.promise(() => named.json()));
       assert.deepEqual(renamed.webcredentials.apps, [`${TEAM_ID}.dev.vespin.ios.beta`]);
+      assert.deepEqual(renamed.activitycontinuation.apps, [`${TEAM_ID}.dev.vespin.ios.beta`]);
     }),
 );
 

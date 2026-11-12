@@ -11,8 +11,11 @@
  * authorization's redirect before any page loads, and for the links the app
  * draws a screen for (`@repo/features/ios-app-links`), and under
  * `webcredentials`, which that callback requires of its host besides, and
- * under `activitycontinuation`, which lets the app take a page of the host
- * another device hands off as its browser would, such as the Mac app's (`apps/desktop/src/main/window/handoff.ts`). The web service rewrites the
+ * under `activitycontinuation`, which lets the app take any page of the host
+ * another device hands off as its browser would, such as the Mac app's,
+ * whose activity type the app can't take across their two teams; Apple scopes
+ * this section by no path, and the app sends a page it doesn't draw on to
+ * Safari. The web service rewrites the
  * well-known path onto this group's route (`apps/web/server/function-rewrites.ts`).
  *
  * The Team ID is the deployment's to configure, and the bundle ID is the
