@@ -260,6 +260,15 @@ const taskAgentStartSchema = EffectSchema.Struct({
   branch: agentStartRequestFields.branch,
   title: agentStartRequestFields.title,
   permissionMode: agentStartRequestFields.permissionMode,
+  /** The repositories beside the task's, which released desktop builds send and the service passes over, since every connected repository is on the workspace drive. */
+  alsoRepositories: EffectSchema.optionalKey(
+    EffectSchema.Array(
+      EffectSchema.Struct({
+        repository: EffectSchema.String,
+        branch: EffectSchema.optionalKey(EffectSchema.String),
+      }),
+    ),
+  ),
 }).check(startBrief);
 
 export type TaskAgentStart = typeof taskAgentStartSchema.Type;
