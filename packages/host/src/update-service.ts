@@ -76,11 +76,23 @@ function isNetworkErrorMessage(message: string): boolean {
  */
 const READ_ONLY_VOLUME_ERROR_PATTERN = "read-only volume";
 
+/**
+ * What Squirrel.Mac says when the downloaded build's code signature does not
+ * satisfy the installed app's designated requirement (its
+ * `SQRLCodeSignature`, "Code signature at URL … did not pass validation"):
+ * a build signed by another team than this install accepts, which no retry
+ * mends.
+ */
+const SIGNATURE_ERROR_PATTERNS = ["Code signature", "did not pass validation"] as const;
+
 /** The failure an error's words name a remedy for, or none. */
 function updateFailureOf(message: string): UpdateFailure | undefined {
-  return message.includes(READ_ONLY_VOLUME_ERROR_PATTERN)
-    ? UPDATE_FAILURE.READ_ONLY_VOLUME
-    : undefined;
+  if (message.includes(READ_ONLY_VOLUME_ERROR_PATTERN)) return UPDATE_FAILURE.READ_ONLY_VOLUME;
+
+  if (SIGNATURE_ERROR_PATTERNS.some((pattern) => message.includes(pattern)))
+    return UPDATE_FAILURE.SIGNATURE;
+
+  return undefined;
 }
 
 /**

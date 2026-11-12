@@ -40,6 +40,8 @@ export const PRODUCT_EVENT = {
   SEARCH_OPEN: "search:open",
   SURFACE_OPEN: "surface:open",
   UPDATE_ACTION: "update:action",
+  /** An update the Updates row drew as failed, a check's or an install's, by the kind of failure and the build it failed on. */
+  UPDATE_FAIL: "update:fail",
   FEEDBACK_SEND: "feedback:send",
   VOICE_PERMISSION: "voice:permission",
   SETTING_UPDATE: "setting:update",
@@ -89,6 +91,7 @@ export const PRODUCT_EVENT_PROPERTY = {
   IMAGE_COUNT: "image_count",
   ACCOUNT_ACTION: "account_action",
   UPDATE_ACTION: "update_action",
+  UPDATE_FAILURE: "update_failure",
   PANEL_TAB: "panel_tab",
   SETTINGS_VIEW: "settings_view",
   SEARCH_SURFACE: "search_surface",
@@ -135,6 +138,22 @@ export const PRODUCT_UPDATE_ACTION = {
 } as const;
 
 type ProductUpdateAction = (typeof PRODUCT_UPDATE_ACTION)[keyof typeof PRODUCT_UPDATE_ACTION];
+
+/**
+ * Why an update failed, as the Updates row names it: an install a read-only
+ * volume refused, a build whose signature the installed app's requirement
+ * refused, or any other failure, a check's or an install's. The words of
+ * the error never travel: a kind here, the build's version beside it, and
+ * nothing else, so a path or a volume's name has no shape to ride in.
+ */
+export const PRODUCT_UPDATE_FAILURE = {
+  READ_ONLY_VOLUME: "read_only_volume",
+  SIGNATURE: "signature",
+  OTHER: "other",
+} as const;
+
+export type ProductUpdateFailure =
+  (typeof PRODUCT_UPDATE_FAILURE)[keyof typeof PRODUCT_UPDATE_FAILURE];
 
 /** Which half of the panel is drawn, said exactly as `APP_PANEL_TAB` says it. */
 const PRODUCT_PANEL_TAB = {
@@ -392,6 +411,7 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.IMAGE_COUNT]: ProductSessionCountBucket;
   [PRODUCT_EVENT_PROPERTY.ACCOUNT_ACTION]: ProductAccountAction;
   [PRODUCT_EVENT_PROPERTY.UPDATE_ACTION]: ProductUpdateAction;
+  [PRODUCT_EVENT_PROPERTY.UPDATE_FAILURE]: ProductUpdateFailure;
   [PRODUCT_EVENT_PROPERTY.PANEL_TAB]: ProductPanelTab;
   [PRODUCT_EVENT_PROPERTY.SETTINGS_VIEW]: ProductSettingsView;
   [PRODUCT_EVENT_PROPERTY.SEARCH_SURFACE]: ProductSearchSurface;
@@ -426,6 +446,7 @@ type EnumeratedProductEventProperty = Exclude<
 const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.ACCOUNT_ACTION]: Object.values(PRODUCT_ACCOUNT_ACTION),
   [PRODUCT_EVENT_PROPERTY.UPDATE_ACTION]: Object.values(PRODUCT_UPDATE_ACTION),
+  [PRODUCT_EVENT_PROPERTY.UPDATE_FAILURE]: Object.values(PRODUCT_UPDATE_FAILURE),
   [PRODUCT_EVENT_PROPERTY.PANEL_TAB]: Object.values(PRODUCT_PANEL_TAB),
   [PRODUCT_EVENT_PROPERTY.SETTINGS_VIEW]: Object.values(PRODUCT_SETTINGS_VIEW),
   [PRODUCT_EVENT_PROPERTY.SEARCH_SURFACE]: Object.values(PRODUCT_SEARCH_SURFACE),
@@ -456,6 +477,10 @@ const PRODUCT_EVENT_PROPERTIES = {
   [PRODUCT_EVENT.SEARCH_OPEN]: [PRODUCT_EVENT_PROPERTY.SEARCH_SURFACE],
   [PRODUCT_EVENT.SURFACE_OPEN]: [PRODUCT_EVENT_PROPERTY.SURFACE, PRODUCT_EVENT_PROPERTY.LAYOUT],
   [PRODUCT_EVENT.UPDATE_ACTION]: [PRODUCT_EVENT_PROPERTY.UPDATE_ACTION],
+  [PRODUCT_EVENT.UPDATE_FAIL]: [
+    PRODUCT_EVENT_PROPERTY.UPDATE_FAILURE,
+    PRODUCT_EVENT_PROPERTY.APP_VERSION,
+  ],
   [PRODUCT_EVENT.FEEDBACK_SEND]: [PRODUCT_EVENT_PROPERTY.IMAGE_COUNT],
   [PRODUCT_EVENT.VOICE_PERMISSION]: [PRODUCT_EVENT_PROPERTY.PERMISSION_RESULT],
   [PRODUCT_EVENT.SETTING_UPDATE]: [
