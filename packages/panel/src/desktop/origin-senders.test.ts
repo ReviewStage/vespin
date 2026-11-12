@@ -180,14 +180,14 @@ test("a task's agent opens on its description sent by the task, which opens the 
   assert.deepEqual(chosen, [MAIN_TAB.OVERVIEW]);
 });
 
-test("an agent started from a suggestion opens on its card, which draws the files sent from the suggestion's draft", async () => {
+test("an agent started from a suggestion opens on its card, which draws the files sent from the suggestion's draft, a file named in its words as the file's chip", async () => {
   const started: AgentTranscriptMessage = {
     id: "suggested",
     role: MESSAGE_ROLE.USER,
     parts: [
       {
         type: "text",
-        text: "Suggested by [@Invite flow](https://app.test/agent/a):\n\nSend the invite email.",
+        text: "Suggested by [@Invite flow](https://app.test/agent/a):\n\nSend the invite email as [File: flow.png] draws it.",
       },
       {
         type: "file",
@@ -212,12 +212,15 @@ test("an agent started from a suggestion opens on its card, which draws the file
   });
 
   const card = container.querySelector(".agent-origin") ?? assert.fail("it opens on a card");
-  assert.deepEqual(
-    [...card.querySelectorAll('ul[aria-label="Attached files"] > li [aria-label^="Open "]')].map(
-      (chip) => chip.getAttribute("aria-label"),
-    ),
-    ["Open flow.png"],
-  );
+
+  const words =
+    card.querySelector("[data-origin-description]") ?? assert.fail("the card has words");
+
+  // The card opens folded under its title, so its words are drawn once it is opened.
+  act(() => words.querySelector<HTMLElement>(":scope > summary")?.click());
+  await settleQueries();
+  assert.equal(words.querySelectorAll('[aria-label="Open flow.png"]').length, 1);
+  assert.ok(!words.textContent?.includes("[File: flow.png]"), "the marker is the file's chip");
 });
 
 test("an agent started blank whose first line a suggestion sent opens on that line, headed by who suggested it, never a card", async () => {

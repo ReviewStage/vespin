@@ -1344,13 +1344,14 @@ function PlanCard({
   taskId?: string | undefined;
 }): ReactNode {
   const named = sender != null;
-  const words = <TranscriptWords text={text} />;
+  // Note that a card standing in a sent line's place draws its words as the line would, so a file's marker in them is the file's chip.
+  const words = files === undefined ? <TranscriptWords text={text} /> : <SentWords text={text} />;
   // The task's status as the list holds it, else as the window hands the open task live (`LiveDoors`), as its sender reads it.
   const listed = useTaskStatus(lead.description ? taskId : undefined);
   const handed = useContext(LiveDoors)?.cards?.task?.status;
   const status = lead.description ? (listed ?? handed) : undefined;
 
-  return (
+  const card = (
     <Message from={MESSAGE_ROLE.USER} className="agent-origin" data-message-id={messageId}>
       {files === undefined ? null : <MessageFileChips message={files} />}
       <Plan data-origin-description="" aria-label={lead.label}>
@@ -1380,6 +1381,14 @@ function PlanCard({
         actions={<CopyMessageAction words={text} messageId={messageId} />}
       />
     </Message>
+  );
+
+  return files === undefined ? (
+    card
+  ) : (
+    <MessageFiles message={files} words={text}>
+      {card}
+    </MessageFiles>
   );
 }
 

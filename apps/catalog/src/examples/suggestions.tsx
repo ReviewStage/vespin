@@ -6,6 +6,7 @@ import {
   InlineRef,
   SUGGESTION_KIND,
   Suggestion,
+  SuggestionSent,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import type { Example } from "../example";
@@ -16,6 +17,8 @@ import { CatalogSection } from "../section";
  * line it is about: one of a new agent, whose card says where it would run
  * row by row, and one of a message to a running agent, whose card names that
  * agent's chip. Resting on either hangs the card; a press opens the draft.
+ * Once sent, a suggestion is the chip of the agent it reached, Started or
+ * Sent after its name.
  */
 
 const BRIEF =
@@ -64,6 +67,16 @@ function Suggestions(): React.JSX.Element {
           }
           brief="Invitations now stand apart from members: count a pending invite as an invite."
           onPress={() => undefined}
+        />
+      </p>
+      <p>
+        Once sent, it is the agent it reached.{" "}
+        <InlineRef
+          look={INLINE_REF_LOOK.PILL}
+          glyph={<GLYPH.AGENT />}
+          label="Wire up the invite email"
+          name={INLINE_REF_NAME.WHOLE}
+          state={<SuggestionSent kind={SUGGESTION_KIND.START} />}
         />
       </p>
     </CatalogSection>

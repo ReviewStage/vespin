@@ -588,7 +588,7 @@ export function useAgentComposer(input: {
     if (!hasWordsOrFiles(text, attachments) || held.closed !== undefined) return;
 
     if (suggestion !== undefined) {
-      sendThroughSuggestion(suggestion, text, attachments, lead);
+      sendThroughSuggestion(suggestion, text, kept.draft, lead);
 
       return;
     }
@@ -611,7 +611,7 @@ export function useAgentComposer(input: {
   const sendThroughSuggestion = (
     suggestion: DraftSuggestion,
     text: string,
-    attachments: readonly AgentAttachment[],
+    sent: Draft,
     sentLead: string | undefined,
   ) => {
     const sendSuggestion = latest.current.sendSuggestion;
@@ -619,10 +619,19 @@ export function useAgentComposer(input: {
     if (sendSuggestion === undefined || suggesting) return;
     setSuggesting(true);
     queue.after(agentId, () =>
-      sendSuggestion(suggestion, text, attachments)
+      sendSuggestion(suggestion, text, sent.attachments)
         .then((result) => {
           if ("reached" in result) {
-            update(() => EMPTY_DRAFT);
+            // Note that the box is emptied only while it holds what was sent, since a tab opened
+            // again while the send was out may have taken newer words; those stay, as the
+            // member's own, because the suggestion they would have gone through is spent.
+            update((was) =>
+              was.text === sent.text && was.attachments.length === sent.attachments.length
+                ? EMPTY_DRAFT
+                : was.suggestion?.buttonId === suggestion.buttonId
+                  ? { ...was, suggestion: undefined }
+                  : was,
+            );
 
             // Note that the follow-ups the send carried go once it lands, as a line's do, so no later send carries them again,
             // but only while they are still the ones ticked: one ticked while the send was out stays, with those it joined.
