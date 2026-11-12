@@ -216,7 +216,7 @@ diff --git a/packages/panel/src/repository-picture.tsx b/packages/panel/src/repo
 index 989961401..fa293b017 100644
 --- a/packages/panel/src/repository-picture.tsx
 +++ b/packages/panel/src/repository-picture.tsx
-@@ -2,6 +2,8 @@ import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar, type AvatarSize } from "@repo/ui";
+@@ -2,6 +2,8 @@ import { AVATAR_SHAPE, AVATAR_SIZE, Avatar, type AvatarSize } from "@repo/ui";
  import { GLYPH } from "@repo/ui/icons";
  import { repositoryOwnerPictureUrl } from "@repo/ui/tasks-model";
  import { useState } from "react";

@@ -158,7 +158,7 @@ index 6e0760073..964101e0a 100644
 --- a/packages/panel/src/repository-picture.tsx
 +++ b/packages/panel/src/repository-picture.tsx
 @@ -1,6 +1,8 @@
- import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar, type AvatarSize } from "@luke/ui";
+ import { AVATAR_SHAPE, AVATAR_SIZE, Avatar, type AvatarSize } from "@luke/ui";
  import { repositoryOwnerPictureUrl } from "@luke/ui/tasks-model";
  import { useState } from "react";
 +import { shotOwnerPicture } from "./shots/owner-pictures";
