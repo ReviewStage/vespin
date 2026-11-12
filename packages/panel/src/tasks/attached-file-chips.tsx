@@ -23,7 +23,7 @@ import {
 } from "@repo/ui";
 import { isRecord, isWireString } from "@repo/wire";
 import { type ReactNode, type RefObject, useMemo, useRef, useState } from "react";
-import { AttachmentViewer } from "./attachment-viewer.js";
+import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 
 /**
@@ -241,12 +241,15 @@ export function AttachedFileChips({
   files,
   onRemove,
   uploading = false,
+  action,
 }: {
   files: readonly FileChip[];
   /** Takes one file off the message, by its place; nothing in the transcript, whose files are sent. */
   onRemove?: ((index: number) => void) | undefined;
   /** Whether the files are on their way up with the line they came on. */
   uploading?: boolean;
+  /** One more thing the viewer offers for a picture, a video, or a PDF shown, such as adding it to the task's description; nothing in the message box. */
+  action?: ViewerAction | undefined;
 }): ReactNode {
   // The file open over the window, by its place among those that carry bytes.
   const [viewing, setViewing] = useState<number | undefined>(undefined);
@@ -260,6 +263,7 @@ export function AttachedFileChips({
         at={viewing}
         onAt={setViewing}
         onClose={() => setViewing(undefined)}
+        action={onRemove === undefined ? action : undefined}
       />
     );
 

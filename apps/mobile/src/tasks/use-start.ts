@@ -11,7 +11,10 @@
  * start one. File for later is the same act with no agent, the task filed
  * in the Backlog under its words. A start names a model only
  * where one was picked, so an untouched sheet starts on the account's
- * default at the moment it goes, as the panel's does.
+ * default at the moment it goes, as the panel's does. A read that could not
+ * be read before it listed anything says so, in the panel's words, with Try
+ * again, which asks the host to read it again (`AGENTS_MODELS_RETRY`,
+ * `TASKS_REPOSITORIES_RETRY`), as the panel's menus do.
  */
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
@@ -41,12 +44,15 @@ import {
 import {
   type FiledTask,
   recentRepositories,
+  repositoryFailureNote,
   startFailureNote,
   workspaceReaches,
 } from "@repo/features/tasks-model";
+import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
+import { readFailedWords } from "@repo/features/words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppStateSnapshot } from "@repo/host/app-state";
+import type { AppHostRead, AppStateSnapshot } from "@repo/host/app-state";
 import {
   selectAccount,
   selectAgentDefault,
@@ -101,6 +107,18 @@ export interface ModelPick {
   readonly pickEffort: (effort: string) => void;
   /** The devices that may run an agent, where the account may run one on its own device; none otherwise. */
   readonly devices: readonly MacOffer[];
+  /** Why the models could not be read, where they listed nothing; none while they read or were read. */
+  readonly failed: string | undefined;
+  /** Reads the models again. */
+  readonly retry: () => void;
+}
+
+/** What a sheet's models say where they could not be read, in the panel's words. */
+const MODELS_READ_FAILED = readFailedWords("the models");
+
+/** Says on the console a Try again the host refused, which leaves the read as it stood. */
+function retryRefused(what: string): (cause: unknown) => void {
+  return (cause) => console.error(`Reading ${what} again did not land.`, cause);
 }
 
 /** The models a picker offers, each once at standard speed, its fast versions folded under it as the panel's menu folds them, named as the panel names them (`modelLabel`). */
@@ -125,11 +143,16 @@ export function effortOptions(
 
 /** The models the account may start an agent on, followed while the screen that reads them stands, and the read itself: none before it lands. */
 export function useModelCatalog(): ModelsAnswer | undefined {
+  return useModelsRead()?.rows;
+}
+
+/** The models' read as the host holds it, followed while the screen that reads it stands: its rows once read, and whether it failed. */
+function useModelsRead(): AppHostRead<ModelsAnswer> | undefined {
   const acts = useHostActs();
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
   useLiveFollow(signedInAccountId(account), () => acts[ACT_KIND.AGENTS_MODELS_FOLLOW]());
 
-  return useQuery({ ...appStateQuery, select: selectModels }).data?.rows;
+  return useQuery({ ...appStateQuery, select: selectModels }).data;
 }
 
 /**
@@ -139,7 +162,9 @@ export function useModelCatalog(): ModelsAnswer | undefined {
  * menu keeps (`effortFor`).
  */
 export function useModelPick(): ModelPick {
-  const read = useModelCatalog();
+  const acts = useHostActs();
+  const held = useModelsRead();
+  const read = held?.rows;
   const { data: fallback } = useQuery({ ...appStateQuery, select: selectAgentDefault });
   const [picked, setPicked] = useState<ModelChoice | undefined>(undefined);
   const catalog = read?.models ?? NO_MODELS;
@@ -161,6 +186,10 @@ export function useModelPick(): ModelPick {
     },
     // Note that a device still setting itself up takes no agent, so it is not offered.
     devices: (read?.macs ?? NO_DEVICES).filter((device) => device.setup === undefined),
+    failed: held?.failed === true && read === undefined ? MODELS_READ_FAILED : undefined,
+    retry: () => {
+      acts[ACT_KIND.AGENTS_MODELS_RETRY]().catch(retryRefused("the models"));
+    },
   };
 }
 
@@ -186,12 +215,22 @@ export interface RepositoryPick {
   readonly options: readonly PickOption[];
   readonly picked: string | undefined;
   readonly pick: (repository: string) => void;
+  /** Whether the repositories were read, so none listed means the workspace reaches none. */
+  readonly read: boolean;
+  /** Why the repositories could not be read, where they listed nothing; none while they read or were read. */
+  readonly failed: string | undefined;
+  /** Reads the workspace's repositories again. */
+  readonly retry: () => void;
 }
 
-/** The repositories a workspace's GitHub reaches, by full name, and whether their list has been read. */
+/** The repositories a workspace's GitHub reaches, by full name, whether their list has been read or could not be, and what reads it again. */
 export interface WorkspaceRepositories {
   readonly listed: readonly string[];
   readonly read: boolean;
+  /** Whether the list could not be read before it listed anything. */
+  readonly failed: boolean;
+  /** Reads the workspace's repositories again. */
+  readonly retry: () => void;
 }
 
 /** No repositories read yet. */
@@ -212,14 +251,28 @@ export function useWorkspaceRepositories(workspaceId: string | undefined): Works
     return (state: AppStateSnapshot) => list(state)?.rows;
   }, [workspaceId]);
 
+  const failedSelect = useMemo(() => {
+    const list = selectRepositoryList(workspaceId ?? "");
+
+    return (state: AppStateSnapshot) => list(state)?.failed === true;
+  }, [workspaceId]);
+
   const { data: rows } = useQuery({ ...appStateQuery, select });
+  const { data: failed = false } = useQuery({ ...appStateQuery, select: failedSelect });
 
   return useMemo(
     () => ({
       listed: rows?.repositories.map(({ fullName }) => fullName) ?? NO_REPOSITORIES,
       read: rows !== undefined,
+      failed: failed && rows === undefined,
+      retry: () => {
+        if (workspaceId === undefined) return;
+        acts[ACT_KIND.TASKS_REPOSITORIES_RETRY]({ workspaceId }).catch(
+          retryRefused("the repositories"),
+        );
+      },
     }),
-    [rows],
+    [rows, failed, workspaceId, acts],
   );
 }
 
@@ -234,7 +287,7 @@ export function useRepositoryPick(
   workspace: Workspace | undefined,
   drafted?: string | undefined,
 ): RepositoryPick {
-  const { listed, read } = useWorkspaceRepositories(workspace?.id);
+  const { listed, read, failed, retry } = useWorkspaceRepositories(workspace?.id);
   const { data: tasks } = useQuery({ ...appStateQuery, select: selectTasks });
   const [picked, setPicked] = useState<string | undefined>(drafted);
   const recent = useMemo(() => recentRepositories(tasks?.tasks ?? []), [tasks]);
@@ -252,6 +305,9 @@ export function useRepositoryPick(
     options: listed.map((repository) => ({ id: repository, label: repository })),
     picked: kept ?? starting,
     pick: setPicked,
+    read,
+    failed: failed ? repositoryFailureNote(TASK_CALL_FAILURE.UNANSWERED) : undefined,
+    retry,
   };
 }
 

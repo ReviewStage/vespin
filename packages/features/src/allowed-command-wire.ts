@@ -3,7 +3,7 @@ import { Schema as EffectSchema } from "effect";
 import { countedNumber, wireUuidSchema } from "./service-wire.js";
 
 /**
- * allowed-command-wire.ts -- the shell commands a member always allows their coding agents to run unasked, by their first words, as Settings › Agents lists, adds, and removes them.
+ * allowed-command-wire.ts -- the shell commands a member always allows their coding agents to run unasked, by their first words, as Settings › Agents lists, adds, edits, and removes them.
  *
  * A member's Always allow on a command's ask lasts past the agent's session
  * where the harness proposed the command's prefix (`CommandPrefixSchema`,
@@ -18,13 +18,17 @@ import { countedNumber, wireUuidSchema } from "./service-wire.js";
  * matters only in a mode that asks; full access asks nothing.
  *
  * `/api/account/allowed-commands` answers the member's list in the order
- * it was added (GET), adds a prefix by hand, naming no agent (POST), and
- * removes one by its id in the query (DELETE). A prefix already kept is
+ * it was added (GET), adds a prefix by hand, naming no agent (POST), puts
+ * a prefix typed by hand in place of one of the list's by its id (PATCH),
+ * and removes one by its id in the query (DELETE). A prefix already kept is
  * answered as it stands, and one past the list's bound is refused
- * (`allowed-commands-full`). A removal stops applying at an agent's next
+ * (`allowed-commands-full`). An edit is one write: the command it names
+ * takes the new words and stands as added by hand at the edit, or goes
+ * where the list already keeps them, so no failure leaves the list half
+ * changed. A removal stops applying at an agent's next
  * launch; a runner already running holds the rules it launched with. Every
  * answer carries the list as it then stands. A list is its member's alone:
- * no one else reads, adds to, or removes from it.
+ * no one else reads, adds to, edits, or removes from it.
  */
 
 /** The bounds of a member's list. */
@@ -67,3 +71,11 @@ export const allowedCommandAddRequestSchema = EffectSchema.Struct({
 });
 
 export type AllowedCommandAddRequest = typeof allowedCommandAddRequestSchema.Type;
+
+/** A command's first words replaced by ones typed by hand (PATCH): the command by its id, and its new prefix. */
+export const allowedCommandEditRequestSchema = EffectSchema.Struct({
+  id: allowedCommandIdSchema,
+  prefix: CommandPrefixSchema,
+});
+
+export type AllowedCommandEditRequest = typeof allowedCommandEditRequestSchema.Type;

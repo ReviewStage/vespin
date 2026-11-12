@@ -116,12 +116,21 @@ const CHIP_DROP = 0.22;
 /** How wide a list's marker column stands, in body sizes. */
 const MARKER_WIDTH = 1.4;
 
+/**
+ * A bullet's dot, in body sizes: its width, how far below the line's top its
+ * middle stands, which is the middle of the first line's lowercase letters,
+ * as the panel's disc sits, and how far it stands in from the marker column's
+ * edge, where an ordered list's number ends.
+ */
+const BULLET = { SIZE: 0.34, MIDDLE: 0.69, INSET: 0.2 } as const;
+
 const styles = StyleSheet.create({
   flow: { gap: SPACE.ROW },
   itemBody: { gap: SPACE.TIGHT },
   marker: { position: "absolute", left: 0, top: 0 },
   quote: { borderLeftWidth: 3, paddingLeft: SPACE.ROW, gap: SPACE.ROW },
   well: { borderRadius: 8, padding: SPACE.ROW },
+  tableBox: { alignSelf: "stretch", overflow: "hidden" },
   table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
   row: { flexDirection: "row" },
   cell: { paddingHorizontal: SPACE.ROW, paddingVertical: 6 },
@@ -441,13 +450,37 @@ function Marker({
     );
   }
 
-  // Note that a bullet is never heard, while an ordered list's number is, since its order is part of what it says.
+  // Note that a bullet is a dot drawn at the panel's disc's size on the first line's lowercase letters, since the bullet character stands small and high in the system face; it is never heard, while an ordered list's number is, since its order is part of what it says.
+  if (number === undefined) {
+    const size = PROSE_SIZE * fontScale;
+    const dot = size * BULLET.SIZE;
+
+    return (
+      <View
+        style={{
+          width,
+          alignItems: "flex-end",
+          paddingTop: size * BULLET.MIDDLE - dot / 2,
+          paddingRight: size * BULLET.INSET,
+        }}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <View
+          style={{
+            width: dot,
+            height: dot,
+            borderRadius: dot / 2,
+            backgroundColor: colors.TEXT_MUTED,
+          }}
+        />
+      </View>
+    );
+  }
+
   return (
-    <Text
-      style={{ width, fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "right" }}
-      accessibilityElementsHidden={number === undefined}
-    >
-      {number === undefined ? "•" : `${number}.`}
+    <Text style={{ width, fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "right" }}>
+      {`${number}.`}
     </Text>
   );
 }
@@ -489,7 +522,9 @@ function ListView({
 }
 
 /**
- * A table, scrolling sideways inside its own box. Note that React Native has
+ * A table, scrolling sideways inside its own box, which stands at the
+ * words' width as a code block's well does, so a table wider than the page
+ * scrolls within the page's inset rather than running past its edge. Note that React Native has
  * no table layout, so every cell is first drawn at its own width, held
  * between the column's bounds, and each column then stands at its widest
  * cell's; the table is laid out afresh when the reader's text size changes.
@@ -514,46 +549,48 @@ function TableView({
     });
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View style={[styles.table, { borderColor: colors.CHIP_EDGE }]}>
-        {block.rows.map((row, rowAt) => (
-          <View
-            key={rowAt}
-            style={[
-              styles.row,
-              rowAt === 0
-                ? { backgroundColor: colors.WELL }
-                : { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.CHIP_EDGE },
-            ]}
-          >
-            {row.map((cell, columnAt) => (
-              <View
-                key={columnAt}
-                onLayout={(event) => measured(columnAt, event.nativeEvent.layout.width)}
-                style={[
-                  styles.cell,
-                  {
-                    minWidth: COLUMN_WIDTH.MIN * fontScale,
-                    maxWidth: COLUMN_WIDTH.MAX * fontScale,
-                  },
-                  (widths[columnAt] ?? 0) > 0 ? { width: widths[columnAt] } : {},
-                ]}
-              >
-                <Line
-                  runs={cell}
-                  drawing={drawing}
-                  style={{
-                    fontSize: TEXT_SIZE.FOOTNOTE,
-                    textAlign: TEXT_ALIGN[block.align[columnAt] ?? COLUMN_ALIGN.START],
-                    ...(rowAt === 0 && { fontWeight: "600", color: colors.TEXT }),
-                  }}
-                />
-              </View>
-            ))}
-          </View>
-        ))}
-      </View>
-    </ScrollView>
+    <View style={styles.tableBox}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={[styles.table, { borderColor: colors.CHIP_EDGE }]}>
+          {block.rows.map((row, rowAt) => (
+            <View
+              key={rowAt}
+              style={[
+                styles.row,
+                rowAt === 0
+                  ? { backgroundColor: colors.WELL }
+                  : { borderTopWidth: StyleSheet.hairlineWidth, borderColor: colors.CHIP_EDGE },
+              ]}
+            >
+              {row.map((cell, columnAt) => (
+                <View
+                  key={columnAt}
+                  onLayout={(event) => measured(columnAt, event.nativeEvent.layout.width)}
+                  style={[
+                    styles.cell,
+                    {
+                      minWidth: COLUMN_WIDTH.MIN * fontScale,
+                      maxWidth: COLUMN_WIDTH.MAX * fontScale,
+                    },
+                    (widths[columnAt] ?? 0) > 0 ? { width: widths[columnAt] } : {},
+                  ]}
+                >
+                  <Line
+                    runs={cell}
+                    drawing={drawing}
+                    style={{
+                      fontSize: TEXT_SIZE.FOOTNOTE,
+                      textAlign: TEXT_ALIGN[block.align[columnAt] ?? COLUMN_ALIGN.START],
+                      ...(rowAt === 0 && { fontWeight: "600", color: colors.TEXT }),
+                    }}
+                  />
+                </View>
+              ))}
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 

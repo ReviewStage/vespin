@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { IOS_APP_LINK_COMPONENTS, iosAppRouteOf, iosAppRouteOfAddress } from "./ios-app-links.js";
+import {
+  IOS_APP_LINK_COMPONENTS,
+  iosAppRouteOf,
+  iosAppRouteOfAddress,
+  iosRouteHidesTabs,
+} from "./ios-app-links.js";
 import { readLink } from "./link-grammar.js";
 
 /**
@@ -64,5 +69,22 @@ describe("a pull request's address", () => {
 
   it("names a vespin.dev place by the route its link opens", () => {
     expect(iosAppRouteOfAddress("https://vespin.dev/acme/task/42", opened)).toBe("/tasks/42");
+  });
+});
+
+// Note that the regression this catches is a route renamed under a conversation, which would bring the tab bar back over its composer.
+describe("the tab bar on a route", () => {
+  it.each([
+    ["/inbox", false],
+    ["/inbox/thread-1", true],
+    ["/tasks", false],
+    ["/tasks/task-1", false],
+    ["/tasks/agent/agent-1", true],
+    ["/tasks/agent/agent-1/pull/42", true],
+    ["/tasks/agent/agent-1/page", false],
+    ["/tasks/page/page-1", false],
+    ["/search", false],
+  ])("on %s hidden is %s", (pathname, hidden) => {
+    expect(iosRouteHidesTabs(pathname)).toBe(hidden);
   });
 });

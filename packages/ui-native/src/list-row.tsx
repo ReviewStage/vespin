@@ -31,9 +31,10 @@ import {
   tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { type InboxLineKind, NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
-import { PULL_REQUEST_STATE_LABEL } from "@repo/features/pull-request-model";
+import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
@@ -54,7 +55,7 @@ import {
   UnreadDot,
   WorkingMark,
 } from "./marks.js";
-import { RowOpenContext } from "./row-open.js";
+import { RowOpenContext, RowSelectedContext } from "./row-open.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
@@ -97,8 +98,6 @@ const LINE_PART = " · ";
 
 /** The words VoiceOver hears for a row's marks, each said where the mark is drawn. */
 const UNREAD_WORDS = "Unread";
-const FAILED_HEARD = "Failed";
-const WORKING_HEARD = "Working";
 const PULL_REQUEST_HEARD = "Pull request";
 const SUB_TASKS_SHOWN = "Sub-tasks shown";
 const SUB_TASKS_HIDDEN = "Sub-tasks hidden";
@@ -286,10 +285,16 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
   );
 }
 
-/** Where a row stands in its list: on the list's own ground, inset so the unread dot stands in the margin, its hairline starting under the words. */
-export function rowPlacement(colors: BrandColors) {
+/**
+ * Where a row stands in its list: on the list's own ground, inset so the
+ * unread dot stands in the margin, its hairline starting under the words.
+ * Note that a selected row stands on the `SELECTED` gray, as iOS's own
+ * selection does, since a clear row ground leaves the system no fill to draw,
+ * so an iPad's selected row showed only the keyboard focus's black outline.
+ */
+export function rowPlacement(colors: BrandColors, selected = false) {
   return [
-    listRowBackground("clear"),
+    listRowBackground(selected ? colors.SELECTED : "clear"),
     listRowInsets({
       leading: ROW_INSET.LEADING,
       trailing: SPACE.EDGE,
@@ -347,12 +352,13 @@ export function RowFrame({
 }) {
   const colors = useColors();
   const open = useContext(RowOpenContext);
+  const selected = useContext(RowSelectedContext) === id;
   const swiped = [...trailingActions, ...leadingActions];
 
   // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
   const frameModifiers = [
     tag(id),
-    ...rowPlacement(colors),
+    ...rowPlacement(colors, selected),
     ...(heard === undefined
       ? []
       : [
@@ -595,11 +601,11 @@ function threadHeard(props: ListRowProps): RowHeard {
 function agentsHeard(agents: TaskAgentsStatus | undefined): string | undefined {
   switch (agents?.kind) {
     case TASK_AGENTS_STATUS.FAILED:
-      return FAILED_HEARD;
+      return GLYPH_STATE_WORDS[GLYPH_STATE.FAILED];
     case TASK_AGENTS_STATUS.WORKING:
-      return WORKING_HEARD;
+      return GLYPH_STATE_WORDS[GLYPH_STATE.WORKING];
     case TASK_AGENTS_STATUS.PULL_REQUEST:
-      return `${PULL_REQUEST_HEARD} ${PULL_REQUEST_STATE_LABEL[agents.pullRequest.state]}`;
+      return `${PULL_REQUEST_HEARD} ${pullRequestMarkLabel(agents.pullRequest)}`;
     case TASK_AGENTS_STATUS.NONE:
     case undefined:
       return undefined;
@@ -639,7 +645,7 @@ function TaskEndMark({ needsYou = false, agents }: Pick<TaskRowProps, "needsYou"
     case TASK_AGENTS_STATUS.WORKING:
       return <WorkingMark />;
     case TASK_AGENTS_STATUS.PULL_REQUEST: {
-      const pull = PULL_REQUEST_LOOK[agents.pullRequest.state];
+      const pull = PULL_REQUEST_LOOK[pullRequestMarkState(agents.pullRequest)];
 
       return <ToneGlyph glyph={pull.symbol} tone={pull.tone} />;
     }

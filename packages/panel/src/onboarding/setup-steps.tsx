@@ -375,7 +375,15 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
             at={at + 1}
             total={steps.length}
             onBack={back}
-            onSkip={survey.answered ? undefined : forward}
+            onSkip={
+              survey.answered
+                ? undefined
+                : () => {
+                    // Skipping after taking every pick back keeps that, so the account's earlier answers do not come back.
+                    survey.keep();
+                    forward();
+                  }
+            }
             next={
               survey.answered
                 ? {

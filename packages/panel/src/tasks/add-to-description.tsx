@@ -4,8 +4,11 @@ import {
   withoutPictureLine,
   withPictureLine,
 } from "@repo/features/agent-pictures-model";
-import type { FileChip } from "@repo/features/attachment-model";
+import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { ATTACHMENT_VIEW, attachmentView, type FileChip } from "@repo/features/attachment-model";
 import { descriptionAttachmentAddress } from "@repo/features/description-attachment-link";
+import { startsLikePdf } from "@repo/features/media-signature";
+import { formatBytes } from "@repo/features/number-format";
 import { PICTURE_BOUNDS } from "@repo/features/picture-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
@@ -33,7 +36,7 @@ import type { ViewerAction } from "./attachment-viewer.js";
 import { useTaskMentions } from "./task-mentions.js";
 
 /**
- * add-to-description.tsx -- a picture or a recording an agent showed, added to its task's description: kept on the description as one of its own and written at the end of its text, as the developer's edit, with Undo.
+ * add-to-description.tsx -- a picture or a recording an agent showed, or a PDF a message carried, added to its task's description: kept on the description as one of its own and written at the end of its text, as the developer's edit, with Undo.
  *
  * The picture is the agent's, read from its transcript, so it is kept on the
  * description again, as a picture pasted from another description is, and the description's
@@ -41,7 +44,9 @@ import { useTaskMentions } from "./task-mentions.js";
  * the description's bound first (`encodeImage`), since an agent's picture may be
  * larger than a description's may. A recording is kept as it is, never re-encoded,
  * where it is no larger than a video sent to the description may be
- * (`PICTURE_BOUNDS.MAX_SENT_VIDEO_BYTES`), and the description plays it in place. The line is written at the end of the description's text, a paragraph
+ * (`PICTURE_BOUNDS.MAX_SENT_VIDEO_BYTES`), and the description plays it in place. A PDF
+ * is kept as it is too, within a PDF's bound, and the description draws it as
+ * its file's chip under its whole name. The line is written at the end of the description's text, a paragraph
  * of its own, through the same edit a developer's save is; an edit that
  * meets the text moved on is written again on the text as it stands. Note
  * that it is never written at the editor's caret, because the description's editor
@@ -61,6 +66,8 @@ const ADD_WORDS = {
   ADDING: "Adding to the description…",
   ADDED: "Added to the description",
   NOT_A_PICTURE: "This picture could not be added to the description.",
+  NOT_A_PDF: "This PDF could not be added to the description.",
+  PDF_TOO_LARGE: `This PDF is over ${formatBytes(AGENT_BOUNDS.MAX_PDF_BYTES)}, too large to add to the description.`,
   VIDEO_TOO_LARGE: `This video is over ${String(PICTURE_BOUNDS.MAX_SENT_VIDEO_BYTES / 1_000_000)} MB, too large to add to the description from here.`,
   TOO_MANY: "This description already holds as many pictures as it can.",
   TOO_MANY_VIDEOS: "This description already holds as many videos as it can.",
@@ -89,10 +96,19 @@ const KEEP_FAILED_WORDS = {
 
 /**
  * The `data:` URL the file is kept on the description as, or why it cannot be: a
- * recording as it is, within a sent video's bound, and a picture re-encoded
- * within a picture's.
+ * recording as it is, within a sent video's bound, a PDF as it is, within a
+ * PDF's, and a picture re-encoded within a picture's.
  */
 async function keptUrlOf(chip: FileChip): Promise<{ url: string } | { refused: string }> {
+  if (attachmentView(chip) === ATTACHMENT_VIEW.PDF) {
+    const file = fileOf(chip);
+
+    if (file.size > AGENT_BOUNDS.MAX_PDF_BYTES) return { refused: ADD_WORDS.PDF_TOO_LARGE };
+    const head = new Uint8Array(await file.slice(0, 8).arrayBuffer());
+
+    return startsLikePdf(head) ? { url: chip.url } : { refused: ADD_WORDS.NOT_A_PDF };
+  }
+
   if (isVideoDataUrl(chip.url)) {
     return fileOf(chip).size > PICTURE_BOUNDS.MAX_SENT_VIDEO_BYTES
       ? { refused: ADD_WORDS.VIDEO_TOO_LARGE }
@@ -106,8 +122,9 @@ async function keptUrlOf(chip: FileChip): Promise<{ url: string } | { refused: s
   return { url: `data:${read.image.mediaType};base64,${read.image.base64}` };
 }
 
-/** A picture's words: the name the viewer saves it by, without its extension. */
+/** A picture's words: the name the viewer saves it by, without its extension; a PDF's its whole name, which its chip shows. */
 function wordsOf(chip: FileChip): string {
+  if (attachmentView(chip) === ATTACHMENT_VIEW.PDF) return chip.name;
   const dot = chip.name.lastIndexOf(".");
 
   return dot > 0 ? chip.name.slice(0, dot) : chip.name;

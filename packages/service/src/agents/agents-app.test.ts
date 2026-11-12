@@ -4,6 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { writeAccountPreferences } from "@repo/database/models/account-store";
 import {
   type Agent,
   createAgent,
@@ -24,7 +25,6 @@ import { registerDevice } from "@repo/database/models/device-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { createTask, saveDescriptionText } from "@repo/database/models/task-store";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
-import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
@@ -197,10 +197,10 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   });
 
   it.effect(
-    "a rewind asked to put the files back is refused as malformed while the workspace has the experiment off, and where no snapshot of them stands for the line once it is on, the conversation left whole either way",
+    "a rewind asked to put the files back is refused as malformed while the account rewinding has the experiment off, and where no snapshot of them stands for the line once it is on, the conversation left whole either way",
     () =>
       Effect.gen(function* () {
-        const { owner, task, ask, source, stored, laterLine } = yield* sourceAgent;
+        const { owner, ask, source, stored, laterLine } = yield* sourceAgent;
         const db = yield* Database;
 
         const rowsOf = () =>
@@ -226,12 +226,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           [HOSTED_HTTP_STATUS.BAD_REQUEST, { error: HOSTED_API_ERROR.INVALID_REQUEST }],
         );
 
-        yield* setWorkspaceExperiment({
-          organizationId: task.workspaceId,
-          experiment: EXPERIMENT.REWIND_FILES,
-          on: true,
-          by: owner,
-        });
+        yield* writeAccountPreferences(owner, { experiments: { [EXPERIMENT.REWIND_FILES]: true } });
         const answered = yield* asked();
 
         assert.deepEqual(answered.body, { error: HOSTED_API_ERROR.CHECKOUT_SNAPSHOT_MISSING });
@@ -241,21 +236,16 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   );
 
   it.effect(
-    "a turn's changes are refused as malformed while the workspace has the experiment off, and by name where no snapshot of the turn stands once it is on",
+    "a turn's changes are refused as malformed while the account asking has the experiment off, and by name where no snapshot of the turn stands once it is on",
     () =>
       Effect.gen(function* () {
-        const { owner, task, ask, source, laterLine } = yield* sourceAgent;
+        const { owner, ask, source, laterLine } = yield* sourceAgent;
 
         const asked = () =>
           ask(request(AGENT_TURN_CHANGES, owner, { id: source.id, messageId: laterLine }));
 
         const off = yield* asked();
-        yield* setWorkspaceExperiment({
-          organizationId: task.workspaceId,
-          experiment: EXPERIMENT.REWIND_FILES,
-          on: true,
-          by: owner,
-        });
+        yield* writeAccountPreferences(owner, { experiments: { [EXPERIMENT.TURN_CHANGES]: true } });
         const unrecorded = yield* asked();
 
         assert.deepEqual(
@@ -742,12 +732,12 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   );
 
   /** A source whose stopped sandbox holds a change it never committed, over a checkout and remote on disk, and a continue of it; GitHub answers its pull request's reads as `pull` does, where given. */
-  const copyScenario = (t: TestContext, pull?: RepositoryScript, snapshotted = false) =>
+  const copyScenario = (t: TestContext, pull?: RepositoryScript, ownsDrive = false) =>
     Effect.gen(function* () {
       vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureOidcToken());
       const checkout = sourceCheckout(yield* Effect.promise(() => temporaryDirectory(t, "copy-")));
       writeFileSync(join(checkout.checkout, "invites.ts"), "export const ttl = 7;\n");
-      const sandbox = sourceSandbox(checkout, "stopped", snapshotted);
+      const sandbox = sourceSandbox(checkout, "stopped", ownsDrive);
 
       const opened = yield* sourceAgentOn(
         pull === undefined ? sandbox.answer : (sent) => sandbox.answer(sent) ?? pull(sent),
@@ -822,7 +812,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   );
 
   it.effect(
-    "a continue of a source whose sandbox stopped on a snapshot wakes nothing and copies nothing, and tells the new agent its checkout is the source's own",
+    "a continue of a source whose sandbox stopped owning a drive wakes nothing and copies nothing, and tells the new agent its checkout is the source's own",
     (t) =>
       Effect.gen(function* () {
         const { sandbox, continued } = yield* copyScenario(t, undefined, true);

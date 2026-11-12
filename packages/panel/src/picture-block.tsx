@@ -1,14 +1,22 @@
+import { chipBase64, sizeLabel } from "@repo/features/attachment-model";
+import { DESCRIPTION_FILE_TYPE } from "@repo/features/description-attachment-wire";
 import {
+  ATTACHMENT_CHIP_HOVER,
+  ATTACHMENT_CHIP_STATE,
+  AttachmentChip,
+  type AttachmentChipState,
   CARD_CORNER,
   CARD_ELEMENT,
   CARD_PADDING,
   Card,
+  dataUrlMediaType,
   isVideoDataUrl,
   PictureStandIn,
   PictureTile,
   VideoPlayer,
 } from "@repo/ui";
 import { PICTURE_STATE, type PictureState } from "@repo/ui/picture-read";
+import { FileTypeIcon } from "./tasks/file-type-icon.js";
 
 /**
  * picture-block.tsx -- a picture drawn in written words: its own block, at its own size up to the column's, its caption under it, a press opening it over the window.
@@ -24,7 +32,9 @@ import { PICTURE_STATE, type PictureState } from "@repo/ui/picture-read";
  * picture's address, so it draws empty there (`session-replay.ts`). A video an agent recorded plays in its place instead
  * (`@repo/ui`'s `VideoPlayer`), with the player's own controls, Full screen
  * among them, since a press on a video plays it; what a press on a picture
- * opens is its Expand. Nothing here knows whose picture it is; the place
+ * opens is its Expand. A PDF a description keeps as it keeps a picture is
+ * drawn as its file, a chip with its name, its alt text, and its size,
+ * whose press opens it over the window, where its pages are drawn. Nothing here knows whose picture it is; the place
  * drawing one hands its state and what a press does.
  */
 
@@ -57,6 +67,49 @@ const PICTURE_MISSING_CLASS =
 const PICTURE_CAPTION_CLASS =
   "picture-caption mt-item-gap block text-picture-caption text-muted-foreground";
 
+/** Whether a `data:` URL a picture read answered holds a PDF, drawn as its file rather than a picture. */
+export function isPdfDataUrl(dataUrl: string): boolean {
+  return dataUrlMediaType(dataUrl) === DESCRIPTION_FILE_TYPE.PDF;
+}
+
+/** The name a PDF's chip draws its type's icon by, which reads the type off its extension. */
+function pdfIconName(name: string): string {
+  return name.toLowerCase().endsWith(".pdf") ? name : `${name}.pdf`;
+}
+
+/** A PDF where a picture stands: its file's chip, its name and size, a press opening it once it is kept. */
+export function PdfFile({
+  url,
+  name,
+  onOpen,
+  state = ATTACHMENT_CHIP_STATE.READY,
+}: {
+  url: string;
+  name: string;
+  onOpen?: (() => void) | undefined;
+  /** Where the file stands: kept, or on its way up from the editor, or failed to go. */
+  state?: AttachmentChipState;
+}): React.JSX.Element {
+  const base64 = chipBase64({ name, mediaType: DESCRIPTION_FILE_TYPE.PDF, url });
+
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a picture stands inside its paragraph's `p`, which holds no `ul`, so the chip's list is a span.
+    <span className="picture-file flex" role="list" aria-label="Attached file">
+      <AttachmentChip
+        name={name}
+        icon={<FileTypeIcon name={pdfIconName(name)} />}
+        detail={sizeLabel(base64)}
+        onOpen={onOpen}
+        state={state}
+        // Note that a failed chip says its file's name, since it hangs no card that would name it, and the failure's words stand under it.
+        failure={state === ATTACHMENT_CHIP_STATE.FAILED ? name : undefined}
+        // Note that it hangs no card, because a card would cover the description's words and say only what the chip does.
+        hover={ATTACHMENT_CHIP_HOVER.NONE}
+      />
+    </span>
+  );
+}
+
 /** The picture's own block, by where its read stands. */
 export function PictureBlock({
   ref,
@@ -79,6 +132,16 @@ export function PictureBlock({
     caption === undefined || caption === "" ? null : (
       <span className={PICTURE_CAPTION_CLASS}>{caption}</span>
     );
+
+  // A PDF stands as its file, which a press opens over the window.
+  if (state.kind === PICTURE_STATE.READY && isPdfDataUrl(state.url)) {
+    return (
+      <span ref={ref} className={PICTURE_BLOCK_CLASS} data-state={state.kind} data-file="">
+        <PdfFile url={state.url} name={alt === "" ? "PDF" : alt} onOpen={onOpen} />
+        {said}
+      </span>
+    );
+  }
 
   // A video plays where it stands, and what a press on a picture opens is its Expand.
   if (state.kind === PICTURE_STATE.READY && isVideoDataUrl(state.url)) {

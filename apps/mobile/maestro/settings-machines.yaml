@@ -1,0 +1,32 @@
+# settings-machines.yaml -- Settings › Machines on the Inbox fixture: the account's machines, each with where it stands and what it is, and an offline machine's Remove asked first, with the command that removes it by hand, and canceled.
+#
+# Launched on the host's Inbox fixture, whose account has a Mac online and a
+# Linux server marked away (`@repo/host/fixture-inbox`), so no server is
+# reached.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Machines"
+- tapOn: "Machines"
+- waitForAnimationToEnd
+# Note that a row is one element, heard as its name, so a machine is found by it.
+- assertVisible: "Ada's MacBook Pro"
+- assertVisible: "build-box"
+- takeScreenshot: settings-machines
+# A long press offers Remove, which asks first.
+- longPressOn: "build-box"
+- tapOn: "Remove"
+- assertVisible: "Remove build-box?"
+- waitForAnimationToEnd
+- takeScreenshot: settings-machines-remove
+- tapOn: "Cancel"
+- assertVisible: "build-box"

@@ -9,6 +9,7 @@
 import { CLI_EXIT } from "@repo/features/cli-exit";
 import { PAGE_SHOWER, type PageLine, type PageVersion } from "@repo/features/page-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { withoutTrailingNewlines } from "@repo/features/trailing-newlines";
 import { Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { answer, CommandFailed, columns } from "../output.js";
@@ -100,7 +101,7 @@ const showCommand = Command.make(
 
       yield* answer({
         json: { page: read, newestVersion: line.version },
-        lines: [read.html.replace(/\n+$/u, "")],
+        lines: [withoutTrailingNewlines(read.html)],
         ids: [read.id],
       });
     }),

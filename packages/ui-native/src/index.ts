@@ -130,7 +130,6 @@ export { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 export {
   CHECK_LOOK,
   CHECK_SUMMARY_LOOK,
-  pullRequestLook,
   REVIEW_LOOK,
 } from "./pull-request-look.js";
 
@@ -163,8 +162,12 @@ export { SealedPage } from "./sealed-page.js";
 export {
   AccountRow,
   ActionRow,
+  type ConnectionLine,
+  ConnectionRow,
   MemberRow,
   type MemberRowAct,
+  MenuRow,
+  type MenuRowAct,
   NoteRow,
   type PickOption,
   PickRows,
@@ -188,7 +191,7 @@ export {
   SplitView,
 } from "./split-view.js";
 
-export { STATUS_MARK_LOOK } from "./status-mark-model.js";
+export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
 
 export { askForName, type NameAsk, shareLink } from "./system-asks.js";
 
@@ -264,5 +267,4 @@ export {
   WorkspaceSwitcher,
   WorkspaceSwitcherMenu,
   WorkspaceTile,
-  workspaceSettingsAction,
 } from "./workspace-switcher.js";

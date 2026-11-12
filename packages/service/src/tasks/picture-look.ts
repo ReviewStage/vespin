@@ -2,10 +2,10 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { readDescriptionAttachment } from "@repo/database/models/description-attachments";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
+import { type DescriptionFile, isPdfFile } from "@repo/features/description-attachment-wire";
 import { type InboxAttachmentRef, inboxAttachmentOf } from "@repo/features/inbox-attachment-link";
 import { LINK_ORIGIN } from "@repo/features/link-home";
 import {
-  type Picture,
   type PictureType,
   pictureMediaTypeSchema,
   pictureTypeSchema,
@@ -40,7 +40,8 @@ import type { DescriptionDocumentBinding } from "./description-notes.js";
  *
  * A description may hold a video an agent recorded, which no model is handed in any
  * form: a look at one is refused, pointing the model at its alt text and
- * caption, and the MCP door hands on a look only of an image's type,
+ * caption; so is a look at a PDF kept there, whose refusal names it a file
+ * the model cannot open, and the MCP door hands on a look only of an image's type,
  * turning any other into that refusal (`lookNamedOnly`), so a video could
  * not reach a model even were it answered, as an image nor as its base64
  * spelled out.
@@ -62,6 +63,7 @@ export const PICTURE_LOOK_REFUSAL = {
   NO_THREAD_PICTURE: "Not looked: that thread holds no such picture.",
   VIDEO:
     "Not looked: that address is a video, which is never shown to a model. Its alt text and caption in the description's text say what it shows.",
+  PDF: "Not looked: that address is a PDF kept in the description, a file you cannot open yet. Its name is the alt text of its ![name](address) line, under the heading it stands in; tell the member you could not read it rather than guess at what it holds.",
   UNAVAILABLE: "Not looked: the picture could not be read just now. The call may be made again.",
 } as const;
 
@@ -165,8 +167,10 @@ const isImageType = Schema.is(pictureTypeSchema);
 /** Whether a kept file is a picture, an image or a video, rather than any other file a message carried. */
 const isPictureMediaType = Schema.is(pictureMediaTypeSchema);
 
-/** A picture as a look answers it: an image's type and its bytes in base64, or the refusal of a video, whose bytes go nowhere. */
-function looked(picture: Picture): PictureLookResult {
+/** A picture as a look answers it: an image's type and its bytes in base64, or the refusal of a video or a PDF, whose bytes go nowhere. */
+function looked(picture: DescriptionFile): PictureLookResult {
+  if (isPdfFile(picture)) return pictureNotLooked(PICTURE_LOOK_REFUSAL.PDF);
+
   if (!isImageType(picture.contentType)) {
     return pictureNotLooked(PICTURE_LOOK_REFUSAL.VIDEO);
   }

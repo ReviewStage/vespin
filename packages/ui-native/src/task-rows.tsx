@@ -26,9 +26,10 @@ import {
   padding,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
+import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { needsYouWords } from "@repo/features/inbox-list-model";
 import type { ModelProvider } from "@repo/features/models-wire";
-import { PULL_REQUEST_STATE_LABEL } from "@repo/features/pull-request-model";
+import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
@@ -56,9 +57,6 @@ const LINE_PART = "· ";
 
 /** What a pull request's number in an agent's line is heard to do. */
 const OPENS_PULL_REQUEST = "Opens the pull request";
-
-/** What an agent's line says of its state, as the panel's agent mark is heard. */
-const AGENT_STATE_WORDS = { WORKING: "Working", FAILED: "Failed" } as const;
 
 /** How a press-through row's words read: the attention ink for what waits on you, or the body's ink for a place or an act, as the panel's quiet New agent and New sub-task stand. */
 export const LINK_ROW_TONE = {
@@ -177,6 +175,8 @@ type AgentRowProps = {
     | {
         readonly number: number;
         readonly state: PullRequestState;
+        /** Whether GitHub's merge queue holds it, which its glyph says as the panel's does. */
+        readonly queued?: true | undefined;
         readonly onPress: () => void;
       }
     | undefined;
@@ -193,7 +193,7 @@ function PullRequestLink({
   readonly pullRequest: NonNullable<AgentRowProps["pullRequest"]>;
 }) {
   const colors = useColors();
-  const look = PULL_REQUEST_LOOK[pullRequest.state];
+  const look = PULL_REQUEST_LOOK[pullRequestMarkState(pullRequest)];
 
   return (
     <SwiftUIButton
@@ -201,7 +201,7 @@ function PullRequestLink({
       modifiers={[
         buttonStyle("borderless"),
         hoverEffect(HOVER_EFFECT.HIGHLIGHT),
-        accessibilityValue(PULL_REQUEST_STATE_LABEL[pullRequest.state]),
+        accessibilityValue(pullRequestMarkLabel(pullRequest)),
         accessibilityHint(OPENS_PULL_REQUEST),
       ]}
     >
@@ -234,7 +234,7 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
           foregroundStyle(working ? colors.TEXT_MUTED : colors.DANGER_TEXT),
         ]}
       >
-        {working ? AGENT_STATE_WORDS.WORKING : AGENT_STATE_WORDS.FAILED}
+        {working ? GLYPH_STATE_WORDS[GLYPH_STATE.WORKING] : GLYPH_STATE_WORDS[GLYPH_STATE.FAILED]}
       </Text>
     </HStack>
   );
@@ -358,7 +358,13 @@ export function LinkRow({
     <SwiftUIButton
       onPress={onPress}
       {...(disabled ? { disabled: true } : {})}
-      modifiers={[...rowPlacement(colors), buttonStyle("borderless"), accessibilityLabel(label)]}
+      modifiers={[
+        ...rowPlacement(colors),
+        buttonStyle("borderless"),
+        accessibilityLabel(label),
+        // Note that the detail is heard after the label, since the label stands for the whole row.
+        ...(detail === undefined ? [] : [accessibilityValue(detail)]),
+      ]}
     >
       <RowHead
         unread={false}

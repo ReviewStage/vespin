@@ -99,7 +99,11 @@ export interface ProductEventSenderOptions {
   confirmAccount?: (() => Effect.Effect<void>) | undefined;
   /** The hosted service origin, without a trailing slash. */
   serviceBaseUrl: string;
-  /** The running build's version, as the packaged app reports it. */
+  /**
+   * The running build's version, as the packaged app reports it: a release
+   * version, or the web app's deployment commit, or empty for a build that
+   * names none, which sends no version and whose launches count nothing.
+   */
   appVersion: string;
   /** Whether this build runs from a packaged bundle rather than a development checkout. */
   packaged: boolean;
@@ -209,8 +213,13 @@ export class ProductEventSender {
     });
     this.#client = options.httpClient ?? FetchHttpClient.layer;
     this.#appVersion = options.appVersion;
+    // Note that a build naming no version sends none rather than an empty
+    // one, which the service would read as no build at all and lose the
+    // platform with it.
     this.#build = {
-      [PRODUCT_EVENT_BUILD_FIELD.APP_VERSION]: options.appVersion,
+      ...(options.appVersion === ""
+        ? undefined
+        : { [PRODUCT_EVENT_BUILD_FIELD.APP_VERSION]: options.appVersion }),
       [PRODUCT_EVENT_BUILD_FIELD.PACKAGED]: options.packaged,
       [PRODUCT_EVENT_BUILD_FIELD.PLATFORM]: options.platform,
     };

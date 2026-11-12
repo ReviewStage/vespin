@@ -31,6 +31,7 @@ import {
   CodeEditor,
   CodePreview,
   ConfirmDialog,
+  EditActions,
   GAP,
   GlyphSlot,
   INLINE_REF_LOOK,
@@ -390,33 +391,6 @@ function LastRun({
         {`, exited ${run.exitCode}`}
       </Text>
     </OneLine>
-  );
-}
-
-/** A row's way out of an edit and its Save, at the row's end. */
-function EditActions({
-  leave,
-  saving,
-  canSave,
-  onLeave,
-  onSave,
-}: {
-  /** What letting the edit go says: Discard for a saved script, Cancel for a new one. */
-  leave: string;
-  saving: boolean;
-  canSave: boolean;
-  onLeave: () => void;
-  onSave: () => void;
-}): React.JSX.Element {
-  return (
-    <Inline gap={GAP.CONTROL}>
-      <Button variant={BUTTON_VARIANT.QUIET} disabled={saving} onClick={onLeave}>
-        {leave}
-      </Button>
-      <Button variant={BUTTON_VARIANT.PRIMARY} disabled={!canSave || saving} onClick={onSave}>
-        {saving ? "Saving" : "Save"}
-      </Button>
-    </Inline>
   );
 }
 

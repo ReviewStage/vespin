@@ -682,6 +682,7 @@ export function KeptFileChips({
   // marker draws the first file of its name alone, so a later file of that name stays here.
   const drawn = new Set(useContext(WordFilesContext)?.names);
   const chips = useKeptChips(files.filter((file) => !drawn.delete(file.name)));
+  const addToDescription = useAddToDescription();
 
-  return <AttachedFileChips files={chips} uploading={sending} />;
+  return <AttachedFileChips files={chips} uploading={sending} action={addToDescription} />;
 }

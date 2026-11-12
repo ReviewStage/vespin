@@ -13,8 +13,6 @@ import {
   PULL_REQUEST_CHAPTERS_ROUTE_PATHS,
 } from "@repo/service/chapters/chapters-function";
 import {
-  BASE_DRIVE_REFRESH,
-  BASE_DRIVE_REFRESH_PATH,
   MAINTENANCE_SWEEP,
   MAINTENANCE_SWEEP_PATH,
 } from "@repo/service/maintenance/maintenance-bounds";
@@ -58,7 +56,6 @@ const FUNCTION_GROUP = {
   WORKSPACE_MCP: "workspace-mcp",
   MEMBER_MCP: "member-mcp",
   MAINTENANCE_SWEEP: "maintenance-sweep",
-  BASE_DRIVE_REFRESH: "base-drive-refresh",
   PAGE_SANDBOX: "page-sandbox",
   PREVIEW_PROXY: "preview-proxy",
   PULL_REQUEST_CHAPTERS: "pull-request-chapters",
@@ -100,12 +97,6 @@ const GROUPS: readonly GroupDefinition[] = [
     file: FUNCTION_GROUP.MAINTENANCE_SWEEP,
     maxDuration: MAINTENANCE_SWEEP.MAX_DURATION_SECONDS,
     routes: [routeKeyOf(MAINTENANCE_SWEEP_PATH)],
-  },
-  // The daily refresh fills every workspace's drive in the one call, one after another, past the platform's default duration.
-  {
-    file: FUNCTION_GROUP.BASE_DRIVE_REFRESH,
-    maxDuration: BASE_DRIVE_REFRESH.MAX_DURATION_SECONDS,
-    routes: [routeKeyOf(BASE_DRIVE_REFRESH_PATH)],
   },
   // A Generate runs one model call of up to three minutes, past the platform's default duration.
   {

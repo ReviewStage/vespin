@@ -63,6 +63,8 @@ interface MenuRowWords {
   describedControl?: (control: SettingsRowControl) => ReactNode;
   /** Whether the row just arrived, which lights it once. */
   landed?: boolean;
+  /** Whether its words are being typed in place, which rings the row until its Save or Cancel. */
+  editing?: boolean;
   /** Where its control and ⋯ stand where they would leave its words less than a legible stretch; dropped below them where none is named. */
   controls?: SettingsRowControls;
   /** Whether the row stands inset under the row above, one of its things, as GitHub's accounts stand under GitHub's. */
@@ -194,6 +196,7 @@ export function MenuRow({
             description={row.description}
             error={replayMaskedError(row.error)}
             landed={row.landed}
+            editing={row.editing}
             controls={row.controls}
             below={row.below === undefined || row.below === null ? undefined : () => row.below}
             end={(control) => (

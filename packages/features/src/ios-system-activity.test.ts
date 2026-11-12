@@ -8,6 +8,8 @@ import {
 } from "./inbox-wire.js";
 import {
   agentActivity,
+  desktopHandoffOf,
+  type IosActivity,
   iosContinuedRouteOf,
   pullRequestActivity,
   SPOTLIGHT_DOMAIN,
@@ -16,6 +18,7 @@ import {
   taskActivity,
   threadActivity,
 } from "./ios-system-activity.js";
+import { LINK_DESTINATION, type LinkDestination } from "./link-grammar.js";
 import { TASK_STATUS, type TaskSummary } from "./task-wire.js";
 import { WORKSPACE_ROLE, type Workspace } from "./workspace-wire.js";
 
@@ -73,6 +76,21 @@ const ELSEWHERE = task("task-2", OTHER.id);
 const ASK = { holder: taskHolder(INVITES), item: thread("item-1", "Which expiry?", "Pick one.") };
 const ELSEWHERE_ASK = { holder: taskHolder(ELSEWHERE), item: thread("item-2", "Elsewhere", "") };
 
+/** What the desktop window holds: the two tasks, the other workspace's numbered 42 too. */
+const DESK_READS = {
+  tasks: [INVITES, task("task-3", OTHER.id, { number: 42 })],
+  workspaces: [ACME, OTHER],
+};
+
+/** What the desktop window advertises while it shows `place` in Acme. */
+function deskShows(place: LinkDestination): Omit<IosActivity, "title"> {
+  const activity = desktopHandoffOf({ workspace: "acme", place }, DESK_READS);
+
+  if (activity === undefined) throw new Error("The window advertised nothing.");
+
+  return activity;
+}
+
 // Note that the regression these catch is a screen's activity naming a page the app routes elsewhere, or
 // nowhere: a pull request's page is its agent's Changes, which only its number brings back to its screen.
 describe("a screen's activity, continued on another of the member's devices", () => {
@@ -106,6 +124,19 @@ describe("a screen's activity, continued on another of the member's devices", ()
       "https://vespin.dev/acme/agent/agent-1/changes",
       "/tasks/agent/agent-1/pull/7",
     ],
+    // Note that a desktop window names a task by its number, which the other workspace's task shares.
+    [
+      "a task the desktop shows",
+      deskShows({ kind: LINK_DESTINATION.TASK, planId: "42" }),
+      "https://vespin.dev/acme/task/task-1",
+      "/tasks/task-1",
+    ],
+    [
+      "a pull request the desktop shows, as its agent",
+      deskShows({ kind: LINK_DESTINATION.CHANGES, agentId: "agent-1" }),
+      "https://vespin.dev/acme/agent/agent-1",
+      "/tasks/agent/agent-1",
+    ],
   ])("%s names its page on vespin.dev and opens on its own screen", (_, activity, page, route) => {
     expect(activity.webpageUrl).toBe(page);
     expect(
@@ -121,6 +152,16 @@ describe("a screen's activity, continued on another of the member's devices", ()
       undefined,
     );
     expect(iosContinuedRouteOf({ link: "https://example.com/acme/task/42" })).toBe(undefined);
+    expect(
+      desktopHandoffOf({ workspace: "acme", place: { kind: LINK_DESTINATION.BOARD } }, DESK_READS),
+    ).toBe(undefined);
+    // Note that a task the window holds no row for hands off nothing, since its number may name another workspace's task on the phone.
+    expect(
+      desktopHandoffOf(
+        { workspace: "acme", place: { kind: LINK_DESTINATION.TASK, planId: "99" } },
+        DESK_READS,
+      ),
+    ).toBe(undefined);
   });
 });
 

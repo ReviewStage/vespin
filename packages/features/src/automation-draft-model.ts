@@ -104,10 +104,11 @@ export interface AutomationDraft {
   readonly triggerKind: AutomationTriggerKind;
   /** The GitHub event it fires on, where that is its trigger; a new draft's is a pull request opened or updated. */
   readonly githubEvent: GitHubTriggerEvent;
-  /** The label and branch filters a GitHub trigger was given, kept as they were. */
+  /** The label and branch filters a GitHub trigger was given, its default branch among them, kept as they were. */
   readonly githubFilters: {
     readonly labels?: readonly string[];
     readonly branches?: readonly string[];
+    readonly defaultBranch?: boolean;
   };
   /** Whose events, at which moments, and whether drafts and forks fire a GitHub trigger: the row of choices under its sentence. */
   readonly githubSettings: GitHubTriggerSettings;
@@ -257,12 +258,16 @@ function sameSet(one: readonly string[] = [], other: readonly string[] = []): bo
   return one.length === other.length && one.every((each) => other.includes(each));
 }
 
-/** Whether two GitHub triggers keep to the same labels and branches. */
+/** Whether two GitHub triggers keep to the same labels and branches, the default branch among them. */
 function sameFilters(
   one: AutomationDraft["githubFilters"],
   other: AutomationDraft["githubFilters"],
 ) {
-  return sameSet(one.labels, other.labels) && sameSet(one.branches, other.branches);
+  return (
+    sameSet(one.labels, other.labels) &&
+    sameSet(one.branches, other.branches) &&
+    (one.defaultBranch === true) === (other.defaultBranch === true)
+  );
 }
 
 /** Whether two GitHub triggers' settings say the same. */
@@ -462,6 +467,9 @@ export function automationDraft(
       ? {
           ...(trigger.labels === undefined ? undefined : { labels: trigger.labels }),
           ...(trigger.branches === undefined ? undefined : { branches: trigger.branches }),
+          ...(trigger.defaultBranch === undefined
+            ? undefined
+            : { defaultBranch: trigger.defaultBranch }),
         }
       : {},
     githubSettings: github ? githubSettingsOf(trigger) : GITHUB_DEFAULT_SETTINGS,
@@ -735,7 +743,7 @@ export function withGithubEvent(
  * one chosen. One for the workspace is the workspace's only where `shared`
  * says the workspace is, since everything in the account's own workspace is
  * its own; who owns any other stays as it was chosen. A GitHub event keeps
- * to the preset's branches under the settings a new trigger has.
+ * to the preset's default branch under the settings a new trigger has.
  */
 export function presetDraft(
   draft: AutomationDraft,
@@ -763,7 +771,7 @@ export function presetDraft(
       return {
         ...filled,
         githubEvent: trigger.event,
-        githubFilters: { branches: trigger.branches },
+        githubFilters: { defaultBranch: trigger.defaultBranch },
       };
     case AUTOMATION_TRIGGER.INTEGRATION:
       return { ...filled, integrationTrigger: trigger };

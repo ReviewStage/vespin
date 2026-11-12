@@ -948,6 +948,15 @@ function vercelSandbox(
           Effect.catchIf(isGone, () => Effect.succeed(false)),
         ),
       ),
+    ownDriveStands: (sandboxName) =>
+      said(
+        asked(SANDBOX_CALL.DRIVE, (signal, under) =>
+          Drive.get({ ...under, name: ownDriveName(sandboxName), signal }),
+        ).pipe(
+          Effect.as(true),
+          Effect.catchIf(isGone, () => Effect.succeed(false)),
+        ),
+      ),
     resume: (name) =>
       said(
         Effect.map(

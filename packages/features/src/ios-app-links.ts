@@ -122,6 +122,24 @@ export function iosPullRequestRoute(agentId: string, number: number): string {
 }
 
 /**
+ * Whether the route is a conversation, which a compact window's tab bar
+ * steps aside for, as Messages hides its tabs in a chat so the composer
+ * stands alone at the foot: a thread (`/inbox/<id>`), an agent's page, or
+ * a pull request it opened. A list, a task, and a page the agent showed keep
+ * the bar.
+ */
+export function iosRouteHidesTabs(pathname: string): boolean {
+  const [tab, first, second, third] = pathname.split("/").filter((segment) => segment !== "");
+  const route = `/${tab ?? ""}`;
+
+  if (route === IOS_ROUTE.INBOX) return first !== undefined;
+
+  if (`${route}/${first ?? ""}` !== IOS_ROUTE.AGENT || second === undefined) return false;
+
+  return third === undefined || third === IOS_ROUTE.PULL_REQUEST;
+}
+
+/**
  * The app's route for an address a link or a chip names: a vespin.dev
  * place the app draws, or a pull request's own page on GitHub that one of
  * `pullRequests` is, which opens on the app's pull request screen; none for

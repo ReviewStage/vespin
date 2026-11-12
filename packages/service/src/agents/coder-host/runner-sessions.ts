@@ -1528,10 +1528,7 @@ export const runnerSessions = <
         };
 
         const [opened, experiments] = yield* Effect.all(
-          [
-            coderTurnMessage(admitted, agent, turn, handed, now),
-            experimentsOnIn(agent.organizationId),
-          ],
+          [coderTurnMessage(admitted, agent, turn, handed, now), experimentsOnIn(agent)],
           { concurrency: "unbounded" },
         );
 
@@ -1613,7 +1610,7 @@ export const runnerSessions = <
 
         if (opened === undefined) return false;
         // Note that a read that failed is no change, since restarting on it would open a session with every experiment off.
-        const read = yield* experimentsReadIn(agent.organizationId);
+        const read = yield* experimentsReadIn(agent);
 
         if (Option.isNone(read)) return false;
         const standing = read.value;

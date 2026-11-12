@@ -133,9 +133,14 @@ const CHECKS_WAIT = {
 } as const;
 
 /** The harnesses whose instructions differ in the tools they name: Claude Code and Codex, which each run their own. */
-/** How Codex reads an attached PDF or HEIC photo, since it has no Read tool: it goes with every Codex agent's checkout or sandbox words. */
+/**
+ * How Codex reads an attached PDF or HEIC photo, since it has no Read tool: it
+ * goes with every Codex agent's checkout or sandbox words. Note that it names
+ * the tools as installed where they are, because the cloud machine's image
+ * carries poppler and libheif but a Mac may hold neither.
+ */
 const CODEX_DOCUMENT_WORDS =
-  " To read an attached PDF, run `pdftotext -layout <file> -` for its text, and `pdftoppm -png <file> <prefix>` then `view_image` for its pictures; to look at a HEIC photo, convert it with `heif-dec <file> <out>.jpg`, then `view_image`.";
+  " To read an attached PDF, where poppler's tools are installed, as they are on a cloud machine, run `pdftotext -layout <file> -` for its text, and `pdftoppm -png <file> <prefix>` then `view_image` for its pictures; to look at a HEIC photo, where libheif's `heif-dec` is installed, convert it with `heif-dec <file> <out>.jpg`, then `view_image`. Where the tool is missing, say so rather than guess at what the file holds.";
 
 export const CODER_HARNESS = {
   CLAUDE_CODE: CONVERSATION_RUNTIME.CLAUDE_CODE,
